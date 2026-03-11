@@ -723,7 +723,7 @@ pub unsafe extern "C" fn rs_skip_to_option_part(p: *const c_char) -> *const c_ch
 ///
 /// - `str` must be a valid, mutable null-terminated C string
 /// - `c` must not be NUL (0), as that would cause undefined behavior
-#[no_mangle]
+#[export_name = "strchrsub"]
 pub unsafe extern "C" fn rs_strchrsub(str: *mut c_char, c: c_char, x: c_char) {
     if str.is_null() || c == 0 {
         return;
@@ -754,7 +754,7 @@ pub unsafe extern "C" fn rs_strchrsub(str: *mut c_char, c: c_char, x: c_char) {
 ///
 /// - `data` must be a valid, mutable pointer to at least `len` bytes
 /// - The memory region must not overlap with any other mutable references
-#[no_mangle]
+#[export_name = "memchrsub"]
 pub unsafe extern "C" fn rs_memchrsub(data: *mut c_char, c: c_char, x: c_char, len: usize) {
     if data.is_null() || len == 0 {
         return;
@@ -786,7 +786,7 @@ pub unsafe extern "C" fn rs_memchrsub(data: *mut c_char, c: c_char, x: c_char, l
 /// - `dst` must be a valid, mutable pointer with enough space for strlen(src) + 1 bytes
 /// - `src` must be a valid NUL-terminated C string
 /// - `dst` and `src` must not overlap
-#[no_mangle]
+#[export_name = "xstpcpy"]
 pub unsafe extern "C" fn rs_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
     if dst.is_null() || src.is_null() {
         return dst;
@@ -810,7 +810,7 @@ pub unsafe extern "C" fn rs_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mu
 /// - `dst` must be a valid, mutable pointer with space for at least maxlen bytes
 /// - `src` must be a valid NUL-terminated C string or at least maxlen bytes
 /// - `dst` and `src` must not overlap
-#[no_mangle]
+#[export_name = "xstpncpy"]
 pub unsafe extern "C" fn rs_xstpncpy(
     dst: *mut c_char,
     src: *const c_char,
@@ -846,7 +846,7 @@ pub unsafe extern "C" fn rs_xstpncpy(
 /// - `dst` must be a valid, mutable pointer with space for at least dsize bytes
 /// - `src` must be a valid NUL-terminated C string
 /// - `dst` and `src` must not overlap
-#[no_mangle]
+#[export_name = "xstrlcpy"]
 pub unsafe extern "C" fn rs_xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     if src.is_null() {
         return 0;
@@ -876,7 +876,7 @@ pub unsafe extern "C" fn rs_xstrlcpy(dst: *mut c_char, src: *const c_char, dsize
 /// - `dst` must be a valid, mutable NUL-terminated string with space for at least dsize bytes
 /// - `src` must be a valid NUL-terminated C string
 /// - dsize must be > 0
-#[no_mangle]
+#[export_name = "xstrlcat"]
 pub unsafe extern "C" fn rs_xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
     if dst.is_null() || src.is_null() || dsize == 0 {
         return 0;

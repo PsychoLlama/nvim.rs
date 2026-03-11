@@ -61,12 +61,6 @@ extern void rs_free_tag_stuff(void);
 
 extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 extern size_t rs_arena_align_offset(uint64_t off);
-extern void rs_strchrsub(char *str, char c, char x);
-extern void rs_memchrsub(void *data, char c, char x, size_t len);
-extern char *rs_xstpcpy(char *restrict dst, const char *restrict src);
-extern char *rs_xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen);
-extern size_t rs_xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize);
-extern size_t rs_xstrlcat(char *dst, const char *src, size_t dsize);
 extern void rs_diff_clear(tabpage_T *tp);
 
 #ifdef EXITFREE
@@ -276,32 +270,6 @@ size_t xstrnlen(const char *s, size_t n)
 }
 #endif
 
-/// Replaces every instance of `c` with `x`.
-///
-/// @warning Will read past `str + strlen(str)` if `c == NUL`.
-///
-/// @param str A NUL-terminated string.
-/// @param c   The unwanted byte.
-/// @param x   The replacement.
-void strchrsub(char *str, char c, char x)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(c != NUL);
-  rs_strchrsub(str, c, x);
-}
-
-/// Replaces every instance of `c` with `x`.
-///
-/// @param data An object in memory. May contain NULs.
-/// @param c    The unwanted byte.
-/// @param x    The replacement.
-/// @param len  The length of data.
-void memchrsub(void *data, char c, char x, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_memchrsub(data, c, x, len);
-}
-
 /// Copies the string pointed to by src (including the terminating NUL
 /// character) into the array pointed to by dst.
 ///
@@ -314,75 +282,6 @@ void memchrsub(void *data, char c, char x, size_t len)
 /// Nvim version of POSIX 2008 stpcpy(3). We do not require POSIX 2008, so
 /// implement our own version.
 ///
-/// @param dst
-/// @param src
-char *xstpcpy(char *restrict dst, const char *restrict src)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_xstpcpy(dst, src);
-}
-
-/// Copies not more than n bytes (bytes that follow a NUL character are not
-/// copied) from the array pointed to by src to the array pointed to by dst.
-///
-/// If a NUL character is written to the destination, xstpncpy() returns the
-/// address of the first such NUL character. Otherwise, it shall return
-/// &dst[maxlen].
-///
-/// WARNING: If copying takes place between objects that overlap, the behavior
-/// is undefined.
-///
-/// WARNING: xstpncpy will ALWAYS write maxlen bytes. If src is shorter than
-/// maxlen, zeroes will be written to the remaining bytes.
-///
-/// @param dst
-/// @param src
-/// @param maxlen
-char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_xstpncpy(dst, src, maxlen);
-}
-
-/// xstrlcpy - Copy a NUL-terminated string into a sized buffer
-///
-/// Compatible with *BSD strlcpy: the result is always a valid NUL-terminated
-/// string that fits in the buffer (unless, of course, the buffer size is
-/// zero). It does not pad out the result like strncpy() does.
-///
-/// @param[out]  dst  Buffer to store the result.
-/// @param[in]  src  String to be copied.
-/// @param[in]  dsize  Size of `dst`.
-///
-/// @return Length of `src`. May be greater than `dsize - 1`, which would mean
-///         that string was truncated.
-size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_xstrlcpy(dst, src, dsize);
-}
-
-/// Appends `src` to string `dst` of size `dsize` (unlike strncat, dsize is the
-/// full size of `dst`, not space left).  At most dsize-1 characters
-/// will be copied.  Always NUL terminates. `src` and `dst` may overlap.
-///
-/// @see vim_strcat from Vim.
-/// @see strlcat from OpenBSD.
-///
-/// @param[in,out]  dst  Buffer to be appended-to. Must have a NUL byte.
-/// @param[in]  src  String to put at the end of `dst`.
-/// @param[in]  dsize  Size of `dst` including NUL byte. Must be greater than 0.
-///
-/// @return Length of the resulting string as if destination size was #SIZE_MAX.
-///         May be greater than `dsize - 1`, which would mean that string was
-///         truncated.
-size_t xstrlcat(char *const dst, const char *const src, const size_t dsize)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(dsize > 0);
-  return rs_xstrlcat(dst, src, dsize);
-}
-
 /// strdup() wrapper
 ///
 /// @see {xmalloc}

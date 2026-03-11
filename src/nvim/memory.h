@@ -61,6 +61,14 @@ extern void *xmemrchr(const void *src, uint8_t c, size_t len);
 extern bool strequal(const char *a, const char *b);
 extern bool strnequal(const char *a, const char *b, size_t n);
 
+// Rust-provided replacements for deleted C wrapper functions (Phase 2)
+extern void strchrsub(char *str, char c, char x);
+extern void memchrsub(void *data, char c, char x, size_t len);
+extern char *xstpcpy(char *restrict dst, const char *restrict src);
+extern char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen);
+extern size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize);
+extern size_t xstrlcat(char *const dst, const char *const src, const size_t dsize);
+
 #define XFREE_CLEAR(ptr) \
   do { \
     /* Take the address to avoid double evaluation. #1375 */ \

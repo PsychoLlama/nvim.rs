@@ -71,6 +71,7 @@ extern "C" {
     fn nvim_tv_set_list(tv: *mut c_void, list: *mut c_void);
 
     // ----- string utilities -----
+    #[link_name = "strchrsub"]
     fn rs_strchrsub(str: *mut c_char, c: c_char, x: c_char);
 
     // ----- security check -----
