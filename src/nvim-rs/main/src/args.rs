@@ -130,24 +130,6 @@ impl ArgFlags {
     }
 }
 
-/// FFI: Create new arg flags.
-#[no_mangle]
-pub extern "C" fn rs_arg_flags_new() -> ArgFlags {
-    ArgFlags::new()
-}
-
-/// FFI: Check if has layout.
-///
-/// # Safety
-/// `flags` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_arg_flags_has_layout(flags: *const ArgFlags) -> c_int {
-    if flags.is_null() {
-        return 0;
-    }
-    c_int::from((*flags).has_layout())
-}
-
 // =============================================================================
 // Argument Parsing State
 // =============================================================================
@@ -205,35 +187,6 @@ impl ArgParseState {
     pub fn exit_with(&mut self, code: c_int) {
         self.should_exit = true;
         self.exit_code = code;
-    }
-}
-
-/// FFI: Create parse state.
-#[no_mangle]
-pub extern "C" fn rs_arg_parse_state_new(argc: c_int) -> ArgParseState {
-    ArgParseState::new(argc)
-}
-
-/// FFI: Check if has more args.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_arg_parse_has_more(state: *const ArgParseState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).has_more())
-}
-
-/// FFI: Advance parse state.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_arg_parse_advance(state: *mut ArgParseState) {
-    if !state.is_null() {
-        (*state).advance();
     }
 }
 
@@ -356,34 +309,6 @@ impl ShortOpt {
     }
 }
 
-/// FFI: Parse short option.
-#[no_mangle]
-#[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn rs_parse_short_opt(c: c_int) -> c_int {
-    ShortOpt::from_char(c as u8) as c_int
-}
-
-/// FFI: Check if short option requires arg.
-#[no_mangle]
-pub extern "C" fn rs_short_opt_requires_arg(opt: c_int) -> c_int {
-    let short_opt = match opt {
-        1 => ShortOpt::Binary,
-        2 => ShortOpt::Command,
-        3 => ShortOpt::Diff,
-        4 => ShortOpt::Ex,
-        5 => ShortOpt::Help,
-        11 => ShortOpt::Quickfix,
-        14 => ShortOpt::Tag,
-        15 => ShortOpt::UseVimrc,
-        17 => ShortOpt::ScriptOut,
-        24 => ShortOpt::Source,
-        25 => ShortOpt::Verbose,
-        26 => ShortOpt::ScriptOutOverwrite,
-        _ => ShortOpt::Unknown,
-    };
-    c_int::from(short_opt.requires_arg())
-}
-
 // =============================================================================
 // Long Option Recognition
 // =============================================================================
@@ -436,8 +361,7 @@ pub enum LongOpt {
 ///
 /// # Safety
 /// `arg` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_match_long_opt(arg: *const c_char) -> c_int {
+pub unsafe fn rs_match_long_opt(arg: *const c_char) -> c_int {
     if arg.is_null() {
         return 0;
     }
@@ -518,14 +442,6 @@ unsafe fn match_long_opt_str(p: *const c_char) -> LongOpt {
     }
 }
 
-/// FFI: Check if long option requires arg.
-#[no_mangle]
-pub extern "C" fn rs_long_opt_requires_arg(opt: c_int) -> c_int {
-    // Listen=7, Server=8, Remote=9, RemoteSilent=10, RemoteWait=11,
-    // RemoteWaitSilent=12, RemoteSend=13, RemoteExpr=14, StartupTime=15, Cmd=16
-    c_int::from((7..=16).contains(&opt))
-}
-
 // =============================================================================
 // Argument Classification
 // =============================================================================
@@ -534,8 +450,7 @@ pub extern "C" fn rs_long_opt_requires_arg(opt: c_int) -> c_int {
 ///
 /// # Safety
 /// `arg` must be valid.
-#[no_mangle]
-pub unsafe extern "C" fn rs_classify_arg(arg: *const c_char) -> c_int {
+pub unsafe fn rs_classify_arg(arg: *const c_char) -> c_int {
     if arg.is_null() {
         return 0;
     }

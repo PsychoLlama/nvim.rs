@@ -84,18 +84,6 @@ impl StartupPhase {
     }
 }
 
-/// FFI: Check if startup phase is complete.
-#[no_mangle]
-pub extern "C" fn rs_startup_is_complete(phase: c_int) -> c_int {
-    c_int::from(StartupPhase::from_c_int(phase).is_complete())
-}
-
-/// FFI: Check if in early init.
-#[no_mangle]
-pub extern "C" fn rs_startup_is_early(phase: c_int) -> c_int {
-    c_int::from(StartupPhase::from_c_int(phase).is_early())
-}
-
 // =============================================================================
 // Tests
 // =============================================================================

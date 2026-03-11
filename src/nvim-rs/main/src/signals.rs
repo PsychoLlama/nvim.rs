@@ -101,33 +101,6 @@ impl SignalType {
     }
 }
 
-/// FFI: Parse signal number.
-#[no_mangle]
-pub extern "C" fn rs_signal_from_signum(signum: c_int) -> c_int {
-    SignalType::from_signum(signum).to_c_int()
-}
-
-/// FFI: Check if signal is fatal.
-#[no_mangle]
-pub extern "C" fn rs_signal_is_fatal(sig: c_int) -> c_int {
-    let sig_type = match sig {
-        12 => SignalType::Segv,
-        13 => SignalType::Bus,
-        14 => SignalType::Fpe,
-        15 => SignalType::Ill,
-        4 => SignalType::Quit,
-        _ => SignalType::Unknown,
-    };
-    c_int::from(sig_type.is_fatal())
-}
-
-/// FFI: Check if signal causes exit.
-#[no_mangle]
-pub extern "C" fn rs_signal_causes_exit(sig: c_int) -> c_int {
-    let sig_type = SignalType::from_signum(sig);
-    c_int::from(sig_type.causes_exit())
-}
-
 // =============================================================================
 // Signal Handler State
 // =============================================================================
@@ -196,46 +169,6 @@ impl SignalState {
     }
 }
 
-/// FFI: Create signal state.
-#[no_mangle]
-pub extern "C" fn rs_signal_state_new() -> SignalState {
-    SignalState::new()
-}
-
-/// FFI: Record signal.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_signal_state_record(state: *mut SignalState, signum: c_int) {
-    if !state.is_null() {
-        (*state).record(signum);
-    }
-}
-
-/// FFI: Check if wants interrupt.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_signal_wants_interrupt(state: *const SignalState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).wants_interrupt())
-}
-
-/// FFI: Reset interrupt count.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_signal_reset_interrupt(state: *mut SignalState) {
-    if !state.is_null() {
-        (*state).reset_interrupt();
-    }
-}
-
 // =============================================================================
 // Signal Mask
 // =============================================================================
@@ -295,55 +228,6 @@ impl SignalMask {
     }
 }
 
-/// FFI: Create empty signal mask.
-#[no_mangle]
-pub extern "C" fn rs_signal_mask_empty() -> SignalMask {
-    SignalMask::empty()
-}
-
-/// FFI: Create full signal mask.
-#[no_mangle]
-pub extern "C" fn rs_signal_mask_all() -> SignalMask {
-    SignalMask::all()
-}
-
-/// FFI: Add signal to mask.
-///
-/// # Safety
-/// `mask` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_signal_mask_add(mask: *mut SignalMask, sig: c_int) {
-    if !mask.is_null() {
-        let sig_type = match sig {
-            1 => SignalType::Int,
-            2 => SignalType::Term,
-            3 => SignalType::Hup,
-            7 => SignalType::Winch,
-            _ => SignalType::Unknown,
-        };
-        (*mask).add(sig_type);
-    }
-}
-
-/// FFI: Check if mask contains signal.
-///
-/// # Safety
-/// `mask` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_signal_mask_contains(mask: *const SignalMask, sig: c_int) -> c_int {
-    if mask.is_null() {
-        return 0;
-    }
-    let sig_type = match sig {
-        1 => SignalType::Int,
-        2 => SignalType::Term,
-        3 => SignalType::Hup,
-        7 => SignalType::Winch,
-        _ => SignalType::Unknown,
-    };
-    c_int::from((*mask).contains(sig_type))
-}
-
 // =============================================================================
 // Signal Handler Actions
 // =============================================================================
@@ -394,20 +278,6 @@ pub const fn recommended_action(sig: SignalType) -> SignalAction {
         }
         _ => SignalAction::Default,
     }
-}
-
-/// FFI: Get recommended action for signal.
-#[no_mangle]
-pub extern "C" fn rs_signal_recommended_action(sig: c_int) -> c_int {
-    let sig_type = match sig {
-        1 => SignalType::Int,
-        2 => SignalType::Term,
-        3 => SignalType::Hup,
-        7 => SignalType::Winch,
-        10 => SignalType::Pipe,
-        _ => SignalType::Unknown,
-    };
-    recommended_action(sig_type).to_c_int()
 }
 
 // =============================================================================

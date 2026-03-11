@@ -69,12 +69,6 @@ impl ExitCode {
     }
 }
 
-/// FFI: Check if exit code is success.
-#[no_mangle]
-pub extern "C" fn rs_exit_is_success(code: c_int) -> c_int {
-    c_int::from(ExitCode::from_c_int(code).is_success())
-}
-
 // =============================================================================
 // Exit Reason
 // =============================================================================
@@ -134,18 +128,6 @@ impl ExitReason {
     }
 }
 
-/// FFI: Check if exit allows save.
-#[no_mangle]
-pub extern "C" fn rs_exit_allows_save(reason: c_int) -> c_int {
-    c_int::from(ExitReason::from_c_int(reason).allows_save())
-}
-
-/// FFI: Check if exit runs autocmds.
-#[no_mangle]
-pub extern "C" fn rs_exit_runs_autocmds(reason: c_int) -> c_int {
-    c_int::from(ExitReason::from_c_int(reason).runs_autocmds())
-}
-
 // =============================================================================
 // Exit State
 // =============================================================================
@@ -203,35 +185,6 @@ impl ExitState {
     pub const fn should_write_shada(&self) -> bool {
         self.write_shada && self.get_reason().allows_save()
     }
-}
-
-/// FFI: Create exit state.
-#[no_mangle]
-pub extern "C" fn rs_exit_state_new() -> ExitState {
-    ExitState::new()
-}
-
-/// FFI: Begin exit.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_exit_state_begin(state: *mut ExitState, code: c_int, reason: c_int) {
-    if !state.is_null() {
-        (*state).begin(ExitCode::from_c_int(code), ExitReason::from_c_int(reason));
-    }
-}
-
-/// FFI: Check if should write shada.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_exit_should_write_shada(state: *const ExitState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).should_write_shada())
 }
 
 // =============================================================================
@@ -301,18 +254,6 @@ impl CleanupPhase {
     }
 }
 
-/// FFI: Get next cleanup phase.
-#[no_mangle]
-pub extern "C" fn rs_cleanup_phase_next(phase: c_int) -> c_int {
-    CleanupPhase::from_c_int(phase).next().to_c_int()
-}
-
-/// FFI: Check if cleanup is complete.
-#[no_mangle]
-pub extern "C" fn rs_cleanup_is_complete(phase: c_int) -> c_int {
-    c_int::from(CleanupPhase::from_c_int(phase).is_complete())
-}
-
 // =============================================================================
 // Preserved State
 // =============================================================================
@@ -351,24 +292,6 @@ impl PreservedState {
     pub const fn has_content(&self) -> bool {
         self.file_count > 0
     }
-}
-
-/// FFI: Create preserved state.
-#[no_mangle]
-pub extern "C" fn rs_preserved_state_new() -> PreservedState {
-    PreservedState::new()
-}
-
-/// FFI: Check if preserved state has content.
-///
-/// # Safety
-/// `state` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_preserved_has_content(state: *const PreservedState) -> c_int {
-    if state.is_null() {
-        return 0;
-    }
-    c_int::from((*state).has_content())
 }
 
 // =============================================================================

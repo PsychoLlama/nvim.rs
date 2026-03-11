@@ -66,36 +66,6 @@ impl InitFlags {
     }
 }
 
-/// FFI: Create init flags.
-#[no_mangle]
-pub extern "C" fn rs_init_flags_new() -> InitFlags {
-    InitFlags::new()
-}
-
-/// FFI: Check if config disabled.
-///
-/// # Safety
-/// `flags` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_init_is_config_disabled(flags: *const InitFlags) -> c_int {
-    if flags.is_null() {
-        return 0;
-    }
-    c_int::from((*flags).is_config_disabled())
-}
-
-/// FFI: Check if plugins disabled.
-///
-/// # Safety
-/// `flags` must be valid or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_init_is_plugins_disabled(flags: *const InitFlags) -> c_int {
-    if flags.is_null() {
-        return 0;
-    }
-    c_int::from((*flags).is_plugins_disabled())
-}
-
 // =============================================================================
 // Init Step Result
 // =============================================================================
@@ -143,18 +113,6 @@ impl InitResult {
     pub const fn is_fatal(self) -> bool {
         matches!(self, Self::Error)
     }
-}
-
-/// FFI: Check if init result is OK.
-#[no_mangle]
-pub extern "C" fn rs_init_result_is_ok(result: c_int) -> c_int {
-    c_int::from(InitResult::from_c_int(result).is_ok())
-}
-
-/// FFI: Check if init result is fatal.
-#[no_mangle]
-pub extern "C" fn rs_init_result_is_fatal(result: c_int) -> c_int {
-    c_int::from(InitResult::from_c_int(result).is_fatal())
 }
 
 // =============================================================================
