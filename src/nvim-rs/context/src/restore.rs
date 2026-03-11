@@ -1,6 +1,6 @@
 use std::os::raw::c_int;
 
-use crate::{ffi, rs_ctx_free, Context};
+use crate::{ctx_stack, ffi, rs_ctx_free, stack, Context};
 
 const KCTX_REGS: c_int = 1;
 const KCTX_JUMPS: c_int = 2;
@@ -15,11 +15,11 @@ const SHADA_READ_FLAGS: c_int = 5;
 pub unsafe extern "C" fn rs_ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     let mut free_ctx = false;
     let ctx = if ctx.is_null() {
-        if ffi::nvim_get_ctx_stack_size() == 0 {
+        if ctx_stack.size == 0 {
             return false;
         }
         free_ctx = true;
-        ffi::nvim_ctx_stack_pop()
+        stack::ctx_stack_pop_slot()
     } else {
         ctx
     };

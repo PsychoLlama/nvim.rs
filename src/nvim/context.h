@@ -15,6 +15,8 @@ typedef struct {
 } Context;
 typedef kvec_t(Context) ContextVec;
 
+extern ContextVec ctx_stack;
+
 #define CONTEXT_INIT (Context) { \
   .regs = STRING_INIT, \
   .jumps = STRING_INIT, \

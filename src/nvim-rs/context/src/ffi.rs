@@ -3,20 +3,11 @@ use std::os::raw::c_int;
 use crate::{Array, Context, Dict, NvimString};
 
 extern "C" {
-    // Stack access
-    pub fn nvim_get_ctx_stack_size() -> usize;
-    pub fn nvim_get_ctx_at_index(index: usize) -> *mut Context;
-    pub fn nvim_ctx_stack_at_forward(index: usize) -> *mut Context;
-
-    // Stack mutation
-    pub fn nvim_ctx_stack_push_init();
-    pub fn nvim_ctx_stack_last() -> *mut Context;
-    pub fn nvim_ctx_stack_pop() -> *mut Context;
-    pub fn nvim_ctx_stack_destroy();
-
     // Memory
     pub fn rs_api_free_string(value: NvimString);
     pub fn rs_api_free_array(value: Array);
+    pub fn xfree(ptr: *mut std::ffi::c_void);
+    pub fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
 
     // ShaDa encoding (implemented in nvim-shada Rust crate)
     pub fn rs_shada_encode_regs() -> NvimString;

@@ -1,6 +1,6 @@
 use std::os::raw::c_int;
 
-use crate::{ffi, Context};
+use crate::{ffi, stack, Context};
 
 const KCTX_REGS: c_int = 1;
 const KCTX_JUMPS: c_int = 2;
@@ -11,12 +11,7 @@ const KCTX_FUNCS: c_int = 32;
 
 #[export_name = "ctx_save"]
 pub unsafe extern "C" fn rs_ctx_save(ctx: *mut Context, flags: c_int) {
-    let ctx = if ctx.is_null() {
-        ffi::nvim_ctx_stack_push_init();
-        ffi::nvim_ctx_stack_last()
-    } else {
-        ctx
-    };
+    let ctx = stack::ctx_stack_push_or_ptr(ctx);
 
     let c = &mut *ctx;
 

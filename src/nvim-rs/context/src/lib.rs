@@ -93,11 +93,24 @@ pub struct Context {
     pub funcs: Array,
 }
 
+/// `ContextVec` matching `kvec_t(Context)` layout.
+#[repr(C)]
+pub struct ContextVec {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut Context,
+}
+
+unsafe extern "C" {
+    /// The global context stack defined in context.c.
+    pub static mut ctx_stack: ContextVec;
+}
+
 /// Returns the size of the context stack.
 #[must_use]
 #[export_name = "ctx_size"]
 pub unsafe extern "C" fn rs_ctx_size() -> usize {
-    ffi::nvim_get_ctx_stack_size()
+    ctx_stack.size
 }
 
 /// Returns pointer to Context object with given zero-based index from the top
@@ -105,7 +118,12 @@ pub unsafe extern "C" fn rs_ctx_size() -> usize {
 #[must_use]
 #[export_name = "ctx_get"]
 pub unsafe extern "C" fn rs_ctx_get(index: usize) -> *mut Context {
-    ffi::nvim_get_ctx_at_index(index)
+    if index < ctx_stack.size {
+        // kv_Z: items[size - index - 1]
+        ctx_stack.items.add(ctx_stack.size - index - 1)
+    } else {
+        std::ptr::null_mut()
+    }
 }
 
 /// Free resources used by a Context object.

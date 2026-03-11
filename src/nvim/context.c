@@ -31,70 +31,7 @@ extern void rs_optval_free(OptVal o);
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
-static ContextVec ctx_stack = KV_INITIAL_VALUE;
-
-// Rust FFI accessor functions
-
-// Compile-time verification that Rust constants match C values
-_Static_assert(kCtxRegs == 1, "kCtxRegs must be 1");
-_Static_assert(kCtxJumps == 2, "kCtxJumps must be 2");
-_Static_assert(kCtxBufs == 4, "kCtxBufs must be 4");
-_Static_assert(kCtxGVars == 8, "kCtxGVars must be 8");
-_Static_assert(kCtxSFuncs == 16, "kCtxSFuncs must be 16");
-_Static_assert(kCtxFuncs == 32, "kCtxFuncs must be 32");
-
-size_t nvim_get_ctx_stack_size(void)
-{
-  return kv_size(ctx_stack);
-}
-
-/// Returns a pointer to Context at given index from the top of the stack.
-/// Returns NULL if index is out of bounds.
-Context *nvim_get_ctx_at_index(size_t index)
-{
-  if (index < kv_size(ctx_stack)) {
-    return &kv_Z(ctx_stack, index);
-  }
-  return NULL;
-}
-
-/// Returns a pointer to Context at given forward index.
-/// Returns NULL if index is out of bounds.
-Context *nvim_ctx_stack_at_forward(size_t index)
-{
-  if (index < kv_size(ctx_stack)) {
-    return &kv_A(ctx_stack, index);
-  }
-  return NULL;
-}
-
-/// Push a CONTEXT_INIT onto the stack.
-void nvim_ctx_stack_push_init(void)
-{
-  kv_push(ctx_stack, CONTEXT_INIT);
-}
-
-/// Returns a pointer to the last element of the stack.
-Context *nvim_ctx_stack_last(void)
-{
-  return &kv_last(ctx_stack);
-}
-
-/// Pops the last element from the stack and returns a pointer to the
-/// (still-allocated) slot. The memory is valid until the next push/destroy.
-Context *nvim_ctx_stack_pop(void)
-{
-  // kv_pop decrements size and returns the value.
-  // The slot memory at items[size] is still allocated, so we can return its address.
-  (void)kv_pop(ctx_stack);
-  return &ctx_stack.items[ctx_stack.size];
-}
-
-/// Destroy the stack (free items array, reset to empty).
-void nvim_ctx_stack_destroy(void)
-{
-  kv_destroy(ctx_stack);
-}
+ContextVec ctx_stack = KV_INITIAL_VALUE;
 
 // ShaDa option save/restore accessors.
 // Wraps the save-set-restore pattern for the shada option so Rust
