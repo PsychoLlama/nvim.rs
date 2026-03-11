@@ -67,16 +67,9 @@ extern int score_wordcount_adj(slang_T *slang, int score, char *word, bool split
 extern int badword_captype(char *word, char *end);
 extern bool similar_chars(slang_T *slang, int c1, int c2);
 
-// Use this to adjust the score after finding suggestions, based on the
-// suggested word sounding like the bad word.  This is much faster than doing
-// it for every possible suggestion.
-// Disadvantage: When "the" is typed as "hte" it sounds quite different ("@"
-// vs "ht") and goes down in the list.
-// Used when 'spellsuggest' is set to "best".
+// Adjust the final score using the sound-alike score (used when 'best' mode).
 #define RESCORE(word_score, sound_score) ((3 * (word_score) + (sound_score)) / 4)
-
-// Do the opposite: based on a maximum end score and a known sound score,
-// compute the maximum word score that can be used.
+// Compute the maximum word score given a maximum end score and a sound score.
 #define MAXSCORE(word_score, sound_score) ((4 * (word_score) - (sound_score)) / 3)
 
 // only used for su_badflags
@@ -116,14 +109,9 @@ typedef struct {
 // True if a word appears in the list of banned words.
 #define WAS_BANNED(su, word) (!HASHITEM_EMPTY(hash_find(&(su)->su_banned, word)))
 
-// Number of suggestions kept when cleaning up.  We need to keep more than
-// what is displayed, because when rescore_suggestions() is called the score
-// may change and wrong suggestions may be removed later.
-#define SUG_CLEAN_COUNT(su)    ((su)->su_maxcount < \
-                                130 ? 150 : (su)->su_maxcount + 20)
-
-// Threshold for sorting and cleaning up suggestions.  Don't want to keep lots
-// of suggestions that are not going to be displayed.
+// Keep more suggestions than displayed; rescore_suggestions() may change scores.
+#define SUG_CLEAN_COUNT(su)    ((su)->su_maxcount < 130 ? 150 : (su)->su_maxcount + 20)
+// Threshold for sorting/cleanup: don't accumulate suggestions beyond this.
 #define SUG_MAX_COUNT(su)       (SUG_CLEAN_COUNT(su) + 50)
 
 // score for various changes
@@ -943,11 +931,8 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
 {
   char tword[MAXWLEN];            // good word collected so far
   trystate_T stack[MAXWLEN];
-  char preword[MAXWLEN * 3] = { 0 };  // word found with proper case;
-  // concatenation of prefix compound
-  // words and split word.  NUL terminated
-  // when going deeper but not when coming
-  // back.
+  // preword: proper-case word; concatenation of prefix, compound, and split parts.
+  char preword[MAXWLEN * 3] = { 0 };
   uint8_t compflags[MAXWLEN];        // compound flags, one for each word
   uint8_t *byts, *fbyts, *pbyts;
   idx_T *idxs, *fidxs, *pidxs;
@@ -962,9 +947,7 @@ static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char *fword, bool soun
   int breakcheckcount = 1000;
 
   // Go through the whole case-fold tree, try changes at each node.
-  // "tword[]" contains the word collected from nodes in the tree.
-  // "fword[]" the word we are trying to match with (initially the bad
-  // word).
+  // tword[] = good word collected from tree nodes, fword[] = bad word to match.
   int depth = 0;
   trystate_T *sp = &stack[0];
   CLEAR_POINTER(sp);
