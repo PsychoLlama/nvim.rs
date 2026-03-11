@@ -36,16 +36,6 @@
 #include "profile.c.generated.h"
 
 // Rust implementations of profile functions
-extern proftime_T rs_profile_zero(void);
-extern proftime_T rs_profile_divide(proftime_T tm, int count);
-extern proftime_T rs_profile_add(proftime_T tm1, proftime_T tm2);
-extern proftime_T rs_profile_sub(proftime_T tm1, proftime_T tm2);
-extern proftime_T rs_profile_self(proftime_T self, proftime_T total, proftime_T children);
-extern bool rs_profile_equal(proftime_T tm1, proftime_T tm2);
-extern int64_t rs_profile_signed(proftime_T tm);
-extern int rs_profile_cmp(proftime_T tm1, proftime_T tm2);
-extern proftime_T rs_profile_get_wait(void);
-extern proftime_T rs_profile_sub_wait(proftime_T tm, proftime_T tma);
 // Phase 1: timing wrappers
 extern proftime_T rs_profile_start(void);
 extern proftime_T rs_profile_end(proftime_T tm);
@@ -142,104 +132,6 @@ proftime_T profile_setlimit(int64_t msec) FUNC_ATTR_WARN_UNUSED_RESULT
 bool profile_passed_limit(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_profile_passed_limit(tm);
-}
-
-/// Gets the zero time.
-///
-/// @return the zero time
-proftime_T profile_zero(void) FUNC_ATTR_CONST
-{
-  return rs_profile_zero();
-}
-
-/// Divides time `tm` by `count`.
-///
-/// @return 0 if count <= 0, otherwise tm / count
-proftime_T profile_divide(proftime_T tm, int count) FUNC_ATTR_CONST
-{
-  return rs_profile_divide(tm, count);
-}
-
-/// Adds time `tm2` to `tm1`.
-///
-/// @return `tm1` + `tm2`
-proftime_T profile_add(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
-{
-  return rs_profile_add(tm1, tm2);
-}
-
-/// Subtracts time `tm2` from `tm1`.
-///
-/// Unsigned overflow (wraparound) occurs if `tm2` is greater than `tm1`.
-/// Use `profile_signed()` to get the signed integer value.
-///
-/// @see profile_signed
-///
-/// @return `tm1` - `tm2`
-proftime_T profile_sub(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
-{
-  return rs_profile_sub(tm1, tm2);
-}
-
-/// Adds the `self` time from the total time and the `children` time.
-///
-/// @return if `total` <= `children`, then self, otherwise `self` + `total` -
-///         `children`
-proftime_T profile_self(proftime_T self, proftime_T total, proftime_T children)
-  FUNC_ATTR_CONST
-{
-  return rs_profile_self(self, total, children);
-}
-
-/// Gets the current waittime.
-///
-/// @return the current waittime
-static proftime_T profile_get_wait(void) FUNC_ATTR_PURE
-{
-  return rs_profile_get_wait();
-}
-
-/// Sets the current waittime.
-void profile_set_wait(proftime_T wait)
-{
-  rs_profile_set_wait(wait);
-}
-
-/// Subtracts the passed waittime since `tm`.
-///
-/// @return `tma` - (waittime - `tm`)
-proftime_T profile_sub_wait(proftime_T tm, proftime_T tma) FUNC_ATTR_PURE
-{
-  return rs_profile_sub_wait(tm, tma);
-}
-
-/// Checks if time `tm1` is equal to `tm2`.
-///
-/// @return true if `tm1` == `tm2`
-static bool profile_equal(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
-{
-  return rs_profile_equal(tm1, tm2);
-}
-
-/// Converts time duration `tm` (`profile_sub` result) to a signed integer.
-///
-/// @return signed representation of the given time value
-int64_t profile_signed(proftime_T tm)
-  FUNC_ATTR_CONST
-{
-  return rs_profile_signed(tm);
-}
-
-/// Compares profiling times.
-///
-/// Times `tm1` and `tm2` must be less than 150 years apart.
-///
-/// @return <0: `tm2` < `tm1`
-///          0: `tm2` == `tm1`
-///         >0: `tm2` > `tm1`
-int profile_cmp(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
-{
-  return rs_profile_cmp(tm1, tm2);
 }
 
 /// Reset all profiling information.

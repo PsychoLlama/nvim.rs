@@ -23,7 +23,7 @@ use std::os::raw::c_int;
 pub type Proftime = u64;
 
 /// Returns the zero time.
-#[no_mangle]
+#[export_name = "profile_zero"]
 pub extern "C" fn rs_profile_zero() -> Proftime {
     0
 }
@@ -31,7 +31,7 @@ pub extern "C" fn rs_profile_zero() -> Proftime {
 /// Divides time `tm` by `count`.
 ///
 /// Returns 0 if count <= 0, otherwise tm / count (rounded).
-#[no_mangle]
+#[export_name = "profile_divide"]
 pub extern "C" fn rs_profile_divide(tm: Proftime, count: c_int) -> Proftime {
     if count <= 0 {
         return 0;
@@ -43,7 +43,7 @@ pub extern "C" fn rs_profile_divide(tm: Proftime, count: c_int) -> Proftime {
 /// Adds time `tm2` to `tm1`.
 ///
 /// Returns `tm1` + `tm2`.
-#[no_mangle]
+#[export_name = "profile_add"]
 pub extern "C" fn rs_profile_add(tm1: Proftime, tm2: Proftime) -> Proftime {
     tm1.wrapping_add(tm2)
 }
@@ -52,7 +52,7 @@ pub extern "C" fn rs_profile_add(tm1: Proftime, tm2: Proftime) -> Proftime {
 ///
 /// Unsigned overflow (wraparound) occurs if `tm2` is greater than `tm1`.
 /// Use `rs_profile_signed()` to get the signed integer value.
-#[no_mangle]
+#[export_name = "profile_sub"]
 pub extern "C" fn rs_profile_sub(tm1: Proftime, tm2: Proftime) -> Proftime {
     tm1.wrapping_sub(tm2)
 }
@@ -60,7 +60,7 @@ pub extern "C" fn rs_profile_sub(tm1: Proftime, tm2: Proftime) -> Proftime {
 /// Adds the `self` time from the total time and the `children` time.
 ///
 /// Returns if `total` <= `children`, then self, otherwise `self` + `total` - `children`.
-#[no_mangle]
+#[export_name = "profile_self"]
 pub extern "C" fn rs_profile_self(
     self_time: Proftime,
     total: Proftime,
@@ -75,7 +75,7 @@ pub extern "C" fn rs_profile_self(
 }
 
 /// Checks if time `tm1` is equal to `tm2`.
-#[no_mangle]
+#[export_name = "profile_equal"]
 pub extern "C" fn rs_profile_equal(tm1: Proftime, tm2: Proftime) -> bool {
     tm1 == tm2
 }
@@ -83,7 +83,7 @@ pub extern "C" fn rs_profile_equal(tm1: Proftime, tm2: Proftime) -> bool {
 /// Converts time duration `tm` (from `profile_sub` result) to a signed integer.
 ///
 /// If tm > INT64_MAX, it's assumed to be a negative duration from unsigned wraparound.
-#[no_mangle]
+#[export_name = "profile_signed"]
 pub extern "C" fn rs_profile_signed(tm: Proftime) -> i64 {
     // (tm > INT64_MAX) is >=150 years, so we can assume it was produced by
     // arithmetic of two proftime_T values. For human-readable representation
@@ -103,7 +103,7 @@ pub extern "C" fn rs_profile_signed(tm: Proftime) -> i64 {
 /// - <0: `tm2` < `tm1`
 /// -  0: `tm2` == `tm1`
 /// - >0: `tm2` > `tm1`
-#[no_mangle]
+#[export_name = "profile_cmp"]
 pub extern "C" fn rs_profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int {
     if tm1 == tm2 {
         return 0;
@@ -120,7 +120,7 @@ pub extern "C" fn rs_profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int {
 /// # Safety
 ///
 /// Accesses mutable static via `timing` module.
-#[no_mangle]
+#[export_name = "profile_get_wait"]
 pub unsafe extern "C" fn rs_profile_get_wait() -> Proftime {
     timing::rs_profile_get_wait_time()
 }
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn rs_profile_get_wait() -> Proftime {
 /// # Safety
 ///
 /// Accesses mutable static via `timing` module.
-#[no_mangle]
+#[export_name = "profile_sub_wait"]
 pub unsafe extern "C" fn rs_profile_sub_wait(tm: Proftime, tma: Proftime) -> Proftime {
     let tm3 = rs_profile_sub(timing::rs_profile_get_wait_time(), tm);
     rs_profile_sub(tma, tm3)

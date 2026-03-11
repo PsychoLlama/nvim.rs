@@ -36,11 +36,11 @@ extern "C" {
     // Columns
     fn nvim_syn_get_columns() -> c_int;
 
-    // Profile arithmetic (from profile Rust crate, exposed as C symbols)
-    fn rs_profile_zero() -> Proftime;
-    fn rs_profile_add(tm1: Proftime, tm2: Proftime) -> Proftime;
-    fn rs_profile_divide(tm: Proftime, count: c_int) -> Proftime;
-    fn rs_profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int;
+    // Profile arithmetic (from profile Rust crate, exported via #[export_name])
+    fn profile_zero() -> Proftime;
+    fn profile_add(tm1: Proftime, tm2: Proftime) -> Proftime;
+    fn profile_divide(tm: Proftime, count: c_int) -> Proftime;
+    fn profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int;
     fn rs_profile_msg(tm: Proftime) -> *const c_char;
 
     // Highlight group name
@@ -168,7 +168,7 @@ unsafe fn syntime_report_impl() {
 
     // Collect entries with count > 0
     let mut entries: Vec<TimeEntry> = Vec::new();
-    let mut total_total: Proftime = rs_profile_zero();
+    let mut total_total: Proftime = profile_zero();
     let mut total_count: i32 = 0;
 
     for idx in 0..pat_count {
@@ -180,8 +180,8 @@ unsafe fn syntime_report_impl() {
         let count = (*pp).sp_time.count;
         if count > 0 {
             let total = (*pp).sp_time.total;
-            total_total = rs_profile_add(total_total, total);
-            let average = rs_profile_divide(total, count);
+            total_total = profile_add(total_total, total);
+            let average = profile_divide(total, count);
             entries.push(TimeEntry {
                 total,
                 count,
@@ -197,7 +197,7 @@ unsafe fn syntime_report_impl() {
 
     // Sort by total time descending (profile_cmp returns <0 if tm2 < tm1)
     entries.sort_by(|a, b| {
-        let cmp = rs_profile_cmp(a.total, b.total);
+        let cmp = profile_cmp(a.total, b.total);
         cmp.cmp(&0)
     });
 
