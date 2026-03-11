@@ -18,7 +18,19 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+
+// =============================================================================
+// FFI: existing C symbols (no new C accessors)
+// =============================================================================
+
+extern "C" {
+    /// Find channel by ID. Defined in eval_shim.c.
+    fn nvim_find_channel(id: u64) -> *mut c_void;
+    /// Check if channel is a valid running job (proc stream, not stopped).
+    /// Defined in eval_shim.c.
+    fn nvim_channel_is_valid_job(chan: *mut c_void) -> c_int;
+}
 
 // =============================================================================
 // Constants
@@ -142,6 +154,23 @@ impl ClientType {
             _ => Self::Unknown,
         }
     }
+}
+
+// =============================================================================
+// Migrated functions
+// =============================================================================
+
+/// Check if a channel ID refers to a running job process.
+///
+/// Returns true if the channel exists, is a proc stream, and has not stopped.
+///
+/// # Safety
+///
+/// Accesses the global channels map.
+#[export_name = "channel_job_running"]
+pub unsafe extern "C" fn rs_channel_job_running(id: u64) -> bool {
+    let chan = nvim_find_channel(id);
+    !chan.is_null() && nvim_channel_is_valid_job(chan) != 0
 }
 
 // =============================================================================

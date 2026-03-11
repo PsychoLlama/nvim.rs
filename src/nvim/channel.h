@@ -49,6 +49,9 @@ struct Channel {
 #include "channel.h.generated.h"
 #include "channel.h.inline.generated.h"
 
+// Implemented in Rust (src/nvim-rs/channel/src/lib.rs)
+bool channel_job_running(uint64_t id);
+
 static inline bool callback_reader_set(CallbackReader reader)
 {
   return reader.cb.type != kCallbackNone || reader.self;
