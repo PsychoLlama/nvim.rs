@@ -172,6 +172,19 @@ extern void rs_source_startup_scripts(const mparm_T *parmp);
 // Expose GARGLIST[idx] name to Rust
 char *nvim_garglist_name(int idx) { return alist_name(&GARGLIST[idx]); }
 
+// Rust implementations (Phase 3: command execution and quickfix helpers)
+extern void rs_exe_pre_commands(mparm_T *parmp);
+extern void rs_exe_commands(mparm_T *parmp);
+extern void rs_handle_quickfix(mparm_T *paramp);
+extern void rs_handle_tag(char *tagname);
+extern bool rs_edit_stdin(const mparm_T *parmp);
+
+// Thin helper: set 'errorfile' option from Rust (avoids OptVal complexity)
+void nvim_set_errorfile_opt(const char *val)
+{
+  set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(val), 0, SID_CARG);
+}
+
 Loop main_loop;
 
 char *nvim_argv0 = NULL;
@@ -1054,17 +1067,9 @@ static void remote_request(mparm_T *params, int remote_args, char *server_addr, 
   }
 }
 
-/// Decides whether text (as opposed to commands) will be read from stdin.
-/// @see EDIT_STDIN
 static bool edit_stdin(mparm_T *parmp)
 {
-  bool implicit = !headless_mode
-                  && !(embedded_mode && stdin_fd <= 0)
-                  && (!exmode_active || parmp->input_istext)
-                  && !stdin_isatty
-                  && parmp->edit_type <= EDIT_STDIN
-                  && parmp->scriptin == NULL;  // `-s -` was not given.
-  return parmp->had_stdin_file || implicit;
+  return rs_edit_stdin(parmp);
 }
 
 /// Scan the command line arguments.
@@ -1553,39 +1558,19 @@ static void set_window_layout(mparm_T *paramp)
   rs_set_window_layout(paramp);
 }
 
-// "-q errorfile": Load the error file now.
-// If the error file can't be read, exit before doing anything else.
 static void handle_quickfix(mparm_T *paramp)
 {
+  rs_handle_quickfix(paramp);
   if (paramp->edit_type == EDIT_QF) {
-    if (paramp->use_ef != NULL) {
-      set_option_direct(kOptErrorfile, CSTR_AS_OPTVAL(paramp->use_ef), 0, SID_CARG);
-    }
-    vim_snprintf(IObuff, IOSIZE, "cfile %s", p_ef);
-    if (qf_init(NULL, p_ef, p_efm, true, IObuff, p_menc) < 0) {
-      msg_putchar('\n');
-      os_exit(3);
-    }
     TIME_MSG("reading errorfile");
   }
 }
 
-// Need to jump to the tag before executing the '-c command'.
-// Makes "vim -c '/return' -t main" work.
 static void handle_tag(char *tagname)
 {
+  rs_handle_tag(tagname);
   if (tagname != NULL) {
-    swap_exists_did_quit = false;
-
-    vim_snprintf(IObuff, IOSIZE, "ta %s", tagname);
-    do_cmdline_cmd(IObuff);
     TIME_MSG("jumping to tag");
-
-    // If the user doesn't want to edit the file then we quit here.
-    if (swap_exists_did_quit) {
-      ui_call_error_exit(1);
-      getout(1);
-    }
   }
 }
 
@@ -1878,60 +1863,15 @@ static void edit_buffers(mparm_T *parmp, char *cwd)
   }
 }
 
-// Execute the commands from --cmd arguments "cmds[cnt]".
 static void exe_pre_commands(mparm_T *parmp)
 {
-  char **cmds = parmp->pre_commands;
-  int cnt = parmp->n_pre_commands;
-
-  if (cnt <= 0) {
-    return;
-  }
-
-  curwin->w_cursor.lnum = 0;     // just in case..
-  estack_push(ETYPE_ARGS, _("pre-vimrc command line"), 0);
-  current_sctx.sc_sid = SID_CMDARG;
-  for (int i = 0; i < cnt; i++) {
-    do_cmdline_cmd(cmds[i]);
-  }
-  estack_pop();
-  current_sctx.sc_sid = 0;
+  rs_exe_pre_commands(parmp);
   TIME_MSG("--cmd commands");
 }
 
-// Execute "+", "-c" and "-S" arguments.
 static void exe_commands(mparm_T *parmp)
 {
-  // We start commands on line 0, make "vim +/pat file" match a
-  // pattern on line 1.  But don't move the cursor when an autocommand
-  // with g`" was used.
-  msg_scroll = true;
-  if (parmp->tagname == NULL && curwin->w_cursor.lnum <= 1) {
-    curwin->w_cursor.lnum = 0;
-  }
-  estack_push(ETYPE_ARGS, "command line", 0);
-  current_sctx.sc_sid = SID_CARG;
-  current_sctx.sc_seq = 0;
-  for (int i = 0; i < parmp->n_commands; i++) {
-    do_cmdline_cmd(parmp->commands[i]);
-    if (parmp->cmds_tofree[i]) {
-      xfree(parmp->commands[i]);
-    }
-  }
-  estack_pop();
-  current_sctx.sc_sid = 0;
-  if (curwin->w_cursor.lnum == 0) {
-    curwin->w_cursor.lnum = 1;
-  }
-
-  if (!exmode_active) {
-    msg_scroll = false;
-  }
-
-  // When started with "-q errorfile" jump to first error again.
-  if (parmp->edit_type == EDIT_QF) {
-    rs_qf_jump_newwin(NULL, 0, 0, false, false);
-  }
+  rs_exe_commands(parmp);
   TIME_MSG("executing command arguments");
 }
 

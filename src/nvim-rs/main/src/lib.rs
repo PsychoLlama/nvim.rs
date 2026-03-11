@@ -14,6 +14,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod args;
+pub mod commands;
 pub mod config;
 pub mod exit;
 pub mod helpers;
