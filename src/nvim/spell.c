@@ -214,6 +214,12 @@ _Static_assert(offsetof(slang_T, sl_rep) == 552, "sl_rep offset mismatch");
 _Static_assert(offsetof(slang_T, sl_rep_first) == 576, "sl_rep_first offset mismatch");
 _Static_assert(offsetof(slang_T, sl_sofo) == 2139, "sl_sofo offset mismatch");
 _Static_assert(offsetof(slang_T, sl_compmax) == 424, "sl_compmax offset mismatch");
+_Static_assert(offsetof(slang_T, sl_has_map) == 2721, "sl_has_map offset mismatch");
+_Static_assert(offsetof(slang_T, sl_map_hash) == 2728, "sl_map_hash offset mismatch");
+_Static_assert(offsetof(slang_T, sl_map_array) == 3024, "sl_map_array offset mismatch");
+_Static_assert(offsetof(slang_T, sl_sounddone) == 4048, "sl_sounddone offset mismatch");
+_Static_assert(offsetof(slang_T, sl_sbyts) == 2696, "sl_sbyts offset mismatch");
+_Static_assert(offsetof(slang_T, sl_sidxs) == 2704, "sl_sidxs offset mismatch");
 
 /// mode values for find_word
 enum {

@@ -160,8 +160,19 @@ pub struct SlangRaw {
     pub sl_repsal_first: [i16; 256],   // offset 2168 (size 512)
     pub sl_nosplitsugs: bool,          // offset 2680
     pub sl_nocompoundsugs: bool,       // offset 2681
-    // Remaining fields (sug file info, map hash, sounddone): padding only
-    _tail: [u8; 1662], // 4344 - 2682 = 1662 bytes
+    // Sug file info
+    _pad6: [u8; 6],             // padding 2682..2687
+    pub sl_sugtime: i64,        // offset 2688 (time_t, 8 bytes)
+    pub sl_sbyts: *mut u8,      // offset 2696 (soundfold word bytes)
+    pub sl_sidxs: *mut c_int,   // offset 2704 (soundfold word indexes)
+    pub sl_sugbuf: *mut c_void, // offset 2712 (buffer with word number table)
+    pub sl_sugloaded: bool,     // offset 2720
+    // MAP data
+    pub sl_has_map: bool,           // offset 2721
+    _pad7: [u8; 6],                 // padding 2722..2727
+    pub sl_map_hash: HashtabRaw,    // offset 2728 (296 bytes, MAP for multi-byte chars)
+    pub sl_map_array: [c_int; 256], // offset 3024 (1024 bytes, MAP for first 256 chars)
+    pub sl_sounddone: HashtabRaw,   // offset 4048 (296 bytes)
 }
 
 // =============================================================================
@@ -459,6 +470,36 @@ impl SlangHandle {
     #[must_use]
     pub fn midword(self) -> *mut c_char {
         unsafe { (*self.0).sl_midword }
+    }
+
+    /// Get whether this language has MAP data
+    #[must_use]
+    pub fn has_map(self) -> bool {
+        unsafe { (*self.0).sl_has_map }
+    }
+
+    /// Get the MAP array for ASCII chars (first 256 code points)
+    #[must_use]
+    pub fn map_array(self) -> *const c_int {
+        unsafe { (*self.0).sl_map_array.as_ptr() }
+    }
+
+    /// Get a mutable pointer to the MAP hashtab for multi-byte chars
+    #[must_use]
+    pub fn map_hash(self) -> *mut HashtabRaw {
+        unsafe { std::ptr::addr_of_mut!((*self.0).sl_map_hash) }
+    }
+
+    /// Get soundfold word bytes array
+    #[must_use]
+    pub fn sbyts(self) -> *mut u8 {
+        unsafe { (*self.0).sl_sbyts }
+    }
+
+    /// Get soundfold word indexes array
+    #[must_use]
+    pub fn sidxs(self) -> *mut c_int {
+        unsafe { (*self.0).sl_sidxs }
     }
 }
 

@@ -3217,22 +3217,6 @@ static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
 }
 
 
-// =============================================================================
-// C accessor functions for Rust FFI
-// =============================================================================
-
-/// Check if slang_T has MAP data (sl_has_map).
-bool nvim_slang_has_map(slang_T *slang)
-{
-  return slang->sl_has_map;
-}
-
-/// Check if two characters are similar according to MAP lines.
-bool nvim_similar_chars(slang_T *slang, int c1, int c2)
-{
-  return similar_chars(slang, c1, c2);
-}
-
 /// Convert character to its case-folded equivalent.
 /// Wrapper around the SPELL_TOFOLD macro for Rust FFI access.
 int spell_tofold(int c)

@@ -93,18 +93,106 @@ pub const SCORE_BIG: c_int = 3 * SCORES.ins;
 // =============================================================================
 
 extern "C" {
-    // Character classification from spellfile
-    fn nvim_slang_has_map(slang: SlangHandle) -> bool;
-
-    // Similar character check - uses slang's MAP data
-    fn nvim_similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool;
-
     // UTF-8 to character conversion
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 
     // Case folding for spell checking
     fn spell_tofold(c: c_int) -> c_int;
+
+    // Hashtable lookup (from nvim/hashtab.c)
+    fn hash_find(ht: *const crate::HashtabRaw, key: *const c_char) -> *mut crate::HashitemRaw;
+
+    // Magic sentinel for removed hash items
+    static hash_removed: c_char;
+}
+
+// =============================================================================
+// Similar Character Detection (MAP data)
+// =============================================================================
+
+/// Check if two characters belong to the same MAP group.
+///
+/// MAP lines in .aff files group similar characters (e.g., accented variants).
+/// This function returns true if c1 and c2 are in the same group.
+///
+/// # Safety
+/// `slang` must be a valid non-null handle with MAP data loaded.
+unsafe fn hashitem_is_empty(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed).cast_mut())
+}
+
+unsafe fn similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool {
+    let m1 = if c1 >= 256 {
+        let mut buf = [0u8; 8]; // MB_MAXCHAR + 1
+        let len = utf_char2bytes(c1, buf.as_mut_ptr().cast::<c_char>()) as usize;
+        buf[len] = 0;
+        let hi = hash_find(slang.map_hash(), buf.as_ptr().cast::<c_char>());
+        if hashitem_is_empty(hi) {
+            0
+        } else {
+            // Value stored after the key's NUL terminator
+            let key_end = (*hi).hi_key.add(libc_strlen((*hi).hi_key) + 1);
+            utf_ptr2char(key_end)
+        }
+    } else {
+        *slang.map_array().add(c1 as usize)
+    };
+
+    if m1 == 0 {
+        return false;
+    }
+
+    let m2 = if c2 >= 256 {
+        let mut buf = [0u8; 8];
+        let len = utf_char2bytes(c2, buf.as_mut_ptr().cast::<c_char>()) as usize;
+        buf[len] = 0;
+        let hi = hash_find(slang.map_hash(), buf.as_ptr().cast::<c_char>());
+        if hashitem_is_empty(hi) {
+            0
+        } else {
+            let key_end = (*hi).hi_key.add(libc_strlen((*hi).hi_key) + 1);
+            utf_ptr2char(key_end)
+        }
+    } else {
+        *slang.map_array().add(c2 as usize)
+    };
+
+    m1 == m2
+}
+
+/// Get byte length of a null-terminated C string (equivalent to strlen).
+/// Used in similar_chars to skip past a hash key to its value.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut n = 0usize;
+    while *s.add(n) != 0 {
+        n += 1;
+    }
+    n
+}
+
+/// Check if a slang_T has MAP data.
+/// Replaces the C accessor `nvim_slang_has_map`.
+///
+/// # Safety
+/// `slang` must be a valid non-null handle.
+#[must_use]
+#[export_name = "nvim_slang_has_map"]
+pub unsafe extern "C" fn rs_nvim_slang_has_map(slang: SlangHandle) -> bool {
+    slang.has_map()
+}
+
+/// Check if two characters are in the same MAP group.
+/// Replaces the C accessor `nvim_similar_chars`.
+///
+/// # Safety
+/// `slang` must be a valid non-null handle.
+#[must_use]
+#[export_name = "nvim_similar_chars"]
+pub unsafe extern "C" fn rs_nvim_similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool {
+    similar_chars(slang, c1, c2)
 }
 
 // =============================================================================
@@ -144,7 +232,7 @@ pub unsafe extern "C" fn rs_spell_edit_score(
     let goodlen = goodlen + 1;
 
     // Check for similar characters if slang has MAP data
-    let has_map = !slang.is_null() && nvim_slang_has_map(slang);
+    let has_map = !slang.is_null() && slang.has_map();
 
     spell_edit_score_impl(slang, &wbadword, badlen, &wgoodword, goodlen, has_map)
 }
@@ -186,7 +274,7 @@ fn spell_edit_score_impl(
                 let subst_score = if unsafe { spell_tofold(bc) == spell_tofold(gc) } {
                     // Only case difference
                     SCORES.icase
-                } else if has_map && unsafe { nvim_similar_chars(slang, gc, bc) } {
+                } else if has_map && unsafe { similar_chars(slang, gc, bc) } {
                     // Similar characters according to MAP
                     SCORES.similar
                 } else {
@@ -251,7 +339,7 @@ pub unsafe extern "C" fn rs_spell_edit_score_limit(
     wbadword[badlen] = 0;
     wgoodword[goodlen] = 0;
 
-    let has_map = !slang.is_null() && nvim_slang_has_map(slang);
+    let has_map = !slang.is_null() && slang.has_map();
 
     spell_edit_score_limit_impl(slang, &wbadword, &wgoodword, limit, has_map)
 }
@@ -405,7 +493,7 @@ fn spell_edit_score_limit_impl(
             let gc = wgoodword[gi];
             let subst_score = if unsafe { spell_tofold(bc) == spell_tofold(gc) } {
                 SCORES.icase
-            } else if has_map && unsafe { nvim_similar_chars(slang, gc, bc) } {
+            } else if has_map && unsafe { similar_chars(slang, gc, bc) } {
                 SCORES.similar
             } else {
                 SCORES.subst
