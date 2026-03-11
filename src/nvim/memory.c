@@ -59,8 +59,6 @@ MemRealloc mem_realloc = &realloc;
 // Rust FFI declarations (tag module)
 extern void rs_free_tag_stuff(void);
 
-extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
-extern size_t rs_arena_align_offset(uint64_t off);
 extern void rs_diff_clear(tabpage_T *tp);
 
 #ifdef EXITFREE
@@ -258,30 +256,6 @@ void *xmemcpyz(void *dst, const void *src, size_t len)
   return dst;
 }
 
-#ifndef HAVE_STRNLEN
-size_t xstrnlen(const char *s, size_t n)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  const char *end = memchr(s, NUL, n);
-  if (end == NULL) {
-    return n;
-  }
-  return (size_t)(end - s);
-}
-#endif
-
-/// Copies the string pointed to by src (including the terminating NUL
-/// character) into the array pointed to by dst.
-///
-/// @returns pointer to the terminating NUL char copied into the dst buffer.
-///          This is the only difference with strcpy(), which returns dst.
-///
-/// WARNING: If copying takes place between objects that overlap, the behavior
-/// is undefined.
-///
-/// Nvim version of POSIX 2008 stpcpy(3). We do not require POSIX 2008, so
-/// implement our own version.
-///
 /// strdup() wrapper
 ///
 /// @see {xmalloc}
@@ -330,12 +304,6 @@ void *xmemdup(const void *data, size_t len)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   return memcpy(xmalloc(len), data, len);
-}
-
-/// Writes time_t to "buf[8]".
-void time_to_bytes(time_t time_, uint8_t buf[8])
-{
-  rs_time_to_bytes((int64_t)time_, buf);
 }
 
 /// Iterative merge sort for doubly linked list.
@@ -500,8 +468,6 @@ void arena_alloc_block(Arena *arena)
   struct consumed_blk *blk = arena_alloc(arena, sizeof(struct consumed_blk), true);
   blk->prev = prev_blk;
 }
-
-#define arena_align_offset(off) rs_arena_align_offset(off)
 
 /// @param arena if NULL, do a global allocation. caller must then free the value!
 /// @param size if zero, will still return a non-null pointer, but not a usable or unique one

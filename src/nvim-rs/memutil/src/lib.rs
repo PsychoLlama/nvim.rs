@@ -17,7 +17,8 @@ use std::ffi::c_char;
 /// Get the length of a string up to a maximum of `n` bytes.
 ///
 /// Like `strnlen` but always available.
-#[no_mangle]
+#[export_name = "xstrnlen"]
+#[must_use]
 pub unsafe extern "C" fn rs_xstrnlen(s: *const c_char, n: usize) -> usize {
     if s.is_null() {
         return 0;
@@ -216,7 +217,7 @@ type HashT = usize;
 /// # Safety
 ///
 /// `buf` must point to a buffer of at least 8 bytes.
-#[no_mangle]
+#[export_name = "time_to_bytes"]
 pub unsafe extern "C" fn rs_time_to_bytes(time_: i64, buf: *mut u8) {
     if buf.is_null() {
         return;
@@ -304,7 +305,8 @@ const ARENA_ALIGN: usize = {
 /// Align an offset to the arena alignment boundary.
 ///
 /// Returns the smallest value >= `off` that is aligned to `ARENA_ALIGN` bytes.
-#[no_mangle]
+#[export_name = "arena_align_offset"]
+#[must_use]
 #[allow(clippy::cast_possible_truncation)] // Intentional for 32-bit platforms
 pub extern "C" fn rs_arena_align_offset(off: u64) -> usize {
     let align = ARENA_ALIGN as u64;

@@ -69,6 +69,11 @@ extern char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxle
 extern size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize);
 extern size_t xstrlcat(char *const dst, const char *const src, const size_t dsize);
 
+// Rust-provided replacements for deleted C wrapper functions (Phase 3)
+extern size_t xstrnlen(const char *s, size_t n);
+extern void time_to_bytes(time_t time_, uint8_t buf[8]);
+extern size_t arena_align_offset(size_t off);
+
 #define XFREE_CLEAR(ptr) \
   do { \
     /* Take the address to avoid double evaluation. #1375 */ \
