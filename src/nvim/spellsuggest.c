@@ -2,9 +2,6 @@
 
 #include <stdint.h>
 
-// Rust implementations (slang_T forward declared below)
-extern int rs_bytes2offset(const uint8_t **pp);
-
 #include <assert.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -58,75 +55,12 @@ extern int rs_bytes2offset(const uint8_t **pp);
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-// Rust edit distance implementations
+// Rust implementations used in this file
 extern int rs_spell_edit_score(slang_T *slang, const char *badword, const char *goodword);
-extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword, int limit);
+extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword,
+                                     int limit);
 extern int rs_soundalike_score(const char *goodstart, const char *badstart);
-
-// Rust score computation functions
-extern int rs_rescore_suggestion(int word_score, int sound_score);
-extern int rs_maxscore_for_suggestion(int max_score, int sound_score);
-extern int rs_score_maxmax(void);
-extern int rs_score_big_suggest(void);
-extern size_t rs_maxsug(void);
-
-// Rust byte manipulation for suggestions
-extern bool rs_swap_bytes(uint8_t *word, size_t word_len, size_t pos);
-extern bool rs_swap3_bytes(uint8_t *word, size_t word_len, size_t pos);
-extern bool rs_rotate3_left(uint8_t *word, size_t word_len, size_t pos);
-extern bool rs_rotate3_right(uint8_t *word, size_t word_len, size_t pos);
-extern size_t rs_delete_byte(uint8_t *word, size_t word_len, size_t pos);
-extern bool rs_insert_byte(uint8_t *word, size_t word_len, size_t *new_len, size_t pos, uint8_t byte);
-extern bool rs_substitute_byte(uint8_t *word, size_t word_len, size_t pos, uint8_t byte);
-
-// Rust suggestion comparison functions
-extern int rs_suggestion_compare(const void *a, const void *b);
-extern bool rs_suggestion_same_word(const void *a, const void *b);
-
-// Rust REP replacement functions
-extern int rs_rep_matches_at(const char *word, size_t word_len, const char *from, size_t from_len, size_t pos);
-extern bool rs_apply_rep(char *word, size_t word_cap, size_t *word_len, const char *from, size_t from_len, const char *to, size_t to_len, size_t pos);
-
-// Phase B3: TryState for suggestion state machine
-// The TryState struct exists in Rust but the suggestion state machine
-// (suggest_trie_walk) remains in C for now. These declarations make
-// the Rust TryState available for future migration.
-typedef struct {
-  int state;          // Current state
-  int score;          // Score accumulated so far
-  int ts_isdiff;      // Difference type (DIFF_* values)
-  int ts_fcharstart;  // Start of character in fword
-  int ts_curi;        // Current index in child nodes
-  int ts_arridx;      // Current array index
-  uint8_t ts_save_badflags;  // Saved bad word flags
-  uint8_t ts_flags;   // TSF_* flags
-  int ts_prefixdepth; // Prefix depth
-  int ts_fidx;        // Index in fword
-  int ts_fidxtry;     // Try index in fword
-  int ts_twordlen;    // Length of tword
-  int ts_badwordlen;  // Length of bad word part
-  int ts_splitoff;    // Split word offset
-  int ts_splitfidx;   // Split fword index
-  int ts_complen;     // Compound part length
-  int ts_compsplit;   // Compound split index
-  uint8_t ts_prewordlen;  // Prefix word length
-  uint8_t ts_tcharlen;    // Tword character length
-  uint8_t ts_tcharidx;    // Tword character index
-  uint8_t ts_delidx;      // Deletion index
-} RsTryState;
-
-extern void rs_trystate_new(RsTryState *out);
-extern int rs_trystate_get_state(const RsTryState *ts);
-extern void rs_trystate_set_state(RsTryState *ts, int state);
-extern bool rs_go_deeper(RsTryState *stack, size_t depth, int score_add);
-
-// Phase B3: Suggestion score constants
-extern int rs_score_default_del(void);
-extern int rs_score_default_ins(void);
-extern int rs_score_default_subst(void);
-extern int rs_score_default_swap(void);
-extern int rs_score_default_icase(void);
-extern int rs_score_default_similar(void);
+extern int rs_bytes2offset(const uint8_t **pp);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -139,97 +73,6 @@ extern int rs_score_default_similar(void);
 // Do the opposite: based on a maximum end score and a known sound score,
 // compute the maximum word score that can be used.
 #define MAXSCORE(word_score, sound_score) ((4 * (word_score) - (sound_score)) / 3)
-
-/// Rescore a suggestion. Rust implementation.
-static int rescore_sug(int word_score, int sound_score)
-  FUNC_ATTR_CONST
-{
-  return rs_rescore_suggestion(word_score, sound_score);
-}
-
-/// Compute max word score for a given max end score. Rust implementation.
-static int maxscore_sug(int max_score, int sound_score)
-  FUNC_ATTR_CONST
-{
-  return rs_maxscore_for_suggestion(max_score, sound_score);
-}
-
-/// Get SCORE_MAXMAX constant. Rust implementation.
-static int get_score_maxmax(void)
-  FUNC_ATTR_CONST
-{
-  return rs_score_maxmax();
-}
-
-/// Get SCORE_BIG constant. Rust implementation.
-static int get_score_big(void)
-  FUNC_ATTR_CONST
-{
-  return rs_score_big_suggest();
-}
-
-/// Get maximum suggestions constant. Rust implementation.
-static size_t get_maxsug(void)
-  FUNC_ATTR_CONST
-{
-  return rs_maxsug();
-}
-
-/// Swap two adjacent bytes in a word. Rust implementation.
-static bool swap_bytes(uint8_t *word, size_t word_len, size_t pos)
-{
-  return rs_swap_bytes(word, word_len, pos);
-}
-
-/// Swap bytes over 3 positions. Rust implementation.
-static bool swap3_bytes(uint8_t *word, size_t word_len, size_t pos)
-{
-  return rs_swap3_bytes(word, word_len, pos);
-}
-
-/// Rotate 3 bytes left. Rust implementation.
-static bool rotate3_left(uint8_t *word, size_t word_len, size_t pos)
-{
-  return rs_rotate3_left(word, word_len, pos);
-}
-
-/// Rotate 3 bytes right. Rust implementation.
-static bool rotate3_right(uint8_t *word, size_t word_len, size_t pos)
-{
-  return rs_rotate3_right(word, word_len, pos);
-}
-
-/// Delete a byte from a word. Rust implementation.
-static size_t delete_byte(uint8_t *word, size_t word_len, size_t pos)
-{
-  return rs_delete_byte(word, word_len, pos);
-}
-
-/// Insert a byte into a word. Rust implementation.
-static bool insert_byte(uint8_t *word, size_t word_len, size_t *new_len, size_t pos, uint8_t byte)
-{
-  return rs_insert_byte(word, word_len, new_len, pos, byte);
-}
-
-/// Substitute a byte in a word. Rust implementation.
-static bool substitute_byte(uint8_t *word, size_t word_len, size_t pos, uint8_t byte)
-{
-  return rs_substitute_byte(word, word_len, pos, byte);
-}
-
-/// Check if REP matches at position. Rust implementation.
-static int rep_matches_at(const char *word, size_t word_len, const char *from, size_t from_len,
-                          size_t pos)
-{
-  return rs_rep_matches_at(word, word_len, from, from_len, pos);
-}
-
-/// Apply REP replacement. Rust implementation.
-static bool apply_rep(char *word, size_t word_cap, size_t *word_len, const char *from,
-                      size_t from_len, const char *to, size_t to_len, size_t pos)
-{
-  return rs_apply_rep(word, word_cap, word_len, from, from_len, to, to_len, pos);
-}
 
 // only used for su_badflags
 #define WF_MIXCAP   0x20        // mix of upper and lower case: macaRONI
@@ -505,15 +348,6 @@ static int badword_captype(char *word, char *end)
   }
 
   return flags;
-}
-
-/// Opposite of offset2bytes().
-/// "pp" points to the bytes and is advanced over it.
-///
-/// @return  the offset.
-static int bytes2offset(char **pp)
-{
-  return rs_bytes2offset((const uint8_t **)pp);
 }
 
 // values for sps_flags
@@ -2671,7 +2505,7 @@ static void score_combine(suginfo_T *su)
   // Add the alternate score to su_sga.
   for (int i = 0; i < su->su_sga.ga_len; i++) {
     suggest_T *stp = &SUG(su->su_sga, i);
-    stp->st_altscore = spell_edit_score(slang, su->su_badword, stp->st_word);
+    stp->st_altscore = rs_spell_edit_score(slang, su->su_badword, stp->st_word);
     if (stp->st_score == SCORE_MAXMAX) {
       stp->st_score = (SCORE_BIG * 7 + stp->st_altscore) / 8;
     } else {
@@ -2777,7 +2611,7 @@ static int stp_sal_score(suggest_T *stp, suginfo_T *su, slang_T *slang, char *ba
   // Sound-fold the word and compute the score for the difference.
   spell_soundfold(slang, pgood, false, goodsound);
 
-  return soundalike_score(goodsound, pbad);
+  return rs_soundalike_score(goodsound, pbad);
 }
 
 /// structure used to store soundfolded words that add_sound_suggest() has
@@ -2908,7 +2742,7 @@ static void add_sound_suggest(suginfo_T *su, char *goodword, int score, langp_T 
   while (*nrline != NUL) {
     // The wordnr was stored in a minimal nr of bytes as an offset to the
     // previous wordnr.
-    orgnr += bytes2offset(&nrline);
+    orgnr += rs_bytes2offset((const uint8_t **)&nrline);
 
     byts = slang->sl_fbyts;
     idx_T *idxs = slang->sl_fidxs;
@@ -3013,9 +2847,9 @@ badword:
         // inefficient, using an array is quicker.
         int limit = MAXSCORE(su->su_sfmaxscore - goodscore, score);
         if (limit > SCORE_LIMITMAX) {
-          goodscore += spell_edit_score(slang, su->su_badword, p);
+          goodscore += rs_spell_edit_score(slang, su->su_badword, p);
         } else {
-          goodscore += spell_edit_score_limit(slang, su->su_badword, p, limit);
+          goodscore += rs_spell_edit_score_limit(slang, su->su_badword, p, limit);
         }
 
         // When going over the limit don't bother to do the rest.
@@ -3382,291 +3216,6 @@ static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
   return maxscore;
 }
 
-/// Compute a score for two sound-a-like words.
-/// This permits up to two inserts/deletes/swaps/etc. to keep things fast.
-/// Now implemented in Rust (rs_soundalike_score).
-///
-/// @param goodstart  sound-folded good word
-/// @param badstart  sound-folded bad word
-static int soundalike_score(char *goodstart, char *badstart)
-{
-  return rs_soundalike_score(goodstart, badstart);
-}
-
-/// Compute the "edit distance" to turn "badword" into "goodword".  The less
-/// deletes/inserts/substitutes/swaps are required the lower the score.
-///
-/// The algorithm is described by Du and Chang, 1992.
-/// The implementation of the algorithm comes from Aspell editdist.cpp,
-/// edit_distance().  Now implemented in Rust (rs_spell_edit_score).
-static int spell_edit_score(slang_T *slang, const char *badword, const char *goodword)
-{
-  return rs_spell_edit_score(slang, badword, goodword);
-}
-
-#if 0  // Replaced by Rust implementation
-static int spell_edit_score_c(slang_T *slang, const char *badword, const char *goodword)
-{
-  int wbadword[MAXWLEN];
-  int wgoodword[MAXWLEN];
-
-  // Lengths with NUL.
-  int badlen;
-  int goodlen;
-  {
-    // Get the characters from the multi-byte strings and put them in an
-    // int array for easy access.
-    badlen = 0;
-    for (const char *p = badword; *p != NUL;) {
-      wbadword[badlen++] = mb_cptr2char_adv(&p);
-    }
-    wbadword[badlen++] = 0;
-    goodlen = 0;
-    for (const char *p = goodword; *p != NUL;) {
-      wgoodword[goodlen++] = mb_cptr2char_adv(&p);
-    }
-    wgoodword[goodlen++] = 0;
-  }
-
-  // We use "cnt" as an array: CNT(badword_idx, goodword_idx).
-#define CNT(a, b)   cnt[(a) + (b) * (badlen + 1)]
-  int *cnt = xmalloc(sizeof(int) * ((size_t)badlen + 1) * ((size_t)goodlen + 1));
-
-  CNT(0, 0) = 0;
-  for (int j = 1; j <= goodlen; j++) {
-    CNT(0, j) = CNT(0, j - 1) + SCORE_INS;
-  }
-
-  for (int i = 1; i <= badlen; i++) {
-    CNT(i, 0) = CNT(i - 1, 0) + SCORE_DEL;
-    for (int j = 1; j <= goodlen; j++) {
-      int bc = wbadword[i - 1];
-      int gc = wgoodword[j - 1];
-      if (bc == gc) {
-        CNT(i, j) = CNT(i - 1, j - 1);
-      } else {
-        // Use a better score when there is only a case difference.
-        if (SPELL_TOFOLD(bc) == SPELL_TOFOLD(gc)) {
-          CNT(i, j) = SCORE_ICASE + CNT(i - 1, j - 1);
-        } else {
-          // For a similar character use SCORE_SIMILAR.
-          if (slang != NULL
-              && slang->sl_has_map
-              && similar_chars(slang, gc, bc)) {
-            CNT(i, j) = SCORE_SIMILAR + CNT(i - 1, j - 1);
-          } else {
-            CNT(i, j) = SCORE_SUBST + CNT(i - 1, j - 1);
-          }
-        }
-
-        if (i > 1 && j > 1) {
-          int pbc = wbadword[i - 2];
-          int pgc = wgoodword[j - 2];
-          if (bc == pgc && pbc == gc) {
-            int t = SCORE_SWAP + CNT(i - 2, j - 2);
-            CNT(i, j) = MIN(CNT(i, j), t);
-          }
-        }
-        int t = SCORE_DEL + CNT(i - 1, j);
-        CNT(i, j) = MIN(CNT(i, j), t);
-        t = SCORE_INS + CNT(i, j - 1);
-        CNT(i, j) = MIN(CNT(i, j), t);
-      }
-    }
-  }
-
-  int i = CNT(badlen - 1, goodlen - 1);
-  xfree(cnt);
-  return i;
-}
-#endif  // spell_edit_score_c
-
-/// Like spell_edit_score(), but with a limit on the score to make it faster.
-/// May return SCORE_MAXMAX when the score is higher than "limit".
-/// Now implemented in Rust (rs_spell_edit_score_limit).
-static int spell_edit_score_limit(slang_T *slang, char *badword, char *goodword, int limit)
-{
-  return rs_spell_edit_score_limit(slang, badword, goodword, limit);
-}
-
-typedef struct {
-  int badi;
-  int goodi;
-  int score;
-} limitscore_T;
-
-#if 0  // Old C implementation replaced by Rust
-/// Like spell_edit_score(), but with a limit on the score to make it faster.
-/// May return SCORE_MAXMAX when the score is higher than "limit".
-///
-/// This uses a stack for the edits still to be tried.
-/// The idea comes from Aspell leditdist.cpp.  Rewritten in C and added support
-/// for multi-byte characters.
-static int spell_edit_score_limit_c(slang_T *slang, char *badword, char *goodword, int limit)
-{
-  return spell_edit_score_limit_w(slang, badword, goodword, limit);
-}
-
-/// Multi-byte version of spell_edit_score_limit().
-/// Keep it in sync with the above!
-static int spell_edit_score_limit_w(slang_T *slang, const char *badword, const char *goodword,
-                                    int limit)
-{
-  limitscore_T stack[10];               // allow for over 3 * 2 edits
-  int bc, gc;
-  int score_off;
-  int wbadword[MAXWLEN];
-  int wgoodword[MAXWLEN];
-
-  // Get the characters from the multi-byte strings and put them in an
-  // int array for easy access.
-  int bi = 0;
-  for (const char *p = badword; *p != NUL;) {
-    wbadword[bi++] = mb_cptr2char_adv(&p);
-  }
-  wbadword[bi++] = 0;
-  int gi = 0;
-  for (const char *p = goodword; *p != NUL;) {
-    wgoodword[gi++] = mb_cptr2char_adv(&p);
-  }
-  wgoodword[gi++] = 0;
-
-  // The idea is to go from start to end over the words.  So long as
-  // characters are equal just continue, this always gives the lowest score.
-  // When there is a difference try several alternatives.  Each alternative
-  // increases "score" for the edit distance.  Some of the alternatives are
-  // pushed unto a stack and tried later, some are tried right away.  At the
-  // end of the word the score for one alternative is known.  The lowest
-  // possible score is stored in "minscore".
-  int stackidx = 0;
-  bi = 0;
-  gi = 0;
-  int score = 0;
-  int minscore = limit + 1;
-
-  while (true) {
-    // Skip over an equal part, score remains the same.
-    while (true) {
-      bc = wbadword[bi];
-      gc = wgoodword[gi];
-
-      if (bc != gc) {           // stop at a char that's different
-        break;
-      }
-      if (bc == NUL) {          // both words end
-        if (score < minscore) {
-          minscore = score;
-        }
-        goto pop;               // do next alternative
-      }
-      bi++;
-      gi++;
-    }
-
-    if (gc == NUL) {      // goodword ends, delete badword chars
-      do {
-        if ((score += SCORE_DEL) >= minscore) {
-          goto pop;                 // do next alternative
-        }
-      } while (wbadword[++bi] != NUL);
-      minscore = score;
-    } else if (bc == NUL) {   // badword ends, insert badword chars
-      do {
-        if ((score += SCORE_INS) >= minscore) {
-          goto pop;                 // do next alternative
-        }
-      } while (wgoodword[++gi] != NUL);
-      minscore = score;
-    } else {                  // both words continue
-      // If not close to the limit, perform a change.  Only try changes
-      // that may lead to a lower score than "minscore".
-      // round 0: try deleting a char from badword
-      // round 1: try inserting a char in badword
-      for (int round = 0; round <= 1; round++) {
-        score_off = score + (round == 0 ? SCORE_DEL : SCORE_INS);
-        if (score_off < minscore) {
-          if (score_off + SCORE_EDIT_MIN >= minscore) {
-            // Near the limit, rest of the words must match.  We
-            // can check that right now, no need to push an item
-            // onto the stack.
-            int bi2 = bi + 1 - round;
-            int gi2 = gi + round;
-            while (wgoodword[gi2] == wbadword[bi2]) {
-              if (wgoodword[gi2] == NUL) {
-                minscore = score_off;
-                break;
-              }
-              bi2++;
-              gi2++;
-            }
-          } else {
-            // try deleting a character from badword later
-            stack[stackidx].badi = bi + 1 - round;
-            stack[stackidx].goodi = gi + round;
-            stack[stackidx].score = score_off;
-            stackidx++;
-          }
-        }
-      }
-
-      if (score + SCORE_SWAP < minscore) {
-        // If swapping two characters makes a match then the
-        // substitution is more expensive, thus there is no need to
-        // try both.
-        if (gc == wbadword[bi + 1] && bc == wgoodword[gi + 1]) {
-          // Swap two characters, that is: skip them.
-          gi += 2;
-          bi += 2;
-          score += SCORE_SWAP;
-          continue;
-        }
-      }
-
-      // Substitute one character for another which is the same
-      // thing as deleting a character from both goodword and badword.
-      // Use a better score when there is only a case difference.
-      if (SPELL_TOFOLD(bc) == SPELL_TOFOLD(gc)) {
-        score += SCORE_ICASE;
-      } else {
-        // For a similar character use SCORE_SIMILAR.
-        if (slang != NULL
-            && slang->sl_has_map
-            && similar_chars(slang, gc, bc)) {
-          score += SCORE_SIMILAR;
-        } else {
-          score += SCORE_SUBST;
-        }
-      }
-
-      if (score < minscore) {
-        // Do the substitution.
-        gi++;
-        bi++;
-        continue;
-      }
-    }
-pop:
-    // Get here to try the next alternative, pop it from the stack.
-    if (stackidx == 0) {                // stack is empty, finished
-      break;
-    }
-
-    // pop an item from the stack
-    stackidx--;
-    gi = stack[stackidx].goodi;
-    bi = stack[stackidx].badi;
-    score = stack[stackidx].score;
-  }
-
-  // When the score goes over "limit" it may actually be much higher.
-  // Return a very large number to avoid going below the limit when giving a
-  // bonus.
-  if (minscore > limit) {
-    return SCORE_MAXMAX;
-  }
-  return minscore;
-}
-#endif  // Replaced by Rust implementation
 
 // =============================================================================
 // C accessor functions for Rust FFI
