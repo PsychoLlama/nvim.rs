@@ -2873,6 +2873,11 @@ int nvim_cmdline_mouse_used(void)
 /// Set v:echospace variable.
 void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
 
+// Spell checking synblock accessors — used by Rust spell crate for spell_iswordp*
+bool nvim_win_get_b_cjk(const win_T *wp) { return wp->w_s->b_cjk != 0; }
+const bool *nvim_win_get_b_spell_ismw(const win_T *wp) { return wp->w_s->b_spell_ismw; }
+const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_spell_ismw_mb; }
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");

@@ -195,6 +195,8 @@ extern void rs_optval_free(OptVal o);
 // Rust implementations of spell functions
 extern bool rs_spell_mb_isword_class(int cl, bool cjk);
 extern int rs_find_region(const char *rp, const char *region);
+// spell_iswordp_w was static in C but is now exported from Rust
+extern bool spell_iswordp_w(const int *p, const win_T *wp);
 
 // Static assertions to validate Rust repr(C) struct layout matches C struct layout.
 // These catch layout mismatches at compile time before they cause silent bugs.
@@ -1548,29 +1550,6 @@ theend:
   return ret;
 }
 
-// For spell checking: concatenate the start of the following line "line" into
-// "buf", blanking-out special characters.  Copy less than "maxlen" bytes.
-// Keep the blanks at the start of the next line, this is used in win_line()
-// to skip those bytes if the word was OK.
-void spell_cat_line(char *buf, char *line, int maxlen)
-{
-  char *p = skipwhite(line);
-  while (vim_strchr("*#/\"\t", (uint8_t)(*p)) != NULL) {
-    p = skipwhite(p + 1);
-  }
-
-  if (*p == NUL) {
-    return;
-  }
-
-  // Only worth concatenating if there is something else than spaces to
-  // concatenate.
-  int n = (int)(p - line) + 1;
-  if (n < maxlen - 1) {
-    memset(buf, ' ', (size_t)n);
-    xstrlcpy(buf + n, p, (size_t)(maxlen - n));
-  }
-}
 
 // Load word list(s) for "lang" from Vim spell file(s).
 // "lang" must be the language without the region: e.g., "en".
@@ -2249,59 +2228,6 @@ static void use_midword(slang_T *lp, win_T *wp)
 }
 
 
-/// Return case type of word:
-/// w word       0
-/// Word         WF_ONECAP
-/// W WORD       WF_ALLCAP
-/// WoRd wOrd    WF_KEEPCAP
-///
-/// @param[in]  word
-/// @param[in]  end  End of word or NULL for NUL delimited string
-///
-/// @returns  Case type of word
-int captype(const char *word, const char *end)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  const char *p;
-
-  // find first letter
-  for (p = word; !spell_iswordp_nmw(p, curwin); MB_PTR_ADV(p)) {
-    if (end == NULL ? *p == NUL : p >= end) {
-      return 0;             // only non-word characters, illegal word
-    }
-  }
-  int c = mb_ptr2char_adv(&p);
-  bool allcap;
-  bool firstcap = allcap = SPELL_ISUPPER(c);
-  bool past_second = false;              // past second word char
-
-  // Need to check all letters to find a word with mixed upper/lower.
-  // But a word with an upper char only at start is a ONECAP.
-  for (; end == NULL ? *p != NUL : p < end; MB_PTR_ADV(p)) {
-    if (spell_iswordp_nmw(p, curwin)) {
-      c = utf_ptr2char(p);
-      if (!SPELL_ISUPPER(c)) {
-        // UUl -> KEEPCAP
-        if (past_second && allcap) {
-          return WF_KEEPCAP;
-        }
-        allcap = false;
-      } else if (!allcap) {
-        // UlU -> KEEPCAP
-        return WF_KEEPCAP;
-      }
-      past_second = true;
-    }
-  }
-
-  if (allcap) {
-    return WF_ALLCAP;
-  }
-  if (firstcap) {
-    return WF_ONECAP;
-  }
-  return 0;
-}
 
 // Delete the internal wordlist and its .spl file.
 void spell_delete_wordlist(void)
@@ -2413,72 +2339,6 @@ void init_spell_chartab(void)
   }
 }
 
-/// Returns true if "p" points to a word character.
-/// As a special case we see "midword" characters as word character when it is
-/// followed by a word character.  This finds they'there but not 'they there'.
-/// Thus this only works properly when past the first character of the word.
-///
-/// @param wp Buffer used.
-bool spell_iswordp(const char *p, const win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const int l = utfc_ptr2len(p);
-  const char *s = p;
-  if (l == 1) {
-    // be quick for ASCII
-    if (wp->w_s->b_spell_ismw[(uint8_t)(*p)]) {
-      s = p + 1;                      // skip a mid-word character
-    }
-  } else {
-    int c = utf_ptr2char(p);
-    if (c < 256
-        ? wp->w_s->b_spell_ismw[c]
-        : (wp->w_s->b_spell_ismw_mb != NULL
-           && vim_strchr(wp->w_s->b_spell_ismw_mb, c) != NULL)) {
-      s = p + l;
-    }
-  }
-
-  int c = utf_ptr2char(s);
-  if (c > 255) {
-    return rs_spell_mb_isword_class(mb_get_class(s), wp->w_s->b_cjk != 0);
-  }
-  return spelltab.st_isw[c];
-}
-
-// Returns true if "p" points to a word character.
-// Unlike spell_iswordp() this doesn't check for "midword" characters.
-bool spell_iswordp_nmw(const char *p, win_T *wp)
-{
-  int c = utf_ptr2char(p);
-  if (c > 255) {
-    return rs_spell_mb_isword_class(mb_get_class(p), wp->w_s->b_cjk != 0);
-  }
-  return spelltab.st_isw[c];
-}
-
-
-// Returns true if "p" points to a word character.
-// Wide version of spell_iswordp().
-static bool spell_iswordp_w(const int *p, const win_T *wp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const int *s;
-
-  if (*p <
-      256 ? wp->w_s->b_spell_ismw[*p] : (wp->w_s->b_spell_ismw_mb != NULL
-                                         && vim_strchr(wp->w_s->b_spell_ismw_mb,
-                                                       *p) != NULL)) {
-    s = p + 1;
-  } else {
-    s = p;
-  }
-
-  if (*s > 255) {
-    return rs_spell_mb_isword_class(utf_class(*s), wp->w_s->b_cjk != 0);
-  }
-  return spelltab.st_isw[*s];
-}
 
 // Case-fold "str[len]" into "buf[buflen]".  The result is NUL terminated.
 // Uses the character definitions from the .spl file.
@@ -2642,82 +2502,6 @@ void ex_spellrepall(exarg_T *eap)
   }
 }
 
-/// Make a copy of "word", with the first letter upper or lower cased, to
-/// "wcopy[MAXWLEN]".  "word" must not be empty.
-/// The result is NUL terminated.
-///
-/// @param[in]  word  source string to copy
-/// @param[in,out]  wcopy  copied string, with case of first letter changed
-/// @param[in]  upper  True to upper case, otherwise lower case
-void onecap_copy(const char *word, char *wcopy, bool upper)
-{
-  const char *p = word;
-  int c = mb_cptr2char_adv(&p);
-  if (upper) {
-    c = SPELL_TOUPPER(c);
-  } else {
-    c = SPELL_TOFOLD(c);
-  }
-  int l = utf_char2bytes(c, wcopy);
-  xstrlcpy(wcopy + l, p, (size_t)(MAXWLEN - l));
-}
-
-// Make a copy of "word" with all the letters upper cased into
-// "wcopy[MAXWLEN]".  The result is NUL terminated.
-void allcap_copy(const char *word, char *wcopy)
-{
-  char *d = wcopy;
-  for (const char *s = word; *s != NUL;) {
-    int c = mb_cptr2char_adv(&s);
-
-    if (c == 0xdf) {
-      c = 'S';
-      if (d - wcopy >= MAXWLEN - 1) {
-        break;
-      }
-      *d++ = (char)c;
-    } else {
-      c = SPELL_TOUPPER(c);
-    }
-
-    if (d - wcopy >= MAXWLEN - MB_MAXBYTES) {
-      break;
-    }
-    d += utf_char2bytes(c, d);
-  }
-  *d = NUL;
-}
-
-// Case-folding may change the number of bytes: Count nr of chars in
-// fword[flen] and return the byte length of that many chars in "word".
-int nofold_len(char *fword, int flen, char *word)
-{
-  char *p;
-  int i = 0;
-
-  for (p = fword; p < fword + flen; MB_PTR_ADV(p)) {
-    i++;
-  }
-  for (p = word; i > 0; MB_PTR_ADV(p)) {
-    i--;
-  }
-  return (int)(p - word);
-}
-
-// Copy "fword" to "cword", fixing case according to "flags".
-void make_case_word(char *fword, char *cword, int flags)
-{
-  if (flags & WF_ALLCAP) {
-    // Make it all upper-case
-    allcap_copy(fword, cword);
-  } else if (flags & WF_ONECAP) {
-    // Make the first letter upper-case
-    onecap_copy(fword, cword, true);
-  } else {
-    // Use goodword as-is.
-    STRCPY(cword, fword);
-  }
-}
 
 /// Soundfold a string, for soundfold()
 ///

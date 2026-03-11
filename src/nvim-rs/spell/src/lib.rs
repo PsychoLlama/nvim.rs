@@ -1501,6 +1501,412 @@ pub extern "C" fn rs_spell_mb_isword_class(cl: c_int, cjk: bool) -> bool {
 }
 
 // =============================================================================
+// Phase 3: Case/Word Utility Functions
+// =============================================================================
+
+extern "C" {
+    // Multibyte character functions
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn mb_get_class(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_fold(c: c_int) -> c_int;
+    fn mb_toupper(c: c_int) -> c_int;
+    fn mb_isupper(c: c_int) -> bool;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
+    fn utf_class(c: c_int) -> c_int;
+
+    // Window synblock accessors (window_shim.c)
+    fn nvim_win_get_b_cjk(wp: *const c_void) -> bool;
+    fn nvim_win_get_b_spell_ismw(wp: *const c_void) -> *const bool;
+    fn nvim_win_get_b_spell_ismw_mb(wp: *const c_void) -> *const c_char;
+
+    // curwin global
+    #[link_name = "curwin"]
+    static curwin_global: *mut c_void;
+}
+
+/// Fold character using spelltab or utf_fold for high chars (SPELL_TOFOLD macro).
+#[inline]
+#[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
+unsafe fn spell_tofold(c: c_int) -> c_int {
+    if c >= 128 {
+        utf_fold(c)
+    } else {
+        let fold_table = (*std::ptr::addr_of!(spelltab_global)).st_fold.as_ptr();
+        c_int::from(*fold_table.add(c as usize))
+    }
+}
+
+/// Uppercase character using spelltab or mb_toupper for high chars (SPELL_TOUPPER macro).
+#[inline]
+#[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
+unsafe fn spell_toupper(c: c_int) -> c_int {
+    if c >= 128 {
+        mb_toupper(c)
+    } else {
+        let upper_table = (*std::ptr::addr_of!(spelltab_global)).st_upper.as_ptr();
+        c_int::from(*upper_table.add(c as usize))
+    }
+}
+
+/// Check if character is uppercase using spelltab or mb_isupper (SPELL_ISUPPER macro).
+#[inline]
+#[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
+unsafe fn spell_isupper(c: c_int) -> bool {
+    if c >= 128 {
+        mb_isupper(c)
+    } else {
+        let isu_table = (*std::ptr::addr_of!(spelltab_global)).st_isu.as_ptr();
+        *isu_table.add(c as usize)
+    }
+}
+
+/// Check if a char class is a word char for high-byte chars.
+#[inline]
+unsafe fn iswordp_mb(p: *const c_char, wp: *const c_void) -> bool {
+    spell_mb_isword_class_impl(mb_get_class(p), nvim_win_get_b_cjk(wp))
+}
+
+/// Returns true if "p" points to a word character.
+/// Unlike spell_iswordp() this doesn't check for "midword" characters.
+///
+/// # Safety
+/// `p` and `wp` must be valid pointers.
+#[must_use]
+#[export_name = "spell_iswordp_nmw"]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_sign_loss)] // c is validated > 0 by utf_ptr2char
+pub unsafe extern "C" fn rs_spell_iswordp_nmw(p: *const c_char, wp: *const c_void) -> bool {
+    let c = utf_ptr2char(p);
+    if c > 255 {
+        iswordp_mb(p, wp)
+    } else {
+        let isw = (*std::ptr::addr_of!(spelltab_global)).st_isw.as_ptr();
+        // SAFETY: c >= 0 and c <= 255, so cast is safe
+        *isw.add(c as u32 as usize)
+    }
+}
+
+/// Returns true if "p" points to a word character.
+/// Checks for "midword" characters (skips them when checking the next char).
+///
+/// # Safety
+/// `p` and `wp` must be valid pointers.
+#[must_use]
+#[export_name = "spell_iswordp"]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_sign_loss)] // lengths are always positive
+pub unsafe extern "C" fn rs_spell_iswordp(p: *const c_char, wp: *const c_void) -> bool {
+    let l = utfc_ptr2len(p) as usize;
+    let s = if l == 1 {
+        // ASCII: check midword
+        let b = *(p as *const u8);
+        let ismw = nvim_win_get_b_spell_ismw(wp);
+        if !ismw.is_null() && *ismw.add(b as usize) {
+            p.add(1)
+        } else {
+            p
+        }
+    } else {
+        let c = utf_ptr2char(p);
+        if c < 256 {
+            let ismw = nvim_win_get_b_spell_ismw(wp);
+            // SAFETY: c >= 0 and c < 256, so cast is safe
+            if !ismw.is_null() && *ismw.add(c as u32 as usize) {
+                p.add(l)
+            } else {
+                p
+            }
+        } else {
+            let ismw_mb = nvim_win_get_b_spell_ismw_mb(wp);
+            if !ismw_mb.is_null() && !vim_strchr(ismw_mb, c).is_null() {
+                p.add(l)
+            } else {
+                p
+            }
+        }
+    };
+
+    let c = utf_ptr2char(s);
+    if c > 255 {
+        iswordp_mb(s, wp)
+    } else {
+        let isw = (*std::ptr::addr_of!(spelltab_global)).st_isw.as_ptr();
+        // SAFETY: c >= 0 and c <= 255, so cast is safe
+        *isw.add(c as u32 as usize)
+    }
+}
+
+/// Wide version of spell_iswordp() — checks if wide-char position is a word char.
+///
+/// # Safety
+/// `p` and `wp` must be valid pointers.
+#[must_use]
+#[export_name = "spell_iswordp_w"]
+#[allow(clippy::cast_sign_loss)] // *p and *s are validated >= 0 at check sites
+pub unsafe extern "C" fn rs_spell_iswordp_w(p: *const c_int, wp: *const c_void) -> bool {
+    let s = if *p < 256 {
+        let ismw = nvim_win_get_b_spell_ismw(wp);
+        if !ismw.is_null() && *ismw.add(*p as u32 as usize) {
+            p.add(1)
+        } else {
+            p
+        }
+    } else {
+        let ismw_mb = nvim_win_get_b_spell_ismw_mb(wp);
+        if !ismw_mb.is_null() && !vim_strchr(ismw_mb, *p).is_null() {
+            p.add(1)
+        } else {
+            p
+        }
+    };
+
+    if *s > 255 {
+        spell_mb_isword_class_impl(utf_class(*s), nvim_win_get_b_cjk(wp))
+    } else {
+        let isw = (*std::ptr::addr_of!(spelltab_global)).st_isw.as_ptr();
+        *isw.add(*s as u32 as usize)
+    }
+}
+
+/// Determine case type of a word.
+///
+/// Returns:
+/// - 0: all lower (or only non-word chars)
+/// - WF_ONECAP: first char upper, rest lower
+/// - WF_ALLCAP: all caps
+/// - WF_KEEPCAP: mixed upper/lower
+///
+/// # Safety
+/// `word` must be a valid NUL-terminated C string.
+#[export_name = "captype"]
+#[allow(clippy::cast_sign_loss)] // lengths and char indices are always >= 0
+#[allow(clippy::cast_possible_wrap)] // WF_* constants fit in c_int
+pub unsafe extern "C" fn rs_captype(word: *const c_char, end: *const c_char) -> c_int {
+    let mut p = word;
+
+    // Find first word character
+    loop {
+        if end.is_null() {
+            if *p == 0 {
+                return 0; // only non-word chars
+            }
+        } else if p >= end {
+            return 0;
+        }
+        if rs_spell_iswordp_nmw(p, curwin_global) {
+            break;
+        }
+        // advance pointer (MB_PTR_ADV)
+        let l = utfc_ptr2len(p).max(1) as usize;
+        p = p.add(l);
+    }
+
+    // mb_cptr2char_adv advances p in-place via the pointer-to-pointer
+    let c = mb_cptr2char_adv(std::ptr::addr_of_mut!(p));
+    let firstcap = spell_isupper(c);
+    let mut allcap = firstcap;
+    let mut past_second = false;
+
+    loop {
+        if end.is_null() {
+            if *p == 0 {
+                break;
+            }
+        } else if p >= end {
+            break;
+        }
+        if rs_spell_iswordp_nmw(p, curwin_global) {
+            let c2 = utf_ptr2char(p);
+            if !spell_isupper(c2) {
+                if past_second && allcap {
+                    return crate::wordtree::WF_KEEPCAP as c_int;
+                }
+                allcap = false;
+            } else if !allcap {
+                return crate::wordtree::WF_KEEPCAP as c_int;
+            }
+            past_second = true;
+        }
+        let l = utfc_ptr2len(p).max(1) as usize;
+        p = p.add(l);
+    }
+
+    if allcap {
+        return crate::wordtree::WF_ALLCAP as c_int;
+    }
+    if firstcap {
+        return crate::wordtree::WF_ONECAP as c_int;
+    }
+    0
+}
+
+/// Copy word with first letter case changed.
+///
+/// If `upper` is true, capitalize the first letter; otherwise fold it.
+///
+/// # Safety
+/// `word` and `wcopy` must be valid pointers. `wcopy` must have at least MAXWLEN bytes.
+#[export_name = "onecap_copy"]
+#[allow(clippy::cast_sign_loss)] // l is utf_char2bytes result, always >= 0
+pub unsafe extern "C" fn rs_onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) {
+    let mut p = word;
+    let mut c = mb_cptr2char_adv(std::ptr::addr_of_mut!(p));
+    c = if upper {
+        spell_toupper(c)
+    } else {
+        spell_tofold(c)
+    };
+    let byte_len = utf_char2bytes(c, wcopy) as usize;
+    xstrlcpy(wcopy.add(byte_len), p, MAXWLEN.saturating_sub(byte_len));
+}
+
+/// Copy word with all letters uppercased.
+///
+/// # Safety
+/// `word` and `wcopy` must be valid pointers. `wcopy` must have at least MAXWLEN bytes.
+#[export_name = "allcap_copy"]
+#[allow(clippy::cast_sign_loss)] // bytes result is always >= 0
+#[allow(clippy::cast_possible_wrap)] // MAXWLEN fits in isize
+#[allow(clippy::cast_possible_truncation)] // c is always ASCII 'S' (0x53) in the truncation path
+pub unsafe extern "C" fn rs_allcap_copy(word: *const c_char, wcopy: *mut c_char) {
+    let mut d = wcopy;
+    let mut src = word;
+
+    while *(src as *const u8) != 0 {
+        let mut c = mb_cptr2char_adv(std::ptr::addr_of_mut!(src));
+
+        if c == 0xdf {
+            // German sharp-s: becomes 'S'
+            c = i32::from(b'S');
+            if d.offset_from(wcopy) >= (MAXWLEN as isize) - 1 {
+                break;
+            }
+            *d = c as c_char;
+            d = d.add(1);
+        } else {
+            c = spell_toupper(c);
+        }
+
+        if d.offset_from(wcopy) >= (MAXWLEN as isize) - 4 {
+            // MB_MAXBYTES = 4
+            break;
+        }
+        let byte_count = utf_char2bytes(c, d) as usize;
+        d = d.add(byte_count);
+    }
+    *d = 0;
+}
+
+/// Count byte length of N chars in original word.
+///
+/// Case-folding may change the number of bytes: count nr of chars in
+/// fword[flen] and return the byte length of that many chars in "word".
+///
+/// # Safety
+/// `fword` and `word` must be valid pointers.
+#[export_name = "nofold_len"]
+#[must_use]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_sign_loss)] // lengths are always positive
+#[allow(clippy::cast_possible_truncation)] // word byte count fits in c_int for any real word
+pub unsafe extern "C" fn rs_nofold_len(
+    fword: *const c_char,
+    flen: c_int,
+    word: *const c_char,
+) -> c_int {
+    // Count number of chars in fword[0..flen]
+    let mut fp = fword;
+    let fword_end = fword.add(flen as usize);
+    let mut char_count: c_int = 0;
+    while fp < fword_end {
+        let step = utfc_ptr2len(fp).max(1) as usize;
+        fp = fp.add(step);
+        char_count += 1;
+    }
+
+    // Count that many chars in word
+    let mut wp = word;
+    let mut remaining = char_count;
+    while remaining > 0 {
+        let step = utfc_ptr2len(wp).max(1) as usize;
+        wp = wp.add(step);
+        remaining -= 1;
+    }
+    wp.offset_from(word) as c_int
+}
+
+/// Copy "fword" to "cword", fixing case according to "flags".
+///
+/// # Safety
+/// `fword` and `cword` must be valid pointers. `cword` must have MAXWLEN bytes.
+#[export_name = "make_case_word"]
+#[allow(clippy::cast_possible_wrap)] // WF_* constants fit in c_int
+#[allow(clippy::cast_possible_truncation)] // byte values are always 0..=127 for ASCII chars
+pub unsafe extern "C" fn rs_make_case_word(fword: *const c_char, cword: *mut c_char, flags: c_int) {
+    if flags & (crate::wordtree::WF_ALLCAP as c_int) != 0 {
+        rs_allcap_copy(fword, cword);
+    } else if flags & (crate::wordtree::WF_ONECAP as c_int) != 0 {
+        rs_onecap_copy(fword, cword, true);
+    } else {
+        // Copy as-is (STRCPY)
+        let mut src = fword;
+        let mut dst = cword;
+        loop {
+            let b = *(src as *const u8);
+            #[allow(clippy::cast_possible_wrap)] // c_char is i8, bytes 0-127 are always positive
+            {
+                *dst = b as c_char;
+            }
+            if b == 0 {
+                break;
+            }
+            src = src.add(1);
+            dst = dst.add(1);
+        }
+    }
+}
+
+/// Concatenate spell check line into buffer.
+///
+/// Strips leading comment characters and whitespace, then copies into buf
+/// at an offset so words from consecutive lines are separated.
+///
+/// # Safety
+/// `buf`, `line` must be valid pointers. `buf` must have at least `maxlen` bytes.
+#[export_name = "spell_cat_line"]
+#[allow(clippy::cast_sign_loss)] // maxlen comes from C as positive value
+#[allow(clippy::cast_possible_truncation)] // offset fits in usize for any reasonable string
+pub unsafe extern "C" fn rs_spell_cat_line(buf: *mut c_char, line: *const c_char, maxlen: c_int) {
+    let mut p = skipwhite(line);
+    // Skip comment and list chars: *#/"\t
+    let comment_chars: &[u8] = b"*#/\"\t";
+    while !p.is_null() {
+        let ch = *(p as *const u8);
+        if ch == 0 || !comment_chars.contains(&ch) {
+            break;
+        }
+        p = skipwhite(p.add(1));
+    }
+    if p.is_null() || *(p as *const u8) == 0 {
+        return;
+    }
+
+    // SAFETY: p >= line since we only advanced forward from line
+    let n = p.offset_from(line).max(0) as usize + 1;
+    let maxlen = maxlen.max(0) as usize;
+    if n < maxlen.saturating_sub(1) {
+        // Fill leading bytes with spaces
+        std::ptr::write_bytes(buf, b' ', n);
+        xstrlcpy(buf.add(n), p, maxlen - n);
+    }
+}
+
+// =============================================================================
 // Word Tree Functions
 // =============================================================================
 

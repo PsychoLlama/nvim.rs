@@ -34,5 +34,13 @@ bool byte_in_str(const uint8_t *str, int n);
 void clear_spell_chartab(spelltab_T *sp);
 bool valid_spelllang(const char *val);
 bool valid_spellfile(const char *val);
+bool spell_iswordp(const char *p, const win_T *wp);
+bool spell_iswordp_nmw(const char *p, win_T *wp);
+int captype(const char *word, const char *end);
+void onecap_copy(const char *word, char *wcopy, bool upper);
+void allcap_copy(const char *word, char *wcopy);
+int nofold_len(char *fword, int flen, char *word);
+void make_case_word(char *fword, char *cword, int flags);
+void spell_cat_line(char *buf, char *line, int maxlen);
 
 #include "spell.h.generated.h"
