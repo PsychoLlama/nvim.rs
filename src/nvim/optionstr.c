@@ -1993,27 +1993,6 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
   return NULL;          // no error
 }
 
-/// Function given to ExpandGeneric() to obtain possible arguments of the
-/// 'fillchars' option.
-char *get_fillchars_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  if (idx < 0 || idx >= (int)ARRAY_SIZE(fcs_tab)) {
-    return NULL;
-  }
-
-  return fcs_tab[idx].name.data;
-}
-
-/// Function given to ExpandGeneric() to obtain possible arguments of the
-/// 'listchars' option.
-char *get_listchars_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  if (idx < 0 || idx >= (int)ARRAY_SIZE(lcs_tab)) {
-    return NULL;
-  }
-
-  return lcs_tab[idx].name.data;
-}
 
 /// Check all global and local values of 'listchars' and 'fillchars'.
 /// May set different defaults in case character widths change.

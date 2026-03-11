@@ -21,4 +21,9 @@ const char *did_set_breakat(optset_T *args);
 const char *did_set_backupext_or_patchmode(optset_T *args);
 const char *did_set_mousescroll(optset_T *args);
 
+// Implemented in Rust (src/nvim-rs/optionstr/src/chars.rs)
+#include "nvim/cmdexpand_defs.h"  // expand_T
+char *get_fillchars_name(expand_T *xp, int idx);
+char *get_listchars_name(expand_T *xp, int idx);
+
 #include "optionstr.h.generated.h"

@@ -7,7 +7,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // schar_T is uint32_t in C
 type ScharT = u32;
@@ -79,6 +79,22 @@ pub extern "C" fn rs_fcs_field_name(idx: c_int) -> *const c_char {
     FCS_FIELDS[idx as usize].as_ptr().cast::<c_char>()
 }
 
+/// Expansion helper: get fillchars field name by index (replaces C get_fillchars_name).
+///
+/// The first argument (`xp`) is the expand_T pointer and is always ignored.
+/// Returns a mutable pointer to the field name string, or null if out of bounds.
+#[must_use]
+#[export_name = "get_fillchars_name"]
+pub extern "C" fn get_fillchars_name_impl(_xp: *const c_void, idx: c_int) -> *mut c_char {
+    if idx < 0 || idx >= FCS_FIELDS.len() as c_int {
+        return std::ptr::null_mut();
+    }
+    FCS_FIELDS[idx as usize]
+        .as_ptr()
+        .cast_mut()
+        .cast::<c_char>()
+}
+
 // =============================================================================
 // Listchars Field Names
 // =============================================================================
@@ -113,6 +129,22 @@ pub extern "C" fn rs_lcs_field_name(idx: c_int) -> *const c_char {
         return std::ptr::null();
     }
     LCS_FIELDS[idx as usize].as_ptr().cast::<c_char>()
+}
+
+/// Expansion helper: get listchars field name by index (replaces C get_listchars_name).
+///
+/// The first argument (`xp`) is the expand_T pointer and is always ignored.
+/// Returns a mutable pointer to the field name string, or null if out of bounds.
+#[must_use]
+#[export_name = "get_listchars_name"]
+pub extern "C" fn get_listchars_name_impl(_xp: *const c_void, idx: c_int) -> *mut c_char {
+    if idx < 0 || idx >= LCS_FIELDS.len() as c_int {
+        return std::ptr::null_mut();
+    }
+    LCS_FIELDS[idx as usize]
+        .as_ptr()
+        .cast_mut()
+        .cast::<c_char>()
 }
 
 // =============================================================================
