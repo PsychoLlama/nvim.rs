@@ -89,6 +89,7 @@ static void discard_pending_return(typval_T *p)
   tv_free(p);
 }
 
+// cause_abort is now owned by Rust (rs_get_cause_abort/rs_set_cause_abort).
 // When several errors appear in a row, setting "force_abort" is delayed until
 // the failing command returned.  "cause_abort" is set to true meanwhile, in
 // order to indicate that situation.  This is useful when "force_abort" was set
@@ -96,7 +97,12 @@ static void discard_pending_return(typval_T *p)
 // expression evaluation is done without producing any error messages, but all
 // error messages on parsing errors during the expression evaluation are given
 // (even if a try conditional is active).
-static bool cause_abort = false;
+extern bool rs_get_cause_abort(void);
+extern void rs_set_cause_abort(bool val);
+// free_msglist is now implemented in Rust
+extern void free_msglist(msglist_T *l);
+// report_pending is declared in ex_eval.c.generated.h after removing static
+void report_pending(int action, int pending, void *value);
 
 /// cause_errthrow(): Cause a throw of an error exception if appropriate.
 ///
@@ -128,7 +134,7 @@ bool cause_errthrow(const char *mesg, bool multiline, bool severe, bool *ignore)
   // multiply, even when the expression is evaluated from a finally clause
   // that was activated due to an aborting error, interrupt, or exception.
   if (!did_emsg) {
-    cause_abort = force_abort;
+    rs_set_cause_abort(force_abort);
     force_abort = false;
   }
 
@@ -138,7 +144,7 @@ bool cause_errthrow(const char *mesg, bool multiline, bool severe, bool *ignore)
   // be displayed by emsg().  When ":silent!" was used and we are not
   // currently throwing an exception, do nothing.  The message text will
   // then be stored to v:errmsg by emsg() without displaying it.
-  if (((trylevel == 0 && !cause_abort) || emsg_silent) && !did_throw) {
+  if (((trylevel == 0 && !rs_get_cause_abort()) || emsg_silent) && !did_throw) {
     return false;
   }
 
@@ -154,7 +160,7 @@ bool cause_errthrow(const char *mesg, bool multiline, bool severe, bool *ignore)
 
   // Ensure that all commands in nested function calls and sourced files
   // are aborted immediately.
-  cause_abort = true;
+  rs_set_cause_abort(true);
 
   // When an exception is being thrown, some commands (like conditionals) are
   // not skipped.  Errors in those commands may affect what of the subsequent
@@ -226,27 +232,6 @@ bool cause_errthrow(const char *mesg, bool multiline, bool severe, bool *ignore)
   }
 }
 
-/// Free a "msg_list" and the messages it contains.
-static void free_msglist(msglist_T *l)
-{
-  msglist_T *messages = l;
-  while (messages != NULL) {
-    msglist_T *next = messages->next;
-    xfree(messages->msg);
-    xfree(messages->sfile);
-    xfree(messages);
-    messages = next;
-  }
-}
-
-/// Free global "*msg_list" and the messages it contains, then set "*msg_list"
-/// to NULL.
-void free_global_msglist(void)
-{
-  free_msglist(*msg_list);
-  *msg_list = NULL;
-}
-
 /// Throw the message specified in the call to cause_errthrow() above as an
 /// error exception.  If cstack is NULL, postpone the throw until do_cmdline()
 /// has returned (see do_one_cmd()).
@@ -254,8 +239,8 @@ void do_errthrow(cstack_T *cstack, char *cmdname)
 {
   // Ensure that all commands in nested function calls and sourced files
   // are aborted immediately.
-  if (cause_abort) {
-    cause_abort = false;
+  if (rs_get_cause_abort()) {
+    rs_set_cause_abort(false);
     force_abort = true;
   }
 
@@ -615,40 +600,6 @@ static void finish_exception(except_T *excp)
   discard_exception(excp, true);
 }
 
-/// Save the current exception state in "estate"
-void exception_state_save(exception_state_T *estate)
-{
-  estate->estate_current_exception = current_exception;
-  estate->estate_did_throw = did_throw;
-  estate->estate_need_rethrow = need_rethrow;
-  estate->estate_trylevel = trylevel;
-  estate->estate_did_emsg = did_emsg;
-}
-
-/// Restore the current exception state from "estate"
-void exception_state_restore(exception_state_T *estate)
-{
-  // Handle any outstanding exceptions before restoring the state
-  if (did_throw) {
-    handle_did_throw();
-  }
-  current_exception = estate->estate_current_exception;
-  did_throw = estate->estate_did_throw;
-  need_rethrow = estate->estate_need_rethrow;
-  trylevel = estate->estate_trylevel;
-  did_emsg = estate->estate_did_emsg;
-}
-
-/// Clear the current exception state
-void exception_state_clear(void)
-{
-  current_exception = NULL;
-  did_throw = false;
-  need_rethrow = false;
-  trylevel = 0;
-  did_emsg = 0;
-}
-
 // Flags specifying the message displayed by report_pending.
 #define RP_MAKE         0
 #define RP_RESUME       1
@@ -659,7 +610,7 @@ void exception_state_clear(void)
 /// made pending or something pending is resumed or discarded.  "pending" tells
 /// what is pending.  "value" specifies the return value for a pending ":return"
 /// or the exception value for a pending exception.
-static void report_pending(int action, int pending, void *value)
+void report_pending(int action, int pending, void *value)
 {
   char *mesg;
   char *s;
@@ -730,21 +681,6 @@ static void report_pending(int action, int pending, void *value)
     xfree(s);
   } else if (pending & CSTP_THROW) {
     xfree(mesg);
-  }
-}
-
-/// If something is made pending in a finally clause, report it if required by
-/// the 'verbose' option or when debugging.
-void report_make_pending(int pending, void *value)
-{
-  if (p_verbose >= 14 || debug_break_level > 0) {
-    if (debug_break_level <= 0) {
-      verbose_enter();
-    }
-    report_pending(RP_MAKE, pending, value);
-    if (debug_break_level <= 0) {
-      verbose_leave();
-    }
   }
 }
 
@@ -1716,8 +1652,8 @@ void enter_cleanup(cleanup_T *csp)
     } else {
       csp->exception = NULL;
       if (did_emsg) {
-        force_abort |= cause_abort;
-        cause_abort = false;
+        force_abort |= rs_get_cause_abort();
+        rs_set_cause_abort(false);
       }
     }
     did_emsg = got_int = did_throw = need_rethrow = false;
@@ -1782,7 +1718,7 @@ void leave_cleanup(cleanup_T *csp)
       // If an error was about to be converted to an exception when
       // enter_cleanup() was called, let "cause_abort" take the part of
       // "force_abort" (as done by cause_errthrow()).
-      cause_abort = force_abort;
+      rs_set_cause_abort(force_abort);
       force_abort = false;
     }
 
@@ -1954,33 +1890,6 @@ void rewind_conditionals(cstack_T *cstack, int idx, int cond_type, int *cond_lev
   }
 }
 
-/// Handle ":endfunction" when not after a ":function"
-void ex_endfunction(exarg_T *eap)
-{
-  semsg(_(e_str_not_inside_function), ":endfunction");
-}
-
-/// @return  true if the string "p" looks like a ":while" or ":for" command.
-bool has_loop_cmd(char *p)
-{
-  // skip modifiers, white space and ':'
-  while (true) {
-    while (*p == ' ' || *p == '\t' || *p == ':') {
-      p++;
-    }
-    int len = modifier_len(p);
-    if (len == 0) {
-      break;
-    }
-    p += len;
-  }
-  if ((p[0] == 'w' && p[1] == 'h')
-      || (p[0] == 'f' && p[1] == 'o' && p[2] == 'r')) {
-    return true;
-  }
-  return false;
-}
-
 // =============================================================================
 // Rust FFI accessor functions
 // =============================================================================
@@ -2013,13 +1922,6 @@ int nvim_get_did_throw(void)
 int nvim_get_trylevel(void)
 {
   return trylevel;
-}
-
-
-/// C accessor for the global cause_abort variable (used by Rust FFI).
-int nvim_get_cause_abort(void)
-{
-  return cause_abort ? 1 : 0;
 }
 
 /// C setter for the global force_abort variable (used by Rust FFI).
