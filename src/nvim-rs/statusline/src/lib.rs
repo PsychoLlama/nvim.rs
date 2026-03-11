@@ -2096,6 +2096,7 @@ extern "C" {
     fn nvim_stl_win_set_statuscol_click_defs_size(wp: WinHandle, size: usize);
     fn nvim_stl_stcp_get_width(stcp: StatuscolHandle) -> c_int;
     fn nvim_stl_stcp_get_hlrec_ptr(stcp: StatuscolHandle) -> HlrecPtrPtr;
+    #[link_name = "nvim_win_get_topline"]
     fn nvim_stl_win_get_topline(wp: WinHandle) -> c_int;
 }
 
