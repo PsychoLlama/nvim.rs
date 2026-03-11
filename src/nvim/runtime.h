@@ -45,4 +45,17 @@ enum {
   DIP_DIRFILE = 0x200,  ///< find both files and directories
 };
 
+/// Functions now implemented in Rust (src/nvim-rs/runtime/) but still called
+/// from C. Declarations here because the auto-generated header only covers
+/// functions defined in C.
+#include <stdbool.h>
+#include "nvim/types_defs.h"
+
+void ex_scriptnames(exarg_T *eap);
+char *autoload_name(const char *name, size_t name_len);
+bool script_autoload(const char *name, size_t name_len, bool reload);
+void free_scriptnames(void);
+void free_autoload_scriptnames(void);
+void scriptnames_slash_adjust(void);
+
 #include "runtime.h.generated.h"

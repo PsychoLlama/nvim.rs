@@ -685,7 +685,7 @@ pub unsafe extern "C" fn rs_runtimepath_default(clean_arg: bool) -> *mut c_char 
 /// The name must contain at least one AUTOLOAD_CHAR ('#').
 ///
 /// Returns allocated string: "autoload/<name_with_slashes>.vim"
-#[no_mangle]
+#[export_name = "autoload_name"]
 pub unsafe extern "C" fn rs_autoload_name(name: *const c_char, name_len: usize) -> *mut c_char {
     // Allocate: "autoload/" + name + ".vim" + NUL
     // sizeof("autoload/.vim") = 13 + 1(NUL) = 14, but C uses sizeof which includes NUL
@@ -722,7 +722,7 @@ pub unsafe extern "C" fn rs_autoload_name(name: *const c_char, name_len: usize) 
 /// If name has a package name (contains '#'), try autoloading the script for it.
 ///
 /// Returns true if a package was loaded.
-#[no_mangle]
+#[export_name = "script_autoload"]
 pub unsafe extern "C" fn rs_script_autoload(
     name: *const c_char,
     name_len: usize,

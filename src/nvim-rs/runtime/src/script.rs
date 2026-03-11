@@ -285,7 +285,7 @@ pub unsafe extern "C" fn rs_get_scriptname(
 ///
 /// If addr_count > 0 or arg is non-empty, edit the specified script.
 /// Otherwise, list all loaded scripts.
-#[no_mangle]
+#[export_name = "ex_scriptnames"]
 pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
     let addr_count = nvim_rt_exarg_get_addr_count(eap);
     let arg_is_nul = nvim_exarg_arg_is_nul(eap);
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
 /// Free all script names and associated data.
 ///
 /// Delegates entirely to C since it uses EXITFREE macros and complex cleanup.
-#[no_mangle]
+#[export_name = "free_scriptnames"]
 pub unsafe extern "C" fn rs_free_scriptnames() {
     nvim_rt_free_scriptnames();
 }
@@ -351,7 +351,7 @@ pub unsafe extern "C" fn rs_free_scriptnames() {
 /// Free the autoload script names array.
 ///
 /// Delegates to C since ga_loaded is static in runtime.c.
-#[no_mangle]
+#[export_name = "free_autoload_scriptnames"]
 pub unsafe extern "C" fn rs_free_autoload_scriptnames() {
     nvim_rt_ga_clear_loaded();
 }
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn rs_f_getscriptinfo(
 ///
 /// On non-Windows platforms, this is a no-op since BACKSLASH_IN_FILENAME
 /// is not defined.
-#[no_mangle]
+#[export_name = "scriptnames_slash_adjust"]
 pub unsafe extern "C" fn rs_scriptnames_slash_adjust() {
     // This is a no-op on non-Windows. On Windows, we would iterate and call
     // nvim_rt_slash_adjust. Since Neovim targets Linux/macOS primarily and

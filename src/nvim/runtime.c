@@ -153,20 +153,14 @@ extern scriptitem_T *rs_new_script_item(char *name, scid_T *sid_out);
 extern int rs_find_script_by_name(const char *name);
 extern bool rs_script_is_lua(scid_T sid);
 extern char *rs_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free);
-extern void rs_ex_scriptnames(void *eap);
-extern void rs_free_scriptnames(void);
-extern void rs_free_autoload_scriptnames(void);
 extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
 extern void *rs_get_script_local_funcs(scid_T sid);
 extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
-extern void rs_scriptnames_slash_adjust(void);
 
 // Rust implementations of path utilities and runtimepath (Phase 3)
 extern char *rs_get_lib_dir(void);
 extern char *rs_runtimepath_default(bool clean_arg);
 extern bool rs_path_is_after(const char *buf, size_t buflen);
-extern char *rs_autoload_name(const char *name, size_t name_len);
-extern bool rs_script_autoload(const char *name, size_t name_len, bool reload);
 
 // C helpers called by Rust for functions that access static variables.
 // These live here (not in runtime_ffi.c) because ga_loaded is static.
@@ -1980,123 +1974,6 @@ int find_script_by_name(char *name)
   return rs_find_script_by_name(name);
 }
 
-/// ":scriptnames"
-void ex_scriptnames(exarg_T *eap)
-{
-  if (eap->addr_count > 0 || *eap->arg != NUL) {
-    // :script {scriptId}: edit the script
-    if (eap->addr_count > 0 && !SCRIPT_ID_VALID(eap->line2)) {
-      emsg(_(e_invarg));
-    } else {
-      if (eap->addr_count > 0) {
-        eap->arg = SCRIPT_ITEM(eap->line2)->sn_name;
-      } else {
-        expand_env(eap->arg, NameBuff, MAXPATHL);
-        eap->arg = NameBuff;
-      }
-      do_exedit(eap, NULL);
-    }
-    return;
-  }
-
-  for (int i = 1; i <= script_items.ga_len && !got_int; i++) {
-    if (SCRIPT_ITEM(i)->sn_name != NULL) {
-      home_replace(NULL, SCRIPT_ITEM(i)->sn_name, NameBuff, MAXPATHL, true);
-      vim_snprintf(IObuff, IOSIZE, "%3d: %s", i, NameBuff);
-      if (!message_filtered(IObuff)) {
-        msg_putchar('\n');
-        msg_outtrans(IObuff, 0, false);
-        line_breakcheck();
-      }
-    }
-  }
-}
-
-#if defined(BACKSLASH_IN_FILENAME)
-/// Fix slashes in the list of script names for 'shellslash'.
-void scriptnames_slash_adjust(void)
-{
-  for (int i = 1; i <= script_items.ga_len; i++) {
-    if (SCRIPT_ITEM(i)->sn_name != NULL) {
-      slash_adjust(SCRIPT_ITEM(i)->sn_name);
-    }
-  }
-}
-
-#endif
-
-/// Get a pointer to a script name.  Used for ":verbose set".
-/// Message appended to "Last set from "
-///
-/// @param should_free  if non-NULL and the script name is a file path, call
-///                     home_replace_save() on it and set *should_free to true.
-char *get_scriptname(sctx_T script_ctx, bool *should_free)
-{
-  if (should_free != NULL) {
-    *should_free = false;
-  }
-
-  switch (script_ctx.sc_sid) {
-  case SID_MODELINE:
-    return _("modeline");
-  case SID_CMDARG:
-    return _("--cmd argument");
-  case SID_CARG:
-    return _("-c argument");
-  case SID_ENV:
-    return _("environment variable");
-  case SID_ERROR:
-    return _("error handler");
-  case SID_WINLAYOUT:
-    return _("changed window size");
-  case SID_LUA:
-    return _("Lua");
-  case SID_API_CLIENT:
-    snprintf(IObuff, IOSIZE, _("API client (channel id %" PRIu64 ")"), script_ctx.sc_chan);
-    return IObuff;
-  case SID_STR:
-    return _("anonymous :source");
-  default: {
-    char *const sname = SCRIPT_ITEM(script_ctx.sc_sid)->sn_name;
-    if (sname == NULL) {
-      snprintf(IObuff, IOSIZE, _("anonymous :source (script id %d)"),
-               script_ctx.sc_sid);
-      return IObuff;
-    }
-    if (should_free != NULL) {
-      *should_free = true;
-      return home_replace_save(NULL, sname);
-    } else {
-      return sname;
-    }
-  }
-  }
-}
-
-#if defined(EXITFREE)
-void free_scriptnames(void)
-{
-  profile_reset();
-
-# define FREE_SCRIPTNAME(item) \
-  do { \
-    scriptitem_T *_si = *(item); \
-    /* the variables themselves are cleared in evalvars_clear() */ \
-    xfree(_si->sn_vars); \
-    xfree(_si->sn_name); \
-    ga_clear(&_si->sn_prl_ga); \
-    xfree(_si); \
-  } while (0) \
-
-  GA_DEEP_CLEAR(&script_items, scriptitem_T *, FREE_SCRIPTNAME);
-}
-#endif
-
-void free_autoload_scriptnames(void)
-{
-  ga_clear_strings(&ga_loaded);
-}
-
 linenr_T get_sourced_lnum(LineGetter fgetline, void *cookie)
   FUNC_ATTR_PURE
 {
@@ -2105,99 +1982,20 @@ linenr_T get_sourced_lnum(LineGetter fgetline, void *cookie)
          : SOURCING_LNUM;
 }
 
-/// Return a List of script-local functions defined in the script with id "sid".
-static list_T *get_script_local_funcs(scid_T sid)
+/// Get a pointer to a script name.  Used for ":verbose set".
+/// Message appended to "Last set from "
+///
+/// @param should_free  if non-NULL and the script name is a file path, call
+///                     home_replace_save() on it and set *should_free to true.
+char *get_scriptname(sctx_T script_ctx, bool *should_free)
 {
-  hashtab_T *const functbl = func_tbl_get();
-  list_T *l = tv_list_alloc((ptrdiff_t)functbl->ht_used);
-
-  // Iterate through all the functions in the global function hash table
-  // looking for functions with script ID "sid".
-  HASHTAB_ITER(functbl, hi, {
-    const ufunc_T *const fp = HI2UF(hi);
-    // Add functions with script id == "sid"
-    if (fp->uf_script_ctx.sc_sid == sid) {
-      const char *const name = fp->uf_name_exp != NULL ? fp->uf_name_exp : fp->uf_name;
-      tv_list_append_string(l, name, -1);
-    }
-  });
-
-  return l;
+  return rs_get_scriptname(script_ctx.sc_sid, script_ctx.sc_chan, should_free);
 }
 
 /// "getscriptinfo()" function
 void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  tv_list_alloc_ret(rettv, script_items.ga_len);
-
-  if (tv_check_for_opt_dict_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  list_T *l = rettv->vval.v_list;
-
-  regmatch_T regmatch = {
-    .regprog = NULL,
-    .rm_ic = p_ic,
-  };
-  bool filterpat = false;
-  varnumber_T sid = -1;
-
-  char *pat = NULL;
-  if (argvars[0].v_type == VAR_DICT) {
-    dictitem_T *sid_di = tv_dict_find(argvars[0].vval.v_dict, S_LEN("sid"));
-    if (sid_di != NULL) {
-      bool error = false;
-      sid = tv_get_number_chk(&sid_di->di_tv, &error);
-      if (error) {
-        return;
-      }
-      if (sid <= 0) {
-        semsg(_(e_invargNval), "sid", tv_get_string(&sid_di->di_tv));
-        return;
-      }
-    } else {
-      pat = tv_dict_get_string(argvars[0].vval.v_dict, "name", true);
-      if (pat != NULL) {
-        regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-      }
-      if (regmatch.regprog != NULL) {
-        filterpat = true;
-      }
-    }
-  }
-
-  for (varnumber_T i = sid > 0 ? sid : 1;
-       (i == sid || sid <= 0) && i <= script_items.ga_len; i++) {
-    scriptitem_T *si = SCRIPT_ITEM(i);
-
-    if (si->sn_name == NULL) {
-      continue;
-    }
-
-    if (filterpat && !vim_regexec(&regmatch, si->sn_name, 0)) {
-      continue;
-    }
-
-    dict_T *d = tv_dict_alloc();
-    tv_list_append_dict(l, d);
-    tv_dict_add_str(d, S_LEN("name"), si->sn_name);
-    tv_dict_add_nr(d, S_LEN("sid"), i);
-    tv_dict_add_nr(d, S_LEN("version"), 1);
-    // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
-    tv_dict_add_bool(d, S_LEN("autoload"), false);
-
-    // When a script ID is specified, return information about only the
-    // specified script, and add the script-local variables and functions.
-    if (sid > 0) {
-      dict_T *var_dict = tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, rs_get_copyID());
-      tv_dict_add_dict(d, S_LEN("variables"), var_dict);
-      tv_dict_add_list(d, S_LEN("functions"), get_script_local_funcs((scid_T)sid));
-    }
-  }
-
-  vim_regfree(regmatch.regprog);
-  xfree(pat);
+  rs_f_getscriptinfo(argvars, rettv, &fptr);
 }
 
 /// Get one full line from a sourced file.
@@ -2465,78 +2263,3 @@ bool source_finished(LineGetter fgetline, void *cookie)
          && ((source_cookie_T *)getline_cookie(fgetline, cookie))->finished;
 }
 
-/// Return the autoload script name for a function or variable name
-/// Caller must make sure that "name" contains AUTOLOAD_CHAR.
-///
-/// @param[in]  name  Variable/function name.
-/// @param[in]  name_len  Name length.
-///
-/// @return [allocated] autoload script name.
-char *autoload_name(const char *const name, const size_t name_len)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  // Get the script file name: replace '#' with '/', append ".vim".
-  char *const scriptname = xmalloc(name_len + sizeof("autoload/.vim"));
-  memcpy(scriptname, "autoload/", sizeof("autoload/") - 1);
-  memcpy(scriptname + sizeof("autoload/") - 1, name, name_len);
-  size_t auchar_idx = 0;
-  for (size_t i = sizeof("autoload/") - 1;
-       i - sizeof("autoload/") + 1 < name_len;
-       i++) {
-    if (scriptname[i] == AUTOLOAD_CHAR) {
-      scriptname[i] = '/';
-      auchar_idx = i;
-    }
-  }
-  memcpy(scriptname + auchar_idx, ".vim", sizeof(".vim"));
-
-  return scriptname;
-}
-
-/// If name has a package name try autoloading the script for it
-///
-/// @param[in]  name  Variable/function name.
-/// @param[in]  name_len  Name length.
-/// @param[in]  reload  If true, load script again when already loaded.
-///
-/// @return true if a package was loaded.
-bool script_autoload(const char *const name, const size_t name_len, const bool reload)
-{
-  // If there is no '#' after name[0] there is no package name.
-  const char *p = memchr(name, AUTOLOAD_CHAR, name_len);
-  if (p == NULL || p == name) {
-    return false;
-  }
-
-  bool ret = false;
-  char *tofree = autoload_name(name, name_len);
-  char *scriptname = tofree;
-
-  // Find the name in the list of previously loaded package names.  Skip
-  // "autoload/", it's always the same.
-  int i = 0;
-  for (; i < ga_loaded.ga_len; i++) {
-    if (strcmp(((char **)ga_loaded.ga_data)[i] + 9, scriptname + 9) == 0) {
-      break;
-    }
-  }
-  if (!reload && i < ga_loaded.ga_len) {
-    ret = false;  // Was loaded already.
-  } else {
-    // Remember the name if it wasn't loaded already.
-    if (i == ga_loaded.ga_len) {
-      GA_APPEND(char *, &ga_loaded, scriptname);
-      tofree = NULL;
-    }
-
-    // Try loading the package from $VIMRUNTIME/autoload/<name>.vim
-    // Use "ret_sid" to avoid loading the same script again.
-    int ret_sid;
-    if (do_in_runtimepath(scriptname, DIP_START, source_callback, &ret_sid) == OK) {
-      ret = true;
-    }
-  }
-
-  xfree(tofree);
-  return ret;
-}
