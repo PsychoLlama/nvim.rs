@@ -70,7 +70,7 @@ const E_UNCLOSED_EXPRESSION: &[u8] = b"E540: Unclosed expression sequence\0";
 
 /// Error message for unbalanced groups
 #[cfg(not(test))]
-const E_UNBALANCED_GROUPS: &[u8] = b"E542: unbalanced groups\0";
+const E_UNBALANCED_GROUPS: &[u8] = b"E542: Unbalanced groups\0";
 
 // =============================================================================
 // Statusline Format Validation
@@ -205,6 +205,20 @@ pub unsafe extern "C" fn rs_check_stl_option(
     }
 
     std::ptr::null()
+}
+
+/// Check validity of options with the 'statusline' format.
+/// This is a direct replacement for the C `check_stl_option` function.
+/// Uses a per-call static buffer matching the C behavior.
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string.
+#[cfg(not(test))]
+#[allow(static_mut_refs)]
+#[export_name = "check_stl_option"]
+pub unsafe extern "C" fn check_stl_option(s: *mut c_char) -> *const c_char {
+    static mut ERRBUF: [c_char; 80] = [0; 80];
+    rs_check_stl_option(s, ERRBUF.as_mut_ptr(), 80)
 }
 
 // =============================================================================

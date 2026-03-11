@@ -129,6 +129,17 @@ extern const char *rs_fcs_fallback(int idx);
 extern schar_T rs_get_encoded_char_adv(const char **p);
 extern bool rs_is_valid_chars_option(const char *value, bool is_listchars);
 
+// Statusline format validation (symbol exported from Rust option crate)
+extern const char *check_stl_option(char *s);
+
+// Signcolumn validation (from Rust option crate)
+typedef struct {
+  int min_width;
+  int max_width;
+  int valid;
+} SigncolumnResult;
+extern SigncolumnResult rs_parse_signcolumn(const char *val);
+
 // Option string flags parsing
 typedef struct {
   bool ok;
@@ -147,10 +158,6 @@ static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");
 static const char e_comma_required[]
   = N_("E536: Comma required");
-static const char e_unclosed_expression_sequence[]
-  = N_("E540: Unclosed expression sequence");
-static const char e_unbalanced_groups[]
-  = N_("E542: Unbalanced groups");
 static const char e_backupext_and_patchmode_are_equal[]
   = N_("E589: 'backupext' and 'patchmode' are equal");
 static const char e_showbreak_contains_unprintable_or_wide_character[]
@@ -298,13 +305,6 @@ void check_string_option(char **pp)
   }
 }
 
-/// Return true if "val" is a valid 'filetype' name.
-/// Also used for 'syntax' and 'keymap'.
-static bool valid_filetype(const char *val)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_valid_name(val, ".-_");
-}
 
 /// Handle setting 'signcolumn' for value 'val'. Store minimum and maximum width.
 ///
@@ -314,131 +314,30 @@ static bool valid_filetype(const char *val)
 /// @return OK when the value is valid, FAIL otherwise
 int check_signcolumn(char *scl, win_T *wp)
 {
-  char *val = empty_string_option;
-  if (scl != NULL) {
-    val = scl;
-  } else if (wp != NULL) {
-    val = wp->w_p_scl;
-  }
-
+  char *val = scl != NULL ? scl : (wp != NULL ? wp->w_p_scl : empty_string_option);
   if (*val == NUL) {
     return FAIL;
   }
-
-  if (opt_strings_flags(val, opt_scl_values, NULL, false) == OK) {
-    if (wp == NULL) {
-      return OK;
-    }
-    if (!strncmp(val, "no", 2)) {  // no
-      wp->w_minscwidth = wp->w_maxscwidth = SCL_NO;
-    } else if (!strncmp(val, "nu", 2) && (wp->w_p_nu || wp->w_p_rnu)) {  // number
-      wp->w_minscwidth = wp->w_maxscwidth = SCL_NUM;
-    } else if (!strncmp(val, "yes:", 4)) {  // yes:<NUM>
-      wp->w_minscwidth = wp->w_maxscwidth = val[4] - '0';
-    } else if (*val == 'y') {  // yes
-      wp->w_minscwidth = wp->w_maxscwidth = 1;
-    } else if (!strncmp(val, "auto:", 5)) {  // auto:<NUM>
-      wp->w_minscwidth = 0;
-      wp->w_maxscwidth = val[5] - '0';
-    } else {  // auto
-      wp->w_minscwidth = 0;
-      wp->w_maxscwidth = 1;
-    }
-  } else {
-    if (strncmp(val, "auto:", 5) != 0
-        || strlen(val) != 8
-        || !ascii_isdigit(val[5])
-        || val[6] != '-'
-        || !ascii_isdigit(val[7])) {
-      return FAIL;
-    }
-    // auto:<NUM>-<NUM>
-    int min = val[5] - '0';
-    int max = val[7] - '0';
-    if (min < 1 || max < 2 || min > 8 || min >= max) {
-      return FAIL;
-    }
-    if (wp == NULL) {
-      return OK;
-    }
-    wp->w_minscwidth = min;
-    wp->w_maxscwidth = max;
+  SigncolumnResult r = rs_parse_signcolumn(val);
+  if (!r.valid) {
+    return FAIL;
   }
-
+  if (wp == NULL) {
+    return OK;
+  }
+  // "number" mode only applies when 'number' or 'relativenumber' is set
+  if (r.min_width == SCL_NUM && !(wp->w_p_nu || wp->w_p_rnu)) {
+    wp->w_minscwidth = 0;
+    wp->w_maxscwidth = 1;
+  } else {
+    wp->w_minscwidth = r.min_width;
+    wp->w_maxscwidth = r.max_width;
+  }
   int scwidth = wp->w_minscwidth <= 0 ? 0 : MIN(wp->w_maxscwidth, wp->w_scwidth);
   wp->w_scwidth = MAX(wp->w_minscwidth, scwidth);
   return OK;
 }
 
-/// Check validity of options with the 'statusline' format.
-/// Return an untranslated error message or NULL.
-const char *check_stl_option(char *s)
-{
-  int groupdepth = 0;
-  static char errbuf[ERR_BUFLEN];
-
-  while (*s) {
-    // Check for valid keys after % sequences
-    while (*s && *s != '%') {
-      s++;
-    }
-    if (!*s) {
-      break;
-    }
-    s++;
-    if (*s == '%' || *s == STL_TRUNCMARK || *s == STL_SEPARATE) {
-      s++;
-      continue;
-    }
-    if (*s == ')') {
-      s++;
-      if (--groupdepth < 0) {
-        break;
-      }
-      continue;
-    }
-    if (*s == '-') {
-      s++;
-    }
-    while (ascii_isdigit(*s)) {
-      s++;
-    }
-    if (*s == STL_USER_HL) {
-      continue;
-    }
-    if (*s == '.') {
-      s++;
-      while (*s && ascii_isdigit(*s)) {
-        s++;
-      }
-    }
-    if (*s == '(') {
-      groupdepth++;
-      continue;
-    }
-    if (vim_strchr(STL_ALL, (uint8_t)(*s)) == NULL) {
-      return illegal_char(errbuf, sizeof(errbuf), (uint8_t)(*s));
-    }
-    if (*s == '{') {
-      bool reevaluate = (*++s == '%');
-
-      if (reevaluate && *++s == '}') {
-        // "}" is not allowed immediately after "%{%"
-        return illegal_char(errbuf, sizeof(errbuf), '}');
-      }
-      while ((*s != '}' || (reevaluate && s[-1] != '%')) && *s) {
-        s++;
-      }
-      if (*s != '}') {
-        return e_unclosed_expression_sequence;
-      }
-    }
-  }
-  if (groupdepth != 0) {
-    return e_unbalanced_groups;
-  }
-  return NULL;
-}
 
 /// Check for a "normal" directory or file name in some options.  Disallow a
 /// path separator (slash and/or backslash), wildcards and characters that are
@@ -451,15 +350,6 @@ bool check_illegal_path_names(char *val, uint32_t flags)
               && strpbrk(val, "*?[|;&<>\r\n") != NULL));
 }
 
-/// An option that accepts a list of flags is changed.
-/// e.g. 'viewoptions', 'switchbuf', 'casemap', etc.
-static const char *did_set_opt_flags(char *val, const char **values, unsigned *flagp, bool list)
-{
-  if (opt_strings_flags(val, values, flagp, list) != OK) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 static const char **opt_values(OptIndex idx, size_t *values_len)
 {
@@ -497,15 +387,6 @@ const char *did_set_str_generic(optset_T *args)
   return check_str_opt(args->os_idx, args->os_varp) != OK ? e_invarg : NULL;
 }
 
-/// An option which is a list of flags is set.  Valid values are in "flags".
-static const char *did_set_option_listflag(char *val, char *flags, char *errbuf, size_t errbuflen)
-{
-  FlagListValidateResult result = rs_validate_option_listflag(val, flags);
-  if (!result.ok) {
-    return illegal_char(errbuf, errbuflen, (uint8_t)result.invalid_char);
-  }
-  return NULL;
-}
 
 /// Expand an option that accepts a list of string values.
 static int expand_set_opt_string(optexpand_T *args, const char **values, size_t numValues,
@@ -1161,7 +1042,7 @@ const char *did_set_filetype_or_syntax(optset_T *args)
 {
   char **varp = (char **)args->os_varp;
 
-  if (!valid_filetype(*varp)) {
+  if (!rs_valid_name(*varp, ".-_")) {
     return e_invarg;
   }
 
@@ -1334,7 +1215,7 @@ const char *did_set_keymap(optset_T *args)
   char **varp = (char **)args->os_varp;
   int opt_flags = args->os_flags;
 
-  if (!valid_filetype(*varp)) {
+  if (!rs_valid_name(*varp, ".-_")) {
     return e_invarg;
   }
 
@@ -1934,13 +1815,6 @@ static const char e_conflicts_with_value_of_listchars[]
 static const char e_conflicts_with_value_of_fillchars[]
   = N_("E835: Conflicts with value of 'fillchars'");
 
-/// Calls utfc_ptr2schar(p) and returns the character.
-/// If "p" starts with "\x", "\u" or "\U" the hex or unicode value is used.
-/// Returns 0 for invalid hex or invalid UTF-8 byte.
-static schar_T get_encoded_char_adv(const char **p)
-{
-  return rs_get_encoded_char_adv(p);
-}
 
 struct chars_tab {
   schar_T *cp;           ///< char value
@@ -2087,7 +1961,7 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
             last_multispace = p;
             multispace_len = 0;
             while (*s != NUL && *s != ',') {
-              schar_T c1 = get_encoded_char_adv(&s);
+              schar_T c1 = rs_get_encoded_char_adv(&s);
               if (c1 == 0) {
                 return field_value_err(errbuf, errbuflen,
                                        e_wrong_character_width_for_field_str,
@@ -2104,7 +1978,7 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
           } else {
             int multispace_pos = 0;
             while (*s != NUL && *s != ',') {
-              schar_T c1 = get_encoded_char_adv(&s);
+              schar_T c1 = rs_get_encoded_char_adv(&s);
               if (p == last_multispace) {
                 lcs_chars.multispace[multispace_pos++] = c1;
               }
@@ -2120,7 +1994,7 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
             last_lmultispace = p;
             lead_multispace_len = 0;
             while (*s != NUL && *s != ',') {
-              schar_T c1 = get_encoded_char_adv(&s);
+              schar_T c1 = rs_get_encoded_char_adv(&s);
               if (c1 == 0) {
                 return field_value_err(errbuf, errbuflen,
                                        e_wrong_character_width_for_field_str,
@@ -2137,7 +2011,7 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
           } else {
             int multispace_pos = 0;
             while (*s != NUL && *s != ',') {
-              schar_T c1 = get_encoded_char_adv(&s);
+              schar_T c1 = rs_get_encoded_char_adv(&s);
               if (p == last_lmultispace) {
                 lcs_chars.leadmultispace[multispace_pos++] = c1;
               }
@@ -2152,7 +2026,7 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
                                  e_wrong_number_of_characters_for_field_str,
                                  tab[i].name.data);
         }
-        schar_T c1 = get_encoded_char_adv(&s);
+        schar_T c1 = rs_get_encoded_char_adv(&s);
         if (c1 == 0) {
           return field_value_err(errbuf, errbuflen,
                                  e_wrong_character_width_for_field_str,
@@ -2166,14 +2040,14 @@ const char *set_chars_option(win_T *wp, const char *value, CharsOption what, boo
                                    e_wrong_number_of_characters_for_field_str,
                                    tab[i].name.data);
           }
-          c2 = get_encoded_char_adv(&s);
+          c2 = rs_get_encoded_char_adv(&s);
           if (c2 == 0) {
             return field_value_err(errbuf, errbuflen,
                                    e_wrong_character_width_for_field_str,
                                    tab[i].name.data);
           }
           if (!(*s == ',' || *s == NUL)) {
-            c3 = get_encoded_char_adv(&s);
+            c3 = rs_get_encoded_char_adv(&s);
             if (c3 == 0) {
               return field_value_err(errbuf, errbuflen,
                                      e_wrong_character_width_for_field_str,

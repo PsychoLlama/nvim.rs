@@ -11,4 +11,7 @@ typedef enum {
   kListchars,
 } CharsOption;
 
+// Implemented in Rust (src/nvim-rs/option/src/validate.rs)
+const char *check_stl_option(char *s);
+
 #include "optionstr.h.generated.h"
