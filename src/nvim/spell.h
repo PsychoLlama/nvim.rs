@@ -44,5 +44,9 @@ void make_case_word(char *fword, char *cword, int flags);
 void spell_cat_line(char *buf, char *line, int maxlen);
 void spell_soundfold(slang_T *slang, char *inword, bool folded, char *res);
 char *eval_soundfold(const char *word);
+void init_spell_chartab(void);
+bool spell_check_window(win_T *wp);
+bool no_spell_checking(win_T *wp);
+char *spell_enc(void);
 
 #include "spell.h.generated.h"

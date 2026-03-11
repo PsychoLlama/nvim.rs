@@ -2423,6 +2423,254 @@ pub unsafe extern "C" fn rs_eval_soundfold(word: *const c_char) -> *mut c_char {
 }
 
 // =============================================================================
+// Phase 5: Small Utility Functions
+// =============================================================================
+
+extern "C" {
+    // Functions needed by Phase 5
+    fn nvim_get_p_enc() -> *const c_char;
+    fn nvim_syn_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn mb_islower(c: c_int) -> bool;
+    fn nvim_emsg_no_spell();
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+/// Syl item structure for count_syllables.
+/// sizeof = 34 bytes = 30 chars + 4 int (no padding needed since 30 % 4 != 0 but int is 4-aligned)
+/// Actually: 30 chars + 2 bytes padding + 4 int = 36 bytes
+#[repr(C)]
+pub struct SylItemT {
+    pub sy_chars: [c_char; 30],
+    _pad: [u8; 2],
+    pub sy_len: c_int,
+}
+
+/// CHAR_* type constants for get_char_type
+const CHAR_OTHER: c_int = 0;
+const CHAR_UPPER: c_int = 1;
+const CHAR_DIGIT: c_int = 2;
+
+/// Classify a character as digit, uppercase, or other.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn get_char_type(c: c_int) -> c_int {
+    if rs_ascii_isdigit(c) != 0 {
+        return CHAR_DIGIT;
+    }
+    if spell_isupper(c) {
+        return CHAR_UPPER;
+    }
+    CHAR_OTHER
+}
+
+/// Returns a pointer to the end of the word starting at "str".
+/// Supports camelCase words.
+///
+/// # Safety
+/// str and wp must be valid non-null pointers.
+#[export_name = "advance_camelcase_word"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_advance_camelcase_word(
+    str_: *mut c_char,
+    wp: *const c_void,
+    is_camel_case: *mut bool,
+) -> *mut c_char {
+    let mut end = str_;
+    *is_camel_case = false;
+
+    if *(end as *const u8) == 0 {
+        return str_;
+    }
+
+    let c = utf_ptr2char(end);
+    // MB_PTR_ADV
+    let adv = utfc_ptr2len(end).max(1) as usize;
+    end = end.add(adv);
+
+    let mut last_last_type: c_int = -1;
+    let mut last_type = get_char_type(c);
+
+    while *(end as *const u8) != 0 && rs_spell_iswordp(end, wp) {
+        let c2 = utf_ptr2char(end);
+        let this_type = get_char_type(c2);
+
+        if last_last_type == CHAR_UPPER && last_type == CHAR_UPPER && this_type == CHAR_OTHER {
+            // UpperUpperLower: camelCase boundary
+            *is_camel_case = true;
+            // MB_PTR_BACK(str_, end)
+            let retreat = nvim_syn_utf_head_off(str_, end.sub(1)) + 1;
+            end = end.sub(retreat as usize);
+            break;
+        } else if (this_type == CHAR_UPPER && last_type == CHAR_OTHER)
+            || (this_type != last_type && (this_type == CHAR_DIGIT || last_type == CHAR_DIGIT))
+        {
+            *is_camel_case = true;
+            break;
+        }
+
+        last_last_type = last_type;
+        last_type = this_type;
+
+        let adv2 = utfc_ptr2len(end).max(1) as usize;
+        end = end.add(adv2);
+    }
+
+    end
+}
+
+/// Count syllables in "word" using slang syllable rules.
+///
+/// # Safety
+/// slang and word must be valid non-null pointers.
+#[export_name = "count_syllables"]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn count_syllables(slang: *mut SlangRaw, word: *const c_char) -> c_int {
+    if (*slang).sl_syllable.is_null() {
+        return 0;
+    }
+
+    let mut cnt: c_int = 0;
+    let mut skip = false;
+    let mut p = word;
+
+    while *(p as *const u8) != 0 {
+        // Reset counter when we hit a space.
+        if *(p as *const u8) == b' ' {
+            p = p.add(1);
+            cnt = 0;
+            continue;
+        }
+
+        // Find longest match of syllable items.
+        let mut len: c_int = 0;
+        let syl_count = (*slang).sl_syl_items.ga_len;
+        let syl_data = (*slang).sl_syl_items.ga_data as *const SylItemT;
+        for i in 0..syl_count {
+            let syl = syl_data.add(i as usize);
+            if (*syl).sy_len > len
+                && strncmp(p, (*syl).sy_chars.as_ptr(), (*syl).sy_len as usize) == 0
+            {
+                len = (*syl).sy_len;
+            }
+        }
+        if len != 0 {
+            // Found a match, count syllable.
+            cnt += 1;
+            skip = false;
+        } else {
+            // No recognized syllable item; check for syllable char.
+            let c = utf_ptr2char(p);
+            len = utfc_ptr2len(p).max(1);
+            if vim_strchr((*slang).sl_syllable, c).is_null() {
+                skip = false; // No, search for next syllable
+            } else if !skip {
+                cnt += 1; // Yes, count it
+                skip = true; // don't count following syllable chars
+            }
+        }
+        p = p.add(len as usize);
+    }
+    cnt
+}
+
+/// Initialize the spell character table for ASCII and high bytes.
+///
+/// # Safety
+/// Accesses global spelltab and did_set_spelltab.
+#[export_name = "init_spell_chartab"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_init_spell_chartab() {
+    // did_set_spelltab is a C global
+    extern "C" {
+        #[link_name = "did_set_spelltab"]
+        static mut did_set_spelltab_global: bool;
+    }
+    did_set_spelltab_global = false;
+    clear_spell_chartab_impl(SpelltabHandle::global());
+
+    // Fill in high bytes using utf_fold, mb_toupper, mb_isupper, mb_islower.
+    #[allow(clippy::ptr_cast_constness)]
+    let sp = std::ptr::addr_of!(spelltab_global)
+        .cast_mut()
+        .cast::<SpelltabT>();
+    #[allow(clippy::cast_possible_wrap)]
+    for i in 128u32..256u32 {
+        let i_c = i as c_int;
+        let f = utf_fold(i_c);
+        let u = mb_toupper(i_c);
+        (*sp).st_isu[i as usize] = mb_isupper(i_c);
+        (*sp).st_isw[i as usize] = (*sp).st_isu[i as usize] || mb_islower(i_c);
+        // Use latin1 value for utf-8 to avoid E763 for 0xb5.
+        (*sp).st_fold[i as usize] = if f < 256 { f as u8 } else { i as u8 };
+        (*sp).st_upper[i as usize] = if u < 256 { u as u8 } else { i as u8 };
+    }
+}
+
+/// Returns true if spell checking is active in window "wp".
+///
+/// # Safety
+/// wp must be a valid non-null win_T pointer.
+#[export_name = "spell_check_window"]
+#[must_use]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_spell_check_window(wp: *const c_void) -> bool {
+    if nvim_win_get_p_spell(wp) == 0 {
+        return false;
+    }
+    let spl = nvim_win_get_b_p_spl(wp);
+    if spl.is_null() || *(spl as *const u8) == 0 {
+        return false;
+    }
+    let langp = nvim_win_get_b_langp(wp);
+    if (*langp).ga_len <= 0 {
+        return false;
+    }
+    // Check that the first entry is not NULL (mimics the C check).
+    let first_entry = (*langp).ga_data as *const *const c_char;
+    !(*first_entry).is_null()
+}
+
+/// Return true and give an error if spell checking is not enabled.
+///
+/// # Safety
+/// wp must be a valid non-null win_T pointer.
+#[export_name = "no_spell_checking"]
+#[must_use]
+pub unsafe extern "C" fn rs_no_spell_checking(wp: *const c_void) -> bool {
+    let langp = nvim_win_get_b_langp(wp);
+    if nvim_win_get_p_spell(wp) == 0
+        || {
+            let spl = nvim_win_get_b_p_spl(wp);
+            spl.is_null() || *(spl as *const u8) == 0
+        }
+        || (*langp).ga_len == 0
+    {
+        nvim_emsg_no_spell();
+        return true;
+    }
+    false
+}
+
+/// Return encoding string for spell files.
+/// Returns p_enc if short enough and not iso-8859-15, otherwise "latin1".
+///
+/// # Safety
+/// Accesses p_enc global.
+#[export_name = "spell_enc"]
+#[must_use]
+pub unsafe extern "C" fn rs_spell_enc() -> *const c_char {
+    let enc = nvim_get_p_enc();
+    if !enc.is_null() && strlen(enc) < 60 && strcmp(enc, c"iso-8859-15".as_ptr()) != 0 {
+        enc
+    } else {
+        c"latin1".as_ptr()
+    }
+}
+
+// =============================================================================
 // Word Tree Functions
 // =============================================================================
 

@@ -197,6 +197,9 @@ extern bool rs_spell_mb_isword_class(int cl, bool cjk);
 extern int rs_find_region(const char *rp, const char *region);
 // spell_iswordp_w was static in C but is now exported from Rust
 extern bool spell_iswordp_w(const int *p, const win_T *wp);
+// Phase 5: functions now implemented in Rust (were static in C)
+extern char *advance_camelcase_word(char *str, win_T *wp, bool *is_camel_case);
+extern int count_syllables(slang_T *slang, const char *word);
 
 // Static assertions to validate Rust repr(C) struct layout matches C struct layout.
 // These catch layout mismatches at compile time before they cause silent bugs.
@@ -450,65 +453,6 @@ size_t spell_check(win_T *wp, char *ptr, hlf_T *attrp, int *capcol, bool docount
   return (size_t)(mi.mi_end - ptr);
 }
 
-/// Determine the type of character "c".
-static int get_char_type(int c)
-{
-  if (ascii_isdigit(c)) {
-    return CHAR_DIGIT;
-  }
-  if (SPELL_ISUPPER(c)) {
-    return CHAR_UPPER;
-  }
-  return CHAR_OTHER;
-}
-
-/// Returns a pointer to the end of the word starting at "str".
-/// Supports camelCase words.
-static char *advance_camelcase_word(char *str, win_T *wp, bool *is_camel_case)
-{
-  char *end = str;
-
-  *is_camel_case = false;
-
-  if (*str == NUL) {
-    return str;
-  }
-
-  int c = utf_ptr2char(end);
-  MB_PTR_ADV(end);
-  // We need at most the types of the type of the last two chars.
-  int last_last_type = -1;
-  int last_type = get_char_type(c);
-
-  while (*end != NUL && spell_iswordp(end, wp)) {
-    c = utf_ptr2char(end);
-    int this_type = get_char_type(c);
-
-    if (last_last_type == CHAR_UPPER && last_type == CHAR_UPPER
-        && this_type == CHAR_OTHER) {
-      // Handle the following cases:
-      // UpperUpperLower
-      *is_camel_case = true;
-      // Back up by one char.
-      MB_PTR_BACK(str, end);
-      break;
-    } else if ((this_type == CHAR_UPPER && last_type == CHAR_OTHER)
-               || (this_type != last_type
-                   && (this_type == CHAR_DIGIT || last_type == CHAR_DIGIT))) {
-      // Handle the following cases:
-      // LowerUpper LowerDigit UpperDigit DigitUpper DigitLower
-      *is_camel_case = true;
-      break;
-    }
-
-    last_last_type = last_type;
-    last_type = this_type;
-
-    MB_PTR_ADV(end);
-  }
-
-  return end;
-}
 
 // Check if the word at "mip->mi_word" is in the tree.
 // When "mode" is FIND_FOLDWORD check in fold-case word tree.
@@ -1248,24 +1192,6 @@ static int fold_more(matchinf_T *mip)
 }
 
 
-/// Return true if spell checking is enabled for "wp".
-bool spell_check_window(win_T *wp)
-{
-  return wp->w_p_spell
-         && *wp->w_s->b_p_spl != NUL
-         && wp->w_s->b_langp.ga_len > 0
-         && *(char **)(wp->w_s->b_langp.ga_data) != NULL;
-}
-
-/// Return true and give an error if spell checking is not enabled.
-bool no_spell_checking(win_T *wp)
-{
-  if (!wp->w_p_spell || *wp->w_s->b_p_spl == NUL || GA_EMPTY(&wp->w_s->b_langp)) {
-    emsg(_(e_no_spell));
-    return true;
-  }
-  return false;
-}
 
 static void decor_spell_nav_start(win_T *wp)
 {
@@ -1615,15 +1541,6 @@ static void spell_load_lang(char *lang)
   curbuf->b_locked--;
 }
 
-// Return the encoding used for spell checking: Use 'encoding', except that we
-// use "latin1" for "latin9".  And limit to 60 characters (just in case).
-char *spell_enc(void)
-{
-  if (strlen(p_enc) < 60 && strcmp(p_enc, "iso-8859-15") != 0) {
-    return p_enc;
-  }
-  return "latin1";
-}
 
 // Get the name of the .spl file for the internal wordlist into
 // "fname[MAXPATHL]".
@@ -1847,54 +1764,6 @@ int init_syl_tab(slang_T *slang)
   return OK;
 }
 
-// Count the number of syllables in "word".
-// When "word" contains spaces the syllables after the last space are counted.
-// Returns zero if syllables are not defines.
-static int count_syllables(slang_T *slang, const char *word)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (slang->sl_syllable == NULL) {
-    return 0;
-  }
-
-  int cnt = 0;
-  bool skip = false;
-  int len;
-
-  for (const char *p = word; *p != NUL; p += len) {
-    // When running into a space reset counter.
-    if (*p == ' ') {
-      len = 1;
-      cnt = 0;
-      continue;
-    }
-
-    // Find longest match of syllable items.
-    len = 0;
-    for (int i = 0; i < slang->sl_syl_items.ga_len; i++) {
-      syl_item_T *syl = ((syl_item_T *)slang->sl_syl_items.ga_data) + i;
-      if (syl->sy_len > len
-          && strncmp(p, syl->sy_chars, (size_t)syl->sy_len) == 0) {
-        len = syl->sy_len;
-      }
-    }
-    if (len != 0) {     // found a match, count syllable
-      cnt++;
-      skip = false;
-    } else {
-      // No recognized syllable item, at least a syllable char then?
-      int c = utf_ptr2char(p);
-      len = utfc_ptr2len(p);
-      if (vim_strchr(slang->sl_syllable, c) == NULL) {
-        skip = false;               // No, search for next syllable
-      } else if (!skip) {
-        cnt++;                      // Yes, count it
-        skip = true;                // don't count following syllable chars
-      }
-    }
-  }
-  return cnt;
-}
 
 /// Parse 'spelllang' and set w_s->b_langp accordingly.
 /// @return  NULL if it's OK, an untranslated error message otherwise.
@@ -2316,28 +2185,6 @@ void close_spellbuf(buf_T *buf)
   xfree(buf);
 }
 
-
-// Init the chartab used for spelling. Called once while starting up.
-// The default is to use isalpha(), but the spell file should define the word
-// characters to make it possible that 'encoding' differs from the current
-// locale.  For utf-8 we don't use isalpha() but our own functions.
-void init_spell_chartab(void)
-{
-  did_set_spelltab = false;
-  clear_spell_chartab(&spelltab);
-  for (int i = 128; i < 256; i++) {
-    int f = utf_fold(i);
-    int u = mb_toupper(i);
-
-    spelltab.st_isu[i] = mb_isupper(i);
-    spelltab.st_isw[i] = spelltab.st_isu[i] || mb_islower(i);
-    // The folded/upper-cased value is different between latin1 and
-    // utf8 for 0xb5, causing E763 for no good reason.  Use the latin1
-    // value for utf-8 to avoid this.
-    spelltab.st_fold[i] = (f < 256) ? (uint8_t)f : (uint8_t)i;
-    spelltab.st_upper[i] = (u < 256) ? (uint8_t)u : (uint8_t)i;
-  }
-}
 
 
 // Case-fold "str[len]" into "buf[buflen]".  The result is NUL terminated.
