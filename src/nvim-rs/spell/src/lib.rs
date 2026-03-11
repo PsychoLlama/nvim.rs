@@ -1577,9 +1577,10 @@ extern "C" {
 }
 
 /// Fold character using spelltab or utf_fold for high chars (SPELL_TOFOLD macro).
-#[inline]
+#[must_use]
+#[export_name = "spell_tofold"]
 #[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
-unsafe fn spell_tofold(c: c_int) -> c_int {
+pub unsafe extern "C" fn spell_tofold(c: c_int) -> c_int {
     if c >= 128 {
         utf_fold(c)
     } else {

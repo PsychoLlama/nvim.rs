@@ -130,7 +130,9 @@ unsafe fn hashitem_is_empty(hi: *const crate::HashitemRaw) -> bool {
         || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed).cast_mut())
 }
 
-unsafe fn similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool {
+#[must_use]
+#[export_name = "similar_chars"]
+pub unsafe extern "C" fn similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool {
     let m1 = if c1 >= 256 {
         let mut buf = [0u8; 8]; // MB_MAXCHAR + 1
         let len = utf_char2bytes(c1, buf.as_mut_ptr().cast::<c_char>()) as usize;

@@ -65,6 +65,7 @@ extern int soundfold_find(slang_T *slang, char *word);
 extern void find_keepcap_word(slang_T *slang, char *fword, char *kword);
 extern int score_wordcount_adj(slang_T *slang, int score, char *word, bool split);
 extern int badword_captype(char *word, char *end);
+extern bool similar_chars(slang_T *slang, int c1, int c2);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -151,14 +152,6 @@ enum {
   SCORE_FILE = 30,      // suggestion from a file
   SCORE_MAXINIT = 350,  // Initial maximum score: higher == slower.
                         // 350 allows for about three changes.
-};
-
-enum {
-  SCORE_COMMON1 = 30,  // subtracted for words seen before
-  SCORE_COMMON2 = 40,  // subtracted for words often seen
-  SCORE_COMMON3 = 50,  // subtracted for words very often seen
-  SCORE_THRES2 = 10,   // word count threshold for COMMON2
-  SCORE_THRES3 = 100,  // word count threshold for COMMON3
 };
 
 // When trying changed soundfold words it becomes slow when trying more than
@@ -2653,41 +2646,6 @@ badword:
 /// Find word "word" in fold-case tree for "slang" and return the word number.
 /// Returns true if "c1" and "c2" are similar characters according to the MAP
 /// lines in the .aff file.
-static bool similar_chars(slang_T *slang, int c1, int c2)
-{
-  int m1, m2;
-  char buf[MB_MAXCHAR + 1];
-
-  if (c1 >= 256) {
-    buf[utf_char2bytes(c1, buf)] = 0;
-    hashitem_T *hi = hash_find(&slang->sl_map_hash, buf);
-    if (HASHITEM_EMPTY(hi)) {
-      m1 = 0;
-    } else {
-      m1 = utf_ptr2char(hi->hi_key + strlen(hi->hi_key) + 1);
-    }
-  } else {
-    m1 = slang->sl_map_array[c1];
-  }
-  if (m1 == 0) {
-    return false;
-  }
-
-  if (c2 >= 256) {
-    buf[utf_char2bytes(c2, buf)] = 0;
-    hashitem_T *hi = hash_find(&slang->sl_map_hash, buf);
-    if (HASHITEM_EMPTY(hi)) {
-      m2 = 0;
-    } else {
-      m2 = utf_ptr2char(hi->hi_key + strlen(hi->hi_key) + 1);
-    }
-  } else {
-    m2 = slang->sl_map_array[c2];
-  }
-
-  return m1 == m2;
-}
-
 /// Adds a suggestion to the list of suggestions.
 /// For a suggestion that is already in the list the lowest score is remembered.
 ///
@@ -2925,12 +2883,4 @@ static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
     }
   }
   return maxscore;
-}
-
-
-/// Convert character to its case-folded equivalent.
-/// Wrapper around the SPELL_TOFOLD macro for Rust FFI access.
-int spell_tofold(int c)
-{
-  return SPELL_TOFOLD(c);
 }
