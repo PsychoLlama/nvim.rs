@@ -61,6 +61,8 @@ extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const 
                                      int limit);
 extern int rs_soundalike_score(const char *goodstart, const char *badstart);
 extern int rs_bytes2offset(const uint8_t **pp);
+extern int soundfold_find(slang_T *slang, char *word);
+extern void find_keepcap_word(slang_T *slang, char *fword, char *kword);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -2306,128 +2308,6 @@ static void go_deeper(trystate_T *stack, int depth, int score_add)
   stack[depth + 1].ts_flags = 0;
 }
 
-/// "fword" is a good word with case folded.  Find the matching keep-case
-/// words and put it in "kword".
-/// Theoretically there could be several keep-case words that result in the
-/// same case-folded word, but we only find one...
-static void find_keepcap_word(slang_T *slang, char *fword, char *kword)
-{
-  char uword[MAXWLEN];                // "fword" in upper-case
-  idx_T tryidx;
-
-  // The following arrays are used at each depth in the tree.
-  idx_T arridx[MAXWLEN];
-  int round[MAXWLEN];
-  int fwordidx[MAXWLEN];
-  int uwordidx[MAXWLEN];
-  int kwordlen[MAXWLEN];
-
-  int l;
-  char *p;
-  uint8_t *byts = slang->sl_kbyts;      // array with bytes of the words
-  idx_T *idxs = slang->sl_kidxs;      // array with indexes
-
-  if (byts == NULL) {
-    // array is empty: "cannot happen"
-    *kword = NUL;
-    return;
-  }
-
-  // Make an all-cap version of "fword".
-  allcap_copy(fword, uword);
-
-  // Each character needs to be tried both case-folded and upper-case.
-  // All this gets very complicated if we keep in mind that changing case
-  // may change the byte length of a multi-byte character...
-  int depth = 0;
-  arridx[0] = 0;
-  round[0] = 0;
-  fwordidx[0] = 0;
-  uwordidx[0] = 0;
-  kwordlen[0] = 0;
-  while (depth >= 0) {
-    if (fword[fwordidx[depth]] == NUL) {
-      // We are at the end of "fword".  If the tree allows a word to end
-      // here we have found a match.
-      if (byts[arridx[depth] + 1] == 0) {
-        kword[kwordlen[depth]] = NUL;
-        return;
-      }
-
-      // kword is getting too long, continue one level up
-      depth--;
-    } else if (++round[depth] > 2) {
-      // tried both fold-case and upper-case character, continue one
-      // level up
-      depth--;
-    } else {
-      // round[depth] == 1: Try using the folded-case character.
-      // round[depth] == 2: Try using the upper-case character.
-      int flen = utf_ptr2len(fword + fwordidx[depth]);
-      int ulen = utf_ptr2len(uword + uwordidx[depth]);
-      if (round[depth] == 1) {
-        p = fword + fwordidx[depth];
-        l = flen;
-      } else {
-        p = uword + uwordidx[depth];
-        l = ulen;
-      }
-
-      for (tryidx = arridx[depth]; l > 0; l--) {
-        // Perform a binary search in the list of accepted bytes.
-        int len = byts[tryidx++];
-        int c = (uint8_t)(*p++);
-        idx_T lo = tryidx;
-        idx_T hi = tryidx + len - 1;
-        while (lo < hi) {
-          idx_T m = (lo + hi) / 2;
-          if (byts[m] > c) {
-            hi = m - 1;
-          } else if (byts[m] < c) {
-            lo = m + 1;
-          } else {
-            lo = hi = m;
-            break;
-          }
-        }
-
-        // Stop if there is no matching byte.
-        if (hi < lo || byts[lo] != c) {
-          break;
-        }
-
-        // Continue at the child (if there is one).
-        tryidx = idxs[lo];
-      }
-
-      if (l == 0) {
-        // Found the matching char.  Copy it to "kword" and go a
-        // level deeper.
-        if (round[depth] == 1) {
-          strncpy(kword + kwordlen[depth],  // NOLINT(runtime/printf)
-                  fword + fwordidx[depth],
-                  (size_t)flen);
-          kwordlen[depth + 1] = kwordlen[depth] + flen;
-        } else {
-          strncpy(kword + kwordlen[depth],  // NOLINT(runtime/printf)
-                  uword + uwordidx[depth],
-                  (size_t)ulen);
-          kwordlen[depth + 1] = kwordlen[depth] + ulen;
-        }
-        fwordidx[depth + 1] = fwordidx[depth] + flen;
-        uwordidx[depth + 1] = uwordidx[depth] + ulen;
-
-        depth++;
-        arridx[depth] = tryidx;
-        round[depth] = 0;
-      }
-    }
-  }
-
-  // Didn't find it: "cannot happen".
-  *kword = NUL;
-}
-
 /// Compute the sound-a-like score for suggestions in su->su_ga and add them to
 /// su->su_sga.
 static void score_comp_sal(suginfo_T *su)
@@ -2870,76 +2750,6 @@ badword:
 }
 
 /// Find word "word" in fold-case tree for "slang" and return the word number.
-static int soundfold_find(slang_T *slang, char *word)
-{
-  idx_T arridx = 0;
-  int wlen = 0;
-  uint8_t *ptr = (uint8_t *)word;
-  int wordnr = 0;
-
-  uint8_t *byts = slang->sl_sbyts;
-  idx_T *idxs = slang->sl_sidxs;
-
-  while (true) {
-    // First byte is the number of possible bytes.
-    int len = byts[arridx++];
-
-    // If the first possible byte is a zero the word could end here.
-    // If the word ends we found the word.  If not skip the NUL bytes.
-    int c = ptr[wlen];
-    if (byts[arridx] == NUL) {
-      if (c == NUL) {
-        break;
-      }
-
-      // Skip over the zeros, there can be several.
-      while (len > 0 && byts[arridx] == NUL) {
-        arridx++;
-        len--;
-      }
-      if (len == 0) {
-        return -1;            // no children, word should have ended here
-      }
-      wordnr++;
-    }
-
-    // If the word ends we didn't find it.
-    if (c == NUL) {
-      return -1;
-    }
-
-    // Perform a binary search in the list of accepted bytes.
-    if (c == TAB) {         // <Tab> is handled like <Space>
-      c = ' ';
-    }
-    while (byts[arridx] < c) {
-      // The word count is in the first idxs[] entry of the child.
-      wordnr += idxs[idxs[arridx]];
-      arridx++;
-      if (--len == 0) {         // end of the bytes, didn't find it
-        return -1;
-      }
-    }
-    if (byts[arridx] != c) {    // didn't find the byte
-      return -1;
-    }
-
-    // Continue at the child (if there is one).
-    arridx = idxs[arridx];
-    wlen++;
-
-    // One space in the good word may stand for several spaces in the
-    // checked word.
-    if (c == ' ') {
-      while (ptr[wlen] == ' ' || ptr[wlen] == TAB) {
-        wlen++;
-      }
-    }
-  }
-
-  return wordnr;
-}
-
 /// Returns true if "c1" and "c2" are similar characters according to the MAP
 /// lines in the .aff file.
 static bool similar_chars(slang_T *slang, int c1, int c2)

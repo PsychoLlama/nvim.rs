@@ -1685,6 +1685,231 @@ pub unsafe extern "C" fn rs_apply_rep(
 }
 
 // =============================================================================
+// Trie Tree Traversal Functions
+// =============================================================================
+
+/// Find a sound-folded word in the soundfold tree.
+///
+/// Returns the word number for the given soundfolded word, or -1 if not found.
+/// Mirrors C `soundfold_find()`.
+///
+/// # Safety
+/// `slang` must be valid and have a loaded soundfold tree (sl_sbyts/sl_sidxs).
+/// `word` must be a valid null-terminated byte string.
+#[must_use]
+#[export_name = "soundfold_find"]
+pub unsafe extern "C" fn rs_soundfold_find(
+    slang: crate::SlangHandle,
+    word: *const c_char,
+) -> c_int {
+    use crate::IdxT;
+
+    let byts = slang.sbyts();
+    let idxs = slang.sidxs();
+
+    if byts.is_null() || idxs.is_null() || word.is_null() {
+        return -1;
+    }
+
+    let word_bytes = word.cast::<u8>();
+    let mut arridx: IdxT = 0;
+    let mut wlen: usize = 0;
+    let mut wordnr: c_int = 0;
+
+    loop {
+        // First byte is the count of possible bytes at this node.
+        let len = c_int::from(*byts.add(arridx as usize));
+        arridx += 1;
+
+        let c = *word_bytes.add(wlen);
+
+        // If the first possible byte is NUL, the word can end here.
+        if *byts.add(arridx as usize) == 0 {
+            if c == 0 {
+                // Word ends here: found it.
+                break;
+            }
+            // Skip over NUL entries (there can be several).
+            let mut remaining = len;
+            while remaining > 0 && *byts.add(arridx as usize) == 0 {
+                arridx += 1;
+                remaining -= 1;
+            }
+            if remaining == 0 {
+                return -1; // no children, word should have ended here
+            }
+            wordnr += 1;
+        }
+
+        // If the word ended but the tree hasn't: not found.
+        if c == 0 {
+            return -1;
+        }
+
+        // Binary search among accepted bytes (Tab treated as Space).
+        let search_byte = if c == b'\t' { b' ' } else { c };
+
+        let mut lo = arridx;
+        let hi = arridx + len - 1;
+        // Linear scan: find first byte >= search_byte
+        while lo < hi && *byts.add(lo as usize) < search_byte {
+            // Count the words in this child's subtree.
+            wordnr += *idxs.add(*idxs.add(lo as usize) as usize);
+            lo += 1;
+        }
+        if *byts.add(lo as usize) != search_byte {
+            return -1; // byte not found
+        }
+
+        // Continue to the child node.
+        arridx = *idxs.add(lo as usize);
+        wlen += 1;
+
+        // One space in the good word may stand for several in the bad word.
+        if c == b' ' || c == b'\t' {
+            while *word_bytes.add(wlen) == b' ' || *word_bytes.add(wlen) == b'\t' {
+                wlen += 1;
+            }
+        }
+    }
+
+    wordnr
+}
+
+/// Find the keep-case version of a case-folded word in the keep-case trie.
+///
+/// Writes the result into `kword` (null-terminated). On failure, writes an
+/// empty string. Mirrors C `find_keepcap_word()`.
+///
+/// # Safety
+/// `slang` must be valid with a loaded keep-case tree.
+/// `fword` and `kword` must be valid buffers (kword at least MAXWLEN bytes).
+#[allow(clippy::many_single_char_names)]
+#[export_name = "find_keepcap_word"]
+pub unsafe extern "C" fn rs_find_keepcap_word(
+    slang: crate::SlangHandle,
+    fword: *mut c_char,
+    kword: *mut c_char,
+) {
+    use crate::IdxT;
+
+    let byts = slang.kbyts();
+    let idxs = slang.kidxs();
+
+    if byts.is_null() {
+        *kword = 0;
+        return;
+    }
+
+    // Make an all-caps version of fword.
+    let mut uword = [0u8; MAXWLEN];
+    crate::rs_allcap_copy(fword, uword.as_mut_ptr().cast::<c_char>());
+
+    // State arrays for DFS traversal.
+    let mut arridx = [0 as IdxT; MAXWLEN];
+    let mut round = [0i32; MAXWLEN];
+    let mut fwordidx = [0usize; MAXWLEN];
+    let mut uwordidx = [0usize; MAXWLEN];
+    let mut kwordlen = [0usize; MAXWLEN];
+
+    let mut depth: isize = 0;
+    arridx[0] = 0;
+    round[0] = 0;
+    fwordidx[0] = 0;
+    uwordidx[0] = 0;
+    kwordlen[0] = 0;
+
+    while depth >= 0 {
+        let d = depth as usize;
+        let fc = *fword.add(fwordidx[d]) as u8;
+
+        if fc == 0 {
+            // At end of fword: check if tree allows word end here.
+            if *byts.add(arridx[d] as usize + 1) == 0 {
+                *kword.add(kwordlen[d]) = 0;
+                return;
+            }
+            depth -= 1;
+        } else {
+            round[d] += 1;
+            if round[d] > 2 {
+                // Tried both fold-case and upper-case: backtrack.
+                depth -= 1;
+            } else {
+                // round 1 = fold-case, round 2 = upper-case
+                let flen = utf_ptr2len(fword.add(fwordidx[d]).cast::<c_char>()) as usize;
+                let ulen = utf_ptr2len(uword.as_ptr().add(uwordidx[d]).cast::<c_char>()) as usize;
+                let (p, l): (*const c_char, usize) = if round[d] == 1 {
+                    (fword.add(fwordidx[d]).cast::<c_char>(), flen)
+                } else {
+                    (uword.as_ptr().add(uwordidx[d]).cast::<c_char>(), ulen)
+                };
+
+                // Try to match the bytes of 'p' (length 'l') in the trie.
+                let mut tryidx = arridx[d];
+                let mut matched = true;
+                let mut remaining = l;
+                let mut pb: *const c_char = p;
+                while remaining > 0 {
+                    let node_len = *byts.add(tryidx as usize) as usize;
+                    tryidx += 1;
+                    let c = *pb.cast::<u8>();
+                    pb = pb.add(1);
+
+                    // Binary search for c.
+                    let lo = tryidx;
+                    let hi = tryidx + node_len as IdxT - 1;
+                    let mut lo_idx = lo;
+                    let mut hi_idx = hi;
+                    while lo_idx < hi_idx {
+                        let mid = i32::midpoint(lo_idx, hi_idx);
+                        match (*byts.add(mid as usize)).cmp(&c) {
+                            std::cmp::Ordering::Greater => hi_idx = mid - 1,
+                            std::cmp::Ordering::Less => lo_idx = mid + 1,
+                            std::cmp::Ordering::Equal => {
+                                lo_idx = mid;
+                                hi_idx = mid;
+                                break;
+                            }
+                        }
+                    }
+
+                    if hi_idx < lo_idx || *byts.add(lo_idx as usize) != c {
+                        matched = false;
+                        break;
+                    }
+
+                    tryidx = *idxs.add(lo_idx as usize);
+                    remaining -= 1;
+                }
+
+                if matched {
+                    // Copy the matched bytes to kword and go deeper.
+                    let copy_len = if round[d] == 1 { flen } else { ulen };
+                    let src: *const u8 = p.cast::<u8>();
+                    std::ptr::copy_nonoverlapping(
+                        src,
+                        kword.add(kwordlen[d]).cast::<u8>(),
+                        copy_len,
+                    );
+
+                    let nd = d + 1;
+                    kwordlen[nd] = kwordlen[d] + copy_len;
+                    fwordidx[nd] = fwordidx[d] + flen;
+                    uwordidx[nd] = uwordidx[d] + ulen;
+                    arridx[nd] = tryidx;
+                    round[nd] = 0;
+                    depth += 1;
+                }
+            }
+        }
+    }
+
+    // Not found.
+    *kword = 0;
+}
+
+// =============================================================================
 // Phase 149: Suggestion Generation - additional FFI exports
 // =============================================================================
 
