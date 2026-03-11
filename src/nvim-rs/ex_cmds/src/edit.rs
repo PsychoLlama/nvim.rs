@@ -135,6 +135,7 @@ extern "C" {
     fn nvim_ecmd_au_new_curbuf_restore(saved: *mut std::ffi::c_void);
 
     // Buffer operation wrappers (direct C calls)
+    #[link_name = "buf_check_timestamp"]
     fn nvim_ex2_buf_check_timestamp(buf: *mut BufHandle);
     fn buf_copy_options(buf: *mut BufHandle, flags: c_int);
     fn buf_freeall(buf: *mut BufHandle, flags: c_int);

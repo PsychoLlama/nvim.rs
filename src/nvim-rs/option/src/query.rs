@@ -408,6 +408,7 @@ extern "C" {
 
     // do_spelllang_source
     fn nvim_win_get_b_p_spl(win: WinHandle) -> *const c_char;
+    #[link_name = "source_runtime_vim_lua"]
     fn nvim_ex2_source_runtime_vim_lua(name: *const c_char, flags: c_int) -> c_int;
 
     // get_fileformat_force (nvim_eap_get_force_ff/bin are in ex_docmd.c)

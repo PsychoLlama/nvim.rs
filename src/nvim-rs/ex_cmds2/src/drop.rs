@@ -19,36 +19,45 @@ extern "C" {
     fn nvim_ex2_get_curbuf() -> *mut BufHandle;
     fn nvim_ex2_bufIsChanged(buf: *mut BufHandle) -> bool;
     fn nvim_ex2_buf_hide(buf: *mut BufHandle) -> bool;
+    #[link_name = "buflist_findnr"]
     fn nvim_ex2_buflist_findnr(nr: c_int) -> *mut BufHandle;
     fn nvim_ex2_get_first_tabpage() -> *mut TabHandle;
     fn nvim_ex2_tp_next(tp: *mut TabHandle) -> *mut TabHandle;
     fn nvim_ex2_tp_firstwin(tp: *mut TabHandle) -> *mut WinHandle;
     fn nvim_ex2_win_next(win: *mut WinHandle) -> *mut WinHandle;
     fn nvim_ex2_win_get_buffer(win: *mut WinHandle) -> *mut BufHandle;
+    #[link_name = "goto_tabpage_win"]
     fn nvim_ex2_goto_tabpage_win(tp: *mut TabHandle, wp: *mut WinHandle);
 
     #[link_name = "check_changed"]
     fn rs_check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
 
     // --- drop-specific accessors ---
+    #[link_name = "set_arglist"]
     fn nvim_ex2_set_arglist(arg: *mut c_char);
     fn nvim_ex2_get_argcount() -> c_int;
     fn nvim_ex2_get_arglist_fnum(idx: c_int) -> c_int;
+    #[link_name = "ex_all"]
     fn nvim_ex2_ex_all(eap: *mut ExArgHandle);
+    #[link_name = "ex_rewind"]
     fn nvim_ex2_ex_rewind(eap: *mut ExArgHandle);
     fn nvim_ex2_curwin_set_arg_idx(val: c_int);
     fn nvim_ex2_curbuf_get_b_p_ar() -> c_int;
     fn nvim_ex2_curbuf_set_b_p_ar(val: c_int);
     fn nvim_ex2_curbuf_get_ml_flags() -> c_int;
     fn nvim_ex2_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *mut c_char;
+    #[link_name = "set_swapcommand"]
     fn nvim_ex2_set_swapcommand(cmd: *const c_char, zero: c_int) -> bool;
+    #[link_name = "do_cmdline"]
     fn nvim_ex2_do_cmdline(
         cmd: *mut c_char,
         getline: *mut c_void,
         cookie: *mut c_void,
         flags: c_int,
     );
+    // nvim_ex2_clear_swapcommand: kept (sets VV_SWAPCOMMAND global, no simple linker symbol)
     fn nvim_ex2_clear_swapcommand();
+    // nvim_ex2_buf_check_timestamp_curbuf: kept (wraps buf_check_timestamp(curbuf), accesses global)
     fn nvim_ex2_buf_check_timestamp_curbuf();
     fn nvim_ex2_get_emsg_off() -> c_int;
     fn nvim_ex2_set_emsg_off(val: c_int);

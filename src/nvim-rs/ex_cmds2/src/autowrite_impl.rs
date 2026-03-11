@@ -49,14 +49,15 @@ extern "C" {
     fn nvim_ex2_bufref_valid(br: *mut BufrefHandle) -> bool;
     fn nvim_ex2_bufref_free(br: *mut BufrefHandle);
 
-    // --- function wrappers ---
+    // --- function wrappers (kept, wrap macros or have special logic) ---
     fn nvim_ex2_bufIsChanged(buf: *mut BufHandle) -> bool;
     fn nvim_ex2_bt_dontwrite(buf: *mut BufHandle) -> bool;
     fn nvim_ex2_buf_hide(buf: *mut BufHandle) -> bool;
+    #[link_name = "buf_write"]
     fn nvim_ex2_buf_write(
         buf: *mut BufHandle,
-        ffname: *const c_char,
-        fname: *const c_char,
+        ffname: *mut c_char,
+        fname: *mut c_char,
         start: i32,
         end: i32,
         eap: *mut std::ffi::c_void,
@@ -65,11 +66,17 @@ extern "C" {
         reset_changed: bool,
         filtering: bool,
     ) -> c_int;
+    #[link_name = "msg_source"]
     fn nvim_ex2_msg_source(hl: c_int);
-    fn nvim_ex2_msg(s: *const c_char, attr: c_int);
+    #[link_name = "msg"]
+    fn nvim_ex2_msg(s: *const c_char, attr: c_int) -> bool;
+    #[link_name = "no_write_message"]
     fn nvim_ex2_no_write_message();
+    #[link_name = "no_write_message_nobang"]
     fn nvim_ex2_no_write_message_nobang(buf: *mut BufHandle);
+    #[link_name = "emsg"]
     fn nvim_ex2_emsg(s: *const c_char) -> bool;
+    // nvim_ex2_gettext: kept (wraps the _() macro which has no linker symbol)
     fn nvim_ex2_gettext(s: *const c_char) -> *const c_char;
 }
 
@@ -88,8 +95,8 @@ unsafe fn buf_write_all_impl(buf: *mut BufHandle, forceit: bool) -> c_int {
     let retval = unsafe {
         nvim_ex2_buf_write(
             buf,
-            ffname,
-            fname,
+            ffname.cast_mut(),
+            fname.cast_mut(),
             1,
             line_count,
             ptr::null_mut(),

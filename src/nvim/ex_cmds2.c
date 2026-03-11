@@ -104,40 +104,10 @@ int nvim_ex2_eap_get_skip(exarg_T *eap)
   return eap->skip;
 }
 
-char *nvim_ex2_script_get(exarg_T *eap, size_t *lenp)
-{
-  return script_get(eap, lenp);
-}
-
-list_T *nvim_ex2_tv_list_alloc(ptrdiff_t len)
-{
-  return tv_list_alloc(len);
-}
-
-void nvim_ex2_tv_list_append_allocated_string(list_T *l, char *s)
-{
-  tv_list_append_allocated_string(l, s);
-}
-
-void nvim_ex2_tv_list_append_number(list_T *l, varnumber_T n)
-{
-  tv_list_append_number(l, n);
-}
-
-void nvim_ex2_tv_list_append_string(list_T *l, const char *s, ssize_t len)
-{
-  tv_list_append_string(l, s, len);
-}
-
 void nvim_ex2_eval_call_provider(char *provider, char *method, list_T *arguments, bool discard)
 {
   typval_T rettv;
   rs_eval_call_provider(provider, method, arguments, discard, &rettv);
-}
-
-int nvim_ex2_vim_fullname(const char *fname, char *buf, size_t len, bool force)
-{
-  return vim_FullName(fname, buf, len, force);
 }
 
 // =============================================================================
@@ -241,40 +211,6 @@ bool nvim_ex2_buf_hide(buf_T *buf)
   return buf_hide(buf);
 }
 
-int nvim_ex2_buf_write(buf_T *buf, const char *ffname, const char *fname,
-                       linenr_T start, linenr_T end, exarg_T *eap,
-                       bool append, bool forceit, bool reset_changed,
-                       bool filtering)
-{
-  return buf_write(buf, (char *)ffname, (char *)fname, start, end, eap,
-                   append, forceit, reset_changed, filtering);
-}
-
-void nvim_ex2_msg_source(int hl)
-{
-  msg_source(hl);
-}
-
-void nvim_ex2_msg(const char *s, int attr)
-{
-  msg(s, attr);
-}
-
-void nvim_ex2_no_write_message(void)
-{
-  no_write_message();
-}
-
-void nvim_ex2_no_write_message_nobang(buf_T *buf)
-{
-  no_write_message_nobang(buf);
-}
-
-bool nvim_ex2_emsg(const char *s)
-{
-  return emsg(s);
-}
-
 const char *nvim_ex2_gettext(const char *s)
 {
   return _(s);
@@ -289,21 +225,6 @@ int nvim_ex2_buf_get_fnum(buf_T *buf)
   return buf->b_fnum;
 }
 
-void nvim_ex2_dialog_msg(char *buff, char *format, char *fname)
-{
-  dialog_msg(buff, format, fname);
-}
-
-int nvim_ex2_vim_dialog_yesnocancel(int type, char *title, char *message, int dflt)
-{
-  return vim_dialog_yesnocancel(type, title, message, dflt);
-}
-
-int nvim_ex2_vim_dialog_yesnoallcancel(int type, char *title, char *message, int dflt)
-{
-  return vim_dialog_yesnoallcancel(type, title, message, dflt);
-}
-
 int nvim_ex2_check_overwrite(buf_T *buf, const char *fname, const char *ffname)
 {
   exarg_T ea = {
@@ -311,16 +232,6 @@ int nvim_ex2_check_overwrite(buf_T *buf, const char *fname, const char *ffname)
     .forceit = false,
   };
   return check_overwrite(&ea, buf, (char *)fname, (char *)ffname, false);
-}
-
-void nvim_ex2_unchanged(buf_T *buf, bool ff, bool always_inc_changedtick)
-{
-  unchanged(buf, ff, always_inc_changedtick);
-}
-
-void nvim_ex2_buf_set_name(int fnum, const char *name)
-{
-  buf_set_name(fnum, (char *)name);
 }
 
 void nvim_ex2_buf_clear_names(buf_T *buf)
@@ -439,40 +350,11 @@ void nvim_ex2_set_exiting(bool val)
   exiting = val;
 }
 
-buf_T *nvim_ex2_buflist_findnr(int nr)
-{
-  return buflist_findnr(nr);
-}
-
-void nvim_ex2_set_curbuf(buf_T *buf, int action, bool prevbuf)
-{
-  set_curbuf(buf, action, prevbuf);
-}
-
-const char *nvim_ex2_buf_spname(buf_T *buf)
-{
-  return buf_spname(buf);
-}
-
-void nvim_ex2_goto_tabpage_win(tabpage_T *tp, win_T *wp)
-{
-  goto_tabpage_win(tp, wp);
-}
-
-void nvim_ex2_wait_return(bool redraw)
-{
-  wait_return(redraw);
-}
-
 bool nvim_ex2_buf_has_running_job(buf_T *buf)
 {
   return buf->terminal && channel_job_running((uint64_t)buf->b_p_channel);
 }
 
-bool nvim_ex2_semsg(const char *fmt, const char *arg)
-{
-  return semsg(fmt, arg);
-}
 
 int nvim_ex2_eap_get_addr_count(exarg_T *eap)
 {
@@ -489,15 +371,6 @@ void nvim_ex2_set_no_check_timestamps(int val)
   no_check_timestamps = val;
 }
 
-void nvim_ex2_check_timestamps(bool focus)
-{
-  check_timestamps(focus);
-}
-
-void nvim_ex2_buf_check_timestamp(buf_T *buf)
-{
-  (void)buf_check_timestamp(buf);
-}
 
 // =============================================================================
 // C accessor functions for Rust (compiler)
@@ -510,55 +383,6 @@ int nvim_ex2_eap_get_forceit(exarg_T *eap)
   return eap->forceit;
 }
 
-void nvim_ex2_do_cmdline_cmd(const char *cmd)
-{
-  do_cmdline_cmd(cmd);
-}
-
-char *nvim_ex2_get_var_value(const char *name)
-{
-  return get_var_value(name);
-}
-
-void nvim_ex2_set_internal_string_var(const char *name, const char *val)
-{
-  set_internal_string_var(name, (char *)val);
-}
-
-void nvim_ex2_do_unlet(const char *name, size_t name_len, bool forceit)
-{
-  do_unlet(name, name_len, forceit);
-}
-
-int nvim_ex2_source_runtime_vim_lua(const char *name, int flags)
-{
-  return source_runtime_vim_lua((char *)name, flags);
-}
-
-char *nvim_ex2_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
-
-void nvim_ex2_xfree(void *p)
-{
-  xfree(p);
-}
-
-char *nvim_ex2_xmalloc(size_t size)
-{
-  return xmalloc(size);
-}
-
-void nvim_ex2_snprintf(char *buf, size_t size, const char *fmt, const char *arg)
-{
-  snprintf(buf, size, fmt, arg);
-}
-
-size_t nvim_ex2_strlen(const char *s)
-{
-  return strlen(s);
-}
 
 // =============================================================================
 // C accessor functions for Rust (drop)
@@ -568,11 +392,6 @@ _Static_assert(ML_EMPTY == 0x01, "ML_EMPTY mismatch");
 _Static_assert(DOCMD_VERBOSE == 0x01, "DOCMD_VERBOSE mismatch");
 _Static_assert(DOCMD_NOWAIT == 0x02, "DOCMD_NOWAIT mismatch");
 
-void nvim_ex2_set_arglist(char *arg)
-{
-  set_arglist(arg);
-}
-
 int nvim_ex2_get_argcount(void)
 {
   return ARGCOUNT;
@@ -581,16 +400,6 @@ int nvim_ex2_get_argcount(void)
 int nvim_ex2_get_arglist_fnum(int idx)
 {
   return ARGLIST[idx].ae_fnum;
-}
-
-void nvim_ex2_ex_all(exarg_T *eap)
-{
-  ex_all(eap);
-}
-
-void nvim_ex2_ex_rewind(exarg_T *eap)
-{
-  ex_rewind(eap);
 }
 
 win_T *nvim_ex2_get_curwin(void)
@@ -628,15 +437,6 @@ char *nvim_ex2_eap_get_do_ecmd_cmd(exarg_T *eap)
   return eap->do_ecmd_cmd;
 }
 
-bool nvim_ex2_set_swapcommand(const char *cmd, int zero)
-{
-  return set_swapcommand(cmd, zero);
-}
-
-void nvim_ex2_do_cmdline(char *cmd, LineGetter getline_fn, void *cookie, int flags)
-{
-  do_cmdline(cmd, getline_fn, cookie, flags);
-}
 
 void nvim_ex2_clear_swapcommand(void)
 {
@@ -740,10 +540,6 @@ bool nvim_ex2_win_get_w_p_wfb(win_T *win)
   return win->w_p_wfb;
 }
 
-void nvim_ex2_win_goto(win_T *win)
-{
-  win_goto(win);
-}
 
 int nvim_ex2_win_split(void)
 {
@@ -770,10 +566,6 @@ char *nvim_ex2_au_event_disable_syntax(void)
   return au_event_disable(",Syntax");
 }
 
-void nvim_ex2_au_event_restore(char *save_ei)
-{
-  au_event_restore(save_ei);
-}
 
 bool nvim_ex2_win_valid(win_T *win)
 {
@@ -800,15 +592,6 @@ char *nvim_ex2_buf_get_b_p_syn(buf_T *buf)
   return buf->b_p_syn;
 }
 
-size_t nvim_ex2_qf_get_valid_size(exarg_T *eap)
-{
-  return qf_get_valid_size(eap);
-}
-
-size_t nvim_ex2_qf_get_cur_idx(exarg_T *eap)
-{
-  return qf_get_cur_idx(eap);
-}
 
 extern void rs_ex_cc(void *eap);
 extern void rs_ex_cnext(void *eap);
@@ -843,15 +626,6 @@ bool nvim_ex2_editing_arg_idx(void)
   return editing_arg_idx(curwin);
 }
 
-void nvim_ex2_do_argfile(exarg_T *eap, int idx)
-{
-  do_argfile(eap, idx);
-}
-
-void nvim_ex2_goto_buffer(exarg_T *eap, int start, int dir, int fnum)
-{
-  goto_buffer(eap, start, dir, fnum);
-}
 
 bool nvim_ex2_win_get_w_floating(win_T *win)
 {
@@ -873,10 +647,6 @@ bool nvim_ex2_valid_tabpage(tabpage_T *tp)
   return rs_valid_tabpage(tp) != 0;
 }
 
-void nvim_ex2_goto_tabpage_tp(tabpage_T *tp, bool trigger_enter, bool trigger_leave)
-{
-  goto_tabpage_tp(tp, trigger_enter, trigger_leave);
-}
 
 void nvim_ex2_validate_cursor(void)
 {
@@ -888,10 +658,6 @@ bool nvim_ex2_curwin_get_w_p_scb(void)
   return curwin->w_p_scb;
 }
 
-void nvim_ex2_do_check_scrollbind(bool check)
-{
-  do_check_scrollbind(check);
-}
 
 /// Restore syntax autocommands after listdo.
 /// This handles the aco_save_T stack-local struct by keeping it entirely in C.

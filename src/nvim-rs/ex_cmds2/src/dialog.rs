@@ -29,26 +29,32 @@ extern "C" {
 
     // --- dialog-specific accessors ---
     fn nvim_ex2_buf_get_fnum(buf: *mut BufHandle) -> c_int;
+    #[link_name = "dialog_msg"]
     fn nvim_ex2_dialog_msg(buff: *mut c_char, format: *const c_char, fname: *const c_char);
+    #[link_name = "vim_dialog_yesnocancel"]
     fn nvim_ex2_vim_dialog_yesnocancel(
         typ: c_int,
         title: *const c_char,
         message: *const c_char,
         dflt: c_int,
     ) -> c_int;
+    #[link_name = "vim_dialog_yesnoallcancel"]
     fn nvim_ex2_vim_dialog_yesnoallcancel(
         typ: c_int,
         title: *const c_char,
         message: *const c_char,
         dflt: c_int,
     ) -> c_int;
+    // nvim_ex2_check_overwrite: special wrapper (stack-local exarg_T), kept
     fn nvim_ex2_check_overwrite(
         buf: *mut BufHandle,
         fname: *const c_char,
         ffname: *const c_char,
     ) -> c_int;
+    #[link_name = "unchanged"]
     fn nvim_ex2_unchanged(buf: *mut BufHandle, ff: bool, always_inc_changedtick: bool);
-    fn nvim_ex2_buf_set_name(fnum: c_int, name: *const c_char);
+    #[link_name = "buf_set_name"]
+    fn nvim_ex2_buf_set_name(fnum: c_int, name: *mut c_char);
     fn nvim_ex2_buf_clear_names(buf: *mut BufHandle);
     fn nvim_ex2_buf_set_fname_null(buf: *mut BufHandle);
 }
@@ -122,7 +128,7 @@ pub unsafe extern "C" fn rs_dialog_changed(buf: *mut BufHandle, checkall: bool) 
         let empty_bufname = unsafe { nvim_ex2_buf_get_fname(buf) }.is_null();
         if empty_bufname {
             let fnum = unsafe { nvim_ex2_buf_get_fnum(buf) };
-            unsafe { nvim_ex2_buf_set_name(fnum, b"Untitled\0".as_ptr().cast()) };
+            unsafe { nvim_ex2_buf_set_name(fnum, b"Untitled\0".as_ptr().cast_mut().cast()) };
         }
 
         let fname = unsafe { nvim_ex2_buf_get_fname(buf) };

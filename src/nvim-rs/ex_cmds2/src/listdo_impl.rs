@@ -52,7 +52,9 @@ extern "C" {
     fn nvim_ex2_get_prevwin() -> *mut WinHandle;
     fn nvim_ex2_win_valid(win: *mut WinHandle) -> bool;
     fn nvim_ex2_win_get_w_p_wfb(win: *mut WinHandle) -> bool;
+    #[link_name = "win_goto"]
     fn nvim_ex2_win_goto(win: *mut WinHandle);
+    // nvim_ex2_win_split: kept (wraps win_split(0, 0) with constant args)
     fn nvim_ex2_win_split() -> c_int;
     fn nvim_ex2_emsg_winfixbuf();
 
@@ -61,6 +63,7 @@ extern "C" {
     fn nvim_ex2_dec_msg_listdo_overwrite();
 
     // autocmd operations
+    // nvim_ex2_au_event_disable_syntax: kept (wraps au_event_disable(",Syntax") with constant arg)
     fn nvim_ex2_au_event_disable_syntax() -> *mut c_char;
 
     // buffer flags
@@ -68,7 +71,9 @@ extern "C" {
     fn nvim_ex2_buf_get_b_p_bl(buf: *mut BufHandle) -> bool;
 
     // quickfix
+    #[link_name = "qf_get_valid_size"]
     fn nvim_ex2_qf_get_valid_size(eap: *mut ExArgHandle) -> usize;
+    #[link_name = "qf_get_cur_idx"]
     fn nvim_ex2_qf_get_cur_idx(eap: *mut ExArgHandle) -> usize;
     fn rs_ex_cc(eap: *mut ExArgHandle);
     fn rs_ex_cnext(eap: *mut ExArgHandle);
@@ -80,21 +85,27 @@ extern "C" {
     fn nvim_ex2_get_argcount() -> c_int;
     fn nvim_ex2_curwin_get_arg_idx() -> c_int;
     fn nvim_ex2_editing_arg_idx() -> bool;
+    #[link_name = "do_argfile"]
     fn nvim_ex2_do_argfile(eap: *mut ExArgHandle, idx: c_int);
+    #[link_name = "goto_buffer"]
     fn nvim_ex2_goto_buffer(eap: *mut ExArgHandle, start: c_int, dir: c_int, fnum: c_int);
     fn nvim_ex2_win_get_w_floating(win: *mut WinHandle) -> bool;
     fn nvim_ex2_win_get_w_config_hide(win: *mut WinHandle) -> bool;
     fn nvim_ex2_win_get_w_config_focusable(win: *mut WinHandle) -> bool;
     fn nvim_ex2_valid_tabpage(tp: *mut TabHandle) -> bool;
+    #[link_name = "goto_tabpage_tp"]
     fn nvim_ex2_goto_tabpage_tp(tp: *mut TabHandle, trigger_enter: bool, trigger_leave: bool);
+    #[link_name = "do_cmdline"]
     fn nvim_ex2_do_cmdline(
         cmd: *mut c_char,
         getline: *mut c_void,
         cookie: *mut c_void,
         flags: c_int,
     );
+    // nvim_ex2_validate_cursor: kept (wraps validate_cursor(curwin), accesses global)
     fn nvim_ex2_validate_cursor();
     fn nvim_ex2_curwin_get_w_p_scb() -> bool;
+    #[link_name = "do_check_scrollbind"]
     fn nvim_ex2_do_check_scrollbind(check: bool);
 
     // syntax restore

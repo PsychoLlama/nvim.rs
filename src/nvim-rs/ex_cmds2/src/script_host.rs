@@ -20,24 +20,31 @@ pub struct ListHandle {
 }
 
 extern "C" {
-    // --- exarg_T field accessors ---
+    // --- exarg_T field accessors (kept, access struct fields) ---
     fn nvim_ex2_eap_get_arg(eap: *mut ExArgHandle) -> *mut c_char;
     fn nvim_ex2_eap_get_line1(eap: *mut ExArgHandle) -> i32;
     fn nvim_ex2_eap_get_line2(eap: *mut ExArgHandle) -> i32;
     fn nvim_ex2_eap_get_skip(eap: *mut ExArgHandle) -> c_int;
 
-    // --- C library functions ---
+    // --- C library functions (via link_name to real symbols) ---
+    #[link_name = "script_get"]
     fn nvim_ex2_script_get(eap: *mut ExArgHandle, lenp: *mut usize) -> *mut c_char;
+    #[link_name = "tv_list_alloc"]
     fn nvim_ex2_tv_list_alloc(len: isize) -> *mut ListHandle;
+    #[link_name = "tv_list_append_allocated_string"]
     fn nvim_ex2_tv_list_append_allocated_string(l: *mut ListHandle, s: *mut c_char);
+    #[link_name = "tv_list_append_number"]
     fn nvim_ex2_tv_list_append_number(l: *mut ListHandle, n: i64);
+    #[link_name = "tv_list_append_string"]
     fn nvim_ex2_tv_list_append_string(l: *mut ListHandle, s: *const c_char, len: isize);
+    // nvim_ex2_eval_call_provider: special wrapper (stack-local rettv), kept
     fn nvim_ex2_eval_call_provider(
         provider: *const c_char,
         method: *const c_char,
         arguments: *mut ListHandle,
         discard: bool,
     );
+    #[link_name = "vim_FullName"]
     fn nvim_ex2_vim_fullname(
         fname: *const c_char,
         buf: *mut c_char,

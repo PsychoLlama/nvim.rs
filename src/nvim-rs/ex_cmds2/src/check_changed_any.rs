@@ -59,12 +59,19 @@ extern "C" {
     fn nvim_ex2_get_no_wait_return() -> c_int;
     fn nvim_ex2_set_no_wait_return(val: c_int);
     fn nvim_ex2_set_exiting(val: bool);
+    #[link_name = "buflist_findnr"]
     fn nvim_ex2_buflist_findnr(nr: c_int) -> *mut BufHandle;
+    #[link_name = "set_curbuf"]
     fn nvim_ex2_set_curbuf(buf: *mut BufHandle, action: c_int, prevbuf: bool);
+    #[link_name = "buf_spname"]
     fn nvim_ex2_buf_spname(buf: *mut BufHandle) -> *const c_char;
+    #[link_name = "goto_tabpage_win"]
     fn nvim_ex2_goto_tabpage_win(tp: *mut TabHandle, wp: *mut WinHandle);
+    #[link_name = "wait_return"]
     fn nvim_ex2_wait_return(redraw: bool);
+    // nvim_ex2_buf_has_running_job: kept (accesses buf->terminal field directly)
     fn nvim_ex2_buf_has_running_job(buf: *mut BufHandle) -> bool;
+    #[link_name = "semsg"]
     fn nvim_ex2_semsg(fmt: *const c_char, arg: *const c_char) -> bool;
 
     // --- ex_checktime ---
@@ -72,8 +79,10 @@ extern "C" {
     fn nvim_ex2_eap_get_line2(eap: *mut ExArgHandle) -> i32;
     fn nvim_ex2_get_no_check_timestamps() -> c_int;
     fn nvim_ex2_set_no_check_timestamps(val: c_int);
+    #[link_name = "check_timestamps"]
     fn nvim_ex2_check_timestamps(focus: bool);
-    fn nvim_ex2_buf_check_timestamp(buf: *mut BufHandle);
+    #[link_name = "buf_check_timestamp"]
+    fn nvim_ex2_buf_check_timestamp(buf: *mut BufHandle) -> c_int;
 }
 
 /// Add a buffer number to the vector if not already present (replaces `add_bufnum`)
