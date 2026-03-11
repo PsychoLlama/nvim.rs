@@ -151,9 +151,18 @@ extern int rs_shada_write_file(const char *file, bool nomerge);
 extern int rs_diffopt_horizontal(void);
 #define loop_get_events(l) rs_loop_get_events(l)
 
+// Rust implementations (Phase 1: output and helpers)
+extern void rs_usage(void);
+extern void rs_version(void);
+extern void rs_print_mainerr(const char *msg1, const char *msg2, const char *msg3);
+extern void rs_mainerr(const char *msg1, const char *msg2, const char *msg3) FUNC_ATTR_NORETURN;
+extern int rs_get_number_arg(const char *p, int *idx, int def);
+extern void rs_check_swap_exists_action(void);
+
 Loop main_loop;
 
-static char *argv0 = NULL;
+char *nvim_argv0 = NULL;
+#define argv0 nvim_argv0
 
 // Error messages
 static const char *err_arg_missing = N_("Argument missing after");
@@ -907,28 +916,10 @@ void preserve_exit(const char *errmsg)
   getout(1);
 }
 
-/// Gets the integer value of a numeric command line argument if given,
-/// such as '-o10'.
-///
-/// @param[in] p         pointer to argument
-/// @param[in, out] idx  pointer to index in argument, is incremented
-/// @param[in] def       default value
-///
-/// @return def unmodified if:
-///   - argument isn't given
-///   - argument is non-numeric
-///
-/// @return argument's numeric value otherwise
 static int get_number_arg(const char *p, int *idx, int def)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (ascii_isdigit(p[*idx])) {
-    def = atoi(&(p[*idx]));
-    while (ascii_isdigit(p[*idx])) {
-      *idx = *idx + 1;
-    }
-  }
-  return def;
+  return rs_get_number_arg(p, idx, def);
 }
 
 static uint64_t server_connect(char *server_addr, const char **errmsg)
@@ -2200,95 +2191,31 @@ static int execute_env(char *env)
   return OK;
 }
 
-/// Prints a message of the form "{msg1}: {msg2}: {msg3}", then exits with code 1.
-///
-/// @param msg1  error message
-/// @param msg2  extra message, or NULL
-/// @param msg3  extra message, or NULL
 static void mainerr(const char *msg1, const char *msg2, const char *msg3)
   FUNC_ATTR_NORETURN
 {
-  print_mainerr(msg1, msg2, msg3);
-  os_exit(1);
+  rs_mainerr(msg1, msg2, msg3);
+  abort();  // unreachable: rs_mainerr is noreturn
 }
 
 static void print_mainerr(const char *msg1, const char *msg2, const char *msg3)
 {
-  char *prgname = path_tail(argv0);
-
-  signal_stop();              // kill us with CTRL-C here, if you like
-
-  fprintf(stderr, "%s: %s", prgname, _(msg1));
-  if (msg2 != NULL) {
-    fprintf(stderr, ": \"%s\"", msg2);
-  }
-  if (msg3 != NULL) {
-    fprintf(stderr, ": \"%s\"", msg3);
-  }
-  fprintf(stderr, _("\nMore info with \""));
-  fprintf(stderr, "%s -h\"\n", prgname);
+  rs_print_mainerr(msg1, msg2, msg3);
 }
 
-/// Prints version information for "nvim -v" or "nvim --version".
 static void version(void)
 {
-  // TODO(bfred): not like this?
-  nlua_init(NULL, 0, -1);
-  info_message = true;  // use stdout, not stderr
-  list_version();
-  msg_putchar('\n');
-  msg_didout = false;
+  rs_version();
 }
 
-/// Prints help message for "nvim -h" or "nvim --help".
 static void usage(void)
 {
-  signal_stop();              // kill us with CTRL-C here, if you like
-
-  printf(_("Usage:\n"));
-  printf(_("  nvim [options] [file ...]\n"));
-  printf(_("\nOptions:\n"));
-  printf(_("  --cmd <cmd>           Execute <cmd> before any config\n"));
-  printf(_("  +<cmd>, -c <cmd>      Execute <cmd> after config and first file\n"));
-  printf(_("  -l <script> [args...] Execute Lua <script> (with optional args)\n"));
-  printf(_("  -S <session>          Source <session> after loading the first file\n"));
-  printf(_("  -s <scriptin>         Read Normal mode commands from <scriptin>\n"));
-  printf(_("  -u <config>           Use this config file\n"));
-  printf("\n");
-  printf(_("  -d                    Diff mode\n"));
-  printf(_("  -es, -Es              Silent (batch) mode\n"));
-  printf(_("  -h, --help            Print this help message\n"));
-  printf(_("  -i <shada>            Use this shada file\n"));
-  printf(_("  -n                    No swap file, use memory only\n"));
-  printf(_("  -o[N]                 Open N windows (default: one per file)\n"));
-  printf(_("  -O[N]                 Open N vertical windows (default: one per file)\n"));
-  printf(_("  -p[N]                 Open N tab pages (default: one per file)\n"));
-  printf(_("  -R                    Read-only (view) mode\n"));
-  printf(_("  -v, --version         Print version information\n"));
-  printf(_("  -V[N][file]           Verbose [level][file]\n"));
-  printf("\n");
-  printf(_("  --                    Only file names after this\n"));
-  printf(_("  --api-info            Write msgpack-encoded API metadata to stdout\n"));
-  printf(_("  --clean               \"Factory defaults\" (skip user config and plugins, shada)\n"));
-  printf(_("  --embed               Use stdin/stdout as a msgpack-rpc channel\n"));
-  printf(_("  --headless            Don't start a user interface\n"));
-  printf(_("  --listen <address>    Serve RPC API from this address\n"));
-  printf(_("  --remote[-subcommand] Execute commands remotely on a server\n"));
-  printf(_("  --server <address>    Connect to this Nvim server\n"));
-  printf(_("  --startuptime <file>  Write startup timing messages to <file>\n"));
-  printf(_("\nSee \":help startup-options\" for all options.\n"));
+  rs_usage();
 }
 
-// Check the result of the ATTENTION dialog:
-// When "Quit" selected, exit Vim.
-// When "Recover" selected, recover the file.
 static void check_swap_exists_action(void)
 {
-  if (swap_exists_action == SEA_QUIT) {
-    ui_call_error_exit(1);
-    getout(1);
-  }
-  handle_swap_exists(NULL);
+  rs_check_swap_exists_action();
 }
 
 #ifdef ENABLE_ASAN_UBSAN

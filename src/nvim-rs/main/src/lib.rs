@@ -15,7 +15,9 @@
 
 pub mod args;
 pub mod exit;
+pub mod helpers;
 pub mod init;
+pub mod output;
 pub mod signals;
 
 use std::ffi::c_int;
