@@ -490,6 +490,12 @@ impl SlangHandle {
         unsafe { std::ptr::addr_of_mut!((*self.0).sl_map_hash) }
     }
 
+    /// Get mutable pointer to the wordcount hashtable
+    #[must_use]
+    pub fn wordcount(self) -> *const HashtabRaw {
+        unsafe { std::ptr::addr_of!((*self.0).sl_wordcount) }
+    }
+
     /// Get soundfold word bytes array
     #[must_use]
     pub fn sbyts(self) -> *mut u8 {
@@ -1596,8 +1602,9 @@ unsafe fn spell_toupper(c: c_int) -> c_int {
 
 /// Check if character is uppercase using spelltab or mb_isupper (SPELL_ISUPPER macro).
 #[inline]
+#[must_use]
 #[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
-unsafe fn spell_isupper(c: c_int) -> bool {
+pub unsafe fn spell_isupper(c: c_int) -> bool {
     if c >= 128 {
         mb_isupper(c)
     } else {

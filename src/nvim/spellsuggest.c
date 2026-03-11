@@ -63,6 +63,8 @@ extern int rs_soundalike_score(const char *goodstart, const char *badstart);
 extern int rs_bytes2offset(const uint8_t **pp);
 extern int soundfold_find(slang_T *slang, char *word);
 extern void find_keepcap_word(slang_T *slang, char *fword, char *kword);
+extern int score_wordcount_adj(slang_T *slang, int score, char *word, bool split);
+extern int badword_captype(char *word, char *end);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -228,6 +230,8 @@ typedef struct {
                              ///< valid when "ts_flags" has TSF_DIDDEL
 } trystate_T;
 
+extern bool can_be_compound(trystate_T *sp, slang_T *slang, uint8_t *compflags, int flag);
+
 // values for ts_isdiff
 enum {
   DIFF_NONE = 0,    // no different byte (yet)
@@ -256,101 +260,6 @@ static int spell_suggest_timeout = 5000;
 /// Returns true when the sequence of flags in "compflags" plus "flag" can
 /// possibly form a valid compounded word.  This also checks the COMPOUNDRULE
 /// lines if they don't contain wildcards.
-static bool can_be_compound(trystate_T *sp, slang_T *slang, uint8_t *compflags, int flag)
-{
-  // If the flag doesn't appear in sl_compstartflags or sl_compallflags
-  // then it can't possibly compound.
-  if (!byte_in_str(sp->ts_complen == sp->ts_compsplit
-                   ? slang->sl_compstartflags : slang->sl_compallflags, flag)) {
-    return false;
-  }
-
-  // If there are no wildcards, we can check if the flags collected so far
-  // possibly can form a match with COMPOUNDRULE patterns.  This only
-  // makes sense when we have two or more words.
-  if (slang->sl_comprules != NULL && sp->ts_complen > sp->ts_compsplit) {
-    compflags[sp->ts_complen] = (uint8_t)flag;
-    compflags[sp->ts_complen + 1] = NUL;
-    bool v = match_compoundrule(slang, compflags + sp->ts_compsplit);
-    compflags[sp->ts_complen] = NUL;
-    return v;
-  }
-
-  return true;
-}
-
-/// Adjust the score of common words.
-///
-/// @param split  word was split, less bonus
-static int score_wordcount_adj(slang_T *slang, int score, char *word, bool split)
-{
-  int bonus;
-
-  hashitem_T *hi = hash_find(&slang->sl_wordcount, word);
-  if (HASHITEM_EMPTY(hi)) {
-    return score;
-  }
-
-  wordcount_T *wc = HI2WC(hi);
-  if (wc->wc_count < SCORE_THRES2) {
-    bonus = SCORE_COMMON1;
-  } else if (wc->wc_count < SCORE_THRES3) {
-    bonus = SCORE_COMMON2;
-  } else {
-    bonus = SCORE_COMMON3;
-  }
-  int newscore = split ? score - bonus / 2
-                       : score - bonus;
-  if (newscore < 0) {
-    return 0;
-  }
-  return newscore;
-}
-
-/// Like captype() but for a KEEPCAP word add ONECAP if the word starts with a
-/// capital.  So that make_case_word() can turn WOrd into Word.
-/// Add ALLCAP for "WOrD".
-static int badword_captype(char *word, char *end)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int flags = captype(word, end);
-
-  if (!(flags & WF_KEEPCAP)) {
-    return flags;
-  }
-
-  // Count the number of UPPER and lower case letters.
-  int l = 0;
-  int u = 0;
-  bool first = false;
-  for (char *p = word; p < end; MB_PTR_ADV(p)) {
-    int c = utf_ptr2char(p);
-    if (SPELL_ISUPPER(c)) {
-      u++;
-      if (p == word) {
-        first = true;
-      }
-    } else {
-      l++;
-    }
-  }
-
-  // If there are more UPPER than lower case letters suggest an
-  // ALLCAP word.  Otherwise, if the first letter is UPPER then
-  // suggest ONECAP.  Exception: "ALl" most likely should be "All",
-  // require three upper case letters.
-  if (u > l && u > 2) {
-    flags |= WF_ALLCAP;
-  } else if (first) {
-    flags |= WF_ONECAP;
-  }
-
-  if (u >= 2 && l >= 2) {     // maCARONI maCAroni
-    flags |= WF_MIXCAP;
-  }
-
-  return flags;
-}
 
 // values for sps_flags
 enum {

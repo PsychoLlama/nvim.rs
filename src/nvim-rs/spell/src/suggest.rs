@@ -106,6 +106,12 @@ extern "C" {
 
     // Magic sentinel for removed hash items
     static hash_removed: c_char;
+
+    // Check if byte n is in string str (from nvim/spell.h)
+    fn byte_in_str(str: *const u8, n: c_int) -> bool;
+
+    // Check if compflags match a COMPOUNDRULE (from nvim/spell.c)
+    fn match_compoundrule(slang: crate::SlangHandle, compflags: *const u8) -> bool;
 }
 
 // =============================================================================
@@ -1910,6 +1916,148 @@ pub unsafe extern "C" fn rs_find_keepcap_word(
 }
 
 // =============================================================================
+// Phase 4: can_be_compound, score_wordcount_adj, badword_captype
+// =============================================================================
+
+/// Check if compound flags collected so far could form a valid compound word.
+///
+/// Returns true if adding `flag` to the compound flags is allowed.
+///
+/// # Safety
+/// `sp` must be a valid non-null pointer to a trystate_T (C ABI compatible with TryState).
+/// `slang` must be a valid non-null SlangHandle.
+/// `compflags` must point to a buffer of at least MAXWLEN bytes.
+#[must_use]
+#[export_name = "can_be_compound"]
+pub unsafe extern "C" fn rs_can_be_compound(
+    sp: *const TryState,
+    slang: crate::SlangHandle,
+    compflags: *mut u8,
+    flag: c_int,
+) -> bool {
+    let complen = (*sp).complen as usize;
+    let compsplit = (*sp).compsplit as usize;
+
+    // If flag doesn't appear in the relevant flags string, it can't compound.
+    let flags_ptr = if complen == compsplit {
+        slang.compstartflags()
+    } else {
+        slang.compallflags()
+    };
+    if !byte_in_str(flags_ptr, flag) {
+        return false;
+    }
+
+    // If there are no wildcards, check that collected flags match a COMPOUNDRULE.
+    let comprules = slang.comprules();
+    if !comprules.is_null() && complen > compsplit {
+        *compflags.add(complen) = flag as u8;
+        *compflags.add(complen + 1) = 0;
+        let result = match_compoundrule(slang, compflags.add(compsplit));
+        *compflags.add(complen) = 0;
+        return result;
+    }
+
+    true
+}
+
+/// Adjust the score of common words.
+///
+/// Subtracts a bonus from `score` when `word` appears frequently in `sl_wordcount`.
+///
+/// # Safety
+/// `slang` must be a valid non-null SlangHandle.
+/// `word` must be a valid null-terminated string.
+#[must_use]
+#[export_name = "score_wordcount_adj"]
+pub unsafe extern "C" fn rs_score_wordcount_adj(
+    slang: crate::SlangHandle,
+    score: c_int,
+    word: *const c_char,
+    split: bool,
+) -> c_int {
+    let wordcount_ht = slang.wordcount();
+    let hi = hash_find(wordcount_ht, word);
+    if hashitem_is_empty(hi) {
+        return score;
+    }
+
+    // HI2WC: wc_count is 2 bytes before wc_word (the hash key)
+    // wordcount_T = { wc_count: u16, wc_word: [] }
+    // WC_KEY_OFF = offsetof(wordcount_T, wc_word) = 2
+    // Read as two bytes to avoid alignment issues (little-endian u16)
+    let base = (*hi).hi_key.cast::<u8>().sub(2);
+    let wc_count = u16::from_le_bytes([*base, *base.add(1)]);
+
+    let bonus = if c_int::from(wc_count) < crate::SCORE_THRES2 {
+        crate::SCORE_COMMON1
+    } else if c_int::from(wc_count) < crate::SCORE_THRES3 {
+        crate::SCORE_COMMON2
+    } else {
+        crate::SCORE_COMMON3
+    };
+
+    let newscore = if split {
+        score - bonus / 2
+    } else {
+        score - bonus
+    };
+    if newscore < 0 {
+        0
+    } else {
+        newscore
+    }
+}
+
+/// Like captype() but for KEEPCAP words also adds ONECAP/ALLCAP/MIXCAP flags.
+///
+/// # Safety
+/// `word` and `end` must be valid pointers with `word <= end`.
+#[must_use]
+#[export_name = "badword_captype"]
+#[allow(clippy::cast_sign_loss)] // char counts are always non-negative
+pub unsafe extern "C" fn rs_badword_captype(word: *const c_char, end: *const c_char) -> c_int {
+    let flags = crate::rs_captype(word, end);
+
+    if flags & crate::WF_KEEPCAP_FLAG == 0 {
+        return flags;
+    }
+
+    // Count upper and lower case letters.
+    let mut upper_count: c_int = 0;
+    let mut lower_count: c_int = 0;
+    let mut first_is_upper = false;
+    let mut p = word;
+    while p < end {
+        let c = utf_ptr2char(p);
+        if crate::spell_isupper(c) {
+            upper_count += 1;
+            if std::ptr::eq(p, word) {
+                first_is_upper = true;
+            }
+        } else {
+            lower_count += 1;
+        }
+        // Advance by char width (MB_PTR_ADV)
+        let l = utf_ptr2len(p).max(1) as usize;
+        p = p.add(l);
+    }
+
+    let mut result = flags;
+    if upper_count > lower_count && upper_count > 2 {
+        result |= crate::WF_ALLCAP_FLAG;
+    } else if first_is_upper {
+        result |= crate::WF_ONECAP_FLAG;
+    }
+    // WF_MIXCAP = 0x20 (mix of upper and lower case, defined in spellsuggest.c)
+    if upper_count >= 2 && lower_count >= 2 {
+        result |= 0x20;
+    }
+
+    result
+}
+
+// =============================================================================
 // Phase 149: Suggestion Generation - additional FFI exports
 // =============================================================================
 
@@ -1947,23 +2095,6 @@ pub extern "C" fn rs_score_default_icase() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_score_default_similar() -> c_int {
     SCORES.similar
-}
-
-/// Calculate word count adjustment score.
-///
-/// Common words get a bonus that makes them more likely to be suggested.
-#[no_mangle]
-pub extern "C" fn rs_score_wordcount_adj(score: c_int, word_count: c_int) -> c_int {
-    // Adjust score based on word frequency
-    // Higher word count = lower (better) score
-    if word_count <= 0 {
-        return score;
-    }
-
-    // Each doubling of word count reduces score by ~10%
-    let log_count = f64::from(word_count).log2() as c_int;
-    let adjustment = log_count * 5;
-    score.saturating_sub(adjustment.min(50))
 }
 
 /// State values for suggestion trie walk.
