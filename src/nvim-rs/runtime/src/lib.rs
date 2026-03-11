@@ -47,6 +47,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 pub mod commands;
 pub mod defaults;
+pub mod expand;
 pub mod package;
 pub mod path;
 pub mod pathsearch;

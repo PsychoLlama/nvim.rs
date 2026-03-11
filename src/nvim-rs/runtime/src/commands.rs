@@ -3,8 +3,10 @@
 //! This module handles :source, :runtime, :packadd, and related commands.
 
 use std::ffi::{c_char, c_int, c_void};
+use std::sync::atomic::Ordering;
 
 use crate::dip;
+use crate::expand::RUNTIME_EXPAND_FLAGS;
 
 // =============================================================================
 // Command Types
@@ -169,10 +171,6 @@ extern "C" {
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
     fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
 
-    // runtime_expand_flags accessors (in runtime.c, static variable)
-    fn nvim_rt_cmd_get_runtime_expand_flags() -> c_int;
-    fn nvim_rt_cmd_set_runtime_expand_flags(val: c_int);
-
     // expand_T accessor (in runtime_ffi.c)
     fn nvim_rt_cmd_expand_set_context(xp: *mut c_void, context: c_int, pattern: *const c_char);
 
@@ -247,15 +245,15 @@ pub unsafe extern "C" fn rs_set_context_in_runtime_cmd(xp: *mut c_void, arg: *co
     } else {
         0
     };
-    nvim_rt_cmd_set_runtime_expand_flags(expand_flags);
+    RUNTIME_EXPAND_FLAGS.store(expand_flags, Ordering::Relaxed);
 
     // Skip to the last argument.
     let mut p = rs_skiptowhite_esc(arg);
     while *p != 0 {
-        if nvim_rt_cmd_get_runtime_expand_flags() == 0 {
+        if RUNTIME_EXPAND_FLAGS.load(Ordering::Relaxed) == 0 {
             // When there are multiple arguments and [where] is not specified,
             // use an unrelated non-zero flag to avoid expanding [where].
-            nvim_rt_cmd_set_runtime_expand_flags(dip::ALL);
+            RUNTIME_EXPAND_FLAGS.store(dip::ALL, Ordering::Relaxed);
         }
         arg = rs_skipwhite(p);
         p = rs_skiptowhite_esc(arg);

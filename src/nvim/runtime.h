@@ -58,5 +58,8 @@ void free_scriptnames(void);
 void free_autoload_scriptnames(void);
 void scriptnames_slash_adjust(void);
 int add_pack_dir_to_rtp(char *fname, bool is_pack);
+int ExpandRTDir(char *pat, int flags, int *num_file, char ***file, char *dirnames[]);
+int expand_runtime_cmd(char *pat, int *numMatches, char ***matches);
+int ExpandPackAddDir(char *pat, int *num_file, char ***file);
 
 #include "runtime.h.generated.h"
