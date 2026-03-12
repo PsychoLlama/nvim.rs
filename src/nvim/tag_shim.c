@@ -925,15 +925,7 @@ void do_tags(exarg_T *eap)
 /// @param mincount  MAXCOL: find all matches
 ///                  other: minimal number of matches
 /// @param buf_ffname  name of buffer for priority
-// Forward declaration for the Rust implementation
-int rs_find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
-                 char *buf_ffname);
-
-int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
-              char *buf_ffname)
-{
-  return rs_find_tags(pat, num_matches, matchesp, flags, mincount, buf_ffname);
-}
+// find_tags deleted: now exported from Rust search.rs via #[export_name = "find_tags"]
 
 static garray_T tag_fnames = GA_EMPTY_INIT_VALUE;
 

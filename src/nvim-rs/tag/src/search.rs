@@ -2542,7 +2542,7 @@ extern "C" {
 /// - `pat` must be a valid, mutable C string
 /// - `num_matches` and `matchesp` must be valid output pointers
 /// - `buf_ffname` may be null
-#[no_mangle]
+#[export_name = "find_tags"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_find_tags(
     pat: *mut c_char,

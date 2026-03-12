@@ -47,5 +47,7 @@ typedef struct {
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 const char *did_set_tagfunc(optset_T *args);
+int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
+              char *buf_ffname);
 
 #include "tag_shim.h.generated.h"
