@@ -150,6 +150,7 @@ extern "C" {
     /// Check if option is global-local (scope_flags is not a power of two)
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     /// Check if option has the given type
+    #[link_name = "option_has_type"]
     fn rs_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     /// Get options[opt_idx].flags (as u32)
     #[link_name = "rs_get_option_flags"]
@@ -504,7 +505,8 @@ use crate::OptFlags;
 use std::ffi::c_uint;
 
 extern "C" {
-    /// rs_option_is_hidden(opt_idx) - returns 1 if option is hidden
+    /// is_option_hidden(opt_idx) - returns 1 if option is hidden
+    #[link_name = "is_option_hidden"]
     fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
     /// rs_option_is_global_only(opt_idx)
     fn rs_option_is_global_only(opt_idx: c_int) -> c_int;

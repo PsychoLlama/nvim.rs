@@ -284,7 +284,8 @@ pub unsafe extern "C" fn rs_option_is_string(opt_idx: OptIndex) -> c_int {
 }
 
 /// Check if option has a specific type.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "option_has_type"]
 pub unsafe extern "C" fn rs_option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
@@ -306,7 +307,8 @@ pub mod scope {
 }
 
 /// Check if option supports a specific scope.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "option_has_scope"]
 pub unsafe extern "C" fn rs_option_has_scope(opt_idx: OptIndex, opt_scope: c_int) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
@@ -348,7 +350,8 @@ pub unsafe extern "C" fn rs_option_is_window_local(opt_idx: OptIndex) -> c_int {
 }
 
 /// Check if option is hidden (immutable and var points to def_val.data).
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "is_option_hidden"]
 pub unsafe extern "C" fn rs_option_is_hidden(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;

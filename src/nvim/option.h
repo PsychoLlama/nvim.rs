@@ -111,6 +111,9 @@ const char *get_equalprg(void);
 const char *get_findfunc(void);
 void *get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
 void *get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
+bool is_option_hidden(OptIndex opt_idx);
+bool option_has_type(OptIndex opt_idx, OptValType type);
+bool option_has_scope(OptIndex opt_idx, OptScope scope);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif

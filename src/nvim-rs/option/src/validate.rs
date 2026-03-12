@@ -941,6 +941,7 @@ extern "C" {
     fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal;
     fn rs_optval_equal(a: OptVal, b: OptVal) -> c_int;
     fn rs_optval_copy(o: OptVal) -> OptVal;
+    #[link_name = "option_has_type"]
     fn rs_option_has_type(opt_idx: OptIndex, type_: c_int) -> c_int;
     fn nvim_get_option_type(opt_idx: OptIndex) -> c_int;
     fn nvim_optval_type_get_name(type_: c_int) -> *const c_char;

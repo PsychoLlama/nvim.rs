@@ -51,9 +51,9 @@ extern "C" {
     fn nvim_option_get_def_val(opt_idx: c_int) -> crate::storage::OptVal;
     #[link_name = "rs_option_is_global_local"]
     fn nvim_option_is_global_local(opt_idx: c_int) -> c_int;
-    #[link_name = "rs_option_is_hidden"]
+    #[link_name = "is_option_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
-    #[link_name = "rs_option_has_type"]
+    #[link_name = "option_has_type"]
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn rs_optval_equal(a: crate::storage::OptVal, b: crate::storage::OptVal) -> c_int;
 

@@ -216,7 +216,7 @@ extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_i
 // Phase 3 (pass 7) Rust exports
 extern int rs_ins_compl_start(void);
 // Phase 4 (pass 7) Rust exports
-extern int rs_ins_complete(int c, int enable_pum);
+// rs_ins_complete deleted: now exported as ins_complete via #[export_name]
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
@@ -2065,13 +2065,7 @@ void nvim_set_compl_ins_end_col_to_compl_col(void)
   compl_ins_end_col = compl_col;
 }
 
-/// Do Insert mode completion.
-/// Called when character "c" was typed, which has a meaning for completion.
-/// Returns OK if completion was done, FAIL if something failed.
-int ins_complete(int c, bool enable_pum)
-{
-  return rs_ins_complete(c, enable_pum ? 1 : 0);
-}
+// ins_complete deleted: now exported from Rust entry.rs via #[export_name = "ins_complete"]
 
 /// Compound accessor: free all completion global state at process exit.
 void nvim_free_insexpand_stuff_impl(void)

@@ -47,7 +47,7 @@ extern "C" {
     fn nvim_get_sizeof_winopt_T() -> c_int;
 
     /// Check if option is hidden (immutable, var points to def_val)
-    #[link_name = "rs_option_is_hidden"]
+    #[link_name = "is_option_hidden"]
     fn nvim_opt_is_hidden(opt_idx: OptIndex) -> c_int;
 
     /// Check if option is global-only (no local value)

@@ -782,6 +782,7 @@ extern "C" {
     fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_option_ptr_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_optval_copy(o: OptVal) -> OptVal;
+    #[link_name = "is_option_hidden"]
     fn rs_option_is_hidden(opt_idx: c_int) -> c_int;
     fn rs_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_sandbox() -> c_int;

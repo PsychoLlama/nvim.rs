@@ -9,6 +9,7 @@
 #if defined(EXITFREE)
 void free_insexpand_stuff(void);
 #endif
+int ins_complete(int c, bool enable_pum);
 bool check_compl_option(bool dict_opt);
 void ins_ctrl_x(void);
 const char *did_set_completefunc(optset_T *args);

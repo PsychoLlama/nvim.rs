@@ -357,8 +357,9 @@ const CONT_S_IPOS: c_int = 8;
 ///
 /// # Safety
 /// Requires valid global completion state. Mutates many C static globals.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
 #[allow(clippy::too_many_lines)]
+#[export_name = "ins_complete"]
 pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     // Compute disable_ac_delay: disable autocomplete delay if already started
     // and key is a regular forward/backward completion key or pum key.

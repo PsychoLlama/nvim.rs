@@ -137,11 +137,8 @@ extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *
 // rs_set_helplang_default deleted: now exported as set_helplang_default via #[export_name]
 
 // Rust metadata query functions (option pass 8 phase 1)
-// rs_option_is_hidden, rs_option_has_type, rs_option_has_scope,
+// is_option_hidden, option_has_type, option_has_scope now exported directly from Rust via #[export_name]
 // rs_option_is_global_local/only/window_local, rs_get_option_flags already declared elsewhere
-extern int rs_option_is_hidden(int opt_idx);
-extern int rs_option_has_type(int opt_idx, int type);
-extern int rs_option_has_scope(int opt_idx, int scope);
 extern int rs_option_is_global_local(int opt_idx);
 extern int rs_option_is_global_only(int opt_idx);
 extern int rs_option_is_window_local(int opt_idx);
@@ -1857,27 +1854,9 @@ OptVal object_as_optval(Object o, bool *error)
   UNREACHABLE;
 }
 
-/// Check if option is hidden.
-///
-/// @param  opt_idx  Option index in options[] table.
-///
-/// @return  True if option is hidden, false otherwise. Returns false if option name is invalid.
-bool is_option_hidden(OptIndex opt_idx)
-{
-  return rs_option_is_hidden(opt_idx);
-}
-
-/// Check if option supports a specific type.
-bool option_has_type(OptIndex opt_idx, OptValType type)
-{
-  return rs_option_has_type(opt_idx, (int)type);
-}
-
-/// Check if option supports a specific scope.
-bool option_has_scope(OptIndex opt_idx, OptScope scope)
-{
-  return rs_option_has_scope(opt_idx, (int)scope);
-}
+// is_option_hidden deleted: now exported from Rust index.rs via #[export_name = "is_option_hidden"]
+// option_has_type deleted: now exported from Rust index.rs via #[export_name = "option_has_type"]
+// option_has_scope deleted: now exported from Rust index.rs via #[export_name = "option_has_scope"]
 
 /// Check if option is global-local.
 static inline bool option_is_global_local(OptIndex opt_idx)
