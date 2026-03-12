@@ -258,12 +258,8 @@ extern int rs_ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size
                                   bool copy, bool noalloc);
 // Pass 3 Phase 4: ml_get_buf_impl Rust function declaration
 extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
-// Pass 4 Phase 1: line-access thin wrapper Rust function declarations
-extern char *rs_ml_get_pos(const pos_T *pos);
-extern colnr_T rs_ml_get_len(linenr_T lnum);
-extern colnr_T rs_ml_get_pos_len(pos_T *pos);
-extern colnr_T rs_ml_get_buf_len(buf_T *buf, linenr_T lnum);
-extern int rs_gchar_pos(pos_T *pos);
+// Pass 4 Phase 1: line-access thin wrappers now exported directly from Rust via #[export_name]
+// rs_ml_get_pos, rs_ml_get_len, rs_ml_get_pos_len, rs_ml_get_buf_len, rs_gchar_pos deleted
 // Pass 4 Phase 2: modification dispatch _impl Rust function declarations
 extern int rs_ml_append_flags_impl(linenr_T lnum, char *line, colnr_T len, int flags);
 extern int rs_ml_append_buf_impl(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile);
@@ -398,37 +394,8 @@ char *ml_get_buf_mut(buf_T *buf, linenr_T lnum)
   return rs_ml_get_buf_impl(buf, lnum, true);
 }
 
-/// @return  pointer to position "pos".
-char *ml_get_pos(const pos_T *pos)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ml_get_pos(pos);
-}
-
-/// @return  length (excluding the NUL) of the given line.
-colnr_T ml_get_len(linenr_T lnum)
-{
-  return rs_ml_get_len(lnum);
-}
-
-/// @return  length (excluding the NUL) of the text after position "pos".
-colnr_T ml_get_pos_len(pos_T *pos)
-{
-  return rs_ml_get_pos_len(pos);
-}
-
-/// @return  length (excluding the NUL) of the given line in the given buffer.
-colnr_T ml_get_buf_len(buf_T *buf, linenr_T lnum)
-{
-  return rs_ml_get_buf_len(buf, lnum);
-}
-
-/// @return  codepoint at pos. pos must be either valid or have col set to MAXCOL!
-int gchar_pos(pos_T *pos)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_gchar_pos(pos);
-}
+// ml_get_pos, ml_get_len, ml_get_pos_len, ml_get_buf_len, gchar_pos deleted:
+// now exported from Rust access.rs via #[export_name]
 
 // =============================================================================
 // C accessors for Rust FFI (memline crate)

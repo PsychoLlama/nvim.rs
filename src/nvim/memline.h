@@ -8,6 +8,11 @@
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 int ml_open(buf_T *buf);
+char *ml_get_pos(const pos_T *pos);
+colnr_T ml_get_len(linenr_T lnum);
+colnr_T ml_get_pos_len(pos_T *pos);
+colnr_T ml_get_buf_len(buf_T *buf, linenr_T lnum);
+int gchar_pos(pos_T *pos);
 linenr_T ml_firstmarked(void);
 #if defined(HAVE_READLINK)
 int resolve_symlink(const char *fname, char *buf);

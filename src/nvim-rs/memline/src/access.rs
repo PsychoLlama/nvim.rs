@@ -140,7 +140,8 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C functions that access buffer state.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_get_len"]
 pub unsafe extern "C" fn rs_ml_get_len(lnum: LineNr) -> ColNr {
     rs_ml_get_buf_len(nvim_get_curbuf(), lnum)
 }
@@ -150,7 +151,7 @@ pub unsafe extern "C" fn rs_ml_get_len(lnum: LineNr) -> ColNr {
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 /// - Calls C functions that access buffer state
-#[no_mangle]
+#[export_name = "ml_get_buf_len"]
 pub unsafe extern "C" fn rs_ml_get_buf_len(buf: *mut BufHandle, lnum: LineNr) -> ColNr {
     if buf.is_null() {
         return 0;
@@ -178,7 +179,7 @@ pub unsafe extern "C" fn rs_ml_get_buf_len(buf: *mut BufHandle, lnum: LineNr) ->
 /// # Safety
 /// - `pos` must be a valid position pointer or NULL
 /// - Calls C functions that access buffer state
-#[no_mangle]
+#[export_name = "ml_get_pos_len"]
 pub unsafe extern "C" fn rs_ml_get_pos_len(pos: *mut PosHandle) -> ColNr {
     if pos.is_null() {
         return 0;
@@ -203,7 +204,8 @@ pub unsafe extern "C" fn rs_ml_get_pos_len(pos: *mut PosHandle) -> ColNr {
 /// - `pos` must be a valid position pointer or NULL
 /// - Calls C functions that access buffer state
 /// - The returned pointer is valid only until the next buffer modification
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_get_pos"]
 pub unsafe extern "C" fn rs_ml_get_pos(pos: *const PosHandle) -> *mut c_char {
     if pos.is_null() {
         return ptr::null_mut();
@@ -229,7 +231,7 @@ pub unsafe extern "C" fn rs_ml_get_pos(pos: *const PosHandle) -> *mut c_char {
 /// # Safety
 /// - `pos` must be a valid position pointer or NULL
 /// - Calls C functions that access buffer state
-#[no_mangle]
+#[export_name = "gchar_pos"]
 pub unsafe extern "C" fn rs_gchar_pos(pos: *mut PosHandle) -> c_int {
     if pos.is_null() {
         return 0; // NUL
