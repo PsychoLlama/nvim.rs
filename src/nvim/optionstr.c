@@ -59,7 +59,6 @@
 #include "optionstr.c.generated.h"
 
 // Rust FFI declarations (window wrappers removed)
-extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_global_stl_height(void);
 extern int rs_get_shada_parameter(int type);
 
@@ -72,62 +71,22 @@ extern int rs_valid_name(const char *val, const char *allowed);
 extern int rs_get_fileformat(buf_T *buf);
 
 // String option flag utilities (from Rust optionstr crate)
-extern int rs_optflags_is_comma_list(uint32_t flags);
-extern int rs_optflags_is_flag_list(uint32_t flags);
-extern int rs_optflags_no_dup(uint32_t flags);
-extern int rs_optflags_needs_redraw(uint32_t flags);
-extern int rs_optflags_is_secure(uint32_t flags);
-extern int rs_optflags_no_mkrc(uint32_t flags);
 
 // Option type utilities
-extern int rs_opt_type_is_boolean(int opt_type);
-extern int rs_opt_type_is_number(int opt_type);
-extern int rs_opt_type_is_string(int opt_type);
 
 // Option scope utilities
-extern int rs_opt_scope_is_global(int scope);
-extern int rs_opt_scope_is_win(int scope);
-extern int rs_opt_scope_is_buf(int scope);
 
 // Set operation utilities
-extern int rs_set_op_is_adding(int op);
-extern int rs_set_op_is_prepending(int op);
-extern int rs_set_op_is_removing(int op);
 
 // Flag character validation
-extern int rs_is_valid_shm_flag(int c);
-extern int rs_is_valid_fo_flag(int c);
-extern int rs_is_valid_cpo_flag(int c);
-extern int rs_is_valid_cocu_flag(int c);
-extern int rs_is_valid_mouse_flag(int c);
-extern int rs_is_valid_ww_flag(int c);
-extern int rs_diffanchors_changed(bool buflocal);
 extern int rs_diffopt_changed(void);
 
 // Number validation utilities
-extern int rs_opt_num_in_range(int64_t value, int64_t min, int64_t max);
-extern int rs_opt_num_is_positive(int64_t value);
-extern int rs_opt_num_is_nonneg(int64_t value);
-extern int rs_opt_num_is_percent(int64_t value);
 
 // Character validation
-extern int rs_is_valid_fname_char(int c);
-extern int rs_is_valid_dname_char(int c);
-extern int rs_is_valid_spelllang_char(int c);
-extern int rs_is_valid_hlgroup_char(int c, int first);
-extern int rs_is_regex_delim(int c);
 
 // Fillchars/listchars utilities
-extern int rs_chars_option_is_fillchars(int opt);
-extern int rs_chars_option_is_listchars(int opt);
-extern int rs_fcs_field_count(void);
-extern const char *rs_fcs_field_name(int idx);
-extern int rs_lcs_field_count(void);
-extern const char *rs_lcs_field_name(int idx);
-extern const char *rs_fcs_default(int idx);
-extern const char *rs_fcs_fallback(int idx);
 extern schar_T rs_get_encoded_char_adv(const char **p);
-extern bool rs_is_valid_chars_option(const char *value, bool is_listchars);
 
 // Statusline format validation (symbol exported from Rust option crate)
 extern const char *check_stl_option(char *s);
@@ -152,7 +111,6 @@ typedef struct {
   bool ok;
   char invalid_char;
 } FlagListValidateResult;
-extern FlagListValidateResult rs_validate_option_listflag(const char *val, const char *flags);
 
 static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");

@@ -126,14 +126,12 @@ extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
                                     int forceit, int silent);
 
 // Rust FFI declarations for pattern utilities
-extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
-extern int rs_needs_previous_pattern(const char *pat);
 
 // Rust FFI declarations for Phase 7 integration functions
 extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,

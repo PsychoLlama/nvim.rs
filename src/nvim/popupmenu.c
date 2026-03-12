@@ -74,7 +74,6 @@ extern int rs_pum_border_width(void);
 extern int rs_win_valid(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
 
-extern void rs_pum_compute_size(const pumitem_T *array);
 
 typedef struct {
   int row;
@@ -95,14 +94,6 @@ extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col
                                                      int pum_scrollbar, int pum_base_width,
                                                      int pum_kind_width, int pum_extra_width);
 
-extern int *rs_pum_compute_text_attrs(char *text, int hlf, int user_hlattr);
-extern void rs_pum_grid_puts_with_attrs(int col, int cells, const char *text,
-                                        int textlen, const int *attrs);
-extern void rs_pum_preview_set_text(buf_T *buf, char *info, linenr_T *lnum, int *max_width);
-extern void rs_pum_adjust_info_position(win_T *wp, int width);
-extern void rs_pum_position_at_mouse(int min_width);
-extern void rs_pum_select_mouse_pos(void);
-extern void rs_pum_execute_menu(vimmenu_T *menu, int mode);
 extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
                             int cmd_startcol);
 

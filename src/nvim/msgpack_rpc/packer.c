@@ -20,7 +20,6 @@
 // mpack_ext, mpack_handle are exported directly from Rust.
 extern void rs_mpack_str(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
-extern size_t rs_mpack_remaining(PackerBuffer *packer);
 
 // mpack_str and mpack_bin decompose a String struct before calling Rust.
 void mpack_str(String str, PackerBuffer *packer)

@@ -78,43 +78,20 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // Rust implementations from insexpand crate
-extern int rs_ctrl_x_mode_not_default(void);
-extern int rs_compl_status_local(void);
 
 // Rust FFI declarations (functions called directly from remaining C code)
 extern int rs_can_get_old_char(void);
 extern int rs_get_old_char(void);
-extern void rs_clear_old_char(void);
 extern void rs_restore_old_char_state(void);
 
 // Buffer FFI functions (buffers owned by Rust)
-extern void rs_add_buff_redobuff(const uint8_t *s, ptrdiff_t len);
-extern void rs_add_char_buff_redobuff(int c);
-extern void rs_add_byte_buff_redobuff(int c);
-extern void rs_add_num_buff_redobuff(int n);
-extern void rs_free_buff_redobuff(void);
-extern uint8_t *rs_get_buffcont_redobuff(void);
-extern void rs_free_buff_old_redobuff(void);
-extern void rs_add_buff_recordbuff(const uint8_t *s, ptrdiff_t len);
-extern void rs_add_char_buff_recordbuff(int c);
-extern void rs_add_byte_buff_recordbuff(int c);
-extern void rs_free_buff_recordbuff(void);
-extern uint8_t *rs_get_buffcont_recordbuff(void);
-extern void rs_delete_buff_tail_recordbuff(int slen);
 extern int rs_read_readbuffers(int advance);
 extern void rs_start_stuff(void);
-extern int rs_readbuf1_is_empty(void);
-extern int rs_readbuf2_is_empty(void);
 extern int rs_get_block_redo(void);
 extern void rs_set_block_redo(int val);
-extern int rs_read_redo_init(int old_redo);
-extern int rs_read_redo_byte(void);
-extern int rs_read_redo_peek(void);
 extern void rs_save_readbufs(void);
 extern void rs_restore_readbufs(void);
-extern uint8_t *rs_get_recorded(void);
 extern uint8_t *rs_get_inserted(void);
-extern size_t rs_get_inserted_len(void);
 
 // Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);

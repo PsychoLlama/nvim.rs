@@ -69,17 +69,12 @@ typedef struct {
 } PutdigraphResult;
 
 extern int rs_putdigraph(char **str, PutdigraphResult *result);
-extern int rs_digraph_get_header_index(int previous, int current);
-extern int rs_digraph_format_entry(uint8_t char1, uint8_t char2, int result, char *buf, int buf_len);
 
 // Callback type for digraph iteration
 typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
 extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
 extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
-extern void rs_listdigraphs(int use_headers);
 extern int rs_get_digraph(int cmdline);
-extern void rs_printdigraph(uint8_t char1, uint8_t char2, int result, int *previous);
-extern void rs_digraph_header(const char *msg);
 
 // Verify highlight constants match Rust values
 _Static_assert(HLF_8 == 1, "HLF_8");

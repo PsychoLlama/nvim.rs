@@ -93,34 +93,17 @@ _Static_assert(sizeof(WinViewportSnapshot) == 4 * sizeof(int32_t), "WinViewportS
 
 // Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
-extern void rs_reset_VIsual_and_resel(void);
-extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 
 // Rust fold FFI declarations
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
-extern void rs_clearFolding(win_T *win);
-extern void rs_foldInitWin(win_T *wp);
 
-extern int rs_get_scrolloff_value(win_T *wp);
-extern int rs_global_winbar_height(void);
 extern int rs_tabline_height(void);
 extern int rs_global_stl_height(void);
-extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
-extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 extern int rs_win_valid_any_tab(win_T *win);
-extern int rs_valid_tabpage(tabpage_T *tpc);
-extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
-extern int rs_last_window(win_T *win);
 extern int rs_tabpage_index(tabpage_T *ftp);
-extern int rs_frame_check_height(frame_T *topfrp, int height);
-extern int rs_frame_check_width(frame_T *topfrp, int width);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
-extern tabpage_T *rs_find_tabpage(int n);
-extern win_T *rs_lastwin_nofloating(void);
-extern win_T *rs_frame2win(frame_T *frp);
-extern frame_T *rs_win_altframe(win_T *win);
 
 // Result structure from rs_winframe_find_altwin
 typedef struct {
@@ -130,52 +113,23 @@ typedef struct {
 extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial);
 
 // New Rust replacements for frame tree operations
-extern void rs_frame_flatten(frame_T *frp);
 
 // rs_alt_tabpage: dead (Phase 15)
 
-extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
-extern int rs_win_comp_pos(void);
-extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
-extern void rs_win_setheight_win(int height, win_T *win);
-extern void rs_frame_add_height(frame_T *frp, int n);
-extern void rs_frame_add_statusline(frame_T *frp);
-extern void rs_frame_set_vsep(const frame_T *frp, int add);
-extern void rs_frame_add_hsep(const frame_T *frp);
-extern void rs_frame_append(frame_T *after, frame_T *frp);
-extern void rs_frame_insert(frame_T *before, frame_T *frp);
-extern void rs_frame_remove(frame_T *frp);
-extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
-extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 
 // Split helper functions from Rust
-extern int rs_split_max_windows(int vertical);
-extern int rs_split_iteration_size(int vertical, int todo);
-extern int rs_split_make_windows_flags(int vertical);
 
 // Close validation functions from Rust
-extern int rs_close_can_close_floating(void);
-extern void rs_diff_clear(tabpage_T *tp);
-extern int rs_diffopt_closeoff(void);
 
 // Pure calculations and thin wrappers
-extern int64_t rs_win_default_scroll(win_T *wp);
 extern void rs_win_setheight(int height);
-extern void rs_win_setwidth(int width);
 
 // Height/width setters
-extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
 // rs_frame_new_height deleted: now exported as frame_new_height via #[export_name]
 
 // Win exchange / rotate
-extern void rs_win_exchange(int prenum);
-extern void rs_win_rotate(int upwards, int count);
 
 // Snapshot lifecycle
-extern void rs_clear_snapshot(tabpage_T *tp, int idx);
-extern void rs_make_snapshot(int idx);
-extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
-extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
 // Utility and validation helpers
 // rs_check_can_set_curbuf_disabled deleted: now exported as check_can_set_curbuf_disabled via #[export_name]
@@ -187,20 +141,16 @@ extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
 // can_close_floating_windows, maximum_wincount
 // rs_can_close_floating_windows_tp: removed from C declarations (Rust uses #[link_name] directly)
-extern int rs_get_maximum_wincount(frame_T *fr, int height);
 // make_windows deleted: now exported from Rust utility.rs via #[export_name = "make_windows"]
 
 // rs_win_fix_scroll deleted: now exported as win_fix_scroll via #[export_name]
 
 // do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
-extern void rs_do_autocmd_winclosed(win_T *win);
 // rs_can_close_in_cmdwin deleted: now exported as can_close_in_cmdwin via #[export_name]
 // rs_set_winbar_win deleted: now exported as set_winbar_win via #[export_name]
 // rs_set_winbar deleted: now exported as set_winbar via #[export_name]
 
 // Status line management
-extern void rs_last_status(int morewin);
-extern int rs_resize_frame_for_winbar(frame_T *fr);
 
 // goto_tabpage_tp deleted: now exported from Rust tabpage.rs via #[export_name = "goto_tabpage_tp"]
 
@@ -212,8 +162,6 @@ typedef struct {
   int vertical;        // 1 if vertical split
   int saved_option;    // saved p_wiw or p_wh value
 } SplitInsResult;
-extern SplitInsResult rs_win_split_ins(int size, int flags, win_T *new_wp, int dir,
-                                       frame_T *to_flatten);
 
 // win_close deleted: now exported from Rust win_close.rs via #[export_name = "win_close"]
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
@@ -544,7 +492,6 @@ static OptInt min_set_ch = 1;
 OptInt nvim_get_min_set_ch(void) { return min_set_ch; }
 // nvim_set_cmdheight_option deleted: logic migrated to Rust resize/frame.rs (Phase 8)
 
-extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 
 
 void win_set_buf(win_T *win, buf_T *buf, Error *err)

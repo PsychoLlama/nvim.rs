@@ -274,11 +274,6 @@ void nvim_path_ga_sort_strings(void *gap, int start) {
 
 // --- Phase 7 Rust declarations ---
 extern void rs_expand_path_option(char *curdir, char *path_option, void *gap);
-extern void rs_uniquefy_paths(void *gap, char *pattern, char *path_option);
-extern int rs_gen_expand_wildcards(int num_pat, char **pat, int *num_file,
-                                    char ***file, int flags);
-extern int rs_expand_wildcards(int num_pat, char **pat, int *num_files,
-                                char ***files, int flags);
 
 // --- Phase 7 accessor functions ---
 

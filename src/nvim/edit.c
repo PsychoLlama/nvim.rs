@@ -84,38 +84,21 @@
 
 // Rust implementations (called directly instead of C wrappers)
 extern int rs_ctrl_x_mode_none(void);
-extern int rs_ctrl_x_mode_normal(void);
 extern int rs_ctrl_x_mode_scroll(void);
-extern int rs_ctrl_x_mode_whole_line(void);
-extern int rs_ctrl_x_mode_files(void);
-extern int rs_ctrl_x_mode_tags(void);
-extern int rs_ctrl_x_mode_path_patterns(void);
-extern int rs_ctrl_x_mode_path_defines(void);
-extern int rs_ctrl_x_mode_dictionary(void);
-extern int rs_ctrl_x_mode_thesaurus(void);
 extern int rs_ctrl_x_mode_cmdline(void);
-extern int rs_ctrl_x_mode_function(void);
-extern int rs_ctrl_x_mode_omni(void);
-extern int rs_ctrl_x_mode_spell(void);
 extern int rs_ctrl_x_mode_line_or_eval(void);
-extern int rs_ctrl_x_mode_register(void);
 extern int rs_ins_compl_active(void);
 extern int rs_ins_compl_accept_char(int c);
-extern void rs_ins_compl_clear(void);
-extern int rs_ins_compl_win_active(win_T *wp);
 extern int rs_ins_compl_used_match(void);
 extern int rs_ins_compl_enter_selects(void);
 extern int rs_ins_compl_col(void);
-extern int rs_ins_compl_has_preinsert(void);
 extern int rs_ins_compl_preinsert_effect(void);
 extern int rs_ins_compl_has_autocomplete(void);
-extern int rs_compl_status_local(void);
 extern int rs_ins_compl_is_match_selected(void);
 extern int rs_ins_compl_preinsert_longest(void);
 extern int rs_ins_compl_has_shown_match(void);
 extern int rs_ins_compl_long_shown_match(void);
 extern int rs_pum_wanted(void);
-extern void rs_compl_status_clear(void);
 extern void rs_ins_compl_init_get_longest(void);
 extern void rs_ins_compl_enable_autocomplete(void);
 
@@ -156,7 +139,6 @@ extern int rs_get_scrolloff_value(win_T *wp);
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
 extern void rs_foldCheckClose(void);
-extern void rs_foldUpdateAfterInsert(void);
 
 enum {
   BACKSPACE_CHAR = 1,
@@ -197,7 +179,6 @@ typedef struct {
 
 // Rust FFI declarations (only functions called directly in this file)
 extern RsNvimString rs_get_last_insert(void);
-extern void rs_replace_push(const char *str, size_t len);
 extern void rs_replace_stack_clear(void);
 extern void rs_ins_ctrl_v(void);
 extern void rs_clear_showcmd(void);

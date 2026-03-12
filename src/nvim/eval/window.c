@@ -36,14 +36,8 @@
 
 // Rust FFI declarations (window wrappers removed)
 extern tabpage_T *rs_find_tabpage(int n);
-extern int rs_tabpage_index(tabpage_T *ftp);
 extern void rs_win_drag_status_line(win_T *dragwin, int offset);
 extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
-extern void rs_win_get_tabwin(int id, int *tabnr, int *winnr);
-extern win_T *rs_win_vert_neighbor(tabpage_T *tp, win_T *wp, int up, int count);
-extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count);
-extern void rs_win_new_height(win_T *wp, int height);
-extern void rs_win_new_width(win_T *wp, int width);
 extern int rs_win_valid(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
 

@@ -293,23 +293,15 @@ extern int rs_read_be_u24(const uint8_t *buf, size_t len, size_t offset);
 extern int rs_read_be_u32(const uint8_t *buf, size_t len, size_t offset);
 extern int rs_find_region(const char *rp, const char *region);
 extern bool rs_valid_spell_word(const uint8_t *word, const uint8_t *end);
-extern int rs_tree_count_words(const uint8_t *byts, int32_t *idxs, int len);
 extern int rs_encode_offset(uint8_t *p, int len, int nr);
 extern int rs_decode_offset_3byte(const uint8_t *p);
 extern int rs_decode_offset_4byte(const uint8_t *p);
 extern bool rs_sal_to_bool(const char *s);
 
 // Spellfile header functions
-extern int rs_parse_spellfile_header(const uint8_t *data, size_t len, void *header);
-extern int rs_validate_spellfile_header(const void *header);
 extern int rs_write_spellfile_header(uint8_t *out, size_t max_len, const void *header);
-extern int rs_parse_section_header(const uint8_t *data, size_t len, void *section);
-extern int rs_parse_region_section(const uint8_t *data, size_t len, void *regions);
-extern int rs_parse_charflags_section(const uint8_t *data, size_t len, void *flags);
 // rs_parse_rep_item, rs_parse_sal_header, rs_parse_sofo_section,
 // rs_parse_compound_header - declarations moved to Phase B1 section below
-extern int rs_parse_sugfile_timestamp(const uint8_t *data, size_t len, void *ts);
-extern int rs_parse_tree_nodecount(const uint8_t *data, size_t len);
 
 // Write functions
 extern int rs_write_section_header(uint8_t *out, size_t max_len, int id, int flags, int data_len);
@@ -357,7 +349,6 @@ extern int rs_parse_rep_count(const uint8_t *buf, size_t buf_len, uint16_t *coun
                               size_t *consumed_out);
 extern int rs_parse_rep_item(const uint8_t *buf, size_t buf_len, RsFromTo *item_out,
                              size_t *consumed_out);
-extern void rs_build_rep_first_table(const RsFromTo *items, size_t count, int16_t *first);
 
 // SAL section parsing
 typedef struct {
@@ -435,8 +426,6 @@ extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32
                         size_t array_len, bool prefixtree, int prefixcnt,
                         size_t *bytes_consumed_out, int *node_count_out);
 extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint32_t *nodecount_out);
-extern int rs_read_tree_node_count(const uint8_t *buf, size_t buf_len, uint32_t *count_out,
-                                   size_t *consumed_out);
 
 // Phase 2: Write helpers
 extern int rs_write_prefcond_section(uint8_t *buf, size_t buf_len,
@@ -505,8 +494,6 @@ typedef enum {
 } RsAffFlagType;
 
 // Future: Rust helpers for affix flag parsing would go here
-// extern unsigned rs_affitem2flag(RsAffFlagType flagtype, const char *item);
-// extern bool rs_aff_flag_valid(unsigned flag, RsAffFlagType flagtype);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C

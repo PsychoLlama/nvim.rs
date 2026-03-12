@@ -247,7 +247,6 @@ extern void rs_ml_set_lowest_marked(linenr_T lnum);
 // rs_ml_flush_deleted_bytes deleted: now exported as ml_flush_deleted_bytes via #[export_name]
 // rs_ml_add_deleted_len deleted: now exported as ml_add_deleted_len via #[export_name]
 // rs_ml_add_deleted_len_buf deleted: now exported as ml_add_deleted_len_buf via #[export_name]
-extern int rs_ml_add_stack(buf_T *buf);
 // rs_ml_setflags deleted: now exported as ml_setflags via #[export_name]
 // Pass 3 Phase 1: swapfile_dict Rust function declaration
 // rs_swapfile_dict deleted: now exported as swapfile_dict via #[export_name]
@@ -316,8 +315,6 @@ static const char e_warning_pointer_block_corrupted[]
 // ml_recover deleted: Rust exports under the C name directly via #[export_name = "ml_recover"].
 
 // Forward declaration for Rust implementation (migrated from C)
-extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
-                            char **fname_out);
 
 // recover_names and recov_file_names migrated to Rust (recovery.rs)
 

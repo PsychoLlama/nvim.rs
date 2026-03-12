@@ -57,8 +57,6 @@ extern void rs_foldOpenCursor(void);
 // Rust FFI declarations
 extern int rs_sign_row_cmp(int row1, int row2);
 extern int rs_sign_cmd_idx(const char *cmd);
-extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
-                            int priority2, uint32_t id2, uint32_t add_id2);
 extern int rs_sign_effective_priority(int prio);
 extern int64_t rs_group_get_ns(const char *group, int (*ns_lookup)(const char *));
 extern const char *rs_sign_get_display_name(DecorSignHighlight *sh);
@@ -68,7 +66,6 @@ extern void rs_buf_set_sign(buf_T *buf, uint32_t *id, const char *group, int pri
 extern linenr_T rs_buf_mod_sign(buf_T *buf, uint32_t *id, const char *group, int prio, sign_T *sp);
 extern int rs_buf_findsign(buf_T *buf, int id, const char *group);
 extern int rs_buf_delete_signs(buf_T *buf, const char *group, int id, linenr_T atlnum);
-extern void rs_sign_list_placed(buf_T *rbuf, const char *group);
 extern void rs_sign_list_defined(sign_T *sp);
 extern void rs_sign_list_by_name(const char *name);
 extern int rs_sign_define_by_name(const char *name, const char *icon, const char *text,
@@ -79,7 +76,6 @@ extern size_t rs_describe_sign_text(char *buf, size_t buf_len, schar_T *sign_tex
 extern int rs_sign_place(uint32_t *id, const char *group, const char *name, buf_T *buf,
                          linenr_T lnum, int prio);
 extern int rs_sign_unplace(buf_T *buf, int id, const char *group, linenr_T atlnum);
-extern linenr_T rs_sign_jump(int id, const char *group, buf_T *buf);
 extern void sign_define_cmd(char *name, char *cmdline);
 extern int parse_sign_cmd_args(int cmd, char *arg, char **name, int *id, char **group, int *prio,
                                buf_T **buf, linenr_T *lnum);

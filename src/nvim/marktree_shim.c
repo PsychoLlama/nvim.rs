@@ -54,98 +54,46 @@
 
 // Rust marktree FFI declarations
 // Position comparison and manipulation functions
-extern bool rs_pos_leq(MTPos a, MTPos b);
-extern bool rs_pos_less(MTPos a, MTPos b);
-extern void rs_relative(MTPos base, MTPos *val);
-extern void rs_unrelative(MTPos base, MTPos *val);
-extern void rs_compose(MTPos *base, MTPos val);
 
 // Mark key property functions
-extern bool rs_mt_paired(MTKey key);
-extern bool rs_mt_end(MTKey key);
-extern bool rs_mt_start(MTKey key);
 extern bool rs_mt_right(MTKey key);
-extern bool rs_mt_no_undo(MTKey key);
-extern bool rs_mt_invalidate(MTKey key);
 extern bool rs_mt_invalid(MTKey key);
-extern bool rs_mt_decor_any(MTKey key);
-extern bool rs_mt_decor_sign(MTKey key);
-extern bool rs_mt_conceal_lines(MTKey key);
 
 // Lookup ID functions
-extern uint64_t rs_mt_lookup_id(uint32_t ns, uint32_t id, bool end);
-extern uint64_t rs_mt_lookup_key_side(MTKey key, bool end);
 extern uint64_t rs_mt_lookup_key(MTKey key);
 
 // Key comparison and flag functions
-extern int rs_key_cmp(MTKey a, MTKey b);
-extern uint16_t rs_mt_flags(bool right_gravity, bool no_undo, bool invalidate, bool decor_ext);
 
 // Extended iterator functions (used by nvim_marktree_itr_get_ext_simple)
 extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last,
                                          bool gravity, MTPos *oldbase,
                                          MetaFilter meta_filter);
-extern bool rs_marktree_itr_next_skip(MarkTree *b, MarkTreeIter *itr, bool skip, bool preload,
-                                      MTPos *oldbase, MetaFilter meta_filter);
-extern bool rs_marktree_itr_check_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
-                                         int stop_col, MetaFilter meta_filter);
 
 // Filter functions
-extern bool rs_marktree_itr_get_filter(MarkTree *b, int32_t row, int col, int stop_row,
-                                       int stop_col, MetaFilter meta_filter, MarkTreeIter *itr);
-extern bool rs_marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop_row,
-                                        int stop_col, MetaFilter meta_filter);
-extern bool rs_marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr,
-                                            MetaFilter meta_filter);
 
 // Tree operations
-extern void rs_marktree_clear(MarkTree *b);
 extern void rs_marktree_check(MarkTree *b);
-extern bool rs_marktree_check_intersections(MarkTree *b);
 
 // Memory management operations
-extern void rs_marktree_free_node(MarkTree *b, MTNode *x);
-extern void rs_marktree_free_subtree(MarkTree *b, MTNode *x);
 
 // Intersection operations
-extern void rs_intersect_node(MarkTree *b, MTNode *x, uint64_t id);
-extern void rs_unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict);
-extern bool rs_intersection_has(MTNode *x, uint64_t id);
-extern void rs_bubble_up(MTNode *x);
 
 // Meta description and pseudo-index operations
 extern void rs_meta_describe_key(MTKey k, uint32_t *meta_out);
-extern void rs_meta_describe_key_inc(uint32_t *meta_inc, MTKey *k);
-extern void rs_meta_describe_node(uint32_t *meta_out, MTNode *x);
 extern uint64_t rs_pseudo_index(MTNode *x, int i);
-extern uint64_t rs_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy);
 
 // Binary search
-extern int rs_marktree_getp_aux(const MTNode *x, MTKey k, bool *match);
 
 // Intersection pair
-extern void rs_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
-                                       MarkTreeIter *end_itr, bool delete);
 
 // Insertion operations
-extern void rs_split_node(MarkTree *b, MTNode *x, int i, MTKey next);
-extern void rs_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc);
-extern void rs_marktree_put_key(MarkTree *b, MTKey k);
 extern void rs_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right);
 
 // Test helper operations
-extern void rs_marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row, int col,
-                                  bool right_gravity, int end_row, int end_col, bool end_right,
-                                  bool meta_inline);
-extern bool rs_mt_right_test(MTKey key);
 
 // Splice
-extern bool rs_marktree_splice(MarkTree *b, int32_t start_line, int start_col,
-                               int old_extent_line, int old_extent_col,
-                               int new_extent_line, int new_extent_col);
 
 // Test helper
-extern void rs_marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id);
 
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 

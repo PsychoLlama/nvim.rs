@@ -41,10 +41,8 @@ extern void rs_transchar_buf(char *buf, int c, bool chartab_initialized, bool us
 extern void rs_transchar_byte_buf(char *buf, int c, bool chartab_initialized, bool use_uhex, int fileformat);
 extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
                              int (*tolower_fn)(int));
-extern int rs_parse_isopt(const char *var, buf_T *buf, bool only_check);
 extern int rs_check_isopt(const char *var);
 extern int rs_buf_init_chartab(buf_T *buf, bool global);
-extern char *rs_transstr(const char *s, bool untab);
 extern int rs_try_getdigits(char **pp, intptr_t *nr);
 extern intptr_t rs_getdigits(char **pp, int strict, intptr_t def);
 extern int rs_getdigits_int(char **pp, int strict, int def);

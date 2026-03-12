@@ -68,28 +68,15 @@ extern void rs_restore_chartab(const char *chartab);
 extern void rs_clear_syn_state(synstate_T *p);
 extern void rs_validate_current_state(void);
 extern char *rs_syn_getcurline(void);
-extern int rs_syn_getcurline_len(void);
 extern void rs_syn_clear_time(syn_time_T *st);
-extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 // rs_check_state_ends: Rust function called via #[link_name] bypasses nvim_syn_check_state_ends
 extern void rs_update_si_attr(int idx);
-extern void rs_check_keepend(void);
-extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
-                                int *opt_sync_idx, int opt_has_cont_list,
-                                int16_t **opt_cont_list, int16_t **opt_cont_in_list,
-                                int16_t **opt_next_list, int *conceal_char, int skip);
-extern int rs_get_id_list(char **arg, int keylen, int16_t **list, int skip);
-extern void rs_syn_cmd_region(exarg_T *eap, int syncing);
 
 // Pass 5: clearing.rs Rust functions
-extern void rs_syn_clear_pattern(synblock_T *block, int i);
-extern void rs_syn_clear_cluster(synblock_T *block, int i);
 extern void rs_syn_remove_pattern(synblock_T *block, int idx);
-extern void rs_syn_clear_one(int id, int syncing);
 extern void rs_syntax_clear(synblock_T *block);
 extern void rs_reset_synblock(win_T *wp);
 extern void rs_syntax_sync_clear(void);
-extern void rs_syn_clear_keyword(int id, hashtab_T *ht);
 extern void rs_clear_keywtab(hashtab_T *ht);
 // rs_invalidate_current_state: Rust function called via #[link_name] bypasses nvim_syn_invalidate_current_state
 
@@ -100,26 +87,14 @@ extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
 extern void rs_syn_store_bufstates(synstate_T *sp);
 
 // Phase 11: commands.rs Rust implementations for do_onoff and maybe_enable
-extern void rs_syn_do_onoff_impl(exarg_T *eap, const char *name);
-extern void rs_syn_do_maybe_enable_impl(void);
 
 // Phase 11: keyword.rs Rust implementations for keyword_find and hash_insert_keyword
-extern keyentry_T *rs_syn_keyword_find(char *keyword, int use_ic);
-extern void rs_syn_hash_insert_keyword(const char *name_ic, int name_iclen,
-                                        int id, int inc_tag, int flags,
-                                        int conceal_char,
-                                        int16_t *cont_in_list_copy,
-                                        int16_t *next_list_copy,
-                                        int use_ic);
 
 // Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
-extern int rs_syn_ownsyntax_init(void);
-extern int rs_synblock_cluster_append(void);
 
 // Phase 9.2: state_ops.rs Rust implementations
 extern void rs_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
                                       int si_cchar, reg_extmatch_T *extmatch);
-extern int rs_syn_state_item_spans_line(int idx, int lnum);
 extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 
 // Phase 9.3: extmatch comparison and cur_state_set_matchcont
@@ -239,42 +214,26 @@ extern void rs_foldUpdateAll(win_T *win);
 extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
 // Rust match command FFI declaration
-extern void rs_syn_cmd_match(exarg_T *eap, int syncing);
 
 // Rust list command FFI declaration
-extern void rs_syn_cmd_list(exarg_T *eap, int syncing);
 
 // Rust keyword command FFI declaration
-extern void rs_syn_cmd_keyword(exarg_T *eap, int syncing);
 
 // Rust cluster command FFI declaration
-extern void rs_syn_cmd_cluster(exarg_T *eap, int syncing);
 
 // Rust sync command FFI declaration
-extern void rs_syn_cmd_sync(exarg_T *eap, int syncing);
 
 // Rust clear command FFI declaration
-extern void rs_syn_cmd_clear(exarg_T *eap, int syncing);
 
 // Rust include command FFI declaration
-extern void rs_syn_cmd_include(exarg_T *eap, int syncing);
 
 // Rust simple subcommand FFI declarations (Phase 4)
 extern void rs_syn_cmd_reset(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_onoff(exarg_T *eap, const char *name, int syncing);
 extern void rs_syn_maybe_enable(void);
 
 // Rust dispatch wrappers (Phase 1 of pass 4): replace C thin wrappers
-extern void rs_syn_cmd_case_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_conceal_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_foldlevel_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_spell_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_on_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_manual_dispatch(exarg_T *eap, int syncing);
-extern void rs_syn_cmd_off_dispatch(exarg_T *eap, int syncing);
 
 // Rust Phase 4 (pass 4): iskeyword + ownsyntax
-extern void rs_syn_cmd_iskeyword(exarg_T *eap, int syncing);
 extern void rs_ex_ownsyntax(exarg_T *eap);
 
 // The sp_off_flags are computed like this:
@@ -620,15 +579,6 @@ void syn_maybe_enable(void)
 // syn_cmd_list and listing functions are implemented in Rust (listing.rs).
 
 // Phase 6+7: Forward declarations for Rust functions used below
-extern void rs_add_keyword(char *name, int namelen, int id, int flags,
-                            int16_t *cont_in_list, int16_t *next_list, int conceal_char);
-extern int16_t *rs_copy_id_list(const int16_t *list);
-extern char *rs_get_group_name(char *arg, char **name_end);
-extern void rs_syn_incl_toplevel(int id, int *flagsp);
-extern void rs_init_syn_patterns(void);
-extern int rs_syn_scl_name2id(char *name);
-extern int rs_syn_scl_namen2id(char *linep, int len);
-extern int rs_syn_check_cluster(char *pp, int len);
 extern int rs_syn_add_cluster(char *name);
 extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
 extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,

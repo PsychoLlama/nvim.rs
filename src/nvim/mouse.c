@@ -59,7 +59,6 @@ extern void rs_win_drag_status_line(win_T *dragwin, int offset);
 extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
 extern int rs_get_scrolloff_value(win_T *wp);
 extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-extern int rs_get_mouse_class(const char *p);
 extern bool rs_mouse_model_popup(const char *p_mousem);
 extern int rs_find_start_of_word(const char *line, int col);
 extern int rs_find_end_of_word(const char *line, int col, bool sel_exclusive);
@@ -162,7 +161,6 @@ static void find_end_of_word(pos_T *pos)
 extern void rs_set_mouse_topline(win_T *wp);
 extern void rs_move_tab_to_mouse(void);
 extern void rs_mouse_tab_close(int c1);
-extern bool rs_do_mousescroll_horiz(colnr_T leftcol);
 extern void rs_mouse_check_grid(colnr_T *vcolp, int *flagsp);
 extern int rs_get_fpos_of_mouse(pos_T *mpos);
 extern int rs_do_popup(int which_button, int m_pos_flag, pos_T m_pos);

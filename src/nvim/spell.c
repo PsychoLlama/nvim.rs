@@ -193,7 +193,6 @@ extern int rs_ins_compl_interrupted(void);
 extern void rs_optval_free(OptVal o);
 
 // Rust implementations of spell functions
-extern bool rs_spell_mb_isword_class(int cl, bool cjk);
 extern int rs_find_region(const char *rp, const char *region);
 // spell_iswordp_w was static in C but is now exported from Rust
 extern bool spell_iswordp_w(const int *p, const win_T *wp);

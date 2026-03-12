@@ -85,7 +85,6 @@ extern int rs_is_aucmd_win(win_T *win);
 extern int rs_autocmd_supported(const char *event);
 extern int rs_augroup_exists(const char *name);
 extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
-extern char *rs_aucmd_handler_to_string(int event, size_t idx);
 extern void rs_aubuflocal_remove(int bufnr);
 
 // Phase 2: Event name resolution + EventIgnore

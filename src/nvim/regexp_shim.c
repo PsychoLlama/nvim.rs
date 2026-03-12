@@ -54,22 +54,15 @@
 extern char *rs_partial_name(partial_T *pt);
 // rs_skip_regexp_ex deleted: now exported as skip_regexp_ex via #[export_name]
 // Rust FFI: regexp utility functions (directly exported from Rust)
-extern reg_extmatch_T *rs_make_extmatch(void);
-extern void rs_cleanup_zsubexpr(void);
 // Rust FFI: NFA execution engine entry points
-extern int rs_nfa_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                 int32_t col, void *tm, int *timed_out);
 // Rust FFI: BT execution engine entry points
-extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
-extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
-                               int32_t col, void *tm, int *timed_out);
 // rs_vim_regexec deleted: now exported as vim_regexec via #[export_name]
 // rs_vim_regexec_nl deleted: now exported as vim_regexec_nl via #[export_name]
 // rs_vim_regexec_prog deleted: now exported as vim_regexec_prog via #[export_name]
 // rs_vim_regexec_multi deleted: now exported as vim_regexec_multi via #[export_name]
 // rs_vim_regcomp deleted: now exported as vim_regcomp via #[export_name]
-extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
 
 /// Structure returned by vim_regcomp() to pass on to vim_regexec().
 /// This is the general structure. For the actual matcher, two specific
@@ -129,7 +122,6 @@ struct regengine {
 /// Check for a character class name "[:name:]".  "pp" points to the '['.
 /// Returns one of the CLASS_ items. CLASS_NONE means that no item was
 /// recognized.  Otherwise "pp" is advanced to after the item.
-extern int rs_get_char_class(char **pp);
 
 // flags for regflags
 #define RF_ICASE    1   // ignore case
@@ -585,7 +577,6 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 
 // Error messages for post2nfa
 
-extern void *rs_nfa_regcomp(uint8_t *expr, int re_flags);
 
 
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }

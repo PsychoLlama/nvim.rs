@@ -1362,8 +1362,6 @@ void nvim_call_check_signcolumn(win_T *wp) { check_signcolumn(NULL, wp); }
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
 
-extern void rs_set_init_default_backupskip(void);
-
 extern void rs_set_init_fenc_default(void);
 
 

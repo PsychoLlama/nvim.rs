@@ -82,94 +82,36 @@ _Static_assert(BUF_HAS_LL_ENTRY == 2, "BUF_HAS_LL_ENTRY mismatch with Rust");
 // =============================================================================
 
 // Mark index functions (already used inline)
-extern int rs_mark_global_index(int name);
-extern int rs_mark_local_index(int name);
 
 // Mark type checks (already used inline)
-extern bool rs_mark_is_valid_named(int name);
-extern bool rs_mark_is_file_mark(int name);
-extern bool rs_mark_is_jump_mark(int name);
-extern bool rs_mark_is_special(int name);
-extern bool rs_mark_is_visual(int name);
-extern bool rs_mark_is_last_cursor(int name);
-extern bool rs_mark_is_last_insert(int name);
-extern bool rs_mark_is_last_change(int name);
-extern bool rs_mark_is_sentence(int name);
-extern bool rs_mark_is_user_settable(int name);
-extern bool rs_mark_is_persistent(int name);
 
 // Position comparison functions
 extern int rs_lt(pos_T a, pos_T b);
-extern int rs_equalpos(pos_T a, pos_T b);
-extern int rs_ltoreq(pos_T a, pos_T b);
-extern int rs_empty_pos(pos_T a);
-extern void rs_clearpos(pos_T *a);
-extern int rs_pos_is_valid(pos_T pos);
-extern int rs_pos_in_range(pos_T pos, int line_count);
-extern int rs_pos_compare(pos_T a, pos_T b);
-extern void rs_pos_copy(pos_T *dst, const pos_T *src);
 
 // Position accessors
-extern int rs_pos_get_lnum(pos_T pos);
 extern int rs_pos_get_col(pos_T pos);
-extern int rs_pos_get_coladd(pos_T pos);
-extern void rs_pos_set_lnum(pos_T *pos, int lnum);
 extern void rs_pos_set_col(pos_T *pos, int col);
-extern void rs_pos_set_coladd(pos_T *pos, int coladd);
 
 // Position manipulation
-extern pos_T rs_pos_new(int lnum, int col, int coladd);
-extern pos_T rs_pos_zero(void);
-extern void rs_pos_adjust_line(pos_T *pos, int delta);
-extern void rs_pos_adjust_col(pos_T *pos, int delta);
 extern void rs_pos_clamp(pos_T *pos, int max_lnum, int max_col);
-extern int rs_pos_line_distance(pos_T a, pos_T b);
-extern int rs_pos_same_line(pos_T a, pos_T b);
-extern void rs_pos_order(pos_T *a, pos_T *b);
 
 // Mark name utilities
-extern void rs_mark_get_name(int name, char *buf, size_t buf_len);
-extern const char *rs_mark_get_category(int name);
 
 // Mark view functions
-extern fmarkv_T rs_fmarkv_init(void);
 extern fmarkv_T rs_mark_view_make(linenr_T topline, linenr_T pos_lnum);
-extern linenr_T rs_mark_view_calc_topline(linenr_T mark_lnum, linenr_T topline_offset);
-extern int rs_fmarkv_has_view(fmarkv_T view);
 
 // Mark validation functions
-extern int rs_mark_lnum_is_valid(linenr_T mark_lnum);
-extern int rs_mark_lnum_in_bounds(linenr_T mark_lnum, linenr_T buf_line_count);
 
 // fmark_T functions
-extern int rs_fmark_is_set(fmark_T fm);
-extern linenr_T rs_fmark_get_lnum(fmark_T fm);
-extern colnr_T rs_fmark_get_col(fmark_T fm);
-extern int rs_fmark_get_fnum(fmark_T fm);
-extern void rs_fmark_set_pos(fmark_T *fm, linenr_T lnum, colnr_T col);
-extern void rs_fmark_set_fnum(fmark_T *fm, int fnum);
 
 // Visual mark selection
-extern int rs_visual_mark_select(linenr_T start_lnum, colnr_T start_col,
-                                  linenr_T end_lnum, colnr_T end_col, int name);
 
 // Jumplist and changelist operations
-extern int rs_jumplist_new_len(int current_len);
-extern int rs_jumplist_is_full(int current_len);
-extern int rs_jumplist_stack_trim(int idx, int len);
-extern int rs_jumplist_calc_idx(int current_idx, int current_len, int count);
-extern int rs_changelist_calc_idx(int current_idx, int changelist_len, int count);
-extern int rs_mark_target_type(int name);
-extern linenr_T rs_pos_clamp_lnum_min(linenr_T lnum);
 
 // Mark movement functions
 extern int rs_mark_move_calc_result(linenr_T prev_lnum, colnr_T prev_col,
                                      linenr_T new_lnum, colnr_T new_col, int initial_res);
 extern int rs_mark_move_needs_cursor_check(int res);
-extern colnr_T rs_getnextmark_adjust_col(colnr_T col, int dir, int begin_line);
-extern int rs_getnextmark_is_better(linenr_T candidate_lnum, colnr_T candidate_col,
-                                     linenr_T current_best_lnum, colnr_T current_best_col,
-                                     linenr_T start_lnum, colnr_T start_col, int dir);
 
 // Mark adjustment result structures
 typedef struct {
@@ -186,12 +128,9 @@ typedef struct {
 // Mark adjustment functions
 extern LineAdjustResult rs_mark_adjust_lnum(linenr_T lnum, linenr_T line1, linenr_T line2,
                                              linenr_T amount, linenr_T amount_after);
-extern LineAdjustResult rs_mark_adjust_lnum_nodel(linenr_T lnum, linenr_T line1, linenr_T line2,
-                                                   linenr_T amount, linenr_T amount_after);
 extern ColAdjustResult rs_mark_col_adjust(linenr_T pos_lnum, colnr_T pos_col, linenr_T lnum,
                                            colnr_T mincol, linenr_T lnum_amount,
                                            colnr_T col_amount, int spaces_removed);
-extern int rs_mark_adjust_should_skip(linenr_T line1, linenr_T line2, linenr_T amount_after);
 
 // Ex command helper structures
 typedef struct {
@@ -202,27 +141,15 @@ typedef struct {
 } DelmarksRange;
 
 // Ex command helper functions
-extern DelmarksRange rs_delmarks_parse_range(int c, int next1, int next2);
-extern int rs_delmarks_global_idx(int c);
-extern int rs_delmarks_special_type(int c);
-extern int rs_marks_index_to_char(int idx, int is_global);
 
 // Phase 1: FFI infrastructure + memory/field operations
-extern void rs_free_fmark(fmark_T fm);
-extern void rs_free_xfmark(xfmark_T fm);
-extern void rs_clear_fmark(fmark_T *fm, Timestamp timestamp);
-extern fmark_T *rs_pos_to_mark(buf_T *buf, fmark_T *fmp, pos_T pos);
 extern xfmark_T rs_get_raw_global_mark(int name);
 extern int rs_mark_check_line_bounds(buf_T *buf, linenr_T fm_mark_lnum,
                                       const char **errormsg, const char *e_markinval_str);
-extern void rs_fmarks_check_one(xfmark_T *fm, const char *name, buf_T *buf);
 
 // Phase 2: Simple window/buffer operations
-extern void rs_set_last_cursor(win_T *win);
-extern void rs_free_jumplist(win_T *wp);
 extern void rs_ex_clearjumps(win_T *win);
 extern void rs_free_all_marks(void);
-extern void rs_copy_jumplist(win_T *from, win_T *to);
 extern void rs_checkpcmark(win_T *win);
 extern void rs_mark_view_restore(const fmark_T *fm, win_T *win);
 extern int rs_mark_check(const fmark_T *fm, const char **errormsg, buf_T *curbuf);
@@ -231,32 +158,21 @@ extern int rs_mark_check(const fmark_T *fm, const char **errormsg, buf_T *curbuf
 extern fmark_T *rs_mark_get(buf_T *buf, win_T *win, fmark_T *fmp, int flag, int name);
 extern xfmark_T *rs_mark_get_global(int resolve, int name);
 extern fmark_T *rs_mark_get_local(buf_T *buf, win_T *win, int name, buf_T *curbuf_ptr);
-extern fmark_T *rs_mark_get_visual(buf_T *buf, int name);
 // setmark_pos stays in C due to pointer comparison (pos == &curwin->w_cursor)
 extern int rs_mark_set_global(int name, xfmark_T fm, int update);
 extern int rs_mark_set_local(int name, buf_T *buf, fmark_T fm, int update);
-extern void rs_clrallmarks(buf_T *buf, Timestamp timestamp);
 extern char *rs_fm_getname(fmark_T *fmark, int lead_len, buf_T *curbuf_ptr);
 
 // Phase 4: Jumplist/changelist navigation
 extern void rs_setpcmark(win_T *win, buf_T *buf);
 extern fmark_T *rs_get_jumplist(win_T *win, buf_T *curbuf_ptr, int count);
-extern fmark_T *rs_get_changelist(buf_T *buf, win_T *win, int count);
 extern void rs_cleanup_jumplist(win_T *wp, int loadfiles);
-extern void rs_mark_jumplist_forget_file(win_T *wp, int fnum);
-extern void rs_mark_forget_file(win_T *wp, int fnum);
 extern fmark_T *rs_getnextmark(pos_T *startpos, int dir, int begin_line, buf_T *curbuf_ptr);
 
 // Phase 5: Mark adjustment
-extern void rs_mark_adjust_buf(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
-                                linenr_T amount_after, int adjust_folds, int mode, int op);
-extern void rs_mark_col_adjust_all(linenr_T lnum, colnr_T mincol, linenr_T lnum_amount,
-                                    colnr_T col_amount, int spaces_removed);
 
 // Phase 6: Ex commands + remaining
 extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
-extern void rs_mark_mb_adjustpos(buf_T *buf, pos_T *lp);
-extern fmark_T *rs_mark_get_motion(buf_T *buf, win_T *win, int name);
 extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
                                 linenr_T amount, linenr_T amount_after);
 

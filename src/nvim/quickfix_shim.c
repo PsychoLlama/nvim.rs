@@ -162,26 +162,13 @@ static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
-extern const char *rs_skip_to_option_part(const char *p);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
-                               list_stack_T **list_stack);
-extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
-                                   list_stack_T **list_stack);
-extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
 // rs_qf_msg deleted: Rust bypasses nvim_qf_msg via #[link_name]
-extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
-extern int rs_qf_getprop_qfbufnr(const void *qi);
 extern int rs_copy_loclist(const void *from_qfl, void *to_qfl);
-extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
-extern void rs_reset_VIsual_and_resel(void);
 
-extern void rs_qf_new_list(void *qi, const char *title);
-extern void rs_qf_free_items(void *qfl);
 extern void rs_qf_free_list(void *qfl);
-extern void rs_qf_pop_stack(void *qi, bool adjust);
 
 int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
 
@@ -243,35 +230,16 @@ const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? 
 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
-extern bool rs_qf_list_has_valid_entries(const void *qfl);
 
-extern int rs_qf_id2nr(const void *qi, unsigned qf_id);
-extern int rs_qf_restore_list(void *qi, unsigned save_qfid);
-extern void *rs_qf_get_nth_entry(const void *qfl, int errornr, int *new_qfidx);
 
-extern bool rs_qf_should_update_cursor(const void *qfl, int old_idx);
-extern unsigned char rs_qf_type_display_char(unsigned char type_code);
-extern int rs_qf_is_error_type(unsigned char type_code);
-extern int rs_qf_is_warning_type(unsigned char type_code);
 
 // Phase 1: Auname lookups and qf_types (migrated to Rust)
-extern const char *rs_make_get_auname(int cmdidx);
-extern const char *rs_cfile_get_auname(int cmdidx);
-extern const char *rs_cbuffer_get_auname(int cmdidx);
-extern const char *rs_cexpr_get_auname(int cmdidx);
-extern const char *rs_vgr_get_auname(int cmdidx);
 extern const char *rs_qf_types(int c, int nr, char *buf, size_t bufsz);
 
 // Phase 2: Format and title helpers (migrated to Rust)
-extern size_t rs_qf_fmt_text(const char *text, char *out, size_t out_size);
-extern size_t rs_qf_range_text(int32_t lnum, int32_t end_lnum, int col, int end_col, char *out, size_t out_size);
 extern size_t rs_qf_cmdtitle(const char *cmd, char *buf, size_t bufsz);
 
 // Phase 3: Property flag operations and index resolution (migrated to Rust)
-extern int rs_qf_getprop_keys2flags(const void *what, bool loclist);
-extern int rs_qf_getprop_qfidx(const void *qi, const void *what);
-extern int rs_qf_getprop_defaults(const void *qi, int flags, bool locstack, void *retdict);
-extern int rs_qf_setprop_get_qfidx(const void *qi, const void *what, int action, bool *newlist);
 
 // Phase 4: mark_adjust and valid counting (migrated to Rust)
 extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
@@ -291,26 +259,16 @@ typedef struct {
 } EfmToRegpatResult;
 
 // Full errorformat to regex conversion
-extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
-                                           char *addr, char *out, size_t out_size);
 
 // Buffer size and part length helpers
-extern size_t rs_efm_regpat_bufsz(const char *efm, size_t efm_len);
-extern int rs_efm_option_part_len(const char *efm, size_t efm_max_len);
 
 // Prefix type helpers
-extern char rs_qf_parse_prefix_type(char prefix);
-extern bool rs_qf_should_skip_line(char flags);
-extern bool rs_qf_is_continuation(char prefix);
-extern bool rs_qf_starts_multiline(char prefix);
-extern bool rs_qf_is_file_handler(char prefix);
 
 // Phase 5: parse_match and parse_line (migrated to Rust)
 extern int rs_qf_parse_match(const char *linebuf, size_t linelen, void *fmt_ptr, const void *rm,
                               void *fields, bool qf_multiline, bool qf_multiscan, char **tail);
 extern int rs_qf_parse_line(void *qfl, char *linebuf, size_t linelen, void *fmt_first,
                              void *fields);
-extern void rs_qf_reset_fmt_start(void);
 
 // Entry creation
 extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *module,
@@ -319,22 +277,15 @@ extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *
                            char type, const void *user_data, char valid);
 
 // Directory stack operations (Phase 7)
-extern const char *rs_qf_push_dir(void *qfl, char *dirbuf, bool is_file_stack);
-extern const char *rs_qf_pop_dir(void *qfl, bool is_file_stack);
-extern const char *rs_qf_guess_filepath(void *qfl, char *filename);
 
 // Vimgrep functions
-extern bool rs_vgr_match_buflines(void *qfl, const char *fname, void *buf, const char *spat,
-                                  void *regmatch, int *tomatch, int duplicate_name, int flags);
 
 // List management functions
-extern int rs_qf_add_entries(void *qi, int qf_idx, void *list, char *title, int action);
 
 // Display functions
 extern void rs_qf_fill_buffer(void *qfl, void *buf, void *old_last, int qf_winid);
 
 // Helpgrep functions (Phase 1)
-extern void rs_hgr_search_in_rtp(void *qfl, void *p_regmatch, const char *lang);
 
 // Init functions
 extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
@@ -345,12 +296,7 @@ extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newli
 extern void rs_ex_vimgrep(void *eap);
 
 // Phase 8: qf_get_properties / qf_set_properties cluster (migrated to Rust)
-extern int rs_get_errorlist(const void *qi_arg, const void *wp, int qf_idx, int eidx, void *list);
-extern int rs_qf_get_list_from_lines(const void *what, void *retdict);
-extern int rs_qf_get_properties(const void *wp, void *what, void *retdict);
-extern void rs_get_qf_loc_list(bool is_qf, void *wp, const void *what_arg, void *rettv);
 extern int rs_qf_set_properties(void *qi, const void *what, int action, char *title);
-extern void rs_set_qf_ll_list(void *wp, const void *args, void *rettv);
 
 // Phase 11: window/title helpers and position update (migrated to Rust)
 extern const void *rs_qf_find_win_for_stack(const void *qi);
@@ -365,7 +311,6 @@ extern void rs_qf_sync_win_to_llw(void *pwp);
 
 // Phase 3: lifecycle functions (migrated to Rust)
 extern void *rs_qf_alloc_stack(int qfltype, int n);
-extern void *rs_ll_get_or_alloc_list(void *wp);
 // rs_qf_cmd_get_stack deleted: Rust commands.rs uses #[link_name] directly.
 
 // Pass 4: stack query entry points (Phase 1)
@@ -531,10 +476,6 @@ typedef struct {
 extern int rs_win_valid(win_T *win);
 
 // Rust FFI declarations (window wrappers removed)
-extern void rs_check_lnums(int do_curwin);
-extern int rs_tabline_height(void);
-extern void rs_win_setheight(int height);
-extern void rs_win_setwidth(int width);
 // rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
 // rs_did_set_quickfixtextfunc removed: exports as did_set_quickfixtextfunc via #[export_name].
 // rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
@@ -542,8 +483,6 @@ extern void rs_win_setwidth(int width);
 // rs_free_quickfix deleted: now exported as free_quickfix via #[export_name]
 
 // Rust fold FFI declarations
-extern void rs_foldOpenCursor(void);
-extern void rs_foldUpdateAll(win_T *win);
 
 // Phase 14: e_no_more_items, e_current_quickfix_list_was_changed,
 // e_current_location_list_was_changed statics deleted; error strings inlined into wrappers.
@@ -1342,7 +1281,6 @@ void *nvim_win_take_llist_ref(void *wp_void)
 
 // ---- Rust lifecycle forward declarations ----
 extern void rs_locstack_queue_delreq(void *qi);
-extern void rs_wipe_qf_buffer(void *qi);
 extern void rs_ll_free_all(void **pqi);
 
 // ---- Phase 3 stack-allocation accessors ----
@@ -1420,7 +1358,6 @@ int nvim_qf_set_properties(void *qi, const void *what, int action, void *title)
 void nvim_qf_list_changed(void *qfl) { if (qfl != NULL) rs_qf_incr_changedtick(qfl); }
 
 // ---- Rust Phase 4 forward declarations ----
-extern void rs_qf_free_stack(void *wp, void *qi);
 // rs_set_errorlist deleted: now exported as set_errorlist via #[export_name]
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }

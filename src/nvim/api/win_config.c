@@ -26,18 +26,8 @@ extern bool rs_zindex_valid(int64_t zindex);
 extern bool rs_external_needs_multigrid(bool external, bool has_multigrid);
 extern bool rs_relative_is_window(int relative);
 extern double rs_bufpos_default_row(uint8_t anchor);
-extern bool rs_anchor_has_south(uint8_t anchor);
 extern bool rs_style_is_minimal(int style);
 extern int rs_split_dir_from_layout(bool layout_is_col, bool has_next);
-extern bool rs_is_to_split(bool relative_empty, bool external, bool has_split_or_vert, bool was_split);
-extern bool rs_keep_existing_split(bool has_vertical, bool has_split, bool was_split,
-                                   bool has_win, int old_split, int new_split);
-extern bool rs_get_neighbor_direction(int split);
-extern int rs_vert_split_dir_reconfig(int old_split, bool p_spr);
-extern int rs_horiz_split_dir_reconfig(int old_split, bool p_sb);
-extern bool rs_curwin_moving_tp(bool win_is_curwin, bool has_parent, bool win_tp_is_parent_tp);
-extern int rs_frame_count_for_self_split(int n_frames);
-extern bool rs_config_win_equals_self(int config_win, int self_handle);
 
 #include "klib/kvec.h"
 #include "nvim/api/extmark.h"

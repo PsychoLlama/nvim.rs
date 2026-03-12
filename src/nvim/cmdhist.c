@@ -32,7 +32,6 @@
 
 #include "cmdhist.c.generated.h"
 
-extern HistoryType rs_get_histtype(const char *name, size_t len, int return_default);
 
 _Static_assert(sizeof(histentry_T) == 40,
                "sizeof(histentry_T) changed - update Rust HistoryEntry in cmdline/src/history.rs");
@@ -263,8 +262,6 @@ void nvim_cmdhist_regfree(void *rm)
   xfree(r);
 }
 
-extern int rs_del_history_entry(int histype, const char *str);
-extern int rs_del_history_idx(int histype, int idx);
 
 // =============================================================================
 // Phase 4: VimL Typval Wrappers

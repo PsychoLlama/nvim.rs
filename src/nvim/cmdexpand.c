@@ -110,7 +110,6 @@ static int compl_selected;
 static char *cmdline_orig = NULL;
 
 extern int rs_magic_isset(void);
-extern int rs_cmdline_fuzzy_completion_supported(int context);
 
 
 // Phase 1: Leaf utility functions from Rust
@@ -119,13 +118,10 @@ extern int rs_cmdline_compl_use_pum(int need_wildmenu);
 extern int rs_map_wildopts_to_ewflags(int options);
 extern char *rs_showmatches_gettail(char *s, int eager);
 extern int rs_expand_showtail(expand_T *xp);
-extern void rs_wildescape(expand_T *xp, const char *str, int numfiles, char **files);
 extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files, int options);
 
 
 // Phase 3: Match navigation
-extern char *rs_get_next_or_prev_match(int mode, expand_T *xp);
-extern char *rs_expand_one_start(int mode, expand_T *xp, const char *str, int options);
 extern char *rs_find_longest_match(expand_T *xp, int options);
 
 

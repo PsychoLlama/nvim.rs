@@ -133,8 +133,6 @@ typedef enum {
 // Rust FFI declarations
 extern int rs_global_stl_height(void);
 extern int rs_min_rows(tabpage_T *tp);
-extern int rs_min_rows_for_all_tabpages(void);
-extern int rs_last_stl_height(int morewin);
 extern int rs_cmdline_number_prompt(void);
 extern int rs_hasAnyFolding(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);

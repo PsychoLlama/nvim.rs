@@ -108,18 +108,10 @@ typedef struct {
 // Rust FFI declarations
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 extern int rs_win_valid(win_T *win);
-extern int rs_win_valid_any_tab(win_T *win);
-extern void rs_reset_VIsual(void);
-extern void rs_check_lnums(int do_curwin);
-extern int rs_hasAnyFolding(win_T *win);
 extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T line2,
                              linenr_T dest);
 extern void rs_foldUpdateAll(win_T *win);
 extern int rs_magic_isset(void);
-extern void rs_diff_buf_add(buf_T *buf);
-extern void rs_diff_invalidate(buf_T *buf);
-extern int rs_check_regexp_delim(int c);
-extern char *rs_skip_substitute(char *start, int delimiter);
 // rs_do_sub_msg deleted: now exported as do_sub_msg via #[export_name]
 
 // ExArg accessors

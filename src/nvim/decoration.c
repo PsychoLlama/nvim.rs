@@ -42,31 +42,10 @@ extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
 // Additional Rust implementations for Phase 133
 extern DecorSignHighlight rs_decor_sh_from_inline(uint16_t flags, uint16_t priority,
                                                    int hl_id, uint32_t conceal_char);
-extern uint16_t rs_decor_type_flags(int ext, uint8_t vt_flags, uint16_t sh_flags,
-                                    int has_vt, int has_sh);
 extern int rs_decor_init_draw_col_value(int win_col, int hidden, int kind,
                                         int pos, int vt_flags);
 extern int rs_should_recheck_draw_col(int draw_col);
-extern int rs_calc_eol_right_width(void *state, int from_idx, int row);
-extern int rs_range_end_before(int end_row, int end_col, int row, int col);
-extern int rs_range_start_after(int start_row, int start_col, int row, int col);
-extern int rs_priority_cmp(uint32_t priority1, int ordering1,
-                           uint32_t priority2, int ordering2);
-extern int rs_draw_col_is_just_added(int draw_col);
-extern int rs_draw_col_is_disabled(int draw_col);
-extern int rs_draw_col_is_pending(int draw_col);
-extern int rs_draw_col_is_unset(int draw_col);
-extern int rs_draw_col_is_valid(int draw_col);
-extern int rs_virt_pos_is_eol(int pos);
-extern int rs_virt_pos_needs_col(int pos);
-extern int rs_virt_pos_offscreen_ok(int pos);
-extern int rs_hl_mode_replaces(int mode);
-extern int rs_hl_mode_combines(int mode);
-extern int rs_hl_mode_blends(int mode);
-extern int rs_decor_kind_is_virt(int kind);
-extern int rs_decor_kind_is_sign(int kind);
 extern int rs_decor_kind_is_highlight(int kind);
-extern int rs_decor_kind_is_ui_watched(int kind);
 extern int rs_sh_is_sign(uint16_t flags);
 extern int rs_sh_is_hl_eol(uint16_t flags);
 extern int rs_sh_is_ui_watched(uint16_t flags);
@@ -78,7 +57,6 @@ extern int rs_vt_is_lines(uint8_t flags);
 extern int rs_vt_is_hide(uint8_t flags);
 extern int rs_vt_is_lines_above(uint8_t flags);
 extern int rs_vt_repeat_linebreak(uint8_t flags);
-extern int rs_compute_virt_text_attr(int hl_id, int base_attr, int mode, int *use_hl_id);
 
 uint32_t decor_freelist = UINT32_MAX;
 
@@ -96,9 +74,6 @@ extern void rs_decor_state_free(void *state);
 // Rust implementations for Phase 2
 extern uint32_t rs_decor_put_sh(DecorSignHighlight item);
 extern void *rs_decor_put_vt(DecorVirtText *vt_data, DecorVirtText *next);
-extern void rs_clear_virttext(void *text);
-extern void rs_clear_virtlines(void *lines);
-extern void rs_decor_free_inner(DecorVirtText *vt, uint32_t first_idx);
 extern void rs_decor_free(int ext, DecorVirtText *vt, uint32_t sh_idx);
 extern void rs_decor_check_to_be_deleted(void);
 

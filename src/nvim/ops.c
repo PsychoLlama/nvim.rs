@@ -93,7 +93,6 @@ extern void rs_clearopbeep(oparg_T *oap);
 extern void rs_may_clear_cmdline(void);
 extern bool rs_unadjust_for_sel(void);
 
-extern int rs_get_fileformat(buf_T *buf);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 

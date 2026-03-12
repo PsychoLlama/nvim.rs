@@ -103,10 +103,7 @@ typedef kvec_t(char *) CharVec;
 #include "runtime.c.generated.h"
 
 // Rust FFI forward declarations
-extern int rs_get_copyID(void);
-extern bool rs_source_callback_vim_lua(int num_fnames, char **fnames, bool all, void *cookie);
 extern bool rs_source_callback(int num_fnames, char **fnames, bool all, void *cookie);
-extern int rs_get_runtime_cmd_flags(char **argp, size_t where_len);
 
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
 garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };

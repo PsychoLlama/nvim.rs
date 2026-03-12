@@ -67,7 +67,6 @@
 
 // Rust rs_* function declarations (from src/nvim-rs/shada/src/lib.rs)
 extern int rs_magic_isset(void);
-extern int rs_marks_equal(pos_T a, pos_T b);
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern void rs_shada_free_entry_contents(ShadaEntry *entry);

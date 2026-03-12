@@ -22,7 +22,6 @@ typedef enum {
 
 #include "eval/list.c.generated.h"
 
-extern int rs_get_copyID(void);
 
 static const char e_argument_of_str_must_be_list_string_dictionary_or_blob[]
   = N_("E1250: Argument of %s must be a List, String, Dictionary or Blob");

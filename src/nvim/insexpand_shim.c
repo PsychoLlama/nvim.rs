@@ -87,142 +87,80 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
                                    list_stack_T **list_stack);
 extern int rs_magic_isset(void);
 extern int rs_ctrl_x_mode_normal(void);
-extern int rs_ctrl_x_mode_scroll(void);
 extern int rs_ctrl_x_mode_whole_line(void);
-extern int rs_ctrl_x_mode_files(void);
-extern int rs_ctrl_x_mode_path_patterns(void);
 extern int rs_ctrl_x_mode_path_defines(void);
-extern int rs_ctrl_x_mode_dictionary(void);
-extern int rs_ctrl_x_mode_thesaurus(void);
-extern int rs_ctrl_x_mode_cmdline(void);
 extern int rs_ctrl_x_mode_function(void);
-extern int rs_ctrl_x_mode_omni(void);
-extern int rs_ctrl_x_mode_spell(void);
 extern int rs_ctrl_x_mode_line_or_eval(void);
-extern int rs_ctrl_x_mode_register(void);
 extern int rs_ctrl_x_mode_not_default(void);
-extern int rs_ctrl_x_mode_not_defined_yet(void);
 extern int rs_compl_status_adding(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
 extern char *rs_find_line_end(char *ptr);
 extern int rs_compl_dir_forward(void);
-extern int rs_compl_shows_dir_forward(void);
-extern int rs_compl_shows_dir_backward(void);
 extern int rs_cot_fuzzy(void);
 extern int rs_is_nearest_active(void);
-extern int rs_ins_compl_has_multiple(void);
 extern int rs_ins_compl_make_cyclic(void);
-extern void rs_set_fuzzy_score(void);
-extern int rs_get_compl_len(void);
-extern int rs_ins_compl_refresh_always(void);
-extern int rs_ins_compl_need_restart(void);
 extern int rs_get_cpt_sources_count(void);
-extern void rs_check_elapsed_time(void);
-extern void rs_ins_compl_fixRedoBufForLeader(char *ptr_arg);
 extern int rs_ins_compl_key2dir(int c);
-extern int rs_ins_compl_pum_key(int c);
 extern int rs_ins_compl_key2count(int c);
-extern int rs_ins_compl_use_match(int c);
 extern void rs_ins_compl_make_linear(void);
 extern void rs_ins_compl_clear(void);
-extern int rs_ins_compl_win_active(win_T *wp);
 extern int rs_ins_compl_interrupted(void);
 extern int rs_ins_compl_has_preinsert(void);
 extern int rs_ins_compl_preinsert_effect(void);
-extern int rs_ins_compl_has_autocomplete(void);
 extern int rs_ins_compl_preinsert_longest(void);
 extern const char *rs_ins_compl_leader(void);
 extern size_t rs_ins_compl_leader_len(void);
-extern int rs_pum_wanted(void);
 extern unsigned rs_get_cot_flags(void);
 extern int rs_ctrl_x_mode_eval(void);
 extern void rs_ins_compl_free(void);
-extern void rs_compl_status_clear(void);
-extern void rs_ins_compl_init_get_longest(void);
-extern void rs_ins_compl_enable_autocomplete(void);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
 extern int rs_ins_compl_col_range_attr(int lnum, int col);
-extern void rs_ins_compl_show_pum(void);
-extern void rs_ins_compl_delete(int new_leader);
 extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
 // rs_ins_ctrl_x deleted: now exported as ins_ctrl_x via #[export_name]
 // rs_check_compl_option deleted: now exported as check_compl_option via #[export_name]
-extern void rs_ins_compl_restart(void);
-extern void rs_ins_compl_set_original_text(const char *str, size_t len);
-extern void rs_ins_compl_addleader(int c);
 extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
-extern void rs_ins_compl_fuzzy_sort(void);
 extern void rs_sort_compl_match_list(int compare_type);
 extern void rs_ins_compl_new_leader(void);
 extern void rs_ins_compl_del_pum(void);
 // Phase 1 Rust exports
 extern const char *rs_ins_compl_mode(void);
-extern int rs_thesaurus_func_complete(int type);
 // Phase 3 (pass 5) Rust exports
-extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict_f);
 // Phase 4 (pass 5) Rust exports -- rs_fuzzy_longest_match no longer called from C (Phase 15)
 // Phase 1 (pass 5) Rust exports
-extern void rs_get_register_completion(void);
 // Phase 5 (pass 5) Rust exports
 // rs_did_set_completefunc deleted: now exported as did_set_completefunc via #[export_name]
 // rs_did_set_omnifunc deleted: now exported as did_set_omnifunc via #[export_name]
 // rs_did_set_thesaurusfunc deleted: now exported as did_set_thesaurusfunc via #[export_name]
 // rs_set_ref_in_insexpand_funcs deleted: now exported as set_ref_in_insexpand_funcs via #[export_name]
-extern void rs_get_next_include_file_completion(int compl_type);
-extern void rs_get_next_cmdline_completion(void);
-extern void rs_get_next_spell_completion(int lnum);
-extern void rs_do_autocmd_completedone(int c, int mode, char *word);
-extern void rs_ins_compl_show_filename(void);
 // Phase 2 Rust exports
-extern int rs_get_normal_compl_info(char *line, int startcol, int curs_col);
-extern int rs_get_wholeline_compl_info(char *line, int curs_col);
-extern int rs_get_filename_compl_info(char *line, int startcol, int curs_col);
-extern int rs_get_spell_compl_info(int startcol, int curs_col);
 // Phase 3 Rust exports
-extern void rs_ins_compl_continue_search(char *line);
-extern void rs_ins_compl_show_statusmsg(void);
 // Phase 4 (pass 3) Rust exports
-extern void rs_ins_compl_update_shown_match(void);
-extern void rs_find_next_match_in_menu(void);
 // Phase 2 (pass 4) Rust exports
-extern void rs_get_next_bufname_token(void);
 // Phase 3 (pass 4) Rust exports
-extern void rs_get_next_tag_completion(void);
 // Phase 4 (pass 4) Rust exports
 extern void rs_compl_source_start_timer(int source_idx);
 extern int rs_advance_cpt_sources_index_safe(void);
 // Phase 5 (pass 4) Rust exports
-extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
-                                            int min_len, char **tofree);
 // Phase 6 (pass 4) Rust exports
-extern void rs_ins_compl_insert_bytes(const char *p, int len);
-extern void rs_ins_compl_expand_multiple(const char *str);
 // Phase 1 (pass 6) Rust exports
 extern void rs_show_pum(int prev_w_wrow, int prev_w_leftcol);
 extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
-extern void rs_spell_back_to_badword(void);
 // Phase 1 (pass 7) Rust exports
 extern void rs_save_orig_extmarks(void);
-extern void rs_restore_orig_extmarks(void);
 // rs_free_insexpand_stuff deleted: now exported as free_insexpand_stuff via #[export_name]
 // Phase 2 (pass 7) Rust exports
-extern int rs_get_cmdline_compl_info(char *line, int curs_col);
-extern void rs_set_compl_globals(int startcol, int curs_col, int is_cpt_compl);
 extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
 // Phase 3 (pass 7) Rust exports
-extern int rs_ins_compl_start(void);
 // Phase 4 (pass 7) Rust exports
 // rs_ins_complete deleted: now exported as ins_complete via #[export_name]
 // Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
 // Phase 1 (pass 11) Rust exports: leader-for-startcol
-extern const char *rs_get_leader_for_startcol_data(void *match, int cached);
-extern size_t rs_get_leader_for_startcol_size(void *match, int cached);
 // Phase 2 (pass 11) Rust exports: ins_compl_build_pum
 extern int rs_ins_compl_build_pum(void);
 // Phase 3 (pass 11) Rust exports: find_common_prefix (replaces nvim_find_common_prefix_data)
@@ -377,7 +315,6 @@ static bool ins_compl_st_cleared = false;
 #define LOOKBACK_LINE_COUNT     1000
 
 #include "insexpand_shim.c.generated.h"
-extern int rs_win_valid(win_T *win);
 extern buf_T *rs_ins_compl_next_buf(buf_T *buf, int flag);
 
 /// values for cp_flags
@@ -539,8 +476,6 @@ static int compl_match_arraysize;
 extern int rs_vim_is_ctrl_x_key(int c);
 extern int rs_may_advance_cpt_index(const char *cpt);
 extern int rs_ins_compl_prep(int c);
-extern int rs_ins_compl_stop(int c, int prev_mode, int retval);
-extern int rs_ins_compl_cancel(void);
 extern int rs_ins_compl_bs(void);
 
 /// @return  true if "match" is the original text when the completion began.
@@ -896,7 +831,6 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
 // NOTE: ins_compl_col_range_attr deleted (Phase 15).
 // drawline.c already calls rs_ins_compl_col_range_attr() directly.
 
-extern int rs_pum_enough_matches(int menuone);
 
 /// Convert to complete item dict
 static dict_T *ins_compl_dict_alloc(compl_T *match)
@@ -3037,7 +2971,6 @@ extern void rs_ins_compl_add_dict(void *dict);
 // are now exported directly as f_complete etc. via #[export_name] (Phase 1).
 extern void rs_set_completion(int startcol, void *list);
 extern void rs_remove_old_matches(void);
-extern void rs_cpt_compl_refresh(void);
 extern void *rs_get_callback_if_cpt_func(const char *p, int idx);
 
 // Phase 1 accessors: wrap static functions for Rust

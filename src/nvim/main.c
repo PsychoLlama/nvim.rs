@@ -148,7 +148,6 @@ extern void rs_win_equal(win_T *next_curwin, int current, int dir);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_shada_read_everything(const char *fname, bool forceit, bool missing_ok);
 extern int rs_shada_write_file(const char *file, bool nomerge);
-extern int rs_diffopt_horizontal(void);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // Rust implementations (Phase 1: output and helpers)

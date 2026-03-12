@@ -84,27 +84,6 @@
 #include "nvim/window.h"
 
 // Rust FFI declarations
-extern int64_t rs_num_divide(int64_t n1, int64_t n2);
-extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
-extern bool rs_eval_isdictc(int c);
-extern const char *rs_skip_luafunc_name(const char *p);
-extern int rs_check_luafunc_name(const char *str, bool paren);
-extern bool rs_is_luafunc(partial_T *partial);
-extern char *rs_partial_name(partial_T *pt);
-extern int rs_get_copyID(void);
-extern bool rs_set_ref_in_tagfunc(int copyID);
-extern size_t rs_string2float(const char *text, float_T *ret_value);
-extern char *rs_char_from_string(const char *str, varnumber_T index);
-extern char *rs_string_slice(const char *str, varnumber_T first, varnumber_T last, bool exclusive);
-extern int rs_get_env_len(const char **arg);
-extern int rs_get_id_len(const char **arg);
-extern const char *rs_to_name_end(const char *arg, bool use_namespace);
-extern const char *rs_find_name_end(const char *arg, const char **expr_start,
-                                    const char **expr_end, int flags);
-extern int rs_buf_byteidx_to_charidx(buf_T *buf, linenr_T lnum, int byteidx);
-extern int rs_buf_charidx_to_byteidx(buf_T *buf, linenr_T lnum, int charidx);
-extern int rs_is_tty_option(const char *name);
-extern int rs_get_callback_depth(void);
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
@@ -112,26 +91,10 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern bool rs_set_ref_in_callback_reader(CallbackReader *reader, int copyID,
                                           ht_stack_T **ht_stack, list_stack_T **list_stack);
-extern int rs_eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op);
 extern int rs_eval_func(char **arg, evalarg_T *evalarg, char *name, int name_len,
                         typval_T *rettv, int flags, typval_T *basetv);
-extern int rs_eval_number(char **arg, typval_T *rettv, bool evaluate, bool want_string);
-extern int rs_eval_list(char **arg, typval_T *rettv, void *evalarg);
 extern int rs_eval_index(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
-extern int rs_check_can_index(typval_T *rettv, bool evaluate, bool verbose);
-extern int rs_eval_index_inner(typval_T *rettv, bool is_range, typval_T *var1, typval_T *var2,
-                               bool exclusive, const char *key, ptrdiff_t keylen, bool verbose);
 extern int rs_eval_method(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
-extern int rs_eval_lit_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
-extern int rs_eval_string(char **arg, typval_T *rettv, bool evaluate, bool interpolate);
-extern int rs_eval_dict(char **arg, typval_T *rettv, evalarg_T *evalarg, bool literal);
-extern int rs_eval_lit_dict(char **arg, typval_T *rettv, evalarg_T *evalarg);
-extern int rs_eval7(char **arg, typval_T *rettv, evalarg_T *evalarg, bool want_string);
-extern int rs_free_unref_items(int copyID);
-extern char *rs_make_expanded_name(const char *in_start, char *expr_start, char *expr_end,
-                                    char *in_end);
-extern void rs_ex_echohl(exarg_T *eap);
-extern int rs_get_echo_hl_id(void);
 extern void rs_timer_close_cb(TimeWatcher *tw, void *data);
 
 _Static_assert(VARNUMBER_MAX == INT64_MAX, "VARNUMBER_MAX mismatch");
@@ -501,7 +464,6 @@ void eval_clear(void)
 extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, bool evaluate,
                               void *selfdict, typval_T *basetv, const char *lua_funcname);
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
-extern int rs_eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap);
 
 /// Get TV_LIST_ITEM_NEXT(fi->fi_list, item).
 listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
