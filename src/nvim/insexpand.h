@@ -5,6 +5,9 @@
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 #include "nvim/vim_defs.h"  // IWYU pragma: keep
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+bool check_compl_option(bool dict_opt);
+
 #include "insexpand_shim.h.generated.h"
 
 // Rust-implemented functions (rs_ prefix)

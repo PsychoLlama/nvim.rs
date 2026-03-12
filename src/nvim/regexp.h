@@ -28,4 +28,7 @@ extern char *skip_regexp_err(char *startp, int delim, int magic);
 extern void vim_regfree(regprog_T *prog);
 extern void free_regexp_stuff(void);
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+int vim_regcomp_had_eol(void);
+
 #include "regexp_shim.h.generated.h"

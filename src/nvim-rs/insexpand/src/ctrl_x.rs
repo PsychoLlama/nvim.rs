@@ -668,7 +668,8 @@ extern "C" {
 ///
 /// # Safety
 /// Requires valid global state.
-#[no_mangle]
+#[export_name = "check_compl_option"]
+#[must_use]
 pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
     let is_empty = if dict_opt != 0 {
         nvim_check_compl_option_dict()

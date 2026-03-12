@@ -151,7 +151,7 @@ extern void rs_ins_compl_delete(int new_leader);
 extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
 // Phase 4 Rust exports
 extern void rs_ins_ctrl_x(void);
-extern int rs_check_compl_option(int dict_opt);
+// rs_check_compl_option deleted: now exported as check_compl_option via #[export_name]
 extern void rs_ins_compl_restart(void);
 extern void rs_ins_compl_set_original_text(const char *str, size_t len);
 extern void rs_ins_compl_addleader(int c);
@@ -535,10 +535,7 @@ static int compl_match_arraysize;
 /// CTRL-X pressed in Insert mode.
 void ins_ctrl_x(void) { rs_ins_ctrl_x(); }
 
-/// Check that the 'dictionary' or 'thesaurus' option can be used.
-///
-/// @param  dict_opt  check 'dictionary' when true, 'thesaurus' when false.
-bool check_compl_option(bool dict_opt) { return rs_check_compl_option(dict_opt ? 1 : 0) != 0; }
+// check_compl_option deleted: Rust exports under the C name directly via #[export_name].
 
 extern int rs_vim_is_ctrl_x_key(int c);
 extern int rs_may_advance_cpt_index(const char *cpt);

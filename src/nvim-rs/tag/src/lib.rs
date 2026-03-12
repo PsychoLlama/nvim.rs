@@ -1084,7 +1084,8 @@ const FAIL_I: c_int = 0;
 ///
 /// # Safety
 /// - `args` must be a valid `optset_T` pointer
-#[no_mangle]
+#[export_name = "did_set_tagfunc"]
+#[must_use]
 pub unsafe extern "C" fn rs_did_set_tagfunc(args: *const c_void) -> *const c_char {
     let buf = nvim_tag_optset_get_buf(args);
 

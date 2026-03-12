@@ -129,7 +129,7 @@ pub extern "C" fn search_was_last_used_export() -> bool {
 /// # Safety
 ///
 /// Calls external C function to access static variable.
-#[no_mangle]
+#[export_name = "vim_regcomp_had_eol"]
 pub unsafe extern "C" fn rs_vim_regcomp_had_eol() -> c_int {
     nvim_regexp_get_had_eol()
 }

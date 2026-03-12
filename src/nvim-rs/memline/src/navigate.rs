@@ -638,7 +638,7 @@ unsafe fn dec_native(lp: *mut PosHandle) -> c_int {
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
-#[no_mangle]
+#[export_name = "inc"]
 pub unsafe extern "C" fn rs_inc(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
@@ -650,7 +650,7 @@ pub unsafe extern "C" fn rs_inc(lp: *mut PosHandle) -> c_int {
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
-#[no_mangle]
+#[export_name = "incl"]
 pub unsafe extern "C" fn rs_incl(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
@@ -672,7 +672,7 @@ pub unsafe extern "C" fn rs_incl(lp: *mut PosHandle) -> c_int {
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
-#[no_mangle]
+#[export_name = "dec"]
 pub unsafe extern "C" fn rs_dec(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;
@@ -684,7 +684,7 @@ pub unsafe extern "C" fn rs_dec(lp: *mut PosHandle) -> c_int {
 ///
 /// # Safety
 /// - `lp` must be a valid position pointer or NULL
-#[no_mangle]
+#[export_name = "decl"]
 pub unsafe extern "C" fn rs_decl(lp: *mut PosHandle) -> c_int {
     if lp.is_null() {
         return -1;

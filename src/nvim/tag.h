@@ -45,4 +45,7 @@ typedef struct {
   void *tn_search_ctx;
 } tagname_T;
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+const char *did_set_tagfunc(optset_T *args);
+
 #include "tag_shim.h.generated.h"

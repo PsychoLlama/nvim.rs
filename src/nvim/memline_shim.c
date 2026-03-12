@@ -233,15 +233,13 @@ extern long rs_char_to_long(const char *s);
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
 // Pass 2 Phase 1: Mark tracking Rust function declarations
 extern void rs_ml_setmarked(linenr_T lnum);
-extern linenr_T rs_ml_firstmarked(void);
+// rs_ml_firstmarked deleted: now exported as ml_firstmarked via #[export_name]
 extern void rs_ml_clearmarked(void);
 extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
 // Pass 2 Phase 2: Swap file path helper Rust function declarations
 extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
-#ifdef HAVE_READLINK
-extern int rs_resolve_symlink(const char *fname, char *buf);
-#endif
+// rs_resolve_symlink deleted: now exported as resolve_symlink via #[export_name]
 extern char *rs_get_file_in_dir(char *fname, char *dname);
 extern char *rs_makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
 // Pass 2 Phase 3: Buffer lifecycle Rust function declarations
@@ -287,8 +285,7 @@ extern void rs_ml_open_file(buf_T *buf);
 extern void rs_ml_open_files(void);
 // Pass 9 Phase 2: ml_setname Rust function declaration
 extern void rs_ml_setname(buf_T *buf);
-// Pass 9 Phase 3: ml_open Rust function declaration
-extern int rs_ml_open(buf_T *buf);
+// rs_ml_open deleted: now exported as ml_open via #[export_name]
 // Pass 9 Phase 4: buffer-iteration wrappers Rust function declarations
 extern void rs_ml_close_all(int del_file);
 extern void rs_ml_close_notmod(void);
@@ -317,10 +314,7 @@ static const char e_warning_pointer_block_corrupted[]
 # define ML_GET_ALLOC_LINES
 #endif
 
-/// Open a new memline for "buf". (thin wrapper calling Rust)
-///
-/// @return  FAIL for failure, OK otherwise.
-int ml_open(buf_T *buf) { return rs_ml_open(buf); }
+// ml_open deleted: Rust exports under the C name directly via #[export_name = "ml_open"].
 
 /// ml_setname() is called when the file name of "buf" has been changed.
 /// It may rename the swapfile. (thin wrapper calling Rust)
@@ -1493,8 +1487,7 @@ int ml_delete_flags(linenr_T lnum, int flags)
 /// set the DB_MARKED flag for line 'lnum' (thin wrapper calling Rust)
 void ml_setmarked(linenr_T lnum) { rs_ml_setmarked(lnum); }
 
-/// find the first line with its DB_MARKED flag set (thin wrapper calling Rust)
-linenr_T ml_firstmarked(void) { return rs_ml_firstmarked(); }
+// ml_firstmarked deleted: Rust exports under the C name directly via #[export_name = "ml_firstmarked"].
 
 /// clear all DB_MARKED flags (thin wrapper calling Rust)
 void ml_clearmarked(void) { rs_ml_clearmarked(); }
@@ -1512,10 +1505,7 @@ void ml_flush_line(buf_T *buf, bool noalloc)
 }
 
 
-#if defined(HAVE_READLINK)
-/// Resolve a symlink in the last component of a file name. (thin wrapper calling Rust)
-int resolve_symlink(const char *fname, char *buf) { return rs_resolve_symlink(fname, buf); }
-#endif
+// resolve_symlink deleted: Rust exports under the C name directly via #[export_name = "resolve_symlink"].
 
 /// Make swapfile name out of the file name and a directory name. (thin wrapper calling Rust)
 ///
@@ -1538,23 +1528,7 @@ void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }
 
 // ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
 
-// inc/incl/dec/decl migrated to Rust (navigate.rs); thin wrappers below.
-extern int rs_inc(pos_T *lp);
-extern int rs_incl(pos_T *lp);
-extern int rs_dec(pos_T *lp);
-extern int rs_decl(pos_T *lp);
-
-/// Increment position (thin wrapper calling Rust).
-int inc(pos_T *lp) { return rs_inc(lp); }
-
-/// Increment position, skipping NUL at end of non-empty lines (thin wrapper calling Rust).
-int incl(pos_T *lp) { return rs_incl(lp); }
-
-/// Decrement position (thin wrapper calling Rust).
-int dec(pos_T *lp) { return rs_dec(lp); }
-
-/// Decrement position, skipping NUL at end of non-empty lines (thin wrapper calling Rust).
-int decl(pos_T *lp) { return rs_decl(lp); }
+// inc, incl, dec, decl deleted: Rust exports under the C names directly via #[export_name].
 
 // ============================================================================
 // Extmark Accessor Functions (for Rust FFI - extmark crate)

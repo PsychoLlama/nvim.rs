@@ -1746,7 +1746,7 @@ pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
 ///
 /// # Safety
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_firstmarked"]
 pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
     let buf = nvim_get_curbuf();
     if nvim_buf_has_ml_mfp(buf) == 0 {

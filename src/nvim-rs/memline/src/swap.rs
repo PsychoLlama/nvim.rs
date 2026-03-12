@@ -108,7 +108,7 @@ extern "C" {
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_open"]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     if buf.is_null() {
@@ -928,7 +928,7 @@ pub unsafe extern "C" fn rs_make_percent_swname(
 /// - `fname` must be a valid C string
 /// - `buf` must be a buffer of at least MAXPATHL bytes
 #[cfg(unix)]
-#[no_mangle]
+#[export_name = "resolve_symlink"]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
     const FAIL: c_int = 0;

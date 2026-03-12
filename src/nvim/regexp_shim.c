@@ -559,8 +559,7 @@ int32_t nvim_regexp_get_curwin_vcol(void)
 }
 
 
-extern int rs_vim_regcomp_had_eol(void);
-int vim_regcomp_had_eol(void) { return rs_vim_regcomp_had_eol(); }
+// vim_regcomp_had_eol deleted: Rust exports under the C name directly via #[export_name].
 
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
