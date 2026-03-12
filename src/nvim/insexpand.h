@@ -16,6 +16,12 @@ const char *did_set_completefunc(optset_T *args);
 const char *did_set_omnifunc(optset_T *args);
 const char *did_set_thesaurusfunc(optset_T *args);
 bool set_ref_in_insexpand_funcs(int copyID);
+// VimL completion builtins (Phase 1: exported from Rust via #[export_name])
+void f_complete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_complete_add(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 #include "insexpand_shim.h.generated.h"
 

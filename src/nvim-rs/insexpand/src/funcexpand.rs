@@ -108,7 +108,7 @@ extern "C" {
 ///
 /// # Safety
 /// Requires valid global completion state.
-#[no_mangle]
+#[export_name = "f_complete_check"]
 pub unsafe extern "C" fn rs_f_complete_check(
     _argvars: TypvalPtr,
     rettv: TypvalPtr,
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn rs_f_complete_check(
 ///
 /// # Safety
 /// Requires valid global completion state.
-#[no_mangle]
+#[export_name = "f_preinserted"]
 pub unsafe extern "C" fn rs_f_preinserted(
     _argvars: TypvalPtr,
     rettv: TypvalPtr,
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn rs_f_preinserted(
 ///
 /// # Safety
 /// `argvars` must be a valid `typval_T[2]` pointer; `rettv` a `typval_T*`.
-#[no_mangle]
+#[export_name = "f_complete"]
 pub unsafe extern "C" fn rs_f_complete(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: *mut c_void) {
     nvim_f_complete_impl(argvars, rettv);
 }
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn rs_f_complete(argvars: TypvalPtr, rettv: TypvalPtr, _fp
 ///
 /// # Safety
 /// `argvars` must be a valid `typval_T[1]` pointer; `rettv` a `typval_T*`.
-#[no_mangle]
+#[export_name = "f_complete_add"]
 pub unsafe extern "C" fn rs_f_complete_add(
     argvars: TypvalPtr,
     rettv: TypvalPtr,

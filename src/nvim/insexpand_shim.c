@@ -249,6 +249,7 @@ void nvim_f_complete_impl(void *argvars, void *rettv);
 void nvim_f_complete_add_impl(void *argvars, void *rettv);
 void nvim_f_complete_check_impl(void *rettv);
 void nvim_f_preinserted_impl(void *rettv);
+void nvim_f_complete_info_impl(void *argvars, void *rettv);
 void nvim_set_completion_impl(int startcol, void *list);
 void nvim_cpt_compl_refresh_impl(void);
 void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
@@ -1631,29 +1632,8 @@ static void set_completion(colnr_T startcol, list_T *list)
   nvim_set_completion_impl((int)startcol, (void *)list);
 }
 
-/// "complete()" function
-// NOTE: Body migrated to Rust rs_f_complete (Phase 9, pass 9).
-// Logic lives in nvim_f_complete_impl compound accessor.
-void f_complete(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  nvim_f_complete_impl((void *)argvars, (void *)rettv);
-}
-
-/// "complete_add()" function
-// NOTE: Body migrated to Rust rs_f_complete_add (Phase 9, pass 9).
-// Logic lives in nvim_f_complete_add_impl compound accessor.
-void f_complete_add(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  nvim_f_complete_add_impl((void *)argvars, (void *)rettv);
-}
-
-/// "complete_check()" function
-// NOTE: Body migrated to Rust rs_f_complete_check (Phase 9, pass 9).
-// Logic lives in nvim_f_complete_check_impl compound accessor.
-void f_complete_check(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  nvim_f_complete_check_impl((void *)rettv);
-}
+// NOTE: f_complete, f_complete_add, f_complete_check exported from Rust via
+// #[export_name] in src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
 
 /// Fill the dict of complete_info
 // Phase 2 (pass 5): rs_get_complete_info -- Rust wrapper
@@ -1796,22 +1776,8 @@ void nvim_get_complete_info_impl(void *what_list_v, void *retdict_v)
   (void)ret;
 }
 
-/// "complete_info()" function
-void f_complete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-
-  list_T *what_list = NULL;
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    if (argvars[0].v_type != VAR_LIST) {
-      emsg(_(e_listreq));
-      return;
-    }
-    what_list = argvars[0].vval.v_list;
-  }
-  rs_get_complete_info(what_list, rettv->vval.v_dict);
-}
+// NOTE: f_complete_info exported from Rust via #[export_name] in
+// src/nvim-rs/insexpand/src/info.rs (Phase 1).
 
 // NOTE: process_next_cpt_value, INS_COMPL_CPT_* enum migrated to Rust
 // as rs_process_next_cpt_value (Phase 14, Phase 3).
@@ -2091,13 +2057,8 @@ void nvim_spell_back_to_badword_impl(void)
   }
 }
 
-/// "preinserted()" function
-// NOTE: Body migrated to Rust rs_f_preinserted (Phase 9, pass 9).
-// Logic lives in nvim_f_preinserted_impl compound accessor.
-void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  nvim_f_preinserted_impl((void *)rettv);
-}
+// NOTE: f_preinserted exported from Rust via #[export_name] in
+// src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
 
 // Completion state accessors (used by Rust insexpand crate)
 int nvim_get_ctrl_x_mode(void) { return ctrl_x_mode; }
@@ -3091,10 +3052,8 @@ extern void rs_expand_by_function(int type, char *base, void *cb);
 extern int rs_ins_compl_add_tv(void *tv, int dir, int fast);
 extern void rs_ins_compl_add_list(void *list);
 extern void rs_ins_compl_add_dict(void *dict);
-extern void rs_f_complete(void *argvars, void *rettv, void *fptr);
-extern void rs_f_complete_add(void *argvars, void *rettv, void *fptr);
-extern void rs_f_complete_check(void *argvars, void *rettv, void *fptr);
-extern void rs_f_preinserted(void *argvars, void *rettv, void *fptr);
+// NOTE: rs_f_complete, rs_f_complete_add, rs_f_complete_check, rs_f_preinserted
+// are now exported directly as f_complete etc. via #[export_name] (Phase 1).
 extern void rs_set_completion(int startcol, void *list);
 extern void rs_remove_old_matches(void);
 extern void rs_cpt_compl_refresh(void);
@@ -3326,6 +3285,26 @@ void nvim_f_preinserted_impl(void *rettv_v)
   if (rs_ins_compl_preinsert_effect()) {
     rettv->vval.v_number = 1;
   }
+}
+
+/// Compound accessor: f_complete_info logic, callable from Rust.
+/// Contains the argument parsing from the original f_complete_info function.
+void nvim_f_complete_info_impl(void *argvars_v, void *rettv_v)
+{
+  typval_T *argvars = (typval_T *)argvars_v;
+  typval_T *rettv = (typval_T *)rettv_v;
+  tv_dict_alloc_ret(rettv);
+
+  list_T *what_list = NULL;
+
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    if (argvars[0].v_type != VAR_LIST) {
+      emsg(_(e_listreq));
+      return;
+    }
+    what_list = argvars[0].vval.v_list;
+  }
+  rs_get_complete_info(what_list, rettv->vval.v_dict);
 }
 
 // Phase 3 accessor: set_completion
