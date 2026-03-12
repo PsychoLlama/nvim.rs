@@ -648,6 +648,7 @@ extern "C" {
         flags: c_int,
     ) -> i32;
     fn nvim_docmd_strlen(s: *const c_char) -> usize;
+    #[link_name = "rs_magic_isset"]
     fn nvim_docmd_magic_isset() -> c_int;
 
     // Mark

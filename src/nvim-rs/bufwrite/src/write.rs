@@ -186,6 +186,7 @@ extern "C" {
 
     // Encoding
     fn nvim_bw_enc_canonize(enc: *const c_char) -> *mut c_char;
+    #[link_name = "rs_need_conversion"]
     fn nvim_bw_need_conversion(fenc: *const c_char) -> c_int;
     fn nvim_bw_get_fio_flags(name: *const c_char) -> c_int;
     fn nvim_bw_get_fileformat_force(buf: BufHandle, eap: ExargHandle) -> c_int;

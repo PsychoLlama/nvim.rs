@@ -72,7 +72,6 @@ extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_valid_tabpage(tabpage_T *tpc);
 extern int rs_win_valid(win_T *win);
 
-extern int rs_magic_isset(void);
 
 static const char e_window_layout_changed_unexpectedly[]
   = N_("E249: Window layout changed unexpectedly");
@@ -275,7 +274,6 @@ char *nvim_al_file_pat_to_reg_pat(const char *pat)
 {
   return file_pat_to_reg_pat(pat, NULL, NULL, false);
 }
-int nvim_al_magic_isset(void) { return rs_magic_isset(); }
 int nvim_al_get_p_fic(void) { return p_fic; }
 void nvim_al_semsg_nomatch2(const char *s) { semsg(_(e_nomatch2), s); }
 void nvim_al_emsg_nomatch(void) { emsg(_(e_nomatch)); }

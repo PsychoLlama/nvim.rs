@@ -89,9 +89,6 @@ const char *nvim_get_flp_value(buf_T *buf) { return get_flp_value(buf); }
 
 unsigned nvim_get_dy_flags_uhex(void) { return dy_flags & kOptDyFlagUhex; }
 
-extern const char *rs_get_showbreak_value(win_T *win);
-const char *nvim_indent_get_showbreak_value(win_T *wp) { return rs_get_showbreak_value(wp); }
-
 /// Higher-level regex helper for breakindent: match formatlistpat against line.
 ///
 /// Returns 1 if match found, 0 if no match. On match with list < 0, computes

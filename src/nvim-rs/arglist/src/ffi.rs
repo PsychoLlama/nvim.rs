@@ -167,6 +167,7 @@ extern "C" {
     pub fn nvim_al_regmatch_exec(rm: *mut c_void, line: *const c_char) -> c_int;
     pub fn nvim_al_regmatch_free(rm: *mut c_void);
     pub fn nvim_al_regmatch_free_prog(rm: *mut c_void);
+    #[link_name = "rs_magic_isset"]
     pub fn nvim_al_magic_isset() -> c_int;
     pub fn nvim_al_get_p_fic() -> c_int;
     pub fn nvim_al_semsg_nomatch2(pat: *const c_char);

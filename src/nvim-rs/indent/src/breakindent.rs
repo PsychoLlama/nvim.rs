@@ -30,6 +30,7 @@ extern "C" {
     fn nvim_indent_buf_get_changedtick(buf: BufHandle) -> i64;
     fn nvim_get_flp_value(buf: BufHandle) -> *const c_char;
     fn nvim_get_dy_flags_uhex() -> u32;
+    #[link_name = "rs_get_showbreak_value"]
     fn nvim_indent_get_showbreak_value(wp: WinHandle) -> *const c_char;
 
     fn nvim_breakindent_flp_match(

@@ -103,7 +103,6 @@ _Static_assert(SHA256_SUM_SIZE == 32, "UNDO_HASH_SIZE");
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
                            int fat_tolerance);
 extern int rs_get_fio_flags(const char *name);
-extern bool rs_need_conversion(const char *fenc);
 
 static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
 static const char e_no_matching_autocommands_for_buftype_str_buffer[]
@@ -524,7 +523,6 @@ int nvim_bw_match_file_list(const char *list, const char *sfname, const char *ff
 
 // Encoding
 char *nvim_bw_enc_canonize(const char *enc) { return enc_canonize((char *)enc); }
-int nvim_bw_need_conversion(const char *fenc) { return rs_need_conversion(fenc); }
 int nvim_bw_get_fileformat_force(buf_T *buf, exarg_T *eap) { return get_fileformat_force(buf, eap); }
 
 // iconv

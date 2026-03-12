@@ -142,6 +142,7 @@ extern "C" {
     pub fn nvim_ses_makemap(fd: *mut libc::FILE, buf: BufPtr) -> c_int;
     pub fn nvim_ses_makeset(fd: *mut libc::FILE, opt: c_int, local_only: bool) -> c_int;
     pub fn nvim_ses_makefoldset(fd: *mut libc::FILE) -> c_int;
+    #[link_name = "rs_put_folds"]
     pub fn nvim_ses_put_folds(fd: *mut libc::FILE, wp: WinPtr) -> c_int;
 
     // --- Phase 7: makeopens accessors ---
@@ -170,6 +171,7 @@ extern "C" {
 
     // Window globals
     pub fn nvim_ses_get_firstwin() -> WinPtr;
+    #[link_name = "rs_tabpage_index"]
     pub fn nvim_ses_tabpage_index(tp: TabpagePtr) -> c_int;
 
     // Session option globals

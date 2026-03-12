@@ -241,7 +241,6 @@ extern int rs_foldManualAllowed(bool create);
 extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
 extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening, int recurse, bool had_visual);
 
-extern int rs_magic_isset(void);
 extern int rs_get_scrolloff_value(win_T *wp);
 
 // Declare cmdnames[].
@@ -249,6 +248,8 @@ extern int rs_get_scrolloff_value(win_T *wp);
 
 // Rust FFI declarations (memline crate)
 extern void rs_goto_byte(int cnt);
+
+extern int rs_magic_isset(void);
 
 // Rust FFI declarations (window wrappers removed)
 extern void rs_do_window(int nchar, int Prenum, int xchar);
@@ -6442,8 +6443,6 @@ int nvim_docmd_compute_buf_local_count(int addr_type, linenr_T lnum, int offset)
   return compute_buffer_local_count((cmd_addr_T)addr_type, lnum, offset);
 }
 
-/// Wrap magic_isset for Rust.
-int nvim_docmd_magic_isset(void) { return rs_magic_isset(); }
 
 /// Wrap getdigits_int32 for Rust.
 int nvim_docmd_getdigits_int32(char **pp)

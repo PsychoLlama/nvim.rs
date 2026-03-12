@@ -52,8 +52,7 @@
 
 #include "ex_session.c.generated.h"
 
-// Rust FFI declarations (window wrappers removed)
-extern int rs_tabpage_index(tabpage_T *ftp);
+// Rust FFI declarations
 extern var_flavour_T rs_var_flavour(const char *varname);
 
 /// Whether ":lcd" or ":tcd" was produced for a session.
@@ -273,7 +272,6 @@ int nvim_ses_makeset(FILE *fd, int opt, bool local_only)
   return makeset(fd, opt, local_only);
 }
 int nvim_ses_makefoldset(FILE *fd) { return makefoldset(fd); }
-int nvim_ses_put_folds(FILE *fd, win_T *wp) { return rs_put_folds(fd, wp); }
 
 // _Static_assert for Phase 6 constants
 _Static_assert(kOptSsopFlagCursor == 0x4000, "kOptSsopFlagCursor");
@@ -319,7 +317,6 @@ frame_T *nvim_ses_tp_get_topframe(const tabpage_T *tp) { return tp->tp_topframe;
 
 // Window globals
 win_T *nvim_ses_get_firstwin(void) { return firstwin; }
-int nvim_ses_tabpage_index(tabpage_T *tp) { return rs_tabpage_index(tp); }
 
 // Session option globals
 const char *nvim_ses_get_globaldir(void) { return globaldir; }

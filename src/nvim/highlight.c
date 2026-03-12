@@ -34,11 +34,9 @@ _Static_assert(HLF_E == 6, "HLF_E changed - update Rust constants");
 _Static_assert(HLF_S == 19, "HLF_S changed - update Rust constants");
 _Static_assert(HLF_MSG == 63, "HLF_MSG changed - update Rust constants");
 
-// Rust FFI declarations (only for functions still called from C wrappers)
+// Rust FFI declarations
 extern bool rs_ns_hl_def(int ns_id, int hl_id, HlAttrs attrs, int link_id);
 extern HlAttrs rs_dict2hlattrs(Dict dict, bool use_rgb, int *link_id, Error *err);
-extern void rs_update_ns_hl(int ns_id);
-extern bool rs_get_hlstate_active(void);
 
 // ============================================================================
 // C accessor functions (callable from Rust via FFI)
@@ -85,9 +83,6 @@ void nvim_call_highlight_attr_set_all(void) { highlight_attr_set_all(); }
 void nvim_call_highlight_changed(void) { highlight_changed(); }
 void nvim_call_screen_invalidate_highlights(void) { screen_invalidate_highlights(); }
 
-// Wrappers that call Rust
-void nvim_update_ns_hl(int ns_id) { rs_update_ns_hl(ns_id); }
-bool nvim_get_hlstate_active(void) { return rs_get_hlstate_active(); }
 
 // ============================================================================
 // C callback wrappers (callable from Rust via FFI)

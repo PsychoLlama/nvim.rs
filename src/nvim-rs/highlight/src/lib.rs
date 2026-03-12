@@ -6489,6 +6489,7 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
 
 extern "C" {
     fn strlen(s: *const c_char) -> usize;
+    #[link_name = "rs_get_hlstate_active"]
     fn nvim_get_hlstate_active() -> bool;
 }
 
