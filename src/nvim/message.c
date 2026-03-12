@@ -176,10 +176,6 @@ void msg_grid_set_pos(int row, bool scrolled)
   }
 }
 
-// Rust FFI declarations
-extern int rs_msg_use_grid(void);
-extern int rs_msg_scrollsize(void);
-extern int rs_msg_do_throttle(void);
 
 // Phase 6: Message state functions from Rust
 extern int rs_msg_scrolled(void);
@@ -537,15 +533,6 @@ int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 int nvim_hl_attr(int hlf) { return hl_attr_active[hlf]; }
 
 
-
-// Rust implementation
-extern int rs_redirecting(void);
-extern int rs_msg_use_printf(void);
-
-bool msg_use_grid(void)
-{
-  return rs_msg_use_grid() != 0;
-}
 
 void msg_grid_validate(void)
 {
@@ -2875,16 +2862,6 @@ bool message_filtered(const char *msg)
   return cmdmod.cmod_filter_force ? match : !match;
 }
 
-/// including horizontal separator
-int msg_scrollsize(void)
-{
-  return rs_msg_scrollsize();
-}
-
-bool msg_do_throttle(void)
-{
-  return rs_msg_do_throttle() != 0;
-}
 
 /// Scroll the screen up one line for displaying the next message line.
 void msg_scroll_up(bool may_throttle, bool zerocmd)
@@ -3226,14 +3203,6 @@ static msgchunk_T *disp_sb_line(int row, msgchunk_T *smp)
   }
 
   return mp->sb_next;
-}
-
-/// @return  true when messages should be printed to stdout/stderr:
-///          - "batch mode" ("silent mode", -es/-Es/-l)
-///          - no UI and not embedded
-int msg_use_printf(void)
-{
-  return rs_msg_use_printf();
 }
 
 /// Print a message when there is no valid screen.
@@ -3797,11 +3766,6 @@ static void redir_write(const char *const str, const ptrdiff_t maxlen)
       msg_col = cur_col;
     }
   }
-}
-
-int redirecting(void)
-{
-  return rs_redirecting();
 }
 
 // Save and restore message kind when emitting a verbose message.

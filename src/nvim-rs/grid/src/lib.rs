@@ -2434,9 +2434,9 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions for grid and UI state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_use_grid() -> c_int {
-    c_int::from(nvim_get_default_grid_has_chars() != 0 && nvim_ui_has_messages() == 0)
+#[export_name = "msg_use_grid"]
+pub unsafe extern "C" fn rs_msg_use_grid() -> bool {
+    nvim_get_default_grid_has_chars() != 0 && nvim_ui_has_messages() == 0
 }
 
 // Message scroll accessors
@@ -2453,7 +2453,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions for global state.
-#[no_mangle]
+#[export_name = "msg_scrollsize"]
 pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
     let msg_scrolled = nvim_get_msg_scrolled();
     let p_ch = nvim_get_p_ch();
@@ -2467,12 +2467,12 @@ pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions for grid and debug state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_do_throttle() -> c_int {
-    let use_grid = rs_msg_use_grid() != 0;
+#[export_name = "msg_do_throttle"]
+pub unsafe extern "C" fn rs_msg_do_throttle() -> bool {
+    let use_grid = rs_msg_use_grid();
     let rdb_flags = nvim_get_rdb_flags();
     let nothrottle = nvim_get_rdb_flag_nothrottle();
-    c_int::from(use_grid && (rdb_flags & nothrottle) == 0)
+    use_grid && (rdb_flags & nothrottle) == 0
 }
 
 // Message redirection accessors
@@ -2488,7 +2488,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions for redirection state.
-#[no_mangle]
+#[export_name = "redirecting"]
 pub unsafe extern "C" fn rs_redirecting() -> c_int {
     c_int::from(
         nvim_get_redir_fd_not_null() != 0
@@ -2512,7 +2512,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions for embedded mode and UI state.
-#[no_mangle]
+#[export_name = "msg_use_printf"]
 pub unsafe extern "C" fn rs_msg_use_printf() -> c_int {
     c_int::from(nvim_get_embedded_mode() == 0 && nvim_get_ui_active() == 0)
 }

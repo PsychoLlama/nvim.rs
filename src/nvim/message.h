@@ -58,6 +58,13 @@ EXTERN int msg_grid_scroll_discount INIT( = 0);
 
 EXTERN int msg_listdo_overwrite INIT( = 0);
 
+// Rust-implemented functions exported under C names via #[export_name]
+bool msg_use_grid(void);
+int msg_scrollsize(void);
+bool msg_do_throttle(void);
+int msg_use_printf(void);
+int redirecting(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong
