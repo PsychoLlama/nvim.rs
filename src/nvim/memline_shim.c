@@ -237,7 +237,7 @@ extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname
 extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
 // Pass 2 Phase 2: Swap file path helper Rust function declarations
-extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
+// rs_make_percent_swname deleted: now exported as make_percent_swname via #[export_name]
 // rs_resolve_symlink deleted: now exported as resolve_symlink via #[export_name]
 // rs_get_file_in_dir deleted: now exported as get_file_in_dir via #[export_name]
 // rs_makeswapname deleted: now exported as makeswapname via #[export_name]
@@ -250,7 +250,7 @@ extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
 extern int rs_ml_add_stack(buf_T *buf);
 // rs_ml_setflags deleted: now exported as ml_setflags via #[export_name]
 // Pass 3 Phase 1: swapfile_dict Rust function declaration
-extern void rs_swapfile_dict(const char *fname, dict_T *d);
+// rs_swapfile_dict deleted: now exported as swapfile_dict via #[export_name]
 // Pass 3 Phase 2: swapfile_info Rust function declaration
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
 // Pass 3 Phase 3: ml_replace_buf_len now exported directly from Rust via #[export_name]
@@ -271,14 +271,14 @@ extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len
 // Pass 5 Phase 2: ml_flush_line now exported directly from Rust via #[export_name]
 // rs_ml_flush_line deleted: now exported as ml_flush_line via #[export_name]
 // Pass 8 Phase 2: ml_preserve Rust function declaration
-extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
+// rs_ml_preserve deleted: now exported as ml_preserve via #[export_name]
 // rs_ml_open_file deleted: now exported as ml_open_file via #[export_name]
 // rs_ml_open_files deleted: now exported as ml_open_files via #[export_name]
 // rs_ml_setname deleted: now exported as ml_setname via #[export_name]
 // rs_ml_open deleted: now exported as ml_open via #[export_name]
 // rs_ml_close_all deleted: now exported as ml_close_all via #[export_name]
 // rs_ml_close_notmod deleted: now exported as ml_close_notmod via #[export_name]
-extern void rs_ml_sync_all(int check_file, int check_char, bool do_fsync);
+// rs_ml_sync_all deleted: now exported as ml_sync_all via #[export_name]
 
 static const char e_ml_get_invalid_lnum_nr[]
   = N_("E315: ml_get: Invalid lnum: %" PRId64);
@@ -321,43 +321,16 @@ extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int 
 
 // recover_names and recov_file_names migrated to Rust (recovery.rs)
 
-/// Append the full path to name with path separators made into percent signs.
-/// (thin wrapper calling Rust)
-char *make_percent_swname(char *dir, char *dir_end, const char *name)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  return rs_make_percent_swname(dir, dir_end, name);
-}
+// make_percent_swname deleted: now exported directly from Rust via #[export_name]
 
-/// For Vimscript "swapinfo()".
-///
-/// @return  information found in swapfile "fname" in dictionary "d".
-void swapfile_dict(const char *fname, dict_T *d)
-{
-  rs_swapfile_dict(fname, d);
-}
+// swapfile_dict deleted: now exported directly from Rust via #[export_name]
 
 // recov_file_names migrated to Rust (recovery.rs)
 // proc_running static, swapfile_info wrapper migrated to Rust (swap.rs Phase 8)
 
-/// sync all memlines (thin wrapper calling Rust)
-void ml_sync_all(int check_file, int check_char, bool do_fsync)
-{
-  rs_ml_sync_all(check_file, check_char, do_fsync);
-}
+// ml_sync_all deleted: now exported directly from Rust via #[export_name]
 
-/// sync one buffer, including negative blocks
-///
-/// after this all the blocks are in the swapfile (thin wrapper calling Rust)
-///
-/// Used for the :preserve command and when the original file has been
-/// changed or deleted.
-///
-/// @param message  if true, the success of preserving is reported.
-void ml_preserve(buf_T *buf, bool message, bool do_fsync)
-{
-  rs_ml_preserve(buf, message, do_fsync);
-}
+// ml_preserve deleted: now exported directly from Rust via #[export_name]
 
 // NOTE: The pointer returned by the ml_get_*() functions only remains valid
 // until the next call!

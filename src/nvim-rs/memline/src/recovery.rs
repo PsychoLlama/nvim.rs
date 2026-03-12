@@ -1307,7 +1307,7 @@ pub unsafe extern "C" fn rs_recover_names(
 /// # Safety
 /// - `fname` must be a valid C string or NULL
 /// - `d` must be a valid dict_T pointer or NULL
-#[no_mangle]
+#[export_name = "swapfile_dict"]
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_swapfile_dict(fname: *const c_char, d: *mut c_void) {
     if fname.is_null() || d.is_null() {

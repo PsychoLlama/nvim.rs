@@ -562,7 +562,7 @@ pub unsafe extern "C" fn rs_ml_timestamp(buf: *mut BufHandle) {
 ///
 /// # Safety
 /// Calls into C via FFI. Must be signal-handler safe.
-#[no_mangle]
+#[export_name = "ml_sync_all"]
 pub unsafe extern "C" fn rs_ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
@@ -878,7 +878,8 @@ const ENOENT: c_int = 2;
 /// - `dir`, `dir_end` must be valid C string pointers into the same allocation
 /// - `name` may be NULL (treated as "")
 /// - Returns allocated string or NULL
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "make_percent_swname"]
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_make_percent_swname(
     dir: *mut c_char,
@@ -2304,7 +2305,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
 ///
 /// # Safety
 /// Calls into C via FFI.
-#[no_mangle]
+#[export_name = "ml_preserve"]
 pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_fsync: bool) {
     let mfp = nvim_buf_get_ml_mfp(buf);
     if mfp.is_null() || nvim_buf_get_ml_mfp_fname(buf).is_null() {

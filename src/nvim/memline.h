@@ -46,6 +46,10 @@ void ml_add_deleted_len(char *ptr, ssize_t len);
 void ml_setmarked(linenr_T lnum);
 void ml_clearmarked(void);
 void ml_setflags(buf_T *buf);
+char *make_percent_swname(char *dir, char *dir_end, const char *name);
+void swapfile_dict(const char *fname, dict_T *d);
+void ml_sync_all(int check_file, int check_char, bool do_fsync);
+void ml_preserve(buf_T *buf, bool message, bool do_fsync);
 
 #include "memline_shim.h.generated.h"
 
