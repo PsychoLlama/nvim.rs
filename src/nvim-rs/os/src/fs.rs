@@ -402,8 +402,8 @@ pub unsafe extern "C" fn rs_os_filesize(path: *const c_char) -> i64 {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_mkdir(path: *const c_char, mode: c_uint) -> c_int {
+#[export_name = "os_mkdir"]
+pub unsafe extern "C" fn rs_os_mkdir(path: *const c_char, mode: i32) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL
     }
@@ -417,7 +417,9 @@ pub unsafe extern "C" fn rs_os_mkdir(path: *const c_char, mode: c_uint) -> c_int
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
-        let result = fs::DirBuilder::new().mode(mode).create(path_str);
+        // mode is a Unix mode; sign-cast to u32 is correct
+        #[allow(clippy::cast_sign_loss)]
+        let result = fs::DirBuilder::new().mode(mode as u32).create(path_str);
         match result {
             Ok(()) => 0,
             Err(e) => io_error_to_uv_error(&e),
@@ -1842,7 +1844,7 @@ pub unsafe extern "C" fn rs_os_realpath(
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_open"]
 pub unsafe extern "C" fn rs_os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL

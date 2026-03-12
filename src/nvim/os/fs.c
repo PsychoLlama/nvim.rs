@@ -64,9 +64,7 @@
 
 // Rust filesystem implementations (still called from C)
 extern int rs_os_nodetype(const char *name);
-extern int rs_os_mkdir(const char *path, unsigned int mode);
 extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
-extern int rs_os_open(const char *path, int flags, int mode);
 
 #ifdef HAVE_XATTR
 static const char e_xattr_erange[]
@@ -337,23 +335,6 @@ end:
   return rv;
 }
 
-/// Opens or creates a file and returns a non-negative integer representing
-/// the lowest-numbered unused file descriptor, for use in subsequent system
-/// calls (read, write, lseek, fcntl, etc.). If the operation fails, a libuv
-/// error code is returned, and no file is created or modified.
-///
-/// @param path Filename
-/// @param flags Bitwise OR of flags defined in <fcntl.h>
-/// @param mode Permissions for the newly-created file (IGNORED if 'flags' is
-///        not `O_CREAT` or `O_TMPFILE`), subject to the current umask
-/// @return file descriptor, or negative error code on failure
-int os_open(const char *path, int flags, int mode)
-{
-  if (path == NULL) {
-    return UV_EINVAL;
-  }
-  return rs_os_open(path, flags, mode);
-}
 
 
 
@@ -565,14 +546,6 @@ void os_free_acl(vim_acl_T aclent)
 
 
 
-/// Make a directory.
-///
-/// @return `0` for success, libuv error code for failure.
-int os_mkdir(const char *path, int32_t mode)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_mkdir(path, (unsigned int)mode);
-}
 
 /// Make a directory, with higher levels when needed
 ///
