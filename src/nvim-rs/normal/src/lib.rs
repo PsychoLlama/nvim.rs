@@ -322,6 +322,14 @@ extern "C" {
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_emsg_no_string_under_cursor();
     fn nvim_emsg_no_ident_under_cursor();
+
+    // pos_T accessors (from memline_shim.c)
+    fn nvim_pos_get_lnum(pos: *const c_void) -> c_int;
+    fn nvim_pos_get_col(pos: *const c_void) -> c_int;
+    fn nvim_pos_get_coladd(pos: *const c_void) -> c_int;
+    fn nvim_pos_set_lnum(pos: *mut c_void, lnum: c_int);
+    fn nvim_pos_set_col(pos: *mut c_void, col: c_int);
+    fn nvim_pos_set_coladd(pos: *mut c_void, coladd: c_int);
 }
 
 // Tag command type (must match tag_defs.h)
@@ -2418,7 +2426,7 @@ unsafe fn invoke_edit_impl(cap: CapHandle, repl: bool, cmd: c_int, startln: bool
 ///
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
-#[unsafe(no_mangle)]
+#[export_name = "invoke_edit"]
 pub unsafe extern "C" fn rs_invoke_edit(cap: CapHandle, repl: bool, cmd: c_int, startln: bool) {
     invoke_edit_impl(cap, repl, cmd, startln);
 }
@@ -6002,6 +6010,25 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner(
         return true;
     }
     false
+}
+
+/// Move position `*pp` back one character for 'selection' == "exclusive".
+///
+/// This is the public C-facing entry point that takes a pos_T pointer directly.
+/// Returns true when backed up to the previous line.
+///
+/// # Safety
+/// `pp` must be a valid non-null pointer to a `pos_T`.
+#[export_name = "unadjust_for_sel_inner"]
+pub unsafe extern "C" fn rs_unadjust_for_sel_inner_pos(pp: *mut c_void) -> bool {
+    let mut lnum = nvim_pos_get_lnum(pp);
+    let mut col = nvim_pos_get_col(pp);
+    let mut coladd = nvim_pos_get_coladd(pp);
+    let backed_up = rs_unadjust_for_sel_inner(&raw mut lnum, &raw mut col, &raw mut coladd);
+    nvim_pos_set_lnum(pp, lnum);
+    nvim_pos_set_col(pp, col);
+    nvim_pos_set_coladd(pp, coladd);
+    backed_up
 }
 
 /// Move position of curwin cursor back one char for 'selection' == "exclusive".

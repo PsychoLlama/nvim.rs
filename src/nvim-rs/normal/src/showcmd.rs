@@ -452,7 +452,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
 ///
 /// # Safety
 /// Reads/writes the shared showcmd_buf C static and calls C helpers.
-#[no_mangle]
+#[export_name = "del_from_showcmd"]
 pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
     if p_sc == 0 {
         return;

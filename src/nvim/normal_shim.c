@@ -514,7 +514,10 @@ extern void rs_n_start_visual_mode(int c);
 extern void rs_set_cursor_for_append_to_line(void);
 extern void rs_set_op_var(int optype);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
-extern void rs_invoke_edit(cmdarg_T *cap, bool repl, int cmd, bool startln);
+// invoke_edit: now exported from Rust via #[export_name = "invoke_edit"]
+extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
+// del_from_showcmd: now exported from Rust via #[export_name = "del_from_showcmd"]
+extern void del_from_showcmd(int len);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -2082,12 +2085,7 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 
-/// Delete 'len' characters from the end of the shown command.
-extern void rs_del_from_showcmd(int len);
-static void del_from_showcmd(int len)
-{
-  rs_del_from_showcmd(len);
-}
+// del_from_showcmd deleted: Rust showcmd.rs exports directly via #[export_name = "del_from_showcmd"].
 
 // push_showcmd deleted: Rust exports under the C name directly via #[export_name = "push_showcmd"].
 // pop_showcmd deleted: Rust exports under the C name directly via #[export_name = "pop_showcmd"].
@@ -2198,27 +2196,9 @@ cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
 
 // do_nv_ident deleted: Rust exports under the C name directly via #[export_name = "do_nv_ident"].
 
-/// Move position "*pp" back one character for 'selection' == "exclusive".
-///
-/// @return  true when backed up to the previous line.
-extern bool rs_unadjust_for_sel_inner(int *lnum, int *col, int *coladd);
-bool unadjust_for_sel_inner(pos_T *pp)
-{
-  int lnum = (int)pp->lnum;
-  int col = (int)pp->col;
-  int coladd = (int)pp->coladd;
-  bool backed_up = rs_unadjust_for_sel_inner(&lnum, &col, &coladd);
-  pp->lnum = (linenr_T)lnum;
-  pp->col = (colnr_T)col;
-  pp->coladd = (colnr_T)coladd;
-  return backed_up;
-}
+// unadjust_for_sel_inner deleted: Rust lib.rs exports directly via #[export_name = "unadjust_for_sel_inner"].
 
-/// invoke_edit thin wrapper.
-static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
-{
-  rs_invoke_edit(cap, repl, cmd, startln);
-}
+// invoke_edit deleted: Rust lib.rs exports directly via #[export_name = "invoke_edit"].
 
 void normal_cmd(oparg_T *oap, bool toplevel)
 {

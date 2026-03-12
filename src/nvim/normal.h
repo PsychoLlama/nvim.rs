@@ -26,5 +26,6 @@ bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_ar
 void end_visual_mode(void);
 void do_check_scrollbind(bool check);
 void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff);
+bool unadjust_for_sel_inner(pos_T *pp);
 
 #include "normal_shim.h.generated.h"
