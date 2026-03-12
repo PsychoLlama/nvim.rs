@@ -123,24 +123,31 @@ extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
 extern int rs_expr_map_locked(void);
-extern const char *rs_skip_colon_white(const char *p, int skipleadingwhite);
 extern int rs_one_letter_cmd(const char *p, int *idx);
 extern int rs_modifier_len(const char *cmd);
-extern void rs_append_command(const char *cmd);
-extern bool rs_parse_bang(const void *eap, char **p);
-extern void rs_get_flags(void *eap);
-extern void rs_correct_range(void *eap);
 extern int rs_is_cmd_ni(int cmdidx);
-extern char *rs_skip_grep_pat(void *eap);
 extern bool rs_cmd_has_expr_args(int cmdidx);
 extern int rs_excmd_get_cmdidx(const char *cmd, size_t len);
 extern char *rs_get_command_name(void *xp, int idx);
-extern void rs_parse_register(void *eap);
-extern int rs_parse_count_ex(void *eap, const char **errormsg, int validate);
 extern int rs_get_bad_opt(const char *p, void *eap);
 extern int rs_getargopt(void *eap);
 extern char *rs_skip_cmd_arg(char *p, int rembs);
 extern int rs_get_tabpage_arg(void *eap);
+// Forward declarations for Phase 2 Rust exports (static functions replaced by Rust)
+bool is_other_file(int fnum, char *ffname);
+void msg_verbose_cmd(linenr_T lnum, char *cmd);
+char *skip_colon_white(const char *p, bool skipleadingwhite);
+void parse_register(exarg_T *eap);
+int parse_count(exarg_T *eap, const char **errormsg, bool validate);
+bool parse_bang(const exarg_T *eap, char **p);
+void shift_cmd_args(exarg_T *eap);
+int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview);
+void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie);
+bool skip_cmd(const exarg_T *eap);
+void append_command(const char *cmd);
+void get_flags(exarg_T *eap);
+void correct_range(exarg_T *eap);
+char *skip_grep_pat(exarg_T *eap);
 // Phase 3 normal-mode Rust exports used by ex_docmd
 extern void rs_set_cursor_for_append_to_line(void);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
@@ -243,17 +250,10 @@ extern int rs_get_vtopline(win_T *wp);
 
 // Phase 1 Rust FFI declarations (commands.rs)
 extern void rs_verify_command(const char *cmd);
-extern int rs_skip_cmd(const exarg_T *eap);
-extern void rs_msg_verbose_cmd(int32_t lnum, const char *cmd);
-extern int rs_is_other_file(int fnum, const char *ffname);
 extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
-extern void rs_shift_cmd_args(exarg_T *eap);
-extern int rs_execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview);
-extern void rs_profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline,
-                           void *cookie);
 extern bool rs_changedir_func(char *new_dir, int scope);
 
 // Helper function to get first character of command name for Rust FFI
@@ -308,14 +308,6 @@ static void restore_dbg_stuff(struct dbg_stuff *dsp)
   need_rethrow = dsp->need_rethrow;
   check_cstack = dsp->check_cstack;
   current_exception = dsp->current_exception;
-}
-
-/// Check if ffname differs from fnum.
-/// fnum is a buffer number. 0 == current buffer, 1-or-more must be a valid buffer ID.
-/// ffname is a full path to where a buffer lives on-disk or would live on-disk.
-static bool is_other_file(int fnum, char *ffname)
-{
-  return (bool)rs_is_other_file(fnum, ffname);
 }
 
 /// Repeatedly get commands for Ex mode, until the ":vi" command is given.
@@ -387,15 +379,6 @@ void do_exmode(void)
   update_screen();
   need_wait_return = false;
   msg_scroll = save_msg_scroll;
-}
-
-/// Print the executed command for when 'verbose' is set.
-///
-/// @param lnum  if 0, only print the command.
-static void msg_verbose_cmd(linenr_T lnum, char *cmd)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_msg_verbose_cmd((int32_t)lnum, cmd);
 }
 
 static int cmdline_call_depth = 0;  ///< recursiveness
@@ -1220,25 +1203,6 @@ static int current_tab_nr(tabpage_T *tab)
 
 // get_wincmd_addr_type: now in Rust (rs_set_cmd_addr_type calls it internally)
 
-/// Skip colons and trailing whitespace, returning a pointer to the first
-/// non-colon, non-whitespace character.
-//
-/// @param skipleadingwhite Skip leading whitespace too
-static char *skip_colon_white(const char *p, bool skipleadingwhite)
-{
-  return (char *)rs_skip_colon_white(p, skipleadingwhite ? 1 : 0);
-}
-
-static void parse_register(exarg_T *eap)
-{
-  rs_parse_register(eap);
-}
-
-static int parse_count(exarg_T *eap, const char **errormsg, bool validate)
-{
-  return rs_parse_count_ex(eap, errormsg, validate ? 1 : 0);
-}
-
 /// Check if command is not implemented
 bool is_cmd_ni(cmdidx_T cmdidx)
 {
@@ -1259,37 +1223,10 @@ static char *find_excmd_after_range(exarg_T *eap)
   return p;
 }
 
-// Set the forceit flag based on the presence of '!' after the command.
-static bool parse_bang(const exarg_T *eap, char **p)
-{
-  return rs_parse_bang(eap, p);
-}
-
 /// Check if command expects expression arguments that need special parsing
 bool cmd_has_expr_args(cmdidx_T cmdidx)
 {
   return rs_cmd_has_expr_args((int)cmdidx);
-}
-
-// Shift Ex-command arguments to the right.
-static void shift_cmd_args(exarg_T *eap)
-{
-  rs_shift_cmd_args(eap);
-}
-
-static int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview)
-{
-  return rs_execute_cmd0(retv, eap, errormsg, preview);
-}
-
-static void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie)
-{
-  rs_profile_cmd(eap, cstack, fgetline, cookie);
-}
-
-static bool skip_cmd(const exarg_T *eap)
-{
-  return (bool)rs_skip_cmd(eap);
 }
 
 /// Execute one Ex command.
@@ -1897,14 +1834,6 @@ void undo_cmdmod(cmdmod_T *cmod)
 /// Parse the address range, if any, in "eap".
 /// May set the last search pattern, unless "silent" is true.
 ///
-/// Append "cmd" to the error message in IObuff.
-/// Takes care of limiting the length and handling 0xa0, which would be
-/// invisible otherwise.
-static void append_command(const char *cmd)
-{
-  rs_append_command(cmd);
-}
-
 /// Return true and set "*idx" if "p" points to a one letter command.
 /// - The 'k' command can directly be followed by any character
 ///          but :keepa[lt] is another command, as are :keepj[umps],
@@ -1939,12 +1868,6 @@ uint32_t excmd_get_argt(cmdidx_T idx)
   return cmdnames[(int)idx].cmd_argt;
 }
 
-/// Get flags from an Ex command argument.
-static void get_flags(exarg_T *eap)
-{
-  rs_get_flags(eap);
-}
-
 /// Stub function for command which is Not Implemented. NI!
 void ex_ni(exarg_T *eap)
 {
@@ -1966,18 +1889,6 @@ static void ex_script_ni(exarg_T *eap)
 }
 
 /// Correct the range for zero line number, if required.
-static void correct_range(exarg_T *eap)
-{
-  rs_correct_range(eap);
-}
-
-/// For a ":vimgrep" or ":vimgrepadd" command return a pointer past the
-/// pattern.  Otherwise return eap->arg.
-static char *skip_grep_pat(exarg_T *eap)
-{
-  return rs_skip_grep_pat(eap);
-}
-
 /// For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
 /// in the command line, so that things like % get expanded.
 char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)

@@ -328,7 +328,7 @@ pub fn is_escaped(s: &[u8], pos: usize) -> bool {
 ///
 /// `eap` must be a valid ExArgHandle.
 /// `p` must point to a valid `*mut c_char` pointer.
-#[no_mangle]
+#[export_name = "parse_bang"]
 pub unsafe extern "C" fn rs_parse_bang(eap: ExArgHandle, p: *mut *mut c_char) -> bool {
     if eap.is_null() || p.is_null() {
         return false;
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn rs_parse_bang(eap: ExArgHandle, p: *mut *mut c_char) ->
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "skip_grep_pat"]
 pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
     if eap.is_null() {
         return ptr::null_mut();
@@ -447,7 +447,7 @@ pub unsafe extern "C" fn rs_set_cmd_count(eap: ExArgHandle, count: c_int, valida
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "parse_register"]
 pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -518,7 +518,7 @@ extern "C" {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "parse_count"]
 pub unsafe extern "C" fn rs_parse_count_ex(
     eap: ExArgHandle,
     errormsg: *mut *const c_char,

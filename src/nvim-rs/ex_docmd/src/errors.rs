@@ -322,7 +322,7 @@ pub unsafe extern "C" fn rs_has_trailing_chars(arg: *const c_char) -> c_int {
 ///
 /// `cmd` must be a valid null-terminated C string.
 /// Accesses global `IObuff` via C accessors.
-#[no_mangle]
+#[export_name = "append_command"]
 pub unsafe extern "C" fn rs_append_command(cmd: *const c_char) {
     if cmd.is_null() {
         return;

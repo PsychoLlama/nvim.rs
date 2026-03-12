@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_verify_command(cmd: *const c_char) {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "skip_cmd"]
 pub unsafe extern "C" fn rs_skip_cmd(eap: ExArgHandle) -> c_int {
     if eap.is_null() {
         return 0;
@@ -587,7 +587,7 @@ pub unsafe extern "C" fn rs_skip_cmd(eap: ExArgHandle) -> c_int {
 /// # Safety
 ///
 /// `cmd` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "msg_verbose_cmd"]
 pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
     let no_wait = nvim_get_no_wait_return();
     nvim_set_no_wait_return(no_wait + 1);
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
 /// # Safety
 ///
 /// `ffname` may be NULL or a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "is_other_file"]
 pub unsafe extern "C" fn rs_is_other_file(fnum: c_int, ffname: *const c_char) -> c_int {
     if fnum != 0 {
         if fnum == nvim_docmd_get_curbuf_fnum() {
@@ -1201,6 +1201,7 @@ const EX_NOSPC: u32 = 0x010;
 
 extern "C" {
     // expand_filename helpers
+    #[link_name = "skip_grep_pat"]
     fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char;
     fn nvim_path_has_wildcard(p: *const c_char) -> bool;
     fn nvim_is_expand_char(c: c_int) -> bool;

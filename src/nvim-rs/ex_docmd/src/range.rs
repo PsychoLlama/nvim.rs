@@ -586,7 +586,7 @@ pub unsafe extern "C" fn rs_range_parse_state_has_special(state: *const RangePar
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "correct_range"]
 pub unsafe extern "C" fn rs_correct_range(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -616,7 +616,7 @@ pub unsafe extern "C" fn rs_correct_range(eap: ExArgHandle) {
 /// # Safety
 ///
 /// `p` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "skip_colon_white"]
 pub unsafe extern "C" fn rs_skip_colon_white(
     p: *const c_char,
     skipleadingwhite: c_int,

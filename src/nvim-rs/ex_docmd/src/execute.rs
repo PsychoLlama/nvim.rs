@@ -433,7 +433,7 @@ pub extern "C" fn rs_valid_line_range(line1: i64, line2: i64) -> c_int {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle with args != NULL and argc > 0.
-#[no_mangle]
+#[export_name = "shift_cmd_args"]
 pub unsafe extern "C" fn rs_shift_cmd_args(eap: ExArgHandle) {
     let old_argc = nvim_eap_get_argc(eap);
     debug_assert!(old_argc > 0, "rs_shift_cmd_args called with argc == 0");
@@ -500,7 +500,7 @@ const CMD_ENDWHILE_P2: c_int = 147;
 /// # Safety
 ///
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "profile_cmd"]
 pub unsafe extern "C" fn rs_profile_cmd(
     eap: ExArgHandle,
     cstack: CstackHandle,
@@ -583,7 +583,7 @@ const EX_WHOLEFOLD_P2: u32 = 0x040;
 /// # Safety
 ///
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "execute_cmd0"]
 pub unsafe extern "C" fn rs_execute_cmd0(
     retv: *mut c_int,
     eap: ExArgHandle,
@@ -1029,7 +1029,7 @@ unsafe fn goto_end(
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "get_flags"]
 pub unsafe extern "C" fn rs_get_flags(eap: ExArgHandle) {
     if eap.is_null() {
         return;
