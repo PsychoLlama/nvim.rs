@@ -164,7 +164,8 @@ const SHM_ALL_ABBREVIATIONS: &[u8] = b"rmlw\0";
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "shortmess"]
 pub unsafe extern "C" fn rs_shortmess(x: c_int) -> c_int {
     let p_shm = nvim_option_get_shm();
     if p_shm.is_null() {

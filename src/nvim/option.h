@@ -116,6 +116,9 @@ bool option_has_type(OptIndex opt_idx, OptValType type);
 bool option_has_scope(OptIndex opt_idx, OptScope scope);
 vimoption_T *get_option(OptIndex opt_idx);
 bool option_was_set(OptIndex opt_idx);
+sctx_T *get_option_sctx(OptIndex opt_idx);
+bool shortmess(int x);
+bool can_bs(int what);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif

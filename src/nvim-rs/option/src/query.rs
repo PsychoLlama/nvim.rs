@@ -101,7 +101,8 @@ const BS_NOSTOP: c_int = b'p' as c_int;
 /// Check if backspacing over something is allowed.
 ///
 /// `what` is one of BS_INDENT, BS_EOL, BS_START, or BS_NOSTOP.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "can_bs"]
 pub unsafe extern "C" fn rs_can_bs(what: c_int) -> c_int {
     // BS_START is disallowed in prompt buffers
     if what == BS_START && nvim_curbuf_is_prompt() != 0 {

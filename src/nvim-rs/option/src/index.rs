@@ -412,7 +412,8 @@ pub unsafe extern "C" fn rs_reset_option_was_set(opt_idx: OptIndex) {
 }
 
 /// Get pointer to option's script context.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_option_sctx"]
 pub unsafe extern "C" fn rs_get_option_sctx(opt_idx: OptIndex) -> *mut std::ffi::c_void {
     nvim_get_option_script_ctx_ptr(opt_idx)
 }

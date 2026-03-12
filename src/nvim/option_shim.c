@@ -147,7 +147,7 @@ extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
 // rs_option_was_set deleted: now exported as option_was_set via #[export_name]
 extern void rs_reset_option_was_set(int opt_idx);
-extern void *rs_get_option_sctx(int opt_idx);
+// rs_get_option_sctx deleted: now exported as get_option_sctx via #[export_name]
 
 // Rust default value management functions (option pass 8 phase 2)
 extern void rs_alloc_options_default(void);
@@ -164,7 +164,7 @@ extern const char *rs_validate_option_value(int opt_idx, OptVal *newval, int opt
 // Rust parsing helpers and query functions (option pass 7 phase 1)
 extern int rs_get_op(const char *arg);
 extern int rs_get_option_prefix(char **argp);
-extern int rs_shortmess(int x);
+// rs_shortmess deleted: now exported as shortmess via #[export_name]
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
 // rs_find_option_len deleted: now exported as find_option_len via #[export_name]
@@ -184,7 +184,7 @@ extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, in
 // rs_do_set deleted: now exported as do_set via #[export_name]
 
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
-extern int rs_can_bs(int what);
+// rs_can_bs deleted: now exported as can_bs via #[export_name]
 // rs_get_equalprg deleted: now exported as get_equalprg via #[export_name]
 // rs_get_findfunc deleted: now exported as get_findfunc via #[export_name]
 // rs_get_bkc_flags deleted: now exported as get_bkc_flags via #[export_name]
@@ -1699,12 +1699,7 @@ static void didset_options2(void)
 ///
 /// @return  whether the option value is valid.
 
-/// Get the script context of global option at index opt_idx.
-sctx_T *get_option_sctx(OptIndex opt_idx)
-{
-  assert(opt_idx != kOptInvalid);
-  return rs_get_option_sctx(opt_idx);
-}
+// get_option_sctx deleted: now exported directly from Rust via #[export_name]
 
 // set_option_sctx deleted: now exported directly from Rust via #[export_name]
 
@@ -2345,12 +2340,7 @@ static int wc_use_keyname(const void *varp, OptInt *wcp)
   return rs_wc_use_keyname(varp, wcp);
 }
 
-/// @returns true if "x" is present in 'shortmess' option, or
-/// 'shortmess' contains 'a' and "x" is present in SHM_ALL_ABBREVIATIONS.
-bool shortmess(int x)
-{
-  return rs_shortmess(x) != 0;
-}
+// shortmess deleted: now exported directly from Rust via #[export_name]
 
 // vimrc_found deleted: now exported directly from Rust via #[export_name]
 
@@ -2418,12 +2408,7 @@ static void didset_options_sctx(int opt_flags, int *buf)
   }
 }
 
-/// Check if backspacing over something is allowed.
-/// @param  what  BS_INDENT, BS_EOL, BS_START, or BS_NOSTOP
-bool can_bs(int what)
-{
-  return rs_can_bs(what) != 0;
-}
+// can_bs deleted: now exported directly from Rust via #[export_name]
 
 // get_bkc_flags deleted: now exported directly from Rust via #[export_name]
 // get_flp_value deleted: now exported directly from Rust via #[export_name]
