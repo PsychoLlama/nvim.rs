@@ -782,6 +782,12 @@ int os_system(char **argv, const char *input, size_t len, char **output,
   return do_os_system(argv, input, len, output, nread, true, false);
 }
 
+// Rust implementations (Phase 4 migration)
+extern size_t system_data_cb(RStream *stream, const char *buf, size_t count, void *data, bool eof);
+extern size_t out_data_cb(RStream *stream, const char *ptr, size_t count, void *data, bool eof);
+extern bool out_data_decide_throttle(size_t size);
+extern void out_data_ring(const char *output, size_t size);
+
 static int do_os_system(char **argv, const char *input, size_t len, char **output, size_t *nread,
                         bool silent, bool forward_output)
 {
@@ -898,179 +904,6 @@ static int do_os_system(char **argv, const char *input, size_t len, char **outpu
   return exitcode;
 }
 
-static size_t system_data_cb(RStream *stream, const char *buf, size_t count, void *data, bool eof)
-{
-  StringBuilder *dbuf = data;
-  kv_concat_len(*dbuf, buf, count);
-  return count;
-}
-
-/// Tracks output received for the current executing shell command, and displays
-/// a pulsing "..." when output should be skipped. Tracking depends on the
-/// synchronous/blocking nature of ":!".
-///
-/// Purpose:
-///   1. CTRL-C is more responsive. #1234 #5396
-///   2. Improves performance of :! (UI, esp. TUI, is the bottleneck).
-///   3. Avoids OOM during long-running, spammy :!.
-///
-/// Vim does not need this hack because:
-///   1. :! in terminal-Vim runs in cooked mode, so CTRL-C is caught by the
-///      terminal and raises SIGINT out-of-band.
-///   2. :! in terminal-Vim uses a tty (Nvim uses pipes), so commands
-///      (e.g. `git grep`) may page themselves.
-///
-/// @param size Length of data, used with internal state to decide whether
-///             output should be skipped. size=0 resets the internal state and
-///             returns the previous decision.
-///
-/// @returns true if output should be skipped and pulse was displayed.
-///          Returns the previous decision if size=0.
-static bool out_data_decide_throttle(size_t size)
-{
-  static uint64_t started = 0;  // Start time of the current throttle.
-  static size_t received = 0;  // Bytes observed since last throttle.
-  static size_t visit = 0;  // "Pulse" count of the current throttle.
-  static char pulse_msg[] = { ' ', ' ', ' ', NUL };
-
-  if (!size) {
-    bool previous_decision = (visit > 0);
-    started = received = visit = 0;
-    return previous_decision;
-  }
-
-  received += size;
-  if (received < OUT_DATA_THRESHOLD
-      // Display at least the first chunk of output even if it is big.
-      || (!started && received < size + 1000)) {
-    return false;
-  } else if (!visit) {
-    started = os_hrtime();
-  } else {
-    uint64_t since = os_hrtime() - started;
-    if (since < (visit * (NS_1_SECOND / 10))) {
-      return true;
-    }
-    if (since > (3 * NS_1_SECOND)) {
-      received = visit = 0;
-      return false;
-    }
-  }
-
-  visit++;
-  // Pulse "..." at the bottom of the screen.
-  size_t tick = visit % 4;
-  pulse_msg[0] = (tick > 0) ? '.' : ' ';
-  pulse_msg[1] = (tick > 1) ? '.' : ' ';
-  pulse_msg[2] = (tick > 2) ? '.' : ' ';
-  if (visit == 1) {
-    msg_puts("...\n");
-  }
-  msg_putchar('\r');  // put cursor at start of line
-  msg_puts(pulse_msg);
-  msg_putchar('\r');
-  ui_flush();
-  return true;
-}
-
-/// Saves output in a quasi-ringbuffer. Used to ensure the last ~page of
-/// output for a shell-command is always displayed.
-///
-/// Init mode: Resets the internal state.
-///   output = NULL
-///   size   = 0
-/// Print mode: Displays the current saved data.
-///   output = NULL
-///   size   = SIZE_MAX
-///
-/// @param  output  Data to save, or NULL to invoke a special mode.
-/// @param  size    Length of `output`.
-static void out_data_ring(const char *output, size_t size)
-{
-#define MAX_CHUNK_SIZE (OUT_DATA_THRESHOLD / 2)
-  static char last_skipped[MAX_CHUNK_SIZE];  // Saved output.
-  static size_t last_skipped_len = 0;
-
-  assert(output != NULL || (size == 0 || size == SIZE_MAX));
-
-  if (output == NULL && size == 0) {          // Init mode
-    last_skipped_len = 0;
-    return;
-  }
-
-  if (output == NULL && size == SIZE_MAX) {   // Print mode
-    out_data_append_to_screen(last_skipped, &last_skipped_len, STDOUT_FILENO, true);
-    return;
-  }
-
-  // This is basically a ring-buffer...
-  if (size >= MAX_CHUNK_SIZE) {               // Save mode
-    size_t start = size - MAX_CHUNK_SIZE;
-    memcpy(last_skipped, output + start, MAX_CHUNK_SIZE);
-    last_skipped_len = MAX_CHUNK_SIZE;
-  } else if (size > 0) {
-    // Length of the old data that can be kept.
-    size_t keep_len = MIN(last_skipped_len, MAX_CHUNK_SIZE - size);
-    size_t keep_start = last_skipped_len - keep_len;
-    // Shift the kept part of the old data to the start.
-    if (keep_start) {
-      memmove(last_skipped, last_skipped + keep_start, keep_len);
-    }
-    // Copy the entire new data to the remaining space.
-    memcpy(last_skipped + keep_len, output, size);
-    last_skipped_len = keep_len + size;
-  }
-}
-
-/// Continue to append data to last screen line.
-///
-/// @param output       Data to append to screen lines.
-/// @param count        Size of data.
-/// @param eof          If true, there will be no more data output.
-static void out_data_append_to_screen(const char *output, size_t *count, int fd, bool eof)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *p = output;
-  const char *end = output + *count;
-  msg_ext_set_kind(fd == STDERR_FILENO ? "shell_err" : "shell_out");
-  while (p < end) {
-    if (*p == '\n' || *p == '\r' || *p == TAB || *p == BELL) {
-      msg_putchar_hl((uint8_t)(*p), fd == STDERR_FILENO ? HLF_SE : HLF_SO);
-      p++;
-    } else {
-      // Note: this is not 100% precise:
-      // 1. we don't check if received continuation bytes are already invalid
-      //    and we thus do some buffering that could be avoided
-      // 2. we don't compose chars over buffer boundaries, even if we see an
-      //    incomplete UTF-8 sequence that could be composing with the last
-      //    complete sequence.
-      // This will be corrected when we switch to vterm based implementation
-      int i = *p ? utfc_ptr2len_len(p, (int)(end - p)) : 1;
-      if (!eof && i == 1 && utf8len_tab_zero[*(uint8_t *)p] > (end - p)) {
-        *count = (size_t)(p - output);
-        goto end;
-      }
-
-      msg_outtrans_len(p, i, fd == STDERR_FILENO ? HLF_SE : HLF_SO, false);
-      p += i;
-    }
-  }
-
-end:
-  ui_flush();
-}
-
-static size_t out_data_cb(RStream *stream, const char *ptr, size_t count, void *data, bool eof)
-{
-  if (count > 0 && out_data_decide_throttle(count)) {  // Skip output above a threshold.
-    // Save the skipped output. If it is the final chunk, we display it later.
-    out_data_ring(ptr, count);
-  } else if (count > 0) {
-    out_data_append_to_screen(ptr, &count, stream->s.fd, eof);
-  }
-
-  return count;
-}
 
 
 /// To remain compatible with the old implementation (which forked a process
