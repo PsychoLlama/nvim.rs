@@ -900,8 +900,7 @@ OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - optio
 // Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 
-// Get is_option_hidden as an int (for Rust FFI) - now delegates to rs_option_is_hidden
-int nvim_opt_is_hidden(OptIndex opt_idx) { return rs_option_is_hidden(opt_idx); }
+// nvim_opt_is_hidden deleted: Rust callers now use #[link_name = "rs_option_is_hidden"] directly.
 
 // =============================================================================
 // Phase 8 metadata query accessors (Phase 1)
@@ -2021,10 +2020,8 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
   return rs_option_scope_idx(opt_idx, (int)scope);
 }
 
-// Non-static wrappers for Rust FFI (Rust callers use these until fully migrated)
-int nvim_option_is_global_local(OptIndex opt_idx) { return rs_option_is_global_local(opt_idx); }
-int nvim_option_is_global_only(OptIndex opt_idx) { return rs_option_is_global_only(opt_idx); }
-int nvim_option_is_window_local(OptIndex opt_idx) { return rs_option_is_window_local(opt_idx); }
+// nvim_option_is_global_local/global_only/window_local deleted:
+// Rust callers now use #[link_name] to call the rs_ functions directly.
 
 /// Get option flags.
 ///

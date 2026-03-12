@@ -63,6 +63,7 @@ extern "C" {
 
     // C shim functions (thin wrappers that call Rust, needed for legacy callers)
     fn option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int;
+    #[link_name = "rs_option_is_window_local"]
     fn nvim_option_is_window_local(opt_idx: OptIndex) -> c_int;
 
     // Field accessors for vimoption_T (Phase 8 metadata)

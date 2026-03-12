@@ -516,6 +516,7 @@ extern "C" {
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
     fn nvim_option_get_shortname(opt_idx: c_int) -> *const c_char;
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
+    #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
     fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;

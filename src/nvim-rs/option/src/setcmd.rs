@@ -1197,8 +1197,10 @@ extern "C" {
     fn nvim_get_varp_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
+    #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
+    #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);

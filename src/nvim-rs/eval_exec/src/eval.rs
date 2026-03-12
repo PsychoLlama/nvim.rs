@@ -3584,6 +3584,7 @@ extern "C" {
         opt_flagsp: *mut c_int,
     ) -> *const c_char;
     // Check if option is hidden (returns non-zero if hidden)
+    #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
     // Get option value as typval (get_option_value + optval_as_tv)
     fn nvim_get_option_value_as_tv(opt_idx: c_int, opt_flags: c_int, rettv: TypevalHandle);

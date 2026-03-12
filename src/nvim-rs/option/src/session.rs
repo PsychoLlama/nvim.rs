@@ -27,7 +27,9 @@ use crate::{OptFlags, OptInt, OptValType};
 extern "C" {
     // makeset - Phase 2
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
+    #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
+    #[link_name = "rs_option_is_window_local"]
     fn nvim_option_is_window_local(opt_idx: c_int) -> c_int;
     fn nvim_call_put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
     fn nvim_call_makeset_if_line(
@@ -45,7 +47,9 @@ extern "C" {
         -> crate::storage::OptVal;
     fn nvim_get_option_unset_value(opt_idx: c_int) -> crate::storage::OptVal;
     fn nvim_option_get_def_val(opt_idx: c_int) -> crate::storage::OptVal;
+    #[link_name = "rs_option_is_global_local"]
     fn nvim_option_is_global_local(opt_idx: c_int) -> c_int;
+    #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn rs_optval_equal(a: crate::storage::OptVal, b: crate::storage::OptVal) -> c_int;

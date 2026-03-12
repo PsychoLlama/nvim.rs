@@ -47,15 +47,19 @@ extern "C" {
     fn nvim_get_sizeof_winopt_T() -> c_int;
 
     /// Check if option is hidden (immutable, var points to def_val)
+    #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: OptIndex) -> c_int;
 
     /// Check if option is global-only (no local value)
+    #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: OptIndex) -> c_int;
 
     /// Check if option is global-local (has both global and local)
+    #[link_name = "rs_option_is_global_local"]
     fn nvim_option_is_global_local(opt_idx: OptIndex) -> c_int;
 
     /// Check if option is window-local
+    #[link_name = "rs_option_is_window_local"]
     fn nvim_option_is_window_local(opt_idx: OptIndex) -> c_int;
 
     /// Fill offset table for buf_T option fields (kOptCount entries)

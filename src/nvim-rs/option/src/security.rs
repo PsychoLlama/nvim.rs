@@ -69,6 +69,7 @@ extern "C" {
     fn nvim_option_set_script_ctx(opt_idx: OptIndex, sctx: ScriptContext);
     fn option_has_scope(opt_idx: OptIndex, scope: c_int) -> c_int;
     fn option_scope_idx(opt_idx: OptIndex, scope: c_int) -> c_int;
+    #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: OptIndex) -> c_int;
 }
 
