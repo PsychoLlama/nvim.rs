@@ -117,8 +117,8 @@ pub unsafe extern "C" fn rs_check_winopt(wop: WinoptHandle) {
 ///
 /// # Safety
 /// `wp` must be a valid non-null win_T pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: c_int) {
+#[export_name = "didset_window_options"]
+pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: bool) {
     // Set w_leftcol or w_skipcol to zero based on 'wrap'
     if nvim_win_get_p_wrap(wp) != 0 {
         nvim_win_set_leftcol(wp, 0);
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: c
     nvim_call_set_chars_option_lcs(wp);
     crate::callbacks::winhl::rs_parse_winhl_opt(std::ptr::null(), wp); // sets w_hl_needs_update also for w_p_winbl
     nvim_call_check_blending(wp);
-    nvim_call_set_winbar_win(wp, valid_cursor);
+    nvim_call_set_winbar_win(wp, c_int::from(valid_cursor));
     nvim_call_check_signcolumn(wp);
     nvim_win_update_grid_blending(wp);
 }

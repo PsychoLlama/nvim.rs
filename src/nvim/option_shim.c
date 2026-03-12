@@ -2209,7 +2209,7 @@ static char *copy_option_val(const char *val)
 // rs_copy_winopt deleted: now exported as copy_winopt via #[export_name]
 // rs_clear_winopt deleted: now exported as clear_winopt via #[export_name]
 extern void rs_check_winopt(winopt_T *wop);
-extern void rs_didset_window_options(win_T *wp, int valid_cursor);
+// rs_didset_window_options deleted: now exported as didset_window_options via #[export_name]
 
 // copy_winopt deleted: now exported directly from Rust via #[export_name]
 
@@ -2228,10 +2228,7 @@ static void check_winopt(winopt_T *wop)
 
 // clear_winopt deleted: now exported directly from Rust via #[export_name]
 
-void didset_window_options(win_T *wp, bool valid_cursor)
-{
-  rs_didset_window_options(wp, (int)valid_cursor);
-}
+// didset_window_options deleted: Rust exports under the C name directly via #[export_name].
 
 // reset_modifiable deleted: now exported directly from Rust via #[export_name]
 
