@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <uv.h>
@@ -20,6 +21,19 @@ extern char *default_lib_dir;
 #include "os/stdpaths.h.generated.h"
 #include "os/users.h.generated.h"
 // IWYU pragma: end_exports
+
+// Rust-provided replacements for env.c functions (Phase 1 migration).
+char *os_getenv(const char *name);
+bool os_env_exists(const char *name, bool nonempty);
+int os_setenv(const char *name, const char *value, int overwrite);
+int os_unsetenv(const char *name);
+int64_t os_get_pid(void);
+void os_get_hostname(char *hostname, size_t size);
+size_t os_get_fullenv_size(void);
+void os_copy_fullenv(char **env, size_t env_size);
+void os_free_fullenv(char **env);
+char *os_getenvname_at_index(size_t index);
+void os_hint_priority(void);
 
 #define ENV_LOGFILE "NVIM_LOG_FILE"
 #define ENV_NVIM "NVIM"
