@@ -49,6 +49,7 @@ extern "C" {
     fn nvim_set_first_tabpage(tp: TabpageHandle);
     fn nvim_tabpage_set_next(tp: TabpageHandle, next: TabpageHandle);
     fn rs_win_new_screen_rows();
+    #[link_name = "rs_can_close_floating_windows_tp"]
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
     fn nvim_win_set_buffer_raw(wp: WinHandle, buf: BufHandle);
     fn nvim_buf_inc_nwindows(buf: BufHandle);

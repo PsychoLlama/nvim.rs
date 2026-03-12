@@ -61,6 +61,7 @@ extern "C" {
 
     // --- Phase 2 wrappers (reused) ---
     fn nvim_emsg_id(id: c_int);
+    #[link_name = "rs_can_close_floating_windows_tp"]
     fn nvim_can_close_floating_windows(tp: TabpageHandle) -> c_int;
 
     // --- Phase 3 wrappers ---

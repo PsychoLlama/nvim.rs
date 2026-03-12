@@ -77,6 +77,7 @@ extern "C" {
     // Diff functions
     #[link_name = "rs_diff_internal"]
     fn nvim_diff_internal() -> bool;
+    #[link_name = "rs_diff_lnum_win"]
     fn nvim_diff_lnum_win(lnum: LinenrT, win: WinHandle) -> LinenrT;
 
     // Redraw functions

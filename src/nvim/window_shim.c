@@ -186,7 +186,7 @@ extern int rs_goto_tabpage_lastused(void);
 extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 
 // can_close_floating_windows, maximum_wincount, make_windows
-extern int rs_can_close_floating_windows_tp(tabpage_T *tp);
+// rs_can_close_floating_windows_tp: removed from C declarations (Rust uses #[link_name] directly)
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
@@ -1381,7 +1381,7 @@ void nvim_check_cursor_win_wrapper(win_T *wp) { check_cursor(wp); }
 frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp->w_frame->fr_parent : NULL; }
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
-int nvim_can_close_floating_windows(tabpage_T *tp) { return rs_can_close_floating_windows_tp(tp) != 0 ? 1 : 0; }
+// nvim_can_close_floating_windows deleted: Rust callers use #[link_name = "rs_can_close_floating_windows_tp"].
 int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }

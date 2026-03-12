@@ -409,6 +409,7 @@ extern "C" {
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Wrapper for diff_lnum_win.
+    #[link_name = "rs_diff_lnum_win"]
     fn nvim_diff_lnum_win(lnum: LineNr, wp: WinHandle) -> LineNr;
 
     /// Set the w_p_fdl (foldlevel) field in a window.
