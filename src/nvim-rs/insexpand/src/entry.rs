@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_ml_get_curline() -> *const c_char;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
-    fn nvim_set_compl_pending(val: c_int);
+    // (compl_pending moved to Rust static in state.rs)
     fn nvim_get_p_ic() -> c_int;
 }
 
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         nvim_restore_did_ai(c_int::from(save_did_ai));
         return FAIL;
     }
-    nvim_set_compl_pending(0);
+    crate::state::COMPL_PENDING = 0;
     nvim_set_compl_lnum_to_cursor();
     // line and curs_col are obtained via accessors
     let line = nvim_ml_get_curline().cast_mut();

@@ -430,7 +430,7 @@ static bool compl_was_interrupted = false;
 // stop looking for matches.
 static bool compl_interrupted = false;
 
-static bool compl_restarting = false;   ///< don't insert match
+// compl_restarting: moved to Rust static COMPL_RESTARTING in state.rs (Phase 2)
 
 /// When the first completion is done "compl_started" is set.  When it's
 /// false the word to be completed must be located.
@@ -444,7 +444,7 @@ static String compl_pattern = STRING_INIT;      ///< search pattern for matching
 static String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt'
 static Direction compl_direction = FORWARD;
 static Direction compl_shows_dir = FORWARD;
-static int compl_pending = 0;           ///< > 1 for postponed CTRL-N
+// compl_pending: moved to Rust static COMPL_PENDING in state.rs (Phase 2)
 static pos_T compl_startpos;
 /// Length in bytes of the text being completed (this is deleted to be replaced
 /// by the match.)
@@ -475,7 +475,7 @@ static bool compl_autocomplete = false;        ///< whether autocompletion is ac
 static uint64_t compl_timeout_ms = COMPL_INITIAL_TIMEOUT_MS;
 static bool compl_time_slice_expired = false;  ///< time budget exceeded for current source
 static bool compl_from_nonkeyword = false;     ///< completion started from non-keyword
-static bool compl_hi_on_autocompl_longest = false;  ///< apply "PreInsert" highlight
+// compl_hi_on_autocompl_longest: moved to Rust COMPL_HI_ON_AUTOCOMPL_LONGEST in state.rs (Phase 2)
 
 // Halve the current completion timeout, simulating exponential decay.
 #define COMPL_MIN_TIMEOUT_MS    5
@@ -2067,7 +2067,7 @@ int nvim_get_compl_started(void) { return compl_started; }
 unsigned nvim_get_cot_flags_global(void) { return cot_flags; }
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 int nvim_get_compl_autocomplete(void) { return compl_autocomplete ? 1 : 0; }
-int nvim_get_compl_restarting(void) { return compl_restarting ? 1 : 0; }
+// nvim_get_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_get_compl_from_nonkeyword(void) { return compl_from_nonkeyword ? 1 : 0; }
 int nvim_get_compl_direction(void) { return compl_direction; }
 int nvim_get_compl_shows_dir(void) { return compl_shows_dir; }
@@ -2078,7 +2078,7 @@ int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_compl_lnum(void) { return (int)compl_lnum; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
-int nvim_get_compl_hi_on_autocompl_longest(void) { return compl_hi_on_autocompl_longest ? 1 : 0; }
+// nvim_get_compl_hi_on_autocompl_longest: deleted (Phase 2, moved to Rust)
 int nvim_syn_name2attr(const char *name) { return syn_name2attr(name); }
 const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
 size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
@@ -2239,7 +2239,7 @@ void nvim_ins_compl_insert_bytes_len(const char *cp_str, int compl_len, int ins_
 void nvim_cursor_col_sub(int n) { curwin->w_cursor.col -= (colnr_T)n; }
 int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
-void nvim_set_compl_hi_on_longest(int val) { compl_hi_on_autocompl_longest = val != 0; }
+// nvim_set_compl_hi_on_longest: deleted (Phase 2, COMPL_HI_ON_AUTOCOMPL_LONGEST moved to Rust)
 
 // Compound accessors for Phase 4 (ins_compl_restart, ins_ctrl_x, check_compl_option,
 // ins_compl_addleader, ins_compl_addfrommatch, ins_compl_set_original_text,
@@ -2295,8 +2295,7 @@ int nvim_key_typed(void) { return KeyTyped ? 1 : 0; }
 void nvim_set_compl_interrupted(int val) { compl_interrupted = val != 0; }
 int nvim_using_script(void) { return using_script() ? 1 : 0; }
 int nvim_ex_normal_busy(void) { return ex_normal_busy ? 1 : 0; }
-int nvim_get_compl_pending(void) { return compl_pending; }
-void nvim_set_compl_pending(int val) { compl_pending = val; }
+// nvim_get/set_compl_pending: deleted (Phase 2, COMPL_PENDING moved to Rust)
 int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy)) ? 1 : 0; }
 // nvim_get_compl_shows_dir: already defined above (line 5277)
 void nvim_set_compl_shows_dir(int val) { compl_shows_dir = val; }
@@ -2511,7 +2510,7 @@ int nvim_is_cpt_func_refresh_always(void) {
 }
 void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
 void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
-void nvim_set_compl_restarting(int val) { compl_restarting = val != 0; }
+// nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
 // Compound accessor: compl_enter_selects = !compl_used_match && compl_selected_item != -1
 void nvim_update_compl_enter_selects(void) { compl_enter_selects = !compl_used_match && compl_selected_item != -1; }

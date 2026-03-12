@@ -553,7 +553,7 @@ extern "C" {
     fn rs_cot_fuzzy() -> c_int;
     fn rs_ins_compl_fuzzy_sort();
     fn nvim_set_spell_bad_len(val: c_int);
-    fn nvim_set_compl_restarting(val: c_int);
+    // (compl_restarting moved to Rust static in state.rs)
     fn rs_ins_compl_has_autocomplete() -> c_int;
     fn rs_ins_compl_enable_autocomplete();
     fn nvim_set_compl_autocomplete(val: c_int);
@@ -614,7 +614,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         nvim_set_spell_bad_len(0);
         // Matches were cleared, need to search for them now.
         // Set compl_restarting to avoid that the first match is inserted.
-        nvim_set_compl_restarting(1);
+        crate::state::COMPL_RESTARTING = true;
         if rs_ins_compl_has_autocomplete() != 0 {
             rs_ins_compl_enable_autocomplete();
         } else {
@@ -623,7 +623,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         if nvim_ins_complete_ctrl_n() == FAIL {
             nvim_set_compl_cont_status(0);
         }
-        nvim_set_compl_restarting(0);
+        crate::state::COMPL_RESTARTING = false;
     }
 
     nvim_update_compl_enter_selects();

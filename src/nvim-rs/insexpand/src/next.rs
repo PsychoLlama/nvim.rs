@@ -45,9 +45,7 @@ extern "C" {
     // navigation in menu
     fn rs_find_next_match_in_menu();
 
-    // compl_pending
-    fn nvim_get_compl_pending() -> c_int;
-    fn nvim_set_compl_pending(val: c_int);
+    // (compl_pending moved to Rust static in state.rs)
 
     // compl_direction / compl_shows_dir
     fn nvim_get_compl_direction() -> c_int;
@@ -63,8 +61,7 @@ extern "C" {
 
     // compl state
     fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_restarting() -> c_int;
-    fn nvim_set_compl_restarting(val: c_int);
+    // (compl_restarting moved to Rust static in state.rs)
     fn nvim_get_compl_get_longest() -> c_int;
     fn nvim_get_compl_used_match() -> c_int;
     fn nvim_set_compl_used_match(val: c_int);
@@ -161,22 +158,22 @@ unsafe fn find_next_completion_match(
         } else {
             if !allow_get_expansion {
                 if advance {
-                    let pending = nvim_get_compl_pending();
+                    let pending = crate::state::COMPL_PENDING;
                     if rs_compl_shows_dir_backward() != 0 {
-                        nvim_set_compl_pending(pending - (todo + 1));
+                        crate::state::COMPL_PENDING = pending - (todo + 1);
                     } else {
-                        nvim_set_compl_pending(pending + (todo + 1));
+                        crate::state::COMPL_PENDING = pending + (todo + 1);
                     }
                 }
                 return -1;
             }
 
             if !compl_no_select && advance {
-                let pending = nvim_get_compl_pending();
+                let pending = crate::state::COMPL_PENDING;
                 if rs_compl_shows_dir_backward() != 0 {
-                    nvim_set_compl_pending(pending - 1);
+                    crate::state::COMPL_PENDING = pending - 1;
                 } else {
-                    nvim_set_compl_pending(pending + 1);
+                    crate::state::COMPL_PENDING = pending + 1;
                 }
             }
 
@@ -187,7 +184,7 @@ unsafe fn find_next_completion_match(
 
             // Handle any pending completions
             loop {
-                let pending = nvim_get_compl_pending();
+                let pending = crate::state::COMPL_PENDING;
                 if pending == 0
                     || nvim_get_compl_direction() != nvim_get_compl_shows_dir()
                     || !advance
@@ -201,7 +198,7 @@ unsafe fn find_next_completion_match(
                         break;
                     }
                     nvim_compl_set_shown_match(n);
-                    nvim_set_compl_pending(pending - 1);
+                    crate::state::COMPL_PENDING = pending - 1;
                 } else {
                     // pending < 0
                     let p = nvim_compl_match_get_prev(shown2);
@@ -209,7 +206,7 @@ unsafe fn find_next_completion_match(
                         break;
                     }
                     nvim_compl_set_shown_match(p);
-                    nvim_set_compl_pending(pending + 1);
+                    crate::state::COMPL_PENDING = pending + 1;
                 }
             }
             found_end = false;
@@ -305,9 +302,9 @@ pub unsafe extern "C" fn rs_ins_compl_next(
     let mut advance = count != 1 || !allow_get_expansion || nvim_get_compl_get_longest() == 0;
 
     // When restarting the search don't insert the first match either.
-    if nvim_get_compl_restarting() != 0 {
+    if crate::state::COMPL_RESTARTING {
         advance = false;
-        nvim_set_compl_restarting(0);
+        crate::state::COMPL_RESTARTING = false;
     }
 
     // Repeat this for when <PageUp> or <PageDown> is typed.  But don't wrap

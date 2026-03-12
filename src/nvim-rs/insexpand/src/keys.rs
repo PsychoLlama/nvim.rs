@@ -67,8 +67,7 @@ extern "C" {
     fn nvim_set_compl_interrupted(val: c_int);
     fn nvim_using_script() -> c_int;
     fn nvim_ex_normal_busy() -> c_int;
-    fn nvim_get_compl_pending() -> c_int;
-    fn nvim_set_compl_pending(val: c_int);
+    // (compl_pending moved to Rust static in state.rs)
     fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int;
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_get_compl_cont_status() -> c_int;
@@ -150,7 +149,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
         }
     }
 
-    let pending = nvim_get_compl_pending();
+    let pending = crate::state::COMPL_PENDING;
     if pending != 0
         && nvim_got_int() == 0
         && nvim_cot_flags_has_noinsert_fuzzy() == 0
@@ -159,7 +158,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
         // Insert the first match immediately and advance compl_shown_match,
         // before finding other matches.
         let todo = pending.abs();
-        nvim_set_compl_pending(0);
+        crate::state::COMPL_PENDING = 0;
         nvim_ins_compl_next_wrap(0, todo, 1);
     }
 }

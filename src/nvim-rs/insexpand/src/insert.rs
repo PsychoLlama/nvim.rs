@@ -176,7 +176,7 @@ extern "C" {
     fn nvim_cursor_col_sub(n: c_int);
     fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_ins_compl_dict_alloc_set_shown();
-    fn nvim_set_compl_hi_on_longest(val: c_int);
+    // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn nvim_set_compl_used_match(val: c_int);
     fn rs_compl_status_adding() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
     nvim_set_compl_used_match(c_int::from(used_match));
 
     nvim_ins_compl_dict_alloc_set_shown();
-    nvim_set_compl_hi_on_longest(c_int::from(insert_prefix != 0 && move_cursor != 0));
+    crate::state::COMPL_HI_ON_AUTOCOMPL_LONGEST = insert_prefix != 0 && move_cursor != 0;
 }
 
 // =============================================================================

@@ -61,7 +61,7 @@ extern "C" {
     fn nvim_get_compl_autocomplete() -> c_int;
 
     // For ins_compl_col_range_attr
-    fn nvim_get_compl_hi_on_autocompl_longest() -> c_int;
+    // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn nvim_syn_name2attr(name: *const c_char) -> c_int;
     fn nvim_get_compl_ins_end_col() -> c_int;
     fn nvim_get_compl_lnum() -> c_int;
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn rs_ins_compl_col_range_attr(lnum: c_int, col: c_int) ->
         return -1;
     }
 
-    if nvim_get_compl_hi_on_autocompl_longest() == 0 && rs_ins_compl_preinsert_longest() != 0 {
+    if !crate::state::COMPL_HI_ON_AUTOCOMPL_LONGEST && rs_ins_compl_preinsert_longest() != 0 {
         return -1;
     }
 

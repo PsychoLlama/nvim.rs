@@ -29,7 +29,6 @@ extern "C" {
     fn nvim_get_compl_used_match() -> c_int;
     fn nvim_get_compl_was_interrupted() -> c_int;
     fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_restarting() -> c_int;
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_get_compl_get_longest() -> c_int;
 
@@ -47,6 +46,20 @@ extern "C" {
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_compl_cont_mode() -> c_int;
 }
+
+// =============================================================================
+// Phase 2: Scalar state variables moved from C to Rust (Phase 1 of plan)
+// Previously held in insexpand_shim.c as C static variables.
+// =============================================================================
+
+/// Whether to highlight match on autocompl longest (compl_hi_on_autocompl_longest).
+pub(crate) static mut COMPL_HI_ON_AUTOCOMPL_LONGEST: bool = false;
+
+/// Number of pending completions (compl_pending).
+pub(crate) static mut COMPL_PENDING: c_int = 0;
+
+/// Don't insert match, completion is restarting (compl_restarting).
+pub(crate) static mut COMPL_RESTARTING: bool = false;
 
 // CTRL-X mode constants
 const CTRL_X_WANT_IDENT: c_int = 0x100;
