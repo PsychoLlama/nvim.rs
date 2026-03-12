@@ -90,7 +90,7 @@ pub extern "C" fn rs_decor_state_invalidate(state: DecorStateHandle, buf: BufHan
 /// Mark the end of decoration redraw by clearing the window pointer.
 ///
 /// Rust implementation of `decor_redraw_end()`.
-#[no_mangle]
+#[export_name = "decor_redraw_end"]
 pub extern "C" fn rs_decor_redraw_end(state: DecorStateHandle) {
     if state.is_null() {
         return;
@@ -101,7 +101,7 @@ pub extern "C" fn rs_decor_redraw_end(state: DecorStateHandle) {
 /// Free the memory used by DecorState's kvecs.
 ///
 /// Rust implementation of `decor_state_free()`.
-#[no_mangle]
+#[export_name = "decor_state_free"]
 pub extern "C" fn rs_decor_state_free(state: DecorStateHandle) {
     if state.is_null() {
         return;
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn rs_redraw_line_state_reset(state: *mut RedrawLineState,
 /// buffer's marktree has any keys.
 ///
 /// Rust implementation of `decor_redraw_reset()`.
-#[no_mangle]
+#[export_name = "decor_redraw_reset"]
 pub extern "C" fn rs_decor_redraw_reset(wp: WinHandle, state: DecorStateHandle) -> bool {
     if state.is_null() || wp.is_null() {
         return false;
@@ -268,7 +268,7 @@ pub extern "C" fn rs_decor_state_pack(state: DecorStateHandle) {
 /// and sets row/col_until/eol_col.
 ///
 /// Rust implementation of `decor_redraw_line()`.
-#[no_mangle]
+#[export_name = "decor_redraw_line"]
 pub extern "C" fn rs_decor_redraw_line(wp: WinHandle, row: c_int, state: DecorStateHandle) {
     if state.is_null() || wp.is_null() {
         return;
@@ -297,7 +297,7 @@ pub extern "C" fn rs_decor_redraw_line(wp: WinHandle, row: c_int, state: DecorSt
 /// Checks active ranges, future ranges, and the marktree iterator position.
 ///
 /// Rust implementation of `decor_has_more_decorations()`.
-#[no_mangle]
+#[export_name = "decor_has_more_decorations"]
 pub extern "C" fn rs_decor_has_more_decorations(state: DecorStateHandle, row: c_int) -> bool {
     if state.is_null() {
         return false;
@@ -1022,7 +1022,7 @@ unsafe fn col_update_state(
 /// 4. Updates DecorState output fields
 ///
 /// Rust implementation of `decor_redraw_col_impl()`.
-#[no_mangle]
+#[export_name = "decor_redraw_col_impl"]
 pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     wp: WinHandle,
     col: c_int,

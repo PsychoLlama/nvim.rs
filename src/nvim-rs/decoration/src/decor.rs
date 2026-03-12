@@ -932,7 +932,7 @@ pub extern "C" fn rs_vt_repeat_linebreak(flags: u8) -> c_int {
 /// Allocate a DecorSignHighlight from the freelist or push to decor_items.
 ///
 /// Rust implementation of `decor_put_sh()`.
-#[no_mangle]
+#[export_name = "decor_put_sh"]
 pub extern "C" fn rs_decor_put_sh(item: DecorSignHighlight) -> u32 {
     unsafe {
         let freelist = nvim_get_decor_freelist();

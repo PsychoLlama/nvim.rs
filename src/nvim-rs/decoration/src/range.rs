@@ -592,7 +592,7 @@ extern "C" {
 /// Constructs the appropriate DecorRange (VirtText or VirtLines) and inserts it.
 ///
 /// Rust implementation of `decor_range_add_virt()`.
-#[no_mangle]
+#[export_name = "decor_range_add_virt"]
 pub unsafe extern "C" fn rs_decor_range_add_virt(
     state: DecorStateHandle,
     start_row: c_int,
@@ -635,7 +635,7 @@ pub unsafe extern "C" fn rs_decor_range_add_virt(
 /// For UI watched items, inserts an additional UI watched range.
 ///
 /// Rust implementation of `decor_range_add_sh()`.
-#[no_mangle]
+#[export_name = "decor_range_add_sh"]
 pub unsafe extern "C" fn rs_decor_range_add_sh(
     state: DecorStateHandle,
     start_row: c_int,

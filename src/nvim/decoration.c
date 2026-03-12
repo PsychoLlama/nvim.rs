@@ -68,19 +68,12 @@ uint32_t to_free_sh = UINT32_MAX;
 
 // Rust implementations for Phase 1
 extern void rs_decor_state_invalidate(void *state, buf_T *buf);
-extern void rs_decor_redraw_end(void *state);
-extern void rs_decor_state_free(void *state);
 
 // Rust implementations for Phase 2
-extern uint32_t rs_decor_put_sh(DecorSignHighlight item);
 extern void *rs_decor_put_vt(DecorVirtText *vt_data, DecorVirtText *next);
 extern void rs_decor_free(int ext, DecorVirtText *vt, uint32_t sh_idx);
 extern void rs_decor_check_to_be_deleted(void);
 
-// Rust implementations for Phase 3
-extern bool rs_decor_redraw_reset(void *wp, void *state);
-extern void rs_decor_redraw_line(void *wp, int row, void *state);
-extern bool rs_decor_has_more_decorations(void *state, int row);
 
 // Rust implementations for Phase 4
 extern void rs_decor_range_add_from_inline(void *state, int start_row, int start_col,
@@ -89,12 +82,6 @@ extern void rs_decor_range_add_from_inline(void *state, int start_row, int start
                                            uint16_t hl_flags, uint16_t hl_priority,
                                            int hl_hl_id, uint32_t hl_conceal_char,
                                            bool owned, uint32_t ns, uint32_t mark_id);
-extern void rs_decor_range_add_virt(void *state, int start_row, int start_col,
-                                    int end_row, int end_col, void *vt, bool owned);
-extern void rs_decor_range_add_sh(void *state, int start_row, int start_col,
-                                  int end_row, int end_col, void *sh,
-                                  bool owned, uint32_t ns, uint32_t mark_id,
-                                  uint16_t subpriority);
 
 // Rust implementations for Phase 5
 extern void rs_decor_redraw(void *buf, int row1, int row2, int col1,
@@ -107,9 +94,6 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
                                 uint16_t hl_flags, uint16_t hl_priority,
                                 int hl_hl_id, uint32_t hl_conceal_char,
                                 bool do_free);
-
-// Rust implementations for Phase 6
-extern int rs_decor_redraw_col_impl(void *wp, int col, int win_col, bool hidden, void *state);
 
 // Rust implementations for Phase 7
 extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
@@ -193,11 +177,6 @@ void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
   if (rs_sh_is_ui_watched(sh.flags)) {
     redraw_buf_line_later(buf, row1 + 1, false);
   }
-}
-
-uint32_t decor_put_sh(DecorSignHighlight item)
-{
-  return rs_decor_put_sh(item);
 }
 
 DecorVirtText *decor_put_vt(DecorVirtText vt, DecorVirtText *next)
@@ -289,11 +268,6 @@ void decor_check_to_be_deleted(void)
   rs_decor_check_to_be_deleted();
 }
 
-void decor_state_free(DecorState *state)
-{
-  rs_decor_state_free(state);
-}
-
 void clear_virttext(VirtText *text)
 {
   for (size_t i = 0; i < kv_size(*text); i++) {
@@ -360,11 +334,6 @@ next_mark:
   return NULL;
 }
 
-bool decor_redraw_reset(win_T *wp, DecorState *state)
-{
-  return rs_decor_redraw_reset(wp, state);
-}
-
 /// @return true if decor has a virtual position (virtual text or ui_watched)
 bool decor_virt_pos(const DecorRange *decor)
 {
@@ -399,17 +368,6 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
   }
 
   return true;  // TODO(bfredl): check if available in the region
-}
-
-void decor_redraw_line(win_T *wp, int row, DecorState *state)
-{
-  rs_decor_redraw_line(wp, row, state);
-}
-
-// Checks if there are (likely) more decorations on the current line.
-bool decor_has_more_decorations(DecorState *state, int row)
-{
-  return rs_decor_has_more_decorations(state, row);
 }
 
 static void decor_range_add_from_inline(DecorState *state, int start_row, int start_col,
@@ -470,20 +428,6 @@ static void decor_range_insert(DecorState *state, DecorRange *range)
   *item = index;
 }
 
-void decor_range_add_virt(DecorState *state, int start_row, int start_col, int end_row, int end_col,
-                          DecorVirtText *vt, bool owned)
-{
-  rs_decor_range_add_virt(state, start_row, start_col, end_row, end_col, vt, owned);
-}
-
-void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end_row, int end_col,
-                        DecorSignHighlight *sh, bool owned, uint32_t ns, uint32_t mark_id,
-                        DecorPriority subpriority)
-{
-  rs_decor_range_add_sh(state, start_row, start_col, end_row, end_col, sh, owned, ns, mark_id,
-                        subpriority);
-}
-
 /// Initialize the draw_col of a newly-added virtual text item.
 void decor_init_draw_col(int win_col, bool hidden, DecorRange *item)
 {
@@ -505,11 +449,6 @@ void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state)
       decor_init_draw_col(win_col, hidden, r);
     }
   }
-}
-
-int decor_redraw_col_impl(win_T *wp, int col, int win_col, bool hidden, DecorState *state)
-{
-  return rs_decor_redraw_col_impl(wp, col, win_col, hidden, state);
 }
 
 static const uint32_t conceal_filter[kMTMetaCount] = {[kMTMetaConcealLines] = kMTFilterSelect };
@@ -734,11 +673,6 @@ void buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, TriState 
   }
 
   xfree(count);
-}
-
-void decor_redraw_end(DecorState *state)
-{
-  rs_decor_redraw_end(state);
 }
 
 bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col)
@@ -1321,7 +1255,7 @@ void nvim_decor_range_add_from_inline_hl(void *state, int start_row, int start_c
     .conceal_char = hl_conceal_char,
   };
   DecorSignHighlight sh = decor_sh_from_inline(hl);
-  rs_decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
+  decor_range_add_sh(state, start_row, start_col, end_row, end_col, &sh, owned, ns, mark_id, 0);
 }
 
 // ============================================================================

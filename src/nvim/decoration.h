@@ -113,6 +113,20 @@ typedef struct {
 } DecorColAdvanceResult;
 
 
+// Forward declarations for functions migrated to Rust (no longer in generated header)
+uint32_t decor_put_sh(DecorSignHighlight item);
+bool decor_redraw_reset(win_T *wp, DecorState *state);
+void decor_state_free(DecorState *state);
+void decor_redraw_line(win_T *wp, int row, DecorState *state);
+bool decor_has_more_decorations(DecorState *state, int row);
+void decor_redraw_end(DecorState *state);
+int decor_redraw_col_impl(win_T *wp, int col, int win_col, bool hidden, DecorState *state);
+void decor_range_add_virt(DecorState *state, int start_row, int start_col, int end_row, int end_col,
+                          DecorVirtText *vt, bool owned);
+void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end_row, int end_col,
+                        DecorSignHighlight *sh, bool owned, uint32_t ns, uint32_t mark_id,
+                        DecorPriority subpriority);
+
 #include "decoration.h.generated.h"
 #include "decoration.h.inline.generated.h"
 
