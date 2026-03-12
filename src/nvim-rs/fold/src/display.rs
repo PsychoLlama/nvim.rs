@@ -92,7 +92,8 @@ extern "C" {
     );
     /// Call rs_eval_foldtext (Rust-to-Rust via extern "C").
     fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void);
-    /// Free an Object (via rs_api_free_object from api crate).
+    /// Free an Object (via api_free_object from api crate).
+    #[link_name = "api_free_object"]
     fn rs_api_free_object(obj: nvim_api::Object);
     /// Get emsg_off value (from message.c).
     fn nvim_get_emsg_off() -> c_int;

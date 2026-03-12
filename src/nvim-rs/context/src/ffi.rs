@@ -4,7 +4,9 @@ use crate::{Array, Context, Dict, NvimString};
 
 extern "C" {
     // Memory
+    #[link_name = "api_free_string"]
     pub fn rs_api_free_string(value: NvimString);
+    #[link_name = "api_free_array"]
     pub fn rs_api_free_array(value: Array);
     pub fn xfree(ptr: *mut std::ffi::c_void);
     pub fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;

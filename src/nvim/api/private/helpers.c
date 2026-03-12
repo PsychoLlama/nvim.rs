@@ -307,83 +307,8 @@ tabpage_T *find_tab_by_handle(Tabpage tabpage, Error *err)
 }
 
 /// Allocates a String consisting of a single char. Does not support multibyte
-/// characters. The resulting string is also NUL-terminated, to facilitate
-/// interoperating with code using C strings.
-///
-/// @param char the char to convert
-/// @return the resulting String, if the input char was NUL, an
-///         empty String is returned
-String cchar_to_string(char c)
-{
-  return rs_cchar_to_string(c);
-}
-
-/// Copies a C string into a String (binary safe string, characters + length).
-/// The resulting string is also NUL-terminated, to facilitate interoperating
-/// with code using C strings.
-///
-/// @param str the C string to copy
-/// @return the resulting String, if the input string was NULL, an
-///         empty String is returned
-String cstr_to_string(const char *str)
-{
-  return rs_cstr_to_string(str);
-}
-
-/// Copies a String to an allocated, NUL-terminated C string.
-///
-/// @param str the String to copy
-/// @return the resulting C string
-char *string_to_cstr(String str)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_string_to_cstr(str);
-}
-
-/// Copies buffer to an allocated String.
-/// The resulting string is also NUL-terminated, to facilitate interoperating
-/// with code using C strings.
-///
-/// @param buf the buffer to copy
-/// @param size length of the buffer
-/// @return the resulting String, if the input string was NULL, an
-///         empty String is returned
-String cbuf_to_string(const char *buf, size_t size)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_cbuf_to_string(buf, size);
-}
-
-String cstrn_to_string(const char *str, size_t maxsize)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_cstrn_to_string(str, maxsize);
-}
-
-String cstrn_as_string(char *str, size_t maxsize)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_cstrn_as_string(str, maxsize);
-}
-
-/// Creates a String using the given C string. Unlike
-/// cstr_to_string this function DOES NOT copy the C string.
-///
-/// @param str the C string to use
-/// @return The resulting String, or an empty String if
-///           str was NULL
-String cstr_as_string(const char *str) FUNC_ATTR_PURE
-{
-  return rs_cstr_as_string(str);
-}
-
-/// Return the owned memory of a ga as a String
-///
-/// Reinitializes the ga to a valid empty state.
-String ga_take_string(garray_T *ga)
-{
-  return rs_ga_take_string(ga);
-}
+// cchar_to_string, cstr_to_string, string_to_cstr, cbuf_to_string, cstrn_to_string,
+// cstrn_as_string, cstr_as_string, ga_take_string exported directly from Rust.
 
 /// Creates "readfile()-style" ArrayOf(String) from a binary string.
 ///
@@ -480,10 +405,7 @@ String buf_get_text(buf_T *buf, int64_t lnum, int64_t start_col, int64_t end_col
   return cbuf_as_string(bufstr + start_col, (size_t)(end_col - start_col));
 }
 
-void api_free_string(String value)
-{
-  rs_api_free_string(value);
-}
+// api_free_string exported directly from Rust.
 
 Array arena_array(Arena *arena, size_t max_size)
 {
@@ -517,26 +439,7 @@ Array arena_take_arraybuilder(Arena *arena, ArrayBuilder *arr)
   return ret;
 }
 
-void api_free_object(Object value)
-{
-  rs_api_free_object(value);
-}
-
-void api_free_array(Array value)
-{
-  rs_api_free_array(value);
-}
-
-void api_free_dict(Dict value)
-{
-  rs_api_free_dict(value);
-}
-
-void api_clear_error(Error *value)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_api_clear_error(value);
-}
+// api_free_object, api_free_array, api_free_dict, api_clear_error exported directly from Rust.
 
 // initialized once, never freed
 static ArenaMem mem_for_metadata = NULL;
@@ -568,10 +471,7 @@ String api_metadata_raw(void)
 // then global allocations are used, and the resulting object
 // should be freed with an api_free_[object] function
 
-String copy_string(String str, Arena *arena)
-{
-  return rs_copy_string(str, arena);
-}
+// copy_string exported directly from Rust.
 
 Array copy_array(Array array, Arena *arena)
 {
@@ -640,26 +540,8 @@ void api_set_error(Error *err, ErrorType errType, const char *format, ...)
   err->type = errType;
 }
 
-/// Force obj to bool.
-/// If it fails, returns false and sets err
-/// @param obj          The object to coerce to a boolean
-/// @param what         The name of the object, used for error message
-/// @param nil_value    What to return if the type is nil.
-/// @param err          Set if there was an error in converting to a bool
-bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err)
-{
-  return rs_api_object_to_bool(obj, what, nil_value, err);
-}
-
-int object_to_hl_id(Object obj, const char *what, Error *err)
-{
-  return rs_object_to_hl_id(obj, what, err);
-}
-
-char *api_typename(ObjectType t)
-{
-  return rs_api_typename((int)t);
-}
+// api_object_to_bool, object_to_hl_id exported directly from Rust.
+// api_typename exported directly from Rust (takes int, ObjectType is compatible).
 
 HlMessage parse_hl_msg(ArrayOf(Tuple(String, *HLGroupID)) chunks, bool is_err, Error *err)
 {
@@ -836,10 +718,7 @@ Dict api_keydict_to_dict(void *value, KeySetLink *table, size_t max_size, Arena 
   return rv;
 }
 
-void api_luarefs_free_object(Object value)
-{
-  rs_api_luarefs_free_object(value);
-}
+// api_luarefs_free_object exported directly from Rust.
 
 void api_luarefs_free_keydict(void *dict, KeySetLink *table)
 {
@@ -855,15 +734,7 @@ void api_luarefs_free_keydict(void *dict, KeySetLink *table)
   }
 }
 
-void api_luarefs_free_array(Array value)
-{
-  rs_api_luarefs_free_array(value);
-}
-
-void api_luarefs_free_dict(Dict value)
-{
-  rs_api_luarefs_free_dict(value);
-}
+// api_luarefs_free_array, api_luarefs_free_dict exported directly from Rust.
 
 /// Set a named mark
 /// buffer and mark name must be validated already

@@ -111,30 +111,27 @@ typedef kvec_withinit_t(Object, 16) ArrayBuilder;
 #define STATIC_CSTR_AS_OBJ(s) STRING_OBJ(STATIC_CSTR_AS_STRING(s))
 #define STATIC_CSTR_TO_OBJ(s) STRING_OBJ(STATIC_CSTR_TO_STRING(s))
 
-// Rust implementations of API string helpers
-extern char *rs_api_typename(int t);
-extern String rs_cstr_as_string(const char *str);
-extern String rs_cstr_to_string(const char *str);
-extern String rs_cbuf_to_string(const char *buf, size_t size);
-extern String rs_cstrn_to_string(const char *str, size_t maxsize);
-extern String rs_cstrn_as_string(char *str, size_t maxsize);
-extern String rs_cchar_to_string(char c);
-extern void rs_api_free_string(String value);
-extern bool rs_api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err);
-extern String rs_copy_string(String str, Arena *arena);
-extern void rs_api_clear_error(Error *value);
-extern char *rs_string_to_cstr(String str);
-extern String rs_ga_take_string(garray_T *ga);
-// Rust implementations of recursive free functions
-extern void rs_api_free_object(Object value);
-extern void rs_api_free_array(Array value);
-extern void rs_api_free_dict(Dict value);
-// Rust implementation of object_to_hl_id
-extern int rs_object_to_hl_id(Object obj, const char *what, Error *err);
-// Rust implementations of luarefs free functions
-extern void rs_api_luarefs_free_object(Object value);
-extern void rs_api_luarefs_free_array(Array value);
-extern void rs_api_luarefs_free_dict(Dict value);
+// The following functions are implemented in Rust and exported under their original names.
+extern char *api_typename(int t);
+extern String cstr_as_string(const char *str);
+extern String cstr_to_string(const char *str);
+extern String cbuf_to_string(const char *buf, size_t size);
+extern String cstrn_to_string(const char *str, size_t maxsize);
+extern String cstrn_as_string(char *str, size_t maxsize);
+extern String cchar_to_string(char c);
+extern void api_free_string(String value);
+extern bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err);
+extern String copy_string(String str, Arena *arena);
+extern void api_clear_error(Error *value);
+extern char *string_to_cstr(String str);
+extern String ga_take_string(garray_T *ga);
+extern void api_free_object(Object value);
+extern void api_free_array(Array value);
+extern void api_free_dict(Dict value);
+extern int object_to_hl_id(Object obj, const char *what, Error *err);
+extern void api_luarefs_free_object(Object value);
+extern void api_luarefs_free_array(Array value);
+extern void api_luarefs_free_dict(Dict value);
 
 #define API_CLEAR_STRING(s) \
   do { \

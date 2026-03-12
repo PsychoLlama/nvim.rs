@@ -76,7 +76,7 @@ static UNKNOWN_STR: &[u8] = b"Unknown\0";
 ///
 /// # Returns
 /// A pointer to a static null-terminated string with the type name
-#[no_mangle]
+#[unsafe(export_name = "api_typename")]
 pub extern "C" fn rs_api_typename(t: c_int) -> *const c_char {
     let bytes = match t {
         0 => NIL_STR,      // kObjectTypeNil
@@ -197,7 +197,7 @@ impl Default for NvimString {
 ///
 /// # Returns
 /// A String struct pointing to the input data, or empty if str was NULL
-#[no_mangle]
+#[unsafe(export_name = "cstr_as_string")]
 pub unsafe extern "C" fn rs_cstr_as_string(s: *const c_char) -> NvimString {
     if s.is_null() {
         return NvimString::default();
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn rs_cstr_as_string(s: *const c_char) -> NvimString {
 ///
 /// # Returns
 /// A newly allocated String, or empty if str was NULL
-#[no_mangle]
+#[unsafe(export_name = "cstr_to_string")]
 pub unsafe extern "C" fn rs_cstr_to_string(s: *const c_char) -> NvimString {
     if s.is_null() {
         return NvimString::default();
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn rs_cstr_to_string(s: *const c_char) -> NvimString {
 ///
 /// # Returns
 /// A newly allocated String
-#[no_mangle]
+#[unsafe(export_name = "cbuf_to_string")]
 pub unsafe extern "C" fn rs_cbuf_to_string(buf: *const c_char, size: usize) -> NvimString {
     NvimString {
         data: xmemdupz(buf, size),
@@ -276,7 +276,7 @@ pub extern "C" fn rs_cbuf_as_string(buf: *mut c_char, size: usize) -> NvimString
 ///
 /// # Returns
 /// A newly allocated String
-#[no_mangle]
+#[unsafe(export_name = "cstrn_to_string")]
 pub unsafe extern "C" fn rs_cstrn_to_string(s: *const c_char, maxsize: usize) -> NvimString {
     let len = strnlen(s, maxsize);
     rs_cbuf_to_string(s, len)
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn rs_cstrn_to_string(s: *const c_char, maxsize: usize) ->
 ///
 /// # Returns
 /// A String struct pointing to the input data
-#[no_mangle]
+#[unsafe(export_name = "cstrn_as_string")]
 pub unsafe extern "C" fn rs_cstrn_as_string(s: *mut c_char, maxsize: usize) -> NvimString {
     let len = strnlen(s, maxsize);
     NvimString { data: s, size: len }
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn rs_cstrn_as_string(s: *mut c_char, maxsize: usize) -> N
 ///
 /// # Returns
 /// A newly allocated String (empty if c was NUL)
-#[no_mangle]
+#[unsafe(export_name = "cchar_to_string")]
 pub unsafe extern "C" fn rs_cchar_to_string(c: c_char) -> NvimString {
     let buf = [c, 0];
     NvimString {
@@ -324,7 +324,7 @@ pub unsafe extern "C" fn rs_cchar_to_string(c: c_char) -> NvimString {
 ///
 /// # Safety
 /// The string's data must have been allocated with xmalloc/xmemdupz.
-#[no_mangle]
+#[unsafe(export_name = "api_free_string")]
 pub unsafe extern "C" fn rs_api_free_string(value: NvimString) {
     xfree(value.data);
 }
@@ -348,7 +348,7 @@ const K_OBJECT_TYPE_LUAREF: c_int = 7;
 ///
 /// # Arguments
 /// * `value` - The Object to free
-#[no_mangle]
+#[unsafe(export_name = "api_free_object")]
 pub unsafe extern "C" fn rs_api_free_object(value: Object) {
     match value.obj_type {
         // These types have no heap data
@@ -387,7 +387,7 @@ pub unsafe extern "C" fn rs_api_free_object(value: Object) {
 ///
 /// # Arguments
 /// * `value` - The Array to free
-#[no_mangle]
+#[unsafe(export_name = "api_free_array")]
 pub unsafe extern "C" fn rs_api_free_array(value: Array) {
     for i in 0..value.size {
         rs_api_free_object(*value.items.add(i));
@@ -402,7 +402,7 @@ pub unsafe extern "C" fn rs_api_free_array(value: Array) {
 ///
 /// # Arguments
 /// * `value` - The Dict to free
-#[no_mangle]
+#[unsafe(export_name = "api_free_dict")]
 pub unsafe extern "C" fn rs_api_free_dict(value: Dict) {
     for i in 0..value.size {
         let item = &*value.items.add(i);
@@ -435,7 +435,7 @@ const K_ERROR_TYPE_VALIDATION: c_int = 1;
 ///
 /// # Returns
 /// The boolean value of the object
-#[no_mangle]
+#[unsafe(export_name = "api_object_to_bool")]
 pub unsafe extern "C" fn rs_api_object_to_bool(
     obj: Object,
     what: *const c_char,
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn rs_api_object_to_bool(
 ///
 /// # Returns
 /// A newly allocated copy of the string
-#[no_mangle]
+#[unsafe(export_name = "copy_string")]
 pub unsafe extern "C" fn rs_copy_string(str: NvimString, arena: *mut Arena) -> NvimString {
     if str.data.is_null() {
         return NvimString::default();
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn rs_error_set(err: *const Error) -> bool {
 /// # Safety
 /// `err` must be a valid pointer to an Error struct.
 /// If err->msg is non-null, it must have been allocated with xmalloc.
-#[no_mangle]
+#[unsafe(export_name = "api_clear_error")]
 pub unsafe extern "C" fn rs_api_clear_error(err: *mut Error) {
     if err.is_null() {
         return;
@@ -731,7 +731,7 @@ extern "C" {
 ///
 /// # Returns
 /// The highlight group ID, or 0 on failure
-#[no_mangle]
+#[unsafe(export_name = "object_to_hl_id")]
 pub unsafe extern "C" fn rs_object_to_hl_id(
     obj: Object,
     what: *const c_char,
@@ -777,7 +777,7 @@ pub unsafe extern "C" fn rs_object_to_hl_id(
 ///
 /// # Returns
 /// A newly allocated NUL-terminated C string
-#[no_mangle]
+#[unsafe(export_name = "string_to_cstr")]
 pub unsafe extern "C" fn rs_string_to_cstr(str: NvimString) -> *mut c_char {
     xstrndup(str.data, str.size)
 }
@@ -803,7 +803,7 @@ pub struct GArray {
 ///
 /// # Returns
 /// A String containing the ga's data
-#[no_mangle]
+#[unsafe(export_name = "ga_take_string")]
 pub unsafe extern "C" fn rs_ga_take_string(ga: *mut GArray) -> NvimString {
     if ga.is_null() {
         return NvimString::default();
@@ -829,7 +829,7 @@ pub unsafe extern "C" fn rs_ga_take_string(ga: *mut GArray) -> NvimString {
 ///
 /// # Arguments
 /// * `value` - The Object to free luarefs from
-#[no_mangle]
+#[unsafe(export_name = "api_luarefs_free_object")]
 pub unsafe extern "C" fn rs_api_luarefs_free_object(value: Object) {
     match value.obj_type {
         K_OBJECT_TYPE_LUAREF => {
@@ -852,7 +852,7 @@ pub unsafe extern "C" fn rs_api_luarefs_free_object(value: Object) {
 ///
 /// # Arguments
 /// * `value` - The Array to free luarefs from
-#[no_mangle]
+#[unsafe(export_name = "api_luarefs_free_array")]
 pub unsafe extern "C" fn rs_api_luarefs_free_array(value: Array) {
     for i in 0..value.size {
         rs_api_luarefs_free_object(*value.items.add(i));
@@ -866,7 +866,7 @@ pub unsafe extern "C" fn rs_api_luarefs_free_array(value: Array) {
 ///
 /// # Arguments
 /// * `value` - The Dict to free luarefs from
-#[no_mangle]
+#[unsafe(export_name = "api_luarefs_free_dict")]
 pub unsafe extern "C" fn rs_api_luarefs_free_dict(value: Dict) {
     for i in 0..value.size {
         let item = &*value.items.add(i);
