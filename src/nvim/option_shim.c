@@ -209,10 +209,7 @@ extern const char *rs_set_option_impl(OptIndex opt_idx, OptVal value, int opt_fl
                                       char *errbuf, size_t errbuflen);
 // rs_was_set_insecurely deleted: now exported as was_set_insecurely via #[export_name]
 // rs_set_option_sctx deleted: now exported as set_option_sctx via #[export_name]
-extern int rs_optval_default(OptIndex opt_idx, void *varp);
-extern int rs_wc_use_keyname(const void *varp, OptInt *wcp);
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
-extern int rs_put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -1465,30 +1462,7 @@ void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->
 
 // set_init_tablocal deleted: now exported directly from Rust via #[export_name]
 
-extern void rs_set_init_default_shell(void);
-
-/// Initialize the 'shell' option to a default value.
-static void set_init_default_shell(void)
-{
-  rs_set_init_default_shell();
-}
-
 extern void rs_set_init_default_backupskip(void);
-
-/// Set the default for 'backupskip' to include environment variables for
-/// temp files.
-static void set_init_default_backupskip(void)
-{
-  rs_set_init_default_backupskip();
-}
-
-extern void rs_set_init_default_cdpath(void);
-
-/// Initialize the 'cdpath' option to a default value.
-static void set_init_default_cdpath(void)
-{
-  rs_set_init_default_cdpath();
-}
 
 extern void rs_set_init_fenc_default(void);
 
@@ -1855,17 +1829,6 @@ static inline bool option_is_global_local(OptIndex opt_idx)
   return rs_option_is_global_local(opt_idx);
 }
 
-/// Check if option only supports global scope.
-static inline bool option_is_global_only(OptIndex opt_idx)
-{
-  return rs_option_is_global_only(opt_idx);
-}
-
-/// Check if option only supports window scope.
-static inline bool option_is_window_local(OptIndex opt_idx)
-{
-  return rs_option_is_window_local(opt_idx);
-}
 
 /// Get option index for scope.
 ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
@@ -1881,14 +1844,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 // get_option deleted: now exported from Rust value.rs via #[export_name = "get_option"]
 
 
-/// Check if local value of global-local option is unset for current buffer / window.
-/// Always returns false for options that aren't global-local.
-///
-/// TODO(famiu): Remove this once we have an OptVal type to indicate an unset local value.
-static bool is_option_local_value_unset(OptIndex opt_idx)
-{
-  return rs_is_option_local_value_unset(opt_idx) != 0;
-}
 
 /// Set option value directly, without processing any side effects.
 ///
@@ -2055,11 +2010,6 @@ static void showoptions(bool all, int opt_flags)
   rs_showoptions(all ? 1 : 0, opt_flags);
 }
 
-/// Return true if option "p" has its default value.
-static int optval_default(OptIndex opt_idx, void *varp)
-{
-  return rs_optval_default(opt_idx, varp);
-}
 
 /// Send update to UIs with values of UI relevant options
 void ui_refresh_options(void)
@@ -2106,18 +2056,6 @@ static void showoneopt(vimoption_T *opt, int opt_flags)
 ///             When "local_only" is true, don't write fresh
 ///             values, only local values (for ":mkview").
 
-/// Print the ":set" command to set a single option to file.
-///
-/// @param  fd       File descriptor.
-/// @param  cmd      Command name.
-/// @param  opt_idx  Option index in options[] table.
-/// @param  varp     Pointer to option variable.
-///
-/// @return FAIL on error, OK otherwise.
-static int put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp)
-{
-  return rs_put_set(fd, cmd, opt_idx, varp);
-}
 
 // get_varp_scope_from deleted: Rust exports under the C name directly via #[export_name].
 
@@ -2322,13 +2260,6 @@ static void option_value2string(vimoption_T *opt, int opt_flags)
   rs_option_value2string((int)get_opt_idx(opt), opt_flags);
 }
 
-/// Return true if "varp" points to 'wildchar' or 'wildcharm' and it can be
-/// printed as a keyname.
-/// "*wcp" is set to the value of the option if it's 'wildchar' or 'wildcharm'.
-static int wc_use_keyname(const void *varp, OptInt *wcp)
-{
-  return rs_wc_use_keyname(varp, wcp);
-}
 
 // shortmess deleted: now exported directly from Rust via #[export_name]
 
