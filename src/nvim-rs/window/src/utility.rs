@@ -115,9 +115,10 @@ fn check_can_set_curbuf_disabled_impl() -> bool {
 }
 
 /// FFI export for `check_can_set_curbuf_disabled`.
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_check_can_set_curbuf_disabled() -> c_int {
-    c_int::from(check_can_set_curbuf_disabled_impl())
+#[allow(clippy::must_use_candidate)]
+#[unsafe(export_name = "check_can_set_curbuf_disabled")]
+pub extern "C" fn rs_check_can_set_curbuf_disabled() -> bool {
+    check_can_set_curbuf_disabled_impl()
 }
 
 // =============================================================================
@@ -140,9 +141,10 @@ fn check_can_set_curbuf_forceit_impl(forceit: c_int) -> bool {
 }
 
 /// FFI export for `check_can_set_curbuf_forceit`.
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_check_can_set_curbuf_forceit(forceit: c_int) -> c_int {
-    c_int::from(check_can_set_curbuf_forceit_impl(forceit))
+#[allow(clippy::must_use_candidate)]
+#[unsafe(export_name = "check_can_set_curbuf_forceit")]
+pub extern "C" fn rs_check_can_set_curbuf_forceit(forceit: c_int) -> bool {
+    check_can_set_curbuf_forceit_impl(forceit)
 }
 
 // =============================================================================
@@ -330,12 +332,12 @@ unsafe fn check_split_disallowed_err_impl(wp: WinHandle, err: *mut std::ffi::c_v
 ///
 /// # Safety
 /// `err` must be a valid pointer to a C `Error` struct.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "check_split_disallowed_err")]
 pub unsafe extern "C" fn rs_check_split_disallowed_err(
     wp: WinHandle,
     err: *mut std::ffi::c_void,
-) -> c_int {
-    c_int::from(check_split_disallowed_err_impl(wp, err))
+) -> bool {
+    check_split_disallowed_err_impl(wp, err)
 }
 
 // =============================================================================

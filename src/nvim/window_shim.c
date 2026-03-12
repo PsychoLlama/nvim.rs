@@ -178,12 +178,12 @@ extern int rs_check_snapshot_rec(frame_T *sn, frame_T *fr);
 extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 
 // Utility and validation helpers
-extern bool rs_check_can_set_curbuf_disabled(void);
-extern bool rs_check_can_set_curbuf_forceit(int forceit);
+// rs_check_can_set_curbuf_disabled deleted: now exported as check_can_set_curbuf_disabled via #[export_name]
+// rs_check_can_set_curbuf_forceit deleted: now exported as check_can_set_curbuf_forceit via #[export_name]
+// rs_check_split_disallowed_err deleted: now exported as check_split_disallowed_err via #[export_name]
 
-// Tabpage helpers and check_split_disallowed_err
+// Tabpage helpers
 extern int rs_goto_tabpage_lastused(void);
-extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 
 // can_close_floating_windows, maximum_wincount, make_windows
 // rs_can_close_floating_windows_tp: removed from C declarations (Rust uses #[link_name] directly)
@@ -534,24 +534,8 @@ static char *m_onlyone = N_("Already only one window");
 static int split_disallowed = 0;
 
 
-/// Check if the current window is allowed to move to a different buffer.
-///
-/// @return If the window has 'winfixbuf', or this function will return false.
-bool check_can_set_curbuf_disabled(void)
-{
-  return rs_check_can_set_curbuf_disabled();
-}
-
-/// Check if the current window is allowed to move to a different buffer.
-///
-/// @param forceit If true, do not error. If false and 'winfixbuf' is enabled, error.
-///
-/// @return If the window has 'winfixbuf', then forceit must be true
-///     or this function will return false.
-bool check_can_set_curbuf_forceit(int forceit)
-{
-  return rs_check_can_set_curbuf_forceit(forceit);
-}
+// check_can_set_curbuf_disabled deleted: now exported from Rust utility.rs via #[export_name]
+// check_can_set_curbuf_forceit deleted: now exported from Rust utility.rs via #[export_name]
 
 // swbuf_goto_win_with_buf: thin wrapper defined in Phase 2 accessors section.
 
@@ -625,14 +609,7 @@ void ui_ext_win_position(win_T *wp, bool validate)
   rs_ui_ext_win_position(wp, validate);
 }
 
-/// Like `check_split_disallowed`, but set `err` to the (untranslated) error message on failure and
-/// return false. Otherwise return true.
-/// @see check_split_disallowed
-bool check_split_disallowed_err(const win_T *wp, Error *err)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_check_split_disallowed_err(wp, err);
-}
+// check_split_disallowed_err deleted: now exported from Rust utility.rs via #[export_name]
 
 /// Make "count" windows on the screen.
 /// Must be called when there is just one window, filling the whole screen.

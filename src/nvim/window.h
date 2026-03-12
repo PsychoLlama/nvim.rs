@@ -115,5 +115,8 @@ void set_winbar(bool make_room);
 void close_windows(buf_T *buf, bool keep_curwin);
 void win_ui_flush(bool validate);
 bool can_close_in_cmdwin(win_T *win, Error *err);
+bool check_can_set_curbuf_disabled(void);
+bool check_can_set_curbuf_forceit(int forceit);
+bool check_split_disallowed_err(const win_T *wp, Error *err);
 
 #include "window_shim.h.generated.h"
