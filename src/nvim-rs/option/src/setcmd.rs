@@ -514,6 +514,7 @@ extern "C" {
     // State accessors
     fn nvim_get_curwin() -> *const std::ffi::c_void;
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
+    #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_option_script_ctx(opt_idx: c_int) -> ScriptContext;
@@ -1199,6 +1200,7 @@ extern "C" {
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
     #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
+    #[link_name = "rs_option_has_type"]
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;

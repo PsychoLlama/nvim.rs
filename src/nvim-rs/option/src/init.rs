@@ -446,6 +446,7 @@ extern "C" {
     fn nvim_call_os_getenv(name: *const c_char) -> *mut c_char;
     fn nvim_call_vim_getenv(name: *const c_char) -> *mut c_char;
     fn nvim_call_after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
     fn rs_find_dup_item(

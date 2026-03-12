@@ -26,6 +26,7 @@ use crate::{OptFlags, OptInt, OptValType};
 
 extern "C" {
     // makeset - Phase 2
+    #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     #[link_name = "rs_option_is_global_only"]
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
@@ -45,12 +46,14 @@ extern "C" {
     // optval helpers
     fn nvim_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void)
         -> crate::storage::OptVal;
+    #[link_name = "rs_get_option_unset_value"]
     fn nvim_get_option_unset_value(opt_idx: c_int) -> crate::storage::OptVal;
     fn nvim_option_get_def_val(opt_idx: c_int) -> crate::storage::OptVal;
     #[link_name = "rs_option_is_global_local"]
     fn nvim_option_is_global_local(opt_idx: c_int) -> c_int;
     #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
+    #[link_name = "rs_option_has_type"]
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn rs_optval_equal(a: crate::storage::OptVal, b: crate::storage::OptVal) -> c_int;
 

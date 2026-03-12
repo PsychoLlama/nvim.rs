@@ -571,6 +571,7 @@ extern "C" {
     fn option_has_type(opt_idx: OptIndex, val_type: c_int) -> c_int;
 
     // option flags
+    #[link_name = "rs_get_option_flags"]
     fn get_option_flags(opt_idx: OptIndex) -> u32;
 
     // xp_pattern accessor

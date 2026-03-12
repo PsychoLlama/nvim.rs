@@ -152,6 +152,7 @@ extern "C" {
     /// Check if option has the given type
     fn rs_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     /// Get options[opt_idx].flags (as u32)
+    #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     /// Get options[opt_idx].def_val.data.string.data
     fn nvim_option_expand(opt_idx: c_int, val: *const std::ffi::c_char) -> *mut std::ffi::c_char;

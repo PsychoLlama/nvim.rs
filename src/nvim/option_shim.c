@@ -145,7 +145,6 @@ extern int rs_option_has_scope(int opt_idx, int scope);
 extern int rs_option_is_global_local(int opt_idx);
 extern int rs_option_is_global_only(int opt_idx);
 extern int rs_option_is_window_local(int opt_idx);
-extern uint32_t rs_get_option_flags(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
@@ -161,7 +160,6 @@ extern void rs_set_init_tablocal(void);
 extern void rs_check_options(void);
 
 // Rust validate_option_value cluster (option pass 8 phase 3)
-extern OptVal rs_get_option_unset_value(int opt_idx);
 extern OptVal rs_get_option_default(int opt_idx, int opt_flags);
 extern const char *rs_validate_option_value(int opt_idx, OptVal *newval, int opt_flags,
                                             char *errbuf, size_t errbuflen);
@@ -1265,8 +1263,6 @@ void nvim_option_set_script_ctx(OptIndex opt_idx, sctx_T sctx) { options[opt_idx
 
 // Phase 4 (session.rs) accessors
 OptVal nvim_optval_from_varp(OptIndex opt_idx, void *varp) { return optval_from_varp(opt_idx, varp); }
-OptVal nvim_get_option_unset_value(OptIndex opt_idx) { return get_option_unset_value(opt_idx); }
-int nvim_option_has_type(OptIndex opt_idx, int type) { return (int)option_has_type(opt_idx, (OptValType)type); }
 void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
 {
   return get_varp_scope(&options[opt_idx], opt_flags);
@@ -2023,15 +2019,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 // nvim_option_is_global_local/global_only/window_local deleted:
 // Rust callers now use #[link_name] to call the rs_ functions directly.
 
-/// Get option flags.
-///
-/// @param  opt_idx  Option index in options[] table.
-///
-/// @return  Option flags. Returns 0 for invalid option name.
-uint32_t get_option_flags(OptIndex opt_idx)
-{
-  return rs_get_option_flags(opt_idx);
-}
 
 /// Gets the value for an option.
 ///
@@ -2051,17 +2038,6 @@ vimoption_T *get_option(OptIndex opt_idx)
   return rs_get_option_ptr(opt_idx);
 }
 
-/// Get option value that represents an unset local value for an option.
-/// TODO(famiu): Remove this once we have a dedicated OptVal type for unset local options.
-///
-/// @param      opt_idx  Option index in options[] table.
-/// @param[in]  varp  Pointer to option variable.
-///
-/// @return Option value equal to the unset value for the option.
-static OptVal get_option_unset_value(OptIndex opt_idx)
-{
-  return rs_get_option_unset_value(opt_idx);
-}
 
 /// Check if local value of global-local option is unset for current buffer / window.
 /// Always returns false for options that aren't global-local.

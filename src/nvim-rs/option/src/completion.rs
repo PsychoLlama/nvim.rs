@@ -515,6 +515,7 @@ pub unsafe extern "C" fn rs_ends_with_comma(s: *const c_char) -> c_int {
 extern "C" {
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
     fn nvim_option_get_shortname(opt_idx: c_int) -> *const c_char;
+    #[link_name = "rs_option_has_type"]
     fn nvim_option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     #[link_name = "rs_option_is_hidden"]
     fn nvim_opt_is_hidden(opt_idx: c_int) -> c_int;
