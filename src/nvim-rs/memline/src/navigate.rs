@@ -129,6 +129,7 @@ extern "C" {
     // -------------------------------------------------------------------------
 
     /// Flush the current cached line to the data block (Rust implementation)
+    #[link_name = "ml_flush_line"]
     fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     // -------------------------------------------------------------------------
@@ -1044,7 +1045,8 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 /// - Output pointers must be valid or NULL
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_flush_deleted_bytes"]
 pub unsafe extern "C" fn rs_ml_flush_deleted_bytes(
     buf: *mut BufHandle,
     codepoints: *mut usize,

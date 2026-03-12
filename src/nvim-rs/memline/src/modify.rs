@@ -592,7 +592,7 @@ const FAIL: c_int = 0;
 /// - `buf` must be a valid buffer pointer
 /// - `line_arg` must point to at least `len_arg` bytes
 /// - If `copy` is false, the caller must not use `line_arg` after this call
-#[no_mangle]
+#[export_name = "ml_replace_buf_len"]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn rs_ml_delete_buf(
 ///
 /// # Safety
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_append_flags"]
 pub unsafe extern "C" fn rs_ml_append_flags_impl(
     lnum: LineNr,
     line: *mut c_char,
@@ -749,7 +749,7 @@ pub unsafe extern "C" fn rs_ml_append_flags_impl(
 /// - `buf` must be a valid buffer pointer or NULL
 ///
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_append_buf"]
 pub unsafe extern "C" fn rs_ml_append_buf_impl(
     buf: *mut BufHandle,
     lnum: LineNr,
@@ -772,7 +772,8 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
 /// # Safety
 ///
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ml_delete_flags"]
 pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> c_int {
     let buf = nvim_get_curbuf();
     rs_ml_flush_line(buf, 0);
@@ -789,7 +790,7 @@ pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> 
 /// - `buf` must be a valid buffer pointer or NULL
 ///
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_delete_buf"]
 pub unsafe extern "C" fn rs_ml_delete_buf_impl(
     buf: *mut BufHandle,
     lnum: LineNr,
@@ -810,7 +811,7 @@ pub unsafe extern "C" fn rs_ml_delete_buf_impl(
 /// - `line` must be a valid C string or NULL
 ///
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_replace_buf"]
 pub unsafe extern "C" fn rs_ml_replace_buf_impl(
     buf: *mut BufHandle,
     lnum: LineNr,
@@ -1419,7 +1420,7 @@ pub unsafe extern "C" fn rs_ml_append_flush(
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 /// - Only call from the main Neovim thread (static ENTERED guard is not thread-safe)
-#[no_mangle]
+#[export_name = "ml_flush_line"]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -1637,7 +1638,7 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len(ptr: *mut c_char, len: isize) {
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
 /// - `ptr` must be a valid C string
-#[no_mangle]
+#[export_name = "ml_add_deleted_len_buf"]
 #[allow(
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,

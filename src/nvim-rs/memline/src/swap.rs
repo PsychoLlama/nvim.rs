@@ -1008,7 +1008,8 @@ pub unsafe extern "C" fn rs_resolve_symlink(fname: *const c_char, buf: *mut c_ch
 /// # Safety
 /// - `fname` and `dname` must be valid C strings
 /// - Returns allocated string or NULL
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_file_in_dir"]
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
     if fname.is_null() || dname.is_null() {
@@ -1051,7 +1052,8 @@ pub unsafe extern "C" fn rs_get_file_in_dir(fname: *mut c_char, dname: *mut c_ch
 /// # Safety
 /// - `buf`, `dir_name` must be valid C strings; `fname` may be NULL
 /// - Returns allocated string or NULL
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "makeswapname"]
 #[allow(clippy::similar_names, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_makeswapname(
     fname: *mut c_char,
@@ -2221,6 +2223,7 @@ extern "C" {
     fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
 
     /// Flush buffered line for buffer
+    #[link_name = "ml_flush_line"]
     fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     /// Find or flush line in B-tree

@@ -239,37 +239,37 @@ extern void rs_ml_set_lowest_marked(linenr_T lnum);
 // Pass 2 Phase 2: Swap file path helper Rust function declarations
 extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
 // rs_resolve_symlink deleted: now exported as resolve_symlink via #[export_name]
-extern char *rs_get_file_in_dir(char *fname, char *dname);
-extern char *rs_makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
+// rs_get_file_in_dir deleted: now exported as get_file_in_dir via #[export_name]
+// rs_makeswapname deleted: now exported as makeswapname via #[export_name]
 // rs_ml_close deleted: now exported as ml_close via #[export_name]
 // rs_check_need_swap deleted: now exported as check_need_swap via #[export_name]
 // rs_ml_timestamp deleted: now exported as ml_timestamp via #[export_name]
-extern size_t rs_ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits);
+// rs_ml_flush_deleted_bytes deleted: now exported as ml_flush_deleted_bytes via #[export_name]
 // rs_ml_add_deleted_len deleted: now exported as ml_add_deleted_len via #[export_name]
-extern void rs_ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
+// rs_ml_add_deleted_len_buf deleted: now exported as ml_add_deleted_len_buf via #[export_name]
 extern int rs_ml_add_stack(buf_T *buf);
 // rs_ml_setflags deleted: now exported as ml_setflags via #[export_name]
 // Pass 3 Phase 1: swapfile_dict Rust function declaration
 extern void rs_swapfile_dict(const char *fname, dict_T *d);
 // Pass 3 Phase 2: swapfile_info Rust function declaration
 extern int64_t rs_swapfile_info(char *fname, void *sb, int *proc_running_out);
-// Pass 3 Phase 3: ml_replace_buf_len Rust function declaration
-extern int rs_ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg,
-                                  bool copy, bool noalloc);
+// Pass 3 Phase 3: ml_replace_buf_len now exported directly from Rust via #[export_name]
+// rs_ml_replace_buf_len deleted: now exported as ml_replace_buf_len via #[export_name]
 // Pass 3 Phase 4: ml_get_buf_impl Rust function declaration
 extern char *rs_ml_get_buf_impl(buf_T *buf, linenr_T lnum, bool will_change);
 // Pass 4 Phase 1: line-access thin wrappers now exported directly from Rust via #[export_name]
 // rs_ml_get_pos, rs_ml_get_len, rs_ml_get_pos_len, rs_ml_get_buf_len, rs_gchar_pos deleted
-// Pass 4 Phase 2: modification dispatch _impl Rust function declarations
-extern int rs_ml_append_flags_impl(linenr_T lnum, char *line, colnr_T len, int flags);
-extern int rs_ml_append_buf_impl(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile);
-extern int rs_ml_delete_flags_impl(linenr_T lnum, int flags);
-extern int rs_ml_delete_buf_impl(buf_T *buf, linenr_T lnum, bool message);
-extern int rs_ml_replace_buf_impl(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
+// Pass 4 Phase 2: modification dispatch now exported directly from Rust via #[export_name]
+// rs_ml_append_flags_impl deleted: now exported as ml_append_flags via #[export_name]
+// rs_ml_append_buf_impl deleted: now exported as ml_append_buf via #[export_name]
+// rs_ml_delete_flags_impl deleted: now exported as ml_delete_flags via #[export_name]
+// rs_ml_delete_buf_impl deleted: now exported as ml_delete_buf via #[export_name]
+// rs_ml_replace_buf_impl deleted: now exported as ml_replace_buf via #[export_name]
+// Pass 3 Phase 3: ml_replace_buf_len still used by rs_ml_replace_buf_len alias
 // Pass 4 Phase 3: ml_append_flush Rust function declaration
 extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len, int flags);
-// Pass 5 Phase 2: ml_flush_line Rust function declaration
-extern void rs_ml_flush_line(buf_T *buf, int noalloc);
+// Pass 5 Phase 2: ml_flush_line now exported directly from Rust via #[export_name]
+// rs_ml_flush_line deleted: now exported as ml_flush_line via #[export_name]
 // Pass 8 Phase 2: ml_preserve Rust function declaration
 extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
 // rs_ml_open_file deleted: now exported as ml_open_file via #[export_name]
@@ -1301,37 +1301,10 @@ int ml_append(linenr_T lnum, char *line, colnr_T len, bool newfile)
   return ml_append_flags(lnum, line, len, newfile ? ML_APPEND_NEW : 0);
 }
 
-/// @param lnum  append after this line (can be 0)
-/// @param line  text of the new line
-/// @param len  length of new line, including nul, or 0
-/// @param flags  ML_APPEND_ values
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_append_flags(linenr_T lnum, char *line, colnr_T len, int flags)
-{
-  return rs_ml_append_flags_impl(lnum, line, len, flags);
-}
-
-/// Like ml_append() but for an arbitrary buffer.  The buffer must already have
-/// a memline.
-///
-/// @param lnum  append after this line (can be 0)
-/// @param line  text of the new line
-/// @param len  length of new line, including NUL, or 0
-/// @param newfile  flag, see above
-int ml_append_buf(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_append_buf_impl(buf, lnum, line, len, newfile);
-}
-
+// ml_append_flags deleted: now exported from Rust modify.rs via #[export_name]
+// ml_append_buf deleted: now exported from Rust modify.rs via #[export_name]
 // ml_add_deleted_len deleted: Rust exports under the C name directly via #[export_name = "ml_add_deleted_len"].
-
-/// Track deleted text length for a specific buffer (thin wrapper calling Rust).
-void ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len)
-{
-  rs_ml_add_deleted_len_buf(buf, ptr, len);
-}
+// ml_add_deleted_len_buf deleted: now exported from Rust modify.rs via #[export_name]
 
 /// Replace line "lnum", with buffering, in current buffer.
 int ml_replace(linenr_T lnum, char *line, bool copy)
@@ -1346,45 +1319,10 @@ int ml_replace_len(linenr_T lnum, char *line, size_t len, bool copy)
   return ml_replace_buf_len(curbuf, lnum, line, len, copy, false);
 }
 
-int ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_replace_buf_impl(buf, lnum, line, copy, noalloc);
-}
-
-/// Replace line "lnum", with buffering.
-///
-/// @param copy  if true, make a copy of the line, otherwise the line has been
-///              copied to allocated memory already.
-///              if false, the "line" may be freed to add text properties!
-/// @param len_arg  length of the text, excluding NUL
-///
-/// Do not use it after calling ml_replace().
-///
-/// Check: The caller of this function should probably also call
-/// changed_lines(), unless update_screen(UPD_NOT_VALID) is used.
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg, bool copy,
-                       bool noalloc)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ml_replace_buf_len(buf, lnum, line_arg, len_arg, copy, noalloc);
-}
-
-/// Delete line `lnum` in buffer
-///
-/// @note The caller of this function should probably also call changed_lines() after this.
-///
-/// @param message  Show "--No lines in buffer--" message.
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_ml_delete_buf_impl(buf, lnum, message);
-}
-
+// ml_replace_buf deleted: now exported from Rust modify.rs via #[export_name]
+// ml_replace_buf_len deleted: now exported from Rust modify.rs via #[export_name]
+// ml_delete_buf deleted: now exported from Rust modify.rs via #[export_name]
+// ml_delete_flags deleted: now exported from Rust modify.rs via #[export_name]
 
 /// Delete line "lnum" in the current buffer.
 ///
@@ -1397,46 +1335,16 @@ int ml_delete(linenr_T lnum)
   return ml_delete_flags(lnum, 0);
 }
 
-/// Like ml_delete() but using flags (see ml_delete_int()).
-///
-/// @return  FAIL for failure, OK otherwise
-int ml_delete_flags(linenr_T lnum, int flags)
-{
-  return rs_ml_delete_flags_impl(lnum, flags);
-}
-
 // ml_setmarked deleted: Rust exports under the C name directly via #[export_name = "ml_setmarked"].
 // ml_firstmarked deleted: Rust exports under the C name directly via #[export_name = "ml_firstmarked"].
 // ml_clearmarked deleted: Rust exports under the C name directly via #[export_name = "ml_clearmarked"].
 
-/// Flush deleted byte tracking counters (thin wrapper calling Rust).
-size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
-{
-  return rs_ml_flush_deleted_bytes(buf, codepoints, codeunits);
-}
-
-/// flush ml_line if necessary (thin wrapper calling Rust)
-void ml_flush_line(buf_T *buf, bool noalloc)
-{
-  rs_ml_flush_line(buf, noalloc);
-}
-
+// ml_flush_deleted_bytes deleted: now exported from Rust navigate.rs via #[export_name]
+// ml_flush_line deleted: now exported from Rust modify.rs via #[export_name]
 
 // resolve_symlink deleted: Rust exports under the C name directly via #[export_name = "resolve_symlink"].
-
-/// Make swapfile name out of the file name and a directory name. (thin wrapper calling Rust)
-///
-/// @return  pointer to allocated memory or NULL.
-char *makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name)
-{
-  return rs_makeswapname(fname, ffname, buf, dir_name);
-}
-
-/// Get file name to use for swapfile or backup file. (thin wrapper calling Rust)
-char *get_file_in_dir(char *fname, char *dname)
-{
-  return rs_get_file_in_dir(fname, dname);
-}
+// makeswapname deleted: now exported from Rust swap.rs via #[export_name]
+// get_file_in_dir deleted: now exported from Rust swap.rs via #[export_name]
 
 // attention_message, do_swapexists, findswapname migrated to Rust (swap.rs Phase 8 Pass 1)
 

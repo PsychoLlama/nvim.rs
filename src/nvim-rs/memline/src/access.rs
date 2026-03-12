@@ -115,9 +115,11 @@ extern "C" {
     fn rs_ml_find_line(buf: *mut BufHandle, lnum: LineNr, action: c_int) -> *mut c_void;
 
     /// Flush the cached line to the data block (Rust implementation)
+    #[link_name = "ml_flush_line"]
     fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
 
     /// Track a deleted line's length for undo purposes (Rust implementation)
+    #[link_name = "ml_add_deleted_len_buf"]
     fn rs_ml_add_deleted_len_buf(buf: *mut BufHandle, ptr: *mut c_char, len: isize);
 
     /// Duplicate memory of given length

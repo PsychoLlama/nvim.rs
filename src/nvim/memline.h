@@ -13,6 +13,18 @@ colnr_T ml_get_len(linenr_T lnum);
 colnr_T ml_get_pos_len(pos_T *pos);
 colnr_T ml_get_buf_len(buf_T *buf, linenr_T lnum);
 int gchar_pos(pos_T *pos);
+int ml_append_flags(linenr_T lnum, char *line, colnr_T len, int flags);
+int ml_append_buf(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfile);
+void ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
+int ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool noalloc);
+int ml_replace_buf_len(buf_T *buf, linenr_T lnum, char *line_arg, size_t len_arg, bool copy,
+                       bool noalloc);
+int ml_delete_buf(buf_T *buf, linenr_T lnum, bool message);
+int ml_delete_flags(linenr_T lnum, int flags);
+size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits);
+void ml_flush_line(buf_T *buf, bool noalloc);
+char *makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
+char *get_file_in_dir(char *fname, char *dname);
 linenr_T ml_firstmarked(void);
 #if defined(HAVE_READLINK)
 int resolve_symlink(const char *fname, char *buf);
