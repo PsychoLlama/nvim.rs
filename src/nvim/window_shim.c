@@ -194,7 +194,7 @@ extern int rs_make_windows(int count, int vertical);
 
 // do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
 extern void rs_do_autocmd_winclosed(win_T *win);
-extern bool rs_can_close_in_cmdwin(win_T *win, Error *err);
+// rs_can_close_in_cmdwin deleted: now exported as can_close_in_cmdwin via #[export_name]
 extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
 // rs_set_winbar deleted: now exported as set_winbar via #[export_name]
 
@@ -648,13 +648,7 @@ int make_windows(int count, bool vertical)
 
 // can_close_floating_windows deleted: logic migrated to Rust close/win_close.rs (Phase 11)
 
-/// @return true if, considering the cmdwin, `win` is safe to close.
-/// If false and `win` is the cmdwin, it is closed; otherwise, `err` is set.
-bool can_close_in_cmdwin(win_T *win, Error *err)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_can_close_in_cmdwin(win, err);
-}
+// can_close_in_cmdwin deleted: now exported from Rust focus.rs via #[export_name = "can_close_in_cmdwin"]
 
 /// Close the possibly last window in a tab page.
 ///

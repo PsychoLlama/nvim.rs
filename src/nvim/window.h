@@ -109,10 +109,11 @@ const char *check_colorcolumn(char *cc, win_T *wp);
 void close_others(int message, int forceit);
 void ui_ext_win_viewport(win_T *wp);
 
-// Phase 17: Rust-exported functions (via #[export_name])
+// Phase 17+: Rust-exported functions (via #[export_name])
 void win_fix_scroll(bool resize);
 void set_winbar(bool make_room);
 void close_windows(buf_T *buf, bool keep_curwin);
 void win_ui_flush(bool validate);
+bool can_close_in_cmdwin(win_T *win, Error *err);
 
 #include "window_shim.h.generated.h"

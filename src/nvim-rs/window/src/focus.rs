@@ -525,7 +525,7 @@ unsafe fn can_close_in_cmdwin_impl(win: WinHandle, err: *mut std::ffi::c_void) -
 ///
 /// # Safety
 /// Calls C accessor functions with a valid window handle.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "can_close_in_cmdwin")]
 pub unsafe extern "C" fn rs_can_close_in_cmdwin(
     win: WinHandle,
     err: *mut std::ffi::c_void,
