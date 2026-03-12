@@ -153,8 +153,6 @@ int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
 {
   return ml_append(lnum, (char *)line, len, newfile);
 }
-extern int rs_ml_line_alloced(void);
-bool nvim_ml_line_alloced(void) { return rs_ml_line_alloced(); }
 void nvim_ml_add_deleted_len(char *ptr, colnr_T len) { ml_add_deleted_len(ptr, len); }
 
 // =============================================================================
@@ -234,8 +232,6 @@ void nvim_set_curwin_cursor_coladd(colnr_T coladd) { curwin->w_cursor.coladd = c
 
 void nvim_replace_push(const char *ptr, size_t len) { replace_push(ptr, len); }
 void nvim_replace_push_nul(void) { replace_push_nul(); }
-extern int rs_ins_compl_active(void);
-bool nvim_ins_compl_active(void) { return rs_ins_compl_active(); }
 void nvim_showmatch(int c) { showmatch(c); }
 
 // =============================================================================
@@ -292,8 +288,6 @@ char *nvim_curbuf_get_b_p_com(void) { return curbuf->b_p_com; }
 // Diff functions
 // =============================================================================
 
-extern int rs_diff_internal(void);
-bool nvim_diff_internal(void) { return rs_diff_internal(); }
 
 // =============================================================================
 // Spell
@@ -367,8 +361,6 @@ win_T *nvim_win_get_next_in_tab(win_T *wp) { return wp->w_next; }
 
 void nvim_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_approximate_botline_win(win_T *wp) { approximate_botline_win(wp); }
-extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
-int nvim_find_wl_entry(win_T *wp, linenr_T lnum) { return rs_find_wl_entry(wp, lnum); }
 // nvim_changed_cline_bef_curs exists in move.c
 
 // Window w_lines[] array accessors

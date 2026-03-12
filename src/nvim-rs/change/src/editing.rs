@@ -25,6 +25,7 @@ extern "C" {
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
+    #[link_name = "rs_ml_line_alloced"]
     fn nvim_ml_line_alloced() -> bool;
     fn nvim_ml_add_deleted_len(ptr: *mut c_char, len: ColnrT);
 
@@ -56,6 +57,7 @@ extern "C" {
     // Showmatch
     fn nvim_p_sm() -> bool;
     fn nvim_msg_silent() -> c_int;
+    #[link_name = "rs_ins_compl_active"]
     fn nvim_ins_compl_active() -> bool;
     fn nvim_showmatch(c: c_int);
     fn nvim_utf_ptr2char(ptr: *const c_char) -> c_int;

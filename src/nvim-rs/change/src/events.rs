@@ -75,6 +75,7 @@ extern "C" {
     fn nvim_vim_strchr_cpo_dollar() -> bool;
 
     // Diff functions
+    #[link_name = "rs_diff_internal"]
     fn nvim_diff_internal() -> bool;
     fn nvim_diff_lnum_win(lnum: LinenrT, win: WinHandle) -> LinenrT;
 

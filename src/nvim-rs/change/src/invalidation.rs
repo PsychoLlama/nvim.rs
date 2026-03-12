@@ -35,6 +35,7 @@ extern "C" {
     fn nvim_changed_line_abv_curs_win(win: WinHandle);
     fn nvim_changed_cline_bef_curs(win: WinHandle);
     fn nvim_approximate_botline_win(win: WinHandle);
+    #[link_name = "rs_find_wl_entry"]
     fn nvim_find_wl_entry(win: WinHandle, lnum: LinenrT) -> c_int;
 
     // Buffer metadata
