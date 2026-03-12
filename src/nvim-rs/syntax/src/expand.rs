@@ -185,7 +185,8 @@ pub unsafe extern "C" fn rs_set_context_in_syntax_cmd(xp: *mut c_void, arg: *con
 ///
 /// # Safety
 /// `xp` must be a valid pointer to expand_T.
-#[no_mangle]
+#[export_name = "get_syntax_name"]
+#[must_use]
 pub unsafe extern "C" fn rs_get_syntax_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
     if idx < 0 {
         return std::ptr::null_mut();

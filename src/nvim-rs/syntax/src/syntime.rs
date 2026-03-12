@@ -122,7 +122,8 @@ pub unsafe extern "C" fn rs_ex_syntime(eap: *mut c_void) {
 ///
 /// # Safety
 /// Returned pointer is to a static string, valid forever.
-#[no_mangle]
+#[export_name = "get_syntime_arg"]
+#[must_use]
 pub unsafe extern "C" fn rs_get_syntime_arg(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     if idx >= 0 && (idx as usize) < SYNTIME_ARGS.len() {
         // Cast away const for C API compatibility (callers treat as const)

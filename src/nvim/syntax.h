@@ -34,5 +34,9 @@ enum {
 /// Array of highlight definitions, used for unit testing
 extern const char *const highlight_init_cmdline[];
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+char *get_syntime_arg(expand_T *xp, int idx);
+char *get_syntax_name(expand_T *xp, int idx);
+
 #include "syntax_accessors.h.generated.h"
 #include "nvim/syntax_bridge.h"

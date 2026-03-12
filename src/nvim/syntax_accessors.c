@@ -1891,9 +1891,7 @@ int nvim_syn_get_columns(void) { return (int)Columns; }
 extern void rs_ex_syntime(exarg_T *eap);
 void ex_syntime(exarg_T *eap) { rs_ex_syntime(eap); }
 
-/// Thin wrapper: get_syntime_arg body delegated to Rust.
-extern char *rs_get_syntime_arg(expand_T *xp, int idx);
-char *get_syntime_arg(expand_T *xp, int idx) { return rs_get_syntime_arg(xp, idx); }
+// get_syntime_arg deleted: Rust exports under the C name directly via #[export_name].
 
 // =============================================================================
 // Phase expand: accessors for tab completion functions
@@ -1915,8 +1913,7 @@ void set_context_in_syntax_cmd(expand_T *xp, const char *arg)
   rs_set_context_in_syntax_cmd(xp, arg);
 }
 
-extern char *rs_get_syntax_name(expand_T *xp, int idx);
-char *get_syntax_name(expand_T *xp, int idx) { return rs_get_syntax_name(xp, idx); }
+// get_syntax_name deleted: Rust exports under the C name directly via #[export_name].
 
 extern void rs_set_context_in_echohl_cmd(expand_T *xp, const char *arg);
 void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
