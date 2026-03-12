@@ -61,6 +61,9 @@ static inline const char *optval_type_get_name(const OptValType type)
 #define STATIC_CSTR_TO_OPTVAL(s) STRING_OPTVAL(STATIC_CSTR_TO_STRING(s))
 
 // Phase 34+: Rust-exported functions (via #[export_name])
+void check_options(void);
+int was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
+uint32_t *insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
 void set_init_tablocal(void);
 void set_init_3(void);
 void set_helplang_default(const char *lang);

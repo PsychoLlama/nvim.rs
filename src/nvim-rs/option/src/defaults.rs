@@ -119,7 +119,7 @@ pub unsafe extern "C" fn rs_set_init_tablocal() {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "check_options"]
 pub unsafe extern "C" fn rs_check_options() {
     let count = K_OPT_COUNT;
     for opt_idx in 0..count {
@@ -511,7 +511,8 @@ extern "C" {
     fn rs_option_is_window_local(opt_idx: c_int) -> c_int;
     /// rs_optval_from_varp(opt_idx, varp) - convert varp pointer to OptVal
     fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
-    /// rs_insecure_flag(wp, opt_idx, opt_flags) - get pointer to insecure flag
+    /// insecure_flag(wp, opt_idx, opt_flags) - get pointer to insecure flag
+    #[link_name = "insecure_flag"]
     fn rs_insecure_flag(wp: *mut std::ffi::c_void, opt_idx: c_int, opt_flags: c_int)
         -> *mut c_uint;
     /// nvim_opt_get_curwin() - get current window handle

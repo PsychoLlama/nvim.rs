@@ -835,6 +835,7 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ul_no_local();
     fn nvim_call_check_buf_options_curbuf();
     fn nvim_call_check_win_options();
+    #[link_name = "check_options"]
     fn rs_check_options();
     fn nvim_call_rs_last_status_0();
     fn nvim_didset_options();

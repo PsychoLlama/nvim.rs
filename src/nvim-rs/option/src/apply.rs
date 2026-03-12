@@ -117,6 +117,7 @@ extern "C" {
     fn rs_check_redraw_for(buf: *mut std::ffi::c_void, win: *mut std::ffi::c_void, flags: c_uint);
 
     // insecure_flag pointer
+    #[link_name = "insecure_flag"]
     fn rs_insecure_flag(wp: *mut std::ffi::c_void, opt_idx: c_int, opt_flags: c_int)
         -> *mut c_uint;
 

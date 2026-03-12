@@ -131,7 +131,8 @@ pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, fla
 /// NOTE: Caller must make sure that `wp` is set to the window from which the option is used.
 ///
 /// Corresponds to `insecure_flag()` in option_shim.c.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "insecure_flag"]
 pub unsafe extern "C" fn rs_insecure_flag(
     wp: WinHandle,
     opt_idx: OptIndex,
@@ -175,7 +176,8 @@ pub unsafe extern "C" fn rs_insecure_flag(
 // =============================================================================
 
 /// Check if option `opt_idx` was set insecurely (from modeline).
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "was_set_insecurely"]
 pub unsafe extern "C" fn rs_was_set_insecurely(
     wp: WinHandle,
     opt_idx: OptIndex,

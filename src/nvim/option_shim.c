@@ -157,7 +157,7 @@ extern void rs_alloc_options_default(void);
 extern void rs_change_option_default(int opt_idx, OptVal value);
 extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
 // rs_set_init_tablocal deleted: now exported as set_init_tablocal via #[export_name]
-extern void rs_check_options(void);
+// rs_check_options deleted: now exported as check_options via #[export_name]
 
 // Rust validate_option_value cluster (option pass 8 phase 3)
 extern OptVal rs_get_option_default(int opt_idx, int opt_flags);
@@ -202,7 +202,7 @@ extern OptVal rs_get_tty_option(const char *name);
 extern bool rs_set_tty_option(const char *name, char *value);
 extern int rs_string_to_key(char *arg);
 extern void rs_check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
-extern uint32_t *rs_insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
+// rs_insecure_flag deleted: now exported as insecure_flag via #[export_name]
 extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_value,
                                      OptVal new_value, int opt_flags, scid_T set_sid,
                                      int direct, int value_replaced, char *errbuf,
@@ -210,7 +210,7 @@ extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_va
 extern const char *rs_set_option_impl(OptIndex opt_idx, OptVal value, int opt_flags,
                                       int set_sid, int direct, int value_replaced,
                                       char *errbuf, size_t errbuflen);
-extern int rs_was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
+// rs_was_set_insecurely deleted: now exported as was_set_insecurely via #[export_name]
 extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
 extern int rs_optval_default(OptIndex opt_idx, void *varp);
 extern int rs_wc_use_keyname(const void *varp, OptInt *wcp);
@@ -1704,32 +1704,11 @@ static void didset_options2(void)
   rs_didset_options2();
 }
 
-/// Check for string options that are NULL (normally only termcap options).
-void check_options(void)
-{
-  rs_check_options();
-}
+// check_options deleted: now exported directly from Rust via #[export_name]
 
-/// Check if option was set insecurely.
-///
-/// @param  wp         Window.
-/// @param  opt_idx    Option index in options[] table.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-///
-/// @return  True if option was set from a modeline or in secure mode, false if it wasn't.
-int was_set_insecurely(win_T *const wp, OptIndex opt_idx, int opt_flags)
-{
-  return rs_was_set_insecurely(wp, opt_idx, opt_flags);
-}
+// was_set_insecurely deleted: now exported directly from Rust via #[export_name]
 
-/// Get a pointer to the flags used for the kOptFlagInsecure flag of option
-/// "opt_idx".  For some local options a local flags field is used.
-/// NOTE: Caller must make sure that "wp" is set to the window from which
-/// the option is used.
-uint32_t *insecure_flag(win_T *const wp, OptIndex opt_idx, int opt_flags)
-{
-  return rs_insecure_flag(wp, opt_idx, opt_flags);
-}
+// insecure_flag deleted: now exported directly from Rust via #[export_name]
 
 // redraw_titles deleted: now exported directly from Rust via #[export_name]
 
