@@ -411,7 +411,8 @@ unsafe fn write_int64(fd: *mut libc::FILE, val: i64) -> c_int {
 /// Write fold option set commands to file `fd`.
 ///
 /// Corresponds to `makefoldset()` in option_shim.c.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "makefoldset"]
 pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
     let setlocal = c"setlocal".as_ptr();
 
@@ -452,7 +453,8 @@ const OPT_SKIPRTP: c_int = 0x80;
 /// Write modified options as `:set` commands to a file.
 ///
 /// Corresponds to `makeset()` in option_shim.c.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "makeset"]
 pub unsafe extern "C" fn rs_makeset(
     fd: *mut libc::FILE,
     opt_flags: c_int,

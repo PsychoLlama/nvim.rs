@@ -1084,7 +1084,8 @@ pub unsafe extern "C" fn rs_set_option_direct_for(
 /// Rust implementation of get_option_value.
 ///
 /// Gets the value for an option, returning NIL_OPTVAL for invalid index.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_option_value"]
 pub unsafe extern "C" fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal {
     if opt_idx == OPT_INVALID {
         return OptVal {

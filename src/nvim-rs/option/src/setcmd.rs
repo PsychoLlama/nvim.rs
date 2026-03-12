@@ -534,6 +534,7 @@ extern "C" {
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_unset_option_local_value(opt_idx: c_int) -> *const c_char;
+    #[link_name = "get_option_value"]
     fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn nvim_call_vim_str2nr(arg: *const c_char, len_out: *mut c_int, num_out: *mut crate::OptInt);
     fn rs_string_to_key(arg: *mut c_char) -> c_int;

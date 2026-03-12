@@ -216,7 +216,6 @@ extern int rs_optval_default(OptIndex opt_idx, void *varp);
 extern int rs_wc_use_keyname(const void *varp, OptInt *wcp);
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
 extern int rs_put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp);
-extern int rs_makefoldset(FILE *fd);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
 _Static_assert(UPD_VALID == 10, "UPD_VALID mismatch with Rust UpdateType::Valid");
@@ -350,7 +349,6 @@ extern int rs_is_option_local_value_unset(OptIndex opt_idx);
 extern char *rs_optval_to_cstr(OptVal o);
 
 // Phase 15 option value API (from Rust value.rs)
-extern OptVal rs_get_option_value(int opt_idx, int opt_flags);
 extern vimoption_T *rs_get_option_ptr(int opt_idx);
 extern void rs_set_option_direct(int opt_idx, OptVal value, int opt_flags, int set_sid);
 extern void rs_set_option_direct_for(int opt_idx, OptVal value, int opt_flags, int set_sid,
@@ -1938,16 +1936,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 // Rust callers now use #[link_name] to call the rs_ functions directly.
 
 
-/// Gets the value for an option.
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-///
-/// @return [allocated] Option value. Returns NIL_OPTVAL for invalid option index.
-OptVal get_option_value(OptIndex opt_idx, int opt_flags)
-{
-  return rs_get_option_value(opt_idx, opt_flags);
-}
 
 /// Return information for option at 'opt_idx'
 vimoption_T *get_option(OptIndex opt_idx)
@@ -2233,21 +2221,6 @@ static void showoneopt(vimoption_T *opt, int opt_flags)
 ///             value.
 ///             When "local_only" is true, don't write fresh
 ///             values, only local values (for ":mkview").
-/// (fresh value = value used for a new buffer or window for a local option).
-///
-/// Return FAIL on error, OK otherwise.
-extern int rs_makeset(FILE *fd, int opt_flags, int local_only);
-int makeset(FILE *fd, int opt_flags, int local_only)
-{
-  return rs_makeset(fd, opt_flags, local_only);
-}
-
-/// Generate set commands for the local fold options only.  Used when
-/// 'sessionoptions' or 'viewoptions' contains "folds" but not "options".
-int makefoldset(FILE *fd)
-{
-  return rs_makefoldset(fd);
-}
 
 /// Print the ":set" command to set a single option to file.
 ///
