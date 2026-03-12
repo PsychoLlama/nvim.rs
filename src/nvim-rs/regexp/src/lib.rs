@@ -15452,7 +15452,8 @@ extern "C" {
 ///
 /// Selects BT vs NFA based on `p_re` and `\%#=` prefix,
 /// handles NFA-to-BT fallback on compile error.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regcomp"]
 pub unsafe extern "C" fn rs_vim_regcomp(expr_arg: *const u8, re_flags: c_int) -> *mut c_void {
     let mut expr = expr_arg;
 

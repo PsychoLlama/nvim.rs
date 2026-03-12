@@ -69,7 +69,7 @@ extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
 // rs_vim_regexec_multi deleted: now exported as vim_regexec_multi via #[export_name]
-extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
+// rs_vim_regcomp deleted: now exported as vim_regcomp via #[export_name]
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
 
 /// Structure returned by vim_regcomp() to pass on to vim_regexec().
@@ -687,14 +687,7 @@ void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
   return r;
 }
 
-// Compile a regular expression into internal code.
-// Returns the program in allocated memory.
-// Use vim_regfree() to free the memory.
-// Returns NULL for an error.
-regprog_T *vim_regcomp(const char *expr_arg, int re_flags)
-{
-  return (regprog_T *)rs_vim_regcomp((const uint8_t *)expr_arg, re_flags);
-}
+// vim_regcomp deleted: Rust exports under the C name directly via #[export_name].
 
 // Note: "*prog" may be freed and changed.
 // Return true if there is a match, false if not.
