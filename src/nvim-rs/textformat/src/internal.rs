@@ -79,7 +79,7 @@ extern "C" {
     fn nvim_textfmt_get_cursor_pos_len() -> c_int;
 
     // Existing accessors from other modules
-    fn nvim_get_nolist_virtcol() -> c_int;
+    fn get_nolist_virtcol() -> c_int;
     fn nvim_char2cells(c: c_int) -> c_int;
     fn nvim_get_cursor_pos_ptr() -> *const c_char;
     fn nvim_set_did_ai(val: bool);
@@ -175,7 +175,7 @@ pub(crate) unsafe fn internal_format_impl(
         let mut did_do_comment = false;
         let mut cc: c_int;
 
-        let virtcol = nvim_get_nolist_virtcol()
+        let virtcol = get_nolist_virtcol()
             + nvim_char2cells(if c != NUL {
                 c
             } else {

@@ -190,95 +190,16 @@ static bool ins_need_undo;              // call u_save() before inserting a
                                         // char.  Set when edit() is called.
                                         // after that arrow_used is used.
 
-// Rust FFI declarations
-extern int rs_ins_need_undo_get(void);
-extern int rs_get_can_cindent(void);
-// buf_prompt_text, prompt_text: now canonical names (Phase 2)
-extern bool rs_prompt_curpos_editable(void);
-// State module exports
-extern int rs_state_ins_need_undo(void);
-extern int rs_state_can_cindent(void);
-extern void rs_state_set_can_cindent(int val);
-extern int rs_state_revins_on(void);
-extern int rs_state_did_restart_edit(void);
-extern int rs_state_compl_busy(void);
-extern linenr_T rs_state_insstart_lnum(void);
-extern colnr_T rs_state_insstart_col(void);
-extern linenr_T rs_state_insstart_orig_lnum(void);
-extern colnr_T rs_state_insstart_orig_col(void);
-extern colnr_T rs_state_insstart_textlen(void);
-extern colnr_T rs_state_insstart_blank_vcol(void);
-extern int rs_state_dont_sync_undo(void);
-extern void rs_state_set_dont_sync_undo(int val);
-extern linenr_T rs_state_o_lnum(void);
-extern void rs_state_set_o_lnum(linenr_T val);
-// Mode module exports
-extern void rs_init_insert_state(int startln, int cmdchar);
-extern int rs_handle_restart_edit(void);
-extern int rs_in_insert_mode(void);
-extern int rs_in_replace_mode(void);
-extern int rs_in_vreplace_mode(void);
-extern void rs_set_insert_mode(int cmdchar);
-extern void rs_update_o_lnum_on_exit(void);
-extern int rs_has_langmap(void);
-extern void rs_enable_langmap(void);
-extern void rs_disable_langmap(void);
-extern int rs_revins_on(void);
-extern int rs_did_restart_edit(void);
-extern int rs_get_arrow_used(void);
-extern void rs_set_arrow_used(int val);
-extern linenr_T rs_get_o_lnum(void);
-// Insert module exports
-extern int rs_char_info_byte_len(int c);
-extern int rs_char_needs_nul_conversion(int c);
-extern int rs_insert_in_replace_mode(void);
-extern int rs_insert_in_vreplace_mode(void);
-extern int rs_is_printable(int c);
-extern int rs_is_whitespace(int c);
-extern int rs_is_newline(int c);
-extern colnr_T rs_insert_cursor_col(void);
-extern linenr_T rs_insert_cursor_lnum(void);
-// Keys module exports (edit_ prefix to avoid cmdline conflicts)
-extern int rs_edit_is_arrow_key(int key);
-extern int rs_edit_is_navigation_key(int key);
-extern int rs_edit_is_delete_key(int key);
-extern int rs_edit_is_backspace_key(int key);
-extern int rs_edit_is_enter_key(int key);
-extern int rs_edit_is_tab_key(int key);
-extern int rs_edit_is_ctrl_key(int key);
-extern int rs_edit_is_escape_key(int key);
-extern int rs_edit_is_printable_ascii(int key);
-extern int rs_edit_is_special_key(int key);
-extern int rs_edit_get_nav_direction(int key);
-extern int rs_edit_classify_key(int key);
-// Abbreviation module exports
-extern int rs_abbr_disabled(void);
-extern int rs_abbr_loaded(void);
-extern int rs_add_abbr_off(int c);
-extern int rs_remove_abbr_off(int c);
-extern int rs_has_abbr_off(int c);
-extern int rs_abbr_trigger_type(int c);
-extern int rs_abbr_trigger_needs_offset(int trigger_type);
-// Helpers module exports
-// undisplay_dollar, get_nolist_virtcol, truncate_spaces, backspace_until_column,
-// set_last_insert, free_last_insert, get_last_insert_save: now canonical names (Phase 2)
-
 typedef struct {
   char *data;
   size_t size;
 } RsNvimString;
+
+// Rust FFI declarations (only functions called directly in this file)
 extern RsNvimString rs_get_last_insert(void);
-// Replace stack module exports
 extern void rs_replace_push(const char *str, size_t len);
 extern void rs_replace_stack_clear(void);
-// Movement module exports
-// beginline, oneright, oneleft, cursor_up, cursor_down: now canonical names (Phase 2)
-// Tab and EOL module exports
-// ins_tab and ins_eol are now exported directly by Rust and declared in edit.h
 extern void rs_ins_ctrl_v(void);
-// ins_copychar, stuff_inserted: now canonical names (Phase 2)
-extern void rs_redo_literal(int c);
-extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
 
@@ -3402,12 +3323,7 @@ static bool ins_esc(int *count, int cmdchar, bool nomove)
 
 // ins_copychar: now exported directly from Rust (export_name = "ins_copychar").
 // get_nolist_virtcol: now exported directly from Rust (export_name = "get_nolist_virtcol").
-
-/// Get virtual column without list mode (accessor for Rust).
-int nvim_get_nolist_virtcol(void)
-{
-  return (int)get_nolist_virtcol();
-}
+// nvim_get_nolist_virtcol: deleted (no more callers after Phase 2).
 
 // get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").
 
@@ -3437,19 +3353,7 @@ int ins_apply_autocmds(event_T event)
 // C Wrappers for Rust FFI
 // =============================================================================
 
-/// Wrapper for cursor_up() (accessor for Rust).
-/// Operates on curwin.
-int nvim_scroll_cursor_up(long n, int upd_topline)
-{
-  return cursor_up((linenr_T)n, upd_topline != 0);
-}
-
-/// Wrapper for cursor_down() (accessor for Rust).
-/// Operates on curwin.
-int nvim_scroll_cursor_down(int n, int upd_topline)
-{
-  return cursor_down(n, upd_topline != 0);
-}
+// nvim_scroll_cursor_up, nvim_scroll_cursor_down: deleted (move crate now calls cursor_up/cursor_down directly).
 
 /// Get the dollar_vcol global variable (accessor for Rust).
 colnr_T nvim_get_dollar_vcol(void)

@@ -1346,9 +1346,9 @@ extern "C" {
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn nvim_invalidate_botline(wp: WinHandle);
 
-    // Cursor movement (operates on curwin)
-    fn nvim_scroll_cursor_up(n: i64, upd_topline: c_int) -> c_int;
-    fn nvim_scroll_cursor_down(n: c_int, upd_topline: c_int) -> c_int;
+    // Cursor movement (operates on curwin; canonical Rust exports)
+    fn cursor_up(n: LinenrT, upd_topline: bool) -> c_int;
+    fn cursor_down(n: c_int, upd_topline: bool) -> c_int;
 
     // Plines wrappers
     fn nvim_linetabsize_eol(wp: WinHandle, lnum: LinenrT) -> c_int;
@@ -1866,13 +1866,10 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
 
             let cursor_lnum = nvim_win_get_cursor_lnum(wp);
             if up {
-                if cursor_lnum > prev_lnum || nvim_scroll_cursor_down(1, 0) == 0 {
+                if cursor_lnum > prev_lnum || cursor_down(1, false) == 0 {
                     break;
                 }
-            } else if cursor_lnum < prev_lnum
-                || prev_topline == 1
-                || nvim_scroll_cursor_up(1, 0) == 0
-            {
+            } else if cursor_lnum < prev_lnum || prev_topline == 1 || cursor_up(1, false) == 0 {
                 break;
             }
 

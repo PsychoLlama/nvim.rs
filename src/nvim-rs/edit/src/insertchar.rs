@@ -53,7 +53,7 @@ extern "C" {
 
     // -- textformat --
     fn nvim_edit_comp_textwidth(force_format: c_int) -> c_int;
-    fn nvim_get_nolist_virtcol() -> c_int;
+    fn get_nolist_virtcol() -> c_int;
     fn nvim_edit_char2cells(c: c_int) -> c_int;
     fn nvim_edit_gchar_cursor() -> c_int;
     fn nvim_edit_internal_format(
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         // Format with 'formatexpr' when it's set. Use internal formatting
         // when 'formatexpr' isn't set or it returns non-zero.
         let mut do_internal = true;
-        let virtcol = nvim_get_nolist_virtcol()
+        let virtcol = get_nolist_virtcol()
             + nvim_edit_char2cells(if c != 0 { c } else { nvim_edit_gchar_cursor() });
 
         if nvim_edit_has_b_p_fex() != 0
@@ -224,7 +224,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         buf[0] = c as u8;
         let mut i: usize = 1;
         if textwidth > 0 {
-            virtcol = nvim_get_nolist_virtcol() as ColnrT;
+            virtcol = get_nolist_virtcol() as ColnrT;
         }
         // Stop the string when:
         // - no more chars available
