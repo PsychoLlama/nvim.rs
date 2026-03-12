@@ -92,6 +92,15 @@ bool set_tty_option(const char *name, char *value);
 const char *set_option_value(OptIndex opt_idx, OptVal value, int opt_flags);
 const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, OptVal value, int opt_flags);
 void set_option_value_give_err(OptIndex opt_idx, OptVal value, int opt_flags);
+void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags);
+int ExpandOldSetting(int *numMatches, char ***matches);
+int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches);
+unsigned get_bkc_flags(buf_T *buf);
+char *get_flp_value(buf_T *buf);
+unsigned get_ve_flags(win_T *wp);
+int get_fileformat_force(const buf_T *buf, const exarg_T *eap);
+void set_fileformat(int eol_style, int opt_flags);
+size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif

@@ -807,7 +807,8 @@ pub unsafe extern "C" fn rs_escape_option_str_cmdline(var: *const c_char) -> *mu
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ExpandOldSetting"]
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_expand_old_setting(
     num_matches: *mut c_int,
@@ -848,7 +849,8 @@ pub unsafe extern "C" fn rs_expand_old_setting(
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "ExpandStringSetting"]
 pub unsafe extern "C" fn rs_expand_string_setting(
     xp: *mut c_void,
     regmatch: *mut c_void,

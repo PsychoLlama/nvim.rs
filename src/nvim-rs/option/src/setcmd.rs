@@ -1604,7 +1604,7 @@ fn is_alnum_or_ident(c: u8) -> bool {
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[unsafe(no_mangle)]
+#[export_name = "set_context_in_set_cmd"]
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_set_context_in_set_cmd(

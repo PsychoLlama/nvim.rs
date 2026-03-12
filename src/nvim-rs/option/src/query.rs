@@ -141,7 +141,8 @@ pub unsafe extern "C" fn rs_get_findfunc() -> *const c_char {
 }
 
 /// Get the local or global value of 'backupcopy' flags.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_bkc_flags"]
 pub unsafe extern "C" fn rs_get_bkc_flags(buf: BufHandle) -> c_uint {
     let local = nvim_buf_get_bkc_flags(buf);
     if local != 0 {
@@ -152,7 +153,8 @@ pub unsafe extern "C" fn rs_get_bkc_flags(buf: BufHandle) -> c_uint {
 }
 
 /// Get the local or global value of 'formatlistpat'.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_flp_value"]
 pub unsafe extern "C" fn rs_get_flp_value(buf: BufHandle) -> *const c_char {
     let b_p_flp = nvim_buf_get_p_flp(buf);
     if !b_p_flp.is_null() && *b_p_flp != 0 {
@@ -167,7 +169,8 @@ const K_OPT_VE_FLAG_NONE: c_uint = 0x10;
 const K_OPT_VE_FLAG_NONE_U: c_uint = 0x20;
 
 /// Get the local or global value of 'virtualedit' flags.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_ve_flags"]
 pub unsafe extern "C" fn rs_get_ve_flags(wp: WinHandle) -> c_uint {
     let w_ve_flags = nvim_win_get_ve_flags(wp);
     let flags = if w_ve_flags != 0 {
@@ -511,7 +514,8 @@ pub unsafe extern "C" fn rs_do_spelllang_source(win: WinHandle) {
 /// Get file format override considering ++ff and ++bin command arguments.
 ///
 /// Translation of C `get_fileformat_force`. Returns EOL_UNIX, EOL_DOS, or EOL_MAC.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_fileformat_force"]
 pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const c_void) -> c_int {
     let force_ff = nvim_eap_get_force_ff(eap);
     let c = if force_ff != 0 {

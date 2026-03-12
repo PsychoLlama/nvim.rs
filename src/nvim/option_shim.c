@@ -126,14 +126,14 @@ extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_default_fileformat(void);
-extern size_t rs_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep);
+// rs_copy_option_part deleted: now exported as copy_option_part via #[export_name]
 extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *errbuf, size_t errbuflen);
 extern const char *rs_find_dup_item(const char *origval, const char *newval, size_t newvallen, uint32_t flags);
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
 // rs_fill_culopt_flags deleted: now exported as fill_culopt_flags via #[export_name]
 // rs_set_options_bin deleted: now exported as set_options_bin via #[export_name]
-extern void rs_set_fileformat(int eol_style, int opt_flags);
+// rs_set_fileformat deleted: now exported as set_fileformat via #[export_name]
 // rs_set_helplang_default deleted: now exported as set_helplang_default via #[export_name]
 
 // Rust metadata query functions (option pass 8 phase 1)
@@ -190,9 +190,9 @@ extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, in
 extern int rs_can_bs(int what);
 extern const char *rs_get_equalprg(void);
 extern const char *rs_get_findfunc(void);
-extern unsigned rs_get_bkc_flags(buf_T *buf);
-extern char *rs_get_flp_value(buf_T *buf);
-extern unsigned rs_get_ve_flags(win_T *wp);
+// rs_get_bkc_flags deleted: now exported as get_bkc_flags via #[export_name]
+// rs_get_flp_value deleted: now exported as get_flp_value via #[export_name]
+// rs_get_ve_flags deleted: now exported as get_ve_flags via #[export_name]
 // rs_redraw_titles deleted: now exported as redraw_titles via #[export_name]
 // rs_vimrc_found deleted: now exported as vimrc_found via #[export_name]
 // rs_set_iminsert_global deleted: now exported as set_iminsert_global via #[export_name]
@@ -334,8 +334,7 @@ extern const char *rs_did_set_selection(optset_T *args);
 extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
 extern void *rs_get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
 
-// Rust set_context_in_set_cmd (from Rust setcmd.rs)
-extern void rs_set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags);
+// rs_set_context_in_set_cmd deleted: now exported as set_context_in_set_cmd via #[export_name]
 
 // OptVal storage operations (from Rust storage.rs)
 extern void rs_optval_free(OptVal o);
@@ -2367,11 +2366,7 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
   return 4;  // EXPAND_FILES + XP_BS_ONE
 }
 
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags)
-{
-  rs_set_context_in_set_cmd(xp, arg, opt_flags);
-}
+// set_context_in_set_cmd deleted: now exported directly from Rust via #[export_name]
 
 extern int rs_expand_option_settings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr,
                                       int *numMatches, char ***matches, int can_fuzzy);
@@ -2401,20 +2396,8 @@ win_T *nvim_opt_get_curwin(void) { return curwin; }
 void nvim_opt_set_curbuf(buf_T *buf) { curbuf = buf; }
 void nvim_opt_set_curwin(win_T *win) { curwin = win; }
 
-/// Expansion handler for :set= when we just want to fill in with the existing value.
-extern int rs_expand_old_setting(int *numMatches, char ***matches);
-int ExpandOldSetting(int *numMatches, char ***matches)
-{
-  return rs_expand_old_setting(numMatches, matches);
-}
-
-/// Expansion handler for :set=/:set+= when the option has a custom expansion handler.
-extern int rs_expand_string_setting(expand_T *xp, regmatch_T *regmatch, int *numMatches,
-                                    char ***matches);
-int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches)
-{
-  return rs_expand_string_setting(xp, regmatch, numMatches, matches);
-}
+// ExpandOldSetting deleted: now exported directly from Rust via #[export_name]
+// ExpandStringSetting deleted: now exported directly from Rust via #[export_name]
 
 
 /// Get the value for the numeric or string option///opp in a nice format into
@@ -2525,63 +2508,12 @@ bool can_bs(int what)
   return rs_can_bs(what) != 0;
 }
 
-/// Get the local or global value of 'backupcopy' flags.
-///
-/// @param buf The buffer.
-unsigned get_bkc_flags(buf_T *buf)
-{
-  return rs_get_bkc_flags(buf);
-}
-
-/// Get the local or global value of 'formatlistpat'.
-///
-/// @param buf The buffer.
-char *get_flp_value(buf_T *buf)
-{
-  return rs_get_flp_value(buf);
-}
-
-/// Get the local or global value of 'virtualedit' flags.
-unsigned get_ve_flags(win_T *wp)
-{
-  return rs_get_ve_flags(wp);
-}
-
-extern int rs_get_fileformat_force(const buf_T *buf, const exarg_T *eap);
-
-/// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"
-/// argument.
-///
-/// @param eap  can be NULL!
-int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_get_fileformat_force(buf, eap);
-}
-
-/// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
-///
-/// Sets 'fileformat'.
-///
-/// @param eol_style End-of-line style.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-void set_fileformat(int eol_style, int opt_flags)
-{
-  rs_set_fileformat(eol_style, opt_flags);
-}
-
-/// Isolate one part of a string option separated by `sep_chars`.
-///
-/// @param[in,out]  option    advanced to the next part
-/// @param[in,out]  buf       copy of the isolated part
-/// @param[in]      maxlen    length of `buf`
-/// @param[in]      sep_chars chars that separate the option parts
-///
-/// @return length of `*option`
-size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars)
-{
-  return rs_copy_option_part(option, buf, maxlen, sep_chars);
-}
+// get_bkc_flags deleted: now exported directly from Rust via #[export_name]
+// get_flp_value deleted: now exported directly from Rust via #[export_name]
+// get_ve_flags deleted: now exported directly from Rust via #[export_name]
+// get_fileformat_force deleted: now exported directly from Rust via #[export_name]
+// set_fileformat deleted: now exported directly from Rust via #[export_name]
+// copy_option_part deleted: now exported directly from Rust via #[export_name]
 
 /// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)

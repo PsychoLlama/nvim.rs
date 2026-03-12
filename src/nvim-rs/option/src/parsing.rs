@@ -429,7 +429,8 @@ unsafe fn rs_skip_to_option_part(p: *const c_char) -> *const c_char {
 /// # Safety
 ///
 /// `pp` and `*pp` must be valid, `buf` must have at least `maxlen` bytes.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "copy_option_part"]
 pub unsafe extern "C" fn rs_copy_option_part(
     pp: *mut *mut c_char,
     buf: *mut c_char,

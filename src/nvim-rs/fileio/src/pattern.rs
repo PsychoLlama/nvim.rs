@@ -38,6 +38,7 @@ extern "C" {
     fn nvim_option_get_fic() -> c_int;
 
     /// Copy one comma-separated option part into buf.
+    #[link_name = "copy_option_part"]
     fn rs_copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,

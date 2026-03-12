@@ -476,7 +476,7 @@ extern "C" {
 /// Maps EOL style codes to their string names ("unix", "dos", "mac").
 /// If `eol_style` is not a recognized code, no option change is made but
 /// redraws are still triggered.
-#[no_mangle]
+#[export_name = "set_fileformat"]
 pub unsafe extern "C" fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int) {
     let p: *const std::ffi::c_char = match eol_style {
         EOL_UNIX => c"unix".as_ptr(),

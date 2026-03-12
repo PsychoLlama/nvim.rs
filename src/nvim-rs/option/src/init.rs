@@ -694,6 +694,7 @@ extern "C" {
     fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
     fn nvim_curbuf_is_empty() -> c_int;
     fn rs_default_fileformat() -> c_int;
+    #[link_name = "set_fileformat"]
     fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int);
     fn rs_optval_copy(o: OptVal) -> OptVal;
 }
