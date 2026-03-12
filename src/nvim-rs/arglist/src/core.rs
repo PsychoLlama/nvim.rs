@@ -29,7 +29,7 @@ pub extern "C" fn rs_check_arglist_locked() -> c_int {
 // alist_clear
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_clear"]
 pub extern "C" fn rs_alist_clear(al: ffi::AlistPtr) {
     if check_arglist_locked() == FAIL {
         return;
@@ -41,7 +41,7 @@ pub extern "C" fn rs_alist_clear(al: ffi::AlistPtr) {
 // alist_init
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_init"]
 pub extern "C" fn rs_alist_init(al: ffi::AlistPtr) {
     let ga = unsafe { ffi::nvim_al_ga_ptr(al) };
     unsafe { ffi::nvim_al_ga_init_aentry(ga) };
@@ -51,7 +51,7 @@ pub extern "C" fn rs_alist_init(al: ffi::AlistPtr) {
 // alist_unlink
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_unlink"]
 pub extern "C" fn rs_alist_unlink(al: ffi::AlistPtr) {
     let global_al = unsafe { ffi::nvim_al_get_global_alist() };
     if al != global_al {
@@ -67,7 +67,7 @@ pub extern "C" fn rs_alist_unlink(al: ffi::AlistPtr) {
 // alist_new
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_new"]
 pub extern "C" fn rs_alist_new() {
     let curwin = unsafe { ffi::nvim_al_get_curwin() };
     let al = unsafe { ffi::nvim_al_alloc_alist() };
@@ -83,7 +83,7 @@ pub extern "C" fn rs_alist_new() {
 // alist_add
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_add"]
 pub extern "C" fn rs_alist_add(al: ffi::AlistPtr, fname: *mut c_char, set_fnum: c_int) {
     if fname.is_null() {
         return;
@@ -119,7 +119,7 @@ pub extern "C" fn rs_alist_add(al: ffi::AlistPtr, fname: *mut c_char, set_fnum: 
 // alist_set
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_set"]
 pub extern "C" fn rs_alist_set(
     al: ffi::AlistPtr,
     count: c_int,
@@ -179,7 +179,7 @@ pub extern "C" fn rs_alist_set(
 // alist_expand - no-op on Linux (guarded by #if !defined(UNIX) in C)
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "alist_expand"]
 pub extern "C" fn rs_alist_expand(_fnum_list: *mut c_int, _fnum_len: c_int) {
     // No-op on Unix/Linux systems
 }

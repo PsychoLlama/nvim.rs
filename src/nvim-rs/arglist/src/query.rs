@@ -34,7 +34,7 @@ pub(crate) unsafe fn alist_name(aep: ffi::AentryPtr) -> *mut c_char {
     fname
 }
 
-#[no_mangle]
+#[export_name = "alist_name"]
 pub extern "C" fn rs_alist_name(aep: ffi::AentryPtr) -> *mut c_char {
     unsafe { alist_name(aep) }
 }
@@ -43,7 +43,7 @@ pub extern "C" fn rs_alist_name(aep: ffi::AentryPtr) -> *mut c_char {
 // get_arglist_name
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "get_arglist_name"]
 pub extern "C" fn rs_get_arglist_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     unsafe {
         if idx >= ffi::nvim_al_ARGCOUNT() {
@@ -86,7 +86,7 @@ pub(crate) unsafe fn editing_arg_idx(win: WinPtr) -> bool {
     (ffi::nvim_al_path_full_compare(ae_name, buf_ffname, 1, 1) & K_EQUAL_FILES) != 0
 }
 
-#[no_mangle]
+#[export_name = "editing_arg_idx"]
 pub extern "C" fn rs_editing_arg_idx(win: WinPtr) -> c_int {
     unsafe { c_int::from(editing_arg_idx(win)) }
 }
@@ -95,7 +95,7 @@ pub extern "C" fn rs_editing_arg_idx(win: WinPtr) -> c_int {
 // check_arg_idx
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "check_arg_idx"]
 pub extern "C" fn rs_check_arg_idx(win: WinPtr) {
     unsafe {
         let wargcount = ffi::nvim_al_WARGCOUNT(win);
@@ -145,7 +145,7 @@ pub extern "C" fn rs_check_arg_idx(win: WinPtr) {
 
 /// Concatenate all files in the argument list, separated by spaces.
 /// Spaces and backslashes in the file names are escaped with a backslash.
-#[no_mangle]
+#[export_name = "arg_all"]
 #[allow(clippy::cast_sign_loss)]
 pub extern "C" fn rs_arg_all() -> *mut c_char {
     unsafe {

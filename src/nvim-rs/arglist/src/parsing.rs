@@ -71,7 +71,7 @@ pub(crate) unsafe fn get_arglist(gap: GarrayPtr, mut str: *mut c_char, escaped: 
 // get_arglist_exp
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "get_arglist_exp"]
 pub extern "C" fn rs_get_arglist_exp(
     str: *mut c_char,
     fcountp: *mut c_int,

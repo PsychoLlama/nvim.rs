@@ -126,7 +126,7 @@ unsafe fn do_argfile(eap: ExargPtr, argn: c_int) {
     }
 }
 
-#[no_mangle]
+#[export_name = "do_argfile"]
 pub extern "C" fn rs_do_argfile(eap: ExargPtr, argn: c_int) {
     unsafe { do_argfile(eap, argn) }
 }
@@ -136,7 +136,7 @@ pub extern "C" fn rs_do_argfile(eap: ExargPtr, argn: c_int) {
 // =============================================================================
 
 /// ":previous", ":sprevious", ":Next" and ":sNext".
-#[no_mangle]
+#[export_name = "ex_previous"]
 pub extern "C" fn rs_ex_previous(eap: ExargPtr) {
     unsafe {
         let curwin = ffi::nvim_al_get_curwin();
@@ -157,7 +157,7 @@ pub extern "C" fn rs_ex_previous(eap: ExargPtr) {
 // =============================================================================
 
 /// ":rewind", ":first", ":sfirst" and ":srewind".
-#[no_mangle]
+#[export_name = "ex_rewind"]
 pub extern "C" fn rs_ex_rewind(eap: ExargPtr) {
     unsafe { do_argfile(eap, 0) }
 }
@@ -167,7 +167,7 @@ pub extern "C" fn rs_ex_rewind(eap: ExargPtr) {
 // =============================================================================
 
 /// ":last" and ":slast".
-#[no_mangle]
+#[export_name = "ex_last"]
 pub extern "C" fn rs_ex_last(eap: ExargPtr) {
     unsafe {
         let argcount = ffi::nvim_al_ARGCOUNT();
@@ -180,7 +180,7 @@ pub extern "C" fn rs_ex_last(eap: ExargPtr) {
 // =============================================================================
 
 /// ":argument" and ":sargument".
-#[no_mangle]
+#[export_name = "ex_argument"]
 pub extern "C" fn rs_ex_argument(eap: ExargPtr) {
     unsafe {
         let i = if ffi::nvim_al_eap_get_addr_count(eap) > 0 {
@@ -198,7 +198,7 @@ pub extern "C" fn rs_ex_argument(eap: ExargPtr) {
 // =============================================================================
 
 /// ":next", and commands that behave like it.
-#[no_mangle]
+#[export_name = "ex_next"]
 pub extern "C" fn rs_ex_next(eap: ExargPtr) {
     unsafe {
         let curbuf = ffi::nvim_al_get_curbuf();
@@ -235,7 +235,7 @@ pub extern "C" fn rs_ex_next(eap: ExargPtr) {
 // =============================================================================
 
 /// ":argdedupe"
-#[no_mangle]
+#[export_name = "ex_argdedupe"]
 #[allow(clippy::cast_sign_loss)]
 pub extern "C" fn rs_ex_argdedupe() {
     unsafe {
@@ -297,7 +297,7 @@ pub extern "C" fn rs_ex_argdedupe() {
 // =============================================================================
 
 /// ":args", ":arglocal" and ":argglobal".
-#[no_mangle]
+#[export_name = "ex_args"]
 #[allow(clippy::cast_sign_loss)]
 pub extern "C" fn rs_ex_args(eap: ExargPtr) {
     unsafe {
@@ -392,7 +392,7 @@ pub extern "C" fn rs_ex_args(eap: ExargPtr) {
 // =============================================================================
 
 /// ":argedit"
-#[no_mangle]
+#[export_name = "ex_argedit"]
 pub extern "C" fn rs_ex_argedit(eap: ExargPtr) {
     unsafe {
         let addr_count = ffi::nvim_al_eap_get_addr_count(eap);
@@ -431,7 +431,7 @@ pub extern "C" fn rs_ex_argedit(eap: ExargPtr) {
 // =============================================================================
 
 /// ":argadd"
-#[no_mangle]
+#[export_name = "ex_argadd"]
 pub extern "C" fn rs_ex_argadd(eap: ExargPtr) {
     unsafe {
         let arg = ffi::nvim_al_eap_get_arg(eap);
@@ -452,7 +452,7 @@ pub extern "C" fn rs_ex_argadd(eap: ExargPtr) {
 // =============================================================================
 
 /// ":argdelete"
-#[no_mangle]
+#[export_name = "ex_argdelete"]
 pub extern "C" fn rs_ex_argdelete(eap: ExargPtr) {
     unsafe {
         if crate::core::check_arglist_locked() == FAIL {

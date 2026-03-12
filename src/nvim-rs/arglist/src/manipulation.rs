@@ -222,7 +222,7 @@ unsafe fn do_arglist(str: *mut c_char, what: c_int, after: c_int, will_edit: boo
 // set_arglist
 // =============================================================================
 
-#[no_mangle]
+#[export_name = "set_arglist"]
 pub extern "C" fn rs_set_arglist(str: *mut c_char) {
     unsafe {
         do_arglist(str, AL_SET, 0, true);

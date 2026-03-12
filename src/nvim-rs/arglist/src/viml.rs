@@ -28,7 +28,7 @@ unsafe fn get_arglist_as_rettv(arglist: ffi::AentryPtr, argcount: c_int, rettv: 
 // =============================================================================
 
 /// "argc([window id])" function
-#[no_mangle]
+#[export_name = "f_argc"]
 pub extern "C" fn rs_f_argc(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let tv0 = ffi::nvim_al_tv_idx(argvars, 0);
@@ -56,7 +56,7 @@ pub extern "C" fn rs_f_argc(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFun
 // =============================================================================
 
 /// "argidx()" function
-#[no_mangle]
+#[export_name = "f_argidx"]
 pub extern "C" fn rs_f_argidx(_argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let curwin = ffi::nvim_al_get_curwin();
@@ -70,7 +70,7 @@ pub extern "C" fn rs_f_argidx(_argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Eval
 // =============================================================================
 
 /// "arglistid()" function
-#[no_mangle]
+#[export_name = "f_arglistid"]
 pub extern "C" fn rs_f_arglistid(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         ffi::nvim_al_rettv_set_number(rettv, -1);
@@ -89,7 +89,7 @@ pub extern "C" fn rs_f_arglistid(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Ev
 // =============================================================================
 
 /// "argv(nr)" function
-#[no_mangle]
+#[export_name = "f_argv"]
 pub extern "C" fn rs_f_argv(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let tv0 = ffi::nvim_al_tv_idx(argvars, 0);

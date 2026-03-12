@@ -496,7 +496,7 @@ unsafe fn do_arg_all(mut count: c_int, forceit: c_int, keep_tabs: c_int) {
 
 /// ":all" and ":sall".
 /// Also used for ":tab drop file ..." after setting the argument list.
-#[no_mangle]
+#[export_name = "ex_all"]
 pub extern "C" fn rs_ex_all(eap: ExargPtr) {
     unsafe {
         let addr_count = ffi::nvim_al_eap_get_addr_count(eap);

@@ -433,188 +433,43 @@ void nvim_al_foreach_windows_in_tab(int (*callback)(win_T *wp, void *ud), tabpag
   }
 }
 
-// Rust FFI declarations for Phase 2
-extern int rs_check_arglist_locked(void);
-extern void rs_alist_clear(alist_T *al);
-extern void rs_alist_init(alist_T *al);
-extern void rs_alist_unlink(alist_T *al);
-extern void rs_alist_new(void);
-extern void rs_alist_add(alist_T *al, char *fname, int set_fnum);
-extern void rs_alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len);
-extern void rs_alist_expand(int *fnum_list, int fnum_len);
-
-// Rust FFI declarations for Phase 3
-extern int rs_get_arglist_exp(char *str, int *fcountp, char ***fnamesp, int wig);
-
-// Rust FFI declarations for Phase 4
-extern int rs_do_arglist(char *str, int what, int after, int will_edit);
-extern void rs_set_arglist(char *str);
-
-// Rust FFI declarations for Phase 5
-extern char *rs_alist_name(aentry_T *aep);
-extern char *rs_get_arglist_name(void *xp, int idx);
-extern bool rs_editing_arg_idx(win_T *win);
-extern void rs_check_arg_idx(win_T *win);
-extern char *rs_arg_all(void);
-
-// Rust FFI declarations for Phase 6
-extern void rs_ex_previous(exarg_T *eap);
-extern void rs_ex_rewind(exarg_T *eap);
-extern void rs_ex_last(exarg_T *eap);
-extern void rs_ex_argument(exarg_T *eap);
-extern void rs_do_argfile(exarg_T *eap, int argn);
-extern void rs_ex_next(exarg_T *eap);
-extern void rs_ex_argdedupe(void);
-
-// Rust FFI declarations for Phase 7
-extern void rs_ex_args(exarg_T *eap);
-extern void rs_ex_argedit(exarg_T *eap);
-extern void rs_ex_argadd(exarg_T *eap);
-extern void rs_ex_argdelete(exarg_T *eap);
-
-// Rust FFI declarations for Phase 8
-extern void rs_ex_all(exarg_T *eap);
-
-// Rust FFI declarations for Phase 9
-extern void rs_f_argc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_argidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_arglistid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_f_argv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-
-static int check_arglist_locked(void)
-{
-  return rs_check_arglist_locked();
-}
-
-void alist_clear(alist_T *al) { rs_alist_clear(al); }
-void alist_init(alist_T *al) { rs_alist_init(al); }
-void alist_unlink(alist_T *al) { rs_alist_unlink(al); }
-void alist_new(void) { rs_alist_new(); }
-
-void alist_add(alist_T *al, char *fname, int set_fnum) { rs_alist_add(al, fname, set_fnum); }
-
-void alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len)
-{
-  rs_alist_set(al, count, files, use_curbuf, fnum_list, fnum_len);
-}
-
-#if !defined(UNIX)
-void alist_expand(int *fnum_list, int fnum_len) { rs_alist_expand(fnum_list, fnum_len); }
-#endif
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+// arglist management
+void alist_clear(alist_T *al);
+void alist_init(alist_T *al);
+void alist_unlink(alist_T *al);
+void alist_new(void);
+void alist_add(alist_T *al, char *fname, int set_fnum);
+void alist_set(alist_T *al, int count, char **files, int use_curbuf, int *fnum_list, int fnum_len);
+int get_arglist_exp(char *str, int *fcountp, char ***fnamesp, bool wig);
+// arglist query
+char *alist_name(aentry_T *aep);
+char *get_arglist_name(expand_T *xp, int idx);
+bool editing_arg_idx(win_T *win);
+void check_arg_idx(win_T *win);
+char *arg_all(void);
+void set_arglist(char *str);
+// ex commands
+void do_argfile(exarg_T *eap, int argn);
+void ex_previous(exarg_T *eap);
+void ex_rewind(exarg_T *eap);
+void ex_last(exarg_T *eap);
+void ex_argument(exarg_T *eap);
+void ex_next(exarg_T *eap);
+void ex_argdedupe(exarg_T *eap);
+void ex_args(exarg_T *eap);
+void ex_argedit(exarg_T *eap);
+void ex_argadd(exarg_T *eap);
+void ex_argdelete(exarg_T *eap);
+void ex_all(exarg_T *eap);
+// viml functions
+void f_argc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_argidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_arglistid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_argv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 #if defined(BACKSLASH_IN_FILENAME)
 /// Adjust slashes in file names.  Called after 'shellslash' was set.
 /// No-op on Linux — only relevant on Windows.
 void alist_slash_adjust(void) {}
 #endif
-
-/// Parse a list of arguments (file names), expand them and return in
-/// "fnames[fcountp]".  When "wig" is true, removes files matching 'wildignore'.
-///
-/// @return  FAIL or OK.
-int get_arglist_exp(char *str, int *fcountp, char ***fnamesp, bool wig)
-{
-  return rs_get_arglist_exp(str, fcountp, fnamesp, wig);
-}
-
-/// @param str
-/// @param what
-///         AL_SET: Redefine the argument list to 'str'.
-///         AL_ADD: add files in 'str' to the argument list after "after".
-///         AL_DEL: remove files in 'str' from the argument list.
-/// @param after
-///         0 means before first one
-/// @param will_edit  will edit added argument
-///
-/// @return  FAIL for failure, OK otherwise.
-static int do_arglist(char *str, int what, int after, bool will_edit)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_do_arglist(str, what, after, will_edit);
-}
-
-/// Redefine the argument list.
-void set_arglist(char *str) { rs_set_arglist(str); }
-
-/// @return  true if window "win" is editing the file at the current argument
-///          index.
-bool editing_arg_idx(win_T *win) { return rs_editing_arg_idx(win); }
-
-/// Check if window "win" is editing the w_arg_idx file in its argument list.
-void check_arg_idx(win_T *win) { rs_check_arg_idx(win); }
-
-/// ":args", ":arglocal" and ":argglobal".
-void ex_args(exarg_T *eap) { rs_ex_args(eap); }
-
-/// ":previous", ":sprevious", ":Next" and ":sNext".
-void ex_previous(exarg_T *eap) { rs_ex_previous(eap); }
-
-/// ":rewind", ":first", ":sfirst" and ":srewind".
-void ex_rewind(exarg_T *eap) { rs_ex_rewind(eap); }
-
-/// ":last" and ":slast".
-void ex_last(exarg_T *eap) { rs_ex_last(eap); }
-
-/// ":argument" and ":sargument".
-void ex_argument(exarg_T *eap) { rs_ex_argument(eap); }
-
-/// Edit file "argn" of the argument lists.
-void do_argfile(exarg_T *eap, int argn) { rs_do_argfile(eap, argn); }
-
-/// ":next", and commands that behave like it.
-void ex_next(exarg_T *eap) { rs_ex_next(eap); }
-
-/// ":argdedupe"
-void ex_argdedupe(exarg_T *eap FUNC_ATTR_UNUSED) { rs_ex_argdedupe(); }
-
-/// ":argedit"
-void ex_argedit(exarg_T *eap) { rs_ex_argedit(eap); }
-
-/// ":argadd"
-void ex_argadd(exarg_T *eap) { rs_ex_argadd(eap); }
-
-/// ":argdelete"
-void ex_argdelete(exarg_T *eap) { rs_ex_argdelete(eap); }
-
-/// Function given to ExpandGeneric() to obtain the possible arguments of the
-/// argedit and argdelete commands.
-char *get_arglist_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_arglist_name(xp, idx);
-}
-
-/// Get the file name for an argument list entry.
-char *alist_name(aentry_T *aep) { return rs_alist_name(aep); }
-
-/// ":all" and ":sall".
-/// Also used for ":tab drop file ..." after setting the argument list.
-void ex_all(exarg_T *eap) { rs_ex_all(eap); }
-
-/// Concatenate all files in the argument list, separated by spaces, and return
-/// it in one allocated string.
-/// Spaces and backslashes in the file names are escaped with a backslash.
-char *arg_all(void) { return rs_arg_all(); }
-
-/// "argc([window id])" function
-void f_argc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_argc(argvars, rettv, fptr);
-}
-
-/// "argidx()" function
-void f_argidx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_argidx(argvars, rettv, fptr);
-}
-
-/// "arglistid()" function
-void f_arglistid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_arglistid(argvars, rettv, fptr);
-}
-
-/// "argv(nr)" function
-void f_argv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_argv(argvars, rettv, fptr);
-}
