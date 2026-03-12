@@ -100,6 +100,7 @@ void buf_copy_options(buf_T *buf, int flags);
 void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags);
 int ExpandOldSetting(int *numMatches, char ***matches);
 int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches);
+int ExpandSettings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr, int *numMatches, char ***matches, bool can_fuzzy);
 unsigned get_bkc_flags(buf_T *buf);
 char *get_flp_value(buf_T *buf);
 unsigned get_ve_flags(win_T *wp);

@@ -2285,13 +2285,7 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
 
 // set_context_in_set_cmd deleted: now exported directly from Rust via #[export_name]
 
-extern int rs_expand_option_settings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr,
-                                      int *numMatches, char ***matches, int can_fuzzy);
-int ExpandSettings(expand_T *xp, regmatch_T *regmatch, char *fuzzystr, int *numMatches,
-                   char ***matches, const bool can_fuzzy)
-{
-  return rs_expand_option_settings(xp, regmatch, fuzzystr, numMatches, matches, can_fuzzy ? 1 : 0);
-}
+// ExpandSettings deleted: now exported directly from Rust via #[export_name]
 
 /// Escape an option value that can be used on the command-line with :set.
 /// Caller needs to free the returned string, unless NULL is returned.

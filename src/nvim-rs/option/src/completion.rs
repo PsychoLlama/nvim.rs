@@ -597,7 +597,8 @@ unsafe fn match_str_impl(
 ///
 /// # Safety
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "ExpandSettings"]
+#[allow(clippy::must_use_candidate)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
