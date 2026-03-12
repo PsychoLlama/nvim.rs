@@ -87,7 +87,6 @@
 // Rust function declarations called from C accessor bodies within this file
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
-extern void rs_run_linematch(diff_T *dp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
 extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
                                 linenr_T start, linenr_T end, int diff_flags);
@@ -295,7 +294,7 @@ void nvim_diff_invalidate_botline_win(win_T *wp) { invalidate_botline(wp); }
 void nvim_diff_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
 void nvim_diff_check_topfill(win_T *wp, bool down) { check_topfill(wp, down); }
 void nvim_diff_setpcmark(void) { setpcmark(); }
-void nvim_diff_run_linematch(diff_T *dp) { rs_run_linematch(dp); }
+// nvim_diff_run_linematch deleted: Rust buffer.rs now uses #[link_name = "rs_run_linematch"].
 bool nvim_diffblock_get_has_changes(diff_T *dp) { if (dp == NULL) { return false; } return dp->has_changes; }
 void nvim_diffblock_set_has_changes(diff_T *dp, bool val) { if (dp != NULL) { dp->has_changes = val; } }
 void nvim_diffblock_reset_changes_len(diff_T *dp) { if (dp != NULL) { dp->df_changes.ga_len = 0; } }

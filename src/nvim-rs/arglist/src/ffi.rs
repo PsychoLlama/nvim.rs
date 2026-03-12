@@ -291,6 +291,7 @@ extern "C" {
     pub fn nvim_al_set_bufref(br: BufrefPtr, buf: BufPtr);
     pub fn nvim_al_ONE_WINDOW() -> c_int;
     pub fn nvim_al_is_aucmd_win(wp: WinPtr) -> c_int;
+    #[link_name = "rs_reset_VIsual_and_resel"]
     pub fn nvim_al_reset_VIsual_and_resel();
     pub fn nvim_al_xcalloc(count: usize, size: usize) -> *mut c_void;
     #[link_name = "rs_tabpage_index"]

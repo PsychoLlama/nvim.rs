@@ -1867,6 +1867,7 @@ extern "C" {
     fn nvim_diff_changed_line_abv_curs_win(wp: WinHandle);
     fn nvim_diff_check_topfill(wp: WinHandle, down: bool);
     fn nvim_diff_setpcmark();
+    #[link_name = "rs_run_linematch"]
     fn nvim_diff_run_linematch(dp: DiffBlockHandle);
 }
 
