@@ -60,6 +60,7 @@ size_t qf_get_cur_idx(exarg_T *eap);
 int qf_get_cur_valid_idx(exarg_T *eap);
 
 // Phase 35+: Rust-exported functions (via #[export_name])
+int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what);
 void qf_list(exarg_T *eap);
 void ex_make(exarg_T *eap);
 void ex_cfile(exarg_T *eap);

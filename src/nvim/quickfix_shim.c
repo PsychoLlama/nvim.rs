@@ -1421,7 +1421,7 @@ void nvim_qf_list_changed(void *qfl) { if (qfl != NULL) rs_qf_incr_changedtick(q
 
 // ---- Rust Phase 4 forward declarations ----
 extern void rs_qf_free_stack(void *wp, void *qi);
-extern int rs_set_errorlist(void *wp, void *list, int action, char *title, void *what);
+// rs_set_errorlist deleted: now exported as set_errorlist via #[export_name]
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -3261,11 +3261,7 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
 }
 
 
-/// When "what" is not NULL then only set some properties.
-int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what)
-{
-  return rs_set_errorlist((void *)wp, (void *)list, action, title, (void *)what);
-}
+// set_errorlist deleted: Rust exports under the C name directly via #[export_name].
 
 // Phase 10 Pass 10 Phase 6: C accessors for rs_set_ref_in_quickfix
 

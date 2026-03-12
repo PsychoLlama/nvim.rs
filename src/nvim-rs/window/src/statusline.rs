@@ -36,6 +36,7 @@ extern "C" {
     fn nvim_emsg_id(id: c_int);
     fn rs_is_bottom_win(wp: WinHandle) -> c_int;
     fn rs_win_new_height(wp: WinHandle, height: c_int);
+    #[link_name = "frame_new_height"]
     fn rs_frame_new_height(
         topfrp: *mut Frame,
         height: c_int,

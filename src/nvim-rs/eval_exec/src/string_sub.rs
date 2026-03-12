@@ -89,6 +89,7 @@ extern "C" {
     fn vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
     fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: c_int) -> c_int;
     fn vim_regfree(prog: *mut c_void);
+    #[link_name = "vim_regsub"]
     fn rs_vim_regsub(
         rmp: *mut RegMatch,
         source: *mut c_char,

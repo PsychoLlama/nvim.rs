@@ -125,6 +125,7 @@ extern "C" {
     fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
     fn rs_win_new_height(wp: WinHandle, height: c_int);
     fn rs_win_new_width(wp: WinHandle, width: c_int);
+    #[link_name = "frame_new_height"]
     fn rs_frame_new_height(
         topfrp: *mut Frame,
         height: c_int,

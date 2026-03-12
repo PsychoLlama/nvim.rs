@@ -2374,7 +2374,7 @@ pub extern "C" fn rs_win_drag_vsep_line(dragwin: WinHandle, offset: c_int) {
 
 /// FFI wrapper for `frame_new_height`.
 /// Calls the Rust implementation directly.
-#[no_mangle]
+#[export_name = "frame_new_height"]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_frame_new_height(
     topfrp: *mut Frame,

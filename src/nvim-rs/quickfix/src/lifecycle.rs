@@ -594,7 +594,8 @@ pub unsafe extern "C" fn rs_qf_free_stack(wp: *mut c_void, qi: *mut c_void) {
 /// # Safety
 ///
 /// All pointer arguments must be valid (or NULL where noted).
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "set_errorlist"]
 pub unsafe extern "C" fn rs_set_errorlist(
     wp: *mut c_void,
     list: *mut c_void,

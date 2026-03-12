@@ -43,6 +43,7 @@ extern "C" {
     fn rs_frame_comp_pos(topfrp: *mut Frame, row: *mut c_int, col: *mut c_int);
 
     /// Set frame to a new height (recursively).
+    #[link_name = "frame_new_height"]
     fn rs_frame_new_height(
         topfrp: *mut Frame,
         height: c_int,

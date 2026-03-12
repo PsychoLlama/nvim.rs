@@ -396,16 +396,11 @@ static void clear_submatch_list(staticList10_T *sl)
 }
 
 // Rust FFI: vim_regsub functions
-extern int rs_vim_regsub(void *rmp, char *source, void *expr, char *dest, int destlen, int flags);
+// rs_vim_regsub deleted: now exported as vim_regsub via #[export_name]
 extern int rs_vim_regsub_multi(void *rmp, int32_t lnum, char *source, char *dest, int destlen,
                                int flags);
 
-/// vim_regsub() - perform substitutions after a vim_regexec() or
-/// vim_regexec_multi() match.
-int vim_regsub(regmatch_T *rmp, char *source, typval_T *expr, char *dest, int destlen, int flags)
-{
-  return rs_vim_regsub(rmp, source, expr, dest, destlen, flags);
-}
+// vim_regsub deleted: Rust exports under the C name directly via #[export_name].
 
 int vim_regsub_multi(regmmatch_T *rmp, linenr_T lnum, char *source, char *dest, int destlen,
                      int flags)

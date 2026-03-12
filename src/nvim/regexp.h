@@ -30,5 +30,6 @@ extern void free_regexp_stuff(void);
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 int vim_regcomp_had_eol(void);
+int vim_regsub(regmatch_T *rmp, char *source, typval_T *expr, char *dest, int destlen, int flags);
 
 #include "regexp_shim.h.generated.h"

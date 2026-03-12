@@ -2824,7 +2824,7 @@ pub unsafe extern "C" fn rs_vim_regsub_both(
 /// Perform substitution after a `vim_regexec()` match (single-line).
 ///
 /// Saves/restores `rex` state for recursive calls.
-#[no_mangle]
+#[export_name = "vim_regsub"]
 pub unsafe extern "C" fn rs_vim_regsub(
     rmp: *mut c_void,
     source: *mut c_char,

@@ -29,6 +29,7 @@ extern "C" {
     fn nvim_tabpage_get_snapshot(tp: TabpageHandle, idx: c_int) -> *mut Frame;
     fn nvim_tabpage_set_snapshot(tp: TabpageHandle, idx: c_int, val: *mut Frame);
     fn rs_win_valid(win: WinHandle) -> c_int;
+    #[link_name = "frame_new_height"]
     fn rs_frame_new_height(
         topfrp: *mut Frame,
         height: c_int,

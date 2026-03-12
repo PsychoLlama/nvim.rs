@@ -1323,6 +1323,7 @@ extern "C" {
     ) -> c_int;
     fn rs_qf_free_list(qfl: *mut c_void);
     fn rs_qf_new_list(qi: *mut c_void, title: *const std::ffi::c_char);
+    #[link_name = "set_errorlist"]
     fn rs_set_errorlist(
         wp: *mut c_void,
         list: *mut c_void,

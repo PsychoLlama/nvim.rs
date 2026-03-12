@@ -165,7 +165,7 @@ extern void rs_win_setwidth(int width);
 
 // Height/width setters
 extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
-extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
+// rs_frame_new_height deleted: now exported as frame_new_height via #[export_name]
 
 // Win exchange / rotate
 extern void rs_win_exchange(int prenum);
@@ -675,14 +675,7 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
 /// frames and windows.  Caller must take care of positions.
 ///
 /// @param topfirst  resize topmost contained frame first.
-/// @param wfh       obey 'winfixheight' when there is a choice;
-///                  may cause the height not to be set.
-/// @param set_ch    set 'cmdheight' to resize topframe.
-/// Set height of a frame (thin wrapper -- implementation is in Rust).
-void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch)
-{
-  rs_frame_new_height(topfrp, height, topfirst, wfh, set_ch);
-}
+// frame_new_height deleted: Rust exports under the C name directly via #[export_name].
 
 // frame_new_width: dead static wrapper (Phase 15)
 

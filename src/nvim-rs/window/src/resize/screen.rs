@@ -79,6 +79,7 @@ extern "C" {
     // --- win_new_screen_rows dependencies ---
     fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
     fn rs_frame_check_height(topfrp: *const Frame, height: c_int) -> c_int;
+    #[link_name = "frame_new_height"]
     fn rs_frame_new_height(
         topfrp: *mut Frame,
         height: c_int,
