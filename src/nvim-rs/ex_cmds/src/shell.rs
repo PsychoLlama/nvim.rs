@@ -670,7 +670,7 @@ pub unsafe extern "C" fn rs_find_unescaped_bang(cmd: *const std::ffi::c_char) ->
 /// - `buf` must be a valid, writable, null-terminated C string buffer of at least `buflen` bytes.
 /// - `opt` must be a valid null-terminated C string.
 /// - `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "append_redir"]
 pub unsafe extern "C" fn rs_append_redir(
     buf: *mut std::ffi::c_char,
     buflen: usize,

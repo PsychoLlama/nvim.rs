@@ -520,16 +520,8 @@ char *make_filter_cmd(char *cmd, char *itmp, char *otmp, bool do_in)
   return rs_make_filter_cmd(cmd, itmp, otmp, (int)do_in);
 }
 
-// append_redir implemented in Rust (rs_append_redir in ex_cmds/src/shell.rs)
-extern void rs_append_redir(char *buf, size_t buflen, const char *opt, const char *fname);
-
-/// Append output redirection for the given file to the end of the buffer.
-/// Thin wrapper calling the Rust implementation.
-void append_redir(char *const buf, const size_t buflen, const char *const opt,
-                  const char *const fname)
-{
-  rs_append_redir(buf, buflen, opt, fname);
-}
+// append_redir deleted: Rust exports under the C name directly via #[export_name].
+// rs_append_redir deleted: now exported as append_redir via #[export_name]
 
 // rename_buffer + ex_file implemented in Rust (ex_cmds/src/buffer.rs)
 extern int rs_rename_buffer(const char *new_fname);

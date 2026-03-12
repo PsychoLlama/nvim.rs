@@ -193,7 +193,8 @@ extern "C" {
     fn nvim_diff_set_a_works(val: c_int);
     fn nvim_diff_xfree(p: *mut std::ffi::c_void);
 
-    /// rs_append_redir -- the Rust append_redir implementation (from ex_cmds crate).
+    /// append_redir -- append output redirection to the buffer.
+    #[link_name = "append_redir"]
     fn rs_append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, fname: *const c_char);
 
     /// xdl_diff -- the xdiff library entry point.
