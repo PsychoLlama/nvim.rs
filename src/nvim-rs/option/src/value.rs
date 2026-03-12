@@ -1018,7 +1018,7 @@ const K_OPT_SCOPE_BUF: c_int = 2;
 /// Rust implementation of set_option_direct.
 ///
 /// Sets an option value directly, without processing any side effects.
-#[no_mangle]
+#[export_name = "set_option_direct"]
 pub unsafe extern "C" fn rs_set_option_direct(
     opt_idx: c_int,
     value: OptVal,
@@ -1048,7 +1048,7 @@ pub unsafe extern "C" fn rs_set_option_direct(
 ///
 /// Sets an option value directly for a buffer/window, without side effects.
 /// Saves/restores curbuf and curwin around the call.
-#[no_mangle]
+#[export_name = "set_option_direct_for"]
 pub unsafe extern "C" fn rs_set_option_direct_for(
     opt_idx: c_int,
     value: OptVal,

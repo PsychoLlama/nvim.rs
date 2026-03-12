@@ -349,9 +349,8 @@ extern char *rs_optval_to_cstr(OptVal o);
 
 // Phase 15 option value API (from Rust value.rs)
 extern vimoption_T *rs_get_option_ptr(int opt_idx);
-extern void rs_set_option_direct(int opt_idx, OptVal value, int opt_flags, int set_sid);
-extern void rs_set_option_direct_for(int opt_idx, OptVal value, int opt_flags, int set_sid,
-                                     int scope, void *from);
+// rs_set_option_direct deleted: now exported as set_option_direct via #[export_name]
+// rs_set_option_direct_for deleted: now exported as set_option_direct_for via #[export_name]
 // rs_set_option_value deleted: now exported as set_option_value via #[export_name]
 extern const char *rs_unset_option_local_value(int opt_idx);
 // rs_set_option_value_handle_tty deleted: now exported as set_option_value_handle_tty via #[export_name]
@@ -1934,26 +1933,8 @@ static bool is_option_local_value_unset(OptIndex opt_idx)
 /// @param  set_sid    Script ID. Special values:
 ///                      0: Use current script ID.
 ///                      SID_NONE: Don't set script ID.
-void set_option_direct(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid)
-{
-  rs_set_option_direct(opt_idx, value, opt_flags, (int)set_sid);
-}
-
-/// Set option value directly for buffer / window, without processing any side effects.
-///
-/// @param      opt_idx    Option index in options[] table.
-/// @param      value      Option value.
-/// @param      opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// @param      set_sid    Script ID. Special values:
-///                          0: Use current script ID.
-///                          SID_NONE: Don't set script ID.
-/// @param      scope      Option scope. See OptScope in option.h.
-/// @param[in]  from       Target buffer/window.
-void set_option_direct_for(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid,
-                           OptScope scope, void *const from)
-{
-  rs_set_option_direct_for(opt_idx, value, opt_flags, (int)set_sid, (int)scope, (void *)from);
-}
+// set_option_direct deleted: now exported directly from Rust via #[export_name]
+// set_option_direct_for deleted: now exported directly from Rust via #[export_name]
 
 // set_option_value deleted: now exported directly from Rust via #[export_name]
 
