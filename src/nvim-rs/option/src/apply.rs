@@ -114,6 +114,7 @@ extern "C" {
     fn nvim_call_setmouse();
     fn nvim_call_redraw_all_later(kind: c_int);
     fn nvim_call_set_winbar();
+    #[link_name = "check_redraw_for"]
     fn rs_check_redraw_for(buf: *mut std::ffi::c_void, win: *mut std::ffi::c_void, flags: c_uint);
 
     // insecure_flag pointer

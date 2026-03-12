@@ -92,7 +92,7 @@ const UPD_NOT_VALID: c_int = 40;
 /// Check option flags and trigger appropriate redraws.
 ///
 /// Corresponds to `check_redraw_for()` in option_shim.c.
-#[no_mangle]
+#[export_name = "check_redraw_for"]
 pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, flags: c_uint) {
     // kOptFlagRedrAll = kOptFlagRedrBuf | kOptFlagRedrWin
     let redr_all = OptFlags::REDR_ALL.0;
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn rs_was_set_insecurely(
 /// window-local value.
 ///
 /// Corresponds to `set_option_sctx()` in option_shim.c.
-#[no_mangle]
+#[export_name = "set_option_sctx"]
 pub unsafe extern "C" fn rs_set_option_sctx(
     opt_idx: OptIndex,
     opt_flags: c_int,

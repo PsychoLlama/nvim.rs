@@ -201,7 +201,7 @@ extern void rs_reset_modifiable(void);
 extern OptVal rs_get_tty_option(const char *name);
 extern bool rs_set_tty_option(const char *name, char *value);
 extern int rs_string_to_key(char *arg);
-extern void rs_check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
+// rs_check_redraw_for deleted: now exported as check_redraw_for via #[export_name]
 // rs_insecure_flag deleted: now exported as insecure_flag via #[export_name]
 extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_value,
                                      OptVal new_value, int opt_flags, scid_T set_sid,
@@ -211,7 +211,7 @@ extern const char *rs_set_option_impl(OptIndex opt_idx, OptVal value, int opt_fl
                                       int set_sid, int direct, int value_replaced,
                                       char *errbuf, size_t errbuflen);
 // rs_was_set_insecurely deleted: now exported as was_set_insecurely via #[export_name]
-extern void rs_set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
+// rs_set_option_sctx deleted: now exported as set_option_sctx via #[export_name]
 extern int rs_optval_default(OptIndex opt_idx, void *varp);
 extern int rs_wc_use_keyname(const void *varp, OptInt *wcp);
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
@@ -1728,12 +1728,7 @@ sctx_T *get_option_sctx(OptIndex opt_idx)
   return rs_get_option_sctx(opt_idx);
 }
 
-/// Set the script_ctx for an option, taking care of setting the buffer- or
-/// window-local value.
-void set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx)
-{
-  rs_set_option_sctx(opt_idx, opt_flags, script_ctx);
-}
+// set_option_sctx deleted: now exported directly from Rust via #[export_name]
 
 
 
@@ -1774,11 +1769,7 @@ static void do_spelllang_source(win_T *win)
   rs_do_spelllang_source(win);
 }
 
-/// Called after an option changed: check if something needs to be redrawn.
-void check_redraw_for(buf_T *buf, win_T *win, uint32_t flags)
-{
-  rs_check_redraw_for(buf, win, flags);
-}
+// check_redraw_for deleted: now exported directly from Rust via #[export_name]
 
 void check_redraw(uint32_t flags)
 {
