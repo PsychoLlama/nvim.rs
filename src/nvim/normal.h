@@ -23,5 +23,8 @@ void pop_showcmd(void);
 void do_nv_ident(int c1, int c2);
 bool add_to_showcmd(int c);
 bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
+void end_visual_mode(void);
+void do_check_scrollbind(bool check);
+void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff);
 
 #include "normal_shim.h.generated.h"

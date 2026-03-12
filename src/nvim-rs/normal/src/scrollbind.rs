@@ -47,7 +47,7 @@ extern "C" {
 ///
 /// # Safety
 /// Caller must ensure curwin/curbuf globals are valid.
-#[no_mangle]
+#[export_name = "do_check_scrollbind"]
 pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
     let vtopline = crate::rs_get_vtopline(nvim_get_curwin());
 
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
 ///
 /// # Safety
 /// Caller must ensure curwin/curbuf globals and all window pointers are valid.
-#[no_mangle]
+#[export_name = "check_scrollbind"]
 pub unsafe extern "C" fn rs_check_scrollbind(vtopline_diff: c_int, leftcol_diff: c_int) {
     let old_curwin = nvim_get_curwin();
     let tgt_leftcol = nvim_get_curwin_w_leftcol();

@@ -510,7 +510,7 @@ extern int rs_get_vtopline(win_T *wp);
 extern int rs_get_sidescrolloff_value(win_T *wp);
 extern const char *rs_get_showbreak_value(win_T *win);
 extern void rs_n_start_visual_mode(int c);
-extern void rs_end_visual_mode(void);
+// rs_end_visual_mode deleted: now exported as end_visual_mode via #[export_name]
 extern void rs_set_cursor_for_append_to_line(void);
 extern void rs_set_op_var(int optype);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
@@ -1965,13 +1965,7 @@ void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = fal
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 
-/// End Visual mode.
-/// This function should ALWAYS be called to end Visual mode, except from
-/// do_pending_operator().
-void end_visual_mode(void)
-{
-  rs_end_visual_mode();
-}
+// end_visual_mode deleted: now exported directly from Rust via #[export_name]
 
 // =============================================================================
 // showcmd accessors for Rust FFI
@@ -2182,22 +2176,8 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
   curbuf = old_curbuf_buf;
 }
 
-/// When "check" is false, prepare for commands that scroll the window.
-/// When "check" is true, take care of scroll-binding after the window has
-/// scrolled.  Called from normal_cmd() and edit().
-extern void rs_do_check_scrollbind(bool check);
-void do_check_scrollbind(bool check)
-{
-  rs_do_check_scrollbind(check);
-}
-
-/// Synchronize any windows that have "scrollbind" set, based on the
-/// number of rows by which the current window has changed.
-extern void rs_check_scrollbind(int vtopline_diff, int leftcol_diff);
-void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
-{
-  rs_check_scrollbind((int)vtopline_diff, leftcol_diff);
-}
+// do_check_scrollbind deleted: now exported directly from Rust via #[export_name]
+// check_scrollbind deleted: now exported directly from Rust via #[export_name]
 
 // find_decl deleted: Rust lib.rs exports directly via #[export_name = "find_decl"].
 // nv_screengo deleted: dead code (no C or Rust callers; rs_nv_screengo called directly via move.c wrapper).

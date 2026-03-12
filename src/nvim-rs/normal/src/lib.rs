@@ -7723,7 +7723,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[unsafe(no_mangle)]
+#[export_name = "end_visual_mode"]
 pub unsafe extern "C" fn rs_end_visual_mode() {
     nvim_set_VIsual_select_exclu_adj(false);
     nvim_set_VIsual_active(false);

@@ -142,6 +142,7 @@ extern "C" {
     fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
     fn nvim_get_km_stopsel() -> bool;
     fn nvim_redraw_curbuf_inverted();
+    #[link_name = "end_visual_mode"]
     fn rs_end_visual_mode();
     fn rs_set_vcount_ca(cap: CapHandle, set_prevcount: *mut bool);
 }
