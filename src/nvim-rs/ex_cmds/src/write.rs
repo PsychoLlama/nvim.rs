@@ -450,7 +450,8 @@ extern "C" {
 ///
 /// # Safety
 /// All pointer arguments must be valid or null.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "getfile"]
 pub unsafe extern "C" fn rs_getfile(
     fnum: c_int,
     ffname_arg: *mut c_char,
@@ -744,7 +745,8 @@ extern "C" {
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "check_overwrite"]
 pub unsafe extern "C" fn rs_check_overwrite(
     eap: *mut ExArgHandle,
     buf: *mut BufHandle,
@@ -873,7 +875,8 @@ extern "C" {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "do_write"]
 pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     let mut retval: c_int = 0; // FAIL
 

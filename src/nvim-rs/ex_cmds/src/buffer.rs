@@ -385,7 +385,8 @@ extern "C" {
 ///
 /// # Safety
 /// `new_fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "rename_buffer"]
 pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
     const OK: c_int = 1;
     const FAIL: c_int = 0;

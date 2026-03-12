@@ -263,7 +263,8 @@ extern "C" {
 /// Called from C; all pointer parameters may be null except as noted.
 #[allow(clippy::never_loop)] // 'outer: loop used to simulate C's goto theend
 #[allow(unused_assignments)] // variables mirror C locals; some intermediate assignments are intentional
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "do_ecmd"]
 pub unsafe extern "C" fn rs_do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,

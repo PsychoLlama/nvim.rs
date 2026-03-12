@@ -506,7 +506,8 @@ fn find_pipe_pos(cmd: &[u8]) -> Option<usize> {
 /// - `cmd` must be a valid null-terminated C string.
 /// - `itmp` must be null or a valid null-terminated C string.
 /// - `otmp` must be null or a valid null-terminated C string.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "make_filter_cmd"]
 pub unsafe extern "C" fn rs_make_filter_cmd(
     cmd: *const c_char,
     itmp: *const c_char,

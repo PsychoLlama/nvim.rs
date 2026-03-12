@@ -510,28 +510,16 @@ static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char *cmd, b
 
 // do_shell deleted: now exported directly from Rust via #[export_name]
 
-// make_filter_cmd and find_pipe implemented in Rust (rs_make_filter_cmd in ex_cmds/src/shell.rs)
-extern char *rs_make_filter_cmd(const char *cmd, const char *itmp, const char *otmp, int do_in);
-
-/// Create a shell command from a command string, input redirection file and
-/// output redirection file. Thin wrapper calling the Rust implementation.
-char *make_filter_cmd(char *cmd, char *itmp, char *otmp, bool do_in)
-{
-  return rs_make_filter_cmd(cmd, itmp, otmp, (int)do_in);
-}
+// make_filter_cmd deleted: now exported directly from Rust via #[export_name]
 
 // append_redir deleted: Rust exports under the C name directly via #[export_name].
 // rs_append_redir deleted: now exported as append_redir via #[export_name]
 
 // rename_buffer + ex_file implemented in Rust (ex_cmds/src/buffer.rs)
-extern int rs_rename_buffer(const char *new_fname);
+// rs_rename_buffer deleted: now exported as rename_buffer via #[export_name]
 // rs_ex_file deleted: now exported as ex_file via #[export_name]
 
-/// Rename the current buffer to a new file name. Thin wrapper calling Rust.
-int rename_buffer(char *new_fname)
-{
-  return rs_rename_buffer(new_fname) ? OK : FAIL;
-}
+// rename_buffer deleted: now exported directly from Rust via #[export_name]
 
 // ex_file deleted: now exported directly from Rust via #[export_name]
 
@@ -544,9 +532,9 @@ extern int rs_not_writing(void);
 extern int rs_check_writable(const char *fname);
 extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
-extern int rs_do_write(exarg_T *eap);
-extern int rs_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname, const char *ffname, int other);
-extern int rs_getfile(int fnum, char *ffname, char *sfname, int setpm, int lnum, int forceit);
+// rs_do_write deleted: now exported as do_write via #[export_name]
+// rs_check_overwrite deleted: now exported as check_overwrite via #[export_name]
+// rs_getfile deleted: now exported as getfile via #[export_name]
 extern int rs_set_swapcommand(const char *command, int newlnum);
 extern void rs_delbuf_msg(char *name);
 
@@ -566,30 +554,9 @@ static int handle_mkdir_p_arg(exarg_T *eap, char *fname)
   return rs_handle_mkdir_p_arg(eap, fname) == 1 ? OK : FAIL;
 }
 
-/// Thin wrapper calling Rust rs_do_write.
-///
-/// Write current buffer to file "eap->arg".
-/// If "eap->append" is true, append to the file.
-///
-/// @return  FAIL for failure, OK otherwise.
-int do_write(exarg_T *eap)
-{
-  return rs_do_write(eap) != 0 ? OK : FAIL;
-}
+// do_write deleted: now exported directly from Rust via #[export_name]
 
-/// Check if it is allowed to overwrite a file.  If b_flags has BF_NOTEDITED,
-/// BF_NEW or BF_READERR, check for overwriting current file.
-/// Thin wrapper calling Rust rs_check_overwrite.
-///
-/// @param fname   file name to be used (can differ from buf->ffname)
-/// @param ffname  full path version of fname
-/// @param other   writing under other name
-///
-/// @return  OK if it's OK, FAIL if it is not.
-int check_overwrite(exarg_T *eap, buf_T *buf, char *fname, char *ffname, bool other)
-{
-  return rs_check_overwrite(eap, buf, fname, ffname, (int)other) != 0 ? OK : FAIL;
-}
+// check_overwrite deleted: now exported directly from Rust via #[export_name]
 
 // ex_wnext deleted: now exported directly from Rust via #[export_name]
 
@@ -616,20 +583,7 @@ static int check_readonly(int *forceit, buf_T *buf)
   return result;
 }
 
-/// Thin wrapper calling Rust rs_getfile.
-///
-/// @param fnum  the number of the file, if zero use "ffname_arg"/"sfname_arg".
-/// @param lnum  the line number for the cursor in the new file (if non-zero).
-///
-/// @return:
-///           GETFILE_ERROR for "normal" error,
-///           GETFILE_NOT_WRITTEN for "not written" error,
-///           GETFILE_SAME_FILE for success
-///           GETFILE_OPEN_OTHER for successfully opening another file.
-int getfile(int fnum, char *ffname_arg, char *sfname_arg, bool setpm, linenr_T lnum, bool forceit)
-{
-  return rs_getfile(fnum, ffname_arg, sfname_arg, (int)setpm, (int)lnum, (int)forceit);
-}
+// getfile deleted: now exported directly from Rust via #[export_name]
 
 /// Thin wrapper calling Rust rs_set_swapcommand.
 ///
@@ -642,41 +596,7 @@ bool set_swapcommand(char *command, linenr_T newlnum)
   return rs_set_swapcommand(command, (int)newlnum) != 0;
 }
 
-/// start editing a new file
-///
-/// @param fnum     file number; if zero use ffname/sfname
-/// @param ffname   the file name
-///                 - full path if sfname used,
-///                 - any file name if sfname is NULL
-///                 - empty string to re-edit with the same file name (but may
-///                   be in a different directory)
-///                 - NULL to start an empty buffer
-/// @param sfname   the short file name (or NULL)
-/// @param eap      contains the command to be executed after loading the file
-///                 and forced 'ff' and 'fenc'. Can be NULL!
-/// @param newlnum  if > 0: put cursor on this line number (if possible)
-///                 ECMD_LASTL: use last position in loaded file
-///                 ECMD_LAST: use last position in all files
-///                 ECMD_ONE: use first line
-/// @param flags    ECMD_HIDE: if true don't free the current buffer
-///                 ECMD_SET_HELP: set b_help flag of (new) buffer before
-///                 opening file
-///                 ECMD_OLDBUF: use existing buffer if it exists
-///                 ECMD_FORCEIT: ! used for Ex command
-///                 ECMD_ADDBUF: don't edit, just add to buffer list
-///                 ECMD_ALTBUF: like ECMD_ADDBUF and also set the alternate
-///                 file
-///                 ECMD_NOWINENTER: Do not trigger BufWinEnter
-/// @param oldwin   Should be "curwin" when editing a new buffer in the current
-///                 window, NULL when splitting the window first.  When not NULL
-///                 info of the previous buffer for "oldwin" is stored.
-///
-/// @return FAIL for failure, OK otherwise
-int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum, int flags,
-            win_T *oldwin)
-{
-  return rs_do_ecmd(fnum, ffname, sfname, eap, (int)newlnum, flags, oldwin);
-}
+// do_ecmd deleted: now exported directly from Rust via #[export_name]
 
 /// Thin wrapper calling Rust rs_delbuf_msg.
 static void delbuf_msg(char *name)

@@ -34,10 +34,15 @@ extern void rs_ex_z(exarg_T *eap);
 extern int rs_check_secure(void);
 extern void rs_print_line(int lnum, int use_number, int list, int first);
 extern void rs_print_line_no_prefix(int lnum, int use_number, int list);
-extern int rs_do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap,
-                      int newlnum, int flags, win_T *oldwin);
+// rs_do_ecmd deleted: now exported as do_ecmd via #[export_name]
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+int do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap, linenr_T newlnum, int flags, win_T *oldwin);
+char *make_filter_cmd(char *cmd, char *itmp, char *otmp, bool do_in);
+int rename_buffer(char *new_fname);
+int do_write(exarg_T *eap);
+int check_overwrite(exarg_T *eap, buf_T *buf, char *fname, char *ffname, bool other);
+int getfile(int fnum, char *ffname_arg, char *sfname_arg, bool setpm, linenr_T lnum, bool forceit);
 bool do_sub_msg(bool count_only);
 bool prepare_tagpreview(bool undo_sync);
 void ex_substitute(exarg_T *eap);
