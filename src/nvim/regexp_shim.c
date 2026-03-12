@@ -68,8 +68,7 @@ extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
 extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
-extern int rs_vim_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
-                                int32_t col, void *tm, int *timed_out);
+// rs_vim_regexec_multi deleted: now exported as vim_regexec_multi via #[export_name]
 extern void *rs_vim_regcomp(const uint8_t *expr, int re_flags);
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
 
@@ -726,16 +725,4 @@ bool vim_regexec_nl(regmatch_T *rmp, const char *line, colnr_T col)
 ///
 /// @param win        window in which to search or NULL
 /// @param buf        buffer in which to search
-/// @param lnum       nr of line to start looking for match
-/// @param col        column to start looking for match
-/// @param tm         timeout limit or NULL
-/// @param timed_out  flag is set when timeout limit reached
-///
-/// @return  zero if there is no match.  Return number of lines contained in the
-///          match otherwise.
-int vim_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col,
-                      proftime_T *tm, int *timed_out)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_vim_regexec_multi(rmp, win, buf, lnum, col, (void *)tm, timed_out);
-}
+// vim_regexec_multi deleted: Rust exports under the C name directly via #[export_name].

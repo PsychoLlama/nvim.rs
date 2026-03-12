@@ -15383,7 +15383,8 @@ pub unsafe extern "C" fn rs_vim_regexec_prog(
 }
 
 /// Public API: multi-line regexp match with NFA fallback.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regexec_multi"]
 pub unsafe extern "C" fn rs_vim_regexec_multi(
     rmp: *mut c_void,
     win: *mut c_void,
