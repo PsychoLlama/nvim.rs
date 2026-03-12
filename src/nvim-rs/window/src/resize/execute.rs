@@ -556,9 +556,9 @@ fn win_set_inner_size_impl(wp: WinHandle, valid_cursor: bool) {
 }
 
 /// FFI: Update view dimensions, outer dimensions, and border offsets for window wp.
-#[unsafe(no_mangle)]
-pub extern "C" fn rs_win_set_inner_size(wp: WinHandle, valid_cursor: c_int) {
-    win_set_inner_size_impl(wp, valid_cursor != 0);
+#[export_name = "win_set_inner_size"]
+pub extern "C" fn rs_win_set_inner_size(wp: WinHandle, valid_cursor: bool) {
+    win_set_inner_size_impl(wp, valid_cursor);
 }
 
 /// Set current window height and take care of repositioning other windows.

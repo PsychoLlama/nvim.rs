@@ -1110,12 +1110,8 @@ void win_free_grid(win_T *wp, bool reinit)
 
 // scroll_to_fraction: exported directly from Rust (Phase 15)
 
-extern void rs_win_set_inner_size(win_T *wp, int valid_cursor);
-
-void win_set_inner_size(win_T *wp, bool valid_cursor)
-{
-  rs_win_set_inner_size(wp, valid_cursor ? 1 : 0);
-}
+// rs_win_set_inner_size deleted: now exported as win_set_inner_size via #[export_name]
+// win_set_inner_size deleted: Rust exports under the C name directly via #[export_name].
 
 // command_height: thin wrapper defined in Phase 3 accessors section.
 

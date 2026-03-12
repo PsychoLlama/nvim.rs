@@ -111,6 +111,7 @@ void ui_ext_win_viewport(win_T *wp);
 
 // Phase 17+: Rust-exported functions (via #[export_name])
 void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch);
+void win_set_inner_size(win_T *wp, bool valid_cursor);
 void win_fix_scroll(bool resize);
 void set_winbar(bool make_room);
 void close_windows(buf_T *buf, bool keep_curwin);
