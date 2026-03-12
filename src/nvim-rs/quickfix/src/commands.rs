@@ -1263,6 +1263,7 @@ const BUF_HAS_LL_ENTRY: c_int = 2;
 type LinenrT = i64;
 
 extern "C" {
+    #[link_name = "rs_qf_cmd_get_stack"]
     fn nvim_qf_cmd_get_stack(eap: EapHandle, print_emsg: bool) -> QfInfoHandleMut;
     fn nvim_eap_get_cmdidx(eap: EapHandle) -> c_int;
     fn nvim_eap_get_addr_count(eap: EapHandle) -> c_int;
@@ -1711,6 +1712,7 @@ extern "C" {
     fn nvim_qf_reset_visual();
     fn nvim_qf_get_cmdmod_tab() -> c_int;
     fn nvim_qf_get_cmdmod_split() -> c_int;
+    #[link_name = "rs_qf_open_new_cwindow"]
     fn nvim_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_int) -> c_int;
     fn nvim_qf_curwin_set_cursor(lnum: CLinenrT, col: c_int);
     fn nvim_qf_check_cursor_curwin();

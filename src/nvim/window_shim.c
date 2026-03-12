@@ -1393,8 +1393,7 @@ int nvim_get_split_disallowed(void) { return split_disallowed; }
 int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ? 1 : 0; }
 
 // Phase 2 accessors: win_split and win_splitmove orchestration
-extern int rs_may_open_tabpage(void);
-int nvim_may_open_tabpage(void) { return rs_may_open_tabpage(); }
+// nvim_may_open_tabpage deleted: Rust orchestrate.rs now uses #[link_name = "rs_may_open_tabpage"].
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 /// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }

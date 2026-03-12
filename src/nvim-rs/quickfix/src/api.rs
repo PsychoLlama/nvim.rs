@@ -771,6 +771,7 @@ extern "C" {
         key_len: c_int,
     ) -> c_int;
     // qf window id
+    #[link_name = "rs_qf_winid"]
     fn nvim_qf_winid(qi: *const c_void) -> c_int;
     // qf valid buf number
     fn nvim_qf_get_valid_bufnr(qi: *const c_void) -> c_int;

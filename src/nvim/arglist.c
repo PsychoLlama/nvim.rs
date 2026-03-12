@@ -66,11 +66,8 @@ typedef struct {
 
 #include "arglist.c.generated.h"
 
-// Rust FFI declarations (window wrappers removed)
-extern win_T *rs_lastwin_nofloating(void);
-extern int rs_tabpage_index(tabpage_T *ftp);
-extern int rs_valid_tabpage(tabpage_T *tpc);
-extern int rs_win_valid(win_T *win);
+// rs_lastwin_nofloating, rs_tabpage_index, rs_valid_tabpage, rs_win_valid:
+// All deleted from C callers; Rust ffi.rs uses #[link_name] to call them directly.
 
 
 static const char e_window_layout_changed_unexpectedly[]
@@ -347,12 +344,11 @@ void nvim_al_goto_tabpage_tp(tabpage_T *tp, int trigger_enter, int trigger_leave
 {
   goto_tabpage_tp(tp, trigger_enter, trigger_leave);
 }
-int nvim_al_valid_tabpage(tabpage_T *tp) { return rs_valid_tabpage(tp); }
-int nvim_al_win_valid(win_T *wp) { return rs_win_valid(wp); }
+// nvim_al_valid_tabpage, nvim_al_win_valid deleted: Rust ffi.rs now uses #[link_name] to call rs_ directly.
 void nvim_al_win_close(win_T *wp, int free_buf, int force) { win_close(wp, free_buf, force); }
 void nvim_al_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync); }
 void nvim_al_win_move_after(win_T *wp, win_T *after) { win_move_after(wp, after); }
-win_T *nvim_al_lastwin_nofloating(void) { return rs_lastwin_nofloating(); }
+// nvim_al_lastwin_nofloating deleted: Rust ffi.rs now uses #[link_name = "rs_lastwin_nofloating"].
 int nvim_al_win_is_floating(win_T *wp) { return wp->w_floating; }
 win_T *nvim_al_win_get_prev(win_T *wp) { return wp->w_prev; }
 win_T *nvim_al_win_get_next(win_T *wp) { return wp->w_next; }
@@ -377,7 +373,7 @@ int nvim_al_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp); }
 extern void rs_reset_VIsual_and_resel(void);
 void nvim_al_reset_VIsual_and_resel(void) { rs_reset_VIsual_and_resel(); }
 void *nvim_al_xcalloc(size_t count, size_t size) { return xcalloc(count, size); }
-int nvim_al_tabpage_index(tabpage_T *tp) { return rs_tabpage_index(tp); }
+// nvim_al_tabpage_index deleted: Rust ffi.rs now uses #[link_name = "rs_tabpage_index"].
 int nvim_al_get_p_tpm(void) { return p_tpm; }
 int nvim_al_get_p_ea(void) { return p_ea; }
 void nvim_al_set_p_ea(int val) { p_ea = val; }

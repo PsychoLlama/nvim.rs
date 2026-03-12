@@ -266,11 +266,14 @@ extern "C" {
     pub fn nvim_al_get_lastwin() -> WinPtr;
     pub fn nvim_al_get_first_tabpage() -> TabpagePtr;
     pub fn nvim_al_goto_tabpage_tp(tp: TabpagePtr, trigger_enter: c_int, trigger_leave: c_int);
+    #[link_name = "rs_valid_tabpage"]
     pub fn nvim_al_valid_tabpage(tp: TabpagePtr) -> c_int;
+    #[link_name = "rs_win_valid"]
     pub fn nvim_al_win_valid(wp: WinPtr) -> c_int;
     pub fn nvim_al_win_close(wp: WinPtr, free_buf: c_int, force: c_int);
     pub fn nvim_al_win_enter(wp: WinPtr, undo_sync: c_int);
     pub fn nvim_al_win_move_after(wp: WinPtr, after: WinPtr);
+    #[link_name = "rs_lastwin_nofloating"]
     pub fn nvim_al_lastwin_nofloating() -> WinPtr;
     pub fn nvim_al_win_is_floating(wp: WinPtr) -> c_int;
     pub fn nvim_al_win_get_prev(wp: WinPtr) -> WinPtr;
@@ -290,6 +293,7 @@ extern "C" {
     pub fn nvim_al_is_aucmd_win(wp: WinPtr) -> c_int;
     pub fn nvim_al_reset_VIsual_and_resel();
     pub fn nvim_al_xcalloc(count: usize, size: usize) -> *mut c_void;
+    #[link_name = "rs_tabpage_index"]
     pub fn nvim_al_tabpage_index(tp: TabpagePtr) -> c_int;
     pub fn nvim_al_get_p_tpm() -> c_int;
     pub fn nvim_al_get_p_ea() -> c_int;

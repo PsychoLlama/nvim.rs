@@ -366,7 +366,7 @@ extern void rs_qf_sync_win_to_llw(void *pwp);
 // Phase 3: lifecycle functions (migrated to Rust)
 extern void *rs_qf_alloc_stack(int qfltype, int n);
 extern void *rs_ll_get_or_alloc_list(void *wp);
-extern void *rs_qf_cmd_get_stack(void *eap, bool print_emsg);
+// rs_qf_cmd_get_stack deleted: Rust commands.rs uses #[link_name] directly.
 
 // Pass 4: stack query entry points (Phase 1)
 extern size_t rs_qf_get_size_eap(void *eap);
@@ -539,7 +539,7 @@ extern void rs_check_lnums(int do_curwin);
 extern int rs_tabline_height(void);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
-extern int rs_qf_open_new_cwindow(void *qi_void, int height);
+// rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
 extern const char *rs_did_set_quickfixtextfunc(const void *args);
 extern void rs_qf_update_buffer(void *qi_void, const void *old_last);
 extern bool rs_set_ref_in_quickfix(int copyID);
@@ -2141,7 +2141,7 @@ int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NUL
 int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 
-int nvim_qf_open_new_cwindow(void *qi_void, int height) { return rs_qf_open_new_cwindow(qi_void, height); }
+// nvim_qf_open_new_cwindow deleted: Rust commands.rs now uses #[link_name = "rs_qf_open_new_cwindow"].
 void nvim_qf_set_title_var(void *qfl_void) { rs_qf_set_title_var(qfl_void); }
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
@@ -2766,8 +2766,7 @@ int qf_get_cur_valid_idx(exarg_T *eap)
   return rs_qf_get_cur_valid_idx_eap(eap);
 }
 
-/// For :cfdo and :lfdo, returns the 'n'th valid file entry.
-void *nvim_qf_cmd_get_stack(void *eap_void, bool print_emsg) { return rs_qf_cmd_get_stack(eap_void, print_emsg); }
+// nvim_qf_cmd_get_stack deleted: Rust commands.rs now uses #[link_name = "rs_qf_cmd_get_stack"].
 
 void nvim_qf_msg(void *qi_void, int which, const char *lead) { rs_qf_msg(qi_void, which, lead); }
 
@@ -3235,9 +3234,7 @@ enum {
 
 // qf_winid deleted: migrated to Rust rs_qf_winid in lib.rs (Phase 10, Pass 10).
 
-/// Accessor for Rust: get winid for a quickfix info (0 if not found).
-extern int rs_qf_winid(void *qi_void);
-int nvim_qf_winid(const void *qi_void) { return rs_qf_winid((void *)(uintptr_t)qi_void); }
+// nvim_qf_winid deleted: Rust api.rs now uses #[link_name = "rs_qf_winid"].
 
 // _Static_assert for Phase 3 QF_GETLIST_* constants used in Rust property functions
 _Static_assert(QF_GETLIST_NONE == 0x0, "QF_GETLIST_NONE mismatch");

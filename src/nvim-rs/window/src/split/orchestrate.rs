@@ -1021,6 +1021,7 @@ pub unsafe extern "C" fn win_split_ins(
 // declared in the extern block above.
 extern "C" {
     /// nvim_may_open_tabpage: opens a new tab page when :tab modifier was used.
+    #[link_name = "rs_may_open_tabpage"]
     fn nvim_may_open_tabpage() -> c_int;
 
     /// nvim_get_cmdmod_split: get cmdmod.cmod_split flags.
