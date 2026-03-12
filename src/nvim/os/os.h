@@ -35,5 +35,20 @@ void os_free_fullenv(char **env);
 char *os_getenvname_at_index(size_t index);
 void os_hint_priority(void);
 
+// Rust-provided replacements for env.c functions (Phase 2 migration).
+const void *vim_env_iter(char delim, const char *val, const void *iter, const char **dir,
+                         size_t *len);
+const void *vim_env_iter_rev(char delim, const char *val, const void *iter, const char **dir,
+                             size_t *len);
+char *expand_env_save(char *src);
+char *expand_env_save_opt(char *src, bool one);
+size_t expand_env(char *src, char *dst, int dstlen);
+char *get_env_name(expand_T *xp, int idx);
+bool os_setenv_append_path(const char *fname);
+bool os_shell_is_cmdexe(const char *sh);
+void vim_unsetenv_ext(const char *var);
+void vim_setenv_ext(const char *name, const char *val);
+char *home_replace_save(buf_T *buf, const char *src);
+
 #define ENV_LOGFILE "NVIM_LOG_FILE"
 #define ENV_NVIM "NVIM"

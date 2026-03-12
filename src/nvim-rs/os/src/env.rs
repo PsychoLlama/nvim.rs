@@ -6,7 +6,7 @@
 //! allocator, so callers should free them with `xfree`.
 
 use std::env;
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
 
 use nvim_memory::NvimString;
@@ -16,6 +16,48 @@ extern "C" {
     fn nvim_xfree(ptr: *mut c_char);
     #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xmalloc"]
+    fn nvim_xmalloc(size: usize) -> *mut c_char;
+    #[link_name = "xstrlcpy"]
+    fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    #[link_name = "xstrlcat"]
+    fn nvim_xstrlcat(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    #[link_name = "expand_env_esc"]
+    fn c_expand_env_esc(
+        srcp: *const c_char,
+        dst: *mut c_char,
+        dstlen: c_int,
+        esc: bool,
+        one: bool,
+        prefix: *mut c_char,
+    ) -> usize;
+    #[link_name = "home_replace"]
+    fn c_home_replace(
+        buf: *const c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    ) -> usize;
+    #[link_name = "path_is_absolute"]
+    fn c_path_is_absolute(fname: *const c_char) -> bool;
+    #[link_name = "path_tail_with_sep"]
+    fn c_path_tail_with_sep(fname: *mut c_char) -> *mut c_char;
+    #[link_name = "path_tail"]
+    fn c_path_tail(fname: *const c_char) -> *mut c_char;
+    #[link_name = "striequal"]
+    fn c_striequal(a: *const c_char, b: *const c_char) -> bool;
+    #[link_name = "os_getenv_noalloc"]
+    fn c_os_getenv_noalloc(name: *const c_char) -> *mut c_char;
+    #[link_name = "init_homedir"]
+    fn c_init_homedir();
+    #[link_name = "internal_error"]
+    fn c_internal_error(where_: *const c_char);
+    #[link_name = "nvim_xp_get_buf"]
+    fn nvim_xp_get_buf(xp: *mut c_void) -> *mut c_char;
+    // C globals accessed by Phase 2 functions
+    static mut didset_vim: bool;
+    static mut didset_vimruntime: bool;
 }
 
 /// Get the value of an environment variable.
@@ -331,6 +373,351 @@ pub extern "C" fn rs_os_getenvname_at_index(index: usize) -> *mut c_char {
         },
         None => ptr::null_mut(),
     }
+}
+
+// MAXPATHL value (must match nvim's MAXPATHL)
+const MAXPATHL: usize = 4096;
+
+// EXPAND_BUF_LEN (must match cmdexpand_defs.h)
+const EXPAND_BUF_LEN: usize = 256;
+
+/// Iterates $PATH-like delimited list `val` forward.
+///
+/// # Safety
+///
+/// `val`, `dir`, and `len` must be valid pointers.
+#[export_name = "vim_env_iter"]
+pub unsafe extern "C" fn rs_vim_env_iter(
+    delim: c_char,
+    val: *const c_char,
+    iter: *const c_void,
+    dir: *mut *const c_char,
+    len: *mut usize,
+) -> *const c_void {
+    let varval: *const c_char = if iter.is_null() { val } else { iter.cast() };
+
+    unsafe {
+        *dir = varval;
+    }
+
+    // Find next delimiter
+    let slice_start = varval;
+    let mut p = varval;
+    while unsafe { *p } != 0 && unsafe { *p } != delim {
+        p = unsafe { p.add(1) };
+    }
+
+    // p.offset_from is always non-negative since p >= slice_start
+    let dist = unsafe { p.offset_from(slice_start) };
+    #[allow(clippy::cast_sign_loss)]
+    let entry_len = dist as usize;
+    unsafe { *len = entry_len };
+
+    if unsafe { *p } == 0 {
+        ptr::null()
+    } else {
+        unsafe { p.add(1) }.cast()
+    }
+}
+
+/// Iterates $PATH-like delimited list `val` in reverse.
+///
+/// # Safety
+///
+/// `val`, `dir`, and `len` must be valid pointers.
+#[export_name = "vim_env_iter_rev"]
+pub unsafe extern "C" fn rs_vim_env_iter_rev(
+    delim: c_char,
+    val: *const c_char,
+    iter: *const c_void,
+    dir: *mut *const c_char,
+    len: *mut usize,
+) -> *const c_void {
+    // Calculate string length of val
+    let val_len = unsafe {
+        let mut p = val;
+        while *p != 0 {
+            p = p.add(1);
+        }
+        // p >= val always
+        #[allow(clippy::cast_sign_loss)]
+        let n = p.offset_from(val) as usize;
+        n
+    };
+
+    let varend: *const c_char = if iter.is_null() {
+        if val_len == 0 {
+            // Empty string: no entries
+            unsafe {
+                *dir = val;
+                *len = 0;
+            }
+            return ptr::null();
+        }
+        unsafe { val.add(val_len - 1) }
+    } else {
+        iter.cast()
+    };
+
+    // varend >= val always
+    #[allow(clippy::cast_sign_loss)]
+    let varlen = unsafe { varend.offset_from(val) as usize } + 1;
+
+    // Find last occurrence of delim in val[0..varlen]
+    let colon = {
+        let mut found: *const c_char = ptr::null();
+        let mut p = val;
+        let end = unsafe { val.add(varlen) };
+        while p < end {
+            if unsafe { *p } == delim {
+                found = p;
+            }
+            p = unsafe { p.add(1) };
+        }
+        found
+    };
+
+    if colon.is_null() {
+        unsafe {
+            *len = varlen;
+            *dir = val;
+        }
+        ptr::null()
+    } else {
+        unsafe {
+            *dir = colon.add(1);
+            // varend >= colon always (colon is in val[0..varlen])
+            #[allow(clippy::cast_sign_loss)]
+            let entry_len = varend.offset_from(colon) as usize;
+            *len = entry_len;
+        }
+        unsafe { colon.sub(1) }.cast()
+    }
+}
+
+/// Call `expand_env()` and store the result in an allocated string.
+///
+/// # Safety
+///
+/// `src` must be a valid C string.
+#[export_name = "expand_env_save"]
+pub unsafe extern "C" fn rs_expand_env_save(src: *mut c_char) -> *mut c_char {
+    unsafe { rs_expand_env_save_opt(src, false) }
+}
+
+/// Like `expand_env_save()` but when `one` is true, handle string as one filename.
+///
+/// # Safety
+///
+/// `src` must be a valid C string.
+#[export_name = "expand_env_save_opt"]
+pub unsafe extern "C" fn rs_expand_env_save_opt(src: *mut c_char, one: bool) -> *mut c_char {
+    let p = unsafe { nvim_xmalloc(MAXPATHL) };
+    #[allow(clippy::cast_possible_truncation)]
+    unsafe {
+        c_expand_env_esc(src, p, MAXPATHL as c_int, false, one, ptr::null_mut());
+    }
+    p
+}
+
+/// Expand environment variable with path name.
+///
+/// # Safety
+///
+/// `src` and `dst` must be valid C strings.
+#[export_name = "expand_env"]
+pub unsafe extern "C" fn rs_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int) -> usize {
+    unsafe { c_expand_env_esc(src, dst, dstlen, false, false, ptr::null_mut()) }
+}
+
+/// Function given to `ExpandGeneric()` to obtain an environment variable name.
+///
+/// # Safety
+///
+/// `xp` must be a valid pointer to `expand_T`.
+#[export_name = "get_env_name"]
+pub unsafe extern "C" fn rs_get_env_name(xp: *mut c_void, idx: c_int) -> *mut c_char {
+    assert!(idx >= 0);
+    #[allow(clippy::cast_sign_loss)]
+    let envname = rs_os_getenvname_at_index(idx as usize);
+    if envname.is_null() {
+        return ptr::null_mut();
+    }
+    let buf = unsafe { nvim_xp_get_buf(xp) };
+    unsafe {
+        nvim_xstrlcpy(buf, envname, EXPAND_BUF_LEN);
+        nvim_xfree(envname);
+    }
+    buf
+}
+
+/// Appends the head of `fname` to $PATH and sets it in the environment.
+///
+/// # Safety
+///
+/// `fname` must be a valid null-terminated C string.
+#[export_name = "os_setenv_append_path"]
+pub unsafe extern "C" fn rs_os_setenv_append_path(fname: *const c_char) -> bool {
+    #[cfg(windows)]
+    const MAX_ENVPATHLEN: usize = 8192;
+    #[cfg(not(windows))]
+    const MAX_ENVPATHLEN: usize = usize::MAX;
+
+    if !unsafe { c_path_is_absolute(fname) } {
+        unsafe { c_internal_error(c"os_setenv_append_path()".as_ptr()) };
+        return false;
+    }
+
+    let tail = unsafe { c_path_tail_with_sep(fname.cast_mut()) };
+    // tail >= fname always (path_tail_with_sep returns ptr into fname)
+    #[allow(clippy::cast_sign_loss)]
+    let dirlen = unsafe { tail.offset_from(fname) as usize };
+
+    // Copy the directory portion into a local buffer
+    let mut dir_buf = [0u8; MAXPATHL];
+    if dirlen >= MAXPATHL {
+        return false;
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(fname.cast::<u8>(), dir_buf.as_mut_ptr(), dirlen);
+    }
+    dir_buf[dirlen] = 0;
+
+    let path = unsafe { rs_os_getenv(c"PATH".as_ptr()) };
+    let pathlen = if path.is_null() {
+        0usize
+    } else {
+        unsafe {
+            let mut p = path;
+            while *p != 0 {
+                p = p.add(1);
+            }
+            // p >= path always
+            #[allow(clippy::cast_sign_loss)]
+            let n = p.offset_from(path) as usize;
+            n
+        }
+    };
+    let newlen = pathlen + dirlen + 2;
+    let retval = if newlen < MAX_ENVPATHLEN {
+        let temp = unsafe { nvim_xmalloc(newlen) };
+        if pathlen == 0 {
+            unsafe { *temp = 0 };
+        } else {
+            unsafe {
+                nvim_xstrlcpy(temp, path, newlen);
+            }
+            #[cfg(windows)]
+            let sep = b';' as c_char;
+            #[cfg(not(windows))]
+            let sep = b':' as c_char;
+            #[cfg(windows)]
+            let sep_str = c";";
+            #[cfg(not(windows))]
+            let sep_str = c":";
+            let last = unsafe { *path.add(pathlen - 1) };
+            if last != sep {
+                unsafe {
+                    nvim_xstrlcat(temp, sep_str.as_ptr(), newlen);
+                }
+            }
+        }
+        unsafe {
+            nvim_xstrlcat(temp, dir_buf.as_ptr().cast(), newlen);
+            rs_os_setenv(c"PATH".as_ptr(), temp, 1);
+            nvim_xfree(temp);
+        }
+        true
+    } else {
+        false
+    };
+    if !path.is_null() {
+        unsafe { nvim_xfree(path) };
+    }
+    retval
+}
+
+/// Returns true if `sh` looks like it resolves to "cmd.exe".
+///
+/// # Safety
+///
+/// `sh` must be a valid null-terminated C string.
+#[export_name = "os_shell_is_cmdexe"]
+pub unsafe extern "C" fn rs_os_shell_is_cmdexe(sh: *const c_char) -> bool {
+    if unsafe { *sh } == 0 {
+        return false;
+    }
+    if unsafe { c_striequal(sh, c"$COMSPEC".as_ptr()) } {
+        let comspec_val = unsafe { c_os_getenv_noalloc(c"COMSPEC".as_ptr()) };
+        return unsafe { c_striequal(c"cmd.exe".as_ptr(), c_path_tail(comspec_val)) };
+    }
+    if unsafe { c_striequal(sh, c"cmd.exe".as_ptr()) }
+        || unsafe { c_striequal(sh, c"cmd".as_ptr()) }
+    {
+        return true;
+    }
+    unsafe { c_striequal(c"cmd.exe".as_ptr(), c_path_tail(sh)) }
+}
+
+/// Removes environment variable and handles side effects.
+///
+/// # Safety
+///
+/// `var` must be a valid null-terminated C string.
+#[export_name = "vim_unsetenv_ext"]
+pub unsafe extern "C" fn rs_vim_unsetenv_ext(var: *const c_char) {
+    unsafe { rs_os_unsetenv(var) };
+    // Check if it's "VIM" or "VIMRUNTIME" (case-insensitive)
+    let var_cstr = unsafe { CStr::from_ptr(var) };
+    if let Ok(s) = var_cstr.to_str() {
+        if s.eq_ignore_ascii_case("VIM") {
+            unsafe { didset_vim = false };
+        } else if s.eq_ignore_ascii_case("VIMRUNTIME") {
+            unsafe { didset_vimruntime = false };
+        }
+    }
+}
+
+/// Sets environment variable and handles side effects.
+///
+/// # Safety
+///
+/// `name` and `val` must be valid null-terminated C strings.
+#[export_name = "vim_setenv_ext"]
+pub unsafe extern "C" fn rs_vim_setenv_ext(name: *const c_char, val: *const c_char) {
+    unsafe { rs_os_setenv(name, val, 1) };
+    let name_cstr = unsafe { CStr::from_ptr(name) };
+    if let Ok(s) = name_cstr.to_str() {
+        if s.eq_ignore_ascii_case("HOME") {
+            unsafe { c_init_homedir() };
+        } else if s.eq_ignore_ascii_case("VIM") && unsafe { didset_vim } {
+            unsafe { didset_vim = false };
+        } else if s.eq_ignore_ascii_case("VIMRUNTIME") && unsafe { didset_vimruntime } {
+            unsafe { didset_vimruntime = false };
+        }
+    }
+}
+
+/// Like `home_replace`, but stores result in allocated memory.
+///
+/// # Safety
+///
+/// `buf` may be NULL. `src` may be NULL.
+#[export_name = "home_replace_save"]
+pub unsafe extern "C" fn rs_home_replace_save(
+    buf: *const c_void,
+    src: *const c_char,
+) -> *mut c_char {
+    let mut len: usize = 3; // space for "~/" and trailing NUL
+    if !src.is_null() {
+        let src_cstr = unsafe { CStr::from_ptr(src) };
+        len += src_cstr.to_bytes().len();
+    }
+    let dst = unsafe { nvim_xmalloc(len) };
+    unsafe {
+        c_home_replace(buf, src, dst, len, true);
+    }
+    dst
 }
 
 #[cfg(test)]
