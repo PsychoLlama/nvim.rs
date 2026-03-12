@@ -74,7 +74,6 @@ extern "C" {
     fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const std::ffi::c_void;
     fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut std::ffi::c_void;
     fn nvim_get_option_var(opt_idx: OptIndex) -> *mut std::ffi::c_void;
-    #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: OptIndex) -> c_uint;
     fn nvim_option_clear_was_set_flag(opt_idx: OptIndex);
 
