@@ -636,6 +636,25 @@ pub unsafe extern "C" fn rs_os_readlink(path: *const c_char) -> *mut c_char {
 // Note: rs_os_readlink_free is no longer needed since rs_os_readlink now uses
 // xmallocz. Callers should use xfree() directly to free returned strings.
 
+/// Maximum length of a temporary file path, matching `TEMP_FILE_PATH_MAXLEN` in nvim.
+///
+/// On Unix this is 256; on Windows it would be `_MAX_PATH` (260).
+const TEMP_FILE_PATH_MAXLEN: usize = 256;
+
+/// Create a temporary directory from a template (2-arg C-compatible interface).
+///
+/// Exported as `os_mkdtemp` to replace the C wrapper that passed
+/// `TEMP_FILE_PATH_MAXLEN` as the third argument.
+///
+/// # Safety
+///
+/// - `template` must be a valid null-terminated C string ending with "XXXXXX"
+/// - `path` must point to a buffer of at least `TEMP_FILE_PATH_MAXLEN` bytes
+#[export_name = "os_mkdtemp"]
+pub unsafe extern "C" fn rs_os_mkdtemp_2arg(template: *const c_char, path: *mut c_char) -> c_int {
+    unsafe { rs_os_mkdtemp(template, path, TEMP_FILE_PATH_MAXLEN) }
+}
+
 /// Create a temporary directory from a template.
 ///
 /// The template must end with "XXXXXX" which will be replaced by random characters.

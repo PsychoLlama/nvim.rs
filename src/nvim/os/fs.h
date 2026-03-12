@@ -21,6 +21,7 @@
 
 DLLEXPORT int os_open(const char *path, int flags, int mode);
 DLLEXPORT int os_mkdir(const char *path, int32_t mode);
+DLLEXPORT int os_mkdtemp(const char *templ, char *path);
 DLLEXPORT bool os_isrealdir(const char *name);
 DLLEXPORT bool os_isdir(const char *name);
 DLLEXPORT bool os_path_exists(const char *path);

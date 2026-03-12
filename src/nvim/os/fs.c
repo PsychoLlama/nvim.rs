@@ -64,7 +64,6 @@
 
 // Rust filesystem implementations (still called from C)
 extern int rs_os_nodetype(const char *name);
-extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
 
 #ifdef HAVE_XATTR
 static const char e_xattr_erange[]
@@ -636,18 +635,6 @@ int os_file_mkdir(char *fname, int32_t mode)
   return 0;
 }
 
-/// Create a unique temporary directory.
-///
-/// @param[in] templ Template of the path to the directory with XXXXXX
-///                  which would be replaced by random chars.
-/// @param[out] path Path to created directory for success, undefined for
-///                  failure.
-/// @return `0` for success, non-zero for failure.
-int os_mkdtemp(const char *templ, char *path)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_mkdtemp(templ, path, TEMP_FILE_PATH_MAXLEN);
-}
 
 
 /// Opens a directory.
