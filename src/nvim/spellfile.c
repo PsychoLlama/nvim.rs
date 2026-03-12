@@ -287,16 +287,6 @@
 // Rust implementations (direct exports)
 extern int offset2bytes(int nr, uint8_t *buf);
 extern bool sal_to_bool(const char *s);
-extern int rs_bytes2offset(const uint8_t **pp);
-extern bool rs_check_spell_magic(const uint8_t *buf);
-extern int rs_read_be_u16(const uint8_t *buf, size_t len, size_t offset);
-extern int rs_read_be_u24(const uint8_t *buf, size_t len, size_t offset);
-extern int rs_read_be_u32(const uint8_t *buf, size_t len, size_t offset);
-extern int rs_find_region(const char *rp, const char *region);
-extern bool rs_valid_spell_word(const uint8_t *word, const uint8_t *end);
-extern int rs_encode_offset(uint8_t *p, int len, int nr);
-extern int rs_decode_offset_3byte(const uint8_t *p);
-extern int rs_decode_offset_4byte(const uint8_t *p);
 
 // Spellfile header functions
 extern int rs_write_spellfile_header(uint8_t *out, size_t max_len, const void *header);
@@ -318,24 +308,10 @@ extern int rs_write_tree_child_index(uint8_t *out, size_t max_len, int index);
 extern int rs_write_region_section(uint8_t *out, size_t max_len, const void *regions);
 extern int rs_write_end_section(uint8_t *out, size_t max_len);
 
-// Soundfold comparison
-extern int rs_soundfold_compare(const char *s1, const char *s2);
-
-// Compression functions
-extern int rs_should_compress_memory(size_t size);
-extern int rs_should_compress_words(int word_count);
-
 // Phase B1: Section reading functions
 // Prefix condition parsing
-typedef struct {
-  uint8_t pattern[256];
-  uint8_t pattern_len;
-} RsPrefixCondition;
-
 extern int rs_parse_prefcond_count(const uint8_t *buf, size_t buf_len, uint16_t *count_out,
                                    size_t *consumed_out);
-extern int rs_parse_prefcond(const uint8_t *buf, size_t buf_len, RsPrefixCondition *cond_out,
-                             size_t *consumed_out);
 
 // REP/REPSAL section parsing
 typedef struct {
@@ -479,21 +455,6 @@ extern int rs_mkspell_output_fname(const uint8_t *const *fnames, int fcount,
 
 extern int rs_mkspell_validate_args(const uint8_t *const *innames, int incount,
                                     uint8_t *region_name_out);
-
-// Phase B6: Affix file parsing infrastructure
-// The main spell_read_aff() function remains in C due to its complexity
-// (~738 LOC, text file parsing, encoding conversion, hash tables).
-// These declarations provide Rust helpers for affix flag parsing.
-
-// Affix flag type constants (matches AFT_* defines below)
-typedef enum {
-  RS_AFT_CHAR = 0,      // flags are one character
-  RS_AFT_LONG = 1,      // flags are two characters
-  RS_AFT_NUM = 2,       // flags are numbers (comma-separated)
-  RS_AFT_CAPLONG = 3,   // flags are two characters, first can be upper case
-} RsAffFlagType;
-
-// Future: Rust helpers for affix flag parsing would go here
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
