@@ -514,7 +514,8 @@ pub unsafe extern "C" fn rs_skip_anyof(p: *mut c_char) -> *mut c_char {
 /// is changed in-place.
 /// If a `\?` is changed to `?` then `dropped` is incremented, unless NULL.
 /// If `magic_val` is not NULL, returns the effective magicness of the pattern.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "skip_regexp_ex"]
 pub unsafe extern "C" fn rs_skip_regexp_ex(
     startp: *mut c_char,
     dirc: c_int,
@@ -2851,7 +2852,8 @@ pub unsafe extern "C" fn rs_vim_regsub(
 /// Perform substitution after a `vim_regexec_multi()` match (multi-line).
 ///
 /// Saves/restores `rex` state for recursive calls.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regsub_multi"]
 pub unsafe extern "C" fn rs_vim_regsub_multi(
     rmp: *mut c_void,
     lnum: i32,

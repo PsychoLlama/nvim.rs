@@ -517,6 +517,7 @@ extern "C" {
 
     /// Skip regexp to find magic value.
     /// Returns pointer past pattern, sets magic_val.
+    #[link_name = "skip_regexp_ex"]
     fn rs_skip_regexp_ex(
         startp: *mut std::ffi::c_char,
         dirc: c_int,

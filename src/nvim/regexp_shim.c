@@ -52,8 +52,7 @@
 
 // Rust FFI: skip_regexp implementation
 extern char *rs_partial_name(partial_T *pt);
-extern char *rs_skip_regexp_ex(char *startp, int dirc, int magic, char **newp,
-                               int *dropped, int *magic_val);
+// rs_skip_regexp_ex deleted: now exported as skip_regexp_ex via #[export_name]
 // Rust FFI: regexp utility functions (directly exported from Rust)
 extern reg_extmatch_T *rs_make_extmatch(void);
 extern void rs_cleanup_zsubexpr(void);
@@ -145,17 +144,7 @@ char *skip_regexp(char *startp, int delim, int magic)
   return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL);
 }
 
-/// skip_regexp() with extra arguments:
-/// When "newp" is not NULL and "dirc" is '?', make an allocated copy of the
-/// expression and change "\?" to "?".  If "*newp" is not NULL the expression
-/// is changed in-place.
-/// If a "\?" is changed to "?" then "dropped" is incremented, unless NULL.
-/// If "magic_val" is not NULL, returns the effective magicness of the pattern
-char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *dropped,
-                     magic_T *magic_val)
-{
-  return rs_skip_regexp_ex(startp, dirc, magic, newp, dropped, (int *)magic_val);
-}
+// skip_regexp_ex deleted: now exported from Rust lib.rs via #[export_name = "skip_regexp_ex"]
 
 // vim_regexec and friends
 
@@ -396,16 +385,10 @@ static void clear_submatch_list(staticList10_T *sl)
 
 // Rust FFI: vim_regsub functions
 // rs_vim_regsub deleted: now exported as vim_regsub via #[export_name]
-extern int rs_vim_regsub_multi(void *rmp, int32_t lnum, char *source, char *dest, int destlen,
-                               int flags);
+// rs_vim_regsub_multi deleted: now exported as vim_regsub_multi via #[export_name]
 
 // vim_regsub deleted: Rust exports under the C name directly via #[export_name].
-
-int vim_regsub_multi(regmmatch_T *rmp, linenr_T lnum, char *source, char *dest, int destlen,
-                     int flags)
-{
-  return rs_vim_regsub_multi(rmp, (int32_t)lnum, source, dest, destlen, flags);
-}
+// vim_regsub_multi deleted: now exported from Rust lib.rs via #[export_name = "vim_regsub_multi"]
 
 // Forward declarations for Rust-exported state accessors
 char **nvim_regexp_get_eval_result_ptr(int i);

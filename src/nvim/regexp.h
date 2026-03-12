@@ -37,5 +37,7 @@ int vim_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, c
 bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col);
 bool vim_regexec(regmatch_T *rmp, const char *line, colnr_T col);
 bool vim_regexec_nl(regmatch_T *rmp, const char *line, colnr_T col);
+char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *dropped, magic_T *magic_val);
+int vim_regsub_multi(regmmatch_T *rmp, linenr_T lnum, char *source, char *dest, int destlen, int flags);
 
 #include "regexp_shim.h.generated.h"
