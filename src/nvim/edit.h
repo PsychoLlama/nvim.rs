@@ -54,3 +54,24 @@ void cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
 void cursor_down_inner(win_T *wp, int n, bool skip_conceal);
 void replace_push(char *str, size_t len);
 bool get_can_cindent(void);
+
+// Phase 2: public thin-wrapper eliminations (Rust exports canonical names).
+void undisplay_dollar(void);
+void backspace_until_column(int col);
+int get_literal(bool no_simplify);
+void start_arrow(pos_T *end_insert_pos);
+int stop_arrow(void);
+void set_last_insert(int c);
+void free_last_insert(void);
+void beginline(int flags);
+int oneright(void);
+int oneleft(void);
+int cursor_up(linenr_T n, bool upd_topline);
+int cursor_down(int n, bool upd_topline);
+int stuff_inserted(int c, int count, int no_esc);
+char *get_last_insert_save(void);
+void replace_push_nul(void);
+int ins_copychar(linenr_T lnum);
+colnr_T get_nolist_virtcol(void);
+char *buf_prompt_text(const buf_T *buf);
+char *prompt_text(void);

@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_edit_can_bs(what: c_int) -> c_int;
 
     // Undo / stop_arrow
-    fn rs_stop_arrow() -> c_int;
+    fn stop_arrow() -> c_int;
     fn nvim_edit_u_save(lnum1: c_int, lnum2: c_int) -> c_int;
 
     // Indent
@@ -78,7 +78,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_edit_cindent_on() -> c_int;
     fn nvim_edit_fix_indent();
-    fn rs_beginline(flags: c_int);
+    fn beginline(flags: c_int);
 
     // ml_get_len
     fn nvim_edit_ml_get_len(lnum: c_int) -> c_int;
@@ -215,7 +215,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         return false;
     }
 
-    if rs_stop_arrow() == FAIL {
+    if stop_arrow() == FAIL {
         return false;
     }
 
@@ -319,7 +319,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             && !revins_on
         {
             let save_col = nvim_curwin_get_cursor_col();
-            rs_beginline(BL_WHITE);
+            beginline(BL_WHITE);
             if nvim_curwin_get_cursor_col() < save_col {
                 mincol = nvim_curwin_get_cursor_col();
                 call_fix_indent = true;

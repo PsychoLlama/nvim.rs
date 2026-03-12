@@ -155,7 +155,7 @@ unsafe fn beginline_impl(flags: c_int) {
     nvim_edit_adjust_skipcol();
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "beginline")]
 pub unsafe extern "C" fn rs_beginline(flags: c_int) {
     beginline_impl(flags);
 }
@@ -211,7 +211,8 @@ unsafe fn oneright_impl() -> c_int {
     OK
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "oneright")]
 pub unsafe extern "C" fn rs_oneright() -> c_int {
     oneright_impl()
 }
@@ -275,7 +276,8 @@ unsafe fn oneleft_impl() -> c_int {
     OK
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "oneleft")]
 pub unsafe extern "C" fn rs_oneleft() -> c_int {
     oneleft_impl()
 }
@@ -376,9 +378,10 @@ unsafe fn cursor_up_impl(n: LinenrT, upd_topline: bool) -> c_int {
     OK
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_cursor_up(n: LinenrT, upd_topline: c_int) -> c_int {
-    cursor_up_impl(n, upd_topline != 0)
+#[must_use]
+#[unsafe(export_name = "cursor_up")]
+pub unsafe extern "C" fn rs_cursor_up(n: LinenrT, upd_topline: bool) -> c_int {
+    cursor_up_impl(n, upd_topline)
 }
 
 // ============================================================================
@@ -469,9 +472,10 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     OK
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_cursor_down(n: c_int, upd_topline: c_int) -> c_int {
-    cursor_down_impl(n, upd_topline != 0)
+#[must_use]
+#[unsafe(export_name = "cursor_down")]
+pub unsafe extern "C" fn rs_cursor_down(n: c_int, upd_topline: bool) -> c_int {
+    cursor_down_impl(n, upd_topline)
 }
 
 // ============================================================================

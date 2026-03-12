@@ -193,8 +193,7 @@ static bool ins_need_undo;              // call u_save() before inserting a
 // Rust FFI declarations
 extern int rs_ins_need_undo_get(void);
 extern int rs_get_can_cindent(void);
-extern char *rs_buf_prompt_text(const buf_T *buf);
-extern char *rs_prompt_text(void);
+// buf_prompt_text, prompt_text: now canonical names (Phase 2)
 extern bool rs_prompt_curpos_editable(void);
 // State module exports
 extern int rs_state_ins_need_undo(void);
@@ -261,45 +260,30 @@ extern int rs_has_abbr_off(int c);
 extern int rs_abbr_trigger_type(int c);
 extern int rs_abbr_trigger_needs_offset(int trigger_type);
 // Helpers module exports
-extern void rs_undisplay_dollar(void);
-extern colnr_T rs_get_nolist_virtcol(void);
-extern void rs_truncate_spaces(char *line, size_t len);
-extern void rs_backspace_until_column(int col);
-extern void rs_set_last_insert(int c);
-extern void rs_free_last_insert(void);
+// undisplay_dollar, get_nolist_virtcol, truncate_spaces, backspace_until_column,
+// set_last_insert, free_last_insert, get_last_insert_save: now canonical names (Phase 2)
 
 typedef struct {
   char *data;
   size_t size;
 } RsNvimString;
 extern RsNvimString rs_get_last_insert(void);
-extern char *rs_get_last_insert_save(void);
 // Replace stack module exports
 extern void rs_replace_push(const char *str, size_t len);
-extern void rs_replace_push_nul(void);
 extern void rs_replace_stack_clear(void);
 // Movement module exports
-extern void rs_beginline(int flags);
-extern int rs_oneright(void);
-extern int rs_oneleft(void);
-extern void rs_cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
-extern int rs_cursor_up(linenr_T n, int upd_topline);
-extern void rs_cursor_down_inner(win_T *wp, int n, bool skip_conceal);
-extern int rs_cursor_down(int n, int upd_topline);
+// beginline, oneright, oneleft, cursor_up, cursor_down: now canonical names (Phase 2)
 // Tab and EOL module exports
 // ins_tab and ins_eol are now exported directly by Rust and declared in edit.h
 extern void rs_ins_ctrl_v(void);
-extern int rs_ins_copychar(linenr_T lnum);
-extern int rs_stuff_inserted(int c, int count, int no_esc);
+// ins_copychar, stuff_inserted: now canonical names (Phase 2)
 extern void rs_redo_literal(int c);
-extern void rs_start_arrow(void *end_insert_pos);
 extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
-extern int rs_stop_arrow(void);
-extern int rs_get_literal(int no_simplify);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
 
-// Rust functions exported with canonical C names (Phase 1 static wrappers eliminated)
+// Rust functions exported with canonical C names (Phase 1+2 wrappers eliminated)
+// Phase 1: static wrappers
 extern void insert_special(int c, int allow_modmask, int ctrlv);
 extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
 extern void check_spell_redraw(void);
@@ -313,6 +297,26 @@ extern void ins_ctrl_o(void);
 extern int ins_start_select(int c);
 extern char *do_insert_char_pre(int c);
 extern int del_char_after_col(int limit_col);
+// Phase 2: public wrappers
+extern void undisplay_dollar(void);
+extern void backspace_until_column(int col);
+extern int get_literal(bool no_simplify);
+extern void start_arrow(pos_T *end_insert_pos);
+extern int stop_arrow(void);
+extern void set_last_insert(int c);
+extern void free_last_insert(void);
+extern void beginline(int flags);
+extern int oneright(void);
+extern int oneleft(void);
+extern int cursor_up(linenr_T n, bool upd_topline);
+extern int cursor_down(int n, bool upd_topline);
+extern int stuff_inserted(int c, int count, int no_esc);
+extern char *get_last_insert_save(void);
+extern void replace_push_nul(void);
+extern int ins_copychar(linenr_T lnum);
+extern colnr_T get_nolist_virtcol(void);
+extern char *buf_prompt_text(const buf_T *buf);
+extern char *prompt_text(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -2916,18 +2920,8 @@ void edit_putchar(int c, bool highlight)
 }
 
 /// @return    the effective prompt for the specified buffer.
-char *buf_prompt_text(const buf_T *const buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_buf_prompt_text(buf);
-}
-
-/// @return  the effective prompt for the current buffer.
-char *prompt_text(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_prompt_text();
-}
+// buf_prompt_text: now exported directly from Rust (export_name = "buf_prompt_text").
+// prompt_text: now exported directly from Rust (export_name = "prompt_text").
 
 // Prepare for prompt mode: Make sure the last line has the prompt text.
 // Move the cursor to this line.
@@ -3019,52 +3013,12 @@ void display_dollar(colnr_T col_arg)
   curwin->w_cursor.col = save_col;
 }
 
-// Call this function before moving the cursor from the normal insert position
-// in insert mode.
-void undisplay_dollar(void)
-{
-  rs_undisplay_dollar();
-}
-
+// undisplay_dollar: now exported directly from Rust (export_name = "undisplay_dollar").
 // truncate_spaces: now exported directly from Rust (export_name = "truncate_spaces").
-
-/// Backspace the cursor until the given column.  Handles MODE_REPLACE and
-/// MODE_VREPLACE modes correctly.  May also be used when not in insert mode at
-/// all.  Will attempt not to go before "col" even when there is a composing
-/// character.
-void backspace_until_column(int col)
-{
-  rs_backspace_until_column(col);
-}
-
-/// Like del_char(), but make sure not to go before column "limit_col".
-/// Only matters when there are composing characters.
-///
-/// @param  limit_col  only delete the character if it is after this column
-//
-/// @return true when something was deleted.
-/// Next character is interpreted literally.
-int get_literal(bool no_simplify)
-{
-  return rs_get_literal(no_simplify ? 1 : 0);
-}
-
-/// start_arrow() is called when an arrow key is used in insert mode.
-/// For undo/redo it resembles hitting the <ESC> key.
-///
-/// @param end_insert_pos  can be NULL
-void start_arrow(pos_T *end_insert_pos)
-{
-  rs_start_arrow(end_insert_pos);
-}
-
-// stop_arrow() is called before a change is made in insert mode.
-// If an arrow key has been used, start a new insertion.
-// Returns FAIL if undo is impossible, shouldn't insert then.
-int stop_arrow(void)
-{
-  return rs_stop_arrow();
-}
+// backspace_until_column: now exported directly from Rust (export_name = "backspace_until_column").
+// get_literal: now exported directly from Rust (export_name = "get_literal").
+// start_arrow: now exported directly from Rust (export_name = "start_arrow").
+// stop_arrow: now exported directly from Rust (export_name = "stop_arrow").
 
 /// Do a few things to stop inserting.
 /// "end_insert_pos" is where insert ended.  It is NULL when we already jumped
@@ -3188,73 +3142,16 @@ static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
   }
 }
 
-// Set the last inserted text to a single character.
-// Used for the replace command.
-void set_last_insert(int c)
-{
-  rs_set_last_insert(c);
-}
-
-#if defined(EXITFREE)
-void free_last_insert(void)
-{
-  rs_free_last_insert();
-}
-#endif
-
-// move cursor to start of line
-// if flags & BL_WHITE  move to first non-white
-// if flags & BL_SOL    move to first non-white if startofline is set,
-//                          otherwise keep "curswant" column
-// if flags & BL_FIX    don't leave the cursor on a NUL.
-void beginline(int flags)
-{
-  rs_beginline(flags);
-}
-
-// oneright oneleft cursor_down cursor_up
-//
-// Move one char {right,left,down,up}.
-// Doesn't move onto the NUL past the end of the line, unless it is allowed.
-// Return OK when successful, FAIL when we hit a line of file boundary.
-
-int oneright(void)
-{
-  return rs_oneright();
-}
-
-int oneleft(void)
-{
-  return rs_oneleft();
-}
-
+// set_last_insert: now exported directly from Rust (export_name = "set_last_insert").
+// free_last_insert: now exported directly from Rust (export_name = "free_last_insert").
+// beginline: now exported directly from Rust (export_name = "beginline").
+// oneright: now exported directly from Rust (export_name = "oneright").
+// oneleft: now exported directly from Rust (export_name = "oneleft").
 // cursor_up_inner: now exported directly from Rust (export_name = "cursor_up_inner").
-
-/// @param upd_topline  When true: update topline
-int cursor_up(linenr_T n, bool upd_topline)
-{
-  return rs_cursor_up(n, upd_topline ? 1 : 0);
-}
-
+// cursor_up: now exported directly from Rust (export_name = "cursor_up").
 // cursor_down_inner: now exported directly from Rust (export_name = "cursor_down_inner").
-
-/// @param upd_topline  When true: update topline
-int cursor_down(int n, bool upd_topline)
-{
-  return rs_cursor_down(n, upd_topline ? 1 : 0);
-}
-
-/// Stuff the last inserted text in the read buffer.
-/// Last_insert actually is a copy of the redo buffer, so we
-/// first have to remove the command.
-///
-/// @param c       Command character to be inserted
-/// @param count   Repeat this many times
-/// @param no_esc  Don't add an ESC at the end
-int stuff_inserted(int c, int count, int no_esc)
-{
-  return rs_stuff_inserted(c, count, no_esc);
-}
+// cursor_down: now exported directly from Rust (export_name = "cursor_down").
+// stuff_inserted: now exported directly from Rust (export_name = "stuff_inserted").
 
 String get_last_insert(void)
   FUNC_ATTR_PURE
@@ -3263,12 +3160,7 @@ String get_last_insert(void)
   return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
 }
 
-// Get last inserted string, and remove trailing <Esc>.
-// Returns pointer to allocated memory (must be freed) or NULL.
-char *get_last_insert_save(void)
-{
-  return rs_get_last_insert_save();
-}
+// get_last_insert_save: now exported directly from Rust (export_name = "get_last_insert_save").
 
 /// Check the word in front of the cursor for an abbreviation.
 /// Called when the non-id character "c" has been entered.
@@ -3292,10 +3184,7 @@ char *get_last_insert_save(void)
 /// characters will be left on the stack above the newly inserted character.
 // replace_push: now exported directly from Rust (export_name = "replace_push").
 
-void replace_push_nul(void)
-{
-  rs_replace_push_nul();
-}
+// replace_push_nul: now exported directly from Rust (export_name = "replace_push_nul").
 
 static void ins_reg(void)
 {
@@ -3511,24 +3400,13 @@ static bool ins_esc(int *count, int cmdchar, bool nomove)
 // Handle digraph in insert mode -- now exported directly from Rust as ins_digraph.
 // Handle CTRL-Y/E -- now exported directly from Rust as ins_ctrl_ey.
 
-// Handle CTRL-E and CTRL-Y in Insert mode: copy char from other line.
-// Returns the char to be inserted, or NUL if none found.
-int ins_copychar(linenr_T lnum)
-{
-  return rs_ins_copychar(lnum);
-}
-
-// Get the value that w_virtcol would have when 'list' is off.
-// Unless 'cpo' contains the 'L' flag.
-colnr_T get_nolist_virtcol(void)
-{
-  return rs_get_nolist_virtcol();
-}
+// ins_copychar: now exported directly from Rust (export_name = "ins_copychar").
+// get_nolist_virtcol: now exported directly from Rust (export_name = "get_nolist_virtcol").
 
 /// Get virtual column without list mode (accessor for Rust).
 int nvim_get_nolist_virtcol(void)
 {
-  return (int)rs_get_nolist_virtcol();
+  return (int)get_nolist_virtcol();
 }
 
 // get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").

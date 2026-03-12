@@ -56,12 +56,12 @@ extern "C" {
     fn nvim_edit_ww_allows(ch: c_int) -> c_int;
     fn nvim_edit_set_cursor_lnum_rel(delta: LinenrT);
 
-    // Movement functions (already migrated to Rust, callable via FFI)
-    fn rs_oneleft() -> c_int;
-    fn rs_oneright() -> c_int;
-    fn rs_undisplay_dollar();
-    fn rs_cursor_up(n: LinenrT, upd_topline: c_int) -> c_int;
-    fn rs_cursor_down(n: c_int, upd_topline: c_int) -> c_int;
+    // Movement functions (canonical names, exported from Rust)
+    fn oneleft() -> c_int;
+    fn oneright() -> c_int;
+    fn undisplay_dollar();
+    fn cursor_up(n: LinenrT, upd_topline: bool) -> c_int;
+    fn cursor_down(n: c_int, upd_topline: bool) -> c_int;
 
     // Word movement
     fn nvim_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int;
@@ -147,9 +147,9 @@ unsafe fn ins_left_impl() {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     nvim_edit_save_cursor(0); // save to slot 0
-    if rs_oneleft() == OK {
+    if oneleft() == OK {
         nvim_edit_start_arrow_with_change_from_slot(0, c_int::from(end_change));
         if !end_change {
             nvim_edit_append_char_to_redobuff(K_LEFT);
@@ -189,7 +189,7 @@ unsafe fn ins_right_impl() {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     if nvim_gchar_cursor() != 0 || nvim_edit_virtual_active() != 0 {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
@@ -197,7 +197,7 @@ unsafe fn ins_right_impl() {
         }
         nvim_edit_set_w_set_curswant(1);
         if nvim_edit_virtual_active() != 0 {
-            rs_oneright();
+            oneright();
         } else {
             let ptr = nvim_get_cursor_pos_ptr();
             let l = utfc_ptr2len(ptr);
@@ -238,7 +238,7 @@ unsafe fn ins_s_left_impl() {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() > 1 || nvim_curwin_get_cursor_col() > 0 {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
@@ -268,7 +268,7 @@ unsafe fn ins_s_right_impl() {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() < nvim_edit_curwin_buf_line_count() || nvim_gchar_cursor() != 0
     {
         nvim_edit_start_arrow_with_change_curpos(end_change);
@@ -297,7 +297,7 @@ unsafe fn ins_home_impl(c: c_int) {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     nvim_edit_save_cursor(0);
     if c == K_C_HOME {
         nvim_edit_set_cursor_lnum_abs(1);
@@ -322,7 +322,7 @@ unsafe fn ins_end_impl(c: c_int) {
     if nvim_edit_fdo_hor_and_key_typed() != 0 {
         rs_foldOpenCursor();
     }
-    rs_undisplay_dollar();
+    undisplay_dollar();
     nvim_edit_save_cursor(0);
     if c == K_C_END {
         nvim_edit_set_cursor_lnum_abs(nvim_edit_curwin_buf_line_count());
@@ -344,9 +344,9 @@ pub unsafe extern "C" fn rs_ins_end(c: c_int) {
 /// Handle Up arrow in Insert mode.
 unsafe fn ins_up_impl(startcol: bool) {
     nvim_edit_save_topline();
-    rs_undisplay_dollar();
+    undisplay_dollar();
     nvim_edit_save_cursor(0);
-    if rs_cursor_up(1, 1) == OK {
+    if cursor_up(1, true) == OK {
         if startcol {
             nvim_edit_coladvance_insstart();
         }
@@ -372,9 +372,9 @@ pub unsafe extern "C" fn rs_ins_up(startcol: c_int) {
 /// Handle Down arrow in Insert mode.
 unsafe fn ins_down_impl(startcol: bool) {
     nvim_edit_save_topline();
-    rs_undisplay_dollar();
+    undisplay_dollar();
     nvim_edit_save_cursor(0);
-    if rs_cursor_down(1, 1) == OK {
+    if cursor_down(1, true) == OK {
         if startcol {
             nvim_edit_coladvance_insstart();
         }
@@ -399,7 +399,7 @@ pub unsafe extern "C" fn rs_ins_down(startcol: c_int) {
 
 /// Handle `PageUp` in Insert mode.
 unsafe fn ins_pageup_impl() {
-    rs_undisplay_dollar();
+    undisplay_dollar();
 
     if nvim_edit_mod_mask_ctrl() != 0 {
         // <C-PageUp>: tab page back
@@ -430,7 +430,7 @@ pub unsafe extern "C" fn rs_ins_pageup() {
 
 /// Handle `PageDown` in Insert mode.
 unsafe fn ins_pagedown_impl() {
-    rs_undisplay_dollar();
+    undisplay_dollar();
 
     if nvim_edit_mod_mask_ctrl() != 0 {
         // <C-PageDown>: tab page forward

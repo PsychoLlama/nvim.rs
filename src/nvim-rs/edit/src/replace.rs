@@ -368,7 +368,7 @@ pub unsafe extern "C" fn rs_replace_push(str_ptr: *const c_char, len: usize) {
 // =============================================================================
 
 /// Push a NUL separator onto the replace stack.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "replace_push_nul")]
 pub unsafe extern "C" fn rs_replace_push_nul() {
     let nul: u8 = 0;
     replace_push_impl(std::ptr::addr_of!(nul), 1);

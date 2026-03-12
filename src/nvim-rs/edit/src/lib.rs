@@ -138,7 +138,8 @@ const DEFAULT_PROMPT: &[u8] = b"% \0";
 ///
 /// # Safety
 /// The buf pointer must be a valid `buf_T` pointer.
-#[no_mangle]
+#[must_use]
+#[unsafe(export_name = "buf_prompt_text")]
 pub unsafe extern "C" fn rs_buf_prompt_text(buf: *const std::ffi::c_void) -> *const c_char {
     let prompt = nvim_buf_get_b_prompt_text(buf);
     if prompt.is_null() {
@@ -152,7 +153,8 @@ pub unsafe extern "C" fn rs_buf_prompt_text(buf: *const std::ffi::c_void) -> *co
 ///
 /// # Safety
 /// Accesses curbuf global.
-#[no_mangle]
+#[must_use]
+#[unsafe(export_name = "prompt_text")]
 pub unsafe extern "C" fn rs_prompt_text() -> *const c_char {
     rs_buf_prompt_text(nvim_get_curbuf())
 }

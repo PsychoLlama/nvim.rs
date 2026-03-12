@@ -59,7 +59,7 @@ extern "C" {
     fn nvim_edit_ins_str(p: *const c_char, len: usize);
     fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
-    fn rs_stop_arrow() -> c_int;
+    fn stop_arrow() -> c_int;
 
     // -- get_literal dependencies --
     fn nvim_edit_plain_vgetc() -> c_int;
@@ -148,7 +148,8 @@ pub unsafe extern "C" fn rs_ins_ctrl_v() {
 // ins_copychar — delegated to C helper
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "ins_copychar")]
 pub unsafe extern "C" fn rs_ins_copychar(lnum: LinenrT) -> c_int {
     nvim_edit_ins_copychar(lnum)
 }
@@ -254,7 +255,8 @@ unsafe fn stuff_inserted_impl(c: c_int, count: c_int, no_esc: c_int) -> c_int {
     OK
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "stuff_inserted")]
 pub unsafe extern "C" fn rs_stuff_inserted(c: c_int, count: c_int, no_esc: c_int) -> c_int {
     stuff_inserted_impl(c, count, no_esc)
 }
@@ -376,7 +378,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
         let len = c_strlen(p);
         c = c_int::from(*p.add(len - 1) as u8);
         if len > 2 {
-            if rs_stop_arrow() == FAIL {
+            if stop_arrow() == FAIL {
                 return;
             }
             // Temporarily NUL-terminate before the last char
@@ -388,7 +390,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
             ctrlv = 0;
         }
     }
-    if rs_stop_arrow() == OK {
+    if stop_arrow() == OK {
         insertchar(c, if ctrlv != 0 { INSCHAR_CTRLV } else { 0 }, -1);
     }
 }
@@ -532,9 +534,10 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     cc
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_get_literal(no_simplify: c_int) -> c_int {
-    get_literal_impl(no_simplify)
+#[must_use]
+#[unsafe(export_name = "get_literal")]
+pub unsafe extern "C" fn rs_get_literal(no_simplify: bool) -> c_int {
+    get_literal_impl(c_int::from(no_simplify))
 }
 
 // ============================================================================

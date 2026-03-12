@@ -114,13 +114,13 @@ extern "C" {
     fn rs_ins_ctrl_v();
     fn ins_ctrl_ey(tc: c_int) -> c_int;
     fn ins_digraph() -> c_int;
-    fn rs_stop_arrow() -> c_int;
+    fn stop_arrow() -> c_int;
     fn rs_foldOpenCursor();
     fn insert_special(c: c_int, allow_modmask: c_int, ctrlv: c_int);
-    fn rs_stuff_inserted(c: c_int, count: c_int, no_esc: c_int) -> c_int;
+    fn stuff_inserted(c: c_int, count: c_int, no_esc: c_int) -> c_int;
     fn do_insert_char_pre(c: c_int) -> *mut c_char;
     fn echeck_abbr(c: c_int) -> c_int;
-    fn rs_get_nolist_virtcol() -> c_int;
+    fn get_nolist_virtcol() -> c_int;
 
     // -- Tab / EOL (Rust exports) --
     fn ins_tab() -> bool;
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
 #[unsafe(export_name = "insert_do_cindent")]
 pub unsafe extern "C" fn rs_insert_do_cindent(s: *mut InsertState) {
     if nvim_edit_in_cinkeys((*s).c, c_int::from(b' '), c_int::from((*s).line_is_white)) != 0
-        && rs_stop_arrow() == OK
+        && stop_arrow() == OK
     {
         nvim_edit_do_c_expr_indent();
     }
@@ -592,7 +592,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
     if nvim_edit_get_p_paste() == 0 {
         let str_ptr = do_insert_char_pre((*s).c);
         if !str_ptr.is_null() {
-            if *str_ptr != 0 && rs_stop_arrow() != FAIL {
+            if *str_ptr != 0 && stop_arrow() != FAIL {
                 // Insert the new value of v:char literally.
                 let mut p = str_ptr;
                 while *p != 0 {
@@ -625,7 +625,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
         if nvim_get_Insstart_blank_vcol() == MAXCOL
             && nvim_curwin_get_cursor_lnum() == nvim_get_Insstart_lnum()
         {
-            nvim_set_Insstart_blank_vcol(rs_get_nolist_virtcol());
+            nvim_set_Insstart_blank_vcol(get_nolist_virtcol());
         }
     }
 
@@ -1047,7 +1047,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 // ============================================================================
 
 unsafe fn handle_insert_previously_inserted(s: *mut InsertState) -> SwitchAction {
-    if rs_stuff_inserted(NUL, 1, c_int::from((*s).c == CTRL_A)) == FAIL && (*s).c != CTRL_A {
+    if stuff_inserted(NUL, 1, c_int::from((*s).c == CTRL_A)) == FAIL && (*s).c != CTRL_A {
         return SwitchAction::Exit(0);
     }
     (*s).inserted_space = 0;

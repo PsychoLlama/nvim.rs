@@ -31,8 +31,8 @@ extern "C" {
     // Cursor
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
 
-    // get_nolist_virtcol (already implemented in helpers.rs as rs_get_nolist_virtcol)
-    fn rs_get_nolist_virtcol() -> ColnrT;
+    // get_nolist_virtcol (canonical name, exported from Rust)
+    fn get_nolist_virtcol() -> ColnrT;
 
     // Abbreviation check
     fn echeck_abbr(c: c_int) -> c_int;
@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_edit_AppendToRedobuff(str: *const c_char);
 
     // stop_arrow
-    fn rs_stop_arrow() -> c_int;
+    fn stop_arrow() -> c_int;
 
     // State (REPLACE_FLAG / VREPLACE_FLAG)
     fn nvim_get_State() -> c_int;
@@ -78,7 +78,7 @@ extern "C" {
     // Character insertion
     fn ins_char(c: c_int);
     fn nvim_edit_ins_str(s: *const c_char, len: usize);
-    fn rs_replace_push_nul();
+    fn replace_push_nul();
 
     // Space-to-TAB replacement (complex C helper)
     fn nvim_edit_ins_tab_replace_spaces(p_sta_val: bool, ind: bool) -> bool;
@@ -121,7 +121,7 @@ unsafe fn ins_tab_impl() -> bool {
     if nvim_get_Insstart_blank_vcol() == MAXCOL
         && nvim_curwin_get_cursor_lnum() == nvim_get_Insstart_lnum()
     {
-        nvim_set_Insstart_blank_vcol(rs_get_nolist_virtcol());
+        nvim_set_Insstart_blank_vcol(get_nolist_virtcol());
     }
 
     // Check for abbreviation
@@ -160,7 +160,7 @@ unsafe fn ins_tab_impl() -> bool {
         return true;
     }
 
-    if rs_stop_arrow() == FAIL {
+    if stop_arrow() == FAIL {
         return true;
     }
 
@@ -174,7 +174,7 @@ unsafe fn ins_tab_impl() -> bool {
     let temp: c_int = if sta && ind {
         // Use shiftwidth
         let sw = sw_value as c_int;
-        let vcol = rs_get_nolist_virtcol() as c_int;
+        let vcol = get_nolist_virtcol() as c_int;
         sw - (vcol % sw)
     } else if vsts_cnt > 0 || nvim_curbuf_get_b_p_sts() != 0 {
         // Use softtabstop
@@ -196,7 +196,7 @@ unsafe fn ins_tab_impl() -> bool {
         } else {
             nvim_edit_ins_str(c" ".as_ptr(), 1);
             if state & REPLACE_FLAG != 0 {
-                rs_replace_push_nul();
+                replace_push_nul();
             }
         }
         remaining -= 1;

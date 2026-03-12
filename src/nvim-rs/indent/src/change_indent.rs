@@ -101,7 +101,7 @@ extern "C" {
 
     // Rust functions in edit crate (via FFI)
     fn replace_join(off: c_int);
-    fn rs_backspace_until_column(col: c_int);
+    fn backspace_until_column(col: c_int);
 }
 
 /// Change the indent of the current line and adjust cursor position.
@@ -279,7 +279,7 @@ pub unsafe extern "C" fn rs_change_indent(
         nvim_set_curbuf_splice_pending(pending + 1);
 
         // Backspace from cursor to start of line
-        rs_backspace_until_column(0);
+        backspace_until_column(0);
 
         // Insert new stuff into line again
         nvim_ins_bytes(new_line);

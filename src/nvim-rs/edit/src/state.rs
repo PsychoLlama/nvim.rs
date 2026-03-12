@@ -567,7 +567,7 @@ pub unsafe extern "C" fn rs_start_arrow_common(end_insert_pos: *mut c_void, end_
 ///
 /// # Safety
 /// Called from C FFI only.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "start_arrow")]
 pub unsafe extern "C" fn rs_start_arrow(end_insert_pos: *mut c_void) {
     start_arrow_common_impl(end_insert_pos, 1);
 }
@@ -638,7 +638,8 @@ unsafe fn stop_arrow_impl() -> c_int {
 
 /// # Safety
 /// Called from C FFI only.
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "stop_arrow")]
 pub unsafe extern "C" fn rs_stop_arrow() -> c_int {
     stop_arrow_impl()
 }

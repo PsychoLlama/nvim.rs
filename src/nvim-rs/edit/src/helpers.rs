@@ -127,7 +127,7 @@ unsafe fn undisplay_dollar_impl() {
     redrawWinline(curwin, lnum);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "undisplay_dollar")]
 pub unsafe extern "C" fn rs_undisplay_dollar() {
     undisplay_dollar_impl();
 }
@@ -153,7 +153,8 @@ unsafe fn get_nolist_virtcol_impl() -> ColnrT {
     nvim_curwin_get_w_virtcol()
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "get_nolist_virtcol")]
 pub unsafe extern "C" fn rs_get_nolist_virtcol() -> ColnrT {
     get_nolist_virtcol_impl()
 }
@@ -272,7 +273,7 @@ pub unsafe extern "C" fn rs_del_char_after_col(limit_col: c_int) -> c_int {
 /// Handles replace mode correctly by using `replace_do_bs`.
 /// In normal insert mode, uses `del_char_after_col` to avoid
 /// deleting before composing characters.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "backspace_until_column")]
 pub unsafe extern "C" fn rs_backspace_until_column(col: c_int) {
     while nvim_curwin_get_cursor_col() as c_int > col {
         nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
@@ -292,7 +293,7 @@ pub unsafe extern "C" fn rs_backspace_until_column(col: c_int) {
 ///
 /// Used for the replace command. Allocates a buffer, optionally
 /// prefixes with CTRL-V for special characters, and appends ESC.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "set_last_insert")]
 pub unsafe extern "C" fn rs_set_last_insert(c: c_int) {
     // Free existing last_insert data
     let old_data = nvim_get_last_insert_data();
@@ -325,7 +326,7 @@ pub unsafe extern "C" fn rs_set_last_insert(c: c_int) {
 // ============================================================================
 
 /// Free the last-insert text (used at exit).
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "free_last_insert")]
 pub unsafe extern "C" fn rs_free_last_insert() {
     nvim_clear_last_insert();
 }
@@ -368,7 +369,8 @@ pub unsafe extern "C" fn rs_get_last_insert() -> NvimString {
 /// Get last inserted string with trailing ESC removed.
 ///
 /// Returns a newly allocated copy (caller must free), or NULL if none.
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "get_last_insert_save")]
 pub unsafe extern "C" fn rs_get_last_insert_save() -> *mut c_char {
     let insert = rs_get_last_insert();
     if insert.data.is_null() {

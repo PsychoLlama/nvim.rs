@@ -150,7 +150,7 @@ extern "C" {
     fn rs_foldOpenCursor();
     fn rs_foldUpdateAfterInsert();
     fn rs_clear_showcmd();
-    fn rs_undisplay_dollar();
+    fn undisplay_dollar();
 }
 
 // ============================================================================
@@ -279,7 +279,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     let revins_on_val = in_insert_mode && nvim_get_p_ri() != 0;
     nvim_edit_set_revins_on(c_int::from(revins_on_val));
     if revins_on_val {
-        rs_undisplay_dollar();
+        undisplay_dollar();
     }
     nvim_set_revins_chars(0);
     nvim_set_revins_legal(0);
