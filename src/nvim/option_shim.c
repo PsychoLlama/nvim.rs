@@ -171,7 +171,7 @@ extern FindOptionEndResult rs_find_option_end(const char *arg);
 // rs_find_option deleted: now exported as find_option via #[export_name]
 
 // Rust init functions (option pass 7 phase 2)
-extern void rs_set_init_2(int headless);
+// rs_set_init_2 deleted: now exported as set_init_2 via #[export_name]
 // rs_set_init_3 deleted: now exported as set_init_3 via #[export_name]
 
 // Rust option validation and ex_set (option pass 7 phase 3)
@@ -1558,11 +1558,7 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
 
 // free_all_options deleted: now exported directly from Rust via #[export_name] (EXITFREE guarded)
 
-/// Initialize the options, part two: After getting Rows and Columns.
-void set_init_2(bool headless)
-{
-  rs_set_init_2(headless ? 1 : 0);
-}
+// set_init_2 deleted: now exported directly from Rust via #[export_name]
 
 // set_init_3 deleted: now exported directly from Rust via #[export_name]
 
@@ -3133,14 +3129,7 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-extern void rs_set_init_1(int clean_arg);
-
-/// Initialize the options, first part.
-/// Called only once from main(), just after creating the first buffer.
-void set_init_1(bool clean_arg)
-{
-  rs_set_init_1(clean_arg ? 1 : 0);
-}
+// set_init_1 deleted: now exported directly from Rust via #[export_name]
 
 /// langmap_init() wrapper.
 void nvim_call_langmap_init(void) { langmap_init(); }

@@ -733,7 +733,7 @@ fn number_optval(n: OptInt) -> OptVal {
 /// Initialize the options, part two: After getting Rows and Columns.
 ///
 /// Corresponds to C's `set_init_2`.
-#[no_mangle]
+#[export_name = "set_init_2"]
 pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     // set in set_init_1 but logging is not allowed there
     nvim_option_ilog_rtp();
@@ -865,7 +865,7 @@ extern "C" {
 ///
 /// # Safety
 /// Must only be called once during startup, from C main().
-#[no_mangle]
+#[export_name = "set_init_1"]
 pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     nvim_call_langmap_init();
 

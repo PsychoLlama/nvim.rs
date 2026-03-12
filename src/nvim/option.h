@@ -119,6 +119,8 @@ bool option_was_set(OptIndex opt_idx);
 sctx_T *get_option_sctx(OptIndex opt_idx);
 bool shortmess(int x);
 bool can_bs(int what);
+void set_init_1(bool clean_arg);
+void set_init_2(bool headless);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif
