@@ -145,7 +145,7 @@ extern int rs_option_is_window_local(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
-extern int rs_option_was_set(int opt_idx);
+// rs_option_was_set deleted: now exported as option_was_set via #[export_name]
 extern void rs_reset_option_was_set(int opt_idx);
 extern void *rs_get_option_sctx(int opt_idx);
 
@@ -345,7 +345,7 @@ extern int rs_is_option_local_value_unset(OptIndex opt_idx);
 extern char *rs_optval_to_cstr(OptVal o);
 
 // Phase 15 option value API (from Rust value.rs)
-extern vimoption_T *rs_get_option_ptr(int opt_idx);
+// rs_get_option_ptr deleted: now exported as get_option via #[export_name]
 // rs_set_option_direct deleted: now exported as set_option_direct via #[export_name]
 // rs_set_option_direct_for deleted: now exported as set_option_direct_for via #[export_name]
 // rs_set_option_value deleted: now exported as set_option_value via #[export_name]
@@ -1887,12 +1887,7 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 
 
 
-/// Return information for option at 'opt_idx'
-vimoption_T *get_option(OptIndex opt_idx)
-{
-  assert(opt_idx != kOptInvalid);
-  return rs_get_option_ptr(opt_idx);
-}
+// get_option deleted: now exported from Rust value.rs via #[export_name = "get_option"]
 
 
 /// Check if local value of global-local option is unset for current buffer / window.
@@ -2359,16 +2354,7 @@ bool shortmess(int x)
 
 // vimrc_found deleted: now exported directly from Rust via #[export_name]
 
-/// Check whether global option has been set.
-///
-/// @param[in]  name  Option name.
-///
-/// @return True if option was set.
-bool option_was_set(OptIndex opt_idx)
-{
-  assert(opt_idx != kOptInvalid);
-  return rs_option_was_set(opt_idx);
-}
+// option_was_set deleted: now exported from Rust index.rs via #[export_name = "option_was_set"]
 
 /// Reset the flag indicating option "name" was set.
 ///

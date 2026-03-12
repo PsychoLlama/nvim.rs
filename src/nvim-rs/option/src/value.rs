@@ -1102,7 +1102,8 @@ pub unsafe extern "C" fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -
 /// Rust implementation of get_option (returns pointer to vimoption_T).
 ///
 /// Returns a pointer to &options[opt_idx].
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_option"]
 pub unsafe extern "C" fn rs_get_option_ptr(opt_idx: c_int) -> *mut std::ffi::c_void {
     nvim_get_option_ptr_by_idx(opt_idx)
 }

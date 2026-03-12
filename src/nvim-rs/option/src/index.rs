@@ -394,7 +394,8 @@ pub unsafe extern "C" fn rs_get_option_flags(opt_idx: OptIndex) -> c_uint {
 }
 
 /// Check if option was set (has kOptFlagWasSet flag).
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "option_was_set"]
 pub unsafe extern "C" fn rs_option_was_set(opt_idx: OptIndex) -> c_int {
     if opt_idx == OPT_INVALID {
         return 0;
