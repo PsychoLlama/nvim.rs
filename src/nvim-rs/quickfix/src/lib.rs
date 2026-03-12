@@ -5687,7 +5687,8 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
 /// # Safety
 ///
 /// May only be called from the option-setting machinery.
-#[no_mangle]
+#[export_name = "did_set_quickfixtextfunc"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_did_set_quickfixtextfunc(_args: *const c_void) -> *const c_char {
     if nvim_qf_option_set_callback_func_for_qftf() == P3_FAIL {
         return nvim_qf_get_e_invarg();

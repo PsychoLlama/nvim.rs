@@ -369,11 +369,8 @@ extern void *rs_ll_get_or_alloc_list(void *wp);
 // rs_qf_cmd_get_stack deleted: Rust commands.rs uses #[link_name] directly.
 
 // Pass 4: stack query entry points (Phase 1)
-extern size_t rs_qf_get_size_eap(void *eap);
-extern size_t rs_qf_get_valid_size_eap(void *eap);
-extern size_t rs_qf_get_cur_idx_eap(void *eap);
-extern int rs_qf_get_cur_valid_idx_eap(void *eap);
-extern int rs_grep_internal(int cmdidx);
+// rs_qf_get_size_eap, rs_qf_get_valid_size_eap, rs_qf_get_cur_idx_eap,
+// rs_qf_get_cur_valid_idx_eap, rs_grep_internal removed: all now export under C names via #[export_name].
 extern void rs_qf_incr_changedtick(void *qfl);
 
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
@@ -540,7 +537,7 @@ extern int rs_tabline_height(void);
 extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 // rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
-extern const char *rs_did_set_quickfixtextfunc(const void *args);
+// rs_did_set_quickfixtextfunc removed: exports as did_set_quickfixtextfunc via #[export_name].
 // rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
 extern bool rs_set_ref_in_quickfix(int copyID);
 extern void rs_free_quickfix(void);
@@ -2417,12 +2414,7 @@ void nvim_qf_clear_fnum_cache(void)
 // qf_find_win deleted: migrated to Rust rs_qf_find_win_for_stack (Phase 10/11).
 // qf_find_buf deleted: migrated to Rust rs_qf_find_buf_for_stack (Phase 10/11).
 
-/// Process the 'quickfixtextfunc' option value.
-/// Delegates to rs_did_set_quickfixtextfunc (Phase 10 Pass 10 Phase 3).
-const char *did_set_quickfixtextfunc(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_quickfixtextfunc(args);
-}
+// did_set_quickfixtextfunc deleted: Rust lib.rs exports directly via #[export_name = "did_set_quickfixtextfunc"].
 
 // qf_update_win_titlevar deleted: migrated to Rust rs_qf_update_win_titlevar (Phase 11).
 
@@ -2556,11 +2548,7 @@ void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : (
 // qf_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 14).
 // qf_jump_first deleted: callers use rs_qf_jump_first directly (Phase 14).
 
-// Return true when using ":vimgrep" for ":grep".
-int grep_internal(cmdidx_T cmdidx)
-{
-  return rs_grep_internal(cmdidx);
-}
+// grep_internal deleted: Rust commands.rs exports directly via #[export_name = "grep_internal"].
 
 
 // Phase 7: C accessor wrappers needed by rs_ex_make / rs_make_get_fullcmd / rs_get_mef_name
@@ -2736,32 +2724,10 @@ void ex_make(exarg_T *eap)
   rs_ex_make((void *)eap);
 }
 
-/// Returns the number of entries in the current quickfix/location list.
-size_t qf_get_size(exarg_T *eap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_qf_get_size_eap(eap);
-}
-
-/// Returns the number of valid entries in the current quickfix/location list.
-size_t qf_get_valid_size(exarg_T *eap)
-{
-  return rs_qf_get_valid_size_eap(eap);
-}
-
-/// Returns 0 if there is an error.
-size_t qf_get_cur_idx(exarg_T *eap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_qf_get_cur_idx_eap(eap);
-}
-
-/// Returns 1 if there are no valid entries.
-int qf_get_cur_valid_idx(exarg_T *eap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_qf_get_cur_valid_idx_eap(eap);
-}
+// qf_get_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_size"].
+// qf_get_valid_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_valid_size"].
+// qf_get_cur_idx deleted: Rust commands.rs exports directly via #[export_name = "qf_get_cur_idx"].
+// qf_get_cur_valid_idx deleted: Rust commands.rs exports directly via #[export_name = "qf_get_cur_valid_idx"].
 
 // nvim_qf_cmd_get_stack deleted: Rust commands.rs now uses #[link_name = "rs_qf_cmd_get_stack"].
 

@@ -1992,7 +1992,7 @@ extern "C" {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "qf_get_size"]
 pub unsafe extern "C" fn rs_qf_get_size_eap(eap: EapHandle) -> usize {
     let qi = nvim_qf_cmd_get_stack(eap, false);
     if qi.is_null() {
@@ -2010,7 +2010,7 @@ pub unsafe extern "C" fn rs_qf_get_size_eap(eap: EapHandle) -> usize {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "qf_get_valid_size"]
 pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
     let qi = nvim_qf_cmd_get_stack(eap, false);
     if qi.is_null() {
@@ -2030,7 +2030,7 @@ pub unsafe extern "C" fn rs_qf_get_valid_size_eap(eap: EapHandle) -> usize {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "qf_get_cur_idx"]
 pub unsafe extern "C" fn rs_qf_get_cur_idx_eap(eap: EapHandle) -> usize {
     let qi = nvim_qf_cmd_get_stack(eap, false);
     if qi.is_null() {
@@ -2050,7 +2050,7 @@ pub unsafe extern "C" fn rs_qf_get_cur_idx_eap(eap: EapHandle) -> usize {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "qf_get_cur_valid_idx"]
 pub unsafe extern "C" fn rs_qf_get_cur_valid_idx_eap(eap: EapHandle) -> c_int {
     let qi = nvim_qf_cmd_get_stack(eap, false);
     if qi.is_null() {
@@ -2101,7 +2101,8 @@ pub unsafe extern "C" fn rs_qf_current_entry(wp: WinHandle) -> i32 {
 /// # Safety
 ///
 /// Always safe — reads global state only.
-#[no_mangle]
+#[export_name = "grep_internal"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_grep_internal(cmdidx: c_int) -> c_int {
     let is_grep_cmd = cmdidx == CMD_GREP_P4
         || cmdidx == CMD_LGREP_P4

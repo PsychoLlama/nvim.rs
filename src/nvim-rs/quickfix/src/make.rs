@@ -117,6 +117,7 @@ extern "C" {
     fn rs_qf_jump_first(qi: QfInfoHandleMut, save_qfid: u32, forceit: c_int);
     fn rs_qflist_valid(wp: WinHandle, qf_id: u32) -> bool;
     fn rs_qf_stack_empty(qi: *const c_void) -> bool;
+    #[link_name = "grep_internal"]
     fn rs_grep_internal(cmdidx: c_int) -> c_int;
     fn rs_ex_vimgrep(eap: EapHandle);
     fn rs_make_get_auname(cmdidx: c_int) -> *const c_char;

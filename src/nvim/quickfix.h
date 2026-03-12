@@ -52,5 +52,11 @@ void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // Forward declarations for Rust-implemented functions (exported via #[export_name])
 bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after);
+const char *did_set_quickfixtextfunc(optset_T *args);
+int grep_internal(cmdidx_T cmdidx);
+size_t qf_get_size(exarg_T *eap);
+size_t qf_get_valid_size(exarg_T *eap);
+size_t qf_get_cur_idx(exarg_T *eap);
+int qf_get_cur_valid_idx(exarg_T *eap);
 
 #include "quickfix_shim.h.generated.h"
