@@ -1875,25 +1875,6 @@ void nvim_apply_autocmds_tabnewentered(void)
 /// get curwin->w_alt_fnum.
 int nvim_win_get_alt_fnum(win_T *wp) { return wp ? wp->w_alt_fnum : 0; }
 
-// Phase 4 Rust thin wrappers:
-
-extern void rs_do_window_wW(int nchar, int prenum);
-void nvim_do_window_wW(int nchar, int Prenum) { rs_do_window_wW(nchar, Prenum); }
-
-extern void rs_do_window_P(void);
-void nvim_do_window_P(void) { rs_do_window_P(); }
-
-extern void rs_do_window_T(int prenum);
-void nvim_do_window_T(int Prenum) { rs_do_window_T(Prenum); }
-
-extern void rs_do_window_hat(int prenum);
-void nvim_do_window_hat(int Prenum) { rs_do_window_hat(Prenum); }
-
-extern void rs_do_window_new(int nchar, int prenum);
-void nvim_do_window_new(int nchar, int Prenum) { rs_do_window_new(nchar, Prenum); }
-
-extern void rs_cmd_with_count_exec(const char *cmd, int64_t prenum);
-void nvim_cmd_with_count_exec(const char *cmd, int64_t Prenum) { rs_cmd_with_count_exec(cmd, Prenum); }
 
 // Phase 2 accessors: tabpage helpers and check_split_disallowed_err migration
 
