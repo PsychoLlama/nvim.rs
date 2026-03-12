@@ -123,5 +123,8 @@ bool check_split_disallowed_err(const win_T *wp, Error *err);
 void ui_ext_win_position(win_T *wp, bool validate);
 void win_free_all(void);
 bool goto_tabpage_lastused(void);
+void win_free_grid(win_T *wp, bool reinit);
+win_T *win_alloc(win_T *after, bool hidden);
+int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor);
 
 #include "window_shim.h.generated.h"

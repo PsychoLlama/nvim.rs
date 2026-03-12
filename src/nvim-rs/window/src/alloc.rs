@@ -461,9 +461,10 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
 ///
 /// # Safety
 /// `after` must be null or a valid window handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_alloc(after: WinHandle, hidden: c_int) -> WinHandle {
-    win_alloc_impl(after, hidden != 0)
+#[allow(clippy::must_use_candidate)]
+#[export_name = "win_alloc"]
+pub unsafe extern "C" fn rs_win_alloc(after: WinHandle, hidden: bool) -> WinHandle {
+    win_alloc_impl(after, hidden)
 }
 
 /// Free a WinInfo struct.

@@ -195,7 +195,7 @@ extern int rs_make_windows(int count, int vertical);
 // do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
 extern void rs_do_autocmd_winclosed(win_T *win);
 // rs_can_close_in_cmdwin deleted: now exported as can_close_in_cmdwin via #[export_name]
-extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
+// rs_set_winbar_win deleted: now exported as set_winbar_win via #[export_name]
 // rs_set_winbar deleted: now exported as set_winbar via #[export_name]
 
 // Status line management
@@ -979,14 +979,7 @@ void nvim_free_wininfo_raw(WinInfo *wip, buf_T *bp)
 // win_alloc: thin wrapper calling rs_win_alloc
 // =============================================================================
 
-extern win_T *rs_win_alloc(win_T *after, int hidden);
-
-/// @param hidden  allocate a window structure and link it in the window if
-//                 false.
-win_T *win_alloc(win_T *after, bool hidden)
-{
-  return rs_win_alloc(after, hidden ? 1 : 0);
-}
+// win_alloc deleted: Rust exports under the C name directly via #[export_name = "win_alloc"].
 
 // Phase 12 compound C accessors for rs_win_free / rs_win_free_grid
 
@@ -1092,12 +1085,7 @@ void nvim_win_grid_free(win_T *wp) { grid_free(&wp->w_grid_alloc); }
 /// CLEAR_FIELD the window's grid (for reinit).
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 
-extern void rs_win_free_grid(win_T *wp, int reinit);
-
-void win_free_grid(win_T *wp, bool reinit)
-{
-  rs_win_free_grid(wp, reinit ? 1 : 0);
-}
+// win_free_grid deleted: Rust exports under the C name directly via #[export_name = "win_free_grid"].
 
 // win_new_screensize, win_new_screen_rows, win_new_screen_cols,
 // snapshot_windows_scroll_size, may_make_initial_scroll_size_snapshot,
@@ -1122,11 +1110,7 @@ void win_free_grid(win_T *wp, bool reinit)
 ///                     resizing.
 ///
 /// @return Success status.
-int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor)
-{
-  return rs_set_winbar_win(wp, make_room ? 1 : 0, valid_cursor ? 1 : 0);
-}
-
+// set_winbar_win deleted: Rust exports under the C name directly via #[export_name = "set_winbar_win"].
 // set_winbar deleted: Rust exports under the C name directly via #[export_name = "set_winbar"].
 
 // A snapshot of the window sizes, to restore them after closing the help

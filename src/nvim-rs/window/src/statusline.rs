@@ -334,13 +334,14 @@ unsafe fn set_winbar_win_impl(wp: WinHandle, make_room: bool, valid_cursor: bool
 ///
 /// # Safety
 /// Calls C accessor functions with a valid window handle.
-#[unsafe(no_mangle)]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "set_winbar_win"]
 pub unsafe extern "C" fn rs_set_winbar_win(
     wp: WinHandle,
-    make_room: c_int,
-    valid_cursor: c_int,
+    make_room: bool,
+    valid_cursor: bool,
 ) -> c_int {
-    set_winbar_win_impl(wp, make_room != 0, valid_cursor != 0)
+    set_winbar_win_impl(wp, make_room, valid_cursor)
 }
 
 // =============================================================================

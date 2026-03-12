@@ -150,9 +150,10 @@ unsafe fn win_free_grid_impl(wp: WinHandle, reinit: bool) {
 ///
 /// # Safety
 /// `wp` must be a valid `win_T*`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_win_free_grid(wp: WinHandle, reinit: c_int) {
-    win_free_grid_impl(wp, reinit != 0);
+#[allow(clippy::must_use_candidate)]
+#[export_name = "win_free_grid"]
+pub unsafe extern "C" fn rs_win_free_grid(wp: WinHandle, reinit: bool) {
+    win_free_grid_impl(wp, reinit);
 }
 
 // =============================================================================

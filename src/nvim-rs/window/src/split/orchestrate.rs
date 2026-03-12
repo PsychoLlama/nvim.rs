@@ -92,7 +92,8 @@ extern "C" {
     fn nvim_win_set_floating(wp: WinHandle, val: c_int);
 
     // --- Wrappers for complex operations ---
-    fn rs_win_alloc(after: WinHandle, hidden: c_int) -> WinHandle;
+    #[link_name = "win_alloc"]
+    fn rs_win_alloc(after: WinHandle, hidden: bool) -> WinHandle;
     fn rs_new_frame(wp: WinHandle);
     fn rs_win_init(wp: WinHandle, oldwin: WinHandle, flags: c_int);
     fn rs_frame_flatten(frp: *mut Frame);
@@ -100,7 +101,8 @@ extern "C" {
     fn nvim_ui_comp_remove_grid_win(wp: WinHandle);
     fn nvim_ui_has_multigrid() -> c_int;
     fn nvim_ui_call_win_hide_win(wp: WinHandle);
-    fn rs_win_free_grid(wp: WinHandle, reinit: c_int);
+    #[link_name = "win_free_grid"]
+    fn rs_win_free_grid(wp: WinHandle, reinit: bool);
     fn nvim_merge_win_config_init(wp: WinHandle);
     fn nvim_redraw_later_wrapper(wp: WinHandle, r#type: c_int);
     fn nvim_status_redraw_all_wrapper();
@@ -640,7 +642,7 @@ unsafe fn alloc_and_link(
     };
 
     if new_wp.is_null() {
-        rs_win_alloc(place_after, 0)
+        rs_win_alloc(place_after, false)
     } else {
         rs_win_append(place_after, new_wp, WinHandle::null());
         new_wp
@@ -660,7 +662,7 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
             nvim_win_set_pos_changed(wp, 1);
         } else {
             nvim_ui_call_win_hide_win(wp);
-            rs_win_free_grid(wp, 1);
+            rs_win_free_grid(wp, true);
         }
 
         if nvim_win_get_config_external_int(wp) != 0 {
