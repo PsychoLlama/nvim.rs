@@ -741,7 +741,7 @@ pub fn bytes2offset(buf: &[u8]) -> Option<(i32, usize)> {
 /// # Safety
 ///
 /// `buf` must point to at least 4 bytes of valid memory.
-#[no_mangle]
+#[export_name = "offset2bytes"]
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_offset2bytes(nr: c_int, buf: *mut u8) -> c_int {
     if buf.is_null() {
@@ -1503,7 +1503,8 @@ unsafe fn sal_to_bool_impl(s: *const c_char) -> bool {
 /// # Safety
 ///
 /// `s` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "sal_to_bool"]
+#[must_use]
 pub unsafe extern "C" fn rs_sal_to_bool(s: *const c_char) -> bool {
     sal_to_bool_impl(s)
 }

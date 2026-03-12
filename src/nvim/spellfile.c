@@ -284,8 +284,9 @@
 // Rust FFI declarations
 // =============================================================================
 
-// Rust implementations
-extern int rs_offset2bytes(int nr, uint8_t *buf);
+// Rust implementations (direct exports)
+extern int offset2bytes(int nr, uint8_t *buf);
+extern bool sal_to_bool(const char *s);
 extern int rs_bytes2offset(const uint8_t **pp);
 extern bool rs_check_spell_magic(const uint8_t *buf);
 extern int rs_read_be_u16(const uint8_t *buf, size_t len, size_t offset);
@@ -296,7 +297,6 @@ extern bool rs_valid_spell_word(const uint8_t *word, const uint8_t *end);
 extern int rs_encode_offset(uint8_t *p, int len, int nr);
 extern int rs_decode_offset_3byte(const uint8_t *p);
 extern int rs_decode_offset_4byte(const uint8_t *p);
-extern bool rs_sal_to_bool(const char *s);
 
 // Spellfile header functions
 extern int rs_write_spellfile_header(uint8_t *out, size_t max_len, const void *header);
@@ -3185,12 +3185,6 @@ static void add_fromto(spellinfo_T *spin, garray_T *gap, char *from, char *to)
   ftp->ft_to = getroom_save(spin, word);
 }
 
-/// Converts a boolean argument in a SAL line to true or false;
-static bool sal_to_bool(char *s)
-{
-  return rs_sal_to_bool(s);
-}
-
 // =============================================================================
 // Phase 6: Wrapper functions using Rust implementations
 // =============================================================================
@@ -5274,7 +5268,7 @@ static int sug_filltable(spellinfo_T *spin, wordnode_T *node, int startwordnr, g
         // following bytes.
         nr -= prev_nr;
         prev_nr += nr;
-        gap->ga_len += offset2bytes(nr, (char *)gap->ga_data + gap->ga_len);
+        gap->ga_len += offset2bytes(nr, (uint8_t *)gap->ga_data + gap->ga_len);
       }
 
       // add the NUL byte
@@ -5304,14 +5298,6 @@ static int sug_filltable(spellinfo_T *spin, wordnode_T *node, int startwordnr, g
     }
   }
   return wordnr;
-}
-
-// Convert an offset into a minimal number of bytes.
-// Similar to utf_char2byters, but use 8 bits in followup bytes and avoid NUL
-// bytes.
-static int offset2bytes(int nr, char *buf_in)
-{
-  return rs_offset2bytes(nr, (uint8_t *)buf_in);
 }
 
 // Write the .sug file in "fname".
