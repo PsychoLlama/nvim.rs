@@ -129,7 +129,8 @@ unsafe fn libc_strlen(s: *const c_char) -> usize {
 /// # Safety
 ///
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "find_option"]
 pub unsafe extern "C" fn rs_find_option(name: *const c_char) -> OptIndex {
     if name.is_null() {
         return OPT_INVALID;
@@ -143,7 +144,8 @@ pub unsafe extern "C" fn rs_find_option(name: *const c_char) -> OptIndex {
 /// # Safety
 ///
 /// `name` must point to valid memory for at least `len` bytes.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "find_option_len"]
 pub unsafe extern "C" fn rs_find_option_len(name: *const c_char, len: usize) -> OptIndex {
     if name.is_null() || len == 0 {
         return OPT_INVALID;

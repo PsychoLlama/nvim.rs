@@ -170,8 +170,8 @@ extern int rs_get_option_prefix(char **argp);
 extern int rs_shortmess(int x);
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
-extern OptIndex rs_find_option_len(const char *name, size_t len);
-extern OptIndex rs_find_option(const char *name);
+// rs_find_option_len deleted: now exported as find_option_len via #[export_name]
+// rs_find_option deleted: now exported as find_option via #[export_name]
 
 // Rust init functions (option pass 7 phase 2)
 extern void rs_set_init_2(int headless);
@@ -1797,22 +1797,9 @@ bool set_tty_option(const char *name, char *value)
 /// @param      len   Option name length.
 ///
 /// @return Option index or kOptInvalid if option was not found.
-OptIndex find_option_len(const char *const name, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_find_option_len(name, len);
-}
+// find_option_len deleted: now exported directly from Rust via #[export_name]
 
-/// Find index for an option.
-///
-/// @param[in]  name  Option name.
-///
-/// @return Option index or kOptInvalid if option was not found.
-OptIndex find_option(const char *const name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_find_option(name);
-}
+// find_option deleted: now exported directly from Rust via #[export_name]
 
 /// Direct hash-based option lookup for use by Rust (avoids circular delegation).
 ///

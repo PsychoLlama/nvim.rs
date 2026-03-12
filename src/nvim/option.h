@@ -66,6 +66,8 @@ int was_set_insecurely(win_T *wp, OptIndex opt_idx, int opt_flags);
 uint32_t *insecure_flag(win_T *wp, OptIndex opt_idx, int opt_flags);
 void check_redraw_for(buf_T *buf, win_T *win, uint32_t flags);
 void set_option_sctx(OptIndex opt_idx, int opt_flags, sctx_T script_ctx);
+OptIndex find_option_len(const char *name, size_t len);
+OptIndex find_option(const char *name);
 void set_init_tablocal(void);
 void set_init_3(void);
 void set_helplang_default(const char *lang);
