@@ -1252,7 +1252,7 @@ extern "C" {
 /// # Safety
 ///
 /// All pointers must be valid. `src` must point into `*cmdlinep`.
-#[no_mangle]
+#[export_name = "repl_cmdline"]
 pub unsafe extern "C" fn rs_repl_cmdline(
     eap: ExArgHandle,
     src: *mut c_char,
@@ -1349,7 +1349,7 @@ pub unsafe extern "C" fn rs_repl_cmdline(
 /// # Safety
 ///
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "expand_filename"]
 pub unsafe extern "C" fn rs_expand_filename(
     eap: ExArgHandle,
     cmdlinep: *mut *mut c_char,

@@ -254,7 +254,9 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "skipdigits"]
     fn rs_skipdigits(q: *const c_char) -> *const c_char;
+    #[link_name = "ends_excmd"]
     fn rs_ends_excmd(c: c_int) -> c_int;
+    #[link_name = "checkforcmd"]
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
 
     // eap field accessors
@@ -318,7 +320,7 @@ const RE_MAGIC: c_int = 1;
 ///
 /// Returns OK (1) on success, FAIL (0) when the command should not be executed
 /// (comment, empty line, etc.).
-#[no_mangle]
+#[export_name = "parse_command_modifiers"]
 pub unsafe extern "C" fn rs_parse_command_modifiers(
     eap: ExArgHandle,
     errormsg: *mut *const c_char,

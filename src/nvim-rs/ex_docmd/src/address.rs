@@ -364,7 +364,7 @@ unsafe fn get_wincmd_addr_type(arg: *const c_char, eap: ExArgHandle) {
 /// Set the address type for a command.
 ///
 /// Replaces C `set_cmd_addr_type()`.
-#[no_mangle]
+#[export_name = "set_cmd_addr_type"]
 pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
 
@@ -402,7 +402,7 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
 /// Get default range number for command based on its address type.
 ///
 /// Replaces C `get_cmd_default_range()`.
-#[no_mangle]
+#[export_name = "get_cmd_default_range"]
 pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
     let addr_type = nvim_eap_get_addr_type(eap);
     match addr_type {
@@ -441,7 +441,7 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
 /// Set default-all range (% range) for all address types.
 ///
 /// Replaces C `set_cmd_dflall_range()`.
-#[no_mangle]
+#[export_name = "set_cmd_dflall_range"]
 pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
     nvim_eap_set_line1(eap, 1);
     let addr_type = nvim_eap_get_addr_type(eap);
@@ -1065,7 +1065,7 @@ pub unsafe fn get_address_impl(
 /// Gets a single EX address (FFI entry point).
 ///
 /// Replaces C `get_address()`.
-#[no_mangle]
+#[export_name = "get_address"]
 pub unsafe extern "C" fn rs_get_address(
     eap: ExArgHandle,
     ptr: *mut *mut c_char,
@@ -1097,7 +1097,7 @@ const OK: c_int = 1;
 /// Parse the address range for an Ex command.
 ///
 /// Replaces C `parse_cmd_address()`.
-#[no_mangle]
+#[export_name = "parse_cmd_address"]
 pub unsafe extern "C" fn rs_parse_cmd_address(
     eap: ExArgHandle,
     errormsg: *mut *const c_char,

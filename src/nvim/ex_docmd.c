@@ -124,41 +124,23 @@ extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
 extern int rs_expr_map_locked(void);
 extern const char *rs_skip_colon_white(const char *p, int skipleadingwhite);
-extern const char *rs_skip_range(const char *cmd, int *ctx);
-extern bool rs_checkforcmd(char **pp, const char *cmd, int len);
 extern int rs_one_letter_cmd(const char *p, int *idx);
 extern int rs_modifier_len(const char *cmd);
-extern int rs_cmd_exists(const char *name);
 extern void rs_append_command(const char *cmd);
 extern bool rs_parse_bang(const void *eap, char **p);
 extern void rs_get_flags(void *eap);
 extern void rs_correct_range(void *eap);
 extern int rs_is_cmd_ni(int cmdidx);
 extern char *rs_skip_grep_pat(void *eap);
-extern void rs_set_cmd_count(void *eap, int count, int validate);
 extern bool rs_cmd_has_expr_args(int cmdidx);
-extern char *rs_find_ex_command(void *eap, int *full);
 extern int rs_excmd_get_cmdidx(const char *cmd, size_t len);
 extern char *rs_get_command_name(void *xp, int idx);
-extern void rs_f_fullcommand(void *argvars, void *rettv, EvalFuncData fptr);
 extern void rs_parse_register(void *eap);
 extern int rs_parse_count_ex(void *eap, const char **errormsg, int validate);
 extern int rs_get_bad_opt(const char *p, void *eap);
 extern int rs_getargopt(void *eap);
-extern char *rs_getargcmd(char **argp);
 extern char *rs_skip_cmd_arg(char *p, int rembs);
-extern void rs_separate_nextcmd(void *eap);
-extern void rs_set_cmd_addr_type(void *eap, char *p);
-extern int rs_get_cmd_default_range(void *eap);
-extern void rs_set_cmd_dflall_range(void *eap);
-extern char *rs_invalid_range(void *eap);
 extern int rs_get_tabpage_arg(void *eap);
-extern int rs_parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod,
-                                      bool skip_only);
-extern linenr_T rs_get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool skip,
-                                bool silent, int to_other_file, int address_count,
-                                const char **errormsg);
-extern int rs_parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent);
 // Phase 3 normal-mode Rust exports used by ex_docmd
 extern void rs_set_cursor_for_append_to_line(void);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
@@ -270,15 +252,9 @@ extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
 extern void rs_shift_cmd_args(exarg_T *eap);
 extern int rs_execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview);
-extern int rs_execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview);
-extern bool rs_parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo,
-                             const char **errormsg);
 extern void rs_profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline,
                            void *cookie);
 extern bool rs_changedir_func(char *new_dir, int scope);
-extern int rs_expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp);
-extern char *rs_repl_cmdline(exarg_T *eap, char *src, size_t srclen, char *repl,
-                             char **cmdlinep);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -1253,35 +1229,9 @@ static char *skip_colon_white(const char *p, bool skipleadingwhite)
   return (char *)rs_skip_colon_white(p, skipleadingwhite ? 1 : 0);
 }
 
-/// Set the addr type for command
-///
-/// @param p pointer to character after command name in cmdline
-void set_cmd_addr_type(exarg_T *eap, char *p)
-{
-  rs_set_cmd_addr_type(eap, p);
-}
-
-/// Get default range number for command based on its address type
-linenr_T get_cmd_default_range(exarg_T *eap)
-{
-  return rs_get_cmd_default_range(eap);
-}
-
-/// Set default command range for -range=% based on the addr type of the command
-void set_cmd_dflall_range(exarg_T *eap)
-{
-  rs_set_cmd_dflall_range(eap);
-}
-
 static void parse_register(exarg_T *eap)
 {
   rs_parse_register(eap);
-}
-
-// Change line1 and line2 of Ex command to use count
-void set_cmd_count(exarg_T *eap, linenr_T count, bool validate)
-{
-  rs_set_cmd_count(eap, (int)count, validate ? 1 : 0);
 }
 
 static int parse_count(exarg_T *eap, const char **errormsg, bool validate)
@@ -1321,21 +1271,6 @@ bool cmd_has_expr_args(cmdidx_T cmdidx)
   return rs_cmd_has_expr_args((int)cmdidx);
 }
 
-/// Parse command line and return information about the first command.
-/// If parsing is done successfully, need to free cmod_filter_pat and cmod_filter_regmatch.regprog
-/// after calling, usually done using undo_cmdmod() or execute_cmd().
-///
-/// @param cmdline Command line string
-/// @param[out] eap Ex command arguments
-/// @param[out] cmdinfo Command parse information
-/// @param[out] errormsg Error message, if any
-///
-/// @return Success or failure
-bool parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo, const char **errormsg)
-{
-  return rs_parse_cmdline(cmdline, eap, cmdinfo, errormsg);
-}
-
 // Shift Ex-command arguments to the right.
 static void shift_cmd_args(exarg_T *eap)
 {
@@ -1345,17 +1280,6 @@ static void shift_cmd_args(exarg_T *eap)
 static int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview)
 {
   return rs_execute_cmd0(retv, eap, errormsg, preview);
-}
-
-/// Execute an Ex command using parsed command line information.
-/// Does not do any validation of the Ex command arguments.
-///
-/// @param eap Ex-command arguments
-/// @param cmdinfo Command parse information
-/// @param preview Execute command preview callback instead of actual command
-int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview)
-{
-  return rs_execute_cmd(eap, cmdinfo, preview);
 }
 
 static void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie)
@@ -1883,12 +1807,6 @@ static char *ex_range_without_command(exarg_T *eap)
 /// - set msg_silent for ":silent"
 /// - set 'eventignore' to "all" for ":noautocmd"
 ///
-/// @return  FAIL when the command is not to be executed.
-int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod, bool skip_only)
-{
-  return rs_parse_command_modifiers(eap, errormsg, cmod, skip_only);
-}
-
 /// Apply the command modifiers.  Saves current state in "cmdmod", call
 /// undo_cmdmod() later.
 void apply_cmdmod(cmdmod_T *cmod)
@@ -1979,25 +1897,6 @@ void undo_cmdmod(cmdmod_T *cmod)
 /// Parse the address range, if any, in "eap".
 /// May set the last search pattern, unless "silent" is true.
 ///
-/// @return  FAIL and set "errormsg" or return OK.
-/// Thin wrapper around Rust `rs_parse_cmd_address`.
-int parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_parse_cmd_address(eap, errormsg, silent);
-}
-
-/// Check for an Ex command with optional tail.
-/// If there is a match advance "pp" to the argument and return true.
-///
-/// @param pp   start of command
-/// @param cmd  name of command
-/// @param len  required length
-bool checkforcmd(char **pp, const char *cmd, int len)
-{
-  return rs_checkforcmd(pp, cmd, len);
-}
-
 /// Append "cmd" to the error message in IObuff.
 /// Takes care of limiting the length and handling 0xa0, which would be
 /// invisible otherwise.
@@ -2023,37 +1922,11 @@ static int one_letter_cmd(const char *p, cmdidx_T *idx)
   return result;
 }
 
-/// Find an Ex command by its name, either built-in or user.
-/// Start of the name can be found at eap->cmd.
-/// Sets eap->cmdidx and returns a pointer to char after the command name.
-/// "full" is set to true if the whole command name matched.
-///
-/// @return  NULL for an ambiguous user command.
-char *find_ex_command(exarg_T *eap, int *full)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_find_ex_command(eap, full);
-}
-
 /// @return  length of a command modifier (including optional count) or,
 ///          zero when it's not a modifier.
 int modifier_len(char *cmd)
 {
   return rs_modifier_len(cmd);
-}
-
-/// @return  > 0 if an Ex command "name" exists or,
-///            2 if there is an exact match or,
-///            3 if there is an ambiguous match.
-int cmd_exists(const char *const name)
-{
-  return rs_cmd_exists(name);
-}
-
-/// "fullcommand" function
-void f_fullcommand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_fullcommand(argvars, rettv, fptr);
 }
 
 cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len)
@@ -2064,31 +1937,6 @@ cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len)
 uint32_t excmd_get_argt(cmdidx_T idx)
 {
   return cmdnames[(int)idx].cmd_argt;
-}
-
-/// Skip a range specifier of the form: addr [,addr] [;addr] ..
-///
-/// Backslashed delimiters after / or ? will be skipped, and commands will
-/// not be expanded between /'s and ?'s or after "'".
-///
-/// Also skip white space and ":" characters.
-///
-/// @param ctx  pointer to xp_context or NULL
-///
-/// @return the "cmd" pointer advanced to beyond the range.
-char *skip_range(const char *cmd, int *ctx)
-{
-  return (char *)rs_skip_range(cmd, ctx);
-}
-
-/// Gets a single EX address.
-///
-/// Thin wrapper around Rust `rs_get_address`.
-linenr_T get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool skip, bool silent,
-                     int to_other_file, int address_count, const char **errormsg)
-  FUNC_ATTR_NONNULL_ARG(2, 8)
-{
-  return rs_get_address(eap, ptr, addr_type, skip, silent, to_other_file, address_count, errormsg);
 }
 
 /// Get flags from an Ex command argument.
@@ -2115,14 +1963,6 @@ static void ex_script_ni(exarg_T *eap)
     size_t len;
     xfree(script_get(eap, &len));
   }
-}
-
-/// Check range in Ex command for validity.
-///
-/// @return  NULL when valid, error message when invalid.
-char *invalid_range(exarg_T *eap)
-{
-  return rs_invalid_range(eap);
 }
 
 /// Correct the range for zero line number, if required.
@@ -2173,38 +2013,6 @@ char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
     arg = new_cmdline;
   }
   return arg;
-}
-
-/// Expand file name in Ex command argument.
-/// When an error is detected, "errormsgp" is set to a non-NULL pointer.
-///
-/// @return  FAIL for failure, OK otherwise.
-int expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp)
-{
-  return rs_expand_filename(eap, cmdlinep, errormsgp);
-}
-
-/// Replace part of the command line, keeping eap->cmd, eap->arg, eap->args and
-/// eap->nextcmd correct.
-/// "src" points to the part that is to be replaced, of length "srclen".
-/// "repl" is the replacement string.
-///
-/// @return  a pointer to the character after the replaced string.
-static char *repl_cmdline(exarg_T *eap, char *src, size_t srclen, char *repl, char **cmdlinep)
-{
-  return rs_repl_cmdline(eap, src, srclen, repl, cmdlinep);
-}
-
-/// Check for '|' to separate commands and '"' to start comments.
-void separate_nextcmd(exarg_T *eap)
-{
-  rs_separate_nextcmd(eap);
-}
-
-/// get + command from ex argument
-char *getargcmd(char **argp)
-{
-  return rs_getargcmd(argp);
 }
 
 /// Find end of "+command" argument.  Skip over "\ " and "\\".

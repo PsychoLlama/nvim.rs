@@ -45,3 +45,25 @@ typedef struct {
 } save_state_T;
 
 #include "ex_docmd.h.generated.h"
+
+// Forward declarations for Rust-implemented functions exported under C names via #[export_name].
+// These replace the C wrapper bodies that were deleted during the migration.
+bool checkforcmd(char **pp, const char *cmd, int len);
+char *find_ex_command(exarg_T *eap, int *full);
+int cmd_exists(const char *name);
+void f_fullcommand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+char *skip_range(const char *cmd, int *ctx);
+linenr_T get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool skip, bool silent,
+                     int to_other_file, int address_count, const char **errormsg);
+char *invalid_range(exarg_T *eap);
+int expand_filename(exarg_T *eap, char **cmdlinep, const char **errormsgp);
+void separate_nextcmd(exarg_T *eap);
+char *getargcmd(char **argp);
+void set_cmd_addr_type(exarg_T *eap, char *p);
+linenr_T get_cmd_default_range(exarg_T *eap);
+void set_cmd_dflall_range(exarg_T *eap);
+void set_cmd_count(exarg_T *eap, linenr_T count, bool validate);
+bool parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo, const char **errormsg);
+int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview);
+int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod, bool skip_only);
+bool parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent);

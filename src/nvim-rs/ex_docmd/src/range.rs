@@ -650,7 +650,7 @@ pub unsafe extern "C" fn rs_skip_colon_white(
 ///
 /// `cmd` must be a valid null-terminated C string.
 /// `ctx` may be null or a valid pointer for writes.
-#[no_mangle]
+#[export_name = "skip_range"]
 pub unsafe extern "C" fn rs_skip_range(cmd: *const c_char, ctx: *mut c_int) -> *const c_char {
     if cmd.is_null() {
         return cmd;
@@ -705,7 +705,7 @@ pub unsafe extern "C" fn rs_skip_range(cmd: *const c_char, ctx: *mut c_int) -> *
 /// Returns NULL when valid, error message when invalid.
 ///
 /// Replaces C `invalid_range()`.
-#[no_mangle]
+#[export_name = "invalid_range"]
 pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
     let line1 = nvim_eap_get_line1(eap);
     let line2 = nvim_eap_get_line2(eap);

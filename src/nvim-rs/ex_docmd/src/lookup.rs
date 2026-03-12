@@ -218,7 +218,7 @@ pub extern "C" fn rs_cmd_char_ord_low(c: c_int) -> c_int {
 ///
 /// `pp` must point to a valid `*mut c_char` pointer.
 /// `cmd` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "checkforcmd"]
 pub unsafe extern "C" fn rs_checkforcmd(
     pp: *mut *mut c_char,
     cmd: *const c_char,
@@ -317,7 +317,7 @@ pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) ->
 /// # Safety
 ///
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "cmd_exists"]
 pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
@@ -384,7 +384,7 @@ pub extern "C" fn rs_is_cmd_ni(cmdidx: c_int) -> c_int {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle. `full` may be NULL.
-#[no_mangle]
+#[export_name = "find_ex_command"]
 pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) -> *mut c_char {
     if eap.is_null() {
         return std::ptr::null_mut();
@@ -595,7 +595,7 @@ pub unsafe extern "C" fn rs_get_command_name(_xp: *mut c_void, idx: c_int) -> *m
 /// # Safety
 ///
 /// `argvars` and `rettv` must be valid pointers to typval_T.
-#[no_mangle]
+#[export_name = "f_fullcommand"]
 pub unsafe extern "C" fn rs_f_fullcommand(argvars: *mut c_void, rettv: *mut c_void, _fptr: u64) {
     let name_ptr = nvim_docmd_tv_get_string(argvars as *const c_void);
     nvim_docmd_rettv_init_string(rettv);

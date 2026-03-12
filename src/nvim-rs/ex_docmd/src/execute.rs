@@ -689,7 +689,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
 /// # Safety
 ///
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "execute_cmd"]
 pub unsafe extern "C" fn rs_execute_cmd(
     eap: ExArgHandle,
     cmdinfo: CmdParseInfoHandle,
@@ -820,7 +820,7 @@ unsafe fn goto_end_ret(
 /// # Safety
 ///
 /// All pointers must be valid.
-#[no_mangle]
+#[export_name = "parse_cmdline"]
 pub unsafe extern "C" fn rs_parse_cmdline(
     cmdline: *mut *mut c_char,
     eap: ExArgHandle,

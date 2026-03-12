@@ -3497,6 +3497,10 @@ extern "C" {
     fn nvim_diff_get_firstwin() -> WinHandle;
     fn nvim_win_get_w_p_diff_bool(wp: WinHandle) -> bool;
     fn nvim_diff_emsg(msg: *const c_char);
+}
+
+extern "C" {
+    #[link_name = "get_address"]
     fn rs_get_address(
         eap: *mut c_void,
         ptr: *mut *mut c_char,

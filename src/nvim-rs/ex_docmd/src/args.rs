@@ -73,7 +73,9 @@ extern "C" {
     fn nvim_docmd_count_buf_check(eap: ExArgHandle) -> c_int;
 
     fn rs_skip_vimgrep_pat(p: *mut c_char, s: *mut *mut c_char, flags: *mut c_int) -> *mut c_char;
+    #[link_name = "checkforcmd"]
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
+    #[link_name = "check_nextcmd"]
     fn rs_check_nextcmd(p: *const c_char) -> *mut c_char;
 }
 
@@ -397,7 +399,7 @@ pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "set_cmd_count"]
 pub unsafe extern "C" fn rs_set_cmd_count(eap: ExArgHandle, count: c_int, validate: c_int) {
     if eap.is_null() {
         return;
@@ -750,7 +752,7 @@ unsafe fn strncmp_prefix(p: *const c_char, prefix: &[u8]) -> bool {
 /// # Safety
 ///
 /// `argp` must point to a valid `*mut c_char` pointer.
-#[no_mangle]
+#[export_name = "getargcmd"]
 pub unsafe extern "C" fn rs_getargcmd(argp: *mut *mut c_char) -> *mut c_char {
     if argp.is_null() {
         return ptr::null_mut();
@@ -825,7 +827,7 @@ pub unsafe extern "C" fn rs_skip_cmd_arg(p: *mut c_char, rembs: c_int) -> *mut c
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "separate_nextcmd"]
 pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
     if eap.is_null() {
         return;
