@@ -118,5 +118,8 @@ bool can_close_in_cmdwin(win_T *win, Error *err);
 bool check_can_set_curbuf_disabled(void);
 bool check_can_set_curbuf_forceit(int forceit);
 bool check_split_disallowed_err(const win_T *wp, Error *err);
+void ui_ext_win_position(win_T *wp, bool validate);
+void win_free_all(void);
+bool goto_tabpage_lastused(void);
 
 #include "window_shim.h.generated.h"

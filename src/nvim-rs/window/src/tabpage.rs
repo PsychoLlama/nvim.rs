@@ -1265,9 +1265,10 @@ pub unsafe extern "C" fn make_tabpages(maxcount: c_int) -> c_int {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_goto_tabpage_lastused() -> c_int {
-    c_int::from(goto_tabpage_lastused_impl())
+#[allow(clippy::must_use_candidate)]
+#[unsafe(export_name = "goto_tabpage_lastused")]
+pub unsafe extern "C" fn rs_goto_tabpage_lastused() -> bool {
+    goto_tabpage_lastused_impl()
 }
 
 /// FFI: Enter window `wp` in tab page `tp`.

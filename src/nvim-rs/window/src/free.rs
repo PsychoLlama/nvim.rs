@@ -351,7 +351,7 @@ unsafe fn win_free_all_impl() {
 ///
 /// # Safety
 /// Must only be called from the EXITFREE path.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "win_free_all")]
 pub unsafe extern "C" fn rs_win_free_all() {
     win_free_all_impl();
 }

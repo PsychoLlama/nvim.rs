@@ -506,7 +506,7 @@ pub extern "C" fn rs_do_autocmd_winclosed(win: WinHandle) {
 ///
 /// # Safety
 /// Accesses global Neovim state via C accessor functions.
-#[no_mangle]
+#[export_name = "ui_ext_win_position"]
 pub unsafe extern "C" fn rs_ui_ext_win_position(wp: WinHandle, validate: bool) {
     // Clear pos_changed flag
     nvim_win_set_pos_changed(wp, 0);

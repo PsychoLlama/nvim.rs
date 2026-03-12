@@ -183,7 +183,7 @@ extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 // rs_check_split_disallowed_err deleted: now exported as check_split_disallowed_err via #[export_name]
 
 // Tabpage helpers
-extern int rs_goto_tabpage_lastused(void);
+// rs_goto_tabpage_lastused deleted: now exported as goto_tabpage_lastused via #[export_name]
 
 // can_close_floating_windows, maximum_wincount, make_windows
 // rs_can_close_floating_windows_tp: removed from C declarations (Rust uses #[link_name] directly)
@@ -602,12 +602,7 @@ void merge_win_config(WinConfig *dst, const WinConfig src)
   *dst = src;
 }
 
-extern void rs_ui_ext_win_position(win_T *wp, bool validate);
-
-void ui_ext_win_position(win_T *wp, bool validate)
-{
-  rs_ui_ext_win_position(wp, validate);
-}
+// ui_ext_win_position deleted: now exported from Rust events.rs via #[export_name]
 
 // check_split_disallowed_err deleted: now exported from Rust utility.rs via #[export_name]
 
@@ -669,12 +664,9 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
 
 // win_free_mem deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
-#if defined(EXITFREE)
-void win_free_all(void)
-{
-  rs_win_free_all();
-}
+// win_free_all deleted: now exported from Rust free.rs via #[export_name]
 
+#if defined(EXITFREE)
 #endif
 
 // alt_tabpage: dead static wrapper (Phase 15)
@@ -781,7 +773,7 @@ void nvim_kv_destroy_aucmd_win_vec(void) { kv_destroy(aucmd_win_vec); }
 /// curwin = NULL.
 void nvim_set_curwin_null(void) { curwin = NULL; }
 
-extern void rs_win_free_all(void);
+// rs_win_free_all deleted: now exported as win_free_all via #[export_name]
 
 // win_alloc_firstwin: dead static wrapper (Phase 15)
 
@@ -900,13 +892,7 @@ void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_le
   rs_goto_tabpage_tp_impl(tp, trigger_enter_autocmds ? 1 : 0, trigger_leave_autocmds ? 1 : 0);
 }
 
-/// Go to the last accessed tab page, if there is one.
-/// @return true if the tab page is valid, false otherwise.
-bool goto_tabpage_lastused(void)
-{
-  return rs_goto_tabpage_lastused();
-}
-
+// goto_tabpage_lastused deleted: now exported from Rust tabpage.rs via #[export_name]
 // goto_tabpage_win, tabpage_move: exported directly from Rust (Phase 15)
 
 /// Make window `wp` the current window.
