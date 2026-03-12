@@ -81,9 +81,6 @@ static const char e_xattr_other[]
     uv_fs_req_cleanup(&req); \
   } while (0)
 
-// Many fs functions from libuv return that value on success.
-static const int kLibuvSuccess = 0;
-
 /// Changes the current directory to `path`.
 ///
 /// @return 0 on success, or negative error code.
@@ -101,8 +98,6 @@ int os_chdir(const char *path)
   }
   return err;
 }
-
-
 
 /// Check what `name` is:
 /// @return NODE_NORMAL: file or directory (or doesn't exist)
@@ -156,7 +151,6 @@ int os_nodetype(const char *name)
   }
 #endif
 }
-
 
 /// Checks if the file `name` is executable.
 ///
@@ -334,11 +328,6 @@ end:
   return rv;
 }
 
-
-
-
-
-
 /// Open the file descriptor for stdin.
 int os_open_stdin_fd(void)
 {
@@ -354,7 +343,6 @@ int os_open_stdin_fd(void)
   }
   return stdin_dup_fd;
 }
-
 
 #ifdef HAVE_READV
 /// Read from a file to multiple buffers at once
@@ -417,8 +405,6 @@ ptrdiff_t os_readv(const int fd, bool *const ret_eof, struct iovec *iov, size_t 
 }
 #endif  // HAVE_READV
 
-
-
 /// Flushes file modifications to disk.
 ///
 /// @param fd the file descriptor of the file to flush to disk.
@@ -431,9 +417,6 @@ int os_fsync(int fd)
   g_stats.fsync++;
   return r;
 }
-
-
-
 
 #ifdef HAVE_XATTR
 /// Copy extended attributes from_file to to_file
@@ -537,15 +520,6 @@ void os_free_acl(vim_acl_T aclent)
   }
 }
 
-
-
-
-
-
-
-
-
-
 /// Make a directory, with higher levels when needed
 ///
 /// @param[in]  dir  Directory to create.
@@ -635,8 +609,6 @@ int os_file_mkdir(char *fname, int32_t mode)
   return 0;
 }
 
-
-
 /// Opens a directory.
 /// @param[out] dir   The Directory object.
 /// @param      path  Path to the directory.
@@ -669,20 +641,6 @@ void os_closedir(Directory *dir)
 {
   uv_fs_req_cleanup(&dir->request);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #ifdef MSWIN
 /// When "fname" is the name of a shortcut (*.lnk) resolve the file it points
