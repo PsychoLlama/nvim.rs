@@ -377,7 +377,7 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_make"]
 pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
     if rs_grep_internal(nvim_eap_get_cmdidx(eap)) != 0 {
@@ -508,7 +508,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_cfile"]
 pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cfile_get_auname(cmdidx);
@@ -667,7 +667,7 @@ const unsafe fn skip_nul_whitespace(p: *const c_char) -> *const c_char {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_cbuffer"]
 pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cbuffer_get_auname(cmdidx);
@@ -755,7 +755,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_cexpr"]
 pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cexpr_get_auname(cmdidx);
@@ -839,7 +839,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
 /// # Safety
 ///
 /// `from` and `to` must be valid non-null pointers to `win_T`.
-#[no_mangle]
+#[export_name = "copy_loclist_stack"]
 pub unsafe extern "C" fn rs_copy_loclist_stack(from: *mut c_void, to: *mut c_void) {
     // Get the qi to copy from: for LL windows use w_llist_ref, else w_llist.
     let qi = nvim_win_get_llist_or_ref(from);

@@ -845,7 +845,7 @@ pub unsafe extern "C" fn rs_set_ref_in_quickfix(copy_id: c_int) -> bool {
 ///
 /// Must be called only from the Neovim main thread during shutdown
 /// (EXITFREE path).
-#[no_mangle]
+#[export_name = "free_quickfix"]
 pub unsafe extern "C" fn rs_free_quickfix() {
     // Free global quickfix list contents (struct is static, not freed).
     rs_qf_free_all(std::ptr::null_mut());

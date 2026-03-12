@@ -2189,7 +2189,7 @@ extern "C" {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "qf_list"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let qi = nvim_qf_cmd_get_stack(eap, true);

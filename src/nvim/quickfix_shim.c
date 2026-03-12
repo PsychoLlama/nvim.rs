@@ -423,8 +423,7 @@ extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
 extern void rs_qf_list_entry(const void *qfp, int qf_idx, bool cursel,
                               int qfFile_hl_id, int qfSep_hl_id, int qfLine_hl_id);
 
-// Phase 4: qf_list (:clist/:llist)
-extern void rs_ex_clist(void *eap);
+// rs_ex_clist deleted: now exported as qf_list via #[export_name]
 
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
@@ -540,7 +539,7 @@ extern void rs_win_setwidth(int width);
 // rs_did_set_quickfixtextfunc removed: exports as did_set_quickfixtextfunc via #[export_name].
 // rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
 // rs_set_ref_in_quickfix removed: Rust eval gc.rs uses #[link_name] directly.
-extern void rs_free_quickfix(void);
+// rs_free_quickfix deleted: now exported as free_quickfix via #[export_name]
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -1878,14 +1877,7 @@ void qf_init_stack(void) { ql_info = (qf_info_T *)rs_qf_alloc_stack(QFLT_QUICKFI
 // qf_cmd_get_stack, qf_cmd_get_or_alloc_stack deleted: migrated to Rust in lifecycle.rs.
 // Dead static wrappers removed in Phase 16.
 
-extern void rs_copy_loclist_stack(void *from, void *to);
-
-// Copy the location list stack 'from' window to 'to' window.
-void copy_loclist_stack(win_T *from, win_T *to)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_copy_loclist_stack((void *)from, (void *)to);
-}
+// rs_copy_loclist_stack deleted: now exported as copy_loclist_stack via #[export_name]
 
 // qf_get_fnum deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
@@ -2317,14 +2309,9 @@ void nvim_qf_aucmd_restbuf_free(void *aco_void)
   xfree(aco_void);
 }
 
-// ":clist": list all errors
-// ":llist": list all locations
+// qf_list deleted: now exported directly from Rust via #[export_name]
 // Phase 14: qfFile_hl_id, qfSep_hl_id, qfLine_hl_id statics and qf_list_entry wrapper
 // deleted -- Rust rs_ex_clist computes hl_ids via nvim_syn_name2id_qf.
-void qf_list(exarg_T *eap)
-{
-  rs_ex_clist(eap);
-}
 
 // qf_mark_adjust deleted: Rust navigate.rs exports directly via #[export_name = "qf_mark_adjust"].
 
@@ -2708,21 +2695,13 @@ void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (
 void *nvim_qi_get_list_qi(void *qi, int idx) { return (void *)&((qf_info_T *)qi)->qf_lists[idx]; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 
-// Extern declarations for Phase 7 Rust entry points
-extern void rs_ex_make(void *eap);
-extern void rs_ex_cfile(void *eap);
-extern void rs_ex_cbuffer(void *eap);
-extern void rs_ex_cexpr(void *eap);
-// rs_copy_loclist_stack declared earlier (before copy_loclist_stack)
+// rs_ex_make, rs_ex_cfile, rs_ex_cbuffer, rs_ex_cexpr deleted: now exported via #[export_name]
+// rs_copy_loclist_stack deleted: now exported as copy_loclist_stack via #[export_name]
 
 // make_get_fullcmd deleted: dead static wrapper (Phase 16). Real impl in Rust rs_make_get_fullcmd.
 // get_mef_name deleted: dead static wrapper (Phase 16). Real impl in Rust rs_get_mef_name.
 
-// Used for ":make", ":lmake", ":grep", ":lgrep", ":grepadd", and ":lgrepadd"
-void ex_make(exarg_T *eap)
-{
-  rs_ex_make((void *)eap);
-}
+// ex_make deleted: now exported directly from Rust via #[export_name]
 
 // qf_get_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_size"].
 // qf_get_valid_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_valid_size"].
@@ -2795,12 +2774,7 @@ int nvim_hlf_n(void) { return HLF_N; }
 bool nvim_got_int_qf(void) { return got_int; }
 void nvim_os_breakcheck_qf(void) { os_breakcheck(); }
 
-// ":cfile"/":cgetfile"/":caddfile" commands.
-// ":lfile"/":lgetfile"/":laddfile" commands.
-void ex_cfile(exarg_T *eap)
-{
-  rs_ex_cfile((void *)eap);
-}
+// ex_cfile deleted: now exported directly from Rust via #[export_name]
 
 
 
@@ -3350,17 +3324,9 @@ const void *nvim_qf_get_list_at_const(const void *qi_void, int idx)
 // ":[range]lbuffer [bufnr]" command.
 // ":[range]laddbuffer [bufnr]" command.
 // ":[range]lgetbuffer [bufnr]" command.
-void ex_cbuffer(exarg_T *eap)
-{
-  rs_ex_cbuffer((void *)eap);
-}
+// ex_cbuffer deleted: now exported directly from Rust via #[export_name]
 
-
-/// ":lexpr {expr}", ":lgetexpr {expr}", ":laddexpr {expr}" command.
-void ex_cexpr(exarg_T *eap)
-{
-  rs_ex_cexpr((void *)eap);
-}
+// ex_cexpr deleted: now exported directly from Rust via #[export_name]
 
 // hgr_get_ll deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep.
 
@@ -3433,12 +3399,7 @@ void nvim_restore_cpo(void *saved_cpo_void)
   }
 }
 
-#if defined(EXITFREE)
-void free_quickfix(void)
-{
-  rs_free_quickfix();
-}
-#endif
+// free_quickfix deleted: now exported directly from Rust via #[export_name] (EXITFREE guarded)
 
 // f_getloclist, f_getqflist, f_setloclist, f_setqflist deleted:
 // migrated to Rust with #[export_name] exporting under the C names directly.

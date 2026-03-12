@@ -59,4 +59,15 @@ size_t qf_get_valid_size(exarg_T *eap);
 size_t qf_get_cur_idx(exarg_T *eap);
 int qf_get_cur_valid_idx(exarg_T *eap);
 
+// Phase 35+: Rust-exported functions (via #[export_name])
+void qf_list(exarg_T *eap);
+void ex_make(exarg_T *eap);
+void ex_cfile(exarg_T *eap);
+void ex_cbuffer(exarg_T *eap);
+void ex_cexpr(exarg_T *eap);
+void copy_loclist_stack(win_T *from, win_T *to);
+#if defined(EXITFREE)
+void free_quickfix(void);
+#endif
+
 #include "quickfix_shim.h.generated.h"
