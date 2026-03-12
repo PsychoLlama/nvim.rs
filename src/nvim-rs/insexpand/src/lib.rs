@@ -174,8 +174,8 @@ extern "C" {
     fn nvim_get_pum_want_item() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_insert() -> c_int;
-    fn nvim_pum_visible() -> c_int;
-    fn nvim_pum_get_height() -> c_int;
+    fn pum_visible() -> c_int;
+    fn pum_get_height() -> c_int;
 }
 
 // Direction constants
@@ -824,7 +824,7 @@ pub unsafe extern "C" fn rs_ins_compl_key2dir(c: c_int) -> c_int {
 /// Check that "c" is a valid completion key only while the popup menu is shown.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_pum_key(c: c_int) -> c_int {
-    if nvim_pum_visible() == 0 {
+    if pum_visible() == 0 {
         return 0;
     }
 
@@ -853,7 +853,7 @@ pub unsafe extern "C" fn rs_ins_compl_key2count(c: c_int) -> c_int {
 
     // For page keys (except plain up/down), return popup height minus context
     if rs_ins_compl_pum_key(c) != 0 && c != K_UP && c != K_DOWN {
-        let mut h = nvim_pum_get_height();
+        let mut h = pum_get_height();
         if h > 3 {
             h -= 2; // keep some context
         }

@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_compl_match_set_score(m: ComplMatch, score: c_int);
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
     fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
-    fn nvim_fuzzy_match_str(str: *mut c_char, pat: *const c_char) -> c_int;
+    fn fuzzy_match_str(str: *mut c_char, pat: *const c_char) -> c_int;
     // rs_get_leader_for_startcol_data is defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const c_char;
     fn nvim_get_compl_leader_size() -> usize;
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
         };
 
         let str_data = nvim_compl_match_get_cp_str_data(comp);
-        let score = nvim_fuzzy_match_str(str_data.cast_mut(), pat);
+        let score = fuzzy_match_str(str_data.cast_mut(), pat);
         nvim_compl_match_set_score(comp, score);
 
         let next = nvim_compl_match_get_next(comp);

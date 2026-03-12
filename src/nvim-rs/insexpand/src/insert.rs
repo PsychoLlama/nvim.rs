@@ -378,11 +378,11 @@ extern "C" {
     fn nvim_ins_compl_set_original_text_impl(str_ptr: *const c_char, len: usize);
 
     // Accessors for rs_ins_compl_addleader
-    fn nvim_stop_arrow() -> c_int;
-    fn nvim_utf_char2len(c: c_int) -> c_int;
+    fn stop_arrow() -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
     fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
-    fn nvim_ins_char(c: c_int);
-    fn nvim_ins_char_bytes(buf: *const c_char, len: usize);
+    fn ins_char(c: c_int);
+    fn ins_char_bytes(buf: *const c_char, len: usize);
     fn rs_ins_compl_need_restart() -> c_int;
     fn rs_ins_compl_restart();
     fn nvim_api_clear_compl_leader();
@@ -418,19 +418,19 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
         rs_ins_compl_delete(0);
     }
 
-    if nvim_stop_arrow() != 0 {
+    if stop_arrow() != 0 {
         // stop_arrow() returned FAIL
         return;
     }
 
-    let cc = nvim_utf_char2len(c);
+    let cc = utf_char2len(c);
     if cc > 1 {
         let mut buf = [0i8; MB_MAXCHAR + 1];
         nvim_utf_char2bytes(c, buf.as_mut_ptr());
         buf[cc as usize] = 0;
-        nvim_ins_char_bytes(buf.as_ptr(), cc as usize);
+        ins_char_bytes(buf.as_ptr(), cc as usize);
     } else {
-        nvim_ins_char(c);
+        ins_char(c);
     }
 
     // If we didn't complete finding matches we must search again.

@@ -58,10 +58,10 @@ static CHECK_KEYS_COUNT: AtomicI32 = AtomicI32::new(0);
 
 // Additional C accessor functions for Phase 4
 extern "C" {
-    fn nvim_vpeekc_any() -> c_int;
+    fn vpeekc_any() -> c_int;
     fn nvim_test_disable_char_avail() -> c_int;
-    fn nvim_safe_vgetc() -> c_int;
-    fn nvim_vungetc(c: c_int);
+    fn safe_vgetc() -> c_int;
+    fn vungetc(c: c_int);
     fn nvim_got_int() -> c_int;
     fn nvim_key_typed() -> c_int;
     fn nvim_set_compl_interrupted(val: c_int);
@@ -117,10 +117,10 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
 
     // Check for a typed key. Do use mappings, otherwise vim_is_ctrl_x_key()
     // can't do its work correctly.
-    let peeked = nvim_vpeekc_any();
+    let peeked = vpeekc_any();
     if peeked != NUL && nvim_test_disable_char_avail() == 0 {
         // Eat or inspect the character
-        let c = nvim_safe_vgetc();
+        let c = safe_vgetc();
         if crate::rs_vim_is_ctrl_x_key(peeked) != 0 && peeked != CTRL_X && peeked != CTRL_R {
             nvim_set_compl_shows_dir(crate::rs_ins_compl_key2dir(c));
             let todo = crate::rs_ins_compl_key2count(c);
@@ -135,7 +135,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
                 if c != CTRL_R && nvim_key_typed() != 0 {
                     nvim_set_compl_interrupted(1);
                 }
-                nvim_vungetc(c);
+                vungetc(c);
             }
         }
     } else {

@@ -110,7 +110,7 @@ pub unsafe extern "C" fn rs_common_prefix_len(s1: *const c_char, s2: *const c_ch
 // =============================================================================
 
 extern "C" {
-    fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_append_char_to_redobuff(c: c_int);
     fn nvim_append_to_redobuff_lit(s: *const c_char, len: c_int);
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) 
         }
         // Adjust length to not break inside a multi-byte character
         if len > 0 {
-            len -= nvim_utf_head_off(p_start, p_start.offset(len as isize));
+            len -= utf_head_off(p_start, p_start.offset(len as isize));
         }
         // Add backspace characters for each remaining character in original text
         let mut p = p_start.offset(len as isize);
@@ -657,7 +657,7 @@ use crate::match_list::ComplMatch;
 
 extern "C" {
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
-    fn nvim_mb_tolower(c: c_int) -> c_int;
+    fn mb_tolower(c: c_int) -> c_int;
     fn nvim_cursor_col_gt_compl_col() -> c_int;
     fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
     fn nvim_ins_redraw(ready: c_int);
@@ -716,7 +716,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         let c2 = nvim_utf_ptr2char(s);
 
         let differs = if icase {
-            nvim_mb_tolower(c1) != nvim_mb_tolower(c2)
+            mb_tolower(c1) != mb_tolower(c2)
         } else {
             c1 != c2
         };
@@ -771,7 +771,7 @@ extern "C" {
     fn nvim_get_cpt_source_cs_flag(idx: c_int) -> c_int;
     fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
     fn nvim_get_cpt_sources_count() -> c_int;
-    fn nvim_xcalloc_ints(count: usize) -> *mut c_int;
+    fn xcalloc(count: usize, size: usize) -> *mut c_int;
     // nvim_xfree already declared above
     fn nvim_get_p_inf() -> c_int;
     fn nvim_ignorecase(pat: *const c_char) -> bool;
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
         return std::ptr::null();
     }
 
-    let match_count = nvim_xcalloc_ints(sources_count as usize);
+    let match_count = xcalloc(sources_count as usize, std::mem::size_of::<c_int>());
 
     // Clear the adjusted-leader cache
     let _ = rs_get_leader_for_startcol_data(ComplMatch::null(), 1);

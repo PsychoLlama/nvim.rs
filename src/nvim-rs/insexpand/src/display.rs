@@ -16,7 +16,7 @@ extern "C" {
     fn nvim_set_redrawing_disabled(val: c_int);
 
     // Cursor position
-    fn nvim_setcursor();
+    fn setcursor();
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
 
@@ -63,13 +63,13 @@ pub unsafe extern "C" fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) 
     nvim_set_redrawing_disabled(0);
 
     // If the cursor moved or the display scrolled we need to remove the pum first.
-    nvim_setcursor();
+    setcursor();
     if prev_w_wrow != nvim_get_curwin_w_wrow() || prev_w_leftcol != nvim_get_curwin_w_leftcol() {
         rs_ins_compl_del_pum();
     }
 
     rs_ins_compl_show_pum();
-    nvim_setcursor();
+    setcursor();
     nvim_set_redrawing_disabled(n);
 }
 

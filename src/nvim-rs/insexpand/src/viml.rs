@@ -16,7 +16,7 @@ extern "C" {
     fn nvim_get_compl_matches() -> c_int;
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_pum_visible() -> c_int;
+    fn pum_visible() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
 
     // Match info accessors

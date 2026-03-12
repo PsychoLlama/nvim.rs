@@ -17,8 +17,8 @@ extern "C" {
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_compl_interrupted() -> c_int;
     fn nvim_get_compl_time_slice_expired() -> c_int;
-    fn nvim_pum_visible() -> c_int;
-    fn nvim_pum_get_height() -> c_int;
+    fn pum_visible() -> c_int;
+    fn pum_get_height() -> c_int;
 }
 
 // CTRL-X mode constants (for message selection)

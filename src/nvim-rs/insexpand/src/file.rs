@@ -423,7 +423,7 @@ extern "C" {
     fn nvim_compl_pattern_get_data() -> *mut c_char;
 
     // Fuzzy matching
-    fn nvim_fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
+    fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
 
     // Match addition
     fn nvim_ins_compl_add_simple(
@@ -553,7 +553,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
 
         for (i, score_slot) in fuzzy_scores.iter_mut().enumerate() {
             let ptr = *matches.add(i);
-            let score = nvim_fuzzy_match_str(ptr, fuzzy_leader.cast_const());
+            let score = fuzzy_match_str(ptr, fuzzy_leader.cast_const());
             if score != FUZZY_SCORE_NONE {
                 fuzzy_indices.push(i as c_int);
                 *score_slot = score;

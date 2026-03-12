@@ -21,7 +21,7 @@ extern "C" {
     fn nvim_get_compl_used_match() -> c_int;
     fn nvim_get_compl_enter_selects() -> c_int;
     fn nvim_get_compl_matches() -> c_int;
-    fn nvim_pum_visible() -> c_int;
+    fn pum_visible() -> c_int;
 
     // Dispatch helpers for compl_get_info
     fn rs_ctrl_x_mode_normal() -> c_int;
@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_ins_compl_add_orig_text(flags: c_int, save_did_ai: c_int) -> c_int;
     fn rs_save_orig_extmarks();
     fn nvim_set_edit_submode_extra_searching();
-    fn nvim_showmode_wrap();
+    fn showmode() -> c_int;
     fn nvim_set_compl_col(val: c_int);
     fn nvim_set_compl_length(val: c_int);
     fn nvim_get_compl_cont_mode() -> c_int;
@@ -185,7 +185,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     let save_did_ai: bool = nvim_get_did_ai();
     nvim_set_did_ai(false);
     nvim_clear_indent_flags();
-    if nvim_stop_arrow() == FAIL {
+    if stop_arrow() == FAIL {
         nvim_restore_did_ai(c_int::from(save_did_ai));
         return FAIL;
     }
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
         nvim_set_edit_submode_extra_searching();
         nvim_set_edit_submode_highl_count();
-        nvim_showmode_wrap();
+        showmode();
         nvim_clear_edit_submode_extra();
         nvim_ui_flush();
     }
@@ -307,9 +307,9 @@ extern "C" {
     fn rs_ins_compl_use_match(c: c_int) -> c_int;
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
     fn rs_ins_compl_key2count(c: c_int) -> c_int;
-    fn nvim_stop_arrow() -> c_int;
+    fn stop_arrow() -> c_int;
     fn nvim_get_p_acl() -> c_int;
-    fn nvim_os_hrtime() -> u64;
+    fn os_hrtime() -> u64;
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
@@ -329,7 +329,7 @@ extern "C" {
     fn rs_ctrl_x_mode_path_defines() -> c_int;
     fn nvim_ins_complete_update_cont_s_ipos();
     fn rs_ins_compl_show_statusmsg();
-    fn nvim_setcursor();
+    fn setcursor();
     fn nvim_ui_flush();
     fn nvim_char_avail() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
@@ -378,14 +378,14 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
         if rs_ins_compl_start() == FAIL {
             return FAIL;
         }
-    } else if insert_match != 0 && nvim_stop_arrow() == FAIL {
+    } else if insert_match != 0 && stop_arrow() == FAIL {
         return FAIL;
     }
 
     // Set up timestamp for autocomplete delay
     let compl_start_tv: u64 =
         if nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0 && !disable_ac_delay {
-            nvim_os_hrtime()
+            os_hrtime()
         } else {
             0
         };
@@ -440,9 +440,9 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
         && p_acl > 0
         && !disable_ac_delay
         && !no_matches_found
-        && (nvim_os_hrtime() - compl_start_tv) / 1_000_000 < p_acl_ms
+        && (os_hrtime() - compl_start_tv) / 1_000_000 < p_acl_ms
     {
-        nvim_setcursor();
+        setcursor();
         nvim_ui_flush();
         loop {
             if nvim_char_avail() != 0 {
@@ -457,7 +457,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
                 break;
             }
             nvim_os_delay(2, false);
-            if (nvim_os_hrtime() - compl_start_tv) / 1_000_000 >= p_acl_ms {
+            if (os_hrtime() - compl_start_tv) / 1_000_000 >= p_acl_ms {
                 break;
             }
         }

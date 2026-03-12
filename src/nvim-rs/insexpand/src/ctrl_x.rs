@@ -132,7 +132,7 @@ extern "C" {
     fn nvim_set_redraw_mode_true();
     fn nvim_get_state_replace_flag() -> c_int;
     fn nvim_spell_back_safe();
-    fn nvim_vpeekc() -> c_int;
+    fn vpeekc() -> c_int;
     fn nvim_get_cpt_sources_index() -> c_int;
 
     // Phase 2 accessors
@@ -153,7 +153,7 @@ extern "C" {
 
     // Phase 3 state accessors
     fn nvim_get_compl_enter_selects() -> c_int;
-    fn nvim_pum_visible() -> c_int;
+    fn pum_visible() -> c_int;
     fn nvim_get_compl_curr_match_str_data() -> *const c_char;
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
     fn nvim_get_compl_leader_data() -> *const c_char;
@@ -224,7 +224,7 @@ unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
         CTRL_F => nvim_set_ctrl_x_mode(CTRL_X_FILES),
         CTRL_K => nvim_set_ctrl_x_mode(CTRL_X_DICTIONARY),
         CTRL_R => {
-            if nvim_vpeekc() != i32::from(b'=') {
+            if vpeekc() != i32::from(b'=') {
                 nvim_set_ctrl_x_mode(CTRL_X_REGISTER);
             }
         }
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // the Enter key does the same.
     if (c == CTRL_Y
         || (nvim_get_compl_enter_selects() != 0 && (c == CAR || c == K_KENTER || c == NL)))
-        && nvim_pum_visible() != 0
+        && pum_visible() != 0
     {
         word = nvim_get_compl_shown_match_str_dup().cast::<u8>();
         retval = true;
@@ -653,7 +653,7 @@ extern "C" {
     fn nvim_emsg_silent_is_zero() -> c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_vim_beep_complete();
-    fn nvim_setcursor();
+    fn setcursor();
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
@@ -683,7 +683,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
         nvim_emsg_dict_empty(dict_opt);
         if nvim_emsg_silent_is_zero() != 0 && !nvim_in_assert_fails() {
             nvim_vim_beep_complete();
-            nvim_setcursor();
+            setcursor();
             if nvim_ui_has_messages() == 0 {
                 nvim_ui_flush();
                 nvim_os_delay(2004, false);

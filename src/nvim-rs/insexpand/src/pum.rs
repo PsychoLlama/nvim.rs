@@ -182,7 +182,7 @@ pub unsafe extern "C" fn rs_compl_match_curr_select(selected: c_int) -> c_int {
 
 // Additional C accessors for Phase 2
 extern "C" {
-    fn nvim_pum_visible() -> c_int;
+    fn pum_visible() -> c_int;
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_compl_started() -> c_int;
 }
@@ -325,7 +325,7 @@ extern "C" {
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
     fn nvim_xfree(ptr: *mut u8);
-    fn nvim_xmalloc_ints(count: usize) -> *mut c_int;
+    fn xmalloc(size: usize) -> *mut c_int;
 
     // From leader.rs (pass 11)
     fn rs_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
@@ -402,7 +402,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     let match_count_ptr: *mut c_int = if is_cpt_completion {
         let cnt = rs_get_cpt_sources_count();
         if cnt > 0 {
-            let ptr = nvim_xmalloc_ints(cnt as usize);
+            let ptr = xmalloc(cnt as usize * std::mem::size_of::<c_int>());
             // Zero-initialize
             std::ptr::write_bytes(ptr, 0, cnt as usize);
             ptr

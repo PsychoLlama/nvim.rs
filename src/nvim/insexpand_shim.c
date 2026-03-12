@@ -1242,8 +1242,7 @@ void nvim_set_compl_shown_to_first_or_next(int no_select) {
 /// Build and fill compl_match_array from the cp_match_next linked list.
 /// Allocates compl_match_array[0..count-1] and populates pumitem_T fields.
 /// Returns the count of filled entries (same as count parameter).
-/// Allocate an integer array (for per-source match counts). Caller must free via nvim_xfree.
-int *nvim_xmalloc_ints(size_t count) { return xmalloc(count * sizeof(int)); }
+// nvim_xmalloc_ints: deleted (Phase 3, Rust calls xmalloc directly)
 int nvim_build_pum_fill_array(void *match_head_void, int count) {
   compl_T *match_head = (compl_T *)match_head_void;
   assert(count >= 0);
@@ -1284,7 +1283,7 @@ void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
 void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
 void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
 // NOTE: nvim_ins_compl_del_pum deleted (Phase 15). Rust calls rs_ins_compl_del_pum() directly.
-void nvim_pum_clear(void) { pum_clear(); }
+// nvim_pum_clear: deleted (Phase 3, Rust calls pum_clear directly)
 int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
 // Completion state accessors (used by Rust insexpand crate)
@@ -1916,7 +1915,7 @@ int nvim_ins_compl_add_orig_text(int flags, int save_did_ai) {
   return OK;
 }
 void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Searching..."); }
-void nvim_showmode_wrap(void) { showmode(); }
+// nvim_showmode_wrap: deleted (Phase 3, Rust calls showmode directly)
 
 /// Compound accessor: set compl_startpos to the current cursor position.
 void nvim_set_compl_startpos_to_cursor(void)
@@ -1984,7 +1983,7 @@ void nvim_ins_complete_setup_match_state(int direction)
 }
 
 /// Compound accessor: return os_hrtime().
-uint64_t nvim_os_hrtime(void) { return os_hrtime(); }
+// nvim_os_hrtime: deleted (Phase 3, Rust calls os_hrtime directly)
 
 /// Compound accessor: check if first_match->cp_next is the first match (no matches case).
 int nvim_compl_first_match_next_is_first(void)
@@ -2088,7 +2087,6 @@ int nvim_compl_shown_match_exists(void) { return compl_shown_match != NULL ? 1 :
 int nvim_get_compl_selected_item(void) { return compl_selected_item; }
 int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
 int nvim_pum_visible(void) { return pum_visible() ? 1 : 0; }
-int nvim_pum_get_height(void) { return pum_get_height(); }
 
 // Match list and popup menu accessors (used by Rust insexpand crate)
 int nvim_compl_first_match_is_null(void) { return compl_first_match == NULL ? 1 : 0; }
@@ -2115,7 +2113,7 @@ void nvim_set_edit_submode_pre_null(void) { edit_submode_pre = NULL; }
 void nvim_set_redraw_mode_true(void) { redraw_mode = true; }
 int nvim_get_state_replace_flag(void) { return (State & REPLACE_FLAG) ? 1 : 0; }
 void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
-int nvim_vpeekc(void) { return vpeekc(); }
+// nvim_vpeekc: deleted (Phase 3, Rust calls vpeekc directly)
 int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 
 // Accessor for ins_compl_prep (Phase 2)
@@ -2123,7 +2121,7 @@ void nvim_set_compl_used_match(int val) { compl_used_match = val != 0; }
 void nvim_ins_redraw(int ready) { ins_redraw(ready != 0); }
 // Accessors for Phase 2 (pass 12): ins_compl_longest_match
 // nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
-int nvim_mb_tolower(int c) { return mb_tolower(c); }
+// nvim_mb_tolower: deleted (Phase 3, Rust calls mb_tolower directly)
 int nvim_cursor_col_gt_compl_col(void) { return curwin->w_cursor.col > compl_col ? 1 : 0; }
 
 // Accessors for ins_compl_stop (Phase 3)
@@ -2215,7 +2213,7 @@ int nvim_mb_byte2len(int b) { return (b >= 0 && b <= 255) ? MB_BYTE2LEN((uint8_t
 // nvim_get_curwin_cursor_col: defined in change_ffi.c (returns colnr_T)
 // nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool nvim_ascii_iswhite_or_nul(int c)
 int nvim_get_cpt_sources_count(void) { return cpt_sources_count; }
-int *nvim_xcalloc_ints(size_t count) { return xcalloc(count, sizeof(int)); }
+// nvim_xcalloc_ints: deleted (Phase 3, Rust calls xcalloc directly)
 void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
   char *start = (char *)str + skip;
   char *curr = start;
@@ -2247,11 +2245,9 @@ void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_I
 void nvim_compl_cont_status_or(int mask) { compl_cont_status |= mask; }
 void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(CTRL_X_MSG(mode)); }
 // nvim_may_trigger_modechanged: defined in normal_shim.c
-int nvim_stop_arrow(void) { return stop_arrow(); }
+// nvim_stop_arrow: deleted (Phase 3, Rust calls stop_arrow directly)
 // nvim_utf_char2bytes: defined in change_ffi.c (int nvim_utf_char2bytes(int c, char *buf))
-int nvim_utf_char2len(int c) { return utf_char2len(c); }
-void nvim_ins_char(int c) { ins_char(c); }
-void nvim_ins_char_bytes(const char *buf, size_t len) { ins_char_bytes((char *)buf, len); }
+// nvim_utf_char2len, nvim_ins_char, nvim_ins_char_bytes: deleted (Phase 3, Rust calls directly)
 void nvim_api_clear_compl_leader(void) { API_CLEAR_STRING(compl_leader); }
 void nvim_set_compl_leader_from_cursor(void) {
   compl_leader = cbuf_to_string(get_cursor_line_ptr() + compl_col,
@@ -2280,16 +2276,15 @@ void nvim_emsg_dict_empty(int is_dict) {
 int nvim_emsg_silent_is_zero(void) { return emsg_silent == 0 ? 1 : 0; }
 // nvim_in_assert_fails: defined in change_ffi.c (bool nvim_in_assert_fails(void))
 void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
-void nvim_setcursor(void) { setcursor(); }
+// nvim_setcursor: deleted (Phase 3, Rust calls setcursor directly)
 // nvim_ui_has_messages: defined in message.c (int nvim_ui_has_messages(void))
 // nvim_ui_flush: defined in change_ffi.c (void nvim_ui_flush(void))
 // nvim_os_delay: defined in change_ffi.c (void nvim_os_delay(long ms, bool allow_input))
 int nvim_compl_first_match_at_orig_text(void) { return compl_first_match ? (match_at_original_text(compl_first_match) ? 1 : 0) : 0; }
-int nvim_vpeekc_any(void) { return vpeekc_any(); }
+// nvim_vpeekc_any: deleted (Phase 3, Rust calls vpeekc_any directly)
 int nvim_test_disable_char_avail(void) { return test_disable_char_avail ? 1 : 0; }
 // NOTE: nvim_vim_is_ctrl_x_key deleted (Phase 15). keys.rs calls rs_vim_is_ctrl_x_key() directly.
-int nvim_safe_vgetc(void) { return safe_vgetc(); }
-void nvim_vungetc(int c) { vungetc(c); }
+// nvim_safe_vgetc, nvim_vungetc: deleted (Phase 3, Rust calls directly)
 int nvim_got_int(void) { return got_int ? 1 : 0; }
 int nvim_key_typed(void) { return KeyTyped ? 1 : 0; }
 void nvim_set_compl_interrupted(int val) { compl_interrupted = val != 0; }
