@@ -188,7 +188,7 @@ pub unsafe extern "C" fn rs_os_file_is_readable(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_file_is_writable"]
 pub unsafe extern "C" fn rs_os_file_is_writable(path: *const c_char) -> c_int {
     if path.is_null() {
         return 0;
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn rs_os_file_is_writable(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_getperm"]
 pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
     if path.is_null() {
         return -22; // UV_EINVAL
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_setperm"]
 pub unsafe extern "C" fn rs_os_setperm(path: *const c_char, perm: c_int) -> c_int {
     if path.is_null() {
         return FAIL;
@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_os_mkdir_all(path: *const c_char, _mode: c_uint) -> 
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_remove"]
 pub unsafe extern "C" fn rs_os_remove(path: *const c_char) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL
@@ -492,7 +492,7 @@ pub unsafe extern "C" fn rs_os_remove(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_rmdir"]
 pub unsafe extern "C" fn rs_os_rmdir(path: *const c_char) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL
@@ -517,7 +517,7 @@ pub unsafe extern "C" fn rs_os_rmdir(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `from` and `to` must be valid null-terminated C strings.
-#[no_mangle]
+#[export_name = "os_rename"]
 pub unsafe extern "C" fn rs_os_rename(from: *const c_char, to: *const c_char) -> c_int {
     if from.is_null() || to.is_null() {
         return FAIL;
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn rs_os_rename(from: *const c_char, to: *const c_char) ->
 /// # Safety
 ///
 /// `buf` must point to a buffer of at least `size` bytes.
-#[no_mangle]
+#[export_name = "os_dirname"]
 pub unsafe extern "C" fn rs_os_dirname(buf: *mut c_char, size: usize) -> c_int {
     if buf.is_null() || size == 0 {
         return FAIL;
@@ -749,7 +749,7 @@ pub unsafe extern "C" fn rs_os_mkdtemp(
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_chown"]
 pub unsafe extern "C" fn rs_os_chown(path: *const c_char, owner: u32, group: u32) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL
@@ -792,7 +792,7 @@ pub unsafe extern "C" fn rs_os_chown(path: *const c_char, owner: u32, group: u32
 ///
 /// Returns 0 on success, libuv-compatible error code on failure.
 /// If `owner` or `group` is -1 (max value for unsigned), that ID is not changed.
-#[no_mangle]
+#[export_name = "os_fchown"]
 pub extern "C" fn rs_os_fchown(fd: c_int, owner: u32, group: u32) -> c_int {
     #[cfg(unix)]
     {
@@ -835,7 +835,7 @@ pub extern "C" fn rs_os_fchown(fd: c_int, owner: u32, group: u32) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_file_settime"]
 pub unsafe extern "C" fn rs_os_file_settime(path: *const c_char, atime: f64, mtime: f64) -> c_int {
     if path.is_null() {
         return -22; // UV_EINVAL
@@ -883,7 +883,7 @@ pub unsafe extern "C" fn rs_os_file_settime(path: *const c_char, atime: f64, mti
 /// Close a file descriptor.
 ///
 /// Returns 0 on success, libuv-compatible error code on failure.
-#[no_mangle]
+#[export_name = "os_close"]
 pub extern "C" fn rs_os_close(fd: c_int) -> c_int {
     #[cfg(unix)]
     {
@@ -910,7 +910,7 @@ pub extern "C" fn rs_os_close(fd: c_int) -> c_int {
 /// Duplicate a file descriptor.
 ///
 /// Returns the new file descriptor on success, libuv-compatible error code on failure.
-#[no_mangle]
+#[export_name = "os_dup"]
 pub extern "C" fn rs_os_dup(fd: c_int) -> c_int {
     #[cfg(unix)]
     {
@@ -957,7 +957,7 @@ const UV_FS_COPYFILE_FICLONE_FORCE: c_int = 0x0004;
 /// # Safety
 ///
 /// `path` and `new_path` must be valid null-terminated C strings.
-#[no_mangle]
+#[export_name = "os_copy"]
 pub unsafe extern "C" fn rs_os_copy(
     path: *const c_char,
     new_path: *const c_char,
@@ -1125,7 +1125,7 @@ pub unsafe extern "C" fn rs_os_nodetype(name: *const c_char) -> c_int {
 /// Set the close-on-exec flag on a file descriptor.
 ///
 /// Returns 0 on success, -1 on failure.
-#[no_mangle]
+#[export_name = "os_set_cloexec"]
 pub extern "C" fn rs_os_set_cloexec(fd: c_int) -> c_int {
     #[cfg(unix)]
     {
@@ -1166,7 +1166,7 @@ pub extern "C" fn rs_os_set_cloexec(fd: c_int) -> c_int {
 ///
 /// - `buffer` must point to a buffer of at least `*size` bytes
 /// - `size` must be a valid pointer
-#[no_mangle]
+#[export_name = "os_exepath"]
 pub unsafe extern "C" fn rs_os_exepath(buffer: *mut c_char, size: *mut usize) -> c_int {
     if buffer.is_null() || size.is_null() {
         return -22; // UV_EINVAL
@@ -1228,7 +1228,7 @@ fn errno_to_uv_error(errno: c_int) -> c_int {
 ///
 /// - `ret_eof` must be a valid pointer
 /// - `ret_buf` must point to a buffer of at least `size` bytes (or be NULL if size is 0)
-#[no_mangle]
+#[export_name = "os_read"]
 pub unsafe extern "C" fn rs_os_read(
     fd: c_int,
     ret_eof: *mut bool,
@@ -1299,7 +1299,7 @@ pub unsafe extern "C" fn rs_os_read(
 /// # Safety
 ///
 /// - `buf` must point to a buffer of at least `size` bytes (or be NULL if size is 0)
-#[no_mangle]
+#[export_name = "os_write"]
 pub unsafe extern "C" fn rs_os_write(
     fd: c_int,
     buf: *const c_char,
@@ -1453,7 +1453,7 @@ fn stat_to_uv_stat(st: &libc::stat) -> UvStat {
 /// # Safety
 ///
 /// Both `file_id_1` and `file_id_2` must be valid pointers to `FileID` structs.
-#[no_mangle]
+#[export_name = "os_fileid_equal"]
 pub unsafe extern "C" fn rs_os_fileid_equal(
     file_id_1: *const FileID,
     file_id_2: *const FileID,
@@ -1476,7 +1476,7 @@ pub unsafe extern "C" fn rs_os_fileid_equal(
 /// # Safety
 ///
 /// Both `file_id` and `file_info` must be valid pointers.
-#[no_mangle]
+#[export_name = "os_fileid_equal_fileinfo"]
 pub unsafe extern "C" fn rs_os_fileid_equal_fileinfo(
     file_id: *const FileID,
     file_info: *const FileInfo,
@@ -1497,7 +1497,7 @@ pub unsafe extern "C" fn rs_os_fileid_equal_fileinfo(
 ///
 /// - `path` must be a valid null-terminated C string.
 /// - `file_id` must be a valid pointer to a `FileID` struct.
-#[no_mangle]
+#[export_name = "os_fileid"]
 #[allow(clippy::unnecessary_cast)]
 pub unsafe extern "C" fn rs_os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
     if path.is_null() || file_id.is_null() {
@@ -1532,7 +1532,7 @@ pub unsafe extern "C" fn rs_os_fileid(path: *const c_char, file_id: *mut FileID)
 /// # Safety
 ///
 /// `fname` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "os_file_owned"]
 pub unsafe extern "C" fn rs_os_file_owned(fname: *const c_char) -> bool {
     if fname.is_null() {
         return false;
@@ -1563,7 +1563,7 @@ pub unsafe extern "C" fn rs_os_file_owned(fname: *const c_char) -> bool {
 /// # Safety
 ///
 /// Both `file_info_1` and `file_info_2` must be valid pointers.
-#[no_mangle]
+#[export_name = "os_fileinfo_id_equal"]
 pub unsafe extern "C" fn rs_os_fileinfo_id_equal(
     file_info_1: *const FileInfo,
     file_info_2: *const FileInfo,
@@ -1583,7 +1583,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_id_equal(
 /// # Safety
 ///
 /// Both `file_info` and `file_id` must be valid pointers.
-#[no_mangle]
+#[export_name = "os_fileinfo_id"]
 pub unsafe extern "C" fn rs_os_fileinfo_id(file_info: *const FileInfo, file_id: *mut FileID) {
     if file_info.is_null() || file_id.is_null() {
         return;
@@ -1601,7 +1601,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_id(file_info: *const FileInfo, file_id: 
 /// # Safety
 ///
 /// `file_info` must be a valid pointer.
-#[no_mangle]
+#[export_name = "os_fileinfo_inode"]
 pub unsafe extern "C" fn rs_os_fileinfo_inode(file_info: *const FileInfo) -> u64 {
     if file_info.is_null() {
         return 0;
@@ -1616,7 +1616,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_inode(file_info: *const FileInfo) -> u64
 /// # Safety
 ///
 /// `file_info` must be a valid pointer.
-#[no_mangle]
+#[export_name = "os_fileinfo_size"]
 pub unsafe extern "C" fn rs_os_fileinfo_size(file_info: *const FileInfo) -> u64 {
     if file_info.is_null() {
         return 0;
@@ -1631,7 +1631,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_size(file_info: *const FileInfo) -> u64 
 /// # Safety
 ///
 /// `file_info` must be a valid pointer.
-#[no_mangle]
+#[export_name = "os_fileinfo_hardlinks"]
 pub unsafe extern "C" fn rs_os_fileinfo_hardlinks(file_info: *const FileInfo) -> u64 {
     if file_info.is_null() {
         return 0;
@@ -1646,7 +1646,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_hardlinks(file_info: *const FileInfo) ->
 /// # Safety
 ///
 /// `file_info` must be a valid pointer.
-#[no_mangle]
+#[export_name = "os_fileinfo_blocksize"]
 pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) -> u64 {
     if file_info.is_null() {
         return 0;
@@ -1662,7 +1662,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) ->
 ///
 /// - `path` must be a valid null-terminated C string, or NULL.
 /// - `file_info` must be a valid pointer to a `FileInfo` struct.
-#[no_mangle]
+#[export_name = "os_fileinfo"]
 pub unsafe extern "C" fn rs_os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool {
     if file_info.is_null() {
         return false;
@@ -1701,7 +1701,7 @@ pub unsafe extern "C" fn rs_os_fileinfo(path: *const c_char, file_info: *mut Fil
 ///
 /// - `path` must be a valid null-terminated C string, or NULL.
 /// - `file_info` must be a valid pointer to a `FileInfo` struct.
-#[no_mangle]
+#[export_name = "os_fileinfo_link"]
 pub unsafe extern "C" fn rs_os_fileinfo_link(
     path: *const c_char,
     file_info: *mut FileInfo,
@@ -1742,7 +1742,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_link(
 /// # Safety
 ///
 /// - `file_info` must be a valid pointer to a `FileInfo` struct.
-#[no_mangle]
+#[export_name = "os_fileinfo_fd"]
 pub unsafe extern "C" fn rs_os_fileinfo_fd(
     file_descriptor: c_int,
     file_info: *mut FileInfo,
@@ -1784,7 +1784,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_fd(
 /// - `name` must be a valid null-terminated C string.
 /// - If `buf` is not NULL, it must point to a buffer of at least `len` bytes.
 /// - The caller is responsible for freeing any allocated buffer.
-#[no_mangle]
+#[export_name = "os_realpath"]
 pub unsafe extern "C" fn rs_os_realpath(
     name: *const c_char,
     buf: *mut c_char,
@@ -1876,7 +1876,7 @@ pub unsafe extern "C" fn rs_os_open(path: *const c_char, flags: c_int, mode: c_i
 /// - `path` must be a valid null-terminated C string.
 /// - `flags` must be a valid null-terminated C string with length 1-2.
 /// - The returned `FILE*` must be closed with `fclose()` when done.
-#[no_mangle]
+#[export_name = "os_fopen"]
 pub unsafe extern "C" fn rs_os_fopen(path: *const c_char, flags: *const c_char) -> *mut libc::FILE {
     if path.is_null() || flags.is_null() {
         return ptr::null_mut();

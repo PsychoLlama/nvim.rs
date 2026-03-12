@@ -62,47 +62,15 @@
 
 #include "os/fs.c.generated.h"
 
-// Rust filesystem implementations
-extern int rs_os_path_exists(const char *path);
-extern int rs_os_isdir(const char *path);
+// Rust filesystem implementations (still called from C)
 extern int rs_os_isrealdir(const char *path);
+extern int rs_os_isdir(const char *path);
+extern int rs_os_path_exists(const char *path);
 extern int rs_os_file_is_readable(const char *path);
-extern int rs_os_file_is_writable(const char *path);
-extern int rs_os_dirname(char *buf, size_t len);
-extern int rs_os_rename(const char *path, const char *new_path);
-extern int rs_os_setperm(const char *path, int perm);
-extern int32_t rs_os_getperm(const char *path);
-extern int rs_os_remove(const char *path);
-extern int rs_os_rmdir(const char *path);
+extern int rs_os_nodetype(const char *name);
 extern int rs_os_mkdir(const char *path, unsigned int mode);
 extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
-extern int rs_os_chown(const char *path, unsigned int owner, unsigned int group);
-extern int rs_os_fchown(int fd, unsigned int owner, unsigned int group);
-extern int rs_os_file_settime(const char *path, double atime, double mtime);
-extern int rs_os_copy(const char *path, const char *new_path, int flags);
-extern int rs_os_close(int fd);
-extern int rs_os_dup(int fd);
-extern int rs_os_exepath(char *buffer, size_t *size);
-extern int rs_os_nodetype(const char *name);
-extern int rs_os_set_cloexec(int fd);
-extern ptrdiff_t rs_os_read(int fd, bool *ret_eof, char *ret_buf, size_t size, bool non_blocking);
-extern ptrdiff_t rs_os_write(int fd, const char *buf, size_t size, bool non_blocking);
-extern bool rs_os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2);
-extern bool rs_os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info);
-extern bool rs_os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info_2);
-extern void rs_os_fileinfo_id(const FileInfo *file_info, FileID *file_id);
-extern uint64_t rs_os_fileinfo_inode(const FileInfo *file_info);
-extern uint64_t rs_os_fileinfo_size(const FileInfo *file_info);
-extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
-extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
-extern bool rs_os_fileinfo(const char *path, FileInfo *file_info);
-extern bool rs_os_fileinfo_link(const char *path, FileInfo *file_info);
-extern bool rs_os_fileinfo_fd(int file_descriptor, FileInfo *file_info);
-extern bool rs_os_fileid(const char *path, FileID *file_id);
-extern bool rs_os_file_owned(const char *fname);
-extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 extern int rs_os_open(const char *path, int flags, int mode);
-extern FILE *rs_os_fopen(const char *path, const char *flags);
 
 #ifdef HAVE_XATTR
 static const char e_xattr_erange[]
@@ -141,16 +109,6 @@ int os_chdir(const char *path)
   return err;
 }
 
-/// Get the name of current directory.
-///
-/// @param buf Buffer to store the directory name.
-/// @param len Length of `buf`.
-/// @return `OK` for success, `FAIL` for failure.
-int os_dirname(char *buf, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_dirname(buf, len);
-}
 
 /// Check if the given path is a directory and not a symlink to a directory.
 /// @return `true` if `name` is a directory and NOT a symlink to a directory.
@@ -223,19 +181,6 @@ int os_nodetype(const char *name)
 #endif
 }
 
-/// Gets the absolute path of the currently running executable.
-/// May fail if procfs is missing. #6734
-/// @see path_exepath
-///
-/// @param[out] buffer Full path to the executable.
-/// @param[in]  size   Size of `buffer`.
-///
-/// @return 0 on success, or libuv error code.
-int os_exepath(char *buffer, size_t *size)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_exepath(buffer, size);
-}
 
 /// Checks if the file `name` is executable.
 ///
@@ -431,47 +376,9 @@ int os_open(const char *path, int flags, int mode)
   return rs_os_open(path, flags, mode);
 }
 
-/// Compatibility wrapper conforming to fopen(3).
-///
-/// Windows: works with UTF-16 filepaths by delegating to libuv (os_open).
-///
-/// Future: remove this, migrate callers to os/fileio.c ?
-///         But file_open_fd does not support O_RDWR yet.
-///
-/// @param path  Filename
-/// @param flags  String flags, one of { r w a r+ w+ a+ rb wb ab }
-/// @return FILE pointer, or NULL on error.
-FILE *os_fopen(const char *path, const char *flags)
-{
-  return rs_os_fopen(path, flags);
-}
 
-/// Sets file descriptor `fd` to close-on-exec.
-//
-// @return -1 if failed to set, 0 otherwise.
-int os_set_cloexec(const int fd)
-{
-  return rs_os_set_cloexec(fd);
-}
 
-/// Close a file
-///
-/// @return 0 or libuv error code on failure.
-int os_close(const int fd)
-{
-  return rs_os_close(fd);
-}
 
-/// Duplicate file descriptor
-///
-/// @param[in]  fd  File descriptor to duplicate.
-///
-/// @return New file descriptor or libuv error code (< 0).
-int os_dup(const int fd)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_dup(fd);
-}
 
 /// Open the file descriptor for stdin.
 int os_open_stdin_fd(void)
@@ -489,24 +396,6 @@ int os_open_stdin_fd(void)
   return stdin_dup_fd;
 }
 
-/// Read from a file
-///
-/// Handles EINTR and ENOMEM, but not other errors.
-///
-/// @param[in]  fd  File descriptor to read from.
-/// @param[out]  ret_eof  Is set to true if EOF was encountered, otherwise set
-///                       to false. Initial value is ignored.
-/// @param[out]  ret_buf  Buffer to write to. May be NULL if size is zero.
-/// @param[in]  size  Amount of bytes to read.
-/// @param[in]  non_blocking  Do not restart syscall if EAGAIN was encountered.
-///
-/// @return Number of bytes read or libuv error code (< 0).
-ptrdiff_t os_read(const int fd, bool *const ret_eof, char *const ret_buf, const size_t size,
-                  const bool non_blocking)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_read(fd, ret_eof, ret_buf, size, non_blocking);
-}
 
 #ifdef HAVE_READV
 /// Read from a file to multiple buffers at once
@@ -569,32 +458,7 @@ ptrdiff_t os_readv(const int fd, bool *const ret_eof, struct iovec *iov, size_t 
 }
 #endif  // HAVE_READV
 
-/// Write to a file
-///
-/// @param[in]  fd  File descriptor to write to.
-/// @param[in]  buf  Data to write. May be NULL if size is zero.
-/// @param[in]  size  Amount of bytes to write.
-/// @param[in]  non_blocking  Do not restart syscall if EAGAIN was encountered.
-///
-/// @return Number of bytes written or libuv error code (< 0).
-ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const bool non_blocking)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_write(fd, buf, size, non_blocking);
-}
 
-/// Copies a file from `path` to `new_path`.
-///
-/// @see http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_copyfile
-///
-/// @param path Path of file to be copied
-/// @param path_new Path of new file
-/// @param flags Bitwise OR of flags defined in <uv.h>
-/// @return 0 on success, or libuv error code on failure.
-int os_copy(const char *path, const char *new_path, int flags)
-{
-  return rs_os_copy(path, new_path, flags);
-}
 
 /// Flushes file modifications to disk.
 ///
@@ -609,40 +473,8 @@ int os_fsync(int fd)
   return r;
 }
 
-/// Get stat information for a file.
-///
-/// @return libuv return code, or -errno
-static int os_stat(const char *name, uv_stat_t *statbuf)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  if (!name) {
-    return UV_EINVAL;
-  }
-  uv_fs_t request;
-  int result = uv_fs_stat(NULL, &request, name, NULL);
-  if (result == kLibuvSuccess) {
-    *statbuf = request.statbuf;
-  }
-  uv_fs_req_cleanup(&request);
-  return result;
-}
 
-/// Get the file permissions for a given file.
-///
-/// @return libuv error code on error.
-int32_t os_getperm(const char *name)
-{
-  return rs_os_getperm(name);
-}
 
-/// Set the permission of a file.
-///
-/// @return `OK` for success, `FAIL` for failure.
-int os_setperm(const char *const name, int perm)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_setperm(name, perm);
-}
 
 #ifdef HAVE_XATTR
 /// Copy extended attributes from_file to to_file
@@ -746,35 +578,8 @@ void os_free_acl(vim_acl_T aclent)
   }
 }
 
-/// Checks if the current user owns a file.
-///
-/// Uses both stat() and lstat() for extra security.
-bool os_file_owned(const char *fname)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_file_owned(fname);
-}
 
-/// Changes the owner and group of a file, like chown(2).
-///
-/// @return 0 on success, or libuv error code on failure.
-///
-/// @note If `owner` or `group` is -1, then that ID is not changed.
-int os_chown(const char *path, uv_uid_t owner, uv_gid_t group)
-{
-  return rs_os_chown(path, owner, group);
-}
 
-/// Changes the owner and group of the file referred to by the open file
-/// descriptor, like fchown(2).
-///
-/// @return 0 on success, or libuv error code on failure.
-///
-/// @note If `owner` or `group` is -1, then that ID is not changed.
-int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
-{
-  return rs_os_fchown(fd, owner, group);
-}
 
 /// Check if a path exists.
 ///
@@ -784,19 +589,6 @@ bool os_path_exists(const char *path)
   return rs_os_path_exists(path) != 0;
 }
 
-/// Sets file access and modification times.
-///
-/// @see POSIX utime(2)
-///
-/// @param path   File path.
-/// @param atime  Last access time.
-/// @param mtime  Last modification time.
-///
-/// @return 0 on success, or negative error code.
-int os_file_settime(const char *path, double atime, double mtime)
-{
-  return rs_os_file_settime(path, atime, mtime);
-}
 
 /// Check if a file is readable.
 ///
@@ -807,25 +599,7 @@ bool os_file_is_readable(const char *name)
   return rs_os_file_is_readable(name) != 0;
 }
 
-/// Check if a file is writable.
-///
-/// @return `0` if `name` is not writable,
-/// @return `1` if `name` is writable,
-/// @return `2` for a directory which we have rights to write into.
-int os_file_is_writable(const char *name)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_file_is_writable(name);
-}
 
-/// Rename a file or directory.
-///
-/// @return `OK` for success, `FAIL` for failure.
-int os_rename(const char *path, const char *new_path)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_rename(path, new_path);
-}
 
 /// Make a directory.
 ///
@@ -938,14 +712,6 @@ int os_mkdtemp(const char *templ, char *path)
   return rs_os_mkdtemp(templ, path, TEMP_FILE_PATH_MAXLEN);
 }
 
-/// Remove a directory.
-///
-/// @return `0` for success, non-zero for failure.
-int os_rmdir(const char *path)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_rmdir(path);
-}
 
 /// Opens a directory.
 /// @param[out] dir   The Directory object.
@@ -980,152 +746,19 @@ void os_closedir(Directory *dir)
   uv_fs_req_cleanup(&dir->request);
 }
 
-/// Remove a file.
-///
-/// @return `0` for success, non-zero for failure.
-int os_remove(const char *path)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_remove(path);
-}
 
-/// Get the file information for a given path
-///
-/// @param path Path to the file.
-/// @param[out] file_info Pointer to a FileInfo to put the information in.
-/// @return `true` on success, `false` for failure.
-bool os_fileinfo(const char *path, FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return rs_os_fileinfo(path, file_info);
-}
 
-/// Get the file information for a given path without following links
-///
-/// @param path Path to the file.
-/// @param[out] file_info Pointer to a FileInfo to put the information in.
-/// @return `true` on success, `false` for failure.
-bool os_fileinfo_link(const char *path, FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return rs_os_fileinfo_link(path, file_info);
-}
 
-/// Get the file information for a given file descriptor
-///
-/// @param file_descriptor File descriptor of the file.
-/// @param[out] file_info Pointer to a FileInfo to put the information in.
-/// @return `true` on success, `false` for failure.
-bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_fd(file_descriptor, file_info);
-}
 
-/// Compare the inodes of two FileInfos
-///
-/// @return `true` if the two FileInfos represent the same file.
-bool os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info_2)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_id_equal(file_info_1, file_info_2);
-}
 
-/// Get the `FileID` of a `FileInfo`
-///
-/// @param file_info Pointer to the `FileInfo`
-/// @param[out] file_id Pointer to a `FileID`
-void os_fileinfo_id(const FileInfo *file_info, FileID *file_id)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_os_fileinfo_id(file_info, file_id);
-}
 
-/// Get the inode of a `FileInfo`
-///
-/// @deprecated Use `FileID` instead, this function is only needed in memline.c
-/// @param file_info Pointer to the `FileInfo`
-/// @return the inode number
-uint64_t os_fileinfo_inode(const FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_inode(file_info);
-}
 
-/// Get the size of a file from a `FileInfo`.
-///
-/// @return filesize in bytes.
-uint64_t os_fileinfo_size(const FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_size(file_info);
-}
 
-/// Get the number of hardlinks from a `FileInfo`.
-///
-/// @return number of hardlinks.
-uint64_t os_fileinfo_hardlinks(const FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_hardlinks(file_info);
-}
 
-/// Get the blocksize from a `FileInfo`.
-///
-/// @return blocksize in bytes.
-uint64_t os_fileinfo_blocksize(const FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileinfo_blocksize(file_info);
-}
 
-/// Get the `FileID` for a given path
-///
-/// @param path Path to the file.
-/// @param[out] file_info Pointer to a `FileID` to fill in.
-/// @return `true` on success, `false` for failure.
-bool os_fileid(const char *path, FileID *file_id)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileid(path, file_id);
-}
 
-/// Check if two `FileID`s are equal
-///
-/// @param file_id_1 Pointer to first `FileID`
-/// @param file_id_2 Pointer to second `FileID`
-/// @return `true` if the two `FileID`s represent te same file.
-bool os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileid_equal(file_id_1, file_id_2);
-}
 
-/// Check if a `FileID` is equal to a `FileInfo`
-///
-/// @param file_id Pointer to a `FileID`
-/// @param file_info Pointer to a `FileInfo`
-/// @return `true` if the `FileID` and the `FileInfo` represent te same file.
-bool os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_fileid_equal_fileinfo(file_id, file_info);
-}
 
-/// Return the canonicalized absolute pathname.
-///
-/// @param[in] name Filename to be canonicalized.
-/// @param[out] buf Buffer to store the canonicalized values.
-///                 If it is NULL, memory is allocated. In that case, the caller
-///                 should deallocate this buffer.
-/// @param[in] len  The length of the buffer.
-///
-/// @return pointer to the buf on success, or NULL.
-char *os_realpath(const char *name, char *buf, size_t len)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_os_realpath(name, buf, len);
-}
 
 #ifdef MSWIN
 /// When "fname" is the name of a shortcut (*.lnk) resolve the file it points
