@@ -876,6 +876,7 @@ extern "C" {
     // State and quickfix functions for apply_cursorline_highlight
     fn nvim_get_state() -> c_int;
     fn rs_bt_quickfix(buf: BufHandle) -> bool;
+    #[link_name = "qf_current_entry"]
     fn nvim_qf_current_entry(wp: WinHandle) -> LinenrT;
 
     // Diff highlight accessor

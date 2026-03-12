@@ -109,7 +109,9 @@ extern "C" {
 
     // Xhistory callback
     fn nvim_get_p_chi_addr() -> *mut c_void;
+    #[link_name = "qf_resize_stack"]
     fn nvim_qf_resize_stack(n: c_int);
+    #[link_name = "ll_resize_stack"]
     fn nvim_ll_resize_stack(win: WinHandle, n: c_int);
 
     // Shiftwidth buffer-local value

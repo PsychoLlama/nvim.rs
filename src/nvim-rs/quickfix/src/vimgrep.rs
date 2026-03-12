@@ -660,7 +660,9 @@ extern "C" {
     fn nvim_semsg_nomatch2(spat: *const c_char);
 
     // busy counter
+    #[link_name = "rs_incr_quickfix_busy"]
     fn nvim_incr_quickfix_busy();
+    #[link_name = "rs_decr_quickfix_busy"]
     fn nvim_decr_quickfix_busy();
 }
 

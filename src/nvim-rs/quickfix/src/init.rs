@@ -659,7 +659,7 @@ extern "C" {
 /// # Panics
 ///
 /// Panics if `nvim_get_ql_info()` returns null (indicates uninitialized quickfix stack).
-#[no_mangle]
+#[export_name = "qf_stack_get_bufnr"]
 pub unsafe extern "C" fn rs_qf_stack_get_bufnr() -> std::ffi::c_int {
     let qi = nvim_get_ql_info();
     assert!(!qi.is_null());

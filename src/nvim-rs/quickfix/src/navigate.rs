@@ -2019,7 +2019,9 @@ pub mod jump_machinery {
         fn rs_qf_stack_empty(qi: *const c_void) -> bool;
         fn rs_qf_list_empty(qfl: *const c_void) -> bool;
         fn nvim_emsg_no_errors();
+        #[link_name = "rs_incr_quickfix_busy"]
         fn nvim_incr_quickfix_busy();
+        #[link_name = "rs_decr_quickfix_busy"]
         fn nvim_decr_quickfix_busy();
         fn nvim_qf_get_ptr(qfl: *const c_void) -> QfLineHandle;
         fn nvim_qf_get_index(qfl: *const c_void) -> c_int;

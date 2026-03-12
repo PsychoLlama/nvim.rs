@@ -566,7 +566,7 @@ pub unsafe extern "C" fn rs_qf_resize_stack_base(qi: QfInfoHandleMut, n: c_int) 
 ///
 /// - Must be called from the Neovim main thread.
 /// - `ql_info` must be initialized.
-#[no_mangle]
+#[export_name = "qf_resize_stack"]
 pub unsafe extern "C" fn rs_qf_resize_stack(n: c_int) {
     let qi = nvim_get_ql_info();
     if !qi.is_null() {
@@ -582,7 +582,7 @@ pub unsafe extern "C" fn rs_qf_resize_stack(n: c_int) {
 /// # Safety
 ///
 /// - `wp` must be a valid non-null pointer to a `win_T`.
-#[no_mangle]
+#[export_name = "ll_resize_stack"]
 pub unsafe extern "C" fn rs_ll_resize_stack(wp: WinHandle, n: c_int) {
     if wp.is_null() {
         return;

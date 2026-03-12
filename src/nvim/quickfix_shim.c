@@ -342,8 +342,6 @@ extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
                            linenr_T lnumlast, const char *qf_title, char *enc);
 extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newlist,
                       const char *qf_title, char *enc);
-extern int rs_qf_stack_get_bufnr(void);
-
 extern void rs_ex_vimgrep(void *eap);
 
 // Phase 8: qf_get_properties / qf_set_properties cluster (migrated to Rust)
@@ -351,12 +349,8 @@ extern int rs_get_errorlist(const void *qi_arg, const void *wp, int qf_idx, int 
 extern int rs_qf_get_list_from_lines(const void *what, void *retdict);
 extern int rs_qf_get_properties(const void *wp, void *what, void *retdict);
 extern void rs_get_qf_loc_list(bool is_qf, void *wp, const void *what_arg, void *rettv);
-extern void rs_f_getqflist(const void *argvars, void *rettv, void *fptr);
-extern void rs_f_getloclist(const void *argvars, void *rettv, void *fptr);
 extern int rs_qf_set_properties(void *qi, const void *what, int action, char *title);
 extern void rs_set_qf_ll_list(void *wp, const void *args, void *rettv);
-extern void rs_f_setqflist(const void *argvars, void *rettv, void *fptr);
-extern void rs_f_setloclist(const void *argvars, void *rettv, void *fptr);
 
 // Phase 11: window/title helpers and position update (migrated to Rust)
 extern const void *rs_qf_find_win_for_stack(const void *qi);
@@ -366,8 +360,6 @@ extern void rs_qf_update_win_titlevar(void *qi);
 
 // Phase 11: stack resize and location list sync (migrated to Rust)
 extern void rs_qf_resize_stack_base(void *qi, int n);
-extern void rs_qf_resize_stack(int n);
-extern void rs_ll_resize_stack(void *wp, int n);
 extern void rs_qf_sync_llw_to_win(void *llw);
 extern void rs_qf_sync_win_to_llw(void *pwp);
 
@@ -381,7 +373,6 @@ extern size_t rs_qf_get_size_eap(void *eap);
 extern size_t rs_qf_get_valid_size_eap(void *eap);
 extern size_t rs_qf_get_cur_idx_eap(void *eap);
 extern int rs_qf_get_cur_valid_idx_eap(void *eap);
-extern linenr_T rs_qf_current_entry(void *wp);
 extern int rs_grep_internal(int cmdidx);
 extern void rs_qf_incr_changedtick(void *qfl);
 
@@ -1354,13 +1345,9 @@ void *nvim_win_take_llist_ref(void *wp_void)
 }
 
 // ---- Rust lifecycle forward declarations ----
-extern void rs_incr_quickfix_busy(void);
-extern void rs_decr_quickfix_busy(void);
 extern void rs_locstack_queue_delreq(void *qi);
-extern void rs_check_quickfix_busy(void);
 extern void rs_wipe_qf_buffer(void *qi);
 extern void rs_ll_free_all(void **pqi);
-extern void rs_qf_free_all(void *wp);
 
 // ---- Phase 3 stack-allocation accessors ----
 
@@ -1880,27 +1867,8 @@ void nvim_qf_emsg_efm_e378(void) { emsg(_("E378: 'errorformat' contains no patte
 
 // locstack_queue_delreq deleted: migrated to Rust rs_locstack_queue_delreq in lifecycle.rs.
 
-// qf_stack_get_bufnr body migrated to rs_qf_stack_get_bufnr in Rust (Phase 16).
-int qf_stack_get_bufnr(void) { return rs_qf_stack_get_bufnr(); }
-
-// wipe_qf_buffer, ll_free_all deleted: migrated to Rust in lifecycle.rs.
-// incr_quickfix_busy, decr_quickfix_busy, check_quickfix_busy deleted: migrated to Rust in lifecycle.rs.
-// qf_free_lists deleted: dead static (Phase 16).
-// ll_free_all deleted: dead static (Phase 16).
-
-/// Free all the quickfix/location lists in the stack.
-/// Thin wrapper calling Rust rs_qf_free_all.
-void qf_free_all(win_T *wp) { rs_qf_free_all((void *)wp); }
-
-#if defined(EXITFREE)
-void check_quickfix_busy(void) { rs_check_quickfix_busy(); }
-#endif
-
-// qf_resize_stack deleted: migrated to Rust rs_qf_resize_stack (Phase 11).
-void qf_resize_stack(int n) { rs_qf_resize_stack(n); }
-
-// ll_resize_stack deleted: migrated to Rust rs_ll_resize_stack (Phase 11).
-void ll_resize_stack(win_T *wp, int n) { rs_ll_resize_stack((void *)wp, n); }
+// qf_stack_get_bufnr, qf_free_all, check_quickfix_busy, qf_resize_stack, ll_resize_stack
+// deleted: migrated to Rust with #[export_name] exporting under the C names directly.
 
 // qf_resize_stack_base deleted: migrated to Rust rs_qf_resize_stack_base (Phase 11).
 
@@ -2446,9 +2414,6 @@ void nvim_qf_clear_fnum_cache(void)
 // qf_win_goto deleted: implementation moved to nvim_qf_win_goto_impl (Phase 10 Pass 10 Phase 2).
 
 // Return the number of the current entry (line number in the quickfix window).
-linenr_T qf_current_entry(win_T *wp) { return rs_qf_current_entry(wp); }
-
-linenr_T nvim_qf_current_entry(win_T *wp) { return rs_qf_current_entry(wp); }
 
 // qf_win_pos_update deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
 // is_qf_win deleted: logic inlined into rs_qf_find_win_for_stack / rs_qf_win_pos_update (Phase 11).
@@ -3016,9 +2981,6 @@ void nvim_semsg_nomatch2(const char *spat) { semsg(_(e_nomatch2), spat); }
 /// smsg wrapper for "Cannot open file" (used by rs_vgr_process_files).
 void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
 
-void nvim_incr_quickfix_busy(void) { rs_incr_quickfix_busy(); }
-
-void nvim_decr_quickfix_busy(void) { rs_decr_quickfix_busy(); }
 
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
@@ -3522,10 +3484,5 @@ void free_quickfix(void)
 }
 #endif
 
-void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getloclist(argvars, rettv, NULL); }
-
-void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getqflist(argvars, rettv, NULL); }
-
-void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_setloclist(argvars, rettv, NULL); }
-
-void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_setqflist(argvars, rettv, NULL); }
+// f_getloclist, f_getqflist, f_setloclist, f_setqflist deleted:
+// migrated to Rust with #[export_name] exporting under the C names directly.

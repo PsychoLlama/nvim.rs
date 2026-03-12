@@ -206,7 +206,7 @@ pub unsafe extern "C" fn rs_locstack_queue_delreq(qi: *mut c_void) {
 /// # Panics
 ///
 /// Panics if the internal mutex is poisoned (should never happen in practice).
-#[no_mangle]
+#[export_name = "check_quickfix_busy"]
 pub unsafe extern "C" fn rs_check_quickfix_busy() {
     let busy = *QUICKFIX_BUSY.lock().unwrap();
     if busy != 0 {
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn rs_ll_free_all(pqi: *mut *mut c_void) {
 /// # Safety
 ///
 /// If non-null, `wp` must be a valid `*mut win_T`.
-#[no_mangle]
+#[export_name = "qf_free_all"]
 pub unsafe extern "C" fn rs_qf_free_all(wp: *mut c_void) {
     if wp.is_null() {
         // Global quickfix list: free list contents but not the struct itself

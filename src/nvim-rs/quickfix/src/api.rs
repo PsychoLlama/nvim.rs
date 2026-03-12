@@ -1743,7 +1743,7 @@ pub unsafe extern "C" fn rs_get_qf_loc_list(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid `typval_T *`.
-#[no_mangle]
+#[export_name = "f_getqflist"]
 pub unsafe extern "C" fn rs_f_getqflist(
     argvars: *const c_void,
     rettv: *mut c_void,
@@ -1756,7 +1756,7 @@ pub unsafe extern "C" fn rs_f_getqflist(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid `typval_T *`.
-#[no_mangle]
+#[export_name = "f_getloclist"]
 pub unsafe extern "C" fn rs_f_getloclist(
     argvars: *const c_void,
     rettv: *mut c_void,
@@ -2049,7 +2049,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid `typval_T *`.
-#[no_mangle]
+#[export_name = "f_setqflist"]
 pub unsafe extern "C" fn rs_f_setqflist(
     argvars: *const c_void,
     rettv: *mut c_void,
@@ -2062,7 +2062,7 @@ pub unsafe extern "C" fn rs_f_setqflist(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid `typval_T *`.
-#[no_mangle]
+#[export_name = "f_setloclist"]
 pub unsafe extern "C" fn rs_f_setloclist(
     argvars: *const c_void,
     rettv: *mut c_void,

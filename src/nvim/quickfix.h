@@ -35,4 +35,18 @@ extern void rs_ex_helpgrep(void *eap);
 extern void rs_qf_age(void *eap);
 extern void rs_qf_history(void *eap);
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+int qf_stack_get_bufnr(void);
+void qf_free_all(win_T *wp);
+#if defined(EXITFREE)
+void check_quickfix_busy(void);
+#endif
+void qf_resize_stack(int n);
+void ll_resize_stack(win_T *wp, int n);
+linenr_T qf_current_entry(win_T *wp);
+void f_getqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #include "quickfix_shim.h.generated.h"

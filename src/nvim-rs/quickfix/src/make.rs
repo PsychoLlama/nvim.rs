@@ -134,7 +134,9 @@ extern "C" {
     // List management
     fn nvim_qf_list_changed(qfl: *mut c_void);
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
+    #[link_name = "rs_incr_quickfix_busy"]
     fn nvim_incr_quickfix_busy();
+    #[link_name = "rs_decr_quickfix_busy"]
     fn nvim_decr_quickfix_busy();
 
     // curlist accessors

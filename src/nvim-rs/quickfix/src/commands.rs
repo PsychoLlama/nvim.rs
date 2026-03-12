@@ -32,7 +32,9 @@ extern "C" {
     fn nvim_qf_curwin_buf_is_help() -> bool;
     fn nvim_qf_find_help_win() -> *mut c_void;
     fn nvim_qf_win_get_llist(win: *const c_void) -> *mut c_void;
+    #[link_name = "rs_incr_quickfix_busy"]
     fn nvim_incr_quickfix_busy();
+    #[link_name = "rs_decr_quickfix_busy"]
     fn nvim_decr_quickfix_busy();
     // nvim_hgr_compile_and_search deleted (Phase 3): inlined into Rust below.
     // nvim_hgr_regex_search deleted (Phase 16): inlined into rs_ex_helpgrep below.
@@ -2075,7 +2077,8 @@ extern "C" {
 /// # Safety
 ///
 /// `wp` must be a valid pointer to a C `win_T`.
-#[no_mangle]
+#[export_name = "qf_current_entry"]
+#[must_use]
 pub unsafe extern "C" fn rs_qf_current_entry(wp: WinHandle) -> i32 {
     let mut qi: QfInfoHandleMut = nvim_get_ql_info();
     assert!(!qi.is_null());

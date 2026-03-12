@@ -853,11 +853,8 @@ extern void rs_foldUpdateAll(win_T *win);
 // After options[] is available:
 int nvim_option_hlg_was_set(void) { return (options[kOptHelplang].flags & kOptFlagWasSet) != 0; }
 
-// Xhistory callback wrappers -- delegate to Rust (Phase 11)
-extern void rs_qf_resize_stack(int n);
-extern void rs_ll_resize_stack(void *wp, int n);
-void nvim_qf_resize_stack(int n) { rs_qf_resize_stack(n); }
-void nvim_ll_resize_stack(win_T *win, int n) { rs_ll_resize_stack((void *)win, n); }
+// nvim_qf_resize_stack, nvim_ll_resize_stack deleted:
+// Rust behavior.rs now uses #[link_name] to call qf_resize_stack/ll_resize_stack directly.
 
 // lines_or_columns callback: restore option varp to its old number value
 void nvim_optset_restore_oldval_number(const void *args)
