@@ -100,14 +100,6 @@ extern bool rs_is_dev_fd_file(const char *fname);
 extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
 extern bool rs_need_conversion(const char *fenc);
 extern int rs_get_fio_flags(const char *name);
-// File operations (Phase 3)
-extern char *rs_modname(const char *fname, const char *ext, int prepend_dot);
-// File pattern conversion (Phase 4)
-extern char *rs_file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs,
-                                    int no_bslash);
-extern bool rs_match_file_pat(const char *pattern, void **prog, const char *fname,
-                               const char *sfname, const char *tail, int allow_dirs);
-extern bool rs_match_file_list(const char *list, const char *sfname, const char *ffname);
 extern void rs_check_marks_read(void);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -2219,35 +2211,6 @@ void shorten_fnames(int force)
   redraw_tabline = true;
 }
 
-/// Get new filename ended by given extension.
-///
-/// @param fname        The original filename.
-///                     If NULL, use current directory name and ext to
-///                     compute new filename.
-/// @param ext          The extension to add to the filename.
-///                     4 chars max if prefixed with a dot, 3 otherwise.
-/// @param prepend_dot  If true, prefix ext with a dot.
-///                     Does nothing if ext already starts with a dot, or
-///                     if fname is NULL.
-///
-/// @return [allocated] - A new filename, made up from:
-///                       * fname + ext, if fname not NULL.
-///                       * current dir + ext, if fname is NULL.
-///                       Result is guaranteed to:
-///                       * be ended by <ext>.
-///                       * have a basename with at most BASENAMELEN chars:
-///                         original basename is truncated if necessary.
-///                       * be different than original: basename chars are
-///                         replaced by "_" if necessary. If that can't be done
-///                         because truncated value of original filename was
-///                         made of all underscores, replace first "_" by "v".
-///                     - NULL, if fname is NULL and there was a problem trying
-///                       to get current directory.
-char *modname(const char *fname, const char *ext, bool prepend_dot)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  return rs_modname(fname, ext, (int)prepend_dot);
-}
 
 static bool already_warned = false;
 
@@ -3053,40 +3016,6 @@ char *vim_tempname(void)
   return xstrdup(templ);
 }
 
-/// Tries matching a filename with a "pattern" ("prog" is NULL), or use the
-/// precompiled regprog "prog" ("pattern" is NULL).  That avoids calling
-/// vim_regcomp() often.
-///
-/// Used for autocommands and 'wildignore'.
-///
-/// @param pattern pattern to match with
-/// @param prog pre-compiled regprog or NULL
-/// @param fname full path of the file name
-/// @param sfname short file name or NULL
-/// @param tail tail of the path
-/// @param allow_dirs Allow matching with dir
-///
-/// @return true if there is a match, false otherwise
-bool match_file_pat(char *pattern, regprog_T **prog, char *fname, char *sfname, char *tail,
-                    int allow_dirs)
-{
-  return rs_match_file_pat(pattern, (void **)prog, fname, sfname, tail, allow_dirs);
-}
-
-/// Check if a file matches with a pattern in "list".
-/// "list" is a comma-separated list of patterns, like 'wildignore'.
-/// "sfname" is the short file name or NULL, "ffname" the long file name.
-///
-/// @param list list of patterns to match
-/// @param sfname short file name
-/// @param ffname full file name
-///
-/// @return true if there was a match
-bool match_file_list(char *list, char *sfname, char *ffname)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1, 3)
-{
-  return rs_match_file_list(list, sfname, ffname);
-}
 
 /// Emit E219 error for rs_file_pat_to_reg_pat.
 void nvim_fileio_emsg_missing_open_brace(void)
@@ -3100,17 +3029,6 @@ void nvim_fileio_emsg_missing_close_brace(void)
   emsg(_("E220: Missing }."));
 }
 
-/// Convert the given pattern "pat" which has shell style wildcards in it, into
-/// a regular expression, and return the result in allocated memory.  If there
-/// is a directory path separator to be matched, then true is put in
-/// allow_dirs, otherwise false is put there -- webb.
-///
-/// @return  NULL on failure.
-char *file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs, int no_bslash)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_file_pat_to_reg_pat(pat, pat_end, allow_dirs, no_bslash);
-}
 
 #if defined(EINTR)
 

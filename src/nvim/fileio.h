@@ -54,6 +54,11 @@ enum {
 };
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+char *modname(const char *fname, const char *ext, bool prepend_dot);
+bool match_file_pat(char *pattern, regprog_T **prog, char *fname, char *sfname, char *tail,
+                    int allow_dirs);
+bool match_file_list(char *list, char *sfname, char *ffname);
+char *file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs, int no_bslash);
 bool vim_fgets(char *buf, int size, FILE *fp);
 int get2c(FILE *fd);
 int get3c(FILE *fd);

@@ -73,11 +73,11 @@ const UV_FS_COPYFILE_EXCL: c_int = 1;
 ///
 /// # Safety
 /// `fname` may be null. `ext` must be a valid non-null C string.
-#[no_mangle]
+#[export_name = "modname"]
 pub unsafe extern "C" fn rs_modname(
     fname: *const c_char,
     ext: *const c_char,
-    prepend_dot: c_int,
+    prepend_dot: bool,
 ) -> *mut c_char {
     if ext.is_null() {
         return std::ptr::null_mut();
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn rs_modname(
 
     let ext_bytes = unsafe { std::ffi::CStr::from_ptr(ext).to_bytes() };
     let extlen = ext_bytes.len();
-    let mut prepend_dot = prepend_dot != 0;
+    let mut prepend_dot = prepend_dot;
 
     let retval: *mut c_char;
     let fnamelen: usize;

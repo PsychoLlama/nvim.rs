@@ -70,7 +70,7 @@ const MAXPATHL: usize = 4096;
 /// `pat` must be a valid non-null C string.
 /// `pat_end` may be null (meaning use strlen).
 /// `allow_dirs` may be null.
-#[no_mangle]
+#[export_name = "file_pat_to_reg_pat"]
 pub unsafe extern "C" fn rs_file_pat_to_reg_pat(
     pat: *const c_char,
     pat_end: *const c_char,
@@ -289,7 +289,7 @@ extern "C" {
 ///
 /// # Safety
 /// Pointers must be valid or null per the C contract.
-#[no_mangle]
+#[export_name = "match_file_pat"]
 pub unsafe extern "C" fn rs_match_file_pat(
     pattern: *const c_char,
     prog: *mut *mut c_void,
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn rs_match_file_pat(
 ///
 /// # Safety
 /// `list` and `ffname` must be valid non-null C strings. `sfname` may be null.
-#[no_mangle]
+#[export_name = "match_file_list"]
 pub unsafe extern "C" fn rs_match_file_list(
     list: *const c_char,
     sfname: *const c_char,
