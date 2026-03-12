@@ -418,8 +418,8 @@ int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void
 void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_void)->w_llist; }
 // nvim_check_can_set_curbuf_forceit already defined in tag_shim.c
 
-// Phase 2: rs_qf_mark_adjust and rs_qf_jump_first
-extern bool rs_qf_mark_adjust_entry(const void *buf, const void *wp, int32_t line1, int32_t line2, int32_t amount, int32_t amount_after);
+// Phase 2: rs_qf_jump_first
+// rs_qf_mark_adjust_entry removed: exports as qf_mark_adjust via #[export_name].
 extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
 
 // Phase 3: qf_list_entry display
@@ -2329,10 +2329,7 @@ void qf_list(exarg_T *eap)
   rs_ex_clist(eap);
 }
 
-/// Adjust quickfix line numbers when buffer lines are added or removed.
-bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
-                    linenr_T amount_after)
-{ return rs_qf_mark_adjust_entry(buf, wp, line1, line2, amount, amount_after); }
+// qf_mark_adjust deleted: Rust navigate.rs exports directly via #[export_name = "qf_mark_adjust"].
 
 // Phase 10 Pass 10 Phase 5: C accessors for rs_qf_get_fnum
 

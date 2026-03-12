@@ -49,4 +49,8 @@ void f_setqflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_getloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_setloclist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Forward declarations for Rust-implemented functions (exported via #[export_name])
+bool qf_mark_adjust(buf_T *buf, win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
+                    linenr_T amount_after);
+
 #include "quickfix_shim.h.generated.h"

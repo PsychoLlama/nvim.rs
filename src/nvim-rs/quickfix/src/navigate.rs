@@ -2394,7 +2394,8 @@ extern "C" {
 /// - `buf` must be a valid `buf_T *`
 /// - `wp` may be null (indicates global quickfix list)
 /// - If `wp` is non-null, it must be a valid `win_T *`
-#[no_mangle]
+#[export_name = "qf_mark_adjust"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_qf_mark_adjust_entry(
     buf: BufHandle,
     wp: WinHandleP2,
