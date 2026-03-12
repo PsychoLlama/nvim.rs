@@ -284,7 +284,7 @@ unsafe fn equal_bytes<T>(a: *const T, b: *const T) -> bool {
 ///
 /// `h` must point to a valid `MapHash`. `h->hash` must be NULL or a valid
 /// allocation from `xcalloc`.
-#[no_mangle]
+#[unsafe(export_name = "mh_realloc")]
 pub unsafe extern "C" fn rs_mh_realloc(h: *mut MapHash, n_min_buckets: u32) {
     let h = &mut *h;
     xfree(h.hash.cast());
@@ -305,7 +305,7 @@ pub unsafe extern "C" fn rs_mh_realloc(h: *mut MapHash, n_min_buckets: u32) {
 /// # Safety
 ///
 /// `h` must point to a valid `MapHash`.
-#[no_mangle]
+#[unsafe(export_name = "mh_clear")]
 pub unsafe extern "C" fn rs_mh_clear(h: *mut MapHash) {
     let h = &mut *h;
     if !h.hash.is_null() {
@@ -687,7 +687,7 @@ map_value_impl!(
 
 /// Delete a key:value pair from a string:pointer map and free both key and
 /// value storage. Matches C `pmap_del2`.
-#[no_mangle]
+#[unsafe(export_name = "pmap_del2")]
 pub unsafe extern "C" fn rs_pmap_del2(map: *mut Map_cstr_tptr_t, key: *const c_char) {
     let mut key_alloc: *const c_char = ptr::null();
     let val = rs_map_del_cstr_tptr_t(map, key, &mut key_alloc as *mut *const c_char);

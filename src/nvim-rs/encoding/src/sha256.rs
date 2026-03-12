@@ -269,7 +269,7 @@ pub fn to_hex(hash: &[u8; SHA256_SUM_SIZE]) -> String {
 /// # Safety
 ///
 /// `ctx` must be a valid pointer to a `Sha256Context`.
-#[no_mangle]
+#[unsafe(export_name = "sha256_start")]
 pub unsafe extern "C" fn rs_sha256_start(ctx: *mut Sha256Context) {
     if !ctx.is_null() {
         unsafe { *ctx = Sha256Context::new() };
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn rs_sha256_start(ctx: *mut Sha256Context) {
 ///
 /// `ctx` must be a valid pointer to a `Sha256Context`.
 /// `input` must be a valid pointer to at least `length` bytes.
-#[no_mangle]
+#[unsafe(export_name = "sha256_update")]
 pub unsafe extern "C" fn rs_sha256_update(
     ctx: *mut Sha256Context,
     input: *const u8,
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_sha256_update(
 ///
 /// `ctx` must be a valid pointer to a `Sha256Context`.
 /// `digest` must be a valid pointer to at least 32 bytes.
-#[no_mangle]
+#[unsafe(export_name = "sha256_finish")]
 pub unsafe extern "C" fn rs_sha256_finish(ctx: *mut Sha256Context, digest: *mut u8) {
     if ctx.is_null() || digest.is_null() {
         return;

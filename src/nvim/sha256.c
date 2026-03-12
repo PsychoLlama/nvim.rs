@@ -22,32 +22,8 @@
 
 #include "sha256.c.generated.h"
 
-// Rust SHA-256 context has identical layout to context_sha256_T
-typedef struct {
-  uint32_t total[2];
-  uint32_t state[8];
-  uint8_t buffer[SHA256_BUFFER_SIZE];
-} Sha256Context;
-
-extern void rs_sha256_start(Sha256Context *ctx);
-extern void rs_sha256_update(Sha256Context *ctx, const uint8_t *input, size_t length);
-extern void rs_sha256_finish(Sha256Context *ctx, uint8_t *digest);
-extern const char *rs_sha256_bytes(const uint8_t *buf, size_t buf_len, const uint8_t *salt, size_t salt_len);
-
-void sha256_start(context_sha256_T *ctx)
-{
-  rs_sha256_start((Sha256Context *)ctx);
-}
-
-void sha256_update(context_sha256_T *ctx, const uint8_t *input, size_t length)
-{
-  rs_sha256_update((Sha256Context *)ctx, input, length);
-}
-
-void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE])
-{
-  rs_sha256_finish((Sha256Context *)ctx, digest);
-}
+// sha256_start, sha256_update, sha256_finish are exported directly from Rust
+// (src/nvim-rs/encoding/src/sha256.rs) via #[unsafe(export_name = "...")].
 
 #define SHA_STEP 2
 
@@ -60,6 +36,9 @@ void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE])
 ///
 /// @returns hex digest of "buf[buf_len]" in a static array.
 ///          if "salt" is not NULL also do "salt[salt_len]".
+extern const char *rs_sha256_bytes(const uint8_t *buf, size_t buf_len, const uint8_t *salt,
+                                   size_t salt_len);
+
 const char *sha256_bytes(const uint8_t *restrict buf,  size_t buf_len, const uint8_t *restrict salt,
                          size_t salt_len)
 {

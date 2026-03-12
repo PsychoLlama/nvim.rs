@@ -12,19 +12,7 @@
 #include "nvim/map_defs.h"
 #include "nvim/memory.h"
 
-// Rust implementations
-extern void rs_mh_realloc(MapHash *h, uint32_t n_min_buckets);
-extern void rs_mh_clear(MapHash *h);
-
-void mh_realloc(MapHash *h, uint32_t n_min_buckets)
-{
-  rs_mh_realloc(h, n_min_buckets);
-}
-
-void mh_clear(MapHash *h)
-{
-  rs_mh_clear(h);
-}
+// mh_realloc, mh_clear exported directly from Rust via #[unsafe(export_name = "...")].
 
 #define KEY_NAME(x) x##int
 #include "nvim/map_key_impl.c.h"
@@ -107,12 +95,4 @@ void mh_clear(MapHash *h)
 #undef VAL_NAME
 #undef KEY_NAME
 
-extern void rs_pmap_del2(PMap(cstr_t) *map, const char *key);
-
-/// Deletes a key:value pair from a string:pointer map, and frees the
-/// storage of both key and value.
-///
-void pmap_del2(PMap(cstr_t) *map, const char *key)
-{
-  rs_pmap_del2(map, key);
-}
+// pmap_del2 exported directly from Rust via #[unsafe(export_name = "pmap_del2")].

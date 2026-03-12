@@ -544,7 +544,7 @@ extern "C" {
 /// * `val_s` - String value (NULL for numeric error, empty for no value)
 /// * `val_n` - Numeric value (only used if val_s is NULL)
 /// * `quote_val` - Whether to quote string values
-#[no_mangle]
+#[unsafe(export_name = "api_err_invalid")]
 pub unsafe extern "C" fn rs_api_err_invalid(
     err: *mut Error,
     name: *const c_char,
@@ -655,7 +655,7 @@ pub unsafe extern "C" fn rs_api_err_invalid(
 /// * `name` - Name of the parameter/field
 /// * `expected` - Expected type/value description
 /// * `actual` - Actual type/value description (may be NULL)
-#[no_mangle]
+#[unsafe(export_name = "api_err_exp")]
 pub unsafe extern "C" fn rs_api_err_exp(
     err: *mut Error,
     name: *const c_char,
