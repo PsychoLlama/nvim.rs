@@ -102,23 +102,12 @@ extern bool rs_need_conversion(const char *fenc);
 extern int rs_get_fio_flags(const char *name);
 // File operations (Phase 3)
 extern char *rs_modname(const char *fname, const char *ext, int prepend_dot);
-extern int rs_vim_rename(const char *from, const char *to);
-extern int rs_vim_copyfile(const char *from, const char *to);
 // File pattern conversion (Phase 4)
 extern char *rs_file_pat_to_reg_pat(const char *pat, const char *pat_end, char *allow_dirs,
                                     int no_bslash);
 extern bool rs_match_file_pat(const char *pattern, void **prog, const char *fname,
                                const char *sfname, const char *tail, int allow_dirs);
 extern bool rs_match_file_list(const char *list, const char *sfname, const char *ffname);
-// Binary I/O (Phase 2)
-extern int rs_get2c(FILE *fd);
-extern int rs_get3c(FILE *fd);
-extern int rs_get4c(FILE *fd);
-extern time_t rs_get8ctime(FILE *fd);
-extern char *rs_read_string(FILE *fd, size_t cnt);
-extern bool rs_put_bytes(FILE *fd, uintmax_t number, size_t len);
-extern int rs_put_time(FILE *fd, time_t time_);
-extern bool rs_vim_fgets(char *buf, int size, FILE *fp);
 extern void rs_check_marks_read(void);
 extern void rs_diff_invalidate(buf_T *buf);
 
@@ -2258,50 +2247,6 @@ char *modname(const char *fname, const char *ext, bool prepend_dot)
   FUNC_ATTR_NONNULL_ARG(2)
 {
   return rs_modname(fname, ext, (int)prepend_dot);
-}
-
-/// Like fgets(), but if the file line is too long, it is truncated and the
-/// rest of the line is thrown away.
-///
-/// @param[out] buf buffer to fill
-/// @param size size of the buffer
-/// @param fp file to read from
-///
-/// @return true for EOF or error
-bool vim_fgets(char *buf, int size, FILE *fp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_fgets(buf, size, fp);
-}
-
-int get2c(FILE *fd) { return rs_get2c(fd); }
-int get3c(FILE *fd) { return rs_get3c(fd); }
-int get4c(FILE *fd) { return rs_get4c(fd); }
-time_t get8ctime(FILE *fd) { return (time_t)rs_get8ctime(fd); }
-char *read_string(FILE *fd, size_t cnt) { return rs_read_string(fd, cnt); }
-
-bool put_bytes(FILE *fd, uintmax_t number, size_t len)
-{
-  return rs_put_bytes(fd, (uint64_t)number, len);
-}
-
-int put_time(FILE *fd, time_t time_) { return rs_put_time(fd, (int64_t)time_); }
-
-/// os_rename() only works if both files are on the same file system, this
-/// function will (attempts to?) copy the file across if rename fails.
-///
-/// @return  -1 for failure, 0 for success
-int vim_rename(const char *from, const char *to)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_vim_rename(from, to);
-}
-
-/// Create the new file with same permissions as the original.
-/// Return FAIL for failure, OK for success.
-int vim_copyfile(const char *from, const char *to)
-{
-  return rs_vim_copyfile(from, to);
 }
 
 static bool already_warned = false;

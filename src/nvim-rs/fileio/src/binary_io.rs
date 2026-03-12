@@ -26,7 +26,7 @@ extern "C" {
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "get2c"]
 pub unsafe extern "C" fn rs_get2c(fd: *mut libc::FILE) -> c_int {
     let n = unsafe { libc::fgetc(fd) };
     if n == libc::EOF {
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn rs_get2c(fd: *mut libc::FILE) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "get3c"]
 pub unsafe extern "C" fn rs_get3c(fd: *mut libc::FILE) -> c_int {
     let n = unsafe { libc::fgetc(fd) };
     if n == libc::EOF {
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn rs_get3c(fd: *mut libc::FILE) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "get4c"]
 pub unsafe extern "C" fn rs_get4c(fd: *mut libc::FILE) -> c_int {
     // Use u32 to avoid undefined behavior when the MSB is set (signed overflow).
     let c = unsafe { libc::fgetc(fd) };
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn rs_get4c(fd: *mut libc::FILE) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "get8ctime"]
 pub unsafe extern "C" fn rs_get8ctime(fd: *mut libc::FILE) -> i64 {
     let mut n: i64 = 0;
     for _ in 0..8 {
@@ -113,7 +113,7 @@ pub unsafe extern "C" fn rs_get8ctime(fd: *mut libc::FILE) -> i64 {
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "read_string"]
 pub unsafe extern "C" fn rs_read_string(fd: *mut libc::FILE, cnt: usize) -> *mut c_char {
     // Allocate cnt+1 bytes (xmallocz zero-terminates)
     let ptr = unsafe { xmallocz(cnt) } as *mut u8;
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn rs_read_string(fd: *mut libc::FILE, cnt: usize) -> *mut
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "put_bytes"]
 pub unsafe extern "C" fn rs_put_bytes(fd: *mut libc::FILE, number: u64, len: usize) -> bool {
     if len == 0 {
         return true;
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn rs_put_bytes(fd: *mut libc::FILE, number: u64, len: usi
 ///
 /// # Safety
 /// `fd` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "put_time"]
 pub unsafe extern "C" fn rs_put_time(fd: *mut libc::FILE, time_: i64) -> c_int {
     let mut buf = [0u8; 8];
     let t = time_ as u64;
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn rs_put_time(fd: *mut libc::FILE, time_: i64) -> c_int {
 /// # Safety
 /// `buf` must point to a writable buffer of at least `size` bytes.
 /// `fp` must be a valid, open FILE pointer.
-#[no_mangle]
+#[export_name = "vim_fgets"]
 pub unsafe extern "C" fn rs_vim_fgets(buf: *mut c_char, size: c_int, fp: *mut libc::FILE) -> bool {
     assert!(size > 0);
 

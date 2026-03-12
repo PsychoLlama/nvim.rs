@@ -243,7 +243,7 @@ unsafe fn rename_with_tmp_impl(from: *const c_char, to: *const c_char) -> c_int 
 ///
 /// # Safety
 /// `from` and `to` must be valid non-null C strings.
-#[no_mangle]
+#[export_name = "vim_rename"]
 pub unsafe extern "C" fn rs_vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     if from.is_null() || to.is_null() {
         return -1;
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn rs_vim_rename(from: *const c_char, to: *const c_char) -
 ///
 /// # Safety
 /// `from` and `to` must be valid C strings (may be null, will return FAIL).
-#[no_mangle]
+#[export_name = "vim_copyfile"]
 pub unsafe extern "C" fn rs_vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
     if from.is_null() || to.is_null() {
         return FAIL;

@@ -53,4 +53,16 @@ enum {
   ICONV_MULT = 8,
 };
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+bool vim_fgets(char *buf, int size, FILE *fp);
+int get2c(FILE *fd);
+int get3c(FILE *fd);
+int get4c(FILE *fd);
+time_t get8ctime(FILE *fd);
+char *read_string(FILE *fd, size_t cnt);
+bool put_bytes(FILE *fd, uintmax_t number, size_t len);
+int put_time(FILE *fd, time_t time_);
+int vim_rename(const char *from, const char *to);
+int vim_copyfile(const char *from, const char *to);
+
 #include "fileio.h.generated.h"
