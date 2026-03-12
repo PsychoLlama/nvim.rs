@@ -28,9 +28,11 @@ extern "C" {
     fn rs_ctrl_x_mode_thesaurus() -> c_int;
     fn rs_magic_isset() -> c_int;
 
-    // Compound accessors for Phase 4 (pass 4)
-    fn nvim_compl_source_start_timer_impl(source_idx: c_int);
-    fn nvim_advance_cpt_sources_index_safe_impl() -> c_int;
+    // Accessors for Phase 4 (pass 4) inline implementations
+    fn nvim_get_compl_autocomplete() -> c_int;
+    fn nvim_p_cto() -> c_int;
+    fn nvim_set_cpt_sources_start_tv(idx: c_int, ts: u64);
+    fn nvim_semsg_list_index_out_of_range(idx: c_int);
 }
 
 // CTRL-X mode constants
@@ -241,7 +243,10 @@ pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
 /// Requires valid cpt_sources_array state with source_idx in bounds.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
-    nvim_compl_source_start_timer_impl(source_idx);
+    if nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
+        nvim_set_cpt_sources_start_tv(source_idx, os_hrtime());
+        nvim_set_compl_time_slice_expired(0);
+    }
 }
 
 /// Safely advance cpt_sources_index by one.
@@ -254,7 +259,15 @@ pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
 /// Requires valid cpt_sources_array state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_advance_cpt_sources_index_safe() -> c_int {
-    nvim_advance_cpt_sources_index_safe_impl()
+    let idx = nvim_get_cpt_sources_index();
+    let count = nvim_get_cpt_sources_count();
+    if idx >= 0 && idx < count - 1 {
+        nvim_set_cpt_sources_index(idx + 1);
+        1 // OK
+    } else {
+        nvim_semsg_list_index_out_of_range(idx);
+        0 // FAIL
+    }
 }
 
 // =============================================================================
@@ -283,6 +296,7 @@ extern "C" {
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
     fn nvim_get_cpt_sources_index() -> c_int;
     fn nvim_get_cpt_sources_count() -> c_int;
+    fn nvim_set_cpt_sources_index(val: c_int);
 
     // Option parsing helpers
     fn nvim_copy_option_part_ffi(

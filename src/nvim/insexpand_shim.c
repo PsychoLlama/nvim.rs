@@ -1291,6 +1291,7 @@ int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_numb
 void nvim_compl_match_set_cp_number(void *m, int num) { if (m) ((compl_T *)m)->cp_number = num; }
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
+void nvim_set_cpt_sources_start_tv(int idx, uint64_t ts) { cpt_sources_array[idx].compl_start_tv = ts; }
 uint64_t nvim_get_compl_timeout_ms(void) { return compl_timeout_ms; }
 void nvim_set_compl_time_slice_expired(int val) { compl_time_slice_expired = val != 0; }
 void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
@@ -2366,6 +2367,7 @@ void nvim_compl_curr_rewind_to_head(void) {
 
 // --- timeout / cpt_sources_index / misc ---
 void nvim_set_cpt_sources_index(int val) { cpt_sources_index = val; }
+void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
 int nvim_get_compl_num_bests(void) { return compl_num_bests; }
 void nvim_set_compl_timeout_ms(uint64_t val) { compl_timeout_ms = val; }
 int nvim_get_compl_pattern_is_null(void) { return compl_pattern.data == NULL ? 1 : 0; }
@@ -2861,23 +2863,8 @@ void nvim_get_next_tag_completion_impl(void)
 // Compound accessors for Phase 4 (pass 4): compl_source_start_timer and
 // advance_cpt_sources_index_safe
 
-void nvim_compl_source_start_timer_impl(int source_idx)
-{
-  if (compl_autocomplete || p_cto > 0) {
-    cpt_sources_array[source_idx].compl_start_tv = os_hrtime();
-    compl_time_slice_expired = false;
-  }
-}
-
-int nvim_advance_cpt_sources_index_safe_impl(void)
-{
-  if (cpt_sources_index >= 0 && cpt_sources_index < cpt_sources_count - 1) {
-    cpt_sources_index++;
-    return 1;  // OK
-  }
-  semsg(_(e_list_index_out_of_range_nr), cpt_sources_index);
-  return 0;  // FAIL
-}
+// nvim_compl_source_start_timer_impl: migrated to Rust rs_compl_source_start_timer (Phase 4)
+// nvim_advance_cpt_sources_index_safe_impl: migrated to Rust rs_advance_cpt_sources_index_safe (Phase 4)
 
 // Accessors for Phase 3 (pass 12): register completion migration
 int nvim_get_num_registers(void) { return NUM_REGISTERS; }
