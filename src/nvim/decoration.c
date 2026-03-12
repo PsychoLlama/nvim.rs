@@ -79,7 +79,6 @@ extern void rs_decor_check_to_be_deleted(void);
 
 // Rust implementations for Phase 3
 extern bool rs_decor_redraw_reset(void *wp, void *state);
-extern void rs_decor_state_pack(void *state);
 extern void rs_decor_redraw_line(void *wp, int row, void *state);
 extern bool rs_decor_has_more_decorations(void *state, int row);
 
@@ -400,11 +399,6 @@ bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
   }
 
   return true;  // TODO(bfredl): check if available in the region
-}
-
-static void decor_state_pack(DecorState *state)
-{
-  rs_decor_state_pack(state);
 }
 
 void decor_redraw_line(win_T *wp, int row, DecorState *state)
