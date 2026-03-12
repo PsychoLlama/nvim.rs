@@ -136,6 +136,7 @@ extern int rs_option_scope_idx(int opt_idx, int scope);
 extern void rs_alloc_options_default(void);
 extern void rs_change_option_default(int opt_idx, OptVal value);
 extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
+extern void rs_set_option_default(int opt_idx, int opt_flags);
 
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
@@ -749,7 +750,7 @@ void nvim_optset_restore_oldval_number(const void *args)
 {
   const optset_T *a = (const optset_T *)args;
   OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
-  set_option_varp(a->os_idx, a->os_varp, oldval, false);
+  rs_set_option_varp(a->os_idx, a->os_varp, oldval, 0);
 }
 
 // =============================================================================
@@ -834,7 +835,7 @@ int64_t nvim_get_no_local_undolevel(void) { return NO_LOCAL_UNDOLEVEL; }
 // Returns a static C string naming the OptValType: "nil", "boolean", "number", "string".
 const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
 // Allocates and returns a string representation of an OptVal (caller must xfree).
-char *nvim_optval_to_cstr_alloc(OptVal o) { return optval_to_cstr(o); }
+char *nvim_optval_to_cstr_alloc(OptVal o) { return rs_optval_to_cstr(o); }
 // Returns translated "Cannot unset global option value" string pointer.
 const char *nvim_errmsg_no_unset_global(void) { return _("Cannot unset global option value"); }
 
@@ -1108,7 +1109,7 @@ void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 // change_option_default wrapper (for reset_modifiable)
-void nvim_change_option_default_bool(OptIndex opt_idx, int value) { change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
+void nvim_change_option_default_bool(OptIndex opt_idx, int value) { rs_change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
 // TTY and key accessors
 int nvim_option_get_t_colors(void) { return t_colors; }
 const char *nvim_option_get_p_term(void) { return p_term; }
@@ -1191,11 +1192,11 @@ OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_v
 // Phase 1 init function accessors: expose static helpers to Rust
 void nvim_call_set_string_default(int opt_idx, char *val, bool allocated)
 {
-  set_string_default((OptIndex)opt_idx, val, allocated);
+  rs_set_string_default_opt((OptIndex)opt_idx, val, allocated);
 }
 void nvim_call_change_option_default(int opt_idx, OptVal value)
 {
-  change_option_default((OptIndex)opt_idx, value);
+  rs_change_option_default((OptIndex)opt_idx, value);
 }
 char *nvim_call_enc_locale(void) { return enc_locale(); }
 void nvim_set_fenc_default(char *val) { fenc_default = val; }
@@ -1210,7 +1211,7 @@ int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-void nvim_call_set_option_default(int opt_idx, int opt_flags) { set_option_default((OptIndex)opt_idx, opt_flags); }
+void nvim_call_set_option_default(int opt_idx, int opt_flags) { rs_set_option_default(opt_idx, opt_flags); }
 void nvim_call_comp_col(void) { comp_col(); }
 void nvim_call_parse_shape_opt(void) { parse_shape_opt(SHAPE_CURSOR); }
 const char *nvim_call_invocation_path_tail(const char *p_sh, size_t *lenp) { return invocation_path_tail(p_sh, lenp); }
@@ -1365,59 +1366,14 @@ extern void rs_set_init_default_backupskip(void);
 
 extern void rs_set_init_fenc_default(void);
 
-/// Initialize the encoding used for "default" in 'fileencodings'.
-static void set_init_fenc_default(void)
-{
-  rs_set_init_fenc_default();
-}
 
 
-/// Allocate the default values for all options by copying them from the stack.
-/// This ensures that we don't need to always check if the option default is allocated or not.
-static void alloc_options_default(void)
-{
-  rs_alloc_options_default();
-}
-
-/// Change the default value for an option.
-///
-/// @param  opt_idx  Option index in options[] table.
-/// @param  value    New default value. Must be allocated.
-static void change_option_default(const OptIndex opt_idx, OptVal value)
-{
-  rs_change_option_default(opt_idx, value);
-}
 
 extern const char *rs_option_expand(int opt_idx, const char *val);
-extern void rs_set_option_default(int opt_idx, int opt_flags);
 extern void rs_set_options_default(int opt_flags);
 
-/// Set an option to its default value.
-/// This does not take care of side effects!
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// Body migrated to Rust (Phase 12 Pass 3).
-static void set_option_default(const OptIndex opt_idx, int opt_flags)
-{
-  rs_set_option_default((int)opt_idx, opt_flags);
-}
 
 
-/// Set the Vi-default value of a string option.
-/// Used for 'sh', 'backupskip' and 'term'.
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  val        The value of the option.
-/// @param  allocated  If true, do not copy default as it was already allocated.
-///
-/// TODO(famiu): Remove this.
-static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(opt_idx != kOptInvalid);
-  rs_set_string_default_opt(opt_idx, val, allocated);
-}
 
 
 /// 'title' and 'icon' only default to true if they have not been set or reset
@@ -1489,19 +1445,10 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 
 /// Expand environment variables for some string options.
 /// These string options cannot be indirect!
-/// If "val" is NULL expand the current value of the option.
-/// Return pointer to NameBuff, or NULL when not expanded.
-/// Body migrated to Rust (Phase 12 Pass 3).
-static char *option_expand(OptIndex opt_idx, const char *val)
-{
-  return (char *)rs_option_expand((int)opt_idx, val);
-}
-
-/// Non-static wrapper for option_expand(), for Rust FFI.
 /// Returns expanded string (in static NameBuff), or NULL if no expansion.
 char *nvim_option_expand(OptIndex opt_idx, const char *val)
 {
-  return option_expand(opt_idx, val);
+  return (char *)rs_option_expand((int)opt_idx, val);
 }
 
 /// Get the address of p_kp (keywordprg global), as void*.
@@ -1545,19 +1492,6 @@ const char *did_set_buflocal_undolevels(buf_T *buf, OptInt value, OptInt old_val
 }
 
 
-extern void rs_do_syntax_autocmd(buf_T *buf, int value_changed);
-extern void rs_do_spelllang_source(win_T *win);
-
-// When 'syntax' is set, load the syntax of that name
-static void do_syntax_autocmd(buf_T *buf, bool value_changed)
-{
-  rs_do_syntax_autocmd(buf, value_changed ? 1 : 0);
-}
-
-static void do_spelllang_source(win_T *win)
-{
-  rs_do_spelllang_source(win);
-}
 
 
 void check_redraw(uint32_t flags)
@@ -1583,11 +1517,6 @@ OptIndex nvim_find_option_len_hash(const char *name, size_t len)
   return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid;
 }
 
-/// Get type of option.
-static OptValType option_get_type(const OptIndex opt_idx)
-{
-  return (OptValType)rs_option_get_type(opt_idx);
-}
 
 /// Create OptVal from var pointer.
 ///
@@ -1607,17 +1536,7 @@ OptVal optval_from_varp(OptIndex opt_idx, void *varp)
 /// @param[out]  varp         Pointer to option variable.
 /// @param[in]   value        New option value.
 /// @param       free_oldval  Free old value.
-static void set_option_varp(OptIndex opt_idx, void *varp, OptVal value, bool free_oldval)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  rs_set_option_varp(opt_idx, varp, value, free_oldval ? 1 : 0);
-}
 
-/// Return C-string representation of OptVal. Caller must free the returned C-string.
-static char *optval_to_cstr(OptVal o)
-{
-  return rs_optval_to_cstr(o);
-}
 
 /// Convert an OptVal to an API Object.
 Object optval_as_object(OptVal o)
@@ -1828,17 +1747,6 @@ void set_option_value_for(const char *name, OptIndex opt_idx, OptVal value, cons
   }
 }
 
-/// if 'all' == false: show changed options
-/// if 'all' == true: show all normal options
-///
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-extern void rs_showoptions(int all, int opt_flags);
-static void showoptions(bool all, int opt_flags)
-{
-  rs_showoptions(all ? 1 : 0, opt_flags);
-}
-
-
 /// Send update to UIs with values of UI relevant options
 void ui_refresh_options(void)
 {
@@ -1856,15 +1764,6 @@ void ui_refresh_options(void)
   }
 }
 
-/// showoneopt: show the value of one option
-/// must not be called with a hidden option!
-///
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-extern void rs_showoneopt(int opt_idx, int opt_flags);
-static void showoneopt(vimoption_T *opt, int opt_flags)
-{
-  rs_showoneopt((int)get_opt_idx(opt), opt_flags);
-}
 
 /// Write modified options as ":set" commands to a file.
 ///
@@ -1935,18 +1834,6 @@ static char *copy_option_val(const char *val)
 extern void rs_check_winopt(winopt_T *wop);
 
 
-/// Check string options in a window for a NULL value.
-static void check_win_options(win_T *win)
-{
-  rs_check_winopt(&win->w_onebuf_opt);
-  rs_check_winopt(&win->w_allbuf_opt);
-}
-
-/// Check for NULL pointers in a winopt_T and replace them with empty_string_option.
-static void check_winopt(winopt_T *wop)
-{
-  rs_check_winopt(wop);
-}
 
 
 static OptIndex expand_option_idx = kOptInvalid;
@@ -2035,15 +1922,9 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
 /// Escape an option value that can be used on the command-line with :set.
 /// Caller needs to free the returned string, unless NULL is returned.
 extern char *rs_escape_option_str_cmdline(const char *var);
-static char *escape_option_str_cmdline(char *var)
-{
-  return rs_escape_option_str_cmdline(var);
-}
-
-/// Non-static wrapper for escape_option_str_cmdline (for Rust FFI).
 char *nvim_escape_option_str_cmdline(char *var)
 {
-  return escape_option_str_cmdline(var);
+  return rs_escape_option_str_cmdline(var);
 }
 
 /// curbuf/curwin accessors for option expansion Rust code.
@@ -2057,13 +1938,6 @@ void nvim_opt_set_curwin(win_T *win) { curwin = win; }
 /// NameBuff[].  Must not be called with a hidden option!
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-///
-/// TODO(famiu): Replace this with optval_to_cstr() if possible.
-static void option_value2string(vimoption_T *opt, int opt_flags)
-{
-  rs_option_value2string((int)get_opt_idx(opt), opt_flags);
-}
-
 
 /// Set the callback function value for an option that accepts a function name,
 /// lambda, et al. (e.g. 'operatorfunc', 'tagfunc', etc.)
@@ -2204,7 +2078,7 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
   PUT_C(dict, "last_set_linenr", INTEGER_OBJ(script_ctx.sc_lnum));
   PUT_C(dict, "last_set_chan", INTEGER_OBJ((int64_t)script_ctx.sc_chan));
 
-  PUT_C(dict, "type", CSTR_AS_OBJ(optval_type_get_name(option_get_type(get_opt_idx(opt)))));
+  PUT_C(dict, "type", CSTR_AS_OBJ(optval_type_get_name((OptValType)rs_option_get_type(get_opt_idx(opt)))));
   PUT_C(dict, "default", optval_as_object(opt->def_val));
   PUT_C(dict, "allows_duplicates", BOOLEAN_OBJ(!(opt->flags & kOptFlagNoDup)));
 
@@ -2330,9 +2204,9 @@ int nvim_option_invoke_expand_cb(OptIndex opt_idx, int opt_flags,
   };
   args.oe_include_orig_val = !args.oe_append && (*args.oe_set_arg == NUL);
 
-  option_value2string(&options[opt_idx], opt_flags);
+  rs_option_value2string(opt_idx, opt_flags);
   char *var = NameBuff;
-  char *buf = escape_option_str_cmdline(var);
+  char *buf = rs_escape_option_str_cmdline(var);
   args.oe_opt_value = buf;
 
   int result = options[opt_idx].opt_expand_cb(&args, num_matches, matches);
@@ -2852,10 +2726,14 @@ void nvim_call_set_termbidi_true(void)
 }
 
 /// alloc_options_default() wrapper.
-void nvim_call_alloc_options_default(void) { alloc_options_default(); }
+void nvim_call_alloc_options_default(void) { rs_alloc_options_default(); }
 
 /// check_win_options(curwin) wrapper.
-void nvim_call_check_win_options(void) { check_win_options(curwin); }
+void nvim_call_check_win_options(void)
+{
+  rs_check_winopt(&curwin->w_onebuf_opt);
+  rs_check_winopt(&curwin->w_allbuf_opt);
+}
 
 /// set_helplang_default(get_mess_lang()) wrapper.
 void nvim_call_set_helplang_default_from_mess_lang(void)
@@ -2864,7 +2742,7 @@ void nvim_call_set_helplang_default_from_mess_lang(void)
 }
 
 /// set_init_fenc_default() wrapper.
-void nvim_call_set_init_fenc_default(void) { set_init_fenc_default(); }
+void nvim_call_set_init_fenc_default(void) { rs_set_init_fenc_default(); }
 
 /// rs_last_status(0) -- already a Rust fn; call it here for the shim.
 void nvim_call_rs_last_status_0(void) { rs_last_status(0); }
@@ -2893,7 +2771,7 @@ char *nvim_call_runtimepath_default(int clean_arg) { return runtimepath_default(
 /// set_string_default(opt_idx, val, allocated) with integer opt_idx and bool allocated.
 void nvim_call_set_string_default_idx(int opt_idx, char *val, int allocated)
 {
-  set_string_default((OptIndex)opt_idx, val, allocated != 0);
+  rs_set_string_default_opt((OptIndex)opt_idx, val, allocated != 0);
 }
 
 /// set_init_expand_env() implementation called from Rust.
@@ -2909,11 +2787,11 @@ void nvim_call_set_init_expand_env(void)
     if ((opt->flags & kOptFlagGettext) && opt->var != NULL) {
       p = _(*(char **)opt->var);
     } else {
-      p = option_expand(opt_idx, NULL);
+      p = rs_option_expand((int)opt_idx, NULL);
     }
     if (p != NULL) {
-      set_option_varp(opt_idx, opt->var, CSTR_TO_OPTVAL(p), true);
-      change_option_default(opt_idx, CSTR_TO_OPTVAL(p));
+      rs_set_option_varp(opt_idx, opt->var, CSTR_TO_OPTVAL(p), 1);
+      rs_change_option_default(opt_idx, CSTR_TO_OPTVAL(p));
     }
   }
 }
