@@ -213,6 +213,9 @@ extern void f_remove(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_reverse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_extend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_extendnew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_add(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_insert(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_count(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 // Rust window VimL function declarations (exported from nvim-window crate via #[export_name])
 extern void f_getwinpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

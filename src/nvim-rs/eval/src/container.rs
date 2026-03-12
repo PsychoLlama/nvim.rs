@@ -1,8 +1,8 @@
 //! List/Dict/Blob container VimL built-in function implementations.
 //!
 //! Phase 3: f_remove, f_reverse
-//! Phase 4: f_extend, f_extendnew, f_insert
-//! Phase 5: f_filter, f_map, f_mapnew, f_foreach
+//! Phase 4: f_extend, f_extendnew
+//! Phase 5: f_add, f_insert, f_count (count_string, count_list, count_dict)
 
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
@@ -48,6 +48,21 @@ const TV_TRANSLATE: usize = usize::MAX;
 
 /// VarLockStatus: VAR_UNLOCKED = 0
 const VAR_UNLOCKED: c_int = 0;
+
+// =============================================================================
+// Structs (matching C layout)
+// =============================================================================
+
+/// garray_T -- must match C layout exactly.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct GArray {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
 
 // =============================================================================
 // C extern declarations
@@ -123,6 +138,34 @@ extern "C" {
     static e_invarg2: [c_char; 0];
     static e_listdictarg: [c_char; 0];
     static e_list_index_out_of_range_nr: [c_char; 0];
+    static e_invarg: [c_char; 0];
+    static e_listblobarg: [c_char; 0];
+    static e_invalblob: [c_char; 0];
+    static e_string_required: [c_char; 0];
+}
+
+extern "C" {
+    // Phase 5: f_add, f_insert, f_count helpers
+    fn blob_get_ga(b: BlobPtr) -> *mut GArray;
+    fn ga_grow(ga: *mut GArray, n: c_int);
+    fn ga_append(ga: *mut GArray, c: u8);
+    fn ga_init(ga: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_concat(ga: *mut GArray, s: *const c_char);
+    fn tv_get_string(tv: TypvalPtr) -> *const c_char;
+    fn strstr(haystack: *const c_char, needle: *const c_char) -> *const c_char;
+    fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
+    fn strlen(s: *const c_char) -> usize;
+
+    // Dict iteration (tag_shim.c): hashitem_T iterator over dict_T.
+    fn nvim_tag_dict_iter_start(d: *const c_void) -> *mut c_void;
+    fn nvim_tag_dict_iter_next(d: *const c_void, hi: *const c_void) -> *mut c_void;
+
+    // dictitem_T helpers (eval_shim.c, eval/vars.c)
+    fn nvim_hi2dictitem(hi: *mut c_void) -> *mut c_void;
+    fn nvim_di_get_tv(di: *mut c_void) -> TypvalPtr;
+
+    // typval number setter (eval/typval.c)
+    fn nvim_tv_set_number(tv: TypvalPtr, n: VarNumber);
 }
 
 // =============================================================================
@@ -415,5 +458,305 @@ pub unsafe extern "C" fn rs_f_extend(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
 pub unsafe extern "C" fn rs_f_extendnew(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         extend_impl(argvars, rettv, c"extendnew() argument".as_ptr(), true);
+    }
+}
+
+// =============================================================================
+// Phase 5 implementations
+// =============================================================================
+
+/// "add(list, item)" / "add(blob, nr)" function.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_add"]
+pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    unsafe {
+        // Default return value: 1 (failed)
+        nvim_tv_set_number(rettv, 1);
+
+        let tv0 = argvar_at(argvars, 0);
+        let t0 = nvim_eval_tv_get_type(tv0);
+
+        if t0 == VAR_LIST {
+            let l = nvim_eval_tv_get_list(tv0);
+            if !value_check_lock(
+                nvim_list_get_lock(l),
+                c"add() argument".as_ptr(),
+                TV_TRANSLATE,
+            ) {
+                let tv1 = argvar_at(argvars, 1);
+                tv_list_append_tv(l, tv1);
+                tv_copy(tv0, rettv);
+            }
+        } else if t0 == VAR_BLOB {
+            let b = nvim_tv_get_blob(tv0);
+            if !b.is_null()
+                && !value_check_lock(
+                    nvim_blob_get_bv_lock(b),
+                    c"add() argument".as_ptr(),
+                    TV_TRANSLATE,
+                )
+            {
+                let tv1 = argvar_at(argvars, 1);
+                let mut error = false;
+                let n = tv_get_number_chk(tv1, &raw mut error);
+                if !error {
+                    ga_append(blob_get_ga(b), n as u8);
+                    tv_copy(tv0, rettv);
+                }
+            }
+        } else {
+            emsg(e_listblobreq.as_ptr());
+        }
+    }
+}
+
+/// "insert(list, item [, idx])" / "insert(blob, nr [, idx])" function.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_insert"]
+pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    unsafe {
+        let tv0 = argvar_at(argvars, 0);
+        let t0 = nvim_eval_tv_get_type(tv0);
+        let tv1 = argvar_at(argvars, 1);
+        let tv2 = argvar_at(argvars, 2);
+
+        if t0 == VAR_BLOB {
+            let b = nvim_tv_get_blob(tv0);
+            if b.is_null()
+                || value_check_lock(
+                    nvim_blob_get_bv_lock(b),
+                    c"insert() argument".as_ptr(),
+                    TV_TRANSLATE,
+                )
+            {
+                return;
+            }
+
+            let mut before: c_int = 0;
+            let len = nvim_blob_len(b);
+
+            if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+                let mut error = false;
+                before = tv_get_number_chk(tv2, &raw mut error) as c_int;
+                if error {
+                    return;
+                }
+                if before < 0 || before > len {
+                    semsg(e_invarg2.as_ptr(), tv_get_string(tv2));
+                    return;
+                }
+            }
+
+            let mut error = false;
+            let val = tv_get_number_chk(tv1, &raw mut error) as c_int;
+            if error {
+                return;
+            }
+            if !(0..=255).contains(&val) {
+                semsg(e_invarg2.as_ptr(), tv_get_string(tv1));
+                return;
+            }
+
+            let ga = blob_get_ga(b);
+            ga_grow(ga, 1);
+            let p = (*ga).ga_data.cast::<u8>();
+            memmove(
+                p.add(before as usize + 1).cast::<c_void>(),
+                p.add(before as usize).cast_const().cast::<c_void>(),
+                (len - before) as usize,
+            );
+            *p.add(before as usize) = val as u8;
+            (*ga).ga_len += 1;
+
+            tv_copy(tv0, rettv);
+        } else if t0 != VAR_LIST {
+            semsg(e_listblobarg.as_ptr(), c"insert()".as_ptr());
+        } else {
+            let l = nvim_eval_tv_get_list(tv0);
+            if value_check_lock(
+                nvim_list_get_lock(l),
+                c"insert() argument".as_ptr(),
+                TV_TRANSLATE,
+            ) {
+                return;
+            }
+
+            let mut before: VarNumber = 0;
+            if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+                let mut error = false;
+                before = tv_get_number_chk(tv2, &raw mut error);
+                if error {
+                    return;
+                }
+            }
+
+            let item: ListItemPtr = if before == nvim_list_get_len(l) as VarNumber {
+                std::ptr::null_mut()
+            } else {
+                let item = tv_list_find(l, before as c_int);
+                if item.is_null() {
+                    semsg(e_list_index_out_of_range_nr.as_ptr(), before);
+                    return;
+                }
+                item
+            };
+
+            tv_list_insert_tv(l, tv1, item);
+            tv_copy(tv0, rettv);
+        }
+    }
+}
+
+/// Count occurrences of `needle` in string `haystack`.
+///
+/// # Safety
+/// Pointers must be valid null-terminated C strings or NULL.
+unsafe fn count_string_impl(haystack: *const c_char, needle: *const c_char, ic: bool) -> VarNumber {
+    unsafe {
+        if haystack.is_null() || needle.is_null() || *needle == 0 {
+            return 0;
+        }
+        let needlelen = strlen(needle);
+        let mut n: VarNumber = 0;
+        let mut p = haystack;
+        if ic {
+            while *p != 0 {
+                if mb_strnicmp(p, needle, needlelen) == 0 {
+                    n += 1;
+                    p = p.add(needlelen);
+                } else {
+                    // MB_PTR_ADV: advance by one multibyte char
+                    p = p.add(utfc_ptr2len(p) as usize);
+                }
+            }
+        } else {
+            loop {
+                let next = strstr(p, needle);
+                if next.is_null() {
+                    break;
+                }
+                n += 1;
+                p = next.add(needlelen);
+            }
+        }
+        n
+    }
+}
+
+/// Count occurrences of `needle` in list `l` starting at index `idx`.
+///
+/// # Safety
+/// `l` and `needle` must be valid pointers.
+unsafe fn count_list_impl(l: ListPtr, needle: TypvalPtr, idx: VarNumber, ic: bool) -> VarNumber {
+    unsafe {
+        if nvim_list_get_len(l) == 0 {
+            return 0;
+        }
+        let li = tv_list_find(l, idx as c_int);
+        if li.is_null() {
+            semsg(e_list_index_out_of_range_nr.as_ptr(), idx);
+            return 0;
+        }
+        let mut n: VarNumber = 0;
+        let mut cur = li;
+        while !cur.is_null() {
+            let item_tv = nvim_list_item_tv(cur);
+            if tv_equal(item_tv, needle, ic) {
+                n += 1;
+            }
+            cur = nvim_list_item_next(l, cur);
+        }
+        n
+    }
+}
+
+/// Count occurrences of `needle` in dict `d`.
+///
+/// # Safety
+/// `d` and `needle` must be valid pointers (or `d` may be NULL).
+unsafe fn count_dict_impl(d: *mut c_void, needle: TypvalPtr, ic: bool) -> VarNumber {
+    unsafe {
+        if d.is_null() {
+            return 0;
+        }
+        let mut n: VarNumber = 0;
+        let mut hi = nvim_tag_dict_iter_start(d);
+        while !hi.is_null() {
+            let di = nvim_hi2dictitem(hi);
+            if !di.is_null() {
+                let item_tv = nvim_di_get_tv(di);
+                if tv_equal(item_tv, needle, ic) {
+                    n += 1;
+                }
+            }
+            hi = nvim_tag_dict_iter_next(d, hi);
+        }
+        n
+    }
+}
+
+/// "count()" function -- count occurrences of item in list/string/dict.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_count"]
+pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    unsafe {
+        let mut n: VarNumber = 0;
+        let mut ic: c_int = 0;
+        let mut error = false;
+
+        let tv0 = argvar_at(argvars, 0);
+        let tv1 = argvar_at(argvars, 1);
+        let tv2 = argvar_at(argvars, 2);
+        let tv3 = argvar_at(argvars, 3);
+
+        if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+            ic = tv_get_number_chk(tv2, &raw mut error) as c_int;
+        }
+
+        let t0 = nvim_eval_tv_get_type(tv0);
+
+        if !error && t0 == 2 {
+            // VAR_STRING = 2
+            let haystack = nvim_tv_get_vstring(tv0);
+            let needle = tv_get_string_chk(tv1);
+            n = count_string_impl(haystack.cast_const(), needle, ic != 0);
+        } else if !error && t0 == VAR_LIST {
+            let idx: VarNumber = if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN
+                && nvim_eval_tv_get_type(tv3) != VAR_UNKNOWN
+            {
+                tv_get_number_chk(tv3, &raw mut error)
+            } else {
+                0
+            };
+            if !error {
+                let l = nvim_eval_tv_get_list(tv0);
+                n = count_list_impl(l, tv1, idx, ic != 0);
+            }
+        } else if !error && t0 == VAR_DICT {
+            let d = nvim_eval_tv_get_dict(tv0);
+            if !d.is_null() {
+                if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN
+                    && nvim_eval_tv_get_type(tv3) != VAR_UNKNOWN
+                {
+                    emsg(e_invarg.as_ptr());
+                } else {
+                    n = count_dict_impl(d, tv1, ic != 0);
+                }
+            }
+        } else if !error {
+            semsg(
+                c"E706: Argument of %s must be a List, String or Dictionary".as_ptr(),
+                c"count()".as_ptr(),
+            );
+        }
+
+        // Set rettv->vval.v_number = n
+        nvim_tv_set_number(rettv, n);
     }
 }
