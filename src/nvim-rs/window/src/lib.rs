@@ -474,7 +474,8 @@ fn win_float_valid_impl(win: WinHandle) -> bool {
 /// FFI wrapper for `win_float_valid`.
 ///
 /// Returns non-zero if the window is a valid floating window in the current tabpage.
-#[no_mangle]
+#[must_use]
+#[unsafe(export_name = "win_float_valid")]
 pub extern "C" fn rs_win_float_valid(win: WinHandle) -> c_int {
     c_int::from(win_float_valid_impl(win))
 }

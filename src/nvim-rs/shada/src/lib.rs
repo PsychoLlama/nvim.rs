@@ -7779,11 +7779,15 @@ extern "C" {
     fn rs_mpack_map(ptr: *mut *mut u8, size: u32);
     fn rs_mpack_uint(ptr: *mut *mut u8, val: u32);
     fn rs_mpack_bool(ptr: *mut *mut u8, val: c_int);
+    #[link_name = "mpack_uint64"]
     fn rs_mpack_uint64(ptr: *mut *mut u8, val: u64);
+    #[link_name = "mpack_integer"]
     fn rs_mpack_integer(ptr: *mut *mut u8, val: i64);
     fn rs_mpack_bin(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
     fn rs_mpack_str(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
+    #[link_name = "mpack_raw"]
     fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut ShadaPackerBuffer);
+    #[link_name = "mpack_check_buffer"]
     fn rs_mpack_check_buffer(packer: *mut ShadaPackerBuffer);
 
 }

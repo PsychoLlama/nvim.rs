@@ -28,14 +28,6 @@ _Static_assert(kOptCbFlagUnnamed == 0x01, "kOptCbFlagUnnamed mismatch");
 _Static_assert(kOptCbFlagUnnamedplus == 0x02, "kOptCbFlagUnnamedplus mismatch");
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 
-// Rust implementations
-extern yankreg_T *rs_adjust_clipboard_name(int *name, bool quiet, bool writing);
-extern bool rs_get_clipboard(int name, yankreg_T **target, bool quiet);
-extern void rs_set_clipboard(int name, yankreg_T *reg);
-extern void rs_start_batch_changes(void);
-extern void rs_end_batch_changes(void);
-extern int rs_save_batch_count(void);
-extern void rs_restore_batch_count(int save_count);
 
 // =============================================================================
 // C accessor functions for Rust to call back into
@@ -197,41 +189,5 @@ void nvim_clipboard_provider_set(int name, yankreg_T *reg)
   rs_eval_call_provider("clipboard", "set", args_list, true, &rettv);
 }
 
-// =============================================================================
-// Thin wrappers delegating to Rust
-// =============================================================================
-
-yankreg_T *adjust_clipboard_name(int *name, bool quiet, bool writing)
-{
-  return rs_adjust_clipboard_name(name, quiet, writing);
-}
-
-bool get_clipboard(int name, yankreg_T **target, bool quiet)
-{
-  return rs_get_clipboard(name, target, quiet);
-}
-
-void set_clipboard(int name, yankreg_T *reg)
-{
-  rs_set_clipboard(name, reg);
-}
-
-void start_batch_changes(void)
-{
-  rs_start_batch_changes();
-}
-
-void end_batch_changes(void)
-{
-  rs_end_batch_changes();
-}
-
-int save_batch_count(void)
-{
-  return rs_save_batch_count();
-}
-
-void restore_batch_count(int save_count)
-{
-  rs_restore_batch_count(save_count);
-}
+// adjust_clipboard_name, get_clipboard, set_clipboard, start_batch_changes,
+// end_batch_changes, save_batch_count, restore_batch_count exported directly from Rust.

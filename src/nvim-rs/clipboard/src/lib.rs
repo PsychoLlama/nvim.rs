@@ -469,7 +469,7 @@ unsafe fn flush_clipboard_if_needed() {
 // FFI Exports — Main clipboard functions
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "adjust_clipboard_name")]
 pub unsafe extern "C" fn rs_adjust_clipboard_name(
     name: *mut c_int,
     quiet: bool,
@@ -478,7 +478,7 @@ pub unsafe extern "C" fn rs_adjust_clipboard_name(
     unsafe { adjust_clipboard_name_impl(name, quiet, writing) }
 }
 
-#[no_mangle]
+#[unsafe(export_name = "get_clipboard")]
 pub unsafe extern "C" fn rs_get_clipboard(
     name: c_int,
     target: *mut *mut YankregHandle,
@@ -499,7 +499,7 @@ pub unsafe extern "C" fn rs_get_clipboard(
     ok
 }
 
-#[no_mangle]
+#[unsafe(export_name = "set_clipboard")]
 pub unsafe extern "C" fn rs_set_clipboard(name: c_int, reg: *mut YankregHandle) {
     let mut name = name;
     let target = unsafe { adjust_clipboard_name_impl(&raw mut name, false, true) };
@@ -509,7 +509,7 @@ pub unsafe extern "C" fn rs_set_clipboard(name: c_int, reg: *mut YankregHandle) 
     unsafe { nvim_clipboard_provider_set(name, reg) };
 }
 
-#[no_mangle]
+#[unsafe(export_name = "start_batch_changes")]
 pub unsafe extern "C" fn rs_start_batch_changes() {
     let s = &raw mut CLIPBOARD_STATE;
     unsafe {
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn rs_start_batch_changes() {
     }
 }
 
-#[no_mangle]
+#[unsafe(export_name = "end_batch_changes")]
 pub unsafe extern "C" fn rs_end_batch_changes() {
     let s = &raw mut CLIPBOARD_STATE;
     unsafe {
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn rs_end_batch_changes() {
     unsafe { flush_clipboard_if_needed() };
 }
 
-#[no_mangle]
+#[unsafe(export_name = "save_batch_count")]
 pub unsafe extern "C" fn rs_save_batch_count() -> c_int {
     let s = &raw mut CLIPBOARD_STATE;
     let save_count = unsafe { (*s).batch.count };
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn rs_save_batch_count() -> c_int {
     save_count
 }
 
-#[no_mangle]
+#[unsafe(export_name = "restore_batch_count")]
 pub unsafe extern "C" fn rs_restore_batch_count(save_count: c_int) {
     let s = &raw mut CLIPBOARD_STATE;
     unsafe {

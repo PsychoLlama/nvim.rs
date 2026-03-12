@@ -32,4 +32,13 @@ static inline size_t mpack_remaining(PackerBuffer *packer)
   return (size_t)(packer->endptr - packer->ptr);
 }
 
+// The following functions are implemented in Rust and exported under their original names.
+extern void mpack_check_buffer(PackerBuffer *packer);
+extern void mpack_uint64(char **ptr, uint64_t val);
+extern void mpack_integer(char **ptr, Integer val);
+extern void mpack_float8(char **ptr, double val);
+extern void mpack_raw(const char *data, size_t len, PackerBuffer *packer);
+extern void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer);
+extern void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer);
+
 #include "msgpack_rpc/packer.h.generated.h"

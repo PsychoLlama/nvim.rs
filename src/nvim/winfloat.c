@@ -191,19 +191,7 @@ void win_set_minimal_style(win_T *wp)
   }
 }
 
-extern int rs_win_border_height(win_T *wp);
-extern int rs_win_border_width(win_T *wp);
-extern int rs_win_float_valid(win_T *win);
-
-int win_border_height(win_T *wp)
-{
-  return rs_win_border_height(wp);
-}
-
-int win_border_width(win_T *wp)
-{
-  return rs_win_border_width(wp);
-}
+// win_border_height and win_border_width exported directly from Rust.
 
 void win_config_float(win_T *wp, WinConfig fconfig)
 {
@@ -378,12 +366,7 @@ void win_reconfig_floats(void)
 
 /// Return true if "win" is floating window in the current tab page.
 ///
-/// @param  win  window to check
-bool win_float_valid(const win_T *win)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_win_float_valid((win_T *)win) != 0;
-}
+// win_float_valid exported directly from Rust (returns int; callers cast to bool as needed).
 
 win_T *win_float_find_preview(void)
 {

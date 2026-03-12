@@ -16,37 +16,13 @@
 #include "msgpack_rpc/packer.c.generated.h"
 
 // Rust implementations from nvim-msgpack crate
-extern void rs_mpack_check_buffer(PackerBuffer *packer);
-extern void rs_mpack_raw(const char *data, size_t len, PackerBuffer *packer);
+// mpack_check_buffer, mpack_uint64, mpack_integer, mpack_float8, mpack_raw,
+// mpack_ext, mpack_handle are exported directly from Rust.
 extern void rs_mpack_str(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
-extern void rs_mpack_ext(const char *buf, size_t len, int8_t type, PackerBuffer *packer);
-extern void rs_mpack_handle(int object_type, int handle, PackerBuffer *packer);
 extern size_t rs_mpack_remaining(PackerBuffer *packer);
-extern void rs_mpack_uint64(uint8_t **ptr, uint64_t val);
-extern void rs_mpack_integer(uint8_t **ptr, int64_t val);
-extern void rs_mpack_float8(uint8_t **ptr, double val);
 
-void mpack_check_buffer(PackerBuffer *packer)
-{
-  rs_mpack_check_buffer(packer);
-}
-
-void mpack_uint64(char **ptr, uint64_t i)
-{
-  rs_mpack_uint64((uint8_t **)ptr, i);
-}
-
-void mpack_integer(char **ptr, Integer i)
-{
-  rs_mpack_integer((uint8_t **)ptr, i);
-}
-
-void mpack_float8(char **ptr, double i)
-{
-  rs_mpack_float8((uint8_t **)ptr, i);
-}
-
+// mpack_str and mpack_bin decompose a String struct before calling Rust.
 void mpack_str(String str, PackerBuffer *packer)
 {
   rs_mpack_str(str.data, str.size, packer);
@@ -55,21 +31,6 @@ void mpack_str(String str, PackerBuffer *packer)
 void mpack_bin(String str, PackerBuffer *packer)
 {
   rs_mpack_bin(str.data, str.size, packer);
-}
-
-void mpack_raw(const char *data, size_t len, PackerBuffer *packer)
-{
-  rs_mpack_raw(data, len, packer);
-}
-
-void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
-{
-  rs_mpack_ext(buf, len, type, packer);
-}
-
-void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
-{
-  rs_mpack_handle((int)type, handle, packer);
 }
 
 void mpack_object(Object *obj, PackerBuffer *packer)

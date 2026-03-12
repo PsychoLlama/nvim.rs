@@ -928,7 +928,7 @@ pub extern "C" fn rs_tabline_height() -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[unsafe(export_name = "win_border_height")]
 pub extern "C" fn rs_win_border_height(wp: WinHandle) -> c_int {
     win_border_height_impl(wp)
 }
@@ -937,7 +937,7 @@ pub extern "C" fn rs_win_border_height(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
+#[unsafe(export_name = "win_border_width")]
 pub extern "C" fn rs_win_border_width(wp: WinHandle) -> c_int {
     win_border_width_impl(wp)
 }

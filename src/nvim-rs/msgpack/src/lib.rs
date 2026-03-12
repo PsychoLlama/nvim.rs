@@ -36,7 +36,7 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::branches_sharing_code)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 /// Write a single byte to the buffer and advance the pointer.
 ///
@@ -172,8 +172,9 @@ pub unsafe extern "C" fn rs_mpack_uint(ptr: *mut *mut u8, val: u32) {
 /// # Safety
 ///
 /// `ptr` must point to a valid mutable pointer to a buffer with at least 9 bytes remaining.
-#[no_mangle]
-pub unsafe extern "C" fn rs_mpack_uint64(ptr: *mut *mut u8, val: u64) {
+#[unsafe(export_name = "mpack_uint64")]
+pub unsafe extern "C" fn rs_mpack_uint64(ptr: *mut *mut c_char, val: u64) {
+    let ptr = ptr.cast::<*mut u8>();
     if ptr.is_null() || (*ptr).is_null() {
         return;
     }
@@ -198,13 +199,14 @@ pub unsafe extern "C" fn rs_mpack_uint64(ptr: *mut *mut u8, val: u64) {
 /// # Safety
 ///
 /// `ptr` must point to a valid mutable pointer to a buffer with at least 9 bytes remaining.
-#[no_mangle]
-pub unsafe extern "C" fn rs_mpack_integer(ptr: *mut *mut u8, val: i64) {
+#[unsafe(export_name = "mpack_integer")]
+pub unsafe extern "C" fn rs_mpack_integer(ptr: *mut *mut c_char, val: i64) {
+    let ptr = ptr.cast::<*mut u8>();
     if ptr.is_null() || (*ptr).is_null() {
         return;
     }
     if val >= 0 {
-        rs_mpack_uint64(ptr, val as u64);
+        rs_mpack_uint64(ptr.cast(), val as u64);
     } else if val < -0x8000_0000 {
         // int 64
         rs_mpack_w(ptr, 0xd3);
@@ -232,8 +234,9 @@ pub unsafe extern "C" fn rs_mpack_integer(ptr: *mut *mut u8, val: i64) {
 /// # Safety
 ///
 /// `ptr` must point to a valid mutable pointer to a buffer with at least 9 bytes remaining.
-#[no_mangle]
-pub unsafe extern "C" fn rs_mpack_float8(ptr: *mut *mut u8, val: f64) {
+#[unsafe(export_name = "mpack_float8")]
+pub unsafe extern "C" fn rs_mpack_float8(ptr: *mut *mut c_char, val: f64) {
+    let ptr = ptr.cast::<*mut u8>();
     if ptr.is_null() || (*ptr).is_null() {
         return;
     }
@@ -404,7 +407,7 @@ pub unsafe extern "C" fn rs_mpack_remaining(packer: *mut PackerBuffer) -> usize 
 /// # Safety
 ///
 /// `packer` must be a valid PackerBuffer pointer
-#[no_mangle]
+#[unsafe(export_name = "mpack_check_buffer")]
 pub unsafe extern "C" fn rs_mpack_check_buffer(packer: *mut PackerBuffer) {
     if packer.is_null() {
         return;
@@ -422,8 +425,9 @@ pub unsafe extern "C" fn rs_mpack_check_buffer(packer: *mut PackerBuffer) {
 ///
 /// - `data` must be valid for `len` bytes
 /// - `packer` must be a valid PackerBuffer pointer
-#[no_mangle]
-pub unsafe extern "C" fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut PackerBuffer) {
+#[unsafe(export_name = "mpack_raw")]
+pub unsafe extern "C" fn rs_mpack_raw(data: *const c_char, len: usize, packer: *mut PackerBuffer) {
+    let data = data.cast::<u8>();
     if packer.is_null() || (data.is_null() && len > 0) {
         return;
     }
@@ -436,7 +440,7 @@ pub unsafe extern "C" fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut 
         let to_copy = std::cmp::min(len - pos, remaining);
 
         if to_copy > 0 {
-            std::ptr::copy_nonoverlapping(data.add(pos), ptr, to_copy);
+            std::ptr::copy_nonoverlapping(data.add(pos), ptr.cast(), to_copy);
             nvim_packer_set_ptr(packer, ptr.add(to_copy));
         }
         pos += to_copy;
@@ -480,7 +484,7 @@ pub unsafe extern "C" fn rs_mpack_str(data: *const u8, len: usize, packer: *mut 
     nvim_packer_set_ptr(packer, ptr);
 
     // Write data
-    rs_mpack_raw(data, len, packer);
+    rs_mpack_raw(data.cast(), len, packer);
 }
 
 /// Pack binary data (header + data) into the buffer.
@@ -513,7 +517,7 @@ pub unsafe extern "C" fn rs_mpack_bin(data: *const u8, len: usize, packer: *mut 
     nvim_packer_set_ptr(packer, ptr);
 
     // Write data
-    rs_mpack_raw(data, len, packer);
+    rs_mpack_raw(data.cast(), len, packer);
 }
 
 /// Pack an extension type (header + type byte + data) into the buffer.
@@ -522,9 +526,9 @@ pub unsafe extern "C" fn rs_mpack_bin(data: *const u8, len: usize, packer: *mut 
 ///
 /// - `buf` must be valid for `len` bytes
 /// - `packer` must be a valid PackerBuffer pointer
-#[no_mangle]
+#[unsafe(export_name = "mpack_ext")]
 pub unsafe extern "C" fn rs_mpack_ext(
-    buf: *const u8,
+    buf: *const c_char,
     len: usize,
     ext_type: i8,
     packer: *mut PackerBuffer,
@@ -572,7 +576,7 @@ pub const EXT_OBJECT_TYPE_SHIFT: i32 = 8;
 /// # Safety
 ///
 /// `packer` must be a valid PackerBuffer pointer
-#[no_mangle]
+#[unsafe(export_name = "mpack_handle")]
 pub unsafe extern "C" fn rs_mpack_handle(
     object_type: c_int,
     handle: c_int,
@@ -672,25 +676,25 @@ mod tests {
 
     #[test]
     fn test_mpack_integer_positive() {
-        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr, 42) });
+        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr.cast(), 42) });
         assert_eq!(result, vec![42]);
     }
 
     #[test]
     fn test_mpack_integer_negative_fixint() {
         // -1 is 0xff as negative fixint
-        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr, -1) });
+        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr.cast(), -1) });
         assert_eq!(result, vec![0xff]);
 
         // -31 is 0xe1 as negative fixint
-        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr, -31) });
+        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr.cast(), -31) });
         assert_eq!(result, vec![0xe1]);
     }
 
     #[test]
     fn test_mpack_integer_int8() {
         // -33 requires int 8
-        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr, -100) });
+        let result = pack_to_vec(|ptr| unsafe { rs_mpack_integer(ptr.cast(), -100) });
         assert_eq!(result, vec![0xd0, 0x9c]); // 0x9c = -100 as i8
     }
 
