@@ -155,23 +155,6 @@ pub const fn is_json_number_char(c: u8) -> bool {
     c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-')
 }
 
-/// FFI export: skip JSON whitespace.
-///
-/// Returns number of bytes skipped.
-///
-/// # Safety
-/// - `input` must be valid pointer to `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_json_skip_whitespace(input: *const u8, len: c_int) -> c_int {
-    if input.is_null() || len < 0 {
-        return 0;
-    }
-
-    let slice = unsafe { std::slice::from_raw_parts(input, len as usize) };
-    let remaining = skip_json_whitespace(slice);
-    (slice.len() - remaining.len()) as c_int
-}
-
 // =============================================================================
 // JSON Number Parsing
 // =============================================================================
@@ -258,30 +241,6 @@ pub fn parse_json_number(input: &[u8]) -> Option<(bool, i64, f64, usize)> {
     } else {
         let n: i64 = num_str.parse().ok()?;
         Some((false, n, 0.0, i))
-    }
-}
-
-/// FFI export: parse JSON number.
-///
-/// # Safety
-/// - `input` must be valid pointer to `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_json_parse_number(input: *const u8, len: c_int) -> JsonNumberResult {
-    if input.is_null() || len < 0 {
-        return JsonNumberResult::default();
-    }
-
-    let slice = unsafe { std::slice::from_raw_parts(input, len as usize) };
-
-    match parse_json_number(slice) {
-        Some((is_float, int_val, float_val, consumed)) => JsonNumberResult {
-            ok: true,
-            is_float,
-            int_val,
-            float_val,
-            consumed: consumed as i32,
-        },
-        None => JsonNumberResult::default(),
     }
 }
 

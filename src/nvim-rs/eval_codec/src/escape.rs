@@ -3,8 +3,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::cast_possible_truncation)]
 
-use std::ffi::c_int;
-
 // =============================================================================
 // JSON String Escaping
 // =============================================================================
@@ -62,12 +60,6 @@ const fn hex_digit(val: u8) -> u8 {
     }
 }
 
-/// FFI export: check if character needs JSON escaping.
-#[no_mangle]
-pub extern "C" fn rs_json_needs_escape(c: u8) -> bool {
-    needs_json_escape(c)
-}
-
 // =============================================================================
 // JSON String Unescaping
 // =============================================================================
@@ -122,28 +114,6 @@ pub fn unescape_json_char(input: &[u8]) -> Option<(u8, usize)> {
     }
 }
 
-/// FFI export: unescape JSON character.
-///
-/// # Safety
-/// - `input` must be valid pointer to `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_json_unescape_char(input: *const u8, len: c_int) -> UnescapeResult {
-    if input.is_null() || len < 0 {
-        return UnescapeResult::default();
-    }
-
-    let slice = unsafe { std::slice::from_raw_parts(input, len as usize) };
-
-    match unescape_json_char(slice) {
-        Some((char_val, consumed)) => UnescapeResult {
-            ok: true,
-            char_val,
-            consumed: consumed as i32,
-        },
-        None => UnescapeResult::default(),
-    }
-}
-
 // =============================================================================
 // VimL String Escaping
 // =============================================================================
@@ -177,12 +147,6 @@ pub fn escape_viml_string(input: &[u8]) -> Vec<u8> {
 /// Check if character needs VimL escaping in double-quoted string.
 pub const fn needs_viml_escape(c: u8) -> bool {
     c < 0x20 || c == b'"' || c == b'\\'
-}
-
-/// FFI export: check if needs VimL escaping.
-#[no_mangle]
-pub extern "C" fn rs_viml_needs_escape(c: u8) -> bool {
-    needs_viml_escape(c)
 }
 
 // =============================================================================

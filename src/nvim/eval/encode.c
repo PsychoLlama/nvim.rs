@@ -44,13 +44,8 @@ const char *const encode_special_var_names[] = {
 
 #include "eval/encode.c.generated.h"
 
-/// Msgpack callback for writing to a Blob
-int encode_blob_write(void *const data, const char *const buf, const size_t len)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  ga_concat_len(&((blob_T *)data)->bv_ga, buf, len);
-  return (int)len;
-}
+// encode_blob_write is implemented in Rust (rs_encode_blob_write in eval_codec)
+// with #[export_name = "encode_blob_write"].
 
 /// Msgpack callback for writing to readfile()-style list
 void encode_list_write(void *const data, const char *const buf, const size_t len)
@@ -576,143 +571,14 @@ int encode_read_from_list(ListReaderState *const state, char *const buf, const s
     } \
   } while (0)
 
-/// Escape sequences used in JSON
-static const char escapes[][3] = {
-  [BS] = "\\b",
-  [TAB] = "\\t",
-  [NL] = "\\n",
-  [CAR] = "\\r",
-  ['"'] = "\\\"",
-  ['\\'] = "\\\\",
-  [FF] = "\\f",
-};
-
-static const char xdigits[] = "0123456789ABCDEF";
-
-/// Convert given string to JSON string
-///
-/// @param[out]  gap  Garray where result will be saved.
-/// @param[in]  buf  Converted string.
-/// @param[in]  len  Converted string length.
-///
-/// @return OK in case of success, FAIL otherwise.
-static inline int convert_to_json_string(garray_T *const gap, const char *const buf,
-                                         const size_t len)
-  FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_ALWAYS_INLINE
-{
-  const char *utf_buf = buf;
-  if (utf_buf == NULL) {
-    ga_concat(gap, "\"\"");
-  } else {
-    size_t utf_len = len;
-    char *tofree = NULL;
-    size_t str_len = 0;
-    // Encode character as \uNNNN if
-    // 1. It is an ASCII control character (0x0 .. 0x1F; 0x7F not
-    //    utf_printable and thus not checked specially).
-    // 2. Code point is not printable according to utf_printable().
-    // This is done to make resulting values displayable on screen also not from
-    // Neovim.
-#define ENCODE_RAW(ch) \
-  ((ch) >= 0x20 && utf_printable(ch))
-    for (size_t i = 0; i < utf_len;) {
-      const int ch = utf_ptr2char(utf_buf + i);
-      const size_t shift = (ch == 0 ? 1 : ((size_t)utf_ptr2len(utf_buf + i)));
-      assert(shift > 0);
-      i += shift;
-      switch (ch) {
-      case BS:
-      case TAB:
-      case NL:
-      case FF:
-      case CAR:
-      case '"':
-      case '\\':
-        str_len += 2;
-        break;
-      default:
-        if (ch > 0x7F && shift == 1) {
-          semsg(_("E474: String \"%.*s\" contains byte that does not start "
-                  "any UTF-8 character"),
-                (int)(utf_len - (i - shift)), utf_buf + i - shift);
-          xfree(tofree);
-          return FAIL;
-        } else if ((SURROGATE_HI_START <= ch && ch <= SURROGATE_HI_END)
-                   || (SURROGATE_LO_START <= ch && ch <= SURROGATE_LO_END)) {
-          semsg(_("E474: UTF-8 string contains code point which belongs "
-                  "to a surrogate pair: %.*s"),
-                (int)(utf_len - (i - shift)), utf_buf + i - shift);
-          xfree(tofree);
-          return FAIL;
-        } else if (ENCODE_RAW(ch)) {
-          str_len += shift;
-        } else {
-          str_len += ((sizeof("\\u1234") - 1)
-                      * (size_t)(1 + (ch >= SURROGATE_FIRST_CHAR)));
-        }
-        break;
-      }
-    }
-    ga_append(gap, '"');
-    ga_grow(gap, (int)str_len);
-    for (size_t i = 0; i < utf_len;) {
-      const int ch = utf_ptr2char(utf_buf + i);
-      const size_t shift = (ch == 0 ? 1 : ((size_t)utf_char2len(ch)));
-      assert(shift > 0);
-      // Is false on invalid unicode, but this should already be handled.
-      assert(ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i)));
-      switch (ch) {
-      case BS:
-      case TAB:
-      case NL:
-      case FF:
-      case CAR:
-      case '"':
-      case '\\':
-        ga_concat_len(gap, escapes[ch], 2);
-        break;
-      default:
-        if (ENCODE_RAW(ch)) {
-          ga_concat_len(gap, utf_buf + i, shift);
-        } else if (ch < SURROGATE_FIRST_CHAR) {
-          ga_concat_len(gap, ((const char[]) {
-            '\\', 'u',
-            xdigits[(ch >> (4 * 3)) & 0xF],
-            xdigits[(ch >> (4 * 2)) & 0xF],
-            xdigits[(ch >> (4 * 1)) & 0xF],
-            xdigits[(ch >> (4 * 0)) & 0xF],
-          }), sizeof("\\u1234") - 1);
-        } else {
-          const int tmp = ch - SURROGATE_FIRST_CHAR;
-          const int hi = SURROGATE_HI_START + ((tmp >> 10) & ((1 << 10) - 1));
-          const int lo = SURROGATE_LO_END + ((tmp >>  0) & ((1 << 10) - 1));
-          ga_concat_len(gap, ((const char[]) {
-            '\\', 'u',
-            xdigits[(hi >> (4 * 3)) & 0xF],
-            xdigits[(hi >> (4 * 2)) & 0xF],
-            xdigits[(hi >> (4 * 1)) & 0xF],
-            xdigits[(hi >> (4 * 0)) & 0xF],
-            '\\', 'u',
-            xdigits[(lo >> (4 * 3)) & 0xF],
-            xdigits[(lo >> (4 * 2)) & 0xF],
-            xdigits[(lo >> (4 * 1)) & 0xF],
-            xdigits[(lo >> (4 * 0)) & 0xF],
-          }), (sizeof("\\u1234") - 1) * 2);
-        }
-        break;
-      }
-      i += shift;
-    }
-    ga_append(gap, '"');
-    xfree(tofree);
-  }
-  return OK;
-}
+// convert_to_json_string is implemented in Rust as rs_convert_to_json_string
+// (in eval_codec). The JSON encoder macro calls it directly.
+extern int rs_convert_to_json_string(garray_T *gap, const char *buf, size_t len);
 
 #undef TYPVAL_ENCODE_CONV_STRING
 #define TYPVAL_ENCODE_CONV_STRING(tv, buf, len) \
   do { \
-    if (convert_to_json_string(gap, (buf), (len)) != OK) { \
+    if (rs_convert_to_json_string(gap, (buf), (len)) != OK) { \
       return FAIL; \
     } \
   } while (0)

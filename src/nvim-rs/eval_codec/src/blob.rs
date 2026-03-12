@@ -90,37 +90,6 @@ const fn hex_value(c: u8) -> Option<u8> {
     }
 }
 
-/// FFI export: encode bytes to hex.
-///
-/// Returns number of bytes written to output.
-///
-/// # Safety
-/// - `input` must be valid pointer to `input_len` bytes, or null.
-/// - `output` must be valid pointer to at least `input_len * 2` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_blob_encode_hex(
-    input: *const u8,
-    input_len: c_int,
-    output: *mut u8,
-    output_len: c_int,
-) -> c_int {
-    if input.is_null() || output.is_null() || input_len < 0 || output_len < 0 {
-        return 0;
-    }
-
-    let input_slice = unsafe { std::slice::from_raw_parts(input, input_len as usize) };
-    let output_slice = unsafe { std::slice::from_raw_parts_mut(output, output_len as usize) };
-
-    let needed = input_len as usize * 2;
-    if output_slice.len() < needed {
-        return 0;
-    }
-
-    let encoded = encode_hex(input_slice);
-    output_slice[..encoded.len()].copy_from_slice(&encoded);
-    encoded.len() as c_int
-}
-
 // =============================================================================
 // VimL Blob Literal
 // =============================================================================
@@ -197,20 +166,6 @@ pub fn format_blob_literal(bytes: &[u8]) -> Vec<u8> {
         result.push(hex_digit_upper(byte & 0x0F));
     }
     result
-}
-
-/// FFI export: check if blob literal.
-///
-/// # Safety
-/// - `input` must be valid pointer to `len` bytes, or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_blob_is_literal(input: *const u8, len: c_int) -> bool {
-    if input.is_null() || len < 0 {
-        return false;
-    }
-
-    let slice = unsafe { std::slice::from_raw_parts(input, len as usize) };
-    is_blob_literal(slice)
 }
 
 // =============================================================================

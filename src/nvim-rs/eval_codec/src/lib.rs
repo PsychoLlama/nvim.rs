@@ -30,7 +30,7 @@ pub use blob::*;
 pub use escape::*;
 pub use json::*;
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_uchar, c_void};
 
 // =============================================================================
 // Encoding Options
@@ -97,17 +97,8 @@ impl JsonEncodeOptions {
     }
 }
 
-/// FFI export: create compact JSON options.
-#[no_mangle]
-pub extern "C" fn rs_json_opts_compact() -> u32 {
-    JsonEncodeOptions::compact().to_bits()
-}
-
-/// FFI export: create pretty JSON options.
-#[no_mangle]
-pub extern "C" fn rs_json_opts_pretty(indent: c_int) -> u32 {
-    JsonEncodeOptions::pretty(indent).to_bits()
-}
+// rs_json_opts_compact and rs_json_opts_pretty were dead FFI exports (no C
+// callers). Removed.
 
 // =============================================================================
 // Decode Result Types
@@ -161,12 +152,6 @@ impl DecodeResult {
     }
 }
 
-/// FFI export: check if decode result is ok.
-#[no_mangle]
-pub extern "C" fn rs_decode_is_ok(result: c_int) -> bool {
-    DecodeResult::from_c_int(result).is_ok()
-}
-
 // =============================================================================
 // Encode Result Types
 // =============================================================================
@@ -213,10 +198,242 @@ impl EncodeResult {
     }
 }
 
-/// FFI export: check if encode result is ok.
-#[no_mangle]
-pub extern "C" fn rs_encode_is_ok(result: c_int) -> bool {
-    EncodeResult::from_c_int(result).is_ok()
+// =============================================================================
+// C type layout definitions
+// =============================================================================
+
+/// Growing array structure matching C `garray_T`.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+pub struct GarrayT {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
+// =============================================================================
+// C function declarations
+// =============================================================================
+
+extern "C" {
+    fn ga_concat_len(gap: *mut GarrayT, data: *const c_char, len: usize);
+    fn ga_concat(gap: *mut GarrayT, data: *const c_char);
+    fn ga_append(gap: *mut GarrayT, c: c_uchar);
+    fn ga_grow(gap: *mut GarrayT, n: c_int);
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_printable(c: c_int) -> bool;
+    fn semsg(msg: *const c_char, ...);
+}
+
+// =============================================================================
+// encode_blob_write
+// =============================================================================
+
+/// Msgpack callback for writing to a Blob.
+///
+/// The `data` argument is a `*mut blob_T` cast to `*mut c_void`. Since `bv_ga`
+/// is the first field of `blobvar_S`, the pointer can be used directly as a
+/// `*mut GarrayT`.
+///
+/// # Safety
+/// - `data` must be a valid non-null pointer to a `blob_T`.
+/// - `buf` must be a valid pointer to `len` bytes (or null if len == 0).
+#[unsafe(export_name = "encode_blob_write")]
+pub unsafe extern "C" fn rs_encode_blob_write(
+    data: *mut c_void,
+    buf: *const c_char,
+    len: usize,
+) -> c_int {
+    // bv_ga is the first field of blob_T, so data == &blob.bv_ga
+    let gap = data.cast::<GarrayT>();
+    ga_concat_len(gap, buf, len);
+    len as c_int
+}
+
+// =============================================================================
+// convert_to_json_string (rs_convert_to_json_string)
+// =============================================================================
+
+// Surrogate pair constants matching encode.h
+const SURROGATE_HI_START: c_int = 0xD800;
+const SURROGATE_HI_END: c_int = 0xDBFF;
+const SURROGATE_LO_START: c_int = 0xDC00;
+const SURROGATE_LO_END: c_int = 0xDFFF;
+const SURROGATE_FIRST_CHAR: c_int = 0x10000;
+
+/// JSON escape sequences for control characters.
+/// Index is the byte value; entry is a 2-byte escape sequence.
+/// Matches the C `escapes` table in encode.c.
+static ESCAPES: [[u8; 2]; 128] = {
+    let mut table = [[0u8; 2]; 128];
+    // BS = 0x08
+    table[0x08] = [b'\\', b'b'];
+    // TAB = 0x09
+    table[0x09] = [b'\\', b't'];
+    // NL = 0x0A
+    table[0x0A] = [b'\\', b'n'];
+    // FF = 0x0C
+    table[0x0C] = [b'\\', b'f'];
+    // CAR = 0x0D
+    table[0x0D] = [b'\\', b'r'];
+    // '"' = 0x22
+    table[0x22] = [b'\\', b'"'];
+    // '\\' = 0x5C
+    table[0x5C] = [b'\\', b'\\'];
+    table
+};
+
+static XDIGITS: &[u8] = b"0123456789ABCDEF";
+
+/// Check if a codepoint should be encoded raw (not escaped) in JSON.
+/// Returns true if ch >= 0x20 and utf_printable(ch).
+///
+/// # Safety
+/// Calls `utf_printable` which is always safe to call.
+#[inline]
+unsafe fn encode_raw(ch: c_int) -> bool {
+    ch >= 0x20 && utf_printable(ch)
+}
+
+/// Has a non-zero escape entry for `ch` (0x00..0x7F).
+#[inline]
+fn has_escape(ch: c_int) -> bool {
+    let u = ch as usize;
+    u < ESCAPES.len() && ESCAPES[u][0] != 0
+}
+
+/// Convert a string to a JSON double-quoted string, appending to `gap`.
+///
+/// Mirrors the C `convert_to_json_string` in encode.c.
+///
+/// # Safety
+/// - `gap` must be a valid pointer to a `garray_T`.
+/// - `buf` must be a valid pointer to `len` bytes, or null if len is 0.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_convert_to_json_string(
+    gap: *mut GarrayT,
+    buf: *const c_char,
+    len: usize,
+) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = -1;
+
+    let null_terminated_null_msg =
+        b"E474: String \"%.*s\" contains byte that does not start any UTF-8 character\0";
+    let surrogate_msg =
+        b"E474: UTF-8 string contains code point which belongs to a surrogate pair: %.*s\0";
+
+    if buf.is_null() {
+        // ga_concat(gap, "\"\"")
+        let empty = b"\"\"\0";
+        ga_concat(gap, empty.as_ptr().cast());
+        return OK;
+    }
+
+    let utf_buf = buf;
+    let utf_len = len;
+
+    // First pass: compute the length needed.
+    let mut str_len: usize = 0;
+    let mut i: usize = 0;
+    while i < utf_len {
+        let ch = utf_ptr2char(utf_buf.add(i));
+        let raw_shift = if ch == 0 {
+            1usize
+        } else {
+            utf_ptr2len(utf_buf.add(i)) as usize
+        };
+        debug_assert!(raw_shift > 0);
+        i += raw_shift;
+
+        if has_escape(ch) {
+            str_len += 2;
+        } else if ch > 0x7F && raw_shift == 1 {
+            // Byte that doesn't start a valid UTF-8 sequence.
+            semsg(
+                null_terminated_null_msg.as_ptr().cast(),
+                (utf_len - (i - raw_shift)) as c_int,
+                utf_buf.add(i - raw_shift),
+            );
+            return FAIL;
+        } else if (SURROGATE_HI_START..=SURROGATE_HI_END).contains(&ch)
+            || (SURROGATE_LO_START..=SURROGATE_LO_END).contains(&ch)
+        {
+            semsg(
+                surrogate_msg.as_ptr().cast(),
+                (utf_len - (i - raw_shift)) as c_int,
+                utf_buf.add(i - raw_shift),
+            );
+            return FAIL;
+        } else if encode_raw(ch) {
+            str_len += raw_shift;
+        } else {
+            // \uNNNN, possibly a surrogate pair (two \uNNNN)
+            let escape_unit = b"\\u1234".len(); // 6
+            str_len += escape_unit * (1 + usize::from(ch >= SURROGATE_FIRST_CHAR));
+        }
+    }
+
+    // Opening quote
+    ga_append(gap, b'"');
+    ga_grow(gap, str_len as c_int);
+
+    // Second pass: write the characters.
+    let mut i: usize = 0;
+    while i < utf_len {
+        let ch = utf_ptr2char(utf_buf.add(i));
+        let shift = if ch == 0 {
+            1usize
+        } else {
+            utf_char2len(ch) as usize
+        };
+        debug_assert!(shift > 0);
+
+        if has_escape(ch) {
+            let esc = &ESCAPES[ch as usize];
+            ga_concat_len(gap, esc.as_ptr().cast(), 2);
+        } else if encode_raw(ch) {
+            ga_concat_len(gap, utf_buf.add(i), shift);
+        } else if ch < SURROGATE_FIRST_CHAR {
+            let bytes: [u8; 6] = [
+                b'\\',
+                b'u',
+                XDIGITS[((ch >> 12) & 0xF) as usize],
+                XDIGITS[((ch >> 8) & 0xF) as usize],
+                XDIGITS[((ch >> 4) & 0xF) as usize],
+                XDIGITS[(ch & 0xF) as usize],
+            ];
+            ga_concat_len(gap, bytes.as_ptr().cast(), 6);
+        } else {
+            let tmp = ch - SURROGATE_FIRST_CHAR;
+            let hi = SURROGATE_HI_START + ((tmp >> 10) & ((1 << 10) - 1));
+            let lo = SURROGATE_LO_END + (tmp & ((1 << 10) - 1));
+            let bytes: [u8; 12] = [
+                b'\\',
+                b'u',
+                XDIGITS[((hi >> 12) & 0xF) as usize],
+                XDIGITS[((hi >> 8) & 0xF) as usize],
+                XDIGITS[((hi >> 4) & 0xF) as usize],
+                XDIGITS[(hi & 0xF) as usize],
+                b'\\',
+                b'u',
+                XDIGITS[((lo >> 12) & 0xF) as usize],
+                XDIGITS[((lo >> 8) & 0xF) as usize],
+                XDIGITS[((lo >> 4) & 0xF) as usize],
+                XDIGITS[(lo & 0xF) as usize],
+            ];
+            ga_concat_len(gap, bytes.as_ptr().cast(), 12);
+        }
+        i += shift;
+    }
+
+    // Closing quote
+    ga_append(gap, b'"');
+    OK
 }
 
 // =============================================================================
@@ -256,5 +473,34 @@ mod tests {
         assert!(!EncodeResult::CircularRef.is_ok());
         assert_eq!(EncodeResult::from_c_int(0), EncodeResult::Ok);
         assert_eq!(EncodeResult::from_c_int(1), EncodeResult::CircularRef);
+    }
+
+    #[test]
+    fn test_escapes_table() {
+        // BS
+        assert_eq!(ESCAPES[0x08], [b'\\', b'b']);
+        // TAB
+        assert_eq!(ESCAPES[0x09], [b'\\', b't']);
+        // NL
+        assert_eq!(ESCAPES[0x0A], [b'\\', b'n']);
+        // FF
+        assert_eq!(ESCAPES[0x0C], [b'\\', b'f']);
+        // CAR
+        assert_eq!(ESCAPES[0x0D], [b'\\', b'r']);
+        // quote
+        assert_eq!(ESCAPES[0x22], [b'\\', b'"']);
+        // backslash
+        assert_eq!(ESCAPES[0x5C], [b'\\', b'\\']);
+    }
+
+    #[test]
+    fn test_has_escape() {
+        assert!(has_escape(0x08)); // BS
+        assert!(has_escape(0x09)); // TAB
+        assert!(has_escape(0x0A)); // NL
+        assert!(has_escape(0x22)); // '"'
+        assert!(has_escape(0x5C)); // '\\'
+        assert!(!has_escape(c_int::from(b'a')));
+        assert!(!has_escape(c_int::from(b'z')));
     }
 }
