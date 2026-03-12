@@ -27,6 +27,7 @@ pub mod fs;
 pub mod input;
 pub mod mem;
 pub mod proc;
+pub mod shell;
 pub mod time;
 
 use std::ffi::c_int;
