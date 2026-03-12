@@ -146,7 +146,7 @@ extern int rs_option_is_window_local(int opt_idx);
 extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
 // rs_option_was_set deleted: now exported as option_was_set via #[export_name]
-extern void rs_reset_option_was_set(int opt_idx);
+// rs_reset_option_was_set deleted: now exported as reset_option_was_set via #[export_name]
 // rs_get_option_sctx deleted: now exported as get_option_sctx via #[export_name]
 
 // Rust default value management functions (option pass 8 phase 2)
@@ -2342,14 +2342,7 @@ static int wc_use_keyname(const void *varp, OptInt *wcp)
 
 // option_was_set deleted: now exported from Rust index.rs via #[export_name = "option_was_set"]
 
-/// Reset the flag indicating option "name" was set.
-///
-/// @param[in]  name  Option name.
-void reset_option_was_set(OptIndex opt_idx)
-{
-  assert(opt_idx != kOptInvalid);
-  rs_reset_option_was_set(opt_idx);
-}
+// reset_option_was_set deleted: now exported directly from Rust via #[export_name]
 
 // fill_culopt_flags deleted: now exported directly from Rust via #[export_name]
 

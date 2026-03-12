@@ -404,7 +404,7 @@ pub unsafe extern "C" fn rs_option_was_set(opt_idx: OptIndex) -> c_int {
 }
 
 /// Reset the was-set flag for an option.
-#[no_mangle]
+#[export_name = "reset_option_was_set"]
 pub unsafe extern "C" fn rs_reset_option_was_set(opt_idx: OptIndex) {
     if opt_idx != OPT_INVALID {
         nvim_option_clear_was_set_flag(opt_idx);
