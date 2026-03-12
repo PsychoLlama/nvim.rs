@@ -233,6 +233,7 @@ pub enum CmdHandler {
     Ident,
     Hat,
     Right,
+    Left,
     Operator,
     Regname,
     Dollar,
@@ -261,6 +262,7 @@ pub enum CmdHandler {
     Subst,
     Undo,
     Zet,
+    SmallZet,
     Brackets,
     Lineop,
     Tilde,
@@ -639,7 +641,7 @@ pub static NV_CMDS: [NvCmd; 188] = [
     // 'g'
     NvCmd::new(b'g' as c_int, CmdHandler::GCmd, f(NV_NCH_ALW), 0),
     // 'h'
-    NvCmd::new(b'h' as c_int, CmdHandler::Right, f(NV_RL), 0), // Note: nv_left in C, handler is Right with RL flag
+    NvCmd::new(b'h' as c_int, CmdHandler::Left, f(NV_RL), 0),
     // 'i'
     NvCmd::new(b'i' as c_int, CmdHandler::Edit, f(NV_NCH), 0),
     // 'j'
@@ -683,7 +685,7 @@ pub static NV_CMDS: [NvCmd; 188] = [
     // 'y'
     NvCmd::new(b'y' as c_int, CmdHandler::Operator, 0, 0),
     // 'z'
-    NvCmd::new(b'z' as c_int, CmdHandler::Zet, f(NV_NCH_ALW), 0),
+    NvCmd::new(b'z' as c_int, CmdHandler::SmallZet, f(NV_NCH_ALW), 0),
     // '{'
     NvCmd::new(b'{' as c_int, CmdHandler::Findpar, 0, BACKWARD as i16),
     // '|'
@@ -728,7 +730,7 @@ pub static NV_CMDS: [NvCmd; 188] = [
     NvCmd::new(K_S_UP, CmdHandler::Page, f(NV_SS), BACKWARD as i16),
     NvCmd::new(K_DOWN, CmdHandler::Down, f(NV_SSS | NV_STS), 0),
     NvCmd::new(K_S_DOWN, CmdHandler::Page, f(NV_SS), FORWARD as i16),
-    NvCmd::new(K_LEFT, CmdHandler::Right, f(NV_SSS | NV_STS | NV_RL), 0), // nv_left
+    NvCmd::new(K_LEFT, CmdHandler::Left, f(NV_SSS | NV_STS | NV_RL), 0),
     NvCmd::new(K_S_LEFT, CmdHandler::BckWord, f(NV_SS | NV_RL), 0),
     NvCmd::new(K_C_LEFT, CmdHandler::BckWord, f(NV_SSS | NV_RL | NV_STS), 1),
     NvCmd::new(K_RIGHT, CmdHandler::Right, f(NV_SSS | NV_STS | NV_RL), 0),
@@ -933,6 +935,18 @@ pub fn get_cmd_handler(idx: c_int) -> Option<CmdHandler> {
 // FFI Exports
 // =============================================================================
 
+/// Initialize normal mode command table (triggers lazy OnceLock initialization).
+///
+/// This replaces the C `init_normal_cmds()` function. The Rust table uses
+/// `OnceLock` for lazy initialization so explicit initialization is a no-op,
+/// but calling this ensures the table is ready before first use.
+#[export_name = "init_normal_cmds"]
+pub extern "C" fn rs_init_normal_cmds() {
+    // Force initialization of sorted index and max_linear
+    let _ = get_cmd_idx();
+    let _ = get_max_linear();
+}
+
 /// FFI: Find command by character.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_table_find_command(cmdchar: c_int) -> c_int {
@@ -1027,6 +1041,180 @@ pub extern "C" fn rs_table_needs_additional_char(
     }
 
     false
+}
+
+// =============================================================================
+// Dispatch Execution
+// =============================================================================
+
+// All command handler function pointers (called from rs_execute_dispatch)
+#[cfg(not(test))]
+extern "C" {
+    fn nvim_cap_set_arg(cap: *mut std::ffi::c_void, val: c_int);
+    fn rs_nv_ignore(cap: *mut std::ffi::c_void);
+    fn rs_nv_nop(cap: *mut std::ffi::c_void);
+    fn rs_nv_error(cap: *mut std::ffi::c_void);
+    fn rs_nv_help(cap: *mut std::ffi::c_void);
+    fn rs_nv_suspend(cap: *mut std::ffi::c_void);
+    fn rs_nv_page(cap: *mut std::ffi::c_void);
+    fn rs_nv_halfpage(cap: *mut std::ffi::c_void);
+    fn rs_nv_ctrlg(cap: *mut std::ffi::c_void);
+    fn rs_nv_scroll_line(cap: *mut std::ffi::c_void);
+    fn rs_nv_kundo(cap: *mut std::ffi::c_void);
+    fn rs_nv_goto(cap: *mut std::ffi::c_void);
+    fn rs_nv_beginline(cap: *mut std::ffi::c_void);
+    fn rs_nv_dollar(cap: *mut std::ffi::c_void);
+    fn rs_nv_end(cap: *mut std::ffi::c_void);
+    fn rs_nv_home(cap: *mut std::ffi::c_void);
+    fn rs_nv_pipe(cap: *mut std::ffi::c_void);
+    fn rs_nv_wordcmd(cap: *mut std::ffi::c_void);
+    fn rs_nv_bck_word(cap: *mut std::ffi::c_void);
+    fn rs_nv_findpar(cap: *mut std::ffi::c_void);
+    fn rs_nv_brace(cap: *mut std::ffi::c_void);
+    fn rs_nv_csearch(cap: *mut std::ffi::c_void);
+    fn rs_nv_mark(cap: *mut std::ffi::c_void);
+    fn rs_nv_gomark(cap: *mut std::ffi::c_void);
+    fn rs_nv_pcmark(cap: *mut std::ffi::c_void);
+    fn rs_nv_regname(cap: *mut std::ffi::c_void);
+    fn rs_nv_put(cap: *mut std::ffi::c_void);
+    fn rs_nv_visual(cap: *mut std::ffi::c_void);
+    fn rs_nv_window(cap: *mut std::ffi::c_void);
+    fn rs_nv_clear(cap: *mut std::ffi::c_void);
+    fn rs_nv_ctrlo(cap: *mut std::ffi::c_void);
+    fn rs_nv_hat(cap: *mut std::ffi::c_void);
+    fn rs_nv_Zet(cap: *mut std::ffi::c_void);
+    fn rs_nv_esc(cap: *mut std::ffi::c_void);
+    fn rs_nv_edit(cap: *mut std::ffi::c_void);
+    fn rs_nv_search(cap: *mut std::ffi::c_void);
+    fn rs_nv_next(cap: *mut std::ffi::c_void);
+    fn rs_nv_ident(cap: *mut std::ffi::c_void);
+    fn rs_nv_operator(cap: *mut std::ffi::c_void);
+    fn rs_nv_optrans(cap: *mut std::ffi::c_void);
+    fn rs_nv_tilde(cap: *mut std::ffi::c_void);
+    fn rs_nv_subst(cap: *mut std::ffi::c_void);
+    fn rs_nv_select(cap: *mut std::ffi::c_void);
+    fn rs_nv_brackets(cap: *mut std::ffi::c_void);
+    fn rs_nv_undo(cap: *mut std::ffi::c_void);
+    fn rs_nv_Undo(cap: *mut std::ffi::c_void);
+    fn rs_nv_dot(cap: *mut std::ffi::c_void);
+    fn rs_nv_redo_or_register(cap: *mut std::ffi::c_void);
+    fn rs_nv_replace(cap: *mut std::ffi::c_void);
+    fn rs_nv_Replace(cap: *mut std::ffi::c_void);
+    fn rs_nv_zet(cap: *mut std::ffi::c_void);
+    fn rs_nv_scroll(cap: *mut std::ffi::c_void);
+    fn rs_nv_right(cap: *mut std::ffi::c_void);
+    fn rs_nv_left(cap: *mut std::ffi::c_void);
+    fn rs_nv_up(cap: *mut std::ffi::c_void);
+    fn rs_nv_down(cap: *mut std::ffi::c_void);
+    fn rs_nv_g_cmd(cap: *mut std::ffi::c_void);
+    fn rs_nv_at(cap: *mut std::ffi::c_void);
+    fn rs_nv_join(cap: *mut std::ffi::c_void);
+    fn rs_nv_open(cap: *mut std::ffi::c_void);
+    fn rs_nv_abbrev(cap: *mut std::ffi::c_void);
+    fn rs_nv_lineop(cap: *mut std::ffi::c_void);
+    fn rs_nv_normal(cap: *mut std::ffi::c_void);
+    fn rs_nv_percent(cap: *mut std::ffi::c_void);
+    fn rs_nv_tagpop(cap: *mut std::ffi::c_void);
+    fn rs_nv_regreplay(cap: *mut std::ffi::c_void);
+    fn rs_nv_ctrlh(cap: *mut std::ffi::c_void);
+    fn rs_nv_addsub(cap: *mut std::ffi::c_void);
+    fn rs_nv_colon(cap: *mut std::ffi::c_void);
+    fn rs_nv_record(cap: *mut std::ffi::c_void);
+    fn rs_nv_paste(cap: *mut std::ffi::c_void);
+    fn rs_nv_event(cap: *mut std::ffi::c_void);
+    fn nv_mouse(cap: *mut std::ffi::c_void);
+    fn nv_mousescroll(cap: *mut std::ffi::c_void);
+}
+
+/// Dispatch a command to the appropriate handler function.
+///
+/// Sets ca->arg from the table entry and calls the handler.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer. `idx` must be a valid table index.
+#[cfg(not(test))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_execute_dispatch(idx: c_int, cap: *mut std::ffi::c_void) {
+    let Some(entry) = get_cmd_entry(idx) else {
+        return;
+    };
+    // Set ca->arg from the table (mimics nvim_execute_nv_cmd behavior)
+    nvim_cap_set_arg(cap, c_int::from(entry.arg));
+    match entry.handler {
+        CmdHandler::Ignore => rs_nv_ignore(cap),
+        CmdHandler::Nop => rs_nv_nop(cap),
+        CmdHandler::AddsUb => rs_nv_addsub(cap),
+        CmdHandler::Page => rs_nv_page(cap),
+        CmdHandler::Esc => rs_nv_esc(cap),
+        CmdHandler::HalfPage => rs_nv_halfpage(cap),
+        CmdHandler::ScrollLine => rs_nv_scroll_line(cap),
+        CmdHandler::Ctrlg => rs_nv_ctrlg(cap),
+        CmdHandler::Ctrlh => rs_nv_ctrlh(cap),
+        CmdHandler::Pcmark => rs_nv_pcmark(cap),
+        CmdHandler::Down => rs_nv_down(cap),
+        CmdHandler::Clear => rs_nv_clear(cap),
+        CmdHandler::Up => rs_nv_up(cap),
+        CmdHandler::Visual => rs_nv_visual(cap),
+        CmdHandler::Window => rs_nv_window(cap),
+        CmdHandler::Suspend => rs_nv_suspend(cap),
+        CmdHandler::Normal => rs_nv_normal(cap),
+        CmdHandler::Ident => rs_nv_ident(cap),
+        CmdHandler::Hat => rs_nv_hat(cap),
+        CmdHandler::Right => rs_nv_right(cap),
+        CmdHandler::Left => rs_nv_left(cap),
+        CmdHandler::Operator => rs_nv_operator(cap),
+        CmdHandler::Regname => rs_nv_regname(cap),
+        CmdHandler::Dollar => rs_nv_dollar(cap),
+        CmdHandler::Percent => rs_nv_percent(cap),
+        CmdHandler::Optrans => rs_nv_optrans(cap),
+        CmdHandler::Gomark => rs_nv_gomark(cap),
+        CmdHandler::Brace => rs_nv_brace(cap),
+        CmdHandler::Csearch => rs_nv_csearch(cap),
+        CmdHandler::Dot => rs_nv_dot(cap),
+        CmdHandler::Search => rs_nv_search(cap),
+        CmdHandler::Beginline => rs_nv_beginline(cap),
+        CmdHandler::Colon => rs_nv_colon(cap),
+        CmdHandler::Next => rs_nv_next(cap),
+        CmdHandler::At => rs_nv_at(cap),
+        CmdHandler::Edit => rs_nv_edit(cap),
+        CmdHandler::BckWord => rs_nv_bck_word(cap),
+        CmdHandler::Abbrev => rs_nv_abbrev(cap),
+        CmdHandler::Wordcmd => rs_nv_wordcmd(cap),
+        CmdHandler::Goto => rs_nv_goto(cap),
+        CmdHandler::Scroll => rs_nv_scroll(cap),
+        CmdHandler::Join => rs_nv_join(cap),
+        CmdHandler::Open => rs_nv_open(cap),
+        CmdHandler::Put => rs_nv_put(cap),
+        CmdHandler::Regreplay => rs_nv_regreplay(cap),
+        CmdHandler::Replace => rs_nv_replace(cap),
+        CmdHandler::Subst => rs_nv_subst(cap),
+        CmdHandler::Undo => rs_nv_undo(cap),
+        CmdHandler::Zet => rs_nv_Zet(cap),
+        CmdHandler::SmallZet => rs_nv_zet(cap),
+        CmdHandler::Brackets => rs_nv_brackets(cap),
+        CmdHandler::Lineop => rs_nv_lineop(cap),
+        CmdHandler::Tilde => rs_nv_tilde(cap),
+        CmdHandler::Findpar => rs_nv_findpar(cap),
+        CmdHandler::Pipe => rs_nv_pipe(cap),
+        CmdHandler::Mark => rs_nv_mark(cap),
+        CmdHandler::Record => rs_nv_record(cap),
+        CmdHandler::RedoOrRegister => rs_nv_redo_or_register(cap),
+        CmdHandler::ReplaceMode => rs_nv_Replace(cap),
+        CmdHandler::UndoLine => rs_nv_Undo(cap),
+        CmdHandler::GCmd => rs_nv_g_cmd(cap),
+        CmdHandler::Mouse => nv_mouse(cap),
+        CmdHandler::Mousescroll => nv_mousescroll(cap),
+        CmdHandler::End => rs_nv_end(cap),
+        CmdHandler::Home => rs_nv_home(cap),
+        CmdHandler::Kundo => rs_nv_kundo(cap),
+        CmdHandler::Help => rs_nv_help(cap),
+        CmdHandler::Select => rs_nv_select(cap),
+        CmdHandler::Paste => rs_nv_paste(cap),
+        CmdHandler::Event => rs_nv_event(cap),
+        CmdHandler::Ctrlo => rs_nv_ctrlo(cap),
+        CmdHandler::Tagpop => rs_nv_tagpop(cap),
+        CmdHandler::Error | CmdHandler::Object => rs_nv_error(cap),
+    }
 }
 
 // =============================================================================

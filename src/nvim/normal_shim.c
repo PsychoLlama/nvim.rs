@@ -126,325 +126,13 @@ static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(Norma
 
 static const char *e_noident = N_("E349: No identifier under cursor");
 
-/// Function to be called for a Normal or Visual mode command.
-/// The argument is a cmdarg_T.
-typedef void (*nv_func_T)(cmdarg_T *cap);
-
-// Values for cmd_flags.
-#define NV_NCH      0x01          // may need to get a second char
-#define NV_NCH_NOP  (0x02|NV_NCH)  // get second char when no operator pending
-#define NV_NCH_ALW  (0x04|NV_NCH)  // always get a second char
-#define NV_LANG     0x08        // second char needs language adjustment
-
-#define NV_SS       0x10        // may start selection
-#define NV_SSS      0x20        // may start selection with shift modifier
-#define NV_STS      0x40        // may stop selection without shift modif.
-#define NV_RL       0x80        // 'rightleft' modifies command
-#define NV_KEEPREG  0x100       // don't clear regname
-#define NV_NCW      0x200       // not allowed in command-line window
-
-// Generally speaking, every Normal mode command should either clear any
-// pending operator (with *clearop*()), or set the motion type variable
-// oap->motion_type.
-//
-// When a cursor motion command is made, it is marked as being a character or
-// line oriented motion.  Then, if an operator is in effect, the operation
-// becomes character or line oriented accordingly.
-
-// Rust command handlers (forward declarations needed by dispatch table)
-extern int rs_magic_isset(void);
-extern void rs_nv_ignore(cmdarg_T *cap);
-extern void rs_nv_nop(cmdarg_T *cap);
-extern void rs_nv_error(cmdarg_T *cap);
-extern void rs_nv_help(cmdarg_T *cap);
-extern void rs_nv_suspend(cmdarg_T *cap);
-extern void rs_nv_page(cmdarg_T *cap);
-extern void rs_nv_halfpage(cmdarg_T *cap);
-extern void rs_nv_ctrlg(cmdarg_T *cap);
-extern void rs_nv_scroll_line(cmdarg_T *cap);
-extern void rs_nv_kundo(cmdarg_T *cap);
-extern void rs_nv_goto(cmdarg_T *cap);
-extern void rs_nv_beginline(cmdarg_T *cap);
-extern void rs_nv_dollar(cmdarg_T *cap);
-extern void rs_nv_end(cmdarg_T *cap);
-extern void rs_nv_home(cmdarg_T *cap);
-extern void rs_nv_pipe(cmdarg_T *cap);
-extern void rs_nv_wordcmd(cmdarg_T *cap);
-extern void rs_nv_bck_word(cmdarg_T *cap);
-extern void rs_nv_findpar(cmdarg_T *cap);
-extern void rs_nv_brace(cmdarg_T *cap);
-extern void rs_nv_csearch(cmdarg_T *cap);
-extern void rs_nv_mark(cmdarg_T *cap);
-extern void rs_nv_gomark(cmdarg_T *cap);
-extern void rs_nv_pcmark(cmdarg_T *cap);
-extern void rs_nv_regname(cmdarg_T *cap);
-extern void rs_nv_put(cmdarg_T *cap);
-extern void rs_nv_visual(cmdarg_T *cap);
-extern void rs_nv_window(cmdarg_T *cap);
-extern void rs_nv_clear(cmdarg_T *cap);
-extern void rs_nv_ctrlo(cmdarg_T *cap);
-extern void rs_nv_hat(cmdarg_T *cap);
-extern void rs_nv_Zet(cmdarg_T *cap);
-extern void rs_nv_esc(cmdarg_T *cap);
-extern void rs_nv_edit(cmdarg_T *cap);
-extern void rs_nv_search(cmdarg_T *cap);
-extern void rs_nv_next(cmdarg_T *cap);
-extern void rs_nv_ident(cmdarg_T *cap);
-extern void rs_nv_operator(cmdarg_T *cap);
-extern void rs_nv_optrans(cmdarg_T *cap);
-extern void rs_nv_tilde(cmdarg_T *cap);
-extern void rs_nv_subst(cmdarg_T *cap);
-extern void rs_nv_select(cmdarg_T *cap);
-extern void rs_nv_brackets(cmdarg_T *cap);
-extern void rs_nv_undo(cmdarg_T *cap);
-extern void rs_nv_Undo(cmdarg_T *cap);
-extern void rs_nv_dot(cmdarg_T *cap);
-extern void rs_nv_redo_or_register(cmdarg_T *cap);
-extern void rs_nv_replace(cmdarg_T *cap);
-extern void rs_nv_Replace(cmdarg_T *cap);
-extern void rs_nv_zet(cmdarg_T *cap);
-extern void rs_nv_scroll(cmdarg_T *cap);
-extern void rs_nv_right(cmdarg_T *cap);
-extern void rs_nv_left(cmdarg_T *cap);
-extern void rs_nv_up(cmdarg_T *cap);
-extern void rs_nv_down(cmdarg_T *cap);
-extern void rs_nv_g_cmd(cmdarg_T *cap);
-extern void rs_nv_at(cmdarg_T *cap);
-extern void rs_nv_join(cmdarg_T *cap);
-extern void rs_nv_open(cmdarg_T *cap);
-extern void rs_nv_abbrev(cmdarg_T *cap);
-extern void rs_nv_lineop(cmdarg_T *cap);
-extern void rs_nv_normal(cmdarg_T *cap);
-extern void rs_nv_percent(cmdarg_T *cap);
-extern void rs_nv_tagpop(cmdarg_T *cap);
-extern void rs_nv_regreplay(cmdarg_T *cap);
-extern void rs_nv_ctrlh(cmdarg_T *cap);
-extern void rs_nv_object(cmdarg_T *cap);
-extern void rs_nv_vreplace(cmdarg_T *cap);
-extern void rs_nv_g_underscore_cmd(cmdarg_T *cap);
-extern void rs_nv_gi_cmd(cmdarg_T *cap);
-extern void rs_nv_gv_cmd(cmdarg_T *cap);
-extern void rs_n_swapchar(cmdarg_T *cap);
-extern void rs_nv_addsub(cmdarg_T *cap);
-extern void rs_nv_colon(cmdarg_T *cap);
-extern void rs_nv_record(cmdarg_T *cap);
-extern void rs_nv_paste(cmdarg_T *cap);
-extern void rs_nv_event(cmdarg_T *cap);
-
-/// This table contains one entry for every Normal or Visual mode command.
-/// The order doesn't matter, init_normal_cmds() will create a sorted index.
-/// It is faster when all keys from zero to '~' are present.
-static const struct nv_cmd {
-  int cmd_char;                 ///< (first) command character
-  nv_func_T cmd_func;           ///< function for this command
-  uint16_t cmd_flags;           ///< NV_ flags
-  int16_t cmd_arg;              ///< value for ca.arg
-} nv_cmds[] = {
-  { NUL,       rs_nv_error,    0,                      0 },
-  { Ctrl_A,    rs_nv_addsub,   0,                      0 },
-  { Ctrl_B,    rs_nv_page,     NV_STS,                 BACKWARD },
-  { Ctrl_C,    rs_nv_esc,      0,                      true },
-  { Ctrl_D,    rs_nv_halfpage, 0,                      0 },
-  { Ctrl_E,    rs_nv_scroll_line, 0,                   true },
-  { Ctrl_F,    rs_nv_page,     NV_STS,                 FORWARD },
-  { Ctrl_G,    rs_nv_ctrlg,    0,                      0 },
-  { Ctrl_H,    rs_nv_ctrlh,    0,                      0 },
-  { Ctrl_I,    rs_nv_pcmark,   0,                      0 },
-  { NL,        rs_nv_down,     0,                      false },
-  { Ctrl_K,    rs_nv_error,    0,                      0 },
-  { Ctrl_L,    rs_nv_clear,    0,                      0 },
-  { CAR,       rs_nv_down,     0,                      true },
-  { Ctrl_N,    rs_nv_down,     NV_STS,                 false },
-  { Ctrl_O,    rs_nv_ctrlo,    0,                      0 },
-  { Ctrl_P,    rs_nv_up,       NV_STS,                 false },
-  { Ctrl_Q,    rs_nv_visual,   0,                      false },
-  { Ctrl_R,    rs_nv_redo_or_register, 0,              0 },
-  { Ctrl_S,    rs_nv_ignore,   0,                      0 },
-  { Ctrl_T,    rs_nv_tagpop,   NV_NCW,                 0 },
-  { Ctrl_U,    rs_nv_halfpage, 0,                      0 },
-  { Ctrl_V,    rs_nv_visual,   0,                      false },
-  { 'V',       rs_nv_visual,   0,                      false },
-  { 'v',       rs_nv_visual,   0,                      false },
-  { Ctrl_W,    rs_nv_window,   0,                      0 },
-  { Ctrl_X,    rs_nv_addsub,   0,                      0 },
-  { Ctrl_Y,    rs_nv_scroll_line, 0,                   false },
-  { Ctrl_Z,    rs_nv_suspend,  0,                      0 },
-  { ESC,       rs_nv_esc,      0,                      false },
-  { Ctrl_BSL,  rs_nv_normal,   NV_NCH_ALW,             0 },
-  { Ctrl_RSB,  rs_nv_ident,    NV_NCW,                 0 },
-  { Ctrl_HAT,  rs_nv_hat,      NV_NCW,                 0 },
-  { Ctrl__,    rs_nv_error,    0,                      0 },
-  { ' ',       rs_nv_right,    0,                      0 },
-  { '!',       rs_nv_operator, 0,                      0 },
-  { '"',       rs_nv_regname,  NV_NCH_NOP|NV_KEEPREG,  0 },
-  { '#',       rs_nv_ident,    0,                      0 },
-  { '$',       rs_nv_dollar,   0,                      0 },
-  { '%',       rs_nv_percent,  0,                      0 },
-  { '&',       rs_nv_optrans,  0,                      0 },
-  { '\'',      rs_nv_gomark,   NV_NCH_ALW,             true },
-  { '(',       rs_nv_brace,    0,                      BACKWARD },
-  { ')',       rs_nv_brace,    0,                      FORWARD },
-  { '*',       rs_nv_ident,    0,                      0 },
-  { '+',       rs_nv_down,     0,                      true },
-  { ',',       rs_nv_csearch,  0,                      true },
-  { '-',       rs_nv_up,       0,                      true },
-  { '.',       rs_nv_dot,      NV_KEEPREG,             0 },
-  { '/',       rs_nv_search,   0,                      false },
-  { '0',       rs_nv_beginline, 0,                     0 },
-  { '1',       rs_nv_ignore,   0,                      0 },
-  { '2',       rs_nv_ignore,   0,                      0 },
-  { '3',       rs_nv_ignore,   0,                      0 },
-  { '4',       rs_nv_ignore,   0,                      0 },
-  { '5',       rs_nv_ignore,   0,                      0 },
-  { '6',       rs_nv_ignore,   0,                      0 },
-  { '7',       rs_nv_ignore,   0,                      0 },
-  { '8',       rs_nv_ignore,   0,                      0 },
-  { '9',       rs_nv_ignore,   0,                      0 },
-  { ':',       rs_nv_colon,    0,                      0 },
-  { ';',       rs_nv_csearch,  0,                      false },
-  { '<',       rs_nv_operator, NV_RL,                  0 },
-  { '=',       rs_nv_operator, 0,                      0 },
-  { '>',       rs_nv_operator, NV_RL,                  0 },
-  { '?',       rs_nv_search,   0,                      false },
-  { '@',       rs_nv_at,       NV_NCH_NOP,             false },
-  { 'A',       rs_nv_edit,     0,                      0 },
-  { 'B',       rs_nv_bck_word, 0,                      1 },
-  { 'C',       rs_nv_abbrev,   NV_KEEPREG,             0 },
-  { 'D',       rs_nv_abbrev,   NV_KEEPREG,             0 },
-  { 'E',       rs_nv_wordcmd,  0,                      true },
-  { 'F',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     BACKWARD },
-  { 'G',       rs_nv_goto,     0,                      true },
-  { 'H',       rs_nv_scroll,   0,                      0 },
-  { 'I',       rs_nv_edit,     0,                      0 },
-  { 'J',       rs_nv_join,     0,                      0 },
-  { 'K',       rs_nv_ident,    0,                      0 },
-  { 'L',       rs_nv_scroll,   0,                      0 },
-  { 'M',       rs_nv_scroll,   0,                      0 },
-  { 'N',       rs_nv_next,     0,                      SEARCH_REV },
-  { 'O',       rs_nv_open,     0,                      0 },
-  { 'P',       rs_nv_put,      0,                      0 },
-  { 'Q',       rs_nv_regreplay, 0,                     0 },
-  { 'R',       rs_nv_Replace,  0,                      false },
-  { 'S',       rs_nv_subst,    NV_KEEPREG,             0 },
-  { 'T',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     BACKWARD },
-  { 'U',       rs_nv_Undo,     0,                      0 },
-  { 'W',       rs_nv_wordcmd,  0,                      true },
-  { 'X',       rs_nv_abbrev,   NV_KEEPREG,             0 },
-  { 'Y',       rs_nv_abbrev,   NV_KEEPREG,             0 },
-  { 'Z',       rs_nv_Zet,      NV_NCH_NOP|NV_NCW,      0 },
-  { '[',       rs_nv_brackets, NV_NCH_ALW,             BACKWARD },
-  { '\\',      rs_nv_error,    0,                      0 },
-  { ']',       rs_nv_brackets, NV_NCH_ALW,             FORWARD },
-  { '^',       rs_nv_beginline, 0,                     BL_WHITE | BL_FIX },
-  { '_',       rs_nv_lineop,   0,                      0 },
-  { '`',       rs_nv_gomark,   NV_NCH_ALW,             false },
-  { 'a',       rs_nv_edit,     NV_NCH,                 0 },
-  { 'b',       rs_nv_bck_word, 0,                      0 },
-  { 'c',       rs_nv_operator, 0,                      0 },
-  { 'd',       rs_nv_operator, 0,                      0 },
-  { 'e',       rs_nv_wordcmd,  0,                      false },
-  { 'f',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     FORWARD },
-  { 'g',       rs_nv_g_cmd,    NV_NCH_ALW,             false },
-  { 'h',       rs_nv_left,     NV_RL,                  0 },
-  { 'i',       rs_nv_edit,     NV_NCH,                 0 },
-  { 'j',       rs_nv_down,     0,                      false },
-  { 'k',       rs_nv_up,       0,                      false },
-  { 'l',       rs_nv_right,    NV_RL,                  0 },
-  { 'm',       rs_nv_mark,     NV_NCH_NOP,             0 },
-  { 'n',       rs_nv_next,     0,                      0 },
-  { 'o',       rs_nv_open,     0,                      0 },
-  { 'p',       rs_nv_put,      0,                      0 },
-  { 'q',       rs_nv_record,   NV_NCH,                 0 },
-  { 'r',       rs_nv_replace,  NV_NCH_NOP|NV_LANG,     0 },
-  { 's',       rs_nv_subst,    NV_KEEPREG,             0 },
-  { 't',       rs_nv_csearch,  NV_NCH_ALW|NV_LANG,     FORWARD },
-  { 'u',       rs_nv_undo,     0,                      0 },
-  { 'w',       rs_nv_wordcmd,  0,                      false },
-  { 'x',       rs_nv_abbrev,   NV_KEEPREG,             0 },
-  { 'y',       rs_nv_operator, 0,                      0 },
-  { 'z',       rs_nv_zet,      NV_NCH_ALW,             0 },
-  { '{',       rs_nv_findpar,  0,                      BACKWARD },
-  { '|',       rs_nv_pipe,     0,                      0 },
-  { '}',       rs_nv_findpar,  0,                      FORWARD },
-  { '~',       rs_nv_tilde,    0,                      0 },
-
-  // pound sign
-  { POUND,     rs_nv_ident,    0,                      0 },
-  { K_MOUSEUP, nv_mousescroll, 0,                      MSCR_UP },
-  { K_MOUSEDOWN, nv_mousescroll, 0,                    MSCR_DOWN },
-  { K_MOUSELEFT, nv_mousescroll, 0,                    MSCR_LEFT },
-  { K_MOUSERIGHT, nv_mousescroll, 0,                   MSCR_RIGHT },
-  { K_LEFTMOUSE, nv_mouse,     0,                      0 },
-  { K_LEFTMOUSE_NM, nv_mouse,  0,                      0 },
-  { K_LEFTDRAG, nv_mouse,      0,                      0 },
-  { K_LEFTRELEASE, nv_mouse,   0,                      0 },
-  { K_LEFTRELEASE_NM, nv_mouse, 0,                     0 },
-  { K_MOUSEMOVE, nv_mouse,     0,                      0 },
-  { K_MIDDLEMOUSE, nv_mouse,   0,                      0 },
-  { K_MIDDLEDRAG, nv_mouse,    0,                      0 },
-  { K_MIDDLERELEASE, nv_mouse, 0,                      0 },
-  { K_RIGHTMOUSE, nv_mouse,    0,                      0 },
-  { K_RIGHTDRAG, nv_mouse,     0,                      0 },
-  { K_RIGHTRELEASE, nv_mouse,  0,                      0 },
-  { K_X1MOUSE, nv_mouse,       0,                      0 },
-  { K_X1DRAG, nv_mouse,        0,                      0 },
-  { K_X1RELEASE, nv_mouse,     0,                      0 },
-  { K_X2MOUSE, nv_mouse,       0,                      0 },
-  { K_X2DRAG, nv_mouse,        0,                      0 },
-  { K_X2RELEASE, nv_mouse,     0,                      0 },
-  { K_IGNORE,  rs_nv_ignore,   NV_KEEPREG,             0 },
-  { K_NOP,     rs_nv_nop,      0,                      0 },
-  { K_INS,     rs_nv_edit,     0,                      0 },
-  { K_KINS,    rs_nv_edit,     0,                      0 },
-  { K_BS,      rs_nv_ctrlh,    0,                      0 },
-  { K_UP,      rs_nv_up,       NV_SSS|NV_STS,          false },
-  { K_S_UP,    rs_nv_page,     NV_SS,                  BACKWARD },
-  { K_DOWN,    rs_nv_down,     NV_SSS|NV_STS,          false },
-  { K_S_DOWN,  rs_nv_page,     NV_SS,                  FORWARD },
-  { K_LEFT,    rs_nv_left,     NV_SSS|NV_STS|NV_RL,    0 },
-  { K_S_LEFT,  rs_nv_bck_word, NV_SS|NV_RL,            0 },
-  { K_C_LEFT,  rs_nv_bck_word, NV_SSS|NV_RL|NV_STS,    1 },
-  { K_RIGHT,   rs_nv_right,    NV_SSS|NV_STS|NV_RL,    0 },
-  { K_S_RIGHT, rs_nv_wordcmd,  NV_SS|NV_RL,            false },
-  { K_C_RIGHT, rs_nv_wordcmd,  NV_SSS|NV_RL|NV_STS,    true },
-  { K_PAGEUP,  rs_nv_page,     NV_SSS|NV_STS,          BACKWARD },
-  { K_KPAGEUP, rs_nv_page,     NV_SSS|NV_STS,          BACKWARD },
-  { K_PAGEDOWN, rs_nv_page,    NV_SSS|NV_STS,          FORWARD },
-  { K_KPAGEDOWN, rs_nv_page,   NV_SSS|NV_STS,          FORWARD },
-  { K_END,     rs_nv_end,      NV_SSS|NV_STS,          false },
-  { K_KEND,    rs_nv_end,      NV_SSS|NV_STS,          false },
-  { K_S_END,   rs_nv_end,      NV_SS,                  false },
-  { K_C_END,   rs_nv_end,      NV_SSS|NV_STS,          true },
-  { K_HOME,    rs_nv_home,     NV_SSS|NV_STS,          0 },
-  { K_KHOME,   rs_nv_home,     NV_SSS|NV_STS,          0 },
-  { K_S_HOME,  rs_nv_home,     NV_SS,                  0 },
-  { K_C_HOME,  rs_nv_goto,     NV_SSS|NV_STS,          false },
-  { K_DEL,     rs_nv_abbrev,   0,                      0 },
-  { K_KDEL,    rs_nv_abbrev,   0,                      0 },
-  { K_UNDO,    rs_nv_kundo,    0,                      0 },
-  { K_HELP,    rs_nv_help,     NV_NCW,                 0 },
-  { K_F1,      rs_nv_help,     NV_NCW,                 0 },
-  { K_XF1,     rs_nv_help,     NV_NCW,                 0 },
-  { K_SELECT,  rs_nv_select,   0,                      0 },
-  { K_PASTE_START, rs_nv_paste, NV_KEEPREG,             0 },
-  { K_EVENT,   rs_nv_event,    NV_KEEPREG,             0 },
-  { K_COMMAND, rs_nv_colon,    0,                      0 },
-  { K_LUA, rs_nv_colon,        0,                      0 },
-};
-
-// Number of commands in nv_cmds[].
-#define NV_CMDS_SIZE ARRAY_SIZE(nv_cmds)
-
-// Sorted index of commands in nv_cmds[].
-static int16_t nv_cmd_idx[NV_CMDS_SIZE];
-
-// The highest index for which
-// nv_cmds[idx].cmd_char == nv_cmd_idx[nv_cmds[idx].cmd_char]
-static int nv_max_linear;
-
 // =============================================================================
+// Dispatch table moved to Rust (dispatch/table.rs).
+// init_normal_cmds, nv_cmds[], nv_cmd_idx[], nv_max_linear, nv_compare,
+// NV_* flag constants, and all extern rs_nv_* declarations deleted.
+// =============================================================================
+
 // Rust FFI declarations (non-dispatch-table)
-// =============================================================================
 
 // memline crate
 extern void rs_goto_byte(int cnt);
@@ -519,44 +207,14 @@ extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
 // del_from_showcmd: now exported from Rust via #[export_name = "del_from_showcmd"]
 extern void del_from_showcmd(int len);
 
-/// Compare functions for qsort() below, that checks the command character
-/// through the index in nv_cmd_idx[].
-static int nv_compare(const void *s1, const void *s2)
-{
-  // The commands are sorted on absolute value.
-  int c1 = nv_cmds[*(const int16_t *)s1].cmd_char;
-  int c2 = nv_cmds[*(const int16_t *)s2].cmd_char;
-  if (c1 < 0) {
-    c1 = -c1;
-  }
-  if (c2 < 0) {
-    c2 = -c2;
-  }
-  return c1 == c2 ? 0 : c1 > c2 ? 1 : -1;
-}
-
-/// Initialize the nv_cmd_idx[] table.
-void init_normal_cmds(void)
-{
-  assert(NV_CMDS_SIZE <= SHRT_MAX);
-
-  // Fill the index table with a one to one relation.
-  for (int16_t i = 0; i < (int16_t)NV_CMDS_SIZE; i++) {
-    nv_cmd_idx[i] = i;
-  }
-
-  // Sort the commands by the command character.
-  qsort(&nv_cmd_idx, NV_CMDS_SIZE, sizeof(int16_t), nv_compare);
-
-  // Find the first entry that can't be indexed by the command character.
-  int16_t i;
-  for (i = 0; i < (int16_t)NV_CMDS_SIZE; i++) {
-    if (i != nv_cmds[nv_cmd_idx[i]].cmd_char) {
-      break;
-    }
-  }
-  nv_max_linear = i - 1;
-}
+// Rust dispatch table accessors
+extern int rs_table_get_cmd_flags(int idx);
+extern int rs_table_get_cmd_arg(int idx);
+extern int rs_table_get_cmd_char(int idx);
+extern int rs_table_get_size(void);
+extern int rs_table_get_max_linear(void);
+extern int16_t rs_table_get_cmd_idx(int idx);
+extern void rs_execute_dispatch(int idx, cmdarg_T *cap);
 
 static oparg_T *current_oap = NULL;
 
@@ -579,17 +237,18 @@ int nvim_get_opcount(void) { return opcount; }
 
 void nvim_set_opcount(int val) { opcount = val; }
 
-int nvim_get_nv_max_linear(void) { return nv_max_linear; }
+// Dispatch table accessors now forward to Rust (table lives in dispatch/table.rs)
+int nvim_get_nv_max_linear(void) { return rs_table_get_max_linear(); }
 
-int nvim_get_nv_cmd_char(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_char : 0; }
+int nvim_get_nv_cmd_char(int idx) { return rs_table_get_cmd_char(idx); }
 
-int nvim_get_nv_cmds_size(void) { return (int)NV_CMDS_SIZE; }
+int nvim_get_nv_cmds_size(void) { return rs_table_get_size(); }
 
-int16_t nvim_get_nv_cmd_idx(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmd_idx[idx] : 0; }
+int16_t nvim_get_nv_cmd_idx(int idx) { return rs_table_get_cmd_idx(idx); }
 
-unsigned int nvim_get_nv_cmd_flags(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_flags : 0; }
+unsigned int nvim_get_nv_cmd_flags(int idx) { return (unsigned int)rs_table_get_cmd_flags(idx); }
 
-int nvim_get_nv_cmd_arg(int idx) { return (idx >= 0 && (size_t)idx < NV_CMDS_SIZE) ? nv_cmds[idx].cmd_arg : 0; }
+int nvim_get_nv_cmd_arg(int idx) { return rs_table_get_cmd_arg(idx); }
 
 // =============================================================================
 // oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
@@ -1571,7 +1230,7 @@ _Static_assert(MODE_LREPLACE == 0x120, "MODE_LREPLACE changed");
 _Static_assert(MODE_LANGMAP == 0x20, "MODE_LANGMAP changed");
 _Static_assert(MODE_NORMAL_BUSY == 0x1001, "MODE_NORMAL_BUSY changed");
 _Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP changed");
-_Static_assert(NV_LANG == 0x08, "NV_LANG changed");
+// NV_LANG _Static_assert deleted: constant now owned by Rust dispatch/constants.rs
 _Static_assert(CPO_DIGRAPH == 'D', "CPO_DIGRAPH changed");
 
 /// Wrapper for plain_vgetc.
@@ -1657,7 +1316,7 @@ _Static_assert(K_EVENT == -26365, "K_EVENT changed");
 _Static_assert(OP_NOP == 0, "OP_NOP changed");
 _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
-_Static_assert(NV_KEEPREG == 0x100, "NV_KEEPREG changed");
+// NV_KEEPREG _Static_assert deleted: constant now owned by Rust dispatch/constants.rs
 
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
@@ -1789,11 +1448,7 @@ _Static_assert(Ctrl_W == 23, "Ctrl_W changed");
 _Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT changed");
 _Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL changed");
 _Static_assert(MODE_SELECT == 0x40, "MODE_SELECT changed");
-_Static_assert(NV_NCW == 0x200, "NV_NCW changed");
-_Static_assert(NV_RL == 0x80, "NV_RL changed");
-_Static_assert(NV_SS == 0x10, "NV_SS changed");
-_Static_assert(NV_SSS == 0x20, "NV_SSS changed");
-_Static_assert(NV_STS == 0x40, "NV_STS changed");
+// NV_NCW/NV_RL/NV_SS/NV_SSS/NV_STS _Static_asserts deleted: constants now owned by Rust dispatch/constants.rs
 
 /// Get vgetc_char global.
 int nvim_get_vgetc_char(void) { return vgetc_char; }
@@ -1827,7 +1482,8 @@ void nvim_ui_flush_wrapper(void) { ui_flush(); }
 /// Clear MOD_MASK_SHIFT from mod_mask.
 void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
 
-void nvim_execute_nv_cmd(int idx, cmdarg_T *ca) { ca->arg = nv_cmds[idx].cmd_arg; (nv_cmds[idx].cmd_func)(ca); }
+// nvim_execute_nv_cmd now forwards to Rust dispatch (dispatch/table.rs rs_execute_dispatch)
+void nvim_execute_nv_cmd(int idx, cmdarg_T *ca) { rs_execute_dispatch(idx, ca); }
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 
