@@ -19,6 +19,10 @@
 #  endif
 #endif
 
+DLLEXPORT bool os_isrealdir(const char *name);
+DLLEXPORT bool os_isdir(const char *name);
+DLLEXPORT bool os_path_exists(const char *path);
+DLLEXPORT bool os_file_is_readable(const char *name);
 DLLEXPORT int os_dirname(char *buf, size_t len);
 DLLEXPORT int os_exepath(char *buffer, size_t *size);
 DLLEXPORT FILE *os_fopen(const char *path, const char *flags);

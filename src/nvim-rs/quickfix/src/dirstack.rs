@@ -12,7 +12,7 @@
 //! - Push adds a new directory (resolving relative paths against the stack)
 //! - Pop removes the top and returns the new current directory
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_void};
 use std::ptr;
 
 // =============================================================================
@@ -31,9 +31,9 @@ extern "C" {
 
 // Import from sibling crates
 extern "C" {
-    // From os crate
-    fn rs_os_isdir(path: *const c_char) -> c_int;
-    fn rs_os_path_exists(path: *const c_char) -> c_int;
+    // From os crate (exported as os_* via #[export_name])
+    fn os_isdir(path: *const c_char) -> bool;
+    fn os_path_exists(path: *const c_char) -> bool;
 
     // From path crate
     #[link_name = "vim_isAbsName"]
@@ -120,7 +120,7 @@ pub unsafe fn push_dir_raw(
             (*(*stackptr)).dirname = concat_fnames((*ds_search).dirname, dirbuf, true);
 
             // Check if this concatenated path is a directory
-            if rs_os_isdir((*(*stackptr)).dirname) != 0 {
+            if os_isdir((*(*stackptr)).dirname) {
                 break;
             }
 
@@ -256,7 +256,7 @@ pub unsafe fn guess_filepath_raw(
         fullname = concat_fnames((*ds_ptr).dirname, filename, true);
 
         // Check if this file exists
-        if rs_os_path_exists(fullname) != 0 {
+        if os_path_exists(fullname) {
             break;
         }
 

@@ -63,10 +63,6 @@
 #include "os/fs.c.generated.h"
 
 // Rust filesystem implementations (still called from C)
-extern int rs_os_isrealdir(const char *path);
-extern int rs_os_isdir(const char *path);
-extern int rs_os_path_exists(const char *path);
-extern int rs_os_file_is_readable(const char *path);
 extern int rs_os_nodetype(const char *name);
 extern int rs_os_mkdir(const char *path, unsigned int mode);
 extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
@@ -110,23 +106,6 @@ int os_chdir(const char *path)
 }
 
 
-/// Check if the given path is a directory and not a symlink to a directory.
-/// @return `true` if `name` is a directory and NOT a symlink to a directory.
-///         `false` if `name` is not a directory or if an error occurred.
-bool os_isrealdir(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_isrealdir(name) != 0;
-}
-
-/// Check if the given path exists and is a directory.
-///
-/// @return `true` if `name` is a directory.
-bool os_isdir(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_os_isdir(name) != 0;
-}
 
 /// Check what `name` is:
 /// @return NODE_NORMAL: file or directory (or doesn't exist)
@@ -581,23 +560,8 @@ void os_free_acl(vim_acl_T aclent)
 
 
 
-/// Check if a path exists.
-///
-/// @return `true` if `path` exists
-bool os_path_exists(const char *path)
-{
-  return rs_os_path_exists(path) != 0;
-}
 
 
-/// Check if a file is readable.
-///
-/// @return true if `name` is readable, otherwise false.
-bool os_file_is_readable(const char *name)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_file_is_readable(name) != 0;
-}
 
 
 

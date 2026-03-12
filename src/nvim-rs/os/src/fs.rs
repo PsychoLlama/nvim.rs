@@ -49,19 +49,19 @@ fn io_error_to_uv_error(err: &std::io::Error) -> i32 {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_path_exists(path: *const c_char) -> c_int {
+#[export_name = "os_path_exists"]
+pub unsafe extern "C" fn rs_os_path_exists(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return 0,
+        Err(_) => return false,
     };
 
-    c_int::from(Path::new(path_str).exists())
+    Path::new(path_str).exists()
 }
 
 /// Check if a path is a directory.
@@ -69,19 +69,19 @@ pub unsafe extern "C" fn rs_os_path_exists(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_isdir(path: *const c_char) -> c_int {
+#[export_name = "os_isdir"]
+pub unsafe extern "C" fn rs_os_isdir(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return 0,
+        Err(_) => return false,
     };
 
-    c_int::from(Path::new(path_str).is_dir())
+    Path::new(path_str).is_dir()
 }
 
 /// Check if a path is a regular file.
@@ -109,16 +109,16 @@ pub unsafe extern "C" fn rs_os_isfile(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_isrealdir(path: *const c_char) -> c_int {
+#[export_name = "os_isrealdir"]
+pub unsafe extern "C" fn rs_os_isrealdir(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return 0,
+        Err(_) => return false,
     };
 
     let path = Path::new(path_str);
@@ -128,12 +128,12 @@ pub unsafe extern "C" fn rs_os_isrealdir(path: *const c_char) -> c_int {
         Ok(meta) => {
             // If it's a symlink, return false
             if meta.file_type().is_symlink() {
-                return 0;
+                return false;
             }
             // Otherwise, check if it's a directory
-            c_int::from(meta.is_dir())
+            meta.is_dir()
         }
-        Err(_) => 0,
+        Err(_) => false,
     }
 }
 
@@ -162,20 +162,20 @@ pub unsafe extern "C" fn rs_os_islink(path: *const c_char) -> c_int {
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_file_is_readable(path: *const c_char) -> c_int {
+#[export_name = "os_file_is_readable"]
+pub unsafe extern "C" fn rs_os_file_is_readable(path: *const c_char) -> bool {
     if path.is_null() {
-        return 0;
+        return false;
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return 0,
+        Err(_) => return false,
     };
 
     // Try to open the file for reading
-    c_int::from(fs::File::open(path_str).is_ok())
+    fs::File::open(path_str).is_ok()
 }
 
 /// Check if a file is writable.
@@ -1937,12 +1937,12 @@ mod tests {
         // Current directory should exist
         let path = CString::new(".").unwrap();
         let exists = unsafe { rs_os_path_exists(path.as_ptr()) };
-        assert_eq!(exists, 1);
+        assert!(exists);
 
         // Non-existent path
         let path = CString::new("/nonexistent/path/12345").unwrap();
         let exists = unsafe { rs_os_path_exists(path.as_ptr()) };
-        assert_eq!(exists, 0);
+        assert!(!exists);
     }
 
     #[test]
@@ -1950,13 +1950,13 @@ mod tests {
         // Current directory is a directory
         let path = CString::new(".").unwrap();
         let isdir = unsafe { rs_os_isdir(path.as_ptr()) };
-        assert_eq!(isdir, 1);
+        assert!(isdir);
 
         // Cargo.toml is not a directory (if it exists)
         if Path::new("Cargo.toml").exists() {
             let path = CString::new("Cargo.toml").unwrap();
             let isdir = unsafe { rs_os_isdir(path.as_ptr()) };
-            assert_eq!(isdir, 0);
+            assert!(!isdir);
         }
     }
 
