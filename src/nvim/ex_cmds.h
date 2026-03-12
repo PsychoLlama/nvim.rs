@@ -37,4 +37,10 @@ extern void rs_print_line_no_prefix(int lnum, int use_number, int list);
 extern int rs_do_ecmd(int fnum, char *ffname, char *sfname, exarg_T *eap,
                       int newlnum, int flags, win_T *oldwin);
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+bool do_sub_msg(bool count_only);
+bool prepare_tagpreview(bool undo_sync);
+void ex_substitute(exarg_T *eap);
+int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
+
 #include "ex_cmds_shim.h.generated.h"

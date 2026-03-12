@@ -120,7 +120,7 @@ extern void rs_diff_buf_add(buf_T *buf);
 extern void rs_diff_invalidate(buf_T *buf);
 extern int rs_check_regexp_delim(int c);
 extern char *rs_skip_substitute(char *start, int delimiter);
-extern bool rs_do_sub_msg(bool count_only);
+// rs_do_sub_msg deleted: now exported as do_sub_msg via #[export_name]
 
 // ExArg accessors
 int nvim_exarg_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
@@ -757,8 +757,8 @@ static int global_need_beginline;       // call beginline() after ":g"
 extern void rs_sub_get_replacement(void *ret_sub);
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 extern void rs_free_old_sub(void);
-extern void rs_ex_substitute(exarg_T *eap);
-extern int rs_ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
+// rs_ex_substitute deleted: now exported as ex_substitute via #[export_name]
+// rs_ex_substitute_preview deleted: now exported as ex_substitute_preview via #[export_name]
 
 /// Get old substitute replacement string. Thin wrapper calling Rust.
 ///
@@ -817,16 +817,7 @@ int nvim_excmds_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
 /// Accessor: return messaging() result.
 int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
-/// Give message for number of substitutions.
-/// Can also be used after a ":global" command.
-///
-/// @param count_only  used 'n' flag for ":s"
-///
-/// @return            true if a message was given.
-bool do_sub_msg(bool count_only)
-{
-  return rs_do_sub_msg(count_only);
-}
+// do_sub_msg deleted: now exported from Rust substitute.rs via #[export_name]
 
 // ex_global implemented in Rust (rs_ex_global in ex_cmds/src/global.rs)
 extern void rs_ex_global(exarg_T *eap);
@@ -914,26 +905,9 @@ void nvim_excmds_set_foldcolumn_zero(void)
   set_option_direct(kOptFoldcolumn, STATIC_CSTR_AS_OPTVAL("0"), 0, SID_NONE);
 }
 
-// prepare_tagpreview implemented in Rust (rs_prepare_tagpreview in ex_cmds/src/window.rs)
-extern bool rs_prepare_tagpreview(int undo_sync);
-
-/// Sets up the preview window for tag preview. Thin wrapper calling the Rust implementation.
-bool prepare_tagpreview(bool undo_sync)
-{
-  return rs_prepare_tagpreview((int)undo_sync);
-}
-
-/// :substitute command. Thin wrapper calling Rust.
-void ex_substitute(exarg_T *eap)
-{
-  rs_ex_substitute(eap);
-}
-
-/// :substitute command preview callback. Thin wrapper calling Rust.
-int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr)
-{
-  return rs_ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
-}
+// prepare_tagpreview deleted: now exported from Rust window.rs via #[export_name]
+// ex_substitute deleted: now exported from Rust substitute.rs via #[export_name]
+// ex_substitute_preview deleted: now exported from Rust substitute.rs via #[export_name]
 
 // --- ex_oldfiles FFI accessors ---
 

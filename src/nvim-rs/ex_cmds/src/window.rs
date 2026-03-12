@@ -378,7 +378,8 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C window management functions; must be called on the main Neovim thread.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "prepare_tagpreview"]
 pub unsafe extern "C" fn rs_prepare_tagpreview(undo_sync: c_int) -> bool {
     // If current window is already the preview window, do nothing.
     if nvim_excmds_curwin_get_pvw() != 0 {

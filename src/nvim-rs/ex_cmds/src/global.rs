@@ -85,8 +85,9 @@ extern "C" {
 const BL_WHITE: c_int = 1;
 const BL_FIX: c_int = 4;
 
-// Forward declaration - rs_do_sub_msg is in substitute.rs in this crate
+// Forward declaration - rs_do_sub_msg is in substitute.rs in this crate (exported as do_sub_msg)
 extern "C" {
+    #[link_name = "do_sub_msg"]
     fn rs_do_sub_msg(count_only: bool) -> bool;
 }
 

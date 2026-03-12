@@ -676,7 +676,8 @@ pub unsafe extern "C" fn rs_sub_grow_buf(
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "do_sub_msg"]
 pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
     let sub_nsubs = nvim_excmds_get_sub_nsubs();
     let sub_nlines = nvim_excmds_get_sub_nlines();
@@ -2797,7 +2798,7 @@ pub unsafe extern "C" fn rs_free_old_sub() {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_substitute"]
 pub unsafe extern "C" fn rs_ex_substitute(eap: *mut ExArgHandle) {
     rs_do_sub(eap, 0, 0, 0);
 }
@@ -2808,7 +2809,7 @@ pub unsafe extern "C" fn rs_ex_substitute(eap: *mut ExArgHandle) {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_substitute_preview"]
 pub unsafe extern "C" fn rs_ex_substitute_preview(
     eap: *mut ExArgHandle,
     cmdpreview_ns: c_int,
