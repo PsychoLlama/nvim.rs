@@ -42,9 +42,6 @@
 #include "nvim/vim_defs.h"
 
 
-// Handle type for typval_T pointers passed to Rust
-typedef void *TypevalHandle;
-
 // Rust FFI functions
 extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
