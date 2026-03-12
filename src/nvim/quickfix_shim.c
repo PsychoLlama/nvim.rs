@@ -539,7 +539,7 @@ extern void rs_win_setwidth(int width);
 // rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
 // rs_did_set_quickfixtextfunc removed: exports as did_set_quickfixtextfunc via #[export_name].
 // rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
-extern bool rs_set_ref_in_quickfix(int copyID);
+// rs_set_ref_in_quickfix removed: Rust eval gc.rs uses #[link_name] directly.
 extern void rs_free_quickfix(void);
 
 // Rust fold FFI declarations
@@ -3341,11 +3341,7 @@ const void *nvim_qf_get_list_at_const(const void *qi_void, int idx)
 // mark_quickfix_user_data deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
 // mark_quickfix_ctx deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
 
-/// "in use". So that garbage collection doesn't free the context.
-bool set_ref_in_quickfix(int copyID)
-{
-  return rs_set_ref_in_quickfix(copyID);
-}
+// set_ref_in_quickfix deleted: eval gc.rs bypasses via #[link_name = "rs_set_ref_in_quickfix"].
 
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 // ":[range]cbuffer [bufnr]" command.

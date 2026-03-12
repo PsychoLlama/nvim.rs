@@ -80,6 +80,7 @@ extern "C" {
     fn set_ref_in_functions(copy_id: c_int) -> bool;
     fn set_ref_in_func_args(copy_id: c_int) -> bool;
     fn garbage_collect_vimvars(copy_id: c_int) -> bool;
+    #[link_name = "rs_set_ref_in_quickfix"]
     fn set_ref_in_quickfix(copy_id: c_int) -> bool;
     fn free_unref_funccal(copy_id: c_int, testing: bool) -> bool;
 
