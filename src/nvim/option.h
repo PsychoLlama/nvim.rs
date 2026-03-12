@@ -94,6 +94,9 @@ const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, OptV
 void set_option_value_give_err(OptIndex opt_idx, OptVal value, int opt_flags);
 void set_option_direct(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid);
 void set_option_direct_for(OptIndex opt_idx, OptVal value, int opt_flags, scid_T set_sid, OptScope scope, void *from);
+void copy_winopt(winopt_T *from, winopt_T *to);
+void clear_winopt(winopt_T *wop);
+void buf_copy_options(buf_T *buf, int flags);
 void set_context_in_set_cmd(expand_T *xp, char *arg, int opt_flags);
 int ExpandOldSetting(int *numMatches, char ***matches);
 int ExpandStringSetting(expand_T *xp, regmatch_T *regmatch, int *numMatches, char ***matches);

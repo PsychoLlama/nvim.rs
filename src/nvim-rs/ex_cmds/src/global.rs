@@ -412,7 +412,7 @@ impl IntoIterator for MarkedLines {
 ///
 /// # Safety
 /// `cmd` must be null or a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "global_exe"]
 pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     // Set current position only once for a global command.
     // If global_busy is set, setpcmark() will not do anything.

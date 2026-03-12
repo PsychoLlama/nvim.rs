@@ -2221,19 +2221,12 @@ static char *copy_option_val(const char *val)
   return xstrdup(val);
 }
 
-extern void rs_copy_winopt(winopt_T *from, winopt_T *to);
-extern void rs_clear_winopt(winopt_T *wop);
+// rs_copy_winopt deleted: now exported as copy_winopt via #[export_name]
+// rs_clear_winopt deleted: now exported as clear_winopt via #[export_name]
 extern void rs_check_winopt(winopt_T *wop);
 extern void rs_didset_window_options(win_T *wp, int valid_cursor);
 
-/// Copy the options from one winopt_T to another.
-/// Doesn't free the old option values in "to", use clear_winopt() for that.
-/// The 'scroll' option is not copied, because it depends on the window height.
-/// The 'previewwindow' option is reset, there can be only one preview window.
-void copy_winopt(winopt_T *from, winopt_T *to)
-{
-  rs_copy_winopt(from, to);
-}
+// copy_winopt deleted: now exported directly from Rust via #[export_name]
 
 /// Check string options in a window for a NULL value.
 static void check_win_options(win_T *win)
@@ -2248,11 +2241,7 @@ static void check_winopt(winopt_T *wop)
   rs_check_winopt(wop);
 }
 
-/// Free the allocated memory inside a winopt_T.
-void clear_winopt(winopt_T *wop)
-{
-  rs_clear_winopt(wop);
-}
+// clear_winopt deleted: now exported directly from Rust via #[export_name]
 
 void didset_window_options(win_T *wp, bool valid_cursor)
 {
@@ -2955,14 +2944,8 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 // Phase 11 (pass 11) accessors: buf_copy_options
 // =============================================================================
 
-extern void rs_buf_copy_options(void *buf, int flags);
-
-/// Copy global option values to local options for one buffer.
-/// Delegates all control flow to Rust; C handles only the mechanical bulk copy.
-void buf_copy_options(buf_T *buf, int flags)
-{
-  rs_buf_copy_options(buf, flags);
-}
+// rs_buf_copy_options deleted: now exported as buf_copy_options via #[export_name]
+// buf_copy_options deleted: now exported directly from Rust via #[export_name]
 
 /// Returns cmdmod.cmod_flags (used by Rust to check CMOD_NOSWAPFILE).
 int nvim_cmdmod_get_cmod_flags(void)

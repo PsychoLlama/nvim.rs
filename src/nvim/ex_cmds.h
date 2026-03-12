@@ -49,5 +49,11 @@ void ex_wnext(exarg_T *eap);
 void do_wqall(exarg_T *eap);
 void ex_global(exarg_T *eap);
 void ex_oldfiles(exarg_T *eap);
+void do_shell(char *cmd, int flags);
+void global_exe(char *cmd);
+void free_old_sub(void);
+#if defined(EXITFREE)
+void free_prev_shellcmd(void);
+#endif
 
 #include "ex_cmds_shim.h.generated.h"

@@ -534,7 +534,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
 ///
 /// # Safety
 /// `buf` must be a valid non-null `buf_T *`.
-#[no_mangle]
+#[export_name = "buf_copy_options"]
 pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags: c_int) {
     let p_cpo = nvim_option_get_cpo();
     // Skip when option defaults have not been set yet (first buffer allocation).

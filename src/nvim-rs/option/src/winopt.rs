@@ -53,7 +53,7 @@ extern "C" {
 ///
 /// # Safety
 /// Both `from` and `to` must be valid non-null winopt_T pointers.
-#[no_mangle]
+#[export_name = "copy_winopt"]
 pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
     // Copy all scalar fields
     nvim_copy_winopt_scalars(from, to);
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
 ///
 /// # Safety
 /// `wop` must be a valid non-null winopt_T pointer.
-#[no_mangle]
+#[export_name = "clear_winopt"]
 pub unsafe extern "C" fn rs_clear_winopt(wop: WinoptHandle) {
     let n = nvim_winopt_string_field_count();
     for i in 0..n {

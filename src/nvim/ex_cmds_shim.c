@@ -493,7 +493,7 @@ _Static_assert(REGSUB_BACKSLASH == 4, "REGSUB_BACKSLASH mismatch - update Rust c
 
 // do_bang, prevcmd management implemented in Rust (rs_do_bang, rs_free_prev_shellcmd)
 extern void rs_do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out);
-extern void rs_free_prev_shellcmd(void);
+// rs_free_prev_shellcmd deleted: now exported as free_prev_shellcmd via #[export_name]
 
 /// Handle the ":!cmd" command. Thin wrapper calling the Rust implementation.
 void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out)
@@ -502,13 +502,7 @@ void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out
   rs_do_bang(addr_count, eap, forceit, do_in, do_out);
 }
 
-#if defined(EXITFREE)
-void free_prev_shellcmd(void)
-{
-  rs_free_prev_shellcmd();
-}
-
-#endif
+// free_prev_shellcmd deleted: now exported directly from Rust via #[export_name]
 
 // do_filter implemented in Rust (rs_do_filter in ex_cmds/src/shell.rs)
 extern void rs_do_filter(int line1, int line2, exarg_T *eap, const char *cmd, int do_in,
@@ -521,14 +515,7 @@ static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char *cmd, b
   rs_do_filter((int)line1, (int)line2, eap, cmd, do_in ? 1 : 0, do_out ? 1 : 0);
 }
 
-// do_shell implemented in Rust (rs_do_shell in ex_cmds/src/shell.rs)
-extern void rs_do_shell(char *cmd, int flags);
-
-/// Call a shell to execute a command. Thin wrapper calling the Rust implementation.
-void do_shell(char *cmd, int flags)
-{
-  rs_do_shell(cmd, flags);
-}
+// do_shell deleted: now exported directly from Rust via #[export_name]
 
 // make_filter_cmd and find_pipe implemented in Rust (rs_make_filter_cmd in ex_cmds/src/shell.rs)
 extern char *rs_make_filter_cmd(const char *cmd, const char *itmp, const char *otmp, int do_in);
@@ -734,7 +721,7 @@ static int global_need_beginline;       // call beginline() after ":g"
 // implemented in Rust (ex_cmds/src/substitute.rs).
 extern void rs_sub_get_replacement(void *ret_sub);
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
-extern void rs_free_old_sub(void);
+// rs_free_old_sub deleted: now exported as free_old_sub via #[export_name]
 // rs_ex_substitute deleted: now exported as ex_substitute via #[export_name]
 // rs_ex_substitute_preview deleted: now exported as ex_substitute_preview via #[export_name]
 
@@ -799,23 +786,9 @@ int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
 // ex_global deleted: now exported directly from Rust via #[export_name] (ex_cmds/src/global.rs)
 
-// global_exe + global_exe_one implemented in Rust (rs_global_exe in ex_cmds/src/global.rs)
-extern void rs_global_exe(char *cmd);
+// global_exe deleted: now exported directly from Rust via #[export_name]
 
-/// Execute `cmd` on lines marked with ml_setmarked(). Thin wrapper calling Rust.
-void global_exe(char *cmd)
-{
-  rs_global_exe(cmd);
-}
-
-#if defined(EXITFREE)
-/// EXITFREE cleanup for old_sub. Thin wrapper calling Rust.
-void free_old_sub(void)
-{
-  rs_free_old_sub();
-}
-
-#endif
+// free_old_sub deleted: now exported directly from Rust via #[export_name]
 
 /// Set up for a tagpreview.
 ///

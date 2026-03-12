@@ -772,7 +772,7 @@ static mut PREVCMD: Option<*mut c_char> = None;
 ///
 /// # Safety
 /// Must only be called once during process exit.
-#[no_mangle]
+#[export_name = "free_prev_shellcmd"]
 pub unsafe extern "C" fn rs_free_prev_shellcmd() {
     #[allow(static_mut_refs)]
     if let Some(ptr) = PREVCMD.take() {
@@ -786,7 +786,7 @@ pub unsafe extern "C" fn rs_free_prev_shellcmd() {
 ///
 /// # Safety
 /// `cmd` must be null or a valid null-terminated C string (mutable for call_shell).
-#[no_mangle]
+#[export_name = "do_shell"]
 pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
     // Disallow shell commands in secure mode
     if rs_check_secure() != 0 {

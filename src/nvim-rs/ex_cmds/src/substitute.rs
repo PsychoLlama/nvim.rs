@@ -2789,7 +2789,7 @@ pub unsafe extern "C" fn rs_sub_set_replacement(
 ///
 /// # Safety
 /// Calls C accessor.
-#[no_mangle]
+#[export_name = "free_old_sub"]
 pub unsafe extern "C" fn rs_free_old_sub() {
     nvim_excmds_old_sub_set(std::ptr::null_mut(), 0, std::ptr::null_mut());
 }
