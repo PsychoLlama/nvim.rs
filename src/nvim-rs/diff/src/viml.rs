@@ -477,7 +477,7 @@ pub unsafe extern "C" fn rs_xdiff_out(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be valid pointers to typval_T values.
-#[no_mangle]
+#[export_name = "f_diff_filler"]
 pub unsafe extern "C" fn rs_f_diff_filler(
     argvars: *mut c_void,
     rettv: *mut c_void,
@@ -509,9 +509,9 @@ static mut HLID_VALUE: c_int = 0;
 ///
 /// # Safety
 /// Accesses global state and static mut variables. Single-threaded Neovim only.
-#[no_mangle]
-#[allow(static_mut_refs)]
-pub unsafe extern "C" fn rs_f_diff_hlID(
+#[export_name = "f_diff_hlID"]
+#[allow(static_mut_refs, non_snake_case)]
+pub unsafe extern "C" fn rs_f_diff_hl_id(
     argvars: *mut c_void,
     rettv: *mut c_void,
     _fptr: *mut c_void,

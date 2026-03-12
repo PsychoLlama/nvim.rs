@@ -79,6 +79,7 @@ extern "C" {
     fn nvim_diff_do_exedit_with_old_curwin(eap: *mut std::ffi::c_void, old_curwin: WinHandle);
     fn nvim_diff_get_CMD_split() -> c_int;
     fn rs_win_valid(wp: WinHandle) -> c_int;
+    #[link_name = "diff_win_options"]
     fn rs_diff_win_options(wp: WinHandle, addbuf: bool);
     fn nvim_diff_ex_file(eap: *mut std::ffi::c_void);
     fn nvim_diff_augroup_exists_filetypedetect() -> bool;
@@ -304,7 +305,7 @@ unsafe fn ex_diffpatch_impl(eap: *mut std::ffi::c_void, old_curwin: WinHandle) {
 ///
 /// # Safety
 /// `eap` must be a valid pointer to an `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_diffpatch"]
 pub unsafe extern "C" fn rs_ex_diffpatch(eap: *mut std::ffi::c_void) {
     let old_curwin = nvim_diff_get_curwin();
     ex_diffpatch_impl(eap, old_curwin);

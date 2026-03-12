@@ -383,7 +383,7 @@ pub const extern "C" fn rs_diff_line_update_complete(
 ///
 /// # Safety
 /// Accesses C globals (curtab, curwin, need_diff_redraw).
-#[no_mangle]
+#[export_name = "diff_redraw"]
 pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
     let mut wp_other = WinHandle::null();
     let mut used_max_fill_other = false;

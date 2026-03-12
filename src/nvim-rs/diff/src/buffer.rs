@@ -167,6 +167,7 @@ extern "C" {
     fn nvim_set_need_diff_redraw(val: bool);
     fn nvim_diff_get_linematch_lines() -> c_int;
     fn nvim_diff_get_diff_flags() -> c_int;
+    #[link_name = "diff_redraw"]
     fn rs_diff_redraw(dofold: bool);
     fn nvim_diff_semsg_e96();
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
@@ -3420,7 +3421,7 @@ pub unsafe extern "C" fn rs_diff_find_change(
 /// Rust implementation of `ex_diffupdate`.
 ///
 /// Completely updates the diffs for the buffers involved in the current tab.
-#[no_mangle]
+#[export_name = "ex_diffupdate"]
 pub unsafe extern "C" fn rs_diff_ex_diffupdate(eap: ExargHandle) {
     // If busy, defer the update.
     if nvim_diff_get_busy() {

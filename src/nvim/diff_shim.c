@@ -87,19 +87,8 @@
 // Rust function declarations called from C accessor bodies within this file
 extern int rs_lnum_compare(const void *s1, const void *s2);
 extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
-extern void rs_diff_ex_diffupdate(exarg_T *eap);
-extern void rs_f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_nv_diffgetput(bool put, size_t count);
-extern void rs_ex_diffthis(exarg_T *eap);
-extern void rs_f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
-extern void rs_diff_redraw(bool dofold);
-extern void rs_diff_win_options(win_T *wp, bool addbuf);
-extern void rs_ex_diffoff(exarg_T *eap);
-extern void rs_ex_diffsplit(exarg_T *eap);
-extern void rs_ex_diffgetput(exarg_T *eap);
 extern void rs_run_linematch(diff_T *dp);
 extern int rs_parse_diffanchors(bool check_only, buf_T *buf, linenr_T *anchors, int *num_anchors);
-extern void rs_ex_diffpatch(exarg_T *eap);
 extern int rs_diff_write_buffer(buf_T *buf, char **m_ptr, int *m_size,
                                 linenr_T start, linenr_T end, int diff_flags);
 extern int rs_diff_file_internal(void *dio);
@@ -185,105 +174,24 @@ typedef enum {
 // Rust fold FFI declaration
 extern void rs_newFoldLevel(void);
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+void diff_redraw(bool dofold);
+void ex_diffupdate(exarg_T *eap);
+void ex_diffpatch(exarg_T *eap);
+void ex_diffsplit(exarg_T *eap);
+void ex_diffthis(exarg_T *eap);
+void diff_win_options(win_T *wp, bool addbuf);
+void ex_diffoff(exarg_T *eap);
+void nv_diffgetput(bool put, size_t count);
+void ex_diffgetput(exarg_T *eap);
+void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
   for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
-/// Mark all diff buffers in the current tab page for redraw.
-/// Thin wrapper -- implementation moved to Rust (rs_diff_redraw in update.rs).
-///
-/// @param dofold Also recompute the folds
-void diff_redraw(bool dofold)
-{
-  rs_diff_redraw(dofold);
-}
-
-
-
-/// Completely update the diffs for the buffers involved.
-///
-/// @param eap can be NULL
-void ex_diffupdate(exarg_T *eap)
-{
-  rs_diff_ex_diffupdate(eap);
-}
-
-
-/// Create a new version of a file from the current buffer and a diff file.
-///
-/// The buffer is written to a file, also for unmodified buffers (the file
-/// could have been produced by autocommands, e.g. the netrw plugin).
-///
-/// Thin wrapper -- implementation moved to Rust (rs_ex_diffpatch in patch.rs).
-///
-/// @param eap
-void ex_diffpatch(exarg_T *eap)
-{
-  rs_ex_diffpatch(eap);
-}
-
-/// Split the window and edit another file, setting options to show the diffs.
-/// Thin wrapper -- implementation moved to Rust (rs_ex_diffsplit in winopts.rs).
-///
-/// @param eap
-void ex_diffsplit(exarg_T *eap)
-{
-  rs_ex_diffsplit(eap);
-}
-
-// Set options to show diffs for the current window -- thin wrapper calling Rust rs_ex_diffthis.
-void ex_diffthis(exarg_T *eap)
-{
-  rs_ex_diffthis(eap);
-}
-
-/// Set options in window "wp" for diff mode -- thin wrapper calling Rust rs_diff_win_options.
-///
-/// @param addbuf Add buffer to diff.
-void diff_win_options(win_T *wp, bool addbuf)
-{
-  rs_diff_win_options(wp, addbuf);
-}
-
-/// Set options not to show diffs.  For the current window or all windows.
-/// Only in the current tab page -- thin wrapper calling Rust rs_ex_diffoff.
-///
-/// @param eap
-void ex_diffoff(exarg_T *eap)
-{
-  rs_ex_diffoff(eap);
-}
-
-
 /// used for simple inline diff algorithm
 static diffline_change_T simple_diffline_change;
-
-
-/// "dp" and "do" commands -- thin wrapper calling Rust rs_nv_diffgetput.
-void nv_diffgetput(bool put, size_t count)
-{
-  rs_nv_diffgetput(put, count);
-}
-
-/// ":diffget" and ":diffput" -- thin wrapper calling Rust rs_ex_diffgetput.
-///
-/// @param eap
-void ex_diffgetput(exarg_T *eap)
-{
-  rs_ex_diffgetput(eap);
-}
-
-
-/// "diff_filler()" function -- thin wrapper calling Rust rs_f_diff_filler.
-void f_diff_filler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_diff_filler(argvars, rettv, fptr);
-}
-
-/// "diff_hlID()" function -- thin wrapper calling Rust rs_f_diff_hlID.
-void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rs_f_diff_hlID(argvars, rettv, fptr);
-}
 
 // Rust FFI accessor functions
 int nvim_get_diff_flags(void) { return diff_flags; }
@@ -433,7 +341,7 @@ void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, li
 linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 // Phase 2 accessors: nv_diffgetput and ex_diffthis
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
-void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; rs_ex_diffgetput(&ea); }
+void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
 // Phase 3 (diff_win_options / ex_diffoff) accessors
 bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
 void nvim_win_set_w_p_diff_saved(win_T *wp, bool val) { wp->w_p_diff_saved = val ? 1 : 0; }

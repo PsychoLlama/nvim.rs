@@ -155,7 +155,7 @@ unsafe fn set_fdc_to_foldcolumn(wp: WinHandle, n: c_int) {
 ///
 /// # Safety
 /// Calls C functions that access global Neovim state.
-#[no_mangle]
+#[export_name = "diff_win_options"]
 pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
     // Close manually opened folds: temporarily switch curwin to wp.
     // The C code does: curwin = wp; rs_newFoldLevel(); curwin = old_curwin;
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
 ///
 /// # Safety
 /// Calls C functions that access global Neovim state.
-#[no_mangle]
+#[export_name = "ex_diffoff"]
 pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
     let forceit = nvim_eap_forceit(eap);
     let curtab = nvim_get_curtab();
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn rs_ex_diffoff(eap: *const std::ffi::c_void) {
 ///
 /// # Safety
 /// Calls C functions that access global Neovim state.
-#[no_mangle]
+#[export_name = "ex_diffsplit"]
 pub unsafe extern "C" fn rs_ex_diffsplit(eap: *mut std::ffi::c_void) {
     let old_curwin = nvim_diff_get_curwin();
 

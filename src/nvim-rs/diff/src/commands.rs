@@ -105,7 +105,9 @@ extern "C" {
     fn nvim_win_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_w_p_fen(wp: WinHandle) -> bool;
     fn rs_foldUpdateAll(wp: WinHandle);
+    #[link_name = "diff_redraw"]
     fn rs_diff_redraw(dofold: bool);
+    #[link_name = "ex_diffupdate"]
     fn rs_diff_ex_diffupdate(eap: *const c_void);
     fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
     fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
@@ -576,7 +578,7 @@ pub extern "C" fn rs_diff_get_block_info(dp: DiffBlockHandle) -> DiffBlockInfo {
 ///
 /// # Safety
 /// Calls C functions that access global state (curbuf, curwin).
-#[no_mangle]
+#[export_name = "nv_diffgetput"]
 pub unsafe extern "C" fn rs_nv_diffgetput(put: bool, count: usize) {
     if nvim_bt_prompt_curbuf() {
         nvim_vim_beep_operator();
@@ -629,7 +631,7 @@ fn format_usize_to_buf(mut n: usize, buf: &mut [u8; 32]) -> &[u8] {
 ///
 /// # Safety
 /// Calls C functions that access global state.
-#[no_mangle]
+#[export_name = "ex_diffthis"]
 pub unsafe extern "C" fn rs_ex_diffthis(_eap: *mut c_void) {
     let curwin = nvim_get_curwin();
     crate::winopts::rs_diff_win_options(curwin, true);
@@ -1082,7 +1084,7 @@ pub unsafe extern "C" fn rs_diffgetput(
 ///
 /// # Safety
 /// Calls C functions that access global state (curbuf, curwin, curtab).
-#[no_mangle]
+#[export_name = "ex_diffgetput"]
 pub unsafe extern "C" fn rs_ex_diffgetput(eap: *mut c_void) {
     use crate::buffer::rs_diff_buf_idx_tp;
 

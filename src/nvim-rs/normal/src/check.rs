@@ -127,6 +127,7 @@ extern "C" {
     fn nvim_update_topline_call();
     fn nvim_validate_cursor();
     fn nvim_curtab_needs_diff_update() -> bool;
+    #[link_name = "ex_diffupdate"]
     fn rs_diff_ex_diffupdate(eap: *mut std::ffi::c_void);
     fn nvim_curtab_clear_diff_update();
     fn nvim_check_scrollbind_zero_wrapper();
