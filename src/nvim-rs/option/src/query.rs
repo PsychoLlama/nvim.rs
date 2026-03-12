@@ -238,7 +238,8 @@ const NUMBUFLEN: usize = 65;
 /// Return allocated OptVal for a TTY option name (t_Co, term, ttytype, t_xx).
 ///
 /// Returns NIL_OPTVAL if name is not a TTY option.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_tty_option"]
 pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
     if name.is_null() {
         return OptVal::nil();
@@ -292,7 +293,7 @@ pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
 /// Set a TTY option. Returns true if the name is a settable TTY option.
 ///
 /// Takes ownership of `value` on success (as in the C implementation).
-#[no_mangle]
+#[export_name = "set_tty_option"]
 pub unsafe extern "C" fn rs_set_tty_option(name: *const c_char, value: *mut c_char) -> bool {
     if name.is_null() {
         return false;
@@ -369,7 +370,8 @@ unsafe fn find_key_len(arg_arg: *const c_char, len: usize, has_lt: bool) -> c_in
 /// Convert a key name or string into a key value.
 ///
 /// Used for 'cedit', 'wildchar' and 'wildcharm' options.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "string_to_key"]
 pub unsafe extern "C" fn rs_string_to_key(arg: *mut c_char) -> c_int {
     if arg.is_null() || *arg == 0 {
         return 0;

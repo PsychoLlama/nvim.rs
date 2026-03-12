@@ -160,7 +160,7 @@ extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
 // rs_check_options deleted: now exported as check_options via #[export_name]
 
 // Rust validate_option_value cluster (option pass 8 phase 3)
-extern OptVal rs_get_option_default(int opt_idx, int opt_flags);
+// rs_get_option_default deleted: now exported as get_option_default via #[export_name]
 extern const char *rs_validate_option_value(int opt_idx, OptVal *newval, int opt_flags,
                                             char *errbuf, size_t errbuflen);
 
@@ -198,9 +198,9 @@ extern unsigned rs_get_ve_flags(win_T *wp);
 // rs_set_iminsert_global deleted: now exported as set_iminsert_global via #[export_name]
 // rs_set_imsearch_global deleted: now exported as set_imsearch_global via #[export_name]
 // rs_reset_modifiable deleted: now exported as reset_modifiable via #[export_name]
-extern OptVal rs_get_tty_option(const char *name);
-extern bool rs_set_tty_option(const char *name, char *value);
-extern int rs_string_to_key(char *arg);
+// rs_get_tty_option deleted: now exported as get_tty_option via #[export_name]
+// rs_set_tty_option deleted: now exported as set_tty_option via #[export_name]
+// rs_string_to_key deleted: now exported as string_to_key via #[export_name]
 // rs_check_redraw_for deleted: now exported as check_redraw_for via #[export_name]
 // rs_insecure_flag deleted: now exported as insecure_flag via #[export_name]
 extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_value,
@@ -353,11 +353,10 @@ extern vimoption_T *rs_get_option_ptr(int opt_idx);
 extern void rs_set_option_direct(int opt_idx, OptVal value, int opt_flags, int set_sid);
 extern void rs_set_option_direct_for(int opt_idx, OptVal value, int opt_flags, int set_sid,
                                      int scope, void *from);
-extern const char *rs_set_option_value(int opt_idx, OptVal value, int opt_flags);
+// rs_set_option_value deleted: now exported as set_option_value via #[export_name]
 extern const char *rs_unset_option_local_value(int opt_idx);
-extern const char *rs_set_option_value_handle_tty(const char *name, int opt_idx, OptVal value,
-                                                   int opt_flags);
-extern void rs_set_option_value_give_err(int opt_idx, OptVal value, int opt_flags);
+// rs_set_option_value_handle_tty deleted: now exported as set_option_value_handle_tty via #[export_name]
+// rs_set_option_value_give_err deleted: now exported as set_option_value_give_err via #[export_name]
 
 // Rust FFI declarations (tag module)
 extern void rs_free_tagfunc_option(void);
@@ -1504,16 +1503,7 @@ static void set_init_fenc_default(void)
   rs_set_init_fenc_default();
 }
 
-/// Get default value for option, based on the option's type and scope.
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-///
-/// @return Default value of option for the scope specified in opt_flags.
-OptVal get_option_default(const OptIndex opt_idx, int opt_flags)
-{
-  return rs_get_option_default(opt_idx, opt_flags);
-}
+// get_option_default deleted: now exported directly from Rust via #[export_name]
 
 /// Allocate the default values for all options by copying them from the stack.
 /// This ensures that we don't need to always check if the option default is allocated or not.
@@ -1648,12 +1638,7 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 /// @return  FAIL if an error is detected, OK otherwise
 // do_set deleted: now exported directly from Rust via #[export_name]
 
-/// Convert a key name or string into a key value.
-/// Used for 'cedit', 'wildchar' and 'wildcharm' options.
-int string_to_key(char *arg)
-{
-  return rs_string_to_key(arg);
-}
+// string_to_key deleted: now exported directly from Rust via #[export_name]
 
 // When changing 'title', 'titlestring', 'icon' or 'iconstring', call
 // maketitle() to create and display it.
@@ -1774,20 +1759,8 @@ void check_redraw(uint32_t flags)
   check_redraw_for(curbuf, curwin, flags);
 }
 
-/// Get value of TTY option.
-///
-/// @param  name  Name of TTY option.
-///
-/// @return [allocated] TTY option value. Returns NIL_OPTVAL if option isn't a TTY option.
-OptVal get_tty_option(const char *name)
-{
-  return rs_get_tty_option(name);
-}
-
-bool set_tty_option(const char *name, char *value)
-{
-  return rs_set_tty_option(name, value);
-}
+// get_tty_option deleted: now exported directly from Rust via #[export_name]
+// set_tty_option deleted: now exported directly from Rust via #[export_name]
 
 /// Find index for an option. Don't go beyond `len` length.
 ///
@@ -1983,17 +1956,7 @@ void set_option_direct_for(OptIndex opt_idx, OptVal value, int opt_flags, scid_T
   rs_set_option_direct_for(opt_idx, value, opt_flags, (int)set_sid, (int)scope, (void *)from);
 }
 
-/// Set the value of an option.
-///
-/// @param      opt_idx    Index in options[] table. Must not be kOptInvalid.
-/// @param[in]  value      Option value. If NIL_OPTVAL, the option value is cleared.
-/// @param[in]  opt_flags  Flags: OPT_LOCAL, OPT_GLOBAL, or 0 (both).
-///
-/// @return  NULL on success, an untranslated error message on error.
-const char *set_option_value(const OptIndex opt_idx, const OptVal value, int opt_flags)
-{
-  return rs_set_option_value(opt_idx, value, opt_flags);
-}
+// set_option_value deleted: now exported directly from Rust via #[export_name]
 
 /// Unset the local value of a global-local option.
 ///
@@ -2005,32 +1968,8 @@ static inline const char *unset_option_local_value(const OptIndex opt_idx)
   return rs_unset_option_local_value(opt_idx);
 }
 
-/// Set the value of an option. Supports TTY options, unlike set_option_value().
-///
-/// @param      name       Option name. Used for error messages and for setting TTY options.
-/// @param      opt_idx    Option indx in options[] table. If kOptInvalid, `name` is used to
-///                        check if the option is a TTY option, and an error is shown if it's not.
-///                        If the option is a TTY option, the function fails silently.
-/// @param      value      Option value. If NIL_OPTVAL, the option value is cleared.
-/// @param[in]  opt_flags  Flags: OPT_LOCAL, OPT_GLOBAL, or 0 (both).
-///
-/// @return  NULL on success, an untranslated error message on error.
-const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, const OptVal value,
-                                        int opt_flags)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_set_option_value_handle_tty(name, opt_idx, value, opt_flags);
-}
-
-/// Call set_option_value() and when an error is returned, report it.
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  value      Option value. If NIL_OPTVAL, the option value is cleared.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-void set_option_value_give_err(const OptIndex opt_idx, OptVal value, int opt_flags)
-{
-  rs_set_option_value_give_err(opt_idx, value, opt_flags);
-}
+// set_option_value_handle_tty deleted: now exported directly from Rust via #[export_name]
+// set_option_value_give_err deleted: now exported directly from Rust via #[export_name]
 
 /// Switch current context to get/set option value for window/buffer.
 ///

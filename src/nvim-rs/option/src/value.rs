@@ -1126,7 +1126,8 @@ thread_local! {
 /// Sets the value of an option. Checks sandbox/secure flags before setting.
 ///
 /// Returns NULL on success, untranslated error message on error.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "set_option_value"]
 pub unsafe extern "C" fn rs_set_option_value(
     opt_idx: c_int,
     value: OptVal,
@@ -1170,7 +1171,8 @@ pub unsafe extern "C" fn rs_unset_option_local_value(opt_idx: c_int) -> *const c
 /// or formats an unknown-option error message into a static buffer.
 ///
 /// Returns NULL on success, error message pointer on error.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "set_option_value_handle_tty"]
 pub unsafe extern "C" fn rs_set_option_value_handle_tty(
     name: *const c_char,
     opt_idx: c_int,
@@ -1196,7 +1198,7 @@ pub unsafe extern "C" fn rs_set_option_value_handle_tty(
 /// Rust implementation of set_option_value_give_err.
 ///
 /// Calls set_option_value and reports any error via emsg.
-#[no_mangle]
+#[export_name = "set_option_value_give_err"]
 pub unsafe extern "C" fn rs_set_option_value_give_err(
     opt_idx: c_int,
     value: OptVal,

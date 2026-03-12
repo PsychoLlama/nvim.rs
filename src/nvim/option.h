@@ -85,6 +85,13 @@ int do_set(char *arg, int opt_flags);
 void set_options_bin(int oldval, int newval, int opt_flags);
 void redraw_titles(void);
 void check_blending(win_T *wp);
+OptVal get_option_default(OptIndex opt_idx, int opt_flags);
+int string_to_key(char *arg);
+OptVal get_tty_option(const char *name);
+bool set_tty_option(const char *name, char *value);
+const char *set_option_value(OptIndex opt_idx, OptVal value, int opt_flags);
+const char *set_option_value_handle_tty(const char *name, OptIndex opt_idx, OptVal value, int opt_flags);
+void set_option_value_give_err(OptIndex opt_idx, OptVal value, int opt_flags);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif

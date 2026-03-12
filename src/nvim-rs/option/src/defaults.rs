@@ -239,7 +239,8 @@ pub unsafe extern "C" fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal 
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_option_default"]
 pub unsafe extern "C" fn rs_get_option_default(opt_idx: OptIndex, opt_flags: c_int) -> OptVal {
     // On Unix, modeline defaults to off for root.
     if opt_idx == K_OPT_MODELINE && nvim_is_root_user() != 0 {

@@ -530,6 +530,7 @@ extern "C" {
     // get_option_newval dependencies
     fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
     fn rs_optval_copy(o: OptVal) -> OptVal;
+    #[link_name = "get_option_default"]
     fn rs_get_option_default(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
@@ -537,6 +538,7 @@ extern "C" {
     #[link_name = "get_option_value"]
     fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn nvim_call_vim_str2nr(arg: *const c_char, len_out: *mut c_int, num_out: *mut crate::OptInt);
+    #[link_name = "string_to_key"]
     fn rs_string_to_key(arg: *mut c_char) -> c_int;
     fn rs_stropt_get_newval(
         nextchar: c_int,
