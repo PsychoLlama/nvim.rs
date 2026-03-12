@@ -211,6 +211,8 @@ extern uint32_t rs_shuffle_xoshiro128starstar(uint32_t *x, uint32_t *y, uint32_t
 // Rust list/container VimL function declarations (exported from nvim-eval crate via #[export_name])
 extern void f_remove(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_reverse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_extend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_extendnew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 // Rust window VimL function declarations (exported from nvim-window crate via #[export_name])
 extern void f_getwinpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
