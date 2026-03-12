@@ -359,7 +359,7 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
 ///
 /// `str_ptr` and `pat_ptr` must be valid null-terminated C strings.
 /// `out_score` and `matches` must be valid pointers if non-null.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzzy_match")]
 pub unsafe extern "C" fn rs_fuzzy_match(
     str_ptr: *const c_char,
     pat_ptr: *const c_char,
@@ -463,7 +463,8 @@ pub unsafe extern "C" fn rs_fuzzy_match(
 /// # Safety
 ///
 /// `str_ptr` and `pat_ptr` must be valid null-terminated C strings.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzzy_match_str")]
+#[must_use]
 pub unsafe extern "C" fn rs_fuzzy_match_str(
     str_ptr: *const c_char,
     pat_ptr: *const c_char,
@@ -746,7 +747,7 @@ pub struct FuzmatchStr {
 ///
 /// `fuzmatch` must be a valid pointer to an array of `count` `FuzmatchStr` items
 /// allocated with `xmalloc`, or null.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzmatch_str_free")]
 pub unsafe extern "C" fn rs_fuzmatch_str_free(fuzmatch: *mut FuzmatchStr, count: c_int) {
     if fuzmatch.is_null() {
         return;
@@ -766,7 +767,7 @@ pub unsafe extern "C" fn rs_fuzmatch_str_free(fuzmatch: *mut FuzmatchStr, count:
 ///
 /// `fuzmatch` must be a valid pointer to an array of `count` `FuzmatchStr` items.
 /// `matches` must be a valid pointer to a `*mut *mut c_char`.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzzymatches_to_strmatches")]
 pub unsafe extern "C" fn rs_fuzzymatches_to_strmatches(
     fuzmatch: *mut FuzmatchStr,
     matches: *mut *mut *mut c_char,
@@ -901,7 +902,7 @@ unsafe fn mb_ptr_adv(p: *mut c_char) -> *mut c_char {
 /// # Safety
 ///
 /// All pointer parameters must be valid. `current_pos` may be null.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzzy_match_str_in_line")]
 pub unsafe extern "C" fn rs_fuzzy_match_str_in_line(
     ptr: *mut *mut c_char,
     pat: *mut c_char,
@@ -960,7 +961,7 @@ pub unsafe extern "C" fn rs_fuzzy_match_str_in_line(
 /// # Safety
 ///
 /// All pointer parameters must be valid. `buf` must be a valid `buf_T *`.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "search_for_fuzzy_match")]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn rs_search_for_fuzzy_match(
     buf: BufHandle,

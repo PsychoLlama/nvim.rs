@@ -69,29 +69,9 @@ _Static_assert(offsetof(fuzmatch_str_T, score) == 16, "fuzmatch_str_T.score offs
 #include "fuzzy.c.generated.h"
 
 // Rust FFI declarations
-extern bool rs_fuzzy_match(const char *str, const char *pat, bool matchseq,
-                           int *outScore, uint32_t *matches, int maxMatches);
-extern int rs_fuzzy_match_str(const char *str, const char *pat);
+// fuzzy_match, fuzzy_match_str, fuzzy_match_str_in_line, search_for_fuzzy_match,
+// fuzmatch_str_free, fuzzymatches_to_strmatches exported directly from Rust.
 extern garray_T *rs_fuzzy_match_str_with_pos(const char *str, const char *pat);
-extern bool rs_fuzzy_match_str_in_line(char **ptr, char *pat, int *len,
-                                       pos_T *current_pos, int *score);
-extern bool rs_search_for_fuzzy_match(buf_T *buf, pos_T *pos, char *pattern,
-                                      int dir, pos_T *start_pos, int *len,
-                                      char **ptr, int *score);
-extern void rs_fuzmatch_str_free(fuzmatch_str_T *fuzmatch, int count);
-extern void rs_fuzzymatches_to_strmatches(fuzmatch_str_T *fuzmatch, char ***matches,
-                                          int count, bool funcsort);
-
-/// fuzzy_match()
-///
-/// @return true if "pat_arg" matches "str". Also returns the match score in
-/// "outScore" and the matching character positions in "matches".
-bool fuzzy_match(char *const str, const char *const pat_arg, const bool matchseq,
-                 int *const outScore, uint32_t *const matches, const int maxMatches)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_fuzzy_match(str, pat_arg, matchseq, outScore, matches, maxMatches);
-}
 
 /// Sort the fuzzy matches in the descending order of the match score.
 /// For items with same score, retain the order using the index (stable sort)
@@ -364,48 +344,11 @@ void f_matchfuzzypos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   do_fuzzymatch(argvars, rettv, true);
 }
 
-/// Fuzzy match "pat" in "str".
-/// @returns FUZZY_SCORE_NONE if there is no match. Otherwise, returns the match score.
-int fuzzy_match_str(char *const str, const char *const pat)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_fuzzy_match_str(str, pat);
-}
-
 /// Fuzzy match the position of string "pat" in string "str".
 /// @returns a dynamic array of matching positions. If there is no match, returns NULL.
 garray_T *fuzzy_match_str_with_pos(char *const str, const char *const pat)
 {
   return rs_fuzzy_match_str_with_pos(str, pat);
-}
-
-/// This function splits the line pointed to by `*ptr` into words and performs
-/// a fuzzy match for the pattern `pat` on each word.
-bool fuzzy_match_str_in_line(char **ptr, char *pat, int *len, pos_T *current_pos, int *score)
-{
-  return rs_fuzzy_match_str_in_line(ptr, pat, len, current_pos, score);
-}
-
-/// Search for the next fuzzy match in the specified buffer.
-bool search_for_fuzzy_match(buf_T *buf, pos_T *pos, char *pattern, int dir, pos_T *start_pos,
-                            int *len, char **ptr, int *score)
-{
-  return rs_search_for_fuzzy_match(buf, pos, pattern, dir, start_pos, len, ptr, score);
-}
-
-/// Free an array of fuzzy string matches "fuzmatch[count]".
-void fuzmatch_str_free(fuzmatch_str_T *const fuzmatch, int count)
-{
-  rs_fuzmatch_str_free(fuzmatch, count);
-}
-
-/// Copy a list of fuzzy matches into a string list after sorting the matches by
-/// the fuzzy score. Frees the memory allocated for "fuzmatch".
-void fuzzymatches_to_strmatches(fuzmatch_str_T *const fuzmatch, char ***const matches,
-                                const int count, const bool funcsort)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  rs_fuzzymatches_to_strmatches(fuzmatch, matches, count, funcsort);
 }
 
 // Note: The fuzzy matching algorithm implementation has been moved to Rust.
