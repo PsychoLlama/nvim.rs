@@ -65,9 +65,9 @@ extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
 extern int rs_bt_regexec_nl(void *rmp, uint8_t *line, int32_t col, int line_lbr);
 extern int rs_bt_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
                                int32_t col, void *tm, int *timed_out);
-extern int rs_vim_regexec(void *rmp, const uint8_t *line, int32_t col);
-extern int rs_vim_regexec_nl(void *rmp, const uint8_t *line, int32_t col);
-extern int rs_vim_regexec_prog(void **prog_ptr, int ignore_case, const uint8_t *line, int32_t col);
+// rs_vim_regexec deleted: now exported as vim_regexec via #[export_name]
+// rs_vim_regexec_nl deleted: now exported as vim_regexec_nl via #[export_name]
+// rs_vim_regexec_prog deleted: now exported as vim_regexec_prog via #[export_name]
 // rs_vim_regexec_multi deleted: now exported as vim_regexec_multi via #[export_name]
 // rs_vim_regcomp deleted: now exported as vim_regcomp via #[export_name]
 extern void *rs_bt_regcomp(uint8_t *expr, int re_flags);
@@ -689,27 +689,9 @@ void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
 
 // vim_regcomp deleted: Rust exports under the C name directly via #[export_name].
 
-// Note: "*prog" may be freed and changed.
-// Return true if there is a match, false if not.
-bool vim_regexec_prog(regprog_T **prog, bool ignore_case, const char *line, colnr_T col)
-{
-  return rs_vim_regexec_prog((void **)prog, ignore_case, (const uint8_t *)line, col) > 0;
-}
-
-// Note: "rmp->regprog" may be freed and changed.
-// Return true if there is a match, false if not.
-bool vim_regexec(regmatch_T *rmp, const char *line, colnr_T col)
-{
-  return rs_vim_regexec(rmp, (const uint8_t *)line, col) > 0;
-}
-
-// Like vim_regexec(), but consider a "\n" in "line" to be a line break.
-// Note: "rmp->regprog" may be freed and changed.
-// Return true if there is a match, false if not.
-bool vim_regexec_nl(regmatch_T *rmp, const char *line, colnr_T col)
-{
-  return rs_vim_regexec_nl(rmp, (const uint8_t *)line, col) > 0;
-}
+// vim_regexec_prog deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec_prog"]
+// vim_regexec deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec"]
+// vim_regexec_nl deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec_nl"]
 
 /// Match a regexp against multiple lines.
 /// "rmp->regprog" must be a compiled regexp as returned by vim_regcomp().

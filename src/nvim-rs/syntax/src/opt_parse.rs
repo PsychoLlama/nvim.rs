@@ -60,8 +60,9 @@ extern "C" {
     fn nvim_syn_vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
     fn nvim_syn_vim_regfree(regprog: *mut c_void);
 
-    // Direct Rust regexp exec (replaces nvim_syn_vim_regexec):
+    // Direct regexp exec:
     // takes *mut *mut c_void so regprog updates on NFA fallback are visible
+    #[link_name = "vim_regexec_prog"]
     fn rs_vim_regexec_prog(
         prog_ptr: *mut *mut c_void,
         ignore_case: c_int,

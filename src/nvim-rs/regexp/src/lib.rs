@@ -15349,19 +15349,22 @@ pub unsafe extern "C" fn rs_vim_regexec_string(
 }
 
 /// Public API: regexp match against a string.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regexec"]
 pub unsafe extern "C" fn rs_vim_regexec(rmp: *mut c_void, line: *const u8, col: i32) -> c_int {
     rs_vim_regexec_string(rmp, line, col, 0)
 }
 
 /// Public API: regexp match with "\n" as line break.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regexec_nl"]
 pub unsafe extern "C" fn rs_vim_regexec_nl(rmp: *mut c_void, line: *const u8, col: i32) -> c_int {
     rs_vim_regexec_string(rmp, line, col, 1)
 }
 
 /// Public API: regexp match with prog pointer indirection.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "vim_regexec_prog"]
 pub unsafe extern "C" fn rs_vim_regexec_prog(
     prog_ptr: *mut *mut c_void,
     ignore_case: c_int,
