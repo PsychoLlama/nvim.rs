@@ -20,23 +20,6 @@
 
 #include "os/time.c.generated.h"
 
-// Rust implementations - declarations
-extern uint64_t rs_os_time(void);
-extern uint64_t rs_os_hrtime(void);
-extern void rs_os_sleep_ms(uint64_t ms);
-
-/// Gets a high-resolution (nanosecond), monotonically-increasing time relative
-/// to an arbitrary time in the past.
-///
-/// Not related to the time of day and therefore not subject to clock drift.
-///
-/// @return Relative time value with nanosecond precision.
-uint64_t os_hrtime(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_hrtime();
-}
-
 /// Gets a millisecond-resolution, monotonically-increasing time relative to an
 /// arbitrary time in the past.
 ///
@@ -65,20 +48,6 @@ void os_delay(uint64_t ms, bool ignoreinput)
   }
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, NULL, (int)ms,
                             ignoreinput ? got_int : os_input_ready(NULL));
-}
-
-/// Sleeps for `ms` milliseconds without checking for events or interrupts.
-///
-/// This blocks even "fast" events which is quite disruptive. This should only
-/// be used in debug code. Prefer os_delay() and decide if the delay should be
-/// interrupted by input or only a CTRL-C.
-///
-/// @see uv_sleep() (libuv v1.34.0)
-///
-/// @param us          Number of microseconds to sleep.
-void os_sleep(uint64_t ms)
-{
-  rs_os_sleep_ms(ms);
 }
 
 // Cache of the current timezone name as retrieved from TZ, or an empty string
@@ -189,11 +158,3 @@ char *os_strptime(const char *str, const char *format, struct tm *tm)
 #endif
 }
 
-/// Obtains the current Unix timestamp.
-///
-/// @return Seconds since epoch.
-Timestamp os_time(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_os_time();
-}

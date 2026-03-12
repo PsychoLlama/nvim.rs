@@ -16,7 +16,7 @@ fn get_start_time() -> &'static Instant {
 ///
 /// This is relative to an arbitrary time in the past and is not
 /// related to wall-clock time.
-#[no_mangle]
+#[export_name = "os_hrtime"]
 pub extern "C" fn rs_os_hrtime() -> u64 {
     get_start_time().elapsed().as_nanos() as u64
 }
@@ -25,7 +25,7 @@ pub extern "C" fn rs_os_hrtime() -> u64 {
 ///
 /// Returns seconds since Unix epoch as unsigned 64-bit integer,
 /// matching nvim's `Timestamp` type (`uint64_t`).
-#[no_mangle]
+#[export_name = "os_time"]
 pub extern "C" fn rs_os_time() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -47,7 +47,7 @@ pub extern "C" fn rs_os_time_ms() -> u64 {
 /// This is a simple blocking sleep - it does not check for interrupts
 /// or process events. For nvim's normal delay function, use the C
 /// version which integrates with the event loop.
-#[no_mangle]
+#[export_name = "os_sleep"]
 pub extern "C" fn rs_os_sleep_ms(ms: u64) {
     std::thread::sleep(std::time::Duration::from_millis(ms));
 }
