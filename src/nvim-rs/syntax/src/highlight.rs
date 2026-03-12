@@ -35,6 +35,7 @@ extern "C" {
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
     fn nvim_syn_is_current_state_valid() -> c_int;
     fn nvim_syn_ensure_current_state_valid();
+    #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut std::ffi::c_char;
     fn nvim_syn_get_next_match_attr() -> c_int;
     fn nvim_syn_get_next_match_idx() -> c_int;

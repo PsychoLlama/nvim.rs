@@ -60,6 +60,7 @@ extern "C" {
 
     // Line operations
     fn nvim_syn_getcurline_byte_at(col: c_int) -> c_int;
+    #[link_name = "rs_syn_update_ends"]
     fn nvim_syn_update_ends(startofline: c_int);
 
     // Chartab
@@ -116,6 +117,7 @@ extern "C" {
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // getcurline
+    #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut i8;
     fn nvim_syn_getcurline_len() -> c_int;
 

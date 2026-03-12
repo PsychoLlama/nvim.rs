@@ -62,8 +62,6 @@ extern void rs_syn_stack_alloc(void);
 extern void rs_syn_stack_apply_changes_block(synblock_T *block, buf_T *buf);
 extern void rs_syn_stack_apply_changes(buf_T *buf);
 // Phase 8: line initialization (Rust implementations)
-extern void rs_syn_update_ends(int startofline);
-extern void rs_syn_start_line(void);
 extern int rs_syn_match_linecont(int lnum);
 extern void rs_save_chartab(char *chartab);
 extern void rs_restore_chartab(const char *chartab);
@@ -72,13 +70,11 @@ extern void rs_validate_current_state(void);
 extern char *rs_syn_getcurline(void);
 extern int rs_syn_getcurline_len(void);
 extern void rs_syn_clear_time(syn_time_T *st);
-extern void rs_load_current_state(synstate_T *from);
 extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 extern void rs_check_state_ends(void);
 extern void rs_update_si_attr(int idx);
 extern void rs_check_keepend(void);
 extern stateitem_T *rs_push_next_match(void);
-extern int rs_syn_finish_line(int syncing);
 extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
                                 int *opt_sync_idx, int opt_has_cont_list,
                                 int16_t **opt_cont_list, int16_t **opt_cont_in_list,
@@ -99,10 +95,7 @@ extern void rs_clear_keywtab(hashtab_T *ht);
 extern void rs_invalidate_current_state(void);
 
 // Phase 9: state_entry.rs Rust implementations
-extern void rs_syn_stack_remove_entry(synstate_T *sp);
 extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
-extern void rs_syn_store_state_to_entry(synstate_T *sp);
-extern void rs_syn_do_stack_realloc(int len);
 
 // Phase 11: state_entry.rs Phase 11 Rust implementations
 extern void rs_syn_store_bufstates(synstate_T *sp);
@@ -125,13 +118,9 @@ extern int rs_syn_ownsyntax_init(void);
 extern int rs_synblock_cluster_append(void);
 
 // Phase 9.2: state_ops.rs Rust implementations
-extern void rs_syn_pop_current_state(void);
-extern void rs_syn_push_current_state(int idx);
 extern void rs_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
                                       int si_cchar, reg_extmatch_T *extmatch);
-extern int rs_syn_count_fold_items(void);
 extern int rs_syn_state_item_spans_line(int idx, int lnum);
-extern void rs_syn_clear_current_state(void);
 extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 
 // Phase 9.3: extmatch comparison and cur_state_set_matchcont
@@ -831,16 +820,13 @@ void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
-void nvim_syn_stack_remove_entry(synstate_T *sp) { rs_syn_stack_remove_entry(sp); }
 synstate_T *nvim_syn_stack_alloc_entry(int lnum, synstate_T *after)
 {
   return rs_syn_stack_alloc_entry(lnum, after);
 }
-void nvim_syn_store_state_to_entry(synstate_T *sp) { rs_syn_store_state_to_entry(sp); }
 
 void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
-void nvim_syn_clear_current_state(void) { rs_syn_clear_current_state(); }
 
 void nvim_syn_validate_current_state(void) { rs_validate_current_state(); }
 
@@ -984,8 +970,6 @@ void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
 
-void nvim_syn_pop_current_state(void) { rs_syn_pop_current_state(); }
-void nvim_syn_push_current_state(int idx) { rs_syn_push_current_state(idx); }
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 
@@ -993,7 +977,6 @@ void nvim_syn_set_current_finished(int finished) { current_finished = finished ?
 
 int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
-void nvim_syn_call_syn_update_ends(int syncing) { rs_syn_update_ends(syncing ? 1 : 0); }
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
@@ -1037,7 +1020,6 @@ int16_t *nvim_syn_get_cluster_scl_list(int idx)
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 
-char *nvim_syn_getcurline(void) { return rs_syn_getcurline(); }
 
 void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
 
@@ -1146,11 +1128,6 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
 
 int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
-void nvim_syn_start_line(void) { rs_syn_start_line(); }
-
-int nvim_syn_finish_line(int syncing) { return rs_syn_finish_line(syncing); }
-
-void nvim_syn_update_ends(int startofline) { rs_syn_update_ends(startofline); }
 
 int nvim_syn_get_current_line_id(void) { return (int)current_line_id; }
 
@@ -1205,8 +1182,6 @@ void nvim_syn_line_breakcheck(void) { line_breakcheck(); }
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
 
-void nvim_syn_stack_free_all(synblock_T *block) { rs_syn_stack_free_all(block); }
-void nvim_syn_stack_apply_changes(buf_T *buf) { rs_syn_stack_apply_changes(buf); }
 
 int nvim_buf_get_mod_top(buf_T *buf) { return (int)buf->b_mod_top; }
 int nvim_buf_get_mod_bot(buf_T *buf) { return (int)buf->b_mod_bot; }
@@ -1246,7 +1221,6 @@ int nvim_syn_get_next_match_attr(void)
 
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
-int nvim_syn_cur_foldlevel(void) { return rs_syn_count_fold_items(); }
 
 char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 
@@ -1450,7 +1424,6 @@ _Static_assert(HL_CONTAINED == 0x01, "HL_CONTAINED");
 _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
-void nvim_syn_load_current_state(synstate_T *from) { rs_load_current_state(from); }
 
 int nvim_syn_match_linecont(linenr_T lnum) { return syn_match_linecont(lnum); }
 
@@ -2381,7 +2354,6 @@ void nvim_syn_apply_changes_for_windows(buf_T *buf)
   }
 }
 
-void nvim_syn_do_stack_realloc(int len) { rs_syn_do_stack_realloc(len); }
 
 // =============================================================================
 // Phase 8: Line initialization accessors (for Rust migration)

@@ -36,6 +36,7 @@ extern "C" {
 
     // Redraw and free syntax state (Phase 4: decomposed wrappers)
     fn nvim_syn_redraw_curbuf_later();
+    #[link_name = "rs_syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // Unlet helpers (Phase 4: replaces nvim_syn_clear_unlet_vars)

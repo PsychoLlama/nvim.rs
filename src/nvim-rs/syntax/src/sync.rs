@@ -51,6 +51,7 @@ extern "C" {
     fn nvim_syn_get_sync_id() -> c_int;
 
     // Update ends with syncing parameter
+    #[link_name = "rs_syn_update_ends"]
     fn nvim_syn_call_syn_update_ends(syncing: c_int);
 
     // State management
@@ -61,11 +62,13 @@ extern "C" {
     fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
+    #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
     fn nvim_syn_get_got_int() -> c_int;
     fn nvim_syn_line_breakcheck();
 
     // Phase 3 accessors
+    #[link_name = "rs_load_current_state"]
     fn nvim_syn_load_current_state(from: SynStateHandle);
     fn nvim_syn_match_linecont(lnum: c_int) -> c_int;
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
@@ -92,6 +95,7 @@ extern "C" {
     fn nvim_syn_get_pattern_sync_idx(idx: c_int) -> c_int;
 
     // Line content access
+    #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut i8;
 }
 

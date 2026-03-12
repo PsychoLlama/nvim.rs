@@ -58,6 +58,7 @@ extern "C" {
 
     // Line operations
     fn nvim_syn_getcurline_byte_at(col: c_int) -> c_int;
+    #[link_name = "rs_syn_update_ends"]
     fn nvim_syn_update_ends(startofline: c_int);
     fn nvim_syn_update_si_attr(idx: c_int);
 

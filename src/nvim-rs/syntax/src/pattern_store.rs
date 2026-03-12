@@ -42,6 +42,7 @@ extern "C" {
 
     // Redraw + cache invalidation
     fn nvim_syn_redraw_curbuf_later();
+    #[link_name = "rs_syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
 }

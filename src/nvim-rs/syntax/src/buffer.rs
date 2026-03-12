@@ -29,6 +29,7 @@ extern "C" {
     fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
 
     // Change handling
+    #[link_name = "rs_syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: BufHandle);
 
     // Current buffer/window access
@@ -37,6 +38,7 @@ extern "C" {
     fn nvim_syn_get_win() -> WinHandle;
 
     // Fold level computation
+    #[link_name = "rs_syn_count_fold_items"]
     fn nvim_syn_cur_foldlevel() -> c_int;
 
     // syntax_start dependencies
@@ -56,11 +58,13 @@ extern "C" {
     fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
+    #[link_name = "rs_syn_finish_line"]
     fn nvim_syn_finish_line(syncing: c_int) -> c_int;
     fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_syn_get_sync_minlines() -> c_int;
     fn nvim_syn_get_sst_len() -> c_int;
     fn nvim_syn_get_rows() -> c_int;
+    #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
     fn nvim_syn_line_breakcheck();
     fn nvim_syn_get_got_int() -> c_int;

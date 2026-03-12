@@ -51,6 +51,7 @@ extern "C" {
     fn nvim_synblock_sync_clear(block: SynBlockHandle);
 
     /// Free all syntax state stack entries for block.
+    #[link_name = "rs_syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     /// Invalidate the current syntax state.

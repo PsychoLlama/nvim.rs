@@ -82,9 +82,13 @@ extern "C" {
     );
 
     // Line operations
+    #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
+    #[link_name = "rs_syn_finish_line"]
     fn nvim_syn_finish_line(syncing: c_int) -> c_int;
+    #[link_name = "rs_syn_update_ends"]
     fn nvim_syn_update_ends(startofline: c_int);
+    #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut c_char;
     fn nvim_syn_getcurline_at_col() -> c_char;
     fn nvim_syn_check_state_ends();

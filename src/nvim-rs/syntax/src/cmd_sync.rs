@@ -56,6 +56,7 @@ extern "C" {
 
     // Redraw and state reset (Phase 4: decomposed from nvim_syn_redraw_and_free_all)
     fn nvim_syn_redraw_curbuf_later();
+    #[link_name = "rs_syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // nextcmd via check_nextcmd
