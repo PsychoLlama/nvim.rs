@@ -81,27 +81,7 @@ extern uint64_t rs_mt_lookup_key(MTKey key);
 extern int rs_key_cmp(MTKey a, MTKey b);
 extern uint16_t rs_mt_flags(bool right_gravity, bool no_undo, bool invalidate, bool decor_ext);
 
-// Iterator functions
-extern bool rs_marktree_itr_valid(MarkTreeIter *itr);
-extern MTPos rs_marktree_itr_pos(MarkTreeIter *itr);
-extern MTKey rs_marktree_itr_current(MarkTreeIter *itr);
-extern bool rs_marktree_itr_node_done(MarkTreeIter *itr);
-extern bool rs_marktree_itr_next(MarkTree *b, MarkTreeIter *itr);
-extern bool rs_marktree_itr_prev(MarkTree *b, MarkTreeIter *itr);
-extern bool rs_marktree_itr_first(MarkTree *b, MarkTreeIter *itr);
-extern bool rs_marktree_itr_last(MarkTree *b, MarkTreeIter *itr);
-extern bool rs_marktree_itr_get(MarkTree *b, int32_t row, int col, MarkTreeIter *itr);
-
-// Lookup and pair functions
-extern MTKey rs_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr);
-extern MTKey rs_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end,
-                                   MarkTreeIter *itr);
-extern MTKey rs_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr);
-extern MTPos rs_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr);
-extern MTKey rs_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i);
-extern void rs_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr);
-
-// Extended iterator functions
+// Extended iterator functions (used by nvim_marktree_itr_get_ext_simple)
 extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr, bool last,
                                          bool gravity, MTPos *oldbase,
                                          MetaFilter meta_filter);
@@ -117,10 +97,6 @@ extern bool rs_marktree_itr_next_filter(MarkTree *b, MarkTreeIter *itr, int stop
                                         int stop_col, MetaFilter meta_filter);
 extern bool rs_marktree_itr_step_out_filter(MarkTree *b, MarkTreeIter *itr,
                                             MetaFilter meta_filter);
-
-// Overlap functions
-extern bool rs_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr);
-extern bool rs_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair);
 
 // Tree operations
 extern void rs_marktree_clear(MarkTree *b);
@@ -163,33 +139,19 @@ extern void rs_marktree_put_test(MarkTree *b, uint32_t ns, uint32_t id, int row,
                                   bool meta_inline);
 extern bool rs_mt_right_test(MTKey key);
 
-// Phase 4 (pass 4): splice
+// Splice
 extern bool rs_marktree_splice(MarkTree *b, int32_t start_line, int start_col,
                                int old_extent_line, int old_extent_col,
                                int new_extent_line, int new_extent_col);
 
-// Phase 1 (pass 2) migrations
-extern void rs_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key);
-extern void rs_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col);
-extern void rs_marktree_restore_pair(MarkTree *b, MTKey key);
+// Test helper
 extern void rs_marktree_del_pair_test(MarkTree *b, uint32_t ns, uint32_t id);
-extern void rs_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
-                                    int extent_row, colnr_T extent_col,
-                                    int new_row, colnr_T new_col);
-
-// Phase 5 (pass 5): deletion rebalancing
-extern uint64_t rs_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev);
-
-// Phase 6 (pass 6): debug/inspection
-extern String rs_mt_inspect(MarkTree *b, bool keys, bool dot);
 
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
 #define rawkey(itr) ((itr)->x->key[(itr)->i])
 
 #include "marktree_shim.c.generated.h"
-
-String mt_inspect(MarkTree *b, bool keys, bool dot) { return rs_mt_inspect(b, keys, dot); }
 
 // ============================================================================
 // Rust FFI Accessor Functions
@@ -223,24 +185,12 @@ void nvim_mtitr_set_s_i(MarkTreeIter *itr, int lvl, int i) { itr->s[lvl].i = i; 
 void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol) { itr->s[lvl].oldcol = oldcol; }
 
 // ============================================================================
-// Lookup and Pair Functions (for Rust FFI)
-// ============================================================================
-
-MTKey nvim_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr) { return rs_marktree_lookup(b, id, itr); }
-MTKey nvim_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr) { return rs_marktree_lookup_ns(b, ns, id, end, itr); }
-MTKey nvim_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return rs_marktree_get_alt(b, mark, itr); }
-MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr) { return rs_marktree_get_altpos(b, mark, itr); }
-
-// ============================================================================
 // Iterator Allocation Functions (for Rust FFI - extmark crate)
 // ============================================================================
 
 MarkTreeIter *nvim_marktree_itr_alloc(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
 void nvim_marktree_itr_free(MarkTreeIter *itr) { xfree(itr); }
 void nvim_marktree_itr_copy(MarkTreeIter *dst, MarkTreeIter *src) { *dst = *src; }
-void nvim_marktree_itr_get(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get(b, row, col, itr); }
-bool nvim_marktree_itr_next(MarkTree *b, MarkTreeIter *itr) { return rs_marktree_itr_next(b, itr); }
-MTKey nvim_marktree_itr_current(MarkTreeIter *itr) { return rs_marktree_itr_current(itr); }
 uint16_t nvim_mt_itr_rawkey_get_flags(MarkTreeIter *itr) { return rawkey(itr).flags; }
 void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
 DecorInlineData nvim_mt_itr_rawkey_get_decor_data(MarkTreeIter *itr) { return rawkey(itr).decor_data; }
@@ -258,11 +208,9 @@ size_t nvim_mtitr_get_intersect_idx(MarkTreeIter *itr) { return itr->intersect_i
 void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx) { itr->intersect_idx = idx; }
 
 // ============================================================================
-// Overlap Iteration Wrapper Functions (for Rust extmark FFI)
+// Iterator Adapter Functions (for Rust extmark FFI)
 // ============================================================================
 
-bool nvim_marktree_itr_get_overlap(MarkTree *b, int row, int col, MarkTreeIter *itr) { return rs_marktree_itr_get_overlap(b, row, col, itr); }
-bool nvim_marktree_itr_step_overlap(MarkTree *b, MarkTreeIter *itr, MTPair *pair) { return rs_marktree_itr_step_overlap(b, itr, pair); }
 void nvim_marktree_itr_get_ext_simple(MarkTree *b, int row, int col, MarkTreeIter *itr) { rs_marktree_itr_get_ext_full(b, MTPos(row, col), itr, false, false, NULL, NULL); }
 
 // ============================================================================
@@ -298,13 +246,6 @@ uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx)
 
 MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return pmap_get(uint64_t)(b->id2node, id); }
 size_t nvim_marktree_id2node_count(MarkTree *b) { return b->id2node ? map_size(b->id2node) : 0; }
-
-// ============================================================================
-// Helper Functions (for Rust FFI)
-// ============================================================================
-
-MTKey nvim_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i) { return rs_marktree_itr_set_node(b, itr, n, i); }
-void nvim_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr) { rs_marktree_itr_fix_pos(b, itr); }
 
 // ============================================================================
 // Node Mutation Accessor Functions (for Rust FFI)
@@ -372,10 +313,6 @@ void nvim_mtnode_intersect_push(MTNode *x, uint64_t id)
 // B-tree Deletion Operations (for Rust FFI)
 // ============================================================================
 
-uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev) { return rs_marktree_del_itr(b, itr, rev); }
-void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key) { rs_marktree_revise_meta(b, itr, old_key); }
-void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col) { rs_marktree_move(b, itr, row, col); }
-void nvim_marktree_restore_pair(MarkTree *b, MTKey key) { rs_marktree_restore_pair(b, key); }
 void nvim_marktree_del_id(MarkTree *b, uint64_t id) { pmap_del(uint64_t)(b->id2node, id, NULL); }
 void nvim_marktree_dec_n_keys(MarkTree *b) { b->n_keys--; }
 void nvim_marktree_sub_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] -= val; }
@@ -387,14 +324,6 @@ void nvim_rawkey_set_pos(MarkTreeIter *itr, MTPos pos) { rawkey(itr).pos = pos; 
 MTPos nvim_rawkey_get_pos(MarkTreeIter *itr) { return rawkey(itr).pos; }
 void nvim_rawkey_add_pos_col(MarkTreeIter *itr, int delta) { rawkey(itr).pos.col += delta; }
 void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row += delta; }
-
-// ============================================================================
-// Splice Operations (for Rust FFI)
-// ============================================================================
-
-void nvim_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
-                               int extent_row, colnr_T extent_col,
-                               int new_row, colnr_T new_col) { rs_marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col); }
 
 // ============================================================================
 // Debug and Validation (for Rust FFI)

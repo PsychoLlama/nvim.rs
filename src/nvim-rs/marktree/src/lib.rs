@@ -450,6 +450,7 @@ extern "C" {
 
     /// Set iterator to point at node n, index i.
     #[allow(dead_code)]
+    #[link_name = "rs_marktree_itr_set_node"]
     fn nvim_marktree_itr_set_node(
         b: MarkTreeHandle,
         itr: MarkTreeIterHandle,
@@ -459,6 +460,7 @@ extern "C" {
 
     /// Fix iterator position after setting node directly.
     #[allow(dead_code)]
+    #[link_name = "rs_marktree_itr_fix_pos"]
     fn nvim_marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle);
 
     // ========================================================================

@@ -152,4 +152,7 @@ extern MTKey rs_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool e
                                    MarkTreeIter *itr);
 extern MTPos rs_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr);
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+String mt_inspect(MarkTree *b, bool keys, bool dot);
+
 #include "marktree_shim.h.generated.h"

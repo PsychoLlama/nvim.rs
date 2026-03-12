@@ -227,7 +227,8 @@ fn inspect_dotfile_node(output: &mut String, n: MTNodeHandle, off: MTPos, parent
 /// `b` must be a valid non-null `MarkTree*`.
 /// The returned string is allocated with `xmallocz` and must be freed by the
 /// caller via `xfree` (i.e. the Neovim API string free path).
-#[no_mangle]
+#[must_use]
+#[export_name = "mt_inspect"]
 pub unsafe extern "C" fn rs_mt_inspect(b: MarkTreeHandle, keys: bool, dot: bool) -> NvimApiString {
     let root = unsafe { nvim_marktree_get_root(b) };
     if root.is_null() {

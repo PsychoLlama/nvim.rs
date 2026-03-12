@@ -322,27 +322,35 @@ extern "C" {
     // ========================================================================
 
     /// Delete mark at iterator position, return paired mark ID or 0.
+    #[link_name = "rs_marktree_del_itr"]
     fn nvim_marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64;
 
     /// Move mark at iterator position to new location.
+    #[link_name = "rs_marktree_move"]
     fn nvim_marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: c_int, col: ColnrT);
 
     /// Revise metadata for mark after in-place update.
+    #[link_name = "rs_marktree_revise_meta"]
     fn nvim_marktree_revise_meta(b: MarkTreeHandle, itr: MarkTreeIterHandle, old: MTKey);
 
     /// Get iterator to position.
+    #[link_name = "rs_marktree_itr_get"]
     fn nvim_marktree_itr_get(b: MarkTreeHandle, row: i32, col: i32, itr: MarkTreeIterHandle);
 
     /// Advance iterator to next mark.
+    #[link_name = "rs_marktree_itr_next"]
     fn nvim_marktree_itr_next(b: MarkTreeHandle, itr: MarkTreeIterHandle);
 
     /// Get current mark from iterator.
+    #[link_name = "rs_marktree_itr_current"]
     fn nvim_marktree_itr_current(itr: MarkTreeIterHandle) -> MTKey;
 
     /// Lookup mark by ID.
+    #[link_name = "rs_marktree_lookup"]
     fn nvim_marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey;
 
     /// Lookup mark by namespace and ID.
+    #[link_name = "rs_marktree_lookup_ns"]
     fn nvim_marktree_lookup_ns(
         b: MarkTreeHandle,
         ns: u32,
@@ -352,12 +360,15 @@ extern "C" {
     ) -> MTKey;
 
     /// Get alternate end of paired mark.
+    #[link_name = "rs_marktree_get_alt"]
     fn nvim_marktree_get_alt(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTKey;
 
     /// Get position of alternate end.
+    #[link_name = "rs_marktree_get_altpos"]
     fn nvim_marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos;
 
     /// Initialize overlap iteration at (row, col).
+    #[link_name = "rs_marktree_itr_get_overlap"]
     fn nvim_marktree_itr_get_overlap(
         b: MarkTreeHandle,
         row: c_int,
@@ -366,6 +377,7 @@ extern "C" {
     ) -> bool;
 
     /// Step overlap iteration, writing the next overlapping pair.
+    #[link_name = "rs_marktree_itr_step_overlap"]
     fn nvim_marktree_itr_step_overlap(
         b: MarkTreeHandle,
         itr: MarkTreeIterHandle,
@@ -395,6 +407,7 @@ extern "C" {
     ) -> bool;
 
     /// Move region of marks.
+    #[link_name = "rs_marktree_move_region"]
     fn nvim_marktree_move_region(
         b: MarkTreeHandle,
         start_row: c_int,
