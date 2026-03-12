@@ -188,7 +188,7 @@ pub unsafe extern "C" fn rs_redraw_titles() {
 /// Handle vimrc file discovery: set $envname if not already set.
 ///
 /// Called when a vimrc or "VIMINIT" has been found.
-#[no_mangle]
+#[export_name = "vimrc_found"]
 pub unsafe extern "C" fn rs_vimrc_found(fname: *const c_char, envname: *const c_char) {
     if fname.is_null() || envname.is_null() {
         return;
@@ -207,21 +207,21 @@ pub unsafe extern "C" fn rs_vimrc_found(fname: *const c_char, envname: *const c_
 }
 
 /// Set the global value for 'iminsert' to the local value.
-#[no_mangle]
+#[export_name = "set_iminsert_global"]
 pub unsafe extern "C" fn rs_set_iminsert_global(buf: BufHandle) {
     let val = nvim_buf_get_b_p_iminsert(buf);
     nvim_set_p_iminsert(val);
 }
 
 /// Set the global value for 'imsearch' to the local value.
-#[no_mangle]
+#[export_name = "set_imsearch_global"]
 pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
     let val = nvim_buf_get_b_p_imsearch(buf);
     nvim_set_p_imsearch(val);
 }
 
 /// Reset the 'modifiable' option and its default value.
-#[no_mangle]
+#[export_name = "reset_modifiable"]
 pub unsafe extern "C" fn rs_reset_modifiable() {
     nvim_curbuf_set_b_p_ma(0);
     nvim_option_set_p_ma(0);

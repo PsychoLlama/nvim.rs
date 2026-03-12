@@ -642,7 +642,8 @@ const FAIL: c_int = 0;
 ///
 /// If `val` is null, reads the current value from the window.
 /// Returns OK on success, FAIL if the value is invalid.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "fill_culopt_flags"]
 pub unsafe extern "C" fn rs_fill_culopt_flags(
     val: *const std::ffi::c_char,
     wp: WinHandle,

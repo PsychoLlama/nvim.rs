@@ -131,7 +131,7 @@ extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *err
 extern const char *rs_find_dup_item(const char *origval, const char *newval, size_t newvallen, uint32_t flags);
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
-extern int rs_fill_culopt_flags(const char *val, win_T *wp);
+// rs_fill_culopt_flags deleted: now exported as fill_culopt_flags via #[export_name]
 // rs_set_options_bin deleted: now exported as set_options_bin via #[export_name]
 extern void rs_set_fileformat(int eol_style, int opt_flags);
 // rs_set_helplang_default deleted: now exported as set_helplang_default via #[export_name]
@@ -194,10 +194,10 @@ extern unsigned rs_get_bkc_flags(buf_T *buf);
 extern char *rs_get_flp_value(buf_T *buf);
 extern unsigned rs_get_ve_flags(win_T *wp);
 // rs_redraw_titles deleted: now exported as redraw_titles via #[export_name]
-extern void rs_vimrc_found(const char *fname, const char *envname);
-extern void rs_set_iminsert_global(buf_T *buf);
-extern void rs_set_imsearch_global(buf_T *buf);
-extern void rs_reset_modifiable(void);
+// rs_vimrc_found deleted: now exported as vimrc_found via #[export_name]
+// rs_set_iminsert_global deleted: now exported as set_iminsert_global via #[export_name]
+// rs_set_imsearch_global deleted: now exported as set_imsearch_global via #[export_name]
+// rs_reset_modifiable deleted: now exported as reset_modifiable via #[export_name]
 extern OptVal rs_get_tty_option(const char *name);
 extern bool rs_set_tty_option(const char *name, char *value);
 extern int rs_string_to_key(char *arg);
@@ -2367,23 +2367,11 @@ void didset_window_options(win_T *wp, bool valid_cursor)
   rs_didset_window_options(wp, (int)valid_cursor);
 }
 
-/// Reset the 'modifiable' option and its default value.
-void reset_modifiable(void)
-{
-  rs_reset_modifiable();
-}
+// reset_modifiable deleted: now exported directly from Rust via #[export_name]
 
-/// Set the global value for 'iminsert' to the local value.
-void set_iminsert_global(buf_T *buf)
-{
-  rs_set_iminsert_global(buf);
-}
+// set_iminsert_global deleted: now exported directly from Rust via #[export_name]
 
-/// Set the global value for 'imsearch' to the local value.
-void set_imsearch_global(buf_T *buf)
-{
-  rs_set_imsearch_global(buf);
-}
+// set_imsearch_global deleted: now exported directly from Rust via #[export_name]
 
 static OptIndex expand_option_idx = kOptInvalid;
 static int expand_option_start_col = 0;
@@ -2543,14 +2531,7 @@ bool shortmess(int x)
   return rs_shortmess(x) != 0;
 }
 
-/// vimrc_found() - Called when a vimrc or "VIMINIT" has been found.
-///
-/// Set the values for options that didn't get set yet to the defaults.
-/// When "fname" is not NULL, use it to set $"envname" when it wasn't set yet.
-void vimrc_found(char *fname, char *envname)
-{
-  rs_vimrc_found(fname, envname);
-}
+// vimrc_found deleted: now exported directly from Rust via #[export_name]
 
 /// Check whether global option has been set.
 ///
@@ -2572,11 +2553,7 @@ void reset_option_was_set(OptIndex opt_idx)
   rs_reset_option_was_set(opt_idx);
 }
 
-/// fill_culopt_flags() -- called when 'culopt' changes value
-int fill_culopt_flags(char *val, win_T *wp)
-{
-  return rs_fill_culopt_flags(val, wp);
-}
+// fill_culopt_flags deleted: now exported directly from Rust via #[export_name]
 
 
 
