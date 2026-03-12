@@ -256,7 +256,6 @@ extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
-extern bool rs_changedir_func(char *new_dir, int scope);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
