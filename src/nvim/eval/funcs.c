@@ -208,6 +208,29 @@ extern uint32_t rs_shuffle_xoshiro128starstar(uint32_t *x, uint32_t *y, uint32_t
 # pragma function(floor)
 #endif
 
+// Rust window VimL function declarations (exported from nvim-window crate via #[export_name])
+extern void f_getwinpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getwinposx(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getwinposy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_wincol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winheight(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winwidth(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winbufnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcmdwintype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_win_screenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_tabpagenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_tabpagewinnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_win_getid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_win_id2tabwin(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_win_id2win(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_win_findbuf(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_gettabinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getwininfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winsaveview(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_winrestview(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"

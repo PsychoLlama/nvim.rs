@@ -2880,6 +2880,17 @@ const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_sp
 const garray_T *nvim_win_get_b_langp(const win_T *wp) { return &wp->w_s->b_langp; }
 void nvim_emsg_no_spell(void) { emsg(_(e_no_spell)); }
 
+// set_topline wrapper for winrestview (window viml)
+void nvim_set_topline(win_T *wp, int lnum) { set_topline(wp, (linenr_T)lnum); }
+
+// Typval accessors for window VimL functions (viml.rs)
+typval_T *nvim_eval_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }
+void nvim_eval_tv_set_number(typval_T *tv, int64_t n) { tv->v_type = VAR_NUMBER; tv->vval.v_number = (varnumber_T)n; }
+void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }
+void nvim_eval_tv_set_type(typval_T *tv, int t) { tv->v_type = (VarType)t; }
+dict_T *nvim_win_get_vars(win_T *wp) { return wp->w_vars; }
+dict_T *nvim_tabpage_get_vars(tabpage_T *tp) { return tp->tp_vars; }
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");

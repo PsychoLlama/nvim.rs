@@ -64,6 +64,7 @@ pub mod statusline;
 pub mod tabpage;
 pub mod ui_flush;
 pub mod utility;
+pub mod viml;
 
 use std::ffi::{c_char, c_int};
 
