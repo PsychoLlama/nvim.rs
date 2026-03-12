@@ -126,12 +126,6 @@ static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(Norma
 
 static const char *e_noident = N_("E349: No identifier under cursor");
 
-// =============================================================================
-// Dispatch table moved to Rust (dispatch/table.rs).
-// init_normal_cmds, nv_cmds[], nv_cmd_idx[], nv_max_linear, nv_compare,
-// NV_* flag constants, and all extern rs_nv_* declarations deleted.
-// =============================================================================
-
 // Rust FFI declarations (only those called directly from this file)
 
 // Normal mode state machine
@@ -147,9 +141,7 @@ extern int rs_get_vtopline(win_T *wp);
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
                                    char **text, int *textcol, int find_type);
 
-// invoke_edit: now exported from Rust via #[export_name = "invoke_edit"]
 extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
-// del_from_showcmd: now exported from Rust via #[export_name = "del_from_showcmd"]
 extern void del_from_showcmd(int len);
 
 // Rust dispatch table accessors
@@ -1175,7 +1167,6 @@ _Static_assert(MODE_LREPLACE == 0x120, "MODE_LREPLACE changed");
 _Static_assert(MODE_LANGMAP == 0x20, "MODE_LANGMAP changed");
 _Static_assert(MODE_NORMAL_BUSY == 0x1001, "MODE_NORMAL_BUSY changed");
 _Static_assert(B_IMODE_LMAP == 1, "B_IMODE_LMAP changed");
-// NV_LANG _Static_assert deleted: constant now owned by Rust dispatch/constants.rs
 _Static_assert(CPO_DIGRAPH == 'D', "CPO_DIGRAPH changed");
 
 /// Wrapper for plain_vgetc.
@@ -1261,7 +1252,6 @@ _Static_assert(K_EVENT == -26365, "K_EVENT changed");
 _Static_assert(OP_NOP == 0, "OP_NOP changed");
 _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
-// NV_KEEPREG _Static_assert deleted: constant now owned by Rust dispatch/constants.rs
 
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
@@ -1393,7 +1383,6 @@ _Static_assert(Ctrl_W == 23, "Ctrl_W changed");
 _Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT changed");
 _Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL changed");
 _Static_assert(MODE_SELECT == 0x40, "MODE_SELECT changed");
-// NV_NCW/NV_RL/NV_SS/NV_SSS/NV_STS _Static_asserts deleted: constants now owned by Rust dispatch/constants.rs
 
 /// Get vgetc_char global.
 int nvim_get_vgetc_char(void) { return vgetc_char; }
@@ -1569,8 +1558,6 @@ void nvim_curbuf_b_changed_invalid_clear(void) { curbuf->b_changed_invalid = fal
 
 static int normal_check(VimState *state) { return rs_normal_check((NormalState *)state); }
 
-// end_visual_mode deleted: now exported directly from Rust via #[export_name]
-
 // =============================================================================
 // showcmd accessors for Rust FFI
 // =============================================================================
@@ -1682,14 +1669,7 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
   *out_right = (int)rightcol;
 }
 
-// add_to_showcmd deleted: Rust showcmd.rs exports directly via #[export_name = "add_to_showcmd"].
-
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
-
-// del_from_showcmd deleted: Rust showcmd.rs exports directly via #[export_name = "del_from_showcmd"].
-
-// push_showcmd deleted: Rust exports under the C name directly via #[export_name = "push_showcmd"].
-// pop_showcmd deleted: Rust exports under the C name directly via #[export_name = "pop_showcmd"].
 
 // =============================================================================
 // Scrollbind C accessors for Rust FFI
@@ -1775,11 +1755,6 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
   curbuf = old_curbuf_buf;
 }
 
-// do_check_scrollbind deleted: now exported directly from Rust via #[export_name]
-// check_scrollbind deleted: now exported directly from Rust via #[export_name]
-
-// find_decl deleted: Rust lib.rs exports directly via #[export_name = "find_decl"].
-// nv_screengo deleted: dead code (no C or Rust callers; rs_nv_screengo called directly via move.c wrapper).
 
 /// Initializes static oparg_T/cmdarg_T and returns cap pointer.
 /// nvim is single-threaded so function-static storage is safe.
@@ -1795,11 +1770,6 @@ cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
   return &ca;
 }
 
-// do_nv_ident deleted: Rust exports under the C name directly via #[export_name = "do_nv_ident"].
-
-// unadjust_for_sel_inner deleted: Rust lib.rs exports directly via #[export_name = "unadjust_for_sel_inner"].
-
-// invoke_edit deleted: Rust lib.rs exports directly via #[export_name = "invoke_edit"].
 
 void normal_cmd(oparg_T *oap, bool toplevel)
 {
