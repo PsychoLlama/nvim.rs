@@ -1,20 +1,23 @@
-// Functions for creating a session file, i.e. implementing:
-//   :mkexrc
-//   :mkvimrc
-//   :mkview
-//   :mksession
+// C accessor functions for the Rust session crate.
+//
+// This file contains thin C wrapper/accessor functions that Rust calls via FFI
+// to access C struct fields, globals, and standard library functions.
+// These exist because Rust cannot directly access C struct fields without
+// bindgen-generated definitions.
+//
+// All nvim_ses_* functions are called from: src/nvim-rs/session/src/ffi.rs
+// No other C files depend on these functions.
 
-#include <inttypes.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "klib/kvec.h"
 #include "nvim/arglist.h"
 #include "nvim/arglist_defs.h"
-#include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/errors.h"
@@ -25,14 +28,12 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
-#include "nvim/ex_session.h"
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
 #include "nvim/fold.h"
 #include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/macros_defs.h"
 #include "nvim/mapping.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
@@ -43,14 +44,12 @@
 #include "nvim/os/os.h"
 #include "nvim/os/os_defs.h"
 #include "nvim/path.h"
-#include "nvim/pos_defs.h"
 #include "nvim/runtime.h"
 #include "nvim/strings.h"
-#include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-#include "ex_session.c.generated.h"
+#include "session_shim.c.generated.h"
 
 // Rust FFI declarations
 extern var_flavour_T rs_var_flavour(const char *varname);
@@ -58,30 +57,27 @@ extern var_flavour_T rs_var_flavour(const char *varname);
 /// Whether ":lcd" or ":tcd" was produced for a session.
 static int did_lcd;
 
-#define PUTLINE_FAIL(s) \
-  do { if (FAIL == put_line(fd, (s))) { return FAIL; } } while (0)
-
 // =========================================================================
 // C accessor functions for Rust FFI
 // =========================================================================
 
-// --- Window accessors (Phase 2) ---
+// --- Window accessors ---
 bool nvim_ses_win_get_floating(const win_T *wp) { return wp->w_floating; }
 buf_T *nvim_ses_win_get_buffer(const win_T *wp) { return wp->w_buffer; }
 win_T *nvim_ses_win_get_next(const win_T *wp) { return wp->w_next; }
 
-// --- Buffer query accessors (Phase 2) ---
+// --- Buffer query accessors ---
 const char *nvim_ses_buf_get_fname(const buf_T *buf) { return buf->b_fname; }
 bool nvim_ses_buf_is_terminal(const buf_T *buf) { return buf->terminal != NULL; }
 bool nvim_ses_bt_nofilename(const buf_T *buf) { return bt_nofilename(buf); }
 bool nvim_ses_bt_help(const buf_T *buf) { return bt_help(buf); }
 bool nvim_ses_bt_terminal(const buf_T *buf) { return bt_terminal(buf); }
 
-// --- Session flags accessors (Phase 2) ---
+// --- Session flags accessors ---
 unsigned nvim_ses_get_ssop_flags(void) { return ssop_flags; }
 unsigned *nvim_ses_get_ssop_flags_ptr(void) { return &ssop_flags; }
 
-// --- Frame accessors (Phase 2) ---
+// --- Frame accessors ---
 int nvim_ses_frame_get_layout(const frame_T *fr) { return fr->fr_layout; }
 frame_T *nvim_ses_frame_get_child(const frame_T *fr) { return fr->fr_child; }
 frame_T *nvim_ses_frame_get_next(const frame_T *fr) { return fr->fr_next; }
@@ -97,7 +93,7 @@ _Static_assert(kOptSsopFlagBlank == 0x80, "kOptSsopFlagBlank");
 _Static_assert(kOptSsopFlagHelp == 0x40, "kOptSsopFlagHelp");
 _Static_assert(kOptSsopFlagTerminal == 0x10000, "kOptSsopFlagTerminal");
 
-// --- Filename helper accessors (Phase 3) ---
+// --- Filename helper accessors ---
 const char *nvim_ses_buf_get_sfname(const buf_T *buf) { return buf->b_sfname; }
 const char *nvim_ses_buf_get_ffname(const buf_T *buf) { return buf->b_ffname; }
 unsigned *nvim_ses_get_vop_flags_ptr(void) { return &vop_flags; }
@@ -133,7 +129,7 @@ int nvim_ses_utfc_ptr2len(const char *p)
 _Static_assert(kOptSsopFlagCurdir == 0x1000, "kOptSsopFlagCurdir");
 _Static_assert(kOptSsopFlagSesdir == 0x800, "kOptSsopFlagSesdir");
 
-// --- Window struct accessors (Phase 4) ---
+// --- Window struct accessors ---
 colnr_T nvim_ses_win_get_curswant(const win_T *wp) { return wp->w_curswant; }
 colnr_T nvim_ses_win_get_virtcol(const win_T *wp) { return wp->w_virtcol; }
 int nvim_ses_win_get_height(const win_T *wp) { return wp->w_height; }
@@ -141,13 +137,13 @@ int nvim_ses_win_get_hsep_height(const win_T *wp) { return wp->w_hsep_height; }
 int nvim_ses_win_get_status_height(const win_T *wp) { return wp->w_status_height; }
 int nvim_ses_win_get_width(const win_T *wp) { return wp->w_width; }
 
-// --- Global variables (Phase 4) ---
+// --- Global variables ---
 frame_T *nvim_ses_get_topframe(void) { return topframe; }
 int nvim_ses_topframe_get_height(void) { return topframe->fr_height; }
 int nvim_ses_get_Rows(void) { return Rows; }
 int nvim_ses_get_Columns(void) { return Columns; }
 
-// --- garray / arglist accessors (Phase 4) ---
+// --- garray / arglist accessors ---
 int nvim_ses_ga_get_len(const garray_T *gap) { return gap->ga_len; }
 char *nvim_ses_alist_name_at(garray_T *gap, int i)
 {
@@ -163,13 +159,7 @@ int nvim_ses_vim_FullName(const char *fname, char *buf, size_t len, bool force)
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
 _Static_assert(kOptSsopFlagWinsize == 0x08, "kOptSsopFlagWinsize");
 
-// --- Phase 5 accessors: store_session_globals ---
-// Type constants for session global variable callback
-// 0 = VAR_NUMBER or VAR_STRING, 1 = VAR_FLOAT
-//
-// Callback signature: int (*cb)(const char *key, int var_type, const char *escaped_val,
-//                               double float_val, int float_sign, void *fd)
-// Returns FAIL if callback requests stop (write error).
+// --- store_session_globals complex helper ---
 int nvim_ses_foreach_session_global(
     int (*cb)(const char *key, int var_type, const char *escaped_val,
               double float_val, int float_sign, void *ud),
@@ -211,14 +201,14 @@ int nvim_ses_foreach_session_global(
   return OK;
 }
 
-// --- Phase 5 accessors: get_view_file ---
+// --- get_view_file accessors ---
 const char *nvim_ses_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 void nvim_ses_emsg_noname(void) { emsg(_(e_noname)); }
 const char *nvim_ses_get_p_vdir(void) { return p_vdir; }
 bool nvim_ses_vim_ispathsep(int c) { return vim_ispathsep(c); }
 bool nvim_ses_add_pathsep(char *p) { return add_pathsep(p); }
 
-// --- Phase 6 accessors: put_view ---
+// --- put_view accessors ---
 
 // Window accessors for argument list
 bool nvim_ses_win_uses_global_alist(const win_T *wp) { return wp->w_alist == &global_alist; }
@@ -280,7 +270,7 @@ _Static_assert(kOptSsopFlagLocaloptions == 0x10, "kOptSsopFlagLocaloptions");
 _Static_assert(kOptSsopFlagFolds == 0x2000, "kOptSsopFlagFolds");
 _Static_assert(OPT_LOCAL == 0x02, "OPT_LOCAL");
 
-// --- Phase 7 accessors: makeopens ---
+// --- makeopens accessors ---
 
 // Buffer iteration callback
 int nvim_ses_foreach_buffer(
@@ -331,7 +321,7 @@ _Static_assert(kOptSsopFlagGlobals == 0x100, "kOptSsopFlagGlobals");
 _Static_assert(kOptSsopFlagTabpages == 0x8000, "kOptSsopFlagTabpages");
 _Static_assert(kOptSsopFlagResize == 0x04, "kOptSsopFlagResize");
 
-// --- Phase 8 accessors: ex_mkrc, ex_loadview ---
+// --- ex_mkrc, ex_loadview accessors ---
 
 // exarg_T field accessors
 int nvim_ses_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
@@ -398,118 +388,6 @@ _Static_assert(kOptSsopFlagSkiprtp == 0x20000, "kOptSsopFlagSkiprtp");
 _Static_assert(DOSO_NONE == 0, "DOSO_NONE");
 _Static_assert(OPT_GLOBAL == 0x01, "OPT_GLOBAL");
 _Static_assert(OPT_SKIPRTP == 0x80, "OPT_SKIPRTP");
-
-static int put_view_curpos(FILE *fd, const win_T *wp, char *spaces)
-{
-  return rs_put_view_curpos(fd, (win_T *)wp, spaces);
-}
-
-static int ses_winsizes(FILE *fd, bool restore_size, win_T *tab_firstwin)
-{
-  return rs_ses_winsizes(fd, restore_size, tab_firstwin);
-}
-
-/// Write commands to "fd" to recursively create windows for frame "fr",
-/// horizontally and vertically split.
-/// After the commands the last window in the frame is the current window.
-///
-/// @return  FAIL when writing the commands to "fd" fails.
-static int ses_win_rec(FILE *fd, frame_T *fr)
-{
-  return rs_ses_win_rec(fd, fr);
-}
-
-static frame_T *ses_skipframe(frame_T *fr)
-{
-  return rs_ses_skipframe(fr);
-}
-
-static bool ses_do_frame(const frame_T *fr)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_ses_do_frame((frame_T *)fr);
-}
-
-static int ses_do_win(win_T *wp)
-{
-  return rs_ses_do_win(wp);
-}
-
-/// Writes an :argument list to the session file.
-static int ses_arglist(FILE *fd, char *cmd, garray_T *gap, bool fullname, unsigned *flagp)
-{
-  return rs_ses_arglist(fd, cmd, gap, fullname, flagp);
-}
-
-static char *ses_get_fname(buf_T *buf, const unsigned *flagp)
-{
-  return rs_ses_get_fname(buf, flagp);
-}
-
-static int ses_fname(FILE *fd, buf_T *buf, unsigned *flagp, bool add_eol)
-{
-  return rs_ses_fname(fd, buf, flagp, add_eol);
-}
-
-static char *ses_escape_fname(char *name, unsigned *flagp)
-{
-  return rs_ses_escape_fname(name, flagp);
-}
-
-static int ses_put_fname(FILE *fd, char *name, unsigned *flagp)
-{
-  return rs_ses_put_fname(fd, name, flagp);
-}
-
-/// Write commands to "fd" to restore the view of a window.
-static int put_view(FILE *fd, win_T *wp, tabpage_T *tp, bool add_edit, unsigned *flagp,
-                    int current_arg_idx)
-{
-  return rs_put_view(fd, wp, tp, add_edit, flagp, current_arg_idx);
-}
-
-static int store_session_globals(FILE *fd)
-{
-  return rs_store_session_globals(fd);
-}
-
-/// Writes commands for restoring the current buffers, for :mksession.
-static int makeopens(FILE *fd, char *dirnow)
-{
-  return rs_makeopens(fd, dirnow);
-}
-
-/// ":loadview [nr]"
-void ex_loadview(exarg_T *eap)
-{
-  rs_ex_loadview(eap);
-}
-
-/// ":mkexrc", ":mkvimrc", ":mkview", ":mksession".
-///
-/// Legacy 'sessionoptions'/'viewoptions' flags are always enabled:
-///   - kOptSsopFlagUnix: line-endings are LF
-///   - kOptSsopFlagSlash: filenames are written with "/" slash
-void ex_mkrc(exarg_T *eap)
-{
-  rs_ex_mkrc(eap);
-}
-
-/// @return  the name of the view file for the current buffer.
-static char *get_view_file(char c)
-{
-  return rs_get_view_file(c);
-}
-
-int put_eol(FILE *fd)
-{
-  return rs_put_eol(fd);
-}
-
-int put_line(FILE *fd, char *s)
-{
-  return rs_put_line(fd, s);
-}
 
 // _Static_assert for OK/FAIL values used by Rust FFI
 _Static_assert(OK == 1, "OK must be 1");

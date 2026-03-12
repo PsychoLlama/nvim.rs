@@ -1303,7 +1303,7 @@ const OPT_SKIPRTP: c_int = 0x80;
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_loadview"]
 pub unsafe extern "C" fn rs_ex_loadview(eap: ffi::ExargPtr) {
     let arg = ffi::nvim_ses_eap_get_arg(eap);
     let c = *arg;
@@ -1323,7 +1323,7 @@ pub unsafe extern "C" fn rs_ex_loadview(eap: ffi::ExargPtr) {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_mkrc"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_ex_mkrc(eap: ffi::ExargPtr) {
     let cmd_mksession = ffi::nvim_ses_get_CMD_mksession();

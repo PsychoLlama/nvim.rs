@@ -89,7 +89,7 @@ impl SessionWriter {
 ///
 /// # Safety
 /// `fd` must be a valid, open `FILE*`.
-#[no_mangle]
+#[export_name = "put_eol"]
 pub unsafe extern "C" fn rs_put_eol(fd: *mut libc::FILE) -> c_int {
     let mut w = SessionWriter::new(fd);
     w.put_eol()
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn rs_put_eol(fd: *mut libc::FILE) -> c_int {
 ///
 /// # Safety
 /// `fd` must be a valid, open `FILE*`. `s` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "put_line"]
 pub unsafe extern "C" fn rs_put_line(fd: *mut libc::FILE, s: *const c_char) -> c_int {
     let mut w = SessionWriter::new(fd);
     if s.is_null() {
