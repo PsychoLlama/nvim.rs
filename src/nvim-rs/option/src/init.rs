@@ -410,7 +410,7 @@ extern "C" {
 ///
 /// Converts locale strings to two-letter codes (same logic as
 /// `rs_compute_helplang`), then stores them via `nvim_set_p_hlg_from_code`.
-#[no_mangle]
+#[export_name = "set_helplang_default"]
 pub unsafe extern "C" fn rs_set_helplang_default(lang: *const c_char) {
     if lang.is_null() || *lang == 0 {
         return;
@@ -654,7 +654,7 @@ pub unsafe extern "C" fn rs_set_init_fenc_default() {
 /// Set default values for 'title' and 'icon'.
 ///
 /// Replaces C `set_title_defaults()`.
-#[no_mangle]
+#[export_name = "set_title_defaults"]
 pub unsafe extern "C" fn rs_set_title_defaults() {
     let title_flags = nvim_get_option_flags(K_OPT_TITLE);
     if (title_flags & K_OPT_FLAG_WAS_SET) == 0 {
@@ -766,7 +766,7 @@ unsafe fn shell_is(p: *const c_char, name: *const c_char) -> bool {
 /// Initialize the options, part three: After reading the .vimrc.
 ///
 /// Corresponds to C's `set_init_3`.
-#[no_mangle]
+#[export_name = "set_init_3"]
 pub unsafe extern "C" fn rs_set_init_3() {
     nvim_call_parse_shape_opt();
 

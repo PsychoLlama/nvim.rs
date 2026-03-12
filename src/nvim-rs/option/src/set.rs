@@ -624,7 +624,7 @@ const OPT_ONECOLUMN: c_int = 0x20;
 /// # Safety
 ///
 /// `eap` must be a valid non-null pointer to a C `exarg_T`.
-#[no_mangle]
+#[export_name = "ex_set"]
 pub unsafe extern "C" fn rs_ex_set(eap: *mut std::ffi::c_void) {
     use crate::setops::{OPT_GLOBAL, OPT_LOCAL};
 

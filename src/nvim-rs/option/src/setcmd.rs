@@ -616,7 +616,7 @@ const OP_REMOVING: c_int = 3;
 ///
 /// # Safety
 /// `arg` must be a valid, writable C string.
-#[no_mangle]
+#[export_name = "do_set"]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {

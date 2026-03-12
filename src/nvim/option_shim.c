@@ -132,9 +132,9 @@ extern const char *rs_find_dup_item(const char *origval, const char *newval, siz
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
 extern int rs_fill_culopt_flags(const char *val, win_T *wp);
-extern void rs_set_options_bin(int oldval, int newval, int opt_flags);
+// rs_set_options_bin deleted: now exported as set_options_bin via #[export_name]
 extern void rs_set_fileformat(int eol_style, int opt_flags);
-extern void rs_set_helplang_default(const char *lang);
+// rs_set_helplang_default deleted: now exported as set_helplang_default via #[export_name]
 
 // Rust metadata query functions (option pass 8 phase 1)
 // rs_option_is_hidden, rs_option_has_type, rs_option_has_scope,
@@ -156,7 +156,7 @@ extern void *rs_get_option_sctx(int opt_idx);
 extern void rs_alloc_options_default(void);
 extern void rs_change_option_default(int opt_idx, OptVal value);
 extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
-extern void rs_set_init_tablocal(void);
+// rs_set_init_tablocal deleted: now exported as set_init_tablocal via #[export_name]
 extern void rs_check_options(void);
 
 // Rust validate_option_value cluster (option pass 8 phase 3)
@@ -175,16 +175,16 @@ extern OptIndex rs_find_option(const char *name);
 
 // Rust init functions (option pass 7 phase 2)
 extern void rs_set_init_2(int headless);
-extern void rs_set_init_3(void);
+// rs_set_init_3 deleted: now exported as set_init_3 via #[export_name]
 
 // Rust option validation and ex_set (option pass 7 phase 3)
 typedef struct { int result; const char *errmsg; } ValidateOptIdxResult;
 extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags,
                                                 uint32_t flags, int prefix);
-extern void rs_ex_set(exarg_T *eap);
+// rs_ex_set deleted: now exported as ex_set via #[export_name]
 
 // Rust do_set / do_one_set_option (option pass 10 phase 1)
-extern int rs_do_set(char *arg, int opt_flags);
+// rs_do_set deleted: now exported as do_set via #[export_name]
 
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
@@ -193,7 +193,7 @@ extern const char *rs_get_findfunc(void);
 extern unsigned rs_get_bkc_flags(buf_T *buf);
 extern char *rs_get_flp_value(buf_T *buf);
 extern unsigned rs_get_ve_flags(win_T *wp);
-extern void rs_redraw_titles(void);
+// rs_redraw_titles deleted: now exported as redraw_titles via #[export_name]
 extern void rs_vimrc_found(const char *fname, const char *envname);
 extern void rs_set_iminsert_global(buf_T *buf);
 extern void rs_set_imsearch_global(buf_T *buf);
@@ -1471,10 +1471,7 @@ void nvim_call_check_signcolumn(win_T *wp) { check_signcolumn(NULL, wp); }
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
-void set_init_tablocal(void)
-{
-  rs_set_init_tablocal();
-}
+// set_init_tablocal deleted: now exported directly from Rust via #[export_name]
 
 extern void rs_set_init_default_shell(void);
 
@@ -1539,7 +1536,7 @@ static void change_option_default(const OptIndex opt_idx, OptVal value)
 extern const char *rs_option_expand(int opt_idx, const char *val);
 extern void rs_set_option_default(int opt_idx, int opt_flags);
 extern void rs_set_options_default(int opt_flags);
-extern void rs_free_all_options(void);
+// rs_free_all_options deleted: now exported as free_all_options via #[export_name]
 
 /// Set an option to its default value.
 /// This does not take care of side effects!
@@ -1576,13 +1573,7 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
   rs_set_string_default_opt(opt_idx, val, allocated);
 }
 
-#if defined(EXITFREE)
-/// Free all options. Body migrated to Rust (Phase 12 Pass 3).
-void free_all_options(void)
-{
-  rs_free_all_options();
-}
-#endif
+// free_all_options deleted: now exported directly from Rust via #[export_name] (EXITFREE guarded)
 
 /// Initialize the options, part two: After getting Rows and Columns.
 void set_init_2(bool headless)
@@ -1590,35 +1581,20 @@ void set_init_2(bool headless)
   rs_set_init_2(headless ? 1 : 0);
 }
 
-/// Initialize the options, part three: After reading the .vimrc
-void set_init_3(void)
-{
-  rs_set_init_3();
-}
+// set_init_3 deleted: now exported directly from Rust via #[export_name]
 
-/// When 'helplang' is still at its default value, set it to "lang".
-/// Only the first two characters of "lang" are used.
-void set_helplang_default(const char *lang)
-{
-  rs_set_helplang_default(lang);
-}
+// set_helplang_default deleted: now exported directly from Rust via #[export_name]
 
-extern void rs_set_title_defaults(void);
+// rs_set_title_defaults deleted: now exported as set_title_defaults via #[export_name]
 
 /// 'title' and 'icon' only default to true if they have not been set or reset
 /// in .vimrc and we can read the old value.
 /// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
-void set_title_defaults(void)
-{
-  rs_set_title_defaults();
-}
+// set_title_defaults deleted: now exported directly from Rust via #[export_name]
 
-void ex_set(exarg_T *eap)
-{
-  rs_ex_set(eap);
-}
+// ex_set deleted: now exported directly from Rust via #[export_name]
 
 /// Get the string value specified for a ":set" command.  The following set options are supported:
 ///     set {opt}={val}
@@ -1672,10 +1648,7 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 /// @param arg  option string (may be written to!)
 ///
 /// @return  FAIL if an error is detected, OK otherwise
-int do_set(char *arg, int opt_flags)
-{
-  return rs_do_set(arg, opt_flags);
-}
+// do_set deleted: now exported directly from Rust via #[export_name]
 
 /// Convert a key name or string into a key value.
 /// Used for 'cedit', 'wildchar' and 'wildcharm' options.
@@ -1689,10 +1662,7 @@ int string_to_key(char *arg)
 /// set_options_bin -  called when 'bin' changes value.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-void set_options_bin(int oldval, int newval, int opt_flags)
-{
-  rs_set_options_bin(oldval, newval, opt_flags);
-}
+// set_options_bin deleted: now exported directly from Rust via #[export_name]
 
 /// Expand environment variables for some string options.
 /// These string options cannot be indirect!
@@ -1761,18 +1731,9 @@ uint32_t *insecure_flag(win_T *const wp, OptIndex opt_idx, int opt_flags)
   return rs_insecure_flag(wp, opt_idx, opt_flags);
 }
 
-/// Redraw the window title and/or tab page text later.
-void redraw_titles(void)
-{
-  rs_redraw_titles();
-}
+// redraw_titles deleted: now exported directly from Rust via #[export_name]
 
-extern void rs_check_blending(win_T *wp);
-
-void check_blending(win_T *wp)
-{
-  rs_check_blending(wp);
-}
+// rs_check_blending deleted: now exported as check_blending via #[export_name]
 
 /// Handle setting `winhighlight' in window "wp"
 ///

@@ -107,7 +107,7 @@ pub unsafe extern "C" fn rs_set_string_default_opt(
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "set_init_tablocal"]
 pub unsafe extern "C" fn rs_set_init_tablocal() {
     let ch_default = nvim_get_cmdheight_def_number();
     nvim_set_p_ch(ch_default);
@@ -657,7 +657,7 @@ pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[no_mangle]
+#[export_name = "free_all_options"]
 pub unsafe extern "C" fn rs_free_all_options() {
     let count = K_OPT_COUNT;
     for opt_idx in 0..count {

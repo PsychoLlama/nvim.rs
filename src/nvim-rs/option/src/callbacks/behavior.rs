@@ -741,7 +741,7 @@ const OPT_LOCAL_BIN: c_int = 0x02;
 ///
 /// When `newval` is zero (bin turned off):
 /// - If previously on, restores the saved local/global values
-#[no_mangle]
+#[export_name = "set_options_bin"]
 pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int) {
     if newval != 0 {
         if oldval == 0 {

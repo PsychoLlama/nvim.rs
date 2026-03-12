@@ -60,4 +60,18 @@ static inline const char *optval_type_get_name(const OptValType type)
 #define STATIC_CSTR_AS_OPTVAL(s) STRING_OPTVAL(STATIC_CSTR_AS_STRING(s))
 #define STATIC_CSTR_TO_OPTVAL(s) STRING_OPTVAL(STATIC_CSTR_TO_STRING(s))
 
+// Phase 34+: Rust-exported functions (via #[export_name])
+void set_init_tablocal(void);
+void set_init_3(void);
+void set_helplang_default(const char *lang);
+void set_title_defaults(void);
+void ex_set(exarg_T *eap);
+int do_set(char *arg, int opt_flags);
+void set_options_bin(int oldval, int newval, int opt_flags);
+void redraw_titles(void);
+void check_blending(win_T *wp);
+#if defined(EXITFREE)
+void free_all_options(void);
+#endif
+
 #include "option_shim.h.generated.h"

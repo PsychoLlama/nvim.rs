@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_get_ve_flags(wp: WinHandle) -> c_uint {
 }
 
 /// Redraw the window title and/or tab page text later.
-#[no_mangle]
+#[export_name = "redraw_titles"]
 pub unsafe extern "C" fn rs_redraw_titles() {
     need_maketitle = true;
     redraw_tabline = true;
@@ -432,7 +432,7 @@ const DIP_ALL: c_int = 0x01;
 /// Update w_grid_alloc.blending based on winbl and floating/shadow config.
 ///
 /// Translation of C `check_blending`.
-#[no_mangle]
+#[export_name = "check_blending"]
 pub unsafe extern "C" fn rs_check_blending(wp: WinHandle) {
     let winbl = nvim_win_get_p_winbl(wp);
     let floating = nvim_win_get_floating(wp) != 0;
