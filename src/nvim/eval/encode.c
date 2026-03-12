@@ -93,7 +93,8 @@ void encode_list_write(void *const data, const char *const buf, const size_t len
 }
 
 /// Abort conversion to string after a recursion error.
-static bool did_echo_string_emsg = false;
+/// Non-static so Rust wrappers (encode_tv2string, encode_tv2json) can reset it.
+bool did_echo_string_emsg = false;
 
 /// Show a error message when converting to msgpack value
 ///

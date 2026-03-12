@@ -36,6 +36,9 @@ typedef struct {
 extern const char *const encode_bool_var_names[];
 extern const char *const encode_special_var_names[];
 
+// Functions implemented in Rust (eval_codec crate):
+int encode_blob_write(void *data, const char *buf, size_t len);
+
 /// First codepoint in high surrogates block
 #define SURROGATE_HI_START 0xD800
 
