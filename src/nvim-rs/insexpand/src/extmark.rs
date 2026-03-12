@@ -47,7 +47,7 @@ pub unsafe extern "C" fn rs_restore_orig_extmarks() {
 ///
 /// # Safety
 /// Should only be called at process exit; modifies static callback state.
-#[no_mangle]
+#[export_name = "free_insexpand_stuff"]
 pub unsafe extern "C" fn rs_free_insexpand_stuff() {
     nvim_free_insexpand_stuff_impl();
 }

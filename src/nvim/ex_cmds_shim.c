@@ -492,15 +492,8 @@ _Static_assert(REGSUB_MAGIC == 2, "REGSUB_MAGIC mismatch - update Rust constant"
 _Static_assert(REGSUB_BACKSLASH == 4, "REGSUB_BACKSLASH mismatch - update Rust constant");
 
 // do_bang, prevcmd management implemented in Rust (rs_do_bang, rs_free_prev_shellcmd)
-extern void rs_do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out);
+// rs_do_bang deleted: now exported as do_bang via #[export_name]
 // rs_free_prev_shellcmd deleted: now exported as free_prev_shellcmd via #[export_name]
-
-/// Handle the ":!cmd" command. Thin wrapper calling the Rust implementation.
-void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_do_bang(addr_count, eap, forceit, do_in, do_out);
-}
 
 // free_prev_shellcmd deleted: now exported directly from Rust via #[export_name]
 

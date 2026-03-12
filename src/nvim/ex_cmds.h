@@ -49,6 +49,7 @@ void ex_wnext(exarg_T *eap);
 void do_wqall(exarg_T *eap);
 void ex_global(exarg_T *eap);
 void ex_oldfiles(exarg_T *eap);
+void do_bang(int addr_count, exarg_T *eap, bool forceit, bool do_in, bool do_out);
 void do_shell(char *cmd, int flags);
 void global_exe(char *cmd);
 void free_old_sub(void);

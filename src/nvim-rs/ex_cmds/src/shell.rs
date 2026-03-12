@@ -836,7 +836,7 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
 ///
 /// # Safety
 /// All pointer arguments must be non-null and valid.
-#[no_mangle]
+#[export_name = "do_bang"]
 #[allow(static_mut_refs)]
 pub unsafe extern "C" fn rs_do_bang(
     addr_count: c_int,

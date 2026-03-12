@@ -208,7 +208,7 @@ extern void rs_spell_back_to_badword(void);
 // Phase 1 (pass 7) Rust exports
 extern void rs_save_orig_extmarks(void);
 extern void rs_restore_orig_extmarks(void);
-extern void rs_free_insexpand_stuff(void);
+// rs_free_insexpand_stuff deleted: now exported as free_insexpand_stuff via #[export_name]
 // Phase 2 (pass 7) Rust exports
 extern int rs_get_cmdline_compl_info(char *line, int curs_col);
 extern void rs_set_compl_globals(int startcol, int curs_col, int is_cpt_compl);
@@ -2084,12 +2084,7 @@ void nvim_free_insexpand_stuff_impl(void)
   clear_cpt_callbacks(&cpt_cb, cpt_cb_count);
 }
 
-#if defined(EXITFREE)
-void free_insexpand_stuff(void)
-{
-  rs_free_insexpand_stuff();
-}
-#endif
+// free_insexpand_stuff deleted: Rust exports under the C name directly via #[export_name].
 
 /// Called when starting CTRL_X_SPELL mode: Move backwards to a previous badly
 /// spelled word, if there is one.

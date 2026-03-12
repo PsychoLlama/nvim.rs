@@ -6,6 +6,9 @@
 #include "nvim/vim_defs.h"  // IWYU pragma: keep
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+#if defined(EXITFREE)
+void free_insexpand_stuff(void);
+#endif
 bool check_compl_option(bool dict_opt);
 void ins_ctrl_x(void);
 const char *did_set_completefunc(optset_T *args);
