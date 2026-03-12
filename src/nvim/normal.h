@@ -21,5 +21,7 @@ EXTERN char showcmd_buf[SHOWCMD_BUFLEN];
 void push_showcmd(void);
 void pop_showcmd(void);
 void do_nv_ident(int c1, int c2);
+bool add_to_showcmd(int c);
+bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
 
 #include "normal_shim.h.generated.h"

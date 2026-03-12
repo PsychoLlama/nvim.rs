@@ -355,7 +355,7 @@ pub unsafe extern "C" fn rs_pop_showcmd() {
 ///
 /// # Safety
 /// Reads/writes the shared showcmd_buf C static and calls C helpers.
-#[no_mangle]
+#[export_name = "add_to_showcmd"]
 pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
     if p_sc == 0 || nvim_get_msg_silent() != 0 {
         return false;

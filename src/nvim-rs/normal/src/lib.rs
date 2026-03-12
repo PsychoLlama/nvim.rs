@@ -3943,7 +3943,7 @@ unsafe fn find_decl_search(
 ///
 /// # Safety
 /// `ptr` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
+#[export_name = "find_decl"]
 pub unsafe extern "C" fn rs_find_decl(
     ptr: *mut c_char,
     len: usize,

@@ -1203,8 +1203,7 @@ bool nvim_findmatchlimit_forward(int64_t maxtravel,
   return true;
 }
 
-/// rs_find_decl Rust implementation.
-extern bool rs_find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg);
+// rs_find_decl extern removed: Rust exports as find_decl via #[export_name].
 
 // =============================================================================
 // Operator handler accessors for Rust FFI
@@ -2085,14 +2084,7 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
   *out_right = (int)rightcol;
 }
 
-/// Add 'c' to string of shown command chars.
-///
-/// @return  true if output has been written (and setcursor() has been called).
-extern bool rs_add_to_showcmd(int c);
-bool add_to_showcmd(int c)
-{
-  return rs_add_to_showcmd(c);
-}
+// add_to_showcmd deleted: Rust showcmd.rs exports directly via #[export_name = "add_to_showcmd"].
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 
@@ -2207,20 +2199,8 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
   rs_check_scrollbind((int)vtopline_diff, leftcol_diff);
 }
 
-/// Search for variable declaration of "ptr[len]" (thin wrapper calling Rust).
-/// Used by nv_gd and the searchdecl() Vimscript function.
-bool find_decl(char *ptr, size_t len, bool locally, bool thisblock, int flags_arg)
-{
-  return rs_find_decl(ptr, len, locally, thisblock, flags_arg);
-}
-
-/// Move 'dist' lines in direction 'dir', counting lines by *screen*
-/// lines rather than lines in the file (thin wrapper calling Rust).
-extern bool rs_nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal);
-bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
-{
-  return rs_nv_screengo(oap, dir, dist, skip_conceal);
-}
+// find_decl deleted: Rust lib.rs exports directly via #[export_name = "find_decl"].
+// nv_screengo deleted: dead code (no C or Rust callers; rs_nv_screengo called directly via move.c wrapper).
 
 /// Initializes static oparg_T/cmdarg_T and returns cap pointer.
 /// nvim is single-threaded so function-static storage is safe.
