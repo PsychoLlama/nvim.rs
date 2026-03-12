@@ -173,7 +173,7 @@ unsafe fn ins_left_impl() {
     nvim_set_dont_sync_undo(K_FALSE);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_left")]
 pub unsafe extern "C" fn rs_ins_left() {
     ins_left_impl();
 }
@@ -222,7 +222,7 @@ unsafe fn ins_right_impl() {
     nvim_set_dont_sync_undo(K_FALSE);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_right")]
 pub unsafe extern "C" fn rs_ins_right() {
     ins_right_impl();
 }
@@ -252,7 +252,7 @@ unsafe fn ins_s_left_impl() {
     nvim_set_dont_sync_undo(K_FALSE);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_s_left")]
 pub unsafe extern "C" fn rs_ins_s_left() {
     ins_s_left_impl();
 }
@@ -283,7 +283,7 @@ unsafe fn ins_s_right_impl() {
     nvim_set_dont_sync_undo(K_FALSE);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_s_right")]
 pub unsafe extern "C" fn rs_ins_s_right() {
     ins_s_right_impl();
 }
@@ -308,7 +308,7 @@ unsafe fn ins_home_impl(c: c_int) {
     nvim_edit_start_arrow_from_slot(0);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_home")]
 pub unsafe extern "C" fn rs_ins_home(c: c_int) {
     ins_home_impl(c);
 }
@@ -332,7 +332,7 @@ unsafe fn ins_end_impl(c: c_int) {
     nvim_edit_start_arrow_from_slot(0);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_end")]
 pub unsafe extern "C" fn rs_ins_end(c: c_int) {
     ins_end_impl(c);
 }
@@ -360,7 +360,7 @@ unsafe fn ins_up_impl(startcol: bool) {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_up")]
 pub unsafe extern "C" fn rs_ins_up(startcol: c_int) {
     ins_up_impl(startcol != 0);
 }
@@ -388,7 +388,7 @@ unsafe fn ins_down_impl(startcol: bool) {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_down")]
 pub unsafe extern "C" fn rs_ins_down(startcol: c_int) {
     ins_down_impl(startcol != 0);
 }
@@ -419,7 +419,7 @@ unsafe fn ins_pageup_impl() {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_pageup")]
 pub unsafe extern "C" fn rs_ins_pageup() {
     ins_pageup_impl();
 }
@@ -450,7 +450,7 @@ unsafe fn ins_pagedown_impl() {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_pagedown")]
 pub unsafe extern "C" fn rs_ins_pagedown() {
     ins_pagedown_impl();
 }
@@ -459,7 +459,7 @@ pub unsafe extern "C" fn rs_ins_pagedown() {
 // ins_insert (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_insert")]
 pub unsafe extern "C" fn rs_ins_insert(replace_state: c_int) {
     nvim_edit_ins_insert(replace_state);
 }
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn rs_ins_insert(replace_state: c_int) {
 // ins_ctrl_o (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_ctrl_o")]
 pub unsafe extern "C" fn rs_ins_ctrl_o() {
     nvim_edit_ins_ctrl_o();
 }
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_o() {
 // ins_ctrl_hat (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_ctrl_hat")]
 pub unsafe extern "C" fn rs_ins_ctrl_hat() {
     nvim_edit_ins_ctrl_hat();
 }
@@ -492,7 +492,7 @@ unsafe fn ins_ctrl__impl() {
     nvim_edit_ins_ctrl_(c_int::from(revins_on_val));
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_ctrl_")]
 pub unsafe extern "C" fn rs_ins_ctrl_() {
     ins_ctrl__impl();
 }
@@ -501,7 +501,8 @@ pub unsafe extern "C" fn rs_ins_ctrl_() {
 // ins_start_select (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "ins_start_select")]
 pub unsafe extern "C" fn rs_ins_start_select(c: c_int) -> c_int {
     nvim_edit_ins_start_select(c)
 }
@@ -531,7 +532,7 @@ unsafe fn ins_ctrl_g_impl() {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_ctrl_g")]
 pub unsafe extern "C" fn rs_ins_ctrl_g() {
     ins_ctrl_g_impl();
 }
@@ -540,7 +541,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_g() {
 // ins_shift (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_shift")]
 pub unsafe extern "C" fn rs_ins_shift(c: c_int, lastc: c_int) {
     nvim_edit_ins_shift(c, lastc);
 }
@@ -549,7 +550,7 @@ pub unsafe extern "C" fn rs_ins_shift(c: c_int, lastc: c_int) {
 // ins_del (Phase 4b - delegated to C helper)
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_del")]
 pub unsafe extern "C" fn rs_ins_del() {
     nvim_edit_ins_del();
 }

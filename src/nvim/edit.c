@@ -263,9 +263,7 @@ extern int rs_abbr_trigger_needs_offset(int trigger_type);
 // Helpers module exports
 extern void rs_undisplay_dollar(void);
 extern colnr_T rs_get_nolist_virtcol(void);
-extern int rs_echeck_abbr(int c);
 extern void rs_truncate_spaces(char *line, size_t len);
-extern int rs_del_char_after_col(int limit_col);
 extern void rs_backspace_until_column(int col);
 extern void rs_set_last_insert(int c);
 extern void rs_free_last_insert(void);
@@ -276,16 +274,11 @@ typedef struct {
 } RsNvimString;
 extern RsNvimString rs_get_last_insert(void);
 extern char *rs_get_last_insert_save(void);
-// Replace stack module exports (Phase 2)
+// Replace stack module exports
 extern void rs_replace_push(const char *str, size_t len);
 extern void rs_replace_push_nul(void);
-extern int rs_replace_pop_if_nul(void);
-extern void rs_replace_join(int off);
-extern void rs_replace_pop_ins(void);
-extern void rs_mb_replace_pop_ins(void);
-extern void rs_replace_do_bs(int limit_col);
 extern void rs_replace_stack_clear(void);
-// Movement module exports (Phase 3)
+// Movement module exports
 extern void rs_beginline(int flags);
 extern int rs_oneright(void);
 extern int rs_oneleft(void);
@@ -293,43 +286,33 @@ extern void rs_cursor_up_inner(win_T *wp, linenr_T n, bool skip_conceal);
 extern int rs_cursor_up(linenr_T n, int upd_topline);
 extern void rs_cursor_down_inner(win_T *wp, int n, bool skip_conceal);
 extern int rs_cursor_down(int n, int upd_topline);
-// Key handler module exports (Phase 4)
-extern void rs_ins_left(void);
-extern void rs_ins_right(void);
-extern void rs_ins_s_left(void);
-extern void rs_ins_s_right(void);
-extern void rs_ins_home(int c);
-extern void rs_ins_end(int c);
-extern void rs_ins_up(int startcol);
-extern void rs_ins_down(int startcol);
-extern void rs_ins_pageup(void);
-extern void rs_ins_pagedown(void);
-extern void rs_ins_insert(int replaceState);
-extern void rs_ins_ctrl_o(void);
-extern void rs_ins_ctrl_hat(void);
-extern void rs_ins_ctrl_(void);
-extern int rs_ins_start_select(int c);
-extern void rs_ins_ctrl_g(void);
-extern void rs_ins_shift(int c, int lastc);
-extern void rs_ins_del(void);
-// Tab and EOL module exports (Phase 1)
+// Tab and EOL module exports
 // ins_tab and ins_eol are now exported directly by Rust and declared in edit.h
 extern void rs_ins_ctrl_v(void);
 extern int rs_ins_copychar(linenr_T lnum);
-extern int rs_ins_ctrl_ey(int tc);
-extern int rs_ins_digraph(void);
 extern int rs_stuff_inserted(int c, int count, int no_esc);
 extern void rs_redo_literal(int c);
-extern void rs_check_spell_redraw(void);
-extern char *rs_do_insert_char_pre(int c);
 extern void rs_start_arrow(void *end_insert_pos);
-extern void rs_start_arrow_with_change(void *end_insert_pos, int end_change);
 extern void rs_start_arrow_common(void *end_insert_pos, int end_change);
 extern int rs_stop_arrow(void);
-extern void rs_insert_special(int c, int allow_modmask, int ctrlv);
 extern int rs_get_literal(int no_simplify);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
+
+// Rust functions exported with canonical C names (Phase 1 static wrappers eliminated)
+extern void insert_special(int c, int allow_modmask, int ctrlv);
+extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
+extern void check_spell_redraw(void);
+extern int echeck_abbr(int c);
+extern int replace_pop_if_nul(void);
+extern void replace_join(int off);
+extern void replace_pop_ins(void);
+extern void mb_replace_pop_ins(void);
+extern void replace_do_bs(int limit_col);
+extern void ins_ctrl_o(void);
+extern int ins_start_select(int c);
+extern char *do_insert_char_pre(int c);
+extern int del_char_after_col(int limit_col);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -3060,21 +3043,10 @@ void backspace_until_column(int col)
 /// @param  limit_col  only delete the character if it is after this column
 //
 /// @return true when something was deleted.
-static bool del_char_after_col(int limit_col)
-{
-  return rs_del_char_after_col(limit_col) != 0;
-}
-
 /// Next character is interpreted literally.
 int get_literal(bool no_simplify)
 {
   return rs_get_literal(no_simplify ? 1 : 0);
-}
-
-/// Insert character, taking care of special keys and mod_mask.
-static void insert_special(int c, int allow_modmask, int ctrlv)
-{
-  rs_insert_special(c, allow_modmask, ctrlv);
 }
 
 /// start_arrow() is called when an arrow key is used in insert mode.
@@ -3084,23 +3056,6 @@ static void insert_special(int c, int allow_modmask, int ctrlv)
 void start_arrow(pos_T *end_insert_pos)
 {
   rs_start_arrow(end_insert_pos);
-}
-
-/// Like start_arrow() but with end_change argument.
-/// Will prepare for redo of CTRL-G U if "end_change" is false.
-///
-/// @param end_insert_pos  can be NULL
-/// @param end_change      end undoable change
-static void start_arrow_with_change(pos_T *end_insert_pos, bool end_change)
-{
-  rs_start_arrow_with_change(end_insert_pos, end_change ? 1 : 0);
-}
-
-// If we skipped highlighting word at cursor, do it now.
-// It may be skipped again, thus reset spell_redraw_lnum first.
-static void check_spell_redraw(void)
-{
-  rs_check_spell_redraw();
 }
 
 // stop_arrow() is called before a change is made in insert mode.
@@ -3317,18 +3272,6 @@ char *get_last_insert_save(void)
 
 /// Check the word in front of the cursor for an abbreviation.
 /// Called when the non-id character "c" has been entered.
-/// When an abbreviation is recognized it is removed from the text and
-/// the replacement string is inserted in typebuf.tb_buf[], followed by "c".
-///
-/// @param  c  character
-///
-/// @return true if the word is a known abbreviation.
-static bool echeck_abbr(int c)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_echeck_abbr(c) != 0;
-}
-
 // replace-stack functions
 //
 // When replacing characters, the replaced characters are remembered for each
@@ -3352,31 +3295,6 @@ static bool echeck_abbr(int c)
 void replace_push_nul(void)
 {
   rs_replace_push_nul();
-}
-
-static int replace_pop_if_nul(void)
-{
-  return rs_replace_pop_if_nul();
-}
-
-void replace_join(int off)
-{
-  rs_replace_join(off);
-}
-
-static void replace_pop_ins(void)
-{
-  rs_replace_pop_ins();
-}
-
-static void mb_replace_pop_ins(void)
-{
-  rs_mb_replace_pop_ins();
-}
-
-static void replace_do_bs(int limit_col)
-{
-  rs_replace_do_bs(limit_col);
 }
 
 static void ins_reg(void)
@@ -3472,18 +3390,6 @@ static void ins_reg(void)
   if (!vis_active && VIsual_active) {
     end_visual_mode();
   }
-}
-
-// CTRL-G commands in Insert mode.
-static void ins_ctrl_g(void)
-{
-  rs_ins_ctrl_g();
-}
-
-// CTRL-^ in Insert mode.
-static void ins_ctrl_hat(void)
-{
-  rs_ins_ctrl_hat();
 }
 
 /// Handle ESC in insert mode.
@@ -3597,127 +3503,19 @@ static bool ins_esc(int *count, int cmdchar, bool nomove)
   return true;
 }
 
-// Toggle language: revins_on.
-// Move to end of reverse inserted text.
-static void ins_ctrl_(void)
-{
-  rs_ins_ctrl_();
-}
-
-/// If 'keymodel' contains "startsel", may start selection.
-///
-/// @param  c  character to check
-//
-/// @return true when a CTRL-O and other keys stuffed.
-static bool ins_start_select(int c)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_ins_start_select(c) != 0;
-}
-
-// <Insert> key in Insert mode: toggle insert/replace mode.
-static void ins_insert(int replaceState)
-{
-  rs_ins_insert(replaceState);
-}
-
-// Pressed CTRL-O in Insert mode.
-static void ins_ctrl_o(void)
-{
-  rs_ins_ctrl_o();
-}
-
-// If the cursor is on an indent, ^T/^D insert/delete one
-// shiftwidth.  Otherwise ^T/^D behave like a "<<" or ">>".
-// Always round the indent to 'shiftwidth', this is compatible
-// with vi.  But vi only supports ^T and ^D after an
-// autoindent, we support it everywhere.
-static void ins_shift(int c, int lastc)
-{
-  rs_ins_shift(c, lastc);
-}
-
-static void ins_del(void)
-{
-  rs_ins_del();
-}
-
 // ins_bs is now implemented in Rust (src/nvim-rs/edit/src/backspace.rs).
-
-static void ins_left(void)
-{
-  rs_ins_left();
-}
-
-static void ins_home(int c)
-{
-  rs_ins_home(c);
-}
-
-static void ins_end(int c)
-{
-  rs_ins_end(c);
-}
-
-static void ins_s_left(void)
-{
-  rs_ins_s_left();
-}
-
-static void ins_right(void)
-{
-  rs_ins_right();
-}
-
-static void ins_s_right(void)
-{
-  rs_ins_s_right();
-}
-
-/// @param startcol  when true move to Insstart.col
-static void ins_up(bool startcol)
-{
-  rs_ins_up(startcol);
-}
-
-static void ins_pageup(void)
-{
-  rs_ins_pageup();
-}
-
-/// @param startcol  when true move to Insstart.col
-static void ins_down(bool startcol)
-{
-  rs_ins_down(startcol);
-}
-
-static void ins_pagedown(void)
-{
-  rs_ins_pagedown();
-}
 
 // ins_tab is now implemented in Rust (src/nvim-rs/edit/src/tab.rs).
 // ins_eol delegates to Rust rs_ins_eol (symbol exported directly).
 
-// Handle digraph in insert mode.
-// Returns character still to be inserted, or NUL when nothing remaining to be
-// done.
-static int ins_digraph(void)
-{
-  return rs_ins_digraph();
-}
+// Handle digraph in insert mode -- now exported directly from Rust as ins_digraph.
+// Handle CTRL-Y/E -- now exported directly from Rust as ins_ctrl_ey.
 
 // Handle CTRL-E and CTRL-Y in Insert mode: copy char from other line.
 // Returns the char to be inserted, or NUL if none found.
 int ins_copychar(linenr_T lnum)
 {
   return rs_ins_copychar(lnum);
-}
-
-// CTRL-Y or CTRL-E typed in Insert mode.
-static int ins_ctrl_ey(int tc)
-{
-  return rs_ins_ctrl_ey(tc);
 }
 
 // Get the value that w_virtcol would have when 'list' is off.
@@ -3731,15 +3529,6 @@ colnr_T get_nolist_virtcol(void)
 int nvim_get_nolist_virtcol(void)
 {
   return (int)rs_get_nolist_virtcol();
-}
-
-// Handle the InsertCharPre autocommand.
-// "c" is the character that was typed.
-// Return a pointer to allocated memory with the replacement string.
-// Return NULL to continue inserting "c".
-static char *do_insert_char_pre(int c)
-{
-  return rs_do_insert_char_pre(c);
 }
 
 // get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").

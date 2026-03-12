@@ -92,34 +92,34 @@ extern "C" {
     fn rs_compl_status_clear();
     fn rs_ins_compl_col() -> c_int;
 
-    // -- Key handlers (already-migrated Rust symbols) --
-    fn rs_ins_insert(replace_state: c_int);
-    fn rs_ins_ctrl_o();
-    fn rs_ins_ctrl_hat();
-    fn rs_ins_ctrl_();
-    fn rs_ins_start_select(c: c_int) -> c_int;
-    fn rs_ins_ctrl_g();
-    fn rs_ins_shift(c: c_int, lastc: c_int);
-    fn rs_ins_del();
-    fn rs_ins_left();
-    fn rs_ins_right();
-    fn rs_ins_s_left();
-    fn rs_ins_s_right();
-    fn rs_ins_home(c: c_int);
-    fn rs_ins_end(c: c_int);
-    fn rs_ins_up(startcol: c_int);
-    fn rs_ins_down(startcol: c_int);
-    fn rs_ins_pageup();
-    fn rs_ins_pagedown();
+    // -- Key handlers (canonical names, exported from Rust) --
+    fn ins_insert(replace_state: c_int);
+    fn ins_ctrl_o();
+    fn ins_ctrl_hat();
+    fn ins_ctrl_();
+    fn ins_start_select(c: c_int) -> c_int;
+    fn ins_ctrl_g();
+    fn ins_shift(c: c_int, lastc: c_int);
+    fn ins_del();
+    fn ins_left();
+    fn ins_right();
+    fn ins_s_left();
+    fn ins_s_right();
+    fn ins_home(c: c_int);
+    fn ins_end(c: c_int);
+    fn ins_up(startcol: c_int);
+    fn ins_down(startcol: c_int);
+    fn ins_pageup();
+    fn ins_pagedown();
     fn rs_ins_ctrl_v();
-    fn rs_ins_ctrl_ey(tc: c_int) -> c_int;
-    fn rs_ins_digraph() -> c_int;
+    fn ins_ctrl_ey(tc: c_int) -> c_int;
+    fn ins_digraph() -> c_int;
     fn rs_stop_arrow() -> c_int;
     fn rs_foldOpenCursor();
-    fn rs_insert_special(c: c_int, allow_modmask: c_int, ctrlv: c_int);
+    fn insert_special(c: c_int, allow_modmask: c_int, ctrlv: c_int);
     fn rs_stuff_inserted(c: c_int, count: c_int, no_esc: c_int) -> c_int;
-    fn rs_do_insert_char_pre(c: c_int) -> *mut c_char;
-    fn rs_echeck_abbr(c: c_int) -> c_int;
+    fn do_insert_char_pre(c: c_int) -> *mut c_char;
+    fn echeck_abbr(c: c_int) -> c_int;
     fn rs_get_nolist_virtcol() -> c_int;
 
     // -- Tab / EOL (Rust exports) --
@@ -561,7 +561,7 @@ pub unsafe extern "C" fn rs_insert_handle_key(s: *mut InsertState) -> c_int {
     }
 
     // If 'keymodel' contains "startsel", may start selection.
-    if rs_ins_start_select((*s).c) != 0 {
+    if ins_start_select((*s).c) != 0 {
         return 1; // continue
     }
 
@@ -590,7 +590,7 @@ pub unsafe extern "C" fn rs_insert_handle_key(s: *mut InsertState) -> c_int {
 /// Run the normalchar path (insert character as normal char).
 unsafe fn handle_normalchar(s: *mut InsertState) {
     if nvim_edit_get_p_paste() == 0 {
-        let str_ptr = rs_do_insert_char_pre((*s).c);
+        let str_ptr = do_insert_char_pre((*s).c);
         if !str_ptr.is_null() {
             if *str_ptr != 0 && rs_stop_arrow() != FAIL {
                 // Insert the new value of v:char literally.
@@ -601,7 +601,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
                     if c == CAR || c == K_KENTER || c == NL {
                         ins_eol(c);
                     } else {
-                        rs_insert_special(c, 0, 0);
+                        insert_special(c, 0, 0);
                     }
                 }
                 append_to_redo_lit(str_ptr);
@@ -630,14 +630,14 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
     }
 
     if nvim_edit_vim_iswordc_dispatch((*s).c) != 0
-        || (rs_echeck_abbr(if (*s).c >= ABBR_OFF {
+        || (echeck_abbr(if (*s).c >= ABBR_OFF {
             (*s).c + ABBR_OFF
         } else {
             (*s).c
         }) == 0
             && (*s).c != CTRL_RSB)
     {
-        rs_insert_special((*s).c, 0, 0);
+        insert_special((*s).c, 0, 0);
         nvim_set_revins_legal(nvim_get_revins_legal() + 1);
         nvim_set_revins_chars(nvim_get_revins_chars() + 1);
     }
@@ -663,7 +663,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
     match (*s).c {
         // ESC / Ctrl-C: end input mode
         ESC => {
-            if rs_echeck_abbr(ESC + ABBR_OFF) != 0 {
+            if echeck_abbr(ESC + ABBR_OFF) != 0 {
                 return SwitchAction::Continue;
             }
             // FALLTHROUGH to Ctrl-C
@@ -693,10 +693,10 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 rs_insert_do_complete(s);
                 return SwitchAction::Continue;
             }
-            if rs_echeck_abbr(CTRL_O + ABBR_OFF) != 0 {
+            if echeck_abbr(CTRL_O + ABBR_OFF) != 0 {
                 return SwitchAction::Continue;
             }
-            rs_ins_ctrl_o();
+            ins_ctrl_o();
             if nvim_edit_ve_onemore() != 0 {
                 nvim_edit_set_ins_at_eol(0);
                 (*s).nomove = true;
@@ -706,7 +706,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_INS | K_KINS => {
-            rs_ins_insert((*s).replace_state);
+            ins_insert((*s).replace_state);
             SwitchAction::Continue
         }
 
@@ -742,12 +742,12 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_G => {
-            rs_ins_ctrl_g();
+            ins_ctrl_g();
             SwitchAction::Continue
         }
 
         CTRL_HAT => {
-            rs_ins_ctrl_hat();
+            ins_ctrl_hat();
             SwitchAction::Continue
         }
 
@@ -755,7 +755,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             if nvim_get_p_ari() == 0 {
                 return SwitchAction::NormalChar;
             }
-            rs_ins_ctrl_();
+            ins_ctrl_();
             SwitchAction::Continue
         }
 
@@ -765,7 +765,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Continue;
             }
             // FALLTHROUGH to CTRL_T
-            rs_ins_shift((*s).c, (*s).lastc);
+            ins_shift((*s).c, (*s).lastc);
             nvim_edit_auto_format(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
@@ -778,14 +778,14 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 }
                 return SwitchAction::Continue;
             }
-            rs_ins_shift((*s).c, (*s).lastc);
+            ins_shift((*s).c, (*s).lastc);
             nvim_edit_auto_format(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
 
         K_DEL | K_KDEL => {
-            rs_ins_del();
+            ins_del();
             nvim_edit_auto_format(1);
             SwitchAction::Continue
         }
@@ -883,40 +883,40 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         // Navigation keys
         K_HOME | K_KHOME | K_S_HOME | K_C_HOME => {
-            rs_ins_home((*s).c);
+            ins_home((*s).c);
             SwitchAction::Continue
         }
 
         K_END | K_KEND | K_S_END | K_C_END => {
-            rs_ins_end((*s).c);
+            ins_end((*s).c);
             SwitchAction::Continue
         }
 
         K_LEFT => {
             if nvim_edit_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-                rs_ins_s_left();
+                ins_s_left();
             } else {
-                rs_ins_left();
+                ins_left();
             }
             SwitchAction::Continue
         }
 
         K_S_LEFT | K_C_LEFT => {
-            rs_ins_s_left();
+            ins_s_left();
             SwitchAction::Continue
         }
 
         K_RIGHT => {
             if nvim_edit_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-                rs_ins_s_right();
+                ins_s_right();
             } else {
-                rs_ins_right();
+                ins_right();
             }
             SwitchAction::Continue
         }
 
         K_S_RIGHT | K_C_RIGHT => {
-            rs_ins_s_right();
+            ins_s_right();
             SwitchAction::Continue
         }
 
@@ -924,9 +924,9 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             if nvim_edit_pum_visible() != 0 {
                 rs_insert_do_complete(s);
             } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
-                rs_ins_pageup();
+                ins_pageup();
             } else {
-                rs_ins_up(0);
+                ins_up(0);
             }
             SwitchAction::Continue
         }
@@ -935,7 +935,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             if nvim_edit_pum_visible() != 0 {
                 rs_insert_do_complete(s);
             } else {
-                rs_ins_pageup();
+                ins_pageup();
             }
             SwitchAction::Continue
         }
@@ -944,9 +944,9 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             if nvim_edit_pum_visible() != 0 {
                 rs_insert_do_complete(s);
             } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
-                rs_ins_pagedown();
+                ins_pagedown();
             } else {
-                rs_ins_down(0);
+                ins_down(0);
             }
             SwitchAction::Continue
         }
@@ -955,7 +955,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             if nvim_edit_pum_visible() != 0 {
                 rs_insert_do_complete(s);
             } else {
-                rs_ins_pagedown();
+                ins_pagedown();
             }
             SwitchAction::Continue
         }
@@ -983,7 +983,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 }
                 return SwitchAction::Continue;
             }
-            (*s).c = rs_ins_digraph();
+            (*s).c = ins_digraph();
             if (*s).c == NUL {
                 return SwitchAction::Continue;
             }
@@ -1034,7 +1034,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         CTRL_P | CTRL_N => handle_completion_pn(s),
 
         CTRL_Y | CTRL_E => {
-            (*s).c = rs_ins_ctrl_ey((*s).c);
+            (*s).c = ins_ctrl_ey((*s).c);
             SwitchAction::Continue
         }
 

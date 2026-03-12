@@ -100,7 +100,7 @@ extern "C" {
     fn nvim_xmallocz(size: usize) -> *mut c_char;
 
     // Rust functions in edit crate (via FFI)
-    fn rs_replace_join(off: c_int);
+    fn replace_join(off: c_int);
     fn rs_backspace_until_column(col: c_int);
 }
 
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn rs_change_indent(
     if replace_normal(state) && start_col >= 0 {
         let cursor_col = nvim_get_curwin_cursor_col() as c_int;
         while start_col > cursor_col {
-            rs_replace_join(0); // remove a NUL from the replace stack
+            replace_join(0); // remove a NUL from the replace stack
             start_col -= 1;
         }
         while start_col < cursor_col {

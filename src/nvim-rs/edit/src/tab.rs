@@ -35,7 +35,7 @@ extern "C" {
     fn rs_get_nolist_virtcol() -> ColnrT;
 
     // Abbreviation check
-    fn rs_echeck_abbr(c: c_int) -> c_int;
+    fn echeck_abbr(c: c_int) -> c_int;
 
     // Indent check
     fn inindent(extra: c_int) -> c_int;
@@ -125,7 +125,7 @@ unsafe fn ins_tab_impl() -> bool {
     }
 
     // Check for abbreviation
-    if rs_echeck_abbr(TAB + ABBR_OFF) != 0 {
+    if echeck_abbr(TAB + ABBR_OFF) != 0 {
         return false;
     }
 

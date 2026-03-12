@@ -157,7 +157,8 @@ pub unsafe extern "C" fn rs_ins_copychar(lnum: LinenrT) -> c_int {
 // ins_ctrl_ey — delegated to C helper
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "ins_ctrl_ey")]
 pub unsafe extern "C" fn rs_ins_ctrl_ey(tc: c_int) -> c_int {
     nvim_edit_ins_ctrl_ey(tc)
 }
@@ -166,7 +167,8 @@ pub unsafe extern "C" fn rs_ins_ctrl_ey(tc: c_int) -> c_int {
 // ins_digraph — delegated to C helper
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "ins_digraph")]
 pub unsafe extern "C" fn rs_ins_digraph() -> c_int {
     nvim_edit_ins_digraph()
 }
@@ -347,7 +349,8 @@ unsafe fn libc_strcmp(a: *const c_char, b: *const c_char) -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "do_insert_char_pre")]
 pub unsafe extern "C" fn rs_do_insert_char_pre(c: c_int) -> *mut c_char {
     do_insert_char_pre_impl(c)
 }
@@ -399,7 +402,7 @@ unsafe fn c_strlen(p: *mut c_char) -> usize {
     len
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "insert_special")]
 pub unsafe extern "C" fn rs_insert_special(c: c_int, allow_modmask: c_int, ctrlv: c_int) {
     insert_special_impl(c, allow_modmask, ctrlv);
 }

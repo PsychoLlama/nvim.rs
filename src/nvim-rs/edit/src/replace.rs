@@ -318,7 +318,7 @@ extern "C" {
     fn gchar_cursor() -> c_int;
     fn changed_bytes(lnum: i32, col: i32);
     fn nvim_curwin_get_cursor_lnum() -> i32;
-    fn rs_del_char_after_col(limit_col: c_int) -> c_int;
+    fn del_char_after_col(limit_col: c_int) -> c_int;
     // Use *const u8 to match insert.rs declaration in same crate
     fn utfc_ptr2len(p: *const u8) -> c_int;
 }
@@ -395,7 +395,8 @@ fn replace_pop_if_nul_impl() -> c_int {
     })
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "replace_pop_if_nul")]
 pub extern "C" fn rs_replace_pop_if_nul() -> c_int {
     replace_pop_if_nul_impl()
 }
@@ -421,7 +422,7 @@ fn replace_join_impl(mut off: c_int) {
     });
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "replace_join")]
 pub extern "C" fn rs_replace_join(off: c_int) {
     replace_join_impl(off);
 }
@@ -442,7 +443,7 @@ unsafe fn replace_pop_ins_impl() {
     nvim_edit_set_State(old_state);
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "replace_pop_ins")]
 pub unsafe extern "C" fn rs_replace_pop_ins() {
     replace_pop_ins_impl();
 }
@@ -470,7 +471,7 @@ unsafe fn mb_replace_pop_ins_impl() {
     });
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "mb_replace_pop_ins")]
 pub unsafe extern "C" fn rs_mb_replace_pop_ins() {
     mb_replace_pop_ins_impl();
 }
@@ -505,7 +506,7 @@ unsafe fn replace_do_bs_impl(limit_col: c_int) {
             0
         };
 
-        rs_del_char_after_col(limit_col);
+        del_char_after_col(limit_col);
 
         let orig_len = if is_vreplace {
             nvim_cursor_get_pos_len()
@@ -547,11 +548,11 @@ unsafe fn replace_do_bs_impl(limit_col: c_int) {
 
         changed_bytes(nvim_curwin_get_cursor_lnum(), nvim_curwin_get_cursor_col());
     } else if cc == 0 {
-        rs_del_char_after_col(limit_col);
+        del_char_after_col(limit_col);
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "replace_do_bs")]
 pub unsafe extern "C" fn rs_replace_do_bs(limit_col: c_int) {
     replace_do_bs_impl(limit_col);
 }

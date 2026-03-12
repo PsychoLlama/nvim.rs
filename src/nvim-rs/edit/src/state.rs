@@ -79,7 +79,7 @@ extern "C" {
     fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
 
     // check_spell_redraw (already in Rust)
-    fn rs_check_spell_redraw();
+    fn check_spell_redraw();
 
     // stop_arrow dependencies
     fn nvim_edit_set_insstart_from_cursor();
@@ -548,7 +548,7 @@ unsafe fn start_arrow_common_impl(end_insert_pos: *mut c_void, end_change: c_int
         nvim_edit_stop_insert(end_insert_pos, 0, 0);
         nvim_set_arrow_used(1); // This means we stopped the current insert.
     }
-    rs_check_spell_redraw();
+    check_spell_redraw();
 }
 
 /// # Safety
@@ -581,7 +581,7 @@ pub unsafe extern "C" fn rs_start_arrow(end_insert_pos: *mut c_void) {
 ///
 /// # Safety
 /// Called from C FFI only.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "start_arrow_with_change")]
 pub unsafe extern "C" fn rs_start_arrow_with_change(
     end_insert_pos: *mut c_void,
     end_change: c_int,

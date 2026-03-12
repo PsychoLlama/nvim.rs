@@ -90,10 +90,10 @@ extern "C" {
     fn nvim_edit_do_join_simple();
 
     // Replace mode
-    fn rs_replace_pop_if_nul() -> c_int;
-    fn rs_mb_replace_pop_ins();
-    fn rs_replace_pop_ins();
-    fn rs_replace_do_bs(limit_col: c_int);
+    fn replace_pop_if_nul() -> c_int;
+    fn mb_replace_pop_ins();
+    fn replace_pop_ins();
+    fn replace_do_bs(limit_col: c_int);
 
     // Delete character
     fn del_char(fixpos: c_int) -> c_int;
@@ -261,7 +261,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
         // In replace mode: cc < 0 means NL was inserted; cc >= 0 means replaced
         let mut cc: c_int = if state & REPLACE_FLAG != 0 {
-            rs_replace_pop_if_nul()
+            replace_pop_if_nul()
         } else {
             -1
         };
@@ -297,11 +297,11 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 nvim_edit_set_State(MODE_NORMAL);
                 while cc > 0 {
                     let save_col = nvim_curwin_get_cursor_col();
-                    rs_mb_replace_pop_ins();
+                    mb_replace_pop_ins();
                     nvim_curwin_set_cursor_col(save_col);
-                    cc = rs_replace_pop_if_nul();
+                    cc = replace_pop_if_nul();
                 }
-                rs_replace_pop_ins();
+                replace_pop_ins();
                 nvim_edit_set_State(old_state);
             }
         }
@@ -364,7 +364,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 }
 
                 if state & REPLACE_FLAG != 0 {
-                    rs_replace_do_bs(-1);
+                    replace_do_bs(-1);
                 } else {
                     let has_composing = nvim_edit_cursor_has_composing();
                     del_char(0);

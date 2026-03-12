@@ -41,8 +41,8 @@ extern "C" {
     fn nvim_get_State() -> c_int;
 
     // Replace stack (Rust-owned in replace.rs, accessed via rs_* functions)
-    fn rs_replace_join(off: c_int);
-    fn rs_replace_do_bs(limit_col: c_int);
+    fn replace_join(off: c_int);
+    fn replace_do_bs(limit_col: c_int);
 
     // Character operations
     fn mb_adjust_cursor();
@@ -184,7 +184,8 @@ unsafe fn echeck_abbr_impl(c: c_int) -> bool {
     check_abbr(c, get_cursor_line_ptr(), cursor_col, mincol) != 0
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "echeck_abbr")]
 pub unsafe extern "C" fn rs_echeck_abbr(c: c_int) -> c_int {
     c_int::from(echeck_abbr_impl(c))
 }
@@ -214,7 +215,7 @@ pub unsafe extern "C" fn rs_truncate_spaces(line: *mut c_char, len: usize) {
             break;
         }
         if state & REPLACE_FLAG != 0 {
-            rs_replace_join(0);
+            replace_join(0);
         }
         i -= 1;
     }
@@ -256,7 +257,8 @@ unsafe fn del_char_after_col_impl(limit_col: c_int) -> bool {
     true
 }
 
-#[unsafe(no_mangle)]
+#[must_use]
+#[unsafe(export_name = "del_char_after_col")]
 pub unsafe extern "C" fn rs_del_char_after_col(limit_col: c_int) -> c_int {
     c_int::from(del_char_after_col_impl(limit_col))
 }
@@ -275,7 +277,7 @@ pub unsafe extern "C" fn rs_backspace_until_column(col: c_int) {
     while nvim_curwin_get_cursor_col() as c_int > col {
         nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
         if nvim_get_State() & REPLACE_FLAG != 0 {
-            rs_replace_do_bs(col);
+            replace_do_bs(col);
         } else if !del_char_after_col_impl(col) {
             break;
         }
@@ -396,7 +398,7 @@ unsafe fn check_spell_redraw_impl() {
     }
 }
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "check_spell_redraw")]
 pub unsafe extern "C" fn rs_check_spell_redraw() {
     check_spell_redraw_impl();
 }
