@@ -448,6 +448,12 @@ EXTERN const size_t kTVTranslate INIT( = TV_TRANSLATE);
 
 // Functions implemented in Rust via #[export_name] in src/nvim-rs/typval/src/lib.rs
 
+// List and blob operations
+extern listitem_T *tv_list_find(list_T *l, int n);
+extern int tv_list_idx_of_item(const list_T *l, const listitem_T *item);
+extern void tv_list_reverse(list_T *l);
+extern bool tv_blob_equal(const blob_T *b1, const blob_T *b2);
+
 // Type validation
 extern bool tv_check_str_or_nr(const typval_T *tv);
 extern bool tv_check_num(const typval_T *tv);

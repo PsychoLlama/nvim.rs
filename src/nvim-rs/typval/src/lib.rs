@@ -1306,7 +1306,7 @@ fn tv_list_find_impl(l: ListHandle, n: c_int) -> ListItemHandle {
 }
 
 /// FFI wrapper: find list item at index.
-#[no_mangle]
+#[export_name = "tv_list_find"]
 pub extern "C" fn rs_tv_list_find(l: ListHandle, n: c_int) -> ListItemHandle {
     tv_list_find_impl(l, n)
 }
@@ -1332,7 +1332,7 @@ fn tv_list_idx_of_item_impl(l: ListHandle, item: ListItemHandle) -> c_int {
 }
 
 /// FFI wrapper: get index of list item in list.
-#[no_mangle]
+#[export_name = "tv_list_idx_of_item"]
 pub extern "C" fn rs_tv_list_idx_of_item(l: ListHandle, item: ListItemHandle) -> c_int {
     tv_list_idx_of_item_impl(l, item)
 }
@@ -1382,7 +1382,7 @@ fn tv_list_reverse_impl(l: ListHandle) {
 }
 
 /// FFI wrapper: reverse list in-place.
-#[no_mangle]
+#[export_name = "tv_list_reverse"]
 pub extern "C" fn rs_tv_list_reverse(l: ListHandle) {
     tv_list_reverse_impl(l);
 }
@@ -1526,7 +1526,7 @@ fn tv_blob_equal_impl(b1: BlobHandle, b2: BlobHandle) -> bool {
 }
 
 /// FFI wrapper: check if two blobs are equal.
-#[no_mangle]
+#[export_name = "tv_blob_equal"]
 pub extern "C" fn rs_tv_blob_equal(b1: BlobHandle, b2: BlobHandle) -> bool {
     tv_blob_equal_impl(b1, b2)
 }

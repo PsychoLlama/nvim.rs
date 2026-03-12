@@ -46,10 +46,6 @@
 typedef void *TypevalHandle;
 
 // Rust FFI functions
-extern listitem_T *rs_tv_list_find(list_T *l, int n);
-extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
-extern void rs_tv_list_reverse(list_T *l);
-extern bool rs_tv_blob_equal(const blob_T *b1, const blob_T *b2);
 extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern char *rs_partial_name(partial_T *pt);
@@ -1562,28 +1558,7 @@ bool tv_list_equal(list_T *const l1, list_T *const l2, const bool ic)
   return true;
 }
 
-/// Reverse list in-place
-///
-/// @param[in,out]  l  List to reverse.
-void tv_list_reverse(list_T *const l)
-{
-  rs_tv_list_reverse(l);
-}
-
 //{{{2 Indexing/searching
-
-/// Locate item with a given index in a list and return it
-///
-/// @param[in]  l  List to index.
-/// @param[in]  n  Index. Negative index is counted from the end, -1 is the last
-///                item.
-///
-/// @return Item at the given index or NULL if `n` is out of range.
-listitem_T *tv_list_find(list_T *const l, int n)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_tv_list_find(l, n);
-}
 
 /// Get list item l[n] as a number
 ///
@@ -1639,18 +1614,6 @@ static listitem_T *tv_list_find_index(list_T *const l, int *const idx)
     li = tv_list_find(l, *idx);
   }
   return li;
-}
-
-/// Locate item in a list and return its index
-///
-/// @param[in]  l  List to search.
-/// @param[in]  item  Item to search for.
-///
-/// @return Index of an item or -1 if item is not in the list.
-int tv_list_idx_of_item(const list_T *const l, const listitem_T *const item)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_list_idx_of_item(l, item);
 }
 
 //{{{1 Dictionaries
@@ -2841,18 +2804,6 @@ void tv_blob_unref(blob_T *const b)
 }
 
 //{{{2 Operations on the whole blob
-
-/// Check whether two blobs are equal.
-///
-/// @param[in]  b1  First blob.
-/// @param[in]  b2  Second blob.
-///
-/// @return true if blobs are equal, false otherwise.
-bool tv_blob_equal(const blob_T *const b1, const blob_T *const b2)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_tv_blob_equal(b1, b2);
-}
 
 /// Returns a slice of "blob" from index "n1" to "n2" in "rettv".  The length of
 /// the blob is "len".  Returns an empty blob if the indexes are out of range.
