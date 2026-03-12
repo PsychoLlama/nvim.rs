@@ -42,5 +42,12 @@ bool do_sub_msg(bool count_only);
 bool prepare_tagpreview(bool undo_sync);
 void ex_substitute(exarg_T *eap);
 int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
+void ex_file(exarg_T *eap);
+void ex_update(exarg_T *eap);
+void ex_write(exarg_T *eap);
+void ex_wnext(exarg_T *eap);
+void do_wqall(exarg_T *eap);
+void ex_global(exarg_T *eap);
+void ex_oldfiles(exarg_T *eap);
 
 #include "ex_cmds_shim.h.generated.h"

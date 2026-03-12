@@ -445,7 +445,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_file"]
 pub unsafe extern "C" fn rs_ex_file(eap: *mut ExArgHandle) {
     let addr_count = nvim_exarg_get_addr_count(eap);
     let arg = nvim_exarg_get_arg(eap);

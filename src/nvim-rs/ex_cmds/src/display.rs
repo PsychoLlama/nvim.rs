@@ -882,7 +882,7 @@ extern "C" {
 ///
 /// # Safety
 /// `eap` must be a valid pointer to an exarg_T.
-#[no_mangle]
+#[export_name = "ex_oldfiles"]
 pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     let count = nvim_excmds_oldfiles_count();
 

@@ -555,7 +555,7 @@ pub extern "C" fn rs_global_state_is_busy(busy: c_int) -> c_int {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_global"]
 pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
     // Constants matching C values
     const RE_LAST: c_int = 2;

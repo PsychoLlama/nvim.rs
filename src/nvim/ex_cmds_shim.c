@@ -551,9 +551,9 @@ void append_redir(char *const buf, const size_t buflen, const char *const opt,
   rs_append_redir(buf, buflen, opt, fname);
 }
 
-// rename_buffer + ex_file implemented in Rust (rs_rename_buffer, rs_ex_file in ex_cmds/src/buffer.rs)
+// rename_buffer + ex_file implemented in Rust (ex_cmds/src/buffer.rs)
 extern int rs_rename_buffer(const char *new_fname);
-extern void rs_ex_file(exarg_T *eap);
+// rs_ex_file deleted: now exported as ex_file via #[export_name]
 
 /// Rename the current buffer to a new file name. Thin wrapper calling Rust.
 int rename_buffer(char *new_fname)
@@ -561,38 +561,26 @@ int rename_buffer(char *new_fname)
   return rs_rename_buffer(new_fname) ? OK : FAIL;
 }
 
-/// ":file[!] [fname]". Thin wrapper calling Rust.
-void ex_file(exarg_T *eap)
-{
-  rs_ex_file(eap);
-}
+// ex_file deleted: now exported directly from Rust via #[export_name]
 
-// ex_update, ex_write, ex_wnext implemented in Rust (ex_cmds/src/write.rs)
-extern void rs_ex_update(exarg_T *eap);
-extern void rs_ex_write(exarg_T *eap);
-extern void rs_ex_wnext(exarg_T *eap);
+// ex_update, ex_write, ex_wnext, do_wqall implemented in Rust (ex_cmds/src/write.rs)
+// rs_ex_update deleted: now exported as ex_update via #[export_name]
+// rs_ex_write deleted: now exported as ex_write via #[export_name]
+// rs_ex_wnext deleted: now exported as ex_wnext via #[export_name]
+// rs_do_wqall deleted: now exported as do_wqall via #[export_name]
 extern int rs_not_writing(void);
 extern int rs_check_writable(const char *fname);
 extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 extern int rs_do_write(exarg_T *eap);
 extern int rs_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname, const char *ffname, int other);
-extern void rs_do_wqall(exarg_T *eap);
 extern int rs_getfile(int fnum, char *ffname, char *sfname, int setpm, int lnum, int forceit);
 extern int rs_set_swapcommand(const char *command, int newlnum);
 extern void rs_delbuf_msg(char *name);
 
-/// ":update". Thin wrapper calling Rust.
-void ex_update(exarg_T *eap)
-{
-  rs_ex_update(eap);
-}
+// ex_update deleted: now exported directly from Rust via #[export_name]
 
-/// ":write" and ":saveas". Thin wrapper calling Rust.
-void ex_write(exarg_T *eap)
-{
-  rs_ex_write(eap);
-}
+// ex_write deleted: now exported directly from Rust via #[export_name]
 
 /// Thin wrapper calling Rust rs_check_writable.
 static int check_writable(const char *fname)
@@ -631,19 +619,9 @@ int check_overwrite(exarg_T *eap, buf_T *buf, char *fname, char *ffname, bool ot
   return rs_check_overwrite(eap, buf, fname, ffname, (int)other) != 0 ? OK : FAIL;
 }
 
-/// Handle ":wnext", ":wNext" and ":wprevious" commands. Thin wrapper calling Rust.
-void ex_wnext(exarg_T *eap)
-{
-  rs_ex_wnext(eap);
-}
+// ex_wnext deleted: now exported directly from Rust via #[export_name]
 
-/// Thin wrapper calling Rust rs_do_wqall.
-///
-/// ":wall", ":wqall" and ":xall": Write all changed files (and exit).
-void do_wqall(exarg_T *eap)
-{
-  rs_do_wqall(eap);
-}
+// do_wqall deleted: now exported directly from Rust via #[export_name]
 
 /// Thin wrapper calling Rust rs_not_writing.
 ///
@@ -819,27 +797,7 @@ int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
 // do_sub_msg deleted: now exported from Rust substitute.rs via #[export_name]
 
-// ex_global implemented in Rust (rs_ex_global in ex_cmds/src/global.rs)
-extern void rs_ex_global(exarg_T *eap);
-
-/// Execute a global command of the form:
-///
-/// g/pattern/X : execute X on all lines where pattern matches
-/// v/pattern/X : execute X on all lines where pattern does not match
-///
-/// where 'X' is an EX command
-///
-/// The command character (as well as the trailing slash) is optional, and
-/// is assumed to be 'p' if missing.
-///
-/// This is implemented in two passes: first we scan the file for the pattern and
-/// set a mark for each line that (not) matches. Secondly we execute the command
-/// for each line that has a mark. This is required because after deleting
-/// lines we do not know where to search for the next match.
-void ex_global(exarg_T *eap)
-{
-  rs_ex_global(eap);
-}
+// ex_global deleted: now exported directly from Rust via #[export_name] (ex_cmds/src/global.rs)
 
 // global_exe + global_exe_one implemented in Rust (rs_global_exe in ex_cmds/src/global.rs)
 extern void rs_global_exe(char *cmd);
@@ -946,14 +904,7 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 }
 void nvim_excmds_xfree(void *ptr) { xfree(ptr); }
 
-// ex_oldfiles implemented in Rust (rs_ex_oldfiles in ex_cmds/src/display.rs)
-extern void rs_ex_oldfiles(exarg_T *eap);
-
-/// List v:oldfiles in a nice way. Thin wrapper calling the Rust implementation.
-void ex_oldfiles(exarg_T *eap)
-{
-  rs_ex_oldfiles(eap);
-}
+// ex_oldfiles deleted: now exported directly from Rust via #[export_name] (ex_cmds/src/display.rs)
 
 // --- do_bang FFI accessors ---
 
@@ -1213,8 +1164,7 @@ int nvim_excmds_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 /// Set curwin->w_cursor.col to 0 (for nested global).
 void nvim_excmds_curwin_set_col_zero(void) { curwin->w_cursor.col = 0; }
 
-// rs_ex_global implemented in Rust (ex_cmds/src/global.rs)
-extern void rs_ex_global(exarg_T *eap);
+// rs_ex_global deleted: now exported as ex_global via #[export_name]
 
 // --- rename_buffer + ex_file FFI accessors ---
 

@@ -635,7 +635,7 @@ extern "C" {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "do_wqall"]
 pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
     let mut error: c_int = 0;
     let save_forceit = nvim_exarg_get_forceit(eap);
@@ -1041,7 +1041,7 @@ extern "C" {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_update"]
 pub unsafe extern "C" fn rs_ex_update(eap: *mut ExArgHandle) {
     let is_changed = nvim_excmds_curbufIsChanged() != 0;
     let no_filename = nvim_excmds_bt_nofilename_curbuf() != 0;
@@ -1057,7 +1057,7 @@ pub unsafe extern "C" fn rs_ex_update(eap: *mut ExArgHandle) {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_write"]
 pub unsafe extern "C" fn rs_ex_write(eap: *mut ExArgHandle) {
     if nvim_exarg_cmdidx_is_saveas(eap) != 0 {
         // :saveas does not take a range, uses all lines.
@@ -1078,7 +1078,7 @@ pub unsafe extern "C" fn rs_ex_write(eap: *mut ExArgHandle) {
 ///
 /// # Safety
 /// `eap` must be a valid exarg_T pointer.
-#[no_mangle]
+#[export_name = "ex_wnext"]
 pub unsafe extern "C" fn rs_ex_wnext(eap: *mut ExArgHandle) {
     let cmd_byte1 = nvim_exarg_get_cmd_byte1(eap);
     let line2_count = nvim_exarg_get_line2(eap);
