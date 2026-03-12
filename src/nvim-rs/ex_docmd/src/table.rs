@@ -280,7 +280,7 @@ extern "C" {
 /// :echomsg, :echoerr.
 ///
 /// Matches C `cmd_has_expr_args()`.
-#[no_mangle]
+#[export_name = "cmd_has_expr_args"]
 pub extern "C" fn rs_cmd_has_expr_args(cmdidx: c_int) -> bool {
     unsafe {
         cmdidx == nvim_docmd_cmd_execute()

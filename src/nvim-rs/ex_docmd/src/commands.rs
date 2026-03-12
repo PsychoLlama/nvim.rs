@@ -1141,7 +1141,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
 /// # Safety
 ///
 /// `new_dir` must be a valid C string or NULL.
-#[no_mangle]
+#[export_name = "changedir_func"]
 pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -> bool {
     if new_dir.is_null() || nvim_allbuf_locked() {
         return false;

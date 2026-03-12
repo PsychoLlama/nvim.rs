@@ -66,6 +66,7 @@ pub const VGR_FUZZY: c_int = 4;
 // FFI declarations for C helper functions
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
+    fn nvim_eap_get_cmdsize() -> c_int;
     fn nvim_get_ex_pressedreturn() -> c_int;
     fn nvim_get_expr_map_lock() -> c_int;
     fn nvim_curbuf_is_dummy() -> c_int;
@@ -98,10 +99,10 @@ pub fn ends_excmd(c: i32) -> bool {
     c == 0 || c == b'|' as i32 || c == b'"' as i32 || c == b'\n' as i32
 }
 
-/// FFI wrapper for `ends_excmd`.
+/// FFI export for `ends_excmd`.
 ///
 /// Returns 1 if the character ends an Ex command, 0 otherwise.
-#[no_mangle]
+#[export_name = "ends_excmd"]
 pub extern "C" fn rs_ends_excmd(c: c_int) -> c_int {
     c_int::from(ends_excmd(c))
 }
@@ -126,7 +127,7 @@ pub fn find_nextcmd(s: &[u8]) -> Option<usize> {
     None
 }
 
-/// FFI wrapper for `find_nextcmd`.
+/// FFI export for `find_nextcmd`.
 ///
 /// Returns a pointer to the character after the first '|' or '\n',
 /// or NULL if no separator is found before NUL.
@@ -134,20 +135,20 @@ pub fn find_nextcmd(s: &[u8]) -> Option<usize> {
 /// # Safety
 ///
 /// `p` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_find_nextcmd(p: *const c_char) -> *const c_char {
+#[export_name = "find_nextcmd"]
+pub unsafe extern "C" fn rs_find_nextcmd(p: *const c_char) -> *mut c_char {
     if p.is_null() {
-        return ptr::null();
+        return ptr::null_mut();
     }
 
     let mut ptr = p;
     loop {
         let c = unsafe { *ptr } as u8;
         if c == b'|' || c == b'\n' {
-            return unsafe { ptr.add(1) };
+            return unsafe { ptr.add(1) as *mut c_char };
         }
         if c == 0 {
-            return ptr::null();
+            return ptr::null_mut();
         }
         ptr = unsafe { ptr.add(1) };
     }
@@ -173,7 +174,7 @@ pub fn check_nextcmd(s: &[u8]) -> Option<usize> {
     }
 }
 
-/// FFI wrapper for `check_nextcmd`.
+/// FFI export for `check_nextcmd`.
 ///
 /// Skips whitespace, then returns a pointer to after the '|' or '\n',
 /// or NULL if not at a separator.
@@ -181,10 +182,10 @@ pub fn check_nextcmd(s: &[u8]) -> Option<usize> {
 /// # Safety
 ///
 /// `p` must be a valid C string pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *const c_char {
+#[export_name = "check_nextcmd"]
+pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *mut c_char {
     if p.is_null() {
-        return ptr::null();
+        return ptr::null_mut();
     }
 
     let mut ptr = p;
@@ -199,9 +200,9 @@ pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *const c_char {
 
     let c = unsafe { *ptr } as u8;
     if c == b'|' || c == b'\n' {
-        unsafe { ptr.add(1) }
+        unsafe { ptr.add(1) as *mut c_char }
     } else {
-        ptr::null()
+        ptr::null_mut()
     }
 }
 
@@ -211,7 +212,8 @@ pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *const c_char {
 /// indicating it's a location list command rather than a quickfix command.
 /// Returns false if the index is out of bounds.
 #[inline]
-pub fn is_loclist_cmd(cmdidx: i32, cmd_size: i32) -> bool {
+pub fn is_loclist_cmd(cmdidx: i32) -> bool {
+    let cmd_size = unsafe { nvim_eap_get_cmdsize() };
     if cmdidx < 0 || cmdidx >= cmd_size {
         return false;
     }
@@ -220,12 +222,12 @@ pub fn is_loclist_cmd(cmdidx: i32, cmd_size: i32) -> bool {
     first_char == b'l' as c_int
 }
 
-/// FFI wrapper for `is_loclist_cmd`.
+/// FFI export for `is_loclist_cmd`.
 ///
 /// Returns 1 if the command is a location list command, 0 otherwise.
-#[no_mangle]
-pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int, cmd_size: c_int) -> c_int {
-    c_int::from(is_loclist_cmd(cmdidx, cmd_size))
+#[export_name = "is_loclist_cmd"]
+pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int) -> c_int {
+    c_int::from(is_loclist_cmd(cmdidx))
 }
 
 /// Get the current value of ex_pressedreturn.
@@ -235,7 +237,7 @@ pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int, cmd_size: c_int) -> c_int {
 /// # Safety
 ///
 /// Calls external C function to access static variable.
-#[no_mangle]
+#[export_name = "get_pressedreturn"]
 pub unsafe extern "C" fn rs_get_pressedreturn() -> c_int {
     nvim_get_ex_pressedreturn()
 }
@@ -248,7 +250,7 @@ pub unsafe extern "C" fn rs_get_pressedreturn() -> c_int {
 /// # Safety
 ///
 /// Calls external C functions to access global variables.
-#[no_mangle]
+#[export_name = "expr_map_locked"]
 pub unsafe extern "C" fn rs_expr_map_locked() -> c_int {
     let lock = nvim_get_expr_map_lock();
     let is_dummy = nvim_curbuf_is_dummy();

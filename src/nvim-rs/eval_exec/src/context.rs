@@ -47,7 +47,8 @@ extern "C" {
     // MB_PTR_BACK helper: utf_head_off(base, p) + 1
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
-    // rs_cmd_has_expr_args (in ex_docmd Rust crate)
+    // cmd_has_expr_args (in ex_docmd Rust crate, exported under canonical C name)
+    #[link_name = "cmd_has_expr_args"]
     fn rs_cmd_has_expr_args(cmdidx: c_int) -> bool;
 }
 

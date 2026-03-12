@@ -496,7 +496,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 /// Parse tabpage number argument.
 ///
 /// Replaces C `get_tabpage_arg()`.
-#[no_mangle]
+#[export_name = "get_tabpage_arg"]
 pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let cmd_tabmove = nvim_docmd_cmd_tabmove();

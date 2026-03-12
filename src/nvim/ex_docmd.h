@@ -67,3 +67,19 @@ bool parse_cmdline(char **cmdline, exarg_T *eap, CmdParseInfo *cmdinfo, const ch
 int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview);
 int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod, bool skip_only);
 bool parse_cmd_address(exarg_T *eap, const char **errormsg, bool silent);
+// Phase 3: type-converting and widely-called wrappers replaced by Rust exports
+int ends_excmd(int c);
+char *find_nextcmd(const char *p);
+char *check_nextcmd(char *p);
+bool is_loclist_cmd(int cmdidx);
+int get_pressedreturn(void);
+bool expr_map_locked(void);
+int modifier_len(char *cmd);
+bool is_cmd_ni(cmdidx_T cmdidx);
+bool cmd_has_expr_args(cmdidx_T cmdidx);
+cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len);
+char *get_command_name(expand_T *xp, int idx);
+int get_bad_opt(const char *p, exarg_T *eap);
+int getargopt(exarg_T *eap);
+char *skip_cmd_arg(char *p, bool rembs);
+bool changedir_func(char *new_dir, CdScope scope);

@@ -693,7 +693,7 @@ const ADDR_TABS: c_int = 5;
 /// # Safety
 ///
 /// `cmd` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "modifier_len"]
 pub unsafe extern "C" fn rs_modifier_len(cmd: *const c_char) -> c_int {
     if cmd.is_null() {
         return 0;

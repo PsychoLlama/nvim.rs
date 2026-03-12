@@ -117,22 +117,24 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern int rs_get_copyID(void);
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 extern void rs_listdigraphs(int use_headers);
-extern int rs_ends_excmd(int c);
-extern const char *rs_find_nextcmd(const char *p);
-extern const char *rs_check_nextcmd(const char *p);
-extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
-extern int rs_get_pressedreturn(void);
-extern int rs_expr_map_locked(void);
-extern int rs_one_letter_cmd(const char *p, int *idx);
-extern int rs_modifier_len(const char *cmd);
-extern int rs_is_cmd_ni(int cmdidx);
-extern bool rs_cmd_has_expr_args(int cmdidx);
-extern int rs_excmd_get_cmdidx(const char *cmd, size_t len);
-extern char *rs_get_command_name(void *xp, int idx);
-extern int rs_get_bad_opt(const char *p, void *eap);
-extern int rs_getargopt(void *eap);
-extern char *rs_skip_cmd_arg(char *p, int rembs);
-extern int rs_get_tabpage_arg(void *eap);
+// Forward declarations for Phase 3 Rust exports (wrappers replaced by Rust)
+int ends_excmd(int c);
+char *find_nextcmd(const char *p);
+char *check_nextcmd(char *p);
+bool is_loclist_cmd(int cmdidx);
+int get_pressedreturn(void);
+bool expr_map_locked(void);
+int one_letter_cmd(const char *p, int *idx);
+int modifier_len(char *cmd);
+bool is_cmd_ni(cmdidx_T cmdidx);
+bool cmd_has_expr_args(cmdidx_T cmdidx);
+cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len);
+char *get_command_name(expand_T *xp, int idx);
+int get_bad_opt(const char *p, exarg_T *eap);
+int getargopt(exarg_T *eap);
+char *skip_cmd_arg(char *p, bool rembs);
+int get_tabpage_arg(exarg_T *eap);
+bool changedir_func(char *new_dir, CdScope scope);
 // Forward declarations for Phase 2 Rust exports (static functions replaced by Rust)
 bool is_other_file(int fnum, char *ffname);
 void msg_verbose_cmd(linenr_T lnum, char *cmd);
@@ -1203,11 +1205,6 @@ static int current_tab_nr(tabpage_T *tab)
 
 // get_wincmd_addr_type: now in Rust (rs_set_cmd_addr_type calls it internally)
 
-/// Check if command is not implemented
-bool is_cmd_ni(cmdidx_T cmdidx)
-{
-  return rs_is_cmd_ni((int)cmdidx);
-}
 
 // Find the command name after skipping range specifiers.
 static char *find_excmd_after_range(exarg_T *eap)
@@ -1223,11 +1220,6 @@ static char *find_excmd_after_range(exarg_T *eap)
   return p;
 }
 
-/// Check if command expects expression arguments that need special parsing
-bool cmd_has_expr_args(cmdidx_T cmdidx)
-{
-  return rs_cmd_has_expr_args((int)cmdidx);
-}
 
 /// Execute one Ex command.
 ///
@@ -1834,35 +1826,6 @@ void undo_cmdmod(cmdmod_T *cmod)
 /// Parse the address range, if any, in "eap".
 /// May set the last search pattern, unless "silent" is true.
 ///
-/// Return true and set "*idx" if "p" points to a one letter command.
-/// - The 'k' command can directly be followed by any character
-///          but :keepa[lt] is another command, as are :keepj[umps],
-///          :kee[pmarks] and :keepp[atterns].
-/// - The 's' command can be followed directly by 'c', 'g', 'i', 'I' or 'r'
-///          but :sre[wind] is another command, as are :scr[iptnames],
-///          :scs[cope], :sim[alt], :sig[ns] and :sil[ent].
-static int one_letter_cmd(const char *p, cmdidx_T *idx)
-{
-  int raw_idx;
-  int result = rs_one_letter_cmd(p, &raw_idx);
-  if (result) {
-    *idx = (cmdidx_T)raw_idx;
-  }
-  return result;
-}
-
-/// @return  length of a command modifier (including optional count) or,
-///          zero when it's not a modifier.
-int modifier_len(char *cmd)
-{
-  return rs_modifier_len(cmd);
-}
-
-cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len)
-{
-  return (cmdidx_T)rs_excmd_get_cmdidx(cmd, len);
-}
-
 uint32_t excmd_get_argt(cmdidx_T idx)
 {
   return cmdnames[(int)idx].cmd_argt;
@@ -1926,19 +1889,6 @@ char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
   return arg;
 }
 
-/// Find end of "+command" argument.  Skip over "\ " and "\\".
-///
-/// @param rembs  true to halve the number of backslashes
-char *skip_cmd_arg(char *p, bool rembs)
-{
-  return rs_skip_cmd_arg(p, rembs ? 1 : 0);
-}
-
-int get_bad_opt(const char *p, exarg_T *eap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_get_bad_opt(p, eap);
-}
 
 /// Function given to ExpandGeneric() to obtain the list of bad= names.
 static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
@@ -1956,13 +1906,6 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return NULL;
 }
 
-/// Get "++opt=arg" argument.
-///
-/// @return  FAIL or OK.
-int getargopt(exarg_T *eap)
-{
-  return rs_getargopt(eap);
-}
 
 /// Function given to ExpandGeneric() to obtain the list of ++opt names.
 static char *get_argopt_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
@@ -2027,15 +1970,6 @@ int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int
 
   ExpandGeneric(pat, xp, rmp, matches, numMatches, get_argopt_name, false);
   return OK;
-}
-
-/// Handle the argument for a tabpage related ex command.
-/// When an error is encountered then eap->errmsg is set.
-///
-/// @return  a tabpage number.
-static int get_tabpage_arg(exarg_T *eap)
-{
-  return rs_get_tabpage_arg(eap);
 }
 
 static void ex_autocmd(exarg_T *eap)
@@ -2157,25 +2091,6 @@ static void ex_blast(exarg_T *eap)
   }
 }
 
-int ends_excmd(int c) FUNC_ATTR_CONST
-{
-  return rs_ends_excmd(c);
-}
-
-/// @return  the next command, after the first '|' or '\n' or,
-///          NULL if not found.
-char *find_nextcmd(const char *p)
-{
-  return (char *)rs_find_nextcmd(p);
-}
-
-/// Check if *p is a separator between Ex commands, skipping over white space.
-///
-/// @return  NULL if it isn't, the following character if it is.
-char *check_nextcmd(char *p)
-{
-  return (char *)rs_check_nextcmd(p);
-}
 
 /// - if there are more files to edit
 /// - and this is the last window
@@ -2212,11 +2127,6 @@ static int check_more(bool message, bool forceit)
   return OK;
 }
 
-/// Function given to ExpandGeneric() to obtain the list of command names.
-char *get_command_name(expand_T *xp, int idx)
-{
-  return rs_get_command_name(xp, idx);
-}
 
 static void ex_colorscheme(exarg_T *eap)
 {
@@ -3604,14 +3514,6 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
   }
 }
 
-/// Change directory function used by :cd/:tcd/:lcd Ex commands and the chdir() function.
-/// @param new_dir  The directory to change to.
-/// @param scope    Scope of the function call (global, tab or window).
-/// @return true if the directory is successfully changed.
-bool changedir_func(char *new_dir, CdScope scope)
-{
-  return rs_changedir_func(new_dir, (int)scope);
-}
 
 /// ":cd", ":tcd", ":lcd", ":chdir", "tchdir" and ":lchdir".
 void ex_cd(exarg_T *eap)
@@ -4298,10 +4200,6 @@ void restore_current_state(save_state_T *sst)
   ui_cursor_shape();  // may show different cursor shape
 }
 
-bool expr_map_locked(void)
-{
-  return rs_expr_map_locked() != 0;
-}
 
 /// ":normal[!] {commands}": Execute normal mode commands.
 static void ex_normal(exarg_T *eap)
@@ -5080,19 +4978,6 @@ static void ex_folddo(exarg_T *eap)
   ml_clearmarked();      // clear rest of the marks
 }
 
-/// @return  true if the supplied Ex cmdidx is for a location list command
-///          instead of a quickfix command.
-bool is_loclist_cmd(int cmdidx)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_is_loclist_cmd(cmdidx, CMD_SIZE) != 0;
-}
-
-bool get_pressedreturn(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_pressedreturn() != 0;
-}
 
 void set_pressedreturn(bool val)
 {

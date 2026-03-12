@@ -263,7 +263,7 @@ pub unsafe extern "C" fn rs_checkforcmd(
 ///
 /// `p` must be a valid null-terminated C string.
 /// `idx` must be a valid pointer for writes.
-#[no_mangle]
+#[export_name = "one_letter_cmd"]
 pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) -> c_int {
     if p.is_null() || idx.is_null() {
         return 0;
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
 /// Check if a command is "not implemented" (ex_ni or ex_script_ni).
 ///
 /// Matches C `is_cmd_ni()`.
-#[no_mangle]
+#[export_name = "is_cmd_ni"]
 pub extern "C" fn rs_is_cmd_ni(cmdidx: c_int) -> c_int {
     unsafe { nvim_docmd_cmdnames_func_is_ni(cmdidx) }
 }
@@ -533,7 +533,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
 /// # Safety
 ///
 /// `cmd` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
+#[export_name = "excmd_get_cmdidx"]
 pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> c_int {
     if cmd.is_null() {
         return nvim_docmd_cmd_size();
@@ -575,7 +575,7 @@ pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> 
 /// # Safety
 ///
 /// `xp` is unused (passed through for API compat). `idx` must be valid.
-#[no_mangle]
+#[export_name = "get_command_name"]
 pub unsafe extern "C" fn rs_get_command_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     let cmd_size = nvim_docmd_cmd_size();
     if idx >= cmd_size {

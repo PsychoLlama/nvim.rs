@@ -569,7 +569,7 @@ pub unsafe extern "C" fn rs_parse_count_ex(
 /// # Safety
 ///
 /// `p` must be a valid null-terminated string. `eap` must be valid.
-#[no_mangle]
+#[export_name = "get_bad_opt"]
 pub unsafe extern "C" fn rs_get_bad_opt(p: *const c_char, eap: ExArgHandle) -> c_int {
     if p.is_null() || eap.is_null() {
         return FAIL;
@@ -625,7 +625,7 @@ unsafe fn stricmp_matches(p: *const c_char, target: &[u8]) -> bool {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "getargopt"]
 pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
     if eap.is_null() {
         return FAIL;
@@ -795,7 +795,7 @@ pub unsafe extern "C" fn rs_getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 /// # Safety
 ///
 /// `p` must be a valid null-terminated string.
-#[no_mangle]
+#[export_name = "skip_cmd_arg"]
 pub unsafe extern "C" fn rs_skip_cmd_arg(p: *mut c_char, rembs: c_int) -> *mut c_char {
     if p.is_null() {
         return p;
