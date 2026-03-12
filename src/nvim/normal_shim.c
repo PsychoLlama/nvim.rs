@@ -2103,13 +2103,8 @@ static void del_from_showcmd(int len)
   rs_del_from_showcmd(len);
 }
 
-/// push_showcmd() and pop_showcmd() are used when waiting for the user to type
-/// something and there is a partial mapping.
-extern void rs_push_showcmd(void);
-void push_showcmd(void) { rs_push_showcmd(); }
-
-extern void rs_pop_showcmd(void);
-void pop_showcmd(void) { rs_pop_showcmd(); }
+// push_showcmd deleted: Rust exports under the C name directly via #[export_name = "push_showcmd"].
+// pop_showcmd deleted: Rust exports under the C name directly via #[export_name = "pop_showcmd"].
 
 // =============================================================================
 // Scrollbind C accessors for Rust FFI
@@ -2241,10 +2236,7 @@ cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
   return &ca;
 }
 
-extern void rs_do_nv_ident(int c1, int c2);
-
-/// Call nv_ident() as if "c1" was used, with "c2" as next character.
-void do_nv_ident(int c1, int c2) { rs_do_nv_ident(c1, c2); }
+// do_nv_ident deleted: Rust exports under the C name directly via #[export_name = "do_nv_ident"].
 
 /// Move position "*pp" back one character for 'selection' == "exclusive".
 ///

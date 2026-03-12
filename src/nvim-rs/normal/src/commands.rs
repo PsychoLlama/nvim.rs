@@ -633,7 +633,7 @@ pub extern "C" fn rs_parse_bracket_command(nchar: c_int) -> c_int {
 /// Calls C accessors and passes the returned pointer to rs_nv_ident.
 /// The returned cap pointer is backed by function-static storage (safe
 /// for single-threaded nvim).
-#[no_mangle]
+#[export_name = "do_nv_ident"]
 pub unsafe extern "C" fn rs_do_nv_ident(c1: c_int, c2: c_int) {
     let cap = nvim_create_temp_cap_for_ident(c1, c2);
     crate::rs_nv_ident(cap);

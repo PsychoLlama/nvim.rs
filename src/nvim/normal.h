@@ -17,4 +17,9 @@ enum {
 /// 'showcmd' buffer shared between normal.c and statusline.c
 EXTERN char showcmd_buf[SHOWCMD_BUFLEN];
 
+// Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+void push_showcmd(void);
+void pop_showcmd(void);
+void do_nv_ident(int c1, int c2);
+
 #include "normal_shim.h.generated.h"

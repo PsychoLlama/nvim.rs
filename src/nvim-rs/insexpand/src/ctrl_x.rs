@@ -617,7 +617,7 @@ const CONT_N_ADDS: c_int = 4; // next ^X<> will add-new or expand-current
 ///
 /// # Safety
 /// Requires valid global state.
-#[no_mangle]
+#[export_name = "ins_ctrl_x"]
 pub unsafe extern "C" fn rs_ins_ctrl_x() {
     if rs_ctrl_x_mode_cmdline() == 0 {
         // if the next ^X<> won't ADD nothing, then reset compl_cont_status

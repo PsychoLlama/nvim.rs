@@ -149,8 +149,7 @@ extern int rs_ins_compl_col_range_attr(int lnum, int col);
 extern void rs_ins_compl_show_pum(void);
 extern void rs_ins_compl_delete(int new_leader);
 extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
-// Phase 4 Rust exports
-extern void rs_ins_ctrl_x(void);
+// rs_ins_ctrl_x deleted: now exported as ins_ctrl_x via #[export_name]
 // rs_check_compl_option deleted: now exported as check_compl_option via #[export_name]
 extern void rs_ins_compl_restart(void);
 extern void rs_ins_compl_set_original_text(const char *str, size_t len);
@@ -532,8 +531,7 @@ static int cpt_sources_index = -1;
 static pumitem_T *compl_match_array = NULL;
 static int compl_match_arraysize;
 
-/// CTRL-X pressed in Insert mode.
-void ins_ctrl_x(void) { rs_ins_ctrl_x(); }
+// ins_ctrl_x deleted: Rust exports under the C name directly via #[export_name = "ins_ctrl_x"].
 
 // check_compl_option deleted: Rust exports under the C name directly via #[export_name].
 

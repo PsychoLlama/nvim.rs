@@ -313,7 +313,7 @@ pub extern "C" fn rs_clear_showcmd() {
 ///
 /// # Safety
 /// Reads/writes the shared showcmd_buf and old_showcmd_buf C statics.
-#[no_mangle]
+#[export_name = "push_showcmd"]
 pub unsafe extern "C" fn rs_push_showcmd() {
     if p_sc != 0 {
         let src = nvim_normal_showcmd_buf_ptr().cast::<u8>();
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn rs_push_showcmd() {
 ///
 /// # Safety
 /// Reads/writes the shared showcmd_buf and old_showcmd_buf C statics.
-#[no_mangle]
+#[export_name = "pop_showcmd"]
 pub unsafe extern "C" fn rs_pop_showcmd() {
     if p_sc == 0 {
         return;
