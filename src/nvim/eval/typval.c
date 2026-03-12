@@ -54,32 +54,6 @@ extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern char *rs_partial_name(partial_T *pt);
 
-// Type checking functions from Rust
-extern int rs_tv_check_for_string_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_nonempty_string_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_opt_string_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_number_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_opt_number_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_float_or_nr_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_bool_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_opt_bool_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_blob_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_list_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_dict_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_nonnull_dict_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_opt_dict_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_string_or_number_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_buffer_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_lnum_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_string_or_list_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_opt_string_or_list_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_string_or_list_or_blob_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_string_or_list_or_dict_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_string_or_func_arg(TypevalHandle args, int idx);
-extern int rs_tv_check_for_list_or_blob_arg(TypevalHandle args, int idx);
-extern bool rs_tv_check_num(TypevalHandle tv);
-extern bool rs_tv_check_str(TypevalHandle tv);
-extern bool rs_tv_check_str_or_nr(TypevalHandle tv);
 
 /// struct storing information about current sort
 typedef struct {
@@ -3943,21 +3917,6 @@ bool tv_equal(typval_T *const tv1, typval_T *const tv2, const bool ic)
 
 //{{{2 Type checks
 
-/// Check that given value is a number or string
-///
-/// Error messages are compatible with tv_get_number() previously used for the
-/// same purpose in buf*() functions. Special values are not accepted (previous
-/// behaviour: silently fail to find buffer).
-///
-/// @param[in]  tv  Value to check.
-///
-/// @return true if everything is OK, false otherwise.
-bool tv_check_str_or_nr(const typval_T *const tv)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_tv_check_str_or_nr((TypevalHandle)tv);
-}
-
 #define FUNC_ERROR "E703: Using a Funcref as a Number"
 
 static const char *const num_errors[] = {
@@ -3972,20 +3931,6 @@ static const char *const num_errors[] = {
 
 #undef FUNC_ERROR
 
-/// Check that given value is a number or can be converted to it
-///
-/// Error messages are compatible with tv_get_number_chk() previously used for
-/// the same purpose.
-///
-/// @param[in]  tv  Value to check.
-///
-/// @return true if everything is OK, false otherwise.
-bool tv_check_num(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_tv_check_num((TypevalHandle)tv);
-}
-
 #define FUNC_ERROR "E729: Using a Funcref as a String"
 
 static const char *const str_errors[] = {
@@ -3998,20 +3943,6 @@ static const char *const str_errors[] = {
 };
 
 #undef FUNC_ERROR
-
-/// Check that given value is a Vimscript String or can be "cast" to it.
-///
-/// Error messages are compatible with tv_get_string_chk() previously used for
-/// the same purpose.
-///
-/// @param[in]  tv  Value to check.
-///
-/// @return true if everything is OK, false otherwise.
-bool tv_check_str(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_tv_check_str((TypevalHandle)tv);
-}
 
 //{{{2 Get
 
@@ -4178,165 +4109,6 @@ float_T tv_get_float(const typval_T *const tv)
     break;
   }
   return 0;
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string.
-int tv_check_for_string_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a non-empty string.
-int tv_check_for_nonempty_string_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_nonempty_string_arg(args, idx);
-}
-
-/// Check for an optional string argument at "idx"
-int tv_check_for_opt_string_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_opt_string_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a number.
-int tv_check_for_number_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_number_arg(args, idx);
-}
-
-/// Check for an optional number argument at "idx"
-int tv_check_for_opt_number_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_opt_number_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a float or a number.
-int tv_check_for_float_or_nr_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_float_or_nr_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a bool.
-int tv_check_for_bool_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_bool_arg(args, idx);
-}
-
-/// Check for an optional bool argument at "idx".
-/// Return FAIL if the type is wrong.
-int tv_check_for_opt_bool_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_opt_bool_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a blob.
-int tv_check_for_blob_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_blob_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a list.
-int tv_check_for_list_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_list_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a dict.
-int tv_check_for_dict_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_dict_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a non-NULL dict.
-int tv_check_for_nonnull_dict_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_nonnull_dict_arg(args, idx);
-}
-
-/// Check for an optional dict argument at "idx"
-int tv_check_for_opt_dict_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_opt_dict_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string or
-/// a number.
-int tv_check_for_string_or_number_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_or_number_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a buffer number.
-/// Buffer number can be a number or a string.
-int tv_check_for_buffer_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_buffer_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a line number.
-/// Line number can be a number or a string.
-int tv_check_for_lnum_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_lnum_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string or a list.
-int tv_check_for_string_or_list_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_or_list_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string, a list or a blob.
-int tv_check_for_string_or_list_or_blob_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_or_list_or_blob_arg(args, idx);
-}
-
-/// Check for an optional string or list argument at "idx"
-int tv_check_for_opt_string_or_list_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_opt_string_or_list_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string or a list or a dict
-int tv_check_for_string_or_list_or_dict_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_or_list_or_dict_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a string
-/// or a function reference.
-int tv_check_for_string_or_func_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_string_or_func_arg(args, idx);
-}
-
-/// Give an error and return FAIL unless "args[idx]" is a list or a blob.
-int tv_check_for_list_or_blob_arg(const typval_T *const args, const int idx)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  return rs_tv_check_for_list_or_blob_arg(args, idx);
 }
 
 // =============================================================================

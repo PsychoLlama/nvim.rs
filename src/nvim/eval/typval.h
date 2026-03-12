@@ -446,4 +446,35 @@ EXTERN const size_t kTVCstring INIT( = TV_CSTRING);
 EXTERN const size_t kTVTranslate INIT( = TV_TRANSLATE);
 #endif
 
+// Functions implemented in Rust via #[export_name] in src/nvim-rs/typval/src/lib.rs
+
+// Type validation
+extern bool tv_check_str_or_nr(const typval_T *tv);
+extern bool tv_check_num(const typval_T *tv);
+extern bool tv_check_str(const typval_T *tv);
+
+// Argument type-checking functions
+extern int tv_check_for_string_arg(const typval_T *args, int idx);
+extern int tv_check_for_nonempty_string_arg(const typval_T *args, int idx);
+extern int tv_check_for_opt_string_arg(const typval_T *args, int idx);
+extern int tv_check_for_number_arg(const typval_T *args, int idx);
+extern int tv_check_for_opt_number_arg(const typval_T *args, int idx);
+extern int tv_check_for_float_or_nr_arg(const typval_T *args, int idx);
+extern int tv_check_for_bool_arg(const typval_T *args, int idx);
+extern int tv_check_for_opt_bool_arg(const typval_T *args, int idx);
+extern int tv_check_for_blob_arg(const typval_T *args, int idx);
+extern int tv_check_for_list_arg(const typval_T *args, int idx);
+extern int tv_check_for_dict_arg(const typval_T *args, int idx);
+extern int tv_check_for_nonnull_dict_arg(const typval_T *args, int idx);
+extern int tv_check_for_opt_dict_arg(const typval_T *args, int idx);
+extern int tv_check_for_string_or_number_arg(const typval_T *args, int idx);
+extern int tv_check_for_buffer_arg(const typval_T *args, int idx);
+extern int tv_check_for_lnum_arg(const typval_T *args, int idx);
+extern int tv_check_for_string_or_list_arg(const typval_T *args, int idx);
+extern int tv_check_for_opt_string_or_list_arg(const typval_T *args, int idx);
+extern int tv_check_for_string_or_list_or_blob_arg(const typval_T *args, int idx);
+extern int tv_check_for_string_or_list_or_dict_arg(const typval_T *args, int idx);
+extern int tv_check_for_string_or_func_arg(const typval_T *args, int idx);
+extern int tv_check_for_list_or_blob_arg(const typval_T *args, int idx);
+
 #include "eval/typval.h.generated.h"

@@ -1658,7 +1658,7 @@ fn tv_check_for_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a string.
-#[no_mangle]
+#[export_name = "tv_check_for_string_arg"]
 pub extern "C" fn rs_tv_check_for_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_arg_impl(args, idx)
 }
@@ -1679,7 +1679,7 @@ fn tv_check_for_nonempty_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_i
 }
 
 /// FFI wrapper: check if args[idx] is a non-empty string.
-#[no_mangle]
+#[export_name = "tv_check_for_nonempty_string_arg"]
 pub extern "C" fn rs_tv_check_for_nonempty_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_nonempty_string_arg_impl(args, idx)
 }
@@ -1696,7 +1696,7 @@ fn tv_check_for_opt_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check for optional string at args[idx].
-#[no_mangle]
+#[export_name = "tv_check_for_opt_string_arg"]
 pub extern "C" fn rs_tv_check_for_opt_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_opt_string_arg_impl(args, idx)
 }
@@ -1714,7 +1714,7 @@ fn tv_check_for_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a number.
-#[no_mangle]
+#[export_name = "tv_check_for_number_arg"]
 pub extern "C" fn rs_tv_check_for_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_number_arg_impl(args, idx)
 }
@@ -1731,7 +1731,7 @@ fn tv_check_for_opt_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check for optional number at args[idx].
-#[no_mangle]
+#[export_name = "tv_check_for_opt_number_arg"]
 pub extern "C" fn rs_tv_check_for_opt_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_opt_number_arg_impl(args, idx)
 }
@@ -1750,7 +1750,7 @@ fn tv_check_for_float_or_nr_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a float or number.
-#[no_mangle]
+#[export_name = "tv_check_for_float_or_nr_arg"]
 pub extern "C" fn rs_tv_check_for_float_or_nr_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_float_or_nr_arg_impl(args, idx)
 }
@@ -1775,7 +1775,7 @@ fn tv_check_for_bool_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a bool.
-#[no_mangle]
+#[export_name = "tv_check_for_bool_arg"]
 pub extern "C" fn rs_tv_check_for_bool_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_bool_arg_impl(args, idx)
 }
@@ -1792,7 +1792,7 @@ fn tv_check_for_opt_bool_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check for optional bool at args[idx].
-#[no_mangle]
+#[export_name = "tv_check_for_opt_bool_arg"]
 pub extern "C" fn rs_tv_check_for_opt_bool_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_opt_bool_arg_impl(args, idx)
 }
@@ -1810,7 +1810,7 @@ fn tv_check_for_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a blob.
-#[no_mangle]
+#[export_name = "tv_check_for_blob_arg"]
 pub extern "C" fn rs_tv_check_for_blob_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_blob_arg_impl(args, idx)
 }
@@ -1828,7 +1828,7 @@ fn tv_check_for_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a list.
-#[no_mangle]
+#[export_name = "tv_check_for_list_arg"]
 pub extern "C" fn rs_tv_check_for_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_list_arg_impl(args, idx)
 }
@@ -1846,7 +1846,7 @@ fn tv_check_for_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check if args[idx] is a dict.
-#[no_mangle]
+#[export_name = "tv_check_for_dict_arg"]
 pub extern "C" fn rs_tv_check_for_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_dict_arg_impl(args, idx)
 }
@@ -1866,7 +1866,7 @@ fn tv_check_for_nonnull_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int 
 }
 
 /// FFI wrapper: check if args[idx] is a non-NULL dict.
-#[no_mangle]
+#[export_name = "tv_check_for_nonnull_dict_arg"]
 pub extern "C" fn rs_tv_check_for_nonnull_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_nonnull_dict_arg_impl(args, idx)
 }
@@ -1883,7 +1883,7 @@ fn tv_check_for_opt_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
 }
 
 /// FFI wrapper: check for optional dict at args[idx].
-#[no_mangle]
+#[export_name = "tv_check_for_opt_dict_arg"]
 pub extern "C" fn rs_tv_check_for_opt_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_opt_dict_arg_impl(args, idx)
 }
@@ -1902,19 +1902,19 @@ fn tv_check_for_string_or_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_
 }
 
 /// FFI wrapper: check if args[idx] is a string or number.
-#[no_mangle]
+#[export_name = "tv_check_for_string_or_number_arg"]
 pub extern "C" fn rs_tv_check_for_string_or_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_or_number_arg_impl(args, idx)
 }
 
 /// Check if args[idx] is a buffer (string or number). Return OK if valid, FAIL if not.
-#[no_mangle]
+#[export_name = "tv_check_for_buffer_arg"]
 pub extern "C" fn rs_tv_check_for_buffer_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_or_number_arg_impl(args, idx)
 }
 
 /// Check if args[idx] is a line number (string or number). Return OK if valid, FAIL if not.
-#[no_mangle]
+#[export_name = "tv_check_for_lnum_arg"]
 pub extern "C" fn rs_tv_check_for_lnum_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_or_number_arg_impl(args, idx)
 }
@@ -1933,7 +1933,7 @@ fn tv_check_for_string_or_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_in
 }
 
 /// FFI wrapper: check if args[idx] is a string or list.
-#[no_mangle]
+#[export_name = "tv_check_for_string_or_list_arg"]
 pub extern "C" fn rs_tv_check_for_string_or_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_or_list_arg_impl(args, idx)
 }
@@ -1950,7 +1950,7 @@ fn tv_check_for_opt_string_or_list_arg_impl(args: TypevalHandle, idx: c_int) -> 
 }
 
 /// FFI wrapper: check for optional string or list at args[idx].
-#[no_mangle]
+#[export_name = "tv_check_for_opt_string_or_list_arg"]
 pub extern "C" fn rs_tv_check_for_opt_string_or_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_opt_string_or_list_arg_impl(args, idx)
 }
@@ -1969,7 +1969,7 @@ fn tv_check_for_string_or_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int)
 }
 
 /// FFI wrapper: check if args[idx] is a string, list, or blob.
-#[no_mangle]
+#[export_name = "tv_check_for_string_or_list_or_blob_arg"]
 pub extern "C" fn rs_tv_check_for_string_or_list_or_blob_arg(
     args: TypevalHandle,
     idx: c_int,
@@ -1991,7 +1991,7 @@ fn tv_check_for_string_or_list_or_dict_arg_impl(args: TypevalHandle, idx: c_int)
 }
 
 /// FFI wrapper: check if args[idx] is a string, list, or dict.
-#[no_mangle]
+#[export_name = "tv_check_for_string_or_list_or_dict_arg"]
 pub extern "C" fn rs_tv_check_for_string_or_list_or_dict_arg(
     args: TypevalHandle,
     idx: c_int,
@@ -2013,7 +2013,7 @@ fn tv_check_for_string_or_func_arg_impl(args: TypevalHandle, idx: c_int) -> c_in
 }
 
 /// FFI wrapper: check if args[idx] is a string or function reference.
-#[no_mangle]
+#[export_name = "tv_check_for_string_or_func_arg"]
 pub extern "C" fn rs_tv_check_for_string_or_func_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_string_or_func_arg_impl(args, idx)
 }
@@ -2032,7 +2032,7 @@ fn tv_check_for_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int 
 }
 
 /// FFI wrapper: check if args[idx] is a list or blob.
-#[no_mangle]
+#[export_name = "tv_check_for_list_or_blob_arg"]
 pub extern "C" fn rs_tv_check_for_list_or_blob_arg(args: TypevalHandle, idx: c_int) -> c_int {
     tv_check_for_list_or_blob_arg_impl(args, idx)
 }
@@ -2078,7 +2078,7 @@ fn tv_check_num_impl(tv: TypevalHandle) -> bool {
 }
 
 /// FFI wrapper: check if typval can be used as a number.
-#[no_mangle]
+#[export_name = "tv_check_num"]
 pub extern "C" fn rs_tv_check_num(tv: TypevalHandle) -> bool {
     tv_check_num_impl(tv)
 }
@@ -2118,7 +2118,7 @@ fn tv_check_str_impl(tv: TypevalHandle) -> bool {
 }
 
 /// FFI wrapper: check if typval can be used as a string.
-#[no_mangle]
+#[export_name = "tv_check_str"]
 pub extern "C" fn rs_tv_check_str(tv: TypevalHandle) -> bool {
     tv_check_str_impl(tv)
 }
@@ -2168,7 +2168,7 @@ fn tv_check_str_or_nr_impl(tv: TypevalHandle) -> bool {
 }
 
 /// FFI wrapper: check if typval is a number or string.
-#[no_mangle]
+#[export_name = "tv_check_str_or_nr"]
 pub extern "C" fn rs_tv_check_str_or_nr(tv: TypevalHandle) -> bool {
     tv_check_str_or_nr_impl(tv)
 }
