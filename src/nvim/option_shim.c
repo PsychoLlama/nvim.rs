@@ -122,13 +122,7 @@ _Static_assert(sizeof(vimoption_T) == 160,
 
 // Rust FFI declarations (used by internal code)
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-extern const char *rs_find_tty_option_end(const char *arg);
-extern int rs_is_tty_option(const char *name);
-extern const char *rs_skip_to_option_part(const char *p);
-extern int rs_default_fileformat(void);
 // rs_copy_option_part deleted: now exported as copy_option_part via #[export_name]
-extern const char *rs_validate_num_option(int opt_idx, OptInt *newval, char *errbuf, size_t errbuflen);
-extern const char *rs_find_dup_item(const char *origval, const char *newval, size_t newvallen, uint32_t flags);
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
 // rs_fill_culopt_flags deleted: now exported as fill_culopt_flags via #[export_name]
@@ -138,10 +132,7 @@ extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *
 
 // Rust metadata query functions (option pass 8 phase 1)
 // is_option_hidden, option_has_type, option_has_scope now exported directly from Rust via #[export_name]
-// rs_option_is_global_local/only/window_local, rs_get_option_flags already declared elsewhere
 extern int rs_option_is_global_local(int opt_idx);
-extern int rs_option_is_global_only(int opt_idx);
-extern int rs_option_is_window_local(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
@@ -158,12 +149,9 @@ extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
 
 // Rust validate_option_value cluster (option pass 8 phase 3)
 // rs_get_option_default deleted: now exported as get_option_default via #[export_name]
-extern const char *rs_validate_option_value(int opt_idx, OptVal *newval, int opt_flags,
-                                            char *errbuf, size_t errbuflen);
+// rs_validate_option_value deleted: called from Rust directly via internal Rust calls
 
 // Rust parsing helpers and query functions (option pass 7 phase 1)
-extern int rs_get_op(const char *arg);
-extern int rs_get_option_prefix(char **argp);
 // rs_shortmess deleted: now exported as shortmess via #[export_name]
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
@@ -200,13 +188,8 @@ extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, in
 // rs_string_to_key deleted: now exported as string_to_key via #[export_name]
 // rs_check_redraw_for deleted: now exported as check_redraw_for via #[export_name]
 // rs_insecure_flag deleted: now exported as insecure_flag via #[export_name]
-extern const char *rs_did_set_option(OptIndex opt_idx, void *varp, OptVal old_value,
-                                     OptVal new_value, int opt_flags, scid_T set_sid,
-                                     int direct, int value_replaced, char *errbuf,
-                                     size_t errbuflen);
-extern const char *rs_set_option_impl(OptIndex opt_idx, OptVal value, int opt_flags,
-                                      int set_sid, int direct, int value_replaced,
-                                      char *errbuf, size_t errbuflen);
+// rs_did_set_option deleted: called from Rust directly
+// rs_set_option_impl deleted: called from Rust directly
 // rs_was_set_insecurely deleted: now exported as was_set_insecurely via #[export_name]
 // rs_set_option_sctx deleted: now exported as set_option_sctx via #[export_name]
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
@@ -296,7 +279,6 @@ extern const char *rs_did_set_shellslash(optset_T *args);
 
 // Phase 3: winhighlight callback (from Rust winhl.rs)
 extern const char *rs_did_set_winhighlight(optset_T *args);
-extern bool rs_parse_winhl_opt(const char *winhl, win_T *wp);
 
 // Phase 2: Medium-complexity string callbacks (from Rust string_simple.rs)
 extern const char *rs_did_set_backupcopy(optset_T *args);
@@ -331,14 +313,11 @@ extern const char *rs_did_set_selection(optset_T *args);
 // rs_set_context_in_set_cmd deleted: now exported as set_context_in_set_cmd via #[export_name]
 
 // OptVal storage operations (from Rust storage.rs)
-extern void rs_optval_free(OptVal o);
-extern OptVal rs_optval_copy(OptVal o);
-extern int rs_optval_equal(OptVal o1, OptVal o2);
+// rs_optval_free, rs_optval_copy, rs_optval_equal: declared in other C files that use them
 
 // Phase 9 value manipulation helpers (from Rust value.rs)
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
-extern int rs_is_option_local_value_unset(OptIndex opt_idx);
 extern char *rs_optval_to_cstr(OptVal o);
 
 // Phase 15 option value API (from Rust value.rs)
@@ -350,21 +329,12 @@ extern const char *rs_unset_option_local_value(int opt_idx);
 // rs_set_option_value_handle_tty deleted: now exported as set_option_value_handle_tty via #[export_name]
 // rs_set_option_value_give_err deleted: now exported as set_option_value_give_err via #[export_name]
 
-// Rust FFI declarations (tag module)
-extern void rs_free_tagfunc_option(void);
-extern void rs_set_buflocal_tfu_callback(void *buf);
-
 // Rust FFI declarations (window/layout module)
-extern int rs_global_stl_height(void);
+// rs_free_tagfunc_option, rs_set_buflocal_tfu_callback: declared in other C files that use them
+// rs_global_stl_height, rs_min_rows, rs_min_rows_for_all_tabpages, rs_tabline_height,
+// rs_win_comp_pos, rs_win_default_scroll, rs_win_setheight, rs_win_setwidth: declared elsewhere
 extern void rs_last_status(int morewin);
-extern int rs_min_rows(tabpage_T *tp);
-extern int rs_min_rows_for_all_tabpages(void);
-extern int rs_tabline_height(void);
-extern int rs_win_comp_pos(void);
-extern int64_t rs_win_default_scroll(win_T *wp);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
-extern void rs_win_setheight(int height);
-extern void rs_win_setwidth(int width);
 
 // =============================================================================
 // Accessor functions for Rust code
@@ -826,9 +796,6 @@ typedef enum {
 } set_prefix_T;
 
 #include "option_shim.c.generated.h"
-
-// Rust fold FFI declaration
-extern void rs_foldUpdateAll(win_T *win);
 
 // options[] is initialized in options.generated.h.
 // The options with a NULL variable are 'hidden': a set command for them is
