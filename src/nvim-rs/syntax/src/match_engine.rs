@@ -45,7 +45,9 @@ extern "C" {
     // Current state management
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_set_current_state_len(len: c_int);
+    #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_grow_current_state(size: c_int);
 
@@ -91,6 +93,7 @@ extern "C" {
     #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut c_char;
     fn nvim_syn_getcurline_at_col() -> c_char;
+    #[link_name = "rs_check_state_ends"]
     fn nvim_syn_check_state_ends();
     fn nvim_syn_line_breakcheck();
 

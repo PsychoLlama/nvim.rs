@@ -150,6 +150,7 @@ extern "C" {
     fn nvim_syn_get_current_seqnr() -> c_int;
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_get_current_state_len() -> c_int;
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;

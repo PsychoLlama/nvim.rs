@@ -63,7 +63,9 @@ extern "C" {
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
     // Current state setters
     fn nvim_syn_set_state_stored(stored: c_int);
+    #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_keepend_level(level: c_int);
     fn nvim_syn_grow_current_state(size: c_int);

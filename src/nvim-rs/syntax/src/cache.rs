@@ -36,6 +36,7 @@ extern "C" {
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_get_current_next_list() -> IdListHandle;
     fn nvim_syn_set_state_stored(stored: c_int);
+    #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     fn nvim_syn_set_keepend_level(level: c_int);
     fn nvim_syn_grow_current_state(size: c_int);

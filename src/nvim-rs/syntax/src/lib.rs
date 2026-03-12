@@ -380,6 +380,7 @@ extern "C" {
     fn nvim_syn_set_state_stored(stored: c_int);
 
     /// Call validate_current_state()
+    #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     /// Set keepend_level
     fn nvim_syn_set_keepend_level(level: c_int);

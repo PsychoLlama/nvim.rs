@@ -102,7 +102,7 @@ static SYNC_ARGS: [&[u8]; 10] = [
 ///
 /// # Safety
 /// Must be called from main thread.
-#[no_mangle]
+#[export_name = "reset_expand_highlight"]
 pub unsafe extern "C" fn rs_reset_expand_highlight() {
     nvim_syn_set_include_link(0);
     nvim_syn_set_include_default(0);

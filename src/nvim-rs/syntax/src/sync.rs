@@ -55,7 +55,9 @@ extern "C" {
     fn nvim_syn_call_syn_update_ends(syncing: c_int);
 
     // State management
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
+    #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_get_current_lnum() -> c_int;

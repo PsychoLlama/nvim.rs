@@ -43,6 +43,7 @@ extern "C" {
 
     // syntax_start dependencies
     fn nvim_syn_set_current_sub_char(c: c_int);
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_syn_buf(buf: BufHandle);
     fn nvim_syn_set_syn_block(block: SynBlockHandle);

@@ -95,7 +95,7 @@ struct TimeEntry {
 ///
 /// # Safety
 /// Must be called from main thread with valid eap pointer.
-#[no_mangle]
+#[export_name = "ex_syntime"]
 pub unsafe extern "C" fn rs_ex_syntime(eap: *mut c_void) {
     let arg = nvim_syn_get_eap_arg(eap);
     if arg.is_null() {

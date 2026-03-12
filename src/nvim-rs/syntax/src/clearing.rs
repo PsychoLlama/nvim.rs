@@ -55,6 +55,7 @@ extern "C" {
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     /// Invalidate the current syntax state.
+    #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
 
     /// Reset running_syn_inc_tag to 0.

@@ -37,6 +37,8 @@ extern const char *const highlight_init_cmdline[];
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 char *get_syntime_arg(expand_T *xp, int idx);
 char *get_syntax_name(expand_T *xp, int idx);
+void ex_syntime(exarg_T *eap);
+void reset_expand_highlight(void);
 
 #include "syntax_accessors.h.generated.h"
 #include "nvim/syntax_bridge.h"

@@ -71,7 +71,7 @@ extern char *rs_syn_getcurline(void);
 extern int rs_syn_getcurline_len(void);
 extern void rs_syn_clear_time(syn_time_T *st);
 extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
-extern void rs_check_state_ends(void);
+// rs_check_state_ends: Rust function called via #[link_name] bypasses nvim_syn_check_state_ends
 extern void rs_update_si_attr(int idx);
 extern void rs_check_keepend(void);
 extern stateitem_T *rs_push_next_match(void);
@@ -92,7 +92,7 @@ extern void rs_reset_synblock(win_T *wp);
 extern void rs_syntax_sync_clear(void);
 extern void rs_syn_clear_keyword(int id, hashtab_T *ht);
 extern void rs_clear_keywtab(hashtab_T *ht);
-extern void rs_invalidate_current_state(void);
+// rs_invalidate_current_state: Rust function called via #[link_name] bypasses nvim_syn_invalidate_current_state
 
 // Phase 9: state_entry.rs Rust implementations
 extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
@@ -828,9 +828,8 @@ synstate_T *nvim_syn_stack_alloc_entry(int lnum, synstate_T *after)
 void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
 
-void nvim_syn_validate_current_state(void) { rs_validate_current_state(); }
-
-void nvim_syn_invalidate_current_state(void) { rs_invalidate_current_state(); }
+// nvim_syn_validate_current_state deleted: Rust bypasses via #[link_name = "rs_validate_current_state"]
+// nvim_syn_invalidate_current_state deleted: Rust bypasses via #[link_name = "rs_invalidate_current_state"]
 
 void nvim_syn_set_keepend_level(int level) { keepend_level = level; }
 
@@ -968,7 +967,7 @@ void nvim_stateitem_get_positions(stateitem_T *item,
 
 void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
-void nvim_syn_check_state_ends(void) { rs_check_state_ends(); }
+// nvim_syn_check_state_ends deleted: Rust bypasses via #[link_name = "rs_check_state_ends"]
 
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
@@ -1887,9 +1886,7 @@ uint64_t nvim_synpat_get_time_slowest(synpat_T *pat) { return (uint64_t)pat->sp_
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
 
-/// Thin wrapper: ex_syntime body delegated to Rust.
-extern void rs_ex_syntime(exarg_T *eap);
-void ex_syntime(exarg_T *eap) { rs_ex_syntime(eap); }
+// ex_syntime deleted: Rust exports under the C name directly via #[export_name = "ex_syntime"].
 
 // get_syntime_arg deleted: Rust exports under the C name directly via #[export_name].
 
@@ -1921,8 +1918,7 @@ void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
   rs_set_context_in_echohl_cmd(xp, arg);
 }
 
-extern void rs_reset_expand_highlight(void);
-void reset_expand_highlight(void) { rs_reset_expand_highlight(); }
+// reset_expand_highlight deleted: Rust exports under the C name directly via #[export_name = "reset_expand_highlight"].
 
 // =============================================================================
 // Phase listing: accessors for syn_cmd_list migration
