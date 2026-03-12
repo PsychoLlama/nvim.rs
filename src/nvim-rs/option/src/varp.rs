@@ -214,7 +214,8 @@ unsafe fn win_num_local_or_global(
 /// # Safety
 /// All pointer arguments must be valid. `p` must point to a `vimoption_T`
 /// within the global `options[]` array. `buf` and `win` must be non-null.
-#[unsafe(no_mangle)]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_varp_from"]
 pub unsafe extern "C" fn rs_get_varp_from(
     p: *mut c_void,
     buf: BufHandle,
@@ -328,7 +329,8 @@ pub unsafe extern "C" fn rs_get_varp_from(
 ///
 /// # Safety
 /// All pointer arguments must be valid.
-#[unsafe(no_mangle)]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_varp_scope_from"]
 pub unsafe extern "C" fn rs_get_varp_scope_from(
     p: *mut c_void,
     opt_flags: c_int,

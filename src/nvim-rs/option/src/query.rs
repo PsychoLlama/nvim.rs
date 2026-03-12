@@ -119,7 +119,8 @@ pub unsafe extern "C" fn rs_can_bs(what: c_int) -> c_int {
 }
 
 /// Get the value of 'equalprg', either the buffer-local one or the global one.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_equalprg"]
 pub unsafe extern "C" fn rs_get_equalprg() -> *const c_char {
     let b_p_ep = nvim_curbuf_get_b_p_ep();
     if !b_p_ep.is_null() && *b_p_ep != 0 {
@@ -130,7 +131,8 @@ pub unsafe extern "C" fn rs_get_equalprg() -> *const c_char {
 }
 
 /// Get the value of 'findfunc', either the buffer-local one or the global one.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "get_findfunc"]
 pub unsafe extern "C" fn rs_get_findfunc() -> *const c_char {
     let b_p_ffu = nvim_curbuf_get_b_p_ffu();
     if !b_p_ffu.is_null() && *b_p_ffu != 0 {

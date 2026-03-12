@@ -188,8 +188,8 @@ extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, in
 
 // Rust query functions (from Rust query.rs, option pass 4 phase 1)
 extern int rs_can_bs(int what);
-extern const char *rs_get_equalprg(void);
-extern const char *rs_get_findfunc(void);
+// rs_get_equalprg deleted: now exported as get_equalprg via #[export_name]
+// rs_get_findfunc deleted: now exported as get_findfunc via #[export_name]
 // rs_get_bkc_flags deleted: now exported as get_bkc_flags via #[export_name]
 // rs_get_flp_value deleted: now exported as get_flp_value via #[export_name]
 // rs_get_ve_flags deleted: now exported as get_ve_flags via #[export_name]
@@ -331,8 +331,8 @@ extern const char *rs_did_set_showcmdloc(optset_T *args);
 extern const char *rs_did_set_selection(optset_T *args);
 
 // Rust varp dispatch functions (from Rust varp.rs)
-extern void *rs_get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
-extern void *rs_get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
+// rs_get_varp_from deleted: now exported as get_varp_from via #[export_name]
+// rs_get_varp_scope_from deleted: now exported as get_varp_scope_from via #[export_name]
 
 // rs_set_context_in_set_cmd deleted: now exported as set_context_in_set_cmd via #[export_name]
 
@@ -2154,10 +2154,7 @@ static int put_set(FILE *fd, char *cmd, OptIndex opt_idx, void *varp)
   return rs_put_set(fd, cmd, opt_idx, varp);
 }
 
-void *get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win)
-{
-  return rs_get_varp_scope_from(p, opt_flags, buf, win);
-}
+// get_varp_scope_from deleted: Rust exports under the C name directly via #[export_name].
 
 /// Get pointer to option variable, depending on local or global scope.
 ///
@@ -2174,10 +2171,7 @@ void *get_option_varp_scope_from(OptIndex opt_idx, int opt_flags, buf_T *buf, wi
   return get_varp_scope_from(&(options[opt_idx]), opt_flags, buf, win);
 }
 
-void *get_varp_from(vimoption_T *p, buf_T *buf, win_T *win)
-{
-  return rs_get_varp_from(p, buf, win);
-}
+// get_varp_from deleted: Rust exports under the C name directly via #[export_name].
 
 /// Get option index from option pointer
 static inline OptIndex get_opt_idx(vimoption_T *opt)
@@ -2192,17 +2186,8 @@ static inline void *get_varp(vimoption_T *p)
   return get_varp_from(p, curbuf, curwin);
 }
 
-/// Get the value of 'equalprg', either the buffer-local one or the global one.
-char *get_equalprg(void)
-{
-  return (char *)rs_get_equalprg();
-}
-
-/// Get the value of 'findfunc', either the buffer-local one or the global one.
-char *get_findfunc(void)
-{
-  return (char *)rs_get_findfunc();
-}
+// get_equalprg deleted: Rust exports under the C name directly via #[export_name].
+// get_findfunc deleted: Rust exports under the C name directly via #[export_name].
 
 /// Copy options from one window to another.
 /// Used when splitting a window.

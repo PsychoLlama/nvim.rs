@@ -106,6 +106,10 @@ unsigned get_ve_flags(win_T *wp);
 int get_fileformat_force(const buf_T *buf, const exarg_T *eap);
 void set_fileformat(int eol_style, int opt_flags);
 size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars);
+const char *get_equalprg(void);
+const char *get_findfunc(void);
+void *get_varp_from(vimoption_T *p, buf_T *buf, win_T *win);
+void *get_varp_scope_from(vimoption_T *p, int opt_flags, buf_T *buf, win_T *win);
 #if defined(EXITFREE)
 void free_all_options(void);
 #endif
