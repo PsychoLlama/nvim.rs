@@ -7692,7 +7692,6 @@ extern "C" {
     fn nvim_get_op_char(optype: c_int) -> c_int;
     fn nvim_get_extra_op_char(optype: c_int) -> c_int;
     fn nvim_set_vim_var_string_vv_op(opchars: *const std::ffi::c_char, len: c_int);
-    fn nvim_coladvance_append_mode();
     fn nvim_get_cursor_pos_ptr_len() -> c_int;
     fn nvim_get_curwin_w_redr_type() -> c_int;
     fn nvim_curwin_set_old_visual_lnums();
@@ -7793,7 +7792,10 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
     nvim_curwin_set_curswant(true);
     if nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
         // Pretend Insert mode to allow cursor past end of line
-        nvim_coladvance_append_mode();
+        let save_state = nvim_get_State();
+        nvim_set_State(MODE_INSERT);
+        nvim_coladvance_maxcol();
+        nvim_set_State(save_state);
     } else {
         let extra = nvim_get_cursor_pos_ptr_len();
         nvim_set_cursor_col(nvim_get_cursor_col() + extra);

@@ -132,76 +132,21 @@ static const char *e_noident = N_("E349: No identifier under cursor");
 // NV_* flag constants, and all extern rs_nv_* declarations deleted.
 // =============================================================================
 
-// Rust FFI declarations (non-dispatch-table)
-
-// memline crate
-extern void rs_goto_byte(int cnt);
+// Rust FFI declarations (only those called directly from this file)
 
 // Normal mode state machine
 extern int rs_normal_check(void *s);
 extern int rs_normal_execute(void *s, int key);
 extern void rs_normal_prepare(void *s);
-extern bool rs_normal_get_command_count(void *s);
-extern bool rs_normal_handle_special_visual_command(void *s);
-extern bool rs_normal_need_redraw_mode_message(void *s);
-extern void rs_normal_redraw_mode_message(void *s);
-extern void rs_normal_redraw(void *s);
-extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
 
-// Operator/command helpers
-extern bool rs_op_pending(void);
-extern int rs_find_command(int cmdchar);
-extern int rs_invert_horizontal(int cmdchar);
-extern int rs_unshift_special(int cmdchar, int *modp);
-extern bool rs_is_ident(const char *line, int offset);
-extern void rs_clearop(oparg_T *oap);
-extern void rs_clearopbeep(oparg_T *oap);
-extern bool rs_checkclearop(oparg_T *oap);
-extern bool rs_checkclearopq(oparg_T *oap);
-extern bool rs_check_text_locked(oparg_T *oap);
-extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
-extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
-extern void rs_prep_redo_cmd(cmdarg_T *cap);
-extern void rs_set_vcount_ca(cmdarg_T *cap, bool *set_prevcount);
-extern void rs_reset_VIsual_and_resel(void);
-extern void rs_may_clear_cmdline(void);
-extern void rs_v_visop(cmdarg_T *cap);
-extern void rs_may_start_select(int c);
-extern void rs_v_swap_corners(int cmdchar);
-extern bool rs_unadjust_for_sel(void);
-extern bool rs_get_visual_text(cmdarg_T *cap, char **pp, size_t *lenp);
-extern int rs_nv_mark_move_to(cmdarg_T *cap, int flags, fmark_T *fm);
+// Diff and scrollbind helpers (called from nvim_scrollbind_sync_windows)
+extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
+extern int rs_get_vtopline(win_T *wp);
+
+// Ident helper (called from rs_find_ident_under_cursor)
 extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
                                    char **text, int *textcol, int find_type);
 
-// Window/fold/quickfix/diff helpers
-extern void rs_set_fraction(win_T *wp);
-extern void rs_win_setheight(int height);
-extern void rs_qf_view_result(bool split);
-extern int rs_hasAnyFolding(win_T *win);
-extern void rs_foldOpenCursor(void);
-extern void rs_foldCheckClose(void);
-extern void rs_newFoldLevel(void);
-extern int rs_foldManualAllowed(bool create);
-extern void rs_clearFolding(win_T *win);
-extern int rs_foldMoveTo(bool updown, int dir, int count);
-extern void rs_foldAdjustVisual(void);
-extern int rs_getDeepestNesting(win_T *wp);
-extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
-extern void rs_foldUpdateAfterInsert(void);
-extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
-extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
-extern void rs_do_ascii(exarg_T *eap);
-extern void rs_diff_set_topline(win_T *fromwin, win_T *towin);
-extern int rs_diff_move_to(int dir, int count);
-extern int rs_get_vtopline(win_T *wp);
-extern int rs_get_sidescrolloff_value(win_T *wp);
-extern const char *rs_get_showbreak_value(win_T *win);
-extern void rs_n_start_visual_mode(int c);
-// rs_end_visual_mode deleted: now exported as end_visual_mode via #[export_name]
-extern void rs_set_cursor_for_append_to_line(void);
-extern void rs_set_op_var(int optype);
-extern size_t rs_find_ident_under_cursor(char **text, int find_type);
 // invoke_edit: now exported from Rust via #[export_name = "invoke_edit"]
 extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
 // del_from_showcmd: now exported from Rust via #[export_name = "del_from_showcmd"]
@@ -2026,14 +1971,6 @@ size_t rs_find_ident_under_cursor(char **text, int find_type)
                               curwin->w_cursor.col, text, NULL, find_type);
 }
 
-/// Coladvance wrapper: temporarily set State to MODE_INSERT for "A" command cursor positioning.
-void nvim_coladvance_append_mode(void)
-{
-  const int save_State = State;
-  State = MODE_INSERT;
-  coladvance(curwin, MAXCOL);
-  State = save_State;
-}
 
 /// Get length of cursor line suffix (strlen(get_cursor_pos_ptr())).
 int nvim_get_cursor_pos_ptr_len(void) { return (int)strlen(get_cursor_pos_ptr()); }
