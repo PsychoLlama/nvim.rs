@@ -1618,7 +1618,7 @@ pub unsafe extern "C" fn rs_ml_clear_cached_line(buf: *mut BufHandle) {
 ///
 /// # Safety
 /// - `ptr` must be a valid C string
-#[no_mangle]
+#[export_name = "ml_add_deleted_len"]
 pub unsafe extern "C" fn rs_ml_add_deleted_len(ptr: *mut c_char, len: isize) {
     let buf = nvim_get_curbuf();
     rs_ml_add_deleted_len_buf(buf, ptr, len);
@@ -1712,7 +1712,7 @@ pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
 ///
 /// # Safety
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_setmarked"]
 pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     let buf = nvim_get_curbuf();
     if lnum < 1 || lnum > nvim_buf_get_ml_line_count(buf) || nvim_buf_has_ml_mfp(buf) == 0 {
@@ -1792,7 +1792,7 @@ pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
 ///
 /// # Safety
 /// Modifies buffer state. Only call from main Nvim thread.
-#[no_mangle]
+#[export_name = "ml_clearmarked"]
 pub unsafe extern "C" fn rs_ml_clearmarked() {
     let buf = nvim_get_curbuf();
     if nvim_buf_has_ml_mfp(buf) == 0 {

@@ -280,7 +280,7 @@ const RECOVER_MSG_ERRORS: c_int = 13;
 ///
 /// # Safety
 /// Modifies global editor state; may read from corrupted swap files.
-#[no_mangle]
+#[export_name = "ml_recover"]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,

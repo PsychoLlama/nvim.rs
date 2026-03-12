@@ -231,10 +231,9 @@ extern void rs_long_to_char(long n, char *s);
 extern long rs_char_to_long(const char *s);
 // Phase 2 Rust function declarations
 extern int rs_swapfile_proc_running(const ZeroBlock *b0p, const char *swap_fname);
-// Pass 2 Phase 1: Mark tracking Rust function declarations
-extern void rs_ml_setmarked(linenr_T lnum);
+// rs_ml_setmarked deleted: now exported as ml_setmarked via #[export_name]
 // rs_ml_firstmarked deleted: now exported as ml_firstmarked via #[export_name]
-extern void rs_ml_clearmarked(void);
+// rs_ml_clearmarked deleted: now exported as ml_clearmarked via #[export_name]
 extern linenr_T rs_ml_get_lowest_marked(void);
 extern void rs_ml_set_lowest_marked(linenr_T lnum);
 // Pass 2 Phase 2: Swap file path helper Rust function declarations
@@ -242,17 +241,14 @@ extern char *rs_make_percent_swname(char *dir, char *dir_end, const char *name);
 // rs_resolve_symlink deleted: now exported as resolve_symlink via #[export_name]
 extern char *rs_get_file_in_dir(char *fname, char *dname);
 extern char *rs_makeswapname(char *fname, char *ffname, buf_T *buf, char *dir_name);
-// Pass 2 Phase 3: Buffer lifecycle Rust function declarations
-extern void rs_ml_close(buf_T *buf, int del_file);
-extern void rs_check_need_swap(int newfile);
-extern void rs_ml_timestamp(buf_T *buf);
+// rs_ml_close deleted: now exported as ml_close via #[export_name]
+// rs_check_need_swap deleted: now exported as check_need_swap via #[export_name]
+// rs_ml_timestamp deleted: now exported as ml_timestamp via #[export_name]
 extern size_t rs_ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits);
-// Pass 2 Phase 4: Deleted-length tracking and stack Rust function declarations
-extern void rs_ml_add_deleted_len(char *ptr, ssize_t len);
+// rs_ml_add_deleted_len deleted: now exported as ml_add_deleted_len via #[export_name]
 extern void rs_ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len);
 extern int rs_ml_add_stack(buf_T *buf);
-// Pass 2 Phase 5: ml_setflags Rust function declaration
-extern void rs_ml_setflags(buf_T *buf);
+// rs_ml_setflags deleted: now exported as ml_setflags via #[export_name]
 // Pass 3 Phase 1: swapfile_dict Rust function declaration
 extern void rs_swapfile_dict(const char *fname, dict_T *d);
 // Pass 3 Phase 2: swapfile_info Rust function declaration
@@ -280,15 +276,12 @@ extern int rs_ml_append_flush(buf_T *buf, linenr_T lnum, char *line, colnr_T len
 extern void rs_ml_flush_line(buf_T *buf, int noalloc);
 // Pass 8 Phase 2: ml_preserve Rust function declaration
 extern void rs_ml_preserve(buf_T *buf, bool message, bool do_fsync);
-// Pass 9 Phase 1: ml_open_file + ml_open_files Rust function declarations
-extern void rs_ml_open_file(buf_T *buf);
-extern void rs_ml_open_files(void);
-// Pass 9 Phase 2: ml_setname Rust function declaration
-extern void rs_ml_setname(buf_T *buf);
+// rs_ml_open_file deleted: now exported as ml_open_file via #[export_name]
+// rs_ml_open_files deleted: now exported as ml_open_files via #[export_name]
+// rs_ml_setname deleted: now exported as ml_setname via #[export_name]
 // rs_ml_open deleted: now exported as ml_open via #[export_name]
-// Pass 9 Phase 4: buffer-iteration wrappers Rust function declarations
-extern void rs_ml_close_all(int del_file);
-extern void rs_ml_close_notmod(void);
+// rs_ml_close_all deleted: now exported as ml_close_all via #[export_name]
+// rs_ml_close_notmod deleted: now exported as ml_close_notmod via #[export_name]
 extern void rs_ml_sync_all(int check_file, int check_char, bool do_fsync);
 
 static const char e_ml_get_invalid_lnum_nr[]
@@ -316,57 +309,19 @@ static const char e_warning_pointer_block_corrupted[]
 
 // ml_open deleted: Rust exports under the C name directly via #[export_name = "ml_open"].
 
-/// ml_setname() is called when the file name of "buf" has been changed.
-/// It may rename the swapfile. (thin wrapper calling Rust)
-void ml_setname(buf_T *buf) { rs_ml_setname(buf); }
-
-/// Open a file for the memfile for all buffers that are not readonly or have
-/// been modified.
-/// Used when 'updatecount' changes from zero to non-zero.
-/// (thin wrapper calling Rust)
-void ml_open_files(void) { rs_ml_open_files(); }
-
-/// Open a swapfile for an existing memfile, if there is no swapfile yet.
-/// (thin wrapper calling Rust)
-void ml_open_file(buf_T *buf) { rs_ml_open_file(buf); }
-
-/// If still need to create a swapfile, and starting to edit a not-readonly
-/// file, or reading into an existing buffer, create a swapfile now.
-///
-/// @param newfile reading file into new buffer
-/// @param newfile  reading file into new buffer (thin wrapper calling Rust)
-void check_need_swap(bool newfile) { rs_check_need_swap(newfile); }
-
-/// Close memline for buffer 'buf' (thin wrapper calling Rust).
-///
-/// @param del_file  if true, delete the swapfile
-void ml_close(buf_T *buf, int del_file) { rs_ml_close(buf, del_file); }
-
-/// Close all existing memlines and memfiles. (thin wrapper calling Rust)
-/// Only used when exiting.
-///
-/// @param del_file  if true, delete the memfiles.
-void ml_close_all(bool del_file) { rs_ml_close_all((int)del_file); }
-
-/// Close all memfiles for not modified buffers. (thin wrapper calling Rust)
-/// Only use just before exiting!
-void ml_close_notmod(void) { rs_ml_close_notmod(); }
-
-/// Update the timestamp in the .swp file (thin wrapper calling Rust).
-/// Used when the file has been written.
-void ml_timestamp(buf_T *buf) { rs_ml_timestamp(buf); }
-
+// ml_setname deleted: Rust exports under the C name directly via #[export_name = "ml_setname"].
+// ml_open_files deleted: Rust exports under the C name directly via #[export_name = "ml_open_files"].
+// ml_open_file deleted: Rust exports under the C name directly via #[export_name = "ml_open_file"].
+// check_need_swap deleted: Rust exports under the C name directly via #[export_name = "check_need_swap"].
+// ml_close deleted: Rust exports under the C name directly via #[export_name = "ml_close"].
+// ml_close_all deleted: Rust exports under the C name directly via #[export_name = "ml_close_all"].
+// ml_close_notmod deleted: Rust exports under the C name directly via #[export_name = "ml_close_notmod"].
+// ml_timestamp deleted: Rust exports under the C name directly via #[export_name = "ml_timestamp"].
+// ml_recover deleted: Rust exports under the C name directly via #[export_name = "ml_recover"].
 
 // Forward declaration for Rust implementation (migrated from C)
 extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
                             char **fname_out);
-// Pass 10 Phase 1: ml_recover migrated to Rust
-extern void rs_ml_recover(int checkext);
-
-/// Try to recover curbuf from the .swp file. (thin wrapper calling Rust)
-///
-/// @param checkext  if true, check the extension and detect whether it is a swapfile.
-void ml_recover(bool checkext) { rs_ml_recover(checkext ? 1 : 0); }
 
 // recover_names and recov_file_names migrated to Rust (recovery.rs)
 
@@ -1403,8 +1358,7 @@ int ml_append_buf(buf_T *buf, linenr_T lnum, char *line, colnr_T len, bool newfi
   return rs_ml_append_buf_impl(buf, lnum, line, len, newfile);
 }
 
-/// Track deleted text length for the current buffer (thin wrapper calling Rust).
-void ml_add_deleted_len(char *ptr, ssize_t len) { rs_ml_add_deleted_len(ptr, len); }
+// ml_add_deleted_len deleted: Rust exports under the C name directly via #[export_name = "ml_add_deleted_len"].
 
 /// Track deleted text length for a specific buffer (thin wrapper calling Rust).
 void ml_add_deleted_len_buf(buf_T *buf, char *ptr, ssize_t len)
@@ -1484,13 +1438,9 @@ int ml_delete_flags(linenr_T lnum, int flags)
   return rs_ml_delete_flags_impl(lnum, flags);
 }
 
-/// set the DB_MARKED flag for line 'lnum' (thin wrapper calling Rust)
-void ml_setmarked(linenr_T lnum) { rs_ml_setmarked(lnum); }
-
+// ml_setmarked deleted: Rust exports under the C name directly via #[export_name = "ml_setmarked"].
 // ml_firstmarked deleted: Rust exports under the C name directly via #[export_name = "ml_firstmarked"].
-
-/// clear all DB_MARKED flags (thin wrapper calling Rust)
-void ml_clearmarked(void) { rs_ml_clearmarked(); }
+// ml_clearmarked deleted: Rust exports under the C name directly via #[export_name = "ml_clearmarked"].
 
 /// Flush deleted byte tracking counters (thin wrapper calling Rust).
 size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
@@ -1523,8 +1473,7 @@ char *get_file_in_dir(char *fname, char *dname)
 
 // attention_message, do_swapexists, findswapname migrated to Rust (swap.rs Phase 8 Pass 1)
 
-/// Set the flags in the first block of the swapfile. (thin wrapper calling Rust)
-void ml_setflags(buf_T *buf) { rs_ml_setflags(buf); }
+// ml_setflags deleted: Rust exports under the C name directly via #[export_name = "ml_setflags"].
 
 // ml_find_line_or_offset and goto_byte migrated to Rust (navigate.rs)
 

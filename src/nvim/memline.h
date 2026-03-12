@@ -16,6 +16,19 @@ int inc(pos_T *lp);
 int incl(pos_T *lp);
 int dec(pos_T *lp);
 int decl(pos_T *lp);
+void ml_setname(buf_T *buf);
+void ml_open_files(void);
+void ml_open_file(buf_T *buf);
+void check_need_swap(bool newfile);
+void ml_close(buf_T *buf, int del_file);
+void ml_close_all(bool del_file);
+void ml_close_notmod(void);
+void ml_timestamp(buf_T *buf);
+void ml_recover(bool checkext);
+void ml_add_deleted_len(char *ptr, ssize_t len);
+void ml_setmarked(linenr_T lnum);
+void ml_clearmarked(void);
+void ml_setflags(buf_T *buf);
 
 #include "memline_shim.h.generated.h"
 

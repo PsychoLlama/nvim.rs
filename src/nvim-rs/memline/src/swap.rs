@@ -225,7 +225,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_setname"]
 pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
     if buf.is_null() {
         return;
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
 ///
 /// # Safety
 /// Modifies global buffer state.
-#[no_mangle]
+#[export_name = "ml_open_files"]
 pub unsafe extern "C" fn rs_ml_open_files() {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn rs_ml_open_files() {
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_open_file"]
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
 ///
 /// # Safety
 /// Modifies current buffer state.
-#[no_mangle]
+#[export_name = "check_need_swap"]
 pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
     let old_msg_silent = nvim_get_msg_silent();
     nvim_set_msg_silent(0); // If swap dialog prompts for input, user needs to see it!
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_close"]
 pub unsafe extern "C" fn rs_ml_close(buf: *mut BufHandle, del_file: c_int) {
     if buf.is_null() {
         return;
@@ -504,7 +504,7 @@ pub unsafe extern "C" fn rs_ml_close(buf: *mut BufHandle, del_file: c_int) {
 ///
 /// # Safety
 /// Modifies global state, only call during exit.
-#[no_mangle]
+#[export_name = "ml_close_all"]
 pub unsafe extern "C" fn rs_ml_close_all(del_file: c_int) {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
@@ -523,7 +523,7 @@ pub unsafe extern "C" fn rs_ml_close_all(del_file: c_int) {
 ///
 /// # Safety
 /// Modifies global state, only call during exit.
-#[no_mangle]
+#[export_name = "ml_close_notmod"]
 pub unsafe extern "C" fn rs_ml_close_notmod() {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn rs_ml_close_notmod() {
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_timestamp"]
 pub unsafe extern "C" fn rs_ml_timestamp(buf: *mut BufHandle) {
     if !buf.is_null() {
         rs_ml_upd_block0(buf, UB_FNAME as c_int);
@@ -585,7 +585,7 @@ pub unsafe extern "C" fn rs_ml_sync_all(check_file: c_int, check_char: c_int, do
 ///
 /// # Safety
 /// - `buf` must be a valid buffer pointer or NULL
-#[no_mangle]
+#[export_name = "ml_setflags"]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
     if buf.is_null() {
