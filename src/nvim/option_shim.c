@@ -1506,14 +1506,6 @@ static void set_option_default(const OptIndex opt_idx, int opt_flags)
   rs_set_option_default((int)opt_idx, opt_flags);
 }
 
-/// Set all options (except terminal options) to their default value.
-///
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// Body migrated to Rust (Phase 12 Pass 3).
-static void set_options_default(int opt_flags)
-{
-  rs_set_options_default(opt_flags);
-}
 
 /// Set the Vi-default value of a string option.
 /// Used for 'sh', 'backupskip' and 'term'.
@@ -1639,18 +1631,6 @@ void *nvim_option_get_p_kp_ptr(void)
 extern void rs_didset_options(void);
 extern void rs_didset_options2(void);
 
-/// After setting various option values: recompute variables that depend on
-/// option values. Body migrated to Rust (Phase 12 Pass 2).
-static void didset_options(void)
-{
-  rs_didset_options();
-}
-
-// More side effects of setting options. Body migrated to Rust (Phase 12 Pass 2).
-static void didset_options2(void)
-{
-  rs_didset_options2();
-}
 
 // check_options deleted: now exported directly from Rust via #[export_name]
 
@@ -2431,9 +2411,9 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
 // Wrapper function implementations for Rust setcmd module
 // =============================================================================
 
-void nvim_set_options_default(int opt_flags) { set_options_default(opt_flags); }
-void nvim_didset_options(void) { didset_options(); }
-void nvim_didset_options2(void) { didset_options2(); }
+void nvim_set_options_default(int opt_flags) { rs_set_options_default(opt_flags); }
+void nvim_didset_options(void) { rs_didset_options(); }
+void nvim_didset_options2(void) { rs_didset_options2(); }
 
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg)
