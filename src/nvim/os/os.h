@@ -19,8 +19,16 @@ extern char *default_lib_dir;
 #include "os/env.h.generated.h"
 #include "os/mem.h.generated.h"
 #include "os/stdpaths.h.generated.h"
-#include "os/users.h.generated.h"
 // IWYU pragma: end_exports
+
+// Functions implemented in Rust (src/nvim-rs/os/src/users.rs)
+int os_get_usernames(garray_T *users);
+int os_get_username(char *s, size_t len);
+int os_get_uname(uv_uid_t uid, char *s, size_t len);
+char *os_get_userdir(const char *name);
+void free_users(void);
+char *get_users(expand_T *xp, int idx);
+int match_user(char *name);
 
 // Rust-provided replacements for env.c functions (Phase 1 migration).
 char *os_getenv(const char *name);

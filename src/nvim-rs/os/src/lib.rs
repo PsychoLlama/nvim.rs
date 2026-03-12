@@ -29,6 +29,7 @@ pub mod mem;
 pub mod proc;
 pub mod shell;
 pub mod time;
+pub mod users;
 
 use std::ffi::c_int;
 
