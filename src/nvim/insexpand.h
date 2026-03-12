@@ -8,6 +8,10 @@
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
 bool check_compl_option(bool dict_opt);
 void ins_ctrl_x(void);
+const char *did_set_completefunc(optset_T *args);
+const char *did_set_omnifunc(optset_T *args);
+const char *did_set_thesaurusfunc(optset_T *args);
+bool set_ref_in_insexpand_funcs(int copyID);
 
 #include "insexpand_shim.h.generated.h"
 

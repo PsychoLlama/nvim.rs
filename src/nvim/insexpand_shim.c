@@ -168,10 +168,10 @@ extern void rs_get_next_dict_tsr_completion(int compl_type, char *dict, int dict
 // Phase 1 (pass 5) Rust exports
 extern void rs_get_register_completion(void);
 // Phase 5 (pass 5) Rust exports
-extern const char *rs_did_set_completefunc(void *args);
-extern const char *rs_did_set_omnifunc(void *args);
-extern const char *rs_did_set_thesaurusfunc(void *args);
-extern bool rs_set_ref_in_insexpand_funcs(int copyID);
+// rs_did_set_completefunc deleted: now exported as did_set_completefunc via #[export_name]
+// rs_did_set_omnifunc deleted: now exported as did_set_omnifunc via #[export_name]
+// rs_did_set_thesaurusfunc deleted: now exported as did_set_thesaurusfunc via #[export_name]
+// rs_set_ref_in_insexpand_funcs deleted: now exported as set_ref_in_insexpand_funcs via #[export_name]
 extern void rs_get_next_include_file_completion(int compl_type);
 extern void rs_get_next_cmdline_completion(void);
 extern void rs_get_next_spell_completion(int lnum);
@@ -1356,14 +1356,7 @@ const char *nvim_did_set_completefunc_impl(void *args_v)
   return NULL;
 }
 
-/// Parse the 'completefunc' option value and set the callback function.
-/// Invoked when the 'completefunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_completefunc(optset_T *args)
-{
-  return rs_did_set_completefunc(args);
-}
+// did_set_completefunc deleted: now exported from Rust userfunc.rs via #[export_name]
 
 /// Copy the global 'completefunc' callback function to the buffer-local
 /// 'completefunc' callback for "buf".
@@ -1384,14 +1377,7 @@ const char *nvim_did_set_omnifunc_impl(void *args_v)
   return NULL;
 }
 
-/// Parse the 'omnifunc' option value and set the callback function.
-/// Invoked when the 'omnifunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_omnifunc(optset_T *args)
-{
-  return rs_did_set_omnifunc(args);
-}
+// did_set_omnifunc deleted: now exported from Rust userfunc.rs via #[export_name]
 
 /// Copy the global 'omnifunc' callback function to the buffer-local 'omnifunc'
 /// callback for "buf".
@@ -1514,14 +1500,7 @@ const char *nvim_did_set_thesaurusfunc_impl(void *args_v)
   return retval == FAIL ? e_invarg : NULL;
 }
 
-/// Parse the 'thesaurusfunc' option value and set the callback function.
-/// Invoked when the 'thesaurusfunc' option is set. The option value can be a
-/// name of a function (string), or function(<name>) or funcref(<name>) or a
-/// lambda expression.
-const char *did_set_thesaurusfunc(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_did_set_thesaurusfunc(args);
-}
+// did_set_thesaurusfunc deleted: now exported from Rust userfunc.rs via #[export_name]
 
 /// Mark "copyID" references in an array of F{func} callbacks so that they are
 /// not garbage collected.
@@ -1549,12 +1528,7 @@ int nvim_set_ref_in_insexpand_funcs_impl(int copyID)
   return abort ? 1 : 0;
 }
 
-/// Mark the global 'completefunc' 'omnifunc' and 'thesaurusfunc' callbacks with
-/// "copyID" so that they are not garbage collected.
-bool set_ref_in_insexpand_funcs(int copyID)
-{
-  return rs_set_ref_in_insexpand_funcs(copyID);
-}
+// set_ref_in_insexpand_funcs deleted: now exported from Rust userfunc.rs via #[export_name]
 
 /// Get the user-defined completion function name for completion "type"
 static char *get_complete_funcname(int type)

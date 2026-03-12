@@ -48,7 +48,7 @@ const CTRL_X_OMNI: c_int = 11;
 ///
 /// # Safety
 /// Requires valid optset_T argument.
-#[no_mangle]
+#[export_name = "did_set_completefunc"]
 pub unsafe extern "C" fn rs_did_set_completefunc(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_completefunc_impl(args)
 }
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn rs_did_set_completefunc(args: *mut std::ffi::c_void) ->
 ///
 /// # Safety
 /// Requires valid optset_T argument.
-#[no_mangle]
+#[export_name = "did_set_omnifunc"]
 pub unsafe extern "C" fn rs_did_set_omnifunc(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_omnifunc_impl(args)
 }
@@ -72,7 +72,7 @@ pub unsafe extern "C" fn rs_did_set_omnifunc(args: *mut std::ffi::c_void) -> *co
 ///
 /// # Safety
 /// Requires valid optset_T argument.
-#[no_mangle]
+#[export_name = "did_set_thesaurusfunc"]
 pub unsafe extern "C" fn rs_did_set_thesaurusfunc(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_thesaurusfunc_impl(args)
 }
@@ -149,7 +149,8 @@ pub unsafe extern "C" fn rs_get_userdefined_compl_info(
 ///
 /// # Safety
 /// Requires valid GC state.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "set_ref_in_insexpand_funcs"]
 pub unsafe extern "C" fn rs_set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
     nvim_set_ref_in_insexpand_funcs_impl(copy_id) != 0
 }
