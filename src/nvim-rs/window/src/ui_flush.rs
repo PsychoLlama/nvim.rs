@@ -177,7 +177,7 @@ pub unsafe extern "C" fn rs_tabpage_check_windows(old_curtab: TabpageHandle) {
 ///
 /// # Safety
 /// Accesses global Neovim state via C accessor functions.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "win_ui_flush")]
 pub unsafe extern "C" fn rs_win_ui_flush(validate: c_int) {
     win_ui_flush_impl(validate);
 }

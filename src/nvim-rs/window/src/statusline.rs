@@ -366,7 +366,7 @@ unsafe fn set_winbar_impl(make_room: bool) {
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "set_winbar")]
 pub unsafe extern "C" fn rs_set_winbar(make_room: c_int) {
     set_winbar_impl(make_room != 0);
 }

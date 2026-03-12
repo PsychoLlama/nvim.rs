@@ -1306,6 +1306,7 @@ extern "C" {
     // Global quickfix / location list accessors
     fn nvim_get_ql_info() -> *mut c_void;
     fn nvim_win_get_loclist(wp: *const c_void) -> *const c_void;
+    #[link_name = "rs_qf_update_buffer"]
     fn nvim_qf_update_buffer(qi: *mut c_void, old_last: *const c_void);
     fn rs_qf_init_ext(
         qi: *mut c_void,

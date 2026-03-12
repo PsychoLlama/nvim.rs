@@ -161,7 +161,7 @@ unsafe fn close_windows_impl(buf: BufHandle, keep_curwin: c_int) {
 ///
 /// # Safety
 /// Accesses global Neovim state via C accessor functions.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "close_windows")]
 pub unsafe extern "C" fn rs_close_windows(buf: BufHandle, keep_curwin: c_int) {
     close_windows_impl(buf, keep_curwin);
 }

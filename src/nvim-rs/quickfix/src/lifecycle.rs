@@ -107,6 +107,7 @@ extern "C" {
     /// Find the quickfix/location list window for a stack.
     fn nvim_qf_find_win_handle(qi: *const c_void) -> *const c_void;
     /// Call `qf_update_buffer(qi, old_last)`.
+    #[link_name = "rs_qf_update_buffer"]
     fn nvim_qf_update_buffer(qi: *mut c_void, old_last: *mut c_void);
     /// Get curlist index (`qi->qf_curlist`).
     fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;

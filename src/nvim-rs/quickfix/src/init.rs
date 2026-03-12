@@ -327,6 +327,7 @@ mod init_ext {
         fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
         fn nvim_qf_get_count(qfl: QfListHandle) -> c_int;
         fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
+        #[link_name = "rs_qf_update_buffer"]
         fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
 
         // Globals

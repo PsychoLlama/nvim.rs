@@ -276,7 +276,7 @@ fn win_fix_scroll_impl(resize: bool) {
 }
 
 /// FFI export for `win_fix_scroll`.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "win_fix_scroll")]
 pub extern "C" fn rs_win_fix_scroll(resize: c_int) {
     win_fix_scroll_impl(resize != 0);
 }

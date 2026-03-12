@@ -90,6 +90,7 @@ extern "C" {
     fn nvim_tabpage_set_ch_used(tp: TabpageHandle, val: i64);
     fn nvim_compute_cmdrow();
     fn nvim_get_skip_win_fix_scroll() -> c_int;
+    #[link_name = "win_fix_scroll"]
     fn rs_win_fix_scroll(resize: c_int);
 }
 

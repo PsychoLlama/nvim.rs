@@ -171,7 +171,7 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
-extern void rs_qf_msg(const void *qi, int which, const char *lead);
+// rs_qf_msg deleted: Rust bypasses nvim_qf_msg via #[link_name]
 extern int rs_qf_getprop_filewinid(const void *wp, const void *qi);
 extern int rs_qf_getprop_qfbufnr(const void *qi);
 extern int rs_copy_loclist(const void *from_qfl, void *to_qfl);
@@ -355,8 +355,8 @@ extern void rs_set_qf_ll_list(void *wp, const void *args, void *rettv);
 // Phase 11: window/title helpers and position update (migrated to Rust)
 extern const void *rs_qf_find_win_for_stack(const void *qi);
 extern bool rs_qf_win_pos_update(void *qi, int old_qf_index);
-extern void rs_qf_set_title_var(const void *qfl);
-extern void rs_qf_update_win_titlevar(void *qi);
+// rs_qf_set_title_var deleted: nvim_qf_set_title_var wrapper deleted (dead code)
+// rs_qf_update_win_titlevar deleted: nvim_qf_update_win_titlevar wrapper deleted (dead code)
 
 // Phase 11: stack resize and location list sync (migrated to Rust)
 extern void rs_qf_resize_stack_base(void *qi, int n);
@@ -541,7 +541,7 @@ extern void rs_win_setheight(int height);
 extern void rs_win_setwidth(int width);
 // rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
 extern const char *rs_did_set_quickfixtextfunc(const void *args);
-extern void rs_qf_update_buffer(void *qi_void, const void *old_last);
+// rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
 extern bool rs_set_ref_in_quickfix(int copyID);
 extern void rs_free_quickfix(void);
 
@@ -1256,7 +1256,7 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 // nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
 // rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
 bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : rs_qf_win_pos_update(qi_void, old_qf_index); }
-void nvim_qf_update_buffer(void *qi_void, void *old_last) { rs_qf_update_buffer(qi_void, old_last); }
+// nvim_qf_update_buffer deleted: Rust bypasses via #[link_name = "rs_qf_update_buffer"]
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
 void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
 
@@ -2142,7 +2142,7 @@ int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 
 // nvim_qf_open_new_cwindow deleted: Rust commands.rs now uses #[link_name = "rs_qf_open_new_cwindow"].
-void nvim_qf_set_title_var(void *qfl_void) { rs_qf_set_title_var(qfl_void); }
+// nvim_qf_set_title_var deleted: dead code, only defined but never called externally
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
@@ -2150,7 +2150,7 @@ void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
 
 void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
 
-void nvim_qf_update_win_titlevar(void *qi_void) { rs_qf_update_win_titlevar(qi_void); }
+// nvim_qf_update_win_titlevar deleted: dead code, only defined but never called externally
 
 // Phase 10 Pass 10 Phase 2: New C accessors for Rust implementations
 
@@ -2768,7 +2768,7 @@ int qf_get_cur_valid_idx(exarg_T *eap)
 
 // nvim_qf_cmd_get_stack deleted: Rust commands.rs now uses #[link_name = "rs_qf_cmd_get_stack"].
 
-void nvim_qf_msg(void *qi_void, int which, const char *lead) { rs_qf_msg(qi_void, which, lead); }
+// nvim_qf_msg deleted: Rust bypasses via #[link_name = "rs_qf_msg"]
 
 void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
 

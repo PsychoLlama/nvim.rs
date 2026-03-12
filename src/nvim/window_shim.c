@@ -190,14 +190,13 @@ extern int rs_check_split_disallowed_err(const win_T *wp, Error *err);
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
 extern int rs_make_windows(int count, int vertical);
 
-// win_fix_scroll
-extern void rs_win_fix_scroll(int resize);
+// rs_win_fix_scroll deleted: now exported as win_fix_scroll via #[export_name]
 
 // do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
 extern void rs_do_autocmd_winclosed(win_T *win);
 extern bool rs_can_close_in_cmdwin(win_T *win, Error *err);
 extern int rs_set_winbar_win(win_T *wp, int make_room, int valid_cursor);
-extern void rs_set_winbar(int make_room);
+// rs_set_winbar deleted: now exported as set_winbar via #[export_name]
 
 // Status line management
 extern void rs_last_status(int morewin);
@@ -1156,7 +1155,7 @@ void win_free_grid(win_T *wp, bool reinit)
 
 #define FRACTION_MULT   16384
 
-void win_fix_scroll(bool resize) { rs_win_fix_scroll(resize ? 1 : 0); }
+// win_fix_scroll deleted: Rust exports under the C name directly via #[export_name = "win_fix_scroll"].
 // win_fix_cursor: dead static wrapper (Phase 15)
 
 // scroll_to_fraction: exported directly from Rust (Phase 15)
@@ -1182,10 +1181,7 @@ int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor)
   return rs_set_winbar_win(wp, make_room ? 1 : 0, valid_cursor ? 1 : 0);
 }
 
-/// Add or remove window bars from all windows in tab depending on the value of 'winbar'.
-///
-/// @param make_room Whether to resize frames to make room for winbar.
-void set_winbar(bool make_room) { rs_set_winbar(make_room ? 1 : 0); }
+// set_winbar deleted: Rust exports under the C name directly via #[export_name = "set_winbar"].
 
 // A snapshot of the window sizes, to restore them after closing the help
 // window.
@@ -1993,8 +1989,7 @@ int nvim_win_buf_b_locked(win_T *wp)
 }
 
 
-extern void rs_close_windows(buf_T *buf, int keep_curwin);
-void close_windows(buf_T *buf, bool keep_curwin) { rs_close_windows(buf, keep_curwin ? 1 : 0); }
+// close_windows deleted: Rust exports under the C name directly via #[export_name = "close_windows"].
 
 // Phase 6 accessors: ui_ext_win_viewport
 
@@ -2061,8 +2056,7 @@ int nvim_win_get_grid_chars_valid(win_T *wp)
 
 // tabpage_check_windows: dead static wrapper (Phase 15)
 
-extern void rs_win_ui_flush(int validate);
-void win_ui_flush(bool validate) { rs_win_ui_flush(validate ? 1 : 0); }
+// win_ui_flush deleted: Rust exports under the C name directly via #[export_name = "win_ui_flush"].
 
 // Phase 6 accessors: may_open_tabpage
 

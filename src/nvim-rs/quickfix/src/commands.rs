@@ -48,6 +48,7 @@ extern "C" {
     fn rs_hgr_search_in_rtp(qfl: *mut c_void, regmatch: *mut c_void, lang: *const c_char);
     // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
+    #[link_name = "rs_qf_update_buffer"]
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
     // nvim_hgr_post_autocmd deleted (Phase 4): inlined via autocmd_post + is_ll_stack + find_win
     fn nvim_qf_apply_autocmd_post(au_name: *const c_char);
@@ -1270,6 +1271,7 @@ extern "C" {
     fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_line2(eap: EapHandle) -> LinenrT;
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
+    #[link_name = "rs_qf_msg"]
     fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
     fn nvim_emsg_loclist();
     fn nvim_emsg_no_errors();
