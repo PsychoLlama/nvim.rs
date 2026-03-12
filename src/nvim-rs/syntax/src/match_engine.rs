@@ -66,6 +66,7 @@ extern "C" {
     fn nvim_syn_get_next_match_flags() -> c_int;
     fn nvim_syn_get_next_match_end_idx() -> c_int;
     fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
+    #[link_name = "rs_push_next_match"]
     fn nvim_syn_push_next_match() -> StateItemHandle;
 
     // Bulk next match position getter

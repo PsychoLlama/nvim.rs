@@ -74,7 +74,6 @@ extern void rs_update_si_end(stateitem_T *sip, int startcol, int force);
 // rs_check_state_ends: Rust function called via #[link_name] bypasses nvim_syn_check_state_ends
 extern void rs_update_si_attr(int idx);
 extern void rs_check_keepend(void);
-extern stateitem_T *rs_push_next_match(void);
 extern char *rs_get_syn_options(char *arg, int *opt_flags, int opt_keyword,
                                 int *opt_sync_idx, int opt_has_cont_list,
                                 int16_t **opt_cont_list, int16_t **opt_cont_in_list,
@@ -1078,7 +1077,7 @@ reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(
 
 void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 
-stateitem_T *nvim_syn_push_next_match(void) { return rs_push_next_match(); }
+// nvim_syn_push_next_match deleted: Rust match_engine.rs bypasses via #[link_name = "rs_push_next_match"].
 
 /// Get synpat sp_flags by index
 int nvim_syn_get_pattern_flags(int idx)
