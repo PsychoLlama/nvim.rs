@@ -39,6 +39,7 @@ extern "C" {
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
     fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
+    #[link_name = "rs_otherfile_buf_4"]
     fn nvim_otherfile_buf(
         buf: BufHandle,
         ffname: *const c_char,

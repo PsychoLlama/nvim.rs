@@ -46,9 +46,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Rust FFI function declared in Rust (list.rs) — used by nvim_otherfile_buf.
-extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
-
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
 // ============================================================
@@ -636,13 +633,6 @@ buf_T *nvim_handle_get_buffer(handle_T handle)
 char *nvim_home_replace_save(buf_T *buf, const char *src)
 {
   return home_replace_save(buf, src);
-}
-
-/// Check if filename differs from buffer's file (4-arg version, accessor for Rust).
-/// file_id_p may be NULL to trigger a new os_fileid call.
-bool nvim_otherfile_buf(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid)
-{
-  return rs_otherfile_buf_4(buf, ffname, file_id_p, file_id_valid);
 }
 
 // ============================================================
