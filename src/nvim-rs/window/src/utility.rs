@@ -383,7 +383,8 @@ fn make_windows_impl(count: c_int, vertical: c_int) -> c_int {
 }
 
 /// FFI export for `make_windows`.
-#[unsafe(no_mangle)]
+#[allow(clippy::must_use_candidate)]
+#[export_name = "make_windows"]
 pub extern "C" fn rs_make_windows(count: c_int, vertical: c_int) -> c_int {
     make_windows_impl(count, vertical)
 }

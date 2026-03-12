@@ -162,8 +162,9 @@ pub struct WinCloseStructResult {
 /// # Safety
 ///
 /// `win` must be a valid `win_T*`.
-#[no_mangle]
+#[allow(clippy::must_use_candidate)]
 #[allow(clippy::too_many_lines)]
+#[export_name = "win_close"]
 pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_int) -> c_int {
     let prev_curtab = nvim_get_curtab();
     let win_floating = nvim_win_get_floating(win) != 0;

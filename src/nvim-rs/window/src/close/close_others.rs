@@ -77,7 +77,8 @@ extern "C" {
     /// Display "Already only one window" message.
     fn nvim_msg_onlyone();
 
-    /// Call rs_win_close(wp, free_buf, 0) directly.
+    /// Call win_close directly.
+    #[link_name = "win_close"]
     fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
 }
 

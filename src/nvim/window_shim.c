@@ -185,10 +185,10 @@ extern win_T *rs_restore_snapshot_rec(frame_T *sn, frame_T *fr);
 // Tabpage helpers
 // rs_goto_tabpage_lastused deleted: now exported as goto_tabpage_lastused via #[export_name]
 
-// can_close_floating_windows, maximum_wincount, make_windows
+// can_close_floating_windows, maximum_wincount
 // rs_can_close_floating_windows_tp: removed from C declarations (Rust uses #[link_name] directly)
 extern int rs_get_maximum_wincount(frame_T *fr, int height);
-extern int rs_make_windows(int count, int vertical);
+// make_windows deleted: now exported from Rust utility.rs via #[export_name = "make_windows"]
 
 // rs_win_fix_scroll deleted: now exported as win_fix_scroll via #[export_name]
 
@@ -202,8 +202,7 @@ extern void rs_do_autocmd_winclosed(win_T *win);
 extern void rs_last_status(int morewin);
 extern int rs_resize_frame_for_winbar(frame_T *fr);
 
-// goto_tabpage_tp
-extern void rs_goto_tabpage_tp_impl(tabpage_T *tp, int trigger_enter, int trigger_leave);
+// goto_tabpage_tp deleted: now exported from Rust tabpage.rs via #[export_name = "goto_tabpage_tp"]
 
 // win_split_ins migration: Rust orchestrator
 typedef struct {
@@ -216,8 +215,7 @@ typedef struct {
 extern SplitInsResult rs_win_split_ins(int size, int flags, win_T *new_wp, int dir,
                                        frame_T *to_flatten);
 
-// win_close / win_close_othertab: consolidated Rust entry points (Phase 11)
-extern int rs_win_close(win_T *win, int free_buf, int force);
+// win_close deleted: now exported from Rust win_close.rs via #[export_name = "win_close"]
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
 // rs_win_free_mem still used by win_free_all
 extern win_T *rs_win_free_mem(win_T *win, int *dirp, tabpage_T *tp);
@@ -606,17 +604,7 @@ void merge_win_config(WinConfig *dst, const WinConfig src)
 
 // check_split_disallowed_err deleted: now exported from Rust utility.rs via #[export_name]
 
-/// Make "count" windows on the screen.
-/// Must be called when there is just one window, filling the whole screen.
-/// (excluding the command line).
-///
-/// @param vertical  split windows vertically if true.
-///
-/// @return actual number of windows on the screen.
-int make_windows(int count, bool vertical)
-{
-  return rs_make_windows(count, vertical ? 1 : 0);
-}
+// make_windows deleted: now exported from Rust utility.rs via #[export_name = "make_windows"]
 
 // can_close_floating_windows deleted: logic migrated to Rust close/win_close.rs (Phase 11)
 
@@ -634,17 +622,7 @@ int make_windows(int count, bool vertical)
 
 // win_close_buffer deleted: logic migrated to Rust close/helpers.rs (Phase 10)
 
-// Close window "win".  Only works for the current tab page.
-// If "free_buf" is true related buffer may be unloaded.
-//
-// Called by :quit, :close, :xit, :wq and findtag().
-// Returns FAIL when the window was not closed.
-// Body migrated to Rust rs_win_close (Phase 11).
-int win_close(win_T *win, bool free_buf, bool force)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_win_close(win, free_buf ? 1 : 0, force ? 1 : 0);
-}
+// win_close deleted: now exported from Rust win_close.rs via #[export_name = "win_close"]
 
 // do_autocmd_winclosed deleted: logic migrated to Rust close/win_close.rs (Phase 11)
 
@@ -875,15 +853,7 @@ void nvim_apply_autocmds_tabnew(const char *filename)
 /// implemented by always moving them to curtab.
 // goto_tabpage: exported directly from Rust (Phase 15)
 
-/// Go to tabpage "tp".
-/// Note: doesn't update the GUI tab.
-///
-/// @param trigger_enter_autocmds  when true trigger *Enter autocommands.
-/// @param trigger_leave_autocmds  when true trigger *Leave autocommands.
-void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_leave_autocmds)
-{
-  rs_goto_tabpage_tp_impl(tp, trigger_enter_autocmds ? 1 : 0, trigger_leave_autocmds ? 1 : 0);
-}
+// goto_tabpage_tp deleted: now exported from Rust tabpage.rs via #[export_name = "goto_tabpage_tp"]
 
 // goto_tabpage_lastused deleted: now exported from Rust tabpage.rs via #[export_name]
 // goto_tabpage_win, tabpage_move: exported directly from Rust (Phase 15)

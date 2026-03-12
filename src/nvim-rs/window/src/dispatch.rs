@@ -174,7 +174,8 @@ extern "C" {
     fn nvim_swb_has_usetab() -> c_int;
     /// goto_tabpage_win: call rs_goto_tabpage_win directly.
     fn rs_goto_tabpage_win(tp: TabpageHandle, wp: WinHandle);
-    /// win_close: call rs_win_close directly.
+    /// win_close: call directly.
+    #[link_name = "win_close"]
     fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
     /// cmdmod.cmod_tab getter.
     fn nvim_get_cmdmod_tab() -> c_int;

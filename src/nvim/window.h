@@ -126,5 +126,8 @@ bool goto_tabpage_lastused(void);
 void win_free_grid(win_T *wp, bool reinit);
 win_T *win_alloc(win_T *after, bool hidden);
 int set_winbar_win(win_T *wp, bool make_room, bool valid_cursor);
+int make_windows(int count, bool vertical);
+int win_close(win_T *win, bool free_buf, bool force);
+void goto_tabpage_tp(tabpage_T *tp, bool trigger_enter_autocmds, bool trigger_leave_autocmds);
 
 #include "window_shim.h.generated.h"

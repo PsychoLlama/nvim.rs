@@ -1593,7 +1593,7 @@ unsafe fn goto_tabpage_tp_impl(tp: TabpageHandle, trigger_enter: bool, trigger_l
 ///
 /// # Safety
 /// Calls C accessor functions.
-#[unsafe(no_mangle)]
+#[export_name = "goto_tabpage_tp"]
 pub unsafe extern "C" fn rs_goto_tabpage_tp_impl(
     tp: TabpageHandle,
     trigger_enter: c_int,

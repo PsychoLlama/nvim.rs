@@ -52,7 +52,8 @@ extern "C" {
     /// Check if there is only one window in the tab.
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
 
-    /// Call rs_win_close directly.
+    /// Call win_close directly.
+    #[link_name = "win_close"]
     fn rs_win_close(wp: WinHandle, free_buf: c_int, force: c_int) -> c_int;
 
     /// Call rs_win_close_othertab directly.
