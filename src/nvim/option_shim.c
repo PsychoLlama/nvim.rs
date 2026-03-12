@@ -122,13 +122,8 @@ _Static_assert(sizeof(vimoption_T) == 160,
 
 // Rust FFI declarations (used by internal code)
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-// rs_copy_option_part deleted: now exported as copy_option_part via #[export_name]
 extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
                                   const char *origval, int *op_arg, uint32_t flags);
-// rs_fill_culopt_flags deleted: now exported as fill_culopt_flags via #[export_name]
-// rs_set_options_bin deleted: now exported as set_options_bin via #[export_name]
-// rs_set_fileformat deleted: now exported as set_fileformat via #[export_name]
-// rs_set_helplang_default deleted: now exported as set_helplang_default via #[export_name]
 
 // Rust metadata query functions (option pass 8 phase 1)
 // is_option_hidden, option_has_type, option_has_scope now exported directly from Rust via #[export_name]
@@ -136,62 +131,19 @@ extern int rs_option_is_global_local(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 extern int rs_option_scope_idx(int opt_idx, int scope);
-// rs_option_was_set deleted: now exported as option_was_set via #[export_name]
-// rs_reset_option_was_set deleted: now exported as reset_option_was_set via #[export_name]
-// rs_get_option_sctx deleted: now exported as get_option_sctx via #[export_name]
 
 // Rust default value management functions (option pass 8 phase 2)
 extern void rs_alloc_options_default(void);
 extern void rs_change_option_default(int opt_idx, OptVal value);
 extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
-// rs_set_init_tablocal deleted: now exported as set_init_tablocal via #[export_name]
-// rs_check_options deleted: now exported as check_options via #[export_name]
 
-// Rust validate_option_value cluster (option pass 8 phase 3)
-// rs_get_option_default deleted: now exported as get_option_default via #[export_name]
-// rs_validate_option_value deleted: called from Rust directly via internal Rust calls
-
-// Rust parsing helpers and query functions (option pass 7 phase 1)
-// rs_shortmess deleted: now exported as shortmess via #[export_name]
 typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
 extern FindOptionEndResult rs_find_option_end(const char *arg);
-// rs_find_option_len deleted: now exported as find_option_len via #[export_name]
-// rs_find_option deleted: now exported as find_option via #[export_name]
 
-// Rust init functions (option pass 7 phase 2)
-// rs_set_init_2 deleted: now exported as set_init_2 via #[export_name]
-// rs_set_init_3 deleted: now exported as set_init_3 via #[export_name]
-
-// Rust option validation and ex_set (option pass 7 phase 3)
 typedef struct { int result; const char *errmsg; } ValidateOptIdxResult;
 extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags,
                                                 uint32_t flags, int prefix);
-// rs_ex_set deleted: now exported as ex_set via #[export_name]
 
-// Rust do_set / do_one_set_option (option pass 10 phase 1)
-// rs_do_set deleted: now exported as do_set via #[export_name]
-
-// Rust query functions (from Rust query.rs, option pass 4 phase 1)
-// rs_can_bs deleted: now exported as can_bs via #[export_name]
-// rs_get_equalprg deleted: now exported as get_equalprg via #[export_name]
-// rs_get_findfunc deleted: now exported as get_findfunc via #[export_name]
-// rs_get_bkc_flags deleted: now exported as get_bkc_flags via #[export_name]
-// rs_get_flp_value deleted: now exported as get_flp_value via #[export_name]
-// rs_get_ve_flags deleted: now exported as get_ve_flags via #[export_name]
-// rs_redraw_titles deleted: now exported as redraw_titles via #[export_name]
-// rs_vimrc_found deleted: now exported as vimrc_found via #[export_name]
-// rs_set_iminsert_global deleted: now exported as set_iminsert_global via #[export_name]
-// rs_set_imsearch_global deleted: now exported as set_imsearch_global via #[export_name]
-// rs_reset_modifiable deleted: now exported as reset_modifiable via #[export_name]
-// rs_get_tty_option deleted: now exported as get_tty_option via #[export_name]
-// rs_set_tty_option deleted: now exported as set_tty_option via #[export_name]
-// rs_string_to_key deleted: now exported as string_to_key via #[export_name]
-// rs_check_redraw_for deleted: now exported as check_redraw_for via #[export_name]
-// rs_insecure_flag deleted: now exported as insecure_flag via #[export_name]
-// rs_did_set_option deleted: called from Rust directly
-// rs_set_option_impl deleted: called from Rust directly
-// rs_was_set_insecurely deleted: now exported as was_set_insecurely via #[export_name]
-// rs_set_option_sctx deleted: now exported as set_option_sctx via #[export_name]
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -306,28 +258,11 @@ extern const char *rs_did_set_display(optset_T *args);
 extern const char *rs_did_set_showcmdloc(optset_T *args);
 extern const char *rs_did_set_selection(optset_T *args);
 
-// Rust varp dispatch functions (from Rust varp.rs)
-// rs_get_varp_from deleted: now exported as get_varp_from via #[export_name]
-// rs_get_varp_scope_from deleted: now exported as get_varp_scope_from via #[export_name]
-
-// rs_set_context_in_set_cmd deleted: now exported as set_context_in_set_cmd via #[export_name]
-
-// OptVal storage operations (from Rust storage.rs)
-// rs_optval_free, rs_optval_copy, rs_optval_equal: declared in other C files that use them
-
-// Phase 9 value manipulation helpers (from Rust value.rs)
+// OptVal helpers (from Rust value.rs)
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
 extern char *rs_optval_to_cstr(OptVal o);
-
-// Phase 15 option value API (from Rust value.rs)
-// rs_get_option_ptr deleted: now exported as get_option via #[export_name]
-// rs_set_option_direct deleted: now exported as set_option_direct via #[export_name]
-// rs_set_option_direct_for deleted: now exported as set_option_direct_for via #[export_name]
-// rs_set_option_value deleted: now exported as set_option_value via #[export_name]
 extern const char *rs_unset_option_local_value(int opt_idx);
-// rs_set_option_value_handle_tty deleted: now exported as set_option_value_handle_tty via #[export_name]
-// rs_set_option_value_give_err deleted: now exported as set_option_value_give_err via #[export_name]
 
 // Rust FFI declarations (window/layout module)
 // rs_free_tagfunc_option, rs_set_buflocal_tfu_callback: declared in other C files that use them
@@ -807,7 +742,6 @@ typedef enum {
 // After options[] is available:
 int nvim_option_hlg_was_set(void) { return (options[kOptHelplang].flags & kOptFlagWasSet) != 0; }
 
-// nvim_qf_resize_stack, nvim_ll_resize_stack deleted:
 // Rust behavior.rs now uses #[link_name] to call qf_resize_stack/ll_resize_stack directly.
 
 // lines_or_columns callback: restore option varp to its old number value
@@ -854,7 +788,6 @@ OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - optio
 // Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 
-// nvim_opt_is_hidden deleted: Rust callers now use #[link_name = "rs_option_is_hidden"] directly.
 
 // =============================================================================
 // Phase 8 metadata query accessors (Phase 1)
@@ -1427,7 +1360,6 @@ void nvim_call_check_signcolumn(win_T *wp) { check_signcolumn(NULL, wp); }
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
-// set_init_tablocal deleted: now exported directly from Rust via #[export_name]
 
 extern void rs_set_init_default_backupskip(void);
 
@@ -1439,7 +1371,6 @@ static void set_init_fenc_default(void)
   rs_set_init_fenc_default();
 }
 
-// get_option_default deleted: now exported directly from Rust via #[export_name]
 
 /// Allocate the default values for all options by copying them from the stack.
 /// This ensures that we don't need to always check if the option default is allocated or not.
@@ -1460,7 +1391,6 @@ static void change_option_default(const OptIndex opt_idx, OptVal value)
 extern const char *rs_option_expand(int opt_idx, const char *val);
 extern void rs_set_option_default(int opt_idx, int opt_flags);
 extern void rs_set_options_default(int opt_flags);
-// rs_free_all_options deleted: now exported as free_all_options via #[export_name]
 
 /// Set an option to its default value.
 /// This does not take care of side effects!
@@ -1489,24 +1419,13 @@ static void set_string_default(OptIndex opt_idx, char *val, bool allocated)
   rs_set_string_default_opt(opt_idx, val, allocated);
 }
 
-// free_all_options deleted: now exported directly from Rust via #[export_name] (EXITFREE guarded)
-
-// set_init_2 deleted: now exported directly from Rust via #[export_name]
-
-// set_init_3 deleted: now exported directly from Rust via #[export_name]
-
-// set_helplang_default deleted: now exported directly from Rust via #[export_name]
-
-// rs_set_title_defaults deleted: now exported as set_title_defaults via #[export_name]
 
 /// 'title' and 'icon' only default to true if they have not been set or reset
 /// in .vimrc and we can read the old value.
 /// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
-// set_title_defaults deleted: now exported directly from Rust via #[export_name]
 
-// ex_set deleted: now exported directly from Rust via #[export_name]
 
 /// Get the string value specified for a ":set" command.  The following set options are supported:
 ///     set {opt}={val}
@@ -1560,16 +1479,13 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 /// @param arg  option string (may be written to!)
 ///
 /// @return  FAIL if an error is detected, OK otherwise
-// do_set deleted: now exported directly from Rust via #[export_name]
 
-// string_to_key deleted: now exported directly from Rust via #[export_name]
 
 // When changing 'title', 'titlestring', 'icon' or 'iconstring', call
 // maketitle() to create and display it.
 /// set_options_bin -  called when 'bin' changes value.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-// set_options_bin deleted: now exported directly from Rust via #[export_name]
 
 /// Expand environment variables for some string options.
 /// These string options cannot be indirect!
@@ -1599,28 +1515,12 @@ extern void rs_didset_options(void);
 extern void rs_didset_options2(void);
 
 
-// check_options deleted: now exported directly from Rust via #[export_name]
-
-// was_set_insecurely deleted: now exported directly from Rust via #[export_name]
-
-// insecure_flag deleted: now exported directly from Rust via #[export_name]
-
-// redraw_titles deleted: now exported directly from Rust via #[export_name]
-
-// rs_check_blending deleted: now exported as check_blending via #[export_name]
-
 /// Handle setting `winhighlight' in window "wp"
 ///
 /// @param winhl  when NULL: use "wp->w_p_winhl"
 /// @param wp     when NULL: only parse "winhl"
 ///
 /// @return  whether the option value is valid.
-
-// get_option_sctx deleted: now exported directly from Rust via #[export_name]
-
-// set_option_sctx deleted: now exported directly from Rust via #[export_name]
-
-
 
 
 /// Process the new global 'undolevels' option value.
@@ -1659,15 +1559,12 @@ static void do_spelllang_source(win_T *win)
   rs_do_spelllang_source(win);
 }
 
-// check_redraw_for deleted: now exported directly from Rust via #[export_name]
 
 void check_redraw(uint32_t flags)
 {
   check_redraw_for(curbuf, curwin, flags);
 }
 
-// get_tty_option deleted: now exported directly from Rust via #[export_name]
-// set_tty_option deleted: now exported directly from Rust via #[export_name]
 
 /// Find index for an option. Don't go beyond `len` length.
 ///
@@ -1675,9 +1572,7 @@ void check_redraw(uint32_t flags)
 /// @param      len   Option name length.
 ///
 /// @return Option index or kOptInvalid if option was not found.
-// find_option_len deleted: now exported directly from Rust via #[export_name]
 
-// find_option deleted: now exported directly from Rust via #[export_name]
 
 /// Direct hash-based option lookup for use by Rust (avoids circular delegation).
 ///
@@ -1766,9 +1661,6 @@ OptVal object_as_optval(Object o, bool *error)
   UNREACHABLE;
 }
 
-// is_option_hidden deleted: now exported from Rust index.rs via #[export_name = "is_option_hidden"]
-// option_has_type deleted: now exported from Rust index.rs via #[export_name = "option_has_type"]
-// option_has_scope deleted: now exported from Rust index.rs via #[export_name = "option_has_scope"]
 
 /// Check if option is global-local.
 static inline bool option_is_global_local(OptIndex opt_idx)
@@ -1783,13 +1675,7 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
   return rs_option_scope_idx(opt_idx, (int)scope);
 }
 
-// nvim_option_is_global_local/global_only/window_local deleted:
 // Rust callers now use #[link_name] to call the rs_ functions directly.
-
-
-
-// get_option deleted: now exported from Rust value.rs via #[export_name = "get_option"]
-
 
 
 /// Set option value directly, without processing any side effects.
@@ -1800,10 +1686,7 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 /// @param  set_sid    Script ID. Special values:
 ///                      0: Use current script ID.
 ///                      SID_NONE: Don't set script ID.
-// set_option_direct deleted: now exported directly from Rust via #[export_name]
-// set_option_direct_for deleted: now exported directly from Rust via #[export_name]
 
-// set_option_value deleted: now exported directly from Rust via #[export_name]
 
 /// Unset the local value of a global-local option.
 ///
@@ -1815,8 +1698,6 @@ static inline const char *unset_option_local_value(const OptIndex opt_idx)
   return rs_unset_option_local_value(opt_idx);
 }
 
-// set_option_value_handle_tty deleted: now exported directly from Rust via #[export_name]
-// set_option_value_give_err deleted: now exported directly from Rust via #[export_name]
 
 /// Switch current context to get/set option value for window/buffer.
 ///
@@ -2004,8 +1885,6 @@ static void showoneopt(vimoption_T *opt, int opt_flags)
 ///             values, only local values (for ":mkview").
 
 
-// get_varp_scope_from deleted: Rust exports under the C name directly via #[export_name].
-
 /// Get pointer to option variable, depending on local or global scope.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
@@ -2021,7 +1900,6 @@ void *get_option_varp_scope_from(OptIndex opt_idx, int opt_flags, buf_T *buf, wi
   return get_varp_scope_from(&(options[opt_idx]), opt_flags, buf, win);
 }
 
-// get_varp_from deleted: Rust exports under the C name directly via #[export_name].
 
 /// Get option index from option pointer
 static inline OptIndex get_opt_idx(vimoption_T *opt)
@@ -2036,8 +1914,6 @@ static inline void *get_varp(vimoption_T *p)
   return get_varp_from(p, curbuf, curwin);
 }
 
-// get_equalprg deleted: Rust exports under the C name directly via #[export_name].
-// get_findfunc deleted: Rust exports under the C name directly via #[export_name].
 
 /// Copy options from one window to another.
 /// Used when splitting a window.
@@ -2056,12 +1932,8 @@ static char *copy_option_val(const char *val)
   return xstrdup(val);
 }
 
-// rs_copy_winopt deleted: now exported as copy_winopt via #[export_name]
-// rs_clear_winopt deleted: now exported as clear_winopt via #[export_name]
 extern void rs_check_winopt(winopt_T *wop);
-// rs_didset_window_options deleted: now exported as didset_window_options via #[export_name]
 
-// copy_winopt deleted: now exported directly from Rust via #[export_name]
 
 /// Check string options in a window for a NULL value.
 static void check_win_options(win_T *win)
@@ -2076,15 +1948,6 @@ static void check_winopt(winopt_T *wop)
   rs_check_winopt(wop);
 }
 
-// clear_winopt deleted: now exported directly from Rust via #[export_name]
-
-// didset_window_options deleted: Rust exports under the C name directly via #[export_name].
-
-// reset_modifiable deleted: now exported directly from Rust via #[export_name]
-
-// set_iminsert_global deleted: now exported directly from Rust via #[export_name]
-
-// set_imsearch_global deleted: now exported directly from Rust via #[export_name]
 
 static OptIndex expand_option_idx = kOptInvalid;
 static int expand_option_start_col = 0;
@@ -2168,9 +2031,6 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
   return 4;  // EXPAND_FILES + XP_BS_ONE
 }
 
-// set_context_in_set_cmd deleted: now exported directly from Rust via #[export_name]
-
-// ExpandSettings deleted: now exported directly from Rust via #[export_name]
 
 /// Escape an option value that can be used on the command-line with :set.
 /// Caller needs to free the returned string, unless NULL is returned.
@@ -2192,9 +2052,6 @@ win_T *nvim_opt_get_curwin(void) { return curwin; }
 void nvim_opt_set_curbuf(buf_T *buf) { curbuf = buf; }
 void nvim_opt_set_curwin(win_T *win) { curwin = win; }
 
-// ExpandOldSetting deleted: now exported directly from Rust via #[export_name]
-// ExpandStringSetting deleted: now exported directly from Rust via #[export_name]
-
 
 /// Get the value for the numeric or string option///opp in a nice format into
 /// NameBuff[].  Must not be called with a hidden option!
@@ -2206,18 +2063,6 @@ static void option_value2string(vimoption_T *opt, int opt_flags)
 {
   rs_option_value2string((int)get_opt_idx(opt), opt_flags);
 }
-
-
-// shortmess deleted: now exported directly from Rust via #[export_name]
-
-// vimrc_found deleted: now exported directly from Rust via #[export_name]
-
-// option_was_set deleted: now exported from Rust index.rs via #[export_name = "option_was_set"]
-
-// reset_option_was_set deleted: now exported directly from Rust via #[export_name]
-
-// fill_culopt_flags deleted: now exported directly from Rust via #[export_name]
-
 
 
 /// Set the callback function value for an option that accepts a function name,
@@ -2269,14 +2114,6 @@ static void didset_options_sctx(int opt_flags, int *buf)
   }
 }
 
-// can_bs deleted: now exported directly from Rust via #[export_name]
-
-// get_bkc_flags deleted: now exported directly from Rust via #[export_name]
-// get_flp_value deleted: now exported directly from Rust via #[export_name]
-// get_ve_flags deleted: now exported directly from Rust via #[export_name]
-// get_fileformat_force deleted: now exported directly from Rust via #[export_name]
-// set_fileformat deleted: now exported directly from Rust via #[export_name]
-// copy_option_part deleted: now exported directly from Rust via #[export_name]
 
 /// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)
@@ -2737,8 +2574,6 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 // Phase 11 (pass 11) accessors: buf_copy_options
 // =============================================================================
 
-// rs_buf_copy_options deleted: now exported as buf_copy_options via #[export_name]
-// buf_copy_options deleted: now exported directly from Rust via #[export_name]
 
 /// Returns cmdmod.cmod_flags (used by Rust to check CMOD_NOSWAPFILE).
 int nvim_cmdmod_get_cmod_flags(void)
@@ -2994,7 +2829,6 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-// set_init_1 deleted: now exported directly from Rust via #[export_name]
 
 /// langmap_init() wrapper.
 void nvim_call_langmap_init(void) { langmap_init(); }
