@@ -254,6 +254,16 @@ pub unsafe extern "C" fn rs_did_set_equalalways(args: *mut c_void) -> CallbackRe
 
 // Note: rs_did_set_foldlevel is already defined in mod.rs
 
+/// Callback for 'cinoptions' option (Phase 94).
+///
+/// Reparses cinoptions for the current buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_cinoptions(args: *mut c_void) -> CallbackResult {
+    let buf = nvim_optset_get_buf(args);
+    nvim_parse_cino(buf);
+    callback_ok()
+}
+
 /// Error: Comma required (E536)
 const E_COMMA_REQUIRED: *const std::ffi::c_char = c"E536: Comma required".as_ptr();
 

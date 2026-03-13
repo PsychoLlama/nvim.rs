@@ -248,6 +248,7 @@ extern const char *rs_did_set_runtimepackpath(optset_T *args);
 extern const char *rs_did_set_foldignore(optset_T *args);
 extern const char *rs_did_set_foldmarker(optset_T *args);
 extern const char *rs_did_set_foldmethod(optset_T *args);
+extern const char *rs_did_set_cinoptions(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);

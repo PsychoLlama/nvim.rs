@@ -1251,7 +1251,7 @@ local options = {
     },
     {
       abbreviation = 'cino',
-      cb = 'did_set_cinoptions',
+      cb = 'rs_did_set_cinoptions',
       defaults = '',
       deny_duplicates = true,
       desc = [=[

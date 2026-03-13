@@ -618,16 +618,6 @@ int expand_set_chars_option(optexpand_T *args, int *numMatches, char ***matches)
                                 matches);
 }
 
-/// The 'cinoptions' option is changed.
-const char *did_set_cinoptions(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  // TODO(vim): recognize errors
-  parse_cino(buf);
-
-  return NULL;
-}
-
 /// The 'colorcolumn' option is changed.
 const char *did_set_colorcolumn(optset_T *args)
 {
