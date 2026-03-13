@@ -193,6 +193,13 @@ extern "C" {
     fn nvim_did_set_iconstring(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_titlestring(args: *mut c_void) -> CallbackResult;
     fn nvim_get_e_unsupportedoption() -> *const std::ffi::c_char;
+
+    // Phase 103: isopt / signcolumn / tagcase / virtualedit wrappers
+    fn nvim_did_set_isopt(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_iskeyword(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_signcolumn(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
 }
 
 // =============================================================================
@@ -961,6 +968,36 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'isident'/'isprint'/'isfname' options (Phase 103).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_isopt(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_isopt(args)
+}
+
+/// Callback for 'iskeyword' option (Phase 103).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_iskeyword(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_iskeyword(args)
+}
+
+/// Callback for 'signcolumn' option (Phase 103).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_signcolumn(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_signcolumn(args)
+}
+
+/// Callback for 'tagcase' option (Phase 103).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_tagcase(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_tagcase(args)
+}
+
+/// Callback for 'virtualedit' option (Phase 103).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_virtualedit_full(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_virtualedit(args)
 }
 
 /// Callback for 'highlight' option (Phase 102).

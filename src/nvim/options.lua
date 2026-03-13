@@ -4801,7 +4801,7 @@ local options = {
     },
     {
       abbreviation = 'isf',
-      cb = 'did_set_isopt',
+      cb = 'rs_did_set_isopt',
       defaults = {
         condition = 'BACKSLASH_IN_FILENAME',
         if_false = '@,48-57,/,.,-,_,+,,,#,$,%,~,=',
@@ -4867,7 +4867,7 @@ local options = {
     },
     {
       abbreviation = 'isi',
-      cb = 'did_set_isopt',
+      cb = 'rs_did_set_isopt',
       defaults = {
         condition = 'MSWIN',
         if_false = '@,48-57,_,192-255',
@@ -4897,7 +4897,7 @@ local options = {
     },
     {
       abbreviation = 'isk',
-      cb = 'did_set_iskeyword',
+      cb = 'rs_did_set_iskeyword',
       defaults = '@,48-57,_,192-255',
       deny_duplicates = true,
       desc = [=[
@@ -4923,7 +4923,7 @@ local options = {
     },
     {
       abbreviation = 'isp',
-      cb = 'did_set_isopt',
+      cb = 'rs_did_set_isopt',
       defaults = '@,161-255',
       deny_duplicates = true,
       desc = [=[
@@ -8218,7 +8218,7 @@ local options = {
     },
     {
       abbreviation = 'scl',
-      cb = 'did_set_signcolumn',
+      cb = 'rs_did_set_signcolumn',
       defaults = 'auto',
       values = {
         'yes',
@@ -9312,7 +9312,7 @@ local options = {
     },
     {
       abbreviation = 'tc',
-      cb = 'did_set_tagcase',
+      cb = 'rs_did_set_tagcase',
       defaults = 'followic',
       values = { 'followic', 'ignore', 'match', 'followscs', 'smart' },
       flags = true,
@@ -10094,7 +10094,7 @@ local options = {
     },
     {
       abbreviation = 've',
-      cb = 'did_set_virtualedit',
+      cb = 'rs_did_set_virtualedit_full',
       defaults = '',
       values = { 'block', 'insert', 'all', 'onemore', 'none', 'NONE' },
       flags = {

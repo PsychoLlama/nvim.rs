@@ -272,6 +272,11 @@ extern const char *rs_did_set_winbar(optset_T *args);
 extern const char *rs_did_set_highlight(optset_T *args);
 extern const char *rs_did_set_iconstring(optset_T *args);
 extern const char *rs_did_set_titlestring(optset_T *args);
+extern const char *rs_did_set_isopt(optset_T *args);
+extern const char *rs_did_set_iskeyword(optset_T *args);
+extern const char *rs_did_set_signcolumn(optset_T *args);
+extern const char *rs_did_set_tagcase(optset_T *args);
+extern const char *rs_did_set_virtualedit_full(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -527,6 +532,19 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 103: isopt / colorcolumn / signcolumn / tagcase / virtualedit wrappers
+// These delegate entire logic to C (complex struct access patterns)
+const char *did_set_isopt(optset_T *args);
+const char *did_set_iskeyword(optset_T *args);
+const char *did_set_signcolumn(optset_T *args);
+const char *did_set_tagcase(optset_T *args);
+const char *did_set_virtualedit(optset_T *args);
+const char *nvim_did_set_isopt(void *args) { return did_set_isopt((optset_T *)args); }
+const char *nvim_did_set_iskeyword(void *args) { return did_set_iskeyword((optset_T *)args); }
+const char *nvim_did_set_signcolumn(void *args) { return did_set_signcolumn((optset_T *)args); }
+const char *nvim_did_set_tagcase(void *args) { return did_set_tagcase((optset_T *)args); }
+const char *nvim_did_set_virtualedit(void *args) { return did_set_virtualedit((optset_T *)args); }
 
 // Phase 102: highlight / titleiconstring accessors
 const char *did_set_titleiconstring(optset_T *args, int flagval);

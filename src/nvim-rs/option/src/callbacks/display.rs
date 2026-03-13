@@ -347,14 +347,7 @@ pub extern "C" fn rs_did_set_breakindent() -> CallbackResult {
     callback_ok()
 }
 
-/// Callback for 'signcolumn' option.
-///
-/// Checks and updates sign column display.
-#[no_mangle]
-pub unsafe extern "C" fn rs_did_set_signcolumn(win: WinHandle) -> CallbackResult {
-    check_signcolumn(std::ptr::null_mut(), win);
-    callback_ok()
-}
+// rs_did_set_signcolumn is now in behavior.rs (Phase 103) with full optset_T implementation
 
 /// Callback for 'foldcolumn' option.
 ///
