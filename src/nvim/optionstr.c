@@ -320,7 +320,7 @@ static const char **opt_values(OptIndex idx, size_t *values_len)
   return opt->values;
 }
 
-static int check_str_opt(OptIndex idx, char **varp)
+int check_str_opt(OptIndex idx, char **varp)
 {
   vimoption_T *opt = get_option(idx);
   if (varp == NULL) {
@@ -457,23 +457,6 @@ static int expand_set_opt_listflag(optexpand_T *args, char *flags, int *numMatch
 }
 
 /// The 'ambiwidth' option is changed.
-const char *did_set_ambiwidth(optset_T *args)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  return check_chars_options();
-}
-
-/// The 'emoji' option is changed.
-const char *did_set_emoji(optset_T *args)
-{
-  if (check_str_opt(kOptAmbiwidth, NULL) != OK) {
-    return e_invarg;
-  }
-  return check_chars_options();
-}
 
 /// The 'background' option is changed.
 const char *did_set_background(optset_T *args)
@@ -948,19 +931,6 @@ int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches
   return expand_set_opt_listflag(args, FO_ALL, numMatches, matches);
 }
 
-/// The 'guicursor' option is changed.
-const char *did_set_guicursor(optset_T *args FUNC_ATTR_UNUSED)
-{
-  const char *errmsg = parse_shape_opt(SHAPE_CURSOR);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  if (VIsual_active) {
-    // In Visual mode cursor may be drawn differently.
-    redrawWinline(curwin, curwin->w_cursor.lnum);
-  }
-  return NULL;
-}
 
 
 
@@ -1113,18 +1083,6 @@ int expand_set_shortmess(optexpand_T *args, int *numMatches, char ***matches)
 }
 
 /// The 'showbreak' option is changed.
-const char *did_set_showbreak(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  for (char *s = *varp; *s;) {
-    if (ptr2cells(s) != 1) {
-      return e_showbreak_contains_unprintable_or_wide_character;
-    }
-    MB_PTR_ADV(s);
-  }
-  return NULL;
-}
 
 /// The 'signcolumn' option is changed.
 const char *did_set_signcolumn(optset_T *args)

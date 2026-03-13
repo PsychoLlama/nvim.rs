@@ -277,6 +277,10 @@ extern const char *rs_did_set_iskeyword(optset_T *args);
 extern const char *rs_did_set_signcolumn(optset_T *args);
 extern const char *rs_did_set_tagcase(optset_T *args);
 extern const char *rs_did_set_virtualedit_full(optset_T *args);
+extern const char *rs_did_set_guicursor(optset_T *args);
+extern const char *rs_did_set_ambiwidth(optset_T *args);
+extern const char *rs_did_set_emoji(optset_T *args);
+extern const char *rs_did_set_showbreak(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -532,6 +536,28 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
+int check_str_opt(OptIndex idx, char **varp);  // defined in optionstr.c
+const char *check_chars_options(void);  // defined in optionstr.c
+const char *nvim_parse_guicursor(void) { return parse_shape_opt(SHAPE_CURSOR); }
+int nvim_get_visual_active_opt(void) { return VIsual_active ? 1 : 0; }
+void nvim_redrawWinline_curwin(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
+const char *nvim_check_chars_options_str(void) { return check_chars_options(); }
+int nvim_check_ambiwidth_opt(void) { return check_str_opt(kOptAmbiwidth, NULL); }
+// Phase 104: showbreak validation (inlined from optionstr.c)
+static const char e_showbreak_wide[]
+  = N_("E595: 'showbreak' contains unprintable or wide character");
+const char *nvim_did_set_showbreak(void *args) {
+  char **varp = (char **)((optset_T *)args)->os_varp;
+  for (char *s = *varp; *s;) {
+    if (ptr2cells(s) != 1) {
+      return e_showbreak_wide;
+    }
+    MB_PTR_ADV(s);
+  }
+  return NULL;
+}
 
 // Phase 103: isopt / colorcolumn / signcolumn / tagcase / virtualedit wrappers
 // These delegate entire logic to C (complex struct access patterns)

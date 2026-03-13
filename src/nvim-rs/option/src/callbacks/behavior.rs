@@ -200,6 +200,14 @@ extern "C" {
     fn nvim_did_set_signcolumn(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
+
+    // Phase 104: guicursor / ambiwidth / emoji / showbreak
+    fn nvim_parse_guicursor() -> CallbackResult;
+    fn nvim_get_visual_active_opt() -> c_int;
+    fn nvim_redrawWinline_curwin();
+    fn nvim_check_chars_options_str() -> CallbackResult;
+    fn nvim_check_ambiwidth_opt() -> c_int;
+    fn nvim_did_set_showbreak(args: *mut c_void) -> CallbackResult;
 }
 
 // =============================================================================
@@ -968,6 +976,46 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'guicursor' option (Phase 104).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_guicursor(_args: *mut c_void) -> CallbackResult {
+    let errmsg = nvim_parse_guicursor();
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+    if nvim_get_visual_active_opt() != 0 {
+        nvim_redrawWinline_curwin();
+    }
+    callback_ok()
+}
+
+/// Callback for 'ambiwidth' option (Phase 104).
+/// Validates the flag value then checks chars options.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_ambiwidth(args: *mut c_void) -> CallbackResult {
+    let errmsg = nvim_did_set_str_generic(args);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+    nvim_check_chars_options_str()
+}
+
+/// Callback for 'emoji' option (Phase 104).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_emoji(_args: *mut c_void) -> CallbackResult {
+    if nvim_check_ambiwidth_opt() != 1 {
+        // OK == 1 in C
+        return E_INVARG_BEHAVIOR;
+    }
+    nvim_check_chars_options_str()
+}
+
+/// Callback for 'showbreak' option (Phase 104).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_showbreak(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_showbreak(args)
 }
 
 /// Callback for 'isident'/'isprint'/'isfname' options (Phase 103).

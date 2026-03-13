@@ -118,7 +118,7 @@ local options = {
     },
     {
       abbreviation = 'ambw',
-      cb = 'did_set_ambiwidth',
+      cb = 'rs_did_set_ambiwidth',
       defaults = 'single',
       values = { 'single', 'double' },
       desc = [=[
@@ -2645,7 +2645,7 @@ local options = {
     },
     {
       abbreviation = 'emo',
-      cb = 'did_set_emoji',
+      cb = 'rs_did_set_emoji',
       defaults = true,
       desc = [=[
         When on all Unicode emoji characters are considered to be full width.
@@ -3906,7 +3906,7 @@ local options = {
     },
     {
       abbreviation = 'gcr',
-      cb = 'did_set_guicursor',
+      cb = 'rs_did_set_guicursor',
       defaults = 'n-v-c-sm:block,i-ci-ve:ver25,r-cr-o:hor20,t:block-blinkon500-blinkoff500-TermCursor',
       deny_duplicates = true,
       desc = [=[
@@ -8016,7 +8016,7 @@ local options = {
     },
     {
       abbreviation = 'sbr',
-      cb = 'did_set_showbreak',
+      cb = 'rs_did_set_showbreak',
       defaults = '',
       desc = [=[
         String to put at the start of lines that have been wrapped.  Useful
