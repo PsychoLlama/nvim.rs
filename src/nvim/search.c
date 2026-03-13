@@ -69,6 +69,7 @@ extern int rs_win_valid(win_T *win);
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
 extern void rs_may_start_select(int c);
+extern int rs_current_search(int count, bool forward);
 
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
@@ -670,136 +671,7 @@ void showmatch(int c)
 /// @param forward  true for forward, false for backward
 int current_search(int count, bool forward)
 {
-  bool old_p_ws = p_ws;
-  pos_T save_VIsual = VIsual;
-
-  // Correct cursor when 'selection' is exclusive
-  if (VIsual_active && *p_sel == 'e' && lt(VIsual, curwin->w_cursor)) {
-    dec_cursor();
-  }
-
-  // When searching forward and the cursor is at the start of the Visual
-  // area, skip the first search backward, otherwise it doesn't move.
-  const bool skip_first_backward = forward && VIsual_active
-                                   && lt(curwin->w_cursor, VIsual);
-
-  pos_T pos = curwin->w_cursor;       // position after the pattern
-  pos_T orig_pos = curwin->w_cursor;  // position of the cursor at beginning
-  if (VIsual_active) {
-    // Searching further will extend the match.
-    if (forward) {
-      incl(&pos);
-    } else {
-      decl(&pos);
-    }
-  }
-
-  // Is the pattern is zero-width?, this time, don't care about the direction
-  int zero_width = rs_is_zero_width(spats[last_idx].pat, spats[last_idx].patlen,
-                                    true, curwin->w_cursor.lnum, curwin->w_cursor.col,
-                                    curwin->w_cursor.coladd, (int)FORWARD);
-  if (zero_width == -1) {
-    return FAIL;  // pattern not found
-  }
-
-  pos_T end_pos;  // end position of the pattern match
-  int result;     // result of various function calls
-
-  // The trick is to first search backwards and then search forward again,
-  // so that a match at the current cursor position will be correctly
-  // captured.  When "forward" is false do it the other way around.
-  for (int i = 0; i < 2; i++) {
-    int dir;
-    if (forward) {
-      if (i == 0 && skip_first_backward) {
-        continue;
-      }
-      dir = i;
-    } else {
-      dir = !i;
-    }
-
-    int flags = 0;
-
-    if (!dir && !zero_width) {
-      flags = SEARCH_END;
-    }
-    end_pos = pos;
-
-    // wrapping should not occur in the first round
-    if (i == 0) {
-      p_ws = false;
-    }
-
-    result = searchit(curwin, curbuf, &pos, &end_pos,
-                      (dir ? FORWARD : BACKWARD),
-                      spats[last_idx].pat, spats[last_idx].patlen, i ? count : 1,
-                      SEARCH_KEEP | flags, RE_SEARCH, NULL);
-
-    p_ws = old_p_ws;
-
-    // First search may fail, but then start searching from the
-    // beginning of the file (cursor might be on the search match)
-    // except when Visual mode is active, so that extending the visual
-    // selection works.
-    if (i == 1 && !result) {  // not found, abort
-      curwin->w_cursor = orig_pos;
-      if (VIsual_active) {
-        VIsual = save_VIsual;
-      }
-      return FAIL;
-    } else if (i == 0 && !result) {
-      if (forward) {  // try again from start of buffer
-        clearpos(&pos);
-      } else {  // try again from end of buffer
-                // searching backwards, so set pos to last line and col
-        pos.lnum = curwin->w_buffer->b_ml.ml_line_count;
-        pos.col = ml_get_len(curwin->w_buffer->b_ml.ml_line_count);
-      }
-    }
-  }
-
-  pos_T start_pos = pos;
-
-  if (!VIsual_active) {
-    VIsual = start_pos;
-  }
-
-  // put the cursor after the match
-  curwin->w_cursor = end_pos;
-  if (lt(VIsual, end_pos) && forward) {
-    if (skip_first_backward) {
-      // put the cursor on the start of the match
-      curwin->w_cursor = pos;
-    } else {
-      // put the cursor on last character of match
-      dec_cursor();
-    }
-  } else if (VIsual_active && lt(curwin->w_cursor, VIsual) && forward) {
-    curwin->w_cursor = pos;   // put the cursor on the start of the match
-  }
-  VIsual_active = true;
-  VIsual_mode = 'v';
-
-  if (*p_sel == 'e') {
-    // Correction for exclusive selection depends on the direction.
-    if (forward && ltoreq(VIsual, curwin->w_cursor)) {
-      inc_cursor();
-    } else if (!forward && ltoreq(curwin->w_cursor, VIsual)) {
-      inc(&VIsual);
-    }
-  }
-
-  if (fdo_flags & kOptFdoFlagSearch && KeyTyped) {
-    rs_foldOpenCursor();
-  }
-
-  rs_may_start_select('c');
-  setmouse();
-  redraw_curbuf_later(UPD_INVERTED);
-  showmode();
-
-  return OK;
+  return rs_current_search(count, forward);
 }
 
 
@@ -2925,4 +2797,63 @@ _Static_assert(ACTION_GOTO == 2, "ACTION_GOTO mismatch");
 _Static_assert(ACTION_SPLIT == 3, "ACTION_SPLIT mismatch");
 _Static_assert(ACTION_SHOW_ALL == 4, "ACTION_SHOW_ALL mismatch");
 _Static_assert(ACTION_EXPAND == 5, "ACTION_EXPAND mismatch");
+
+// =============================================================================
+// Phase 7d: current_search accessors
+// =============================================================================
+
+/// Get curwin->w_cursor.coladd.
+colnr_T nvim_search_get_curwin_cursor_coladd(void)
+{
+  return curwin->w_cursor.coladd;
+}
+
+/// incl() on a position passed by components.
+/// Updates *lnum, *col, *coladd in place.
+void nvim_search_incl_pos(int *lnum, int *col, int *coladd)
+{
+  pos_T pos = { *lnum, *col, *coladd };
+  incl(&pos);
+  *lnum = pos.lnum;
+  *col = pos.col;
+  *coladd = pos.coladd;
+}
+
+/// decl() on a position passed by components.
+/// Updates *lnum, *col, *coladd in place.
+void nvim_search_decl_pos(int *lnum, int *col, int *coladd)
+{
+  pos_T pos = { *lnum, *col, *coladd };
+  decl(&pos);
+  *lnum = pos.lnum;
+  *col = pos.col;
+  *coladd = pos.coladd;
+}
+
+/// Call searchit for current_search.
+/// Marshals pos and end_pos from/to integer components.
+/// dir: 1 = FORWARD, 0 = BACKWARD.
+/// flags: SEARCH_* flags.
+/// pat/patlen: the search pattern (from spats[last_idx]).
+/// Returns 1 if found, 0 if not found.
+int nvim_search_current_searchit(int dir, int flags, int count,
+                                 int *pos_lnum, int *pos_col, int *pos_coladd,
+                                 int *end_lnum, int *end_col, int *end_coladd)
+{
+  _Static_assert(kOptFdoFlagSearch == 0x40,
+                 "kOptFdoFlagSearch changed - update K_OPT_FDO_FLAG_SEARCH in search/src/commands.rs");
+  pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
+  pos_T end_pos = { *end_lnum, *end_col, *end_coladd };
+  int result = searchit(curwin, curbuf, &pos, &end_pos,
+                        dir ? FORWARD : BACKWARD,
+                        spats[last_idx].pat, spats[last_idx].patlen,
+                        count, SEARCH_KEEP | flags, RE_SEARCH, NULL);
+  *pos_lnum = pos.lnum;
+  *pos_col = pos.col;
+  *pos_coladd = pos.coladd;
+  *end_lnum = end_pos.lnum;
+  *end_col = end_pos.col;
+  *end_coladd = end_pos.coladd;
+  return result;
+}
 

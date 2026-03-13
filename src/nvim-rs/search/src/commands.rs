@@ -39,6 +39,57 @@ extern "C" {
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
+
+    // Phase 7d: current_search accessors
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_set_VIsual_active(val: bool);
+    fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_VIsual_col() -> c_int;
+    fn nvim_get_VIsual_coladd() -> c_int;
+    fn nvim_set_VIsual_pos(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_set_VIsual_mode(val: c_int);
+    fn nvim_set_p_ws(val: c_int);
+    fn nvim_get_p_sel_first() -> c_char;
+    fn nvim_search_get_curwin_cursor_lnum() -> c_int;
+    fn nvim_search_get_curwin_cursor_col() -> c_int;
+    fn nvim_search_get_curwin_cursor_coladd() -> c_int;
+    fn nvim_set_curwin_cursor_lnum(lnum: c_int);
+    fn nvim_set_curwin_cursor_coladd(coladd: c_int);
+    fn nvim_inc_cursor() -> c_int;
+    fn nvim_dec_cursor() -> c_int;
+    fn nvim_search_incl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
+    fn nvim_search_decl_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
+    fn nvim_search_get_line_count() -> c_int;
+    fn nvim_search_ml_get_len(lnum: c_int) -> c_int;
+    fn nvim_search_current_searchit(
+        dir: c_int,
+        flags: c_int,
+        count: c_int,
+        pos_lnum: *mut c_int,
+        pos_col: *mut c_int,
+        pos_coladd: *mut c_int,
+        end_lnum: *mut c_int,
+        end_col: *mut c_int,
+        end_coladd: *mut c_int,
+    ) -> c_int;
+    fn nvim_get_fdo_flags() -> u32;
+    fn nvim_get_KeyTyped() -> bool;
+    fn nvim_setmouse();
+    fn nvim_showmode();
+    fn nvim_redraw_curbuf_inverted();
+
+    // Rust functions callable from search crate
+    fn rs_is_zero_width(
+        pat: *const c_char,
+        patlen: usize,
+        whole: bool,
+        lnum: c_int,
+        col: c_int,
+        coladd: c_int,
+        dir: c_int,
+    ) -> c_int;
+    fn rs_foldOpenCursor();
+    fn rs_may_start_select(c: c_int);
 }
 
 // =============================================================================
@@ -711,6 +762,297 @@ pub unsafe extern "C" fn search_for_exact_line_export(
     pos_ref.lnum = lnum;
     pos_ref.col = col;
     result
+}
+
+// =============================================================================
+// Phase 7d: current_search
+// =============================================================================
+
+const SEARCH_END: c_int = 0x40;
+const K_OPT_FDO_FLAG_SEARCH: u32 = 0x40;
+
+/// Migrate current_search from search.c.
+///
+/// Searches forward or backward for the last search pattern and adjusts
+/// Visual mode selection to cover the match.
+///
+/// # Safety
+/// Requires valid editor state (curwin, curbuf, completion state).
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = -1;
+
+    let old_p_ws = nvim_get_p_ws();
+    // Save VIsual position
+    let save_visual_lnum = nvim_get_VIsual_lnum();
+    let save_visual_col = nvim_get_VIsual_col();
+    let save_visual_coladd = nvim_get_VIsual_coladd();
+
+    let visual_active = nvim_get_VIsual_active() != 0;
+
+    // Correct cursor when 'selection' is exclusive
+    if visual_active && nvim_get_p_sel_first() == b'e' as c_char {
+        let vis_lnum = nvim_get_VIsual_lnum();
+        let vis_col = nvim_get_VIsual_col();
+        let vis_coladd = nvim_get_VIsual_coladd();
+        let cur_lnum = nvim_search_get_curwin_cursor_lnum();
+        let cur_col = nvim_search_get_curwin_cursor_col();
+        let cur_coladd = nvim_search_get_curwin_cursor_coladd();
+        // lt(VIsual, curwin->w_cursor)
+        if lt_pos(vis_lnum, vis_col, vis_coladd, cur_lnum, cur_col, cur_coladd) {
+            nvim_dec_cursor();
+        }
+    }
+
+    // Re-read visual_active since dec_cursor might not change it,
+    // but also re-read cursor in case it changed.
+    let visual_active = nvim_get_VIsual_active() != 0;
+
+    let cur_lnum = nvim_search_get_curwin_cursor_lnum();
+    let cur_col = nvim_search_get_curwin_cursor_col();
+    let cur_coladd = nvim_search_get_curwin_cursor_coladd();
+
+    // When searching forward and cursor is at start of Visual area, skip
+    // the first backward search.
+    let skip_first_backward = forward
+        && visual_active
+        && lt_pos(
+            cur_lnum,
+            cur_col,
+            cur_coladd,
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+        );
+
+    let mut pos_lnum = cur_lnum;
+    let mut pos_col = cur_col;
+    let mut pos_coladd = cur_coladd;
+    let orig_lnum = cur_lnum;
+    let orig_col = cur_col;
+    let orig_coladd = cur_coladd;
+
+    if visual_active {
+        if forward {
+            nvim_search_incl_pos(&mut pos_lnum, &mut pos_col, &mut pos_coladd);
+        } else {
+            nvim_search_decl_pos(&mut pos_lnum, &mut pos_col, &mut pos_coladd);
+        }
+    }
+
+    // Check if the pattern is zero-width
+    let zero_width = rs_is_zero_width(
+        std::ptr::null(),
+        0,
+        true,
+        cur_lnum,
+        cur_col,
+        cur_coladd,
+        DIRECTION_FORWARD,
+    );
+    if zero_width == -1 {
+        return FAIL;
+    }
+
+    let mut end_lnum = 0i32;
+    let mut end_col = 0i32;
+    let mut end_coladd = 0i32;
+    let mut result = 0i32;
+
+    for i in 0..2i32 {
+        let dir = if forward {
+            if i == 0 && skip_first_backward {
+                continue;
+            }
+            i
+        } else if i == 0 {
+            1
+        } else {
+            0
+        };
+
+        let flags = if dir == 0 && zero_width == 0 {
+            SEARCH_END
+        } else {
+            0
+        };
+
+        end_lnum = pos_lnum;
+        end_col = pos_col;
+        end_coladd = pos_coladd;
+
+        // Wrapping should not occur in the first round
+        if i == 0 {
+            nvim_set_p_ws(0);
+        }
+
+        result = nvim_search_current_searchit(
+            dir,
+            flags,
+            if i != 0 { count } else { 1 },
+            &mut pos_lnum,
+            &mut pos_col,
+            &mut pos_coladd,
+            &mut end_lnum,
+            &mut end_col,
+            &mut end_coladd,
+        );
+
+        nvim_set_p_ws(old_p_ws);
+
+        if i == 1 && result == 0 {
+            // Not found, abort
+            nvim_set_curwin_cursor_lnum(orig_lnum);
+            nvim_set_curwin_cursor_col(orig_col);
+            nvim_set_curwin_cursor_coladd(orig_coladd);
+            if visual_active {
+                nvim_set_VIsual_pos(save_visual_lnum, save_visual_col, save_visual_coladd);
+            }
+            return FAIL;
+        } else if i == 0 && result == 0 {
+            if forward {
+                // Try again from start of buffer
+                pos_lnum = 0;
+                pos_col = 0;
+                pos_coladd = 0;
+            } else {
+                // Try again from end of buffer
+                let last_lnum = nvim_search_get_line_count();
+                let last_col = nvim_search_ml_get_len(last_lnum);
+                pos_lnum = last_lnum;
+                pos_col = last_col;
+                pos_coladd = 0;
+            }
+        }
+    }
+
+    let start_lnum = pos_lnum;
+    let start_col = pos_col;
+    let start_coladd = pos_coladd;
+
+    if !visual_active {
+        nvim_set_VIsual_pos(start_lnum, start_col, start_coladd);
+    }
+
+    // Put cursor after the match
+    nvim_set_curwin_cursor_lnum(end_lnum);
+    nvim_set_curwin_cursor_col(end_col);
+    nvim_set_curwin_cursor_coladd(end_coladd);
+
+    let vis_lnum = nvim_get_VIsual_lnum();
+    let vis_col = nvim_get_VIsual_col();
+    let vis_coladd = nvim_get_VIsual_coladd();
+
+    if lt_pos(vis_lnum, vis_col, vis_coladd, end_lnum, end_col, end_coladd) && forward {
+        if skip_first_backward {
+            // Put cursor on start of match
+            nvim_set_curwin_cursor_lnum(pos_lnum);
+            nvim_set_curwin_cursor_col(pos_col);
+            nvim_set_curwin_cursor_coladd(pos_coladd);
+        } else {
+            // Put cursor on last character of match
+            nvim_dec_cursor();
+        }
+    } else {
+        let cur_lnum2 = nvim_search_get_curwin_cursor_lnum();
+        let cur_col2 = nvim_search_get_curwin_cursor_col();
+        let cur_coladd2 = nvim_search_get_curwin_cursor_coladd();
+        if visual_active
+            && lt_pos(
+                cur_lnum2,
+                cur_col2,
+                cur_coladd2,
+                vis_lnum,
+                vis_col,
+                vis_coladd,
+            )
+            && forward
+        {
+            nvim_set_curwin_cursor_lnum(pos_lnum);
+            nvim_set_curwin_cursor_col(pos_col);
+            nvim_set_curwin_cursor_coladd(pos_coladd);
+        }
+    }
+
+    nvim_set_VIsual_active(true);
+    nvim_set_VIsual_mode(b'v' as c_int);
+
+    if nvim_get_p_sel_first() == b'e' as c_char {
+        let cur_lnum3 = nvim_search_get_curwin_cursor_lnum();
+        let cur_col3 = nvim_search_get_curwin_cursor_col();
+        let cur_coladd3 = nvim_search_get_curwin_cursor_coladd();
+        let vis_lnum2 = nvim_get_VIsual_lnum();
+        let vis_col2 = nvim_get_VIsual_col();
+        let vis_coladd2 = nvim_get_VIsual_coladd();
+        if forward
+            && ltoreq_pos(
+                vis_lnum2,
+                vis_col2,
+                vis_coladd2,
+                cur_lnum3,
+                cur_col3,
+                cur_coladd3,
+            )
+        {
+            nvim_inc_cursor();
+        } else if !forward
+            && ltoreq_pos(
+                cur_lnum3,
+                cur_col3,
+                cur_coladd3,
+                vis_lnum2,
+                vis_col2,
+                vis_coladd2,
+            )
+        {
+            let mut vl = vis_lnum2;
+            let mut vc = vis_col2;
+            let mut vca = vis_coladd2;
+            nvim_search_incl_pos(&mut vl, &mut vc, &mut vca);
+            nvim_set_VIsual_pos(vl, vc, vca);
+        }
+    }
+
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0 && nvim_get_KeyTyped() {
+        rs_foldOpenCursor();
+    }
+
+    rs_may_start_select(b'c' as c_int);
+    nvim_setmouse();
+    nvim_redraw_curbuf_inverted();
+    nvim_showmode();
+
+    let _ = result;
+    OK
+}
+
+/// Helper: lt(a, b) - true if position a < position b.
+/// Positions are compared lnum first, then col, then coladd.
+#[inline]
+fn lt_pos(
+    a_lnum: c_int,
+    a_col: c_int,
+    a_coladd: c_int,
+    b_lnum: c_int,
+    b_col: c_int,
+    b_coladd: c_int,
+) -> bool {
+    a_lnum < b_lnum
+        || (a_lnum == b_lnum && (a_col < b_col || (a_col == b_col && a_coladd < b_coladd)))
+}
+
+/// Helper: ltoreq(a, b) - true if position a <= position b.
+#[inline]
+fn ltoreq_pos(
+    a_lnum: c_int,
+    a_col: c_int,
+    a_coladd: c_int,
+    b_lnum: c_int,
+    b_col: c_int,
+    b_coladd: c_int,
+) -> bool {
+    !lt_pos(b_lnum, b_col, b_coladd, a_lnum, a_col, a_coladd)
 }
 
 #[cfg(test)]
