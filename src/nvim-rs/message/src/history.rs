@@ -217,7 +217,7 @@ pub unsafe extern "C" fn rs_msg_hist_free_entry(entry: *mut MessageHistoryEntryH
 ///
 /// # Safety
 /// Calls C accessor and mutator functions.
-#[no_mangle]
+#[export_name = "msg_hist_clear"]
 pub unsafe extern "C" fn rs_msg_hist_clear(keep: c_int) {
     loop {
         let first = nvim_get_msg_hist_first();
@@ -241,7 +241,7 @@ pub unsafe extern "C" fn rs_msg_hist_clear(keep: c_int) {
 ///
 /// # Safety
 /// Calls C accessor and mutator functions.
-#[no_mangle]
+#[export_name = "msg_hist_clear_temp"]
 pub unsafe extern "C" fn rs_msg_hist_clear_temp() {
     let mut current = nvim_get_msg_hist_temp();
 

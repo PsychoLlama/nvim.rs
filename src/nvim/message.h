@@ -130,6 +130,10 @@ int verbose_open(void);
 void msg_make(const char *arg);
 void msg_putchar_hl(int c, int hl_id);
 
+// Phase 82: msg_hist_clear and msg_hist_clear_temp migrated to Rust
+void msg_hist_clear(int keep);
+void msg_hist_clear_temp(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

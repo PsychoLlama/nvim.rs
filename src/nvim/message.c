@@ -1263,44 +1263,6 @@ static void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, Message
   msg_hist_clear(msg_hist_max);
 }
 
-static void msg_hist_free_msg(MessageHistoryEntry *entry)
-{
-  if (entry->next == NULL) {
-    msg_hist_last = entry->prev;
-  } else {
-    entry->next->prev = entry->prev;
-  }
-  if (entry->prev == NULL) {
-    msg_hist_first = entry->next;
-  } else {
-    entry->prev->next = entry->next;
-  }
-  if (entry == msg_hist_temp) {
-    msg_hist_temp = entry->next;
-  }
-  hl_msg_free(entry->msg);
-  xfree(entry);
-}
-
-/// Delete oldest messages from the history until there are "keep" messages.
-void msg_hist_clear(int keep)
-{
-  while (msg_hist_len > keep || (keep == 0 && msg_hist_first != NULL)) {
-    msg_hist_len -= !msg_hist_first->temp;
-    msg_hist_free_msg(msg_hist_first);
-  }
-}
-
-void msg_hist_clear_temp(void)
-{
-  while (msg_hist_temp != NULL) {
-    MessageHistoryEntry *next = msg_hist_temp->next;
-    if (msg_hist_temp->temp) {
-      msg_hist_free_msg(msg_hist_temp);
-    }
-    msg_hist_temp = next;
-  }
-}
 
 int messagesopt_changed(void)
 {
