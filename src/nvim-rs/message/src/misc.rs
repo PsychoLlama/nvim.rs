@@ -67,6 +67,15 @@ extern "C" {
     // For msg_make
     fn skipwhite(s: *const c_char) -> *mut c_char;
     fn msg_putchar(c: c_int);
+
+    // For messagesopt_changed (Phase 86)
+    fn nvim_get_p_mopt() -> *const c_char;
+    fn strnequal(s1: *const c_char, s2: *const c_char, n: usize) -> bool;
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+    fn nvim_set_msg_flags(val: c_int);
+    fn nvim_set_msg_wait(val: c_int);
+    fn nvim_set_msg_hist_max(val: c_int);
+    fn msg_hist_clear(keep: c_int);
 }
 
 // ============================================================================
@@ -356,6 +365,96 @@ pub unsafe extern "C" fn rs_messaging() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_suppress() -> c_int {
     c_int::from(nvim_get_msg_silent() != 0)
+}
+
+// ============================================================================
+// Messages Option Parsing (Phase 86)
+// ============================================================================
+
+// kOptMoptFlag constants (from build/src/nvim/auto/option_vars.generated.h)
+const K_OPT_MOPT_FLAG_HIT_ENTER: c_int = 0x01;
+const K_OPT_MOPT_FLAG_WAIT: c_int = 0x02;
+const K_OPT_MOPT_FLAG_HISTORY: c_int = 0x04;
+
+/// Parse and apply the 'messagesopt' option.
+///
+/// Returns OK (0) on success or FAIL (2) on error.
+///
+/// # Safety
+/// Reads the global `p_mopt` option and calls C accessors.
+#[export_name = "messagesopt_changed"]
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 2;
+
+    const OPT_HIT_ENTER: &[u8] = b"hit-enter";
+    const OPT_WAIT: &[u8] = b"wait:";
+    const OPT_HISTORY: &[u8] = b"history:";
+
+    let mut messages_flags_new: c_int = 0;
+    let mut messages_wait_new: c_int = 0;
+    let mut messages_history_new: c_int = 0;
+
+    let mut p: *mut c_char = nvim_get_p_mopt().cast_mut();
+
+    while *p != 0 {
+        if strnequal(p, OPT_HIT_ENTER.as_ptr().cast(), OPT_HIT_ENTER.len()) {
+            p = p.add(OPT_HIT_ENTER.len());
+            messages_flags_new |= K_OPT_MOPT_FLAG_HIT_ENTER;
+        } else if strnequal(p, OPT_WAIT.as_ptr().cast(), OPT_WAIT.len())
+            && (*p.add(OPT_WAIT.len()) as u8).is_ascii_digit()
+        {
+            p = p.add(OPT_WAIT.len());
+            messages_wait_new = getdigits_int(std::ptr::addr_of_mut!(p), false, c_int::MAX);
+            messages_flags_new |= K_OPT_MOPT_FLAG_WAIT;
+        } else if strnequal(p, OPT_HISTORY.as_ptr().cast(), OPT_HISTORY.len())
+            && (*p.add(OPT_HISTORY.len()) as u8).is_ascii_digit()
+        {
+            p = p.add(OPT_HISTORY.len());
+            messages_history_new = getdigits_int(std::ptr::addr_of_mut!(p), false, c_int::MAX);
+            messages_flags_new |= K_OPT_MOPT_FLAG_HISTORY;
+        }
+
+        if *p != b',' as c_char && *p != 0 {
+            return FAIL;
+        }
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+
+    // Either "wait" or "hit-enter" is required
+    if messages_flags_new & (K_OPT_MOPT_FLAG_HIT_ENTER | K_OPT_MOPT_FLAG_WAIT) == 0 {
+        return FAIL;
+    }
+
+    // "history" must be set
+    if messages_flags_new & K_OPT_MOPT_FLAG_HISTORY == 0 {
+        return FAIL;
+    }
+
+    // "history" must be <= 10000
+    if messages_history_new > 10000 {
+        return FAIL;
+    }
+
+    // "wait" must be <= 10000
+    if messages_wait_new > 10000 {
+        return FAIL;
+    }
+
+    nvim_set_msg_flags(messages_flags_new);
+    nvim_set_msg_wait(messages_wait_new);
+    nvim_set_msg_hist_max(messages_history_new);
+    msg_hist_clear(messages_history_new);
+
+    OK
 }
 
 #[cfg(test)]

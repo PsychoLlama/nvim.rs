@@ -487,6 +487,12 @@ void nvim_msg_hist_add_len(const char *s, int len, int hl_id) { msg_hist_add(s, 
 // Phase 77: msg_home_replace accessor
 char *nvim_home_replace_save_null(const char *fname) { return home_replace_save(NULL, fname); }
 
+// Phase 86: messagesopt_changed accessors
+const char *nvim_get_p_mopt(void) { return p_mopt; }
+void nvim_set_msg_flags(int val) { msg_flags = val; }
+void nvim_set_msg_wait(int val) { msg_wait = val; }
+void nvim_set_msg_hist_max(int val) { msg_hist_max = val; }
+
 
 
 void msg_grid_validate(void)
@@ -1238,67 +1244,6 @@ static void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, Message
 }
 
 
-int messagesopt_changed(void)
-{
-  int messages_flags_new = 0;
-  int messages_wait_new = 0;
-  int messages_history_new = 0;
-
-  char *p = p_mopt;
-  while (*p != NUL) {
-    if (strnequal(p, S_LEN(MESSAGES_OPT_HIT_ENTER))) {
-      p += STRLEN_LITERAL(MESSAGES_OPT_HIT_ENTER);
-      messages_flags_new |= kOptMoptFlagHitEnter;
-    } else if (strnequal(p, S_LEN(MESSAGES_OPT_WAIT))
-               && ascii_isdigit(p[STRLEN_LITERAL(MESSAGES_OPT_WAIT)])) {
-      p += STRLEN_LITERAL(MESSAGES_OPT_WAIT);
-      messages_wait_new = getdigits_int(&p, false, INT_MAX);
-      messages_flags_new |= kOptMoptFlagWait;
-    } else if (strnequal(p, S_LEN(MESSAGES_OPT_HISTORY))
-               && ascii_isdigit(p[STRLEN_LITERAL(MESSAGES_OPT_HISTORY)])) {
-      p += STRLEN_LITERAL(MESSAGES_OPT_HISTORY);
-      messages_history_new = getdigits_int(&p, false, INT_MAX);
-      messages_flags_new |= kOptMoptFlagHistory;
-    }
-
-    if (*p != ',' && *p != NUL) {
-      return FAIL;
-    }
-    if (*p == ',') {
-      p++;
-    }
-  }
-
-  // Either "wait" or "hit-enter" is required
-  if (!(messages_flags_new & (kOptMoptFlagHitEnter | kOptMoptFlagWait))) {
-    return FAIL;
-  }
-
-  // "history" must be set
-  if (!(messages_flags_new & kOptMoptFlagHistory)) {
-    return FAIL;
-  }
-
-  assert(messages_history_new >= 0);
-  // "history" must be <= 10000
-  if (messages_history_new > 10000) {
-    return FAIL;
-  }
-
-  assert(messages_wait_new >= 0);
-  // "wait" must be <= 10000
-  if (messages_wait_new > 10000) {
-    return FAIL;
-  }
-
-  msg_flags = messages_flags_new;
-  msg_wait = messages_wait_new;
-
-  msg_hist_max = messages_history_new;
-  msg_hist_clear(msg_hist_max);
-
-  return OK;
-}
 
 /// :messages command implementation
 void ex_messages(exarg_T *eap)

@@ -140,6 +140,9 @@ int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist);
 // Phase 84: msg_multiline migrated to Rust
 void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear);
 
+// Phase 86: messagesopt_changed migrated to Rust
+int messagesopt_changed(void);
+
 // Phase 85: str2special family and msg_outtrans_special migrated to Rust
 int msg_outtrans_special(const char *strstart, bool from, int maxlen);
 const char *str2special(const char **sp, bool replace_spaces, bool replace_lt);
