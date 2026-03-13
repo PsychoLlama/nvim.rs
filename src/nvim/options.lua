@@ -31,7 +31,7 @@
 --- @field alloced? true
 --- @field redraw? vim.option_redraw[]
 ---
---- If not provided and `values` is present, then is set to 'did_set_str_generic'
+--- If not provided and `values` is present, then is set to 'rs_did_set_str_generic'
 --- @field cb? string
 ---
 --- If not provided and `values` is present, then is set to 'expand_set_str_generic'
@@ -360,7 +360,7 @@ local options = {
     },
     {
       abbreviation = 'bg',
-      cb = 'did_set_background',
+      cb = 'rs_did_set_background',
       defaults = 'dark',
       values = { 'light', 'dark' },
       desc = [=[
@@ -1381,7 +1381,7 @@ local options = {
     },
     {
       abbreviation = 'cc',
-      cb = 'did_set_colorcolumn',
+      cb = 'rs_did_set_colorcolumn',
       defaults = '',
       deny_duplicates = true,
       desc = [=[
@@ -3040,7 +3040,7 @@ local options = {
     },
     {
       abbreviation = 'ff',
-      cb = 'did_set_fileformat',
+      cb = 'rs_did_set_fileformat',
       defaults = {
         condition = 'USE_CRNL',
         if_true = 'dos',
@@ -3075,7 +3075,7 @@ local options = {
     },
     {
       abbreviation = 'ffs',
-      cb = 'did_set_str_generic',
+      cb = 'rs_did_set_str_generic',
       defaults = {
         condition = 'USE_CRNL',
         if_true = 'dos,unix',
@@ -10065,7 +10065,7 @@ local options = {
     },
     {
       abbreviation = 'vop',
-      cb = 'did_set_str_generic',
+      cb = 'rs_did_set_str_generic',
       defaults = 'folds,cursor,curdir',
       flags = true,
       deny_duplicates = true,
@@ -10898,7 +10898,7 @@ local options = {
 --- @param o vim.option_meta
 local function preprocess(o)
   if o.values then
-    o.cb = o.cb or 'did_set_str_generic'
+    o.cb = o.cb or 'rs_did_set_str_generic'
     o.expand_cb = o.expand_cb or 'expand_set_str_generic'
   end
 

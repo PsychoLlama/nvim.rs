@@ -697,6 +697,13 @@ pub unsafe extern "C" fn rs_did_set_eventignore(args: *mut c_void) -> CallbackRe
     callback_ok()
 }
 
+/// Generic string option callback (Phase 107).
+/// Validates the option value against the allowed values list via check_str_opt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_str_generic(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_str_generic(args)
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

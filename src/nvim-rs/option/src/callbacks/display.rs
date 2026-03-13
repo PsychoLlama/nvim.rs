@@ -88,6 +88,11 @@ extern "C" {
     fn nvim_option_was_set_window() -> c_int;
     fn nvim_get_p_window() -> OptInt;
     fn nvim_set_p_window(val: OptInt);
+
+    // Phase 107: colorcolumn / background / fileformat wrappers
+    fn nvim_did_set_colorcolumn(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_background(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_fileformat(args: *mut c_void) -> CallbackResult;
 }
 
 // =============================================================================
@@ -297,13 +302,24 @@ pub extern "C" fn rs_did_set_cursorcolumn() -> CallbackResult {
     callback_ok()
 }
 
-/// Callback for 'colorcolumn' option.
+/// Callback for 'colorcolumn' option (Phase 107).
 ///
-/// Triggers redraw when color column changes.
+/// Validates the colorcolumn format via check_colorcolumn.
 #[no_mangle]
-pub extern "C" fn rs_did_set_colorcolumn() -> CallbackResult {
-    request_redraw_all(UpdateType::NotValid);
-    callback_ok()
+pub unsafe extern "C" fn rs_did_set_colorcolumn(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_colorcolumn(args)
+}
+
+/// Callback for 'background' option (Phase 107).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_background(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_background(args)
+}
+
+/// Callback for 'fileformat' option (Phase 107).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_fileformat(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_fileformat(args)
 }
 
 /// Callback for 'list' option.

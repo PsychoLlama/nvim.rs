@@ -545,6 +545,18 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
 
+// Phase 107: colorcolumn / background / fileformat / str_generic
+extern const char *rs_did_set_colorcolumn(optset_T *args);
+extern const char *rs_did_set_background(optset_T *args);
+extern const char *rs_did_set_fileformat(optset_T *args);
+extern const char *rs_did_set_str_generic(optset_T *args);
+extern const char *did_set_colorcolumn(optset_T *args);
+extern const char *did_set_background(optset_T *args);
+extern const char *did_set_fileformat(optset_T *args);
+const char *nvim_did_set_colorcolumn(void *args) { return did_set_colorcolumn((optset_T *)args); }
+const char *nvim_did_set_background(void *args) { return did_set_background((optset_T *)args); }
+const char *nvim_did_set_fileformat(void *args) { return did_set_fileformat((optset_T *)args); }
+
 // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
 extern const char *did_set_cedit(optset_T *args);
 extern const char *did_set_operatorfunc(optset_T *args);
