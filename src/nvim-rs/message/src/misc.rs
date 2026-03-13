@@ -390,8 +390,8 @@ const K_OPT_MOPT_FLAG_HISTORY: c_int = 0x04;
     clippy::cast_sign_loss
 )]
 pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = 2;
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
 
     const OPT_HIT_ENTER: &[u8] = b"hit-enter";
     const OPT_WAIT: &[u8] = b"wait:";

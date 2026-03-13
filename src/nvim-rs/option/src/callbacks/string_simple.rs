@@ -588,6 +588,19 @@ pub unsafe extern "C" fn rs_did_set_diffanchors(args: *mut c_void) -> CallbackRe
     callback_ok()
 }
 
+/// Callback for 'messagesopt' option.
+/// Delegates to the Rust message module's messagesopt_changed().
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_messagesopt(_args: *mut c_void) -> CallbackResult {
+    extern "C" {
+        fn messagesopt_changed() -> c_int;
+    }
+    if messagesopt_changed() == FAIL {
+        return E_INVARG;
+    }
+    callback_ok()
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

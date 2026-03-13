@@ -5759,7 +5759,7 @@ local options = {
     },
     {
       abbreviation = 'mopt',
-      cb = 'did_set_messagesopt',
+      cb = 'rs_did_set_messagesopt',
       defaults = 'hit-enter,history:500',
       values = { 'hit-enter', 'wait:', 'history:' },
       flags = true,

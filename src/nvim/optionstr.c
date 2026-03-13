@@ -1190,15 +1190,6 @@ const char *did_set_keymodel(optset_T *args FUNC_ATTR_UNUSED)
 }
 
 
-/// Process the updated 'messagesopt' option value.
-const char *did_set_messagesopt(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (messagesopt_changed() == FAIL) {
-    return e_invarg;
-  }
-  return NULL;
-}
-
 /// The 'mkspellmem' option is changed.
 const char *did_set_mkspellmem(optset_T *args FUNC_ATTR_UNUSED)
 {
