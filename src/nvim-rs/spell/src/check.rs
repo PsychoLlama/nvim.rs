@@ -2144,7 +2144,6 @@ extern "C" {
     fn skipbin(q: *const c_char) -> *const c_char;
     fn skiphex(q: *mut c_char) -> *mut c_char;
     fn mb_charlen_len(s: *const c_char, len: c_int) -> c_int;
-    fn count_common_word(slang: *mut crate::SlangRaw, word: *const c_char, len: c_int, count: u8);
     fn nvim_win_get_spo_flags(wp: *const c_void) -> c_uint;
     fn nvim_win_get_b_cap_prog(wp: *const c_void) -> *mut c_void;
     fn nvim_win_spell_capcol_regexec(wp: *mut c_void, ptr: *mut c_char) -> c_int;
@@ -2966,7 +2965,7 @@ pub unsafe extern "C" fn rs_spell_check(
         }
 
         if count_word && mi.mi_result == SP_OK {
-            count_common_word(
+            crate::rs_count_common_word(
                 slang,
                 mi.mi_word,
                 mi.mi_end.offset_from(mi.mi_word) as c_int,

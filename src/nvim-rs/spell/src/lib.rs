@@ -4033,6 +4033,161 @@ pub unsafe extern "C" fn rs_spell_file_result_get_error(result: *const SpellFile
     (*result).error
 }
 
+// =============================================================================
+// Spell file helper functions (Phase 4)
+// =============================================================================
+
+extern "C" {
+    fn hash_hash(key: *const c_char) -> usize;
+    fn hash_lookup(
+        ht: *const HashtabRaw,
+        key: *const c_char,
+        key_len: usize,
+        hash: usize,
+    ) -> *mut HashitemRaw;
+    fn hash_add_item(ht: *mut HashtabRaw, hi: *mut HashitemRaw, key: *mut c_char, hash: usize);
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn ga_grow(gap: *mut GArrayRaw, n: c_int);
+    static hash_removed: c_char;
+}
+
+/// Returns true if a hashitem is empty (unused or removed).
+#[inline]
+unsafe fn hashitem_empty(hi: *const HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed).cast_mut())
+}
+
+/// Counts a word in the common word hashtable for a language.
+///
+/// # Safety
+/// `lp` must be a valid pointer to a `SlangRaw` with an initialized `sl_wordcount`.
+/// `word` must be a valid C string (or `len` bytes if len != -1).
+#[export_name = "count_common_word"]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_count_common_word(
+    lp: *mut SlangRaw,
+    word: *const c_char,
+    len: c_int,
+    count: u8,
+) {
+    // offsetof(wordcount_T, wc_word): wc_count is u16 at offset 0, wc_word[] starts at 2
+    const WC_KEY_OFF: usize = 2;
+    const MAXWORDCOUNT: u16 = 0xffff;
+
+    let mut buf = [0u8; MAXWLEN];
+    let p: *const c_char = if len == -1 {
+        word
+    } else if len >= MAXWLEN as c_int {
+        return;
+    } else {
+        let ulen = len as usize;
+        std::ptr::copy_nonoverlapping(word.cast::<u8>(), buf.as_mut_ptr(), ulen);
+        buf[ulen] = 0;
+        buf.as_ptr().cast::<c_char>()
+    };
+
+    let hash = hash_hash(p);
+    let p_len = libc::strlen(p);
+    let hi = hash_lookup(std::ptr::addr_of!((*lp).sl_wordcount), p, p_len, hash);
+    if hashitem_empty(hi) {
+        // HASHITEM_EMPTY: allocate new wordcount_T
+        let alloc_size = WC_KEY_OFF + p_len + 1;
+        let wc_base = xmalloc(alloc_size).cast::<u8>();
+        // wc_count at offset 0 (u16, store as raw bytes to avoid alignment issues)
+        let count16 = u16::from(count);
+        wc_base.write(count16.to_ne_bytes()[0]);
+        wc_base.add(1).write(count16.to_ne_bytes()[1]);
+        // wc_word at offset 2
+        std::ptr::copy_nonoverlapping(p.cast::<u8>(), wc_base.add(WC_KEY_OFF), p_len + 1);
+        let key_ptr = wc_base.add(WC_KEY_OFF).cast::<c_char>();
+        hash_add_item(
+            std::ptr::addr_of_mut!((*lp).sl_wordcount),
+            hi,
+            key_ptr,
+            hash,
+        );
+    } else {
+        // Existing entry: update count (HI2WC: key - WC_KEY_OFF gives wc_count)
+        let wc_base = (*hi).hi_key.cast::<u8>().sub(WC_KEY_OFF);
+        let b0 = wc_base.read();
+        let b1 = wc_base.add(1).read();
+        let old_count = u16::from_ne_bytes([b0, b1]);
+        let new_count = old_count.saturating_add(u16::from(count));
+        // Check for overflow (original C: if wc_count < count, set MAXWORDCOUNT)
+        let result = if new_count < old_count {
+            MAXWORDCOUNT
+        } else {
+            new_count
+        };
+        let bytes = result.to_ne_bytes();
+        wc_base.write(bytes[0]);
+        wc_base.add(1).write(bytes[1]);
+    }
+}
+
+/// Initialise the syllable table for a language.
+///
+/// Reads `slang->sl_syllable`, splits on '/', and fills `slang->sl_syl_items`.
+///
+/// Returns `OK` (0) on success, `SP_FORMERROR` (-2) if a syllable is too long.
+///
+/// # Safety
+/// `slang` must be a valid pointer with `sl_syllable` initialised.
+#[export_name = "init_syl_tab"]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_init_syl_tab(slang: *mut SlangRaw) -> c_int {
+    const SY_MAXLEN: usize = 30;
+    let syl_items = std::ptr::addr_of_mut!((*slang).sl_syl_items);
+    // ga_init(&slang->sl_syl_items, sizeof(syl_item_T), 4)
+    (*syl_items).ga_len = 0;
+    (*syl_items).ga_maxlen = 0;
+    let item_size = std::mem::size_of::<SylItemT>();
+    // Item size fits in i32 (it's 36 bytes)
+    (*syl_items).ga_itemsize = item_size as c_int;
+    (*syl_items).ga_growsize = 4;
+    (*syl_items).ga_data = std::ptr::null_mut();
+
+    let base = (*slang).sl_syllable;
+    if base.is_null() {
+        return 0; // OK
+    }
+    let mut p = vim_strchr(base, c_int::from(b'/'));
+    while !p.is_null() {
+        *p = 0; // replace '/' with NUL
+        p = p.add(1);
+        if *p == 0 {
+            // trailing slash
+            break;
+        }
+        let s = p;
+        p = vim_strchr(s, c_int::from(b'/'));
+        let l: usize = if p.is_null() {
+            libc::strlen(s)
+        } else {
+            // p > s, offset is positive
+            p.offset_from(s) as usize
+        };
+        if l >= SY_MAXLEN {
+            return SP_FORMERROR;
+        }
+        // GA_APPEND_VIA_PTR: grow by 1, return pointer to new element
+        ga_grow(syl_items, 1);
+        let idx = (*syl_items).ga_len as usize;
+        let syl = ((*syl_items).ga_data as *mut SylItemT).add(idx);
+        (*syl_items).ga_len += 1;
+        // Copy l bytes then zero-terminate
+        std::ptr::copy_nonoverlapping(s.cast::<u8>(), (*syl).sy_chars.as_mut_ptr().cast::<u8>(), l);
+        (*syl).sy_chars[l] = 0;
+        (*syl).sy_len = l as c_int;
+    }
+    0 // OK
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

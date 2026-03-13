@@ -134,12 +134,6 @@ typedef struct {
   int sl_nobreak;                       // NOBREAK language found
 } spelload_T;
 
-#define SY_MAXLEN   30
-typedef struct {
-  char sy_chars[SY_MAXLEN];               // the sequence of chars
-  int sy_len;
-} syl_item_T;
-
 spelltab_T spelltab;
 bool did_set_spelltab;
 
@@ -704,76 +698,6 @@ static bool spell_load_cb(int num_fnames, char **fnames, bool all, void *cookie)
 
   return num_fnames > 0;
 }
-
-/// Add a word to the hashtable of common words.
-/// If it's already there then the counter is increased.
-///
-/// @param[in]  lp
-/// @param[in]  word  added to common words hashtable
-/// @param[in]  len  length of word or -1 for NUL terminated
-/// @param[in]  count  1 to count once, 10 to init
-void count_common_word(slang_T *lp, char *word, int len, uint8_t count)
-{
-  char buf[MAXWLEN];
-  char *p;
-
-  if (len == -1) {
-    p = word;
-  } else if (len >= MAXWLEN) {
-    return;
-  } else {
-    xmemcpyz(buf, word, (size_t)len);
-    p = buf;
-  }
-
-  hash_T hash = hash_hash(p);
-  const size_t p_len = strlen(p);
-  hashitem_T *hi = hash_lookup(&lp->sl_wordcount, p, p_len, hash);
-  if (HASHITEM_EMPTY(hi)) {
-    wordcount_T *wc = xmalloc(offsetof(wordcount_T, wc_word) + p_len + 1);
-    memcpy(wc->wc_word, p, p_len + 1);
-    wc->wc_count = count;
-    hash_add_item(&lp->sl_wordcount, hi, wc->wc_word, hash);
-  } else {
-    wordcount_T *wc = HI2WC(hi);
-    wc->wc_count = (uint16_t)(wc->wc_count + count);
-    if (wc->wc_count < count) {    // check for overflow
-      wc->wc_count = MAXWORDCOUNT;
-    }
-  }
-}
-
-
-// Truncate "slang->sl_syllable" at the first slash and put the following items
-// in "slang->sl_syl_items".
-int init_syl_tab(slang_T *slang)
-{
-  ga_init(&slang->sl_syl_items, sizeof(syl_item_T), 4);
-  char *p = vim_strchr(slang->sl_syllable, '/');
-  while (p != NULL) {
-    *p++ = NUL;
-    if (*p == NUL) {        // trailing slash
-      break;
-    }
-    char *s = p;
-    p = vim_strchr(p, '/');
-    int l;
-    if (p == NULL) {
-      l = (int)strlen(s);
-    } else {
-      l = (int)(p - s);
-    }
-    if (l >= SY_MAXLEN) {
-      return SP_FORMERROR;
-    }
-
-    syl_item_T *syl = GA_APPEND_VIA_PTR(syl_item_T, &slang->sl_syl_items);
-    xmemcpyz(syl->sy_chars, s, (size_t)l);
-    syl->sy_len = l;
-  }
-  return OK;
-}
-
 
 /// Parse 'spelllang' and set w_s->b_langp accordingly.
 /// @return  NULL if it's OK, an untranslated error message otherwise.
