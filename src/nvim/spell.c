@@ -1241,27 +1241,6 @@ void ex_spellrepall(exarg_T *eap)
 }
 
 
-// ":spellinfo"
-void ex_spellinfo(exarg_T *eap)
-{
-  if (no_spell_checking(curwin)) {
-    return;
-  }
-
-  msg_start();
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len && !got_int; lpi++) {
-    langp_T *const lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    msg_puts("file: ");
-    msg_puts(lp->lp_slang->sl_fname);
-    msg_putchar('\n');
-    const char *const p = lp->lp_slang->sl_info;
-    if (p != NULL) {
-      msg_puts(p);
-      msg_putchar('\n');
-    }
-  }
-  msg_end();
-}
 
 #define DUMPFLAG_KEEPCASE   1   // round 2: keep-case tree
 #define DUMPFLAG_COUNT      2   // include word count

@@ -4034,6 +4034,47 @@ pub unsafe extern "C" fn rs_spell_file_result_get_error(result: *const SpellFile
 }
 
 // =============================================================================
+// Spell Ex commands (Phase 5)
+// =============================================================================
+
+extern "C" {
+    fn msg_start();
+    fn msg_end() -> c_int;
+    fn msg_puts(s: *const c_char);
+    fn msg_putchar(c: c_int);
+    static got_int: c_int;
+}
+
+/// `:spellinfo` -- show info about loaded spell files for the current window.
+///
+/// # Safety
+/// Must be called from the main thread with a valid current window.
+#[export_name = "ex_spellinfo"]
+pub unsafe extern "C" fn rs_ex_spellinfo(_eap: *mut c_void) {
+    if rs_no_spell_checking(curwin_global) {
+        return;
+    }
+    msg_start();
+    let langp_ga = nvim_win_get_b_langp(curwin_global);
+    let len = (*langp_ga).ga_len;
+    let mut lpi: c_int = 0;
+    while lpi < len && got_int == 0 {
+        let lp = langp_entry(langp_ga, lpi);
+        lpi += 1;
+        let fname = (*(*lp).lp_slang).sl_fname;
+        msg_puts(c"file: ".as_ptr());
+        msg_puts(fname);
+        msg_putchar(c_int::from(b'\n'));
+        let info = (*(*lp).lp_slang).sl_info;
+        if !info.is_null() {
+            msg_puts(info);
+            msg_putchar(c_int::from(b'\n'));
+        }
+    }
+    msg_end();
+}
+
+// =============================================================================
 // Spell file helper functions (Phase 4)
 // =============================================================================
 
