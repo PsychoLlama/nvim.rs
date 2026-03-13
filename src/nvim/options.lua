@@ -7034,7 +7034,7 @@ local options = {
     },
     {
       abbreviation = 'ruf',
-      cb = 'did_set_rulerformat',
+      cb = 'rs_did_set_rulerformat',
       defaults = '',
       desc = [=[
         When this option is not empty, it determines the content of the ruler
@@ -8691,7 +8691,7 @@ local options = {
     },
     {
       abbreviation = 'stc',
-      cb = 'did_set_statuscolumn',
+      cb = 'rs_did_set_statuscolumn',
       defaults = '',
       desc = [=[
         When non-empty, this option determines the content of the area to the
@@ -8756,7 +8756,7 @@ local options = {
     },
     {
       abbreviation = 'stl',
-      cb = 'did_set_statusline',
+      cb = 'rs_did_set_statusline',
       defaults = {
         if_true = table.concat({
           '%<',
@@ -9187,7 +9187,7 @@ local options = {
     },
     {
       abbreviation = 'tal',
-      cb = 'did_set_tabline',
+      cb = 'rs_did_set_tabline',
       defaults = '',
       desc = [=[
         When non-empty, this option determines the content of the tab pages
@@ -10504,7 +10504,7 @@ local options = {
     },
     {
       abbreviation = 'wbr',
-      cb = 'did_set_winbar',
+      cb = 'rs_did_set_winbar',
       defaults = '',
       desc = [=[
         When non-empty, this option enables the window bar and determines its

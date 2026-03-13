@@ -1072,11 +1072,6 @@ int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
 
 
 
-/// The 'rulerformat' option is changed.
-const char *did_set_rulerformat(optset_T *args)
-{
-  return did_set_statustabline_rulerformat(args, true, false);
-}
 
 
 const char *did_set_shada(optset_T *args)
@@ -1165,24 +1160,13 @@ const char *did_set_signcolumn(optset_T *args)
 }
 
 
-/// The 'statuscolumn' option is changed.
-const char *did_set_statuscolumn(optset_T *args)
-{
-  return did_set_statustabline_rulerformat(args, false, true);
-}
-
-/// The 'statusline' option is changed.
-const char *did_set_statusline(optset_T *args)
-{
-  return did_set_statustabline_rulerformat(args, false, false);
-}
 
 /// The 'statusline', 'winbar', 'tabline', 'rulerformat' or 'statuscolumn' option is changed.
 ///
 /// @param rulerformat  true if the 'rulerformat' option is changed
 /// @param statuscolumn  true if the 'statuscolumn' option is changed
-static const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat,
-                                                     bool statuscolumn)
+const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat,
+                                              bool statuscolumn)
 {
   win_T *win = (win_T *)args->os_win;
   char **varp = (char **)args->os_varp;
@@ -1236,11 +1220,6 @@ static const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerf
   return errmsg;
 }
 
-/// The 'tabline' option is changed.
-const char *did_set_tabline(optset_T *args)
-{
-  return did_set_statustabline_rulerformat(args, false, false);
-}
 
 /// The 'tagcase' option is changed.
 const char *did_set_tagcase(optset_T *args)
@@ -1389,11 +1368,6 @@ int expand_set_whichwrap(optexpand_T *args, int *numMatches, char ***matches)
   return expand_set_opt_listflag(args, WW_ALL, numMatches, matches);
 }
 
-/// The 'winbar' option is changed.
-const char *did_set_winbar(optset_T *args)
-{
-  return did_set_statustabline_rulerformat(args, false, false);
-}
 
 bool parse_border_opt(char *border_opt)
 {

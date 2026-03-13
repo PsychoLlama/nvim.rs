@@ -182,6 +182,11 @@ extern "C" {
     // Phase 100: optexpr / foldexpr accessors
     fn nvim_apply_scriptlocal_funcname(varp_ptr: *mut c_void);
     fn nvim_foldmethodIsExpr(win: WinHandle) -> c_int;
+
+    // Phase 101: statustabline_rulerformat accessors
+    fn nvim_did_set_statustabline(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_rulerformat(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_statuscolumn(args: *mut c_void) -> CallbackResult;
 }
 
 // =============================================================================
@@ -950,6 +955,36 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'rulerformat' option (Phase 101).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_rulerformat(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_rulerformat(args)
+}
+
+/// Callback for 'statusline' option (Phase 101).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_statusline(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_statustabline(args)
+}
+
+/// Callback for 'statuscolumn' option (Phase 101).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_statuscolumn(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_statuscolumn(args)
+}
+
+/// Callback for 'tabline' option (Phase 101).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_tabline(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_statustabline(args)
+}
+
+/// Callback for 'winbar' option (Phase 101).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_winbar(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_statustabline(args)
 }
 
 /// Callback for '*expr' options (Phase 100).

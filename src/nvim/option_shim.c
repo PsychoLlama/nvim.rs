@@ -264,6 +264,11 @@ extern const char *rs_did_set_verbosefile(optset_T *args);
 extern const char *rs_did_set_helpfile(optset_T *args);
 extern const char *rs_did_set_optexpr(optset_T *args);
 extern const char *rs_did_set_foldexpr(optset_T *args);
+extern const char *rs_did_set_rulerformat(optset_T *args);
+extern const char *rs_did_set_statusline(optset_T *args);
+extern const char *rs_did_set_statuscolumn(optset_T *args);
+extern const char *rs_did_set_tabline(optset_T *args);
+extern const char *rs_did_set_winbar(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -519,6 +524,18 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 101: statustabline_rulerformat accessors
+const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat, bool statuscolumn);
+const char *nvim_did_set_statustabline(void *args) {
+  return did_set_statustabline_rulerformat((optset_T *)args, false, false);
+}
+const char *nvim_did_set_rulerformat(void *args) {
+  return did_set_statustabline_rulerformat((optset_T *)args, true, false);
+}
+const char *nvim_did_set_statuscolumn(void *args) {
+  return did_set_statustabline_rulerformat((optset_T *)args, false, true);
+}
 
 // Phase 100: optexpr / foldexpr accessors
 void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
