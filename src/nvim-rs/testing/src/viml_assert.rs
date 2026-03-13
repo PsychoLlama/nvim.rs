@@ -28,6 +28,9 @@ pub type TypevalHandle = *const c_void;
 /// Opaque handle to a mutable typval_T.
 pub type TypevalHandleMut = *mut c_void;
 
+/// Opaque handle for EvalFuncData union (8-byte union passed by value as pointer).
+pub type EvalFuncData = *mut c_void;
+
 // =============================================================================
 // C accessor functions
 // =============================================================================
@@ -1467,8 +1470,12 @@ fn assert_fails_impl(argvars: TypevalHandle, rettv: TypevalHandleMut) {
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_true(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_true"]
+pub unsafe extern "C" fn rs_f_assert_true(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(rettv, i64::from(assert_bool(argvars, true)));
 }
 
@@ -1478,8 +1485,12 @@ pub unsafe extern "C" fn rs_f_assert_true(argvars: TypevalHandle, rettv: Typeval
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_false(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_false"]
+pub unsafe extern "C" fn rs_f_assert_false(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(rettv, i64::from(assert_bool(argvars, false)));
 }
 
@@ -1489,8 +1500,12 @@ pub unsafe extern "C" fn rs_f_assert_false(argvars: TypevalHandle, rettv: Typeva
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_equalfile(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_equalfile"]
+pub unsafe extern "C" fn rs_f_assert_equalfile(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(rettv, i64::from(assert_equalfile(argvars)));
 }
 
@@ -1500,8 +1515,12 @@ pub unsafe extern "C" fn rs_f_assert_equalfile(argvars: TypevalHandle, rettv: Ty
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_fails(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_fails"]
+pub unsafe extern "C" fn rs_f_assert_fails(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     assert_fails_impl(argvars, rettv);
 }
 
@@ -1511,8 +1530,12 @@ pub unsafe extern "C" fn rs_f_assert_fails(argvars: TypevalHandle, rettv: Typeva
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_equal(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_equal"]
+pub unsafe extern "C" fn rs_f_assert_equal(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(
         rettv,
         i64::from(assert_equal_common(argvars, AssertType::Equal)),
@@ -1525,8 +1548,12 @@ pub unsafe extern "C" fn rs_f_assert_equal(argvars: TypevalHandle, rettv: Typeva
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_notequal(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_notequal"]
+pub unsafe extern "C" fn rs_f_assert_notequal(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(
         rettv,
         i64::from(assert_equal_common(argvars, AssertType::NotEqual)),
@@ -1539,8 +1566,12 @@ pub unsafe extern "C" fn rs_f_assert_notequal(argvars: TypevalHandle, rettv: Typ
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_match(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_match"]
+pub unsafe extern "C" fn rs_f_assert_match(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(
         rettv,
         i64::from(assert_match_common(argvars, AssertType::Match)),
@@ -1553,8 +1584,12 @@ pub unsafe extern "C" fn rs_f_assert_match(argvars: TypevalHandle, rettv: Typeva
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_notmatch(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_notmatch"]
+pub unsafe extern "C" fn rs_f_assert_notmatch(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(
         rettv,
         i64::from(assert_match_common(argvars, AssertType::NotMatch)),
@@ -1567,8 +1602,12 @@ pub unsafe extern "C" fn rs_f_assert_notmatch(argvars: TypevalHandle, rettv: Typ
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_beeps(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_beeps"]
+pub unsafe extern "C" fn rs_f_assert_beeps(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(rettv, i64::from(assert_beeps(argvars, false)));
 }
 
@@ -1578,8 +1617,12 @@ pub unsafe extern "C" fn rs_f_assert_beeps(argvars: TypevalHandle, rettv: Typeva
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_nobeep(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_nobeep"]
+pub unsafe extern "C" fn rs_f_assert_nobeep(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     set_rettv_number(rettv, i64::from(assert_beeps(argvars, true)));
 }
 
@@ -1589,8 +1632,12 @@ pub unsafe extern "C" fn rs_f_assert_nobeep(argvars: TypevalHandle, rettv: Typev
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_exception(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_exception"]
+pub unsafe extern "C" fn rs_f_assert_exception(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     assert_exception_impl(argvars, rettv);
 }
 
@@ -1600,9 +1647,20 @@ pub unsafe extern "C" fn rs_f_assert_exception(argvars: TypevalHandle, rettv: Ty
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_inrange(argvars: TypevalHandle, rettv: TypevalHandleMut) {
-    // Type checking is done in C wrapper
+#[export_name = "f_assert_inrange"]
+pub unsafe extern "C" fn rs_f_assert_inrange(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
+    const FAIL: c_int = 0;
+    if tv_check_for_float_or_nr_arg(argvars, 0) == FAIL
+        || tv_check_for_float_or_nr_arg(argvars, 1) == FAIL
+        || tv_check_for_float_or_nr_arg(argvars, 2) == FAIL
+        || tv_check_for_opt_string_arg(argvars, 3) == FAIL
+    {
+        return;
+    }
     set_rettv_number(rettv, i64::from(assert_inrange_impl(argvars)));
 }
 
@@ -1615,10 +1673,11 @@ pub unsafe extern "C" fn rs_f_assert_inrange(argvars: TypevalHandle, rettv: Type
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
+#[export_name = "f_test_garbagecollect_now"]
 pub unsafe extern "C" fn rs_f_test_garbagecollect_now(
     _argvars: TypevalHandle,
     _rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
 ) {
     if get_vim_var_nr(VV_TESTING) == 0 {
         let msg = nvim_testing_gettext(
@@ -1638,8 +1697,12 @@ pub unsafe extern "C" fn rs_f_test_garbagecollect_now(
 ///
 /// - `argvars` must point to a valid array of at least 1 `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_assert_report(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+#[export_name = "f_assert_report"]
+pub unsafe extern "C" fn rs_f_assert_report(
+    argvars: TypevalHandle,
+    rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
+) {
     let mut ga = GArray::default();
 
     prepare_assert_error(&raw mut ga);
@@ -1665,10 +1728,11 @@ pub unsafe extern "C" fn rs_f_assert_report(argvars: TypevalHandle, rettv: Typev
 ///
 /// - `argvars` must point to a valid array of `typval_T`.
 /// - `rettv` must point to a valid `typval_T` for the return value.
-#[no_mangle]
+#[export_name = "f_test_write_list_log"]
 pub unsafe extern "C" fn rs_f_test_write_list_log(
     _argvars: TypevalHandle,
     _rettv: TypevalHandleMut,
+    _fptr: EvalFuncData,
 ) {
     // This function is a no-op in Neovim
     // The original C code just extracts the filename and does nothing with it
