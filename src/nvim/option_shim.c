@@ -285,6 +285,10 @@ extern const char *rs_did_set_cursorlineopt(optset_T *args);
 extern const char *rs_did_set_completeopt(optset_T *args);
 extern const char *rs_did_set_varsofttabstop(optset_T *args);
 extern const char *rs_did_set_vartabstop(optset_T *args);
+extern const char *rs_did_set_cedit(optset_T *args);
+extern const char *rs_did_set_operatorfunc(optset_T *args);
+extern const char *rs_did_set_findfunc(optset_T *args);
+extern const char *rs_did_set_completeitemalign(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -540,6 +544,16 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 106: cedit / operatorfunc / findfunc / completeitemalign
+extern const char *did_set_cedit(optset_T *args);
+extern const char *did_set_operatorfunc(optset_T *args);
+extern const char *did_set_findfunc(optset_T *args);
+const char *did_set_completeitemalign(optset_T *args);
+const char *nvim_did_set_cedit(void *args) { return did_set_cedit((optset_T *)args); }
+const char *nvim_did_set_operatorfunc(void *args) { return did_set_operatorfunc((optset_T *)args); }
+const char *nvim_did_set_findfunc(void *args) { return did_set_findfunc((optset_T *)args); }
+const char *nvim_did_set_completeitemalign(void *args) { return did_set_completeitemalign((optset_T *)args); }
 
 // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
 int nvim_fill_culopt_flags(const char *val, win_T *win) { return fill_culopt_flags((char *)val, win); }

@@ -1096,7 +1096,7 @@ local options = {
       varname = 'p_cdpath',
     },
     {
-      cb = 'did_set_cedit',
+      cb = 'rs_did_set_cedit',
       defaults = {
         if_true = macros('CTRL_F_STR', 'string'),
         doc = 'CTRL-F',
@@ -1578,7 +1578,7 @@ local options = {
     },
     {
       abbreviation = 'cia',
-      cb = 'did_set_completeitemalign',
+      cb = 'rs_did_set_completeitemalign',
       defaults = 'abbr,kind,menu',
       flags = true,
       deny_duplicates = true,
@@ -3288,7 +3288,7 @@ local options = {
     },
     {
       abbreviation = 'ffu',
-      cb = 'did_set_findfunc',
+      cb = 'rs_did_set_findfunc',
       defaults = '',
       desc = [=[
         Function that is called to obtain the filename(s) for the |:find|
@@ -6385,7 +6385,7 @@ local options = {
     },
     {
       abbreviation = 'opfunc',
-      cb = 'did_set_operatorfunc',
+      cb = 'rs_did_set_operatorfunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be called by the |g@| operator.

@@ -201,6 +201,12 @@ extern "C" {
     fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
 
+    // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
+    fn nvim_did_set_cedit(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_operatorfunc(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_findfunc(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_completeitemalign(args: *mut c_void) -> CallbackResult;
+
     // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
     fn nvim_fill_culopt_flags(val: *const std::ffi::c_char, win: WinHandle) -> c_int;
     fn nvim_did_set_completeopt(args: *mut c_void) -> CallbackResult;
@@ -1199,6 +1205,30 @@ pub unsafe extern "C" fn rs_did_set_verbosefile(_args: *mut c_void) -> CallbackR
 pub unsafe extern "C" fn rs_did_set_helpfile(_args: *mut c_void) -> CallbackResult {
     nvim_unset_vim_env();
     callback_ok()
+}
+
+/// Callback for 'cedit' option (Phase 106).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_cedit(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_cedit(args)
+}
+
+/// Callback for 'operatorfunc' option (Phase 106).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_operatorfunc(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_operatorfunc(args)
+}
+
+/// Callback for 'findfunc' option (Phase 106).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_findfunc(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_findfunc(args)
+}
+
+/// Callback for 'completeitemalign' option (Phase 106).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_completeitemalign(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_completeitemalign(args)
 }
 
 // =============================================================================
