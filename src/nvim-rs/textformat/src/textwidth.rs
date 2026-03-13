@@ -107,7 +107,7 @@ pub(crate) unsafe fn comp_textwidth_impl(ff: bool) -> c_int {
 ///
 /// # Safety
 /// Accesses global window and buffer state via C functions.
-#[no_mangle]
+#[export_name = "comp_textwidth"]
 pub unsafe extern "C" fn rs_comp_textwidth(ff: c_int) -> c_int {
     comp_textwidth_impl(ff != 0)
 }

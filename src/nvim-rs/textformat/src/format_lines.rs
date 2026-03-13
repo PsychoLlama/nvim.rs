@@ -394,7 +394,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "format_lines"]
 pub unsafe extern "C" fn rs_format_lines(line_count: c_int, avoid_fex: c_int) {
     format_lines_impl(line_count, avoid_fex != 0);
 }

@@ -201,7 +201,7 @@ unsafe fn op_formatexpr_impl(oap: OapHandle) {
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "op_format"]
 pub unsafe extern "C" fn rs_op_format(oap: OapHandle, keep_cursor: c_int) {
     op_format_impl(oap, keep_cursor != 0);
 }
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn rs_op_format(oap: OapHandle, keep_cursor: c_int) {
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "op_formatexpr"]
 pub unsafe extern "C" fn rs_op_formatexpr(oap: OapHandle) {
     op_formatexpr_impl(oap);
 }

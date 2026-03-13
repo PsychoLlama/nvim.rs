@@ -56,9 +56,9 @@ pub(crate) fn has_format_option_impl(x: c_int) -> bool {
 ///
 /// # Safety
 /// This function accesses global state (p_paste, curbuf->b_p_fo).
-#[no_mangle]
-pub extern "C" fn rs_has_format_option(x: c_int) -> c_int {
-    c_int::from(has_format_option_impl(x))
+#[export_name = "has_format_option"]
+pub extern "C" fn rs_has_format_option(x: c_int) -> bool {
+    has_format_option_impl(x)
 }
 
 #[cfg(test)]

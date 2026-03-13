@@ -72,7 +72,7 @@ pub(crate) unsafe fn fex_format_impl(lnum: c_int, count: c_long, c: c_int) -> c_
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "fex_format"]
 pub unsafe extern "C" fn rs_fex_format(lnum: c_int, count: c_long, c: c_int) -> c_int {
     fex_format_impl(lnum, count, c)
 }

@@ -48,7 +48,8 @@ const FAIL: c_int = 0;
 
 extern "C" {
     // Format option check
-    fn rs_has_format_option(x: c_int) -> c_int;
+    #[link_name = "has_format_option"]
+    fn rs_has_format_option(x: c_int) -> bool;
 
     // Cursor operations
     fn nvim_textfmt_get_curwin_cursor_lnum() -> c_int;
@@ -67,7 +68,8 @@ extern "C" {
     fn nvim_textfmt_get_leader_len_simple(line: *const c_char) -> c_int;
 
     // Paragraph detection (already migrated)
-    fn rs_paragraph_start(lnum: c_int) -> c_int;
+    #[link_name = "paragraph_start"]
+    fn rs_paragraph_start(lnum: c_int) -> bool;
 
     // Undo
     fn nvim_textfmt_u_save_cursor() -> c_int;
@@ -105,13 +107,13 @@ extern "C" {
 /// Check if format option 'x' is set.
 #[inline]
 fn has_format_option(x: c_int) -> bool {
-    unsafe { rs_has_format_option(x) != 0 }
+    unsafe { rs_has_format_option(x) }
 }
 
 /// Check if paragraph starts at line.
 #[inline]
 fn paragraph_start(lnum: c_int) -> bool {
-    unsafe { rs_paragraph_start(lnum) != 0 }
+    unsafe { rs_paragraph_start(lnum) }
 }
 
 // =============================================================================
@@ -261,7 +263,7 @@ unsafe fn check_auto_format_impl(end_insert: bool) {
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "auto_format"]
 pub unsafe extern "C" fn rs_auto_format(trailblank: c_int, prev_line: c_int) {
     auto_format_impl(trailblank != 0, prev_line != 0);
 }
@@ -270,7 +272,7 @@ pub unsafe extern "C" fn rs_auto_format(trailblank: c_int, prev_line: c_int) {
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "check_auto_format"]
 pub unsafe extern "C" fn rs_check_auto_format(end_insert: c_int) {
     check_auto_format_impl(end_insert != 0);
 }

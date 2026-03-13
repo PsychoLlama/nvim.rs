@@ -590,7 +590,7 @@ pub(crate) unsafe fn internal_format_impl(
 ///
 /// # Safety
 /// Accesses global state via C functions.
-#[no_mangle]
+#[export_name = "internal_format"]
 pub unsafe extern "C" fn rs_internal_format(
     textwidth: c_int,
     second_indent: c_int,

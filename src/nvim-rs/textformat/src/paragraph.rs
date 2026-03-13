@@ -50,8 +50,9 @@ extern "C" {
     /// Check if line starts a paragraph or section.
     fn nvim_textfmt_startPS(lnum: c_int, para: c_int, both: bool) -> bool;
 
-    /// Check if format option is set (via rs_has_format_option).
-    fn rs_has_format_option(x: c_int) -> c_int;
+    /// Check if format option is set (via has_format_option).
+    #[link_name = "has_format_option"]
+    fn rs_has_format_option(x: c_int) -> bool;
 
     /// Get number indent for a line. Returns indent or -1.
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;
@@ -83,7 +84,7 @@ const fn ascii_iswhite(c: u8) -> bool {
 /// Check if format option 'x' is set.
 #[inline]
 fn has_format_option(x: c_int) -> bool {
-    unsafe { rs_has_format_option(x) != 0 }
+    unsafe { rs_has_format_option(x) }
 }
 
 // =============================================================================
@@ -351,16 +352,16 @@ unsafe fn paragraph_start_impl(lnum: c_int) -> bool {
 ///
 /// # Safety
 /// Accesses buffer memory via C functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ends_in_white(lnum: c_int) -> c_int {
-    c_int::from(ends_in_white_impl(lnum))
+#[export_name = "ends_in_white"]
+pub unsafe extern "C" fn rs_ends_in_white(lnum: c_int) -> bool {
+    ends_in_white_impl(lnum)
 }
 
 /// Check if line is a paragraph boundary.
 ///
 /// # Safety
 /// Accesses buffer memory via C functions.
-#[no_mangle]
+#[export_name = "fmt_check_par"]
 pub unsafe extern "C" fn rs_fmt_check_par(
     lnum: c_int,
     leader_len: *mut c_int,
@@ -379,7 +380,7 @@ pub unsafe extern "C" fn rs_fmt_check_par(
 ///
 /// # Safety
 /// Accesses buffer memory via C functions.
-#[no_mangle]
+#[export_name = "same_leader"]
 pub unsafe extern "C" fn rs_same_leader(
     lnum: c_int,
     leader1_len: c_int,
@@ -400,9 +401,9 @@ pub unsafe extern "C" fn rs_same_leader(
 ///
 /// # Safety
 /// Accesses buffer memory via C functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_paragraph_start(lnum: c_int) -> c_int {
-    c_int::from(paragraph_start_impl(lnum))
+#[export_name = "paragraph_start"]
+pub unsafe extern "C" fn rs_paragraph_start(lnum: c_int) -> bool {
+    paragraph_start_impl(lnum)
 }
 
 #[cfg(test)]
