@@ -879,8 +879,8 @@ extern "C" {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
-pub unsafe extern "C" fn rs_bufIsChanged(buf: BufHandle) -> bool {
+#[export_name = "bufIsChanged"]
+pub unsafe extern "C" fn rs_buf_is_changed(buf: BufHandle) -> bool {
     // In a "prompt" buffer we do respect 'modified', so that we can control
     // closing the window by setting or resetting that option.
     (!nvim_bt_dontwrite(buf) || nvim_bt_prompt(buf))
@@ -892,11 +892,11 @@ pub unsafe extern "C" fn rs_bufIsChanged(buf: BufHandle) -> bool {
 /// # Safety
 ///
 /// Accesses global buffer list via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_anyBufIsChanged() -> bool {
+#[export_name = "anyBufIsChanged"]
+pub unsafe extern "C" fn rs_any_buf_is_changed() -> bool {
     let mut buf = nvim_get_firstbuf();
     while !buf.0.is_null() {
-        if rs_bufIsChanged(buf) {
+        if rs_buf_is_changed(buf) {
             return true;
         }
         buf = nvim_buf_get_next(buf);
@@ -909,9 +909,9 @@ pub unsafe extern "C" fn rs_anyBufIsChanged() -> bool {
 /// # Safety
 ///
 /// Accesses global curbuf via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_curbufIsChanged() -> bool {
-    rs_bufIsChanged(nvim_get_curbuf())
+#[export_name = "curbufIsChanged"]
+pub unsafe extern "C" fn rs_curbuf_is_changed() -> bool {
+    rs_buf_is_changed(nvim_get_curbuf())
 }
 
 /// Invalidate the undo buffer; called when storage has already been released.
@@ -919,7 +919,7 @@ pub unsafe extern "C" fn rs_curbufIsChanged() -> bool {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_clearall"]
 pub unsafe extern "C" fn rs_u_clearall(buf: BufHandle) {
     nvim_buf_set_b_u_newhead(buf, std::ptr::null_mut());
     nvim_buf_set_b_u_oldhead(buf, std::ptr::null_mut());
@@ -936,7 +936,7 @@ pub unsafe extern "C" fn rs_u_clearall(buf: BufHandle) {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_clearline"]
 pub unsafe extern "C" fn rs_u_clearline(buf: BufHandle) {
     let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
     if line_ptr.is_null() {
@@ -1205,7 +1205,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_blockfree"]
 pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
     loop {
         let oldhead = nvim_buf_get_b_u_oldhead(buf);
@@ -1225,7 +1225,7 @@ pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
 /// # Safety
 ///
 /// Accesses global curbuf via C FFI.
-#[no_mangle]
+#[export_name = "u_sync"]
 pub unsafe extern "C" fn rs_u_sync(force: bool) {
     let buf = nvim_get_curbuf();
 
@@ -1252,7 +1252,7 @@ pub unsafe extern "C" fn rs_u_sync(force: bool) {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_clearallandblockfree"]
 pub unsafe extern "C" fn rs_u_clearallandblockfree(buf: BufHandle) {
     rs_u_blockfree(buf);
     rs_u_clearall(buf);
@@ -1288,7 +1288,7 @@ pub unsafe extern "C" fn rs_u_unch_branch(uhp: UHeaderHandle) {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_unchanged"]
 pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
     let oldhead = nvim_buf_get_b_u_oldhead(buf);
     rs_u_unch_branch(oldhead);
@@ -1301,7 +1301,7 @@ pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "u_update_save_nr"]
 pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
     let save_nr_last = nvim_buf_get_b_u_save_nr_last(buf) + 1;
     nvim_buf_set_b_u_save_nr_last(buf, save_nr_last);
@@ -1355,7 +1355,7 @@ unsafe fn expr_map_locked() -> bool {
 /// # Safety
 ///
 /// The `buf` handle must be a valid pointer to a buf_T.
-#[no_mangle]
+#[export_name = "undo_allowed"]
 pub unsafe extern "C" fn rs_undo_allowed(buf: BufHandle) -> bool {
     // Don't allow changes when 'modifiable' is off.
     if !nvim_buf_is_modifiable(buf) {
@@ -1384,8 +1384,8 @@ pub unsafe extern "C" fn rs_undo_allowed(buf: BufHandle) -> bool {
 /// # Safety
 ///
 /// Accesses global curbuf via C FFI.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ex_undojoin() {
+#[export_name = "ex_undojoin"]
+pub unsafe extern "C" fn rs_ex_undojoin(_eap: ExargHandle) {
     let buf = nvim_get_curbuf();
 
     // Nothing changed before
@@ -1421,7 +1421,7 @@ pub unsafe extern "C" fn rs_ex_undojoin() {
 /// # Safety
 ///
 /// Accesses global state via C FFI.
-#[no_mangle]
+#[export_name = "u_undo"]
 pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
     let buf = nvim_get_curbuf();
 
@@ -1448,7 +1448,7 @@ pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
 /// # Safety
 ///
 /// Accesses global state via C FFI.
-#[no_mangle]
+#[export_name = "u_redo"]
 pub unsafe extern "C" fn rs_u_redo(count: c_int) {
     if !nvim_has_cpo_undo() {
         nvim_set_undo_undoes(false);
@@ -1463,7 +1463,7 @@ pub unsafe extern "C" fn rs_u_redo(count: c_int) {
 /// # Safety
 ///
 /// Accesses global state via C FFI.
-#[no_mangle]
+#[export_name = "u_undo_and_forget"]
 pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bool) -> bool {
     let buf = nvim_get_curbuf();
 
@@ -2002,7 +2002,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
 /// # Safety
 ///
 /// Must be called with valid buffer handle and line numbers.
-#[no_mangle]
+#[export_name = "u_savecommon"]
 pub unsafe extern "C" fn rs_u_savecommon(
     buf: BufHandle,
     top: LinenrT,
@@ -2304,7 +2304,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
 /// # Safety
 ///
 /// Must be called from a valid Neovim context with curwin set.
-#[no_mangle]
+#[export_name = "u_save_cursor"]
 pub unsafe extern "C" fn rs_u_save_cursor() -> c_int {
     let mut lnum: LinenrT = 0;
     let mut col: ColnrT = 0;
@@ -2323,7 +2323,7 @@ pub unsafe extern "C" fn rs_u_save_cursor() -> c_int {
 /// # Safety
 ///
 /// Must be called with valid line numbers for curbuf.
-#[no_mangle]
+#[export_name = "u_save"]
 pub unsafe extern "C" fn rs_u_save(top: LinenrT, bot: LinenrT) -> c_int {
     rs_u_save_buf(nvim_get_curbuf(), top, bot)
 }
@@ -2334,7 +2334,7 @@ pub unsafe extern "C" fn rs_u_save(top: LinenrT, bot: LinenrT) -> c_int {
 /// # Safety
 ///
 /// Must be called with valid buffer handle and line numbers.
-#[no_mangle]
+#[export_name = "u_save_buf"]
 pub unsafe extern "C" fn rs_u_save_buf(buf: BufHandle, top: LinenrT, bot: LinenrT) -> c_int {
     let line_count = nvim_buf_get_ml_line_count(buf);
 
@@ -2355,7 +2355,7 @@ pub unsafe extern "C" fn rs_u_save_buf(buf: BufHandle, top: LinenrT, bot: Linenr
 /// # Safety
 ///
 /// Must be called with valid line number for curbuf.
-#[no_mangle]
+#[export_name = "u_savesub"]
 pub unsafe extern "C" fn rs_u_savesub(lnum: LinenrT) -> c_int {
     rs_u_savecommon(nvim_get_curbuf(), lnum - 1, lnum + 1, lnum + 1, false)
 }
@@ -2366,7 +2366,7 @@ pub unsafe extern "C" fn rs_u_savesub(lnum: LinenrT) -> c_int {
 /// # Safety
 ///
 /// Must be called with valid line number for curbuf.
-#[no_mangle]
+#[export_name = "u_inssub"]
 pub unsafe extern "C" fn rs_u_inssub(lnum: LinenrT) -> c_int {
     rs_u_savecommon(nvim_get_curbuf(), lnum - 1, lnum, lnum + 1, false)
 }
@@ -2377,7 +2377,7 @@ pub unsafe extern "C" fn rs_u_inssub(lnum: LinenrT) -> c_int {
 /// # Safety
 ///
 /// Must be called with valid line numbers for curbuf.
-#[no_mangle]
+#[export_name = "u_savedel"]
 pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
     let buf = nvim_get_curbuf();
     let line_count = nvim_buf_get_ml_line_count(buf);
@@ -2393,7 +2393,7 @@ pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
 /// # Safety
 ///
 /// Must be called from a valid Neovim context.
-#[no_mangle]
+#[export_name = "u_find_first_changed"]
 pub unsafe extern "C" fn rs_u_find_first_changed() {
     let curbuf = nvim_get_curbuf();
     let uhp = nvim_buf_get_b_u_newhead(curbuf);
@@ -2443,7 +2443,7 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
 /// # Safety
 ///
 /// Must be called from a valid Neovim context.
-#[no_mangle]
+#[export_name = "u_undoline"]
 pub unsafe extern "C" fn rs_u_undoline() {
     let curbuf = nvim_get_curbuf();
     let line_ptr = nvim_buf_get_b_u_line_ptr(curbuf);
@@ -2481,7 +2481,7 @@ pub unsafe extern "C" fn rs_u_undoline() {
 /// # Safety
 ///
 /// Must be called with a valid buffer handle.
-#[no_mangle]
+#[export_name = "u_force_get_undo_header"]
 pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHandle {
     let mut uhp = nvim_buf_get_b_u_curhead(buf);
     if uhp.is_null() {
@@ -2517,7 +2517,7 @@ pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHa
 /// # Safety
 ///
 /// Accesses global state via C FFI. Must be called with valid global state.
-#[no_mangle]
+#[export_name = "undo_time"]
 pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     // Check text lock first
     if nvim_text_locked() {
@@ -2970,7 +2970,7 @@ extern "C" {
 /// # Safety
 ///
 /// `buf` must be a valid pointer to a buffer of at least `buflen` bytes.
-#[no_mangle]
+#[export_name = "undo_fmt_time"]
 pub unsafe extern "C" fn rs_undo_fmt_time(buf: *mut c_char, buflen: usize, tt: TimeT) {
     if buf.is_null() || buflen == 0 {
         return;
@@ -4141,7 +4141,7 @@ pub unsafe extern "C" fn rs_serialize_header(
 /// # Safety
 ///
 /// `buf` must be a valid buffer handle. `hash` must point to at least 32 bytes.
-#[no_mangle]
+#[export_name = "u_compute_hash"]
 pub unsafe extern "C" fn rs_u_compute_hash(buf: BufHandle, hash: *mut u8) {
     if hash.is_null() {
         return;
@@ -4199,7 +4199,7 @@ const O_RDONLY: c_int = 0o0;
 /// # Safety
 ///
 /// All handles must be valid. `hash` must point to UNDO_HASH_SIZE bytes.
-#[no_mangle]
+#[export_name = "u_write_undo"]
 pub unsafe extern "C" fn rs_u_write_undo(
     name: *const c_char,
     forceit: bool,
@@ -4736,7 +4736,7 @@ unsafe fn unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHa
 /// # Safety
 ///
 /// All handles must be valid. `hash` must point to UNDO_HASH_SIZE bytes.
-#[no_mangle]
+#[export_name = "u_read_undo"]
 pub unsafe extern "C" fn rs_u_read_undo(
     name: *const c_char,
     hash: *const u8,
@@ -5109,7 +5109,7 @@ pub struct ExargHandle(*mut c_void);
 /// # Safety
 ///
 /// `eap` must be a valid ExargT handle.
-#[no_mangle]
+#[export_name = "ex_undolist"]
 pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
     let buf = nvim_get_curbuf();
     let mut changes: c_int = 1;

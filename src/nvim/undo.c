@@ -134,49 +134,9 @@
 #include "nvim/undo_defs.h"
 #include "nvim/vim_defs.h"
 
-// Rust FFI function declarations
-extern bool rs_bufIsChanged(buf_T *buf);
-extern bool rs_anyBufIsChanged(void);
-extern bool rs_curbufIsChanged(void);
-extern void rs_u_clearall(buf_T *buf);
-extern void rs_u_clearline(buf_T *buf);
-extern void rs_u_freeentry(u_entry_T *uep, int n);
-extern void rs_u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
-extern void rs_u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
-extern void rs_u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
-extern u_entry_T *rs_u_get_headentry(buf_T *buf);
-extern void rs_u_getbot(buf_T *buf);
-extern void rs_u_blockfree(buf_T *buf);
-extern void rs_u_sync(bool force);
-extern void rs_u_clearallandblockfree(buf_T *buf);
-extern void rs_u_unch_branch(u_header_T *uhp);
-extern void rs_u_unchanged(buf_T *buf);
-extern void rs_u_update_save_nr(buf_T *buf);
-extern void rs_u_free_uhp(u_header_T *uhp);
-extern bool rs_undo_allowed(buf_T *buf);
-extern void rs_ex_undojoin(void);
-extern void rs_u_undo(int count);
-extern void rs_u_redo(int count);
-extern bool rs_u_undo_and_forget(int count, bool do_buf_event);
-extern void rs_u_doit(int startcount, bool quiet, bool do_buf_event);
-extern int rs_u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool reload);
-extern int rs_u_save_cursor(void);
-extern int rs_u_save(linenr_T top, linenr_T bot);
-extern int rs_u_save_buf(buf_T *buf, linenr_T top, linenr_T bot);
-extern int rs_u_savesub(linenr_T lnum);
-extern int rs_u_inssub(linenr_T lnum);
-extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
-extern void rs_u_find_first_changed(void);
-extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
-extern void rs_u_undoline(void);
-extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
-extern void rs_u_compute_hash(buf_T *buf, uint8_t *hash);
-extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
-extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *orig_name);
-extern void rs_ex_undolist(exarg_T *eap);
+// Rust FFI function declarations (accessors only - implementations are exported directly)
 extern list_T *rs_u_eval_tree(buf_T *buf, const u_header_T *first_uhp);
 extern char *rs_f_undofile(const char *fname);
-extern void rs_undo_fmt_time(char *buf, size_t buflen, time_t tt);
 
 #include "undo.c.generated.h"
 
@@ -276,64 +236,6 @@ static void u_check(int newhead_may_be_NULL)
 
 #endif
 
-/// Save the current line for both the "u" and "U" command.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns OK or FAIL.
-int u_save_cursor(void)
-{
-  return rs_u_save_cursor();
-}
-
-/// Save the lines between "top" and "bot" for both the "u" and "U" command.
-/// "top" may be 0 and "bot" may be curbuf->b_ml.ml_line_count + 1.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns FAIL when lines could not be saved, OK otherwise.
-int u_save(linenr_T top, linenr_T bot)
-{
-  return rs_u_save(top, bot);
-}
-
-int u_save_buf(buf_T *buf, linenr_T top, linenr_T bot)
-{
-  return rs_u_save_buf(buf, top, bot);
-}
-
-/// Save the line "lnum" (used by ":s" and "~" command).
-/// The line is replaced, so the new bottom line is lnum + 1.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns FAIL when lines could not be saved, OK otherwise.
-int u_savesub(linenr_T lnum)
-{
-  return rs_u_savesub(lnum);
-}
-
-/// A new line is inserted before line "lnum" (used by :s command).
-/// The line is inserted, so the new bottom line is lnum + 1.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns FAIL when lines could not be saved, OK otherwise.
-int u_inssub(linenr_T lnum)
-{
-  return rs_u_inssub(lnum);
-}
-
-/// Save the lines "lnum" - "lnum" + nlines (used by delete command).
-/// The lines are deleted, so the new bottom line is lnum, unless the buffer
-/// becomes empty.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns FAIL when lines could not be saved, OK otherwise.
-int u_savedel(linenr_T lnum, linenr_T nlines)
-{
-  return rs_u_savedel(lnum, nlines);
-}
-
-/// Return true when undo is allowed. Otherwise print an error message and
-/// return false.
-///
-/// @return true if undo is allowed.
-bool undo_allowed(buf_T *buf)
-{
-  return rs_undo_allowed(buf);
-}
 
 /// Get the 'undolevels' value for the current buffer.
 static OptInt get_undolevel(buf_T *buf)
@@ -351,17 +253,6 @@ static inline void zero_fmark_additional_data(fmark_T *fmarks)
   }
 }
 
-/// Common code for various ways to save text before a change.
-/// "top" is the line above the first changed line.
-/// "bot" is the line below the last changed line.
-/// "newbot" is the new bottom line.  Use zero when not known.
-/// "reload" is true when saving for a buffer reload.
-/// Careful: may trigger autocommands that reload the buffer.
-/// Returns FAIL when lines could not be saved, OK otherwise.
-int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool reload)
-{
-  return rs_u_savecommon(buf, top, bot, newbot, reload);
-}
 
 // Static assertions for Rust FFI constant verification
 _Static_assert(kExtmarkSplice == 0, "kExtmarkSplice must be 0");
@@ -374,270 +265,6 @@ _Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM must be 0x7fffffff");
 _Static_assert(kExtmarkNOOP == 0, "kExtmarkNOOP must be 0");
 _Static_assert(kOptFdoFlagUndo == 0x200, "kOptFdoFlagUndo must be 0x200");
 
-/// Compute the hash for a buffer text into hash[UNDO_HASH_SIZE].
-///
-/// @param[in] buf The buffer used to compute the hash
-/// @param[in] hash Array of size UNDO_HASH_SIZE in which to store the value of
-///                 the hash
-void u_compute_hash(buf_T *buf, uint8_t *hash)
-{
-  rs_u_compute_hash(buf, hash);
-}
-
-static void u_free_uhp(u_header_T *uhp)
-{
-  rs_u_free_uhp(uhp);
-}
-
-/// Write the undo tree in an undo file.
-///
-/// @param[in]  name  Name of the undo file or NULL if this function needs to
-///                   generate the undo file name based on buf->b_ffname.
-/// @param[in]  forceit  True for `:wundo!`, false otherwise.
-/// @param[in]  buf  Buffer for which undo file is written.
-/// @param[in]  hash  Hash value of the buffer text. Must have #UNDO_HASH_SIZE
-///                   size.
-void u_write_undo(const char *const name, const bool forceit, buf_T *const buf, uint8_t *const hash)
-  FUNC_ATTR_NONNULL_ARG(3, 4)
-{
-  // Call the Rust implementation
-  rs_u_write_undo(name, forceit, buf, hash);
-}
-
-/// Loads the undo tree from an undo file.
-/// If "name" is not NULL use it as the undo file name. This also means being
-/// a bit more verbose.
-/// Otherwise use curbuf->b_ffname to generate the undo file name.
-/// "hash[UNDO_HASH_SIZE]" must be the hash value of the buffer text.
-void u_read_undo(char *name, const uint8_t *hash, const char *orig_name FUNC_ATTR_UNUSED)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  // Call the Rust implementation
-  rs_u_read_undo(name, hash, orig_name);
-}
-
-
-/// If 'cpoptions' contains 'u': Undo the previous undo or redo (vi compatible).
-/// If 'cpoptions' does not contain 'u': Always undo.
-void u_undo(int count)
-{
-  rs_u_undo(count);
-}
-
-/// If 'cpoptions' contains 'u': Repeat the previous undo or redo.
-/// If 'cpoptions' does not contain 'u': Always redo.
-void u_redo(int count)
-{
-  rs_u_redo(count);
-}
-
-/// Undo and remove the branch from the undo tree.
-/// Also moves the cursor (as a "normal" undo would).
-///
-/// @param do_buf_event If `true`, send the changedtick with the buffer updates
-bool u_undo_and_forget(int count, bool do_buf_event)
-{
-  return rs_u_undo_and_forget(count, do_buf_event);
-}
-
-/// Undo or redo, depending on `undo_undoes`, `count` times.
-///
-/// @param startcount How often to undo or redo
-/// @param quiet If `true`, don't show messages
-/// @param do_buf_event If `true`, send the changedtick with the buffer updates
-static void u_doit(int startcount, bool quiet, bool do_buf_event)
-{
-  rs_u_doit(startcount, quiet, do_buf_event);
-}
-
-// Undo or redo over the timeline.
-// When "step" is negative go back in time, otherwise goes forward in time.
-// When "sec" is false make "step" steps, when "sec" is true use "step" as
-// seconds.
-// When "file" is true use "step" as a number of file writes.
-// When "absolute" is true use "step" as the sequence number to jump to.
-// "sec" must be false then.
-void undo_time(int step, bool sec, bool file, bool absolute)
-{
-  // Call the Rust implementation
-  rs_undo_time(step, sec, file, absolute);
-}
-
-
-/// Put the timestamp of an undo header in "buf[buflen]" in a nice format.
-void undo_fmt_time(char *buf, size_t buflen, time_t tt)
-{
-  rs_undo_fmt_time(buf, buflen, tt);
-}
-
-/// u_sync: stop adding to the current entry list
-///
-/// @param force  if true, also sync when no_u_sync is set.
-void u_sync(bool force)
-{
-  rs_u_sync(force);
-}
-
-/// ":undolist": List the leafs of the undo tree
-void ex_undolist(exarg_T *eap)
-{
-  // Call the Rust implementation
-  rs_ex_undolist(eap);
-}
-
-/// ":undojoin": continue adding to the last entry list
-void ex_undojoin(exarg_T *eap)
-{
-  (void)eap;  // unused
-  rs_ex_undojoin();
-}
-
-/// Called after writing or reloading the file and setting b_changed to false.
-/// Now an undo means that the buffer is modified.
-void u_unchanged(buf_T *buf)
-{
-  rs_u_unchanged(buf);
-}
-
-/// After reloading a buffer which was saved for 'undoreload': Find the first
-/// line that was changed and set the cursor there.
-void u_find_first_changed(void)
-{
-  rs_u_find_first_changed();
-}
-
-/// Increase the write count, store it in the last undo header, what would be
-/// used for "u".
-void u_update_save_nr(buf_T *buf)
-{
-  rs_u_update_save_nr(buf);
-}
-
-static void u_unch_branch(u_header_T *uhp)
-{
-  rs_u_unch_branch(uhp);
-}
-
-/// Get pointer to last added entry.
-/// If it's not valid, give an error message and return NULL.
-static u_entry_T *u_get_headentry(buf_T *buf)
-{
-  return rs_u_get_headentry(buf);
-}
-
-/// u_getbot(): compute the line number of the previous u_save
-///              It is called only when b_u_synced is false.
-static void u_getbot(buf_T *buf)
-{
-  rs_u_getbot(buf);
-}
-
-/// Free one header "uhp" and its entry list and adjust the pointers.
-///
-/// @param uhpp  if not NULL reset when freeing this header
-static void u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
-{
-  rs_u_freeheader(buf, uhp, uhpp);
-}
-
-/// Free an alternate branch and any following alternate branches.
-///
-/// @param uhpp  if not NULL reset when freeing this header
-static void u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
-{
-  rs_u_freebranch(buf, uhp, uhpp);
-}
-
-/// Free all the undo entries for one header and the header itself.
-/// This means that "uhp" is invalid when returning.
-///
-/// @param uhpp  if not NULL reset when freeing this header
-static void u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
-{
-  rs_u_freeentries(buf, uhp, uhpp);
-}
-
-/// free entry 'uep' and 'n' lines in uep->ue_array[]
-static void u_freeentry(u_entry_T *uep, int n)
-{
-  rs_u_freeentry(uep, n);
-}
-
-/// invalidate the undo buffer; called when storage has already been released
-void u_clearall(buf_T *buf)
-{
-  rs_u_clearall(buf);
-}
-
-/// Free all allocated memory blocks for the buffer 'buf'.
-void u_blockfree(buf_T *buf)
-{
-  rs_u_blockfree(buf);
-}
-
-/// Free all allocated memory blocks for the buffer 'buf'.
-/// and invalidate the undo buffer
-void u_clearallandblockfree(buf_T *buf)
-{
-  rs_u_clearallandblockfree(buf);
-}
-
-/// clear the line saved for the "U" command
-/// (this is used externally for crossing a line while in insert mode)
-void u_clearline(buf_T *buf)
-{
-  rs_u_clearline(buf);
-}
-
-/// Implementation of the "U" command.
-/// Differentiation from vi: "U" can be undone with the next "U".
-/// We also allow the cursor to be in another line.
-/// Careful: may trigger autocommands that reload the buffer.
-void u_undoline(void)
-{
-  rs_u_undoline();
-}
-
-/// Check if the 'modified' flag is set, or 'ff' has changed (only need to
-/// check the first character, because it can only be "dos", "unix" or "mac").
-/// "nofile" and "scratch" type buffers are considered to always be unchanged.
-///
-/// @param buf The buffer to check
-///
-/// @return true if the buffer has changed
-bool bufIsChanged(buf_T *buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_bufIsChanged(buf);
-}
-
-// Return true if any buffer has changes.  Also buffers that are not written.
-bool anyBufIsChanged(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_anyBufIsChanged();
-}
-
-/// @see bufIsChanged
-/// @return true if the current buffer has changed
-bool curbufIsChanged(void)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_curbufIsChanged();
-}
-
-/// Append the list of undo blocks to a newly allocated list
-///
-/// For use in undotree(). Recursive.
-///
-/// @param[in]  first_uhp  Undo blocks list to start with.
-///
-/// @return [allocated] List with a representation of undo blocks.
-static list_T *u_eval_tree(buf_T *const buf, const u_header_T *const first_uhp)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
-{
-  return rs_u_eval_tree(buf, first_uhp);
-}
 
 /// "undofile(name)" function
 void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -667,15 +294,9 @@ void f_undotree(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   tv_dict_add_nr(dict, S_LEN("time_cur"), (varnumber_T)buf->b_u_time_cur);
   tv_dict_add_nr(dict, S_LEN("save_cur"), (varnumber_T)buf->b_u_save_nr_cur);
 
-  tv_dict_add_list(dict, S_LEN("entries"), u_eval_tree(buf, buf->b_u_oldhead));
+  tv_dict_add_list(dict, S_LEN("entries"), rs_u_eval_tree(buf, buf->b_u_oldhead));
 }
 
-// Given the buffer, Return the undo header. If none is set, set one first.
-// NULL will be returned if e.g undolevels = -1 (undo disabled)
-u_header_T *u_force_get_undo_header(buf_T *buf)
-{
-  return rs_u_force_get_undo_header(buf);
-}
 
 // ============================================================================
 // Rust FFI accessor functions
@@ -924,10 +545,6 @@ void nvim_set_undo_undoes(bool val)
   undo_undoes = val;
 }
 
-void nvim_u_doit(int count, bool quiet, bool do_buf_event)
-{
-  u_doit(count, quiet, do_buf_event);
-}
 
 // u_undo_and_forget accessors
 int nvim_buf_get_b_u_seq_cur(buf_T *buf)
