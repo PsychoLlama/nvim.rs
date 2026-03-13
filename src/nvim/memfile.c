@@ -86,26 +86,11 @@ _Static_assert(OK == 1, "OK must be 1");
 _Static_assert(FAIL == 0, "FAIL must be 0");
 
 // =============================================================================
-// Rust function declarations
+// Rust function declarations (only those called with rs_ prefix from C)
 // =============================================================================
 
-extern memfile_T *rs_mf_open(char *fname, int flags);
-extern int rs_mf_open_file(memfile_T *mfp, char *fname);
-extern void rs_mf_close(memfile_T *mfp, bool del_file);
-extern void rs_mf_close_file_impl(memfile_T *mfp);
-extern void rs_mf_new_page_size(memfile_T *mfp, unsigned new_size);
-extern bhdr_T *rs_mf_new(memfile_T *mfp, bool negative, unsigned page_count);
-extern bhdr_T *rs_mf_get(memfile_T *mfp, blocknr_T nr, unsigned page_count);
-extern void rs_mf_put(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile);
-extern void rs_mf_free(memfile_T *mfp, bhdr_T *hp);
-extern int rs_mf_sync(memfile_T *mfp, int flags);
-extern void rs_mf_set_dirty_all(memfile_T *mfp);
 extern bool rs_mf_release_for_memfile(memfile_T *mfp);
-extern blocknr_T rs_mf_trans_del(memfile_T *mfp, blocknr_T old_nr);
-extern void rs_mf_free_fnames(memfile_T *mfp);
-extern void rs_mf_set_fnames(memfile_T *mfp, char *fname);
-extern void rs_mf_fullname(memfile_T *mfp);
-extern bool rs_mf_need_trans(memfile_T *mfp);
+extern void rs_mf_close_file_impl(memfile_T *mfp);
 
 // =============================================================================
 // C accessor functions for memfile_T fields
@@ -529,23 +514,8 @@ void nvim_mf_buf_ml_open_file(buf_T *buf)
 }
 
 // =============================================================================
-// Thin C wrappers delegating to Rust
+// C functions with real logic that call Rust helpers
 // =============================================================================
-
-memfile_T *mf_open(char *fname, int flags)
-{
-  return rs_mf_open(fname, flags);
-}
-
-int mf_open_file(memfile_T *mfp, char *fname)
-{
-  return rs_mf_open_file(mfp, fname);
-}
-
-void mf_close(memfile_T *mfp, bool del_file)
-{
-  rs_mf_close(mfp, del_file);
-}
 
 /// Close the swap file for a memfile. Used when 'swapfile' is reset.
 ///
@@ -567,40 +537,6 @@ void mf_close_file(buf_T *buf, bool getlines)
   rs_mf_close_file_impl(mfp);
 }
 
-void mf_new_page_size(memfile_T *mfp, unsigned new_size)
-{
-  rs_mf_new_page_size(mfp, new_size);
-}
-
-bhdr_T *mf_new(memfile_T *mfp, bool negative, unsigned page_count)
-{
-  return rs_mf_new(mfp, negative, page_count);
-}
-
-bhdr_T *mf_get(memfile_T *mfp, blocknr_T nr, unsigned page_count)
-{
-  return rs_mf_get(mfp, nr, page_count);
-}
-
-void mf_put(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile)
-{
-  rs_mf_put(mfp, hp, dirty, infile);
-}
-
-void mf_free(memfile_T *mfp, bhdr_T *hp)
-{
-  rs_mf_free(mfp, hp);
-}
-
-int mf_sync(memfile_T *mfp, int flags)
-{
-  return rs_mf_sync(mfp, flags);
-}
-
-void mf_set_dirty(memfile_T *mfp)
-{
-  rs_mf_set_dirty_all(mfp);
-}
 
 /// Release as many blocks as possible.
 ///
@@ -629,27 +565,3 @@ bool mf_release_all(void)
   return retval;
 }
 
-blocknr_T mf_trans_del(memfile_T *mfp, blocknr_T old_nr)
-{
-  return rs_mf_trans_del(mfp, old_nr);
-}
-
-void mf_free_fnames(memfile_T *mfp)
-{
-  rs_mf_free_fnames(mfp);
-}
-
-void mf_set_fnames(memfile_T *mfp, char *fname)
-{
-  rs_mf_set_fnames(mfp, fname);
-}
-
-void mf_fullname(memfile_T *mfp)
-{
-  rs_mf_fullname(mfp);
-}
-
-bool mf_need_trans(memfile_T *mfp)
-{
-  return rs_mf_need_trans(mfp);
-}

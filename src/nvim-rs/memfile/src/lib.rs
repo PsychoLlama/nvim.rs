@@ -637,14 +637,14 @@ unsafe fn mf_do_open(mfp: MfHandle, fname: *mut c_char, flags: c_int) -> bool {
 // =============================================================================
 
 /// Free mf_fname and mf_ffname.
-#[no_mangle]
+#[export_name = "mf_free_fnames"]
 pub unsafe extern "C" fn rs_mf_free_fnames(mfp: MfHandle) {
     nvim_mf_xfree_clear_fname(mfp);
     nvim_mf_xfree_clear_ffname(mfp);
 }
 
 /// Set the simple file name and the full file name of memfile's swapfile.
-#[no_mangle]
+#[export_name = "mf_set_fnames"]
 pub unsafe extern "C" fn rs_mf_set_fnames(mfp: MfHandle, fname: *mut c_char) {
     nvim_mf_set_fname(mfp, fname);
     let full_name = nvim_mf_fullname_save(nvim_mf_get_fname(mfp));
@@ -652,7 +652,7 @@ pub unsafe extern "C" fn rs_mf_set_fnames(mfp: MfHandle, fname: *mut c_char) {
 }
 
 /// Make name of memfile's swapfile a full path. Used before doing a :cd.
-#[no_mangle]
+#[export_name = "mf_fullname"]
 pub unsafe extern "C" fn rs_mf_fullname(mfp: MfHandle) {
     if mfp.is_null() {
         return;
@@ -669,21 +669,21 @@ pub unsafe extern "C" fn rs_mf_fullname(mfp: MfHandle) {
 }
 
 /// Return true if there are any translations pending for memfile.
-#[no_mangle]
+#[export_name = "mf_need_trans"]
 pub unsafe extern "C" fn rs_mf_need_trans(mfp: MfHandle) -> bool {
     !nvim_mf_get_fname(mfp).is_null() && nvim_mf_get_neg_count(mfp) > 0
 }
 
 /// Set new size for a memfile. Used when block 0 of a swapfile has been read
 /// and the size it indicates differs from what was guessed.
-#[no_mangle]
+#[export_name = "mf_new_page_size"]
 pub unsafe extern "C" fn rs_mf_new_page_size(mfp: MfHandle, new_size: c_uint) {
     nvim_mf_set_page_size(mfp, new_size);
 }
 
 /// Lookup translation from trans list and delete the entry.
 /// Returns the positive new number when found, or old_nr when not found.
-#[no_mangle]
+#[export_name = "mf_trans_del"]
 pub unsafe extern "C" fn rs_mf_trans_del(mfp: MfHandle, old_nr: BlockNr) -> BlockNr {
     let num_ptr = nvim_mf_trans_ref(mfp, old_nr);
     if num_ptr.is_null() {
@@ -700,7 +700,7 @@ pub unsafe extern "C" fn rs_mf_trans_del(mfp: MfHandle, old_nr: BlockNr) -> Bloc
 }
 
 /// Release the block *hp.
-#[no_mangle]
+#[export_name = "mf_put"]
 pub unsafe extern "C" fn rs_mf_put(mfp: MfHandle, hp: BhHandle, dirty: bool, infile: bool) {
     let mut flags = nvim_bh_get_flags(hp);
 
@@ -721,7 +721,7 @@ pub unsafe extern "C" fn rs_mf_put(mfp: MfHandle, hp: BhHandle, dirty: bool, inf
 }
 
 /// Signal block as no longer used (may put it in the free list).
-#[no_mangle]
+#[export_name = "mf_free"]
 pub unsafe extern "C" fn rs_mf_free(mfp: MfHandle, hp: BhHandle) {
     xfree(nvim_bh_get_data(hp));
     let bnum = nvim_bh_get_bnum(hp);
@@ -737,7 +737,7 @@ pub unsafe extern "C" fn rs_mf_free(mfp: MfHandle, hp: BhHandle) {
 
 /// Open a file for an existing memfile.
 /// Used when updatecount set from 0 to some value.
-#[no_mangle]
+#[export_name = "mf_open_file"]
 pub unsafe extern "C" fn rs_mf_open_file(mfp: MfHandle, fname: *mut c_char) -> c_int {
     if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
         nvim_mf_set_dirty(mfp, MF_DIRTY_YES);
@@ -765,7 +765,7 @@ pub unsafe extern "C" fn rs_mf_set_dirty_all(mfp: MfHandle) {
 // =============================================================================
 
 /// Open a new or existing memory block file.
-#[no_mangle]
+#[export_name = "mf_open"]
 pub unsafe extern "C" fn rs_mf_open(fname: *mut c_char, flags: c_int) -> MfHandle {
     let mfp = nvim_mf_alloc();
 
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn rs_mf_open(fname: *mut c_char, flags: c_int) -> MfHandl
 }
 
 /// Close a memory file and optionally delete the associated file.
-#[no_mangle]
+#[export_name = "mf_close"]
 pub unsafe extern "C" fn rs_mf_close(mfp: MfHandle, del_file: bool) {
     if mfp.is_null() {
         return;
@@ -859,7 +859,7 @@ pub unsafe extern "C" fn rs_mf_close(mfp: MfHandle, del_file: bool) {
 }
 
 /// Create a new block in a memfile and lock it.
-#[no_mangle]
+#[export_name = "mf_new"]
 pub unsafe extern "C" fn rs_mf_new(mfp: MfHandle, negative: bool, page_count: c_uint) -> BhHandle {
     let hp;
 
@@ -909,7 +909,7 @@ pub unsafe extern "C" fn rs_mf_new(mfp: MfHandle, negative: bool, page_count: c_
 
 /// Get an existing block and lock it.
 /// Caller should first check a negative nr with mf_trans_del().
-#[no_mangle]
+#[export_name = "mf_get"]
 pub unsafe extern "C" fn rs_mf_get(mfp: MfHandle, nr: BlockNr, page_count: c_uint) -> BhHandle {
     let blocknr_max = nvim_mf_get_blocknr_max(mfp);
     let blocknr_min = nvim_mf_get_blocknr_min(mfp);
@@ -951,7 +951,7 @@ pub unsafe extern "C" fn rs_mf_get(mfp: MfHandle, nr: BlockNr, page_count: c_uin
 }
 
 /// Sync memory file to disk.
-#[no_mangle]
+#[export_name = "mf_sync"]
 pub unsafe extern "C" fn rs_mf_sync(mfp: MfHandle, flags: c_int) -> c_int {
     let got_int_save = nvim_mf_get_got_int();
 
