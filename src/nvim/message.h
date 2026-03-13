@@ -65,6 +65,22 @@ bool msg_do_throttle(void);
 int msg_use_printf(void);
 int redirecting(void);
 
+// Phase 1: Simple leaf functions migrated to Rust
+bool msg(const char *s, int hl_id);
+int verb_msg(const char *s);
+void msg_puts(const char *s);
+void msg_puts_title(const char *s);
+void msg_putchar(int c);
+void msg_outnum(int n);
+void msg_starthere(void);
+void msg_clr_eos(void);
+void msg_end_prompt(void);
+bool emsg(const char *s);
+
+// Phase 2: Truncation functions migrated to Rust
+char *msg_strtrunc(const char *s, int force);
+void trunc_string(const char *s, char *buf, int room_in, int buflen);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

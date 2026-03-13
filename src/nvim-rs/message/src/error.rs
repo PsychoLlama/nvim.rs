@@ -488,7 +488,8 @@ use std::ffi::c_char;
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "emsg"]
+#[must_use]
 pub unsafe extern "C" fn rs_emsg(s: *const c_char) -> c_int {
     static KIND: &[u8] = b"emsg\0";
     emsg_multiline(s, KIND.as_ptr().cast::<c_char>(), HLF_E, 0)

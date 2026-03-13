@@ -22,10 +22,22 @@ extern "C" {
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
     fn msg_start();
     fn msg_end() -> c_int;
-    fn msg_clr_eos();
+    fn msg_clr_eos_force();
+
+    // Verbose enter/leave
+    fn verbose_enter();
+    fn verbose_leave();
 
     // State accessors
     fn nvim_get_msg_silent() -> c_int;
+    fn nvim_get_cmdline_row() -> c_int;
+    fn nvim_set_lines_left(val: c_int);
+    fn nvim_set_msg_didany(val: c_int);
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_set_emsg_on_display(val: c_int);
+    fn nvim_set_cmdline_row(val: c_int);
+    fn nvim_get_msg_row() -> c_int;
+    fn nvim_set_msg_col(col: c_int);
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -73,7 +85,8 @@ const fn k_third(c: c_int) -> u8 {
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg"]
+#[must_use]
 pub unsafe extern "C" fn rs_msg(s: *const c_char, hl_id: c_int) -> c_int {
     msg_keep(s, hl_id, 0, 0)
 }
@@ -128,7 +141,7 @@ pub unsafe extern "C" fn rs_msg_multiline_simple(
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg_puts"]
 pub unsafe extern "C" fn rs_msg_puts(s: *const c_char) {
     msg_puts_hl(s, 0, 0);
 }
@@ -157,7 +170,7 @@ pub unsafe extern "C" fn rs_msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_
 ///
 /// # Safety
 /// This function is safe to call with any integer value.
-#[no_mangle]
+#[export_name = "msg_putchar"]
 pub unsafe extern "C" fn rs_msg_putchar(c: c_int) {
     rs_msg_putchar_hl(c, 0);
 }
@@ -202,7 +215,7 @@ pub unsafe extern "C" fn rs_msg_putchar_hl(c: c_int, hl_id: c_int) {
 ///
 /// # Safety
 /// This function is safe to call with any integer value.
-#[no_mangle]
+#[export_name = "msg_outnum"]
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_msg_outnum(n: c_int) {
     // Format number as string (max 20 chars for i32)
@@ -252,13 +265,21 @@ pub unsafe extern "C" fn rs_msg_end() -> c_int {
     msg_end()
 }
 
-/// Clear from current message position to end of screen.
+/// Clear from current message position to end of screen (rs_ alias).
 ///
 /// # Safety
-/// Calls C function that modifies display state.
+/// Calls Rust implementation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_clr_eos() {
-    msg_clr_eos();
+    msg_clr_eos_impl();
+}
+
+/// Internal implementation of msg_clr_eos logic.
+#[inline]
+unsafe fn msg_clr_eos_impl() {
+    if nvim_get_msg_silent() == 0 {
+        msg_clr_eos_force();
+    }
 }
 
 /// Check if messages are silent.
@@ -285,10 +306,8 @@ pub unsafe extern "C" fn rs_msg_is_silent() -> c_int {
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg_puts_title"]
 pub unsafe extern "C" fn rs_msg_puts_title(s: *const c_char) {
-    // HLF_T is the title highlight - use the constant from C
-    // For now, use hl_id 0 as placeholder; actual HLF_T value from C will be used
     msg_puts_hl(s, HLF_T, 0);
 }
 
@@ -397,6 +416,64 @@ pub const extern "C" fn rs_is_printf_length(c: c_int) -> c_int {
         || c == b'z' as c_int
         || c == b'j' as c_int
         || c == b't' as c_int) as c_int
+}
+
+// ============================================================================
+// Message Control Flow (Phase 1 Migration)
+// ============================================================================
+
+/// Like msg() but keep it silent when 'verbosefile' is set.
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+#[export_name = "verb_msg"]
+#[must_use]
+pub unsafe extern "C" fn rs_verb_msg(s: *const c_char) -> c_int {
+    verbose_enter();
+    let n = msg_keep(s, 0, 0, 0);
+    verbose_leave();
+    n
+}
+
+/// Start collecting messages here.
+///
+/// Sets lines_left to cmdline_row and clears msg_didany.
+///
+/// # Safety
+/// Calls C accessor functions that modify global state.
+#[export_name = "msg_starthere"]
+pub unsafe extern "C" fn rs_msg_starthere() {
+    let cmdline_row = nvim_get_cmdline_row();
+    nvim_set_lines_left(cmdline_row);
+    nvim_set_msg_didany(0);
+}
+
+/// Clear from current message position to end of screen.
+///
+/// Only clears if msg_silent is not set.
+///
+/// # Safety
+/// Calls C functions that modify display state.
+#[export_name = "msg_clr_eos"]
+pub unsafe extern "C" fn rs_msg_clr_eos_export() {
+    msg_clr_eos_impl();
+}
+
+/// End a prompt message.
+///
+/// Resets the prompt state: clears need_wait_return, emsg_on_display,
+/// updates cmdline_row, resets msg_col, clears eos, resets lines_left.
+///
+/// # Safety
+/// Calls C functions that modify global state and display.
+#[export_name = "msg_end_prompt"]
+pub unsafe extern "C" fn rs_msg_end_prompt() {
+    nvim_set_need_wait_return(0);
+    nvim_set_emsg_on_display(0);
+    nvim_set_cmdline_row(nvim_get_msg_row());
+    nvim_set_msg_col(0);
+    msg_clr_eos_impl();
+    nvim_set_lines_left(-1);
 }
 
 // ============================================================================

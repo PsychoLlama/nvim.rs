@@ -27,7 +27,6 @@ extern "C" {
 
     // Display coordination
     fn msg_check();
-    fn msg_starthere();
     fn msg_grid_validate();
     fn msg_line_flush();
 
@@ -239,17 +238,6 @@ pub unsafe extern "C" fn rs_set_need_clr_eos(val: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_check() {
     msg_check();
-}
-
-/// Mark the start position for message display.
-///
-/// Sets msg_startvcol and msg_startrow to current position.
-///
-/// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_starthere() {
-    msg_starthere();
 }
 
 /// Validate the message grid for output.

@@ -19,7 +19,6 @@ extern "C" {
     // Note: msg_source is wrapped in error.rs
 
     // Prompt handling
-    fn msg_end_prompt();
 
     // Delay checking
     fn msg_check_for_delay(check_msg_scroll: c_int);
@@ -86,17 +85,6 @@ pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
 // ============================================================================
 // Prompt and Delay Functions
 // ============================================================================
-
-/// End a prompt message.
-///
-/// Called after prompt input to clean up message state.
-///
-/// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_end_prompt() {
-    msg_end_prompt();
-}
 
 /// Check if a delay is needed before next message.
 ///

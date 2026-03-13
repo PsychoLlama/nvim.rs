@@ -467,25 +467,7 @@ void msg_grid_validate(void)
   }
 }
 
-/// Like msg() but keep it silent when 'verbosefile' is set.
-int verb_msg(const char *s)
-{
-  verbose_enter();
-  int n = msg_keep(s, 0, false, false);
-  verbose_leave();
 
-  return n;
-}
-
-/// Displays the string 's' on the status line
-/// When terminal not initialized (yet) printf("%s", ..) is used.
-///
-/// @return  true if wait_return() not called
-bool msg(const char *s, const int hl_id)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  return msg_keep(s, hl_id, false, false);
-}
 
 /// Similar to msg_outtrans_len, but support newlines and tabs.
 void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear)
@@ -705,122 +687,6 @@ bool msg_keep(const char *s, int hl_id, bool keep, bool multiline)
   return retval;
 }
 
-/// Truncate a string such that it can be printed without causing a scroll.
-///
-/// @return  an allocated string or NULL when no truncating is done.
-///
-/// @param force  always truncate
-char *msg_strtrunc(const char *s, int force)
-{
-  char *buf = NULL;
-
-  // May truncate message to avoid a hit-return prompt
-  if ((!msg_scroll && !need_wait_return && shortmess(SHM_TRUNCALL)
-       && !exmode_active && msg_silent == 0 && !ui_has(kUIMessages))
-      || force) {
-    int room;
-    int len = vim_strsize(s);
-    if (msg_scrolled != 0) {
-      // Use all the columns.
-      room = (Rows - msg_row) * Columns - 1;
-    } else {
-      // Use up to 'showcmd' column.
-      room = (Rows - msg_row - 1) * Columns + sc_col - 1;
-    }
-    if (len > room && room > 0) {
-      // may have up to 18 bytes per cell (6 per char, up to two
-      // composing chars)
-      len = (room + 2) * 18;
-      buf = xmalloc((size_t)len);
-      trunc_string(s, buf, room, len);
-    }
-  }
-  return buf;
-}
-
-/// Truncate a string "s" to "buf" with cell width "room".
-/// "s" and "buf" may be equal.
-void trunc_string(const char *s, char *buf, int room_in, int buflen)
-{
-  int room = room_in - 3;  // "..." takes 3 chars
-  int len = 0;
-  int e;
-  int i;
-  int n;
-
-  if (*s == NUL) {
-    if (buflen > 0) {
-      *buf = NUL;
-    }
-    return;
-  }
-
-  if (room_in < 3) {
-    room = 0;
-  }
-  int half = room / 2;
-
-  // First part: Start of the string.
-  for (e = 0; len < half && e < buflen; e++) {
-    if (s[e] == NUL) {
-      // text fits without truncating!
-      buf[e] = NUL;
-      return;
-    }
-    n = ptr2cells(s + e);
-    if (len + n > half) {
-      break;
-    }
-    len += n;
-    buf[e] = s[e];
-    for (n = utfc_ptr2len(s + e); --n > 0;) {
-      if (++e == buflen) {
-        break;
-      }
-      buf[e] = s[e];
-    }
-  }
-
-  // Last part: End of the string.
-  half = i = (int)strlen(s);
-  while (true) {
-    half = half - utf_head_off(s, s + half - 1) - 1;
-    n = ptr2cells(s + half);
-    if (len + n > room || half == 0) {
-      break;
-    }
-    len += n;
-    i = half;
-  }
-
-  if (i <= e + 3) {
-    // text fits without truncating
-    if (s != buf) {
-      len = (int)strlen(s);
-      if (len >= buflen) {
-        len = buflen - 1;
-      }
-      len = len - e + 1;
-      if (len < 1) {
-        buf[e - 1] = NUL;
-      } else {
-        memmove(buf + e, s + e, (size_t)len);
-      }
-    }
-  } else if (e + 3 < buflen) {
-    // set the middle and copy the last part
-    memmove(buf + e, "...", 3);
-    len = (int)strlen(s + i) + 1;
-    if (len >= buflen - e - 3) {
-      len = buflen - e - 3 - 1;
-    }
-    memmove(buf + e + 3, s + i, (size_t)len);
-    buf[e + 3 + len - 1] = NUL;
-  } else {
-    // can't fit in the "...", just truncate it
-    buf[buflen - 1] = NUL;
-  }
-}
 
 /// Shows a printf-style message with highlight id.
 ///
@@ -1103,10 +969,6 @@ bool emsg_multiline(const char *s, const char *kind, int hl_id, bool multiline)
 /// When terminal not initialized (yet) fprintf(stderr, "%s", ..) is used.
 ///
 /// @return true if wait_return() not called
-bool emsg(const char *s)
-{
-  return emsg_multiline(s, "emsg", HLF_E, false);
-}
 
 void emsg_invreg(int name)
 {
@@ -1552,17 +1414,6 @@ void ex_messages(exarg_T *eap)
   }
 }
 
-/// Call this after prompting the user.  This will avoid a hit-return message
-/// and a delay.
-void msg_end_prompt(void)
-{
-  need_wait_return = false;
-  emsg_on_display = false;
-  cmdline_row = msg_row;
-  msg_col = 0;
-  msg_clr_eos();
-  lines_left = -1;
-}
 
 /// Wait for the user to hit a key (normally Enter)
 ///
@@ -1912,17 +1763,6 @@ void msg_start(void)
   }
 }
 
-/// Note that the current msg position is where messages start.
-void msg_starthere(void)
-{
-  lines_left = cmdline_row;
-  msg_didany = false;
-}
-
-void msg_putchar(int c)
-{
-  msg_putchar_hl(c, 0);
-}
 
 void msg_putchar_hl(int c, int hl_id)
 {
@@ -1939,13 +1779,6 @@ void msg_putchar_hl(int c, int hl_id)
   msg_puts_hl(buf, hl_id, false);
 }
 
-void msg_outnum(int n)
-{
-  char buf[20];
-
-  snprintf(buf, sizeof(buf), "%d", n);
-  msg_puts(buf);
-}
 
 void msg_home_replace(const char *fname)
 {
@@ -2440,17 +2273,6 @@ void msg_prt_line(const char *s, bool list)
   msg_clr_eos();
 }
 
-/// Output a string to the screen at position msg_row, msg_col.
-/// Update msg_row and msg_col for the next message.
-void msg_puts(const char *s)
-{
-  msg_puts_hl(s, 0, false);
-}
-
-void msg_puts_title(const char *s)
-{
-  msg_puts_hl(s, HLF_T, false);
-}
 
 /// Show a message in such a way that it always fits in the line.  Cut out a
 /// part in the middle and replace it with "..." when necessary.
@@ -3421,14 +3243,6 @@ void repeat_message(void)
   }
 }
 
-/// Clear from current message position to end of screen.
-/// Skip this when ":silent" was used, no need to clear for redirection.
-void msg_clr_eos(void)
-{
-  if (msg_silent == 0) {
-    msg_clr_eos_force();
-  }
-}
 
 /// Clear from current message position to end of screen.
 /// Note: msg_col is not updated, so we remember the end of the message

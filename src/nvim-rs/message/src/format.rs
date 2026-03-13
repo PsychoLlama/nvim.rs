@@ -460,7 +460,7 @@ extern "C" {
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
 /// - `buf` must be a valid buffer of at least `buflen` bytes
-#[no_mangle]
+#[export_name = "trunc_string"]
 #[allow(
     clippy::too_many_lines,
     clippy::cast_sign_loss,
@@ -589,7 +589,8 @@ pub unsafe extern "C" fn rs_trunc_string(
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
 /// - Returned pointer (if not NULL) must be freed with `rs_msg_free_trunc`
-#[no_mangle]
+#[export_name = "msg_strtrunc"]
+#[must_use]
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
