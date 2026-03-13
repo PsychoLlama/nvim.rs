@@ -942,16 +942,6 @@ char *get_fileformat_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 }
 
 
-/// The 'foldexpr' option is changed.
-const char *did_set_foldexpr(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  did_set_optexpr(args);
-  if (rs_foldmethodIsExpr(win)) {
-    rs_foldUpdateAll(win);
-  }
-  return NULL;
-}
 
 int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches)
 {
@@ -1081,21 +1071,6 @@ int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
 }
 
 
-/// One of the '*expr' options is changed:, 'diffexpr', 'foldexpr', 'foldtext',
-/// 'formatexpr', 'includeexpr', 'indentexpr', 'patchexpr' and 'charconvert'.
-const char *did_set_optexpr(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  // If the option value starts with <SID> or s:, then replace that with
-  // the script identifier.
-  char *name = get_scriptlocal_funcname(*varp);
-  if (name != NULL) {
-    free_string_option(*varp);
-    *varp = name;
-  }
-  return NULL;
-}
 
 /// The 'rulerformat' option is changed.
 const char *did_set_rulerformat(optset_T *args)

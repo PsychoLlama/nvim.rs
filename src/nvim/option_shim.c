@@ -48,6 +48,7 @@
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
+#include "nvim/eval/userfunc.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
 #include "nvim/eval/window.h"
@@ -261,6 +262,8 @@ extern const char *rs_did_set_pumborder(optset_T *args);
 extern const char *rs_did_set_filetype_or_syntax(optset_T *args);
 extern const char *rs_did_set_verbosefile(optset_T *args);
 extern const char *rs_did_set_helpfile(optset_T *args);
+extern const char *rs_did_set_optexpr(optset_T *args);
+extern const char *rs_did_set_foldexpr(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -516,6 +519,17 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 100: optexpr / foldexpr accessors
+void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
+  char **varp = (char **)varp_ptr;
+  char *name = get_scriptlocal_funcname(*varp);
+  if (name != NULL) {
+    free_string_option(*varp);
+    *varp = name;
+  }
+}
+int nvim_foldmethodIsExpr(win_T *win) { return rs_foldmethodIsExpr(win) ? 1 : 0; }
 
 // Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c

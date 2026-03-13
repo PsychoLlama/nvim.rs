@@ -178,6 +178,10 @@ extern "C" {
     fn nvim_optset_get_oldval_str(args: *const c_void) -> *const std::ffi::c_char;
     fn nvim_verbose_check_and_open() -> c_int;
     fn nvim_unset_vim_env();
+
+    // Phase 100: optexpr / foldexpr accessors
+    fn nvim_apply_scriptlocal_funcname(varp_ptr: *mut c_void);
+    fn nvim_foldmethodIsExpr(win: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -946,6 +950,27 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for '*expr' options (Phase 100).
+/// Replaces <SID> or s: prefixes with script identifier.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_optexpr(args: *mut c_void) -> CallbackResult {
+    let varp = nvim_optset_get_varp(args);
+    nvim_apply_scriptlocal_funcname(varp);
+    callback_ok()
+}
+
+/// Callback for 'foldexpr' option (Phase 100).
+/// Applies scriptlocal name, then updates folds if using expr method.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_foldexpr(args: *mut c_void) -> CallbackResult {
+    rs_did_set_optexpr(args);
+    let win = nvim_optset_get_win(args);
+    if nvim_foldmethodIsExpr(win) != 0 {
+        rs_foldUpdateAll(win);
+    }
+    callback_ok()
 }
 
 /// Callback for 'filetype' and 'syntax' options (Phase 99).

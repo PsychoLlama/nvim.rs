@@ -1135,7 +1135,7 @@ local options = {
     },
     {
       abbreviation = 'ccv',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         An expression that is used for character encoding conversion.  It is
@@ -2330,7 +2330,7 @@ local options = {
     },
     {
       abbreviation = 'dex',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         Expression which is evaluated to obtain a diff file (either ed-style
@@ -3444,7 +3444,7 @@ local options = {
     },
     {
       abbreviation = 'fde',
-      cb = 'did_set_foldexpr',
+      cb = 'rs_did_set_foldexpr',
       defaults = '0',
       desc = [=[
         The expression used for when 'foldmethod' is "expr".  It is evaluated
@@ -3655,7 +3655,7 @@ local options = {
     },
     {
       abbreviation = 'fdt',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = 'foldtext()',
       desc = [=[
         An expression which is used to specify the text displayed for a closed
@@ -3682,7 +3682,7 @@ local options = {
     },
     {
       abbreviation = 'fex',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         Expression which is evaluated to format a range of lines for the |gq|
@@ -4619,7 +4619,7 @@ local options = {
     },
     {
       abbreviation = 'inex',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         Expression to be used to transform the string found with the 'include'
@@ -4703,7 +4703,7 @@ local options = {
     },
     {
       abbreviation = 'inde',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         Expression which is evaluated to obtain the proper indent for a line.
@@ -6463,7 +6463,7 @@ local options = {
     },
     {
       abbreviation = 'pex',
-      cb = 'did_set_optexpr',
+      cb = 'rs_did_set_optexpr',
       defaults = '',
       desc = [=[
         Expression which is evaluated to apply a patch to a file and generate
