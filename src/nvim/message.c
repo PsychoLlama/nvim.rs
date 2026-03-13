@@ -428,6 +428,10 @@ void nvim_set_keep_msg_hl_id(int val) { keep_msg_hl_id = val; }
 // Note: nvim_ui_flush is defined in change_ffi.c
 // Note: nvim_os_delay is defined in change_ffi.c (takes long ms, bool allow_input)
 
+// Phase 70: messaging() p_lz accessor
+int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
+// Note: nvim_get_global_busy is defined in undo.c (returns bool)
+
 
 
 void msg_grid_validate(void)
@@ -1634,13 +1638,6 @@ static void hit_return_msg(bool newline_sb)
 }
 
 
-/// Return true if printing messages should currently be done.
-bool messaging(void)
-{
-  // TODO(bfredl): with general support for "async" messages with p_ch,
-  // this should be re-enabled.
-  return !(p_lz && char_avail() && !KeyTyped) && (p_ch > 0 || ui_has(kUIMessages));
-}
 
 void msgmore(int n)
 {

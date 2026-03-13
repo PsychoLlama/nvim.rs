@@ -97,6 +97,7 @@ void set_keep_msg(const char *s, int hl_id);
 void msg_check_for_delay(bool check_msg_scroll);
 void msg_clr_cmdline(void);
 void msg_check(void);
+bool messaging(void);
 
 #include "message.h.generated.h"
 
