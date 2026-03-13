@@ -964,22 +964,6 @@ const char *did_set_guicursor(optset_T *args FUNC_ATTR_UNUSED)
 
 
 
-/// The 'highlight' option is changed.
-const char *did_set_highlight(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (strcmp(*varp, HIGHLIGHT_INIT) != 0) {
-    return e_unsupportedoption;
-  }
-  return NULL;
-}
-
-/// The 'iconstring' option is changed.
-const char *did_set_iconstring(optset_T *args)
-{
-  return did_set_titleiconstring(args, STL_IN_ICON);
-}
 
 /// The 'iskeyword' option is changed.
 const char *did_set_iskeyword(optset_T *args)
@@ -1248,7 +1232,7 @@ const char *did_set_tagcase(optset_T *args)
 }
 
 /// The 'titlestring' or the 'iconstring' option is changed.
-static const char *did_set_titleiconstring(optset_T *args, int flagval)
+const char *did_set_titleiconstring(optset_T *args, int flagval)
 {
   char **varp = (char **)args->os_varp;
 
@@ -1263,11 +1247,6 @@ static const char *did_set_titleiconstring(optset_T *args, int flagval)
   return NULL;
 }
 
-/// The 'titlestring' option is changed.
-const char *did_set_titlestring(optset_T *args)
-{
-  return did_set_titleiconstring(args, STL_IN_TITLE);
-}
 
 /// The 'varsofttabstop' option is changed.
 const char *did_set_varsofttabstop(optset_T *args)

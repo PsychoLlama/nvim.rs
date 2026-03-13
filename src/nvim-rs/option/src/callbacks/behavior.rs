@@ -187,6 +187,12 @@ extern "C" {
     fn nvim_did_set_statustabline(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_rulerformat(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_statuscolumn(args: *mut c_void) -> CallbackResult;
+
+    // Phase 102: highlight / titleiconstring accessors
+    fn nvim_check_highlight_init(args: *mut c_void) -> c_int;
+    fn nvim_did_set_iconstring(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_titlestring(args: *mut c_void) -> CallbackResult;
+    fn nvim_get_e_unsupportedoption() -> *const std::ffi::c_char;
 }
 
 // =============================================================================
@@ -955,6 +961,28 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'highlight' option (Phase 102).
+/// Validates that the value is HIGHLIGHT_INIT.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_highlight(args: *mut c_void) -> CallbackResult {
+    if nvim_check_highlight_init(args) == 0 {
+        return nvim_get_e_unsupportedoption();
+    }
+    callback_ok()
+}
+
+/// Callback for 'iconstring' option (Phase 102).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_iconstring(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_iconstring(args)
+}
+
+/// Callback for 'titlestring' option (Phase 102).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_titlestring(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_titlestring(args)
 }
 
 /// Callback for 'rulerformat' option (Phase 101).

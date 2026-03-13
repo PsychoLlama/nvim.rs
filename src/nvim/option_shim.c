@@ -269,6 +269,9 @@ extern const char *rs_did_set_statusline(optset_T *args);
 extern const char *rs_did_set_statuscolumn(optset_T *args);
 extern const char *rs_did_set_tabline(optset_T *args);
 extern const char *rs_did_set_winbar(optset_T *args);
+extern const char *rs_did_set_highlight(optset_T *args);
+extern const char *rs_did_set_iconstring(optset_T *args);
+extern const char *rs_did_set_titlestring(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -524,6 +527,19 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 102: highlight / titleiconstring accessors
+const char *did_set_titleiconstring(optset_T *args, int flagval);
+const char *nvim_did_set_iconstring(void *args) {
+  return did_set_titleiconstring((optset_T *)args, STL_IN_ICON);
+}
+const char *nvim_did_set_titlestring(void *args) {
+  return did_set_titleiconstring((optset_T *)args, STL_IN_TITLE);
+}
+int nvim_check_highlight_init(void *args) {
+  char **varp = (char **)((optset_T *)args)->os_varp;
+  return strcmp(*varp, HIGHLIGHT_INIT) == 0 ? 1 : 0;
+}
 
 // Phase 101: statustabline_rulerformat accessors
 const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat, bool statuscolumn);

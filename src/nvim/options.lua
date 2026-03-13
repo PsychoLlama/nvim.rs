@@ -4356,7 +4356,7 @@ local options = {
     },
     {
       abbreviation = 'hl',
-      cb = 'did_set_highlight',
+      cb = 'rs_did_set_highlight',
       defaults = macros('HIGHLIGHT_INIT', 'string'),
       deny_duplicates = true,
       full_name = 'highlight',
@@ -4452,7 +4452,7 @@ local options = {
       varname = 'p_icon',
     },
     {
-      cb = 'did_set_iconstring',
+      cb = 'rs_did_set_iconstring',
       defaults = '',
       desc = [=[
         When this option is not empty, it will be used for the icon text of
@@ -9701,7 +9701,7 @@ local options = {
       varname = 'p_titleold',
     },
     {
-      cb = 'did_set_titlestring',
+      cb = 'rs_did_set_titlestring',
       defaults = '',
       desc = [=[
         When this option is not empty, it will be used for the title of the
