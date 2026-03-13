@@ -7,24 +7,41 @@ use std::ffi::{c_char, c_int};
 
 // C function declarations
 extern "C" {
-    // Warning message functions
-    fn give_warning(message: *const c_char, hl: c_int);
-
     // State accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
     fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_columns() -> c_int;
+
+    // For give_warning
+    fn no_wait_return_inc();
+    fn no_wait_return_dec();
+    fn nvim_set_vim_var_warningmsg(s: *const c_char);
+    fn nvim_set_keep_msg_raw(s: *const c_char);
+    fn nvim_set_keep_msg_hl_id(val: c_int);
+    fn nvim_msg_ext_kind_is_null() -> c_int;
+    fn msg_ext_set_kind(msg_kind: *const c_char);
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    fn set_keep_msg(s: *const c_char, hl_id: c_int);
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_set_msg_didout(val: c_int);
+    fn nvim_set_msg_nowait(val: c_int);
 }
+
+/// Highlight face for warning messages (HLF_W = 26)
+const HLF_W: c_int = 26;
+
+/// "wmsg" kind string for ext_messages
+const WMSG_KIND: &std::ffi::CStr = c"wmsg";
 
 // ============================================================================
 // Warning Message Functions
 // ============================================================================
 
-/// Display a warning message.
+/// Display a warning message (for searching).
 ///
-/// Shows the message as a warning, optionally highlighted.
-/// The message is set in v:warningmsg.
+/// Use 'w' highlighting and may repeat the message after redrawing.
+/// Does nothing if msg_silent is set.
 ///
 /// # Arguments
 /// * `message` - The warning message string (NUL-terminated)
@@ -32,9 +49,33 @@ extern "C" {
 ///
 /// # Safety
 /// - `message` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "give_warning"]
 pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
-    give_warning(message, hl);
+    // Don't do this for ":silent".
+    if nvim_get_msg_silent() != 0 {
+        return;
+    }
+
+    // Don't want a hit-enter prompt here.
+    no_wait_return_inc();
+
+    nvim_set_vim_var_warningmsg(message);
+    nvim_set_keep_msg_raw(std::ptr::null());
+    let hl_id = if hl != 0 { HLF_W } else { 0 };
+    nvim_set_keep_msg_hl_id(hl_id);
+
+    if nvim_msg_ext_kind_is_null() != 0 {
+        msg_ext_set_kind(WMSG_KIND.as_ptr());
+    }
+
+    if msg(message, hl_id) && nvim_get_msg_scrolled() == 0 {
+        set_keep_msg(message, hl_id);
+    }
+    nvim_set_msg_didout(0); // Overwrite this message.
+    nvim_set_msg_nowait(1); // Don't wait for this message.
+    nvim_set_msg_col(0);
+
+    no_wait_return_dec();
 }
 
 /// Display a warning message with highlight.
@@ -48,7 +89,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
 /// - `message` must be a valid NUL-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_give_warning_hl(message: *const c_char) {
-    give_warning(message, 1);
+    rs_give_warning(message, 1);
 }
 
 /// Display a warning message without highlight.
@@ -62,7 +103,7 @@ pub unsafe extern "C" fn rs_give_warning_hl(message: *const c_char) {
 /// - `message` must be a valid NUL-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_give_warning_plain(message: *const c_char) {
-    give_warning(message, 0);
+    rs_give_warning(message, 0);
 }
 
 // ============================================================================

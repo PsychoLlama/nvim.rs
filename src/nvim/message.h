@@ -99,6 +99,7 @@ void msg_clr_cmdline(void);
 void msg_check(void);
 bool messaging(void);
 bool msg_end(void);
+void give_warning(const char *message, bool hl);
 
 #include "message.h.generated.h"
 

@@ -432,6 +432,10 @@ void nvim_set_keep_msg_hl_id(int val) { keep_msg_hl_id = val; }
 int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
 // Note: nvim_get_global_busy is defined in undo.c (returns bool)
 
+// Phase 72: give_warning() accessors
+void nvim_set_vim_var_warningmsg(const char *s) { set_vim_var_string(VV_WARNINGMSG, s, -1); }
+int nvim_msg_ext_kind_is_null(void) { return msg_ext_kind == NULL ? 1 : 0; }
+
 
 
 void msg_grid_validate(void)
@@ -3425,40 +3429,6 @@ int verbose_open(void)
   return OK;
 }
 
-/// Give a warning message (for searching).
-/// Use 'w' highlighting and may repeat the message after redrawing
-void give_warning(const char *message, bool hl)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  // Don't do this for ":silent".
-  if (msg_silent != 0) {
-    return;
-  }
-
-  // Don't want a hit-enter prompt here.
-  no_wait_return++;
-
-  set_vim_var_string(VV_WARNINGMSG, message, -1);
-  XFREE_CLEAR(keep_msg);
-  if (hl) {
-    keep_msg_hl_id = HLF_W;
-  } else {
-    keep_msg_hl_id = 0;
-  }
-
-  if (msg_ext_kind == NULL) {
-    msg_ext_set_kind("wmsg");
-  }
-
-  if (msg(message, keep_msg_hl_id) && msg_scrolled == 0) {
-    set_keep_msg(message, keep_msg_hl_id);
-  }
-  msg_didout = false;  // Overwrite this message.
-  msg_nowait = true;   // Don't wait for this message.
-  msg_col = 0;
-
-  no_wait_return--;
-}
 
 /// Shows a warning, with optional highlighting.
 ///
