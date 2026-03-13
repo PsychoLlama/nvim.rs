@@ -482,6 +482,9 @@ int nvim_verbose_open_impl(void)
 // Phase 76: msg_may_trunc/msg_trunc accessors
 void nvim_msg_hist_add_str(const char *s, int hl_id) { msg_hist_add(s, -1, hl_id); }
 
+// Phase 77: msg_home_replace accessor
+char *nvim_home_replace_save_null(const char *fname) { return home_replace_save(NULL, fname); }
+
 
 
 void msg_grid_validate(void)
@@ -1740,17 +1743,6 @@ void msg_start(void)
 
 
 
-void msg_home_replace(const char *fname)
-{
-  msg_home_replace_hl(fname, 0);
-}
-
-static void msg_home_replace_hl(const char *fname, int hl_id)
-{
-  char *name = home_replace_save(NULL, fname);
-  msg_outtrans(name, hl_id, false);
-  xfree(name);
-}
 
 /// Output "len" characters in "str" (including NULs) with translation
 /// if "len" is -1, output up to a NUL character. Use highlight "hl_id".

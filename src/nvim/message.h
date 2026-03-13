@@ -86,6 +86,9 @@ void trunc_string(const char *s, char *buf, int room_in, int buflen);
 char *msg_may_trunc(bool force, char *s);
 char *msg_trunc(char *s, bool force, int hl_id);
 
+// Phase 77: Home replace display functions migrated to Rust
+void msg_home_replace(const char *fname);
+
 // Phase 2 (additional): Formatting functions migrated to Rust
 void msg_advance(int col);
 

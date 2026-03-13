@@ -13,8 +13,10 @@ extern "C" {
     // Output translation functions (basic versions in format.rs)
     fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int);
 
-    // Home directory handling
-    fn msg_home_replace(fname: *const c_char);
+    // Home directory handling (Phase 77: now implemented in Rust)
+    fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
+    fn nvim_xfree(ptr: *mut c_char);
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
 
     // Note: msg_source is wrapped in error.rs
 
@@ -132,14 +134,31 @@ pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_i
 
 /// Display a filename with home directory replaced by ~.
 ///
+/// Replaces the home directory prefix with ~ and outputs with highlight 0.
+///
 /// # Arguments
 /// * `fname` - The filename to display
 ///
 /// # Safety
 /// - `fname` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg_home_replace"]
 pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
-    msg_home_replace(fname);
+    rs_msg_home_replace_hl(fname, 0);
+}
+
+/// Display a filename with home directory replaced by ~ and given highlight.
+///
+/// # Arguments
+/// * `fname` - The filename to display
+/// * `hl_id` - Highlight group ID
+///
+/// # Safety
+/// - `fname` must be a valid NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
+    let name = nvim_home_replace_save_null(fname);
+    msg_outtrans(name.cast_const(), hl_id, 0);
+    nvim_xfree(name);
 }
 
 // ============================================================================
