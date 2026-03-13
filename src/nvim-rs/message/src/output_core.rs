@@ -19,7 +19,7 @@ use nvim_mbyte::rs_utf_char2bytes;
 extern "C" {
     // Core message output functions (call into C until fully migrated)
     fn msg_keep(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int;
-    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
+    fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
     fn msg_start();
     fn msg_clr_eos_force();
     fn msg_ext_ui_flush();
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn rs_msg_multiline_simple(
 /// - `s` must be a valid NUL-terminated C string
 #[export_name = "msg_puts"]
 pub unsafe extern "C" fn rs_msg_puts(s: *const c_char) {
-    msg_puts_hl(s, 0, 0);
+    rs_msg_puts_hl(s, 0, false);
 }
 
 /// Output a string with highlight and history option.
@@ -163,9 +163,9 @@ pub unsafe extern "C" fn rs_msg_puts(s: *const c_char) {
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int) {
-    msg_puts_hl(s, hl_id, hist);
+#[export_name = "msg_puts_hl"]
+pub unsafe extern "C" fn rs_msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool) {
+    msg_puts_len(s, -1, hl_id, hist);
 }
 
 /// Output a single character to the message area.
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn rs_msg_putchar_hl(c: c_int, hl_id: c_int) {
         buf[len as usize] = 0; // NUL terminator
     }
 
-    msg_puts_hl(buf.as_ptr(), hl_id, 0);
+    rs_msg_puts_hl(buf.as_ptr(), hl_id, false);
 }
 
 /// Output a number to the message area.
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_msg_outnum(n: c_int) {
     }
     buf[len] = 0;
 
-    msg_puts_hl(buf.as_ptr(), 0, 0);
+    rs_msg_puts_hl(buf.as_ptr(), 0, false);
 }
 
 // ============================================================================
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn rs_msg_is_silent() -> c_int {
 /// - `s` must be a valid NUL-terminated C string
 #[export_name = "msg_puts_title"]
 pub unsafe extern "C" fn rs_msg_puts_title(s: *const c_char) {
-    msg_puts_hl(s, HLF_T, 0);
+    rs_msg_puts_hl(s, HLF_T, false);
 }
 
 /// Highlight face for title

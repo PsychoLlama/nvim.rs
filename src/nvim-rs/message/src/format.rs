@@ -433,10 +433,10 @@ extern "C" {
     fn utf_ptr2cells(p: *const c_char) -> c_int;
 
     // Character translation
-    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
     fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
     fn transchar_byte_buf(buf: *mut c_char, c: c_int) -> *mut c_char;
-    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
 
     // Memory management
     fn xmalloc(size: usize) -> *mut c_char;
@@ -678,7 +678,7 @@ pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
 /// - `str` must be a valid NUL-terminated C string
 #[export_name = "msg_outtrans"]
 #[must_use]
-pub unsafe extern "C" fn rs_msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int {
+pub unsafe extern "C" fn rs_msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int {
     if *str == 0 {
         return 0;
     }
@@ -711,7 +711,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
     msgstr: *const c_char,
     len: c_int,
     hl_id: c_int,
-    hist: c_int,
+    hist: bool,
 ) -> c_int {
     msg_outtrans_len(msgstr, len, hl_id, hist)
 }
@@ -735,7 +735,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 pub unsafe extern "C" fn rs_msg_outtrans_one(
     p: *const c_char,
     hl_id: c_int,
-    hist: c_int,
+    hist: bool,
 ) -> *const c_char {
     let l = utfc_ptr2len(p);
     if l > 1 {

@@ -2188,11 +2188,6 @@ void msg_prt_line(const char *s, bool list)
 /// part in the middle and replace it with "..." when necessary.
 /// Does not handle multi-byte characters!
 
-/// Basic function for writing a message with highlight id.
-void msg_puts_hl(const char *const s, const int hl_id, const bool hist)
-{
-  msg_puts_len(s, -1, hl_id, hist);
-}
 
 /// Write a message with highlight id.
 ///

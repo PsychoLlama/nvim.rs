@@ -98,6 +98,9 @@ const char *msg_outtrans_one(const char *p, int hl_id, bool hist);
 // Phase 80: msg_outtrans_long migrated to Rust
 void msg_outtrans_long(const char *longstr, int hl_id);
 
+// Phase 81: msg_puts_hl migrated to Rust
+void msg_puts_hl(const char *s, int hl_id, bool hist);
+
 // Phase 2 (additional): Formatting functions migrated to Rust
 void msg_advance(int col);
 

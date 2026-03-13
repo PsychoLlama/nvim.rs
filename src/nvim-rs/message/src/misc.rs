@@ -13,11 +13,11 @@ extern "C" {
     // Home directory handling (Phase 77: now implemented in Rust)
     fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
-    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
 
     // For msg_outtrans_long (Phase 80)
-    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
-    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
     fn nvim_get_columns() -> c_int;
     fn nvim_get_msg_col() -> c_int;
 
@@ -143,10 +143,10 @@ pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_i
     let room = nvim_get_columns() - nvim_get_msg_col();
     if nvim_ui_has_messages() == 0 && len > room && room >= 20 {
         slen = (room - 3) / 2;
-        msg_outtrans_len(longstr, slen, hl_id, 0);
-        msg_puts_hl(c"...".as_ptr(), HLF_8, 0);
+        msg_outtrans_len(longstr, slen, hl_id, false);
+        msg_puts_hl(c"...".as_ptr(), HLF_8, false);
     }
-    msg_outtrans_len(longstr.offset((len - slen) as isize), slen, hl_id, 0);
+    msg_outtrans_len(longstr.offset((len - slen) as isize), slen, hl_id, false);
 }
 
 // ============================================================================
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
     let name = nvim_home_replace_save_null(fname);
-    msg_outtrans(name.cast_const(), hl_id, 0);
+    msg_outtrans(name.cast_const(), hl_id, false);
     nvim_xfree(name);
 }
 
