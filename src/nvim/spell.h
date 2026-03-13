@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "nvim/ex_cmds_defs.h"  // IWYU pragma: keep
+#include "nvim/highlight_defs.h"  // IWYU pragma: keep
 #include "nvim/spell_defs.h"  // IWYU pragma: keep
 #include "nvim/vim_defs.h"  // IWYU pragma: keep
 
@@ -29,6 +30,7 @@ typedef enum {
 } smt_T;
 
 // Functions implemented in Rust (nvim-spell crate) and exported via #[export_name].
+size_t spell_check(win_T *wp, char *ptr, hlf_T *attrp, int *capcol, bool docount);
 bool spell_valid_case(int wordflags, int treeflags);
 bool byte_in_str(const uint8_t *str, int n);
 void clear_spell_chartab(spelltab_T *sp);

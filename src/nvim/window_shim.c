@@ -68,6 +68,8 @@
 #include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
 #include "nvim/quickfix.h"
+#include "nvim/regexp.h"
+#include "nvim/regexp_defs.h"
 #include "nvim/search.h"
 #include "nvim/state.h"
 #include "nvim/state_defs.h"
@@ -2700,6 +2702,21 @@ const bool *nvim_win_get_b_spell_ismw(const win_T *wp) { return wp->w_s->b_spell
 const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_spell_ismw_mb; }
 const garray_T *nvim_win_get_b_langp(const win_T *wp) { return &wp->w_s->b_langp; }
 void nvim_emsg_no_spell(void) { emsg(_(e_no_spell)); }
+regprog_T *nvim_win_get_b_cap_prog(const win_T *wp) { return wp->w_s->b_cap_prog; }
+void nvim_win_set_b_cap_prog(win_T *wp, regprog_T *prog) { wp->w_s->b_cap_prog = prog; }
+
+// Runs vim_regexec with b_cap_prog against ptr. Updates b_cap_prog (may be GC'd).
+// Returns the offset of endp[0] from ptr if matched, -1 if no match.
+int nvim_win_spell_capcol_regexec(win_T *wp, char *ptr)
+{
+  regmatch_T regmatch = { .regprog = wp->w_s->b_cap_prog, .rm_ic = false };
+  bool r = vim_regexec(&regmatch, ptr, 0);
+  wp->w_s->b_cap_prog = regmatch.regprog;
+  if (r) {
+    return (int)(regmatch.endp[0] - ptr);
+  }
+  return -1;
+}
 
 // set_topline wrapper for winrestview (window viml)
 void nvim_set_topline(win_T *wp, int lnum) { set_topline(wp, (linenr_T)lnum); }

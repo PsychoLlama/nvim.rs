@@ -2136,6 +2136,905 @@ pub unsafe extern "C" fn rs_valid_word_prefix(
 }
 
 // =============================================================================
+// Core Spell Check Engine (Phase 3)
+// =============================================================================
+
+extern "C" {
+    fn skipdigits(q: *const c_char) -> *const c_char;
+    fn skipbin(q: *const c_char) -> *const c_char;
+    fn skiphex(q: *mut c_char) -> *mut c_char;
+    fn mb_charlen_len(s: *const c_char, len: c_int) -> c_int;
+    fn count_common_word(slang: *mut crate::SlangRaw, word: *const c_char, len: c_int, count: u8);
+    fn nvim_win_get_spo_flags(wp: *const c_void) -> c_uint;
+    fn nvim_win_get_b_cap_prog(wp: *const c_void) -> *mut c_void;
+    fn nvim_win_spell_capcol_regexec(wp: *mut c_void, ptr: *mut c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn emsg(s: *const c_char) -> bool;
+    fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize);
+    #[link_name = "e_format"]
+    static e_format_arr: *const c_char;
+}
+
+use std::ffi::c_uint;
+
+/// Mode values for find_word (matching C FIND_* enum)
+const FIND_FOLDWORD: c_int = 0;
+const FIND_KEEPWORD: c_int = 1;
+const FIND_PREFIX: c_int = 2;
+const FIND_COMPOUND: c_int = 3;
+const FIND_KEEPCOMPOUND: c_int = 4;
+
+// SP_* constants are defined earlier in this file (SP_BANNED=-1, SP_RARE=0, SP_OK=1, SP_LOCAL=2, SP_BAD=3)
+
+/// kOptSpoFlagCamel value (matches C enum value)
+const K_OPT_SPO_FLAG_CAMEL: c_uint = 0x02;
+
+/// HLF_* values matching C enum (counted from highlight_defs.h)
+const HLF_SPB: c_int = 37; // SpellBad
+const HLF_SPC: c_int = 38; // SpellCap
+const HLF_SPR: c_int = 39; // SpellRare
+const HLF_SPL: c_int = 40; // SpellLocal
+
+// WF_COMPROOT and WF_RAREPFX are imported from wordtree (WF_COMPROOT=0x800, WF_RAREPFX=0x1000)
+
+/// Internal state for the spell check engine.
+/// Only used internally by fold_more, find_word, find_prefix, spell_check.
+#[allow(clippy::struct_field_names)]
+struct MatchinfT {
+    mi_lp: *mut crate::LangpT,
+    mi_word: *const c_char,
+    mi_end: *const c_char,
+    mi_fend: *const c_char,
+    mi_cend: *const c_char,
+    mi_fword: [c_char; crate::MAXWLEN + 1],
+    mi_fwordlen: c_int,
+    mi_prefarridx: c_int,
+    mi_prefcnt: c_int,
+    mi_prefixlen: c_int,
+    mi_cprefixlen: c_int,
+    mi_compoff: c_int,
+    mi_compflags: [u8; crate::MAXWLEN],
+    mi_complen: c_int,
+    mi_compextra: c_int,
+    mi_result: c_int,
+    mi_capflags: c_int,
+    mi_win: *const c_void,
+    mi_result2: c_int,
+    mi_end2: *const c_char,
+}
+
+impl Default for MatchinfT {
+    fn default() -> Self {
+        // SAFETY: all-zeros is valid for this struct (pointers start null)
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+// SAFETY: we never send these across threads; the C runtime is single-threaded.
+unsafe impl Send for MatchinfT {}
+
+/// Get a mutable pointer to the lpi-th entry in a langp garray.
+///
+/// # Safety
+/// ga must be valid and lpi < ga_len.
+#[inline]
+unsafe fn langp_entry_mut(ga: *const crate::GArrayRaw, lpi: c_int) -> *mut crate::LangpT {
+    (*ga).ga_data.cast::<crate::LangpT>().add(lpi as usize)
+}
+
+/// Fold more characters of the word. Returns count of new folded bytes.
+///
+/// # Safety
+/// mip fields mi_fend, mi_win, mi_fword, mi_fwordlen must be valid.
+unsafe fn fold_more(mip: &mut MatchinfT) -> c_int {
+    let p = mip.mi_fend;
+    // Advance over word chars
+    loop {
+        mip.mi_fend = mip.mi_fend.add(utfc_ptr2len(mip.mi_fend) as usize);
+        if *(mip.mi_fend as *const u8) == 0 || !crate::rs_spell_iswordp(mip.mi_fend, mip.mi_win) {
+            break;
+        }
+    }
+    // Include the non-word character
+    if *(mip.mi_fend as *const u8) != 0 {
+        mip.mi_fend = mip.mi_fend.add(utfc_ptr2len(mip.mi_fend) as usize);
+    }
+
+    let dest = mip.mi_fword.as_mut_ptr().add(mip.mi_fwordlen as usize);
+    let dest_len = crate::MAXWLEN as c_int - mip.mi_fwordlen;
+    rs_spell_casefold_c_compat(
+        mip.mi_win,
+        p,
+        mip.mi_fend.offset_from(p) as c_int,
+        dest,
+        dest_len,
+    );
+    let flen = strlen(dest) as c_int;
+    mip.mi_fwordlen += flen;
+    flen
+}
+
+/// Check if the word at mip->mi_word is in the dictionary tree.
+///
+/// # Safety
+/// All pointer fields in mip must be valid.
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::too_many_lines)]
+unsafe fn find_word(mip: &mut MatchinfT, mode: c_int) {
+    use crate::wordtree::WF_RAREPFX;
+
+    let mut wlen: c_int = 0;
+    let mut flen: c_int;
+    let ptr: *const c_char;
+    let slang = (*mip.mi_lp).lp_slang;
+    let byts: *const u8;
+    let idxs: *const IdxT;
+
+    if mode == FIND_KEEPWORD || mode == FIND_KEEPCOMPOUND {
+        ptr = mip.mi_word;
+        flen = 9999;
+        byts = (*slang).sl_kbyts;
+        idxs = (*slang).sl_kidxs;
+        if mode == FIND_KEEPCOMPOUND {
+            wlen += mip.mi_compoff;
+        }
+    } else {
+        ptr = mip.mi_fword.as_ptr();
+        flen = mip.mi_fwordlen;
+        byts = (*slang).sl_fbyts;
+        idxs = (*slang).sl_fidxs;
+        if mode == FIND_PREFIX {
+            wlen = mip.mi_prefixlen;
+            flen -= mip.mi_prefixlen;
+        } else if mode == FIND_COMPOUND {
+            wlen = mip.mi_compoff;
+            flen -= mip.mi_compoff;
+        }
+    }
+
+    if byts.is_null() {
+        return;
+    }
+
+    let mut arridx: IdxT = 0;
+    let mut endlen = [0i32; crate::MAXWLEN];
+    let mut endidx = [0usize; crate::MAXWLEN];
+    let mut endidxcnt: usize = 0;
+
+    // Tree traversal loop
+    'trav: loop {
+        if flen <= 0 && *(mip.mi_fend as *const u8) != 0 {
+            flen = fold_more(mip);
+        }
+
+        let node_len = *byts.add(arridx as usize) as usize;
+        arridx += 1;
+
+        // If first byte is zero, word could end here
+        if *byts.add(arridx as usize) == 0 {
+            if endidxcnt == crate::MAXWLEN {
+                emsg(e_format_arr);
+                return;
+            }
+            endlen[endidxcnt] = wlen;
+            endidx[endidxcnt] = arridx as usize;
+            endidxcnt += 1;
+            arridx += 1;
+            let mut rem = node_len - 1;
+            while rem > 0 && *byts.add(arridx as usize) == 0 {
+                arridx += 1;
+                rem -= 1;
+            }
+            if rem == 0 {
+                break 'trav;
+            }
+        }
+
+        if *(ptr.add(wlen as usize) as *const u8) == 0 {
+            break 'trav;
+        }
+
+        // Binary search
+        let mut c = *ptr.add(wlen as usize) as u8;
+        if c == b'\t' {
+            c = b' ';
+        }
+        let lo = arridx;
+        let hi_init = arridx + node_len as IdxT - 1;
+        let mut lo2 = lo;
+        let mut hi2 = hi_init;
+        while lo2 < hi2 {
+            let m = lo2 + (hi2 - lo2) / 2;
+            match (*byts.add(m as usize)).cmp(&c) {
+                std::cmp::Ordering::Greater => {
+                    if m == 0 {
+                        break;
+                    }
+                    hi2 = m - 1;
+                }
+                std::cmp::Ordering::Less => {
+                    lo2 = m + 1;
+                }
+                std::cmp::Ordering::Equal => {
+                    lo2 = m;
+                    hi2 = m;
+                    break;
+                }
+            }
+        }
+        if hi2 < lo2 || *byts.add(lo2 as usize) != c {
+            break 'trav;
+        }
+
+        arridx = *idxs.add(lo2 as usize);
+        wlen += 1;
+        flen -= 1;
+
+        // One space may stand for several spaces
+        if c == b' ' {
+            loop {
+                if flen <= 0 && *(mip.mi_fend as *const u8) != 0 {
+                    flen = fold_more(mip);
+                }
+                let next = *ptr.add(wlen as usize) as u8;
+                if next != b' ' && next != b'\t' {
+                    break;
+                }
+                wlen += 1;
+                flen -= 1;
+            }
+        }
+    }
+
+    // Verify possible endings, longest first
+    'outer: while endidxcnt > 0 {
+        endidxcnt -= 1;
+        let arridx_save = endidx[endidxcnt] as IdxT;
+        wlen = endlen[endidxcnt];
+
+        if utf_head_off(ptr, ptr.add(wlen as usize)) > 0 {
+            continue 'outer;
+        }
+
+        let word_ends = if crate::rs_spell_iswordp(ptr.add(wlen as usize), mip.mi_win) {
+            if (*slang).sl_compprog.is_null() && !(*slang).sl_nobreak {
+                continue 'outer;
+            }
+            false
+        } else {
+            true
+        };
+
+        let mut prefix_found = false;
+
+        // Adjust wlen for original word byte length if not keep-case
+        if mode != FIND_KEEPWORD {
+            let mut p = mip.mi_word;
+            if strncmp(ptr, p, wlen as usize) != 0 {
+                let mut s = ptr;
+                while s < ptr.add(wlen as usize) {
+                    s = s.add(utfc_ptr2len(s) as usize);
+                    p = p.add(utfc_ptr2len(p) as usize);
+                }
+                wlen = p.offset_from(mip.mi_word) as c_int;
+            }
+        }
+
+        // Iterate over flags/region alternatives
+        let num_alts = c_int::from(*byts.add((arridx_save - 1) as usize));
+        let mut ai = arridx_save;
+        let mut alt_rem = num_alts;
+        'flag_loop: while alt_rem > 0 && *byts.add(ai as usize) == 0 {
+            let flags = *idxs.add(ai as usize) as u32;
+            ai += 1;
+            alt_rem -= 1;
+
+            // For fold-case tree: check case matches
+            if mode == FIND_FOLDWORD {
+                let cap_end = mip.mi_word.add(wlen as usize);
+                if mip.mi_cend != cap_end {
+                    mip.mi_cend = cap_end;
+                    mip.mi_capflags = crate::rs_captype(mip.mi_word, mip.mi_cend);
+                }
+                if mip.mi_capflags == WF_KEEPCAP as c_int
+                    || !crate::rs_spell_valid_case(mip.mi_capflags, flags as c_int)
+                {
+                    continue 'flag_loop;
+                }
+            } else if mode == FIND_PREFIX && !prefix_found {
+                let c = rs_valid_word_prefix(
+                    mip.mi_prefcnt,
+                    mip.mi_prefarridx,
+                    flags as c_int,
+                    mip.mi_word.add(mip.mi_cprefixlen as usize).cast_mut(),
+                    slang,
+                    false,
+                );
+                if c == 0 {
+                    continue 'flag_loop;
+                }
+                // Use WF_RARE for rare prefix
+                let flags = if (c as u32) & WF_RAREPFX != 0 {
+                    flags | WF_RARE
+                } else {
+                    flags
+                };
+                prefix_found = true;
+                // Fall through with updated flags
+                find_word_check_flags(
+                    mip,
+                    slang,
+                    mode,
+                    flags,
+                    word_ends,
+                    wlen,
+                    &endlen,
+                    endidxcnt,
+                    &mut prefix_found,
+                );
+                if mip.mi_result == SP_OK {
+                    break 'outer;
+                }
+                continue 'flag_loop;
+            }
+
+            find_word_check_flags(
+                mip,
+                slang,
+                mode,
+                flags,
+                word_ends,
+                wlen,
+                &endlen,
+                endidxcnt,
+                &mut prefix_found,
+            );
+        }
+
+        if mip.mi_result == SP_OK {
+            break 'outer;
+        }
+    }
+}
+
+/// Process one flags/region entry found during find_word tree search.
+///
+/// # Safety
+/// mip and slang must be valid pointers.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+unsafe fn find_word_check_flags(
+    mip: &mut MatchinfT,
+    slang: *mut crate::SlangRaw,
+    mode: c_int,
+    flags: u32,
+    word_ends: bool,
+    wlen: c_int,
+    endlen: &[i32; crate::MAXWLEN],
+    endidxcnt: usize,
+    _prefix_found: &mut bool,
+) {
+    use crate::wordtree::WF_COMPROOT;
+
+    if (*slang).sl_nobreak {
+        if (mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND) && (flags & WF_BANNED) == 0 {
+            mip.mi_result = SP_OK;
+            return;
+        }
+    } else if mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND || !word_ends {
+        // Reject if no compound flag or word too short
+        if (flags >> 24) == 0 || wlen - mip.mi_compoff < (*slang).sl_compminlen {
+            return;
+        }
+        // Check character length vs COMPOUNDMIN
+        if (*slang).sl_compminlen > 0
+            && mb_charlen_len(
+                mip.mi_word.add(mip.mi_compoff as usize),
+                wlen - mip.mi_compoff,
+            ) < (*slang).sl_compminlen
+        {
+            return;
+        }
+        // Limit compound word count
+        if !word_ends
+            && mip.mi_complen + mip.mi_compextra + 2 > (*slang).sl_compmax
+            && (*slang).sl_compsylmax == crate::MAXWLEN as c_int
+        {
+            return;
+        }
+        // No compounding where affix was added
+        if mip.mi_complen > 0 && (flags & WF_NOCOMPBEF) != 0 {
+            return;
+        }
+        if !word_ends && (flags & WF_NOCOMPAFT) != 0 {
+            return;
+        }
+        // Check compound flag is in the allowed set
+        let flag_set = if mip.mi_complen == 0 {
+            (*slang).sl_compstartflags
+        } else {
+            (*slang).sl_compallflags
+        };
+        if !crate::rs_byte_in_str(flag_set, (flags >> 24) as c_int) {
+            return;
+        }
+
+        // CHECKCOMPOUNDPATTERN
+        let fptr = mip.mi_fword.as_ptr();
+        let check_ptr = if mode == FIND_KEEPWORD || mode == FIND_KEEPCOMPOUND {
+            mip.mi_word.cast_mut()
+        } else {
+            fptr.cast_mut()
+        };
+        if rs_match_checkcompoundpattern(
+            check_ptr,
+            wlen,
+            std::ptr::addr_of_mut!((*slang).sl_comppat),
+        ) {
+            return;
+        }
+
+        if mode == FIND_COMPOUND {
+            // Check caps type of appended compound word
+            let p: *const c_char = if strncmp(fptr, mip.mi_word, mip.mi_compoff as usize) != 0 {
+                let mut pp = mip.mi_word;
+                let mut s = fptr;
+                while s < fptr.add(mip.mi_compoff as usize) {
+                    s = s.add(utfc_ptr2len(s) as usize);
+                    pp = pp.add(utfc_ptr2len(pp) as usize);
+                }
+                pp
+            } else {
+                mip.mi_word.add(mip.mi_compoff as usize)
+            };
+
+            let capflags = crate::rs_captype(p, mip.mi_word.add(wlen as usize));
+            if capflags == WF_KEEPCAP as c_int
+                || (capflags == WF_ALLCAP as c_int && (flags & WF_FIXCAP) != 0)
+            {
+                return;
+            }
+            if capflags != WF_ALLCAP as c_int {
+                let back = utf_head_off(mip.mi_word, p.sub(1)) + 1;
+                let pb = p.sub(back as usize);
+                if crate::rs_spell_iswordp_nmw(pb, mip.mi_win) {
+                    if capflags == WF_ONECAP as c_int {
+                        return;
+                    }
+                } else if (flags & WF_ONECAP) != 0 && capflags != WF_ONECAP as c_int {
+                    return;
+                }
+            }
+        }
+
+        // Store compound flag
+        mip.mi_compflags[mip.mi_complen as usize] = (flags >> 24) as u8;
+        mip.mi_compflags[(mip.mi_complen + 1) as usize] = 0;
+
+        if word_ends {
+            let mut fword_buf = [0u8; crate::MAXWLEN];
+            if (*slang).sl_compsylmax < crate::MAXWLEN as c_int {
+                if std::ptr::eq(check_ptr.cast_const(), mip.mi_word) {
+                    rs_spell_casefold_c_compat(
+                        mip.mi_win,
+                        check_ptr.cast_const(),
+                        wlen,
+                        fword_buf.as_mut_ptr() as *mut c_char,
+                        crate::MAXWLEN as c_int,
+                    );
+                } else {
+                    xmemcpyz(
+                        fword_buf.as_mut_ptr() as *mut c_void,
+                        check_ptr as *const c_void,
+                        endlen[endidxcnt] as usize,
+                    );
+                }
+            }
+            if !rs_can_compound_c_compat(
+                slang,
+                fword_buf.as_ptr() as *const c_char,
+                mip.mi_compflags.as_ptr(),
+            ) {
+                return;
+            }
+        } else if !(*slang).sl_comprules.is_null()
+            && !rs_match_compoundrule_c_compat(slang, mip.mi_compflags.as_ptr())
+        {
+            return;
+        }
+    } else if (flags & WF_NEEDCOMP) != 0 {
+        return;
+    }
+
+    let mut nobreak_result = SP_OK;
+
+    if !word_ends {
+        let save_result = mip.mi_result;
+        let save_end = mip.mi_end;
+        let save_lp = mip.mi_lp;
+
+        if (*slang).sl_nobreak {
+            mip.mi_result = SP_BAD;
+        }
+
+        let saved_compoff = mip.mi_compoff;
+        mip.mi_compoff = endlen[endidxcnt];
+        if mode == FIND_KEEPWORD {
+            let kptr = mip.mi_word;
+            let mut p2 = mip.mi_fword.as_ptr();
+            if strncmp(kptr, p2, wlen as usize) != 0 {
+                let mut s = kptr;
+                while s < kptr.add(wlen as usize) {
+                    s = s.add(utfc_ptr2len(s) as usize);
+                    p2 = p2.add(utfc_ptr2len(p2) as usize);
+                }
+                mip.mi_compoff = p2.offset_from(mip.mi_fword.as_ptr()) as c_int;
+            }
+        }
+        mip.mi_complen += 1;
+        if (flags & WF_COMPROOT) != 0 {
+            mip.mi_compextra += 1;
+        }
+
+        let langp_ga = crate::nvim_win_get_b_langp(mip.mi_win);
+        let langp_len = (*langp_ga).ga_len;
+        for lpi in 0..langp_len {
+            if (*slang).sl_nobreak {
+                mip.mi_lp = langp_entry_mut(langp_ga, lpi);
+                if (*(*mip.mi_lp).lp_slang).sl_fidxs.is_null()
+                    || !(*(*mip.mi_lp).lp_slang).sl_nobreak
+                {
+                    continue;
+                }
+            }
+            find_word(mip, FIND_COMPOUND);
+            if !(*slang).sl_nobreak || mip.mi_result == SP_BAD {
+                mip.mi_compoff = wlen;
+                find_word(mip, FIND_KEEPCOMPOUND);
+            }
+            if !(*slang).sl_nobreak {
+                break;
+            }
+        }
+        mip.mi_complen -= 1;
+        if (flags & WF_COMPROOT) != 0 {
+            mip.mi_compextra -= 1;
+        }
+        mip.mi_lp = save_lp;
+        mip.mi_compoff = saved_compoff;
+
+        if (*slang).sl_nobreak {
+            nobreak_result = mip.mi_result;
+            mip.mi_result = save_result;
+            mip.mi_end = save_end;
+        } else {
+            // For non-NOBREAK: if result is OK we stop, otherwise continue
+            if mip.mi_result == SP_OK {
+                return;
+            }
+            return;
+        }
+    }
+
+    let res = if (flags & WF_BANNED) != 0 {
+        SP_BANNED
+    } else if (flags & WF_REGION) != 0 {
+        if ((*mip.mi_lp).lp_region as u32 & (flags >> 16)) != 0 {
+            SP_OK
+        } else {
+            SP_LOCAL
+        }
+    } else if (flags & WF_RARE) != 0 {
+        SP_RARE
+    } else {
+        SP_OK
+    };
+
+    if nobreak_result == SP_BAD {
+        if mip.mi_result2 > res {
+            mip.mi_result2 = res;
+            mip.mi_end2 = mip.mi_word.add(wlen as usize);
+        } else if mip.mi_result2 == res && mip.mi_end2 < mip.mi_word.add(wlen as usize) {
+            mip.mi_end2 = mip.mi_word.add(wlen as usize);
+        }
+    } else if mip.mi_result > res {
+        mip.mi_result = res;
+        mip.mi_end = mip.mi_word.add(wlen as usize);
+    } else if mip.mi_result == res && mip.mi_end < mip.mi_word.add(wlen as usize) {
+        mip.mi_end = mip.mi_word.add(wlen as usize);
+    }
+}
+
+/// Check if the word at mip->mi_word has a matching prefix.
+///
+/// # Safety
+/// All pointer fields in mip must be valid.
+#[allow(clippy::too_many_lines)]
+unsafe fn find_prefix(mip: &mut MatchinfT, mode: c_int) {
+    let mut arridx: IdxT = 0;
+    let mut wlen: c_int = 0;
+    let slang = (*mip.mi_lp).lp_slang;
+
+    let byts = (*slang).sl_pbyts;
+    if byts.is_null() {
+        return;
+    }
+
+    let mut ptr = mip.mi_fword.as_ptr();
+    let mut flen = mip.mi_fwordlen;
+    if mode == FIND_COMPOUND {
+        ptr = ptr.add(mip.mi_compoff as usize);
+        flen -= mip.mi_compoff;
+    }
+    let idxs = (*slang).sl_pidxs;
+
+    'trav: loop {
+        if flen == 0 && *(mip.mi_fend as *const u8) != 0 {
+            flen = fold_more(mip);
+        }
+
+        let node_len = *byts.add(arridx as usize) as usize;
+        arridx += 1;
+
+        if *byts.add(arridx as usize) == 0 {
+            // Prefix end - try all prefix IDs
+            mip.mi_prefarridx = arridx as c_int;
+            mip.mi_prefcnt = node_len as c_int;
+            let mut count = node_len;
+            while count > 0 && *byts.add(arridx as usize) == 0 {
+                arridx += 1;
+                count -= 1;
+            }
+            mip.mi_prefcnt -= count as c_int;
+
+            mip.mi_prefixlen = wlen;
+            if mode == FIND_COMPOUND {
+                mip.mi_prefixlen += mip.mi_compoff;
+            }
+
+            mip.mi_cprefixlen = crate::rs_nofold_len(
+                mip.mi_fword.as_mut_ptr(),
+                mip.mi_prefixlen,
+                mip.mi_word.cast_mut(),
+            );
+            find_word(mip, FIND_PREFIX);
+
+            if count == 0 {
+                break 'trav;
+            }
+        }
+
+        if *(ptr.add(wlen as usize) as *const u8) == 0 {
+            break 'trav;
+        }
+
+        let c = *ptr.add(wlen as usize) as u8;
+        let lo = arridx;
+        let hi_init = arridx + node_len as IdxT - 1;
+        let mut lo2 = lo;
+        let mut hi2 = hi_init;
+        while lo2 < hi2 {
+            let m = lo2 + (hi2 - lo2) / 2;
+            match (*byts.add(m as usize)).cmp(&c) {
+                std::cmp::Ordering::Greater => {
+                    if m == 0 {
+                        break;
+                    }
+                    hi2 = m - 1;
+                }
+                std::cmp::Ordering::Less => {
+                    lo2 = m + 1;
+                }
+                std::cmp::Ordering::Equal => {
+                    lo2 = m;
+                    hi2 = m;
+                    break;
+                }
+            }
+        }
+        if hi2 < lo2 || *byts.add(lo2 as usize) != c {
+            break 'trav;
+        }
+
+        arridx = *idxs.add(lo2 as usize);
+        wlen += 1;
+        flen -= 1;
+    }
+}
+
+/// Main spell-checking function.
+///
+/// Returns the byte length of the word (even when correctly spelled).
+///
+/// # Safety
+/// wp, ptr, attrp must be valid non-null pointers.
+#[export_name = "spell_check"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_spell_check(
+    wp: *const c_void,
+    ptr: *mut c_char,
+    attrp: *mut c_int,
+    capcol: *mut c_int,
+    docount: bool,
+) -> usize {
+    let ptr_c: *const c_char = ptr.cast_const();
+    if *(ptr as *const u8) <= b' ' {
+        return 1;
+    }
+    let langp_ga = crate::nvim_win_get_b_langp(wp);
+    if (*langp_ga).ga_len <= 0 {
+        return 1;
+    }
+
+    let mut nrlen: usize = 0;
+    let mut wrongcaplen: usize = 0;
+    let mut count_word = docount;
+    let spo_flags = nvim_win_get_spo_flags(wp);
+    let use_camel_case = (spo_flags & K_OPT_SPO_FLAG_CAMEL) != 0;
+    let mut is_camel_case = false;
+
+    let mut mi = MatchinfT::default();
+
+    // Check for number prefix
+    if *(ptr as *const u8) >= b'0' && *(ptr as *const u8) <= b'9' {
+        let end: *const c_char = if *(ptr as *const u8) == b'0'
+            && (*ptr.add(1) as u8 == b'b' || *ptr.add(1) as u8 == b'B')
+        {
+            skipbin(ptr.add(2).cast_const())
+        } else if *(ptr as *const u8) == b'0'
+            && (*ptr.add(1) as u8 == b'x' || *ptr.add(1) as u8 == b'X')
+        {
+            skiphex(ptr.add(2)).cast_const()
+        } else {
+            skipdigits(ptr_c)
+        };
+        nrlen = end.offset_from(ptr_c) as usize;
+        mi.mi_end = end;
+    }
+
+    mi.mi_word = ptr_c;
+    mi.mi_fend = ptr_c;
+
+    if crate::rs_spell_iswordp(mi.mi_fend, wp) {
+        if use_camel_case {
+            mi.mi_fend =
+                crate::rs_advance_camelcase_word(ptr, wp, std::ptr::addr_of_mut!(is_camel_case))
+                    .cast_const();
+        } else {
+            loop {
+                mi.mi_fend = mi.mi_fend.add(utfc_ptr2len(mi.mi_fend) as usize);
+                if *(mi.mi_fend as *const u8) == 0 || !crate::rs_spell_iswordp(mi.mi_fend, wp) {
+                    break;
+                }
+            }
+        }
+
+        if !capcol.is_null() && *capcol == 0 && !nvim_win_get_b_cap_prog(wp).is_null() {
+            let c = utf_ptr2char(ptr_c);
+            if !crate::spell_isupper(c) {
+                wrongcaplen = mi.mi_fend.offset_from(ptr_c) as usize;
+            }
+        }
+    }
+
+    if !capcol.is_null() {
+        *capcol = -1;
+    }
+
+    mi.mi_end = mi.mi_fend;
+    mi.mi_capflags = 0;
+    mi.mi_cend = std::ptr::null();
+    mi.mi_win = wp;
+
+    // Case-fold the word with one extra character
+    if *(mi.mi_fend as *const u8) != 0 {
+        mi.mi_fend = mi.mi_fend.add(utfc_ptr2len(mi.mi_fend) as usize);
+    }
+    rs_spell_casefold_c_compat(
+        wp,
+        ptr_c,
+        mi.mi_fend.offset_from(ptr_c) as c_int,
+        mi.mi_fword.as_mut_ptr(),
+        crate::MAXWLEN as c_int + 1,
+    );
+    mi.mi_fwordlen = strlen(mi.mi_fword.as_ptr()) as c_int;
+
+    if is_camel_case && mi.mi_fwordlen > 0 {
+        *mi.mi_fword.as_mut_ptr().add(mi.mi_fwordlen as usize - 1) = b' ' as c_char;
+    }
+
+    mi.mi_result = SP_BAD;
+    mi.mi_result2 = SP_BAD;
+
+    // Loop over languages in 'spelllang'
+    let langp_len = (*langp_ga).ga_len;
+    for lpi in 0..langp_len {
+        mi.mi_lp = langp_entry_mut(langp_ga, lpi);
+        if (*(*mi.mi_lp).lp_slang).sl_fidxs.is_null() {
+            continue;
+        }
+
+        find_word(&mut mi, FIND_FOLDWORD);
+        find_word(&mut mi, FIND_KEEPWORD);
+        find_prefix(&mut mi, FIND_FOLDWORD);
+
+        let slang = (*mi.mi_lp).lp_slang;
+        if (*slang).sl_nobreak && mi.mi_result == SP_BAD && mi.mi_result2 != SP_BAD {
+            mi.mi_result = mi.mi_result2;
+            mi.mi_end = mi.mi_end2;
+        }
+
+        if count_word && mi.mi_result == SP_OK {
+            count_common_word(
+                slang,
+                mi.mi_word,
+                mi.mi_end.offset_from(mi.mi_word) as c_int,
+                1,
+            );
+            count_word = false;
+        }
+    }
+
+    if mi.mi_result != SP_OK {
+        if nrlen > 0 {
+            if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
+                return nrlen;
+            }
+        } else if !crate::rs_spell_iswordp_nmw(mi.mi_word, wp) {
+            // Non-word character: check for sentence end
+            if !capcol.is_null() && !nvim_win_get_b_cap_prog(wp).is_null() {
+                let off = nvim_win_spell_capcol_regexec(wp.cast_mut(), ptr);
+                if off >= 0 {
+                    *capcol = off;
+                }
+            }
+            return utfc_ptr2len(ptr_c) as usize;
+        } else if mi.mi_end == mi.mi_word {
+            mi.mi_end = mi.mi_end.add(utfc_ptr2len(mi.mi_end) as usize);
+        } else if mi.mi_result == SP_BAD && {
+            let lp0 = langp_entry_mut(langp_ga, 0);
+            !(*(*lp0).lp_slang).sl_fidxs.is_null() && (*(*lp0).lp_slang).sl_nobreak
+        } {
+            // First language is NOBREAK: find first valid compound position
+            let save_result = mi.mi_result;
+            mi.mi_lp = langp_entry_mut(langp_ga, 0);
+            let mut p = mi.mi_word;
+            let mut fp = mi.mi_fword.as_ptr();
+            loop {
+                p = p.add(utfc_ptr2len(p) as usize);
+                fp = fp.add(utfc_ptr2len(fp) as usize);
+                if p >= mi.mi_end {
+                    break;
+                }
+                mi.mi_compoff = fp.offset_from(mi.mi_fword.as_ptr()) as c_int;
+                find_word(&mut mi, FIND_COMPOUND);
+                if mi.mi_result != SP_BAD {
+                    mi.mi_end = p;
+                    break;
+                }
+            }
+            mi.mi_result = save_result;
+        }
+
+        *attrp = if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
+            HLF_SPB
+        } else if mi.mi_result == SP_RARE {
+            HLF_SPR
+        } else {
+            HLF_SPL
+        };
+    }
+
+    if wrongcaplen > 0 && (mi.mi_result == SP_OK || mi.mi_result == SP_RARE) {
+        *attrp = HLF_SPC;
+        return wrongcaplen;
+    }
+
+    mi.mi_end.offset_from(mi.mi_word) as usize
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
