@@ -614,6 +614,27 @@ pub unsafe extern "C" fn rs_did_set_diffopt(_args: *mut c_void) -> CallbackResul
     callback_ok()
 }
 
+/// Callback for 'langmap' option.
+/// Delegates to the Rust mapping module's rs_langmap_parse().
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_langmap(args: *mut c_void) -> CallbackResult {
+    extern "C" {
+        fn rs_langmap_parse(
+            langmap_str: *const c_char,
+            errbuf: *mut c_char,
+            errbuflen: usize,
+        ) -> c_int;
+        fn nvim_get_p_langmap() -> *const c_char;
+    }
+    let langmap = nvim_get_p_langmap();
+    let errbuf = nvim_optset_get_errbuf(args);
+    let errbuflen = nvim_optset_get_errbuflen(args);
+    if rs_langmap_parse(langmap, errbuf, errbuflen) != 0 {
+        return errbuf;
+    }
+    callback_ok()
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

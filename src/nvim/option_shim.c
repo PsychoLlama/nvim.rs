@@ -243,6 +243,7 @@ extern const char *rs_did_set_spelloptions(optset_T *args);
 extern const char *rs_did_set_diffanchors(optset_T *args);
 extern const char *rs_did_set_messagesopt(optset_T *args);
 extern const char *rs_did_set_diffopt(optset_T *args);
+extern const char *rs_did_set_langmap(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -461,6 +462,9 @@ void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
 // Phase 88: undolevels accessors
 void nvim_set_p_ul(OptInt val) { p_ul = val; }
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
+
+// Phase 91: langmap accessor
+const char *nvim_get_p_langmap(void) { return p_langmap; }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }

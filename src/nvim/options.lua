@@ -5081,7 +5081,7 @@ local options = {
     },
     {
       abbreviation = 'lmap',
-      cb = 'did_set_langmap',
+      cb = 'rs_did_set_langmap',
       defaults = '',
       deny_duplicates = true,
       desc = [=[

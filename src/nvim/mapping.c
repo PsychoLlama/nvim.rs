@@ -1060,17 +1060,6 @@ void f_mapcheck(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// @param mode  Bitflags representing the mode in which to set the mapping.
 ///              See @ref rs_get_map_mode.
 /// @param buffer  If true, make a buffer-local mapping for curbuf
-/// Called when langmap option is set; the language map can be
-/// changed at any time!
-const char *did_set_langmap(optset_T *args)
-{
-  int err = rs_langmap_parse(p_langmap, args->os_errbuf, args->os_errbuflen);
-  if (err != 0) {
-    return args->os_errbuf;
-  }
-  return NULL;
-}
-
 static void do_exmap(exarg_T *eap, int isabbrev)
 {
   char *cmdp = eap->cmd;
