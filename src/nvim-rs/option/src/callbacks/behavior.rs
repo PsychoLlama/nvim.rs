@@ -115,6 +115,12 @@ extern "C" {
     fn nvim_valid_spelllang(val: *const std::ffi::c_char) -> c_int;
     fn nvim_did_set_spell_option() -> CallbackResult;
 
+    // Phase 96: spellcapcheck and keymodel accessors
+    fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
+    fn nvim_get_p_km() -> *const std::ffi::c_char;
+    fn nvim_set_km_stopsel(val: c_int);
+    fn nvim_set_km_startsel(val: c_int);
+
     // Shiftwidth/tabstop callback
     fn nvim_parse_cino(buf: BufHandle);
     fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
@@ -651,6 +657,33 @@ pub unsafe extern "C" fn rs_did_set_spelllang(args: *mut c_void) -> CallbackResu
         return E_INVARG_BEHAVIOR;
     }
     nvim_did_set_spell_option()
+}
+
+/// Callback for 'spellcapcheck' option (Phase 96).
+///
+/// Compiles the regexp program for start-of-sentence detection.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_spellcapcheck(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    nvim_compile_cap_prog_win(win)
+}
+
+/// Callback for 'keymodel' option (Phase 96).
+///
+/// Validates and then updates km_stopsel/km_startsel flags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResult {
+    let errmsg = nvim_did_set_str_generic(args);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+    let p_km = nvim_get_p_km();
+    if !p_km.is_null() {
+        let km = std::ffi::CStr::from_ptr(p_km).to_bytes();
+        nvim_set_km_stopsel(c_int::from(km.contains(&b'o')));
+        nvim_set_km_startsel(c_int::from(km.contains(&b'a')));
+    }
+    callback_ok()
 }
 
 /// Callback for 'spell' option.

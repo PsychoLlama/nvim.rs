@@ -1114,19 +1114,6 @@ const char *did_set_keymap(optset_T *args)
   return errmsg;
 }
 
-/// The 'keymodel' option is changed.
-const char *did_set_keymodel(optset_T *args FUNC_ATTR_UNUSED)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  km_stopsel = (vim_strchr(p_km, 'o') != NULL);
-  km_startsel = (vim_strchr(p_km, 'a') != NULL);
-  return NULL;
-}
-
-
 /// The 'mkspellmem' option is changed.
 const char *did_set_mkspellmem(optset_T *args FUNC_ATTR_UNUSED)
 {
@@ -1248,14 +1235,6 @@ const char *did_set_signcolumn(optset_T *args)
     win->w_nrwidth_line_count = 0;
   }
   return NULL;
-}
-
-/// The 'spellcapcheck' option is changed.
-const char *did_set_spellcapcheck(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  // When 'spellcapcheck' is set compile the regexp program.
-  return compile_cap_prog(win->w_s);
 }
 
 /// The 'spellsuggest' option is changed.

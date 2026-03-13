@@ -5026,7 +5026,7 @@ local options = {
     },
     {
       abbreviation = 'km',
-      cb = 'did_set_keymodel',
+      cb = 'rs_did_set_keymodel',
       defaults = '',
       values = { 'startsel', 'stopsel' },
       deny_duplicates = true,
@@ -8398,7 +8398,7 @@ local options = {
     },
     {
       abbreviation = 'spc',
-      cb = 'did_set_spellcapcheck',
+      cb = 'rs_did_set_spellcapcheck',
       defaults = '[.?!]\\_[\\])\'"\\t ]\\+',
       desc = [=[
         Pattern to locate the end of a sentence.  The following word will be
