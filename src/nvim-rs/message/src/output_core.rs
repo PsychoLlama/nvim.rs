@@ -21,8 +21,14 @@ extern "C" {
     fn msg_keep(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int;
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
     fn msg_start();
-    fn msg_end() -> c_int;
     fn msg_clr_eos_force();
+    fn msg_ext_ui_flush();
+
+    // For msg_end
+    fn nvim_get_exiting() -> c_int;
+    fn nvim_get_need_wait_return() -> c_int;
+    fn nvim_get_state() -> c_int;
+    fn nvim_wait_return(redraw: bool);
 
     // Verbose enter/leave
     fn verbose_enter();
@@ -261,10 +267,27 @@ pub unsafe extern "C" fn rs_msg_start() {
 /// * `false` (0) if wait_return() was called
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that may trigger interactive prompt.
+#[export_name = "msg_end"]
+#[must_use]
 pub unsafe extern "C" fn rs_msg_end() -> c_int {
-    msg_end()
+    // If the string is larger than the window,
+    // or the ruler option is set and we run into it,
+    // we have to redraw the window.
+    // Do not do this if we are abandoning the file or editing the command line.
+    const MODE_CMDLINE: c_int = 0x08;
+    if nvim_get_exiting() == 0
+        && nvim_get_need_wait_return() != 0
+        && (nvim_get_state() & MODE_CMDLINE) == 0
+    {
+        nvim_wait_return(false);
+        return 0;
+    }
+
+    // NOTE: ui_flush() used to be called here. This had to be removed, as it
+    // inhibited substantial performance improvements.
+    msg_ext_ui_flush();
+    1
 }
 
 /// Clear from current message position to end of screen (rs_ alias).

@@ -98,6 +98,7 @@ void msg_check_for_delay(bool check_msg_scroll);
 void msg_clr_cmdline(void);
 void msg_check(void);
 bool messaging(void);
+bool msg_end(void);
 
 #include "message.h.generated.h"
 

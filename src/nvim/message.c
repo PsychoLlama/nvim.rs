@@ -3198,28 +3198,6 @@ void msg_clr_eos_force(void)
 }
 
 
-/// end putting a message on the screen
-/// call wait_return() if the message does not fit in the available space
-///
-/// @return  true if wait_return() not called.
-bool msg_end(void)
-{
-  // If the string is larger than the window,
-  // or the ruler option is set and we run into it,
-  // we have to redraw the window.
-  // Do not do this if we are abandoning the file or editing the command line.
-  if (!exiting && need_wait_return && !(State & MODE_CMDLINE)) {
-    wait_return(false);
-    return false;
-  }
-
-  // NOTE: ui_flush() used to be called here. This had to be removed, as it
-  // inhibited substantial performance improvements. It is assumed that relevant
-  // callers invoke ui_flush() before going into CPU busywork, or restricted
-  // event processing after displaying a message to the user.
-  msg_ext_ui_flush();
-  return true;
-}
 
 /// Clear "msg_ext_chunks" before flushing so that ui_flush() does not re-emit
 /// the same message recursively.
