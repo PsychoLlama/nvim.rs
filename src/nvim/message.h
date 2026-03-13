@@ -137,6 +137,9 @@ void msg_hist_clear_temp(void);
 // Phase 83: msg_outtrans_len migrated to Rust
 int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist);
 
+// Phase 84: msg_multiline migrated to Rust
+void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

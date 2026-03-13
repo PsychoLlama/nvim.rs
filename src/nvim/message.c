@@ -542,34 +542,6 @@ void msg_grid_validate(void)
 
 
 
-/// Similar to msg_outtrans_len, but support newlines and tabs.
-void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *s = str.data;
-  const char *chunk = s;
-  while ((size_t)(s - str.data) < str.size) {
-    if (check_int && got_int) {
-      return;
-    }
-    if (*s == '\n' || *s == TAB || *s == '\r') {
-      // Print all chars before the delimiter
-      msg_outtrans_len(chunk, (int)(s - chunk), hl_id, hist);
-
-      if (*s != TAB && *need_clear) {
-        msg_clr_eos();
-        *need_clear = false;
-      }
-      msg_putchar_hl((uint8_t)(*s), hl_id);
-      chunk = s + 1;
-    }
-    s++;
-  }
-
-  // Print the rest of the message
-  msg_outtrans_len(chunk, (int)(str.size - (size_t)(chunk - str.data)), hl_id, hist);
-}
-
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 static bool is_multihl = false;
 

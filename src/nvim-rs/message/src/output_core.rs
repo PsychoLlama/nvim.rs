@@ -12,9 +12,22 @@ use std::ffi::{c_char, c_int};
 // Use the mbyte crate for UTF-8 encoding
 use nvim_mbyte::rs_utf_char2bytes;
 
+// Use msg_outtrans_len from format.rs (same crate)
+use crate::rs_msg_outtrans_len;
+
 // ============================================================================
 // C Function Declarations
 // ============================================================================
+
+/// C-compatible `String` struct (`{char *data, size_t size}`).
+///
+/// This mirrors the C API `String` typedef used in message functions.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NvimString {
+    pub data: *mut c_char,
+    pub size: usize,
+}
 
 extern "C" {
     // Core message output functions (call into C until fully migrated)
@@ -23,6 +36,8 @@ extern "C" {
     fn msg_start();
     fn msg_clr_eos_force();
     fn msg_ext_ui_flush();
+    // got_int accessor
+    fn nvim_get_got_int() -> c_int;
 
     // For msg_end
     fn nvim_get_exiting() -> c_int;
@@ -521,6 +536,69 @@ pub unsafe extern "C" fn rs_msg_end_prompt() {
     nvim_set_msg_col(0);
     msg_clr_eos_impl();
     nvim_set_lines_left(-1);
+}
+
+// ============================================================================
+// Multiline Message Output (Phase 84)
+// ============================================================================
+
+/// Output a string with newline/tab/CR handling.
+///
+/// Similar to `msg_outtrans_len`, but handles newlines, tabs, and carriage
+/// returns specially: flushes the current chunk, optionally clears EOS,
+/// and outputs the delimiter character.
+///
+/// # Arguments
+/// * `str` - The string to output (length-delimited, not NUL-terminated)
+/// * `hl_id` - Highlight group ID
+/// * `check_int` - If true, stop early when `got_int` is set
+/// * `hist` - If true, add to message history
+/// * `need_clear` - In/out flag: true if EOS needs clearing before next newline
+///
+/// # Safety
+/// - `str.data` must be valid for `str.size` bytes
+/// - `need_clear` must be a valid non-null pointer
+#[export_name = "msg_multiline"]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_msg_multiline(
+    str: NvimString,
+    hl_id: c_int,
+    check_int: bool,
+    hist: bool,
+    need_clear: *mut bool,
+) {
+    let base = str.data;
+    let mut s = base;
+    let mut chunk = base;
+    let end = base.add(str.size);
+
+    while s < end {
+        if check_int && nvim_get_got_int() != 0 {
+            return;
+        }
+        let c = *s as u8;
+        if c == b'\n' || c == b'\t' || c == b'\r' {
+            // Flush chars before this delimiter
+            let chunk_len = (s as usize - chunk as usize) as c_int;
+            let _ = rs_msg_outtrans_len(chunk, chunk_len, hl_id, hist);
+
+            if c != b'\t' && *need_clear {
+                msg_clr_eos_impl();
+                *need_clear = false;
+            }
+            rs_msg_putchar_hl(c_int::from(c), hl_id);
+            chunk = s.add(1);
+        }
+        s = s.add(1);
+    }
+
+    // Print the remaining tail
+    let tail_len = (s as usize - chunk as usize) as c_int;
+    let _ = rs_msg_outtrans_len(chunk, tail_len, hl_id, hist);
 }
 
 // ============================================================================
