@@ -176,6 +176,7 @@ extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *or
 extern void rs_ex_undolist(exarg_T *eap);
 extern list_T *rs_u_eval_tree(buf_T *buf, const u_header_T *first_uhp);
 extern char *rs_f_undofile(const char *fname);
+extern void rs_undo_fmt_time(char *buf, size_t buflen, time_t tt);
 
 #include "undo.c.generated.h"
 
@@ -466,27 +467,7 @@ void undo_time(int step, bool sec, bool file, bool absolute)
 /// Put the timestamp of an undo header in "buf[buflen]" in a nice format.
 void undo_fmt_time(char *buf, size_t buflen, time_t tt)
 {
-  if (time(NULL) - tt >= 100) {
-    struct tm curtime;
-    os_localtime_r(&tt, &curtime);
-    size_t n;
-    if (time(NULL) - tt < (60 * 60 * 12)) {
-      // within 12 hours
-      n = strftime(buf, buflen, "%H:%M:%S", &curtime);
-    } else {
-      // longer ago
-      n = strftime(buf, buflen, "%Y/%m/%d %H:%M:%S", &curtime);
-    }
-    if (n == 0) {
-      buf[0] = NUL;
-    }
-  } else {
-    int64_t seconds = time(NULL) - tt;
-    vim_snprintf(buf, buflen,
-                 NGETTEXT("%" PRId64 " second ago",
-                          "%" PRId64 " seconds ago", (uint32_t)seconds),
-                 seconds);
-  }
+  rs_undo_fmt_time(buf, buflen, tt);
 }
 
 /// u_sync: stop adding to the current entry list
