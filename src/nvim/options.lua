@@ -3469,7 +3469,7 @@ local options = {
     },
     {
       abbreviation = 'fdi',
-      cb = 'did_set_foldignore',
+      cb = 'rs_did_set_foldignore',
       defaults = '#',
       desc = [=[
         Used only when 'foldmethod' is "indent".  Lines starting with
@@ -3523,7 +3523,7 @@ local options = {
     },
     {
       abbreviation = 'fmr',
-      cb = 'did_set_foldmarker',
+      cb = 'rs_did_set_foldmarker',
       defaults = '{{{,}}}',
       deny_duplicates = true,
       desc = [=[
@@ -3542,7 +3542,7 @@ local options = {
     },
     {
       abbreviation = 'fdm',
-      cb = 'did_set_foldmethod',
+      cb = 'rs_did_set_foldmethod',
       defaults = 'manual',
       values = { 'manual', 'expr', 'marker', 'indent', 'syntax', 'diff' },
       desc = [=[

@@ -22,6 +22,12 @@ extern "C" {
     // Fold functions
     fn rs_foldmethodIsSyntax(win: WinHandle) -> c_int;
     fn rs_foldmethodIsIndent(win: WinHandle) -> c_int;
+    fn rs_foldmethodIsMarker(win: WinHandle) -> c_int;
+    fn rs_newFoldLevel();
+
+    // Option callback helpers
+    fn nvim_did_set_str_generic(args: *mut c_void) -> *const std::ffi::c_char;
+    fn nvim_optset_get_varp_str(args: *const c_void) -> *const std::ffi::c_char;
 
     // Window functions
     #[link_name = "rs_win_equal"]
@@ -247,6 +253,66 @@ pub unsafe extern "C" fn rs_did_set_equalalways(args: *mut c_void) -> CallbackRe
 }
 
 // Note: rs_did_set_foldlevel is already defined in mod.rs
+
+/// Error: Comma required (E536)
+const E_COMMA_REQUIRED: *const std::ffi::c_char = c"E536: Comma required".as_ptr();
+
+/// Error: Invalid argument (E474)
+const E_INVARG_BEHAVIOR: *const std::ffi::c_char = c"E474: Invalid argument".as_ptr();
+
+/// Callback for 'foldignore' option (Phase 93).
+///
+/// Updates all folds if using indent fold method.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_foldignore(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    if rs_foldmethodIsIndent(win) != 0 {
+        rs_foldUpdateAll(win);
+    }
+    callback_ok()
+}
+
+/// Callback for 'foldmarker' option (Phase 93).
+///
+/// Validates comma-separated pair and updates folds if using marker method.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_foldmarker(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    let varp_str = nvim_optset_get_varp_str(args);
+    if varp_str.is_null() {
+        return E_INVARG_BEHAVIOR;
+    }
+    // Find comma separator
+    let s = std::ffi::CStr::from_ptr(varp_str).to_bytes();
+    let comma_pos = s.iter().position(|&b| b == b',');
+    match comma_pos {
+        None => return E_COMMA_REQUIRED,
+        Some(0) => return E_INVARG_BEHAVIOR,
+        Some(pos) if pos + 1 >= s.len() => return E_INVARG_BEHAVIOR,
+        _ => {}
+    }
+    if rs_foldmethodIsMarker(win) != 0 {
+        rs_foldUpdateAll(win);
+    }
+    callback_ok()
+}
+
+/// Callback for 'foldmethod' option (Phase 93).
+///
+/// Validates against allowed values, then updates folds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_foldmethod(args: *mut c_void) -> CallbackResult {
+    let errmsg = nvim_did_set_str_generic(args);
+    if !errmsg.is_null() {
+        return errmsg;
+    }
+    let win = nvim_optset_get_win(args);
+    rs_foldUpdateAll(win);
+    if rs_foldmethodIsDiff(win) != 0 {
+        rs_newFoldLevel();
+    }
+    callback_ok()
+}
 
 /// Callback for 'foldminlines' option.
 ///

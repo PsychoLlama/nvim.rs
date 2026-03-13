@@ -991,53 +991,6 @@ const char *did_set_foldexpr(optset_T *args)
   return NULL;
 }
 
-/// The 'foldignore' option is changed.
-const char *did_set_foldignore(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  if (rs_foldmethodIsIndent(win)) {
-    rs_foldUpdateAll(win);
-  }
-  return NULL;
-}
-
-/// The 'foldmarker' option is changed.
-const char *did_set_foldmarker(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-  char *p = vim_strchr(*varp, ',');
-
-  if (p == NULL) {
-    return e_comma_required;
-  }
-
-  if (p == *varp || p[1] == NUL) {
-    return e_invarg;
-  }
-
-  if (rs_foldmethodIsMarker(win)) {
-    rs_foldUpdateAll(win);
-  }
-
-  return NULL;
-}
-
-/// The 'foldmethod' option is changed.
-const char *did_set_foldmethod(optset_T *args)
-{
-  const char *errmsg = did_set_str_generic(args);
-  if (errmsg != NULL) {
-    return errmsg;
-  }
-  win_T *win = (win_T *)args->os_win;
-  rs_foldUpdateAll(win);
-  if (rs_foldmethodIsDiff(win)) {
-    rs_newFoldLevel();
-  }
-  return NULL;
-}
-
 int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches)
 {
   return expand_set_opt_listflag(args, FO_ALL, numMatches, matches);
