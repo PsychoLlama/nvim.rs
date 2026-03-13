@@ -81,6 +81,13 @@ bool emsg(const char *s);
 char *msg_strtrunc(const char *s, int force);
 void trunc_string(const char *s, char *buf, int room_in, int buflen);
 
+// Phase 5: Scrollback management functions migrated to Rust
+void may_clear_sb_text(void);
+void sb_text_start_cmdline(void);
+void sb_text_restart_cmdline(void);
+void sb_text_end_cmdline(void);
+void msg_sb_eol(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

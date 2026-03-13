@@ -2722,6 +2722,8 @@ static sb_clear_T do_clear_sb_text = SB_CLEAR_NONE;
 // C accessors for scrollback state (used by Rust)
 int nvim_get_do_clear_sb_text(void) { return (int)do_clear_sb_text; }
 void nvim_set_do_clear_sb_text(int val) { do_clear_sb_text = (sb_clear_T)val; }
+int nvim_get_do_clear_hist_temp(void) { return do_clear_hist_temp ? 1 : 0; }
+void nvim_set_do_clear_hist_temp(int val) { do_clear_hist_temp = (val != 0); }
 
 // C accessors for dialog state (used by Rust)
 const char *nvim_get_confirm_msg(void) { return confirm_msg; }
@@ -2776,55 +2778,6 @@ static void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb
   *sb_col = 0;
 }
 
-/// Finished showing messages, clear the scroll-back text on the next message.
-void may_clear_sb_text(void)
-{
-  do_clear_sb_text = SB_CLEAR_ALL;
-  do_clear_hist_temp = true;
-}
-
-/// Starting to edit the command line: do not clear messages now.
-void sb_text_start_cmdline(void)
-{
-  if (do_clear_sb_text == SB_CLEAR_CMDLINE_BUSY) {
-    // Invoking command line recursively: the previous-level command line
-    // doesn't need to be remembered as it will be redrawn when returning
-    // to that level.
-    sb_text_restart_cmdline();
-  } else {
-    msg_sb_eol();
-    do_clear_sb_text = SB_CLEAR_CMDLINE_BUSY;
-  }
-}
-
-/// Redrawing the command line: clear the last unfinished line.
-void sb_text_restart_cmdline(void)
-{
-  // Needed when returning from nested command line.
-  do_clear_sb_text = SB_CLEAR_CMDLINE_BUSY;
-
-  if (last_msgchunk == NULL || last_msgchunk->sb_eol) {
-    // No unfinished line: don't clear anything.
-    return;
-  }
-
-  msgchunk_T *tofree = msg_sb_start(last_msgchunk);
-  last_msgchunk = tofree->sb_prev;
-  if (last_msgchunk != NULL) {
-    last_msgchunk->sb_next = NULL;
-  }
-  while (tofree != NULL) {
-    msgchunk_T *tofree_next = tofree->sb_next;
-    xfree(tofree);
-    tofree = tofree_next;
-  }
-}
-
-/// Ending to edit the command line: clear old lines but the last one later.
-void sb_text_end_cmdline(void)
-{
-  do_clear_sb_text = SB_CLEAR_CMDLINE_DONE;
-}
 
 /// Clear any text remembered for scrolling back.
 /// When "all" is false keep the last line.
@@ -2880,13 +2833,6 @@ static msgchunk_T *msg_sb_start(msgchunk_T *mps)
   return mp;
 }
 
-/// Mark the last message chunk as finishing the line.
-void msg_sb_eol(void)
-{
-  if (last_msgchunk != NULL) {
-    last_msgchunk->sb_eol = true;
-  }
-}
 
 /// Display a screen line from previously displayed text at row "row".
 ///

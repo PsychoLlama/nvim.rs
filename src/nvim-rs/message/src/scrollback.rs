@@ -29,6 +29,11 @@ extern "C" {
     fn nvim_get_do_clear_sb_text() -> c_int;
     /// Set `do_clear_sb_text` state
     fn nvim_set_do_clear_sb_text(val: c_int);
+    /// Get `do_clear_hist_temp` flag
+    #[allow(dead_code)]
+    fn nvim_get_do_clear_hist_temp() -> c_int;
+    /// Set `do_clear_hist_temp` flag
+    fn nvim_set_do_clear_hist_temp(val: c_int);
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
@@ -120,7 +125,7 @@ fn msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
 ///
 /// # Safety
 /// Calls C accessor and mutator functions.
-#[no_mangle]
+#[export_name = "msg_sb_eol"]
 pub unsafe extern "C" fn rs_sb_mark_eol() {
     let last = nvim_get_last_msgchunk();
     if !last.is_null() {
@@ -135,7 +140,7 @@ pub unsafe extern "C" fn rs_sb_mark_eol() {
 ///
 /// # Safety
 /// Calls C accessor and mutator functions.
-#[no_mangle]
+#[export_name = "sb_text_start_cmdline"]
 pub unsafe extern "C" fn rs_sb_start_cmdline() {
     let state = nvim_get_do_clear_sb_text();
 
@@ -154,7 +159,7 @@ pub unsafe extern "C" fn rs_sb_start_cmdline() {
 ///
 /// # Safety
 /// Calls C accessor and mutator functions, frees memory.
-#[no_mangle]
+#[export_name = "sb_text_restart_cmdline"]
 pub unsafe extern "C" fn rs_sb_restart_cmdline() {
     nvim_set_do_clear_sb_text(SbClearState::CMDLINE_BUSY.0);
 
@@ -188,7 +193,7 @@ pub unsafe extern "C" fn rs_sb_restart_cmdline() {
 ///
 /// # Safety
 /// Calls C mutator function.
-#[no_mangle]
+#[export_name = "sb_text_end_cmdline"]
 pub unsafe extern "C" fn rs_sb_end_cmdline() {
     nvim_set_do_clear_sb_text(SbClearState::CMDLINE_DONE.0);
 }
@@ -196,12 +201,14 @@ pub unsafe extern "C" fn rs_sb_end_cmdline() {
 /// Schedule clearing all scrollback text.
 ///
 /// Called when done showing messages and screen will be redrawn.
+/// Also sets do_clear_hist_temp to clear temporary history entries.
 ///
 /// # Safety
-/// Calls C mutator function.
-#[no_mangle]
+/// Calls C mutator functions.
+#[export_name = "may_clear_sb_text"]
 pub unsafe extern "C" fn rs_sb_schedule_clear() {
     nvim_set_do_clear_sb_text(SbClearState::ALL.0);
+    nvim_set_do_clear_hist_temp(1);
 }
 
 /// Clear scrollback text.
