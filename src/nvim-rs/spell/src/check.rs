@@ -1944,6 +1944,198 @@ pub unsafe extern "C" fn rs_compile_cap_prog(synblock: *mut c_void) -> *const c_
 }
 
 // =============================================================================
+// Phase 2: Compound word functions migrated from spell.c
+// =============================================================================
+
+extern "C" {
+    fn vim_regexec_prog(
+        prog: *mut *mut c_void,
+        ignore_case: bool,
+        line: *const c_char,
+        col: i32,
+    ) -> bool;
+    fn strlen(s: *const c_char) -> usize;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+}
+
+/// Check if "ptr" matches a compound pattern.
+///
+/// Returns true if the word boundary at ptr[wlen] matches one of the compound
+/// patterns in gap (sl_comppat). Checks both first and second halves of each
+/// pattern pair.
+///
+/// # Safety
+/// ptr must be valid, gap must be a valid garray_T with char** data.
+#[export_name = "match_checkcompoundpattern"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_match_checkcompoundpattern(
+    ptr: *const c_char,
+    wlen: c_int,
+    gap: *const GArrayRaw,
+) -> bool {
+    let ga_len = (*gap).ga_len;
+    let mut i = 0;
+    while i + 1 < ga_len {
+        let data = (*gap).ga_data as *const *const c_char;
+        // Second part: must match at start of following word
+        let p2 = *data.add(i as usize + 1);
+        let p2_len = strlen(p2);
+        if strncmp(ptr.add(wlen as usize), p2, p2_len) == 0 {
+            // First part: must match at end of previous word
+            let p1 = *data.add(i as usize);
+            let len = strlen(p1) as c_int;
+            if len <= wlen && strncmp(ptr.add((wlen - len) as usize), p1, len as usize) == 0 {
+                return true;
+            }
+        }
+        i += 2;
+    }
+    false
+}
+
+/// Return true if "flags" is a valid sequence of compound flags and "word"
+/// does not have too many syllables.
+///
+/// # Safety
+/// slang, word, flags must be valid pointers.
+#[export_name = "can_compound"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_can_compound_c_compat(
+    slang: *mut crate::SlangRaw,
+    word: *const c_char,
+    flags: *const u8,
+) -> bool {
+    if (*slang).sl_compprog.is_null() {
+        return false;
+    }
+
+    // Convert single-byte flags to UTF-8 characters
+    let mut uflags = [0u8; crate::MAXWLEN * 2 + 1];
+    let mut p = uflags.as_mut_ptr().cast::<c_char>();
+    let mut i = 0usize;
+    loop {
+        let c = *flags.add(i);
+        if c == 0 {
+            break;
+        }
+        p = p.add(utf_char2bytes(c_int::from(c), p) as usize);
+        i += 1;
+    }
+    *p = 0;
+
+    if !vim_regexec_prog(
+        std::ptr::addr_of_mut!((*slang).sl_compprog),
+        false,
+        uflags.as_ptr().cast::<c_char>(),
+        0,
+    ) {
+        return false;
+    }
+
+    // Count syllables - if too many AND too many compound words, reject
+    if (*slang).sl_compsylmax < crate::MAXWLEN as c_int {
+        let syllables = crate::count_syllables(slang, word);
+        if syllables > (*slang).sl_compsylmax {
+            return (strlen(flags.cast::<c_char>()) as c_int) < (*slang).sl_compmax;
+        }
+    }
+    true
+}
+
+/// Return true if "compflags" can be the start of a valid compound rule in slang.
+///
+/// This is the canonical C-ABI export of match_compoundrule using the C signature.
+///
+/// # Safety
+/// slang and compflags must be valid pointers.
+#[export_name = "match_compoundrule"]
+pub unsafe extern "C" fn rs_match_compoundrule_c_compat(
+    slang: *mut crate::SlangRaw,
+    compflags: *const u8,
+) -> bool {
+    if (*slang).sl_comprules.is_null() {
+        return false;
+    }
+    // Build NUL-terminated slices for the Rust implementation
+    let rules = (*slang).sl_comprules;
+    // Find length of comprules (NUL-terminated)
+    let mut rules_len = 0usize;
+    while *rules.add(rules_len) != 0 {
+        rules_len += 1;
+    }
+    rules_len += 1; // include NUL
+
+    let mut flags_len = 0usize;
+    while *compflags.add(flags_len) != 0 {
+        flags_len += 1;
+    }
+    flags_len += 1; // include NUL
+
+    let comprules_slice = std::slice::from_raw_parts(rules, rules_len);
+    let compflags_slice = std::slice::from_raw_parts(compflags, flags_len);
+    match_compoundrule(comprules_slice, compflags_slice)
+}
+
+/// Return non-zero if the prefix at arridx in sl_pidxs matches "flags" for "word".
+/// Returns the WF_* flags for the matching prefix, or 0 if no match.
+///
+/// # Safety
+/// slang and word must be valid pointers.
+#[export_name = "valid_word_prefix"]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_valid_word_prefix(
+    totprefcnt: c_int,
+    arridx: c_int,
+    flags: c_int,
+    word: *mut c_char,
+    slang: *mut crate::SlangRaw,
+    cond_req: bool,
+) -> c_int {
+    const WF_HAS_AFF: c_int = 0x0200;
+    const WF_PFX_NC: c_int = 0x0040_0000;
+    const WF_RAREPFX: c_int = 0x0020_0000;
+    let _ = WF_RAREPFX; // used indirectly via return value
+
+    let prefid = ((flags as u32) >> 24) as c_int;
+    let pidxs = (*slang).sl_pidxs;
+
+    let mut prefcnt = totprefcnt - 1;
+    while prefcnt >= 0 {
+        let pidx = *pidxs.add((arridx + prefcnt) as usize);
+
+        // Check prefix ID (low byte of pidx)
+        if prefid != (pidx & 0xff) {
+            prefcnt -= 1;
+            continue;
+        }
+
+        // Check if prefix doesn't combine and word has suffix
+        if (flags & WF_HAS_AFF) != 0 && (pidx & WF_PFX_NC) != 0 {
+            prefcnt -= 1;
+            continue;
+        }
+
+        // Check the condition regexp
+        let cond_idx = ((pidx as u32 >> 8) & 0xffff) as usize;
+        let rp_ptr = (*slang).sl_prefprog.add(cond_idx);
+        if !(*rp_ptr).is_null() {
+            if !vim_regexec_prog(rp_ptr, false, word, 0) {
+                prefcnt -= 1;
+                continue;
+            }
+        } else if cond_req {
+            prefcnt -= 1;
+            continue;
+        }
+
+        // Match found!
+        return pidx;
+    }
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
