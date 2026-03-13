@@ -49,7 +49,7 @@ const CTRL_X_OMNI: c_int = 11;
 /// # Safety
 /// Requires valid optset_T argument.
 #[export_name = "did_set_completefunc"]
-pub unsafe extern "C" fn rs_did_set_completefunc(args: *mut std::ffi::c_void) -> *const c_char {
+pub unsafe extern "C" fn did_set_completefunc_compat(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_completefunc_impl(args)
 }
 
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn rs_did_set_completefunc(args: *mut std::ffi::c_void) ->
 /// # Safety
 /// Requires valid optset_T argument.
 #[export_name = "did_set_omnifunc"]
-pub unsafe extern "C" fn rs_did_set_omnifunc(args: *mut std::ffi::c_void) -> *const c_char {
+pub unsafe extern "C" fn did_set_omnifunc_compat(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_omnifunc_impl(args)
 }
 
@@ -73,6 +73,25 @@ pub unsafe extern "C" fn rs_did_set_omnifunc(args: *mut std::ffi::c_void) -> *co
 /// # Safety
 /// Requires valid optset_T argument.
 #[export_name = "did_set_thesaurusfunc"]
+pub unsafe extern "C" fn did_set_thesaurusfunc_compat(
+    args: *mut std::ffi::c_void,
+) -> *const c_char {
+    nvim_did_set_thesaurusfunc_impl(args)
+}
+
+// rs_* aliases for options.lua registration (Phase 109)
+/// Alias for 'completefunc' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_completefunc(args: *mut std::ffi::c_void) -> *const c_char {
+    nvim_did_set_completefunc_impl(args)
+}
+/// Alias for 'omnifunc' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_omnifunc(args: *mut std::ffi::c_void) -> *const c_char {
+    nvim_did_set_omnifunc_impl(args)
+}
+/// Alias for 'thesaurusfunc' callback under the rs_ naming convention.
+#[no_mangle]
 pub unsafe extern "C" fn rs_did_set_thesaurusfunc(args: *mut std::ffi::c_void) -> *const c_char {
     nvim_did_set_thesaurusfunc_impl(args)
 }

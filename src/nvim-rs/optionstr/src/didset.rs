@@ -287,3 +287,31 @@ pub unsafe extern "C" fn did_set_mousescroll(_args: *const c_void) -> *const c_c
 
     std::ptr::null()
 }
+
+// =============================================================================
+// rs_* aliases (Phase 109)
+// =============================================================================
+
+/// Alias for 'helplang' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_helplang(args: *const c_void) -> *const c_char {
+    did_set_helplang(args)
+}
+
+/// Alias for 'breakat' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_breakat(args: *const c_void) -> *const c_char {
+    did_set_breakat(args)
+}
+
+/// Alias for 'backupext'/'patchmode' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_backupext_or_patchmode(args: *const c_void) -> *const c_char {
+    did_set_backupext_or_patchmode(args)
+}
+
+/// Alias for 'mousescroll' callback under the rs_ naming convention.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_mousescroll(args: *const c_void) -> *const c_char {
+    did_set_mousescroll(args)
+}

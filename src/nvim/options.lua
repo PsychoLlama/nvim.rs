@@ -578,7 +578,7 @@ local options = {
     },
     {
       abbreviation = 'bex',
-      cb = 'did_set_backupext_or_patchmode',
+      cb = 'rs_did_set_backupext_or_patchmode',
       defaults = '~',
       desc = [=[
         String which is appended to a file name to make the name of the
@@ -783,7 +783,7 @@ local options = {
     },
     {
       abbreviation = 'brk',
-      cb = 'did_set_breakat',
+      cb = 'rs_did_set_breakat',
       defaults = {
         if_true = ' \t!@*-+;:,./?',
         doc = '" ^I!@*-+;:,./?"',
@@ -1556,7 +1556,7 @@ local options = {
     },
     {
       abbreviation = 'cfu',
-      cb = 'did_set_completefunc',
+      cb = 'rs_did_set_completefunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be used for Insert mode completion
@@ -4302,7 +4302,7 @@ local options = {
     },
     {
       abbreviation = 'hlg',
-      cb = 'did_set_helplang',
+      cb = 'rs_did_set_helplang',
       defaults = {
         if_true = '',
         doc = 'messages language or empty',
@@ -6113,7 +6113,7 @@ local options = {
       varname = 'p_mousemev',
     },
     {
-      cb = 'did_set_mousescroll',
+      cb = 'rs_did_set_mousescroll',
       defaults = 'ver:3,hor:6',
       values = { 'hor:', 'ver:' },
       desc = [=[
@@ -6344,7 +6344,7 @@ local options = {
     },
     {
       abbreviation = 'ofu',
-      cb = 'did_set_omnifunc',
+      cb = 'rs_did_set_omnifunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be used for Insert mode omni
@@ -6480,7 +6480,7 @@ local options = {
     },
     {
       abbreviation = 'pm',
-      cb = 'did_set_backupext_or_patchmode',
+      cb = 'rs_did_set_backupext_or_patchmode',
       defaults = '',
       desc = [=[
         When non-empty the oldest version of a file is kept.  This can be used
@@ -6736,7 +6736,7 @@ local options = {
     },
     {
       abbreviation = 'qftf',
-      cb = 'did_set_quickfixtextfunc',
+      cb = 'rs_did_set_quickfixtextfunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be used to get the text to display
@@ -9334,7 +9334,7 @@ local options = {
     },
     {
       abbreviation = 'tfu',
-      cb = 'did_set_tagfunc',
+      cb = 'rs_did_set_tagfunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be used to perform tag searches
@@ -9584,7 +9584,7 @@ local options = {
     },
     {
       abbreviation = 'tsrfu',
-      cb = 'did_set_thesaurusfunc',
+      cb = 'rs_did_set_thesaurusfunc',
       defaults = '',
       desc = [=[
         This option specifies a function to be used for thesaurus completion

@@ -290,6 +290,17 @@ extern const char *rs_did_set_operatorfunc(optset_T *args);
 extern const char *rs_did_set_findfunc(optset_T *args);
 extern const char *rs_did_set_completeitemalign(optset_T *args);
 
+// Phase 109: rs_* aliases for already-Rust callbacks (didset.rs, userfunc.rs, tag, quickfix)
+extern const char *rs_did_set_helplang(optset_T *args);
+extern const char *rs_did_set_breakat(optset_T *args);
+extern const char *rs_did_set_backupext_or_patchmode(optset_T *args);
+extern const char *rs_did_set_mousescroll(optset_T *args);
+extern const char *rs_did_set_completefunc(optset_T *args);
+extern const char *rs_did_set_omnifunc(optset_T *args);
+extern const char *rs_did_set_thesaurusfunc(optset_T *args);
+extern const char *rs_did_set_tagfunc(optset_T *args);
+extern const char *rs_did_set_quickfixtextfunc(optset_T *args);
+
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
 extern const char *rs_did_set_cpoptions(optset_T *args);

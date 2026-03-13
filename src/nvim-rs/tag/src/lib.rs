@@ -1086,7 +1086,7 @@ const FAIL_I: c_int = 0;
 /// - `args` must be a valid `optset_T` pointer
 #[export_name = "did_set_tagfunc"]
 #[must_use]
-pub unsafe extern "C" fn rs_did_set_tagfunc(args: *const c_void) -> *const c_char {
+pub unsafe extern "C" fn did_set_tagfunc_compat(args: *const c_void) -> *const c_char {
     let buf = nvim_tag_optset_get_buf(args);
 
     nvim_tag_callback_free_tfu();
@@ -1102,6 +1102,15 @@ pub unsafe extern "C" fn rs_did_set_tagfunc(args: *const c_void) -> *const c_cha
 
     nvim_tag_callback_copy_tfu_to_buf(buf);
     std::ptr::null()
+}
+
+/// Callback for 'tagfunc' option (Phase 109 rs_* alias).
+///
+/// # Safety
+/// - `args` must be a valid `optset_T` pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_tagfunc(args: *const c_void) -> *const c_char {
+    did_set_tagfunc_compat(args)
 }
 
 /// Free the global tagfunc callback option on exit.
