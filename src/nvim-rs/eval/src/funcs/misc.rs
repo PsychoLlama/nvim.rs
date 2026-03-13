@@ -683,3 +683,271 @@ pub unsafe extern "C" fn rs_f_matchstrpos(
 ) {
     nvim_eval_find_some_match(argvars, rettv, 4); // kSomeMatchStrPos
 }
+
+// =============================================================================
+// Phase 4 C accessor declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_execute(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_flatten(argvars: *const c_void, rettv: *mut c_void, make_copy: bool);
+    fn nvim_eval_common_function(argvars: *const c_void, rettv: *mut c_void, is_funcref: bool);
+    fn nvim_eval_hlID(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_hlexists(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_input(argvars: *const c_void, rettv: *mut c_void, dialog: bool);
+    fn nvim_eval_json_encode(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_libcall(argvars: *const c_void, rettv: *mut c_void, retstr: bool);
+    fn nvim_eval_script_host_eval(name: *const c_char, argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_search(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_searchpairpos(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_swapfilelist(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_swapinfo(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Phase 4: Simple delegation functions
+// =============================================================================
+
+/// "execute()" function - execute Ex commands, capture output
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_execute"]
+pub unsafe extern "C" fn rs_f_execute(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_execute(argvars, rettv);
+}
+
+/// "flatten()" function - flatten a list in-place
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_flatten"]
+pub unsafe extern "C" fn rs_f_flatten(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_flatten(argvars, rettv, false);
+}
+
+/// "flattennew()" function - flatten a list, returning a new list
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_flattennew"]
+pub unsafe extern "C" fn rs_f_flattennew(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_flatten(argvars, rettv, true);
+}
+
+/// "funcref()" function - create a Funcref from a function reference
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_funcref"]
+pub unsafe extern "C" fn rs_f_funcref(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_common_function(argvars, rettv, true);
+}
+
+/// "function()" function - create a Funcref from a function name
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_function"]
+pub unsafe extern "C" fn rs_f_function(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_common_function(argvars, rettv, false);
+}
+
+/// "hlID()" function - get highlight group ID by name
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[allow(non_snake_case)]
+#[export_name = "f_hlID"]
+pub unsafe extern "C" fn rs_f_hlID(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_hlID(argvars, rettv);
+}
+
+/// "hlexists()" function - check if highlight group exists
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_hlexists"]
+pub unsafe extern "C" fn rs_f_hlexists(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_hlexists(argvars, rettv);
+}
+
+/// "input()" function - prompt the user for input
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_input"]
+pub unsafe extern "C" fn rs_f_input(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_input(argvars, rettv, false);
+}
+
+/// "inputdialog()" function - prompt the user via a dialog
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_inputdialog"]
+pub unsafe extern "C" fn rs_f_inputdialog(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_input(argvars, rettv, true);
+}
+
+/// "json_encode()" function - encode a value to JSON string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_json_encode"]
+pub unsafe extern "C" fn rs_f_json_encode(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_json_encode(argvars, rettv);
+}
+
+/// "libcall()" function - call a function in an external library (returns string)
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_libcall"]
+pub unsafe extern "C" fn rs_f_libcall(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_libcall(argvars, rettv, true);
+}
+
+/// "libcallnr()" function - call a function in an external library (returns number)
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_libcallnr"]
+pub unsafe extern "C" fn rs_f_libcallnr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_libcall(argvars, rettv, false);
+}
+
+/// "py3eval()" function - evaluate a Python 3 expression
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_py3eval"]
+pub unsafe extern "C" fn rs_f_py3eval(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_script_host_eval(c"python3".as_ptr(), argvars, rettv);
+}
+
+/// "perleval()" function - evaluate a Perl expression
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_perleval"]
+pub unsafe extern "C" fn rs_f_perleval(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_script_host_eval(c"perl".as_ptr(), argvars, rettv);
+}
+
+/// "rubyeval()" function - evaluate a Ruby expression
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_rubyeval"]
+pub unsafe extern "C" fn rs_f_rubyeval(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_script_host_eval(c"ruby".as_ptr(), argvars, rettv);
+}
+
+/// "search()" function - search for a pattern
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_search"]
+pub unsafe extern "C" fn rs_f_search(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_search(argvars, rettv);
+}
+
+/// "searchpairpos()" function - search for matching bracket pair, return position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_searchpairpos"]
+pub unsafe extern "C" fn rs_f_searchpairpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_searchpairpos(argvars, rettv);
+}
+
+/// "swapfilelist()" function - get list of swap files
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_swapfilelist"]
+pub unsafe extern "C" fn rs_f_swapfilelist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_swapfilelist(argvars, rettv);
+}
+
+/// "swapinfo()" function - get info about a swap file
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_swapinfo"]
+pub unsafe extern "C" fn rs_f_swapinfo(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_swapinfo(argvars, rettv);
+}

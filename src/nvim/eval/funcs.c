@@ -290,6 +290,27 @@ extern void f_matchlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchstr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_matchstrpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 4 VimL function declarations (exported from nvim-eval crate via #[export_name])
+extern void f_execute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_flatten(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_flattennew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_funcref(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_function(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_hlexists(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_inputdialog(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_json_encode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_libcall(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_libcallnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_py3eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_perleval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_rubyeval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_search(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_searchpairpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_swapinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -1315,11 +1336,6 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
 }
 
 /// "execute(command)" function
-static void f_execute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  execute_common(argvars, rettv, 0);
-}
-
 /// "exists()" function
 static void f_exists(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -1534,17 +1550,6 @@ static void flatten_common(typval_T *argvars, typval_T *rettv, bool make_copy)
 }
 
 /// "flatten(list[, {maxdepth}])" function
-static void f_flatten(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  flatten_common(argvars, rettv, false);
-}
-
-/// "flattennew(list[, {maxdepth}])" function
-static void f_flattennew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  flatten_common(argvars, rettv, true);
-}
-
 /// "feedkeys()" function
 static void f_feedkeys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -1722,16 +1727,6 @@ static void common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
   }
 theend:
   xfree(trans_name);
-}
-
-static void f_funcref(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  common_function(argvars, rettv, true);
-}
-
-static void f_function(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  common_function(argvars, rettv, false);
 }
 
 /// "garbagecollect()" function
@@ -2738,17 +2733,6 @@ static bool has_wsl(void)
 }
 
 /// "highlightID(name)" function
-static void f_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = syn_name2id(tv_get_string(&argvars[0]));
-}
-
-/// "highlight_exists()" function
-static void f_hlexists(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = highlight_exists(tv_get_string(&argvars[0]));
-}
-
 /// "index()" function
 static void f_index(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -2976,17 +2960,6 @@ static bool inputsecret_flag = false;
 
 /// "input()" function
 ///     Also handles inputsecret() when inputsecret is set.
-static void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_user_input(argvars, rettv, false, inputsecret_flag);
-}
-
-/// "inputdialog()" function
-static void f_inputdialog(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_user_input(argvars, rettv, true, inputsecret_flag);
-}
-
 /// "inputlist()" function
 static void f_inputlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -3653,12 +3626,6 @@ static void f_json_decode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// json_encode() function
-static void f_json_encode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = encode_tv2json(&argvars[0], NULL);
-}
-
 /// "keytrans()" function
 static void f_keytrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -3717,17 +3684,6 @@ static void libcall_common(typval_T *argvars, typval_T *rettv, int out_type)
 }
 
 /// "libcall()" function
-static void f_libcall(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  libcall_common(argvars, rettv, VAR_STRING);
-}
-
-/// "libcallnr()" function
-static void f_libcallnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  libcall_common(argvars, rettv, VAR_NUMBER);
-}
-
 /// "line(string, [winid])" function
 static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -4579,10 +4535,6 @@ static void f_pum_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "py3eval()" and "pyxeval()" functions (always python3)
-static void f_py3eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  script_host_eval("python3", argvars, rettv);
-}
 
 static void init_srand(uint32_t *const x)
   FUNC_ATTR_NONNULL_ALL
@@ -4709,17 +4661,6 @@ static void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "perleval()" function
-static void f_perleval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  script_host_eval("perl", argvars, rettv);
-}
-
-/// "rubyeval()" function
-static void f_rubyeval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  script_host_eval("ruby", argvars, rettv);
-}
-
 /// "range()" function
 static void f_range(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -5580,13 +5521,6 @@ static void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 }
 
 /// "search()" function
-static void f_search(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int flags = 0;
-
-  rettv->vval.v_number = search_cmn(argvars, NULL, &flags);
-}
-
 /// "searchdecl()" function
 static void f_searchdecl(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -5607,24 +5541,6 @@ static void f_searchdecl(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     rettv->vval.v_number = find_decl((char *)name, strlen(name), locally,
                                      thisblock, SEARCH_KEEP) == FAIL;
   }
-}
-
-/// "searchpairpos()" function
-static void f_searchpairpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  pos_T match_pos;
-  int lnum = 0;
-  int col = 0;
-
-  tv_list_alloc_ret(rettv, 2);
-
-  if (searchpair_cmn(argvars, &match_pos) > 0) {
-    lnum = match_pos.lnum;
-    col = match_pos.col;
-  }
-
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
 }
 
 /// Used by searchpair() and searchpairpos()
@@ -6874,21 +6790,6 @@ static void f_substitute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "swapfilelist()" function
-static void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
-                              char **fname_out);
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-  rs_recover_names(NULL, false, rettv->vval.v_list, 0, NULL);
-}
-
-/// "swapinfo(swap_filename)" function
-static void f_swapinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-  swapfile_dict(tv_get_string(argvars), rettv->vval.v_dict);
-}
-
 /// "swapname(expr)" function
 static void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -7533,5 +7434,90 @@ void nvim_eval_len(typval_T *argvars, typval_T *rettv)
     emsg(_("E701: Invalid type for len()"));
     break;
   }
+}
+
+// Phase 4 accessors for simple delegation functions
+
+void nvim_eval_execute(typval_T *argvars, typval_T *rettv)
+{
+  execute_common(argvars, rettv, 0);
+}
+
+void nvim_eval_flatten(typval_T *argvars, typval_T *rettv, bool make_copy)
+{
+  flatten_common(argvars, rettv, make_copy);
+}
+
+void nvim_eval_common_function(typval_T *argvars, typval_T *rettv, bool is_funcref)
+{
+  common_function(argvars, rettv, is_funcref);
+}
+
+void nvim_eval_hlID(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_number = syn_name2id(tv_get_string(&argvars[0]));
+}
+
+void nvim_eval_hlexists(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_number = highlight_exists(tv_get_string(&argvars[0]));
+}
+
+void nvim_eval_input(typval_T *argvars, typval_T *rettv, bool dialog)
+{
+  get_user_input(argvars, rettv, dialog, inputsecret_flag);
+}
+
+void nvim_eval_json_encode(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = encode_tv2json(&argvars[0], NULL);
+}
+
+void nvim_eval_libcall(typval_T *argvars, typval_T *rettv, bool retstr)
+{
+  libcall_common(argvars, rettv, retstr ? VAR_STRING : VAR_NUMBER);
+}
+
+void nvim_eval_script_host_eval(const char *name, typval_T *argvars, typval_T *rettv)
+{
+  script_host_eval(name, argvars, rettv);
+}
+
+void nvim_eval_search(typval_T *argvars, typval_T *rettv)
+{
+  int flags = 0;
+  rettv->vval.v_number = search_cmn(argvars, NULL, &flags);
+}
+
+void nvim_eval_searchpairpos(typval_T *argvars, typval_T *rettv)
+{
+  pos_T match_pos;
+  int lnum = 0;
+  int col = 0;
+
+  tv_list_alloc_ret(rettv, 2);
+
+  if (searchpair_cmn(argvars, &match_pos) > 0) {
+    lnum = match_pos.lnum;
+    col = match_pos.col;
+  }
+
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
+}
+
+void nvim_eval_swapfilelist(typval_T *argvars, typval_T *rettv)
+{
+  extern int rs_recover_names(const char *fname, int do_list, void *ret_list, int nr,
+                              char **fname_out);
+  tv_list_alloc_ret(rettv, kListLenUnknown);
+  rs_recover_names(NULL, false, rettv->vval.v_list, 0, NULL);
+}
+
+void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+  swapfile_dict(tv_get_string(argvars), rettv->vval.v_dict);
 }
 
