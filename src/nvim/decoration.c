@@ -98,6 +98,10 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
 // Rust implementations for Phase 7
 extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
 
+// Rust implementations for Phase 2 (memory management)
+extern void rs_clear_virttext(void *text);
+extern void rs_clear_virtlines(void *lines);
+
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
 ///
@@ -270,20 +274,12 @@ void decor_check_to_be_deleted(void)
 
 void clear_virttext(VirtText *text)
 {
-  for (size_t i = 0; i < kv_size(*text); i++) {
-    xfree(kv_A(*text, i).text);
-  }
-  kv_destroy(*text);
-  *text = (VirtText)KV_INITIAL_VALUE;
+  rs_clear_virttext((void *)text);
 }
 
 void clear_virtlines(VirtLines *lines)
 {
-  for (size_t i = 0; i < kv_size(*lines); i++) {
-    clear_virttext(&kv_A(*lines, i).line);
-  }
-  kv_destroy(*lines);
-  *lines = (VirtLines)KV_INITIAL_VALUE;
+  rs_clear_virtlines((void *)lines);
 }
 
 
