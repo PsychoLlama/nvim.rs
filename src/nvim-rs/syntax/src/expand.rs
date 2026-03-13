@@ -113,7 +113,7 @@ pub unsafe extern "C" fn rs_reset_expand_highlight() {
 ///
 /// # Safety
 /// `xp` must be a valid pointer to expand_T; `arg` must be a valid C string.
-#[no_mangle]
+#[export_name = "set_context_in_echohl_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_echohl_cmd(xp: *mut c_void, arg: *const c_char) {
     nvim_xp_set_context(xp, EXPAND_HIGHLIGHT);
     nvim_xp_set_pattern(xp, arg.cast_mut());
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn rs_set_context_in_echohl_cmd(xp: *mut c_void, arg: *con
 ///
 /// # Safety
 /// `xp` must be a valid pointer to expand_T; `arg` must be a valid C string.
-#[no_mangle]
+#[export_name = "set_context_in_syntax_cmd"]
 pub unsafe extern "C" fn rs_set_context_in_syntax_cmd(xp: *mut c_void, arg: *const c_char) {
     // Default: expand subcommands
     nvim_xp_set_context(xp, EXPAND_SYNTAX);

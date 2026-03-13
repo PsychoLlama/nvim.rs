@@ -39,6 +39,18 @@ char *get_syntime_arg(expand_T *xp, int idx);
 char *get_syntax_name(expand_T *xp, int idx);
 void ex_syntime(exarg_T *eap);
 void reset_expand_highlight(void);
+void syn_stack_free_all(synblock_T *block);
+void syn_stack_apply_changes(buf_T *buf);
+void syntax_clear(synblock_T *block);
+void reset_synblock(win_T *wp);
+void syn_maybe_enable(void);
+void ex_syntax(exarg_T *eap);
+void ex_ownsyntax(exarg_T *eap);
+int get_syntax_info(int *seqnrp);
+int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col);
+int syn_get_stack_item(int i);
+void set_context_in_syntax_cmd(expand_T *xp, const char *arg);
+void set_context_in_echohl_cmd(expand_T *xp, const char *arg);
 
 #include "syntax_accessors.h.generated.h"
 #include "nvim/syntax_bridge.h"

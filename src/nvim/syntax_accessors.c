@@ -433,25 +433,11 @@ static void syn_stack_free_block(synblock_T *block)
 {
   rs_syn_stack_free_block(block);
 }
-// Free b_sst_array[] for buffer "buf".
-// Used when syntax items changed to force resyncing everywhere.
-void syn_stack_free_all(synblock_T *block)
-{
-  rs_syn_stack_free_all(block);
-}
-
 // Allocate the syntax state stack for syn_buf when needed.
 // Delegated to Rust; actual array allocation is in nvim_syn_do_stack_realloc().
 static void syn_stack_alloc(void)
 {
   rs_syn_stack_alloc();
-}
-
-// Check for changes in a buffer to affect stored syntax states.
-// Delegated to Rust; window iteration stays in nvim_syn_apply_changes_for_windows().
-void syn_stack_apply_changes(buf_T *buf)
-{
-  rs_syn_stack_apply_changes(buf);
 }
 
 static void syn_stack_apply_changes_block(synblock_T *block, buf_T *buf)
@@ -559,22 +545,6 @@ void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
   }
 }
 
-// Clear all syntax info for one buffer.
-void syntax_clear(synblock_T *block)
-{
-  rs_syntax_clear(block);
-}
-
-// Get rid of ownsyntax for window "wp".
-void reset_synblock(win_T *wp)
-{
-  rs_reset_synblock(wp);
-}
-
-void syn_maybe_enable(void)
-{
-  rs_syn_maybe_enable();
-}
 
 // syn_cmd_list and listing functions are implemented in Rust (listing.rs).
 
@@ -591,20 +561,6 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 #define ITEM_END            2
 #define ITEM_MATCHGROUP     3
 
-/// Rust implementation of the `:syntax` dispatcher.
-extern void rs_ex_syntax(exarg_T *eap);
-
-/// ":syntax" -- thin wrapper delegating to Rust.
-void ex_syntax(exarg_T *eap)
-{
-  rs_ex_syntax(eap);
-}
-
-/// @deprecated -- thin wrapper delegating to Rust.
-void ex_ownsyntax(exarg_T *eap)
-{
-  rs_ex_ownsyntax(eap);
-}
 
 static enum {
   EXP_SUBCMD,       // expand ":syn" sub-commands
@@ -621,9 +577,6 @@ static enum {
 // Rust implementations of query API (Phase 3 of pass 4)
 extern int rs_syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, int *spellp,
                          int keep_state);
-extern int rs_get_syntax_info(int *seqnrp);
-extern int rs_syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col);
-extern int rs_syn_get_stack_item(int i);
 
 /// Function called for expression evaluation: get syntax ID at file position.
 ///
@@ -640,30 +593,6 @@ int syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, bool *spellp, i
   return id;
 }
 
-// Get extra information about the syntax item.  Must be called right after
-// get_syntax_attr().
-// Stores the current item sequence nr in "*seqnrp".
-// Returns the current flags.
-int get_syntax_info(int *seqnrp)
-{
-  return rs_get_syntax_info(seqnrp);
-}
-
-/// Get the sequence number of the concealed file position.
-///
-/// @return seqnr if the file position is concealed, 0 otherwise.
-int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col)
-{
-  return rs_syn_get_concealed_id(wp, lnum, col);
-}
-
-// Return the syntax ID at position "i" in the current stack.
-// The caller must have called syn_get_id() before to fill the stack.
-// Returns -1 when "i" is out of range.
-int syn_get_stack_item(int i)
-{
-  return rs_syn_get_stack_item(i);
-}
 
 // ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
 // Their C thin wrappers are at the bottom of this file.
@@ -1852,20 +1781,8 @@ int nvim_syn_get_expand_cluster_count(void)
   return curwin->w_s->b_syn_clusters.ga_len;
 }
 
-/// Thin wrappers: expand/context functions delegated to Rust.
-extern void rs_set_context_in_syntax_cmd(expand_T *xp, const char *arg);
-void set_context_in_syntax_cmd(expand_T *xp, const char *arg)
-{
-  rs_set_context_in_syntax_cmd(xp, arg);
-}
-
-// get_syntax_name deleted: Rust exports under the C name directly via #[export_name].
-
-extern void rs_set_context_in_echohl_cmd(expand_T *xp, const char *arg);
-void set_context_in_echohl_cmd(expand_T *xp, const char *arg)
-{
-  rs_set_context_in_echohl_cmd(xp, arg);
-}
+// set_context_in_syntax_cmd and set_context_in_echohl_cmd deleted: Rust exports
+// under the C name directly via #[export_name].
 
 // reset_expand_highlight deleted: Rust exports under the C name directly via #[export_name = "reset_expand_highlight"].
 

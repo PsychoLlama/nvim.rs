@@ -198,7 +198,7 @@ pub unsafe extern "C" fn rs_syn_stack_free_block(block: SynBlockHandle) {
 ///
 /// # Safety
 /// Accesses C global state; must be called from main thread.
-#[no_mangle]
+#[export_name = "syn_stack_free_all"]
 pub unsafe extern "C" fn rs_syn_stack_free_all(block: SynBlockHandle) {
     rs_syn_stack_free_block(block);
     // FOR_ALL_WINDOWS_IN_TAB macro stays in C
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes_block(block: SynBlockHandle,
 ///
 /// # Safety
 /// Accesses C global state; must be called from main thread.
-#[no_mangle]
+#[export_name = "syn_stack_apply_changes"]
 pub unsafe extern "C" fn rs_syn_stack_apply_changes(buf: BufHandle) {
     if buf.is_null() {
         return;

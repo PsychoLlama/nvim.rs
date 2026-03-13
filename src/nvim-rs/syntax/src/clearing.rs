@@ -51,7 +51,7 @@ extern "C" {
     fn nvim_synblock_sync_clear(block: SynBlockHandle);
 
     /// Free all syntax state stack entries for block.
-    #[link_name = "rs_syn_stack_free_all"]
+    #[link_name = "syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     /// Invalidate the current syntax state.
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn rs_invalidate_current_state() {
 ///
 /// # Safety
 /// block must be a valid synblock_T pointer. Must be called from main thread.
-#[no_mangle]
+#[export_name = "syntax_clear"]
 pub unsafe extern "C" fn rs_syntax_clear(block: SynBlockHandle) {
     if block.is_null() {
         return;
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn rs_syntax_clear(block: SynBlockHandle) {
 ///
 /// # Safety
 /// wp must be a valid win_T pointer. Must be called from main thread.
-#[no_mangle]
+#[export_name = "reset_synblock"]
 pub unsafe extern "C" fn rs_reset_synblock(wp: WinHandle) {
     if wp.is_null() {
         return;

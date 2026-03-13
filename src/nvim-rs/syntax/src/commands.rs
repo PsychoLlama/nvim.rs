@@ -1004,7 +1004,7 @@ pub unsafe extern "C" fn rs_syn_do_onoff_impl(eap: *mut c_void, name: *const c_c
 ///
 /// # Safety
 /// Must be called from main thread.
-#[no_mangle]
+#[export_name = "syn_maybe_enable"]
 pub unsafe extern "C" fn rs_syn_maybe_enable() {
     if nvim_syn_get_did_syntax_onoff() == 0 {
         rs_syn_do_maybe_enable_impl();
@@ -1193,7 +1193,7 @@ static E410_FMT: &[u8] = b"E410: Invalid :syntax subcommand: %s\0";
 ///
 /// # Safety
 /// Must be called from the main thread during command execution.
-#[no_mangle]
+#[export_name = "ex_syntax"]
 pub unsafe extern "C" fn rs_ex_syntax(eap: *mut c_void) {
     // Set syn_cmdlinep for error messages
     nvim_syn_set_cmdlinep_from_eap(eap);
@@ -1335,7 +1335,7 @@ pub unsafe extern "C" fn rs_syn_cmd_iskeyword(eap: *mut c_void, _syncing: c_int)
 ///
 /// # Safety
 /// Must be called from main thread.
-#[no_mangle]
+#[export_name = "ex_ownsyntax"]
 pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
     rs_syn_ownsyntax_init();
 

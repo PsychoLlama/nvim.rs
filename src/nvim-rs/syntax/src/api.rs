@@ -271,7 +271,7 @@ pub unsafe extern "C" fn rs_syn_get_id(
 ///
 /// # Safety
 /// Must be called right after `rs_syn_get_id` or equivalent.
-#[no_mangle]
+#[export_name = "get_syntax_info"]
 pub unsafe extern "C" fn rs_get_syntax_info(seqnrp: *mut c_int) -> c_int {
     if seqnrp.is_null() {
         return 0;
@@ -283,7 +283,7 @@ pub unsafe extern "C" fn rs_get_syntax_info(seqnrp: *mut c_int) -> c_int {
 ///
 /// # Safety
 /// Must be called from the main thread.
-#[no_mangle]
+#[export_name = "syn_get_concealed_id"]
 pub unsafe extern "C" fn rs_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int {
     syn_get_concealed_id_impl(wp, lnum, col)
 }
@@ -292,7 +292,7 @@ pub unsafe extern "C" fn rs_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col
 ///
 /// # Safety
 /// Must be called after `rs_syn_get_id` with `keep_state = 1`.
-#[no_mangle]
+#[export_name = "syn_get_stack_item"]
 pub unsafe extern "C" fn rs_syn_get_stack_item(i: c_int) -> c_int {
     syn_get_stack_item_impl(i)
 }

@@ -36,7 +36,7 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     // --- Logic helpers ---
-    #[link_name = "rs_reset_synblock"]
+    #[link_name = "reset_synblock"]
     fn rs_reset_synblock_c(wp: WinHandle);
     #[link_name = "rs_bt_quickfix"]
     fn rs_bt_quickfix_c(buf: BufHandle) -> c_int;

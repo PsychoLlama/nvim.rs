@@ -29,7 +29,7 @@ extern "C" {
     fn nvim_buf_get_mod_xlines(buf: BufHandle) -> c_int;
 
     // Change handling
-    #[link_name = "rs_syn_stack_apply_changes"]
+    #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: BufHandle);
 
     // Current buffer/window access

@@ -82,9 +82,9 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Stack management functions
     // -------------------------------------------------------------------------
-    #[link_name = "rs_syn_stack_free_all"]
+    #[link_name = "syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
-    #[link_name = "rs_syn_stack_apply_changes"]
+    #[link_name = "syn_stack_apply_changes"]
     fn nvim_syn_stack_apply_changes(buf: crate::types::BufHandle);
     fn nvim_buf_get_mod_top(buf: crate::types::BufHandle) -> c_int;
     fn nvim_buf_get_mod_bot(buf: crate::types::BufHandle) -> c_int;

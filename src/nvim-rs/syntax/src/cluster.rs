@@ -690,7 +690,7 @@ extern "C" {
     // Redraw + free after cluster changes (Phase 4: decomposed)
     fn nvim_syn_redraw_curbuf_later();
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
-    #[link_name = "rs_syn_stack_free_all"]
+    #[link_name = "syn_stack_free_all"]
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // Set eap->nextcmd = find_nextcmd(arg)
