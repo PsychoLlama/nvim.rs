@@ -12,7 +12,7 @@ use std::ffi::{c_char, c_int};
 
 extern "C" {
     // ext_messages protocol functions
-    fn msg_ext_set_kind(msg_kind: *const c_char);
+    fn nvim_set_msg_ext_kind(kind: *const c_char);
     fn msg_ext_ui_flush();
     fn msg_ext_flush_showmode();
 
@@ -67,9 +67,11 @@ extern "C" {
 ///
 /// # Safety
 /// - `msg_kind` must be a valid NUL-terminated C string or NULL
-#[no_mangle]
+#[export_name = "msg_ext_set_kind"]
 pub unsafe extern "C" fn rs_msg_ext_set_kind(msg_kind: *const c_char) {
-    msg_ext_set_kind(msg_kind);
+    // Don't change the label of an existing batch:
+    msg_ext_ui_flush();
+    nvim_set_msg_ext_kind(msg_kind);
 }
 
 /// Flush pending messages to ext_messages UI.
@@ -291,7 +293,7 @@ pub unsafe extern "C" fn rs_msg_line_flush() {
 /// - `kind` must be a valid NUL-terminated C string or NULL
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_begin(kind: *const c_char) {
-    msg_ext_set_kind(kind);
+    rs_msg_ext_set_kind(kind);
     nvim_set_msg_ext_skip_flush(1);
 }
 

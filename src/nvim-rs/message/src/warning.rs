@@ -20,7 +20,8 @@ extern "C" {
     fn nvim_set_keep_msg_raw(s: *const c_char);
     fn nvim_set_keep_msg_hl_id(val: c_int);
     fn nvim_msg_ext_kind_is_null() -> c_int;
-    fn msg_ext_set_kind(msg_kind: *const c_char);
+    fn nvim_set_msg_ext_kind(kind: *const c_char);
+    fn msg_ext_ui_flush();
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
     fn set_keep_msg(s: *const c_char, hl_id: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
@@ -65,7 +66,8 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     nvim_set_keep_msg_hl_id(hl_id);
 
     if nvim_msg_ext_kind_is_null() != 0 {
-        msg_ext_set_kind(WMSG_KIND.as_ptr());
+        msg_ext_ui_flush();
+        nvim_set_msg_ext_kind(WMSG_KIND.as_ptr());
     }
 
     if msg(message, hl_id) && nvim_get_msg_scrolled() == 0 {

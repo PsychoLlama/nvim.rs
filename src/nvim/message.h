@@ -140,6 +140,9 @@ int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist);
 // Phase 84: msg_multiline migrated to Rust
 void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear);
 
+// Phase 87: msg_ext_set_kind migrated to Rust
+void msg_ext_set_kind(const char *msg_kind);
+
 // Phase 86: messagesopt_changed migrated to Rust
 int messagesopt_changed(void);
 

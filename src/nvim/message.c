@@ -493,6 +493,9 @@ void nvim_set_msg_flags(int val) { msg_flags = val; }
 void nvim_set_msg_wait(int val) { msg_wait = val; }
 void nvim_set_msg_hist_max(int val) { msg_hist_max = val; }
 
+// Phase 87: msg_ext_set_kind accessor
+void nvim_set_msg_ext_kind(const char *kind) { msg_ext_kind = kind; }
+
 
 
 void msg_grid_validate(void)
@@ -1558,16 +1561,6 @@ void msgmore(int n)
   }
 }
 
-void msg_ext_set_kind(const char *msg_kind)
-{
-  // Don't change the label of an existing batch:
-  msg_ext_ui_flush();
-
-  // TODO(bfredl): would be nice to avoid dynamic scoping, but that would
-  // need refactoring the msg_ interface to not be "please pretend nvim is
-  // a terminal for a moment"
-  msg_ext_kind = msg_kind;
-}
 
 /// Prepare for outputting characters in the command line.
 void msg_start(void)
