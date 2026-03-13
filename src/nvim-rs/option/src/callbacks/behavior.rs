@@ -201,6 +201,12 @@ extern "C" {
     fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
 
+    // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
+    fn nvim_fill_culopt_flags(val: *const std::ffi::c_char, win: WinHandle) -> c_int;
+    fn nvim_did_set_completeopt(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_varsofttabstop(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_vartabstop(args: *mut c_void) -> CallbackResult;
+
     // Phase 104: guicursor / ambiwidth / emoji / showbreak
     fn nvim_parse_guicursor() -> CallbackResult;
     fn nvim_get_visual_active_opt() -> c_int;
@@ -976,6 +982,38 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'cursorlineopt' option (Phase 105).
+/// Validates value using fill_culopt_flags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_cursorlineopt(args: *mut c_void) -> CallbackResult {
+    let win = nvim_optset_get_win(args);
+    let varp_str = nvim_optset_get_varp_str(args);
+    // Check for empty string or invalid flags
+    // OK == 1; empty string or invalid flags are errors
+    if varp_str.is_null() || *varp_str == 0 || nvim_fill_culopt_flags(varp_str, win) != 1 {
+        return E_INVARG_BEHAVIOR;
+    }
+    callback_ok()
+}
+
+/// Callback for 'completeopt' option (Phase 105).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_completeopt(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_completeopt(args)
+}
+
+/// Callback for 'varsofttabstop' option (Phase 105).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_varsofttabstop(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_varsofttabstop(args)
+}
+
+/// Callback for 'vartabstop' option (Phase 105).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_vartabstop(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_vartabstop(args)
 }
 
 /// Callback for 'guicursor' option (Phase 104).

@@ -768,19 +768,6 @@ int expand_set_cpoptions(optexpand_T *args, int *numMatches, char ***matches)
   return expand_set_opt_listflag(args, CPO_VI, numMatches, matches);
 }
 
-/// The 'cursorlineopt' option is changed.
-const char *did_set_cursorlineopt(optset_T *args)
-{
-  win_T *win = (win_T *)args->os_win;
-  char **varp = (char **)args->os_varp;
-
-  // This could be changed to use opt_strings_flags() instead.
-  if (**varp == NUL || fill_culopt_flags(*varp, win) != OK) {
-    return e_invarg;
-  }
-
-  return NULL;
-}
 
 
 int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)

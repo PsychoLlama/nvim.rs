@@ -1599,7 +1599,7 @@ local options = {
     },
     {
       abbreviation = 'cot',
-      cb = 'did_set_completeopt',
+      cb = 'rs_did_set_completeopt',
       defaults = 'menu,popup',
       values = {
         'menu',
@@ -2139,7 +2139,7 @@ local options = {
     },
     {
       abbreviation = 'culopt',
-      cb = 'did_set_cursorlineopt',
+      cb = 'rs_did_set_cursorlineopt',
       defaults = 'both',
       -- Keep this in sync with fill_culopt_flags().
       values = { 'line', 'screenline', 'number', 'both' },
@@ -9931,7 +9931,7 @@ local options = {
     },
     {
       abbreviation = 'vsts',
-      cb = 'did_set_varsofttabstop',
+      cb = 'rs_did_set_varsofttabstop',
       defaults = '',
       desc = [=[
         Defines variable-width soft tab stops.  The value is a comma-separated
@@ -9958,7 +9958,7 @@ local options = {
     },
     {
       abbreviation = 'vts',
-      cb = 'did_set_vartabstop',
+      cb = 'rs_did_set_vartabstop',
       defaults = '',
       desc = [=[
         Defines variable-width tab stops.  The value is a comma-separated list

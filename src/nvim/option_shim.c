@@ -281,6 +281,10 @@ extern const char *rs_did_set_guicursor(optset_T *args);
 extern const char *rs_did_set_ambiwidth(optset_T *args);
 extern const char *rs_did_set_emoji(optset_T *args);
 extern const char *rs_did_set_showbreak(optset_T *args);
+extern const char *rs_did_set_cursorlineopt(optset_T *args);
+extern const char *rs_did_set_completeopt(optset_T *args);
+extern const char *rs_did_set_varsofttabstop(optset_T *args);
+extern const char *rs_did_set_vartabstop(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -536,6 +540,15 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
+int nvim_fill_culopt_flags(const char *val, win_T *win) { return fill_culopt_flags((char *)val, win); }
+const char *did_set_completeopt(optset_T *args);
+const char *did_set_varsofttabstop(optset_T *args);
+const char *did_set_vartabstop(optset_T *args);
+const char *nvim_did_set_completeopt(void *args) { return did_set_completeopt((optset_T *)args); }
+const char *nvim_did_set_varsofttabstop(void *args) { return did_set_varsofttabstop((optset_T *)args); }
+const char *nvim_did_set_vartabstop(void *args) { return did_set_vartabstop((optset_T *)args); }
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
 int check_str_opt(OptIndex idx, char **varp);  // defined in optionstr.c
