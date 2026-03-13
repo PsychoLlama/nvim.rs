@@ -115,18 +115,13 @@ static garray_T ga_loaded = { 0, 0, sizeof(char *), 4, NULL };
 static int last_current_SID_seq = 0;
 
 // Rust implementations of execution stack functions (Phase 1)
-extern void rs_estack_init(void);
 extern estack_T *rs_estack_push(int type, char *name, linenr_T lnum);
-extern void rs_estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum);
-extern void rs_estack_pop(void);
 extern char *rs_estack_sfile(int which);
 extern list_T *rs_stacktrace_create(void);
 extern void rs_f_getstacktrace(typval_T *argvars, typval_T *rettv, void *fptr);
 
 // Rust implementations of script registry functions (Phase 2)
 extern scriptitem_T *rs_new_script_item(char *name, scid_T *sid_out);
-extern int rs_find_script_by_name(const char *name);
-extern bool rs_script_is_lua(scid_T sid);
 extern char *rs_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free);
 extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
 extern void *rs_get_script_local_funcs(scid_T sid);
@@ -217,29 +212,11 @@ int nvim_rt_do_in_runtimepath_source(const char *name, int flags, void *cookie)
   return do_in_runtimepath((char *)name, flags, rs_source_callback, cookie);
 }
 
-/// Initialize the execution stack.
-void estack_init(void)
-{
-  rs_estack_init();
-}
-
 /// Add an item to the execution stack.
 /// @return  the new entry
 estack_T *estack_push(etype_T type, char *name, linenr_T lnum)
 {
   return rs_estack_push((int)type, name, lnum);
-}
-
-/// Add a user function to the execution stack.
-void estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum)
-{
-  rs_estack_push_ufunc(ufunc, lnum);
-}
-
-/// Take an item off of the execution stack.
-void estack_pop(void)
-{
-  rs_estack_pop();
 }
 
 /// Get the current value for <sfile> in allocated memory.
@@ -270,7 +247,6 @@ static uv_mutex_t runtime_search_path_mutex;
 
 // Rust implementations of search path management functions
 extern const char *rs_did_set_runtimepackpath(optset_T *args);
-extern void rs_runtime_search_path_validate(void);
 extern void rs_runtime_search_path_get_cached(int *ref);
 extern bool rs_runtime_search_path_unref(const int *ref);
 
@@ -779,12 +755,6 @@ static void runtime_search_path_free(RuntimeSearchPath path)
   }
   kv_destroy(path);
 }
-
-void runtime_search_path_validate(void)
-{
-  rs_runtime_search_path_validate();
-}
-
 
 // Phase 3: strcpy_comma_escaped, compute_double_env_sep_len, add_env_sep_dirs,
 // and add_dir have been migrated to Rust as internal helpers of
@@ -1322,18 +1292,6 @@ int do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
 }
 
 /// Checks if the script with the given script ID is a Lua script.
-bool script_is_lua(scid_T sid)
-{
-  return rs_script_is_lua(sid);
-}
-
-/// Find an already loaded script "name".
-/// If found returns its script ID.  If not found returns -1.
-int find_script_by_name(char *name)
-{
-  return rs_find_script_by_name(name);
-}
-
 linenr_T get_sourced_lnum(LineGetter fgetline, void *cookie)
   FUNC_ATTR_PURE
 {

@@ -38,7 +38,6 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 // Rust implementations
-extern int rs_get_real_state(void);
 extern int rs_ctrl_x_mode_not_defined_yet(void);
 extern int rs_ins_compl_active(void);
 
@@ -166,14 +165,6 @@ bool virtual_active(win_T *wp)
          || ((cur_ve_flags & kOptVeFlagInsert) && (State & MODE_INSERT));
 }
 
-/// MODE_VISUAL, MODE_SELECT and MODE_OP_PENDING State are never set, they are
-/// equal to MODE_NORMAL State with a condition.  This function returns the real
-/// State.
-int get_real_state(void)
-{
-  return rs_get_real_state();
-}
-
 /// Returns the current mode as a string in "buf[MODE_MAX_LENGTH]", NUL
 /// terminated.
 /// The first character represents the major mode, the following ones the minor
@@ -283,8 +274,6 @@ void may_trigger_modechanged(void)
 /// When true in a safe state when starting to wait for a character.
 static bool was_safe = false;
 
-extern int rs_get_was_safe_state(void);
-
 /// C accessor for was_safe static.
 int nvim_get_was_safe(void)
 {
@@ -330,7 +319,3 @@ void state_no_longer_safe(const char *reason)
   was_safe = false;
 }
 
-bool get_was_safe_state(void)
-{
-  return rs_get_was_safe_state() != 0;
-}

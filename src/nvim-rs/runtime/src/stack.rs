@@ -133,7 +133,7 @@ extern "C" {
 /// Initialize the execution stack.
 ///
 /// Grows the exestack garray and pushes an initial ETYPE_TOP entry.
-#[no_mangle]
+#[export_name = "estack_init"]
 pub unsafe extern "C" fn rs_estack_init() {
     nvim_exestack_ga_grow(10);
     let entry = nvim_exestack_get_next_slot();
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn rs_estack_push(
 }
 
 /// Add a user function to the execution stack.
-#[no_mangle]
+#[export_name = "estack_push_ufunc"]
 pub unsafe extern "C" fn rs_estack_push_ufunc(ufunc: UfuncHandle, lnum: LinenrT) {
     // Pick uf_name_exp if available, otherwise uf_name
     let name_exp = nvim_ufunc_get_name_exp(ufunc);
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn rs_estack_push_ufunc(ufunc: UfuncHandle, lnum: LinenrT)
 }
 
 /// Take an item off of the execution stack.
-#[no_mangle]
+#[export_name = "estack_pop"]
 pub unsafe extern "C" fn rs_estack_pop() {
     nvim_exestack_dec_len();
 }

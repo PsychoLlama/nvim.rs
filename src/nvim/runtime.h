@@ -62,6 +62,12 @@ int ExpandRTDir(char *pat, int flags, int *num_file, char ***file, char *dirname
 int expand_runtime_cmd(char *pat, int *numMatches, char ***matches);
 int ExpandPackAddDir(char *pat, int *num_file, char ***file);
 void runtime_init(void);
+void estack_init(void);
+void estack_push_ufunc(ufunc_T *ufunc, linenr_T lnum);
+void estack_pop(void);
+void runtime_search_path_validate(void);
+bool script_is_lua(scid_T sid);
+int find_script_by_name(char *name);
 int do_in_path_and_pp(char *path, char *name, int flags, DoInRuntimepathCB callback, void *cookie);
 int do_in_runtimepath(char *name, int flags, DoInRuntimepathCB callback, void *cookie);
 int source_runtime(char *name, int flags);

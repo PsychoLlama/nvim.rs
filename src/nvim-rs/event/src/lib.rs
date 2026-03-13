@@ -3292,9 +3292,9 @@ const MODE_SELECT: c_int = 0x40;
 ///
 /// # Safety
 /// Calls C accessor function for was_safe static.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_was_safe_state() -> c_int {
-    nvim_get_was_safe()
+#[export_name = "get_was_safe_state"]
+pub unsafe extern "C" fn rs_get_was_safe_state() -> bool {
+    nvim_get_was_safe() != 0
 }
 
 /// Get the real state of the editor.
@@ -3326,7 +3326,7 @@ fn get_real_state_impl() -> c_int {
 ///
 /// Returns the real state of the editor, accounting for virtual states like
 /// MODE_VISUAL, MODE_SELECT, and MODE_OP_PENDING.
-#[no_mangle]
+#[export_name = "get_real_state"]
 pub extern "C" fn rs_get_real_state() -> c_int {
     get_real_state_impl()
 }

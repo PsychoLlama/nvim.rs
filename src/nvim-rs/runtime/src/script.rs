@@ -220,7 +220,7 @@ pub unsafe extern "C" fn rs_new_script_item(
 /// # Safety
 ///
 /// `name` must be a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "find_script_by_name"]
 pub unsafe extern "C" fn rs_find_script_by_name(name: *const c_char) -> c_int {
     if name.is_null() {
         return -1;
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_find_script_by_name(name: *const c_char) -> c_int {
 ///
 /// Returns true if sid == SID_LUA, or if the script item has sn_lua set.
 /// Returns false if the sid is not a valid script ID.
-#[no_mangle]
+#[export_name = "script_is_lua"]
 pub unsafe extern "C" fn rs_script_is_lua(sid: ScidT) -> bool {
     if sid == SID_LUA {
         return true;

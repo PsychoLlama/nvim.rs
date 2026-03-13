@@ -67,7 +67,7 @@ pub unsafe extern "C" fn rs_did_set_runtimepackpath(_args: *mut OptsetT) -> *con
 ///
 /// If the cache is invalid, rebuilds it from `p_rtp` and `p_pp`, then
 /// copies the result to the thread-safe copy under mutex protection.
-#[no_mangle]
+#[export_name = "runtime_search_path_validate"]
 pub unsafe extern "C" fn rs_runtime_search_path_validate() {
     if !nvim_rt_nlua_is_deferred_safe() {
         // Cannot rebuild search path in an async context. Prefer stale cache

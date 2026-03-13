@@ -57,6 +57,7 @@ extern "C" {
     fn nvim_aucmd_win_get_win(idx: c_int) -> WinHandle;
 
     // From event crate - get the real editor state
+    #[link_name = "get_real_state"]
     fn rs_get_real_state() -> c_int;
 
     // Accessors for trigger_cursorhold
