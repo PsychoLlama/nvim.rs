@@ -253,6 +253,7 @@ extern const char *rs_did_set_spellfile(optset_T *args);
 extern const char *rs_did_set_spelllang(optset_T *args);
 extern const char *rs_did_set_spellcapcheck(optset_T *args);
 extern const char *rs_did_set_keymodel(optset_T *args);
+extern const char *rs_did_set_eventignore(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -485,6 +486,9 @@ const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win-
 const char *nvim_get_p_km(void) { return p_km; }
 void nvim_set_km_stopsel(int val) { km_stopsel = val != 0; }
 void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
+
+// Phase 97: eventignore check_ei accessor
+int nvim_check_ei(const char *val) { return check_ei(val); }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }

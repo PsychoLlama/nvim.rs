@@ -2830,7 +2830,7 @@ local options = {
     },
     {
       abbreviation = 'ei',
-      cb = 'did_set_eventignore',
+      cb = 'rs_did_set_eventignore',
       defaults = '',
       deny_duplicates = true,
       desc = [=[
@@ -2854,7 +2854,7 @@ local options = {
     },
     {
       abbreviation = 'eiw',
-      cb = 'did_set_eventignore',
+      cb = 'rs_did_set_eventignore',
       defaults = '',
       deny_duplicates = true,
       desc = [=[

@@ -878,17 +878,6 @@ int expand_set_encoding(optexpand_T *args, int *numMatches, char ***matches)
   return expand_set_opt_generic(args, get_encoding_name, numMatches, matches);
 }
 
-/// The 'eventignore(win)' option is changed.
-const char *did_set_eventignore(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (check_ei(*varp) == FAIL) {
-    return e_invarg;
-  }
-  return NULL;
-}
-
 static bool expand_eiw = false;
 
 static char *get_eventignore_name(expand_T *xp, int idx)
