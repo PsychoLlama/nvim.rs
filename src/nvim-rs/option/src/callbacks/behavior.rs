@@ -110,6 +110,11 @@ extern "C" {
     fn nvim_win_get_p_spell(win: WinHandle) -> c_int;
     fn nvim_parse_spelllang(win: WinHandle) -> CallbackResult;
 
+    // Phase 95: spell option accessors
+    fn nvim_valid_spellfile(val: *const std::ffi::c_char) -> c_int;
+    fn nvim_valid_spelllang(val: *const std::ffi::c_char) -> c_int;
+    fn nvim_did_set_spell_option() -> CallbackResult;
+
     // Shiftwidth/tabstop callback
     fn nvim_parse_cino(buf: BufHandle);
     fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
@@ -622,6 +627,30 @@ pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> Callback
     }
 
     callback_ok()
+}
+
+/// Callback for 'spellfile' option (Phase 95).
+///
+/// Validates the spellfile and loads wordlists if spell is enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_spellfile(args: *mut c_void) -> CallbackResult {
+    let varp_str = nvim_optset_get_varp_str(args);
+    if nvim_valid_spellfile(varp_str) == 0 {
+        return E_INVARG_BEHAVIOR;
+    }
+    nvim_did_set_spell_option()
+}
+
+/// Callback for 'spelllang' option (Phase 95).
+///
+/// Validates the spelllang and loads wordlists if spell is enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_spelllang(args: *mut c_void) -> CallbackResult {
+    let varp_str = nvim_optset_get_varp_str(args);
+    if nvim_valid_spelllang(varp_str) == 0 {
+        return E_INVARG_BEHAVIOR;
+    }
+    nvim_did_set_spell_option()
 }
 
 /// Callback for 'spell' option.

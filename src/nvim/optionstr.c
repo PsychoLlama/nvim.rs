@@ -1258,33 +1258,6 @@ const char *did_set_spellcapcheck(optset_T *args)
   return compile_cap_prog(win->w_s);
 }
 
-/// The 'spellfile' option is changed.
-const char *did_set_spellfile(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  // When there is a window for this buffer in which 'spell'
-  // is set load the wordlists.
-  if (!valid_spellfile(*varp)) {
-    return e_invarg;
-  }
-  return did_set_spell_option();
-}
-
-/// The 'spelllang' option is changed.
-const char *did_set_spelllang(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  // When there is a window for this buffer in which 'spell'
-  // is set load the wordlists.
-  if (!valid_spelllang(*varp)) {
-    return e_invarg;
-  }
-  return did_set_spell_option();
-}
-
-
 /// The 'spellsuggest' option is changed.
 const char *did_set_spellsuggest(optset_T *args FUNC_ATTR_UNUSED)
 {

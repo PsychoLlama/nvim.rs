@@ -8420,7 +8420,7 @@ local options = {
     },
     {
       abbreviation = 'spf',
-      cb = 'did_set_spellfile',
+      cb = 'rs_did_set_spellfile',
       defaults = '',
       deny_duplicates = true,
       desc = [=[
@@ -8457,7 +8457,7 @@ local options = {
     },
     {
       abbreviation = 'spl',
-      cb = 'did_set_spelllang',
+      cb = 'rs_did_set_spelllang',
       defaults = 'en',
       deny_duplicates = true,
       desc = [=[

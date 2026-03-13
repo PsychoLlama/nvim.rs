@@ -249,6 +249,8 @@ extern const char *rs_did_set_foldignore(optset_T *args);
 extern const char *rs_did_set_foldmarker(optset_T *args);
 extern const char *rs_did_set_foldmethod(optset_T *args);
 extern const char *rs_did_set_cinoptions(optset_T *args);
+extern const char *rs_did_set_spellfile(optset_T *args);
+extern const char *rs_did_set_spelllang(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -470,6 +472,11 @@ void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 
 // Phase 91: langmap accessor
 const char *nvim_get_p_langmap(void) { return p_langmap; }
+
+// Phase 95: spell option accessors
+int nvim_valid_spellfile(const char *val) { return valid_spellfile(val) ? 1 : 0; }
+int nvim_valid_spelllang(const char *val) { return valid_spelllang(val) ? 1 : 0; }
+const char *nvim_did_set_spell_option(void) { return did_set_spell_option(); }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
