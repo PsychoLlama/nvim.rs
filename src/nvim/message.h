@@ -76,10 +76,14 @@ void msg_starthere(void);
 void msg_clr_eos(void);
 void msg_end_prompt(void);
 bool emsg(const char *s);
+void iemsg(const char *s);
 
 // Phase 2: Truncation functions migrated to Rust
 char *msg_strtrunc(const char *s, int force);
 void trunc_string(const char *s, char *buf, int room_in, int buflen);
+
+// Phase 2 (additional): Formatting functions migrated to Rust
+void msg_advance(int col);
 
 // Phase 5: Scrollback management functions migrated to Rust
 void may_clear_sb_text(void);

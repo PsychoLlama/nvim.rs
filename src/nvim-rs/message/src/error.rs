@@ -463,7 +463,6 @@ extern "C" {
         hl_id: c_int,
         multiline: c_int,
     ) -> c_int;
-    fn iemsg(s: *const std::ffi::c_char);
 
     // Source info functions
     fn msg_source(hl_id: c_int);
@@ -525,16 +524,20 @@ pub unsafe extern "C" fn rs_emsg_multiline_full(
 /// Display an internal error message.
 ///
 /// For internal Neovim errors that shouldn't normally occur.
-/// Always displayed regardless of suppression state.
+/// Like emsg() but skips when error messages are suppressed.
 ///
 /// # Arguments
 /// * `s` - The error message string (NUL-terminated)
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "iemsg"]
 pub unsafe extern "C" fn rs_iemsg(s: *const c_char) {
-    iemsg(s);
+    if rs_emsg_not_now() != 0 {
+        return;
+    }
+    let _ = rs_emsg(s);
+    // Note: ABORT_ON_INTERNAL_ERROR path omitted (fuzzing builds only)
 }
 
 /// Display source info before an error message.

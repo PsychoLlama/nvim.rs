@@ -9,7 +9,6 @@ use std::ffi::{c_char, c_int};
 extern "C" {
     // Warning message functions
     fn give_warning(message: *const c_char, hl: c_int);
-    fn msg_advance(col: c_int);
 
     // State accessors
     fn nvim_get_msg_col() -> c_int;
@@ -69,21 +68,6 @@ pub unsafe extern "C" fn rs_give_warning_plain(message: *const c_char) {
 // ============================================================================
 // Message Position Functions
 // ============================================================================
-
-/// Advance message cursor to a specific column.
-///
-/// Pads with spaces to reach the target column.
-/// If silent mode is active, just sets msg_col.
-///
-/// # Arguments
-/// * `col` - Target column (clamped to Columns - 1)
-///
-/// # Safety
-/// Calls C function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_advance(col: c_int) {
-    msg_advance(col);
-}
 
 /// Calculate spaces needed to advance to a column.
 ///

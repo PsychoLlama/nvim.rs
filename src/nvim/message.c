@@ -1025,23 +1025,6 @@ static bool semsgv(const char *fmt, va_list ap)
   return emsg(errbuf);
 }
 
-/// Same as emsg(...), but abort on error when ABORT_ON_INTERNAL_ERROR is
-/// defined. It is used for internal errors only, so that they can be
-/// detected when fuzzing vim.
-void iemsg(const char *s)
-{
-  if (emsg_not_now()) {
-    return;
-  }
-
-  emsg(s);
-#ifdef ABORT_ON_INTERNAL_ERROR
-  set_vim_var_string(VV_ERRMSG, s, -1);
-  msg_putchar('\n');  // avoid overwriting the error message
-  ui_flush();
-  abort();
-#endif
-}
 
 /// Same as semsg(...) but abort on error when ABORT_ON_INTERNAL_ERROR is
 /// defined. It is used for internal errors only, so that they can be
@@ -3543,18 +3526,7 @@ void swmsg(bool hl, const char *const fmt, ...)
   give_warning(IObuff, hl);
 }
 
-/// Advance msg cursor to column "col".
-void msg_advance(int col)
-{
-  if (msg_silent != 0) {        // nothing to advance to
-    msg_col = col;              // for redirection, may fill it up later
-    return;
-  }
-  col = MIN(col, Columns - 1);  // not enough room
-  while (msg_col < col) {
-    msg_putchar(' ');
-  }
-}
+
 
 /// Used for "confirm()" function, and the :confirm command prefix.
 /// Versions which haven't got flexible dialogs yet, and console

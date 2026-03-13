@@ -30,6 +30,9 @@ extern "C" {
 
     // State accessors
     fn nvim_get_msg_silent() -> c_int;
+    fn nvim_get_msg_col() -> c_int;
+    fn nvim_set_msg_col(col: c_int);
+    fn nvim_get_columns() -> c_int;
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_set_lines_left(val: c_int);
     fn nvim_set_msg_didany(val: c_int);
@@ -37,7 +40,6 @@ extern "C" {
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_set_cmdline_row(val: c_int);
     fn nvim_get_msg_row() -> c_int;
-    fn nvim_set_msg_col(col: c_int);
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -421,6 +423,28 @@ pub const extern "C" fn rs_is_printf_length(c: c_int) -> c_int {
 // ============================================================================
 // Message Control Flow (Phase 1 Migration)
 // ============================================================================
+
+/// Advance msg cursor to column "col".
+///
+/// If msg_silent is set, just update msg_col (for redirection).
+/// Otherwise pad with spaces until reaching the column.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[export_name = "msg_advance"]
+pub unsafe extern "C" fn rs_msg_advance(col: c_int) {
+    if nvim_get_msg_silent() != 0 {
+        // nothing to advance to (for redirection, may fill it up later)
+        nvim_set_msg_col(col);
+        return;
+    }
+    // not enough room - clamp to Columns - 1
+    let columns = nvim_get_columns();
+    let col = if col > columns - 1 { columns - 1 } else { col };
+    while nvim_get_msg_col() < col {
+        rs_msg_putchar(c_int::from(b' '));
+    }
+}
 
 /// Like msg() but keep it silent when 'verbosefile' is set.
 ///
