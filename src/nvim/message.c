@@ -414,6 +414,20 @@ int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 int nvim_hl_attr(int hlf) { return hl_attr_active[hlf]; }
 
+// Phase 68: keep_msg raw setters (used by Rust set_keep_msg)
+// Note: nvim_set_keep_msg (with xfree/xstrdup) is defined in buffer_shim.c
+void nvim_set_keep_msg_raw(const char *s)
+{
+  xfree(keep_msg);
+  keep_msg = (s != NULL) ? xstrdup(s) : NULL;
+}
+void nvim_set_keep_msg_more(int val) { keep_msg_more = (val != 0); }
+void nvim_set_keep_msg_hl_id(int val) { keep_msg_hl_id = val; }
+
+// Note: nvim_get_in_assert_fails is defined in normal_shim.c (returns bool)
+// Note: nvim_ui_flush is defined in change_ffi.c
+// Note: nvim_os_delay is defined in change_ffi.c (takes long ms, bool allow_input)
+
 
 
 void msg_grid_validate(void)
@@ -1619,23 +1633,6 @@ static void hit_return_msg(bool newline_sb)
   p_more = save_p_more;
 }
 
-/// Set "keep_msg" to "s".  Free the old value and check for NULL pointer.
-void set_keep_msg(const char *s, int hl_id)
-{
-  // Kept message is not cleared and re-emitted with ext_messages: #20416.
-  if (ui_has(kUIMessages)) {
-    return;
-  }
-
-  xfree(keep_msg);
-  if (s != NULL && msg_silent == 0) {
-    keep_msg = xstrdup(s);
-  } else {
-    keep_msg = NULL;
-  }
-  keep_msg_more = false;
-  keep_msg_hl_id = hl_id;
-}
 
 /// Return true if printing messages should currently be done.
 bool messaging(void)
@@ -3858,16 +3855,3 @@ int vim_dialog_yesnoallcancel(int type, char *title, char *message, int dflt)
 
 /// Check if there should be a delay to allow the user to see a message.
 ///
-/// Used before clearing or redrawing the screen or the command line.
-void msg_check_for_delay(bool check_msg_scroll)
-{
-  if ((emsg_on_display || (check_msg_scroll && msg_scroll))
-      && !did_wait_return && emsg_silent == 0 && !in_assert_fails && !ui_has(kUIMessages)) {
-    ui_flush();
-    os_delay(1006, true);
-    emsg_on_display = false;
-    if (check_msg_scroll) {
-      msg_scroll = false;
-    }
-  }
-}

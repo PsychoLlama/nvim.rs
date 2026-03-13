@@ -18,11 +18,6 @@ extern "C" {
 
     // Note: msg_source is wrapped in error.rs
 
-    // Prompt handling
-
-    // Delay checking
-    fn msg_check_for_delay(check_msg_scroll: c_int);
-
     // UI refresh
     fn msg_ui_refresh();
     fn msg_ui_flush();
@@ -37,6 +32,24 @@ extern "C" {
 
     // State accessors
     fn nvim_get_msg_silent() -> c_int;
+    fn nvim_get_emsg_on_display() -> c_int;
+    fn nvim_set_emsg_on_display(val: c_int);
+    fn nvim_get_msg_scroll() -> c_int;
+    fn nvim_set_msg_scroll(val: c_int);
+    fn nvim_get_did_wait_return() -> c_int;
+    fn nvim_get_emsg_silent() -> c_int;
+    // nvim_get_in_assert_fails returns bool (defined in normal_shim.c)
+    fn nvim_get_in_assert_fails() -> bool;
+    fn nvim_ui_has_messages() -> c_int;
+    // nvim_ui_flush is defined in change_ffi.c
+    fn nvim_ui_flush();
+    // nvim_os_delay is defined in change_ffi.c (long ms, bool allow_input)
+    fn nvim_os_delay(ms: std::ffi::c_long, allow_input: bool);
+
+    // keep_msg raw setters (nvim_set_keep_msg_raw in message.c does xfree+xstrdup)
+    fn nvim_set_keep_msg_raw(s: *const c_char);
+    fn nvim_set_keep_msg_more(val: c_int);
+    fn nvim_set_keep_msg_hl_id(val: c_int);
 }
 
 // ============================================================================
@@ -94,10 +107,54 @@ pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
 /// * `check_msg_scroll` - If true, also check msg_scroll state
 ///
 /// # Safety
-/// Calls C function that may block.
-#[no_mangle]
+/// Calls C accessor functions and may block.
+#[export_name = "msg_check_for_delay"]
 pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
-    msg_check_for_delay(check_msg_scroll);
+    let check = check_msg_scroll != 0;
+    if (nvim_get_emsg_on_display() != 0 || (check && nvim_get_msg_scroll() != 0))
+        && nvim_get_did_wait_return() == 0
+        && nvim_get_emsg_silent() == 0
+        && !nvim_get_in_assert_fails()
+        && nvim_ui_has_messages() == 0
+    {
+        nvim_ui_flush();
+        nvim_os_delay(1006, true);
+        nvim_set_emsg_on_display(0);
+        if check {
+            nvim_set_msg_scroll(0);
+        }
+    }
+}
+
+// ============================================================================
+// Keep Message Functions
+// ============================================================================
+
+/// Set the "keep_msg" string that is re-displayed after redraw.
+///
+/// Frees the old value. Skips when ext_messages UI is active.
+/// Sets keep_msg_more to false and updates highlight.
+///
+/// # Arguments
+/// * `s` - The message string, or NULL to clear
+/// * `hl_id` - Highlight group ID for the message
+///
+/// # Safety
+/// Calls C accessor/mutator functions that manage allocated memory.
+#[export_name = "set_keep_msg"]
+pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
+    // Kept message is not cleared and re-emitted with ext_messages: #20416.
+    if nvim_ui_has_messages() != 0 {
+        return;
+    }
+
+    if s.is_null() || nvim_get_msg_silent() != 0 {
+        nvim_set_keep_msg_raw(std::ptr::null());
+    } else {
+        nvim_set_keep_msg_raw(s);
+    }
+    nvim_set_keep_msg_more(0);
+    nvim_set_keep_msg_hl_id(hl_id);
 }
 
 // ============================================================================

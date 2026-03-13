@@ -92,6 +92,10 @@ void sb_text_restart_cmdline(void);
 void sb_text_end_cmdline(void);
 void msg_sb_eol(void);
 
+// Phase 68: keep_msg and delay functions migrated to Rust
+void set_keep_msg(const char *s, int hl_id);
+void msg_check_for_delay(bool check_msg_scroll);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong
