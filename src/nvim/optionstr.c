@@ -941,23 +941,6 @@ char *get_fileformat_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return (char *)opt_ff_values[idx];
 }
 
-/// The 'filetype' or the 'syntax' option is changed.
-const char *did_set_filetype_or_syntax(optset_T *args)
-{
-  char **varp = (char **)args->os_varp;
-
-  if (!rs_valid_name(*varp, ".-_")) {
-    return e_invarg;
-  }
-
-  args->os_value_changed = strcmp(args->os_oldval.string.data, *varp) != 0;
-
-  // Since we check the value, there is no need to set kOptFlagInsecure,
-  // even when the value comes from a modeline.
-  args->os_value_checked = true;
-
-  return NULL;
-}
 
 /// The 'foldexpr' option is changed.
 const char *did_set_foldexpr(optset_T *args)
@@ -989,18 +972,6 @@ const char *did_set_guicursor(optset_T *args FUNC_ATTR_UNUSED)
   return NULL;
 }
 
-/// The 'helpfile' option is changed.
-const char *did_set_helpfile(optset_T *args FUNC_ATTR_UNUSED)
-{
-  // May compute new values for $VIM and $VIMRUNTIME
-  if (didset_vim) {
-    vim_unsetenv_ext("VIM");
-  }
-  if (didset_vimruntime) {
-    vim_unsetenv_ext("VIMRUNTIME");
-  }
-  return NULL;
-}
 
 
 /// The 'highlight' option is changed.
@@ -1408,15 +1379,6 @@ const char *did_set_vartabstop(optset_T *args)
   return NULL;
 }
 
-/// The 'verbosefile' option is changed.
-const char *did_set_verbosefile(optset_T *args)
-{
-  verbose_stop();
-  if (*p_vfile != NUL && verbose_open() == FAIL) {
-    return (char *)e_invarg;
-  }
-  return NULL;
-}
 
 /// The 'virtualedit' option is changed.
 const char *did_set_virtualedit(optset_T *args)

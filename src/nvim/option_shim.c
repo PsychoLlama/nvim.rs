@@ -258,6 +258,9 @@ extern const char *rs_did_set_spellsuggest(optset_T *args);
 extern const char *rs_did_set_mkspellmem(optset_T *args);
 extern const char *rs_did_set_winborder(optset_T *args);
 extern const char *rs_did_set_pumborder(optset_T *args);
+extern const char *rs_did_set_filetype_or_syntax(optset_T *args);
+extern const char *rs_did_set_verbosefile(optset_T *args);
+extern const char *rs_did_set_helpfile(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -302,6 +305,26 @@ int64_t nvim_optset_get_newval_number(const void *args) { return ((const optset_
 void *nvim_optset_get_varp(const void *args) { return ((const optset_T *)args)->os_varp; }
 int nvim_optset_get_newval_boolean(const void *args) { return (int)((const optset_T *)args)->os_newval.boolean; }
 int nvim_optset_get_flags(const void *args) { return ((const optset_T *)args)->os_flags; }
+void nvim_optset_set_value_changed(void *args, int val) { ((optset_T *)args)->os_value_changed = val != 0; }
+void nvim_optset_set_value_checked(void *args, int val) { ((optset_T *)args)->os_value_checked = val != 0; }
+const char *nvim_optset_get_oldval_str(const void *args) { return ((const optset_T *)args)->os_oldval.string.data; }
+
+// Phase 99: verbosefile / helpfile accessors
+int nvim_verbose_check_and_open(void) {
+  verbose_stop();
+  if (*p_vfile != NUL && verbose_open() == FAIL) {
+    return 0;  // FAIL
+  }
+  return 1;  // OK
+}
+void nvim_unset_vim_env(void) {
+  if (didset_vim) {
+    vim_unsetenv_ext("VIM");
+  }
+  if (didset_vimruntime) {
+    vim_unsetenv_ext("VIMRUNTIME");
+  }
+}
 
 // String option accessors
 const char *nvim_option_get_sh(void) { return p_sh; }
@@ -621,11 +644,6 @@ const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T
 const char *nvim_optset_get_newval_str(const void *args)
 {
   return ((const optset_T *)args)->os_newval.string.data;
-}
-// Return os_oldval.string.data from optset_T
-const char *nvim_optset_get_oldval_str(const void *args)
-{
-  return ((const optset_T *)args)->os_oldval.string.data;
 }
 // Global bkc_flags accessors
 unsigned nvim_get_bkc_flags(void) { return bkc_flags; }

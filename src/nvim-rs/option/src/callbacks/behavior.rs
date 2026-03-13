@@ -170,6 +170,14 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ml_nobin(v: c_int);
     fn nvim_curbuf_set_b_p_et_nobin(v: c_int);
     fn nvim_bin_didset_sctx_all(opt_flags: c_int);
+
+    // Phase 99: filetype_or_syntax / verbosefile / helpfile accessors
+    fn rs_valid_name(val: *const std::ffi::c_char, allowed: *const std::ffi::c_char) -> c_int;
+    fn nvim_optset_set_value_changed(args: *mut c_void, val: c_int);
+    fn nvim_optset_set_value_checked(args: *mut c_void, val: c_int);
+    fn nvim_optset_get_oldval_str(args: *const c_void) -> *const std::ffi::c_char;
+    fn nvim_verbose_check_and_open() -> c_int;
+    fn nvim_unset_vim_env();
 }
 
 // =============================================================================
@@ -938,6 +946,48 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     }
 
     nvim_bin_didset_sctx_all(opt_flags);
+}
+
+/// Callback for 'filetype' and 'syntax' options (Phase 99).
+/// Validates name and flags value as changed/checked.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_filetype_or_syntax(args: *mut c_void) -> CallbackResult {
+    let varp_str = nvim_optset_get_varp_str(args);
+    if rs_valid_name(varp_str, c".-_".as_ptr()) == 0 {
+        return E_INVARG_BEHAVIOR;
+    }
+
+    // Compare new vs old value to set os_value_changed
+    let old_str = nvim_optset_get_oldval_str(args);
+    let changed = if old_str.is_null() || varp_str.is_null() {
+        true
+    } else {
+        std::ffi::CStr::from_ptr(old_str) != std::ffi::CStr::from_ptr(varp_str)
+    };
+    nvim_optset_set_value_changed(args, c_int::from(changed));
+
+    // Mark as checked so kOptFlagInsecure is not set
+    nvim_optset_set_value_checked(args, 1);
+
+    callback_ok()
+}
+
+/// Callback for 'verbosefile' option (Phase 99).
+/// Stops verbose logging and reopens the file if set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_verbosefile(_args: *mut c_void) -> CallbackResult {
+    if nvim_verbose_check_and_open() == 0 {
+        return E_INVARG_BEHAVIOR;
+    }
+    callback_ok()
+}
+
+/// Callback for 'helpfile' option (Phase 99).
+/// Unsets $VIM and $VIMRUNTIME if they were set by us.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_helpfile(_args: *mut c_void) -> CallbackResult {
+    nvim_unset_vim_env();
+    callback_ok()
 }
 
 // =============================================================================

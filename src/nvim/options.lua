@@ -3165,7 +3165,7 @@ local options = {
     },
     {
       abbreviation = 'ft',
-      cb = 'did_set_filetype_or_syntax',
+      cb = 'rs_did_set_filetype_or_syntax',
       defaults = '',
       desc = [=[
         When this option is set, the FileType autocommand event is triggered.
@@ -4258,7 +4258,7 @@ local options = {
     },
     {
       abbreviation = 'hf',
-      cb = 'did_set_helpfile',
+      cb = 'rs_did_set_helpfile',
       defaults = {
         if_true = macros('DFLT_HELPFILE', 'string'),
         doc = [[(MS-Windows) "$VIMRUNTIME\doc\help.txt"
@@ -9125,7 +9125,7 @@ local options = {
     },
     {
       abbreviation = 'syn',
-      cb = 'did_set_filetype_or_syntax',
+      cb = 'rs_did_set_filetype_or_syntax',
       defaults = '',
       desc = [=[
         When this option is set, the syntax with this name is loaded, unless
@@ -10024,7 +10024,7 @@ local options = {
     },
     {
       abbreviation = 'vfile',
-      cb = 'did_set_verbosefile',
+      cb = 'rs_did_set_verbosefile',
       defaults = '',
       desc = [=[
         When not empty all messages are written in a file with this name.
