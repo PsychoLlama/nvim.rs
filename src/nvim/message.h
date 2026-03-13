@@ -140,6 +140,12 @@ int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist);
 // Phase 84: msg_multiline migrated to Rust
 void msg_multiline(String str, int hl_id, bool check_int, bool hist, bool *need_clear);
 
+// Phase 85: str2special family and msg_outtrans_special migrated to Rust
+int msg_outtrans_special(const char *strstart, bool from, int maxlen);
+const char *str2special(const char **sp, bool replace_spaces, bool replace_lt);
+void str2specialbuf(const char *sp, char *buf, size_t len);
+char *str2special_save(const char *str, bool replace_spaces, bool replace_lt);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

@@ -439,7 +439,6 @@ extern "C" {
     fn transchar_buf(buf: *const std::ffi::c_void, c: c_int) -> *mut c_char;
 
     // Character translation
-    fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
     fn transchar_byte_buf(buf: *mut c_char, c: c_int) -> *mut c_char;
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
@@ -887,13 +886,58 @@ pub unsafe extern "C" fn rs_msg_outtrans_one(
 ///
 /// # Safety
 /// - `strstart` must be a valid NUL-terminated C string or NULL
-#[no_mangle]
+#[export_name = "msg_outtrans_special"]
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub unsafe extern "C" fn rs_msg_outtrans_special(
     strstart: *const c_char,
     from: c_int,
     maxlen: c_int,
 ) -> c_int {
-    msg_outtrans_special(strstart, from, maxlen)
+    use crate::rs_str2special;
+
+    if strstart.is_null() {
+        return 0;
+    }
+
+    let mut str = strstart;
+    let mut retval: c_int = 0;
+
+    while *str != 0 {
+        let text: *const c_char;
+        // Leading and trailing spaces need to be displayed in <> form.
+        if (str == strstart || *str.add(1) == 0) && *str == b' ' as c_char {
+            text = c"<Space>".as_ptr();
+            str = str.add(1);
+        } else {
+            text = rs_str2special(std::ptr::addr_of_mut!(str), from != 0, false);
+        }
+
+        // Single-byte: translate via transchar_byte_buf for display
+        let text = if *text != 0 && *text.add(1) == 0 {
+            transchar_byte_buf(std::ptr::null_mut(), c_int::from(*text as u8)).cast_const()
+        } else {
+            text
+        };
+
+        let len = nvim_vim_strsize(text);
+        if maxlen > 0 && retval + len >= maxlen {
+            break;
+        }
+        // Highlight special keys (multi-cell but not multi-byte → HLF_8)
+        let hl = if len > 1 && utfc_ptr2len(text) <= 1 {
+            HLF_8
+        } else {
+            0
+        };
+        msg_puts_hl(text, hl, false);
+        retval += len;
+    }
+    retval
 }
 
 // ============================================================================
