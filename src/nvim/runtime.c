@@ -771,11 +771,6 @@ static RuntimeSearchPath runtime_search_path_build(void)
   return search_path;
 }
 
-const char *did_set_runtimepackpath(optset_T *args)
-{
-  return rs_did_set_runtimepackpath(args);
-}
-
 static void runtime_search_path_free(RuntimeSearchPath path)
 {
   for (size_t j = 0; j < kv_size(path); j++) {

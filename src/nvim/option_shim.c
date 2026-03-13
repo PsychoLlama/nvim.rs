@@ -244,6 +244,7 @@ extern const char *rs_did_set_diffanchors(optset_T *args);
 extern const char *rs_did_set_messagesopt(optset_T *args);
 extern const char *rs_did_set_diffopt(optset_T *args);
 extern const char *rs_did_set_langmap(optset_T *args);
+extern const char *rs_did_set_runtimepackpath(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);

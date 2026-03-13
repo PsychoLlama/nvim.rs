@@ -6406,7 +6406,7 @@ local options = {
     },
     {
       abbreviation = 'pp',
-      cb = 'did_set_runtimepackpath',
+      cb = 'rs_did_set_runtimepackpath',
       defaults = {
         if_true = '',
         doc = "see 'runtimepath'",
@@ -7058,7 +7058,7 @@ local options = {
     },
     {
       abbreviation = 'rtp',
-      cb = 'did_set_runtimepackpath',
+      cb = 'rs_did_set_runtimepackpath',
       defaults = {
         if_true = '',
         doc = [["$XDG_CONFIG_HOME/nvim,
