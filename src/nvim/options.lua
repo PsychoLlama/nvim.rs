@@ -5793,7 +5793,7 @@ local options = {
     },
     {
       abbreviation = 'msm',
-      cb = 'did_set_mkspellmem',
+      cb = 'rs_did_set_mkspellmem',
       defaults = '460000,2000,500',
       desc = [=[
         Parameters for |:mkspell|.  This tunes when to start compressing the
@@ -6659,7 +6659,7 @@ local options = {
     {
       full_name = 'pumborder',
       scope = { 'global' },
-      cb = 'did_set_pumborder',
+      cb = 'rs_did_set_pumborder',
       defaults = { if_true = '' },
       values = { '', 'double', 'single', 'shadow', 'rounded', 'solid', 'bold', 'none' },
       desc = [=[
@@ -8535,7 +8535,7 @@ local options = {
     },
     {
       abbreviation = 'sps',
-      cb = 'did_set_spellsuggest',
+      cb = 'rs_did_set_spellsuggest',
       defaults = 'best',
       -- Keep this in sync with spell_check_sps().
       values = { 'best', 'fast', 'double', 'expr:', 'file:', 'timeout:' },
@@ -10549,7 +10549,7 @@ local options = {
     {
       full_name = 'winborder',
       scope = { 'global' },
-      cb = 'did_set_winborder',
+      cb = 'rs_did_set_winborder',
       defaults = { if_true = '' },
       values = { '', 'double', 'single', 'shadow', 'rounded', 'solid', 'bold', 'none' },
       desc = [=[

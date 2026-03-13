@@ -1103,14 +1103,6 @@ const char *did_set_keymap(optset_T *args)
   return errmsg;
 }
 
-/// The 'mkspellmem' option is changed.
-const char *did_set_mkspellmem(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (spell_check_msm() != OK) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
 {
@@ -1226,14 +1218,6 @@ const char *did_set_signcolumn(optset_T *args)
   return NULL;
 }
 
-/// The 'spellsuggest' option is changed.
-const char *did_set_spellsuggest(optset_T *args FUNC_ATTR_UNUSED)
-{
-  if (spell_check_sps() != OK) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 /// The 'statuscolumn' option is changed.
 const char *did_set_statuscolumn(optset_T *args)
@@ -1474,7 +1458,7 @@ const char *did_set_winbar(optset_T *args)
   return did_set_statustabline_rulerformat(args, false, false);
 }
 
-static bool parse_border_opt(char *border_opt)
+bool parse_border_opt(char *border_opt)
 {
   WinConfig fconfig = WIN_CONFIG_INIT;
   Error err = ERROR_INIT;
@@ -1486,22 +1470,6 @@ static bool parse_border_opt(char *border_opt)
   return result;
 }
 
-/// The 'winborder' option is changed.
-const char *did_set_winborder(optset_T *args)
-{
-  if (!parse_border_opt(p_winborder)) {
-    return e_invarg;
-  }
-  return NULL;
-}
-
-const char *did_set_pumborder(optset_T *args)
-{
-  if (!parse_border_opt(p_pumborder)) {
-    return e_invarg;
-  }
-  return NULL;
-}
 
 
 int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)

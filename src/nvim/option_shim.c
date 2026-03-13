@@ -254,6 +254,10 @@ extern const char *rs_did_set_spelllang(optset_T *args);
 extern const char *rs_did_set_spellcapcheck(optset_T *args);
 extern const char *rs_did_set_keymodel(optset_T *args);
 extern const char *rs_did_set_eventignore(optset_T *args);
+extern const char *rs_did_set_spellsuggest(optset_T *args);
+extern const char *rs_did_set_mkspellmem(optset_T *args);
+extern const char *rs_did_set_winborder(optset_T *args);
+extern const char *rs_did_set_pumborder(optset_T *args);
 
 // Phase 1: Simple string validation callbacks (from Rust string_simple.rs and display.rs)
 extern const char *rs_did_set_concealcursor(optset_T *args);
@@ -489,6 +493,13 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
+
+// Phase 98: spell / border option accessors
+bool parse_border_opt(char *border_opt);  // defined in optionstr.c
+int nvim_spell_check_sps(void) { return spell_check_sps(); }
+int nvim_spell_check_msm(void) { return spell_check_msm(); }
+int nvim_check_winborder(void) { return parse_border_opt(p_winborder) ? 1 : 0; }
+int nvim_check_pumborder(void) { return parse_border_opt(p_pumborder) ? 1 : 0; }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
