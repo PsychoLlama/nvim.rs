@@ -38,8 +38,8 @@ fn float_op_single(argvars: *const c_void, rettv: *mut c_void, op: fn(f64) -> f6
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_sin(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_sin"]
+pub unsafe extern "C" fn rs_f_sin(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::sin);
 }
 
@@ -47,8 +47,8 @@ pub unsafe extern "C" fn rs_f_sin(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_cos(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_cos"]
+pub unsafe extern "C" fn rs_f_cos(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::cos);
 }
 
@@ -56,8 +56,8 @@ pub unsafe extern "C" fn rs_f_cos(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_tan(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_tan"]
+pub unsafe extern "C" fn rs_f_tan(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::tan);
 }
 
@@ -65,8 +65,8 @@ pub unsafe extern "C" fn rs_f_tan(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_asin(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_asin"]
+pub unsafe extern "C" fn rs_f_asin(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::asin);
 }
 
@@ -74,8 +74,8 @@ pub unsafe extern "C" fn rs_f_asin(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_acos(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_acos"]
+pub unsafe extern "C" fn rs_f_acos(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::acos);
 }
 
@@ -83,8 +83,8 @@ pub unsafe extern "C" fn rs_f_acos(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_atan(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_atan"]
+pub unsafe extern "C" fn rs_f_atan(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::atan);
 }
 
@@ -92,8 +92,8 @@ pub unsafe extern "C" fn rs_f_atan(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_sinh(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_sinh"]
+pub unsafe extern "C" fn rs_f_sinh(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::sinh);
 }
 
@@ -101,8 +101,8 @@ pub unsafe extern "C" fn rs_f_sinh(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_cosh(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_cosh"]
+pub unsafe extern "C" fn rs_f_cosh(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::cosh);
 }
 
@@ -110,8 +110,8 @@ pub unsafe extern "C" fn rs_f_cosh(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_tanh(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_tanh"]
+pub unsafe extern "C" fn rs_f_tanh(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::tanh);
 }
 
@@ -119,8 +119,8 @@ pub unsafe extern "C" fn rs_f_tanh(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_exp(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_exp"]
+pub unsafe extern "C" fn rs_f_exp(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::exp);
 }
 
@@ -128,8 +128,8 @@ pub unsafe extern "C" fn rs_f_exp(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_log(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_log"]
+pub unsafe extern "C" fn rs_f_log(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::ln);
 }
 
@@ -137,8 +137,12 @@ pub unsafe extern "C" fn rs_f_log(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_log10(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_log10"]
+pub unsafe extern "C" fn rs_f_log10(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     float_op_single(argvars, rettv, f64::log10);
 }
 
@@ -146,8 +150,8 @@ pub unsafe extern "C" fn rs_f_log10(argvars: *const c_void, rettv: *mut c_void) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_sqrt(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_sqrt"]
+pub unsafe extern "C" fn rs_f_sqrt(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::sqrt);
 }
 
@@ -155,8 +159,8 @@ pub unsafe extern "C" fn rs_f_sqrt(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_ceil(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_ceil"]
+pub unsafe extern "C" fn rs_f_ceil(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_single(argvars, rettv, f64::ceil);
 }
 
@@ -164,8 +168,12 @@ pub unsafe extern "C" fn rs_f_ceil(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_floor(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_floor"]
+pub unsafe extern "C" fn rs_f_floor(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     float_op_single(argvars, rettv, f64::floor);
 }
 
@@ -173,8 +181,12 @@ pub unsafe extern "C" fn rs_f_floor(argvars: *const c_void, rettv: *mut c_void) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_round(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_round"]
+pub unsafe extern "C" fn rs_f_round(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     float_op_single(argvars, rettv, f64::round);
 }
 
@@ -182,8 +194,12 @@ pub unsafe extern "C" fn rs_f_round(argvars: *const c_void, rettv: *mut c_void) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_trunc(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_trunc"]
+pub unsafe extern "C" fn rs_f_trunc(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     float_op_single(argvars, rettv, f64::trunc);
 }
 
@@ -208,8 +224,12 @@ fn float_op_double(argvars: *const c_void, rettv: *mut c_void, op: fn(f64, f64) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_atan2(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_atan2"]
+pub unsafe extern "C" fn rs_f_atan2(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     float_op_double(argvars, rettv, f64::atan2);
 }
 
@@ -217,8 +237,8 @@ pub unsafe extern "C" fn rs_f_atan2(argvars: *const c_void, rettv: *mut c_void) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_pow(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_pow"]
+pub unsafe extern "C" fn rs_f_pow(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_double(argvars, rettv, f64::powf);
 }
 
@@ -226,8 +246,8 @@ pub unsafe extern "C" fn rs_f_pow(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_fmod(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_fmod"]
+pub unsafe extern "C" fn rs_f_fmod(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     float_op_double(argvars, rettv, |a, b| a % b);
 }
 
@@ -242,8 +262,8 @@ pub unsafe extern "C" fn rs_f_fmod(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_abs(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_abs"]
+pub unsafe extern "C" fn rs_f_abs(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     let rettv = TypevalPtrMut::from_raw(rettv);
     let arg0 = argvar_at(argvars, 0);
 
@@ -270,8 +290,12 @@ pub unsafe extern "C" fn rs_f_abs(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_float2nr(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_float2nr"]
+pub unsafe extern "C" fn rs_f_float2nr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     let rettv = TypevalPtrMut::from_raw(rettv);
     let arg0 = argvar_at(argvars, 0);
 
@@ -300,8 +324,12 @@ pub unsafe extern "C" fn rs_f_float2nr(argvars: *const c_void, rettv: *mut c_voi
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_isnan(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_isnan"]
+pub unsafe extern "C" fn rs_f_isnan(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     let rettv = TypevalPtrMut::from_raw(rettv);
     let arg0 = argvar_at(argvars, 0);
 
@@ -318,8 +346,12 @@ pub unsafe extern "C" fn rs_f_isnan(argvars: *const c_void, rettv: *mut c_void) 
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_isinf(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_isinf"]
+pub unsafe extern "C" fn rs_f_isinf(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     let rettv = TypevalPtrMut::from_raw(rettv);
     let arg0 = argvar_at(argvars, 0);
 

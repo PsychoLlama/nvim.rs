@@ -57,8 +57,8 @@ const VAR_TYPE_BLOB: i64 = 10;
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_type(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_type"]
+pub unsafe extern "C" fn rs_f_type(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     let rettv = TypevalPtrMut::from_raw(rettv);
     let arg0 = argvar_at(argvars, 0);
 

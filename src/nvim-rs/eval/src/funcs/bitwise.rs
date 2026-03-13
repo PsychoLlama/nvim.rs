@@ -30,8 +30,8 @@ fn bitwise_op_double(argvars: *const c_void, rettv: *mut c_void, op: fn(i64, i64
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_and(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_and"]
+pub unsafe extern "C" fn rs_f_and(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     bitwise_op_double(argvars, rettv, |a, b| a & b);
 }
 
@@ -39,8 +39,8 @@ pub unsafe extern "C" fn rs_f_and(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_or(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_or"]
+pub unsafe extern "C" fn rs_f_or(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     bitwise_op_double(argvars, rettv, |a, b| a | b);
 }
 
@@ -48,8 +48,8 @@ pub unsafe extern "C" fn rs_f_or(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_xor(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_xor"]
+pub unsafe extern "C" fn rs_f_xor(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
     bitwise_op_double(argvars, rettv, |a, b| a ^ b);
 }
 
@@ -61,8 +61,12 @@ pub unsafe extern "C" fn rs_f_xor(argvars: *const c_void, rettv: *mut c_void) {
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
-#[no_mangle]
-pub unsafe extern "C" fn rs_f_invert(argvars: *const c_void, rettv: *mut c_void) {
+#[export_name = "f_invert"]
+pub unsafe extern "C" fn rs_f_invert(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
     let rettv = unsafe { TypevalPtrMut::from_raw(rettv) };
     let arg0 = unsafe { argvar_at(argvars, 0) };
 
