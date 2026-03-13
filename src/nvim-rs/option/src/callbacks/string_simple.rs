@@ -601,6 +601,19 @@ pub unsafe extern "C" fn rs_did_set_messagesopt(_args: *mut c_void) -> CallbackR
     callback_ok()
 }
 
+/// Callback for 'diffopt' option.
+/// Delegates to the Rust diff module's rs_diffopt_changed().
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_diffopt(_args: *mut c_void) -> CallbackResult {
+    extern "C" {
+        fn rs_diffopt_changed() -> c_int;
+    }
+    if rs_diffopt_changed() == FAIL {
+        return E_INVARG;
+    }
+    callback_ok()
+}
+
 // =============================================================================
 // Tests
 // =============================================================================

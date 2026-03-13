@@ -810,12 +810,6 @@ const char *did_set_cursorlineopt(optset_T *args)
 }
 
 
-/// The 'diffopt' option is changed.
-const char *did_set_diffopt(optset_T *args FUNC_ATTR_UNUSED)
-{
-  return rs_diffopt_changed() == FAIL ? e_invarg : NULL;
-}
-
 int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)
 {
   expand_T *xp = args->oe_xp;

@@ -2348,7 +2348,7 @@ local options = {
     },
     {
       abbreviation = 'dip',
-      cb = 'did_set_diffopt',
+      cb = 'rs_did_set_diffopt',
       defaults = 'internal,filler,closeoff,indent-heuristic,inline:char,linematch:40',
       -- Keep this in sync with diffopt_changed().
       values = {
