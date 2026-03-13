@@ -481,6 +481,8 @@ int nvim_verbose_open_impl(void)
 
 // Phase 76: msg_may_trunc/msg_trunc accessors
 void nvim_msg_hist_add_str(const char *s, int hl_id) { msg_hist_add(s, -1, hl_id); }
+// Phase 83: msg_outtrans_len accessor with explicit length
+void nvim_msg_hist_add_len(const char *s, int len, int hl_id) { msg_hist_add(s, len, hl_id); }
 
 // Phase 77: msg_home_replace accessor
 char *nvim_home_replace_save_null(const char *fname) { return home_replace_save(NULL, fname); }
@@ -1708,78 +1710,6 @@ void msg_start(void)
 
 
 
-int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist)
-{
-  int retval = 0;
-  const char *str = msgstr;
-  const char *plain_start = msgstr;
-  char *s;
-  int c;
-  int save_got_int = got_int;
-
-  // Only quit when got_int was set in here.
-  got_int = false;
-
-  if (hist) {
-    msg_hist_add(str, len, hl_id);
-  }
-
-  // When drawing over the command line no need to clear it later or remove
-  // the mode message.
-  if (msg_silent == 0 && len > 0 && msg_row >= cmdline_row && msg_col == 0) {
-    clear_cmdline = false;
-    mode_displayed = false;
-  }
-
-  // Go over the string.  Special characters are translated and printed.
-  // Normal characters are printed several at a time.
-  while (--len >= 0 && !got_int) {
-    // Don't include composing chars after the end.
-    int mb_l = utfc_ptr2len_len(str, len + 1);
-    if (mb_l > 1) {
-      c = utf_ptr2char(str);
-      if (vim_isprintc(c)) {
-        // Printable multi-byte char: count the cells.
-        retval += utf_ptr2cells(str);
-      } else {
-        // Unprintable multi-byte char: print the printable chars so
-        // far and the translation of the unprintable char.
-        if (str > plain_start) {
-          msg_puts_len(plain_start, str - plain_start, hl_id, hist);
-        }
-        plain_start = str + mb_l;
-        msg_puts_hl(transchar_buf(NULL, c), hl_id == 0 ? HLF_8 : hl_id, false);
-        retval += char2cells(c);
-      }
-      len -= mb_l - 1;
-      str += mb_l;
-    } else {
-      s = transchar_byte_buf(NULL, (uint8_t)(*str));
-      if (s[1] != NUL) {
-        // Unprintable char: print the printable chars so far and the
-        // translation of the unprintable char.
-        if (str > plain_start) {
-          msg_puts_len(plain_start, str - plain_start, hl_id, hist);
-        }
-        plain_start = str + 1;
-        msg_puts_hl(s, hl_id == 0 ? HLF_8 : hl_id, false);
-        retval += (int)strlen(s);
-      } else {
-        retval++;
-      }
-      str++;
-    }
-  }
-
-  if ((str > plain_start || plain_start == msgstr) && !got_int) {
-    // Print the printable chars at the end (or emit empty string).
-    msg_puts_len(plain_start, str - plain_start, hl_id, hist);
-  }
-
-  got_int |= save_got_int;
-
-  return retval;
-}
 
 
 /// Output the string 'str' up to a NUL character.

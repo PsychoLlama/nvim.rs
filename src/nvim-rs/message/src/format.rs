@@ -431,12 +431,18 @@ extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn utf_ptr2cells(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utfc_ptr2len_len(p: *const c_char, maxlen: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+    fn char2cells(c: c_int) -> c_int;
+    // transchar_buf(NULL, c) returns a static buffer
+    fn transchar_buf(buf: *const std::ffi::c_void, c: c_int) -> *mut c_char;
 
     // Character translation
-    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
     fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
     fn transchar_byte_buf(buf: *mut c_char, c: c_int) -> *mut c_char;
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
 
     // Memory management
     fn xmalloc(size: usize) -> *mut c_char;
@@ -444,9 +450,18 @@ extern "C" {
 
     // History management (Phase 76)
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
+    fn nvim_msg_hist_add_len(s: *const c_char, len: c_int, hl_id: c_int);
     fn nvim_set_msg_hist_off(val: c_int);
     // msg() — #[export_name = "msg"] is in output_core.rs, callable via C name
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
+
+    // got_int (ex_eval.c)
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
+
+    // clear_cmdline, mode_displayed (normal_shim.c)
+    fn nvim_set_clear_cmdline(val: bool);
+    fn nvim_set_mode_displayed(val: bool);
 }
 
 // ============================================================================
@@ -661,6 +676,138 @@ pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
 // Output Translation Functions
 // ============================================================================
 
+/// HLF_8 = 8 (special-char highlight)
+const HLF_8: c_int = 8;
+
+/// Output a string with length and unprintable character translation.
+///
+/// Translates unprintable characters to their visible form and outputs them.
+/// Returns the number of screen cells used.
+///
+/// # Arguments
+/// * `msgstr` - The string to output
+/// * `len` - Length in bytes
+/// * `hl_id` - Highlight group ID (0 for default)
+/// * `hist` - If true, add to message history
+///
+/// # Safety
+/// - `msgstr` must be a valid string of at least `len` bytes
+#[export_name = "msg_outtrans_len"]
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_msg_outtrans_len(
+    msgstr: *const c_char,
+    len: c_int,
+    hl_id: c_int,
+    hist: bool,
+) -> c_int {
+    let mut retval: c_int = 0;
+    let mut str = msgstr;
+    let mut plain_start = msgstr;
+    let mut remaining = len;
+
+    let save_got_int = nvim_get_got_int();
+    // Only quit when got_int was set in here.
+    nvim_set_got_int(0);
+
+    if hist {
+        nvim_msg_hist_add_len(str, len, hl_id);
+    }
+
+    // When drawing over the command line no need to clear it later or remove
+    // the mode message.
+    if nvim_get_msg_silent() == 0
+        && len > 0
+        && nvim_get_msg_row() >= nvim_get_cmdline_row()
+        && nvim_get_msg_col() == 0
+    {
+        nvim_set_clear_cmdline(false);
+        nvim_set_mode_displayed(false);
+    }
+
+    // Go over the string. Special characters are translated and printed.
+    // Normal characters are printed several at a time.
+    while remaining > 0 && nvim_get_got_int() == 0 {
+        remaining -= 1;
+        // Don't include composing chars after the end.
+        let mb_l = utfc_ptr2len_len(str, remaining + 1);
+        if mb_l > 1 {
+            let c = utf_ptr2char(str);
+            if vim_isprintc(c) != 0 {
+                // Printable multi-byte char: count the cells.
+                retval += utf_ptr2cells(str);
+            } else {
+                // Unprintable multi-byte char: print the printable chars so
+                // far and the translation of the unprintable char.
+                if str > plain_start {
+                    msg_puts_len(
+                        plain_start,
+                        (str as usize - plain_start as usize) as isize,
+                        hl_id,
+                        hist,
+                    );
+                }
+                plain_start = str.offset(mb_l as isize);
+                msg_puts_hl(
+                    transchar_buf(std::ptr::null(), c).cast_const(),
+                    if hl_id == 0 { HLF_8 } else { hl_id },
+                    false,
+                );
+                retval += char2cells(c);
+            }
+            remaining -= mb_l - 1;
+            str = str.offset(mb_l as isize);
+        } else {
+            let s = transchar_byte_buf(std::ptr::null_mut(), c_int::from(*str as u8));
+            if *s.offset(1) != 0 {
+                // Unprintable char: print the printable chars so far and the
+                // translation of the unprintable char.
+                if str > plain_start {
+                    msg_puts_len(
+                        plain_start,
+                        (str as usize - plain_start as usize) as isize,
+                        hl_id,
+                        hist,
+                    );
+                }
+                plain_start = str.offset(1);
+                msg_puts_hl(
+                    s.cast_const(),
+                    if hl_id == 0 { HLF_8 } else { hl_id },
+                    false,
+                );
+                // count translated bytes (like strlen(s))
+                let mut sp = s;
+                while *sp != 0 {
+                    retval += 1;
+                    sp = sp.offset(1);
+                }
+            } else {
+                retval += 1;
+            }
+            str = str.offset(1);
+        }
+    }
+
+    if (str > plain_start || plain_start == msgstr) && nvim_get_got_int() == 0 {
+        // Print the printable chars at the end (or emit empty string).
+        msg_puts_len(
+            plain_start,
+            (str as usize - plain_start as usize) as isize,
+            hl_id,
+            hist,
+        );
+    }
+
+    nvim_set_got_int(nvim_get_got_int() | save_got_int);
+
+    retval
+}
+
 /// Output a string with unprintable character translation.
 ///
 /// Outputs characters, translating unprintable ones to their visible form
@@ -688,32 +835,7 @@ pub unsafe extern "C" fn rs_msg_outtrans(str: *const c_char, hl_id: c_int, hist:
         len += 1;
         p = p.offset(1);
     }
-    msg_outtrans_len(str, len, hl_id, hist)
-}
-
-/// Output a string with length and unprintable character translation.
-///
-/// Like `rs_msg_outtrans` but takes an explicit length.
-///
-/// # Arguments
-/// * `msgstr` - The string to output
-/// * `len` - Length in bytes (-1 for NUL-terminated)
-/// * `hl_id` - Highlight group ID (0 for default)
-/// * `hist` - If true, add to message history
-///
-/// # Returns
-/// Number of screen cells used
-///
-/// # Safety
-/// - `msgstr` must be a valid string of at least `len` bytes
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_outtrans_len(
-    msgstr: *const c_char,
-    len: c_int,
-    hl_id: c_int,
-    hist: bool,
-) -> c_int {
-    msg_outtrans_len(msgstr, len, hl_id, hist)
+    rs_msg_outtrans_len(str, len, hl_id, hist)
 }
 
 /// Output one character at position and return pointer to next.
@@ -739,7 +861,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_one(
 ) -> *const c_char {
     let l = utfc_ptr2len(p);
     if l > 1 {
-        msg_outtrans_len(p, l, hl_id, hist);
+        let _ = rs_msg_outtrans_len(p, l, hl_id, hist);
         return p.offset(l as isize);
     }
     // Single byte: translate and output

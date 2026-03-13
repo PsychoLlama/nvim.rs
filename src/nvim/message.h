@@ -134,6 +134,9 @@ void msg_putchar_hl(int c, int hl_id);
 void msg_hist_clear(int keep);
 void msg_hist_clear_temp(void);
 
+// Phase 83: msg_outtrans_len migrated to Rust
+int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

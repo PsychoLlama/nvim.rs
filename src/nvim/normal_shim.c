@@ -579,6 +579,7 @@ int nvim_get_curbuf_visual_vi_mode(void) { return curbuf->b_visual.vi_mode; }
 void nvim_set_curbuf_visual_vi_mode(int val) { curbuf->b_visual.vi_mode = val; }
 
 bool nvim_get_mode_displayed(void) { return mode_displayed; }
+void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
