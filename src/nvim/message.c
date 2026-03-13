@@ -1744,14 +1744,6 @@ void msg_start(void)
 
 
 
-/// Output "len" characters in "str" (including NULs) with translation
-/// if "len" is -1, output up to a NUL character. Use highlight "hl_id".
-///
-/// @return  the number of characters it takes on the screen.
-int msg_outtrans(const char *str, int hl_id, bool hist)
-{
-  return *str == NUL ? 0 : msg_outtrans_len(str, (int)strlen(str), hl_id, hist);
-}
 
 /// Output one character at "p".
 /// Handles multi-byte characters.

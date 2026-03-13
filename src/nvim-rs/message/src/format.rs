@@ -433,7 +433,6 @@ extern "C" {
     fn utf_ptr2cells(p: *const c_char) -> c_int;
 
     // Character translation
-    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
     fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
     fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: c_int) -> *const c_char;
     fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
@@ -676,9 +675,19 @@ pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
 ///
 /// # Safety
 /// - `str` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg_outtrans"]
+#[must_use]
 pub unsafe extern "C" fn rs_msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int {
-    msg_outtrans(str, hl_id, hist)
+    if *str == 0 {
+        return 0;
+    }
+    let mut len: c_int = 0;
+    let mut p = str;
+    while *p != 0 {
+        len += 1;
+        p = p.offset(1);
+    }
+    msg_outtrans_len(str, len, hl_id, hist)
 }
 
 /// Output a string with length and unprintable character translation.

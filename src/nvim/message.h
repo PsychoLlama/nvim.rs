@@ -89,6 +89,9 @@ char *msg_trunc(char *s, bool force, int hl_id);
 // Phase 77: Home replace display functions migrated to Rust
 void msg_home_replace(const char *fname);
 
+// Phase 78: msg_outtrans migrated to Rust
+int msg_outtrans(const char *str, int hl_id, bool hist);
+
 // Phase 2 (additional): Formatting functions migrated to Rust
 void msg_advance(int col);
 
