@@ -2187,18 +2187,6 @@ void msg_prt_line(const char *s, bool list)
 /// Show a message in such a way that it always fits in the line.  Cut out a
 /// part in the middle and replace it with "..." when necessary.
 /// Does not handle multi-byte characters!
-void msg_outtrans_long(const char *longstr, int hl_id)
-{
-  int len = (int)strlen(longstr);
-  int slen = len;
-  int room = Columns - msg_col;
-  if (!ui_has(kUIMessages) && len > room && room >= 20) {
-    slen = (room - 3) / 2;
-    msg_outtrans_len(longstr, slen, hl_id, false);
-    msg_puts_hl("...", HLF_8, false);
-  }
-  msg_outtrans_len(longstr + len - slen, slen, hl_id, false);
-}
 
 /// Basic function for writing a message with highlight id.
 void msg_puts_hl(const char *const s, const int hl_id, const bool hist)

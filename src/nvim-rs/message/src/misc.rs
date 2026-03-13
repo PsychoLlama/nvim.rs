@@ -10,13 +10,16 @@ use std::ffi::{c_char, c_int};
 // ============================================================================
 
 extern "C" {
-    // Output translation functions (basic versions in format.rs)
-    fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int);
-
     // Home directory handling (Phase 77: now implemented in Rust)
     fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
+
+    // For msg_outtrans_long (Phase 80)
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
+    fn nvim_get_columns() -> c_int;
+    fn nvim_get_msg_col() -> c_int;
 
     // Note: msg_source is wrapped in error.rs
 
@@ -113,9 +116,13 @@ pub unsafe extern "C" fn rs_msg_make(arg: *const c_char) {
 
 // Note: rs_msg_outtrans() and rs_msg_outtrans_len() are defined in format.rs
 
+/// Highlight face for special characters (HLF_8 = 8)
+const HLF_8: c_int = 8;
+
 /// Output a potentially long string with truncation.
 ///
-/// If the string is too long for the screen, shows "..." at the end.
+/// If the string is too long for the screen, shows "..." at the middle.
+/// Truncates by showing the start and end with "..." in the middle.
 ///
 /// # Arguments
 /// * `longstr` - The string to output
@@ -123,9 +130,23 @@ pub unsafe extern "C" fn rs_msg_make(arg: *const c_char) {
 ///
 /// # Safety
 /// - `longstr` must be a valid NUL-terminated C string
-#[no_mangle]
+#[export_name = "msg_outtrans_long"]
 pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
-    msg_outtrans_long(longstr, hl_id);
+    // Calculate strlen
+    let mut p = longstr;
+    while *p != 0 {
+        p = p.offset(1);
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let len = (p as usize - longstr as usize) as c_int;
+    let mut slen = len;
+    let room = nvim_get_columns() - nvim_get_msg_col();
+    if nvim_ui_has_messages() == 0 && len > room && room >= 20 {
+        slen = (room - 3) / 2;
+        msg_outtrans_len(longstr, slen, hl_id, 0);
+        msg_puts_hl(c"...".as_ptr(), HLF_8, 0);
+    }
+    msg_outtrans_len(longstr.offset((len - slen) as isize), slen, hl_id, 0);
 }
 
 // ============================================================================
