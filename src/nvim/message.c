@@ -1745,21 +1745,6 @@ void msg_start(void)
 
 
 
-/// Output one character at "p".
-/// Handles multi-byte characters.
-///
-/// @return  pointer to the next character.
-const char *msg_outtrans_one(const char *p, int hl_id, bool hist)
-{
-  int l;
-
-  if ((l = utfc_ptr2len(p)) > 1) {
-    msg_outtrans_len(p, l, hl_id, hist);
-    return p + l;
-  }
-  msg_puts_hl(transchar_byte_buf(NULL, (uint8_t)(*p)), hl_id, hist);
-  return p + 1;
-}
 
 int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist)
 {

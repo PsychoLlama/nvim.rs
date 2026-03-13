@@ -434,8 +434,9 @@ extern "C" {
 
     // Character translation
     fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
-    fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: c_int) -> *const c_char;
     fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
+    fn transchar_byte_buf(buf: *mut c_char, c: c_int) -> *mut c_char;
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: c_int);
 
     // Memory management
     fn xmalloc(size: usize) -> *mut c_char;
@@ -729,13 +730,24 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 ///
 /// # Safety
 /// - `p` must be a valid pointer into a string
-#[no_mangle]
+#[export_name = "msg_outtrans_one"]
+#[must_use]
 pub unsafe extern "C" fn rs_msg_outtrans_one(
     p: *const c_char,
     hl_id: c_int,
     hist: c_int,
 ) -> *const c_char {
-    msg_outtrans_one(p, hl_id, hist)
+    let l = utfc_ptr2len(p);
+    if l > 1 {
+        msg_outtrans_len(p, l, hl_id, hist);
+        return p.offset(l as isize);
+    }
+    // Single byte: translate and output
+    #[allow(clippy::cast_sign_loss)]
+    let byte = (*p) as u8;
+    let translated = transchar_byte_buf(std::ptr::null_mut(), c_int::from(byte));
+    msg_puts_hl(translated.cast_const(), hl_id, hist);
+    p.offset(1)
 }
 
 /// Output a string showing special keys in <> form.

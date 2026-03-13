@@ -92,6 +92,9 @@ void msg_home_replace(const char *fname);
 // Phase 78: msg_outtrans migrated to Rust
 int msg_outtrans(const char *str, int hl_id, bool hist);
 
+// Phase 79: msg_outtrans_one migrated to Rust
+const char *msg_outtrans_one(const char *p, int hl_id, bool hist);
+
 // Phase 2 (additional): Formatting functions migrated to Rust
 void msg_advance(int col);
 
