@@ -108,6 +108,7 @@ void verbose_enter_scroll(void);
 void verbose_leave_scroll(void);
 void verbose_stop(void);
 int verbose_open(void);
+void msg_make(const char *arg);
 
 #include "message.h.generated.h"
 

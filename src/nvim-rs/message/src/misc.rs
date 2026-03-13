@@ -58,6 +58,51 @@ extern "C" {
     fn nvim_char_avail() -> c_int;
     fn nvim_get_key_typed() -> c_int;
     fn nvim_get_p_ch() -> i64;
+
+    // For msg_make
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn msg_putchar(c: c_int);
+}
+
+// ============================================================================
+// Easter Egg
+// ============================================================================
+
+/// Show a special message if the argument matches a secret phrase.
+///
+/// # Safety
+/// - `arg` must be a valid NUL-terminated C string
+#[export_name = "msg_make"]
+pub unsafe extern "C" fn rs_msg_make(arg: *const c_char) {
+    const STR: &[u8] = b"eeffoc";
+    const RS: &[u8] = b"Plon#dqg#vxjduB";
+
+    let arg = skipwhite(arg).cast_const();
+    let mut idx: usize = 5;
+    let mut p = arg;
+    let mut matched = true;
+    loop {
+        if *p == 0 {
+            break;
+        }
+        // Compare *p (i8) with STR[idx] (u8) — STR chars are all ASCII (<128)
+        #[allow(clippy::cast_possible_wrap)]
+        if *p != STR[idx] as i8 {
+            matched = false;
+            break;
+        }
+        p = p.add(1);
+        if idx == 0 {
+            break;
+        }
+        idx -= 1;
+    }
+    if matched && idx == 0 && *p == 0 {
+        msg_putchar(c_int::from(b'\n'));
+        for &b in RS {
+            msg_putchar(c_int::from(b) - 3);
+        }
+    }
 }
 
 // ============================================================================

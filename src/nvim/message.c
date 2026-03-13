@@ -1914,25 +1914,6 @@ int msg_outtrans_len(const char *msgstr, int len, int hl_id, bool hist)
   return retval;
 }
 
-void msg_make(const char *arg)
-{
-  int i;
-  static const char *str = "eeffoc";
-  static const char *rs = "Plon#dqg#vxjduB";
-
-  arg = skipwhite(arg);
-  for (i = 5; *arg && i >= 0; i--) {
-    if (*arg++ != str[i]) {
-      break;
-    }
-  }
-  if (i < 0) {
-    msg_putchar('\n');
-    for (i = 0; rs[i]; i++) {
-      msg_putchar(rs[i] - 3);
-    }
-  }
-}
 
 /// Output the string 'str' up to a NUL character.
 /// Return the number of characters it takes on the screen.
