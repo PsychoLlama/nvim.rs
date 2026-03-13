@@ -932,7 +932,7 @@ local options = {
     },
     {
       abbreviation = 'bt',
-      cb = 'did_set_buftype',
+      cb = 'rs_did_set_buftype',
       defaults = '',
       values = {
         '',
@@ -1479,7 +1479,7 @@ local options = {
     },
     {
       abbreviation = 'cpt',
-      cb = 'did_set_complete',
+      cb = 'rs_did_set_complete',
       defaults = '.,w,b,u,t',
       values = { '.', 'w', 'b', 'u', 'k', 'kspell', 's', 'i', 'd', ']', 't', 'U', 'f', 'F', 'o' },
       deny_duplicates = true,
@@ -2666,7 +2666,7 @@ local options = {
     },
     {
       abbreviation = 'enc',
-      cb = 'did_set_encoding',
+      cb = 'rs_did_set_encoding',
       defaults = macros('ENC_DFLT', 'string'),
       deny_in_modelines = true,
       desc = [=[
@@ -2927,7 +2927,7 @@ local options = {
     },
     {
       abbreviation = 'fenc',
-      cb = 'did_set_encoding',
+      cb = 'rs_did_set_encoding',
       defaults = '',
       desc = [=[
         File-content encoding for the current buffer. Conversion is done with
@@ -3201,7 +3201,7 @@ local options = {
     },
     {
       abbreviation = 'fcs',
-      cb = 'did_set_chars_option',
+      cb = 'rs_did_set_chars_option',
       defaults = '',
       deny_duplicates = true,
       desc = [=[
@@ -5006,7 +5006,7 @@ local options = {
     },
     {
       abbreviation = 'kmp',
-      cb = 'did_set_keymap',
+      cb = 'rs_did_set_keymap',
       defaults = '',
       desc = [=[
         Name of a keyboard mapping.  See |mbyte-keymap|.
@@ -5397,7 +5397,7 @@ local options = {
     },
     {
       abbreviation = 'lcs',
-      cb = 'did_set_chars_option',
+      cb = 'rs_did_set_chars_option',
       defaults = 'tab:> ,trail:-,nbsp:+',
       deny_duplicates = true,
       desc = [=[
@@ -5566,7 +5566,7 @@ local options = {
     },
     {
       abbreviation = 'menc',
-      cb = 'did_set_encoding',
+      cb = 'rs_did_set_encoding',
       defaults = '',
       desc = [=[
         Encoding used for reading the output of external commands.  When empty,
@@ -7461,7 +7461,7 @@ local options = {
     {
       abbreviation = 'sd',
       alias = { 'vi', 'viminfo' },
-      cb = 'did_set_shada',
+      cb = 'rs_did_set_shada',
       defaults = {
         if_true = "!,'100,<50,s10,h",
         doc = [[for

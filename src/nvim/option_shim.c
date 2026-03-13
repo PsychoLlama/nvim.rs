@@ -545,6 +545,26 @@ void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
 
+// Phase 108: buftype / encoding / chars_option / keymap / shada / complete
+extern const char *rs_did_set_buftype(optset_T *args);
+extern const char *rs_did_set_encoding(optset_T *args);
+extern const char *rs_did_set_chars_option(optset_T *args);
+extern const char *rs_did_set_keymap(optset_T *args);
+extern const char *rs_did_set_shada(optset_T *args);
+extern const char *rs_did_set_complete(optset_T *args);
+extern const char *did_set_buftype(optset_T *args);
+extern const char *did_set_encoding(optset_T *args);
+extern const char *did_set_chars_option(optset_T *args);
+extern const char *did_set_keymap(optset_T *args);
+extern const char *did_set_shada(optset_T *args);
+extern const char *did_set_complete(optset_T *args);
+const char *nvim_did_set_buftype(void *args) { return did_set_buftype((optset_T *)args); }
+const char *nvim_did_set_encoding(void *args) { return did_set_encoding((optset_T *)args); }
+const char *nvim_did_set_chars_option(void *args) { return did_set_chars_option((optset_T *)args); }
+const char *nvim_did_set_keymap(void *args) { return did_set_keymap((optset_T *)args); }
+const char *nvim_did_set_shada(void *args) { return did_set_shada((optset_T *)args); }
+const char *nvim_did_set_complete(void *args) { return did_set_complete((optset_T *)args); }
+
 // Phase 107: colorcolumn / background / fileformat / str_generic
 extern const char *rs_did_set_colorcolumn(optset_T *args);
 extern const char *rs_did_set_background(optset_T *args);

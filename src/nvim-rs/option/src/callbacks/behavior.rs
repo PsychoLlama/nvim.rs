@@ -201,6 +201,14 @@ extern "C" {
     fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
 
+    // Phase 108: buftype / encoding / chars_option / keymap / shada / complete
+    fn nvim_did_set_buftype(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_encoding(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_chars_option(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_keymap(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_shada(args: *mut c_void) -> CallbackResult;
+    fn nvim_did_set_complete(args: *mut c_void) -> CallbackResult;
+
     // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
     fn nvim_did_set_cedit(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_operatorfunc(args: *mut c_void) -> CallbackResult;
@@ -1205,6 +1213,42 @@ pub unsafe extern "C" fn rs_did_set_verbosefile(_args: *mut c_void) -> CallbackR
 pub unsafe extern "C" fn rs_did_set_helpfile(_args: *mut c_void) -> CallbackResult {
     nvim_unset_vim_env();
     callback_ok()
+}
+
+/// Callback for 'buftype' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_buftype(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_buftype(args)
+}
+
+/// Callback for 'encoding'/'fileencoding'/'makeencoding' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_encoding(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_encoding(args)
+}
+
+/// Callback for 'fillchars'/'listchars' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_chars_option(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_chars_option(args)
+}
+
+/// Callback for 'keymap' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_keymap(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_keymap(args)
+}
+
+/// Callback for 'shada' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_shada(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_shada(args)
+}
+
+/// Callback for 'complete' option (Phase 108).
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_complete(args: *mut c_void) -> CallbackResult {
+    nvim_did_set_complete(args)
 }
 
 /// Callback for 'cedit' option (Phase 106).
