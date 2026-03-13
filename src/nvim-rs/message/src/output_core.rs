@@ -194,7 +194,7 @@ pub unsafe extern "C" fn rs_msg_putchar(c: c_int) {
 ///
 /// # Safety
 /// This function is safe to call with any integer value for `c`.
-#[no_mangle]
+#[export_name = "msg_putchar_hl"]
 #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_msg_putchar_hl(c: c_int, hl_id: c_int) {
     let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];

@@ -1788,20 +1788,6 @@ void msg_start(void)
 }
 
 
-void msg_putchar_hl(int c, int hl_id)
-{
-  char buf[MB_MAXCHAR + 1];
-
-  if (IS_SPECIAL(c)) {
-    buf[0] = (char)K_SPECIAL;
-    buf[1] = (char)K_SECOND(c);
-    buf[2] = (char)K_THIRD(c);
-    buf[3] = NUL;
-  } else {
-    buf[utf_char2bytes(c, buf)] = NUL;
-  }
-  msg_puts_hl(buf, hl_id, false);
-}
 
 
 void msg_home_replace(const char *fname)
