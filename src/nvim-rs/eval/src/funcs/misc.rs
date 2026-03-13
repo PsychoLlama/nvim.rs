@@ -347,3 +347,339 @@ pub unsafe extern "C" fn rs_f_getpos(
 ) {
     nvim_eval_getpos_both(argvars, rettv, false, false);
 }
+
+// =============================================================================
+// Phase 3: Medium-complexity functions (all delegated to C accessors)
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_char2nr(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_nr2char(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_str2float(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_escape(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_shellescape(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_fnameescape(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_hostname(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_empty(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_copy(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_deepcopy(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_len(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_ctx_size() -> c_int;
+    fn nvim_eval_ctxpop();
+    fn nvim_eval_max_min(argvars: *const c_void, rettv: *mut c_void, domax: bool);
+    fn nvim_eval_set_position(argvars: *const c_void, rettv: *mut c_void, charpos: bool);
+    fn nvim_eval_set_cursorpos(argvars: *const c_void, rettv: *mut c_void, charcol: bool);
+    fn nvim_eval_searchpair_cmn(argvars: *const c_void) -> c_int;
+    fn nvim_eval_find_some_match(argvars: *const c_void, rettv: *mut c_void, kind: c_int);
+}
+
+/// "char2nr()" function - convert UTF-8 character to number
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_char2nr"]
+pub unsafe extern "C" fn rs_f_char2nr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_char2nr(argvars, rettv);
+}
+
+/// "nr2char()" function - convert number to UTF-8 character string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_nr2char"]
+pub unsafe extern "C" fn rs_f_nr2char(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_nr2char(argvars, rettv);
+}
+
+/// "str2float()" function - convert string to float
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_str2float"]
+pub unsafe extern "C" fn rs_f_str2float(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_str2float(argvars, rettv);
+}
+
+/// "escape()" function - escape special characters in string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_escape"]
+pub unsafe extern "C" fn rs_f_escape(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_escape(argvars, rettv);
+}
+
+/// "shellescape()" function - shell-escape a string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_shellescape"]
+pub unsafe extern "C" fn rs_f_shellescape(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_shellescape(argvars, rettv);
+}
+
+/// "fnameescape()" function - escape filename special characters
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_fnameescape"]
+pub unsafe extern "C" fn rs_f_fnameescape(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_fnameescape(argvars, rettv);
+}
+
+/// "hostname()" function - get the hostname
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_hostname"]
+pub unsafe extern "C" fn rs_f_hostname(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_hostname(argvars, rettv);
+}
+
+/// "empty()" function - check if value is empty
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_empty"]
+pub unsafe extern "C" fn rs_f_empty(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_empty(argvars, rettv);
+}
+
+/// "copy()" function - shallow copy a value
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_copy"]
+pub unsafe extern "C" fn rs_f_copy(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_copy(argvars, rettv);
+}
+
+/// "deepcopy()" function - deep copy a value
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_deepcopy"]
+pub unsafe extern "C" fn rs_f_deepcopy(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_deepcopy(argvars, rettv);
+}
+
+/// "len()" function - length of string/list/dict/blob
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_len"]
+pub unsafe extern "C" fn rs_f_len(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_len(argvars, rettv);
+}
+
+/// "ctxsize()" function - context stack size
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_ctxsize"]
+pub unsafe extern "C" fn rs_f_ctxsize(
+    _argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    rettv_set_number(rettv, i64::from(nvim_eval_ctx_size()));
+}
+
+/// "ctxpop()" function - pop context from stack
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_ctxpop"]
+pub unsafe extern "C" fn rs_f_ctxpop(
+    _argvars: *const c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_ctxpop();
+}
+
+/// "max()" function - maximum value in list or dict
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_max"]
+pub unsafe extern "C" fn rs_f_max(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_max_min(argvars, rettv, true);
+}
+
+/// "min()" function - minimum value in list or dict
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_min"]
+pub unsafe extern "C" fn rs_f_min(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_max_min(argvars, rettv, false);
+}
+
+/// "setcharpos()" function - set position using character offsets
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_setcharpos"]
+pub unsafe extern "C" fn rs_f_setcharpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_set_position(argvars, rettv, true);
+}
+
+/// "setpos()" function - set position using byte offsets
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_setpos"]
+pub unsafe extern "C" fn rs_f_setpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_set_position(argvars, rettv, false);
+}
+
+/// "setcursorcharpos()" function - set cursor position using character offsets
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_setcursorcharpos"]
+pub unsafe extern "C" fn rs_f_setcursorcharpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_set_cursorpos(argvars, rettv, true);
+}
+
+/// "cursor()" function - set cursor position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_cursor"]
+pub unsafe extern "C" fn rs_f_cursor(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_set_cursorpos(argvars, rettv, false);
+}
+
+/// "searchpair()" function - search for a matching bracket pair
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_searchpair"]
+pub unsafe extern "C" fn rs_f_searchpair(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    rettv_set_number(rettv, i64::from(nvim_eval_searchpair_cmn(argvars)));
+}
+
+/// "match()" function - find pattern match position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_match"]
+pub unsafe extern "C" fn rs_f_match(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_find_some_match(argvars, rettv, 0); // kSomeMatch
+}
+
+/// "matchend()" function - find pattern match end position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_matchend"]
+pub unsafe extern "C" fn rs_f_matchend(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_find_some_match(argvars, rettv, 1); // kSomeMatchEnd
+}
+
+/// "matchlist()" function - find pattern match and return submatches
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_matchlist"]
+pub unsafe extern "C" fn rs_f_matchlist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_find_some_match(argvars, rettv, 2); // kSomeMatchList
+}
+
+/// "matchstr()" function - find pattern match and return matched string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_matchstr"]
+pub unsafe extern "C" fn rs_f_matchstr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_find_some_match(argvars, rettv, 3); // kSomeMatchStr
+}
+
+/// "matchstrpos()" function - find pattern match, return string and position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_matchstrpos"]
+pub unsafe extern "C" fn rs_f_matchstrpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_find_some_match(argvars, rettv, 4); // kSomeMatchStrPos
+}
