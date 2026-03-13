@@ -38,6 +38,7 @@ mod dispatch;
 pub mod display;
 pub mod list;
 pub mod math;
+pub mod misc;
 pub mod path;
 pub mod random;
 pub mod search;

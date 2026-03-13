@@ -240,6 +240,29 @@ extern void f_getwininfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_winsaveview(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_winrestview(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust misc VimL function declarations (exported from nvim-eval crate via #[export_name])
+extern void f_foreground(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getfontname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_windowsversion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_localtime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_screencol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_screenrow(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_eventhandler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_did_filetype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_changenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_interrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_pumvisible(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reg_executing(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reg_recording(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reg_recorded(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_charcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_col(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcharpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcurpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcursorcharpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -598,12 +621,6 @@ done:
   xfree(tofree);
 }
 
-/// "changenr()" function
-static void f_changenr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = curbuf->b_u_seq_cur;
-}
-
 /// "chanclose(id[, stream])" function
 static void f_chanclose(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -768,12 +785,6 @@ static void get_col(typval_T *argvars, typval_T *rettv, bool charcol)
   }
 }
 
-/// "charcol()" function
-static void f_charcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_col(argvars, rettv, true);
-}
-
 win_T *get_optional_window(typval_T *argvars, int idx)
 {
   if (argvars[idx].v_type == VAR_UNKNOWN) {
@@ -786,12 +797,6 @@ win_T *get_optional_window(typval_T *argvars, int idx)
     return NULL;
   }
   return win;
-}
-
-/// "col(string)" function
-static void f_col(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  get_col(argvars, rettv, false);
 }
 
 /// "confirm(message, buttons[, default [, type]])" function
@@ -1157,12 +1162,6 @@ static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   callback_free(&callback);
 }
 
-/// "did_filetype()" function
-static void f_did_filetype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = curbuf->b_did_filetype;
-}
-
 /// "empty({expr})" function
 static void f_empty(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -1303,11 +1302,6 @@ static void f_eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "eventhandler()" function
-static void f_eventhandler(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = vgetc_busy;
-}
 
 typedef struct {
   const list_T *const l;
@@ -1663,11 +1657,6 @@ static void f_fnameescape(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->vval.v_string = vim_strsave_fnameescape(tv_get_string(&argvars[0]), VSE_NONE);
   rettv->v_type = VAR_STRING;
-}
-
-/// "foreground()" function
-static void f_foreground(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
 }
 
 /// "function()" function
@@ -2084,12 +2073,6 @@ static void getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool
   }
 }
 
-/// "getcharpos()" function
-static void f_getcharpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getpos_both(argvars, rettv, false, true);
-}
-
 /// "getcharsearch()" function
 static void f_getcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -2100,13 +2083,6 @@ static void f_getcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
   tv_dict_add_str(dict, S_LEN("char"), last_csearch());
   tv_dict_add_nr(dict, S_LEN("forward"), last_csearch_forward());
   tv_dict_add_nr(dict, S_LEN("until"), last_csearch_until());
-}
-
-/// "getfontname()" function
-static void f_getfontname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
 }
 
 /// "getjumplist()" function
@@ -2156,29 +2132,6 @@ static void f_getmarklist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   get_buf_local_marks(buf, rettv->vval.v_list);
-}
-
-/// "getpid()" function
-static void f_getpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = os_get_pid();
-}
-
-/// "getcurpos(string)" function
-static void f_getcurpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getpos_both(argvars, rettv, true, false);
-}
-
-static void f_getcursorcharpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getpos_both(argvars, rettv, true, true);
-}
-
-/// "getpos(string)" function
-static void f_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getpos_both(argvars, rettv, false, false);
 }
 
 /// Convert from block_def to string
@@ -3204,12 +3157,6 @@ static void f_inputsecret(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   inputsecret_flag = false;
 }
 
-/// "interrupt()" function
-static void f_interrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  got_int = true;
-}
-
 /// "islocked()" function
 static void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -3961,12 +3908,6 @@ static void f_line2byte(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (rettv->vval.v_number >= 0) {
     rettv->vval.v_number++;
   }
-}
-
-/// "localtime()" function
-static void f_localtime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = (varnumber_T)time(NULL);
 }
 
 /// luaeval() function implementation
@@ -4840,14 +4781,6 @@ static void f_pum_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   pum_set_event_info(rettv->vval.v_dict);
 }
 
-/// "pumvisible()" function
-static void f_pumvisible(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (pum_visible()) {
-    rettv->vval.v_number = 1;
-  }
-}
-
 /// "py3eval()" and "pyxeval()" functions (always python3)
 static void f_py3eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -5074,31 +5007,6 @@ static void f_getreginfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     tv_dict_add_bool(dict, S_LEN("isunnamed"),
                      regname == buf[0] ? kBoolVarTrue : kBoolVarFalse);
   }
-}
-
-static void return_register(int regname, typval_T *rettv)
-{
-  char buf[2] = { (char)regname, 0 };
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xstrdup(buf);
-}
-
-/// "reg_executing()" function
-static void f_reg_executing(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  return_register(reg_executing, rettv);
-}
-
-/// "reg_recording()" function
-static void f_reg_recording(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  return_register(reg_recording, rettv);
-}
-
-static void f_reg_recorded(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  return_register(reg_recorded, rettv);
 }
 
 /// list2proftime - convert a List to proftime_T
@@ -5851,20 +5759,6 @@ static void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     tv_list_append_number(rettv->vval.v_list, c);
     i += (size_t)utf_ptr2len(buf + i);
   } while (buf[i] != NUL);
-}
-
-/// "screencol()" function
-///
-/// First column is 1 to be consistent with virtcol().
-static void f_screencol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = ui_current_col() + 1;
-}
-
-/// "screenrow()" function
-static void f_screenrow(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = ui_current_row() + 1;
 }
 
 /// "screenstring()" function
@@ -7666,17 +7560,34 @@ static void f_wildmenumode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   }
 }
 
-/// "windowsversion()" function
-static void f_windowsversion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xstrdup(windowsVersion);
-}
-
 /// "wordcount()" function
 static void f_wordcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   tv_dict_alloc_ret(rettv);
   cursor_pos_info(rettv->vval.v_dict);
 }
+
+// =============================================================================
+// C accessor functions for Rust VimL function implementations (Phase 2)
+// =============================================================================
+
+// nvim_get_vgetc_busy is defined in getchar.c
+// nvim_get_reg_executing, nvim_get_reg_recording are defined in autocmd.c
+// nvim_set_got_int is defined in ex_eval.c
+int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
+int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
+int nvim_get_reg_recorded(void) { return reg_recorded; }
+int nvim_eval_ui_current_col(void) { return (int)ui_current_col(); }
+int nvim_eval_ui_current_row(void) { return (int)ui_current_row(); }
+int nvim_eval_pum_visible(void) { return pum_visible() ? 1 : 0; }
+int nvim_eval_os_get_pid(void) { return (int)os_get_pid(); }
+void nvim_eval_get_col(typval_T *argvars, typval_T *rettv, bool charcol)
+{
+  get_col(argvars, rettv, charcol);
+}
+void nvim_eval_getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool charcol)
+{
+  getpos_both(argvars, rettv, getcurpos, charcol);
+}
+const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
 
