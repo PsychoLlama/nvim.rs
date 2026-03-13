@@ -430,6 +430,7 @@ extern "C" {
     fn rs_ptr2cells(p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utf_ptr2cells(p: *const c_char) -> c_int;
 
     // Character translation
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
@@ -440,6 +441,12 @@ extern "C" {
     // Memory management
     fn xmalloc(size: usize) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
+
+    // History management (Phase 76)
+    fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
+    fn nvim_set_msg_hist_off(val: c_int);
+    // msg() — #[export_name = "msg"] is in output_core.rs, callable via C name
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
 }
 
 // ============================================================================
@@ -799,6 +806,104 @@ pub unsafe extern "C" fn rs_msg_calc_trunc_room(str_width: c_int) -> c_int {
     } else {
         0
     }
+}
+
+// ============================================================================
+// Phase 76: msg_may_trunc and msg_trunc
+// ============================================================================
+
+/// Truncate message at the start with '<' for filename messages.
+///
+/// Checks if `s` is too long for the current message area and, if so,
+/// truncates at the start by replacing a character with '<'.
+///
+/// # Arguments
+/// * `force` - If true, force truncation even without 'shortmess' 't' flag
+/// * `s` - Mutable pointer to the message string (may be modified in-place)
+///
+/// # Returns
+/// Pointer into `s` (possibly offset) at the truncation point.
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated mutable C string
+#[export_name = "msg_may_trunc"]
+#[must_use]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
+    if nvim_ui_has_messages() != 0 {
+        return s;
+    }
+
+    let rows = nvim_get_rows();
+    let cmdline_row = nvim_get_cmdline_row();
+    let columns = nvim_get_columns();
+    let sc_col = nvim_get_sc_col();
+    let room = (rows - cmdline_row - 1) * columns + sc_col - 1;
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let len = libc_strlen(s.cast_const()) as c_int;
+    if (force || (nvim_shortmess(SHM_TRUNC) != 0 && !nvim_get_exmode_active())) && len - room > 0 {
+        let size = nvim_vim_strsize(s.cast_const());
+        if size <= room {
+            return s;
+        }
+        let mut sz = size;
+        let mut n: c_int = 0;
+        while sz >= room {
+            sz -= utf_ptr2cells(s.offset(n as isize));
+            n += utfc_ptr2len(s.offset(n as isize));
+        }
+        n -= 1;
+        let p = s.offset(n as isize);
+        #[allow(clippy::cast_possible_wrap)]
+        let lt = b'<' as c_char;
+        *p = lt;
+        return p;
+    }
+    s
+}
+
+/// Like msg(), but truncate to a single line if p_shm contains 't', or when
+/// `force` is true. Also adds the message to history.
+///
+/// # Arguments
+/// * `s` - The message string (may be modified in-place by truncation)
+/// * `force` - If true, force truncation
+/// * `hl_id` - Highlight group ID
+///
+/// # Returns
+/// Pointer to the printed message if wait_return() was not called, else NULL.
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated mutable C string
+#[export_name = "msg_trunc"]
+pub unsafe extern "C" fn rs_msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char {
+    // Add message to history before truncating.
+    nvim_msg_hist_add_str(s.cast_const(), hl_id);
+
+    let ts = rs_msg_may_trunc(force, s);
+
+    nvim_set_msg_hist_off(1);
+    let n = msg(ts.cast_const(), hl_id);
+    nvim_set_msg_hist_off(0);
+
+    if n {
+        ts
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+/// Calculate strlen of a C string (wrapper to avoid libc dep).
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated C string.
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut p = s;
+    while *p != 0 {
+        p = p.offset(1);
+    }
+    (p as usize) - (s as usize)
 }
 
 #[cfg(test)]

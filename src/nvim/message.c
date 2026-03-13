@@ -479,6 +479,9 @@ int nvim_verbose_open_impl(void)
 // Note: nvim_get_msg_silent, nvim_set_msg_silent, nvim_set_msg_scroll already defined above
 // Note: nvim_get_p_vfile_not_empty already defined (returns 1 if not empty)
 
+// Phase 76: msg_may_trunc/msg_trunc accessors
+void nvim_msg_hist_add_str(const char *s, int hl_id) { msg_hist_add(s, -1, hl_id); }
+
 
 
 void msg_grid_validate(void)
@@ -1154,59 +1157,6 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
   loop_schedule_deferred(&main_loop, event_create(msg_semsg_multiline_event, s));
 }
 
-/// Like msg(), but truncate to a single line if p_shm contains 't', or when
-/// "force" is true.  This truncates in another way as for normal messages.
-/// Careful: The string may be changed by msg_may_trunc()!
-///
-/// @return  a pointer to the printed message, if wait_return() not called.
-char *msg_trunc(char *s, bool force, int hl_id)
-{
-  // Add message to history before truncating.
-  msg_hist_add(s, -1, hl_id);
-
-  char *ts = msg_may_trunc(force, s);
-
-  msg_hist_off = true;
-  bool n = msg(ts, hl_id);
-  msg_hist_off = false;
-
-  if (n) {
-    return ts;
-  }
-  return NULL;
-}
-
-/// Check if message "s" should be truncated at the start (for filenames).
-///
-/// @return  a pointer to where the truncated message starts.
-///
-/// @note: May change the message by replacing a character with '<'.
-char *msg_may_trunc(bool force, char *s)
-{
-  if (ui_has(kUIMessages)) {
-    return s;
-  }
-
-  int room = (Rows - cmdline_row - 1) * Columns + sc_col - 1;
-  if ((force || (shortmess(SHM_TRUNC) && !exmode_active))
-      && (int)strlen(s) - room > 0) {
-    int size = vim_strsize(s);
-
-    // There may be room anyway when there are multibyte chars.
-    if (size <= room) {
-      return s;
-    }
-    int n;
-    for (n = 0; size >= room;) {
-      size -= utf_ptr2cells(s + n);
-      n += utfc_ptr2len(s + n);
-    }
-    n--;
-    s += n;
-    *s = '<';
-  }
-  return s;
-}
 
 void hl_msg_free(HlMessage hl_msg)
 {

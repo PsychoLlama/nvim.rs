@@ -82,6 +82,10 @@ void iemsg(const char *s);
 char *msg_strtrunc(const char *s, int force);
 void trunc_string(const char *s, char *buf, int room_in, int buflen);
 
+// Phase 76: Filename truncation functions migrated to Rust
+char *msg_may_trunc(bool force, char *s);
+char *msg_trunc(char *s, bool force, int hl_id);
+
 // Phase 2 (additional): Formatting functions migrated to Rust
 void msg_advance(int col);
 
