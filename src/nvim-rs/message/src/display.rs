@@ -26,9 +26,15 @@ extern "C" {
     fn nvim_ui_has_messages() -> c_int;
 
     // Display coordination
-    fn msg_check();
     fn msg_grid_validate();
     fn msg_line_flush();
+
+    // Position and display state
+    fn nvim_get_msg_col() -> c_int;
+    fn nvim_get_rows() -> c_int;
+    fn nvim_get_sc_col() -> c_int;
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_set_redraw_cmdline(val: bool);
 
     // Wait state
     fn nvim_get_did_wait_return() -> c_int;
@@ -234,10 +240,16 @@ pub unsafe extern "C" fn rs_set_need_clr_eos(val: c_int) {
 /// sets need_wait_return and schedules a redraw.
 ///
 /// # Safety
-/// Calls C function that may modify global state.
-#[no_mangle]
+/// Calls C accessor functions that read and modify global state.
+#[export_name = "msg_check"]
 pub unsafe extern "C" fn rs_msg_check() {
-    msg_check();
+    if nvim_ui_has_messages() != 0 {
+        return;
+    }
+    if nvim_get_msg_row() == nvim_get_rows() - 1 && nvim_get_msg_col() >= nvim_get_sc_col() {
+        nvim_set_need_wait_return(1);
+        nvim_set_redraw_cmdline(true);
+    }
 }
 
 /// Validate the message grid for output.

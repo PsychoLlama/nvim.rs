@@ -23,12 +23,14 @@ extern "C" {
     fn msg_ui_flush();
     fn msg_scroll_flush();
 
+    // For msg_clr_cmdline
+    fn nvim_get_cmdline_row() -> c_int;
+    fn nvim_set_msg_row(val: c_int);
+    fn nvim_set_msg_col(val: c_int);
+    fn msg_clr_eos_force();
+
     // Cursor positioning
     fn msg_cursor_goto(row: c_int, col: c_int);
-
-    // Command line clearing
-    fn msg_clr_cmdline();
-    fn msg_clr_eos_force();
 
     // State accessors
     fn nvim_get_msg_silent() -> c_int;
@@ -214,10 +216,12 @@ pub unsafe extern "C" fn rs_msg_cursor_goto(row: c_int, col: c_int) {
 /// Clear the command line area.
 ///
 /// # Safety
-/// Calls C function that modifies display state.
-#[no_mangle]
+/// Calls C accessor functions that modify display state.
+#[export_name = "msg_clr_cmdline"]
 pub unsafe extern "C" fn rs_msg_clr_cmdline() {
-    msg_clr_cmdline();
+    nvim_set_msg_row(nvim_get_cmdline_row());
+    nvim_set_msg_col(0);
+    msg_clr_eos_force();
 }
 
 /// Force clear to end of screen even if not needed.

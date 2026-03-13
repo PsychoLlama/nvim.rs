@@ -95,6 +95,8 @@ void msg_sb_eol(void);
 // Phase 68: keep_msg and delay functions migrated to Rust
 void set_keep_msg(const char *s, int hl_id);
 void msg_check_for_delay(bool check_msg_scroll);
+void msg_clr_cmdline(void);
+void msg_check(void);
 
 #include "message.h.generated.h"
 

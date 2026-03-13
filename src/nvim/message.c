@@ -3200,13 +3200,6 @@ void msg_clr_eos_force(void)
   }
 }
 
-/// Clear the command line.
-void msg_clr_cmdline(void)
-{
-  msg_row = cmdline_row;
-  msg_col = 0;
-  msg_clr_eos_force();
-}
 
 /// end putting a message on the screen
 /// call wait_return() if the message does not fit in the available space
@@ -3296,18 +3289,6 @@ void msg_ext_flush_showmode(void)
   }
 }
 
-/// If the written message runs into the shown command or ruler, we have to
-/// wait for hit-return and redraw the window later.
-void msg_check(void)
-{
-  if (ui_has(kUIMessages)) {
-    return;
-  }
-  if (msg_row == Rows - 1 && msg_col >= sc_col) {
-    need_wait_return = true;
-    redraw_cmdline = true;
-  }
-}
 
 /// May write a string to the redirection file.
 ///
