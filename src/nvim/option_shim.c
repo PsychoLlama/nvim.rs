@@ -456,6 +456,10 @@ void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal 
 int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
 
+// Phase 88: undolevels accessors
+void nvim_set_p_ul(OptInt val) { p_ul = val; }
+void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
+
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
 
@@ -1469,28 +1473,6 @@ extern void rs_didset_options2(void);
 
 
 /// Process the new global 'undolevels' option value.
-const char *did_set_global_undolevels(OptInt value, OptInt old_value)
-{
-  // sync undo before 'undolevels' changes
-  // use the old value, otherwise u_sync() may not work properly
-  p_ul = old_value;
-  u_sync(true);
-  p_ul = value;
-  return NULL;
-}
-
-/// Process the new buffer local 'undolevels' option value.
-const char *did_set_buflocal_undolevels(buf_T *buf, OptInt value, OptInt old_value)
-{
-  // use the old value, otherwise u_sync() may not work properly
-  buf->b_p_ul = old_value;
-  u_sync(true);
-  buf->b_p_ul = value;
-  return NULL;
-}
-
-
-
 
 void check_redraw(uint32_t flags)
 {

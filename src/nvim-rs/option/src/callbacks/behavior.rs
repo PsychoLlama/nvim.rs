@@ -37,9 +37,10 @@ extern "C" {
     fn mf_close_file(buf: BufHandle, del_file: c_int);
     fn ml_open_files();
 
-    // Undo functions
-    fn did_set_global_undolevels(new_value: OptInt, old_value: OptInt);
-    fn did_set_buflocal_undolevels(buf: BufHandle, new_value: OptInt, old_value: OptInt);
+    // Undo state accessors (Phase 88)
+    fn nvim_set_p_ul(val: OptInt);
+    fn nvim_buf_set_b_p_ul(buf: BufHandle, val: OptInt);
+    fn nvim_u_sync(force: bool);
 
     // State accessors
     fn nvim_callback_get_p_uc() -> OptInt;
@@ -420,11 +421,15 @@ pub unsafe extern "C" fn rs_did_set_undolevels_full(args: *mut c_void) -> Callba
 
     let p_ul_addr = nvim_callback_get_p_ul_addr();
     if varp == p_ul_addr {
-        // global 'undolevels'
-        did_set_global_undolevels(new_value, old_value);
+        // global 'undolevels': sync undo before changing the value
+        nvim_set_p_ul(old_value);
+        nvim_u_sync(true);
+        nvim_set_p_ul(new_value);
     } else {
         // buffer local 'undolevels'
-        did_set_buflocal_undolevels(buf, new_value, old_value);
+        nvim_buf_set_b_p_ul(buf, old_value);
+        nvim_u_sync(true);
+        nvim_buf_set_b_p_ul(buf, new_value);
     }
     callback_ok()
 }
