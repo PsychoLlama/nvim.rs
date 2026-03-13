@@ -48,5 +48,12 @@ void init_spell_chartab(void);
 bool spell_check_window(win_T *wp);
 bool no_spell_checking(win_T *wp);
 char *spell_enc(void);
+int spell_casefold(const win_T *wp, const char *str, int len, char *buf, int buflen);
+char *spell_to_word_end(char *start, win_T *win);
+int spell_word_start(int startcol);
+void spell_expand_check_cap(colnr_T col);
+int expand_spelling(linenr_T lnum, char *pat, char ***matchp);
+const char *did_set_spell_option(void);
+const char *compile_cap_prog(synblock_T *synblock);
 
 #include "spell.h.generated.h"

@@ -14,7 +14,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::wordtree::{
     get_word_flags, traverse_tree, TreeSearchResult, WF_ALLCAP, WF_BANNED, WF_FIXCAP, WF_KEEPCAP,
@@ -1664,6 +1664,283 @@ pub unsafe extern "C" fn rs_check_word_both_trees(
 
     *result_out = result;
     result.result
+}
+
+// =============================================================================
+// Phase 1: Simple utility functions migrated from spell.c
+// =============================================================================
+
+extern "C" {
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn check_need_cap(wp: *mut c_void, lnum: i32, col: c_int) -> bool;
+    fn spell_suggest_list(
+        ga: *mut GArrayRaw,
+        word: *const c_char,
+        maxcount: c_int,
+        need_cap: bool,
+        interactive: bool,
+    );
+    fn nvim_for_all_windows_in_curtab(
+        callback: unsafe extern "C" fn(*mut c_void, *mut c_void),
+        ud: *mut c_void,
+    );
+    fn nvim_parse_spelllang(win: *mut c_void) -> *const c_char;
+    fn nvim_win_get_buffer(wp: *const c_void) -> *mut c_void;
+    fn nvim_win_get_p_spell(wp: *const c_void) -> c_int;
+    fn nvim_win_get_cursor_lnum(wp: *const c_void) -> i32;
+    fn get_cursor_line_ptr() -> *const c_char;
+    #[link_name = "curwin"]
+    static curwin_p1: *mut c_void;
+    #[link_name = "curbuf"]
+    static curbuf_p1: *mut c_void;
+    // For synblock-based accessors
+    fn nvim_synblock_get_b_p_spc(block: *const c_void) -> *const c_char;
+    fn nvim_synblock_get_b_cap_prog(block: *const c_void) -> *mut c_void;
+    fn nvim_synblock_set_b_cap_prog(block: *mut c_void, prog: *mut c_void);
+    fn vim_regcomp(s: *const c_char, flags: c_int) -> *mut c_void;
+    fn vim_regfree(prog: *mut c_void);
+    fn concat_str(a: *const c_char, b: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    /// e_invarg is a const char[] in C; take its address to get *const c_char
+    #[link_name = "e_invarg"]
+    static e_invarg_arr: [c_char; 1];
+}
+
+use crate::GArrayRaw;
+
+/// Case-fold "str[len]" into "buf[buflen]". The result is NUL terminated.
+///
+/// Uses the character definitions from the .spl file.
+/// When using a multi-byte 'encoding' the length may change.
+/// Returns FAIL (non-zero) when something went wrong, OK (0) on success.
+/// This matches the C spell_casefold() signature exactly.
+///
+/// # Safety
+/// All pointers must be valid. wp must be a valid win_T pointer.
+#[export_name = "spell_casefold"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_spell_casefold_c_compat(
+    wp: *const c_void,
+    str_: *const c_char,
+    len: c_int,
+    buf: *mut c_char,
+    buflen: c_int,
+) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = -1;
+    const NUL: u8 = 0;
+
+    if len >= buflen {
+        if buflen > 0 {
+            *(buf as *mut u8) = NUL;
+        }
+        return FAIL;
+    }
+
+    let mut outi: c_int = 0;
+    let mut p = str_;
+    let end = str_.add(len as usize);
+
+    while p < end {
+        if outi + 4 > buflen {
+            // MB_MAXBYTES == 4
+            *(buf.add(outi as usize) as *mut u8) = NUL;
+            return FAIL;
+        }
+        let mut c = mb_cptr2char_adv(std::ptr::addr_of_mut!(p));
+
+        // Exception: Greek capital sigma 0x03A3 folds to 0x03C3, except
+        // when it is the last character in a word, then it folds to 0x03C2.
+        if c == 0x03a3 || c == 0x03c2 {
+            if p >= end || !crate::rs_spell_iswordp(p, wp) {
+                c = 0x03c2;
+            } else {
+                c = 0x03c3;
+            }
+        } else {
+            c = crate::spell_tofold(c);
+        }
+
+        outi += utf_char2bytes(c, buf.add(outi as usize));
+    }
+    *(buf.add(outi as usize) as *mut u8) = NUL;
+
+    OK
+}
+
+/// Move "p" to the end of word "start".
+/// Uses the spell-checking word characters.
+///
+/// # Safety
+/// `start` and `win` must be valid pointers.
+#[export_name = "spell_to_word_end"]
+pub unsafe extern "C" fn rs_spell_to_word_end(start: *mut c_char, win: *mut c_void) -> *mut c_char {
+    let mut p = start;
+    while *(p as *const u8) != 0 && crate::rs_spell_iswordp(p, win) {
+        let step = utfc_ptr2len(p).max(1) as usize;
+        p = p.add(step);
+    }
+    p
+}
+
+/// For Insert mode completion CTRL-X s:
+/// Find start of the word in front of column "startcol".
+/// Returns the column number of the word.
+///
+/// # Safety
+/// Accesses curwin global and cursor position.
+#[export_name = "spell_word_start"]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_spell_word_start(startcol: c_int) -> c_int {
+    if crate::rs_no_spell_checking(curwin_p1) {
+        return startcol;
+    }
+
+    let line = get_cursor_line_ptr();
+    let mut p = line.add(startcol as usize);
+
+    // Find a word character before "startcol".
+    while p > line {
+        // MB_PTR_BACK: p -= utf_head_off(line, p - 1) + 1
+        let back = utf_head_off(line, p.sub(1)) + 1;
+        p = p.sub(back as usize);
+        if crate::rs_spell_iswordp_nmw(p, curwin_p1) {
+            break;
+        }
+    }
+
+    let mut col: c_int = 0;
+
+    // Go back to start of the word.
+    while p > line {
+        col = p.offset_from(line) as c_int;
+        // MB_PTR_BACK
+        let back = utf_head_off(line, p.sub(1)) + 1;
+        p = p.sub(back as usize);
+        if !crate::rs_spell_iswordp(p, curwin_p1) {
+            break;
+        }
+        col = 0;
+    }
+
+    col
+}
+
+// Global variable for spell_expand_check_cap / expand_spelling.
+// This is a static variable that mirrors the C `spell_expand_need_cap`.
+static mut SPELL_EXPAND_NEED_CAP: bool = false;
+
+/// Check if the word at the given column needs to start with a capital.
+/// Must be called before expand_spelling().
+///
+/// # Safety
+/// Accesses curwin global.
+#[export_name = "spell_expand_check_cap"]
+pub unsafe extern "C" fn rs_spell_expand_check_cap(col: c_int) {
+    SPELL_EXPAND_NEED_CAP = check_need_cap(curwin_p1, nvim_win_get_cursor_lnum(curwin_p1), col);
+}
+
+/// Get list of spelling suggestions for Insert mode completion CTRL-X s.
+/// Returns the number of matches. The matches are in matchp[], array of
+/// allocated strings.
+///
+/// # Safety
+/// All pointers must be valid.
+#[export_name = "expand_spelling"]
+pub unsafe extern "C" fn rs_expand_spelling(
+    _lnum: i32,
+    pat: *const c_char,
+    matchp: *mut *mut *mut c_char,
+) -> c_int {
+    let mut ga = GArrayRaw {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: std::ptr::null_mut(),
+    };
+    spell_suggest_list(
+        std::ptr::addr_of_mut!(ga),
+        pat,
+        100,
+        SPELL_EXPAND_NEED_CAP,
+        true,
+    );
+    *matchp = ga.ga_data as *mut *mut c_char;
+    ga.ga_len
+}
+
+/// Callback for did_set_spell_option window iteration.
+struct DidSetSpellState {
+    errmsg: *const c_char,
+    done: bool,
+}
+
+unsafe extern "C" fn did_set_spell_option_cb(wp: *mut c_void, ud: *mut c_void) {
+    let state = ud as *mut DidSetSpellState;
+    if (*state).done {
+        return; // already processed a matching window
+    }
+    if nvim_win_get_buffer(wp) == curbuf_p1 && nvim_win_get_p_spell(wp) != 0 {
+        (*state).errmsg = nvim_parse_spelllang(wp);
+        (*state).done = true;
+    }
+}
+
+/// Called when 'spell' or 'spelllang' is set.
+/// Parse the new 'spelllang' and return an error message if failed.
+///
+/// # Safety
+/// Accesses window globals.
+#[export_name = "did_set_spell_option"]
+pub unsafe extern "C" fn rs_did_set_spell_option() -> *const c_char {
+    let mut state = DidSetSpellState {
+        errmsg: std::ptr::null(),
+        done: false,
+    };
+    nvim_for_all_windows_in_curtab(
+        did_set_spell_option_cb,
+        std::ptr::addr_of_mut!(state).cast(),
+    );
+    state.errmsg
+}
+
+/// Set `synblock->b_cap_prog` to the regexp program for 'spellcapcheck'.
+/// Returns error message when failed, NULL when OK.
+///
+/// # Safety
+/// synblock must be a valid synblock_T pointer.
+#[export_name = "compile_cap_prog"]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_compile_cap_prog(synblock: *mut c_void) -> *const c_char {
+    const RE_MAGIC: c_int = 1; // matches C RE_MAGIC
+
+    let rp = nvim_synblock_get_b_cap_prog(synblock);
+    let spc = nvim_synblock_get_b_p_spc(synblock);
+
+    if spc.is_null() || *(spc as *const u8) == 0 {
+        nvim_synblock_set_b_cap_prog(synblock, std::ptr::null_mut());
+    } else {
+        // Prepend "^" so we only match at one column
+        let re = concat_str(c"^".as_ptr(), spc);
+        let new_prog = vim_regcomp(re, RE_MAGIC);
+        xfree(re as *mut c_void);
+        if new_prog.is_null() {
+            nvim_synblock_set_b_cap_prog(synblock, rp);
+            return e_invarg_arr.as_ptr();
+        }
+        nvim_synblock_set_b_cap_prog(synblock, new_prog);
+    }
+
+    vim_regfree(rp);
+    std::ptr::null()
 }
 
 // =============================================================================

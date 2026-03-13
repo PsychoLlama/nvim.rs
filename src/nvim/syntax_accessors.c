@@ -2671,3 +2671,12 @@ int nvim_synblock_cluster_append_inner(void)
   CLEAR_POINTER(scp);
   return len;
 }
+
+/// Get synblock->b_p_spc (spellcapcheck option string).
+const char *nvim_synblock_get_b_p_spc(synblock_T *block) { return block->b_p_spc; }
+
+/// Get synblock->b_cap_prog (compiled regexp for 'spellcapcheck').
+regprog_T *nvim_synblock_get_b_cap_prog(synblock_T *block) { return block->b_cap_prog; }
+
+/// Set synblock->b_cap_prog.
+void nvim_synblock_set_b_cap_prog(synblock_T *block, regprog_T *prog) { block->b_cap_prog = prog; }

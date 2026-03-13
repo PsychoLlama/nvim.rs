@@ -1977,13 +1977,6 @@ pub struct SalitemT {
 
 extern "C" {
     // C spell functions needed by soundfold
-    fn spell_casefold(
-        wp: *const c_void,
-        str_: *const c_char,
-        len: c_int,
-        buf: *mut c_char,
-        buflen: c_int,
-    ) -> c_int;
     fn xstrdup(str_: *const c_char) -> *mut c_char;
     fn rs_ascii_isdigit(c: c_int) -> c_int;
     fn rs_ascii_iswhite(c: c_int) -> c_int;
@@ -2428,7 +2421,7 @@ pub unsafe extern "C" fn rs_spell_soundfold(
         let word: *const c_char = if folded {
             inword
         } else {
-            spell_casefold(
+            crate::check::rs_spell_casefold_c_compat(
                 curwin_global,
                 inword,
                 strlen(inword) as c_int,
