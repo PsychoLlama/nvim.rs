@@ -64,6 +64,7 @@ extern "C" {
     fn buf_hide(buf: BufHandle) -> c_int;
 
     /// Check if window is an aucmd_win.
+    #[link_name = "is_aucmd_win"]
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
 
     /// Check cmdwin_type global.

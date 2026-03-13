@@ -328,15 +328,15 @@ pub unsafe extern "C" fn rs_trigger_cursorhold() -> c_int {
 ///
 /// # Safety
 /// The `win` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_is_aucmd_win(win: WinHandle) -> c_int {
+#[export_name = "is_aucmd_win"]
+pub unsafe extern "C" fn rs_is_aucmd_win(win: WinHandle) -> bool {
     let count = nvim_get_aucmd_win_count();
     for i in 0..count {
         if nvim_aucmd_win_used(i) != 0 && nvim_aucmd_win_get_win(i) == win {
-            return 1;
+            return true;
         }
     }
-    0
+    false
 }
 
 /// Returns the length of the first pattern in a comma-separated pattern list.
@@ -430,10 +430,10 @@ pub unsafe extern "C" fn rs_aucmd_next_pattern(pat: *const c_char, patlen: usize
 ///
 /// # Safety
 /// `pat` must be a valid pointer to at least `patlen` bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int) -> c_int {
+#[export_name = "aupat_is_buflocal"]
+pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int) -> bool {
     if pat.is_null() || patlen < 8 {
-        return 0;
+        return false;
     }
 
     let patlen = patlen as usize;
@@ -445,16 +445,16 @@ pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int)
         // Case-insensitive comparison for 'b', 'u', 'f', 'e', 'r'
         if i == 0 {
             if c != b'<' {
-                return 0;
+                return false;
             }
         } else if c.to_ascii_lowercase() != expected {
-            return 0;
+            return false;
         }
     }
 
     // Check ends with ">"
     let last = *pat.add(patlen - 1) as u8;
-    c_int::from(last == b'>')
+    last == b'>'
 }
 
 /// Get the buffer number from a buffer-local pattern.
@@ -798,10 +798,10 @@ fn is_ascii_white(c: u8) -> bool {
 ///
 /// # Safety
 /// `event` must be a valid NUL-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_autocmd_supported(event: *const c_char) -> c_int {
+#[export_name = "autocmd_supported"]
+pub unsafe extern "C" fn rs_autocmd_supported(event: *const c_char) -> bool {
     if event.is_null() {
-        return 0;
+        return false;
     }
 
     // Find the length of the event name (up to NUL, whitespace, comma, or pipe)
@@ -815,7 +815,7 @@ pub unsafe extern "C" fn rs_autocmd_supported(event: *const c_char) -> c_int {
     }
 
     let result = nvim_event_name2nr(event, len);
-    c_int::from(result != NUM_EVENTS)
+    result != NUM_EVENTS
 }
 
 // =============================================================================
@@ -869,7 +869,7 @@ pub unsafe extern "C" fn rs_au_show_for_event(group: c_int, event: c_int, pat: *
         }
 
         // detect special <buffer[=X]> buffer-local patterns
-        if rs_aupat_is_buflocal(pat, patlen) != 0 {
+        if rs_aupat_is_buflocal(pat, patlen) {
             let buflocal_nr = rs_aupat_get_buflocal_nr(pat, patlen);
             rs_aupat_normalize_buflocal_pat(
                 buflocal_pat.as_mut_ptr().cast(),
@@ -1418,7 +1418,7 @@ pub unsafe extern "C" fn rs_do_all_autocmd_events(
 ///
 /// # Safety
 /// `pat` and `cmd` must be valid NUL-terminated C strings.
-#[no_mangle]
+#[export_name = "do_autocmd_event"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_do_autocmd_event(
     event: c_int,
@@ -1450,7 +1450,7 @@ pub unsafe extern "C" fn rs_do_autocmd_event(
 
     while patlen != 0 {
         // Detect special <buffer[=X]> buffer-local patterns
-        if rs_aupat_is_buflocal(pat, patlen) != 0 {
+        if rs_aupat_is_buflocal(pat, patlen) {
             let buflocal_nr = rs_aupat_get_buflocal_nr(pat, patlen);
             rs_aupat_normalize_buflocal_pat(
                 buflocal_pat.as_mut_ptr().cast(),
@@ -1763,30 +1763,30 @@ mod tests {
         unsafe {
             // Valid buffer-local patterns
             let buf = CString::new("<buffer>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(buf.as_ptr(), 8), 1);
+            assert!(rs_aupat_is_buflocal(buf.as_ptr(), 8));
 
             let buf_eq = CString::new("<buffer=1>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(buf_eq.as_ptr(), 10), 1);
+            assert!(rs_aupat_is_buflocal(buf_eq.as_ptr(), 10));
 
             let buf_abuf = CString::new("<buffer=abuf>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(buf_abuf.as_ptr(), 13), 1);
+            assert!(rs_aupat_is_buflocal(buf_abuf.as_ptr(), 13));
 
             // Case insensitive
             let buf_upper = CString::new("<BUFFER>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(buf_upper.as_ptr(), 8), 1);
+            assert!(rs_aupat_is_buflocal(buf_upper.as_ptr(), 8));
 
             // Invalid patterns
             let short = CString::new("<buf>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(short.as_ptr(), 5), 0);
+            assert!(!rs_aupat_is_buflocal(short.as_ptr(), 5));
 
             let no_end = CString::new("<buffer").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(no_end.as_ptr(), 7), 0);
+            assert!(!rs_aupat_is_buflocal(no_end.as_ptr(), 7));
 
             let wrong_start = CString::new("buffer>").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(wrong_start.as_ptr(), 7), 0);
+            assert!(!rs_aupat_is_buflocal(wrong_start.as_ptr(), 7));
 
             let normal = CString::new("*.c").unwrap();
-            assert_eq!(rs_aupat_is_buflocal(normal.as_ptr(), 3), 0);
+            assert!(!rs_aupat_is_buflocal(normal.as_ptr(), 3));
         }
     }
 
@@ -1820,8 +1820,8 @@ mod tests {
     #[test]
     fn test_aupat_is_buflocal_null() {
         unsafe {
-            // Null pointer should return 0
-            assert_eq!(rs_aupat_is_buflocal(std::ptr::null(), 8), 0);
+            // Null pointer should return false
+            assert!(!rs_aupat_is_buflocal(std::ptr::null(), 8));
         }
     }
 

@@ -317,6 +317,7 @@ extern "C" {
 
     // Autocmd functions (from nvim-autocmd crate)
     /// Check if window is an aucmd_win.
+    #[link_name = "is_aucmd_win"]
     fn rs_is_aucmd_win(win: WinHandle) -> c_int;
 }
 

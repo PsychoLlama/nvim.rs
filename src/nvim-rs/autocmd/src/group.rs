@@ -497,9 +497,9 @@ pub unsafe extern "C" fn rs_augroup_name(mut group: c_int) -> *const c_char {
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_augroup_exists(name: *const c_char) -> c_int {
-    c_int::from(rs_augroup_find(name) > 0)
+#[export_name = "augroup_exists"]
+pub unsafe extern "C" fn rs_augroup_exists(name: *const c_char) -> bool {
+    rs_augroup_find(name) > 0
 }
 
 // =============================================================================

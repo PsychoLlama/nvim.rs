@@ -78,12 +78,8 @@ extern win_T *rs_win_find_by_handle(int handle);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust functions still needed by remaining C wrappers/code
-extern int rs_aupat_is_buflocal(const char *pat, int patlen);
+// Rust functions still needed by remaining C code
 extern const char *rs_event_nr2name(int event, int num_events);
-extern int rs_is_aucmd_win(win_T *win);
-extern int rs_autocmd_supported(const char *event);
-extern int rs_augroup_exists(const char *name);
 extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
 extern void rs_aubuflocal_remove(int bufnr);
 
@@ -93,14 +89,9 @@ typedef struct {
   const char *end_ptr;
 } EventNameResult;
 extern EventNameResult rs_event_name2nr(const char *start);
-extern int rs_event_ignored(int event, const char *ei);
 
 // Phase 5: :augroup command + arg parsing
 extern int rs_arg_augroup_get(const char **argp);
-
-// Phase 7: :autocmd command + registration
-extern int rs_do_autocmd_event(int event, const char *pat, bool once, int nested,
-                               const char *cmd, bool del, int group);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -272,14 +263,6 @@ void augroup_del(char *name, bool stupid_legacy_mode)
   au_cleanup();
 }
 
-/// Return true if augroup "name" exists.
-///
-/// @param name augroup name
-bool augroup_exists(const char *name)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_augroup_exists(name) != 0;
-}
 
 #if defined(EXITFREE)
 void free_all_autocmds(void)
@@ -309,11 +292,6 @@ void free_all_autocmds(void)
 }
 #endif
 
-/// Return true if "win" is an active entry in aucmd_win[].
-bool is_aucmd_win(win_T *win)
-{
-  return rs_is_aucmd_win(win) != 0;
-}
 
 /// Return the event number for event name "start".
 /// Return NUM_EVENTS if the event name was not found.
@@ -336,14 +314,6 @@ const char *event_nr2name(event_T event)
   return rs_event_nr2name((int)event, NUM_EVENTS);
 }
 
-/// Return true if "event" is included in 'eventignore(win)'.
-///
-/// @param event event to check
-bool event_ignored(event_T event, char *ei)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_event_ignored((int)event, ei) != 0;
-}
 
 // Implements :autocmd.
 // Defines an autocmd (does not execute; cf. apply_autocmds_group).
@@ -384,12 +354,6 @@ bool event_ignored(event_T event, char *ei)
 // If *cmd == NUL: show entries.
 // If forceit == true: delete entries.
 // If group is not AUGROUP_ALL: only use this group.
-int do_autocmd_event(event_T event, const char *pat, bool once, int nested, const char *cmd,
-                     bool del, int group)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_do_autocmd_event((int)event, pat, once, nested, cmd, del, group);
-}
 
 /// Registers an autocmd. The handler may be a Ex command or callback function, decided by
 /// the `handler_cmd` or `handler_fn` args.
@@ -1496,23 +1460,6 @@ char *get_event_name_no_group(expand_T *xp FUNC_ATTR_UNUSED, int idx, bool win)
   return NULL;
 }
 
-/// Check whether given autocommand is supported
-///
-/// @param[in]  event  Event to check.
-///
-/// @return True if it is, false otherwise.
-bool autocmd_supported(const char *const event)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_autocmd_supported(event) != 0;
-}
-
-// Checks if a pattern is buflocal
-bool aupat_is_buflocal(const char *pat, int patlen)
-  FUNC_ATTR_PURE
-{
-  return rs_aupat_is_buflocal(pat, patlen) != 0;
-}
 
 /// Deletes an autocmd by ID.
 /// Only autocmds created via the API have IDs associated with them. There

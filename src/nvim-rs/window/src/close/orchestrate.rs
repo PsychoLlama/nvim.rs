@@ -34,6 +34,7 @@ extern "C" {
     fn nvim_buf_valid_ptr(buf: BufHandle) -> c_int;
 
     // --- Existing Rust FFI helpers ---
+    #[link_name = "is_aucmd_win"]
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;

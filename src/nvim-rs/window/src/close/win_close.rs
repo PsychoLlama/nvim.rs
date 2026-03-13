@@ -43,6 +43,7 @@ extern "C" {
 
     // --- Existing Rust FFI helpers ---
     fn rs_last_window(win: WinHandle) -> c_int;
+    #[link_name = "is_aucmd_win"]
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;

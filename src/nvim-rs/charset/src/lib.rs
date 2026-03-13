@@ -1270,11 +1270,11 @@ use std::ffi::c_long;
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a C string.
 /// - `nr` must be a valid pointer to an isize value.
-#[no_mangle]
-pub unsafe extern "C" fn rs_try_getdigits(pp: *mut *mut c_char, nr: *mut isize) -> c_int {
+#[export_name = "try_getdigits"]
+pub unsafe extern "C" fn rs_try_getdigits(pp: *mut *mut c_char, nr: *mut isize) -> bool {
     if pp.is_null() || (*pp).is_null() || nr.is_null() {
         *nr = 0;
-        return 1; // strtoimax returns success even with null input
+        return true; // strtoimax returns success even with null input
     }
 
     let s = *pp;
@@ -1296,7 +1296,7 @@ pub unsafe extern "C" fn rs_try_getdigits(pp: *mut *mut c_char, nr: *mut isize) 
     if !(*p >= b'0' && *p <= b'9') {
         // No valid conversion, return 0, don't advance pointer
         *nr = 0;
-        return 1; // success (no overflow, just no conversion)
+        return true; // success (no overflow, just no conversion)
     }
 
     // Parse digits
@@ -1335,29 +1335,29 @@ pub unsafe extern "C" fn rs_try_getdigits(pp: *mut *mut c_char, nr: *mut isize) 
 
     if overflow {
         *nr = if negative { isize::MIN } else { isize::MAX };
-        return 0; // false - overflow occurred
+        return false; // overflow occurred
     }
 
     *nr = result;
     *pp = p as *mut c_char;
-    1 // success
+    true // success
 }
 
 /// Gets a number from a string and skips over it.
 ///
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_getdigits(pp: *mut *mut c_char, strict: c_int, def: isize) -> isize {
+#[export_name = "getdigits"]
+pub unsafe extern "C" fn rs_getdigits(pp: *mut *mut c_char, strict: bool, def: isize) -> isize {
     let mut number: isize = 0;
     let ok = rs_try_getdigits(pp, std::ptr::addr_of_mut!(number));
 
-    if strict != 0 && ok == 0 {
+    if strict && !ok {
         // In strict mode, abort on overflow
         std::process::abort();
     }
 
-    if ok != 0 {
+    if ok {
         number
     } else {
         def
@@ -1368,19 +1368,15 @@ pub unsafe extern "C" fn rs_getdigits(pp: *mut *mut c_char, strict: c_int, def: 
 ///
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_getdigits_int(
-    pp: *mut *mut c_char,
-    strict: c_int,
-    def: c_int,
-) -> c_int {
+#[export_name = "getdigits_int"]
+pub unsafe extern "C" fn rs_getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
     let number = rs_getdigits(pp, strict, def as isize);
 
     // Check bounds
     if i32::try_from(number).is_ok() {
         number as c_int
     } else {
-        if strict != 0 {
+        if strict {
             std::process::abort();
         }
         def
@@ -1391,10 +1387,10 @@ pub unsafe extern "C" fn rs_getdigits_int(
 ///
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a C string.
-#[no_mangle]
+#[export_name = "getdigits_long"]
 pub unsafe extern "C" fn rs_getdigits_long(
     pp: *mut *mut c_char,
-    strict: c_int,
+    strict: bool,
     def: c_long,
 ) -> c_long {
     let number = rs_getdigits(pp, strict, def as isize);
@@ -1411,7 +1407,7 @@ pub unsafe extern "C" fn rs_getdigits_long(
         if number >= c_long::MIN as isize && number <= c_long::MAX as isize {
             number as c_long
         } else {
-            if strict != 0 {
+            if strict {
                 std::process::abort();
             }
             def
@@ -1423,14 +1419,14 @@ pub unsafe extern "C" fn rs_getdigits_long(
 ///
 /// # Safety
 /// - `pp` must be a valid pointer to a pointer to a C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_getdigits_int32(pp: *mut *mut c_char, strict: c_int, def: i32) -> i32 {
+#[export_name = "getdigits_int32"]
+pub unsafe extern "C" fn rs_getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32 {
     let number = rs_getdigits(pp, strict, def as isize);
 
     if i32::try_from(number).is_ok() {
         number as i32
     } else {
-        if strict != 0 {
+        if strict {
             std::process::abort();
         }
         def
@@ -1939,8 +1935,8 @@ pub unsafe extern "C" fn rs_parse_isopt(
             let mut p_mut = p.cast_mut();
             c = rs_getdigits_int(
                 std::ptr::addr_of_mut!(p_mut),
-                1, // strict
-                0, // def
+                true, // strict
+                0,    // def
             );
             p = p_mut;
         } else {
@@ -1957,8 +1953,8 @@ pub unsafe extern "C" fn rs_parse_isopt(
                 let mut p_mut = p.cast_mut();
                 c2 = rs_getdigits_int(
                     std::ptr::addr_of_mut!(p_mut),
-                    1, // strict
-                    0, // def
+                    true, // strict
+                    0,    // def
                 );
                 p = p_mut;
             } else {
@@ -2073,9 +2069,11 @@ pub unsafe extern "C" fn rs_parse_isopt(
 ///
 /// # Safety
 /// - `var` must be a valid pointer to a null-terminated string
-#[no_mangle]
+#[export_name = "check_isopt"]
 pub unsafe extern "C" fn rs_check_isopt(var: *const c_char) -> c_int {
-    rs_parse_isopt(var, std::ptr::null_mut(), true)
+    // rs_parse_isopt returns 0 on success (like errno), but check_isopt returns OK=1 on success
+    let result = rs_parse_isopt(var, std::ptr::null_mut(), true);
+    i32::from(result == 0) // OK=1 on success, FAIL=0 on error
 }
 
 /// Initialize buffer chartab from options.
@@ -3237,7 +3235,7 @@ mod tests {
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
             let mut nr: isize = 0;
             let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
-            assert_eq!(ok, 1);
+            assert!(ok);
             assert_eq!(nr, 123);
             assert_eq!(*ptr, b'a' as c_char);
 
@@ -3247,7 +3245,7 @@ mod tests {
             let start = ptr;
             let mut nr: isize = 999;
             let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
-            assert_eq!(ok, 1); // success (no overflow)
+            assert!(ok); // success (no overflow)
             assert_eq!(nr, 0); // returns 0 when no conversion
             assert_eq!(ptr, start); // pointer unchanged
 
@@ -3256,7 +3254,7 @@ mod tests {
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
             let mut nr: isize = 0;
             let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
-            assert_eq!(ok, 1);
+            assert!(ok);
             assert_eq!(nr, -456);
             assert_eq!(*ptr, b'x' as c_char);
 
@@ -3265,7 +3263,7 @@ mod tests {
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
             let mut nr: isize = 0;
             let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
-            assert_eq!(ok, 1);
+            assert!(ok);
             assert_eq!(nr, 999);
             assert_eq!(*ptr, 0);
         }
@@ -3277,14 +3275,14 @@ mod tests {
             // Simple number
             let mut s = *b"42rest\0";
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, 42);
             assert_eq!(*ptr, b'r' as c_char);
 
             // No digits - returns the parsed 0 (not the default)
             let mut s = *b"abc\0";
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), 0, 99);
+            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), false, 99);
             // strtoimax returns 0 when no digits, this is success so result is 0
             assert_eq!(result, 0);
         }
@@ -3296,14 +3294,14 @@ mod tests {
             // Simple number
             let mut s = *b"100xyz\0";
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, 100);
             assert_eq!(*ptr, b'x' as c_char);
 
             // Negative number
             let mut s = *b"-50xyz\0";
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, -50);
             assert_eq!(*ptr, b'x' as c_char);
         }
@@ -3315,7 +3313,7 @@ mod tests {
             // Simple number
             let mut s = *b"1000000\0";
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits_long(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits_long(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, 1_000_000);
             assert_eq!(*ptr, 0);
         }
@@ -3327,13 +3325,13 @@ mod tests {
             // Simple number
             let mut s = *b"2147483647\0"; // i32::MAX
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, i32::MAX);
 
             // Negative number
             let mut s = *b"-2147483648\0"; // i32::MIN
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
-            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), 0, 0);
+            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), false, 0);
             assert_eq!(result, i32::MIN);
         }
     }

@@ -17,7 +17,8 @@ extern "C" {
     fn rs_skipwhite(p: *const c_char) -> *const c_char;
 
     /// Get an integer from a string, advancing the pointer.
-    fn rs_getdigits_int(pp: *mut *mut c_char, strict: c_int, def: c_int) -> c_int;
+    #[link_name = "getdigits_int"]
+    fn rs_getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
 }
 
 // External Rust functions from this crate
@@ -146,7 +147,7 @@ pub unsafe extern "C" fn rs_putdigraph(
         }
 
         // Parse the result number
-        let n = unsafe { rs_getdigits_int(std::ptr::addr_of_mut!(p), 1, 0) };
+        let n = unsafe { rs_getdigits_int(std::ptr::addr_of_mut!(p), true, 0) };
 
         // Register the digraph
         unsafe { rs_registerdigraph(c_int::from(char1), c_int::from(char2), n) };

@@ -41,13 +41,7 @@ extern void rs_transchar_buf(char *buf, int c, bool chartab_initialized, bool us
 extern void rs_transchar_byte_buf(char *buf, int c, bool chartab_initialized, bool use_uhex, int fileformat);
 extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
                              int (*tolower_fn)(int));
-extern int rs_check_isopt(const char *var);
 extern int rs_buf_init_chartab(buf_T *buf, bool global);
-extern int rs_try_getdigits(char **pp, intptr_t *nr);
-extern intptr_t rs_getdigits(char **pp, int strict, intptr_t def);
-extern int rs_getdigits_int(char **pp, int strict, int def);
-extern long rs_getdigits_long(char **pp, int strict, long def);
-extern int32_t rs_getdigits_int32(char **pp, int strict, int32_t def);
 
 static bool chartab_initialized = false;
 
@@ -199,14 +193,6 @@ int buf_init_chartab(buf_T *buf, bool global)
   return FAIL;
 }
 
-/// Checks the format for the option settings 'iskeyword', 'isident', 'isfname'
-/// or 'isprint'.
-/// Returns FAIL if has an error, OK otherwise.
-int check_isopt(char *var)
-{
-  return rs_check_isopt(var) == 0 ? OK : FAIL;
-}
-
 /// Copy string and replace special characters with printable characters
 ///
 /// Works like `strtrans()` does, used for that and in some other places.
@@ -325,52 +311,4 @@ void transchar_nonprint(const buf_T *buf, char *charbuf, int c)
   rs_transchar_nonprint(charbuf, c, use_uhex, fileformat);
 }
 
-/// Gets a number from a string and skips over it, signalling overflow.
-///
-/// @param[out]  pp  A pointer to a pointer to char.
-///                  It will be advanced past the read number.
-/// @param[out]  nr  Number read from the string.
-///
-/// @return true on success, false on error/overflow
-bool try_getdigits(char **pp, intmax_t *nr)
-{
-  return rs_try_getdigits(pp, (intptr_t *)nr) != 0;
-}
-
-/// Gets a number from a string and skips over it.
-///
-/// @param[out]  pp  Pointer to a pointer to char.
-///                  It will be advanced past the read number.
-/// @param strict    Abort on overflow.
-/// @param def       Default value, if parsing fails or overflow occurs.
-///
-/// @return Number read from the string, or `def` on parse failure or overflow.
-intmax_t getdigits(char **pp, bool strict, intmax_t def)
-{
-  return rs_getdigits(pp, strict ? 1 : 0, def);
-}
-
-/// Gets an int number from a string.
-///
-/// @see getdigits
-int getdigits_int(char **pp, bool strict, int def)
-{
-  return rs_getdigits_int(pp, strict ? 1 : 0, def);
-}
-
-/// Gets a long number from a string.
-///
-/// @see getdigits
-long getdigits_long(char **pp, bool strict, long def)
-{
-  return rs_getdigits_long(pp, strict ? 1 : 0, def);
-}
-
-/// Gets a int32_t number from a string.
-///
-/// @see getdigits
-int32_t getdigits_int32(char **pp, bool strict, int32_t def)
-{
-  return rs_getdigits_int32(pp, strict ? 1 : 0, def);
-}
 

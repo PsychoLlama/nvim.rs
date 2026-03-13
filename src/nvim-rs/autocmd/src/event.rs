@@ -1052,8 +1052,8 @@ pub unsafe extern "C" fn rs_event_name2nr_str(data: *const c_char, size: usize) 
 ///
 /// # Safety
 /// `ei` must be a valid NUL-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_event_ignored(event: c_int, ei: *const c_char) -> c_int {
+#[export_name = "event_ignored"]
+pub unsafe extern "C" fn rs_event_ignored(event: c_int, ei: *const c_char) -> bool {
     let p_ei = nvim_get_p_ei();
     let mut p = ei;
     let mut ignored = false;
@@ -1083,14 +1083,14 @@ pub unsafe extern "C" fn rs_event_ignored(event: c_int, ei: *const c_char) -> c_
             p = result.end_ptr;
             if result.event == event {
                 if unignore {
-                    return 0;
+                    return false;
                 }
                 ignored = true;
             }
         }
     }
 
-    c_int::from(ignored)
+    ignored
 }
 
 /// Validate the contents of 'eventignore' or 'eventignorewin'.

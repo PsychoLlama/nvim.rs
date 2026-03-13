@@ -102,3 +102,10 @@ int is_autocmd_blocked(void);
 int trigger_cursorhold(void);
 int has_cursorhold(void);
 void do_autocmd_focusgained(bool gained);
+bool augroup_exists(const char *name);
+bool is_aucmd_win(win_T *win);
+bool event_ignored(event_T event, char *ei);
+int do_autocmd_event(event_T event, const char *pat, bool once, int nested, const char *cmd,
+                     bool del, int group);
+bool autocmd_supported(const char *event);
+bool aupat_is_buflocal(const char *pat, int patlen);

@@ -76,6 +76,12 @@ extern bool vim_isfilec(int c);
 extern bool vim_is_fname_char(int c);
 extern bool vim_isfilec_or_wc(int c);
 extern bool vim_isprintc(int c);
+extern int check_isopt(char *var);
+extern bool try_getdigits(char **pp, intmax_t *nr);
+extern intmax_t getdigits(char **pp, bool strict, intmax_t def);
+extern int getdigits_int(char **pp, bool strict, int def);
+extern long getdigits_long(char **pp, bool strict, long def);
+extern int32_t getdigits_int32(char **pp, bool strict, int32_t def);
 
 #include "charset.h.generated.h"
 #include "charset.h.inline.generated.h"

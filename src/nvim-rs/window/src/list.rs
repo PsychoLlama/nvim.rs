@@ -56,6 +56,7 @@ extern "C" {
     fn rs_bt_help(buf: BufHandle) -> c_int;
 
     /// Check if window is an aucmd_win.
+    #[link_name = "is_aucmd_win"]
     fn rs_is_aucmd_win(win: WinHandle) -> c_int;
 
     /// Get the `handle` field from a window.
