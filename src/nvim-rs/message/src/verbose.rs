@@ -7,23 +7,27 @@ use std::ffi::c_int;
 
 // C function declarations for verbose operations
 extern "C" {
-    // Verbose functions
-    fn verbose_enter();
-    fn verbose_leave();
-    fn verbose_enter_scroll();
-    fn verbose_leave_scroll();
-    fn verbose_stop();
+    // Verbose state accessors (in message.c)
+    fn nvim_verbose_enter_kind();
+    fn nvim_restore_pre_verbose_kind();
+    fn nvim_verbose_stop_impl();
+    fn nvim_verbose_open_impl() -> c_int;
+    fn nvim_get_p_vfile_not_empty() -> c_int;
+
+    // State accessors
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_set_msg_silent(val: c_int);
+    fn nvim_set_msg_scroll(val: c_int);
+    fn nvim_get_msg_row() -> c_int;
+    fn nvim_set_cmdline_row(val: c_int);
 
     // Redirection state
     fn nvim_get_redir_off() -> c_int;
     fn nvim_set_redir_off(val: c_int);
     fn nvim_get_redir_fd_not_null() -> c_int;
-    fn nvim_get_p_vfile_not_empty() -> c_int;
     fn nvim_get_redir_reg() -> c_int;
     fn nvim_get_redir_vname() -> c_int;
     fn nvim_get_capture_ga_not_null() -> c_int;
-    fn nvim_get_msg_silent() -> c_int;
-    fn nvim_set_msg_silent(val: c_int);
 }
 
 // ============================================================================
@@ -36,10 +40,16 @@ extern "C" {
 /// Must be paired with `rs_verbose_leave()`.
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that modify global state.
+#[export_name = "verbose_enter"]
 pub unsafe extern "C" fn rs_verbose_enter() {
-    verbose_enter();
+    if nvim_get_p_vfile_not_empty() != 0 {
+        let silent = nvim_get_msg_silent();
+        nvim_set_msg_silent(silent + 1);
+    }
+    // Save pre_verbose_kind if not already in verbose mode, then set verbose kind.
+    // This is done via a single C accessor to keep the pointer comparison in C.
+    nvim_verbose_enter_kind();
 }
 
 /// Leave verbose message mode.
@@ -48,10 +58,18 @@ pub unsafe extern "C" fn rs_verbose_enter() {
 /// Must be paired with `rs_verbose_enter()`.
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that modify global state.
+#[export_name = "verbose_leave"]
 pub unsafe extern "C" fn rs_verbose_leave() {
-    verbose_leave();
+    if nvim_get_p_vfile_not_empty() != 0 {
+        let silent = nvim_get_msg_silent();
+        if silent > 0 {
+            nvim_set_msg_silent(silent - 1);
+        } else {
+            nvim_set_msg_silent(0);
+        }
+    }
+    nvim_restore_pre_verbose_kind();
 }
 
 /// Enter verbose message mode with scroll.
@@ -60,10 +78,14 @@ pub unsafe extern "C" fn rs_verbose_leave() {
 /// Must be paired with `rs_verbose_leave_scroll()`.
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that modify global state.
+#[export_name = "verbose_enter_scroll"]
 pub unsafe extern "C" fn rs_verbose_enter_scroll() {
-    verbose_enter_scroll();
+    rs_verbose_enter();
+    if nvim_get_p_vfile_not_empty() == 0 {
+        // always scroll up, don't overwrite
+        nvim_set_msg_scroll(1);
+    }
 }
 
 /// Leave verbose message mode with scroll.
@@ -72,10 +94,13 @@ pub unsafe extern "C" fn rs_verbose_enter_scroll() {
 /// Must be paired with `rs_verbose_enter_scroll()`.
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that modify global state.
+#[export_name = "verbose_leave_scroll"]
 pub unsafe extern "C" fn rs_verbose_leave_scroll() {
-    verbose_leave_scroll();
+    rs_verbose_leave();
+    if nvim_get_p_vfile_not_empty() == 0 {
+        nvim_set_cmdline_row(nvim_get_msg_row());
+    }
 }
 
 /// Stop verbose file output.
@@ -84,9 +109,21 @@ pub unsafe extern "C" fn rs_verbose_leave_scroll() {
 ///
 /// # Safety
 /// Calls C function that closes file handle.
-#[no_mangle]
+#[export_name = "verbose_stop"]
 pub unsafe extern "C" fn rs_verbose_stop() {
-    verbose_stop();
+    nvim_verbose_stop_impl();
+}
+
+/// Open the verbose file ('verbosefile').
+///
+/// Returns FAIL or OK.
+///
+/// # Safety
+/// Calls C function that opens a file.
+#[export_name = "verbose_open"]
+#[must_use]
+pub unsafe extern "C" fn rs_verbose_open() -> c_int {
+    nvim_verbose_open_impl()
 }
 
 // ============================================================================

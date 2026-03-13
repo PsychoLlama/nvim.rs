@@ -436,6 +436,49 @@ int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
 void nvim_set_vim_var_warningmsg(const char *s) { set_vim_var_string(VV_WARNINGMSG, s, -1); }
 int nvim_msg_ext_kind_is_null(void) { return msg_ext_kind == NULL ? 1 : 0; }
 
+// Phase 73: forward declarations for verbose statics (defined later in this file)
+static const char *pre_verbose_kind;
+static const char *verbose_kind;
+
+// Phase 73: verbose state management accessors
+void nvim_verbose_enter_kind(void)
+{
+  if (msg_ext_kind != verbose_kind) {
+    pre_verbose_kind = msg_ext_kind;
+  }
+  msg_ext_set_kind(verbose_kind);
+}
+void nvim_restore_pre_verbose_kind(void)
+{
+  if (pre_verbose_kind != NULL) {
+    msg_ext_set_kind(pre_verbose_kind);
+    pre_verbose_kind = NULL;
+  }
+}
+int nvim_verbose_fd_is_null(void) { return verbose_fd == NULL ? 1 : 0; }
+void nvim_verbose_stop_impl(void)
+{
+  if (verbose_fd != NULL) {
+    fclose(verbose_fd);
+    verbose_fd = NULL;
+  }
+  verbose_did_open = false;
+}
+int nvim_verbose_open_impl(void)
+{
+  if (verbose_fd == NULL && !verbose_did_open) {
+    verbose_did_open = true;
+    verbose_fd = os_fopen(p_vfile, "a");
+    if (verbose_fd == NULL) {
+      semsg(_(e_notopen), p_vfile);
+      return FAIL;
+    }
+  }
+  return OK;
+}
+// Note: nvim_get_msg_silent, nvim_set_msg_silent, nvim_set_msg_scroll already defined above
+// Note: nvim_get_p_vfile_not_empty already defined (returns 1 if not empty)
+
 
 
 void msg_grid_validate(void)
@@ -3351,83 +3394,9 @@ static void redir_write(const char *const str, const ptrdiff_t maxlen)
 }
 
 // Save and restore message kind when emitting a verbose message.
+// (pre_verbose_kind and verbose_kind managed via C accessors for Rust)
 static const char *pre_verbose_kind = NULL;
 static const char *verbose_kind = "verbose";
-
-/// Before giving verbose message.
-/// Must always be called paired with verbose_leave()!
-void verbose_enter(void)
-{
-  if (*p_vfile != NUL) {
-    msg_silent++;
-  }
-  if (msg_ext_kind != verbose_kind) {
-    pre_verbose_kind = msg_ext_kind;
-  }
-  msg_ext_set_kind("verbose");
-}
-
-/// After giving verbose message.
-/// Must always be called paired with verbose_enter()!
-void verbose_leave(void)
-{
-  if (*p_vfile != NUL) {
-    if (--msg_silent < 0) {
-      msg_silent = 0;
-    }
-  }
-  if (pre_verbose_kind != NULL) {
-    msg_ext_set_kind(pre_verbose_kind);
-    pre_verbose_kind = NULL;
-  }
-}
-
-/// Like verbose_enter() and set msg_scroll when displaying the message.
-void verbose_enter_scroll(void)
-{
-  verbose_enter();
-  if (*p_vfile == NUL) {
-    // always scroll up, don't overwrite
-    msg_scroll = true;
-  }
-}
-
-/// Like verbose_leave() and set cmdline_row when displaying the message.
-void verbose_leave_scroll(void)
-{
-  verbose_leave();
-  if (*p_vfile == NUL) {
-    cmdline_row = msg_row;
-  }
-}
-
-/// Called when 'verbosefile' is set: stop writing to the file.
-void verbose_stop(void)
-{
-  if (verbose_fd != NULL) {
-    fclose(verbose_fd);
-    verbose_fd = NULL;
-  }
-  verbose_did_open = false;
-}
-
-/// Open the file 'verbosefile'.
-///
-/// @return  FAIL or OK.
-int verbose_open(void)
-{
-  if (verbose_fd == NULL && !verbose_did_open) {
-    // Only give the error message once.
-    verbose_did_open = true;
-
-    verbose_fd = os_fopen(p_vfile, "a");
-    if (verbose_fd == NULL) {
-      semsg(_(e_notopen), p_vfile);
-      return FAIL;
-    }
-  }
-  return OK;
-}
 
 
 /// Shows a warning, with optional highlighting.

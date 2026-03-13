@@ -101,6 +101,14 @@ bool messaging(void);
 bool msg_end(void);
 void give_warning(const char *message, bool hl);
 
+// Phase 73: verbose functions migrated to Rust
+void verbose_enter(void);
+void verbose_leave(void);
+void verbose_enter_scroll(void);
+void verbose_leave_scroll(void);
+void verbose_stop(void);
+int verbose_open(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong
