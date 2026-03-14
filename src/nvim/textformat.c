@@ -123,11 +123,6 @@ void *nvim_textfmt_get_curwin(void)
   return curwin;
 }
 
-/// Get fold column count for window (accessor for Rust).
-int nvim_textfmt_win_fdccol_count(void *win)
-{
-  return rs_win_fdccol_count((win_T *)win);
-}
 
 /// Get curwin->w_scwidth (sign column width, accessor for Rust).
 int nvim_textfmt_get_curwin_w_scwidth(void)

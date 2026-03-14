@@ -733,8 +733,8 @@ extern "C" {
     /// Get fdo_flags for fold options
     fn nvim_undo_get_fdo_flags() -> c_int;
 
-    /// Fold open cursor
-    fn nvim_undo_foldOpenCursor();
+    /// Fold open cursor (calls Rust rs_foldOpenCursor directly)
+    fn rs_foldOpenCursor();
 
     // ==========================================================================
     // Phase 3: u_undoredo FFI helpers
@@ -1803,7 +1803,7 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     let buf = nvim_get_curbuf();
 
     if (nvim_undo_get_fdo_flags() & K_OPT_FDO_FLAG_UNDO) != 0 && nvim_undo_get_key_typed() {
-        nvim_undo_foldOpenCursor();
+        rs_foldOpenCursor();
     }
 
     if quiet || nvim_get_global_busy() || !nvim_messaging() {

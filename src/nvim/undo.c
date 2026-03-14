@@ -1454,11 +1454,6 @@ int nvim_undo_get_fdo_flags(void)
   return fdo_flags;
 }
 
-/// Fold open cursor
-void nvim_undo_foldOpenCursor(void)
-{
-  rs_foldOpenCursor();
-}
 
 /// Check VIsual_active
 bool nvim_undo_get_visual_active(void)

@@ -41,7 +41,7 @@ extern "C" {
     fn nvim_textfmt_get_curwin() -> WinHandle;
 
     /// Get fold column count for window.
-    fn nvim_textfmt_win_fdccol_count(win: WinHandle) -> c_int;
+    fn rs_win_fdccol_count(win: WinHandle) -> c_int;
 
     /// Get curwin->w_scwidth (sign column width).
     fn nvim_textfmt_get_curwin_w_scwidth() -> c_int;
@@ -82,7 +82,7 @@ pub(crate) unsafe fn comp_textwidth_impl(ff: bool) -> c_int {
             textwidth -= 1;
         }
 
-        textwidth -= nvim_textfmt_win_fdccol_count(nvim_textfmt_get_curwin());
+        textwidth -= rs_win_fdccol_count(nvim_textfmt_get_curwin());
         textwidth -= nvim_textfmt_get_curwin_w_scwidth();
 
         if nvim_textfmt_get_curwin_w_p_nu() || nvim_textfmt_get_curwin_w_p_rnu() {
