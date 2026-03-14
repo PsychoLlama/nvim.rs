@@ -938,24 +938,61 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
       break;
 
     case SN_PREFCOND:
-      res = read_prefcond_section(fd, lp);
+      res = rs_read_prefcond_section(fd, lp);
       break;
 
     case SN_REP:
-      res = read_rep_section(fd, &lp->sl_rep, lp->sl_rep_first);
+      res = rs_read_rep_section(fd, &lp->sl_rep, lp->sl_rep_first);
       break;
 
     case SN_REPSAL:
-      res = read_rep_section(fd, &lp->sl_repsal, lp->sl_repsal_first);
+      res = rs_read_rep_section(fd, &lp->sl_repsal, lp->sl_repsal_first);
       break;
 
-    case SN_SAL:
-      res = read_sal_section(fd, lp, len);
+    case SN_SAL: {
+      uint8_t *sal_buf = xmalloc((size_t)len);
+      if (fread(sal_buf, 1, (size_t)len, fd) != (size_t)len) {
+        xfree(sal_buf);
+        res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        break;
+      }
+      res = rs_read_sal_section(sal_buf, (size_t)len, lp);
+      xfree(sal_buf);
       break;
+    }
 
-    case SN_SOFO:
-      res = read_sofo_section(fd, lp, len);
+    case SN_SOFO: {
+      lp->sl_sofo = true;
+      if (len <= 0) {
+        res = SP_FORMERROR;
+        break;
+      }
+      uint8_t *sofo_buf = xmalloc((size_t)len);
+      if (fread(sofo_buf, 1, (size_t)len, fd) != (size_t)len) {
+        xfree(sofo_buf);
+        res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        break;
+      }
+      RsSofoSection sofo_section;
+      size_t sofo_consumed;
+      res = rs_parse_sofo_section(sofo_buf, (size_t)len, &sofo_section, &sofo_consumed);
+      xfree(sofo_buf);
+      if (res == 0) {
+        if (sofo_section.from_len == 0 && sofo_section.to_len == 0) {
+          // empty, OK
+        } else if (sofo_section.from_len == 0 || sofo_section.to_len == 0) {
+          res = SP_FORMERROR;
+        } else {
+          char sofo_from[513], sofo_to[513];
+          memcpy(sofo_from, sofo_section.from, sofo_section.from_len);
+          sofo_from[sofo_section.from_len] = '\0';
+          memcpy(sofo_to, sofo_section.to, sofo_section.to_len);
+          sofo_to[sofo_section.to_len] = '\0';
+          res = rs_set_sofo(lp, sofo_from, sofo_to);
+        }
+      }
       break;
+    }
 
     case SN_MAP:
       p = read_string(fd, (size_t)len);  // <mapstr>
@@ -1004,9 +1041,17 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
       lp->sl_nocompoundsugs = true;
       break;
 
-    case SN_COMPOUND:
-      res = read_compound(fd, lp, len);
+    case SN_COMPOUND: {
+      uint8_t *cmp_buf = xmalloc((size_t)len);
+      if (fread(cmp_buf, 1, (size_t)len, fd) != (size_t)len) {
+        xfree(cmp_buf);
+        res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        break;
+      }
+      res = rs_read_compound(cmp_buf, (size_t)len, lp);
+      xfree(cmp_buf);
       break;
+    }
 
     case SN_NOBREAK:
       lp->sl_nobreak = true;
@@ -1300,92 +1345,6 @@ nextone:
       STRCPY(dotp, ".spl");
     }
   }
-}
-
-// Read SN_PREFCOND section.
-// Return SP_*ERROR flags.
-// Delegates to Rust (rs_read_prefcond_section).
-static int read_prefcond_section(FILE *fd, slang_T *lp)
-{
-  return rs_read_prefcond_section(fd, lp);
-}
-
-// Read REP or REPSAL items section from "fd": <repcount> <rep> ...
-// Return SP_*ERROR flags.
-// Delegates to Rust (rs_read_rep_section).
-static int read_rep_section(FILE *fd, garray_T *gap, int16_t *first)
-{
-  return rs_read_rep_section(fd, gap, first);
-}
-
-// Read SN_SAL section: <salflags> <salcount> <sal> ...
-// Return SP_*ERROR flags.
-// Delegates to Rust (rs_read_sal_section) which parses and applies the section.
-static int read_sal_section(FILE *fd, slang_T *slang, int len)
-{
-  uint8_t *section_buf = xmalloc((size_t)len);
-  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-  int res = rs_read_sal_section(section_buf, (size_t)len, slang);
-  xfree(section_buf);
-  return res;
-}
-
-
-// SN_SOFO: <sofofromlen> <sofofrom> <sofotolen> <sofoto>
-// Return SP_*ERROR flags.
-// Uses Rust (rs_parse_sofo_section) to parse the full SOFO section buffer.
-static int read_sofo_section(FILE *fd, slang_T *slang, int len)
-{
-  slang->sl_sofo = true;
-
-  if (len <= 0) {
-    return SP_FORMERROR;
-  }
-
-  // Read entire section into buffer and let Rust parse it.
-  uint8_t *section_buf = xmalloc((size_t)len);
-  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-
-  RsSofoSection section;
-  size_t consumed;
-  int res = rs_parse_sofo_section(section_buf, (size_t)len, &section, &consumed);
-  xfree(section_buf);
-
-  if (res != 0) {
-    return res;
-  }
-
-  // Apply results: call set_sofo() with the parsed from/to strings.
-  // Null-terminate the strings (they come from fixed-size Rust arrays).
-  char from_str[513];
-  char to_str[513];
-
-  if (section.from_len == 0 && section.to_len == 0) {
-    return 0;
-  }
-  if (section.from_len == 0 || section.to_len == 0) {
-    return SP_FORMERROR;  // only one of two strings is an error
-  }
-
-  memcpy(from_str, section.from, section.from_len);
-  from_str[section.from_len] = '\0';
-  memcpy(to_str, section.to, section.to_len);
-  to_str[section.to_len] = '\0';
-
-  return rs_set_sofo(slang, from_str, to_str);
-}
-
-// Read the compound section from the .spl file:
-//      <compmax> <compminlen> <compsylmax> <compoptions> <compflags>
-// Returns SP_*ERROR flags.
-// Delegates to Rust (rs_read_compound) which parses the entire section.
-static int read_compound(FILE *fd, slang_T *slang, int len)
-{
-  uint8_t *section_buf = xmalloc((size_t)len);
-  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-  int res = rs_read_compound(section_buf, (size_t)len, slang);
-  xfree(section_buf);
-  return res;
 }
 
 /// Reload the spell file "fname" if it's loaded.
