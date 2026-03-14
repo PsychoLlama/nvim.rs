@@ -1699,6 +1699,108 @@ pub unsafe extern "C" fn rs_read_prefcond_section(
     0 // OK
 }
 
+/// C fromto_T struct layout: two heap-allocated char* strings.
+#[repr(C)]
+struct FromtoC {
+    ft_from: *mut c_char,
+    ft_to: *mut c_char,
+}
+
+/// Read and apply a REP or REPSAL section from FILE* to a garray_T and first[] table.
+/// Replaces C read_rep_section(). Reads count, items (from/to strings), fills first table.
+///
+/// # Safety
+/// - `fd` must be a valid FILE* pointer.
+/// - `gap` must be a valid non-null pointer to a GArrayRaw (garray_T for fromto_T).
+/// - `first` must be a valid pointer to an array of at least 256 i16 values.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_rep_section(
+    fd: *mut libc::FILE,
+    gap: *mut crate::GArrayRaw,
+    first: *mut i16,
+) -> c_int {
+    // Read 2-byte count header
+    let mut cnt_buf = [0u8; 2];
+    if libc::fread(cnt_buf.as_mut_ptr().cast(), 1, 2, fd) != 2 {
+        return if libc::feof(fd) != 0 {
+            SP_TRUNCERROR
+        } else {
+            SP_OTHERERROR
+        };
+    }
+    let cnt = ((cnt_buf[0] as usize) << 8) | (cnt_buf[1] as usize);
+
+    ga_grow(gap, cnt as c_int);
+
+    while (*gap).ga_len < cnt as c_int {
+        let ftp = ((*gap).ga_data as *mut FromtoC).add((*gap).ga_len as usize);
+
+        // Read from_len
+        let from_len = libc::fgetc(fd);
+        if from_len < 0 {
+            return SP_TRUNCERROR;
+        }
+        if from_len == 0 {
+            return SP_FORMERROR;
+        }
+        let from_len = from_len as usize;
+
+        // Read from string
+        let mut from_buf = [0u8; 256];
+        if libc::fread(from_buf.as_mut_ptr().cast(), 1, from_len, fd) != from_len {
+            return if libc::feof(fd) != 0 {
+                SP_TRUNCERROR
+            } else {
+                SP_OTHERERROR
+            };
+        }
+
+        // Read to_len
+        let to_len = libc::fgetc(fd);
+        if to_len < 0 {
+            return SP_TRUNCERROR;
+        }
+        let to_len = to_len as usize;
+
+        // Read to string
+        let mut to_buf = [0u8; 256];
+        if to_len > 0 && libc::fread(to_buf.as_mut_ptr().cast(), 1, to_len, fd) != to_len {
+            return if libc::feof(fd) != 0 {
+                SP_TRUNCERROR
+            } else {
+                SP_OTHERERROR
+            };
+        }
+
+        // Allocate NUL-terminated copies (xmemdupz pattern)
+        let from_ptr = xmalloc_spell(from_len + 1).cast::<c_char>();
+        std::ptr::copy_nonoverlapping(from_buf.as_ptr().cast::<c_char>(), from_ptr, from_len);
+        *from_ptr.add(from_len) = 0;
+        (*ftp).ft_from = from_ptr;
+
+        let to_ptr = xmalloc_spell(to_len + 1).cast::<c_char>();
+        std::ptr::copy_nonoverlapping(to_buf.as_ptr().cast::<c_char>(), to_ptr, to_len);
+        *to_ptr.add(to_len) = 0;
+        (*ftp).ft_to = to_ptr;
+
+        (*gap).ga_len += 1;
+    }
+
+    // Fill first-index table
+    std::ptr::write_bytes(first, 0xFF, 256); // initialize to -1 (0xFFFF for i16)
+    for i in 0..(*gap).ga_len as usize {
+        let ftp = ((*gap).ga_data as *const FromtoC).add(i);
+        let first_byte = *(*ftp).ft_from as u8 as usize;
+        if *first.add(first_byte) == -1i16 {
+            *first.add(first_byte) = i as i16;
+        }
+    }
+    0 // OK
+}
+
 // =============================================================================
 // Suggestion File Section Parsing
 // =============================================================================

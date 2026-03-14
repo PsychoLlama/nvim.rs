@@ -472,6 +472,8 @@ extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
 extern int rs_read_sal_section(const uint8_t *buf, size_t len, slang_T *slang);
 // Phase 4: read_prefcond_section replacement
 extern int rs_read_prefcond_section(FILE *fd, slang_T *lp);
+// Phase 4: read_rep_section replacement
+extern int rs_read_rep_section(FILE *fd, garray_T *gap, int16_t *first);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1310,82 +1312,10 @@ static int read_prefcond_section(FILE *fd, slang_T *lp)
 
 // Read REP or REPSAL items section from "fd": <repcount> <rep> ...
 // Return SP_*ERROR flags.
-// Uses Rust for parsing REP item data.
+// Delegates to Rust (rs_read_rep_section).
 static int read_rep_section(FILE *fd, garray_T *gap, int16_t *first)
 {
-  // Read count header: <repcount> (2 bytes)
-  uint8_t cnt_buf[2];
-  SPELL_READ_BYTES((char *)cnt_buf, 2, fd,; );
-
-  uint16_t cnt;
-  size_t consumed;
-  int res = rs_parse_rep_count(cnt_buf, 2, &cnt, &consumed);
-  if (res != 0) {
-    return res;
-  }
-
-  ga_grow(gap, (int)cnt);
-
-  // <rep> : <repfromlen> <repfrom> <reptolen> <repto>
-  for (; gap->ga_len < (int)cnt; gap->ga_len++) {
-    fromto_T *ftp = &((fromto_T *)gap->ga_data)[gap->ga_len];
-
-    // Read item into buffer: max 1 + 255 + 1 + 255 = 512 bytes
-    uint8_t item_buf[512];
-    size_t pos = 0;
-
-    // Read from_len
-    int from_len = getc(fd);
-    if (from_len < 0) {
-      return SP_TRUNCERROR;
-    }
-    if (from_len == 0) {
-      return SP_FORMERROR;
-    }
-    item_buf[pos++] = (uint8_t)from_len;
-
-    // Read from string
-    SPELL_READ_BYTES((char *)(item_buf + pos), (size_t)from_len, fd,; );
-    pos += (size_t)from_len;
-
-    // Read to_len
-    int to_len = getc(fd);
-    if (to_len < 0) {
-      return SP_TRUNCERROR;
-    }
-    item_buf[pos++] = (uint8_t)to_len;
-
-    // Read to string
-    if (to_len > 0) {
-      SPELL_READ_BYTES((char *)(item_buf + pos), (size_t)to_len, fd,; );
-      pos += (size_t)to_len;
-    }
-
-    // Parse with Rust
-    RsFromTo rs_item;
-    res = rs_parse_rep_item(item_buf, pos, &rs_item, &consumed);
-    if (res != 0) {
-      return res;
-    }
-
-    // Allocate and copy strings
-    ftp->ft_from = xmemdupz((char *)rs_item.from, rs_item.from_len);
-    ftp->ft_to = xmemdupz((char *)rs_item.to, rs_item.to_len);
-  }
-
-  // Fill the first-index table using Rust helper.
-  // Note: We need to build RsFromTo array from the gap for Rust.
-  // For now, keep the C implementation for filling the first table.
-  for (int i = 0; i < 256; i++) {
-    first[i] = -1;
-  }
-  for (int i = 0; i < gap->ga_len; i++) {
-    fromto_T *ftp = &((fromto_T *)gap->ga_data)[i];
-    if (first[(uint8_t)(*ftp->ft_from)] == -1) {
-      first[(uint8_t)(*ftp->ft_from)] = (int16_t)i;
-    }
-  }
-  return 0;
+  return rs_read_rep_section(fd, gap, first);
 }
 
 // Read SN_SAL section: <salflags> <salcount> <sal> ...
