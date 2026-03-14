@@ -71,9 +71,6 @@ extern bool rs_marktree_itr_get_ext_full(MarkTree *b, MTPos p, MarkTreeIter *itr
 
 // Filter functions
 
-// Tree operations
-extern void rs_marktree_check(MarkTree *b);
-
 // Memory management operations
 
 // Intersection operations
@@ -273,18 +270,6 @@ MTPos nvim_rawkey_get_pos(MarkTreeIter *itr) { return rawkey(itr).pos; }
 void nvim_rawkey_add_pos_col(MarkTreeIter *itr, int delta) { rawkey(itr).pos.col += delta; }
 void nvim_rawkey_add_pos_row(MarkTreeIter *itr, int delta) { rawkey(itr).pos.row += delta; }
 
-// ============================================================================
-// Debug and Validation (for Rust FFI)
-// ============================================================================
-
-void nvim_marktree_check(MarkTree *b)
-{
-#ifndef NDEBUG
-  rs_marktree_check(b);
-#else
-  (void)b;
-#endif
-}
 
 // ============================================================================
 // MTKey Accessor Functions (for Rust sign crate)

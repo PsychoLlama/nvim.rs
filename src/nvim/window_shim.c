@@ -1648,8 +1648,6 @@ void nvim_do_autocmd_dirchanged_win(const char *new_dir, int localdir, int pre) 
 void nvim_do_autocmd_dirchanged_global(const char *new_dir, int pre) {
   do_autocmd_dirchanged(new_dir, kCdScopeGlobal, kCdCauseWindow, pre != 0);
 }
-/// get curtab.
-tabpage_T *nvim_get_curtab_ptr(void) { return curtab; }
 /// goto_tabpage_win wrapper.
 /// swb_flags & kOptSwbFlagUseopen.
 int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0; }
@@ -2703,7 +2701,6 @@ const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_sp
 const garray_T *nvim_win_get_b_langp(const win_T *wp) { return &wp->w_s->b_langp; }
 void nvim_emsg_no_spell(void) { emsg(_(e_no_spell)); }
 regprog_T *nvim_win_get_b_cap_prog(const win_T *wp) { return wp->w_s->b_cap_prog; }
-void nvim_win_set_b_cap_prog(win_T *wp, regprog_T *prog) { wp->w_s->b_cap_prog = prog; }
 
 // Runs vim_regexec with b_cap_prog against ptr. Updates b_cap_prog (may be GC'd).
 // Returns the offset of endp[0] from ptr if matched, -1 if no match.

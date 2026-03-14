@@ -802,7 +802,6 @@ void nvim_buf_set_b_orig_mode(buf_T *buf, int val) { buf->b_orig_mode = val; }
 
 // ZeroBlock field setters for set_b0_fname
 void nvim_b0_set_fname0(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
-char *nvim_b0_get_fname_for_replace(ZeroBlock *b0p) { return b0p->b0_fname; }
 // mtime/ino setters for set_b0_fname
 char *nvim_b0_get_mtime(ZeroBlock *b0p) { return b0p->b0_mtime; }
 char *nvim_b0_get_ino(ZeroBlock *b0p) { return b0p->b0_ino; }
@@ -1516,9 +1515,6 @@ unsigned nvim_b0_get_page_size_int(const ZeroBlock *b0p)
 {
   return (unsigned)rs_char_to_long(b0p->b0_page_size);
 }
-
-/// Get b0_pid as a char* pointer for rs_char_to_long / rs_swapfile_proc_running.
-const char *nvim_b0_get_pid_as_ptr(const ZeroBlock *b0p) { return b0p->b0_pid; }
 
 /// Read original file for recovery (readfile with READ_NEW flag, lnum=0, topline=0, MAXLNUM).
 int nvim_readfile_for_recovery(const char *fname)

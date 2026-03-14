@@ -2037,8 +2037,6 @@ int nvim_compl_shown_match_is_first(void) { return compl_shown_match ? (is_first
 size_t nvim_compl_shown_match_str_size(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? compl_shown_match->cp_str.size : 0; }
 int nvim_compl_shown_match_has_newline(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0; }
 int nvim_compl_curr_match_at_original_text(void) { return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0; }
-int nvim_compl_curr_match_has_str(void) { return compl_curr_match ? (compl_curr_match->cp_str.data != NULL ? 1 : 0) : 0; }
-
 // Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
 void nvim_set_ctrl_x_mode(int val) { ctrl_x_mode = val; }
 void nvim_set_compl_cont_mode(int val) { compl_cont_mode = val; }
@@ -2215,7 +2213,6 @@ void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
 // nvim_ui_has_messages: defined in message.c (int nvim_ui_has_messages(void))
 // nvim_ui_flush: defined in change_ffi.c (void nvim_ui_flush(void))
 // nvim_os_delay: defined in change_ffi.c (void nvim_os_delay(long ms, bool allow_input))
-int nvim_compl_first_match_at_orig_text(void) { return compl_first_match ? (match_at_original_text(compl_first_match) ? 1 : 0) : 0; }
 // nvim_vpeekc_any: deleted (Phase 3, Rust calls vpeekc_any directly)
 int nvim_test_disable_char_avail(void) { return test_disable_char_avail ? 1 : 0; }
 // NOTE: nvim_vim_is_ctrl_x_key deleted (Phase 15). keys.rs calls rs_vim_is_ctrl_x_key() directly.
@@ -2255,7 +2252,6 @@ int nvim_ins_compl_st_get_first_lnum(void) { return (int)ins_compl_st.first_matc
 void nvim_ins_compl_st_set_found_all(int val) { ins_compl_st.found_all = val != 0; }
 int nvim_ins_compl_st_get_found_all(void) { return ins_compl_st.found_all ? 1 : 0; }
 int nvim_ins_compl_st_e_cpt_is_nul(void) { return *ins_compl_st.e_cpt == NUL ? 1 : 0; }
-int nvim_ins_compl_st_get_set_match_pos(void) { return ins_compl_st.set_match_pos ? 1 : 0; }
 void nvim_ins_compl_st_reset_set_match_pos(void) { ins_compl_st.set_match_pos = false; }
 int nvim_ins_compl_st_buf_valid(void) { return buf_valid(ins_compl_st.ins_buf) ? 1 : 0; }
 int nvim_ins_compl_st_ins_buf_is_curbuf(void) { return ins_compl_st.ins_buf == curbuf ? 1 : 0; }
@@ -2267,7 +2263,6 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 
 // --- compl_old_match / compl_curr_match compound ops ---
 void nvim_ins_compl_set_old_match_to_curr(void) { compl_old_match = compl_curr_match; }
-int nvim_compl_old_match_is_null(void) { return compl_old_match == NULL ? 1 : 0; }
 int nvim_compl_curr_vs_old_match_changed(void) {
   return (compl_curr_match != compl_old_match) ? 1 : 0;
 }
@@ -3363,8 +3358,6 @@ buf_T *nvim_buf_get_b_next(buf_T *buf) { return buf->b_next; }
 /// Returns buf->b_scanned.
 int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
 
-/// Sets buf->b_scanned.
-void nvim_buf_set_b_scanned(buf_T *buf, int val) { buf->b_scanned = val; }
 
 /// Returns wp->w_next (next window in the window list).
 win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
@@ -3379,14 +3372,6 @@ buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }
 /// Equivalent to: searchit(NULL, buf, pos, NULL, dir, pat, patlen, 1,
 ///                         SEARCH_KEEP+SEARCH_NFMSG, RE_LAST, NULL)
 /// Returns FAIL/OK; modifies pos in place.
-int nvim_searchit_for_compl(buf_T *buf, pos_T *pos, int dir, char *pat, size_t patlen)
-{
-  return searchit(NULL, buf, pos, NULL, (Direction)dir, pat, patlen,
-                  1, SEARCH_KEEP + SEARCH_NFMSG, RE_LAST, NULL);
-}
-
-/// Returns ignorecase(pat).
-int nvim_ignorecase_pat(const char *pat) { return ignorecase(pat) ? 1 : 0; }
 
 // Phase 14 accessors for process_next_cpt_value migration (Phase 3).
 
@@ -3462,11 +3447,6 @@ const char *nvim_ins_compl_st_get_ins_buf_fname(void)
 }
 
 /// Returns ins_compl_st.ins_buf->b_sfname (may be NULL).
-const char *nvim_ins_compl_st_get_ins_buf_sfname(void)
-{
-  return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_sfname : NULL;
-}
-
 /// Emits the "Scanning: <name>" completion message for ins_compl_st.ins_buf.
 void nvim_ins_compl_st_msg_scanning(void)
 {
@@ -3508,11 +3488,6 @@ void nvim_ins_compl_st_e_cpt_inc(void)
 }
 
 /// Returns the character one past the current e_cpt position (peeks ahead).
-int nvim_ins_compl_st_get_e_cpt_next_char(void)
-{
-  return ins_compl_st.e_cpt ? (int)(unsigned char)ins_compl_st.e_cpt[1] : 0;
-}
-
 /// Sets ins_compl_st.func_cb via get_callback_if_cpt_func logic.
 /// Returns 1 if a valid callback was found, 0 if not.
 int nvim_ins_compl_st_set_func_cb_from_e_cpt(int cpt_idx)

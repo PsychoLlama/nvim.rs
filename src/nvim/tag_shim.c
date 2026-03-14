@@ -210,7 +210,6 @@ void nvim_taggy_set_tagname(void *tg_void, char *name) { taggy_T *tg = (taggy_T 
 void nvim_taggy_set_cur_match(void *tg_void, int match_idx) { taggy_T *tg = (taggy_T *)tg_void; tg->cur_match = match_idx; }
 void nvim_taggy_set_cur_fnum(void *tg_void, int fnum) { taggy_T *tg = (taggy_T *)tg_void; tg->cur_fnum = fnum; }
 void nvim_taggy_set_user_data(void *tg_void, char *data) { taggy_T *tg = (taggy_T *)tg_void; tg->user_data = data; }
-linenr_T nvim_taggy_get_fmark_lnum(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.lnum; }
 int nvim_taggy_get_fmark_col(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.mark.col; }
 int nvim_taggy_get_fmark_fnum(const void *tg_void) { const taggy_T *tg = (const taggy_T *)tg_void; return tg->fmark.fnum; }
 void nvim_taggy_set_fmark_lnum(void *tg_void, linenr_T lnum) { taggy_T *tg = (taggy_T *)tg_void; tg->fmark.mark.lnum = lnum; }
@@ -483,7 +482,6 @@ char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg
 
 void nvim_tag_xstrlcpy(char *dst, const char *src, size_t dstsize) { xstrlcpy(dst, src, dstsize); }
 void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len) { xmemcpyz(dst, src, len); }
-const char *nvim_tag_gettext(const char *s) { return _(s); }
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
 // --- Rust FFI accessor functions for VimL API and tag stack setters ---
 

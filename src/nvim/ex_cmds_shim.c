@@ -1561,9 +1561,6 @@ int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname)
   return 0;
 }
 
-/// Get p_dir (directory option string).
-const char *nvim_excmds_get_p_dir(void) { return p_dir; }
-
 /// Allocate a copy_option_part result for the first dir entry.
 /// Returns newly allocated string (caller must free). Returns "." if p_dir is empty.
 char *nvim_excmds_get_first_dir(void)

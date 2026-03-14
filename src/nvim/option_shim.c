@@ -470,9 +470,6 @@ int nvim_callback_get_starting(void) { return starting; }
 OptInt nvim_callback_get_p_titlelen(void) { return p_titlelen; }
 int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
 
-// State setters for callbacks
-void nvim_callback_set_need_maketitle(int value) { need_maketitle = value != 0; }
-
 // Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
 
@@ -898,7 +895,6 @@ int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 // Paste callback accessors (nvim_get_p_paste defined in indent_c.c,
 //   nvim_get_p_ru defined in drawscreen.c)
 int nvim_get_p_sta(void) { return p_sta; }
-void nvim_set_p_sta(int val) { p_sta = val != 0; }
 
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
@@ -1545,9 +1541,6 @@ char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); 
 void nvim_call_clear_string_option(char **ptr) { clear_string_option(ptr); }
 void nvim_call_check_string_option(char **ptr) { check_string_option(ptr); }
 
-// Return pointer to win_T.w_onebuf_opt / w_allbuf_opt for Rust.
-winopt_T *nvim_win_get_onebuf_opt(win_T *win) { return &win->w_onebuf_opt; }
-winopt_T *nvim_win_get_allbuf_opt(win_T *win) { return &win->w_allbuf_opt; }
 
 // Wrappers for didset_window_options internals.
 void nvim_call_check_colorcolumn(win_T *wp) { check_colorcolumn(NULL, wp); }
@@ -2293,12 +2286,6 @@ OptInt nvim_get_p_ss(void) { return p_ss; }
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
 // =============================================================================
 
-/// Get buf->b_p_syn (the 'syntax' option value for this buffer).
-const char *nvim_buf_get_b_p_syn(buf_T *buf)
-{
-  return buf ? buf->b_p_syn : NULL;
-}
-
 /// Set BF_SYN_SET flag in buf->b_flags.
 void nvim_buf_set_b_flags_syn_set(buf_T *buf)
 {
@@ -2707,8 +2694,6 @@ const char *nvim_get_p_vts(void) { return p_vts; }
 /// Returns p_vsts_nopaste.
 const char *nvim_get_p_vsts_nopaste(void) { return p_vsts_nopaste; }
 
-/// Returns p_fenc.
-const char *nvim_get_p_fenc(void) { return p_fenc; }
 /// Returns p_ff.
 const char *nvim_get_p_ff(void) { return p_ff; }
 /// Returns p_ffs (fileformats).

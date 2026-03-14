@@ -758,50 +758,6 @@ int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
   return mb_strcmp_ic(ic, a, b);
 }
 
-/// Get si_extmatch from a stateitem
-reg_extmatch_T *nvim_stateitem_get_extmatch(stateitem_T *item)
-{
-  if (item == NULL) {
-    return NULL;
-  }
-  return item->si_extmatch;
-}
-
-/// Bulk getter: fetch all position fields of a stateitem.
-/// Callers may pass NULL for fields they do not need.
-void nvim_stateitem_get_positions(stateitem_T *item,
-    int *m_lnum, int *m_startcol,
-    int *m_end_lnum, int *m_end_col,
-    int *h_start_lnum, int *h_start_col,
-    int *h_end_lnum, int *h_end_col,
-    int *eoe_lnum, int *eoe_col)
-{
-  if (!item) {
-    if (m_lnum) { *m_lnum = 0; }
-    if (m_startcol) { *m_startcol = 0; }
-    if (m_end_lnum) { *m_end_lnum = 0; }
-    if (m_end_col) { *m_end_col = 0; }
-    if (h_start_lnum) { *h_start_lnum = 0; }
-    if (h_start_col) { *h_start_col = 0; }
-    if (h_end_lnum) { *h_end_lnum = 0; }
-    if (h_end_col) { *h_end_col = 0; }
-    if (eoe_lnum) { *eoe_lnum = 0; }
-    if (eoe_col) { *eoe_col = 0; }
-    return;
-  }
-  if (m_lnum) { *m_lnum = item->si_m_lnum; }
-  if (m_startcol) { *m_startcol = item->si_m_startcol; }
-  if (m_end_lnum) { *m_end_lnum = (int)item->si_m_endpos.lnum; }
-  if (m_end_col) { *m_end_col = (int)item->si_m_endpos.col; }
-  if (h_start_lnum) { *h_start_lnum = (int)item->si_h_startpos.lnum; }
-  if (h_start_col) { *h_start_col = (int)item->si_h_startpos.col; }
-  if (h_end_lnum) { *h_end_lnum = (int)item->si_h_endpos.lnum; }
-  if (h_end_col) { *h_end_col = (int)item->si_h_endpos.col; }
-  if (eoe_lnum) { *eoe_lnum = (int)item->si_eoe_pos.lnum; }
-  if (eoe_col) { *eoe_col = (int)item->si_eoe_pos.col; }
-}
-
-
 void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
 void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 // nvim_syn_check_state_ends deleted: Rust bypasses via #[link_name = "rs_check_state_ends"]
@@ -1055,14 +1011,6 @@ int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
 int nvim_syn_get_running_inc_tag(void) { return running_syn_inc_tag; }
 void nvim_syn_set_running_inc_tag(int tag) { running_syn_inc_tag = tag; }
-/// Set tick on synstate
-void nvim_synstate_set_tick(synstate_T *state, int tick)
-{
-  if (state) {
-    state->sst_tick = tick;
-  }
-}
-
 /// Get a synpat offset value by pattern index and offset index.
 int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
 {
@@ -1130,7 +1078,6 @@ void nvim_syn_clear_extmatch_in(void)
 
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
 
-void nvim_syn_set_current_attr(int attr) { current_attr = attr; }
 void nvim_syn_set_current_sub_char(int c) { current_sub_char = c; }
 
 /// Set all current_* fields from a stateitem (replaces 6 individual FFI calls).
@@ -1701,11 +1648,6 @@ void nvim_syn_redraw_curbuf_later(void)
 
 int nvim_syn_get_syn_time_on(void) { return syn_time_on ? 1 : 0; }
 void nvim_syn_set_syn_time_on(int val) { syn_time_on = (val != 0); }
-
-int nvim_synpat_get_time_count(synpat_T *pat) { return pat->sp_time.count; }
-int nvim_synpat_get_time_match(synpat_T *pat) { return pat->sp_time.match; }
-uint64_t nvim_synpat_get_time_total(synpat_T *pat) { return (uint64_t)pat->sp_time.total; }
-uint64_t nvim_synpat_get_time_slowest(synpat_T *pat) { return (uint64_t)pat->sp_time.slowest; }
 
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
@@ -2406,13 +2348,6 @@ void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key)
 {
   if (!ht || idx >= (ht->ht_mask + 1)) return;
   ht->ht_array[idx].hi_key = key;
-}
-
-/// Get keyentry_T k_syn.id field (already exposed as nvim_keyentry_get_syn_id).
-/// Alias here for clarity in the Phase 1 iteration context.
-int nvim_ke_get_syn_id_int(keyentry_T *kp)
-{
-  return kp ? (int)kp->k_syn.id : 0;
 }
 
 /// Find a keyword in hashtab: wraps hash_find + HI2KE.

@@ -180,10 +180,6 @@ linenr_T nvim_qfline_get_lnum(const void *qfp_void) { return ((const qfline_T *)
 
 int nvim_qfline_get_col(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_col; }
 
-linenr_T nvim_qf_pos_get_lnum(const void *pos_void) { return ((const pos_T *)pos_void)->lnum; }
-
-int nvim_qf_pos_get_col(const void *pos_void) { return ((const pos_T *)pos_void)->col; }
-
 void *nvim_qf_get_curlist(const void *qi_void) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[((const qf_info_T *)qi_void)->qf_curlist]; }
 
 void *nvim_qf_get_list_at(const void *qi_void, int idx) { return (void *)&((const qf_info_T *)qi_void)->qf_lists[idx]; }
@@ -882,9 +878,6 @@ void nvim_tv_clear(void *tv)
 /// Get the v_type field of a typval_T (qf-specific void* version).
 int nvim_qf_tv_get_type(const void *tv) { return tv == NULL ? VAR_UNKNOWN : ((const typval_T *)tv)->v_type; }
 
-/// Get the vval.v_number field of a typval_T.
-int64_t nvim_tv_get_vval_nr(const void *tv) { return tv == NULL ? 0 : (int64_t)((const typval_T *)tv)->vval.v_number; }
-
 /// Get the dictitem's v_type.
 int nvim_di_get_type(const void *di) { return di == NULL ? VAR_UNKNOWN : ((const dictitem_T *)di)->di_tv.v_type; }
 
@@ -1244,18 +1237,6 @@ void nvim_close_buffer_wipe(void *buf_void)
   close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false);
 }
 
-/// Set wp->w_llist = NULL.
-void nvim_win_set_llist_null(void *wp_void)
-{
-  if (wp_void != NULL) { ((win_T *)wp_void)->w_llist = NULL; }
-}
-
-/// Set wp->w_llist_ref = NULL.
-void nvim_win_set_llist_ref_null(void *wp_void)
-{
-  if (wp_void != NULL) { ((win_T *)wp_void)->w_llist_ref = NULL; }
-}
-
 /// Atomically exchange wp->w_llist: set to NULL and return old value.
 void *nvim_win_take_llist(void *wp_void)
 {
@@ -1320,9 +1301,6 @@ void nvim_qf_resize_lists_array(void *qi_void, int n)
 
 /// Return wp->w_p_lhi (location history option value).
 int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
-
-/// Set *pwinp = curwin.
-void nvim_set_pwin_to_curwin(void **pwinp) { if (pwinp != NULL) *pwinp = (void *)curwin; }
 
 /// Return true if cmdidx is a location-list command.
 bool nvim_is_loclist_cmd(int cmdidx) { return is_loclist_cmd((cmdidx_T)cmdidx); }
@@ -2480,8 +2458,6 @@ const char *nvim_get_p_ef(void) { return p_ef; }
 // curbuf option accessors
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
-const char *nvim_curbuf_get_b_fname(void) { return curbuf->b_fname; }
-
 // Shell/message helpers
 void nvim_append_redir(char *buf, size_t buflen, const char *opt, const char *name) { append_redir(buf, buflen, opt, name); }
 void nvim_msg_puts_colon_bang(void) { msg_puts(":!"); }
@@ -3227,14 +3203,6 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
 
 // nvim_qf_get_ql_info: use existing nvim_get_ql_info instead (Phase 10 Pass 10 Phase 6).
 
-/// Return a const pointer to a qf_list_T item at index i.
-const void *nvim_qf_get_list_at_const(const void *qi_void, int idx)
-{
-  if (qi_void == NULL) { return NULL; }
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  if (idx < 0 || idx >= qi->qf_maxcount) { return NULL; }
-  return (const void *)&qi->qf_lists[idx];
-}
 
 // mark_quickfix_user_data deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
 // mark_quickfix_ctx deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
