@@ -321,6 +321,14 @@ extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 10 VimL function declarations (misc.rs - exported via #[export_name])
+extern void f_eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_exists(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_has(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_json_decode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_printf(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_sha256(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 9 VimL function declarations (misc.rs - exported via #[export_name])
 extern void f_index(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_indexof(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -1103,25 +1111,7 @@ static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fp
 // f_getenv: migrated to Rust (simple.rs)
 
 /// "eval()" function
-static void f_eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *s = tv_get_string_chk(&argvars[0]);
-  if (s != NULL) {
-    s = skipwhite(s);
-  }
-
-  const char *const expr_start = s;
-  if (s == NULL || eval1((char **)&s, rettv, &EVALARG_EVALUATE) == FAIL) {
-    if (expr_start != NULL && !aborting()) {
-      semsg(_(e_invexpr2), expr_start);
-    }
-    need_clr_eos = false;
-    rettv->v_type = VAR_NUMBER;
-    rettv->vval.v_number = 0;
-  } else if (*s != NUL) {
-    semsg(_(e_trailing_arg), s);
-  }
-}
+// f_eval: migrated to Rust (misc.rs)
 
 
 typedef struct {
@@ -1221,46 +1211,7 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
   capture_ga = save_capture_ga;
 }
 
-/// "execute(command)" function
-/// "exists()" function
-static void f_exists(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int n = false;
-
-  const char *p = tv_get_string(&argvars[0]);
-  if (*p == '$') {  // Environment variable.
-    // First try "normal" environment variables (fast).
-    if (os_env_exists(p + 1, false)) {
-      n = true;
-    } else {
-      // Try expanding things like $VIM and ${HOME}.
-      char *const exp = expand_env_save((char *)p);
-      if (exp != NULL && *exp != '$') {
-        n = true;
-      }
-      xfree(exp);
-    }
-  } else if (*p == '&' || *p == '+') {  // Option.
-    n = (eval_option(&p, NULL, true) == OK);
-    if (*skipwhite(p) != NUL) {
-      n = false;  // Trailing garbage.
-    }
-  } else if (*p == '*') {  // Internal or user defined function.
-    n = strnequal(p, "*v:lua.", 7) ? nlua_func_exists(p + 7) : function_exists(p + 1, false);
-  } else if (*p == ':') {
-    n = cmd_exists(p + 1);
-  } else if (*p == '#') {
-    if (p[1] == '#') {
-      n = autocmd_supported(p + 2);
-    } else {
-      n = au_exists(p + 1);
-    }
-  } else {  // Internal variable.
-    n = var_exists(p);
-  }
-
-  rettv->vval.v_number = n;
-}
+// f_exists: migrated to Rust (misc.rs)
 
 /// "expand()" function
 static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2293,205 +2244,7 @@ static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // f_gettext: migrated to Rust (simple.rs)
 
 /// "has()" function
-static void f_has(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  static const char *const has_list[] = {
-#if defined(BSD) && !defined(__APPLE__) && !defined(__GNU__)
-    "bsd",
-#endif
-#ifdef __GNU__
-    "hurd",
-#endif
-#ifdef __linux__
-    "linux",
-#endif
-#ifdef SUN_SYSTEM
-    "sun",
-#endif
-#ifdef UNIX
-    "unix",
-#endif
-#ifdef MSWIN
-    "win32",
-#endif
-#ifdef _WIN64
-    "win64",
-#endif
-#ifndef CASE_INSENSITIVE_FILENAME
-    "fname_case",
-#endif
-#ifdef HAVE_ACL
-    "acl",
-#endif
-    "autochdir",
-    "arabic",
-    "autocmd",
-    "browsefilter",
-    "byte_offset",
-    "cindent",
-    "cmdline_compl",
-    "cmdline_hist",
-    "cmdwin",
-    "comments",
-    "conceal",
-    "cursorbind",
-    "cursorshape",
-    "dialog_con",
-    "diff",
-    "digraphs",
-    "eval",         // always present, of course!
-    "ex_extra",
-    "extra_search",
-    "file_in_path",
-    "filterpipe",
-    "find_in_path",
-    "float",
-    "folding",
-#if defined(UNIX)
-    "fork",
-#endif
-    "gettext",
-    "iconv",
-    "insert_expand",
-    "jumplist",
-    "keymap",
-    "lambda",
-    "langmap",
-    "libcall",
-    "linebreak",
-    "lispindent",
-    "listcmds",
-    "localmap",
-#ifdef __APPLE__
-    "mac",
-    "macunix",
-    "osx",
-    "osxdarwin",
-#endif
-    "menu",
-    "mksession",
-    "modify_fname",
-    "mouse",
-    "multi_byte",
-    "multi_lang",
-    "nanotime",
-    "num64",
-    "packages",
-    "path_extra",
-    "persistent_undo",
-    "profile",
-    "reltime",
-    "quickfix",
-    "rightleft",
-    "scrollbind",
-    "showcmd",
-    "cmdline_info",
-    "shada",
-    "signs",
-    "smartindent",
-    "startuptime",
-    "statusline",
-    "spell",
-    "syntax",
-#if !defined(UNIX)
-    "system",
-#endif
-    "tablineat",
-    "tag_binary",
-    "termguicolors",
-#ifdef HAVE_UNIBILIUM
-    "terminfo",
-#endif
-    "termresponse",
-    "textobjects",
-    "timers",
-    "title",
-    "user-commands",        // was accidentally included in 5.4
-    "user_commands",
-    "vartabs",
-    "vertsplit",
-    "vimscript-1",
-    "virtualedit",
-    "visual",
-    "visualextra",
-    "vreplace",
-    "wildignore",
-    "wildmenu",
-    "windows",
-    "winaltkeys",
-    "writebackup",
-#ifdef HAVE_XATTR
-    "xattr",
-#endif
-    "nvim",
-  };
-
-  // XXX: eval_has_provider() may shell out :(
-  const int save_shell_error = (int)get_vim_var_nr(VV_SHELL_ERROR);
-  bool n = false;
-  const char *const name = tv_get_string(&argvars[0]);
-  for (size_t i = 0; i < ARRAY_SIZE(has_list); i++) {
-    if (STRICMP(name, has_list[i]) == 0) {
-      n = true;
-      break;
-    }
-  }
-
-  if (!n) {
-    if (STRNICMP(name, "gui_running", 11) == 0) {
-      n = ui_gui_attached();
-    } else if (STRNICMP(name, "patch", 5) == 0) {
-      if (name[5] == '-'
-          && strlen(name) >= 11
-          && (name[6] >= '1' && name[6] <= '9')) {
-        char *end;
-
-        // This works for patch-8.1.2, patch-9.0.3, patch-10.0.4, etc.
-        // Not for patch-9.10.5.
-        int major = (int)strtoul(name + 6, &end, 10);
-        if (*end == '.' && ascii_isdigit(end[1])
-            && end[2] == '.' && ascii_isdigit(end[3])) {
-          int minor = atoi(end + 1);
-
-          // Expect "patch-9.9.01234".
-          n = has_vim_patch(atoi(end + 3), major * 100 + minor);
-        }
-      } else if (ascii_isdigit(name[5])) {
-        n = has_vim_patch(atoi(name + 5), 0);
-      }
-    } else if (STRNICMP(name, "nvim-", 5) == 0) {
-      // Expect "nvim-x.y.z"
-      n = has_nvim_version(name + 5);
-    } else if (STRICMP(name, "vim_starting") == 0) {
-      n = (starting != 0);
-    } else if (STRICMP(name, "ttyin") == 0) {
-      n = stdin_isatty;
-    } else if (STRICMP(name, "ttyout") == 0) {
-      n = stdout_isatty;
-    } else if (STRICMP(name, "multi_byte_encoding") == 0) {
-      n = true;
-    } else if (STRICMP(name, "syntax_items") == 0) {
-      n = syntax_present(curwin);
-    } else if (STRICMP(name, "clipboard_working") == 0) {
-      n = eval_has_provider("clipboard", true);
-    } else if (STRICMP(name, "pythonx") == 0) {
-      n = eval_has_provider("python3", true);
-    } else if (STRICMP(name, "wsl") == 0) {
-      n = has_wsl();
-#ifdef UNIX
-    } else if (STRICMP(name, "unnamedplus") == 0) {
-      n = eval_has_provider("clipboard", true);
-#endif
-    }
-  }
-
-  if (!n && eval_has_provider(name, true)) {
-    n = true;
-  }
-
-  set_vim_var_nr(VV_SHELL_ERROR, save_shell_error);
-  rettv->vval.v_number = n;
-}
+// f_has: migrated to Rust (misc.rs)
 
 static bool has_wsl(void)
 {
@@ -3147,38 +2900,7 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// json_decode() function
-static void f_json_decode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char numbuf[NUMBUFLEN];
-  const char *s = NULL;
-  char *tofree = NULL;
-  size_t len;
-  if (argvars[0].v_type == VAR_LIST) {
-    if (!encode_vim_list_to_buf(argvars[0].vval.v_list, &len, &tofree)) {
-      emsg(_("E474: Failed to convert list to string"));
-      return;
-    }
-    s = tofree;
-    if (s == NULL) {
-      assert(len == 0);
-      s = "";
-    }
-  } else {
-    s = tv_get_string_buf_chk(&argvars[0], numbuf);
-    if (s) {
-      len = strlen(s);
-    } else {
-      return;
-    }
-  }
-  if (json_decode_string(s, len, rettv) == FAIL) {
-    semsg(_("E474: Failed to parse %.*s"), (int)len, s);
-    rettv->v_type = VAR_NUMBER;
-    rettv->vval.v_number = 0;
-  }
-  assert(rettv->v_type != VAR_UNKNOWN);
-  xfree(tofree);
-}
+// f_json_decode: migrated to Rust (misc.rs)
 
 /// json_encode() function
 /// "keytrans()" function
@@ -3905,26 +3627,7 @@ static void f_msgpackparse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 // f_prevnonblank: migrated to Rust (simple.rs)
 
 /// "printf()" function
-static void f_printf(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-  {
-    int saved_did_emsg = did_emsg;
-
-    // Get the required length, allocate the buffer and do it for real.
-    did_emsg = false;
-    char buf[NUMBUFLEN];
-    const char *fmt = tv_get_string_buf(&argvars[0], buf);
-    int len = vim_vsnprintf_typval(NULL, 0, fmt, dummy_ap, argvars + 1);
-    if (!did_emsg) {
-      char *s = xmalloc((size_t)len + 1);
-      rettv->vval.v_string = s;
-      vim_vsnprintf_typval(s, (size_t)len + 1, fmt, dummy_ap, argvars + 1);
-    }
-    did_emsg |= saved_did_emsg;
-  }
-}
+// f_printf: migrated to Rust (misc.rs)
 
 /// "prompt_getprompt({buffer})" function
 static void f_prompt_getprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -5202,22 +4905,7 @@ static void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "sha256({expr})" function
-static void f_sha256(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  if (argvars[0].v_type == VAR_BLOB) {
-    blob_T *blob = argvars[0].vval.v_blob;
-    const uint8_t *p = blob != NULL ? (uint8_t *)blob->bv_ga.ga_data : (uint8_t *)"";
-    int len = blob != NULL ? blob->bv_ga.ga_len : 0;
-    rettv->vval.v_string = xstrdup(sha256_bytes(p, (size_t)len, NULL, 0));
-  } else {
-    const char *p = tv_get_string(&argvars[0]);
-    const char *hash = sha256_bytes((const uint8_t *)p, strlen(p), NULL, 0);
-    rettv->vval.v_string = xstrdup(hash);
-  }
-}
+// f_sha256: migrated to Rust (misc.rs)
 
 /// "shellescape({string})" function
 /// shiftwidth() function
@@ -7574,6 +7262,338 @@ void nvim_eval_reduce(typval_T *argvars, typval_T *rettv)
     nvim_eval_reduce_string(argvars, &argvars[1], rettv);
   } else {
     nvim_eval_reduce_blob(argvars, &argvars[1], rettv);
+  }
+}
+
+// =============================================================================
+// Phase 10 C accessor functions (called by Rust misc.rs wrappers)
+// =============================================================================
+
+void nvim_eval_eval(typval_T *argvars, typval_T *rettv)
+{
+  const char *s = tv_get_string_chk(&argvars[0]);
+  if (s != NULL) {
+    s = skipwhite(s);
+  }
+
+  const char *const expr_start = s;
+  if (s == NULL || eval1((char **)&s, rettv, &EVALARG_EVALUATE) == FAIL) {
+    if (expr_start != NULL && !aborting()) {
+      semsg(_(e_invexpr2), expr_start);
+    }
+    need_clr_eos = false;
+    rettv->v_type = VAR_NUMBER;
+    rettv->vval.v_number = 0;
+  } else if (*s != NUL) {
+    semsg(_(e_trailing_arg), s);
+  }
+}
+
+void nvim_eval_exists(typval_T *argvars, typval_T *rettv)
+{
+  int n = false;
+
+  const char *p = tv_get_string(&argvars[0]);
+  if (*p == '$') {  // Environment variable.
+    if (os_env_exists(p + 1, false)) {
+      n = true;
+    } else {
+      char *const exp = expand_env_save((char *)p);
+      if (exp != NULL && *exp != '$') {
+        n = true;
+      }
+      xfree(exp);
+    }
+  } else if (*p == '&' || *p == '+') {  // Option.
+    n = (eval_option(&p, NULL, true) == OK);
+    if (*skipwhite(p) != NUL) {
+      n = false;  // Trailing garbage.
+    }
+  } else if (*p == '*') {  // Internal or user defined function.
+    n = strnequal(p, "*v:lua.", 7) ? nlua_func_exists(p + 7) : function_exists(p + 1, false);
+  } else if (*p == ':') {
+    n = cmd_exists(p + 1);
+  } else if (*p == '#') {
+    if (p[1] == '#') {
+      n = autocmd_supported(p + 2);
+    } else {
+      n = au_exists(p + 1);
+    }
+  } else {  // Internal variable.
+    n = var_exists(p);
+  }
+
+  rettv->vval.v_number = n;
+}
+
+void nvim_eval_has(typval_T *argvars, typval_T *rettv)
+{
+  static const char *const has_list[] = {
+#if defined(BSD) && !defined(__APPLE__) && !defined(__GNU__)
+    "bsd",
+#endif
+#ifdef __GNU__
+    "hurd",
+#endif
+#ifdef __linux__
+    "linux",
+#endif
+#ifdef SUN_SYSTEM
+    "sun",
+#endif
+#ifdef UNIX
+    "unix",
+#endif
+#ifdef MSWIN
+    "win32",
+#endif
+#ifdef _WIN64
+    "win64",
+#endif
+#ifndef CASE_INSENSITIVE_FILENAME
+    "fname_case",
+#endif
+#ifdef HAVE_ACL
+    "acl",
+#endif
+    "autochdir",
+    "arabic",
+    "autocmd",
+    "browsefilter",
+    "byte_offset",
+    "cindent",
+    "cmdline_compl",
+    "cmdline_hist",
+    "cmdwin",
+    "comments",
+    "conceal",
+    "cursorbind",
+    "cursorshape",
+    "dialog_con",
+    "diff",
+    "digraphs",
+    "eval",         // always present, of course!
+    "ex_extra",
+    "extra_search",
+    "file_in_path",
+    "filterpipe",
+    "find_in_path",
+    "float",
+    "folding",
+#if defined(UNIX)
+    "fork",
+#endif
+    "gettext",
+    "iconv",
+    "insert_expand",
+    "jumplist",
+    "keymap",
+    "lambda",
+    "langmap",
+    "libcall",
+    "linebreak",
+    "lispindent",
+    "listcmds",
+    "localmap",
+#ifdef __APPLE__
+    "mac",
+    "macunix",
+    "osx",
+    "osxdarwin",
+#endif
+    "menu",
+    "mksession",
+    "modify_fname",
+    "mouse",
+    "multi_byte",
+    "multi_lang",
+    "nanotime",
+    "num64",
+    "packages",
+    "path_extra",
+    "persistent_undo",
+    "profile",
+    "reltime",
+    "quickfix",
+    "rightleft",
+    "scrollbind",
+    "showcmd",
+    "cmdline_info",
+    "shada",
+    "signs",
+    "smartindent",
+    "startuptime",
+    "statusline",
+    "spell",
+    "syntax",
+#if !defined(UNIX)
+    "system",
+#endif
+    "tablineat",
+    "tag_binary",
+    "termguicolors",
+#ifdef HAVE_UNIBILIUM
+    "terminfo",
+#endif
+    "termresponse",
+    "textobjects",
+    "timers",
+    "title",
+    "user-commands",        // was accidentally included in 5.4
+    "user_commands",
+    "vartabs",
+    "vertsplit",
+    "vimscript-1",
+    "virtualedit",
+    "visual",
+    "visualextra",
+    "vreplace",
+    "wildignore",
+    "wildmenu",
+    "windows",
+    "winaltkeys",
+    "writebackup",
+#ifdef HAVE_XATTR
+    "xattr",
+#endif
+    "nvim",
+  };
+
+  // XXX: eval_has_provider() may shell out :(
+  const int save_shell_error = (int)get_vim_var_nr(VV_SHELL_ERROR);
+  bool n = false;
+  const char *const name = tv_get_string(&argvars[0]);
+  for (size_t i = 0; i < ARRAY_SIZE(has_list); i++) {
+    if (STRICMP(name, has_list[i]) == 0) {
+      n = true;
+      break;
+    }
+  }
+
+  if (!n) {
+    if (STRNICMP(name, "gui_running", 11) == 0) {
+      n = ui_gui_attached();
+    } else if (STRNICMP(name, "patch", 5) == 0) {
+      if (name[5] == '-'
+          && strlen(name) >= 11
+          && (name[6] >= '1' && name[6] <= '9')) {
+        char *end;
+
+        // This works for patch-8.1.2, patch-9.0.3, patch-10.0.4, etc.
+        // Not for patch-9.10.5.
+        int major = (int)strtoul(name + 6, &end, 10);
+        if (*end == '.' && ascii_isdigit(end[1])
+            && end[2] == '.' && ascii_isdigit(end[3])) {
+          int minor = atoi(end + 1);
+
+          // Expect "patch-9.9.01234".
+          n = has_vim_patch(atoi(end + 3), major * 100 + minor);
+        }
+      } else if (ascii_isdigit(name[5])) {
+        n = has_vim_patch(atoi(name + 5), 0);
+      }
+    } else if (STRNICMP(name, "nvim-", 5) == 0) {
+      // Expect "nvim-x.y.z"
+      n = has_nvim_version(name + 5);
+    } else if (STRICMP(name, "vim_starting") == 0) {
+      n = (starting != 0);
+    } else if (STRICMP(name, "ttyin") == 0) {
+      n = stdin_isatty;
+    } else if (STRICMP(name, "ttyout") == 0) {
+      n = stdout_isatty;
+    } else if (STRICMP(name, "multi_byte_encoding") == 0) {
+      n = true;
+    } else if (STRICMP(name, "syntax_items") == 0) {
+      n = syntax_present(curwin);
+    } else if (STRICMP(name, "clipboard_working") == 0) {
+      n = eval_has_provider("clipboard", true);
+    } else if (STRICMP(name, "pythonx") == 0) {
+      n = eval_has_provider("python3", true);
+    } else if (STRICMP(name, "wsl") == 0) {
+      n = has_wsl();
+#ifdef UNIX
+    } else if (STRICMP(name, "unnamedplus") == 0) {
+      n = eval_has_provider("clipboard", true);
+#endif
+    }
+  }
+
+  if (!n && eval_has_provider(name, true)) {
+    n = true;
+  }
+
+  set_vim_var_nr(VV_SHELL_ERROR, save_shell_error);
+  rettv->vval.v_number = n;
+}
+
+void nvim_eval_json_decode(typval_T *argvars, typval_T *rettv)
+{
+  char numbuf[NUMBUFLEN];
+  const char *s = NULL;
+  char *tofree = NULL;
+  size_t len;
+  if (argvars[0].v_type == VAR_LIST) {
+    if (!encode_vim_list_to_buf(argvars[0].vval.v_list, &len, &tofree)) {
+      emsg(_("E474: Failed to convert list to string"));
+      return;
+    }
+    s = tofree;
+    if (s == NULL) {
+      assert(len == 0);
+      s = "";
+    }
+  } else {
+    s = tv_get_string_buf_chk(&argvars[0], numbuf);
+    if (s) {
+      len = strlen(s);
+    } else {
+      return;
+    }
+  }
+  if (json_decode_string(s, len, rettv) == FAIL) {
+    semsg(_("E474: Failed to parse %.*s"), (int)len, s);
+    rettv->v_type = VAR_NUMBER;
+    rettv->vval.v_number = 0;
+  }
+  assert(rettv->v_type != VAR_UNKNOWN);
+  xfree(tofree);
+}
+
+void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+  {
+    int saved_did_emsg = did_emsg;
+
+    // Get the required length, allocate the buffer and do it for real.
+    did_emsg = false;
+    char buf[NUMBUFLEN];
+    const char *fmt = tv_get_string_buf(&argvars[0], buf);
+    int len = vim_vsnprintf_typval(NULL, 0, fmt, dummy_ap, argvars + 1);
+    if (!did_emsg) {
+      char *s = xmalloc((size_t)len + 1);
+      rettv->vval.v_string = s;
+      vim_vsnprintf_typval(s, (size_t)len + 1, fmt, dummy_ap, argvars + 1);
+    }
+    did_emsg |= saved_did_emsg;
+  }
+}
+
+void nvim_eval_sha256(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  if (argvars[0].v_type == VAR_BLOB) {
+    blob_T *blob = argvars[0].vval.v_blob;
+    const uint8_t *p = blob != NULL ? (uint8_t *)blob->bv_ga.ga_data : (uint8_t *)"";
+    int len = blob != NULL ? blob->bv_ga.ga_len : 0;
+    rettv->vval.v_string = xstrdup(sha256_bytes(p, (size_t)len, NULL, 0));
+  } else {
+    const char *p = tv_get_string(&argvars[0]);
+    const char *hash = sha256_bytes((const uint8_t *)p, strlen(p), NULL, 0);
+    rettv->vval.v_string = xstrdup(hash);
   }
 }
 

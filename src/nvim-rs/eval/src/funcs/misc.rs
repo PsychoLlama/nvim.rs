@@ -1322,3 +1322,90 @@ pub unsafe extern "C" fn rs_f_reduce(
 ) {
     nvim_eval_reduce(argvars, rettv);
 }
+
+// =============================================================================
+// Phase 10 C accessor declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_eval(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_exists(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_has(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_json_decode(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_sha256(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Phase 10: has(), eval(), exists() and related
+// =============================================================================
+
+/// "eval()" function - evaluate an expression string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_eval"]
+pub unsafe extern "C" fn rs_f_eval(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_eval(argvars, rettv);
+}
+
+/// "exists()" function - check if a variable/function/option exists
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_exists"]
+pub unsafe extern "C" fn rs_f_exists(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_exists(argvars, rettv);
+}
+
+/// "has()" function - check if a feature is supported
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_has"]
+pub unsafe extern "C" fn rs_f_has(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    nvim_eval_has(argvars, rettv);
+}
+
+/// "json_decode()" function - decode a JSON string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_json_decode"]
+pub unsafe extern "C" fn rs_f_json_decode(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_json_decode(argvars, rettv);
+}
+
+/// "printf()" function - format a string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_printf"]
+pub unsafe extern "C" fn rs_f_printf(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_printf(argvars, rettv);
+}
+
+/// "sha256()" function - compute SHA256 hash
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_sha256"]
+pub unsafe extern "C" fn rs_f_sha256(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_sha256(argvars, rettv);
+}
