@@ -72,6 +72,7 @@ void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 int check_opt_wim(void);
 void redrawcmd(void);
 void draw_cmdline(int start, int len);
+void put_on_cmdline(const char *str, int len, bool redraw);
 
 #ifdef __cplusplus
 }

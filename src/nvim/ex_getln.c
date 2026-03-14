@@ -3355,101 +3355,7 @@ void unputcmdline(void)
   ui_cursor_shape();
 }
 
-// Put the given string, of the given length, onto the command line.
-// If len is -1, then strlen() is used to calculate the length.
-// If 'redraw' is true then the new part of the command line, and the remaining
-// part will be redrawn, otherwise it will not.  If this function is called
-// twice in a row, then 'redraw' should be false and redrawcmd() should be
-// called afterwards.
-void put_on_cmdline(const char *str, int len, bool redraw)
-{
-  if (len < 0) {
-    len = (int)strlen(str);
-  }
-
-  realloc_cmdbuff(ccline.cmdlen + len + 1);
-
-  if (!ccline.overstrike) {
-    memmove(ccline.cmdbuff + ccline.cmdpos + len,
-            ccline.cmdbuff + ccline.cmdpos,
-            (size_t)(ccline.cmdlen - ccline.cmdpos));
-    ccline.cmdlen += len;
-  } else {
-    // Count nr of characters in the new string.
-    int m = 0;
-    int i;
-    for (i = 0; i < len; i += utfc_ptr2len(str + i)) {
-      m++;
-    }
-    // Count nr of bytes in cmdline that are overwritten by these
-    // characters.
-    for (i = ccline.cmdpos; i < ccline.cmdlen && m > 0;
-         i += utfc_ptr2len(ccline.cmdbuff + i)) {
-      m--;
-    }
-    if (i < ccline.cmdlen) {
-      memmove(ccline.cmdbuff + ccline.cmdpos + len,
-              ccline.cmdbuff + i, (size_t)(ccline.cmdlen - i));
-      ccline.cmdlen += ccline.cmdpos + len - i;
-    } else {
-      ccline.cmdlen = ccline.cmdpos + len;
-    }
-  }
-  memmove(ccline.cmdbuff + ccline.cmdpos, str, (size_t)len);
-  ccline.cmdbuff[ccline.cmdlen] = NUL;
-
-  // When the inserted text starts with a composing character,
-  // backup to the character before it.
-  if (ccline.cmdpos > 0 && (uint8_t)ccline.cmdbuff[ccline.cmdpos] >= 0x80) {
-    int i = utf_head_off(ccline.cmdbuff, ccline.cmdbuff + ccline.cmdpos);
-    if (i != 0) {
-      ccline.cmdpos -= i;
-      len += i;
-      ccline.cmdspos = cmd_screencol(ccline.cmdpos);
-    }
-  }
-
-  if (redraw && !cmd_silent) {
-    msg_no_more = true;
-    int i = cmdline_row;
-    cursorcmd();
-    draw_cmdline(ccline.cmdpos, ccline.cmdlen - ccline.cmdpos);
-    // Avoid clearing the rest of the line too often.
-    if (cmdline_row != i || ccline.overstrike) {
-      msg_clr_eos();
-    }
-    msg_no_more = false;
-  }
-  int m;
-  if (KeyTyped) {
-    m = Columns * Rows;
-    if (m < 0) {            // overflow, Columns or Rows at weird value
-      m = MAXCOL;
-    }
-  } else {
-    m = MAXCOL;
-  }
-  for (int i = 0; i < len; i++) {
-    int c = rs_cmdline_charsize(ccline.cmdpos);
-    // count ">" for a double-wide char that doesn't fit.
-    correct_screencol(ccline.cmdpos, c, &ccline.cmdspos);
-    // Stop cursor at the end of the screen, but do increment the
-    // insert position, so that entering a very long command
-    // works, even though you can't see it.
-    if (ccline.cmdspos + c < m) {
-      ccline.cmdspos += c;
-    }
-    c = utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos) - 1;
-    c = MIN(c, len - i - 1);
-    ccline.cmdpos += c;
-    i += c;
-    ccline.cmdpos++;
-  }
-
-  if (redraw) {
-    msg_check();
-  }
-}
+// put_on_cmdline() is implemented in Rust (cmdline crate, edit.rs).
 
 /// Save ccline, because obtaining the "=" register may execute "normal :cmd"
 /// and overwrite it.
@@ -4563,3 +4469,17 @@ void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
 
 /// Set skip_redraw global.
 void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
+
+// Phase 67 Phase 3: Accessors for put_on_cmdline
+
+/// Get cmdbuff byte at given index.
+char nvim_get_ccline_cmdbuff_byte(int idx) { return ccline.cmdbuff[idx]; }
+
+/// Set cmdbuff byte at given index.
+void nvim_set_ccline_cmdbuff_byte(int idx, char val) { ccline.cmdbuff[idx] = val; }
+
+/// Get KeyTyped global.
+int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
+
+/// Call msg_check() for Rust.
+void nvim_msg_check(void) { msg_check(); }

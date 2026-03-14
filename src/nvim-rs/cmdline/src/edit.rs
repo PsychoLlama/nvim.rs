@@ -26,6 +26,9 @@ extern "C" {
     fn nvim_get_ccline_cmdlen() -> c_int;
     fn nvim_set_ccline_cmdpos(pos: c_int);
     fn nvim_set_ccline_cmdlen(len: c_int);
+    fn nvim_get_ccline_cmdspos() -> c_int;
+    fn nvim_set_ccline_cmdspos(val: c_int);
+    fn nvim_get_ccline_overstrike() -> c_int;
 
     // Reallocation (calls C realloc_cmdbuff)
     fn realloc_cmdbuff(len: c_int) -> c_int;
@@ -36,9 +39,27 @@ extern "C" {
     fn mb_get_class(p: *const c_char) -> c_int;
     fn mb_prevptr(start: *const c_char, p: *const c_char) -> *mut c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Redraw
     fn redrawcmd();
+
+    // Screen
+    fn cmd_screencol(bytepos: c_int) -> c_int;
+    fn rs_cmdline_charsize(idx: c_int) -> c_int;
+    fn cursorcmd();
+    fn correct_screencol(idx: c_int, cells: c_int, col: *mut c_int);
+    fn draw_cmdline(start: c_int, len: c_int);
+    fn msg_clr_eos();
+    fn nvim_get_cmd_silent() -> c_int;
+    fn nvim_get_cmdline_row() -> c_int;
+
+    // Globals
+    fn nvim_get_columns() -> c_int;
+    fn nvim_get_rows() -> c_int;
+    fn nvim_get_key_typed_cmdline() -> c_int;
+    fn nvim_set_msg_no_more(val: c_int);
+    fn nvim_msg_check();
 
     // Abbreviation support
     fn nvim_get_p_paste() -> c_int;
@@ -46,7 +67,6 @@ extern "C" {
     fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> c_int;
 
     // Paste support
-    fn put_on_cmdline(s: *const c_char, len: c_int, redraw: bool);
     fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
     fn stuffcharReadbuff(c: c_int);
 }
@@ -860,7 +880,7 @@ const NL: c_int = 10;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_cmdline_paste_str(s: *const c_char, literally: bool) {
     if literally {
-        put_on_cmdline(s, -1, true);
+        put_on_cmdline_rs(s, -1, true);
     } else {
         let mut p = s;
         while *p != NUL as c_char {
@@ -934,6 +954,164 @@ pub unsafe extern "C" fn rs_ccheck_abbr(c: c_int) -> c_int {
     }
 
     check_abbr(c, cmdbuff, cmdpos, spos)
+}
+
+// =============================================================================
+// put_on_cmdline: Insert a string into the command line buffer
+// =============================================================================
+
+/// Maximum column constant
+const MAXCOL: c_int = 0x7FFF_FFFF;
+
+/// Put the given string onto the command line.
+///
+/// If `len` is -1, `strlen` is used. If `redraw` is true, the new part and
+/// remaining part are redrawn.
+///
+/// Direct replacement for C `put_on_cmdline()`.
+///
+/// # Safety
+///
+/// `str` must be a valid pointer to at least `len` bytes (or NUL-terminated if len == -1).
+#[allow(clippy::too_many_lines)]
+#[export_name = "put_on_cmdline"]
+pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, redraw: bool) {
+    if len < 0 {
+        len = libc_strlen(str) as c_int;
+    }
+
+    let initial_cmdlen = nvim_get_ccline_cmdlen();
+    if nvim_get_ccline_cmdbuff().is_null() {
+        return;
+    }
+
+    realloc_cmdbuff(initial_cmdlen + len + 1);
+    // Re-fetch after possible realloc
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let pos0 = nvim_get_ccline_cmdpos();
+    let buf_len = nvim_get_ccline_cmdlen();
+
+    let overstrike = nvim_get_ccline_overstrike() != 0;
+    if overstrike {
+        // Overstrike mode: count chars being replaced
+        let mut m: c_int = 0;
+        let mut i: c_int = 0;
+        while i < len {
+            let char_len = utfc_ptr2len(str.add(i as usize));
+            m += 1;
+            i += char_len;
+        }
+        // Count bytes in cmdline overwritten
+        i = pos0;
+        while i < buf_len && m > 0 {
+            let char_len = utfc_ptr2len(cmdbuff.add(i as usize));
+            m -= 1;
+            i += char_len;
+        }
+        let cur_len = nvim_get_ccline_cmdlen();
+        if i < cur_len {
+            std::ptr::copy(
+                cmdbuff.add(i as usize),
+                cmdbuff.add((pos0 + len) as usize),
+                (cur_len - i) as usize,
+            );
+            nvim_set_ccline_cmdlen(cur_len + pos0 + len - i);
+        } else {
+            nvim_set_ccline_cmdlen(pos0 + len);
+        }
+    } else {
+        // Insert mode: shift rest of buffer right
+        std::ptr::copy(
+            cmdbuff.add(pos0 as usize),
+            cmdbuff.add((pos0 + len) as usize),
+            (buf_len - pos0) as usize,
+        );
+        nvim_set_ccline_cmdlen(buf_len + len);
+    }
+
+    // Re-fetch after changes
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let pos1 = nvim_get_ccline_cmdpos();
+    let new_len = nvim_get_ccline_cmdlen();
+
+    // Copy the new string in
+    std::ptr::copy_nonoverlapping(str, cmdbuff.add(pos1 as usize), len as usize);
+    // NUL-terminate
+    *cmdbuff.add(new_len as usize) = 0;
+
+    // When inserted text starts with a composing character, backup before it
+    if pos1 > 0 && (*cmdbuff.add(pos1 as usize) as u8) >= 0x80 {
+        let head = utf_head_off(cmdbuff, cmdbuff.add(pos1 as usize));
+        if head != 0 {
+            let new_pos = pos1 - head;
+            nvim_set_ccline_cmdpos(new_pos);
+            let new_cmdspos = cmd_screencol(new_pos);
+            nvim_set_ccline_cmdspos(new_cmdspos);
+        }
+    }
+
+    let cur_pos = nvim_get_ccline_cmdpos();
+
+    if redraw && nvim_get_cmd_silent() == 0 {
+        nvim_set_msg_no_more(1);
+        let old_row = nvim_get_cmdline_row();
+        cursorcmd();
+        let draw_len = nvim_get_ccline_cmdlen();
+        draw_cmdline(cur_pos, draw_len - cur_pos);
+        // Avoid clearing the rest of the line too often
+        if nvim_get_cmdline_row() != old_row || nvim_get_ccline_overstrike() != 0 {
+            msg_clr_eos();
+        }
+        nvim_set_msg_no_more(0);
+    }
+
+    let screen_limit = if nvim_get_key_typed_cmdline() != 0 {
+        let cols = nvim_get_columns();
+        let rows = nvim_get_rows();
+        let prod = cols.saturating_mul(rows);
+        if prod < 0 {
+            MAXCOL
+        } else {
+            prod
+        }
+    } else {
+        MAXCOL
+    };
+
+    let mut i: c_int = 0;
+    let mut pos = nvim_get_ccline_cmdpos();
+    let buf = nvim_get_ccline_cmdbuff();
+    while i < len {
+        let mut screen_pos = nvim_get_ccline_cmdspos();
+        let c = rs_cmdline_charsize(pos);
+        // count ">" for a double-wide char that doesn't fit
+        correct_screencol(pos, c, &raw mut screen_pos);
+        // Stop cursor at end of screen, but still advance position
+        if screen_pos + c < screen_limit {
+            screen_pos += c;
+        }
+        nvim_set_ccline_cmdspos(screen_pos);
+        let char_len = utfc_ptr2len(buf.add(pos as usize)) - 1;
+        let advance = char_len.min(len - i - 1);
+        pos += advance;
+        i += advance;
+        pos += 1;
+        i += 1;
+    }
+    nvim_set_ccline_cmdpos(pos);
+
+    if redraw {
+        nvim_msg_check();
+    }
+}
+
+/// strlen wrapper (avoids importing libc)
+const unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0;
+    while *s.add(len) != 0 {
+        len += 1;
+    }
+    len
 }
 
 // =============================================================================
