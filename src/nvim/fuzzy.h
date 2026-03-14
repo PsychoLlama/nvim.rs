@@ -31,5 +31,6 @@ extern bool search_for_fuzzy_match(buf_T *buf, pos_T *pos, char *pattern, int di
 extern void fuzmatch_str_free(fuzmatch_str_T *fuzmatch, int count);
 extern void fuzzymatches_to_strmatches(fuzmatch_str_T *fuzmatch, char ***matches, int count,
                                        bool funcsort);
+extern garray_T *fuzzy_match_str_with_pos(const char *str, const char *pat);
 
 #include "fuzzy.h.generated.h"

@@ -824,7 +824,8 @@ pub unsafe extern "C" fn rs_fuzzymatches_to_strmatches(
 ///
 /// `str_ptr` and `pat_ptr` must be valid null-terminated C strings or null.
 /// Caller is responsible for freeing the returned `GArray` with `ga_clear` + `xfree`.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "fuzzy_match_str_with_pos")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_fuzzy_match_str_with_pos(
     str_ptr: *const c_char,
     pat_ptr: *const c_char,

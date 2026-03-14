@@ -68,11 +68,6 @@ _Static_assert(offsetof(fuzmatch_str_T, score) == 16, "fuzmatch_str_T.score offs
 
 #include "fuzzy.c.generated.h"
 
-// Rust FFI declarations
-// fuzzy_match, fuzzy_match_str, fuzzy_match_str_in_line, search_for_fuzzy_match,
-// fuzmatch_str_free, fuzzymatches_to_strmatches exported directly from Rust.
-extern garray_T *rs_fuzzy_match_str_with_pos(const char *str, const char *pat);
-
 /// Sort the fuzzy matches in the descending order of the match score.
 /// For items with same score, retain the order using the index (stable sort)
 static int fuzzy_match_item_compare(const void *const s1, const void *const s2)
@@ -342,13 +337,6 @@ void f_matchfuzzy(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_matchfuzzypos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   do_fuzzymatch(argvars, rettv, true);
-}
-
-/// Fuzzy match the position of string "pat" in string "str".
-/// @returns a dynamic array of matching positions. If there is no match, returns NULL.
-garray_T *fuzzy_match_str_with_pos(char *const str, const char *const pat)
-{
-  return rs_fuzzy_match_str_with_pos(str, pat);
 }
 
 // Note: The fuzzy matching algorithm implementation has been moved to Rust.
