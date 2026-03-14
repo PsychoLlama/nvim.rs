@@ -459,6 +459,71 @@ pub extern "C" fn rs_plines_for_line(line_len: c_int, win_width: c_int, wrap: bo
 }
 
 // =============================================================================
+// Screen character VimL functions (Phase 2)
+// =============================================================================
+
+use std::ffi::c_void;
+
+extern "C" {
+    fn nvim_eval_screenattr(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_screenchar(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_screenchars(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_screenstring(argvars: *const c_void, rettv: *mut c_void);
+}
+
+/// "screenattr(row, col)" function - get highlight attr at screen position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_screenattr"]
+pub unsafe extern "C" fn rs_f_screenattr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_screenattr(argvars, rettv);
+}
+
+/// "screenchar(row, col)" function - get character at screen position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_screenchar"]
+pub unsafe extern "C" fn rs_f_screenchar(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_screenchar(argvars, rettv);
+}
+
+/// "screenchars(row, col)" function - get characters at screen position as list
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_screenchars"]
+pub unsafe extern "C" fn rs_f_screenchars(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_screenchars(argvars, rettv);
+}
+
+/// "screenstring(row, col)" function - get string at screen position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_screenstring"]
+pub unsafe extern "C" fn rs_f_screenstring(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_screenstring(argvars, rettv);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -311,6 +311,12 @@ extern void f_searchpairpos(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
 extern void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_swapinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 2 VimL function declarations (display.rs - exported via #[export_name])
+extern void f_screenattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 5 VimL function declarations (simple.rs - exported via #[export_name])
 extern void f_api_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_byte2line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -5297,99 +5303,9 @@ end:
   api_clear_error(&err);
 }
 
-static void screenchar_adjust(ScreenGrid **grid, int *row, int *col)
-{
-  // TODO(bfredl): this is a hack for legacy tests which use screenchar()
-  // to check printed messages on the screen (but not floats etc
-  // as these are not legacy features). If the compositor is refactored to
-  // have its own buffer, this should just read from it instead.
-  msg_scroll_flush();
+// screenchar_adjust, f_screenattr: migrated to Rust (display.rs)
 
-  *grid = ui_comp_get_grid_at_coord(*row, *col);
-
-  // Make `row` and `col` relative to the grid
-  *row -= (*grid)->comp_row;
-  *col -= (*grid)->comp_col;
-}
-
-/// "screenattr()" function
-static void f_screenattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-
-  ScreenGrid *grid;
-  screenchar_adjust(&grid, &row, &col);
-
-  int c;
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    c = -1;
-  } else {
-    c = grid->attrs[grid->line_offset[row] + (size_t)col];
-  }
-  rettv->vval.v_number = c;
-}
-
-/// "screenchar()" function
-static void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-
-  ScreenGrid *grid;
-  screenchar_adjust(&grid, &row, &col);
-
-  rettv->vval.v_number = (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols)
-                         ? -1 : schar_get_first_codepoint(grid_getchar(grid, row, col, NULL));
-}
-
-/// "screenchars()" function
-static void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-
-  ScreenGrid *grid;
-  screenchar_adjust(&grid, &row, &col);
-
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    return;
-  }
-
-  char buf[MAX_SCHAR_SIZE + 1];
-  schar_get(buf, grid_getchar(grid, row, col, NULL));
-
-  // schar values are already processed chars which are always NUL-terminated.
-  // A single [0] is expected when char is NUL.
-  size_t i = 0;
-  do {
-    int c = utf_ptr2char(buf + i);
-    tv_list_append_number(rettv->vval.v_list, c);
-    i += (size_t)utf_ptr2len(buf + i);
-  } while (buf[i] != NUL);
-}
-
-/// "screenstring()" function
-static void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_string = NULL;
-  rettv->v_type = VAR_STRING;
-
-  ScreenGrid *grid;
-  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
-  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
-
-  screenchar_adjust(&grid, &row, &col);
-
-  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
-    return;
-  }
-
-  char buf[MAX_SCHAR_SIZE + 1];
-  schar_get(buf, grid_getchar(grid, row, col, NULL));
-  rettv->vval.v_string = xstrdup(buf);
-}
+// f_screenchar, f_screenchars, f_screenstring: migrated to Rust (display.rs)
 
 /// "search()" function
 /// "searchdecl()" function
@@ -7541,5 +7457,78 @@ void nvim_eval_menu_get(typval_T *argvars, typval_T *rettv)
     modes = get_menu_cmd_modes(strmodes, false, NULL, NULL);
   }
   menu_get((char *)tv_get_string(&argvars[0]), modes, rettv->vval.v_list);
+}
+
+// =============================================================================
+// C accessor functions for Rust VimL function implementations (Phase 2/display)
+// =============================================================================
+
+static void screenchar_adjust_inner(ScreenGrid **grid, int *row, int *col)
+{
+  msg_scroll_flush();
+  *grid = ui_comp_get_grid_at_coord(*row, *col);
+  *row -= (*grid)->comp_row;
+  *col -= (*grid)->comp_col;
+}
+
+void nvim_eval_screenattr(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  int c;
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    c = -1;
+  } else {
+    c = grid->attrs[grid->line_offset[row] + (size_t)col];
+  }
+  rettv->vval.v_number = c;
+}
+
+void nvim_eval_screenchar(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  rettv->vval.v_number = (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols)
+    ? -1 : schar_get_first_codepoint(grid_getchar(grid, row, col, NULL));
+}
+
+void nvim_eval_screenchars(typval_T *argvars, typval_T *rettv)
+{
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  tv_list_alloc_ret(rettv, kListLenMayKnow);
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    return;
+  }
+  char buf[MAX_SCHAR_SIZE + 1];
+  schar_get(buf, grid_getchar(grid, row, col, NULL));
+  size_t i = 0;
+  do {
+    int c = utf_ptr2char(buf + i);
+    tv_list_append_number(rettv->vval.v_list, c);
+    i += (size_t)utf_ptr2len(buf + i);
+  } while (buf[i] != NUL);
+}
+
+void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_string = NULL;
+  rettv->v_type = VAR_STRING;
+  int row = (int)tv_get_number_chk(&argvars[0], NULL) - 1;
+  int col = (int)tv_get_number_chk(&argvars[1], NULL) - 1;
+  ScreenGrid *grid;
+  screenchar_adjust_inner(&grid, &row, &col);
+  if (row < 0 || row >= grid->rows || col < 0 || col >= grid->cols) {
+    return;
+  }
+  char buf[MAX_SCHAR_SIZE + 1];
+  schar_get(buf, grid_getchar(grid, row, col, NULL));
+  rettv->vval.v_string = xstrdup(buf);
 }
 
