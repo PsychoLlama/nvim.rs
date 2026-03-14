@@ -1499,3 +1499,200 @@ pub unsafe extern "C" fn rs_expand_filename(
 
     OK_VAL
 }
+
+// =============================================================================
+// Phase 1 (batch plan): Simple Ex Command Handlers
+// =============================================================================
+
+extern "C" {
+    // Phase 1 C accessors
+    fn nvim_docmd_not_restarting();
+    fn nvim_docmd_set_no_hlsearch(flag: bool);
+    fn nvim_docmd_clear_restart_edit();
+    fn nvim_docmd_set_stop_insert_mode();
+    fn nvim_docmd_clearmode();
+    fn nvim_docmd_get_e_invcmd() -> *const c_char;
+    fn nvim_eap_set_errmsg_const(eap: ExArgHandle, msg: *const c_char);
+    fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_docmd_do_exbuffer(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_mod(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_next(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_prev(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_rewind(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_last(eap: ExArgHandle);
+    fn nvim_docmd_ex_highlight(eap: ExArgHandle);
+    fn nvim_docmd_do_bang(addr_count: c_int, eap: ExArgHandle, forceit: bool);
+    fn nvim_docmd_ml_preserve();
+    fn nvim_docmd_u_redo();
+    fn nvim_docmd_pum_make_popup(arg: *const c_char, forceit: bool);
+    fn nvim_docmd_wundo(arg: *const c_char, forceit: bool);
+    fn nvim_docmd_rundo(arg: *const c_char);
+    fn nvim_docmd_get_tabpage_arg(eap: ExArgHandle) -> c_int;
+    fn tabpage_move(nr: c_int);
+    fn nvim_docmd_checkpath(forceit: bool);
+    fn nvim_docmd_redraw_all_later_some_valid();
+    fn nvim_docmd_set_pressedreturn(val: bool);
+    fn nvim_docmd_ex_psearch(eap: ExArgHandle);
+    fn nvim_docmd_get_e_nogvim() -> *const c_char;
+}
+
+/// ":buffer" -- delegates to do_exbuffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_buffer(eap: ExArgHandle) {
+    nvim_docmd_do_exbuffer(eap);
+}
+
+/// ":bmodified" and similar -- goto modified buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_bmodified(eap: ExArgHandle) {
+    nvim_docmd_goto_buffer_mod(eap);
+}
+
+/// ":bnext" -- go to next buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_bnext(eap: ExArgHandle) {
+    nvim_docmd_goto_buffer_next(eap);
+}
+
+/// ":bprevious" -- go to previous buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_bprevious(eap: ExArgHandle) {
+    nvim_docmd_goto_buffer_prev(eap);
+}
+
+/// ":brewind" / ":bfirst" -- go to first buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_brewind(eap: ExArgHandle) {
+    nvim_docmd_goto_buffer_rewind(eap);
+}
+
+/// ":blast" -- go to last buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_blast(eap: ExArgHandle) {
+    nvim_docmd_goto_buffer_last(eap);
+}
+
+/// ":highlight" -- call do_highlight (including easter egg).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_highlight(eap: ExArgHandle) {
+    nvim_docmd_ex_highlight(eap);
+}
+
+/// not_exiting -- clear exiting flag (already exists as C function, not migrated).
+/// not_restarting -- clear restarting flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_not_restarting() {
+    nvim_docmd_not_restarting();
+}
+
+/// ":preserve" -- call ml_preserve.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_preserve(eap: ExArgHandle) {
+    let _ = eap;
+    nvim_docmd_ml_preserve();
+}
+
+/// ":redo" -- call u_redo(1).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_redo(eap: ExArgHandle) {
+    let _ = eap;
+    nvim_docmd_u_redo();
+}
+
+/// ":!" -- call do_bang.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_bang(eap: ExArgHandle) {
+    let addr_count = nvim_eap_get_addr_count(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    nvim_docmd_do_bang(addr_count, eap, forceit);
+}
+
+/// Command modifier used in the wrong context.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_wrongmodifier(eap: ExArgHandle) {
+    let msg = nvim_docmd_get_e_invcmd();
+    nvim_eap_set_errmsg_const(eap, msg);
+}
+
+/// ":nogui" -- set error message (Nvim has no built-in GUI).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_nogui(eap: ExArgHandle) {
+    let msg = nvim_docmd_get_e_nogvim();
+    nvim_eap_set_errmsg_const(eap, msg);
+}
+
+/// ":popup" -- call pum_make_popup.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_popup(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    nvim_docmd_pum_make_popup(arg as *const c_char, forceit);
+}
+
+/// ":wundo" -- write undo file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_wundo(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    nvim_docmd_wundo(arg as *const c_char, forceit);
+}
+
+/// ":rundo" -- read undo file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_rundo(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    nvim_docmd_rundo(arg as *const c_char);
+}
+
+/// ":tabmove" -- move tab page.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_tabmove(eap: ExArgHandle) {
+    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    let errmsg = nvim_eap_get_errmsg(eap);
+    if errmsg.is_null() {
+        tabpage_move(tab_number);
+    }
+}
+
+/// set_no_hlsearch -- set the no_hlsearch flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_no_hlsearch(flag: bool) {
+    nvim_docmd_set_no_hlsearch(flag);
+}
+
+/// ":nohlsearch" -- disable search highlighting.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_nohlsearch(eap: ExArgHandle) {
+    let _ = eap;
+    nvim_docmd_set_no_hlsearch(true);
+    nvim_docmd_redraw_all_later_some_valid();
+}
+
+/// ":stopinsert" -- stop insert mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_stopinsert(eap: ExArgHandle) {
+    let _ = eap;
+    nvim_docmd_clear_restart_edit();
+    nvim_docmd_set_stop_insert_mode();
+    nvim_docmd_clearmode();
+}
+
+/// ":checkpath" -- find pattern in path.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
+    let forceit = nvim_eap_get_forceit(eap);
+    nvim_docmd_checkpath(forceit);
+}
+
+/// ":psearch" -- preview search (delegates to ex_psearch via C since it calls ex_findpat).
+/// We set g_do_tagpreview and call ex_findpat indirectly.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
+    nvim_docmd_ex_psearch(eap);
+}
+
+/// set_pressedreturn -- set ex_pressedreturn flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_pressedreturn(val: bool) {
+    nvim_docmd_set_pressedreturn(val);
+}

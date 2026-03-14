@@ -258,6 +258,30 @@ extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
+// Phase 1 (batch plan) Rust FFI declarations
+extern void rs_ex_buffer(exarg_T *eap);
+extern void rs_ex_bmodified(exarg_T *eap);
+extern void rs_ex_bnext(exarg_T *eap);
+extern void rs_ex_bprevious(exarg_T *eap);
+extern void rs_ex_brewind(exarg_T *eap);
+extern void rs_ex_blast(exarg_T *eap);
+extern void rs_ex_highlight(exarg_T *eap);
+extern void rs_not_restarting(void);
+extern void rs_ex_preserve(exarg_T *eap);
+extern void rs_ex_redo(exarg_T *eap);
+extern void rs_ex_bang(exarg_T *eap);
+extern void rs_ex_wrongmodifier(exarg_T *eap);
+extern void rs_ex_nogui(exarg_T *eap);
+extern void rs_ex_popup(exarg_T *eap);
+extern void rs_ex_wundo(exarg_T *eap);
+extern void rs_ex_rundo(exarg_T *eap);
+extern void rs_ex_tabmove(exarg_T *eap);
+extern void rs_set_no_hlsearch(bool flag);
+extern void rs_ex_nohlsearch(exarg_T *eap);
+extern void rs_ex_stopinsert(exarg_T *eap);
+extern void rs_ex_checkpath(exarg_T *eap);
+extern void rs_ex_psearch(exarg_T *eap);
+extern void rs_set_pressedreturn(bool val);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -2018,7 +2042,7 @@ static void ex_bunload(exarg_T *eap)
 /// :[N]sbuffer [N]      to buffer N
 static void ex_buffer(exarg_T *eap)
 {
-  do_exbuffer(eap);
+  rs_ex_buffer(eap);
 }
 
 /// ":buffer" command and alike.
@@ -2042,20 +2066,14 @@ static void do_exbuffer(exarg_T *eap)
 /// :[N]sbmodified [N]   to next mod. buffer
 static void ex_bmodified(exarg_T *eap)
 {
-  goto_buffer(eap, DOBUF_MOD, FORWARD, (int)eap->line2);
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
+  rs_ex_bmodified(eap);
 }
 
 /// :[N]bnext [N]        to next buffer
 /// :[N]sbnext [N]       split and to next buffer
 static void ex_bnext(exarg_T *eap)
 {
-  goto_buffer(eap, DOBUF_CURRENT, FORWARD, (int)eap->line2);
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
+  rs_ex_bnext(eap);
 }
 
 /// :[N]bNext [N]        to previous buffer
@@ -2064,10 +2082,7 @@ static void ex_bnext(exarg_T *eap)
 /// :[N]sbprevious [N]   split and to previous buffer
 static void ex_bprevious(exarg_T *eap)
 {
-  goto_buffer(eap, DOBUF_CURRENT, BACKWARD, (int)eap->line2);
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
+  rs_ex_bprevious(eap);
 }
 
 /// :brewind             to first buffer
@@ -2076,20 +2091,14 @@ static void ex_bprevious(exarg_T *eap)
 /// :sbfirst             split and to first buffer
 static void ex_brewind(exarg_T *eap)
 {
-  goto_buffer(eap, DOBUF_FIRST, FORWARD, 0);
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
+  rs_ex_brewind(eap);
 }
 
 /// :blast               to last buffer
 /// :sblast              split and to last buffer
 static void ex_blast(exarg_T *eap)
 {
-  goto_buffer(eap, DOBUF_LAST, BACKWARD, 0);
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
+  rs_ex_blast(eap);
 }
 
 
@@ -2152,10 +2161,7 @@ static void ex_colorscheme(exarg_T *eap)
 
 static void ex_highlight(exarg_T *eap)
 {
-  if (*eap->arg == NUL && eap->cmd[2] == '!') {
-    msg(_("Greetings, Vim user!"), 0);
-  }
-  do_highlight(eap->arg, eap->forceit, false);
+  rs_ex_highlight(eap);
 }
 
 /// Call this function if we thought we were going to exit, but we won't
@@ -2169,7 +2175,7 @@ void not_exiting(void)
 /// (because of an error).
 void not_restarting(void)
 {
-  restarting = false;
+  rs_not_restarting();
 }
 
 bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
@@ -2622,7 +2628,7 @@ static void ex_goto(exarg_T *eap)
 /// ":preserve".
 static void ex_preserve(exarg_T *eap)
 {
-  ml_preserve(curbuf, true, true);
+  rs_ex_preserve(eap);
 }
 
 /// ":recover".
@@ -2645,7 +2651,7 @@ static void ex_recover(exarg_T *eap)
 /// Command modifier used in a wrong way.
 static void ex_wrongmodifier(exarg_T *eap)
 {
-  eap->errmsg = _(e_invcmd);
+  rs_ex_wrongmodifier(eap);
 }
 
 /// callback function for 'findfunc'
@@ -2959,10 +2965,7 @@ static void ex_tabnext(exarg_T *eap)
 /// :tabmove command
 static void ex_tabmove(exarg_T *eap)
 {
-  int tab_number = get_tabpage_arg(eap);
-  if (eap->errmsg == NULL) {
-    tabpage_move(tab_number);
-  }
+  rs_ex_tabmove(eap);
 }
 
 /// :tabs command: List tabs and their contents.
@@ -3315,12 +3318,12 @@ void do_exedit(exarg_T *eap, win_T *old_curwin)
 /// ":gui" and ":gvim" when there is no GUI.
 static void ex_nogui(exarg_T *eap)
 {
-  eap->errmsg = _("E25: Nvim does not have a built-in GUI");
+  rs_ex_nogui(eap);
 }
 
 static void ex_popup(exarg_T *eap)
 {
-  pum_make_popup(eap->arg, eap->forceit);
+  rs_ex_popup(eap);
 }
 
 static void ex_swapname(exarg_T *eap)
@@ -3873,7 +3876,7 @@ static void ex_at(exarg_T *eap)
 /// ":!".
 static void ex_bang(exarg_T *eap)
 {
-  do_bang(eap->addr_count, eap, eap->forceit, true, true);
+  rs_ex_bang(eap);
 }
 
 /// ":undo".
@@ -3916,24 +3919,18 @@ static void ex_undo(exarg_T *eap)
 
 static void ex_wundo(exarg_T *eap)
 {
-  uint8_t hash[UNDO_HASH_SIZE];
-
-  u_compute_hash(curbuf, hash);
-  u_write_undo(eap->arg, eap->forceit, curbuf, hash);
+  rs_ex_wundo(eap);
 }
 
 static void ex_rundo(exarg_T *eap)
 {
-  uint8_t hash[UNDO_HASH_SIZE];
-
-  u_compute_hash(curbuf, hash);
-  u_read_undo(eap->arg, hash, NULL);
+  rs_ex_rundo(eap);
 }
 
 /// ":redo".
 static void ex_redo(exarg_T *eap)
 {
-  u_redo(1);
+  rs_ex_redo(eap);
 }
 
 /// ":earlier" and ":later".
@@ -4248,9 +4245,7 @@ static void ex_startinsert(exarg_T *eap)
 /// ":stopinsert"
 static void ex_stopinsert(exarg_T *eap)
 {
-  restart_edit = 0;
-  stop_insert_mode = true;
-  clearmode();
+  rs_ex_stopinsert(eap);
 }
 
 /// Execute normal mode command "cmd".
@@ -4287,17 +4282,13 @@ void exec_normal(bool was_typed, bool use_vpeekc)
 
 static void ex_checkpath(exarg_T *eap)
 {
-  find_pattern_in_path(NULL, 0, 0, false, false, CHECK_PATH, 1,
-                       eap->forceit ? ACTION_SHOW_ALL : ACTION_SHOW,
-                       1, (linenr_T)MAXLNUM, eap->forceit, false);
+  rs_ex_checkpath(eap);
 }
 
 /// ":psearch"
 static void ex_psearch(exarg_T *eap)
 {
-  g_do_tagpreview = (int)p_pvh;
-  ex_findpat(eap);
-  g_do_tagpreview = 0;
+  rs_ex_psearch(eap);
 }
 
 static void ex_findpat(exarg_T *eap)
@@ -4943,15 +4934,13 @@ static void ex_digraphs(exarg_T *eap)
 
 void set_no_hlsearch(bool flag)
 {
-  no_hlsearch = flag;
-  set_vim_var_nr(VV_HLSEARCH, !no_hlsearch && p_hls);
+  rs_set_no_hlsearch(flag);
 }
 
 /// ":nohlsearch"
 static void ex_nohlsearch(exarg_T *eap)
 {
-  set_no_hlsearch(true);
-  redraw_all_later(UPD_SOME_VALID);
+  rs_ex_nohlsearch(eap);
 }
 
 static void ex_fold(exarg_T *eap)
@@ -4982,7 +4971,7 @@ static void ex_folddo(exarg_T *eap)
 
 void set_pressedreturn(bool val)
 {
-  ex_pressedreturn = val;
+  rs_set_pressedreturn(val);
 }
 
 // C accessor for Rust to read ex_pressedreturn
@@ -6415,3 +6404,163 @@ bool nvim_is_expand_char(int c)
 }
 
 // nvim_path_has_wildcard is defined in tag_shim.c
+
+// =============================================================================
+// Phase 1 (batch plan) accessor functions for Rust FFI
+// =============================================================================
+
+/// Set eap->errmsg from a const string (for Rust FFI const safety).
+void nvim_eap_set_errmsg_const(exarg_T *eap, const char *msg) { eap->errmsg = (char *)msg; }
+
+/// Wrapper for not_restarting() -- sets restarting = false.
+void nvim_docmd_not_restarting(void) { restarting = false; }
+
+/// Set no_hlsearch and update v:hlsearch (direct implementation for Rust FFI).
+void nvim_docmd_set_no_hlsearch(bool flag)
+{
+  no_hlsearch = flag;
+  set_vim_var_nr(VV_HLSEARCH, !no_hlsearch && p_hls);
+}
+
+/// Set restart_edit to 0.
+void nvim_docmd_clear_restart_edit(void) { restart_edit = 0; }
+
+/// Set stop_insert_mode = true.
+void nvim_docmd_set_stop_insert_mode(void) { stop_insert_mode = true; }
+
+/// Call clearmode().
+void nvim_docmd_clearmode(void) { clearmode(); }
+
+/// Get the _(e_nogvim) string for :nogui.
+const char *nvim_docmd_get_e_nogvim(void) { return _("E25: Nvim does not have a built-in GUI"); }
+
+/// Get _(e_invcmd).
+const char *nvim_docmd_get_e_invcmd(void) { return _(e_invcmd); }
+
+/// Wrapper for do_exbuffer(eap).
+void nvim_docmd_do_exbuffer(exarg_T *eap) { do_exbuffer(eap); }
+
+/// Wrapper for goto_buffer(eap, DOBUF_MOD, FORWARD, eap->line2) + do_cmdline_cmd.
+void nvim_docmd_goto_buffer_mod(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_MOD, FORWARD, (int)eap->line2);
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+}
+
+/// Wrapper for goto_buffer(eap, DOBUF_CURRENT, FORWARD, eap->line2).
+void nvim_docmd_goto_buffer_next(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_CURRENT, FORWARD, (int)eap->line2);
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+}
+
+/// Wrapper for goto_buffer(eap, DOBUF_CURRENT, BACKWARD, eap->line2).
+void nvim_docmd_goto_buffer_prev(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_CURRENT, BACKWARD, (int)eap->line2);
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+}
+
+/// Wrapper for goto_buffer(eap, DOBUF_FIRST, FORWARD, 0).
+void nvim_docmd_goto_buffer_rewind(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_FIRST, FORWARD, 0);
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+}
+
+/// Wrapper for goto_buffer(eap, DOBUF_LAST, BACKWARD, 0).
+void nvim_docmd_goto_buffer_last(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_LAST, BACKWARD, 0);
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+}
+
+/// Wrapper for ex_highlight (including easter egg check).
+void nvim_docmd_ex_highlight(exarg_T *eap)
+{
+  if (*eap->arg == NUL && eap->cmd[2] == '!') {
+    msg(_("Greetings, Vim user!"), 0);
+  }
+  do_highlight(eap->arg, eap->forceit, false);
+}
+
+/// Wrapper for do_bang().
+void nvim_docmd_do_bang(int addr_count, exarg_T *eap, bool forceit)
+{
+  do_bang(addr_count, eap, forceit, true, true);
+}
+
+/// Wrapper for ml_preserve(curbuf, true, true).
+void nvim_docmd_ml_preserve(void) { ml_preserve(curbuf, true, true); }
+
+/// Wrapper for u_redo(1).
+void nvim_docmd_u_redo(void) { u_redo(1); }
+
+/// Wrapper for pum_make_popup(arg, forceit).
+void nvim_docmd_pum_make_popup(const char *arg, bool forceit)
+{
+  pum_make_popup(arg, (int)forceit);
+}
+
+/// Wrapper for u_compute_hash(curbuf, hash) + u_write_undo.
+void nvim_docmd_wundo(const char *arg, bool forceit)
+{
+  uint8_t hash[UNDO_HASH_SIZE];
+  u_compute_hash(curbuf, hash);
+  u_write_undo(arg, forceit, curbuf, hash);
+}
+
+/// Wrapper for u_compute_hash(curbuf, hash) + u_read_undo.
+void nvim_docmd_rundo(const char *arg)
+{
+  uint8_t hash[UNDO_HASH_SIZE];
+  u_compute_hash(curbuf, hash);
+  u_read_undo((char *)arg, hash, NULL);
+}
+
+/// Wrapper for get_tabpage_arg(eap).
+int nvim_docmd_get_tabpage_arg(exarg_T *eap) { return get_tabpage_arg(eap); }
+
+/// Wrapper for ins_typebuf + exec_normal_cmd pattern.
+void nvim_docmd_exec_normal_cmd(const char *cmd, int remap, bool silent)
+{
+  exec_normal_cmd((char *)cmd, remap, silent);
+}
+
+/// Wrapper for find_pattern_in_path for :checkpath.
+void nvim_docmd_checkpath(bool forceit)
+{
+  find_pattern_in_path(NULL, 0, 0, false, false, CHECK_PATH, 1,
+                       forceit ? ACTION_SHOW_ALL : ACTION_SHOW,
+                       1, (linenr_T)MAXLNUM, forceit, false);
+}
+
+/// Get eap->addr_count.
+int nvim_eap_get_addr_count_val(const exarg_T *eap) { return (int)eap->addr_count; }
+
+/// Wrapper for redraw_all_later(UPD_SOME_VALID).
+void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VALID); }
+
+/// Wrapper for store_loop_line.
+void nvim_docmd_store_loop_line(garray_T *gap, char *line) { store_loop_line(gap, line); }
+
+/// Set ex_pressedreturn (direct implementation for Rust FFI).
+void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
+
+/// Wrapper for ex_psearch logic (sets g_do_tagpreview then calls ex_findpat).
+void nvim_docmd_ex_psearch(exarg_T *eap)
+{
+  g_do_tagpreview = (int)p_pvh;
+  ex_findpat(eap);
+  g_do_tagpreview = 0;
+}
