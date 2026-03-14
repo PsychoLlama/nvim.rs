@@ -83,9 +83,13 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations (typval blob functions migrated to Rust)
+// Rust FFI declarations (typval functions migrated to Rust)
 extern int tv_blob_check_index(int bloblen, varnumber_T n1, bool quiet);
 extern int tv_blob_check_range(int bloblen, varnumber_T n1, varnumber_T n2, bool quiet);
+extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
+extern varnumber_T tv_list_find_nr(list_T *l, int n, bool *ret_error);
+extern const char *tv_list_find_str(list_T *l, int n);
+extern bool tv2bool(const typval_T *tv);
 
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);

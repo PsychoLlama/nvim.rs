@@ -105,6 +105,9 @@ typedef struct {
 
 #include "ex_cmds_shim.c.generated.h"
 
+// Rust FFI declarations (typval functions migrated to Rust)
+extern const char *tv_list_find_str(list_T *l, int n);
+
 // Rust FFI declarations
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 extern int rs_win_valid(win_T *win);

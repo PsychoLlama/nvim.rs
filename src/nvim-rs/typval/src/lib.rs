@@ -1071,6 +1071,11 @@ extern "C" {
     fn tv_blob_alloc() -> BlobHandle;
     fn tv_clear(tv: TypevalHandle);
     fn tv_get_number_chk(tv: TypevalHandle, error: *mut bool) -> i64;
+
+    // Functions for Phase 2
+    fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
+    fn nvim_tv_get_string(tv: TypevalHandle, out_len: *mut usize) -> *const c_char;
+    fn nvim_semsg_list_index_out_of_range(idx: c_int);
 }
 
 // =============================================================================
@@ -1805,6 +1810,131 @@ pub unsafe extern "C" fn rs_tv_blob_remove(
             unsafe { nvim_blob_set_ga_len(b, (len - i64::from(count)) as c_int) };
         }
     }
+}
+
+// =============================================================================
+// Phase 2: List equality, find, tv2bool
+// =============================================================================
+
+/// Compare two lists for equality.
+fn tv_list_equal_impl(l1: ListHandle, l2: ListHandle, ic: bool) -> bool {
+    // Same pointer => equal
+    if l1.0 == l2.0 {
+        return true;
+    }
+    let len1 = tv_list_len_impl(l1);
+    let len2 = tv_list_len_impl(l2);
+    if len1 != len2 {
+        return false;
+    }
+    // empty and NULL list are considered equal
+    if len1 == 0 {
+        return true;
+    }
+    if l1.is_null() || l2.is_null() {
+        return false;
+    }
+
+    let mut item1 = tv_list_first_impl(l1);
+    let mut item2 = tv_list_first_impl(l2);
+    while !item1.is_null() && !item2.is_null() {
+        let tv1 = tv_listitem_tv_impl(item1);
+        let tv2 = tv_listitem_tv_impl(item2);
+        if !unsafe { tv_equal(tv1, tv2, ic) } {
+            return false;
+        }
+        item1 = tv_listitem_next_impl(item1);
+        item2 = tv_listitem_next_impl(item2);
+    }
+    true
+}
+
+/// FFI wrapper: compare two lists for equality.
+#[export_name = "tv_list_equal"]
+pub extern "C" fn rs_tv_list_equal(l1: ListHandle, l2: ListHandle, ic: bool) -> bool {
+    tv_list_equal_impl(l1, l2, ic)
+}
+
+/// Get list item l[n] as a number.
+fn tv_list_find_nr_impl(l: ListHandle, n: c_int, ret_error: *mut bool) -> i64 {
+    let li = tv_list_find_impl(l, n);
+    if li.is_null() {
+        if !ret_error.is_null() {
+            unsafe { *ret_error = true };
+        }
+        return -1;
+    }
+    let tv = tv_listitem_tv_impl(li);
+    unsafe { tv_get_number_chk(tv, ret_error) }
+}
+
+/// FFI wrapper: get list item as number.
+#[export_name = "tv_list_find_nr"]
+pub extern "C" fn rs_tv_list_find_nr(l: ListHandle, n: c_int, ret_error: *mut bool) -> i64 {
+    tv_list_find_nr_impl(l, n, ret_error)
+}
+
+/// Get list item l[n] as a string.
+unsafe fn tv_list_find_str_impl(l: ListHandle, n: c_int) -> *const c_char {
+    let li = tv_list_find_impl(l, n);
+    if li.is_null() {
+        unsafe { nvim_semsg_list_index_out_of_range(n) };
+        return std::ptr::null();
+    }
+    let tv = tv_listitem_tv_impl(li);
+    unsafe { nvim_tv_get_string(tv, std::ptr::null_mut()) }
+}
+
+/// FFI wrapper: get list item as string.
+#[export_name = "tv_list_find_str"]
+pub unsafe extern "C" fn rs_tv_list_find_str(l: ListHandle, n: c_int) -> *const c_char {
+    unsafe { tv_list_find_str_impl(l, n) }
+}
+
+/// Check if typval is truthy (non-zero, non-empty, non-null).
+fn tv2bool_impl(tv: TypevalHandle) -> bool {
+    match tv_type_impl(tv) {
+        VarType::Number => {
+            let n = unsafe { nvim_tv_get_number(tv) };
+            n != 0
+        }
+        VarType::Float => {
+            let f = unsafe { nvim_tv_get_float(tv) };
+            f != 0.0
+        }
+        VarType::Partial => {
+            let is_null = unsafe { nvim_tv_partial_is_null(tv) };
+            is_null == 0
+        }
+        VarType::Func | VarType::String => {
+            let s = unsafe { nvim_tv_get_string_ptr(tv) };
+            !s.is_null() && unsafe { *s != 0 }
+        }
+        VarType::List => {
+            let l = unsafe { nvim_tv_get_list(tv) };
+            !l.is_null() && tv_list_len_impl(l) > 0
+        }
+        VarType::Dict => {
+            let d = unsafe { nvim_tv_get_dict(tv) };
+            !d.is_null() && tv_dict_len_impl(d) > 0
+        }
+        VarType::Bool => {
+            let b = unsafe { nvim_tv_get_bool(tv) };
+            b != 0
+        }
+        VarType::Special => false,
+        VarType::Blob => {
+            let b = unsafe { nvim_tv_get_blob(tv) };
+            !b.is_null() && tv_blob_len_impl(b) > 0
+        }
+        VarType::Unknown => false,
+    }
+}
+
+/// FFI wrapper: check if typval is truthy.
+#[export_name = "tv2bool"]
+pub extern "C" fn rs_tv2bool(tv: TypevalHandle) -> bool {
+    tv2bool_impl(tv)
 }
 
 // =============================================================================

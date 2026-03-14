@@ -59,6 +59,10 @@ typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
 #include "eval/vars.c.generated.h"
 extern int rs_valid_tabpage(tabpage_T *tpc);
 
+// Rust FFI declarations (typval functions migrated to Rust)
+extern const char *tv_list_find_str(list_T *l, int n);
+extern varnumber_T tv_list_find_nr(list_T *l, int n, bool *ret_error);
+
 // Rust FFI declarations (window wrappers removed)
 extern tabpage_T *rs_find_tabpage(int n);
 

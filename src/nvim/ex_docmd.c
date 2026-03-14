@@ -236,6 +236,9 @@ extern int rs_get_scrolloff_value(win_T *wp);
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
+// Rust FFI declarations (typval functions migrated to Rust)
+extern const char *tv_list_find_str(list_T *l, int n);
+
 // Rust FFI declarations (memline crate)
 extern void rs_goto_byte(int cnt);
 

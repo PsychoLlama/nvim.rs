@@ -47,6 +47,10 @@ extern bool rs_func_equal(typval_T *tv1, typval_T *tv2, bool ic);
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 extern char *rs_partial_name(partial_T *pt);
 
+// Rust typval functions (migrated in Phase 2)
+extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
+extern bool tv2bool(const typval_T *tv);
+
 
 /// struct storing information about current sort
 typedef struct {
@@ -1518,83 +1522,9 @@ void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   do_sort_uniq(argvars, rettv, false);
 }
 
-/// Check whether two lists are equal
-///
-/// @param[in]  l1  First list to compare.
-/// @param[in]  l2  Second list to compare.
-/// @param[in]  ic  True if case is to be ignored.
-///
-/// @return True if lists are equal, false otherwise.
-bool tv_list_equal(list_T *const l1, list_T *const l2, const bool ic)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (l1 == l2) {
-    return true;
-  }
-  if (tv_list_len(l1) != tv_list_len(l2)) {
-    return false;
-  }
-  if (tv_list_len(l1) == 0) {
-    // empty and NULL list are considered equal
-    return true;
-  }
-  if (l1 == NULL || l2 == NULL) {
-    return false;
-  }
-
-  listitem_T *item1 = tv_list_first(l1);
-  listitem_T *item2 = tv_list_first(l2);
-  for (; item1 != NULL && item2 != NULL
-       ; (item1 = TV_LIST_ITEM_NEXT(l1, item1),
-          item2 = TV_LIST_ITEM_NEXT(l2, item2))) {
-    if (!tv_equal(TV_LIST_ITEM_TV(item1), TV_LIST_ITEM_TV(item2), ic)) {
-      return false;
-    }
-  }
-  assert(item1 == NULL && item2 == NULL);
-  return true;
-}
+// tv_list_equal, tv_list_find_nr, tv_list_find_str migrated to Rust (Phase 2)
 
 //{{{2 Indexing/searching
-
-/// Get list item l[n] as a number
-///
-/// @param[in]  l  List to index.
-/// @param[in]  n  Index in a list.
-/// @param[out]  ret_error  Location where 1 will be saved if index was not
-///                         found. May be NULL. If everything is OK,
-///                         `*ret_error` is not touched.
-///
-/// @return Integer value at the given index or -1.
-varnumber_T tv_list_find_nr(list_T *const l, const int n, bool *const ret_error)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const listitem_T *const li = tv_list_find(l, n);
-  if (li == NULL) {
-    if (ret_error != NULL) {
-      *ret_error = true;
-    }
-    return -1;
-  }
-  return tv_get_number_chk(TV_LIST_ITEM_TV(li), ret_error);
-}
-
-/// Get list item l[n] as a string
-///
-/// @param[in]  l  List to index.
-/// @param[in]  n  Index in a list.
-///
-/// @return List item string value or NULL in case of error.
-const char *tv_list_find_str(list_T *const l, const int n)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const listitem_T *const li = tv_list_find(l, n);
-  if (li == NULL) {
-    semsg(_(e_list_index_out_of_range_nr), (int64_t)n);
-    return NULL;
-  }
-  return tv_get_string(TV_LIST_ITEM_TV(li));
-}
 
 /// Like tv_list_find() but when a negative index is used that is not found use
 /// zero and set "idx" to zero.  Used for first index of a range.
@@ -4175,36 +4105,7 @@ const char *tv_get_string_buf(const typval_T *const tv, char *const buf)
   return res != NULL ? res : "";
 }
 
-/// Return true when "tv" is not falsy: non-zero, non-empty string, non-empty
-/// list, etc.  Mostly like what JavaScript does, except that empty list and
-/// empty dictionary are false.
-bool tv2bool(const typval_T *const tv)
-{
-  switch (tv->v_type) {
-  case VAR_NUMBER:
-    return tv->vval.v_number != 0;
-  case VAR_FLOAT:
-    return tv->vval.v_float != 0.0;
-  case VAR_PARTIAL:
-    return tv->vval.v_partial != NULL;
-  case VAR_FUNC:
-  case VAR_STRING:
-    return tv->vval.v_string != NULL && *tv->vval.v_string != NUL;
-  case VAR_LIST:
-    return tv->vval.v_list != NULL && tv->vval.v_list->lv_len > 0;
-  case VAR_DICT:
-    return tv->vval.v_dict != NULL && tv->vval.v_dict->dv_hashtab.ht_used > 0;
-  case VAR_BOOL:
-    return tv->vval.v_bool == kBoolVarTrue;
-  case VAR_SPECIAL:
-    return tv->vval.v_special != kSpecialVarNull;
-  case VAR_BLOB:
-    return tv->vval.v_blob != NULL && tv->vval.v_blob->bv_ga.ga_len > 0;
-  case VAR_UNKNOWN:
-    break;
-  }
-  return false;
-}
+// tv2bool migrated to Rust (Phase 2)
 
 // =============================================================================
 // Rust accessor functions for opaque typval_T handle pattern
