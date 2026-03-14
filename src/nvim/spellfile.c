@@ -464,6 +464,8 @@ extern void rs_set_sal_first(slang_T *slang);
 extern void rs_set_map_str(slang_T *slang, const char *map);
 // Phase 4: spell_check_msm replacement
 extern int rs_spell_check_msm(const char *msm, int *start_out, int *incr_out, int *added_out);
+// Phase 4: set_sofo replacement
+extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1586,7 +1588,7 @@ static int read_sofo_section(FILE *fd, slang_T *slang, int len)
   memcpy(to_str, section.to, section.to_len);
   to_str[section.to_len] = '\0';
 
-  return set_sofo(slang, from_str, to_str);
+  return rs_set_sofo(slang, from_str, to_str);
 }
 
 // Read the compound section from the .spl file:
@@ -1711,72 +1713,6 @@ static int read_compound(FILE *fd, slang_T *slang, int len)
 
   return 0;
 }
-
-// Set the SOFOFROM and SOFOTO items in language "lp".
-// Returns SP_*ERROR flags when there is something wrong.
-static int set_sofo(slang_T *lp, const char *from, const char *to)
-{
-  const char *s;
-  const char *p;
-
-  // Use "sl_sal" as an array with 256 pointers to a list of wide
-  // characters.  The index is the low byte of the character.
-  // The list contains from-to pairs with a terminating NUL.
-  // sl_sal_first[] is used for latin1 "from" characters.
-  garray_T *gap = &lp->sl_sal;
-  ga_init(gap, sizeof(int *), 1);
-  ga_grow(gap, 256);
-  memset(gap->ga_data, 0, sizeof(int *) * 256);
-  gap->ga_len = 256;
-
-  // First count the number of items for each list.  Temporarily use
-  // sl_sal_first[] for this.
-  for (p = from, s = to; *p != NUL && *s != NUL;) {
-    const int c = mb_cptr2char_adv(&p);
-    s += utf_ptr2len(s);
-    if (c >= 256) {
-      lp->sl_sal_first[c & 0xff]++;
-    }
-  }
-  if (*p != NUL || *s != NUL) {  // lengths differ
-    return SP_FORMERROR;
-  }
-
-  // Allocate the lists.
-  for (int i = 0; i < 256; i++) {
-    if (lp->sl_sal_first[i] > 0) {
-      p = xmalloc(sizeof(int) * (size_t)(lp->sl_sal_first[i] * 2 + 1));
-      ((int **)gap->ga_data)[i] = (int *)p;
-      *(int *)p = 0;
-    }
-  }
-
-  // Put the characters up to 255 in sl_sal_first[] the rest in a sl_sal
-  // list.
-  memset(lp->sl_sal_first, 0, sizeof(salfirst_T) * 256);
-  for (p = from, s = to; *p != NUL && *s != NUL;) {
-    const int c = mb_cptr2char_adv(&p);
-    const int i = mb_cptr2char_adv(&s);
-    if (c >= 256) {
-      // Append the from-to chars at the end of the list with
-      // the low byte.
-      int *inp = ((int **)gap->ga_data)[c & 0xff];
-      while (*inp != 0) {
-        inp++;
-      }
-      *inp++ = c;                     // from char
-      *inp++ = i;                     // to char
-      *inp++ = NUL;                   // NUL at the end
-    } else {
-      // mapping byte to char is done in sl_sal_first[]
-      lp->sl_sal_first[c] = i;
-    }
-  }
-
-  return 0;
-}
-
-
 
 /// Reload the spell file "fname" if it's loaded.
 ///

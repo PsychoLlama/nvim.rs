@@ -4004,6 +4004,8 @@ extern "C" {
     );
     fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+    fn ga_grow(gap: *mut crate::GArrayRaw, n: c_int);
     #[link_name = "xmalloc"]
     fn xmalloc_spell(size: usize) -> *mut std::ffi::c_void;
     #[link_name = "xfree"]
@@ -4289,6 +4291,87 @@ pub unsafe extern "C" fn rs_set_map_str(slang: *mut crate::SlangRaw, map: *const
 #[inline]
 unsafe fn hashitem_is_empty_sf(hi: *const crate::HashitemRaw) -> bool {
     (*hi).hi_key.is_null() || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed_sentinel))
+}
+
+/// Build SOFO character mapping tables on slang_T from from/to strings.
+/// Replaces C set_sofo(). Uses sl_sal as a 256-entry int* array and sl_sal_first for latin1.
+///
+/// # Safety
+/// - `slang` must be a valid non-null pointer to a SlangRaw.
+/// - `from` and `to` must be valid NUL-terminated C strings.
+#[no_mangle]
+#[allow(clippy::cast_ptr_alignment)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_set_sofo(
+    slang: *mut crate::SlangRaw,
+    from: *const c_char,
+    to: *const c_char,
+) -> c_int {
+    // Initialize sl_sal as a garray_T of int* with 256 slots.
+    let gap = std::ptr::addr_of_mut!((*slang).sl_sal);
+    (*gap).ga_len = 0;
+    (*gap).ga_maxlen = 0;
+    (*gap).ga_itemsize = std::mem::size_of::<*mut c_int>() as i32;
+    (*gap).ga_growsize = 1;
+    (*gap).ga_data = std::ptr::null_mut();
+    ga_grow(gap, 256);
+    std::ptr::write_bytes((*gap).ga_data, 0, std::mem::size_of::<*mut c_int>() * 256);
+    (*gap).ga_len = 256;
+
+    // First pass: count how many entries are needed per low-byte bucket (for chars >= 256).
+    let mut p = from;
+    let mut s = to;
+    while *p != 0 && *s != 0 {
+        let c = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(p));
+        s = s.add(utf_ptr2len(s) as usize);
+        if c >= 256 {
+            let bucket = (c & 0xff) as usize;
+            let slot = ((*gap).ga_data as *mut *mut c_int).add(bucket);
+            let cur = *slot as usize;
+            *slot = (cur + 1) as *mut c_int; // temp: count
+        }
+    }
+    if *p != 0 || *s != 0 {
+        // lengths differ
+        return -1; // SP_FORMERROR
+    }
+
+    // Allocate int arrays for each bucket that has entries.
+    for i in 0..256usize {
+        let slot = ((*gap).ga_data as *mut *mut c_int).add(i);
+        let count = *slot as usize;
+        if count > 0 {
+            let arr = xmalloc_spell(std::mem::size_of::<c_int>() * (count * 2 + 1)).cast::<c_int>();
+            *arr = 0; // NUL terminator
+            *slot = arr;
+        }
+    }
+
+    // Clear sl_sal_first and do second pass to fill mappings.
+    (*slang).sl_sal_first = [0i32; 256];
+    let mut p = from;
+    let mut s = to;
+    while *p != 0 && *s != 0 {
+        let c = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(p));
+        let target = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(s));
+        if c >= 256 {
+            let bucket = (c & 0xff) as usize;
+            let slot = ((*gap).ga_data as *mut *mut c_int).add(bucket);
+            let mut inp = *slot;
+            while *inp != 0 {
+                inp = inp.add(1);
+            }
+            *inp = c;
+            inp = inp.add(1);
+            *inp = target;
+            inp = inp.add(1);
+            *inp = 0; // NUL terminator
+        } else {
+            (*slang).sl_sal_first[c as usize] = target;
+        }
+    }
+    0 // OK
 }
 
 // Size of spell block in bytes (matches SBLOCKSIZE in spellfile.c).
