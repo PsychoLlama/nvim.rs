@@ -318,111 +318,86 @@ pub type BufHandle = *mut std::ffi::c_void;
 // =============================================================================
 
 extern "C" {
-    // String option accessors
-    fn nvim_option_get_sh() -> *const c_char;
-    fn nvim_get_p_ffs() -> *const c_char;
-    fn nvim_option_get_cpo() -> *const c_char;
-    fn nvim_get_p_isk() -> *const c_char;
-    fn nvim_option_get_isf() -> *const c_char;
-    fn nvim_option_get_isp() -> *const c_char;
-    fn nvim_option_get_isi() -> *const c_char;
-    fn nvim_option_get_breakat() -> *const c_char;
-    fn nvim_option_get_sel() -> *const c_char;
-    fn nvim_option_get_enc() -> *const c_char;
-    fn nvim_get_p_ff() -> *const c_char;
-    fn nvim_get_p_fo() -> *const c_char;
-    fn nvim_get_p_mps() -> *const c_char;
-    fn nvim_get_p_nf() -> *const c_char;
-    fn nvim_option_get_ww() -> *const c_char;
-    fn nvim_option_get_mouse() -> *const c_char;
-    fn nvim_option_get_shm() -> *const c_char;
+    // String option globals (char * -- accessed as *mut c_char, cast to *const c_char at use sites)
+    pub static mut p_sh: *mut c_char;
+    pub static mut p_ffs: *mut c_char;
+    pub static mut p_cpo: *mut c_char;
+    pub static mut p_isk: *mut c_char;
+    pub static mut p_isf: *mut c_char;
+    pub static mut p_isp: *mut c_char;
+    pub static mut p_isi: *mut c_char;
+    pub static mut p_breakat: *mut c_char;
+    pub static mut p_sel: *mut c_char;
+    pub static mut p_enc: *mut c_char;
+    pub static mut p_ff: *mut c_char;
+    pub static mut p_fo: *mut c_char;
+    pub static mut p_mps: *mut c_char;
+    pub static mut p_nf: *mut c_char;
+    pub static mut p_ww: *mut c_char;
+    pub static mut p_mouse: *mut c_char;
+    pub static mut p_shm: *mut c_char;
 
-    // Boolean option accessors
-    fn nvim_get_p_ai() -> c_int;
-    fn nvim_get_p_et() -> c_int;
-    fn nvim_option_get_ic() -> c_int;
-    fn nvim_option_get_scs() -> c_int;
-    fn nvim_option_get_hls() -> c_int;
-    fn nvim_option_get_is() -> c_int;
-    fn nvim_option_get_magic() -> c_int;
-    fn nvim_option_get_fic() -> c_int;
-    fn nvim_get_p_ml() -> c_int;
-    fn nvim_option_get_mle() -> c_int;
-    fn nvim_option_get_paste() -> c_int;
-    fn nvim_option_get_ri() -> c_int;
-    fn nvim_option_get_ws() -> c_int;
-    fn nvim_option_get_gd() -> c_int;
-    fn nvim_option_get_ea() -> c_int;
-    fn nvim_option_get_hid() -> c_int;
-    fn nvim_option_get_sm() -> c_int;
-    fn nvim_option_get_lz() -> c_int;
-    fn nvim_option_get_to() -> c_int;
+    // Boolean/int option globals
+    pub static mut p_ai: c_int;
+    pub static mut p_et: c_int;
+    pub static mut p_ic: c_int;
+    pub static mut p_scs: c_int;
+    pub static mut p_hls: c_int;
+    pub static mut p_is: c_int;
+    pub static mut p_magic: c_int;
+    pub static mut p_fic: c_int;
+    pub static mut p_ml: c_int;
+    pub static mut p_mle: c_int;
+    pub static mut p_paste: c_int;
+    pub static mut p_ri: c_int;
+    pub static mut p_ws: c_int;
+    pub static mut p_gd: c_int;
+    pub static mut p_ea: c_int;
+    pub static mut p_hid: c_int;
+    pub static mut p_sm: c_int;
+    pub static mut p_lz: c_int;
+    pub static mut p_to: c_int;
 
-    // Numeric option accessors
-    fn nvim_get_p_sw() -> OptInt;
-    fn nvim_get_p_ts() -> OptInt;
-    fn nvim_get_p_sts() -> OptInt;
-    fn nvim_get_p_tw() -> OptInt;
-    fn nvim_get_p_wm() -> OptInt;
-    fn nvim_option_get_so() -> OptInt;
-    fn nvim_option_get_siso() -> OptInt;
-    fn nvim_get_p_columns() -> OptInt;
-    fn nvim_get_p_lines() -> OptInt;
-    fn nvim_callback_get_p_ch() -> OptInt;
-    fn nvim_option_get_report() -> OptInt;
-    fn nvim_option_get_mat() -> OptInt;
-    fn nvim_option_get_ut() -> OptInt;
-    fn nvim_option_get_tm() -> OptInt;
-    fn nvim_option_get_hi() -> OptInt;
-    fn nvim_option_get_ls() -> OptInt;
-    fn nvim_option_get_stal() -> OptInt;
-    fn nvim_option_get_re() -> OptInt;
+    // Numeric option globals (OptInt = i64)
+    pub static mut p_sw: OptInt;
+    pub static mut p_ts: OptInt;
+    pub static mut p_sts: OptInt;
+    pub static mut p_tw: OptInt;
+    pub static mut p_wm: OptInt;
+    pub static mut p_so: OptInt;
+    pub static mut p_siso: OptInt;
+    pub static mut p_columns: OptInt;
+    pub static mut p_lines: OptInt;
+    pub static mut p_ch: OptInt;
+    pub static mut p_report: OptInt;
+    pub static mut p_mat: OptInt;
+    pub static mut p_ut: OptInt;
+    pub static mut p_tm: OptInt;
+    pub static mut p_hi: OptInt;
+    pub static mut p_ls: OptInt;
+    pub static mut p_stal: OptInt;
+    pub static mut p_re: OptInt;
 
-    // Flag option accessors
-    fn nvim_option_get_cot_flags() -> c_uint;
-    fn nvim_option_get_fdo_flags() -> c_uint;
-    fn nvim_option_get_dy_flags() -> c_uint;
-    fn nvim_option_get_cb_flags() -> c_uint;
+    // Flag option globals (unsigned)
+    pub static mut cot_flags: c_uint;
+    pub static mut fdo_flags: c_uint;
+    pub static mut dy_flags: c_uint;
+    pub static mut cb_flags: c_uint;
 
-    // Special accessors
-    fn nvim_option_get_magic_overruled() -> c_int;
-
-    // Boolean option setters
-    fn nvim_option_set_ai(value: c_int);
-    fn nvim_option_set_et(value: c_int);
-    fn nvim_option_set_ic(value: c_int);
-    fn nvim_option_set_scs(value: c_int);
-    fn nvim_option_set_hls(value: c_int);
-    fn nvim_option_set_is(value: c_int);
-    fn nvim_option_set_magic(value: c_int);
-    fn nvim_option_set_ml(value: c_int);
-    fn nvim_option_set_paste(value: c_int);
-    fn nvim_option_set_ri(value: c_int);
-    fn nvim_option_set_ws(value: c_int);
-    fn nvim_option_set_gd(value: c_int);
-    fn nvim_option_set_ea(value: c_int);
-    fn nvim_option_set_hid(value: c_int);
-    fn nvim_option_set_sm(value: c_int);
-    fn nvim_option_set_lz(value: c_int);
-    fn nvim_option_set_to(value: c_int);
-
-    // Numeric option setters
-    fn nvim_option_set_sw(value: OptInt);
-    fn nvim_option_set_ts(value: OptInt);
-    fn nvim_option_set_sts(value: OptInt);
-    fn nvim_option_set_tw(value: OptInt);
-    fn nvim_option_set_wm(value: OptInt);
-    fn nvim_option_set_so(value: OptInt);
-    fn nvim_option_set_siso(value: OptInt);
-    fn nvim_option_set_report(value: OptInt);
-    fn nvim_option_set_mat(value: OptInt);
-    fn nvim_option_set_ut(value: OptInt);
-    fn nvim_option_set_tm(value: OptInt);
-    fn nvim_option_set_hi(value: OptInt);
-    fn nvim_option_set_re(value: OptInt);
-
-    // Special setter
-    fn nvim_option_set_magic_overruled(value: c_int);
+    // Special globals from globals.h
+    pub static mut magic_overruled: c_int;
+    pub static mut secure: c_int;
+    pub static mut starting: c_int;
+    pub static mut no_hlsearch: bool;
+    pub static mut full_screen: bool;
+    pub static mut Rows: c_int;
+    pub static mut clear_cmdline: bool;
+    pub static mut readonlymode: bool;
+    pub static mut km_stopsel: bool;
+    pub static mut km_startsel: bool;
+    pub static mut silent_mode: bool;
+    pub static mut info_message: bool;
+    pub static mut no_wait_return: c_int;
 }
 
 // =============================================================================
@@ -432,355 +407,355 @@ extern "C" {
 /// Get the 'shell' option value.
 #[inline]
 pub fn get_shell() -> *const c_char {
-    unsafe { nvim_option_get_sh() }
+    unsafe { p_sh.cast_const() }
 }
 
 /// Get the 'fileformats' option value.
 #[inline]
 pub fn get_fileformats() -> *const c_char {
-    unsafe { nvim_get_p_ffs() }
+    unsafe { p_ffs.cast_const() }
 }
 
 /// Get the 'cpoptions' option value.
 #[inline]
 pub fn get_cpoptions() -> *const c_char {
-    unsafe { nvim_option_get_cpo() }
+    unsafe { p_cpo.cast_const() }
 }
 
 /// Get the 'iskeyword' option value.
 #[inline]
 pub fn get_iskeyword() -> *const c_char {
-    unsafe { nvim_get_p_isk() }
+    unsafe { p_isk.cast_const() }
 }
 
 /// Get the 'isfname' option value.
 #[inline]
 pub fn get_isfname() -> *const c_char {
-    unsafe { nvim_option_get_isf() }
+    unsafe { p_isf.cast_const() }
 }
 
 /// Get the 'isprint' option value.
 #[inline]
 pub fn get_isprint() -> *const c_char {
-    unsafe { nvim_option_get_isp() }
+    unsafe { p_isp.cast_const() }
 }
 
 /// Get the 'isident' option value.
 #[inline]
 pub fn get_isident() -> *const c_char {
-    unsafe { nvim_option_get_isi() }
+    unsafe { p_isi.cast_const() }
 }
 
 /// Get the 'breakat' option value.
 #[inline]
 pub fn get_breakat() -> *const c_char {
-    unsafe { nvim_option_get_breakat() }
+    unsafe { p_breakat.cast_const() }
 }
 
 /// Get the 'selection' option value.
 #[inline]
 pub fn get_selection() -> *const c_char {
-    unsafe { nvim_option_get_sel() }
+    unsafe { p_sel.cast_const() }
 }
 
 /// Get the 'encoding' option value.
 #[inline]
 pub fn get_encoding() -> *const c_char {
-    unsafe { nvim_option_get_enc() }
+    unsafe { p_enc.cast_const() }
 }
 
 /// Get the 'fileformat' option value.
 #[inline]
 pub fn get_fileformat() -> *const c_char {
-    unsafe { nvim_get_p_ff() }
+    unsafe { p_ff.cast_const() }
 }
 
 /// Get the 'formatoptions' option value.
 #[inline]
 pub fn get_formatoptions() -> *const c_char {
-    unsafe { nvim_get_p_fo() }
+    unsafe { p_fo.cast_const() }
 }
 
 /// Get the 'matchpairs' option value.
 #[inline]
 pub fn get_matchpairs() -> *const c_char {
-    unsafe { nvim_get_p_mps() }
+    unsafe { p_mps.cast_const() }
 }
 
 /// Get the 'nrformats' option value.
 #[inline]
 pub fn get_nrformats() -> *const c_char {
-    unsafe { nvim_get_p_nf() }
+    unsafe { p_nf.cast_const() }
 }
 
 /// Get the 'whichwrap' option value.
 #[inline]
 pub fn get_whichwrap() -> *const c_char {
-    unsafe { nvim_option_get_ww() }
+    unsafe { p_ww.cast_const() }
 }
 
 /// Get the 'mouse' option value.
 #[inline]
 pub fn get_mouse() -> *const c_char {
-    unsafe { nvim_option_get_mouse() }
+    unsafe { p_mouse.cast_const() }
 }
 
 /// Get the 'shortmess' option value.
 #[inline]
 pub fn get_shortmess() -> *const c_char {
-    unsafe { nvim_option_get_shm() }
+    unsafe { p_shm.cast_const() }
 }
 
 /// Get the 'autoindent' option value.
 #[inline]
 pub fn get_autoindent() -> bool {
-    unsafe { nvim_get_p_ai() != 0 }
+    unsafe { p_ai != 0 }
 }
 
 /// Get the 'expandtab' option value.
 #[inline]
 pub fn get_expandtab() -> bool {
-    unsafe { nvim_get_p_et() != 0 }
+    unsafe { p_et != 0 }
 }
 
 /// Get the 'ignorecase' option value.
 #[inline]
 pub fn get_ignorecase() -> bool {
-    unsafe { nvim_option_get_ic() != 0 }
+    unsafe { p_ic != 0 }
 }
 
 /// Get the 'smartcase' option value.
 #[inline]
 pub fn get_smartcase() -> bool {
-    unsafe { nvim_option_get_scs() != 0 }
+    unsafe { p_scs != 0 }
 }
 
 /// Get the 'hlsearch' option value.
 #[inline]
 pub fn get_hlsearch() -> bool {
-    unsafe { nvim_option_get_hls() != 0 }
+    unsafe { p_hls != 0 }
 }
 
 /// Get the 'incsearch' option value.
 #[inline]
 pub fn get_incsearch() -> bool {
-    unsafe { nvim_option_get_is() != 0 }
+    unsafe { p_is != 0 }
 }
 
 /// Get the 'magic' option value.
 #[inline]
 pub fn get_magic() -> bool {
-    unsafe { nvim_option_get_magic() != 0 }
+    unsafe { p_magic != 0 }
 }
 
 /// Get the 'fileignorecase' option value.
 #[inline]
 pub fn get_fileignorecase() -> bool {
-    unsafe { nvim_option_get_fic() != 0 }
+    unsafe { p_fic != 0 }
 }
 
 /// Get the 'modeline' option value.
 #[inline]
 pub fn get_modeline() -> bool {
-    unsafe { nvim_get_p_ml() != 0 }
+    unsafe { p_ml != 0 }
 }
 
 /// Get the 'modelineexpr' option value.
 #[inline]
 pub fn get_modelineexpr() -> bool {
-    unsafe { nvim_option_get_mle() != 0 }
+    unsafe { p_mle != 0 }
 }
 
 /// Get the 'paste' option value.
 #[inline]
 pub fn get_paste() -> bool {
-    unsafe { nvim_option_get_paste() != 0 }
+    unsafe { p_paste != 0 }
 }
 
 /// Get the 'revins' option value.
 #[inline]
 pub fn get_revins() -> bool {
-    unsafe { nvim_option_get_ri() != 0 }
+    unsafe { p_ri != 0 }
 }
 
 /// Get the 'wrapscan' option value.
 #[inline]
 pub fn get_wrapscan() -> bool {
-    unsafe { nvim_option_get_ws() != 0 }
+    unsafe { p_ws != 0 }
 }
 
 /// Get the 'gdefault' option value.
 #[inline]
 pub fn get_gdefault() -> bool {
-    unsafe { nvim_option_get_gd() != 0 }
+    unsafe { p_gd != 0 }
 }
 
 /// Get the 'equalalways' option value.
 #[inline]
 pub fn get_equalalways() -> bool {
-    unsafe { nvim_option_get_ea() != 0 }
+    unsafe { p_ea != 0 }
 }
 
 /// Get the 'hidden' option value.
 #[inline]
 pub fn get_hidden() -> bool {
-    unsafe { nvim_option_get_hid() != 0 }
+    unsafe { p_hid != 0 }
 }
 
 /// Get the 'showmatch' option value.
 #[inline]
 pub fn get_showmatch() -> bool {
-    unsafe { nvim_option_get_sm() != 0 }
+    unsafe { p_sm != 0 }
 }
 
 /// Get the 'lazyredraw' option value.
 #[inline]
 pub fn get_lazyredraw() -> bool {
-    unsafe { nvim_option_get_lz() != 0 }
+    unsafe { p_lz != 0 }
 }
 
 /// Get the 'tildeop' option value.
 #[inline]
 pub fn get_tildeop() -> bool {
-    unsafe { nvim_option_get_to() != 0 }
+    unsafe { p_to != 0 }
 }
 
 /// Get the 'shiftwidth' option value.
 #[inline]
 pub fn get_shiftwidth() -> OptInt {
-    unsafe { nvim_get_p_sw() }
+    unsafe { p_sw }
 }
 
 /// Get the 'tabstop' option value.
 #[inline]
 pub fn get_tabstop() -> OptInt {
-    unsafe { nvim_get_p_ts() }
+    unsafe { p_ts }
 }
 
 /// Get the 'softtabstop' option value.
 #[inline]
 pub fn get_softtabstop() -> OptInt {
-    unsafe { nvim_get_p_sts() }
+    unsafe { p_sts }
 }
 
 /// Get the 'textwidth' option value.
 #[inline]
 pub fn get_textwidth() -> OptInt {
-    unsafe { nvim_get_p_tw() }
+    unsafe { p_tw }
 }
 
 /// Get the 'wrapmargin' option value.
 #[inline]
 pub fn get_wrapmargin() -> OptInt {
-    unsafe { nvim_get_p_wm() }
+    unsafe { p_wm }
 }
 
 /// Get the 'scrolloff' option value.
 #[inline]
 pub fn get_scrolloff() -> OptInt {
-    unsafe { nvim_option_get_so() }
+    unsafe { p_so }
 }
 
 /// Get the 'sidescrolloff' option value.
 #[inline]
 pub fn get_sidescrolloff() -> OptInt {
-    unsafe { nvim_option_get_siso() }
+    unsafe { p_siso }
 }
 
 /// Get the 'columns' option value.
 #[inline]
 pub fn get_columns() -> OptInt {
-    unsafe { nvim_get_p_columns() }
+    unsafe { p_columns }
 }
 
 /// Get the 'lines' option value.
 #[inline]
 pub fn get_lines() -> OptInt {
-    unsafe { nvim_get_p_lines() }
+    unsafe { p_lines }
 }
 
 /// Get the 'cmdheight' option value.
 #[inline]
 pub fn get_cmdheight() -> OptInt {
-    unsafe { nvim_callback_get_p_ch() }
+    unsafe { p_ch }
 }
 
 /// Get the 'report' option value.
 #[inline]
 pub fn get_report() -> OptInt {
-    unsafe { nvim_option_get_report() }
+    unsafe { p_report }
 }
 
 /// Get the 'matchtime' option value.
 #[inline]
 pub fn get_matchtime() -> OptInt {
-    unsafe { nvim_option_get_mat() }
+    unsafe { p_mat }
 }
 
 /// Get the 'updatetime' option value.
 #[inline]
 pub fn get_updatetime() -> OptInt {
-    unsafe { nvim_option_get_ut() }
+    unsafe { p_ut }
 }
 
 /// Get the 'timeoutlen' option value.
 #[inline]
 pub fn get_timeoutlen() -> OptInt {
-    unsafe { nvim_option_get_tm() }
+    unsafe { p_tm }
 }
 
 /// Get the 'history' option value.
 #[inline]
 pub fn get_history() -> OptInt {
-    unsafe { nvim_option_get_hi() }
+    unsafe { p_hi }
 }
 
 /// Get the 'laststatus' option value.
 #[inline]
 pub fn get_laststatus() -> OptInt {
-    unsafe { nvim_option_get_ls() }
+    unsafe { p_ls }
 }
 
 /// Get the 'showtabline' option value.
 #[inline]
 pub fn get_showtabline() -> OptInt {
-    unsafe { nvim_option_get_stal() }
+    unsafe { p_stal }
 }
 
 /// Get the 'regexpengine' option value.
 #[inline]
 pub fn get_regexpengine() -> OptInt {
-    unsafe { nvim_option_get_re() }
+    unsafe { p_re }
 }
 
 /// Get the 'completeopt' flags.
 #[inline]
 pub fn get_completeopt_flags() -> c_uint {
-    unsafe { nvim_option_get_cot_flags() }
+    unsafe { cot_flags }
 }
 
 /// Get the 'foldopen' flags.
 #[inline]
 pub fn get_foldopen_flags() -> c_uint {
-    unsafe { nvim_option_get_fdo_flags() }
+    unsafe { fdo_flags }
 }
 
 /// Get the 'display' flags.
 #[inline]
 pub fn get_display_flags() -> c_uint {
-    unsafe { nvim_option_get_dy_flags() }
+    unsafe { dy_flags }
 }
 
 /// Get the 'clipboard' flags.
 #[inline]
 pub fn get_clipboard_flags() -> c_uint {
-    unsafe { nvim_option_get_cb_flags() }
+    unsafe { cb_flags }
 }
 
 /// Get the magic_overruled value.
 #[inline]
 pub fn get_magic_overruled() -> c_int {
-    unsafe { nvim_option_get_magic_overruled() }
+    unsafe { magic_overruled }
 }
 
 // =============================================================================
@@ -790,187 +765,187 @@ pub fn get_magic_overruled() -> c_int {
 /// Set the 'autoindent' option value.
 #[inline]
 pub fn set_autoindent(value: bool) {
-    unsafe { nvim_option_set_ai(c_int::from(value)) }
+    unsafe { p_ai = c_int::from(value) }
 }
 
 /// Set the 'expandtab' option value.
 #[inline]
 pub fn set_expandtab(value: bool) {
-    unsafe { nvim_option_set_et(c_int::from(value)) }
+    unsafe { p_et = c_int::from(value) }
 }
 
 /// Set the 'ignorecase' option value.
 #[inline]
 pub fn set_ignorecase(value: bool) {
-    unsafe { nvim_option_set_ic(c_int::from(value)) }
+    unsafe { p_ic = c_int::from(value) }
 }
 
 /// Set the 'smartcase' option value.
 #[inline]
 pub fn set_smartcase(value: bool) {
-    unsafe { nvim_option_set_scs(c_int::from(value)) }
+    unsafe { p_scs = c_int::from(value) }
 }
 
 /// Set the 'hlsearch' option value.
 #[inline]
 pub fn set_hlsearch(value: bool) {
-    unsafe { nvim_option_set_hls(c_int::from(value)) }
+    unsafe { p_hls = c_int::from(value) }
 }
 
 /// Set the 'incsearch' option value.
 #[inline]
 pub fn set_incsearch(value: bool) {
-    unsafe { nvim_option_set_is(c_int::from(value)) }
+    unsafe { p_is = c_int::from(value) }
 }
 
 /// Set the 'magic' option value.
 #[inline]
 pub fn set_magic(value: bool) {
-    unsafe { nvim_option_set_magic(c_int::from(value)) }
+    unsafe { p_magic = c_int::from(value) }
 }
 
 /// Set the 'modeline' option value.
 #[inline]
 pub fn set_modeline(value: bool) {
-    unsafe { nvim_option_set_ml(c_int::from(value)) }
+    unsafe { p_ml = c_int::from(value) }
 }
 
 /// Set the 'paste' option value.
 #[inline]
 pub fn set_paste(value: bool) {
-    unsafe { nvim_option_set_paste(c_int::from(value)) }
+    unsafe { p_paste = c_int::from(value) }
 }
 
 /// Set the 'revins' option value.
 #[inline]
 pub fn set_revins(value: bool) {
-    unsafe { nvim_option_set_ri(c_int::from(value)) }
+    unsafe { p_ri = c_int::from(value) }
 }
 
 /// Set the 'wrapscan' option value.
 #[inline]
 pub fn set_wrapscan(value: bool) {
-    unsafe { nvim_option_set_ws(c_int::from(value)) }
+    unsafe { p_ws = c_int::from(value) }
 }
 
 /// Set the 'gdefault' option value.
 #[inline]
 pub fn set_gdefault(value: bool) {
-    unsafe { nvim_option_set_gd(c_int::from(value)) }
+    unsafe { p_gd = c_int::from(value) }
 }
 
 /// Set the 'equalalways' option value.
 #[inline]
 pub fn set_equalalways(value: bool) {
-    unsafe { nvim_option_set_ea(c_int::from(value)) }
+    unsafe { p_ea = c_int::from(value) }
 }
 
 /// Set the 'hidden' option value.
 #[inline]
 pub fn set_hidden(value: bool) {
-    unsafe { nvim_option_set_hid(c_int::from(value)) }
+    unsafe { p_hid = c_int::from(value) }
 }
 
 /// Set the 'showmatch' option value.
 #[inline]
 pub fn set_showmatch(value: bool) {
-    unsafe { nvim_option_set_sm(c_int::from(value)) }
+    unsafe { p_sm = c_int::from(value) }
 }
 
 /// Set the 'lazyredraw' option value.
 #[inline]
 pub fn set_lazyredraw(value: bool) {
-    unsafe { nvim_option_set_lz(c_int::from(value)) }
+    unsafe { p_lz = c_int::from(value) }
 }
 
 /// Set the 'tildeop' option value.
 #[inline]
 pub fn set_tildeop(value: bool) {
-    unsafe { nvim_option_set_to(c_int::from(value)) }
+    unsafe { p_to = c_int::from(value) }
 }
 
 /// Set the 'shiftwidth' option value.
 #[inline]
 pub fn set_shiftwidth(value: OptInt) {
-    unsafe { nvim_option_set_sw(value) }
+    unsafe { p_sw = value }
 }
 
 /// Set the 'tabstop' option value.
 #[inline]
 pub fn set_tabstop(value: OptInt) {
-    unsafe { nvim_option_set_ts(value) }
+    unsafe { p_ts = value }
 }
 
 /// Set the 'softtabstop' option value.
 #[inline]
 pub fn set_softtabstop(value: OptInt) {
-    unsafe { nvim_option_set_sts(value) }
+    unsafe { p_sts = value }
 }
 
 /// Set the 'textwidth' option value.
 #[inline]
 pub fn set_textwidth(value: OptInt) {
-    unsafe { nvim_option_set_tw(value) }
+    unsafe { p_tw = value }
 }
 
 /// Set the 'wrapmargin' option value.
 #[inline]
 pub fn set_wrapmargin(value: OptInt) {
-    unsafe { nvim_option_set_wm(value) }
+    unsafe { p_wm = value }
 }
 
 /// Set the 'scrolloff' option value.
 #[inline]
 pub fn set_scrolloff(value: OptInt) {
-    unsafe { nvim_option_set_so(value) }
+    unsafe { p_so = value }
 }
 
 /// Set the 'sidescrolloff' option value.
 #[inline]
 pub fn set_sidescrolloff(value: OptInt) {
-    unsafe { nvim_option_set_siso(value) }
+    unsafe { p_siso = value }
 }
 
 /// Set the 'report' option value.
 #[inline]
 pub fn set_report(value: OptInt) {
-    unsafe { nvim_option_set_report(value) }
+    unsafe { p_report = value }
 }
 
 /// Set the 'matchtime' option value.
 #[inline]
 pub fn set_matchtime(value: OptInt) {
-    unsafe { nvim_option_set_mat(value) }
+    unsafe { p_mat = value }
 }
 
 /// Set the 'updatetime' option value.
 #[inline]
 pub fn set_updatetime(value: OptInt) {
-    unsafe { nvim_option_set_ut(value) }
+    unsafe { p_ut = value }
 }
 
 /// Set the 'timeoutlen' option value.
 #[inline]
 pub fn set_timeoutlen(value: OptInt) {
-    unsafe { nvim_option_set_tm(value) }
+    unsafe { p_tm = value }
 }
 
 /// Set the 'history' option value.
 #[inline]
 pub fn set_history(value: OptInt) {
-    unsafe { nvim_option_set_hi(value) }
+    unsafe { p_hi = value }
 }
 
 /// Set the 'regexpengine' option value.
 #[inline]
 pub fn set_regexpengine(value: OptInt) {
-    unsafe { nvim_option_set_re(value) }
+    unsafe { p_re = value }
 }
 
 /// Set the magic_overruled value.
 #[inline]
 pub fn set_magic_overruled(value: c_int) {
-    unsafe { nvim_option_set_magic_overruled(value) }
+    unsafe { magic_overruled = value }
 }
 
 // =============================================================================

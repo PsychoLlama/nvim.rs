@@ -517,11 +517,6 @@ extern "C" {
     fn nvim_get_option_script_ctx(opt_idx: c_int) -> ScriptContext;
     fn nvim_get_win_p_script_ctx(win: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
     fn nvim_get_buf_p_script_ctx(buf: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
-    fn nvim_get_silent_mode() -> c_int;
-    fn nvim_set_silent_mode(val: c_int);
-    fn nvim_set_info_message(val: c_int);
-    fn nvim_get_no_wait_return() -> c_int;
-    fn nvim_set_no_wait_return(val: c_int);
     fn nvim_get_iobuff() -> *mut c_char;
 
     // get_option_newval dependencies
@@ -629,12 +624,12 @@ pub unsafe extern "C" fn rs_do_set(arg: *mut c_char, opt_flags: c_int) -> c_int 
     };
 
     // Handle silent mode display
-    if nvim_get_silent_mode() != 0 && did_show != 0 {
-        nvim_set_silent_mode(0);
-        nvim_set_info_message(1);
+    if crate::silent_mode && did_show != 0 {
+        crate::silent_mode = false;
+        crate::info_message = true;
         msg_putchar(c_int::from(b'\n'));
-        nvim_set_silent_mode(1);
-        nvim_set_info_message(0);
+        crate::silent_mode = true;
+        crate::info_message = false;
     }
 
     // Return value is in the sign bit: negative means FAIL was returned
@@ -722,10 +717,10 @@ unsafe fn format_and_show_error(
     trans_characters(iobuff, IOSIZE as c_int);
 
     // Show error
-    let no_wait = nvim_get_no_wait_return();
-    nvim_set_no_wait_return(no_wait + 1);
+    let no_wait = crate::no_wait_return;
+    crate::no_wait_return = no_wait + 1;
     emsg(iobuff);
-    nvim_set_no_wait_return(no_wait);
+    crate::no_wait_return = no_wait;
 }
 
 /// Check and process "all" keyword in :set command.
@@ -1231,10 +1226,10 @@ extern "C" {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
-    let save_silent = nvim_get_silent_mode();
+    let save_silent = crate::silent_mode;
 
-    nvim_set_silent_mode(0);
-    nvim_set_info_message(1); // use stdout, not stderr
+    crate::silent_mode = false;
+    crate::info_message = true; // use stdout, not stderr
 
     let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
     let is_bool = nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_BOOLEAN) != 0;
@@ -1273,8 +1268,8 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
         msg_outtrans(namebuff, 0, false);
     }
 
-    nvim_set_silent_mode(save_silent);
-    nvim_set_info_message(0);
+    crate::silent_mode = save_silent;
+    crate::info_message = false;
 }
 
 // =============================================================================

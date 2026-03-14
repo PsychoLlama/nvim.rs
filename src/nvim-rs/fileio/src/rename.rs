@@ -52,8 +52,8 @@ extern "C" {
 use std::ffi::c_void;
 
 extern "C" {
-    /// Get the 'fileignorecase' option value.
-    fn nvim_option_get_fic() -> c_int;
+    /// The 'fileignorecase' option global.
+    static mut p_fic: c_int;
 }
 
 // UV_FS_COPYFILE_EXCL = 1 (but 0 means don't use it, matches the C fallback define)
@@ -255,10 +255,10 @@ pub unsafe extern "C" fn rs_vim_rename(from: *const c_char, to: *const c_char) -
     // When they refer to the same file (ignoring case) but the names differ,
     // go through a temp file.
     if unsafe { path_fnamecmp(from, to) } == 0 {
-        let p_fic = unsafe { nvim_option_get_fic() };
+        let fic_val = unsafe { p_fic };
         let from_tail = unsafe { path_tail(from) };
         let to_tail = unsafe { path_tail(to) };
-        if p_fic != 0
+        if fic_val != 0
             && !from_tail.is_null()
             && !to_tail.is_null()
             && unsafe {

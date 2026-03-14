@@ -284,11 +284,12 @@ extern "C" {
     // UTF-8 length table (mbyte.c)
     static utf8len_tab: [u8; 256];
 
+    // Direct C globals
+    static mut no_wait_return: c_int;
+
     // Global state accessors
     fn nvim_get_State() -> c_int;
     fn nvim_set_State(val: c_int);
-    fn nvim_get_no_wait_return() -> c_int;
-    fn nvim_set_no_wait_return(val: c_int);
     fn nvim_set_need_wait_return(val: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_msg_row() -> c_int;
@@ -416,7 +417,7 @@ unsafe fn prompt_for_input_impl(
 pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
     let save_state = nvim_get_State();
 
-    nvim_set_no_wait_return(nvim_get_no_wait_return() + 1);
+    no_wait_return += 1;
 
     // Format prompt: "%s (y/n)?"
     let mut iobuff = [0u8; IOSIZE];
@@ -438,7 +439,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
 
     let msg_scrolled = nvim_get_msg_scrolled();
     nvim_set_need_wait_return(c_int::from(msg_scrolled != 0));
-    nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+    no_wait_return -= 1;
     nvim_set_State(save_state);
     setmouse();
     nvim_xfree(prompt.cast::<c_void>());

@@ -46,6 +46,34 @@ use crate::{BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, CPO_BUFOPT, CPO_
 // =============================================================================
 
 extern "C" {
+    // Global option variables (Phase 1 bool/int)
+    static mut p_ai: c_int;
+    static mut p_bin: c_int;
+    static mut p_bomb: c_int;
+    static mut p_ci: c_int;
+    static mut p_cin: c_int;
+    static mut p_et: c_int;
+    static mut p_fixeol: c_int;
+    static mut p_lisp: c_int;
+    static mut p_ma: c_int;
+    static mut p_ml: c_int;
+    static mut p_pi: c_int;
+    static mut p_si: c_int;
+    static mut p_swf: c_int;
+    static mut p_udf: c_int;
+    // Global option variables (Phase 2 OptInt)
+    static mut p_sw: OptInt;
+    static mut p_scbk: OptInt;
+    static mut p_tw: OptInt;
+    static mut p_wm: OptInt;
+    static mut p_sts: OptInt;
+    static mut p_ts: OptInt;
+    static mut p_smc: OptInt;
+    static mut p_iminsert: OptInt;
+    static mut p_imsearch: OptInt;
+}
+
+extern "C" {
     fn nvim_option_get_cpo() -> *const c_char;
     fn nvim_call_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     fn nvim_cmdmod_get_cmod_flags() -> c_int;
@@ -125,39 +153,17 @@ extern "C" {
     fn nvim_buf_set_b_s_spo_flags_from_global(buf: *mut core::ffi::c_void);
     fn nvim_get_backslash_in_filename() -> c_int;
 
-    fn nvim_get_p_ai() -> c_int;
+    // Static local accessors (no global equivalent)
     fn nvim_get_p_ai_nopaste() -> bool;
-    fn nvim_get_p_bin() -> bool;
-    fn nvim_get_p_bomb() -> bool;
-    fn nvim_get_p_ci() -> bool;
-    fn nvim_get_p_cin() -> bool;
-    fn nvim_get_p_et() -> c_int;
     fn nvim_get_p_et_nobin() -> c_int;
     fn nvim_get_p_et_nopaste() -> bool;
-    fn nvim_get_p_fixeol() -> bool;
     fn nvim_get_p_inf() -> c_int;
-    fn nvim_get_p_lisp() -> bool;
-    fn nvim_get_p_ma() -> c_int;
-    fn nvim_get_p_ml() -> c_int;
     fn nvim_get_p_ml_nobin() -> c_int;
-    fn nvim_get_p_pi() -> bool;
-    fn nvim_get_p_si() -> bool;
-    fn nvim_get_p_swf() -> bool;
-    fn nvim_get_p_udf() -> c_int;
-    fn nvim_get_p_sw() -> OptInt;
-    fn nvim_get_p_scbk() -> OptInt;
-    fn nvim_get_p_tw() -> OptInt;
     fn nvim_get_p_tw_nobin() -> OptInt;
     fn nvim_get_p_tw_nopaste() -> OptInt;
-    fn nvim_get_p_wm() -> OptInt;
     fn nvim_get_p_wm_nobin() -> OptInt;
     fn nvim_get_p_wm_nopaste() -> OptInt;
-    fn nvim_get_p_sts() -> OptInt;
     fn nvim_get_p_sts_nopaste() -> OptInt;
-    fn nvim_get_p_ts() -> OptInt;
-    fn nvim_get_p_smc() -> OptInt;
-    fn nvim_get_p_iminsert() -> OptInt;
-    fn nvim_get_p_imsearch() -> OptInt;
     fn nvim_get_p_vsts() -> *const c_char;
     fn nvim_get_p_vts() -> *const c_char;
     fn nvim_get_p_vsts_nopaste() -> *const c_char;
@@ -219,62 +225,46 @@ fn field_offset(opt_idx: crate::index::OptIndex) -> isize {
 /// b_help, bt, ma). The b_p_isk save/restore is done by the caller.
 #[allow(clippy::too_many_lines)]
 unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_AUTOINDENT),
-        c_int::from(nvim_get_p_ai()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_AUTOINDENT), p_ai);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_AUTOINDENT);
     nvim_buf_set_b_p_ai_nopaste(buf, c_int::from(nvim_get_p_ai_nopaste()));
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SHIFTWIDTH), nvim_get_p_sw());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SHIFTWIDTH), p_sw);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SHIFTWIDTH);
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SCROLLBACK), nvim_get_p_scbk());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SCROLLBACK), p_scbk);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SCROLLBACK);
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_TEXTWIDTH), nvim_get_p_tw());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_TEXTWIDTH), p_tw);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_TEXTWIDTH);
     nvim_buf_set_b_p_tw_nopaste(buf, nvim_get_p_tw_nopaste());
     nvim_buf_set_b_p_tw_nobin(buf, nvim_get_p_tw_nobin());
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_WRAPMARGIN), nvim_get_p_wm());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_WRAPMARGIN), p_wm);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_WRAPMARGIN);
     nvim_buf_set_b_p_wm_nopaste(buf, nvim_get_p_wm_nopaste());
     nvim_buf_set_b_p_wm_nobin(buf, nvim_get_p_wm_nobin());
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_BINARY),
-        c_int::from(nvim_get_p_bin()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_BINARY), c_int::from(p_bin != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_BINARY);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_BOMB),
-        c_int::from(nvim_get_p_bomb()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_BOMB), c_int::from(p_bomb != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_BOMB);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_EXPANDTAB),
-        c_int::from(nvim_get_p_et()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_EXPANDTAB), c_int::from(p_et != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_EXPANDTAB);
 
     nvim_buf_set_bool_field(
         buf,
         field_offset(K_OPT_FIXENDOFLINE),
-        c_int::from(nvim_get_p_fixeol()),
+        c_int::from(p_fixeol != 0),
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_FIXENDOFLINE);
 
     nvim_buf_set_b_p_et_nobin(buf, nvim_get_p_et_nobin());
     nvim_buf_set_b_p_et_nopaste(buf, c_int::from(nvim_get_p_et_nopaste()));
 
-    nvim_buf_set_b_p_ml(buf, c_int::from(nvim_get_p_ml()));
+    nvim_buf_set_b_p_ml(buf, p_ml);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_MODELINE);
     nvim_buf_set_b_p_ml_nobin(buf, nvim_get_p_ml_nobin());
 
@@ -285,11 +275,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     if nvim_cmdmod_get_cmod_flags() & CMOD_NOSWAPFILE != 0 {
         nvim_buf_set_bool_field(buf, field_offset(K_OPT_SWAPFILE), 0);
     } else {
-        nvim_buf_set_bool_field(
-            buf,
-            field_offset(K_OPT_SWAPFILE),
-            c_int::from(nvim_get_p_swf()),
-        );
+        nvim_buf_set_bool_field(buf, field_offset(K_OPT_SWAPFILE), c_int::from(p_swf != 0));
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SWAPFILE);
     }
 
@@ -315,7 +301,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_TAGFUNC);
     rs_set_buflocal_tfu_callback(buf);
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SOFTTABSTOP), nvim_get_p_sts());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SOFTTABSTOP), p_sts);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SOFTTABSTOP);
     nvim_buf_set_b_p_sts_nopaste(buf, nvim_get_p_sts_nopaste());
 
@@ -349,27 +335,15 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_set_string_field(buf, field_offset(K_OPT_MATCHPAIRS), nvim_get_p_mps());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_MATCHPAIRS);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_SMARTINDENT),
-        c_int::from(nvim_get_p_si()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_SMARTINDENT), c_int::from(p_si != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SMARTINDENT);
 
     nvim_buf_set_optint_field(buf, field_offset(K_OPT_CHANNEL), 0);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_COPYINDENT),
-        c_int::from(nvim_get_p_ci()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_COPYINDENT), c_int::from(p_ci != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_COPYINDENT);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_CINDENT),
-        c_int::from(nvim_get_p_cin()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_CINDENT), c_int::from(p_cin != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_CINDENT);
 
     nvim_buf_set_string_field(buf, field_offset(K_OPT_CINKEYS), nvim_get_p_cink());
@@ -390,24 +364,20 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_set_bool_field(
         buf,
         field_offset(K_OPT_PRESERVEINDENT),
-        c_int::from(nvim_get_p_pi()),
+        c_int::from(p_pi != 0),
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_PRESERVEINDENT);
 
     nvim_buf_set_string_field(buf, field_offset(K_OPT_CINWORDS), nvim_get_p_cinw());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_CINWORDS);
 
-    nvim_buf_set_bool_field(
-        buf,
-        field_offset(K_OPT_LISP),
-        c_int::from(nvim_get_p_lisp()),
-    );
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_LISP), c_int::from(p_lisp != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_LISP);
 
     // Don't copy 'syntax' - it must be set
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_SYNTAX));
 
-    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SYNMAXCOL), nvim_get_p_smc());
+    nvim_buf_set_optint_field(buf, field_offset(K_OPT_SYNMAXCOL), p_smc);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SYNMAXCOL);
 
     nvim_buf_set_b_s_syn_isk_empty(buf);
@@ -448,10 +418,10 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     // Langmap/IME state: copy from current buffer is better than resetting
     // iminsert/imsearch are OptInt globals but b_p_iminsert/b_p_imsearch are int fields
     #[allow(clippy::cast_possible_truncation)]
-    nvim_buf_set_b_p_iminsert(buf, nvim_get_p_iminsert() as c_int);
+    nvim_buf_set_b_p_iminsert(buf, p_iminsert as c_int);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_IMINSERT);
     #[allow(clippy::cast_possible_truncation)]
-    nvim_buf_set_b_p_imsearch(buf, nvim_get_p_imsearch() as c_int);
+    nvim_buf_set_b_p_imsearch(buf, p_imsearch as c_int);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_IMSEARCH);
 
     // Global-local options: use global value (no local copy)
@@ -484,7 +454,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_set_string_field(buf, field_offset(K_OPT_QUOTEESCAPE), nvim_get_p_qe());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_QUOTEESCAPE);
 
-    nvim_buf_set_bool_field(buf, field_offset(K_OPT_UNDOFILE), nvim_get_p_udf());
+    nvim_buf_set_bool_field(buf, field_offset(K_OPT_UNDOFILE), p_udf);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_UNDOFILE);
 
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_LISPWORDS));
@@ -503,7 +473,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
         nvim_buf_set_string_field(buf, field_offset(K_OPT_ISKEYWORD), nvim_get_p_isk());
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_ISKEYWORD);
 
-        nvim_buf_set_optint_field(buf, field_offset(K_OPT_TABSTOP), nvim_get_p_ts());
+        nvim_buf_set_optint_field(buf, field_offset(K_OPT_TABSTOP), p_ts);
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_TABSTOP);
 
         nvim_buf_set_string_field(buf, field_offset(K_OPT_VARTABSTOP), nvim_get_p_vts());
@@ -522,7 +492,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
             nvim_buf_clear_b_p_bt_if_help(buf);
         }
 
-        nvim_buf_set_b_p_ma(buf, c_int::from(nvim_get_p_ma()));
+        nvim_buf_set_b_p_ma(buf, p_ma);
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_MODIFIABLE);
     }
 }

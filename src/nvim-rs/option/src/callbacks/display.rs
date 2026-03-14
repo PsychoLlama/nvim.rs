@@ -14,6 +14,7 @@ extern "C" {
     static updating_screen: bool;
     static mut Rows: c_int;
     static mut Columns: c_int;
+    static mut full_screen: bool;
 }
 
 // =============================================================================
@@ -40,17 +41,15 @@ extern "C" {
     fn check_signcolumn(buf: *mut std::ffi::c_void, win: WinHandle);
 
     // State accessors
-    fn nvim_option_get_full_screen() -> c_int;
     fn nvim_callback_get_p_ch() -> OptInt;
     fn nvim_callback_set_p_ch(value: OptInt);
-    fn nvim_option_get_rows() -> c_int;
     fn nvim_callback_get_topframe() -> *mut std::ffi::c_void;
     fn nvim_callback_get_topframe_fr_height() -> c_int;
     fn rs_tabline_height() -> c_int;
     fn rs_global_stl_height() -> c_int;
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
     fn rs_min_rows(tp: *mut std::ffi::c_void) -> c_int;
-    fn nvim_callback_set_clear_cmdline(value: c_int);
+    static mut clear_cmdline: bool;
 
     // Window accessors
     fn nvim_option_win_get_stc(win: WinHandle) -> *const c_char;
@@ -121,13 +120,13 @@ fn set_cmdheight(value: OptInt) {
 /// Get Rows (screen height).
 #[inline]
 fn get_rows() -> c_int {
-    unsafe { nvim_option_get_rows() }
+    unsafe { Rows }
 }
 
 /// Check if full screen is available.
 #[inline]
-fn full_screen() -> bool {
-    unsafe { nvim_option_get_full_screen() != 0 }
+fn get_full_screen() -> bool {
+    unsafe { full_screen }
 }
 
 /// Get topframe height.
@@ -179,7 +178,7 @@ pub unsafe extern "C" fn rs_did_set_cmdheight(old_value: OptInt) -> CallbackResu
     let new_ch_i32 = new_ch as c_int;
     let layout_mismatch =
         tabline_height() + global_stl_height() + get_topframe_height() != rows - new_ch_i32;
-    if (new_ch != old_value || layout_mismatch) && full_screen() {
+    if (new_ch != old_value || layout_mismatch) && get_full_screen() {
         command_height();
     }
 
@@ -201,7 +200,7 @@ pub unsafe extern "C" fn rs_did_set_laststatus_full(
         let new_height = get_topframe_height() - STATUS_HEIGHT;
         frame_new_height(topframe, new_height, 0, 0, 0);
         win_comp_pos();
-        nvim_callback_set_clear_cmdline(1);
+        clear_cmdline = true;
     }
 
     // When switching from global statusline, increase topframe height

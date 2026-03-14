@@ -511,14 +511,10 @@ extern "C" {
     pub fn nvim_curwin_get_w_p_nu() -> c_int;
     /// Get number_width(curwin)
     pub fn nvim_number_width_curwin() -> c_int;
-    /// Get silent_mode
-    pub fn nvim_get_silent_mode() -> c_int;
-    /// Set silent_mode
-    pub fn nvim_set_silent_mode(val: c_int);
-    /// Get info_message
-    pub fn nvim_get_info_message() -> c_int;
-    /// Set info_message
-    pub fn nvim_set_info_message(val: c_int);
+    /// silent_mode global (bool in C)
+    pub static mut silent_mode: bool;
+    /// info_message global (bool in C)
+    pub static mut info_message: bool;
     /// msg_prt_line wrapper
     pub fn nvim_msg_prt_line(s: *const c_char, list: c_int);
     /// message_filtered wrapper

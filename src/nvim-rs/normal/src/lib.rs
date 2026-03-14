@@ -31,6 +31,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 extern "C" {
     static mut redraw_mode: c_int;
+    static mut p_sta: c_int;
 }
 
 // =============================================================================
@@ -1378,7 +1379,6 @@ extern "C" {
     fn nvim_get_cursor_pos_len_check() -> c_int;
     fn nvim_mb_charlen_cursor() -> c_int;
     fn nvim_curbuf_b_p_et() -> bool;
-    fn nvim_get_p_sta() -> c_int;
     fn nvim_del_chars_call(count: c_int, fixpos: bool);
     fn nvim_ins_char_call(c: c_int);
     fn nvim_ins_copychar_val(lnum: c_int) -> c_int;
@@ -4223,8 +4223,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     // Inlined nvim_replace_tab_expand: TAB with expandtab/smarttab via edit()
     let nchar = nvim_cap_get_nchar(cap);
-    if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || nvim_get_p_sta() != 0)
-    {
+    if had_ctrl_v != CTRL_V && nchar == TAB_CHAR && (nvim_curbuf_b_p_et() || p_sta != 0) {
         nvim_stuffnumReadbuff(count1);
         nvim_stuffcharReadbuff(c_int::from(b'R'));
         nvim_stuffcharReadbuff(TAB_CHAR);

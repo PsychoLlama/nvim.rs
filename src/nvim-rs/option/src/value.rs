@@ -60,11 +60,9 @@ static E_WINWIDTH: &[u8] = b"E592: 'winwidth' cannot be smaller than 'winminwidt
 // =============================================================================
 
 extern "C" {
-    // Full screen state (option module specific)
-    fn nvim_option_get_full_screen() -> c_int;
-
-    // Screen dimensions
-    fn nvim_option_get_rows() -> c_int;
+    // Global state variables
+    static mut full_screen: bool;
+    static mut Rows: c_int;
 
     // Window accessor for view height
     fn nvim_option_win_get_view_height(win: *mut std::ffi::c_void) -> c_int;
@@ -190,7 +188,6 @@ pub unsafe extern "C" fn rs_check_lines_bounds(
         modified: 0,
     };
 
-    let full_screen = nvim_option_get_full_screen() != 0;
     let min_rows = OptInt::from(min_rows_for_all_tabpages());
 
     if value < min_rows && full_screen {
@@ -228,8 +225,6 @@ pub unsafe extern "C" fn rs_check_columns_bounds(
         errmsg: ptr::null(),
         modified: 0,
     };
-
-    let full_screen = nvim_option_get_full_screen() != 0;
 
     if value < MIN_COLUMNS && full_screen {
         // Format error message
@@ -274,8 +269,7 @@ pub unsafe extern "C" fn rs_check_scrolljump_bounds(value: OptInt) -> BoundsChec
         modified: 0,
     };
 
-    let full_screen = nvim_option_get_full_screen() != 0;
-    let rows = OptInt::from(nvim_option_get_rows());
+    let rows = OptInt::from(Rows);
 
     if full_screen && (value < -100 || value >= rows) {
         result.errmsg = E_SCROLL.as_ptr().cast();
@@ -298,7 +292,6 @@ pub unsafe extern "C" fn rs_check_scroll_bounds(
         modified: 0,
     };
 
-    let full_screen = nvim_option_get_full_screen() != 0;
     let view_height = if win.is_null() {
         0
     } else {
@@ -480,13 +473,13 @@ pub unsafe extern "C" fn rs_validate_num_option(
         }
 
         idx if idx == K_OPT_SCROLLOFF => {
-            if value < 0 && nvim_option_get_full_screen() != 0 {
+            if value < 0 && full_screen {
                 return E_POSITIVE.as_ptr().cast();
             }
         }
 
         idx if idx == K_OPT_SIDESCROLLOFF => {
-            if value < 0 && nvim_option_get_full_screen() != 0 {
+            if value < 0 && full_screen {
                 return E_POSITIVE.as_ptr().cast();
             }
         }
@@ -563,7 +556,6 @@ pub unsafe extern "C" fn rs_validate_num_option(
     }
 
     // check_num_option_bounds inline
-    let full_screen = nvim_option_get_full_screen() != 0;
 
     match opt_idx {
         idx if idx == K_OPT_LINES => {
@@ -598,7 +590,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
         }
 
         idx if idx == K_OPT_SCROLLJUMP => {
-            let rows = OptInt::from(nvim_option_get_rows());
+            let rows = OptInt::from(Rows);
             if (*newval < -100 || *newval >= rows) && full_screen {
                 *newval = 1;
                 return E_SCROLL.as_ptr().cast();

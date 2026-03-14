@@ -58,6 +58,10 @@ pub mod option_flags {
 // =============================================================================
 
 extern "C" {
+    static mut p_mle: c_int;
+}
+
+extern "C" {
     // Option lookup (direct hash — avoids circular delegation through find_option_len/find_option)
     fn nvim_find_option_len_hash(name: *const c_char, len: usize) -> OptIndex;
 
@@ -80,9 +84,6 @@ extern "C" {
     // TTY option handling
     fn rs_find_tty_option_end(arg: *const c_char) -> *const c_char;
     fn rs_is_tty_option(name: *const c_char) -> c_int;
-
-    // State accessors
-    fn nvim_option_get_mle() -> c_int;
 
     // sandbox global variable
     fn nvim_get_sandbox() -> c_int;
@@ -538,8 +539,8 @@ pub unsafe extern "C" fn rs_validate_opt_idx(
         }
 
         let is_mle = (flags & option_flags::MLE) != 0;
-        let p_mle = nvim_option_get_mle() != 0;
-        if is_mle && !p_mle {
+        let mle_on = p_mle != 0;
+        if is_mle && !mle_on {
             return ValidateOptIdxResult {
                 result: FAIL,
                 errmsg: E_NOT_ALLOWED_MLE_OFF.as_ptr().cast(),

@@ -116,8 +116,7 @@ extern "C" {
     fn verbose_enter_scroll();
     fn verbose_leave_scroll();
     fn nvim_get_msg_silent() -> c_int;
-    fn nvim_get_no_wait_return() -> c_int;
-    fn nvim_set_no_wait_return(val: c_int);
+    static mut no_wait_return: c_int;
 
     // Error messages
     fn nvim_get_e_secure() -> *const c_char;
@@ -589,8 +588,8 @@ pub unsafe extern "C" fn rs_skip_cmd(eap: ExArgHandle) -> c_int {
 /// `cmd` must be a valid null-terminated C string.
 #[export_name = "msg_verbose_cmd"]
 pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
-    let no_wait = nvim_get_no_wait_return();
-    nvim_set_no_wait_return(no_wait + 1);
+    let no_wait = no_wait_return;
+    no_wait_return = no_wait + 1;
     verbose_enter_scroll();
 
     if lnum == 0 {
@@ -604,7 +603,7 @@ pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
     }
 
     verbose_leave_scroll();
-    nvim_set_no_wait_return(no_wait);
+    no_wait_return = no_wait;
 }
 
 // =============================================================================

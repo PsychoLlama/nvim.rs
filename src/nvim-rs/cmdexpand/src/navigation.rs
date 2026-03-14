@@ -19,6 +19,10 @@ use crate::ExpandHandle;
 // =============================================================================
 
 extern "C" {
+    static mut p_fic: c_int;
+}
+
+extern "C" {
     // Popup menu functions
     fn pum_get_height() -> c_int;
     fn pum_clear();
@@ -28,7 +32,6 @@ extern "C" {
     fn nvim_set_compl_selected(val: c_int);
     fn nvim_get_cmd_showtail() -> c_int;
     fn nvim_get_p_wmnu() -> c_int;
-    fn nvim_option_get_fic() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
 
@@ -295,7 +298,7 @@ pub unsafe extern "C" fn rs_find_longest_match(xp: ExpandHandle, options: c_int)
         let c0 = utf_ptr2char(first_file.add(len));
 
         let ctx = (*xp).xp_context;
-        let use_icase = nvim_option_get_fic() != 0
+        let use_icase = p_fic != 0
             && (ctx == ExpandContext::Directories.to_raw()
                 || ctx == ExpandContext::Files.to_raw()
                 || ctx == ExpandContext::Shellcmd.to_raw()

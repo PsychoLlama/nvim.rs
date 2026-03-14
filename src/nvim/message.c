@@ -1943,7 +1943,6 @@ int nvim_get_confirm_msg_used(void) { return confirm_msg_used; }
 void nvim_set_confirm_msg_used(int val) { confirm_msg_used = val; }
 const char *nvim_get_confirm_buttons(void) { return confirm_buttons; }
 void nvim_set_confirm_buttons(const char *buttons) { confirm_buttons = (char *)buttons; }
-int nvim_get_silent_mode(void) { return (int)silent_mode; }
 
 /// Store part of a printed message for displaying when scrolling back.
 ///

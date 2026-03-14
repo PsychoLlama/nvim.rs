@@ -118,8 +118,8 @@ extern "C" {
     // Global state
     static mut got_int: c_int;
 
-    // Option values
-    fn nvim_option_get_fic() -> c_int;
+    // Option globals
+    static mut p_fic: c_int;
     #[allow(dead_code)]
     fn nvim_get_p_path() -> *const c_char;
     #[allow(dead_code)]
@@ -538,7 +538,7 @@ unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
             return false;
         }
 
-        let fic = nvim_option_get_fic() != 0;
+        let fic = p_fic != 0;
         let c1_cmp = if fic { mb_tolower(c1) } else { c1 };
         let c2_cmp = if fic { mb_tolower(c2) } else { c2 };
 

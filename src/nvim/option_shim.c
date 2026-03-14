@@ -378,23 +378,6 @@ const char *nvim_option_get_ww(void) { return p_ww; }
 const char *nvim_option_get_mouse(void) { return p_mouse; }
 const char *nvim_option_get_shm(void) { return p_shm; }
 
-// Boolean option accessors
-int nvim_option_get_ic(void) { return p_ic; }
-int nvim_option_get_scs(void) { return p_scs; }
-int nvim_option_get_hls(void) { return p_hls; }
-int nvim_option_get_is(void) { return p_is; }
-int nvim_option_get_magic(void) { return p_magic; }
-int nvim_option_get_fic(void) { return p_fic; }
-int nvim_option_get_mle(void) { return p_mle; }
-int nvim_option_get_paste(void) { return p_paste; }
-int nvim_option_get_ri(void) { return p_ri; }
-int nvim_option_get_ws(void) { return p_ws; }
-int nvim_option_get_gd(void) { return p_gd; }
-int nvim_option_get_ea(void) { return p_ea; }
-int nvim_option_get_hid(void) { return p_hid; }
-int nvim_option_get_sm(void) { return p_sm; }
-int nvim_option_get_lz(void) { return p_lz; }
-int nvim_option_get_to(void) { return p_to; }
 
 // Numeric option accessors
 OptInt nvim_option_get_so(void) { return p_so; }
@@ -415,7 +398,6 @@ unsigned nvim_option_get_dy_flags(void) { return dy_flags; }
 unsigned nvim_option_get_cb_flags(void) { return cb_flags; }
 
 // Special accessors
-int nvim_option_get_magic_overruled(void) { return (int)magic_overruled; }
 int nvim_option_get_secure(void) { return secure; }
 
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
@@ -424,24 +406,6 @@ const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 // Setter functions for Rust code
 // =============================================================================
 
-// Boolean option setters (direct assignment for simple options)
-void nvim_option_set_ai(int value) { p_ai = value; }
-void nvim_option_set_et(int value) { p_et = value; }
-void nvim_option_set_ic(int value) { p_ic = value; }
-void nvim_option_set_scs(int value) { p_scs = value; }
-void nvim_option_set_hls(int value) { p_hls = value; }
-void nvim_option_set_is(int value) { p_is = value; }
-void nvim_option_set_magic(int value) { p_magic = value; }
-void nvim_option_set_ml(int value) { p_ml = value; }
-void nvim_option_set_paste(int value) { p_paste = value; }
-void nvim_option_set_ri(int value) { p_ri = value; }
-void nvim_option_set_ws(int value) { p_ws = value; }
-void nvim_option_set_gd(int value) { p_gd = value; }
-void nvim_option_set_ea(int value) { p_ea = value; }
-void nvim_option_set_hid(int value) { p_hid = value; }
-void nvim_option_set_sm(int value) { p_sm = value; }
-void nvim_option_set_lz(int value) { p_lz = value; }
-void nvim_option_set_to(int value) { p_to = value; }
 
 // Numeric option setters (direct assignment for simple options)
 void nvim_option_set_sw(OptInt value) { p_sw = value; }
@@ -458,26 +422,13 @@ void nvim_option_set_tm(OptInt value) { p_tm = value; }
 void nvim_option_set_hi(OptInt value) { p_hi = value; }
 void nvim_option_set_re(OptInt value) { p_re = value; }
 
-// Special setter for magic_overruled (for Rust)
-void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)value; }
 
 // =============================================================================
 // Callback accessor functions for Rust callbacks module
 // =============================================================================
 
-// State accessors for callbacks
-int nvim_callback_get_starting(void) { return starting; }
-OptInt nvim_callback_get_p_titlelen(void) { return p_titlelen; }
-int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
-
 // Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
-
-// Full screen state (option module specific)
-int nvim_option_get_full_screen(void) { return full_screen; }
-
-// Screen dimensions
-int nvim_option_get_rows(void) { return Rows; }
 
 // Window accessor for view height (option module specific)
 int nvim_option_win_get_view_height(win_T *win) { return win ? win->w_view_height : 0; }
@@ -505,7 +456,6 @@ OptInt nvim_callback_get_p_ch(void) { return p_ch; }
 void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
 frame_T *nvim_callback_get_topframe(void) { return topframe; }
 int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
-void nvim_callback_set_clear_cmdline(int value) { clear_cmdline = value != 0; }
 
 // Window accessors for display callbacks
 const char *nvim_option_win_get_stc(win_T *win) { return win ? (const char *)win->w_p_stc : NULL; }
@@ -527,7 +477,6 @@ int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
 void nvim_option_buf_set_modified_was_set(buf_T *buf, int val) { if (buf) buf->b_modified_was_set = val; }
 int nvim_option_buf_get_b_p_ro(buf_T *buf) { return buf ? buf->b_p_ro : 0; }
 void nvim_option_buf_set_b_did_warn(buf_T *buf, int val) { if (buf) buf->b_did_warn = val != 0; }
-void nvim_callback_set_readonlymode(int val) { readonlymode = val != 0; }
 void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal : NULL; }
 int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
@@ -547,8 +496,6 @@ const char *nvim_did_set_spell_option(void) { return did_set_spell_option(); }
 // Phase 96: spellcapcheck and keymodel accessors
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 const char *nvim_get_p_km(void) { return p_km; }
-void nvim_set_km_stopsel(int val) { km_stopsel = val != 0; }
-void nvim_set_km_startsel(int val) { km_startsel = val != 0; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
@@ -701,7 +648,6 @@ void nvim_for_all_buffers(void (*callback)(buf_T *)) {
 // Buffer field accessors for undofile callback
 int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
 int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
-int nvim_get_p_udf(void) { return p_udf; }
 
 // Buflisted callback accessors
 int nvim_buf_get_p_bl(buf_T *buf) { return buf ? buf->b_p_bl : 0; }
@@ -729,11 +675,6 @@ OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
 // Xhistory callback accessors
 void *nvim_get_p_chi_addr(void) { return (void *)&p_chi; }
 
-// Langnoremap/langremap toggle accessors
-int nvim_callback_get_p_lnr(void) { return p_lnr; }
-int nvim_callback_get_p_lrm(void) { return p_lrm; }
-void nvim_callback_set_p_lnr(int value) { p_lnr = value; }
-void nvim_callback_set_p_lrm(int value) { p_lrm = value; }
 
 // Pumblend accessors
 OptInt nvim_callback_get_p_pb(void) { return p_pb; }
@@ -868,33 +809,17 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 // IO buffer accessor
 char *nvim_get_iobuff(void) { return IObuff; }
 
-// no_wait_return state accessors
-int nvim_get_no_wait_return(void) { return no_wait_return; }
-void nvim_set_no_wait_return(int val) { no_wait_return = val; }
-
-// silent_mode state accessor
-void nvim_set_silent_mode(int val) { silent_mode = val != 0; }
-
-// info_message state accessor
-void nvim_set_info_message(int val) { info_message = val != 0; }
-
 // Global option accessors for Rust callbacks
 const char *nvim_get_p_path(void) { return p_path; }
 const char *nvim_get_p_cdpath(void) { return p_cdpath; }
 OptInt nvim_get_p_window(void) { return p_window; }
 void nvim_set_p_window(OptInt val) { p_window = val; }
-void nvim_set_p_arshape(int val) { p_arshape = val != 0; }
 const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
-void nvim_set_p_deco(int val) { p_deco = val != 0; }
 
 // Lines/columns callback accessors
 OptInt nvim_get_p_lines(void) { return p_lines; }
 OptInt nvim_get_p_columns(void) { return p_columns; }
 int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
-
-// Paste callback accessors (nvim_get_p_paste defined in indent_c.c,
-//   nvim_get_p_ru defined in drawscreen.c)
-int nvim_get_p_sta(void) { return p_sta; }
 
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
@@ -903,7 +828,6 @@ void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_cul
 // set_options_bin global option accessors
 OptInt nvim_get_p_tw(void) { return p_tw; }
 OptInt nvim_get_p_wm(void) { return p_wm; }
-void nvim_set_p_bin(int v) { p_bin = v != 0; }
 
 // set_helplang_default accessors
 void nvim_set_p_hlg_from_code(const char *code)
@@ -2740,20 +2664,6 @@ int nvim_get_backslash_in_filename(void) {
 #endif
 }
 
-int nvim_get_p_ai(void) { return p_ai; }
-bool nvim_get_p_bin(void) { return p_bin; }
-bool nvim_get_p_bomb(void) { return p_bomb; }
-bool nvim_get_p_ci(void) { return p_ci; }
-bool nvim_get_p_cin(void) { return p_cin; }
-int nvim_get_p_et(void) { return p_et; }
-bool nvim_get_p_fixeol(void) { return p_fixeol; }
-bool nvim_get_p_lisp(void) { return p_lisp; }
-int nvim_get_p_ma(void) { return p_ma; }
-int nvim_get_p_ml(void) { return p_ml; }
-bool nvim_get_p_pi(void) { return p_pi; }
-bool nvim_get_p_si(void) { return p_si; }
-bool nvim_get_p_swf(void) { return p_swf; }
-// nvim_get_p_udf: already defined as int at line 579
 
 OptInt nvim_get_p_sw(void) { return p_sw; }
 OptInt nvim_get_p_scbk(void) { return p_scbk; }

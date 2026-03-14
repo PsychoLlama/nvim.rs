@@ -15,6 +15,10 @@ const RE_MAGIC: c_int = 1;
 type ColnrT = i32;
 
 extern "C" {
+    static mut p_fic: c_int;
+}
+
+extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
@@ -33,9 +37,6 @@ extern "C" {
         line: *const c_char,
         col: ColnrT,
     ) -> bool;
-
-    /// Get the 'fileignorecase' option.
-    fn nvim_option_get_fic() -> c_int;
 
     /// Copy one comma-separated option part into buf.
     #[link_name = "copy_option_part"]
@@ -298,7 +299,7 @@ pub unsafe extern "C" fn rs_match_file_pat(
     tail: *const c_char,
     allow_dirs: c_int,
 ) -> bool {
-    let p_fic = unsafe { nvim_option_get_fic() } != 0;
+    let use_icase = unsafe { p_fic } != 0;
 
     // Get (or compile) the regex program.
     let local_prog: *mut c_void;
@@ -338,17 +339,21 @@ pub unsafe extern "C" fn rs_match_file_pat(
             let mut matched = false;
             if allow_dirs != 0 {
                 // Try full path
-                if !fname.is_null() && unsafe { vim_regexec_prog(use_prog_ptr, p_fic, fname, 0) } {
+                if !fname.is_null()
+                    && unsafe { vim_regexec_prog(use_prog_ptr, use_icase, fname, 0) }
+                {
                     matched = true;
                 }
                 // Try short name
                 if !matched
                     && !sfname.is_null()
-                    && unsafe { vim_regexec_prog(use_prog_ptr, p_fic, sfname, 0) }
+                    && unsafe { vim_regexec_prog(use_prog_ptr, use_icase, sfname, 0) }
                 {
                     matched = true;
                 }
-            } else if !tail.is_null() && unsafe { vim_regexec_prog(use_prog_ptr, p_fic, tail, 0) } {
+            } else if !tail.is_null()
+                && unsafe { vim_regexec_prog(use_prog_ptr, use_icase, tail, 0) }
+            {
                 matched = true;
             }
             result = matched;
@@ -359,16 +364,16 @@ pub unsafe extern "C" fn rs_match_file_pat(
         let lp_ptr: *mut *mut c_void = &raw mut lp;
         let mut matched = false;
         if allow_dirs != 0 {
-            if !fname.is_null() && unsafe { vim_regexec_prog(lp_ptr, p_fic, fname, 0) } {
+            if !fname.is_null() && unsafe { vim_regexec_prog(lp_ptr, use_icase, fname, 0) } {
                 matched = true;
             }
             if !matched
                 && !sfname.is_null()
-                && unsafe { vim_regexec_prog(lp_ptr, p_fic, sfname, 0) }
+                && unsafe { vim_regexec_prog(lp_ptr, use_icase, sfname, 0) }
             {
                 matched = true;
             }
-        } else if !tail.is_null() && unsafe { vim_regexec_prog(lp_ptr, p_fic, tail, 0) } {
+        } else if !tail.is_null() && unsafe { vim_regexec_prog(lp_ptr, use_icase, tail, 0) } {
             matched = true;
         }
         // Free the locally-compiled prog (lp may have been updated by vim_regexec_prog)

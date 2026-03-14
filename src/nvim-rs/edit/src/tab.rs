@@ -21,6 +21,10 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut p_sta: c_int;
+}
+
+extern "C" {
     // Insstart_blank_vcol
     fn nvim_get_Insstart_blank_vcol() -> ColnrT;
     fn nvim_set_Insstart_blank_vcol(val: ColnrT);
@@ -57,9 +61,6 @@ extern "C" {
 
     // State (REPLACE_FLAG / VREPLACE_FLAG)
     fn nvim_get_State() -> c_int;
-
-    // p_sta (smarttab) -- from option_shim.c
-    fn nvim_get_p_sta() -> c_int;
 
     // expandtab and tabstop options
     fn nvim_curbuf_get_b_p_et() -> c_int; // from option_shim.c
@@ -137,7 +138,7 @@ unsafe fn ins_tab_impl() -> bool {
     // When nothing special, insert TAB like a normal character.
     // Conditions: expandtab is off AND smarttab/softtabstop don't apply.
     let et = nvim_curbuf_get_b_p_et() != 0;
-    let sta = nvim_get_p_sta() != 0;
+    let sta = p_sta != 0;
     let vts_count = nvim_curbuf_tabstop_count_vts();
     // Use a distinct name to avoid the "similar binding" warning
     let vsts_cnt = nvim_curbuf_tabstop_count_vsts();

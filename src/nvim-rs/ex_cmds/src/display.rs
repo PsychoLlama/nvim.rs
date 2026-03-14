@@ -813,8 +813,8 @@ pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int,
 #[no_mangle]
 pub unsafe extern "C" fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int) {
     use crate::{
-        ml_get, msg_putchar, msg_start, nvim_get_silent_mode, nvim_message_filtered,
-        nvim_msg_ext_set_kind_excmd, nvim_set_info_message, nvim_set_silent_mode,
+        info_message, ml_get, msg_putchar, msg_start, nvim_message_filtered,
+        nvim_msg_ext_set_kind_excmd, silent_mode,
     };
 
     // apply :filter /pat/
@@ -822,21 +822,21 @@ pub unsafe extern "C" fn rs_print_line(lnum: c_int, use_number: c_int, list: c_i
         return;
     }
 
-    let save_silent = nvim_get_silent_mode();
-    nvim_set_silent_mode(0);
-    nvim_set_info_message(1); // use stdout, not stderr
+    let save_silent = silent_mode;
+    silent_mode = false;
+    info_message = true; // use stdout, not stderr
     if first != 0 {
         msg_start();
         nvim_msg_ext_set_kind_excmd(c"list_cmd".as_ptr());
-    } else if save_silent == 0 {
+    } else if !save_silent {
         msg_putchar(b'\n' as c_int); // don't want trailing newline with regular messaging
     }
     rs_print_line_no_prefix(lnum, use_number, list);
-    if save_silent != 0 {
+    if save_silent {
         msg_putchar(b'\n' as c_int); // batch mode message should always end in newline
-        nvim_set_silent_mode(save_silent);
+        silent_mode = save_silent;
     }
-    nvim_set_info_message(0);
+    info_message = false;
 }
 
 /// Convert display mode from exarg flags.

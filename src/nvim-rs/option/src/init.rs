@@ -676,16 +676,18 @@ use crate::opt_index::{
 use crate::OptInt;
 
 extern "C" {
+    // Direct C globals
+    static mut Rows: c_int;
+    static mut p_sh: *mut c_char;
+
     // set_init_2 accessors
     fn nvim_option_ilog_rtp();
     fn nvim_call_comp_col();
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
     fn nvim_set_p_window(val: OptInt);
-    fn nvim_option_get_rows() -> c_int;
 
     // set_init_3 accessors
     fn nvim_call_parse_shape_opt();
-    fn nvim_option_get_sh() -> *const c_char;
     fn nvim_call_invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
     fn nvim_call_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
@@ -746,12 +748,9 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     // 'window' is only for backwards compatibility with Vi.
     // Default is Rows - 1.
     if nvim_option_was_set_idx(K_OPT_WINDOW) == 0 {
-        nvim_set_p_window(OptInt::from(nvim_option_get_rows()) - 1);
+        nvim_set_p_window(OptInt::from(Rows) - 1);
     }
-    crate::defaults::rs_change_option_default(
-        K_OPT_WINDOW,
-        number_optval(OptInt::from(nvim_option_get_rows()) - 1),
-    );
+    crate::defaults::rs_change_option_default(K_OPT_WINDOW, number_optval(OptInt::from(Rows) - 1));
 }
 
 /// Compare a shell basename (from `p`) to a known shell name.
@@ -773,8 +772,7 @@ pub unsafe extern "C" fn rs_set_init_3() {
     let do_sp = (nvim_get_option_flags(K_OPT_SHELLPIPE) & K_OPT_FLAG_WAS_SET_2) == 0;
 
     let mut len: usize = 0;
-    let p_sh = nvim_option_get_sh();
-    let tail_ptr = nvim_call_invocation_path_tail(p_sh, &raw mut len);
+    let tail_ptr = nvim_call_invocation_path_tail(p_sh.cast_const(), &raw mut len);
     // Duplicate just the basename so we can compare safely.
     let p = xmemdupz(tail_ptr, len);
 

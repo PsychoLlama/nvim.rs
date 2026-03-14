@@ -10,6 +10,22 @@ use crate::callbacks::{callback_ok, CallbackResult};
 use crate::{BufHandle, OptInt, WinHandle};
 
 // =============================================================================
+// C Global Variable Declarations
+// =============================================================================
+
+extern "C" {
+    static mut p_ea: c_int;
+    static mut p_ml: c_int;
+    static mut p_et: c_int;
+    static mut p_tw: OptInt;
+    static mut p_wm: OptInt;
+    static mut p_bin: c_int;
+    static mut readonlymode: bool;
+    static mut km_stopsel: bool;
+    static mut km_startsel: bool;
+}
+
+// =============================================================================
 // C Function Declarations
 // =============================================================================
 
@@ -50,7 +66,6 @@ extern "C" {
 
     // State accessors
     fn nvim_callback_get_p_uc() -> OptInt;
-    fn nvim_option_get_ea() -> c_int;
     fn nvim_callback_is_one_window() -> c_int;
     fn nvim_callback_is_curbuf_help() -> c_int;
     fn nvim_callback_get_curwin_height() -> c_int;
@@ -80,7 +95,6 @@ extern "C" {
     fn nvim_option_buf_set_modified_was_set(buf: BufHandle, val: c_int);
     fn nvim_option_buf_get_b_p_ro(buf: BufHandle) -> c_int;
     fn nvim_option_buf_set_b_did_warn(buf: BufHandle, val: c_int);
-    fn nvim_callback_set_readonlymode(val: c_int);
 
     // Scrollback callback accessors
     fn nvim_option_buf_get_terminal_ptr(buf: BufHandle) -> *mut c_void;
@@ -118,8 +132,6 @@ extern "C" {
     // Phase 96: spellcapcheck and keymodel accessors
     fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
     fn nvim_get_p_km() -> *const std::ffi::c_char;
-    fn nvim_set_km_stopsel(val: c_int);
-    fn nvim_set_km_startsel(val: c_int);
 
     // Shiftwidth/tabstop callback
     fn nvim_parse_cino(buf: BufHandle);
@@ -139,14 +151,6 @@ extern "C" {
     fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
     fn nvim_win_set_p_culopt_flags(win: WinHandle, flags: u8);
 
-    // set_options_bin global option accessors
-    fn nvim_get_p_tw() -> OptInt;
-    fn nvim_get_p_wm() -> OptInt;
-    fn nvim_get_p_ml() -> c_int;
-    fn nvim_option_set_ml(v: c_int);
-    fn nvim_get_p_et() -> c_int;
-    fn nvim_option_set_et(v: c_int);
-    fn nvim_set_p_bin(v: c_int);
     fn nvim_get_p_tw_nobin() -> OptInt;
     fn nvim_set_p_tw_nobin(v: OptInt);
     fn nvim_get_p_wm_nobin() -> OptInt;
@@ -256,7 +260,7 @@ fn get_updatecount() -> OptInt {
 /// Get 'equalalways' option value.
 #[inline]
 fn get_equalalways() -> bool {
-    unsafe { nvim_option_get_ea() != 0 }
+    unsafe { p_ea != 0 }
 }
 
 /// Check if there's only one window.
@@ -527,7 +531,7 @@ pub unsafe extern "C" fn rs_did_set_readonly(args: *mut c_void) -> CallbackResul
 
     // when 'readonly' is reset globally, also reset readonlymode
     if nvim_option_buf_get_b_p_ro(buf) == 0 && (flags & OPT_LOCAL) == 0 {
-        nvim_callback_set_readonlymode(0);
+        readonlymode = false;
     }
 
     // when 'readonly' is set may give W10 again
@@ -739,8 +743,8 @@ pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResul
     let p_km = nvim_get_p_km();
     if !p_km.is_null() {
         let km = std::ffi::CStr::from_ptr(p_km).to_bytes();
-        nvim_set_km_stopsel(c_int::from(km.contains(&b'o')));
-        nvim_set_km_startsel(c_int::from(km.contains(&b'a')));
+        km_stopsel = km.contains(&b'o');
+        km_startsel = km.contains(&b'a');
     }
     callback_ok()
 }
@@ -958,10 +962,10 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             }
             if (opt_flags & OPT_LOCAL_BIN) == 0 {
                 // save global options
-                nvim_set_p_tw_nobin(nvim_get_p_tw());
-                nvim_set_p_wm_nobin(nvim_get_p_wm());
-                nvim_set_p_ml_nobin(nvim_get_p_ml());
-                nvim_set_p_et_nobin(nvim_get_p_et());
+                nvim_set_p_tw_nobin(p_tw);
+                nvim_set_p_wm_nobin(p_wm);
+                nvim_set_p_ml_nobin(p_ml);
+                nvim_set_p_et_nobin(p_et);
             }
         }
 
@@ -976,9 +980,9 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             // set bin-compatible global values
             crate::set_textwidth(0);
             crate::set_wrapmargin(0);
-            nvim_option_set_ml(0);
-            nvim_option_set_et(0);
-            nvim_set_p_bin(1); // needed when called for the "-b" argument
+            p_ml = 0;
+            p_et = 0;
+            p_bin = 1; // needed when called for the "-b" argument
         }
     } else if oldval != 0 {
         // switched off: restore saved values
@@ -991,8 +995,8 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             crate::set_textwidth(nvim_get_p_tw_nobin());
             crate::set_wrapmargin(nvim_get_p_wm_nobin());
-            nvim_option_set_ml(nvim_get_p_ml_nobin());
-            nvim_option_set_et(nvim_get_p_et_nobin());
+            p_ml = nvim_get_p_ml_nobin();
+            p_et = nvim_get_p_et_nobin();
         }
     }
 

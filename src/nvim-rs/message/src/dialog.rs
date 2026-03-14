@@ -21,8 +21,8 @@ extern "C" {
     fn nvim_get_confirm_buttons() -> *const c_char;
     /// Set `confirm_buttons` pointer
     fn nvim_set_confirm_buttons(buttons: *const c_char);
-    /// Get `silent_mode` flag
-    fn nvim_get_silent_mode() -> c_int;
+    /// Direct C global: silent_mode
+    static silent_mode: bool;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn rs_clear_confirm_buttons() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_silent_mode() -> c_int {
-    nvim_get_silent_mode()
+    c_int::from(silent_mode)
 }
 
 /// Check if a character is a dialog button separator.
@@ -379,9 +379,8 @@ extern "C" {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dialogs_suppressed() -> c_int {
-    let silent_mode = nvim_get_silent_mode();
     let msg_silent = nvim_get_msg_silent();
-    c_int::from(silent_mode != 0 || msg_silent != 0)
+    c_int::from(silent_mode || msg_silent != 0)
 }
 
 /// Check if dialog can be shown.
@@ -392,7 +391,7 @@ pub unsafe extern "C" fn rs_dialogs_suppressed() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dialog_can_show() -> c_int {
-    c_int::from(nvim_get_silent_mode() == 0)
+    c_int::from(!silent_mode)
 }
 
 /// Check if UI is ready for dialogs.

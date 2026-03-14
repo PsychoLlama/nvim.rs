@@ -74,6 +74,11 @@ const EXFLAG_NR: c_int = 0x02;
 const EXFLAG_PRINT: c_int = 0x04;
 
 extern "C" {
+    static mut p_gd: c_int;
+    static mut p_lz: c_int;
+}
+
+extern "C" {
     // show_sub FFI
     fn nvim_excmds_save_set_shortmess_F() -> *mut c_char;
     fn nvim_excmds_restore_shortmess(saved: *mut c_char);
@@ -120,9 +125,6 @@ extern "C" {
     );
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_get_curbuf() -> *mut crate::BufHandle;
-
-    /// Get the current value of p_gd (gdefault option).
-    fn nvim_option_get_gd() -> c_int;
 
     // sub_joining_lines FFI
     fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
@@ -720,14 +722,14 @@ pub unsafe extern "C" fn rs_sub_parse_flags(
     subflags: *mut CSubFlags,
     which_pat: *mut c_int,
 ) -> *mut c_char {
-    let p_gd = nvim_option_get_gd() != 0;
+    let gd_val = p_gd != 0;
 
     // Find trailing options. When '&' is used, keep old options.
     let mut p = cmd;
     if *p == b'&' as c_char {
         p = p.add(1);
     } else {
-        (*subflags).do_all = p_gd;
+        (*subflags).do_all = gd_val;
         (*subflags).do_ask = false;
         (*subflags).do_error = true;
         (*subflags).do_print = false;
@@ -1167,8 +1169,6 @@ extern "C" {
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     fn nvim_callback_get_p_ch() -> i64;
-    fn nvim_option_get_lz() -> c_int;
-    fn nvim_option_set_lz(val: c_int);
     fn nvim_option_p_cpo_has_undo() -> c_int;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_get_w_botline() -> c_int;
@@ -2309,7 +2309,7 @@ unsafe fn handle_do_ask(
             // Normal mode: show highlighted match, then prompt
             let mut orig_line: *mut c_char = std::ptr::null_mut();
             let mut len_change: c_int = 0;
-            let save_p_lz = nvim_option_get_lz();
+            let save_p_lz = p_lz;
             let save_p_fen = nvim_curwin_get_w_p_fen();
 
             nvim_curwin_set_w_p_fen(0);
@@ -2317,7 +2317,7 @@ unsafe fn handle_do_ask(
             let temp = nvim_get_RedrawingDisabled();
             nvim_set_RedrawingDisabled(0);
 
-            nvim_option_set_lz(0);
+            p_lz = 0;
 
             if !new_start.is_null() {
                 let orig = ml_get(lnum);
@@ -2354,7 +2354,7 @@ unsafe fn handle_do_ask(
 
             nvim_set_msg_didout(0);
             nvim_al_gotocmdline(1);
-            nvim_option_set_lz(save_p_lz);
+            p_lz = save_p_lz;
             nvim_set_RedrawingDisabled(temp);
 
             if !orig_line.is_null() {

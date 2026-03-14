@@ -681,14 +681,16 @@ pub unsafe extern "C" fn rs_validate_messagesopt(value: *const c_char) -> c_int 
 // =============================================================================
 
 extern "C" {
+    static mut p_arshape: c_int;
+    static mut p_deco: c_int;
+    static mut p_enc: *mut c_char;
+}
+
+extern "C" {
     fn nvim_win_get_p_arab(win: *const std::ffi::c_void) -> c_int;
     fn nvim_win_set_p_rl(win: *mut std::ffi::c_void, val: c_int);
     fn nvim_win_get_p_rl(win: *const std::ffi::c_void) -> c_int;
     fn nvim_get_p_tbidi() -> c_int;
-    fn nvim_get_p_arshape() -> c_int;
-    fn nvim_set_p_arshape(val: c_int);
-    fn nvim_get_p_enc() -> *const c_char;
-    fn nvim_set_p_deco(val: c_int);
     fn nvim_buf_set_b_p_iminsert(buf: *mut std::ffi::c_void, val: c_int);
     fn nvim_buf_set_b_p_imsearch(buf: *mut std::ffi::c_void, val: c_int);
     fn nvim_win_get_w_buffer(win: *const std::ffi::c_void) -> *mut std::ffi::c_void;
@@ -744,14 +746,14 @@ pub unsafe extern "C" fn rs_did_set_arabic(win: *mut std::ffi::c_void) -> Callba
             }
 
             // Enable Arabic shaping (major part of what Arabic requires)
-            if nvim_get_p_arshape() == 0 {
-                nvim_set_p_arshape(1);
+            if p_arshape == 0 {
+                p_arshape = 1;
                 redraw_all_later(UPD_NOT_VALID);
             }
         }
 
         // Arabic requires UTF-8 encoding, inform user if not set
-        let enc = nvim_get_p_enc();
+        let enc = p_enc.cast_const();
         if !enc.is_null() && !streq_cstr(enc, b"utf-8\0") {
             let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
             msg_source(HLF_W);
@@ -760,7 +762,7 @@ pub unsafe extern "C" fn rs_did_set_arabic(win: *mut std::ffi::c_void) -> Callba
         }
 
         // Set 'delcombine'
-        nvim_set_p_deco(1);
+        p_deco = 1;
 
         // Force-set the necessary keymap for Arabic
         // Note: This returns an error message if it fails
@@ -853,7 +855,7 @@ extern "C" {
     fn u_compute_hash(buf: *mut std::ffi::c_void, hash: *mut u8);
     fn u_read_undo(name: *const c_char, hash: *const u8, orig_name: *const c_char) -> c_int;
     fn nvim_buf_get_b_ffname(buf: *const std::ffi::c_void) -> *const c_char;
-    fn nvim_get_p_udf() -> c_int;
+    static mut p_udf: c_int;
     fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
     fn nvim_buf_has_memfile(buf: *mut c_void) -> c_int;
     fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
@@ -927,7 +929,7 @@ pub unsafe extern "C" fn rs_did_set_undofile_cb(args: *mut c_void) -> CallbackRe
     } else {
         nvim_buf_get_p_udf(buf)
     };
-    let global_udf = nvim_get_p_udf();
+    let global_udf = p_udf;
 
     // Only take action when the option was set.
     if buf_udf == 0 && global_udf == 0 {
@@ -1017,10 +1019,13 @@ pub unsafe extern "C" fn rs_did_set_autochdir(_args: *mut c_void) -> CallbackRes
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_p_paste() -> c_int;
-    fn nvim_option_get_sm() -> c_int;
-    fn nvim_get_p_sta() -> c_int;
-    fn nvim_get_p_ri() -> c_int;
+    static mut p_paste: c_int;
+    static mut p_sm: c_int;
+    static mut p_sta: c_int;
+    static mut p_ri: c_int;
+}
+
+extern "C" {
     // Compound paste buf operations (Phase 12 Pass 1)
     fn nvim_buf_paste_save_scalars(buf: *mut c_void);
     fn nvim_buf_paste_save_vsts(buf: *mut c_void);
@@ -1071,17 +1076,17 @@ unsafe extern "C" fn paste_buf_restore_cb(buf: *mut c_void) {
 /// settings across all buffers. When 'paste' is unset, restores the saved values.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackResult {
-    let p_paste = nvim_get_p_paste();
+    let cur_p_paste = p_paste;
 
-    if p_paste != 0 {
+    if cur_p_paste != 0 {
         // Paste switched from off to on.
         if PASTE_OLD_P_PASTE == 0 {
             // First time paste is turned on: save current values.
             nvim_for_all_buffers(paste_buf_save_and_activate_cb);
-            PASTE_SAVE_SM = nvim_option_get_sm();
-            PASTE_SAVE_STA = nvim_get_p_sta();
-            PASTE_SAVE_RU = unsafe { p_ru };
-            PASTE_SAVE_RI = nvim_get_p_ri();
+            PASTE_SAVE_SM = p_sm;
+            PASTE_SAVE_STA = p_sta;
+            PASTE_SAVE_RU = p_ru;
+            PASTE_SAVE_RI = p_ri;
             nvim_paste_global_save_scalars();
             nvim_paste_global_save_vsts();
         } else {
@@ -1102,7 +1107,7 @@ pub unsafe extern "C" fn rs_did_set_paste_full(_args: *mut c_void) -> CallbackRe
         nvim_paste_global_restore_vsts();
     }
 
-    PASTE_OLD_P_PASTE = p_paste;
+    PASTE_OLD_P_PASTE = cur_p_paste;
     nvim_paste_didset_sctx_all();
 
     callback_ok()

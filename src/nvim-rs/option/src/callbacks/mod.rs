@@ -51,6 +51,12 @@ pub enum UpdateType {
 
 extern "C" {
     static mut need_maketitle: bool;
+    // Global option variables accessed directly
+    static mut starting: c_int;
+    static mut p_hls: c_int;
+    static mut p_lnr: c_int;
+    static mut p_lrm: c_int;
+    static mut p_titlelen: OptInt;
 }
 
 #[allow(dead_code)] // FFI functions used when linked with C
@@ -65,20 +71,8 @@ extern "C" {
     // Search highlight functions
     fn set_no_hlsearch(flag: c_int);
 
-    // State accessors
-    fn nvim_callback_get_starting() -> c_int;
-    fn nvim_option_get_hls() -> c_int;
-    fn nvim_callback_get_p_titlelen() -> OptInt;
-    fn nvim_callback_get_no_hlsearch() -> c_int;
-
     // Fold functions
     fn rs_newFoldLevel();
-
-    // Langnoremap/langremap accessors
-    fn nvim_callback_get_p_lnr() -> c_int;
-    fn nvim_callback_get_p_lrm() -> c_int;
-    fn nvim_callback_set_p_lnr(value: c_int);
-    fn nvim_callback_set_p_lrm(value: c_int);
 
     // Pumblend accessors
     fn hl_invalidate_blends();
@@ -145,19 +139,19 @@ fn request_maketitle() {
 /// Check if screen is available for drawing.
 #[inline]
 fn screen_available() -> bool {
-    unsafe { nvim_callback_get_starting() != NO_SCREEN }
+    unsafe { starting != NO_SCREEN }
 }
 
 /// Get 'hlsearch' option value.
 #[inline]
 fn get_hlsearch() -> bool {
-    unsafe { nvim_option_get_hls() != 0 }
+    unsafe { p_hls != 0 }
 }
 
 /// Get 'titlelen' option value.
 #[inline]
 fn get_titlelen() -> OptInt {
-    unsafe { nvim_callback_get_p_titlelen() }
+    unsafe { p_titlelen }
 }
 
 // =============================================================================
@@ -244,8 +238,7 @@ pub extern "C" fn rs_did_set_iminsert(_args: *mut c_void) -> CallbackResult {
 #[no_mangle]
 pub extern "C" fn rs_did_set_langnoremap(_args: *mut c_void) -> CallbackResult {
     // p_lrm = !p_lnr
-    let lnr = unsafe { nvim_callback_get_p_lnr() };
-    unsafe { nvim_callback_set_p_lrm(c_int::from(lnr == 0)) };
+    unsafe { p_lrm = c_int::from(p_lnr == 0) };
     callback_ok()
 }
 
@@ -254,8 +247,7 @@ pub extern "C" fn rs_did_set_langnoremap(_args: *mut c_void) -> CallbackResult {
 #[no_mangle]
 pub extern "C" fn rs_did_set_langremap(_args: *mut c_void) -> CallbackResult {
     // p_lnr = !p_lrm
-    let lrm = unsafe { nvim_callback_get_p_lrm() };
-    unsafe { nvim_callback_set_p_lnr(c_int::from(lrm == 0)) };
+    unsafe { p_lnr = c_int::from(p_lrm == 0) };
     callback_ok()
 }
 

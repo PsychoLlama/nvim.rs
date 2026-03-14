@@ -407,15 +407,17 @@ pub struct IncsearchStateT {
 // FFI Functions
 // =============================================================================
 
+extern "C" {
+    static mut magic_overruled: c_int;
+}
+
 // External C functions for accessing global state
 extern "C" {
     fn nvim_get_curwin_handle() -> c_int;
     fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
     fn nvim_set_curwin_cursor_pos(pos: *const PosT);
-    fn nvim_option_get_magic_overruled() -> c_int;
     fn nvim_save_viewstate(vs: *mut ViewStateT);
     fn nvim_restore_viewstate(vs: *const ViewStateT);
-    fn nvim_option_set_magic_overruled(value: c_int);
 
     // Incsearch highlighting C dependencies
     fn nvim_get_p_is() -> c_int;
@@ -464,7 +466,7 @@ pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
     s.incsearch_postponed = false;
 
     // Save magic_overruled
-    s.magic_overruled_save = nvim_option_get_magic_overruled();
+    s.magic_overruled_save = magic_overruled;
 
     // Clear match_end
     s.match_end.clear();
@@ -531,7 +533,7 @@ pub unsafe extern "C" fn rs_finish_incsearch_highlighting(
     nvim_set_search_last_line(MAXLNUM);
 
     // Restore magic_overruled
-    nvim_option_set_magic_overruled(s.magic_overruled_save);
+    magic_overruled = s.magic_overruled_save;
 
     // Validation and redraw
     nvim_validate_cursor();
