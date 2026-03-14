@@ -1614,6 +1614,91 @@ pub unsafe extern "C" fn rs_read_sal_section(
     0 // OK
 }
 
+/// Read and apply the SN_PREFCOND section from a FILE* stream to slang_T.
+///
+/// Replaces C read_prefcond_section(). Reads prefix condition count, then
+/// for each condition reads length+bytes, builds "^pattern", calls vim_regcomp.
+///
+/// Returns 0 on success, SP_*ERROR on failure.
+///
+/// # Safety
+/// - `fd` must be a valid FILE* pointer.
+/// - `slang` must be a valid non-null pointer to a SlangRaw.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_prefcond_section(
+    fd: *mut libc::FILE,
+    slang: *mut crate::SlangRaw,
+) -> c_int {
+    const MAXWLEN: usize = 254;
+    // RE_MAGIC | RE_STRING
+    const RE_FLAGS: c_int = 1 + 4;
+
+    // Read 2-byte count header
+    let mut cnt_buf = [0u8; 2];
+    if libc::fread(cnt_buf.as_mut_ptr().cast(), 1, 2, fd) != 2 {
+        return if libc::feof(fd) != 0 {
+            SP_TRUNCERROR
+        } else {
+            SP_OTHERERROR
+        };
+    }
+    let cnt = ((cnt_buf[0] as usize) << 8) | (cnt_buf[1] as usize);
+    if cnt == 0 {
+        return SP_FORMERROR;
+    }
+
+    // Allocate sl_prefprog array (zeroed = NULL regprog pointers)
+    let prog_arr = libc::calloc(cnt, std::mem::size_of::<*mut std::ffi::c_void>())
+        .cast::<*mut std::ffi::c_void>();
+    if prog_arr.is_null() {
+        return SP_OTHERERROR;
+    }
+    (*slang).sl_prefprog = prog_arr;
+    (*slang).sl_prefixcnt = cnt as i32;
+
+    for i in 0..cnt {
+        // Read 1-byte condition length
+        let n = libc::fgetc(fd);
+        if n < 0 {
+            return SP_TRUNCERROR;
+        }
+        let n = n as usize;
+        if n >= MAXWLEN {
+            return SP_FORMERROR;
+        }
+        if n == 0 {
+            continue; // empty condition
+        }
+
+        // Read condition bytes (non-NUL)
+        let mut cond_buf = [0u8; MAXWLEN];
+        if libc::fread(cond_buf.as_mut_ptr().cast(), 1, n, fd) != n {
+            return if libc::feof(fd) != 0 {
+                SP_TRUNCERROR
+            } else {
+                SP_OTHERERROR
+            };
+        }
+        // Check for NUL
+        if cond_buf[..n].contains(&0) {
+            return SP_FORMERROR;
+        }
+
+        // Build "^pattern\0"
+        let mut pattern = [0u8; MAXWLEN + 2];
+        pattern[0] = b'^';
+        pattern[1..=n].copy_from_slice(&cond_buf[..n]);
+        pattern[n + 1] = 0;
+
+        let prog = vim_regcomp(pattern.as_ptr().cast::<c_char>(), RE_FLAGS);
+        *prog_arr.add(i) = prog;
+    }
+    0 // OK
+}
+
 // =============================================================================
 // Suggestion File Section Parsing
 // =============================================================================

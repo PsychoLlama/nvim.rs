@@ -470,6 +470,8 @@ extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
 extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
 // Phase 4: read_sal_section replacement
 extern int rs_read_sal_section(const uint8_t *buf, size_t len, slang_T *slang);
+// Phase 4: read_prefcond_section replacement
+extern int rs_read_prefcond_section(FILE *fd, slang_T *lp);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1300,53 +1302,10 @@ nextone:
 
 // Read SN_PREFCOND section.
 // Return SP_*ERROR flags.
-// Uses Rust for parsing prefix condition data.
+// Delegates to Rust (rs_read_prefcond_section).
 static int read_prefcond_section(FILE *fd, slang_T *lp)
 {
-  // Read count header: <prefcondcnt> (2 bytes)
-  uint8_t cnt_buf[2];
-  SPELL_READ_BYTES((char *)cnt_buf, 2, fd,; );
-
-  uint16_t cnt;
-  size_t consumed;
-  int res = rs_parse_prefcond_count(cnt_buf, 2, &cnt, &consumed);
-  if (res != 0) {
-    return res;
-  }
-  if (cnt == 0) {
-    return SP_FORMERROR;
-  }
-
-  lp->sl_prefprog = xcalloc((size_t)cnt, sizeof(regprog_T *));
-  lp->sl_prefixcnt = (int)cnt;
-
-  // Parse each prefix condition using Rust
-  for (int i = 0; i < (int)cnt; i++) {
-    // Read <condlen> first to know how many bytes to read
-    int n = getc(fd);
-    if (n < 0) {
-      return SP_TRUNCERROR;
-    }
-    if (n >= MAXWLEN) {
-      return SP_FORMERROR;
-    }
-
-    // When <condlen> is zero we have an empty condition.  Otherwise
-    // compile the regexp program used to check for the condition.
-    if (n > 0) {
-      // Read condition bytes
-      uint8_t cond_buf[MAXWLEN];
-      SPELL_READ_NONNUL_BYTES((char *)cond_buf, (size_t)n, fd,; );
-
-      // Build regex pattern with ^ prefix for vim_regcomp
-      char buf[MAXWLEN + 2];
-      buf[0] = '^';  // always match at one position only
-      memcpy(buf + 1, cond_buf, (size_t)n);
-      buf[n + 1] = NUL;
-      lp->sl_prefprog[i] = vim_regcomp(buf, RE_MAGIC | RE_STRING);
-    }
-  }
-  return 0;
+  return rs_read_prefcond_section(fd, lp);
 }
 
 // Read REP or REPSAL items section from "fd": <repcount> <rep> ...
