@@ -21,7 +21,7 @@ extern "C" {
 
     // Accessors for get_userdefined_compl_info migration (Phase 2)
     fn nvim_get_complete_funcname_empty(ctrl_x_mode: c_int) -> c_int;
-    fn nvim_ctrl_x_mode_is_function() -> c_int;
+    fn rs_ctrl_x_mode_function() -> c_int;
     fn nvim_get_insert_callback_opaque(ctrl_x_mode: c_int) -> *mut c_void;
     fn nvim_callback_call_findstart(cb_opaque: *mut c_void) -> c_int;
     fn nvim_ctrl_x_mode_reset_to_normal();
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn rs_get_userdefined_compl_info(
         // Use the global mode callback; check that it's set.
         let ctrl_x_mode = nvim_get_ctrl_x_mode();
         if nvim_get_complete_funcname_empty(ctrl_x_mode) != 0 {
-            nvim_emit_completefunc_not_set_error(nvim_ctrl_x_mode_is_function());
+            nvim_emit_completefunc_not_set_error(rs_ctrl_x_mode_function());
             return FAIL;
         }
         nvim_get_insert_callback_opaque(ctrl_x_mode)

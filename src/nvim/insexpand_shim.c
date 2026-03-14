@@ -2889,11 +2889,6 @@ int nvim_get_complete_funcname_empty(int ctrl_x_mode_val)
   return *get_complete_funcname(ctrl_x_mode_val) == NUL ? 1 : 0;
 }
 
-// Returns 1 if ctrl_x_mode is CTRL_X_FUNCTION (for error message selection).
-int nvim_ctrl_x_mode_is_function(void)
-{
-  return rs_ctrl_x_mode_function();
-}
 
 // Returns an opaque pointer to the Callback for the given ctrl_x_mode.
 void *nvim_get_insert_callback_opaque(int ctrl_x_mode_val)
