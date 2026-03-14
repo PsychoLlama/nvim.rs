@@ -2224,3 +2224,229 @@ pub unsafe extern "C" fn rs_f_confirm(
         p4_nvim_tv_set_number(rettv, i64::from(result));
     }
 }
+
+// =============================================================================
+// Phase 5: Time functions f_strftime and f_strptime (plan 40f0fb72)
+// =============================================================================
+
+use libc::{mktime, strftime, time_t, tm};
+
+const TYPVAL_SIZE_P5: usize = 16;
+const VAR_UNKNOWN_P5: c_int = 0;
+const CONV_NONE_P5: c_int = 0;
+
+/// `vimconv_T` from `mbyte_defs.h` - struct for encoding conversion.
+///
+/// Layout (on Linux x86-64):
+/// - `vc_type:   int`   (4 bytes offset 0)
+/// - `vc_factor: int`   (4 bytes offset 4)
+/// - `vc_fd:     void*` (8 bytes offset 8, iconv_t = void* on Linux)
+/// - `vc_fail:   bool`  (1 byte  offset 16)
+///
+/// Total: 24 bytes (with 7 bytes padding at end)
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct VimConv {
+    vc_type: c_int,
+    vc_factor: c_int,
+    vc_fd: *mut c_void,
+    vc_fail: bool,
+}
+
+impl VimConv {
+    const fn none() -> Self {
+        Self {
+            vc_type: 0, // CONV_NONE
+            vc_factor: 1,
+            vc_fd: std::ptr::null_mut(),
+            vc_fail: false,
+        }
+    }
+}
+
+extern "C" {
+    // Encoding
+    fn enc_locale() -> *mut c_char;
+    fn convert_setup(vcp: *mut VimConv, from: *mut c_char, to: *mut c_char) -> c_int;
+    fn string_convert(vcp: *const VimConv, ptr: *mut c_char, lenp: *mut usize) -> *mut c_char;
+    static p_enc: *mut c_char;
+
+    // OS time functions
+    fn os_localtime_r(clock: *const time_t, result: *mut tm) -> *mut tm;
+    fn os_strptime(str_: *const c_char, format: *const c_char, tm: *mut tm) -> *const c_char;
+
+    // Type accessors for Phase 5
+    #[link_name = "nvim_tv_get_type"]
+    fn p5_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_number"]
+    fn p5_nvim_tv_get_number(tv: *const c_void) -> i64;
+    #[link_name = "nvim_tv_get_string"]
+    fn p5_nvim_tv_get_string(tv: *const c_void, out_len: *mut usize) -> *const u8;
+    #[link_name = "nvim_tv_set_string"]
+    fn p5_nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
+    #[link_name = "nvim_tv_set_number"]
+    fn p5_nvim_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "xstrdup"]
+    fn p5_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xfree"]
+    fn p5_xfree(ptr: *mut c_void);
+}
+
+#[inline]
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn arg_at_p5(argvars: *const c_void, idx: usize) -> *const c_void {
+    (argvars as *const u8)
+        .add(idx * TYPVAL_SIZE_P5)
+        .cast::<c_void>()
+}
+
+/// "strftime({fmt} [, {time}])" function - format time as string.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_strftime"]
+pub unsafe extern "C" fn rs_f_strftime(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let arg0 = arg_at_p5(argvars, 0);
+    let arg1 = arg_at_p5(argvars, 1);
+
+    // Get format string
+    let mut fmt_len = 0usize;
+    let fmt_raw = p5_nvim_tv_get_string(arg0, &raw mut fmt_len);
+
+    // Get time value (or use current time)
+    let seconds: time_t = if p5_nvim_tv_get_type(arg1) == VAR_UNKNOWN_P5 {
+        libc::time(std::ptr::null_mut())
+    } else {
+        p5_nvim_tv_get_number(arg1)
+    };
+
+    // Get local time
+    let mut curtime = std::mem::zeroed::<tm>();
+    let curtime_ptr = os_localtime_r(&raw const seconds, &raw mut curtime);
+    if curtime_ptr.is_null() {
+        // Invalid time
+        p5_nvim_tv_set_string(rettv, p5_xstrdup(c"(Invalid)".as_ptr()).cast::<u8>());
+        return;
+    }
+
+    // Set up encoding conversion (fmt may need to be converted to locale encoding)
+    let mut conv = VimConv::none();
+    let enc = enc_locale();
+    convert_setup(&raw mut conv, p_enc, enc);
+
+    // Possibly convert the format string to locale encoding
+    let fmt_ptr: *mut c_char = if conv.vc_type == CONV_NONE_P5 {
+        fmt_raw.cast::<c_char>().cast_mut()
+    } else {
+        let converted = string_convert(
+            &raw const conv,
+            fmt_raw.cast::<c_char>().cast_mut(),
+            std::ptr::null_mut(),
+        );
+        if converted.is_null() {
+            convert_setup(&raw mut conv, std::ptr::null_mut(), std::ptr::null_mut());
+            p5_xfree(enc.cast::<c_void>());
+            return;
+        }
+        converted
+    };
+
+    // Format the time
+    let mut result_buf = [0u8; 256];
+    let n = strftime(
+        result_buf.as_mut_ptr().cast::<c_char>(),
+        result_buf.len(),
+        fmt_ptr,
+        curtime_ptr,
+    );
+    if n == 0 {
+        result_buf[0] = 0;
+    }
+
+    // Free converted format string
+    if conv.vc_type != CONV_NONE_P5 {
+        p5_xfree(fmt_ptr.cast::<c_void>());
+    }
+
+    // Convert result back to p_enc if needed
+    convert_setup(&raw mut conv, enc, p_enc);
+    if conv.vc_type == CONV_NONE_P5 {
+        p5_nvim_tv_set_string(
+            rettv,
+            p5_xstrdup(result_buf.as_ptr().cast::<c_char>()).cast::<u8>(),
+        );
+    } else {
+        let s = string_convert(
+            &raw const conv,
+            result_buf.as_mut_ptr().cast::<c_char>(),
+            std::ptr::null_mut(),
+        );
+        p5_nvim_tv_set_string(rettv, s.cast::<u8>());
+    }
+
+    // Release conversion descriptors and locale string
+    convert_setup(&raw mut conv, std::ptr::null_mut(), std::ptr::null_mut());
+    p5_xfree(enc.cast::<c_void>());
+}
+
+/// "strptime({format}, {timestring})" function - parse time string.
+///
+/// Returns a Unix timestamp (seconds since epoch), or 0 on error.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_strptime"]
+pub unsafe extern "C" fn rs_f_strptime(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    p5_nvim_tv_set_number(rettv, 0);
+
+    let arg0 = arg_at_p5(argvars, 0);
+    let arg1 = arg_at_p5(argvars, 1);
+
+    let mut fmt_len = 0usize;
+    let fmt_raw = p5_nvim_tv_get_string(arg0, &raw mut fmt_len);
+    let mut str_len = 0usize;
+    let str_raw = p5_nvim_tv_get_string(arg1, &raw mut str_len);
+
+    // Set up encoding conversion
+    let mut conv = VimConv::none();
+    let enc = enc_locale();
+    convert_setup(&raw mut conv, p_enc, enc);
+
+    // Possibly convert format string to locale encoding
+    let fmt_ptr: *mut c_char = if conv.vc_type == CONV_NONE_P5 {
+        fmt_raw.cast::<c_char>().cast_mut()
+    } else {
+        string_convert(
+            &raw const conv,
+            fmt_raw.cast::<c_char>().cast_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+
+    if !fmt_ptr.is_null() {
+        let mut tmval = std::mem::zeroed::<tm>();
+        tmval.tm_isdst = -1;
+
+        let rest = os_strptime(str_raw.cast::<c_char>(), fmt_ptr, &raw mut tmval);
+        if !rest.is_null() {
+            let t = mktime(&raw mut tmval);
+            if t != -1 {
+                p5_nvim_tv_set_number(rettv, t);
+            }
+        }
+    }
+
+    if conv.vc_type != CONV_NONE_P5 {
+        p5_xfree(fmt_ptr.cast::<c_void>());
+    }
+    convert_setup(&raw mut conv, std::ptr::null_mut(), std::ptr::null_mut());
+    p5_xfree(enc.cast::<c_void>());
+}

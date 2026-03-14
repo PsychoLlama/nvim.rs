@@ -408,6 +408,10 @@ extern void f_chanclose(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_confirm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 5 (plan 40f0fb72) VimL function declarations (misc.rs)
+extern void f_strftime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_strptime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -4706,86 +4710,9 @@ theend:
 /// "str2float()" function
 
 /// "strftime({format}[, {time}])" function
-static void f_strftime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  time_t seconds;
+// f_strftime: migrated to Rust (misc.rs)
 
-  rettv->v_type = VAR_STRING;
-
-  char *p = (char *)tv_get_string(&argvars[0]);
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    seconds = time(NULL);
-  } else {
-    seconds = (time_t)tv_get_number(&argvars[1]);
-  }
-
-  struct tm curtime;
-  struct tm *curtime_ptr = os_localtime_r(&seconds, &curtime);
-  // MSVC returns NULL for an invalid value of seconds.
-  if (curtime_ptr == NULL) {
-    rettv->vval.v_string = xstrdup(_("(Invalid)"));
-    return;
-  }
-
-  vimconv_T conv;
-
-  conv.vc_type = CONV_NONE;
-  char *enc = enc_locale();
-  convert_setup(&conv, p_enc, enc);
-  if (conv.vc_type != CONV_NONE) {
-    p = string_convert(&conv, p, NULL);
-  }
-  char result_buf[256];
-  if (p == NULL || strftime(result_buf, sizeof(result_buf), p, curtime_ptr) == 0) {
-    result_buf[0] = NUL;
-  }
-
-  if (conv.vc_type != CONV_NONE) {
-    xfree(p);
-  }
-  convert_setup(&conv, enc, p_enc);
-  if (conv.vc_type != CONV_NONE) {
-    rettv->vval.v_string = string_convert(&conv, result_buf, NULL);
-  } else {
-    rettv->vval.v_string = xstrdup(result_buf);
-  }
-
-  // Release conversion descriptors.
-  convert_setup(&conv, NULL, NULL);
-  xfree(enc);
-}
-
-/// "strptime({format}, {timestring})" function
-static void f_strptime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char fmt_buf[NUMBUFLEN];
-  char str_buf[NUMBUFLEN];
-
-  struct tm tmval = {
-    .tm_isdst = -1,
-  };
-  char *fmt = (char *)tv_get_string_buf(&argvars[0], fmt_buf);
-  char *str = (char *)tv_get_string_buf(&argvars[1], str_buf);
-
-  vimconv_T conv = {
-    .vc_type = CONV_NONE,
-  };
-  char *enc = enc_locale();
-  convert_setup(&conv, p_enc, enc);
-  if (conv.vc_type != CONV_NONE) {
-    fmt = string_convert(&conv, fmt, NULL);
-  }
-  if (fmt == NULL
-      || os_strptime(str, fmt, &tmval) == NULL
-      || (rettv->vval.v_number = mktime(&tmval)) == -1) {
-    rettv->vval.v_number = 0;
-  }
-  if (conv.vc_type != CONV_NONE) {
-    xfree(fmt);
-  }
-  convert_setup(&conv, NULL, NULL);
-  xfree(enc);
-}
+// f_strptime: migrated to Rust (misc.rs)
 
 /// "submatch()" function
 // f_submatch, f_substitute: migrated to Rust (misc.rs)
