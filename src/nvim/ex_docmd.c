@@ -160,7 +160,6 @@ extern int rs_shada_read_everything(const char *fname, bool forceit, bool missin
 extern int rs_shada_write_file(const char *file, bool nomerge);
 extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
 extern int rs_do_move(linenr_T line1, linenr_T line2, linenr_T dest);
-extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 #define loop_get_events(l) rs_loop_get_events(l)
 
 static const char e_ambiguous_use_of_user_defined_command[]
@@ -5922,12 +5921,6 @@ void *nvim_docmd_vim_regcomp(const char *pat, int flags)
 
 /// Wrap xstrdup for Rust.
 char *nvim_docmd_xstrdup(const char *s) { return xstrdup(s); }
-
-/// Wrap skip_vimgrep_pat for Rust.
-char *nvim_docmd_skip_vimgrep_pat(char *p, char **s, int *flags)
-{
-  return rs_skip_vimgrep_pat(p, s, flags);
-}
 
 /// Wrap LAST_TAB_NR for Rust.
 int nvim_docmd_LAST_TAB_NR(void) { return LAST_TAB_NR; }

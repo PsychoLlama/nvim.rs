@@ -285,11 +285,6 @@ extern "C" {
     fn nvim_docmd_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_docmd_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
     fn nvim_docmd_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_docmd_skip_vimgrep_pat(
-        p: *mut c_char,
-        s: *mut *mut c_char,
-        flags: *mut c_int,
-    ) -> *mut c_char;
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
     #[link_name = "rs_tabpage_index"]
     fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
@@ -467,14 +462,14 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         if *p == 0 || rs_ends_excmd(*p as c_int) != 0 {
                             // break out — not matched
                         } else if skip_only {
-                            p = nvim_docmd_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
+                            p = crate::rs_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
                             if !p.is_null() && *p != 0 {
                                 nvim_eap_set_cmd(eap, p);
                                 matched = true;
                             }
                         } else {
                             let mut reg_pat: *mut c_char = ptr::null_mut();
-                            p = nvim_docmd_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
+                            p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                             if !p.is_null() && *p != 0 {
                                 nvim_cmod_set_filter_pat(cmod, nvim_docmd_xstrdup(reg_pat));
                                 let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);
@@ -486,14 +481,14 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                             }
                         }
                     } else if skip_only {
-                        p = nvim_docmd_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
+                        p = crate::rs_skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut());
                         if !p.is_null() && *p != 0 {
                             nvim_eap_set_cmd(eap, p);
                             matched = true;
                         }
                     } else {
                         let mut reg_pat: *mut c_char = ptr::null_mut();
-                        p = nvim_docmd_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
+                        p = crate::rs_skip_vimgrep_pat(p, &mut reg_pat, ptr::null_mut());
                         if !p.is_null() && *p != 0 {
                             nvim_cmod_set_filter_pat(cmod, nvim_docmd_xstrdup(reg_pat));
                             let regprog = nvim_docmd_vim_regcomp(reg_pat, RE_MAGIC);

@@ -2104,14 +2104,6 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
 }
 
 
-/// Escape an option value that can be used on the command-line with :set.
-/// Caller needs to free the returned string, unless NULL is returned.
-extern char *rs_escape_option_str_cmdline(const char *var);
-char *nvim_escape_option_str_cmdline(char *var)
-{
-  return rs_escape_option_str_cmdline(var);
-}
-
 /// curbuf/curwin accessors for option expansion Rust code.
 buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
 win_T *nvim_opt_get_curwin(void) { return curwin; }
@@ -2366,6 +2358,8 @@ char *nvim_vim_strsave_escaped(const char *s, const char *esc)
 {
   return vim_strsave_escaped(s, esc);
 }
+
+extern char *rs_escape_option_str_cmdline(const char *var);
 
 /// Invoke the expand callback for an option (constructs optexpand_T in C).
 int nvim_option_invoke_expand_cb(OptIndex opt_idx, int opt_flags,

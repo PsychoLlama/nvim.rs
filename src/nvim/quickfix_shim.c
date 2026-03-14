@@ -295,9 +295,6 @@ extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newli
                       const char *qf_title, char *enc);
 extern void rs_ex_vimgrep(void *eap);
 
-// Phase 8: qf_get_properties / qf_set_properties cluster (migrated to Rust)
-extern int rs_qf_set_properties(void *qi, const void *what, int action, char *title);
-
 // Phase 11: window/title helpers and position update (migrated to Rust)
 extern const void *rs_qf_find_win_for_stack(const void *qi);
 extern bool rs_qf_win_pos_update(void *qi, int old_qf_index);
@@ -1346,12 +1343,6 @@ void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
 void nvim_semsg_list_and_what(void)
 {
   semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
-}
-
-/// Call rs_qf_set_properties (Rust implementation).
-int nvim_qf_set_properties(void *qi, const void *what, int action, void *title)
-{
-  return rs_qf_set_properties(qi, what, action, (char *)title);
 }
 
 /// Call qf_list_changed(qfl) -> rs_qf_incr_changedtick.
