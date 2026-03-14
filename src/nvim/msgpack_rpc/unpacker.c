@@ -17,13 +17,6 @@
 
 #include "msgpack_rpc/unpacker.c.generated.h"
 
-extern Object rs_unpack(const char *data, size_t size, Arena *arena, Error *err);
-
-Object unpack(const char *data, size_t size, Arena *arena, Error *err)
-{
-  return rs_unpack(data, size, arena, err);
-}
-
 static void api_parse_enter(mpack_parser_t *parser, mpack_node_t *node)
 {
   Unpacker *p = parser->data.p;

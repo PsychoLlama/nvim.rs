@@ -10,15 +10,15 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor function for `blocking` static.
-#[no_mangle]
-pub unsafe extern "C" fn rs_input_blocking() -> c_int {
-    nvim_get_input_blocking()
+#[unsafe(export_name = "input_blocking")]
+pub unsafe extern "C" fn rs_input_blocking() -> bool {
+    nvim_get_input_blocking() != 0
 }
 
 /// Check if a file descriptor refers to a terminal.
 ///
 /// Uses libc `isatty()` which returns 1 if fd is a terminal, 0 otherwise.
-#[no_mangle]
+#[unsafe(export_name = "os_isatty")]
 pub extern "C" fn rs_os_isatty(fd: c_int) -> bool {
     #[cfg(unix)]
     {

@@ -45,7 +45,6 @@
 
 #include "os/proc.c.generated.h"
 
-extern bool rs_os_proc_running(int pid);
 
 #ifdef MSWIN
 static bool os_proc_tree_kill_rec(void *proc, int sig)
@@ -268,8 +267,3 @@ Dict os_proc_info(int pid, Arena *arena)
 }
 #endif
 
-/// Return true if process `pid` is running.
-bool os_proc_running(int pid)
-{
-  return rs_os_proc_running(pid);
-}

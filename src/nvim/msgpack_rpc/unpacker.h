@@ -48,4 +48,7 @@ typedef kvec_t(char) AdditionalDataBuilder;
 // unrecovareble error. unpack_error should be set!
 #define unpacker_closed(p) ((p)->state < 0)
 
+// Functions implemented in Rust (nvim-unpacker crate)
+extern Object unpack(const char *data, size_t size, Arena *arena, Error *err);
+
 #include "msgpack_rpc/unpacker.h.generated.h"

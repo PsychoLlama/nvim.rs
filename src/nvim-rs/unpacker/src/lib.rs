@@ -635,7 +635,7 @@ extern "C" {
 /// - `data` must be a valid pointer to `size` bytes
 /// - `arena` must be a valid arena handle
 /// - `err` must be a valid pointer to an Error struct
-#[no_mangle]
+#[unsafe(export_name = "unpack")]
 pub unsafe extern "C" fn rs_unpack(
     data: *const c_char,
     size: usize,

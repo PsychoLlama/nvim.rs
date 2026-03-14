@@ -9,4 +9,8 @@
 
 EXTERN bool used_stdin INIT( = false);
 
+// Functions implemented in Rust (nvim-os crate)
+extern bool os_isatty(int fd);
+extern bool input_blocking(void);
+
 #include "os/input.h.generated.h"

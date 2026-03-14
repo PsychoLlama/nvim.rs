@@ -7,7 +7,7 @@ use std::ffi::c_int;
 /// Uses kill(pid, 0) to check if a process exists and can receive signals.
 /// Returns true if the process is running (or we get EPERM, meaning we don't
 /// have permission but the process exists).
-#[no_mangle]
+#[unsafe(export_name = "os_proc_running")]
 pub extern "C" fn rs_os_proc_running(pid: c_int) -> bool {
     #[cfg(unix)]
     {
