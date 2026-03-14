@@ -1994,23 +1994,7 @@ bool nvim_autocmd_match_file(int event, size_t idx,
 }
 
 
-/// Wrapper for callback_to_string.
-char *nvim_autocmd_callback_to_string(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs)) {
-    return NULL;
-  }
-  return callback_to_string(&kv_A(*acs, idx).handler_fn, NULL);
-}
-
 // Phase 7: :autocmd command + registration accessors
-
-/// Get eap->nextcmd.
-const char *nvim_autocmd_eap_get_nextcmd(void *eap)
-{
-  return ((exarg_T *)eap)->nextcmd;
-}
 
 /// Set eap->nextcmd.
 void nvim_autocmd_eap_set_nextcmd(void *eap, char *val)
@@ -2064,11 +2048,6 @@ int nvim_autocmd_register_cmd(int event, const char *pat, int patlen, int group,
 int nvim_autocmd_ok(void)
 {
   return OK;
-}
-
-int nvim_autocmd_fail(void)
-{
-  return FAIL;
 }
 
 // Phase 8a: Static variable accessors (cannot use link_name - access C statics)

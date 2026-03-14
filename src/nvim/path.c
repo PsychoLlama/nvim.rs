@@ -346,10 +346,6 @@ void *nvim_path_xcalloc(size_t count, size_t size) {
   return xcalloc(count, size);
 }
 
-int nvim_path_ga_get_len(const void *gap) {
-  return ((const garray_T *)gap)->ga_len;
-}
-
 void *nvim_path_ga_get_data_ptr(const void *gap) {
   return ((const garray_T *)gap)->ga_data;
 }

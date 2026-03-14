@@ -235,12 +235,6 @@ int nvim_win_get_lcs_eol(win_T *wp)
   return wp->w_p_lcs_chars.eol;
 }
 
-/// Get the 'listchars' tab3 character (used for tabs).
-int nvim_win_get_lcs_tab3(win_T *wp)
-{
-  return wp->w_p_lcs_chars.tab3;
-}
-
 /// Get filler lines for a window at a given line number (FFI wrapper).
 int nvim_win_get_fill(win_T *wp, linenr_T lnum)
 {

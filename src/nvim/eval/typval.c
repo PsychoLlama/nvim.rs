@@ -4668,12 +4668,6 @@ void nvim_set_tv_in_free_unref_items(int val)
   tv_in_free_unref_items = (bool)val;
 }
 
-/// Get tv_in_free_unref_items global (accessor for Rust).
-int nvim_get_tv_in_free_unref_items(void)
-{
-  return (int)tv_in_free_unref_items;
-}
-
 // =============================================================================
 // Blob accessor functions for Rust
 // =============================================================================

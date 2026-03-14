@@ -257,12 +257,6 @@ void nvim_redraw_for_cursorcolumn(win_T *wp)
   redraw_for_cursorcolumn(wp);
 }
 
-/// Wrapper for comp_botline() (accessor for Rust).
-void nvim_comp_botline(win_T *wp)
-{
-  comp_botline(wp);
-}
-
 /// Wrapper for curs_columns() (accessor for Rust).
 void nvim_curs_columns(win_T *wp, int may_scroll)
 {
