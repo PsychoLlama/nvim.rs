@@ -390,8 +390,9 @@ unsafe fn shortmess(c: c_int) -> bool {
 /// # Safety
 ///
 /// All pointers must be valid.
-#[unsafe(no_mangle)]
+#[export_name = "buf_write"]
 #[allow(clippy::cognitive_complexity)]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_buf_write(
     buf: BufHandle,
     fname: *mut c_char,
