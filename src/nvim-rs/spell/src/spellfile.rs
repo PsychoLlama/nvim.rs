@@ -1129,6 +1129,151 @@ pub unsafe extern "C" fn rs_parse_compound_flags(
     }
 }
 
+/// Read and apply the SN_COMPOUND section from a buffer to slang_T.
+/// Replaces C read_compound(). Parses header bytes, comppat patterns,
+/// compound flags, and calls vim_regcomp for sl_compprog.
+///
+/// Returns 0 on success, SP_*ERROR on failure.
+///
+/// # Safety
+/// - `buf` must be valid for `len` bytes.
+/// - `slang` must be a valid non-null pointer to a SlangRaw.
+/// - `vim_regcomp` may call back into C code.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_compound(
+    buf: *const u8,
+    len: usize,
+    slang: *mut crate::SlangRaw,
+) -> c_int {
+    const MAXWLEN_VAL: c_int = 254;
+    // RE_MAGIC + RE_STRING + RE_STRICT
+    const RE_FLAGS: c_int = 1 + 4 + 16;
+
+    if len < 2 {
+        return SP_FORMERROR;
+    }
+    let buf_slice = std::slice::from_raw_parts(buf, len);
+    let mut offset = 0usize;
+
+    if len < 3 {
+        return SP_FORMERROR;
+    }
+
+    // <compmax>
+    let c = buf_slice[offset] as c_int;
+    offset += 1;
+    (*slang).sl_compmax = if c < 2 { MAXWLEN_VAL } else { c };
+
+    // <compminlen>
+    let c = buf_slice[offset] as c_int;
+    offset += 1;
+    (*slang).sl_compminlen = if c < 1 { 0 } else { c };
+
+    // <compsylmax>
+    let c = buf_slice[offset] as c_int;
+    offset += 1;
+    (*slang).sl_compsylmax = if c < 1 { MAXWLEN_VAL } else { c };
+
+    // Check for compoptions (Vim 7.0b+ format)
+    if offset < len && buf_slice[offset] != 0 {
+        // Old format: treat remaining bytes as flags directly
+    } else if offset + 1 < len && buf_slice[offset] == 0 {
+        offset += 1; // skip 0 byte
+        (*slang).sl_compoptions = buf_slice[offset] as c_int;
+        offset += 1;
+
+        if offset + 2 > len {
+            return SP_TRUNCERROR;
+        }
+        let pat_count = ((buf_slice[offset] as c_int) << 8) | (buf_slice[offset + 1] as c_int);
+        offset += 2;
+
+        // Initialize sl_comppat garray
+        let gap = std::ptr::addr_of_mut!((*slang).sl_comppat);
+        (*gap).ga_len = 0;
+        (*gap).ga_maxlen = 0;
+        (*gap).ga_itemsize = std::mem::size_of::<*mut c_char>() as i32;
+        (*gap).ga_growsize = pat_count.max(1);
+        (*gap).ga_data = std::ptr::null_mut();
+        ga_grow(gap, pat_count);
+
+        // Read <comppatlen> <comppattext> pairs
+        for _ in 0..pat_count {
+            if offset >= len {
+                return SP_TRUNCERROR;
+            }
+            let pat_len = buf_slice[offset] as usize;
+            offset += 1;
+            if offset + pat_len > len {
+                return SP_TRUNCERROR;
+            }
+            let pat_str = xmalloc_spell(pat_len + 1).cast::<c_char>();
+            std::ptr::copy_nonoverlapping(buf.add(offset).cast::<c_char>(), pat_str, pat_len);
+            *pat_str.add(pat_len) = 0;
+            let slot = ((*gap).ga_data as *mut *mut c_char).add((*gap).ga_len as usize);
+            *slot = pat_str;
+            (*gap).ga_len += 1;
+            offset += pat_len;
+        }
+    } else {
+        return SP_FORMERROR;
+    }
+
+    if offset > len {
+        return SP_FORMERROR;
+    }
+
+    // Parse compound flags with Rust
+    let flags_len = len - offset;
+    if flags_len == 0 {
+        return SP_FORMERROR;
+    }
+
+    let flags_slice = std::slice::from_raw_parts(buf.add(offset), flags_len);
+    let flags_result = match parse_compound_flags(flags_slice) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+
+    // Copy startflags
+    let sf_len = flags_result.startflags_len as usize;
+    let sf_ptr = xmalloc_spell(sf_len + 1).cast::<u8>();
+    std::ptr::copy_nonoverlapping(flags_result.startflags.as_ptr(), sf_ptr, sf_len + 1);
+    (*slang).sl_compstartflags = sf_ptr;
+
+    // Copy allflags
+    let af_len = flags_result.allflags_len as usize;
+    let af_ptr = xmalloc_spell(af_len + 1).cast::<u8>();
+    std::ptr::copy_nonoverlapping(flags_result.allflags.as_ptr(), af_ptr, af_len + 1);
+    (*slang).sl_compallflags = af_ptr;
+
+    // Copy comprules if valid
+    if flags_result.comprules_valid {
+        let cr_len = flags_result.comprules_len as usize;
+        let cr_ptr = xmalloc_spell(cr_len + 1).cast::<u8>();
+        std::ptr::copy_nonoverlapping(flags_result.comprules.as_ptr(), cr_ptr, cr_len + 1);
+        (*slang).sl_comprules = cr_ptr;
+    } else {
+        (*slang).sl_comprules = std::ptr::null_mut();
+    }
+
+    // Compile the regex via vim_regcomp (must be called from C/Rust via FFI)
+    let pat_len = flags_result.pattern_len as usize;
+    let prog = vim_regcomp(flags_result.pattern.as_ptr().cast::<c_char>(), RE_FLAGS);
+    if prog.is_null() {
+        return SP_FORMERROR;
+    }
+    (*slang).sl_compprog = prog;
+
+    // Suppress unused import warning
+    let _ = pat_len;
+
+    0 // OK
+}
+
 // =============================================================================
 // SAL Item Parsing (buffer-based)
 // =============================================================================
@@ -4006,6 +4151,7 @@ extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn utf_ptr2len(p: *const c_char) -> c_int;
     fn ga_grow(gap: *mut crate::GArrayRaw, n: c_int);
+    fn vim_regcomp(expr: *const c_char, re_flags: c_int) -> *mut std::ffi::c_void;
     #[link_name = "xmalloc"]
     fn xmalloc_spell(size: usize) -> *mut std::ffi::c_void;
     #[link_name = "xfree"]

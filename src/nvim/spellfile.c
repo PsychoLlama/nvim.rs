@@ -466,6 +466,8 @@ extern void rs_set_map_str(slang_T *slang, const char *map);
 extern int rs_spell_check_msm(const char *msm, int *start_out, int *incr_out, int *added_out);
 // Phase 4: set_sofo replacement
 extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
+// Phase 4: read_compound replacement
+extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1594,124 +1596,14 @@ static int read_sofo_section(FILE *fd, slang_T *slang, int len)
 // Read the compound section from the .spl file:
 //      <compmax> <compminlen> <compsylmax> <compoptions> <compflags>
 // Returns SP_*ERROR flags.
-// Uses Rust (rs_parse_compound_flags) to build regex pattern and flag lists.
+// Delegates to Rust (rs_read_compound) which parses the entire section.
 static int read_compound(FILE *fd, slang_T *slang, int len)
 {
-  if (len < 2) {
-    return SP_FORMERROR;        // need at least two bytes
-  }
-
-  // Read the entire compound section into a buffer.
   uint8_t *section_buf = xmalloc((size_t)len);
   SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-
-  size_t offset = 0;
-
-  // Apply compound settings with default handling (first 3 bytes).
-  if ((size_t)len < 3) {
-    xfree(section_buf);
-    return SP_FORMERROR;
-  }
-
-  int c = section_buf[offset++];  // <compmax>
-  slang->sl_compmax = (c < 2) ? MAXWLEN : c;
-
-  c = section_buf[offset++];  // <compminlen>
-  slang->sl_compminlen = (c < 1) ? 0 : c;
-
-  c = section_buf[offset++];  // <compsylmax>
-  slang->sl_compsylmax = (c < 1) ? MAXWLEN : c;
-
-  // Check for compoptions (Vim 7.0b+ format).
-  // Old format: first byte of flags is non-zero, treat all remaining bytes as flags.
-  // New format: first byte is 0, next byte is lower options byte, then 2-byte patcount.
-  if (offset < (size_t)len && section_buf[offset] != 0) {
-    // Old format (Vim 7.0b): treat remaining bytes as compound flags directly.
-    // Fall through with offset pointing to start of flags.
-  } else if (offset + 1 < (size_t)len && section_buf[offset] == 0) {
-    offset++;  // skip the 0 byte
-    slang->sl_compoptions = section_buf[offset++];  // lower byte of options
-
-    if (offset + 2 > (size_t)len) {
-      xfree(section_buf);
-      return SP_TRUNCERROR;
-    }
-    int pat_count = ((int)section_buf[offset] << 8) | section_buf[offset + 1];
-    offset += 2;
-
-    garray_T *gap = &slang->sl_comppat;
-    ga_init(gap, sizeof(char *), pat_count);
-    ga_grow(gap, pat_count);
-
-    // Read <comppatlen> <comppattext> pairs.
-    for (int i = 0; i < pat_count; i++) {
-      if (offset >= (size_t)len) {
-        xfree(section_buf);
-        return SP_TRUNCERROR;
-      }
-      int pat_len = section_buf[offset++];
-      if (offset + (size_t)pat_len > (size_t)len) {
-        xfree(section_buf);
-        return SP_TRUNCERROR;
-      }
-      char *pat_str = xmalloc((size_t)pat_len + 1);
-      memcpy(pat_str, section_buf + offset, (size_t)pat_len);
-      pat_str[pat_len] = '\0';
-      ((char **)(gap->ga_data))[gap->ga_len++] = pat_str;
-      offset += (size_t)pat_len;
-    }
-  } else {
-    // No remaining bytes; no flags.
-    xfree(section_buf);
-    return SP_FORMERROR;
-  }
-
-  if (offset > (size_t)len) {
-    xfree(section_buf);
-    return SP_FORMERROR;
-  }
-
-  // Remaining bytes are the compound flags.
-  // Use Rust to build the regex pattern, startflags, allflags, and comprules.
-  size_t flags_len = (size_t)len - offset;
-  if (flags_len == 0) {
-    xfree(section_buf);
-    return SP_FORMERROR;
-  }
-
-  RsCompoundFlagsResult flags_result;
-  int res = rs_parse_compound_flags(section_buf + offset, flags_len, &flags_result);
+  int res = rs_read_compound(section_buf, (size_t)len, slang);
   xfree(section_buf);
-
-  if (res != 0) {
-    return res;
-  }
-
-  // Allocate and copy startflags, allflags, comprules from Rust result.
-  uint8_t *cp = xmalloc((size_t)flags_result.startflags_len + 1);
-  memcpy(cp, flags_result.startflags, (size_t)flags_result.startflags_len + 1);
-  slang->sl_compstartflags = cp;
-
-  uint8_t *ap = xmalloc((size_t)flags_result.allflags_len + 1);
-  memcpy(ap, flags_result.allflags, (size_t)flags_result.allflags_len + 1);
-  slang->sl_compallflags = ap;
-
-  if (flags_result.comprules_valid) {
-    uint8_t *crp = xmalloc((size_t)flags_result.comprules_len + 1);
-    memcpy(crp, flags_result.comprules, (size_t)flags_result.comprules_len + 1);
-    slang->sl_comprules = crp;
-  } else {
-    slang->sl_comprules = NULL;
-  }
-
-  // Compile the regex pattern (vim_regcomp must stay in C).
-  slang->sl_compprog = vim_regcomp((char *)flags_result.pattern,
-                                   RE_MAGIC + RE_STRING + RE_STRICT);
-  if (slang->sl_compprog == NULL) {
-    return SP_FORMERROR;
-  }
-
-  return 0;
+  return res;
 }
 
 /// Reload the spell file "fname" if it's loaded.
