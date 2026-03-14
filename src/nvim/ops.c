@@ -1334,65 +1334,6 @@ int op_change(oparg_T *oap)
 /// Put a boolean value indicating whether the line ends with an unclosed
 /// comment in "is_comment".
 ///
-/// @param line - line to be processed
-/// @param process - if false, will only check whether the line ends
-///         with an unclosed comment,
-/// @param include_space - whether to skip space following the comment leader
-/// @param[out] is_comment - whether the current line ends with an unclosed
-///  comment.
-char *skip_comment(char *line, bool process, bool include_space, bool *is_comment)
-{
-  char *comment_flags = NULL;
-  int leader_offset = get_last_leader_offset(line, &comment_flags);
-
-  *is_comment = false;
-  if (leader_offset != -1) {
-    // Let's check whether the line ends with an unclosed comment.
-    // If the last comment leader has COM_END in flags, there's no comment.
-    while (*comment_flags) {
-      if (*comment_flags == COM_END
-          || *comment_flags == ':') {
-        break;
-      }
-      comment_flags++;
-    }
-    if (*comment_flags != COM_END) {
-      *is_comment = true;
-    }
-  }
-
-  if (process == false) {
-    return line;
-  }
-
-  int lead_len = get_leader_len(line, &comment_flags, false, include_space);
-
-  if (lead_len == 0) {
-    return line;
-  }
-
-  // Find:
-  // - COM_END,
-  // - colon,
-  // whichever comes first.
-  while (*comment_flags) {
-    if (*comment_flags == COM_END
-        || *comment_flags == ':') {
-      break;
-    }
-    comment_flags++;
-  }
-
-  // If we found a colon, it means that we are not processing a line
-  // starting with a closing part of a three-part comment. That's good,
-  // because we don't want to remove those as this would be annoying.
-  if (*comment_flags == ':' || *comment_flags == NUL) {
-    line += lead_len;
-  }
-
-  return line;
-}
-
 /// @param count              number of lines (minimal 2) to join at cursor position.
 /// @param save_undo          when true, save lines for undo first.
 /// @param use_formatoptions  set to false when e.g. processing backspace and comment

@@ -561,3 +561,9 @@ void nvim_line_breakcheck(void) { line_breakcheck(); }
 
 /// Get the number of screen lines for a physical line (no fold consideration).
 int nvim_plines_win_nofold(win_T *wp, linenr_T lnum) { return plines_win_nofold(wp, lnum); }
+
+/// Get offset of last comment leader in line (returns -1 if none).
+int nvim_get_last_leader_offset(const char *line, char **flags)
+{
+  return get_last_leader_offset((char *)line, flags);
+}

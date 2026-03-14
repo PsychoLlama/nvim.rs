@@ -610,6 +610,94 @@ pub unsafe extern "C" fn get_region_bytecount(
     deleted_bytes + end_col as isize
 }
 
+// =============================================================================
+// Phase 3: skip_comment
+// =============================================================================
+
+use std::ffi::c_char;
+
+extern "C" {
+    /// Get offset of last comment leader in line (wrapper around get_last_leader_offset).
+    fn nvim_get_last_leader_offset(line: *const c_char, flags: *mut *mut c_char) -> c_int;
+    /// Get leader length for line (wrapper around get_leader_len).
+    fn nvim_get_leader_len(
+        line: *const c_char,
+        flags: *mut *mut c_char,
+        backward: bool,
+        include_space: bool,
+    ) -> c_int;
+}
+
+/// COM_END: flag meaning "end of comment", matches C's `COM_END` in option_vars.h
+const COM_END: c_int = b'e' as c_int;
+
+/// Port of `skip_comment` -- skip comment leaders on a line.
+///
+/// Returns a pointer into `line` past the comment leader, or `line` unchanged.
+/// Sets `*is_comment` to indicate whether the line starts an unclosed comment.
+///
+/// # Safety
+/// - `line` must be a valid NUL-terminated C string
+/// - `is_comment` must be a valid pointer to a bool
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn skip_comment(
+    line: *mut c_char,
+    process: bool,
+    include_space: bool,
+    is_comment: *mut bool,
+) -> *mut c_char {
+    let mut comment_flags: *mut c_char = std::ptr::null_mut();
+    let leader_offset = nvim_get_last_leader_offset(line, &raw mut comment_flags);
+
+    *is_comment = false;
+    if leader_offset != -1 {
+        // Check whether the line ends with an unclosed comment.
+        // If the last comment leader has COM_END in flags, there's no comment.
+        while !comment_flags.is_null() && *comment_flags != 0 {
+            let ch = c_int::from(*comment_flags as u8);
+            if ch == COM_END || ch == c_int::from(b':') {
+                break;
+            }
+            comment_flags = comment_flags.add(1);
+        }
+        if !comment_flags.is_null() && c_int::from(*comment_flags as u8) != COM_END {
+            *is_comment = true;
+        }
+    }
+
+    if !process {
+        return line;
+    }
+
+    comment_flags = std::ptr::null_mut();
+    let lead_len = nvim_get_leader_len(line, &raw mut comment_flags, false, include_space);
+
+    if lead_len == 0 {
+        return line;
+    }
+
+    // Find COM_END or colon, whichever comes first.
+    while !comment_flags.is_null() && *comment_flags != 0 {
+        let ch = c_int::from(*comment_flags as u8);
+        if ch == COM_END || ch == c_int::from(b':') {
+            break;
+        }
+        comment_flags = comment_flags.add(1);
+    }
+
+    // If we found a colon (or NUL), advance line past the leader.
+    // (COM_END means closing part of 3-part comment -- don't remove it.)
+    if comment_flags.is_null()
+        || *comment_flags == 0
+        || c_int::from(*comment_flags as u8) == c_int::from(b':')
+    {
+        line.add(lead_len as usize)
+    } else {
+        line
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
