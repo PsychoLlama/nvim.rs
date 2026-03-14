@@ -68,6 +68,9 @@ void f_getcmdprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_getcmdscreenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Phase 67 (this migration): Functions implemented in Rust
+int check_opt_wim(void);
+
 #ifdef __cplusplus
 }
 #endif

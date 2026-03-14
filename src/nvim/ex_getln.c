@@ -256,6 +256,12 @@ extern void rs_init_incsearch_state(incsearch_state_T *state);
 extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
                                              int call_update_screen);
 
+// do_incsearch_highlighting: implemented in Rust (cmdline/search.rs)
+extern bool do_incsearch_highlighting(int firstc, int *search_delim, incsearch_state_T *is_state,
+                                      int *skiplen, int *patlen);
+// may_add_char_to_search: implemented in Rust (cmdline/search.rs)
+extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
+
 // Rust key dispatch helpers
 extern int rs_invert_rtl_key(int key);
 extern int rs_should_end_wildmenu(int key, int p_wc, int p_wcm);
@@ -465,41 +471,8 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
   return true;
 }
 
-/// Return true when 'incsearch' highlighting is to be done.
-/// Sets search_first_line and search_last_line to the address range.
-/// May change the last search pattern.
-static bool do_incsearch_highlighting(int firstc, int *search_delim, incsearch_state_T *is_state,
-                                      int *skiplen, int *patlen)
-{
-  bool retval = false;
-
-  *skiplen = 0;
-  *patlen = ccline.cmdlen;
-
-  if (!p_is || cmd_silent) {
-    return false;
-  }
-
-  // By default search all lines
-  search_first_line = 0;
-  search_last_line = MAXLNUM;
-
-  if (firstc == '/' || firstc == '?') {
-    *search_delim = firstc;
-    return true;
-  }
-
-  if (firstc != ':') {
-    return false;
-  }
-
-  emsg_off++;
-  retval = parse_pattern_and_range(&is_state->search_start, search_delim,
-                                   skiplen, patlen);
-  emsg_off--;
-
-  return retval;
-}
+// do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs);
+// declared below in the extern section.
 
 // May do 'incsearch' highlighting if desired.
 static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s)
@@ -647,59 +620,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
   s->did_incsearch = true;
 }
 
-// When CTRL-L typed: add character from the match to the pattern.
-// May set "*c" to the added character.
-// Return OK when calling command_line_not_changed.
-static int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int skiplen, patlen;
-  int search_delim;
-
-  // Parsing range may already set the last search pattern.
-  // NOTE: must call restore_last_search_pattern() before returning!
-  save_last_search_pattern();
-
-  // Add a character from under the cursor for 'incsearch'
-  if (!do_incsearch_highlighting(firstc, &search_delim, s, &skiplen,
-                                 &patlen)) {
-    restore_last_search_pattern();
-    return FAIL;
-  }
-  restore_last_search_pattern();
-
-  if (s->did_incsearch) {
-    curwin->w_cursor = s->match_end;
-    *c = gchar_cursor();
-    if (*c != NUL) {
-      // If 'ignorecase' and 'smartcase' are set and the
-      // command line has no uppercase characters, convert
-      // the character to lowercase
-      if (p_ic && p_scs
-          && !pat_has_uppercase(ccline.cmdbuff + skiplen)) {
-        *c = mb_tolower(*c);
-      }
-      if (*c == search_delim
-          || vim_strchr((rs_magic_isset() ? "\\~^$.*[" : "\\^$"), *c) != NULL) {
-        // put a backslash before special characters
-        stuffcharReadbuff(*c);
-        *c = '\\';
-      }
-      // add any composing characters
-      if (utf_char2len(*c) != utfc_ptr2len(get_cursor_pos_ptr())) {
-        const int save_c = *c;
-        while (utf_char2len(*c) != utfc_ptr2len(get_cursor_pos_ptr())) {
-          curwin->w_cursor.col += utf_char2len(*c);
-          *c = gchar_cursor();
-          stuffcharReadbuff(*c);
-        }
-        *c = save_c;
-      }
-      return FAIL;
-    }
-  }
-  return OK;
-}
+// may_add_char_to_search() is implemented in Rust (cmdline crate, search.rs).
 
 /// Initialize the current command-line info.
 static void init_ccline(int firstc, int indent)
@@ -2855,60 +2776,7 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   return ret;
 }
 
-/// Read the 'wildmode' option, fill wim_flags[].
-int check_opt_wim(void)
-{
-  uint8_t new_wim_flags[4];
-  int i;
-  int idx = 0;
-
-  for (i = 0; i < 4; i++) {
-    new_wim_flags[i] = 0;
-  }
-
-  for (char *p = p_wim; *p; p++) {
-    // Note: Keep this in sync with opt_wim_values.
-    for (i = 0; ASCII_ISALPHA(p[i]); i++) {}
-    if (p[i] != NUL && p[i] != ',' && p[i] != ':') {
-      return FAIL;
-    }
-    if (i == 7 && strncmp(p, "longest", 7) == 0) {
-      new_wim_flags[idx] |= kOptWimFlagLongest;
-    } else if (i == 4 && strncmp(p, "full", 4) == 0) {
-      new_wim_flags[idx] |= kOptWimFlagFull;
-    } else if (i == 4 && strncmp(p, "list", 4) == 0) {
-      new_wim_flags[idx] |= kOptWimFlagList;
-    } else if (i == 8 && strncmp(p, "lastused", 8) == 0) {
-      new_wim_flags[idx] |= kOptWimFlagLastused;
-    } else if (i == 8 && strncmp(p, "noselect", 8) == 0) {
-      new_wim_flags[idx] |= kOptWimFlagNoselect;
-    } else {
-      return FAIL;
-    }
-    p += i;
-    if (*p == NUL) {
-      break;
-    }
-    if (*p == ',') {
-      if (idx == 3) {
-        return FAIL;
-      }
-      idx++;
-    }
-  }
-
-  // fill remaining entries with last flag
-  while (idx < 3) {
-    new_wim_flags[idx + 1] = new_wim_flags[idx];
-    idx++;
-  }
-
-  // only when there are no errors, wim_flags[] is changed
-  for (i = 0; i < 4; i++) {
-    wim_flags[i] = new_wim_flags[i];
-  }
-  return OK;
-}
+// check_opt_wim() is implemented in Rust (cmdline crate, wildmenu.rs).
 
 // Give an error message for a command that isn't allowed while the cmdline
 // window is open or editing the cmdline in another way.
@@ -4732,3 +4600,12 @@ char *nvim_getcmdline_prompt_simple(int firstc, const char *prompt, int hl_id,
 void nvim_inc_textlock(void) { textlock++; }
 /// Decrement textlock.
 void nvim_dec_textlock(void) { textlock--; }
+
+/// Get p_wim (wildmode option string) for Rust.
+char *nvim_get_p_wim(void) { return p_wim; }
+
+/// Get a wim_flags entry for Rust.
+uint8_t nvim_get_wim_flags(int idx) { return wim_flags[idx]; }
+
+/// Set a wim_flags entry for Rust.
+void nvim_set_wim_flags(int idx, uint8_t val) { wim_flags[idx] = val; }

@@ -437,6 +437,21 @@ extern "C" {
     fn nvim_save_viewstate(vs: *mut ViewStateT);
     fn nvim_restore_viewstate(vs: *const ViewStateT);
 
+    // parse_pattern_and_range: still in C, called from do_incsearch_highlighting
+    fn parse_pattern_and_range(
+        incsearch_start: *mut PosT,
+        search_delim: *mut c_int,
+        skiplen: *mut c_int,
+        patlen: *mut c_int,
+    ) -> bool;
+
+    // Accessors for ccline fields
+    fn nvim_get_ccline_cmdlen() -> c_int;
+
+    // emsg_off accessors
+    fn nvim_inc_emsg_off();
+    fn nvim_dec_emsg_off();
+
     // Incsearch highlighting C dependencies
     fn nvim_get_p_is() -> c_int;
     fn nvim_cmd_silent() -> c_int;
@@ -450,6 +465,23 @@ extern "C" {
     fn nvim_update_screen();
     fn nvim_setpcmark();
     fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
+
+    // For may_add_char_to_search
+    fn nvim_save_last_search_pattern();
+    fn nvim_restore_last_search_pattern();
+    fn nvim_gchar_cursor() -> c_int;
+    fn nvim_get_p_ic() -> c_int;
+    fn nvim_get_p_scs() -> c_int;
+    fn pat_has_uppercase(pat: *mut c_char) -> bool;
+    fn mb_tolower(c: c_int) -> c_int;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    fn nvim_stuffcharReadbuff(c: c_int);
+    fn utf_char2len(c: c_int) -> c_int;
+    fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_get_cursor_pos_ptr() -> *mut c_char;
+    fn nvim_get_curwin_cursor_col() -> c_int;
+    fn nvim_set_curwin_cursor_col(col: c_int);
+    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
 }
 
 // Update type constants (from nvim/drawscreen.h)
@@ -835,6 +867,155 @@ pub unsafe extern "C" fn rs_empty_pattern(p: *mut c_char, len: usize, delim: c_i
         return 1;
     }
     c_int::from(empty_pattern(p, len, delim))
+}
+
+// =============================================================================
+// may_add_char_to_search: CTRL-L adds char from match to search pattern
+// =============================================================================
+
+// NUL constant
+const NUL: c_int = 0;
+
+/// Add character from match under cursor to the search pattern (CTRL-L).
+///
+/// Direct replacement for C `may_add_char_to_search()`.
+/// Returns OK (1) when command_line_not_changed should be called, FAIL (0) otherwise.
+///
+/// # Safety
+///
+/// `c` and `is_state` must be valid non-null pointers.
+#[export_name = "may_add_char_to_search"]
+pub unsafe extern "C" fn may_add_char_to_search_rs(
+    firstc: c_int,
+    c: *mut c_int,
+    is_state: *mut IncsearchStateT,
+) -> c_int {
+    let mut skiplen: c_int = 0;
+    let mut patlen: c_int = 0;
+    let mut search_delim: c_int = 0;
+
+    // NOTE: must call restore_last_search_pattern() before returning!
+    nvim_save_last_search_pattern();
+
+    // Add a character from under the cursor for 'incsearch'
+    if !do_incsearch_highlighting_rs(
+        firstc,
+        &raw mut search_delim,
+        is_state,
+        &raw mut skiplen,
+        &raw mut patlen,
+    ) {
+        nvim_restore_last_search_pattern();
+        return 0; // FAIL
+    }
+    nvim_restore_last_search_pattern();
+
+    let s = &mut *is_state;
+    if s.did_incsearch {
+        // Move cursor to match end
+        nvim_set_curwin_cursor_pos(&raw const s.match_end);
+        *c = nvim_gchar_cursor();
+        if *c != NUL {
+            // If 'ignorecase' and 'smartcase' are set and pattern has no uppercase,
+            // convert to lowercase
+            if nvim_get_p_ic() != 0 && nvim_get_p_scs() != 0 {
+                let cmdbuff = nvim_get_ccline_cmdbuff();
+                if !cmdbuff.is_null() {
+                    let pat_ptr = cmdbuff.add(skiplen as usize);
+                    if !pat_has_uppercase(pat_ptr) {
+                        *c = mb_tolower(*c);
+                    }
+                }
+            }
+
+            // Put backslash before special characters
+            let magic_chars: *const c_char = if rs_magic_isset() != 0 {
+                c"\\~^$.*[".as_ptr()
+            } else {
+                c"\\^$".as_ptr()
+            };
+            if *c == search_delim || !vim_strchr(magic_chars, *c).is_null() {
+                nvim_stuffcharReadbuff(*c);
+                *c = b'\\' as c_int;
+            }
+
+            // Add any composing characters
+            let cursor_ptr = nvim_get_cursor_pos_ptr();
+            if !cursor_ptr.is_null() && utf_char2len(*c) != nvim_utfc_ptr2len(cursor_ptr) {
+                let save_c = *c;
+                loop {
+                    let cursor_ptr2 = nvim_get_cursor_pos_ptr();
+                    if cursor_ptr2.is_null() || utf_char2len(*c) == nvim_utfc_ptr2len(cursor_ptr2) {
+                        break;
+                    }
+                    let new_col = nvim_get_curwin_cursor_col() + utf_char2len(*c);
+                    nvim_set_curwin_cursor_col(new_col);
+                    *c = nvim_gchar_cursor();
+                    nvim_stuffcharReadbuff(*c);
+                }
+                *c = save_c;
+            }
+            return 0; // FAIL - char was added
+        }
+    }
+    1 // OK
+}
+
+// =============================================================================
+// do_incsearch_highlighting: check if incsearch highlighting should happen
+// =============================================================================
+
+/// Return true when 'incsearch' highlighting is to be done.
+/// Sets search_first_line and search_last_line for the address range.
+/// May change the last search pattern.
+///
+/// Direct replacement for C `do_incsearch_highlighting()`.
+///
+/// # Safety
+///
+/// `is_state` must be a valid pointer to an IncsearchStateT.
+/// `search_delim`, `skiplen`, `patlen` must be valid non-null output pointers.
+#[export_name = "do_incsearch_highlighting"]
+pub unsafe extern "C" fn do_incsearch_highlighting_rs(
+    firstc: c_int,
+    search_delim: *mut c_int,
+    is_state: *mut IncsearchStateT,
+    skiplen: *mut c_int,
+    patlen: *mut c_int,
+) -> bool {
+    *skiplen = 0;
+    *patlen = nvim_get_ccline_cmdlen();
+
+    // Check 'incsearch' and silent mode
+    if nvim_get_p_is() == 0 || nvim_cmd_silent() != 0 {
+        return false;
+    }
+
+    // Default: search all lines
+    nvim_set_search_first_line(0);
+    nvim_set_search_last_line(MAXLNUM);
+
+    // For / and ? searches, always highlight
+    if firstc == b'/' as c_int || firstc == b'?' as c_int {
+        *search_delim = firstc;
+        return true;
+    }
+
+    // Only : (ex command) can have incsearch via parse_pattern_and_range
+    if firstc != b':' as c_int {
+        return false;
+    }
+
+    nvim_inc_emsg_off();
+    let retval = parse_pattern_and_range(
+        &raw mut (*is_state).search_start,
+        search_delim,
+        skiplen,
+        patlen,
+    );
+    nvim_dec_emsg_off();
+
+    retval
 }
 
 // =============================================================================

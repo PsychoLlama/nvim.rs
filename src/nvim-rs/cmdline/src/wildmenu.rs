@@ -12,6 +12,113 @@ use std::ffi::{c_char, c_int};
 use crate::expand::ExpandContext;
 
 // =============================================================================
+// Wildmode Option Flags (from option_vars.generated.h)
+// =============================================================================
+
+const OPT_WIM_FULL: u8 = 0x01;
+const OPT_WIM_LONGEST: u8 = 0x02;
+const OPT_WIM_LIST: u8 = 0x04;
+const OPT_WIM_LASTUSED: u8 = 0x08;
+const OPT_WIM_NOSELECT: u8 = 0x10;
+
+// Return codes matching C OK/FAIL
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// C accessor declarations for wim_flags
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_get_p_wim() -> *const c_char;
+    fn nvim_get_wim_flags(idx: c_int) -> u8;
+    fn nvim_set_wim_flags(idx: c_int, val: u8);
+}
+
+// =============================================================================
+// check_opt_wim: Parse 'wildmode' option into wim_flags[]
+// =============================================================================
+
+/// Parse the 'wildmode' option string and update wim_flags[].
+///
+/// Returns OK on success, FAIL on invalid option string.
+///
+/// # Safety
+///
+/// Calls C accessors for p_wim and wim_flags globals.
+#[must_use]
+#[export_name = "check_opt_wim"]
+pub unsafe extern "C" fn check_opt_wim_rs() -> c_int {
+    let mut new_flags: [u8; 4] = [0; 4];
+    let mut idx: usize = 0;
+
+    let p_wim = nvim_get_p_wim();
+    if p_wim.is_null() {
+        return FAIL;
+    }
+
+    let mut p = p_wim;
+    loop {
+        let c = *p as u8;
+        if c == 0 {
+            break;
+        }
+
+        // Count length of current word (ASCII alpha chars)
+        let mut word_len: usize = 0;
+        while (*p.add(word_len) as u8).is_ascii_alphabetic() {
+            word_len += 1;
+        }
+
+        // Next char after the word must be NUL, comma, or colon
+        let term = *p.add(word_len) as u8;
+        if term != 0 && term != b',' && term != b':' {
+            return FAIL;
+        }
+
+        // Match the word against known flag names
+        let word = std::slice::from_raw_parts(p.cast::<u8>(), word_len);
+        if word == b"longest" {
+            new_flags[idx] |= OPT_WIM_LONGEST;
+        } else if word == b"full" {
+            new_flags[idx] |= OPT_WIM_FULL;
+        } else if word == b"list" {
+            new_flags[idx] |= OPT_WIM_LIST;
+        } else if word == b"lastused" {
+            new_flags[idx] |= OPT_WIM_LASTUSED;
+        } else if word == b"noselect" {
+            new_flags[idx] |= OPT_WIM_NOSELECT;
+        } else {
+            return FAIL;
+        }
+
+        p = p.add(word_len);
+        let term = *p as u8;
+        if term == 0 {
+            break;
+        }
+        if term == b',' {
+            if idx == 3 {
+                return FAIL;
+            }
+            idx += 1;
+        }
+        p = p.add(1);
+    }
+
+    // Fill remaining entries with last flag
+    while idx < 3 {
+        new_flags[idx + 1] = new_flags[idx];
+        idx += 1;
+    }
+
+    // Only on success update the global wim_flags[]
+    for (i, &flag) in new_flags.iter().enumerate() {
+        nvim_set_wim_flags(i as c_int, flag);
+    }
+
+    OK
+}
+
+// =============================================================================
 // Key Constants (from keycodes.h)
 // =============================================================================
 
