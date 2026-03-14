@@ -311,6 +311,30 @@ extern void f_searchpairpos(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
 extern void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_swapinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 5 VimL function declarations (simple.rs - exported via #[export_name])
+extern void f_api_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_byte2line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_line2byte(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_gettext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_garbagecollect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_debugbreak(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_setenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_pum_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_wordcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_soundfold(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_wildmenumode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_timer_stopall(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_synIDtrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_keytrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_luaeval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_shiftwidth(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_mode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_visualmode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_nextnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_prevnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_menu_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -530,11 +554,7 @@ end:
   api_clear_error(&err);
 }
 
-/// "api_info()" function
-static void f_api_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  object_to_vim(api_metadata(), rettv, NULL);
-}
+// f_api_info: migrated to Rust (simple.rs)
 
 /// Get buffer by number or pattern.
 buf_T *tv_get_buf(typval_T *tv, int curtab_only)
@@ -600,17 +620,7 @@ buf_T *get_buf_arg(typval_T *arg)
   return buf;
 }
 
-/// "byte2line(byte)" function
-static void f_byte2line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int boff = (int)tv_get_number(&argvars[0]) - 1;
-  if (boff < 0) {
-    rettv->vval.v_number = -1;
-  } else {
-    rettv->vval.v_number = (varnumber_T)rs_ml_find_line_or_offset(curbuf, 0,
-                                                                  &boff, false);
-  }
-}
+// f_byte2line: migrated to Rust (simple.rs)
 
 /// "call(func, arglist [, dict])" function
 static void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1061,28 +1071,7 @@ static void set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 ///
 /// @return  0 when the position could be set, -1 otherwise.
 /// "debugbreak()" function
-static void f_debugbreak(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = FAIL;
-  int pid = (int)tv_get_number(&argvars[0]);
-  if (pid == 0) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-#ifdef MSWIN
-  HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
-  if (hProcess == NULL) {
-    return;
-  }
-
-  DebugBreakProcess(hProcess);
-  CloseHandle(hProcess);
-  rettv->vval.v_number = OK;
-#else
-  uv_kill(pid, SIGINT);
-#endif
-}
+// f_debugbreak: migrated to Rust (simple.rs)
 
 /// dictwatcheradd(dict, key, funcref) function
 static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1202,19 +1191,7 @@ static void f_environ(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   os_free_fullenv(env);
 }
 
-/// "getenv()" function
-static void f_getenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char *p = vim_getenv(tv_get_string(&argvars[0]));
-
-  if (p == NULL) {
-    rettv->v_type = VAR_SPECIAL;
-    rettv->vval.v_special = kSpecialVarNull;
-    return;
-  }
-  rettv->vval.v_string = p;
-  rettv->v_type = VAR_STRING;
-}
+// f_getenv: migrated to Rust (simple.rs)
 
 /// "eval()" function
 static void f_eval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1452,16 +1429,7 @@ static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "menu_get(path [, modes])" function
-static void f_menu_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-  int modes = MENU_ALL_MODES;
-  if (argvars[1].v_type == VAR_STRING) {
-    const char *const strmodes = tv_get_string(&argvars[1]);
-    modes = get_menu_cmd_modes(strmodes, false, NULL, NULL);
-  }
-  menu_get((char *)tv_get_string(&argvars[0]), modes, rettv->vval.v_list);
-}
+// f_menu_get: migrated to Rust (simple.rs)
 
 /// "expandcmd()" function
 /// Expand all the special characters in a command string.
@@ -1730,16 +1698,7 @@ theend:
 }
 
 /// "garbagecollect()" function
-static void f_garbagecollect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  // This is postponed until we are back at the toplevel, because we may be
-  // using Lists and Dicts internally.  E.g.: ":echo [garbagecollect()]".
-  want_garbage_collect = true;
-
-  if (argvars[0].v_type != VAR_UNKNOWN && tv_get_number(&argvars[0]) == 1) {
-    garbage_collect_at_exit = true;
-  }
-}
+// f_garbagecollect: migrated to Rust (simple.rs)
 
 /// "get()" function
 static void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2506,16 +2465,7 @@ static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   time_watcher_close(tw, dummy_timer_close_cb);
 }
 
-/// "gettext()" function
-static void f_gettext(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_nonempty_string_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xstrdup(_(argvars[0].vval.v_string));
-}
+// f_gettext: migrated to Rust (simple.rs)
 
 /// "has()" function
 static void f_has(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3627,18 +3577,7 @@ static void f_json_decode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// json_encode() function
 /// "keytrans()" function
-static void f_keytrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  if (tv_check_for_string_arg(argvars, 0) == FAIL
-      || argvars[0].vval.v_string == NULL) {
-    return;
-  }
-  // Need to escape K_SPECIAL for mb_unescape().
-  char *escaped = vim_strsave_escape_ks(argvars[0].vval.v_string);
-  rettv->vval.v_string = str2special_save(escaped, true, true);
-  xfree(escaped);
-}
+// f_keytrans: migrated to Rust (simple.rs)
 
 static void libcall_common(typval_T *argvars, typval_T *rettv, int out_type)
 {
@@ -3721,31 +3660,9 @@ static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = lnum;
 }
 
-/// "line2byte(lnum)" function
-static void f_line2byte(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count + 1) {
-    rettv->vval.v_number = -1;
-  } else {
-    rettv->vval.v_number = rs_ml_find_line_or_offset(curbuf, lnum, NULL, false);
-  }
-  if (rettv->vval.v_number >= 0) {
-    rettv->vval.v_number++;
-  }
-}
+// f_line2byte: migrated to Rust (simple.rs)
 
-/// luaeval() function implementation
-static void f_luaeval(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *const str = tv_get_string_chk(&argvars[0]);
-  if (str == NULL) {
-    return;
-  }
-
-  nlua_typval_eval(cstr_as_string(str), &argvars[1], rettv);
-}
+// f_luaeval: migrated to Rust (simple.rs)
 
 static void find_some_match(typval_T *const argvars, typval_T *const rettv,
                             const SomeMatchType type)
@@ -4218,21 +4135,7 @@ static void max_min(const typval_T *const tv, typval_T *const rettv, const bool 
 }
 
 /// "mode()" function
-static void f_mode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char buf[MODE_MAX_LENGTH];
-
-  get_mode(buf);
-
-  // Clear out the minor mode when the argument is not a non-zero number or
-  // non-empty string.
-  if (!non_zero_arg(&argvars[0])) {
-    buf[1] = NUL;
-  }
-
-  rettv->vval.v_string = xstrdup(buf);
-  rettv->v_type = VAR_STRING;
-}
+// f_mode: migrated to Rust (simple.rs)
 
 static void may_add_state_char(garray_T *gap, const char *include, uint8_t c)
 {
@@ -4434,36 +4337,9 @@ static void f_msgpackparse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 }
 
 /// "nextnonblank()" function
-static void f_nextnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  linenr_T lnum;
+// f_nextnonblank: migrated to Rust (simple.rs)
 
-  for (lnum = tv_get_lnum(argvars);; lnum++) {
-    if (lnum < 0 || lnum > curbuf->b_ml.ml_line_count) {
-      lnum = 0;
-      break;
-    }
-    if (*skipwhite(ml_get(lnum)) != NUL) {
-      break;
-    }
-  }
-  rettv->vval.v_number = lnum;
-}
-
-/// "nr2char()" function
-/// "prevnonblank()" function
-static void f_prevnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
-    lnum = 0;
-  } else {
-    while (lnum >= 1 && *skipwhite(ml_get(lnum)) == NUL) {
-      lnum--;
-    }
-  }
-  rettv->vval.v_number = lnum;
-}
+// f_prevnonblank: migrated to Rust (simple.rs)
 
 /// "printf()" function
 static void f_printf(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4527,12 +4403,7 @@ static void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData f
   rettv->vval.v_string = prompt_get_input(buf);
 }
 
-/// "pum_getpos()" function
-static void f_pum_getpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-  pum_set_event_info(rettv->vval.v_dict);
-}
+// f_pum_getpos: migrated to Rust (simple.rs)
 
 /// "py3eval()" and "pyxeval()" functions (always python3)
 
@@ -5987,27 +5858,7 @@ static void f_setcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
   }
 }
 
-/// "setenv()" function
-static void f_setenv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char namebuf[NUMBUFLEN];
-  char valbuf[NUMBUFLEN];
-  const char *name = tv_get_string_buf(&argvars[0], namebuf);
-
-  // setting an environment variable may be dangerous, e.g. you could
-  // setenv GCONV_PATH=/tmp and then have iconv() unexpectedly call
-  // a shell command using some shared library:
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[1].v_type == VAR_SPECIAL
-      && argvars[1].vval.v_special == kSpecialVarNull) {
-    vim_unsetenv_ext(name);
-  } else {
-    vim_setenv_ext(name, tv_get_string_buf(&argvars[1], valbuf));
-  }
-}
+// f_setenv: migrated to Rust (simple.rs)
 
 /// "setfperm({fname}, {mode})" function
 static void f_setfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -6281,20 +6132,7 @@ static void f_sha256(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// "shellescape({string})" function
 /// shiftwidth() function
-static void f_shiftwidth(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = 0;
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    colnr_T col = (colnr_T)tv_get_number_chk(argvars, NULL);
-    if (col < 0) {
-      return;  // type error; errmsg already given
-    }
-    rettv->vval.v_number = get_sw_value_col(curbuf, col, false);
-    return;
-  }
-  rettv->vval.v_number = get_sw_value(curbuf);
-}
+// f_shiftwidth: migrated to Rust (simple.rs)
 
 /// "sockconnect()" function
 static void f_sockconnect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -6396,12 +6234,7 @@ static void f_reltimefloat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 }
 
 /// "soundfold({word})" function
-static void f_soundfold(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  const char *const s = tv_get_string(&argvars[0]);
-  rettv->vval.v_string = eval_soundfold(s);
-}
+// f_soundfold: migrated to Rust (simple.rs)
 
 /// "spellbadword()" function
 static void f_spellbadword(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -6910,19 +6743,7 @@ static void f_synIDattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_string = p == NULL ? NULL : xstrdup(p);
 }
 
-/// "synIDtrans(id)" function
-static void f_synIDtrans(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int id = (int)tv_get_number(&argvars[0]);
-
-  if (id > 0) {
-    id = syn_get_final_id(id);
-  } else {
-    id = 0;
-  }
-
-  rettv->vval.v_number = id;
-}
+// f_synIDtrans: migrated to Rust (simple.rs)
 
 /// "synconcealed(lnum, col)" function
 static void f_synconcealed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -7129,10 +6950,7 @@ static void f_timer_stop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   timer_stop(timer);
 }
 
-static void f_timer_stopall(typval_T *argvars, typval_T *unused, EvalFuncData fptr)
-{
-  timer_stop_all();
-}
+// f_timer_stopall: migrated to Rust (simple.rs)
 
 /// "virtcol({expr}, [, {list} [, {winid}]])" function
 static void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -7190,36 +7008,11 @@ theend:
   }
 }
 
-/// "visualmode()" function
-static void f_visualmode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char str[2];
+// f_visualmode: migrated to Rust (simple.rs)
 
-  rettv->v_type = VAR_STRING;
-  str[0] = (char)curbuf->b_visual_mode_eval;
-  str[1] = NUL;
-  rettv->vval.v_string = xstrdup(str);
+// f_wildmenumode: migrated to Rust (simple.rs)
 
-  // A non-zero number or non-empty string argument: reset mode.
-  if (non_zero_arg(&argvars[0])) {
-    curbuf->b_visual_mode_eval = NUL;
-  }
-}
-
-/// "wildmenumode()" function
-static void f_wildmenumode(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (wild_menu_showing || ((State & MODE_CMDLINE) && cmdline_pum_active())) {
-    rettv->vval.v_number = 1;
-  }
-}
-
-/// "wordcount()" function
-static void f_wordcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-  cursor_pos_info(rettv->vval.v_dict);
-}
+// f_wordcount: migrated to Rust (simple.rs)
 
 // =============================================================================
 // C accessor functions for Rust VimL function implementations (Phase 2)
@@ -7519,5 +7312,234 @@ void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
 {
   tv_dict_alloc_ret(rettv);
   swapfile_dict(tv_get_string(argvars), rettv->vval.v_dict);
+}
+
+// =============================================================================
+// C accessor functions for Rust VimL function implementations (Phase 5/simple)
+// =============================================================================
+
+void nvim_eval_api_info(typval_T *argvars, typval_T *rettv)
+{
+  object_to_vim(api_metadata(), rettv, NULL);
+}
+
+void nvim_eval_byte2line(typval_T *argvars, typval_T *rettv)
+{
+  int boff = (int)tv_get_number(&argvars[0]) - 1;
+  if (boff < 0) {
+    rettv->vval.v_number = -1;
+  } else {
+    rettv->vval.v_number = (varnumber_T)rs_ml_find_line_or_offset(curbuf, 0, &boff, false);
+  }
+}
+
+void nvim_eval_line2byte(typval_T *argvars, typval_T *rettv)
+{
+  const linenr_T lnum = tv_get_lnum(argvars);
+  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count + 1) {
+    rettv->vval.v_number = -1;
+  } else {
+    rettv->vval.v_number = rs_ml_find_line_or_offset(curbuf, lnum, NULL, false);
+  }
+  if (rettv->vval.v_number >= 0) {
+    rettv->vval.v_number++;
+  }
+}
+
+void nvim_eval_gettext(typval_T *argvars, typval_T *rettv)
+{
+  if (tv_check_for_nonempty_string_arg(argvars, 0) == FAIL) {
+    return;
+  }
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = xstrdup(_(argvars[0].vval.v_string));
+}
+
+void nvim_eval_garbagecollect(typval_T *argvars, typval_T *rettv)
+{
+  want_garbage_collect = true;
+  if (argvars[0].v_type != VAR_UNKNOWN && tv_get_number(&argvars[0]) == 1) {
+    garbage_collect_at_exit = true;
+  }
+}
+
+void nvim_eval_debugbreak(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_number = FAIL;
+  int pid = (int)tv_get_number(&argvars[0]);
+  if (pid == 0) {
+    emsg(_(e_invarg));
+    return;
+  }
+#ifndef MSWIN
+  uv_kill(pid, SIGINT);
+#endif
+}
+
+void nvim_eval_getenv(typval_T *argvars, typval_T *rettv)
+{
+  char *p = vim_getenv(tv_get_string(&argvars[0]));
+  if (p == NULL) {
+    rettv->v_type = VAR_SPECIAL;
+    rettv->vval.v_special = kSpecialVarNull;
+    return;
+  }
+  rettv->vval.v_string = p;
+  rettv->v_type = VAR_STRING;
+}
+
+void nvim_eval_setenv(typval_T *argvars, typval_T *rettv)
+{
+  char namebuf[NUMBUFLEN];
+  char valbuf[NUMBUFLEN];
+  const char *name = tv_get_string_buf(&argvars[0], namebuf);
+  if (rs_check_secure()) {
+    return;
+  }
+  if (argvars[1].v_type == VAR_SPECIAL
+      && argvars[1].vval.v_special == kSpecialVarNull) {
+    vim_unsetenv_ext(name);
+  } else {
+    vim_setenv_ext(name, tv_get_string_buf(&argvars[1], valbuf));
+  }
+}
+
+void nvim_eval_pum_getpos(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+  pum_set_event_info(rettv->vval.v_dict);
+}
+
+void nvim_eval_wordcount(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+  cursor_pos_info(rettv->vval.v_dict);
+}
+
+void nvim_eval_soundfold(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  const char *const s = tv_get_string(&argvars[0]);
+  rettv->vval.v_string = eval_soundfold(s);
+}
+
+void nvim_eval_wildmenumode(typval_T *argvars, typval_T *rettv)
+{
+  if (wild_menu_showing || ((State & MODE_CMDLINE) && cmdline_pum_active())) {
+    rettv->vval.v_number = 1;
+  }
+}
+
+void nvim_eval_timer_stopall(typval_T *argvars, typval_T *rettv)
+{
+  timer_stop_all();
+}
+
+void nvim_eval_synIDtrans(typval_T *argvars, typval_T *rettv)
+{
+  int id = (int)tv_get_number(&argvars[0]);
+  if (id > 0) {
+    id = syn_get_final_id(id);
+  } else {
+    id = 0;
+  }
+  rettv->vval.v_number = id;
+}
+
+void nvim_eval_keytrans(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  if (tv_check_for_string_arg(argvars, 0) == FAIL
+      || argvars[0].vval.v_string == NULL) {
+    return;
+  }
+  char *escaped = vim_strsave_escape_ks(argvars[0].vval.v_string);
+  rettv->vval.v_string = str2special_save(escaped, true, true);
+  xfree(escaped);
+}
+
+void nvim_eval_luaeval(typval_T *argvars, typval_T *rettv)
+{
+  const char *const str = tv_get_string_chk(&argvars[0]);
+  if (str == NULL) {
+    return;
+  }
+  nlua_typval_eval(cstr_as_string(str), &argvars[1], rettv);
+}
+
+void nvim_eval_shiftwidth(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_number = 0;
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    colnr_T col = (colnr_T)tv_get_number_chk(argvars, NULL);
+    if (col < 0) {
+      return;
+    }
+    rettv->vval.v_number = get_sw_value_col(curbuf, col, false);
+    return;
+  }
+  rettv->vval.v_number = get_sw_value(curbuf);
+}
+
+void nvim_eval_mode(typval_T *argvars, typval_T *rettv)
+{
+  char buf[MODE_MAX_LENGTH];
+  get_mode(buf);
+  if (!non_zero_arg(&argvars[0])) {
+    buf[1] = NUL;
+  }
+  rettv->vval.v_string = xstrdup(buf);
+  rettv->v_type = VAR_STRING;
+}
+
+void nvim_eval_visualmode(typval_T *argvars, typval_T *rettv)
+{
+  char str[2];
+  rettv->v_type = VAR_STRING;
+  str[0] = (char)curbuf->b_visual_mode_eval;
+  str[1] = NUL;
+  rettv->vval.v_string = xstrdup(str);
+  if (non_zero_arg(&argvars[0])) {
+    curbuf->b_visual_mode_eval = NUL;
+  }
+}
+
+void nvim_eval_nextnonblank(typval_T *argvars, typval_T *rettv)
+{
+  linenr_T lnum;
+  for (lnum = tv_get_lnum(argvars);; lnum++) {
+    if (lnum < 0 || lnum > curbuf->b_ml.ml_line_count) {
+      lnum = 0;
+      break;
+    }
+    if (*skipwhite(ml_get(lnum)) != NUL) {
+      break;
+    }
+  }
+  rettv->vval.v_number = lnum;
+}
+
+void nvim_eval_prevnonblank(typval_T *argvars, typval_T *rettv)
+{
+  linenr_T lnum = tv_get_lnum(argvars);
+  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
+    lnum = 0;
+  } else {
+    while (lnum >= 1 && *skipwhite(ml_get(lnum)) == NUL) {
+      lnum--;
+    }
+  }
+  rettv->vval.v_number = lnum;
+}
+
+void nvim_eval_menu_get(typval_T *argvars, typval_T *rettv)
+{
+  tv_list_alloc_ret(rettv, kListLenMayKnow);
+  int modes = MENU_ALL_MODES;
+  if (argvars[1].v_type == VAR_STRING) {
+    const char *const strmodes = tv_get_string(&argvars[1]);
+    modes = get_menu_cmd_modes(strmodes, false, NULL, NULL);
+  }
+  menu_get((char *)tv_get_string(&argvars[0]), modes, rettv->vval.v_list);
 }
 
