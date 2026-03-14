@@ -51,6 +51,10 @@ enum { CB_MAX_ERROR = 3, };
 /// To use with kRetNilBool for quick truthiness check
 #define LUARET_TRUTHY(res) ((res).type == kObjectTypeBoolean && (res).data.boolean == true)
 
+// Functions implemented in Rust (nvim-lua crate)
+extern int nlua_get_global_ref_count(void);
+extern bool nlua_is_deferred_safe(void);
+
 #include "lua/executor.h.generated.h"
 
 EXTERN nlua_ref_state_t *nlua_global_refs INIT( = NULL);

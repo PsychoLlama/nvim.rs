@@ -154,9 +154,10 @@ pub unsafe fn lua_call_ref_ctx(
 ///
 /// Luv callbacks are unsafe as they are called inside the uv loop.
 /// Returns true if `in_fast_callback` == 0.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_is_deferred_safe() -> c_int {
-    c_int::from(nvim_get_in_fast_callback() == 0)
+#[unsafe(export_name = "nlua_is_deferred_safe")]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_nlua_is_deferred_safe() -> bool {
+    nvim_get_in_fast_callback() == 0
 }
 
 /// Get the global Lua reference count.
@@ -166,7 +167,8 @@ pub unsafe extern "C" fn rs_nlua_is_deferred_safe() -> c_int {
 /// # Safety
 ///
 /// Calls external C function to access global state.
-#[no_mangle]
+#[unsafe(export_name = "nlua_get_global_ref_count")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_nlua_get_global_ref_count() -> c_int {
     nvim_get_nlua_global_ref_count()
 }

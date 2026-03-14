@@ -300,7 +300,8 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor function for function call state.
-#[no_mangle]
+#[unsafe(export_name = "current_func_returned")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
     nvim_get_current_funccal_fc_returned()
 }

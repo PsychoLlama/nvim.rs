@@ -77,7 +77,7 @@
 static int in_fast_callback = 0;
 static bool in_script = false;
 
-extern int rs_nlua_is_deferred_safe(void);
+extern bool nlua_is_deferred_safe(void);
 
 // Rust executor helpers
 extern bool rs_wait_timeout_valid(int64_t timeout);
@@ -616,13 +616,8 @@ LuaRef nlua_get_empty_dict_ref(lua_State *lstate)
 // C accessor for nlua_global_refs->ref_count (used by Rust)
 int nvim_get_nlua_global_ref_count(void) { return nlua_global_refs->ref_count; }
 
-// Rust implementation
-extern int rs_nlua_get_global_ref_count(void);
-
-int nlua_get_global_ref_count(void)
-{
-  return rs_nlua_get_global_ref_count();
-}
+// Implemented in Rust (nvim-lua crate)
+extern int nlua_get_global_ref_count(void);
 
 static void nlua_common_vim_init(lua_State *lstate, bool is_thread, bool is_standalone)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -1720,12 +1715,6 @@ static Object nlua_call_pop_retval(lua_State *lstate, LuaRetMode mode, Arena *ar
 }
 
 /// check if the current execution context is safe for calling deferred API
-/// methods. Luv callbacks are unsafe as they are called inside the uv loop.
-bool nlua_is_deferred_safe(void)
-{
-  return rs_nlua_is_deferred_safe() != 0;
-}
-
 /// Executes Lua code.
 ///
 /// Implements `:lua` and `:lua ={expr}`.

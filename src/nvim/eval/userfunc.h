@@ -90,4 +90,7 @@ typedef struct {
 #define FUNCARG(fp, j)  ((char **)(fp->uf_args.ga_data))[j]
 #define FUNCLINE(fp, j) ((char **)(fp->uf_lines.ga_data))[j]
 
+// Functions implemented in Rust (nvim-eval crate)
+extern int current_func_returned(void);
+
 #include "eval/userfunc.h.generated.h"
