@@ -61,6 +61,7 @@ void flush_buffers(flush_buffers_T flush_typeahead);
 
 // Orchestrator functions (implemented in Rust, src/nvim-rs/getchar/src/orchestrator.rs)
 void before_blocking(void);
+int vgetc(void);
 int safe_vgetc(void);
 int plain_vgetc(void);
 int vpeekc(void);

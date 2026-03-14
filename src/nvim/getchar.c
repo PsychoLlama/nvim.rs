@@ -512,230 +512,7 @@ static void add_byte_to_showcmd(uint8_t byte)
   }
 }
 
-/// Get the next input character.
-/// Can return a special key or a multi-byte character.
-/// Can return NUL when called recursively, use safe_vgetc() if that's not
-/// wanted.
-/// This translates escaped K_SPECIAL bytes to a K_SPECIAL byte.
-/// Collects the bytes of a multibyte character into the whole character.
-/// Returns the modifiers in the global "mod_mask".
-int vgetc(void)
-{
-  int c;
-  uint8_t buf[MB_MAXBYTES + 1];
-
-  // Do garbage collection when garbagecollect() was called previously and
-  // we are now at the toplevel.
-  if (may_garbage_collect && want_garbage_collect) {
-    garbage_collect(false);
-  }
-
-  // If a character was put back with vungetc, it was already processed.
-  // Return it directly.
-  if (rs_can_get_old_char()) {
-    c = rs_get_old_char();
-    rs_restore_old_char_state();
-  } else {
-    // number of characters recorded from the last vgetc() call
-    static size_t last_vgetc_recorded_len = 0;
-
-    mod_mask = 0;
-    vgetc_mod_mask = 0;
-    vgetc_char = 0;
-
-    // last_recorded_len can be larger than last_vgetc_recorded_len
-    // if peeking records more
-    last_recorded_len -= last_vgetc_recorded_len;
-
-    while (true) {              // this is done twice if there are modifiers
-      bool did_inc = false;
-      if (mod_mask) {           // no mapping after modifier has been read
-        no_mapping++;
-        allow_keys++;
-        did_inc = true;         // mod_mask may change value
-      }
-      c = vgetorpeek(true);
-      if (did_inc) {
-        no_mapping--;
-        allow_keys--;
-      }
-
-      // Get two extra bytes for special keys
-      if (c == K_SPECIAL) {
-        int save_allow_keys = allow_keys;
-        no_mapping++;
-        allow_keys = 0;                 // make sure BS is not found
-        int c2 = vgetorpeek(true);          // no mapping for these chars
-        c = vgetorpeek(true);
-        no_mapping--;
-        allow_keys = save_allow_keys;
-        if (c2 == KS_MODIFIER) {
-          mod_mask = c;
-          continue;
-        }
-        c = TO_SPECIAL(c2, c);
-      }
-
-      // For a multi-byte character get all the bytes and return the
-      // converted character.
-      // Note: This will loop until enough bytes are received!
-      int n;
-      if ((n = MB_BYTE2LEN_CHECK(c)) > 1) {
-        no_mapping++;
-        buf[0] = (uint8_t)c;
-        for (int i = 1; i < n; i++) {
-          buf[i] = (uint8_t)vgetorpeek(true);
-          if (buf[i] == K_SPECIAL) {
-            // Must be a K_SPECIAL - KS_SPECIAL - KE_FILLER sequence,
-            // which represents a K_SPECIAL (0x80).
-            vgetorpeek(true);  // skip KS_SPECIAL
-            vgetorpeek(true);  // skip KE_FILLER
-          }
-        }
-        no_mapping--;
-        c = utf_ptr2char((char *)buf);
-      }
-
-      // If mappings are enabled (i.e., not i_CTRL-V) and the user directly typed
-      // something with MOD_MASK_ALT (<M-/<A- modifier) that was not mapped, interpret
-      // <M-x> as <Esc>x rather than as an unbound <M-x> keypress. #8213
-      // In Terminal mode, however, this is not desirable. #16202 #16220
-      // Also do not do this for mouse keys, as terminals encode mouse events as
-      // CSI sequences, and MOD_MASK_ALT has a meaning even for unmapped mouse keys.
-      if (!no_mapping && KeyTyped && mod_mask == MOD_MASK_ALT
-          && !(State & MODE_TERMINAL) && !is_mouse_key(c)) {
-        mod_mask = 0;
-        int len = ins_char_typebuf(c, 0, false);
-        ins_char_typebuf(ESC, 0, false);
-        int old_len = len + 3;  // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes 3 more bytes
-        ungetchars(old_len);
-        if (on_key_buf.size >= (size_t)old_len) {
-          on_key_buf.size -= (size_t)old_len;
-        }
-        continue;
-      }
-
-      if (vgetc_char == 0) {
-        vgetc_mod_mask = mod_mask;
-        vgetc_char = c;
-      }
-
-      // A keypad or special function key was not mapped, use it like
-      // its ASCII equivalent.
-      switch (c) {
-      case K_KPLUS:
-        c = '+'; break;
-      case K_KMINUS:
-        c = '-'; break;
-      case K_KDIVIDE:
-        c = '/'; break;
-      case K_KMULTIPLY:
-        c = '*'; break;
-      case K_KENTER:
-        c = CAR; break;
-      case K_KPOINT:
-        c = '.'; break;
-      case K_KCOMMA:
-        c = ','; break;
-      case K_KEQUAL:
-        c = '='; break;
-      case K_K0:
-        c = '0'; break;
-      case K_K1:
-        c = '1'; break;
-      case K_K2:
-        c = '2'; break;
-      case K_K3:
-        c = '3'; break;
-      case K_K4:
-        c = '4'; break;
-      case K_K5:
-        c = '5'; break;
-      case K_K6:
-        c = '6'; break;
-      case K_K7:
-        c = '7'; break;
-      case K_K8:
-        c = '8'; break;
-      case K_K9:
-        c = '9'; break;
-
-      case K_XHOME:
-      case K_ZHOME:
-        if (mod_mask == MOD_MASK_SHIFT) {
-          c = K_S_HOME;
-          mod_mask = 0;
-        } else if (mod_mask == MOD_MASK_CTRL) {
-          c = K_C_HOME;
-          mod_mask = 0;
-        } else {
-          c = K_HOME;
-        }
-        break;
-      case K_XEND:
-      case K_ZEND:
-        if (mod_mask == MOD_MASK_SHIFT) {
-          c = K_S_END;
-          mod_mask = 0;
-        } else if (mod_mask == MOD_MASK_CTRL) {
-          c = K_C_END;
-          mod_mask = 0;
-        } else {
-          c = K_END;
-        }
-        break;
-
-      case K_KUP:
-      case K_XUP:
-        c = K_UP; break;
-      case K_KDOWN:
-      case K_XDOWN:
-        c = K_DOWN; break;
-      case K_KLEFT:
-      case K_XLEFT:
-        c = K_LEFT; break;
-      case K_KRIGHT:
-      case K_XRIGHT:
-        c = K_RIGHT; break;
-      }
-
-      break;
-    }
-
-    last_vgetc_recorded_len = last_recorded_len;
-  }
-
-  // In the main loop "may_garbage_collect" can be set to do garbage
-  // collection in the first next vgetc().  It's disabled after that to
-  // avoid internally used Lists and Dicts to be freed.
-  may_garbage_collect = false;
-
-  // Execute Lua on_key callbacks.
-  kvi_push(on_key_buf, NUL);
-  if (nlua_execute_on_key(c, on_key_buf.items)) {
-    // Keys following K_COMMAND/K_LUA/K_PASTE_START aren't normally received by
-    // vim.on_key() callbacks, so discard them along with the current key.
-    if (c == K_COMMAND) {
-      xfree(getcmdkeycmd(NUL, NULL, 0, false));
-    } else if (c == K_LUA) {
-      map_execute_lua(false, true);
-    } else if (c == K_PASTE_START) {
-      paste_repeat(0);
-    }
-    // Discard the current key.
-    c = K_IGNORE;
-  }
-  kvi_destroy(on_key_buf);
-  kvi_init(on_key_buf);
-
-  // Need to process the character before we know it's safe to do something
-  // else.
-  if (c != K_IGNORE) {
-    state_no_longer_safe("key typed");
-  }
-
-  return c;
-}
+// vgetc() is implemented in Rust (src/nvim-rs/getchar/src/orchestrator.rs)
 
 
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
@@ -2440,4 +2217,60 @@ int nvim_get_debug_did_msg(void)
 void nvim_set_debug_did_msg(int val)
 {
   debug_did_msg = val != 0;
+}
+
+// Phase 4: on_key_buf wrappers for vgetc (vgetc is 217 lines, above 50-line threshold)
+
+/// Push a NUL byte onto on_key_buf.
+void nvim_on_key_buf_push_nul(void)
+{
+  kvi_push(on_key_buf, NUL);
+}
+
+/// Execute on_key Lua callbacks and reset on_key_buf.
+/// Returns true if the key should be discarded.
+bool nvim_on_key_buf_execute_and_reset(int c)
+{
+  bool discard = nlua_execute_on_key(c, on_key_buf.items);
+  kvi_destroy(on_key_buf);
+  kvi_init(on_key_buf);
+  return discard;
+}
+
+/// Shrink on_key_buf by `len` bytes (for ALT key rewrite path).
+void nvim_on_key_buf_shrink(size_t len)
+{
+  if (on_key_buf.size >= len) {
+    on_key_buf.size -= len;
+  }
+}
+
+/// Set vgetc_mod_mask global.
+void nvim_set_vgetc_mod_mask(int val)
+{
+  vgetc_mod_mask = val;
+}
+
+/// Set vgetc_char global.
+void nvim_set_vgetc_char(int val)
+{
+  vgetc_char = val;
+}
+
+/// Wrapper for MB_BYTE2LEN_CHECK macro (used by Rust vgetc).
+int nvim_mb_byte2len_check(int b)
+{
+  return MB_BYTE2LEN_CHECK(b);
+}
+
+/// Call map_execute_lua(false, true) - the discard variant used in vgetc.
+bool nvim_map_execute_lua_discard(void)
+{
+  return map_execute_lua(false, true);
+}
+
+/// Call paste_repeat(0) for the K_PASTE_START discard path in vgetc.
+void nvim_paste_repeat_discard(void)
+{
+  paste_repeat(0);
 }
