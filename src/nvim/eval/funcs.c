@@ -403,6 +403,11 @@ extern void f_rand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_reltime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 4 (plan 40f0fb72) VimL function declarations (misc.rs)
+extern void f_chanclose(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_confirm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -748,43 +753,7 @@ done:
 }
 
 /// "chanclose(id[, stream])" function
-static void f_chanclose(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = 0;
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_NUMBER || (argvars[1].v_type != VAR_STRING
-                                          && argvars[1].v_type != VAR_UNKNOWN)) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  ChannelPart part = kChannelPartAll;
-  if (argvars[1].v_type == VAR_STRING) {
-    char *stream = argvars[1].vval.v_string;
-    if (!strcmp(stream, "stdin")) {
-      part = kChannelPartStdin;
-    } else if (!strcmp(stream, "stdout")) {
-      part = kChannelPartStdout;
-    } else if (!strcmp(stream, "stderr")) {
-      part = kChannelPartStderr;
-    } else if (!strcmp(stream, "rpc")) {
-      part = kChannelPartRpc;
-    } else {
-      semsg(_("Invalid channel stream \"%s\""), stream);
-      return;
-    }
-  }
-  const char *error;
-  rettv->vval.v_number = channel_close((uint64_t)argvars[0].vval.v_number, part, &error);
-  if (!rettv->vval.v_number) {
-    emsg(error);
-  }
-}
+// f_chanclose: migrated to Rust (misc.rs)
 
 /// "chansend(id, data)" function
 static void f_chansend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -914,56 +883,7 @@ win_T *get_optional_window(typval_T *argvars, int idx)
 }
 
 /// "confirm(message, buttons[, default [, type]])" function
-static void f_confirm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char buf[NUMBUFLEN];
-  char buf2[NUMBUFLEN];
-  const char *buttons = NULL;
-  int def = 1;
-  int type = VIM_GENERIC;
-  bool error = false;
-
-  const char *message = tv_get_string_chk(&argvars[0]);
-  if (message == NULL) {
-    error = true;
-  }
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    buttons = tv_get_string_buf_chk(&argvars[1], buf);
-    if (buttons == NULL) {
-      error = true;
-    }
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      def = (int)tv_get_number_chk(&argvars[2], &error);
-      if (argvars[3].v_type != VAR_UNKNOWN) {
-        const char *typestr = tv_get_string_buf_chk(&argvars[3], buf2);
-        if (typestr == NULL) {
-          error = true;
-        } else {
-          switch (TOUPPER_ASC(*typestr)) {
-          case 'E':
-            type = VIM_ERROR; break;
-          case 'Q':
-            type = VIM_QUESTION; break;
-          case 'I':
-            type = VIM_INFO; break;
-          case 'W':
-            type = VIM_WARNING; break;
-          case 'G':
-            type = VIM_GENERIC; break;
-          }
-        }
-      }
-    }
-  }
-
-  if (buttons == NULL || *buttons == NUL) {
-    buttons = _("&Ok");
-  }
-
-  if (!error) {
-    rettv->vval.v_number = do_dialog(type, NULL, message, buttons, def, NULL, false);
-  }
-}
+// f_confirm: migrated to Rust (misc.rs)
 
 // f_ctxget: migrated to Rust (misc.rs)
 
@@ -4327,49 +4247,7 @@ cleanup:
   arena_mem_free(arena_finish(&arena));
 }
 
-/// "serverstart()" function
-static void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;  // Address of the new server
-
-  if (rs_check_secure()) {
-    return;
-  }
-
-  char *address;
-  // If the user supplied an address, use it, otherwise use a temp.
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    if (argvars[0].v_type != VAR_STRING) {
-      emsg(_(e_invarg));
-      return;
-    }
-    address = xstrdup(tv_get_string(argvars));
-  } else {
-    address = server_address_new(NULL);
-  }
-
-  int result = server_start(address);
-  xfree(address);
-
-  if (result != 0) {
-    semsg("Failed to start server: %s",
-          result > 0 ? "Unknown system error" : uv_strerror(result));
-    return;
-  }
-
-  // Since it's possible server_start adjusted the given {address} (e.g.,
-  // "localhost:" will now have a port), return the final value to the user.
-  size_t n;
-  char **addrs = server_address_list(&n);
-  rettv->vval.v_string = addrs[n - 1];
-
-  n--;
-  for (size_t i = 0; i < n; i++) {
-    xfree(addrs[i]);
-  }
-  xfree(addrs);
-}
+// f_serverstart: migrated to Rust (misc.rs)
 
 /// "serverstop()" function
 // f_serverstop: migrated to Rust (simple.rs)

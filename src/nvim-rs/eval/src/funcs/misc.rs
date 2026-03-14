@@ -1917,3 +1917,310 @@ pub unsafe extern "C" fn rs_f_reltime(
     tv_list_append_number(list, i64::from(high));
     tv_list_append_number(list, i64::from(low));
 }
+
+// =============================================================================
+// Phase 4: Server, channel, and confirm functions (plan 40f0fb72)
+// =============================================================================
+
+const TYPVAL_SIZE_P4: usize = 16;
+const VAR_UNKNOWN_P4: c_int = 0;
+const VAR_STRING_P4: c_int = 2;
+const VAR_NUMBER_P4: c_int = 1;
+
+// ChannelPart enum values from channel_defs.h
+const K_CHANNEL_PART_STDIN: c_int = 0;
+const K_CHANNEL_PART_STDOUT: c_int = 1;
+const K_CHANNEL_PART_STDERR: c_int = 2;
+const K_CHANNEL_PART_RPC: c_int = 3;
+const K_CHANNEL_PART_ALL: c_int = 4;
+
+// VIM dialog type constants from message.h
+const VIM_GENERIC: c_int = 0;
+const VIM_ERROR: c_int = 1;
+const VIM_WARNING: c_int = 2;
+const VIM_INFO: c_int = 3;
+const VIM_QUESTION: c_int = 4;
+
+extern "C" {
+    // Type/value accessors for Phase 4
+    #[link_name = "nvim_tv_get_type"]
+    fn p4_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_number"]
+    fn p4_nvim_tv_get_number(tv: *const c_void) -> i64;
+    #[link_name = "nvim_tv_get_number_chk"]
+    fn p4_nvim_tv_get_number_chk(tv: *const c_void, error: *mut bool) -> i64;
+    #[link_name = "nvim_tv_set_number"]
+    fn p4_nvim_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "nvim_tv_get_string_ptr"]
+    fn p4_nvim_tv_get_string_ptr(tv: *const c_void) -> *const u8;
+    #[link_name = "nvim_tv_get_string"]
+    fn p4_nvim_tv_get_string(tv: *const c_void, out_len: *mut usize) -> *const u8;
+    #[link_name = "nvim_tv_set_string_copy"]
+    fn p4_nvim_tv_set_string_copy(tv: *mut c_void, s: *const u8, len: c_int);
+
+    // rs_check_secure - already exported from Rust (check if sandbox mode)
+    #[link_name = "rs_check_secure"]
+    fn p4_rs_check_secure() -> c_int;
+
+    // Error functions
+    #[link_name = "emsg"]
+    fn p4_emsg(msg: *const c_char) -> c_int;
+    #[link_name = "semsg"]
+    fn p4_semsg(fmt: *const c_char, ...) -> c_int;
+    #[link_name = "e_invarg"]
+    static P4_E_INVARG: c_char;
+
+    // channel_close(id, part, &error) -> bool
+    fn channel_close(id: u64, part: c_int, error: *mut *const c_char) -> bool;
+
+    // server functions
+    fn server_address_new(name: *const c_char) -> *mut c_char;
+    fn server_start(addr: *const c_char) -> c_int;
+    fn server_address_list(size: *mut usize) -> *mut *mut c_char;
+
+    // libuv error string (for server_start failures)
+    fn uv_strerror(err: c_int) -> *const c_char;
+
+    // do_dialog for f_confirm
+    fn do_dialog(
+        dialtype: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        buttons: *const c_char,
+        dflt: c_int,
+        textfield: *const c_char,
+        ex_cmd: c_int,
+    ) -> c_int;
+
+    // tv_get_string_chk: returns NULL-terminated string or NULL on error
+    #[link_name = "tv_get_string_chk"]
+    fn p4_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
+
+    // Memory management
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+#[inline]
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn arg_at_p4(argvars: *const c_void, idx: usize) -> *const c_void {
+    (argvars as *const u8)
+        .add(idx * TYPVAL_SIZE_P4)
+        .cast::<c_void>()
+}
+
+/// "chanclose(id[, stream])" function - close a channel or stream.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_chanclose"]
+pub unsafe extern "C" fn rs_f_chanclose(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    p4_nvim_tv_set_number(rettv, 0);
+
+    if p4_rs_check_secure() != 0 {
+        return;
+    }
+
+    let arg0 = arg_at_p4(argvars, 0);
+    let arg1 = arg_at_p4(argvars, 1);
+    let arg0_type = p4_nvim_tv_get_type(arg0);
+    let arg1_type = p4_nvim_tv_get_type(arg1);
+
+    if arg0_type != VAR_NUMBER_P4 || (arg1_type != VAR_STRING_P4 && arg1_type != VAR_UNKNOWN_P4) {
+        let _ = p4_emsg(&raw const P4_E_INVARG);
+        return;
+    }
+
+    let part = if arg1_type == VAR_STRING_P4 {
+        let stream = p4_nvim_tv_get_string_ptr(arg1);
+        if stream.is_null() {
+            let _ = p4_emsg(&raw const P4_E_INVARG);
+            return;
+        }
+        // Compare the stream name to known values
+        let s = std::ffi::CStr::from_ptr(stream.cast::<c_char>());
+        match s.to_bytes() {
+            b"stdin" => K_CHANNEL_PART_STDIN,
+            b"stdout" => K_CHANNEL_PART_STDOUT,
+            b"stderr" => K_CHANNEL_PART_STDERR,
+            b"rpc" => K_CHANNEL_PART_RPC,
+            _ => {
+                let _ = p4_semsg(
+                    c"Invalid channel stream \"%s\"".as_ptr(),
+                    stream.cast::<c_char>(),
+                );
+                return;
+            }
+        }
+    } else {
+        K_CHANNEL_PART_ALL
+    };
+
+    #[allow(clippy::cast_sign_loss)]
+    let id = p4_nvim_tv_get_number(arg0) as u64;
+    let mut error_ptr: *const c_char = std::ptr::null();
+    let ok = channel_close(id, part, &raw mut error_ptr);
+    p4_nvim_tv_set_number(rettv, i64::from(ok));
+    if !ok {
+        let _ = p4_emsg(error_ptr);
+    }
+}
+
+/// "serverstart([{address}])" function - start a server at given address.
+///
+/// Returns the server address, or an empty string on failure.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_serverstart"]
+pub unsafe extern "C" fn rs_f_serverstart(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    // Default: empty string return
+    p4_nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+
+    if p4_rs_check_secure() != 0 {
+        return;
+    }
+
+    let arg0 = arg_at_p4(argvars, 0);
+    let arg0_type = p4_nvim_tv_get_type(arg0);
+
+    // Get or generate the address
+    let address: *mut c_char = if arg0_type == VAR_UNKNOWN_P4 {
+        server_address_new(std::ptr::null())
+    } else {
+        if arg0_type != VAR_STRING_P4 {
+            let _ = p4_emsg(&raw const P4_E_INVARG);
+            return;
+        }
+        let mut len = 0usize;
+        let s = p4_nvim_tv_get_string(arg0, &raw mut len);
+        xstrdup(s.cast::<c_char>())
+    };
+
+    let result = server_start(address);
+    xfree(address.cast::<c_void>());
+
+    if result != 0 {
+        if result > 0 {
+            let _ = p4_semsg(
+                c"Failed to start server: %s".as_ptr(),
+                c"Unknown system error".as_ptr(),
+            );
+        } else {
+            let _ = p4_semsg(c"Failed to start server: %s".as_ptr(), uv_strerror(result));
+        }
+        return;
+    }
+
+    // Return the last address from server_address_list (the newly started server).
+    let mut n: usize = 0;
+    let addrs = server_address_list(&raw mut n);
+    if addrs.is_null() || n == 0 {
+        return;
+    }
+
+    // The last entry is the newly started server
+    let last = *addrs.add(n - 1);
+    // Copy the address into rettv then free all entries
+    p4_nvim_tv_set_string_copy(rettv, last.cast::<u8>(), -1);
+
+    for i in 0..n {
+        xfree((*addrs.add(i)).cast::<c_void>());
+    }
+    xfree(addrs.cast::<c_void>());
+}
+
+/// "confirm(msg [, choices [, default [, type]]])" function.
+///
+/// Displays a dialog and returns the choice (1-based), or 0 on error.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_confirm"]
+pub unsafe extern "C" fn rs_f_confirm(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    p4_nvim_tv_set_number(rettv, 0);
+
+    let mut buf = [0u8; 65usize];
+    let mut buf2 = [0u8; 65usize];
+    let mut error = false;
+
+    let arg0 = arg_at_p4(argvars, 0);
+    let arg1 = arg_at_p4(argvars, 1);
+    let arg2 = arg_at_p4(argvars, 2);
+    let arg3 = arg_at_p4(argvars, 3);
+
+    let message = p4_tv_get_string_chk(arg0.cast_mut());
+    if message.is_null() {
+        error = true;
+    }
+
+    let buttons: *const c_char = if p4_nvim_tv_get_type(arg1) == VAR_UNKNOWN_P4 {
+        std::ptr::null()
+    } else {
+        // tv_get_string_buf_chk is already declared in Phase 2
+        let b = tv_get_string_buf_chk(arg1, buf.as_mut_ptr().cast::<c_char>());
+        if b.is_null() {
+            error = true;
+        }
+        b
+    };
+
+    let mut def: c_int = 1;
+    if !error && p4_nvim_tv_get_type(arg2) != VAR_UNKNOWN_P4 {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            def = p4_nvim_tv_get_number_chk(arg2, &raw mut error) as c_int;
+        }
+    }
+
+    let mut dialtype: c_int = VIM_GENERIC;
+    if !error && p4_nvim_tv_get_type(arg3) != VAR_UNKNOWN_P4 {
+        let typestr = tv_get_string_buf_chk(arg3, buf2.as_mut_ptr().cast::<c_char>());
+        if typestr.is_null() {
+            error = true;
+        } else {
+            #[allow(clippy::cast_sign_loss)]
+            let first = (*typestr as u8).to_ascii_uppercase();
+            dialtype = match first {
+                b'E' => VIM_ERROR,
+                b'Q' => VIM_QUESTION,
+                b'I' => VIM_INFO,
+                b'W' => VIM_WARNING,
+                _ => VIM_GENERIC,
+            };
+        }
+    }
+
+    // Default buttons: "&Ok"
+    let effective_buttons: *const c_char =
+        if buttons.is_null() || (!buttons.is_null() && *buttons == 0) {
+            c"&Ok".as_ptr()
+        } else {
+            buttons
+        };
+
+    if !error {
+        let result = do_dialog(
+            dialtype,
+            std::ptr::null(),
+            message,
+            effective_buttons,
+            def,
+            std::ptr::null(),
+            0,
+        );
+        p4_nvim_tv_set_number(rettv, i64::from(result));
+    }
+}
