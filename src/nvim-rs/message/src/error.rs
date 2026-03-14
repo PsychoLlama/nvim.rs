@@ -456,23 +456,210 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
 // ============================================================================
 
 extern "C" {
-    // Error message output functions - call into C
-    fn emsg_multiline(
-        s: *const std::ffi::c_char,
-        kind: *const std::ffi::c_char,
-        hl_id: c_int,
-        multiline: c_int,
-    ) -> c_int;
-
-    // Source info functions
+    // Source info functions (still in C)
     fn msg_source(hl_id: c_int);
 
     // Phase 1: sourcing state accessors for reset_last_sourcing
     fn nvim_clear_last_sourcing_name();
     fn nvim_set_last_sourcing_lnum(val: c_int);
+
+    // Accessors for emsg_multiline implementation
+    fn nvim_emsg_not_now() -> c_int;
+    fn nvim_cause_errthrow(
+        s: *const std::ffi::c_char,
+        multiline: c_int,
+        severe: c_int,
+        ignore: *mut c_int,
+    ) -> c_int;
+    fn nvim_get_emsg_assert_fails_msg() -> *const std::ffi::c_char;
+    fn nvim_set_emsg_assert_fails_msg(val: *mut std::ffi::c_char);
+    fn nvim_set_emsg_assert_fails_lnum(val: c_int);
+    fn nvim_free_emsg_assert_fails_context();
+    fn nvim_set_emsg_assert_fails_context(val: *mut std::ffi::c_char);
+    fn nvim_get_sourcing_name() -> *const std::ffi::c_char;
+    fn nvim_get_sourcing_lnum() -> c_int;
+    fn nvim_xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn nvim_set_vim_var_errmsg(s: *const std::ffi::c_char);
+    fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
+    fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
+    fn nvim_get_emsg_lnum() -> *mut std::ffi::c_char;
+    fn nvim_set_ex_exitval(val: c_int);
+    fn nvim_set_msg_silent(val: c_int);
+    fn nvim_set_cmd_silent(val: c_int);
+    fn nvim_inc_global_busy();
+    fn nvim_get_p_eb() -> c_int;
+    fn nvim_beep_flush();
+    fn nvim_flush_buffers_minimal();
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_set_msg_nowait(val: c_int);
+    fn nvim_set_msg_scroll(val: c_int);
+    fn nvim_get_msg_ext_skip_flush() -> c_int;
+    fn nvim_set_msg_ext_skip_flush(val: c_int);
+}
+
+// These are also declared elsewhere; allow the type-compatible clashes.
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    fn nvim_get_in_assert_fails() -> c_int;
+    fn nvim_get_global_busy() -> c_int;
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn xfree(ptr: *mut std::ffi::c_void);
 }
 
 use std::ffi::c_char;
+
+/// Display error message with full control over kind, highlight, and multiline.
+///
+/// This is the core error display function. It handles:
+/// - Exception throwing via cause_errthrow()
+/// - assert_fails() tracking
+/// - v:errmsg setting
+/// - Silent error redirection
+/// - Source info display via msg_source()
+/// - Message display via msg_keep()
+///
+/// # Arguments
+/// * `s` - The error message string (NUL-terminated)
+/// * `kind` - Message kind for ext_messages (e.g., "emsg")
+/// * `hl_id` - Highlight group ID (typically HLF_E for errors)
+/// * `multiline` - If true, handle embedded newlines specially
+///
+/// # Returns
+/// * `true` (1) if wait_return() was not called
+/// * `false` (0) if wait_return() was called
+///
+/// # Safety
+/// - `s` and `kind` must be valid NUL-terminated C strings
+#[export_name = "emsg_multiline"]
+#[must_use]
+pub unsafe extern "C" fn rs_emsg_multiline(
+    s: *const c_char,
+    kind: *const c_char,
+    hl_id: c_int,
+    multiline: c_int,
+) -> c_int {
+    // Skip this if not giving error messages at the moment.
+    if nvim_emsg_not_now() != 0 {
+        return 1;
+    }
+
+    let called = nvim_get_called_emsg();
+    nvim_set_called_emsg(called + 1);
+
+    // If "emsg_severe" is true: When an error exception is to be thrown,
+    // prefer this message over previous messages for the same command.
+    let severe = nvim_get_emsg_severe();
+    nvim_set_emsg_severe(0);
+
+    let emsg_off = nvim_get_emsg_off();
+    let debug_t = nvim_p_debug_contains(c_int::from(b't'));
+    if emsg_off == 0 || debug_t != 0 {
+        // Cause a throw of an error exception if appropriate.
+        let mut ignore: c_int = 0;
+        // SAFETY: ignore is a local variable, valid for the duration of the call.
+        if nvim_cause_errthrow(s, multiline, severe, std::ptr::addr_of_mut!(ignore)) != 0 {
+            if ignore == 0 {
+                let did = nvim_get_did_emsg();
+                nvim_set_did_emsg(did + 1);
+            }
+            return 1;
+        }
+
+        if nvim_get_in_assert_fails() != 0 && nvim_get_emsg_assert_fails_msg().is_null() {
+            nvim_set_emsg_assert_fails_msg(nvim_xstrdup(s));
+            nvim_set_emsg_assert_fails_lnum(nvim_get_sourcing_lnum());
+            nvim_free_emsg_assert_fails_context();
+            let sname = nvim_get_sourcing_name();
+            let ctx: *const c_char = if sname.is_null() { c"".as_ptr() } else { sname };
+            nvim_set_emsg_assert_fails_context(nvim_xstrdup(ctx));
+        }
+
+        // set "v:errmsg", also when using ":silent! cmd"
+        nvim_set_vim_var_errmsg(s);
+
+        // When using ":silent! cmd" ignore error messages.
+        // But do write it to the redirection file.
+        if nvim_get_emsg_silent() != 0 {
+            if nvim_get_emsg_noredir() == 0 {
+                crate::output_core::rs_msg_start();
+                let p = nvim_get_emsg_source();
+                if !p.is_null() {
+                    let p_len = libc_strlen(p.cast());
+                    // Append newline then write (p_len + 1 bytes including newline)
+                    // SAFETY: newline '\n' = 10, which fits in i8 without wrap.
+                    #[allow(clippy::cast_possible_wrap)]
+                    p.add(p_len).write(10i8); // '\n'
+                    nvim_redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
+                    xfree(p.cast());
+                }
+                let p = nvim_get_emsg_lnum();
+                if !p.is_null() {
+                    let p_len = libc_strlen(p.cast());
+                    #[allow(clippy::cast_possible_wrap)]
+                    p.add(p_len).write(10i8); // '\n'
+                    nvim_redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
+                    xfree(p.cast());
+                }
+                let s_len = libc_strlen(s.cast());
+                nvim_redir_write(s, isize::try_from(s_len).unwrap_or(isize::MAX));
+            }
+            return 1;
+        }
+
+        // Log editor errors as INFO (no Rust equivalent of ILOG/DLOG; skip logging)
+
+        nvim_set_ex_exitval(1);
+
+        // Reset msg_silent, an error causes messages to be switched back on.
+        nvim_set_msg_silent(0);
+        nvim_set_cmd_silent(0);
+
+        if nvim_get_global_busy() != 0 {
+            // break :global command
+            nvim_inc_global_busy();
+        }
+
+        if nvim_get_p_eb() != 0 {
+            nvim_beep_flush(); // also includes flush_buffers()
+        } else {
+            nvim_flush_buffers_minimal(); // flush internal buffers
+        }
+
+        let did = nvim_get_did_emsg();
+        nvim_set_did_emsg(did + 1); // flag for DoOneCmd()
+    }
+
+    nvim_set_emsg_on_display(1); // remember there is an error message
+    if nvim_get_msg_scrolled() != 0 {
+        nvim_set_need_wait_return(1); // needed in case emsg() is called after
+                                      // wait_return() has reset need_wait_return
+    }
+    crate::display::rs_msg_ext_set_kind(kind);
+
+    // Display name and line number for the source of the error.
+    nvim_set_msg_scroll(1);
+    let save_skip_flush = nvim_get_msg_ext_skip_flush();
+    nvim_set_msg_ext_skip_flush(1);
+    msg_source(hl_id);
+
+    // Display the error message itself.
+    nvim_set_msg_nowait(0); // Wait for this msg.
+    let rv = crate::output_core::msg_keep_impl(s, hl_id, 0, multiline);
+    nvim_set_msg_ext_skip_flush(save_skip_flush);
+    rv
+}
+
+/// Compute the length of a NUL-terminated byte string.
+///
+/// # Safety
+/// `s` must point to a valid NUL-terminated sequence of bytes.
+const unsafe fn libc_strlen(s: *const u8) -> usize {
+    let mut len = 0;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
+}
 
 /// Display a simple error message.
 ///
@@ -494,7 +681,7 @@ use std::ffi::c_char;
 #[must_use]
 pub unsafe extern "C" fn rs_emsg(s: *const c_char) -> c_int {
     static KIND: &[u8] = b"emsg\0";
-    emsg_multiline(s, KIND.as_ptr().cast::<c_char>(), HLF_E, 0)
+    rs_emsg_multiline(s, KIND.as_ptr().cast::<c_char>(), HLF_E, 0)
 }
 
 /// Display an error message with kind and highlight.
@@ -521,7 +708,7 @@ pub unsafe extern "C" fn rs_emsg_multiline_full(
     hl_id: c_int,
     multiline: c_int,
 ) -> c_int {
-    emsg_multiline(s, kind, hl_id, multiline)
+    rs_emsg_multiline(s, kind, hl_id, multiline)
 }
 
 /// Display an internal error message.
@@ -604,7 +791,7 @@ pub const IEMSG_PREFIX: &[u8] = b"internal error: \0";
 /// - `s` and `kind` must be valid NUL-terminated C strings
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_multiline_hl(s: *const c_char, kind: *const c_char) -> c_int {
-    emsg_multiline(s, kind, HLF_E, 1)
+    rs_emsg_multiline(s, kind, HLF_E, 1)
 }
 
 /// Check if error output is currently possible.

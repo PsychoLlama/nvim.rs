@@ -1384,6 +1384,12 @@ bool nvim_get_global_busy(void)
   return global_busy;
 }
 
+/// Increment global_busy (for breaking :global command on error)
+void nvim_inc_global_busy(void)
+{
+  global_busy++;
+}
+
 /// Check if messaging is allowed
 bool nvim_messaging(void)
 {

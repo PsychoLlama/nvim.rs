@@ -356,6 +356,33 @@ void nvim_set_did_emsg(int val) { did_emsg = val; }
 int nvim_get_called_emsg(void) { return called_emsg; }
 void nvim_set_called_emsg(int val) { called_emsg = val; }
 
+// Forward declarations for static functions used by Phase 4 accessors below
+static int emsg_not_now(void);
+static char *get_emsg_source(void);
+static char *get_emsg_lnum(void);
+
+// Phase 4: emsg_multiline accessors
+int nvim_get_ex_exitval(void) { return ex_exitval; }
+void nvim_set_ex_exitval(int val) { ex_exitval = val; }
+int nvim_get_p_eb(void) { return p_eb ? 1 : 0; }
+void nvim_flush_buffers_minimal(void) { flush_buffers(FLUSH_MINIMAL); }
+// Wrappers for static functions used by emsg_multiline:
+int nvim_emsg_not_now(void) { return emsg_not_now(); }
+int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore)
+{
+  return cause_errthrow(s, multiline, severe, ignore) ? 1 : 0;
+}
+const char *nvim_get_emsg_assert_fails_msg(void) { return emsg_assert_fails_msg; }
+void nvim_set_emsg_assert_fails_msg(char *val) { emsg_assert_fails_msg = val; }
+int nvim_get_emsg_assert_fails_lnum(void) { return (int)emsg_assert_fails_lnum; }
+void nvim_set_emsg_assert_fails_lnum(int val) { emsg_assert_fails_lnum = (linenr_T)val; }
+void nvim_free_emsg_assert_fails_context(void) { xfree(emsg_assert_fails_context); }
+void nvim_set_emsg_assert_fails_context(char *val) { emsg_assert_fails_context = val; }
+void nvim_set_vim_var_errmsg(const char *s) { set_vim_var_string(VV_ERRMSG, s, -1); }
+void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxlen); }
+char *nvim_get_emsg_source(void) { return get_emsg_source(); }
+char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
+
 int nvim_get_need_fileinfo(void) { return need_fileinfo ? 1 : 0; }
 void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
 
@@ -967,123 +994,7 @@ static int emsg_not_now(void)
   return false;
 }
 
-bool emsg_multiline(const char *s, const char *kind, int hl_id, bool multiline)
-{
-  bool ignore = false;
-
-  // Skip this if not giving error messages at the moment.
-  if (emsg_not_now()) {
-    return true;
-  }
-
-  called_emsg++;
-
-  // If "emsg_severe" is true: When an error exception is to be thrown,
-  // prefer this message over previous messages for the same command.
-  bool severe = emsg_severe;
-  emsg_severe = false;
-
-  if (!emsg_off || vim_strchr(p_debug, 't') != NULL) {
-    // Cause a throw of an error exception if appropriate.  Don't display
-    // the error message in this case.  (If no matching catch clause will
-    // be found, the message will be displayed later on.)  "ignore" is set
-    // when the message should be ignored completely (used for the
-    // interrupt message).
-    if (cause_errthrow(s, multiline, severe, &ignore)) {
-      if (!ignore) {
-        did_emsg++;
-      }
-      return true;
-    }
-
-    if (in_assert_fails && emsg_assert_fails_msg == NULL) {
-      emsg_assert_fails_msg = xstrdup(s);
-      emsg_assert_fails_lnum = SOURCING_LNUM;
-      xfree(emsg_assert_fails_context);
-      emsg_assert_fails_context = xstrdup(SOURCING_NAME == NULL ? "" : SOURCING_NAME);
-    }
-
-    // set "v:errmsg", also when using ":silent! cmd"
-    set_vim_var_string(VV_ERRMSG, s, -1);
-
-    // When using ":silent! cmd" ignore error messages.
-    // But do write it to the redirection file.
-    if (emsg_silent != 0) {
-      if (!emsg_noredir) {
-        msg_start();
-        char *p = get_emsg_source();
-        if (p != NULL) {
-          const size_t p_len = strlen(p);
-          p[p_len] = '\n';
-          redir_write(p, (ptrdiff_t)p_len + 1);
-          xfree(p);
-        }
-        p = get_emsg_lnum();
-        if (p != NULL) {
-          const size_t p_len = strlen(p);
-          p[p_len] = '\n';
-          redir_write(p, (ptrdiff_t)p_len + 1);
-          xfree(p);
-        }
-        redir_write(s, (ptrdiff_t)strlen(s));
-      }
-
-      // Log (silent) errors as debug messages.
-      if (SOURCING_NAME != NULL && SOURCING_LNUM != 0) {
-        DLOG("(:silent) %s (%s (line %" PRIdLINENR "))",
-             s, SOURCING_NAME, SOURCING_LNUM);
-      } else {
-        DLOG("(:silent) %s", s);
-      }
-
-      return true;
-    }
-
-    // Log editor errors as INFO.
-    if (SOURCING_NAME != NULL && SOURCING_LNUM != 0) {
-      ILOG("%s (%s (line %" PRIdLINENR "))", s, SOURCING_NAME, SOURCING_LNUM);
-    } else {
-      ILOG("%s", s);
-    }
-
-    ex_exitval = 1;
-
-    // Reset msg_silent, an error causes messages to be switched back on.
-    msg_silent = 0;
-    cmd_silent = false;
-
-    if (global_busy) {        // break :global command
-      global_busy++;
-    }
-
-    if (p_eb) {
-      beep_flush();           // also includes flush_buffers()
-    } else {
-      flush_buffers(FLUSH_MINIMAL);  // flush internal buffers
-    }
-    did_emsg++;               // flag for DoOneCmd()
-  }
-
-  emsg_on_display = true;     // remember there is an error message
-  if (msg_scrolled != 0) {
-    need_wait_return = true;  // needed in case emsg() is called after
-  }                           // wait_return() has reset need_wait_return
-                              // and a redraw is expected because
-                              // msg_scrolled is non-zero
-  msg_ext_set_kind(kind);
-
-  // Display name and line number for the source of the error.
-  msg_scroll = true;
-  bool save_msg_skip_flush = msg_ext_skip_flush;
-  msg_ext_skip_flush = true;
-  msg_source(hl_id);
-
-  // Display the error message itself.
-  msg_nowait = false;  // Wait for this msg.
-  int rv = msg_keep(s, hl_id, false, multiline);
-  msg_ext_skip_flush = save_msg_skip_flush;
-  return rv;
-}
+// emsg_multiline() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_emsg_multiline)
 
 /// emsg() - display an error message
 ///

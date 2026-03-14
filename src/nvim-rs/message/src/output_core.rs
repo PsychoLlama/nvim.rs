@@ -151,7 +151,12 @@ static ENTERED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-unsafe fn msg_keep_impl(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int {
+pub(crate) unsafe fn msg_keep_impl(
+    s: *const c_char,
+    hl_id: c_int,
+    keep: c_int,
+    multiline: c_int,
+) -> c_int {
     use std::sync::atomic::Ordering;
 
     if keep != 0 && multiline != 0 {

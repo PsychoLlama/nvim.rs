@@ -83,6 +83,7 @@ void msg_scroll_up(bool may_throttle, bool zerocmd);
 void msg_clr_eos_force(void);
 void msg_reset_scroll(void);
 void msg_scroll_flush(void);
+bool emsg_multiline(const char *s, const char *kind, int hl_id, bool multiline);
 
 // Phase 1: Simple leaf functions migrated to Rust
 bool msg(const char *s, int hl_id);

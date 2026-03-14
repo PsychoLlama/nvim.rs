@@ -63,8 +63,6 @@ extern "C" {
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_get_did_wait_return() -> c_int;
     fn nvim_get_emsg_silent() -> c_int;
-    // nvim_get_in_assert_fails returns bool (defined in normal_shim.c)
-    fn nvim_get_in_assert_fails() -> bool;
     fn nvim_ui_has_messages() -> c_int;
     // nvim_ui_flush is defined in change_ffi.c
     fn nvim_ui_flush();
@@ -94,6 +92,13 @@ extern "C" {
     fn nvim_set_msg_wait(val: c_int);
     fn nvim_set_msg_hist_max(val: c_int);
     fn msg_hist_clear(keep: c_int);
+}
+
+// nvim_get_in_assert_fails returns bool in C (normal_shim.c) but other modules
+// declare it as c_int. Use bool here to match the actual signature.
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    fn nvim_get_in_assert_fails() -> bool;
 }
 
 // ============================================================================
