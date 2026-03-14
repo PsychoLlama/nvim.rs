@@ -90,14 +90,8 @@ extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
 // Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
 
 // Phase 9.2: state_ops.rs Rust implementations
-extern void rs_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
-                                      int si_cchar, reg_extmatch_T *extmatch);
 extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 
-// Phase 9.3: extmatch comparison and cur_state_set_matchcont
-extern int rs_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b);
-extern int rs_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
-                                          int subidx, int pat_idx);
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -738,12 +732,6 @@ bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
   return &bp[idx];
 }
 
-void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
-                                  int si_cchar, reg_extmatch_T *extmatch)
-{
-  rs_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, extmatch);
-}
-
 /// Call update_si_attr for item at index
 void nvim_syn_update_si_attr(int idx)
 {
@@ -754,19 +742,6 @@ void nvim_syn_update_si_attr(int idx)
 
 /// Compare two extmatch pointers (for syn_stack_equal)
 /// Returns 1 if they match, 0 if different, -1 if needs string comparison
-int nvim_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b)
-{
-  return rs_syn_extmatch_equal(a, b);
-}
-
-/// Compare extmatch strings at given sub-index with ignore-case from pattern
-/// Returns 1 if equal, 0 if different
-int nvim_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
-                                     int subidx, int pat_idx)
-{
-  return rs_syn_extmatch_strings_equal(a, b, subidx, pat_idx);
-}
-
 /// Get the sp_ic (ignore case) flag for a pattern at index
 int nvim_synblock_pattern_ic(int pat_idx)
 {
