@@ -781,12 +781,12 @@ pub unsafe extern "C" fn rs_multiqueue_has_parent(mq: MultiQueueHandle) -> c_int
 /// # Safety
 ///
 /// `mq` may be null (will return 0 if null)
-#[no_mangle]
-pub unsafe extern "C" fn rs_pending_events(mq: MultiQueueHandle) -> c_int {
+#[unsafe(export_name = "pending_events")]
+pub unsafe extern "C" fn rs_pending_events(mq: MultiQueueHandle) -> bool {
     if mq.is_null() {
-        return 0;
+        return false;
     }
-    c_int::from(rs_multiqueue_empty(mq) == 0)
+    rs_multiqueue_empty(mq) == 0
 }
 
 /// Get the size of thread_events from a Loop (pure Rust implementation)

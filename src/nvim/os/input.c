@@ -59,6 +59,7 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_rstream_is_closed(RStream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define loop_get_events(l) rs_loop_get_events(l)
+extern bool pending_events(MultiQueue *events);
 
 void input_start(void)
 {
@@ -596,10 +597,3 @@ static void read_error_exit(void)
   preserve_exit(_("Nvim: Error reading input, exiting...\n"));
 }
 
-// Rust implementation in nvim-event crate
-extern bool rs_pending_events(MultiQueue *events);
-
-static bool pending_events(MultiQueue *events)
-{
-  return rs_pending_events(events);
-}
