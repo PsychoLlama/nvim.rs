@@ -592,20 +592,6 @@ char *nvim_ex2_buf_get_b_p_syn(buf_T *buf)
   return buf->b_p_syn;
 }
 
-
-extern void rs_ex_cc(void *eap);
-extern void rs_ex_cnext(void *eap);
-
-void nvim_ex2_ex_cc(exarg_T *eap)
-{
-  rs_ex_cc(eap);
-}
-
-void nvim_ex2_ex_cnext(exarg_T *eap)
-{
-  rs_ex_cnext(eap);
-}
-
 bool nvim_ex2_get_got_int(void)
 {
   return got_int;
