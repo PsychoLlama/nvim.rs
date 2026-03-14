@@ -258,6 +258,22 @@ extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
 extern void rs_ex_quit(exarg_T *eap);
+// Phase 2 (batch plan) Rust FFI declarations
+extern void rs_ex_bunload(exarg_T *eap);
+extern void rs_ex_autocmd(exarg_T *eap);
+extern void rs_ex_doautocmd(exarg_T *eap);
+extern void rs_ex_quitall(exarg_T *eap);
+extern void rs_ex_setfiletype(exarg_T *eap);
+extern void rs_ex_shada(exarg_T *eap);
+extern void rs_ex_folddo(exarg_T *eap);
+
+extern void rs_ex_redrawtabline(exarg_T *eap);
+extern void rs_ex_join(exarg_T *eap);
+extern void rs_ex_put(exarg_T *eap);
+extern void rs_ex_iput(exarg_T *eap);
+extern void rs_ex_equal(exarg_T *eap);
+extern void rs_ex_recover(exarg_T *eap);
+extern void rs_do_exbuffer(exarg_T *eap);
 // Phase 1 (batch plan) Rust FFI declarations
 extern void rs_ex_buffer(exarg_T *eap);
 extern void rs_ex_bmodified(exarg_T *eap);
@@ -1999,29 +2015,13 @@ int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int
 
 static void ex_autocmd(exarg_T *eap)
 {
-  // Disallow autocommands in secure mode.
-  if (secure) {
-    secure = 2;
-    eap->errmsg = _(e_curdir);
-  } else if (eap->cmdidx == CMD_autocmd) {
-    do_autocmd(eap, eap->arg, eap->forceit);
-  } else {
-    do_augroup(eap->arg, eap->forceit);
-  }
+  rs_ex_autocmd(eap);
 }
 
 /// ":doautocmd": Apply the automatic commands to the current buffer.
 static void ex_doautocmd(exarg_T *eap)
 {
-  char *arg = eap->arg;
-  int call_do_modelines = check_nomodeline(&arg);
-  bool did_aucmd;
-
-  do_doautocmd(arg, false, &did_aucmd);
-  // Only when there is no <nomodeline>.
-  if (call_do_modelines && did_aucmd) {
-    do_modelines(0);
-  }
+  rs_ex_doautocmd(eap);
 }
 
 /// :[N]bunload[!] [N] [bufname] unload buffer
@@ -2029,13 +2029,7 @@ static void ex_doautocmd(exarg_T *eap)
 /// :[N]bwipeout[!] [N] [bufname] delete buffer really
 static void ex_bunload(exarg_T *eap)
 {
-  eap->errmsg = do_bufdel(eap->cmdidx == CMD_bdelete
-                          ? DOBUF_DEL
-                          : eap->cmdidx == CMD_bwipeout
-                          ? DOBUF_WIPE
-                          : DOBUF_UNLOAD,
-                          eap->arg, eap->addr_count, (int)eap->line1, (int)eap->line2,
-                          eap->forceit);
+  rs_ex_bunload(eap);
 }
 
 /// :[N]buffer [N]       to buffer N
@@ -2251,15 +2245,7 @@ int before_quit_all(exarg_T *eap)
 /// ":qall": try to quit all windows
 static void ex_quitall(exarg_T *eap)
 {
-  if (before_quit_all(eap) == FAIL) {
-    return;
-  }
-  exiting = true;
-  if (!eap->forceit && check_changed_any(false, false)) {
-    not_exiting();
-    return;
-  }
-  getout(0);
+  rs_ex_quitall(eap);
 }
 
 /// ":restart": restart the Nvim server (using ":qall!").
@@ -2634,18 +2620,7 @@ static void ex_preserve(exarg_T *eap)
 /// ":recover".
 static void ex_recover(exarg_T *eap)
 {
-  // Set recoverymode right away to avoid the ATTENTION prompt.
-  recoverymode = true;
-  if (!check_changed(curbuf, (p_awa ? CCGD_AW : 0)
-                     | CCGD_MULTWIN
-                     | (eap->forceit ? CCGD_FORCEIT : 0)
-                     | CCGD_EXCMD)
-
-      && (*eap->arg == NUL
-          || setfname(curbuf, eap->arg, NULL, true) == OK)) {
-    ml_recover(true);
-  }
-  recoverymode = false;
+  rs_ex_recover(eap);
 }
 
 /// Command modifier used in a wrong way.
@@ -3578,13 +3553,7 @@ static void ex_pwd(exarg_T *eap)
 /// ":=".
 static void ex_equal(exarg_T *eap)
 {
-  if (*eap->arg != NUL && *eap->arg != '|') {
-    // equivalent to :lua= expr
-    ex_lua(eap);
-  } else {
-    eap->nextcmd = find_nextcmd(eap->arg);
-    smsg(0, "%" PRId64, (int64_t)eap->line2);
-  }
+  rs_ex_equal(eap);
 }
 
 static void ex_sleep(exarg_T *eap)
@@ -3731,29 +3700,13 @@ static void ex_operators(exarg_T *eap)
 /// ":put".
 static void ex_put(exarg_T *eap)
 {
-  // ":0put" works like ":1put!".
-  if (eap->line2 == 0) {
-    eap->line2 = 1;
-    eap->forceit = true;
-  }
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1,
-         PUT_LINE|PUT_CURSLINE);
+  rs_ex_put(eap);
 }
 
 /// ":iput".
 static void ex_iput(exarg_T *eap)
 {
-  // ":0iput" works like ":1iput!".
-  if (eap->line2 == 0) {
-    eap->line2 = 1;
-    eap->forceit = true;
-  }
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1L,
-         PUT_LINE|PUT_CURSLINE|PUT_FIXINDENT);
+  rs_ex_iput(eap);
 }
 
 /// Handle ":copy" and ":move".
@@ -3823,20 +3776,7 @@ static int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdprev
 /// ":join".
 static void ex_join(exarg_T *eap)
 {
-  curwin->w_cursor.lnum = eap->line1;
-  if (eap->line1 == eap->line2) {
-    if (eap->addr_count >= 2) {     // :2,2join does nothing
-      return;
-    }
-    if (eap->line2 == curbuf->b_ml.ml_line_count) {
-      beep_flush();
-      return;
-    }
-    eap->line2++;
-  }
-  do_join((size_t)((ssize_t)eap->line2 - eap->line1 + 1), !eap->forceit, true, true, true);
-  beginline(BL_WHITE | BL_FIX);
-  ex_may_print(eap);
+  rs_ex_join(eap);
 }
 
 /// ":[addr]@r": execute register
@@ -4042,17 +3982,7 @@ static void ex_redrawstatus(exarg_T *eap)
 /// ":redrawtabline": force redraw of the tabline
 static void ex_redrawtabline(exarg_T *eap FUNC_ATTR_UNUSED)
 {
-  const int r = RedrawingDisabled;
-  const int p = p_lz;
-
-  RedrawingDisabled = 0;
-  p_lz = false;
-
-  draw_tabline();
-
-  RedrawingDisabled = r;
-  p_lz = p;
-  ui_flush();
+  rs_ex_redrawtabline(eap);
 }
 
 static void close_redir(void)
@@ -4839,16 +4769,7 @@ char *expand_sfile(char *arg)
 /// ":rshada" and ":wshada".
 static void ex_shada(exarg_T *eap)
 {
-  char *save_shada = p_shada;
-  if (*p_shada == NUL) {
-    p_shada = "'100";
-  }
-  if (eap->cmdidx == CMD_rviminfo || eap->cmdidx == CMD_rshada) {
-    rs_shada_read_everything(eap->arg, eap->forceit, false);
-  } else {
-    rs_shada_write_file(eap->arg, eap->forceit);
-  }
-  p_shada = save_shada;
+  rs_ex_shada(eap);
 }
 
 /// Make a dialog message in "buff[DIALOG_MSG_SIZE]".
@@ -4908,19 +4829,7 @@ void filetype_maybe_enable(void)
 /// ":setfiletype [FALLBACK] {name}"
 static void ex_setfiletype(exarg_T *eap)
 {
-  if (curbuf->b_did_filetype) {
-    return;
-  }
-
-  char *arg = eap->arg;
-  if (strncmp(arg, "FALLBACK ", 9) == 0) {
-    arg += 9;
-  }
-
-  set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL(arg), OPT_LOCAL);
-  if (arg != eap->arg) {
-    curbuf->b_did_filetype = false;
-  }
+  rs_ex_setfiletype(eap);
 }
 
 static void ex_digraphs(exarg_T *eap)
@@ -4957,15 +4866,7 @@ static void ex_foldopen(exarg_T *eap)
 
 static void ex_folddo(exarg_T *eap)
 {
-  // First set the marks for all lines closed/open.
-  for (linenr_T lnum = eap->line1; lnum <= eap->line2; lnum++) {
-    if (hasFolding(curwin, lnum, NULL, NULL) == (eap->cmdidx == CMD_folddoclosed)) {
-      ml_setmarked(lnum);
-    }
-  }
-
-  global_exe(eap->arg);  // Execute the command on the marked lines.
-  ml_clearmarked();      // clear rest of the marks
+  rs_ex_folddo(eap);
 }
 
 
@@ -6563,4 +6464,199 @@ void nvim_docmd_ex_psearch(exarg_T *eap)
   g_do_tagpreview = (int)p_pvh;
   ex_findpat(eap);
   g_do_tagpreview = 0;
+}
+
+// =============================================================================
+// Phase 2 (batch plan) accessor functions for Rust FFI
+// =============================================================================
+
+/// Wrapper for do_bufdel (buffer unload/delete/wipe).
+char *nvim_docmd_do_bufdel(int command, const char *arg, int addr_count, int start_bnr,
+                            int end_bnr, int forceit)
+{
+  return do_bufdel(command, (char *)arg, addr_count, start_bnr, end_bnr, forceit);
+}
+
+/// CMD enum values for ex_bunload.
+int nvim_docmd_cmd_bunload(void) { return (int)CMD_bunload; }
+
+/// Wrapper for do_autocmd.
+void nvim_docmd_do_autocmd(exarg_T *eap, const char *arg, int forceit)
+{
+  do_autocmd(eap, (char *)arg, forceit);
+}
+
+/// Wrapper for do_augroup.
+void nvim_docmd_do_augroup(const char *arg, int forceit) { do_augroup((char *)arg, forceit); }
+
+/// Get e_curdir error message string.
+const char *nvim_docmd_get_e_curdir(void) { return _(e_curdir); }
+
+/// Wrapper for check_nomodeline.
+int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
+
+/// CMD_autocmd value.
+int nvim_docmd_cmd_autocmd(void) { return (int)CMD_autocmd; }
+
+/// Wrapper for before_quit_all.
+int nvim_docmd_before_quit_all(exarg_T *eap) { return before_quit_all(eap); }
+
+/// ex_setfiletype logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_setfiletype(exarg_T *eap)
+{
+  if (curbuf->b_did_filetype) {
+    return;
+  }
+  char *arg = eap->arg;
+  if (strncmp(arg, "FALLBACK ", 9) == 0) {
+    arg += 9;
+  }
+  set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL(arg), OPT_LOCAL);
+  if (arg != eap->arg) {
+    curbuf->b_did_filetype = false;
+  }
+}
+
+/// ex_shada logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_shada(exarg_T *eap)
+{
+  char *save_shada = p_shada;
+  if (*p_shada == NUL) {
+    p_shada = "'100";
+  }
+  if (eap->cmdidx == CMD_rviminfo || eap->cmdidx == CMD_rshada) {
+    rs_shada_read_everything(eap->arg, eap->forceit, false);
+  } else {
+    rs_shada_write_file(eap->arg, eap->forceit);
+  }
+  p_shada = save_shada;
+}
+
+/// ex_folddo logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_folddo(exarg_T *eap)
+{
+  for (linenr_T lnum = eap->line1; lnum <= eap->line2; lnum++) {
+    if (hasFolding(curwin, lnum, NULL, NULL) == (eap->cmdidx == CMD_folddoclosed)) {
+      ml_setmarked(lnum);
+    }
+  }
+  global_exe(eap->arg);
+  ml_clearmarked();
+}
+
+/// Wrapper for close_redir (static).
+void nvim_docmd_do_close_redir(void) { close_redir(); }
+
+/// Wrapper for ex_redrawtabline logic.
+void nvim_docmd_ex_redrawtabline(void)
+{
+  const int r = RedrawingDisabled;
+  const int p = p_lz;
+  RedrawingDisabled = 0;
+  p_lz = false;
+  draw_tabline();
+  RedrawingDisabled = r;
+  p_lz = p;
+  ui_flush();
+}
+
+/// ex_join logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_join(exarg_T *eap)
+{
+  curwin->w_cursor.lnum = eap->line1;
+  if (eap->line1 == eap->line2) {
+    if (eap->addr_count >= 2) {
+      return;
+    }
+    if (eap->line2 == curbuf->b_ml.ml_line_count) {
+      beep_flush();
+      return;
+    }
+    eap->line2++;
+  }
+  do_join((size_t)((ssize_t)eap->line2 - eap->line1 + 1), !eap->forceit, true, true, true);
+  beginline(BL_WHITE | BL_FIX);
+  ex_may_print(eap);
+}
+
+/// ex_put logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_put(exarg_T *eap)
+{
+  if (eap->line2 == 0) {
+    eap->line2 = 1;
+    eap->forceit = true;
+  }
+  curwin->w_cursor.lnum = eap->line2;
+  check_cursor_col(curwin);
+  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1, PUT_LINE|PUT_CURSLINE);
+}
+
+/// ex_iput logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_iput(exarg_T *eap)
+{
+  if (eap->line2 == 0) {
+    eap->line2 = 1;
+    eap->forceit = true;
+  }
+  curwin->w_cursor.lnum = eap->line2;
+  check_cursor_col(curwin);
+  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1L, PUT_LINE|PUT_CURSLINE|PUT_FIXINDENT);
+}
+
+/// ex_equal logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_equal(exarg_T *eap)
+{
+  if (*eap->arg != NUL && *eap->arg != '|') {
+    ex_lua(eap);
+  } else {
+    eap->nextcmd = find_nextcmd(eap->arg);
+    smsg(0, "%" PRId64, (int64_t)eap->line2);
+  }
+}
+
+/// Wrapper for filetype_plugin_enable.
+void nvim_docmd_filetype_plugin_enable(void) { filetype_plugin_enable(); }
+
+/// Wrapper for filetype_maybe_enable.
+void nvim_docmd_filetype_maybe_enable(void) { filetype_maybe_enable(); }
+
+/// Wrapper for get_prevdir(scope).
+char *nvim_docmd_get_prevdir(int scope) { return get_prevdir((CdScope)scope); }
+
+/// Wrapper for tabpage_close(forceit).
+void nvim_docmd_tabpage_close(int forceit) { tabpage_close(forceit); }
+
+/// Wrapper for get_bad_name expansion function (pass function pointer via index).
+/// Returns the idx-th bad= option value string.
+char *nvim_docmd_get_bad_name(int idx)
+{
+  return get_bad_name(NULL, idx);
+}
+
+/// ex_recover logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_recover(exarg_T *eap)
+{
+  recoverymode = true;
+  if (!check_changed(curbuf, (p_awa ? CCGD_AW : 0)
+                     | CCGD_MULTWIN
+                     | (eap->forceit ? CCGD_FORCEIT : 0)
+                     | CCGD_EXCMD)
+
+      && (*eap->arg == NUL
+          || setfname(curbuf, eap->arg, NULL, true) == OK)) {
+    ml_recover(true);
+  }
+  recoverymode = false;
+}
+
+/// Wrapper for back_to_current_window.
+void nvim_docmd_back_to_current_window(win_T *curwin_save)
+{
+  back_to_current_window(curwin_save);
+}
+
+/// Wrapper for do_exbuffer (Phase 2 - 15 lines).
+void nvim_docmd_do_exbuffer_full(exarg_T *eap)
+{
+  do_exbuffer(eap);
 }

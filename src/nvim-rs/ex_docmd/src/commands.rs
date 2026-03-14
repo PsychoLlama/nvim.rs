@@ -1696,3 +1696,177 @@ pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_set_pressedreturn(val: bool) {
     nvim_docmd_set_pressedreturn(val);
 }
+
+// =============================================================================
+// Phase 2 (batch plan): Medium Ex Command Handlers
+// =============================================================================
+
+extern "C" {
+    // Phase 2 C accessors
+    fn nvim_docmd_do_bufdel(
+        command: c_int,
+        arg: *const c_char,
+        addr_count: c_int,
+        start_bnr: c_int,
+        end_bnr: c_int,
+        forceit: c_int,
+    ) -> *mut c_char;
+    fn nvim_docmd_do_autocmd(eap: ExArgHandle, arg: *const c_char, forceit: c_int);
+    fn nvim_docmd_do_augroup(arg: *const c_char, forceit: c_int);
+    fn nvim_docmd_get_e_curdir() -> *const c_char;
+    fn nvim_get_secure() -> c_int;
+    fn nvim_set_secure(val: c_int);
+    fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
+    fn nvim_docmd_cmd_autocmd() -> c_int;
+    fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_ex_shada(eap: ExArgHandle);
+    fn nvim_docmd_ex_folddo(eap: ExArgHandle);
+    fn nvim_docmd_ex_redrawtabline();
+    fn nvim_docmd_ex_join(eap: ExArgHandle);
+    fn nvim_docmd_ex_put(eap: ExArgHandle);
+    fn nvim_docmd_ex_iput(eap: ExArgHandle);
+    fn nvim_docmd_ex_equal(eap: ExArgHandle);
+    fn nvim_docmd_ex_recover(eap: ExArgHandle);
+    fn nvim_get_cmd_bdelete() -> c_int;
+    fn nvim_get_cmd_bwipeout() -> c_int;
+    fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
+    fn nvim_docmd_ex_setfiletype(eap: ExArgHandle);
+}
+
+/// DOBUF_* constants for do_bufdel.
+const DOBUF_UNLOAD: c_int = 2;
+const DOBUF_DEL: c_int = 3;
+const DOBUF_WIPE: c_int = 4;
+
+/// ":bunload" / ":bdelete" / ":bwipeout".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let cmd_bdelete = nvim_get_cmd_bdelete();
+    let cmd_bwipeout = nvim_get_cmd_bwipeout();
+    let command = if cmdidx == cmd_bdelete {
+        DOBUF_DEL
+    } else if cmdidx == cmd_bwipeout {
+        DOBUF_WIPE
+    } else {
+        DOBUF_UNLOAD
+    };
+    let arg = nvim_eap_get_arg(eap);
+    let addr_count = nvim_eap_get_addr_count(eap);
+    let line1 = nvim_eap_get_line1(eap);
+    let line2 = nvim_eap_get_line2(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    let errmsg = nvim_docmd_do_bufdel(
+        command,
+        arg as *const c_char,
+        addr_count,
+        line1,
+        line2,
+        forceit as c_int,
+    );
+    nvim_eap_set_errmsg(eap, errmsg);
+}
+
+/// ":autocmd" / ":augroup".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
+    let secure = nvim_get_secure();
+    if secure != 0 {
+        nvim_set_secure(2);
+        let e_curdir = nvim_docmd_get_e_curdir();
+        nvim_eap_set_errmsg_const(eap, e_curdir);
+    } else {
+        let cmdidx = nvim_eap_get_cmdidx(eap);
+        let cmd_autocmd = nvim_docmd_cmd_autocmd();
+        let arg = nvim_eap_get_arg(eap);
+        let forceit = nvim_eap_get_forceit(eap);
+        if cmdidx == cmd_autocmd {
+            nvim_docmd_do_autocmd(eap, arg as *const c_char, forceit as c_int);
+        } else {
+            nvim_docmd_do_augroup(arg as *const c_char, forceit as c_int);
+        }
+    }
+}
+
+/// ":doautocmd".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
+    let mut arg = nvim_eap_get_arg(eap);
+    let call_do_modelines = nvim_docmd_check_nomodeline(&mut arg);
+    let mut did_aucmd = false;
+    do_doautocmd(arg, false, &mut did_aucmd);
+    if call_do_modelines != 0 && did_aucmd {
+        do_modelines(0);
+    }
+}
+
+/// ":quitall".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
+    if nvim_docmd_before_quit_all(eap) == 0 {
+        // FAIL
+        return;
+    }
+    nvim_docmd_set_exiting(1);
+    let forceit = nvim_eap_get_forceit(eap);
+    if !forceit && check_changed_any(false, false) {
+        not_exiting();
+        return;
+    }
+    getout(0);
+}
+
+/// ":setfiletype [FALLBACK] {name}".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_setfiletype(eap: ExArgHandle) {
+    nvim_docmd_ex_setfiletype(eap);
+}
+
+/// ":rshada" / ":wshada".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_shada(eap: ExArgHandle) {
+    nvim_docmd_ex_shada(eap);
+}
+
+/// ":folddo" / ":folddoclosed".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
+    nvim_docmd_ex_folddo(eap);
+}
+
+/// ":redrawtabline".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_redrawtabline(eap: ExArgHandle) {
+    let _ = eap;
+    nvim_docmd_ex_redrawtabline();
+}
+
+/// ":join".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
+    nvim_docmd_ex_join(eap);
+}
+
+/// ":put".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
+    nvim_docmd_ex_put(eap);
+}
+
+/// ":iput".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
+    nvim_docmd_ex_iput(eap);
+}
+
+/// ":=" (equal).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
+    nvim_docmd_ex_equal(eap);
+}
+
+/// ":recover".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
+    nvim_docmd_ex_recover(eap);
+}
