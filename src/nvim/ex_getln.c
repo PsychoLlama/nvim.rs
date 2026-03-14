@@ -259,6 +259,11 @@ extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *stat
 // do_incsearch_highlighting: implemented in Rust (cmdline/search.rs)
 extern bool do_incsearch_highlighting(int firstc, int *search_delim, incsearch_state_T *is_state,
                                       int *skiplen, int *patlen);
+// may_do_incsearch_highlighting: implemented in Rust (cmdline/search.rs)
+extern void rs_may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s);
+// may_do_command_line_next_incsearch: implemented in Rust (cmdline/search.rs)
+extern int rs_may_do_command_line_next_incsearch(int firstc, int count, incsearch_state_T *s,
+                                                 bool next_match);
 // may_add_char_to_search: implemented in Rust (cmdline/search.rs)
 extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
 // draw_cmdline: implemented in Rust (cmdline/screen.rs)
@@ -476,150 +481,10 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
 // do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs);
 // declared below in the extern section.
 
-// May do 'incsearch' highlighting if desired.
+// may_do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs).
 static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s)
 {
-  int skiplen, patlen;
-  int search_delim;
-
-  // Parsing range may already set the last search pattern.
-  // NOTE: must call restore_last_search_pattern() before returning!
-  save_last_search_pattern();
-
-  if (!do_incsearch_highlighting(firstc, &search_delim, s, &skiplen, &patlen)) {
-    restore_last_search_pattern();
-    rs_finish_incsearch_highlighting(0, s, 1);
-    return;
-  }
-
-  // if there is a character waiting, search and redraw later
-  if (char_avail()) {
-    restore_last_search_pattern();
-    s->incsearch_postponed = true;
-    return;
-  }
-  s->incsearch_postponed = false;
-
-  // Use the previous pattern for ":s//".
-  char next_char = ccline.cmdbuff[skiplen + patlen];
-  bool use_last_pat = patlen == 0 && skiplen > 0
-                      && ccline.cmdbuff[skiplen - 1] == next_char;
-
-  if (patlen != 0 || use_last_pat) {
-    ui_busy_start();
-    ui_flush();
-  }
-
-  if (search_first_line == 0) {
-    // start at the original cursor position
-    curwin->w_cursor = s->search_start;
-  } else if (search_first_line > curbuf->b_ml.ml_line_count) {
-    // start after the last line
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    curwin->w_cursor.col = MAXCOL;
-  } else {
-    // start at the first line in the range
-    curwin->w_cursor.lnum = search_first_line;
-    curwin->w_cursor.col = 0;
-  }
-
-  int found = 0;  // do_search() result
-
-  if (patlen != 0 || use_last_pat) {
-    int search_flags = SEARCH_OPT + SEARCH_NOOF + SEARCH_PEEK;
-    if (!p_hls) {
-      search_flags += SEARCH_KEEP;
-    }
-    if (search_first_line != 0) {
-      search_flags += SEARCH_START;
-    }
-    // Set the time limit to half a second.
-    proftime_T tm = profile_setlimit(500);
-    searchit_arg_T sia = { .sa_tm = &tm };
-    ccline.cmdbuff[skiplen + patlen] = NUL;
-    emsg_off++;            // So it doesn't beep if bad expr
-    found = do_search(NULL, firstc == ':' ? '/' : firstc, search_delim,
-                      ccline.cmdbuff + skiplen, (size_t)patlen, count,
-                      search_flags, &sia);
-    emsg_off--;
-    ccline.cmdbuff[skiplen + patlen] = next_char;
-    if (curwin->w_cursor.lnum < search_first_line
-        || curwin->w_cursor.lnum > search_last_line) {
-      // match outside of address range
-      found = 0;
-      curwin->w_cursor = s->search_start;
-    }
-
-    // if interrupted while searching, behave like it failed
-    if (got_int) {
-      vpeekc();               // remove <C-C> from input stream
-      got_int = false;              // don't abandon the command line
-      found = 0;
-    } else if (char_avail()) {
-      // cancelled searching because a char was typed
-      s->incsearch_postponed = true;
-    }
-    ui_busy_stop();
-  } else {
-    set_no_hlsearch(true);  // turn off previous highlight
-    redraw_all_later(UPD_SOME_VALID);
-  }
-
-  highlight_match = found != 0;  // add or remove search match position
-
-  // first restore the old curwin values, so the screen is
-  // positioned in the same way as the actual search command
-  rs_restore_viewstate_win(curwin, &s->old_viewstate);
-  changed_cline_bef_curs(curwin);
-  update_topline(curwin);
-
-  pos_T end_pos = curwin->w_cursor;
-  if (found != 0) {
-    s->match_start = curwin->w_cursor;
-    set_search_match(&curwin->w_cursor);
-    validate_cursor(curwin);
-    s->match_end = curwin->w_cursor;
-    curwin->w_cursor = end_pos;
-    end_pos = s->match_end;
-  }
-
-  // Disable 'hlsearch' highlighting if the pattern matches
-  // everything. Avoids a flash when typing "foo\|".
-  if (!use_last_pat) {
-    next_char = ccline.cmdbuff[skiplen + patlen];
-    ccline.cmdbuff[skiplen + patlen] = NUL;
-    if ((bool)rs_empty_pattern(ccline.cmdbuff + skiplen, (size_t)patlen, search_delim)
-        && !no_hlsearch) {
-      redraw_all_later(UPD_SOME_VALID);
-      set_no_hlsearch(true);
-    }
-    ccline.cmdbuff[skiplen + patlen] = next_char;
-  }
-
-  validate_cursor(curwin);
-
-  // May redraw the status line to show the cursor position.
-  if (p_ru && (curwin->w_status_height > 0 || rs_global_stl_height() > 0)) {
-    curwin->w_redr_status = true;
-  }
-
-  redraw_later(curwin, UPD_SOME_VALID);
-  update_screen();
-  highlight_match = false;
-  restore_last_search_pattern();
-
-  // Leave it at the end to make CTRL-R CTRL-W work.  But not when beyond the
-  // end of the pattern, e.g. for ":s/pat/".
-  if (ccline.cmdbuff[skiplen + patlen] != NUL) {
-    curwin->w_cursor = s->search_start;
-  } else if (found != 0) {
-    curwin->w_cursor = end_pos;
-    curwin->w_valid_cursor = end_pos;  // mark as valid for cmdline_show redraw
-  }
-
-  msg_starthere();
-  redrawcmdline();
-  s->did_incsearch = true;
+  rs_may_do_incsearch_highlighting(firstc, count, s);
 }
 
 // may_add_char_to_search() is implemented in Rust (cmdline crate, search.rs).
@@ -1414,127 +1279,11 @@ static int command_line_execute(VimState *state, int key)
 // May adjust 'incsearch' highlighting for typing CTRL-G and CTRL-T, go to next
 // or previous match.
 // Returns FAIL when calling command_line_not_changed.
+// may_do_command_line_next_incsearch() is implemented in Rust (cmdline crate, search.rs).
 static int may_do_command_line_next_incsearch(int firstc, int count, incsearch_state_T *s,
                                               bool next_match)
-  FUNC_ATTR_NONNULL_ALL
 {
-  int skiplen, patlen, search_delim;
-
-  // Parsing range may already set the last search pattern.
-  // NOTE: must call restore_last_search_pattern() before returning!
-  save_last_search_pattern();
-
-  if (!do_incsearch_highlighting(firstc, &search_delim, s, &skiplen,
-                                 &patlen)) {
-    restore_last_search_pattern();
-    return OK;
-  }
-  if (patlen == 0 && ccline.cmdbuff[skiplen] == NUL) {
-    restore_last_search_pattern();
-    return FAIL;
-  }
-
-  ui_busy_start();
-  ui_flush();
-
-  pos_T t;
-  char *pat;
-  int search_flags = SEARCH_NOOF;
-
-  if (search_delim == ccline.cmdbuff[skiplen]) {
-    pat = last_search_pattern();
-    if (pat == NULL) {
-      restore_last_search_pattern();
-      return FAIL;
-    }
-    skiplen = 0;
-    patlen = (int)last_search_pattern_len();
-  } else {
-    pat = ccline.cmdbuff + skiplen;
-  }
-
-  bool bslsh = false;
-  // do not search for the search end delimiter,
-  // unless it is part of the pattern
-  if (patlen > 2 && firstc == pat[patlen - 1]) {
-    patlen--;
-    if (pat[patlen - 1] == '\\') {
-      pat[patlen - 1] = (char)(uint8_t)firstc;
-      bslsh = true;
-    }
-  }
-
-  if (next_match) {
-    t = s->match_end;
-    if (lt(s->match_start, s->match_end)) {
-      // start searching at the end of the match
-      // not at the beginning of the next column
-      decl(&t);
-    }
-    search_flags += SEARCH_COL;
-  } else {
-    t = s->match_start;
-  }
-  if (!p_hls) {
-    search_flags += SEARCH_KEEP;
-  }
-  emsg_off++;
-  char save = pat[patlen];
-  pat[patlen] = NUL;
-  int found = searchit(curwin, curbuf, &t, NULL,
-                       next_match ? FORWARD : BACKWARD,
-                       pat, (size_t)patlen, count, search_flags,
-                       RE_SEARCH, NULL);
-  emsg_off--;
-  pat[patlen] = save;
-  if (bslsh) {
-    pat[patlen - 1] = '\\';
-  }
-  ui_busy_stop();
-  if (found) {
-    s->search_start = s->match_start;
-    s->match_end = t;
-    s->match_start = t;
-    if (!next_match && firstc != '?') {
-      // move just before the current match, so that
-      // when nv_search finishes the cursor will be
-      // put back on the match
-      s->search_start = t;
-      decl(&s->search_start);
-    } else if (next_match && firstc == '?') {
-      // move just after the current match, so that
-      // when nv_search finishes the cursor will be
-      // put back on the match
-      s->search_start = t;
-      incl(&s->search_start);
-    }
-    if (lt(t, s->search_start) && next_match) {
-      // wrap around
-      s->search_start = t;
-      if (firstc == '?') {
-        incl(&s->search_start);
-      } else {
-        decl(&s->search_start);
-      }
-    }
-
-    set_search_match(&s->match_end);
-    curwin->w_cursor = s->match_start;
-    changed_cline_bef_curs(curwin);
-    update_topline(curwin);
-    validate_cursor(curwin);
-    highlight_match = true;
-    rs_save_viewstate_win(curwin, &s->old_viewstate);
-    redraw_later(curwin, UPD_NOT_VALID);
-    update_screen();
-    highlight_match = false;
-    redrawcmdline();
-    curwin->w_cursor = s->match_end;
-  } else {
-    vim_beep(kOptBoFlagError);
-  }
-  restore_last_search_pattern();
-  return FAIL;
+  return rs_may_do_command_line_next_incsearch(firstc, count, s, next_match);
 }
 
 // command_line_erase_chars() is implemented in Rust (cmdline crate, keys.rs).
@@ -4322,6 +4071,12 @@ void nvim_msg_check(void) { msg_check(); }
 
 // Phase 67 (Phase 5): Accessors for command_line_handle_ctrl_bsl, command_line_insert_reg,
 // and command_line_erase_chars
+
+/// Get p_ru option (ruler) for Rust.
+int nvim_get_p_ru(void) { return p_ru; }
+
+/// Call set_search_match() for Rust.
+void nvim_set_search_match(pos_T *t) { set_search_match(t); }
 
 /// Get new_cmdpos (used by set_cmdline_pos).
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }

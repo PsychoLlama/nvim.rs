@@ -10,7 +10,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Search Direction
@@ -1016,6 +1016,460 @@ pub unsafe extern "C" fn do_incsearch_highlighting_rs(
     nvim_dec_emsg_off();
 
     retval
+}
+
+// =============================================================================
+// may_do_incsearch_highlighting and may_do_command_line_next_incsearch
+// =============================================================================
+
+// Search flag constants (from search.h)
+const SEARCH_OPT: c_int = 0x10;
+const SEARCH_NOOF: c_int = 0x80;
+const SEARCH_START: c_int = 0x100;
+const SEARCH_KEEP: c_int = 0x400;
+const SEARCH_PEEK: c_int = 0x800;
+const SEARCH_COL: c_int = 0x1000;
+
+// Direction constants (from vim_defs.h)
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
+
+// RE_SEARCH (use normal search pattern)
+const RE_SEARCH: c_int = 0;
+
+// UPD_NOT_VALID (from drawscreen.h)
+const UPD_NOT_VALID: c_int = 38;
+
+/// Optional extra arguments for searchit() (matches C searchit_arg_T).
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct SearchitArgT {
+    sa_stop_lnum: i32, // linenr_T
+    sa_tm: *mut u64,   // proftime_T * (proftime_T = uint64_t)
+    sa_timed_out: c_int,
+    sa_wrapped: c_int,
+}
+
+unsafe extern "C" {
+    fn ui_busy_start();
+    fn ui_busy_stop();
+    fn ui_flush();
+    fn vpeekc() -> c_int;
+    fn profile_setlimit(msec: i64) -> u64; // returns proftime_T
+    fn set_no_hlsearch(flag: c_int);
+    fn do_search(
+        oap: *mut c_void,
+        dirc: c_int,
+        search_delim: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        count: c_int,
+        options: c_int,
+        sia: *mut SearchitArgT,
+    ) -> c_int;
+    fn searchit(
+        win: *mut c_void,
+        buf: *mut c_void,
+        pos: *mut PosT,
+        end_pos: *mut PosT,
+        dir: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        count: c_int,
+        options: c_int,
+        pat_use: c_int,
+        extra_arg: *mut SearchitArgT,
+    ) -> c_int;
+    fn nvim_get_search_first_line() -> i32;
+    fn nvim_get_search_last_line() -> i32;
+    fn nvim_get_p_ru() -> c_int;
+    fn nvim_get_no_hlsearch() -> c_int;
+    fn nvim_get_p_hls() -> c_int;
+    fn nvim_curbuf_get_ml_line_count() -> c_int;
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn nvim_win_get_status_height(wp: *mut ()) -> c_int;
+    fn nvim_win_set_redr_status(wp: *mut c_void, val: c_int);
+    fn nvim_win_set_valid_cursor(wp: *mut c_void, lnum: i32, col: c_int, coladd: c_int);
+    fn redraw_later(wp: *mut c_void, redraw_type: c_int);
+    fn nvim_set_search_match(t: *mut PosT);
+    fn nvim_get_got_int_val() -> c_int;
+    fn nvim_set_got_int(val: c_int);
+    fn rs_global_stl_height() -> c_int;
+    fn msg_starthere();
+    fn changed_cline_bef_curs(wp: *mut c_void);
+    fn update_topline(wp: *mut c_void);
+    fn validate_cursor(wp: *mut c_void);
+    fn vim_beep(flag: c_int);
+    fn decl(pos: *mut PosT);
+    fn incl(pos: *mut PosT);
+    fn last_search_pattern() -> *mut c_char;
+    fn last_search_pattern_len() -> usize;
+    #[link_name = "rs_save_viewstate_win"]
+    fn save_viewstate_win_vs(wp: *mut c_void, vs: *mut ViewStateT);
+    #[link_name = "rs_restore_viewstate_win"]
+    fn restore_viewstate_win_vs(wp: *mut c_void, vs: *const ViewStateT);
+}
+
+// kOptBoFlagError for vim_beep (from option_defs.h)
+const K_OPT_BO_FLAG_ERROR: c_int = 0x01;
+
+// MAXCOL for column (from pos_defs.h)
+const MAXCOL: c_int = 0x7FFF_FFFF;
+
+// Return codes (from ex_getln.c)
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Comparison: is pos1 < pos2? (lt macro)
+unsafe fn pos_lt(pos1: &PosT, pos2: &PosT) -> bool {
+    pos1.lnum < pos2.lnum || (pos1.lnum == pos2.lnum && pos1.col < pos2.col)
+}
+
+/// May do incsearch highlighting.
+/// Rust replacement for `may_do_incsearch_highlighting` in ex_getln.c.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to IncsearchStateT.
+#[allow(clippy::too_many_lines)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
+    firstc: c_int,
+    count: c_int,
+    s: *mut IncsearchStateT,
+) {
+    let mut skiplen: c_int = 0;
+    let mut patlen: c_int = 0;
+    let mut search_delim: c_int = 0;
+
+    // Parsing range may already set the last search pattern.
+    // NOTE: must call restore_last_search_pattern() before returning!
+    nvim_save_last_search_pattern();
+
+    if !do_incsearch_highlighting_rs(
+        firstc,
+        &raw mut search_delim,
+        s,
+        &raw mut skiplen,
+        &raw mut patlen,
+    ) {
+        nvim_restore_last_search_pattern();
+        rs_finish_incsearch_highlighting(0, s, 1);
+        return;
+    }
+
+    // if there is a character waiting, search and redraw later
+    if nvim_char_avail() != 0 {
+        nvim_restore_last_search_pattern();
+        (*s).incsearch_postponed = true;
+        return;
+    }
+    (*s).incsearch_postponed = false;
+
+    // Use previous pattern for ":s//".
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let next_char_idx = skiplen + patlen;
+    let next_char = *cmdbuff.add(next_char_idx as usize);
+    let use_last_pat =
+        patlen == 0 && skiplen > 0 && *cmdbuff.add((skiplen - 1) as usize) == next_char;
+
+    if patlen != 0 || use_last_pat {
+        ui_busy_start();
+        ui_flush();
+    }
+
+    let search_first_line = nvim_get_search_first_line();
+    let curwin = nvim_get_curwin();
+
+    if search_first_line == 0 {
+        // start at the original cursor position
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+    } else if search_first_line > nvim_curbuf_get_ml_line_count() {
+        // start after the last line
+        let mut pos = PosT::default();
+        nvim_get_curwin_cursor_pos(&raw mut pos);
+        pos.lnum = nvim_curbuf_get_ml_line_count();
+        pos.col = MAXCOL as c_int;
+        nvim_set_curwin_cursor_pos(&raw const pos);
+    } else {
+        // start at the first line in the range
+        let mut pos = PosT::default();
+        nvim_get_curwin_cursor_pos(&raw mut pos);
+        pos.lnum = search_first_line;
+        pos.col = 0;
+        nvim_set_curwin_cursor_pos(&raw const pos);
+    }
+
+    let mut found: c_int = 0;
+
+    if patlen != 0 || use_last_pat {
+        let mut search_flags = SEARCH_OPT | SEARCH_NOOF | SEARCH_PEEK;
+        if nvim_get_p_hls() == 0 {
+            search_flags |= SEARCH_KEEP;
+        }
+        if search_first_line != 0 {
+            search_flags |= SEARCH_START;
+        }
+        let mut tm = profile_setlimit(500);
+        let mut sia = SearchitArgT {
+            sa_stop_lnum: 0,
+            sa_tm: &raw mut tm,
+            sa_timed_out: 0,
+            sa_wrapped: 0,
+        };
+        *cmdbuff.add(next_char_idx as usize) = 0;
+        nvim_inc_emsg_off();
+        found = do_search(
+            std::ptr::null_mut(),
+            if firstc == b':' as c_int {
+                b'/' as c_int
+            } else {
+                firstc
+            },
+            search_delim,
+            cmdbuff.add(skiplen as usize),
+            patlen as usize,
+            count,
+            search_flags,
+            &raw mut sia,
+        );
+        nvim_dec_emsg_off();
+        *cmdbuff.add(next_char_idx as usize) = next_char;
+
+        let search_last_line = nvim_get_search_last_line();
+        let mut cur_pos = PosT::default();
+        nvim_get_curwin_cursor_pos(&raw mut cur_pos);
+        if cur_pos.lnum < search_first_line || cur_pos.lnum > search_last_line {
+            // match outside of address range
+            found = 0;
+            nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+        }
+
+        // if interrupted while searching, behave like it failed
+        if nvim_get_got_int_val() != 0 {
+            vpeekc(); // remove <C-C> from input stream
+            nvim_set_got_int(0); // don't abandon the command line
+            found = 0;
+        } else if nvim_char_avail() != 0 {
+            // cancelled searching because a char was typed
+            (*s).incsearch_postponed = true;
+        }
+        ui_busy_stop();
+    } else {
+        set_no_hlsearch(1); // turn off previous highlight
+        nvim_redraw_all_later(UPD_SOME_VALID);
+    }
+
+    nvim_set_highlight_match(i32::from(found != 0));
+
+    // first restore the old curwin values, so the screen is
+    // positioned in the same way as the actual search command
+    restore_viewstate_win_vs(curwin, &raw const (*s).old_viewstate);
+    changed_cline_bef_curs(curwin);
+    update_topline(curwin);
+
+    let mut end_pos = PosT::default();
+    nvim_get_curwin_cursor_pos(&raw mut end_pos);
+    if found != 0 {
+        nvim_get_curwin_cursor_pos(&raw mut (*s).match_start);
+        nvim_set_search_match(&raw mut (*s).match_start);
+        // Actually: set_search_match moves cursor to end, then call validate_cursor
+        // Re-fetch cursor as match_end
+        validate_cursor(curwin);
+        nvim_get_curwin_cursor_pos(&raw mut (*s).match_end);
+        nvim_set_curwin_cursor_pos(&raw const end_pos);
+        end_pos = (*s).match_end;
+    }
+
+    // Disable 'hlsearch' highlighting if the pattern matches everything.
+    if !use_last_pat {
+        let nc = *cmdbuff.add(next_char_idx as usize);
+        *cmdbuff.add(next_char_idx as usize) = 0;
+        if rs_empty_pattern(cmdbuff.add(skiplen as usize), patlen as usize, search_delim) != 0
+            && nvim_get_no_hlsearch() == 0
+        {
+            nvim_redraw_all_later(UPD_SOME_VALID);
+            set_no_hlsearch(1);
+        }
+        *cmdbuff.add(next_char_idx as usize) = nc;
+    }
+
+    validate_cursor(curwin);
+
+    // May redraw the status line to show cursor position.
+    if nvim_get_p_ru() != 0
+        && (nvim_win_get_status_height(curwin.cast::<()>()) > 0 || rs_global_stl_height() > 0)
+    {
+        nvim_win_set_redr_status(curwin, 1);
+    }
+
+    redraw_later(curwin, UPD_SOME_VALID);
+    nvim_update_screen();
+    nvim_set_highlight_match(0);
+    nvim_restore_last_search_pattern();
+
+    // Leave cursor at end to make CTRL-R CTRL-W work. But not when beyond
+    // end of pattern, e.g. for ":s/pat/".
+    if *cmdbuff.add(next_char_idx as usize) != 0 {
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).search_start));
+    } else if found != 0 {
+        nvim_set_curwin_cursor_pos(&raw const end_pos);
+        nvim_win_set_valid_cursor(curwin, end_pos.lnum, end_pos.col, end_pos.coladd);
+    }
+
+    msg_starthere();
+    crate::screen::rs_redrawcmdline();
+    (*s).did_incsearch = true;
+}
+
+/// Handle CTRL-G/CTRL-T for next/prev incsearch match.
+/// Rust replacement for `may_do_command_line_next_incsearch` in ex_getln.c.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to IncsearchStateT.
+#[allow(clippy::too_many_lines)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
+    firstc: c_int,
+    count: c_int,
+    s: *mut IncsearchStateT,
+    next_match: bool,
+) -> c_int {
+    let mut skiplen: c_int = 0;
+    let mut patlen: c_int = 0;
+    let mut search_delim: c_int = 0;
+
+    // Parsing range may already set the last search pattern.
+    // NOTE: must call restore_last_search_pattern() before returning!
+    nvim_save_last_search_pattern();
+
+    if !do_incsearch_highlighting_rs(
+        firstc,
+        &raw mut search_delim,
+        s,
+        &raw mut skiplen,
+        &raw mut patlen,
+    ) {
+        nvim_restore_last_search_pattern();
+        return OK;
+    }
+
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    if patlen == 0 && *cmdbuff.add(skiplen as usize) == 0 {
+        nvim_restore_last_search_pattern();
+        return FAIL;
+    }
+
+    ui_busy_start();
+    ui_flush();
+
+    let mut t: PosT;
+    let pat: *mut c_char;
+    let mut search_flags: c_int = SEARCH_NOOF;
+
+    if search_delim == *cmdbuff.add(skiplen as usize) as c_int {
+        pat = last_search_pattern();
+        if pat.is_null() {
+            nvim_restore_last_search_pattern();
+            return FAIL;
+        }
+        let _ = skiplen; // skiplen not needed when using last_search_pattern
+        patlen = last_search_pattern_len() as c_int;
+    } else {
+        pat = cmdbuff.add(skiplen as usize);
+    }
+
+    let mut bslsh = false;
+    // do not search for the search end delimiter, unless part of pattern
+    if patlen > 2 && firstc == *pat.add((patlen - 1) as usize) as c_int {
+        patlen -= 1;
+        if *pat.add((patlen - 1) as usize) == b'\\' as c_char {
+            *pat.add((patlen - 1) as usize) = firstc as c_char;
+            bslsh = true;
+        }
+    }
+
+    if next_match {
+        t = (*s).match_end;
+        if pos_lt(&(*s).match_start, &(*s).match_end) {
+            // start searching at end of match, not beginning of next column
+            decl(&raw mut t);
+        }
+        search_flags |= SEARCH_COL;
+    } else {
+        t = (*s).match_start;
+    }
+    if nvim_get_p_hls() == 0 {
+        search_flags |= SEARCH_KEEP;
+    }
+    nvim_inc_emsg_off();
+    let save_char = *pat.add(patlen as usize);
+    *pat.add(patlen as usize) = 0;
+    let curwin = nvim_get_curwin();
+    let curbuf = nvim_get_curbuf();
+    let found = searchit(
+        curwin,
+        curbuf,
+        &raw mut t,
+        std::ptr::null_mut(),
+        if next_match { FORWARD } else { BACKWARD },
+        pat,
+        patlen as usize,
+        count,
+        search_flags,
+        RE_SEARCH,
+        std::ptr::null_mut(),
+    );
+    nvim_dec_emsg_off();
+    *pat.add(patlen as usize) = save_char;
+    if bslsh {
+        *pat.add((patlen - 1) as usize) = b'\\' as c_char;
+    }
+    ui_busy_stop();
+    if found != 0 {
+        (*s).search_start = (*s).match_start;
+        (*s).match_end = t;
+        (*s).match_start = t;
+        if !next_match && firstc != b'?' as c_int {
+            // move just before current match
+            (*s).search_start = t;
+            decl(&raw mut (*s).search_start);
+        } else if next_match && firstc == b'?' as c_int {
+            // move just after current match
+            (*s).search_start = t;
+            incl(&raw mut (*s).search_start);
+        }
+        if pos_lt(&t, &(*s).search_start) && next_match {
+            // wrap around
+            (*s).search_start = t;
+            if firstc == b'?' as c_int {
+                incl(&raw mut (*s).search_start);
+            } else {
+                decl(&raw mut (*s).search_start);
+            }
+        }
+
+        nvim_set_search_match(&raw mut (*s).match_end);
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).match_start));
+        changed_cline_bef_curs(curwin);
+        update_topline(curwin);
+        validate_cursor(curwin);
+        nvim_set_highlight_match(1);
+        save_viewstate_win_vs(curwin, &raw mut (*s).old_viewstate);
+        redraw_later(curwin, UPD_NOT_VALID);
+        nvim_update_screen();
+        nvim_set_highlight_match(0);
+        crate::screen::rs_redrawcmdline();
+        nvim_get_curwin_cursor_pos(&raw mut (*s).match_end);
+        // Actually: curwin->w_cursor = s->match_end
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!((*s).match_end));
+    } else {
+        vim_beep(K_OPT_BO_FLAG_ERROR);
+    }
+    nvim_restore_last_search_pattern();
+    FAIL
 }
 
 // =============================================================================
