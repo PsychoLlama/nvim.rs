@@ -1189,9 +1189,49 @@ void suggest_load_files(void)
       }
 
       // <SUGWORDTREE>: <wordtree>
-      // Read the trie with the soundfolded words.
-      if (spell_read_tree(fd, &slang->sl_sbyts, NULL, &slang->sl_sidxs,
-                          false, 0) != 0) {
+      // Read the trie with the soundfolded words (inlined spell_read_tree).
+      {
+        uint8_t rt_hdr[4];
+        int rt_res = 0;
+        if (fread(rt_hdr, 1, 4, fd) != 4) {
+          rt_res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        } else {
+          int rt_len = ((int)rt_hdr[0] << 24) | ((int)rt_hdr[1] << 16)
+                       | ((int)rt_hdr[2] << 8) | rt_hdr[3];
+          if (rt_len < 0) {
+            rt_res = SP_TRUNCERROR;
+          } else if ((size_t)rt_len >= SIZE_MAX / sizeof(int)) {
+            rt_res = SP_FORMERROR;
+          } else if (rt_len > 0) {
+            uint8_t *rt_bp = xmalloc((size_t)rt_len);
+            slang->sl_sbyts = rt_bp;
+            idx_T *rt_ip = xcalloc((size_t)rt_len, sizeof(*rt_ip));
+            slang->sl_sidxs = rt_ip;
+            size_t rt_buf_max = 4 + (size_t)rt_len * 6 + 64;
+            uint8_t *rt_buf = xmalloc(rt_buf_max);
+            memcpy(rt_buf, rt_hdr, 4);
+            size_t rt_data = fread(rt_buf + 4, 1, rt_buf_max - 4, fd);
+            if (rt_data == 0) {
+              xfree(rt_buf);
+              rt_res = SP_TRUNCERROR;
+            } else {
+              size_t rt_consumed = 0;
+              int rt_nc = 0;
+              rt_res = rs_read_tree(rt_buf, 4 + rt_data, rt_bp, (int32_t *)rt_ip,
+                                    (size_t)rt_len, false, 0, &rt_consumed, &rt_nc);
+              long rt_over = (long)(4 + rt_data) - (long)rt_consumed;
+              if (rt_over > 0) {
+                fseek(fd, -rt_over, SEEK_CUR);
+              }
+              xfree(rt_buf);
+            }
+          }
+        }
+        if (rt_res != 0) {
+          goto someerror;
+        }
+      }
+      if (0) {
 someerror:
         semsg(_(e_error_while_reading_sug_file_str),
               slang->sl_fname);
@@ -1735,84 +1775,6 @@ static int set_sofo(slang_T *lp, const char *from, const char *to)
 }
 
 
-
-/// Reads a tree from the .spl or .sug file.
-/// Allocates the memory and stores pointers in "bytsp" and "idxsp".
-/// This is skipped when the tree has zero length.
-///
-/// @param prefixtree  true for the prefix tree
-/// @param prefixcnt  when "prefixtree" is true: prefix count
-///
-/// @return  zero when OK, SP_ value for an error.
-// Uses Rust (rs_read_tree) for buffer-based tree parsing.
-static int spell_read_tree(FILE *fd, uint8_t **bytsp, int *bytsp_len, idx_T **idxsp,
-                           bool prefixtree, int prefixcnt)
-  FUNC_ATTR_NONNULL_ARG(1, 2, 4)
-{
-  // Read the nodecount (4 bytes, big-endian). <nodecount>
-  uint8_t hdr[4];
-  if (fread(hdr, 1, 4, fd) != 4) {
-    return feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
-  }
-  int len = ((int)hdr[0] << 24) | ((int)hdr[1] << 16) | ((int)hdr[2] << 8) | hdr[3];
-
-  if (len < 0) {
-    return SP_TRUNCERROR;
-  }
-  if ((size_t)len >= SIZE_MAX / sizeof(int)) {
-    // Invalid length, multiply with sizeof(int) would overflow.
-    return SP_FORMERROR;
-  }
-  if (len == 0) {
-    return 0;
-  }
-
-  // Allocate the byte and index arrays.
-  uint8_t *bp = xmalloc((size_t)len);
-  *bytsp = bp;
-  if (bytsp_len != NULL) {
-    *bytsp_len = len;
-  }
-  idx_T *ip = xcalloc((size_t)len, sizeof(*ip));
-  *idxsp = ip;
-
-  // Read tree data into a buffer. Each node uses at most ~6 bytes on disk
-  // (siblingcount + flags + region + affixID + index). Use a generous
-  // estimate; rs_read_tree will stop when it has parsed all nodecount nodes.
-  // The 4-byte header is re-included so rs_read_tree can read the nodecount.
-  size_t buf_max = 4 + (size_t)len * 6 + 64;  // generous upper bound
-  uint8_t *tree_buf = xmalloc(buf_max);
-
-  // Put the header back into the buffer.
-  memcpy(tree_buf, hdr, 4);
-
-  // Read tree data bytes after the header.
-  size_t data_read = fread(tree_buf + 4, 1, buf_max - 4, fd);
-  if (data_read == 0 && len > 0) {
-    xfree(tree_buf);
-    return SP_TRUNCERROR;
-  }
-
-  // Parse the tree using Rust. The buffer starts from the nodecount header.
-  size_t bytes_consumed = 0;
-  int node_count = 0;
-  int res = rs_read_tree(tree_buf, 4 + data_read, bp, (int32_t *)ip, (size_t)len,
-                         prefixtree, prefixcnt, &bytes_consumed, &node_count);
-
-  // Seek back to restore file position: we over-read by (4 + data_read - bytes_consumed) bytes.
-  // Since we can't un-read from a FILE*, use fseek to go back.
-  long over_read = (long)(4 + data_read) - (long)bytes_consumed;
-  if (over_read > 0) {
-    fseek(fd, -over_read, SEEK_CUR);
-  }
-
-  xfree(tree_buf);
-
-  if (res != 0) {
-    return res;
-  }
-  return 0;
-}
 
 /// Reload the spell file "fname" if it's loaded.
 ///
