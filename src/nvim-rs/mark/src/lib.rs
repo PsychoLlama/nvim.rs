@@ -164,14 +164,14 @@ extern "C" {
         amount_after: LinenrT,
         op: c_int,
     );
-    fn nvim_mark_diff_adjust(
+    fn rs_diff_mark_adjust(
         buf: BufHandle,
         line1: LinenrT,
         line2: LinenrT,
         amount: LinenrT,
         amount_after: LinenrT,
     );
-    fn nvim_mark_fold_adjust(
+    fn rs_foldMarkAdjust(
         win: WinHandle,
         line1: LinenrT,
         line2: LinenrT,
@@ -2795,7 +2795,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
                 }
 
                 if adjust_folds != 0 {
-                    nvim_mark_fold_adjust(win, line1, line2, amount, amount_after);
+                    rs_foldMarkAdjust(win, line1, line2, amount, amount_after);
                 }
             }
 
@@ -2805,7 +2805,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
     }
 
     // adjust diffs
-    nvim_mark_diff_adjust(buf, line1, line2, amount, amount_after);
+    rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
 
     // adjust per-window "last cursor" positions
     let winfo_count = nvim_mark_buf_get_wininfo_count(buf);

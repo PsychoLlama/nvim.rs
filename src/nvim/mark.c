@@ -47,9 +47,6 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-// Rust fold FFI declaration
-extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
-                              linenr_T amount, linenr_T amount_after);
 
 // Rust FFI declarations (tag module)
 extern void rs_tagstack_clear_entry(void *tg);
@@ -173,8 +170,6 @@ extern fmark_T *rs_getnextmark(pos_T *startpos, int dir, int begin_line, buf_T *
 
 // Phase 6: Ex commands + remaining
 extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
-extern void rs_diff_mark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
-                                linenr_T amount, linenr_T amount_after);
 
 // =============================================================================
 // C accessor functions called from Rust
@@ -352,16 +347,6 @@ void nvim_mark_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
                                linenr_T amount, linenr_T amount_after, int op)
 {
   extmark_adjust(buf, line1, line2, amount, amount_after, (ExtmarkOp)op);
-}
-void nvim_mark_diff_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
-                            linenr_T amount, linenr_T amount_after)
-{
-  rs_diff_mark_adjust(buf, line1, line2, amount, amount_after);
-}
-void nvim_mark_fold_adjust(win_T *win, linenr_T line1, linenr_T line2,
-                            linenr_T amount, linenr_T amount_after)
-{
-  rs_foldMarkAdjust(win, line1, line2, amount, amount_after);
 }
 
 // Phase 5: Wininfo iteration
