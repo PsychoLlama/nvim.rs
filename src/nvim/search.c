@@ -2657,23 +2657,6 @@ const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
   return p;
 }
 
-/// Check rs_compl_status_adding().
-int nvim_search_compl_status_adding(void)
-{
-  return rs_compl_status_adding() ? 1 : 0;
-}
-
-/// Check rs_compl_status_sol().
-int nvim_search_compl_status_sol(void)
-{
-  return rs_compl_status_sol() ? 1 : 0;
-}
-
-/// Get rs_ins_compl_len().
-int nvim_search_ins_compl_len(void)
-{
-  return rs_ins_compl_len();
-}
 
 /// Compare with mb_strcmp_ic.
 int nvim_mb_strcmp_ic_wrapper(int ic, const char *s1, const char *s2)

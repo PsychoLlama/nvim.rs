@@ -643,9 +643,9 @@ extern "C" {
         lnum: c_int,
         skipwhite_off: *mut c_int,
     ) -> *const c_char;
-    fn nvim_search_compl_status_adding() -> c_int;
-    fn nvim_search_compl_status_sol() -> c_int;
-    fn nvim_search_ins_compl_len() -> c_int;
+    fn rs_compl_status_adding() -> c_int;
+    fn rs_compl_status_sol() -> c_int;
+    fn rs_ins_compl_len() -> c_int;
     fn nvim_mb_strcmp_ic_wrapper(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
     fn nvim_mb_strnicmp_wrapper(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
     fn nvim_search_get_p_ic() -> c_int;
@@ -713,14 +713,14 @@ pub unsafe extern "C" fn rs_search_for_exact_line(
 
         // when adding lines the matching line may be empty but it is not
         // ignored because we are interested in the next line -- Acevedo
-        if nvim_search_compl_status_adding() != 0 && nvim_search_compl_status_sol() == 0 {
+        if rs_compl_status_adding() != 0 && rs_compl_status_sol() == 0 {
             if nvim_mb_strcmp_ic_wrapper(nvim_search_get_p_ic(), p, pat) == 0 {
                 return OK;
             }
         } else if !p.is_null() && *p != 0 {
             // Ignore empty lines.
             // Expanding lines or words.
-            let compl_len = nvim_search_ins_compl_len();
+            let compl_len = rs_ins_compl_len();
             assert!(compl_len >= 0);
             let cmp = if nvim_search_get_p_ic() != 0 {
                 nvim_mb_strnicmp_wrapper(p, pat, compl_len as usize)
