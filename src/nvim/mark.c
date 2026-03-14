@@ -624,11 +624,7 @@ static void fname2fnum(xfmark_T *fm)
 // Check all file marks for a name that matches the file name in buf.
 // May replace the name with an fnum.
 // Used for marks that come from the .shada file.
-extern void rs_fmarks_check_names(buf_T *buf);
-void fmarks_check_names(buf_T *buf)
-{
-  rs_fmarks_check_names(buf);
-}
+extern void fmarks_check_names(buf_T *buf);
 
 /// Check the position in @a fm is valid.
 ///

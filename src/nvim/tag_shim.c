@@ -815,14 +815,6 @@ void nvim_tag_wait_return(void) { wait_return(true); }
 /// check_cursor(curwin) wrapper.
 void nvim_tag_check_cursor(void) { check_cursor(curwin); }
 
-// Verify constants used in Rust rs_tag_jumpto_run_search
-/// High-level executor for jumpto_tag (thin wrapper calling Rust).
-int nvim_tag_jumpto_execute(char *fname, char *pbuf, char *pbuf_end,
-                            char *lbuf, int forceit, bool keep_help)
-{
-  return rs_tag_jumpto_execute(fname, pbuf, pbuf_end, lbuf, forceit, keep_help);
-}
-
 // --- End of jumpto_tag accessor functions ---
 // --- C accessor functions for do_tag() ---
 

@@ -4735,7 +4735,7 @@ pub unsafe extern "C" fn rs_fm_getname(
 ///
 /// # Safety
 /// `buf` must be a valid buffer handle.
-#[no_mangle]
+#[unsafe(export_name = "fmarks_check_names")]
 pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
     let name = nvim_buf_get_ffname(buf);
     if name.is_null() {

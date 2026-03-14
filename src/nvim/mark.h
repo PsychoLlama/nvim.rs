@@ -28,6 +28,7 @@ extern int rs_pos_is_valid(pos_T pos);
 extern int rs_pos_in_range(pos_T pos, int line_count);
 
 // Functions implemented in Rust (exported under their C names via #[export_name])
+extern void fmarks_check_names(buf_T *buf);
 extern void free_fmark(fmark_T fm);
 extern void free_xfmark(xfmark_T fm);
 extern void clear_fmark(fmark_T *fm, Timestamp timestamp);
