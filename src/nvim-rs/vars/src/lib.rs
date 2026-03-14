@@ -38,6 +38,7 @@
 use std::ffi::{c_char, c_int};
 
 // Submodules
+pub mod eval_helpers;
 pub mod lookup;
 
 // Re-export typval types for convenience

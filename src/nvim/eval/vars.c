@@ -76,6 +76,13 @@ extern const char *rs_find_name_end(const char *arg, const char **expr_start,
                                     const char **expr_end, int flags);
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
 
+// Phase 1: eval_helpers migrated to Rust
+extern const char *rs_skip_var_list(const char *arg, int *var_count, int *semicolon,
+                                    bool silent);
+extern char *rs_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate);
+extern char *rs_eval_all_expr_in_str(char *str);
+extern int rs_get_spellword(list_T *list, const char **ret_word);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -567,16 +574,7 @@ list_T *eval_spell_expr(char *badword, char *expr)
 /// @return -1 in case of error, score otherwise.
 int get_spellword(list_T *const list, const char **ret_word)
 {
-  if (tv_list_len(list) != 2) {
-    emsg(_("E5700: Expression from 'spellsuggest' must yield lists with "
-           "exactly two values"));
-    return -1;
-  }
-  *ret_word = tv_list_find_str(list, 0);
-  if (*ret_word == NULL) {
-    return -1;
-  }
-  return (int)tv_list_find_nr(list, -1, NULL);
+  return rs_get_spellword(list, ret_word);
 }
 
 /// Prepare v: variable "idx" to be used.
@@ -629,33 +627,7 @@ static void list_script_vars(int *first)
 /// Return a pointer to the character after "}", NULL for an error.
 char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
 {
-  char *block_start = skipwhite(p + 1);  // skip the opening {
-  char *block_end = block_start;
-
-  if (*block_start == NUL) {
-    semsg(_(e_missing_close_curly_str), p);
-    return NULL;
-  }
-  if (skip_expr(&block_end, NULL) == FAIL) {
-    return NULL;
-  }
-  block_end = skipwhite(block_end);
-  if (*block_end != '}') {
-    semsg(_(e_missing_close_curly_str), p);
-    return NULL;
-  }
-  if (evaluate) {
-    *block_end = NUL;
-    char *expr_val = eval_to_string(block_start, false, false);
-    *block_end = '}';
-    if (expr_val == NULL) {
-      return NULL;
-    }
-    ga_concat(gap, expr_val);
-    xfree(expr_val);
-  }
-
-  return block_end + 1;
+  return rs_eval_one_expr_in_str(p, gap, evaluate);
 }
 
 /// Evaluate all the Vim expressions {expr} in "str" and return the resulting
@@ -664,53 +636,7 @@ char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
 /// Returns NULL for an error.
 static char *eval_all_expr_in_str(char *str)
 {
-  garray_T ga;
-  ga_init(&ga, 1, 80);
-  char *p = str;
-
-  while (*p != NUL) {
-    bool escaped_brace = false;
-
-    // Look for a block start.
-    char *lit_start = p;
-    while (*p != '{' && *p != '}' && *p != NUL) {
-      p++;
-    }
-
-    if (*p != NUL && *p == p[1]) {
-      // Escaped brace, unescape and continue.
-      // Include the brace in the literal string.
-      p++;
-      escaped_brace = true;
-    } else if (*p == '}') {
-      semsg(_(e_stray_closing_curly_str), str);
-      ga_clear(&ga);
-      return NULL;
-    }
-
-    // Append the literal part.
-    ga_concat_len(&ga, lit_start, (size_t)(p - lit_start));
-
-    if (*p == NUL) {
-      break;
-    }
-
-    if (escaped_brace) {
-      // Skip the second brace.
-      p++;
-      continue;
-    }
-
-    // Evaluate the expression and append the result.
-    p = eval_one_expr_in_str(p, &ga, true);
-    if (p == NULL) {
-      ga_clear(&ga);
-      return NULL;
-    }
-  }
-  ga_append(&ga, NUL);
-
-  return ga.ga_data;
+  return rs_eval_all_expr_in_str(str);
 }
 
 /// Get a list of lines from a HERE document. The here document is a list of
@@ -1111,53 +1037,7 @@ int ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon, int var_
 /// @return  NULL for an error.
 const char *skip_var_list(const char *arg, int *var_count, int *semicolon, bool silent)
 {
-  if (*arg == '[') {
-    const char *s;
-    // "[var, var]": find the matching ']'.
-    const char *p = arg;
-    while (true) {
-      p = skipwhite(p + 1);             // skip whites after '[', ';' or ','
-      s = skip_var_one(p);
-      if (s == p) {
-        if (!silent) {
-          semsg(_(e_invarg2), p);
-        }
-        return NULL;
-      }
-      (*var_count)++;
-
-      p = skipwhite(s);
-      if (*p == ']') {
-        break;
-      } else if (*p == ';') {
-        if (*semicolon == 1) {
-          if (!silent) {
-            emsg(_(e_double_semicolon_in_list_of_variables));
-          }
-          return NULL;
-        }
-        *semicolon = 1;
-      } else if (*p != ',') {
-        if (!silent) {
-          semsg(_(e_invarg2), p);
-        }
-        return NULL;
-      }
-    }
-    return p + 1;
-  }
-  return skip_var_one(arg);
-}
-
-/// Skip one (assignable) variable name, including @r, $VAR, &option, d.key,
-/// l[idx].
-static const char *skip_var_one(const char *arg)
-{
-  if (*arg == '@' && arg[1] != NUL) {
-    return arg + 2;
-  }
-  return rs_find_name_end(*arg == '$' || *arg == '&' ? arg + 1 : arg,
-                       NULL, NULL, FNE_INCL_BR | FNE_CHECK_START);
+  return rs_skip_var_list(arg, var_count, semicolon, silent);
 }
 
 /// List variables for hashtab "ht" with prefix "prefix".
@@ -3718,4 +3598,11 @@ typval_T *nvim_dictitem_get_tv(dictitem_T *di)
     return NULL;
   }
   return &di->di_tv;
+}
+
+/// Emit E5700 error for invalid spellsuggest expression result.
+void nvim_vars_emsg_e5700(void)
+{
+  emsg(_("E5700: Expression from 'spellsuggest' must yield lists with "
+         "exactly two values"));
 }
