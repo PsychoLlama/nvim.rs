@@ -12,8 +12,11 @@ const K_MT_LINE_WISE: c_int = 1;
 
 const CPO_EMPTYREGION: c_int = b'E' as c_int;
 const OP_DELETE: c_int = 1;
+const OP_CHANGE: c_int = 3;
 const K_MT_CHAR_WISE: c_int = 0;
 const NUL: c_int = 0;
+const BL_WHITE: c_int = 1; // cursor on first non-white
+const BL_FIX: c_int = 4; // don't leave cursor on NUL
 
 extern "C" {
     // Generic buffer/undo accessors (reuse existing C shims)
@@ -67,12 +70,56 @@ extern "C" {
     // msgmore
     fn nvim_textfmt_msgmore(n: c_int);
 
+    // mb_adjust_opend helpers
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_oap_set_end_col(oap: *mut c_void, val: c_int);
+
+    // linewise_delete helpers
+    fn nvim_del_lines(count: c_int, undo: bool);
+    fn nvim_truncate_line(del_newline: bool);
+    fn nvim_curbuf_get_b_p_ai() -> c_int;
+    fn nvim_set_did_ai(val: bool);
+    fn nvim_set_ai_col(val: c_int);
+    fn nvim_beginline(flags: c_int);
+    fn nvim_u_clearline_curbuf();
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_set_cursor_lnum(lnum: c_int);
+
     // Complex ops: still delegated to C
-    fn nvim_opd_mb_adjust_opend(oap: *mut c_void);
     fn nvim_opd_do_yank_and_registers(oap: *mut c_void) -> c_int;
     fn nvim_opd_block_delete(oap: *mut c_void) -> c_int;
-    fn nvim_opd_linewise_delete(oap: *mut c_void) -> c_int;
     fn nvim_opd_charwise_delete(oap: *mut c_void) -> c_int;
+}
+
+/// Port of `mb_adjust_opend` -- adjust opend for multi-byte character boundary.
+///
+/// If the operation is inclusive, advance oap->end.col to the last byte of the
+/// multi-byte character that starts at or before oap->end.col.
+///
+/// # Safety
+/// `oap` must be a valid `oparg_T *`.
+#[inline]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe fn mb_adjust_opend(oap: *mut c_void) {
+    let oap_c: *const c_void = oap;
+    if !nvim_oap_get_inclusive(oap_c) {
+        return;
+    }
+    let end_lnum = nvim_oap_get_end_lnum(oap_c);
+    let end_col = nvim_oap_get_end_col(oap_c);
+    let line = nvim_ml_get(end_lnum);
+    if line.is_null() {
+        return;
+    }
+    let ptr = line.add(end_col as usize);
+    if *ptr != 0 {
+        let ptr = ptr.sub(utf_head_off(line, ptr) as usize);
+        let ptr = ptr.add((utfc_ptr2len(ptr) - 1) as usize);
+        let new_col = ptr.offset_from(line) as c_int;
+        nvim_oap_set_end_col(oap, new_col);
+    }
 }
 
 /// Inline port of `nvim_opd_setup_visual_reg`.
@@ -151,6 +198,43 @@ unsafe fn opd_maybe_promote_to_linewise(oap: *mut c_void) {
     }
 }
 
+/// Port of `nvim_opd_linewise_delete` -- handle linewise deletion.
+///
+/// # Safety
+/// `oap` must be a valid `oparg_T *`.
+unsafe fn opd_linewise_delete(oap: *mut c_void) -> c_int {
+    let oap_c: *const c_void = oap;
+    let op_type = nvim_oap_get_op_type_ptr(oap_c);
+    let line_count = nvim_oap_get_line_count(oap_c);
+    if op_type == OP_CHANGE {
+        if line_count > 1 {
+            let lnum = nvim_get_cursor_lnum();
+            nvim_set_cursor_lnum(lnum + 1);
+            nvim_del_lines(line_count - 1, true);
+            nvim_set_cursor_lnum(lnum);
+        }
+        if nvim_u_save_cursor() == FAIL {
+            return FAIL;
+        }
+        if nvim_curbuf_get_b_p_ai() != 0 {
+            nvim_beginline(BL_WHITE);
+            nvim_set_did_ai(true);
+            nvim_set_ai_col(nvim_get_cursor_col());
+        } else {
+            nvim_beginline(0);
+        }
+        nvim_truncate_line(false);
+        if line_count > 1 {
+            nvim_u_clearline_curbuf();
+        }
+    } else {
+        nvim_del_lines(line_count, true);
+        nvim_beginline(BL_WHITE | BL_FIX);
+        nvim_u_clearline_curbuf();
+    }
+    OK
+}
+
 /// Inline port of `nvim_opd_setmarks`.
 /// Sets curbuf->b_op_start and b_op_end from oap, respecting LOCKMARKS.
 ///
@@ -202,7 +286,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     }
 
     opd_setup_visual_reg(oap);
-    nvim_opd_mb_adjust_opend(oap);
+    mb_adjust_opend(oap);
     opd_maybe_promote_to_linewise(oap);
 
     // Check for empty line special cases
@@ -232,7 +316,7 @@ pub unsafe extern "C" fn rs_op_delete(oap: *mut c_void) -> c_int {
     let result = if motion_type == K_MT_BLOCK_WISE {
         nvim_opd_block_delete(oap)
     } else if motion_type == K_MT_LINE_WISE {
-        nvim_opd_linewise_delete(oap)
+        opd_linewise_delete(oap)
     } else {
         nvim_opd_charwise_delete(oap)
     };

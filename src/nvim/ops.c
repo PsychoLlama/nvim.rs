@@ -461,13 +461,6 @@ static void block_insert(oparg_T *oap, const char *s, size_t slen, bool b_insert
     changed_lines(curbuf, oap->start.lnum + 1, 0, oap->end.lnum + 1, 0, true);
   }
 }
-
-/// Adjust multi-byte opend for delete (called from Rust op_delete and op_replace).
-void nvim_opd_mb_adjust_opend(oparg_T *oap)
-{
-  mb_adjust_opend(oap);
-}
-
 /// Do yank and register handling.
 /// Returns: OK (1) if should return OK (read-only reg), 2 if proceed normally.
 int nvim_opd_do_yank_and_registers(oparg_T *oap)
@@ -554,38 +547,6 @@ int nvim_opd_block_delete(oparg_T *oap)
   return OK;
 }
 
-/// Linewise delete.
-int nvim_opd_linewise_delete(oparg_T *oap)
-{
-  if (oap->op_type == OP_CHANGE) {
-    if (oap->line_count > 1) {
-      linenr_T lnum = curwin->w_cursor.lnum;
-      curwin->w_cursor.lnum++;
-      del_lines(oap->line_count - 1, true);
-      curwin->w_cursor.lnum = lnum;
-    }
-    if (u_save_cursor() == FAIL) {
-      return FAIL;
-    }
-    if (curbuf->b_p_ai) {
-      beginline(BL_WHITE);
-      did_ai = true;
-      ai_col = curwin->w_cursor.col;
-    } else {
-      beginline(0);
-    }
-    truncate_line(false);
-    if (oap->line_count > 1) {
-      u_clearline(curbuf);
-    }
-  } else {
-    del_lines(oap->line_count, true);
-    beginline(BL_WHITE | BL_FIX);
-    u_clearline(curbuf);
-  }
-  return OK;
-}
-
 /// Charwise delete.
 int nvim_opd_charwise_delete(oparg_T *oap)
 {
@@ -620,7 +581,16 @@ int nvim_opd_charwise_delete(oparg_T *oap)
       oap->end = curwin->w_cursor;
       curwin->w_cursor = oap->start;
     }
-    mb_adjust_opend(oap);
+    // mb_adjust_opend inlined: adjust end.col for multi-byte boundary
+    if (oap->inclusive) {
+      const char *_line = ml_get(oap->end.lnum);
+      const char *_ptr = _line + oap->end.col;
+      if (*_ptr != NUL) {
+        _ptr -= utf_head_off(_line, _ptr);
+        _ptr += utfc_ptr2len(_ptr) - 1;
+        oap->end.col = (colnr_T)(_ptr - _line);
+      }
+    }
   }
 
   if (oap->line_count == 1) {
@@ -687,24 +657,6 @@ int nvim_opd_charwise_delete(oparg_T *oap)
     auto_format(false, true);
   }
   return OK;
-}
-
-
-/// Adjust end of operating area for ending on a multi-byte character.
-/// Used for deletion.
-static void mb_adjust_opend(oparg_T *oap)
-{
-  if (!oap->inclusive) {
-    return;
-  }
-
-  const char *line = ml_get(oap->end.lnum);
-  const char *ptr = line + oap->end.col;
-  if (*ptr != NUL) {
-    ptr -= utf_head_off(line, ptr);
-    ptr += utfc_ptr2len(ptr) - 1;
-    oap->end.col = (colnr_T)(ptr - line);
-  }
 }
 
 /// Put character 'c' at position 'lp'

@@ -2212,3 +2212,9 @@ void nvim_redraw_curbuf_later_inverted(void) { redraw_curbuf_later(UPD_INVERTED)
 void nvim_curwin_set_curswant_flag(bool val) { curwin->w_set_curswant = val; }
 /// Set VIsual.col = val.
 void nvim_set_VIsual_col_val(int val) { VIsual.col = val; }
+
+// Phase 2: linewise_delete accessors
+/// Delete count lines starting at cursor with undo support.
+void nvim_del_lines(int count, bool undo) { del_lines((linenr_T)count, undo); }
+/// Truncate the current line (called for OP_CHANGE linewise).
+void nvim_truncate_line(bool del_newline) { truncate_line(del_newline); }
