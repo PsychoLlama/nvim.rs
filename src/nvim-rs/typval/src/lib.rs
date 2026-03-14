@@ -2190,6 +2190,33 @@ pub unsafe extern "C" fn rs_tv_check_lock(
     tv_check_lock_impl(tv, name, name_len)
 }
 
+/// Check whether a Vimscript value is locked itself or refers to a locked container.
+/// VAR_LOCKED (not VAR_FIXED) is the criterion.
+#[export_name = "tv_islocked"]
+pub extern "C" fn rs_tv_islocked(tv: TypevalHandle) -> bool {
+    // VAR_LOCKED = 1
+    let v_lock = unsafe { nvim_tv_get_v_lock(tv) };
+    if v_lock == 1 {
+        return true;
+    }
+    match tv_type_impl(tv) {
+        VarType::List => {
+            let l = unsafe { nvim_tv_get_list(tv) };
+            tv_list_locked_impl(l) == 1 // VAR_LOCKED
+        }
+        VarType::Dict => {
+            let d = unsafe { nvim_tv_get_dict(tv) };
+            if d.is_null() {
+                false
+            } else {
+                let lock = unsafe { nvim_dict_get_lock(d) };
+                lock == 1 // VAR_LOCKED
+            }
+        }
+        _ => false,
+    }
+}
+
 // =============================================================================
 // Typval -> container conversions
 // =============================================================================

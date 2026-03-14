@@ -486,6 +486,7 @@ extern int tv_check_for_list_or_blob_arg(const typval_T *args, int idx);
 // Lock-checking functions (migrated to Rust)
 extern bool value_check_lock(VarLockStatus lock, const char *name, size_t name_len);
 extern bool tv_check_lock(const typval_T *tv, const char *name, size_t name_len);
+extern bool tv_islocked(const typval_T *tv);
 
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);

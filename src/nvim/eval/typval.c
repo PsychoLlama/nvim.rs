@@ -3318,23 +3318,7 @@ void tv_item_lock(typval_T *const tv, const int deep, const bool lock, const boo
   recurse--;
 }
 
-/// Check whether Vimscript value is locked itself or refers to a locked container
-///
-/// @warning Fixed container is not the same as locked.
-///
-/// @param[in]  tv  Value to check.
-///
-/// @return True if value is locked, false otherwise.
-bool tv_islocked(const typval_T *const tv)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return ((tv->v_lock == VAR_LOCKED)
-          || (tv->v_type == VAR_LIST
-              && (tv_list_locked(tv->vval.v_list) == VAR_LOCKED))
-          || (tv->v_type == VAR_DICT
-              && tv->vval.v_dict != NULL
-              && (tv->vval.v_dict->dv_lock == VAR_LOCKED)));
-}
+// tv_islocked: migrated to Rust (nvim-rs/typval)
 
 // tv_check_lock and value_check_lock migrated to Rust (nvim-rs/typval); declared in typval.h
 
