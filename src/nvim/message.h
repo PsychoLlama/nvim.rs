@@ -71,6 +71,9 @@ bool message_filtered(const char *msg);
 void msg_ui_refresh(void);
 void msg_ui_flush(void);
 
+// Phase 2 (message migration): Rust-implemented replacements
+void msg_start(void);
+
 // Phase 1: Simple leaf functions migrated to Rust
 bool msg(const char *s, int hl_id);
 int verb_msg(const char *s);

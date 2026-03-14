@@ -425,6 +425,10 @@ void nvim_msg_ui_flush_impl(void)
   }
 }
 
+// Phase 2: msg_start accessors
+int nvim_get_redrawing_cmdline(void) { return redrawing_cmdline ? 1 : 0; }
+void nvim_redir_write_newline(void) { redir_write("\n", 1); }
+
 // Phase 3.4: Display state accessors (used by Rust display.rs)
 void nvim_set_cmdline_row(int val) { cmdline_row = val; }
 const char *nvim_get_keep_msg(void) { return keep_msg; }
@@ -1585,60 +1589,6 @@ void msgmore(int n)
     }
   }
 }
-
-
-/// Prepare for outputting characters in the command line.
-void msg_start(void)
-{
-  bool did_return = false;
-
-  msg_row = MAX(msg_row, cmdline_row);
-
-  if (!msg_silent) {
-    XFREE_CLEAR(keep_msg);              // don't display old message now
-    need_fileinfo = false;
-  }
-
-  if (need_clr_eos || (p_ch == 0 && redrawing_cmdline)) {
-    // Halfway an ":echo" command and getting an (error) message: clear
-    // any text from the command.
-    need_clr_eos = false;
-    msg_clr_eos();
-  }
-
-  // if cmdheight=0, we need to scroll in the first line of msg_grid upon the screen
-  if (p_ch == 0 && !ui_has(kUIMessages) && !msg_scrolled) {
-    msg_grid_validate();
-    msg_scroll_up(false, true);
-    msg_scrolled++;
-    cmdline_row = Rows - 1;
-  }
-
-  if (!msg_scroll && full_screen) {     // overwrite last message
-    msg_row = cmdline_row;
-    msg_col = 0;
-  } else if (msg_didout || (p_ch == 0 && !ui_has(kUIMessages))) {  // start message on next line
-    msg_putchar('\n');
-    did_return = true;
-    cmdline_row = msg_row;
-  }
-  if (!msg_didany || lines_left < 0) {
-    msg_starthere();
-  }
-  if (msg_silent == 0) {
-    msg_didout = false;                     // no output on current line yet
-  }
-
-  if (ui_has(kUIMessages)) {
-    msg_ext_ui_flush();
-  }
-
-  // When redirecting, may need to start a new line.
-  if (!did_return) {
-    redir_write("\n", 1);
-  }
-}
-
 
 
 

@@ -33,7 +33,6 @@ extern "C" {
     // Core message output functions (call into C until fully migrated)
     fn msg_keep(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int;
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
-    fn msg_start();
     fn msg_clr_eos_force();
     fn msg_ext_ui_flush();
     // got_int accessor
@@ -61,6 +60,29 @@ extern "C" {
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_set_cmdline_row(val: c_int);
     fn nvim_get_msg_row() -> c_int;
+
+    // Phase 2: msg_start accessors
+    fn nvim_get_msg_scroll() -> c_int;
+    fn nvim_get_need_clr_eos() -> c_int;
+    fn nvim_set_need_clr_eos(val: c_int);
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_get_redrawing_cmdline() -> c_int;
+    fn nvim_get_full_screen() -> bool;
+    fn nvim_get_msg_didout() -> c_int;
+    fn nvim_set_msg_didout(val: c_int);
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_set_msg_scrolled(val: c_int);
+    fn nvim_get_msg_didany() -> c_int;
+    fn nvim_get_lines_left() -> c_int;
+    fn nvim_ui_has_messages() -> c_int;
+    fn nvim_set_need_fileinfo(val: c_int);
+    fn nvim_set_keep_msg_raw(s: *const c_char);
+    fn nvim_set_msg_row(val: c_int);
+    fn nvim_get_rows() -> c_int;
+    fn msg_grid_validate();
+    fn msg_scroll_up(may_throttle: c_int, zerocmd: c_int);
+    fn nvim_redir_write_newline();
+    fn msg_clr_eos();
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -263,14 +285,71 @@ pub unsafe extern "C" fn rs_msg_outnum(n: c_int) {
 
 /// Start a new message.
 ///
-/// Prepares the message area for output. This should be called before
-/// writing message content.
+/// Prepares the message area for output: handles keep_msg clearing,
+/// cmdheight=0 scrolling, scroll vs overwrite decision, and redirection.
 ///
 /// # Safety
-/// Calls C function that modifies global state.
-#[no_mangle]
+/// Calls C accessor functions that modify global display state.
+#[export_name = "msg_start"]
 pub unsafe extern "C" fn rs_msg_start() {
-    msg_start();
+    let mut did_return = false;
+
+    // Ensure msg_row is at least cmdline_row
+    let msg_row = nvim_get_msg_row();
+    let cmdline_row = nvim_get_cmdline_row();
+    if msg_row < cmdline_row {
+        nvim_set_msg_row(cmdline_row);
+    }
+
+    if nvim_get_msg_silent() == 0 {
+        // Don't display old message now; clear keep_msg and need_fileinfo.
+        nvim_set_keep_msg_raw(std::ptr::null());
+        nvim_set_need_fileinfo(0);
+    }
+
+    if nvim_get_need_clr_eos() != 0 || (nvim_get_p_ch() == 0 && nvim_get_redrawing_cmdline() != 0) {
+        // Halfway an ":echo" command and getting an (error) message: clear
+        // any text from the command.
+        nvim_set_need_clr_eos(0);
+        msg_clr_eos();
+    }
+
+    // If cmdheight=0, scroll in the first line of msg_grid upon the screen.
+    if nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0 && nvim_get_msg_scrolled() == 0 {
+        msg_grid_validate();
+        msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
+        let scrolled = nvim_get_msg_scrolled();
+        nvim_set_msg_scrolled(scrolled + 1);
+        nvim_set_cmdline_row(nvim_get_rows() - 1);
+    }
+
+    if nvim_get_msg_scroll() == 0 && nvim_get_full_screen() {
+        // Overwrite last message
+        nvim_set_msg_row(nvim_get_cmdline_row());
+        nvim_set_msg_col(0);
+    } else if nvim_get_msg_didout() != 0 || (nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0) {
+        // Start message on next line
+        rs_msg_putchar(c_int::from(b'\n'));
+        did_return = true;
+        nvim_set_cmdline_row(nvim_get_msg_row());
+    }
+
+    if nvim_get_msg_didany() == 0 || nvim_get_lines_left() < 0 {
+        rs_msg_starthere();
+    }
+
+    if nvim_get_msg_silent() == 0 {
+        nvim_set_msg_didout(0); // no output on current line yet
+    }
+
+    if nvim_ui_has_messages() != 0 {
+        msg_ext_ui_flush();
+    }
+
+    // When redirecting, may need to start a new line.
+    if !did_return {
+        nvim_redir_write_newline();
+    }
 }
 
 /// End a message.
