@@ -2235,20 +2235,11 @@ void nvim_set_compl_shows_dir(int val) { compl_shows_dir = val; }
 // Phase 1 (pass 8) accessors for rs_ins_compl_next / find_next_completion_match
 int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
 int nvim_get_compl_startpos_col(void) { return (int)compl_startpos.col; }
-int nvim_ins_compl_get_exp_wrap(int lnum, int col) {
-  return rs_ins_compl_get_exp(lnum, col);
-}
 int nvim_compl_shown_match_score(void) { return compl_shown_match ? compl_shown_match->cp_score : FUZZY_SCORE_NONE; }
 int nvim_compl_shown_match_has_fname(void) { return (compl_shown_match && compl_shown_match->cp_fname != NULL) ? 1 : 0; }
 int nvim_compl_shown_match_str_eq_orig(void) {
   return (compl_shown_match && compl_orig_text.data
           && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
-}
-void nvim_ins_compl_next_wrap(int allow_get_expansion, int todo, int advance) {
-  rs_ins_compl_next(allow_get_expansion, todo, advance);
-}
-int nvim_ins_compl_next_wrap_ret(int allow_get_expansion, int todo, int advance) {
-  return rs_ins_compl_next(allow_get_expansion, todo, advance);
 }
 int nvim_cpt_sources_index_non_neg(void) { return cpt_sources_index >= 0 ? 1 : 0; }
 int nvim_p_cto(void) { return (int)p_cto; }

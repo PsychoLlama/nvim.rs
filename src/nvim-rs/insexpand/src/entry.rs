@@ -313,11 +313,6 @@ extern "C" {
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
-    fn nvim_ins_compl_next_wrap_ret(
-        allow_get_expansion: c_int,
-        todo: c_int,
-        advance: c_int,
-    ) -> c_int;
     fn nvim_set_compl_matches(val: c_int);
     fn nvim_compl_set_curr_to_shown();
     fn nvim_set_compl_direction(val: c_int);
@@ -396,7 +391,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     // Find next match (and following matches)
     let save_w_wrow = nvim_get_curwin_w_wrow();
     let save_w_leftcol = nvim_get_curwin_w_leftcol();
-    let n = nvim_ins_compl_next_wrap_ret(1, rs_ins_compl_key2count(c), insert_match);
+    let n = crate::next::rs_ins_compl_next(1, rs_ins_compl_key2count(c), insert_match);
 
     if n > 1 {
         // All matches have been found
