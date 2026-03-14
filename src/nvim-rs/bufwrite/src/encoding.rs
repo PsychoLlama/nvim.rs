@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_ucs2bytes(c: u32, pp: *mut *mut u8, flags: c_int) ->
 }
 
 extern "C" {
-    fn nvim_bw_get_fio_flags(name: *const std::ffi::c_char) -> c_int;
+    fn rs_get_fio_flags(name: *const std::ffi::c_char) -> c_int;
 }
 
 /// Generate a BOM in `buf[4]` for encoding `name`.
@@ -283,7 +283,7 @@ pub unsafe extern "C" fn rs_make_bom(buf: *mut u8, name: *const std::ffi::c_char
     if buf.is_null() || name.is_null() {
         return 0;
     }
-    let flags = unsafe { nvim_bw_get_fio_flags(name) };
+    let flags = unsafe { rs_get_fio_flags(name) };
 
     // Can't put a BOM in a non-Unicode file.
     if flags == crate::FIO_LATIN1 as c_int || flags == 0 {

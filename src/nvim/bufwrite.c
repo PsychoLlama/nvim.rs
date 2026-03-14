@@ -175,10 +175,6 @@ void nvim_bw_xfree(char *ptr)
   xfree(ptr);
 }
 
-int nvim_bw_get_fio_flags(const char *name)
-{
-  return rs_get_fio_flags(name);
-}
 
 // File info accessors
 int nvim_bw_os_fileinfo(const char *fname, FileInfo *info)

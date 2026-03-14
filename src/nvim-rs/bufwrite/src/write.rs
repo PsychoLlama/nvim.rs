@@ -188,7 +188,7 @@ extern "C" {
     fn nvim_bw_enc_canonize(enc: *const c_char) -> *mut c_char;
     #[link_name = "rs_need_conversion"]
     fn nvim_bw_need_conversion(fenc: *const c_char) -> c_int;
-    fn nvim_bw_get_fio_flags(name: *const c_char) -> c_int;
+    fn rs_get_fio_flags(name: *const c_char) -> c_int;
     fn nvim_bw_get_fileformat_force(buf: BufHandle, eap: ExargHandle) -> c_int;
 
     // iconv
@@ -799,7 +799,7 @@ pub unsafe extern "C" fn rs_buf_write(
     let mut wb_flags: c_int = 0;
 
     if converted {
-        wb_flags = unsafe { nvim_bw_get_fio_flags(fenc) };
+        wb_flags = unsafe { rs_get_fio_flags(fenc) };
         if wb_flags & (FIO_UCS2 | FIO_UCS4 | FIO_UTF16 | FIO_UTF8) != 0 {
             let conv_buflen = if wb_flags & (FIO_UCS2 | FIO_UTF16 | FIO_UTF8) != 0 {
                 bufsize as usize * 2
