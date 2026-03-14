@@ -3976,6 +3976,322 @@ pub unsafe extern "C" fn rs_mkspell_validate_args(
 }
 
 // =============================================================================
+// Phase 1 & 2: Functions migrated from C spellfile.c
+// =============================================================================
+
+use std::ffi::c_char;
+
+extern "C" {
+    // mb_ptr2char_adv: advance *pp by one multibyte char, return codepoint.
+    // Matches C signature: int mb_cptr2char_adv(const char **pp)
+    #[link_name = "mb_cptr2char_adv"]
+    fn mb_ptr2char_adv_p(pp: *mut *const c_char) -> c_int;
+    fn mb_charlen(p: *const c_char) -> c_int;
+    fn emsg(s: *const c_char) -> bool;
+    fn hash_init(ht: *mut crate::HashtabRaw);
+    fn hash_hash(key: *const c_char) -> usize;
+    fn hash_lookup(
+        ht: *const crate::HashtabRaw,
+        key: *const c_char,
+        key_len: usize,
+        hash: usize,
+    ) -> *mut crate::HashitemRaw;
+    fn hash_add_item(
+        ht: *mut crate::HashtabRaw,
+        hi: *mut crate::HashitemRaw,
+        key: *mut c_char,
+        hash: usize,
+    );
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    #[link_name = "xmalloc"]
+    fn xmalloc_spell(size: usize) -> *mut std::ffi::c_void;
+    #[link_name = "xfree"]
+    fn xfree_spell(ptr: *mut std::ffi::c_void);
+}
+
+extern "C" {
+    // Global: bool did_set_spelltab (spell.c)
+    #[link_name = "did_set_spelltab"]
+    static did_set_spelltab_global: bool;
+
+    // Global: spelltab_T spelltab (spell.c/spell.h)
+    #[link_name = "spelltab"]
+    static spelltab_global_sf: crate::SpelltabT;
+
+    // Sentinel for removed hash items
+    #[link_name = "hash_removed"]
+    static hash_removed_sentinel: c_char;
+}
+
+/// Error message for word character conflict (E763).
+static E763_MSG: &[u8] = b"E763: Word characters differ between spell files\0";
+/// Error message for duplicate map entry (E783).
+static E783_MSG: &[u8] = b"E783: Duplicate char in MAP entry\0";
+
+/// Implements `set_spell_charflags` + `set_spell_finish` from spellfile.c.
+///
+/// Applies charflags and fold character mapping to the global spelltab.
+/// Returns 0 (OK) on success, 1 (FAIL) if spelltab conflicts with a previously
+/// loaded spell file.
+///
+/// # Safety
+/// `flags_in` must be valid for `cnt` bytes. `fol` must be a valid NUL-terminated
+/// multibyte string.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_set_spell_charflags(
+    flags_in: *const u8,
+    cnt: c_int,
+    fol: *const c_char,
+) -> c_int {
+    // CF_WORD / CF_UPPER flags (from spellfile.c)
+    const CF_WORD: u8 = 0x01;
+    const CF_UPPER: u8 = 0x02;
+
+    // Build a new spelltab_T on the stack (initialised to ASCII defaults via
+    // the same logic as clear_spell_chartab).
+    let mut new_st = crate::SpelltabT {
+        st_isw: [false; 256],
+        st_isu: [false; 256],
+        st_fold: std::array::from_fn(|i| i as u8),
+        st_upper: std::array::from_fn(|i| i as u8),
+    };
+
+    // Apply ASCII defaults.
+    for i in b'0'..=b'9' {
+        new_st.st_isw[i as usize] = true;
+    }
+    for i in b'A'..=b'Z' {
+        new_st.st_isw[i as usize] = true;
+        new_st.st_isu[i as usize] = true;
+        new_st.st_fold[i as usize] = i + 0x20;
+    }
+    for i in b'a'..=b'z' {
+        new_st.st_isw[i as usize] = true;
+        new_st.st_upper[i as usize] = i - 0x20;
+    }
+
+    // Apply charflags for the 128..255 range (matching set_spell_charflags).
+    let mut p = fol;
+    for i in 0..128usize {
+        if i < cnt as usize {
+            let flag = *flags_in.add(i);
+            new_st.st_isw[i + 128] = (flag & CF_WORD) != 0;
+            new_st.st_isu[i + 128] = (flag & CF_UPPER) != 0;
+        }
+
+        if *p != 0 {
+            let c = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(p));
+            new_st.st_fold[i + 128] = c as u8;
+            if i + 128 != c as usize && new_st.st_isu[i + 128] && (c as usize) < 256 {
+                new_st.st_upper[c as usize] = (i + 128) as u8;
+            }
+        }
+    }
+
+    // set_spell_finish: compare or install the new table.
+    if did_set_spelltab_global {
+        let st = std::ptr::addr_of!(spelltab_global_sf);
+        for i in 0..256 {
+            if (*st).st_isw[i] != new_st.st_isw[i]
+                || (*st).st_isu[i] != new_st.st_isu[i]
+                || (*st).st_fold[i] != new_st.st_fold[i]
+                || (*st).st_upper[i] != new_st.st_upper[i]
+            {
+                let _ = emsg(E763_MSG.as_ptr().cast());
+                return 1; // FAIL
+            }
+        }
+    } else {
+        // Copy new_st into the global spelltab.
+        let st = std::ptr::addr_of!(spelltab_global_sf).cast_mut();
+        *st = new_st;
+        // Set did_set_spelltab = true.
+        let flag = std::ptr::addr_of!(did_set_spelltab_global).cast_mut();
+        *flag = true;
+    }
+
+    0 // OK
+}
+
+// =============================================================================
+// Phase 1: rs_mb_str2wide -- replaces C mb_str2wide
+// =============================================================================
+
+/// Convert a multibyte string to a newly C-allocated wide-char (c_int) array.
+///
+/// Equivalent to the C `mb_str2wide` function.
+/// The returned array is NUL-terminated and must be freed with `xfree`.
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated multibyte string.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_mb_str2wide(s: *const c_char) -> *mut c_int {
+    let char_count = mb_charlen(s) as usize;
+    let alloc_size = (char_count + 1) * std::mem::size_of::<c_int>();
+    let res = xmalloc_spell(alloc_size).cast::<c_int>();
+
+    let mut p = s;
+    let mut i = 0usize;
+    while *p != 0 {
+        *res.add(i) = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(p));
+        i += 1;
+    }
+    *res.add(i) = 0; // NUL terminator
+
+    res
+}
+
+// =============================================================================
+// Phase 2: rs_set_sal_first -- replaces C set_sal_first
+// =============================================================================
+
+/// Fill the first-index table for soundalike (SAL) items.
+///
+/// Equivalent to the C `set_sal_first` function. Reorders `salitem_T` entries
+/// in `sl_sal` so items with the same first wide-char low byte are contiguous,
+/// then fills `sl_sal_first`.
+///
+/// # Safety
+/// `slang` must be a valid pointer to a `SlangRaw` with `sl_sal` and
+/// `sl_sal_first` properly initialised.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_set_sal_first(slang: *mut crate::SlangRaw) {
+    let gap = std::ptr::addr_of_mut!((*slang).sl_sal);
+    let sfirst = (*slang).sl_sal_first.as_mut_ptr();
+
+    // Initialize all entries to -1.
+    for i in 0..256usize {
+        *sfirst.add(i) = -1;
+    }
+
+    let smp = (*gap).ga_data.cast::<crate::SalitemT>();
+    let gap_len = (*gap).ga_len as usize;
+    let mut i = 0usize;
+
+    while i < gap_len {
+        // Use the lowest byte of the first wide-char of sm_lead_w.
+        let lead_w = (*smp.add(i)).sm_lead_w;
+        let c = (*lead_w & 0xff) as usize;
+
+        if *sfirst.add(c) == -1 {
+            *sfirst.add(c) = i as c_int;
+
+            // Skip over entries that already have the same index byte.
+            while i + 1 < gap_len {
+                let next_c = (*(*smp.add(i + 1)).sm_lead_w & 0xff) as usize;
+                if next_c == c {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+
+            // Move any further entries with the same byte to follow.
+            let mut n = 1usize;
+            while i + n < gap_len {
+                let nc = (*(*smp.add(i + n)).sm_lead_w & 0xff) as usize;
+                if nc == c {
+                    // Move entry at i+n to position i+1, shifting others right.
+                    i += 1;
+                    // Save the entry we want to insert at position i.
+                    let tsal = std::ptr::read(smp.add(i + n - 1));
+                    // Shift smp[i .. i+n-1] right by one position.
+                    std::ptr::copy(smp.add(i), smp.add(i + 1), n - 1);
+                    std::ptr::write(smp.add(i), tsal);
+                    n -= 1;
+                } else {
+                    n += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+// =============================================================================
+// Phase 2: rs_set_map_str -- replaces C set_map_str
+// =============================================================================
+
+/// Process MAP string, populating `sl_map_array` and `sl_map_hash`.
+///
+/// Equivalent to the C `set_map_str` function.
+///
+/// # Safety
+/// `slang` must be a valid pointer to a `SlangRaw`. `map` must be a valid
+/// NUL-terminated multibyte string.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_set_map_str(slang: *mut crate::SlangRaw, map: *const c_char) {
+    if *map == 0 {
+        (*slang).sl_has_map = false;
+        return;
+    }
+    (*slang).sl_has_map = true;
+
+    // Init the array empty.
+    for i in 0..256usize {
+        (*slang).sl_map_array[i] = 0;
+    }
+    hash_init(std::ptr::addr_of_mut!((*slang).sl_map_hash));
+
+    let mut headc: c_int = 0;
+    let mut p = map;
+
+    while *p != 0 {
+        let c = mb_ptr2char_adv_p(std::ptr::addr_of_mut!(p));
+
+        if c == c_int::from(b'/') {
+            headc = 0;
+        } else {
+            if headc == 0 {
+                headc = c;
+            }
+
+            if c >= 256 {
+                // Characters above 255: put in hash table.
+                // Key layout: utf8(c) + NUL + utf8(headc) + NUL
+                let cl = utf_char2len(c) as usize;
+                let headcl = utf_char2len(headc) as usize;
+                let b = xmalloc_spell(cl + headcl + 2).cast::<c_char>();
+                utf_char2bytes(c, b);
+                *b.add(cl) = 0;
+                utf_char2bytes(headc, b.add(cl + 1));
+                *b.add(cl + 1 + headcl) = 0;
+
+                let hash = hash_hash(b);
+                let key_len = libc::strlen(b);
+                let hi = hash_lookup(std::ptr::addr_of!((*slang).sl_map_hash), b, key_len, hash);
+                if hashitem_is_empty_sf(hi) {
+                    hash_add_item(std::ptr::addr_of_mut!((*slang).sl_map_hash), hi, b, hash);
+                } else {
+                    let _ = emsg(E783_MSG.as_ptr().cast());
+                    xfree_spell(b.cast());
+                }
+            } else {
+                // ASCII/latin1: store in array.
+                (*slang).sl_map_array[c as usize] = headc;
+            }
+        }
+    }
+}
+
+/// Returns true if a hashitem is empty (null key or removed sentinel).
+#[inline]
+unsafe fn hashitem_is_empty_sf(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null() || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed_sentinel))
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

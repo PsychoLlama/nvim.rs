@@ -456,6 +456,13 @@ extern int rs_mkspell_output_fname(const uint8_t *const *fnames, int fcount,
 extern int rs_mkspell_validate_args(const uint8_t *const *innames, int incount,
                                     uint8_t *region_name_out);
 
+// Phase 1 & 2: New Rust replacements for spellfile.c utility functions
+extern int rs_set_spell_charflags(const uint8_t *flags_in, int cnt, const char *fol);
+extern int *rs_mb_str2wide(const char *s);
+extern void rs_tree_count_words(const uint8_t *byts, int *idxs, int len);
+extern void rs_set_sal_first(slang_T *slang);
+extern void rs_set_map_str(slang_T *slang, const char *map);
+
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
 // as they orchestrate file I/O and coordinate multiple write operations.
@@ -521,8 +528,6 @@ enum {
 static const char *e_spell_trunc = N_("E758: Truncated spell file");
 static const char e_error_while_reading_sug_file_str[]
   = N_("E782: Error while reading .sug file: %s");
-static const char e_duplicate_char_in_map_entry[]
-  = N_("E783: Duplicate char in MAP entry");
 static const char *e_illegal_character_in_word = N_("E1280: Illegal character in word");
 static const char *e_afftrailing = N_("Trailing text in %s line %d: %s");
 static const char *e_affname = N_("Affix name too long in %s line %d: %s");
@@ -756,25 +761,6 @@ typedef struct {
     } \
   } while (0)
 
-/// Check that spell file starts with a magic string
-///
-/// Does not check for version of the file.
-///
-/// @param  fd  File to check.
-///
-/// @return 0 in case of success, SP_TRUNCERROR if file contains not enough
-///         bytes, SP_FORMERROR if it does not match magic string and
-///         SP_OTHERERROR if reading file failed.
-static inline int spell_check_magic_string(FILE *const fd)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE
-{
-  char buf[VIMSPELLMAGICL];
-  SPELL_READ_BYTES(buf, VIMSPELLMAGICL, fd,; );
-  if (memcmp(buf, VIMSPELLMAGIC, VIMSPELLMAGICL) != 0) {
-    return SP_FORMERROR;
-  }
-  return 0;
-}
 
 /// Load one spell file and store the info into a slang_T.
 ///
@@ -829,19 +815,22 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
   estack_push(ETYPE_SPELL, fname, 0);
   did_estack_push = true;
 
-  // <HEADER>: <fileID>
-  const int scms_ret = spell_check_magic_string(fd);
-  switch (scms_ret) {
-  case SP_FORMERROR:
-  case SP_TRUNCERROR:
-    semsg("%s", _("E757: This does not look like a spell file"));
-    goto endFAIL;
-  case SP_OTHERERROR:
-    semsg(_("E5042: Failed to read spell file %s: %s"),
-          fname, strerror(ferror(fd)));
-    goto endFAIL;
-  case 0:
-    break;
+  // <HEADER>: <fileID> -- validate magic string
+  {
+    char magic_buf[VIMSPELLMAGICL];
+    if (fread(magic_buf, 1, VIMSPELLMAGICL, fd) != VIMSPELLMAGICL) {
+      if (feof(fd)) {
+        semsg("%s", _("E757: This does not look like a spell file"));
+      } else {
+        semsg(_("E5042: Failed to read spell file %s: %s"),
+              fname, strerror(ferror(fd)));
+      }
+      goto endFAIL;
+    }
+    if (memcmp(magic_buf, VIMSPELLMAGIC, VIMSPELLMAGICL) != 0) {
+      semsg("%s", _("E757: This does not look like a spell file"));
+      goto endFAIL;
+    }
   }
   int c = getc(fd);                                         // <versionnr>
   if (c < VIMSPELLVERSION) {
@@ -876,12 +865,50 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
       break;
 
     case SN_REGION:
-      res = read_region_section(fd, lp, len);
+      // Inline of deleted read_region_section():
+      if (len > MAXREGIONS * 2) {
+        res = SP_FORMERROR;
+      } else {
+        if (fread(lp->sl_regions, 1, (size_t)len, fd) != (size_t)len) {
+          res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        } else if (memchr(lp->sl_regions, NUL, (size_t)len)) {
+          res = SP_FORMERROR;
+        } else {
+          lp->sl_regions[len] = NUL;
+        }
+      }
       break;
 
-    case SN_CHARFLAGS:
-      res = read_charflags_section(fd);
+    case SN_CHARFLAGS: {
+      // Read charflags section inline (replaces read_charflags_section +
+      // set_spell_charflags + set_spell_finish, all now in Rust).
+      int flagslen, follen;
+      char *flags = read_cnt_string(fd, 1, &flagslen);
+      if (flagslen < 0) {
+        res = flagslen;
+        break;
+      }
+      char *fol = read_cnt_string(fd, 2, &follen);
+      if (follen < 0) {
+        xfree(flags);
+        res = follen;
+        break;
+      }
+      if ((flags == NULL) != (fol == NULL)) {
+        xfree(flags);
+        xfree(fol);
+        res = SP_FORMERROR;
+        break;
+      }
+      if (flags != NULL && fol != NULL) {
+        if (rs_set_spell_charflags((uint8_t *)flags, flagslen, fol) != 0) {
+          res = SP_OTHERERROR;
+        }
+      }
+      xfree(flags);
+      xfree(fol);
       break;
+    }
 
     case SN_MIDWORD:
       lp->sl_midword = read_string(fd, (size_t)len);  // <midword>
@@ -915,13 +942,35 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
       if (p == NULL) {
         goto endFAIL;
       }
-      set_map_str(lp, p);
+      rs_set_map_str(lp, p);
       xfree(p);
       break;
 
-    case SN_WORDS:
-      res = read_words_section(fd, lp, len);
+    case SN_WORDS: {
+      // Inline of deleted read_words_section():
+      uint8_t *wbuf = xmalloc((size_t)len);
+      if (fread(wbuf, 1, (size_t)len, fd) != (size_t)len) {
+        xfree(wbuf);
+        res = feof(fd) ? SP_TRUNCERROR : SP_OTHERERROR;
+        goto someerror;
+      }
+      size_t woff = 0;
+      uint8_t wword[MAXWLEN];
+      while (woff < (size_t)len) {
+        size_t wconsumed;
+        int wlen = rs_parse_words_entry(wbuf + woff, (size_t)len - woff,
+                                        wword, MAXWLEN, &wconsumed);
+        if (wlen < 0) {
+          xfree(wbuf);
+          res = wlen;
+          goto someerror;
+        }
+        count_common_word(lp, (char *)wword, -1, 10);
+        woff += wconsumed;
+      }
+      xfree(wbuf);
       break;
+    }
 
     case SN_SUGFILE:
       lp->sl_sugtime = get8ctime(fd);                   // <timestamp>
@@ -1075,54 +1124,6 @@ endOK:
   return lp;
 }
 
-// Fill in the wordcount fields for a trie.
-// Returns the total number of words.
-static void tree_count_words(const uint8_t *byts, idx_T *idxs)
-{
-  idx_T arridx[MAXWLEN];
-  int curi[MAXWLEN];
-  int wordcount[MAXWLEN];
-
-  arridx[0] = 0;
-  curi[0] = 1;
-  wordcount[0] = 0;
-  int depth = 0;
-  while (depth >= 0 && !got_int) {
-    if (curi[depth] > byts[arridx[depth]]) {
-      // Done all bytes at this node, go up one level.
-      idxs[arridx[depth]] = wordcount[depth];
-      if (depth > 0) {
-        wordcount[depth - 1] += wordcount[depth];
-      }
-
-      depth--;
-      fast_breakcheck();
-    } else {
-      // Do one more byte at this node.
-      idx_T n = arridx[depth] + curi[depth];
-      curi[depth]++;
-
-      int c = byts[n];
-      if (c == 0) {
-        // End of word, count it.
-        wordcount[depth]++;
-
-        // Skip over any other NUL bytes (same word with different
-        // flags).
-        while (byts[n + 1] == 0) {
-          n++;
-          curi[depth]++;
-        }
-      } else {
-        // Normal char, go one level deeper to count the words.
-        depth++;
-        arridx[depth] = idxs[n];
-        curi[depth] = 1;
-        wordcount[depth] = 0;
-      }
-    }
-  }
-}
 
 /// Load the .sug files for languages that have one and weren't loaded yet.
 void suggest_load_files(void)
@@ -1227,8 +1228,10 @@ someerror:
 
       // Need to put word counts in the word tries, so that we can find
       // a word by its number.
-      tree_count_words(slang->sl_fbyts, slang->sl_fidxs);
-      tree_count_words(slang->sl_sbyts, slang->sl_sidxs);
+      rs_tree_count_words(slang->sl_fbyts, slang->sl_fidxs, slang->sl_fbyts_len);
+      // Soundfold tree has no stored length; pass INT_MAX (tree structure
+      // provides its own termination via sibling counts).
+      rs_tree_count_words(slang->sl_sbyts, slang->sl_sidxs, INT_MAX);
 
 nextone:
       if (fd != NULL) {
@@ -1269,52 +1272,7 @@ static char *read_cnt_string(FILE *fd, int cnt_bytes, int *cntp)
   return str;
 }
 
-// Read SN_REGION: <regionname> ...
-// Return SP_*ERROR flags.
-static int read_region_section(FILE *fd, slang_T *lp, int len)
-{
-  if (len > MAXREGIONS * 2) {
-    return SP_FORMERROR;
-  }
-  SPELL_READ_NONNUL_BYTES(lp->sl_regions, (size_t)len, fd,; );
-  lp->sl_regions[len] = NUL;
-  return 0;
-}
 
-// Read SN_CHARFLAGS section: <charflagslen> <charflags>
-//                              <folcharslen> <folchars>
-// Return SP_*ERROR flags.
-static int read_charflags_section(FILE *fd)
-{
-  int flagslen, follen;
-
-  // <charflagslen> <charflags>
-  char *flags = read_cnt_string(fd, 1, &flagslen);
-  if (flagslen < 0) {
-    return flagslen;
-  }
-
-  // <folcharslen> <folchars>
-  char *fol = read_cnt_string(fd, 2, &follen);
-  if (follen < 0) {
-    xfree(flags);
-    return follen;
-  }
-
-  // Set the word-char flags and fill SPELL_ISUPPER() table.
-  if (flags != NULL && fol != NULL) {
-    set_spell_charflags(flags, flagslen, fol);
-  }
-
-  xfree(flags);
-  xfree(fol);
-
-  // When <charflagslen> is zero then <fcharlen> must also be zero.
-  if ((flags == NULL) != (fol == NULL)) {
-    return SP_FORMERROR;
-  }
-  return 0;
-}
 
 // Read SN_PREFCOND section.
 // Return SP_*ERROR flags.
@@ -1529,17 +1487,17 @@ static int read_sal_section(FILE *fd, slang_T *slang, int len)
     }
 
     // convert the multi-byte strings to wide char strings
-    smp->sm_lead_w = mb_str2wide(smp->sm_lead);
+    smp->sm_lead_w = rs_mb_str2wide(smp->sm_lead);
     smp->sm_leadlen = mb_charlen(smp->sm_lead);
     if (smp->sm_oneof == NULL) {
       smp->sm_oneof_w = NULL;
     } else {
-      smp->sm_oneof_w = mb_str2wide(smp->sm_oneof);
+      smp->sm_oneof_w = rs_mb_str2wide(smp->sm_oneof);
     }
     if (smp->sm_to == NULL) {
       smp->sm_to_w = NULL;
     } else {
-      smp->sm_to_w = mb_str2wide(smp->sm_to);
+      smp->sm_to_w = rs_mb_str2wide(smp->sm_to);
     }
   }
 
@@ -1552,7 +1510,7 @@ static int read_sal_section(FILE *fd, slang_T *slang, int len)
     char *p = xmalloc(1);
     p[0] = NUL;
     smp->sm_lead = p;
-    smp->sm_lead_w = mb_str2wide(smp->sm_lead);
+    smp->sm_lead_w = rs_mb_str2wide(smp->sm_lead);
     smp->sm_leadlen = 0;
     smp->sm_oneof = NULL;
     smp->sm_oneof_w = NULL;
@@ -1563,40 +1521,11 @@ static int read_sal_section(FILE *fd, slang_T *slang, int len)
   }
 
   // Fill the first-index table.
-  set_sal_first(slang);
+  rs_set_sal_first(slang);
 
   return 0;
 }
 
-// Read SN_WORDS: <word> ...
-// Return SP_*ERROR flags.
-// Uses Rust for parsing word entries.
-static int read_words_section(FILE *fd, slang_T *lp, int len)
-{
-  // Read entire section into buffer
-  uint8_t *section_buf = xmalloc((size_t)len);
-  SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-
-  size_t offset = 0;
-  uint8_t word[MAXWLEN];
-
-  while (offset < (size_t)len) {
-    size_t consumed;
-    int word_len = rs_parse_words_entry(section_buf + offset, (size_t)len - offset,
-                                        word, MAXWLEN, &consumed);
-    if (word_len < 0) {
-      xfree(section_buf);
-      return word_len;
-    }
-
-    // Init the count to 10.
-    count_common_word(lp, (char *)word, -1, 10);
-    offset += consumed;
-  }
-
-  xfree(section_buf);
-  return 0;
-}
 
 // SN_SOFO: <sofofromlen> <sofofrom> <sofotolen> <sofoto>
 // Return SP_*ERROR flags.
@@ -1829,64 +1758,7 @@ static int set_sofo(slang_T *lp, const char *from, const char *to)
   return 0;
 }
 
-// Fill the first-index table for "lp".
-static void set_sal_first(slang_T *lp)
-{
-  garray_T *gap = &lp->sl_sal;
 
-  salfirst_T *sfirst = lp->sl_sal_first;
-  for (int i = 0; i < 256; i++) {
-    sfirst[i] = -1;
-  }
-  salitem_T *smp = (salitem_T *)gap->ga_data;
-  for (int i = 0; i < gap->ga_len; i++) {
-    // Use the lowest byte of the first character.  For latin1 it's
-    // the character, for other encodings it should differ for most
-    // characters.
-    int c = *smp[i].sm_lead_w & 0xff;
-    if (sfirst[c] == -1) {
-      sfirst[c] = i;
-
-      // Make sure all entries with this byte are following each
-      // other.  Move the ones that are in the wrong position.  Do
-      // keep the same ordering!
-      while (i + 1 < gap->ga_len
-             && (*smp[i + 1].sm_lead_w & 0xff) == c) {
-        // Skip over entry with same index byte.
-        i++;
-      }
-
-      for (int n = 1; i + n < gap->ga_len; n++) {
-        if ((*smp[i + n].sm_lead_w & 0xff) == c) {
-          salitem_T tsal;
-
-          // Move entry with same index byte after the entries
-          // we already found.
-          i++;
-          n--;
-          tsal = smp[i + n];
-          memmove(smp + i + 1, smp + i, sizeof(salitem_T) * (size_t)n);
-          smp[i] = tsal;
-        }
-      }
-    }
-  }
-}
-
-// Turn a multi-byte string into a wide character string.
-// Return it in allocated memory.
-static int *mb_str2wide(const char *s)
-{
-  int i = 0;
-
-  int *res = xmalloc(((size_t)mb_charlen(s) + 1) * sizeof(int));
-  for (const char *p = s; *p != NUL;) {
-    res[i++] = mb_ptr2char_adv(&p);
-  }
-  res[i] = NUL;
-
-  return res;
-}
 
 /// Reads a tree from the .spl or .sug file.
 /// Allocates the memory and stores pointers in "bytsp" and "idxsp".
@@ -5729,55 +5601,6 @@ static void init_spellfile(void)
 /// Set the spell character tables from strings in the .spl file.
 ///
 /// @param cnt  length of "flags"
-static void set_spell_charflags(const char *flags_in, int cnt, const char *fol)
-{
-  const uint8_t *flags = (uint8_t *)flags_in;
-  // We build the new tables here first, so that we can compare with the
-  // previous one.
-  spelltab_T new_st;
-  const char *p = fol;
-
-  clear_spell_chartab(&new_st);
-
-  for (int i = 0; i < 128; i++) {
-    if (i < cnt) {
-      new_st.st_isw[i + 128] = (flags[i] & CF_WORD) != 0;
-      new_st.st_isu[i + 128] = (flags[i] & CF_UPPER) != 0;
-    }
-
-    if (*p != NUL) {
-      int c = mb_ptr2char_adv(&p);
-      new_st.st_fold[i + 128] = (uint8_t)c;
-      if (i + 128 != c && new_st.st_isu[i + 128] && c < 256) {
-        new_st.st_upper[c] = (uint8_t)(i + 128);
-      }
-    }
-  }
-
-  set_spell_finish(&new_st);
-}
-
-static int set_spell_finish(spelltab_T *new_st)
-{
-  if (did_set_spelltab) {
-    // check that it's the same table
-    for (int i = 0; i < 256; i++) {
-      if (spelltab.st_isw[i] != new_st->st_isw[i]
-          || spelltab.st_isu[i] != new_st->st_isu[i]
-          || spelltab.st_fold[i] != new_st->st_fold[i]
-          || spelltab.st_upper[i] != new_st->st_upper[i]) {
-        emsg(_("E763: Word characters differ between spell files"));
-        return FAIL;
-      }
-    }
-  } else {
-    // copy the new spelltab into the one being used
-    spelltab = *new_st;
-    did_set_spelltab = true;
-  }
-
-  return OK;
-}
 
 // Write the table with prefix conditions to the .spl file.
 // When "fd" is NULL only count the length of what is written.
@@ -5817,62 +5640,3 @@ static int write_spell_prefcond(FILE *fd, garray_T *gap, size_t *fwv)
   return (int)written;
 }
 
-// Use map string "map" for languages "lp".
-static void set_map_str(slang_T *lp, const char *map)
-{
-  int headc = 0;
-
-  if (*map == NUL) {
-    lp->sl_has_map = false;
-    return;
-  }
-  lp->sl_has_map = true;
-
-  // Init the array and hash tables empty.
-  for (int i = 0; i < 256; i++) {
-    lp->sl_map_array[i] = 0;
-  }
-  hash_init(&lp->sl_map_hash);
-
-  // The similar characters are stored separated with slashes:
-  // "aaa/bbb/ccc/".  Fill sl_map_array[c] with the character before c and
-  // before the same slash.  For characters above 255 sl_map_hash is used.
-  for (const char *p = map; *p != NUL;) {
-    int c = mb_cptr2char_adv(&p);
-    if (c == '/') {
-      headc = 0;
-    } else {
-      if (headc == 0) {
-        headc = c;
-      }
-
-      // Characters above 255 don't fit in sl_map_array[], put them in
-      // the hash table.  Each entry is the char, a NUL the headchar and
-      // a NUL.
-      if (c >= 256) {
-        int cl = utf_char2len(c);
-        int headcl = utf_char2len(headc);
-        hash_T hash;
-        hashitem_T *hi;
-
-        char *b = xmalloc((size_t)(cl + headcl) + 2);
-        utf_char2bytes(c, b);
-        b[cl] = NUL;
-        utf_char2bytes(headc, b + cl + 1);
-        b[cl + 1 + headcl] = NUL;
-        hash = hash_hash(b);
-        hi = hash_lookup(&lp->sl_map_hash, b, strlen(b), hash);
-        if (HASHITEM_EMPTY(hi)) {
-          hash_add_item(&lp->sl_map_hash, hi, b, hash);
-        } else {
-          // This should have been checked when generating the .spl
-          // file.
-          emsg(_(e_duplicate_char_in_map_entry));
-          xfree(b);
-        }
-      } else {
-        lp->sl_map_array[c] = headc;
-      }
-    }
-  }
-}
