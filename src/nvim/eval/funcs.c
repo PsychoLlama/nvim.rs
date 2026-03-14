@@ -321,6 +321,12 @@ extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 7 VimL function declarations (timer.rs - exported via #[export_name])
+extern void f_timer_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_timer_pause(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_timer_start(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_timer_stop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 6 VimL function declarations (misc.rs - exported via #[export_name])
 extern void f_ctxget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_ctxpush(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -6366,90 +6372,7 @@ static void f_taglist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "timer_info([timer])" function
-static void f_timer_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-
-  if (tv_check_for_opt_number_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
-    if (timer != NULL && (!timer->stopped || timer->refcount > 1)) {
-      add_timer_info(rettv, timer);
-    }
-  } else {
-    add_timer_info_all(rettv);
-  }
-}
-
-/// "timer_pause(timer, paused)" function
-static void f_timer_pause(typval_T *argvars, typval_T *unused, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_NUMBER) {
-    emsg(_(e_number_exp));
-    return;
-  }
-
-  int paused = (bool)tv_get_number(&argvars[1]);
-  timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
-  if (timer != NULL) {
-    if (!timer->paused && paused) {
-      time_watcher_stop(&timer->tw);
-    } else if (timer->paused && !paused) {
-      time_watcher_start(&timer->tw, timer_due_cb, (uint64_t)timer->timeout,
-                         (uint64_t)timer->timeout);
-    }
-    timer->paused = paused;
-  }
-}
-
-/// "timer_start(timeout, callback, opts)" function
-static void f_timer_start(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int repeat = 1;
-
-  rettv->vval.v_number = -1;
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    if (tv_check_for_nonnull_dict_arg(argvars, 2) == FAIL) {
-      return;
-    }
-    dict_T *dict = argvars[2].vval.v_dict;
-    dictitem_T *const di = tv_dict_find(dict, S_LEN("repeat"));
-    if (di != NULL) {
-      repeat = (int)tv_get_number(&di->di_tv);
-      if (repeat == 0) {
-        repeat = 1;
-      }
-    }
-  }
-
-  Callback callback;
-  if (!rs_callback_from_typval(&callback, &argvars[1])) {
-    return;
-  }
-  rettv->vval.v_number = (varnumber_T)timer_start(tv_get_number(&argvars[0]), repeat, &callback);
-}
-
-/// "timer_stop(timerid)" function
-static void f_timer_stop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_number_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
-  if (timer == NULL) {
-    return;
-  }
-
-  timer_stop(timer);
-}
+// f_timer_info, f_timer_pause, f_timer_start, f_timer_stop: migrated to Rust (timer.rs)
 
 // f_timer_stopall: migrated to Rust (simple.rs)
 
@@ -7560,5 +7483,91 @@ void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
   if (flags & SP_SUBPAT) {
     tv_list_append_number(rettv->vval.v_list, (varnumber_T)n);
   }
+}
+
+// =============================================================================
+// Phase 7 C accessor functions (called by Rust timer.rs wrappers)
+// =============================================================================
+
+void nvim_eval_timer_info(typval_T *argvars, typval_T *rettv)
+{
+  tv_list_alloc_ret(rettv, kListLenUnknown);
+
+  if (tv_check_for_opt_number_arg(argvars, 0) == FAIL) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
+    if (timer != NULL && (!timer->stopped || timer->refcount > 1)) {
+      add_timer_info(rettv, timer);
+    }
+  } else {
+    add_timer_info_all(rettv);
+  }
+}
+
+void nvim_eval_timer_pause(typval_T *argvars, typval_T *rettv)
+{
+  if (argvars[0].v_type != VAR_NUMBER) {
+    emsg(_(e_number_exp));
+    return;
+  }
+
+  int paused = (bool)tv_get_number(&argvars[1]);
+  timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
+  if (timer != NULL) {
+    if (!timer->paused && paused) {
+      time_watcher_stop(&timer->tw);
+    } else if (timer->paused && !paused) {
+      time_watcher_start(&timer->tw, timer_due_cb, (uint64_t)timer->timeout,
+                         (uint64_t)timer->timeout);
+    }
+    timer->paused = paused;
+  }
+}
+
+void nvim_eval_timer_start(typval_T *argvars, typval_T *rettv)
+{
+  int repeat = 1;
+
+  rettv->vval.v_number = -1;
+  if (rs_check_secure()) {
+    return;
+  }
+
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    if (tv_check_for_nonnull_dict_arg(argvars, 2) == FAIL) {
+      return;
+    }
+    dict_T *dict = argvars[2].vval.v_dict;
+    dictitem_T *const di = tv_dict_find(dict, S_LEN("repeat"));
+    if (di != NULL) {
+      repeat = (int)tv_get_number(&di->di_tv);
+      if (repeat == 0) {
+        repeat = 1;
+      }
+    }
+  }
+
+  Callback callback;
+  if (!rs_callback_from_typval(&callback, &argvars[1])) {
+    return;
+  }
+  rettv->vval.v_number = (varnumber_T)timer_start(tv_get_number(&argvars[0]), repeat, &callback);
+}
+
+void nvim_eval_timer_stop(typval_T *argvars, typval_T *rettv)
+{
+  if (tv_check_for_number_arg(argvars, 0) == FAIL) {
+    return;
+  }
+
+  timer_T *timer = find_timer_by_nr(tv_get_number(&argvars[0]));
+  if (timer == NULL) {
+    return;
+  }
+
+  timer_stop(timer);
 }
 

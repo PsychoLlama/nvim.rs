@@ -334,6 +334,71 @@ pub extern "C" fn rs_defer_info_is_pending(info: *const DeferInfo) -> bool {
 }
 
 // =============================================================================
+// Phase 5: Timer VimL function wrappers
+// =============================================================================
+
+use std::ffi::c_void;
+
+extern "C" {
+    fn nvim_eval_timer_info(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_timer_pause(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_timer_start(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_timer_stop(argvars: *const c_void, rettv: *mut c_void);
+}
+
+/// "timer_info([timer])" function - get timer info
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_timer_info"]
+pub unsafe extern "C" fn rs_f_timer_info(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_timer_info(argvars, rettv);
+}
+
+/// "timer_pause(timer, paused)" function - pause or resume a timer
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_timer_pause"]
+pub unsafe extern "C" fn rs_f_timer_pause(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_timer_pause(argvars, rettv);
+}
+
+/// "timer_start(timeout, callback [, opts])" function - start a timer
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_timer_start"]
+pub unsafe extern "C" fn rs_f_timer_start(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_timer_start(argvars, rettv);
+}
+
+/// "timer_stop(timer)" function - stop a timer
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_timer_stop"]
+pub unsafe extern "C" fn rs_f_timer_stop(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_timer_stop(argvars, rettv);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
