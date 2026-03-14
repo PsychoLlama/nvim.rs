@@ -344,6 +344,46 @@ extern "C" {
     );
     fn nvim_get_hl_attr_active() -> *const c_int;
     fn rs_schar_get_ascii(sc: ScharT) -> c_char;
+
+    // draw_statuscol FFI (Phase 1)
+    fn nvim_win_get_nrwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_set_nrwidth(wp: WinHandle, val: c_int);
+    fn nvim_win_get_statuscol_line_count(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_statuscol_line_count(wp: WinHandle, val: LinenrT);
+    fn nvim_win_set_redr_statuscol(wp: WinHandle, val: bool);
+    fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
+    // nvim_win_get_p_nu and nvim_win_get_p_rnu already declared above
+    fn nvim_win_get_nrwidth_line_count(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_nrwidth_line_count(wp: WinHandle, val: LinenrT);
+    fn nvim_win_set_nrwidth_width(wp: WinHandle, val: c_int);
+    fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
+    // statuscol_T opaque accessors
+    fn nvim_stcp_get_width(stcp: *mut c_void) -> c_int;
+    fn nvim_stcp_set_width(stcp: *mut c_void, val: c_int);
+    fn nvim_stcp_get_hlrec(stcp: *mut c_void) -> *mut c_void;
+    fn nvim_stcp_get_fold_vcol(stcp: *mut c_void) -> *mut ColnrT;
+    // stl_hlrec_t opaque accessors
+    fn nvim_hlrec_get_start(sp: *mut c_void) -> *mut c_char;
+    fn nvim_hlrec_get_item(sp: *mut c_void) -> c_int;
+    fn nvim_hlrec_get_userhl(sp: *mut c_void) -> c_int;
+    fn nvim_hlrec_next(sp: *mut c_void) -> *mut c_void;
+    // build_statuscol_str wrapper
+    fn nvim_build_statuscol_str(
+        wp: WinHandle,
+        lnum: LinenrT,
+        relnum: LinenrT,
+        buf: *mut c_char,
+        stcp: *mut c_void,
+    ) -> c_int;
+    // get_cursor_rel_lnum wrapper
+    fn nvim_get_cursor_rel_lnum(wp: WinHandle, lnum: LinenrT) -> LinenrT;
+    // transstr_buf wrapper
+    fn nvim_transstr_buf(s: *const c_char, slen: isize, buf: *mut c_char, buflen: usize) -> usize;
+    // set_vim_var_nr wrapper (from fold_shim.c)
+    fn nvim_fold_set_vim_var_nr(vv_idx: c_int, val: i64);
+    // number_width (already available as rs_number_width, keep consistent)
+    // use_cursor_line_highlight and get_line_number_attr are Rust-exported; we use them directly
+    // draw_col_buf and draw_col_fill are Rust-exported; call impl functions directly
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -386,6 +426,22 @@ const K_VPOS_WIN_COL: c_int = 5;
 
 /// VirtText flag for repeat linebreak.
 const K_VT_REPEAT_LINEBREAK: c_int = 8;
+
+/// VV_VIRTNUM index (from eval/vars.c).
+const VV_VIRTNUM: c_int = 102;
+
+/// MAXPATHL constant (maximum path length).
+const MAXPATHL: usize = 4096;
+
+/// MAX_STCWIDTH = MAX_NUMBERWIDTH + SIGN_SHOW_MAX * SIGN_WIDTH + 9 = 20 + 18 + 9 = 47.
+const MAX_STCWIDTH: c_int = 47;
+
+/// VALID_WCOL bit (from buffer_defs.h).
+const VALID_WCOL: c_int = 0x02;
+
+/// StlFlag: STL_FOLDCOL = 'C', STL_SIGNCOL = 's'.
+const STL_FOLDCOL: c_int = b'C' as c_int;
+const STL_SIGNCOL: c_int = b's' as c_int;
 
 // ============================================================================
 // Implementation functions
@@ -3297,6 +3353,223 @@ pub unsafe extern "C" fn rs_validate_screen_row(wp: WinHandle, row: c_int) -> c_
 
 extern "C" {
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+}
+
+// ============================================================================
+// Phase 1: draw_statuscol migration
+// ============================================================================
+
+/// Rust implementation of draw_statuscol.
+///
+/// Builds and draws the 'statuscolumn' string for line "lnum" in window "wp".
+/// `stcp` is an opaque pointer to `statuscol_T`.
+/// `wlv` is an opaque pointer to `winlinevars_T`.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_draw_statuscol(
+    wp: WinHandle,
+    wlv: *mut WinLineVars,
+    virtnum: c_int,
+    col_rows: c_int,
+    stcp: *mut c_void,
+) {
+    // Adjust lnum for filler lines belonging to the line above.
+    let raw_lnum = (*wlv).lnum;
+    let n_virt_lines = (*wlv).n_virt_lines;
+    let n_virt_below = (*wlv).n_virt_below;
+    let filler_todo = (*wlv).filler_todo;
+
+    let adjust = c_int::from((n_virt_lines - filler_todo) < n_virt_below);
+    let lnum = raw_lnum - adjust;
+
+    // Compute relnum: absolute relative cursor line number for first/last rows.
+    let filler_lines = (*wlv).filler_lines;
+    let is_first_row =
+        virtnum == -filler_lines || virtnum == 0 || virtnum == (n_virt_below - filler_lines);
+    let relnum: LinenrT = if is_first_row {
+        nvim_get_cursor_rel_lnum(wp, lnum).abs()
+    } else {
+        -1
+    };
+
+    // Buffer for building the statuscol string.
+    let mut buf = [0i8; MAXPATHL];
+
+    // When the buffer's line count has changed, rebuild for the widest possible line.
+    let statuscol_line_count = nvim_win_get_statuscol_line_count(wp);
+    let nrwidth_line_count = nvim_win_get_nrwidth_line_count(wp);
+    if statuscol_line_count != nrwidth_line_count {
+        nvim_win_set_statuscol_line_count(wp, nrwidth_line_count);
+        nvim_fold_set_vim_var_nr(VV_VIRTNUM, 0);
+        let width = nvim_build_statuscol_str(
+            wp,
+            nrwidth_line_count,
+            nrwidth_line_count,
+            buf.as_mut_ptr(),
+            stcp,
+        );
+        let stcp_width = nvim_stcp_get_width(stcp);
+        if width > stcp_width {
+            let addwidth = (width - stcp_width).min(MAX_STCWIDTH - stcp_width);
+            let new_nrwidth = nvim_win_get_nrwidth(wp) + addwidth;
+            nvim_win_set_nrwidth(wp, new_nrwidth);
+            nvim_win_set_nrwidth_width(wp, new_nrwidth);
+            if col_rows > 0 {
+                // Only column is being redrawn; need to redraw text too.
+                nvim_win_set_redr_statuscol(wp, true);
+                return;
+            }
+            nvim_stcp_set_width(stcp, stcp_width + addwidth);
+            nvim_win_clear_valid_bits(wp, VALID_WCOL);
+        }
+    }
+
+    nvim_fold_set_vim_var_nr(VV_VIRTNUM, i64::from(virtnum));
+
+    let stcp_width = nvim_stcp_get_width(stcp);
+    let width = nvim_build_statuscol_str(wp, lnum, relnum, buf.as_mut_ptr(), stcp);
+
+    // Force a redraw on error or truncation.
+    let p_stc = nvim_win_get_p_stc(wp);
+    if *p_stc == 0 || (width > stcp_width && stcp_width < MAX_STCWIDTH) {
+        if *p_stc == 0 {
+            // 'statuscolumn' reset due to error.
+            nvim_win_set_nrwidth_line_count(wp, 0);
+            let nu = nvim_win_get_p_nu(wp);
+            let rnu = nvim_win_get_p_rnu(wp);
+            let new_nrwidth = c_int::from(nu != 0 || rnu != 0) * rs_number_width(wp);
+            nvim_win_set_nrwidth(wp, new_nrwidth);
+        } else {
+            // Avoid truncating 'statuscolumn'.
+            let addwidth = (width - stcp_width).min(MAX_STCWIDTH - stcp_width);
+            let new_nrwidth = nvim_win_get_nrwidth(wp) + addwidth;
+            nvim_win_set_nrwidth(wp, new_nrwidth);
+            nvim_win_set_nrwidth_width(wp, new_nrwidth);
+        }
+        nvim_win_set_redr_statuscol(wp, true);
+        return;
+    }
+
+    // Draw each highlighted segment.
+    let buf_len = {
+        let mut i = 0usize;
+        while buf[i] != 0 {
+            i += 1;
+        }
+        i
+    };
+
+    let scl_attr = nvim_win_hl_attr(
+        wp,
+        if use_cursor_line_highlight_impl(wp, raw_lnum) {
+            HLF_CLS
+        } else {
+            HLF_SC
+        },
+    );
+    let num_attr = get_line_number_attr_impl(wp, wlv);
+    let mut cur_attr = num_attr;
+    let mut fold_vcol: *const ColnrT = std::ptr::null();
+
+    let mut p = buf.as_mut_ptr();
+    let buf_end = buf.as_mut_ptr().add(buf_len);
+    let mut sp = nvim_stcp_get_hlrec(stcp);
+
+    // Iterate over highlight records (terminated by start == NULL).
+    loop {
+        let sp_start = nvim_hlrec_get_start(sp);
+        if sp_start.is_null() {
+            break;
+        }
+        // Draw text from p up to sp->start.
+        let textlen = sp_start.offset_from(p);
+        let mut transbuf = [0i8; MAXPATHL];
+        let translen = nvim_transstr_buf(p, textlen, transbuf.as_mut_ptr(), MAXPATHL);
+        draw_col_buf_impl(
+            wp,
+            wlv,
+            transbuf.as_ptr(),
+            translen,
+            cur_attr,
+            fold_vcol,
+            false,
+        );
+
+        let item = nvim_hlrec_get_item(sp);
+        let attr = if item == STL_SIGNCOL {
+            scl_attr
+        } else if item == STL_FOLDCOL {
+            0
+        } else {
+            num_attr
+        };
+        let userhl = nvim_hlrec_get_userhl(sp);
+        let userhl_attr = if userhl < 0 { syn_id2attr(-userhl) } else { 0 };
+        cur_attr = hl_combine_attr(attr, userhl_attr);
+
+        fold_vcol = if item == STL_FOLDCOL {
+            nvim_stcp_get_fold_vcol(stcp)
+        } else {
+            std::ptr::null()
+        };
+
+        p = sp_start;
+        sp = nvim_hlrec_next(sp);
+    }
+
+    // Draw the final segment.
+    let textlen = buf_end.offset_from(p);
+    let mut transbuf = [0i8; MAXPATHL];
+    let translen = nvim_transstr_buf(p, textlen, transbuf.as_mut_ptr(), MAXPATHL);
+    draw_col_buf_impl(
+        wp,
+        wlv,
+        transbuf.as_ptr(),
+        translen,
+        cur_attr,
+        fold_vcol,
+        false,
+    );
+    draw_col_fill_impl(
+        wlv,
+        rs_schar_from_char(c_int::from(b' ')),
+        stcp_width - width,
+        cur_attr,
+    );
+}
+
+// ============================================================================
+// Phase 1: Scratch buffer (get_extra_buf / drawline_free_all_mem)
+// ============================================================================
+
+use std::sync::Mutex;
+
+static EXTRA_BUF: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+/// Rust replacement for get_extra_buf: returns a pointer to a scratch buffer
+/// of at least `size` bytes. The pointer is valid until the next call.
+///
+/// # Safety
+/// Caller must not use the pointer after the mutex is released or after the
+/// next call to this function from any thread.
+unsafe fn get_extra_buf_impl(size: usize) -> *mut c_char {
+    let min = if size < 64 { 64 } else { size };
+    let mut guard = EXTRA_BUF.lock().unwrap();
+    if guard.len() < min {
+        guard.resize(min, 0);
+    }
+    guard.as_mut_ptr().cast::<c_char>()
+}
+
+/// Free the scratch buffer (EXITFREE).
+///
+/// # Panics
+///
+/// Panics if the internal mutex is poisoned.
+#[no_mangle]
+pub unsafe extern "C" fn drawline_free_all_mem() {
+    let mut guard = EXTRA_BUF.lock().unwrap();
+    *guard = Vec::new();
 }
 
 #[cfg(test)]

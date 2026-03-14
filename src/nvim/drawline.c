@@ -219,12 +219,8 @@ static char *get_extra_buf(size_t size)
   return extra_buf;
 }
 
-#ifdef EXITFREE
-void drawline_free_all_mem(void)
-{
-  xfree(extra_buf);
-}
-#endif
+// drawline_free_all_mem is now implemented in Rust (rs_draw_statuscol / Phase 1).
+// The Rust #[no_mangle] export provides this symbol unconditionally.
 
 
 
@@ -240,78 +236,16 @@ void drawline_free_all_mem(void)
 
 
 
+
+// draw_statuscol is now implemented in Rust.
+extern void rs_draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
+                              statuscol_T *stcp);
 
 /// Build and draw the 'statuscolumn' string for line "lnum" in window "wp".
 static void draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_rows,
                            statuscol_T *stcp)
 {
-  // Adjust lnum for filler lines belonging to the line above and set lnum v:vars for first
-  // row, first non-filler line, and first filler line belonging to the current line.
-  linenr_T lnum = wlv->lnum - ((wlv->n_virt_lines - wlv->filler_todo) < wlv->n_virt_below);
-  linenr_T relnum = (virtnum == -wlv->filler_lines || virtnum == 0
-                     || virtnum == (wlv->n_virt_below - wlv->filler_lines))
-                    ? abs(get_cursor_rel_lnum(wp, lnum)) : -1;
-
-  char buf[MAXPATHL];
-  // When a buffer's line count has changed, make a best estimate for the full
-  // width of the status column by building with the largest possible line number.
-  // Add potentially truncated width and rebuild before drawing anything.
-  if (wp->w_statuscol_line_count != wp->w_nrwidth_line_count) {
-    wp->w_statuscol_line_count = wp->w_nrwidth_line_count;
-    set_vim_var_nr(VV_VIRTNUM, 0);
-    int width = build_statuscol_str(wp, wp->w_nrwidth_line_count,
-                                    wp->w_nrwidth_line_count, buf, stcp);
-    if (width > stcp->width) {
-      int addwidth = MIN(width - stcp->width, MAX_STCWIDTH - stcp->width);
-      wp->w_nrwidth += addwidth;
-      wp->w_nrwidth_width = wp->w_nrwidth;
-      if (col_rows > 0) {
-        // If only column is being redrawn, we now need to redraw the text as well
-        wp->w_redr_statuscol = true;
-        return;
-      }
-      stcp->width += addwidth;
-      wp->w_valid &= ~VALID_WCOL;
-    }
-  }
-  set_vim_var_nr(VV_VIRTNUM, virtnum);
-
-  int width = build_statuscol_str(wp, lnum, relnum, buf, stcp);
-  // Force a redraw in case of error or when truncated
-  if (*wp->w_p_stc == NUL || (width > stcp->width && stcp->width < MAX_STCWIDTH)) {
-    if (*wp->w_p_stc == NUL) {  // 'statuscolumn' reset due to error
-      wp->w_nrwidth_line_count = 0;
-      wp->w_nrwidth = (wp->w_p_nu || wp->w_p_rnu) * number_width(wp);
-    } else {  // Avoid truncating 'statuscolumn'
-      wp->w_nrwidth += MIN(width - stcp->width, MAX_STCWIDTH - stcp->width);
-      wp->w_nrwidth_width = wp->w_nrwidth;
-    }
-    wp->w_redr_statuscol = true;
-    return;
-  }
-
-  char *p = buf;
-  char transbuf[MAXPATHL];
-  colnr_T *fold_vcol = NULL;
-  size_t len = strlen(buf);
-  int scl_attr = win_hl_attr(wp, use_cursor_line_highlight(wp, wlv->lnum) ? HLF_CLS : HLF_SC);
-  int num_attr = get_line_number_attr(wp, wlv);
-  int cur_attr = num_attr;
-
-  // Draw each segment with the specified highlighting.
-  for (stl_hlrec_t *sp = stcp->hlrec; sp->start != NULL; sp++) {
-    ptrdiff_t textlen = sp->start - p;
-    // Make all characters printable.
-    size_t translen = transstr_buf(p, textlen, transbuf, MAXPATHL, true);
-    draw_col_buf(wp, wlv, transbuf, translen, cur_attr, fold_vcol, false);
-    int attr = sp->item == STL_SIGNCOL ? scl_attr : sp->item == STL_FOLDCOL ? 0 : num_attr;
-    cur_attr = hl_combine_attr(attr, sp->userhl < 0 ? syn_id2attr(-sp->userhl) : 0);
-    fold_vcol = sp->item == STL_FOLDCOL ? stcp->fold_vcol : NULL;
-    p = sp->start;
-  }
-  size_t translen = transstr_buf(p, buf + len - p, transbuf, MAXPATHL, true);
-  draw_col_buf(wp, wlv, transbuf, translen, cur_attr, fold_vcol, false);
-  draw_col_fill(wlv, schar_from_ascii(' '), stcp->width - width, cur_attr);
+  rs_draw_statuscol(wp, wlv, virtnum, col_rows, stcp);
 }
 
 

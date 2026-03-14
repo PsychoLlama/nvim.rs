@@ -2726,6 +2726,51 @@ void nvim_eval_tv_set_type(typval_T *tv, int t) { tv->v_type = (VarType)t; }
 dict_T *nvim_win_get_vars(win_T *wp) { return wp->w_vars; }
 dict_T *nvim_tabpage_get_vars(tabpage_T *tp) { return tp->tp_vars; }
 
+// ============================================================================
+// draw_statuscol accessors for Rust (Phase 1 drawline migration)
+// ============================================================================
+
+/// w_nrwidth getter/setter
+int nvim_win_get_nrwidth(win_T *wp) { return wp->w_nrwidth; }
+void nvim_win_set_nrwidth(win_T *wp, int val) { wp->w_nrwidth = val; }
+
+/// w_statuscol_line_count getter
+linenr_T nvim_win_get_statuscol_line_count(win_T *wp) { return wp->w_statuscol_line_count; }
+
+/// w_redr_statuscol setter
+void nvim_win_set_redr_statuscol(win_T *wp, bool val) { wp->w_redr_statuscol = val; }
+
+/// statuscol_T field accessors (opaque pointer)
+int nvim_stcp_get_width(statuscol_T *stcp) { return stcp->width; }
+void nvim_stcp_set_width(statuscol_T *stcp, int val) { stcp->width = val; }
+stl_hlrec_t *nvim_stcp_get_hlrec(statuscol_T *stcp) { return stcp->hlrec; }
+colnr_T *nvim_stcp_get_fold_vcol(statuscol_T *stcp) { return stcp->fold_vcol; }
+
+/// stl_hlrec_t field accessors (opaque pointer)
+char *nvim_hlrec_get_start(stl_hlrec_t *sp) { return sp->start; }
+int nvim_hlrec_get_item(stl_hlrec_t *sp) { return (int)sp->item; }
+int nvim_hlrec_get_userhl(stl_hlrec_t *sp) { return sp->userhl; }
+stl_hlrec_t *nvim_hlrec_next(stl_hlrec_t *sp) { return sp + 1; }
+
+/// build_statuscol_str wrapper (statuscol_T is opaque from Rust side)
+int nvim_build_statuscol_str(win_T *wp, linenr_T lnum, linenr_T relnum, char *buf,
+                             statuscol_T *stcp)
+{
+  return build_statuscol_str(wp, lnum, relnum, buf, stcp);
+}
+
+/// get_cursor_rel_lnum wrapper
+linenr_T nvim_get_cursor_rel_lnum(win_T *wp, linenr_T lnum)
+{
+  return get_cursor_rel_lnum(wp, lnum);
+}
+
+/// transstr_buf wrapper (Rust can't call variadic-adjacent ssize_t param easily)
+size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen)
+{
+  return transstr_buf(s, slen, buf, buflen, true);
+}
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
