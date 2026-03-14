@@ -752,9 +752,6 @@ void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
   buf->b_ml.ml_chunksize[idx].mlcs_totalsize += val;
 }
 
-/// Set buf->b_ml.ml_numchunks
-void nvim_buf_set_ml_numchunks(buf_T *buf, int val) { buf->b_ml.ml_numchunks = val; }
-
 /// Set buf->b_ml.ml_usedchunks
 void nvim_buf_set_ml_usedchunks(buf_T *buf, int val) { buf->b_ml.ml_usedchunks = val; }
 
