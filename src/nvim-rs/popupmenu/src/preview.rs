@@ -11,7 +11,7 @@ use crate::PUM_STATE;
 // C accessor functions for preview window operations.
 extern "C" {
     /// Check if selected item matches current completion selection.
-    fn nvim_pum_compl_match_curr_select(selected: c_int) -> c_int;
+    fn rs_compl_match_curr_select(selected: c_int) -> c_int;
     /// Block autocmds.
     fn nvim_pum_block_autocmds();
     /// Unblock autocmds.
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
 /// `info` must be a valid C string.
 #[export_name = "pum_set_info"]
 pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> *mut WinHandle {
-    if PUM_STATE.is_visible == 0 || nvim_pum_compl_match_curr_select(selected) == 0 {
+    if PUM_STATE.is_visible == 0 || rs_compl_match_curr_select(selected) == 0 {
         return std::ptr::null_mut();
     }
 

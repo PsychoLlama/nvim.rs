@@ -18,7 +18,7 @@ pub struct TabHandle {
 // C accessor functions for selection/preview operations.
 extern "C" {
     // COT flags
-    fn nvim_pum_get_cot_flags() -> c_uint;
+    fn rs_get_cot_flags() -> c_uint;
 
     // Preview window hide
     fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
@@ -66,7 +66,7 @@ extern "C" {
     fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: c_int);
 
     // Window height
-    fn nvim_pum_win_setheight(height: c_int);
+    fn rs_win_setheight(height: c_int);
     fn nvim_pum_curwin_get_height() -> c_int;
 
     // Buffer state
@@ -79,9 +79,11 @@ extern "C" {
     fn nvim_pum_curwin_set_topline(val: c_int);
     fn nvim_pum_curwin_set_cursor(lnum: c_int, col: c_int);
 
-    // Window/tabpage validity
-    fn nvim_pum_win_valid(wp: *mut WinHandle) -> c_int;
-    fn nvim_pum_tabpage_valid(tp: *mut TabHandle) -> c_int;
+    // Window/tabpage validity (calls Rust rs_win_valid/rs_valid_tabpage directly)
+    #[link_name = "rs_win_valid"]
+    fn pum_rs_win_valid(wp: *mut WinHandle) -> c_int;
+    #[link_name = "rs_valid_tabpage"]
+    fn pum_rs_valid_tabpage(tp: *mut TabHandle) -> c_int;
     fn nvim_pum_goto_tabpage(tp: *mut TabHandle);
 
     // Context save/restore
@@ -91,7 +93,7 @@ extern "C" {
     fn nvim_pum_curtab_is(tp: *mut TabHandle) -> c_int;
 
     // Completion state
-    fn nvim_pum_ins_compl_active() -> c_int;
+    fn rs_ins_compl_active() -> c_int;
 
     // Redraw helpers
     fn nvim_pum_curwin_set_redr_status(val: c_int);
@@ -140,7 +142,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
     let pum_selected = n;
     let pum_height = PUM_STATE.height;
     let pum_size = PUM_STATE.size;
-    let cur_cot_flags = nvim_pum_get_cot_flags();
+    let cur_cot_flags = rs_get_cot_flags();
     let use_float = (cur_cot_flags & K_OPT_COT_FLAG_POPUP) != 0;
 
     // Close the floating preview window if 'selected' is -1, indicating a return to the original
@@ -246,7 +248,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                             lnum = p_pvh_val;
                         }
                         if nvim_pum_curwin_get_height() < lnum {
-                            nvim_pum_win_setheight(lnum);
+                            rs_win_setheight(lnum);
                             resized = true;
                         }
                     }
@@ -271,13 +273,12 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         rs_pum_adjust_info_position(curwin, max_info_width);
                     }
 
-                    if (nvim_pum_curwin_is(curwin_save) == 0
-                        && nvim_pum_win_valid(curwin_save) != 0)
+                    if (nvim_pum_curwin_is(curwin_save) == 0 && pum_rs_win_valid(curwin_save) != 0)
                         || (nvim_pum_curtab_is(curtab_save) == 0
-                            && nvim_pum_tabpage_valid(curtab_save) != 0)
+                            && pum_rs_valid_tabpage(curtab_save) != 0)
                     {
                         if nvim_pum_curtab_is(curtab_save) == 0
-                            && nvim_pum_tabpage_valid(curtab_save) != 0
+                            && pum_rs_valid_tabpage(curtab_save) != 0
                         {
                             nvim_pum_goto_tabpage(curtab_save);
                         }
@@ -285,7 +286,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         // When the first completion is done and the preview
                         // window is not resized, skip the preview window's
                         // status line redrawing.
-                        if nvim_pum_ins_compl_active() != 0 && !resized {
+                        if rs_ins_compl_active() != 0 && !resized {
                             nvim_pum_curwin_set_redr_status(0);
                         }
 
@@ -297,7 +298,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         // update the view on the buffer. Only go back to
                         // the window when needed, otherwise it will always be
                         // redrawn.
-                        if resized && nvim_pum_win_valid(curwin_save) != 0 {
+                        if resized && pum_rs_win_valid(curwin_save) != 0 {
                             nvim_pum_no_u_sync_inc();
                             nvim_pum_win_enter(curwin_save, 1);
                             nvim_pum_no_u_sync_dec();
@@ -310,7 +311,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         nvim_pum_update_screen();
                         PUM_STATE.is_visible = 1;
 
-                        if !resized && nvim_pum_win_valid(curwin_save) != 0 {
+                        if !resized && pum_rs_win_valid(curwin_save) != 0 {
                             nvim_pum_no_u_sync_inc();
                             nvim_pum_win_enter(curwin_save, 1);
                             nvim_pum_no_u_sync_dec();

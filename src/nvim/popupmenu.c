@@ -462,11 +462,6 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
   win_config_float(wp, wp->w_config);
 }
 
-/// Check if the selected item matches the current completion selection.
-int nvim_pum_compl_match_curr_select(int selected)
-{
-  return rs_compl_match_curr_select(selected);
-}
 
 /// Block autocmds.
 void nvim_pum_block_autocmds(void)
@@ -971,11 +966,6 @@ void nvim_pum_border_cfg_free(PumBorderConfig *cfg)
 
 // Phase 7 C accessor functions (selection / preview window management)
 
-/// Get 'completeopt' flags.
-unsigned nvim_pum_get_cot_flags(void)
-{
-  return rs_get_cot_flags();
-}
 
 /// Hide a floating preview window by setting its hide flag and reconfiguring.
 void nvim_pum_win_config_float_hide(win_T *wp)
@@ -1075,11 +1065,6 @@ void nvim_pum_set_wipeout_options(void)
   set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(false), OPT_LOCAL);
 }
 
-/// Set window height (wrapper for win_setheight).
-void nvim_pum_win_setheight(int height)
-{
-  rs_win_setheight(height);
-}
 
 /// Get curwin->w_height.
 int nvim_pum_curwin_get_height(void)
@@ -1124,17 +1109,6 @@ int nvim_pum_curbuf_line_count(void)
   return (int)curbuf->b_ml.ml_line_count;
 }
 
-/// Check if a window pointer is valid (wrapper for rs_win_valid).
-int nvim_pum_win_valid(win_T *wp)
-{
-  return rs_win_valid(wp);
-}
-
-/// Check if a tabpage pointer is valid (wrapper for rs_valid_tabpage).
-int nvim_pum_tabpage_valid(tabpage_T *tp)
-{
-  return rs_valid_tabpage(tp);
-}
 
 /// Go to a tabpage (wrapper for goto_tabpage_tp).
 void nvim_pum_goto_tabpage(tabpage_T *tp)
@@ -1142,11 +1116,6 @@ void nvim_pum_goto_tabpage(tabpage_T *tp)
   goto_tabpage_tp(tp, false, false);
 }
 
-/// Check if insert completion is active (wrapper for ins_compl_active).
-int nvim_pum_ins_compl_active(void)
-{
-  return rs_ins_compl_active();
-}
 
 /// Set curwin->w_redr_status.
 void nvim_pum_curwin_set_redr_status(int val)
