@@ -2172,6 +2172,7 @@ extern "C" {
     fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
 
     // Phase 16: fix_fname migration accessors
+    #[link_name = "fix_fname"]
     fn rs_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_buf_get_b_ffname(buf: *mut c_void) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;

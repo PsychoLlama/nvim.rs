@@ -778,7 +778,8 @@ const K_OPT_FDO_FLAG_SEARCH: u32 = 0x40;
 ///
 /// # Safety
 /// Requires valid editor state (curwin, curbuf, completion state).
-#[no_mangle]
+#[export_name = "current_search"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int {
     const OK: c_int = 0;
     const FAIL: c_int = -1;

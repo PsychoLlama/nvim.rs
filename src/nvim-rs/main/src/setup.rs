@@ -186,7 +186,8 @@ pub unsafe extern "C" fn rs_init_path(exename: *const c_char) {
 ///
 /// # Safety
 /// The global argument list must be initialized.
-#[no_mangle]
+#[export_name = "get_fname"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_get_fname(_parmp: *mut MparmT, _cwd: *mut c_char) -> *mut c_char {
     nvim_garglist_name(0)
 }

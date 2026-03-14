@@ -24,7 +24,8 @@ const SEA_QUIT: c_int = 1;
 ///
 /// Returns `def` unmodified if argument isn't given or is non-numeric.
 /// Returns argument's numeric value otherwise.
-#[no_mangle]
+#[export_name = "get_number_arg"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_get_number_arg(
     p: *const std::ffi::c_char,
     idx: *mut c_int,

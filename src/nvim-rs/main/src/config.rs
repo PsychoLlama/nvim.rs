@@ -149,7 +149,8 @@ const K_RET_NIL_BOOL: c_int = 2;
 ///
 /// # Safety
 /// `env` must be a valid C string.
-#[no_mangle]
+#[export_name = "execute_env"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_execute_env(env: *mut c_char) -> c_int {
     let initstr = os_getenv(env);
     if initstr.is_null() {

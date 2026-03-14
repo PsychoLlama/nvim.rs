@@ -31,7 +31,7 @@
 #include "nvim/vim_defs.h"
 
 extern const char *rs_skip_to_option_part(const char *p);
-extern bool rs_cin_iscase(const char *s, bool strict);
+extern bool cin_iscase(const char *s, bool strict);
 
 /// C accessor for p_paste global option.
 int nvim_get_p_paste(void)
@@ -214,8 +214,8 @@ const char *nvim_cindent_get_cursor_line_ptr(void)
 }
 
 extern FindMatchResult rs_find_start_comment(int ind_maxcomment);
-extern bool rs_cin_isscopedecl(const char *p);
-extern bool rs_cin_islabel(void);
+extern bool cin_isscopedecl(const char *p);
+extern bool cin_islabel(void);
 extern int rs_get_c_indent(const CindentOptions *opts);
 
 #include "indent_c.c.generated.h"
@@ -236,26 +236,6 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
 // Most of this originally comes from Eric Fischer.
 
 // Below "XXX" means that this function may unlock the current line.
-
-/// Recognize a switch label: "case .*:" or "default:".
-///
-/// @param strict  Allow relaxed check of case statement for JS
-static bool cin_iscase(const char *s, bool strict)
-{
-  return rs_cin_iscase(s, strict);
-}
-
-/// Recognize a scope declaration label from the 'cinscopedecls' option.
-static bool cin_isscopedecl(const char *p)
-{
-  return rs_cin_isscopedecl(p);
-}
-
-/// Recognize a label: "label:".
-static bool cin_islabel(void)  // XXX
-{
-  return rs_cin_islabel();
-}
 
 // Parse 'cinoptions' and set the values in "curbuf".
 // Must be called when 'cinoptions', 'shiftwidth' and/or 'tabstop' changes.

@@ -91,5 +91,6 @@ bool path_is_absolute(const char *fname);
 bool match_suffix(char *fname);
 void path_guess_exepath(const char *argv0, char *buf, size_t bufsize);
 void slash_adjust(char *p);
+char *fix_fname(const char *fname);
 
 #include "path.h.generated.h"

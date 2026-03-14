@@ -188,5 +188,6 @@ size_t last_search_pattern_len(void);
 char *last_search_pat(void);
 void update_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, searchstat_T *stat, bool recompute, int maxcount, int timeout);
 void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool show_top_bot_msg, char *msgbuf, size_t msgbuflen, bool recompute, int maxcount, int timeout);
+int current_search(int count, bool forward);
 
 #include "search.h.generated.h"

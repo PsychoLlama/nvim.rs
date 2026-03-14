@@ -681,7 +681,8 @@ pub unsafe extern "C" fn rs_cin_isdefault(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// The pointer must point to a valid null-terminated C string.
-#[no_mangle]
+#[export_name = "cin_iscase"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_cin_iscase(s: *const c_char, strict: bool) -> bool {
     if s.is_null() {
         return false;
@@ -3284,7 +3285,8 @@ pub unsafe extern "C" fn rs_cin_iswhileofdo_end(terminated: c_int) -> bool {
 ///
 /// # Safety
 /// Calls FFI accessors.
-#[no_mangle]
+#[export_name = "cin_isscopedecl"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_cin_isscopedecl(p: *const c_char) -> bool {
     if p.is_null() {
         return false;
@@ -3333,7 +3335,8 @@ pub unsafe extern "C" fn rs_cin_isscopedecl(p: *const c_char) -> bool {
 ///
 /// # Safety
 /// Calls FFI accessors. Modifies and restores cursor.
-#[no_mangle]
+#[export_name = "cin_islabel"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_cin_islabel() -> bool {
     let s = rs_cin_skipcomment(nvim_cindent_get_cursor_line_ptr());
 

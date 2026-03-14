@@ -215,7 +215,8 @@ pub unsafe extern "C" fn rs_handle_tag(tagname: *mut c_char) {
 ///
 /// # Safety
 /// `parmp` must be a valid pointer.
-#[no_mangle]
+#[export_name = "edit_stdin"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_edit_stdin(parmp: *const MparmT) -> bool {
     let p = &*parmp;
 

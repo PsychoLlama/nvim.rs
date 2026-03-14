@@ -42,12 +42,10 @@ enum {
 # undef gen_expand_wildcards
 #endif
 
-// Rust implementations still needed by C code
-extern int rs_pstrcmp(const void *a, const void *b);
-extern char *rs_fix_fname(const char *fname);
+// pstrcmp is implemented in Rust (path crate)
+extern int pstrcmp(const void *a, const void *b);
 
 // Forward declarations (defined below, after #include "path.c.generated.h")
-static int pstrcmp(const void *a, const void *b);
 static int expand_backtick(garray_T *gap, char *pat, int flags);
 static int expand_in_path(garray_T *gap, char *pattern, int flags);
 
@@ -393,12 +391,6 @@ _Static_assert(RE_NOBREAK == 16, "RE_NOBREAK");
 
 #include "path.c.generated.h"
 
-static int pstrcmp(const void *a, const void *b)
-{
-  return rs_pstrcmp(a, b);
-}
-
-
 /// Calls globpath() with 'path' values for the given pattern and stores the
 /// result in "gap".
 /// Returns the total number of matches.
@@ -488,21 +480,6 @@ static int expand_backtick(garray_T *gap, char *pat, int flags)
 
   xfree(buffer);
   return cnt;
-}
-
-/// Get the full resolved path for `fname`
-///
-/// Even filenames that appear to be absolute based on starting from
-/// the root may have relative paths (like dir/../subdir) or symlinks
-/// embedded, or even extra separators (//).  This function addresses
-/// those possibilities, returning a resolved absolute path.
-/// For MS-Windows, this also expands names like "longna~1".
-///
-/// @param fname is the filename to expand
-/// @return [allocated] Full path (NULL for failure).
-char *fix_fname(const char *fname)
-{
-  return rs_fix_fname(fname);
 }
 
 /// Try to find a shortname by comparing the fullname with `dir_name`.

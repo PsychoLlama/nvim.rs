@@ -69,7 +69,6 @@ extern int rs_win_valid(win_T *win);
 // Rust fold FFI declaration
 extern void rs_foldOpenCursor(void);
 extern void rs_may_start_select(int c);
-extern int rs_current_search(int count, bool forward);
 
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
@@ -664,17 +663,6 @@ void showmatch(int c)
   State = save_state;
   ui_cursor_shape();                // may show different cursor shape
 }
-
-/// Find next search match under cursor, cursor at end.
-/// Used while an operator is pending, and in Visual mode.
-///
-/// @param forward  true for forward, false for backward
-int current_search(int count, bool forward)
-{
-  return rs_current_search(count, forward);
-}
-
-
 
 // "searchcount()" function
 void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

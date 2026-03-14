@@ -155,7 +155,6 @@ extern void rs_usage(void);
 extern void rs_version(void);
 extern void rs_print_mainerr(const char *msg1, const char *msg2, const char *msg3);
 extern void rs_mainerr(const char *msg1, const char *msg2, const char *msg3) FUNC_ATTR_NORETURN;
-extern int rs_get_number_arg(const char *p, int *idx, int def);
 extern void rs_check_swap_exists_action(void);
 
 // Rust implementations (Phase 2: init and config)
@@ -163,10 +162,11 @@ extern void rs_init_params(mparm_T *paramp, int argc, char **argv);
 extern void rs_init_startuptime(const mparm_T *paramp);
 extern void rs_check_and_set_isatty(mparm_T *paramp);
 extern void rs_init_path(const char *exename);
-extern char *rs_get_fname(mparm_T *parmp, char *cwd);
 extern void rs_set_window_layout(mparm_T *paramp);
-extern int rs_execute_env(char *env);
 extern void rs_source_startup_scripts(const mparm_T *parmp);
+extern int get_number_arg(const char *p, int *idx, int def);
+extern bool edit_stdin(const mparm_T *parmp);
+extern char *get_fname(mparm_T *parmp, char *cwd);
 
 // Expose GARGLIST[idx] name to Rust
 char *nvim_garglist_name(int idx) { return alist_name(&GARGLIST[idx]); }
@@ -176,7 +176,6 @@ extern void rs_exe_pre_commands(mparm_T *parmp);
 extern void rs_exe_commands(mparm_T *parmp);
 extern void rs_handle_quickfix(mparm_T *paramp);
 extern void rs_handle_tag(char *tagname);
-extern bool rs_edit_stdin(const mparm_T *parmp);
 
 // Thin helper: set 'errorfile' option from Rust (avoids OptVal complexity)
 void nvim_set_errorfile_opt(const char *val)
@@ -941,12 +940,6 @@ void preserve_exit(const char *errmsg)
   getout(1);
 }
 
-static int get_number_arg(const char *p, int *idx, int def)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_get_number_arg(p, idx, def);
-}
-
 static uint64_t server_connect(char *server_addr, const char **errmsg)
 {
   if (server_addr == NULL) {
@@ -1064,11 +1057,6 @@ static void remote_request(mparm_T *params, int remote_args, char *server_addr, 
     params->window_count = argc - remote_args - 1;
     params->window_layout = WIN_TABS;
   }
-}
-
-static bool edit_stdin(mparm_T *parmp)
-{
-  return rs_edit_stdin(parmp);
 }
 
 /// Scan the command line arguments.
@@ -1547,11 +1535,6 @@ static void init_path(const char *exename)
   rs_init_path(exename);
 }
 
-static char *get_fname(mparm_T *parmp, char *cwd)
-{
-  return rs_get_fname(parmp, cwd);
-}
-
 static void set_window_layout(mparm_T *paramp)
 {
   rs_set_window_layout(paramp);
@@ -1882,12 +1865,6 @@ static void source_startup_scripts(const mparm_T *const parmp)
 {
   rs_source_startup_scripts(parmp);
   TIME_MSG("sourcing vimrc file(s)");
-}
-
-static int execute_env(char *env)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_execute_env(env);
 }
 
 static void mainerr(const char *msg1, const char *msg2, const char *msg3)

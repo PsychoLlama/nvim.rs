@@ -2273,7 +2273,8 @@ extern "C" {
 ///
 /// # Safety
 /// `a` and `b` must be valid pointers to `*const c_char`.
-#[no_mangle]
+#[export_name = "pstrcmp"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_pstrcmp(a: *const c_void, b: *const c_void) -> c_int {
     let pa = *(a as *const *const c_char);
     let pb = *(b as *const *const c_char);
@@ -2817,7 +2818,8 @@ pub unsafe extern "C" fn rs_save_abs_path(name: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `fname` may be NULL.
-#[no_mangle]
+#[export_name = "fix_fname"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_fix_fname(fname: *const c_char) -> *mut c_char {
     if fname.is_null() {
         return std::ptr::null_mut();
