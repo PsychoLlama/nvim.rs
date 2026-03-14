@@ -2052,73 +2052,11 @@ dictitem_T *tv_dict_find(const dict_T *const d, const char *const key, const ptr
   return TV_DICT_HI2DI(hi);
 }
 
-/// Check if a key is present in a dictionary.
-///
-/// @param[in]  d  Dictionary to check.
-/// @param[in]  key  Dictionary key.
-///
-/// @return whether the key is present in the dictionary.
-bool tv_dict_has_key(const dict_T *const d, const char *const key)
-  FUNC_ATTR_NONNULL_ARG(2) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return tv_dict_find(d, key, -1) != NULL;
-}
-
-/// Get a typval item from a dictionary and copy it into "rettv".
-///
-/// @param[in]  d  Dictionary to check.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  rettv  Return value.
-/// @return OK in case of success or FAIL if nothing was found.
-int tv_dict_get_tv(dict_T *d, const char *const key, typval_T *rettv)
-{
-  dictitem_T *const di = tv_dict_find(d, key, -1);
-  if (di == NULL) {
-    return FAIL;
-  }
-
-  tv_copy(&di->di_tv, rettv);
-  return OK;
-}
-
-/// Gets a number item from a dictionary.
-///
-/// @param[in]  d  Dictionary to get item from.
-/// @param[in]  key  Key to find in dictionary.
-///
-/// @return Number value, or 0 if the item does not exist.
-varnumber_T tv_dict_get_number(const dict_T *const d, const char *const key)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return tv_dict_get_number_def(d, key, 0);
-}
-
-/// Gets a number item from a dictionary, or a given default value.
-///
-/// @param[in]  d  Dictionary to get item from.
-/// @param[in]  key  Key to find in dictionary.
-/// @param[in]  def  Default value.
-///
-/// @return Number value, or `def` value if the item does not exist.
-varnumber_T tv_dict_get_number_def(const dict_T *const d, const char *const key, const int def)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  dictitem_T *const di = tv_dict_find(d, key, -1);
-  if (di == NULL) {
-    return def;
-  }
-  return tv_get_number(&di->di_tv);
-}
-
-varnumber_T tv_dict_get_bool(const dict_T *const d, const char *const key, const int def)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  dictitem_T *const di = tv_dict_find(d, key, -1);
-  if (di == NULL) {
-    return def;
-  }
-  return tv_get_bool(&di->di_tv);
-}
+// tv_dict_has_key: migrated to Rust (nvim-rs/typval)
+// tv_dict_get_tv: migrated to Rust (nvim-rs/typval)
+// tv_dict_get_number: migrated to Rust (nvim-rs/typval)
+// tv_dict_get_number_def: migrated to Rust (nvim-rs/typval)
+// tv_dict_get_bool: migrated to Rust (nvim-rs/typval)
 
 /// Converts a dict to an environment
 char **tv_dict_to_env(dict_T *denv)
@@ -2166,48 +2104,8 @@ char *tv_dict_get_string(const dict_T *const d, const char *const key, const boo
   return (char *)s;
 }
 
-/// Get a string item from a dictionary
-///
-/// @param[in]  d  Dictionary to get item from.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  numbuf  Buffer for non-string items converted to strings, at
-///                     least of #NUMBUFLEN length.
-///
-/// @return NULL if key does not exist, empty string in case of type error,
-///         string item value otherwise.
-const char *tv_dict_get_string_buf(const dict_T *const d, const char *const key, char *const numbuf)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const dictitem_T *const di = tv_dict_find(d, key, -1);
-  if (di == NULL) {
-    return NULL;
-  }
-  return tv_get_string_buf(&di->di_tv, numbuf);
-}
-
-/// Get a string item from a dictionary
-///
-/// @param[in]  d  Dictionary to get item from.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  key_len  Key length.
-/// @param[in]  numbuf  Buffer for non-string items converted to strings, at
-///                     least of #NUMBUFLEN length.
-/// @param[in]  def  Default return when key does not exist.
-///
-/// @return `def` when key does not exist,
-///         NULL in case of type error,
-///         string item value in case of success.
-const char *tv_dict_get_string_buf_chk(const dict_T *const d, const char *const key,
-                                       const ptrdiff_t key_len, char *const numbuf,
-                                       const char *const def)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const dictitem_T *const di = tv_dict_find(d, key, key_len);
-  if (di == NULL) {
-    return def;
-  }
-  return tv_get_string_buf_chk(&di->di_tv, numbuf);
-}
+// tv_dict_get_string_buf: migrated to Rust (nvim-rs/typval)
+// tv_dict_get_string_buf_chk: migrated to Rust (nvim-rs/typval)
 
 /// Get a function from a dictionary
 ///
@@ -4251,6 +4149,45 @@ int nvim_dict_get_copyid(const dict_T *d)
 dict_T *nvim_dict_get_used_next(const dict_T *d)
 {
   return d->dv_used_next;
+}
+
+// nvim_dictitem_get_tv: defined in vars.c
+
+/// Get di_key from a dictitem as a C string (accessor for Rust).
+const char *nvim_dictitem_get_key(const dictitem_T *di)
+{
+  return di->di_key;
+}
+
+/// Look up a key in a dict, returning a dictitem pointer or NULL (accessor for Rust).
+dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len)
+{
+  return tv_dict_find(d, key, len);
+}
+
+/// Get string representation of a typval into buf (accessor for Rust).
+/// Returns NULL on type error, empty string for empty string.
+const char *nvim_tv_get_string_buf(const typval_T *tv, char *buf)
+{
+  return tv_get_string_buf(tv, buf);
+}
+
+/// Get string or NULL on type error (accessor for Rust).
+const char *nvim_tv_get_string_buf_chk(const typval_T *tv, char *buf)
+{
+  return tv_get_string_buf_chk(tv, buf);
+}
+
+/// Get number from typval (accessor for Rust).
+int64_t nvim_tv_get_number_simple(const typval_T *tv)
+{
+  return (int64_t)tv_get_number(tv);
+}
+
+/// Get bool from typval (accessor for Rust).
+int nvim_tv_get_bool_simple(const typval_T *tv)
+{
+  return (int)tv_get_bool(tv);
 }
 
 /// Get lv_used_next from a list (accessor for Rust).

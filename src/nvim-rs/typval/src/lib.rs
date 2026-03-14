@@ -916,6 +916,26 @@ impl ListHandle {
     }
 }
 
+/// Opaque handle to a Vimscript dictitem (`dictitem_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DictItemHandle(*const std::ffi::c_void);
+
+impl DictItemHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 /// Opaque handle to a Vimscript dict (`dict_T*`).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1051,6 +1071,15 @@ extern "C" {
     fn nvim_dict_get_ht_used(d: DictHandle) -> usize;
     fn nvim_dict_get_lock(d: DictHandle) -> c_int;
     fn nvim_dict_has_watchers(d: DictHandle) -> c_int;
+
+    // Dict item accessors (Phase 4)
+    fn nvim_dictitem_get_tv(di: DictItemHandle) -> TypevalHandle;
+    fn nvim_dict_find(d: DictHandle, key: *const c_char, len: isize) -> DictItemHandle;
+    fn nvim_tv_get_string_buf(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
+    fn nvim_tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
+    fn nvim_tv_copy(from: *const std::ffi::c_void, to: *mut std::ffi::c_void);
+    fn nvim_tv_get_number_simple(tv: TypevalHandle) -> i64;
+    fn nvim_tv_get_bool_simple(tv: TypevalHandle) -> c_int;
 
     // Blob accessors
     fn nvim_blob_get_len(b: BlobHandle) -> c_int;
@@ -1469,6 +1498,105 @@ fn tv_dict_is_watched_impl(d: DictHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_tv_dict_is_watched(d: DictHandle) -> c_int {
     c_int::from(tv_dict_is_watched_impl(d))
+}
+
+// =============================================================================
+// Dict lookup operations (Phase 4)
+// =============================================================================
+
+/// Check if a key is present in a dictionary.
+#[export_name = "tv_dict_has_key"]
+pub unsafe extern "C" fn rs_tv_dict_has_key(d: DictHandle, key: *const c_char) -> bool {
+    !unsafe { nvim_dict_find(d, key, -1) }.is_null()
+}
+
+/// Get a typval item from a dictionary and copy it into rettv.
+/// Returns OK (1) on success, FAIL (0) if key not found.
+#[export_name = "tv_dict_get_tv"]
+pub unsafe extern "C" fn rs_tv_dict_get_tv(
+    d: DictHandle,
+    key: *const c_char,
+    rettv: TypevalHandle,
+) -> c_int {
+    let di = unsafe { nvim_dict_find(d, key, -1) };
+    if di.is_null() {
+        return 0; // FAIL
+    }
+    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+    unsafe { nvim_tv_copy(di_tv.0, rettv.0.cast_mut()) };
+    1 // OK
+}
+
+/// Gets a number item from a dictionary, or a given default value.
+unsafe fn tv_dict_get_number_def_impl(d: DictHandle, key: *const c_char, def: i64) -> i64 {
+    let di = unsafe { nvim_dict_find(d, key, -1) };
+    if di.is_null() {
+        return def;
+    }
+    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+    unsafe { nvim_tv_get_number_simple(di_tv) }
+}
+
+/// Gets a number item from a dictionary.
+/// Returns 0 if the item does not exist.
+#[export_name = "tv_dict_get_number"]
+pub unsafe extern "C" fn rs_tv_dict_get_number(d: DictHandle, key: *const c_char) -> i64 {
+    unsafe { tv_dict_get_number_def_impl(d, key, 0) }
+}
+
+/// Gets a number item from a dictionary, or a given default value.
+#[export_name = "tv_dict_get_number_def"]
+pub unsafe extern "C" fn rs_tv_dict_get_number_def(
+    d: DictHandle,
+    key: *const c_char,
+    def: c_int,
+) -> i64 {
+    unsafe { tv_dict_get_number_def_impl(d, key, i64::from(def)) }
+}
+
+/// Gets a bool item from a dictionary, or a given default value.
+#[export_name = "tv_dict_get_bool"]
+pub unsafe extern "C" fn rs_tv_dict_get_bool(d: DictHandle, key: *const c_char, def: c_int) -> i64 {
+    let di = unsafe { nvim_dict_find(d, key, -1) };
+    if di.is_null() {
+        return i64::from(def);
+    }
+    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+    i64::from(unsafe { nvim_tv_get_bool_simple(di_tv) })
+}
+
+/// Get a string item from a dictionary with a caller-provided buffer.
+/// Returns NULL if key does not exist.
+#[export_name = "tv_dict_get_string_buf"]
+pub unsafe extern "C" fn rs_tv_dict_get_string_buf(
+    d: DictHandle,
+    key: *const c_char,
+    numbuf: *mut c_char,
+) -> *const c_char {
+    let di = unsafe { nvim_dict_find(d, key, -1) };
+    if di.is_null() {
+        return std::ptr::null();
+    }
+    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+    unsafe { nvim_tv_get_string_buf(di_tv, numbuf) }
+}
+
+/// Get a string item from a dictionary with key length and default.
+/// Returns def if key does not exist, NULL on type error.
+#[export_name = "tv_dict_get_string_buf_chk"]
+pub unsafe extern "C" fn rs_tv_dict_get_string_buf_chk(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: isize,
+    numbuf: *mut c_char,
+    def: *const c_char,
+) -> *const c_char {
+    let di = unsafe { nvim_dict_find(d, key, key_len) };
+    if di.is_null() {
+        return def;
+    }
+    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+    unsafe { nvim_tv_get_string_buf_chk(di_tv, numbuf) }
 }
 
 // =============================================================================

@@ -490,4 +490,14 @@ extern bool tv_check_lock(const typval_T *tv, const char *name, size_t name_len)
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 
+// Dict lookup functions (migrated to Rust, Phase 4)
+extern bool tv_dict_has_key(const dict_T *d, const char *key);
+extern int tv_dict_get_tv(dict_T *d, const char *key, typval_T *rettv);
+extern varnumber_T tv_dict_get_number(const dict_T *d, const char *key);
+extern varnumber_T tv_dict_get_number_def(const dict_T *d, const char *key, int def);
+extern varnumber_T tv_dict_get_bool(const dict_T *d, const char *key, int def);
+extern const char *tv_dict_get_string_buf(const dict_T *d, const char *key, char *numbuf);
+extern const char *tv_dict_get_string_buf_chk(const dict_T *d, const char *key, ptrdiff_t key_len,
+                                              char *numbuf, const char *def);
+
 #include "eval/typval.h.generated.h"
