@@ -411,6 +411,24 @@ extern "C" {
     static mut magic_overruled: c_int;
 }
 
+// skip_regexp_ex from C regexp module
+extern "C" {
+    #[link_name = "skip_regexp_ex"]
+    fn c_skip_regexp_ex(
+        startp: *mut c_char,
+        dirc: c_int,
+        magic: c_int,
+        newp: *mut *mut c_char,
+        dropped: *mut c_int,
+        magic_val: *mut c_int,
+    ) -> *mut c_char;
+    fn rs_magic_isset() -> c_int;
+}
+
+// Magic constants from regexp_defs.h
+const MAGIC_ON: c_int = 3;
+const MAGIC_ALL: c_int = 4;
+
 // External C functions for accessing global state
 extern "C" {
     fn nvim_get_curwin_handle() -> c_int;
@@ -721,6 +739,102 @@ pub unsafe extern "C" fn cmdline_has_word_boundary_rs(pattern: *const c_char, le
     }
     let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
     has_word_boundary(bytes)
+}
+
+// =============================================================================
+// Empty Pattern Detection
+// =============================================================================
+
+/// Check if a pattern is empty given a magic value.
+///
+/// Removes trailing `\v`, `\m`, `\M`, `\V`, `\c`, `\C`, `\Z` modifiers and
+/// checks if the remaining pattern is empty or ends with `\|` (magic) or `|`
+/// (very-magic).
+///
+/// This is the pure-Rust version of `empty_pattern_magic()` from ex_getln.c.
+#[must_use]
+pub fn empty_pattern_magic(p: &[u8], magic_val: c_int) -> bool {
+    let mut len = p.len();
+
+    // Remove trailing \v and similar modifiers
+    while len >= 2 && p[len - 2] == b'\\' {
+        let c = p[len - 1];
+        if matches!(c, b'm' | b'M' | b'v' | b'V' | b'c' | b'C' | b'Z') {
+            len -= 2;
+        } else {
+            break;
+        }
+    }
+
+    // Pattern is empty, or ends with \| (magic on) or | (very magic)
+    len == 0
+        || (len > 1
+            && p[len - 1] == b'|'
+            && ((p[len - 2] == b'\\' && magic_val == MAGIC_ON)
+                || (p[len - 2] != b'\\' && magic_val == MAGIC_ALL)))
+}
+
+/// Guess that the pattern matches everything.
+///
+/// Calls `skip_regexp_ex` to advance past the pattern and determine the
+/// effective magic mode, then delegates to `empty_pattern_magic`.
+///
+/// This is the pure-Rust version of `empty_pattern()` from ex_getln.c.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a NUL-terminated string with at least `len`
+/// bytes before the NUL. `delim` must be a valid delimiter character.
+pub unsafe fn empty_pattern(p: *mut c_char, len: usize, delim: c_int) -> bool {
+    let mut magic_val: c_int = MAGIC_ON;
+
+    if len == 0 {
+        return true;
+    }
+
+    c_skip_regexp_ex(
+        p,
+        delim,
+        rs_magic_isset(),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        &raw mut magic_val,
+    );
+
+    let bytes = std::slice::from_raw_parts(p.cast::<u8>(), len);
+    empty_pattern_magic(bytes, magic_val)
+}
+
+/// FFI export: check if pattern is empty given magic value.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a string of at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_empty_pattern_magic(
+    p: *const c_char,
+    len: usize,
+    magic_val: c_int,
+) -> c_int {
+    if p.is_null() {
+        return 1;
+    }
+    let bytes = std::slice::from_raw_parts(p.cast::<u8>(), len);
+    c_int::from(empty_pattern_magic(bytes, magic_val))
+}
+
+/// FFI export: guess that the pattern matches everything.
+///
+/// # Safety
+///
+/// `p` must be a valid mutable pointer to a NUL-terminated string with at
+/// least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_empty_pattern(p: *mut c_char, len: usize, delim: c_int) -> c_int {
+    if p.is_null() {
+        return 1;
+    }
+    c_int::from(empty_pattern(p, len, delim))
 }
 
 // =============================================================================

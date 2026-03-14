@@ -290,6 +290,14 @@ extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
 // Phase 10: VimL API helpers from Rust
 extern int rs_clamp_cmdpos(int pos, int cmdlen);
 
+// Phase 67: Screen position helpers from Rust
+extern int rs_cmd_startcol(void);
+extern int rs_cmdline_charsize(int idx);
+
+// Phase 67: Empty pattern detection from Rust
+extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
+extern int rs_empty_pattern(char *p, size_t len, int delim);
+
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -2278,30 +2286,12 @@ static int command_line_not_changed(CommandLineState *s)
 /// as a trailing \|, which can happen while typing a pattern.
 static bool empty_pattern(char *p, size_t len, int delim)
 {
-  magic_T magic_val = MAGIC_ON;
-
-  if (len > 0) {
-    skip_regexp_ex(p, delim, rs_magic_isset(), NULL, NULL, &magic_val);
-  } else {
-    return true;
-  }
-
-  return empty_pattern_magic(p, len, magic_val);
+  return rs_empty_pattern(p, len, delim);
 }
 
 static bool empty_pattern_magic(char *p, size_t len, magic_T magic_val)
 {
-  // remove trailing \v and the like
-  while (len >= 2 && p[len - 2] == '\\'
-         && vim_strchr("mMvVcCZ", (uint8_t)p[len - 1]) != NULL) {
-    len -= 2;
-  }
-
-  // true, if the pattern is empty, or the pattern ends with \| and magic is
-  // set (or it ends with '|' and very magic is set)
-  return len == 0 || (len > 1 && p[len - 1] == '|'
-                      && ((p[len - 2] == '\\' && magic_val == MAGIC_ON)
-                          || (p[len - 2] != '\\' && magic_val == MAGIC_ALL)));
+  return rs_empty_pattern_magic(p, len, (int)magic_val);
 }
 
 handle_T cmdpreview_get_bufnr(void)
@@ -2988,17 +2978,14 @@ bool allbuf_locked(void)
 
 static int cmdline_charsize(int idx)
 {
-  if (cmdline_star > 0) {           // showing '*', always 1 position
-    return 1;
-  }
-  return ptr2cells(ccline.cmdbuff + idx);
+  return rs_cmdline_charsize(idx);
 }
 
 /// Compute the offset of the cursor on the command line for the prompt and
 /// indent.
 static int cmd_startcol(void)
 {
-  return ccline.cmdindent + ((ccline.cmdfirstc != NUL) ? 1 : 0);
+  return rs_cmd_startcol();
 }
 
 /// Get an Ex command line for the ":" command.
