@@ -882,18 +882,26 @@ slang_T *spell_load_file(char *fname, char *lang, slang_T *old_lp, bool silent)
     case SN_CHARFLAGS: {
       // Read charflags section inline (replaces read_charflags_section +
       // set_spell_charflags + set_spell_finish, all now in Rust).
-      int flagslen, follen;
-      char *flags = read_cnt_string(fd, 1, &flagslen);
-      if (flagslen < 0) {
-        res = flagslen;
-        break;
+      // Read 1-byte length prefix for flags.
+      int flagslen;
+      {
+        int fc = getc(fd);
+        if (fc == EOF) { res = SP_TRUNCERROR; break; }
+        flagslen = fc;
       }
-      char *fol = read_cnt_string(fd, 2, &follen);
-      if (follen < 0) {
-        xfree(flags);
-        res = follen;
-        break;
+      char *flags = flagslen == 0 ? NULL : read_string(fd, (size_t)flagslen);
+      if (flagslen > 0 && flags == NULL) { res = SP_OTHERERROR; break; }
+
+      // Read 2-byte length prefix for fol.
+      int follen;
+      {
+        int fc1 = getc(fd), fc2 = getc(fd);
+        if (fc1 == EOF || fc2 == EOF) { xfree(flags); res = SP_TRUNCERROR; break; }
+        follen = (fc1 << 8) | fc2;
       }
+      char *fol = follen == 0 ? NULL : read_string(fd, (size_t)follen);
+      if (follen > 0 && fol == NULL) { xfree(flags); res = SP_OTHERERROR; break; }
+
       if ((flags == NULL) != (fol == NULL)) {
         xfree(flags);
         xfree(fol);
@@ -1241,38 +1249,6 @@ nextone:
     }
   }
 }
-
-// Read a length field from "fd" in "cnt_bytes" bytes.
-// Allocate memory, read the string into it and add a NUL at the end.
-// Returns NULL when the count is zero.
-// Sets "*cntp" to SP_*ERROR when there is an error, length of the result
-// otherwise.
-static char *read_cnt_string(FILE *fd, int cnt_bytes, int *cntp)
-{
-  int cnt = 0;
-
-  // read the length bytes, MSB first
-  for (int i = 0; i < cnt_bytes; i++) {
-    const int c = getc(fd);
-
-    if (c == EOF) {
-      *cntp = SP_TRUNCERROR;
-      return NULL;
-    }
-    cnt = (int)(((unsigned)cnt << 8) + (unsigned)c);
-  }
-  *cntp = cnt;
-  if (cnt == 0) {
-    return NULL;            // nothing to read, return NULL
-  }
-  char *str = read_string(fd, (size_t)cnt);
-  if (str == NULL) {
-    *cntp = SP_OTHERERROR;
-  }
-  return str;
-}
-
-
 
 // Read SN_PREFCOND section.
 // Return SP_*ERROR flags.
