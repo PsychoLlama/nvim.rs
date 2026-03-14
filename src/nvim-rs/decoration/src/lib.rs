@@ -668,17 +668,19 @@ pub unsafe fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx:
 
 /// Check if a DecorRange has a virtual position (virtual text or ui_watched).
 /// Rust implementation of decor_virt_pos().
-#[no_mangle]
-pub unsafe extern "C" fn rs_decor_virt_pos(range: DecorRangeHandle) -> c_int {
+#[export_name = "decor_virt_pos"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_decor_virt_pos(range: DecorRangeHandle) -> bool {
     if range.is_null() {
-        return 0;
+        return false;
     }
-    c_int::from(decor_range_has_virt_pos(range))
+    decor_range_has_virt_pos(range)
 }
 
 /// Get the virtual text position kind from a DecorRange.
 /// Rust implementation of decor_virt_pos_kind().
-#[no_mangle]
+#[export_name = "decor_virt_pos_kind"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
     if range.is_null() {
         return VirtTextPos::EndOfLine as c_int;

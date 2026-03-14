@@ -35,7 +35,7 @@
 
 extern bool rs_current_quote(oparg_T *oap, int count, bool include, int quotechar,
                               const char *escape);
-extern bool rs_in_html_tag(bool end_tag);
+extern bool in_html_tag(bool end_tag);
 extern bool rs_unadjust_for_sel(void);
 
 // =============================================================================
@@ -576,12 +576,6 @@ char *nvim_textobj_ml_get_pos(pos_T *pos)
 
 /// @param end_tag  when true, return true if the cursor is on "</aaa>".
 ///
-/// @return         true if the cursor is on a "<aaa>" tag.  Ignore "<aaa/>".
-static bool in_html_tag(bool end_tag)
-{
-  return rs_in_html_tag(end_tag);
-}
-
 /// Find tag block under the cursor, cursor at end.
 ///
 /// @param include  true == include white space

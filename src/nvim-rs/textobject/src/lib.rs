@@ -2209,7 +2209,7 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions which must be valid.
-#[no_mangle]
+#[export_name = "in_html_tag"]
 pub unsafe extern "C" fn rs_in_html_tag(end_tag: bool) -> bool {
     in_html_tag_impl(end_tag)
 }

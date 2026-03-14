@@ -114,6 +114,8 @@ typedef struct {
 
 
 // Forward declarations for functions migrated to Rust (no longer in generated header)
+bool decor_virt_pos(const DecorRange *decor);
+VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
 uint32_t decor_put_sh(DecorSignHighlight item);
 bool decor_redraw_reset(win_T *wp, DecorState *state);
 void decor_state_free(DecorState *state);

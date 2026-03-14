@@ -34,8 +34,8 @@
 extern int rs_hasAnyFolding(win_T *win);
 
 // Rust implementations
-extern int rs_decor_virt_pos(void *range);
-extern int rs_decor_virt_pos_kind(void *range);
+extern bool decor_virt_pos(const DecorRange *decor);
+extern VirtTextPos decor_virt_pos_kind(const DecorRange *decor);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
                             int priority2, uint32_t id2, uint32_t add_id2);
 
@@ -331,16 +331,6 @@ next_mark:
 }
 
 /// @return true if decor has a virtual position (virtual text or ui_watched)
-bool decor_virt_pos(const DecorRange *decor)
-{
-  return rs_decor_virt_pos((void *)decor) != 0;
-}
-
-VirtTextPos decor_virt_pos_kind(const DecorRange *decor)
-{
-  return rs_decor_virt_pos_kind((void *)decor);
-}
-
 bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
 {
   buf_T *buf = wp->w_buffer;

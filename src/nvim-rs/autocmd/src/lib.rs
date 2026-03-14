@@ -650,7 +650,8 @@ pub unsafe extern "C" fn rs_do_augroup(arg: *mut c_char, del_group: bool) {
 ///
 /// # Safety
 /// `argp` must be a valid pointer to a `*const c_char` pointing into a NUL-terminated string.
-#[no_mangle]
+#[export_name = "arg_augroup_get"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_arg_augroup_get(argp: *mut *const c_char) -> c_int {
     let arg = *argp;
 

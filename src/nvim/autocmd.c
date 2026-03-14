@@ -91,7 +91,7 @@ typedef struct {
 extern EventNameResult rs_event_name2nr(const char *start);
 
 // Phase 5: :augroup command + arg parsing
-extern int rs_arg_augroup_get(const char **argp);
+extern int arg_augroup_get(char **argp);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -1496,15 +1496,6 @@ static char *aucmd_handler_to_string(AutoCmd *ac)
 }
 
 // Arg Parsing Functions
-
-// Find the group ID in a ":autocmd" or ":doautocmd" argument.
-// The "argp" argument is advanced to the following argument.
-//
-// Returns the group ID or AUGROUP_ALL.
-static int arg_augroup_get(char **argp)
-{
-  return rs_arg_augroup_get((const char **)argp);
-}
 
 /// When kFalse: VimSuspend should be triggered next.
 /// When kTrue: VimResume should be triggered next.
