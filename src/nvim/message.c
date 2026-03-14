@@ -356,10 +356,11 @@ void nvim_set_did_emsg(int val) { did_emsg = val; }
 int nvim_get_called_emsg(void) { return called_emsg; }
 void nvim_set_called_emsg(int val) { called_emsg = val; }
 
-// Forward declarations for static functions used by Phase 4 accessors below
+// Forward declarations for static functions used by Phase 4/5 accessors below
 static int emsg_not_now(void);
 static char *get_emsg_source(void);
 static char *get_emsg_lnum(void);
+static bool other_sourcing_name(void);
 
 // Phase 4: emsg_multiline accessors
 int nvim_get_ex_exitval(void) { return ex_exitval; }
@@ -518,6 +519,8 @@ int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }
 int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
+int nvim_get_cmdmsg_rl(void) { return cmdmsg_rl ? 1 : 0; }
+int nvim_get_msg_grid_cols(void) { return msg_grid.cols; }
 
 // Phase 1: message_filtered implementation helper (does the regex check in C)
 // This is the actual implementation; message_filtered() is replaced by
@@ -880,6 +883,17 @@ void nvim_clear_last_sourcing_name(void) { XFREE_CLEAR(last_sourcing_name); }
 int nvim_get_last_sourcing_lnum(void) { return last_sourcing_lnum; }
 void nvim_set_last_sourcing_lnum(int val) { last_sourcing_lnum = val; }
 
+// Phase 2 (msg_source): additional sourcing accessors
+int nvim_other_sourcing_name(void) { return other_sourcing_name() ? 1 : 0; }
+int nvim_sourcing_name_is_null(void) { return SOURCING_NAME == NULL ? 1 : 0; }
+void nvim_update_last_sourcing_name(void)
+{
+  XFREE_CLEAR(last_sourcing_name);
+  if (SOURCING_NAME != NULL) {
+    last_sourcing_name = xstrdup(SOURCING_NAME);
+  }
+}
+
 /// @return  true if "SOURCING_NAME" differs from "last_sourcing_name".
 static bool other_sourcing_name(void)
 {
@@ -938,47 +952,7 @@ static char *get_emsg_lnum(void)
   return NULL;
 }
 
-/// Display name and line number for the source of an error.
-/// Remember the file name and line number, so that for the next error the info
-/// is only displayed if it changed.
-void msg_source(int hl_id)
-{
-  static bool recursive = false;
-
-  // Bail out if something called here causes an error.
-  if (recursive) {
-    return;
-  }
-  recursive = true;
-
-  no_wait_return++;
-  char *p = get_emsg_source();
-  if (p != NULL) {
-    msg_scroll = true;  // this will take more than one line
-    msg(p, hl_id);
-    xfree(p);
-  }
-  p = get_emsg_lnum();
-  if (p != NULL) {
-    msg(p, HLF_N);
-    xfree(p);
-    last_sourcing_lnum = SOURCING_LNUM;      // only once for each line
-  }
-
-  // remember the last sourcing name printed, also when it's empty
-  if (SOURCING_NAME == NULL || other_sourcing_name()) {
-    XFREE_CLEAR(last_sourcing_name);
-    if (SOURCING_NAME != NULL) {
-      last_sourcing_name = xstrdup(SOURCING_NAME);
-      if (!redirecting()) {
-        msg_putchar_hl('\n', hl_id);
-      }
-    }
-  }
-  no_wait_return--;
-
-  recursive = false;
-}
+// msg_source() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_msg_source)
 
 /// @return  true if not giving error messages right now:
 ///            If "emsg_off" is set: no error messages at the moment.
@@ -1990,13 +1964,7 @@ static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse
   msg_check();
 }
 
-void msg_line_flush(void)
-{
-  if (cmdmsg_rl) {
-    grid_line_mirror(msg_grid.cols);
-  }
-  grid_line_flush_if_valid_row();
-}
+// msg_line_flush() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_msg_line_flush)
 
 void msg_cursor_goto(int row, int col)
 {

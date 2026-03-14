@@ -27,7 +27,12 @@ extern "C" {
 
     // Display coordination
     fn msg_grid_validate();
-    fn msg_line_flush();
+
+    // grid_line_mirror and grid_line_flush_if_valid_row are implemented in Rust (grid crate)
+    fn grid_line_mirror(width: c_int);
+    fn grid_line_flush_if_valid_row();
+    fn nvim_get_cmdmsg_rl() -> c_int;
+    fn nvim_get_msg_grid_cols() -> c_int;
 
     // Position and display state
     fn nvim_get_msg_col() -> c_int;
@@ -268,13 +273,19 @@ pub unsafe extern "C" fn rs_msg_grid_validate() {
 
 /// Flush pending line content to display.
 ///
-/// Writes any accumulated grid line content to the screen.
+/// For right-to-left command lines, mirrors the line first.
+/// Then flushes the grid line if the row is valid.
+///
+/// Equivalent to the C function `msg_line_flush()`.
 ///
 /// # Safety
-/// Calls C function that modifies display state.
-#[no_mangle]
+/// Calls grid functions that modify display state.
+#[export_name = "msg_line_flush"]
 pub unsafe extern "C" fn rs_msg_line_flush() {
-    msg_line_flush();
+    if nvim_get_cmdmsg_rl() != 0 {
+        grid_line_mirror(nvim_get_msg_grid_cols());
+    }
+    grid_line_flush_if_valid_row();
 }
 
 // ============================================================================

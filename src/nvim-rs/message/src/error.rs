@@ -456,12 +456,18 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
 // ============================================================================
 
 extern "C" {
-    // Source info functions (still in C)
-    fn msg_source(hl_id: c_int);
-
     // Phase 1: sourcing state accessors for reset_last_sourcing
     fn nvim_clear_last_sourcing_name();
     fn nvim_set_last_sourcing_lnum(val: c_int);
+
+    // Accessors for msg_source implementation
+    fn nvim_other_sourcing_name() -> c_int;
+    fn nvim_sourcing_name_is_null() -> c_int;
+    fn nvim_update_last_sourcing_name();
+    fn no_wait_return_inc();
+    fn no_wait_return_dec();
+    fn msg_putchar_hl(c: c_int, hl_id: c_int);
+    fn redirecting() -> c_int;
 
     // Accessors for emsg_multiline implementation
     fn nvim_emsg_not_now() -> c_int;
@@ -640,7 +646,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
     nvim_set_msg_scroll(1);
     let save_skip_flush = nvim_get_msg_ext_skip_flush();
     nvim_set_msg_ext_skip_flush(1);
-    msg_source(hl_id);
+    rs_msg_source(hl_id);
 
     // Display the error message itself.
     nvim_set_msg_nowait(0); // Wait for this msg.
@@ -730,18 +736,62 @@ pub unsafe extern "C" fn rs_iemsg(s: *const c_char) {
     // Note: ABORT_ON_INTERNAL_ERROR path omitted (fuzzing builds only)
 }
 
+// Static recursion guard for msg_source
+static MSG_SOURCE_RECURSIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// HLF_N: LineNr highlight face (for msg_source)
+const HLF_N_LINE_NR: c_int = 12;
+
 /// Display source info before an error message.
 ///
 /// Shows the script name and line number where the error occurred.
+/// Remembers the last source shown so it is only displayed when it changes.
 ///
 /// # Arguments
 /// * `hl_id` - Highlight group ID for the source info
 ///
 /// # Safety
-/// Calls C function.
-#[no_mangle]
+/// Calls C accessor functions.
+#[export_name = "msg_source"]
 pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
-    msg_source(hl_id);
+    use std::sync::atomic::Ordering;
+
+    // Bail out if something called here causes an error.
+    if MSG_SOURCE_RECURSIVE
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    no_wait_return_inc();
+
+    let p = nvim_get_emsg_source();
+    if !p.is_null() {
+        nvim_set_msg_scroll(1); // this will take more than one line
+        let _ = crate::output_core::rs_msg(p, hl_id);
+        xfree(p.cast());
+    }
+
+    let p = nvim_get_emsg_lnum();
+    if !p.is_null() {
+        let _ = crate::output_core::rs_msg(p, HLF_N_LINE_NR);
+        xfree(p.cast());
+        nvim_set_last_sourcing_lnum(nvim_get_sourcing_lnum()); // only once for each line
+    }
+
+    // remember the last sourcing name printed, also when it's empty
+    if nvim_sourcing_name_is_null() != 0 || nvim_other_sourcing_name() != 0 {
+        nvim_update_last_sourcing_name();
+        if nvim_sourcing_name_is_null() == 0 && redirecting() == 0 {
+            msg_putchar_hl(c_int::from(b'\n'), hl_id);
+        }
+    }
+
+    no_wait_return_dec();
+
+    MSG_SOURCE_RECURSIVE.store(false, Ordering::Release);
 }
 
 /// Reset the last sourcing info.
