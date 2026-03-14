@@ -20,8 +20,6 @@
 
 #include "cursor_shape.c.generated.h"
 
-extern int rs_cursor_is_block_during_visual(int exclusive);
-extern int rs_cursor_mode_uses_syn_id(int syn_id);
 extern int rs_cursor_mode_str2int(const char *mode);
 
 /// Handling of cursor and mouse pointer shapes in various modes.
@@ -93,16 +91,6 @@ Array mode_style_array(Arena *arena)
   return all;
 }
 
-/// Returns true if the cursor is non-blinking "block" shape during
-/// visual selection.
-///
-/// @param exclusive If 'selection' option is "exclusive".
-bool cursor_is_block_during_visual(bool exclusive)
-  FUNC_ATTR_PURE
-{
-  return rs_cursor_is_block_during_visual(exclusive ? 1 : 0) != 0;
-}
-
 /// Map cursor mode from string to integer
 ///
 /// @param mode Fullname of the mode whose id we are looking for
@@ -114,13 +102,6 @@ int cursor_mode_str2int(const char *mode)
     WLOG("Unknown mode %s", mode);
   }
   return result;
-}
-
-/// Check if a syntax id is used as a cursor style.
-bool cursor_mode_uses_syn_id(int syn_id)
-  FUNC_ATTR_PURE
-{
-  return rs_cursor_mode_uses_syn_id(syn_id) != 0;
 }
 
 // Rust FFI accessor functions for shape_table

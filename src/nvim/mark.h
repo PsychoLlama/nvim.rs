@@ -12,6 +12,7 @@
 #include "mark.h.generated.h"
 #include "mark.h.inline.generated.h"
 
+int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt);
 extern int rs_mark_global_index(int name);
 extern int rs_mark_local_index(int name);
 extern bool rs_mark_is_valid_named(int name);

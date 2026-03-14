@@ -5,8 +5,6 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::os::raw::c_int;
-
 /// Opaque handle to a `buf_T` structure.
 #[repr(C)]
 pub struct BufHandle {
@@ -25,16 +23,17 @@ extern "C" {
 ///
 /// # Safety
 /// `buf` must be a valid pointer to a `buf_T` structure.
-#[no_mangle]
-pub unsafe extern "C" fn rs_buf_updates_active(buf: *const BufHandle) -> c_int {
+#[export_name = "buf_updates_active"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_buf_updates_active(buf: *const BufHandle) -> bool {
     if buf.is_null() {
-        return 0;
+        return false;
     }
 
     let has_channels = nvim_buf_get_update_channels_size(buf) > 0;
     let has_callbacks = nvim_buf_get_update_callbacks_size(buf) > 0;
 
-    c_int::from(has_channels || has_callbacks)
+    has_channels || has_callbacks
 }
 
 #[cfg(test)]

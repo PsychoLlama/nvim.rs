@@ -560,16 +560,17 @@ pub unsafe extern "C" fn rs_getfile(
 ///
 /// # Safety
 /// `command` must be a valid C string pointer or null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_int) -> c_int {
+#[export_name = "set_swapcommand"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_int) -> bool {
     // Don't set if both command is null and newlnum <= 0
     if command.is_null() && newlnum <= 0 {
-        return 0;
+        return false;
     }
     // Don't set if v:swapcommand is already set
     let existing = nvim_excmds_get_vim_var_str_swapcommand();
     if !existing.is_null() && *existing != 0 {
-        return 0;
+        return false;
     }
 
     // Format swapcommand string: ":%s\r" if command is set, else "<lnum>G".
@@ -580,7 +581,7 @@ pub unsafe extern "C" fn rs_set_swapcommand(command: *const c_char, newlnum: c_i
         CString::new(format!("{}G", newlnum)).unwrap_or_default()
     };
     nvim_excmds_set_vim_var_string_swapcommand(s.as_ptr());
-    1
+    true
 }
 
 /// Emit E143 error and clear au_new_curbuf.

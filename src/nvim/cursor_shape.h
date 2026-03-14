@@ -58,5 +58,7 @@ extern cursorentry_T shape_table[SHAPE_IDX_COUNT];
 // Rust-exported functions
 const char *parse_shape_opt(int what);
 int cursor_get_mode_idx(void);
+bool cursor_is_block_during_visual(bool exclusive);
+bool cursor_mode_uses_syn_id(int syn_id);
 
 #include "cursor_shape.h.generated.h"

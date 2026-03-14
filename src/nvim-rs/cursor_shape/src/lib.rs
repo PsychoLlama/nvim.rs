@@ -125,9 +125,10 @@ extern "C" {
 ///
 /// # Safety
 /// Calls C accessor functions for `shape_table`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cursor_is_block_during_visual(exclusive: c_int) -> c_int {
-    let mode_idx = if exclusive != 0 {
+#[export_name = "cursor_is_block_during_visual"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_cursor_is_block_during_visual(exclusive: bool) -> bool {
+    let mode_idx = if exclusive {
         ModeShape::Ve as c_int
     } else {
         ModeShape::V as c_int
@@ -136,28 +137,29 @@ pub unsafe extern "C" fn rs_cursor_is_block_during_visual(exclusive: c_int) -> c
     let shape = nvim_get_shape_table_shape(mode_idx);
     let blinkon = nvim_get_shape_table_blinkon(mode_idx);
 
-    c_int::from(shape == CursorShape::Block as c_int && blinkon == 0)
+    shape == CursorShape::Block as c_int && blinkon == 0
 }
 
 /// Check if a syntax id is used as a cursor style.
 ///
 /// # Safety
 /// Calls C accessor functions for `shape_table` and `guicursor`.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cursor_mode_uses_syn_id(syn_id: c_int) -> c_int {
+#[export_name = "cursor_mode_uses_syn_id"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
     if nvim_is_guicursor_empty() != 0 {
-        return 0;
+        return false;
     }
 
     for mode_idx in 0..ModeShape::Count as c_int {
         let id = nvim_get_shape_table_id(mode_idx);
         let id_lm = nvim_get_shape_table_id_lm(mode_idx);
         if id == syn_id || id_lm == syn_id {
-            return 1;
+            return true;
         }
     }
 
-    0
+    false
 }
 
 /// Return the index into shape_table[] for the current mode.

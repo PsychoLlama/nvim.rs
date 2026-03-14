@@ -412,15 +412,6 @@ int setmark(int c)
 
 
 // Set named mark "c" to position "pos".
-// When "c" is upper case use file "fnum".
-// Returns OK on success, FAIL if bad name given.
-extern int rs_setmark_pos(int c, pos_T *pos, int fnum, const fmarkv_T *view_pt);
-int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
-{
-  return rs_setmark_pos(c, pos, fnum, view_pt);
-}
-
-
 // Set the previous context mark to the current position and add it to the
 // jump list.
 void setpcmark(void)

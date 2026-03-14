@@ -23,7 +23,6 @@
 
 #include "buffer_updates.c.generated.h"  // IWYU pragma: keep
 
-extern int rs_buf_updates_active(buf_T *buf);
 
 /// Get the size of the update_channels kvec for a buffer.
 size_t nvim_buf_get_update_channels_size(buf_T *buf)
@@ -100,12 +99,6 @@ bool buf_updates_register(buf_T *buf, uint64_t channel_id, BufUpdateCallbacks cb
   }
 
   return true;
-}
-
-bool buf_updates_active(buf_T *buf)
-  FUNC_ATTR_PURE
-{
-  return rs_buf_updates_active(buf) != 0;
 }
 
 void buf_updates_send_end(buf_T *buf, uint64_t channelid)

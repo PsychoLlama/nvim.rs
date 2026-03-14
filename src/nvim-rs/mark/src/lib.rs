@@ -4770,7 +4770,8 @@ pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
 /// # Safety
 /// - `pos` must be a valid non-null pointer to a PosT.
 /// - `view_pt` may be null (treated as no view).
-#[no_mangle]
+#[export_name = "setmark_pos"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_setmark_pos(
     c: c_int,
     pos: *mut PosT,

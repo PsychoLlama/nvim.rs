@@ -527,7 +527,8 @@ extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 // rs_do_write deleted: now exported as do_write via #[export_name]
 // rs_check_overwrite deleted: now exported as check_overwrite via #[export_name]
 // rs_getfile deleted: now exported as getfile via #[export_name]
-extern int rs_set_swapcommand(const char *command, int newlnum);
+// rs_set_swapcommand deleted: now exported as set_swapcommand via #[export_name]
+extern bool set_swapcommand(char *command, linenr_T newlnum);
 extern void rs_delbuf_msg(char *name);
 
 // ex_update deleted: now exported directly from Rust via #[export_name]
@@ -576,17 +577,6 @@ static int check_readonly(int *forceit, buf_T *buf)
 }
 
 // getfile deleted: now exported directly from Rust via #[export_name]
-
-/// Thin wrapper calling Rust rs_set_swapcommand.
-///
-/// @param command  [+cmd] to be executed (e.g. +10).
-/// @param newlnum  if > 0: put cursor on this line number (if possible)
-//
-/// @return 1 if swapcommand was actually set, 0 otherwise
-bool set_swapcommand(char *command, linenr_T newlnum)
-{
-  return rs_set_swapcommand(command, (int)newlnum) != 0;
-}
 
 // do_ecmd deleted: now exported directly from Rust via #[export_name]
 
@@ -2440,10 +2430,10 @@ void nvim_ecmd_do_cmdline(const char *command)
 /// Call set_vim_var_string(VV_SWAPCOMMAND, NULL, -1) to clear swapcommand
 void nvim_ecmd_clear_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 
-/// Call rs_set_swapcommand(command, newlnum). Returns 1 if swapcommand was set.
+/// Call set_swapcommand(command, newlnum). Returns 1 if swapcommand was set.
 int nvim_ecmd_set_swapcommand(const char *command, int newlnum)
 {
-  return rs_set_swapcommand(command, newlnum) ? 1 : 0;
+  return set_swapcommand((char *)command, (linenr_T)newlnum) ? 1 : 0;
 }
 
 /// Get p_ur (undoreload option). Returns -1 if unlimited.
