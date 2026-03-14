@@ -1404,8 +1404,6 @@ void nvim_ui_flush_wrapper(void) { ui_flush(); }
 /// Clear MOD_MASK_SHIFT from mod_mask.
 void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
 
-// nvim_execute_nv_cmd now forwards to Rust dispatch (dispatch/table.rs rs_execute_dispatch)
-void nvim_execute_nv_cmd(int idx, cmdarg_T *ca) { rs_execute_dispatch(idx, ca); }
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 

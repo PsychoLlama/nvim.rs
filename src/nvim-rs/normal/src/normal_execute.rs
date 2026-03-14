@@ -123,6 +123,7 @@ extern "C" {
     fn rs_unshift_special(cmdchar: c_int, modp: *mut c_int) -> c_int;
     fn nvim_set_mod_mask(val: c_int);
     fn nvim_mod_mask_clear_shift();
+    #[link_name = "rs_execute_dispatch"]
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
 
     // Phase 5 count/visual accessors
