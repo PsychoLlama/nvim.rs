@@ -389,6 +389,12 @@ extern void f_nextnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 extern void f_prevnonblank(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_menu_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 1 (plan 40f0fb72) VimL function declarations (simple.rs)
+extern void f_feedkeys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_tagfiles(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_taglist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_serverstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -1379,25 +1385,7 @@ static void flatten_common(typval_T *argvars, typval_T *rettv, bool make_copy)
 
 /// "flatten(list[, {maxdepth}])" function
 /// "feedkeys()" function
-static void f_feedkeys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  // This is not allowed in the sandbox.  If the commands would still be
-  // executed in the sandbox it would be OK, but it probably happens later,
-  // when "sandbox" is no longer set.
-  if (rs_check_secure()) {
-    return;
-  }
-
-  const char *const keys = tv_get_string(&argvars[0]);
-  char nbuf[NUMBUFLEN];
-  const char *flags = NULL;
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    flags = tv_get_string_buf(&argvars[1], nbuf);
-  }
-
-  nvim_feedkeys(cstr_as_string(keys),
-                cstr_as_string(flags), true);
-}
+// f_feedkeys: migrated to Rust (simple.rs)
 
 /// "function()" function
 /// "funcref()" function
@@ -4588,24 +4576,7 @@ static void f_serverstart(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "serverstop()" function
-static void f_serverstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_STRING) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = 0;
-  if (argvars[0].vval.v_string) {
-    bool rv = server_stop(argvars[0].vval.v_string);
-    rettv->vval.v_number = (rv ? 1 : 0);
-  }
-}
+// f_serverstop: migrated to Rust (simple.rs)
 
 /// Set the cursor or mark position.
 /// If "charpos" is true, then use the column number as a character offset.
@@ -5224,40 +5195,9 @@ static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   }
 }
 
-/// "tagfiles()" function
-static void f_tagfiles(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-  char *fname = xmalloc(MAXPATHL);
+// f_tagfiles: migrated to Rust (simple.rs)
 
-  bool first = true;
-  tagname_T tn;
-  while (rs_get_tagfname(&tn, first, fname) == OK) {
-    tv_list_append_string(rettv->vval.v_list, fname, -1);
-    first = false;
-  }
-
-  rs_tagname_free(&tn);
-  xfree(fname);
-}
-
-/// "taglist()" function
-static void f_taglist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const tag_pattern = tv_get_string(&argvars[0]);
-
-  rettv->vval.v_number = false;
-  if (*tag_pattern == NUL) {
-    return;
-  }
-
-  const char *fname = NULL;
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    fname = tv_get_string(&argvars[1]);
-  }
-  rs_get_tags(tv_list_alloc_ret(rettv, kListLenUnknown),
-              (char *)tag_pattern, (char *)fname);
-}
+// f_taglist: migrated to Rust (simple.rs)
 
 /// "timer_info([timer])" function
 // f_timer_info, f_timer_pause, f_timer_start, f_timer_stop: migrated to Rust (timer.rs)
