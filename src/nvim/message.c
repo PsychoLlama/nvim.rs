@@ -471,6 +471,14 @@ void nvim_msg_grid_flush_dirty_line(int row)
           HL_ATTR(HLF_MSG), false);
   msg_grid.dirty_col[row] = 0;
 }
+void nvim_msg_set_pos_for_scroll(int pos)
+{
+  ui_ext_msg_set_pos(pos, true);
+}
+void nvim_msg_grid_scroll_up(int to_scroll)
+{
+  ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
+}
 
 // Phase 430: Redirection/verbose state accessors
 int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
@@ -2091,56 +2099,6 @@ void msg_cursor_goto(int row, int col)
 
 /// Scroll the screen up one line for displaying the next message line.
 
-/// Send throttled message output to UI clients
-///
-/// The way message.c uses the grid_xx family of functions is quite inefficient
-/// relative to the "gridline" UI protocol used by TUI and modern clients.
-/// For instance scrolling is done one line at a time. By throttling drawing
-/// on the message grid, we can coalesce scrolling to a single grid_scroll
-/// per screen update.
-///
-/// NB: The bookkeeping is quite messy, and rests on a bunch of poorly
-/// documented assumptions. For instance that the message area always grows
-/// while being throttled, messages are only being output on the last line
-/// etc.
-///
-/// Probably message scrollback storage should be reimplemented as a
-/// file_buffer, and message scrolling in TUI be reimplemented as a modal
-/// floating window. Then we get throttling "for free" using standard
-/// redraw_later code paths.
-void msg_scroll_flush(void)
-{
-  if (msg_grid.throttled) {
-    msg_grid.throttled = false;
-    int pos_delta = msg_grid_pos_at_flush - msg_grid_pos;
-    assert(pos_delta >= 0);
-    int delta = MIN(msg_scrolled - msg_scrolled_at_flush, msg_grid.rows);
-
-    if (pos_delta > 0) {
-      ui_ext_msg_set_pos(msg_grid_pos, true);
-    }
-
-    int to_scroll = delta - pos_delta - msg_grid_scroll_discount;
-    assert(to_scroll >= 0);
-
-    // TODO(bfredl): msg_grid_pos should be 0 already when starting scrolling
-    // but this sometimes fails in "headless" message printing.
-    if (to_scroll > 0 && msg_grid_pos == 0) {
-      ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
-    }
-
-    for (int i = MAX(Rows - MAX(delta, 1), 0); i < Rows; i++) {
-      int row = i - msg_grid_pos;
-      assert(row >= 0);
-      ui_line(&msg_grid, row, false, 0, msg_grid.dirty_col[row], msg_grid.cols,
-              HL_ATTR(HLF_MSG), false);
-      msg_grid.dirty_col[row] = 0;
-    }
-  }
-  msg_scrolled_at_flush = msg_scrolled;
-  msg_grid_scroll_discount = 0;
-  msg_grid_pos_at_flush = msg_grid_pos;
-}
 
 
 /// Increment "msg_scrolled".

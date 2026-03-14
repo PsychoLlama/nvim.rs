@@ -26,7 +26,23 @@ extern "C" {
     // UI refresh (Phase 1: implementations moved to Rust, C provides accessor wrappers)
     fn nvim_msg_ui_refresh_impl();
     fn nvim_msg_ui_flush_impl();
-    fn msg_scroll_flush();
+
+    // Phase 4: msg_scroll_flush accessors
+    fn nvim_msg_grid_is_throttled() -> c_int;
+    fn nvim_msg_grid_set_throttled(val: c_int);
+    fn nvim_get_msg_grid_pos_at_flush() -> c_int;
+    fn nvim_set_msg_grid_pos_at_flush(val: c_int);
+    fn nvim_get_msg_grid_pos() -> c_int;
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_get_msg_scrolled_at_flush() -> c_int;
+    fn nvim_set_msg_scrolled_at_flush(val: c_int);
+    fn nvim_get_msg_grid_scroll_discount() -> c_int;
+    fn nvim_set_msg_grid_scroll_discount(val: c_int);
+    fn nvim_msg_set_pos_for_scroll(pos: c_int);
+    fn nvim_msg_grid_scroll_up(to_scroll: c_int);
+    fn nvim_get_rows() -> c_int;
+    fn nvim_msg_grid_get_rows() -> c_int;
+    fn nvim_msg_grid_flush_dirty_line(row: c_int);
 
     // Phase 1: message_filtered C implementation
     fn nvim_message_filtered_impl(msg: *const c_char) -> bool;
@@ -287,13 +303,49 @@ pub unsafe extern "C" fn rs_msg_ui_flush() {
     nvim_msg_ui_flush_impl();
 }
 
-/// Flush scroll-related UI updates.
+/// Flush scroll-related UI updates to clients.
+///
+/// Coalesces throttled message grid scrolling into a single grid_scroll
+/// event per screen update.
+///
+/// # Panics
+/// Panics if the scroll accounting invariants are violated (pos_delta or
+/// to_scroll is negative), which indicates a bug in the scroll bookkeeping.
 ///
 /// # Safety
-/// Calls C function that modifies UI state.
-#[no_mangle]
+/// Calls C accessor functions that modify UI state.
+#[allow(clippy::cast_sign_loss)]
+#[export_name = "msg_scroll_flush"]
 pub unsafe extern "C" fn rs_msg_scroll_flush() {
-    msg_scroll_flush();
+    if nvim_msg_grid_is_throttled() != 0 {
+        nvim_msg_grid_set_throttled(0);
+        let pos_delta = nvim_get_msg_grid_pos_at_flush() - nvim_get_msg_grid_pos();
+        assert!(pos_delta >= 0);
+        let delta = (nvim_get_msg_scrolled() - nvim_get_msg_scrolled_at_flush())
+            .min(nvim_msg_grid_get_rows());
+
+        if pos_delta > 0 {
+            nvim_msg_set_pos_for_scroll(nvim_get_msg_grid_pos());
+        }
+
+        let to_scroll = delta - pos_delta - nvim_get_msg_grid_scroll_discount();
+        assert!(to_scroll >= 0);
+
+        if to_scroll > 0 && nvim_get_msg_grid_pos() == 0 {
+            nvim_msg_grid_scroll_up(to_scroll);
+        }
+
+        let rows = nvim_get_rows();
+        let start = (rows - delta.max(1)).max(0);
+        for i in start..rows {
+            let row = i - nvim_get_msg_grid_pos();
+            assert!(row >= 0);
+            nvim_msg_grid_flush_dirty_line(row);
+        }
+    }
+    nvim_set_msg_scrolled_at_flush(nvim_get_msg_scrolled());
+    nvim_set_msg_grid_scroll_discount(0);
+    nvim_set_msg_grid_pos_at_flush(nvim_get_msg_grid_pos());
 }
 
 // Note: rs_msg_reset_scroll() is defined in scrollback.rs
