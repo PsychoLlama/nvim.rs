@@ -2804,6 +2804,24 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
 }
 
 // =============================================================================
+// Phase 5: update_screen
+// =============================================================================
+
+extern "C" {
+    /// Full update_screen implementation in C (batch helper in drawscreen_shim.c).
+    fn nvim_update_screen_impl() -> c_int;
+}
+
+/// Main screen update orchestrator.
+///
+/// Calls the C implementation which handles all grid, window, and provider logic.
+/// Rust equivalent of `update_screen()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_screen() -> c_int {
+    nvim_update_screen_impl()
+}
+
+// =============================================================================
 // Phase 4: show_cursor_info_later
 // =============================================================================
 
