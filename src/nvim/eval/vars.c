@@ -83,6 +83,12 @@ extern char *rs_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate);
 extern char *rs_eval_all_expr_in_str(char *str);
 extern int rs_get_spellword(list_T *list, const char **ret_word);
 
+// Phase 3 partial: ex_let_env, ex_let_register migrated to Rust
+extern char *rs_ex_let_env(char *arg, typval_T *tv, bool is_const,
+                            const char *endchars, const char *op);
+extern char *rs_ex_let_register(char *arg, typval_T *tv, bool is_const,
+                                 const char *endchars, const char *op);
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -1189,46 +1195,7 @@ static char *ex_let_env(char *arg, typval_T *const tv, const bool is_const,
                         const char *const endchars, const char *const op)
   FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (is_const) {
-    emsg(_("E996: Cannot lock an environment variable"));
-    return NULL;
-  }
-
-  // Find the end of the name.
-  char *arg_end = NULL;
-  arg++;
-  char *name = arg;
-  int len = rs_get_env_len((const char **)&arg);
-  if (len == 0) {
-    semsg(_(e_invarg2), name - 1);
-  } else {
-    if (op != NULL && vim_strchr("+-*/%", (uint8_t)(*op)) != NULL) {
-      semsg(_(e_letwrong), op);
-    } else if (endchars != NULL
-               && vim_strchr(endchars, (uint8_t)(*skipwhite(arg))) == NULL) {
-      emsg(_(e_letunexp));
-    } else if (!rs_check_secure()) {
-      char *tofree = NULL;
-      const char c1 = name[len];
-      name[len] = NUL;
-      const char *p = tv_get_string_chk(tv);
-      if (p != NULL && op != NULL && *op == '.') {
-        char *s = vim_getenv(name);
-        if (s != NULL) {
-          tofree = concat_str(s, p);
-          p = tofree;
-          xfree(s);
-        }
-      }
-      if (p != NULL) {
-        vim_setenv_ext(name, p);
-        arg_end = arg;
-      }
-      name[len] = c1;
-      xfree(tofree);
-    }
-  }
-  return arg_end;
+  return rs_ex_let_env(arg, tv, is_const, endchars, op);
 }
 
 /// Set an option, part of ex_let_one().
@@ -1336,36 +1303,7 @@ static char *ex_let_register(char *arg, typval_T *const tv, const bool is_const,
                              const char *const endchars, const char *const op)
   FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (is_const) {
-    emsg(_("E996: Cannot lock a register"));
-    return NULL;
-  }
-
-  char *arg_end = NULL;
-  arg++;
-  if (op != NULL && vim_strchr("+-*/%", (uint8_t)(*op)) != NULL) {
-    semsg(_(e_letwrong), op);
-  } else if (endchars != NULL
-             && vim_strchr(endchars, (uint8_t)(*skipwhite(arg + 1))) == NULL) {
-    emsg(_(e_letunexp));
-  } else {
-    char *ptofree = NULL;
-    const char *p = tv_get_string_chk(tv);
-    if (p != NULL && op != NULL && *op == '.') {
-      char *s = get_reg_contents(*arg == '@' ? '"' : *arg, kGRegExprSrc);
-      if (s != NULL) {
-        ptofree = concat_str(s, p);
-        p = ptofree;
-        xfree(s);
-      }
-    }
-    if (p != NULL) {
-      write_reg_contents(*arg == '@' ? '"' : *arg, p, (ssize_t)strlen(p), false);
-      arg_end = arg + 1;
-    }
-    xfree(ptofree);
-  }
-  return arg_end;
+  return rs_ex_let_register(arg, tv, is_const, endchars, op);
 }
 
 /// Set one item of `:let var = expr` or `:let [v1, v2] = list` to its value

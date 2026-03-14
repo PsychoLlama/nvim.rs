@@ -388,3 +388,170 @@ pub unsafe extern "C" fn rs_get_spellword(list: ListHandle, ret_word: *mut *cons
     *ret_word = word;
     tv_list_find_nr(list, -1, std::ptr::null_mut()) as c_int
 }
+
+// =============================================================================
+// Phase 3 partial: ex_let_env and ex_let_register
+// =============================================================================
+//
+// These are private helpers for ex_let_one() (which stays in C).
+// They are pure orchestrators with no struct field access.
+
+extern "C" {
+    // vim_strchr: find character in string
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+
+    // rs_check_secure: check if secure mode (already Rust export)
+    fn rs_check_secure() -> c_int;
+
+    // rs_get_env_len: get length of environment variable name (already Rust export)
+    fn rs_get_env_len(arg: *mut *const c_char) -> c_int;
+
+    // tv_get_string_chk: get string from typval (returns NULL on error)
+    fn tv_get_string_chk(tv: *const c_void) -> *const c_char;
+
+    // vim_getenv: get environment variable value
+    fn vim_getenv(name: *const c_char) -> *mut c_char;
+
+    // concat_str: concatenate two strings, returns allocated result
+    fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+
+    // vim_setenv_ext: set environment variable
+    fn vim_setenv_ext(name: *const c_char, val: *const c_char);
+
+    // get_reg_contents: get register contents
+    fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_char;
+
+    // write_reg_contents: write register contents (Rust export from register crate,
+    // exported as "write_reg_contents" via export_name attribute)
+    fn write_reg_contents(regname: c_int, str_: *const c_char, str_len: isize, must_append: bool);
+
+    // Error string globals for ex_let_env/ex_let_register
+    static e_letwrong: c_char;
+}
+
+// kGRegExprSrc = 2: return expression itself for "=" register
+const K_GREG_EXPR_SRC: c_int = 2;
+
+// Error strings embedded as static byte arrays (translatable in C with N_() macro).
+static E_LETUNEXP: &[u8] = b"E18: Unexpected characters in :let\0";
+static E_CONST_ENV: &[u8] = b"E996: Cannot lock an environment variable\0";
+static E_CONST_REG: &[u8] = b"E996: Cannot lock a register\0";
+
+/// Set an environment variable, part of ex_let_one().
+///
+/// Equivalent to C `ex_let_env` (static in vars.c).
+/// `arg` starts at the `$` character.
+///
+/// # Safety
+/// All pointer arguments must be valid C strings (or null for `endchars`/`op`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_let_env(
+    arg: *mut c_char,
+    tv: *const c_void,
+    is_const: bool,
+    endchars: *const c_char,
+    op: *const c_char,
+) -> *mut c_char {
+    if is_const {
+        emsg(E_CONST_ENV.as_ptr().cast::<c_char>());
+        return std::ptr::null_mut();
+    }
+
+    let mut arg_end: *mut c_char = std::ptr::null_mut();
+    // arg points at '$'; advance to the name start
+    let name_start = arg.add(1);
+    // rs_get_env_len takes *mut *const c_char and advances it past the name
+    let mut name_ptr: *const c_char = name_start;
+    let len = rs_get_env_len(&mut name_ptr);
+    // name_ptr now points just past the name; name_start..name_ptr is the name
+    if len == 0 {
+        semsg(nvim_get_e_invarg2(), arg);
+    } else {
+        let name_end = name_ptr.cast_mut();
+        if !op.is_null() && !vim_strchr(c"+-*/%".as_ptr(), c_int::from(*op)).is_null() {
+            semsg(&e_letwrong as *const c_char, op);
+        } else if !endchars.is_null()
+            && vim_strchr(endchars, c_int::from(*skipwhite(name_end))).is_null()
+        {
+            emsg(E_LETUNEXP.as_ptr().cast::<c_char>());
+        } else if rs_check_secure() == 0 {
+            let mut tofree: *mut c_char = std::ptr::null_mut();
+            // Temporarily NUL-terminate the name
+            let save_char = *name_end;
+            *name_end = 0;
+            let p = tv_get_string_chk(tv);
+            if !p.is_null() && !op.is_null() && *op as u8 == b'.' {
+                let s = vim_getenv(name_start);
+                if !s.is_null() {
+                    tofree = concat_str(s, p);
+                    xfree(s.cast::<c_void>());
+                }
+            }
+            let p_to_use: *const c_char = if tofree.is_null() { p } else { tofree };
+            if !p_to_use.is_null() {
+                vim_setenv_ext(name_start, p_to_use);
+                arg_end = name_end;
+            }
+            *name_end = save_char;
+            xfree(tofree.cast::<c_void>());
+        }
+    }
+    arg_end
+}
+
+/// Set a register, part of ex_let_one().
+///
+/// Equivalent to C `ex_let_register` (static in vars.c).
+/// `arg` starts at the `@` character.
+///
+/// # Safety
+/// All pointer arguments must be valid C strings (or null for `endchars`/`op`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_let_register(
+    arg: *mut c_char,
+    tv: *const c_void,
+    is_const: bool,
+    endchars: *const c_char,
+    op: *const c_char,
+) -> *mut c_char {
+    if is_const {
+        emsg(E_CONST_REG.as_ptr().cast::<c_char>());
+        return std::ptr::null_mut();
+    }
+    // arg points at '@'; advance past it so arg_reg points to the register char
+    let arg_reg = arg.add(1);
+    let raw_name = *arg_reg as u8;
+    // '@' register maps to the unnamed '"' register
+    let regname: c_int = if raw_name == b'@' {
+        c_int::from(b'"')
+    } else {
+        c_int::from(raw_name)
+    };
+
+    let mut arg_end: *mut c_char = std::ptr::null_mut();
+
+    if !op.is_null() && !vim_strchr(c"+-*/%".as_ptr(), c_int::from(*op)).is_null() {
+        semsg(&e_letwrong as *const c_char, op);
+    } else if !endchars.is_null()
+        && vim_strchr(endchars, c_int::from(*skipwhite(arg_reg.add(1)))).is_null()
+    {
+        emsg(E_LETUNEXP.as_ptr().cast::<c_char>());
+    } else {
+        let mut ptofree: *mut c_char = std::ptr::null_mut();
+        let mut p = tv_get_string_chk(tv);
+        if !p.is_null() && !op.is_null() && *op as u8 == b'.' {
+            let s = get_reg_contents(regname, K_GREG_EXPR_SRC);
+            if !s.is_null() {
+                ptofree = concat_str(s, p);
+                p = ptofree;
+                xfree(s.cast::<c_void>());
+            }
+        }
+        if !p.is_null() {
+            write_reg_contents(regname, p, -1, false);
+            arg_end = arg_reg.add(1);
+        }
+        xfree(ptofree.cast::<c_void>());
+    }
+    arg_end
+}
