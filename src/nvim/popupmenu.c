@@ -615,11 +615,6 @@ void nvim_pum_ui_set_mousemoveevent(int val)
 }
 
 /// Call `rs_pum_undisplay(1)`.
-void nvim_pum_call_undisplay(void)
-{
-  rs_pum_undisplay(1);
-}
-
 /// Set pum_grid.zindex to kZIndexCmdlinePopupMenu.
 void nvim_pum_grid_set_zindex_cmdline(void)
 {

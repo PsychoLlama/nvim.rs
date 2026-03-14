@@ -82,10 +82,6 @@ int nvim_uc_cmod_get_verbose(const void *cmod)
   return ((const cmdmod_T *)cmod)->cmod_verbose;
 }
 
-int nvim_uc_tabpage_index_curtab(void)
-{
-  return rs_tabpage_index(curtab);
-}
 
 
 // C accessor functions called by Rust (Phase 4)

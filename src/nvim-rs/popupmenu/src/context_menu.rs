@@ -322,8 +322,6 @@ const K_UI_MULTIGRID: c_int = 6;
 
 // C accessor functions for show_popupmenu.
 extern "C" {
-    /// Call `pum_undisplay(true)`.
-    fn nvim_pum_call_undisplay();
     /// Get menu mode flag.
     fn nvim_pum_get_menu_mode_flag() -> c_int;
     /// Check if menu item is a separator.
@@ -407,7 +405,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 #[export_name = "pum_show_popupmenu"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
-    nvim_pum_call_undisplay();
+    crate::display::rs_pum_undisplay(1);
     PUM_STATE.size = 0;
     let mode = nvim_pum_get_menu_mode_flag();
 
@@ -536,7 +534,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     }
 
     nvim_pum_free_items(array, count);
-    nvim_pum_call_undisplay();
+    crate::display::rs_pum_undisplay(1);
     if mousemev_was_off {
         nvim_pum_ui_set_mousemoveevent(0);
     }

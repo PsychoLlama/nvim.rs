@@ -676,7 +676,6 @@ void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
     *varp = name;
   }
 }
-int nvim_foldmethodIsExpr(win_T *win) { return rs_foldmethodIsExpr(win) ? 1 : 0; }
 
 // Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c

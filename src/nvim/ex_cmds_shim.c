@@ -1293,13 +1293,6 @@ int nvim_excmds_p_cpo_no_remmark(void)
   return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0;
 }
 
-/// Wrapper for rs_foldUpdate(curwin, ...).
-extern void rs_foldUpdate(win_T *win, int top, int bot);
-void nvim_excmds_fold_update_curwin(int top, int bot)
-{
-  rs_foldUpdate(curwin, top, bot);
-}
-
 /// Format and display "N lines filtered" message via set_keep_msg if scrolled.
 void nvim_excmds_msg_lines_filtered(int linecount)
 {

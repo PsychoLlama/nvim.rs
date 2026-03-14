@@ -5770,18 +5770,6 @@ char *nvim_docmd_get_e_invrange(void) { return _(e_invrange); }
 char *nvim_docmd_get_e_no_errors(void) { return _(e_no_errors); }
 
 // Tabpage accessors for get_tabpage_arg
-int nvim_docmd_tabpage_index_curtab(void) { return rs_tabpage_index(curtab); }
-
-int nvim_docmd_valid_lastused_tabpage(void)
-{
-  return rs_valid_tabpage(lastused_tabpage);
-}
-
-int nvim_docmd_tabpage_index_lastused(void)
-{
-  return rs_tabpage_index(lastused_tabpage);
-}
-
 /// Call getdigits on a string, return the number and advance the pointer.
 int nvim_docmd_getdigits(char **pp, int def)
 {

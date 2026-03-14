@@ -290,7 +290,9 @@ extern "C" {
         s: *mut *mut c_char,
         flags: *mut c_int,
     ) -> *mut c_char;
-    fn nvim_docmd_tabpage_index_curtab() -> c_int;
+    fn nvim_get_curtab() -> *mut std::ffi::c_void;
+    #[link_name = "rs_tabpage_index"]
+    fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
     fn nvim_docmd_LAST_TAB_NR() -> c_int;
     fn nvim_docmd_atoi(s: *const c_char) -> c_int;
     fn nvim_docmd_skip_range(cmd: *const c_char) -> *mut c_char;
@@ -614,7 +616,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
                         }
 
                         if tabnr == MAXLNUM {
-                            nvim_cmod_set_tab(cmod, nvim_docmd_tabpage_index_curtab() + 1);
+                            nvim_cmod_set_tab(cmod, nvim_rs_tabpage_index(nvim_get_curtab()) + 1);
                         } else {
                             if tabnr < 0 || tabnr > nvim_docmd_LAST_TAB_NR() as i32 {
                                 *errormsg = nvim_docmd_get_e_invrange_msg();

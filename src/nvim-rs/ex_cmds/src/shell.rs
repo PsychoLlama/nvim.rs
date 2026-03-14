@@ -1087,7 +1087,8 @@ extern "C" {
     fn nvim_excmds_redraw_curbuf_later_valid();
     fn nvim_excmds_invalidate_botline();
     fn nvim_excmds_p_cpo_no_remmark() -> c_int;
-    fn nvim_excmds_fold_update_curwin(top: c_int, bot: c_int);
+    #[link_name = "rs_foldUpdate"]
+    fn nvim_rs_foldUpdate(wp: *mut std::ffi::c_void, top: c_int, bot: c_int);
     fn nvim_excmds_msg_lines_filtered(linecount: c_int);
     fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
     fn nvim_excmds_wait_return_false();
@@ -1373,7 +1374,7 @@ pub unsafe extern "C" fn rs_do_filter(
             nvim_excmds_write_lnum_adjust(-linecount);
             let op_start = nvim_excmds_curbuf_op_start_lnum();
             let op_end = nvim_excmds_curbuf_op_end_lnum();
-            nvim_excmds_fold_update_curwin(op_start, op_end);
+            nvim_rs_foldUpdate(crate::nvim_get_curwin().cast(), op_start, op_end);
         } else {
             // ":r !cmd" - put cursor on last new line
             let op_start = nvim_excmds_curbuf_op_start_lnum();

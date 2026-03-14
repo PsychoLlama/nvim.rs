@@ -283,9 +283,12 @@ extern "C" {
     fn nvim_docmd_iemsg_dflall();
 
     // Tabpage accessors
-    fn nvim_docmd_tabpage_index_curtab() -> c_int;
-    fn nvim_docmd_valid_lastused_tabpage() -> c_int;
-    fn nvim_docmd_tabpage_index_lastused() -> c_int;
+    fn nvim_get_curtab() -> *mut std::ffi::c_void;
+    fn nvim_get_lastused_tabpage() -> *mut std::ffi::c_void;
+    #[link_name = "rs_tabpage_index"]
+    fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
+    #[link_name = "rs_valid_tabpage"]
+    fn nvim_rs_valid_tabpage(tp: *mut std::ffi::c_void) -> c_int;
     fn nvim_docmd_getdigits(pp: *mut *mut c_char, def: c_int) -> c_int;
     fn nvim_docmd_ex_errmsg_invargval(arg: *const c_char) -> *mut c_char;
     fn nvim_docmd_ex_errmsg_invarg2(arg: *const c_char) -> *mut c_char;
@@ -524,8 +527,8 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
             if *p as u8 == b'$' && *p.add(1) == 0 {
                 tab_number = last_tab_nr;
             } else if *p as u8 == b'#' && *p.add(1) == 0 {
-                if nvim_docmd_valid_lastused_tabpage() != 0 {
-                    tab_number = nvim_docmd_tabpage_index_lastused();
+                if nvim_rs_valid_tabpage(nvim_get_lastused_tabpage()) != 0 {
+                    tab_number = nvim_rs_tabpage_index(nvim_get_lastused_tabpage());
                 } else {
                     nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invargval(arg));
                     return 0;
@@ -541,7 +544,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
                 nvim_eap_set_errmsg(eap, nvim_docmd_ex_errmsg_invarg2(arg));
                 return 0;
             }
-            tab_number = tab_number * relative + nvim_docmd_tabpage_index_curtab();
+            tab_number = tab_number * relative + nvim_rs_tabpage_index(nvim_get_curtab());
             if unaccept_arg0 == 0 && relative == -1 {
                 tab_number -= 1;
             }
@@ -584,7 +587,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
     } else {
         let cmd_tabnext = nvim_docmd_cmd_tabnext();
         if cmdidx == cmd_tabnext {
-            let mut tab_number = nvim_docmd_tabpage_index_curtab() + 1;
+            let mut tab_number = nvim_rs_tabpage_index(nvim_get_curtab()) + 1;
             if tab_number > last_tab_nr {
                 tab_number = 1;
             }
@@ -592,7 +595,7 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
         } else if cmdidx == cmd_tabmove {
             last_tab_nr
         } else {
-            nvim_docmd_tabpage_index_curtab()
+            nvim_rs_tabpage_index(nvim_get_curtab())
         }
     }
 }

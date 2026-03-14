@@ -181,6 +181,7 @@ extern "C" {
 
     // Phase 100: optexpr / foldexpr accessors
     fn nvim_apply_scriptlocal_funcname(varp_ptr: *mut c_void);
+    #[link_name = "rs_foldmethodIsExpr"]
     fn nvim_foldmethodIsExpr(win: WinHandle) -> c_int;
 
     // Phase 101: statustabline_rulerformat accessors

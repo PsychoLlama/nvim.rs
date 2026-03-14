@@ -468,8 +468,9 @@ extern "C" {
     fn nvim_uc_cmod_get_tab(cmod: CmdmodHandle) -> c_int;
     /// Get cmod->cmod_verbose field
     fn nvim_uc_cmod_get_verbose(cmod: CmdmodHandle) -> c_int;
-    /// Return tabpage_index(curtab)
-    fn nvim_uc_tabpage_index_curtab() -> c_int;
+    fn nvim_get_curtab() -> *mut std::ffi::c_void;
+    #[link_name = "rs_tabpage_index"]
+    fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
 }
 
 // =============================================================================
@@ -608,7 +609,7 @@ fn add_win_cmd_modifiers_impl(
     // :tab  (cmod_tab > 0 means ":tab" was used; value is tab_number + 1)
     if cmod_tab > 0 {
         let tabnr = cmod_tab - 1;
-        let curtab_idx = unsafe { nvim_uc_tabpage_index_curtab() };
+        let curtab_idx = unsafe { nvim_rs_tabpage_index(nvim_get_curtab()) };
         if tabnr == curtab_idx {
             result += add_cmd_modifier(buf, b"tab", multi_mods);
         } else {
