@@ -748,7 +748,7 @@ pub unsafe extern "C" fn rs_multiqueue_empty(mq: MultiQueueHandle) -> c_int {
 /// # Safety
 ///
 /// `mq` must be a valid MultiQueue handle
-#[no_mangle]
+#[unsafe(export_name = "multiqueue_size")]
 pub unsafe extern "C" fn rs_multiqueue_size(mq: MultiQueueHandle) -> usize {
     if mq.is_null() {
         return 0;

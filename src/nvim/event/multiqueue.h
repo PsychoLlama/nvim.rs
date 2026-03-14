@@ -7,6 +7,9 @@
 
 #include "event/multiqueue.h.generated.h"
 
+// Functions implemented in Rust (nvim-event crate)
+extern size_t multiqueue_size(MultiQueue *self);
+
 #define multiqueue_put(q, h, ...) \
   do { \
     multiqueue_put_event(q, event_create(h, __VA_ARGS__)); \

@@ -53,7 +53,6 @@
 
 // Rust implementations from nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
-extern size_t rs_multiqueue_size(MultiQueue *mq);
 
 typedef struct multiqueue_item MultiQueueItem;
 struct multiqueue_item {
@@ -180,10 +179,6 @@ bool multiqueue_empty(MultiQueue *self)
   return rs_multiqueue_empty(self) != 0;
 }
 
-size_t multiqueue_size(MultiQueue *self)
-{
-  return rs_multiqueue_size(self);
-}
 
 void multiqueue_replace_parent(MultiQueue *self, MultiQueue *new_parent)
 {

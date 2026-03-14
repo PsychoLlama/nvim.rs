@@ -12,9 +12,6 @@
 
 #include "event/loop.c.generated.h"
 
-// Rust implementation in nvim-event crate
-extern size_t rs_multiqueue_size(MultiQueue *mq);
-#define multiqueue_size(mq) rs_multiqueue_size(mq)
 
 void loop_init(Loop *loop, void *data)
 {
