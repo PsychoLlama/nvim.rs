@@ -242,7 +242,6 @@ int nvim_bw_time_differs(FileInfo *info, int64_t mtime, int64_t mtime_ns)
 // Globals
 int nvim_bw_get_msg_scroll(void) { return msg_scroll; }
 void nvim_bw_set_msg_scroll(int val) { msg_scroll = val; }
-int nvim_bw_get_msg_silent(void) { return msg_silent; }
 void nvim_bw_set_msg_silent(int val) { msg_silent = val; }
 
 // Dialog
@@ -276,10 +275,7 @@ int nvim_bw_info_get_flags(void *p) { struct bw_info *ip = p; return ip->bw_flag
 int nvim_bw_info_get_restlen(void *p) { struct bw_info *ip = p; return ip->bw_restlen; }
 void nvim_bw_info_set_restlen(void *p, int val) { struct bw_info *ip = p; ip->bw_restlen = val; }
 uint8_t *nvim_bw_info_get_rest_ptr(void *p) { struct bw_info *ip = p; return ip->bw_rest; }
-int nvim_bw_info_get_first(void *p) { struct bw_info *ip = p; return ip->bw_first; }
-void nvim_bw_info_set_first(void *p, int val) { struct bw_info *ip = p; ip->bw_first = val; }
 char *nvim_bw_info_get_conv_buf(void *p) { struct bw_info *ip = p; return ip->bw_conv_buf; }
-size_t nvim_bw_info_get_conv_buflen(void *p) { struct bw_info *ip = p; return ip->bw_conv_buflen; }
 int nvim_bw_info_get_conv_error(void *p) { struct bw_info *ip = p; return ip->bw_conv_error; }
 void nvim_bw_info_set_conv_error(void *p, int val) { struct bw_info *ip = p; ip->bw_conv_error = val; }
 linenr_T nvim_bw_info_get_conv_error_lnum(void *p) { struct bw_info *ip = p; return ip->bw_conv_error_lnum; }
@@ -393,7 +389,6 @@ void nvim_bw_XFREE_CLEAR(char **pp) { XFREE_CLEAR(*pp); }
 int nvim_bw_open_flags_creat_wronly_excl_nofollow(void) { return O_CREAT|O_WRONLY|O_EXCL|O_NOFOLLOW; }
 int nvim_bw_uv_fs_copyfile_ficlone(void) { return UV_FS_COPYFILE_FICLONE; }
 int nvim_bw_get_MAXPATHL(void) { return MAXPATHL; }
-const char *nvim_bw_get_err_readonly(void) { return _(err_readonly); }
 size_t nvim_bw_sizeof_FileInfo(void) { return sizeof(FileInfo); }
 #ifdef UNIX
 void nvim_bw_os_fchown(int fd, uint32_t uid, uint32_t gid) { os_fchown(fd, (uv_uid_t)uid, (uv_gid_t)gid); }
@@ -445,7 +440,6 @@ void nvim_bw_buf_set_op_end(buf_T *buf, pos_T pos) { buf->b_op_end = pos; }
 int nvim_bw_buf_get_flags(buf_T *buf) { return buf->b_flags; }
 void nvim_bw_buf_set_flags(buf_T *buf, int flags) { buf->b_flags = flags; }
 int nvim_bw_buf_get_changed(buf_T *buf) { return buf->b_changed; }
-const char *nvim_bw_buf_get_p_bt(buf_T *buf) { return buf->b_p_bt; }
 void nvim_bw_buf_set_no_eol_lnum(buf_T *buf, linenr_T lnum) { buf->b_no_eol_lnum = lnum; }
 
 // Global state accessors
@@ -455,7 +449,6 @@ void nvim_bw_u_unchanged(buf_T *buf) { u_unchanged(buf); }
 void nvim_bw_u_update_save_nr(buf_T *buf) { u_update_save_nr(buf); }
 void nvim_bw_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
 int nvim_bw_bt_nofilename(buf_T *buf) { return bt_nofilename(buf); }
-int nvim_bw_get_no_wait_return(void) { return no_wait_return; }
 void nvim_bw_dec_no_wait_return(void) { no_wait_return--; }
 int nvim_bw_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 int nvim_bw_aborting(void) { return aborting(); }

@@ -792,11 +792,6 @@ const char *nvim_undo_time(int64_t seconds)
   return buf;
 }
 
-int nvim_get_lastmark(void)
-{
-  return lastmark;
-}
-
 int nvim_inc_lastmark(void)
 {
   return ++lastmark;
@@ -812,11 +807,6 @@ void nvim_semsg_undo_number_not_found(int64_t step)
   semsg(_("E830: Undo number %" PRId64 " not found"), step);
 }
 
-void nvim_set_lastmark(int val)
-{
-  lastmark = val;
-}
-
 // ============================================================================
 // Undo File I/O FFI Functions
 // ============================================================================
@@ -830,28 +820,6 @@ bool nvim_os_path_exists(const char *path)
 int nvim_os_remove(const char *path)
 {
   return os_remove(path);
-}
-
-// Message functions for undo file I/O
-
-void nvim_undo_smsg(const char *msg, const char *arg)
-{
-  smsg(0, msg, arg);
-}
-
-void nvim_undo_semsg(const char *msg, const char *arg)
-{
-  semsg(msg, arg);
-}
-
-void nvim_undo_give_warning(const char *msg, bool serious)
-{
-  give_warning(msg, serious);
-}
-
-void nvim_undo_verb_msg(const char *msg)
-{
-  verb_msg(msg);
 }
 
 // Option accessors
@@ -879,19 +847,6 @@ linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf)
 
 // File info for Unix ownership checks
 #ifdef UNIX
-bool nvim_undo_check_file_owner(const char *orig_path, const char *undo_path)
-{
-  FileInfo file_info_orig;
-  FileInfo file_info_undo;
-  if (os_fileinfo(orig_path, &file_info_orig)
-      && os_fileinfo(undo_path, &file_info_undo)
-      && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
-      && file_info_undo.stat.st_uid != getuid()) {
-    return false;  // Owner mismatch, not safe
-  }
-  return true;  // Safe to read
-}
-
 int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
 {
   FileInfo file_info_old;
@@ -907,13 +862,6 @@ int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_pat
   return perm;
 }
 #else
-bool nvim_undo_check_file_owner(const char *orig_path, const char *undo_path)
-{
-  (void)orig_path;
-  (void)undo_path;
-  return true;  // Always safe on non-Unix
-}
-
 int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
 {
   (void)fd;
@@ -1236,6 +1184,12 @@ int nvim_undo_mkdir_recurse(const char *dir, char **failed_dir)
   return os_mkdir_recurse(dir, 0755, failed_dir, NULL);
 }
 
+// Emit a semsg with one string argument (used from Rust undo code)
+void nvim_undo_semsg(const char *msg, const char *arg)
+{
+  semsg(msg, arg);
+}
+
 // Format and emit E5003 error message
 void nvim_undo_semsg_mkdir(const char *failed_dir, int err)
 {
@@ -1391,12 +1345,6 @@ void nvim_check_pos(buf_T *buf, pos_T *pos)
   check_pos(buf, pos);
 }
 
-/// Buffer is empty check
-bool nvim_buf_is_empty(buf_T *buf)
-{
-  return buf_is_empty(buf);
-}
-
 /// Current window handle accessor
 win_T *nvim_undo_get_curwin(void)
 {
@@ -1455,19 +1403,6 @@ int nvim_undo_get_fdo_flags(void)
 }
 
 
-/// Check VIsual_active
-bool nvim_undo_get_visual_active(void)
-{
-  return VIsual_active;
-}
-
-/// Get VIsual position
-void nvim_undo_get_visual_pos(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
-{
-  *lnum = VIsual.lnum;
-  *col = VIsual.col;
-  *coladd = VIsual.coladd;
-}
 
 /// Increment no_u_sync.
 void nvim_inc_no_u_sync(void) { no_u_sync++; }

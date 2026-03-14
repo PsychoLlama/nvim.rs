@@ -46,48 +46,6 @@ int nvim_strings_tv_get_type(typval_T *tv)
   return (int)tv->v_type;
 }
 
-// === garray wrappers ===
-
-void nvim_strings_ga_init(garray_T *gap, int itemsize, int growsize)
-{
-  ga_init(gap, itemsize, growsize);
-}
-
-void nvim_strings_ga_grow(garray_T *gap, int n)
-{
-  ga_grow(gap, n);
-}
-
-void nvim_strings_ga_append(garray_T *gap, char c)
-{
-  ga_append(gap, c);
-}
-
-void nvim_strings_ga_clear(garray_T *gap)
-{
-  ga_clear(gap);
-}
-
-void *nvim_strings_ga_data(garray_T *gap)
-{
-  return gap->ga_data;
-}
-
-int nvim_strings_ga_len(garray_T *gap)
-{
-  return gap->ga_len;
-}
-
-void nvim_strings_ga_set_len(garray_T *gap, int len)
-{
-  gap->ga_len = len;
-}
-
-int nvim_strings_ga_sizeof(void)
-{
-  return (int)sizeof(garray_T);
-}
-
 // === list accessors ===
 
 list_T *nvim_strings_rettv_list(typval_T *rettv)
