@@ -186,13 +186,14 @@ fn handle_more_modifiers_impl(modifiers: c_int, buf: &mut [u8]) -> usize {
 ///
 /// # Returns
 /// 1 if `term` is in the `family`, 0 otherwise
-#[no_mangle]
+#[unsafe(export_name = "terminfo_is_term_family")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_terminfo_is_term_family(
     term: *const c_char,
     family: *const c_char,
-) -> c_int {
+) -> bool {
     if term.is_null() {
-        return 0;
+        return false;
     }
 
     // Safety: caller guarantees these are valid C strings
@@ -206,22 +207,22 @@ pub unsafe extern "C" fn rs_terminfo_is_term_family(
     let flen = family_bytes.len();
 
     if tlen < flen {
-        return 0;
+        return false;
     }
 
     // Check if term starts with family
     if &term_bytes[..flen] != family_bytes {
-        return 0;
+        return false;
     }
 
     // Check the separator condition:
     // Either term equals family exactly, or the next char is '-' or '.'
     if tlen == flen {
-        return 1;
+        return true;
     }
 
     let next_char = term_bytes[flen];
-    c_int::from(next_char == b'-' || next_char == b'.')
+    next_char == b'-' || next_char == b'.'
 }
 
 /// Checks if the terminal is a BSD console.
@@ -240,8 +241,9 @@ pub unsafe extern "C" fn rs_terminfo_is_term_family(
 ///
 /// # Returns
 /// 1 if the terminal is a BSD console, 0 otherwise
-#[no_mangle]
-pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> c_int {
+#[unsafe(export_name = "terminfo_is_bsd_console")]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> bool {
     // This is only relevant on BSD systems
     #[cfg(any(
         target_os = "freebsd",
@@ -251,7 +253,7 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> c_in
     ))]
     {
         if term.is_null() {
-            return 0;
+            return false;
         }
 
         let term_cstr = unsafe { CStr::from_ptr(term) };
@@ -259,12 +261,12 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> c_in
 
         // OpenBSD
         if term_bytes == b"vt220" {
-            return 1;
+            return true;
         }
 
         // NetBSD
         if term_bytes == b"vt100" {
-            return 1;
+            return true;
         }
 
         // FreeBSD specific check
@@ -278,12 +280,12 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> c_in
                 }
                 let name = c"XTERM_VERSION";
                 if unsafe { os_env_exists(name.as_ptr(), 1) } != 0 {
-                    return 1;
+                    return true;
                 }
             }
         }
 
-        0
+        false
     }
 
     #[cfg(not(any(
@@ -294,7 +296,7 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> c_in
     )))]
     {
         let _ = term; // Suppress unused warning
-        0
+        false
     }
 }
 
@@ -1373,12 +1375,12 @@ mod tests {
     fn is_term_family(term: &str, family: &str) -> bool {
         let term_c = CString::new(term).unwrap();
         let family_c = CString::new(family).unwrap();
-        unsafe { rs_terminfo_is_term_family(term_c.as_ptr(), family_c.as_ptr()) != 0 }
+        unsafe { rs_terminfo_is_term_family(term_c.as_ptr(), family_c.as_ptr()) }
     }
 
     fn is_term_family_null(family: &str) -> bool {
         let family_c = CString::new(family).unwrap();
-        unsafe { rs_terminfo_is_term_family(std::ptr::null(), family_c.as_ptr()) != 0 }
+        unsafe { rs_terminfo_is_term_family(std::ptr::null(), family_c.as_ptr()) }
     }
 
     #[test]
@@ -1437,15 +1439,15 @@ mod tests {
         )))]
         {
             let term = CString::new("vt100").unwrap();
-            assert_eq!(unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) }, 0);
+            assert!(!unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) });
             let term = CString::new("vt220").unwrap();
-            assert_eq!(unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) }, 0);
+            assert!(!unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) });
         }
     }
 
     #[test]
     fn test_terminfo_is_bsd_console_null() {
-        assert_eq!(unsafe { rs_terminfo_is_bsd_console(std::ptr::null()) }, 0);
+        assert!(!unsafe { rs_terminfo_is_bsd_console(std::ptr::null()) });
     }
 
     // Helper for testing terminfo_fmt

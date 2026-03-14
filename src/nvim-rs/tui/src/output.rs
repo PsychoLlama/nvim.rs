@@ -841,7 +841,7 @@ pub unsafe extern "C" fn rs_tui_grid_scroll(
 /// # Safety
 ///
 /// - `tui` must be a valid pointer to a TUIData struct
-#[no_mangle]
+#[unsafe(export_name = "tui_is_stopped")]
 pub unsafe extern "C" fn rs_tui_is_stopped(tui: *mut TuiHandle) -> bool {
     if tui.is_null() {
         return true; // Null TUI is considered stopped

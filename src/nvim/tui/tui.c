@@ -212,7 +212,7 @@ extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 extern void rs_tui_visual_bell(TUIData *tui);
 extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_t endrow,
                                int64_t startcol, int64_t endcol, int64_t rows, int64_t cols);
-extern bool rs_tui_is_stopped(TUIData *tui);
+extern bool tui_is_stopped(TUIData *tui);
 extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
 extern void rs_tui_enable_extended_underline(TUIData *tui);
 extern void rs_tui_query_bg_color(TUIData *tui);
@@ -1252,13 +1252,6 @@ static void tui_terminal_stop(TUIData *tui)
 {
   tinput_stop(&tui->input);
   terminfo_stop(tui);
-}
-
-/// Returns true if UI `ui` is stopped.
-/// Check if TUI has been stopped. Rust implementation.
-bool tui_is_stopped(TUIData *tui)
-{
-  return rs_tui_is_stopped(tui);
 }
 
 #ifdef EXITFREE
