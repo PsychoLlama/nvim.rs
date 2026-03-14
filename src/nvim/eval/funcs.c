@@ -321,6 +321,16 @@ extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 8 VimL function declarations (misc.rs - exported via #[export_name])
+extern void f_spellbadword(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_spellsuggest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_submatch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_substitute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_synID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_synIDattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_synconcealed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_synstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 7 VimL function declarations (timer.rs - exported via #[export_name])
 extern void f_timer_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_timer_pause(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -5801,109 +5811,7 @@ static void f_reltimefloat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 // f_soundfold: migrated to Rust (simple.rs)
 
 /// "spellbadword()" function
-static void f_spellbadword(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const int wo_spell_save = curwin->w_p_spell;
-
-  if (!curwin->w_p_spell) {
-    parse_spelllang(curwin);
-    curwin->w_p_spell = true;
-  }
-
-  if (*curwin->w_s->b_p_spl == NUL) {
-    emsg(_(e_no_spell));
-    curwin->w_p_spell = wo_spell_save;
-    return;
-  }
-
-  const char *word = "";
-  hlf_T attr = HLF_COUNT;
-  size_t len = 0;
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    // Find the start and length of the badly spelled word.
-    len = spell_move_to(curwin, FORWARD, SMT_ALL, true, &attr);
-    if (len != 0) {
-      word = get_cursor_pos_ptr();
-      curwin->w_set_curswant = true;
-    }
-  } else if (*curbuf->b_s.b_p_spl != NUL) {
-    const char *str = tv_get_string_chk(&argvars[0]);
-    int capcol = -1;
-
-    if (str != NULL) {
-      // Check the argument for spelling.
-      while (*str != NUL) {
-        len = spell_check(curwin, (char *)str, &attr, &capcol, false);
-        if (attr != HLF_COUNT) {
-          word = str;
-          break;
-        }
-        str += len;
-        capcol -= (int)len;
-        len = 0;
-      }
-    }
-  }
-  curwin->w_p_spell = wo_spell_save;
-
-  assert(len <= INT_MAX);
-  tv_list_alloc_ret(rettv, 2);
-  tv_list_append_string(rettv->vval.v_list, word, (ssize_t)len);
-  tv_list_append_string(rettv->vval.v_list,
-                        (attr == HLF_SPB
-                         ? "bad" : (attr == HLF_SPR
-                                    ? "rare" : (attr == HLF_SPL
-                                                ? "local" : (attr == HLF_SPC
-                                                             ? "caps" : NULL)))), -1);
-}
-
-/// "spellsuggest()" function
-static void f_spellsuggest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  garray_T ga = GA_EMPTY_INIT_VALUE;
-  const int wo_spell_save = curwin->w_p_spell;
-
-  if (!curwin->w_p_spell) {
-    parse_spelllang(curwin);
-    curwin->w_p_spell = true;
-  }
-
-  if (*curwin->w_s->b_p_spl == NUL) {
-    emsg(_(e_no_spell));
-    curwin->w_p_spell = wo_spell_save;
-    return;
-  }
-
-  int maxcount;
-  bool need_capital = false;
-  const char *const str = tv_get_string(&argvars[0]);
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    bool typeerr = false;
-    maxcount = (int)tv_get_number_chk(&argvars[1], &typeerr);
-    if (maxcount <= 0) {
-      goto f_spellsuggest_return;
-    }
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      need_capital = tv_get_number_chk(&argvars[2], &typeerr);
-      if (typeerr) {
-        goto f_spellsuggest_return;
-      }
-    }
-  } else {
-    maxcount = 25;
-  }
-
-  spell_suggest_list(&ga, (char *)str, maxcount, need_capital, false);
-
-f_spellsuggest_return:
-  tv_list_alloc_ret(rettv, (ptrdiff_t)ga.ga_len);
-  for (int i = 0; i < ga.ga_len; i++) {
-    char *const p = ((char **)ga.ga_data)[i];
-    tv_list_append_allocated_string(rettv->vval.v_list, p);
-  }
-  ga_clear(&ga);
-  curwin->w_p_spell = wo_spell_save;
-}
+// f_spellbadword, f_spellsuggest: migrated to Rust (misc.rs)
 
 static void f_split(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -6070,64 +5978,7 @@ static void f_strptime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "submatch()" function
-static void f_submatch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  bool error = false;
-  int no = (int)tv_get_number_chk(&argvars[0], &error);
-  if (error) {
-    return;
-  }
-
-  if (no < 0 || no >= NSUBEXP) {
-    semsg(_(e_invalid_submatch_number_nr), no);
-    return;
-  }
-  int retList = 0;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    retList = (int)tv_get_number_chk(&argvars[1], &error);
-    if (error) {
-      return;
-    }
-  }
-
-  if (retList == 0) {
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = reg_submatch(no);
-  } else {
-    rettv->v_type = VAR_LIST;
-    rettv->vval.v_list = reg_submatch_list(no);
-  }
-}
-
-/// "substitute()" function
-static void f_substitute(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  char patbuf[NUMBUFLEN];
-  char subbuf[NUMBUFLEN];
-  char flagsbuf[NUMBUFLEN];
-
-  const char *const str = tv_get_string_chk(&argvars[0]);
-  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-  const char *sub = NULL;
-  const char *const flg = tv_get_string_buf_chk(&argvars[3], flagsbuf);
-
-  typval_T *expr = NULL;
-  if (tv_is_func(argvars[2])) {
-    expr = &argvars[2];
-  } else {
-    sub = tv_get_string_buf_chk(&argvars[2], subbuf);
-  }
-
-  rettv->v_type = VAR_STRING;
-  if (str == NULL || pat == NULL || (sub == NULL && expr == NULL)
-      || flg == NULL) {
-    rettv->vval.v_string = NULL;
-  } else {
-    rettv->vval.v_string = do_string_sub((char *)str, strlen(str), (char *)pat,
-                                         (char *)sub, expr, (char *)flg, NULL);
-  }
-}
+// f_submatch, f_substitute: migrated to Rust (misc.rs)
 
 /// "swapfilelist()" function
 /// "swapname(expr)" function
@@ -6144,175 +5995,9 @@ static void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "synID(lnum, col, trans)" function
-static void f_synID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  // -1 on type error (both)
-  const linenr_T lnum = tv_get_lnum(argvars);
-  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
+// f_synID, f_synIDattr, f_synIDtrans: migrated to Rust (misc.rs / simple.rs)
 
-  bool transerr = false;
-  const int trans = (int)tv_get_number_chk(&argvars[2], &transerr);
-
-  int id = 0;
-  if (!transerr && lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
-      && col >= 0 && col < ml_get_len(lnum)) {
-    id = syn_get_id(curwin, lnum, col, trans, NULL, false);
-  }
-
-  rettv->vval.v_number = id;
-}
-
-/// "synIDattr(id, what [, mode])" function
-static void f_synIDattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const int id = (int)tv_get_number(&argvars[0]);
-  const char *const what = tv_get_string(&argvars[1]);
-  int modec;
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    char modebuf[NUMBUFLEN];
-    const char *const mode = tv_get_string_buf(&argvars[2], modebuf);
-    modec = TOLOWER_ASC(mode[0]);
-    if (modec != 'c' && modec != 'g') {
-      modec = 0;  // Replace invalid with current.
-    }
-  } else if (ui_rgb_attached()) {
-    modec = 'g';
-  } else {
-    modec = 'c';
-  }
-
-  const char *p = NULL;
-  switch (TOLOWER_ASC(what[0])) {
-  case 'b':
-    if (TOLOWER_ASC(what[1]) == 'g') {  // bg[#]
-      p = highlight_color(id, what, modec);
-    } else {  // bold
-      p = highlight_has_attr(id, HL_BOLD, modec);
-    }
-    break;
-  case 'f':    // fg[#] or font
-    p = highlight_color(id, what, modec);
-    break;
-  case 'i':
-    if (TOLOWER_ASC(what[1]) == 'n') {  // inverse
-      p = highlight_has_attr(id, HL_INVERSE, modec);
-    } else {  // italic
-      p = highlight_has_attr(id, HL_ITALIC, modec);
-    }
-    break;
-  case 'n':
-    if (TOLOWER_ASC(what[1]) == 'o') {  // nocombine
-      p = highlight_has_attr(id, HL_NOCOMBINE, modec);
-    } else {  // name
-      p = get_highlight_name_ext(NULL, id - 1, false);
-    }
-    break;
-  case 'r':    // reverse
-    p = highlight_has_attr(id, HL_INVERSE, modec);
-    break;
-  case 's':
-    if (TOLOWER_ASC(what[1]) == 'p') {  // sp[#]
-      p = highlight_color(id, what, modec);
-    } else if (TOLOWER_ASC(what[1]) == 't'
-               && TOLOWER_ASC(what[2]) == 'r') {  // strikethrough
-      p = highlight_has_attr(id, HL_STRIKETHROUGH, modec);
-    } else {  // standout
-      p = highlight_has_attr(id, HL_STANDOUT, modec);
-    }
-    break;
-  case 'u':
-    if (strlen(what) >= 9) {
-      if (TOLOWER_ASC(what[5]) == 'l') {
-        // underline
-        p = highlight_has_attr(id, HL_UNDERLINE, modec);
-      } else if (TOLOWER_ASC(what[5]) != 'd') {
-        // undercurl
-        p = highlight_has_attr(id, HL_UNDERCURL, modec);
-      } else if (TOLOWER_ASC(what[6]) != 'o') {
-        // underdashed
-        p = highlight_has_attr(id, HL_UNDERDASHED, modec);
-      } else if (TOLOWER_ASC(what[7]) == 'u') {
-        // underdouble
-        p = highlight_has_attr(id, HL_UNDERDOUBLE, modec);
-      } else {
-        // underdotted
-        p = highlight_has_attr(id, HL_UNDERDOTTED, modec);
-      }
-    } else {
-      // ul
-      p = highlight_color(id, what, modec);
-    }
-    break;
-  }
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = p == NULL ? NULL : xstrdup(p);
-}
-
-// f_synIDtrans: migrated to Rust (simple.rs)
-
-/// "synconcealed(lnum, col)" function
-static void f_synconcealed(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int syntax_flags = 0;
-  int matchid = 0;
-  char str[NUMBUFLEN];
-
-  tv_list_set_ret(rettv, NULL);
-
-  // -1 on type error (both)
-  const linenr_T lnum = tv_get_lnum(argvars);
-  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
-
-  CLEAR_FIELD(str);
-
-  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
-      && col >= 0 && col <= ml_get_len(lnum) && curwin->w_p_cole > 0) {
-    syn_get_id(curwin, lnum, col, false, NULL, false);
-    syntax_flags = get_syntax_info(&matchid);
-
-    // get the conceal character
-    if ((syntax_flags & HL_CONCEAL) && curwin->w_p_cole < 3) {
-      schar_T cchar = schar_from_char(syn_get_sub_char());
-      if (cchar == NUL && curwin->w_p_cole == 1) {
-        cchar = (curwin->w_p_lcs_chars.conceal == NUL)
-                ? schar_from_ascii(' ') : curwin->w_p_lcs_chars.conceal;
-      }
-      if (cchar != NUL) {
-        schar_get(str, cchar);
-      }
-    }
-  }
-
-  tv_list_alloc_ret(rettv, 3);
-  tv_list_append_number(rettv->vval.v_list, (syntax_flags & HL_CONCEAL) != 0);
-  // -1 to auto-determine strlen
-  tv_list_append_string(rettv->vval.v_list, str, -1);
-  tv_list_append_number(rettv->vval.v_list, matchid);
-}
-
-/// "synstack(lnum, col)" function
-static void f_synstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_set_ret(rettv, NULL);
-
-  // -1 on type error (both)
-  const linenr_T lnum = tv_get_lnum(argvars);
-  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
-
-  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
-      && col >= 0 && col <= ml_get_len(lnum)) {
-    tv_list_alloc_ret(rettv, kListLenMayKnow);
-    syn_get_id(curwin, lnum, col, false, NULL, true);
-
-    int id;
-    int i = 0;
-    while ((id = syn_get_stack_item(i++)) >= 0) {
-      tv_list_append_number(rettv->vval.v_list, id);
-    }
-  }
-}
+// f_synconcealed, f_synstack: migrated to Rust (misc.rs)
 
 /// "tabpagebuflist()" function
 static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -7569,5 +7254,334 @@ void nvim_eval_timer_stop(typval_T *argvars, typval_T *rettv)
   }
 
   timer_stop(timer);
+}
+
+// =============================================================================
+// Phase 8 C accessor functions (called by Rust misc.rs wrappers)
+// =============================================================================
+
+void nvim_eval_spellbadword(typval_T *argvars, typval_T *rettv)
+{
+  const int wo_spell_save = curwin->w_p_spell;
+
+  if (!curwin->w_p_spell) {
+    parse_spelllang(curwin);
+    curwin->w_p_spell = true;
+  }
+
+  if (*curwin->w_s->b_p_spl == NUL) {
+    emsg(_(e_no_spell));
+    curwin->w_p_spell = wo_spell_save;
+    return;
+  }
+
+  const char *word = "";
+  hlf_T attr = HLF_COUNT;
+  size_t len = 0;
+  if (argvars[0].v_type == VAR_UNKNOWN) {
+    // Find the start and length of the badly spelled word.
+    len = spell_move_to(curwin, FORWARD, SMT_ALL, true, &attr);
+    if (len != 0) {
+      word = get_cursor_pos_ptr();
+      curwin->w_set_curswant = true;
+    }
+  } else if (*curbuf->b_s.b_p_spl != NUL) {
+    const char *str = tv_get_string_chk(&argvars[0]);
+    int capcol = -1;
+
+    if (str != NULL) {
+      // Check the argument for spelling.
+      while (*str != NUL) {
+        len = spell_check(curwin, (char *)str, &attr, &capcol, false);
+        if (attr != HLF_COUNT) {
+          word = str;
+          break;
+        }
+        str += len;
+        capcol -= (int)len;
+        len = 0;
+      }
+    }
+  }
+  curwin->w_p_spell = wo_spell_save;
+
+  assert(len <= INT_MAX);
+  tv_list_alloc_ret(rettv, 2);
+  tv_list_append_string(rettv->vval.v_list, word, (ssize_t)len);
+  tv_list_append_string(rettv->vval.v_list,
+                        (attr == HLF_SPB
+                         ? "bad" : (attr == HLF_SPR
+                                    ? "rare" : (attr == HLF_SPL
+                                                ? "local" : (attr == HLF_SPC
+                                                             ? "caps" : NULL)))), -1);
+}
+
+void nvim_eval_spellsuggest(typval_T *argvars, typval_T *rettv)
+{
+  garray_T ga = GA_EMPTY_INIT_VALUE;
+  const int wo_spell_save = curwin->w_p_spell;
+
+  if (!curwin->w_p_spell) {
+    parse_spelllang(curwin);
+    curwin->w_p_spell = true;
+  }
+
+  if (*curwin->w_s->b_p_spl == NUL) {
+    emsg(_(e_no_spell));
+    curwin->w_p_spell = wo_spell_save;
+    return;
+  }
+
+  int maxcount;
+  bool need_capital = false;
+  const char *const str = tv_get_string(&argvars[0]);
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    bool typeerr = false;
+    maxcount = (int)tv_get_number_chk(&argvars[1], &typeerr);
+    if (maxcount <= 0) {
+      goto nvim_eval_spellsuggest_return;
+    }
+    if (argvars[2].v_type != VAR_UNKNOWN) {
+      need_capital = tv_get_number_chk(&argvars[2], &typeerr);
+      if (typeerr) {
+        goto nvim_eval_spellsuggest_return;
+      }
+    }
+  } else {
+    maxcount = 25;
+  }
+
+  spell_suggest_list(&ga, (char *)str, maxcount, need_capital, false);
+
+nvim_eval_spellsuggest_return:
+  tv_list_alloc_ret(rettv, (ptrdiff_t)ga.ga_len);
+  for (int i = 0; i < ga.ga_len; i++) {
+    char *const p = ((char **)ga.ga_data)[i];
+    tv_list_append_allocated_string(rettv->vval.v_list, p);
+  }
+  ga_clear(&ga);
+  curwin->w_p_spell = wo_spell_save;
+}
+
+void nvim_eval_submatch(typval_T *argvars, typval_T *rettv)
+{
+  bool error = false;
+  int no = (int)tv_get_number_chk(&argvars[0], &error);
+  if (error) {
+    return;
+  }
+
+  if (no < 0 || no >= NSUBEXP) {
+    semsg(_(e_invalid_submatch_number_nr), no);
+    return;
+  }
+  int retList = 0;
+
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    retList = (int)tv_get_number_chk(&argvars[1], &error);
+    if (error) {
+      return;
+    }
+  }
+
+  if (retList == 0) {
+    rettv->v_type = VAR_STRING;
+    rettv->vval.v_string = reg_submatch(no);
+  } else {
+    rettv->v_type = VAR_LIST;
+    rettv->vval.v_list = reg_submatch_list(no);
+  }
+}
+
+void nvim_eval_substitute(typval_T *argvars, typval_T *rettv)
+{
+  char patbuf[NUMBUFLEN];
+  char subbuf[NUMBUFLEN];
+  char flagsbuf[NUMBUFLEN];
+
+  const char *const str = tv_get_string_chk(&argvars[0]);
+  const char *const pat = tv_get_string_buf_chk(&argvars[1], patbuf);
+  const char *sub = NULL;
+  const char *const flg = tv_get_string_buf_chk(&argvars[3], flagsbuf);
+
+  typval_T *expr = NULL;
+  if (tv_is_func(argvars[2])) {
+    expr = &argvars[2];
+  } else {
+    sub = tv_get_string_buf_chk(&argvars[2], subbuf);
+  }
+
+  rettv->v_type = VAR_STRING;
+  if (str == NULL || pat == NULL || (sub == NULL && expr == NULL)
+      || flg == NULL) {
+    rettv->vval.v_string = NULL;
+  } else {
+    rettv->vval.v_string = do_string_sub((char *)str, strlen(str), (char *)pat,
+                                         (char *)sub, expr, (char *)flg, NULL);
+  }
+}
+
+void nvim_eval_synID(typval_T *argvars, typval_T *rettv)
+{
+  // -1 on type error (both)
+  const linenr_T lnum = tv_get_lnum(argvars);
+  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
+
+  bool transerr = false;
+  const int trans = (int)tv_get_number_chk(&argvars[2], &transerr);
+
+  int id = 0;
+  if (!transerr && lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
+      && col >= 0 && col < ml_get_len(lnum)) {
+    id = syn_get_id(curwin, lnum, col, trans, NULL, false);
+  }
+
+  rettv->vval.v_number = id;
+}
+
+void nvim_eval_synIDattr(typval_T *argvars, typval_T *rettv)
+{
+  const int id = (int)tv_get_number(&argvars[0]);
+  const char *const what = tv_get_string(&argvars[1]);
+  int modec;
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    char modebuf[NUMBUFLEN];
+    const char *const mode = tv_get_string_buf(&argvars[2], modebuf);
+    modec = TOLOWER_ASC(mode[0]);
+    if (modec != 'c' && modec != 'g') {
+      modec = 0;  // Replace invalid with current.
+    }
+  } else if (ui_rgb_attached()) {
+    modec = 'g';
+  } else {
+    modec = 'c';
+  }
+
+  const char *p = NULL;
+  switch (TOLOWER_ASC(what[0])) {
+  case 'b':
+    if (TOLOWER_ASC(what[1]) == 'g') {  // bg[#]
+      p = highlight_color(id, what, modec);
+    } else {  // bold
+      p = highlight_has_attr(id, HL_BOLD, modec);
+    }
+    break;
+  case 'f':    // fg[#] or font
+    p = highlight_color(id, what, modec);
+    break;
+  case 'i':
+    if (TOLOWER_ASC(what[1]) == 'n') {  // inverse
+      p = highlight_has_attr(id, HL_INVERSE, modec);
+    } else {  // italic
+      p = highlight_has_attr(id, HL_ITALIC, modec);
+    }
+    break;
+  case 'n':
+    if (TOLOWER_ASC(what[1]) == 'o') {  // nocombine
+      p = highlight_has_attr(id, HL_NOCOMBINE, modec);
+    } else {  // name
+      p = get_highlight_name_ext(NULL, id - 1, false);
+    }
+    break;
+  case 'r':    // reverse
+    p = highlight_has_attr(id, HL_INVERSE, modec);
+    break;
+  case 's':
+    if (TOLOWER_ASC(what[1]) == 'p') {  // sp[#]
+      p = highlight_color(id, what, modec);
+    } else if (TOLOWER_ASC(what[1]) == 't'
+               && TOLOWER_ASC(what[2]) == 'r') {  // strikethrough
+      p = highlight_has_attr(id, HL_STRIKETHROUGH, modec);
+    } else {  // standout
+      p = highlight_has_attr(id, HL_STANDOUT, modec);
+    }
+    break;
+  case 'u':
+    if (strlen(what) >= 9) {
+      if (TOLOWER_ASC(what[5]) == 'l') {
+        // underline
+        p = highlight_has_attr(id, HL_UNDERLINE, modec);
+      } else if (TOLOWER_ASC(what[5]) != 'd') {
+        // undercurl
+        p = highlight_has_attr(id, HL_UNDERCURL, modec);
+      } else if (TOLOWER_ASC(what[6]) != 'o') {
+        // underdashed
+        p = highlight_has_attr(id, HL_UNDERDASHED, modec);
+      } else if (TOLOWER_ASC(what[7]) == 'u') {
+        // underdouble
+        p = highlight_has_attr(id, HL_UNDERDOUBLE, modec);
+      } else {
+        // underdotted
+        p = highlight_has_attr(id, HL_UNDERDOTTED, modec);
+      }
+    } else {
+      // ul
+      p = highlight_color(id, what, modec);
+    }
+    break;
+  }
+
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = p == NULL ? NULL : xstrdup(p);
+}
+
+void nvim_eval_synconcealed(typval_T *argvars, typval_T *rettv)
+{
+  int syntax_flags = 0;
+  int matchid = 0;
+  char str[NUMBUFLEN];
+
+  tv_list_set_ret(rettv, NULL);
+
+  // -1 on type error (both)
+  const linenr_T lnum = tv_get_lnum(argvars);
+  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
+
+  CLEAR_FIELD(str);
+
+  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
+      && col >= 0 && col <= ml_get_len(lnum) && curwin->w_p_cole > 0) {
+    syn_get_id(curwin, lnum, col, false, NULL, false);
+    syntax_flags = get_syntax_info(&matchid);
+
+    // get the conceal character
+    if ((syntax_flags & HL_CONCEAL) && curwin->w_p_cole < 3) {
+      schar_T cchar = schar_from_char(syn_get_sub_char());
+      if (cchar == NUL && curwin->w_p_cole == 1) {
+        cchar = (curwin->w_p_lcs_chars.conceal == NUL)
+                ? schar_from_ascii(' ') : curwin->w_p_lcs_chars.conceal;
+      }
+      if (cchar != NUL) {
+        schar_get(str, cchar);
+      }
+    }
+  }
+
+  tv_list_alloc_ret(rettv, 3);
+  tv_list_append_number(rettv->vval.v_list, (syntax_flags & HL_CONCEAL) != 0);
+  // -1 to auto-determine strlen
+  tv_list_append_string(rettv->vval.v_list, str, -1);
+  tv_list_append_number(rettv->vval.v_list, matchid);
+}
+
+void nvim_eval_synstack(typval_T *argvars, typval_T *rettv)
+{
+  tv_list_set_ret(rettv, NULL);
+
+  // -1 on type error (both)
+  const linenr_T lnum = tv_get_lnum(argvars);
+  const colnr_T col = (colnr_T)tv_get_number(&argvars[1]) - 1;
+
+  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
+      && col >= 0 && col <= ml_get_len(lnum)) {
+    tv_list_alloc_ret(rettv, kListLenMayKnow);
+    syn_get_id(curwin, lnum, col, false, NULL, true);
+
+    int id;
+    int i = 0;
+    while ((id = syn_get_stack_item(i++)) >= 0) {
+      tv_list_append_number(rettv->vval.v_list, id);
+    }
+  }
 }
 

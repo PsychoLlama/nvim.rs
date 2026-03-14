@@ -1116,3 +1116,128 @@ pub unsafe extern "C" fn rs_f_searchpos(
 ) {
     nvim_eval_searchpos(argvars, rettv);
 }
+
+// =============================================================================
+// Phase 8 C accessor declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_spellbadword(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_spellsuggest(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_submatch(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_substitute(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_synID(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_synIDattr(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_synconcealed(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_synstack(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Phase 8: Syntax and spell functions
+// =============================================================================
+
+/// "spellbadword()" function - find a badly spelled word
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_spellbadword"]
+pub unsafe extern "C" fn rs_f_spellbadword(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_spellbadword(argvars, rettv);
+}
+
+/// "spellsuggest()" function - suggest correct spellings
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_spellsuggest"]
+pub unsafe extern "C" fn rs_f_spellsuggest(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_spellsuggest(argvars, rettv);
+}
+
+/// "submatch()" function - get submatch from last regex match
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_submatch"]
+pub unsafe extern "C" fn rs_f_submatch(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_submatch(argvars, rettv);
+}
+
+/// "substitute()" function - string substitution
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_substitute"]
+pub unsafe extern "C" fn rs_f_substitute(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_substitute(argvars, rettv);
+}
+
+/// "synID()" function - get syntax ID at a position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[allow(non_snake_case)]
+#[export_name = "f_synID"]
+pub unsafe extern "C" fn rs_f_synID(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_synID(argvars, rettv);
+}
+
+/// "synIDattr()" function - get attribute of a syntax ID
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[allow(non_snake_case)]
+#[export_name = "f_synIDattr"]
+pub unsafe extern "C" fn rs_f_synIDattr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_synIDattr(argvars, rettv);
+}
+
+/// "synconcealed()" function - check if position is concealed
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_synconcealed"]
+pub unsafe extern "C" fn rs_f_synconcealed(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_synconcealed(argvars, rettv);
+}
+
+/// "synstack()" function - get syntax ID stack at a position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_synstack"]
+pub unsafe extern "C" fn rs_f_synstack(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_synstack(argvars, rettv);
+}
