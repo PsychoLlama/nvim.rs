@@ -325,23 +325,6 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
   apply_autocmds(evt, typestr, typestr, false, curbuf);
 }
 
-static void save_viewstate(win_T *wp, viewstate_T *vs)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_save_viewstate_win(wp, vs);
-}
-
-static void restore_viewstate(win_T *wp, viewstate_T *vs)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_restore_viewstate_win(wp, vs);
-}
-
-static void init_incsearch_state(incsearch_state_T *s)
-{
-  // Delegate to Rust implementation
-  rs_init_incsearch_state(s);
-}
 
 static void set_search_match(pos_T *t)
 {
@@ -452,7 +435,7 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
   if (!use_last_pat) {
     char c = *end;
     *end = NUL;
-    bool empty = empty_pattern_magic(p, (size_t)(end - p), magic);
+    bool empty = (bool)rs_empty_pattern_magic(p, (size_t)(end - p), (int)magic);
     *end = c;
     if (empty) {
       return false;
@@ -611,7 +594,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
 
   // first restore the old curwin values, so the screen is
   // positioned in the same way as the actual search command
-  restore_viewstate(curwin, &s->old_viewstate);
+  rs_restore_viewstate_win(curwin, &s->old_viewstate);
   changed_cline_bef_curs(curwin);
   update_topline(curwin);
 
@@ -630,7 +613,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
   if (!use_last_pat) {
     next_char = ccline.cmdbuff[skiplen + patlen];
     ccline.cmdbuff[skiplen + patlen] = NUL;
-    if (empty_pattern(ccline.cmdbuff + skiplen, (size_t)patlen, search_delim)
+    if ((bool)rs_empty_pattern(ccline.cmdbuff + skiplen, (size_t)patlen, search_delim)
         && !no_hlsearch) {
       redraw_all_later(UPD_SOME_VALID);
       set_no_hlsearch(true);
@@ -781,7 +764,7 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
   };
   CommandLineState *s = &state;
   s->save_p_icm = xstrdup(p_icm);
-  init_incsearch_state(&s->is_state);
+  rs_init_incsearch_state(&s->is_state);
   CmdlineInfo save_ccline;
   bool did_save_ccline = false;
 
@@ -825,8 +808,8 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
   redir_off = true;             // don't redirect the typed command
   if (!cmd_silent) {
     gotocmdline(true);
-    redrawcmdprompt();          // draw prompt or indent
-    ccline.cmdspos = cmd_startcol();
+    rs_redrawcmdprompt();          // draw prompt or indent
+    ccline.cmdspos = rs_cmd_startcol();
   }
   s->xpc.xp_context = EXPAND_NOTHING;
   s->xpc.xp_backslash = XP_BS_NONE;
@@ -1336,7 +1319,7 @@ static int command_line_execute(VimState *state, int key)
     }
     // If the window changed incremental search state is not valid.
     if (s->is_state.winid != curwin->handle) {
-      init_incsearch_state(&s->is_state);
+      rs_init_incsearch_state(&s->is_state);
     }
     // Re-apply 'incsearch' highlighting in case it was cleared.
     if (display_tick > display_tick_saved && s->is_state.did_incsearch) {
@@ -1492,7 +1475,7 @@ static int command_line_execute(VimState *state, int key)
     } else {
       s->gotesc = false;         // Might have typed ESC previously, don't
                                  // truncate the cmdline now.
-      if (ccheck_abbr(s->c + ABBR_OFF)) {
+      if (rs_ccheck_abbr(s->c + ABBR_OFF)) {
         return command_line_changed(s);
       }
 
@@ -1552,7 +1535,7 @@ static int command_line_execute(VimState *state, int key)
   if (wild_type == WILD_CANCEL || wild_type == WILD_APPLY) {
     // Apply search highlighting
     if (s->is_state.winid != curwin->handle) {
-      init_incsearch_state(&s->is_state);
+      rs_init_incsearch_state(&s->is_state);
     }
     if (KeyTyped || vpeekc() == NUL) {
       may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
@@ -1676,7 +1659,7 @@ static int may_do_command_line_next_incsearch(int firstc, int count, incsearch_s
     update_topline(curwin);
     validate_cursor(curwin);
     highlight_match = true;
-    save_viewstate(curwin, &s->old_viewstate);
+    rs_save_viewstate_win(curwin, &s->old_viewstate);
     redraw_later(curwin, UPD_NOT_VALID);
     update_screen();
     highlight_match = false;
@@ -1845,10 +1828,10 @@ static void command_line_left_right_mouse(CommandLineState *s)
     s->ignore_drag_release = false;
   }
 
-  ccline.cmdspos = cmd_startcol();
+  ccline.cmdspos = rs_cmd_startcol();
   for (ccline.cmdpos = 0; ccline.cmdpos < ccline.cmdlen;
        ccline.cmdpos++) {
-    int cells = cmdline_charsize(ccline.cmdpos);
+    int cells = rs_cmdline_charsize(ccline.cmdpos);
     if (mouse_row <= cmdline_row + ccline.cmdspos / Columns
         && mouse_col < ccline.cmdspos % Columns + cells) {
       break;
@@ -1995,7 +1978,7 @@ static int command_line_handle_key(CommandLineState *s)
         break;
       }
 
-      int cells = cmdline_charsize(ccline.cmdpos);
+      int cells = rs_cmdline_charsize(ccline.cmdpos);
       if (KeyTyped && ccline.cmdspos + cells >= Columns * Rows) {
         break;
       }
@@ -2019,7 +2002,7 @@ static int command_line_handle_key(CommandLineState *s)
       // Move to first byte of possibly multibyte char.
       ccline.cmdpos -= utf_head_off(ccline.cmdbuff,
                                     ccline.cmdbuff + ccline.cmdpos);
-      ccline.cmdspos -= cmdline_charsize(ccline.cmdpos);
+      ccline.cmdspos -= rs_cmdline_charsize(ccline.cmdpos);
     } while (ccline.cmdpos > 0
              && (s->c == K_S_LEFT || s->c == K_C_LEFT
                  || (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL)))
@@ -2090,7 +2073,7 @@ static int command_line_handle_key(CommandLineState *s)
   case K_S_HOME:
   case K_C_HOME:
     ccline.cmdpos = 0;
-    ccline.cmdspos = cmd_startcol();
+    ccline.cmdspos = rs_cmd_startcol();
     return command_line_not_changed(s);
 
   case Ctrl_E:            // end of command line
@@ -2243,7 +2226,7 @@ static int command_line_handle_key(CommandLineState *s)
   if (s->do_abbr && (IS_SPECIAL(s->c) || !vim_iswordc(s->c))
       // Add ABBR_OFF for characters above 0x100, this is
       // what check_abbr() expects.
-      && (ccheck_abbr((s->c >= 0x100) ? (s->c + ABBR_OFF) : s->c)
+      && (rs_ccheck_abbr((s->c >= 0x100) ? (s->c + ABBR_OFF) : s->c)
           || s->c == Ctrl_RSB)) {
     return command_line_changed(s);
   }
@@ -2284,17 +2267,6 @@ static int command_line_not_changed(CommandLineState *s)
   return command_line_changed(s);
 }
 
-/// Guess that the pattern matches everything.  Only finds specific cases, such
-/// as a trailing \|, which can happen while typing a pattern.
-static bool empty_pattern(char *p, size_t len, int delim)
-{
-  return rs_empty_pattern(p, len, delim);
-}
-
-static bool empty_pattern_magic(char *p, size_t len, magic_T magic_val)
-{
-  return rs_empty_pattern_magic(p, len, (int)magic_val);
-}
 
 handle_T cmdpreview_get_bufnr(void)
 {
@@ -2480,7 +2452,7 @@ static void cmdpreview_prepare(CpInfo *cpinfo)
 
     // Save window cursor position and viewstate
     cp_wininfo.save_w_cursor = win->w_cursor;
-    save_viewstate(win, &cp_wininfo.save_viewstate);
+    rs_save_viewstate_win(win, &cp_wininfo.save_viewstate);
 
     // Save 'cursorline' and 'cursorcolumn'
     cp_wininfo.save_w_p_cul = win->w_p_cul;
@@ -2563,7 +2535,7 @@ static void cmdpreview_restore_state(CpInfo *cpinfo)
 
     // Restore window cursor position and viewstate
     win->w_cursor = cp_wininfo.save_w_cursor;
-    restore_viewstate(win, &cp_wininfo.save_viewstate);
+    rs_restore_viewstate_win(win, &cp_wininfo.save_viewstate);
 
     // Restore 'cursorline' and 'cursorcolumn'
     win->w_p_cul = cp_wininfo.save_w_p_cul;
@@ -2978,17 +2950,6 @@ bool allbuf_locked(void)
   return false;
 }
 
-static int cmdline_charsize(int idx)
-{
-  return rs_cmdline_charsize(idx);
-}
-
-/// Compute the offset of the cursor on the command line for the prompt and
-/// indent.
-static int cmd_startcol(void)
-{
-  return rs_cmd_startcol();
-}
 
 /// Get an Ex command line for the ":" command.
 ///
@@ -3630,7 +3591,7 @@ void put_on_cmdline(const char *str, int len, bool redraw)
     m = MAXCOL;
   }
   for (int i = 0; i < len; i++) {
-    int c = cmdline_charsize(ccline.cmdpos);
+    int c = rs_cmdline_charsize(ccline.cmdpos);
     // count ">" for a double-wide char that doesn't fit.
     correct_screencol(ccline.cmdpos, c, &ccline.cmdspos);
     // Stop cursor at the end of the screen, but do increment the
@@ -3758,11 +3719,6 @@ void redrawcmdline(void)
   rs_redrawcmdline();
 }
 
-static void redrawcmdprompt(void)
-{
-  rs_redrawcmdprompt();
-}
-
 // Redraw what is currently on the command line.
 void redrawcmd(void)
 {
@@ -3786,7 +3742,7 @@ void redrawcmd(void)
 
   sb_text_restart_cmdline();
   msg_start();
-  redrawcmdprompt();
+  rs_redrawcmdprompt();
 
   // Don't use more prompt, truncate the cmdline if it doesn't fit.
   msg_no_more = true;
@@ -3811,15 +3767,6 @@ void redrawcmd(void)
   redrawing_cmdline = false;
 }
 
-
-// Check the word in front of the cursor for an abbreviation.
-// Called when the non-id character "c" has been entered.
-// When an abbreviation is recognized it is removed from the text with
-// backspaces and the replacement string is inserted, followed by "c".
-static int ccheck_abbr(int c)
-{
-  return rs_ccheck_abbr(c);
-}
 
 
 /// Get a pointer to the current command line info.
