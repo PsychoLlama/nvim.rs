@@ -462,10 +462,22 @@ void nvim_set_highlight_match(int value)
   highlight_match = value != 0;
 }
 
+/// Get search_first_line global (for Rust incsearch).
+linenr_T nvim_get_search_first_line(void)
+{
+  return search_first_line;
+}
+
 /// Set search_first_line global (for Rust incsearch).
 void nvim_set_search_first_line(linenr_T value)
 {
   search_first_line = value;
+}
+
+/// Get search_last_line global (for Rust incsearch).
+linenr_T nvim_get_search_last_line(void)
+{
+  return search_last_line;
 }
 
 /// Set search_last_line global (for Rust incsearch).
