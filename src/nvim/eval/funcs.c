@@ -197,9 +197,6 @@ extern void f_invert(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // Rust type VimL function declarations (direct dispatch via #[export_name])
 extern void f_type(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
-// Rust implementations of random functions (from nvim-rs/eval/src/funcs/random.rs)
-extern uint32_t rs_splitmix32(uint32_t *x);
-extern uint32_t rs_shuffle_xoshiro128starstar(uint32_t *x, uint32_t *y, uint32_t *z, uint32_t *w);
 
 #ifdef _MSC_VER
 // This prevents MSVC from replacing the functions with intrinsics,
@@ -400,6 +397,11 @@ extern void f_id(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_setfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_reltimefloat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_reltimestr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
+// Rust Phase 3 (plan 40f0fb72) VimL function declarations (misc.rs)
+extern void f_rand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reltime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
@@ -3660,129 +3662,9 @@ static void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData f
 
 /// "py3eval()" and "pyxeval()" functions (always python3)
 
-static void init_srand(uint32_t *const x)
-  FUNC_ATTR_NONNULL_ALL
-{
-  union {
-    uint32_t number;
-    uint8_t bytes[sizeof(uint32_t)];
-  } buf;
-
-  if (uv_random(NULL, NULL, buf.bytes, sizeof(buf.bytes), 0, NULL) == 0) {
-    *x = buf.number;
-    return;
-  }
-
-  // The system's random number generator doesn't work,
-  // fall back to os_hrtime() XOR with process ID
-  *x = (uint32_t)os_hrtime();
-  *x ^= (uint32_t)os_get_pid();
-}
-
-static inline uint32_t splitmix32(uint32_t *const x)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_splitmix32(x);
-}
-
-static inline uint32_t shuffle_xoshiro128starstar(uint32_t *const x, uint32_t *const y,
-                                                  uint32_t *const z, uint32_t *const w)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
-{
-  return rs_shuffle_xoshiro128starstar(x, y, z, w);
-}
-
-/// "rand()" function
-static void f_rand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  uint32_t result;
-
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    static uint32_t gx, gy, gz, gw;
-    static bool initialized = false;
-
-    // When no argument is given use the global seed list.
-    if (!initialized) {
-      // Initialize the global seed list.
-      uint32_t x = 0;
-      init_srand(&x);
-
-      gx = splitmix32(&x);
-      gy = splitmix32(&x);
-      gz = splitmix32(&x);
-      gw = splitmix32(&x);
-      initialized = true;
-    }
-
-    result = shuffle_xoshiro128starstar(&gx, &gy, &gz, &gw);
-  } else if (argvars[0].v_type == VAR_LIST) {
-    list_T *const l = argvars[0].vval.v_list;
-    if (tv_list_len(l) != 4) {
-      goto theend;
-    }
-
-    typval_T *const tvx = TV_LIST_ITEM_TV(tv_list_find(l, 0));
-    typval_T *const tvy = TV_LIST_ITEM_TV(tv_list_find(l, 1));
-    typval_T *const tvz = TV_LIST_ITEM_TV(tv_list_find(l, 2));
-    typval_T *const tvw = TV_LIST_ITEM_TV(tv_list_find(l, 3));
-    if (tvx->v_type != VAR_NUMBER) {
-      goto theend;
-    }
-    if (tvy->v_type != VAR_NUMBER) {
-      goto theend;
-    }
-    if (tvz->v_type != VAR_NUMBER) {
-      goto theend;
-    }
-    if (tvw->v_type != VAR_NUMBER) {
-      goto theend;
-    }
-    uint32_t x = (uint32_t)tvx->vval.v_number;
-    uint32_t y = (uint32_t)tvy->vval.v_number;
-    uint32_t z = (uint32_t)tvz->vval.v_number;
-    uint32_t w = (uint32_t)tvw->vval.v_number;
-
-    result = shuffle_xoshiro128starstar(&x, &y, &z, &w);
-
-    tvx->vval.v_number = (varnumber_T)x;
-    tvy->vval.v_number = (varnumber_T)y;
-    tvz->vval.v_number = (varnumber_T)z;
-    tvw->vval.v_number = (varnumber_T)w;
-  } else {
-    goto theend;
-  }
-
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = (varnumber_T)result;
-  return;
-
-theend:
-  semsg(_(e_invarg2), tv_get_string(&argvars[0]));
-  rettv->v_type = VAR_NUMBER;
-  rettv->vval.v_number = -1;
-}
-
-/// "srand()" function
-static void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  uint32_t x = 0;
-
-  tv_list_alloc_ret(rettv, 4);
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    init_srand(&x);
-  } else {
-    bool error = false;
-    x = (uint32_t)tv_get_number_chk(&argvars[0], &error);
-    if (error) {
-      return;
-    }
-  }
-
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)splitmix32(&x));
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)splitmix32(&x));
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)splitmix32(&x));
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)splitmix32(&x));
-}
+// init_srand, splitmix32, shuffle_xoshiro128starstar: migrated to Rust (misc.rs)
+// f_rand: migrated to Rust (misc.rs)
+// f_srand: migrated to Rust (misc.rs)
 
 /// "perleval()" function
 /// "range()" function
@@ -3791,83 +3673,8 @@ static void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "getreginfo()" function
 // f_getreginfo: migrated to Rust (misc.rs)
 
-/// list2proftime - convert a List to proftime_T
-///
-/// @param arg The input list, must be of type VAR_LIST and have
-///            exactly 2 items
-/// @param[out] tm The proftime_T representation of `arg`
-/// @return OK In case of success, FAIL in case of error
-static int list2proftime(typval_T *arg, proftime_T *tm) FUNC_ATTR_NONNULL_ALL
-{
-  if (arg->v_type != VAR_LIST || tv_list_len(arg->vval.v_list) != 2) {
-    return FAIL;
-  }
-
-  bool error = false;
-  varnumber_T n1 = tv_list_find_nr(arg->vval.v_list, 0, &error);
-  varnumber_T n2 = tv_list_find_nr(arg->vval.v_list, 1, &error);
-  if (error) {
-    return FAIL;
-  }
-
-  // in f_reltime() we split up the 64-bit proftime_T into two 32-bit
-  // values, now we combine them again.
-  union {
-    struct { int32_t low, high; } split;
-    proftime_T prof;
-  } u = { .split.high = (int32_t)n1, .split.low = (int32_t)n2 };
-
-  *tm = u.prof;
-
-  return OK;
-}
-
-/// f_reltime - return an item that represents a time value
-///
-/// @param[out] rettv Without an argument it returns the current time. With
-///             one argument it returns the time passed since the argument.
-///             With two arguments it returns the time passed between
-///             the two arguments.
-static void f_reltime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  proftime_T res;
-  proftime_T start;
-
-  if (argvars[0].v_type == VAR_UNKNOWN) {
-    // no arguments: get current time.
-    res = profile_start();
-  } else if (argvars[1].v_type == VAR_UNKNOWN) {
-    if (list2proftime(&argvars[0], &res) == FAIL) {
-      return;
-    }
-    res = profile_end(res);
-  } else {
-    // two arguments: compute the difference.
-    if (list2proftime(&argvars[0], &start) == FAIL
-        || list2proftime(&argvars[1], &res) == FAIL) {
-      return;
-    }
-    res = profile_sub(res, start);
-  }
-
-  // we have to store the 64-bit proftime_T inside of a list of int's
-  // (varnumber_T is defined as int). For all our supported platforms, int's
-  // are at least 32-bits wide. So we'll use two 32-bit values to store it.
-  union {
-    struct { int32_t low, high; } split;
-    proftime_T prof;
-  } u = { .prof = res };
-
-  // statically assert that the union type conv will provide the correct
-  // results, if varnumber_T or proftime_T change, the union cast will need
-  // to be revised.
-  STATIC_ASSERT(sizeof(u.prof) == sizeof(u) && sizeof(u.split) == sizeof(u),
-                "type punning will produce incorrect results on this platform");
-
-  tv_list_alloc_ret(rettv, 2);
-  tv_list_append_number(rettv->vval.v_list, u.split.high);
-  tv_list_append_number(rettv->vval.v_list, u.split.low);
-}
+// list2proftime: migrated to Rust (misc.rs)
+// f_reltime: migrated to Rust (misc.rs)
 
 /// "reltimestr()" function
 // f_reltimestr: migrated to Rust (misc.rs)

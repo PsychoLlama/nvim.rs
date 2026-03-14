@@ -1607,3 +1607,313 @@ pub unsafe extern "C" fn rs_f_reltimestr(
         }
     }
 }
+
+// =============================================================================
+// Phase 3: Reltime and random functions (plan 40f0fb72)
+// =============================================================================
+
+use std::sync::Mutex;
+
+/// Global xoshiro128** PRNG state, initialized lazily.
+static GLOBAL_RAND_STATE: Mutex<Option<[u32; 4]>> = Mutex::new(None);
+
+/// VarType constant: VAR_NUMBER (used by f_rand/f_srand).
+const VAR_NUMBER_P3: c_int = 1;
+/// VarType constant: VAR_UNKNOWN (no argument).
+const VAR_UNKNOWN_P3: c_int = 0;
+/// VarType constant: VAR_LIST.
+const VAR_LIST_P3: c_int = 4;
+
+/// TYPVAL_SIZE for Phase 3 arg_at usage.
+const TYPVAL_SIZE_P3: usize = 16;
+
+extern "C" {
+    // Timing (profile.c)
+    fn profile_start() -> u64;
+    fn profile_end(tm: u64) -> u64;
+    #[link_name = "profile_sub"]
+    fn c_profile_sub(tm1: u64, tm2: u64) -> u64;
+
+    // List construction for reltime/srand return values
+    // nvim_tv_list_alloc_ret: DLLEXPORT wrapper, returns list_T*
+    fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
+    fn tv_list_append_number(l: *mut c_void, nr: i64);
+
+    // Type/value accessors for f_rand list argument
+    #[link_name = "nvim_tv_get_type"]
+    fn p3_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_number"]
+    fn p3_nvim_tv_get_number(tv: *const c_void) -> i64;
+    #[link_name = "nvim_tv_set_number"]
+    fn p3_nvim_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "nvim_tv_get_number_chk"]
+    fn p3_nvim_tv_get_number_chk(tv: *const c_void, error: *mut bool) -> i64;
+    #[link_name = "nvim_tv_get_list"]
+    fn p3_nvim_tv_get_list(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_list_get_len"]
+    fn p3_nvim_list_get_len(l: *const c_void) -> c_int;
+    /// Get list item at index (returns mutable item handle).
+    fn tv_list_find(l: *mut c_void, idx: c_int) -> *mut c_void;
+    /// Get typval from list item (returns mutable).
+    fn nvim_list_item_tv(item: *mut c_void) -> *mut c_void;
+
+    // OS functions for random seeding
+    fn os_hrtime() -> u64;
+    fn os_get_pid() -> i64;
+
+    // libuv synchronous random fill:
+    //   uv_random(NULL, NULL, buf, buflen, 0, NULL) → int (0 = success)
+    fn uv_random(
+        loop_: *mut c_void,
+        req: *mut c_void,
+        buf: *mut c_void,
+        buflen: usize,
+        flags: u32,
+        cb: *mut c_void,
+    ) -> c_int;
+
+    // Error helpers
+    #[link_name = "nvim_tv_get_string"]
+    fn p3_nvim_tv_get_string(tv: *const c_void, out_len: *mut usize) -> *const u8;
+    #[link_name = "semsg"]
+    fn p3_semsg(fmt: *const c_char, ...) -> c_int;
+    #[link_name = "e_invarg2"]
+    static P3_E_INVARG2: c_char;
+}
+
+/// Initialize a 32-bit random seed using the OS random source or fallback.
+///
+/// Mirrors C's `init_srand()`: tries `uv_random`; on failure falls back to
+/// `os_hrtime() XOR os_get_pid()`.
+///
+/// # Safety
+/// Calls libuv and OS functions; safe to call from Rust FFI context.
+unsafe fn init_srand() -> u32 {
+    let mut buf = [0u8; 4];
+    if uv_random(
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        buf.as_mut_ptr().cast::<c_void>(),
+        4,
+        0,
+        std::ptr::null_mut(),
+    ) == 0
+    {
+        u32::from_ne_bytes(buf)
+    } else {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let seed = (os_hrtime() as u32) ^ (os_get_pid() as u32);
+        seed
+    }
+}
+
+/// Get or initialize the global xoshiro128** state, returning `[x, y, z, w]`.
+///
+/// # Safety
+/// Must be called only from Rust FFI context (single-threaded VimL eval).
+unsafe fn global_rand_state() -> [u32; 4] {
+    let mut guard = GLOBAL_RAND_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    #[allow(clippy::option_if_let_else)]
+    if let Some(state) = *guard {
+        state
+    } else {
+        let mut x = init_srand();
+        let s = [
+            crate::funcs::random::splitmix32(&mut x),
+            crate::funcs::random::splitmix32(&mut x),
+            crate::funcs::random::splitmix32(&mut x),
+            crate::funcs::random::splitmix32(&mut x),
+        ];
+        *guard = Some(s);
+        s
+    }
+}
+
+/// Write back the xoshiro128** state to the global slot.
+unsafe fn set_global_rand_state(state: [u32; 4]) {
+    let mut guard = GLOBAL_RAND_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = Some(state);
+}
+
+#[inline]
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn arg_at_p3(argvars: *const c_void, idx: usize) -> *const c_void {
+    (argvars as *const u8)
+        .add(idx * TYPVAL_SIZE_P3)
+        .cast::<c_void>()
+}
+
+/// "rand([{expr}])" function - return a pseudo-random number.
+///
+/// With no argument uses a global xoshiro128** state.
+/// With a list argument (4 numbers), uses that list as the state and updates it in place.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_rand"]
+pub unsafe extern "C" fn rs_f_rand(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    use crate::funcs::random::shuffle_xoshiro128starstar;
+
+    p3_nvim_tv_set_number(rettv, -1);
+
+    let arg0 = arg_at_p3(argvars, 0);
+    let arg0_type = p3_nvim_tv_get_type(arg0);
+
+    let result;
+    if arg0_type == VAR_UNKNOWN_P3 {
+        // No argument: use/update global state
+        let [mut gx, mut gy, mut gz, mut gw] = global_rand_state();
+        result = shuffle_xoshiro128starstar(&mut gx, &mut gy, &mut gz, &mut gw);
+        set_global_rand_state([gx, gy, gz, gw]);
+    } else if arg0_type == VAR_LIST_P3 {
+        let list = p3_nvim_tv_get_list(arg0);
+        if list.is_null() || p3_nvim_list_get_len(list) != 4 {
+            let mut len = 0usize;
+            let s = p3_nvim_tv_get_string(arg0, &raw mut len);
+            let _ = p3_semsg(&raw const P3_E_INVARG2, s);
+            return;
+        }
+        let list_mut = list.cast_mut();
+        // Get mutable item typvals
+        let itv0 = nvim_list_item_tv(tv_list_find(list_mut, 0));
+        let itv1 = nvim_list_item_tv(tv_list_find(list_mut, 1));
+        let itv2 = nvim_list_item_tv(tv_list_find(list_mut, 2));
+        let itv3 = nvim_list_item_tv(tv_list_find(list_mut, 3));
+
+        // All must be VAR_NUMBER
+        if p3_nvim_tv_get_type(itv0.cast_const()) != VAR_NUMBER_P3
+            || p3_nvim_tv_get_type(itv1.cast_const()) != VAR_NUMBER_P3
+            || p3_nvim_tv_get_type(itv2.cast_const()) != VAR_NUMBER_P3
+            || p3_nvim_tv_get_type(itv3.cast_const()) != VAR_NUMBER_P3
+        {
+            let mut len = 0usize;
+            let s = p3_nvim_tv_get_string(arg0, &raw mut len);
+            let _ = p3_semsg(&raw const P3_E_INVARG2, s);
+            return;
+        }
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let mut gx = p3_nvim_tv_get_number(itv0.cast_const()) as u32;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let mut gy = p3_nvim_tv_get_number(itv1.cast_const()) as u32;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let mut gz = p3_nvim_tv_get_number(itv2.cast_const()) as u32;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let mut gw = p3_nvim_tv_get_number(itv3.cast_const()) as u32;
+
+        result = shuffle_xoshiro128starstar(&mut gx, &mut gy, &mut gz, &mut gw);
+
+        // Write back updated state into the list
+        #[allow(clippy::cast_lossless)]
+        p3_nvim_tv_set_number(itv0, gx as i64);
+        #[allow(clippy::cast_lossless)]
+        p3_nvim_tv_set_number(itv1, gy as i64);
+        #[allow(clippy::cast_lossless)]
+        p3_nvim_tv_set_number(itv2, gz as i64);
+        #[allow(clippy::cast_lossless)]
+        p3_nvim_tv_set_number(itv3, gw as i64);
+    } else {
+        let mut len = 0usize;
+        let s = p3_nvim_tv_get_string(arg0, &raw mut len);
+        let _ = p3_semsg(&raw const P3_E_INVARG2, s);
+        return;
+    }
+
+    #[allow(clippy::cast_lossless)]
+    p3_nvim_tv_set_number(rettv, result as i64);
+}
+
+/// "srand([{expr}])" function - initialize random seed, returns 4-element list.
+///
+/// With no argument uses `uv_random` (or `os_hrtime ^ os_get_pid`).
+/// With a number argument uses it as the seed.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_srand"]
+pub unsafe extern "C" fn rs_f_srand(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    use crate::funcs::random::splitmix32;
+
+    let list = nvim_tv_list_alloc_ret(rettv, 4);
+
+    let arg0 = arg_at_p3(argvars, 0);
+    let arg0_type = p3_nvim_tv_get_type(arg0);
+
+    let mut x = if arg0_type == VAR_UNKNOWN_P3 {
+        init_srand()
+    } else {
+        let mut error = false;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let v = p3_nvim_tv_get_number_chk(arg0, &raw mut error) as u32;
+        if error {
+            return;
+        }
+        v
+    };
+
+    tv_list_append_number(list, i64::from(splitmix32(&mut x)));
+    tv_list_append_number(list, i64::from(splitmix32(&mut x)));
+    tv_list_append_number(list, i64::from(splitmix32(&mut x)));
+    tv_list_append_number(list, i64::from(splitmix32(&mut x)));
+}
+
+/// "reltime([{start}[, {end}]])" function.
+///
+/// Returns a list `[high, low]` encoding a proftime_T timestamp:
+/// - 0 args: current time
+/// - 1 arg: elapsed time since `{start}`
+/// - 2 args: difference `{end} - {start}`
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_reltime"]
+pub unsafe extern "C" fn rs_f_reltime(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    let arg0 = arg_at_p3(argvars, 0);
+    let arg1 = arg_at_p3(argvars, 1);
+
+    let res: u64 = if p3_nvim_tv_get_type(arg0) == VAR_UNKNOWN_P3 {
+        // no arguments: current time
+        profile_start()
+    } else if p3_nvim_tv_get_type(arg1) == VAR_UNKNOWN_P3 {
+        // one argument: elapsed since start
+        match list2proftime(arg0) {
+            Some(start) => profile_end(start),
+            None => return,
+        }
+    } else {
+        // two arguments: end - start
+        let Some(start) = list2proftime(arg0) else {
+            return;
+        };
+        let Some(end) = list2proftime(arg1) else {
+            return;
+        };
+        c_profile_sub(end, start)
+    };
+
+    // Encode proftime_T (u64) as [high, low] list of i32 values stored as i64.
+    // This mirrors the C union { struct { int32_t low, high; } split; proftime_T prof; }.
+    // Note: the struct has `low` first (lower address), then `high`.
+    // On little-endian: bytes 0..3 = low, bytes 4..7 = high.
+    let bytes = res.to_ne_bytes();
+    #[allow(clippy::cast_possible_truncation)]
+    let low = i32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    #[allow(clippy::cast_possible_truncation)]
+    let high = i32::from_ne_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+
+    let list = nvim_tv_list_alloc_ret(rettv, 2);
+    tv_list_append_number(list, i64::from(high));
+    tv_list_append_number(list, i64::from(low));
+}
