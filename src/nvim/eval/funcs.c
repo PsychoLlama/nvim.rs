@@ -412,6 +412,10 @@ extern void f_confirm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_strftime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_strptime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 6 (plan 40f0fb72) VimL function declarations (misc.rs)
+extern void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -972,77 +976,9 @@ static void set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 // f_debugbreak: migrated to Rust (simple.rs)
 
 /// dictwatcheradd(dict, key, funcref) function
-static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    return;
-  }
+// f_dictwatcheradd: migrated to Rust (misc.rs)
 
-  if (argvars[0].v_type != VAR_DICT) {
-    semsg(_(e_invarg2), "dict");
-    return;
-  } else if (argvars[0].vval.v_dict == NULL) {
-    const char *const arg_errmsg = _("dictwatcheradd() argument");
-    const size_t arg_errmsg_len = strlen(arg_errmsg);
-    semsg(_(e_readonlyvar), (int)arg_errmsg_len, arg_errmsg);
-    return;
-  }
-
-  if (argvars[1].v_type != VAR_STRING && argvars[1].v_type != VAR_NUMBER) {
-    semsg(_(e_invarg2), "key");
-    return;
-  }
-
-  const char *const key_pattern = tv_get_string_chk(argvars + 1);
-  if (key_pattern == NULL) {
-    return;
-  }
-  const size_t key_pattern_len = strlen(key_pattern);
-
-  Callback callback;
-  if (!rs_callback_from_typval(&callback, &argvars[2])) {
-    semsg(_(e_invarg2), "funcref");
-    return;
-  }
-
-  tv_dict_watcher_add(argvars[0].vval.v_dict, key_pattern, key_pattern_len,
-                      callback);
-}
-
-/// dictwatcherdel(dict, key, funcref) function
-static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_DICT) {
-    semsg(_(e_invarg2), "dict");
-    return;
-  }
-
-  if (argvars[2].v_type != VAR_FUNC && argvars[2].v_type != VAR_STRING) {
-    semsg(_(e_invarg2), "funcref");
-    return;
-  }
-
-  const char *const key_pattern = tv_get_string_chk(argvars + 1);
-  if (key_pattern == NULL) {
-    return;
-  }
-
-  Callback callback;
-  if (!rs_callback_from_typval(&callback, &argvars[2])) {
-    return;
-  }
-
-  if (!tv_dict_watcher_remove(argvars[0].vval.v_dict, key_pattern,
-                              strlen(key_pattern), callback)) {
-    emsg("Couldn't find a watcher matching key and callback");
-  }
-
-  callback_free(&callback);
-}
+// f_dictwatcherdel: migrated to Rust (misc.rs)
 
 // f_environ: migrated to Rust (system.rs)
 

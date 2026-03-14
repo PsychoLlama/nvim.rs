@@ -2450,3 +2450,183 @@ pub unsafe extern "C" fn rs_f_strptime(
     convert_setup(&raw mut conv, std::ptr::null_mut(), std::ptr::null_mut());
     p5_xfree(enc.cast::<c_void>());
 }
+
+// =============================================================================
+// Phase 6: Dict watcher functions (plan 40f0fb72)
+// =============================================================================
+
+use crate::callback::CallbackT;
+
+const TYPVAL_SIZE_P6: usize = 16;
+const VAR_DICT_P6: c_int = 5;
+const VAR_FUNC_P6: c_int = 3;
+const VAR_NUMBER_P6: c_int = 1;
+const VAR_STRING_P6: c_int = 2;
+
+extern "C" {
+    // Type/value accessors for Phase 6
+    #[link_name = "nvim_tv_get_type"]
+    fn p6_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_dict"]
+    fn p6_nvim_tv_get_dict(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_tv_dict_is_null"]
+    fn p6_nvim_tv_dict_is_null(tv: *const c_void) -> c_int;
+
+    // rs_check_secure
+    #[link_name = "rs_check_secure"]
+    fn p6_rs_check_secure() -> c_int;
+
+    // Error helpers
+    #[link_name = "semsg"]
+    fn p6_semsg(fmt: *const c_char, ...) -> c_int;
+    #[link_name = "emsg"]
+    fn p6_emsg(s: *const c_char) -> c_int;
+    #[link_name = "e_invarg2"]
+    static P6_E_INVARG2: c_char;
+    #[link_name = "e_readonlyvar"]
+    static P6_E_READONLYVAR: c_char;
+
+    // tv_get_string_chk (via p4's link name alias)
+    #[link_name = "tv_get_string_chk"]
+    fn p6_tv_get_string_chk(tv: *mut c_void) -> *const c_char;
+
+    // rs_callback_from_typval: Rust-exported, returns bool
+    fn rs_callback_from_typval(callback: *mut CallbackT, arg: *const c_void) -> bool;
+
+    // tv_dict_watcher_add/remove: takes dict ptr, key_pattern, len, callback by value
+    fn tv_dict_watcher_add(
+        dict: *mut c_void,
+        key_pattern: *const c_char,
+        key_pattern_len: usize,
+        callback: CallbackT,
+    );
+    fn tv_dict_watcher_remove(
+        dict: *mut c_void,
+        key_pattern: *const c_char,
+        key_pattern_len: usize,
+        callback: CallbackT,
+    ) -> bool;
+
+    // callback_free
+    fn callback_free(cb: *mut CallbackT);
+}
+
+#[inline]
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn arg_at_p6(argvars: *const c_void, idx: usize) -> *const c_void {
+    (argvars as *const u8)
+        .add(idx * TYPVAL_SIZE_P6)
+        .cast::<c_void>()
+}
+
+/// "dictwatcheradd(dict, key, funcref)" function.
+///
+/// Registers a callback to be called when a dict key matching `key` changes.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_dictwatcheradd"]
+pub unsafe extern "C" fn rs_f_dictwatcheradd(
+    argvars: *const c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if p6_rs_check_secure() != 0 {
+        return;
+    }
+
+    let arg0 = arg_at_p6(argvars, 0);
+    let arg1 = arg_at_p6(argvars, 1);
+    let arg2 = arg_at_p6(argvars, 2);
+
+    if p6_nvim_tv_get_type(arg0) != VAR_DICT_P6 {
+        let _ = p6_semsg(&raw const P6_E_INVARG2, c"dict".as_ptr());
+        return;
+    }
+
+    // Check for null dict (read-only)
+    if p6_nvim_tv_dict_is_null(arg0) != 0 {
+        let msg = c"dictwatcheradd() argument";
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let _ = p6_semsg(
+            &raw const P6_E_READONLYVAR,
+            msg.count_bytes() as c_int,
+            msg.as_ptr(),
+        );
+        return;
+    }
+
+    let arg1_type = p6_nvim_tv_get_type(arg1);
+    if arg1_type != VAR_STRING_P6 && arg1_type != VAR_NUMBER_P6 {
+        let _ = p6_semsg(&raw const P6_E_INVARG2, c"key".as_ptr());
+        return;
+    }
+
+    let key_pattern = p6_tv_get_string_chk(arg1.cast_mut());
+    if key_pattern.is_null() {
+        return;
+    }
+    let key_pattern_len = std::ffi::CStr::from_ptr(key_pattern).to_bytes().len();
+
+    let mut callback = std::mem::zeroed::<CallbackT>();
+    if !rs_callback_from_typval(&raw mut callback, arg2) {
+        let _ = p6_semsg(&raw const P6_E_INVARG2, c"funcref".as_ptr());
+        return;
+    }
+
+    let dict = p6_nvim_tv_get_dict(arg0).cast_mut();
+    tv_dict_watcher_add(dict, key_pattern, key_pattern_len, callback);
+}
+
+/// "dictwatcherdel(dict, key, funcref)" function.
+///
+/// Removes a previously registered dict watcher callback.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_dictwatcherdel"]
+pub unsafe extern "C" fn rs_f_dictwatcherdel(
+    argvars: *const c_void,
+    _rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if p6_rs_check_secure() != 0 {
+        return;
+    }
+
+    let arg0 = arg_at_p6(argvars, 0);
+    let arg1 = arg_at_p6(argvars, 1);
+    let arg2 = arg_at_p6(argvars, 2);
+
+    if p6_nvim_tv_get_type(arg0) != VAR_DICT_P6 {
+        let _ = p6_semsg(&raw const P6_E_INVARG2, c"dict".as_ptr());
+        return;
+    }
+
+    let arg2_type = p6_nvim_tv_get_type(arg2);
+    if arg2_type != VAR_FUNC_P6 && arg2_type != VAR_STRING_P6 {
+        let _ = p6_semsg(&raw const P6_E_INVARG2, c"funcref".as_ptr());
+        return;
+    }
+
+    let key_pattern = p6_tv_get_string_chk(arg1.cast_mut());
+    if key_pattern.is_null() {
+        return;
+    }
+    let key_pattern_len = std::ffi::CStr::from_ptr(key_pattern).to_bytes().len();
+
+    let mut callback = std::mem::zeroed::<CallbackT>();
+    if !rs_callback_from_typval(&raw mut callback, arg2) {
+        return;
+    }
+
+    let dict = p6_nvim_tv_get_dict(arg0).cast_mut();
+    // `tv_dict_watcher_remove` takes Callback by value (C copy semantics).
+    // We need a copy to keep `callback` alive for `callback_free` afterward.
+    let callback_copy = std::ptr::read(&raw const callback);
+    if !tv_dict_watcher_remove(dict, key_pattern, key_pattern_len, callback_copy) {
+        let _ = p6_emsg(c"Couldn't find a watcher matching key and callback".as_ptr());
+    }
+
+    callback_free(&raw mut callback);
+}
