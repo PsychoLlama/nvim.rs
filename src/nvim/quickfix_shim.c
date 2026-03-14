@@ -1323,8 +1323,6 @@ void nvim_semsg_list_and_what(void)
   semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
 }
 
-/// Call qf_list_changed(qfl) -> rs_qf_incr_changedtick.
-void nvim_qf_list_changed(void *qfl) { if (qfl != NULL) rs_qf_incr_changedtick(qfl); }
 
 // ---- Rust Phase 4 forward declarations ----
 // rs_set_errorlist deleted: now exported as set_errorlist via #[export_name]

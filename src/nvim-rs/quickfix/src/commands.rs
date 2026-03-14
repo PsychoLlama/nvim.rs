@@ -60,7 +60,6 @@ extern "C" {
     // nvim_hgr_cleanup deleted (Phase 4): inlined via curwin accessors + rs_ll_free_all
     fn nvim_qf_get_curwin() -> *mut c_void;
     fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
-    fn nvim_qf_list_changed(qfl: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
     fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
@@ -1164,7 +1163,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
         nvim_qf_set_nonevalid(qfl, false);
         nvim_qf_set_ptr(qfl, nvim_qf_get_start(qfl.cast_const()));
         nvim_qf_set_index(qfl, 1);
-        nvim_qf_list_changed(qfl);
+        crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
     // 5. Restore cpoptions (handles plugin interference)

@@ -133,7 +133,6 @@ extern "C" {
     fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
 
     // List management
-    fn nvim_qf_list_changed(qfl: *mut c_void);
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
     #[link_name = "rs_incr_quickfix_busy"]
     fn nvim_incr_quickfix_busy();
@@ -481,7 +480,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
 
     if res >= 0 {
         let qfl = nvim_qf_get_curlist_mut(qi_post);
-        nvim_qf_list_changed(qfl);
+        crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
     let save_qfid = nvim_qf_get_curlist_id(qi_post);
@@ -579,7 +578,7 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
 
     if res >= 0 {
         let qfl = nvim_qf_get_curlist_mut(qi_post);
-        nvim_qf_list_changed(qfl);
+        crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
     let save_qfid = nvim_qf_get_curlist_id(qi_post);
@@ -727,7 +726,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
 
     if res >= 0 {
         let qfl = nvim_qf_get_curlist_mut(qi);
-        nvim_qf_list_changed(qfl);
+        crate::rs_qf_incr_changedtick(qfl.cast());
     }
 
     let save_qfid = nvim_qf_get_curlist_id(qi);
@@ -811,7 +810,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
 
         if res >= 0 {
             let qfl = nvim_qf_get_curlist_mut(qi);
-            nvim_qf_list_changed(qfl);
+            crate::rs_qf_incr_changedtick(qfl.cast());
         }
 
         let save_qfid = nvim_qf_get_curlist_id(qi);

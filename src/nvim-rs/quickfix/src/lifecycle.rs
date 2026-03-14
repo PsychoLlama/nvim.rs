@@ -127,8 +127,6 @@ extern "C" {
     fn nvim_tv_list_len(list: *const c_void) -> c_int;
     /// Emit "cannot have both a list and a 'what' argument" error.
     fn nvim_semsg_list_and_what();
-    /// Call `qf_list_changed(qfl)`.
-    fn nvim_qf_list_changed(qfl: *mut c_void);
 }
 
 // =============================================================================
@@ -627,7 +625,7 @@ pub unsafe extern "C" fn rs_set_errorlist(
     let retval = if what.is_null() {
         let retval = rs_qf_add_entries(qi, nvim_qf_get_curlist_idx(qi), list, title, action);
         if retval == OK {
-            nvim_qf_list_changed(nvim_qf_get_curlist(qi).cast_mut());
+            crate::rs_qf_incr_changedtick(nvim_qf_get_curlist(qi).cast_mut());
         }
         retval
     } else {

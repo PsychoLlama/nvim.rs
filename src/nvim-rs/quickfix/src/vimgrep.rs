@@ -655,7 +655,6 @@ extern "C" {
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
     fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
-    fn nvim_qf_list_changed(qfl: *mut c_void);
 
     fn nvim_semsg_nomatch2(spat: *const c_char);
 
@@ -859,7 +858,7 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
         let start = nvim_qf_get_start(qfl);
         nvim_qf_set_ptr(qfl, start);
         nvim_qf_set_index(qfl, 1);
-        nvim_qf_list_changed(qfl);
+        crate::rs_qf_incr_changedtick(qfl.cast());
         rs_qf_update_buffer(qi, std::ptr::null());
     }
 
