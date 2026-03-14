@@ -567,11 +567,6 @@ char *nvim_ex2_au_event_disable_syntax(void)
 }
 
 
-bool nvim_ex2_win_valid(win_T *win)
-{
-  return rs_win_valid(win) != 0;
-}
-
 void nvim_ex2_buf_clear_bf_syn_set(buf_T *buf)
 {
   buf->b_flags &= ~BF_SYN_SET;
@@ -627,12 +622,6 @@ bool nvim_ex2_win_get_w_config_focusable(win_T *win)
 {
   return win->w_config.focusable;
 }
-
-bool nvim_ex2_valid_tabpage(tabpage_T *tp)
-{
-  return rs_valid_tabpage(tp) != 0;
-}
-
 
 void nvim_ex2_validate_cursor(void)
 {

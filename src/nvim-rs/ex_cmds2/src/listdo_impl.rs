@@ -50,7 +50,8 @@ extern "C" {
     // window/buffer globals and operations
     fn nvim_ex2_get_curwin_w_p_wfb() -> bool;
     fn nvim_ex2_get_prevwin() -> *mut WinHandle;
-    fn nvim_ex2_win_valid(win: *mut WinHandle) -> bool;
+    #[link_name = "rs_win_valid"]
+    fn nvim_ex2_win_valid(win: *mut WinHandle) -> c_int;
     fn nvim_ex2_win_get_w_p_wfb(win: *mut WinHandle) -> bool;
     #[link_name = "win_goto"]
     fn nvim_ex2_win_goto(win: *mut WinHandle);
@@ -92,7 +93,8 @@ extern "C" {
     fn nvim_ex2_win_get_w_floating(win: *mut WinHandle) -> bool;
     fn nvim_ex2_win_get_w_config_hide(win: *mut WinHandle) -> bool;
     fn nvim_ex2_win_get_w_config_focusable(win: *mut WinHandle) -> bool;
-    fn nvim_ex2_valid_tabpage(tp: *mut TabHandle) -> bool;
+    #[link_name = "rs_valid_tabpage"]
+    fn nvim_ex2_valid_tabpage(tp: *mut TabHandle) -> c_int;
     #[link_name = "goto_tabpage_tp"]
     fn nvim_ex2_goto_tabpage_tp(tp: *mut TabHandle, trigger_enter: bool, trigger_leave: bool);
     #[link_name = "do_cmdline"]
@@ -145,7 +147,9 @@ pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
         }
 
         let prevwin = unsafe { nvim_ex2_get_prevwin() };
-        if unsafe { nvim_ex2_win_valid(prevwin) } && !unsafe { nvim_ex2_win_get_w_p_wfb(prevwin) } {
+        if unsafe { nvim_ex2_win_valid(prevwin) } != 0
+            && !unsafe { nvim_ex2_win_get_w_p_wfb(prevwin) }
+        {
             unsafe { nvim_ex2_win_goto(prevwin) };
         }
         if unsafe { nvim_ex2_get_curwin_w_p_wfb() } {
@@ -265,7 +269,7 @@ pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
                     break;
                 }
             } else if cmdidx == cmd_windo {
-                if !unsafe { nvim_ex2_win_valid(wp) } {
+                if unsafe { nvim_ex2_win_valid(wp) } == 0 {
                     break;
                 }
                 execute = !unsafe { nvim_ex2_win_get_w_floating(wp) }
@@ -279,7 +283,7 @@ pub unsafe extern "C" fn rs_ex_listdo(eap: *mut ExArgHandle) {
                 }
                 wp = unsafe { nvim_ex2_win_next(wp) };
             } else if cmdidx == cmd_tabdo {
-                if !unsafe { nvim_ex2_valid_tabpage(tp) } {
+                if unsafe { nvim_ex2_valid_tabpage(tp) } == 0 {
                     break;
                 }
                 unsafe { nvim_ex2_goto_tabpage_tp(tp, true, true) };
