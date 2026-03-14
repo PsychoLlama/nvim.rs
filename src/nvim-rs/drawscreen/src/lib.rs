@@ -2413,6 +2413,55 @@ pub extern "C" fn rs_win_draw_end(
 }
 
 // =============================================================================
+// Phase 3: default_grid_alloc, screenclear, screen_resize
+// =============================================================================
+
+extern "C" {
+    /// Check if default_grid needs reallocation (size mismatch or NULL).
+    fn nvim_default_grid_needs_alloc() -> c_int;
+    /// Perform the actual default_grid allocation and field setup.
+    fn nvim_default_grid_do_alloc();
+    /// Full screenclear implementation (C helper, preserves static state).
+    fn nvim_screenclear_impl();
+    /// Full screen_resize implementation (C helper, handles all guards and state).
+    fn nvim_screen_resize_impl(width: c_int, height: c_int);
+}
+
+/// Resize the default screen grid to Rows and Columns.
+///
+/// Returns true if resizing was performed. The static `resizing` guard is kept
+/// in the C wrapper (`default_grid_alloc`) which calls this Rust function.
+///
+/// Rust equivalent of `default_grid_alloc()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_default_grid_alloc() -> bool {
+    if nvim_default_grid_needs_alloc() == 0 {
+        return false;
+    }
+    nvim_default_grid_do_alloc();
+    true
+}
+
+/// Clear entire screen and reset state.
+///
+/// Rust equivalent of `screenclear()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_screenclear() {
+    nvim_screenclear_impl();
+}
+
+/// Set dimensions of the Nvim application "screen".
+///
+/// All guard logic (recursion check, HITRETURN/SETWSIZE, negative dimensions)
+/// is handled inside `nvim_screen_resize_impl`.
+///
+/// Rust equivalent of `screen_resize()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_drawscreen_screen_resize(width: c_int, height: c_int) {
+    nvim_screen_resize_impl(width, height);
+}
+
+// =============================================================================
 // Phase 1: win_scroll_lines
 // =============================================================================
 

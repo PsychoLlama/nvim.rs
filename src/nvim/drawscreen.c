@@ -142,11 +142,20 @@ extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
 extern void rs_win_scroll_lines(win_T *wp, int row, int line_count);
 extern int rs_showmode(void);
+extern bool rs_default_grid_alloc(void);
+extern void rs_screenclear(void);
+extern void rs_drawscreen_screen_resize(int width, int height);
 
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
 static bool resizing_autocmd = false;
 static bool conceal_cursor_used = false;
+
+// Accessors for file-statics used by drawscreen_shim.c
+void nvim_drawscreen_set_redraw_popupmenu(int val) { redraw_popupmenu = (val != 0); }
+int nvim_drawscreen_get_redraw_popupmenu(void) { return redraw_popupmenu ? 1 : 0; }
+void nvim_drawscreen_set_msg_grid_invalid(int val) { msg_grid_invalid = (val != 0); }
+void nvim_drawscreen_set_resizing_autocmd(int val) { resizing_autocmd = (val != 0); }
 
 
 /// Resize default_grid to Rows and Columns.
@@ -164,239 +173,24 @@ static bool conceal_cursor_used = false;
 bool default_grid_alloc(void)
 {
   static bool resizing = false;
-
-  // It's possible that we produce an out-of-memory message below, which
-  // will cause this function to be called again.  To break the loop, just
-  // return here.
   if (resizing) {
     return false;
   }
   resizing = true;
-
-  // Allocation of the screen buffers is done only when the size changes and
-  // when Rows and Columns have been set.
-  if ((default_grid.chars != NULL
-       && Rows == default_grid.rows
-       && Columns == default_grid.cols)
-      || Rows == 0 || Columns == 0) {
-    resizing = false;
-    return false;
-  }
-
-  // We're changing the size of the screen.
-  // - Allocate new arrays for default_grid
-  // - Move lines from the old arrays into the new arrays, clear extra
-  //   lines (unless the screen is going to be cleared).
-  // - Free the old arrays.
-  //
-  // If anything fails, make grid arrays NULL, so we don't do anything!
-  // Continuing with the old arrays may result in a crash, because the
-  // size is wrong.
-
-  grid_alloc(&default_grid, Rows, Columns, true, true);
-
-  stl_clear_click_defs(tab_page_click_defs, tab_page_click_defs_size);
-  tab_page_click_defs = stl_alloc_click_defs(tab_page_click_defs, Columns,
-                                             &tab_page_click_defs_size);
-
-  default_grid.comp_height = Rows;
-  default_grid.comp_width = Columns;
-
-  default_grid.handle = DEFAULT_GRID_HANDLE;
-
+  bool result = rs_default_grid_alloc();
   resizing = false;
-  return true;
+  return result;
 }
 
 void screenclear(void)
 {
-  msg_check_for_delay(false);
-
-  if (starting == NO_SCREEN || default_grid.chars == NULL) {
-    return;
-  }
-
-  // blank out the default grid
-  for (int i = 0; i < default_grid.rows; i++) {
-    grid_clear_line(&default_grid, default_grid.line_offset[i],
-                    default_grid.cols, true);
-  }
-
-  ui_call_grid_clear(1);  // clear the display
-  ui_comp_set_screen_valid(true);
-
-  ns_hl_fast = -1;
-
-  clear_cmdline = false;
-  mode_displayed = false;
-
-  redraw_all_later(UPD_NOT_VALID);
-  cmdline_was_last_drawn = false;
-  redraw_cmdline = true;
-  redraw_tabline = true;
-  redraw_popupmenu = true;
-  pum_invalidate();
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_floating) {
-      wp->w_redr_type = UPD_CLEAR;
-    }
-  }
-  if (must_redraw == UPD_CLEAR) {
-    must_redraw = UPD_NOT_VALID;  // no need to clear again
-  }
-  compute_cmdrow();
-  msg_row = cmdline_row;  // put cursor on last line for messages
-  msg_col = 0;
-  msg_reset_scroll();     // can't scroll back
-  msg_didany = false;
-  msg_didout = false;
-  if (HL_ATTR(HLF_MSG) > 0 && msg_use_grid() && msg_grid.chars) {
-    grid_invalidate(&msg_grid);
-    msg_grid_validate();
-    msg_grid_invalid = false;
-    clear_cmdline = true;
-  }
+  rs_screenclear();
 }
 
 /// Set dimensions of the Nvim application "screen".
 void screen_resize(int width, int height)
 {
-  // Avoid recursiveness, can happen when setting the window size causes
-  // another window-changed signal.
-  if (updating_screen || resizing_screen || rs_cmdline_number_prompt() != 0) {
-    return;
-  }
-
-  if (width < 0 || height < 0) {    // just checking...
-    return;
-  }
-
-  if (State == MODE_HITRETURN || State == MODE_SETWSIZE) {
-    // postpone the resizing
-    State = MODE_SETWSIZE;
-    return;
-  }
-
-  resizing_screen = true;
-
-  Rows = height;
-  Columns = width;
-  check_screensize();
-  if (!ui_has(kUIMessages)) {
-    // clamp 'cmdheight'
-    int max_p_ch = Rows - rs_min_rows(curtab) + 1;
-    if (p_ch > 0 && p_ch > max_p_ch) {
-      p_ch = MAX(max_p_ch, 1);
-      curtab->tp_ch_used = p_ch;
-    }
-    // clamp 'cmdheight' for other tab pages
-    FOR_ALL_TABS(tp) {
-      if (tp == curtab) {
-        continue;  // already set above
-      }
-      int max_tp_ch = Rows - rs_min_rows(tp) + 1;
-      if (tp->tp_ch_used > 0 && tp->tp_ch_used > max_tp_ch) {
-        tp->tp_ch_used = MAX(max_tp_ch, 1);
-      }
-    }
-  }
-  height = Rows;
-  width = Columns;
-  p_lines = Rows;
-  p_columns = Columns;
-
-  ui_call_grid_resize(1, width, height);
-
-  int retry_count = 0;
-  resizing_autocmd = true;
-
-  // In rare cases, autocommands may have altered Rows or Columns,
-  // so retry to check if we need to allocate the screen again.
-  while (default_grid_alloc()) {
-    // win_new_screensize will recompute floats position, but tell the
-    // compositor to not redraw them yet
-    ui_comp_set_screen_valid(false);
-    if (msg_grid.chars) {
-      msg_grid_invalid = true;
-    }
-
-    RedrawingDisabled++;
-
-    win_new_screensize();      // fit the windows in the new sized screen
-
-    comp_col();           // recompute columns for shown command and ruler
-
-    RedrawingDisabled--;
-
-    // Do not apply autocommands more than 3 times to avoid an endless loop
-    // in case applying autocommands always changes Rows or Columns.
-    if (++retry_count > 3) {
-      break;
-    }
-
-    apply_autocmds(EVENT_VIMRESIZED, NULL, NULL, false, curbuf);
-  }
-
-  resizing_autocmd = false;
-  redraw_all_later(UPD_CLEAR);
-
-  if (State != MODE_ASKMORE && State != MODE_EXTERNCMD) {
-    screenclear();
-  }
-
-  if (starting != NO_SCREEN) {
-    maketitle();
-
-    changed_line_abv_curs();
-    invalidate_botline(curwin);
-
-    // We only redraw when it's needed:
-    // - While at the more prompt or executing an external command, don't
-    //   redraw, but position the cursor.
-    // - While editing the command line, only redraw that. TODO: lies
-    // - in Ex mode, don't redraw anything.
-    // - Otherwise, redraw right now, and position the cursor.
-    if (State == MODE_ASKMORE || State == MODE_EXTERNCMD || exmode_active
-        || ((State & MODE_CMDLINE) && get_cmdline_info()->one_key)) {
-      if (State & MODE_CMDLINE) {
-        update_screen();
-      }
-      if (msg_grid.chars) {
-        msg_grid_validate();
-      }
-      // TODO(bfredl): sometimes messes up the output. Implement clear+redraw
-      // also for the pager? (or: what if the pager was just a modal window?)
-      ui_comp_set_screen_valid(true);
-      repeat_message();
-    } else {
-      if (curwin->w_p_scb) {
-        do_check_scrollbind(true);
-      }
-      if (State & MODE_CMDLINE) {
-        redraw_popupmenu = false;
-        update_screen();
-        redrawcmdline();
-        if (pum_drawn()) {
-          cmdline_pum_display(false);
-        }
-      } else {
-        update_topline(curwin);
-        if (pum_drawn()) {
-          // TODO(bfredl): rs_ins_compl_show_pum wants to redraw the screen first.
-          // For now make sure the nested update_screen() won't redraw the
-          // pum at the old position. Try to untangle this later.
-          redraw_popupmenu = false;
-          rs_ins_compl_show_pum();
-        }
-        update_screen();
-        if (redrawing()) {
-          setcursor();
-        }
-      }
-    }
-    ui_flush();
-  }
-  resizing_screen = false;
+  rs_drawscreen_screen_resize(width, height);
 }
 
 
