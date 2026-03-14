@@ -361,6 +361,8 @@ static int emsg_not_now(void);
 static char *get_emsg_source(void);
 static char *get_emsg_lnum(void);
 static bool other_sourcing_name(void);
+static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
+static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
 // Phase 4: emsg_multiline accessors
 int nvim_get_ex_exitval(void) { return ex_exitval; }
@@ -521,6 +523,20 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_got_int is defined in ex_eval.c
 int nvim_get_cmdmsg_rl(void) { return cmdmsg_rl ? 1 : 0; }
 int nvim_get_msg_grid_cols(void) { return msg_grid.cols; }
+
+// Phase 5 (msg_puts_len): wrappers for static functions and state
+void nvim_msg_puts_printf(const char *str, ptrdiff_t len) { msg_puts_printf(str, len); }
+void nvim_msg_puts_display(const char *str, int len, int hl_id)
+{
+  msg_puts_display(str, len, hl_id, false);
+}
+void nvim_msg_show_empty(void)
+{
+  ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
+                   INTEGER_OBJ(-1));
+}
+int nvim_get_headless_mode(void) { return headless_mode ? 1 : 0; }
+int nvim_default_grid_has_chars(void) { return default_grid.chars != NULL ? 1 : 0; }
 
 // Phase 1: message_filtered implementation helper (does the regex check in C)
 // This is the actual implementation; message_filtered() is replaced by
@@ -1723,61 +1739,7 @@ void msg_prt_line(const char *s, bool list)
 /// Does not handle multi-byte characters!
 
 
-/// Write a message with highlight id.
-///
-/// @param[in]  str  NUL-terminated message string.
-/// @param[in]  len  Length of the string or -1.
-/// @param[in]  hl_id  Highlight id.
-void msg_puts_len(const char *const str, const ptrdiff_t len, int hl_id, bool hist)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(len < 0 || memchr(str, 0, (size_t)len) == NULL);
-  // If redirection is on, also write to the redirection file.
-  redir_write(str, len);
-
-  // Don't print anything when using ":silent cmd" or empty message.
-  if (msg_silent != 0 || *str == NUL) {
-    if (*str == NUL && ui_has(kUIMessages)) {
-      ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
-                       INTEGER_OBJ(-1));
-    }
-    return;
-  }
-
-  if (hist) {
-    msg_hist_add(str, (int)len, hl_id);
-  }
-
-  // When writing something to the screen after it has scrolled, requires a
-  // wait-return prompt later.  Needed when scrolling, resetting
-  // need_wait_return after some prompt, and then outputting something
-  // without scrolling
-  // Not needed when only using CR to move the cursor.
-  bool overflow = !ui_has(kUIMessages) && msg_scrolled > (p_ch == 0 ? 1 : 0);
-
-  if (overflow && !msg_scrolled_ign && strcmp(str, "\r") != 0) {
-    need_wait_return = true;
-  }
-  msg_didany = true;  // remember that something was outputted
-
-  // If there is no valid screen, use fprintf so we can see error messages.
-  // If termcap is not active, we may be writing in an alternate console
-  // window, cursor positioning may not work correctly (window size may be
-  // different, e.g. for Win32 console) or we just don't know where the
-  // cursor is.
-  if (msg_use_printf()) {
-    int saved_msg_col = msg_col;
-    msg_puts_printf(str, len);
-    if (headless_mode) {
-      msg_col = saved_msg_col;
-    }
-  }
-  if (!msg_use_printf() || (headless_mode && default_grid.chars)) {
-    msg_puts_display(str, (int)len, hl_id, false);
-  }
-
-  need_fileinfo = false;
-}
+// msg_puts_len() migrated to Rust: src/nvim-rs/message/src/output.rs (rs_msg_puts_len)
 
 static void msg_ext_emit_chunk(void)
 {

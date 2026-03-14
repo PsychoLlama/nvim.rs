@@ -377,6 +377,99 @@ pub unsafe extern "C" fn rs_reset_wait_return_state() {
     nvim_set_msg_didout(0);
 }
 
+// ============================================================================
+// Phase 5: msg_puts_len migrated to Rust
+// ============================================================================
+
+extern "C" {
+    fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
+    fn nvim_msg_hist_add_len(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
+    fn msg_use_printf() -> c_int;
+    fn nvim_msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
+    fn nvim_msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int);
+    fn nvim_msg_show_empty();
+    fn nvim_get_headless_mode() -> c_int;
+    fn nvim_default_grid_has_chars() -> c_int;
+    fn nvim_get_msg_col() -> c_int;
+    fn nvim_set_msg_col(col: c_int);
+}
+
+/// Write message string with highlight and redirection.
+///
+/// This is the core low-level output routine. It:
+/// 1. Writes to any active redirection targets
+/// 2. Returns early for silent/empty messages
+/// 3. Optionally adds to message history
+/// 4. Sets need_wait_return if scrolled
+/// 5. Dispatches to printf or display rendering
+///
+/// # Arguments
+/// * `str_` - The string to write (NUL-terminated, length bytes)
+/// * `len` - Length of string, or -1 to use NUL-terminator
+/// * `hl_id` - Highlight group ID (0 for default)
+/// * `hist` - If true, add to message history
+///
+/// # Safety
+/// - `str_` must be a valid pointer to at least `len` bytes (or NUL-terminated if len == -1)
+#[export_name = "msg_puts_len"]
+pub unsafe extern "C" fn rs_msg_puts_len(
+    str_: *const std::ffi::c_char,
+    len: isize,
+    hl_id: c_int,
+    hist: bool,
+) {
+    // If redirection is on, also write to the redirection file.
+    nvim_redir_write(str_, len);
+
+    // Don't print anything when using ":silent cmd" or empty message.
+    let first_byte = *str_.cast::<u8>();
+    if nvim_get_msg_silent() != 0 || first_byte == 0 {
+        if first_byte == 0 && nvim_ui_has_messages() != 0 {
+            nvim_msg_show_empty();
+        }
+        return;
+    }
+
+    if hist {
+        nvim_msg_hist_add_len(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
+    }
+
+    // When writing something to the screen after it has scrolled, requires a
+    // wait-return prompt later.
+    let overflow = nvim_ui_has_messages() == 0 && {
+        let msg_scrolled = nvim_get_msg_scrolled();
+        let p_ch = nvim_get_p_ch();
+        let threshold = c_int::from(p_ch == 0);
+        msg_scrolled > threshold
+    };
+
+    if overflow && nvim_get_msg_scrolled_ign() == 0 {
+        // Check if str_ == "\r" - single CR character
+        let is_cr_only = *str_.cast::<u8>() == b'\r'
+            && (len < 0 || len == 1)
+            && (len >= 0 || *str_.add(1).cast::<u8>() == 0);
+        if !is_cr_only {
+            nvim_set_need_wait_return(1);
+        }
+    }
+    nvim_set_msg_didany(1); // remember that something was outputted
+
+    if msg_use_printf() != 0 {
+        let saved_msg_col = nvim_get_msg_col();
+        nvim_msg_puts_printf(str_, len);
+        if nvim_get_headless_mode() != 0 {
+            nvim_set_msg_col(saved_msg_col);
+        }
+    }
+    if msg_use_printf() == 0
+        || (nvim_get_headless_mode() != 0 && nvim_default_grid_has_chars() != 0)
+    {
+        nvim_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
+    }
+
+    nvim_set_need_fileinfo(0);
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions
