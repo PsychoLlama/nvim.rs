@@ -20,7 +20,7 @@ use crate::{HIST_INVALID, NUMBUFLEN, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 #[export_name = "f_histadd"]
 pub unsafe extern "C" fn rs_f_histadd(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     ffi::nvim_cmdhist_rettv_set_number(rettv, 0);
-    if ffi::nvim_cmdhist_check_secure() != 0 {
+    if ffi::rs_check_secure() != 0 {
         return;
     }
     let tv0 = ffi::nvim_cmdhist_tv_idx(argvars, 0);

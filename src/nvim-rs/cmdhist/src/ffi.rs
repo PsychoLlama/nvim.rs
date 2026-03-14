@@ -113,6 +113,6 @@ extern "C" {
     pub fn nvim_cmdhist_rettv_set_number(rettv: TypvalPtr, val: i64);
     pub fn nvim_cmdhist_rettv_set_string(rettv: TypvalPtr, s: *mut c_char);
     pub fn nvim_cmdhist_rettv_set_type(rettv: TypvalPtr, typ: c_int);
-    pub fn nvim_cmdhist_check_secure() -> c_int;
+    pub fn rs_check_secure() -> c_int;
     pub fn nvim_cmdhist_strlen(s: *const c_char) -> usize;
 }
