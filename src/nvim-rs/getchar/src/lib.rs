@@ -20,6 +20,7 @@ pub mod buffheader;
 pub mod input;
 pub mod macro_recording;
 pub mod mapping;
+pub mod orchestrator;
 pub mod stuff;
 pub mod typebuf;
 

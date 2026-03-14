@@ -59,6 +59,17 @@ char *get_recorded(void);
 // Typeahead / buffer flushing
 void flush_buffers(flush_buffers_T flush_typeahead);
 
+// Orchestrator functions (implemented in Rust, src/nvim-rs/getchar/src/orchestrator.rs)
+void before_blocking(void);
+int safe_vgetc(void);
+int plain_vgetc(void);
+int vpeekc(void);
+int vpeekc_any(void);
+bool char_avail(void);
+
+// Internal typeahead helper (used by Rust orchestrators)
+int vgetorpeek(bool advance);
+
 // Typeahead input state
 int ins_typebuf(char *str, int noremap, int offset, bool nottyped, bool silent);
 void del_typebuf(int len, int offset);

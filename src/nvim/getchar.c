@@ -250,13 +250,6 @@ ret_false:
   return retval;
 }
 
-/// Write typed characters to script file.
-/// If recording is on put the character in the record buffer.
-static void gotchars(const uint8_t *chars, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rs_gotchars(chars, len);
-}
 
 /// Make "typebuf" empty and allocate new buffers.
 static void alloc_typebuf(void)
@@ -306,12 +299,6 @@ static int old_mod_mask;    ///< mod_mask for ungotten character
 // old_mouse_grid, old_mouse_row, old_mouse_col moved to Rust (input.rs) -- Phase 4
 static int old_KeyStuffed;  ///< whether old_char was stuffed
 
-static bool can_get_old_char(void)
-{
-  // If the old character was not stuffed and characters have been added to
-  // the stuff buffer, need to first get the stuffed characters instead.
-  return old_char != -1 && (old_KeyStuffed || stuff_empty());
-}
 
 /// Save all three kinds of typeahead, so that the user must type at a prompt.
 void save_typeahead(tasave_T *tp)
@@ -449,15 +436,6 @@ bool open_scriptin(char *scriptin_name)
   return true;
 }
 
-/// This function is called just before doing a blocking wait.  Thus after
-/// waiting 'updatetime' for a character to arrive.
-void before_blocking(void)
-{
-  updatescript(0);
-  if (may_garbage_collect) {
-    garbage_collect(false);
-  }
-}
 
 /// updatescript() is called when a character can be written to the script
 /// file or when we have waited some time for a character (c == 0).
@@ -759,73 +737,6 @@ int vgetc(void)
   return c;
 }
 
-/// Like vgetc(), but never return a NUL when called recursively, get a key
-/// directly from the user (ignoring typeahead).
-int safe_vgetc(void)
-{
-  int c = vgetc();
-  if (c == NUL) {
-    c = get_keystroke(NULL);
-  }
-  return c;
-}
-
-/// Like safe_vgetc(), but loop to handle K_IGNORE.
-/// Also ignore scrollbar events.
-int plain_vgetc(void)
-{
-  int c;
-
-  do {
-    c = safe_vgetc();
-  } while (c == K_IGNORE
-           || c == K_VER_SCROLLBAR || c == K_HOR_SCROLLBAR
-           || c == K_MOUSEMOVE);
-  return c;
-}
-
-/// Check if a character is available, such that vgetc() will not block.
-/// If the next character is a special character or multi-byte, the returned
-/// character is not valid!.
-/// Returns NUL if no character is available.
-int vpeekc(void)
-{
-  if (rs_can_get_old_char()) {
-    return rs_get_old_char();
-  }
-  return vgetorpeek(false);
-}
-
-/// Check if any character is available, also half an escape sequence.
-/// Trick: when no typeahead found, but there is something in the typeahead
-/// buffer, it must be an ESC that is recognized as the start of a key code.
-int vpeekc_any(void)
-{
-  int c = vpeekc();
-  if (c == NUL && typebuf.tb_len > 0) {
-    c = ESC;
-  }
-  return c;
-}
-
-/// Call vpeekc() without causing anything to be mapped.
-/// @return  true if a character is available, false otherwise.
-bool char_avail(void)
-{
-  if (test_disable_char_avail) {
-    return false;
-  }
-  no_mapping++;
-  int retval = vpeekc();
-  no_mapping--;
-  return retval != NUL;
-}
-
-/// Check if a character is available (accessor for Rust).
-int nvim_char_avail(void)
-{
-  return char_avail() ? 1 : 0;
-}
 
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
 
@@ -1299,7 +1210,7 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
     // Write chars to script file(s).
     // Note: :lmap mappings are written *after* being applied. #5658
     if (keylen > typebuf.tb_maplen && (mp->m_mode & MODE_LANGMAP) == 0) {
-      gotchars(typebuf.tb_buf + typebuf.tb_off + typebuf.tb_maplen,
+      rs_gotchars(typebuf.tb_buf + typebuf.tb_off + typebuf.tb_maplen,
                (size_t)(keylen - typebuf.tb_maplen));
     }
 
@@ -1396,7 +1307,7 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
       // If this is a LANGMAP mapping, then we didn't record the keys
       // at the start of the function and have to record them now.
       if (keylen > typebuf.tb_maplen && (mp->m_mode & MODE_LANGMAP) != 0) {
-        gotchars((uint8_t *)map_str, strlen(map_str));
+        rs_gotchars((uint8_t *)map_str, strlen(map_str));
       }
 
       if (save_m_noremap != REMAP_YES) {
@@ -1454,7 +1365,7 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
 /// When `no_mapping` (global) is zero, checks for mappings in the current mode.
 /// Only returns one byte (of a multi-byte character).
 /// K_SPECIAL may be escaped, need to get two more bytes then.
-static int vgetorpeek(bool advance)
+int vgetorpeek(bool advance)
 {
   int c;
   bool timedout = false;  // waited for more than 'timeoutlen'
@@ -1548,7 +1459,7 @@ static int vgetorpeek(bool advance)
             // Also record this character, it might be needed to
             // get out of Insert mode.
             *typebuf.tb_buf = (uint8_t)c;
-            gotchars(typebuf.tb_buf, 1);
+            rs_gotchars(typebuf.tb_buf, 1);
           }
           cmd_silent = false;
 
@@ -1578,7 +1489,7 @@ static int vgetorpeek(bool advance)
               } else {
                 KeyTyped = true;
                 // write char to script file(s)
-                gotchars(typebuf.tb_buf + typebuf.tb_off, 1);
+                rs_gotchars(typebuf.tb_buf + typebuf.tb_off, 1);
               }
               KeyNoremap = (unsigned char)typebuf.tb_noremap[typebuf.tb_off];
               del_typebuf(1, 0);
@@ -2505,10 +2416,16 @@ void nvim_set_mouse_col(int val)
   mouse_col = val;
 }
 
-// Wrapper for can_get_old_char
+// Wrapper for can_get_old_char logic (can_get_old_char() moved to Rust orchestrator)
 int nvim_can_get_old_char(void)
 {
-  return can_get_old_char() ? 1 : 0;
+  return (old_char != -1 && (old_KeyStuffed || stuff_empty())) ? 1 : 0;
+}
+
+/// Check if a character is available (accessor for Rust crates that need c_int return).
+int nvim_char_avail(void)
+{
+  return char_avail() ? 1 : 0;
 }
 
 void nvim_add_on_key_ignore_len(size_t val)
