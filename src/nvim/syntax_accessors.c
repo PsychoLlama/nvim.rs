@@ -80,17 +80,11 @@ extern void rs_syntax_sync_clear(void);
 extern void rs_clear_keywtab(hashtab_T *ht);
 // rs_invalidate_current_state: Rust function called via #[link_name] bypasses nvim_syn_invalidate_current_state
 
-// Phase 9: state_entry.rs Rust implementations
-extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
-
 // Phase 11: commands.rs Rust implementations for do_onoff and maybe_enable
 
 // Phase 11: keyword.rs Rust implementations for keyword_find and hash_insert_keyword
 
 // Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
-
-// Phase 9.2: state_ops.rs Rust implementations
-extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 
 static bool did_syntax_onoff = false;
 
@@ -687,11 +681,6 @@ void nvim_syn_set_expand_what(int what) { expand_what = what; }
 
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
 
-synstate_T *nvim_syn_stack_alloc_entry(int lnum, synstate_T *after)
-{
-  return rs_syn_stack_alloc_entry(lnum, after);
-}
-
 void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
 
 
@@ -827,16 +816,6 @@ int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
-
-/// Walk back through transparent items in current_state starting from item.
-/// Returns the previous item if:
-///   - item has HL_TRANS_CONT flag AND
-///   - item is not the first element of current_state
-/// Otherwise returns item unchanged.
-stateitem_T *nvim_stateitem_prev_if_trans_cont(stateitem_T *item)
-{
-  return rs_stateitem_prev_if_trans_cont(item);
-}
 
 /// Get SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag
 int nvim_syn_get_pattern_sp_syn_inc_tag(int idx)
@@ -1369,9 +1348,6 @@ void *nvim_syn_vim_regcomp(char *pat, int flags) { return vim_regcomp(pat, flags
 
 void nvim_syn_vim_regfree(void *regprog) { vim_regfree(regprog); }
 
-int nvim_syn_foldmethod_is_syntax_curwin(void) { return rs_foldmethodIsSyntax(curwin); }
-
-void nvim_syn_fold_update_all_curwin(void) { rs_foldUpdateAll(curwin); }
 
 
 int nvim_syn_utf_ptr2char(const char *p) { return utf_ptr2char(p); }

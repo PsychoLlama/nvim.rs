@@ -70,9 +70,12 @@ extern "C" {
         col: i32,
     ) -> c_int;
 
-    // Fold
-    fn nvim_syn_foldmethod_is_syntax_curwin() -> c_int;
-    fn nvim_syn_fold_update_all_curwin();
+    // Fold — call rs_ symbols directly, passing curwin
+    fn nvim_get_curwin() -> *mut c_void;
+    #[link_name = "rs_foldmethodIsSyntax"]
+    fn rs_foldmethod_is_syntax(win: *mut c_void) -> c_int;
+    #[link_name = "rs_foldUpdateAll"]
+    fn rs_fold_update_all(win: *mut c_void);
 
 }
 
@@ -387,8 +390,8 @@ pub unsafe fn get_syn_options_impl(
 
                 nvim_syn_xfree(gname as *mut c_void);
                 arg = nvim_syn_skipwhite(arg);
-            } else if flag.flags == HL_FOLD && nvim_syn_foldmethod_is_syntax_curwin() != 0 {
-                nvim_syn_fold_update_all_curwin();
+            } else if flag.flags == HL_FOLD && rs_foldmethod_is_syntax(nvim_get_curwin()) != 0 {
+                rs_fold_update_all(nvim_get_curwin());
             }
         }
     }
