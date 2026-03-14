@@ -395,6 +395,36 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
 
+// Phase 1: message_filtered implementation helper (does the regex check in C)
+// This is the actual implementation; message_filtered() is replaced by
+// Rust #[export_name = "message_filtered"] which calls this.
+bool nvim_message_filtered_impl(const char *msg)
+{
+  if (cmdmod.cmod_filter_regmatch.regprog == NULL) {
+    return false;
+  }
+  bool match = vim_regexec(&cmdmod.cmod_filter_regmatch, msg, 0);
+  return cmdmod.cmod_filter_force ? match : !match;
+}
+
+// Phase 1: transchar_buf with NULL buffer (for emsg_invreg)
+const char *nvim_transchar_buf_null(int c) { return transchar_buf(NULL, c); }
+
+// Phase 1: msg_ui_refresh and msg_ui_flush implementation helpers
+void nvim_msg_ui_refresh_impl(void)
+{
+  if (ui_has(kUIMultigrid) && msg_grid.chars) {
+    ui_call_grid_resize(msg_grid.handle, msg_grid.cols, msg_grid.rows);
+    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
+  }
+}
+void nvim_msg_ui_flush_impl(void)
+{
+  if (ui_has(kUIMultigrid) && msg_grid.chars && msg_grid.pending_comp_index_update) {
+    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
+  }
+}
+
 // Phase 3.4: Display state accessors (used by Rust display.rs)
 void nvim_set_cmdline_row(int val) { cmdline_row = val; }
 const char *nvim_get_keep_msg(void) { return keep_msg; }
@@ -775,13 +805,10 @@ int smsg_keep(int hl_id, const char *s, ...)
 static int last_sourcing_lnum = 0;
 static char *last_sourcing_name = NULL;
 
-/// Reset the last used sourcing name/lnum.  Makes sure it is displayed again
-/// for the next error message;
-void reset_last_sourcing(void)
-{
-  XFREE_CLEAR(last_sourcing_name);
-  last_sourcing_lnum = 0;
-}
+// Phase 1: sourcing state accessors for reset_last_sourcing (Rust implementation)
+void nvim_clear_last_sourcing_name(void) { XFREE_CLEAR(last_sourcing_name); }
+int nvim_get_last_sourcing_lnum(void) { return last_sourcing_lnum; }
+void nvim_set_last_sourcing_lnum(int val) { last_sourcing_lnum = val; }
 
 /// @return  true if "SOURCING_NAME" differs from "last_sourcing_name".
 static bool other_sourcing_name(void)
@@ -2080,18 +2107,6 @@ void msg_cursor_goto(int row, int col)
   ui_grid_cursor_goto(grid->handle, row, col);
 }
 
-/// @return  true when ":filter pattern" was used and "msg" does not match
-///          "pattern".
-bool message_filtered(const char *msg)
-{
-  if (cmdmod.cmod_filter_regmatch.regprog == NULL) {
-    return false;
-  }
-
-  bool match = vim_regexec(&cmdmod.cmod_filter_regmatch, msg, 0);
-  return cmdmod.cmod_filter_force ? match : !match;
-}
-
 
 /// Scroll the screen up one line for displaying the next message line.
 void msg_scroll_up(bool may_throttle, bool zerocmd)
@@ -2191,21 +2206,6 @@ void msg_reset_scroll(void)
   msg_scrolled = 0;
   msg_scrolled_at_flush = 0;
   msg_grid_scroll_discount = 0;
-}
-
-void msg_ui_refresh(void)
-{
-  if (ui_has(kUIMultigrid) && msg_grid.chars) {
-    ui_call_grid_resize(msg_grid.handle, msg_grid.cols, msg_grid.rows);
-    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
-  }
-}
-
-void msg_ui_flush(void)
-{
-  if (ui_has(kUIMultigrid) && msg_grid.chars && msg_grid.pending_comp_index_update) {
-    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
-  }
 }
 
 /// Increment "msg_scrolled".

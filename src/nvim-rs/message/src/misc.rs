@@ -23,10 +23,13 @@ extern "C" {
 
     // Note: msg_source is wrapped in error.rs
 
-    // UI refresh
-    fn msg_ui_refresh();
-    fn msg_ui_flush();
+    // UI refresh (Phase 1: implementations moved to Rust, C provides accessor wrappers)
+    fn nvim_msg_ui_refresh_impl();
+    fn nvim_msg_ui_flush_impl();
     fn msg_scroll_flush();
+
+    // Phase 1: message_filtered C implementation
+    fn nvim_message_filtered_impl(msg: *const c_char) -> bool;
 
     // For msg_clr_cmdline
     fn nvim_get_cmdline_row() -> c_int;
@@ -265,20 +268,24 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
 
 /// Refresh the message area UI.
 ///
+/// Calls ui_call_grid_resize and ui_ext_msg_set_pos when kUIMultigrid is active.
+///
 /// # Safety
-/// Calls C function that modifies UI state.
-#[no_mangle]
+/// Calls C accessor that modifies UI state.
+#[export_name = "msg_ui_refresh"]
 pub unsafe extern "C" fn rs_msg_ui_refresh() {
-    msg_ui_refresh();
+    nvim_msg_ui_refresh_impl();
 }
 
 /// Flush pending UI updates for messages.
 ///
+/// Updates comp index position when kUIMultigrid is active.
+///
 /// # Safety
-/// Calls C function that emits UI events.
-#[no_mangle]
+/// Calls C accessor that emits UI events.
+#[export_name = "msg_ui_flush"]
 pub unsafe extern "C" fn rs_msg_ui_flush() {
-    msg_ui_flush();
+    nvim_msg_ui_flush_impl();
 }
 
 /// Flush scroll-related UI updates.
@@ -455,6 +462,27 @@ pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
     msg_hist_clear(messages_history_new);
 
     OK
+}
+
+// ============================================================================
+// Filter Check Function (Phase 1)
+// ============================================================================
+
+/// Check if a message is filtered by the current `:filter` pattern.
+///
+/// Returns true when `:filter pattern` was used and `msg` does not match
+/// `pattern` (or matches if `filter!` was used).
+///
+/// # Arguments
+/// * `msg` - The message string to test against the filter
+///
+/// # Safety
+/// - `msg` must be a valid NUL-terminated C string
+/// - Calls C accessor that performs regex matching
+#[must_use]
+#[export_name = "message_filtered"]
+pub unsafe extern "C" fn rs_message_filtered(msg: *const c_char) -> bool {
+    nvim_message_filtered_impl(msg)
 }
 
 #[cfg(test)]

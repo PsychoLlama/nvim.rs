@@ -466,7 +466,10 @@ extern "C" {
 
     // Source info functions
     fn msg_source(hl_id: c_int);
-    fn reset_last_sourcing();
+
+    // Phase 1: sourcing state accessors for reset_last_sourcing
+    fn nvim_clear_last_sourcing_name();
+    fn nvim_set_last_sourcing_lnum(val: c_int);
 }
 
 use std::ffi::c_char;
@@ -559,11 +562,14 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 /// Clears the cached source name/line so it will be
 /// displayed again for the next error.
 ///
+/// Equivalent to the C function `reset_last_sourcing()`.
+///
 /// # Safety
-/// Calls C function.
-#[no_mangle]
+/// Calls C accessor functions that manage allocated memory.
+#[export_name = "reset_last_sourcing"]
 pub unsafe extern "C" fn rs_reset_last_sourcing() {
-    reset_last_sourcing();
+    nvim_clear_last_sourcing_name();
+    nvim_set_last_sourcing_lnum(0);
 }
 
 // ============================================================================
