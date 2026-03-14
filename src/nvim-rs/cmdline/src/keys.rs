@@ -9,7 +9,7 @@
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // =============================================================================
 // Key Code Constants
@@ -616,6 +616,298 @@ pub extern "C" fn rs_should_free_lookfor(key: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_is_stab_to_ctrl_p(key: c_int, p_wc: c_int) -> c_int {
     c_int::from(is_stab_to_ctrl_p(key, p_wc))
+}
+
+// =============================================================================
+// Phase 5: command_line_handle_ctrl_bsl, command_line_insert_reg,
+//          command_line_erase_chars
+// =============================================================================
+
+// Return codes matching C enum in ex_getln.c
+const CMDLINE_NOT_CHANGED: c_int = 1;
+const CMDLINE_CHANGED: c_int = 2;
+const GOTO_NORMAL_MODE: c_int = 3;
+const PROCESS_NEXT_KEY: c_int = 4;
+
+unsafe extern "C" {
+    // Getters/setters for globals needed by these functions
+    fn nvim_get_ccline_cmdfirstc() -> c_int;
+    fn nvim_get_ccline_cmdpos() -> c_int;
+    fn nvim_get_ccline_cmdlen() -> c_int;
+    fn nvim_get_ccline_cmdbuff() -> *mut c_char;
+    fn nvim_set_ccline_cmdpos(pos: c_int);
+    fn nvim_set_ccline_cmdlen(len: c_int);
+    fn nvim_get_ccline_cmdprompt() -> *mut c_char;
+    fn nvim_set_ccline_special_char(c: c_int);
+    fn nvim_get_cmdline_star_count() -> c_int;
+    fn nvim_get_new_cmdpos() -> c_int;
+    fn nvim_set_new_cmdpos(val: c_int);
+    fn nvim_get_key_typed_cmdline() -> c_int;
+    fn nvim_set_key_typed(val: c_int);
+    fn nvim_inc_textlock();
+    fn nvim_dec_textlock();
+    fn nvim_get_no_mapping() -> c_int;
+    fn nvim_set_no_mapping(val: c_int);
+    fn nvim_get_allow_keys() -> c_int;
+    fn nvim_set_allow_keys(val: c_int);
+    fn nvim_set_got_int(val: c_int);
+    fn nvim_set_did_emsg(val: c_int);
+    fn nvim_set_emsg_on_display(val: c_int);
+    fn nvim_get_exmode_active() -> bool;
+    fn nvim_get_cmd_silent() -> c_int;
+    fn nvim_set_redraw_cmdline(val: bool);
+    fn ui_has(what: c_int) -> c_int;
+    fn nvim_set_msg_col(val: c_int);
+    fn msg_putchar(c: c_int);
+    fn realloc_cmdbuff(len: c_int) -> c_int;
+    fn nvim_strcpy_cmdbuff(src: *const c_char);
+    fn dealloc_cmdbuff();
+    fn nvim_plain_vgetc_wrapper() -> c_int;
+    fn vungetc(c: c_int);
+    fn get_expr_register() -> c_int;
+    fn get_expr_line() -> *mut c_char;
+    fn xfree(ptr: *mut c_char);
+    fn beep_flush();
+    fn nvim_cmdline_paste(regname: c_int, literally: bool, remcr: bool) -> bool;
+    fn aborting() -> c_int;
+    fn rs_is_literal_register(regname: c_int) -> c_int;
+    fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int;
+    fn putcmdline(c: c_char, shift: bool);
+}
+
+const K_UI_CMDLINE: c_int = 24; // kUICmdline
+
+/// Handle CTRL-\ in command-line mode.
+/// Rust replacement for `command_line_handle_ctrl_bsl(CommandLineState *s)`.
+/// The C wrapper passes `&s->c` and `&s->gotesc`.
+///
+/// # Safety
+/// `c_ptr` and `gotesc_ptr` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
+    c_ptr: *mut c_int,
+    gotesc_ptr: *mut bool,
+) -> c_int {
+    nvim_set_no_mapping(nvim_get_no_mapping() + 1);
+    nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+    let c = nvim_plain_vgetc_wrapper();
+    *c_ptr = c;
+    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+    nvim_set_allow_keys(nvim_get_allow_keys() - 1);
+
+    // CTRL-\ e doesn't work when obtaining an expression, unless it is in a mapping.
+    if c != CTRL_N
+        && c != CTRL_G
+        && (c != b'e' as c_int
+            || (nvim_get_ccline_cmdfirstc() == b'=' as c_int && nvim_get_key_typed_cmdline() != 0)
+            || nvim_get_cmdline_star_count() > 0)
+    {
+        vungetc(c);
+        return PROCESS_NEXT_KEY;
+    }
+
+    if c == b'e' as c_int {
+        // Replace command line with result of an expression.
+        let cmdpos = nvim_get_ccline_cmdpos();
+        let cmdlen = nvim_get_ccline_cmdlen();
+        if cmdpos == cmdlen {
+            nvim_set_new_cmdpos(99999); // keep at end
+        } else {
+            nvim_set_new_cmdpos(cmdpos);
+        }
+
+        let expr_reg = get_expr_register();
+        *c_ptr = expr_reg;
+        if expr_reg == b'=' as c_int {
+            // Evaluate the expression. Set textlock to avoid nasty things.
+            nvim_inc_textlock();
+            let p = get_expr_line();
+            nvim_dec_textlock();
+
+            if !p.is_null() {
+                let mut len: c_int = 0;
+                while *p.add(len as usize) != 0 {
+                    len += 1;
+                }
+                realloc_cmdbuff(len + 1);
+                nvim_set_ccline_cmdlen(len);
+                nvim_strcpy_cmdbuff(p);
+                xfree(p);
+
+                // Restore cursor or use the position from set_cmdline_pos().
+                let new_cmdpos = nvim_get_new_cmdpos();
+                let new_pos = if new_cmdpos < nvim_get_ccline_cmdlen() {
+                    new_cmdpos
+                } else {
+                    nvim_get_ccline_cmdlen()
+                };
+                nvim_set_ccline_cmdpos(new_pos);
+                nvim_set_key_typed(0); // Don't do p_wc completion.
+                crate::screen::redrawcmd_rs();
+                return CMDLINE_CHANGED;
+            }
+        }
+        beep_flush();
+        nvim_set_got_int(0); // don't abandon the command line
+        nvim_set_did_emsg(0);
+        nvim_set_emsg_on_display(0);
+        crate::screen::redrawcmd_rs();
+        return CMDLINE_NOT_CHANGED;
+    }
+
+    *gotesc_ptr = true; // will free ccline.cmdbuff after putting it in history
+    GOTO_NORMAL_MODE
+}
+
+/// Handle CTRL-R in command-line mode.
+/// Rust replacement for `command_line_insert_reg(CommandLineState *s)`.
+/// The C wrapper passes `&s->c` and `&s->gotesc`.
+///
+/// # Safety
+/// `c_ptr` and `gotesc_ptr` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_command_line_insert_reg(
+    c_ptr: *mut c_int,
+    gotesc_ptr: *mut bool,
+) -> c_int {
+    let save_new_cmdpos = nvim_get_new_cmdpos();
+
+    putcmdline(b'"' as c_char, true);
+    nvim_set_no_mapping(nvim_get_no_mapping() + 1);
+    nvim_set_allow_keys(nvim_get_allow_keys() + 1);
+    let mut i = nvim_plain_vgetc_wrapper(); // CTRL-R <char>
+    *c_ptr = i;
+    if i == CTRL_O {
+        i = CTRL_R; // CTRL-R CTRL-O == CTRL-R CTRL-R
+    }
+    if i == CTRL_R {
+        *c_ptr = nvim_plain_vgetc_wrapper(); // CTRL-R CTRL-R <char>
+    }
+    nvim_set_no_mapping(nvim_get_no_mapping() - 1);
+    nvim_set_allow_keys(nvim_get_allow_keys() - 1);
+
+    // Insert the result of an expression.
+    nvim_set_new_cmdpos(-1);
+    let c = *c_ptr;
+    if c == b'=' as c_int {
+        if nvim_get_ccline_cmdfirstc() == b'=' as c_int // can't do this recursively
+            || nvim_get_cmdline_star_count() > 0
+        // or when typing a password
+        {
+            beep_flush();
+            *c_ptr = ESC;
+        } else {
+            *c_ptr = get_expr_register();
+        }
+    }
+
+    let mut literally = false;
+    let c = *c_ptr;
+    if c != ESC {
+        // use ESC to cancel inserting register
+        literally = i == CTRL_R || rs_is_literal_register(c) != 0;
+        nvim_cmdline_paste(c, literally, false);
+
+        // When there was a serious error, abort getting the command line.
+        if aborting() != 0 {
+            *gotesc_ptr = true; // will free ccline.cmdbuff after putting it in history
+            return GOTO_NORMAL_MODE;
+        }
+        nvim_set_key_typed(0); // Don't do p_wc completion.
+        let new_pos = nvim_get_new_cmdpos();
+        if new_pos >= 0 {
+            // set_cmdline_pos() was used
+            let cmdlen = nvim_get_ccline_cmdlen();
+            nvim_set_ccline_cmdpos(if new_pos < cmdlen { new_pos } else { cmdlen });
+        }
+    }
+    nvim_set_new_cmdpos(save_new_cmdpos);
+
+    // remove the double quote
+    nvim_set_ccline_special_char(0);
+    crate::screen::redrawcmd_rs();
+
+    // With "literally": the command line has already changed.
+    // Else: the text has been stuffed, but the command line didn't change yet.
+    if literally {
+        CMDLINE_CHANGED
+    } else {
+        CMDLINE_NOT_CHANGED
+    }
+}
+
+/// Handle backspace, delete, and CTRL-W in command-line mode.
+/// Rust replacement for `command_line_erase_chars(CommandLineState *s)`.
+/// The C wrapper passes `s->c`, `s->indent`, and `&s->is_state`.
+///
+/// # Safety
+/// `is_state` must be a valid non-null pointer to an IncsearchStateT.
+#[allow(clippy::too_many_lines)]
+#[no_mangle]
+pub unsafe extern "C" fn rs_command_line_erase_chars(
+    c: c_int,
+    indent: c_int,
+    is_state: *mut crate::search::IncsearchStateT,
+) -> c_int {
+    let mut c = c;
+    if c == K_KDEL {
+        c = K_DEL;
+    }
+
+    // Delete current character is the same as backspace on next
+    // character, except at end of line
+    let cmdpos = nvim_get_ccline_cmdpos();
+    let cmdlen = nvim_get_ccline_cmdlen();
+    if c == K_DEL && cmdpos != cmdlen {
+        nvim_set_ccline_cmdpos(cmdpos + 1);
+    }
+    if c == K_DEL {
+        let cmdbuff = nvim_get_ccline_cmdbuff();
+        let cmdpos = nvim_get_ccline_cmdpos();
+        let off = mb_off_next(cmdbuff, cmdbuff.add(cmdpos as usize));
+        nvim_set_ccline_cmdpos(cmdpos + off);
+    }
+
+    let cmdpos = nvim_get_ccline_cmdpos();
+    if cmdpos > 0 {
+        let result = if c == CTRL_W {
+            crate::edit::rs_cmdline_delete_word_before()
+        } else {
+            crate::edit::rs_cmdline_delete_char_before()
+        };
+
+        if result > 0 {
+            // Line was changed
+            if nvim_get_ccline_cmdlen() == 0 {
+                (*is_state).search_start = (*is_state).save_cursor;
+                // save view settings, so that the screen won't be restored at the wrong position
+                (*is_state).old_viewstate = (*is_state).init_viewstate;
+            }
+            crate::screen::redrawcmd_rs();
+            return CMDLINE_CHANGED;
+        }
+        return CMDLINE_NOT_CHANGED;
+    } else if nvim_get_ccline_cmdlen() == 0
+        && c != CTRL_W
+        && nvim_get_ccline_cmdprompt().is_null()
+        && indent == 0
+    {
+        // In ex and debug mode it doesn't make sense to return.
+        if nvim_get_exmode_active() || nvim_get_ccline_cmdfirstc() == b'>' as c_int {
+            return CMDLINE_NOT_CHANGED;
+        }
+
+        dealloc_cmdbuff(); // no commandline to return
+
+        if nvim_get_cmd_silent() == 0 && ui_has(K_UI_CMDLINE) == 0 {
+            nvim_set_msg_col(0);
+            msg_putchar(b' ' as c_int); // delete ':'
+        }
+        (*is_state).search_start = (*is_state).save_cursor;
+        nvim_set_redraw_cmdline(true);
+        return GOTO_NORMAL_MODE;
+    }
+    CMDLINE_CHANGED
 }
 
 // =============================================================================

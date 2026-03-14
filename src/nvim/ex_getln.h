@@ -74,6 +74,11 @@ void redrawcmd(void);
 void draw_cmdline(int start, int len);
 void put_on_cmdline(const char *str, int len, bool redraw);
 
+// Phase 67.5: CommandLineState helper functions implemented in Rust
+int rs_command_line_handle_ctrl_bsl(int *c, bool *gotesc);
+int rs_command_line_insert_reg(int *c, bool *gotesc);
+int rs_command_line_erase_chars(int c, int indent, void *is_state);
+
 #ifdef __cplusplus
 }
 #endif

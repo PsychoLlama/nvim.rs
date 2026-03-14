@@ -1010,68 +1010,10 @@ static int command_line_check(VimState *state)
 /// Handle CTRL-\ pressed in Command-line mode:
 /// - CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode.
 /// - CTRL-\ e prompts for an expression.
+// command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
 static int command_line_handle_ctrl_bsl(CommandLineState *s)
 {
-  no_mapping++;
-  allow_keys++;
-  s->c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-
-  // CTRL-\ e doesn't work when obtaining an expression, unless it
-  // is in a mapping.
-  if (s->c != Ctrl_N
-      && s->c != Ctrl_G
-      && (s->c != 'e'
-          || (ccline.cmdfirstc == '=' && KeyTyped)
-          || cmdline_star > 0)) {
-    vungetc(s->c);
-    return PROCESS_NEXT_KEY;
-  }
-
-  if (s->c == 'e') {
-    // Replace the command line with the result of an expression.
-    // This will call getcmdline() recursively in get_expr_register().
-    if (ccline.cmdpos == ccline.cmdlen) {
-      new_cmdpos = 99999;           // keep it at the end
-    } else {
-      new_cmdpos = ccline.cmdpos;
-    }
-
-    s->c = get_expr_register();
-    if (s->c == '=') {
-      // Evaluate the expression.  Set "textlock" to avoid nasty things
-      // like going to another buffer.
-      textlock++;
-      char *p = get_expr_line();
-      textlock--;
-
-      if (p != NULL) {
-        int len = (int)strlen(p);
-        realloc_cmdbuff(len + 1);
-        ccline.cmdlen = len;
-        STRCPY(ccline.cmdbuff, p);
-        xfree(p);
-
-        // Restore the cursor or use the position set with
-        // set_cmdline_pos().
-        ccline.cmdpos = MIN(ccline.cmdlen, new_cmdpos);
-
-        KeyTyped = false;                 // Don't do p_wc completion.
-        redrawcmd();
-        return CMDLINE_CHANGED;
-      }
-    }
-    beep_flush();
-    got_int = false;                // don't abandon the command line
-    did_emsg = false;
-    emsg_on_display = false;
-    redrawcmd();
-    return CMDLINE_NOT_CHANGED;
-  }
-
-  s->gotesc = true;  // will free ccline.cmdbuff after putting it in history
-  return GOTO_NORMAL_MODE;
+  return rs_command_line_handle_ctrl_bsl(&s->c, &s->gotesc);
 }
 
 /// Completion for 'wildchar' or 'wildcharm' key.
@@ -1595,62 +1537,10 @@ static int may_do_command_line_next_incsearch(int firstc, int count, incsearch_s
   return FAIL;
 }
 
-/// Handle backspace, delete and CTRL-W keys in the command-line mode.
-/// Uses Rust edit functions for the core deletion logic.
+// command_line_erase_chars() is implemented in Rust (cmdline crate, keys.rs).
 static int command_line_erase_chars(CommandLineState *s)
 {
-  if (s->c == K_KDEL) {
-    s->c = K_DEL;
-  }
-
-  // Delete current character is the same as backspace on next
-  // character, except at end of line
-  if (s->c == K_DEL && ccline.cmdpos != ccline.cmdlen) {
-    ccline.cmdpos++;
-  }
-  if (s->c == K_DEL) {
-    ccline.cmdpos += mb_off_next(ccline.cmdbuff, ccline.cmdbuff + ccline.cmdpos);
-  }
-
-  if (ccline.cmdpos > 0) {
-    // Use Rust edit functions for deletion
-    int result;
-    if (s->c == Ctrl_W) {
-      result = rs_cmdline_delete_word_before();
-    } else {
-      result = rs_cmdline_delete_char_before();
-    }
-
-    if (result > 0) {
-      // Line was changed
-      if (ccline.cmdlen == 0) {
-        s->is_state.search_start = s->is_state.save_cursor;
-        // save view settings, so that the screen won't be restored at the
-        // wrong position
-        s->is_state.old_viewstate = s->is_state.init_viewstate;
-      }
-      redrawcmd();
-      return CMDLINE_CHANGED;
-    }
-    return CMDLINE_NOT_CHANGED;
-  } else if (ccline.cmdlen == 0 && s->c != Ctrl_W
-             && ccline.cmdprompt == NULL && s->indent == 0) {
-    // In ex and debug mode it doesn't make sense to return.
-    if (exmode_active || ccline.cmdfirstc == '>') {
-      return CMDLINE_NOT_CHANGED;
-    }
-
-    dealloc_cmdbuff();  // no commandline to return
-
-    if (!cmd_silent && !ui_has(kUICmdline)) {
-      msg_col = 0;
-      msg_putchar(' ');                             // delete ':'
-    }
-    s->is_state.search_start = s->is_state.save_cursor;
-    redraw_cmdline = true;
-    return GOTO_NORMAL_MODE;
-  }
-  return CMDLINE_CHANGED;
+  return rs_command_line_erase_chars(s->c, s->indent, &s->is_state);
 }
 
 /// Handle the CTRL-^ key in the command-line mode and toggle the use of the
@@ -1682,64 +1572,10 @@ static void command_line_toggle_langmap(CommandLineState *s)
   status_redraw_curbuf();
 }
 
-/// Handle the CTRL-R key in the command-line mode and insert the contents of a
-/// numbered or named register.
+// command_line_insert_reg() is implemented in Rust (cmdline crate, keys.rs).
 static int command_line_insert_reg(CommandLineState *s)
 {
-  const int save_new_cmdpos = new_cmdpos;
-
-  putcmdline('"', true);
-  no_mapping++;
-  allow_keys++;
-  int i = s->c = plain_vgetc();      // CTRL-R <char>
-  if (i == Ctrl_O) {
-    i = Ctrl_R;                      // CTRL-R CTRL-O == CTRL-R CTRL-R
-  }
-
-  if (i == Ctrl_R) {
-    s->c = plain_vgetc();              // CTRL-R CTRL-R <char>
-  }
-  no_mapping--;
-  allow_keys--;
-  // Insert the result of an expression.
-  new_cmdpos = -1;
-  if (s->c == '=') {
-    if (ccline.cmdfirstc == '='   // can't do this recursively
-        || cmdline_star > 0) {    // or when typing a password
-      beep_flush();
-      s->c = ESC;
-    } else {
-      s->c = get_expr_register();
-    }
-  }
-
-  bool literally = false;
-  if (s->c != ESC) {               // use ESC to cancel inserting register
-    literally = i == Ctrl_R || is_literal_register(s->c);
-    cmdline_paste(s->c, literally, false);
-
-    // When there was a serious error abort getting the
-    // command line.
-    if (aborting()) {
-      s->gotesc = true;              // will free ccline.cmdbuff after
-                                     // putting it in history
-      return GOTO_NORMAL_MODE;
-    }
-    KeyTyped = false;                // Don't do p_wc completion.
-    if (new_cmdpos >= 0) {
-      // set_cmdline_pos() was used
-      ccline.cmdpos = MIN(ccline.cmdlen, new_cmdpos);
-    }
-  }
-  new_cmdpos = save_new_cmdpos;
-
-  // remove the double quote
-  ccline.special_char = NUL;
-  redrawcmd();
-
-  // With "literally": the command line has already changed.
-  // Else: the text has been stuffed, but the command line didn't change yet.
-  return literally ? CMDLINE_CHANGED : CMDLINE_NOT_CHANGED;
+  return rs_command_line_insert_reg(&s->c, &s->gotesc);
 }
 
 /// Handle the Left and Right mouse clicks in the command-line mode.
@@ -4483,3 +4319,22 @@ int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
 
 /// Call msg_check() for Rust.
 void nvim_msg_check(void) { msg_check(); }
+
+// Phase 67 (Phase 5): Accessors for command_line_handle_ctrl_bsl, command_line_insert_reg,
+// and command_line_erase_chars
+
+/// Get new_cmdpos (used by set_cmdline_pos).
+int nvim_get_new_cmdpos(void) { return new_cmdpos; }
+
+/// Set new_cmdpos.
+void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
+
+/// Set KeyTyped global.
+void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
+
+/// Thin non-static wrapper for cmdline_paste (called from Rust).
+bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
+{
+  return cmdline_paste(regname, literally, remcr);
+}
+
