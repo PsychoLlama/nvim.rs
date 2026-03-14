@@ -77,6 +77,12 @@ void msg_start(void);
 // Phase 3 (message migration): Rust-implemented replacements
 bool msg_keep(const char *s, int hl_id, bool keep, bool multiline);
 
+// Phase 4 (message migration): Rust-implemented replacements
+void clear_sb_text(bool all);
+void msg_scroll_up(bool may_throttle, bool zerocmd);
+void msg_clr_eos_force(void);
+void msg_reset_scroll(void);
+
 // Phase 1: Simple leaf functions migrated to Rust
 bool msg(const char *s, int hl_id);
 int verb_msg(const char *s);

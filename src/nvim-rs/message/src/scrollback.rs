@@ -218,7 +218,7 @@ pub unsafe extern "C" fn rs_sb_schedule_clear() {
 ///
 /// # Safety
 /// Calls C accessor and mutator functions, frees memory.
-#[no_mangle]
+#[export_name = "clear_sb_text"]
 pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
     let last = nvim_get_last_msgchunk();
 
@@ -356,25 +356,12 @@ pub unsafe extern "C" fn rs_sb_reset_clear_state() {
 // ============================================================================
 
 extern "C" {
-    // Scroll functions
-    fn msg_scroll_up(may_throttle: c_int, zerocmd: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_set_msg_scrolled(val: c_int);
     fn nvim_get_msg_did_scroll() -> c_int;
     fn nvim_set_msg_did_scroll(val: c_int);
-}
-
-/// Scroll message display up by one line.
-///
-/// # Arguments
-/// * `may_throttle` - If true, allow throttling for slow UI
-/// * `zerocmd` - If true, handling cmdheight=0 case
-///
-/// # Safety
-/// Calls C function that modifies display state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
-    msg_scroll_up(may_throttle, zerocmd);
+    fn nvim_ui_has_messages() -> c_int;
+    fn nvim_msg_reset_scroll_grid();
 }
 
 /// Scroll message display up (normal case).
@@ -382,10 +369,10 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
 /// Convenience wrapper without throttling or zerocmd handling.
 ///
 /// # Safety
-/// Calls C function.
+/// Calls Rust msg_scroll_up implementation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_scroll_up_simple() {
-    msg_scroll_up(0, 0);
+    crate::output_core::rs_msg_scroll_up(0, 0);
 }
 
 // Note: rs_msg_scrolled() is defined in lib.rs
@@ -440,14 +427,18 @@ pub unsafe extern "C" fn rs_set_msg_did_scroll(val: c_int) {
     nvim_set_msg_did_scroll(val);
 }
 
-/// Reset scroll state for new message.
+/// Reset scroll state and message grid position.
+///
+/// Called when the message grid should be collapsed (e.g., after redraw).
 ///
 /// # Safety
-/// Calls C mutator functions.
-#[no_mangle]
+/// Calls C accessor/mutator functions that modify grid state.
+#[export_name = "msg_reset_scroll"]
 pub unsafe extern "C" fn rs_msg_reset_scroll() {
-    nvim_set_msg_scrolled(0);
-    nvim_set_msg_did_scroll(0);
+    if nvim_ui_has_messages() != 0 {
+        return;
+    }
+    nvim_msg_reset_scroll_grid();
 }
 
 #[cfg(test)]

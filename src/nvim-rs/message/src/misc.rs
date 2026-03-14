@@ -35,7 +35,6 @@ extern "C" {
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_set_msg_row(val: c_int);
     fn nvim_set_msg_col(val: c_int);
-    fn msg_clr_eos_force();
 
     // Cursor positioning
     fn msg_cursor_goto(row: c_int, col: c_int);
@@ -328,16 +327,16 @@ pub unsafe extern "C" fn rs_msg_cursor_goto(row: c_int, col: c_int) {
 pub unsafe extern "C" fn rs_msg_clr_cmdline() {
     nvim_set_msg_row(nvim_get_cmdline_row());
     nvim_set_msg_col(0);
-    msg_clr_eos_force();
+    crate::output_core::rs_msg_clr_eos_force_exported();
 }
 
-/// Force clear to end of screen even if not needed.
+/// Force clear to end of screen even if not needed (rs_ alias).
 ///
 /// # Safety
-/// Calls C function that modifies display state.
+/// Delegates to the Rust msg_clr_eos_force implementation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_clr_eos_force() {
-    msg_clr_eos_force();
+    crate::output_core::rs_msg_clr_eos_force_exported();
 }
 
 // ============================================================================

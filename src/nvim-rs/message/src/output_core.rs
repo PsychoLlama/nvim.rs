@@ -32,7 +32,6 @@ pub struct NvimString {
 extern "C" {
     // Core message output functions (call into C until fully migrated)
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
-    fn msg_clr_eos_force();
     fn msg_ext_ui_flush();
     // got_int accessor
     fn nvim_get_got_int() -> c_int;
@@ -79,7 +78,6 @@ extern "C" {
     fn nvim_set_msg_row(val: c_int);
     fn nvim_get_rows() -> c_int;
     fn msg_grid_validate();
-    fn msg_scroll_up(may_throttle: c_int, zerocmd: c_int);
     fn nvim_redir_write_newline();
     fn msg_clr_eos();
 
@@ -92,6 +90,18 @@ extern "C" {
     fn nvim_get_sc_col() -> c_int;
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
     fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+
+    // Phase 4: msg_scroll_up helpers
+    fn nvim_set_msg_did_scroll(val: c_int);
+    fn nvim_get_msg_grid_pos() -> c_int;
+    fn msg_grid_set_pos(row: c_int, scrolled: bool);
+    fn nvim_msg_grid_clear_first_line();
+    fn nvim_msg_grid_del_and_shift();
+    fn nvim_msg_grid_adj_clear_bottom();
+    fn nvim_msg_grid_set_throttled(val: c_int);
+
+    // Phase 4: msg_clr_eos_force helper
+    fn nvim_msg_clr_eos_force_impl();
 }
 
 #[allow(clashing_extern_declarations)]
@@ -444,7 +454,7 @@ pub unsafe extern "C" fn rs_msg_start() {
     // If cmdheight=0, scroll in the first line of msg_grid upon the screen.
     if nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0 && nvim_get_msg_scrolled() == 0 {
         msg_grid_validate();
-        msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
+        rs_msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
         let scrolled = nvim_get_msg_scrolled();
         nvim_set_msg_scrolled(scrolled + 1);
         nvim_set_cmdline_row(nvim_get_rows() - 1);
@@ -524,8 +534,44 @@ pub unsafe extern "C" fn rs_msg_clr_eos() {
 #[inline]
 unsafe fn msg_clr_eos_impl() {
     if nvim_get_msg_silent() == 0 {
-        msg_clr_eos_force();
+        rs_msg_clr_eos_force_exported();
     }
+}
+
+/// Scroll the message grid up one line.
+///
+/// # Safety
+/// Calls C accessor functions that modify grid state.
+#[export_name = "msg_scroll_up"]
+pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
+    extern "C" {
+        fn msg_do_throttle() -> bool;
+    }
+    if may_throttle != 0 && msg_do_throttle() {
+        nvim_msg_grid_set_throttled(1);
+    }
+    nvim_set_msg_did_scroll(1);
+
+    if nvim_get_msg_grid_pos() > 0 {
+        msg_grid_set_pos(nvim_get_msg_grid_pos() - 1, zerocmd == 0);
+        // When displaying the first line with cmdheight=0, draw over the existing last line.
+        if zerocmd != 0 {
+            nvim_msg_grid_clear_first_line();
+        }
+    } else {
+        nvim_msg_grid_del_and_shift();
+    }
+
+    nvim_msg_grid_adj_clear_bottom();
+}
+
+/// Force clear to end of screen even if not needed.
+///
+/// # Safety
+/// Calls C helper that does the actual clearing.
+#[export_name = "msg_clr_eos_force"]
+pub unsafe extern "C" fn rs_msg_clr_eos_force_exported() {
+    nvim_msg_clr_eos_force_impl();
 }
 
 /// Check if messages are silent.

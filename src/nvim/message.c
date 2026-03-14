@@ -383,6 +383,95 @@ void nvim_msg_grid_set_throttled(int val) { msg_grid.throttled = (val != 0); }
 int nvim_msg_grid_get_rows(void) { return msg_grid.rows; }
 int nvim_msg_grid_get_cols(void) { return msg_grid.cols; }
 
+// Phase 4: msg_scroll_up helper wrappers
+void nvim_msg_grid_clear_first_line(void)
+{
+  if (msg_grid.chars) {
+    grid_clear_line(&msg_grid, msg_grid.line_offset[0], msg_grid.cols, false);
+  }
+}
+void nvim_msg_grid_del_and_shift(void)
+{
+  grid_del_lines(&msg_grid, 0, 1, msg_grid.rows, 0, msg_grid.cols);
+  memmove(msg_grid.dirty_col, msg_grid.dirty_col + 1,
+          (size_t)(msg_grid.rows - 1) * sizeof(*msg_grid.dirty_col));
+  msg_grid.dirty_col[msg_grid.rows - 1] = 0;
+}
+void nvim_msg_grid_adj_clear_bottom(void)
+{
+  grid_clear(&msg_grid_adj, Rows - 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
+}
+
+// Phase 4: msg_clr_eos_force helper (does the full clear)
+void nvim_msg_clr_eos_force_impl(void)
+{
+  int msg_startcol = (cmdmsg_rl) ? 0 : msg_col;
+  int msg_endcol = (cmdmsg_rl) ? Columns - msg_col : Columns;
+  if (msg_grid.chars && msg_row < msg_grid_pos) {
+    msg_grid_validate();
+    if (msg_row < msg_grid_pos) {
+      msg_row = msg_grid_pos;
+    }
+  }
+  grid_clear(&msg_grid_adj, msg_row, msg_row + 1, msg_startcol, msg_endcol, HL_ATTR(HLF_MSG));
+  grid_clear(&msg_grid_adj, msg_row + 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
+  redraw_cmdline = true;
+  if (msg_row < Rows - 1 || msg_col == 0) {
+    clear_cmdline = false;
+    mode_displayed = false;
+  }
+}
+
+// Phase 4: inc_msg_scrolled helper (handles VV_SCROLLSTART logic + increment)
+void nvim_inc_msg_scrolled(void)
+{
+  if (*get_vim_var_str(VV_SCROLLSTART) == NUL) {
+    char *p = SOURCING_NAME;
+    char *tofree = NULL;
+    if (p == NULL) {
+      p = _("Unknown");
+    } else {
+      size_t len = strlen(p) + 40;
+      tofree = xmalloc(len);
+      vim_snprintf(tofree, len, _("%s line %" PRId64), p, (int64_t)SOURCING_LNUM);
+      p = tofree;
+    }
+    set_vim_var_string(VV_SCROLLSTART, p, -1);
+    xfree(tofree);
+  }
+  msg_scrolled++;
+  set_must_redraw(UPD_VALID);
+}
+
+// Phase 4: msg_reset_scroll helper (grid clearing loop)
+void nvim_msg_reset_scroll_grid(void)
+{
+  msg_grid.throttled = false;
+  msg_grid_set_pos(Rows - (int)p_ch, false);
+  clear_cmdline = true;
+  if (msg_grid.chars) {
+    for (int i = 0; i < MIN(msg_scrollsize(), msg_grid.rows); i++) {
+      grid_clear_line(&msg_grid, msg_grid.line_offset[i], msg_grid.cols, false);
+    }
+  }
+  msg_scrolled = 0;
+  msg_scrolled_at_flush = 0;
+  msg_grid_scroll_discount = 0;
+}
+
+// Phase 4: accessors for msg_scroll_flush
+int nvim_get_msg_grid_pos_at_flush(void) { return msg_grid_pos_at_flush; }
+void nvim_set_msg_grid_pos_at_flush(int val) { msg_grid_pos_at_flush = val; }
+int nvim_get_msg_grid_scroll_discount(void) { return msg_grid_scroll_discount; }
+void nvim_set_msg_grid_scroll_discount(int val) { msg_grid_scroll_discount = val; }
+int nvim_msg_grid_get_handle(void) { return msg_grid.handle; }
+void nvim_msg_grid_flush_dirty_line(int row)
+{
+  ui_line(&msg_grid, row, false, 0, msg_grid.dirty_col[row], msg_grid.cols,
+          HL_ATTR(HLF_MSG), false);
+  msg_grid.dirty_col[row] = 0;
+}
+
 // Phase 430: Redirection/verbose state accessors
 int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
 void nvim_set_redir_off(int val) { redir_off = (val != 0); }
@@ -2001,29 +2090,6 @@ void msg_cursor_goto(int row, int col)
 
 
 /// Scroll the screen up one line for displaying the next message line.
-void msg_scroll_up(bool may_throttle, bool zerocmd)
-{
-  if (may_throttle && msg_do_throttle()) {
-    msg_grid.throttled = true;
-  }
-  msg_did_scroll = true;
-  if (msg_grid_pos > 0) {
-    msg_grid_set_pos(msg_grid_pos - 1, !zerocmd);
-
-    // When displaying the first line with cmdheight=0, we need to draw over
-    // the existing last line of the screen.
-    if (zerocmd && msg_grid.chars) {
-      grid_clear_line(&msg_grid, msg_grid.line_offset[0], msg_grid.cols, false);
-    }
-  } else {
-    grid_del_lines(&msg_grid, 0, 1, msg_grid.rows, 0, msg_grid.cols);
-    memmove(msg_grid.dirty_col, msg_grid.dirty_col + 1,
-            (size_t)(msg_grid.rows - 1) * sizeof(*msg_grid.dirty_col));
-    msg_grid.dirty_col[msg_grid.rows - 1] = 0;
-  }
-
-  grid_clear(&msg_grid_adj, Rows - 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
-}
 
 /// Send throttled message output to UI clients
 ///
@@ -2076,29 +2142,6 @@ void msg_scroll_flush(void)
   msg_grid_pos_at_flush = msg_grid_pos;
 }
 
-void msg_reset_scroll(void)
-{
-  if (ui_has(kUIMessages)) {
-    return;
-  }
-  // TODO(bfredl): some duplicate logic with update_screen(). Later on
-  // we should properly disentangle message clear with full screen redraw.
-  msg_grid.throttled = false;
-  // TODO(bfredl): risk for extra flicker i e with
-  // "nvim -o has_swap also_has_swap"
-  msg_grid_set_pos(Rows - (int)p_ch, false);
-  clear_cmdline = true;
-  if (msg_grid.chars) {
-    // non-displayed part of msg_grid is considered invalid.
-    for (int i = 0; i < MIN(msg_scrollsize(), msg_grid.rows); i++) {
-      grid_clear_line(&msg_grid, msg_grid.line_offset[i],
-                      msg_grid.cols, false);
-    }
-  }
-  msg_scrolled = 0;
-  msg_scrolled_at_flush = 0;
-  msg_grid_scroll_discount = 0;
-}
 
 /// Increment "msg_scrolled".
 static void inc_msg_scrolled(void)
@@ -2197,29 +2240,6 @@ static void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb
 }
 
 
-/// Clear any text remembered for scrolling back.
-/// When "all" is false keep the last line.
-/// Called when redrawing the screen.
-void clear_sb_text(bool all)
-{
-  msgchunk_T *mp;
-  msgchunk_T **lastp;
-
-  if (all) {
-    lastp = &last_msgchunk;
-  } else {
-    if (last_msgchunk == NULL) {
-      return;
-    }
-    lastp = &msg_sb_start(last_msgchunk)->sb_prev;
-  }
-
-  while (*lastp != NULL) {
-    mp = (*lastp)->sb_prev;
-    xfree(*lastp);
-    *lastp = mp;
-  }
-}
 
 /// "g<" command.
 void show_sb_text(void)
@@ -2610,33 +2630,6 @@ void repeat_message(void)
 
 /// Clear from current message position to end of screen.
 /// Note: msg_col is not updated, so we remember the end of the message
-/// for msg_check().
-void msg_clr_eos_force(void)
-{
-  if (ui_has(kUIMessages)) {
-    return;
-  }
-  int msg_startcol = (cmdmsg_rl) ? 0 : msg_col;
-  int msg_endcol = (cmdmsg_rl) ? Columns - msg_col : Columns;
-
-  // TODO(bfredl): ugly, this state should already been validated at this
-  // point. But msg_clr_eos() is called in a lot of places.
-  if (msg_grid.chars && msg_row < msg_grid_pos) {
-    msg_grid_validate();
-    if (msg_row < msg_grid_pos) {
-      msg_row = msg_grid_pos;
-    }
-  }
-
-  grid_clear(&msg_grid_adj, msg_row, msg_row + 1, msg_startcol, msg_endcol, HL_ATTR(HLF_MSG));
-  grid_clear(&msg_grid_adj, msg_row + 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
-
-  redraw_cmdline = true;  // overwritten the command line
-  if (msg_row < Rows - 1 || msg_col == 0) {
-    clear_cmdline = false;  // command line has been cleared
-    mode_displayed = false;  // mode cleared or overwritten
-  }
-}
 
 
 
