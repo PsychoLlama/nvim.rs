@@ -310,6 +310,20 @@ extern void rs_ex_close(exarg_T *eap);
 extern int rs_check_more(int message, int forceit);
 extern int rs_before_quit_all(exarg_T *eap);
 extern char *rs_get_argopt_name(void *xp, int idx);
+// Phase 4 (batch plan) Rust FFI declarations
+extern void rs_ex_hide(exarg_T *eap);
+extern void rs_ex_resize(exarg_T *eap);
+extern char *rs_ex_range_without_command(exarg_T *eap);
+extern void rs_ex_redrawstatus(exarg_T *eap);
+extern void rs_ex_tabclose(exarg_T *eap);
+extern void rs_ex_cd(exarg_T *eap);
+extern void rs_ex_wincmd(exarg_T *eap);
+extern void rs_ex_copymove(exarg_T *eap);
+extern void rs_ex_at(exarg_T *eap);
+extern void rs_ex_later(exarg_T *eap);
+extern void rs_ex_exit(exarg_T *eap);
+extern void rs_ex_redraw(exarg_T *eap);
+extern void rs_ex_startinsert(exarg_T *eap);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -1747,30 +1761,7 @@ static char exmode_plus[] = "+";
 /// Returns an error message on failure.
 static char *ex_range_without_command(exarg_T *eap)
 {
-  char *errormsg = NULL;
-
-  if (*eap->cmd == '|' || (exmode_active && eap->cmd != exmode_plus + 1)) {
-    eap->cmdidx = CMD_print;
-    eap->argt = EX_RANGE | EX_COUNT | EX_TRLBAR;
-    if ((errormsg = invalid_range(eap)) == NULL) {
-      correct_range(eap);
-      ex_print(eap);
-    }
-  } else if (eap->addr_count != 0) {
-    eap->line2 = MIN(eap->line2, curbuf->b_ml.ml_line_count);
-
-    if (eap->line2 < 0) {
-      errormsg = _(e_invrange);
-    } else {
-      if (eap->line2 == 0) {
-        curwin->w_cursor.lnum = 1;
-      } else {
-        curwin->w_cursor.lnum = eap->line2;
-      }
-      beginline(BL_SOL | BL_FIX);
-    }
-  }
-  return errormsg;
+  return rs_ex_range_without_command(eap);
 }
 
 /// Parse and skip over command modifiers:
@@ -2302,32 +2293,7 @@ void ex_win_close(int forceit, win_T *win, tabpage_T *tp)
 /// ":tabclose N": close tab page N.
 static void ex_tabclose(exarg_T *eap)
 {
-  if (cmdwin_type != 0) {
-    cmdwin_result = K_IGNORE;
-    return;
-  }
-
-  if (first_tabpage->tp_next == NULL) {
-    emsg(_("E784: Cannot close last tab page"));
-    return;
-  }
-
-  int tab_number = get_tabpage_arg(eap);
-  if (eap->errmsg != NULL) {
-    return;
-  }
-
-  tabpage_T *tp = rs_find_tabpage(tab_number);
-  if (tp == NULL) {
-    beep_flush();
-    return;
-  }
-  if (tp != curtab) {
-    tabpage_close_other(tp, eap->forceit);
-    return;
-  } else if (!text_locked() && !curbuf_locked()) {
-    tabpage_close(eap->forceit);
-  }
+  rs_ex_tabclose(eap);
 }
 
 /// ":tabonly": close all tab pages except the current one
@@ -2418,29 +2384,7 @@ static void ex_only(exarg_T *eap)
 
 static void ex_hide(exarg_T *eap)
 {
-  // ":hide" or ":hide | cmd": hide current window
-  if (eap->skip) {
-    return;
-  }
-
-  if (eap->addr_count == 0) {
-    win_close(curwin, false, eap->forceit);  // don't free buffer
-  } else {
-    int winnr = 0;
-    win_T *win = NULL;
-
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      winnr++;
-      if (winnr == eap->line2) {
-        win = wp;
-        break;
-      }
-    }
-    if (win == NULL) {
-      win = lastwin;
-    }
-    win_close(win, false, eap->forceit);
-  }
+  rs_ex_hide(eap);
 }
 
 /// ":stop" and ":suspend": Suspend Vim.
@@ -2457,37 +2401,7 @@ static void ex_stop(exarg_T *eap)
 /// ":exit", ":xit" and ":wq": Write file and quit the current window.
 static void ex_exit(exarg_T *eap)
 {
-  if (cmdwin_type != 0) {
-    cmdwin_result = Ctrl_C;
-    return;
-  }
-  // Don't quit while editing the command line.
-  if (text_locked()) {
-    text_locked_msg();
-    return;
-  }
-
-  // we plan to exit if there is only one relevant window
-  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
-    exiting = true;
-  }
-  // Write the buffer for ":wq" or when it was changed.
-  // Trigger QuitPre and ExitPre.
-  // Check if we can exit now, after autocommands have changed things.
-  if (((eap->cmdidx == CMD_wq || curbufIsChanged()) && do_write(eap) == FAIL)
-      || before_quit_autocmds(curwin, false, eap->forceit)
-      || check_more(true, eap->forceit) == FAIL
-      || (rs_only_one_window() && check_changed_any(eap->forceit, false))) {
-    not_exiting();
-  } else {
-    if (rs_only_one_window()) {
-      // quit last window, exit Vim
-      getout(0);
-    }
-    not_exiting();
-    // Quit current window, may free the buffer.
-    win_close(curwin, !buf_hide(curwin->w_buffer), eap->forceit);
-  }
+  rs_ex_exit(eap);
 }
 
 /// ":print", ":list", ":number".
@@ -2970,29 +2884,7 @@ static void ex_mode(exarg_T *eap)
 /// set, increment or decrement current window height
 static void ex_resize(exarg_T *eap)
 {
-  win_T *wp = curwin;
-
-  if (eap->addr_count > 0) {
-    int n = (int)eap->line2;
-    for (wp = firstwin; wp->w_next != NULL && --n > 0; wp = wp->w_next) {}
-  }
-
-  int n = (int)atol(eap->arg);
-  if (cmdmod.cmod_split & WSP_VERT) {
-    if (*eap->arg == '-' || *eap->arg == '+') {
-      n += wp->w_width;
-    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very wide
-      n = Columns;
-    }
-    rs_win_setwidth_win(n, wp);
-  } else {
-    if (*eap->arg == '-' || *eap->arg == '+') {
-      n += wp->w_height;
-    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very high
-      n = Rows - 1;
-    }
-    rs_win_setheight_win(n, wp);
-  }
+  rs_ex_resize(eap);
 }
 
 /// ":find [+command] <file>" command.
@@ -3371,32 +3263,7 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
 /// ":cd", ":tcd", ":lcd", ":chdir", "tchdir" and ":lchdir".
 void ex_cd(exarg_T *eap)
 {
-  char *new_dir = eap->arg;
-  // for non-UNIX ":cd" means: print current directory unless 'cdhome' is set
-  if (*new_dir == NUL && !p_cdh) {
-    ex_pwd(NULL);
-    return;
-  }
-
-  CdScope scope = kCdScopeGlobal;
-  switch (eap->cmdidx) {
-  case CMD_tcd:
-  case CMD_tchdir:
-    scope = kCdScopeTabpage;
-    break;
-  case CMD_lcd:
-  case CMD_lchdir:
-    scope = kCdScopeWindow;
-    break;
-  default:
-    break;
-  }
-  if (changedir_func(new_dir, scope)) {
-    // Echo the new current directory if the command was typed.
-    if (KeyTyped || p_verbose >= 5) {
-      ex_pwd(eap);
-    }
-  }
+  rs_ex_cd(eap);
 }
 
 /// ":pwd".
@@ -3462,33 +3329,7 @@ static void ex_winsize(exarg_T *eap)
 
 static void ex_wincmd(exarg_T *eap)
 {
-  int xchar = NUL;
-  char *p;
-
-  if (*eap->arg == 'g' || *eap->arg == Ctrl_G) {
-    // CTRL-W g and CTRL-W CTRL-G  have an extra command character
-    if (eap->arg[1] == NUL) {
-      emsg(_(e_invarg));
-      return;
-    }
-    xchar = (uint8_t)eap->arg[1];
-    p = eap->arg + 2;
-  } else {
-    p = eap->arg + 1;
-  }
-
-  eap->nextcmd = check_nextcmd(p);
-  p = skipwhite(p);
-  if (*p != NUL && *p != '"' && eap->nextcmd == NULL) {
-    emsg(_(e_invarg));
-  } else if (!eap->skip) {
-    // Pass flags on for ":vertical wincmd ]".
-    postponed_split_flags = cmdmod.cmod_split;
-    postponed_split_tab = cmdmod.cmod_tab;
-    rs_do_window(*eap->arg, eap->addr_count > 0 ? eap->line2 : 0, xchar);
-    postponed_split_flags = 0;
-    postponed_split_tab = 0;
-  }
+  rs_ex_wincmd(eap);
 }
 
 /// Handle command that work like operators: ":delete", ":yank", ":>" and ":<".
@@ -3553,33 +3394,7 @@ static void ex_iput(exarg_T *eap)
 /// Handle ":copy" and ":move".
 static void ex_copymove(exarg_T *eap)
 {
-  const char *errormsg = NULL;
-  linenr_T n = get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, &errormsg);
-  if (eap->arg == NULL) {  // error detected
-    if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    eap->nextcmd = NULL;
-    return;
-  }
-  get_flags(eap);
-
-  // move or copy lines from 'eap->line1'-'eap->line2' to below line 'n'
-  if (n == MAXLNUM || n < 0 || n > curbuf->b_ml.ml_line_count) {
-    emsg(_(e_invrange));
-    return;
-  }
-
-  if (eap->cmdidx == CMD_move) {
-    if (rs_do_move(eap->line1, eap->line2, n) == FAIL) {
-      return;
-    }
-  } else {
-    rs_ex_copy(eap->line1, eap->line2, n);
-  }
-  u_clearline(curbuf);
-  beginline(BL_SOL | BL_FIX);
-  ex_may_print(eap);
+  rs_ex_copymove(eap);
 }
 
 /// Print the current line if flags were given to the Ex command.
@@ -3623,35 +3438,7 @@ static void ex_join(exarg_T *eap)
 /// ":[addr]@r": execute register
 static void ex_at(exarg_T *eap)
 {
-  int prev_len = typebuf.tb_len;
-
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-
-  // Get the register name. No name means use the previous one.
-  int c = (uint8_t)(*eap->arg);
-  if (c == NUL) {
-    c = '@';
-  }
-
-  // Put the register in the typeahead buffer with the "silent" flag.
-  if (do_execreg(c, true, vim_strchr(p_cpo, CPO_EXECBUF) != NULL, true) == FAIL) {
-    beep_flush();
-    return;
-  }
-
-  const bool save_efr = exec_from_reg;
-
-  exec_from_reg = true;
-
-  // Execute from the typeahead buffer.
-  // Continue until the stuff buffer is empty and all added characters
-  // have been consumed.
-  while (!stuff_empty() || typebuf.tb_len > prev_len) {
-    do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT|DOCMD_VERBOSE);
-  }
-
-  exec_from_reg = save_efr;
+  rs_ex_at(eap);
 }
 
 /// ":!".
@@ -3717,35 +3504,7 @@ static void ex_redo(exarg_T *eap)
 /// ":earlier" and ":later".
 static void ex_later(exarg_T *eap)
 {
-  int count = 0;
-  bool sec = false;
-  bool file = false;
-  char *p = eap->arg;
-
-  if (*p == NUL) {
-    count = 1;
-  } else if (isdigit((uint8_t)(*p))) {
-    count = getdigits_int(&p, false, 0);
-    switch (*p) {
-    case 's':
-      p++; sec = true; break;
-    case 'm':
-      p++; sec = true; count *= 60; break;
-    case 'h':
-      p++; sec = true; count *= 60 * 60; break;
-    case 'd':
-      p++; sec = true; count *= 24 * 60 * 60; break;
-    case 'f':
-      p++; file = true; break;
-    }
-  }
-
-  if (*p != NUL) {
-    semsg(_(e_invarg2), eap->arg);
-  } else {
-    undo_time(eap->cmdidx == CMD_earlier ? -count : count,
-              sec, file, false);
-  }
+  rs_ex_later(eap);
 }
 
 /// ":redir": start/stop redirection.
@@ -3757,67 +3516,13 @@ static void ex_redir(exarg_T *eap)
 /// ":redraw": force redraw
 static void ex_redraw(exarg_T *eap)
 {
-  if (cmdpreview) {
-    return;  // Ignore :redraw during 'inccommand' preview. #9777
-  }
-  int r = RedrawingDisabled;
-  int p = p_lz;
-
-  RedrawingDisabled = 0;
-  p_lz = false;
-  validate_cursor(curwin);
-  update_topline(curwin);
-  if (eap->forceit) {
-    redraw_all_later(UPD_NOT_VALID);
-    redraw_cmdline = true;
-  } else if (VIsual_active) {
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-  update_screen();
-  if (need_maketitle) {
-    maketitle();
-  }
-  RedrawingDisabled = r;
-  p_lz = p;
-
-  // Reset msg_didout, so that a message that's there is overwritten.
-  msg_didout = false;
-  msg_col = 0;
-
-  // No need to wait after an intentional redraw.
-  need_wait_return = false;
-
-  ui_flush();
+  rs_ex_redraw(eap);
 }
 
 /// ":redrawstatus": force redraw of status line(s) and window bar(s)
 static void ex_redrawstatus(exarg_T *eap)
 {
-  if (cmdpreview) {
-    return;  // Ignore :redrawstatus during 'inccommand' preview. #9777
-  }
-  int r = RedrawingDisabled;
-  int p = p_lz;
-
-  if (eap->forceit) {
-    status_redraw_all();
-  } else {
-    status_redraw_curbuf();
-  }
-
-  RedrawingDisabled = 0;
-  p_lz = false;
-  if (State & MODE_CMDLINE) {
-    redraw_statuslines();
-  } else {
-    if (VIsual_active) {
-      redraw_curbuf_later(UPD_INVERTED);
-    }
-    update_screen();
-  }
-  RedrawingDisabled = r;
-  p_lz = p;
-  ui_flush();
+  rs_ex_redrawstatus(eap);
 }
 
 /// ":redrawtabline": force redraw of the tabline
@@ -3963,38 +3668,7 @@ static void ex_normal(exarg_T *eap)
 /// ":startinsert", ":startreplace" and ":startgreplace"
 static void ex_startinsert(exarg_T *eap)
 {
-  if (eap->forceit) {
-    // cursor line can be zero on startup
-    if (!curwin->w_cursor.lnum) {
-      curwin->w_cursor.lnum = 1;
-    }
-    rs_set_cursor_for_append_to_line();
-  }
-
-  // Ignore the command when already in Insert mode.  Inserting an
-  // expression register that invokes a function can do this.
-  if (State & MODE_INSERT) {
-    return;
-  }
-
-  if (eap->cmdidx == CMD_startinsert) {
-    restart_edit = 'a';
-  } else if (eap->cmdidx == CMD_startreplace) {
-    restart_edit = 'R';
-  } else {
-    restart_edit = 'V';
-  }
-
-  if (!eap->forceit) {
-    if (eap->cmdidx == CMD_startinsert) {
-      restart_edit = 'i';
-    }
-    curwin->w_curswant = 0;  // avoid MAXCOL
-  }
-
-  if (VIsual_active) {
-    showmode();
-  }
+  rs_ex_startinsert(eap);
 }
 
 /// ":stopinsert"
@@ -6731,4 +6405,424 @@ char *nvim_docmd_get_argopt_name(int idx)
     return p_opt_values[idx];
   }
   return NULL;
+}
+
+// Phase 4 C wrappers (direct implementations for Rust FFI)
+
+/// ex_range_without_command logic.
+char *nvim_docmd_ex_range_without_command(exarg_T *eap)
+{
+  char *errormsg = NULL;
+
+  if (*eap->cmd == '|' || (exmode_active && eap->cmd != exmode_plus + 1)) {
+    eap->cmdidx = CMD_print;
+    eap->argt = EX_RANGE | EX_COUNT | EX_TRLBAR;
+    if ((errormsg = invalid_range(eap)) == NULL) {
+      correct_range(eap);
+      ex_print(eap);
+    }
+  } else if (eap->addr_count != 0) {
+    eap->line2 = MIN(eap->line2, curbuf->b_ml.ml_line_count);
+
+    if (eap->line2 < 0) {
+      errormsg = _(e_invrange);
+    } else {
+      if (eap->line2 == 0) {
+        curwin->w_cursor.lnum = 1;
+      } else {
+        curwin->w_cursor.lnum = eap->line2;
+      }
+      beginline(BL_SOL | BL_FIX);
+    }
+  }
+  return errormsg;
+}
+
+/// ex_tabclose logic.
+void nvim_docmd_ex_tabclose(exarg_T *eap)
+{
+  if (cmdwin_type != 0) {
+    cmdwin_result = K_IGNORE;
+    return;
+  }
+
+  if (first_tabpage->tp_next == NULL) {
+    emsg(_("E784: Cannot close last tab page"));
+    return;
+  }
+
+  int tab_number = get_tabpage_arg(eap);
+  if (eap->errmsg != NULL) {
+    return;
+  }
+
+  tabpage_T *tp = rs_find_tabpage(tab_number);
+  if (tp == NULL) {
+    beep_flush();
+    return;
+  }
+  if (tp != curtab) {
+    tabpage_close_other(tp, eap->forceit);
+    return;
+  } else if (!text_locked() && !curbuf_locked()) {
+    tabpage_close(eap->forceit);
+  }
+}
+
+/// ex_hide logic.
+void nvim_docmd_ex_hide(exarg_T *eap)
+{
+  // ":hide" or ":hide | cmd": hide current window
+  if (eap->skip) {
+    return;
+  }
+
+  if (eap->addr_count == 0) {
+    win_close(curwin, false, eap->forceit);  // don't free buffer
+  } else {
+    int winnr = 0;
+    win_T *win = NULL;
+
+    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+      winnr++;
+      if (winnr == eap->line2) {
+        win = wp;
+        break;
+      }
+    }
+    if (win == NULL) {
+      win = lastwin;
+    }
+    win_close(win, false, eap->forceit);
+  }
+}
+
+/// ex_exit logic.
+void nvim_docmd_ex_exit(exarg_T *eap)
+{
+  if (cmdwin_type != 0) {
+    cmdwin_result = Ctrl_C;
+    return;
+  }
+  // Don't quit while editing the command line.
+  if (text_locked()) {
+    text_locked_msg();
+    return;
+  }
+
+  // we plan to exit if there is only one relevant window
+  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
+    exiting = true;
+  }
+  // Write the buffer for ":wq" or when it was changed.
+  // Trigger QuitPre and ExitPre.
+  // Check if we can exit now, after autocommands have changed things.
+  if (((eap->cmdidx == CMD_wq || curbufIsChanged()) && do_write(eap) == FAIL)
+      || before_quit_autocmds(curwin, false, eap->forceit)
+      || check_more(true, eap->forceit) == FAIL
+      || (rs_only_one_window() && check_changed_any(eap->forceit, false))) {
+    not_exiting();
+  } else {
+    if (rs_only_one_window()) {
+      // quit last window, exit Vim
+      getout(0);
+    }
+    not_exiting();
+    // Quit current window, may free the buffer.
+    win_close(curwin, !buf_hide(curwin->w_buffer), eap->forceit);
+  }
+}
+
+/// ex_resize logic.
+void nvim_docmd_ex_resize(exarg_T *eap)
+{
+  win_T *wp = curwin;
+
+  if (eap->addr_count > 0) {
+    int n = (int)eap->line2;
+    for (wp = firstwin; wp->w_next != NULL && --n > 0; wp = wp->w_next) {}
+  }
+
+  int n = (int)atol(eap->arg);
+  if (cmdmod.cmod_split & WSP_VERT) {
+    if (*eap->arg == '-' || *eap->arg == '+') {
+      n += wp->w_width;
+    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very wide
+      n = Columns;
+    }
+    rs_win_setwidth_win(n, wp);
+  } else {
+    if (*eap->arg == '-' || *eap->arg == '+') {
+      n += wp->w_height;
+    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very high
+      n = Rows - 1;
+    }
+    rs_win_setheight_win(n, wp);
+  }
+}
+
+/// ex_cd logic.
+void nvim_docmd_ex_cd(exarg_T *eap)
+{
+  char *new_dir = eap->arg;
+  // for non-UNIX ":cd" means: print current directory unless 'cdhome' is set
+  if (*new_dir == NUL && !p_cdh) {
+    ex_pwd(NULL);
+    return;
+  }
+
+  CdScope scope = kCdScopeGlobal;
+  switch (eap->cmdidx) {
+  case CMD_tcd:
+  case CMD_tchdir:
+    scope = kCdScopeTabpage;
+    break;
+  case CMD_lcd:
+  case CMD_lchdir:
+    scope = kCdScopeWindow;
+    break;
+  default:
+    break;
+  }
+  if (changedir_func(new_dir, scope)) {
+    // Echo the new current directory if the command was typed.
+    if (KeyTyped || p_verbose >= 5) {
+      ex_pwd(eap);
+    }
+  }
+}
+
+/// ex_wincmd logic.
+void nvim_docmd_ex_wincmd(exarg_T *eap)
+{
+  int xchar = NUL;
+  char *p;
+
+  if (*eap->arg == 'g' || *eap->arg == Ctrl_G) {
+    // CTRL-W g and CTRL-W CTRL-G  have an extra command character
+    if (eap->arg[1] == NUL) {
+      emsg(_(e_invarg));
+      return;
+    }
+    xchar = (uint8_t)eap->arg[1];
+    p = eap->arg + 2;
+  } else {
+    p = eap->arg + 1;
+  }
+
+  eap->nextcmd = check_nextcmd(p);
+  p = skipwhite(p);
+  if (*p != NUL && *p != '"' && eap->nextcmd == NULL) {
+    emsg(_(e_invarg));
+  } else if (!eap->skip) {
+    // Pass flags on for ":vertical wincmd ]".
+    postponed_split_flags = cmdmod.cmod_split;
+    postponed_split_tab = cmdmod.cmod_tab;
+    rs_do_window(*eap->arg, eap->addr_count > 0 ? eap->line2 : 0, xchar);
+    postponed_split_flags = 0;
+    postponed_split_tab = 0;
+  }
+}
+
+/// ex_copymove logic.
+void nvim_docmd_ex_copymove(exarg_T *eap)
+{
+  const char *errormsg = NULL;
+  linenr_T n = get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, &errormsg);
+  if (eap->arg == NULL) {  // error detected
+    if (errormsg != NULL) {
+      emsg(errormsg);
+    }
+    eap->nextcmd = NULL;
+    return;
+  }
+  get_flags(eap);
+
+  // move or copy lines from 'eap->line1'-'eap->line2' to below line 'n'
+  if (n == MAXLNUM || n < 0 || n > curbuf->b_ml.ml_line_count) {
+    emsg(_(e_invrange));
+    return;
+  }
+
+  if (eap->cmdidx == CMD_move) {
+    if (rs_do_move(eap->line1, eap->line2, n) == FAIL) {
+      return;
+    }
+  } else {
+    rs_ex_copy(eap->line1, eap->line2, n);
+  }
+  u_clearline(curbuf);
+  beginline(BL_SOL | BL_FIX);
+  ex_may_print(eap);
+}
+
+/// ex_at logic.
+void nvim_docmd_ex_at(exarg_T *eap)
+{
+  int prev_len = typebuf.tb_len;
+
+  curwin->w_cursor.lnum = eap->line2;
+  check_cursor_col(curwin);
+
+  // Get the register name. No name means use the previous one.
+  int c = (uint8_t)(*eap->arg);
+  if (c == NUL) {
+    c = '@';
+  }
+
+  // Put the register in the typeahead buffer with the "silent" flag.
+  if (do_execreg(c, true, vim_strchr(p_cpo, CPO_EXECBUF) != NULL, true) == FAIL) {
+    beep_flush();
+    return;
+  }
+
+  const bool save_efr = exec_from_reg;
+
+  exec_from_reg = true;
+
+  // Execute from the typeahead buffer.
+  // Continue until the stuff buffer is empty and all added characters
+  // have been consumed.
+  while (!stuff_empty() || typebuf.tb_len > prev_len) {
+    do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT|DOCMD_VERBOSE);
+  }
+
+  exec_from_reg = save_efr;
+}
+
+/// ex_later logic.
+void nvim_docmd_ex_later(exarg_T *eap)
+{
+  int count = 0;
+  bool sec = false;
+  bool file = false;
+  char *p = eap->arg;
+
+  if (*p == NUL) {
+    count = 1;
+  } else if (isdigit((uint8_t)(*p))) {
+    count = getdigits_int(&p, false, 0);
+    switch (*p) {
+    case 's':
+      p++; sec = true; break;
+    case 'm':
+      p++; sec = true; count *= 60; break;
+    case 'h':
+      p++; sec = true; count *= 60 * 60; break;
+    case 'd':
+      p++; sec = true; count *= 24 * 60 * 60; break;
+    case 'f':
+      p++; file = true; break;
+    }
+  }
+
+  if (*p != NUL) {
+    semsg(_(e_invarg2), eap->arg);
+  } else {
+    undo_time(eap->cmdidx == CMD_earlier ? -count : count,
+              sec, file, false);
+  }
+}
+
+/// ex_redraw logic.
+void nvim_docmd_ex_redraw(exarg_T *eap)
+{
+  if (cmdpreview) {
+    return;  // Ignore :redraw during 'inccommand' preview. #9777
+  }
+  int r = RedrawingDisabled;
+  int p = p_lz;
+
+  RedrawingDisabled = 0;
+  p_lz = false;
+  validate_cursor(curwin);
+  update_topline(curwin);
+  if (eap->forceit) {
+    redraw_all_later(UPD_NOT_VALID);
+    redraw_cmdline = true;
+  } else if (VIsual_active) {
+    redraw_curbuf_later(UPD_INVERTED);
+  }
+  update_screen();
+  if (need_maketitle) {
+    maketitle();
+  }
+  RedrawingDisabled = r;
+  p_lz = p;
+
+  // Reset msg_didout, so that a message that's there is overwritten.
+  msg_didout = false;
+  msg_col = 0;
+
+  // No need to wait after an intentional redraw.
+  need_wait_return = false;
+
+  ui_flush();
+}
+
+/// ex_redrawstatus logic.
+void nvim_docmd_ex_redrawstatus(exarg_T *eap)
+{
+  if (cmdpreview) {
+    return;  // Ignore :redrawstatus during 'inccommand' preview. #9777
+  }
+  int r = RedrawingDisabled;
+  int p = p_lz;
+
+  if (eap->forceit) {
+    status_redraw_all();
+  } else {
+    status_redraw_curbuf();
+  }
+
+  RedrawingDisabled = 0;
+  p_lz = false;
+  if (State & MODE_CMDLINE) {
+    redraw_statuslines();
+  } else {
+    if (VIsual_active) {
+      redraw_curbuf_later(UPD_INVERTED);
+    }
+    update_screen();
+  }
+  RedrawingDisabled = r;
+  p_lz = p;
+  ui_flush();
+}
+
+/// ex_startinsert logic.
+void nvim_docmd_ex_startinsert(exarg_T *eap)
+{
+  if (eap->forceit) {
+    // cursor line can be zero on startup
+    if (!curwin->w_cursor.lnum) {
+      curwin->w_cursor.lnum = 1;
+    }
+    rs_set_cursor_for_append_to_line();
+  }
+
+  // Ignore the command when already in Insert mode.  Inserting an
+  // expression register that invokes a function can do this.
+  if (State & MODE_INSERT) {
+    return;
+  }
+
+  if (eap->cmdidx == CMD_startinsert) {
+    restart_edit = 'a';
+  } else if (eap->cmdidx == CMD_startreplace) {
+    restart_edit = 'R';
+  } else {
+    restart_edit = 'V';
+  }
+
+  if (!eap->forceit) {
+    if (eap->cmdidx == CMD_startinsert) {
+      restart_edit = 'i';
+    }
+    curwin->w_curswant = 0;  // avoid MAXCOL
+  }
+
+  if (VIsual_active) {
+    showmode();
+  }
 }

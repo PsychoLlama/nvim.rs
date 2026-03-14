@@ -1950,3 +1950,99 @@ pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
 pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     nvim_docmd_get_argopt_name(idx)
 }
+
+// Phase 4: Substantial Command Handlers
+
+extern "C" {
+    fn nvim_docmd_ex_range_without_command(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_docmd_ex_tabclose(eap: ExArgHandle);
+    fn nvim_docmd_ex_hide(eap: ExArgHandle);
+    fn nvim_docmd_ex_exit(eap: ExArgHandle);
+    fn nvim_docmd_ex_resize(eap: ExArgHandle);
+    fn nvim_docmd_ex_cd(eap: ExArgHandle);
+    fn nvim_docmd_ex_wincmd(eap: ExArgHandle);
+    fn nvim_docmd_ex_copymove(eap: ExArgHandle);
+    fn nvim_docmd_ex_at(eap: ExArgHandle);
+    fn nvim_docmd_ex_later(eap: ExArgHandle);
+    fn nvim_docmd_ex_redraw(eap: ExArgHandle);
+    fn nvim_docmd_ex_redrawstatus(eap: ExArgHandle);
+    fn nvim_docmd_ex_startinsert(eap: ExArgHandle);
+}
+
+/// ex_range_without_command: handle range-only commands.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
+    nvim_docmd_ex_range_without_command(eap)
+}
+
+/// ":tabclose".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
+    nvim_docmd_ex_tabclose(eap);
+}
+
+/// ":hide".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_hide(eap: ExArgHandle) {
+    nvim_docmd_ex_hide(eap);
+}
+
+/// ":exit" / ":xit" / ":wq".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
+    nvim_docmd_ex_exit(eap);
+}
+
+/// ":resize".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
+    nvim_docmd_ex_resize(eap);
+}
+
+/// ":cd" / ":tcd" / ":lcd" / ":chdir" etc.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
+    nvim_docmd_ex_cd(eap);
+}
+
+/// ":wincmd".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
+    nvim_docmd_ex_wincmd(eap);
+}
+
+/// ":copy" / ":move".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
+    nvim_docmd_ex_copymove(eap);
+}
+
+/// ":@" (execute register).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
+    nvim_docmd_ex_at(eap);
+}
+
+/// ":earlier" / ":later".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
+    nvim_docmd_ex_later(eap);
+}
+
+/// ":redraw".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_redraw(eap: ExArgHandle) {
+    nvim_docmd_ex_redraw(eap);
+}
+
+/// ":redrawstatus".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
+    nvim_docmd_ex_redrawstatus(eap);
+}
+
+/// ":startinsert" / ":startreplace" / ":startgreplace".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
+    nvim_docmd_ex_startinsert(eap);
+}
