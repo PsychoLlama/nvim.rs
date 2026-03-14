@@ -140,6 +140,7 @@ extern void rs_clear_showcmd(void);
 extern void rs_draw_vsep_win(win_T *wp);
 extern void rs_draw_hsep_win(win_T *wp);
 extern void rs_draw_sep_connectors_win(win_T *wp);
+extern void rs_win_scroll_lines(win_T *wp, int row, int line_count);
 
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
@@ -2080,31 +2081,7 @@ redr_statuscol:
 /// at 'row'. Negative `line_count` implies deleting lines at `row`.
 void win_scroll_lines(win_T *wp, int row, int line_count)
 {
-  if (!redrawing() || line_count == 0) {
-    return;
-  }
-
-  int col = 0;
-  int row_off = 0;
-  ScreenGrid *grid = grid_adjust(&wp->w_grid, &row_off, &col);
-
-  // TODO(bfredl): this is due to the call in curs_columns(). We really don't want to
-  // fiddle with the screen outside of update_screen() like this.
-  int checked_width = MIN(grid->cols - col, wp->w_view_width);
-  int checked_height = MIN(grid->rows - row_off, wp->w_view_height);
-
-  // No lines are being moved, just draw over the entire area
-  if (row + abs(line_count) >= checked_height) {
-    return;
-  }
-
-  if (line_count < 0) {
-    grid_del_lines(grid, row + row_off, -line_count,
-                   checked_height + row_off, col, checked_width);
-  } else {
-    grid_ins_lines(grid, row + row_off, line_count,
-                   checked_height + row_off, col, checked_width);
-  }
+  rs_win_scroll_lines(wp, row, line_count);
 }
 
 _Static_assert(HLF_FC == 29, "HLF_FC must be 29");

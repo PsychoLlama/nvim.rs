@@ -2412,6 +2412,89 @@ pub extern "C" fn rs_win_draw_end(
     }
 }
 
+// =============================================================================
+// Phase 1: win_scroll_lines
+// =============================================================================
+
+extern "C" {
+    /// C's grid_adjust: adjusts row/col offsets and returns target ScreenGrid pointer.
+    fn grid_adjust(view: *mut c_void, row_off: *mut c_int, col_off: *mut c_int) -> *mut c_void;
+    /// C's grid_ins_lines: insert lines into a grid.
+    fn grid_ins_lines(
+        grid: *mut c_void,
+        row: c_int,
+        line_count: c_int,
+        end: c_int,
+        col: c_int,
+        width: c_int,
+    );
+    /// C's grid_del_lines: delete lines from a grid.
+    fn grid_del_lines(
+        grid: *mut c_void,
+        row: c_int,
+        line_count: c_int,
+        end: c_int,
+        col: c_int,
+        width: c_int,
+    );
+    /// Get rows from a ScreenGrid pointer.
+    fn nvim_screengrid_get_rows(grid: *mut c_void) -> c_int;
+    /// Get cols from a ScreenGrid pointer.
+    fn nvim_screengrid_get_cols(grid: *mut c_void) -> c_int;
+}
+
+/// Scroll lines in window `wp` grid by `line_count` (positive = scroll up, negative = scroll down).
+///
+/// Rust equivalent of `win_scroll_lines()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_scroll_lines(wp: WinHandle, row: c_int, line_count: c_int) {
+    if !redrawing_impl() || line_count == 0 {
+        return;
+    }
+
+    let mut col: c_int = 0;
+    let mut row_off: c_int = 0;
+    let grid_view = nvim_win_get_w_grid(wp);
+    let grid = grid_adjust(grid_view, &raw mut row_off, &raw mut col);
+
+    let view_width = nvim_win_get_view_width(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    // Get actual grid dimensions via the adjusted grid pointer
+    // We need grid->cols and grid->rows for the bounds check
+    // Use the existing accessors that work on ScreenGrid pointers
+    let grid_rows = nvim_screengrid_get_rows(grid);
+    let grid_cols = nvim_screengrid_get_cols(grid);
+
+    let checked_width = (grid_cols - col).min(view_width);
+    let checked_height = (grid_rows - row_off).min(view_height);
+
+    // No lines are being moved, just draw over the entire area
+    if row + line_count.abs() >= checked_height {
+        return;
+    }
+
+    if line_count < 0 {
+        grid_del_lines(
+            grid,
+            row + row_off,
+            -line_count,
+            checked_height + row_off,
+            col,
+            checked_width,
+        );
+    } else {
+        grid_ins_lines(
+            grid,
+            row + row_off,
+            line_count,
+            checked_height + row_off,
+            col,
+            checked_width,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
