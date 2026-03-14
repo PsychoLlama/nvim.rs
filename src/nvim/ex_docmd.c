@@ -6272,16 +6272,6 @@ int nvim_get_cmd_checktime(void) { return (int)CMD_checktime; }
 int nvim_get_cmd_edit(void) { return (int)CMD_edit; }
 int nvim_get_cmd_file(void) { return (int)CMD_file; }
 
-// EX_ flag values
-uint32_t nvim_get_ex_xfile(void) { return EX_XFILE; }
-uint32_t nvim_get_ex_bufname(void) { return EX_BUFNAME; }
-uint32_t nvim_get_ex_bufunl(void) { return EX_BUFUNL; }
-uint32_t nvim_get_ex_modify(void) { return EX_MODIFY; }
-uint32_t nvim_get_ex_lock_ok(void) { return EX_LOCK_OK; }
-uint32_t nvim_get_ex_wholefold(void) { return EX_WHOLEFOLD; }
-uint32_t nvim_get_ex_range(void) { return EX_RANGE; }
-uint32_t nvim_get_ex_dflall(void) { return EX_DFLALL; }
-uint32_t nvim_get_ex_trlbar(void) { return EX_TRLBAR; }
 
 // Wrappers for static Phase 2 helpers called from Rust
 int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
