@@ -302,6 +302,12 @@ extern int rs_empty_pattern(char *p, size_t len, int delim);
 extern void rs_redrawcmdline(void);
 extern void rs_redrawcmdprompt(void);
 
+// Phase 67: Abbreviation check from Rust
+extern int rs_ccheck_abbr(int c);
+
+// Phase 67: Paste string from Rust
+extern void rs_cmdline_paste_str(const char *s, bool literally);
+
 // Phase 67: Viewstate helpers from Rust
 extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
 extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
@@ -3741,23 +3747,7 @@ static bool cmdline_paste(int regname, bool literally, bool remcr)
 // line.
 void cmdline_paste_str(const char *s, bool literally)
 {
-  if (literally) {
-    put_on_cmdline(s, -1, true);
-  } else {
-    while (*s != NUL) {
-      int cv = (uint8_t)(*s);
-      if (cv == Ctrl_V && s[1]) {
-        s++;
-      }
-      int c = mb_cptr2char_adv(&s);
-      if (cv == Ctrl_V || c == ESC || c == Ctrl_C
-          || c == CAR || c == NL || c == Ctrl_L
-          || (c == Ctrl_BSL && *s == Ctrl_N)) {
-        stuffcharReadbuff(Ctrl_V);
-      }
-      stuffcharReadbuff(c);
-    }
-  }
+  rs_cmdline_paste_str(s, literally);
 }
 
 // This function is called when the screen size changes and with incremental
@@ -3828,28 +3818,7 @@ void redrawcmd(void)
 // backspaces and the replacement string is inserted, followed by "c".
 static int ccheck_abbr(int c)
 {
-  int spos = 0;
-
-  if (p_paste || no_abbr) {         // no abbreviations or in paste mode
-    return false;
-  }
-
-  // Do not consider '<,'> be part of the mapping, skip leading whitespace.
-  // Actually accepts any mark.
-  while (spos < ccline.cmdlen && ascii_iswhite(ccline.cmdbuff[spos])) {
-    spos++;
-  }
-  if (ccline.cmdlen - spos > 5
-      && ccline.cmdbuff[spos] == '\''
-      && ccline.cmdbuff[spos + 2] == ','
-      && ccline.cmdbuff[spos + 3] == '\'') {
-    spos += 5;
-  } else {
-    // check abbreviation from the beginning of the commandline
-    spos = 0;
-  }
-
-  return check_abbr(c, ccline.cmdbuff, ccline.cmdpos, spos);
+  return rs_ccheck_abbr(c);
 }
 
 

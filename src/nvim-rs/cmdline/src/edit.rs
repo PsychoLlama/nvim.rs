@@ -39,6 +39,16 @@ extern "C" {
 
     // Redraw
     fn redrawcmd();
+
+    // Abbreviation support
+    fn nvim_get_p_paste() -> c_int;
+    fn nvim_get_no_abbr() -> c_int;
+    fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> c_int;
+
+    // Paste support
+    fn put_on_cmdline(s: *const c_char, len: c_int, redraw: bool);
+    fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
+    fn stuffcharReadbuff(c: c_int);
 }
 
 // =============================================================================
@@ -821,6 +831,109 @@ pub unsafe extern "C" fn rs_cmdline_insert_str(s: *const c_char, len: usize) -> 
         EditResult::NotChanged => 0,
         EditResult::Failed => -1,
     }
+}
+
+// =============================================================================
+// Paste String
+// =============================================================================
+
+/// Control character constants
+const CTRL_V: c_int = 22;
+const CTRL_BSL: c_int = 28;
+const CTRL_C: c_int = 3;
+const CTRL_L: c_int = 12;
+const CTRL_N: c_int = 14;
+const ESC: c_int = 27;
+const CAR: c_int = 13;
+const NL: c_int = 10;
+
+/// Put a string on the command line.
+///
+/// When `literally` is true, insert literally.
+/// When `literally` is false, insert as typed, but don't leave the command line.
+///
+/// Rust equivalent of `cmdline_paste_str()` from ex_getln.c.
+///
+/// # Safety
+///
+/// `s` must be a valid NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_paste_str(s: *const c_char, literally: bool) {
+    if literally {
+        put_on_cmdline(s, -1, true);
+    } else {
+        let mut p = s;
+        while *p != NUL as c_char {
+            let cv = (*p as u8) as c_int;
+            if cv == CTRL_V && (*p.add(1) != NUL as c_char) {
+                p = p.add(1);
+            }
+            let c = mb_cptr2char_adv(&raw mut p);
+            if cv == CTRL_V
+                || c == ESC
+                || c == CTRL_C
+                || c == CAR
+                || c == NL
+                || c == CTRL_L
+                || (c == CTRL_BSL && *p == CTRL_N as c_char)
+            {
+                stuffcharReadbuff(CTRL_V);
+            }
+            stuffcharReadbuff(c);
+        }
+    }
+}
+
+// =============================================================================
+// Abbreviation Check
+// =============================================================================
+
+/// Check if there is an abbreviation to be expanded at the cursor.
+///
+/// Rust equivalent of `ccheck_abbr()` from ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C functions to access ccline state and check abbreviations.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_ccheck_abbr(c: c_int) -> c_int {
+    // No abbreviations in paste mode
+    if nvim_get_p_paste() != 0 || nvim_get_no_abbr() != 0 {
+        return 0;
+    }
+
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    let cmdlen = nvim_get_ccline_cmdlen();
+    let cmdpos = nvim_get_ccline_cmdpos();
+
+    if cmdbuff.is_null() {
+        return 0;
+    }
+
+    // Find start position: skip leading whitespace for '<,'> ranges
+    let mut spos: c_int = 0;
+
+    // Skip leading whitespace
+    while spos < cmdlen {
+        let ch = *cmdbuff.add(spos as usize) as u8;
+        if ch != b' ' && ch != b'\t' {
+            break;
+        }
+        spos += 1;
+    }
+
+    // Check if we have a '<,'> range marker (any mark like 'a,'b or '<,'>)
+    if cmdlen - spos > 5
+        && *cmdbuff.add(spos as usize) == b'\'' as c_char
+        && *cmdbuff.add((spos + 2) as usize) == b',' as c_char
+        && *cmdbuff.add((spos + 3) as usize) == b'\'' as c_char
+    {
+        spos += 5;
+    } else {
+        spos = 0;
+    }
+
+    check_abbr(c, cmdbuff, cmdpos, spos)
 }
 
 // =============================================================================
