@@ -2031,7 +2031,6 @@ extern "C" {
     fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
 
     // Phase 7: Window and Display Management accessors
-    fn nvim_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool;
     // nvim_qf_update_buffer removed: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4)
     fn nvim_qf_get_bufnr(qi: QfInfoHandle) -> c_int;
     fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);

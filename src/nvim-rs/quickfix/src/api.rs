@@ -1299,7 +1299,6 @@ extern "C" {
     fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
     fn nvim_qf_get_curlist_id(qi: *const c_void) -> u32;
-    fn rs_qf_win_pos_update(qi: *mut c_void, old_qf_index: c_int) -> bool;
     fn rs_qf_incr_changedtick(qfl: *mut c_void);
     fn nvim_di_get_string(di: *const c_void) -> *const std::ffi::c_char;
 
@@ -1929,7 +1928,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
                 nvim_qf_set_ptr(qfl, qf_ptr);
                 nvim_qf_set_index(qfl, new_qfidx);
                 if nvim_qf_get_curlist_id(qi) == nvim_qf_get_id(qfl) {
-                    rs_qf_win_pos_update(qi, old_qfidx);
+                    crate::rs_qf_win_pos_update(qi, old_qfidx);
                 }
                 retval = C_OK;
             }

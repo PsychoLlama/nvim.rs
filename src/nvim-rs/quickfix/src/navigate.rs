@@ -2027,7 +2027,6 @@ pub mod jump_machinery {
         fn nvim_qf_get_index(qfl: *const c_void) -> c_int;
         fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: QfLineHandle);
         fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
-        fn nvim_qf_win_pos_update(qi: *mut c_void, old_qf_index: c_int) -> bool;
         fn nvim_qf_curwin_handle() -> c_int;
         fn nvim_qf_win_close_curwin();
         fn nvim_qf_get_p_swb() -> *mut c_void;
@@ -2126,7 +2125,7 @@ pub mod jump_machinery {
         nvim_qf_set_ptr(qfl, qf_ptr);
 
         // No need to print the error message if it's visible in the error window
-        let print_message = !nvim_qf_win_pos_update(qi, old_qf_index);
+        let print_message = !crate::rs_qf_win_pos_update_impl(qi, old_qf_index);
 
         let prev_winid = nvim_qf_curwin_handle();
 

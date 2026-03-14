@@ -1180,7 +1180,6 @@ bool nvim_qf_list_is_empty(const void *qfl_void)
 // rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10), bodies deleted Phase 11.
 // nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
 // rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
-bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index) { return qi_void == NULL ? false : rs_qf_win_pos_update(qi_void, old_qf_index); }
 // nvim_qf_update_buffer deleted: Rust bypasses via #[link_name = "rs_qf_update_buffer"]
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
 void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
