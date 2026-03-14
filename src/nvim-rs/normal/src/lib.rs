@@ -99,18 +99,6 @@ static VISUAL_MODE_ORIG: AtomicI32 = AtomicI32::new(0);
 // =============================================================================
 
 extern "C" {
-    /// Get the nv_max_linear value.
-    fn nvim_get_nv_max_linear() -> c_int;
-
-    /// Get the command character at index in nv_cmds.
-    fn nvim_get_nv_cmd_char(idx: c_int) -> c_int;
-
-    /// Get the NV_CMDS_SIZE constant.
-    fn nvim_get_nv_cmds_size() -> c_int;
-
-    /// Get the nv_cmd_idx value at position.
-    fn nvim_get_nv_cmd_idx(idx: c_int) -> i16;
-
     /// Call the C simplify_key function.
     fn simplify_key(key: c_int, modp: *mut c_int) -> c_int;
 
@@ -433,37 +421,37 @@ fn find_command_impl(cmdchar: c_int) -> c_int {
     // negative value, but are sorted on their absolute value.
     let abs_char = cmdchar.abs();
 
-    // SAFETY: These are safe accessors to C globals
-    unsafe {
-        let nv_max_linear = nvim_get_nv_max_linear();
-        let nv_cmds_size = nvim_get_nv_cmds_size();
+    let nv_max_linear = crate::dispatch::table::rs_table_get_max_linear();
+    let nv_cmds_size = crate::dispatch::table::rs_table_get_size();
 
-        // If the character is in the first part: The character is the index into
-        // nv_cmd_idx[].
-        if abs_char <= nv_max_linear {
-            return c_int::from(nvim_get_nv_cmd_idx(abs_char));
-        }
-
-        // Perform a binary search.
-        let mut bot = nv_max_linear + 1;
-        let mut top = nv_cmds_size - 1;
-        let mut idx = -1;
-
-        while bot <= top {
-            let i = c_int::midpoint(bot, top);
-            let c = nvim_get_nv_cmd_char(c_int::from(nvim_get_nv_cmd_idx(i))).abs();
-            if abs_char == c {
-                idx = c_int::from(nvim_get_nv_cmd_idx(i));
-                break;
-            }
-            if abs_char > c {
-                bot = i + 1;
-            } else {
-                top = i - 1;
-            }
-        }
-        idx
+    // If the character is in the first part: The character is the index into
+    // nv_cmd_idx[].
+    if abs_char <= nv_max_linear {
+        return c_int::from(crate::dispatch::table::rs_table_get_cmd_idx(abs_char));
     }
+
+    // Perform a binary search.
+    let mut bot = nv_max_linear + 1;
+    let mut top = nv_cmds_size - 1;
+    let mut idx = -1;
+
+    while bot <= top {
+        let i = c_int::midpoint(bot, top);
+        let c = crate::dispatch::table::rs_table_get_cmd_char(c_int::from(
+            crate::dispatch::table::rs_table_get_cmd_idx(i),
+        ))
+        .abs();
+        if abs_char == c {
+            idx = c_int::from(crate::dispatch::table::rs_table_get_cmd_idx(i));
+            break;
+        }
+        if abs_char > c {
+            bot = i + 1;
+        } else {
+            top = i - 1;
+        }
+    }
+    idx
 }
 
 /// FFI wrapper for find_command.

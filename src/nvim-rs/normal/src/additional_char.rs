@@ -50,9 +50,6 @@ extern "C" {
     // oparg_T accessors
     fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
 
-    // Command table accessors
-    fn nvim_get_nv_cmd_flags(idx: c_int) -> c_int;
-
     // Phase 2B wrappers
     fn nvim_plain_vgetc_wrapper() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
@@ -284,7 +281,7 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
         Some(CharTarget::Nchar)
     };
 
-    let flags = nvim_get_nv_cmd_flags(idx);
+    let flags = crate::dispatch::table::rs_table_get_cmd_flags(idx);
     let lang = repl || (flags & NV_LANG != 0);
 
     // Get a second or third character.

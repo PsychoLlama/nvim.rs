@@ -47,9 +47,6 @@ extern "C" {
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
 
-    // Command table accessors
-    fn nvim_get_nv_cmd_flags(idx: c_int) -> c_int;
-
     // Global accessors
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
@@ -112,7 +109,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         let idx = nvim_ns_get_idx(s);
         if nvim_get_finish_op() == 0
             && nvim_oap_get_op_type_ptr(oa) == 0
-            && (idx < 0 || (nvim_get_nv_cmd_flags(idx) & NV_KEEPREG == 0))
+            && (idx < 0 || (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_KEEPREG == 0))
         {
             rs_clearop(oa);
             nvim_set_reg_var_default();

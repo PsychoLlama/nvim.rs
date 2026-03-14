@@ -174,19 +174,6 @@ int nvim_get_opcount(void) { return opcount; }
 
 void nvim_set_opcount(int val) { opcount = val; }
 
-// Dispatch table accessors now forward to Rust (table lives in dispatch/table.rs)
-int nvim_get_nv_max_linear(void) { return rs_table_get_max_linear(); }
-
-int nvim_get_nv_cmd_char(int idx) { return rs_table_get_cmd_char(idx); }
-
-int nvim_get_nv_cmds_size(void) { return rs_table_get_size(); }
-
-int16_t nvim_get_nv_cmd_idx(int idx) { return rs_table_get_cmd_idx(idx); }
-
-unsigned int nvim_get_nv_cmd_flags(int idx) { return (unsigned int)rs_table_get_cmd_flags(idx); }
-
-int nvim_get_nv_cmd_arg(int idx) { return rs_table_get_cmd_arg(idx); }
-
 // =============================================================================
 // oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
 // =============================================================================

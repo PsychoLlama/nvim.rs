@@ -78,9 +78,6 @@ extern "C" {
     fn nvim_oap_set_prev_opcount(oap: OapHandle, val: c_int);
     fn nvim_oap_set_prev_count0(oap: OapHandle, val: c_int);
 
-    // Command table accessors
-    fn nvim_get_nv_cmd_flags(idx: c_int) -> c_int;
-
     // Global accessors (existing)
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_get_VIsual_active() -> c_int;
@@ -260,7 +257,9 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             break 'finish;
         }
 
-        if (nvim_get_nv_cmd_flags(idx) & NV_NCW != 0) && rs_check_text_or_curbuf_locked(oa) {
+        if (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_NCW != 0)
+            && rs_check_text_or_curbuf_locked(oa)
+        {
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }
@@ -274,7 +273,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         if nvim_get_curwin_w_p_rl()
             && nvim_get_KeyTyped()
             && nvim_get_keystuffed() == 0
-            && (nvim_get_nv_cmd_flags(nvim_ns_get_idx(s)) & NV_RL != 0)
+            && (crate::dispatch::table::rs_table_get_cmd_flags(nvim_ns_get_idx(s)) & NV_RL != 0)
         {
             let new_cmdchar = rs_invert_horizontal(nvim_cap_get_cmdchar(ca));
             nvim_cap_set_cmdchar(ca, new_cmdchar);
@@ -314,7 +313,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         // When 'keymodel' contains "startsel" some keys start Select/Visual mode.
         if nvim_get_VIsual_active() == 0 && nvim_get_km_startsel() {
             let cur_idx = nvim_ns_get_idx(s);
-            let flags = nvim_get_nv_cmd_flags(cur_idx);
+            let flags = crate::dispatch::table::rs_table_get_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
                 rs_start_selection();
                 let mut mm = nvim_get_mod_mask();
@@ -438,7 +437,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
 
     // When 'keymodel' contains "stopsel" may stop Select/Visual mode
     if nvim_get_km_stopsel()
-        && (nvim_get_nv_cmd_flags(idx) & NV_STS != 0)
+        && (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_STS != 0)
         && (nvim_get_mod_mask() & MOD_MASK_SHIFT == 0)
     {
         rs_end_visual_mode();
@@ -447,7 +446,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
 
     // Keys that work differently when 'keymodel' contains "startsel"
     if nvim_get_km_startsel() {
-        let flags = nvim_get_nv_cmd_flags(idx);
+        let flags = crate::dispatch::table::rs_table_get_cmd_flags(idx);
         if flags & NV_SS != 0 {
             let mut mm = nvim_get_mod_mask();
             let new_cmdchar = rs_unshift_special(nvim_cap_get_cmdchar(ca), &raw mut mm);

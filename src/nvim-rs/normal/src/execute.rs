@@ -47,8 +47,6 @@ pub const OP_NOP: c_int = 0;
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_nv_cmd_flags(idx: c_int) -> c_int;
-    fn nvim_get_nv_cmd_arg(idx: c_int) -> c_int;
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_reg_recording() -> c_int;
@@ -68,7 +66,7 @@ extern "C" {
 #[inline]
 #[must_use]
 pub fn get_cmd_flags(idx: c_int) -> c_int {
-    unsafe { nvim_get_nv_cmd_flags(idx) }
+    crate::dispatch::table::rs_table_get_cmd_flags(idx)
 }
 
 /// Get the command argument for the command at index.
@@ -80,7 +78,7 @@ pub fn get_cmd_flags(idx: c_int) -> c_int {
 #[inline]
 #[must_use]
 pub fn get_cmd_arg(idx: c_int) -> c_int {
-    unsafe { nvim_get_nv_cmd_arg(idx) }
+    crate::dispatch::table::rs_table_get_cmd_arg(idx)
 }
 
 /// Check if a command needs an additional character.
