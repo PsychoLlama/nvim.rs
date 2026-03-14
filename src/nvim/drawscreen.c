@@ -147,6 +147,9 @@ extern void rs_screenclear(void);
 extern void rs_drawscreen_screen_resize(int width, int height);
 extern void rs_show_cursor_info_later(bool force);
 extern int rs_update_screen(void);
+extern void rs_win_update_visual_region(win_T *wp, buf_T *buf, int type,
+                                        int top_end, bool scrolled_down,
+                                        int *mid_start, int *mid_end);
 
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
@@ -703,174 +706,8 @@ static void win_update(win_T *wp)
   }
 
   // check if we are updating or removing the inverted part
-  if ((VIsual_active && buf == curwin->w_buffer)
-      || (wp->w_old_cursor_lnum != 0 && type != UPD_NOT_VALID)) {
-    linenr_T from, to;
-
-    if (VIsual_active) {
-      if (VIsual_mode != wp->w_old_visual_mode || type == UPD_INVERTED_ALL) {
-        // If the type of Visual selection changed, redraw the whole
-        // selection.  Also when the ownership of the X selection is
-        // gained or lost.
-        if (curwin->w_cursor.lnum < VIsual.lnum) {
-          from = curwin->w_cursor.lnum;
-          to = VIsual.lnum;
-        } else {
-          from = VIsual.lnum;
-          to = curwin->w_cursor.lnum;
-        }
-        // redraw more when the cursor moved as well
-        from = MIN(MIN(from, wp->w_old_cursor_lnum), wp->w_old_visual_lnum);
-        to = MAX(MAX(to, wp->w_old_cursor_lnum), wp->w_old_visual_lnum);
-      } else {
-        // Find the line numbers that need to be updated: The lines
-        // between the old cursor position and the current cursor
-        // position.  Also check if the Visual position changed.
-        if (curwin->w_cursor.lnum < wp->w_old_cursor_lnum) {
-          from = curwin->w_cursor.lnum;
-          to = wp->w_old_cursor_lnum;
-        } else {
-          from = wp->w_old_cursor_lnum;
-          to = curwin->w_cursor.lnum;
-          if (from == 0) {              // Visual mode just started
-            from = to;
-          }
-        }
-
-        if (VIsual.lnum != wp->w_old_visual_lnum
-            || VIsual.col != wp->w_old_visual_col) {
-          if (wp->w_old_visual_lnum < from
-              && wp->w_old_visual_lnum != 0) {
-            from = wp->w_old_visual_lnum;
-          }
-          to = MAX(MAX(to, wp->w_old_visual_lnum), VIsual.lnum);
-          from = MIN(from, VIsual.lnum);
-        }
-      }
-
-      // If in block mode and changed column or curwin->w_curswant:
-      // update all lines.
-      // First compute the actual start and end column.
-      if (VIsual_mode == Ctrl_V) {
-        colnr_T fromc, toc;
-        unsigned save_ve_flags = curwin->w_ve_flags;
-
-        if (curwin->w_p_lbr) {
-          curwin->w_ve_flags = kOptVeFlagAll;
-        }
-
-        getvcols(wp, &VIsual, &curwin->w_cursor, &fromc, &toc);
-        toc++;
-        curwin->w_ve_flags = save_ve_flags;
-        // Highlight to the end of the line, unless 'virtualedit' has
-        // "block".
-        if (curwin->w_curswant == MAXCOL) {
-          if (get_ve_flags(curwin) & kOptVeFlagBlock) {
-            pos_T pos;
-            int cursor_above = curwin->w_cursor.lnum < VIsual.lnum;
-
-            // Need to find the longest line.
-            toc = 0;
-            pos.coladd = 0;
-            for (pos.lnum = curwin->w_cursor.lnum;
-                 cursor_above ? pos.lnum <= VIsual.lnum : pos.lnum >= VIsual.lnum;
-                 pos.lnum += cursor_above ? 1 : -1) {
-              colnr_T t;
-
-              pos.col = ml_get_buf_len(wp->w_buffer, pos.lnum);
-              getvvcol(wp, &pos, NULL, NULL, &t);
-              toc = MAX(toc, t);
-            }
-            toc++;
-          } else {
-            toc = MAXCOL;
-          }
-        }
-
-        if (fromc != wp->w_old_cursor_fcol
-            || toc != wp->w_old_cursor_lcol) {
-          from = MIN(from, VIsual.lnum);
-          to = MAX(to, VIsual.lnum);
-        }
-        wp->w_old_cursor_fcol = fromc;
-        wp->w_old_cursor_lcol = toc;
-      }
-    } else {
-      // Use the line numbers of the old Visual area.
-      if (wp->w_old_cursor_lnum < wp->w_old_visual_lnum) {
-        from = wp->w_old_cursor_lnum;
-        to = wp->w_old_visual_lnum;
-      } else {
-        from = wp->w_old_visual_lnum;
-        to = wp->w_old_cursor_lnum;
-      }
-    }
-
-    // There is no need to update lines above the top of the window.
-    from = MAX(from, wp->w_topline);
-
-    // If we know the value of w_botline, use it to restrict the update to
-    // the lines that are visible in the window.
-    if (wp->w_valid & VALID_BOTLINE) {
-      from = MIN(from, wp->w_botline - 1);
-      to = MIN(to, wp->w_botline - 1);
-    }
-
-    // Find the minimal part to be updated.
-    // Watch out for scrolling that made entries in w_lines[] invalid.
-    // E.g., CTRL-U makes the first half of w_lines[] invalid and sets
-    // top_end; need to redraw from top_end to the "to" line.
-    // A middle mouse click with a Visual selection may change the text
-    // above the Visual area and reset wl_valid, do count these for
-    // mid_end (in srow).
-    if (mid_start > 0) {
-      linenr_T lnum = wp->w_topline;
-      int idx = 0;
-      int srow = 0;
-      if (scrolled_down) {
-        mid_start = top_end;
-      } else {
-        mid_start = 0;
-      }
-      while (lnum < from && idx < wp->w_lines_valid) {          // find start
-        if (wp->w_lines[idx].wl_valid) {
-          mid_start += wp->w_lines[idx].wl_size;
-        } else if (!scrolled_down) {
-          srow += wp->w_lines[idx].wl_size;
-        }
-        idx++;
-        if (idx < wp->w_lines_valid && wp->w_lines[idx].wl_valid) {
-          lnum = wp->w_lines[idx].wl_lnum;
-        } else {
-          lnum++;
-        }
-      }
-      srow += mid_start;
-      mid_end = wp->w_view_height;
-      for (; idx < wp->w_lines_valid; idx++) {                  // find end
-        if (wp->w_lines[idx].wl_valid
-            && wp->w_lines[idx].wl_lnum >= to + 1) {
-          // Only update until first row of this line
-          mid_end = srow;
-          break;
-        }
-        srow += wp->w_lines[idx].wl_size;
-      }
-    }
-  }
-
-  if (VIsual_active && buf == curwin->w_buffer) {
-    wp->w_old_visual_mode = (char)VIsual_mode;
-    wp->w_old_cursor_lnum = curwin->w_cursor.lnum;
-    wp->w_old_visual_lnum = VIsual.lnum;
-    wp->w_old_visual_col = VIsual.col;
-    wp->w_old_curswant = curwin->w_curswant;
-  } else {
-    wp->w_old_visual_mode = 0;
-    wp->w_old_cursor_lnum = 0;
-    wp->w_old_visual_lnum = 0;
-    wp->w_old_visual_col = 0;
-  }
+  rs_win_update_visual_region(wp, buf, type, top_end, scrolled_down,
+                              &mid_start, &mid_end);
 
   foldinfo_T cursorline_fi = { 0 };
   win_update_cursorline(wp, &cursorline_fi);

@@ -2804,6 +2804,43 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
 }
 
 // =============================================================================
+// Phase 6: win_update visual region extraction
+// =============================================================================
+
+extern "C" {
+    /// C batch helper implementing the visual region update section of win_update().
+    fn nvim_win_visual_region_impl(
+        wp: WinHandle,
+        buf: BufHandle,
+        type_: c_int,
+        top_end: c_int,
+        scrolled_down: bool,
+        mid_start: *mut c_int,
+        mid_end: *mut c_int,
+    );
+}
+
+/// Visual mode region update section extracted from `win_update()`.
+///
+/// Computes which screen rows need redrawing due to Visual selection changes,
+/// updates mid_start/mid_end, and saves old visual state into window fields.
+///
+/// # Safety
+/// Must be called from within the win_update() context with valid wp/buf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_update_visual_region(
+    wp: WinHandle,
+    buf: BufHandle,
+    type_: c_int,
+    top_end: c_int,
+    scrolled_down: bool,
+    mid_start: *mut c_int,
+    mid_end: *mut c_int,
+) {
+    nvim_win_visual_region_impl(wp, buf, type_, top_end, scrolled_down, mid_start, mid_end);
+}
+
+// =============================================================================
 // Phase 5: update_screen
 // =============================================================================
 
