@@ -586,6 +586,21 @@ void msg_grid_validate(void)
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 static bool is_multihl = false;
 
+// Phase 3: msg_keep accessors
+int nvim_get_is_multihl(void) { return is_multihl ? 1 : 0; }
+void nvim_set_vim_var_statusmsg(const char *s) { set_vim_var_string(VV_STATUSMSG, s, -1); }
+
+/// Check if the message should be added to history.
+/// Encapsulates the complex condition from msg_keep.
+int nvim_msg_keep_should_add_hist(const char *s)
+{
+  return !is_multihl
+         && (s != keep_msg
+             || (*s != '<' && msg_hist_last != NULL
+                 && kv_size(msg_hist_last->msg) > 0
+                 && strcmp(s, kv_A(msg_hist_last->msg, 0).text.data) != 0));
+}
+
 /// Format a progress message, adding title and percent if given.
 ///
 /// @param hl_msg Message chunks
@@ -698,79 +713,6 @@ MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bo
     hl_msg_free(hl_msg);
   }
   return id;
-}
-
-/// @param keep set keep_msg if it doesn't scroll
-bool msg_keep(const char *s, int hl_id, bool keep, bool multiline)
-  FUNC_ATTR_NONNULL_ALL
-{
-  static int entered = 0;
-
-  if (keep && multiline) {
-    // Not implemented. 'multiline' is only used by nvim-added messages,
-    // which should avoid 'keep' behavior (just show the message at
-    // the correct time already).
-    abort();
-  }
-
-  // Skip messages not match ":filter pattern".
-  // Don't filter when there is an error.
-  if (!emsg_on_display && message_filtered(s)) {
-    return true;
-  }
-
-  if (hl_id == 0) {
-    set_vim_var_string(VV_STATUSMSG, s, -1);
-  }
-
-  // It is possible that displaying a messages causes a problem (e.g.,
-  // when redrawing the window), which causes another message, etc..    To
-  // break this loop, limit the recursiveness to 3 levels.
-  if (entered >= 3) {
-    return true;
-  }
-  entered++;
-
-  // Add message to history unless it's a multihl, repeated kept or truncated message.
-  if (!is_multihl
-      && (s != keep_msg
-          || (*s != '<' && msg_hist_last != NULL
-              && strcmp(s, msg_hist_last->msg.items[0].text.data) != 0))) {
-    msg_hist_add(s, -1, hl_id);
-  }
-
-  if (!is_multihl) {
-    msg_start();
-  }
-  // Truncate the message if needed.
-  char *buf = msg_strtrunc(s, false);
-  if (buf != NULL) {
-    s = buf;
-  }
-
-  bool need_clear = true;
-  if (multiline) {
-    msg_multiline(cstr_as_string(s), hl_id, false, false, &need_clear);
-  } else {
-    msg_outtrans(s, hl_id, false);
-  }
-  if (need_clear) {
-    msg_clr_eos();
-  }
-  bool retval = true;
-  if (!is_multihl) {
-    retval = msg_end();
-  }
-
-  if (keep && retval && vim_strsize(s) < (Rows - cmdline_row - 1) * Columns + sc_col) {
-    set_keep_msg(s, 0);
-  }
-
-  need_fileinfo = false;
-
-  xfree(buf);
-  entered--;
-  return retval;
 }
 
 

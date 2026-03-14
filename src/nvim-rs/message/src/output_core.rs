@@ -31,7 +31,6 @@ pub struct NvimString {
 
 extern "C" {
     // Core message output functions (call into C until fully migrated)
-    fn msg_keep(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int;
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
     fn msg_clr_eos_force();
     fn msg_ext_ui_flush();
@@ -83,6 +82,22 @@ extern "C" {
     fn msg_scroll_up(may_throttle: c_int, zerocmd: c_int);
     fn nvim_redir_write_newline();
     fn msg_clr_eos();
+
+    // Phase 3: msg_keep accessors
+    fn nvim_get_is_multihl() -> c_int;
+    fn nvim_set_vim_var_statusmsg(s: *const c_char);
+    fn nvim_msg_keep_should_add_hist(s: *const c_char) -> c_int;
+    fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_get_sc_col() -> c_int;
+    fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
+    fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+}
+
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    // Also declared in format.rs — same C symbol, safe to re-declare here.
+    fn nvim_xfree(ptr: *mut c_char);
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -115,6 +130,118 @@ const fn k_third(c: c_int) -> u8 {
 // Core Message Output Functions
 // ============================================================================
 
+/// Recursion counter for msg_keep (mirrors the C `static int entered`).
+static ENTERED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+/// Inner implementation of msg_keep.
+///
+/// Display a message with optional keep_msg behavior. This is the
+/// Rust implementation of the C function `msg_keep`.
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+unsafe fn msg_keep_impl(s: *const c_char, hl_id: c_int, keep: c_int, multiline: c_int) -> c_int {
+    use std::sync::atomic::Ordering;
+
+    if keep != 0 && multiline != 0 {
+        // Not implemented: 'multiline' is only used by nvim-added messages,
+        // which should avoid 'keep' behavior.
+        std::process::abort();
+    }
+
+    // Skip messages not matching ":filter pattern". Don't filter when there is an error.
+    let emsg_on_display = crate::error::rs_emsg_on_display_get();
+    if emsg_on_display == 0 && crate::misc::rs_message_filtered(s) {
+        return 1; // true
+    }
+
+    if hl_id == 0 {
+        nvim_set_vim_var_statusmsg(s);
+    }
+
+    // Recursion guard: limit to 3 levels.
+    let entered = ENTERED.load(Ordering::Relaxed);
+    if entered >= 3 {
+        return 1; // true
+    }
+    ENTERED.store(entered + 1, Ordering::Relaxed);
+
+    // Add message to history unless it's a multihl, repeated, or truncated message.
+    if nvim_msg_keep_should_add_hist(s) != 0 {
+        nvim_msg_hist_add_str(s, hl_id);
+    }
+
+    if nvim_get_is_multihl() == 0 {
+        rs_msg_start();
+    }
+
+    // Truncate the message if needed.
+    let buf = msg_strtrunc(s, 0); // false
+    let s = if buf.is_null() { s } else { buf };
+
+    let mut need_clear = true;
+    if multiline != 0 {
+        // Create a NvimString for msg_multiline
+        let len = std::ffi::CStr::from_ptr(s).to_bytes().len();
+        let str_ = NvimString {
+            data: s.cast_mut(),
+            size: len,
+        };
+        rs_msg_multiline(
+            str_,
+            hl_id,
+            false,
+            false,
+            std::ptr::addr_of_mut!(need_clear),
+        );
+    } else {
+        msg_outtrans(s, hl_id, false);
+    }
+    if need_clear {
+        msg_clr_eos();
+    }
+
+    let retval: c_int = if nvim_get_is_multihl() == 0 {
+        rs_msg_end()
+    } else {
+        1 // true
+    };
+
+    if keep != 0
+        && retval != 0
+        && nvim_vim_strsize(s)
+            < (nvim_get_rows() - nvim_get_cmdline_row() - 1) * nvim_get_columns()
+                + nvim_get_sc_col()
+    {
+        crate::misc::rs_set_keep_msg(s, 0);
+    }
+
+    nvim_set_need_fileinfo(0);
+
+    if !buf.is_null() {
+        nvim_xfree(buf);
+    }
+
+    ENTERED.store(ENTERED.load(Ordering::Relaxed) - 1, Ordering::Relaxed);
+    retval
+}
+
+/// Display a message with optional keep behavior (C-exported version).
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+#[export_name = "msg_keep"]
+#[must_use]
+pub unsafe extern "C" fn rs_msg_keep_exported(
+    s: *const c_char,
+    hl_id: c_int,
+    keep: c_int,
+    multiline: c_int,
+) -> c_int {
+    msg_keep_impl(s, hl_id, keep, multiline)
+}
+
 /// Display a message to the user.
 ///
 /// This is the primary function for displaying a message string.
@@ -133,7 +260,7 @@ const fn k_third(c: c_int) -> u8 {
 #[export_name = "msg"]
 #[must_use]
 pub unsafe extern "C" fn rs_msg(s: *const c_char, hl_id: c_int) -> c_int {
-    msg_keep(s, hl_id, 0, 0)
+    msg_keep_impl(s, hl_id, 0, 0)
 }
 
 /// Display a message and optionally keep it displayed.
@@ -151,7 +278,7 @@ pub unsafe extern "C" fn rs_msg(s: *const c_char, hl_id: c_int) -> c_int {
 /// - `s` must be a valid NUL-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_keep(s: *const c_char, hl_id: c_int, keep: c_int) -> c_int {
-    msg_keep(s, hl_id, keep, 0)
+    msg_keep_impl(s, hl_id, keep, 0)
 }
 
 /// Display a multiline message.
@@ -173,7 +300,7 @@ pub unsafe extern "C" fn rs_msg_multiline_simple(
     hl_id: c_int,
     multiline: c_int,
 ) -> c_int {
-    msg_keep(s, hl_id, 0, multiline)
+    msg_keep_impl(s, hl_id, 0, multiline)
 }
 
 /// Output a string to the message area.
@@ -571,7 +698,7 @@ pub unsafe extern "C" fn rs_msg_advance(col: c_int) {
 #[must_use]
 pub unsafe extern "C" fn rs_verb_msg(s: *const c_char) -> c_int {
     verbose_enter();
-    let n = msg_keep(s, 0, 0, 0);
+    let n = msg_keep_impl(s, 0, 0, 0);
     verbose_leave();
     n
 }

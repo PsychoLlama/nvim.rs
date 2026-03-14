@@ -74,6 +74,9 @@ void msg_ui_flush(void);
 // Phase 2 (message migration): Rust-implemented replacements
 void msg_start(void);
 
+// Phase 3 (message migration): Rust-implemented replacements
+bool msg_keep(const char *s, int hl_id, bool keep, bool multiline);
+
 // Phase 1: Simple leaf functions migrated to Rust
 bool msg(const char *s, int hl_id);
 int verb_msg(const char *s);
