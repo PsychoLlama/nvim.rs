@@ -298,6 +298,18 @@ extern void rs_ex_stopinsert(exarg_T *eap);
 extern void rs_ex_checkpath(exarg_T *eap);
 extern void rs_ex_psearch(exarg_T *eap);
 extern void rs_set_pressedreturn(bool val);
+// Phase 3 (batch plan) Rust FFI declarations
+extern void rs_ex_winsize(exarg_T *eap);
+extern void rs_ex_colorscheme(exarg_T *eap);
+extern void rs_ex_mark(exarg_T *eap);
+extern void rs_ex_print(exarg_T *eap);
+extern void rs_ex_edit(exarg_T *eap);
+extern void rs_ex_pwd(exarg_T *eap);
+extern void rs_ex_only(exarg_T *eap);
+extern void rs_ex_close(exarg_T *eap);
+extern int rs_check_more(int message, int forceit);
+extern int rs_before_quit_all(exarg_T *eap);
+extern char *rs_get_argopt_name(void *xp, int idx);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -1951,21 +1963,7 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// Function given to ExpandGeneric() to obtain the list of ++opt names.
 static char *get_argopt_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  // Note: Keep this in sync with getargopt().
-  static char *(p_opt_values[]) = {
-    "fileformat=",
-    "encoding=",
-    "binary",
-    "nobinary",
-    "bad=",
-    "edit",
-    "p",
-  };
-
-  if (idx < (int)ARRAY_SIZE(p_opt_values)) {
-    return p_opt_values[idx];
-  }
-  return NULL;
+  return rs_get_argopt_name(xp, idx);
 }
 
 /// Command-line expansion for ++opt=name.
@@ -2106,51 +2104,13 @@ static void ex_blast(exarg_T *eap)
 /// @return  FAIL and give error message if 'message' true, return OK otherwise
 static int check_more(bool message, bool forceit)
 {
-  int n = ARGCOUNT - curwin->w_arg_idx - 1;
-
-  if (!forceit && rs_only_one_window()
-      && ARGCOUNT > 1 && !arg_had_last && n > 0 && quitmore == 0) {
-    if (message) {
-      if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && curbuf->b_fname != NULL) {
-        char buff[DIALOG_MSG_SIZE];
-
-        vim_snprintf(buff, DIALOG_MSG_SIZE,
-                     NGETTEXT("%d more file to edit.  Quit anyway?",
-                              "%d more files to edit.  Quit anyway?", n), n);
-        if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 1) == VIM_YES) {
-          return OK;
-        }
-        return FAIL;
-      }
-      semsg(NGETTEXT("E173: %" PRId64 " more file to edit",
-                     "E173: %" PRId64 " more files to edit", n), (int64_t)n);
-      quitmore = 2;                 // next try to quit is allowed
-    }
-    return FAIL;
-  }
-  return OK;
+  return rs_check_more(message ? 1 : 0, forceit ? 1 : 0);
 }
 
 
 static void ex_colorscheme(exarg_T *eap)
 {
-  if (*eap->arg == NUL) {
-    char *expr = xstrdup("g:colors_name");
-
-    emsg_off++;
-    char *p = eval_to_string(expr, false, false);
-    emsg_off--;
-    xfree(expr);
-
-    if (p != NULL) {
-      msg(p, 0);
-      xfree(p);
-    } else {
-      msg("default", 0);
-    }
-  } else if (load_colors(eap->arg) == FAIL) {
-    semsg(_("E185: Cannot find color scheme '%s'"), eap->arg);
-  }
+  rs_ex_colorscheme(eap);
 }
 
 static void ex_highlight(exarg_T *eap)
@@ -2222,24 +2182,7 @@ static void ex_cquit(exarg_T *eap)
 /// Returns FAIL when quitting should be aborted.
 int before_quit_all(exarg_T *eap)
 {
-  if (cmdwin_type != 0) {
-    cmdwin_result = eap->forceit
-                    ? K_XF1  // open_cmdwin() takes care of this
-                    : K_XF2;
-    return FAIL;
-  }
-
-  // Don't quit while editing the command line.
-  if (text_locked()) {
-    text_locked_msg();
-    return FAIL;
-  }
-
-  if (before_quit_autocmds(curwin, true, eap->forceit)) {
-    return FAIL;
-  }
-
-  return OK;
+  return rs_before_quit_all(eap);
 }
 
 /// ":qall": try to quit all windows
@@ -2303,27 +2246,7 @@ static void ex_restart(exarg_T *eap)
 /// ":close": close current window, unless it is the last one
 static void ex_close(exarg_T *eap)
 {
-  win_T *win = NULL;
-  int winnr = 0;
-  if (cmdwin_type != 0) {
-    cmdwin_result = Ctrl_C;
-  } else if (!text_locked() && !curbuf_locked()) {
-    if (eap->addr_count == 0) {
-      ex_win_close(eap->forceit, curwin, NULL);
-    } else {
-      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        winnr++;
-        if (winnr == eap->line2) {
-          win = wp;
-          break;
-        }
-      }
-      if (win == NULL) {
-        win = lastwin;
-      }
-      ex_win_close(eap->forceit, win, NULL);
-    }
-  }
+  rs_ex_close(eap);
 }
 
 /// ":pclose": Close any preview window.
@@ -2490,23 +2413,7 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
 /// ":only".
 static void ex_only(exarg_T *eap)
 {
-  win_T *wp;
-
-  if (eap->addr_count > 0) {
-    linenr_T wnr = eap->line2;
-    for (wp = firstwin; --wnr > 0;) {
-      if (wp->w_next == NULL) {
-        break;
-      }
-      wp = wp->w_next;
-    }
-  } else {
-    wp = curwin;
-  }
-  if (wp != curwin) {
-    win_goto(wp);
-  }
-  close_others(true, eap->forceit);
+  rs_ex_only(eap);
 }
 
 static void ex_hide(exarg_T *eap)
@@ -2586,24 +2493,7 @@ static void ex_exit(exarg_T *eap)
 /// ":print", ":list", ":number".
 static void ex_print(exarg_T *eap)
 {
-  if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-    emsg(_(e_empty_buffer));
-  } else {
-    for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; os_breakcheck()) {
-      rs_print_line(line,
-                    (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
-                     || (eap->flags & EXFLAG_NR)),
-                    eap->cmdidx == CMD_list || (eap->flags & EXFLAG_LIST),
-                    line == eap->line1);
-      line++;
-    }
-    setpcmark();
-    // put cursor at last line
-    curwin->w_cursor.lnum = eap->line2;
-    beginline(BL_SOL | BL_FIX);
-  }
-
-  ex_no_reprint = true;
+  rs_ex_print(eap);
 }
 
 static void ex_goto(exarg_T *eap)
@@ -3147,23 +3037,7 @@ static void ex_find(exarg_T *eap)
 /// ":edit", ":badd", ":balt", ":visual".
 static void ex_edit(exarg_T *eap)
 {
-  char *ffname = eap->cmdidx == CMD_enew ? NULL : eap->arg;
-
-  // Exclude commands which keep the window's current buffer
-  if (eap->cmdidx != CMD_badd
-      && eap->cmdidx != CMD_balt
-      // All other commands must obey 'winfixbuf' / ! rules
-      && (is_other_file(0, ffname) && !check_can_set_curbuf_forceit(eap->forceit))) {
-    return;
-  }
-
-  // prevent use of :edit on prompt-buffers
-  if (bt_prompt(curbuf) && eap->cmdidx == CMD_edit && *eap->arg == NUL) {
-    emsg("cannot :edit a prompt buffer");
-    return;
-  }
-
-  do_exedit(eap, NULL);
+  rs_ex_edit(eap);
 }
 
 /// ":edit <file>" command and alike.
@@ -3528,26 +3402,7 @@ void ex_cd(exarg_T *eap)
 /// ":pwd".
 static void ex_pwd(exarg_T *eap)
 {
-  if (os_dirname(NameBuff, MAXPATHL) == OK) {
-#ifdef BACKSLASH_IN_FILENAME
-    slash_adjust(NameBuff);
-#endif
-    if (p_verbose > 0) {
-      char *context = "global";
-      if (last_chdir_reason != NULL) {
-        context = last_chdir_reason;
-      } else if (curwin->w_localdir != NULL) {
-        context = "window";
-      } else if (curtab->tp_localdir != NULL) {
-        context = "tabpage";
-      }
-      smsg(0, "[%s] %s", context, NameBuff);
-    } else {
-      msg(NameBuff, 0);
-    }
-  } else {
-    emsg(_("E187: Unknown"));
-  }
+  rs_ex_pwd(eap);
 }
 
 /// ":=".
@@ -3602,21 +3457,7 @@ void do_sleep(int64_t msec, bool hide_cursor)
 /// ":winsize" command (obsolete).
 static void ex_winsize(exarg_T *eap)
 {
-  char *arg = eap->arg;
-
-  if (!ascii_isdigit(*arg)) {
-    semsg(_(e_invarg2), arg);
-    return;
-  }
-  int w = getdigits_int(&arg, false, 10);
-  arg = skipwhite(arg);
-  char *p = arg;
-  int h = getdigits_int(&arg, false, 10);
-  if (*p != NUL && *arg == NUL) {
-    screen_resize(w, h);
-  } else {
-    emsg(_("E465: :winsize requires two number arguments"));
-  }
+  rs_ex_winsize(eap);
 }
 
 static void ex_wincmd(exarg_T *eap)
@@ -4045,23 +3886,7 @@ FILE *open_exfile(char *fname, int forceit, char *mode)
 /// ":mark" and ":k".
 static void ex_mark(exarg_T *eap)
 {
-  if (*eap->arg == NUL) {               // No argument?
-    emsg(_(e_argreq));
-    return;
-  }
-
-  if (eap->arg[1] != NUL) {         // more than one character?
-    semsg(_(e_trailing_arg), eap->arg);
-    return;
-  }
-
-  pos_T pos = curwin->w_cursor;             // save curwin->w_cursor
-  curwin->w_cursor.lnum = eap->line2;
-  beginline(BL_WHITE | BL_FIX);
-  if (setmark(*eap->arg) == FAIL) {   // set mark
-    emsg(_("E191: Argument must be a letter or forward/backward quote"));
-  }
-  curwin->w_cursor = pos;             // restore curwin->w_cursor
+  rs_ex_mark(eap);
 }
 
 /// Update w_topline, w_leftcol and the cursor position.
@@ -5965,8 +5790,33 @@ void nvim_docmd_set_exiting(int val) { exiting = (bool)val; }
 // autowriteall option
 int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 
-// Wrapper for static check_more
-int nvim_docmd_check_more(int message, int forceit) { return check_more((bool)message, (bool)forceit); }
+// check_more logic (direct implementation for Rust FFI).
+int nvim_docmd_check_more(int message, int forceit)
+{
+  int n = ARGCOUNT - curwin->w_arg_idx - 1;
+
+  if (!forceit && rs_only_one_window()
+      && ARGCOUNT > 1 && !arg_had_last && n > 0 && quitmore == 0) {
+    if (message) {
+      if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && curbuf->b_fname != NULL) {
+        char buff[DIALOG_MSG_SIZE];
+
+        vim_snprintf(buff, DIALOG_MSG_SIZE,
+                     NGETTEXT("%d more file to edit.  Quit anyway?",
+                              "%d more files to edit.  Quit anyway?", n), n);
+        if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 1) == VIM_YES) {
+          return OK;
+        }
+        return FAIL;
+      }
+      semsg(NGETTEXT("E173: %" PRId64 " more file to edit",
+                     "E173: %" PRId64 " more files to edit", n), (int64_t)n);
+      quitmore = 2;                 // next try to quit is allowed
+    }
+    return FAIL;
+  }
+  return OK;
+}
 
 // ONE_WINDOW || eap->addr_count == 0 check for ex_quit
 int nvim_docmd_one_window_p(int addr_count)
@@ -6498,8 +6348,28 @@ int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1
 /// CMD_autocmd value.
 int nvim_docmd_cmd_autocmd(void) { return (int)CMD_autocmd; }
 
-/// Wrapper for before_quit_all.
-int nvim_docmd_before_quit_all(exarg_T *eap) { return before_quit_all(eap); }
+/// before_quit_all logic (direct implementation for Rust FFI).
+int nvim_docmd_before_quit_all(exarg_T *eap)
+{
+  if (cmdwin_type != 0) {
+    cmdwin_result = eap->forceit
+                    ? K_XF1  // open_cmdwin() takes care of this
+                    : K_XF2;
+    return FAIL;
+  }
+
+  // Don't quit while editing the command line.
+  if (text_locked()) {
+    text_locked_msg();
+    return FAIL;
+  }
+
+  if (before_quit_autocmds(curwin, true, eap->forceit)) {
+    return FAIL;
+  }
+
+  return OK;
+}
 
 /// ex_setfiletype logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_setfiletype(exarg_T *eap)
@@ -6659,4 +6529,206 @@ void nvim_docmd_back_to_current_window(win_T *curwin_save)
 void nvim_docmd_do_exbuffer_full(exarg_T *eap)
 {
   do_exbuffer(eap);
+}
+
+// Phase 3 C wrappers (direct implementations for Rust FFI)
+
+/// ex_winsize logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_winsize(exarg_T *eap)
+{
+  char *arg = eap->arg;
+
+  if (!ascii_isdigit(*arg)) {
+    semsg(_(e_invarg2), arg);
+    return;
+  }
+  int w = getdigits_int(&arg, false, 10);
+  arg = skipwhite(arg);
+  char *p = arg;
+  int h = getdigits_int(&arg, false, 10);
+  if (*p != NUL && *arg == NUL) {
+    screen_resize(w, h);
+  } else {
+    emsg(_("E465: :winsize requires two number arguments"));
+  }
+}
+
+/// ex_colorscheme logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_colorscheme(exarg_T *eap)
+{
+  if (*eap->arg == NUL) {
+    char *expr = xstrdup("g:colors_name");
+
+    emsg_off++;
+    char *p = eval_to_string(expr, false, false);
+    emsg_off--;
+    xfree(expr);
+
+    if (p != NULL) {
+      msg(p, 0);
+      xfree(p);
+    } else {
+      msg("default", 0);
+    }
+  } else if (load_colors(eap->arg) == FAIL) {
+    semsg(_("E185: Cannot find color scheme '%s'"), eap->arg);
+  }
+}
+
+/// ex_mark logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_mark(exarg_T *eap)
+{
+  if (*eap->arg == NUL) {
+    emsg(_(e_argreq));
+    return;
+  }
+
+  if (eap->arg[1] != NUL) {
+    semsg(_(e_trailing_arg), eap->arg);
+    return;
+  }
+
+  pos_T pos = curwin->w_cursor;
+  curwin->w_cursor.lnum = eap->line2;
+  beginline(BL_WHITE | BL_FIX);
+  if (setmark(*eap->arg) == FAIL) {
+    emsg(_("E191: Argument must be a letter or forward/backward quote"));
+  }
+  curwin->w_cursor = pos;
+}
+
+/// ex_print logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_print(exarg_T *eap)
+{
+  if (curbuf->b_ml.ml_flags & ML_EMPTY) {
+    emsg(_(e_empty_buffer));
+  } else {
+    for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; os_breakcheck()) {
+      rs_print_line(line,
+                    (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
+                     || (eap->flags & EXFLAG_NR)),
+                    eap->cmdidx == CMD_list || (eap->flags & EXFLAG_LIST),
+                    line == eap->line1);
+      line++;
+    }
+    setpcmark();
+    curwin->w_cursor.lnum = eap->line2;
+    beginline(BL_SOL | BL_FIX);
+  }
+
+  ex_no_reprint = true;
+}
+
+/// ex_edit logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_edit(exarg_T *eap)
+{
+  char *ffname = eap->cmdidx == CMD_enew ? NULL : eap->arg;
+
+  // Exclude commands which keep the window's current buffer
+  if (eap->cmdidx != CMD_badd
+      && eap->cmdidx != CMD_balt
+      && (is_other_file(0, ffname) && !check_can_set_curbuf_forceit(eap->forceit))) {
+    return;
+  }
+
+  // prevent use of :edit on prompt-buffers
+  if (bt_prompt(curbuf) && eap->cmdidx == CMD_edit && *eap->arg == NUL) {
+    emsg("cannot :edit a prompt buffer");
+    return;
+  }
+
+  do_exedit(eap, NULL);
+}
+
+/// ex_pwd logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_pwd(exarg_T *eap)
+{
+  if (os_dirname(NameBuff, MAXPATHL) == OK) {
+#ifdef BACKSLASH_IN_FILENAME
+    slash_adjust(NameBuff);
+#endif
+    if (p_verbose > 0) {
+      char *context = "global";
+      if (last_chdir_reason != NULL) {
+        context = last_chdir_reason;
+      } else if (curwin->w_localdir != NULL) {
+        context = "window";
+      } else if (curtab->tp_localdir != NULL) {
+        context = "tabpage";
+      }
+      smsg(0, "[%s] %s", context, NameBuff);
+    } else {
+      msg(NameBuff, 0);
+    }
+  } else {
+    emsg(_("E187: Unknown"));
+  }
+}
+
+/// ex_only logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_only(exarg_T *eap)
+{
+  win_T *wp;
+
+  if (eap->addr_count > 0) {
+    linenr_T wnr = eap->line2;
+    for (wp = firstwin; --wnr > 0;) {
+      if (wp->w_next == NULL) {
+        break;
+      }
+      wp = wp->w_next;
+    }
+  } else {
+    wp = curwin;
+  }
+  if (wp != curwin) {
+    win_goto(wp);
+  }
+  close_others(true, eap->forceit);
+}
+
+/// ex_close logic (direct implementation for Rust FFI).
+void nvim_docmd_ex_close(exarg_T *eap)
+{
+  win_T *win = NULL;
+  int winnr = 0;
+  if (cmdwin_type != 0) {
+    cmdwin_result = Ctrl_C;
+  } else if (!text_locked() && !curbuf_locked()) {
+    if (eap->addr_count == 0) {
+      ex_win_close(eap->forceit, curwin, NULL);
+    } else {
+      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+        winnr++;
+        if (winnr == eap->line2) {
+          win = wp;
+          break;
+        }
+      }
+      if (win == NULL) {
+        win = lastwin;
+      }
+      ex_win_close(eap->forceit, win, NULL);
+    }
+  }
+}
+
+/// get_argopt_name logic (direct implementation for Rust FFI).
+char *nvim_docmd_get_argopt_name(int idx)
+{
+  // Note: Keep this in sync with getargopt().
+  static char *(p_opt_values[]) = {
+    "fileformat=",
+    "encoding=",
+    "binary",
+    "nobinary",
+    "bad=",
+    "edit",
+    "p",
+  };
+
+  if (idx < (int)ARRAY_SIZE(p_opt_values)) {
+    return p_opt_values[idx];
+  }
+  return NULL;
 }

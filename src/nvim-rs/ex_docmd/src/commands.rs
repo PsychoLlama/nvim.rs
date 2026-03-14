@@ -1870,3 +1870,83 @@ pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
     nvim_docmd_ex_recover(eap);
 }
+
+// Phase 3: Larger Ex Command Handlers
+
+extern "C" {
+    fn nvim_docmd_ex_winsize(eap: ExArgHandle);
+    fn nvim_docmd_ex_colorscheme(eap: ExArgHandle);
+    fn nvim_docmd_ex_mark(eap: ExArgHandle);
+    fn nvim_docmd_ex_print(eap: ExArgHandle);
+    fn nvim_docmd_ex_edit(eap: ExArgHandle);
+    fn nvim_docmd_ex_pwd(eap: ExArgHandle);
+    fn nvim_docmd_ex_only(eap: ExArgHandle);
+    fn nvim_docmd_ex_close(eap: ExArgHandle);
+    fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char;
+}
+
+/// ":winsize" (obsolete).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
+    nvim_docmd_ex_winsize(eap);
+}
+
+/// ":colorscheme".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
+    nvim_docmd_ex_colorscheme(eap);
+}
+
+/// ":mark" / ":k".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
+    nvim_docmd_ex_mark(eap);
+}
+
+/// ":print" / ":list" / ":number".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
+    nvim_docmd_ex_print(eap);
+}
+
+/// ":edit" / ":badd" / ":balt" / ":visual" / ":enew".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
+    nvim_docmd_ex_edit(eap);
+}
+
+/// ":pwd".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_pwd(eap: ExArgHandle) {
+    nvim_docmd_ex_pwd(eap);
+}
+
+/// ":only".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
+    nvim_docmd_ex_only(eap);
+}
+
+/// ":close".
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
+    nvim_docmd_ex_close(eap);
+}
+
+/// check_more: check if more files remain; returns OK (0) or FAIL (non-0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int {
+    nvim_docmd_check_more(message, forceit)
+}
+
+/// before_quit_all: pre-quit-all checks.
+#[no_mangle]
+pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
+    nvim_docmd_before_quit_all(eap)
+}
+
+/// get_argopt_name: expansion for ++opt names.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    nvim_docmd_get_argopt_name(idx)
+}
