@@ -177,6 +177,12 @@ const char *str2special(const char **sp, bool replace_spaces, bool replace_lt);
 void str2specialbuf(const char *sp, char *buf, size_t len);
 char *str2special_save(const char *str, bool replace_spaces, bool replace_lt);
 
+// Phase 6: str2special_arena migrated to Rust
+char *str2special_arena(const char *str, bool replace_spaces, bool replace_lt, Arena *arena);
+
+// Phase 6: msgmore migrated to Rust
+void msgmore(int n);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

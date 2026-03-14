@@ -92,6 +92,13 @@ extern "C" {
     fn nvim_set_msg_wait(val: c_int);
     fn nvim_set_msg_hist_max(val: c_int);
     fn msg_hist_clear(keep: c_int);
+
+    // For msgmore (Phase 6)
+    fn nvim_get_global_busy() -> c_int;
+    fn nvim_get_keep_msg() -> *const c_char;
+    fn nvim_get_keep_msg_more() -> c_int;
+    fn nvim_get_p_report() -> i64;
+    fn nvim_format_msgmore(n: c_int) -> *const c_char;
 }
 
 // nvim_get_in_assert_fails returns bool in C (normal_shim.c) but other modules
@@ -539,6 +546,37 @@ pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
 #[export_name = "message_filtered"]
 pub unsafe extern "C" fn rs_message_filtered(msg: *const c_char) -> bool {
     nvim_message_filtered_impl(msg)
+}
+
+/// Display "N more/fewer lines" message.
+///
+/// Shows the number of lines added or removed by a command.
+/// Does nothing if messages are suppressed or another important message
+/// is being kept.
+///
+/// # Safety
+/// Calls C accessor and display functions.
+#[export_name = "msgmore"]
+pub unsafe extern "C" fn rs_msgmore(n: c_int) {
+    // No messages now - wait until global is finished, or lazyredraw is set.
+    if nvim_get_global_busy() != 0 || !rs_messaging() {
+        return;
+    }
+
+    // Don't overwrite another important message, but do overwrite a previous
+    // "more lines" or "fewer lines" message.
+    if !nvim_get_keep_msg().is_null() && nvim_get_keep_msg_more() == 0 {
+        return;
+    }
+
+    let pn = c_int::try_from(n.unsigned_abs()).unwrap_or(c_int::MAX);
+    if i64::from(pn) > nvim_get_p_report() {
+        let buf = nvim_format_msgmore(n);
+        if crate::output_core::rs_msg(buf, 0) != 0 {
+            rs_set_keep_msg(buf, 0);
+            nvim_set_keep_msg_more(1);
+        }
+    }
 }
 
 #[cfg(test)]

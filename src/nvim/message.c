@@ -600,6 +600,24 @@ void nvim_set_keep_msg_raw(const char *s)
 void nvim_set_keep_msg_more(int val) { keep_msg_more = (val != 0); }
 void nvim_set_keep_msg_hl_id(int val) { keep_msg_hl_id = val; }
 
+// Phase 6: msgmore() accessors - nvim_get_p_report is in indent_ffi.c (returns int64_t)
+// Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
+const char *nvim_format_msgmore(int n)
+{
+  int pn = abs(n);
+  if (n > 0) {
+    vim_snprintf(msg_buf, MSG_BUF_LEN,
+                 NGETTEXT("%d more line", "%d more lines", pn), pn);
+  } else {
+    vim_snprintf(msg_buf, MSG_BUF_LEN,
+                 NGETTEXT("%d line less", "%d fewer lines", pn), pn);
+  }
+  if (got_int) {
+    xstrlcat(msg_buf, _(" (Interrupted)"), MSG_BUF_LEN);
+  }
+  return msg_buf;
+}
+
 // Note: nvim_get_in_assert_fails is defined in normal_shim.c (returns bool)
 // Note: nvim_ui_flush is defined in change_ffi.c
 // Note: nvim_os_delay is defined in change_ffi.c (takes long ms, bool allow_input)
@@ -1492,43 +1510,7 @@ static void hit_return_msg(bool newline_sb)
 
 
 
-void msgmore(int n)
-{
-  int pn;
-
-  if (global_busy           // no messages now, wait until global is finished
-      || !messaging()) {      // 'lazyredraw' set, don't do messages now
-    return;
-  }
-
-  // We don't want to overwrite another important message, but do overwrite
-  // a previous "more lines" or "fewer lines" message, so that "5dd" and
-  // then "put" reports the last action.
-  if (keep_msg != NULL && !keep_msg_more) {
-    return;
-  }
-
-  pn = abs(n);
-
-  if (pn > p_report) {
-    if (n > 0) {
-      vim_snprintf(msg_buf, MSG_BUF_LEN,
-                   NGETTEXT("%d more line", "%d more lines", pn),
-                   pn);
-    } else {
-      vim_snprintf(msg_buf, MSG_BUF_LEN,
-                   NGETTEXT("%d line less", "%d fewer lines", pn),
-                   pn);
-    }
-    if (got_int) {
-      xstrlcat(msg_buf, _(" (Interrupted)"), MSG_BUF_LEN);
-    }
-    if (msg(msg_buf, 0)) {
-      set_keep_msg(msg_buf, 0);
-      keep_msg_more = true;
-    }
-  }
-}
+// msgmore() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msgmore)
 
 
 
@@ -1536,38 +1518,7 @@ void msgmore(int n)
 
 
 
-/// Convert string, replacing key codes with printables
-///
-/// Used for lhs or rhs of mappings.
-///
-/// @param[in]  str  String to convert.
-/// @param[in]  replace_spaces  Convert spaces into `<Space>`, normally used for
-///                             lhs of mapping and keytrans(), but not rhs.
-/// @param[in]  replace_lt  Convert `<` into `<lt>`.
-///
-/// @return [allocated] Converted string.
-char *str2special_arena(const char *str, bool replace_spaces, bool replace_lt, Arena *arena)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
-  FUNC_ATTR_NONNULL_RET
-{
-  const char *p = str;
-  size_t len = 0;
-  while (*p) {
-    len += strlen(str2special(&p, replace_spaces, replace_lt));
-  }
-
-  char *buf = arena_alloc(arena, len + 1, false);
-  size_t pos = 0;
-  p = str;
-  while (*p) {
-    const char *s = str2special(&p, replace_spaces, replace_lt);
-    size_t s_len = strlen(s);
-    memcpy(buf + pos, s, s_len);
-    pos += s_len;
-  }
-  buf[pos] = NUL;
-  return buf;
-}
+// str2special_arena() migrated to Rust: src/nvim-rs/message/src/keys.rs (rs_str2special_arena)
 
 
 /// print line for :print or :list command

@@ -170,6 +170,14 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     /// Copy memory (memcpy)
     fn memcpy(dst: *mut c_char, src: *const c_char, n: usize) -> *mut c_char;
+    /// Allocate memory from an arena
+    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_char;
+}
+
+/// Opaque C Arena type
+#[repr(C)]
+pub struct Arena {
+    _private: [u8; 0],
 }
 
 /// Check if a key code represents a special key.
@@ -339,6 +347,46 @@ pub unsafe extern "C" fn rs_str2special_save(
 
     // Allocate and fill.
     let buf = xmalloc(total + 1);
+    let mut out = buf;
+    p = str;
+    while *p != 0 {
+        let s = rs_str2special(std::ptr::addr_of_mut!(p), replace_spaces, replace_lt);
+        let s_len = strlen(s);
+        memcpy(out, s, s_len);
+        out = out.add(s_len);
+    }
+    *out = 0;
+    buf
+}
+
+/// Convert string to printable, using arena for allocation.
+///
+/// Like `str2special_save` but allocates from the provided arena
+/// instead of xmalloc. The returned pointer is valid for the lifetime
+/// of the arena.
+///
+/// # Safety
+/// - `str` must be a valid NUL-terminated C string
+/// - `arena` must be a valid pointer to a C Arena
+#[export_name = "str2special_arena"]
+#[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_str2special_arena(
+    str: *const c_char,
+    replace_spaces: bool,
+    replace_lt: bool,
+    arena: *mut Arena,
+) -> *mut c_char {
+    // First pass: compute total output length.
+    let mut p = str;
+    let mut total: usize = 0;
+    while *p != 0 {
+        let s = rs_str2special(std::ptr::addr_of_mut!(p), replace_spaces, replace_lt);
+        total += strlen(s);
+    }
+
+    // Allocate from arena and fill.
+    let buf = arena_alloc(arena, total + 1, false);
     let mut out = buf;
     p = str;
     while *p != 0 {
