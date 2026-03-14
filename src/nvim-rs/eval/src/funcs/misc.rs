@@ -1409,3 +1409,201 @@ pub unsafe extern "C" fn rs_f_sha256(
 ) {
     nvim_eval_sha256(argvars, rettv);
 }
+
+// =============================================================================
+// Phase 2: Simple self-contained functions (plan 40f0fb72)
+// =============================================================================
+
+/// Size of a single `typval_T` in bytes (verified by static assert in testing.c).
+const TYPVAL_SIZE_P2: usize = 16;
+
+/// Get pointer to `argvars[idx]`.
+///
+/// # Safety
+/// `argvars` must point to at least `idx + 1` valid `typval_T` entries.
+#[inline]
+#[allow(clippy::ptr_as_ptr)]
+unsafe fn arg_at_p2(argvars: *const c_void, idx: usize) -> *const c_void {
+    (argvars as *const u8)
+        .add(idx * TYPVAL_SIZE_P2)
+        .cast::<c_void>()
+}
+
+/// VarType constants (C's vartype_T).
+const VAR_LIST_P2: c_int = 4;
+/// NUMBUFLEN for number→string conversion buffers.
+const NUMBUFLEN_P2: usize = 65;
+/// C OK/FAIL constants.
+const OK_P2: c_int = 1;
+
+// Phase 2 extern C declarations.
+// Names prefixed `p2_` in the Rust binding to avoid clashing with dispatch.rs
+// re-declarations of the same C symbols (Rust warns on type-identical re-declarations,
+// and errors on type-differing ones).
+extern "C" {
+    // Type/value accessors
+    #[link_name = "nvim_tv_get_type"]
+    fn p2_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_get_string_chk"]
+    fn p2_nvim_tv_get_string_chk(tv: *const c_void, out_len: *mut usize) -> *const u8;
+    fn tv_get_string_buf_chk(tv: *const c_void, buf: *mut c_char) -> *const c_char;
+    #[link_name = "nvim_tv_get_list"]
+    fn p2_nvim_tv_get_list(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_list_get_len"]
+    fn p2_nvim_list_get_len(l: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_list_find_nr"]
+    fn p2_nvim_tv_list_find_nr(l: *mut c_void, n: c_int, error_out: *mut bool) -> i64;
+    #[link_name = "nvim_tv_set_number"]
+    fn p2_nvim_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "nvim_tv_set_float"]
+    fn p2_nvim_tv_set_float(tv: *mut c_void, f: f64);
+    #[link_name = "nvim_tv_set_string_copy"]
+    fn p2_nvim_tv_set_string_copy(tv: *mut c_void, s: *const u8, len: c_int);
+
+    // Filesystem
+    fn os_setperm(name: *const c_char, perm: c_int) -> c_int;
+
+    // Profile timing
+    fn profile_signed(tm: u64) -> i64;
+    fn profile_msg(tm: u64) -> *const c_char;
+
+    // Error messages
+    fn nvim_strings_get_e_invarg2() -> *const c_char;
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+}
+
+/// Convert a 2-element number list to a `u64` proftime_T.
+///
+/// The list `[high, low]` encodes a nanosecond timestamp as two signed 32-bit values.
+/// Returns `None` if the argument is not a valid 2-element list.
+///
+/// # Safety
+/// `arg` must be a valid `typval_T*`.
+unsafe fn list2proftime(arg: *const c_void) -> Option<u64> {
+    if p2_nvim_tv_get_type(arg) != VAR_LIST_P2 {
+        return None;
+    }
+    let list = p2_nvim_tv_get_list(arg);
+    if list.is_null() || p2_nvim_list_get_len(list) != 2 {
+        return None;
+    }
+    let list_mut = list.cast_mut();
+    let mut error = false;
+    let n1 = p2_nvim_tv_list_find_nr(list_mut, 0, &raw mut error);
+    let n2 = p2_nvim_tv_list_find_nr(list_mut, 1, &raw mut error);
+    if error {
+        return None;
+    }
+    // The list stores [high, low] where each is a truncated i32 stored as i64.
+    // Recombine into a u64 proftime_T.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_lossless
+    )]
+    let high = u64::from(n1 as i32 as u32);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_lossless
+    )]
+    let low = u64::from(n2 as i32 as u32);
+    Some((high << 32) | low)
+}
+
+/// "id({expr})" function - return string representation of argument's address.
+///
+/// Returns a hex pointer string like "0x7fff12345678".
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_id"]
+pub unsafe extern "C" fn rs_f_id(argvars: *const c_void, rettv: *mut c_void, _fptr: *mut c_void) {
+    let s = format!("{argvars:p}");
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    p2_nvim_tv_set_string_copy(rettv, s.as_ptr(), s.len() as c_int);
+}
+
+/// "setfperm(fname, mode)" function - set file permissions from rwxrwxrwx string.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_setfperm"]
+pub unsafe extern "C" fn rs_f_setfperm(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    p2_nvim_tv_set_number(rettv, 0);
+
+    let mut len: usize = 0;
+    let fname = p2_nvim_tv_get_string_chk(arg_at_p2(argvars, 0), &raw mut len);
+    if fname.is_null() {
+        return;
+    }
+
+    let mut modebuf = [0u8; NUMBUFLEN_P2];
+    let mode_str =
+        tv_get_string_buf_chk(arg_at_p2(argvars, 1), modebuf.as_mut_ptr().cast::<c_char>());
+    if mode_str.is_null() {
+        return;
+    }
+
+    // mode string must be exactly 9 characters (rwxrwxrwx)
+    let mode_bytes = std::ffi::CStr::from_ptr(mode_str).to_bytes();
+    if mode_bytes.len() != 9 {
+        let _ = semsg(nvim_strings_get_e_invarg2(), mode_str);
+        return;
+    }
+
+    let mut mask: c_int = 1;
+    let mut mode: c_int = 0;
+    for i in (0..9_usize).rev() {
+        if mode_bytes[i] != b'-' {
+            mode |= mask;
+        }
+        mask <<= 1;
+    }
+
+    let rv = os_setperm(fname.cast::<c_char>(), mode);
+    p2_nvim_tv_set_number(rettv, i64::from(rv == OK_P2));
+}
+
+/// "reltimefloat({time})" function - convert reltime list to float seconds.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_reltimefloat"]
+pub unsafe extern "C" fn rs_f_reltimefloat(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    p2_nvim_tv_set_float(rettv, 0.0);
+    if let Some(tm) = list2proftime(arg_at_p2(argvars, 0)) {
+        let signed_ns = profile_signed(tm);
+        #[allow(clippy::cast_precision_loss)]
+        p2_nvim_tv_set_float(rettv, signed_ns as f64 / 1_000_000_000.0);
+    }
+}
+
+/// "reltimestr({time})" function - convert reltime list to string representation.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_reltimestr"]
+pub unsafe extern "C" fn rs_f_reltimestr(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    // Default: NULL string
+    p2_nvim_tv_set_string_copy(rettv, std::ptr::null(), 0);
+    if let Some(tm) = list2proftime(arg_at_p2(argvars, 0)) {
+        let s = profile_msg(tm);
+        if !s.is_null() {
+            // profile_msg returns a static buffer; copy it into the rettv
+            p2_nvim_tv_set_string_copy(rettv, s.cast::<u8>(), -1);
+        }
+    }
+}

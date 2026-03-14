@@ -395,6 +395,12 @@ extern void f_tagfiles(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_taglist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_serverstop(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 2 (plan 40f0fb72) VimL function declarations (misc.rs)
+extern void f_id(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_setfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reltimefloat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reltimestr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
 #include "funcs.generated.h"
@@ -2366,14 +2372,7 @@ static void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "id()" function
-static void f_id(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const int len = vim_vsnprintf_typval(NULL, 0, "%p", dummy_ap, argvars);
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = xmalloc((size_t)len + 1);
-  vim_vsnprintf_typval(rettv->vval.v_string, (size_t)len + 1, "%p", dummy_ap, argvars);
-}
+// f_id: migrated to Rust (misc.rs)
 
 /// "jobpid(id)" function
 static void f_jobpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3871,17 +3870,7 @@ static void f_reltime(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "reltimestr()" function
-static void f_reltimestr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  proftime_T tm;
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-  if (list2proftime(&argvars[0], &tm) == OK) {
-    rettv->vval.v_string = xstrdup(profile_msg(tm));
-  }
-}
+// f_reltimestr: migrated to Rust (misc.rs)
 
 // f_repeat: migrated to Rust (misc.rs)
 
@@ -4624,35 +4613,7 @@ static void set_position(typval_T *argvars, typval_T *rettv, bool charpos)
 // f_setenv: migrated to Rust (simple.rs)
 
 /// "setfperm({fname}, {mode})" function
-static void f_setfperm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = 0;
-
-  const char *const fname = tv_get_string_chk(&argvars[0]);
-  if (fname == NULL) {
-    return;
-  }
-
-  char modebuf[NUMBUFLEN];
-  const char *const mode_str = tv_get_string_buf_chk(&argvars[1], modebuf);
-  if (mode_str == NULL) {
-    return;
-  }
-  if (strlen(mode_str) != 9) {
-    semsg(_(e_invarg2), mode_str);
-    return;
-  }
-
-  int mask = 1;
-  int mode = 0;
-  for (int i = 8; i >= 0; i--) {
-    if (mode_str[i] != '-') {
-      mode |= mask;
-    }
-    mask = mask << 1;
-  }
-  rettv->vval.v_number = os_setperm(fname, mode) == OK;
-}
+// f_setfperm: migrated to Rust (misc.rs)
 
 /// "setpos()" function
 /// Translate a register type string to the yank type and block length
@@ -4969,17 +4930,7 @@ static void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "reltimefloat()" function
-static void f_reltimefloat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-  FUNC_ATTR_NONNULL_ALL
-{
-  proftime_T tm;
-
-  rettv->v_type = VAR_FLOAT;
-  rettv->vval.v_float = 0;
-  if (list2proftime(&argvars[0], &tm) == OK) {
-    rettv->vval.v_float = (float_T)profile_signed(tm) / 1000000000.0;
-  }
-}
+// f_reltimefloat: migrated to Rust (misc.rs)
 
 /// "soundfold({word})" function
 // f_soundfold: migrated to Rust (simple.rs)
