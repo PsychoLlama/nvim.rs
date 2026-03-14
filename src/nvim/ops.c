@@ -2066,29 +2066,3 @@ static void op_function(const oparg_T *oap)
   }
 }
 
-/// Get the byte count of buffer region. End-exclusive.
-///
-/// @return number of bytes
-bcount_t get_region_bytecount(buf_T *buf, linenr_T start_lnum, linenr_T end_lnum, colnr_T start_col,
-                              colnr_T end_col)
-{
-  linenr_T max_lnum = buf->b_ml.ml_line_count;
-  if (start_lnum > max_lnum) {
-    return 0;
-  }
-  if (start_lnum == end_lnum) {
-    return end_col - start_col;
-  }
-  bcount_t deleted_bytes = ml_get_buf_len(buf, start_lnum) - start_col + 1;
-
-  for (linenr_T i = 1; i <= end_lnum - start_lnum - 1; i++) {
-    if (start_lnum + i > max_lnum) {
-      return deleted_bytes;
-    }
-    deleted_bytes += ml_get_buf_len(buf, start_lnum + i) + 1;
-  }
-  if (end_lnum > max_lnum) {
-    return deleted_bytes;
-  }
-  return deleted_bytes + end_col;
-}

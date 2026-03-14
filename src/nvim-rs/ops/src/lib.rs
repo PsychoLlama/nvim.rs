@@ -43,7 +43,7 @@ pub mod yank;
 pub use oparg::{OpArgHandle, OpArgMut, OpArgRef};
 pub use types::{BlockDef, MotionType, OpType, Pos};
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 /// Flags for operator properties
 const OPF_LINES: u8 = 1; // operator always works on lines
@@ -562,6 +562,52 @@ pub unsafe extern "C" fn rs_adjust_cursor_eol() {
         nvim_getvcol_cursor(&raw mut scol, &raw mut ecol);
         nvim_set_cursor_coladd(ecol - scol + 1);
     }
+}
+
+// =============================================================================
+// Phase 3: get_region_bytecount
+// =============================================================================
+
+extern "C" {
+    /// Get `buf->b_ml.ml_line_count` for an arbitrary buffer.
+    fn nvim_buf_get_ml_line_count(buf: *mut c_void) -> c_int;
+    /// Get line length for arbitrary buffer (already exported from memline crate).
+    fn ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
+}
+
+/// Port of `get_region_bytecount` -- byte count of buffer region, end-exclusive.
+///
+/// # Safety
+/// `buf` must be a valid `buf_T *`.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn get_region_bytecount(
+    buf: *mut c_void,
+    start_lnum: c_int,
+    end_lnum: c_int,
+    start_col: c_int,
+    end_col: c_int,
+) -> isize {
+    let max_lnum = nvim_buf_get_ml_line_count(buf);
+    if start_lnum > max_lnum {
+        return 0;
+    }
+    if start_lnum == end_lnum {
+        return (end_col - start_col) as isize;
+    }
+    let mut deleted_bytes: isize = (ml_get_buf_len(buf, start_lnum) - start_col + 1) as isize;
+    let mut i: c_int = 1;
+    while i < end_lnum - start_lnum {
+        if start_lnum + i > max_lnum {
+            return deleted_bytes;
+        }
+        deleted_bytes += (ml_get_buf_len(buf, start_lnum + i) + 1) as isize;
+        i += 1;
+    }
+    if end_lnum > max_lnum {
+        return deleted_bytes;
+    }
+    deleted_bytes + end_col as isize
 }
 
 #[cfg(test)]
