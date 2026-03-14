@@ -79,8 +79,8 @@ extern "C" {
     fn nvim_synblock_get_sync_linebreaks(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_sst_array_ptr(block: SynBlockHandle) -> SynStateHandle;
 
-    // clear_syn_state wrapper
-    fn nvim_syn_do_clear_syn_state(p: SynStateHandle);
+    // clear_syn_state (Rust implementation)
+    fn rs_clear_syn_state(p: SynStateHandle);
 
     // Array allocation/free
     fn nvim_syn_xcalloc_synstate_array(len: c_int) -> SynStateHandle;
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn rs_syn_stack_free_entry(block: SynBlockHandle, p: SynSt
     if block.is_null() || p.is_null() {
         return;
     }
-    nvim_syn_do_clear_syn_state(p);
+    rs_clear_syn_state(p);
     let firstfree = nvim_synblock_get_sst_firstfree(block);
     nvim_synstate_set_next(p, firstfree);
     nvim_synblock_set_sst_firstfree(block, p);
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn rs_syn_stack_free_block(block: SynBlockHandle) {
     let mut p = nvim_synblock_get_sst_first(block);
     while !p.is_null() {
         let next = nvim_synstate_get_next(p);
-        nvim_syn_do_clear_syn_state(p);
+        rs_clear_syn_state(p);
         p = next;
     }
     // Free the backing array and reset fields

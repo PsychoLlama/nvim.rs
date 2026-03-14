@@ -33,7 +33,7 @@ extern "C" {
     fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
 
     // SynState setters for store
-    fn nvim_syn_do_clear_syn_state(p: SynStateHandle);
+    fn rs_clear_syn_state(p: SynStateHandle);
     fn nvim_synstate_set_sst_next_flags(state: SynStateHandle, flags: c_int);
     fn nvim_synstate_set_sst_next_list(state: SynStateHandle, list: IdListHandle);
     fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
@@ -43,9 +43,6 @@ extern "C" {
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_get_current_next_flags() -> c_int;
     fn nvim_syn_get_current_next_list() -> IdListHandle;
-
-    // Bufstate fill (handles union sst_stack vs sst_ga)
-    fn nvim_syn_store_bufstates(sp: SynStateHandle);
 
     // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
     fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
@@ -181,7 +178,7 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
     }
 
     // Clear any existing state data
-    nvim_syn_do_clear_syn_state(sp);
+    rs_clear_syn_state(sp);
 
     let stacksize = nvim_syn_get_current_state_len();
     nvim_synstate_set_stacksize(sp, stacksize);

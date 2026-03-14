@@ -83,9 +83,6 @@ extern void rs_clear_keywtab(hashtab_T *ht);
 // Phase 9: state_entry.rs Rust implementations
 extern synstate_T *rs_syn_stack_alloc_entry(int lnum, synstate_T *after);
 
-// Phase 11: state_entry.rs Phase 11 Rust implementations
-extern void rs_syn_store_bufstates(synstate_T *sp);
-
 // Phase 11: commands.rs Rust implementations for do_onoff and maybe_enable
 
 // Phase 11: keyword.rs Rust implementations for keyword_find and hash_insert_keyword
@@ -101,8 +98,6 @@ extern stateitem_T *rs_stateitem_prev_if_trans_cont(stateitem_T *item);
 extern int rs_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b);
 extern int rs_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
                                           int subidx, int pat_idx);
-extern void rs_cur_state_set_matchcont(int i);
-
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -2138,11 +2133,6 @@ void nvim_synstate_set_stacksize(synstate_T *state, int size)
   if (state) state->sst_stacksize = size;
 }
 
-/// Call rs_clear_syn_state on a synstate entry (releases extmatch pointers).
-void nvim_syn_do_clear_syn_state(synstate_T *p)
-{
-  rs_clear_syn_state(p);
-}
 
 /// Allocate a new zeroed synstate array of given length.
 /// Returns the pointer; caller owns the memory and must free with
@@ -2321,12 +2311,6 @@ int nvim_cur_state_get_m_endpos_lnum(int i)
   return (int)CUR_STATE(i).si_m_endpos.lnum;
 }
 
-/// Set HL_MATCHCONT flag on CUR_STATE(i).si_flags and clear m_endpos.
-void nvim_cur_state_set_matchcont(int i)
-{
-  rs_cur_state_set_matchcont(i);
-}
-
 /// Get CUR_STATE(i).si_flags.
 int nvim_cur_state_get_si_flags(int i)
 {
@@ -2356,13 +2340,6 @@ void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags)
 void nvim_synstate_set_sst_next_list(synstate_T *state, int16_t *list)
 {
   if (state) state->sst_next_list = list;
-}
-
-/// Initialize and fill the sst_union bufstate array from current_state.
-/// Thin wrapper: logic is in rs_syn_store_bufstates (state_entry.rs).
-void nvim_syn_store_bufstates(synstate_T *sp)
-{
-  rs_syn_store_bufstates(sp);
 }
 
 /// Set sst_tick to current display_tick on a synstate entry.
