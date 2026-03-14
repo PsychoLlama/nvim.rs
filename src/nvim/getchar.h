@@ -66,6 +66,7 @@ int plain_vgetc(void);
 int vpeekc(void);
 int vpeekc_any(void);
 bool char_avail(void);
+char *getcmdkeycmd(int promptc, void *cookie, int indent, bool do_concat);
 
 // Internal typeahead helper (used by Rust orchestrators)
 int vgetorpeek(bool advance);

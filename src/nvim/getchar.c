@@ -1901,84 +1901,6 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
   return fix_input_buffer(buf, len);
 }
 
-/// Function passed to do_cmdline() to get the command after a <Cmd> key from
-/// typeahead.
-char *getcmdkeycmd(int promptc, void *cookie, int indent, bool do_concat)
-{
-  garray_T line_ga;
-  int c1 = -1;
-  int cmod = 0;
-  bool aborted = false;
-
-  ga_init(&line_ga, 1, 32);
-
-  // no mapping for these characters
-  no_mapping++;
-
-  got_int = false;
-  while (c1 != NUL && !aborted) {
-    ga_grow(&line_ga, 32);
-
-    if (vgetorpeek(false) == NUL) {
-      // incomplete <Cmd> is an error, because there is not much the user
-      // could do in this state.
-      emsg(_(e_cmd_mapping_must_end_with_cr));
-      aborted = true;
-      break;
-    }
-
-    // Get one character at a time.
-    c1 = vgetorpeek(true);
-
-    // Get two extra bytes for special keys
-    if (c1 == K_SPECIAL) {
-      c1 = vgetorpeek(true);
-      int c2 = vgetorpeek(true);
-      if (c1 == KS_MODIFIER) {
-        cmod = c2;
-        continue;
-      }
-      c1 = TO_SPECIAL(c1, c2);
-    }
-
-    if (got_int) {
-      aborted = true;
-    } else if (c1 == '\r' || c1 == '\n') {
-      c1 = NUL;  // end the line
-    } else if (c1 == ESC) {
-      aborted = true;
-    } else if (c1 == K_COMMAND) {
-      // give a nicer error message for this special case
-      emsg(_(e_cmd_mapping_must_end_with_cr_before_second_cmd));
-      aborted = true;
-    } else if (c1 == K_SNR) {
-      ga_concat(&line_ga, "<SNR>");
-    } else {
-      if (cmod != 0) {
-        ga_append(&line_ga, K_SPECIAL);
-        ga_append(&line_ga, KS_MODIFIER);
-        ga_append(&line_ga, (uint8_t)cmod);
-      }
-      if (IS_SPECIAL(c1)) {
-        ga_append(&line_ga, K_SPECIAL);
-        ga_append(&line_ga, (uint8_t)K_SECOND(c1));
-        ga_append(&line_ga, (uint8_t)K_THIRD(c1));
-      } else {
-        ga_append(&line_ga, (uint8_t)c1);
-      }
-    }
-
-    cmod = 0;
-  }
-
-  no_mapping--;
-
-  if (aborted) {
-    ga_clear(&line_ga);
-  }
-
-  return line_ga.ga_data;
-}
 
 /// Handle a Lua mapping: get its LuaRef from typeahead and execute it.
 ///
@@ -2431,6 +2353,20 @@ int nvim_char_avail(void)
 void nvim_add_on_key_ignore_len(size_t val)
 {
   on_key_ignore_len += val;
+}
+
+// Phase 2 C accessor wrappers for getcmdkeycmd (76 lines, above threshold)
+
+/// Emit "E1255: <Cmd> mapping must end with <CR>" error message.
+void nvim_emsg_cmd_mapping_must_end_with_cr(void)
+{
+  emsg(_(e_cmd_mapping_must_end_with_cr));
+}
+
+/// Emit "E1136: <Cmd> mapping must end with <CR> before second <Cmd>" error message.
+void nvim_emsg_cmd_mapping_before_second_cmd(void)
+{
+  emsg(_(e_cmd_mapping_must_end_with_cr_before_second_cmd));
 }
 
 // Phase 1 accessor functions for Rust
