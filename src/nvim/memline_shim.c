@@ -1328,13 +1328,6 @@ int ml_delete(linenr_T lnum)
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 // ============================================================================
 
-extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
-
-/// Find line or byte offset (thin wrapper for extmark crate FFI).
-bcount_t nvim_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff)
-{
-  return rs_ml_find_line_or_offset(buf, lnum, offp, no_ff);
-}
 
 // ============================================================================
 // Pass 10 Phase 1: ml_recover migration accessors for Rust FFI

@@ -564,7 +564,7 @@ extern "C" {
     // ========================================================================
 
     /// Find line offset.
-    fn nvim_ml_find_line_or_offset(
+    fn rs_ml_find_line_or_offset(
         buf: BufHandle,
         lnum: LinenrT,
         offp: *mut BcountT,
@@ -1131,7 +1131,7 @@ pub fn extmark_adjust(
         return;
     }
 
-    let start_byte = unsafe { nvim_ml_find_line_or_offset(buf, line1, std::ptr::null_mut(), true) };
+    let start_byte = unsafe { rs_ml_find_line_or_offset(buf, line1, std::ptr::null_mut(), true) };
     let mut old_byte: BcountT = 0;
     let mut new_byte: BcountT = 0;
     let old_row: c_int;
@@ -1151,7 +1151,7 @@ pub fn extmark_adjust(
 
     if new_row > 0 {
         new_byte = unsafe {
-            nvim_ml_find_line_or_offset(buf, line1 + new_row as LinenrT, std::ptr::null_mut(), true)
+            rs_ml_find_line_or_offset(buf, line1 + new_row as LinenrT, std::ptr::null_mut(), true)
         } - start_byte;
     }
 
@@ -1204,7 +1204,7 @@ pub fn extmark_splice(
     undo: ExtmarkOp,
 ) {
     let mut offset =
-        unsafe { nvim_ml_find_line_or_offset(buf, start_row + 1, std::ptr::null_mut(), true) };
+        unsafe { rs_ml_find_line_or_offset(buf, start_row + 1, std::ptr::null_mut(), true) };
 
     // On empty buffers, when editing the first line, the line is buffered,
     // causing offset to be < 0.
