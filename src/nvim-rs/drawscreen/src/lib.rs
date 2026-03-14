@@ -2495,6 +2495,265 @@ pub unsafe extern "C" fn rs_win_scroll_lines(wp: WinHandle, row: c_int, line_cou
     }
 }
 
+// =============================================================================
+// Phase 2: showmode
+// =============================================================================
+
+// Mode state bit flags (from state_defs.h)
+const MODE_INSERT: c_int = 0x10;
+const MODE_LANGMAP: c_int = 0x20;
+const MODE_TERMINAL: c_int = 0x80;
+const REPLACE_FLAG: c_int = 0x100;
+const VREPLACE_FLAG: c_int = 0x200;
+
+/// CTRL-V character value.
+const CTRL_V: c_int = 0x16;
+/// SHM_COMPLETIONMENU: shortmess('c').
+const SHM_COMPLETIONMENU: c_int = b'c' as c_int;
+/// HLF_COUNT: number of highlight groups (verified by static_assert in C).
+const HLF_COUNT: c_int = 76;
+
+extern "C" {
+    fn nvim_get_p_smd() -> c_int;
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_VIsual_active() -> c_int;
+    fn nvim_get_p_ch() -> i64;
+    // nvim_ui_has_messages is already declared in the Phase 1 extern block above.
+    fn nvim_get_need_wait_return() -> c_int;
+    fn nvim_set_need_wait_return(val: c_int);
+    fn nvim_drawscreen_msg_check_for_delay();
+    fn nvim_get_clear_cmdline() -> bool;
+    fn nvim_set_clear_cmdline(val: bool);
+    fn nvim_get_cmdline_row() -> c_int;
+    fn nvim_drawscreen_msg_clr_cmdline();
+    fn nvim_get_msg_no_more() -> c_int;
+    fn nvim_set_msg_no_more(val: c_int);
+    fn nvim_get_lines_left() -> c_int;
+    fn nvim_set_lines_left(val: c_int);
+    fn nvim_drawscreen_edit_submode_is_null() -> c_int;
+    fn nvim_drawscreen_edit_submode_ptr() -> *const c_char;
+    fn nvim_drawscreen_edit_submode_pre_is_null() -> c_int;
+    fn nvim_drawscreen_edit_submode_pre_ptr() -> *const c_char;
+    fn nvim_get_edit_submode_highl_attr() -> c_int;
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_get_p_ri() -> c_int;
+    fn nvim_docmd_curbuf_has_terminal() -> c_int;
+    fn nvim_get_VIsual_select() -> bool;
+    fn nvim_get_p_paste() -> c_int;
+    fn nvim_drawscreen_get_keymap_str() -> c_int;
+    fn nvim_drawscreen_namebuff_ptr() -> *const c_char;
+    fn nvim_get_mode_displayed() -> bool;
+    fn nvim_set_mode_displayed(val: bool);
+    fn nvim_get_msg_didout() -> c_int;
+    fn nvim_set_msg_didout(val: c_int);
+    fn redraw_ruler();
+    fn nvim_drawscreen_msg_grid_validate();
+    /// edit_submode_extra null check (from insexpand_shim.c).
+    fn nvim_get_edit_submode_extra_is_null() -> c_int;
+    /// edit_submode_extra pointer (from insexpand_shim.c).
+    fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
+    /// w_p_arab window option accessor.
+    fn nvim_win_get_w_p_arab(wp: WinHandle) -> c_int;
+    /// Clear the showcmd area.
+    fn rs_clear_showcmd();
+}
+
+/// Inline equivalent of C's static `msg_pos_mode()`: set msg_col=0, msg_row=Rows-1.
+#[inline]
+unsafe fn msg_pos_mode() {
+    msg_col = 0;
+    msg_row = Rows - 1;
+}
+
+/// Display the mode text (insert, replace, visual, etc.) into the command line.
+///
+/// Called from `rs_showmode` when `do_mode` is true. Returns whether to clear
+/// the command line after displaying.
+///
+/// # Safety
+/// Caller must be inside `rs_showmode` with all globals valid.
+unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
+    msg_puts_hl(c"--".as_ptr(), hl_id, false);
+    // CTRL-X in Insert mode
+    if nvim_drawscreen_edit_submode_is_null() == 0 && !shortmess(SHM_COMPLETIONMENU) {
+        // Messages can get long; avoid a wrap in a narrow window.
+        if nvim_ui_has_messages() != 0 {
+            *length = c_int::MAX;
+        } else {
+            *length = (Rows - msg_row) * Columns - 3;
+        }
+        let extra_is_null = nvim_get_edit_submode_extra_is_null();
+        if extra_is_null == 0 {
+            *length -= nvim_vim_strsize(nvim_get_edit_submode_extra_ptr());
+        }
+        if *length > 0 {
+            if nvim_drawscreen_edit_submode_pre_is_null() == 0 {
+                *length -= nvim_vim_strsize(nvim_drawscreen_edit_submode_pre_ptr());
+            }
+            let submode = nvim_drawscreen_edit_submode_ptr();
+            if *length - nvim_vim_strsize(submode) > 0 {
+                if nvim_drawscreen_edit_submode_pre_is_null() == 0 {
+                    msg_puts_hl(nvim_drawscreen_edit_submode_pre_ptr(), hl_id, false);
+                }
+                msg_puts_hl(submode, hl_id, false);
+            }
+            if extra_is_null == 0 {
+                msg_puts_hl(c" ".as_ptr(), hl_id, false);
+                // nvim_get_edit_submode_highl_attr returns highl+1 if valid, else 0
+                let highl_attr = nvim_get_edit_submode_highl_attr();
+                let sub_id = if highl_attr > 0 {
+                    highl_attr - 1
+                } else {
+                    hl_id
+                };
+                msg_puts_hl(nvim_get_edit_submode_extra_ptr(), sub_id, false);
+            }
+        }
+    } else {
+        let state = nvim_get_State();
+        if (state & MODE_TERMINAL) != 0 {
+            msg_puts_hl(c" TERMINAL".as_ptr(), hl_id, false);
+        } else if (state & VREPLACE_FLAG) != 0 {
+            msg_puts_hl(c" VREPLACE".as_ptr(), hl_id, false);
+        } else if (state & REPLACE_FLAG) != 0 {
+            msg_puts_hl(c" REPLACE".as_ptr(), hl_id, false);
+        } else if (state & MODE_INSERT) != 0 {
+            if nvim_get_p_ri() != 0 {
+                msg_puts_hl(c" REVERSE".as_ptr(), hl_id, false);
+            }
+            msg_puts_hl(c" INSERT".as_ptr(), hl_id, false);
+        } else {
+            let re = nvim_get_restart_edit();
+            if re == c_int::from(b'I')
+                || re == c_int::from(b'i')
+                || re == c_int::from(b'a')
+                || re == c_int::from(b'A')
+            {
+                if nvim_docmd_curbuf_has_terminal() != 0 {
+                    msg_puts_hl(c" (terminal)".as_ptr(), hl_id, false);
+                } else {
+                    msg_puts_hl(c" (insert)".as_ptr(), hl_id, false);
+                }
+            } else if re == c_int::from(b'R') {
+                msg_puts_hl(c" (replace)".as_ptr(), hl_id, false);
+            } else if re == c_int::from(b'V') {
+                msg_puts_hl(c" (vreplace)".as_ptr(), hl_id, false);
+            }
+        }
+        if (state & MODE_LANGMAP) != 0 {
+            if nvim_win_get_w_p_arab(nvim_get_curwin()) != 0 {
+                msg_puts_hl(c" Arabic".as_ptr(), hl_id, false);
+            } else if nvim_drawscreen_get_keymap_str() > 0 {
+                msg_puts_hl(nvim_drawscreen_namebuff_ptr(), hl_id, false);
+            }
+        }
+        if (state & MODE_INSERT) != 0 && nvim_get_p_paste() != 0 {
+            msg_puts_hl(c" (paste)".as_ptr(), hl_id, false);
+        }
+        if nvim_VIsual_active() != 0 {
+            let vm = VIsual_mode;
+            let sel = c_int::from(nvim_get_VIsual_select());
+            let key = c_int::from(vm == CTRL_V) * 2 + c_int::from(vm == c_int::from(b'V'));
+            let p = match sel * 4 + key {
+                0 => c" VISUAL".as_ptr(),
+                1 => c" VISUAL LINE".as_ptr(),
+                2 => c" VISUAL BLOCK".as_ptr(),
+                4 => c" SELECT".as_ptr(),
+                5 => c" SELECT LINE".as_ptr(),
+                _ => c" SELECT BLOCK".as_ptr(),
+            };
+            msg_puts_hl(p, hl_id, false);
+        }
+        msg_puts_hl(c" --".as_ptr(), hl_id, false);
+    }
+}
+
+/// Show the current mode and ruler.
+///
+/// If clear_cmdline is true, clear the rest of the cmdline.
+/// If clear_cmdline is false there may be a message there that needs to be
+/// cleared only if a mode is shown.
+/// If redraw_mode is true show or clear the mode.
+/// Returns the length of the message (0 if no message).
+///
+/// Rust equivalent of `showmode()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_showmode() -> c_int {
+    let mut length: c_int = 0;
+
+    msg_ext_ui_flush();
+    nvim_drawscreen_msg_grid_validate();
+
+    let state = nvim_get_State();
+    let do_mode = (nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0)
+        && ((state & MODE_TERMINAL) != 0
+            || (state & MODE_INSERT) != 0
+            || nvim_get_restart_edit() != 0
+            || nvim_VIsual_active() != 0);
+
+    let can_show_mode = nvim_get_p_ch() != 0 || nvim_ui_has_messages() != 0;
+
+    if (do_mode || reg_recording != 0) && can_show_mode {
+        if rs_skip_showmode() {
+            return 0;
+        }
+
+        let nwr_save = nvim_get_need_wait_return();
+        nvim_drawscreen_msg_check_for_delay();
+
+        let mut need_clear = nvim_get_clear_cmdline();
+        if nvim_get_clear_cmdline() && nvim_get_cmdline_row() < Rows - 1 {
+            nvim_drawscreen_msg_clr_cmdline();
+        }
+
+        msg_pos_mode();
+        let hl_id = HLF_CM;
+
+        nvim_set_msg_no_more(1);
+        let save_lines_left = nvim_get_lines_left();
+        nvim_set_lines_left(0);
+
+        if do_mode {
+            showmode_display_mode(hl_id, &mut length);
+            need_clear = true;
+        }
+
+        if reg_recording != 0 && nvim_drawscreen_edit_submode_is_null() != 0 {
+            recording_mode_impl(hl_id);
+            need_clear = true;
+        }
+
+        nvim_set_mode_displayed(true);
+        if need_clear || nvim_get_clear_cmdline() || redraw_mode != 0 {
+            msg_clr_eos();
+        }
+        nvim_set_msg_didout(0);
+        length = msg_col;
+        msg_col = 0;
+        nvim_set_msg_no_more(0);
+        nvim_set_lines_left(save_lines_left);
+        nvim_set_need_wait_return(nwr_save);
+    } else if nvim_get_clear_cmdline() && nvim_get_msg_silent() == 0 {
+        nvim_drawscreen_msg_clr_cmdline();
+    } else if redraw_mode != 0 {
+        msg_pos_mode();
+        msg_clr_eos();
+    }
+
+    msg_ext_flush_showmode();
+
+    if nvim_VIsual_active() != 0 {
+        rs_clear_showcmd();
+    }
+
+    redraw_ruler();
+    nvim_set_redraw_cmdline(false);
+    redraw_mode = 0;
+    nvim_set_clear_cmdline(false);
+
+    length
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
