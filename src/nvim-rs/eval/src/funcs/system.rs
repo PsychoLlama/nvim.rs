@@ -419,6 +419,43 @@ pub unsafe extern "C" fn rs_output_has_null(output: *const u8, len: c_int) -> bo
 }
 
 // =============================================================================
+// Environment and path VimL functions (Phase 3)
+// =============================================================================
+
+use std::ffi::c_void;
+
+extern "C" {
+    fn nvim_eval_environ(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_stdpath(argvars: *const c_void, rettv: *mut c_void);
+}
+
+/// "environ()" function - get all environment variables as dict
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_environ"]
+pub unsafe extern "C" fn rs_f_environ(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_environ(argvars, rettv);
+}
+
+/// "stdpath(type)" function - get standard path for given type
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_stdpath"]
+pub unsafe extern "C" fn rs_f_stdpath(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_stdpath(argvars, rettv);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -311,6 +311,10 @@ extern void f_searchpairpos(typval_T *argvars, typval_T *rettv, EvalFuncData fpt
 extern void f_swapfilelist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_swapinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 3 VimL function declarations (system.rs - exported via #[export_name])
+extern void f_environ(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_stdpath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 2 VimL function declarations (display.rs - exported via #[export_name])
 extern void f_screenattr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -1152,50 +1156,7 @@ static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   callback_free(&callback);
 }
 
-/// "environ()" function
-static void f_environ(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-
-  size_t env_size = os_get_fullenv_size();
-  char **env = xmalloc(sizeof(*env) * (env_size + 1));
-  env[env_size] = NULL;
-
-  os_copy_fullenv(env, env_size);
-
-  for (ssize_t i = (ssize_t)env_size - 1; i >= 0; i--) {
-    const char *str = env[i];
-    const char * const end = strchr(str + (str[0] == '=' ? 1 : 0),
-                                    '=');
-    assert(end != NULL);
-    ptrdiff_t len = end - str;
-    assert(len > 0);
-    const char *value = str + len + 1;
-
-    char c = env[i][len];
-    env[i][len] = NUL;
-
-#ifdef MSWIN
-    // Upper-case all the keys for Windows so we can detect duplicates
-    char *const key = strcase_save(str, true);
-#else
-    char *const key = xstrdup(str);
-#endif
-
-    env[i][len] = c;
-
-    if (tv_dict_find(rettv->vval.v_dict, key, len) != NULL) {
-      // Since we're traversing from the end of the env block to the front, any
-      // duplicate names encountered should be ignored.  This preserves the
-      // semantics of env vars defined later in the env block taking precedence.
-      xfree(key);
-      continue;
-    }
-    tv_dict_add_str(rettv->vval.v_dict, key, (size_t)len, value);
-    xfree(key);
-  }
-  os_free_fullenv(env);
-}
+// f_environ: migrated to Rust (system.rs)
 
 // f_getenv: migrated to Rust (simple.rs)
 
@@ -6335,64 +6296,7 @@ theend:
   p_cpo = save_cpo;
 }
 
-/// "stdpath()" helper for list results
-static void get_xdg_var_list(const XDGVarType xdg, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  list_T *const list = tv_list_alloc(kListLenShouldKnow);
-  rettv->v_type = VAR_LIST;
-  rettv->vval.v_list = list;
-  tv_list_ref(list);
-  char *const dirs = stdpaths_get_xdg_var(xdg);
-  if (dirs == NULL) {
-    return;
-  }
-  const void *iter = NULL;
-  const char *appname = get_appname(false);
-  do {
-    size_t dir_len;
-    const char *dir;
-    iter = vim_env_iter(ENV_SEPCHAR, dirs, iter, &dir, &dir_len);
-    if (dir != NULL && dir_len > 0) {
-      char *dir_with_nvim = xmemdupz(dir, dir_len);
-      dir_with_nvim = concat_fnames_realloc(dir_with_nvim, appname, true);
-      tv_list_append_allocated_string(list, dir_with_nvim);
-    }
-  } while (iter != NULL);
-  xfree(dirs);
-}
-
-/// "stdpath(type)" function
-static void f_stdpath(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  const char *const p = tv_get_string_chk(&argvars[0]);
-  if (p == NULL) {
-    return;  // Type error; errmsg already given.
-  }
-
-  if (strequal(p, "config")) {
-    rettv->vval.v_string = get_xdg_home(kXDGConfigHome);
-  } else if (strequal(p, "data")) {
-    rettv->vval.v_string = get_xdg_home(kXDGDataHome);
-  } else if (strequal(p, "cache")) {
-    rettv->vval.v_string = get_xdg_home(kXDGCacheHome);
-  } else if (strequal(p, "state")) {
-    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
-  } else if (strequal(p, "log")) {
-    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
-  } else if (strequal(p, "run")) {
-    rettv->vval.v_string = stdpaths_get_xdg_var(kXDGRuntimeDir);
-  } else if (strequal(p, "config_dirs")) {
-    get_xdg_var_list(kXDGConfigDirs, rettv);
-  } else if (strequal(p, "data_dirs")) {
-    get_xdg_var_list(kXDGDataDirs, rettv);
-  } else {
-    semsg(_("E6100: \"%s\" is not a valid stdpath"), p);
-  }
-}
+// get_xdg_var_list, f_stdpath: migrated to Rust (system.rs)
 
 /// "str2float()" function
 
@@ -7530,5 +7434,104 @@ void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
   char buf[MAX_SCHAR_SIZE + 1];
   schar_get(buf, grid_getchar(grid, row, col, NULL));
   rettv->vval.v_string = xstrdup(buf);
+}
+
+// =============================================================================
+// C accessor functions for Rust VimL function implementations (Phase 3/system)
+// =============================================================================
+
+void nvim_eval_environ(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+
+  size_t env_size = os_get_fullenv_size();
+  char **env = xmalloc(sizeof(*env) * (env_size + 1));
+  env[env_size] = NULL;
+  os_copy_fullenv(env, env_size);
+
+  for (ssize_t i = (ssize_t)env_size - 1; i >= 0; i--) {
+    const char *str = env[i];
+    const char *const end = strchr(str + (str[0] == '=' ? 1 : 0), '=');
+    assert(end != NULL);
+    ptrdiff_t len = end - str;
+    assert(len > 0);
+    const char *value = str + len + 1;
+
+    char c = env[i][len];
+    env[i][len] = NUL;
+
+#ifdef MSWIN
+    char *const key = strcase_save(str, true);
+#else
+    char *const key = xstrdup(str);
+#endif
+
+    env[i][len] = c;
+
+    if (tv_dict_find(rettv->vval.v_dict, key, len) != NULL) {
+      xfree(key);
+      continue;
+    }
+    tv_dict_add_str(rettv->vval.v_dict, key, (size_t)len, value);
+    xfree(key);
+  }
+  os_free_fullenv(env);
+}
+
+static void get_xdg_var_list_inner(const XDGVarType xdg, typval_T *rettv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  list_T *const list = tv_list_alloc(kListLenShouldKnow);
+  rettv->v_type = VAR_LIST;
+  rettv->vval.v_list = list;
+  tv_list_ref(list);
+  char *const dirs = stdpaths_get_xdg_var(xdg);
+  if (dirs == NULL) {
+    return;
+  }
+  const void *iter = NULL;
+  const char *appname = get_appname(false);
+  do {
+    size_t dir_len;
+    const char *dir;
+    iter = vim_env_iter(ENV_SEPCHAR, dirs, iter, &dir, &dir_len);
+    if (dir != NULL && dir_len > 0) {
+      char *dir_with_nvim = xmemdupz(dir, dir_len);
+      dir_with_nvim = concat_fnames_realloc(dir_with_nvim, appname, true);
+      tv_list_append_allocated_string(list, dir_with_nvim);
+    }
+  } while (iter != NULL);
+  xfree(dirs);
+}
+
+void nvim_eval_stdpath(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  const char *const p = tv_get_string_chk(&argvars[0]);
+  if (p == NULL) {
+    return;
+  }
+
+  if (strequal(p, "config")) {
+    rettv->vval.v_string = get_xdg_home(kXDGConfigHome);
+  } else if (strequal(p, "data")) {
+    rettv->vval.v_string = get_xdg_home(kXDGDataHome);
+  } else if (strequal(p, "cache")) {
+    rettv->vval.v_string = get_xdg_home(kXDGCacheHome);
+  } else if (strequal(p, "state")) {
+    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
+  } else if (strequal(p, "log")) {
+    rettv->vval.v_string = get_xdg_home(kXDGStateHome);
+  } else if (strequal(p, "run")) {
+    rettv->vval.v_string = stdpaths_get_xdg_var(kXDGRuntimeDir);
+  } else if (strequal(p, "config_dirs")) {
+    get_xdg_var_list_inner(kXDGConfigDirs, rettv);
+  } else if (strequal(p, "data_dirs")) {
+    get_xdg_var_list_inner(kXDGDataDirs, rettv);
+  } else {
+    semsg(_("E6100: \"%s\" is not a valid stdpath"), p);
+  }
 }
 
