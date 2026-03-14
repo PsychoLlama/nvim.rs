@@ -94,8 +94,6 @@ void ui_comp_detach(RemoteUI *ui)
   ui->composed = false;
 }
 
-extern int rs_ui_comp_should_draw(void);
-
 /// C accessor for composed_uis static.
 int nvim_get_composed_uis(void)
 {
@@ -353,168 +351,14 @@ void nvim_ui_composed_call_grid_cursor_goto(int grid_handle, int row, int col)
   ui_composed_call_grid_cursor_goto(grid_handle, row, col);
 }
 
-// Rust implementation of curgrid_covered_above
-extern bool rs_curgrid_covered_above(int row);
 
-bool ui_comp_should_draw(void)
-{
-  return rs_ui_comp_should_draw() != 0;
-}
-
-// Rust implementation of ui_comp_layers_adjust
-extern void rs_ui_comp_layers_adjust(size_t layer_idx, bool raise);
-
-/// Raises or lowers the layer, syncing comp_index with zindex.
-///
-/// This function adjusts the position of a layer in the layers array
-/// based on its zindex, either raising or lowering it.
-///
-/// @param[in]  layer_idx  Index of the layer to be raised or lowered.
-/// @param[in]  raise      Raise the layer if true, else lower it.
-void ui_comp_layers_adjust(size_t layer_idx, bool raise)
-{
-  rs_ui_comp_layers_adjust(layer_idx, raise);
-}
-
-/// Places `grid` at (col,row) position with (width * height) size.
-/// Adds `grid` as the top layer if it is a new layer.
-///
-/// TODO(bfredl): later on the compositor should just use win_float_pos events,
-// Rust implementation of ui_comp_put_grid
-extern bool rs_ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width,
-                                bool valid, bool on_top);
-
-/// though that will require slight event order adjustment: emit the win_pos
-/// events in the beginning of update_screen(), rather than in ui_flush()
-bool ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width, bool valid,
-                      bool on_top)
-{
-  return rs_ui_comp_put_grid(grid, row, col, height, width, valid, on_top);
-}
-
-// Rust implementation of ui_comp_remove_grid
-extern void rs_ui_comp_remove_grid(ScreenGrid *grid);
-
-void ui_comp_remove_grid(ScreenGrid *grid)
-{
-  rs_ui_comp_remove_grid(grid);
-}
-
-// Rust implementation of ui_comp_set_grid
-extern int rs_ui_comp_set_grid(handle_T handle);
-
-bool ui_comp_set_grid(handle_T handle)
-{
-  return rs_ui_comp_set_grid(handle) != 0;
-}
-
-// Rust implementation of ui_comp_raise_grid
-extern void rs_ui_comp_raise_grid(ScreenGrid *grid, size_t new_index);
-
-void ui_comp_raise_grid(ScreenGrid *grid, size_t new_index)
-{
-  rs_ui_comp_raise_grid(grid, new_index);
-}
-
-// Rust implementation of ui_comp_grid_cursor_goto
-extern void rs_ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c);
-
-void ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c)
-{
-  rs_ui_comp_grid_cursor_goto(grid_handle, r, c);
-}
-
-// Rust implementation of ui_comp_mouse_focus
-extern ScreenGrid *rs_ui_comp_mouse_focus(int row, int col);
-
-ScreenGrid *ui_comp_mouse_focus(int row, int col)
-{
-  return rs_ui_comp_mouse_focus(row, col);
-}
-
-// Rust implementation of ui_comp_get_grid_at_coord
-extern ScreenGrid *rs_ui_comp_get_grid_at_coord(int row, int col);
-
-/// Compute which grid is on top at supplied screen coordinates
-ScreenGrid *ui_comp_get_grid_at_coord(int row, int col)
-{
-  return rs_ui_comp_get_grid_at_coord(row, col);
-}
-
-// Rust implementation of compose_line
-extern void rs_compose_line(Integer row, Integer startcol, Integer endcol, int flags);
-
-/// Baseline implementation. This is always correct, but we can sometimes
-/// do something more efficient (where efficiency means smaller deltas to
-/// the downstream UI.)
-static void compose_line(Integer row, Integer startcol, Integer endcol, LineFlags flags)
-{
-  rs_compose_line(row, startcol, endcol, flags);
-}
-
-// Rust implementations of compose_debug and debug_delay
-extern void rs_compose_debug(Integer startrow, Integer endrow, Integer startcol, Integer endcol,
-                             int syn_id, bool delay);
-extern void rs_debug_delay(Integer lines);
-
-static void compose_debug(Integer startrow, Integer endrow, Integer startcol, Integer endcol,
-                          int syn_id, bool delay)
-{
-  rs_compose_debug(startrow, endrow, startcol, endcol, syn_id, delay);
-}
-
-static void debug_delay(Integer lines)
-{
-  rs_debug_delay(lines);
-}
-
-// Rust implementation of compose_area
-extern void rs_compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol);
-
-static void compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol)
-{
-  rs_compose_area(startrow, endrow, startcol, endcol);
-}
+// Forward declaration for Rust-exported compose_area
+extern void compose_area(int startrow, int endrow, int startcol, int endcol);
 
 // Non-static wrapper for compose_area callable from Rust
 void nvim_compose_area(int startrow, int endrow, int startcol, int endcol)
 {
   compose_area(startrow, endrow, startcol, endcol);
-}
-
-// Rust implementation of ui_comp_compose_grid
-extern void rs_ui_comp_compose_grid(ScreenGrid *grid);
-
-/// compose the area under the grid.
-///
-/// This is needed when some option affecting composition is changed,
-/// such as 'pumblend' for popupmenu grid.
-void ui_comp_compose_grid(ScreenGrid *grid)
-{
-  rs_ui_comp_compose_grid(grid);
-}
-
-// Rust implementation of ui_comp_raw_line
-extern void rs_ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endcol,
-                                Integer clearcol, Integer clearattr, int flags,
-                                const schar_T *chunk, const sattr_T *attrs);
-
-void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endcol, Integer clearcol,
-                      Integer clearattr, LineFlags flags, const schar_T *chunk,
-                      const sattr_T *attrs)
-{
-  rs_ui_comp_raw_line(grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs);
-}
-
-/// The screen is invalid and will soon be cleared
-// Rust implementation of ui_comp_set_screen_valid
-extern bool rs_ui_comp_set_screen_valid(bool valid);
-
-///
-/// Don't redraw floats until screen is cleared
-bool ui_comp_set_screen_valid(bool valid)
-{
-  return rs_ui_comp_set_screen_valid(valid);
 }
 
 // Rust implementation of ui_comp_msg_set_pos
@@ -526,30 +370,4 @@ void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep
                          Integer zindex, Integer compindex)
 {
   rs_ui_comp_msg_set_pos(grid, row, scrolled, sep_char.data, sep_char.size, zindex, compindex);
-}
-
-/// check if curgrid is covered on row or above
-///
-/// TODO(bfredl): currently this only handles message row
-static bool curgrid_covered_above(int row)
-{
-  return rs_curgrid_covered_above(row);
-}
-
-// Rust implementation of ui_comp_grid_scroll
-extern void rs_ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left,
-                                   Integer right, Integer rows, Integer cols);
-
-void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, Integer right,
-                         Integer rows, Integer cols)
-{
-  rs_ui_comp_grid_scroll(grid, top, bot, left, right, rows, cols);
-}
-
-// Rust implementation of ui_comp_grid_resize
-extern void rs_ui_comp_grid_resize(Integer grid, Integer width, Integer height);
-
-void ui_comp_grid_resize(Integer grid, Integer width, Integer height)
-{
-  rs_ui_comp_grid_resize(grid, width, height);
 }

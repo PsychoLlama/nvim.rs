@@ -499,7 +499,7 @@ fn compose_debug_impl(
 ///
 /// # Safety
 /// This function calls C UI flush and OS sleep.
-#[no_mangle]
+#[export_name = "debug_delay"]
 pub extern "C" fn rs_debug_delay(lines: i64) {
     debug_delay_impl(lines);
 }
@@ -510,7 +510,7 @@ pub extern "C" fn rs_debug_delay(lines: i64) {
 ///
 /// # Safety
 /// This function accesses global state and calls UI functions.
-#[no_mangle]
+#[export_name = "compose_debug"]
 pub extern "C" fn rs_compose_debug(
     startrow: i64,
     endrow: i64,
@@ -820,7 +820,7 @@ fn compose_line_impl(row: i64, mut startcol: i64, mut endcol: i64, mut flags: c_
 ///
 /// # Safety
 /// This function accesses global compositor state and grid data.
-#[no_mangle]
+#[export_name = "compose_line"]
 pub extern "C" fn rs_compose_line(row: i64, startcol: i64, endcol: i64, flags: c_int) {
     compose_line_impl(row, startcol, endcol, flags);
 }
@@ -872,7 +872,7 @@ fn compose_area_impl(startrow: i64, mut endrow: i64, startcol: i64, mut endcol: 
 ///
 /// # Safety
 /// This function accesses global compositor state and grid data.
-#[no_mangle]
+#[export_name = "compose_area"]
 pub extern "C" fn rs_compose_area(startrow: i64, endrow: i64, startcol: i64, endcol: i64) {
     compose_area_impl(startrow, endrow, startcol, endcol);
 }
@@ -886,11 +886,14 @@ extern "C" {
     fn nvim_get_curgrid() -> crate::ScreenGridHandle;
 
     // curgrid_covered_above from Rust
+    #[link_name = "curgrid_covered_above"]
     fn rs_curgrid_covered_above(row: c_int) -> bool;
 
     // ui_comp_should_draw and ui_comp_set_grid from Rust
-    fn rs_ui_comp_should_draw() -> c_int;
-    fn rs_ui_comp_set_grid(handle: c_int) -> c_int;
+    #[link_name = "ui_comp_should_draw"]
+    fn rs_ui_comp_should_draw() -> bool;
+    #[link_name = "ui_comp_set_grid"]
+    fn rs_ui_comp_set_grid(handle: c_int) -> bool;
 }
 
 /// Process a raw line update from a grid.
@@ -923,7 +926,7 @@ fn ui_comp_raw_line_impl(
 ) {
     unsafe {
         // Early return if can't draw or can't set grid
-        if rs_ui_comp_should_draw() == 0 || rs_ui_comp_set_grid(grid_handle as c_int) == 0 {
+        if !rs_ui_comp_should_draw() || !rs_ui_comp_set_grid(grid_handle as c_int) {
             return;
         }
 
@@ -1008,7 +1011,7 @@ fn ui_comp_raw_line_impl(
 ///
 /// # Safety
 /// This function accesses global compositor state and grid data.
-#[no_mangle]
+#[export_name = "ui_comp_raw_line"]
 #[allow(clippy::too_many_arguments)]
 pub extern "C" fn rs_ui_comp_raw_line(
     grid: i64,
@@ -1118,12 +1121,12 @@ fn ui_comp_msg_set_pos_impl(
         let default_grid = nvim_get_default_grid();
         let default_cols = i64::from(nvim_screengrid_get_cols(default_grid));
 
-        if row > i64::from(msg_current_row) && rs_ui_comp_should_draw() != 0 {
+        if row > i64::from(msg_current_row) && rs_ui_comp_should_draw() {
             // Message area is expanding down
             let start_row = (i64::from(msg_current_row) - 1).max(0);
             compose_area_impl(start_row, row, 0, default_cols);
         } else if row < i64::from(msg_current_row)
-            && rs_ui_comp_should_draw() != 0
+            && rs_ui_comp_should_draw()
             && (i64::from(msg_current_row) < rows || (scrolled && !msg_was_scrolled))
         {
             // Message area is shrinking up
@@ -1207,7 +1210,7 @@ fn ui_comp_grid_scroll_impl(
 ) {
     unsafe {
         // Early return if can't draw or can't set grid
-        if rs_ui_comp_should_draw() == 0 || rs_ui_comp_set_grid(grid as c_int) == 0 {
+        if !rs_ui_comp_should_draw() || !rs_ui_comp_set_grid(grid as c_int) {
             return;
         }
 
@@ -1266,7 +1269,7 @@ fn ui_comp_grid_scroll_impl(
 ///
 /// # Safety
 /// This function accesses global compositor state and grid data.
-#[no_mangle]
+#[export_name = "ui_comp_grid_scroll"]
 #[allow(clippy::too_many_arguments)]
 pub extern "C" fn rs_ui_comp_grid_scroll(
     grid: i64,
@@ -1329,7 +1332,7 @@ fn ui_comp_grid_resize_impl(grid: i64, width: i64, height: i64) {
 ///
 /// # Safety
 /// This function accesses global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_grid_resize"]
 pub extern "C" fn rs_ui_comp_grid_resize(grid: i64, width: i64, height: i64) {
     ui_comp_grid_resize_impl(grid, width, height);
 }

@@ -203,16 +203,18 @@ fn curgrid_covered_above_impl(row: c_int) -> bool {
 ///
 /// # Safety
 /// This function accesses global compositor state.
-#[no_mangle]
-pub extern "C" fn rs_ui_comp_should_draw() -> c_int {
-    c_int::from(ui_comp_should_draw_impl())
+#[export_name = "ui_comp_should_draw"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_ui_comp_should_draw() -> bool {
+    ui_comp_should_draw_impl()
 }
 
 /// Check if curgrid is covered on row or above.
 ///
 /// # Safety
 /// This function accesses global compositor state (layers, curgrid, msg_grid).
-#[no_mangle]
+#[export_name = "curgrid_covered_above"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_curgrid_covered_above(row: c_int) -> bool {
     curgrid_covered_above_impl(row)
 }
@@ -248,9 +250,10 @@ fn ui_comp_set_grid_impl(handle: HandleT) -> bool {
 ///
 /// # Safety
 /// This function accesses global compositor state.
-#[no_mangle]
-pub extern "C" fn rs_ui_comp_set_grid(handle: HandleT) -> c_int {
-    c_int::from(ui_comp_set_grid_impl(handle))
+#[export_name = "ui_comp_set_grid"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_ui_comp_set_grid(handle: HandleT) -> bool {
+    ui_comp_set_grid_impl(handle)
 }
 
 /// Compose a grid's area onto the screen.
@@ -276,7 +279,7 @@ fn ui_comp_compose_grid_impl(grid: ScreenGridHandle) {
 ///
 /// # Safety
 /// This function accesses global compositor state and grid dimensions.
-#[no_mangle]
+#[export_name = "ui_comp_compose_grid"]
 pub extern "C" fn rs_ui_comp_compose_grid(grid: ScreenGridHandle) {
     ui_comp_compose_grid_impl(grid);
 }
@@ -335,7 +338,7 @@ fn ui_comp_raise_grid_impl(grid: ScreenGridHandle, new_index: usize) {
 ///
 /// # Safety
 /// This function modifies global compositor state (layer ordering).
-#[no_mangle]
+#[export_name = "ui_comp_raise_grid"]
 pub extern "C" fn rs_ui_comp_raise_grid(grid: ScreenGridHandle, new_index: usize) {
     ui_comp_raise_grid_impl(grid, new_index);
 }
@@ -387,7 +390,7 @@ fn ui_comp_remove_grid_impl(grid: ScreenGridHandle) {
 ///
 /// # Safety
 /// This function modifies global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_remove_grid"]
 pub extern "C" fn rs_ui_comp_remove_grid(grid: ScreenGridHandle) {
     ui_comp_remove_grid_impl(grid);
 }
@@ -534,7 +537,8 @@ fn ui_comp_put_grid_impl(
 ///
 /// # Safety
 /// This function modifies global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_put_grid"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_ui_comp_put_grid(
     grid: ScreenGridHandle,
     row: c_int,
@@ -606,7 +610,7 @@ fn ui_comp_grid_cursor_goto_impl(grid_handle: HandleT, r: i64, c: i64) {
 ///
 /// # Safety
 /// This function accesses global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_grid_cursor_goto"]
 pub extern "C" fn rs_ui_comp_grid_cursor_goto(grid_handle: i64, r: i64, c: i64) {
     ui_comp_grid_cursor_goto_impl(grid_handle as HandleT, r, c);
 }
@@ -666,7 +670,7 @@ fn ui_comp_layers_adjust_impl(layer_idx: usize, raise: bool) {
 ///
 /// # Safety
 /// This function modifies global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_layers_adjust"]
 pub extern "C" fn rs_ui_comp_layers_adjust(layer_idx: usize, raise: bool) {
     ui_comp_layers_adjust_impl(layer_idx, raise);
 }
@@ -691,7 +695,8 @@ fn ui_comp_set_screen_valid_impl(valid: bool) -> bool {
 ///
 /// # Safety
 /// This function modifies global compositor state.
-#[no_mangle]
+#[export_name = "ui_comp_set_screen_valid"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_ui_comp_set_screen_valid(valid: bool) -> bool {
     ui_comp_set_screen_valid_impl(valid)
 }
@@ -752,7 +757,8 @@ fn ui_comp_get_grid_at_coord_impl(row: c_int, col: c_int) -> ScreenGridHandle {
 ///
 /// # Safety
 /// This function accesses global compositor state and window list.
-#[no_mangle]
+#[export_name = "ui_comp_get_grid_at_coord"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> ScreenGridHandle {
     ui_comp_get_grid_at_coord_impl(row, col)
 }
@@ -828,7 +834,8 @@ fn ui_comp_mouse_focus_impl(row: c_int, col: c_int) -> ScreenGridHandle {
 ///
 /// # Safety
 /// This function accesses global compositor state and window list.
-#[no_mangle]
+#[export_name = "ui_comp_mouse_focus"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_ui_comp_mouse_focus(row: c_int, col: c_int) -> ScreenGridHandle {
     ui_comp_mouse_focus_impl(row, col)
 }

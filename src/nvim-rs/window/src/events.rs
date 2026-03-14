@@ -134,6 +134,7 @@ extern "C" {
     fn nvim_win_call_win_grid_alloc(wp: WinHandle);
 
     // Compositor functions
+    #[link_name = "ui_comp_put_grid"]
     fn rs_ui_comp_put_grid(
         grid: ScreenGridHandle,
         row: c_int,
@@ -143,7 +144,9 @@ extern "C" {
         valid: bool,
         on_top: bool,
     ) -> bool;
+    #[link_name = "ui_comp_remove_grid"]
     fn rs_ui_comp_remove_grid(grid: ScreenGridHandle);
+    #[link_name = "ui_comp_layers_adjust"]
     fn rs_ui_comp_layers_adjust(layer_idx: usize, raise: bool);
 
     // UI extension check
