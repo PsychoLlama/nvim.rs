@@ -468,6 +468,8 @@ extern int rs_spell_check_msm(const char *msm, int *start_out, int *incr_out, in
 extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
 // Phase 4: read_compound replacement
 extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
+// Phase 4: read_sal_section replacement
+extern int rs_read_sal_section(const uint8_t *buf, size_t len, slang_T *slang);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1429,123 +1431,14 @@ static int read_rep_section(FILE *fd, garray_T *gap, int16_t *first)
 
 // Read SN_SAL section: <salflags> <salcount> <sal> ...
 // Return SP_*ERROR flags.
-// Uses Rust (rs_parse_sal_header, rs_parse_sal_item) to parse binary data.
+// Delegates to Rust (rs_read_sal_section) which parses and applies the section.
 static int read_sal_section(FILE *fd, slang_T *slang, int len)
 {
-  slang->sl_sofo = false;
-
-  if (len < 3) {
-    return SP_FORMERROR;
-  }
-
-  // Read entire section into buffer, then parse with Rust.
   uint8_t *section_buf = xmalloc((size_t)len);
   SPELL_READ_BYTES((char *)section_buf, (size_t)len, fd, xfree(section_buf));
-
-  // Parse SAL header: <salflags> <salcount> (3 bytes)
-  RsSalHeader sal_header;
-  size_t consumed;
-  int res = rs_parse_sal_header(section_buf, (size_t)len, &sal_header, &consumed);
-  if (res != 0) {
-    xfree(section_buf);
-    return res;
-  }
-
-  // Apply flags from Rust-parsed header
-  if (sal_header.flags & SAL_F0LLOWUP) {
-    slang->sl_followup = true;
-  }
-  if (sal_header.flags & SAL_COLLAPSE) {
-    slang->sl_collapse = true;
-  }
-  if (sal_header.flags & SAL_REM_ACCENTS) {
-    slang->sl_rem_accents = true;
-  }
-
-  int cnt = (int)sal_header.count;
-  size_t offset = consumed;
-
-  garray_T *gap = &slang->sl_sal;
-  ga_init(gap, sizeof(salitem_T), 10);
-  ga_grow(gap, cnt + 1);
-
-  // <sal> : <salfromlen> <salfrom> <saltolen> <salto>
-  // Parse each item with Rust, then build salitem_T in C.
-  for (; gap->ga_len < cnt; gap->ga_len++) {
-    RsSalItem rs_item;
-    size_t item_consumed;
-    res = rs_parse_sal_item(section_buf + offset, (size_t)len - offset,
-                            &rs_item, &item_consumed);
-    if (res != 0) {
-      xfree(section_buf);
-      return res;
-    }
-    offset += item_consumed;
-
-    salitem_T *smp = &((salitem_T *)gap->ga_data)[gap->ga_len];
-
-    // Allocate the from buffer (lead+NUL+oneof+NUL+rules+NUL).
-    char *p = xmalloc((size_t)rs_item.from_used + 1);
-    memcpy(p, rs_item.from, rs_item.from_used);
-
-    smp->sm_lead = p + rs_item.lead_offset;
-    smp->sm_leadlen = (int)rs_item.lead_len;
-
-    if (rs_item.oneof_offset == 0xFFFF) {
-      smp->sm_oneof = NULL;
-    } else {
-      smp->sm_oneof = p + rs_item.oneof_offset;
-    }
-
-    smp->sm_rules = p + rs_item.rules_offset;
-
-    if (rs_item.has_to && rs_item.to_len > 0) {
-      char *to_p = xmalloc((size_t)rs_item.to_len + 1);
-      memcpy(to_p, rs_item.to, rs_item.to_len);
-      to_p[rs_item.to_len] = '\0';
-      smp->sm_to = to_p;
-    } else {
-      smp->sm_to = NULL;
-    }
-
-    // convert the multi-byte strings to wide char strings
-    smp->sm_lead_w = rs_mb_str2wide(smp->sm_lead);
-    smp->sm_leadlen = mb_charlen(smp->sm_lead);
-    if (smp->sm_oneof == NULL) {
-      smp->sm_oneof_w = NULL;
-    } else {
-      smp->sm_oneof_w = rs_mb_str2wide(smp->sm_oneof);
-    }
-    if (smp->sm_to == NULL) {
-      smp->sm_to_w = NULL;
-    } else {
-      smp->sm_to_w = rs_mb_str2wide(smp->sm_to);
-    }
-  }
-
+  int res = rs_read_sal_section(section_buf, (size_t)len, slang);
   xfree(section_buf);
-
-  if (!GA_EMPTY(gap)) {
-    // Add one extra entry to mark the end with an empty sm_lead.  Avoids
-    // that we need to check the index every time.
-    salitem_T *smp = &((salitem_T *)gap->ga_data)[gap->ga_len];
-    char *p = xmalloc(1);
-    p[0] = NUL;
-    smp->sm_lead = p;
-    smp->sm_lead_w = rs_mb_str2wide(smp->sm_lead);
-    smp->sm_leadlen = 0;
-    smp->sm_oneof = NULL;
-    smp->sm_oneof_w = NULL;
-    smp->sm_rules = p;
-    smp->sm_to = NULL;
-    smp->sm_to_w = NULL;
-    gap->ga_len++;
-  }
-
-  // Fill the first-index table.
-  rs_set_sal_first(slang);
-
-  return 0;
+  return res;
 }
 
 

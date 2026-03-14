@@ -1485,6 +1485,135 @@ pub unsafe extern "C" fn rs_parse_sal_item(
     }
 }
 
+/// Read and apply the SN_SAL section from a buffer to slang_T.
+/// Replaces C read_sal_section(). Parses header, allocates salitem_T array,
+/// fills wide-char strings, and calls rs_set_sal_first.
+///
+/// # Safety
+/// - `buf` must be valid for `len` bytes.
+/// - `slang` must be a valid non-null pointer to a SlangRaw.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_sal_section(
+    buf: *const u8,
+    len: usize,
+    slang: *mut crate::SlangRaw,
+) -> c_int {
+    const SAL_F0LLOWUP: u8 = 1;
+    const SAL_COLLAPSE: u8 = 2;
+    const SAL_REM_ACCENTS: u8 = 4;
+
+    (*slang).sl_sofo = false;
+
+    if len < 3 {
+        return SP_FORMERROR;
+    }
+    let buf_slice = std::slice::from_raw_parts(buf, len);
+
+    // Parse SAL header: <salflags> <salcount>
+    let Some((sal_header, mut offset)) = parse_sal_header(buf_slice) else {
+        return SP_FORMERROR;
+    };
+
+    // Apply flags
+    if sal_header.flags & SAL_F0LLOWUP != 0 {
+        (*slang).sl_followup = true;
+    }
+    if sal_header.flags & SAL_COLLAPSE != 0 {
+        (*slang).sl_collapse = true;
+    }
+    if sal_header.flags & SAL_REM_ACCENTS != 0 {
+        (*slang).sl_rem_accents = true;
+    }
+
+    let cnt = sal_header.count as usize;
+
+    // Initialize sl_sal garray
+    let gap = std::ptr::addr_of_mut!((*slang).sl_sal);
+    (*gap).ga_len = 0;
+    (*gap).ga_maxlen = 0;
+    (*gap).ga_itemsize = std::mem::size_of::<crate::SalitemT>() as i32;
+    (*gap).ga_growsize = 10;
+    (*gap).ga_data = std::ptr::null_mut();
+    ga_grow(gap, (cnt + 1) as c_int);
+
+    // Parse each SAL item
+    for _ in 0..cnt {
+        let item_res = parse_sal_item(&buf_slice[offset..]);
+        let (rs_item, item_consumed) = match item_res {
+            Ok(r) => r,
+            Err(e) => return e,
+        };
+        offset += item_consumed;
+
+        let smp = ((*gap).ga_data as *mut crate::SalitemT).add((*gap).ga_len as usize);
+
+        // Allocate from buffer (lead+NUL+oneof+NUL+rules+NUL)
+        let from_used = rs_item.from_used as usize;
+        let p = xmalloc_spell(from_used + 1).cast::<c_char>();
+        std::ptr::copy_nonoverlapping(rs_item.from.as_ptr().cast::<c_char>(), p, from_used);
+
+        (*smp).sm_lead = p.add(rs_item.lead_offset as usize);
+        (*smp).sm_leadlen = rs_item.lead_len as c_int;
+
+        if rs_item.oneof_offset == 0xFFFF {
+            (*smp).sm_oneof = std::ptr::null_mut();
+        } else {
+            (*smp).sm_oneof = p.add(rs_item.oneof_offset as usize);
+        }
+        (*smp).sm_rules = p.add(rs_item.rules_offset as usize);
+
+        if rs_item.has_to && rs_item.to_len > 0 {
+            let to_len = rs_item.to_len as usize;
+            let to_p = xmalloc_spell(to_len + 1).cast::<c_char>();
+            std::ptr::copy_nonoverlapping(rs_item.to.as_ptr().cast::<c_char>(), to_p, to_len);
+            *to_p.add(to_len) = 0;
+            (*smp).sm_to = to_p;
+        } else {
+            (*smp).sm_to = std::ptr::null_mut();
+        }
+
+        // Build wide-char versions
+        (*smp).sm_lead_w = rs_mb_str2wide((*smp).sm_lead);
+        (*smp).sm_leadlen = mb_charlen((*smp).sm_lead);
+        (*smp).sm_oneof_w = if (*smp).sm_oneof.is_null() {
+            std::ptr::null_mut()
+        } else {
+            rs_mb_str2wide((*smp).sm_oneof)
+        };
+        (*smp).sm_to_w = if (*smp).sm_to.is_null() {
+            std::ptr::null_mut()
+        } else {
+            rs_mb_str2wide((*smp).sm_to)
+        };
+
+        (*gap).ga_len += 1;
+    }
+
+    // Add sentinel entry with empty sm_lead
+    if (*gap).ga_len > 0 {
+        let smp = ((*gap).ga_data as *mut crate::SalitemT).add((*gap).ga_len as usize);
+        let p = xmalloc_spell(1).cast::<c_char>();
+        *p = 0;
+        (*smp).sm_lead = p;
+        (*smp).sm_lead_w = rs_mb_str2wide(p);
+        (*smp).sm_leadlen = 0;
+        (*smp).sm_oneof = std::ptr::null_mut();
+        (*smp).sm_oneof_w = std::ptr::null_mut();
+        (*smp).sm_rules = p;
+        (*smp).sm_to = std::ptr::null_mut();
+        (*smp).sm_to_w = std::ptr::null_mut();
+        (*gap).ga_len += 1;
+    }
+
+    // Fill the first-index table
+    rs_set_sal_first(slang);
+
+    0 // OK
+}
+
 // =============================================================================
 // Suggestion File Section Parsing
 // =============================================================================
