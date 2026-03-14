@@ -295,19 +295,9 @@ int nvim_ex2_get_vgetc_busy(void)
   return vgetc_busy;
 }
 
-int nvim_ex2_get_msg_row(void)
-{
-  return msg_row;
-}
-
 void nvim_ex2_set_msg_row(int val)
 {
   msg_row = val;
-}
-
-int nvim_ex2_get_msg_col(void)
-{
-  return msg_col;
 }
 
 void nvim_ex2_set_msg_col(int val)
@@ -338,11 +328,6 @@ int nvim_ex2_get_no_wait_return(void)
 void nvim_ex2_set_no_wait_return(int val)
 {
   no_wait_return = val;
-}
-
-bool nvim_ex2_get_exiting(void)
-{
-  return exiting;
 }
 
 void nvim_ex2_set_exiting(bool val)
@@ -572,19 +557,9 @@ void nvim_ex2_buf_clear_bf_syn_set(buf_T *buf)
   buf->b_flags &= ~BF_SYN_SET;
 }
 
-int nvim_ex2_buf_get_b_flags(buf_T *buf)
-{
-  return buf->b_flags;
-}
-
 bool nvim_ex2_buf_get_b_p_bl(buf_T *buf)
 {
   return buf->b_p_bl;
-}
-
-char *nvim_ex2_buf_get_b_p_syn(buf_T *buf)
-{
-  return buf->b_p_syn;
 }
 
 bool nvim_ex2_get_got_int(void)

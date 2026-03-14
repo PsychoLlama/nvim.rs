@@ -767,12 +767,6 @@ void nvim_edit_set_orig_line_count(linenr_T val)
   orig_line_count = val;
 }
 
-/// Get vr_lines_changed (accessor for Rust).
-int nvim_edit_get_vr_lines_changed(void)
-{
-  return vr_lines_changed;
-}
-
 /// Set vr_lines_changed (accessor for Rust).
 void nvim_edit_set_vr_lines_changed(int val)
 {
@@ -2015,12 +2009,6 @@ int nvim_edit_get_p_smd(void)
 int nvim_edit_get_msg_silent(void)
 {
   return msg_silent;
-}
-
-/// Get old_indent (accessor for Rust).
-int nvim_edit_get_old_indent(void)
-{
-  return old_indent;
 }
 
 /// Set old_indent (accessor for Rust).
@@ -3569,12 +3557,6 @@ int nvim_edit_u_save(int lnum1, int lnum2)
 int nvim_edit_ml_get_len(int lnum)
 {
   return ml_get_len((linenr_T)lnum);
-}
-
-/// Get cursor line length (accessor for Rust).
-int nvim_edit_get_cursor_line_len(void)
-{
-  return get_cursor_line_len();
 }
 
 /// Get has_format_option(c) (accessor for Rust).
