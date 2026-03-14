@@ -398,7 +398,6 @@ extern "C" {
 
     // For redrawcmdline
     fn nvim_set_need_wait_return(val: c_int);
-    fn redrawcmd();
     fn ui_cursor_shape();
 
     // For redrawcmdprompt
@@ -410,6 +409,29 @@ extern "C" {
     fn nvim_get_ccline_hl_id() -> c_int;
     fn nvim_set_ccline_cmdindent(val: c_int);
     fn nvim_set_ccline_redraw_state(val: c_int);
+
+    // For draw_cmdline
+    fn nvim_color_cmdline() -> bool;
+    fn nvim_get_ccline_colors_size() -> usize;
+    fn nvim_get_ccline_color_chunk(
+        idx: usize,
+        start_out: *mut c_int,
+        end_out: *mut c_int,
+        hl_id_out: *mut c_int,
+    );
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
+
+    // For redrawcmd
+    fn sb_text_restart_cmdline();
+    fn putcmdline(c: c_char, shift: bool);
+    fn nvim_set_redrawing_cmdline(val: c_int);
+    fn nvim_set_msg_no_more(val: c_int);
+    fn nvim_set_msg_scroll(val: c_int);
+    fn nvim_set_skip_redraw2(val: c_int);
+    fn nvim_get_ccline_special_char() -> c_int;
+    fn nvim_get_ccline_special_shift() -> c_int;
+    fn nvim_set_ccline_special_char(val: c_int);
+    fn nvim_set_ccline_cmdspos(val: c_int);
 }
 
 /// `kUICmdline` constant (from `ui_defs.h`).
@@ -558,6 +580,138 @@ pub unsafe extern "C" fn rs_redrawcmdprompt() {
     }
 }
 
+// =============================================================================
+// draw_cmdline: draw part of the command line
+// =============================================================================
+
+/// Draw part of the command line starting at byte offset `start`, for `len` bytes.
+///
+/// Direct replacement for C `draw_cmdline()`.
+///
+/// # Safety
+///
+/// Calls C functions to access global state.
+#[export_name = "draw_cmdline"]
+pub unsafe extern "C" fn draw_cmdline_rs(start: c_int, len: c_int) {
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    // If cmdbuff is NULL or coloring fails, return early
+    if cmdbuff.is_null() || !nvim_color_cmdline() {
+        return;
+    }
+
+    if ui_has(K_UI_CMDLINE) != 0 {
+        // In external UI mode, clear special_char and mark for full redraw
+        nvim_set_ccline_special_char(NUL);
+        nvim_set_ccline_redraw_state(K_CMD_REDRAW_ALL);
+        return;
+    }
+
+    let star = nvim_get_cmdline_star();
+    if star > 0 {
+        // Password mode: show stars
+        let mut i = 0;
+        while i < len {
+            msg_putchar(b'*' as c_int);
+            let ptr = cmdbuff.add((start + i) as usize);
+            let char_len = utfc_ptr2len(ptr);
+            i += char_len;
+        }
+    } else {
+        let colors_count = nvim_get_ccline_colors_size();
+        if colors_count > 0 {
+            // Colored mode: output each color chunk
+            for idx in 0..colors_count {
+                let mut chunk_start: c_int = 0;
+                let mut chunk_end: c_int = 0;
+                let mut chunk_hl: c_int = 0;
+                nvim_get_ccline_color_chunk(
+                    idx,
+                    &raw mut chunk_start,
+                    &raw mut chunk_end,
+                    &raw mut chunk_hl,
+                );
+                if chunk_end <= start {
+                    continue;
+                }
+                let effective_start = if chunk_start > start {
+                    chunk_start
+                } else {
+                    start
+                };
+                let output_len = chunk_end - effective_start;
+                if output_len > 0 {
+                    let ptr = cmdbuff.add(effective_start as usize);
+                    msg_outtrans_len(ptr, output_len, chunk_hl, false);
+                }
+            }
+        } else {
+            // No colors: output plain
+            let ptr = cmdbuff.add(start as usize);
+            msg_outtrans_len(ptr, len, 0, false);
+        }
+    }
+}
+
+// =============================================================================
+// redrawcmd: redraw the entire command line
+// =============================================================================
+
+/// Redraw what is currently on the command line.
+///
+/// Direct replacement for C `redrawcmd()`.
+///
+/// # Safety
+///
+/// Calls C functions to access and set global state.
+#[export_name = "redrawcmd"]
+pub unsafe extern "C" fn redrawcmd_rs() {
+    if nvim_get_cmd_silent() != 0 {
+        return;
+    }
+
+    if ui_has(K_UI_CMDLINE) != 0 {
+        draw_cmdline_rs(0, nvim_get_ccline_cmdlen());
+        return;
+    }
+
+    // When 'incsearch' is set there may be no cmdbuff while redrawing
+    let cmdbuff = nvim_get_ccline_cmdbuff();
+    if cmdbuff.is_null() {
+        msg_cursor_goto(nvim_get_cmdline_row(), 0);
+        msg_clr_eos();
+        return;
+    }
+
+    nvim_set_redrawing_cmdline(1);
+
+    sb_text_restart_cmdline();
+    msg_start();
+    rs_redrawcmdprompt();
+
+    // Don't use more prompt; truncate cmdline if it doesn't fit
+    nvim_set_msg_no_more(1);
+    draw_cmdline_rs(0, nvim_get_ccline_cmdlen());
+    msg_clr_eos();
+    nvim_set_msg_no_more(0);
+
+    let new_cmdspos = cmd_screencol(nvim_get_ccline_cmdpos());
+    nvim_set_ccline_cmdspos(new_cmdspos);
+
+    let special_char = nvim_get_ccline_special_char();
+    if special_char != NUL {
+        let shift = nvim_get_ccline_special_shift() != 0;
+        putcmdline(special_char as u8 as c_char, shift);
+    }
+
+    // An emsg() before may have set msg_scroll. Reset it in cmdline mode.
+    nvim_set_msg_scroll(0);
+
+    // Typing ':' at the more prompt may set skip_redraw. Reset it.
+    nvim_set_skip_redraw2(0);
+
+    nvim_set_redrawing_cmdline(0);
+}
+
 /// Direct C replacement for redrawcmdline().
 ///
 /// Redraws the command line and updates the cursor.
@@ -572,7 +726,7 @@ pub unsafe extern "C" fn rs_redrawcmdline() {
     }
     nvim_set_need_wait_return(0);
     compute_cmdrow_rs();
-    redrawcmd();
+    redrawcmd_rs();
     cursorcmd_rs();
     ui_cursor_shape();
 }

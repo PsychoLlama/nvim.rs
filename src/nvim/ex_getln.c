@@ -261,6 +261,8 @@ extern bool do_incsearch_highlighting(int firstc, int *search_delim, incsearch_s
                                       int *skiplen, int *patlen);
 // may_add_char_to_search: implemented in Rust (cmdline/search.rs)
 extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
+// draw_cmdline: implemented in Rust (cmdline/screen.rs)
+extern void draw_cmdline(int start, int len);
 
 // Rust key dispatch helpers
 extern int rs_invert_rtl_key(int key);
@@ -3178,38 +3180,7 @@ color_cmdline_error:
 
 // Draw part of the cmdline at the current cursor position.  But draw stars
 // when cmdline_star is true.
-static void draw_cmdline(int start, int len)
-{
-  if (ccline.cmdbuff == NULL || !color_cmdline(&ccline)) {
-    return;
-  }
-
-  if (ui_has(kUICmdline)) {
-    ccline.special_char = NUL;
-    ccline.redraw_state = kCmdRedrawAll;
-    return;
-  }
-
-  if (cmdline_star > 0) {
-    for (int i = 0; i < len; i++) {
-      msg_putchar('*');
-      i += utfc_ptr2len(ccline.cmdbuff + start + i) - 1;
-    }
-  } else {
-    if (kv_size(ccline.last_colors.colors)) {
-      for (size_t i = 0; i < kv_size(ccline.last_colors.colors); i++) {
-        CmdlineColorChunk chunk = kv_A(ccline.last_colors.colors, i);
-        if (chunk.end <= start) {
-          continue;
-        }
-        const int chunk_start = MAX(chunk.start, start);
-        msg_outtrans_len(ccline.cmdbuff + chunk_start, chunk.end - chunk_start, chunk.hl_id, false);
-      }
-    } else {
-      msg_outtrans_len(ccline.cmdbuff + start, len, 0, false);
-    }
-  }
-}
+// draw_cmdline() is implemented in Rust (cmdline crate, screen.rs).
 
 static void ui_ext_cmdline_show(CmdlineInfo *line)
 {
@@ -3587,53 +3558,7 @@ void redrawcmdline(void)
   rs_redrawcmdline();
 }
 
-// Redraw what is currently on the command line.
-void redrawcmd(void)
-{
-  if (cmd_silent) {
-    return;
-  }
-
-  if (ui_has(kUICmdline)) {
-    draw_cmdline(0, ccline.cmdlen);
-    return;
-  }
-
-  // when 'incsearch' is set there may be no command line while redrawing
-  if (ccline.cmdbuff == NULL) {
-    msg_cursor_goto(cmdline_row, 0);
-    msg_clr_eos();
-    return;
-  }
-
-  redrawing_cmdline = true;
-
-  sb_text_restart_cmdline();
-  msg_start();
-  rs_redrawcmdprompt();
-
-  // Don't use more prompt, truncate the cmdline if it doesn't fit.
-  msg_no_more = true;
-  draw_cmdline(0, ccline.cmdlen);
-  msg_clr_eos();
-  msg_no_more = false;
-
-  ccline.cmdspos = cmd_screencol(ccline.cmdpos);
-
-  if (ccline.special_char != NUL) {
-    putcmdline(ccline.special_char, ccline.special_shift);
-  }
-
-  // An emsg() before may have set msg_scroll. This is used in normal mode,
-  // in cmdline mode we can reset them now.
-  msg_scroll = false;           // next message overwrites cmdline
-
-  // Typing ':' at the more prompt may set skip_redraw.  We don't want this
-  // in cmdline mode.
-  skip_redraw = false;
-
-  redrawing_cmdline = false;
-}
+// redrawcmd() is implemented in Rust (cmdline crate, screen.rs).
 
 
 
@@ -4609,3 +4534,32 @@ uint8_t nvim_get_wim_flags(int idx) { return wim_flags[idx]; }
 
 /// Set a wim_flags entry for Rust.
 void nvim_set_wim_flags(int idx, uint8_t val) { wim_flags[idx] = val; }
+
+// Phase 67 Phase 2: Accessors for draw_cmdline and redrawcmd
+
+/// Call color_cmdline(&ccline) and return its result.
+bool nvim_color_cmdline(void) { return color_cmdline(&ccline); }
+
+/// Get number of color chunks in ccline.last_colors.colors.
+size_t nvim_get_ccline_colors_size(void) { return kv_size(ccline.last_colors.colors); }
+
+/// Get a color chunk's fields by index.
+void nvim_get_ccline_color_chunk(size_t idx, int *start_out, int *end_out, int *hl_id_out)
+{
+  CmdlineColorChunk chunk = kv_A(ccline.last_colors.colors, idx);
+  *start_out = chunk.start;
+  *end_out = chunk.end;
+  *hl_id_out = chunk.hl_id;
+}
+
+/// Get cmdline_star global (for draw_cmdline star mode).
+int nvim_get_cmdline_star_count(void) { return cmdline_star; }
+
+/// Set redrawing_cmdline global.
+void nvim_set_redrawing_cmdline(int val) { redrawing_cmdline = (val != 0); }
+
+/// Set msg_no_more global.
+void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
+
+/// Set skip_redraw global.
+void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }

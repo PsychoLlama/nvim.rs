@@ -70,6 +70,8 @@ void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
 // Phase 67 (this migration): Functions implemented in Rust
 int check_opt_wim(void);
+void redrawcmd(void);
+void draw_cmdline(int start, int len);
 
 #ifdef __cplusplus
 }
