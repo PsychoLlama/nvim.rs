@@ -251,7 +251,7 @@ extern void rs_win_setwidth_win(int width, win_T *wp);
 extern int rs_get_vtopline(win_T *wp);
 
 // Phase 1 Rust FFI declarations (commands.rs)
-extern void rs_verify_command(const char *cmd);
+extern void verify_command(const char *cmd);
 extern void rs_ex_redir(exarg_T *eap);
 extern void rs_ex_normal(exarg_T *eap);
 extern void rs_ex_filetype(exarg_T *eap);
@@ -5173,10 +5173,6 @@ static void ex_fclose(exarg_T *eap)
   win_float_remove(eap->forceit, eap->line1);
 }
 
-void verify_command(char *cmd)
-{
-  rs_verify_command(cmd);
-}
 
 /// Get argt of command with id
 uint32_t get_cmd_argt(cmdidx_T cmdidx)

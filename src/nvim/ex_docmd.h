@@ -83,3 +83,4 @@ int get_bad_opt(const char *p, exarg_T *eap);
 int getargopt(exarg_T *eap);
 char *skip_cmd_arg(char *p, bool rembs);
 bool changedir_func(char *new_dir, CdScope scope);
+void verify_command(const char *cmd);

@@ -298,7 +298,7 @@ const CTRL_C: c_int = 3;
 /// # Safety
 ///
 /// `cmd` must be a valid null-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "verify_command")]
 #[rustfmt::skip]
 pub unsafe extern "C" fn rs_verify_command(cmd: *const c_char) {
     // Check if cmd == "smile"
