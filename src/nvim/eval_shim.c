@@ -935,11 +935,7 @@ int nvim_var_unlocked(void)
   return VAR_UNLOCKED;
 }
 
-/// value_check_lock wrapper - accessor for Rust.
-bool nvim_value_check_lock(int lock, const char *name)
-{
-  return value_check_lock((VarLockStatus)lock, name, TV_CSTRING);
-}
+// nvim_value_check_lock moved to typval.c (3-param version)
 
 /// Set vval.v_list in typval_T (raw assignment, does not update type) - accessor for Rust.
 void nvim_tv_set_v_list(typval_T *tv, list_T *l)

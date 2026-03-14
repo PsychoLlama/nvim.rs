@@ -1076,6 +1076,18 @@ extern "C" {
     fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
     fn nvim_tv_get_string(tv: TypevalHandle, out_len: *mut usize) -> *const c_char;
     fn nvim_semsg_list_index_out_of_range(idx: c_int);
+
+    // Functions for Phase 3 (tv_get_float, value_check_lock, tv_check_lock)
+    fn nvim_emsg_float_funcref();
+    fn nvim_emsg_float_string();
+    fn nvim_emsg_float_list();
+    fn nvim_emsg_float_dict();
+    fn nvim_emsg_float_bool();
+    fn nvim_emsg_float_special();
+    fn nvim_emsg_float_blob();
+    fn nvim_emsg_float_unknown();
+    fn nvim_value_check_lock(lock: c_int, name: *const c_char, name_len: usize) -> bool;
+    fn nvim_tv_get_v_lock(tv: TypevalHandle) -> c_int;
 }
 
 // =============================================================================
@@ -1935,6 +1947,119 @@ fn tv2bool_impl(tv: TypevalHandle) -> bool {
 #[export_name = "tv2bool"]
 pub extern "C" fn rs_tv2bool(tv: TypevalHandle) -> bool {
     tv2bool_impl(tv)
+}
+
+// =============================================================================
+// Phase 3: tv_get_float, value_check_lock, tv_check_lock
+// =============================================================================
+
+/// Get the float value of a Vimscript object.
+/// Raises an error if object is not number or floating-point.
+fn tv_get_float_impl(tv: TypevalHandle) -> f64 {
+    match tv_type_impl(tv) {
+        VarType::Number => {
+            let n = unsafe { nvim_tv_get_number(tv) };
+            n as f64
+        }
+        VarType::Float => unsafe { nvim_tv_get_float(tv) },
+        VarType::Partial | VarType::Func => {
+            unsafe { nvim_emsg_float_funcref() };
+            0.0
+        }
+        VarType::String => {
+            unsafe { nvim_emsg_float_string() };
+            0.0
+        }
+        VarType::List => {
+            unsafe { nvim_emsg_float_list() };
+            0.0
+        }
+        VarType::Dict => {
+            unsafe { nvim_emsg_float_dict() };
+            0.0
+        }
+        VarType::Bool => {
+            unsafe { nvim_emsg_float_bool() };
+            0.0
+        }
+        VarType::Special => {
+            unsafe { nvim_emsg_float_special() };
+            0.0
+        }
+        VarType::Blob => {
+            unsafe { nvim_emsg_float_blob() };
+            0.0
+        }
+        VarType::Unknown => {
+            unsafe { nvim_emsg_float_unknown() };
+            0.0
+        }
+    }
+}
+
+/// FFI wrapper: get float from typval.
+#[export_name = "tv_get_float"]
+pub extern "C" fn rs_tv_get_float(tv: TypevalHandle) -> f64 {
+    tv_get_float_impl(tv)
+}
+
+/// Check if variable "name" has a locked (immutable) value.
+fn value_check_lock_impl(lock: c_int, name: *const c_char, name_len: usize) -> bool {
+    unsafe { nvim_value_check_lock(lock, name, name_len) }
+}
+
+/// FFI wrapper: check value lock status.
+#[export_name = "value_check_lock"]
+pub unsafe extern "C" fn rs_value_check_lock(
+    lock: c_int,
+    name: *const c_char,
+    name_len: usize,
+) -> bool {
+    value_check_lock_impl(lock, name, name_len)
+}
+
+/// Check typval's own lock and container lock.
+fn tv_check_lock_impl(tv: TypevalHandle, name: *const c_char, name_len: usize) -> bool {
+    let container_lock = match tv_type_impl(tv) {
+        VarType::Blob => {
+            let b = unsafe { nvim_tv_get_blob(tv) };
+            if b.is_null() {
+                0
+            } else {
+                unsafe { nvim_blob_get_lock(b) }
+            }
+        }
+        VarType::List => {
+            let l = unsafe { nvim_tv_get_list(tv) };
+            if l.is_null() {
+                0
+            } else {
+                unsafe { nvim_list_get_lock(l) }
+            }
+        }
+        VarType::Dict => {
+            let d = unsafe { nvim_tv_get_dict(tv) };
+            if d.is_null() {
+                0
+            } else {
+                unsafe { nvim_dict_get_lock(d) }
+            }
+        }
+        _ => 0,
+    };
+    let v_lock = unsafe { nvim_tv_get_v_lock(tv) };
+    value_check_lock_impl(v_lock, name, name_len)
+        || (container_lock != 0 && value_check_lock_impl(container_lock, name, name_len))
+}
+
+/// FFI wrapper: check typval lock status.
+#[export_name = "tv_check_lock"]
+pub unsafe extern "C" fn rs_tv_check_lock(
+    tv: TypevalHandle,
+    name: *const c_char,
+    name_len: usize,
+) -> bool {
+    tv_check_lock_impl(tv, name, name_len)
 }
 
 // =============================================================================

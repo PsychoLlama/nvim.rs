@@ -3438,82 +3438,7 @@ bool tv_islocked(const typval_T *const tv)
               && (tv->vval.v_dict->dv_lock == VAR_LOCKED)));
 }
 
-/// Return true if typval is locked
-///
-/// Also gives an error message when typval is locked.
-///
-/// @param[in]  tv  Typval.
-/// @param[in]  name  Variable name, used in the error message.
-/// @param[in]  name_len  Variable name length. Use #TV_TRANSLATE to translate
-///                       variable name and compute the length. Use #TV_CSTRING
-///                       to compute the length with strlen() without
-///                       translating.
-///
-///                       Both #TV_… values are used for optimization purposes:
-///                       variable name with its length is needed only in case
-///                       of error, when no error occurs computing them is
-///                       a waste of CPU resources. This especially applies to
-///                       gettext.
-///
-/// @return true if variable is locked, false otherwise.
-bool tv_check_lock(const typval_T *tv, const char *name, size_t name_len)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  VarLockStatus lock = VAR_UNLOCKED;
-
-  switch (tv->v_type) {
-  case VAR_BLOB:
-    if (tv->vval.v_blob != NULL) {
-      lock = tv->vval.v_blob->bv_lock;
-    }
-    break;
-  case VAR_LIST:
-    if (tv->vval.v_list != NULL) {
-      lock = tv->vval.v_list->lv_lock;
-    }
-    break;
-  case VAR_DICT:
-    if (tv->vval.v_dict != NULL) {
-      lock = tv->vval.v_dict->dv_lock;
-    }
-    break;
-  default:
-    break;
-  }
-  return value_check_lock(tv->v_lock, name, name_len)
-         || (lock != VAR_UNLOCKED && value_check_lock(lock, name, name_len));
-}
-
-/// @return true if variable "name" has a locked (immutable) value
-bool value_check_lock(VarLockStatus lock, const char *name, size_t name_len)
-{
-  const char *error_message = NULL;
-  switch (lock) {
-  case VAR_UNLOCKED:
-    return false;
-  case VAR_LOCKED:
-    error_message = N_("E741: Value is locked: %.*s");
-    break;
-  case VAR_FIXED:
-    error_message = N_("E742: Cannot change value of %.*s");
-    break;
-  }
-  assert(error_message != NULL);
-
-  if (name == NULL) {
-    name = _("Unknown");
-    name_len = strlen(name);
-  } else if (name_len == TV_TRANSLATE) {
-    name = _(name);
-    name_len = strlen(name);
-  } else if (name_len == TV_CSTRING) {
-    name_len = strlen(name);
-  }
-
-  semsg(_(error_message), (int)name_len, name);
-
-  return true;
-}
+// tv_check_lock and value_check_lock migrated to Rust (nvim-rs/typval); declared in typval.h
 
 //{{{2 Comparison
 
@@ -3758,49 +3683,7 @@ linenr_T tv_get_lnum_buf(const typval_T *const tv, const buf_T *const buf)
   return (linenr_T)tv_get_number_chk(tv, NULL);
 }
 
-/// Get the floating-point value of a Vimscript object
-///
-/// Raises an error if object is not number or floating-point.
-///
-/// @param[in]  tv  Object to get value of.
-///
-/// @return Floating-point value of the variable or zero.
-float_T tv_get_float(const typval_T *const tv)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  switch (tv->v_type) {
-  case VAR_NUMBER:
-    return (float_T)(tv->vval.v_number);
-  case VAR_FLOAT:
-    return tv->vval.v_float;
-  case VAR_PARTIAL:
-  case VAR_FUNC:
-    emsg(_("E891: Using a Funcref as a Float"));
-    break;
-  case VAR_STRING:
-    emsg(_("E892: Using a String as a Float"));
-    break;
-  case VAR_LIST:
-    emsg(_("E893: Using a List as a Float"));
-    break;
-  case VAR_DICT:
-    emsg(_("E894: Using a Dictionary as a Float"));
-    break;
-  case VAR_BOOL:
-    emsg(_("E362: Using a boolean value as a Float"));
-    break;
-  case VAR_SPECIAL:
-    emsg(_("E907: Using a special value as a Float"));
-    break;
-  case VAR_BLOB:
-    emsg(_("E975: Using a Blob as a Float"));
-    break;
-  case VAR_UNKNOWN:
-    semsg(_(e_intern2), "tv_get_float(UNKNOWN)");
-    break;
-  }
-  return 0;
-}
+// tv_get_float migrated to Rust (nvim-rs/typval); declared in typval.h
 
 // =============================================================================
 // Rust FFI accessor functions for error message reporting
@@ -4444,11 +4327,42 @@ void nvim_tv_set_blob(typval_T *tv, blob_T *b)
   tv_blob_set_ret(tv, b);
 }
 
+/// Real implementation of value_check_lock (called from Rust and from
+/// nvim_value_check_lock_translated). Does NOT call the Rust symbol.
+static bool value_check_lock_impl(VarLockStatus lock, const char *name, size_t name_len)
+{
+  const char *error_message = NULL;
+  switch (lock) {
+  case VAR_UNLOCKED:
+    return false;
+  case VAR_LOCKED:
+    error_message = N_("E741: Value is locked: %.*s");
+    break;
+  case VAR_FIXED:
+    error_message = N_("E742: Cannot change value of %.*s");
+    break;
+  }
+  assert(error_message != NULL);
+
+  if (name == NULL) {
+    name = _("Unknown");
+    name_len = strlen(name);
+  } else if (name_len == TV_TRANSLATE) {
+    name = _(name);
+    name_len = strlen(name);
+  } else if (name_len == TV_CSTRING) {
+    name_len = strlen(name);
+  }
+
+  semsg(_(error_message), (int)name_len, name);
+  return true;
+}
+
 /// Call value_check_lock with TV_TRANSLATE semantics (accessor for Rust).
 /// Returns true if locked (and emits error), false if unlocked.
 bool nvim_value_check_lock_translated(VarLockStatus lock, const char *name)
 {
-  return value_check_lock(lock, name, TV_TRANSLATE);
+  return value_check_lock_impl(lock, name, TV_TRANSLATE);
 }
 
 /// Emit blob index out of range error (accessor for Rust).
@@ -4461,6 +4375,36 @@ void nvim_semsg_blobidx(int64_t idx)
 void nvim_emsg_blob_wrong_bytes(void)
 {
   emsg(_("E972: Blob value does not have the right number of bytes"));
+}
+
+/// Emit tv_get_float error for funcref (accessor for Rust).
+void nvim_emsg_float_funcref(void) { emsg(_("E891: Using a Funcref as a Float")); }
+/// Emit tv_get_float error for string (accessor for Rust).
+void nvim_emsg_float_string(void) { emsg(_("E892: Using a String as a Float")); }
+/// Emit tv_get_float error for list (accessor for Rust).
+void nvim_emsg_float_list(void) { emsg(_("E893: Using a List as a Float")); }
+/// Emit tv_get_float error for dict (accessor for Rust).
+void nvim_emsg_float_dict(void) { emsg(_("E894: Using a Dictionary as a Float")); }
+/// Emit tv_get_float error for bool (accessor for Rust).
+void nvim_emsg_float_bool(void) { emsg(_("E362: Using a boolean value as a Float")); }
+/// Emit tv_get_float error for special (accessor for Rust).
+void nvim_emsg_float_special(void) { emsg(_("E907: Using a special value as a Float")); }
+/// Emit tv_get_float error for blob (accessor for Rust).
+void nvim_emsg_float_blob(void) { emsg(_("E975: Using a Blob as a Float")); }
+/// Emit tv_get_float error for unknown (accessor for Rust).
+void nvim_emsg_float_unknown(void) { semsg(_(e_intern2), "tv_get_float(UNKNOWN)"); }
+
+/// Call value_check_lock_impl with arbitrary name and length (accessor for Rust).
+/// Returns true if locked, false otherwise.
+bool nvim_value_check_lock(VarLockStatus lock, const char *name, size_t name_len)
+{
+  return value_check_lock_impl(lock, name, name_len);
+}
+
+/// Get v_lock from a typval (accessor for Rust).
+int nvim_tv_get_v_lock(const typval_T *tv)
+{
+  return (int)tv->v_lock;
 }
 
 // =============================================================================
