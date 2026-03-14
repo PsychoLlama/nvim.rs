@@ -462,6 +462,8 @@ extern int *rs_mb_str2wide(const char *s);
 extern void rs_tree_count_words(const uint8_t *byts, int *idxs, int len);
 extern void rs_set_sal_first(slang_T *slang);
 extern void rs_set_map_str(slang_T *slang, const char *map);
+// Phase 4: spell_check_msm replacement
+extern int rs_spell_check_msm(const char *msm, int *start_out, int *incr_out, int *added_out);
 
 // Phase B7: mkspell and Write Operations
 // The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
@@ -1822,40 +1824,14 @@ static int compress_inc = 100;         // memory / SBLOCKSIZE
 static int compress_added = 500000;    // word count
 
 // Check the 'mkspellmem' option.  Return FAIL if it's wrong.
-// Sets "sps_flags".
+// Sets compress_start, compress_inc, compress_added from the parsed values.
+// Parsing and validation delegated to Rust (rs_spell_check_msm).
 int spell_check_msm(void)
 {
-  char *p = p_msm;
-
-  if (!ascii_isdigit(*p)) {
+  int start, incr, added;
+  if (rs_spell_check_msm(p_msm, &start, &incr, &added) != 0) {
     return FAIL;
   }
-  // block count = (value * 1024) / SBLOCKSIZE (but avoid overflow)
-  int start = (getdigits_int(&p, true, 0) * 10) / (SBLOCKSIZE / 102);
-  if (*p != ',') {
-    return FAIL;
-  }
-  p++;
-  if (!ascii_isdigit(*p)) {
-    return FAIL;
-  }
-  int incr = (getdigits_int(&p, true, 0) * 102) / (SBLOCKSIZE / 10);
-  if (*p != ',') {
-    return FAIL;
-  }
-  p++;
-  if (!ascii_isdigit(*p)) {
-    return FAIL;
-  }
-  int added = getdigits_int(&p, true, 0) * 1024;
-  if (*p != NUL) {
-    return FAIL;
-  }
-
-  if (start == 0 || incr == 0 || added == 0 || incr > start) {
-    return FAIL;
-  }
-
   compress_start = start;
   compress_inc = incr;
   compress_added = added;

@@ -4291,6 +4291,72 @@ unsafe fn hashitem_is_empty_sf(hi: *const crate::HashitemRaw) -> bool {
     (*hi).hi_key.is_null() || std::ptr::eq((*hi).hi_key, std::ptr::addr_of!(hash_removed_sentinel))
 }
 
+// Size of spell block in bytes (matches SBLOCKSIZE in spellfile.c).
+const SBLOCKSIZE: i32 = 16000;
+
+/// Parse integer digits from a byte slice, advancing the slice past the digits.
+/// Returns None if no digits are present.
+fn parse_digits(s: &[u8]) -> Option<(i32, &[u8])> {
+    if s.is_empty() || !s[0].is_ascii_digit() {
+        return None;
+    }
+    let mut val: i32 = 0;
+    let mut i = 0;
+    while i < s.len() && s[i].is_ascii_digit() {
+        val = val
+            .saturating_mul(10)
+            .saturating_add(i32::from(s[i] - b'0'));
+        i += 1;
+    }
+    Some((val, &s[i..]))
+}
+
+/// Validate and parse the 'mkspellmem' option string, returning (start, incr, added).
+/// Returns None if the string is invalid.
+fn parse_msm(msm: &[u8]) -> Option<(i32, i32, i32)> {
+    let (raw_start, rest) = parse_digits(msm)?;
+    let rest = rest.strip_prefix(b",")?;
+    let (raw_incr, rest) = parse_digits(rest)?;
+    let rest = rest.strip_prefix(b",")?;
+    let (raw_added, rest) = parse_digits(rest)?;
+    if !rest.is_empty() {
+        return None;
+    }
+    let start = (raw_start * 10) / (SBLOCKSIZE / 102);
+    let incr = (raw_incr * 102) / (SBLOCKSIZE / 10);
+    let added = raw_added * 1024;
+    if start == 0 || incr == 0 || added == 0 || incr > start {
+        return None;
+    }
+    Some((start, incr, added))
+}
+
+/// Check the 'mkspellmem' option and return parsed (start, incr, added) values via out-params.
+/// Returns 0 (OK) on success, 1 (FAIL) on error.
+///
+/// # Safety
+/// - `msm` must be a valid NUL-terminated C string.
+/// - `start_out`, `incr_out`, `added_out` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_check_msm(
+    msm: *const c_char,
+    start_out: *mut c_int,
+    incr_out: *mut c_int,
+    added_out: *mut c_int,
+) -> c_int {
+    let len = libc::strlen(msm);
+    let bytes = std::slice::from_raw_parts(msm.cast::<u8>(), len);
+    match parse_msm(bytes) {
+        Some((start, incr, added)) => {
+            *start_out = start;
+            *incr_out = incr;
+            *added_out = added;
+            0 // OK
+        }
+        None => 1, // FAIL
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
