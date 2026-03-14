@@ -221,13 +221,6 @@ char *get_digraph_for_char(int val_arg)
 ///
 /// @param char1
 /// @param char2
-/// @param meta_char
-///
-/// Add a digraph to the digraph table.
-static void registerdigraph(int char1, int char2, int n)
-{
-  rs_registerdigraph(char1, char2, n);
-}
 
 /// Check the characters are valid for a digraph.
 /// If they are valid, returns true; otherwise, give an error message and
@@ -369,7 +362,7 @@ static bool digraph_set_common(const typval_T *argchars, const typval_T *argdigr
     return false;
   }
 
-  registerdigraph(char1, char2, n);
+  rs_registerdigraph(char1, char2, n);
   return true;
 }
 
