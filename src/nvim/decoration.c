@@ -98,9 +98,7 @@ extern void rs_buf_decor_remove(void *buf, int row1, int row2, int col1,
 // Rust implementations for Phase 7
 extern void *rs_decor_find_sign(bool ext, uint32_t sh_idx);
 
-// Rust implementations for Phase 2 (memory management)
-extern void rs_clear_virttext(void *text);
-extern void rs_clear_virtlines(void *lines);
+// clear_virttext and clear_virtlines are declared in decoration.h
 
 /// Add highlighting to a buffer, bounded by two cursor positions,
 /// with an offset.
@@ -272,15 +270,7 @@ void decor_check_to_be_deleted(void)
   rs_decor_check_to_be_deleted();
 }
 
-void clear_virttext(VirtText *text)
-{
-  rs_clear_virttext((void *)text);
-}
 
-void clear_virtlines(VirtLines *lines)
-{
-  rs_clear_virtlines((void *)lines);
-}
 
 
 /// Get the next chunk of a virtual text item.

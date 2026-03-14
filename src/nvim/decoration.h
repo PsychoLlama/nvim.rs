@@ -113,6 +113,10 @@ typedef struct {
 } DecorColAdvanceResult;
 
 
+// Functions implemented in Rust (nvim-decoration crate)
+void clear_virttext(VirtText *text);
+void clear_virtlines(VirtLines *lines);
+
 // Forward declarations for functions migrated to Rust (no longer in generated header)
 bool decor_virt_pos(const DecorRange *decor);
 VirtTextPos decor_virt_pos_kind(const DecorRange *decor);

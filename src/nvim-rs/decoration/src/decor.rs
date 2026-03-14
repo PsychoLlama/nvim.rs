@@ -972,7 +972,7 @@ pub unsafe extern "C" fn rs_decor_put_vt(
 ///
 /// # Safety
 /// `text` must point to a valid `VirtText` or be null.
-#[no_mangle]
+#[unsafe(export_name = "clear_virttext")]
 pub unsafe extern "C" fn rs_clear_virttext(text: *mut c_void) {
     if text.is_null() {
         return;
@@ -987,7 +987,7 @@ pub unsafe extern "C" fn rs_clear_virttext(text: *mut c_void) {
 ///
 /// # Safety
 /// `lines` must point to a valid `VirtLines` or be null.
-#[no_mangle]
+#[unsafe(export_name = "clear_virtlines")]
 pub unsafe extern "C" fn rs_clear_virtlines(lines: *mut c_void) {
     if lines.is_null() {
         return;
