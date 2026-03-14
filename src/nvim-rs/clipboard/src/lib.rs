@@ -342,8 +342,7 @@ static mut CLIPBOARD_STATE: ClipboardModuleState = ClipboardModuleState::new();
 // =============================================================================
 
 extern "C" {
-    /// Get cb_flags option value
-    fn nvim_option_get_cb_flags() -> c_uint;
+    static mut cb_flags: c_uint;
     /// Check if clipboard provider is available
     fn nvim_clipboard_eval_has_provider() -> bool;
     /// Show a non-error message
@@ -385,10 +384,10 @@ unsafe fn adjust_clipboard_name_impl(
 ) -> *mut YankregHandle {
     let s = &raw mut CLIPBOARD_STATE;
     let n = unsafe { *name };
-    let cb_flags = unsafe { nvim_option_get_cb_flags() };
+    let flags = unsafe { cb_flags };
 
     let explicit_cb_reg = n == b'*' as c_int || n == b'+' as c_int;
-    let implicit_cb_reg = n == 0 && (cb_flags & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
+    let implicit_cb_reg = n == 0 && (flags & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
 
     if !explicit_cb_reg && !implicit_cb_reg {
         return std::ptr::null_mut();
@@ -416,7 +415,7 @@ unsafe fn adjust_clipboard_name_impl(
         };
         let target = unsafe { get_y_register(reg_idx) };
         if writing
-            && (cb_flags
+            && (flags
                 & if n == b'*' as c_int {
                     CB_FLAG_UNNAMED
                 } else {
@@ -438,9 +437,9 @@ unsafe fn adjust_clipboard_name_impl(
             return std::ptr::null_mut();
         }
 
-        if cb_flags & CB_FLAG_UNNAMEDPLUS != 0 {
+        if flags & CB_FLAG_UNNAMEDPLUS != 0 {
             unsafe {
-                *name = if cb_flags & CB_FLAG_UNNAMED != 0 && writing {
+                *name = if flags & CB_FLAG_UNNAMED != 0 && writing {
                     b'"' as c_int
                 } else {
                     b'+' as c_int

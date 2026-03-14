@@ -428,6 +428,16 @@ extern "C" {
     pub static mut fdo_flags: c_uint;
     pub static mut dy_flags: c_uint;
     pub static mut cb_flags: c_uint;
+    pub static mut bkc_flags: c_uint;
+    pub static mut ssop_flags: c_uint;
+    pub static mut spo_flags: c_uint;
+    pub static mut ve_flags: c_uint;
+
+    // Additional OptInt option globals
+    pub static mut p_chi: OptInt;
+
+    // String option globals (additional)
+    pub static mut p_wbr: *mut c_char;
 
     // Special globals from globals.h
     pub static mut magic_overruled: c_int;
@@ -443,6 +453,13 @@ extern "C" {
     pub static mut silent_mode: bool;
     pub static mut info_message: bool;
     pub static mut no_wait_return: c_int;
+    pub static mut t_colors: c_int;
+    pub static mut cmdpreview: bool;
+
+    // Error string arrays (const char[] - access via &raw const)
+    pub static e_invarg: c_char;
+    pub static e_secure: c_char;
+    pub static e_unsupportedoption: c_char;
 }
 
 // =============================================================================

@@ -378,12 +378,6 @@ OptInt nvim_option_get_ls(void) { return p_ls; }
 OptInt nvim_option_get_stal(void) { return p_stal; }
 OptInt nvim_option_get_re(void) { return p_re; }
 
-// Flag option accessors (unsigned)
-unsigned nvim_option_get_cot_flags(void) { return cot_flags; }
-unsigned nvim_option_get_fdo_flags(void) { return fdo_flags; }
-unsigned nvim_option_get_dy_flags(void) { return dy_flags; }
-unsigned nvim_option_get_cb_flags(void) { return cb_flags; }
-
 // Special accessors
 int nvim_option_get_secure(void) { return secure; }
 
@@ -440,8 +434,6 @@ int nvim_option_buf_get_b_p_ro(buf_T *buf) { return buf ? buf->b_p_ro : 0; }
 void nvim_option_buf_set_b_did_warn(buf_T *buf, int val) { if (buf) buf->b_did_warn = val != 0; }
 void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal : NULL; }
 int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
-void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
-
 // Phase 88: undolevels accessors
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 
@@ -628,10 +620,6 @@ void nvim_parse_cino(buf_T *buf) { parse_cino(buf); }
 void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
 OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
 
-// Xhistory callback accessors
-void *nvim_get_p_chi_addr(void) { return (void *)&p_chi; }
-
-
 // Pumblend accessors
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
 
@@ -650,9 +638,6 @@ void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
 void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
   if (win) win->w_scbind_pos = value;
 }
-
-// Error message accessor
-const char *nvim_callback_get_e_invarg(void) { return e_invarg; }
 
 // =============================================================================
 // Phase 1 accessors for string callback migration
@@ -683,7 +668,6 @@ int nvim_call_briopt_check_win(const char *val, win_T *win)
 {
   return briopt_check(val, win) == OK ? 1 : 0;
 }
-int nvim_get_cmdpreview(void) { return cmdpreview; }
 // Return address of win->w_p_briopt for varp comparison
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
 // Return varp from optset_T (as void*)
@@ -698,19 +682,10 @@ const char *nvim_optset_get_newval_str(const void *args)
 {
   return ((const optset_T *)args)->os_newval.string.data;
 }
-// Global bkc_flags accessors
-unsigned nvim_get_bkc_flags(void) { return bkc_flags; }
-void nvim_set_bkc_flags(unsigned val) { bkc_flags = val; }
 // Buffer-local bkc accessors
 unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
 void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
-// Global ssop_flags accessors
-unsigned nvim_get_ssop_flags(void) { return ssop_flags; }
-void nvim_set_ssop_flags(unsigned val) { ssop_flags = val; }
-// Global spo_flags accessors
-unsigned nvim_get_spo_flags(void) { return spo_flags; }
-void nvim_set_spo_flags(unsigned val) { spo_flags = val; }
 // Window-local spo_flags accessors
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
@@ -1174,8 +1149,6 @@ const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 // p_flp / b_p_flp accessors (for get_flp_value)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
-// ve_flags accessors (for get_ve_flags)
-unsigned nvim_get_ve_flags_global(void) { return ve_flags; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
 // iminsert/imsearch global accessors (for set_iminsert/imsearch_global)
 OptInt nvim_get_p_iminsert(void) { return p_iminsert; }
@@ -1192,7 +1165,6 @@ void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 // change_option_default wrapper (for reset_modifiable)
 void nvim_change_option_default_bool(OptIndex opt_idx, int value) { rs_change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
 // TTY and key accessors
-int nvim_option_get_t_colors(void) { return t_colors; }
 const char *nvim_option_get_p_term(void) { return p_term; }
 const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
 void nvim_option_set_p_term(char *val) { p_term = val; }
@@ -2347,14 +2319,8 @@ void *nvim_curbuf_b_p_syn_addr(void) { return &curbuf->b_p_syn; }
 void *nvim_curbuf_b_p_ft_addr(void) { return &curbuf->b_p_ft; }
 /// Address of curwin->w_s->b_p_spl (for varp pointer comparison)
 void *nvim_curwin_b_p_spl_addr(void) { return &curwin->w_s->b_p_spl; }
-/// Address of p_mouse (for varp pointer comparison)
-void *nvim_get_p_mouse_addr(void) { return &p_mouse; }
-/// Address of p_flp (for varp pointer comparison)
-void *nvim_get_p_flp_addr(void) { return &p_flp; }
 /// Address of curbuf->b_p_flp (for varp pointer comparison)
 void *nvim_curbuf_b_p_flp_addr(void) { return &curbuf->b_p_flp; }
-/// Address of p_wbr (for varp pointer comparison)
-void *nvim_get_p_wbr_addr(void) { return &p_wbr; }
 /// Address of curwin->w_p_wbr (for varp pointer comparison)
 void *nvim_curwin_p_wbr_addr(void) { return &curwin->w_p_wbr; }
 
@@ -2379,8 +2345,6 @@ void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, v
 void nvim_option_set_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags |= kOptFlagWasSet; }
 
 /// Error message strings for did_set_option
-const char *nvim_get_e_unsupportedoption(void) { return e_unsupportedoption; }
-const char *nvim_get_e_secure(void) { return e_secure; }
 const char *nvim_get_e_unknown_option2(void) { return e_unknown_option2; }
 
 /// Call emsg(_(msg)) -- translates and shows error message

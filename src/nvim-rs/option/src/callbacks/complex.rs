@@ -1140,10 +1140,6 @@ pub unsafe extern "C" fn rs_did_set_shellslash(_args: *mut c_void) -> CallbackRe
 // Wildchar Option Callback
 // =============================================================================
 
-extern "C" {
-    fn nvim_callback_get_e_invarg() -> CallbackResult;
-}
-
 /// Ctrl_C key code (verified via _Static_assert in option.c)
 const CTRL_C: i64 = 3;
 /// K_KENTER = TERMCAP2KEY('K', 'A') = -(75 + (65 << 8)) = -16715
@@ -1157,7 +1153,7 @@ pub unsafe extern "C" fn rs_did_set_wildchar(args: *mut c_void) -> CallbackResul
     let varp = nvim_optset_get_varp(args) as *const crate::OptInt;
     let c = *varp;
     if c == CTRL_C || c == i64::from(b'\n') || c == i64::from(b'\r') || c == K_KENTER {
-        return nvim_callback_get_e_invarg();
+        return (&raw const crate::e_invarg).cast::<c_char>();
     }
     callback_ok()
 }

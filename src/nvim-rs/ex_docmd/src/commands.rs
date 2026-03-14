@@ -119,7 +119,7 @@ extern "C" {
     static mut no_wait_return: c_int;
 
     // Error messages
-    fn nvim_get_e_secure() -> *const c_char;
+    static e_secure: c_char;
     fn nvim_get_e_invarg2() -> *const c_char;
 
     // String utilities
@@ -788,7 +788,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     }
 
     if expr_map_locked() {
-        emsg(nvim_get_e_secure());
+        emsg((&raw const e_secure).cast::<c_char>());
         return;
     }
 

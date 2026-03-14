@@ -37,14 +37,12 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ffu() -> *const c_char;
 
     // get_bkc_flags
-    fn nvim_get_bkc_flags() -> c_uint;
     fn nvim_buf_get_bkc_flags(buf: BufHandle) -> c_uint;
 
     // get_flp_value
     fn nvim_buf_get_p_flp(buf: BufHandle) -> *const c_char;
 
     // get_ve_flags
-    fn nvim_get_ve_flags_global() -> c_uint;
     fn nvim_win_get_ve_flags(wp: WinHandle) -> c_uint;
 
     // vimrc_found
@@ -65,7 +63,6 @@ extern "C" {
     fn nvim_change_option_default_bool(opt_idx: c_int, value: c_int);
 
     // TTY options (Phase 2)
-    fn nvim_option_get_t_colors() -> c_int;
     fn nvim_option_get_p_term() -> *const c_char;
     fn nvim_option_get_p_ttytype() -> *const c_char;
     fn nvim_option_set_p_term(val: *mut c_char);
@@ -147,7 +144,7 @@ pub unsafe extern "C" fn rs_get_bkc_flags(buf: BufHandle) -> c_uint {
     if local != 0 {
         local
     } else {
-        nvim_get_bkc_flags()
+        crate::bkc_flags
     }
 }
 
@@ -175,7 +172,7 @@ pub unsafe extern "C" fn rs_get_ve_flags(wp: WinHandle) -> c_uint {
     let flags = if w_ve_flags != 0 {
         w_ve_flags
     } else {
-        nvim_get_ve_flags_global()
+        crate::ve_flags
     };
     flags & !(K_OPT_VE_FLAG_NONE | K_OPT_VE_FLAG_NONE_U)
 }
@@ -251,7 +248,7 @@ pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
 
     // "t_Co"
     if strcmp(name, c"t_Co".as_ptr()) == 0 {
-        let t_colors = nvim_option_get_t_colors();
+        let t_colors = crate::t_colors;
         if t_colors <= 1 {
             value = xstrdup(c"".as_ptr());
         } else {

@@ -102,8 +102,7 @@ extern "C" {
     fn nvim_option_buf_get_terminal_ptr(buf: BufHandle) -> *mut c_void;
     fn on_scrollback_option_changed(terminal: *mut c_void);
 
-    // Undolevels callback accessors
-    fn nvim_callback_get_p_ul_addr() -> *mut c_void;
+    // Undolevels callback accessors (use &raw mut crate::p_ul instead)
 
     // Binary callback
     fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int);
@@ -137,8 +136,7 @@ extern "C" {
     fn nvim_parse_cino(buf: BufHandle);
     fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
 
-    // Xhistory callback
-    fn nvim_get_p_chi_addr() -> *mut c_void;
+    // Xhistory callback (use &raw mut crate::p_chi instead)
     #[link_name = "qf_resize_stack"]
     fn nvim_qf_resize_stack(n: c_int);
     #[link_name = "ll_resize_stack"]
@@ -197,8 +195,6 @@ extern "C" {
     fn nvim_check_highlight_init(args: *mut c_void) -> c_int;
     fn nvim_did_set_iconstring(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_titlestring(args: *mut c_void) -> CallbackResult;
-    fn nvim_get_e_unsupportedoption() -> *const std::ffi::c_char;
-
     // Phase 103: isopt / signcolumn / tagcase / virtualedit wrappers
     fn nvim_did_set_isopt(args: *mut c_void) -> CallbackResult;
     fn nvim_did_set_iskeyword(args: *mut c_void) -> CallbackResult;
@@ -569,7 +565,7 @@ pub unsafe extern "C" fn rs_did_set_undolevels_full(args: *mut c_void) -> Callba
     let new_value = nvim_optset_get_newval_number(args);
     let old_value = nvim_optset_get_oldval_number(args);
 
-    let p_ul_addr = nvim_callback_get_p_ul_addr();
+    let p_ul_addr: *mut c_void = (&raw mut crate::p_ul).cast::<c_void>();
     if varp == p_ul_addr {
         // global 'undolevels': sync undo before changing the value
         p_ul = old_value;
@@ -790,7 +786,7 @@ pub unsafe extern "C" fn rs_did_set_shiftwidth_tabstop(args: *mut c_void) -> Cal
 pub unsafe extern "C" fn rs_did_set_xhistory(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
     let varp = nvim_optset_get_varp(args);
-    let chi_addr = nvim_get_p_chi_addr();
+    let chi_addr: *mut c_void = (&raw mut crate::p_chi).cast::<c_void>();
 
     if varp == chi_addr {
         // 'chistory': resize the global quickfix stack
@@ -1110,7 +1106,7 @@ pub unsafe extern "C" fn rs_did_set_virtualedit_full(args: *mut c_void) -> Callb
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_highlight(args: *mut c_void) -> CallbackResult {
     if nvim_check_highlight_init(args) == 0 {
-        return nvim_get_e_unsupportedoption();
+        return (&raw const crate::e_unsupportedoption).cast::<std::ffi::c_char>();
     }
     callback_ok()
 }

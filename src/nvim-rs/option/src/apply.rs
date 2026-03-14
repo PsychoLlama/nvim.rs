@@ -10,7 +10,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 
-use std::ffi::{c_char, c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::storage::OptVal;
 use crate::{
@@ -40,10 +40,7 @@ extern "C" {
     // Check if option has a did_set_cb
     fn nvim_option_has_did_set_cb(opt_idx: c_int) -> c_int;
 
-    // Error message accessors
-    fn nvim_get_e_unsupportedoption() -> *const c_char;
-    fn nvim_get_e_secure() -> *const c_char;
-    fn nvim_get_e_invarg() -> *const c_char;
+    // Error message accessors (removed -- using crate statics directly)
 
     // Option metadata accessors
     fn nvim_get_option_immutable(opt_idx: c_int) -> c_int;
@@ -91,10 +88,9 @@ extern "C" {
     fn nvim_curbuf_b_p_syn_addr() -> *mut std::ffi::c_void;
     fn nvim_curbuf_b_p_ft_addr() -> *mut std::ffi::c_void;
     fn nvim_curwin_b_p_spl_addr() -> *mut std::ffi::c_void;
-    fn nvim_get_p_mouse_addr() -> *mut std::ffi::c_void;
-    fn nvim_get_p_flp_addr() -> *mut std::ffi::c_void;
+    // removed -- use &raw mut crate::p_mouse etc.
     fn nvim_curbuf_b_p_flp_addr() -> *mut std::ffi::c_void;
-    fn nvim_get_p_wbr_addr() -> *mut std::ffi::c_void;
+    // removed -- use &raw mut crate::p_wbr
     fn nvim_curwin_p_wbr_addr() -> *mut std::ffi::c_void;
 
     // Special autocmds for file type / syntax / spell
@@ -192,19 +188,19 @@ pub unsafe extern "C" fn rs_did_set_option(
     } else if nvim_get_option_immutable(opt_idx) != 0 && rs_optval_equal(old_value, new_value) == 0
     {
         // Disallow changing immutable options.
-        errmsg = nvim_get_e_unsupportedoption();
+        errmsg = (&raw const crate::e_unsupportedoption).cast::<c_char>();
     } else if (nvim_get_secure() != 0 || nvim_get_sandbox() != 0)
         && (opt_flags_val & K_OPT_FLAG_SECURE) != 0
     {
         // Disallow changing some options from secure mode.
-        errmsg = nvim_get_e_secure();
+        errmsg = (&raw const crate::e_secure).cast::<c_char>();
     } else {
         // Check for illegal path names in string options.
         use crate::OptValType;
         if new_value.type_ == OptValType::String
             && nvim_check_illegal_path_names(varp, opt_flags_val) != 0
         {
-            errmsg = nvim_get_e_invarg();
+            errmsg = (&raw const crate::e_invarg).cast::<c_char>();
         } else if nvim_option_has_did_set_cb(opt_idx) != 0 {
             // Invoke the option-specific callback function.
             errmsg = nvim_invoke_did_set_cb(
@@ -282,10 +278,10 @@ pub unsafe extern "C" fn rs_did_set_option(
     // Redraw comp_col in case ruler/showcmd/columns/ls changed.
     nvim_call_comp_col();
 
-    let mouse_addr = nvim_get_p_mouse_addr();
-    let flp_addr = nvim_get_p_flp_addr();
+    let mouse_addr: *mut c_void = (&raw mut crate::p_mouse).cast::<c_void>();
+    let flp_addr: *mut c_void = (&raw mut crate::p_flp).cast::<c_void>();
     let buf_flp_addr = nvim_curbuf_b_p_flp_addr();
-    let wbr_addr = nvim_get_p_wbr_addr();
+    let wbr_addr: *mut c_void = (&raw mut crate::p_wbr).cast::<c_void>();
     let win_wbr_addr = nvim_curwin_p_wbr_addr();
 
     if varp == mouse_addr {

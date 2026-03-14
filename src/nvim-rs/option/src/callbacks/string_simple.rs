@@ -52,26 +52,19 @@ extern "C" {
     fn nvim_call_check_opt_wim() -> c_int;
     fn nvim_call_briopt_check_win(val: *const c_char, win: crate::WinHandle) -> c_int;
     fn nvim_win_get_p_briopt_addr(win: crate::WinHandle) -> *const c_void;
-    fn nvim_get_cmdpreview() -> c_int;
+    static mut cmdpreview: bool;
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_redraw_curbuf_later(redraw_type: c_int);
     fn nvim_win_get_briopt_list(win: crate::WinHandle) -> c_int;
     fn redraw_all_later(typ: c_int);
 
     // Phase 2 accessors
-    #[allow(dead_code)]
-    fn nvim_get_bkc_flags() -> c_uint;
-    fn nvim_set_bkc_flags(val: c_uint);
-    #[allow(dead_code)]
-    fn nvim_buf_get_bkc_flags(buf: crate::BufHandle) -> c_uint;
     fn nvim_buf_set_bkc_flags(buf: crate::BufHandle, val: c_uint);
     fn nvim_buf_get_p_bkc(buf: crate::BufHandle) -> *const c_char;
     static mut p_bkc: *mut c_char;
-    fn nvim_get_ssop_flags() -> c_uint;
-    fn nvim_set_ssop_flags(val: c_uint);
-    #[allow(dead_code)]
-    fn nvim_get_spo_flags() -> c_uint;
-    fn nvim_set_spo_flags(val: c_uint);
+    static mut bkc_flags: c_uint;
+    static mut ssop_flags: c_uint;
+    static mut spo_flags: c_uint;
     #[allow(dead_code)]
     fn nvim_win_get_spo_flags(win: crate::WinHandle) -> c_uint;
     fn nvim_win_set_spo_flags(win: crate::WinHandle, val: c_uint);
@@ -230,7 +223,7 @@ pub unsafe extern "C" fn rs_did_set_bufhidden(args: *mut c_void) -> CallbackResu
 /// Disallows change while cmdpreview is active, then validates against allowed values.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_inccommand(args: *mut c_void) -> CallbackResult {
-    if nvim_get_cmdpreview() != 0 {
+    if cmdpreview {
         return E_INVARG;
     }
     nvim_did_set_str_generic(args)
@@ -413,7 +406,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
             if opt_flags & OPT_LOCAL != 0 {
                 nvim_buf_set_bkc_flags(buf, restored);
             } else {
-                nvim_set_bkc_flags(restored);
+                bkc_flags = restored;
             }
             return E_INVARG;
         }
@@ -421,7 +414,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
         if opt_flags & OPT_LOCAL != 0 {
             nvim_buf_set_bkc_flags(buf, flags);
         } else {
-            nvim_set_bkc_flags(flags);
+            bkc_flags = flags;
         }
     }
 
@@ -537,13 +530,13 @@ pub unsafe extern "C" fn rs_did_set_sessionoptions(args: *mut c_void) -> Callbac
         return errmsg;
     }
     // Don't allow both "sesdir" and "curdir"
-    let ssop = nvim_get_ssop_flags();
+    let ssop = ssop_flags;
     if (ssop & SSOP_CURDIR != 0) && (ssop & SSOP_SESDIR != 0) {
         // Restore flags from old value
         let oldval = nvim_optset_get_oldval_str(args);
         let ssop_values = nvim_get_opt_ssop_values();
         let old_result = rs_opt_strings_flags(oldval, ssop_values, true);
-        nvim_set_ssop_flags(old_result.flags);
+        ssop_flags = old_result.flags;
         return E_INVARG;
     }
     callback_ok()
@@ -564,7 +557,7 @@ pub unsafe extern "C" fn rs_did_set_spelloptions(args: *mut c_void) -> CallbackR
         if !result.ok {
             return E_INVARG;
         }
-        nvim_set_spo_flags(result.flags);
+        spo_flags = result.flags;
     }
     // Validate and set window-local flags (unless OPT_GLOBAL)
     if opt_flags & OPT_GLOBAL == 0 {

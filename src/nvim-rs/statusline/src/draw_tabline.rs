@@ -52,8 +52,7 @@ extern "C" {
     fn nvim_stl_schar_from_ascii_char(c: c_char) -> ScharT;
 
     // Global state
-    #[link_name = "nvim_option_get_t_colors"]
-    fn nvim_stl_get_t_colors() -> c_int;
+    static mut t_colors: c_int;
     #[link_name = "nvim_get_default_grid_has_chars"]
     fn nvim_stl_default_grid_has_chars() -> c_int;
     fn nvim_stl_set_redraw_tabline(val: c_int);
@@ -117,7 +116,7 @@ extern "C" {
 pub unsafe fn draw_tabline() {
     let attr_nosel = nvim_stl_HL_ATTR(HLF_TP);
     let attr_fill = nvim_stl_HL_ATTR(HLF_TPF);
-    let use_sep_chars = nvim_stl_get_t_colors() < 8;
+    let use_sep_chars = t_colors < 8;
 
     if nvim_stl_default_grid_has_chars() == 0 {
         return;
