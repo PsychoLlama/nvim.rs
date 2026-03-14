@@ -143,15 +143,17 @@ fn digraph_get_impl(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
 // =============================================================================
 
 /// Get digraph (FFI export).
-#[no_mangle]
-pub extern "C" fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: c_int) -> c_int {
-    digraph_get_impl(char1, char2, meta_char != 0)
+#[export_name = "digraph_get"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
+    digraph_get_impl(char1, char2, meta_char)
 }
 
 /// Get exact digraph match (FFI export).
-#[no_mangle]
-pub extern "C" fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: c_int) -> c_int {
-    getexactdigraph_impl(char1, char2, meta_char != 0)
+#[export_name = "getexactdigraph"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: bool) -> c_int {
+    getexactdigraph_impl(char1, char2, meta_char)
 }
 
 #[cfg(test)]

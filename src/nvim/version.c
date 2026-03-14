@@ -65,10 +65,6 @@ int nvim_get_version_patch(void)
   return NVIM_VERSION_PATCH;
 }
 
-extern bool rs_has_nvim_version(const char *version_str);
-extern int rs_min_vim_version(void);
-extern int rs_highest_patch(void);
-extern int rs_has_vim_patch(int n, int major_minor_version);
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
@@ -4284,40 +4280,6 @@ static const int *included_patchsets[] = {
 };
 // clang-format on
 
-/// Compares a version string to the current Nvim version.
-///
-/// @param version Version string like "1.3.42"
-///
-/// @return true if Nvim is at or above the version.
-bool has_nvim_version(const char *const version_str)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  return rs_has_nvim_version(version_str);
-}
-
-int min_vim_version(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_min_vim_version();
-}
-
-int highest_patch(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_highest_patch();
-}
-
-/// Checks whether a Vim patch has been included.
-///
-/// @param n Patch number.
-/// @param major_minor_version (major * 100 + minor) Vim version or 0 (alias to min_vim_version())
-///
-/// @return true if patch `n` has been included.
-bool has_vim_patch(int n, int major_minor_version)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_has_vim_patch(n, major_minor_version) != 0;
-}
 
 void ex_version(exarg_T *eap)
 {

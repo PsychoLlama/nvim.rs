@@ -13,7 +13,8 @@ use libc::c_int;
 
 // External Rust functions from this crate
 extern "C" {
-    fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: c_int) -> c_int;
+    #[link_name = "digraph_get"]
+    fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int;
     fn rs_registerdigraph(char1: c_int, char2: c_int, result: c_int);
     fn rs_check_digraph_chars_valid(char1: c_int, char2: c_int) -> c_int;
 }
@@ -36,7 +37,7 @@ extern "C" {
 /// The digraph result code.
 #[inline]
 fn digraph_get_for_viml(char1: u8, char2: u8) -> c_int {
-    unsafe { rs_digraph_get(c_int::from(char1), c_int::from(char2), 0) }
+    unsafe { rs_digraph_get(c_int::from(char1), c_int::from(char2), false) }
 }
 
 /// Convert a character code to UTF-8 bytes.

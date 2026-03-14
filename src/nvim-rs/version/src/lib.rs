@@ -151,10 +151,10 @@ pub fn has_nvim_version(version_str: &[u8]) -> bool {
 ///
 /// # Safety
 /// - `version_str` must be a valid null-terminated C string
-#[no_mangle]
-pub unsafe extern "C" fn rs_has_nvim_version(version_str: *const c_char) -> c_int {
+#[export_name = "has_nvim_version"]
+pub unsafe extern "C" fn rs_has_nvim_version(version_str: *const c_char) -> bool {
     if version_str.is_null() {
-        return 0;
+        return false;
     }
 
     // Find string length (up to reasonable max)
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rs_has_nvim_version(version_str: *const c_char) -> c_in
     }
 
     let slice = std::slice::from_raw_parts(version_str.cast::<u8>(), len);
-    c_int::from(has_nvim_version(slice))
+    has_nvim_version(slice)
 }
 
 /// Returns the minimum supported Vim version.
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn rs_has_nvim_version(version_str: *const c_char) -> c_in
 /// # Safety
 ///
 /// Calls external C function to access static array.
-#[no_mangle]
+#[export_name = "min_vim_version"]
 pub unsafe extern "C" fn rs_min_vim_version() -> c_int {
     nvim_get_min_vim_version()
 }
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn rs_min_vim_version() -> c_int {
 /// # Safety
 ///
 /// Calls external C function to access static array.
-#[no_mangle]
+#[export_name = "highest_patch"]
 pub unsafe extern "C" fn rs_highest_patch() -> c_int {
     nvim_get_highest_patch()
 }
@@ -263,9 +263,9 @@ fn has_vim_patch_impl(n: c_int, major_minor_version: c_int) -> bool {
 ///
 /// # Safety
 /// Calls external C functions to access static arrays.
-#[no_mangle]
-pub extern "C" fn rs_has_vim_patch(n: c_int, major_minor_version: c_int) -> c_int {
-    c_int::from(has_vim_patch_impl(n, major_minor_version))
+#[export_name = "has_vim_patch"]
+pub extern "C" fn rs_has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
+    has_vim_patch_impl(n, major_minor_version)
 }
 
 #[cfg(test)]

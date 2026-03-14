@@ -26,7 +26,8 @@ extern "C" {
     fn nvim_get_user_digraphs_len() -> c_int;
 
     /// Get exact digraph match.
-    fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: c_int) -> c_int;
+    #[link_name = "getexactdigraph"]
+    fn rs_getexactdigraph(char1: c_int, char2: c_int, meta_char: bool) -> c_int;
 
     /// Convert character to UTF-8.
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
@@ -341,7 +342,7 @@ pub unsafe extern "C" fn rs_digraph_iterate(
         for dp in DIGRAPH_DEFAULT {
             // Get actual result (may be overridden by user digraph)
             let result =
-                unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+                unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), false) };
 
             // Skip if result is 0 or same as char2 (no digraph)
             if result != 0 && result != c_int::from(dp.char2) {
@@ -403,7 +404,8 @@ pub unsafe extern "C" fn rs_digraph_iterate_default(
         }
 
         // Get actual result (may be overridden by user digraph)
-        let result = unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+        let result =
+            unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), false) };
 
         // Skip if result is 0 or same as char2 (no digraph)
         if result != 0 && result != c_int::from(dp.char2) {
@@ -704,7 +706,8 @@ pub unsafe extern "C" fn rs_listdigraphs(use_headers: c_int) {
         }
 
         // Get actual result (may be overridden by user digraph)
-        let result = unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+        let result =
+            unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), false) };
 
         if result != 0 && result != c_int::from(dp.char2) {
             let prev_ptr = if use_headers != 0 {

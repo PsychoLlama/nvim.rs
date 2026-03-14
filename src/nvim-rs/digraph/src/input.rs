@@ -35,7 +35,8 @@ extern "C" {
 
 // Import the digraph lookup function from lib
 extern "C" {
-    fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: c_int) -> c_int;
+    #[link_name = "digraph_get"]
+    fn rs_digraph_get(char1: c_int, char2: c_int, meta_char: bool) -> c_int;
 }
 
 /// `K_BS` key code (matching C's `K_BS`).
@@ -76,7 +77,7 @@ fn do_digraph_impl(c: c_int) -> c_int {
         let backspaced = BACKSPACED.load(Ordering::SeqCst);
         if backspaced >= 0 {
             // We have a character before backspace - compose digraph
-            result = unsafe { rs_digraph_get(backspaced, c, 0) };
+            result = unsafe { rs_digraph_get(backspaced, c, false) };
         }
         BACKSPACED.store(-1, Ordering::SeqCst);
 
@@ -92,7 +93,8 @@ fn do_digraph_impl(c: c_int) -> c_int {
 }
 
 /// Handle digraphs after typing a character (FFI export).
-#[no_mangle]
+#[export_name = "do_digraph"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_do_digraph(c: c_int) -> c_int {
     do_digraph_impl(c)
 }
@@ -145,7 +147,7 @@ pub extern "C" fn rs_get_digraph_result(first_char: c_int, second_char: c_int) -
     if second_char == ESC {
         return 0;
     }
-    unsafe { rs_digraph_get(first_char, second_char, 1) }
+    unsafe { rs_digraph_get(first_char, second_char, true) }
 }
 
 /// NUL character.
@@ -166,8 +168,9 @@ const NUL: c_int = 0;
 ///
 /// # Safety
 /// Calls C input functions.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_digraph(cmdline: c_int) -> c_int {
+#[export_name = "get_digraph"]
+#[allow(clippy::must_use_candidate)]
+pub unsafe extern "C" fn rs_get_digraph(cmdline: bool) -> c_int {
     // Read first character with no mapping
     unsafe { nvim_digraph_inc_no_mapping() };
     let c = unsafe { nvim_digraph_plain_vgetc() };
@@ -184,7 +187,7 @@ pub unsafe extern "C" fn rs_get_digraph(cmdline: c_int) -> c_int {
     }
 
     // Show the first character
-    if cmdline != 0 {
+    if cmdline {
         if unsafe { nvim_char2cells(c) } == 1
             && c < 128
             && unsafe { nvim_digraph_get_cmdline_star() } == 0
@@ -206,7 +209,7 @@ pub unsafe extern "C" fn rs_get_digraph(cmdline: c_int) -> c_int {
     }
 
     // Compose the digraph
-    unsafe { rs_digraph_get(c, cc, 1) }
+    unsafe { rs_digraph_get(c, cc, true) }
 }
 
 #[cfg(test)]

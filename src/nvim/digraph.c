@@ -56,12 +56,9 @@ static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_item
 #include "digraph.c.generated.h"
 
 // Rust implementations
-extern int rs_digraph_get(int char1, int char2, int meta_char);
-extern int rs_getexactdigraph(int char1, int char2, int meta_char);
 extern int rs_check_digraph_chars_valid(int char1, int char2);
 extern void rs_registerdigraph(int char1, int char2, int result);
 extern int rs_get_digraph_for_char(int val, uint8_t *out_char1, uint8_t *out_char2);
-extern int rs_do_digraph(int c);
 typedef struct {
   int error_code;  // 0 = success, 1 = char validation error, 2 = number expected
   int char1;       // First character (for error messages)
@@ -74,7 +71,6 @@ extern int rs_putdigraph(char **str, PutdigraphResult *result);
 typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
 extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
 extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
-extern int rs_get_digraph(int cmdline);
 
 // Verify highlight constants match Rust values
 _Static_assert(HLF_8 == 1, "HLF_8");
@@ -195,14 +191,6 @@ void nvim_digraph_add_to_showcmd(int c)
 
 /// handle digraphs after typing a character
 ///
-/// @param c
-///
-/// @return The digraph.
-int do_digraph(int c)
-{
-  return rs_do_digraph(c);
-}
-
 /// Find a digraph for "val".  If found return the string to display it.
 /// If not found return NULL.
 char *get_digraph_for_char(int val_arg)
@@ -222,28 +210,12 @@ char *get_digraph_for_char(int val_arg)
 /// Get a digraph.  Used after typing CTRL-K on the command line or in normal
 /// mode.
 ///
-/// @param cmdline true when called from the cmdline
-///
-/// @returns composed character, or NUL when ESC was used.
-int get_digraph(bool cmdline)
-{
-  return rs_get_digraph(cmdline ? 1 : 0);
-}
-
 /// Lookup the pair "char1", "char2" in the digraph tables.
 ///
 /// @param char1
 /// @param char2
 /// @param meta_char
 ///
-/// @return If no match, return "char2". If "meta_char" is true and "char1"
-//          is a space, return "char2" | 0x80.
-static int getexactdigraph(int char1, int char2, bool meta_char)
-  FUNC_ATTR_PURE
-{
-  return rs_getexactdigraph(char1, char2, meta_char ? 1 : 0);
-}
-
 /// Get digraph.
 /// Allow for both char1-char2 and char2-char1
 ///
@@ -251,13 +223,6 @@ static int getexactdigraph(int char1, int char2, bool meta_char)
 /// @param char2
 /// @param meta_char
 ///
-/// @return The digraph.
-int digraph_get(int char1, int char2, bool meta_char)
-  FUNC_ATTR_PURE
-{
-  return rs_digraph_get(char1, char2, meta_char ? 1 : 0);
-}
-
 /// Add a digraph to the digraph table.
 static void registerdigraph(int char1, int char2, int n)
 {
