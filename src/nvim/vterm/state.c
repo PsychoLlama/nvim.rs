@@ -2731,12 +2731,6 @@ void nvim_vterm_state_lineinfo_clear(VTermState *state, int row)
   state->lineinfo[row] = (VTermLineInfo){ 0 };
 }
 
-// --- Tabstop accessors ---
-
-uint8_t *nvim_vterm_state_get_tabstops(VTermState *state)
-{
-  return state->tabstops;
-}
 
 int nvim_vterm_state_is_col_tabstop(const VTermState *state, int col)
 {

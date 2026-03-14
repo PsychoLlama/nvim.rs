@@ -485,35 +485,6 @@ void nvim_mf_xfree_clear_ffname(memfile_T *mfp)
 }
 
 // =============================================================================
-// Cross-module (buf_T) wrappers
-// =============================================================================
-
-buf_T *nvim_mf_firstbuf(void)
-{
-  return firstbuf;
-}
-
-buf_T *nvim_mf_buf_next(buf_T *buf)
-{
-  return buf->b_next;
-}
-
-memfile_T *nvim_mf_buf_get_ml_mfp(buf_T *buf)
-{
-  return buf->b_ml.ml_mfp;
-}
-
-bool nvim_mf_buf_may_swap(buf_T *buf)
-{
-  return buf->b_may_swap;
-}
-
-void nvim_mf_buf_ml_open_file(buf_T *buf)
-{
-  ml_open_file(buf);
-}
-
-// =============================================================================
 // C functions with real logic that call Rust helpers
 // =============================================================================
 

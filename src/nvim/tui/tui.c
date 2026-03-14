@@ -221,38 +221,6 @@ extern void rs_tui_query_bg_color(TUIData *tui);
 // TUIData Accessor Functions for Rust
 // ============================================================================
 
-/// Get the rgb flag from TUIData
-bool nvim_tui_get_rgb(TUIData *tui)
-{
-  return tui->rgb;
-}
-
-/// Get an HlAttrs entry from the attrs kvec
-const HlAttrs *nvim_tui_get_attrs_ptr(TUIData *tui, size_t idx)
-{
-  if (idx >= kv_size(tui->attrs)) {
-    return NULL;
-  }
-  return &kv_A(tui->attrs, idx);
-}
-
-/// Get the size of the attrs kvec
-size_t nvim_tui_get_attrs_size(TUIData *tui)
-{
-  return kv_size(tui->attrs);
-}
-
-/// Get pointer to the attrs array
-const HlAttrs *nvim_tui_get_attrs_data(TUIData *tui)
-{
-  return tui->attrs.items;
-}
-
-/// Get cursor row position
-int nvim_tui_get_row(TUIData *tui)
-{
-  return tui->row;
-}
 
 /// Set cursor row position
 void nvim_tui_set_row(TUIData *tui, int row)
@@ -260,11 +228,6 @@ void nvim_tui_set_row(TUIData *tui, int row)
   tui->row = row;
 }
 
-/// Get cursor col position
-int nvim_tui_get_col(TUIData *tui)
-{
-  return tui->col;
-}
 
 /// Set cursor col position
 void nvim_tui_set_col(TUIData *tui, int col)
@@ -284,11 +247,6 @@ void nvim_tui_set_clear_attrs(TUIData *tui, HlAttrs attrs)
   tui->clear_attrs = attrs;
 }
 
-/// Get the clear_attrs field
-HlAttrs nvim_tui_get_clear_attrs(TUIData *tui)
-{
-  return tui->clear_attrs;
-}
 
 /// Set print_attr_id
 void nvim_tui_set_print_attr_id(TUIData *tui, int id)
@@ -549,11 +507,6 @@ bool nvim_tui_get_default_attr(TUIData *tui)
   return tui->default_attr;
 }
 
-/// Get busy flag
-bool nvim_tui_get_busy(TUIData *tui)
-{
-  return tui->busy;
-}
 
 /// Set busy flag
 void nvim_tui_set_busy(TUIData *tui, bool busy)

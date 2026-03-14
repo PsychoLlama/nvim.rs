@@ -198,11 +198,6 @@ char *nvim_packer_get_endptr(PackerBuffer *packer)
   return packer->endptr;
 }
 
-/// Get the start pointer from a PackerBuffer (accessor for Rust).
-char *nvim_packer_get_startptr(PackerBuffer *packer)
-{
-  return packer->startptr;
-}
 
 /// Call the packer_flush callback (accessor for Rust).
 void nvim_packer_flush(PackerBuffer *packer)

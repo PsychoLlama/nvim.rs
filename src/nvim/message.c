@@ -293,7 +293,6 @@ int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0
 // nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }
-int nvim_ui_has_cmdline(void) { return ui_has(kUICmdline) ? 1 : 0; }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
 
 /// Calculate the byte length of string that fits in given cell width.
@@ -455,7 +454,6 @@ void nvim_restore_pre_verbose_kind(void)
     pre_verbose_kind = NULL;
   }
 }
-int nvim_verbose_fd_is_null(void) { return verbose_fd == NULL ? 1 : 0; }
 void nvim_verbose_stop_impl(void)
 {
   if (verbose_fd != NULL) {

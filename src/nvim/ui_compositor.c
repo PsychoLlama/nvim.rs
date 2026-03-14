@@ -144,29 +144,6 @@ void nvim_layers_push(ScreenGrid *grid)
   kv_push(layers, grid);
 }
 
-void nvim_layers_insert(size_t i, ScreenGrid *grid)
-{
-  if (i <= kv_size(layers)) {
-    kv_push(layers, NULL);  // Make space
-    // Shift elements right
-    for (size_t j = kv_size(layers) - 1; j > i; j--) {
-      kv_A(layers, j) = kv_A(layers, j - 1);
-    }
-    kv_A(layers, i) = grid;
-  }
-}
-
-void nvim_layers_remove(size_t i)
-{
-  if (i < kv_size(layers)) {
-    // Shift elements left
-    for (size_t j = i; j < kv_size(layers) - 1; j++) {
-      kv_A(layers, j) = kv_A(layers, j + 1);
-    }
-    kv_pop(layers);
-  }
-}
-
 void nvim_layers_pop(void)
 {
   if (kv_size(layers) > 0) {

@@ -522,12 +522,6 @@ int nvim_stl_stcp_get_sattr_hl_id(statuscol_T *stcp, int idx)
   return stcp->sattrs[idx].hl_id;
 }
 
-/// Get stcp->sattrs[idx].text pointer.
-const schar_T *nvim_stl_stcp_get_sattr_text(statuscol_T *stcp, int idx)
-{
-  if (stcp == NULL) { return NULL; }
-  return stcp->sattrs[idx].text;
-}
 
 /// Get stcp->sattrs[idx].text[0] != 0.
 int nvim_stl_stcp_sattr_has_text(statuscol_T *stcp, int idx)

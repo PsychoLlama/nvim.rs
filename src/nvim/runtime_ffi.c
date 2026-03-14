@@ -240,13 +240,6 @@ char *nvim_runtime_xstrdup(const char *s)
   return xstrdup(s);
 }
 
-/// Call vim_snprintf.
-int nvim_runtime_snprintf(char *buf, size_t len, const char *fmt, ...)
-  FUNC_ATTR_UNUSED
-{
-  // This is a simplified version - callers use specific formatting functions below
-  return 0;
-}
 
 /// Format a stack entry with line number: "type_name name[lnum]dots"
 /// Returns the number of bytes written.
@@ -864,12 +857,6 @@ void nvim_rt_xmemcpyz(void *dst, const void *src, size_t len)
   xmemcpyz(dst, src, len);
 }
 
-/// xstrlcat wrapper (already in Phase 2 as nvim_rt_get_iobuff, but adding
-/// explicit strlcat for Phase 3 use).
-size_t nvim_rt_p3_xstrlcat(char *dst, const char *src, size_t dstsize)
-{
-  return xstrlcat(dst, src, dstsize);
-}
 
 /// Get IOSIZE constant (already exists as nvim_rt_iosize, but alias for clarity).
 size_t nvim_rt_get_iosize(void)

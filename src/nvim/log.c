@@ -71,11 +71,6 @@ bool nvim_log_is_initialized(void)
   return did_log_init;
 }
 
-/// Set the log initialization state.
-void nvim_log_set_initialized(bool val)
-{
-  did_log_init = val;
-}
 
 /// Increment the log_skip counter in g_stats.
 void nvim_log_increment_skip(void)
@@ -192,25 +187,6 @@ size_t nvim_log_strlcpy(char *dst, const char *src, size_t dstsize)
   return xstrlcpy(dst, src, dstsize);
 }
 
-/// Get os_strerror message.
-const char *nvim_log_strerror(int err)
-{
-  return os_strerror(err);
-}
-
-/// Schedule an error message.
-void nvim_log_schedule_semsg(const char *fmt, const char *s1, int line)
-{
-  msg_schedule_semsg(fmt, s1, line);
-}
-
-#ifdef EXITFREE
-/// Check if we've entered free_all_mem.
-bool nvim_log_entered_free_all_mem(void)
-{
-  return entered_free_all_mem;
-}
-#endif
 
 #ifdef HAVE_EXECINFO_BACKTRACE
 # include <execinfo.h>

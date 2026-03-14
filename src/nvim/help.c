@@ -52,7 +52,6 @@
 
 // C accessors for ex_help / ex_helpclose
 char *nvim_help_eap_get_arg(exarg_T *eap) { return eap->arg; }
-void nvim_help_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
 void nvim_help_eap_set_nextcmd(exarg_T *eap, char *cmd) { eap->nextcmd = cmd; }
 int nvim_help_eap_get_forceit(exarg_T *eap) { return eap->forceit; }
 int nvim_help_eap_get_skip(exarg_T *eap) { return eap->skip; }
@@ -71,7 +70,6 @@ const char *nvim_help_get_p_hf(void) { return p_hf; }
 
 bool nvim_help_get_KeyTyped(void) { return KeyTyped; }
 void nvim_help_set_KeyTyped(bool val) { KeyTyped = val; }
-int nvim_help_get_restart_edit(void) { return restart_edit; }
 void nvim_help_set_restart_edit(int val) { restart_edit = val; }
 
 int nvim_help_get_curbuf_fnum(void) { return curbuf->b_fnum; }
@@ -150,7 +148,6 @@ char *nvim_help_get_curbuf_fname(void) { return curbuf->b_fname; }
 int nvim_help_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void *nvim_help_get_curbuf_ptr(void) { return curbuf; }
 bool nvim_help_get_got_int(void) { return got_int; }
-const char *nvim_help_get_p_enc(void) { return p_enc; }
 
 /// Wrap ExpandInit + ExpandOne for ex_helptags to avoid exposing expand_T.
 char *nvim_help_expand_dir(const char *arg)

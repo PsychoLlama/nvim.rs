@@ -1108,8 +1108,3 @@ int nvim_get_trylevel(void)
   return trylevel;
 }
 
-/// C setter for the global force_abort variable (used by Rust FFI).
-void nvim_set_force_abort(int val)
-{
-  force_abort = val != 0;
-}

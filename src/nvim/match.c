@@ -107,11 +107,6 @@ int nvim_match_item_get_priority(matchitem_T *m)
   return m != NULL ? m->mit_priority : 0;
 }
 
-/// Get the pattern of a match item (may be NULL for position matches).
-const char *nvim_match_item_get_pattern(matchitem_T *m)
-{
-  return m != NULL ? m->mit_pattern : NULL;
-}
 
 /// Get the highlight group ID of a match item.
 int nvim_match_item_get_hlg_id(matchitem_T *m)
@@ -489,18 +484,6 @@ void nvim_match_hl_set_regprog(match_T *shl, regprog_T *rp)
   shl->rm.regprog = rp;
 }
 
-/// Get the matchcol from a match_T.
-colnr_T nvim_match_hl_get_matchcol(match_T *shl)
-{
-  return shl->rm.rmm_matchcol;
-}
-
-/// Set the matchcol of a match_T.
-void nvim_match_hl_set_matchcol(match_T *shl, colnr_T col)
-{
-  shl->rm.rmm_matchcol = col;
-}
-
 /// Copy rm from match item to match_T: shl->rm = m->mit_match.
 void nvim_match_hl_copy_rm_from_item(match_T *shl, matchitem_T *m)
 {
@@ -509,11 +492,6 @@ void nvim_match_hl_copy_rm_from_item(match_T *shl, matchitem_T *m)
   }
 }
 
-/// Get mit_match.regprog from a match item.
-regprog_T *nvim_match_item_get_regprog(matchitem_T *m)
-{
-  return m != NULL ? m->mit_match.regprog : NULL;
-}
 
 /// Sync regprog: m->mit_match.regprog = shl->rm.regprog.
 void nvim_match_item_sync_regprog(matchitem_T *m, match_T *shl)

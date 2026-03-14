@@ -238,12 +238,6 @@ bool nvim_textobj_ltoreq_VIsual_cursor(void)
   return ltoreq(VIsual, curwin->w_cursor);
 }
 
-/// Clear a position on the stack (accessor for Rust, uses cursor position).
-void nvim_textobj_clearpos_cursor(void)
-{
-  // This sets cursor to an invalid pos indicating no position set
-  clearpos(&curwin->w_cursor);
-}
 
 /// Set operator argument start position from cursor (accessor for Rust).
 void nvim_textobj_set_oap_start_from_cursor(oparg_T *oap)
@@ -550,11 +544,6 @@ bool nvim_textobj_ltoreq_pos(pos_T *a, pos_T *b)
 // Accessors for tag functions
 // =============================================================================
 
-/// Get pointer at cursor position (accessor for Rust).
-char *nvim_textobj_get_cursor_pos_ptr(void)
-{
-  return get_cursor_pos_ptr();
-}
 
 /// Move backward through multibyte string (accessor for Rust).
 void nvim_textobj_mb_ptr_back(const char *base, char **p)
