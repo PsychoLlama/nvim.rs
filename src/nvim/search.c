@@ -267,15 +267,6 @@ const char *nvim_get_spat_pat(int idx)
   return NULL;
 }
 
-/// Check if the pattern at given index is NULL (accessor for Rust).
-int nvim_spat_pat_is_null(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].pat == NULL;
-  }
-  return 1;
-}
-
 /// Get the pattern length from spats array (accessor for Rust).
 size_t nvim_get_spat_patlen(int idx)
 {
@@ -1896,12 +1887,6 @@ void nvim_searchit_give_warning(int dir)
   give_warning(_(dir == BACKWARD ? top_bot_msg : bot_top_msg), true);
 }
 
-/// Get the sizeof(regmmatch_T) for stack allocation.
-int nvim_regmmatch_size(void)
-{
-  return (int)sizeof(regmmatch_T);
-}
-
 /// Allocate a regmmatch_T on the heap and return as opaque handle.
 void *nvim_regmmatch_alloc(void)
 {
@@ -2391,12 +2376,6 @@ int nvim_search_get_curbuf_b_p_lisp(void)
 int nvim_search_get_curwin_w_p_rl(void)
 {
   return curwin->w_p_rl ? 1 : 0;
-}
-
-/// Get curwin->w_p_rlc.
-char *nvim_search_get_curwin_w_p_rlc(void)
-{
-  return curwin->w_p_rlc;
 }
 
 /// Get curwin->w_cursor.lnum.

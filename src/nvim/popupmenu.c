@@ -763,28 +763,10 @@ schar_T nvim_pum_schar_from_ascii(char c)
   return schar_from_ascii(c);
 }
 
-/// `schar_from_str` wrapper.
-schar_T nvim_pum_schar_from_str(const char *str)
-{
-  return schar_from_str(str);
-}
-
 /// `hl_combine_attr` wrapper.
 int nvim_pum_hl_combine_attr(int a, int b)
 {
   return hl_combine_attr(a, b);
-}
-
-/// Get `hl_attr_active[hlf]`.
-int nvim_pum_hl_attr_active(int hlf)
-{
-  return hl_attr_active[hlf];
-}
-
-/// `hl_get_ui_attr` wrapper.
-int nvim_pum_hl_get_ui_attr(int hlf, int id)
-{
-  return hl_get_ui_attr(-1, hlf, id, false);
 }
 
 /// `transstr` wrapper.

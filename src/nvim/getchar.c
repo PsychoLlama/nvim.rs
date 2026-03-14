@@ -2511,12 +2511,6 @@ int nvim_can_get_old_char(void)
   return can_get_old_char() ? 1 : 0;
 }
 
-// Accessor for on_key_ignore_len
-size_t nvim_get_on_key_ignore_len(void)
-{
-  return on_key_ignore_len;
-}
-
 void nvim_add_on_key_ignore_len(size_t val)
 {
   on_key_ignore_len += val;

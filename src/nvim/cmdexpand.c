@@ -292,12 +292,6 @@ int nvim_get_wild_menu_showing(void)
 // Phase 1: C accessors for Rust leaf utility functions
 // =============================================================================
 
-/// Check if UI extension is active (for Rust FFI).
-int nvim_cmdexpand_ui_has(int ext)
-{
-  return ui_has(ext);
-}
-
 /// Check if character is a path separator (for Rust FFI).
 int nvim_cmdexpand_vim_ispathsep(int c)
 {
@@ -314,18 +308,6 @@ int nvim_cmdexpand_rem_backslash(const char *p)
 int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
 {
   return utfc_ptr2len(p);
-}
-
-/// Get display cell width of character at pointer (for Rust FFI).
-int nvim_cmdexpand_ptr2cells(const char *p)
-{
-  return ptr2cells(p);
-}
-
-/// Check if string is a menu separator (for Rust FFI).
-int nvim_cmdexpand_menu_is_separator(const char *s)
-{
-  return menu_is_separator((char *)s);
 }
 
 /// Get buffer line text (for Rust FFI).
