@@ -133,8 +133,6 @@ extern "C" {
 
     // Phase 96: spellcapcheck and keymodel accessors
     fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
-    fn nvim_get_p_km() -> *const std::ffi::c_char;
-
     // Shiftwidth/tabstop callback
     fn nvim_parse_cino(buf: BufHandle);
     fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
@@ -742,7 +740,7 @@ pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResul
     if !errmsg.is_null() {
         return errmsg;
     }
-    let p_km = nvim_get_p_km();
+    let p_km = crate::p_km.cast_const();
     if !p_km.is_null() {
         let km = std::ffi::CStr::from_ptr(p_km).to_bytes();
         km_stopsel = km.contains(&b'o');

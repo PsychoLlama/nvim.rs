@@ -66,7 +66,7 @@ extern "C" {
     fn nvim_buf_get_bkc_flags(buf: crate::BufHandle) -> c_uint;
     fn nvim_buf_set_bkc_flags(buf: crate::BufHandle, val: c_uint);
     fn nvim_buf_get_p_bkc(buf: crate::BufHandle) -> *const c_char;
-    fn nvim_get_p_bkc() -> *const c_char;
+    static mut p_bkc: *mut c_char;
     fn nvim_get_ssop_flags() -> c_uint;
     fn nvim_set_ssop_flags(val: c_uint);
     #[allow(dead_code)]
@@ -383,7 +383,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
     let bkc = if opt_flags & OPT_LOCAL != 0 {
         nvim_buf_get_p_bkc(buf)
     } else {
-        nvim_get_p_bkc()
+        p_bkc.cast_const()
     };
 
     // When using :set (neither LOCAL nor GLOBAL), clear the local flags
@@ -624,9 +624,8 @@ pub unsafe extern "C" fn rs_did_set_langmap(args: *mut c_void) -> CallbackResult
             errbuf: *mut c_char,
             errbuflen: usize,
         ) -> c_int;
-        fn nvim_get_p_langmap() -> *const c_char;
     }
-    let langmap = nvim_get_p_langmap();
+    let langmap = crate::p_langmap.cast_const();
     let errbuf = nvim_optset_get_errbuf(args);
     let errbuflen = nvim_optset_get_errbuflen(args);
     if rs_langmap_parse(langmap, errbuf, errbuflen) != 0 {

@@ -469,8 +469,8 @@ pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> bool {
 // ============================================================================
 
 extern "C" {
-    fn nvim_option_get_sh() -> *const c_char;
-    fn nvim_get_p_ffs() -> *const c_char;
+    static mut p_sh: *mut c_char;
+    static mut p_ffs: *mut c_char;
 }
 
 /// Check if 'shell' option contains "csh" in the tail.
@@ -479,11 +479,11 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn rs_csh_like_shell() -> c_int {
     unsafe {
-        let p_sh = nvim_option_get_sh();
-        if p_sh.is_null() {
+        let shell = p_sh.cast_const();
+        if shell.is_null() {
             return 0;
         }
-        let tail = rs_path_tail(p_sh);
+        let tail = rs_path_tail(shell);
         if tail.is_null() {
             return 0;
         }
@@ -511,11 +511,11 @@ pub extern "C" fn rs_csh_like_shell() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_fish_like_shell() -> c_int {
     unsafe {
-        let p_sh = nvim_option_get_sh();
-        if p_sh.is_null() {
+        let shell = p_sh.cast_const();
+        if shell.is_null() {
             return 0;
         }
-        let tail = rs_path_tail(p_sh);
+        let tail = rs_path_tail(shell);
         if tail.is_null() {
             return 0;
         }
@@ -551,11 +551,11 @@ const EOL_MAC: c_int = 2;
 #[no_mangle]
 pub extern "C" fn rs_default_fileformat() -> c_int {
     unsafe {
-        let p_ffs = nvim_get_p_ffs();
-        if p_ffs.is_null() || *p_ffs == 0 {
+        let ffs = p_ffs.cast_const();
+        if ffs.is_null() || *ffs == 0 {
             return EOL_UNIX;
         }
-        match *p_ffs as u8 {
+        match *ffs as u8 {
             b'm' => EOL_MAC,
             b'd' => EOL_DOS,
             _ => EOL_UNIX,

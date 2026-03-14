@@ -28,23 +28,19 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // can_bs
-    fn nvim_option_get_p_bs() -> *const c_char;
     fn nvim_curbuf_is_prompt() -> c_int;
 
     // get_equalprg
     fn nvim_curbuf_get_b_p_ep() -> *const c_char;
-    fn nvim_option_get_p_ep() -> *const c_char;
 
     // get_findfunc
     fn nvim_curbuf_get_b_p_ffu() -> *const c_char;
-    fn nvim_option_get_p_ffu() -> *const c_char;
 
     // get_bkc_flags
     fn nvim_get_bkc_flags() -> c_uint;
     fn nvim_buf_get_bkc_flags(buf: BufHandle) -> c_uint;
 
     // get_flp_value
-    fn nvim_get_p_flp() -> *const c_char;
     fn nvim_buf_get_p_flp(buf: BufHandle) -> *const c_char;
 
     // get_ve_flags
@@ -108,7 +104,7 @@ pub unsafe extern "C" fn rs_can_bs(what: c_int) -> c_int {
     if what == BS_START && nvim_curbuf_is_prompt() != 0 {
         return 0;
     }
-    let p_bs = nvim_option_get_p_bs();
+    let p_bs = crate::p_bs.cast_const();
     if p_bs.is_null() {
         return 0;
     }
@@ -127,7 +123,7 @@ pub unsafe extern "C" fn rs_get_equalprg() -> *const c_char {
     if !b_p_ep.is_null() && *b_p_ep != 0 {
         b_p_ep
     } else {
-        nvim_option_get_p_ep()
+        crate::p_ep.cast_const()
     }
 }
 
@@ -139,7 +135,7 @@ pub unsafe extern "C" fn rs_get_findfunc() -> *const c_char {
     if !b_p_ffu.is_null() && *b_p_ffu != 0 {
         b_p_ffu
     } else {
-        nvim_option_get_p_ffu()
+        crate::p_ffu.cast_const()
     }
 }
 
@@ -163,7 +159,7 @@ pub unsafe extern "C" fn rs_get_flp_value(buf: BufHandle) -> *const c_char {
     if !b_p_flp.is_null() && *b_p_flp != 0 {
         b_p_flp
     } else {
-        nvim_get_p_flp()
+        crate::p_flp.cast_const()
     }
 }
 

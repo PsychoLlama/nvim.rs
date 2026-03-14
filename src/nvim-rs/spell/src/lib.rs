@@ -2471,7 +2471,7 @@ pub unsafe extern "C" fn rs_eval_soundfold(word: *const c_char) -> *mut c_char {
 
 extern "C" {
     // Functions needed by Phase 5
-    fn nvim_get_p_enc() -> *const c_char;
+    static mut p_enc: *mut c_char;
     fn nvim_syn_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn mb_islower(c: c_int) -> bool;
     fn nvim_emsg_no_spell();
@@ -2705,7 +2705,7 @@ pub unsafe extern "C" fn rs_no_spell_checking(wp: *const c_void) -> bool {
 #[export_name = "spell_enc"]
 #[must_use]
 pub unsafe extern "C" fn rs_spell_enc() -> *const c_char {
-    let enc = nvim_get_p_enc();
+    let enc = p_enc.cast_const();
     if !enc.is_null() && strlen(enc) < 60 && strcmp(enc, c"iso-8859-15".as_ptr()) != 0 {
         enc
     } else {

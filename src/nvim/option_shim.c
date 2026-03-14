@@ -365,19 +365,6 @@ void nvim_unset_vim_env(void) {
   }
 }
 
-// String option accessors
-const char *nvim_option_get_sh(void) { return p_sh; }
-const char *nvim_option_get_cpo(void) { return p_cpo; }
-const char *nvim_option_get_isf(void) { return p_isf; }
-const char *nvim_option_get_isp(void) { return p_isp; }
-const char *nvim_option_get_isi(void) { return p_isi; }
-const char *nvim_option_get_breakat(void) { return p_breakat; }
-const char *nvim_option_get_sel(void) { return p_sel; }
-const char *nvim_option_get_enc(void) { return p_enc; }
-const char *nvim_option_get_ww(void) { return p_ww; }
-const char *nvim_option_get_mouse(void) { return p_mouse; }
-const char *nvim_option_get_shm(void) { return p_shm; }
-
 
 // Numeric option accessors
 OptInt nvim_option_get_so(void) { return p_so; }
@@ -458,9 +445,6 @@ void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
 // Phase 88: undolevels accessors
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 
-// Phase 91: langmap accessor
-const char *nvim_get_p_langmap(void) { return p_langmap; }
-
 // Phase 95: spell option accessors
 int nvim_valid_spellfile(const char *val) { return valid_spellfile(val) ? 1 : 0; }
 int nvim_valid_spelllang(const char *val) { return valid_spelllang(val) ? 1 : 0; }
@@ -468,7 +452,6 @@ const char *nvim_did_set_spell_option(void) { return did_set_spell_option(); }
 
 // Phase 96: spellcapcheck and keymodel accessors
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
-const char *nvim_get_p_km(void) { return p_km; }
 
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
@@ -722,7 +705,6 @@ void nvim_set_bkc_flags(unsigned val) { bkc_flags = val; }
 unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
 void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
-const char *nvim_get_p_bkc(void) { return p_bkc; }
 // Global ssop_flags accessors
 unsigned nvim_get_ssop_flags(void) { return ssop_flags; }
 void nvim_set_ssop_flags(unsigned val) { ssop_flags = val; }
@@ -780,11 +762,6 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 
 // IO buffer accessor
 char *nvim_get_iobuff(void) { return IObuff; }
-
-// Global option accessors for Rust callbacks
-const char *nvim_get_p_path(void) { return p_path; }
-const char *nvim_get_p_cdpath(void) { return p_cdpath; }
-const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
 
 // Lines/columns callback accessors
 OptInt nvim_get_p_lines(void) { return p_lines; }
@@ -1189,16 +1166,12 @@ void nvim_set_p_et_nobin(int v) { p_et_nobin = v != 0; }
 // Phase 4 (option pass 4) accessors for query.rs migration
 // =============================================================================
 
-// p_bs accessor (for can_bs)
-const char *nvim_option_get_p_bs(void) { return p_bs; }
 // bt_prompt(curbuf) accessor (for can_bs)
 int nvim_curbuf_is_prompt(void) { return bt_prompt(curbuf); }
 // b_p_ep / p_ep accessors (for get_equalprg)
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
-const char *nvim_option_get_p_ep(void) { return p_ep; }
 // b_p_ffu / p_ffu accessors (for get_findfunc)
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
-const char *nvim_option_get_p_ffu(void) { return p_ffu; }
 // p_flp / b_p_flp accessors (for get_flp_value)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 // ve_flags accessors (for get_ve_flags)
@@ -2579,46 +2552,9 @@ void nvim_call_set_buflocal_ofu_callback(buf_T *buf) { set_buflocal_ofu_callback
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
-/// Returns p_vsts (the global vartabstop value).
-const char *nvim_get_p_vsts(void) { return p_vsts; }
-/// Returns p_vts (the global vartabstop for normal tabstop).
-const char *nvim_get_p_vts(void) { return p_vts; }
 /// Returns p_vsts_nopaste.
 const char *nvim_get_p_vsts_nopaste(void) { return p_vsts_nopaste; }
-
-/// Returns p_ff.
-const char *nvim_get_p_ff(void) { return p_ff; }
-/// Returns p_ffs (fileformats).
-const char *nvim_get_p_ffs(void) { return p_ffs; }
-
-// These individual global option getters are needed for the bulk copy:
-const char *nvim_get_p_cpt(void) { return p_cpt; }
-const char *nvim_get_p_cfu(void) { return p_cfu; }
-const char *nvim_get_p_ofu(void) { return p_ofu; }
-const char *nvim_get_p_tfu(void) { return p_tfu; }
-const char *nvim_get_p_com(void) { return p_com; }
-const char *nvim_get_p_cms(void) { return p_cms; }
-const char *nvim_get_p_fo(void) { return p_fo; }
-const char *nvim_get_p_flp(void) { return p_flp; }
-const char *nvim_get_p_nf(void) { return p_nf; }
-const char *nvim_get_p_mps(void) { return p_mps; }
-const char *nvim_get_p_cink(void) { return p_cink; }
-const char *nvim_get_p_cino(void) { return p_cino; }
-const char *nvim_get_p_cinsd(void) { return p_cinsd; }
-const char *nvim_get_p_lop(void) { return p_lop; }
-const char *nvim_get_p_cinw(void) { return p_cinw; }
-const char *nvim_get_p_inde(void) { return p_inde; }
-const char *nvim_get_p_indk(void) { return p_indk; }
-const char *nvim_get_p_fex(void) { return p_fex; }
-const char *nvim_get_p_sua(void) { return p_sua; }
-const char *nvim_get_p_keymap(void) { return p_keymap; }
-const char *nvim_get_p_qe(void) { return p_qe; }
-const char *nvim_get_p_inex(void) { return p_inex; }
-const char *nvim_get_p_spc(void) { return p_spc; }
-const char *nvim_get_p_spf(void) { return p_spf; }
-const char *nvim_get_p_spl(void) { return p_spl; }
-const char *nvim_get_p_spo(void) { return p_spo; }
-const char *nvim_get_p_isk(void) { return p_isk; }
+/// Returns p_csl (completeslash), or "" on non-Windows.
 #ifdef BACKSLASH_IN_FILENAME
 const char *nvim_get_p_csl(void) { return p_csl; }
 #else

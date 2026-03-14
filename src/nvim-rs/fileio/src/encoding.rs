@@ -45,7 +45,7 @@ extern "C" {
     /// Get encoding properties from the mbyte crate.
     fn enc_canon_props(name: *const c_char) -> c_int;
     /// Get the current 'encoding' option value.
-    fn nvim_get_p_enc() -> *const c_char;
+    static mut p_enc: *mut c_char;
 }
 
 // =============================================================================
@@ -122,11 +122,11 @@ pub unsafe extern "C" fn rs_get_fio_flags(name: *const c_char) -> c_int {
     // If name is empty, fall back to the current 'encoding' option (p_enc),
     // matching the behavior of the C get_fio_flags() function.
     let effective_name = if unsafe { *name == 0 } {
-        let p_enc = unsafe { nvim_get_p_enc() };
-        if p_enc.is_null() {
+        let enc = unsafe { p_enc.cast_const() };
+        if enc.is_null() {
             return 0;
         }
-        p_enc
+        enc
     } else {
         name
     };
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn rs_need_conversion(fenc: *const c_char) -> c_int {
     }
 
     // Get the current 'encoding' option
-    let p_enc_ptr = unsafe { nvim_get_p_enc() };
+    let p_enc_ptr = unsafe { p_enc.cast_const() };
 
     let same_encoding;
     let fenc_flags;

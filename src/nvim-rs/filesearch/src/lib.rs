@@ -121,9 +121,9 @@ extern "C" {
     // Option globals
     static mut p_fic: c_int;
     #[allow(dead_code)]
-    fn nvim_get_p_path() -> *const c_char;
+    static mut p_path: *mut c_char;
     #[allow(dead_code)]
-    fn nvim_get_p_cdpath() -> *const c_char;
+    static mut p_cdpath: *mut c_char;
 
     // Current buffer accessors
     fn nvim_get_curbuf_sua() -> *const c_char;
@@ -1932,7 +1932,7 @@ pub unsafe extern "C" fn rs_find_file_in_path(
     // Use buffer-local path if set, otherwise global path
     let curbuf_path = nvim_curbuf_get_path();
     let path_option = if curbuf_path.is_null() || *curbuf_path == 0 {
-        nvim_get_p_path()
+        p_path.cast_const()
     } else {
         curbuf_path
     };
@@ -1972,7 +1972,7 @@ pub unsafe extern "C" fn rs_find_directory_in_path(
         len,
         options,
         1, // first = true
-        nvim_get_p_cdpath().cast_mut(),
+        p_cdpath,
         FINDFILE_DIR,
         rel_fname.cast_mut(),
         c"".as_ptr().cast_mut(),

@@ -30,7 +30,7 @@ extern "C" {
     /// Check shortmess option flag (used by other message code that has not been migrated)
     fn nvim_shortmess(flag: c_int) -> c_int;
     /// Get the 'shortmess' option string value
-    fn nvim_option_get_shm() -> *const c_char;
+    static mut p_shm: *mut c_char;
     /// Search for character in string (returns pointer or NULL)
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     /// Get `exmode_active` flag
@@ -167,15 +167,15 @@ const SHM_ALL_ABBREVIATIONS: &[u8] = b"rmlw\0";
 #[allow(clippy::must_use_candidate)]
 #[export_name = "shortmess"]
 pub unsafe extern "C" fn rs_shortmess(x: c_int) -> c_int {
-    let p_shm = nvim_option_get_shm();
-    if p_shm.is_null() {
+    let shm = p_shm.cast_const();
+    if shm.is_null() {
         return 0;
     }
-    if !vim_strchr(p_shm, x).is_null() {
+    if !vim_strchr(shm, x).is_null() {
         return 1;
     }
     // Check if 'a' flag enables abbreviation for x
-    if !vim_strchr(p_shm, c_int::from(b'a')).is_null()
+    if !vim_strchr(shm, c_int::from(b'a')).is_null()
         && !vim_strchr(SHM_ALL_ABBREVIATIONS.as_ptr().cast(), x).is_null()
     {
         return 1;
