@@ -395,6 +395,21 @@ extern "C" {
     fn msg_cursor_goto(row: c_int, col: c_int);
     fn msg_start();
     fn msg_clr_eos();
+
+    // For redrawcmdline
+    fn nvim_set_need_wait_return(val: c_int);
+    fn redrawcmd();
+    fn ui_cursor_shape();
+
+    // For redrawcmdprompt
+    fn msg_putchar(c: c_int);
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn nvim_get_msg_col() -> c_int;
+    fn nvim_get_msg_row() -> c_int;
+    fn nvim_get_ccline_cmdprompt() -> *mut c_char;
+    fn nvim_get_ccline_hl_id() -> c_int;
+    fn nvim_set_ccline_cmdindent(val: c_int);
+    fn nvim_set_ccline_redraw_state(val: c_int);
 }
 
 /// `kUICmdline` constant (from `ui_defs.h`).
@@ -495,6 +510,71 @@ pub unsafe extern "C" fn correct_screencol_export(idx: c_int, cells: c_int, col:
         return;
     }
     correct_screencol(idx, cells, &mut *col);
+}
+
+/// CmdRedraw enum values
+const K_CMD_REDRAW_ALL: c_int = 2;
+
+/// Redraw the prompt portion of the command line.
+///
+/// This is the Rust implementation of `redrawcmdprompt()` from ex_getln.c.
+///
+/// # Safety
+///
+/// Calls C functions to access and set global state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_redrawcmdprompt() {
+    if nvim_get_cmd_silent() != 0 {
+        return;
+    }
+    if ui_has(K_UI_CMDLINE) != 0 {
+        nvim_set_ccline_redraw_state(K_CMD_REDRAW_ALL);
+        return;
+    }
+    let cmdfirstc = nvim_get_ccline_cmdfirstc();
+    if cmdfirstc != NUL {
+        msg_putchar(cmdfirstc);
+    }
+    let cmdprompt = nvim_get_ccline_cmdprompt();
+    if cmdprompt.is_null() {
+        let cmdindent = nvim_get_ccline_cmdindent();
+        for _ in 0..cmdindent {
+            msg_putchar(b' ' as c_int);
+        }
+    } else {
+        msg_puts_hl(cmdprompt, nvim_get_ccline_hl_id(), false);
+        let columns = nvim_get_columns();
+        let msg_col = nvim_get_msg_col();
+        let msg_row = nvim_get_msg_row();
+        let cmdline_row = nvim_get_cmdline_row();
+        let new_indent = msg_col + (msg_row - cmdline_row) * columns;
+        // reverse of cmd_startcol(): subtract 1 if there's a firstc
+        let new_indent = if cmdfirstc == NUL {
+            new_indent
+        } else {
+            new_indent - 1
+        };
+        nvim_set_ccline_cmdindent(new_indent);
+    }
+}
+
+/// Direct C replacement for redrawcmdline().
+///
+/// Redraws the command line and updates the cursor.
+///
+/// # Safety
+///
+/// Calls C functions to access and set global state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_redrawcmdline() {
+    if nvim_get_cmd_silent() != 0 {
+        return;
+    }
+    nvim_set_need_wait_return(0);
+    compute_cmdrow_rs();
+    redrawcmd();
+    cursorcmd_rs();
+    ui_cursor_shape();
 }
 
 // =============================================================================

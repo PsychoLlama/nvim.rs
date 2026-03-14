@@ -298,6 +298,14 @@ extern int rs_cmdline_charsize(int idx);
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 extern int rs_empty_pattern(char *p, size_t len, int delim);
 
+// Phase 67: Redraw helpers from Rust
+extern void rs_redrawcmdline(void);
+extern void rs_redrawcmdprompt(void);
+
+// Phase 67: Viewstate helpers from Rust
+extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
+extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
+
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -314,25 +322,13 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
 static void save_viewstate(win_T *wp, viewstate_T *vs)
   FUNC_ATTR_NONNULL_ALL
 {
-  vs->vs_curswant = wp->w_curswant;
-  vs->vs_leftcol = wp->w_leftcol;
-  vs->vs_skipcol = wp->w_skipcol;
-  vs->vs_topline = wp->w_topline;
-  vs->vs_topfill = wp->w_topfill;
-  vs->vs_botline = wp->w_botline;
-  vs->vs_empty_rows = wp->w_empty_rows;
+  rs_save_viewstate_win(wp, vs);
 }
 
 static void restore_viewstate(win_T *wp, viewstate_T *vs)
   FUNC_ATTR_NONNULL_ALL
 {
-  wp->w_curswant = vs->vs_curswant;
-  wp->w_leftcol = vs->vs_leftcol;
-  wp->w_skipcol = vs->vs_skipcol;
-  wp->w_topline = vs->vs_topline;
-  wp->w_topfill = vs->vs_topfill;
-  wp->w_botline = vs->vs_botline;
-  wp->w_empty_rows = vs->vs_empty_rows;
+  rs_restore_viewstate_win(wp, vs);
 }
 
 static void init_incsearch_state(incsearch_state_T *s)
@@ -3769,40 +3765,12 @@ void cmdline_paste_str(const char *s, bool literally)
 // overwritten.
 void redrawcmdline(void)
 {
-  if (cmd_silent) {
-    return;
-  }
-  need_wait_return = false;
-  compute_cmdrow();
-  redrawcmd();
-  cursorcmd();
-  ui_cursor_shape();
+  rs_redrawcmdline();
 }
 
 static void redrawcmdprompt(void)
 {
-  if (cmd_silent) {
-    return;
-  }
-  if (ui_has(kUICmdline)) {
-    ccline.redraw_state = kCmdRedrawAll;
-    return;
-  }
-  if (ccline.cmdfirstc != NUL) {
-    msg_putchar(ccline.cmdfirstc);
-  }
-  if (ccline.cmdprompt != NULL) {
-    msg_puts_hl(ccline.cmdprompt, ccline.hl_id, false);
-    ccline.cmdindent = msg_col + (msg_row - cmdline_row) * Columns;
-    // do the reverse of cmd_startcol()
-    if (ccline.cmdfirstc != NUL) {
-      ccline.cmdindent--;
-    }
-  } else {
-    for (int i = ccline.cmdindent; i > 0; i--) {
-      msg_putchar(' ');
-    }
-  }
+  rs_redrawcmdprompt();
 }
 
 // Redraw what is currently on the command line.
