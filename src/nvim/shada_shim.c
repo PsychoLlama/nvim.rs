@@ -625,12 +625,6 @@ int nvim_shada_file_open(void *fd, const char *fname) { return file_open((FileDe
 /// Initialize a FileDescriptor to read from an in-memory buffer (no fd backing).
 void nvim_shada_file_open_buffer(void *fd, char *data, size_t len) { file_open_buffer((FileDescriptor *)fd, data, len); }
 
-/// Read shada data from an open file descriptor.
-/// Delegates to Rust rs_shada_read implementation.
-void nvim_shada_read(void *fd, int flags)
-{
-  rs_shada_read(fd, flags);
-}
 
 /// Get the os_strerror() message for an error code.
 const char *nvim_shada_os_strerror(int err)

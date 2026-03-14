@@ -488,7 +488,6 @@ extern "C" {
     // Phase 5: File I/O accessors
     fn nvim_shada_file_open(fd: FileDescriptorHandle, fname: *const c_char) -> c_int;
     fn nvim_shada_file_open_buffer(fd: FileDescriptorHandle, data: *mut c_char, len: usize);
-    fn nvim_shada_read(fd: FileDescriptorHandle, flags: c_int);
     fn nvim_shada_os_strerror(err: c_int) -> *const c_char;
     fn nvim_shada_verbose_enter();
     fn nvim_shada_verbose_leave();
@@ -4204,7 +4203,7 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
     }
     nvim_xfree(fname.cast::<c_void>());
 
-    nvim_shada_read(fd, flags);
+    rs_shada_read(fd.as_ptr(), flags);
     rs_close_file(fd);
     nvim_xfree(sd_reader);
 
@@ -6569,7 +6568,7 @@ pub unsafe extern "C" fn rs_shada_read_string(string: NvimString, flags: c_int) 
     let sd_reader = nvim_xcalloc(1, fd_size);
     let fd = FileDescriptorHandle::from_ptr(sd_reader);
     nvim_shada_file_open_buffer(fd, string.data, string.size);
-    nvim_shada_read(fd, flags);
+    rs_shada_read(fd.as_ptr(), flags);
     rs_close_file(fd);
     nvim_xfree(sd_reader);
 }
