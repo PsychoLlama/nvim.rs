@@ -59,17 +59,21 @@ extern "C" {
     fn mf_close_file(buf: BufHandle, del_file: c_int);
     fn ml_open_files();
 
+    // Direct C globals
+    static mut p_ul: crate::OptInt;
+    static mut p_uc: crate::OptInt;
+    static mut p_hh: crate::OptInt;
+    static mut p_wh: crate::OptInt;
+    static mut p_wiw: crate::OptInt;
+
     // Undo state accessors (Phase 88)
-    fn nvim_set_p_ul(val: OptInt);
     fn nvim_buf_set_b_p_ul(buf: BufHandle, val: OptInt);
     fn nvim_u_sync(force: bool);
 
     // State accessors
-    fn nvim_callback_get_p_uc() -> OptInt;
     fn nvim_callback_is_one_window() -> c_int;
     fn nvim_callback_is_curbuf_help() -> c_int;
     fn nvim_callback_get_curwin_height() -> c_int;
-    fn nvim_callback_get_p_hh() -> OptInt;
     // Buffer accessors
     fn nvim_buf_get_p_swf(buf: BufHandle) -> c_int;
 
@@ -84,8 +88,6 @@ extern "C" {
     // Additional window/option accessors for full callbacks
     #[link_name = "rs_win_setwidth"]
     fn win_setwidth(width: c_int);
-    fn nvim_option_get_p_wh() -> OptInt;
-    fn nvim_option_get_p_wiw() -> OptInt;
     fn nvim_callback_get_curwin_width() -> c_int;
 
     // Modified/readonly callback accessors
@@ -254,7 +256,7 @@ const EVENT_BUFDELETE: c_int = 2;
 /// Get 'updatecount' option value.
 #[inline]
 fn get_updatecount() -> OptInt {
-    unsafe { nvim_callback_get_p_uc() }
+    unsafe { p_uc }
 }
 
 /// Get 'equalalways' option value.
@@ -284,7 +286,7 @@ fn get_curwin_height() -> c_int {
 /// Get 'helpheight' option value.
 #[inline]
 fn get_helpheight() -> OptInt {
-    unsafe { nvim_callback_get_p_hh() }
+    unsafe { p_hh }
 }
 
 // =============================================================================
@@ -471,9 +473,9 @@ pub unsafe extern "C" fn rs_did_set_updatecount(args: *mut c_void) -> CallbackRe
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_did_set_winheight(_args: *mut c_void) -> CallbackResult {
     if !is_one_window() {
-        let p_wh = nvim_option_get_p_wh() as c_int;
-        if get_curwin_height() < p_wh {
-            win_setheight(p_wh);
+        let wh = p_wh as c_int;
+        if get_curwin_height() < wh {
+            win_setheight(wh);
         }
     }
     callback_ok()
@@ -485,9 +487,9 @@ pub unsafe extern "C" fn rs_did_set_winheight(_args: *mut c_void) -> CallbackRes
 #[no_mangle]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_did_set_winwidth(_args: *mut c_void) -> CallbackResult {
-    let p_wiw = nvim_option_get_p_wiw() as c_int;
-    if !is_one_window() && nvim_callback_get_curwin_width() < p_wiw {
-        win_setwidth(p_wiw);
+    let wiw = p_wiw as c_int;
+    if !is_one_window() && nvim_callback_get_curwin_width() < wiw {
+        win_setwidth(wiw);
     }
     callback_ok()
 }
@@ -572,9 +574,9 @@ pub unsafe extern "C" fn rs_did_set_undolevels_full(args: *mut c_void) -> Callba
     let p_ul_addr = nvim_callback_get_p_ul_addr();
     if varp == p_ul_addr {
         // global 'undolevels': sync undo before changing the value
-        nvim_set_p_ul(old_value);
+        p_ul = old_value;
         nvim_u_sync(true);
-        nvim_set_p_ul(new_value);
+        p_ul = new_value;
     } else {
         // buffer local 'undolevels'
         nvim_buf_set_b_p_ul(buf, old_value);

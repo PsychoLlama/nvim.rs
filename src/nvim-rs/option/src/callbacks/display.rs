@@ -40,9 +40,8 @@ extern "C" {
     );
     fn check_signcolumn(buf: *mut std::ffi::c_void, win: WinHandle);
 
-    // State accessors
-    fn nvim_callback_get_p_ch() -> OptInt;
-    fn nvim_callback_set_p_ch(value: OptInt);
+    // Direct C globals
+    static mut p_window: crate::OptInt;
     fn nvim_callback_get_topframe() -> *mut std::ffi::c_void;
     fn nvim_callback_get_topframe_fr_height() -> c_int;
     fn rs_tabline_height() -> c_int;
@@ -72,8 +71,6 @@ extern "C" {
     fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
 
     // Lines/columns callback accessors
-    fn nvim_get_p_lines() -> OptInt;
-    fn nvim_get_p_columns() -> OptInt;
     fn nvim_get_Rows() -> c_int;
     fn nvim_get_Columns() -> c_int;
     fn nvim_get_full_screen() -> bool;
@@ -85,8 +82,6 @@ extern "C" {
     fn nvim_get_p_sj() -> OptInt;
     fn nvim_set_p_sj(val: OptInt);
     fn nvim_option_was_set_window() -> c_int;
-    fn nvim_get_p_window() -> OptInt;
-    fn nvim_set_p_window(val: OptInt);
 
     // Phase 107: colorcolumn / background / fileformat wrappers
     fn nvim_did_set_colorcolumn(args: *mut c_void) -> CallbackResult;
@@ -108,13 +103,13 @@ const STATUS_HEIGHT: c_int = 1;
 /// Get 'cmdheight' value.
 #[inline]
 fn get_cmdheight() -> OptInt {
-    unsafe { nvim_callback_get_p_ch() }
+    unsafe { crate::p_ch }
 }
 
 /// Set 'cmdheight' value.
 #[inline]
 fn set_cmdheight(value: OptInt) {
-    unsafe { nvim_callback_set_p_ch(value) }
+    unsafe { crate::p_ch = value }
 }
 
 /// Get Rows (screen height).
@@ -436,8 +431,8 @@ pub extern "C" fn rs_did_set_listchars() -> CallbackResult {
 #[no_mangle]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> CallbackResult {
-    let p_lines = nvim_get_p_lines();
-    let p_columns = nvim_get_p_columns();
+    let p_lines = crate::p_lines;
+    let p_columns = crate::p_columns;
     let rows = nvim_get_Rows();
     let columns = nvim_get_Columns();
 
@@ -459,9 +454,9 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
                 nvim_set_cmdline_row(new_row);
             }
         }
-        let window = nvim_get_p_window();
+        let window = p_window;
         if window >= OptInt::from(nvim_get_Rows()) || nvim_option_was_set_window() == 0 {
-            nvim_set_p_window(OptInt::from(nvim_get_Rows()) - 1);
+            p_window = OptInt::from(nvim_get_Rows()) - 1;
         }
     }
 

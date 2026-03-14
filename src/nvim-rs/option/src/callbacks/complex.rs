@@ -1167,9 +1167,8 @@ pub unsafe extern "C" fn rs_did_set_wildchar(args: *mut c_void) -> CallbackResul
 // =============================================================================
 
 extern "C" {
+    static mut p_window: crate::OptInt;
     fn nvim_get_Rows() -> c_int;
-    fn nvim_get_p_window() -> crate::OptInt;
-    fn nvim_set_p_window(val: crate::OptInt);
 }
 
 /// Callback for 'window' option.
@@ -1177,10 +1176,10 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_window(_args: *mut c_void) -> CallbackResult {
     let rows = crate::OptInt::from(nvim_get_Rows());
-    let window = nvim_get_p_window();
+    let window = p_window;
 
     if window < 1 || window >= rows {
-        nvim_set_p_window(rows - 1);
+        p_window = rows - 1;
     }
 
     callback_ok()

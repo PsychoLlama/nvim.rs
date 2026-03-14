@@ -3510,7 +3510,7 @@ extern "C" {
 
     // Window/global accessors
     fn nvim_one_window() -> c_int;
-    fn nvim_get_p_window() -> OptInt;
+    static mut p_window: OptInt;
     fn nvim_get_p_sol() -> c_int;
     fn nvim_get_rows_val() -> c_int;
 
@@ -3602,7 +3602,6 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
         }
     } else {
         // Scroll [count] times 'window' or current window height lines.
-        let p_window = nvim_get_p_window();
         let rows = nvim_get_rows_val();
         let one_window = nvim_one_window() != 0;
 
@@ -4265,7 +4264,7 @@ extern "C" {
     fn nvim_set_dollar_vcol(val: ColnrT);
 
     // Sidescroll option
-    fn nvim_get_p_ss() -> i64;
+    static mut p_ss: i64;
 
     // Win scroll lines
     fn nvim_win_scroll_lines(wp: WinHandle, row: c_int, line_count: c_int);
@@ -4415,7 +4414,6 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
 
             // When far off or not enough room on either side, put cursor in
             // middle of window.
-            let p_ss = nvim_get_p_ss();
             #[allow(clippy::cast_possible_truncation)]
             let p_ss_int = p_ss as c_int;
             let new_leftcol: c_int = if p_ss == 0 || diff >= width1 / 2 || off_right >= off_left {

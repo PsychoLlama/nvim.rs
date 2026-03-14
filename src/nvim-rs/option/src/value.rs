@@ -70,12 +70,6 @@ extern "C" {
     // Current window (note: *const to match setcmd.rs declaration; cast to *mut for Rust APIs)
     fn nvim_get_curwin() -> *const std::ffi::c_void;
 
-    // Global option value accessors
-    fn nvim_option_get_p_wmh() -> OptInt;
-    fn nvim_option_get_p_wh() -> OptInt;
-    fn nvim_option_get_p_wmw() -> OptInt;
-    fn nvim_option_get_p_wiw() -> OptInt;
-
     // Min rows for all tabpages
     #[link_name = "rs_min_rows_for_all_tabpages"]
     fn min_rows_for_all_tabpages() -> c_int;
@@ -411,7 +405,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
         idx if idx == K_OPT_WINHEIGHT => {
             if value < 1 {
                 return E_POSITIVE.as_ptr().cast();
-            } else if nvim_option_get_p_wmh() > value {
+            } else if crate::p_wmh > value {
                 return E_WINHEIGHT.as_ptr().cast();
             }
         }
@@ -419,7 +413,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
         idx if idx == K_OPT_WINMINHEIGHT => {
             if value < 0 {
                 return E_POSITIVE.as_ptr().cast();
-            } else if value > nvim_option_get_p_wh() {
+            } else if value > crate::p_wh {
                 return E_WINHEIGHT.as_ptr().cast();
             }
         }
@@ -427,7 +421,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
         idx if idx == K_OPT_WINWIDTH => {
             if value < 1 {
                 return E_POSITIVE.as_ptr().cast();
-            } else if nvim_option_get_p_wmw() > value {
+            } else if crate::p_wmw > value {
                 return E_WINWIDTH.as_ptr().cast();
             }
         }
@@ -435,7 +429,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
         idx if idx == K_OPT_WINMINWIDTH => {
             if value < 0 {
                 return E_POSITIVE.as_ptr().cast();
-            } else if value > nvim_option_get_p_wiw() {
+            } else if value > crate::p_wiw {
                 return E_WINWIDTH.as_ptr().cast();
             }
         }
@@ -633,7 +627,7 @@ pub unsafe extern "C" fn rs_validate_winheight_cross(value: OptInt) -> *const c_
         return E_POSITIVE.as_ptr().cast();
     }
 
-    let wmh = nvim_option_get_p_wmh();
+    let wmh = crate::p_wmh;
     if wmh > value {
         return E_WINHEIGHT.as_ptr().cast();
     }
@@ -648,7 +642,7 @@ pub unsafe extern "C" fn rs_validate_winminheight_cross(value: OptInt) -> *const
         return E_POSITIVE.as_ptr().cast();
     }
 
-    let wh = nvim_option_get_p_wh();
+    let wh = crate::p_wh;
     if value > wh {
         return E_WINHEIGHT.as_ptr().cast();
     }
@@ -663,7 +657,7 @@ pub unsafe extern "C" fn rs_validate_winwidth_cross(value: OptInt) -> *const c_c
         return E_POSITIVE.as_ptr().cast();
     }
 
-    let wmw = nvim_option_get_p_wmw();
+    let wmw = crate::p_wmw;
     if wmw > value {
         return E_WINWIDTH.as_ptr().cast();
     }
@@ -678,7 +672,7 @@ pub unsafe extern "C" fn rs_validate_winminwidth_cross(value: OptInt) -> *const 
         return E_POSITIVE.as_ptr().cast();
     }
 
-    let wiw = nvim_option_get_p_wiw();
+    let wiw = crate::p_wiw;
     if value > wiw {
         return E_WINWIDTH.as_ptr().cast();
     }

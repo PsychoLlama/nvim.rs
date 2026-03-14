@@ -619,7 +619,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
         nvim_curwin_get_p_scr, nvim_curwin_get_view_height, nvim_curwin_set_cursor_col,
         nvim_curwin_set_cursor_lnum, nvim_exarg_get_addr_count, nvim_exarg_get_arg,
         nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_get_Columns,
-        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, nvim_set_p_window,
+        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, p_window,
     };
 
     let lnum = nvim_exarg_get_line2(eap);
@@ -673,7 +673,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
             bigness = line_count_2x;
         }
 
-        nvim_set_p_window(bigness);
+        p_window = bigness;
         if kind_byte == b'=' {
             bigness += 2;
         }

@@ -679,12 +679,12 @@ extern "C" {
     // Direct C globals
     static mut Rows: c_int;
     static mut p_sh: *mut c_char;
+    static mut p_window: OptInt;
 
     // set_init_2 accessors
     fn nvim_option_ilog_rtp();
     fn nvim_call_comp_col();
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
-    fn nvim_set_p_window(val: OptInt);
 
     // set_init_3 accessors
     fn nvim_call_parse_shape_opt();
@@ -748,7 +748,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     // 'window' is only for backwards compatibility with Vi.
     // Default is Rows - 1.
     if nvim_option_was_set_idx(K_OPT_WINDOW) == 0 {
-        nvim_set_p_window(OptInt::from(Rows) - 1);
+        p_window = OptInt::from(Rows) - 1;
     }
     crate::defaults::rs_change_option_default(K_OPT_WINDOW, number_optval(OptInt::from(Rows) - 1));
 }

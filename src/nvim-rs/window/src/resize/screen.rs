@@ -33,8 +33,7 @@ extern "C" {
     fn nvim_get_curtab() -> TabpageHandle;
 
     // --- Option helpers ---
-    fn nvim_get_p_window() -> i64;
-    fn nvim_set_p_window(val: i64);
+    static mut p_window: i64;
     fn nvim_option_was_set_window() -> c_int;
 
     // --- Window field setters ---
@@ -208,10 +207,10 @@ unsafe fn win_new_screensize_impl() {
     if old_rows != rows {
         // If 'window' uses the whole screen, keep it using that.
         // Don't change it when set with "-w size" on the command line.
-        let p_window = nvim_get_p_window();
+        let window_val = p_window;
         let window_unset = old_rows == 0 && nvim_option_was_set_window() == 0;
-        if p_window == i64::from(old_rows) - 1 || window_unset {
-            nvim_set_p_window(i64::from(rows) - 1);
+        if window_val == i64::from(old_rows) - 1 || window_unset {
+            p_window = i64::from(rows) - 1;
         }
         OLD_ROWS.store(rows, Ordering::Relaxed);
         rs_win_new_screen_rows(); // update window sizes

@@ -497,10 +497,8 @@ extern "C" {
     pub fn nvim_get_Rows() -> c_int;
     /// Get Columns (screen width)
     pub fn nvim_get_Columns() -> c_int;
-    /// Get p_window option (OptInt = i64)
-    pub fn nvim_get_p_window() -> i64;
-    /// Set p_window option (OptInt = i64)
-    pub fn nvim_set_p_window(val: i64);
+    /// Direct C global: p_window
+    pub static mut p_window: i64;
     /// Set curwin->w_cursor.col
     pub fn nvim_curwin_set_cursor_col(col: c_int);
     /// Put a character to the message area

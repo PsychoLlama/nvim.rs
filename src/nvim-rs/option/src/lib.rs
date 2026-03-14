@@ -377,6 +377,18 @@ extern "C" {
     pub static mut p_ls: OptInt;
     pub static mut p_stal: OptInt;
     pub static mut p_re: OptInt;
+    pub static mut p_wmh: OptInt;
+    pub static mut p_wh: OptInt;
+    pub static mut p_wmw: OptInt;
+    pub static mut p_wiw: OptInt;
+    pub static mut p_uc: OptInt;
+    pub static mut p_hh: OptInt;
+    pub static mut p_pb: OptInt;
+    pub static mut p_ul: OptInt;
+    pub static mut p_window: OptInt;
+    pub static mut p_ss: OptInt;
+    pub static mut p_rdt: OptInt;
+    pub static mut p_cwh: OptInt;
 
     // Flag option globals (unsigned)
     pub static mut cot_flags: c_uint;

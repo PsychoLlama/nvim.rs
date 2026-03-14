@@ -407,21 +407,6 @@ const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 // =============================================================================
 
 
-// Numeric option setters (direct assignment for simple options)
-void nvim_option_set_sw(OptInt value) { p_sw = value; }
-void nvim_option_set_ts(OptInt value) { p_ts = value; }
-void nvim_option_set_sts(OptInt value) { p_sts = value; }
-void nvim_option_set_tw(OptInt value) { p_tw = value; }
-void nvim_option_set_wm(OptInt value) { p_wm = value; }
-void nvim_option_set_so(OptInt value) { p_so = value; }
-void nvim_option_set_siso(OptInt value) { p_siso = value; }
-void nvim_option_set_report(OptInt value) { p_report = value; }
-void nvim_option_set_mat(OptInt value) { p_mat = value; }
-void nvim_option_set_ut(OptInt value) { p_ut = value; }
-void nvim_option_set_tm(OptInt value) { p_tm = value; }
-void nvim_option_set_hi(OptInt value) { p_hi = value; }
-void nvim_option_set_re(OptInt value) { p_re = value; }
-
 
 // =============================================================================
 // Callback accessor functions for Rust callbacks module
@@ -432,12 +417,6 @@ int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
 
 // Window accessor for view height (option module specific)
 int nvim_option_win_get_view_height(win_T *win) { return win ? win->w_view_height : 0; }
-
-// Global option value accessors for validation
-OptInt nvim_option_get_p_wmh(void) { return p_wmh; }
-OptInt nvim_option_get_p_wh(void) { return p_wh; }
-OptInt nvim_option_get_p_wmw(void) { return p_wmw; }
-OptInt nvim_option_get_p_wiw(void) { return p_wiw; }
 
 // Window variable pointer accessors
 const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
@@ -452,8 +431,6 @@ void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_li
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 
 // Display callback accessors
-OptInt nvim_callback_get_p_ch(void) { return p_ch; }
-void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
 frame_T *nvim_callback_get_topframe(void) { return topframe; }
 int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
 
@@ -464,13 +441,10 @@ int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 
 // Behavior callback accessors
-OptInt nvim_callback_get_p_uc(void) { return p_uc; }
 int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
 int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
 int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
 int nvim_callback_get_curwin_width(void) { return curwin->w_width; }
-OptInt nvim_callback_get_p_hh(void) { return p_hh; }
-
 // Buffer accessors for behavior callbacks
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
@@ -482,7 +456,6 @@ int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 void *nvim_callback_get_p_ul_addr(void) { return (void *)&p_ul; }
 
 // Phase 88: undolevels accessors
-void nvim_set_p_ul(OptInt val) { p_ul = val; }
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 
 // Phase 91: langmap accessor
@@ -677,7 +650,6 @@ void *nvim_get_p_chi_addr(void) { return (void *)&p_chi; }
 
 
 // Pumblend accessors
-OptInt nvim_callback_get_p_pb(void) { return p_pb; }
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
 
 // Winblend accessors
@@ -812,8 +784,6 @@ char *nvim_get_iobuff(void) { return IObuff; }
 // Global option accessors for Rust callbacks
 const char *nvim_get_p_path(void) { return p_path; }
 const char *nvim_get_p_cdpath(void) { return p_cdpath; }
-OptInt nvim_get_p_window(void) { return p_window; }
-void nvim_set_p_window(OptInt val) { p_window = val; }
 const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
 
 // Lines/columns callback accessors
@@ -2204,8 +2174,6 @@ const char *nvim_get_e_number_required_after_equal(void)
   return e_number_required_after_equal;
 }
 
-OptInt nvim_get_p_ss(void) { return p_ss; }
-
 // =============================================================================
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
 // =============================================================================
@@ -2883,10 +2851,6 @@ int nvim_option_p_cpo_has_undo(void)
 {
   return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
 }
-/// Get p_rdt (redrawtime option, milliseconds).
-int64_t nvim_option_get_p_rdt(void) { return (int64_t)p_rdt; }
-/// Get p_cwh (cmdwinheight).
-int nvim_option_get_p_cwh(void) { return (int)p_cwh; }
 /// Get whether p_icm (inccommand) is non-empty.
 int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 

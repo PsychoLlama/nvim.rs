@@ -1168,7 +1168,7 @@ extern "C" {
     fn nvim_get_textlock() -> c_int;
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
-    fn nvim_callback_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_option_p_cpo_has_undo() -> c_int;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_get_w_botline() -> c_int;
@@ -1185,7 +1185,7 @@ extern "C" {
     fn nvim_u_save_cursor() -> c_int;
     fn nvim_do_check_cursorbind_wrapper();
     fn nvim_do_sub_getdigits_int(pp: *mut *mut c_char) -> c_int;
-    fn nvim_option_get_p_rdt() -> i64;
+    static mut p_rdt: i64;
     fn nvim_do_sub_skip_regexp_ex(
         cmd: *mut c_char,
         delim: c_int,
@@ -1194,7 +1194,7 @@ extern "C" {
     fn nvim_excmds_check_nextcmd(cmd: *const c_char) -> *mut c_char;
     fn nvim_do_sub_changed_window_setting();
     fn nvim_curwin_get_cursor_col() -> c_int;
-    fn nvim_option_get_p_cwh() -> c_int;
+    static mut p_cwh: i64;
     fn setpcmark();
     fn nvim_do_sub_getvcol_start_end(
         lnum: c_int,
@@ -1468,7 +1468,7 @@ pub unsafe extern "C" fn rs_do_sub(
 ) -> c_int {
     // Set up the timeout
     let timeout: u64 = if use_rdt != 0 {
-        rs_profile_setlimit(nvim_option_get_p_rdt())
+        rs_profile_setlimit(p_rdt)
     } else {
         rs_profile_zero()
     };
@@ -1727,7 +1727,7 @@ pub unsafe extern "C" fn rs_do_sub(
         && !got_quit
         && nvim_excmds_aborting() == 0
         && (cmdpreview_ns <= 0
-            || preview_lines.lines_needed <= nvim_option_get_p_cwh()
+            || preview_lines.lines_needed <= p_cwh as c_int
             || lnum <= nvim_curwin_get_w_botline())
     {
         let nmatch = nvim_do_sub_vim_regexec_multi(regmatch, lnum, 0);
@@ -2149,7 +2149,7 @@ pub unsafe extern "C" fn rs_do_sub(
             if cmdpreview_ns <= 0
                 && !rs_do_sub_msg(subflags_local.do_count)
                 && subflags_local.do_ask
-                && nvim_callback_get_p_ch() > 0
+                && p_ch > 0
             {
                 nvim_excmds_emsg_by_id(8); // msg_empty
             }
@@ -2168,7 +2168,7 @@ pub unsafe extern "C" fn rs_do_sub(
         if nvim_excmds_got_int() != 0 {
             nvim_excmds_emsg_interr();
         } else if got_match {
-            if nvim_callback_get_p_ch() > 0 {
+            if p_ch > 0 {
                 nvim_excmds_emsg_by_id(8); // msg_empty
             }
         } else if subflags_local.do_error {

@@ -76,7 +76,7 @@ extern "C" {
 
     // Pumblend accessors
     fn hl_invalidate_blends();
-    fn nvim_callback_get_p_pb() -> OptInt;
+    static mut p_pb: OptInt;
     fn nvim_callback_set_pum_grid_blending(value: c_int);
     fn pum_drawn() -> c_int;
     fn pum_redraw();
@@ -288,7 +288,7 @@ pub extern "C" fn rs_did_set_textwidth(_args: *mut c_void) -> CallbackResult {
 pub extern "C" fn rs_did_set_pumblend(_args: *mut c_void) -> CallbackResult {
     unsafe {
         hl_invalidate_blends();
-        let pb = nvim_callback_get_p_pb();
+        let pb = p_pb;
         nvim_callback_set_pum_grid_blending(c_int::from(pb > 0));
         if pum_drawn() != 0 {
             pum_redraw();

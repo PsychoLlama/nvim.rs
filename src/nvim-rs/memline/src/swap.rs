@@ -123,10 +123,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     }
 
     // When 'updatecount' is non-zero swapfile may be opened later.
-    if nvim_buf_get_terminal(buf) == 0
-        && nvim_callback_get_p_uc() != 0
-        && nvim_buf_get_p_swf(buf) != 0
-    {
+    if nvim_buf_get_terminal(buf) == 0 && p_uc != 0 && nvim_buf_get_p_swf(buf) != 0 {
         nvim_buf_set_b_may_swap_true(buf);
     } else {
         nvim_buf_set_b_may_swap(buf, 0);
@@ -240,7 +237,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
         // There is no swap file yet.
         // When 'updatecount' is 0 or 'noswapfile' there is no swap file.
         // For help files we will make a swap file now.
-        if nvim_callback_get_p_uc() != 0 && nvim_get_cmod_noswapfile() == 0 {
+        if p_uc != 0 && nvim_get_cmod_noswapfile() == 0 {
             rs_ml_open_file(buf); // create a swap file
         }
         return;
@@ -704,8 +701,8 @@ extern "C" {
     /// emsg: print error message
     fn emsg(msg: *const c_char);
 
-    /// Get p_uc option value (updatecount)
-    fn nvim_callback_get_p_uc() -> i64;
+    /// Direct access: p_uc (updatecount)
+    static mut p_uc: i64;
 
     /// Get O_RDWR constant value for os_open
     fn nvim_get_o_rdwr() -> c_int;
