@@ -384,6 +384,20 @@ extern "C" {
     // number_width (already available as rs_number_width, keep consistent)
     // use_cursor_line_highlight and get_line_number_attr are Rust-exported; we use them directly
     // draw_col_buf and draw_col_fill are Rust-exported; call impl functions directly
+
+    // Phase 2: decor_providers_setup / invoke_range_next FFI
+    fn nvim_win_ml_get_buf(wp: WinHandle, lnum: LinenrT) -> *const c_char;
+    fn nvim_win_ml_get_buf_len(wp: WinHandle, lnum: LinenrT) -> ColnrT;
+    fn decor_providers_invoke_line(wp: WinHandle, row: c_int);
+    fn decor_providers_invoke_range(
+        wp: WinHandle,
+        start_row: c_int,
+        start_col: c_int,
+        end_row: c_int,
+        end_col: c_int,
+    );
+    fn validate_virtcol(wp: WinHandle);
+    fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int;
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -3570,6 +3584,88 @@ unsafe fn get_extra_buf_impl(size: usize) -> *mut c_char {
 pub unsafe extern "C" fn drawline_free_all_mem() {
     let mut guard = EXTRA_BUF.lock().unwrap();
     *guard = Vec::new();
+}
+
+// ============================================================================
+// Phase 2: decor_providers_setup and invoke_range_next migration
+// ============================================================================
+
+/// Rust equivalent of invoke_range_next.
+///
+/// Invokes `decor_providers_invoke_range` for the next segment starting at `begin_col`
+/// and spanning `col_off` bytes. Returns the new begin column, or `i32::MAX`.
+unsafe fn invoke_range_next_impl(
+    wp: WinHandle,
+    lnum: LinenrT,
+    begin_col: ColnrT,
+    col_off: ColnrT,
+) -> c_int {
+    let line = nvim_win_ml_get_buf(wp, lnum);
+    let line_len = nvim_win_ml_get_buf_len(wp, lnum);
+    let col_off = col_off.max(1);
+
+    if col_off <= line_len - begin_col {
+        let mut end_col = begin_col + col_off;
+        end_col += mb_off_next(line, line.offset(end_col as isize));
+        decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col);
+        validate_virtcol(wp);
+        end_col
+    } else {
+        decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0);
+        validate_virtcol(wp);
+        c_int::MAX
+    }
+}
+
+/// Exported Rust wrapper for `invoke_range_next` (called from C `win_line`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_invoke_range_next(
+    wp: WinHandle,
+    lnum: LinenrT,
+    begin_col: ColnrT,
+    col_off: ColnrT,
+) -> c_int {
+    invoke_range_next_impl(wp, lnum, begin_col, col_off)
+}
+
+/// Rust equivalent of decor_providers_setup.
+///
+/// Approximates the number of bytes that will be drawn and sets up decoration
+/// provider ranges for the current line. Returns the new begin column.
+unsafe fn decor_providers_setup_impl(
+    rows_to_draw: c_int,
+    draw_from_line_start: bool,
+    lnum: LinenrT,
+    col: ColnrT,
+    wp: WinHandle,
+) -> c_int {
+    let rem_vcols = if nvim_win_get_p_wrap(wp) != 0 {
+        let view_width = nvim_win_get_view_width(wp);
+        let width = view_width - rs_win_col_off(wp);
+        let width2 = width + rs_win_col_off2(wp);
+        let first_row_width = if draw_from_line_start { width } else { width2 };
+        first_row_width + (rows_to_draw - 1) * width2
+    } else {
+        nvim_win_get_view_height(wp) - rs_win_col_off(wp)
+    };
+
+    // Call it here since we need to invalidate the line pointer anyway.
+    decor_providers_invoke_line(wp, lnum - 1);
+    validate_virtcol(wp);
+
+    invoke_range_next_impl(wp, lnum, col, rem_vcols + 1)
+}
+
+/// Exported Rust wrapper for `decor_providers_setup` (called from C `win_line`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_decor_providers_setup(
+    rows_to_draw: c_int,
+    draw_from_line_start: bool,
+    lnum: LinenrT,
+    col: ColnrT,
+    wp: WinHandle,
+) -> c_int {
+    decor_providers_setup_impl(rows_to_draw, draw_from_line_start, lnum, col, wp)
 }
 
 #[cfg(test)]

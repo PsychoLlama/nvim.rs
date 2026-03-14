@@ -2398,49 +2398,19 @@ end_check:
 /// when 'showbreak' is not set.
 ///
 
+// decor_providers_setup and invoke_range_next are now implemented in Rust.
+extern int rs_decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
+                                    colnr_T col, win_T *wp);
+extern int rs_invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off);
+
 static int decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
                                  colnr_T col, win_T *wp)
 {
-  // Approximate the number of bytes that will be drawn.
-  // Assume we're dealing with 1-cell ascii and ignore
-  // the effects of 'linebreak', 'breakindent', etc.
-  int rem_vcols;
-  if (wp->w_p_wrap) {
-    int width = wp->w_view_width - win_col_off(wp);
-    int width2 = width + win_col_off2(wp);
-
-    int first_row_width = draw_from_line_start ? width : width2;
-    rem_vcols = first_row_width + (rows_to_draw - 1) * width2;
-  } else {
-    rem_vcols = wp->w_view_height - win_col_off(wp);
-  }
-
-  // Call it here since we need to invalidate the line pointer anyway.
-  decor_providers_invoke_line(wp, lnum - 1);
-  validate_virtcol(wp);
-
-  return invoke_range_next(wp, lnum, col, rem_vcols + 1);
+  return rs_decor_providers_setup(rows_to_draw, draw_from_line_start, lnum, col, wp);
 }
 
 /// @return New begin column, or INT_MAX.
 static int invoke_range_next(win_T *wp, int lnum, colnr_T begin_col, colnr_T col_off)
 {
-  char const *const line = ml_get_buf(wp->w_buffer, lnum);
-  int const line_len = ml_get_buf_len(wp->w_buffer, lnum);
-  col_off = MAX(col_off, 1);
-
-  colnr_T new_col;
-  if (col_off <= line_len - begin_col) {
-    int end_col = begin_col + col_off;
-    end_col += mb_off_next(line, line + end_col);
-    decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum - 1, end_col);
-    validate_virtcol(wp);
-    new_col = end_col;
-  } else {
-    decor_providers_invoke_range(wp, lnum - 1, begin_col, lnum, 0);
-    validate_virtcol(wp);
-    new_col = INT_MAX;
-  }
-
-  return new_col;
+  return rs_invoke_range_next(wp, lnum, begin_col, col_off);
 }

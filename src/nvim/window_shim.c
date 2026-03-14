@@ -452,6 +452,7 @@ bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
+colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
 int nvim_ui_has_tabline(void) { return ui_has(kUITabline); }
 
 /// Get a specific border adjustment value for a window.
