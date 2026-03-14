@@ -569,6 +569,9 @@ extern "C" {
 
     /// Check if v_partial is NULL (only valid if v_type == VAR_PARTIAL).
     fn nvim_tv_partial_is_null(tv: TypevalHandle) -> c_int;
+
+    /// Set v_type=VAR_NUMBER and v_number (setter for Rust).
+    fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
 }
 
 // =============================================================================
@@ -1054,6 +1057,20 @@ extern "C" {
     fn nvim_blob_get_lock(b: BlobHandle) -> c_int;
     fn nvim_blob_get_byte(b: BlobHandle, idx: c_int) -> u8;
     fn nvim_blob_set_byte(b: BlobHandle, idx: c_int, c: u8);
+
+    // Blob mutation accessors (Phase 1)
+    fn nvim_blob_get_ga_data(b: BlobHandle) -> *mut u8;
+    fn nvim_blob_set_ga_len(b: BlobHandle, len: c_int);
+    fn nvim_blob_ga_grow(b: BlobHandle, n: c_int);
+    fn nvim_tv_set_blob(tv: TypevalHandle, b: BlobHandle);
+    fn nvim_value_check_lock_translated(lock: c_int, name: *const c_char) -> bool;
+    fn nvim_semsg_blobidx(idx: i64);
+    fn nvim_emsg_blob_wrong_bytes();
+
+    // Functions called by blob ops
+    fn tv_blob_alloc() -> BlobHandle;
+    fn tv_clear(tv: TypevalHandle);
+    fn tv_get_number_chk(tv: TypevalHandle, error: *mut bool) -> i64;
 }
 
 // =============================================================================
@@ -1529,6 +1546,265 @@ fn tv_blob_equal_impl(b1: BlobHandle, b2: BlobHandle) -> bool {
 #[export_name = "tv_blob_equal"]
 pub extern "C" fn rs_tv_blob_equal(b1: BlobHandle, b2: BlobHandle) -> bool {
     tv_blob_equal_impl(b1, b2)
+}
+
+// =============================================================================
+// Blob operations: slice, index, check, set, remove (Phase 1)
+// =============================================================================
+
+/// Returns a slice of `blob` from index `n1` to `n2` in `rettv`.
+/// Returns empty blob if indexes are out of range.
+unsafe fn tv_blob_slice_impl(
+    _blob: BlobHandle,
+    len: c_int,
+    mut n1: i64,
+    mut n2: i64,
+    exclusive: bool,
+    rettv: TypevalHandle,
+) -> c_int {
+    let len = i64::from(len);
+    if n1 < 0 {
+        n1 += len;
+        if n1 < 0 {
+            n1 = 0;
+        }
+    }
+    if n2 < 0 {
+        n2 += len;
+    } else if n2 >= len {
+        n2 = len - i64::from(!exclusive);
+    }
+    if exclusive {
+        n2 -= 1;
+    }
+    if n1 >= len || n2 < 0 || n1 > n2 {
+        unsafe {
+            tv_clear(rettv);
+            // Set v_type=VAR_BLOB, v_blob=NULL
+            nvim_tv_set_blob(rettv, BlobHandle(std::ptr::null()));
+        }
+    } else {
+        let new_blob = unsafe { tv_blob_alloc() };
+        let count = (n2 - n1 + 1) as c_int;
+        unsafe {
+            nvim_blob_ga_grow(new_blob, count);
+            nvim_blob_set_ga_len(new_blob, count);
+        }
+        // Get the source data from rettv's blob
+        let src_blob = unsafe { nvim_tv_get_blob(rettv) };
+        for i in n1..=n2 {
+            let byte = unsafe { nvim_blob_get_byte(src_blob, i as c_int) };
+            unsafe { nvim_blob_set_byte(new_blob, (i - n1) as c_int, byte) };
+        }
+        unsafe {
+            tv_clear(rettv);
+            nvim_tv_set_blob(rettv, new_blob);
+        }
+    }
+    OK
+}
+
+/// Return the byte value in `blob` at index `idx` in `rettv`.
+unsafe fn tv_blob_index_impl(
+    _blob: BlobHandle,
+    len: c_int,
+    mut idx: i64,
+    rettv: TypevalHandle,
+) -> c_int {
+    let len = i64::from(len);
+    if idx < 0 {
+        idx += len;
+    }
+    if idx < len && idx >= 0 {
+        let src_blob = unsafe { nvim_tv_get_blob(rettv) };
+        let v = i64::from(unsafe { nvim_blob_get_byte(src_blob, idx as c_int) });
+        unsafe { tv_clear(rettv) };
+        // Set to number - need mutable pointer to rettv
+        let rettv_ptr = rettv.as_ptr().cast_mut();
+        unsafe { nvim_tv_set_number(TypevalHandle(rettv_ptr), v) };
+    } else {
+        unsafe { nvim_semsg_blobidx(idx) };
+        return FAIL;
+    }
+    OK
+}
+
+/// Dispatch between blob slice and blob index operations.
+#[export_name = "tv_blob_slice_or_index"]
+pub unsafe extern "C" fn rs_tv_blob_slice_or_index(
+    blob: BlobHandle,
+    is_range: bool,
+    n1: i64,
+    n2: i64,
+    exclusive: bool,
+    rettv: TypevalHandle,
+) -> c_int {
+    let len = tv_blob_len_impl(unsafe { nvim_tv_get_blob(rettv) });
+    if is_range {
+        unsafe { tv_blob_slice_impl(blob, len, n1, n2, exclusive, rettv) }
+    } else {
+        unsafe { tv_blob_index_impl(blob, len, n1, rettv) }
+    }
+}
+
+/// Check if `n1` is a valid index for a blob with length `bloblen`.
+#[export_name = "tv_blob_check_index"]
+pub unsafe extern "C" fn rs_tv_blob_check_index(bloblen: c_int, n1: i64, quiet: bool) -> c_int {
+    if n1 < 0 || n1 > i64::from(bloblen) {
+        if !quiet {
+            unsafe { nvim_semsg_blobidx(n1) };
+        }
+        return FAIL;
+    }
+    OK
+}
+
+/// Check if `n1`-`n2` is a valid range for a blob with length `bloblen`.
+#[export_name = "tv_blob_check_range"]
+pub unsafe extern "C" fn rs_tv_blob_check_range(
+    bloblen: c_int,
+    n1: i64,
+    n2: i64,
+    quiet: bool,
+) -> c_int {
+    if n2 < 0 || n2 >= i64::from(bloblen) || n2 < n1 {
+        if !quiet {
+            unsafe { nvim_semsg_blobidx(n2) };
+        }
+        return FAIL;
+    }
+    OK
+}
+
+/// Set bytes `n1` to `n2` (inclusive) in `dest` to the value of `src` blob.
+/// Caller must make sure `src` is a blob.
+/// Returns FAIL if the number of bytes does not match.
+#[export_name = "tv_blob_set_range"]
+pub unsafe extern "C" fn rs_tv_blob_set_range(
+    dest: BlobHandle,
+    n1: i64,
+    n2: i64,
+    src: TypevalHandle,
+) -> c_int {
+    let src_blob = unsafe { nvim_tv_get_blob(src) };
+    let src_len = i64::from(tv_blob_len_impl(src_blob));
+    if n2 - n1 + 1 != src_len {
+        unsafe { nvim_emsg_blob_wrong_bytes() };
+        return FAIL;
+    }
+    let mut ir = 0i64;
+    let mut il = n1;
+    while il <= n2 {
+        let byte = unsafe { nvim_blob_get_byte(src_blob, ir as c_int) };
+        unsafe { nvim_blob_set_byte(dest, il as c_int, byte) };
+        ir += 1;
+        il += 1;
+    }
+    OK
+}
+
+/// Store one byte `byte` in blob `blob` at `idx`.
+/// Append one byte if needed.
+#[export_name = "tv_blob_set_append"]
+pub unsafe extern "C" fn rs_tv_blob_set_append(blob: BlobHandle, idx: c_int, byte: u8) {
+    let ga_len = tv_blob_len_impl(blob);
+    if idx <= ga_len {
+        if idx == ga_len {
+            unsafe { nvim_blob_ga_grow(blob, 1) };
+            unsafe { nvim_blob_set_ga_len(blob, ga_len + 1) };
+        }
+        unsafe { nvim_blob_set_byte(blob, idx, byte) };
+    }
+}
+
+/// "remove({blob})" function implementation.
+#[export_name = "tv_blob_remove"]
+pub unsafe extern "C" fn rs_tv_blob_remove(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    arg_errmsg: *const c_char,
+) {
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let b = unsafe { nvim_tv_get_blob(arg0) };
+
+    if !b.is_null() {
+        let lock = unsafe { nvim_blob_get_lock(b) };
+        if unsafe { nvim_value_check_lock_translated(lock, arg_errmsg) } {
+            return;
+        }
+    }
+
+    let mut error = false;
+    let arg1 = unsafe { nvim_typval_array_get(argvars, 1) };
+    let mut idx = unsafe { tv_get_number_chk(arg1, std::ptr::addr_of_mut!(error)) };
+
+    if !error {
+        let len = i64::from(tv_blob_len_impl(b));
+
+        if idx < 0 {
+            idx += len;
+        }
+        if idx < 0 || idx >= len {
+            unsafe { nvim_semsg_blobidx(idx) };
+            return;
+        }
+
+        let arg2 = unsafe { nvim_typval_array_get(argvars, 2) };
+        let arg2_type = tv_type_impl(arg2);
+        if arg2_type == VarType::Unknown {
+            // Remove one item, return its value.
+            let p = unsafe { nvim_blob_get_ga_data(b) };
+            let val = i64::from(unsafe { *p.offset(idx as isize) });
+            unsafe {
+                std::ptr::copy(
+                    p.offset(idx as isize + 1),
+                    p.offset(idx as isize),
+                    (len - idx - 1) as usize,
+                );
+                nvim_blob_set_ga_len(b, (len - 1) as c_int);
+            }
+            let rettv_ptr = rettv.as_ptr().cast_mut();
+            unsafe { nvim_tv_set_number(TypevalHandle(rettv_ptr), val) };
+        } else {
+            // Remove range of items, return blob with values.
+            let mut end = unsafe { tv_get_number_chk(arg2, std::ptr::addr_of_mut!(error)) };
+            if error {
+                return;
+            }
+            if end < 0 {
+                end += len;
+            }
+            if end >= len || idx > end {
+                unsafe { nvim_semsg_blobidx(end) };
+                return;
+            }
+            let blob = unsafe { tv_blob_alloc() };
+            let count = (end - idx + 1) as c_int;
+            unsafe {
+                nvim_blob_set_ga_len(blob, count);
+                nvim_blob_ga_grow(blob, count);
+            }
+
+            let p = unsafe { nvim_blob_get_ga_data(b) };
+            let dst = unsafe { nvim_blob_get_ga_data(blob) };
+            unsafe {
+                std::ptr::copy_nonoverlapping(p.offset(idx as isize), dst, count as usize);
+                nvim_tv_set_blob(rettv, blob);
+            }
+
+            let remaining = len - end - 1;
+            if remaining > 0 {
+                unsafe {
+                    std::ptr::copy(
+                        p.offset(end as isize + 1),
+                        p.offset(idx as isize),
+                        remaining as usize,
+                    );
+                }
+            }
+            unsafe { nvim_blob_set_ga_len(b, (len - i64::from(count)) as c_int) };
+        }
+    }
 }
 
 // =============================================================================

@@ -162,6 +162,9 @@ extern int rs_set_tagstack(void *wp, const void *d, int action);
 
 extern bool rs_op_pending(void);
 
+// Rust typval blob functions (migrated from typval.c, Phase 1)
+extern int tv_blob_set_range(blob_T *dest, varnumber_T n1, varnumber_T n2, typval_T *src);
+
 // Rust math VimL function declarations (direct dispatch via #[export_name])
 extern void f_abs(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_sin(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

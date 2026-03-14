@@ -83,7 +83,10 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Rust FFI declarations
+// Rust FFI declarations (typval blob functions migrated to Rust)
+extern int tv_blob_check_index(int bloblen, varnumber_T n1, bool quiet);
+extern int tv_blob_check_range(int bloblen, varnumber_T n1, varnumber_T n2, bool quiet);
+
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,

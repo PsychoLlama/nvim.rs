@@ -2801,195 +2801,8 @@ void tv_blob_unref(blob_T *const b)
 }
 
 //{{{2 Operations on the whole blob
-
-/// Returns a slice of "blob" from index "n1" to "n2" in "rettv".  The length of
-/// the blob is "len".  Returns an empty blob if the indexes are out of range.
-static int tv_blob_slice(const blob_T *blob, int len, varnumber_T n1, varnumber_T n2,
-                         bool exclusive, typval_T *rettv)
-{
-  // The resulting variable is a sub-blob.  If the indexes
-  // are out of range the result is empty.
-  if (n1 < 0) {
-    n1 = len + n1;
-    if (n1 < 0) {
-      n1 = 0;
-    }
-  }
-  if (n2 < 0) {
-    n2 = len + n2;
-  } else if (n2 >= len) {
-    n2 = len - (exclusive ? 0 : 1);
-  }
-  if (exclusive) {
-    n2--;
-  }
-  if (n1 >= len || n2 < 0 || n1 > n2) {
-    tv_clear(rettv);
-    rettv->v_type = VAR_BLOB;
-    rettv->vval.v_blob = NULL;
-  } else {
-    blob_T *const new_blob = tv_blob_alloc();
-    ga_grow(&new_blob->bv_ga, (int)(n2 - n1 + 1));
-    new_blob->bv_ga.ga_len = (int)(n2 - n1 + 1);
-    for (int i = (int)n1; i <= (int)n2; i++) {
-      tv_blob_set(new_blob, i - (int)n1, tv_blob_get(rettv->vval.v_blob, i));
-    }
-    tv_clear(rettv);
-    tv_blob_set_ret(rettv, new_blob);
-  }
-
-  return OK;
-}
-
-/// Return the byte value in "blob" at index "idx" in "rettv".  If the index is
-/// too big or negative that is an error.  The length of the blob is "len".
-static int tv_blob_index(const blob_T *blob, int len, varnumber_T idx, typval_T *rettv)
-{
-  // The resulting variable is a byte value.
-  // If the index is too big or negative that is an error.
-  if (idx < 0) {
-    idx = len + idx;
-  }
-  if (idx < len && idx >= 0) {
-    const int v = (int)tv_blob_get(rettv->vval.v_blob, (int)idx);
-    tv_clear(rettv);
-    rettv->v_type = VAR_NUMBER;
-    rettv->vval.v_number = v;
-  } else {
-    semsg(_(e_blobidx), idx);
-    return FAIL;
-  }
-
-  return OK;
-}
-
-int tv_blob_slice_or_index(const blob_T *blob, bool is_range, varnumber_T n1, varnumber_T n2,
-                           bool exclusive, typval_T *rettv)
-{
-  int len = tv_blob_len(rettv->vval.v_blob);
-
-  if (is_range) {
-    return tv_blob_slice(blob, len, n1, n2, exclusive, rettv);
-  } else {
-    return tv_blob_index(blob, len, n1, rettv);
-  }
-}
-
-/// Check if "n1" is a valid index for a blob with length "bloblen".
-int tv_blob_check_index(int bloblen, varnumber_T n1, bool quiet)
-{
-  if (n1 < 0 || n1 > bloblen) {
-    if (!quiet) {
-      semsg(_(e_blobidx), n1);
-    }
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Check if "n1"-"n2" is a valid range for a blob with length "bloblen".
-int tv_blob_check_range(int bloblen, varnumber_T n1, varnumber_T n2, bool quiet)
-{
-  if (n2 < 0 || n2 >= bloblen || n2 < n1) {
-    if (!quiet) {
-      semsg(_(e_blobidx), n2);
-    }
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Set bytes "n1" to "n2" (inclusive) in "dest" to the value of "src".
-/// Caller must make sure "src" is a blob.
-/// Returns FAIL if the number of bytes does not match.
-int tv_blob_set_range(blob_T *dest, varnumber_T n1, varnumber_T n2, typval_T *src)
-{
-  if (n2 - n1 + 1 != tv_blob_len(src->vval.v_blob)) {
-    emsg(_("E972: Blob value does not have the right number of bytes"));
-    return FAIL;
-  }
-
-  for (int il = (int)n1, ir = 0; il <= (int)n2; il++) {
-    tv_blob_set(dest, il, tv_blob_get(src->vval.v_blob, ir++));
-  }
-  return OK;
-}
-
-/// Store one byte "byte" in blob "blob" at "idx".
-/// Append one byte if needed.
-void tv_blob_set_append(blob_T *blob, int idx, uint8_t byte)
-{
-  garray_T *gap = &blob->bv_ga;
-
-  // Allow for appending a byte.  Setting a byte beyond
-  // the end is an error otherwise.
-  if (idx <= gap->ga_len) {
-    if (idx == gap->ga_len) {
-      ga_grow(gap, 1);
-      gap->ga_len++;
-    }
-    tv_blob_set(blob, idx, byte);
-  }
-}
-
-/// "remove({blob})" function
-void tv_blob_remove(typval_T *argvars, typval_T *rettv, const char *arg_errmsg)
-{
-  blob_T *const b = argvars[0].vval.v_blob;
-
-  if (b != NULL && value_check_lock(b->bv_lock, arg_errmsg, TV_TRANSLATE)) {
-    return;
-  }
-
-  bool error = false;
-  int64_t idx = tv_get_number_chk(&argvars[1], &error);
-
-  if (!error) {
-    const int len = tv_blob_len(b);
-
-    if (idx < 0) {
-      // count from the end
-      idx = len + idx;
-    }
-    if (idx < 0 || idx >= len) {
-      semsg(_(e_blobidx), idx);
-      return;
-    }
-    if (argvars[2].v_type == VAR_UNKNOWN) {
-      // Remove one item, return its value.
-      uint8_t *const p = (uint8_t *)b->bv_ga.ga_data;
-      rettv->vval.v_number = (varnumber_T)(*(p + idx));
-      memmove(p + idx, p + idx + 1, (size_t)(len - idx - 1));
-      b->bv_ga.ga_len--;
-    } else {
-      // Remove range of items, return blob with values.
-      int64_t end = tv_get_number_chk(&argvars[2], &error);
-      if (error) {
-        return;
-      }
-      if (end < 0) {
-        // count from the end
-        end = len + end;
-      }
-      if (end >= len || idx > end) {
-        semsg(_(e_blobidx), end);
-        return;
-      }
-      blob_T *const blob = tv_blob_alloc();
-      blob->bv_ga.ga_len = (int)(end - idx + 1);
-      ga_grow(&blob->bv_ga, (int)(end - idx + 1));
-
-      uint8_t *const p = (uint8_t *)b->bv_ga.ga_data;
-      memmove(blob->bv_ga.ga_data, p + idx, (size_t)(end - idx + 1));
-      tv_blob_set_ret(rettv, blob);
-
-      if (len - end - 1 > 0) {
-        memmove(p + idx, p + end + 1, (size_t)(len - end - 1));
-      }
-      b->bv_ga.ga_len -= (int)(end - idx + 1);
-    }
-  }
-}
+// tv_blob_slice_or_index, tv_blob_check_index, tv_blob_check_range,
+// tv_blob_set_range, tv_blob_set_append, tv_blob_remove migrated to Rust (Phase 1)
 
 /// blob2list() function
 void f_blob2list(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4703,6 +4516,50 @@ uint8_t nvim_blob_get_byte(const blob_T *b, int idx)
 void nvim_blob_set_byte(blob_T *b, int idx, uint8_t c)
 {
   ((uint8_t *)b->bv_ga.ga_data)[idx] = c;
+}
+
+/// Get the raw data pointer from a blob's garray (accessor for Rust).
+uint8_t *nvim_blob_get_ga_data(blob_T *b)
+{
+  return (uint8_t *)b->bv_ga.ga_data;
+}
+
+/// Set ga_len in a blob's garray (accessor for Rust).
+void nvim_blob_set_ga_len(blob_T *b, int len)
+{
+  b->bv_ga.ga_len = len;
+}
+
+/// Call ga_grow on a blob's garray (accessor for Rust).
+void nvim_blob_ga_grow(blob_T *b, int n)
+{
+  ga_grow(&b->bv_ga, n);
+}
+
+/// Set v_type=VAR_BLOB and vval.v_blob (accessor for Rust).
+/// Also increments the blob's refcount.
+void nvim_tv_set_blob(typval_T *tv, blob_T *b)
+{
+  tv_blob_set_ret(tv, b);
+}
+
+/// Call value_check_lock with TV_TRANSLATE semantics (accessor for Rust).
+/// Returns true if locked (and emits error), false if unlocked.
+bool nvim_value_check_lock_translated(VarLockStatus lock, const char *name)
+{
+  return value_check_lock(lock, name, TV_TRANSLATE);
+}
+
+/// Emit blob index out of range error (accessor for Rust).
+void nvim_semsg_blobidx(int64_t idx)
+{
+  semsg(_(e_blobidx), idx);
+}
+
+/// Emit blob wrong number of bytes error (accessor for Rust).
+void nvim_emsg_blob_wrong_bytes(void)
+{
+  emsg(_("E972: Blob value does not have the right number of bytes"));
 }
 
 // =============================================================================
