@@ -145,6 +145,7 @@ extern int rs_showmode(void);
 extern bool rs_default_grid_alloc(void);
 extern void rs_screenclear(void);
 extern void rs_drawscreen_screen_resize(int width, int height);
+extern void rs_show_cursor_info_later(bool force);
 
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
@@ -491,52 +492,7 @@ int update_screen(void)
 /// @param always  if false, only show ruler if position has changed.
 void show_cursor_info_later(bool force)
 {
-  int state = get_real_state();
-  int empty_line = (State & MODE_INSERT) == 0
-                   && *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL;
-
-  // Only draw when something changed.
-  validate_virtcol(curwin);
-  if (force
-      || curwin->w_cursor.lnum != curwin->w_stl_cursor.lnum
-      || curwin->w_cursor.col != curwin->w_stl_cursor.col
-      || curwin->w_virtcol != curwin->w_stl_virtcol
-      || curwin->w_cursor.coladd != curwin->w_stl_cursor.coladd
-      || curwin->w_topline != curwin->w_stl_topline
-      || curwin->w_buffer->b_ml.ml_line_count != curwin->w_stl_line_count
-      || curwin->w_topfill != curwin->w_stl_topfill
-      || empty_line != curwin->w_stl_empty
-      || reg_recording != curwin->w_stl_recording
-      || state != curwin->w_stl_state
-      || (VIsual_active && (VIsual_mode != curwin->w_stl_visual_mode
-                            || VIsual.lnum != curwin->w_stl_visual_pos.lnum
-                            || VIsual.col != curwin->w_stl_visual_pos.col
-                            || VIsual.coladd != curwin->w_stl_visual_pos.coladd))) {
-    if (curwin->w_status_height || rs_global_stl_height()) {
-      curwin->w_redr_status = true;
-    } else {
-      redraw_cmdline = true;
-    }
-
-    if (*p_wbr != NUL || *curwin->w_p_wbr != NUL) {
-      curwin->w_redr_status = true;
-    }
-
-    redraw_custom_title_later();
-  }
-
-  curwin->w_stl_cursor = curwin->w_cursor;
-  curwin->w_stl_virtcol = curwin->w_virtcol;
-  curwin->w_stl_empty = (char)empty_line;
-  curwin->w_stl_topline = curwin->w_topline;
-  curwin->w_stl_line_count = curwin->w_buffer->b_ml.ml_line_count;
-  curwin->w_stl_topfill = curwin->w_topfill;
-  curwin->w_stl_recording = reg_recording;
-  curwin->w_stl_state = state;
-  if (VIsual_active) {
-    curwin->w_stl_visual_mode = VIsual_mode;
-    curwin->w_stl_visual_pos = VIsual;
-  }
+  rs_show_cursor_info_later(force);
 }
 
 

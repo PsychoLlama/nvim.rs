@@ -2941,6 +2941,68 @@ void nvim_win_charsize_wrap(bool cstype, int vcol, const char *ptr, int32_t chr,
 /// Size of CharsizeArg (for stack allocation in Rust)
 int nvim_charsize_arg_size(void) { return (int)sizeof(CharsizeArg); }
 
+// ---------------------------------------------------------------------------
+// Phase 4: show_cursor_info_later accessors
+// ---------------------------------------------------------------------------
+
+/// Return 1 if the cursor line in curwin starts with NUL (empty line, not insert mode).
+int nvim_curwin_cursor_line_is_nul(void)
+{
+  return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0;
+}
+
+/// Get VIsual position (lnum, col, coladd) as three int32 values.
+void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd)
+{
+  *lnum = (int32_t)VIsual.lnum;
+  *col = (int32_t)VIsual.col;
+  *coladd = (int32_t)VIsual.coladd;
+}
+
+/// Batch read curwin's w_stl_* state into output buffer.
+/// Layout: [cursor_lnum, cursor_col, cursor_coladd, virtcol, topline,
+///          line_count, topfill, empty, recording, state, visual_mode,
+///          vis_pos_lnum, vis_pos_col, vis_pos_coladd]
+void nvim_curwin_get_stl_state(int32_t *out)
+{
+  out[0]  = (int32_t)curwin->w_stl_cursor.lnum;
+  out[1]  = (int32_t)curwin->w_stl_cursor.col;
+  out[2]  = (int32_t)curwin->w_stl_cursor.coladd;
+  out[3]  = (int32_t)curwin->w_stl_virtcol;
+  out[4]  = (int32_t)curwin->w_stl_topline;
+  out[5]  = (int32_t)curwin->w_stl_line_count;
+  out[6]  = (int32_t)curwin->w_stl_topfill;
+  out[7]  = (int32_t)curwin->w_stl_empty;
+  out[8]  = (int32_t)curwin->w_stl_recording;
+  out[9]  = (int32_t)curwin->w_stl_state;
+  out[10] = (int32_t)curwin->w_stl_visual_mode;
+  out[11] = (int32_t)curwin->w_stl_visual_pos.lnum;
+  out[12] = (int32_t)curwin->w_stl_visual_pos.col;
+  out[13] = (int32_t)curwin->w_stl_visual_pos.coladd;
+}
+
+/// Batch write curwin's w_stl_* state fields from current window state.
+/// Also copies w_stl_visual_mode/visual_pos when visual is active.
+void nvim_curwin_set_stl_state(int32_t state, int32_t empty_line,
+                               int32_t visual_active, int32_t visual_mode,
+                               int32_t vis_lnum, int32_t vis_col, int32_t vis_coladd)
+{
+  curwin->w_stl_cursor      = curwin->w_cursor;
+  curwin->w_stl_virtcol     = curwin->w_virtcol;
+  curwin->w_stl_empty       = (char)empty_line;
+  curwin->w_stl_topline     = curwin->w_topline;
+  curwin->w_stl_line_count  = curwin->w_buffer->b_ml.ml_line_count;
+  curwin->w_stl_topfill     = curwin->w_topfill;
+  curwin->w_stl_recording   = reg_recording;
+  curwin->w_stl_state       = state;
+  if (visual_active) {
+    curwin->w_stl_visual_mode       = visual_mode;
+    curwin->w_stl_visual_pos.lnum   = (linenr_T)vis_lnum;
+    curwin->w_stl_visual_pos.col    = (colnr_T)vis_col;
+    curwin->w_stl_visual_pos.coladd = (colnr_T)vis_coladd;
+  }
+}
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");

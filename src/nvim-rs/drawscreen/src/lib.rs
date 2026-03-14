@@ -2803,6 +2803,125 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     length
 }
 
+// =============================================================================
+// Phase 4: show_cursor_info_later
+// =============================================================================
+
+extern "C" {
+    /// Validate virtcol for the current window.
+    fn nvim_validate_virtcol_curwin();
+    /// Return 1 if cursor line in curwin starts with NUL (empty, not insert mode).
+    fn nvim_curwin_cursor_line_is_nul() -> c_int;
+    /// Get VIsual position (lnum, col, coladd) as three i32 values.
+    fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
+    /// Batch read curwin's w_stl_* state (14 i32 values).
+    fn nvim_curwin_get_stl_state(out: *mut i32);
+    /// Batch write curwin's w_stl_* state from current window values.
+    fn nvim_curwin_set_stl_state(
+        state: i32,
+        empty_line: i32,
+        visual_active: i32,
+        visual_mode: i32,
+        vis_lnum: i32,
+        vis_col: i32,
+        vis_coladd: i32,
+    );
+    /// Get w_virtcol for the window.
+    fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
+    /// Get w_topfill for the window.
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    /// Get b_ml.ml_line_count for window's buffer.
+    fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
+    /// Get w_cursor.col for window.
+    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
+    /// Get w_cursor.coladd for window.
+    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
+    /// Return 1 if global p_wbr is empty/NUL.
+    fn nvim_get_p_wbr_empty() -> c_int;
+    /// Return 1 if window's w_p_wbr is empty/NUL.
+    fn nvim_win_get_p_wbr_empty(wp: WinHandle) -> c_int;
+    /// Get real state (MODE_* flags).
+    fn nvim_get_real_state() -> c_int;
+}
+
+/// Check if cursor/ruler/statusline info changed and schedule redraw.
+///
+/// Rust equivalent of `show_cursor_info_later()` in drawscreen.c.
+#[no_mangle]
+pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
+    let curwin = nvim_get_curwin();
+    let state = nvim_get_real_state();
+    let empty_line = if (nvim_get_State() & MODE_INSERT) == 0 {
+        nvim_curwin_cursor_line_is_nul()
+    } else {
+        0
+    };
+
+    nvim_validate_virtcol_curwin();
+
+    // Read the saved stl snapshot (14 i32 values):
+    // [cursor_lnum, cursor_col, cursor_coladd, virtcol, topline,
+    //  line_count, topfill, empty, recording, state, visual_mode,
+    //  vis_pos_lnum, vis_pos_col, vis_pos_coladd]
+    let mut stl = [0i32; 14];
+    nvim_curwin_get_stl_state(stl.as_mut_ptr());
+
+    let vis_active = nvim_VIsual_active() != 0;
+    let cur_lnum = nvim_win_get_cursor_lnum(curwin);
+    let cur_col = nvim_win_get_cursor_col(curwin);
+    let cur_coladd = nvim_win_get_cursor_coladd(curwin);
+    let cur_virtcol = nvim_win_get_virtcol(curwin);
+    let cur_topline = nvim_win_get_topline(curwin);
+    let cur_line_count = nvim_win_buf_line_count(curwin);
+    let cur_topfill = nvim_win_get_topfill(curwin);
+
+    let mut vis_lnum = 0i32;
+    let mut vis_col = 0i32;
+    let mut vis_coladd = 0i32;
+    if vis_active {
+        nvim_get_VIsual_pos_fields(&raw mut vis_lnum, &raw mut vis_col, &raw mut vis_coladd);
+    }
+
+    let changed = force
+        || cur_lnum != stl[0]
+        || cur_col != stl[1]
+        || cur_virtcol != stl[3]
+        || cur_coladd != stl[2]
+        || cur_topline != stl[4]
+        || cur_line_count != stl[5]
+        || cur_topfill != stl[6]
+        || empty_line != stl[7]
+        || reg_recording != stl[8]
+        || state != stl[9]
+        || (vis_active
+            && (VIsual_mode != stl[10]
+                || vis_lnum != stl[11]
+                || vis_col != stl[12]
+                || vis_coladd != stl[13]));
+
+    if changed {
+        if nvim_win_get_status_height(curwin) != 0 || global_stl_height() != 0 {
+            nvim_win_set_redr_status(curwin, 1);
+        } else {
+            nvim_set_redraw_cmdline(true);
+        }
+        if nvim_get_p_wbr_empty() == 0 || nvim_win_get_p_wbr_empty(curwin) == 0 {
+            nvim_win_set_redr_status(curwin, 1);
+        }
+        rs_redraw_custom_title_later();
+    }
+
+    nvim_curwin_set_stl_state(
+        state,
+        empty_line,
+        c_int::from(vis_active),
+        VIsual_mode,
+        vis_lnum,
+        vis_col,
+        vis_coladd,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
