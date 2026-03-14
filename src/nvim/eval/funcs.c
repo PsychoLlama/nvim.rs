@@ -321,6 +321,13 @@ extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 9 VimL function declarations (misc.rs - exported via #[export_name])
+extern void f_index(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_indexof(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_range(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_repeat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_reduce(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 8 VimL function declarations (misc.rs - exported via #[export_name])
 extern void f_spellbadword(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_spellsuggest(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -2502,227 +2509,7 @@ static bool has_wsl(void)
 
 /// "highlightID(name)" function
 /// "index()" function
-static void f_index(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int idx = 0;
-  bool ic = false;
-
-  rettv->vval.v_number = -1;
-  if (argvars[0].v_type == VAR_BLOB) {
-    bool error = false;
-    int start = 0;
-
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      start = (int)tv_get_number_chk(&argvars[2], &error);
-      if (error) {
-        return;
-      }
-    }
-    blob_T *const b = argvars[0].vval.v_blob;
-    if (b == NULL) {
-      return;
-    }
-    if (start < 0) {
-      start = tv_blob_len(b) + start;
-      if (start < 0) {
-        start = 0;
-      }
-    }
-    for (idx = start; idx < tv_blob_len(b); idx++) {
-      typval_T tv;
-      tv.v_type = VAR_NUMBER;
-      tv.vval.v_number = tv_blob_get(b, idx);
-      if (tv_equal(&tv, &argvars[1], ic)) {
-        rettv->vval.v_number = idx;
-        return;
-      }
-    }
-    return;
-  } else if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_listblobreq));
-    return;
-  }
-
-  list_T *const l = argvars[0].vval.v_list;
-  if (l == NULL) {
-    return;
-  }
-
-  listitem_T *item = tv_list_first(l);
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    bool error = false;
-
-    // Start at specified item.
-    idx = tv_list_uidx(l, (int)tv_get_number_chk(&argvars[2], &error));
-    if (error || idx == -1) {
-      item = NULL;
-    } else {
-      item = tv_list_find(l, idx);
-      assert(item != NULL);
-    }
-    if (argvars[3].v_type != VAR_UNKNOWN) {
-      ic = !!tv_get_number_chk(&argvars[3], &error);
-      if (error) {
-        item = NULL;
-      }
-    }
-  }
-
-  for (; item != NULL; item = TV_LIST_ITEM_NEXT(l, item), idx++) {
-    if (tv_equal(TV_LIST_ITEM_TV(item), &argvars[1], ic)) {
-      rettv->vval.v_number = idx;
-      break;
-    }
-  }
-}
-
-/// Evaluate "expr" with the v:key and v:val arguments and return the result.
-/// The expression is expected to return a boolean value.  The caller should set
-/// the VV_KEY and VV_VAL vim variables before calling this function.
-static varnumber_T indexof_eval_expr(typval_T *expr)
-{
-  typval_T argv[3];
-  argv[0] = *get_vim_var_tv(VV_KEY);
-  argv[1] = *get_vim_var_tv(VV_VAL);
-  typval_T newtv;
-  newtv.v_type = VAR_UNKNOWN;
-
-  if (eval_expr_typval(expr, false, argv, 2, &newtv) == FAIL) {
-    return false;
-  }
-
-  bool error = false;
-  varnumber_T found = tv_get_bool_chk(&newtv, &error);
-  tv_clear(&newtv);
-
-  return error ? false : found;
-}
-
-/// Evaluate "expr" for each byte in the Blob "b" starting with the byte at
-/// "startidx" and return the index of the byte where "expr" is TRUE.  Returns
-/// -1 if "expr" doesn't evaluate to TRUE for any of the bytes.
-static varnumber_T indexof_blob(blob_T *b, varnumber_T startidx, typval_T *expr)
-{
-  if (b == NULL) {
-    return -1;
-  }
-
-  if (startidx < 0) {
-    // negative index: index from the last byte
-    startidx = tv_blob_len(b) + startidx;
-    if (startidx < 0) {
-      startidx = 0;
-    }
-  }
-
-  set_vim_var_type(VV_KEY, VAR_NUMBER);
-  set_vim_var_type(VV_VAL, VAR_NUMBER);
-
-  const int called_emsg_start = called_emsg;
-  for (varnumber_T idx = startidx; idx < tv_blob_len(b); idx++) {
-    set_vim_var_nr(VV_KEY, idx);
-    set_vim_var_nr(VV_VAL, tv_blob_get(b, (int)idx));
-
-    if (indexof_eval_expr(expr)) {
-      return idx;
-    }
-
-    if (called_emsg != called_emsg_start) {
-      return -1;
-    }
-  }
-
-  return -1;
-}
-
-/// Evaluate "expr" for each item in the List "l" starting with the item at
-/// "startidx" and return the index of the item where "expr" is TRUE.  Returns
-/// -1 if "expr" doesn't evaluate to TRUE for any of the items.
-static varnumber_T indexof_list(list_T *l, varnumber_T startidx, typval_T *expr)
-{
-  if (l == NULL) {
-    return -1;
-  }
-
-  listitem_T *item;
-  varnumber_T idx = 0;
-  if (startidx == 0) {
-    item = tv_list_first(l);
-  } else {
-    // Start at specified item.
-    idx = tv_list_uidx(l, (int)startidx);
-    if (idx == -1) {
-      item = NULL;
-    } else {
-      item = tv_list_find(l, (int)idx);
-      assert(item != NULL);
-    }
-  }
-
-  set_vim_var_type(VV_KEY, VAR_NUMBER);
-
-  const int called_emsg_start = called_emsg;
-  for (; item != NULL; item = TV_LIST_ITEM_NEXT(l, item), idx++) {
-    set_vim_var_nr(VV_KEY, idx);
-    tv_copy(TV_LIST_ITEM_TV(item), get_vim_var_tv(VV_VAL));
-
-    bool found = indexof_eval_expr(expr);
-    tv_clear(get_vim_var_tv(VV_VAL));
-
-    if (found) {
-      return idx;
-    }
-
-    if (called_emsg != called_emsg_start) {
-      return -1;
-    }
-  }
-
-  return -1;
-}
-
-/// "indexof()" function
-static void f_indexof(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-
-  if (tv_check_for_list_or_blob_arg(argvars, 0) == FAIL
-      || tv_check_for_string_or_func_arg(argvars, 1) == FAIL
-      || tv_check_for_opt_dict_arg(argvars, 2) == FAIL) {
-    return;
-  }
-
-  if ((argvars[1].v_type == VAR_STRING
-       && (argvars[1].vval.v_string == NULL || *argvars[1].vval.v_string == NUL))
-      || (argvars[1].v_type == VAR_FUNC && argvars[1].vval.v_partial == NULL)) {
-    return;
-  }
-
-  varnumber_T startidx = 0;
-  if (argvars[2].v_type == VAR_DICT) {
-    startidx = tv_dict_get_number_def(argvars[2].vval.v_dict, "startidx", 0);
-  }
-
-  typval_T save_val;
-  typval_T save_key;
-  prepare_vimvar(VV_VAL, &save_val);
-  prepare_vimvar(VV_KEY, &save_key);
-
-  // We reset "did_emsg" to be able to detect whether an error occurred
-  // during evaluation of the expression.
-  const int save_did_emsg = did_emsg;
-  did_emsg = false;
-
-  if (argvars[0].v_type == VAR_BLOB) {
-    rettv->vval.v_number = indexof_blob(argvars[0].vval.v_blob, startidx, &argvars[1]);
-  } else {
-    rettv->vval.v_number = indexof_list(argvars[0].vval.v_list, startidx, &argvars[1]);
-  }
-
-  restore_vimvar(VV_KEY, &save_key);
-  restore_vimvar(VV_VAL, &save_val);
-  did_emsg |= save_did_emsg;
-}
+// f_index, indexof_eval_expr, indexof_blob, indexof_list, f_indexof: migrated to Rust (misc.rs)
 
 static bool inputsecret_flag = false;
 
@@ -4309,40 +4096,7 @@ static void f_srand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// "perleval()" function
 /// "range()" function
-static void f_range(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  varnumber_T end;
-  varnumber_T stride = 1;
-  bool error = false;
-
-  varnumber_T start = tv_get_number_chk(&argvars[0], &error);
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    end = start - 1;
-    start = 0;
-  } else {
-    end = tv_get_number_chk(&argvars[1], &error);
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      stride = tv_get_number_chk(&argvars[2], &error);
-    }
-  }
-
-  if (error) {
-    return;  // Type error; errmsg already given.
-  }
-  if (stride == 0) {
-    emsg(_("E726: Stride is zero"));
-    return;
-  }
-  if (stride > 0 ? end + 1 < start : end - 1 > start) {
-    emsg(_("E727: Start past end"));
-    return;
-  }
-
-  tv_list_alloc_ret(rettv, (end - start) / stride);
-  for (varnumber_T i = start; stride > 0 ? i <= end : i >= end; i += stride) {
-    tv_list_append_number(rettv->vval.v_list, i);
-  }
-}
+// f_range: migrated to Rust (misc.rs)
 
 /// "getreginfo()" function
 // f_getreginfo: migrated to Rust (misc.rs)
@@ -4438,248 +4192,9 @@ static void f_reltimestr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "repeat()" function
-static void f_repeat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  varnumber_T n = tv_get_number(&argvars[1]);
-  if (argvars[0].v_type == VAR_LIST) {
-    tv_list_alloc_ret(rettv, (n > 0) * n * tv_list_len(argvars[0].vval.v_list));
-    while (n-- > 0) {
-      tv_list_extend(rettv->vval.v_list, argvars[0].vval.v_list, NULL);
-    }
-  } else if (argvars[0].v_type == VAR_BLOB) {
-    tv_blob_alloc_ret(rettv);
-    if (argvars[0].vval.v_blob == NULL || n <= 0) {
-      return;
-    }
+// f_repeat: migrated to Rust (misc.rs)
 
-    const int slen = argvars[0].vval.v_blob->bv_ga.ga_len;
-    const int len = (int)(slen * n);
-    if (len <= 0) {
-      return;
-    }
-
-    ga_grow(&rettv->vval.v_blob->bv_ga, len);
-
-    rettv->vval.v_blob->bv_ga.ga_len = len;
-
-    int i;
-    for (i = 0; i < slen; i++) {
-      if (tv_blob_get(argvars[0].vval.v_blob, i) != 0) {
-        break;
-      }
-    }
-
-    if (i == slen) {
-      // No need to copy since all bytes are already zero
-      return;
-    }
-
-    for (i = 0; i < n; i++) {
-      tv_blob_set_range(rettv->vval.v_blob, i * slen, (i + 1) * slen - 1, argvars);
-    }
-  } else {
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = NULL;
-    if (n <= 0) {
-      return;
-    }
-
-    const char *const p = tv_get_string(&argvars[0]);
-
-    const size_t slen = strlen(p);
-    if (slen == 0) {
-      return;
-    }
-    const size_t len = slen * (size_t)n;
-    // Detect overflow.
-    if (len / (size_t)n != slen) {
-      return;
-    }
-
-    char *const r = xmallocz(len);
-    for (varnumber_T i = 0; i < n; i++) {
-      memmove(r + (size_t)i * slen, p, slen);
-    }
-
-    rettv->vval.v_string = r;
-  }
-}
-
-/// Implementation of reduce() for list "argvars[0]", using the function "expr"
-/// starting with the optional initial value argvars[2] and return the result in
-/// "rettv".
-static void reduce_list(typval_T *argvars, typval_T *expr, typval_T *rettv)
-{
-  list_T *const l = argvars[0].vval.v_list;
-  const int called_emsg_start = called_emsg;
-
-  typval_T initial;
-  const listitem_T *li = NULL;
-  if (argvars[2].v_type == VAR_UNKNOWN) {
-    if (tv_list_len(l) == 0) {
-      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "List");
-      return;
-    }
-    const listitem_T *const first = tv_list_first(l);
-    initial = *TV_LIST_ITEM_TV(first);
-    li = TV_LIST_ITEM_NEXT(l, first);
-  } else {
-    initial = argvars[2];
-    li = tv_list_first(l);
-  }
-
-  tv_copy(&initial, rettv);
-
-  if (l == NULL) {
-    return;
-  }
-
-  const VarLockStatus prev_locked = tv_list_locked(l);
-
-  tv_list_set_lock(l, VAR_FIXED);  // disallow the list changing here
-  for (; li != NULL; li = TV_LIST_ITEM_NEXT(l, li)) {
-    typval_T argv[3];
-    argv[0] = *rettv;
-    argv[1] = *TV_LIST_ITEM_TV(li);
-    rettv->v_type = VAR_UNKNOWN;
-
-    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
-
-    tv_clear(&argv[0]);
-    if (r == FAIL || called_emsg != called_emsg_start) {
-      break;
-    }
-  }
-  tv_list_set_lock(l, prev_locked);
-}
-
-/// Implementation of reduce() for String "argvars[0]" using the function "expr"
-/// starting with the optional initial value "argvars[2]" and return the result
-/// in "rettv".
-static void reduce_string(typval_T *argvars, typval_T *expr, typval_T *rettv)
-{
-  const char *p = tv_get_string(&argvars[0]);
-  int len;
-  const int called_emsg_start = called_emsg;
-
-  if (argvars[2].v_type == VAR_UNKNOWN) {
-    if (*p == NUL) {
-      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "String");
-      return;
-    }
-    len = utfc_ptr2len(p);
-    *rettv = (typval_T){
-      .v_type = VAR_STRING,
-      .v_lock = VAR_UNLOCKED,
-      .vval.v_string = xmemdupz(p, (size_t)len),
-    };
-    p += len;
-  } else if (tv_check_for_string_arg(argvars, 2) == FAIL) {
-    return;
-  } else {
-    tv_copy(&argvars[2], rettv);
-  }
-
-  for (; *p != NUL; p += len) {
-    typval_T argv[3];
-    argv[0] = *rettv;
-    len = utfc_ptr2len(p);
-    argv[1] = (typval_T){
-      .v_type = VAR_STRING,
-      .v_lock = VAR_UNLOCKED,
-      .vval.v_string = xmemdupz(p, (size_t)len),
-    };
-
-    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
-
-    tv_clear(&argv[0]);
-    tv_clear(&argv[1]);
-    if (r == FAIL || called_emsg != called_emsg_start) {
-      break;
-    }
-  }
-}
-
-/// Implementation of reduce() for Blob "argvars[0]" using the function "expr"
-/// starting with the optional initial value "argvars[2]" and return the result
-/// in "rettv".
-static void reduce_blob(typval_T *argvars, typval_T *expr, typval_T *rettv)
-{
-  const blob_T *const b = argvars[0].vval.v_blob;
-  const int called_emsg_start = called_emsg;
-
-  typval_T initial;
-  int i;
-  if (argvars[2].v_type == VAR_UNKNOWN) {
-    if (tv_blob_len(b) == 0) {
-      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "Blob");
-      return;
-    }
-    initial = (typval_T){
-      .v_type = VAR_NUMBER,
-      .v_lock = VAR_UNLOCKED,
-      .vval.v_number = tv_blob_get(b, 0),
-    };
-    i = 1;
-  } else if (tv_check_for_number_arg(argvars, 2) == FAIL) {
-    return;
-  } else {
-    initial = argvars[2];
-    i = 0;
-  }
-
-  tv_copy(&initial, rettv);
-  for (; i < tv_blob_len(b); i++) {
-    typval_T argv[3];
-    argv[0] = *rettv;
-    argv[1] = (typval_T){
-      .v_type = VAR_NUMBER,
-      .v_lock = VAR_UNLOCKED,
-      .vval.v_number = tv_blob_get(b, i),
-    };
-
-    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
-
-    if (r == FAIL || called_emsg != called_emsg_start) {
-      return;
-    }
-  }
-}
-
-/// "reduce(list, { accumulator, element -> value } [, initial])" function
-/// "reduce(blob, { accumulator, element -> value } [, initial])" function
-/// "reduce(string, { accumulator, element -> value } [, initial])" function
-static void f_reduce(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_STRING
-      && argvars[0].v_type != VAR_LIST
-      && argvars[0].v_type != VAR_BLOB) {
-    emsg(_(e_string_list_or_blob_required));
-    return;
-  }
-
-  const char *func_name;
-  if (argvars[1].v_type == VAR_FUNC) {
-    func_name = argvars[1].vval.v_string;
-  } else if (argvars[1].v_type == VAR_PARTIAL) {
-    func_name = rs_partial_name(argvars[1].vval.v_partial);
-  } else {
-    func_name = tv_get_string(&argvars[1]);
-  }
-  if (func_name == NULL || *func_name == NUL) {
-    emsg(_(e_missing_function_argument));
-    return;
-  }
-
-  if (argvars[0].v_type == VAR_LIST) {
-    reduce_list(argvars, &argvars[1], rettv);
-  } else if (argvars[0].v_type == VAR_STRING) {
-    reduce_string(argvars, &argvars[1], rettv);
-  } else {
-    reduce_blob(argvars, &argvars[1], rettv);
-  }
-}
+// reduce_list, reduce_string, reduce_blob, f_reduce: migrated to Rust (misc.rs)
 
 #define SP_NOMOVE       0x01        ///< don't move cursor
 #define SP_REPEAT       0x02        ///< repeat to find outer pair
@@ -7582,6 +7097,483 @@ void nvim_eval_synstack(typval_T *argvars, typval_T *rettv)
     while ((id = syn_get_stack_item(i++)) >= 0) {
       tv_list_append_number(rettv->vval.v_list, id);
     }
+  }
+}
+
+// =============================================================================
+// Phase 9 C accessor functions (called by Rust misc.rs wrappers)
+// =============================================================================
+
+void nvim_eval_index(typval_T *argvars, typval_T *rettv)
+{
+  int idx = 0;
+  bool ic = false;
+
+  rettv->vval.v_number = -1;
+  if (argvars[0].v_type == VAR_BLOB) {
+    bool error = false;
+    int start = 0;
+
+    if (argvars[2].v_type != VAR_UNKNOWN) {
+      start = (int)tv_get_number_chk(&argvars[2], &error);
+      if (error) {
+        return;
+      }
+    }
+    blob_T *const b = argvars[0].vval.v_blob;
+    if (b == NULL) {
+      return;
+    }
+    if (start < 0) {
+      start = tv_blob_len(b) + start;
+      if (start < 0) {
+        start = 0;
+      }
+    }
+    for (idx = start; idx < tv_blob_len(b); idx++) {
+      typval_T tv;
+      tv.v_type = VAR_NUMBER;
+      tv.vval.v_number = tv_blob_get(b, idx);
+      if (tv_equal(&tv, &argvars[1], ic)) {
+        rettv->vval.v_number = idx;
+        return;
+      }
+    }
+    return;
+  } else if (argvars[0].v_type != VAR_LIST) {
+    emsg(_(e_listblobreq));
+    return;
+  }
+
+  list_T *const l = argvars[0].vval.v_list;
+  if (l == NULL) {
+    return;
+  }
+
+  listitem_T *item = tv_list_first(l);
+  if (argvars[2].v_type != VAR_UNKNOWN) {
+    bool error = false;
+
+    // Start at specified item.
+    idx = tv_list_uidx(l, (int)tv_get_number_chk(&argvars[2], &error));
+    if (error || idx == -1) {
+      item = NULL;
+    } else {
+      item = tv_list_find(l, idx);
+      assert(item != NULL);
+    }
+    if (argvars[3].v_type != VAR_UNKNOWN) {
+      ic = !!tv_get_number_chk(&argvars[3], &error);
+      if (error) {
+        item = NULL;
+      }
+    }
+  }
+
+  for (; item != NULL; item = TV_LIST_ITEM_NEXT(l, item), idx++) {
+    if (tv_equal(TV_LIST_ITEM_TV(item), &argvars[1], ic)) {
+      rettv->vval.v_number = idx;
+      break;
+    }
+  }
+}
+
+static varnumber_T nvim_eval_indexof_eval_expr(typval_T *expr)
+{
+  typval_T argv[3];
+  argv[0] = *get_vim_var_tv(VV_KEY);
+  argv[1] = *get_vim_var_tv(VV_VAL);
+  typval_T newtv;
+  newtv.v_type = VAR_UNKNOWN;
+
+  if (eval_expr_typval(expr, false, argv, 2, &newtv) == FAIL) {
+    return false;
+  }
+
+  bool error = false;
+  varnumber_T found = tv_get_bool_chk(&newtv, &error);
+  tv_clear(&newtv);
+
+  return error ? false : found;
+}
+
+static varnumber_T nvim_eval_indexof_blob(blob_T *b, varnumber_T startidx, typval_T *expr)
+{
+  if (b == NULL) {
+    return -1;
+  }
+
+  if (startidx < 0) {
+    startidx = tv_blob_len(b) + startidx;
+    if (startidx < 0) {
+      startidx = 0;
+    }
+  }
+
+  set_vim_var_type(VV_KEY, VAR_NUMBER);
+  set_vim_var_type(VV_VAL, VAR_NUMBER);
+
+  const int called_emsg_start = called_emsg;
+  for (varnumber_T idx = startidx; idx < tv_blob_len(b); idx++) {
+    set_vim_var_nr(VV_KEY, idx);
+    set_vim_var_nr(VV_VAL, tv_blob_get(b, (int)idx));
+
+    if (nvim_eval_indexof_eval_expr(expr)) {
+      return idx;
+    }
+
+    if (called_emsg != called_emsg_start) {
+      return -1;
+    }
+  }
+
+  return -1;
+}
+
+static varnumber_T nvim_eval_indexof_list(list_T *l, varnumber_T startidx, typval_T *expr)
+{
+  if (l == NULL) {
+    return -1;
+  }
+
+  listitem_T *item;
+  varnumber_T idx = 0;
+  if (startidx == 0) {
+    item = tv_list_first(l);
+  } else {
+    idx = tv_list_uidx(l, (int)startidx);
+    if (idx == -1) {
+      item = NULL;
+    } else {
+      item = tv_list_find(l, (int)idx);
+      assert(item != NULL);
+    }
+  }
+
+  set_vim_var_type(VV_KEY, VAR_NUMBER);
+
+  const int called_emsg_start = called_emsg;
+  for (; item != NULL; item = TV_LIST_ITEM_NEXT(l, item), idx++) {
+    set_vim_var_nr(VV_KEY, idx);
+    tv_copy(TV_LIST_ITEM_TV(item), get_vim_var_tv(VV_VAL));
+
+    bool found = nvim_eval_indexof_eval_expr(expr);
+    tv_clear(get_vim_var_tv(VV_VAL));
+
+    if (found) {
+      return idx;
+    }
+
+    if (called_emsg != called_emsg_start) {
+      return -1;
+    }
+  }
+
+  return -1;
+}
+
+void nvim_eval_indexof(typval_T *argvars, typval_T *rettv)
+{
+  rettv->vval.v_number = -1;
+
+  if (tv_check_for_list_or_blob_arg(argvars, 0) == FAIL
+      || tv_check_for_string_or_func_arg(argvars, 1) == FAIL
+      || tv_check_for_opt_dict_arg(argvars, 2) == FAIL) {
+    return;
+  }
+
+  if ((argvars[1].v_type == VAR_STRING
+       && (argvars[1].vval.v_string == NULL || *argvars[1].vval.v_string == NUL))
+      || (argvars[1].v_type == VAR_FUNC && argvars[1].vval.v_partial == NULL)) {
+    return;
+  }
+
+  varnumber_T startidx = 0;
+  if (argvars[2].v_type == VAR_DICT) {
+    startidx = tv_dict_get_number_def(argvars[2].vval.v_dict, "startidx", 0);
+  }
+
+  typval_T save_val;
+  typval_T save_key;
+  prepare_vimvar(VV_VAL, &save_val);
+  prepare_vimvar(VV_KEY, &save_key);
+
+  const int save_did_emsg = did_emsg;
+  did_emsg = false;
+
+  if (argvars[0].v_type == VAR_BLOB) {
+    rettv->vval.v_number = nvim_eval_indexof_blob(argvars[0].vval.v_blob, startidx, &argvars[1]);
+  } else {
+    rettv->vval.v_number = nvim_eval_indexof_list(argvars[0].vval.v_list, startidx, &argvars[1]);
+  }
+
+  restore_vimvar(VV_KEY, &save_key);
+  restore_vimvar(VV_VAL, &save_val);
+  did_emsg |= save_did_emsg;
+}
+
+void nvim_eval_range(typval_T *argvars, typval_T *rettv)
+{
+  varnumber_T end;
+  varnumber_T stride = 1;
+  bool error = false;
+
+  varnumber_T start = tv_get_number_chk(&argvars[0], &error);
+  if (argvars[1].v_type == VAR_UNKNOWN) {
+    end = start - 1;
+    start = 0;
+  } else {
+    end = tv_get_number_chk(&argvars[1], &error);
+    if (argvars[2].v_type != VAR_UNKNOWN) {
+      stride = tv_get_number_chk(&argvars[2], &error);
+    }
+  }
+
+  if (error) {
+    return;  // Type error; errmsg already given.
+  }
+  if (stride == 0) {
+    emsg(_("E726: Stride is zero"));
+    return;
+  }
+  if (stride > 0 ? end + 1 < start : end - 1 > start) {
+    emsg(_("E727: Start past end"));
+    return;
+  }
+
+  tv_list_alloc_ret(rettv, (end - start) / stride);
+  for (varnumber_T i = start; stride > 0 ? i <= end : i >= end; i += stride) {
+    tv_list_append_number(rettv->vval.v_list, i);
+  }
+}
+
+void nvim_eval_repeat(typval_T *argvars, typval_T *rettv)
+{
+  varnumber_T n = tv_get_number(&argvars[1]);
+  if (argvars[0].v_type == VAR_LIST) {
+    tv_list_alloc_ret(rettv, (n > 0) * n * tv_list_len(argvars[0].vval.v_list));
+    while (n-- > 0) {
+      tv_list_extend(rettv->vval.v_list, argvars[0].vval.v_list, NULL);
+    }
+  } else if (argvars[0].v_type == VAR_BLOB) {
+    tv_blob_alloc_ret(rettv);
+    if (argvars[0].vval.v_blob == NULL || n <= 0) {
+      return;
+    }
+
+    const int slen = argvars[0].vval.v_blob->bv_ga.ga_len;
+    const int len = (int)(slen * n);
+    if (len <= 0) {
+      return;
+    }
+
+    ga_grow(&rettv->vval.v_blob->bv_ga, len);
+
+    rettv->vval.v_blob->bv_ga.ga_len = len;
+
+    int i;
+    for (i = 0; i < slen; i++) {
+      if (tv_blob_get(argvars[0].vval.v_blob, i) != 0) {
+        break;
+      }
+    }
+
+    if (i == slen) {
+      // No need to copy since all bytes are already zero
+      return;
+    }
+
+    for (i = 0; i < n; i++) {
+      tv_blob_set_range(rettv->vval.v_blob, i * slen, (i + 1) * slen - 1, argvars);
+    }
+  } else {
+    rettv->v_type = VAR_STRING;
+    rettv->vval.v_string = NULL;
+    if (n <= 0) {
+      return;
+    }
+
+    const char *const p = tv_get_string(&argvars[0]);
+
+    const size_t slen = strlen(p);
+    if (slen == 0) {
+      return;
+    }
+    const size_t len = slen * (size_t)n;
+    // Detect overflow.
+    if (len / (size_t)n != slen) {
+      return;
+    }
+
+    char *const r = xmallocz(len);
+    for (varnumber_T i = 0; i < n; i++) {
+      memmove(r + (size_t)i * slen, p, slen);
+    }
+
+    rettv->vval.v_string = r;
+  }
+}
+
+static void nvim_eval_reduce_list(typval_T *argvars, typval_T *expr, typval_T *rettv)
+{
+  list_T *const l = argvars[0].vval.v_list;
+  const int called_emsg_start = called_emsg;
+
+  typval_T initial;
+  const listitem_T *li = NULL;
+  if (argvars[2].v_type == VAR_UNKNOWN) {
+    if (tv_list_len(l) == 0) {
+      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "List");
+      return;
+    }
+    const listitem_T *const first = tv_list_first(l);
+    initial = *TV_LIST_ITEM_TV(first);
+    li = TV_LIST_ITEM_NEXT(l, first);
+  } else {
+    initial = argvars[2];
+    li = tv_list_first(l);
+  }
+
+  tv_copy(&initial, rettv);
+
+  if (l == NULL) {
+    return;
+  }
+
+  const VarLockStatus prev_locked = tv_list_locked(l);
+
+  tv_list_set_lock(l, VAR_FIXED);  // disallow the list changing here
+  for (; li != NULL; li = TV_LIST_ITEM_NEXT(l, li)) {
+    typval_T argv[3];
+    argv[0] = *rettv;
+    argv[1] = *TV_LIST_ITEM_TV(li);
+    rettv->v_type = VAR_UNKNOWN;
+
+    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
+
+    tv_clear(&argv[0]);
+    if (r == FAIL || called_emsg != called_emsg_start) {
+      break;
+    }
+  }
+  tv_list_set_lock(l, prev_locked);
+}
+
+static void nvim_eval_reduce_string(typval_T *argvars, typval_T *expr, typval_T *rettv)
+{
+  const char *p = tv_get_string(&argvars[0]);
+  int len;
+  const int called_emsg_start = called_emsg;
+
+  if (argvars[2].v_type == VAR_UNKNOWN) {
+    if (*p == NUL) {
+      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "String");
+      return;
+    }
+    len = utfc_ptr2len(p);
+    *rettv = (typval_T){
+      .v_type = VAR_STRING,
+      .v_lock = VAR_UNLOCKED,
+      .vval.v_string = xmemdupz(p, (size_t)len),
+    };
+    p += len;
+  } else if (tv_check_for_string_arg(argvars, 2) == FAIL) {
+    return;
+  } else {
+    tv_copy(&argvars[2], rettv);
+  }
+
+  for (; *p != NUL; p += len) {
+    typval_T argv[3];
+    argv[0] = *rettv;
+    len = utfc_ptr2len(p);
+    argv[1] = (typval_T){
+      .v_type = VAR_STRING,
+      .v_lock = VAR_UNLOCKED,
+      .vval.v_string = xmemdupz(p, (size_t)len),
+    };
+
+    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
+
+    tv_clear(&argv[0]);
+    tv_clear(&argv[1]);
+    if (r == FAIL || called_emsg != called_emsg_start) {
+      break;
+    }
+  }
+}
+
+static void nvim_eval_reduce_blob(typval_T *argvars, typval_T *expr, typval_T *rettv)
+{
+  const blob_T *const b = argvars[0].vval.v_blob;
+  const int called_emsg_start = called_emsg;
+
+  typval_T initial;
+  int i;
+  if (argvars[2].v_type == VAR_UNKNOWN) {
+    if (tv_blob_len(b) == 0) {
+      semsg(_(e_reduce_of_an_empty_str_with_no_initial_value), "Blob");
+      return;
+    }
+    initial = (typval_T){
+      .v_type = VAR_NUMBER,
+      .v_lock = VAR_UNLOCKED,
+      .vval.v_number = tv_blob_get(b, 0),
+    };
+    i = 1;
+  } else if (tv_check_for_number_arg(argvars, 2) == FAIL) {
+    return;
+  } else {
+    initial = argvars[2];
+    i = 0;
+  }
+
+  tv_copy(&initial, rettv);
+  for (; i < tv_blob_len(b); i++) {
+    typval_T argv[3];
+    argv[0] = *rettv;
+    argv[1] = (typval_T){
+      .v_type = VAR_NUMBER,
+      .v_lock = VAR_UNLOCKED,
+      .vval.v_number = tv_blob_get(b, i),
+    };
+
+    const int r = eval_expr_typval(expr, true, argv, 2, rettv);
+
+    if (r == FAIL || called_emsg != called_emsg_start) {
+      return;
+    }
+  }
+}
+
+void nvim_eval_reduce(typval_T *argvars, typval_T *rettv)
+{
+  if (argvars[0].v_type != VAR_STRING
+      && argvars[0].v_type != VAR_LIST
+      && argvars[0].v_type != VAR_BLOB) {
+    emsg(_(e_string_list_or_blob_required));
+    return;
+  }
+
+  const char *func_name;
+  if (argvars[1].v_type == VAR_FUNC) {
+    func_name = argvars[1].vval.v_string;
+  } else if (argvars[1].v_type == VAR_PARTIAL) {
+    func_name = rs_partial_name(argvars[1].vval.v_partial);
+  } else {
+    func_name = tv_get_string(&argvars[1]);
+  }
+  if (func_name == NULL || *func_name == NUL) {
+    emsg(_(e_missing_function_argument));
+    return;
+  }
+
+  if (argvars[0].v_type == VAR_LIST) {
+    nvim_eval_reduce_list(argvars, &argvars[1], rettv);
+  } else if (argvars[0].v_type == VAR_STRING) {
+    nvim_eval_reduce_string(argvars, &argvars[1], rettv);
+  } else {
+    nvim_eval_reduce_blob(argvars, &argvars[1], rettv);
   }
 }
 

@@ -1241,3 +1241,84 @@ pub unsafe extern "C" fn rs_f_synstack(
 ) {
     nvim_eval_synstack(argvars, rettv);
 }
+
+// =============================================================================
+// Phase 9 C accessor declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_index(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_indexof(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_range(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_repeat(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_reduce(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Phase 9: Data structure functions
+// =============================================================================
+
+/// "index()" function - find item in list/blob
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_index"]
+pub unsafe extern "C" fn rs_f_index(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_index(argvars, rettv);
+}
+
+/// "indexof()" function - find item in list/blob matching expr
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_indexof"]
+pub unsafe extern "C" fn rs_f_indexof(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_indexof(argvars, rettv);
+}
+
+/// "range()" function - create a list of numbers
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_range"]
+pub unsafe extern "C" fn rs_f_range(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_range(argvars, rettv);
+}
+
+/// "repeat()" function - repeat a string/list/blob
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_repeat"]
+pub unsafe extern "C" fn rs_f_repeat(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_repeat(argvars, rettv);
+}
+
+/// "reduce()" function - reduce a list/blob/string with a function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_reduce"]
+pub unsafe extern "C" fn rs_f_reduce(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_reduce(argvars, rettv);
+}
