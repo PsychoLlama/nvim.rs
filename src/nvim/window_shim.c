@@ -2772,6 +2772,175 @@ size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen
   return transstr_buf(s, slen, buf, buflen, true);
 }
 
+// ============================================================================
+// Phase 3: FFI infrastructure for win_line migration
+// Global variable accessors
+// ============================================================================
+
+// nvim_get_VIsual_lnum, _col, _coladd already defined in plines.c.
+// nvim_get_VIsual_mode already defined in normal_shim.c.
+// nvim_get_highlight_match already defined in change_ffi.c.
+// nvim_get_search_match_lines, nvim_get_search_match_endcol already defined in search.c.
+// nvim_get_dollar_vcol already defined in edit.c.
+// nvim_get_cmdwin_type already defined in ex_getln.c.
+// nvim_get_did_emsg, nvim_set_did_emsg already defined in message.c.
+
+/// 'selection' option
+const char *nvim_get_p_sel(void) { return p_sel; }
+
+/// spell_redraw_lnum
+linenr_T nvim_get_spell_redraw_lnum(void) { return spell_redraw_lnum; }
+void nvim_set_spell_redraw_lnum(linenr_T val) { spell_redraw_lnum = val; }
+
+/// highlight_attr[] indexed access (renamed to avoid clash with highlight.c nvim_get_highlight_attr)
+int nvim_get_highlight_attr_idx(int idx) { return highlight_attr[idx]; }
+
+/// dy_flags (display options)
+int nvim_get_dy_flags(void) { return dy_flags; }
+// nvim_get_p_cpo already defined at line 314; nvim_get_curwin at line 211.
+
+/// curwin->w_cursor accessors
+linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
+colnr_T nvim_curwin_cursor_col(void) { return curwin->w_cursor.col; }
+colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
+
+// ============================================================================
+// Phase 3: window field accessors for win_line
+// ============================================================================
+
+// nvim_win_get_p_lbr already defined in plines.c.
+
+/// b_syn_error / b_syn_slow (via w_s)
+int nvim_win_get_syn_error(win_T *wp) { return wp->w_s->b_syn_error ? 1 : 0; }
+void nvim_win_set_syn_error(win_T *wp, int val) { wp->w_s->b_syn_error = (bool)val; }
+int nvim_win_get_syn_slow(win_T *wp) { return wp->w_s->b_syn_slow ? 1 : 0; }
+
+/// syntax_present wrapper
+int nvim_win_syntax_present(win_T *wp) { return syntax_present(wp) ? 1 : 0; }
+
+/// w_p_fdt (foldtext option, check if set)
+int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
+
+/// w_p_lcs_chars field accessors
+schar_T nvim_win_lcs_space(win_T *wp) { return wp->w_p_lcs_chars.space; }
+schar_T nvim_win_lcs_trail(win_T *wp) { return wp->w_p_lcs_chars.trail; }
+schar_T nvim_win_lcs_lead(win_T *wp) { return wp->w_p_lcs_chars.lead; }
+schar_T nvim_win_lcs_nbsp(win_T *wp) { return wp->w_p_lcs_chars.nbsp; }
+schar_T nvim_win_lcs_eol(win_T *wp) { return wp->w_p_lcs_chars.eol; }
+schar_T nvim_win_lcs_tab1(win_T *wp) { return wp->w_p_lcs_chars.tab1; }
+schar_T nvim_win_lcs_tab2(win_T *wp) { return wp->w_p_lcs_chars.tab2; }
+schar_T nvim_win_lcs_tab3(win_T *wp) { return wp->w_p_lcs_chars.tab3; }
+schar_T nvim_win_lcs_conceal(win_T *wp) { return wp->w_p_lcs_chars.conceal; }
+const schar_T *nvim_win_lcs_multispace(win_T *wp) { return wp->w_p_lcs_chars.multispace; }
+const schar_T *nvim_win_lcs_leadmultispace(win_T *wp) { return wp->w_p_lcs_chars.leadmultispace; }
+int nvim_win_lcs_has_multispace(win_T *wp) { return wp->w_p_lcs_chars.multispace != NULL ? 1 : 0; }
+int nvim_win_lcs_has_leadmultispace(win_T *wp) { return wp->w_p_lcs_chars.leadmultispace != NULL ? 1 : 0; }
+
+/// w_p_fcs_chars (fillchars) - fold character
+schar_T nvim_win_fcs_fold(win_T *wp) { return wp->w_p_fcs_chars.fold; }
+
+/// w_p_cc_cols (colorcolumn array, NULL if not set)
+int *nvim_win_get_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
+
+/// w_old_cursor_fcol / w_old_cursor_lcol (block visual mode columns)
+colnr_T nvim_win_get_old_cursor_fcol(win_T *wp) { return wp->w_old_cursor_fcol; }
+colnr_T nvim_win_get_old_cursor_lcol(win_T *wp) { return wp->w_old_cursor_lcol; }
+
+// nvim_win_get_topline, nvim_win_get_topfill already defined above.
+// nvim_win_get_leftcol already defined above.
+
+/// w_virtcol
+colnr_T nvim_win_get_virtcol_val(win_T *wp) { return wp->w_virtcol; }
+
+/// w_cursor compound setter (temporarily move cursor, e.g. for spell checking)
+/// Renamed to avoid clash with Neovim API nvim_win_set_cursor(Window, Array, Error*).
+void nvim_win_set_cursor_pos(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  wp->w_cursor.lnum = lnum;
+  wp->w_cursor.col = col;
+  wp->w_cursor.coladd = coladd;
+}
+
+// nvim_win_get_botfill already defined above.
+
+/// w_p_cuc (cursorcolumn)
+int nvim_win_get_p_cuc_val(win_T *wp) { return wp->w_p_cuc ? 1 : 0; }
+
+// nvim_win_set_cline_row, nvim_win_set_cline_height, nvim_win_set_cline_folded,
+// nvim_win_get_cline_row, nvim_win_get_cline_height already defined above.
+
+/// w_valid set bits
+void nvim_win_set_valid_bits(win_T *wp, int bits) { wp->w_valid |= bits; }
+
+// nvim_win_get_wrow, nvim_win_set_wrow, nvim_win_get_wcol, nvim_win_set_wcol already defined above.
+// nvim_win_get_scwidth already defined above.
+
+/// w_p_wrap getter
+int nvim_win_get_wrap_val(win_T *wp) { return wp->w_p_wrap ? 1 : 0; }
+
+/// buffer terminal pointer (non-null if terminal buffer)
+int nvim_win_buf_is_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL ? 1 : 0; }
+
+/// buffer line count
+linenr_T nvim_win_buf_line_count_direct(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
+
+/// VirtLines helpers for win_line (Phase 3 infrastructure)
+/// VirtLines is kvec_t(struct virt_line { VirtText line; int flags; }) from decoration_defs.h
+int nvim_virt_lines_size(void *vl) { return (int)((VirtLines *)vl)->size; }
+int nvim_virt_lines_flags(void *vl, int idx) { return ((VirtLines *)vl)->items[idx].flags; }
+void *nvim_virt_lines_line(void *vl, int idx) { return &((VirtLines *)vl)->items[idx].line; }
+void nvim_virt_lines_destroy(void *vl) { kv_destroy(*(VirtLines *)vl); }
+
+/// ScreenGrid field accessors (for the wrap line offset update in win_line)
+int nvim_grid_get_cols(ScreenGrid *grid) { return grid->cols; }
+size_t *nvim_grid_get_line_offset(ScreenGrid *grid) { return grid->line_offset; }
+sattr_T *nvim_grid_get_attrs(ScreenGrid *grid) { return grid->attrs; }
+
+/// wp->w_grid (GridView) pointer accessor for win_line
+GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
+
+// nvim_ml_get already defined in change_ffi.c.
+
+/// ml_get_buf_len for a window's buffer
+colnr_T nvim_win_ml_get_buf_len2(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
+
+/// win_bg_attr wrapper
+int nvim_win_bg_attr(win_T *wp) { return win_bg_attr(wp); }
+
+/// bt_quickfix check
+int nvim_win_bt_quickfix(win_T *wp) { return bt_quickfix(wp->w_buffer) ? 1 : 0; }
+
+/// qf_current_entry wrapper
+linenr_T nvim_win_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
+
+/// buf_meta_total wrapper (kMTMetaInline = 2 -- from marktree_defs.h)
+int nvim_win_buf_meta_total_inline(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaInline) > 0 ? 1 : 0; }
+
+/// schar functions needed for win_line
+int nvim_schar_cells(schar_T sc) { return schar_cells(sc); }
+int nvim_schar_len(schar_T sc) { return schar_len(sc); }
+/// schar_get_adv wrapper: buf_out is advanced past the character, returns bytes consumed.
+size_t nvim_schar_get_adv(char **buf_out, schar_T sc) { return schar_get_adv(buf_out, sc); }
+int nvim_schar_get_first_codepoint(schar_T sc) { return (int)schar_get_first_codepoint(sc); }
+
+/// CharsizeArg init (opaque; we pass it around as void* from Rust)
+/// We need to call init_charsize_arg from Rust.
+/// Returns CSType as int (0 = kCharsizeRegular, 1 = kCharsizeFast).
+int nvim_init_charsize_arg_wrap(void *csarg, win_T *wp, linenr_T lnum, const char *line)
+{
+  return (int)init_charsize_arg((CharsizeArg *)csarg, wp, lnum, line);
+}
+/// win_charsize wrapper -- returns width and head packed as {width, head}
+void nvim_win_charsize_wrap(bool cstype, int vcol, const char *ptr, int32_t chr,
+                            void *csarg, int *out_width, int *out_head)
+{
+  CharSize cs = win_charsize(cstype, vcol, (char *)ptr, chr, (CharsizeArg *)csarg);
+  *out_width = cs.width;
+  *out_head = cs.head;
+}
+/// Size of CharsizeArg (for stack allocation in Rust)
+int nvim_charsize_arg_size(void) { return (int)sizeof(CharsizeArg); }
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
