@@ -1414,14 +1414,6 @@ void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
 // Phase 1 init function accessors: expose static helpers to Rust
-void nvim_call_set_string_default(int opt_idx, char *val, bool allocated)
-{
-  rs_set_string_default_opt((OptIndex)opt_idx, val, allocated);
-}
-void nvim_call_change_option_default(int opt_idx, OptVal value)
-{
-  rs_change_option_default((OptIndex)opt_idx, value);
-}
 char *nvim_call_enc_locale(void) { return enc_locale(); }
 void nvim_set_fenc_default(char *val) { fenc_default = val; }
 void nvim_set_p_title(int v) { p_title = v; }
@@ -2967,12 +2959,6 @@ char *nvim_call_stdpaths_user_state_subpath(const char *name) { return stdpaths_
 
 /// runtimepath_default(clean_arg) wrapper.
 char *nvim_call_runtimepath_default(int clean_arg) { return runtimepath_default(clean_arg != 0); }
-
-/// set_string_default(opt_idx, val, allocated) with integer opt_idx and bool allocated.
-void nvim_call_set_string_default_idx(int opt_idx, char *val, int allocated)
-{
-  rs_set_string_default_opt((OptIndex)opt_idx, val, allocated != 0);
-}
 
 /// set_init_expand_env() implementation called from Rust.
 /// Iterates over all options and expands environment variables for defaults.

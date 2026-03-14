@@ -437,8 +437,6 @@ use crate::OptValType;
 
 extern "C" {
     // Phase 1 accessors (added to option_shim.c)
-    fn nvim_call_set_string_default(opt_idx: c_int, val: *mut c_char, allocated: c_int);
-    fn nvim_call_change_option_default(opt_idx: c_int, value: OptVal);
     fn nvim_call_enc_locale() -> *mut c_char;
     fn nvim_set_fenc_default(val: *mut c_char);
     fn nvim_set_p_title(v: c_int);
@@ -513,10 +511,10 @@ pub unsafe extern "C" fn rs_set_init_default_shell() {
         j += 1;
         *cmd.add(j) = 0;
         // Ownership of cmd transferred to set_string_default (allocated=true)
-        nvim_call_set_string_default(K_OPT_SHELL, cmd, 1);
+        crate::defaults::rs_set_string_default_opt(K_OPT_SHELL, cmd, 1);
     } else {
         // No quoting needed; shell is not owned after call (allocated=false)
-        nvim_call_set_string_default(K_OPT_SHELL, shell, 0);
+        crate::defaults::rs_set_string_default_opt(K_OPT_SHELL, shell, 0);
     }
     xfree(shell);
 }
@@ -609,7 +607,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         let len = result.len();
         let buf = xmalloc(len);
         std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, len);
-        nvim_call_set_string_default(opt_idx, buf, 1);
+        crate::defaults::rs_set_string_default_opt(opt_idx, buf, 1);
     }
 }
 
@@ -633,7 +631,7 @@ pub unsafe extern "C" fn rs_set_init_default_cdpath() {
 
     // change_option_default takes ownership via CSTR_AS_OPTVAL semantics
     let val = cstr_as_optval(buf);
-    nvim_call_change_option_default(K_OPT_CDPATH, val);
+    crate::defaults::rs_change_option_default(K_OPT_CDPATH, val);
 }
 
 /// Initialize the encoding used for "default" in 'fileencodings'.
@@ -658,12 +656,12 @@ pub unsafe extern "C" fn rs_set_init_fenc_default() {
 pub unsafe extern "C" fn rs_set_title_defaults() {
     let title_flags = nvim_get_option_flags(K_OPT_TITLE);
     if (title_flags & K_OPT_FLAG_WAS_SET) == 0 {
-        nvim_call_change_option_default(K_OPT_TITLE, boolean_optval(false));
+        crate::defaults::rs_change_option_default(K_OPT_TITLE, boolean_optval(false));
         nvim_set_p_title(0);
     }
     let icon_flags = nvim_get_option_flags(K_OPT_ICON);
     if (icon_flags & K_OPT_FLAG_WAS_SET) == 0 {
-        nvim_call_change_option_default(K_OPT_ICON, boolean_optval(false));
+        crate::defaults::rs_change_option_default(K_OPT_ICON, boolean_optval(false));
         nvim_set_p_icon(0);
     }
 }
@@ -751,7 +749,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     if nvim_option_was_set_idx(K_OPT_WINDOW) == 0 {
         nvim_set_p_window(OptInt::from(nvim_option_get_rows()) - 1);
     }
-    nvim_call_change_option_default(
+    crate::defaults::rs_change_option_default(
         K_OPT_WINDOW,
         number_optval(OptInt::from(nvim_option_get_rows()) - 1),
     );
@@ -798,13 +796,13 @@ pub unsafe extern "C" fn rs_set_init_3() {
             let sp_str: &[u8] = if is_csh { b"|& tee" } else { b"2>&1| tee" };
             let sp = static_cstr_as_optval(sp_str.as_ptr(), sp_str.len());
             nvim_call_set_option_direct(K_OPT_SHELLPIPE, sp, 0);
-            nvim_call_change_option_default(K_OPT_SHELLPIPE, rs_optval_copy(sp));
+            crate::defaults::rs_change_option_default(K_OPT_SHELLPIPE, rs_optval_copy(sp));
         }
         if do_srr {
             let srr_str: &[u8] = if is_csh { b">&" } else { b">%s 2>&1" };
             let srr = static_cstr_as_optval(srr_str.as_ptr(), srr_str.len());
             nvim_call_set_option_direct(K_OPT_SHELLREDIR, srr, 0);
-            nvim_call_change_option_default(K_OPT_SHELLREDIR, rs_optval_copy(srr));
+            crate::defaults::rs_change_option_default(K_OPT_SHELLREDIR, rs_optval_copy(srr));
         }
     }
     xfree(p);
@@ -828,7 +826,6 @@ extern "C" {
     fn nvim_call_alloc_options_default();
     fn nvim_call_stdpaths_user_state_subpath(name: *const c_char) -> *mut c_char;
     fn nvim_call_runtimepath_default(clean_arg: c_int) -> *mut c_char;
-    fn nvim_call_set_string_default_idx(opt_idx: c_int, val: *mut c_char, allocated: c_int);
     fn nvim_set_options_default(opt_flags: c_int);
     fn nvim_curbuf_set_b_p_initialized();
     fn nvim_curbuf_set_b_p_ac_minus1();
@@ -880,24 +877,24 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // backupdir: prepend ".," to the state subpath
     let backupdir_raw = nvim_call_stdpaths_user_state_subpath(c"backup".as_ptr());
     let backupdir = prepend_dot_comma(backupdir_raw);
-    nvim_call_set_string_default_idx(K_OPT_BACKUPDIR, backupdir, 1);
+    crate::defaults::rs_set_string_default_opt(K_OPT_BACKUPDIR, backupdir, 1);
 
     let viewdir = nvim_call_stdpaths_user_state_subpath(c"view".as_ptr());
-    nvim_call_set_string_default_idx(K_OPT_VIEWDIR, viewdir, 1);
+    crate::defaults::rs_set_string_default_opt(K_OPT_VIEWDIR, viewdir, 1);
 
     let directory = nvim_call_stdpaths_user_state_subpath(c"swap".as_ptr());
-    nvim_call_set_string_default_idx(K_OPT_DIRECTORY, directory, 1);
+    crate::defaults::rs_set_string_default_opt(K_OPT_DIRECTORY, directory, 1);
 
     let undodir = nvim_call_stdpaths_user_state_subpath(c"undo".as_ptr());
-    nvim_call_set_string_default_idx(K_OPT_UNDODIR, undodir, 1);
+    crate::defaults::rs_set_string_default_opt(K_OPT_UNDODIR, undodir, 1);
 
     // Set default for &runtimepath. All necessary expansions are performed in
     // runtimepath_default().
     let rtp = nvim_call_runtimepath_default(clean_arg);
     if !rtp.is_null() {
-        nvim_call_set_string_default_idx(K_OPT_RUNTIMEPATH, rtp, 1);
+        crate::defaults::rs_set_string_default_opt(K_OPT_RUNTIMEPATH, rtp, 1);
         // Make a copy of rtp for packpath (allocated=false means a copy is made)
-        nvim_call_set_string_default_idx(K_OPT_PACKPATH, rtp, 0);
+        crate::defaults::rs_set_string_default_opt(K_OPT_PACKPATH, rtp, 0);
         // rtp ownership was taken by runtimepath default; packpath copied it
     }
 
