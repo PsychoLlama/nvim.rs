@@ -321,6 +321,19 @@ extern void f_screenchar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenchars(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_screenstring(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// Rust Phase 6 VimL function declarations (misc.rs - exported via #[export_name])
+extern void f_ctxget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_ctxpush(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_ctxset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_setcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getreg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getregtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_getreginfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_state(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_searchdecl(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_searchpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 // Rust Phase 5 VimL function declarations (simple.rs - exported via #[export_name])
 extern void f_api_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_byte2line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
@@ -907,105 +920,11 @@ static void f_confirm(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// "ctxget([{index}])" function
-static void f_ctxget(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  size_t index = 0;
-  if (argvars[0].v_type == VAR_NUMBER) {
-    index = (size_t)argvars[0].vval.v_number;
-  } else if (argvars[0].v_type != VAR_UNKNOWN) {
-    semsg(_(e_invarg2), "expected nothing or a Number as an argument");
-    return;
-  }
+// f_ctxget: migrated to Rust (misc.rs)
 
-  Context *ctx = ctx_get(index);
-  if (ctx == NULL) {
-    semsg(_(e_invargNval), "index", "out of bounds");
-    return;
-  }
+// f_ctxpush: migrated to Rust (misc.rs)
 
-  Arena arena = ARENA_EMPTY;
-  Dict ctx_dict = ctx_to_dict(ctx, &arena);
-  Error err = ERROR_INIT;
-  object_to_vim(DICT_OBJ(ctx_dict), rettv, &err);
-  arena_mem_free(arena_finish(&arena));
-  api_clear_error(&err);
-}
-
-/// "ctxpush([{types}])" function
-static void f_ctxpush(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int types = kCtxAll;
-  if (argvars[0].v_type == VAR_LIST) {
-    types = 0;
-    TV_LIST_ITER(argvars[0].vval.v_list, li, {
-      typval_T *tv_li = TV_LIST_ITEM_TV(li);
-      if (tv_li->v_type == VAR_STRING) {
-        if (strequal(tv_li->vval.v_string, "regs")) {
-          types |= kCtxRegs;
-        } else if (strequal(tv_li->vval.v_string, "jumps")) {
-          types |= kCtxJumps;
-        } else if (strequal(tv_li->vval.v_string, "bufs")) {
-          types |= kCtxBufs;
-        } else if (strequal(tv_li->vval.v_string, "gvars")) {
-          types |= kCtxGVars;
-        } else if (strequal(tv_li->vval.v_string, "sfuncs")) {
-          types |= kCtxSFuncs;
-        } else if (strequal(tv_li->vval.v_string, "funcs")) {
-          types |= kCtxFuncs;
-        }
-      }
-    });
-  } else if (argvars[0].v_type != VAR_UNKNOWN) {
-    semsg(_(e_invarg2), "expected nothing or a List as an argument");
-    return;
-  }
-  ctx_save(NULL, types);
-}
-
-/// "ctxset({context}[, {index}])" function
-static void f_ctxset(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_DICT) {
-    semsg(_(e_invarg2), "expected dictionary as first argument");
-    return;
-  }
-
-  size_t index = 0;
-  if (argvars[1].v_type == VAR_NUMBER) {
-    index = (size_t)argvars[1].vval.v_number;
-  } else if (argvars[1].v_type != VAR_UNKNOWN) {
-    semsg(_(e_invarg2), "expected nothing or a Number as second argument");
-    return;
-  }
-
-  Context *ctx = ctx_get(index);
-  if (ctx == NULL) {
-    semsg(_(e_invargNval), "index", "out of bounds");
-    return;
-  }
-
-  const int save_did_emsg = did_emsg;
-  did_emsg = false;
-
-  Arena arena = ARENA_EMPTY;
-  Dict dict = vim_to_object(&argvars[0], &arena, true).data.dict;
-  Context tmp = CONTEXT_INIT;
-  Error err = ERROR_INIT;
-  ctx_from_dict(dict, &tmp, &err);
-
-  if (ERROR_SET(&err)) {
-    semsg("%s", err.msg);
-    ctx_free(&tmp);
-  } else {
-    ctx_free(ctx);
-    *ctx = tmp;
-  }
-
-  arena_mem_free(arena_finish(&arena));
-  api_clear_error(&err);
-  did_emsg = save_did_emsg;
-}
+// f_ctxset: migrated to Rust (misc.rs)
 
 /// Set the cursor position.
 /// If "charcol" is true, then use the column number as a character offset.
@@ -1901,17 +1820,7 @@ static void getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool
   }
 }
 
-/// "getcharsearch()" function
-static void f_getcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict_alloc_ret(rettv);
-
-  dict_T *dict = rettv->vval.v_dict;
-
-  tv_dict_add_str(dict, S_LEN("char"), last_csearch());
-  tv_dict_add_nr(dict, S_LEN("forward"), last_csearch_forward());
-  tv_dict_add_nr(dict, S_LEN("until"), last_csearch_until());
-}
+// f_getcharsearch: migrated to Rust (misc.rs)
 
 /// "getjumplist()" function
 static void f_getjumplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2271,81 +2180,7 @@ static void f_getregionpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   virtual_op = save_virtual;
 }
 
-/// Common between getreg(), getreginfo() and getregtype(): get the register
-/// name from the first argument.
-/// Returns zero on error.
-static int getreg_get_regname(typval_T *argvars)
-{
-  const char *strregname;
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    strregname = tv_get_string_chk(&argvars[0]);
-    if (strregname == NULL) {  // type error; errmsg already given
-      return 0;
-    }
-  } else {
-    // Default to v:register
-    strregname = get_vim_var_str(VV_REG);
-  }
-
-  return *strregname == 0 ? '"' : (uint8_t)(*strregname);
-}
-
-/// "getreg()" function
-static void f_getreg(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int arg2 = false;
-  bool return_list = false;
-
-  int regname = getreg_get_regname(argvars);
-  if (regname == 0) {
-    return;
-  }
-
-  if (argvars[0].v_type != VAR_UNKNOWN && argvars[1].v_type != VAR_UNKNOWN) {
-    bool error = false;
-    arg2 = (int)tv_get_number_chk(&argvars[1], &error);
-    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
-      return_list = (bool)tv_get_number_chk(&argvars[2], &error);
-    }
-    if (error) {
-      return;
-    }
-  }
-
-  if (return_list) {
-    rettv->v_type = VAR_LIST;
-    rettv->vval.v_list =
-      get_reg_contents(regname, (arg2 ? kGRegExprSrc : 0) | kGRegList);
-    if (rettv->vval.v_list == NULL) {
-      rettv->vval.v_list = tv_list_alloc(0);
-    }
-    tv_list_ref(rettv->vval.v_list);
-  } else {
-    rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = get_reg_contents(regname, arg2 ? kGRegExprSrc : 0);
-  }
-}
-
-/// "getregtype()" function
-static void f_getregtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  // on error return an empty string
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  int regname = getreg_get_regname(argvars);
-  if (regname == 0) {
-    return;
-  }
-
-  colnr_T reglen = 0;
-  char buf[NUMBUFLEN + 2];
-  MotionType reg_type = get_reg_type(regname, &reglen);
-  format_reg_type(reg_type, reglen, buf, ARRAY_SIZE(buf));
-
-  rettv->vval.v_string = xstrdup(buf);
-}
+// getreg_get_regname, f_getreg, f_getregtype: migrated to Rust (misc.rs)
 
 /// "gettagstack()" function
 static void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4104,49 +3939,7 @@ static void max_min(const typval_T *const tv, typval_T *const rettv, const bool 
 /// "mode()" function
 // f_mode: migrated to Rust (simple.rs)
 
-static void may_add_state_char(garray_T *gap, const char *include, uint8_t c)
-{
-  if (include == NULL || vim_strchr(include, c) != NULL) {
-    ga_append(gap, c);
-  }
-}
-
-/// "state()" function
-static void f_state(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  garray_T ga;
-  ga_init(&ga, 1, 20);
-  const char *include = NULL;
-
-  if (argvars[0].v_type != VAR_UNKNOWN) {
-    include = tv_get_string(&argvars[0]);
-  }
-
-  if (!(stuff_empty() && typebuf.tb_len == 0 && !using_script())) {
-    may_add_state_char(&ga, include, 'm');
-  }
-  if (rs_op_pending()) {
-    may_add_state_char(&ga, include, 'o');
-  }
-  if (autocmd_busy) {
-    may_add_state_char(&ga, include, 'x');
-  }
-  if (rs_ins_compl_active()) {
-    may_add_state_char(&ga, include, 'a');
-  }
-  if (!get_was_safe_state()) {
-    may_add_state_char(&ga, include, 'S');
-  }
-  for (int i = 0; i < rs_get_callback_depth() && i < 3; i++) {
-    may_add_state_char(&ga, include, 'c');
-  }
-  if (msg_scrolled > 0) {
-    may_add_state_char(&ga, include, 's');
-  }
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = ga.ga_data;
-}
+// may_add_state_char, f_state: migrated to Rust (misc.rs)
 
 /// "msgpackdump()" function
 static void f_msgpackdump(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4536,54 +4329,7 @@ static void f_range(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "getreginfo()" function
-static void f_getreginfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int regname = getreg_get_regname(argvars);
-  if (regname == 0) {
-    return;
-  }
-
-  if (regname == '@') {
-    regname = '"';
-  }
-
-  tv_dict_alloc_ret(rettv);
-  dict_T *const dict = rettv->vval.v_dict;
-
-  list_T *const list = get_reg_contents(regname, kGRegExprSrc | kGRegList);
-  if (list == NULL) {
-    return;
-  }
-  tv_dict_add_list(dict, S_LEN("regcontents"), list);
-
-  char buf[NUMBUFLEN + 2];
-  buf[0] = NUL;
-  buf[1] = NUL;
-  colnr_T reglen = 0;
-  switch (get_reg_type(regname, &reglen)) {
-  case kMTLineWise:
-    buf[0] = 'V';
-    break;
-  case kMTCharWise:
-    buf[0] = 'v';
-    break;
-  case kMTBlockWise:
-    vim_snprintf(buf, sizeof(buf), "%c%d", Ctrl_V, reglen + 1);
-    break;
-  case kMTUnknown:
-    abort();
-  }
-  tv_dict_add_str(dict, S_LEN("regtype"), buf);
-
-  buf[0] = (char)get_register_name(get_unname_register());
-  buf[1] = NUL;
-  if (regname == '"') {
-    tv_dict_add_str(dict, S_LEN("points_to"), buf);
-  } else {
-    tv_dict_add_bool(dict, S_LEN("isunnamed"),
-                     regname == buf[0] ? kBoolVarTrue : kBoolVarFalse);
-  }
-}
+// f_getreginfo: migrated to Rust (misc.rs)
 
 /// list2proftime - convert a List to proftime_T
 ///
@@ -5268,28 +5014,7 @@ end:
 
 // f_screenchar, f_screenchars, f_screenstring: migrated to Rust (display.rs)
 
-/// "search()" function
-/// "searchdecl()" function
-static void f_searchdecl(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int locally = 1;
-  int thisblock = 0;
-  bool error = false;
-
-  rettv->vval.v_number = 1;     // default: FAIL
-
-  const char *const name = tv_get_string_chk(&argvars[0]);
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    locally = tv_get_number_chk(&argvars[1], &error) == 0;
-    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
-      thisblock = tv_get_number_chk(&argvars[2], &error) != 0;
-    }
-  }
-  if (!error && name != NULL) {
-    rettv->vval.v_number = find_decl((char *)name, strlen(name), locally,
-                                     thisblock, SEARCH_KEEP) == FAIL;
-  }
-}
+// f_searchdecl: migrated to Rust (misc.rs)
 
 /// Used by searchpair() and searchpairpos()
 static int searchpair_cmn(typval_T *argvars, pos_T *match_pos)
@@ -5538,24 +5263,7 @@ int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
 }
 
 /// "searchpos()" function
-static void f_searchpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  pos_T match_pos;
-  int flags = 0;
-
-  const int n = search_cmn(argvars, &match_pos, &flags);
-
-  tv_list_alloc_ret(rettv, 2 + (!!(flags & SP_SUBPAT)));
-
-  const int lnum = (n > 0 ? match_pos.lnum : 0);
-  const int col = (n > 0 ? match_pos.col : 0);
-
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
-  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
-  if (flags & SP_SUBPAT) {
-    tv_list_append_number(rettv->vval.v_list, (varnumber_T)n);
-  }
-}
+// f_searchpos: migrated to Rust (misc.rs)
 
 /// "serverlist()" function
 static void f_serverlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -5706,34 +5414,7 @@ static void set_position(typval_T *argvars, typval_T *rettv, bool charpos)
   }
 }
 
-/// "setcharpos()" function
-static void f_setcharsearch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_dict_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  dict_T *d = argvars[0].vval.v_dict;
-  if (d == NULL) {
-    return;
-  }
-
-  char *const csearch = tv_dict_get_string(d, "char", false);
-  if (csearch != NULL) {
-    int c = utf_ptr2char(csearch);
-    set_last_csearch(c, csearch, utfc_ptr2len(csearch));
-  }
-
-  dictitem_T *di = tv_dict_find(d, S_LEN("forward"));
-  if (di != NULL) {
-    set_csearch_direction(tv_get_number(&di->di_tv) ? FORWARD : BACKWARD);
-  }
-
-  di = tv_dict_find(d, S_LEN("until"));
-  if (di != NULL) {
-    set_csearch_until(!!tv_get_number(&di->di_tv));
-  }
-}
+// f_setcharsearch: migrated to Rust (misc.rs)
 
 // f_setenv: migrated to Rust (simple.rs)
 
@@ -7532,6 +7213,352 @@ void nvim_eval_stdpath(typval_T *argvars, typval_T *rettv)
     get_xdg_var_list_inner(kXDGDataDirs, rettv);
   } else {
     semsg(_("E6100: \"%s\" is not a valid stdpath"), p);
+  }
+}
+
+// =============================================================================
+// Phase 6 C accessor functions (called by Rust misc.rs wrappers)
+// =============================================================================
+
+void nvim_eval_ctxget(typval_T *argvars, typval_T *rettv)
+{
+  size_t index = 0;
+  if (argvars[0].v_type == VAR_NUMBER) {
+    index = (size_t)argvars[0].vval.v_number;
+  } else if (argvars[0].v_type != VAR_UNKNOWN) {
+    semsg(_(e_invarg2), "expected nothing or a Number as an argument");
+    return;
+  }
+
+  Context *ctx = ctx_get(index);
+  if (ctx == NULL) {
+    semsg(_(e_invargNval), "index", "out of bounds");
+    return;
+  }
+
+  Arena arena = ARENA_EMPTY;
+  Dict ctx_dict = ctx_to_dict(ctx, &arena);
+  Error err = ERROR_INIT;
+  object_to_vim(DICT_OBJ(ctx_dict), rettv, &err);
+  arena_mem_free(arena_finish(&arena));
+  api_clear_error(&err);
+}
+
+void nvim_eval_ctxpush(typval_T *argvars, typval_T *rettv)
+{
+  int types = kCtxAll;
+  if (argvars[0].v_type == VAR_LIST) {
+    types = 0;
+    TV_LIST_ITER(argvars[0].vval.v_list, li, {
+      typval_T *tv_li = TV_LIST_ITEM_TV(li);
+      if (tv_li->v_type == VAR_STRING) {
+        if (strequal(tv_li->vval.v_string, "regs")) {
+          types |= kCtxRegs;
+        } else if (strequal(tv_li->vval.v_string, "jumps")) {
+          types |= kCtxJumps;
+        } else if (strequal(tv_li->vval.v_string, "bufs")) {
+          types |= kCtxBufs;
+        } else if (strequal(tv_li->vval.v_string, "gvars")) {
+          types |= kCtxGVars;
+        } else if (strequal(tv_li->vval.v_string, "sfuncs")) {
+          types |= kCtxSFuncs;
+        } else if (strequal(tv_li->vval.v_string, "funcs")) {
+          types |= kCtxFuncs;
+        }
+      }
+    });
+  } else if (argvars[0].v_type != VAR_UNKNOWN) {
+    semsg(_(e_invarg2), "expected nothing or a List as an argument");
+    return;
+  }
+  ctx_save(NULL, types);
+}
+
+void nvim_eval_ctxset(typval_T *argvars, typval_T *rettv)
+{
+  if (argvars[0].v_type != VAR_DICT) {
+    semsg(_(e_invarg2), "expected dictionary as first argument");
+    return;
+  }
+
+  size_t index = 0;
+  if (argvars[1].v_type == VAR_NUMBER) {
+    index = (size_t)argvars[1].vval.v_number;
+  } else if (argvars[1].v_type != VAR_UNKNOWN) {
+    semsg(_(e_invarg2), "expected nothing or a Number as second argument");
+    return;
+  }
+
+  Context *ctx = ctx_get(index);
+  if (ctx == NULL) {
+    semsg(_(e_invargNval), "index", "out of bounds");
+    return;
+  }
+
+  const int save_did_emsg = did_emsg;
+  did_emsg = false;
+
+  Arena arena = ARENA_EMPTY;
+  Dict dict = vim_to_object(&argvars[0], &arena, true).data.dict;
+  Context tmp = CONTEXT_INIT;
+  Error err = ERROR_INIT;
+  ctx_from_dict(dict, &tmp, &err);
+
+  if (ERROR_SET(&err)) {
+    semsg("%s", err.msg);
+    ctx_free(&tmp);
+  } else {
+    ctx_free(ctx);
+    *ctx = tmp;
+  }
+
+  arena_mem_free(arena_finish(&arena));
+  api_clear_error(&err);
+  did_emsg = save_did_emsg;
+}
+
+void nvim_eval_getcharsearch(typval_T *argvars, typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+
+  dict_T *dict = rettv->vval.v_dict;
+
+  tv_dict_add_str(dict, S_LEN("char"), last_csearch());
+  tv_dict_add_nr(dict, S_LEN("forward"), last_csearch_forward());
+  tv_dict_add_nr(dict, S_LEN("until"), last_csearch_until());
+}
+
+void nvim_eval_setcharsearch(typval_T *argvars, typval_T *rettv)
+{
+  if (tv_check_for_dict_arg(argvars, 0) == FAIL) {
+    return;
+  }
+
+  dict_T *d = argvars[0].vval.v_dict;
+  if (d == NULL) {
+    return;
+  }
+
+  char *const csearch = tv_dict_get_string(d, "char", false);
+  if (csearch != NULL) {
+    int c = utf_ptr2char(csearch);
+    set_last_csearch(c, csearch, utfc_ptr2len(csearch));
+  }
+
+  dictitem_T *di = tv_dict_find(d, S_LEN("forward"));
+  if (di != NULL) {
+    set_csearch_direction(tv_get_number(&di->di_tv) ? FORWARD : BACKWARD);
+  }
+
+  di = tv_dict_find(d, S_LEN("until"));
+  if (di != NULL) {
+    set_csearch_until(!!tv_get_number(&di->di_tv));
+  }
+}
+
+/// Common between getreg(), getreginfo() and getregtype(): get the register
+/// name from the first argument.
+/// Returns zero on error.
+static int nvim_eval_getreg_get_regname(typval_T *argvars)
+{
+  const char *strregname;
+
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    strregname = tv_get_string_chk(&argvars[0]);
+    if (strregname == NULL) {  // type error; errmsg already given
+      return 0;
+    }
+  } else {
+    // Default to v:register
+    strregname = get_vim_var_str(VV_REG);
+  }
+
+  return *strregname == 0 ? '"' : (uint8_t)(*strregname);
+}
+
+void nvim_eval_getreg(typval_T *argvars, typval_T *rettv)
+{
+  int arg2 = false;
+  bool return_list = false;
+
+  int regname = nvim_eval_getreg_get_regname(argvars);
+  if (regname == 0) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_UNKNOWN && argvars[1].v_type != VAR_UNKNOWN) {
+    bool error = false;
+    arg2 = (int)tv_get_number_chk(&argvars[1], &error);
+    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
+      return_list = (bool)tv_get_number_chk(&argvars[2], &error);
+    }
+    if (error) {
+      return;
+    }
+  }
+
+  if (return_list) {
+    rettv->v_type = VAR_LIST;
+    rettv->vval.v_list =
+      get_reg_contents(regname, (arg2 ? kGRegExprSrc : 0) | kGRegList);
+    if (rettv->vval.v_list == NULL) {
+      rettv->vval.v_list = tv_list_alloc(0);
+    }
+    tv_list_ref(rettv->vval.v_list);
+  } else {
+    rettv->v_type = VAR_STRING;
+    rettv->vval.v_string = get_reg_contents(regname, arg2 ? kGRegExprSrc : 0);
+  }
+}
+
+void nvim_eval_getregtype(typval_T *argvars, typval_T *rettv)
+{
+  // on error return an empty string
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  int regname = nvim_eval_getreg_get_regname(argvars);
+  if (regname == 0) {
+    return;
+  }
+
+  colnr_T reglen = 0;
+  char buf[NUMBUFLEN + 2];
+  MotionType reg_type = get_reg_type(regname, &reglen);
+  format_reg_type(reg_type, reglen, buf, ARRAY_SIZE(buf));
+
+  rettv->vval.v_string = xstrdup(buf);
+}
+
+void nvim_eval_getreginfo(typval_T *argvars, typval_T *rettv)
+{
+  int regname = nvim_eval_getreg_get_regname(argvars);
+  if (regname == 0) {
+    return;
+  }
+
+  if (regname == '@') {
+    regname = '"';
+  }
+
+  tv_dict_alloc_ret(rettv);
+  dict_T *const dict = rettv->vval.v_dict;
+
+  list_T *const list = get_reg_contents(regname, kGRegExprSrc | kGRegList);
+  if (list == NULL) {
+    return;
+  }
+  tv_dict_add_list(dict, S_LEN("regcontents"), list);
+
+  char buf[NUMBUFLEN + 2];
+  buf[0] = NUL;
+  buf[1] = NUL;
+  colnr_T reglen = 0;
+  switch (get_reg_type(regname, &reglen)) {
+  case kMTLineWise:
+    buf[0] = 'V';
+    break;
+  case kMTCharWise:
+    buf[0] = 'v';
+    break;
+  case kMTBlockWise:
+    vim_snprintf(buf, sizeof(buf), "%c%d", Ctrl_V, reglen + 1);
+    break;
+  case kMTUnknown:
+    abort();
+  }
+  tv_dict_add_str(dict, S_LEN("regtype"), buf);
+
+  buf[0] = (char)get_register_name(get_unname_register());
+  buf[1] = NUL;
+  if (regname == '"') {
+    tv_dict_add_str(dict, S_LEN("points_to"), buf);
+  } else {
+    tv_dict_add_bool(dict, S_LEN("isunnamed"),
+                     regname == buf[0] ? kBoolVarTrue : kBoolVarFalse);
+  }
+}
+
+static void nvim_eval_may_add_state_char(garray_T *gap, const char *include, uint8_t c)
+{
+  if (include == NULL || vim_strchr(include, c) != NULL) {
+    ga_append(gap, c);
+  }
+}
+
+void nvim_eval_state(typval_T *argvars, typval_T *rettv)
+{
+  garray_T ga;
+  ga_init(&ga, 1, 20);
+  const char *include = NULL;
+
+  if (argvars[0].v_type != VAR_UNKNOWN) {
+    include = tv_get_string(&argvars[0]);
+  }
+
+  if (!(stuff_empty() && typebuf.tb_len == 0 && !using_script())) {
+    nvim_eval_may_add_state_char(&ga, include, 'm');
+  }
+  if (rs_op_pending()) {
+    nvim_eval_may_add_state_char(&ga, include, 'o');
+  }
+  if (autocmd_busy) {
+    nvim_eval_may_add_state_char(&ga, include, 'x');
+  }
+  if (rs_ins_compl_active()) {
+    nvim_eval_may_add_state_char(&ga, include, 'a');
+  }
+  if (!get_was_safe_state()) {
+    nvim_eval_may_add_state_char(&ga, include, 'S');
+  }
+  for (int i = 0; i < rs_get_callback_depth() && i < 3; i++) {
+    nvim_eval_may_add_state_char(&ga, include, 'c');
+  }
+  if (msg_scrolled > 0) {
+    nvim_eval_may_add_state_char(&ga, include, 's');
+  }
+
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = ga.ga_data;
+}
+
+void nvim_eval_searchdecl(typval_T *argvars, typval_T *rettv)
+{
+  int locally = 1;
+  int thisblock = 0;
+  bool error = false;
+
+  rettv->vval.v_number = 1;     // default: FAIL
+
+  const char *const name = tv_get_string_chk(&argvars[0]);
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    locally = tv_get_number_chk(&argvars[1], &error) == 0;
+    if (!error && argvars[2].v_type != VAR_UNKNOWN) {
+      thisblock = tv_get_number_chk(&argvars[2], &error) != 0;
+    }
+  }
+  if (!error && name != NULL) {
+    rettv->vval.v_number = find_decl((char *)name, strlen(name), locally,
+                                     thisblock, SEARCH_KEEP) == FAIL;
+  }
+}
+
+void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
+{
+  pos_T match_pos;
+  int flags = 0;
+
+  const int n = search_cmn(argvars, &match_pos, &flags);
+
+  tv_list_alloc_ret(rettv, 2 + (!!(flags & SP_SUBPAT)));
+
+  const int lnum = (n > 0 ? match_pos.lnum : 0);
+  const int col = (n > 0 ? match_pos.col : 0);
+
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)lnum);
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)col);
+  if (flags & SP_SUBPAT) {
+    tv_list_append_number(rettv->vval.v_list, (varnumber_T)n);
   }
 }
 

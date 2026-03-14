@@ -951,3 +951,168 @@ pub unsafe extern "C" fn rs_f_swapinfo(
 ) {
     nvim_eval_swapinfo(argvars, rettv);
 }
+
+// =============================================================================
+// Phase 6 C accessor declarations
+// =============================================================================
+
+extern "C" {
+    fn nvim_eval_ctxget(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_ctxpush(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_ctxset(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_getcharsearch(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_setcharsearch(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_getreg(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_getregtype(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_getreginfo(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_state(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_searchdecl(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_searchpos(argvars: *const c_void, rettv: *mut c_void);
+}
+
+// =============================================================================
+// Phase 6: Context, register, and state functions
+// =============================================================================
+
+/// "ctxget()" function - get context from stack
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_ctxget"]
+pub unsafe extern "C" fn rs_f_ctxget(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_ctxget(argvars, rettv);
+}
+
+/// "ctxpush()" function - push context to stack
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_ctxpush"]
+pub unsafe extern "C" fn rs_f_ctxpush(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_ctxpush(argvars, rettv);
+}
+
+/// "ctxset()" function - set context in stack
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_ctxset"]
+pub unsafe extern "C" fn rs_f_ctxset(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_ctxset(argvars, rettv);
+}
+
+/// "getcharsearch()" function - get character search info
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getcharsearch"]
+pub unsafe extern "C" fn rs_f_getcharsearch(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_getcharsearch(argvars, rettv);
+}
+
+/// "setcharsearch()" function - set character search info
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_setcharsearch"]
+pub unsafe extern "C" fn rs_f_setcharsearch(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_setcharsearch(argvars, rettv);
+}
+
+/// "getreg()" function - get register contents
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getreg"]
+pub unsafe extern "C" fn rs_f_getreg(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_getreg(argvars, rettv);
+}
+
+/// "getregtype()" function - get register type
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getregtype"]
+pub unsafe extern "C" fn rs_f_getregtype(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_getregtype(argvars, rettv);
+}
+
+/// "getreginfo()" function - get register info dict
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getreginfo"]
+pub unsafe extern "C" fn rs_f_getreginfo(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_getreginfo(argvars, rettv);
+}
+
+/// "state()" function - get current editor state string
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_state"]
+pub unsafe extern "C" fn rs_f_state(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_state(argvars, rettv);
+}
+
+/// "searchdecl()" function - search for declaration
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_searchdecl"]
+pub unsafe extern "C" fn rs_f_searchdecl(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_searchdecl(argvars, rettv);
+}
+
+/// "searchpos()" function - search for pattern, return position
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_searchpos"]
+pub unsafe extern "C" fn rs_f_searchpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_eval_searchpos(argvars, rettv);
+}
