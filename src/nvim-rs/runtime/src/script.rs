@@ -172,7 +172,7 @@ pub unsafe fn rs_script_name_by_id(id: ScidT) -> *const c_char {
 ///
 /// `name` may be NULL for anonymous :source.
 /// `sid_out` may be NULL if the caller doesn't need the SID.
-#[no_mangle]
+#[export_name = "new_script_item"]
 pub unsafe extern "C" fn rs_new_script_item(
     name: *mut c_char,
     sid_out: *mut ScidT,

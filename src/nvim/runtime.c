@@ -114,23 +114,12 @@ static garray_T ga_loaded = { 0, 0, sizeof(char *), 4, NULL };
 /// last used sequence number for sourcing scripts (current_sctx.sc_seq)
 static int last_current_SID_seq = 0;
 
-// Rust implementations of execution stack functions (Phase 1)
-extern estack_T *rs_estack_push(int type, char *name, linenr_T lnum);
-extern char *rs_estack_sfile(int which);
-extern list_T *rs_stacktrace_create(void);
+// Rust implementations (still needed by C)
 extern void rs_f_getstacktrace(typval_T *argvars, typval_T *rettv, void *fptr);
-
-// Rust implementations of script registry functions (Phase 2)
-extern scriptitem_T *rs_new_script_item(char *name, scid_T *sid_out);
 extern char *rs_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free);
 extern linenr_T rs_get_sourced_lnum(void *fgetline, void *cookie);
 extern void *rs_get_script_local_funcs(scid_T sid);
 extern void rs_f_getscriptinfo(void *argvars, void *rettv, void *fptr);
-
-// Rust implementations of path utilities and runtimepath (Phase 3)
-extern char *rs_get_lib_dir(void);
-extern char *rs_runtimepath_default(bool clean_arg);
-extern bool rs_path_is_after(const char *buf, size_t buflen);
 
 // C helpers called by Rust for functions that access static variables.
 // These live here (not in runtime_ffi.c) because ga_loaded is static.
@@ -212,26 +201,6 @@ int nvim_rt_do_in_runtimepath_source(const char *name, int flags, void *cookie)
   return do_in_runtimepath((char *)name, flags, rs_source_callback, cookie);
 }
 
-/// Add an item to the execution stack.
-/// @return  the new entry
-estack_T *estack_push(etype_T type, char *name, linenr_T lnum)
-{
-  return rs_estack_push((int)type, name, lnum);
-}
-
-/// Get the current value for <sfile> in allocated memory.
-/// @param which  ESTACK_SFILE for <sfile>, ESTACK_STACK for <stack> or
-///               ESTACK_SCRIPT for <script>.
-char *estack_sfile(estack_arg_T which)
-{
-  return rs_estack_sfile((int)which);
-}
-
-/// Create the stacktrace from exestack.
-list_T *stacktrace_create(void)
-{
-  return rs_stacktrace_create();
-}
 
 /// getstacktrace() function
 void f_getstacktrace(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -673,11 +642,6 @@ static void expand_pack_entry(RuntimeSearchPath *search_path, Set(String) *rtp_u
   }
 }
 
-static bool path_is_after(char *buf, size_t buflen)
-{
-  return rs_path_is_after(buf, buflen);
-}
-
 static RuntimeSearchPath runtime_search_path_build(void)
 {
   kvec_t(String) pack_entries = KV_INITIAL_VALUE;
@@ -760,15 +724,6 @@ static void runtime_search_path_free(RuntimeSearchPath path)
 // and add_dir have been migrated to Rust as internal helpers of
 // rs_runtimepath_default. They are no longer needed in C.
 
-char *get_lib_dir(void)
-{
-  return rs_get_lib_dir();
-}
-
-char *runtimepath_default(bool clean_arg)
-{
-  return rs_runtimepath_default(clean_arg);
-}
 
 static void cmd_source(char *fname, exarg_T *eap)
 {
@@ -899,11 +854,6 @@ static bool concat_continued_line(garray_T *const ga, const int init_growsize, c
 /// @param[out]  sid_out  SID of the new item.
 ///
 /// @return  pointer to the created script item.
-scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_new_script_item(name, sid_out);
-}
 
 /// Initialization for sourcing lines from the current buffer. Reads all the
 /// lines from the buffer and stores it in the cookie grow array.

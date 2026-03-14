@@ -144,7 +144,7 @@ pub unsafe extern "C" fn rs_estack_init() {
 /// Add an item to the execution stack.
 ///
 /// Returns a handle to the new entry.
-#[no_mangle]
+#[export_name = "estack_push"]
 pub unsafe extern "C" fn rs_estack_push(
     etype: c_int,
     name: *mut c_char,
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn rs_estack_pop() {
 ///
 /// `which`: ESTACK_SFILE for <sfile>, ESTACK_STACK for <stack>,
 ///          ESTACK_SCRIPT for <script>.
-#[no_mangle]
+#[export_name = "estack_sfile"]
 pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
     let len = nvim_get_exestack_len();
     if len <= 0 {
@@ -336,7 +336,7 @@ unsafe fn stacktrace_push_item(
 /// Create the stacktrace from the execution stack.
 ///
 /// Returns an opaque list_T handle.
-#[no_mangle]
+#[export_name = "stacktrace_create"]
 pub unsafe extern "C" fn rs_stacktrace_create() -> ListHandle {
     let len = nvim_get_exestack_len();
     let l = nvim_rt_list_alloc(len);

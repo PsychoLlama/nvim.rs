@@ -473,7 +473,7 @@ unsafe fn add_dir(
 /// Check if path ends with "after" directory component.
 ///
 /// Equivalent to C's `path_is_after(buf, buflen)`.
-#[no_mangle]
+#[export_name = "path_is_after"]
 pub unsafe extern "C" fn rs_path_is_after(buf: *const c_char, buflen: usize) -> bool {
     // buflen >= 5
     //   && (!(buflen >= 6) || vim_ispathsep(buf[buflen - 6]))
@@ -493,7 +493,7 @@ pub unsafe extern "C" fn rs_path_is_after(buf: *const c_char, buflen: usize) -> 
 /// Find library dir relative to binary.
 ///
 /// Returns allocated string or NULL.
-#[no_mangle]
+#[export_name = "get_lib_dir"]
 pub unsafe extern "C" fn rs_get_lib_dir() -> *mut c_char {
     let default_lib = nvim_rt_get_default_lib_dir();
     if !default_lib.is_null() && libc::strlen(default_lib) != 0 && nvim_rt_os_isdir(default_lib) {
@@ -514,7 +514,7 @@ pub unsafe extern "C" fn rs_get_lib_dir() -> *mut c_char {
 /// Build the default &runtimepath value.
 ///
 /// Returns allocated string or NULL.
-#[no_mangle]
+#[export_name = "runtimepath_default"]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_runtimepath_default(clean_arg: bool) -> *mut c_char {
     let mut rtp_size: usize = 0;
