@@ -139,7 +139,7 @@ pub unsafe extern "C" fn rs_ins_eol(c: c_int) -> bool {
 // ins_ctrl_v — delegated to C helper
 // ============================================================================
 
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "ins_ctrl_v")]
 pub unsafe extern "C" fn rs_ins_ctrl_v() {
     nvim_edit_ins_ctrl_v();
 }

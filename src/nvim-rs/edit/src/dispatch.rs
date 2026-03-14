@@ -111,7 +111,7 @@ extern "C" {
     fn ins_down(startcol: c_int);
     fn ins_pageup();
     fn ins_pagedown();
-    fn rs_ins_ctrl_v();
+    fn ins_ctrl_v();
     fn ins_ctrl_ey(tc: c_int) -> c_int;
     fn ins_digraph() -> c_int;
     fn stop_arrow() -> c_int;

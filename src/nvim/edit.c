@@ -180,7 +180,7 @@ typedef struct {
 // Rust FFI declarations (only functions called directly in this file)
 extern RsNvimString rs_get_last_insert(void);
 extern void rs_replace_stack_clear(void);
-extern void rs_ins_ctrl_v(void);
+extern void ins_ctrl_v(void);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
 
@@ -875,11 +875,6 @@ linenr_T nvim_edit_curbuf_line_count(void)
   return curbuf->b_ml.ml_line_count;
 }
 
-/// Call rs_foldOpenCursor() (accessor for Rust).
-void nvim_edit_foldOpenCursor(void)
-{
-  rs_foldOpenCursor();
-}
 
 /// Call plain_vgetc() (accessor for Rust).
 int nvim_edit_plain_vgetc(void)
@@ -2758,11 +2753,6 @@ void ins_redraw(bool ready)
   emsg_on_display = false;      // may remove error message now
 }
 
-// Handle a CTRL-V or CTRL-Q typed in Insert mode.
-static void ins_ctrl_v(void)
-{
-  rs_ins_ctrl_v();
-}
 
 // Put a character directly onto the screen.  It's not stored in a buffer.
 // Used while handling CTRL-K, CTRL-V, etc. in Insert mode.

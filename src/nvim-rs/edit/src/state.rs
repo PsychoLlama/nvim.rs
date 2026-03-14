@@ -90,7 +90,7 @@ extern "C" {
     fn nvim_edit_set_orig_line_count(val: LinenrT);
     fn nvim_edit_set_vr_lines_changed(val: c_int);
     fn nvim_edit_curbuf_line_count() -> LinenrT;
-    fn nvim_edit_foldOpenCursor();
+    fn rs_foldOpenCursor();
 }
 
 /// Position in a buffer (line and column).
@@ -627,7 +627,7 @@ unsafe fn stop_arrow_impl() -> c_int {
     }
 
     // Always open fold at the cursor line when inserting something.
-    nvim_edit_foldOpenCursor();
+    rs_foldOpenCursor();
 
     if nvim_get_arrow_used() != 0 || ins_need_undo_get() {
         FAIL
