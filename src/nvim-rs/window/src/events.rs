@@ -563,6 +563,7 @@ extern "C" {
         line_count: c_int,
         delta: i64,
     );
+    #[link_name = "win_text_height"]
     fn rs_win_text_height(
         wp: WinHandle,
         start_lnum: c_int,

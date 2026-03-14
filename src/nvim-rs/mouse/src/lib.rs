@@ -893,6 +893,7 @@ extern "C" {
     fn nvim_win_virtual_active(wp: WinHandle) -> c_int;
 
     /// Compute char screen width at position in window.
+    #[link_name = "win_chartabsize"]
     fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col: c_int) -> c_int;
 
     /// Set `w_leftcol` and adjust cursor. Returns true if cursor moved.

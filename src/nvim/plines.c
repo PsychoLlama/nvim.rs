@@ -35,28 +35,15 @@
 
 // Rust implementations
 extern const char *rs_get_showbreak_value(win_T *win);
-extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
-extern int rs_win_may_fill(win_T *wp);
-extern int rs_in_win_border(win_T *wp, int vcol);
-extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
 extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_linesize_fast(win_T *wp, int use_tabstop, const char *line, int vcol_arg, int len);
-extern CharSize rs_charsize_regular(void *csarg, const char *cur, int vcol, int32_t cur_char);
-extern int rs_linesize_regular(void *csarg, int vcol_arg, int len);
 extern void rs_getvcol(void *csarg, const char *line, int end_col, int cstype,
                        int pos_lnum, int pos_coladd,
                        int *start_out, int *cursor_out, int *end_out, int *pos_col_out);
 extern int rs_plines_win_nofold(void *csarg, int cstype, int first_char);
 extern int rs_plines_win_col(void *csarg, const char *line, int column, int cstype, int fill_lines);
-extern int rs_linetabsize(win_T *wp, linenr_T lnum);
-extern int rs_linetabsize_eol(win_T *wp, linenr_T lnum);
-extern int rs_linetabsize_col(int startvcol, char *s);
-extern colnr_T rs_getvcol_nolist(pos_T pos);
 extern void rs_getvvcol(win_T *wp, pos_T pos, colnr_T *start, colnr_T *cursor, colnr_T *end);
 extern void rs_getvcols(win_T *wp, pos_T pos1, pos_T pos2, colnr_T *left, colnr_T *right);
-extern int64_t rs_win_text_height(win_T *wp, linenr_T start_lnum, int64_t start_vcol,
-                                  linenr_T *end_lnum, int64_t *end_vcol, int64_t *fill,
-                                  int64_t max);
 extern int rs_diff_check_fill(win_T *wp, linenr_T lnum);
 extern int rs_diffopt_filler(void);
 
@@ -333,45 +320,9 @@ int32_t nvim_str_char_info_next(const char **ptr_out, int len, int32_t value, in
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
-/// Return the number of cells the first char in "p" will take on the screen,
-/// taking into account the size of a tab.
-/// Also see getvcol()
-///
-/// @param p
-/// @param col
-///
-/// @return Number of cells.
-///
-/// @see charsize_nowrap()
-int win_chartabsize(win_T *wp, char *p, colnr_T col)
-{
-  return rs_win_chartabsize(wp, p, (int)col);
-}
 
-/// Like linetabsize_str(), but "s" starts at virtual column "startvcol".
-///
-/// @param startvcol
-/// @param s
-///
-/// @return Number of cells the string will take on the screen.
-int linetabsize_col(int startvcol, char *s)
-{
-  return rs_linetabsize_col(startvcol, s);
-}
 
-/// Return the number of cells line "lnum" of window "wp" will take on the
-/// screen, taking into account the size of a tab and inline virtual text.
-/// Doesn't count the size of 'listchars' "eol".
-int linetabsize(win_T *wp, linenr_T lnum)
-{
-  return rs_linetabsize(wp, lnum);
-}
 
-/// Like linetabsize(), but counts the size of 'listchars' "eol".
-int linetabsize_eol(win_T *wp, linenr_T lnum)
-{
-  return rs_linetabsize_eol(wp, lnum);
-}
 
 /// Prepare the structure passed to charsize functions.
 ///
@@ -403,19 +354,6 @@ CSType init_charsize_arg(CharsizeArg *csarg, win_T *wp, linenr_T lnum, char *lin
   }
 }
 
-/// Get the number of cells taken up on the screen for the given arguments.
-/// "csarg->cur_text_width_left" and "csarg->cur_text_width_right" are set
-/// to the extra size for inline virtual text.
-///
-/// When "csarg->max_head_vcol" is positive, only count in "head" the size
-/// of 'showbreak'/'breakindent' before "csarg->max_head_vcol".
-/// When "csarg->max_head_vcol" is negative, only count in "head" the size
-/// of 'showbreak'/'breakindent' before where cursor should be placed.
-CharSize charsize_regular(CharsizeArg *csarg, char *const cur, colnr_T const vcol,
-                          int32_t const cur_char)
-{
-  return rs_charsize_regular(csarg, cur, (int)vcol, cur_char);
-}
 
 /// Like charsize_regular(), except it doesn't handle inline virtual text,
 /// 'linebreak', 'breakindent' or 'showbreak'.
@@ -429,36 +367,8 @@ CharSize charsize_fast(CharsizeArg *csarg, const char *cur, colnr_T vcol, int32_
   return rs_charsize_fast(csarg->win, cur, csarg->use_tabstop, (int)vcol, cur_char);
 }
 
-/// Get the number of cells taken up on the screen at given virtual column.
-///
-/// @see win_chartabsize()
-int charsize_nowrap(buf_T *buf, const char *cur, bool use_tabstop, colnr_T vcol, int32_t cur_char)
-{
-  return rs_charsize_nowrap(buf, cur, use_tabstop, (int)vcol, cur_char);
-}
 
-/// Check that virtual column "vcol" is in the rightmost column of window "wp".
-///
-/// @param  wp    window
-/// @param  vcol  column number
-static bool in_win_border(win_T *wp, colnr_T vcol)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
-{
-  return rs_in_win_border(wp, (int)vcol);
-}
 
-/// Calculate virtual column until the given "len".
-///
-/// @param csarg    Argument to charsize functions.
-/// @param vcol_arg Starting virtual column.
-/// @param len      First byte of the end character, or MAXCOL.
-///
-/// @return virtual column before the character at "len",
-///         or full size of the line if "len" is MAXCOL.
-int linesize_regular(CharsizeArg *const csarg, int vcol_arg, colnr_T const len)
-{
-  return rs_linesize_regular(csarg, vcol_arg, (int)len);
-}
 
 /// Like linesize_regular(), but can be used when CSType is kCharsizeFast.
 ///
@@ -515,15 +425,6 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
   }
 }
 
-/// Get virtual cursor column in the current window, pretending 'list' is off.
-///
-/// @param posp
-///
-/// @return The virtual cursor column.
-colnr_T getvcol_nolist(pos_T *posp)
-{
-  return rs_getvcol_nolist(*posp);
-}
 
 /// Get virtual column in virtual mode.
 ///
@@ -553,11 +454,6 @@ void getvcols(win_T *wp, pos_T *pos1, pos_T *pos2, colnr_T *left, colnr_T *right
 /// Functions calculating vertical size of text when displayed inside a window.
 /// Calls horizontal size functions defined above.
 
-/// Check if there may be filler lines anywhere in window "wp".
-bool win_may_fill(win_T *wp)
-{
-  return rs_win_may_fill(wp);
-}
 
 /// Return the number of filler lines above "lnum".
 ///
@@ -720,27 +616,6 @@ int plines_m_win_fill(win_T *wp, linenr_T first, linenr_T last)
   return MAX(count, 0);
 }
 
-/// Get the number of screen lines a range of text will take in window "wp".
-///
-/// @param[in] start_lnum    Starting line number, 1-based inclusive.
-/// @param[in] start_vcol    >= 0: Starting virtual column index on "start_lnum",
-///                                0-based inclusive, rounded down to full screen lines.
-///                          < 0:  Count a full "start_lnum", including filler lines above.
-/// @param[in,out] end_lnum  Ending line number, 1-based inclusive. Set to last line for
-///                          which the height is calculated (smaller if "max" is reached).
-/// @param[in,out] end_vcol  >= 0: Ending virtual column index on "end_lnum",
-///                                0-based exclusive, rounded up to full screen lines.
-///                          < 0:  Count a full "end_lnum", not including filler lines below.
-///                          Set to the number of columns in "end_lnum" to reach "max".
-/// @param[in] max           Don't calculate the height for lines beyond the line where "max"
-///                          height is reached.
-/// @param[out] fill         If not NULL, set to the number of filler lines in the range.
-int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_t start_vcol,
-                        linenr_T *const end_lnum, int64_t *const end_vcol, int64_t *const fill,
-                        int64_t const max)
-{
-  return rs_win_text_height(wp, start_lnum, start_vcol, end_lnum, end_vcol, fill, max);
-}
 
 // =============================================================================
 // C Wrappers for Rust FFI

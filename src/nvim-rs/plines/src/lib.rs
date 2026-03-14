@@ -771,15 +771,16 @@ pub extern "C" fn rs_conceal_cursor_line(wp: WinHandle) -> bool {
 /// # Safety
 /// The `buf` parameter must be a valid `buf_T*` pointer or null.
 /// The `cur` parameter must be a valid pointer to a character.
-#[no_mangle]
+#[export_name = "charsize_nowrap"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_charsize_nowrap(
     buf: BufHandle,
     cur: *const c_char,
-    use_tabstop: c_int,
+    use_tabstop: bool,
     vcol: c_int,
     cur_char: i32,
 ) -> c_int {
-    charsize_nowrap_impl(buf, cur, use_tabstop != 0, vcol, cur_char)
+    charsize_nowrap_impl(buf, cur, use_tabstop, vcol, cur_char)
 }
 
 /// Return number of display cells occupied by character at "p" in window "wp".
@@ -788,7 +789,8 @@ pub extern "C" fn rs_charsize_nowrap(
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer.
 /// The `p` parameter must be a valid pointer to a character.
-#[no_mangle]
+#[export_name = "win_chartabsize"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col: c_int) -> c_int {
     if wp.is_null() || p.is_null() {
         return 1;
@@ -817,9 +819,10 @@ pub unsafe extern "C" fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
-pub extern "C" fn rs_win_may_fill(wp: WinHandle) -> c_int {
-    c_int::from(win_may_fill_impl(wp))
+#[export_name = "win_may_fill"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_win_may_fill(wp: WinHandle) -> bool {
+    win_may_fill_impl(wp)
 }
 
 /// Return the offset for the window's first column.
@@ -846,9 +849,10 @@ pub extern "C" fn rs_win_col_off2(wp: WinHandle) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid `win_T*` pointer or null.
-#[no_mangle]
-pub extern "C" fn rs_in_win_border(wp: WinHandle, vcol: c_int) -> c_int {
-    c_int::from(in_win_border_impl(wp, vcol))
+#[export_name = "in_win_border"]
+#[allow(clippy::must_use_candidate)]
+pub extern "C" fn rs_in_win_border(wp: WinHandle, vcol: c_int) -> bool {
+    in_win_border_impl(wp, vcol)
 }
 
 /// Get the 'showbreak' value for a window.
@@ -1493,7 +1497,8 @@ fn charsize_regular_impl(
 /// # Safety
 /// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
 /// The `cur` parameter must be a valid pointer to a character within the line.
-#[no_mangle]
+#[export_name = "charsize_regular"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_charsize_regular(
     csarg: CharsizeArgHandle,
     cur: *const c_char,
@@ -1587,7 +1592,8 @@ fn linesize_regular_impl(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) 
 ///
 /// # Safety
 /// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
-#[no_mangle]
+#[export_name = "linesize_regular"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_linesize_regular(
     csarg: CharsizeArgHandle,
     vcol_arg: c_int,
@@ -2179,7 +2185,8 @@ extern "C" {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[export_name = "linetabsize"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_linetabsize(wp: WinHandle, lnum: c_int) -> c_int {
     if wp.is_null() {
         return 0;
@@ -2196,7 +2203,8 @@ pub extern "C" fn rs_linetabsize(wp: WinHandle, lnum: c_int) -> c_int {
 ///
 /// # Safety
 /// The `wp` parameter must be a valid window handle.
-#[no_mangle]
+#[export_name = "linetabsize_eol"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_linetabsize_eol(wp: WinHandle, lnum: c_int) -> c_int {
     if wp.is_null() {
         return 0;
@@ -2224,7 +2232,8 @@ pub extern "C" fn rs_linetabsize_eol(wp: WinHandle, lnum: c_int) -> c_int {
 ///
 /// # Safety
 /// The `posp` parameter must be a valid position pointer.
-#[no_mangle]
+#[export_name = "getvcol_nolist"]
+#[allow(clippy::must_use_candidate)]
 pub extern "C" fn rs_getvcol_nolist(posp: PosT) -> c_int {
     unsafe {
         let wp = nvim_get_curwin();
@@ -2695,7 +2704,8 @@ pub unsafe extern "C" fn rs_win_linetabsize(
 ///
 /// # Safety
 /// The `s` parameter must be a valid null-terminated string pointer.
-#[no_mangle]
+#[export_name = "linetabsize_col"]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_linetabsize_col(startvcol: c_int, s: *const c_char) -> c_int {
     if s.is_null() {
         return startvcol;
@@ -2734,8 +2744,9 @@ extern "C" {
 ///
 /// # Safety
 /// All pointer parameters must be valid or null.
-#[no_mangle]
+#[export_name = "win_text_height"]
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_win_text_height(
     wp: WinHandle,
     start_lnum: c_int,

@@ -39,6 +39,17 @@ typedef struct {
 #include "plines.h.generated.h"
 #include "plines.h.inline.generated.h"
 
+int win_chartabsize(win_T *wp, char *p, colnr_T col);
+int linetabsize_col(int startvcol, char *s);
+int linetabsize(win_T *wp, linenr_T lnum);
+int linetabsize_eol(win_T *wp, linenr_T lnum);
+CharSize charsize_regular(CharsizeArg *csarg, char *const cur, colnr_T const vcol, int32_t const cur_char);
+int charsize_nowrap(buf_T *buf, const char *cur, bool use_tabstop, colnr_T vcol, int32_t cur_char);
+int linesize_regular(CharsizeArg *const csarg, int vcol_arg, colnr_T const len);
+colnr_T getvcol_nolist(pos_T *posp);
+bool win_may_fill(win_T *wp);
+int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_t start_vcol, linenr_T *const end_lnum, int64_t *const end_vcol, int64_t *const fill, int64_t const max);
+
 /// Get the number of cells taken up on the screen by the given character at vcol.
 /// "csarg->cur_text_width_left" and "csarg->cur_text_width_right" are set
 /// to the extra size for inline virtual text.
