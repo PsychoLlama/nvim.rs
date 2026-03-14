@@ -1058,8 +1058,6 @@ int nvim_is_root_user(void)
 int64_t nvim_get_no_local_undolevel(void) { return NO_LOCAL_UNDOLEVEL; }
 // Returns a static C string naming the OptValType: "nil", "boolean", "number", "string".
 const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
-// Allocates and returns a string representation of an OptVal (caller must xfree).
-char *nvim_optval_to_cstr_alloc(OptVal o) { return rs_optval_to_cstr(o); }
 // Returns translated "Cannot unset global option value" string pointer.
 const char *nvim_errmsg_no_unset_global(void) { return _("Cannot unset global option value"); }
 
@@ -1261,9 +1259,6 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
 }
 
 // Wrapper functions to expose static functions to Rust
-void nvim_set_options_default(int opt_flags);
-void nvim_didset_options(void);
-void nvim_didset_options2(void);
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg);
 
@@ -1427,7 +1422,6 @@ int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-void nvim_call_set_option_default(int opt_idx, int opt_flags) { rs_set_option_default(opt_idx, opt_flags); }
 void nvim_call_comp_col(void) { comp_col(); }
 void nvim_call_parse_shape_opt(void) { parse_shape_opt(SHAPE_CURSOR); }
 const char *nvim_call_invocation_path_tail(const char *p_sh, size_t *lenp) { return invocation_path_tail(p_sh, lenp); }
@@ -2281,10 +2275,6 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
 // Wrapper function implementations for Rust setcmd module
 // =============================================================================
 
-void nvim_set_options_default(int opt_flags) { rs_set_options_default(opt_flags); }
-void nvim_didset_options(void) { rs_didset_options(); }
-void nvim_didset_options2(void) { rs_didset_options2(); }
-
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg)
 {
@@ -2917,9 +2907,6 @@ void nvim_call_set_termbidi_true(void)
   set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0);
 }
 
-/// alloc_options_default() wrapper.
-void nvim_call_alloc_options_default(void) { rs_alloc_options_default(); }
-
 /// check_win_options(curwin) wrapper.
 void nvim_call_check_win_options(void)
 {
@@ -2932,12 +2919,6 @@ void nvim_call_set_helplang_default_from_mess_lang(void)
 {
   set_helplang_default(get_mess_lang());
 }
-
-/// set_init_fenc_default() wrapper.
-void nvim_call_set_init_fenc_default(void) { rs_set_init_fenc_default(); }
-
-/// rs_last_status(0) -- already a Rust fn; call it here for the shim.
-void nvim_call_rs_last_status_0(void) { rs_last_status(0); }
 
 /// curbuf->b_p_initialized = true
 void nvim_curbuf_set_b_p_initialized(void) { curbuf->b_p_initialized = true; }

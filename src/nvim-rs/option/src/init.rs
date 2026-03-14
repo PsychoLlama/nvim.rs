@@ -678,7 +678,6 @@ use crate::OptInt;
 extern "C" {
     // set_init_2 accessors
     fn nvim_option_ilog_rtp();
-    fn nvim_call_set_option_default(opt_idx: c_int, opt_flags: c_int);
     fn nvim_call_comp_col();
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
     fn nvim_set_p_window(val: OptInt);
@@ -740,7 +739,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     // which results in the actual value computed from the window height.
     let scroll_flags = nvim_get_option_flags(K_OPT_SCROLL);
     if (scroll_flags & K_OPT_FLAG_WAS_SET_2) == 0 {
-        nvim_call_set_option_default(K_OPT_SCROLL, OPT_LOCAL);
+        crate::defaults::rs_set_option_default(K_OPT_SCROLL, OPT_LOCAL);
     }
     nvim_call_comp_col();
 
@@ -823,10 +822,8 @@ pub unsafe extern "C" fn rs_set_init_3() {
 
 extern "C" {
     fn nvim_call_langmap_init();
-    fn nvim_call_alloc_options_default();
     fn nvim_call_stdpaths_user_state_subpath(name: *const c_char) -> *mut c_char;
     fn nvim_call_runtimepath_default(clean_arg: c_int) -> *mut c_char;
-    fn nvim_set_options_default(opt_flags: c_int);
     fn nvim_curbuf_set_b_p_initialized();
     fn nvim_curbuf_set_b_p_ac_minus1();
     fn nvim_curbuf_set_b_p_ar_minus1();
@@ -835,16 +832,14 @@ extern "C" {
     fn nvim_call_check_win_options();
     #[link_name = "check_options"]
     fn rs_check_options();
-    fn nvim_call_rs_last_status_0();
-    fn nvim_didset_options();
+    #[link_name = "rs_last_status"]
+    fn nvim_last_status_0(morewin: c_int);
     fn nvim_call_init_spell_chartab();
     fn nvim_call_set_init_expand_env();
     fn nvim_call_save_file_ff_curbuf();
     fn nvim_call_os_env_exists(name: *const c_char) -> c_int;
     fn nvim_call_set_termbidi_true();
-    fn nvim_didset_options2();
     fn nvim_call_lang_init();
-    fn nvim_call_set_init_fenc_default();
     fn nvim_call_bind_textdomain_codeset();
     fn nvim_call_set_helplang_default_from_mess_lang();
 
@@ -867,7 +862,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     nvim_call_langmap_init();
 
     // Allocate the default option values.
-    nvim_call_alloc_options_default();
+    crate::defaults::rs_alloc_options_default();
 
     // Set defaults for shell, backupskip, cdpath (already Rust functions).
     rs_set_init_default_shell();
@@ -899,7 +894,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     }
 
     // Set all options (except terminal options) to their default value.
-    nvim_set_options_default(0);
+    crate::defaults::rs_set_options_default(0);
 
     nvim_curbuf_set_b_p_initialized();
     nvim_curbuf_set_b_p_ac_minus1();
@@ -910,10 +905,10 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     rs_check_options();
 
     // Set 'laststatus'
-    nvim_call_rs_last_status_0();
+    nvim_last_status_0(0);
 
     // Must be before option_expand(), because that one needs vim_isIDc()
-    nvim_didset_options();
+    crate::sideeffect::rs_didset_options();
 
     // Use the current chartab for the generic chartab.
     // This is not in didset_options() because it only depends on 'encoding'.
@@ -931,10 +926,10 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
         nvim_call_set_termbidi_true();
     }
 
-    nvim_didset_options2();
+    crate::sideeffect::rs_didset_options2();
 
     nvim_call_lang_init();
-    nvim_call_set_init_fenc_default();
+    rs_set_init_fenc_default();
 
     // GNU gettext: set codeset for translated messages
     nvim_call_bind_textdomain_codeset();

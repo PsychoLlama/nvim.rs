@@ -945,7 +945,6 @@ extern "C" {
     fn rs_option_has_type(opt_idx: OptIndex, type_: c_int) -> c_int;
     fn nvim_get_option_type(opt_idx: OptIndex) -> c_int;
     fn nvim_optval_type_get_name(type_: c_int) -> *const c_char;
-    fn nvim_optval_to_cstr_alloc(o: OptVal) -> *mut c_char;
     fn nvim_option_get_fullname(opt_idx: OptIndex) -> *const c_char;
     fn nvim_errmsg_no_unset_global() -> *const c_char;
     fn rs_validate_num_option(
@@ -1008,7 +1007,7 @@ pub unsafe extern "C" fn rs_validate_option_value(
         let opt_type = nvim_get_option_type(opt_idx);
         let type_str = nvim_optval_type_get_name(opt_type);
         let newval_type_str = nvim_optval_type_get_name(newval_type);
-        let rep = nvim_optval_to_cstr_alloc(*newval);
+        let rep = crate::value::rs_optval_to_cstr(*newval);
         let fullname = nvim_option_get_fullname(opt_idx);
         let fmt = gettext(c"Invalid value for option '%s': expected %s, got %s %s".as_ptr());
         libc::snprintf(

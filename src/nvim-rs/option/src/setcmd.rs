@@ -462,9 +462,6 @@ pub extern "C" fn rs_copy_direction_local_to_global() -> c_int {
 
 extern "C" {
     // Option setting functions (wrappers for static functions)
-    fn nvim_set_options_default(opt_flags: c_int);
-    fn nvim_didset_options();
-    fn nvim_didset_options2();
     fn ui_refresh_options();
 
     // Screen update
@@ -750,9 +747,9 @@ unsafe fn check_set_all(argp: *mut *mut c_char, opt_flags: c_int, did_show: &mut
         if *(*argp) as u8 == b'&' {
             // ":set all&" - reset all options to default
             *argp = (*argp).add(1);
-            nvim_set_options_default(opt_flags);
-            nvim_didset_options();
-            nvim_didset_options2();
+            crate::defaults::rs_set_options_default(opt_flags);
+            crate::sideeffect::rs_didset_options();
+            crate::sideeffect::rs_didset_options2();
             ui_refresh_options();
             redraw_all_later(UPD_CLEAR);
         } else {
