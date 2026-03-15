@@ -4413,3 +4413,9 @@ void nvim_listitem_set_prev(listitem_T *li, listitem_T *prev)
 {
   li->li_prev = prev;
 }
+
+/// Index into a typval_T array (accessor for Rust).
+typval_T *nvim_tv_idx(typval_T *argvars, int i)
+{
+  return &argvars[i];
+}

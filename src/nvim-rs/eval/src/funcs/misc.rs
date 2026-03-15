@@ -1468,7 +1468,7 @@ extern "C" {
     fn profile_msg(tm: u64) -> *const c_char;
 
     // Error messages
-    fn nvim_strings_get_e_invarg2() -> *const c_char;
+    fn nvim_get_e_invarg2() -> *const c_char;
     fn semsg(fmt: *const c_char, ...) -> c_int;
 }
 
@@ -1552,7 +1552,7 @@ pub unsafe extern "C" fn rs_f_setfperm(
     // mode string must be exactly 9 characters (rwxrwxrwx)
     let mode_bytes = std::ffi::CStr::from_ptr(mode_str).to_bytes();
     if mode_bytes.len() != 9 {
-        let _ = semsg(nvim_strings_get_e_invarg2(), mode_str);
+        let _ = semsg(nvim_get_e_invarg2(), mode_str);
         return;
     }
 

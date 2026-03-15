@@ -81,13 +81,13 @@ impl GArray {
 // =============================================================================
 
 extern "C" {
-    // typval accessors from strings_ffi.c
-    fn nvim_strings_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
-    fn nvim_strings_rettv_set_number(rettv: TypvalPtr, n: i64);
-    fn nvim_strings_rettv_set_string(rettv: TypvalPtr, s: *mut c_char);
-    fn nvim_strings_rettv_set_type(rettv: TypvalPtr, typ: c_int);
-    fn nvim_strings_tv_get_type(tv: TypvalPtr) -> c_int;
-    fn nvim_strings_rettv_list(rettv: TypvalPtr) -> *mut c_void;
+    // typval accessors (eval/typval.c and eval_shim.c)
+    fn nvim_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
+    fn nvim_tv_set_number(rettv: TypvalPtr, n: i64);
+    fn nvim_tv_set_vstring_owned(rettv: TypvalPtr, s: *mut c_char);
+    fn nvim_tv_set_type(rettv: TypvalPtr, typ: c_int);
+    fn nvim_tv_get_type(tv: TypvalPtr) -> c_int;
+    fn nvim_tv_get_list(rettv: TypvalPtr) -> *mut c_void;
 
     // eval/typval functions
     fn tv_get_string(tv: TypvalPtr) -> *const c_char;
@@ -151,9 +151,9 @@ extern "C" {
     fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char;
 
     // error strings
-    fn nvim_strings_get_e_invarg() -> *const c_char;
-    fn nvim_strings_get_e_invarg2() -> *const c_char;
-    fn nvim_strings_get_e_using_number_as_bool_nr() -> *const c_char;
+    fn nvim_get_e_invarg() -> *const c_char;
+    fn nvim_get_e_invarg2() -> *const c_char;
+    fn nvim_get_e_using_number_as_bool_nr() -> *const c_char;
 }
 
 // =============================================================================
@@ -161,20 +161,20 @@ extern "C" {
 // =============================================================================
 
 // We use the C gettext mechanism via these inline helpers.
-// The error message constants are accessed via C shim functions.
-// Since we can't use _() macro in Rust, we use the raw C strings.
+// Error message constants are accessed via C accessor functions in ex_docmd.c.
+// Since we can't use _() macro in Rust, we call the C wrappers.
 
 /// Helper: emit "E475: Invalid argument: %s" via semsg.
 unsafe fn semsg_invarg2(s: *const c_char) {
     unsafe {
-        semsg(nvim_strings_get_e_invarg2(), s);
+        semsg(nvim_get_e_invarg2(), s);
     }
 }
 
 /// Helper: emit "E805: Using a Number as a Bool: ..." via semsg.
 unsafe fn semsg_number_as_bool(n: VarNumber) {
     unsafe {
-        semsg(nvim_strings_get_e_using_number_as_bool_nr(), n);
+        semsg(nvim_get_e_using_number_as_bool_nr(), n);
     }
 }
 
@@ -185,19 +185,19 @@ unsafe fn semsg_number_as_bool(n: VarNumber) {
 /// Implementation of "byteidx()" and "byteidxcomp()" functions
 unsafe fn byteidx_common(argvars: TypvalPtr, rettv: TypvalPtr, comp: bool) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv0 = nvim_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let str = tv_get_string_chk(tv0);
         let idx = tv_get_number_chk(tv1, std::ptr::null_mut());
         if str.is_null() || idx < 0 {
             return;
         }
 
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
+        let tv2 = nvim_tv_idx(argvars, 2);
         let mut utf16idx: VarNumber = 0;
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             let mut error = false;
             utf16idx = tv_get_bool_chk(tv2, &raw mut error);
             if error {
@@ -242,14 +242,14 @@ unsafe fn byteidx_common(argvars: TypvalPtr, rettv: TypvalPtr, comp: bool) {
             }
             idx -= 1;
         }
-        nvim_strings_rettv_set_number(rettv, t.offset_from(str) as i64);
+        nvim_tv_set_number(rettv, t.offset_from(str) as i64);
     }
 }
 
 /// Implementation of "strcharlen()" and "strchars(skipcc=true/false)"
 unsafe fn strchar_common(argvars: TypvalPtr, rettv: TypvalPtr, skipcc: bool) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
         let mut len: VarNumber = 0;
         let mut s = s;
@@ -261,7 +261,7 @@ unsafe fn strchar_common(argvars: TypvalPtr, rettv: TypvalPtr, skipcc: bool) {
             }
             len += 1;
         }
-        nvim_strings_rettv_set_number(rettv, len);
+        nvim_tv_set_number(rettv, len);
     }
 }
 
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn rs_f_byteidxcomp(
 #[export_name = "f_charidx"]
 pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
         if tv_check_for_string_arg(argvars, 0) == FAIL
             || tv_check_for_number_arg(argvars, 1) == FAIL
@@ -310,15 +310,15 @@ pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
         {
             return;
         }
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        let tv2 = nvim_tv_idx(argvars, 2);
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             if tv_check_for_opt_bool_arg(argvars, 3) == FAIL {
                 return;
             }
         }
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv0 = nvim_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let str = tv_get_string_chk(tv0);
         let idx = tv_get_number_chk(tv1, std::ptr::null_mut());
         if str.is_null() || idx < 0 {
@@ -327,10 +327,10 @@ pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 
         let mut countcc: VarNumber = 0;
         let mut utf16idx: VarNumber = 0;
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             countcc = tv_get_bool(tv2);
-            let tv3 = nvim_strings_tv_idx(argvars, 3);
-            if nvim_strings_tv_get_type(tv3) != VAR_UNKNOWN {
+            let tv3 = nvim_tv_idx(argvars, 3);
+            if nvim_tv_get_type(tv3) != VAR_UNKNOWN {
                 utf16idx = tv_get_bool(tv3);
             }
         }
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
                     p == str.add(idx as usize)
                 };
                 if at_end {
-                    nvim_strings_rettv_set_number(rettv, i64::from(len));
+                    nvim_tv_set_number(rettv, i64::from(len));
                 }
                 return;
             }
@@ -383,7 +383,7 @@ pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
             len += 1;
         }
 
-        nvim_strings_rettv_set_number(rettv, if len > 0 { i64::from(len) - 1 } else { 0 });
+        nvim_tv_set_number(rettv, if len > 0 { i64::from(len) - 1 } else { 0 });
     }
 }
 
@@ -399,9 +399,9 @@ pub unsafe extern "C" fn rs_f_charidx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 pub unsafe extern "C" fn rs_f_str2list(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         tv_list_alloc_ret(rettv, -1); // kListLenUnknown = -1
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let mut p = tv_get_string(tv0);
-        let list = nvim_strings_rettv_list(rettv);
+        let list = nvim_tv_get_list(rettv);
         while *p != 0 {
             let ch = utf_ptr2char(p);
             tv_list_append_number(list, i64::from(ch));
@@ -424,20 +424,20 @@ pub unsafe extern "C" fn rs_f_str2nr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         let mut base: c_int = 10;
         let mut what: c_int = 0;
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        if nvim_strings_tv_get_type(tv1) != VAR_UNKNOWN {
+        let tv1 = nvim_tv_idx(argvars, 1);
+        if nvim_tv_get_type(tv1) != VAR_UNKNOWN {
             base = tv_get_number(tv1) as c_int;
             if base != 2 && base != 8 && base != 10 && base != 16 {
-                emsg(nvim_strings_get_e_invarg());
+                emsg(nvim_get_e_invarg());
                 return;
             }
-            let tv2 = nvim_strings_tv_idx(argvars, 2);
-            if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN && tv_get_bool(tv2) != 0 {
+            let tv2 = nvim_tv_idx(argvars, 2);
+            if nvim_tv_get_type(tv2) != VAR_UNKNOWN && tv_get_bool(tv2) != 0 {
                 what |= STR2NR_QUOTE;
             }
         }
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s0 = tv_get_string(tv0);
         let mut p = skipwhite(s0);
         let isneg = *p as u8 == b'-';
@@ -462,7 +462,7 @@ pub unsafe extern "C" fn rs_f_str2nr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
             false,
             std::ptr::null_mut(),
         );
-        nvim_strings_rettv_set_number(rettv, if isneg { -n } else { n });
+        nvim_tv_set_number(rettv, if isneg { -n } else { n });
     }
 }
 
@@ -481,14 +481,14 @@ pub unsafe extern "C" fn rs_f_strgetchar(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let str = tv_get_string_chk(tv0);
         if str.is_null() {
             return;
         }
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let mut error = false;
         let mut charidx = tv_get_number_chk(tv1, &raw mut error);
         if error {
@@ -500,7 +500,7 @@ pub unsafe extern "C" fn rs_f_strgetchar(
         while charidx >= 0 && byteidx < len {
             if charidx == 0 {
                 let ch = utf_ptr2char(str.add(byteidx));
-                nvim_strings_rettv_set_number(rettv, i64::from(ch));
+                nvim_tv_set_number(rettv, i64::from(ch));
                 break;
             }
             charidx -= 1;
@@ -520,11 +520,11 @@ pub unsafe extern "C" fn rs_f_strgetchar(
 #[export_name = "f_stridx"]
 pub unsafe extern "C" fn rs_f_stridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
         let mut buf = [0u8; NUMBUFLEN];
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let needle = tv_get_string_chk(tv1);
         let haystack = tv_get_string_buf_chk(tv0, buf.as_mut_ptr().cast());
         if needle.is_null() || haystack.is_null() {
@@ -532,9 +532,9 @@ pub unsafe extern "C" fn rs_f_stridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         }
         let haystack_start = haystack;
 
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
+        let tv2 = nvim_tv_idx(argvars, 2);
         let mut haystack = haystack;
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             let mut error = false;
             let start_idx = tv_get_number_chk(tv2, &raw mut error) as isize;
             if error || start_idx >= libc::strlen(haystack) as isize {
@@ -547,7 +547,7 @@ pub unsafe extern "C" fn rs_f_stridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
 
         let pos = libc::strstr(haystack, needle);
         if !pos.is_null() {
-            nvim_strings_rettv_set_number(rettv, pos.offset_from(haystack_start) as i64);
+            nvim_tv_set_number(rettv, pos.offset_from(haystack_start) as i64);
         }
     }
 }
@@ -563,11 +563,11 @@ pub unsafe extern "C" fn rs_f_stridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
 #[export_name = "f_string"]
 pub unsafe extern "C" fn rs_f_string(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        nvim_strings_rettv_set_type(rettv, VAR_STRING);
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        nvim_tv_set_type(rettv, VAR_STRING);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = encode_tv2string(tv0, std::ptr::null_mut());
         // rettv->vval.v_string = s; but v_type already set via set_type
-        nvim_strings_rettv_set_string(rettv, s);
+        nvim_tv_set_vstring_owned(rettv, s);
     }
 }
 
@@ -582,9 +582,9 @@ pub unsafe extern "C" fn rs_f_string(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
 #[export_name = "f_strlen"]
 pub unsafe extern "C" fn rs_f_strlen(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_strings_rettv_set_number(rettv, libc::strlen(s) as i64);
+        nvim_tv_set_number(rettv, libc::strlen(s) as i64);
     }
 }
 
@@ -618,8 +618,8 @@ pub unsafe extern "C" fn rs_f_strchars(argvars: TypvalPtr, rettv: TypvalPtr, _fp
     unsafe {
         let mut skipcc: VarNumber = 0;
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        if nvim_strings_tv_get_type(tv1) != VAR_UNKNOWN {
+        let tv1 = nvim_tv_idx(argvars, 1);
+        if nvim_tv_get_type(tv1) != VAR_UNKNOWN {
             let mut error = false;
             skipcc = tv_get_bool_chk(tv1, &raw mut error);
             if error {
@@ -650,7 +650,7 @@ pub unsafe extern "C" fn rs_f_strutf16len(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
         if tv_check_for_string_arg(argvars, 0) == FAIL
             || tv_check_for_opt_bool_arg(argvars, 1) == FAIL
@@ -658,13 +658,13 @@ pub unsafe extern "C" fn rs_f_strutf16len(
             return;
         }
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let mut countcc: VarNumber = 0;
-        if nvim_strings_tv_get_type(tv1) != VAR_UNKNOWN {
+        if nvim_tv_get_type(tv1) != VAR_UNKNOWN {
             countcc = tv_get_bool(tv1);
         }
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let mut s = tv_get_string(tv0);
         let mut len: VarNumber = 0;
         while *s != 0 {
@@ -678,7 +678,7 @@ pub unsafe extern "C" fn rs_f_strutf16len(
             }
             len += 1;
         }
-        nvim_strings_rettv_set_number(rettv, len);
+        nvim_tv_set_number(rettv, len);
     }
 }
 
@@ -697,17 +697,17 @@ pub unsafe extern "C" fn rs_f_strdisplaywidth(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
         let mut col: c_int = 0;
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        if nvim_strings_tv_get_type(tv1) != VAR_UNKNOWN {
+        let tv1 = nvim_tv_idx(argvars, 1);
+        if nvim_tv_get_type(tv1) != VAR_UNKNOWN {
             col = tv_get_number(tv1) as c_int;
         }
 
         let result = linetabsize_col(col, s as *mut c_char) - col;
-        nvim_strings_rettv_set_number(rettv, i64::from(result));
+        nvim_tv_set_number(rettv, i64::from(result));
     }
 }
 
@@ -722,9 +722,9 @@ pub unsafe extern "C" fn rs_f_strdisplaywidth(
 #[export_name = "f_strwidth"]
 pub unsafe extern "C" fn rs_f_strwidth(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_strings_rettv_set_number(rettv, i64::from(mb_string2cells(s)));
+        nvim_tv_set_number(rettv, i64::from(mb_string2cells(s)));
     }
 }
 
@@ -743,7 +743,7 @@ pub unsafe extern "C" fn rs_f_strcharpart(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let p = tv_get_string(tv0);
         let slen = libc::strlen(p);
 
@@ -751,14 +751,12 @@ pub unsafe extern "C" fn rs_f_strcharpart(
         let mut skipcc: VarNumber = 0;
         let mut error = false;
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let mut nchar = tv_get_number_chk(tv1, &raw mut error);
         if !error {
-            let tv2 = nvim_strings_tv_idx(argvars, 2);
-            let tv3 = nvim_strings_tv_idx(argvars, 3);
-            if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN
-                && nvim_strings_tv_get_type(tv3) != VAR_UNKNOWN
-            {
+            let tv2 = nvim_tv_idx(argvars, 2);
+            let tv3 = nvim_tv_idx(argvars, 3);
+            if nvim_tv_get_type(tv2) != VAR_UNKNOWN && nvim_tv_get_type(tv3) != VAR_UNKNOWN {
                 skipcc = tv_get_bool_chk(tv3, &raw mut error);
                 if error {
                     return;
@@ -784,8 +782,8 @@ pub unsafe extern "C" fn rs_f_strcharpart(
         }
 
         let mut len: c_int = 0;
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        let tv2 = nvim_tv_idx(argvars, 2);
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             let mut charlen = tv_get_number(tv2) as c_int;
             while charlen > 0 && nbyte + len < slen as c_int {
                 let off = nbyte + len;
@@ -815,7 +813,7 @@ pub unsafe extern "C" fn rs_f_strcharpart(
             len = slen as c_int - nbyte;
         }
 
-        nvim_strings_rettv_set_string(rettv, xmemdupz(p.add(nbyte as usize), len as usize));
+        nvim_tv_set_vstring_owned(rettv, xmemdupz(p.add(nbyte as usize), len as usize));
     }
 }
 
@@ -832,18 +830,18 @@ pub unsafe extern "C" fn rs_f_strpart(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
     unsafe {
         let mut error = false;
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let p = tv_get_string(tv0);
         let slen = libc::strlen(p) as VarNumber;
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let mut n = tv_get_number_chk(tv1, &raw mut error);
         let mut len: VarNumber;
         if error {
             len = 0;
         } else {
-            let tv2 = nvim_strings_tv_idx(argvars, 2);
-            if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+            let tv2 = nvim_tv_idx(argvars, 2);
+            if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
                 len = tv_get_number(tv2);
             } else {
                 len = slen - n;
@@ -863,11 +861,9 @@ pub unsafe extern "C" fn rs_f_strpart(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
             len = slen - n;
         }
 
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
-        let tv3 = nvim_strings_tv_idx(argvars, 3);
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN
-            && nvim_strings_tv_get_type(tv3) != VAR_UNKNOWN
-        {
+        let tv2 = nvim_tv_idx(argvars, 2);
+        let tv3 = nvim_tv_idx(argvars, 3);
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN && nvim_tv_get_type(tv3) != VAR_UNKNOWN {
             // length in characters
             let mut off = n;
             let mut remaining = len;
@@ -878,7 +874,7 @@ pub unsafe extern "C" fn rs_f_strpart(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
             len = off - n;
         }
 
-        nvim_strings_rettv_set_string(rettv, xmemdupz(p.add(n as usize), len as usize));
+        nvim_tv_set_vstring_owned(rettv, xmemdupz(p.add(n as usize), len as usize));
     }
 }
 
@@ -894,19 +890,19 @@ pub unsafe extern "C" fn rs_f_strpart(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 pub unsafe extern "C" fn rs_f_strridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let mut buf = [0u8; NUMBUFLEN];
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let needle = tv_get_string_chk(tv1);
         let haystack = tv_get_string_buf_chk(tv0, buf.as_mut_ptr().cast());
 
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
         if needle.is_null() || haystack.is_null() {
             return;
         }
 
         let haystack_len = libc::strlen(haystack);
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
-        let end_idx: isize = if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        let tv2 = nvim_tv_idx(argvars, 2);
+        let end_idx: isize = if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             let idx = tv_get_number_chk(tv2, std::ptr::null_mut()) as isize;
             if idx < 0 {
                 return;
@@ -938,7 +934,7 @@ pub unsafe extern "C" fn rs_f_strridx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
         }
 
         if !lastmatch.is_null() {
-            nvim_strings_rettv_set_number(rettv, lastmatch.offset_from(haystack) as i64);
+            nvim_tv_set_number(rettv, lastmatch.offset_from(haystack) as i64);
         }
     }
 }
@@ -954,9 +950,9 @@ pub unsafe extern "C" fn rs_f_strridx(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 #[export_name = "f_strtrans"]
 pub unsafe extern "C" fn rs_f_strtrans(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_strings_rettv_set_string(rettv, transstr(s, true));
+        nvim_tv_set_vstring_owned(rettv, transstr(s, true));
     }
 }
 
@@ -971,7 +967,7 @@ pub unsafe extern "C" fn rs_f_strtrans(argvars: TypvalPtr, rettv: TypvalPtr, _fp
 #[export_name = "f_utf16idx"]
 pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        nvim_strings_rettv_set_number(rettv, -1);
+        nvim_tv_set_number(rettv, -1);
 
         if tv_check_for_string_arg(argvars, 0) == FAIL
             || tv_check_for_opt_number_arg(argvars, 1) == FAIL
@@ -979,15 +975,15 @@ pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fp
         {
             return;
         }
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        let tv2 = nvim_tv_idx(argvars, 2);
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             if tv_check_for_opt_bool_arg(argvars, 3) == FAIL {
                 return;
             }
         }
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv0 = nvim_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let str = tv_get_string_chk(tv0);
         let idx = tv_get_number_chk(tv1, std::ptr::null_mut());
         if str.is_null() || idx < 0 {
@@ -996,10 +992,10 @@ pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fp
 
         let mut countcc: VarNumber = 0;
         let mut charidx: VarNumber = 0;
-        if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+        if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
             countcc = tv_get_bool(tv2);
-            let tv3 = nvim_strings_tv_idx(argvars, 3);
-            if nvim_strings_tv_get_type(tv3) != VAR_UNKNOWN {
+            let tv3 = nvim_tv_idx(argvars, 3);
+            if nvim_tv_get_type(tv3) != VAR_UNKNOWN {
                 charidx = tv_get_bool(tv3);
             }
         }
@@ -1024,7 +1020,7 @@ pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fp
                     p == str.add(idx as usize)
                 };
                 if at_end {
-                    nvim_strings_rettv_set_number(rettv, i64::from(len));
+                    nvim_tv_set_number(rettv, i64::from(len));
                 }
                 return;
             }
@@ -1052,7 +1048,7 @@ pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fp
             }
             len += 1;
         }
-        nvim_strings_rettv_set_number(rettv, i64::from(utf16idx_val));
+        nvim_tv_set_number(rettv, i64::from(utf16idx_val));
     }
 }
 
@@ -1067,9 +1063,9 @@ pub unsafe extern "C" fn rs_f_utf16idx(argvars: TypvalPtr, rettv: TypvalPtr, _fp
 #[export_name = "f_tolower"]
 pub unsafe extern "C" fn rs_f_tolower(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_strings_rettv_set_string(rettv, strcase_save(s, false));
+        nvim_tv_set_vstring_owned(rettv, strcase_save(s, false));
     }
 }
 
@@ -1080,9 +1076,9 @@ pub unsafe extern "C" fn rs_f_tolower(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 #[export_name = "f_toupper"]
 pub unsafe extern "C" fn rs_f_toupper(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_strings_rettv_set_string(rettv, strcase_save(s, true));
+        nvim_tv_set_vstring_owned(rettv, strcase_save(s, true));
     }
 }
 
@@ -1100,15 +1096,15 @@ pub unsafe extern "C" fn rs_f_tr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Ev
         let mut buf = [0u8; NUMBUFLEN];
         let mut buf2 = [0u8; NUMBUFLEN];
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
-        let tv2 = nvim_strings_tv_idx(argvars, 2);
+        let tv0 = nvim_tv_idx(argvars, 0);
+        let tv1 = nvim_tv_idx(argvars, 1);
+        let tv2 = nvim_tv_idx(argvars, 2);
         let in_str = tv_get_string(tv0);
         let fromstr = tv_get_string_buf_chk(tv1, buf.as_mut_ptr().cast());
         let tostr = tv_get_string_buf_chk(tv2, buf2.as_mut_ptr().cast());
 
         // Default return: empty string
-        nvim_strings_rettv_set_type(rettv, VAR_STRING);
+        nvim_tv_set_type(rettv, VAR_STRING);
         // rettv->vval.v_string = NULL; already zeroed by type setter
 
         if fromstr.is_null() || tostr.is_null() {
@@ -1187,7 +1183,7 @@ pub unsafe extern "C" fn rs_f_tr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Ev
 
         // Add NUL terminator
         ga_append(&raw mut ga, 0);
-        nvim_strings_rettv_set_string(rettv, ga.ga_data as *mut c_char);
+        nvim_tv_set_vstring_owned(rettv, ga.ga_data as *mut c_char);
     }
 }
 
@@ -1205,9 +1201,9 @@ pub unsafe extern "C" fn rs_f_trim(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: 
         let mut buf1 = [0u8; NUMBUFLEN];
         let mut buf2 = [0u8; NUMBUFLEN];
 
-        nvim_strings_rettv_set_type(rettv, VAR_STRING);
+        nvim_tv_set_type(rettv, VAR_STRING);
 
-        let tv0 = nvim_strings_tv_idx(argvars, 0);
+        let tv0 = nvim_tv_idx(argvars, 0);
         let mut head = tv_get_string_buf_chk(tv0, buf1.as_mut_ptr().cast());
         if head.is_null() {
             return;
@@ -1217,18 +1213,18 @@ pub unsafe extern "C" fn rs_f_trim(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: 
             return;
         }
 
-        let tv1 = nvim_strings_tv_idx(argvars, 1);
+        let tv1 = nvim_tv_idx(argvars, 1);
         let mut mask: *const c_char = std::ptr::null();
         let mut dir: c_int = 0;
 
-        if nvim_strings_tv_get_type(tv1) == VAR_STRING {
+        if nvim_tv_get_type(tv1) == VAR_STRING {
             mask = tv_get_string_buf_chk(tv1, buf2.as_mut_ptr().cast());
             if !mask.is_null() && *mask == 0 {
                 mask = std::ptr::null();
             }
 
-            let tv2 = nvim_strings_tv_idx(argvars, 2);
-            if nvim_strings_tv_get_type(tv2) != VAR_UNKNOWN {
+            let tv2 = nvim_tv_idx(argvars, 2);
+            if nvim_tv_get_type(tv2) != VAR_UNKNOWN {
                 let mut error = false;
                 dir = tv_get_number_chk(tv2, &raw mut error) as c_int;
                 if error {
@@ -1300,7 +1296,7 @@ pub unsafe extern "C" fn rs_f_trim(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: 
             }
         }
 
-        nvim_strings_rettv_set_string(rettv, xstrnsave(head, tail.offset_from(head) as usize));
+        nvim_tv_set_vstring_owned(rettv, xstrnsave(head, tail.offset_from(head) as usize));
     }
 }
 

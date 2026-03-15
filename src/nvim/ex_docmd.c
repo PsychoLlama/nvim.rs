@@ -4433,6 +4433,11 @@ const char *nvim_get_e_sandbox(void)
   return e_sandbox;
 }
 
+const char *nvim_get_e_using_number_as_bool_nr(void)
+{
+  return _(e_using_number_as_bool_nr);
+}
+
 // C accessors for Rust secure mode access
 int nvim_get_secure(void)
 {
