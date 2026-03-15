@@ -19,6 +19,7 @@ pub mod command;
 pub mod complete;
 pub mod events;
 pub mod ffi;
+pub mod init_tables;
 pub mod normal;
 pub mod parse;
 pub mod registry;
