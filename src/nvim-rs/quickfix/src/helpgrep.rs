@@ -42,21 +42,28 @@ extern "C" {
     static mut got_int: bool;
     fn line_breakcheck();
 
-    // Wildcard expansion
-    fn nvim_gen_expand_wildcards_file_silent(
-        dirname: *mut c_char,
-        fcount_out: *mut c_int,
-        fnames_out: *mut *mut *mut c_char,
+    // Wildcard expansion (direct calls)
+    fn gen_expand_wildcards(
+        num_pat: c_int,
+        pat: *mut *mut c_char,
+        num_file: *mut c_int,
+        file: *mut *mut *mut c_char,
+        flags: c_int,
     ) -> c_int;
-    fn nvim_free_wild(fcount: c_int, fnames: *mut *mut c_char);
-    fn nvim_fname_at(fnames: *mut *mut c_char, idx: c_int) -> *mut c_char;
-    fn nvim_add_pathsep(dirname: *mut c_char);
-    fn nvim_hgr_strcat_doc_glob(dirname: *mut c_char);
-    fn nvim_strnicmp(a: *const c_char, b: *const c_char, n: c_int) -> c_int;
+    fn FreeWild(fcount: c_int, fnames: *mut *mut c_char);
+    fn add_pathsep(dirname: *mut c_char);
 
-    // Option part / p_rtp iteration
-    fn nvim_get_p_rtp() -> *mut c_char;
-    fn nvim_copy_option_part_comma(pp: *mut *mut c_char, buf: *mut c_char, maxlen: c_int);
+    // String comparison
+    fn strncasecmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+
+    // Option part / p_rtp iteration (direct calls)
+    static p_rtp: *mut c_char;
+    fn copy_option_part(
+        pp: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: usize,
+        sep_chars: *const c_char,
+    ) -> usize;
     fn nvim_get_maxpathl() -> usize;
     fn nvim_get_namebuff() -> *mut c_char;
 
@@ -163,23 +170,26 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
 /// - `lang` must be a valid C string or NULL
 unsafe fn hgr_search_files_in_dir(
     qfl: QfListHandleMut,
-    dirname: *mut c_char,
+    mut dirname: *mut c_char,
     p_regmatch: RegmatchHandle,
     lang: *const c_char,
 ) {
     // Append path separator and doc glob pattern
-    nvim_add_pathsep(dirname);
-    nvim_hgr_strcat_doc_glob(dirname);
+    add_pathsep(dirname);
+    // strcat(dirname, "doc/*.\\(txt\\|??x\\)")
+    let doc_glob = c"doc/*.\\(txt\\|??x\\)";
+    libc::strcat(dirname, doc_glob.as_ptr());
 
     let mut fcount: c_int = 0;
     let mut fnames: *mut *mut c_char = std::ptr::null_mut();
 
-    if nvim_gen_expand_wildcards_file_silent(dirname, &raw mut fcount, &raw mut fnames) == OK
+    // EW_FILE | EW_SILENT = 0x02 | 0x20 = 0x22
+    if gen_expand_wildcards(1, &raw mut dirname, &raw mut fcount, &raw mut fnames, 0x22) == OK
         && fcount > 0
     {
         let mut fi = 0;
         while fi < fcount && !got_int {
-            let fname = nvim_fname_at(fnames, fi);
+            let fname = *fnames.add(fi as usize);
 
             // Skip files for a different language.
             if !lang.is_null() {
@@ -194,9 +204,9 @@ unsafe fn hgr_search_files_in_dir(
                 // Skip if lang doesn't match last 2 chars of extension
                 // (e.g. "fr" in "tutor.frx" or "tutor.fr.txt")
                 // Exception: lang="en" matches ".txt" extension
-                let lang_matches_ext = nvim_strnicmp(lang, ext_ptr, 2) == 0;
-                let is_en = nvim_strnicmp(lang, c"en".as_ptr(), 2) == 0;
-                let is_txt = nvim_strnicmp(c"txt".as_ptr(), ext_ptr, 3) == 0;
+                let lang_matches_ext = strncasecmp(lang, ext_ptr, 2) == 0;
+                let is_en = strncasecmp(lang, c"en".as_ptr(), 2) == 0;
+                let is_txt = strncasecmp(c"txt".as_ptr(), ext_ptr, 3) == 0;
 
                 if !lang_matches_ext && (!is_en || !is_txt) {
                     fi += 1;
@@ -207,7 +217,7 @@ unsafe fn hgr_search_files_in_dir(
             hgr_search_file(qfl, fname.cast_const(), p_regmatch);
             fi += 1;
         }
-        nvim_free_wild(fcount, fnames);
+        FreeWild(fcount, fnames);
     }
 }
 
@@ -227,13 +237,13 @@ pub unsafe extern "C" fn rs_hgr_search_in_rtp(
     p_regmatch: RegmatchHandle,
     lang: *const c_char,
 ) {
-    let maxpathl = nvim_get_maxpathl() as c_int;
+    let maxpathl = nvim_get_maxpathl();
     let name_buff = nvim_get_namebuff();
 
     // Go through all directories in 'runtimepath'
-    let mut p = nvim_get_p_rtp();
+    let mut p = p_rtp;
     while *p != 0 && !got_int {
-        nvim_copy_option_part_comma(&raw mut p, name_buff, maxpathl);
+        copy_option_part(&raw mut p, name_buff, maxpathl, c",".as_ptr());
         hgr_search_files_in_dir(qfl, name_buff, p_regmatch, lang);
     }
 }

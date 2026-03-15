@@ -52,12 +52,14 @@ extern "C" {
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
 
     // Regex accessors
-    fn nvim_vim_regexec_multi(
+    fn vim_regexec_multi(
         rm: RegmmatchHandle,
         win: WinHandle,
         buf: BufHandle,
         lnum: LinenrT,
         col: ColnrT,
+        tm: *mut c_void,
+        timed_out: *mut c_int,
     ) -> c_int;
     fn nvim_regmatch_startpos_lnum(rm: RegmmatchHandle, idx: c_int) -> LinenrT;
     fn nvim_regmatch_startpos_col(rm: RegmmatchHandle, idx: c_int) -> ColnrT;
@@ -65,14 +67,14 @@ extern "C" {
     fn nvim_regmatch_endpos_col(rm: RegmmatchHandle, idx: c_int) -> ColnrT;
 
     // Fuzzy match
-    fn nvim_fuzzy_match(
-        str: *const c_char,
+    fn fuzzy_match(
+        str: *mut c_char,
         pat: *const c_char,
         matchseq: bool,
         score: *mut c_int,
         matches: *mut u32,
         max_matches: c_int,
-    ) -> c_int;
+    ) -> bool;
 
     // Globals
     fn nvim_get_got_int() -> c_int;
@@ -180,7 +182,16 @@ unsafe fn vgr_regex_match(
     let mut found_match = false;
     let curwin = nvim_get_curwin();
 
-    while nvim_vim_regexec_multi(regmatch, curwin, buf, lnum, *col) > 0 {
+    while vim_regexec_multi(
+        regmatch,
+        curwin,
+        buf,
+        lnum,
+        *col,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    ) > 0
+    {
         let start_lnum = nvim_regmatch_startpos_lnum(regmatch, 0);
         let start_col = nvim_regmatch_startpos_col(regmatch, 0);
         let end_lnum = nvim_regmatch_endpos_lnum(regmatch, 0);
@@ -247,15 +258,14 @@ unsafe fn vgr_fuzzy_match(
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
     let sz = FUZZY_MATCH_MAX_LEN as c_int;
 
-    while nvim_fuzzy_match(
-        str.add(*col as usize),
+    while fuzzy_match(
+        str.add(*col as usize).cast::<c_char>(),
         spat,
         false,
         &raw mut score,
         matches.as_mut_ptr(),
         sz,
-    ) > 0
-    {
+    ) {
         if rs_qf_add_entry(
             qfl,
             std::ptr::null_mut(), // dir
@@ -623,17 +633,18 @@ extern "C" {
     fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
     fn rs_foldUpdateAll(win: WinHandle);
 
-    // regmmatch_T heap management (Phase 1 new accessors)
+    // regmmatch_T heap management
     fn nvim_vgr_regcomp_init(pat: *const c_char) -> RegmmatchHandle;
     fn nvim_vgr_regmatch_free(rm: RegmmatchHandle);
 
-    // get_arglist_exp wrapper (Phase 1)
-    fn nvim_vgr_get_arglist_exp(
-        p: *const c_char,
+    // get_arglist_exp / FreeWild direct calls
+    fn get_arglist_exp(
+        p: *mut c_char,
         fcount_out: *mut c_int,
         fnames_out: *mut *mut *mut c_char,
+        expand: bool,
     ) -> c_int;
-    fn nvim_vgr_free_wild_raw(fcount: c_int, fnames: *mut *mut c_char);
+    fn FreeWild(fcount: c_int, fnames: *mut *mut c_char);
 
     // Error message wrappers for parse
     // emsg declared in the second extern block
@@ -684,7 +695,7 @@ struct VgrArgs {
     /// Borrowed pointer into `eap->arg`; NOT owned.
     spat: *mut c_char,
     flags: c_int,
-    /// Owned by C's `get_arglist_exp`; freed by `FreeWild` via `nvim_vgr_free_wild_raw`.
+    /// Owned by C's `get_arglist_exp`; freed by `FreeWild` directly.
     fnames: *mut *mut c_char,
     fcount: c_int,
     /// Heap-allocated `regmmatch_T`; freed by `nvim_vgr_regmatch_free`.
@@ -750,7 +761,9 @@ impl VgrArgs {
         // Expand file list
         let mut fcount: c_int = 0;
         let mut fnames: *mut *mut c_char = std::ptr::null_mut();
-        if nvim_vgr_get_arglist_exp(p, &raw mut fcount, &raw mut fnames) == FAIL || fcount == 0 {
+        if get_arglist_exp(p.cast_mut(), &raw mut fcount, &raw mut fnames, true) == FAIL
+            || fcount == 0
+        {
             emsg(c"E479: No match".as_ptr());
             nvim_vgr_regmatch_free(regmatch);
             nvim_xfree(qf_title.cast());
@@ -771,7 +784,7 @@ impl VgrArgs {
     /// Free the file list (`FreeWild`). Safe to call multiple times.
     unsafe fn free_wild(&mut self) {
         if !self.fnames.is_null() {
-            nvim_vgr_free_wild_raw(self.fcount, self.fnames);
+            FreeWild(self.fcount, self.fnames);
             self.fnames = std::ptr::null_mut();
             self.fcount = 0;
         }

@@ -150,8 +150,8 @@ extern "C" {
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_get_lastused_tabpage() -> TabpageHandle;
 
-    // find window by nr or id (quickfix_shim.c)
-    fn nvim_find_win_by_nr_or_id(argvars: TypvalPtr) -> WinHandle;
+    // find window by nr or id (direct call)
+    fn find_win_by_nr_or_id(argvars: TypvalPtr) -> WinHandle;
 
     // tab/window navigation (existing Rust exports callable via #[link_name])
     fn rs_find_tabpage(n: c_int) -> TabpageHandle;
@@ -398,7 +398,7 @@ pub unsafe extern "C" fn rs_f_winline(_argvars: TypvalPtr, rettv: TypvalPtr, _fp
 #[export_name = "f_winheight"]
 pub unsafe extern "C" fn rs_f_winheight(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let wp = nvim_find_win_by_nr_or_id(argvars);
+        let wp = find_win_by_nr_or_id(argvars);
         nvim_eval_tv_set_number(
             rettv,
             if wp.is_null() {
@@ -417,7 +417,7 @@ pub unsafe extern "C" fn rs_f_winheight(argvars: TypvalPtr, rettv: TypvalPtr, _f
 #[export_name = "f_winwidth"]
 pub unsafe extern "C" fn rs_f_winwidth(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let wp = nvim_find_win_by_nr_or_id(argvars);
+        let wp = find_win_by_nr_or_id(argvars);
         nvim_eval_tv_set_number(
             rettv,
             if wp.is_null() {
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn rs_f_winwidth(argvars: TypvalPtr, rettv: TypvalPtr, _fp
 #[export_name = "f_winbufnr"]
 pub unsafe extern "C" fn rs_f_winbufnr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        let wp = nvim_find_win_by_nr_or_id(argvars);
+        let wp = find_win_by_nr_or_id(argvars);
         nvim_eval_tv_set_number(
             rettv,
             if wp.is_null() {
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn rs_f_win_screenpos(
     unsafe {
         tv_list_alloc_ret(rettv, 2);
         let list = nvim_eval_tv_get_list(rettv);
-        let wp = nvim_find_win_by_nr_or_id(argvars);
+        let wp = find_win_by_nr_or_id(argvars);
         tv_list_append_number(
             list,
             if wp.is_null() {

@@ -20,6 +20,7 @@ use crate::{
 
 extern "C" {
     /// Get the `qfl_type` from `qf_info_T`: 0=quickfix, 1=location, 2=internal.
+    #[link_name = "nvim_qf_get_qi_type"]
     fn nvim_qi_get_qfl_type(qi: QfInfoHandle) -> c_int;
 }
 

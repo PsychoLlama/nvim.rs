@@ -323,7 +323,7 @@ int nvim_qf_get_qfl_type(const void *qfl_void) { return ((const qf_list_T *)qfl_
 
 int nvim_qf_get_qi_type(const void *qi_void) { return ((const qf_info_T *)qi_void)->qfl_type; }
 
-int nvim_qi_get_qfl_type(const void *qi_void) { return nvim_qf_get_qi_type(qi_void); }
+// nvim_qi_get_qfl_type deleted: Rust uses #[link_name = "nvim_qf_get_qi_type"] directly.
 
 void *nvim_qf_get_last(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_last; }
 
@@ -508,7 +508,7 @@ bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_w
 
 void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
 
-void *nvim_qf_find_win_handle(const void *qi_void) { return (void *)rs_qf_find_win_for_stack(qi_void); }
+// nvim_qf_find_win_handle deleted: Rust uses #[link_name = "rs_qf_find_win_for_stack"] directly.
 
 int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
 
@@ -798,12 +798,7 @@ const char *nvim_di_get_string(const void *di) { return di == NULL ? NULL : ((co
 /// Get a pointer to the dictitem's di_tv (qf-specific void* version).
 void *nvim_qf_di_get_tv(void *di) { return di == NULL ? NULL : (void *)&((dictitem_T *)di)->di_tv; }
 
-/// Find a dictitem_T by key in a dict (key_len = -1 for NUL-terminated).
-/// Look up the window for f_getloclist from argvars[0].
-void *nvim_find_win_by_nr_or_id(const void *argvars_void)
-{
-  return (void *)find_win_by_nr_or_id((const typval_T *)argvars_void);
-}
+// nvim_find_win_by_nr_or_id deleted: Rust calls find_win_by_nr_or_id directly.
 
 /// Advance the typval_T pointer by one element for argvars indexing.
 void *nvim_tv_advance(const void *tv) { return (void *)((const typval_T *)tv + 1); }
@@ -860,19 +855,8 @@ int nvim_qfline_get_valid_bufnr(const void *qfp_void)
 
 // nvim_qfl_get_{index,count,id,changedtick,title} deleted: merged into nvim_qf_get_* (Phase 15).
 
-/// qf_alloc_stack wrapper for internal stacks (used by qf_get_list_from_lines).
-void *nvim_qf_alloc_internal_stack(void) { return rs_qf_alloc_stack(QFLT_INTERNAL, 1); }
-
-/// qf_free_lists wrapper (free qi->qf_lists array after iterating).
-void nvim_qf_free_lists_for_qi(void *qi_void)
-{
-  if (qi_void == NULL) { return; }
-  qf_info_T *qi = (qf_info_T *)qi_void;
-  for (int i = 0; i < qi->qf_listcount; i++) {
-    rs_qf_free_list(&qi->qf_lists[i]);
-  }
-  nvim_qf_free_lists_array(qi_void);
-}
+// nvim_qf_alloc_internal_stack deleted: Rust calls rs_qf_alloc_stack(QFLT_INTERNAL, 1) directly.
+// nvim_qf_free_lists_for_qi deleted: Rust inlines loop + nvim_qf_free_lists_array.
 
 /// Get the "efm" string from a what dict (NULL if missing or wrong type).
 const char *nvim_tv_dict_get_efm_str(const void *dict)
@@ -989,16 +973,7 @@ int nvim_qf_get_valid_bufnr(const void *qi_void)
   return 0;
 }
 
-// Phase 4 accessors: qfl empty check for mark_adjust / valid counting
-
-/// Check if a qf_list_T is empty (no entries).
-bool nvim_qf_list_is_empty(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return true;
-  }
-  return rs_qf_list_empty(qfl_void);
-}
+// nvim_qf_list_is_empty deleted: Rust uses #[link_name = "rs_qf_list_empty"] directly.
 
 // parse_efm_option, free_efm_list, nvim_qf_parse_efm_option, nvim_qf_free_efm_list,
 // nvim_efm_get_* deleted: migrated to Rust EfmPattern in reader.rs (Phase 9).
@@ -2239,7 +2214,8 @@ static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname
   return buf;
 }
 
-int nvim_vim_regexec_multi(regmmatch_T *rm, void *win, void *buf, linenr_T lnum, colnr_T col) { return vim_regexec_multi(rm, (win_T *)win, (buf_T *)buf, lnum, col, NULL, NULL); }
+// nvim_vim_regexec_multi deleted: Rust calls vim_regexec_multi directly with NULL,NULL.
+// nvim_fuzzy_match deleted: Rust calls fuzzy_match directly.
 
 linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm->startpos[idx].lnum; }
 
@@ -2250,13 +2226,6 @@ linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx) { return rm->
 colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx) { return rm->endpos[idx].col; }
 
 colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum) { return ml_get_buf_len((buf_T *)buf, lnum); }
-
-/// Wrapper for fuzzy_match
-int nvim_fuzzy_match(const char *str, const char *pat, bool matchseq,
-                     int *score, uint32_t *matches, int max_matches)
-{
-  return fuzzy_match((char *)str, pat, matchseq, score, matches, max_matches);
-}
 
 // _Static_assert for Phase 1 CMD_* constants used in Rust auname lookups
 _Static_assert(CMD_make == 273, "CMD_make mismatch");
@@ -2345,14 +2314,8 @@ void nvim_vgr_regmatch_free(void *rm_void)
   xfree(rm);
 }
 
-/// Wrapper for get_arglist_exp.
-int nvim_vgr_get_arglist_exp(const char *p, int *fcount_out, char ***fnames_out)
-{
-  return get_arglist_exp((char *)p, fcount_out, fnames_out, true);
-}
-
-/// FreeWild wrapper for vgr fnames.
-void nvim_vgr_free_wild_raw(int fcount, char **fnames) { FreeWild(fcount, fnames); }
+// nvim_vgr_get_arglist_exp deleted: Rust calls get_arglist_exp directly.
+// nvim_vgr_free_wild_raw deleted: Rust calls FreeWild directly.
 
 // nvim_apply_autocmds_quickfixcmdpre deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, ...) directly.
 // nvim_apply_autocmds_quickfixcmdpost deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, ...) directly.
@@ -2698,20 +2661,14 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
 // nvim_hgr_line_breakcheck deleted: use nvim_qf_line_breakcheck
 // nvim_hgr_get_MAXPATHL deleted: use nvim_get_maxpathl (memline_shim.c, returns size_t)
 // nvim_hgr_get_NameBuff deleted: use nvim_get_namebuff (buffer.c, returns char*)
-int nvim_gen_expand_wildcards_file_silent(char *dirname, int *fcount_out, char ***fnames_out)
-{
-  return gen_expand_wildcards(1, &dirname, fcount_out, fnames_out, EW_FILE|EW_SILENT);
-}
-void nvim_free_wild(int fcount, char **fnames) { FreeWild(fcount, fnames); }
-char *nvim_fname_at(char **fnames, int idx) { return fnames[idx]; }
-void nvim_add_pathsep(char *dirname) { add_pathsep(dirname); }
-void nvim_hgr_strcat_doc_glob(char *dirname) { strcat(dirname, "doc/*.\\(txt\\|??x\\)"); }  // NOLINT
-int nvim_strnicmp(const char *a, const char *b, int n) { return STRNICMP(a, b, (size_t)n); }
-char *nvim_get_p_rtp(void) { return p_rtp; }
-void nvim_copy_option_part_comma(char **pp, char *buf, int maxlen)
-{
-  copy_option_part(pp, buf, (size_t)maxlen, ",");
-}
+// nvim_gen_expand_wildcards_file_silent deleted: Rust calls gen_expand_wildcards directly.
+// nvim_free_wild deleted: Rust calls FreeWild directly.
+// nvim_fname_at deleted: Rust indexes fnames[idx] directly.
+// nvim_add_pathsep deleted: Rust calls add_pathsep directly.
+// nvim_hgr_strcat_doc_glob deleted: Rust calls strcat("doc/*.\\(txt\\|??x\\)") directly.
+// nvim_strnicmp deleted: Rust calls strncasecmp directly.
+// nvim_get_p_rtp deleted: Rust uses static p_rtp directly.
+// nvim_copy_option_part_comma deleted: Rust calls copy_option_part(pp, buf, maxlen, ",") directly.
 
 // nvim_hgr_pre_check deleted (Phase 4): inlined into Rust using nvim_qf_apply_autocmd_pre.
 // nvim_hgr_is_loclist_cmd deleted (Phase 4): use nvim_is_loclist_cmd + nvim_eap_get_cmdidx.

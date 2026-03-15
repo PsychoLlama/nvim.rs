@@ -106,7 +106,8 @@ extern "C" {
     // (nvim_emsg_loclist deleted: use emsg directly)
 
     // --- Phase 4: set_errorlist + qf_free_stack ---
-    /// Find the quickfix/location list window for a stack.
+    /// Find the quickfix/location list window for a stack (direct Rust call).
+    #[link_name = "rs_qf_find_win_for_stack"]
     fn nvim_qf_find_win_handle(qi: *const c_void) -> *const c_void;
     /// Call `qf_update_buffer(qi, old_last)`.
     #[link_name = "rs_qf_update_buffer"]

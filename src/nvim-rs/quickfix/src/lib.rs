@@ -98,6 +98,7 @@ extern "C" {
     // Phase 1: Validation accessors
     fn nvim_win_valid(wp: *const c_void) -> bool;
     fn nvim_win_get_loclist(wp: *const c_void) -> QfInfoHandle;
+    #[link_name = "rs_qf_find_win_for_stack"]
     fn nvim_qf_find_win_handle(qi: QfInfoHandle) -> *const c_void;
     fn nvim_qf_win_get_handle(wp: *const c_void) -> c_int;
     // nvim_qflist_valid removed: logic inlined into rs_qflist_valid (Phase 16)

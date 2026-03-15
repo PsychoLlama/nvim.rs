@@ -725,6 +725,9 @@ const QF_GETLIST_ALL: c_int = 0xFFF;
 /// INVALID_QFIDX sentinel (same as C define)
 const INVALID_QFIDX: c_int = -1;
 
+/// qfl_type constants (from quickfix.h enum qfltype_T)
+const QFLT_INTERNAL: c_int = 2;
+
 /// C return value OK
 const C_OK: c_int = 1;
 
@@ -1212,7 +1215,7 @@ extern "C" {
     fn nvim_di_get_type(di: *const c_void) -> c_int;
     fn nvim_di_get_nr(di: *const c_void) -> i64;
     fn nvim_qf_di_get_tv(di: *mut c_void) -> *mut c_void;
-    fn nvim_find_win_by_nr_or_id(argvars: *const c_void) -> *mut c_void;
+    fn find_win_by_nr_or_id(argvars: *const c_void) -> *mut c_void;
     fn nvim_tv_advance(tv: *const c_void) -> *mut c_void;
     fn nvim_tv_is_unknown(tv: *const c_void) -> bool;
     fn nvim_tv_is_dict(tv: *const c_void) -> bool;
@@ -1235,8 +1238,8 @@ extern "C" {
     fn nvim_qfline_get_valid_bufnr(qfp: *const c_void) -> c_int;
     fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
     static got_int: bool;
-    fn nvim_qf_alloc_internal_stack() -> *mut c_void;
-    fn nvim_qf_free_lists_for_qi(qi: *mut c_void);
+    fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_void;
+    fn nvim_qf_free_lists_array(qi: *mut c_void);
     // nvim_get_p_efm deleted: use p_efm global directly
     static p_efm: *const std::ffi::c_char;
     fn nvim_tv_dict_get_efm_str(what: *const c_void) -> *const std::ffi::c_char;
@@ -1514,7 +1517,7 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
 
     // kListLenMayKnow = -3
     let list = tv_list_alloc(-3);
-    let qi = nvim_qf_alloc_internal_stack();
+    let qi = rs_qf_alloc_stack(QFLT_INTERNAL, 1);
 
     if rs_qf_init_ext(
         qi,
@@ -1537,7 +1540,17 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
         }
     }
 
-    nvim_qf_free_lists_for_qi(qi);
+    // Inline of nvim_qf_free_lists_for_qi: free each list then free the array
+    if !qi.is_null() {
+        let listcount = nvim_qf_get_listcount(qi.cast_const());
+        for i in 0..listcount {
+            let qfl_i = nvim_qf_get_list_handle(qi.cast_const(), i);
+            if !qfl_i.is_null() {
+                rs_qf_free_list(qfl_i);
+            }
+        }
+        nvim_qf_free_lists_array(qi);
+    }
 
     tv_dict_add_list(retdict, c"items".as_ptr(), 5, list);
 
@@ -1757,7 +1770,7 @@ pub unsafe extern "C" fn rs_f_getloclist(
     rettv: *mut c_void,
     _fptr: *const c_void,
 ) {
-    let wp = nvim_find_win_by_nr_or_id(argvars);
+    let wp = find_win_by_nr_or_id(argvars);
     let what_arg = nvim_tv_advance(argvars);
     rs_get_qf_loc_list(false, wp, what_arg, rettv);
 }
@@ -2066,7 +2079,7 @@ pub unsafe extern "C" fn rs_f_setloclist(
     _fptr: *const c_void,
 ) {
     nvim_qf_tv_set_number(rettv, -1);
-    let win = nvim_find_win_by_nr_or_id(argvars);
+    let win = find_win_by_nr_or_id(argvars);
     if !win.is_null() {
         let args = nvim_tv_advance(argvars);
         rs_set_qf_ll_list(win, args, rettv);

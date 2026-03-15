@@ -2207,6 +2207,7 @@ extern "C" {
     // qfl list-level accessors (additional to those in the main extern block above)
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_list_at(qi: *const c_void, idx: c_int) -> *const c_void;
+    #[link_name = "rs_qf_list_empty"]
     fn nvim_qf_list_is_empty(qfl: *const c_void) -> bool;
 
     // entry setters (mutable variants)
