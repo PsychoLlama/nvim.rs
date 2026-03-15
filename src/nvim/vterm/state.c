@@ -4,7 +4,6 @@
 
 #include "nvim/grid.h"
 #include "nvim/mbyte.h"
-#include "nvim/vterm/encoding.h"
 #include "nvim/vterm/parser.h"
 #include "nvim/vterm/pen.h"
 #include "nvim/vterm/state.h"
@@ -12,6 +11,9 @@
 #include "nvim/vterm/vterm_internal_defs.h"
 
 #include "vterm/state.c.generated.h"
+
+// Rust FFI: encoding lookup returning VTermEncoding*
+extern VTermEncoding *rs_vterm_lookup_encoding_ptr(int enc_type, char designation);
 
 #define strneq(a, b, n) (strncmp(a, b, n) == 0)
 
@@ -115,8 +117,8 @@ static VTermState *vterm_state_new(VTerm *vt)
                                                               sizeof(VTermLineInfo));
   state->lineinfo = state->lineinfos[BUFIDX_PRIMARY];
 
-  state->encoding_utf8.enc = vterm_lookup_encoding(ENC_UTF8, 'u');
-  if (*state->encoding_utf8.enc->init) {
+  state->encoding_utf8.enc = rs_vterm_lookup_encoding_ptr(ENC_UTF8, 'u');
+  if (state->encoding_utf8.enc && state->encoding_utf8.enc->init) {
     (*state->encoding_utf8.enc->init)(state->encoding_utf8.enc, state->encoding_utf8.data);
   }
 
@@ -658,7 +660,7 @@ static int on_escape(const char *bytes, size_t len, void *user)
 
     {
       int setnum = bytes[0] - 0x28;
-      VTermEncoding *newenc = vterm_lookup_encoding(ENC_SINGLE_94, bytes[1]);
+      VTermEncoding *newenc = rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, bytes[1]);
 
       if (newenc) {
         state->encoding[setnum].enc = newenc;
@@ -2310,8 +2312,8 @@ void vterm_state_reset(VTermState *state, int hard)
   vterm_state_resetpen(state);
 
   VTermEncoding *default_enc = state->vt->mode.utf8
-                               ? vterm_lookup_encoding(ENC_UTF8,      'u')
-                               : vterm_lookup_encoding(ENC_SINGLE_94, 'B');
+                               ? rs_vterm_lookup_encoding_ptr(ENC_UTF8,      'u')
+                               : rs_vterm_lookup_encoding_ptr(ENC_SINGLE_94, 'B');
 
   for (int i = 0; i < 4; i++) {
     state->encoding[i].enc = default_enc;

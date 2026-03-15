@@ -7,7 +7,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_sign_loss)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 /// Unicode replacement character for invalid sequences
 pub const UNICODE_INVALID: u32 = 0xFFFD;
@@ -399,6 +399,217 @@ pub extern "C" fn rs_vterm_lookup_encoding(enc_type: c_int, designation: c_int) 
         Some(Encoding::UsAscii) => 1,
         Some(Encoding::DecDrawing) => 2,
         None => -1,
+    }
+}
+
+// =============================================================================
+// VTermEncoding FFI Interface (Approach B: function-pointer statics)
+// =============================================================================
+
+/// C-compatible `VTermEncoding` struct matching the C definition.
+///
+/// This must match `struct VTermEncoding` in `vterm_internal_defs.h`.
+#[repr(C)]
+pub struct VTermEncoding {
+    /// Optional init callback (resets decoder state)
+    pub init: Option<unsafe extern "C" fn(enc: *mut VTermEncoding, data: *mut c_void)>,
+    /// Decode callback
+    pub decode: Option<
+        unsafe extern "C" fn(
+            enc: *mut VTermEncoding,
+            data: *mut c_void,
+            cp: *mut u32,
+            cpi: *mut c_int,
+            cplen: c_int,
+            bytes: *const c_char,
+            pos: *mut usize,
+            bytelen: usize,
+        ),
+    >,
+}
+
+// SAFETY: VTermEncoding is a C struct with function pointers (no mutable state).
+// It is only accessed from a single thread (vterm is single-threaded).
+unsafe impl Sync for VTermEncoding {}
+unsafe impl Send for VTermEncoding {}
+
+/// C-compatible UTF-8 decoder state matching `struct UTF8DecoderData` in encoding.c.
+///
+/// Layout must match:
+/// ```c
+/// struct UTF8DecoderData {
+///     int bytes_remaining;
+///     int bytes_total;
+///     int this_cp;
+/// };
+/// ```
+#[repr(C)]
+struct Utf8DecoderData {
+    bytes_remaining: c_int,
+    bytes_total: c_int,
+    this_cp: c_int,
+}
+
+/// UTF-8 init callback: resets decoder state.
+unsafe extern "C" fn utf8_init(_enc: *mut VTermEncoding, data: *mut c_void) {
+    if data.is_null() {
+        return;
+    }
+    let d = unsafe { &mut *data.cast::<Utf8DecoderData>() };
+    d.bytes_remaining = 0;
+    d.bytes_total = 0;
+    d.this_cp = 0;
+}
+
+/// UTF-8 decode callback.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe extern "C" fn utf8_decode(
+    _enc: *mut VTermEncoding,
+    data: *mut c_void,
+    cp: *mut u32,
+    cpi: *mut c_int,
+    cplen: c_int,
+    bytes: *const c_char,
+    pos: *mut usize,
+    bytelen: usize,
+) {
+    if data.is_null() || cp.is_null() || cpi.is_null() || bytes.is_null() || pos.is_null() {
+        return;
+    }
+
+    let d = unsafe { &mut *data.cast::<Utf8DecoderData>() };
+    let cplen_usize = if cplen > 0 { cplen as usize } else { 0 };
+    let output = unsafe { std::slice::from_raw_parts_mut(cp, cplen_usize) };
+    let byte_slice = unsafe { std::slice::from_raw_parts(bytes.cast::<u8>(), bytelen) };
+
+    // Reconstruct Utf8Decoder from C data
+    let mut decoder = Utf8Decoder {
+        bytes_remaining: d.bytes_remaining as u8,
+        bytes_total: d.bytes_total as u8,
+        this_cp: d.this_cp as u32,
+    };
+
+    let out_idx_init = unsafe { *cpi } as usize;
+    let mut out_idx = out_idx_init;
+
+    decoder.decode(byte_slice, unsafe { &mut *pos }, output, &mut out_idx);
+
+    // Write back decoder state
+    d.bytes_remaining = c_int::from(decoder.bytes_remaining);
+    d.bytes_total = c_int::from(decoder.bytes_total);
+    #[allow(clippy::cast_possible_wrap)]
+    let this_cp_int = decoder.this_cp as c_int;
+    d.this_cp = this_cp_int;
+    #[allow(clippy::cast_possible_wrap)]
+    let out_idx_int = out_idx as c_int;
+    unsafe { *cpi = out_idx_int };
+}
+
+/// US-ASCII decode callback.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe extern "C" fn usascii_decode(
+    _enc: *mut VTermEncoding,
+    _data: *mut c_void,
+    cp: *mut u32,
+    cpi: *mut c_int,
+    cplen: c_int,
+    bytes: *const c_char,
+    pos: *mut usize,
+    bytelen: usize,
+) {
+    if cp.is_null() || cpi.is_null() || bytes.is_null() || pos.is_null() {
+        return;
+    }
+
+    let cplen_usize = if cplen > 0 { cplen as usize } else { 0 };
+    let output = unsafe { std::slice::from_raw_parts_mut(cp, cplen_usize) };
+    let byte_slice = unsafe { std::slice::from_raw_parts(bytes.cast::<u8>(), bytelen) };
+
+    let mut out_idx = unsafe { *cpi } as usize;
+    decode_usascii(byte_slice, unsafe { &mut *pos }, output, &mut out_idx);
+    #[allow(clippy::cast_possible_wrap)]
+    unsafe {
+        *cpi = out_idx as c_int;
+    }
+}
+
+/// DEC Special Graphics decode callback.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe extern "C" fn dec_drawing_decode(
+    _enc: *mut VTermEncoding,
+    _data: *mut c_void,
+    cp: *mut u32,
+    cpi: *mut c_int,
+    cplen: c_int,
+    bytes: *const c_char,
+    pos: *mut usize,
+    bytelen: usize,
+) {
+    if cp.is_null() || cpi.is_null() || bytes.is_null() || pos.is_null() {
+        return;
+    }
+
+    let cplen_usize = if cplen > 0 { cplen as usize } else { 0 };
+    let output = unsafe { std::slice::from_raw_parts_mut(cp, cplen_usize) };
+    let byte_slice = unsafe { std::slice::from_raw_parts(bytes.cast::<u8>(), bytelen) };
+
+    let mut out_idx = unsafe { *cpi } as usize;
+    decode_dec_drawing(byte_slice, unsafe { &mut *pos }, output, &mut out_idx);
+    #[allow(clippy::cast_possible_wrap)]
+    unsafe {
+        *cpi = out_idx as c_int;
+    }
+}
+
+/// Static `VTermEncoding` instance for UTF-8.
+#[no_mangle]
+pub static RS_VTERM_ENCODING_UTF8: VTermEncoding = VTermEncoding {
+    init: Some(utf8_init),
+    decode: Some(utf8_decode),
+};
+
+/// Static `VTermEncoding` instance for US-ASCII.
+#[no_mangle]
+pub static RS_VTERM_ENCODING_USASCII: VTermEncoding = VTermEncoding {
+    init: None,
+    decode: Some(usascii_decode),
+};
+
+/// Static `VTermEncoding` instance for DEC Special Graphics.
+#[no_mangle]
+pub static RS_VTERM_ENCODING_DEC_DRAWING: VTermEncoding = VTermEncoding {
+    init: None,
+    decode: Some(dec_drawing_decode),
+};
+
+/// Look up an encoding and return a pointer to the static `VTermEncoding` instance.
+///
+/// This replaces `vterm_lookup_encoding()` in C.
+/// - `enc_type`: 0 = `ENC_UTF8`, 1 = `ENC_SINGLE_94`
+/// - `designation`: ASCII character designating the encoding ('u', 'B', '0')
+///
+/// Returns a pointer to the static `VTermEncoding` instance, or null if not found.
+#[no_mangle]
+pub extern "C" fn rs_vterm_lookup_encoding_ptr(
+    enc_type: c_int,
+    designation: c_char,
+) -> *const VTermEncoding {
+    let enc_type = match enc_type {
+        0 => EncodingType::Utf8,
+        1 => EncodingType::Single94,
+        _ => return std::ptr::null(),
+    };
+
+    #[allow(clippy::cast_sign_loss)]
+    let Some(d) = char::from_u32(designation as u32) else {
+        return std::ptr::null();
+    };
+
+    match Encoding::lookup(enc_type, d) {
+        Some(Encoding::Utf8) => &raw const RS_VTERM_ENCODING_UTF8,
+        Some(Encoding::UsAscii) => &raw const RS_VTERM_ENCODING_USASCII,
+        Some(Encoding::DecDrawing) => &raw const RS_VTERM_ENCODING_DEC_DRAWING,
+        None => std::ptr::null(),
     }
 }
 
