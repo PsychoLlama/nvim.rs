@@ -114,22 +114,11 @@ typedef struct {
 
 static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");
-static const char e_comma_required[]
-  = N_("E536: Comma required");
-static const char e_showbreak_contains_unprintable_or_wide_character[]
-  = N_("E595: 'showbreak' contains unprintable or wide character");
 static const char e_wrong_number_of_characters_for_field_str[]
   = N_("E1511: Wrong number of characters for field \"%s\"");
 static const char e_wrong_character_width_for_field_str[]
   = N_("E1512: Wrong character width for field \"%s\"");
 
-/// All possible flags for 'shm'.
-/// the literal chars before 0 are removed flags. these are safely ignored
-static char SHM_ALL[] = { SHM_RO, SHM_MOD, SHM_LINES,
-                          SHM_WRI, SHM_ABBREVIATIONS, SHM_WRITE, SHM_TRUNC, SHM_TRUNCALL,
-                          SHM_OVER, SHM_OVERALL, SHM_SEARCH, SHM_ATTENTION, SHM_INTRO,
-                          SHM_COMPLETIONMENU, SHM_COMPLETIONSCAN, SHM_RECORDING, SHM_FILEINFO,
-                          SHM_SEARCHCOUNT, 'n', 'f', 'x', 'i', 0, };
 
 /// After setting various option values: recompute variables that depend on
 /// option values.
@@ -295,16 +284,6 @@ int check_signcolumn(char *scl, win_T *wp)
 }
 
 
-/// Check for a "normal" directory or file name in some options.  Disallow a
-/// path separator (slash and/or backslash), wildcards and characters that are
-/// often illegal in a file name. Be more permissive if "secure" is off.
-bool check_illegal_path_names(char *val, uint32_t flags)
-{
-  return (((flags & kOptFlagNFname)
-           && strpbrk(val, (secure ? "/\\*?[|;&<>\r\n" : "/\\*?[<>\r\n")) != NULL)
-          || ((flags & kOptFlagNDname)
-              && strpbrk(val, "*?[|;&<>\r\n") != NULL));
-}
 
 
 static const char **opt_values(OptIndex idx, size_t *values_len)
@@ -328,7 +307,11 @@ int check_str_opt(OptIndex idx, char **varp)
   }
   bool list = opt->flags & (kOptFlagComma | kOptFlagOneComma);
   const char **values = opt_values(idx, NULL);
-  return opt_strings_flags(*varp, values, opt->flags_var, list);
+  OptStringsFlagsResult result = rs_opt_strings_flags(*varp, values, list);
+  if (opt->flags_var != NULL) {
+    *opt->flags_var = result.flags;
+  }
+  return result.ok ? OK : FAIL;
 }
 
 int expand_set_str_generic(optexpand_T *args, int *numMatches, char ***matches)
@@ -508,7 +491,7 @@ const char *did_set_buftype(optset_T *args)
   // When 'buftype' is set, check for valid value.
   if ((buf->terminal && buf->b_p_bt[0] != 't')
       || (!buf->terminal && buf->b_p_bt[0] == 't')
-      || opt_strings_flags(buf->b_p_bt, opt_bt_values, NULL, false) != OK) {
+      || !rs_opt_strings_flags(buf->b_p_bt, opt_bt_values, false).ok) {
     return e_invarg;
   }
   // buftype=prompt:
@@ -738,9 +721,11 @@ const char *did_set_completeopt(optset_T *args FUNC_ATTR_UNUSED)
     buf->b_cot_flags = 0;
   }
 
-  if (opt_strings_flags(cot, opt_cot_values, flags, true) != OK) {
+  OptStringsFlagsResult cot_result = rs_opt_strings_flags(cot, opt_cot_values, true);
+  if (!cot_result.ok) {
     return e_invarg;
   }
+  *flags = cot_result.flags;
 
   return NULL;
 }
@@ -750,8 +735,8 @@ const char *did_set_completeopt(optset_T *args FUNC_ATTR_UNUSED)
 const char *did_set_completeslash(optset_T *args)
 {
   buf_T *buf = (buf_T *)args->os_buf;
-  if (opt_strings_flags(p_csl, opt_csl_values, NULL, false) != OK
-      || opt_strings_flags(buf->b_p_csl, opt_csl_values, NULL, false) != OK) {
+  if (!rs_opt_strings_flags(p_csl, opt_csl_values, false).ok
+      || !rs_opt_strings_flags(buf->b_p_csl, opt_csl_values, false).ok) {
     return e_invarg;
   }
   return NULL;
@@ -1066,7 +1051,7 @@ const char *did_set_shada(optset_T *args)
 
 int expand_set_shortmess(optexpand_T *args, int *numMatches, char ***matches)
 {
-  return expand_set_opt_listflag(args, SHM_ALL, numMatches, matches);
+  return expand_set_opt_listflag(args, "rmlwaWtToOsAIcCqFSnfxi", numMatches, matches);
 }
 
 /// The 'showbreak' option is changed.
@@ -1170,8 +1155,12 @@ const char *did_set_tagcase(optset_T *args)
   if ((opt_flags & OPT_LOCAL) && *p == NUL) {
     // make the local value empty: use the global value
     *flags = 0;
-  } else if (opt_strings_flags(p, opt_tc_values, flags, false) != OK) {
-    return e_invarg;
+  } else {
+    OptStringsFlagsResult tc_result = rs_opt_strings_flags(p, opt_tc_values, false);
+    if (!tc_result.ok) {
+      return e_invarg;
+    }
+    *flags = tc_result.flags;
   }
   return NULL;
 }
@@ -1275,9 +1264,12 @@ const char *did_set_virtualedit(optset_T *args)
     // make the local value empty: use the global value
     *flags = 0;
   } else {
-    if (opt_strings_flags(ve, opt_ve_values, flags, true) != OK) {
+    OptStringsFlagsResult ve_result = rs_opt_strings_flags(ve, opt_ve_values, true);
+    if (!ve_result.ok) {
       return e_invarg;
-    } else if (strcmp(ve, args->os_oldval.string.data) != 0) {
+    }
+    *flags = ve_result.flags;
+    if (strcmp(ve, args->os_oldval.string.data) != 0) {
       // Recompute cursor position in case the new 've' setting
       // changes something.
       validate_virtcol(win);
@@ -1312,27 +1304,10 @@ int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)
   return expand_set_opt_generic(args, get_highlight_name, numMatches, matches);
 }
 
-/// Handle an option that can be a range of string values.
-/// Set a flag in "*flagp" for each string present.
-///
-/// @param val  new value
-/// @param values  array of valid string values
-/// @param list  when true: accept a list of values
-///
-/// @return  OK for correct value, FAIL otherwise. Empty is always OK.
-static int opt_strings_flags(const char *val, const char **values, unsigned *flagp, bool list)
-{
-  OptStringsFlagsResult result = rs_opt_strings_flags(val, values, list);
-  if (flagp != NULL) {
-    *flagp = result.flags;
-  }
-  return result.ok ? OK : FAIL;
-}
-
 /// @return  OK if "p" is a valid fileformat name, FAIL otherwise.
 int check_ff_value(char *p)
 {
-  return opt_strings_flags(p, opt_ff_values, NULL, false);
+  return rs_opt_strings_flags(p, opt_ff_values, false).ok ? OK : FAIL;
 }
 
 static const char e_conflicts_with_value_of_listchars[]

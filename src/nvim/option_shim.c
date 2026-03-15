@@ -653,10 +653,11 @@ const char *nvim_optset_get_varp_str(const void *args)
 char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)->os_errbuf; }
 // Return os_errbuflen for listflag error formatting
 size_t nvim_optset_get_errbuflen(const void *args) { return ((const optset_T *)args)->os_errbuflen; }
-// Wrapper for illegal_char (formats E539 error into errbuf)
+// Wrapper for rs_illegal_char (formats E539 error into errbuf)
+extern const char *rs_illegal_char(char *errbuf, size_t errbuflen, int c);
 const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
 {
-  return illegal_char(errbuf, errbuflen, c);
+  return rs_illegal_char(errbuf, errbuflen, c);
 }
 // Wrapper for did_set_str_generic (validates against option's allowed values)
 const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic(args); }
@@ -2350,11 +2351,12 @@ const char *nvim_get_e_unknown_option2(void) { return e_unknown_option2; }
 /// Call emsg(_(msg)) -- translates and shows error message
 void nvim_call_emsg_translated(const char *msg) { emsg(_(msg)); }
 
-/// Call check_illegal_path_names(*(char**)varp, flags)
+/// Call rs_check_illegal_path_names(*(char**)varp, flags)
 /// Returns 1 if illegal path names detected, 0 otherwise.
+extern int rs_check_illegal_path_names(const char *val, uint32_t flags);
 int nvim_check_illegal_path_names(void *varp, uint32_t flags)
 {
-  return check_illegal_path_names(*(char **)varp, flags) ? 1 : 0;
+  return rs_check_illegal_path_names(*(const char **)varp, flags);
 }
 
 /// Get options[opt_idx].flags (already exists as nvim_option_get_flags_ptr, but need value)
