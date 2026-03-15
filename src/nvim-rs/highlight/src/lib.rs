@@ -53,6 +53,31 @@ impl Drop for SizedArena {
     }
 }
 
+// ============================================================================
+// Direct C global access via extern statics
+// ============================================================================
+//
+// These globals are declared with EXTERN in C headers, so their symbols are
+// available for linking. Accessing them directly avoids the need for C
+// accessor wrapper functions.
+
+extern "C" {
+    /// Global highlight namespace (0 = use default), from highlight.h
+    static mut ns_hl_global: c_int;
+    /// Window-specific highlight namespace (-1 = not set), from highlight.h
+    static mut ns_hl_win: c_int;
+    /// Fast callback highlight namespace (-1 = not set), from highlight.h
+    static mut ns_hl_fast: c_int;
+    /// Currently active/cached highlight namespace, from highlight.h
+    static mut ns_hl_active: c_int;
+    /// Whether highlight tables need updating, from globals.h
+    static mut need_highlight_changed: bool;
+    /// 'pumblend' option value (OptInt = int64_t), from option_vars.h
+    static p_pb: i64;
+    /// Must redraw pum flag, from globals.h
+    static mut must_redraw_pum: bool;
+}
+
 extern "C" {
     /// Get the terminal color count from C globals
     fn nvim_get_t_colors() -> c_int;
@@ -65,23 +90,6 @@ extern "C" {
     /// Get p_bg (background option: 'd' for dark, 'l' for light)
     fn nvim_get_p_bg() -> c_char;
 
-    // Namespace highlight global accessors
-    /// Get global highlight namespace (0 = use default)
-    fn nvim_get_ns_hl_global() -> c_int;
-    /// Set global highlight namespace
-    fn nvim_set_ns_hl_global(ns: c_int);
-    /// Get window-specific highlight namespace (-1 = not set)
-    fn nvim_get_ns_hl_win() -> c_int;
-    /// Set window-specific highlight namespace
-    fn nvim_set_ns_hl_win(ns: c_int);
-    /// Get fast callback highlight namespace (-1 = not set)
-    fn nvim_get_ns_hl_fast() -> c_int;
-    /// Set fast callback highlight namespace
-    fn nvim_set_ns_hl_fast(ns: c_int);
-    /// Get currently active/cached highlight namespace
-    fn nvim_get_ns_hl_active() -> c_int;
-    /// Set currently active/cached highlight namespace
-    fn nvim_set_ns_hl_active(ns: c_int);
     /// Get pointer to currently active highlight attributes
     fn nvim_get_hl_attr_active() -> *const c_int;
     /// Set pointer to active highlight attributes
@@ -100,9 +108,6 @@ extern "C" {
     fn nvim_decor_provider_get_hl_cached(ns_id: c_int) -> bool;
     /// Set hl_cached for a namespace. Creates provider if force=true.
     fn nvim_decor_provider_set_hl_cached(ns_id: c_int, cached: bool, force: bool);
-
-    /// Set need_highlight_changed global
-    fn nvim_set_need_highlight_changed(value: bool);
 
     // hl_table (HlGroup array) accessors from highlight_group.c
     /// Get the number of highlight groups
@@ -123,12 +128,8 @@ extern "C" {
     fn nvim_highlight_name_lookup(name_u: *const c_char) -> c_int;
 
     // Accessors for hl_get_ui_attr (Phase 15)
-    /// Get 'pumblend' option value
-    fn nvim_get_p_pb() -> c_int;
     /// Check if popup menu is drawn
     fn nvim_get_pum_drawn() -> bool;
-    /// Set must_redraw_pum flag
-    fn nvim_set_must_redraw_pum(value: bool);
 
     // Accessors for win_bg_attr (Phase 16)
     /// Get current window pointer
@@ -1074,7 +1075,7 @@ pub extern "C" fn rs_ns_get_hl_pre(
 
     // Resolve negative ns_hl to ns_hl_active
     let ns_id = if ns_hl < 0 {
-        let active = unsafe { nvim_get_ns_hl_active() };
+        let active = unsafe { ns_hl_active };
         if active <= 0 {
             return NsGetHlPreResult {
                 ns_id: active,
@@ -1314,26 +1315,23 @@ pub unsafe extern "C" fn rs_ns_get_hl_full(
 #[export_name = "hl_check_ns"]
 pub extern "C" fn rs_hl_check_ns() -> bool {
     // Resolve namespace priority
-    let ns_hl_fast = unsafe { nvim_get_ns_hl_fast() };
-    let ns_hl_win = unsafe { nvim_get_ns_hl_win() };
-    let ns_hl_global = unsafe { nvim_get_ns_hl_global() };
-
-    let ns = if ns_hl_fast > 0 {
-        ns_hl_fast
-    } else if ns_hl_win >= 0 {
-        ns_hl_win
-    } else {
-        ns_hl_global
+    let ns = unsafe {
+        if ns_hl_fast > 0 {
+            ns_hl_fast
+        } else if ns_hl_win >= 0 {
+            ns_hl_win
+        } else {
+            ns_hl_global
+        }
     };
 
     // Check if namespace changed
-    let ns_hl_active = unsafe { nvim_get_ns_hl_active() };
-    if ns_hl_active == ns {
+    if unsafe { ns_hl_active } == ns {
         return false;
     }
 
     // Update active namespace
-    unsafe { nvim_set_ns_hl_active(ns) };
+    unsafe { ns_hl_active = ns };
 
     // Reset to default highlight_attr
     let highlight_attr = unsafe { nvim_get_highlight_attr() };
@@ -1355,7 +1353,7 @@ pub extern "C" fn rs_hl_check_ns() -> bool {
     }
 
     // Signal that highlights changed
-    unsafe { nvim_set_need_highlight_changed(true) };
+    unsafe { need_highlight_changed = true };
 
     true
 }
@@ -1435,49 +1433,49 @@ pub extern "C" fn rs_ns_hl_attr_get_or_create(ns_id: c_int) -> *mut c_int {
 /// Get the global highlight namespace (0 = use default).
 #[no_mangle]
 pub extern "C" fn rs_get_ns_hl_global() -> c_int {
-    unsafe { nvim_get_ns_hl_global() }
+    unsafe { ns_hl_global }
 }
 
 /// Set the global highlight namespace.
 #[no_mangle]
 pub extern "C" fn rs_set_ns_hl_global(ns: c_int) {
-    unsafe { nvim_set_ns_hl_global(ns) }
+    unsafe { ns_hl_global = ns }
 }
 
 /// Get the window-specific highlight namespace (-1 = not set).
 #[no_mangle]
 pub extern "C" fn rs_get_ns_hl_win() -> c_int {
-    unsafe { nvim_get_ns_hl_win() }
+    unsafe { ns_hl_win }
 }
 
 /// Set the window-specific highlight namespace.
 #[no_mangle]
 pub extern "C" fn rs_set_ns_hl_win(ns: c_int) {
-    unsafe { nvim_set_ns_hl_win(ns) }
+    unsafe { ns_hl_win = ns }
 }
 
 /// Get the fast callback highlight namespace (-1 = not set).
 #[no_mangle]
 pub extern "C" fn rs_get_ns_hl_fast() -> c_int {
-    unsafe { nvim_get_ns_hl_fast() }
+    unsafe { ns_hl_fast }
 }
 
 /// Set the fast callback highlight namespace.
 #[no_mangle]
 pub extern "C" fn rs_set_ns_hl_fast(ns: c_int) {
-    unsafe { nvim_set_ns_hl_fast(ns) }
+    unsafe { ns_hl_fast = ns }
 }
 
 /// Get the currently active/cached highlight namespace.
 #[no_mangle]
 pub extern "C" fn rs_get_ns_hl_active() -> c_int {
-    unsafe { nvim_get_ns_hl_active() }
+    unsafe { ns_hl_active }
 }
 
 /// Set the currently active/cached highlight namespace.
 #[no_mangle]
 pub extern "C" fn rs_set_ns_hl_active(ns: c_int) {
-    unsafe { nvim_set_ns_hl_active(ns) }
+    unsafe { ns_hl_active = ns }
 }
 
 /// Get pointer to currently active highlight attributes.
@@ -2488,12 +2486,12 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
 
     // Handle popup menu highlights - apply 'pumblend'
     if HLF_PNI <= idx && idx <= HLF_PST {
-        let p_pb = nvim_get_p_pb();
-        if attrs.hl_blend == -1 && p_pb > 0 {
-            attrs.hl_blend = p_pb;
+        let p_pb_val = unsafe { p_pb } as c_int;
+        if attrs.hl_blend == -1 && p_pb_val > 0 {
+            attrs.hl_blend = p_pb_val;
         }
-        if nvim_get_pum_drawn() {
-            nvim_set_must_redraw_pum(true);
+        if unsafe { nvim_get_pum_drawn() } {
+            unsafe { must_redraw_pum = true };
         }
     }
 
@@ -2523,7 +2521,6 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
 /// The background attribute ID for the window.
 #[export_name = "win_bg_attr"]
 pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
-    let ns_hl_fast = nvim_get_ns_hl_fast();
     let curwin = nvim_get_curwin();
     let hl_attr_active = nvim_get_hl_attr_active();
     if ns_hl_fast < 0 {

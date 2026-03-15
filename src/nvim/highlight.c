@@ -42,24 +42,17 @@ extern HlAttrs rs_dict2hlattrs(Dict dict, bool use_rgb, int *link_id, Error *err
 // C accessor functions (callable from Rust via FFI)
 // ============================================================================
 
-// Namespace globals
-int nvim_get_ns_hl_global(void) { return ns_hl_global; }
-void nvim_set_ns_hl_global(int ns) { ns_hl_global = ns; }
-int nvim_get_ns_hl_win(void) { return ns_hl_win; }
-void nvim_set_ns_hl_win(int ns) { ns_hl_win = ns; }
-int nvim_get_ns_hl_fast(void) { return ns_hl_fast; }
-void nvim_set_ns_hl_fast(int ns) { ns_hl_fast = ns; }
-int nvim_get_ns_hl_active(void) { return ns_hl_active; }
-void nvim_set_ns_hl_active(int ns) { ns_hl_active = ns; }
+// Namespace globals (ns_hl_global, ns_hl_win, ns_hl_fast, ns_hl_active,
+// need_highlight_changed, p_pb, must_redraw_pum) are now accessed directly
+// from Rust via extern static declarations (highlight/src/lib.rs).
 const int *nvim_get_hl_attr_active(void) { return hl_attr_active; }
 void nvim_set_hl_attr_active(const int *attrs) { hl_attr_active = (int *)attrs; }
 const int *nvim_get_highlight_attr(void) { return highlight_attr; }
-void nvim_set_need_highlight_changed(bool value) { need_highlight_changed = value; }
 
 // Popupmenu / option accessors
-int nvim_get_p_pb(void) { return (int)p_pb; }
 bool nvim_get_pum_drawn(void) { return pum_drawn(); }
-void nvim_set_must_redraw_pum(bool value) { must_redraw_pum = value; }
+// Called from the popupmenu crate (c_int 0 = false)
+void nvim_set_must_redraw_pum(int value) { must_redraw_pum = (bool)value; }
 
 // HLF_* constants are now defined directly in Rust (highlight/src/lib.rs).
 // Validated by _Static_assert lines above.
