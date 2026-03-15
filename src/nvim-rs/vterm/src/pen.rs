@@ -683,6 +683,136 @@ pub unsafe extern "C" fn rs_vterm_state_resetpen(state: VTermStateHandle) {
     setpenattr_int(state, VTermAttr::Uri, 0);
 }
 
+/// Convert a C integer to a `VTermAttr` enum value, or None if out of range
+fn vterm_attr_from_int(attr: c_int) -> Option<VTermAttr> {
+    match attr {
+        1 => Some(VTermAttr::Bold),
+        2 => Some(VTermAttr::Underline),
+        3 => Some(VTermAttr::Italic),
+        4 => Some(VTermAttr::Blink),
+        5 => Some(VTermAttr::Reverse),
+        6 => Some(VTermAttr::Conceal),
+        7 => Some(VTermAttr::Strike),
+        8 => Some(VTermAttr::Font),
+        9 => Some(VTermAttr::Foreground),
+        10 => Some(VTermAttr::Background),
+        11 => Some(VTermAttr::Small),
+        12 => Some(VTermAttr::Baseline),
+        13 => Some(VTermAttr::Uri),
+        _ => None,
+    }
+}
+
+// =============================================================================
+// Phase 3 FFI Functions: savepen and set_penattr
+// =============================================================================
+
+/// Save or restore the pen state
+///
+/// If `save` is nonzero, saves the current pen to `saved.pen`.
+/// If `save` is zero, restores the pen from `saved.pen` and dispatches callbacks.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_savepen(state: VTermStateHandle, save: c_int) {
+    if save != 0 {
+        nvim_vterm_state_save_pen(state);
+    } else {
+        nvim_vterm_state_restore_pen(state);
+
+        // After restore, dispatch callbacks for all pen attributes with the restored values
+        let bold = nvim_vterm_state_get_saved_pen_bold(state);
+        setpenattr_bool(state, VTermAttr::Bold, bold != 0);
+
+        let underline = nvim_vterm_state_get_saved_pen_underline(state);
+        setpenattr_int(state, VTermAttr::Underline, underline);
+
+        let italic = nvim_vterm_state_get_saved_pen_italic(state);
+        setpenattr_bool(state, VTermAttr::Italic, italic != 0);
+
+        let blink = nvim_vterm_state_get_saved_pen_blink(state);
+        setpenattr_bool(state, VTermAttr::Blink, blink != 0);
+
+        let reverse = nvim_vterm_state_get_saved_pen_reverse(state);
+        setpenattr_bool(state, VTermAttr::Reverse, reverse != 0);
+
+        let conceal = nvim_vterm_state_get_saved_pen_conceal(state);
+        setpenattr_bool(state, VTermAttr::Conceal, conceal != 0);
+
+        let strike = nvim_vterm_state_get_saved_pen_strike(state);
+        setpenattr_bool(state, VTermAttr::Strike, strike != 0);
+
+        let font = nvim_vterm_state_get_saved_pen_font(state);
+        setpenattr_int(state, VTermAttr::Font, font);
+
+        let small = nvim_vterm_state_get_saved_pen_small(state);
+        setpenattr_bool(state, VTermAttr::Small, small != 0);
+
+        let baseline = nvim_vterm_state_get_saved_pen_baseline(state);
+        setpenattr_int(state, VTermAttr::Baseline, baseline);
+
+        let fg = nvim_vterm_state_get_saved_pen_fg(state);
+        setpenattr_col(state, VTermAttr::Foreground, fg);
+
+        let bg = nvim_vterm_state_get_saved_pen_bg(state);
+        setpenattr_col(state, VTermAttr::Background, bg);
+
+        let uri = nvim_vterm_state_get_saved_pen_uri(state);
+        setpenattr_int(state, VTermAttr::Uri, uri);
+    }
+}
+
+/// Set an individual pen attribute by type
+///
+/// Returns 1 on success, 0 on failure (null val, type mismatch, or unknown attr).
+///
+/// # Safety
+/// The state handle must be valid. `val` must be a valid pointer to `VTermValue`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_penattr(
+    state: VTermStateHandle,
+    attr: c_int,
+    type_: c_int,
+    val: *mut VTermValue,
+) -> c_int {
+    if val.is_null() {
+        return 0;
+    }
+
+    // Validate attr is in range and type matches
+    let Some(attr_enum) = vterm_attr_from_int(attr) else {
+        return 0;
+    };
+
+    let expected_type = get_attr_type(attr_enum) as c_int;
+    if type_ != expected_type {
+        return 0;
+    }
+
+    let v = &*val;
+
+    match attr_enum {
+        VTermAttr::Bold => nvim_vterm_state_set_pen_bold(state, v.boolean),
+        VTermAttr::Underline => nvim_vterm_state_set_pen_underline(state, v.number),
+        VTermAttr::Italic => nvim_vterm_state_set_pen_italic(state, v.boolean),
+        VTermAttr::Blink => nvim_vterm_state_set_pen_blink(state, v.boolean),
+        VTermAttr::Reverse => nvim_vterm_state_set_pen_reverse(state, v.boolean),
+        VTermAttr::Conceal => nvim_vterm_state_set_pen_conceal(state, v.boolean),
+        VTermAttr::Strike => nvim_vterm_state_set_pen_strike(state, v.boolean),
+        VTermAttr::Font => nvim_vterm_state_set_pen_font(state, v.number),
+        VTermAttr::Foreground => nvim_vterm_state_set_pen_fg(state, v.color),
+        VTermAttr::Background => nvim_vterm_state_set_pen_bg(state, v.color),
+        VTermAttr::Small => nvim_vterm_state_set_pen_small(state, v.boolean),
+        VTermAttr::Baseline => nvim_vterm_state_set_pen_baseline(state, v.number),
+        VTermAttr::Uri => nvim_vterm_state_set_pen_uri(state, v.number),
+    }
+
+    nvim_vterm_state_call_setpenattr(state, attr, val);
+
+    1
+}
+
 // Pull in the C accessor functions declared in state.rs
 // All imports are needed across phases 2-4.
 #[allow(unused_imports)]

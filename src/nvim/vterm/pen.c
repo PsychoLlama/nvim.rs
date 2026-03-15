@@ -182,27 +182,7 @@ void vterm_state_resetpen(VTermState *state)
 
 void vterm_state_savepen(VTermState *state, int save)
 {
-  if (save) {
-    state->saved.pen = state->pen;
-  } else {
-    state->pen = state->saved.pen;
-
-    setpenattr_bool(state, VTERM_ATTR_BOLD,      state->pen.bold);
-    setpenattr_int(state, VTERM_ATTR_UNDERLINE, state->pen.underline);
-    setpenattr_bool(state, VTERM_ATTR_ITALIC,    state->pen.italic);
-    setpenattr_bool(state, VTERM_ATTR_BLINK,     state->pen.blink);
-    setpenattr_bool(state, VTERM_ATTR_REVERSE,   state->pen.reverse);
-    setpenattr_bool(state, VTERM_ATTR_CONCEAL,   state->pen.conceal);
-    setpenattr_bool(state, VTERM_ATTR_STRIKE,    state->pen.strike);
-    setpenattr_int(state, VTERM_ATTR_FONT,      state->pen.font);
-    setpenattr_bool(state, VTERM_ATTR_SMALL,     state->pen.small);
-    setpenattr_int(state, VTERM_ATTR_BASELINE,  state->pen.baseline);
-
-    setpenattr_col(state, VTERM_ATTR_FOREGROUND, state->pen.fg);
-    setpenattr_col(state, VTERM_ATTR_BACKGROUND, state->pen.bg);
-
-    setpenattr_int(state, VTERM_ATTR_URI, state->pen.uri);
-  }
+  rs_vterm_state_savepen(state, save);
 }
 
 void vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
@@ -554,63 +534,5 @@ int vterm_state_getpen(VTermState *state, long args[], int argcount)
 
 int vterm_state_set_penattr(VTermState *state, VTermAttr attr, VTermValueType type, VTermValue *val)
 {
-  if (!val) {
-    return 0;
-  }
-
-  if (type != vterm_get_attr_type(attr)) {
-    DEBUG_LOG("Cannot set attr %d as it has type %d, not type %d\n",
-              attr, vterm_get_attr_type(attr), type);
-    return 0;
-  }
-
-  switch (attr) {
-  case VTERM_ATTR_BOLD:
-    state->pen.bold = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_UNDERLINE:
-    state->pen.underline = (unsigned)val->number;
-    break;
-  case VTERM_ATTR_ITALIC:
-    state->pen.italic = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_BLINK:
-    state->pen.blink = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_REVERSE:
-    state->pen.reverse = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_CONCEAL:
-    state->pen.conceal = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_STRIKE:
-    state->pen.strike = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_FONT:
-    state->pen.font = (unsigned)val->number;
-    break;
-  case VTERM_ATTR_FOREGROUND:
-    state->pen.fg = val->color;
-    break;
-  case VTERM_ATTR_BACKGROUND:
-    state->pen.bg = val->color;
-    break;
-  case VTERM_ATTR_SMALL:
-    state->pen.small = (unsigned)val->boolean;
-    break;
-  case VTERM_ATTR_BASELINE:
-    state->pen.baseline = (unsigned)val->number;
-    break;
-  case VTERM_ATTR_URI:
-    state->pen.uri = val->number;
-    break;
-  default:
-    return 0;
-  }
-
-  if (state->callbacks && state->callbacks->setpenattr) {
-    (*state->callbacks->setpenattr)(attr, val, state->cbdata);
-  }
-
-  return 1;
+  return rs_vterm_state_set_penattr(state, (int)attr, (int)type, val);
 }
