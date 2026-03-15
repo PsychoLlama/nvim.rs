@@ -184,6 +184,8 @@ pub const HLF_CLF: c_int = 17; // CursorLineFold
 pub const HLF_FC: c_int = 29; // FoldColumn
 pub const HLF_DED: c_int = 32; // DiffDelete (deleted diff line)
 pub const HLF_SC: c_int = 35; // SignColumn
+pub const HLF_CUL: c_int = 56; // CursorLine
+pub const HLF_MC: c_int = 57; // ColorColumn
 
 // Cursorlineopt flags (from option_vars.generated.h)
 pub const K_OPT_CULOPT_FLAG_LINE: c_int = 0x01;
@@ -936,10 +938,6 @@ extern "C" {
 
     // Additional wlv accessors for win_line_start and fix_for_boguscols
 
-    // HLF constants
-    fn nvim_get_hlf_mc() -> c_int;
-    fn nvim_get_hlf_cul() -> c_int;
-
     // Buffer handle for win
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
 
@@ -1193,8 +1191,7 @@ pub extern "C" fn rs_use_cursor_line_highlight(wp: WinHandle, lnum: LinenrT) -> 
 /// - low-priority CursorLine if fg is not set
 /// - high-priority ("same as Vim" priority) CursorLine if fg is set
 unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: *mut WinLineVars) {
-    let hlf_cul = nvim_get_hlf_cul();
-    let cul_attr = nvim_win_hl_attr(wp, hlf_cul);
+    let cul_attr = nvim_win_hl_attr(wp, HLF_CUL);
     (*wlv).cul_attr = cul_attr;
 
     let ae: HlAttrs = rs_syn_attr2entry(cul_attr);
@@ -1282,7 +1279,7 @@ unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: *mut WinLineVars) {
         }
 
         let vcol_before = (*wlv).vcol;
-        let hlf_mc = nvim_get_hlf_mc();
+        let hlf_mc = HLF_MC;
 
         let linebuf_char = nvim_get_linebuf_char();
         let linebuf_attr = nvim_get_linebuf_attr();
@@ -1981,7 +1978,7 @@ unsafe fn draw_col_buf_impl(
     let linebuf_char = nvim_get_linebuf_char();
     let linebuf_attr = nvim_get_linebuf_attr();
     let linebuf_vcol = nvim_get_linebuf_vcol();
-    let hlf_mc = nvim_get_hlf_mc();
+    let hlf_mc = HLF_MC;
 
     let mut ptr = text;
     let text_end = text.add(len);

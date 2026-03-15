@@ -61,16 +61,8 @@ int nvim_get_p_pb(void) { return (int)p_pb; }
 bool nvim_get_pum_drawn(void) { return pum_drawn(); }
 void nvim_set_must_redraw_pum(bool value) { must_redraw_pum = value; }
 
-// HLF_* enum constant accessors
-int nvim_get_hlf_pni(void) { return HLF_PNI; }
-int nvim_get_hlf_pst(void) { return HLF_PST; }
-int nvim_get_hlf_none(void) { return HLF_NONE; }
-int nvim_get_hlf_inactive(void) { return HLF_INACTIVE; }
-int nvim_get_hlf_nfloat(void) { return HLF_NFLOAT; }
-int nvim_get_hlf_border(void) { return HLF_BORDER; }
-int nvim_get_hlf_count(void) { return HLF_COUNT; }
-int nvim_get_hlf_mc(void) { return HLF_MC; }
-int nvim_get_hlf_cul(void) { return HLF_CUL; }
+// HLF_* constants are now defined directly in Rust (highlight/src/lib.rs).
+// Validated by _Static_assert lines above.
 const char *nvim_get_hlf_name(int idx) { return hlf_names[idx]; }
 
 // Arena management

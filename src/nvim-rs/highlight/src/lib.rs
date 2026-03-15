@@ -129,10 +129,6 @@ extern "C" {
     fn nvim_get_pum_drawn() -> bool;
     /// Set must_redraw_pum flag
     fn nvim_set_must_redraw_pum(value: bool);
-    /// Get HLF_PNI enum value
-    fn nvim_get_hlf_pni() -> c_int;
-    /// Get HLF_PST enum value
-    fn nvim_get_hlf_pst() -> c_int;
 
     // Accessors for win_bg_attr (Phase 16)
     /// Get current window pointer
@@ -141,19 +137,9 @@ extern "C" {
     fn nvim_win_get_hl_attr_normal(wp: *mut c_void) -> c_int;
     /// Get w_hl_attr_normalnc field from window
     fn nvim_win_get_hl_attr_normalnc(wp: *mut c_void) -> c_int;
-    /// Get HLF_NONE enum value
-    fn nvim_get_hlf_none() -> c_int;
-    /// Get HLF_INACTIVE enum value
-    fn nvim_get_hlf_inactive() -> c_int;
 
     // Accessors for update_window_hl (Phase 17)
-    /// Get HLF_NFLOAT enum value
-    fn nvim_get_hlf_nfloat() -> c_int;
-    /// Get HLF_BORDER enum value
-    fn nvim_get_hlf_border() -> c_int;
-    /// Get HLF_COUNT enum value
-    fn nvim_get_hlf_count() -> c_int;
-    /// Get hlf_names[idx] string
+    /// Get hlf_names[idx] string (C array, cannot eliminate)
     fn nvim_get_hlf_name(idx: c_int) -> *const c_char;
     // nvim_get_highlight_attr is already defined above (line 45)
     // nvim_win_get_ns_hl is defined below in window accessors section
@@ -196,6 +182,29 @@ extern "C" {
     /// Get current_sub_char static variable (conceal substitution character)
     fn nvim_syn_get_current_sub_char() -> c_int;
 }
+
+// ============================================================================
+// HLF_* constants (from highlight_defs.h enum hlf_T)
+//
+// These values are validated by _Static_assert lines in highlight.c:
+//   HLF_COUNT == 76, HLF_MSGSEP == 61, HLF_W == 26, HLF_E == 6,
+//   HLF_S == 19, HLF_MSG == 63
+// ============================================================================
+
+/// No UI highlight active
+const HLF_NONE: c_int = 0;
+/// Popup menu normal item
+const HLF_PNI: c_int = 41;
+/// Popup menu scrollbar thumb
+const HLF_PST: c_int = 50;
+/// NormalNC: Normal text in non-current windows
+const HLF_INACTIVE: c_int = 60;
+/// Floating window
+const HLF_NFLOAT: c_int = 62;
+/// Floating window border
+const HLF_BORDER: c_int = 64;
+// HLF_COUNT is defined as usize below (for NSHlAttr array type) at const HLF_COUNT: usize = 76.
+// Where c_int is needed, cast with `HLF_COUNT as c_int`.
 
 // ============================================================================
 // Highlight Attribute Flags (from highlight_defs.h)
@@ -830,8 +839,7 @@ pub unsafe extern "C" fn rs_ui_send_all_hls(ui: *mut c_void) {
         rs_ui_send_hl_attr(ui, i, arena.as_arena_mut());
         // arena dropped and freed here
     }
-    let hlf_count = nvim_get_hlf_count();
-    for hlf in 0..hlf_count {
+    for hlf in 0..HLF_COUNT as c_int {
         rs_ui_send_hl_group(ui, hlf);
     }
 }
@@ -1373,13 +1381,8 @@ pub unsafe extern "C" fn rs_update_ns_hl(ns_id: c_int) {
     // Get or create the attribute array
     let hl_attrs = rs_ns_hl_attr_get_or_create(ns_id);
 
-    let hlf_count = nvim_get_hlf_count();
-    let hlf_inactive = nvim_get_hlf_inactive();
-    let hlf_nfloat = nvim_get_hlf_nfloat();
-    let hlf_none = nvim_get_hlf_none();
-
     // Iterate through all HLF_* types (starting from 1, skipping HLF_NONE)
-    for hlf in 1..hlf_count {
+    for hlf in 1..HLF_COUNT as c_int {
         let name = nvim_get_hlf_name(hlf);
         if name.is_null() {
             continue;
@@ -1387,14 +1390,14 @@ pub unsafe extern "C" fn rs_update_ns_hl(ns_id: c_int) {
         let name_cstr = CStr::from_ptr(name);
         let name_len = name_cstr.to_bytes().len();
         let id = rs_syn_check_group(name, name_len);
-        let optional = hlf == hlf_inactive || hlf == hlf_nfloat;
+        let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
         *hl_attrs.add(hlf as usize) = rs_hl_get_ui_attr(ns_id, hlf, id, optional);
     }
 
     // Handle "Normal" specially - stored at HLF_NONE (index 0)
     static NORMAL: &[u8] = b"Normal\0";
     let normality = rs_syn_check_group(NORMAL.as_ptr() as *const c_char, 6);
-    *hl_attrs.add(hlf_none as usize) = rs_hl_get_ui_attr(ns_id, -1, normality, true);
+    *hl_attrs.add(HLF_NONE as usize) = rs_hl_get_ui_attr(ns_id, -1, normality, true);
 
     // Mark as cached (hl_get_ui_attr might have invalidated, so re-get provider)
     nvim_decor_provider_set_hl_cached(ns_id, true, true);
@@ -2484,9 +2487,7 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
     }
 
     // Handle popup menu highlights - apply 'pumblend'
-    let hlf_pni = nvim_get_hlf_pni();
-    let hlf_pst = nvim_get_hlf_pst();
-    if hlf_pni <= idx && idx <= hlf_pst {
+    if HLF_PNI <= idx && idx <= HLF_PST {
         let p_pb = nvim_get_p_pb();
         if attrs.hl_blend == -1 && p_pb > 0 {
             attrs.hl_blend = p_pb;
@@ -2525,9 +2526,6 @@ pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
     let ns_hl_fast = nvim_get_ns_hl_fast();
     let curwin = nvim_get_curwin();
     let hl_attr_active = nvim_get_hl_attr_active();
-    let hlf_none = nvim_get_hlf_none();
-    let hlf_inactive = nvim_get_hlf_inactive();
-
     if ns_hl_fast < 0 {
         let local = if wp == curwin {
             nvim_win_get_hl_attr_normal(wp)
@@ -2539,10 +2537,10 @@ pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
         }
     }
 
-    if wp == curwin || *hl_attr_active.offset(hlf_inactive as isize) == 0 {
-        *hl_attr_active.offset(hlf_none as isize)
+    if wp == curwin || *hl_attr_active.offset(HLF_INACTIVE as isize) == 0 {
+        *hl_attr_active.offset(HLF_NONE as isize)
     } else {
-        *hl_attr_active.offset(hlf_inactive as isize)
+        *hl_attr_active.offset(HLF_INACTIVE as isize)
     }
 }
 
@@ -2589,11 +2587,6 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     nvim_win_set_hl_needs_update(wp, false);
 
     // Get HLF constants
-    let hlf_nfloat = nvim_get_hlf_nfloat();
-    let hlf_none = nvim_get_hlf_none();
-    let hlf_inactive = nvim_get_hlf_inactive();
-    let hlf_border = nvim_get_hlf_border();
-
     // If a floating window is blending it always has a named
     // wp->w_hl_attr_normal group. HL_ATTR(HLF_NFLOAT) is always named.
     let floating = nvim_win_get_floating(wp) != 0;
@@ -2605,16 +2598,16 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
 
     // Determine window specific background set in 'winhighlight'
     let hl_attr_normal;
-    if float_win && *hl_def.offset(hlf_nfloat as isize) != 0 && ns_id > 0 {
-        hl_attr_normal = *hl_def.offset(hlf_nfloat as isize);
-    } else if *hl_def.offset(hlf_none as isize) > 0 {
-        hl_attr_normal = *hl_def.offset(hlf_none as isize);
+    if float_win && *hl_def.offset(HLF_NFLOAT as isize) != 0 && ns_id > 0 {
+        hl_attr_normal = *hl_def.offset(HLF_NFLOAT as isize);
+    } else if *hl_def.offset(HLF_NONE as isize) > 0 {
+        hl_attr_normal = *hl_def.offset(HLF_NONE as isize);
     } else if float_win {
-        let hl_nfloat = *hl_attr_active.offset(hlf_nfloat as isize);
+        let hl_nfloat = *hl_attr_active.offset(HLF_NFLOAT as isize);
         hl_attr_normal = if hl_nfloat > 0 {
             hl_nfloat
         } else {
-            *highlight_attr.offset(hlf_nfloat as isize)
+            *highlight_attr.offset(HLF_NFLOAT as isize)
         };
     } else {
         hl_attr_normal = 0;
@@ -2632,10 +2625,10 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     nvim_win_set_config_shadow(wp, false);
     if floating && nvim_win_get_config_border(wp) {
         for i in 0..8 {
-            let mut attr = *hl_def.offset(hlf_border as isize);
+            let mut attr = *hl_def.offset(HLF_BORDER as isize);
             let border_hl_id = nvim_win_get_config_border_hl_id(wp, i);
             if border_hl_id != 0 {
-                attr = rs_hl_get_ui_attr(ns_id, hlf_border, border_hl_id, false);
+                attr = rs_hl_get_ui_attr(ns_id, HLF_BORDER, border_hl_id, false);
             }
             attr = rs_hl_apply_winblend(winbl, attr);
             // Check if this attr has blend > 0
@@ -2651,13 +2644,13 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     check_blending(wp);
 
     // Compute normalnc (non-current window normal)
-    let hl_attr_normalnc = if *hl_def.offset(hlf_inactive as isize) == 0 {
+    let hl_attr_normalnc = if *hl_def.offset(HLF_INACTIVE as isize) == 0 {
         rs_hl_combine_attr(
-            *hl_attr_active.offset(hlf_inactive as isize),
+            *hl_attr_active.offset(HLF_INACTIVE as isize),
             hl_attr_normal,
         )
     } else {
-        *hl_def.offset(hlf_inactive as isize)
+        *hl_def.offset(HLF_INACTIVE as isize)
     };
 
     let hl_attr_normalnc = if floating {
