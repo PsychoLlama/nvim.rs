@@ -4,8 +4,10 @@
 // Translated to Rust from src/nvim/tui/terminfo_builtin.h
 
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::needless_range_loop)]
 
 use std::ffi::{c_char, c_int};
+use std::fmt::Write as FmtWrite;
 
 // TerminfoDef indices (must match terminfo_enum_defs.h / TerminfoDef enum in lib.rs)
 use crate::TerminfoDef::*;
@@ -1586,4 +1588,230 @@ pub unsafe extern "C" fn rs_terminfo_from_builtin(
         *termname = name.as_ptr() as *mut c_char;
     }
     entry as *const TerminfoEntry
+}
+
+// ============================================================================
+// terminfo_info_msg: diagnostic dump of terminfo capabilities
+// ============================================================================
+
+/// C String type (matches nvim's `String` typedef: { char *data, size_t size }).
+#[repr(C)]
+pub struct NvimCString {
+    pub data: *mut c_char,
+    pub size: usize,
+}
+
+extern "C" {
+    fn xmallocz(size: usize) -> *mut std::ffi::c_void;
+}
+
+/// Make a single byte printable (control chars -> ^X, high bytes -> <XX>).
+fn make_byte_printable(out: &mut String, byte: u8) {
+    match byte {
+        0 => out.push_str("^@"),
+        1..=0x1f => {
+            out.push('^');
+            out.push((byte + b'@') as char);
+        }
+        0x7f => out.push_str("^?"),
+        0x80.. => {
+            let _ = write!(out, "<{:02X}>", byte);
+        }
+        _ => out.push(byte as char),
+    }
+}
+
+/// Append a C string with non-printable bytes escaped.
+/// Equivalent to kv_transstr(&data, s, false).
+fn append_transstr(out: &mut String, s: *const c_char) {
+    if s.is_null() {
+        return;
+    }
+    // SAFETY: caller guarantees s is a valid NUL-terminated C string
+    let bytes = unsafe { std::ffi::CStr::from_ptr(s).to_bytes() };
+    for &byte in bytes {
+        make_byte_printable(out, byte);
+    }
+}
+
+/// String names matching XLIST_TERMINFO_BUILTIN + XLIST_TERMINFO_EXT order.
+static STRING_NAMES: &[&str] = &[
+    "carriage_return",
+    "change_scroll_region",
+    "clear_screen",
+    "clr_eol",
+    "clr_eos",
+    "cursor_address",
+    "cursor_down",
+    "cursor_invisible",
+    "cursor_left",
+    "cursor_home",
+    "cursor_normal",
+    "cursor_up",
+    "cursor_right",
+    "delete_line",
+    "enter_bold_mode",
+    "enter_ca_mode",
+    "enter_italics_mode",
+    "enter_reverse_mode",
+    "enter_standout_mode",
+    "enter_underline_mode",
+    "erase_chars",
+    "exit_attribute_mode",
+    "exit_ca_mode",
+    "from_status_line",
+    "insert_line",
+    "keypad_local",
+    "keypad_xmit",
+    "parm_delete_line",
+    "parm_down_cursor",
+    "parm_insert_line",
+    "parm_left_cursor",
+    "parm_right_cursor",
+    "parm_up_cursor",
+    "set_a_background",
+    "set_a_foreground",
+    "set_attributes",
+    "set_lr_margin",
+    "to_status_line",
+    // Extended (XLIST_TERMINFO_EXT)
+    "reset_cursor_style (Se)",
+    "set_cursor_style (Ss)",
+    "enter_strikethrough_mode (smxx)",
+    "set_rgb_foreground (setrgbf)",
+    "set_rgb_background (setrgbb)",
+    "set_cursor_color (Cs)",
+    "reset_cursor_color (Cr)",
+    "set_underline_style (Smulx)",
+];
+
+/// Key names matching XYLIST_TERMINFO_KEYS order.
+static KEY_NAMES: &[&str] = &[
+    "backspace",
+    "beg",
+    "btab",
+    "clear",
+    "dc",
+    "end",
+    "find",
+    "home",
+    "ic",
+    "npage",
+    "ppage",
+    "select",
+    "suspend",
+    "undo",
+];
+
+/// F-key names matching XLIST_TERMINFO_FKEYS order (f1..f63).
+static FKEY_NAMES: &[&str] = &[
+    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
+    "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28",
+    "f29", "f30", "f31", "f32", "f33", "f34", "f35", "f36", "f37", "f38", "f39", "f40", "f41",
+    "f42", "f43", "f44", "f45", "f46", "f47", "f48", "f49", "f50", "f51", "f52", "f53", "f54",
+    "f55", "f56", "f57", "f58", "f59", "f60", "f61", "f62", "f63",
+];
+
+/// Dumps terminfo capabilities as a diagnostic string.
+/// Matches behavior of C terminfo_info_msg().
+///
+/// # Safety
+///
+/// - `ti` must be a valid pointer to a TerminfoEntry
+/// - `termname` must be a valid NUL-terminated C string or null
+/// - Returns an nvim String (data/size), caller must xfree data
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminfo_info_msg(
+    ti: *const TerminfoEntry,
+    termname: *const c_char,
+    from_db: bool,
+) -> NvimCString {
+    let ti = &*ti;
+    let termname_str = if termname.is_null() {
+        "?"
+    } else {
+        std::ffi::CStr::from_ptr(termname).to_str().unwrap_or("?")
+    };
+
+    let mut data = String::new();
+
+    let _ = writeln!(data, "&term: {termname_str}");
+    if from_db {
+        data.push_str("using terminfo database\n");
+    } else {
+        data.push_str("using builtin terminfo\n");
+    }
+    data.push('\n');
+
+    data.push_str("Boolean capabilities:\n");
+    let _ = writeln!(
+        data,
+        "  back_color_erase: {}",
+        if ti.bce { "true" } else { "false" }
+    );
+    let _ = writeln!(
+        data,
+        "  truecolor ('Tc' or 'RGB'): {}",
+        if ti.has_tc_or_rgb { "true" } else { "false" }
+    );
+    let _ = writeln!(
+        data,
+        "  extended underline ('Su'): {}",
+        if ti.su { "true" } else { "false" }
+    );
+    data.push('\n');
+
+    data.push_str("Numeric capabilities: (-1 for unknown)\n");
+    let _ = writeln!(data, "  lines: {}", ti.lines);
+    let _ = writeln!(data, "  columns: {}", ti.columns);
+    // Note: C code uses ti->columns here (bug preserved for behavioral fidelity)
+    let _ = writeln!(data, "  max_colors: {}", ti.columns);
+    data.push('\n');
+
+    data.push_str("String capabilities:\n");
+
+    for (i, name) in STRING_NAMES.iter().enumerate() {
+        let s = ti.defs[i];
+        if !s.is_null() {
+            let _ = write!(data, "  {name:<31} = ");
+            append_transstr(&mut data, s);
+            data.push('\n');
+        }
+    }
+
+    // key_names loop starts at index 1 (skips backspace) — matching C behavior
+    for i in 1..KEY_NAMES.len() {
+        let s = ti.keys[i][0];
+        if !s.is_null() {
+            let _ = write!(data, "  key_{:<27} = ", KEY_NAMES[i]);
+            append_transstr(&mut data, s);
+            let ss = ti.keys[i][1];
+            if !ss.is_null() {
+                let _ = write!(data, ", key_s{} = ", KEY_NAMES[i]);
+                append_transstr(&mut data, ss);
+            }
+            data.push('\n');
+        }
+    }
+
+    // fkey_names loop starts at index 1 (skips f1) — matching C behavior
+    for i in 1..FKEY_NAMES.len() {
+        let s = ti.f_keys[i];
+        if !s.is_null() {
+            let _ = write!(data, "  key_{:<27} = ", FKEY_NAMES[i]);
+            append_transstr(&mut data, s);
+            data.push('\n');
+        }
+    }
+
+    // Allocate with xmallocz (adds NUL terminator) and return nvim String
+    let bytes = data.as_bytes();
+    let len = bytes.len();
+    let ptr = xmallocz(len) as *mut c_char;
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr as *mut u8, len);
+
+    NvimCString {
+        data: ptr,
+        size: len,
+    }
 }

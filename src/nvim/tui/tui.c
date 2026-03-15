@@ -1976,7 +1976,7 @@ static void show_verbose_terminfo(TUIData *tui)
   ADD_C(title, CSTR_AS_OBJ("Title"));
   ADD_C(chunks, ARRAY_OBJ(title));
   MAXSIZE_TEMP_ARRAY(info, 1);
-  String str = terminfo_info_msg(&tui->ti, tui->term, tui->terminfo_found_in_db);
+  String str = (String)rs_terminfo_info_msg(&tui->ti, tui->term, tui->terminfo_found_in_db);
   ADD_C(info, STRING_OBJ(str));
   ADD_C(chunks, ARRAY_OBJ(info));
   MAXSIZE_TEMP_ARRAY(end_fold, 2);
