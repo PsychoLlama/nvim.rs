@@ -211,6 +211,12 @@ void vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col)
 
 void vterm_state_setpen(VTermState *state, const long args[], int argcount)
 {
+  rs_vterm_state_setpen(state, args, argcount);
+}
+
+#if 0  // Dead code: was vterm_state_setpen body
+void vterm_state_setpen_dead(VTermState *state, const long args[], int argcount)
+{
   // SGR - ECMA-48 8.3.117
 
   int argi = 0;
@@ -443,93 +449,11 @@ void vterm_state_setpen(VTermState *state, const long args[], int argcount)
     while (CSI_ARG_HAS_MORE(args[argi++])) {}
   }
 }
-
-static int vterm_state_getpen_color(const VTermColor *col, int argi, long args[], int fg)
-{
-  // Do nothing if the given color is the default color
-  if ((fg && VTERM_COLOR_IS_DEFAULT_FG(col))
-      || (!fg && VTERM_COLOR_IS_DEFAULT_BG(col))) {
-    return argi;
-  }
-
-  // Decide whether to send an indexed color or an RGB color
-  if (VTERM_COLOR_IS_INDEXED(col)) {
-    const uint8_t idx = col->indexed.idx;
-    if (idx < 8) {
-      args[argi++] = (idx + (fg ? 30 : 40));
-    } else if (idx < 16) {
-      args[argi++] = (idx - 8 + (fg ? 90 : 100));
-    } else {
-      args[argi++] = CSI_ARG_FLAG_MORE | (fg ? 38 : 48);
-      args[argi++] = CSI_ARG_FLAG_MORE | 5;
-      args[argi++] = idx;
-    }
-  } else if (VTERM_COLOR_IS_RGB(col)) {
-    args[argi++] = CSI_ARG_FLAG_MORE | (fg ? 38 : 48);
-    args[argi++] = CSI_ARG_FLAG_MORE | 2;
-    args[argi++] = CSI_ARG_FLAG_MORE | col->rgb.red;
-    args[argi++] = CSI_ARG_FLAG_MORE | col->rgb.green;
-    args[argi++] = col->rgb.blue;
-  }
-  return argi;
-}
+#endif  // Dead code end
 
 int vterm_state_getpen(VTermState *state, long args[], int argcount)
 {
-  int argi = 0;
-
-  if (state->pen.bold) {
-    args[argi++] = 1;
-  }
-
-  if (state->pen.italic) {
-    args[argi++] = 3;
-  }
-
-  if (state->pen.underline == VTERM_UNDERLINE_SINGLE) {
-    args[argi++] = 4;
-  }
-  if (state->pen.underline == VTERM_UNDERLINE_CURLY) {
-    args[argi++] = 4 | CSI_ARG_FLAG_MORE, args[argi++] = 3;
-  }
-
-  if (state->pen.blink) {
-    args[argi++] = 5;
-  }
-
-  if (state->pen.reverse) {
-    args[argi++] = 7;
-  }
-
-  if (state->pen.conceal) {
-    args[argi++] = 8;
-  }
-
-  if (state->pen.strike) {
-    args[argi++] = 9;
-  }
-
-  if (state->pen.font) {
-    args[argi++] = 10 + state->pen.font;
-  }
-
-  if (state->pen.underline == VTERM_UNDERLINE_DOUBLE) {
-    args[argi++] = 21;
-  }
-
-  argi = vterm_state_getpen_color(&state->pen.fg, argi, args, true);
-
-  argi = vterm_state_getpen_color(&state->pen.bg, argi, args, false);
-
-  if (state->pen.small) {
-    if (state->pen.baseline == VTERM_BASELINE_RAISE) {
-      args[argi++] = 73;
-    } else if (state->pen.baseline == VTERM_BASELINE_LOWER) {
-      args[argi++] = 74;
-    }
-  }
-
-  return argi;
+  return rs_vterm_state_getpen(state, args, argcount);
 }
 
 int vterm_state_set_penattr(VTermState *state, VTermAttr attr, VTermValueType type, VTermValue *val)

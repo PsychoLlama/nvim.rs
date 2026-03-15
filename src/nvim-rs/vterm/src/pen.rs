@@ -819,16 +819,20 @@ pub unsafe extern "C" fn rs_vterm_state_set_penattr(
 use crate::state::{
     nvim_vterm_state_call_setpenattr, nvim_vterm_state_get_bold_is_highbright,
     nvim_vterm_state_get_color, nvim_vterm_state_get_default_bg, nvim_vterm_state_get_default_fg,
-    nvim_vterm_state_get_pen_bg, nvim_vterm_state_get_pen_bold, nvim_vterm_state_get_pen_fg,
-    nvim_vterm_state_get_pen_font, nvim_vterm_state_get_pen_underline,
-    nvim_vterm_state_get_saved_pen_baseline, nvim_vterm_state_get_saved_pen_bg,
-    nvim_vterm_state_get_saved_pen_blink, nvim_vterm_state_get_saved_pen_bold,
-    nvim_vterm_state_get_saved_pen_conceal, nvim_vterm_state_get_saved_pen_fg,
-    nvim_vterm_state_get_saved_pen_font, nvim_vterm_state_get_saved_pen_italic,
-    nvim_vterm_state_get_saved_pen_reverse, nvim_vterm_state_get_saved_pen_small,
-    nvim_vterm_state_get_saved_pen_strike, nvim_vterm_state_get_saved_pen_underline,
-    nvim_vterm_state_get_saved_pen_uri, nvim_vterm_state_restore_pen, nvim_vterm_state_save_pen,
-    nvim_vterm_state_set_color, nvim_vterm_state_set_default_bg, nvim_vterm_state_set_default_fg,
+    nvim_vterm_state_get_pen_baseline, nvim_vterm_state_get_pen_bg, nvim_vterm_state_get_pen_blink,
+    nvim_vterm_state_get_pen_bold, nvim_vterm_state_get_pen_conceal, nvim_vterm_state_get_pen_fg,
+    nvim_vterm_state_get_pen_font, nvim_vterm_state_get_pen_italic,
+    nvim_vterm_state_get_pen_reverse, nvim_vterm_state_get_pen_small,
+    nvim_vterm_state_get_pen_strike, nvim_vterm_state_get_pen_underline,
+    nvim_vterm_state_get_pen_uri, nvim_vterm_state_get_saved_pen_baseline,
+    nvim_vterm_state_get_saved_pen_bg, nvim_vterm_state_get_saved_pen_blink,
+    nvim_vterm_state_get_saved_pen_bold, nvim_vterm_state_get_saved_pen_conceal,
+    nvim_vterm_state_get_saved_pen_fg, nvim_vterm_state_get_saved_pen_font,
+    nvim_vterm_state_get_saved_pen_italic, nvim_vterm_state_get_saved_pen_reverse,
+    nvim_vterm_state_get_saved_pen_small, nvim_vterm_state_get_saved_pen_strike,
+    nvim_vterm_state_get_saved_pen_underline, nvim_vterm_state_get_saved_pen_uri,
+    nvim_vterm_state_restore_pen, nvim_vterm_state_save_pen, nvim_vterm_state_set_color,
+    nvim_vterm_state_set_default_bg, nvim_vterm_state_set_default_fg,
     nvim_vterm_state_set_pen_baseline, nvim_vterm_state_set_pen_bg, nvim_vterm_state_set_pen_blink,
     nvim_vterm_state_set_pen_bold, nvim_vterm_state_set_pen_conceal, nvim_vterm_state_set_pen_fg,
     nvim_vterm_state_set_pen_font, nvim_vterm_state_set_pen_italic,
@@ -836,6 +840,420 @@ use crate::state::{
     nvim_vterm_state_set_pen_strike, nvim_vterm_state_set_pen_underline,
     nvim_vterm_state_set_pen_uri,
 };
+
+// =============================================================================
+// Phase 4 FFI Functions: setpen (SGR dispatcher) and getpen
+// =============================================================================
+
+/// Set an ANSI palette foreground or background color on the pen, then dispatch callback
+///
+/// # Safety
+/// The state handle must be valid.
+unsafe fn set_pen_col_ansi(state: VTermStateHandle, attr: VTermAttr, col_idx: u8) {
+    let col = VTermColor::indexed(col_idx);
+    match attr {
+        VTermAttr::Foreground => nvim_vterm_state_set_pen_fg(state, col),
+        VTermAttr::Background => nvim_vterm_state_set_pen_bg(state, col),
+        _ => {}
+    }
+    setpenattr_col(state, attr, col);
+}
+
+/// Process SGR (Select Graphic Rendition) parameters and apply to pen state
+///
+/// # Safety
+/// The state handle must be valid. `args` must point to a valid array of `argcount` elements.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_vterm_state_setpen(
+    state: VTermStateHandle,
+    args: *const c_long,
+    argcount: c_int,
+) {
+    use crate::{csi_arg, csi_arg_has_more, csi_arg_is_missing};
+
+    if args.is_null() || argcount <= 0 {
+        return;
+    }
+
+    let args = std::slice::from_raw_parts(args, argcount as usize);
+    let mut argi: usize = 0;
+
+    while argi < args.len() {
+        let mut done = true;
+        let arg = csi_arg(args[argi]);
+
+        match arg {
+            // Reset
+            _ if csi_arg_is_missing(args[argi]) || arg == 0 => {
+                rs_vterm_state_resetpen(state);
+            }
+
+            // Bold on
+            1 => {
+                let fg = nvim_vterm_state_get_pen_fg(state);
+                nvim_vterm_state_set_pen_bold(state, 1);
+                setpenattr_bool(state, VTermAttr::Bold, true);
+                // bold_is_highbright: promote fg colour 0-7 to 8-15
+                if !fg.is_default_fg()
+                    && fg.is_indexed()
+                    && fg.indexed.idx < 8
+                    && nvim_vterm_state_get_bold_is_highbright(state) != 0
+                {
+                    set_pen_col_ansi(state, VTermAttr::Foreground, fg.indexed.idx + 8);
+                }
+            }
+
+            // Italic on
+            3 => {
+                nvim_vterm_state_set_pen_italic(state, 1);
+                setpenattr_bool(state, VTermAttr::Italic, true);
+            }
+
+            // Underline (with optional sub-parameter)
+            4 => {
+                let underline = if csi_arg_has_more(args[argi]) && argi + 1 < args.len() {
+                    argi += 1;
+                    match csi_arg(args[argi]) {
+                        0 => VTermUnderline::Off as c_int,
+                        2 => VTermUnderline::Double as c_int,
+                        3 => VTermUnderline::Curly as c_int,
+                        _ => VTermUnderline::Single as c_int, // 1 and others
+                    }
+                } else {
+                    VTermUnderline::Single as c_int
+                };
+                nvim_vterm_state_set_pen_underline(state, underline);
+                setpenattr_int(state, VTermAttr::Underline, underline);
+            }
+
+            // Blink
+            5 => {
+                nvim_vterm_state_set_pen_blink(state, 1);
+                setpenattr_bool(state, VTermAttr::Blink, true);
+            }
+
+            // Reverse on
+            7 => {
+                nvim_vterm_state_set_pen_reverse(state, 1);
+                setpenattr_bool(state, VTermAttr::Reverse, true);
+            }
+
+            // Conceal on
+            8 => {
+                nvim_vterm_state_set_pen_conceal(state, 1);
+                setpenattr_bool(state, VTermAttr::Conceal, true);
+            }
+
+            // Strikethrough on
+            9 => {
+                nvim_vterm_state_set_pen_strike(state, 1);
+                setpenattr_bool(state, VTermAttr::Strike, true);
+            }
+
+            // Select font (10-19)
+            10..=19 => {
+                let font = (arg - 10) as c_int;
+                nvim_vterm_state_set_pen_font(state, font);
+                setpenattr_int(state, VTermAttr::Font, font);
+            }
+
+            // Double underline
+            21 => {
+                nvim_vterm_state_set_pen_underline(state, VTermUnderline::Double as c_int);
+                setpenattr_int(state, VTermAttr::Underline, VTermUnderline::Double as c_int);
+            }
+
+            // Bold off
+            22 => {
+                nvim_vterm_state_set_pen_bold(state, 0);
+                setpenattr_bool(state, VTermAttr::Bold, false);
+            }
+
+            // Italic off
+            23 => {
+                nvim_vterm_state_set_pen_italic(state, 0);
+                setpenattr_bool(state, VTermAttr::Italic, false);
+            }
+
+            // Underline off
+            24 => {
+                nvim_vterm_state_set_pen_underline(state, 0);
+                setpenattr_int(state, VTermAttr::Underline, 0);
+            }
+
+            // Blink off
+            25 => {
+                nvim_vterm_state_set_pen_blink(state, 0);
+                setpenattr_bool(state, VTermAttr::Blink, false);
+            }
+
+            // Reverse off
+            27 => {
+                nvim_vterm_state_set_pen_reverse(state, 0);
+                setpenattr_bool(state, VTermAttr::Reverse, false);
+            }
+
+            // Conceal off
+            28 => {
+                nvim_vterm_state_set_pen_conceal(state, 0);
+                setpenattr_bool(state, VTermAttr::Conceal, false);
+            }
+
+            // Strikethrough off
+            29 => {
+                nvim_vterm_state_set_pen_strike(state, 0);
+                setpenattr_bool(state, VTermAttr::Strike, false);
+            }
+
+            // Foreground colour palette (30-37)
+            30..=37 => {
+                let mut value = (arg - 30) as u8;
+                if nvim_vterm_state_get_pen_bold(state) != 0
+                    && nvim_vterm_state_get_bold_is_highbright(state) != 0
+                {
+                    value += 8;
+                }
+                set_pen_col_ansi(state, VTermAttr::Foreground, value);
+            }
+
+            // Foreground colour alternative palette
+            38 => {
+                if args.len() - argi < 2 {
+                    return;
+                }
+                let palette = csi_arg(args[argi + 1]);
+                let mut col = VTermColor::default();
+                let consumed = lookup_colour(palette, &args[argi + 2..], &mut col);
+                argi += 1 + consumed;
+                nvim_vterm_state_set_pen_fg(state, col);
+                setpenattr_col(state, VTermAttr::Foreground, col);
+            }
+
+            // Foreground colour default
+            39 => {
+                let fg = nvim_vterm_state_get_default_fg(state);
+                nvim_vterm_state_set_pen_fg(state, fg);
+                setpenattr_col(state, VTermAttr::Foreground, fg);
+            }
+
+            // Background colour palette (40-47)
+            40..=47 => {
+                let value = (arg - 40) as u8;
+                set_pen_col_ansi(state, VTermAttr::Background, value);
+            }
+
+            // Background colour alternative palette
+            48 => {
+                if args.len() - argi < 2 {
+                    return;
+                }
+                let palette = csi_arg(args[argi + 1]);
+                let mut col = VTermColor::default();
+                let consumed = lookup_colour(palette, &args[argi + 2..], &mut col);
+                argi += 1 + consumed;
+                nvim_vterm_state_set_pen_bg(state, col);
+                setpenattr_col(state, VTermAttr::Background, col);
+            }
+
+            // Background colour default
+            49 => {
+                let bg = nvim_vterm_state_get_default_bg(state);
+                nvim_vterm_state_set_pen_bg(state, bg);
+                setpenattr_col(state, VTermAttr::Background, bg);
+            }
+
+            // Superscript (73) / Subscript (74) / off (75)
+            73..=75 => {
+                let small = arg != 75;
+                let baseline = match arg {
+                    73 => crate::VTermBaseline::Raise as c_int,
+                    74 => crate::VTermBaseline::Lower as c_int,
+                    _ => crate::VTermBaseline::Normal as c_int,
+                };
+                nvim_vterm_state_set_pen_small(state, c_int::from(small));
+                nvim_vterm_state_set_pen_baseline(state, baseline);
+                setpenattr_bool(state, VTermAttr::Small, small);
+                setpenattr_int(state, VTermAttr::Baseline, baseline);
+            }
+
+            // Foreground high-intensity (90-97)
+            90..=97 => {
+                let value = (arg - 90 + 8) as u8;
+                set_pen_col_ansi(state, VTermAttr::Foreground, value);
+            }
+
+            // Background high-intensity (100-107)
+            100..=107 => {
+                let value = (arg - 100 + 8) as u8;
+                set_pen_col_ansi(state, VTermAttr::Background, value);
+            }
+
+            _ => {
+                done = false;
+            }
+        }
+
+        let _ = done; // suppress unused warning
+
+        // Advance past any sub-parameters with the HAS_MORE flag
+        while csi_arg_has_more(args[argi]) {
+            argi += 1;
+            if argi >= args.len() {
+                return;
+            }
+        }
+        argi += 1;
+    }
+}
+
+/// Serialize pen state to SGR parameter array
+///
+/// Returns the number of arguments written to `args`.
+///
+/// # Safety
+/// The state handle must be valid. `args` must point to a valid array of at least `argcount`
+/// elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_getpen(
+    state: VTermStateHandle,
+    args: *mut c_long,
+    argcount: c_int,
+) -> c_int {
+    use crate::CSI_ARG_FLAG_MORE;
+
+    if args.is_null() || argcount <= 0 {
+        return 0;
+    }
+
+    let args = std::slice::from_raw_parts_mut(args, argcount as usize);
+    let mut argi: usize = 0;
+
+    if nvim_vterm_state_get_pen_bold(state) != 0 {
+        args[argi] = 1;
+        argi += 1;
+    }
+
+    if nvim_vterm_state_get_pen_italic(state) != 0 {
+        args[argi] = 3;
+        argi += 1;
+    }
+
+    let underline = nvim_vterm_state_get_pen_underline(state);
+    if underline == VTermUnderline::Single as c_int {
+        args[argi] = 4;
+        argi += 1;
+    }
+    if underline == VTermUnderline::Curly as c_int {
+        args[argi] = 4 | CSI_ARG_FLAG_MORE;
+        argi += 1;
+        args[argi] = 3;
+        argi += 1;
+    }
+
+    if nvim_vterm_state_get_pen_blink(state) != 0 {
+        args[argi] = 5;
+        argi += 1;
+    }
+
+    // Note: reverse, conceal, strike read from pen but aren't exposed via scalar accessors yet.
+    // We read them using the existing Phase 1 accessors.
+    if nvim_vterm_state_get_pen_reverse(state) != 0 {
+        args[argi] = 7;
+        argi += 1;
+    }
+
+    if nvim_vterm_state_get_pen_conceal(state) != 0 {
+        args[argi] = 8;
+        argi += 1;
+    }
+
+    if nvim_vterm_state_get_pen_strike(state) != 0 {
+        args[argi] = 9;
+        argi += 1;
+    }
+
+    let font = nvim_vterm_state_get_pen_font(state);
+    if font != 0 {
+        args[argi] = c_long::from(10 + font);
+        argi += 1;
+    }
+
+    if underline == VTermUnderline::Double as c_int {
+        args[argi] = 21;
+        argi += 1;
+    }
+
+    // Foreground color
+    let fg = nvim_vterm_state_get_pen_fg(state);
+    argi = getpen_color(&fg, argi, args, true);
+
+    // Background color
+    let bg = nvim_vterm_state_get_pen_bg(state);
+    argi = getpen_color(&bg, argi, args, false);
+
+    // Small / baseline
+    let small = nvim_vterm_state_get_pen_small(state);
+    if small != 0 {
+        let baseline = nvim_vterm_state_get_pen_baseline(state);
+        if baseline == crate::VTermBaseline::Raise as c_int {
+            args[argi] = 73;
+            argi += 1;
+        } else if baseline == crate::VTermBaseline::Lower as c_int {
+            args[argi] = 74;
+            argi += 1;
+        }
+    }
+
+    // argi <= argcount (c_int) so this is safe
+    #[allow(clippy::cast_possible_wrap)]
+    let result = argi as c_int;
+    result
+}
+
+/// Serialize a single color to SGR args (helper for getpen)
+///
+/// Returns updated `argi`.
+fn getpen_color(col: &VTermColor, mut argi: usize, args: &mut [c_long], fg: bool) -> usize {
+    use crate::CSI_ARG_FLAG_MORE;
+
+    // Do nothing if it's the default color
+    if fg && col.is_default_fg() || !fg && col.is_default_bg() {
+        return argi;
+    }
+
+    if col.is_indexed() {
+        // SAFETY: We checked is_indexed()
+        let idx = c_long::from(unsafe { col.indexed.idx });
+        if idx < 8 {
+            args[argi] = idx + if fg { 30 } else { 40 };
+        } else if idx < 16 {
+            args[argi] = idx - 8 + if fg { 90 } else { 100 };
+        } else {
+            args[argi] = CSI_ARG_FLAG_MORE | if fg { 38 } else { 48 };
+            argi += 1;
+            args[argi] = CSI_ARG_FLAG_MORE | 5;
+            argi += 1;
+            args[argi] = idx;
+        }
+        argi += 1;
+    } else if col.is_rgb() {
+        // SAFETY: We checked is_rgb()
+        let (r, g, b) = unsafe { (col.rgb.red, col.rgb.green, col.rgb.blue) };
+        args[argi] = CSI_ARG_FLAG_MORE | if fg { 38 } else { 48 };
+        argi += 1;
+        args[argi] = CSI_ARG_FLAG_MORE | 2;
+        argi += 1;
+        args[argi] = CSI_ARG_FLAG_MORE | c_long::from(r);
+        argi += 1;
+        args[argi] = CSI_ARG_FLAG_MORE | c_long::from(g);
+        argi += 1;
+        args[argi] = c_long::from(b);
+        argi += 1;
+    }
+
+    argi
+}
 
 /// Convert an indexed color to RGB using the default palette
 #[no_mangle]
