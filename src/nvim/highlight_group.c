@@ -855,46 +855,6 @@ void free_highlight(void)
 
 #endif
 
-/// @param check_link  if true also check for an existing link.
-///
-/// @return true if highlight group "idx" has any settings.
-static bool hl_has_settings(int idx, bool check_link)
-{
-  return hl_table[idx].sg_cleared == 0
-         && (hl_table[idx].sg_attr != 0
-             || hl_table[idx].sg_cterm_fg != 0
-             || hl_table[idx].sg_cterm_bg != 0
-             || hl_table[idx].sg_rgb_fg_idx != kColorIdxNone
-             || hl_table[idx].sg_rgb_bg_idx != kColorIdxNone
-             || hl_table[idx].sg_rgb_sp_idx != kColorIdxNone
-             || (check_link && (hl_table[idx].sg_set & SG_LINK)));
-}
-
-/// Clear highlighting for one group.
-static void highlight_clear(int idx)
-{
-  hl_table[idx].sg_cleared = true;
-
-  hl_table[idx].sg_attr = 0;
-  hl_table[idx].sg_cterm = 0;
-  hl_table[idx].sg_cterm_bold = false;
-  hl_table[idx].sg_cterm_fg = 0;
-  hl_table[idx].sg_cterm_bg = 0;
-  hl_table[idx].sg_gui = 0;
-  hl_table[idx].sg_rgb_fg = -1;
-  hl_table[idx].sg_rgb_bg = -1;
-  hl_table[idx].sg_rgb_sp = -1;
-  hl_table[idx].sg_rgb_fg_idx = kColorIdxNone;
-  hl_table[idx].sg_rgb_bg_idx = kColorIdxNone;
-  hl_table[idx].sg_rgb_sp_idx = kColorIdxNone;
-  hl_table[idx].sg_blend = -1;
-  // Restore default link and context if they exist. Otherwise clears.
-  hl_table[idx].sg_link = hl_table[idx].sg_deflink;
-  // Since we set the default link, set the location to where the default
-  // link was set.
-  hl_table[idx].sg_script_ctx = hl_table[idx].sg_deflink_sctx;
-}
-
 /// \addtogroup LIST_XXX
 /// @{
 #define LIST_ATTR   1
@@ -1207,34 +1167,6 @@ bool syn_list_header(const bool did_header, const int outlen, const int id, bool
   }
 
   return newline;
-}
-
-/// Set the attribute numbers for a highlight group.
-/// Called after one of the attributes has changed.
-/// @param idx corrected highlight index
-static void set_hl_attr(int idx)
-{
-  HlAttrs at_en = HLATTRS_INIT;
-  HlGroup *sgp = hl_table + idx;
-
-  at_en.cterm_ae_attr = (int16_t)sgp->sg_cterm;
-  at_en.cterm_fg_color = (int16_t)sgp->sg_cterm_fg;
-  at_en.cterm_bg_color = (int16_t)sgp->sg_cterm_bg;
-  at_en.rgb_ae_attr = (int16_t)sgp->sg_gui;
-  // FIXME(tarruda): The "unset value" for rgb is -1, but since hlgroup is
-  // initialized with 0 (by garray functions), check for sg_rgb_{f,b}g_name
-  // before setting attr_entry->{f,g}g_color to a other than -1
-  at_en.rgb_fg_color = sgp->sg_rgb_fg_idx != kColorIdxNone ? sgp->sg_rgb_fg : -1;
-  at_en.rgb_bg_color = sgp->sg_rgb_bg_idx != kColorIdxNone ? sgp->sg_rgb_bg : -1;
-  at_en.rgb_sp_color = sgp->sg_rgb_sp_idx != kColorIdxNone ? sgp->sg_rgb_sp : -1;
-  at_en.hl_blend = sgp->sg_blend;
-
-  sgp->sg_attr = hl_get_syn_attr(0, idx + 1, at_en);
-
-  // a cursor style uses this syn_id, make sure its attribute is updated.
-  if (cursor_mode_uses_syn_id(idx + 1)) {
-    ui_mode_info_set();
-  }
 }
 
 int syn_name2id(const char *name)

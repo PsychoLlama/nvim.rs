@@ -509,6 +509,108 @@ extern "C" {
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+// =============================================================================
+// Utility functions migrated from highlight_group.c (Phase 3)
+//
+// hl_has_settings, highlight_clear, set_hl_attr
+// =============================================================================
+
+extern "C" {
+    /// Compute and store the screen attribute for a highlight group.
+    /// (hl_get_syn_attr is in the nvim-highlight crate)
+    fn hl_get_syn_attr(ns_id: c_int, idx: c_int, attrs: crate::HlAttrs) -> c_int;
+
+    /// Check if any cursor mode entry uses the given syntax ID.
+    fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool;
+
+    /// Notify the UI about a mode info change.
+    fn ui_mode_info_set();
+}
+
+/// Returns true if highlight group `idx` has any settings.
+///
+/// `check_link`: if true, also check for an existing link target.
+/// Was `static bool hl_has_settings(int idx, bool check_link)` in C.
+#[export_name = "hl_has_settings"]
+pub unsafe extern "C" fn rs_hl_has_settings(idx: c_int, check_link: bool) -> bool {
+    let sg = &*hl_table_ptr(idx);
+    !sg.sg_cleared
+        && (sg.sg_attr != 0
+            || sg.sg_cterm_fg != 0
+            || sg.sg_cterm_bg != 0
+            || sg.sg_rgb_fg_idx != crate::types::ColorIdx::None as c_int
+            || sg.sg_rgb_bg_idx != crate::types::ColorIdx::None as c_int
+            || sg.sg_rgb_sp_idx != crate::types::ColorIdx::None as c_int
+            || (check_link && (sg.sg_set & crate::types::SgSet::LINK.0) != 0))
+}
+
+/// Clear all highlight settings for group `idx`.
+///
+/// Restores default link/context if they are set.
+/// Was `static void highlight_clear(int idx)` in C.
+#[export_name = "highlight_clear"]
+pub unsafe extern "C" fn rs_highlight_clear(idx: c_int) {
+    let sg = &mut *hl_table_ptr(idx);
+    sg.sg_cleared = true;
+    sg.sg_attr = 0;
+    sg.sg_cterm = 0;
+    sg.sg_cterm_bold = false;
+    sg.sg_cterm_fg = 0;
+    sg.sg_cterm_bg = 0;
+    sg.sg_gui = 0;
+    sg.sg_rgb_fg = -1;
+    sg.sg_rgb_bg = -1;
+    sg.sg_rgb_sp = -1;
+    sg.sg_rgb_fg_idx = crate::types::ColorIdx::None as c_int;
+    sg.sg_rgb_bg_idx = crate::types::ColorIdx::None as c_int;
+    sg.sg_rgb_sp_idx = crate::types::ColorIdx::None as c_int;
+    sg.sg_blend = -1;
+    // Restore default link and context if they exist.
+    sg.sg_link = sg.sg_deflink;
+    sg.sg_script_ctx = sg.sg_deflink_sctx;
+}
+
+/// Compute and set the screen attribute for highlight group `idx`.
+///
+/// Builds an `HlAttrs` from the group fields and calls `hl_get_syn_attr`.
+/// Was `static void set_hl_attr(int idx)` in C.
+#[export_name = "set_hl_attr"]
+pub unsafe extern "C" fn rs_set_hl_attr(idx: c_int) {
+    let sg = &*hl_table_ptr(idx);
+    let none = crate::types::ColorIdx::None as c_int;
+
+    let at_en = crate::HlAttrs {
+        cterm_ae_attr: sg.sg_cterm as i16,
+        cterm_fg_color: sg.sg_cterm_fg as i16,
+        cterm_bg_color: sg.sg_cterm_bg as i16,
+        rgb_ae_attr: sg.sg_gui as i16,
+        rgb_fg_color: if sg.sg_rgb_fg_idx != none {
+            sg.sg_rgb_fg
+        } else {
+            -1
+        },
+        rgb_bg_color: if sg.sg_rgb_bg_idx != none {
+            sg.sg_rgb_bg
+        } else {
+            -1
+        },
+        rgb_sp_color: if sg.sg_rgb_sp_idx != none {
+            sg.sg_rgb_sp
+        } else {
+            -1
+        },
+        hl_blend: sg.sg_blend,
+        url: -1,
+    };
+
+    (*hl_table_ptr(idx)).sg_attr = hl_get_syn_attr(0, idx + 1, at_en);
+
+    // A cursor style uses this syn_id — make sure its attribute is updated.
+    if cursor_mode_uses_syn_id(idx + 1) {
+        ui_mode_info_set();
+    }
+}
+
 /// Tracks whether `init_highlight(both=true, ...)` has been called yet.
 static HAD_BOTH: AtomicBool = AtomicBool::new(false);
 
