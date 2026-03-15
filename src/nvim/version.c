@@ -49,22 +49,6 @@ char *Versions[] = { "8.1", "8.2", "9.0", "9.1" };
 char *longVersion = NVIM_VERSION_LONG;
 char *version_buildtype = "Build type: " NVIM_VERSION_BUILD_TYPE;
 
-// FFI helper functions to expose version constants to Rust
-int nvim_get_version_major(void)
-{
-  return NVIM_VERSION_MAJOR;
-}
-
-int nvim_get_version_minor(void)
-{
-  return NVIM_VERSION_MINOR;
-}
-
-int nvim_get_version_patch(void)
-{
-  return NVIM_VERSION_PATCH;
-}
-
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
