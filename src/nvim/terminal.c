@@ -98,7 +98,6 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/vim_defs.h"
-#include "nvim/vterm/keyboard.h"
 #include "nvim/vterm/mouse.h"
 #include "nvim/vterm/parser.h"
 #include "nvim/vterm/pen.h"
@@ -134,6 +133,12 @@ extern int rs_win_valid(win_T *win);
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
+
+// Rust FFI declarations from nvim-vterm crate
+extern void rs_vterm_keyboard_key(void *vt, int key, int mods);
+extern void rs_vterm_keyboard_unichar(void *vt, unsigned int ch, int mods);
+extern void rs_vterm_keyboard_start_paste(void *vt);
+extern void rs_vterm_keyboard_end_paste(void *vt);
 
 // Rust FFI declarations from nvim-terminal crate
 extern int rs_terminal_is_filter_char_flags(int c, int flags);
@@ -1098,7 +1103,7 @@ void terminal_paste(int count, String *y_array, size_t y_size)
   if (y_size == 0) {
     return;
   }
-  vterm_keyboard_start_paste(curbuf->terminal->vt);
+  rs_vterm_keyboard_start_paste(curbuf->terminal->vt);
   size_t buff_len = y_array[0].size;
   char *buff = xmalloc(buff_len);
   for (int i = 0; i < count; i++) {
@@ -1132,7 +1137,7 @@ void terminal_paste(int count, String *y_array, size_t y_size)
     }
   }
   xfree(buff);
-  vterm_keyboard_end_paste(curbuf->terminal->vt);
+  rs_vterm_keyboard_end_paste(curbuf->terminal->vt);
 }
 
 static void terminal_send_key(Terminal *term, int c)
@@ -1145,9 +1150,9 @@ static void terminal_send_key(Terminal *term, int c)
   VTermKeyResult result = rs_terminal_convert_key(c, mod_mask);
 
   if (result.key != VTERM_KEY_NONE) {
-    vterm_keyboard_key(term->vt, (VTermKey)result.key, (VTermModifier)result.modifiers);
+    rs_vterm_keyboard_key(term->vt, (VTermKey)result.key, (VTermModifier)result.modifiers);
   } else if (!IS_SPECIAL(c)) {
-    vterm_keyboard_unichar(term->vt, (uint32_t)c, (VTermModifier)result.modifiers);
+    rs_vterm_keyboard_unichar(term->vt, (uint32_t)c, (VTermModifier)result.modifiers);
   }
 }
 

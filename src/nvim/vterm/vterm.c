@@ -156,6 +156,33 @@ void vterm_push_output_bytes(VTerm *vt, const char *bytes, size_t len)
   vt->outbuffer_cur += len;
 }
 
+/// Get the ctrl8bit mode flag (for Rust FFI)
+int nvim_vterm_get_ctrl8bit(const VTerm *vt)
+{
+  return (int)vt->mode.ctrl8bit;
+}
+
+/// Push a control sequence with a pre-built body string (for Rust FFI, no varargs)
+void nvim_vterm_push_output_ctrl(VTerm *vt, uint8_t ctrl, const char *body, size_t bodylen)
+{
+  char prefix[2];
+  size_t prefixlen;
+
+  if (ctrl >= 0x80 && !vt->mode.ctrl8bit) {
+    prefix[0] = '\x1b';
+    prefix[1] = (char)(ctrl - 0x40);
+    prefixlen = 2;
+  } else {
+    prefix[0] = (char)ctrl;
+    prefixlen = 1;
+  }
+
+  vterm_push_output_bytes(vt, prefix, prefixlen);
+  if (bodylen > 0) {
+    vterm_push_output_bytes(vt, body, bodylen);
+  }
+}
+
 void vterm_push_output_sprintf(VTerm *vt, const char *format, ...)
   FUNC_ATTR_PRINTF(2, 3)
 {

@@ -463,6 +463,45 @@ pub fn encode_unichar(codepoint: u32, mods: u8, disambiguate: bool) -> KeyOutput
     }
 }
 
+/// Encode a special key for keyboard input given a raw key value
+///
+/// This is like `encode_key` but accepts a raw u16 key value instead of a `VTermKey` enum.
+/// Returns `KeyOutput::None` if the key value is invalid.
+pub fn encode_key_raw(
+    key_val: u16,
+    mods: u8,
+    disambiguate: bool,
+    cursor_mode: bool,
+    keypad_mode: bool,
+    newline_mode: bool,
+) -> KeyOutput {
+    // SAFETY: VTermKey is repr(u16) and we handle unknown keys via lookup_keycode_by_value
+    // We use Function0 as a stand-in for the raw value since encode_key only uses the
+    // numeric value via lookup_keycode anyway.
+    //
+    // For VTERM_KEY_NONE (0), return None immediately.
+    if key_val == VTermKey::None as u16 {
+        return KeyOutput::None;
+    }
+
+    let Some(keycode) = lookup_keycode_by_value(key_val, disambiguate) else {
+        return KeyOutput::None;
+    };
+
+    // Reconstruct a VTermKey for special handling in encode_key.
+    // We need to know the key identity for Tab/Enter/Backspace disambiguation.
+    // Use a helper that works directly with the keycode.
+    encode_keycode(
+        keycode,
+        key_val,
+        mods,
+        disambiguate,
+        cursor_mode,
+        keypad_mode,
+        newline_mode,
+    )
+}
+
 /// Encode a special key for keyboard input
 pub fn encode_key(
     key: VTermKey,
@@ -562,6 +601,121 @@ pub fn encode_key(
                 encode_literal_key(keycode.literal, key, mods, disambiguate)
             }
         }
+    }
+}
+
+/// Internal implementation: encode a keycode given raw key value
+///
+/// This avoids needing to convert the raw u16 key value to a `VTermKey` enum.
+fn encode_keycode(
+    keycode: Keycode,
+    key_val: u16,
+    mods: u8,
+    disambiguate: bool,
+    cursor_mode: bool,
+    keypad_mode: bool,
+    newline_mode: bool,
+) -> KeyOutput {
+    match keycode.keycode_type {
+        KeycodeType::None => KeyOutput::None,
+
+        KeycodeType::Tab => {
+            if disambiguate {
+                encode_literal_key_raw(keycode.literal, key_val, mods, true)
+            } else if mods == VTERM_MOD_SHIFT {
+                KeyOutput::Csi(b'Z')
+            } else if (mods & VTERM_MOD_SHIFT) != 0 {
+                KeyOutput::CsiMod(b'Z', mods + 1)
+            } else {
+                encode_literal_key_raw(keycode.literal, key_val, mods, false)
+            }
+        }
+
+        KeycodeType::Enter => {
+            if newline_mode {
+                KeyOutput::Literal(vec![b'\r', b'\n'])
+            } else {
+                encode_literal_key_raw(keycode.literal, key_val, mods, disambiguate)
+            }
+        }
+
+        KeycodeType::Literal => {
+            encode_literal_key_raw(keycode.literal, key_val, mods, disambiguate)
+        }
+
+        KeycodeType::Ss3 => {
+            if mods == 0 {
+                KeyOutput::Ss3(keycode.literal)
+            } else {
+                KeyOutput::CsiMod(keycode.literal, mods + 1)
+            }
+        }
+
+        KeycodeType::Csi => {
+            if mods == 0 {
+                KeyOutput::Csi(keycode.literal)
+            } else {
+                KeyOutput::CsiMod(keycode.literal, mods + 1)
+            }
+        }
+
+        KeycodeType::CsiCursor => {
+            if cursor_mode {
+                if mods == 0 {
+                    KeyOutput::Ss3(keycode.literal)
+                } else {
+                    KeyOutput::CsiMod(keycode.literal, mods + 1)
+                }
+            } else if mods == 0 {
+                KeyOutput::Csi(keycode.literal)
+            } else {
+                KeyOutput::CsiMod(keycode.literal, mods + 1)
+            }
+        }
+
+        KeycodeType::CsiNum => {
+            if mods == 0 {
+                KeyOutput::CsiNum(keycode.csinum, keycode.literal)
+            } else {
+                KeyOutput::CsiNumMod(keycode.csinum, keycode.literal, mods + 1)
+            }
+        }
+
+        KeycodeType::Keypad => {
+            if keypad_mode {
+                let ss3_char = keycode.csinum as u8;
+                if mods == 0 {
+                    KeyOutput::Ss3(ss3_char)
+                } else {
+                    KeyOutput::CsiMod(ss3_char, mods + 1)
+                }
+            } else {
+                encode_literal_key_raw(keycode.literal, key_val, mods, disambiguate)
+            }
+        }
+    }
+}
+
+/// Encode a literal key by raw key value (for use without `VTermKey` enum)
+fn encode_literal_key_raw(literal: u8, key_val: u16, mods: u8, disambiguate: bool) -> KeyOutput {
+    let mut use_csiu = disambiguate;
+
+    // For Tab, Enter, Backspace without modifiers, don't use CSI u
+    if use_csiu {
+        let is_special = key_val == VTermKey::Tab as u16
+            || key_val == VTermKey::Enter as u16
+            || key_val == VTermKey::Backspace as u16;
+        if is_special {
+            use_csiu = mods != VTERM_MOD_NONE;
+        }
+    }
+
+    if use_csiu {
+        KeyOutput::CsiU(u32::from(literal), mods + 1)
+    } else if (mods & VTERM_MOD_ALT) != 0 {
+        KeyOutput::EscChar(literal)
+    } else {
+        KeyOutput::Literal(vec![literal])
     }
 }
 

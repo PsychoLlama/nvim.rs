@@ -1582,14 +1582,13 @@ extern "C" {
 
     // I/O functions
     fn vterm_input_write(vt: *mut c_void, data: *const c_char, len: usize) -> usize;
-    fn vterm_keyboard_key(vt: *mut c_void, key: c_int, mods: c_int);
-    fn vterm_keyboard_unichar(vt: *mut c_void, ch: u32, mods: c_int);
-    fn vterm_keyboard_start_paste(vt: *mut c_void);
-    fn vterm_keyboard_end_paste(vt: *mut c_void);
 
     // Screen functions
     fn vterm_screen_flush_damage(vts: *mut c_void);
     fn vterm_screen_reset(vts: *mut c_void, hard: c_int);
+
+    // Keyboard/output helpers (non-variadic wrappers added for Rust FFI)
+    fn nvim_vterm_push_output_ctrl(vt: *mut c_void, ctrl: u8, body: *const c_char, bodylen: usize);
 }
 
 /// Create a new `VTerm` instance.
@@ -1762,52 +1761,164 @@ pub extern "C" fn rs_vterm_input_write(vt: VTermHandle, data: *const c_char, len
     unsafe { vterm_input_write(vt.as_ptr(), data, len) }
 }
 
+// =============================================================================
+// Keyboard Output Helpers
+// =============================================================================
+
+/// Push raw bytes to `VTerm` output
+unsafe fn push_bytes(vt: *mut c_void, bytes: &[u8]) {
+    if !bytes.is_empty() {
+        unsafe {
+            vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len());
+        }
+    }
+}
+
+/// Push a control sequence (CSI/SS3) with a pre-built body to `VTerm` output.
+///
+/// The C1 control codes are: CSI = 0x9B, SS3 = 0x8F.
+/// When `ctrl8bit`=0 (default), 0x9B -> ESC [, 0x8F -> ESC O.
+unsafe fn push_ctrl_seq(vt: *mut c_void, ctrl: u8, body: &[u8]) {
+    unsafe {
+        nvim_vterm_push_output_ctrl(vt, ctrl, body.as_ptr().cast::<c_char>(), body.len());
+    }
+}
+
+/// Convert a `KeyOutput` to bytes and push to `VTerm`.
+unsafe fn push_key_output(vt: *mut c_void, output: &keyboard::KeyOutput) {
+    match *output {
+        keyboard::KeyOutput::None => {}
+
+        keyboard::KeyOutput::Literal(ref bytes) => unsafe {
+            push_bytes(vt, bytes);
+        },
+
+        keyboard::KeyOutput::EscChar(c) => unsafe {
+            push_bytes(vt, &[0x1b, c]);
+        },
+
+        keyboard::KeyOutput::Ss3(c) => unsafe {
+            push_ctrl_seq(vt, 0x8F, &[c]);
+        },
+
+        keyboard::KeyOutput::Csi(c) => unsafe {
+            push_ctrl_seq(vt, 0x9B, &[c]);
+        },
+
+        keyboard::KeyOutput::CsiMod(c, m) => {
+            let body = format!("1;{m}{}", c as char);
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+
+        keyboard::KeyOutput::CsiNum(n, c) => {
+            let body = format!("{n}{}", c as char);
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+
+        keyboard::KeyOutput::CsiNumMod(n, c, m) => {
+            let body = format!("{n};{m}{}", c as char);
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+
+        keyboard::KeyOutput::CsiU(code, m) => {
+            let body = format!("{code};{m}u");
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+    }
+}
+
 /// Send a keyboard key to a `VTerm` instance.
 ///
-/// This is the Rust wrapper for `vterm_keyboard_key()`.
+/// Implements `vterm_keyboard_key()` in Rust.
 #[no_mangle]
 pub extern "C" fn rs_vterm_keyboard_key(vt: VTermHandle, key: c_int, mods: c_int) {
     if vt.is_null() {
         return;
     }
-    // SAFETY: Caller guarantees the handle is valid
-    unsafe { vterm_keyboard_key(vt.as_ptr(), key, mods) }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let key_val = key as u16;
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mods_u8 = (mods as u8) & keyboard::VTERM_ALL_MODS_MASK;
+
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &*(state_ptr as *const state::State) };
+    let flags = state.current_key_encoding();
+
+    let output = keyboard::encode_key_raw(
+        key_val,
+        mods_u8,
+        flags.disambiguate(),
+        state.mode.cursor(),
+        state.mode.keypad(),
+        state.mode.newline(),
+    );
+
+    unsafe { push_key_output(vt.as_ptr(), &output) };
 }
 
 /// Send a Unicode character to a `VTerm` instance.
 ///
-/// This is the Rust wrapper for `vterm_keyboard_unichar()`.
+/// Implements `vterm_keyboard_unichar()` in Rust.
 #[no_mangle]
 pub extern "C" fn rs_vterm_keyboard_unichar(vt: VTermHandle, ch: u32, mods: c_int) {
     if vt.is_null() {
         return;
     }
-    // SAFETY: Caller guarantees the handle is valid
-    unsafe { vterm_keyboard_unichar(vt.as_ptr(), ch, mods) }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mods_u8 = (mods as u8) & keyboard::VTERM_ALL_MODS_MASK;
+
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &*(state_ptr as *const state::State) };
+    let disambiguate = state.current_key_encoding().disambiguate();
+
+    let output = keyboard::encode_unichar(ch, mods_u8, disambiguate);
+    unsafe { push_key_output(vt.as_ptr(), &output) };
 }
 
 /// Start a paste operation on a `VTerm` instance.
 ///
-/// This is the Rust wrapper for `vterm_keyboard_start_paste()`.
+/// Implements `vterm_keyboard_start_paste()` in Rust.
 #[no_mangle]
 pub extern "C" fn rs_vterm_keyboard_start_paste(vt: VTermHandle) {
     if vt.is_null() {
         return;
     }
-    // SAFETY: Caller guarantees the handle is valid
-    unsafe { vterm_keyboard_start_paste(vt.as_ptr()) }
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &*(state_ptr as *const state::State) };
+    if state.mode.bracketpaste() {
+        unsafe { push_bytes(vt.as_ptr(), keyboard::PASTE_START) };
+    }
 }
 
 /// End a paste operation on a `VTerm` instance.
 ///
-/// This is the Rust wrapper for `vterm_keyboard_end_paste()`.
+/// Implements `vterm_keyboard_end_paste()` in Rust.
 #[no_mangle]
 pub extern "C" fn rs_vterm_keyboard_end_paste(vt: VTermHandle) {
     if vt.is_null() {
         return;
     }
-    // SAFETY: Caller guarantees the handle is valid
-    unsafe { vterm_keyboard_end_paste(vt.as_ptr()) }
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &*(state_ptr as *const state::State) };
+    if state.mode.bracketpaste() {
+        unsafe { push_bytes(vt.as_ptr(), keyboard::PASTE_END) };
+    }
 }
 
 /// Flush screen damage on a `VTermScreen` instance.
