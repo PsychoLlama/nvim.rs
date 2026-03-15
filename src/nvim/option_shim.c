@@ -663,8 +663,8 @@ const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
 }
 // did_set_str_generic is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 // Keep nvim_did_set_str_generic as a thin wrapper for Rust option crate callers.
-extern const char *did_set_str_generic(void *args);
-const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic(args); }
+// did_set_str_generic is declared in optionstr.h (included above).
+const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic((optset_T *)args); }
 // Wrappers for side-effect functions
 void nvim_call_init_chartab(void) { init_chartab(); }
 void nvim_call_msg_grid_validate(void) { msg_grid_validate(); }

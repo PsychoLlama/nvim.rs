@@ -20,6 +20,13 @@ const char *did_set_helplang(optset_T *args);
 const char *did_set_breakat(optset_T *args);
 const char *did_set_backupext_or_patchmode(optset_T *args);
 const char *did_set_mousescroll(optset_T *args);
+const char *did_set_str_generic(optset_T *args);
+void didset_string_options(void);
+
+// Implemented in Rust (src/nvim-rs/optionstr/src/lib.rs)
+void free_string_option(char *p);
+void clear_string_option(char **pp);
+void check_string_option(char **pp);
 
 // Implemented in Rust (src/nvim-rs/optionstr/src/chars.rs)
 #include "nvim/cmdexpand_defs.h"  // expand_T

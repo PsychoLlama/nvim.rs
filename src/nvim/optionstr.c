@@ -210,27 +210,8 @@ void check_buf_options(buf_T *buf)
 /// Free the string allocated for an option.
 /// Checks for the string being empty_string_option. This may happen if we're out of memory,
 /// xstrdup() returned NULL, which was replaced by empty_string_option by check_options().
-void free_string_option(char *p)
-{
-  if (p != empty_string_option) {
-    xfree(p);
-  }
-}
-
-void clear_string_option(char **pp)
-{
-  if (*pp != empty_string_option) {
-    xfree(*pp);
-  }
-  *pp = empty_string_option;
-}
-
-void check_string_option(char **pp)
-{
-  if (*pp == NULL) {
-    *pp = empty_string_option;
-  }
-}
+// free_string_option, clear_string_option, check_string_option implemented in Rust
+// (src/nvim-rs/optionstr/src/lib.rs)
 
 
 /// Handle setting 'signcolumn' for value 'val'. Store minimum and maximum width.

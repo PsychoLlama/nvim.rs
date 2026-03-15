@@ -517,6 +517,52 @@ pub extern "C" fn rs_chars_option_is_listchars(opt: c_int) -> bool {
 }
 
 // =============================================================================
+// String Option Memory Management
+// =============================================================================
+
+extern "C" {
+    fn xfree(ptr: *mut std::ffi::c_void);
+    /// Returns the empty_string_option sentinel pointer (never NULL, never freed).
+    fn nvim_get_empty_string_option() -> *mut c_char;
+}
+
+/// Free a string option value (skip if it's the empty_string_option sentinel).
+///
+/// # Safety
+/// `p` must be either null, the empty_string_option sentinel, or a heap-allocated
+/// C string previously allocated with xmalloc/xstrdup.
+#[export_name = "free_string_option"]
+pub unsafe extern "C" fn free_string_option(p: *mut c_char) {
+    if p != nvim_get_empty_string_option() {
+        xfree(p.cast());
+    }
+}
+
+/// Clear a string option: free old value (if not sentinel) and replace with sentinel.
+///
+/// # Safety
+/// `pp` must be a valid non-null pointer to a string option field.
+#[export_name = "clear_string_option"]
+pub unsafe extern "C" fn clear_string_option(pp: *mut *mut c_char) {
+    let empty = nvim_get_empty_string_option();
+    if *pp != empty {
+        xfree((*pp).cast());
+    }
+    *pp = empty;
+}
+
+/// Ensure a string option field is not NULL; replace NULL with the sentinel.
+///
+/// # Safety
+/// `pp` must be a valid non-null pointer to a string option field.
+#[export_name = "check_string_option"]
+pub unsafe extern "C" fn check_string_option(pp: *mut *mut c_char) {
+    if (*pp).is_null() {
+        *pp = nvim_get_empty_string_option();
+    }
+}
+
+// =============================================================================
 // String Helpers
 // =============================================================================
 
