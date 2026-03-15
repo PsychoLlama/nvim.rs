@@ -135,7 +135,7 @@ extern void rs_foldUpdateAll(win_T *win);
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 
 // Rust implementations
-extern int rs_bt_nofileread(buf_T *buf);
+extern bool rs_bt_nofileread(buf_T *buf);
 
 extern void rs_diff_buf_delete(buf_T *buf);
 extern void rs_diff_buf_add(buf_T *buf);

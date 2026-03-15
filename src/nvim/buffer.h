@@ -86,8 +86,8 @@ EXTERN char *msg_qflist INIT( = N_("[Quickfix List]"));
 // Forward-declare the Rust rs_* symbols used by the inline wrappers.
 extern int rs_buf_valid(buf_T *buf);
 extern int rs_bufref_valid(bufref_T *bufref);
-extern int rs_buf_is_empty(buf_T *buf);
-extern int rs_buf_hide(buf_T *buf);
+extern bool rs_buf_is_empty(buf_T *buf);
+extern bool rs_buf_hide(buf_T *buf);
 extern bool rs_bt_prompt(buf_T *buf);
 extern bool rs_bt_help(buf_T *buf);
 extern bool rs_bt_normal(buf_T *buf);
