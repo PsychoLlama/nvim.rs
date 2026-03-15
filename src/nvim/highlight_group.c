@@ -154,35 +154,6 @@ int nvim_highlight_name_lookup(const char *name_u)
   return map_get(cstr_t, int)(&highlight_unames, name_u);
 }
 
-/// Load color file "name".
-///
-/// @return  OK for success, FAIL for failure.
-int load_colors(char *name)
-{
-  static bool recursive = false;
-
-  // When being called recursively, this is probably because setting
-  // 'background' caused the highlighting to be reloaded.  This means it is
-  // working, thus we should return OK.
-  if (recursive) {
-    return OK;
-  }
-
-  recursive = true;
-  size_t buflen = strlen(name) + 12;
-  char *buf = xmalloc(buflen);
-  apply_autocmds(EVENT_COLORSCHEMEPRE, name, curbuf->b_fname, false, curbuf);
-  snprintf(buf, buflen, "colors/%s.*", name);
-  int retval = source_runtime_vim_lua(buf, DIP_START + DIP_OPT);
-  xfree(buf);
-  if (retval == OK) {
-    apply_autocmds(EVENT_COLORSCHEME, name, curbuf->b_fname, false, curbuf);
-  }
-
-  recursive = false;
-
-  return retval;
-}
 
 static char *(color_names[28]) = {
   "Black", "DarkBlue", "DarkGreen", "DarkCyan",
@@ -1025,29 +996,6 @@ static int syn_add_group(const char *name, size_t len)
   return id;
 }
 
-/// Refresh the color attributes of all highlight groups.
-void highlight_attr_set_all(void)
-{
-  for (int idx = 0; idx < highlight_ga.ga_len; idx++) {
-    HlGroup *sgp = &hl_table[idx];
-    if (sgp->sg_rgb_bg_idx == kColorIdxFg) {
-      sgp->sg_rgb_bg = normal_fg;
-    } else if (sgp->sg_rgb_bg_idx == kColorIdxBg) {
-      sgp->sg_rgb_bg = normal_bg;
-    }
-    if (sgp->sg_rgb_fg_idx == kColorIdxFg) {
-      sgp->sg_rgb_fg = normal_fg;
-    } else if (sgp->sg_rgb_fg_idx == kColorIdxBg) {
-      sgp->sg_rgb_fg = normal_bg;
-    }
-    if (sgp->sg_rgb_sp_idx == kColorIdxFg) {
-      sgp->sg_rgb_sp = normal_fg;
-    } else if (sgp->sg_rgb_sp_idx == kColorIdxBg) {
-      sgp->sg_rgb_sp = normal_bg;
-    }
-    set_hl_attr(idx);
-  }
-}
 
 // Apply difference between User[1-9] and HLF_S to HLF_SNC.
 static void combine_stl_hlt(int id, int id_S, int id_alt, int hlcnt, int i, int hlf, int *table)

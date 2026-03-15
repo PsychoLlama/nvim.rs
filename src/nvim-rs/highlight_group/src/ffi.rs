@@ -1089,3 +1089,134 @@ pub unsafe extern "C" fn rs_highlight_list_one(id: c_int) {
         last_set_msg(sgp.sg_script_ctx);
     }
 }
+
+// =============================================================================
+// Phase 5: highlight_attr_set_all and load_colors
+// =============================================================================
+
+extern "C" {
+    /// Get curbuf as an opaque pointer (buf_T *).
+    fn nvim_get_curbuf() -> *mut c_void;
+
+    /// Get curbuf->b_fname (the current buffer's file name).
+    fn nvim_get_curbuf_b_fname() -> *const c_char;
+
+    /// Apply autocommands for event `event`, with pattern `fname`, I/O file `fname_io`.
+    /// Returns true if the autocommands were applied (at least one matched).
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+
+    /// Source a runtime file matching `name` with the given `flags`.
+    /// Returns OK (0) on success.
+    fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int;
+
+    /// Allocate memory. Panics (abort) on OOM, like xmalloc.
+    fn xmalloc(size: usize) -> *mut c_void;
+}
+
+// Autocmd event IDs (from auevents_enum.generated.h)
+const EVENT_COLORSCHEME: c_int = 32;
+const EVENT_COLORSCHEMEPRE: c_int = 33;
+
+// DIP flags for source_runtime_vim_lua
+const DIP_START: c_int = 0x08;
+const DIP_OPT: c_int = 0x10;
+
+// OK return value (matches C's OK == 0)
+const OK: c_int = 0;
+
+/// Refresh the actual RGB colors for all highlight groups that use
+/// "fg" or "bg" as color values.
+///
+/// Called after `normal_fg`/`normal_bg` change.
+/// Was `void highlight_attr_set_all(void)` in C.
+#[export_name = "highlight_attr_set_all"]
+pub unsafe extern "C" fn rs_highlight_attr_set_all() {
+    let color_idx_fg = crate::types::ColorIdx::Fg as c_int;
+    let color_idx_bg = crate::types::ColorIdx::Bg as c_int;
+
+    for idx in 0..highlight_ga.ga_len {
+        let sg = &mut *hl_table_ptr(idx);
+
+        if sg.sg_rgb_bg_idx == color_idx_fg {
+            sg.sg_rgb_bg = normal_fg;
+        } else if sg.sg_rgb_bg_idx == color_idx_bg {
+            sg.sg_rgb_bg = normal_bg;
+        }
+
+        if sg.sg_rgb_fg_idx == color_idx_fg {
+            sg.sg_rgb_fg = normal_fg;
+        } else if sg.sg_rgb_fg_idx == color_idx_bg {
+            sg.sg_rgb_fg = normal_bg;
+        }
+
+        if sg.sg_rgb_sp_idx == color_idx_fg {
+            sg.sg_rgb_sp = normal_fg;
+        } else if sg.sg_rgb_sp_idx == color_idx_bg {
+            sg.sg_rgb_sp = normal_bg;
+        }
+
+        rs_set_hl_attr(idx);
+    }
+}
+
+/// Load a color scheme file by name.
+///
+/// Applies ColorSchemePre and ColorScheme autocommands.
+/// Returns OK (0) on success.
+/// Was `int load_colors(char *name)` in C.
+#[export_name = "load_colors"]
+pub unsafe extern "C" fn rs_load_colors(name: *mut c_char) -> c_int {
+    // Track recursion: if load_colors is called while already loading
+    // (e.g., from setting 'background'), return OK immediately.
+    static RECURSIVE: AtomicBool = AtomicBool::new(false);
+    if RECURSIVE.load(Ordering::Relaxed) {
+        return OK;
+    }
+
+    RECURSIVE.store(true, Ordering::Relaxed);
+
+    // Build "colors/<name>.*" pattern
+    let name_len = {
+        let mut p = name;
+        while *p != 0 {
+            p = p.add(1);
+        }
+        p.offset_from(name) as usize
+    };
+    let buflen = name_len + 12; // "colors/" + name + ".*" + NUL
+    let buf = xmalloc(buflen) as *mut c_char;
+
+    // Build the string: "colors/<name>.*\0"
+    let prefix = b"colors/";
+    for (i, &b) in prefix.iter().enumerate() {
+        *buf.add(i) = b as c_char;
+    }
+    for i in 0..name_len {
+        *buf.add(7 + i) = *name.add(i);
+    }
+    let suffix = b".*\0";
+    for (i, &b) in suffix.iter().enumerate() {
+        *buf.add(7 + name_len + i) = b as c_char;
+    }
+
+    let curbuf = nvim_get_curbuf();
+    let b_fname = nvim_get_curbuf_b_fname();
+
+    apply_autocmds(EVENT_COLORSCHEMEPRE, name, b_fname, false, curbuf);
+
+    let retval = source_runtime_vim_lua(buf, DIP_START + DIP_OPT);
+    xfree(buf as *mut c_void);
+
+    if retval == OK {
+        apply_autocmds(EVENT_COLORSCHEME, name, b_fname, false, curbuf);
+    }
+
+    RECURSIVE.store(false, Ordering::Relaxed);
+    retval
+}

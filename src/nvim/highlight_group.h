@@ -32,6 +32,8 @@ bool hl_has_settings(int idx, bool check_link);
 void highlight_clear(int idx);
 void set_hl_attr(int idx);
 void restore_cterm_colors(void);
+void highlight_attr_set_all(void);
+int load_colors(char *name);
 void highlight_list_one(int id);
 bool highlight_list_arg(int id, bool didh, int type, int iarg, const char *sarg, const char *name);
 bool syn_list_header(bool did_header, int outlen, int id, bool force_newline);
