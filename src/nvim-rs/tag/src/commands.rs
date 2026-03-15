@@ -1428,8 +1428,8 @@ pub unsafe extern "C" fn rs_add_llist_tags(
 ///
 /// # Safety
 /// - Called from C with a valid `exarg_T` pointer (unused in this implementation)
-#[no_mangle]
-pub unsafe extern "C" fn rs_do_tags() {
+#[export_name = "do_tags"]
+pub unsafe extern "C" fn rs_do_tags(_eap: *mut std::ffi::c_void) {
     let curwin = nvim_tag_get_curwin();
     let tagstackidx = nvim_win_get_tagstackidx(curwin);
     let tagstacklen = nvim_win_get_tagstacklen(curwin);

@@ -49,5 +49,6 @@ typedef struct {
 const char *did_set_tagfunc(optset_T *args);
 int find_tags(char *pat, int *num_matches, char ***matchesp, int flags, int mincount,
               char *buf_ffname);
+void do_tags(exarg_T *eap);
 
 #include "tag_shim.h.generated.h"

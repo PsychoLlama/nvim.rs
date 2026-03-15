@@ -300,8 +300,8 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
                                    list_stack_T **list_stack);
 extern void rs_prepare_pats(pat_T *pats, bool has_re);
 extern bool rs_found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cookie);
-extern void rs_do_tags(void);
 // rs_did_set_tagfunc deleted: now exported as did_set_tagfunc via #[export_name]
+// rs_do_tags deleted: now exported as do_tags via #[export_name]
 
 #include "tag_shim.c.generated.h"
 
@@ -878,12 +878,7 @@ void nvim_tag_free_nofile_fname(void) { free_string_option(nofile_fname); nofile
 bool nvim_tag_nofile_fname_is_null(void) { return nofile_fname == NULL; }
 // --- End of do_tag() accessor functions ---
 // did_set_tagfunc deleted: Rust exports under the C name directly via #[export_name].
-// Print the tag stack
-void do_tags(exarg_T *eap)
-{
-  rs_do_tags();
-}
-
+// do_tags deleted: Rust exports under the C name directly via #[export_name].
 /// find_tags() - search for tags in tags files
 ///
 /// Return FAIL if search completely failed (*num_matches will be 0, *matchesp
