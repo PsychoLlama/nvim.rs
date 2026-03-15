@@ -13,9 +13,10 @@ typedef struct {
   uint8_t buffer[SHA256_BUFFER_SIZE];
 } context_sha256_T;
 
-// sha256_start, sha256_update, sha256_finish are exported directly from Rust.
+// sha256_start, sha256_update, sha256_finish, sha256_bytes are exported
+// directly from Rust (src/nvim-rs/encoding/src/sha256.rs).
 extern void sha256_start(context_sha256_T *ctx);
 extern void sha256_update(context_sha256_T *ctx, const uint8_t *input, size_t length);
 extern void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE]);
-
-#include "sha256.h.generated.h"
+extern const char *sha256_bytes(const uint8_t *buf, size_t buf_len,
+                                const uint8_t *salt, size_t salt_len);

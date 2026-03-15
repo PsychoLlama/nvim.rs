@@ -337,7 +337,12 @@ static mut SHA256_HEX_BUFFER: [u8; SHA256_BUFFER_SIZE + 1] = [0; SHA256_BUFFER_S
 ///
 /// `buf` must be a valid pointer to at least `buf_len` bytes.
 /// `salt` must be null or a valid pointer to at least `salt_len` bytes.
-#[no_mangle]
+/// # Note
+///
+/// This function previously relied on a C wrapper in sha256.c that called
+/// sha256_self_test() before delegating to Rust. The self-test is now covered
+/// by Rust unit tests (FIPS-180-2 vectors in the tests module below).
+#[unsafe(export_name = "sha256_bytes")]
 pub unsafe extern "C" fn rs_sha256_bytes(
     buf: *const u8,
     buf_len: usize,
