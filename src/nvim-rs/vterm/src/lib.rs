@@ -1921,6 +1921,152 @@ pub extern "C" fn rs_vterm_keyboard_end_paste(vt: VTermHandle) {
     }
 }
 
+// =============================================================================
+// Mouse Output Helpers
+// =============================================================================
+
+/// Convert a `MouseOutput` to bytes and push to `VTerm`.
+unsafe fn push_mouse_output(vt: *mut c_void, output: &mouse::MouseOutput) {
+    match *output {
+        mouse::MouseOutput::None => {}
+
+        mouse::MouseOutput::CsiM(ref bytes) => {
+            // CSI M <raw bytes>
+            let mut body = Vec::with_capacity(1 + bytes.len());
+            body.push(b'M');
+            body.extend_from_slice(bytes);
+            unsafe { push_ctrl_seq(vt, 0x9B, &body) };
+        }
+
+        mouse::MouseOutput::Sgr(code, col, row, pressed) => {
+            // CSI < {code} ; {col} ; {row} M|m
+            let final_char = if pressed { 'M' } else { 'm' };
+            let body = format!("<{code};{col};{row}{final_char}");
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+
+        mouse::MouseOutput::Rxvt(code, col, row) => {
+            // CSI {code} ; {col} ; {row} M
+            let body = format!("{code};{col};{row}M");
+            unsafe { push_ctrl_seq(vt, 0x9B, body.as_bytes()) };
+        }
+    }
+}
+
+/// Handle a mouse move event.
+///
+/// Implements `vterm_mouse_move()` in Rust.
+#[no_mangle]
+pub extern "C" fn rs_vterm_mouse_move(vt: VTermHandle, row: c_int, col: c_int, mods: c_int) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state_ptr.cast::<state::State>() };
+
+    // Check if position changed
+    if state.mouse_col == col && state.mouse_row == row {
+        return;
+    }
+
+    // Update position in the C state struct
+    state.mouse_col = col;
+    state.mouse_row = row;
+
+    // Check if we should output anything
+    let want_drag = (state.mouse_flags & state::mouse_flags::WANT_DRAG) != 0;
+    let want_move = (state.mouse_flags & state::mouse_flags::WANT_MOVE) != 0;
+
+    if !want_drag && !want_move {
+        return;
+    }
+
+    // Build a MouseState for encoding
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mouse_state = mouse::MouseState {
+        col,
+        row,
+        buttons: state.mouse_buttons,
+        flags: state.mouse_flags as u8,
+        protocol: state.mouse_protocol,
+    };
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mods_u8 = (mods as u8) & keyboard::VTERM_ALL_MODS_MASK;
+
+    let output = mouse::encode_move(&mouse_state, col, row, mods_u8);
+    unsafe { push_mouse_output(vt.as_ptr(), &output) };
+}
+
+/// Handle a mouse button event.
+///
+/// Implements `vterm_mouse_button()` in Rust.
+#[no_mangle]
+pub extern "C" fn rs_vterm_mouse_button(
+    vt: VTermHandle,
+    button: c_int,
+    pressed: c_int,
+    mods: c_int,
+) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: vterm_obtain_state returns a valid pointer for a valid VTerm
+    let state_ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    if state_ptr.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state_ptr.cast::<state::State>() };
+
+    let old_buttons = state.mouse_buttons;
+
+    // Update button state for main and extra buttons (not scroll buttons 4-7)
+    if (1..=3).contains(&button) || (8..=11).contains(&button) {
+        if pressed != 0 {
+            state.mouse_buttons |= 1 << (button - 1);
+        } else {
+            state.mouse_buttons &= !(1 << (button - 1));
+        }
+    }
+
+    // Most of the time we don't get button releases from 4/5/6/7
+    if state.mouse_buttons == old_buttons && !(4..=7).contains(&button) {
+        return;
+    }
+
+    if state.mouse_flags == 0 {
+        return;
+    }
+
+    // Build a MouseState for encoding
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mouse_state = mouse::MouseState {
+        col: state.mouse_col,
+        row: state.mouse_row,
+        buttons: state.mouse_buttons,
+        flags: state.mouse_flags as u8,
+        protocol: state.mouse_protocol,
+    };
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mods_u8 = (mods as u8) & keyboard::VTERM_ALL_MODS_MASK;
+    let is_pressed = pressed != 0;
+
+    // Pass button value directly; encode_button handles the code mapping
+    if !(1..12).contains(&button) {
+        return;
+    }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let btn = button as u8;
+    let output = mouse::encode_button(&mouse_state, btn, is_pressed, mods_u8);
+
+    unsafe { push_mouse_output(vt.as_ptr(), &output) };
+}
+
 /// Flush screen damage on a `VTermScreen` instance.
 ///
 /// This is the Rust wrapper for `vterm_screen_flush_damage()`.

@@ -98,7 +98,6 @@ extern void rs_eval_call_provider(const char *provider, const char *method,
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/vim_defs.h"
-#include "nvim/vterm/mouse.h"
 #include "nvim/vterm/parser.h"
 #include "nvim/vterm/pen.h"
 #include "nvim/vterm/screen.h"
@@ -139,6 +138,8 @@ extern void rs_vterm_keyboard_key(void *vt, int key, int mods);
 extern void rs_vterm_keyboard_unichar(void *vt, unsigned int ch, int mods);
 extern void rs_vterm_keyboard_start_paste(void *vt);
 extern void rs_vterm_keyboard_end_paste(void *vt);
+extern void rs_vterm_mouse_move(void *vt, int row, int col, int mods);
+extern void rs_vterm_mouse_button(void *vt, int button, int pressed, int mods);
 
 // Rust FFI declarations from nvim-terminal crate
 extern int rs_terminal_is_filter_char_flags(int c, int flags);
@@ -1563,9 +1564,9 @@ static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag,
 static void mouse_action(Terminal *term, int button, int row, int col, bool pressed,
                          VTermModifier mod)
 {
-  vterm_mouse_move(term->vt, row, col, mod);
+  rs_vterm_mouse_move(term->vt, row, col, mod);
   if (button) {
-    vterm_mouse_button(term->vt, button, pressed, mod);
+    rs_vterm_mouse_button(term->vt, button, (int)pressed, mod);
   }
 }
 
