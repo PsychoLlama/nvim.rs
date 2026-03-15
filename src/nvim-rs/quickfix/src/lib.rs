@@ -2056,8 +2056,16 @@ extern "C" {
 
     // Phase 10 Pass 10 Phase 3: qf_open_new_cwindow / did_set_quickfixtextfunc accessors
     fn nvim_qf_set_cwindow_options();
-    fn nvim_qf_do_ecmd_existing_buf(fnum: c_int, oldwin: *mut c_void) -> c_int;
-    fn nvim_qf_do_ecmd_new_buf(oldwin: *mut c_void) -> c_int;
+    // nvim_qf_do_ecmd_existing_buf/new_buf deleted: use do_ecmd directly
+    fn do_ecmd(
+        fnum: c_int,
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        eap: *mut c_void,
+        newlnum: LinenrT,
+        flags: c_int,
+        oldwin: *mut c_void,
+    ) -> c_int;
     static curtab: *const c_void;
     static mut prevwin: *mut c_void;
     static mut curbuf: *mut c_void;
@@ -2072,7 +2080,8 @@ extern "C" {
     fn nvim_qf_curbuf_fnum() -> c_int;
     fn win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_qf_get_cmdmod_split() -> c_int;
-    fn nvim_qf_get_e_invarg() -> *const c_char;
+    // nvim_qf_get_e_invarg deleted: use e_invarg global directly
+    static e_invarg: c_char;
 
     // Phase 10 Pass 10 Phase 4: qf_update_buffer accessors
     fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
@@ -2174,7 +2183,8 @@ extern "C" {
     fn rs_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_buf_get_b_ffname(buf: *mut c_void) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_path_try_shorten_fname(full: *const c_char) -> *mut c_char;
+    // nvim_path_try_shorten_fname deleted: use path_try_shorten_fname directly
+    fn path_try_shorten_fname(full: *const c_char) -> *mut c_char;
 
     // Phase 1: Core List Lifecycle accessors
     fn nvim_qf_set_id(qfl: QfListHandleMut, id: u32);
@@ -2234,7 +2244,7 @@ pub unsafe extern "C" fn rs_qf_fix_fname(fname: *const c_char, bufnum: c_int) ->
     if !buf.is_null() {
         let ffname = nvim_buf_get_b_ffname(buf);
         if !ffname.is_null() && path_fnamecmp(fullname, ffname) != 0 {
-            let p = nvim_path_try_shorten_fname(fullname);
+            let p = path_try_shorten_fname(fullname);
             if !p.is_null() {
                 let result = xstrdup(p);
                 xfree(fullname.cast());
@@ -5575,6 +5585,12 @@ const WSP_NEWLOC: c_int = 0x100; // don't copy location list
 const P3_OK: c_int = 1;
 const P3_FAIL: c_int = 0;
 
+// do_ecmd constants (from ex_cmds.h)
+const ECMD_ONE: LinenrT = 1;
+const ECMD_HIDE: c_int = 0x01;
+const ECMD_OLDBUF: c_int = 0x04;
+const ECMD_NOWINENTER: c_int = 0x40;
+
 // Redraw type constants
 const UPD_NOT_VALID: c_int = 40;
 
@@ -5642,7 +5658,16 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
 
     if qf_buf.is_null() {
         // Create a new quickfix buffer
-        if nvim_qf_do_ecmd_new_buf(effective_oldwin) == P3_FAIL {
+        if do_ecmd(
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            ECMD_ONE,
+            ECMD_HIDE + ECMD_NOWINENTER,
+            effective_oldwin,
+        ) == P3_FAIL
+        {
             return P3_FAIL;
         }
         // Save the number of the new buffer
@@ -5651,7 +5676,16 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
     } else {
         // Use the existing quickfix buffer
         let fnum = p3_nvim_qf_buf_get_fnum(qf_buf.cast_const());
-        if nvim_qf_do_ecmd_existing_buf(fnum, effective_oldwin) == P3_FAIL {
+        if do_ecmd(
+            fnum,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            ECMD_ONE,
+            ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER,
+            effective_oldwin,
+        ) == P3_FAIL
+        {
             return P3_FAIL;
         }
     }
@@ -5688,7 +5722,7 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
 #[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn did_set_quickfixtextfunc_compat(_args: *const c_void) -> *const c_char {
     if nvim_qf_option_set_callback_func_for_qftf() == P3_FAIL {
-        return nvim_qf_get_e_invarg();
+        return std::ptr::addr_of!(e_invarg).cast::<c_char>();
     }
     std::ptr::null()
 }

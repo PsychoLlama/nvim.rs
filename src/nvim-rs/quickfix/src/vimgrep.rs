@@ -18,6 +18,10 @@ const VGR_FUZZY: c_int = 4;
 const FUZZY_MATCH_MAX_LEN: usize = 1024;
 const QF_FAIL: c_int = 0;
 
+// Autocmd event constants (from auevents_enum.generated.h, validated by _Static_assert)
+const EVENT_QUICKFIXCMDPRE: c_int = 89;
+const EVENT_QUICKFIXCMDPOST: c_int = 88;
+
 // =============================================================================
 // Type aliases
 // =============================================================================
@@ -306,7 +310,7 @@ extern "C" {
     fn nvim_qf_get_id(qfl: *const c_void) -> u32;
 
     // Phase 3 accessors
-    fn nvim_path_try_shorten_fname(full_fname: *const c_char) -> *mut c_char;
+    fn path_try_shorten_fname(full_fname: *const c_char) -> *mut c_char;
     fn nvim_msg_start();
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -337,7 +341,7 @@ extern "C" {
     fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_vgr_smsg_cannot_open, nvim_qf_emsg_ll_changed deleted: use smsg/emsg directly)
-    fn nvim_os_dirname(buf: *mut c_char, size: c_int);
+    fn os_dirname(buf: *mut c_char, size: usize);
     // jump
     fn rs_qf_jump_newwin(qi: *mut c_void, dir: c_int, errornr: c_int, forceit: c_int, newwin: bool);
     // qf_list ops (for vgr_qflist_valid inline)
@@ -492,10 +496,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
     // Allocate directory name buffers (replaces nvim_vgr_alloc_dirnames)
     let mut dirname_start = vec![0u8; MAXPATHL];
     let mut dirname_now = vec![0u8; MAXPATHL];
-    nvim_os_dirname(
-        dirname_start.as_mut_ptr().cast::<c_char>(),
-        MAXPATHL as c_int,
-    );
+    os_dirname(dirname_start.as_mut_ptr().cast::<c_char>(), MAXPATHL);
 
     let mut seconds: u64 = 0;
     let mut status = FAIL;
@@ -506,7 +507,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
                 break;
             }
 
-            let fname = nvim_path_try_shorten_fname(*fnames.add(fi as usize));
+            let fname = path_try_shorten_fname(*fnames.add(fi as usize));
 
             // Display fname once per second (replaces nvim_vgr_time_now)
             let now = std::time::SystemTime::now()
@@ -646,9 +647,17 @@ extern "C" {
     // Pre-check inlining (Phase 2)
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn rs_vgr_get_auname(cmdidx: c_int) -> *const c_char;
-    fn nvim_apply_autocmds_quickfixcmdpre(au_name: *const c_char) -> bool;
-    fn nvim_apply_autocmds_quickfixcmdpost(au_name: *const c_char) -> bool;
-    fn nvim_aborting() -> bool;
+    // nvim_apply_autocmds_quickfixcmdpre/post deleted: use apply_autocmds + aborting directly
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    fn nvim_qf_buf_get_fname(buf: BufHandle) -> *const c_char;
+    fn aborting() -> bool;
+    // nvim_aborting was a thin C alias for aborting; now replaced by direct aborting() call
 
     // Finalize inlining (Phase 2)
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
@@ -789,6 +798,7 @@ impl VgrArgs {
 /// # Safety
 ///
 /// `eap` must be a valid pointer to an `exarg_T`.
+#[allow(clippy::too_many_lines)]
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     // Phase 2: inline nvim_vgr_pre_check
@@ -798,7 +808,16 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     }
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_vgr_get_auname(cmdidx);
-    if !au_name.is_null() && nvim_apply_autocmds_quickfixcmdpre(au_name) && nvim_aborting() {
+    if !au_name.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        )
+        && aborting()
+    {
         return;
     }
 
@@ -871,7 +890,13 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     {
         let au_name_post = rs_vgr_get_auname(cmdidx);
         if !au_name_post.is_null() {
-            nvim_apply_autocmds_quickfixcmdpost(au_name_post);
+            apply_autocmds(
+                EVENT_QUICKFIXCMDPOST,
+                au_name_post.cast_mut(),
+                nvim_qf_buf_get_fname(curbuf).cast_mut(),
+                true,
+                curbuf,
+            );
         }
     }
 

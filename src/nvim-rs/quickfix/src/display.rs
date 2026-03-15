@@ -423,6 +423,11 @@ type ListItemPtr = *const c_void;
 
 const MAXPATHL: usize = 4096;
 
+// Autocmd event constants (from auevents_enum.generated.h)
+// Validated by _Static_assert blocks in quickfix_shim.c if added.
+const EVENT_BUFREADPOST: c_int = 13;
+const EVENT_BUFWINENTER: c_int = 16;
+
 extern "C" {
     fn nvim_qf_buf_is_curbuf(buf: BufHandle) -> bool;
     fn internal_error(where_: *const c_char);
@@ -453,7 +458,7 @@ extern "C" {
     fn nvim_tv_list_first(list: *const c_void) -> ListItemPtr;
     fn nvim_tv_list_item_next(list: *const c_void, li: ListItemPtr) -> ListItemPtr;
     fn nvim_tv_list_item_string(li: ListItemPtr) -> *mut c_char;
-    fn nvim_ml_delete_one(lnum: LinenrT);
+    fn ml_delete(lnum: LinenrT);
     fn rs_check_lnums(do_curwin: c_int);
     // nvim_qf_set_filetype_and_autocmds replaced by thin accessors (Phase 14)
     fn nvim_qf_curbuf_incr_ro_locked();
@@ -461,8 +466,17 @@ extern "C" {
     fn nvim_qf_curbuf_set_ma_false();
     fn nvim_qf_curbuf_set_keep_filetype(val: bool);
     fn nvim_qf_set_option_filetype_qf();
-    fn nvim_qf_apply_autocmds_bufreadpost_qf();
-    fn nvim_qf_apply_autocmds_bufwinenter_qf();
+    // nvim_qf_apply_autocmds_bufreadpost_qf/bufwinenter_qf deleted: use apply_autocmds directly
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    // curbuf alias for apply_autocmds calls (avoid clash with other modules' curbuf declarations)
+    #[link_name = "curbuf"]
+    static mut curbuf_fill: *mut c_void;
     fn nvim_qf_redraw_curbuf_later();
     fn nvim_qf_get_key_typed() -> bool;
     fn nvim_qf_set_key_typed(val: bool);
@@ -482,12 +496,13 @@ extern "C" {
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     // nvim_buf_get_sfname takes buf_T* (void* in Rust) - from buffer.c
     fn nvim_buf_get_sfname(buf: BufHandle) -> *const c_char;
-    fn nvim_qf_buf_get_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_path_tail_buf(fname: *const c_char) -> *const c_char;
-    fn nvim_path_is_absolute(fname: *const c_char) -> bool;
-    fn nvim_os_dirname(buf: *mut c_char, size: c_int);
-    fn nvim_shorten_buf_fname(buf: BufHandle, dirname: *const c_char, force: bool);
-    fn nvim_ml_append_buf(
+    #[link_name = "nvim_qf_buf_get_fname"]
+    fn qf_buf_get_fname_fill(buf: *const c_void) -> *const c_char;
+    fn path_tail(fname: *const c_char) -> *mut c_char;
+    fn path_is_absolute(fname: *const c_char) -> bool;
+    fn os_dirname(buf: *mut c_char, size: usize);
+    fn shorten_buf_fname(buf: BufHandle, dirname: *mut c_char, force: c_int);
+    fn ml_append_buf(
         buf: BufHandle,
         lnum: LinenrT,
         line: *mut c_char,
@@ -673,12 +688,12 @@ unsafe fn qf_buf_add_line(
             if fnum != 0 {
                 let errbuf = nvim_buflist_findnr(fnum);
                 if !errbuf.is_null() {
-                    let b_fname = nvim_qf_buf_get_fname(errbuf);
+                    let b_fname = qf_buf_get_fname_fill(errbuf.cast_const());
                     if !b_fname.is_null() {
                         let qf_type = nvim_qfline_get_type(qfp);
                         if qf_type == 1 {
                             // :helpgrep -- use filename tail only
-                            let tail = nvim_path_tail_buf(b_fname);
+                            let tail = path_tail(b_fname);
                             let s = std::ffi::CStr::from_ptr(tail).to_bytes();
                             line.extend_from_slice(s);
                         } else {
@@ -686,14 +701,11 @@ unsafe fn qf_buf_add_line(
                             // For optimization, only for the first entry in a buffer.
                             if first_bufline {
                                 let sfname = nvim_buf_get_sfname(errbuf);
-                                if sfname.is_null() || nvim_path_is_absolute(sfname) {
+                                if sfname.is_null() || path_is_absolute(sfname) {
                                     if dirname[0] == 0 {
-                                        nvim_os_dirname(
-                                            dirname.as_mut_ptr().cast(),
-                                            c_int::try_from(MAXPATHL).unwrap_or(4096),
-                                        );
+                                        os_dirname(dirname.as_mut_ptr().cast(), MAXPATHL);
                                     }
-                                    nvim_shorten_buf_fname(errbuf, dirname.as_ptr().cast(), false);
+                                    shorten_buf_fname(errbuf, dirname.as_mut_ptr().cast(), 0);
                                 }
                             }
                             let qf_fname = nvim_qfline_get_fname(qfp);
@@ -749,7 +761,7 @@ unsafe fn qf_buf_add_line(
     // Append NUL terminator and write to buffer
     line.push(0u8);
     let len = c_int::try_from(line.len()).unwrap_or(c_int::MAX);
-    let ret = nvim_ml_append_buf(buf, lnum, line.as_mut_ptr().cast(), len, false);
+    let ret = ml_append_buf(buf, lnum, line.as_mut_ptr().cast(), len, false);
     if ret == FAIL {
         FAIL
     } else {
@@ -850,7 +862,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
 
         if old_last.is_null() {
             // Delete the empty line which is now at the end
-            nvim_ml_delete_one(lnum + 1);
+            ml_delete(lnum + 1);
         }
     }
 
@@ -863,8 +875,20 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
         nvim_qf_set_option_filetype_qf();
         nvim_qf_curbuf_set_ma_false();
         nvim_qf_curbuf_set_keep_filetype(true);
-        nvim_qf_apply_autocmds_bufreadpost_qf();
-        nvim_qf_apply_autocmds_bufwinenter_qf();
+        apply_autocmds(
+            EVENT_BUFREADPOST,
+            c"quickfix".as_ptr().cast_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf_fill,
+        );
+        apply_autocmds(
+            EVENT_BUFWINENTER,
+            c"quickfix".as_ptr().cast_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf_fill,
+        );
         nvim_qf_curbuf_set_keep_filetype(false);
         nvim_qf_curbuf_decr_ro_locked();
         nvim_qf_redraw_curbuf_later();
@@ -978,6 +1002,8 @@ pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *c
 // =============================================================================
 
 const IOSIZE: usize = 1025; // 1024 + 1
+                            // HLF_QFL constant (from highlight_defs.h, validated by _Static_assert in quickfix_shim.c)
+const HLF_QFL: c_int = 58;
 
 extern "C" {
     // Phase 3: message output accessors
@@ -990,7 +1016,7 @@ extern "C" {
     fn msg_puts(s: *const c_char);
     // (nvim_msg_outtrans_attr, nvim_msg_puts_plain deleted: use msg_outtrans/msg_puts directly)
     fn nvim_msg_prt_line(s: *const c_char, list: c_int);
-    fn nvim_hlf_qfl() -> c_int;
+    // nvim_hlf_qfl deleted: use HLF_QFL constant directly
 
     // Phase 3: qfline field accessors (already in lib.rs, re-declare locally)
     #[link_name = "nvim_qfline_get_module"]
@@ -1018,9 +1044,9 @@ extern "C" {
     #[link_name = "nvim_buflist_findnr"]
     fn buflist_findnr_p3(nr: c_int) -> *mut c_void;
     #[link_name = "nvim_qf_buf_get_fname"]
-    fn buf_get_fname_p3(buf: *mut c_void) -> *const c_char;
-    #[link_name = "nvim_path_tail_buf"]
-    fn path_tail_p3(fname: *const c_char) -> *const c_char;
+    fn buf_get_fname_p3(buf: *const c_void) -> *const c_char;
+    #[link_name = "path_tail"]
+    fn path_tail_p3(fname: *const c_char) -> *mut c_char;
     #[link_name = "skipwhite"]
     fn skipwhite_p3(str: *const c_char) -> *mut c_char;
 
@@ -1061,7 +1087,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
             if buf.is_null() {
                 std::ptr::null()
             } else {
-                let b_fname = buf_get_fname_p3(buf);
+                let b_fname = buf_get_fname_p3(buf.cast_const());
                 if b_fname.is_null() {
                     std::ptr::null()
                 } else {
@@ -1215,11 +1241,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
 
     // --- Direct message output (Phase 14: inlined from nvim_qf_list_entry_output) ---
     nvim_msg_putchar(c_int::from(b'\n'));
-    let prefix_hl = if cursel {
-        nvim_hlf_qfl()
-    } else {
-        qf_file_hl_id
-    };
+    let prefix_hl = if cursel { HLF_QFL } else { qf_file_hl_id };
     msg_outtrans(prefix_string.as_ptr(), prefix_hl, false);
 
     if lnum != 0 {

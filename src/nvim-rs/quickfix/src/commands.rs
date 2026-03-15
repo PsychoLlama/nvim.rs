@@ -20,14 +20,30 @@ type EapHandle = *mut c_void;
 /// Opaque handle to `qf_info_T` (mutable)
 type QfInfoHandleMut = *mut c_void;
 
+// Autocmd event constants (from auevents_enum.generated.h, validated by _Static_assert)
+const EVENT_QUICKFIXCMDPRE: c_int = 89;
+const EVENT_QUICKFIXCMDPOST: c_int = 88;
+
 extern "C" {
     fn nvim_get_ql_info() -> QfInfoHandleMut;
-    // nvim_hgr_pre_check deleted (Phase 4): inlined via nvim_qf_apply_autocmd_pre
-    fn nvim_qf_apply_autocmd_pre(au_name: *const c_char) -> bool;
+    // nvim_hgr_pre_check deleted: inlined via apply_autocmds + aborting
+    // nvim_qf_apply_autocmd_pre/post deleted: use apply_autocmds + aborting directly
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    fn aborting() -> bool;
+    fn nvim_qf_buf_get_fname(buf: *const c_void) -> *const c_char;
+    // Use link_name alias to avoid clash with curbuf declared in the large block below
+    #[link_name = "curbuf"]
+    static mut curbuf_hgr: *mut c_void;
     // nvim_hgr_save_cpo renamed to nvim_save_cpo_set_empty (Phase 4)
     fn nvim_save_cpo_set_empty() -> *mut c_void;
-    // nvim_hgr_is_loclist_cmd deleted (Phase 4): use nvim_is_loclist_cmd
-    fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
+    // nvim_hgr_is_loclist_cmd deleted (Phase 4): use is_loclist_cmd directly
+    fn is_loclist_cmd(cmdidx: c_int) -> bool;
     // nvim_hgr_get_ll deleted (Phase 4): inlined in Rust
     fn nvim_qf_curwin_buf_is_help() -> bool;
     fn nvim_qf_find_help_win() -> *mut c_void;
@@ -50,8 +66,7 @@ extern "C" {
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
     #[link_name = "rs_qf_update_buffer"]
     fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: *const c_void);
-    // nvim_hgr_post_autocmd deleted (Phase 4): inlined via autocmd_post + is_ll_stack + find_win
-    fn nvim_qf_apply_autocmd_post(au_name: *const c_char);
+    // nvim_hgr_post_autocmd deleted: inlined via apply_autocmds + is_ll_stack + find_win
     fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
     fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
     // nvim_hgr_jump_or_nomatch deleted (Phase 4): inlined via rs_qf_list_empty + rs_qf_jump_newwin
@@ -1099,7 +1114,17 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // Inlined from nvim_hgr_pre_check.
     let au_name_cstr = hgr_au_name(cmdidx);
     let au_name_ptr = au_name_cstr.map_or(std::ptr::null(), std::ffi::CStr::as_ptr);
-    if !nvim_qf_apply_autocmd_pre(au_name_ptr) {
+    // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
+    if !au_name_ptr.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name_ptr.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf_hgr).cast_mut(),
+            true,
+            curbuf_hgr,
+        )
+        && aborting()
+    {
         return;
     }
 
@@ -1111,7 +1136,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // Inlined from nvim_hgr_is_loclist_cmd + nvim_hgr_get_ll.
     let mut qi = nvim_get_ql_info();
     let mut new_qi = false;
-    if nvim_is_loclist_cmd(cmdidx) {
+    if is_loclist_cmd(cmdidx) {
         // Inline hgr_get_ll: find help window, use its llist or allocate new.
         let wp = if nvim_qf_curwin_buf_is_help() {
             // curwin is a help window — use it directly
@@ -1177,8 +1202,16 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     }
 
     // 7. Post autocmd — may invalidate location list
-    // Inlined from nvim_hgr_post_autocmd.
-    nvim_qf_apply_autocmd_post(au_name_ptr);
+    // Inlined nvim_qf_apply_autocmd_post: fire EVENT_QUICKFIXCMDPOST with curbuf->b_fname
+    if !au_name_ptr.is_null() {
+        apply_autocmds(
+            EVENT_QUICKFIXCMDPOST,
+            au_name_ptr.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf_hgr).cast_mut(),
+            true,
+            curbuf_hgr,
+        );
+    }
     if !new_qi
         && nvim_qf_is_ll_stack_qi(qi.cast_const())
         && nvim_qf_find_win_with_loclist(qi.cast_const()).is_null()
@@ -1979,6 +2012,12 @@ const CMD_LGREP_P4: c_int = 239;
 const CMD_GREPADD_P4: c_int = 173;
 const CMD_LGREPADD_P4: c_int = 240;
 
+// HLF (HighlightAttribute) constants (from highlight_defs.h; values validated by
+// _Static_assert in quickfix_shim.c)
+const HLF_D: c_int = 5; // directories in CTRL-D listing
+const HLF_N: c_int = 12; // line number for ":number" and ":#" commands
+                         // HLF_QFL moved to display.rs (rs_qf_list_entry uses it there)
+
 extern "C" {
     fn nvim_grep_uses_internal() -> bool;
 }
@@ -2160,18 +2199,12 @@ extern "C" {
     fn nvim_eap_get_arg(eap: EapHandle) -> *mut std::ffi::c_char;
     // nvim_eap_get_forceit from indent_ffi.c — returns bool
     // (already declared in the existing extern block above)
-    fn nvim_get_list_range(
-        arg: *mut *mut std::ffi::c_char,
-        idx1: *mut c_int,
-        idx2: *mut c_int,
-    ) -> bool;
+    fn get_list_range(arg: *mut *mut std::ffi::c_char, idx1: *mut c_int, idx2: *mut c_int) -> bool;
     // nvim_semsg_trailing_arg: now in nvim_eval::errors
-    fn nvim_shorten_fnames_qf();
-    fn nvim_syn_name2id_qf(name: *const std::ffi::c_char) -> c_int;
-    fn nvim_hlf_d() -> c_int;
-    fn nvim_hlf_n() -> c_int;
-    fn nvim_got_int_qf() -> bool;
-    fn nvim_os_breakcheck_qf();
+    fn shorten_fnames(expand: bool);
+    fn syn_name2id(name: *const std::ffi::c_char) -> c_int;
+    static got_int: bool;
+    fn os_breakcheck();
     fn rs_qf_list_entry(
         qfp: *const c_void,
         qf_idx: c_int,
@@ -2217,8 +2250,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let mut idx1: c_int = 1;
     let mut idx2: c_int = -1;
 
-    if !nvim_get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2)
-        || (!arg.is_null() && *arg != 0)
+    if !get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) || (!arg.is_null() && *arg != 0)
     {
         nvim_eval::errors::semsg_trailing_arg(arg.cast_const());
         return;
@@ -2253,20 +2285,20 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     };
 
     // Shorten all file names for display
-    nvim_shorten_fnames_qf();
+    shorten_fnames(false);
 
     // Set up highlight IDs
-    let mut qf_file_hl_id = nvim_syn_name2id_qf(c"qfFileName".as_ptr());
+    let mut qf_file_hl_id = syn_name2id(c"qfFileName".as_ptr());
     if qf_file_hl_id == 0 {
-        qf_file_hl_id = nvim_hlf_d();
+        qf_file_hl_id = HLF_D;
     }
-    let mut qf_sep_hl_id = nvim_syn_name2id_qf(c"qfSeparator".as_ptr());
+    let mut qf_sep_hl_id = syn_name2id(c"qfSeparator".as_ptr());
     if qf_sep_hl_id == 0 {
-        qf_sep_hl_id = nvim_hlf_d();
+        qf_sep_hl_id = HLF_D;
     }
-    let mut qf_line_hl_id = nvim_syn_name2id_qf(c"qfLineNr".as_ptr());
+    let mut qf_line_hl_id = syn_name2id(c"qfLineNr".as_ptr());
     if qf_line_hl_id == 0 {
-        qf_line_hl_id = nvim_hlf_n();
+        qf_line_hl_id = HLF_N;
     }
 
     // If nonevalid is set, show all entries (forceit is bool from nvim_eap_get_forceit)
@@ -2277,7 +2309,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let qf_count = crate::nvim_qf_get_count(qfl);
     let mut i: c_int = 1;
     let mut qfp = crate::nvim_qf_get_start(qfl);
-    while !nvim_got_int_qf() && i <= qf_count && !qfp.is_null() {
+    while !got_int && i <= qf_count && !qfp.is_null() {
         let valid = crate::nvim_qfline_get_valid(qfp);
         if (valid || all) && idx1 <= i && i <= idx2 {
             rs_qf_list_entry(
@@ -2289,7 +2321,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
                 qf_line_hl_id,
             );
         }
-        nvim_os_breakcheck_qf();
+        os_breakcheck();
         i += 1;
         qfp = crate::nvim_qfline_get_next(qfp);
     }

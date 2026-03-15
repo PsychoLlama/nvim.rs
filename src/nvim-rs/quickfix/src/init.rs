@@ -339,7 +339,8 @@ mod init_ext {
         // nvim_qf_init_clear_last_bufname removed: use nvim_qf_clear_fnum_cache (Phase 16)
         fn nvim_qf_clear_fnum_cache();
         // nvim_qf_init_resolve_efm removed: logic inlined into rs_qf_init_ext (Phase 16)
-        fn nvim_get_p_efm() -> *const c_char;
+        // nvim_get_p_efm deleted: use p_efm global directly
+        static p_efm: *const c_char;
         fn nvim_buf_get_b_p_efm(buf: BufHandle) -> *const c_char;
 
         // Phase 16: rs_qf_init accessors
@@ -519,8 +520,8 @@ mod init_ext {
             // Inlined from nvim_qf_init_resolve_efm (Phase 16):
             // If errorformat is the global p_efm, tv is NULL, and buf has its own efm, use buf's.
             let efm = {
-                let p_efm = nvim_get_p_efm();
-                if errorformat.cast_const() == p_efm && tv.is_null() && !buf.is_null() {
+                let global_p_efm = p_efm;
+                if errorformat.cast_const() == global_p_efm && tv.is_null() && !buf.is_null() {
                     let b_p_efm = nvim_buf_get_b_p_efm(buf);
                     if !b_p_efm.is_null() && *b_p_efm != 0 {
                         b_p_efm.cast_mut()

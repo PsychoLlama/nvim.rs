@@ -1204,6 +1204,9 @@ mod jump_edit {
     const QFLT_QUICKFIX: c_int = 0;
     const QFLT_LOCATION: c_int = 1;
     const QF_ABORT: c_int = 6;
+    // buflist_getfile flags (from buffer.h)
+    const GETF_SETMARK: c_int = 0x01;
+    const GETF_SWITCH: c_int = 0x04;
 
     extern "C" {
         // Existing accessors
@@ -1229,7 +1232,8 @@ mod jump_edit {
         fn nvim_can_abandon_curbuf(forceit: c_int) -> bool;
         fn nvim_no_write_message();
         fn nvim_do_ecmd_help(fnum: c_int, prev_winid: c_int) -> c_int;
-        fn nvim_qf_buflist_getfile(fnum: c_int, forceit: c_int) -> c_int;
+        // nvim_qf_buflist_getfile deleted: use buflist_getfile directly
+        fn buflist_getfile(n: c_int, lnum: c_int, options: c_int, forceit: c_int) -> c_int;
         fn nvim_curwin_get_wfb() -> bool;
         fn nvim_qf_curbuf_fnum() -> c_int;
         fn nvim_qf_get_qi_type(qi: *const c_void) -> c_int;
@@ -1290,7 +1294,7 @@ mod jump_edit {
                 }
             }
             if retval == OK {
-                retval = nvim_qf_buflist_getfile(fnum, forceit);
+                retval = buflist_getfile(fnum, 1, GETF_SETMARK | GETF_SWITCH, forceit);
             }
             retval
         };

@@ -46,26 +46,30 @@ const CMD_LEXPR: c_int = 232;
 // typval v_type values (from eval/typval_defs.h VAR_*)
 const VAR_STRING: c_int = 1;
 
+// Autocmd event constants (from auevents_enum.generated.h, validated by _Static_assert)
+const EVENT_QUICKFIXCMDPRE: c_int = 89;
+const EVENT_QUICKFIXCMDPOST: c_int = 88;
+
 // =============================================================================
 // External C function declarations
 // =============================================================================
 
 extern "C" {
-    // Option globals
-    fn nvim_get_p_shq() -> *const c_char;
-    fn nvim_get_p_sp() -> *const c_char;
-    fn nvim_get_p_mef() -> *const c_char;
-    fn nvim_get_p_efm() -> *const c_char;
-    fn nvim_get_p_menc() -> *const c_char;
-    fn nvim_get_p_gefm() -> *const c_char;
-    fn nvim_get_p_ef() -> *const c_char;
+    // Option globals (direct access)
+    static p_shq: *const c_char;
+    static p_sp: *const c_char;
+    static p_mef: *const c_char;
+    static p_efm: *const c_char;
+    static p_menc: *const c_char;
+    static p_gefm: *const c_char;
+    static p_ef: *const c_char;
 
-    // curbuf option accessors
+    // curbuf option accessors (struct field access - retained as opaque accessors)
     fn nvim_curbuf_get_b_p_menc() -> *const c_char;
     fn nvim_curbuf_get_b_p_gefm() -> *const c_char;
 
     // Shell/message helpers
-    fn nvim_append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, name: *const c_char);
+    fn append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, name: *const c_char);
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_didout(val: c_int);
     fn nvim_msg_start();
@@ -74,16 +78,16 @@ extern "C" {
     // (nvim_msg_puts_colon_bang, nvim_msg_outtrans_cmd deleted: use msg_puts/msg_outtrans directly)
 
     // autowrite, shell, remove
-    fn nvim_autowrite_all();
-    fn nvim_do_shell(cmd: *const c_char);
+    fn autowrite_all();
+    fn do_shell(cmd: *const c_char, flags: c_int);
     fn nvim_os_remove(path: *const c_char) -> c_int;
 
     // OS helpers for get_mef_name
-    fn nvim_os_get_pid() -> c_int;
+    fn os_get_pid() -> i64;
     fn nvim_os_fileinfo_link_exists(name: *const c_char) -> bool;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_emsg_notmp deleted: use emsg directly)
-    fn nvim_vim_tempname() -> *mut c_char;
+    fn vim_tempname() -> *mut c_char;
 
     // Memory
     fn nvim_xmalloc(size: usize) -> *mut c_void;
@@ -132,7 +136,7 @@ extern "C" {
     fn rs_ll_get_or_alloc_list(wp: WinHandle) -> QfInfoHandleMut;
     fn nvim_get_ql_info() -> QfInfoHandleMut;
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
+    fn is_loclist_cmd(cmdidx: c_int) -> bool;
 
     // List management
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
@@ -170,12 +174,16 @@ extern "C" {
     // (nvim_emsg_e777 deleted: use emsg directly)
     // emsg declared earlier in this file
 
-    // autocmd wrappers
-    fn nvim_qf_apply_autocmd_pre(au_name: *const c_char) -> bool;
-    fn nvim_qf_apply_autocmd_pre_null(au_name: *const c_char) -> bool;
-    fn nvim_qf_apply_autocmd_post(au_name: *const c_char);
-    fn nvim_qf_apply_autocmd_post_null(au_name: *const c_char);
-    fn nvim_qf_apply_autocmd_post_track(au_name: *const c_char) -> bool;
+    // autocmd wrappers → deleted; Rust inlines apply_autocmds + aborting directly
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    fn aborting() -> bool;
+    fn nvim_qf_buf_get_fname(buf: *const c_void) -> *const c_char;
 
     // IObuff helpers for cbuffer
     fn nvim_qf_snprintf_iobuff(title: *const c_char, sfname: *const c_char);
@@ -249,16 +257,11 @@ static MEF_OFF: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new
 #[no_mangle]
 #[allow(clippy::missing_panics_doc)] // CString::new on integer-only string cannot fail
 pub unsafe extern "C" fn rs_get_mef_name() -> *mut c_char {
-    let p_mef = nvim_get_p_mef();
     debug_assert!(!p_mef.is_null());
 
     // If 'makeef' is empty, use a temp file.
     if *p_mef == 0 {
-        // Use vim_tempname via C (not exposed directly, so call nvim_xstrdup of NULL
-        // would fail. We need a tempname -- but vim_tempname is not wrapped yet.
-        // Fall back: use xmalloc'd tempname via C's existing nvim_os_get_pid logic.
-        // For now call the C wrapper for vim_tempname.
-        let name = nvim_vim_tempname();
+        let name = vim_tempname();
         if name.is_null() {
             emsg(c"E483: Can't get temp file name".as_ptr());
         }
@@ -281,7 +284,7 @@ pub unsafe extern "C" fn rs_get_mef_name() -> *mut c_char {
     loop {
         let start_val = MEF_START.load(std::sync::atomic::Ordering::Relaxed);
         let start = if start_val == -1 {
-            let pid = nvim_os_get_pid();
+            let pid = os_get_pid() as c_int;
             MEF_START.store(pid, std::sync::atomic::Ordering::Relaxed);
             pid
         } else {
@@ -336,9 +339,6 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
     makecmd: *const c_char,
     fname: *const c_char,
 ) -> *mut c_char {
-    let p_shq = nvim_get_p_shq();
-    let p_sp = nvim_get_p_sp();
-
     let shq_len = strlen(p_shq);
     let makecmd_len = strlen(makecmd);
 
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
 
     // If 'shellpipe' non-empty, redirect to fname.
     if *p_sp != 0 {
-        nvim_append_redir(cmd, len, p_sp, fname);
+        append_redir(cmd, len, p_sp, fname);
     }
 
     // Display the command. If cursor is at column 0 reset msg_didout.
@@ -378,6 +378,7 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
 /// # Safety
 ///
 /// `eap` must be a valid pointer to a C `exarg_T`.
+#[allow(clippy::too_many_lines)]
 #[export_name = "ex_make"]
 pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
@@ -389,17 +390,27 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_make_get_auname(cmdidx);
 
-    if !nvim_qf_apply_autocmd_pre(au_name) {
+    // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
+    if !au_name.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        )
+        && aborting()
+    {
         return;
     }
 
-    let wp: WinHandle = if nvim_is_loclist_cmd(cmdidx) {
+    let wp: WinHandle = if is_loclist_cmd(cmdidx) {
         nvim_get_curwin()
     } else {
         std::ptr::null_mut()
     };
 
-    nvim_autowrite_all();
+    autowrite_all();
 
     let fname = rs_get_mef_name();
     if fname.is_null() {
@@ -410,7 +421,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     let arg = nvim_eap_get_arg(eap);
     let cmd = rs_make_get_fullcmd(arg, fname);
 
-    nvim_do_shell(cmd);
+    do_shell(cmd, 0);
 
     nvim_incr_quickfix_busy();
 
@@ -420,10 +431,10 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
         if !b_gefm.is_null() && *b_gefm != 0 {
             b_gefm.cast_mut()
         } else {
-            nvim_get_p_gefm().cast_mut()
+            p_gefm.cast_mut()
         }
     } else {
-        nvim_get_p_efm().cast_mut()
+        p_efm.cast_mut()
     };
 
     let newlist = cmdidx != CMD_GREPADD && cmdidx != CMD_LGREPADD;
@@ -433,7 +444,7 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     let enc: *mut c_char = if !b_menc.is_null() && *b_menc != 0 {
         b_menc.cast_mut()
     } else {
-        nvim_get_p_menc().cast_mut()
+        p_menc.cast_mut()
     };
 
     // Build qf title.
@@ -487,7 +498,16 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
 
     let save_qfid = nvim_qf_get_curlist_id(qi_post);
 
-    nvim_qf_apply_autocmd_post(au_name);
+    // Inlined nvim_qf_apply_autocmd_post: fire EVENT_QUICKFIXCMDPOST with curbuf->b_fname
+    if !au_name.is_null() {
+        apply_autocmds(
+            EVENT_QUICKFIXCMDPOST,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        );
+    }
 
     if res > 0 && !nvim_eap_get_forceit(eap) && rs_qflist_valid(wp, save_qfid) {
         rs_qf_jump_first(qi_post, save_qfid, 0);
@@ -514,7 +534,17 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cfile_get_auname(cmdidx);
 
-    if !nvim_qf_apply_autocmd_pre_null(au_name) {
+    // Inlined nvim_qf_apply_autocmd_pre_null: fire EVENT_QUICKFIXCMDPRE with NULL fname_io
+    if !au_name.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name.cast_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf,
+        )
+        && aborting()
+    {
         return;
     }
 
@@ -528,10 +558,10 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     let enc: *mut c_char = if !b_menc.is_null() && *b_menc != 0 {
         b_menc.cast_mut()
     } else {
-        nvim_get_p_menc().cast_mut()
+        p_menc.cast_mut()
     };
 
-    let wp: WinHandle = if nvim_is_loclist_cmd(cmdidx) {
+    let wp: WinHandle = if is_loclist_cmd(cmdidx) {
         nvim_get_curwin()
     } else {
         std::ptr::null_mut()
@@ -555,10 +585,10 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     let res = rs_qf_init_ext(
         qi_for_init,
         qi_idx,
-        nvim_get_p_ef(),
+        p_ef,
         std::ptr::null_mut(),
         std::ptr::null_mut(),
-        nvim_get_p_efm().cast_mut(),
+        p_efm.cast_mut(),
         newlist,
         0,
         0,
@@ -584,7 +614,17 @@ pub unsafe extern "C" fn rs_ex_cfile(eap: EapHandle) {
     }
 
     let save_qfid = nvim_qf_get_curlist_id(qi_post);
-    nvim_qf_apply_autocmd_post_null(au_name);
+
+    // Inlined nvim_qf_apply_autocmd_post_null: fire EVENT_QUICKFIXCMDPOST with NULL fname_io
+    if !au_name.is_null() {
+        apply_autocmds(
+            EVENT_QUICKFIXCMDPOST,
+            au_name.cast_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf,
+        );
+    }
 
     // Jump for cfile/lfile only (not cgetfile/caddfile).
     if res > 0 && (cmdidx == CMD_CFILE || cmdidx == CMD_LFILE) && rs_qflist_valid(wp, save_qfid) {
@@ -673,7 +713,17 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cbuffer_get_auname(cmdidx);
 
-    if !nvim_qf_apply_autocmd_pre(au_name) {
+    // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
+    if !au_name.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        )
+        && aborting()
+    {
         return;
     }
 
@@ -713,7 +763,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
         std::ptr::null(),
         buf,
         std::ptr::null_mut(),
-        nvim_get_p_efm().cast_mut(),
+        p_efm.cast_mut(),
         newlist,
         line1,
         line2,
@@ -733,8 +783,20 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
 
     let save_qfid = nvim_qf_get_curlist_id(qi);
 
-    // Track curbuf change during post autocmd.
-    let curbuf_changed = nvim_qf_apply_autocmd_post_track(au_name);
+    // Inlined nvim_qf_apply_autocmd_post_track: fire EVENT_QUICKFIXCMDPOST, return true if curbuf changed
+    let curbuf_changed = if au_name.is_null() {
+        false
+    } else {
+        let old_curbuf = curbuf;
+        apply_autocmds(
+            EVENT_QUICKFIXCMDPOST,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        );
+        curbuf != old_curbuf
+    };
     let res_final = if curbuf_changed { 0 } else { res };
 
     if res_final > 0
@@ -761,7 +823,17 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let au_name = rs_cexpr_get_auname(cmdidx);
 
-    if !nvim_qf_apply_autocmd_pre(au_name) {
+    // Inlined nvim_qf_apply_autocmd_pre: fire EVENT_QUICKFIXCMDPRE with curbuf->b_fname
+    if !au_name.is_null()
+        && apply_autocmds(
+            EVENT_QUICKFIXCMDPRE,
+            au_name.cast_mut(),
+            nvim_qf_buf_get_fname(curbuf).cast_mut(),
+            true,
+            curbuf,
+        )
+        && aborting()
+    {
         return;
     }
 
@@ -796,7 +868,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
             std::ptr::null(),
             std::ptr::null_mut(),
             tv,
-            nvim_get_p_efm().cast_mut(),
+            p_efm.cast_mut(),
             newlist,
             0,
             0,
@@ -816,7 +888,17 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
         }
 
         let save_qfid = nvim_qf_get_curlist_id(qi);
-        nvim_qf_apply_autocmd_post(au_name);
+
+        // Inlined nvim_qf_apply_autocmd_post: fire EVENT_QUICKFIXCMDPOST with curbuf->b_fname
+        if !au_name.is_null() {
+            apply_autocmds(
+                EVENT_QUICKFIXCMDPOST,
+                au_name.cast_mut(),
+                nvim_qf_buf_get_fname(curbuf).cast_mut(),
+                true,
+                curbuf,
+            );
+        }
 
         if res > 0 && (cmdidx == CMD_CEXPR || cmdidx == CMD_LEXPR) && rs_qflist_valid(wp, save_qfid)
         {

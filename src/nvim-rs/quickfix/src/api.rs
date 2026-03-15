@@ -1237,7 +1237,8 @@ extern "C" {
     static got_int: bool;
     fn nvim_qf_alloc_internal_stack() -> *mut c_void;
     fn nvim_qf_free_lists_for_qi(qi: *mut c_void);
-    fn nvim_get_p_efm() -> *const std::ffi::c_char;
+    // nvim_get_p_efm deleted: use p_efm global directly
+    static p_efm: *const std::ffi::c_char;
     fn nvim_tv_dict_get_efm_str(what: *const c_void) -> *const std::ffi::c_char;
     fn nvim_tv_dict_efm_wrong_type(what: *const c_void) -> bool;
     fn nvim_tv_dict_has_lines_key(dict: *const c_void) -> bool;
@@ -1505,7 +1506,7 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
     } else {
         let s = nvim_tv_dict_get_efm_str(what);
         if s.is_null() {
-            nvim_get_p_efm()
+            p_efm
         } else {
             s
         }
@@ -1848,7 +1849,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
             } else {
                 let errorformat = nvim_tv_dict_get_efm_str(what);
                 let efm = if errorformat.is_null() {
-                    nvim_get_p_efm()
+                    p_efm
                 } else {
                     errorformat
                 };

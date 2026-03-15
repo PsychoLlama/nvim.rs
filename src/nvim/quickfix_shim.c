@@ -1130,8 +1130,7 @@ void nvim_qf_resize_lists_array(void *qi_void, int n)
 /// Return wp->w_p_lhi (location history option value).
 int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
 
-/// Return true if cmdidx is a location-list command.
-bool nvim_is_loclist_cmd(int cmdidx) { return is_loclist_cmd((cmdidx_T)cmdidx); }
+// nvim_is_loclist_cmd deleted: Rust calls is_loclist_cmd directly.
 
 // nvim_eap_get_cmdidx: already exists in ex_docmd.c
 
@@ -1482,11 +1481,7 @@ int nvim_do_ecmd_help(int fnum, int prev_winid)
                  prev_winid == curwin->handle ? curwin : NULL);
 }
 
-/// buflist_getfile with GETF_SETMARK|GETF_SWITCH flags.
-int nvim_qf_buflist_getfile(int fnum, int forceit)
-{
-  return buflist_getfile(fnum, 1, GETF_SETMARK | GETF_SWITCH, forceit);
-}
+// nvim_qf_buflist_getfile deleted: Rust calls buflist_getfile(fnum, 1, GETF_SETMARK|GETF_SWITCH, forceit) directly.
 
 /// curwin->w_p_wfb accessor.
 bool nvim_curwin_get_wfb(void) { return curwin->w_p_wfb; }
@@ -1751,23 +1746,8 @@ void nvim_qf_set_cwindow_options(void)
   set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL);
 }
 
-/// do_ecmd for an existing quickfix buffer (ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER).
-/// oldwin may be NULL. Returns OK (1) or FAIL (0).
-int nvim_qf_do_ecmd_existing_buf(int fnum, void *oldwin_void)
-{
-  return do_ecmd(fnum, NULL, NULL, NULL, ECMD_ONE,
-                 ECMD_HIDE + ECMD_OLDBUF + ECMD_NOWINENTER,
-                 (win_T *)oldwin_void);
-}
-
-/// do_ecmd creating a new quickfix buffer (ECMD_HIDE + ECMD_NOWINENTER).
-/// oldwin may be NULL. Returns OK (1) or FAIL (0).
-int nvim_qf_do_ecmd_new_buf(void *oldwin_void)
-{
-  return do_ecmd(0, NULL, NULL, NULL, ECMD_ONE,
-                 ECMD_HIDE + ECMD_NOWINENTER,
-                 (win_T *)oldwin_void);
-}
+// nvim_qf_do_ecmd_existing_buf deleted: Rust calls do_ecmd(fnum, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE+ECMD_OLDBUF+ECMD_NOWINENTER, oldwin) directly.
+// nvim_qf_do_ecmd_new_buf deleted: Rust calls do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE+ECMD_NOWINENTER, oldwin) directly.
 
 // nvim_qf_get_curtab deleted: Rust accesses curtab global directly.
 
@@ -1798,8 +1778,7 @@ int nvim_qf_option_set_callback_func_for_qftf(void)
   return option_set_callback_func(p_qftf, &qftf_cb);
 }
 
-/// Return the e_invarg error string pointer (for rs_did_set_quickfixtextfunc).
-const char *nvim_qf_get_e_invarg(void) { return e_invarg; }
+// nvim_qf_get_e_invarg deleted: Rust accesses e_invarg global directly.
 
 // nvim_qf_curwin_is deleted: Rust compares curwin == win directly.
 
@@ -2002,18 +1981,12 @@ char *nvim_tv_list_item_string(const void *li) { return li == NULL ? NULL : (cha
 // Note: nvim_buflist_findnr is in buffer.c (returns buf_T*)
 // Note: nvim_buf_get_sfname is in buffer.c (takes buf_T*)
 const char *nvim_qf_buf_get_fname(const void *buf) { return ((const buf_T *)buf)->b_fname; }
-const char *nvim_path_tail_buf(const char *fname) { return path_tail((char *)fname); }
-bool nvim_path_is_absolute(const char *fname) { return path_is_absolute(fname); }
-void nvim_os_dirname(char *buf, int size) { os_dirname(buf, (size_t)size); }
-void nvim_shorten_buf_fname(void *buf, const char *dirname, bool force)
-{
-  shorten_buf_fname((buf_T *)buf, (char *)dirname, force);
-}
-int nvim_ml_append_buf(void *buf, linenr_T lnum, char *line, int len, bool newfile)
-{
-  return ml_append_buf((buf_T *)buf, lnum, line, (colnr_T)len, newfile);
-}
-void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
+// nvim_path_tail_buf deleted: Rust calls path_tail directly.
+// nvim_path_is_absolute deleted: Rust calls path_is_absolute directly.
+// nvim_os_dirname deleted: Rust calls os_dirname directly.
+// nvim_shorten_buf_fname deleted: Rust calls shorten_buf_fname directly.
+// nvim_ml_append_buf deleted: Rust calls ml_append_buf directly.
+// nvim_ml_delete_one deleted: Rust calls ml_delete directly.
 
 // nvim_qf_set_filetype_and_autocmds deleted: inlined into Rust display.rs (Phase 14).
 
@@ -2030,16 +2003,8 @@ void nvim_qf_set_option_filetype_qf(void)
 {
   set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL);
 }
-/// Call apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf).
-void nvim_qf_apply_autocmds_bufreadpost_qf(void)
-{
-  apply_autocmds(EVENT_BUFREADPOST, "quickfix", NULL, false, curbuf);
-}
-/// Call apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf).
-void nvim_qf_apply_autocmds_bufwinenter_qf(void)
-{
-  apply_autocmds(EVENT_BUFWINENTER, "quickfix", NULL, false, curbuf);
-}
+// nvim_qf_apply_autocmds_bufreadpost_qf deleted: Rust calls apply_autocmds(EVENT_BUFREADPOST, ...) directly.
+// nvim_qf_apply_autocmds_bufwinenter_qf deleted: Rust calls apply_autocmds(EVENT_BUFWINENTER, ...) directly.
 /// Call redraw_curbuf_later(UPD_NOT_VALID).
 void nvim_qf_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
 
@@ -2057,30 +2022,15 @@ void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : (
 
 // Phase 7: C accessor wrappers needed by rs_ex_make / rs_make_get_fullcmd / rs_get_mef_name
 
-// Global option accessors
-const char *nvim_get_p_shq(void) { return p_shq; }
-const char *nvim_get_p_sp(void) { return p_sp; }
-const char *nvim_get_p_mef(void) { return p_mef; }
-const char *nvim_get_p_efm(void) { return p_efm; }
-const char *nvim_get_p_menc(void) { return p_menc; }
-const char *nvim_get_p_gefm(void) { return p_gefm; }
-const char *nvim_get_p_ef(void) { return p_ef; }
-
-// curbuf option accessors
+// Global option accessors deleted: Rust accesses p_shq, p_sp, p_mef, p_efm, p_menc, p_gefm, p_ef globals directly.
+// curbuf option accessors (struct field access - retained as opaque accessors):
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
-// Shell/message helpers
-void nvim_append_redir(char *buf, size_t buflen, const char *opt, const char *name) { append_redir(buf, buflen, opt, name); }
-
-// autowrite, shell, remove
-void nvim_autowrite_all(void) { autowrite_all(); }
-void nvim_do_shell(const char *cmd) { do_shell(cmd, 0); }
-
-// vim_tempname wrapper
-char *nvim_vim_tempname(void) { return vim_tempname(); }
-
-// OS helpers for get_mef_name
-int nvim_os_get_pid(void) { return (int)os_get_pid(); }
+// nvim_append_redir deleted: Rust calls append_redir directly.
+// nvim_autowrite_all deleted: Rust calls autowrite_all directly.
+// nvim_do_shell deleted: Rust calls do_shell directly.
+// nvim_vim_tempname deleted: Rust calls vim_tempname directly.
+// nvim_os_get_pid deleted: Rust calls os_get_pid directly.
 bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
 
 // curlist id accessor for quickfix list change tracking
@@ -2123,60 +2073,11 @@ const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)
 bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
 
-// QuickFixCmdPre/Post autocmd wrappers for ex_make cluster
-// Returns true if autocmd fired and aborting() is false (OK to continue),
-// false if we should abort.
-bool nvim_qf_apply_autocmd_pre(const char *au_name)
-{
-  if (au_name == NULL) {
-    return true;
-  }
-  if (apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, curbuf->b_fname, true, curbuf)) {
-    if (aborting()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Apply QuickFixCmdPre with explicit buffer fname (for :cfile which passes NULL).
-bool nvim_qf_apply_autocmd_pre_null(const char *au_name)
-{
-  if (au_name == NULL) {
-    return true;
-  }
-  if (apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, NULL, false, curbuf)) {
-    if (aborting()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-void nvim_qf_apply_autocmd_post(const char *au_name)
-{
-  if (au_name != NULL) {
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-  }
-}
-
-void nvim_qf_apply_autocmd_post_null(const char *au_name)
-{
-  if (au_name != NULL) {
-    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, NULL, false, curbuf);
-  }
-}
-
-// Returns true if curbuf changed during autocmd post (for ex_cbuffer curbuf tracking)
-bool nvim_qf_apply_autocmd_post_track(const char *au_name)
-{
-  if (au_name == NULL) {
-    return false;
-  }
-  const buf_T *const old = curbuf;
-  apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-  return curbuf != old;
-}
+// nvim_qf_apply_autocmd_pre deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, ...) + aborting() directly.
+// nvim_qf_apply_autocmd_pre_null deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, NULL, false, ...) directly.
+// nvim_qf_apply_autocmd_post deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, ...) directly.
+// nvim_qf_apply_autocmd_post_null deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, NULL, false, ...) directly.
+// nvim_qf_apply_autocmd_post_track deleted: Rust inlines curbuf comparison + apply_autocmds directly.
 
 // IObuff/IOSIZE for cbuffer title formatting
 // Note: nvim_qf_get_iobuff already defined above (returns char*).
@@ -2251,19 +2152,19 @@ void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_
 
 // Phase 14: Direct message output accessors (replacing nvim_qf_list_entry_output and
 // nvim_qf_format_prefix which were deleted after inlining into Rust rs_qf_list_entry).
-int nvim_hlf_qfl(void) { return HLF_QFL; }
+// nvim_hlf_qfl deleted: Rust uses constant HLF_QFL = 58.
 
 // Phase 4: qf_list (:clist/:llist) accessors
 // nvim_eap_get_arg already exists in ex_docmd.c
 // nvim_semsg_trailing_arg already exists in eval_shim.c
 // nvim_eap_get_forceit already exists in indent_ffi.c (returns bool)
-bool nvim_get_list_range(char **arg, int *idx1, int *idx2) { return get_list_range(arg, idx1, idx2); }
-void nvim_shorten_fnames_qf(void) { shorten_fnames(false); }
-int nvim_syn_name2id_qf(const char *name) { return syn_name2id(name); }
-int nvim_hlf_d(void) { return HLF_D; }
-int nvim_hlf_n(void) { return HLF_N; }
-bool nvim_got_int_qf(void) { return got_int; }
-void nvim_os_breakcheck_qf(void) { os_breakcheck(); }
+// nvim_get_list_range deleted: Rust calls get_list_range directly.
+// nvim_shorten_fnames_qf deleted: Rust calls shorten_fnames(false) directly.
+// nvim_syn_name2id_qf deleted: Rust calls syn_name2id directly.
+// nvim_hlf_d deleted: Rust uses constant HLF_D = 5.
+// nvim_hlf_n deleted: Rust uses constant HLF_N = 12.
+// nvim_got_int_qf deleted: Rust accesses got_int global directly.
+// nvim_os_breakcheck_qf deleted: Rust calls os_breakcheck directly.
 
 // ex_cfile deleted: now exported directly from Rust via #[export_name]
 
@@ -2316,8 +2217,7 @@ void nvim_ex_cd_arg(char *arg, bool is_lcd)
   ex_cd(&ea);
 }
 
-// Phase 3: path_try_shorten_fname wrapper (rename-compatible)
-char *nvim_path_try_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }
+// nvim_path_try_shorten_fname deleted: Rust calls path_try_shorten_fname directly.
 
 /// Load a dummy buffer to search for a pattern using vimgrep.
 static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname_now)
@@ -2394,6 +2294,17 @@ _Static_assert(CMD_ldo == 228, "CMD_ldo mismatch");
 _Static_assert(CMD_cfdo == 66, "CMD_cfdo mismatch");
 _Static_assert(CMD_lfdo == 234, "CMD_lfdo mismatch");
 
+// _Static_assert for Phase 5 HLF constants used in Rust clist display
+_Static_assert(HLF_D == 5, "HLF_D mismatch");
+_Static_assert(HLF_N == 12, "HLF_N mismatch");
+_Static_assert(HLF_QFL == 58, "HLF_QFL mismatch");
+
+// _Static_assert for Phase 5 autocmd event constants used in Rust display/make/vimgrep
+_Static_assert(EVENT_BUFREADPOST == 13, "EVENT_BUFREADPOST mismatch");
+_Static_assert(EVENT_BUFWINENTER == 16, "EVENT_BUFWINENTER mismatch");
+_Static_assert(EVENT_QUICKFIXCMDPRE == 89, "EVENT_QUICKFIXCMDPRE mismatch");
+_Static_assert(EVENT_QUICKFIXCMDPOST == 88, "EVENT_QUICKFIXCMDPOST mismatch");
+
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
 /// or NULL if compilation failed (error already emitted).
@@ -2443,16 +2354,8 @@ int nvim_vgr_get_arglist_exp(const char *p, int *fcount_out, char ***fnames_out)
 /// FreeWild wrapper for vgr fnames.
 void nvim_vgr_free_wild_raw(int fcount, char **fnames) { FreeWild(fcount, fnames); }
 
-// apply_autocmds wrapper for QuickFixCmdPre/Post (for Phase 2 rs_ex_vimgrep).
-bool nvim_apply_autocmds_quickfixcmdpre(const char *au_name)
-{
-  return apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name, curbuf->b_fname, true, curbuf);
-}
-bool nvim_apply_autocmds_quickfixcmdpost(const char *au_name)
-{
-  apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name, curbuf->b_fname, true, curbuf);
-  return true;
-}
+// nvim_apply_autocmds_quickfixcmdpre deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, ...) directly.
+// nvim_apply_autocmds_quickfixcmdpost deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, ...) directly.
 
 // Restore current working directory to "dirname_start" if they differ, taking
 // into account whether it is set locally or globally.
