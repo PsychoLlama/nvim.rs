@@ -11,9 +11,15 @@ use nvim_typval::{DictHandle, ListHandle};
 /// Bitmask used for GC copy-ID comparisons (matches C's `COPYID_MASK`).
 const COPYID_MASK: c_int = !0x1;
 
+/// Head of list of all dictionaries (matches C `gc_first_dict`).
+#[no_mangle]
+pub static mut gc_first_dict: DictHandle = DictHandle::null();
+
+/// Head of list of all lists (matches C `gc_first_list`).
+#[no_mangle]
+pub static mut gc_first_list: ListHandle = ListHandle::null();
+
 extern "C" {
-    fn nvim_gc_get_first_dict() -> DictHandle;
-    fn nvim_gc_get_first_list() -> ListHandle;
     fn nvim_dict_get_copyid(d: DictHandle) -> c_int;
     fn nvim_dict_get_used_next(d: DictHandle) -> DictHandle;
     fn nvim_list_get_copyid(l: ListHandle) -> c_int;
@@ -59,7 +65,7 @@ pub unsafe extern "C" fn rs_free_unref_items(copy_id: c_int) -> c_int {
     // Go through the list of dicts and free items without the copyID.
     // Don't free dicts that are referenced internally.
     // SAFETY: gc_first_dict is the head of a valid C linked list.
-    let mut dd = unsafe { nvim_gc_get_first_dict() };
+    let mut dd = unsafe { gc_first_dict };
     while !dd.is_null() {
         // SAFETY: dd is a valid non-null dict pointer.
         let copyid = unsafe { nvim_dict_get_copyid(dd) };
@@ -79,7 +85,7 @@ pub unsafe extern "C" fn rs_free_unref_items(copy_id: c_int) -> c_int {
     // But don't free a list that has a watcher (used in a for loop), these
     // are not referenced anywhere.
     // SAFETY: gc_first_list is the head of a valid C linked list.
-    let mut ll = unsafe { nvim_gc_get_first_list() };
+    let mut ll = unsafe { gc_first_list };
     while !ll.is_null() {
         // SAFETY: ll is a valid non-null list pointer.
         let copyid = unsafe { nvim_list_get_copyid(ll) };
@@ -100,7 +106,7 @@ pub unsafe extern "C" fn rs_free_unref_items(copy_id: c_int) -> c_int {
     // Must save the next pointer BEFORE freeing, because the free function
     // removes the node from the linked list.
     // SAFETY: gc_first_dict is the head of a valid C linked list.
-    let mut dd = unsafe { nvim_gc_get_first_dict() };
+    let mut dd = unsafe { gc_first_dict };
     while !dd.is_null() {
         // SAFETY: dd is valid; save next before potential free.
         let dd_next = unsafe { nvim_dict_get_used_next(dd) };
@@ -114,7 +120,7 @@ pub unsafe extern "C" fn rs_free_unref_items(copy_id: c_int) -> c_int {
     }
 
     // SAFETY: gc_first_list is the head of a valid C linked list.
-    let mut ll = unsafe { nvim_gc_get_first_list() };
+    let mut ll = unsafe { gc_first_list };
     while !ll.is_null() {
         // SAFETY: ll is valid; save next before potential free.
         let ll_next = unsafe { nvim_list_get_used_next(ll) };
