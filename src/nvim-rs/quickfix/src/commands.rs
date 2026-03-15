@@ -59,7 +59,7 @@ extern "C" {
     // (nvim_semsg_nomatch2 deleted: use semsg directly)
     // nvim_hgr_is_lhelpgrep deleted (Phase 4): use nvim_eap_get_cmdidx comparison
     // nvim_hgr_cleanup deleted (Phase 4): inlined via curwin accessors + rs_ll_free_all
-    fn nvim_qf_get_curwin() -> *mut c_void;
+    static mut curwin: *mut c_void;
     fn nvim_win_set_llist(win: *mut c_void, qi: *mut c_void);
     // Used for finalization after compile+search (Phase 3)
     fn nvim_qf_set_nonevalid(qfl: *mut c_void, nonevalid: bool);
@@ -1115,7 +1115,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
         // Inline hgr_get_ll: find help window, use its llist or allocate new.
         let wp = if nvim_qf_curwin_buf_is_help() {
             // curwin is a help window — use it directly
-            nvim_qf_get_curwin()
+            curwin
         } else {
             nvim_qf_find_help_win()
         };
@@ -1203,15 +1203,15 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     if cmdidx == CMD_LHELPGREP {
         // If the help window is not opened or if it already points to the
         // correct location list, then free the new location list.
-        let curwin = nvim_qf_get_curwin();
-        let curwin_llist = nvim_qf_win_get_llist(curwin.cast_const());
+        let curwin_local = curwin;
+        let curwin_llist = nvim_qf_win_get_llist(curwin_local.cast_const());
         if !nvim_qf_curwin_buf_is_help() || curwin_llist == qi {
             if new_qi {
                 rs_ll_free_all(&raw mut qi);
             }
         } else if curwin_llist.is_null() && new_qi {
             // current window didn't have a location list — associate now.
-            nvim_win_set_llist(curwin, qi);
+            nvim_win_set_llist(curwin_local, qi);
         }
     }
 }
@@ -1280,7 +1280,7 @@ extern "C" {
     fn nvim_qf_curwin_is_ll() -> bool;
     fn nvim_qf_curwin_get_loclist() -> QfInfoHandleMut;
     fn nvim_qf_get_cursor_lnum() -> LinenrT;
-    fn nvim_do_cmdline_cmd(cmd: *const u8);
+    fn do_cmdline_cmd(cmd: *const u8);
 
     // From crate (already declared in lib.rs)
     fn nvim_qf_get_curlist_mut(qi: QfInfoHandleMut) -> *mut c_void;
@@ -1520,14 +1520,14 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
         // Open the selected entry in a new window
         let lnum = nvim_qf_get_cursor_lnum() as c_int;
         crate::navigate::jump_machinery::rs_qf_jump_newwin(qi, 0, lnum, 0, true);
-        nvim_do_cmdline_cmd(c"clearjumps".as_ptr().cast::<u8>());
+        do_cmdline_cmd(c"clearjumps".as_ptr().cast::<u8>());
         return;
     }
 
     if nvim_qf_curwin_is_ll() {
-        nvim_do_cmdline_cmd(c".ll".as_ptr().cast::<u8>());
+        do_cmdline_cmd(c".ll".as_ptr().cast::<u8>());
     } else {
-        nvim_do_cmdline_cmd(c".cc".as_ptr().cast::<u8>());
+        do_cmdline_cmd(c".cc".as_ptr().cast::<u8>());
     }
 }
 
@@ -1613,7 +1613,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
 type CLinenrT = i32;
 
 extern "C" {
-    fn nvim_qf_win_close(win: *mut c_void);
+    fn win_close(win: *mut c_void, free_buf: bool, force: bool) -> c_int;
     fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> CLinenrT;
     fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> CLinenrT;
     // nvim_qf_win_goto_lnum delegates to Rust rs_qf_win_goto_impl
@@ -1640,7 +1640,7 @@ pub unsafe extern "C" fn rs_ex_cclose(eap: EapHandle) {
 
     let win = find_win_for_stack(qi);
     if !win.is_null() {
-        nvim_qf_win_close(win);
+        win_close(win, false, false);
     }
 }
 
@@ -1715,22 +1715,22 @@ extern "C" {
     #[link_name = "rs_qf_open_new_cwindow"]
     fn nvim_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_int) -> c_int;
     fn nvim_qf_curwin_set_cursor(lnum: CLinenrT, col: c_int);
-    fn nvim_qf_check_cursor_curwin();
-    fn nvim_qf_update_topline_curwin();
+    fn check_cursor(wp: *mut c_void);
+    fn update_topline(wp: *mut c_void);
     fn nvim_qf_win_get_width(win: *const c_void) -> c_int;
     fn nvim_qf_win_get_height(win: *const c_void) -> c_int;
     fn nvim_qf_win_get_hsep_height(win: *const c_void) -> c_int;
     fn nvim_qf_win_get_status_height(win: *const c_void) -> c_int;
     #[link_name = "rs_tabline_height"]
     fn nvim_qf_tabline_height() -> c_int;
-    fn nvim_qf_cmdline_row() -> c_int;
+    static cmdline_row: c_int;
     #[link_name = "rs_win_setwidth"]
     fn nvim_qf_win_setwidth(width: c_int);
     #[link_name = "rs_win_setheight"]
     fn nvim_qf_win_setheight(height: c_int);
-    fn nvim_qf_win_goto(win: *mut c_void);
+    fn win_goto(win: *mut c_void);
     fn nvim_qf_curwin_handle() -> c_int;
-    fn nvim_qf_get_curbuf() -> *mut c_void;
+    static mut curbuf: *mut c_void;
 }
 
 /// Goto a quickfix or location list window, optionally resizing.
@@ -1747,7 +1747,7 @@ unsafe fn qf_goto_cwindow_rs(
         return FAIL_VAL;
     }
 
-    nvim_qf_win_goto(win);
+    win_goto(win);
     if resize {
         if vertsplit {
             if sz != nvim_qf_win_get_width(win) {
@@ -1758,7 +1758,7 @@ unsafe fn qf_goto_cwindow_rs(
             let hsep = nvim_qf_win_get_hsep_height(win);
             let status = nvim_qf_win_get_status_height(win);
             let tabline = nvim_qf_tabline_height();
-            let cmdrow = nvim_qf_cmdline_row();
+            let cmdrow = cmdline_row;
             if sz != win_h && (win_h + hsep + status + tabline < cmdrow) {
                 nvim_qf_win_setheight(sz);
             }
@@ -1818,16 +1818,16 @@ pub unsafe extern "C" fn rs_ex_copen(eap: EapHandle) {
     }
 
     // Fill the buffer with quickfix list
-    let curbuf = nvim_qf_get_curbuf();
+    let curbuf_local = curbuf;
     let curwin_handle = nvim_qf_curwin_handle();
-    crate::display::rs_qf_fill_buffer(qfl, curbuf, std::ptr::null(), curwin_handle);
+    crate::display::rs_qf_fill_buffer(qfl, curbuf_local, std::ptr::null(), curwin_handle);
 
     nvim_decr_quickfix_busy();
 
     // Position cursor
     nvim_qf_curwin_set_cursor(lnum, 0);
-    nvim_qf_check_cursor_curwin();
-    nvim_qf_update_topline_curwin();
+    check_cursor(curwin);
+    update_topline(curwin);
 }
 
 // =============================================================================

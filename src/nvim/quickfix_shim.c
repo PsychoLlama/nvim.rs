@@ -1559,7 +1559,7 @@ bool nvim_qf_goto_tabwin_with_file(int fnum)
 
 void *nvim_qf_curwin_get_llist_ref(void) { return curwin->w_llist_ref; }
 
-bool nvim_qf_curbuf_is_quickfix(void) { return bt_quickfix(curbuf); }
+// nvim_qf_curbuf_is_quickfix deleted: Rust calls rs_bt_quickfix(curbuf) directly.
 
 bool nvim_qf_curwin_buf_is_help(void) { return bt_help(curwin->w_buffer); }
 
@@ -1571,11 +1571,9 @@ bool nvim_qf_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) != 0;
 
 int nvim_qf_curwin_handle(void) { return curwin->handle; }
 
-void nvim_qf_win_close_curwin(void) { win_close(curwin, true, false); }
-
-void nvim_qf_win_goto(void *win) { win_goto((win_T *)win); }
-
-void nvim_qf_win_enter(void *win) { win_enter((win_T *)win, true); }
+// nvim_qf_win_close_curwin deleted: Rust calls win_close(curwin, true, false) directly.
+// nvim_qf_win_goto deleted: Rust calls win_goto directly.
+// nvim_qf_win_enter deleted: Rust calls win_enter directly.
 
 int nvim_qf_win_buf_nwindows(const void *win) { return ((const win_T *)win)->w_buffer->b_nwindows; }
 
@@ -1593,15 +1591,11 @@ int nvim_qf_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 
 int nvim_qf_curwin_width(void) { return curwin->w_width; }
 
-int nvim_qf_get_columns(void) { return Columns; }
-
+// nvim_qf_get_columns deleted: Rust accesses Columns global directly.
 int nvim_qf_curwin_height(void) { return curwin->w_height; }
-
-int nvim_qf_get_p_hh(void) { return (int)p_hh; }
-
-int nvim_qf_win_split(int size, int flags) { return win_split(size, flags); }
-
-void nvim_qf_clear_restart_edit(void) { restart_edit = 0; }
+// nvim_qf_get_p_hh deleted: Rust accesses p_hh global directly.
+// nvim_qf_win_split deleted: Rust calls win_split directly.
+// nvim_qf_clear_restart_edit deleted: Rust sets restart_edit = 0 directly.
 
 bool nvim_qf_is_ll_stack_qi(const void *qi) { return IS_LL_STACK((const qf_info_T *)qi); }
 
@@ -1611,15 +1605,14 @@ void *nvim_qf_win_prev(const void *win) { return ((const win_T *)win)->w_prev; }
 
 void *nvim_qf_win_next(const void *win) { return ((const win_T *)win)->w_next; }
 
-void *nvim_qf_get_lastwin(void) { return lastwin; }
-
-void *nvim_qf_get_curwin(void) { return curwin; }
+// nvim_qf_get_lastwin deleted: Rust accesses lastwin global directly.
+// nvim_qf_get_curwin deleted: Rust accesses curwin global directly.
 
 bool nvim_qf_win_bt_normal(const void *win) { return bt_normal(((const win_T *)win)->w_buffer); }
 
 bool nvim_qf_swb_uselast_prevwin_ok(void) { return (swb_flags & kOptSwbFlagUselast) && rs_win_valid(prevwin) && !prevwin->w_p_wfb; }
 
-void *nvim_qf_get_prevwin(void) { return prevwin; }
+// nvim_qf_get_prevwin deleted: Rust accesses prevwin global directly.
 
 bool nvim_qf_win_is_preview(const void *win) { return ((const win_T *)win)->w_p_pvw; }
 
@@ -1658,13 +1651,10 @@ int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp
 const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
-void *nvim_qf_get_curbuf(void) { return curbuf; }
-
+// nvim_qf_get_curbuf deleted: Rust accesses curbuf global directly.
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
-
-void nvim_qf_setpcmark(void) { setpcmark(); }
-
-bool nvim_qf_curbuf_is(const void *buf) { return curbuf == (const buf_T *)buf; }
+// nvim_qf_setpcmark deleted: Rust calls setpcmark directly.
+// nvim_qf_curbuf_is deleted: Rust compares curbuf == buf directly.
 
 void *nvim_qf_get_p_swb(void) { return p_swb; }
 
@@ -1679,7 +1669,7 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-void nvim_qf_win_close(void *win_void) { if (win_void != NULL) win_close((win_T *)win_void, false, false); }
+// nvim_qf_win_close deleted: Rust checks null and calls win_close directly.
 void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { nvim_qf_win_goto_impl(win_void, lnum); }
 linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_cursor.lnum; }
 linenr_T nvim_qf_win_get_buf_line_count(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count; }
@@ -1688,7 +1678,7 @@ int nvim_qf_win_get_height(const void *win_void) { return win_void == NULL ? 0 :
 int nvim_qf_win_get_hsep_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_hsep_height; }
 int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_status_height; }
 
-int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
+// nvim_qf_cmdline_row deleted: Rust accesses cmdline_row global directly.
 
 
 // nvim_qf_open_new_cwindow deleted: Rust commands.rs now uses #[link_name = "rs_qf_open_new_cwindow"].
@@ -1696,9 +1686,8 @@ int nvim_qf_cmdline_row(void) { return (int)cmdline_row; }
 
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
-void nvim_qf_check_cursor_curwin(void) { check_cursor(curwin); }
-
-void nvim_qf_update_topline_curwin(void) { update_topline(curwin); }
+// nvim_qf_check_cursor_curwin deleted: Rust calls check_cursor(curwin) directly.
+// nvim_qf_update_topline_curwin deleted: Rust calls update_topline(curwin) directly.
 
 // nvim_qf_update_win_titlevar deleted: dead code, only defined but never called externally
 
@@ -1744,14 +1733,9 @@ void nvim_qf_set_title_var_for_list(void *qfl_void)
   }
 }
 
-/// Save and return the current curwin pointer.
-void *nvim_qf_save_curwin(void) { return curwin; }
-
-/// Restore curwin to a previously saved pointer.
-void nvim_qf_restore_curwin(void *saved) { curwin = (win_T *)saved; }
-
-/// Set curwin to the given window (for qf_update_win_titlevar pattern).
-void nvim_qf_set_curwin(void *win_void) { curwin = (win_T *)win_void; }
+// nvim_qf_save_curwin deleted: Rust reads curwin global directly.
+// nvim_qf_restore_curwin deleted: Rust writes curwin global directly.
+// nvim_qf_set_curwin deleted: Rust writes curwin global directly.
 
 // Phase 10 Pass 10 Phase 3: New C accessors for qf_open_new_cwindow / did_set_quickfixtextfunc
 
@@ -1785,8 +1769,7 @@ int nvim_qf_do_ecmd_new_buf(void *oldwin_void)
                  (win_T *)oldwin_void);
 }
 
-/// Return the current tab page pointer (curtab).
-const void *nvim_qf_get_curtab(void) { return curtab; }
+// nvim_qf_get_curtab deleted: Rust accesses curtab global directly.
 
 // nvim_qf_curwin_width already defined at line 2529 (nvim_qf_get_columns section).
 
@@ -1806,11 +1789,8 @@ void nvim_qf_curwin_set_wfh(void) { curwin->w_p_wfh = true; }
 /// Reset key bindings on curwin (RESET_BINDING).
 void nvim_qf_curwin_reset_binding(void) { RESET_BINDING(curwin); }
 
-/// Set prevwin to the given window pointer.
-void nvim_qf_set_prevwin(void *win_void) { prevwin = (win_T *)win_void; }
-
-/// Check if the current tab page equals a previously saved tab page pointer.
-bool nvim_qf_curtab_eq(const void *saved_tab) { return curtab == (const tabpage_T *)saved_tab; }
+// nvim_qf_set_prevwin deleted: Rust writes prevwin global directly.
+// nvim_qf_curtab_eq deleted: Rust compares curtab == tab directly.
 
 /// Call option_set_callback_func(p_qftf, &qftf_cb). Returns FAIL or OK.
 int nvim_qf_option_set_callback_func_for_qftf(void)
@@ -1821,16 +1801,10 @@ int nvim_qf_option_set_callback_func_for_qftf(void)
 /// Return the e_invarg error string pointer (for rs_did_set_quickfixtextfunc).
 const char *nvim_qf_get_e_invarg(void) { return e_invarg; }
 
-/// Return true if curwin equals the given window (for oldwin != curwin check).
-bool nvim_qf_curwin_is(const void *win_void) { return curwin == (const win_T *)win_void; }
+// nvim_qf_curwin_is deleted: Rust compares curwin == win directly.
 
 // Phase 10 Pass 10 Phase 4: New C accessors for rs_qf_update_buffer
-
-/// get_region_bytecount for a quickfix buffer.
-bcount_t nvim_qf_get_region_bytecount(void *buf, linenr_T l1, linenr_T l2, colnr_T c1, colnr_T c2)
-{
-  return get_region_bytecount((buf_T *)buf, l1, l2, c1, c2);
-}
+// nvim_qf_get_region_bytecount deleted: Rust calls get_region_bytecount directly.
 
 /// extmark_splice for quickfix buffer updates.
 void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
@@ -1839,17 +1813,10 @@ void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
   extmark_splice((buf_T *)buf, r1, c1, r2, c2, bc, nr, nc, nbc, kExtmarkNoUndo);
 }
 
-/// changed_lines for quickfix buffer updates.
-void nvim_qf_changed_lines(void *buf, linenr_T lnum, colnr_T col, linenr_T lnume, linenr_T xtra, bool do_win)
-{
-  changed_lines((buf_T *)buf, lnum, col, lnume, xtra, do_win);
-}
-
+// nvim_qf_changed_lines deleted: Rust calls changed_lines directly.
 /// Set buf->b_changed = false.
 void nvim_qf_buf_set_changed_false(void *buf) { ((buf_T *)buf)->b_changed = false; }
-
-/// redraw_buf_later(buf, UPD_NOT_VALID).
-void nvim_qf_redraw_buf_later(void *buf) { redraw_buf_later((buf_T *)buf, UPD_NOT_VALID); }
+// nvim_qf_redraw_buf_later deleted: Rust calls redraw_buf_later(buf, UPD_NOT_VALID) directly.
 
 /// Return win->w_botline.
 linenr_T nvim_qf_win_botline(const void *win) { return ((const win_T *)win)->w_botline; }
@@ -2145,7 +2112,7 @@ bool nvim_buf_has_ml_mfp_void(const void *buf) { return ((const buf_T *)buf)->b_
 linenr_T nvim_buf_get_ml_line_count_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
 const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
 void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
-void *nvim_curbuf_ptr(void) { return (void *)curbuf; }
+// nvim_curbuf_ptr deleted: Rust accesses curbuf global directly.
 // eval_expr / tv_free wrappers for ex_cexpr
 void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
 // nvim_tv_get_type: already defined in eval/typval.h (takes const typval_T*)
@@ -2260,7 +2227,7 @@ void *nvim_qf_curwin_get_loclist(void) { return GET_LOC_LIST(curwin); }
 
 linenr_T nvim_qf_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
-void nvim_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
+// nvim_do_cmdline_cmd deleted: Rust calls do_cmdline_cmd directly.
 
 bool nvim_qf_curbuf_has_flag(int flag) { return (curbuf->b_has_qf_entry & flag) != 0; }
 

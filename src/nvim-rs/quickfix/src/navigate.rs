@@ -1236,9 +1236,9 @@ mod jump_edit {
         fn nvim_qf_prevwin_valid_for_wfb() -> bool;
         fn nvim_win_id2wp(id: c_int) -> *mut c_void;
         fn nvim_qf_curwin_get_loclist() -> *mut c_void;
-        fn nvim_qf_get_prevwin() -> *mut c_void;
-        fn nvim_qf_win_goto(win: *mut c_void);
-        fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+        static mut prevwin: *mut c_void;
+        fn win_goto(win: *mut c_void);
+        fn win_split(size: c_int, flags: c_int) -> c_int;
     }
 
     /// Edit the selected file or help file from quickfix.
@@ -1277,11 +1277,10 @@ mod jump_edit {
                     return FAIL; // sentinel: location list winfixbuf early return
                 }
                 if nvim_qf_prevwin_valid_for_wfb() {
-                    let prevwin = nvim_qf_get_prevwin();
-                    nvim_qf_win_goto(prevwin);
+                    win_goto(prevwin);
                 }
                 if nvim_curwin_get_wfb() {
-                    if nvim_qf_win_split(0, 0) == OK {
+                    if win_split(0, 0) == OK {
                         *opened_window = true;
                     }
                     if nvim_curwin_get_wfb() {
@@ -1373,39 +1372,41 @@ pub mod jump_machinery {
 
         // Window/buffer state accessors (Phase 1)
         fn nvim_qf_curwin_get_llist_ref() -> *mut c_void;
-        fn nvim_qf_curbuf_is_quickfix() -> bool;
+        fn rs_bt_quickfix(buf: *mut c_void) -> bool;
         fn nvim_qf_curwin_buf_is_help() -> bool;
         fn nvim_qf_get_cmdmod_tab() -> c_int;
         fn nvim_qf_is_one_window() -> bool;
         fn nvim_qf_swb_has_usetab() -> bool;
 
         // Window operations (Phase 2)
-        fn nvim_qf_win_goto(win: WinHandle);
-        fn nvim_qf_win_enter(win: WinHandle);
+        fn win_goto(win: WinHandle);
+        fn win_enter(win: WinHandle, undo_sync: bool);
+        fn win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
         fn nvim_qf_win_buf_nwindows(win: *const c_void) -> c_int;
         fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
         fn nvim_qf_win_get_llist(win: *const c_void) -> *mut c_void;
         fn nvim_qf_win_set_loclist(win: WinHandle, qi: *mut c_void);
         fn nvim_qf_get_cmdmod_split() -> c_int;
         fn nvim_qf_curwin_width() -> c_int;
-        fn nvim_qf_get_columns() -> c_int;
+        static Columns: c_int;
         fn nvim_qf_curwin_height() -> c_int;
-        fn nvim_qf_get_p_hh() -> c_int;
-        fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+        static p_hh: i64;
+        fn win_split(size: c_int, flags: c_int) -> c_int;
         #[link_name = "rs_win_setheight"]
         fn nvim_qf_win_setheight(height: c_int);
-        fn nvim_qf_clear_restart_edit();
+        static mut restart_edit: c_int;
         fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
         fn nvim_qf_win_is_qf_window(win: *const c_void) -> bool;
         fn nvim_qf_win_prev(win: *const c_void) -> WinHandle;
         fn nvim_qf_win_next(win: *const c_void) -> WinHandle;
-        fn nvim_qf_get_lastwin() -> WinHandle;
-        fn nvim_qf_get_curwin() -> WinHandle;
+        static lastwin: *mut c_void;
+        static curwin: *mut c_void;
         fn nvim_qf_win_bt_normal(win: *const c_void) -> bool;
         fn nvim_qf_swb_uselast_prevwin_ok() -> bool;
-        fn nvim_qf_get_prevwin() -> WinHandle;
+        static mut prevwin: *mut c_void;
         fn nvim_qf_win_is_preview(win: *const c_void) -> bool;
         fn nvim_qf_win_is_wfb(win: *const c_void) -> bool;
+        static mut curbuf: *mut c_void;
     }
 
     /// Find or open a help window. Returns OK or FAIL.
@@ -1427,13 +1428,13 @@ pub mod jump_machinery {
         };
 
         if !wp.is_null() && nvim_qf_win_buf_nwindows(wp) > 0 {
-            nvim_qf_win_enter(wp);
+            win_enter(wp, true);
         } else {
             // Split off help window; put it at far top if no position
             // specified, the current window is vertically split and narrow.
             let mut flags = WSP_HELP;
             if nvim_qf_get_cmdmod_split() == 0
-                && nvim_qf_curwin_width() != nvim_qf_get_columns()
+                && nvim_qf_curwin_width() != Columns
                 && nvim_qf_curwin_width() < 80
             {
                 flags |= WSP_TOP;
@@ -1445,24 +1446,24 @@ pub mod jump_machinery {
                 flags |= WSP_NEWLOC;
             }
 
-            if nvim_qf_win_split(0, flags) == FAIL {
+            if win_split(0, flags) == FAIL {
                 return FAIL;
             }
 
             *opened_window = true;
 
-            if nvim_qf_curwin_height() < nvim_qf_get_p_hh() {
-                nvim_qf_win_setheight(nvim_qf_get_p_hh());
+            if nvim_qf_curwin_height() < p_hh as c_int {
+                nvim_qf_win_setheight(p_hh as c_int);
             }
 
             // When using location list, the new window should use the supplied
             // location list.
             if nvim_qf_is_ll_stack_qi(qi) && !newwin {
-                nvim_qf_win_set_loclist(nvim_qf_get_curwin(), qi);
+                nvim_qf_win_set_loclist(curwin, qi);
             }
         }
 
-        nvim_qf_clear_restart_edit(); // don't want insert mode in help file
+        restart_edit = 0; // don't want insert mode in help file
 
         OK
     }
@@ -1497,7 +1498,7 @@ pub mod jump_machinery {
             // We walk backwards from curwin (like original C code does for the
             // fallback path), but first we need to try all windows.
             // Walk from lastwin backwards to find the file.
-            let mut w = nvim_qf_get_lastwin();
+            let mut w = lastwin;
             while !w.is_null() {
                 if nvim_qf_win_buf_fnum(w) == qf_fnum {
                     win = w;
@@ -1508,24 +1509,24 @@ pub mod jump_machinery {
 
             if win.is_null() {
                 // Find a previous usable window (walk backwards from curwin)
-                win = nvim_qf_get_curwin();
+                win = curwin;
                 loop {
                     if nvim_qf_win_bt_normal(win) {
                         break;
                     }
                     let prev = nvim_qf_win_prev(win);
                     if prev.is_null() {
-                        win = nvim_qf_get_lastwin(); // wrap around the top
+                        win = lastwin; // wrap around the top
                     } else {
                         win = prev; // go to previous window
                     }
-                    if win == nvim_qf_get_curwin() {
+                    if win == curwin {
                         break;
                     }
                 }
             }
         }
-        nvim_qf_win_goto(win);
+        win_goto(win);
 
         // If the location list for the window is not set, then set it
         // to the location list from the location window
@@ -1541,7 +1542,7 @@ pub mod jump_machinery {
     /// Globals must be in a valid state.
     #[no_mangle]
     pub unsafe extern "C" fn rs_qf_goto_win_with_qfl_file(qf_fnum: c_int) {
-        let mut win = nvim_qf_get_curwin();
+        let mut win = curwin;
         let mut altwin: WinHandle = ptr::null_mut();
 
         loop {
@@ -1550,7 +1551,7 @@ pub mod jump_machinery {
             }
             let prev = nvim_qf_win_prev(win);
             if prev.is_null() {
-                win = nvim_qf_get_lastwin(); // wrap around the top
+                win = lastwin; // wrap around the top
             } else {
                 win = prev; // go to previous window
             }
@@ -1560,13 +1561,13 @@ pub mod jump_machinery {
                 // window, unless 'switchbuf' contains 'uselast': in this case we
                 // try to jump to the previously used window first.
                 if nvim_qf_swb_uselast_prevwin_ok() {
-                    win = nvim_qf_get_prevwin();
+                    win = prevwin;
                 } else if !altwin.is_null() {
                     win = altwin;
                 } else {
-                    let cur_prev = nvim_qf_win_prev(nvim_qf_get_curwin());
+                    let cur_prev = nvim_qf_win_prev(curwin);
                     if cur_prev.is_null() {
-                        win = nvim_qf_win_next(nvim_qf_get_curwin());
+                        win = nvim_qf_win_next(curwin);
                     } else {
                         win = cur_prev;
                     }
@@ -1584,7 +1585,7 @@ pub mod jump_machinery {
             }
         }
 
-        nvim_qf_win_goto(win);
+        win_goto(win);
     }
 
     /// Find a usable window and jump to it. Returns OK or FAIL.
@@ -1636,18 +1637,18 @@ pub mod jump_machinery {
         // If there is only one window and it is the quickfix window, create a
         // new one above the quickfix window.
         // Inline nvim_qf_open_new_file_win
-        if (nvim_qf_is_one_window() && nvim_qf_curbuf_is_quickfix()) || !usable_win || newwin {
+        if (nvim_qf_is_one_window() && rs_bt_quickfix(curbuf)) || !usable_win || newwin {
             let mut win_flags = WSP_ABOVE;
             if !ll_ref.is_null() {
                 win_flags |= WSP_NEWLOC;
             }
-            if nvim_qf_win_split(0, win_flags) == FAIL {
+            if win_split(0, win_flags) == FAIL {
                 return FAIL;
             }
             nvim_qf_set_swb_empty_option();
             nvim_qf_curwin_reset_binding();
             if !ll_ref.is_null() {
-                nvim_qf_win_set_loclist(nvim_qf_get_curwin(), ll_ref);
+                nvim_qf_win_set_loclist(curwin, ll_ref);
             }
             *opened_window = true; // close it when fail
         } else if !nvim_qf_curwin_get_llist_ref().is_null() {
@@ -1681,12 +1682,10 @@ pub mod jump_machinery {
         // (nvim_qf_jump_emsg_ll_changed deleted: use emsg directly)
 
         // Phase 3 wrappers
-        fn nvim_qf_get_curbuf() -> BufHandle;
         fn nvim_qf_fdo_quickfix() -> bool;
         #[link_name = "rs_foldOpenCursor"]
         fn nvim_qf_fold_open_cursor();
-        fn nvim_qf_setpcmark();
-        fn nvim_qf_curbuf_is(buf: *const c_void) -> bool;
+        fn setpcmark();
 
         // Entry accessors (already exist)
         fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
@@ -1716,10 +1715,10 @@ pub mod jump_machinery {
         fn nvim_qf_coladvance(col: c_int);
         fn nvim_qf_beginline_white_fix();
         fn nvim_qf_do_search_pattern(pat: *const std::ffi::c_char) -> bool;
-        fn nvim_qf_check_cursor_curwin();
+        fn check_cursor(wp: *mut c_void);
+        fn update_topline(wp: *mut c_void);
         // Phase 14 Phase 2: print_msg inlined accessors
         fn nvim_get_msg_scrolled() -> c_int;
-        fn nvim_qf_update_topline_curwin();
         fn nvim_update_screen();
         fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
         fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
@@ -1762,7 +1761,7 @@ pub mod jump_machinery {
         print_message: bool,
     ) -> c_int {
         // Save old state before buffer operations
-        let old_curbuf = nvim_qf_get_curbuf();
+        let old_curbuf = curbuf;
         let old_lnum = nvim_qf_get_cursor_lnum();
         let mut retval = OK;
 
@@ -1776,8 +1775,8 @@ pub mod jump_machinery {
         }
 
         // When not switched to another buffer, still need to set pc mark
-        if nvim_qf_curbuf_is(old_curbuf) {
-            nvim_qf_setpcmark();
+        if curbuf == old_curbuf {
+            setpcmark();
         }
 
         // Phase 14: inlined nvim_qf_jump_goto_line
@@ -1827,7 +1826,7 @@ pub mod jump_machinery {
                     nvim_qf_curwin_set_col(qf_col - 1);
                 }
                 nvim_qf_curwin_set_curswant();
-                nvim_qf_check_cursor_curwin();
+                check_cursor(curwin);
             } else {
                 nvim_qf_beginline_white_fix();
             }
@@ -1855,7 +1854,7 @@ pub mod jump_machinery {
 
         // Update the screen before showing the message, unless messages scrolled.
         if nvim_get_msg_scrolled() == 0 {
-            nvim_qf_update_topline_curwin();
+            update_topline(curwin);
             if unsafe { must_redraw } != 0 {
                 nvim_update_screen();
             }
@@ -1910,7 +1909,7 @@ pub mod jump_machinery {
         // Output the message.  Overwrite to avoid scrolling when the 'O'
         // flag is present in 'shortmess'; But when not jumping, print the whole message.
         let saved_scroll = nvim_get_msg_scroll();
-        if nvim_qf_curbuf_is(old_curbuf) && nvim_qf_get_cursor_lnum() == old_lnum {
+        if curbuf == old_curbuf && nvim_qf_get_cursor_lnum() == old_lnum {
             nvim_set_msg_scroll(1);
         } else if (nvim_get_msg_scrolled() == 0
             || (nvim_get_p_ch() == 0 && nvim_get_msg_scrolled() == 1))
@@ -1987,7 +1986,7 @@ pub mod jump_machinery {
 
         // If currently in the quickfix window, find another window to show the
         // file in.
-        if nvim_qf_curbuf_is_quickfix() && !*opened_window {
+        if rs_bt_quickfix(curbuf) && !*opened_window {
             // If there is no file specified, we don't know where to go.
             // But do advance, otherwise ":cn" gets stuck.
             if nvim_qfline_get_fnum(qf_ptr) == 0 {
@@ -2026,7 +2025,7 @@ pub mod jump_machinery {
         fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: QfLineHandle);
         fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
         fn nvim_qf_curwin_handle() -> c_int;
-        fn nvim_qf_win_close_curwin();
+        // win_close already declared above; win_close(curwin, true, false)
         fn nvim_qf_get_p_swb() -> *mut c_void;
         fn nvim_qf_get_swb_flags() -> u32;
         fn nvim_qf_restore_swb(old_swb: *mut c_void, old_swb_flags: u32);
@@ -2176,7 +2175,7 @@ pub mod jump_machinery {
 
         if retval != OK {
             if opened_window {
-                nvim_qf_win_close_curwin();
+                win_close(curwin, true, false);
             }
             if !qf_ptr.is_null() && nvim_qfline_get_fnum(qf_ptr) != 0 {
                 // Couldn't open file, so put index back where it was.

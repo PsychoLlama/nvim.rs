@@ -344,9 +344,8 @@ extern "C" {
     fn rs_qf_new_list(qi: *mut c_void, title: *const c_char);
     fn rs_qf_restore_list(qi: *mut c_void, save_qfid: u32) -> c_int;
     fn rs_qflist_valid(wp: WinHandle, qf_id: u32) -> bool;
-    // curbuf accessor
-    fn nvim_qf_get_curbuf() -> BufHandle;
-    fn nvim_qf_curbuf_is(buf: *const c_void) -> bool;
+    // curbuf global
+    static mut curbuf: *mut c_void;
     // xstrdup / xfree (for target_dir)
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 }
@@ -895,14 +894,14 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
             semsg(c"E480: No match: %s".as_ptr(), spat);
         } else if (flags & VGR_NOJUMP) == 0 {
             // Inline vgr_jump_to_match:
-            let buf_before = nvim_qf_get_curbuf();
+            let buf_before = curbuf;
             rs_qf_jump_newwin(qi, 0, 0, c_int::from(forceit), false);
-            if !nvim_qf_curbuf_is(buf_before) {
+            if curbuf != buf_before {
                 // Jumped to another buffer; redraw already handled.
                 redraw_for_dummy = false;
             }
             // Jump to the directory used after loading the buffer.
-            if nvim_qf_curbuf_is(first_match_buf) && !target_dir.is_null() {
+            if curbuf == first_match_buf && !target_dir.is_null() {
                 nvim_ex_cd_arg(target_dir, true);
             }
         }

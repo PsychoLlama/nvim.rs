@@ -345,7 +345,7 @@ mod init_ext {
         // Phase 16: rs_qf_init accessors
         fn nvim_get_ql_info() -> QfInfoHandleMut;
         fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> QfInfoHandleMut;
-        fn nvim_curbuf_ptr() -> BufHandle;
+        static mut curbuf: *mut c_void;
 
         // nvim_qf_init_finalize_list deleted: inlined below (Phase 14)
         fn nvim_qf_get_index(qfl: QfListHandle) -> c_int;
@@ -623,7 +623,7 @@ mod init_ext {
         };
         assert!(!qi.is_null());
         let curlist = nvim_qf_get_curlist_idx(qi);
-        let buf = nvim_curbuf_ptr();
+        let buf = curbuf;
         rs_qf_init_ext(
             qi,
             curlist,

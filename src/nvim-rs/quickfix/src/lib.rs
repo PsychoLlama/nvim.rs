@@ -2051,36 +2051,33 @@ extern "C" {
     fn nvim_qf_win_set_redraw_bounds(win: *mut c_void, top: LinenrT, bot: LinenrT);
     fn nvim_qf_win_goto_impl(win: *mut c_void, lnum: LinenrT);
     fn nvim_qf_set_title_var_for_list(qfl: *const c_void);
-    fn nvim_qf_save_curwin() -> *mut c_void;
-    fn nvim_qf_restore_curwin(saved: *mut c_void);
-    fn nvim_qf_set_curwin(win: *mut c_void);
+    static mut curwin: *mut c_void;
     fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> LinenrT;
 
     // Phase 10 Pass 10 Phase 3: qf_open_new_cwindow / did_set_quickfixtextfunc accessors
     fn nvim_qf_set_cwindow_options();
     fn nvim_qf_do_ecmd_existing_buf(fnum: c_int, oldwin: *mut c_void) -> c_int;
     fn nvim_qf_do_ecmd_new_buf(oldwin: *mut c_void) -> c_int;
-    fn nvim_qf_get_curtab() -> *const c_void;
+    static curtab: *const c_void;
+    static mut prevwin: *mut c_void;
+    static mut curbuf: *mut c_void;
+    static Columns: c_int;
     fn nvim_qf_curwin_width() -> c_int;
     fn nvim_qf_curwin_set_llist_ref_incr(qi: *mut c_void);
     fn nvim_qf_curwin_set_wfh();
     fn nvim_qf_curwin_reset_binding();
-    fn nvim_qf_set_prevwin(win: *mut c_void);
-    fn nvim_qf_curtab_eq(saved_tab: *const c_void) -> bool;
     fn nvim_qf_option_set_callback_func_for_qftf() -> c_int;
     // nvim_qf_buf_get_fnum already declared in navigate.rs (with *const c_void)
-    fn nvim_qf_curbuf_is_quickfix() -> bool;
+    fn rs_bt_quickfix(buf: *mut c_void) -> bool;
     fn nvim_qf_curbuf_fnum() -> c_int;
-    fn nvim_qf_get_columns() -> c_int;
-    fn nvim_qf_win_split(size: c_int, flags: c_int) -> c_int;
+    fn win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_qf_get_cmdmod_split() -> c_int;
     fn nvim_qf_get_e_invarg() -> *const c_char;
-    fn nvim_qf_curwin_is(win: *const c_void) -> bool;
 
     // Phase 10 Pass 10 Phase 4: qf_update_buffer accessors
     fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: LinenrT) -> c_int;
-    fn nvim_qf_get_region_bytecount(
+    fn get_region_bytecount(
         buf: *mut c_void,
         l1: LinenrT,
         l2: LinenrT,
@@ -2098,7 +2095,7 @@ extern "C" {
         nc: c_int,
         nbc: i64,
     );
-    fn nvim_qf_changed_lines(
+    fn changed_lines(
         buf: *mut c_void,
         lnum: LinenrT,
         col: c_int,
@@ -2107,13 +2104,13 @@ extern "C" {
         do_win: bool,
     );
     fn nvim_qf_buf_set_changed_false(buf: *mut c_void);
-    fn nvim_qf_redraw_buf_later(buf: *mut c_void);
+    fn redraw_buf_later(buf: *mut c_void, redraw_type: c_int);
     fn nvim_qf_win_botline(win: *const c_void) -> LinenrT;
     fn nvim_qf_aucmd_prepbuf_alloc(buf: *mut c_void) -> *mut c_void;
     fn nvim_qf_aucmd_restbuf_free(aco: *mut c_void);
     fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
     fn nvim_buf_win_get_llist(win: *const c_void) -> *mut c_void;
-    fn nvim_qf_get_curwin() -> *mut c_void;
+    // curwin declared above in this block
     // nvim_qf_win_get_handle already declared above at line 102
 
     // Phase 10 Pass 10 Phase 5: qf_get_fnum accessors
@@ -3443,7 +3440,7 @@ pub unsafe extern "C" fn rs_qf_update_win_titlevar(qi: QfInfoHandleMut) {
     if qfl.is_null() {
         return;
     }
-    let saved_curwin = nvim_qf_save_curwin();
+    let saved_curwin = curwin;
 
     // FOR_ALL_TAB_WINDOWS(tp, win)
     let mut tp = nvim_get_first_tabpage();
@@ -3451,14 +3448,14 @@ pub unsafe extern "C" fn rs_qf_update_win_titlevar(qi: QfInfoHandleMut) {
         let mut win = nvim_tabpage_get_firstwin(tp);
         while !win.is_null() {
             if is_qf_win_for_stack(win, qi.cast_const()) {
-                nvim_qf_set_curwin(win);
+                curwin = win;
                 nvim_qf_set_title_var_for_list(qfl);
             }
             win = nvim_qf_win_next(win);
         }
         tp = nvim_tabpage_get_next(tp);
     }
-    nvim_qf_restore_curwin(saved_curwin);
+    curwin = saved_curwin;
 }
 
 /// Update the cursor position in the quickfix window.
@@ -5578,6 +5575,9 @@ const WSP_NEWLOC: c_int = 0x100; // don't copy location list
 const P3_OK: c_int = 1;
 const P3_FAIL: c_int = 0;
 
+// Redraw type constants
+const UPD_NOT_VALID: c_int = 40;
+
 extern "C" {
     #[link_name = "rs_win_setheight"]
     fn p3_rs_win_setheight(height: c_int);
@@ -5604,8 +5604,8 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
     }
 
     // Save curwin as oldwin (= win, to be stored as prevwin later)
-    let oldwin = nvim_qf_save_curwin();
-    let prevtab = nvim_qf_get_curtab();
+    let oldwin = curwin;
+    let prevtab = curtab;
 
     // Find existing quickfix buffer (if any)
     let qf_buf = rs_qf_find_buf_for_stack(qi);
@@ -5622,7 +5622,7 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
         0
     } | WSP_NEWLOC;
 
-    if nvim_qf_win_split(height, flags) == P3_FAIL {
+    if win_split(height, flags) == P3_FAIL {
         return P3_FAIL; // not enough room for window
     }
     nvim_qf_curwin_reset_binding();
@@ -5634,7 +5634,7 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
     }
 
     // If curwin changed after win_split (it usually does), don't store info.
-    let effective_oldwin = if nvim_qf_curwin_is(oldwin) {
+    let effective_oldwin = if curwin == oldwin {
         oldwin
     } else {
         std::ptr::null_mut()
@@ -5659,18 +5659,18 @@ pub unsafe extern "C" fn rs_qf_open_new_cwindow(qi: QfInfoHandleMut, height: c_i
     // Set the options for the quickfix buffer/window (if not already done).
     // Do this even if the quickfix buffer was already present, as an autocmd
     // might have previously deleted (:bdelete) the quickfix buffer.
-    if !nvim_qf_curbuf_is_quickfix() {
+    if !rs_bt_quickfix(curbuf) {
         nvim_qf_set_cwindow_options();
     }
 
     // Only set the height when still in the same tab page and there is no
     // window to the side.
-    if nvim_qf_curtab_eq(prevtab) && nvim_qf_curwin_width() == nvim_qf_get_columns() {
+    if curtab == prevtab && nvim_qf_curwin_width() == Columns {
         p3_rs_win_setheight(height);
     }
     nvim_qf_curwin_set_wfh();
     if nvim_win_valid(oldwin) {
-        nvim_qf_set_prevwin(oldwin);
+        prevwin = oldwin;
     }
     P3_OK
 }
@@ -5729,14 +5729,14 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
 
     let old_line_count = nvim_buf_get_ml_line_count_void(buf.cast_const());
     let old_endcol = nvim_ml_get_buf_len(buf, old_line_count);
-    let old_bytecount = nvim_qf_get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
+    let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
 
     // For location list stacks, find the associated window and get its winid.
     let qf_winid: c_int = if nvim_qf_is_ll_stack(qi.cast_const()) {
-        let curwin = nvim_qf_get_curwin();
-        let curwin_llist = nvim_buf_win_get_llist(curwin.cast_const());
+        let curwin_local = curwin;
+        let curwin_llist = nvim_buf_win_get_llist(curwin_local.cast_const());
         let win = if std::ptr::eq(curwin_llist, qi) {
-            curwin
+            curwin_local
         } else {
             let mut w = nvim_qf_find_win_with_loclist(qi.cast_const());
             if w.is_null() {
@@ -5772,7 +5772,7 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
     let delta = new_line_count - old_line_count;
 
     if old_last.is_null() {
-        let new_byte_count = nvim_qf_get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
+        let new_byte_count = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
         nvim_qf_extmark_splice(
             buf,
             0,
@@ -5789,11 +5789,10 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
         } else {
             1
         };
-        nvim_qf_changed_lines(buf, 1, 0, lnume, delta, true);
+        changed_lines(buf, 1, 0, lnume, delta, true);
     } else if delta > 0 {
         let start_lnum = old_line_count + 1;
-        let new_byte_count =
-            nvim_qf_get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
+        let new_byte_count = get_region_bytecount(buf, start_lnum, new_line_count, 0, new_endcol);
         nvim_qf_extmark_splice(
             buf,
             old_line_count - 1,
@@ -5805,7 +5804,7 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
             new_endcol,
             new_byte_count,
         );
-        nvim_qf_changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
+        changed_lines(buf, start_lnum, 0, start_lnum, delta, true);
     }
     nvim_qf_buf_set_changed_false(buf);
 
@@ -5817,7 +5816,7 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
     // Only redraw when added lines are visible.
     let qf_win = rs_qf_find_win_for_stack(qi.cast_const()).cast_mut();
     if !qf_win.is_null() && old_line_count < nvim_qf_win_botline(qf_win.cast_const()) {
-        nvim_qf_redraw_buf_later(buf);
+        redraw_buf_later(buf, UPD_NOT_VALID);
     }
 
     // Always called after rs_incr_quickfix_busy()

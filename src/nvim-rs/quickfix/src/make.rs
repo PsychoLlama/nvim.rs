@@ -154,7 +154,7 @@ extern "C" {
     fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
     fn nvim_buf_get_sfname_void(buf: *const c_void) -> *const c_char;
     fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
-    fn nvim_curbuf_ptr() -> *mut c_void;
+    static mut curbuf: *mut c_void;
     fn skipdigits(s: *const c_char) -> *mut c_char;
     // (nvim_emsg_invarg, nvim_emsg_buf_not_loaded, nvim_emsg_invrange deleted: use emsg directly)
     // emsg declared earlier in this file
@@ -609,7 +609,7 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
     let buf: BufHandle;
 
     if arg.is_null() || *arg == 0 {
-        buf = nvim_curbuf_ptr();
+        buf = curbuf;
     } else {
         let tail = skipdigits(arg);
         // if *skipwhite(skipdigits(arg)) == NUL
