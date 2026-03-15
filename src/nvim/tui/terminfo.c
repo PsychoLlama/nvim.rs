@@ -31,67 +31,6 @@ typedef struct {
 extern bool terminfo_is_term_family(const char *term, const char *family);
 extern bool terminfo_is_bsd_console(const char *term);
 
-/// Loads a built-in terminfo db when we (unibilium) failed to load a terminfo
-/// record from the environment (termcap systems, unrecognized $TERM, …).
-/// We do not attempt to detect xterm pretenders here.
-///
-/// @param term $TERM value
-/// @param[out,static] termname decided builtin 'term' name
-/// @return [allocated] terminfo structure
-const TerminfoEntry *terminfo_from_builtin(const char *term, char **termname)
-{
-  if (terminfo_is_term_family(term, "xterm")) {
-    *termname = "xterm";
-    return &xterm_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "screen")) {
-    *termname = "screen";
-    return &screen_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "tmux")) {
-    *termname = "tmux";
-    return &tmux_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "rxvt")) {
-    *termname = "rxvt";
-    return &rxvt_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "putty")) {
-    *termname = "putty";
-    return &putty_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "linux")) {
-    *termname = "linux";
-    return &linux_16colour_terminfo;
-  } else if (terminfo_is_term_family(term, "interix")) {
-    *termname = "interix";
-    return &interix_8colour_terminfo;
-  } else if (terminfo_is_term_family(term, "iterm")
-             || terminfo_is_term_family(term, "iterm2")
-             || terminfo_is_term_family(term, "iTerm.app")
-             || terminfo_is_term_family(term, "iTerm2.app")) {
-    *termname = "iterm";
-    return &iterm_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "st")) {
-    *termname = "st";
-    return &st_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "gnome")
-             || terminfo_is_term_family(term, "vte")) {
-    *termname = "vte";
-    return &vte_256colour_terminfo;
-  } else if (terminfo_is_term_family(term, "cygwin")) {
-    *termname = "cygwin";
-    return &cygwin_terminfo;
-  } else if (terminfo_is_term_family(term, "win32con")) {
-    *termname = "win32con";
-    return &win32con_terminfo;
-  } else if (terminfo_is_term_family(term, "conemu")) {
-    *termname = "conemu";
-    return &conemu_terminfo;
-  } else if (terminfo_is_term_family(term, "vtpcon")) {
-    *termname = "vtpcon";
-    return &vtpcon_terminfo;
-  } else {
-    *termname = "ansi";
-    return &ansi_terminfo;
-  }
-}
-
 bool terminfo_from_database(TerminfoEntry *ti, char *termname, Arena *arena)
 {
 #ifdef HAVE_UNIBILIUM

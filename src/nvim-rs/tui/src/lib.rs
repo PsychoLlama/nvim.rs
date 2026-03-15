@@ -16,6 +16,7 @@
 
 pub mod input;
 pub mod output;
+pub mod terminfo;
 
 use std::ffi::{c_char, c_int, c_long, CStr};
 use std::io::Write;

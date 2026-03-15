@@ -11,5 +11,6 @@ typedef struct {
 // Functions implemented in Rust (nvim-tui crate)
 extern bool terminfo_is_term_family(const char *term, const char *family);
 extern bool terminfo_is_bsd_console(const char *term);
+extern const TerminfoEntry *rs_terminfo_from_builtin(const char *term, char **termname);
 
 #include "tui/terminfo.h.generated.h"

@@ -887,7 +887,7 @@ static void terminfo_start(TUIData *tui)
   }
 
   if (!tui->terminfo_found_in_db) {
-    const TerminfoEntry *new = terminfo_from_builtin(term, &tui->term);
+    const TerminfoEntry *new = rs_terminfo_from_builtin(term, &tui->term);
     // we will patch it below, so make a copy
     memcpy(&tui->ti, new, sizeof tui->ti);
   }
