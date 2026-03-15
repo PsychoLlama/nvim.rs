@@ -664,3 +664,428 @@ pub unsafe extern "C" fn rs_init_highlight(both: bool, reset: bool) {
 
     syn_init_cmdline_highlight(false, false);
 }
+
+// =============================================================================
+// Phase 4: highlight_color and highlight_list Functions
+//
+// highlight_color, highlight_list_one, highlight_list_arg, syn_list_header
+// =============================================================================
+
+extern "C" {
+    /// Check whether any RGB-capable UI is attached.
+    fn ui_rgb_attached() -> bool;
+
+    /// Check whether a UI extension is enabled.
+    /// ext=4 is kUIMessages.
+    fn ui_has(ext: c_int) -> bool;
+
+    /// Output string with highlight.
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+
+    /// Output a character to the message area.
+    fn msg_putchar(c: c_int);
+
+    /// Output a string, translating special characters.
+    /// Returns msg_col after the string.
+    fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+
+    /// Move the message cursor to column `col`.
+    fn msg_advance(col: c_int);
+
+    /// Get the current message column.
+    fn nvim_get_msg_col() -> c_int;
+
+    /// Set the current message column.
+    fn nvim_set_msg_col(col: c_int);
+
+    /// Get the Columns (screen width) global.
+    fn nvim_get_columns() -> c_int;
+
+    /// Get the got_int global (returns c_int; non-zero means interrupted).
+    fn nvim_get_got_int() -> c_int;
+
+    /// Get the msg_silent global.
+    fn nvim_get_msg_silent() -> c_int;
+
+    /// Get the p_verbose global.
+    fn nvim_get_p_verbose() -> c_int;
+
+    /// Check if a message would be filtered (not displayed).
+    fn message_filtered(msg: *const c_char) -> bool;
+
+    /// Show the "last set" message for a script context.
+    fn last_set_msg(script_ctx: crate::types::SctxT);
+
+    /// Return the display width of a string in columns.
+    fn vim_strsize(s: *const c_char) -> c_int;
+
+    /// Return color name string for a color index.
+    fn coloridx_to_name(idx: c_int, val: c_int, hexbuf: *mut c_char) -> *const c_char;
+}
+
+// kUIMessages = 4 (UIExtension enum in ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
+/// Return color name of the given highlight group.
+///
+/// @param id Highlight group ID (1-based)
+/// @param what What to return: "font", "fg", "bg", "sp", "fg#", "bg#", "sp#"
+/// @param modec 'g' for GUI, 'c' for cterm, 't' for term
+///
+/// # Safety
+/// `what` must be a valid nul-terminated C string.
+#[export_name = "highlight_color"]
+pub unsafe extern "C" fn rs_highlight_color(
+    id: c_int,
+    what: *const c_char,
+    modec: c_int,
+) -> *const c_char {
+    // Static buffer for cterm number and hex color string.
+    // SAFETY: this matches the C `static char name[20]` pattern.
+    // Neovim is single-threaded for message processing.
+    static mut NAME_BUF: [c_char; 20] = [0; 20];
+
+    if id <= 0 || id > highlight_ga.ga_len {
+        return std::ptr::null();
+    }
+
+    // Read the first 4 bytes, lowercase for case-insensitive comparison
+    let w0 = (*what as u8).to_ascii_lowercase();
+    let w1 = (*what.add(1) as u8).to_ascii_lowercase();
+    let w2 = (*what.add(2) as u8).to_ascii_lowercase();
+    let w3 = (*what.add(3) as u8).to_ascii_lowercase();
+    // also keep raw byte 2 for '#' check
+    let raw2 = *what.add(2) as u8;
+
+    // Determine what kind of color is requested
+    let is_fg = w0 == b'f' && w1 == b'g';
+    let is_sp = w0 == b's' && w1 == b'p';
+    let is_font = w0 == b'f' && w1 == b'o' && w2 == b'n' && w3 == b't';
+    let is_bg = w0 == b'b' && w1 == b'g';
+
+    if !is_fg && !is_sp && !is_font && !is_bg {
+        return std::ptr::null();
+    }
+
+    let sg = &*hl_table_ptr(id - 1);
+
+    // Raw pointer to NAME_BUF — never create a reference to it
+    let name_buf_ptr = std::ptr::addr_of_mut!(NAME_BUF) as *mut c_char;
+
+    if modec == b'g' as c_int {
+        // GUI colors
+        if raw2 == b'#' && ui_rgb_attached() {
+            let n = if is_fg {
+                sg.sg_rgb_fg
+            } else if is_sp {
+                sg.sg_rgb_sp
+            } else {
+                sg.sg_rgb_bg
+            };
+            if !(0..=0x00ff_ffff).contains(&n) {
+                return std::ptr::null();
+            }
+            // Format as "#rrggbb" directly into the static buffer
+            let s = std::format!("#{:06x}\0", n as u32);
+            let bytes = s.as_bytes();
+            for (i, &b) in bytes.iter().enumerate().take(20) {
+                *name_buf_ptr.add(i) = b as c_char;
+            }
+            return name_buf_ptr as *const c_char;
+        }
+        // Return color name
+        return if is_fg {
+            coloridx_to_name(sg.sg_rgb_fg_idx, sg.sg_rgb_fg, name_buf_ptr)
+        } else if is_sp {
+            coloridx_to_name(sg.sg_rgb_sp_idx, sg.sg_rgb_sp, name_buf_ptr)
+        } else {
+            coloridx_to_name(sg.sg_rgb_bg_idx, sg.sg_rgb_bg, name_buf_ptr)
+        };
+    }
+
+    // Non-GUI: font and sp not supported
+    if is_font || is_sp {
+        return std::ptr::null();
+    }
+
+    if modec == b'c' as c_int {
+        let n = if is_fg {
+            sg.sg_cterm_fg - 1
+        } else {
+            sg.sg_cterm_bg - 1
+        };
+        if n < 0 {
+            return std::ptr::null();
+        }
+        // Format number directly into the static buffer
+        let s = std::format!("{}\0", n);
+        let bytes = s.as_bytes();
+        for (i, &b) in bytes.iter().enumerate().take(20) {
+            *name_buf_ptr.add(i) = b as c_char;
+        }
+        return name_buf_ptr as *const c_char;
+    }
+
+    // term doesn't have color
+    std::ptr::null()
+}
+
+/// Output the syntax list header.
+///
+/// @param did_header  did header already
+/// @param outlen      length of string that comes after
+/// @param id          highlight group id (1-based)
+/// @param force_newline  always start a new line
+/// @return true when started a new line
+#[export_name = "syn_list_header"]
+pub unsafe extern "C" fn rs_syn_list_header(
+    did_header: bool,
+    outlen: c_int,
+    id: c_int,
+    force_newline: bool,
+) -> bool {
+    let mut endcol: c_int = 19;
+    let mut newline = true;
+    let mut name_col: c_int = 0;
+    let mut adjust = true;
+
+    if !did_header {
+        msg_putchar(b'\n' as c_int);
+        if nvim_get_got_int() != 0 {
+            return true;
+        }
+        let col = msg_outtrans((*hl_table_ptr(id - 1)).sg_name, 0, false);
+        nvim_set_msg_col(col);
+        name_col = col;
+        endcol = 15;
+    } else if (ui_has(K_UI_MESSAGES) || nvim_get_msg_silent() != 0) && !force_newline {
+        msg_putchar(b' ' as c_int);
+        adjust = false;
+    } else if nvim_get_msg_col() + outlen + 1 >= nvim_get_columns() || force_newline {
+        msg_putchar(b'\n' as c_int);
+        if nvim_get_got_int() != 0 {
+            return true;
+        }
+    } else if nvim_get_msg_col() >= endcol {
+        // wrap around is like starting a new line
+        newline = false;
+    }
+
+    if adjust {
+        if nvim_get_msg_col() >= endcol {
+            // output at least one space
+            endcol = nvim_get_msg_col() + 1;
+        }
+        msg_advance(endcol);
+    }
+
+    // Show "xxx" with the attributes.
+    if !did_header {
+        if endcol == nvim_get_columns() - 1 && endcol <= name_col {
+            msg_putchar(b' ' as c_int);
+        }
+        msg_puts_hl(c"xxx".as_ptr(), id, false);
+        msg_putchar(b' ' as c_int);
+    }
+
+    newline
+}
+
+// HL_UNDERLINE_MASK as c_int for use in highlight_list_arg
+const HL_UNDERLINE_MASK_INT: c_int = 0x38;
+
+// LIST_XXX constants matching C
+const LIST_ATTR: c_int = 1;
+const LIST_STRING: c_int = 2;
+const LIST_INT: c_int = 3;
+
+/// Outputs a highlight when doing ":hi MyHighlight".
+///
+/// @param id       highlight group id (1-based)
+/// @param didh     whether the header was already output
+/// @param type     one of LIST_ATTR, LIST_STRING, LIST_INT
+/// @param iarg     integer argument (for LIST_INT and LIST_ATTR)
+/// @param sarg     string argument (for LIST_STRING)
+/// @param name     attribute name (e.g. "cterm", "guifg")
+/// @return new value of didh
+#[export_name = "highlight_list_arg"]
+pub unsafe extern "C" fn rs_highlight_list_arg(
+    id: c_int,
+    didh: bool,
+    r#type: c_int,
+    mut iarg: c_int,
+    sarg: *const c_char,
+    name: *const c_char,
+) -> bool {
+    if nvim_get_got_int() != 0 {
+        return false;
+    }
+
+    // If nothing to show, return unchanged didh
+    let is_empty = if r#type == LIST_STRING {
+        sarg.is_null()
+    } else {
+        iarg == 0
+    };
+    if is_empty {
+        return didh;
+    }
+
+    // Build the value string.
+    // For LIST_INT: the value is iarg-1 (stored as +1)
+    // For LIST_STRING: the value is sarg directly
+    // For LIST_ATTR: build a comma-separated list of matching attribute names
+    let ts: *const c_char;
+    // We use a fixed-size stack buffer for INT and ATTR cases.
+    // Safety: 100 bytes is enough for any attribute list or integer.
+    let mut buf = [0u8; 100];
+
+    if r#type == LIST_INT {
+        let s = std::format!("{}", iarg - 1);
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(99);
+        buf[..len].copy_from_slice(&bytes[..len]);
+        buf[len] = 0;
+        ts = buf.as_ptr() as *const c_char;
+    } else if r#type == LIST_STRING {
+        ts = sarg;
+    } else {
+        // LIST_ATTR: build comma-separated list
+        buf[0] = 0;
+        let mut pos = 0usize;
+        for &(attr_name, flag) in crate::parse::HL_NAME_TABLE {
+            let flag_int = flag as c_int;
+            if flag_int == 0 {
+                continue; // skip NONE entry
+            }
+            let matches = if flag_int & HL_UNDERLINE_MASK_INT != 0 {
+                (iarg & HL_UNDERLINE_MASK_INT) == flag_int
+            } else {
+                (iarg & flag_int) != 0
+            };
+            if matches {
+                if pos > 0 && pos < 99 {
+                    buf[pos] = b',';
+                    pos += 1;
+                }
+                let name_bytes = attr_name.as_bytes();
+                let copy_len = name_bytes.len().min(99 - pos);
+                buf[pos..pos + copy_len].copy_from_slice(&name_bytes[..copy_len]);
+                pos += copy_len;
+                if flag_int & HL_UNDERLINE_MASK_INT == 0 {
+                    iarg &= !flag_int; // don't want "inverse" twice
+                }
+            }
+        }
+        buf[pos.min(99)] = 0;
+        ts = buf.as_ptr() as *const c_char;
+    }
+
+    rs_syn_list_header(didh, vim_strsize(ts) + vim_strsize(name) + 1, id, false);
+    if nvim_get_got_int() == 0 {
+        // if *name != NUL
+        if *name != 0 {
+            msg_puts_hl(name, HLF_D, false);
+            msg_puts_hl(c"=".as_ptr(), HLF_D, false);
+        }
+        msg_outtrans(ts, 0, false);
+    }
+    true
+}
+
+// HLF_D = 5 (same as syntax/src/listing.rs)
+const HLF_D: c_int = 5;
+
+/// Outputs a highlight when doing ":hi MyHighlight".
+///
+/// @param id highlight group ID (1-based)
+#[export_name = "highlight_list_one"]
+pub unsafe extern "C" fn rs_highlight_list_one(id: c_int) {
+    let sgp = &*hl_table_ptr(id - 1);
+    let mut didh = false;
+
+    if message_filtered(sgp.sg_name) {
+        return;
+    }
+
+    // don't list specialized groups if a parent is used instead
+    if sgp.sg_parent != 0 && sgp.sg_cleared {
+        return;
+    }
+
+    didh = rs_highlight_list_arg(
+        id,
+        didh,
+        LIST_ATTR,
+        sgp.sg_cterm,
+        std::ptr::null(),
+        c"cterm".as_ptr(),
+    );
+    didh = rs_highlight_list_arg(
+        id,
+        didh,
+        LIST_INT,
+        sgp.sg_cterm_fg,
+        std::ptr::null(),
+        c"ctermfg".as_ptr(),
+    );
+    didh = rs_highlight_list_arg(
+        id,
+        didh,
+        LIST_INT,
+        sgp.sg_cterm_bg,
+        std::ptr::null(),
+        c"ctermbg".as_ptr(),
+    );
+
+    didh = rs_highlight_list_arg(
+        id,
+        didh,
+        LIST_ATTR,
+        sgp.sg_gui,
+        std::ptr::null(),
+        c"gui".as_ptr(),
+    );
+
+    let mut hexbuf = [0u8; 8];
+    let hbuf = hexbuf.as_mut_ptr() as *mut c_char;
+    let fg_name = coloridx_to_name(sgp.sg_rgb_fg_idx, sgp.sg_rgb_fg, hbuf);
+    didh = rs_highlight_list_arg(id, didh, LIST_STRING, 0, fg_name, c"guifg".as_ptr());
+
+    let mut hexbuf2 = [0u8; 8];
+    let hbuf2 = hexbuf2.as_mut_ptr() as *mut c_char;
+    let bg_name = coloridx_to_name(sgp.sg_rgb_bg_idx, sgp.sg_rgb_bg, hbuf2);
+    didh = rs_highlight_list_arg(id, didh, LIST_STRING, 0, bg_name, c"guibg".as_ptr());
+
+    let mut hexbuf3 = [0u8; 8];
+    let hbuf3 = hexbuf3.as_mut_ptr() as *mut c_char;
+    let sp_name = coloridx_to_name(sgp.sg_rgb_sp_idx, sgp.sg_rgb_sp, hbuf3);
+    didh = rs_highlight_list_arg(id, didh, LIST_STRING, 0, sp_name, c"guisp".as_ptr());
+
+    didh = rs_highlight_list_arg(
+        id,
+        didh,
+        LIST_INT,
+        sgp.sg_blend + 1,
+        std::ptr::null(),
+        c"blend".as_ptr(),
+    );
+
+    if sgp.sg_link != 0 && nvim_get_got_int() == 0 {
+        rs_syn_list_header(didh, 0, id, true);
+        // didh = true (but we don't need to use it further)
+        msg_puts_hl(c"links to".as_ptr(), HLF_D, false);
+        msg_putchar(b' ' as c_int);
+        msg_outtrans(
+            (*hl_table_ptr((*hl_table_ptr(id - 1)).sg_link - 1)).sg_name,
+            0,
+            false,
+        );
+    } else if !didh {
+        rs_highlight_list_arg(id, false, LIST_STRING, 0, c"cleared".as_ptr(), c"".as_ptr());
+    }
+
+    if nvim_get_p_verbose() as i64 > 0 {
+        last_set_msg(sgp.sg_script_ctx);
+    }
+}
