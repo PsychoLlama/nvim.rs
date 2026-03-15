@@ -733,42 +733,27 @@ extern "C" {
     fn nvim_qf_get_curlist_idx(qi: *const c_void) -> c_int;
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
 
-    // dict key check
-    fn nvim_tv_dict_find_has_key(
-        dict: *const c_void,
-        key: *const std::ffi::c_char,
-        key_len: c_int,
-    ) -> bool;
-    // dict number value (returns false if key absent or wrong type)
-    fn nvim_tv_dict_find_nr(
-        dict: *const c_void,
-        key: *const std::ffi::c_char,
-        key_len: c_int,
-        out: *mut i64,
-    ) -> bool;
-    // dict string value is exactly "$"
-    fn nvim_tv_dict_find_str_is_dollar(
-        dict: *const c_void,
-        key: *const std::ffi::c_char,
-        key_len: c_int,
-    ) -> bool;
-    // dict add functions
-    fn nvim_tv_dict_add_nr_ret(
+    // dict find / add (direct C functions; also declared in the second extern block below)
+    fn tv_dict_find(dict: *const c_void, key: *const std::ffi::c_char, key_len: i64)
+        -> *mut c_void;
+    fn tv_dict_add_nr(
         dict: *mut c_void,
         key: *const std::ffi::c_char,
-        key_len: c_int,
+        key_len: usize,
         nr: i64,
     ) -> c_int;
-    fn nvim_tv_dict_add_str_copy(
+    fn tv_dict_add_str(
         dict: *mut c_void,
         key: *const std::ffi::c_char,
-        key_len: c_int,
+        key_len: usize,
         val: *const std::ffi::c_char,
     ) -> c_int;
-    fn nvim_tv_dict_add_list_empty(
+    fn tv_list_alloc(len: i64) -> *mut c_void;
+    fn tv_dict_add_list(
         dict: *mut c_void,
         key: *const std::ffi::c_char,
-        key_len: c_int,
+        key_len: usize,
+        list: *mut c_void,
     ) -> c_int;
     // qf window id
     #[link_name = "rs_qf_winid"]
@@ -779,7 +764,17 @@ extern "C" {
     fn rs_qf_id2nr(qi: *const c_void, qf_id: u32) -> c_int;
     // stack empty check (already in lib.rs)
     fn rs_qf_stack_empty(qi: *const c_void) -> bool;
+    // still in C (accesses struct internals via C struct field access)
+    fn nvim_tv_dict_find_str_is_dollar(
+        dict: *const c_void,
+        key: *const std::ffi::c_char,
+        key_len: c_int,
+    ) -> bool;
+    // nvim_di_get_type / nvim_di_get_nr used for dict_find_nr (declared in second extern block)
 }
+
+// VAR_NUMBER = 1 (from typval_defs.h)
+const VAR_NUMBER: c_int = 1;
 
 /// Check if the given dict has a key, using a byte-slice key (no null terminator needed).
 ///
@@ -788,7 +783,7 @@ extern "C" {
 #[inline]
 #[allow(clippy::cast_possible_wrap)]
 unsafe fn dict_has_key(dict: *const c_void, key: &[u8]) -> bool {
-    nvim_tv_dict_find_has_key(dict, key.as_ptr().cast(), key.len() as c_int)
+    !tv_dict_find(dict, key.as_ptr().cast(), key.len() as i64).is_null()
 }
 
 /// Attempt to read a VAR_NUMBER value from a dict key.
@@ -800,12 +795,15 @@ unsafe fn dict_has_key(dict: *const c_void, key: &[u8]) -> bool {
 #[inline]
 #[allow(clippy::cast_possible_wrap)]
 unsafe fn dict_find_nr(dict: *const c_void, key: &[u8]) -> Option<i64> {
-    let mut val: i64 = 0;
-    if nvim_tv_dict_find_nr(dict, key.as_ptr().cast(), key.len() as c_int, &raw mut val) {
-        Some(val)
-    } else {
-        None
+    // nvim_di_get_type and nvim_di_get_nr are struct accessors still in C
+    let di = tv_dict_find(dict, key.as_ptr().cast(), key.len() as i64);
+    if di.is_null() {
+        return None;
     }
+    if nvim_di_get_type(di) != VAR_NUMBER {
+        return None;
+    }
+    Some(nvim_di_get_nr(di))
 }
 
 /// Returns true if the dict has the given key with a VAR_STRING value equal to "$".
@@ -823,9 +821,8 @@ unsafe fn dict_find_str_is_dollar(dict: *const c_void, key: &[u8]) -> bool {
 /// # Safety
 /// `dict` must be a valid non-null `dict_T *`.
 #[inline]
-#[allow(clippy::cast_possible_wrap)]
 unsafe fn dict_add_nr(dict: *mut c_void, key: &[u8], nr: i64) -> c_int {
-    nvim_tv_dict_add_nr_ret(dict, key.as_ptr().cast(), key.len() as c_int, nr)
+    tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), nr)
 }
 
 /// Add a string copy to a dict; returns C_OK or C_FAIL.
@@ -833,9 +830,8 @@ unsafe fn dict_add_nr(dict: *mut c_void, key: &[u8], nr: i64) -> c_int {
 /// # Safety
 /// `dict` must be a valid non-null `dict_T *`.
 #[inline]
-#[allow(clippy::cast_possible_wrap)]
 unsafe fn dict_add_str(dict: *mut c_void, key: &[u8], val: *const std::ffi::c_char) -> c_int {
-    nvim_tv_dict_add_str_copy(dict, key.as_ptr().cast(), key.len() as c_int, val)
+    tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), val)
 }
 
 /// Add an empty list to a dict; returns C_OK or C_FAIL.
@@ -843,9 +839,10 @@ unsafe fn dict_add_str(dict: *mut c_void, key: &[u8], val: *const std::ffi::c_ch
 /// # Safety
 /// `dict` must be a valid non-null `dict_T *`.
 #[inline]
-#[allow(clippy::cast_possible_wrap)]
 unsafe fn dict_add_list_empty(dict: *mut c_void, key: &[u8]) -> c_int {
-    nvim_tv_dict_add_list_empty(dict, key.as_ptr().cast(), key.len() as c_int)
+    // kListLenMayKnow = -3
+    let list = tv_list_alloc(-3);
+    tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list)
 }
 
 /// Convert the keys in `what` dict to `QF_GETLIST_*` flag bitmask.
@@ -1194,32 +1191,27 @@ extern "C" {
     fn nvim_qfl_get_ctx(qfl: *const c_void) -> *mut c_void;
     fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> *mut c_void;
 
-    // typval list/dict ops (qf-specific void* versions)
-    fn nvim_qf_tv_list_alloc_ret(rettv: *mut c_void);
-    fn nvim_qf_tv_dict_alloc_ret(rettv: *mut c_void);
-    fn nvim_qf_tv_dict_alloc() -> *mut c_void;
-    fn nvim_qf_tv_list_append_dict(list: *mut c_void, dict: *mut c_void);
-    fn nvim_tv_dict_add_tv(
+    // typval list/dict ops (tv_list_alloc, tv_dict_find, tv_dict_add_list declared above)
+    fn tv_list_alloc_ret(rettv: *mut c_void, len: i64) -> *mut c_void;
+    fn tv_dict_alloc_ret(rettv: *mut c_void);
+    fn tv_dict_alloc() -> *mut c_void;
+    fn tv_list_append_dict(list: *mut c_void, dict: *mut c_void);
+    fn tv_dict_add_tv(
         dict: *mut c_void,
         key: *const std::ffi::c_char,
-        key_len: c_int,
+        key_len: usize,
         tv: *mut c_void,
     ) -> c_int;
-    fn nvim_tv_dict_item_alloc_len(key: *const std::ffi::c_char, key_len: c_int) -> *mut c_void;
-    fn nvim_qf_tv_dict_add_item(dict: *mut c_void, item: *mut c_void) -> c_int;
-    fn nvim_qf_tv_dict_item_free(item: *mut c_void);
-    fn nvim_tv_copy(from: *const c_void, to: *mut c_void);
+    fn tv_dict_item_alloc_len(key: *const std::ffi::c_char, key_len: usize) -> *mut c_void;
+    fn tv_dict_add(dict: *mut c_void, item: *mut c_void) -> c_int;
+    fn tv_dict_item_free(item: *mut c_void);
+    fn tv_copy(from: *const c_void, to: *mut c_void);
     fn nvim_qf_qftf_cb_put(qfl: *mut c_void, tv_out: *mut c_void) -> bool;
-    fn nvim_tv_clear(tv: *mut c_void);
+    fn tv_clear(tv: *mut c_void);
     fn nvim_qf_tv_get_type(tv: *const c_void) -> c_int;
     fn nvim_di_get_type(di: *const c_void) -> c_int;
     fn nvim_di_get_nr(di: *const c_void) -> i64;
     fn nvim_qf_di_get_tv(di: *mut c_void) -> *mut c_void;
-    fn nvim_tv_dict_find(
-        dict: *const c_void,
-        key: *const std::ffi::c_char,
-        key_len: c_int,
-    ) -> *mut c_void;
     fn nvim_find_win_by_nr_or_id(argvars: *const c_void) -> *mut c_void;
     fn nvim_tv_advance(tv: *const c_void) -> *mut c_void;
     fn nvim_tv_is_unknown(tv: *const c_void) -> bool;
@@ -1242,27 +1234,23 @@ extern "C" {
     fn nvim_qfline_get_next(qfp: *const c_void) -> *const c_void;
     fn nvim_qfline_get_valid_bufnr(qfp: *const c_void) -> c_int;
     fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
-    fn nvim_qf_got_int() -> bool;
+    static got_int: bool;
     fn nvim_qf_alloc_internal_stack() -> *mut c_void;
     fn nvim_qf_free_lists_for_qi(qi: *mut c_void);
-    fn nvim_qf_tv_dict_add_list(
-        dict: *mut c_void,
-        key: *const std::ffi::c_char,
-        key_len: c_int,
-        list: *mut c_void,
-    ) -> c_int;
-    fn nvim_qf_tv_list_alloc() -> *mut c_void;
     fn nvim_get_p_efm() -> *const std::ffi::c_char;
     fn nvim_tv_dict_get_efm_str(what: *const c_void) -> *const std::ffi::c_char;
     fn nvim_tv_dict_efm_wrong_type(what: *const c_void) -> bool;
     fn nvim_tv_dict_has_lines_key(dict: *const c_void) -> bool;
     fn nvim_tv_dict_get_lines_di_tv(dict: *const c_void) -> *mut c_void;
-    fn nvim_tv_alloc() -> *mut c_void;
-    fn nvim_tv_alloc_copy(src_tv: *const c_void) -> *mut c_void;
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    #[allow(dead_code)]
+    fn xfree(ptr: *mut c_void);
+    #[allow(dead_code)]
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
 
     // Phase 8 set-side accessors
-    fn nvim_qf_tv_get_string_chk(tv: *const c_void) -> *const std::ffi::c_char;
-    fn nvim_qf_tv_free(tv: *mut c_void);
+    fn tv_get_string_chk(tv: *const c_void) -> *const std::ffi::c_char;
+    fn tv_free(tv: *mut c_void);
     fn nvim_qfl_free_ctx(qfl: *mut c_void);
     fn nvim_qfl_set_ctx(qfl: *mut c_void, ctx_tv: *mut c_void);
     fn nvim_qfl_free_qftf_cb(qfl: *mut c_void);
@@ -1277,10 +1265,10 @@ extern "C" {
 
     // Phase 15 inlined set-properties primitives
     fn nvim_qf_set_title_dup(qfl: *mut c_void, title: *const std::ffi::c_char);
-    fn nvim_qf_tv_dict_get_string(
+    fn tv_dict_get_string(
         dict: *const c_void,
         key: *const std::ffi::c_char,
-        alloc: bool,
+        save: bool,
     ) -> *mut std::ffi::c_char;
     fn rs_qf_update_win_titlevar(qi: *mut c_void);
     fn rs_qf_add_entries(
@@ -1291,7 +1279,7 @@ extern "C" {
         action: c_int,
     ) -> c_int;
     fn rs_qf_free_items(qfl: *mut c_void);
-    fn nvim_qf_tv_get_number_chk(tv: *const c_void, denote: *mut bool) -> i64;
+    fn tv_get_number_chk(tv: *const c_void, denote: *mut bool) -> i64;
     fn rs_qf_get_nth_entry(
         qfl: *const c_void,
         errornr: c_int,
@@ -1346,9 +1334,9 @@ unsafe fn dict_add_str_or_empty(
     val: *const std::ffi::c_char,
 ) -> c_int {
     if val.is_null() {
-        nvim_tv_dict_add_str_copy(dict, key.as_ptr().cast(), key.len() as c_int, c"".as_ptr())
+        tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), c"".as_ptr())
     } else {
-        nvim_tv_dict_add_str_copy(dict, key.as_ptr().cast(), key.len() as c_int, val)
+        tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), val)
     }
 }
 
@@ -1362,8 +1350,8 @@ unsafe fn dict_add_str_or_empty(
 unsafe fn rs_get_qfline_items_impl(qfp: *const c_void, list: *mut c_void) -> c_int {
     let bufnum = nvim_qfline_get_valid_bufnr(qfp);
 
-    let dict = nvim_qf_tv_dict_alloc();
-    nvim_qf_tv_list_append_dict(list, dict);
+    let dict = tv_dict_alloc();
+    tv_list_append_dict(list, dict);
 
     // Build type string ("E", "W", etc. or "")
     let type_ch = nvim_qfline_get_type(qfp) as u8;
@@ -1390,7 +1378,7 @@ unsafe fn rs_get_qfline_items_impl(qfp: *const c_void, list: *mut c_void) -> c_i
     let ok2 = dict_add_str_or_empty(dict, b"module", nvim_qfline_get_module(qfp)) == C_OK
         && dict_add_str_or_empty(dict, b"pattern", nvim_qfline_get_pattern(qfp)) == C_OK
         && dict_add_str_or_empty(dict, b"text", nvim_qfline_get_text(qfp)) == C_OK
-        && nvim_tv_dict_add_str_copy(
+        && tv_dict_add_str(
             dict,
             b"type".as_ptr().cast(),
             4,
@@ -1475,7 +1463,7 @@ pub unsafe extern "C" fn rs_get_errorlist(
 
     let mut qfp = nvim_qf_get_start(qfl);
     let mut i: c_int = 1;
-    while !qfp.is_null() && !nvim_qf_got_int() && i <= nvim_qf_get_count(qfl) {
+    while !qfp.is_null() && !got_int && i <= nvim_qf_get_count(qfl) {
         if eidx > 0 {
             if eidx == i {
                 return rs_get_qfline_items_impl(qfp, list);
@@ -1523,7 +1511,8 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
         }
     };
 
-    let list = nvim_qf_tv_list_alloc();
+    // kListLenMayKnow = -3
+    let list = tv_list_alloc(-3);
     let qi = nvim_qf_alloc_internal_stack();
 
     if rs_qf_init_ext(
@@ -1549,7 +1538,7 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
 
     nvim_qf_free_lists_for_qi(qi);
 
-    nvim_qf_tv_dict_add_list(retdict, c"items".as_ptr(), 5, list);
+    tv_dict_add_list(retdict, c"items".as_ptr(), 5, list);
 
     C_OK
 }
@@ -1574,7 +1563,7 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     retdict: *mut c_void,
 ) -> c_int {
     // Check for "lines" key -- handle separately
-    if !nvim_tv_dict_find(what, c"lines".as_ptr(), -1).is_null() {
+    if !tv_dict_find(what, c"lines".as_ptr(), -1).is_null() {
         return rs_qf_get_list_from_lines(what, retdict);
     }
 
@@ -1602,7 +1591,7 @@ pub unsafe extern "C" fn rs_qf_get_properties(
 
     // Resolve eidx from "idx" key in what dict
     let mut eidx: c_int = 0;
-    let idx_di = nvim_tv_dict_find(what, c"idx".as_ptr(), -1);
+    let idx_di = tv_dict_find(what, c"idx".as_ptr(), -1);
     if !idx_di.is_null() {
         if nvim_di_get_type(idx_di) != 3 {
             // 3 = VAR_NUMBER -- wrong type
@@ -1632,9 +1621,10 @@ pub unsafe extern "C" fn rs_qf_get_properties(
     }
 
     if (flags & QF_GETLIST_ITEMS) != 0 && status == C_OK {
-        let list = nvim_qf_tv_list_alloc();
+        // kListLenMayKnow = -3
+        let list = tv_list_alloc(-3);
         rs_get_errorlist(qi, std::ptr::null(), qf_idx, eidx, list);
-        status = nvim_qf_tv_dict_add_list(retdict, c"items".as_ptr(), 5, list);
+        status = tv_dict_add_list(retdict, c"items".as_ptr(), 5, list);
     }
 
     if (flags & QF_GETLIST_CONTEXT) != 0 && status == C_OK {
@@ -1643,13 +1633,13 @@ pub unsafe extern "C" fn rs_qf_get_properties(
             status = dict_add_str(retdict, b"context", c"".as_ptr());
         } else {
             // Allocate dictitem with key "context", copy ctx tv into it
-            let di = nvim_tv_dict_item_alloc_len(c"context".as_ptr(), 7);
+            let di = tv_dict_item_alloc_len(c"context".as_ptr(), 7);
             if !di.is_null() {
                 let di_tv_ptr = nvim_qf_di_get_tv(di);
-                nvim_tv_copy(ctx, di_tv_ptr);
-                status = nvim_qf_tv_dict_add_item(retdict, di);
+                tv_copy(ctx, di_tv_ptr);
+                status = tv_dict_add(retdict, di);
                 if status == C_FAIL {
-                    nvim_qf_tv_dict_item_free(di);
+                    tv_dict_item_free(di);
                 }
             } else {
                 status = C_FAIL;
@@ -1694,14 +1684,15 @@ pub unsafe extern "C" fn rs_qf_get_properties(
 
     if (flags & QF_GETLIST_QFTF) != 0 && status == C_OK {
         // Allocate inline typval for callback_put output
-        let tv_buf = nvim_tv_alloc();
+        // sizeof(typval_T) = 16
+        let tv_buf = xcalloc(1, 16).cast::<c_void>();
         if nvim_qf_qftf_cb_put(qfl, tv_buf) {
-            status = nvim_tv_dict_add_tv(retdict, c"quickfixtextfunc".as_ptr(), 16, tv_buf);
-            nvim_tv_clear(tv_buf);
+            status = tv_dict_add_tv(retdict, c"quickfixtextfunc".as_ptr(), 16, tv_buf);
+            tv_clear(tv_buf);
         } else {
             status = dict_add_str(retdict, b"quickfixtextfunc", c"".as_ptr());
         }
-        nvim_qf_tv_free(tv_buf);
+        tv_free(tv_buf);
     }
 
     status
@@ -1722,13 +1713,13 @@ pub unsafe extern "C" fn rs_get_qf_loc_list(
 ) {
     if nvim_tv_is_unknown(what_arg) {
         // No dict arg -- return a list of all entries
-        nvim_qf_tv_list_alloc_ret(rettv);
+        tv_list_alloc_ret(rettv, -3);
         if is_qf || !wp.is_null() {
             let list_ptr = nvim_qf_tv_get_list(rettv);
             rs_get_errorlist(std::ptr::null(), wp, INVALID_QFIDX, 0, list_ptr);
         }
     } else {
-        nvim_qf_tv_dict_alloc_ret(rettv);
+        tv_dict_alloc_ret(rettv);
         if is_qf || !wp.is_null() {
             if nvim_tv_is_dict(what_arg) {
                 let d = nvim_qf_tv_get_dict(what_arg);
@@ -1813,10 +1804,10 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     let mut retval = C_FAIL;
 
     // Process "title" key: inline nvim_qfl_set_title_from_what
-    let di = nvim_tv_dict_find(what, c"title".as_ptr(), -1);
+    let di = tv_dict_find(what, c"title".as_ptr(), -1);
     if !di.is_null() && nvim_di_get_type(di) == VAR_STRING {
         // alloc=false: borrowed pointer into the dict; nvim_qf_set_title_dup makes its own copy
-        let title_str = nvim_qf_tv_dict_get_string(what, c"title".as_ptr(), false);
+        let title_str = tv_dict_get_string(what, c"title".as_ptr(), false);
         nvim_qf_set_title_dup(qfl, title_str);
         if nvim_qf_get_curlist_idx(qi) == qf_idx {
             rs_qf_update_win_titlevar(qi);
@@ -1825,7 +1816,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     }
 
     // Process "items" key: inline nvim_qfl_set_items
-    let di = nvim_tv_dict_find(what, c"items".as_ptr(), -1);
+    let di = tv_dict_find(what, c"items".as_ptr(), -1);
     if !di.is_null() && nvim_di_get_type(di) == VAR_LIST {
         // Pass borrowed title pointer; rs_qf_add_entries reads it but does not free it
         let title_borrowed = nvim_qf_get_title(qfl);
@@ -1840,7 +1831,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     }
 
     // Process "lines" key: inline nvim_qfl_set_items_from_lines
-    let di = nvim_tv_dict_find(what, c"lines".as_ptr(), -1);
+    let di = tv_dict_find(what, c"lines".as_ptr(), -1);
     if !di.is_null() {
         if nvim_tv_dict_efm_wrong_type(what) {
             retval = C_FAIL;
@@ -1888,19 +1879,21 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     }
 
     // Process "context" key
-    let di = nvim_tv_dict_find(what, c"context".as_ptr(), -1);
+    let di = tv_dict_find(what, c"context".as_ptr(), -1);
     if !di.is_null() {
         let ctx_tv_ptr = nvim_qf_di_get_tv(di);
         if !ctx_tv_ptr.is_null() {
             nvim_qfl_free_ctx(qfl);
-            let new_ctx = nvim_tv_alloc_copy(ctx_tv_ptr);
+            // sizeof(typval_T) = 16
+            let new_ctx = xcalloc(1, 16).cast::<c_void>();
+            tv_copy(ctx_tv_ptr, new_ctx);
             nvim_qfl_set_ctx(qfl, new_ctx);
             retval = C_OK;
         }
     }
 
     // Process "idx" key: inline nvim_qfl_set_curidx
-    let di = nvim_tv_dict_find(what, c"idx".as_ptr(), -1);
+    let di = tv_dict_find(what, c"idx".as_ptr(), -1);
     if !di.is_null() {
         let di_type = nvim_di_get_type(di);
         let di_str = nvim_di_get_string(di);
@@ -1916,7 +1909,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
         } else {
             let di_tv = nvim_qf_di_get_tv(di);
             let mut denote = false;
-            let n = nvim_qf_tv_get_number_chk(di_tv, &raw mut denote) as c_int;
+            let n = tv_get_number_chk(di_tv, &raw mut denote) as c_int;
             idx_ok = !denote;
             newidx = n;
         }
@@ -1937,7 +1930,7 @@ pub unsafe extern "C" fn rs_qf_set_properties(
     }
 
     // Process "quickfixtextfunc" key
-    let di = nvim_tv_dict_find(what, c"quickfixtextfunc".as_ptr(), -1);
+    let di = tv_dict_find(what, c"quickfixtextfunc".as_ptr(), -1);
     if !di.is_null() {
         let tv_ptr = nvim_qf_di_get_tv(di);
         if !tv_ptr.is_null() {
@@ -1994,7 +1987,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
             emsg(c"E928: String required".as_ptr());
             return;
         }
-        let act = nvim_qf_tv_get_string_chk(action_arg);
+        let act = tv_get_string_chk(action_arg);
         if act.is_null() {
             return;
         }
@@ -2016,7 +2009,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
         if !nvim_tv_is_unknown(what_arg) {
             if nvim_qf_tv_get_type(what_arg) == 5 {
                 // VAR_STRING
-                title = nvim_qf_tv_get_string_chk(what_arg);
+                title = tv_get_string_chk(what_arg);
                 if title.is_null() {
                     return;
                 }

@@ -68,7 +68,7 @@ extern "C" {
     /// Free the `qf_lists` array inside a `qf_info_T`.
     fn nvim_qf_free_lists_array(qi: *mut c_void);
     /// Free the `qf_info_T` struct itself (only for heap-allocated ones).
-    fn nvim_qf_free_info(qi: *mut c_void);
+    fn xfree(ptr: *mut c_void);
 
     // --- Buffer management (for `wipe_qf_buffer`) ---
     fn nvim_buflist_findnr(bufnr: c_int) -> *mut c_void;
@@ -87,7 +87,8 @@ extern "C" {
 
     // --- Phase 3: stack allocation ---
     fn nvim_get_ql_info_actual() -> *mut c_void;
-    fn nvim_qf_alloc_info() -> *mut c_void;
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn nvim_qf_sizeof_qfinfo() -> usize;
     fn nvim_qf_set_qi_type(qi: *mut c_void, qfltype: c_int);
     fn nvim_qf_set_maxcount(qi: *mut c_void, n: c_int);
     fn nvim_qf_set_new_lists(qi: *mut c_void, n: c_int);
@@ -286,7 +287,7 @@ unsafe fn free_lists_and_info(qi: *mut c_void) {
         }
     }
     nvim_qf_free_lists_array(qi);
-    nvim_qf_free_info(qi);
+    xfree(qi);
 }
 
 /// Free a location list stack, respecting the busy counter.
@@ -393,7 +394,7 @@ pub unsafe extern "C" fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_v
     let qi: *mut c_void = if qfltype == QFLT_QUICKFIX {
         nvim_get_ql_info_actual()
     } else {
-        let p = nvim_qf_alloc_info();
+        let p = xcalloc(1, nvim_qf_sizeof_qfinfo());
         nvim_qf_incr_refcount(p);
         p
     };

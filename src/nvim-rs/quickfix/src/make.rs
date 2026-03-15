@@ -155,7 +155,7 @@ extern "C" {
     fn nvim_buf_get_sfname_void(buf: *const c_void) -> *const c_char;
     fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
     fn nvim_curbuf_ptr() -> *mut c_void;
-    fn nvim_skipdigits_str(s: *const c_char) -> *const c_char;
+    fn skipdigits(s: *const c_char) -> *mut c_char;
     // (nvim_emsg_invarg, nvim_emsg_buf_not_loaded, nvim_emsg_invrange deleted: use emsg directly)
     // emsg declared earlier in this file
     fn nvim_eap_set_line1(eap: EapHandle, lnum: LinenrT);
@@ -179,7 +179,7 @@ extern "C" {
 
     // IObuff helpers for cbuffer
     fn nvim_qf_snprintf_iobuff(title: *const c_char, sfname: *const c_char);
-    fn nvim_qf_get_iobuff() -> *mut c_char;
+    static IObuff: *mut c_char;
 
     // GET_LOC_LIST
     fn nvim_win_get_loclist_ptr(wp: *const c_void) -> *mut c_void;
@@ -611,7 +611,7 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
     if arg.is_null() || *arg == 0 {
         buf = nvim_curbuf_ptr();
     } else {
-        let tail = nvim_skipdigits_str(arg);
+        let tail = skipdigits(arg);
         // if *skipwhite(skipdigits(arg)) == NUL
         let tail_ws = skip_nul_whitespace(tail);
         if !tail_ws.is_null() && *tail_ws == 0 {
@@ -697,7 +697,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
         title_base
     } else {
         nvim_qf_snprintf_iobuff(title_base, sfname);
-        nvim_qf_get_iobuff()
+        IObuff
     };
 
     nvim_incr_quickfix_busy();

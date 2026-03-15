@@ -27,6 +27,8 @@ const LINE_MAXLEN: usize = 4096;
 // External C accessor functions
 // ===========================================================================
 
+const IOSIZE: usize = 1025;
+
 extern "C" {
     // File I/O
     fn os_fopen(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
@@ -34,20 +36,18 @@ extern "C" {
     fn fdopen(fd: c_int, mode: *const c_char) -> *mut libc::FILE;
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
-    // (nvim_qf_open_file_for_read deleted: inlined below)
     fn nvim_qf_fclose(fd: *mut libc::FILE);
     fn nvim_qf_fgets(buf: *mut c_char, size: c_int, fd: *mut libc::FILE) -> bool;
-    fn nvim_qf_errno() -> c_int;
 
-    // IObuff / IOSIZE
-    fn nvim_qf_get_iobuff_ptr() -> *mut c_char;
-    fn nvim_qf_get_iosize() -> c_int;
+    // IObuff global
+    static IObuff: *mut c_char;
 
     // Memory helpers
-    fn nvim_qf_xmalloc_buf(sz: usize) -> *mut c_char;
-    fn nvim_qf_xrealloc_buf(ptr: *mut c_char, sz: usize) -> *mut c_char;
-    fn nvim_qf_xfree_buf(ptr: *mut c_void);
-    fn nvim_qf_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
+    fn xmalloc(sz: usize) -> *mut c_void;
+    fn xrealloc(ptr: *mut c_void, sz: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Encoding conversion (opaque vimconv_T)
     fn nvim_qf_alloc_vimconv() -> *mut c_void;
@@ -62,9 +62,9 @@ extern "C" {
     ) -> *mut c_char;
 
     // String helpers
-    fn nvim_qf_has_non_ascii(buf: *const c_char) -> bool;
+    fn has_non_ascii(s: *const c_char) -> bool;
     fn nvim_qf_remove_bom(buf: *mut c_char);
-    fn nvim_qf_strchr_nl(str: *mut c_char) -> *mut c_char;
+    fn vim_strchr(s: *mut c_char, c: c_int) -> *mut c_char;
 
     // Buffer line access
     fn nvim_qf_ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
@@ -78,7 +78,6 @@ extern "C" {
     fn nvim_qf_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
     fn nvim_qf_list_item_is_string(li: *const c_void) -> bool;
     fn nvim_qf_list_item_string(li: *mut c_void) -> *mut c_char;
-
 }
 
 // ===========================================================================
@@ -227,10 +226,10 @@ impl QfParserState {
             newsz
         };
         if self.growbuf.is_null() {
-            self.growbuf = nvim_qf_xmalloc_buf(self.linelen + 1);
+            self.growbuf = xmalloc(self.linelen + 1).cast();
             self.growbufsiz = self.linelen;
         } else if self.linelen > self.growbufsiz {
-            self.growbuf = nvim_qf_xrealloc_buf(self.growbuf, self.linelen + 1);
+            self.growbuf = xrealloc(self.growbuf.cast(), self.linelen + 1).cast();
             self.growbufsiz = self.linelen;
         }
         self.growbuf
@@ -246,11 +245,11 @@ impl QfParserState {
             return QF_END_OF_INPUT;
         }
 
-        let iosize = nvim_qf_get_iosize() as usize;
-        let iobuff = nvim_qf_get_iobuff_ptr();
+        let iosize = IOSIZE;
+        let iobuff = IObuff;
 
         // Find newline or end of string
-        let nl_ptr = nvim_qf_strchr_nl(p_str);
+        let nl_ptr = vim_strchr(p_str, b'\n' as c_int);
         let len = if nl_ptr.is_null() {
             libc::strlen(p_str.cast_const())
         } else {
@@ -277,8 +276,8 @@ impl QfParserState {
     /// # Safety
     /// List pointers must be valid.
     unsafe fn get_next_list_line(&mut self) -> c_int {
-        let iosize = nvim_qf_get_iosize() as usize;
-        let iobuff = nvim_qf_get_iobuff_ptr();
+        let iosize = IOSIZE;
+        let iobuff = IObuff;
 
         // Skip non-string items
         let mut p_li = self.p_li;
@@ -301,7 +300,7 @@ impl QfParserState {
             self.linebuf = iobuff;
             self.linelen = len;
         }
-        nvim_qf_xstrlcpy(self.linebuf, s, self.linelen + 1);
+        xstrlcpy(self.linebuf, s, self.linelen + 1);
 
         self.p_li = nvim_qf_list_item_next(self.p_list.cast_const(), p_li.cast_const());
         QF_OK
@@ -312,8 +311,8 @@ impl QfParserState {
     /// # Safety
     /// `self.buf` must be a valid buffer handle.
     unsafe fn get_next_buf_line(&mut self) -> c_int {
-        let iosize = nvim_qf_get_iosize() as usize;
-        let iobuff = nvim_qf_get_iobuff_ptr();
+        let iosize = IOSIZE;
+        let iobuff = IObuff;
 
         if self.buflnum > self.lnumlast {
             return QF_END_OF_INPUT;
@@ -329,7 +328,7 @@ impl QfParserState {
             self.linebuf = iobuff;
             self.linelen = len;
         }
-        nvim_qf_xstrlcpy(self.linebuf, p_buf, self.linelen + 1);
+        xstrlcpy(self.linebuf, p_buf, self.linelen + 1);
         QF_OK
     }
 
@@ -341,13 +340,13 @@ impl QfParserState {
     /// # Safety
     /// `self.fd` must be a valid FILE*.
     unsafe fn get_next_file_line(&mut self) -> c_int {
-        let iosize = nvim_qf_get_iosize() as usize;
-        let iobuff = nvim_qf_get_iobuff_ptr();
+        let iosize = IOSIZE;
+        let iobuff = IObuff;
 
         // Retry loop for EINTR
         loop {
-            if !nvim_qf_fgets(iobuff, nvim_qf_get_iosize(), self.fd) {
-                if nvim_qf_errno() == libc::EINTR {
+            if !nvim_qf_fgets(iobuff, IOSIZE as c_int, self.fd) {
+                if *libc::__errno_location() == libc::EINTR {
                     continue;
                 }
                 return QF_END_OF_INPUT;
@@ -362,7 +361,7 @@ impl QfParserState {
             // Line exceeds IObuff; use growbuf to accumulate the rest.
             if self.growbuf.is_null() {
                 self.growbufsiz = 2 * (iosize - 1);
-                self.growbuf = nvim_qf_xmalloc_buf(self.growbufsiz);
+                self.growbuf = xmalloc(self.growbufsiz).cast();
             }
             // Copy read part (excluding NUL terminator)
             libc::memcpy(self.growbuf.cast(), iobuff.cast(), iosize - 1);
@@ -379,7 +378,7 @@ impl QfParserState {
                 // EINTR retry loop for inner fgets
                 loop {
                     if !nvim_qf_fgets(self.growbuf.add(growbuflen), remaining as c_int, self.fd) {
-                        if nvim_qf_errno() == libc::EINTR {
+                        if *libc::__errno_location() == libc::EINTR {
                             continue;
                         }
                         // EOF or real error - stop growing
@@ -398,15 +397,15 @@ impl QfParserState {
                 }
                 // Grow the buffer
                 self.growbufsiz = self.growbufsiz.wrapping_mul(2).min(LINE_MAXLEN);
-                self.growbuf = nvim_qf_xrealloc_buf(self.growbuf, self.growbufsiz);
+                self.growbuf = xrealloc(self.growbuf.cast(), self.growbufsiz).cast();
             }
 
             // Discard loop: read and discard until we find EOL or EOF
             if discard {
                 loop {
                     loop {
-                        if !nvim_qf_fgets(iobuff, nvim_qf_get_iosize(), self.fd) {
-                            if nvim_qf_errno() == libc::EINTR {
+                        if !nvim_qf_fgets(iobuff, IOSIZE as c_int, self.fd) {
+                            if *libc::__errno_location() == libc::EINTR {
                                 continue;
                             }
                             break;
@@ -427,16 +426,16 @@ impl QfParserState {
         }
 
         // Encoding conversion for non-ASCII lines
-        if nvim_qf_vc_type(self.vc.cast_const()) != 0 && nvim_qf_has_non_ascii(self.linebuf) {
+        if nvim_qf_vc_type(self.vc.cast_const()) != 0 && has_non_ascii(self.linebuf) {
             let mut converted_len = self.linelen;
             let line =
                 nvim_qf_string_convert_with_len(self.vc, self.linebuf, &raw mut converted_len);
             if !line.is_null() {
                 if converted_len < iosize {
-                    nvim_qf_xstrlcpy(self.linebuf, line, converted_len + 1);
-                    nvim_qf_xfree_buf(line.cast());
+                    xstrlcpy(self.linebuf, line, converted_len + 1);
+                    xfree(line.cast());
                 } else {
-                    nvim_qf_xfree_buf(self.growbuf.cast());
+                    xfree(self.growbuf.cast());
                     self.linebuf = line;
                     self.growbuf = line;
                     self.growbufsiz = converted_len.min(LINE_MAXLEN);
@@ -504,7 +503,7 @@ impl Drop for QfParserState {
                 self.fd = std::ptr::null_mut();
             }
             if !self.growbuf.is_null() {
-                nvim_qf_xfree_buf(self.growbuf.cast());
+                xfree(self.growbuf.cast());
                 self.growbuf = std::ptr::null_mut();
             }
             if !self.vc.is_null() {
@@ -633,12 +632,8 @@ extern "C" {
     fn nvim_qf_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
     fn nvim_qf_vim_regfree(prog: *mut c_void);
 
-    // Error messages (Phase 2: emit efm error messages from C)
-    // semsg and emsg declared in the first extern block
-    // (nvim_qf_semsg_efm_e372-e378 deleted: use semsg/emsg directly)
-
-    // Memory helpers for string fields
-    fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
+    // Error messages: semsg and emsg declared in the first extern block
+    // xstrdup: declared in the first extern block
 }
 
 /// Result type matching C's `EfmToRegpatResult` (must stay in sync with parse.rs)
@@ -729,7 +724,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
         return std::ptr::null_mut();
     }
     // Allocate the regex pattern buffer via xmalloc
-    let fmtstr: *mut c_char = nvim_qf_xmalloc_buf(bufsz);
+    let fmtstr: *mut c_char = xmalloc(bufsz).cast();
 
     let mut fmt_first: *mut EfmPattern = std::ptr::null_mut();
     let mut fmt_last: *mut EfmPattern = std::ptr::null_mut();
@@ -792,7 +787,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
             }
             // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
             free_efm_pattern_list(fmt_first);
-            nvim_qf_xfree_buf(fmtstr.cast());
+            xfree(fmtstr.cast());
             return std::ptr::null_mut();
         }
 
@@ -805,7 +800,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
         if prog.is_null() {
             // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
             free_efm_pattern_list(fmt_first);
-            nvim_qf_xfree_buf(fmtstr.cast());
+            xfree(fmtstr.cast());
             return std::ptr::null_mut();
         }
         fmt_ptr.prog = prog;
@@ -827,7 +822,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
         emsg(c"E378: 'errorformat' contains no pattern".as_ptr());
     }
 
-    nvim_qf_xfree_buf(fmtstr.cast());
+    xfree(fmtstr.cast());
     fmt_first
 }
 
@@ -887,7 +882,7 @@ pub unsafe extern "C" fn rs_qf_init_update_efm_cache(efm: *mut c_char) -> *mut c
     if needs_update {
         // Free old cache
         if !last.is_null() {
-            nvim_qf_xfree_buf(last.cast());
+            xfree(last.cast());
             (*cache).last_efm = std::ptr::null_mut();
         }
         free_efm_pattern_list((*cache).fmt_first);
@@ -896,7 +891,7 @@ pub unsafe extern "C" fn rs_qf_init_update_efm_cache(efm: *mut c_char) -> *mut c
         // Parse new efm
         (*cache).fmt_first = parse_efm_option(efm);
         if !(*cache).fmt_first.is_null() {
-            (*cache).last_efm = nvim_qf_xstrdup(efm);
+            (*cache).last_efm = xstrdup(efm);
         }
     }
 
@@ -952,17 +947,17 @@ impl QfAllFields {
     pub unsafe fn alloc() -> Box<Self> {
         let bufsz = CMDBUFFSIZE + 1;
         Box::new(Self {
-            namebuf: nvim_qf_xmalloc_buf(bufsz),
+            namebuf: xmalloc(bufsz).cast(),
             bnr: 0,
-            module: nvim_qf_xmalloc_buf(bufsz),
-            errmsg: nvim_qf_xmalloc_buf(bufsz),
+            module: xmalloc(bufsz).cast(),
+            errmsg: xmalloc(bufsz).cast(),
             errmsglen: bufsz,
             lnum: 0,
             end_lnum: 0,
             col: 0,
             end_col: 0,
             use_viscol: false,
-            pattern: nvim_qf_xmalloc_buf(bufsz),
+            pattern: xmalloc(bufsz).cast(),
             enr: 0,
             type_char: 0,
             user_data: std::ptr::null_mut(),
@@ -983,10 +978,10 @@ impl QfAllFields {
             return;
         }
         if len >= self.errmsglen {
-            self.errmsg = nvim_qf_xrealloc_buf(self.errmsg, len + 1);
+            self.errmsg = xrealloc(self.errmsg.cast(), len + 1).cast();
             self.errmsglen = len + 1;
         }
-        nvim_qf_xstrlcpy(self.errmsg, msg, len + 1);
+        xstrlcpy(self.errmsg, msg, len + 1);
     }
 }
 
@@ -994,16 +989,16 @@ impl Drop for QfAllFields {
     fn drop(&mut self) {
         unsafe {
             if !self.namebuf.is_null() {
-                nvim_qf_xfree_buf(self.namebuf.cast());
+                xfree(self.namebuf.cast());
             }
             if !self.module.is_null() {
-                nvim_qf_xfree_buf(self.module.cast());
+                xfree(self.module.cast());
             }
             if !self.errmsg.is_null() {
-                nvim_qf_xfree_buf(self.errmsg.cast());
+                xfree(self.errmsg.cast());
             }
             if !self.pattern.is_null() {
-                nvim_qf_xfree_buf(self.pattern.cast());
+                xfree(self.pattern.cast());
             }
         }
     }

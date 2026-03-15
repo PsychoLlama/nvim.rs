@@ -970,21 +970,17 @@ const QF_FAIL: c_int = 0;
 
 extern "C" {
     // Dict field accessors for qf_add_entry_from_dict
-    fn nvim_qf_tv_dict_get_string(
-        dict: *const c_void,
-        key: *const c_char,
-        alloc: bool,
-    ) -> *mut c_char;
-    fn nvim_qf_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
-    fn nvim_tv_dict_get_tv(dict: *const c_void, key: *const c_char, tv_out: *mut c_void);
-    fn nvim_tv_dict_find(dict: *const c_void, key: *const c_char, key_len: c_int) -> *mut c_void;
-    fn nvim_tv_clear(tv: *mut c_void);
-    fn nvim_tv_alloc() -> *mut c_void;
-    fn nvim_qf_tv_free(tv: *mut c_void);
+    fn tv_dict_get_string(dict: *const c_void, key: *const c_char, save: bool) -> *mut c_char;
+    fn nvim_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
+    fn tv_dict_find(dict: *const c_void, key: *const c_char, key_len: i64) -> *mut c_void;
+    fn nvim_qf_di_get_tv(di: *mut c_void) -> *mut c_void;
+    fn tv_copy(from: *const c_void, to: *mut c_void);
+    fn tv_clear(tv: *mut c_void);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn tv_free(tv: *mut c_void);
     fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     // (nvim_qf_semsg_e92_bufnr deleted: use semsg directly)
-    fn nvim_qf_alloc_empty_text() -> *mut c_char;
     fn nvim_xfree_char(ptr: *mut c_char);
     fn rs_qf_add_entry(
         qfl: QfListHandleMut,
@@ -1034,29 +1030,37 @@ pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
         DID_BUFNR_EMSG.store(false, Ordering::Relaxed);
     }
 
-    let filename = nvim_qf_tv_dict_get_string(d, c"filename".as_ptr(), true);
-    let module = nvim_qf_tv_dict_get_string(d, c"module".as_ptr(), true);
-    let mut bufnum = nvim_qf_tv_dict_get_number(d, c"bufnr".as_ptr()) as c_int;
-    let lnum = nvim_qf_tv_dict_get_number(d, c"lnum".as_ptr()) as LinenrT;
-    let end_lnum = nvim_qf_tv_dict_get_number(d, c"end_lnum".as_ptr()) as LinenrT;
-    let col = nvim_qf_tv_dict_get_number(d, c"col".as_ptr()) as c_int;
-    let end_col = nvim_qf_tv_dict_get_number(d, c"end_col".as_ptr()) as c_int;
-    let vcol = nvim_qf_tv_dict_get_number(d, c"vcol".as_ptr()) as c_char;
-    let nr = nvim_qf_tv_dict_get_number(d, c"nr".as_ptr()) as c_int;
+    let filename = tv_dict_get_string(d, c"filename".as_ptr(), true);
+    let module = tv_dict_get_string(d, c"module".as_ptr(), true);
+    let mut bufnum = nvim_tv_dict_get_number(d, c"bufnr".as_ptr()) as c_int;
+    let lnum = nvim_tv_dict_get_number(d, c"lnum".as_ptr()) as LinenrT;
+    let end_lnum = nvim_tv_dict_get_number(d, c"end_lnum".as_ptr()) as LinenrT;
+    let col = nvim_tv_dict_get_number(d, c"col".as_ptr()) as c_int;
+    let end_col = nvim_tv_dict_get_number(d, c"end_col".as_ptr()) as c_int;
+    let vcol = nvim_tv_dict_get_number(d, c"vcol".as_ptr()) as c_char;
+    let nr = nvim_tv_dict_get_number(d, c"nr".as_ptr()) as c_int;
     // type: not alloc'd (alloc=false), caller must NOT free
-    let type_str = nvim_qf_tv_dict_get_string(d, c"type".as_ptr(), false);
-    let pattern = nvim_qf_tv_dict_get_string(d, c"pattern".as_ptr(), true);
+    let type_str = tv_dict_get_string(d, c"type".as_ptr(), false);
+    let pattern = tv_dict_get_string(d, c"pattern".as_ptr(), true);
 
-    let text_raw = nvim_qf_tv_dict_get_string(d, c"text".as_ptr(), true);
+    let text_raw = tv_dict_get_string(d, c"text".as_ptr(), true);
     let text = if text_raw.is_null() {
-        nvim_qf_alloc_empty_text()
+        // allocate empty string: xcalloc(1, 1) gives a '\0'-terminated buffer
+        xcalloc(1, 1).cast()
     } else {
         text_raw
     };
 
     // Allocate a heap typval_T for user_data (zeroed, VAR_UNKNOWN)
-    let user_data_tv: *mut c_void = nvim_tv_alloc();
-    nvim_tv_dict_get_tv(d, c"user_data".as_ptr(), user_data_tv);
+    // sizeof(typval_T) = 16
+    let user_data_tv: *mut c_void = xcalloc(1, 16);
+    let ud_di = tv_dict_find(d, c"user_data".as_ptr(), -1);
+    if !ud_di.is_null() {
+        let ud_tv = nvim_qf_di_get_tv(ud_di);
+        if !ud_tv.is_null() {
+            tv_copy(ud_tv, user_data_tv);
+        }
+    }
 
     let mut valid = (filename.is_null() && bufnum == 0) || (lnum == 0 && pattern.is_null());
     valid = !valid; // valid=false if no file/lnum
@@ -1073,9 +1077,9 @@ pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
     }
 
     // If the 'valid' field is present it overrules the detected value.
-    let valid_di = nvim_tv_dict_find(d, c"valid".as_ptr(), -1);
+    let valid_di = tv_dict_find(d, c"valid".as_ptr(), -1);
     if !valid_di.is_null() {
-        valid = nvim_qf_tv_dict_get_number(d, c"valid".as_ptr()) != 0;
+        valid = nvim_tv_dict_get_number(d, c"valid".as_ptr()) != 0;
     }
 
     let type_char: c_char = if type_str.is_null() || *type_str == 0 {
@@ -1107,8 +1111,8 @@ pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
     nvim_xfree_char(module);
     nvim_xfree_char(pattern);
     nvim_xfree_char(text);
-    nvim_tv_clear(user_data_tv);
-    nvim_qf_tv_free(user_data_tv);
+    tv_clear(user_data_tv);
+    tv_free(user_data_tv);
 
     if valid {
         *valid_entry = true;

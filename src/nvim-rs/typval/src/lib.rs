@@ -1077,7 +1077,7 @@ extern "C" {
     fn nvim_dict_find(d: DictHandle, key: *const c_char, len: isize) -> DictItemHandle;
     fn nvim_tv_get_string_buf(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
     fn nvim_tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
-    fn nvim_tv_copy(from: *const std::ffi::c_void, to: *mut std::ffi::c_void);
+    fn tv_copy(from: *const std::ffi::c_void, to: *mut std::ffi::c_void);
     fn nvim_tv_get_number_simple(tv: TypevalHandle) -> i64;
     fn nvim_tv_get_bool_simple(tv: TypevalHandle) -> c_int;
 
@@ -1523,7 +1523,7 @@ pub unsafe extern "C" fn rs_tv_dict_get_tv(
         return 0; // FAIL
     }
     let di_tv = unsafe { nvim_dictitem_get_tv(di) };
-    unsafe { nvim_tv_copy(di_tv.0, rettv.0.cast_mut()) };
+    unsafe { tv_copy(di_tv.0, rettv.0.cast_mut()) };
     1 // OK
 }
 

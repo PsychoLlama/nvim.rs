@@ -638,11 +638,11 @@ extern "C" {
     // Error message wrappers for parse
     // emsg declared in the second extern block
     // (nvim_vgr_emsg_invalpat, nvim_vgr_emsg_no_filename, nvim_vgr_emsg_nomatch deleted: use emsg directly)
-    fn nvim_skipwhite_const(p: *const c_char) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
 
     // xstrdup / xfree
     fn nvim_xfree(ptr: *mut c_void);
-    fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Pre-check inlining (Phase 2)
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
@@ -702,7 +702,7 @@ impl VgrArgs {
             title_buf.as_mut_ptr().cast::<c_char>(),
             title_buf.len(),
         );
-        let qf_title = nvim_qf_xstrdup(title_buf.as_ptr().cast::<c_char>());
+        let qf_title = xstrdup(title_buf.as_ptr().cast::<c_char>());
 
         // tomatch: line2 if addr_count > 0, else MAXLNUM
         let tomatch: c_int = if nvim_eap_get_addr_count(eap) > 0 {
@@ -731,7 +731,7 @@ impl VgrArgs {
         }
 
         // Check that file name is present after pattern
-        let p = nvim_skipwhite_const(p);
+        let p = skipwhite(p);
         if *p == 0 {
             emsg(c"E683: File name missing or invalid pattern".as_ptr());
             nvim_vgr_regmatch_free(regmatch);

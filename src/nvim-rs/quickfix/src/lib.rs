@@ -2127,8 +2127,8 @@ extern "C" {
     fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
     fn nvim_qf_clear_fnum_cache();
     fn nvim_qf_os_path_exists(path: *const c_char) -> bool;
-    fn nvim_qf_xfree_buf(ptr: *mut c_void);
-    fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Phase 8: Ex Commands and API Functions accessors
     // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
@@ -2141,8 +2141,10 @@ extern "C" {
     fn nvim_qf_incr_changedtick(qfl: QfListHandleMut);
 
     // Phase 3 Extension: qfline_T allocation and field-setting
-    fn nvim_qfline_alloc() -> QfLineHandleMut;
-    // nvim_qfline_free replaced by nvim_qfline_free_fields + nvim_qf_xfree_buf (Phase 14)
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn nvim_qf_sizeof_qfline() -> usize;
+    fn nvim_qf_sizeof_qflist() -> usize;
+    // nvim_qfline_free replaced by nvim_qfline_free_fields + xfree (Phase 14)
     fn nvim_qfline_free_fields(qfp: QfLineHandleMut);
     fn nvim_qfline_set_fnum(qfp: QfLineHandleMut, fnum: c_int);
     fn nvim_qfline_set_lnum(qfp: QfLineHandleMut, lnum: LinenrT);
@@ -2168,7 +2170,7 @@ extern "C" {
     fn nvim_qf_buf_or_has_entry(buf: *mut c_void, is_location_list: bool);
     // nvim_qf_get_fnum_for_entry removed: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5)
     // nvim_qf_fix_fname removed: replaced by rs_qf_fix_fname below (Phase 16)
-    fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 
     // Phase 16: fix_fname migration accessors
     #[link_name = "fix_fname"]
@@ -2183,7 +2185,7 @@ extern "C" {
     fn nvim_qf_set_has_user_data(qfl: QfListHandleMut, has_user_data: bool);
     fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
     fn nvim_qf_alloc_next_id() -> u32;
-    fn nvim_qf_clear_list_struct(qfl: QfListHandleMut);
+    fn memset(ptr: *mut c_void, c: c_int, n: usize) -> *mut c_void;
     fn nvim_qf_free_title(qfl: QfListHandleMut);
     fn nvim_qf_free_ctx(qfl: QfListHandleMut);
     fn nvim_qf_free_callback(qfl: QfListHandleMut);
@@ -2237,13 +2239,13 @@ pub unsafe extern "C" fn rs_qf_fix_fname(fname: *const c_char, bufnum: c_int) ->
         if !ffname.is_null() && path_fnamecmp(fullname, ffname) != 0 {
             let p = nvim_path_try_shorten_fname(fullname);
             if !p.is_null() {
-                let result = nvim_qf_xstrdup(p);
-                nvim_qf_xfree_buf(fullname.cast());
+                let result = xstrdup(p);
+                xfree(fullname.cast());
                 return result;
             }
         }
     }
-    nvim_qf_xfree_buf(fullname.cast());
+    xfree(fullname.cast());
     std::ptr::null_mut()
 }
 
@@ -2394,7 +2396,7 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
     }
 
     // Clear the list structure
-    nvim_qf_clear_list_struct(qfl);
+    memset(qfl.cast(), 0, nvim_qf_sizeof_qflist());
 
     // Set the title
     nvim_qf_set_title_dup(qfl, title);
@@ -2488,7 +2490,7 @@ pub unsafe extern "C" fn rs_qf_free_items(qfl: QfListHandleMut) {
 
         // Free the entry: fields first, then the struct itself
         nvim_qfline_free_fields(qfp.cast_mut());
-        nvim_qf_xfree_buf(qfp.cast_mut());
+        xfree(qfp.cast_mut());
 
         if !is_circular {
             qfp = next;
@@ -2674,11 +2676,6 @@ pub unsafe extern "C" fn rs_qfline_set_prev(qfp: QfLineHandleMut, prev: QfLineHa
 // Phase 3 Extension: Entry Creation (qf_add_entry migration)
 // =============================================================================
 
-extern "C" {
-    #[allow(dead_code)]
-    fn xfree(ptr: *mut c_void);
-}
-
 /// `QF_OK` constant for success
 pub const QF_OK: c_int = 1;
 /// `QF_FAIL` constant for failure
@@ -2740,7 +2737,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
     }
 
     // Allocate a new quickfix entry
-    let qfp = nvim_qfline_alloc();
+    let qfp = xcalloc(1, nvim_qf_sizeof_qfline()).cast::<c_void>();
     if qfp.is_null() {
         return QF_FAIL;
     }
@@ -2768,7 +2765,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
             nvim_qfline_set_fname(qfp, fixed_fname);
             // rs_qf_fix_fname returns an allocated string that we need to free
             // after set_fname duplicates it.
-            nvim_qf_xfree_buf(fixed_fname.cast());
+            xfree(fixed_fname.cast());
         }
     }
 
@@ -2794,7 +2791,7 @@ pub unsafe extern "C" fn rs_qf_add_entry(
 
     // Validate and set type character
     #[allow(clippy::cast_sign_loss)]
-    let final_type = if type_char != 1 && nvim_qf_vim_isprintc(c_int::from(type_char as u8)) == 0 {
+    let final_type = if type_char != 1 && !vim_isprintc(c_int::from(type_char as u8)) {
         0
     } else {
         type_char
@@ -3123,11 +3120,11 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
         if nvim_qf_os_path_exists(ptr.cast_const()) {
             ptr
         } else {
-            nvim_qf_xfree_buf(ptr.cast());
+            xfree(ptr.cast());
             let guessed = rs_qf_guess_filepath(qfl, fname);
             if guessed.is_null() {
                 // No guess available; use fname as-is (xstrdup for owned allocation).
-                nvim_qf_xstrdup(fname)
+                xstrdup(fname)
             } else {
                 nvim_qf_concat_fnames(guessed, fname)
             }
@@ -3149,13 +3146,13 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
         nvim_qf_fnum_cache_update(bufname.cast_const(), new_buf);
         // Free the concat_ptr (cache_update made a copy of bufname).
         if !concat_ptr.is_null() {
-            nvim_qf_xfree_buf(concat_ptr.cast());
+            xfree(concat_ptr.cast());
         }
         new_buf
     } else {
         // Cache hit: free the concat_ptr if we allocated one.
         if !concat_ptr.is_null() {
-            nvim_qf_xfree_buf(concat_ptr.cast());
+            xfree(concat_ptr.cast());
         }
         cached_buf
     };

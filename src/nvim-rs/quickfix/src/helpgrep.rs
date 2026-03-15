@@ -39,11 +39,9 @@ extern "C" {
     fn nvim_qf_regmatch_endp(rmp: RegmatchConstHandle, idx: c_int) -> *const c_char;
 
     // Globals
-    fn nvim_qf_get_iobuff() -> *mut c_char;
-    fn nvim_qf_get_iosize() -> c_int;
-    fn nvim_qf_got_int() -> bool;
-    fn nvim_qf_set_got_int(val: bool);
-    fn nvim_qf_line_breakcheck();
+    static IObuff: *mut c_char;
+    static mut got_int: bool;
+    fn line_breakcheck();
 
     // Wildcard expansion
     fn nvim_gen_expand_wildcards_file_silent(
@@ -103,11 +101,11 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
         return;
     }
 
-    let iobuff = nvim_qf_get_iobuff();
-    let iosize = nvim_qf_get_iosize();
+    let iobuff = IObuff;
+    let iosize: c_int = 1025;
 
     let mut lnum: LinenrT = 1;
-    while !nvim_qf_vim_fgets(iobuff, iosize, fd) && !nvim_qf_got_int() {
+    while !nvim_qf_vim_fgets(iobuff, iosize, fd) && !got_int {
         let line = iobuff;
 
         if nvim_qf_vim_regexec(p_regmatch, line.cast_const()) {
@@ -144,12 +142,12 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
                 c_char::from(true), // valid
             ) == QF_FAIL
             {
-                nvim_qf_set_got_int(true);
+                got_int = true;
                 break;
             }
         }
         lnum += 1;
-        nvim_qf_line_breakcheck();
+        line_breakcheck();
     }
     nvim_qf_fclose(fd);
 }
@@ -181,7 +179,7 @@ unsafe fn hgr_search_files_in_dir(
         && fcount > 0
     {
         let mut fi = 0;
-        while fi < fcount && !nvim_qf_got_int() {
+        while fi < fcount && !got_int {
             let fname = nvim_fname_at(fnames, fi);
 
             // Skip files for a different language.
@@ -235,7 +233,7 @@ pub unsafe extern "C" fn rs_hgr_search_in_rtp(
 
     // Go through all directories in 'runtimepath'
     let mut p = nvim_get_p_rtp();
-    while *p != 0 && !nvim_qf_got_int() {
+    while *p != 0 && !got_int {
         nvim_copy_option_part_comma(&raw mut p, name_buff, maxpathl);
         hgr_search_files_in_dir(qfl, name_buff, p_regmatch, lang);
     }

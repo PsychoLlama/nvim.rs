@@ -2167,15 +2167,14 @@ extern "C" {
     fn nvim_qfline_replace_text(qfp: *mut c_void, text: *const c_char);
 
     // misc
-    fn nvim_qf_line_breakcheck();
-    fn nvim_qf_vim_isprintc(c: c_int) -> c_int;
+    fn line_breakcheck();
+    fn vim_isprintc(c: c_int) -> bool;
     fn nvim_qf_get_directory(qfl: *const c_void) -> *const c_char;
     fn nvim_qf_get_currfile(qfl: *const c_void) -> *const c_char;
     fn nvim_qf_set_directory(qfl: *mut c_void, dir: *mut c_char);
     fn nvim_qf_set_currfile(qfl: *mut c_void, file: *mut c_char);
-    fn nvim_qf_strmove(dst: *mut c_char, src: *const c_char);
-    fn nvim_qf_get_iobuff() -> *mut c_char;
-    fn nvim_qf_skipwhite(p: *const c_char) -> *const c_char;
+    static IObuff: *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
     // (nvim_qf_emsg_missing_dir deleted: use emsg directly)
 
@@ -2850,10 +2849,15 @@ unsafe fn qf_parse_file_pfx_rs(
         }
         if !tail.is_null() && unsafe { *tail != 0 } {
             // STRMOVE(IObuff, skipwhite(tail))
-            let skipped = nvim_qf_skipwhite(tail);
-            let iobuff = nvim_qf_get_iobuff();
+            let skipped = skipwhite(tail);
+            let iobuff = IObuff;
             if !iobuff.is_null() && !skipped.is_null() {
-                nvim_qf_strmove(iobuff, skipped);
+                // STRMOVE(dst, src) = memmove(dst, src, strlen(src) + 1)
+                libc::memmove(
+                    iobuff.cast(),
+                    skipped.cast(),
+                    libc::strlen(skipped.cast_const()) + 1,
+                );
             }
             nvim_qf_set_multiscan(qfl, true);
             return C_QF_MULTISCAN;
@@ -2923,7 +2927,7 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
         // Update type if not set and new type is printable
         let new_type = fields_get_type(fields);
         #[allow(clippy::cast_possible_wrap)]
-        if nvim_qf_vim_isprintc(new_type as c_int) != 0 && nvim_qfline_get_type(qfprev_const) == 0 {
+        if vim_isprintc(new_type as c_int) && nvim_qfline_get_type(qfprev_const) == 0 {
             nvim_qfline_set_type(qfprev, new_type);
         }
 
@@ -2971,7 +2975,7 @@ unsafe fn qf_parse_multiline_pfx_rs(idx: c_char, qfl: *mut c_void, fields: *mut 
         nvim_qf_set_multiline(qfl, false);
         nvim_qf_set_multiignore(qfl, false);
     }
-    nvim_qf_line_breakcheck();
+    line_breakcheck();
 
     C_QF_IGNORE_LINE
 }

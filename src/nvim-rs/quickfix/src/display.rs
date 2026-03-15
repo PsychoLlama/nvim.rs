@@ -436,20 +436,15 @@ extern "C" {
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     // Phase 11: rs_call_qftf_func accessors (replacing nvim_call_qftf_func)
-    fn nvim_tv_dict_alloc_lock_fixed() -> *mut c_void;
-    fn nvim_tv_dict_incr_refcount(dict: *mut c_void);
+    fn tv_dict_alloc_lock(scope: c_int) -> *mut c_void;
     fn nvim_callback_is_none(cb: *const c_void) -> bool;
     fn nvim_callback_call_one_dict(cb: *mut c_void, dict: *mut c_void, rettv: *mut c_void) -> bool;
     fn nvim_tv_rettv_list_if_var_list(rettv: *const c_void) -> *mut c_void;
-    fn nvim_qf_tv_list_ref(list: *mut c_void);
-    fn nvim_qf_tv_dict_unref(dict: *mut c_void);
-    fn nvim_tv_clear(tv: *mut c_void);
-    fn nvim_tv_dict_add_nr_ret(
-        dict: *mut c_void,
-        key: *const c_char,
-        key_len: c_int,
-        nr: i64,
-    ) -> c_int;
+    fn nvim_tv_list_ref(list: *mut c_void);
+    fn tv_dict_unref(dict: *mut c_void);
+    fn tv_clear(tv: *mut c_void);
+    fn tv_dict_add_nr(dict: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;
+    fn nvim_tv_dict_incr_refcount(dict: *mut c_void);
     fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
     fn nvim_qf_get_id(qfl: *const c_void) -> u32;
     fn nvim_qfl_get_qftf_cb_ptr(qfl: *mut c_void) -> *mut c_void;
@@ -499,7 +494,7 @@ extern "C" {
         len: c_int,
         newfile: bool,
     ) -> c_int;
-    fn nvim_skipwhite_const(str: *const c_char) -> *const c_char;
+    fn skipwhite(str: *const c_char) -> *mut c_char;
 }
 
 const FAIL: c_int = 0;
@@ -562,7 +557,8 @@ unsafe fn call_qftf_func_inner(
     }
 
     // Build the dict argument: { quickfix, winid, id, start_idx, end_idx }
-    let dict = nvim_tv_dict_alloc_lock_fixed();
+    // VAR_FIXED = 2
+    let dict = tv_dict_alloc_lock(2);
     if dict.is_null() {
         return std::ptr::null_mut();
     }
@@ -570,11 +566,11 @@ unsafe fn call_qftf_func_inner(
     let is_qf = nvim_qf_is_qf_list(qfl);
     let qf_id = nvim_qf_get_id(qfl);
 
-    nvim_tv_dict_add_nr_ret(dict, c"quickfix".as_ptr(), 8, i64::from(is_qf));
-    nvim_tv_dict_add_nr_ret(dict, c"winid".as_ptr(), 5, i64::from(qf_winid));
-    nvim_tv_dict_add_nr_ret(dict, c"id".as_ptr(), 2, i64::from(qf_id));
-    nvim_tv_dict_add_nr_ret(dict, c"start_idx".as_ptr(), 9, i64::from(start_idx));
-    nvim_tv_dict_add_nr_ret(dict, c"end_idx".as_ptr(), 7, i64::from(end_idx));
+    tv_dict_add_nr(dict, c"quickfix".as_ptr(), 8, i64::from(is_qf));
+    tv_dict_add_nr(dict, c"winid".as_ptr(), 5, i64::from(qf_winid));
+    tv_dict_add_nr(dict, c"id".as_ptr(), 2, i64::from(qf_id));
+    tv_dict_add_nr(dict, c"start_idx".as_ptr(), 9, i64::from(start_idx));
+    tv_dict_add_nr(dict, c"end_idx".as_ptr(), 7, i64::from(end_idx));
     // Increment refcount before passing to callback (matches C code pattern)
     nvim_tv_dict_incr_refcount(dict);
 
@@ -589,13 +585,13 @@ unsafe fn call_qftf_func_inner(
     if nvim_callback_call_one_dict(cb, dict, rettv) {
         let list_ptr = nvim_tv_rettv_list_if_var_list(rettv);
         if !list_ptr.is_null() {
-            nvim_qf_tv_list_ref(list_ptr);
+            nvim_tv_list_ref(list_ptr);
             qftf_list = list_ptr;
         }
-        nvim_tv_clear(rettv);
+        tv_clear(rettv);
     }
 
-    nvim_qf_tv_dict_unref(dict);
+    tv_dict_unref(dict);
     qftf_list
 }
 
@@ -741,8 +737,8 @@ unsafe fn qf_buf_add_line(
         // For an unrecognized line keep the indent, the compiler may mark a word with ^^^^.
         let qf_text = nvim_qfline_get_text(qfp);
         if !qf_text.is_null() {
-            let text = if line.len() > 3 {
-                nvim_skipwhite_const(qf_text)
+            let text: *const c_char = if line.len() > 3 {
+                skipwhite(qf_text).cast_const()
             } else {
                 qf_text
             };
@@ -1025,8 +1021,8 @@ extern "C" {
     fn buf_get_fname_p3(buf: *mut c_void) -> *const c_char;
     #[link_name = "nvim_path_tail_buf"]
     fn path_tail_p3(fname: *const c_char) -> *const c_char;
-    #[link_name = "nvim_skipwhite_const"]
-    fn skipwhite_p3(str: *const c_char) -> *const c_char;
+    #[link_name = "skipwhite"]
+    fn skipwhite_p3(str: *const c_char) -> *mut c_char;
 
 }
 

@@ -544,7 +544,9 @@ void nvim_qfline_set_next(void *qfp_void, void *next) { if (qfp_void != NULL) ((
 
 void nvim_qfline_set_prev(void *qfp_void, void *prev) { if (qfp_void != NULL) ((qfline_T *)qfp_void)->qf_prev = (qfline_T *)prev; }
 
-void *nvim_qfline_alloc(void) { return xcalloc(1, sizeof(qfline_T)); }
+size_t nvim_qf_sizeof_qfline(void) { return sizeof(qfline_T); }
+size_t nvim_qf_sizeof_qflist(void) { return sizeof(qf_list_T); }
+size_t nvim_qf_sizeof_qfinfo(void) { return sizeof(qf_info_T); }
 
 /// Free qfline_T string fields and user_data, but NOT the struct itself.
 void nvim_qfline_free_fields(void *qfp_void)
@@ -677,8 +679,6 @@ void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
 
 unsigned nvim_qf_alloc_next_id(void) { return ++last_qf_id; }
 
-void nvim_qf_clear_list_struct(void *qfl_void) { if (qfl_void != NULL) memset(qfl_void, 0, sizeof(qf_list_T)); }
-
 void nvim_qf_free_title(void *qfl_void) { if (qfl_void != NULL) XFREE_CLEAR(((qf_list_T *)qfl_void)->qf_title); }
 
 /// Free the context typval of a quickfix list
@@ -744,23 +744,6 @@ void nvim_qf_set_currfile(void *qfl_void, char *file) { if (qfl_void != NULL) ((
 
 // Phase 3 accessors: typval dict operations for property flag / index resolution functions
 
-/// Check if a dict has the given key (returns true if tv_dict_find != NULL).
-bool nvim_tv_dict_find_has_key(const void *dict, const char *key, int key_len)
-{
-  return tv_dict_find((const dict_T *)dict, key, (ptrdiff_t)key_len) != NULL;
-}
-
-/// Find a VAR_NUMBER item in dict.  Returns true and sets *out if found and typed correctly.
-bool nvim_tv_dict_find_nr(const void *dict, const char *key, int key_len, int64_t *out)
-{
-  const dictitem_T *di = tv_dict_find((const dict_T *)dict, key, (ptrdiff_t)key_len);
-  if (di == NULL || di->di_tv.v_type != VAR_NUMBER) {
-    return false;
-  }
-  *out = (int64_t)di->di_tv.vval.v_number;
-  return true;
-}
-
 /// Return the string value of a dict key if it is VAR_STRING with value "$", else NULL.
 bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_len)
 {
@@ -771,85 +754,19 @@ bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_
 }
 
 /// Add a number to a dict; returns OK or FAIL.
-int nvim_tv_dict_add_nr_ret(void *dict, const char *key, int key_len, int64_t nr)
-{
-  return tv_dict_add_nr((dict_T *)dict, key, (size_t)key_len, (varnumber_T)nr);
-}
-
 /// Add a string copy to a dict; returns OK or FAIL.
-int nvim_tv_dict_add_str_copy(void *dict, const char *key, int key_len, const char *val)
-{
-  return tv_dict_add_str((dict_T *)dict, key, (size_t)key_len, val == NULL ? "" : val);
-}
-
 /// Allocate an empty list and add it to a dict; returns OK or FAIL.
-int nvim_tv_dict_add_list_empty(void *dict, const char *key, int key_len)
-{
-  list_T *l = tv_list_alloc(kListLenMayKnow);
-  return tv_dict_add_list((dict_T *)dict, key, (size_t)key_len, l);
-}
-
 // Phase 8 accessors: get_properties / set_properties cluster
 
 /// Allocate a new list and set it as the return value (qf-specific void* version).
-void nvim_qf_tv_list_alloc_ret(void *rettv_void)
-{
-  typval_T *rettv = (typval_T *)rettv_void;
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-}
-
 /// Allocate a new dict and set it as the return value (qf-specific void* version).
-void nvim_qf_tv_dict_alloc_ret(void *rettv_void)
-{
-  typval_T *rettv = (typval_T *)rettv_void;
-  tv_dict_alloc_ret(rettv);
-}
-
 /// Allocate a plain dict_T (qf-specific void* version).
-void *nvim_qf_tv_dict_alloc(void) { return tv_dict_alloc(); }
-
 /// Append a dict to a list (qf-specific void* version).
-void nvim_qf_tv_list_append_dict(void *list, void *dict)
-{
-  if (list != NULL && dict != NULL) {
-    tv_list_append_dict((list_T *)list, (dict_T *)dict);
-  }
-}
-
 /// Add a tv (copy) to a dict under 'key' of 'key_len'; returns OK or FAIL.
-int nvim_tv_dict_add_tv(void *dict, const char *key, int key_len, void *tv)
-{
-  return tv_dict_add_tv((dict_T *)dict, key, (size_t)key_len, (typval_T *)tv);
-}
-
 /// Allocate a new dictitem_T with the given key (length exclusive).
-void *nvim_tv_dict_item_alloc_len(const char *key, int key_len)
-{
-  return tv_dict_item_alloc_len(key, (size_t)key_len);
-}
-
 /// Add a dictitem_T to a dict (qf-specific void* version); returns OK or FAIL.
-int nvim_qf_tv_dict_add_item(void *dict, void *item)
-{
-  return tv_dict_add((dict_T *)dict, (dictitem_T *)item);
-}
-
 /// Free a dictitem_T including its di_tv (qf-specific void* version).
-void nvim_qf_tv_dict_item_free(void *item)
-{
-  if (item != NULL) {
-    tv_dict_item_free((dictitem_T *)item);
-  }
-}
-
 /// Copy a typval_T value (shallow copy with reference counting).
-void nvim_tv_copy(const void *from, void *to)
-{
-  if (from != NULL && to != NULL) {
-    tv_copy((const typval_T *)from, (typval_T *)to);
-  }
-}
-
 /// Serialize the qfl's quickfixtextfunc callback into a stack-allocated tv.
 /// Returns true if callback was non-None.
 bool nvim_qf_qftf_cb_put(void *qfl_void, void *tv_out)
@@ -866,13 +783,6 @@ bool nvim_qf_qftf_cb_put(void *qfl_void, void *tv_out)
 }
 
 /// Clear (free) an inline typval_T value without freeing the struct itself.
-void nvim_tv_clear(void *tv)
-{
-  if (tv != NULL) {
-    tv_clear((typval_T *)tv);
-  }
-}
-
 /// Get the v_type field of a typval_T (qf-specific void* version).
 int nvim_qf_tv_get_type(const void *tv) { return tv == NULL ? VAR_UNKNOWN : ((const typval_T *)tv)->v_type; }
 
@@ -889,14 +799,6 @@ const char *nvim_di_get_string(const void *di) { return di == NULL ? NULL : ((co
 void *nvim_qf_di_get_tv(void *di) { return di == NULL ? NULL : (void *)&((dictitem_T *)di)->di_tv; }
 
 /// Find a dictitem_T by key in a dict (key_len = -1 for NUL-terminated).
-void *nvim_tv_dict_find(const void *dict, const char *key, int key_len)
-{
-  if (dict == NULL) {
-    return NULL;
-  }
-  return tv_dict_find((const dict_T *)dict, key, (ptrdiff_t)key_len);
-}
-
 /// Look up the window for f_getloclist from argvars[0].
 void *nvim_find_win_by_nr_or_id(const void *argvars_void)
 {
@@ -922,14 +824,7 @@ void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval
 void *nvim_qfl_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 
 /// tv_dict_add_list: add an existing list to a dict (qf-specific); returns OK or FAIL.
-int nvim_qf_tv_dict_add_list(void *dict, const char *key, int key_len, void *list)
-{
-  return tv_dict_add_list((dict_T *)dict, key, (size_t)key_len, (list_T *)list);
-}
-
 /// Allocate a list (qf-specific void* version).
-void *nvim_qf_tv_list_alloc(void) { return tv_list_alloc(kListLenMayKnow); }
-
 /// Check if a dict has 'lines' key with a VAR_LIST value and non-NULL list.
 bool nvim_tv_dict_has_lines_key(const void *dict)
 {
@@ -1009,57 +904,16 @@ void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
   return (void *)&qi->qf_lists[qf_idx];
 }
 
-/// Get the got_int flag (qf-specific version to avoid conflict with insexpand_shim).
-bool nvim_qf_got_int(void) { return got_int; }
-/// Set the got_int flag.
-void nvim_qf_set_got_int(bool val) { got_int = val; }
-
 // Phase 8 set-side accessors
 
 /// tv_dict_get_string: get string from dict by key (alloc=true means heap copy, qf void* version).
-char *nvim_qf_tv_dict_get_string(const void *dict, const char *key, bool alloc)
-{
-  return tv_dict_get_string((const dict_T *)dict, key, alloc);
-}
-
 /// tv_dict_get_number: get number from dict by key (0 if not found, qf void* version).
-int64_t nvim_qf_tv_dict_get_number(const void *dict, const char *key)
-{
-  return (int64_t)tv_dict_get_number((const dict_T *)dict, key);
-}
-
 /// tv_dict_get_tv: copy tv from dict key into *tv_out (VAR_UNKNOWN if not found).
-void nvim_tv_dict_get_tv(const void *dict, const char *key, void *tv_out)
-{
-  tv_dict_get_tv((const dict_T *)dict, key, (typval_T *)tv_out);
-}
-
 /// tv_get_number_chk: get number from typval (qf void* version).
-int64_t nvim_qf_tv_get_number_chk(const void *tv, bool *denote)
-{
-  return (int64_t)tv_get_number_chk((const typval_T *)tv, denote);
-}
-
 /// tv_get_string_chk: get string from typval (qf void* version, NULL on error).
-const char *nvim_qf_tv_get_string_chk(const void *tv)
-{
-  return tv_get_string_chk((const typval_T *)tv);
-}
-
 /// tv_free: free a heap-allocated typval_T (qf void* version).
-void nvim_qf_tv_free(void *tv) { tv_free((typval_T *)tv); }
-
 /// Allocate a heap typval_T (zeroed).
-void *nvim_tv_alloc(void) { return xcalloc(1, sizeof(typval_T)); }
-
 /// tv_copy from src tv into a newly allocated heap typval_T.
-void *nvim_tv_alloc_copy(const void *src_tv)
-{
-  typval_T *dst = xcalloc(1, sizeof(typval_T));
-  tv_copy((const typval_T *)src_tv, dst);
-  return dst;
-}
-
 /// Free the qfl->qf_ctx field (tv_free + set to NULL).
 void nvim_qfl_free_ctx(void *qfl_void)
 {
@@ -1196,8 +1050,6 @@ void nvim_qf_free_lists_array(void *qi_void)
 }
 
 /// Free the qf_info_T struct itself (only for heap-allocated stacks).
-void nvim_qf_free_info(void *qi_void) { xfree(qi_void); }
-
 // nvim_get_curbuf, nvim_get_curwin: already exist in window_shim.c
 // nvim_buflist_findnr: already exists in buffer.c
 // nvim_buf_get_nwindows: already exists in buffer.c
@@ -1245,8 +1097,6 @@ extern void rs_ll_free_all(void **pqi);
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
 
 /// Allocate a zeroed qf_info_T on the heap.
-void *nvim_qf_alloc_info(void) { return xcalloc(1, sizeof(qf_info_T)); }
-
 /// Set qi->qfl_type.
 void nvim_qf_set_qi_type(void *qi_void, int qfltype) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qfl_type = (qfltype_T)qfltype; }
 
@@ -1469,36 +1319,12 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
 }
 
 /// Wrapper for line_breakcheck().
-void nvim_qf_line_breakcheck(void)
-{
-  line_breakcheck();
-}
-
 /// Call vim_isprintc() - returns nonzero if the char is printable.
-int nvim_qf_vim_isprintc(int c)
-{
-  return vim_isprintc(c);
-}
-
 // nvim_qf_get_fnum_for_fields deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 /// Move memory: STRMOVE(dst, src) - move overlapping memory.
-void nvim_qf_strmove(char *dst, const char *src)
-{
-  if (dst != NULL && src != NULL) {
-    STRMOVE(dst, src);
-  }
-}
-
 /// Get IObuff pointer for reuse in file_pfx multiscan.
-char *nvim_qf_get_iobuff(void) { return IObuff; }
-
 /// skipwhite wrapper.
-const char *nvim_qf_skipwhite(const char *p)
-{
-  return p == NULL ? NULL : skipwhite(p);
-}
-
 // =============================================================================
 // Phase 9: Reader state accessors for Rust QfParserState
 // =============================================================================
@@ -1531,11 +1357,7 @@ FILE *nvim_os_fopen_read(const char *fname)
 }
 
 /// Return errno value (used for EINTR check after failed fgets).
-int nvim_qf_errno(void) { return errno; }
-
 /// Returns true if the string has non-ASCII bytes.
-bool nvim_qf_has_non_ascii(const char *buf) { return has_non_ascii(buf); }
-
 /// Remove BOM from the start of buf (modifies in place).
 void nvim_qf_remove_bom(char *buf) { remove_bom(buf); }
 
@@ -1587,23 +1409,11 @@ char *nvim_qf_ml_get_buf(void *buf, int32_t lnum) { return ml_get_buf((buf_T *)b
 int32_t nvim_qf_ml_get_buf_len(void *buf, int32_t lnum) { return (int32_t)ml_get_buf_len((buf_T *)buf, (linenr_T)lnum); }
 
 /// Return IObuff pointer.
-char *nvim_qf_get_iobuff_ptr(void) { return IObuff; }
-
 /// Return IOSIZE constant.
-int nvim_qf_get_iosize(void) { return IOSIZE; }
-
 /// xmalloc wrapper for growbuf allocation.
-char *nvim_qf_xmalloc_buf(size_t sz) { return xmalloc(sz); }
-
 /// xrealloc wrapper for growbuf grow.
-char *nvim_qf_xrealloc_buf(char *ptr, size_t sz) { return xrealloc(ptr, sz); }
-
 /// xfree wrapper for growbuf free.
-void nvim_qf_xfree_buf(void *ptr) { xfree(ptr); }
-
 /// xstrlcpy: copy at most n-1 bytes of src to dst, always NUL-terminate.
-void nvim_qf_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
-
 /// Return true if tv is VAR_STRING.
 bool nvim_qf_tv_is_string(const void *tv_void)
 {
@@ -1665,11 +1475,6 @@ char *nvim_qf_list_item_string(void *li)
 
 /// vim_strchr on a mutable char* with char NL character.
 /// Returns pointer to first NL in str, or NULL.
-char *nvim_qf_strchr_nl(char *str)
-{
-  return vim_strchr(str, '\n');
-}
-
 // =============================================================================
 // Phase 9 (Phase 2): vim_regcomp/vim_regfree wrappers and efm error messages
 // =============================================================================
@@ -1684,8 +1489,6 @@ void *nvim_qf_vim_regcomp(const char *pat, int flags)
 void nvim_qf_vim_regfree(void *prog) { vim_regfree(prog); }
 
 /// Wrapper for xstrdup used by Rust's EFM cache.
-char *nvim_qf_xstrdup(const char *s) { return s == NULL ? NULL : xstrdup(s); }
-
 // qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.
 
 // All qf_parse_fmt_* functions, copy_nonerror_line, qf_parse_match, qf_parse_get_fields,
@@ -1913,7 +1716,6 @@ bool nvim_qfline_get_cleared_bool(const void *qfp_void)
 char nvim_qfline_get_type_char(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
 int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
 const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
-char *nvim_skipwhite_qf(const char *s) { return skipwhite(s); }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
 void *nvim_qf_get_curbuf(void) { return curbuf; }
@@ -2233,11 +2035,8 @@ void nvim_qf_clear_fnum_cache(void)
 // C accessors for rs_call_qftf_func (Phase 11):
 
 /// Allocate a new VAR_FIXED-locked dict.
-void *nvim_tv_dict_alloc_lock_fixed(void) { return tv_dict_alloc_lock(VAR_FIXED); }
-
 /// Increment dict->dv_refcount by 1.
 void nvim_tv_dict_incr_refcount(void *dict) { if (dict != NULL) ((dict_T *)dict)->dv_refcount++; }
-
 /// Return true if callback cb has type kCallbackNone.
 bool nvim_callback_is_none(const void *cb) { return cb == NULL || ((const Callback *)cb)->type == kCallbackNone; }
 
@@ -2261,11 +2060,7 @@ void *nvim_tv_rettv_list_if_var_list(const void *rettv_void)
 }
 
 /// tv_list_ref (qf-specific void* version): increment list reference count.
-void nvim_qf_tv_list_ref(void *list) { if (list != NULL) tv_list_ref((list_T *)list); }
-
 /// tv_dict_unref (qf-specific void* version): decrement dict reference count and free if zero.
-void nvim_qf_tv_dict_unref(void *dict) { if (dict != NULL) tv_dict_unref((dict_T *)dict); }
-
 bool nvim_qf_buf_is_curbuf(const void *buf) { return (const buf_T *)buf == curbuf; }
 
 /// Returns true on success.
@@ -2311,8 +2106,6 @@ int nvim_ml_append_buf(void *buf, linenr_T lnum, char *line, int len, bool newfi
 {
   return ml_append_buf((buf_T *)buf, lnum, line, (colnr_T)len, newfile);
 }
-const char *nvim_skipwhite_const(const char *str) { return skipwhite(str); }
-
 void nvim_ml_delete_one(linenr_T lnum) { ml_delete(lnum); }
 
 // nvim_qf_set_filetype_and_autocmds deleted: inlined into Rust display.rs (Phase 14).
@@ -2413,7 +2206,6 @@ linenr_T nvim_buf_get_ml_line_count_void(const void *buf) { return ((const buf_T
 const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
 void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
 void *nvim_curbuf_ptr(void) { return (void *)curbuf; }
-const char *nvim_skipdigits_str(const char *str) { return (const char *)skipdigits(str); }
 // eval_expr / tv_free wrappers for ex_cexpr
 void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
 // nvim_tv_get_type: already defined in eval/typval.h (takes const typval_T*)
@@ -2996,9 +2788,7 @@ void *nvim_tv_list_item_dict(const void *li)
 // qf_add_entry_from_dict + nvim_qf_add_entry_from_dict deleted:
 // migrated to Rust rs_qf_add_entry_from_dict in list.rs (Phase 11).
 
-/// Allocate a single null byte (empty C string). Caller must xfree/nvim_xfree_char.
-char *nvim_qf_alloc_empty_text(void) { return xcalloc(1, 1); }
-
+/// Allocate a single null byte (empty C string). Caller must xfree/
 /// Free a char * allocated by xmalloc/xstrdup/etc.
 void nvim_xfree_char(char *ptr) { xfree(ptr); }
 

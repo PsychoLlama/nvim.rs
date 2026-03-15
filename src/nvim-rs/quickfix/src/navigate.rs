@@ -1726,7 +1726,7 @@ pub mod jump_machinery {
         fn nvim_qfline_get_type_char(qfp: QfLineHandle) -> std::ffi::c_char;
         fn nvim_qfline_get_nr_int(qfp: QfLineHandle) -> c_int;
         fn nvim_qfline_get_text_ptr(qfp: QfLineHandle) -> *const std::ffi::c_char;
-        fn nvim_skipwhite_qf(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+        fn skipwhite(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
         fn nvim_get_msg_scroll() -> c_int;
         fn nvim_set_msg_scroll(val: c_int);
         fn nvim_ecmd_shortmess_overall() -> c_int;
@@ -1890,7 +1890,7 @@ pub mod jump_machinery {
         let fmt_text = if qf_text_ptr.is_null() {
             String::new()
         } else {
-            let text_no_ws = nvim_skipwhite_qf(qf_text_ptr.cast_mut());
+            let text_no_ws = skipwhite(qf_text_ptr);
             let mut fmt_buf = vec![0i8; 1025];
             let fmt_len =
                 navigate_qf_fmt_text(text_no_ws.cast_const(), fmt_buf.as_mut_ptr(), fmt_buf.len());
