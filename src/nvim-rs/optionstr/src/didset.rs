@@ -10,7 +10,112 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 
-use std::ffi::{c_char, c_void};
+use crate::listval::{rs_opt_strings_flags, OptStringsFlagsResult};
+use std::ffi::{c_char, c_int, c_uint, c_void};
+
+// =============================================================================
+// C FFI: check_str_opt infrastructure
+// =============================================================================
+
+/// OptIndex type alias (matches C's OptIndex = int)
+type OptIndex = c_int;
+
+/// kOptFlagComma bitmask (1 << 10)
+const K_OPT_FLAG_COMMA: c_uint = 1 << 10;
+/// kOptFlagOneComma bitmask (1 << 11 | 1 << 10)
+const K_OPT_FLAG_ONE_COMMA: c_uint = (1 << 11) | (1 << 10);
+
+extern "C" {
+    /// Normalize an option index for values lookup
+    /// (kOptViewoptions -> kOptSessionoptions, kOptFileformats -> kOptFileformat)
+    fn nvim_normalize_opt_idx_for_expand(idx: OptIndex) -> OptIndex;
+
+    /// Get opaque vimoption_T* from index
+    fn get_option(idx: OptIndex) -> *mut c_void;
+
+    /// Get null-terminated values array from vimoption_T*
+    fn nvim_option_get_values(opt: *mut c_void) -> *const *const c_char;
+
+    /// Get flags bitmask for option at idx
+    fn nvim_option_get_flags_val(idx: OptIndex) -> c_uint;
+
+    /// Get global string value for option at idx (dereferences opt->var)
+    fn nvim_option_get_global_str_val(idx: OptIndex) -> *const c_char;
+
+    /// Set *opt->flags_var = val if flags_var is non-NULL
+    fn nvim_option_set_flags_var_if_present(idx: OptIndex, val: c_uint);
+
+    /// optset_T field: args->os_idx
+    fn nvim_optset_get_idx(args: *const c_void) -> OptIndex;
+
+    /// optset_T field: args->os_varp (the char** itself, as void*)
+    fn nvim_optset_get_varp(args: *const c_void) -> *mut c_void;
+}
+
+// =============================================================================
+// Rust implementation of check_str_opt
+// =============================================================================
+
+/// Validate a string option value against its allowed values list.
+///
+/// Mirrors C's `check_str_opt(idx, varp)`:
+/// - normalizes idx for values lookup (viewoptions -> sessionoptions)
+/// - calls rs_opt_strings_flags to validate and compute flags
+/// - writes flags to opt->flags_var if present
+///
+/// If varp is null, uses the global option value (opt->var).
+///
+/// Returns true on success (value is valid), false on failure.
+///
+/// # Safety
+/// idx must be a valid OptIndex; varp (if non-null) must point to a valid string pointer.
+pub unsafe fn check_str_opt_impl(idx: OptIndex, varp: *mut *mut c_char) -> bool {
+    // Normalize index for values lookup
+    let norm_idx = nvim_normalize_opt_idx_for_expand(idx);
+    let opt_norm = get_option(norm_idx);
+    let values = nvim_option_get_values(opt_norm);
+
+    // Determine if this option is a comma-separated list
+    let flags_val = nvim_option_get_flags_val(idx);
+    let is_list = (flags_val & (K_OPT_FLAG_COMMA | K_OPT_FLAG_ONE_COMMA)) != 0;
+
+    // Get the actual string to validate
+    let val: *const c_char = if varp.is_null() {
+        nvim_option_get_global_str_val(idx)
+    } else {
+        *varp
+    };
+
+    let result: OptStringsFlagsResult = rs_opt_strings_flags(val, values, is_list);
+
+    // Write flags back
+    nvim_option_set_flags_var_if_present(idx, result.flags);
+
+    result.ok
+}
+
+// =============================================================================
+// Option indices for didset_string_options
+// (numeric values from build/src/nvim/auto/options_enum.generated.h)
+// =============================================================================
+
+const K_OPT_CASEMAP: OptIndex = 31;
+const K_OPT_BACKUPCOPY: OptIndex = 16;
+const K_OPT_BELLOFF: OptIndex = 20;
+const K_OPT_COMPLETEOPT: OptIndex = 54;
+const K_OPT_SESSIONOPTIONS: OptIndex = 253;
+const K_OPT_VIEWOPTIONS: OptIndex = 342;
+const K_OPT_FOLDOPEN: OptIndex = 112;
+const K_OPT_DISPLAY: OptIndex = 76;
+const K_OPT_JUMPOPTIONS: OptIndex = 157;
+const K_OPT_REDRAWDEBUG: OptIndex = 231;
+const K_OPT_TAGCASE: OptIndex = 306;
+const K_OPT_TERMPASTEFILTER: OptIndex = 315;
+const K_OPT_VIRTUALEDIT: OptIndex = 343;
+const K_OPT_SWITCHBUF: OptIndex = 298;
+const K_OPT_TABCLOSE: OptIndex = 301;
+const K_OPT_WILDOPTIONS: OptIndex = 353;
+const K_OPT_CLIPBOARD: OptIndex = 43;
 
 // =============================================================================
 // Error Message Constants
@@ -286,6 +391,69 @@ pub unsafe extern "C" fn did_set_mousescroll(_args: *const c_void) -> *const c_c
     };
 
     std::ptr::null()
+}
+
+// =============================================================================
+// did_set_str_generic and didset_string_options (Phase 4)
+// =============================================================================
+
+/// Check a string option by index, using global value if varp is NULL.
+/// Returns 1 (OK) if valid, 0 (FAIL) if invalid.
+/// Equivalent to C's `check_str_opt(idx, varp)`.
+///
+/// # Safety
+/// idx must be a valid OptIndex; varp (if non-null) must point to a valid string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_int {
+    c_int::from(check_str_opt_impl(idx, varp))
+}
+
+/// Validates the current option value against its allowed values list.
+/// Equivalent to C's `did_set_str_generic`.
+///
+/// # Safety
+/// args must be a valid optset_T pointer.
+#[export_name = "did_set_str_generic"]
+pub unsafe extern "C" fn did_set_str_generic(args: *const c_void) -> *const c_char {
+    let idx = nvim_optset_get_idx(args);
+    // os_varp is char** - get it as a mutable pointer to char*
+    let varp_pp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    if check_str_opt_impl(idx, varp_pp) {
+        std::ptr::null()
+    } else {
+        E_INVARG
+    }
+}
+
+/// Recompute flags for all string options after loading viminfo / shada.
+/// Equivalent to C's `didset_string_options`.
+///
+/// # Safety
+/// Must be called only from C option machinery.
+#[export_name = "didset_string_options"]
+pub unsafe extern "C" fn didset_string_options() {
+    let opts: &[OptIndex] = &[
+        K_OPT_CASEMAP,
+        K_OPT_BACKUPCOPY,
+        K_OPT_BELLOFF,
+        K_OPT_COMPLETEOPT,
+        K_OPT_SESSIONOPTIONS,
+        K_OPT_VIEWOPTIONS,
+        K_OPT_FOLDOPEN,
+        K_OPT_DISPLAY,
+        K_OPT_JUMPOPTIONS,
+        K_OPT_REDRAWDEBUG,
+        K_OPT_TAGCASE,
+        K_OPT_TERMPASTEFILTER,
+        K_OPT_VIRTUALEDIT,
+        K_OPT_SWITCHBUF,
+        K_OPT_TABCLOSE,
+        K_OPT_WILDOPTIONS,
+        K_OPT_CLIPBOARD,
+    ];
+    for &idx in opts {
+        check_str_opt_impl(idx, std::ptr::null_mut());
+    }
 }
 
 // =============================================================================

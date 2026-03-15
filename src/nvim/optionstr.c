@@ -71,6 +71,9 @@ extern int rs_valid_name(const char *val, const char *allowed);
 extern int rs_get_fileformat(buf_T *buf);
 
 // String option flag utilities (from Rust optionstr crate)
+// did_set_str_generic and didset_string_options are implemented in Rust
+extern const char *did_set_str_generic(optset_T *args);
+extern void didset_string_options(void);
 
 // Option type utilities
 
@@ -120,28 +123,7 @@ static const char e_wrong_character_width_for_field_str[]
   = N_("E1512: Wrong character width for field \"%s\"");
 
 
-/// After setting various option values: recompute variables that depend on
-/// option values.
-void didset_string_options(void)
-{
-  check_str_opt(kOptCasemap, NULL);
-  check_str_opt(kOptBackupcopy, NULL);
-  check_str_opt(kOptBelloff, NULL);
-  check_str_opt(kOptCompleteopt, NULL);
-  check_str_opt(kOptSessionoptions, NULL);
-  check_str_opt(kOptViewoptions, NULL);
-  check_str_opt(kOptFoldopen, NULL);
-  check_str_opt(kOptDisplay, NULL);
-  check_str_opt(kOptJumpoptions, NULL);
-  check_str_opt(kOptRedrawdebug, NULL);
-  check_str_opt(kOptTagcase, NULL);
-  check_str_opt(kOptTermpastefilter, NULL);
-  check_str_opt(kOptVirtualedit, NULL);
-  check_str_opt(kOptSwitchbuf, NULL);
-  check_str_opt(kOptTabclose, NULL);
-  check_str_opt(kOptWildoptions, NULL);
-  check_str_opt(kOptClipboard, NULL);
-}
+// didset_string_options() is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
 
 char *illegal_char(char *errbuf, size_t errbuflen, int c)
 {
@@ -286,40 +268,8 @@ int check_signcolumn(char *scl, win_T *wp)
 
 
 
-static const char **opt_values(OptIndex idx, size_t *values_len)
-{
-  OptIndex idx1 = idx == kOptViewoptions ? kOptSessionoptions
-                                         : idx == kOptFileformats ? kOptFileformat
-                                                                  : idx;
-
-  vimoption_T *opt = get_option(idx1);
-  if (values_len != NULL) {
-    *values_len = opt->values_len;
-  }
-  return opt->values;
-}
-
-int check_str_opt(OptIndex idx, char **varp)
-{
-  vimoption_T *opt = get_option(idx);
-  if (varp == NULL) {
-    varp = opt->var;
-  }
-  bool list = opt->flags & (kOptFlagComma | kOptFlagOneComma);
-  const char **values = opt_values(idx, NULL);
-  OptStringsFlagsResult result = rs_opt_strings_flags(*varp, values, list);
-  if (opt->flags_var != NULL) {
-    *opt->flags_var = result.flags;
-  }
-  return result.ok ? OK : FAIL;
-}
-
-// expand_set_str_generic is now implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
-
-const char *did_set_str_generic(optset_T *args)
-{
-  return check_str_opt(args->os_idx, args->os_varp) != OK ? e_invarg : NULL;
-}
+// opt_values, check_str_opt, did_set_str_generic are now implemented in Rust
+// (src/nvim-rs/optionstr/src/didset.rs)
 
 
 /// Expand an option that accepts a list of string values.

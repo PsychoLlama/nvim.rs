@@ -338,6 +338,7 @@ extern tabpage_T *rs_win_find_tabpage(win_T *win);
 // optset_T field accessors for Rust callbacks
 void *nvim_optset_get_win(const void *args) { return (void *)((const optset_T *)args)->os_win; }
 void *nvim_optset_get_buf(const void *args) { return (void *)((const optset_T *)args)->os_buf; }
+int nvim_optset_get_idx(const void *args) { return (int)((const optset_T *)args)->os_idx; }
 int nvim_optset_get_oldval_boolean(const void *args) { return (int)((const optset_T *)args)->os_oldval.boolean; }
 int64_t nvim_optset_get_oldval_number(const void *args) { return ((const optset_T *)args)->os_oldval.number; }
 int64_t nvim_optset_get_newval_number(const void *args) { return ((const optset_T *)args)->os_newval.number; }
@@ -500,13 +501,14 @@ const char *nvim_did_set_varsofttabstop(void *args) { return did_set_varsofttabs
 const char *nvim_did_set_vartabstop(void *args) { return did_set_vartabstop((optset_T *)args); }
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
-int check_str_opt(OptIndex idx, char **varp);  // defined in optionstr.c
 const char *check_chars_options(void);  // defined in optionstr.c
 const char *nvim_parse_guicursor(void) { return parse_shape_opt(SHAPE_CURSOR); }
 int nvim_get_visual_active_opt(void) { return VIsual_active ? 1 : 0; }
 void nvim_redrawWinline_curwin(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
 const char *nvim_check_chars_options_str(void) { return check_chars_options(); }
-int nvim_check_ambiwidth_opt(void) { return check_str_opt(kOptAmbiwidth, NULL); }
+// Now calls Rust rs_check_str_opt (check_str_opt deleted from C)
+extern int rs_check_str_opt(int idx, char **varp);
+int nvim_check_ambiwidth_opt(void) { return rs_check_str_opt(kOptAmbiwidth, NULL); }
 // Phase 104: showbreak validation (inlined from optionstr.c)
 static const char e_showbreak_wide[]
   = N_("E595: 'showbreak' contains unprintable or wide character");
@@ -659,7 +661,9 @@ const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
 {
   return rs_illegal_char(errbuf, errbuflen, c);
 }
-// Wrapper for did_set_str_generic (validates against option's allowed values)
+// did_set_str_generic is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
+// Keep nvim_did_set_str_generic as a thin wrapper for Rust option crate callers.
+extern const char *did_set_str_generic(void *args);
 const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic(args); }
 // Wrappers for side-effect functions
 void nvim_call_init_chartab(void) { init_chartab(); }
@@ -2914,7 +2918,9 @@ void nvim_paste_didset_sctx_all(void)
 // Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
 // =============================================================================
 
-/// didset_string_options() wrapper.
+// didset_string_options is now implemented in Rust; this call goes directly to Rust.
+// (The Rust implementation is registered via #[export_name = "didset_string_options"])
+extern void didset_string_options(void);  // defined in Rust optionstr crate
 void nvim_call_didset_string_options(void) { didset_string_options(); }
 /// spell_check_msm() wrapper.
 void nvim_call_spell_check_msm(void) { spell_check_msm(); }
@@ -3067,3 +3073,27 @@ int nvim_normalize_opt_idx_for_expand(int idx)
 
 // Window p_lcs accessor
 const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }
+
+// =============================================================================
+// Phase 4 (optionstr): check_str_opt infrastructure for Rust migration
+// =============================================================================
+
+/// Return the global string value for the option at idx.
+/// opt->var is char** for string options; dereference to get char*.
+const char *nvim_option_get_global_str_val(OptIndex idx)
+{
+  vimoption_T *opt = get_option(idx);
+  if (opt == NULL || opt->var == NULL) {
+    return NULL;
+  }
+  return *(const char **)opt->var;
+}
+
+/// Set *opt->flags_var = val, if flags_var is non-NULL.
+void nvim_option_set_flags_var_if_present(OptIndex idx, unsigned val)
+{
+  vimoption_T *opt = get_option(idx);
+  if (opt != NULL && opt->flags_var != NULL) {
+    *opt->flags_var = val;
+  }
+}
