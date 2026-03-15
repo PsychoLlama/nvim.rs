@@ -1233,25 +1233,9 @@ const char *nvim_qf_regmatch_endp(const void *rm, int idx)
   return ((const regmatch_T *)rm)->endp[idx];
 }
 
-/// Expand environment variables in src into dst (dstlen bytes).
-void nvim_qf_expand_env(const char *src, char *dst, int dstlen)
-{
-  if (src != NULL && dst != NULL && dstlen > 0) {
-    expand_env((char *)src, dst, dstlen);
-  }
-}
-
-/// Return true if the path exists on the filesystem.
-bool nvim_qf_os_path_exists(const char *path)
-{
-  return path != NULL && os_path_exists(path);
-}
-
-/// Return true if the buffer number bnr refers to a known buffer.
-bool nvim_qf_buflist_findnr_exists(int bnr)
-{
-  return buflist_findnr(bnr) != NULL;
-}
+// nvim_qf_expand_env deleted: Rust calls expand_env directly.
+// nvim_qf_os_path_exists deleted: Rust calls os_path_exists directly.
+// nvim_qf_buflist_findnr_exists deleted: Rust calls buflist_findnr directly.
 
 // =============================================================================
 // Phase 5: qffields_T accessors deleted: migrated to Rust QfAllFields in reader.rs (Phase 9).
@@ -1329,43 +1313,18 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
 // Phase 9: Reader state accessors for Rust QfParserState
 // =============================================================================
 
-/// Close a FILE*. Safe to call with NULL.
-void nvim_qf_fclose(FILE *fd)
-{
-  if (fd != NULL) {
-    fclose(fd);
-  }
-}
+// nvim_qf_fclose deleted: Rust uses fclose (libc) directly with null check.
+// nvim_qf_fgets deleted: Rust uses fgets (libc) directly.
+// nvim_qf_vim_fgets deleted: Rust uses vim_fgets directly.
+// nvim_os_fopen_read deleted: Rust uses os_fopen(fname, "r") directly.
 
-/// fgets wrapper: reads up to size-1 bytes into buf from fd.
-/// Returns true if data was read, false on EOF/error (sets errno on EINTR).
-bool nvim_qf_fgets(char *buf, int size, FILE *fd)
-{
-  return fgets(buf, size, fd) != NULL;
-}
+// nvim_qf_remove_bom deleted: Rust calls remove_bom directly.
 
-/// vim_fgets wrapper: returns true on EOF/error (same semantics as vim_fgets).
-bool nvim_qf_vim_fgets(char *buf, int size, FILE *fd)
-{
-  return vim_fgets(buf, size, fd);
-}
+/// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
+size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
 
-/// Open a file for reading using os_fopen. Returns NULL on failure (no error message).
-FILE *nvim_os_fopen_read(const char *fname)
-{
-  return os_fopen(fname, "r");
-}
-
-/// Return errno value (used for EINTR check after failed fgets).
-/// Returns true if the string has non-ASCII bytes.
-/// Remove BOM from the start of buf (modifies in place).
-void nvim_qf_remove_bom(char *buf) { remove_bom(buf); }
-
-/// Allocate a zeroed vimconv_T on the heap.
-void *nvim_qf_alloc_vimconv(void) { return xcalloc(1, sizeof(vimconv_T)); }
-
-/// Free a heap-allocated vimconv_T (no cleanup; caller must convert_setup first).
-void nvim_qf_free_vimconv(void *vc) { xfree(vc); }
+// nvim_qf_alloc_vimconv deleted: Rust uses xcalloc(1, nvim_qf_sizeof_vimconv()).
+// nvim_qf_free_vimconv deleted: Rust uses xfree directly.
 
 /// Setup encoding conversion: convert_setup(vc, from, p_enc).
 /// enc may be NULL (no conversion set up in that case).
@@ -1391,22 +1350,9 @@ void nvim_qf_convert_setup_cleanup(void *vc)
 /// Return vc->vc_type (CONV_NONE == 0).
 int nvim_qf_vc_type(const void *vc) { return vc == NULL ? 0 : ((const vimconv_T *)vc)->vc_type; }
 
-/// Convert buf with encoding conversion (string_convert).
-/// Returns allocated converted string (caller must xfree), or NULL.
-/// Sets *lenp to the new length.
-char *nvim_qf_string_convert_with_len(void *vc, char *buf, size_t *lenp)
-{
-  if (vc == NULL || buf == NULL) {
-    return NULL;
-  }
-  return string_convert((vimconv_T *)vc, buf, lenp);
-}
-
-/// Return ml_get_buf(buf, lnum) - a pointer to the buffer line (not allocated).
-char *nvim_qf_ml_get_buf(void *buf, int32_t lnum) { return ml_get_buf((buf_T *)buf, (linenr_T)lnum); }
-
-/// Return ml_get_buf_len(buf, lnum).
-int32_t nvim_qf_ml_get_buf_len(void *buf, int32_t lnum) { return (int32_t)ml_get_buf_len((buf_T *)buf, (linenr_T)lnum); }
+// nvim_qf_string_convert_with_len deleted: Rust calls string_convert directly.
+// nvim_qf_ml_get_buf deleted: Rust calls ml_get_buf directly.
+// nvim_qf_ml_get_buf_len deleted: Rust calls ml_get_buf_len directly.
 
 /// Return IObuff pointer.
 /// Return IOSIZE constant.
@@ -1479,14 +1425,8 @@ char *nvim_qf_list_item_string(void *li)
 // Phase 9 (Phase 2): vim_regcomp/vim_regfree wrappers and efm error messages
 // =============================================================================
 
-/// Compile a regex pattern; returns allocated regprog_T* or NULL.
-void *nvim_qf_vim_regcomp(const char *pat, int flags)
-{
-  return vim_regcomp((char *)pat, flags);
-}
-
-/// Free a compiled regex (regprog_T*).
-void nvim_qf_vim_regfree(void *prog) { vim_regfree(prog); }
+// nvim_qf_vim_regcomp deleted: Rust calls vim_regcomp directly.
+// nvim_qf_vim_regfree deleted: Rust calls vim_regfree directly.
 
 /// Wrapper for xstrdup used by Rust's EFM cache.
 // qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.

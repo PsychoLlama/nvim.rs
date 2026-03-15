@@ -978,7 +978,7 @@ extern "C" {
     fn tv_clear(tv: *mut c_void);
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
     fn tv_free(tv: *mut c_void);
-    fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
+    fn buflist_findnr(bnr: c_int) -> *mut c_void;
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     // (nvim_qf_semsg_e92_bufnr deleted: use semsg directly)
     fn nvim_xfree_char(ptr: *mut c_char);
@@ -1067,7 +1067,7 @@ pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
 
     // Mark entries with non-existing buffer number as not valid.
     // Emit the error message only once per batch.
-    if bufnum != 0 && !nvim_qf_buflist_findnr_exists(bufnum) {
+    if bufnum != 0 && buflist_findnr(bufnum).is_null() {
         if !DID_BUFNR_EMSG.load(Ordering::Relaxed) {
             DID_BUFNR_EMSG.store(true, Ordering::Relaxed);
             semsg(c"E92: Buffer %lld not found".as_ptr(), i64::from(bufnum));

@@ -41,10 +41,10 @@ extern "C" {
     fn nvim_eap_get_cmdlinep_deref_make(eap: EapHandle) -> *mut c_char;
     // Phase 16: helpgrep regex inlining
     fn check_help_lang(arg: *mut c_char) -> *mut c_char;
-    fn nvim_qf_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
     fn nvim_qf_regmatch_create(prog: *mut c_void, ic: bool) -> *mut c_void;
     fn nvim_qf_regmatch_extract_prog(rm: *mut c_void) -> *mut c_void;
-    fn nvim_qf_vim_regfree(prog: *mut c_void);
+    fn vim_regfree(prog: *mut c_void);
     fn rs_hgr_search_in_rtp(qfl: *mut c_void, regmatch: *mut c_void, lang: *const c_char);
     // nvim_hgr_restore_cpo renamed to nvim_restore_cpo (Phase 4)
     fn nvim_restore_cpo(saved_cpo: *mut c_void);
@@ -1146,7 +1146,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // Inlined from nvim_hgr_regex_search (Phase 16).
     // RE_MAGIC=256, RE_STRING=4
     let lang = check_help_lang(eap_arg);
-    let prog = nvim_qf_vim_regcomp(eap_arg.cast_const(), 256 + 4);
+    let prog = vim_regcomp(eap_arg.cast_const(), 256 + 4);
     let updated = if prog.is_null() {
         false
     } else {
@@ -1154,7 +1154,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
         let qfl = nvim_qf_get_curlist_mut(qi);
         rs_hgr_search_in_rtp(qfl, regmatch, lang.cast_const());
         let prog_out = nvim_qf_regmatch_extract_prog(regmatch);
-        nvim_qf_vim_regfree(prog_out);
+        vim_regfree(prog_out);
         true
     };
 

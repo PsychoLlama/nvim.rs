@@ -29,6 +29,15 @@ const LINE_MAXLEN: usize = 4096;
 
 const IOSIZE: usize = 1025;
 
+/// Thin wrapper: calls `fgets` and returns true if data was read (non-null return).
+///
+/// # Safety
+/// `buf` must point to at least `size` bytes; `fd` must be a valid open FILE*.
+#[inline]
+unsafe fn fgets_not_null(buf: *mut c_char, size: c_int, fd: *mut libc::FILE) -> bool {
+    !libc::fgets(buf, size, fd).is_null()
+}
+
 extern "C" {
     // File I/O
     fn os_fopen(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
@@ -36,8 +45,6 @@ extern "C" {
     fn fdopen(fd: c_int, mode: *const c_char) -> *mut libc::FILE;
     fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
     fn emsg(msg: *const std::ffi::c_char) -> bool;
-    fn nvim_qf_fclose(fd: *mut libc::FILE);
-    fn nvim_qf_fgets(buf: *mut c_char, size: c_int, fd: *mut libc::FILE) -> bool;
 
     // IObuff global
     static IObuff: *mut c_char;
@@ -46,29 +53,25 @@ extern "C" {
     fn xmalloc(sz: usize) -> *mut c_void;
     fn xrealloc(ptr: *mut c_void, sz: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Encoding conversion (opaque vimconv_T)
-    fn nvim_qf_alloc_vimconv() -> *mut c_void;
-    fn nvim_qf_free_vimconv(vc: *mut c_void);
+    fn nvim_qf_sizeof_vimconv() -> usize;
     fn nvim_qf_convert_setup(vc: *mut c_void, enc: *const c_char);
     fn nvim_qf_convert_setup_cleanup(vc: *mut c_void);
     fn nvim_qf_vc_type(vc: *const c_void) -> c_int;
-    fn nvim_qf_string_convert_with_len(
-        vc: *mut c_void,
-        buf: *mut c_char,
-        lenp: *mut usize,
-    ) -> *mut c_char;
+    fn string_convert(vc: *mut c_void, buf: *mut c_char, lenp: *mut usize) -> *mut c_char;
 
     // String helpers
     fn has_non_ascii(s: *const c_char) -> bool;
-    fn nvim_qf_remove_bom(buf: *mut c_char);
+    fn remove_bom(buf: *mut c_char);
     fn vim_strchr(s: *mut c_char, c: c_int) -> *mut c_char;
 
     // Buffer line access
-    fn nvim_qf_ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
-    fn nvim_qf_ml_get_buf_len(buf: *mut c_void, lnum: i32) -> i32;
+    fn ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    fn ml_get_buf_len(buf: *mut c_void, lnum: i32) -> i32;
 
     // VimL typval (tv) source
     fn nvim_qf_tv_is_string(tv: *const c_void) -> bool;
@@ -167,7 +170,7 @@ impl QfParserState {
         let mut state = Box::new(Self::new_empty());
 
         // Setup encoding converter if enc is provided
-        state.vc = nvim_qf_alloc_vimconv();
+        state.vc = xcalloc(1, nvim_qf_sizeof_vimconv()).cast();
         if !enc.is_null() {
             nvim_qf_convert_setup(state.vc, enc.cast_const());
         }
@@ -318,8 +321,8 @@ impl QfParserState {
             return QF_END_OF_INPUT;
         }
 
-        let p_buf = nvim_qf_ml_get_buf(self.buf, self.buflnum);
-        let len = nvim_qf_ml_get_buf_len(self.buf, self.buflnum) as usize;
+        let p_buf = ml_get_buf(self.buf, self.buflnum);
+        let len = ml_get_buf_len(self.buf, self.buflnum) as usize;
         self.buflnum += 1;
 
         if len > iosize - 2 {
@@ -345,7 +348,7 @@ impl QfParserState {
 
         // Retry loop for EINTR
         loop {
-            if !nvim_qf_fgets(iobuff, IOSIZE as c_int, self.fd) {
+            if !fgets_not_null(iobuff, IOSIZE as c_int, self.fd) {
                 if *libc::__errno_location() == libc::EINTR {
                     continue;
                 }
@@ -377,7 +380,7 @@ impl QfParserState {
                 }
                 // EINTR retry loop for inner fgets
                 loop {
-                    if !nvim_qf_fgets(self.growbuf.add(growbuflen), remaining as c_int, self.fd) {
+                    if !fgets_not_null(self.growbuf.add(growbuflen), remaining as c_int, self.fd) {
                         if *libc::__errno_location() == libc::EINTR {
                             continue;
                         }
@@ -404,7 +407,7 @@ impl QfParserState {
             if discard {
                 loop {
                     loop {
-                        if !nvim_qf_fgets(iobuff, IOSIZE as c_int, self.fd) {
+                        if !fgets_not_null(iobuff, IOSIZE as c_int, self.fd) {
                             if *libc::__errno_location() == libc::EINTR {
                                 continue;
                             }
@@ -428,8 +431,7 @@ impl QfParserState {
         // Encoding conversion for non-ASCII lines
         if nvim_qf_vc_type(self.vc.cast_const()) != 0 && has_non_ascii(self.linebuf) {
             let mut converted_len = self.linelen;
-            let line =
-                nvim_qf_string_convert_with_len(self.vc, self.linebuf, &raw mut converted_len);
+            let line = string_convert(self.vc, self.linebuf, &raw mut converted_len);
             if !line.is_null() {
                 if converted_len < iosize {
                     xstrlcpy(self.linebuf, line, converted_len + 1);
@@ -483,7 +485,7 @@ impl QfParserState {
             }
         }
 
-        nvim_qf_remove_bom(self.linebuf);
+        remove_bom(self.linebuf);
         QF_OK
     }
 
@@ -499,7 +501,7 @@ impl Drop for QfParserState {
     fn drop(&mut self) {
         unsafe {
             if !self.fd.is_null() {
-                nvim_qf_fclose(self.fd);
+                libc::fclose(self.fd);
                 self.fd = std::ptr::null_mut();
             }
             if !self.growbuf.is_null() {
@@ -510,7 +512,7 @@ impl Drop for QfParserState {
                 if nvim_qf_vc_type(self.vc.cast_const()) != 0 {
                     nvim_qf_convert_setup_cleanup(self.vc);
                 }
-                nvim_qf_free_vimconv(self.vc);
+                xfree(self.vc);
                 self.vc = std::ptr::null_mut();
             }
         }
@@ -628,9 +630,9 @@ extern "C" {
     fn rs_efm_option_part_len(efm: *const c_char, efm_max_len: usize) -> c_int;
     fn rs_skip_to_option_part(p: *const c_char) -> *const c_char;
 
-    // vim regex (thin C wrappers needed around vim_regcomp/vim_regfree)
-    fn nvim_qf_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
-    fn nvim_qf_vim_regfree(prog: *mut c_void);
+    // vim regex
+    fn vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn vim_regfree(prog: *mut c_void);
 
     // Error messages: semsg and emsg declared in the first extern block
     // xstrdup: declared in the first extern block
@@ -652,7 +654,7 @@ struct EfmToRegpatResult {
 ///
 /// Equivalent to C's `efm_T`. Must be ABI-compatible via raw pointer casting.
 pub struct EfmPattern {
-    /// Pre-compiled regex program (opaque C pointer, owned - free with `nvim_qf_vim_regfree`)
+    /// Pre-compiled regex program (opaque C pointer, owned - free with `vim_regfree`)
     pub prog: *mut c_void,
     /// Next in linked list (NULL if last)
     pub next: *mut EfmPattern,
@@ -692,7 +694,7 @@ pub unsafe fn free_efm_pattern_list(efm_first: *mut EfmPattern) {
         let node = Box::from_raw(p);
         p = node.next;
         if !node.prog.is_null() {
-            nvim_qf_vim_regfree(node.prog);
+            vim_regfree(node.prog);
         }
         // node is dropped here (Box goes out of scope)
     }
@@ -796,7 +798,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
         fmt_ptr.conthere = result.conthere as c_int;
 
         // Compile the regex pattern
-        let prog = nvim_qf_vim_regcomp(fmtstr, 1 + 2); // RE_MAGIC + RE_STRING
+        let prog = vim_regcomp(fmtstr, 1 + 2); // RE_MAGIC + RE_STRING
         if prog.is_null() {
             // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
             free_efm_pattern_list(fmt_first);

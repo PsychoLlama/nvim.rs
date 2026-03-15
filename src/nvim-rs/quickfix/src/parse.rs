@@ -2134,9 +2134,9 @@ extern "C" {
     fn nvim_qf_regmatch_endp(rm: *const c_void, idx: c_int) -> *const c_char;
 
     // Environment / filesystem helpers
-    fn nvim_qf_expand_env(src: *const c_char, dst: *mut c_char, dstlen: c_int);
-    fn nvim_qf_os_path_exists(path: *const c_char) -> bool;
-    fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
+    fn expand_env(src: *const c_char, dst: *mut c_char, dstlen: c_int);
+    fn os_path_exists(path: *const c_char) -> bool;
+    fn buflist_findnr(bnr: c_int) -> *mut c_void;
 
     // regmatch_T lifecycle for vim_regexec
     fn nvim_qf_regmatch_create_ic(prog: *mut c_void) -> *mut c_void;
@@ -2391,10 +2391,10 @@ unsafe fn parse_fmt_f_impl(
         return C_QF_FAIL;
     }
     // expand_env(tmp, namebuf, CMDBUFFSIZE)
-    nvim_qf_expand_env(tmp.as_ptr().cast(), namebuf, CMDBUFFSIZE as c_int);
+    expand_env(tmp.as_ptr().cast(), namebuf, CMDBUFFSIZE as c_int);
 
     // For file-handler prefixes (O, P, Q) the file must exist
-    if rs_qf_is_file_handler(prefix) && !nvim_qf_os_path_exists(namebuf) {
+    if rs_qf_is_file_handler(prefix) && !os_path_exists(namebuf) {
         return C_QF_FAIL;
     }
     C_QF_OK
@@ -2409,7 +2409,7 @@ unsafe fn parse_fmt_b_impl(rm: *const c_void, midx: c_int, fields: *mut c_void) 
     // atol equivalent
     let bytes = submatch_bytes(rm, midx).unwrap_or(&[]);
     let bnr = parse_number(bytes) as c_int;
-    if bnr <= 0 || !nvim_qf_buflist_findnr_exists(bnr) {
+    if bnr <= 0 || buflist_findnr(bnr).is_null() {
         return C_QF_FAIL;
     }
     fields_set_bnr(fields, bnr);
@@ -2829,7 +2829,7 @@ unsafe fn qf_parse_file_pfx_rs(
     let namebuf = fields_get_namebuf(fields);
     #[allow(clippy::cast_sign_loss)]
     let namebuf_empty = namebuf.is_null() || *namebuf == 0;
-    let name_exists = !namebuf_empty && nvim_qf_os_path_exists(namebuf);
+    let name_exists = !namebuf_empty && os_path_exists(namebuf);
 
     if namebuf_empty || name_exists {
         #[allow(clippy::cast_sign_loss)]

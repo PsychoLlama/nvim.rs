@@ -2126,7 +2126,7 @@ extern "C" {
     fn nvim_qf_concat_fnames(dir: *const c_char, fname: *const c_char) -> *mut c_char;
     fn nvim_qf_is_qf_list(qfl: *const c_void) -> bool;
     fn nvim_qf_clear_fnum_cache();
-    fn nvim_qf_os_path_exists(path: *const c_char) -> bool;
+    fn os_path_exists(path: *const c_char) -> bool;
     fn xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
@@ -3117,7 +3117,7 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
     let concat_ptr: *mut c_char = if !directory.is_null() && !nvim_qf_vim_is_abs_name(fname) {
         let ptr = nvim_qf_concat_fnames(directory, fname);
         // Verify the concatenated path exists; if not, guess via dir stack.
-        if nvim_qf_os_path_exists(ptr.cast_const()) {
+        if os_path_exists(ptr.cast_const()) {
             ptr
         } else {
             xfree(ptr.cast());

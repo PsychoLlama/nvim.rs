@@ -29,9 +29,8 @@ type FileHandle = *mut libc::FILE;
 
 extern "C" {
     // File I/O
-    fn nvim_os_fopen_read(fname: *const c_char) -> FileHandle;
-    fn nvim_qf_vim_fgets(buf: *mut c_char, size: c_int, fd: FileHandle) -> bool;
-    fn nvim_qf_fclose(fd: FileHandle);
+    fn os_fopen(fname: *const c_char, mode: *const c_char) -> FileHandle;
+    fn vim_fgets(buf: *mut c_char, size: c_int, fd: FileHandle) -> bool;
 
     // Regex
     fn nvim_qf_vim_regexec(rmp: RegmatchHandle, line: *const c_char) -> bool;
@@ -96,7 +95,7 @@ const OK: c_int = 1;
 /// - `fname` must be a valid C string
 /// - `p_regmatch` must be a valid pointer to a `regmatch_T`
 unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch: RegmatchHandle) {
-    let fd = nvim_os_fopen_read(fname);
+    let fd = os_fopen(fname, c"r".as_ptr());
     if fd.is_null() {
         return;
     }
@@ -105,7 +104,7 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
     let iosize: c_int = 1025;
 
     let mut lnum: LinenrT = 1;
-    while !nvim_qf_vim_fgets(iobuff, iosize, fd) && !got_int {
+    while !vim_fgets(iobuff, iosize, fd) && !got_int {
         let line = iobuff;
 
         if nvim_qf_vim_regexec(p_regmatch, line.cast_const()) {
@@ -149,7 +148,7 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
         lnum += 1;
         line_breakcheck();
     }
-    nvim_qf_fclose(fd);
+    libc::fclose(fd);
 }
 
 /// Search for a pattern in all help files in the doc directory under `dirname`.
