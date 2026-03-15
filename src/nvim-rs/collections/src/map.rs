@@ -345,7 +345,7 @@ macro_rules! map_key_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_mh_find_bucket_ $name>](
+            pub unsafe extern "C" fn [<mh_find_bucket_ $name>](
                 set: *mut [<Set_ $name>],
                 key: $key_ty,
                 put: bool,
@@ -382,7 +382,7 @@ macro_rules! map_key_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_mh_get_ $name>](
+            pub unsafe extern "C" fn [<mh_get_ $name>](
                 set: *mut [<Set_ $name>],
                 key: $key_ty,
             ) -> u32 {
@@ -390,7 +390,7 @@ macro_rules! map_key_impl {
                 if set.h.n_buckets == 0 {
                     return MH_TOMBSTONE;
                 }
-                let idx = [<rs_mh_find_bucket_ $name>](set as *const _ as *mut _, key, false);
+                let idx = [<mh_find_bucket_ $name>](set as *const _ as *mut _, key, false);
                 if idx != MH_TOMBSTONE {
                     *(*set).h.hash.add(idx as usize) - 1
                 } else {
@@ -399,11 +399,11 @@ macro_rules! map_key_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_mh_rehash_ $name>](set: *mut [<Set_ $name>]) {
+            pub unsafe extern "C" fn [<mh_rehash_ $name>](set: *mut [<Set_ $name>]) {
                 let set = &mut *set;
                 for k in 0..set.h.n_keys {
                     let key = *set.keys.add(k as usize);
-                    let idx = [<rs_mh_find_bucket_ $name>](set, key, true);
+                    let idx = [<mh_find_bucket_ $name>](set, key, true);
                     if !mh_is_empty(set.h.hash, idx) {
                         std::process::abort();
                     }
@@ -414,7 +414,7 @@ macro_rules! map_key_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_mh_put_ $name>](
+            pub unsafe extern "C" fn [<mh_put_ $name>](
                 set: *mut [<Set_ $name>],
                 key: $key_ty,
                 new: *mut MHPutStatus,
@@ -431,10 +431,10 @@ macro_rules! map_key_impl {
                         (*h).size = 0;
                         (*h).n_occupied = 0;
                     }
-                    [<rs_mh_rehash_ $name>](set);
+                    [<mh_rehash_ $name>](set);
                 }
 
-                let idx = [<rs_mh_find_bucket_ $name>](set, key, true);
+                let idx = [<mh_find_bucket_ $name>](set, key, true);
 
                 if mh_is_either((*h).hash, idx) {
                     (*h).size += 1;
@@ -469,7 +469,7 @@ macro_rules! map_key_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_mh_delete_ $name>](
+            pub unsafe extern "C" fn [<mh_delete_ $name>](
                 set: *mut [<Set_ $name>],
                 key: *mut $key_ty,
             ) -> u32 {
@@ -477,7 +477,7 @@ macro_rules! map_key_impl {
                 if set.h.size == 0 {
                     return MH_TOMBSTONE;
                 }
-                let idx = [<rs_mh_find_bucket_ $name>](set, *key, false);
+                let idx = [<mh_find_bucket_ $name>](set, *key, false);
                 if idx != MH_TOMBSTONE {
                     let k = *set.h.hash.add(idx as usize) - 1;
                     *set.h.hash.add(idx as usize) = MH_TOMBSTONE;
@@ -487,7 +487,7 @@ macro_rules! map_key_impl {
                     *key = *set.keys.add(k as usize);
                     set.h.size -= 1;
                     if last != k {
-                        let idx2 = [<rs_mh_find_bucket_ $name>](
+                        let idx2 = [<mh_find_bucket_ $name>](
                             set,
                             *set.keys.add(last as usize),
                             false,
@@ -526,13 +526,13 @@ macro_rules! map_value_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_map_ref_ $kname $vname>](
+            pub unsafe extern "C" fn [<map_ref_ $kname $vname>](
                 map: *mut [<Map_ $kname $vname>],
                 key: $key_ty,
                 key_alloc: *mut *mut $key_ty,
             ) -> *mut $val_ty {
                 let map = &mut *map;
-                let k = [<rs_mh_get_ $kname>](&mut map.set, key);
+                let k = [<mh_get_ $kname>](&mut map.set, key);
                 if k == MH_TOMBSTONE {
                     return ptr::null_mut();
                 }
@@ -543,7 +543,7 @@ macro_rules! map_value_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_map_put_ref_ $kname $vname>](
+            pub unsafe extern "C" fn [<map_put_ref_ $kname $vname>](
                 map: *mut [<Map_ $kname $vname>],
                 key: $key_ty,
                 key_alloc: *mut *mut $key_ty,
@@ -551,7 +551,7 @@ macro_rules! map_value_impl {
             ) -> *mut $val_ty {
                 let map = &mut *map;
                 let mut status = MHPutStatus::Existing;
-                let k = [<rs_mh_put_ $kname>](&mut map.set, key, &mut status);
+                let k = [<mh_put_ $kname>](&mut map.set, key, &mut status);
                 if status != MHPutStatus::Existing {
                     if status == MHPutStatus::NewKeyRealloc {
                         map.values = xrealloc(
@@ -572,7 +572,7 @@ macro_rules! map_value_impl {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn [<rs_map_del_ $kname $vname>](
+            pub unsafe extern "C" fn [<map_del_ $kname $vname>](
                 map: *mut [<Map_ $kname $vname>],
                 key: $key_ty,
                 key_alloc: *mut $key_ty,
@@ -580,7 +580,7 @@ macro_rules! map_value_impl {
                 let map = &mut *map;
                 let rv: $val_ty = $val_init;
                 let mut key_copy = key;
-                let k = [<rs_mh_delete_ $kname>](&mut map.set, &mut key_copy);
+                let k = [<mh_delete_ $kname>](&mut map.set, &mut key_copy);
                 if k == MH_TOMBSTONE {
                     return rv;
                 }
@@ -690,7 +690,7 @@ map_value_impl!(
 #[unsafe(export_name = "pmap_del2")]
 pub unsafe extern "C" fn rs_pmap_del2(map: *mut Map_cstr_tptr_t, key: *const c_char) {
     let mut key_alloc: *const c_char = ptr::null();
-    let val = rs_map_del_cstr_tptr_t(map, key, &mut key_alloc as *mut *const c_char);
+    let val = map_del_cstr_tptr_t(map, key, &mut key_alloc as *mut *const c_char);
     xfree(key_alloc as *mut c_void);
     xfree(val);
 }

@@ -3602,7 +3602,7 @@ extern "C" {
     /// Get entry from map by string key.
     fn nvim_hmll_map_get(map: *mut PMapCstrT, key: *const c_char) -> *mut HMLListEntry;
     /// Get key index from set by string key (returns MH_TOMBSTONE if not found).
-    fn rs_mh_get_cstr_t(set: *mut SetCstrT, key: *const c_char) -> u32;
+    fn mh_get_cstr_t(set: *mut SetCstrT, key: *const c_char) -> u32;
     /// Put entry into map by string key.
     fn nvim_hmll_map_put(map: *mut PMapCstrT, key: *const c_char, entry: *mut HMLListEntry);
     /// Remove entry from map by string key.
@@ -3868,7 +3868,7 @@ pub unsafe extern "C" fn rs_hms_insert(
             // we must update the key pointer in the map to the new string.
             let new_key = entry.data.history_item.string;
             let map = &raw mut (*hmll).contained_entries;
-            let ki = rs_mh_get_cstr_t(&raw mut (*map).set, key);
+            let ki = mh_get_cstr_t(&raw mut (*map).set, key);
             rs_shada_free_entry_contents(&raw mut existing_entry.data);
             existing_entry.data = entry;
             if ki != MH_TOMBSTONE {
