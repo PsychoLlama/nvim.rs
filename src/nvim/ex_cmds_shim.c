@@ -115,8 +115,6 @@ extern void rs_foldMoveRange(win_T *wp, garray_T *gap, linenr_T line1, linenr_T 
                              linenr_T dest);
 extern void rs_foldUpdateAll(win_T *win);
 extern int rs_magic_isset(void);
-// rs_do_sub_msg deleted: now exported as do_sub_msg via #[export_name]
-
 // ExArg accessors
 int nvim_exarg_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
 const char *nvim_exarg_get_arg(exarg_T *eap) { return eap->arg; }
@@ -486,108 +484,11 @@ _Static_assert(REGSUB_COPY == 1, "REGSUB_COPY mismatch - update Rust constant");
 _Static_assert(REGSUB_MAGIC == 2, "REGSUB_MAGIC mismatch - update Rust constant");
 _Static_assert(REGSUB_BACKSLASH == 4, "REGSUB_BACKSLASH mismatch - update Rust constant");
 
-// do_bang, prevcmd management implemented in Rust (rs_do_bang, rs_free_prev_shellcmd)
-// rs_do_bang deleted: now exported as do_bang via #[export_name]
-// rs_free_prev_shellcmd deleted: now exported as free_prev_shellcmd via #[export_name]
-
-// free_prev_shellcmd deleted: now exported directly from Rust via #[export_name]
-
-// do_filter implemented in Rust (rs_do_filter in ex_cmds/src/shell.rs)
-extern void rs_do_filter(int line1, int line2, exarg_T *eap, const char *cmd, int do_in,
-                         int do_out);
-
-/// Filter lines through an external command. Thin wrapper calling the Rust implementation.
-static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char *cmd, bool do_in,
-                      bool do_out)
-{
-  rs_do_filter((int)line1, (int)line2, eap, cmd, do_in ? 1 : 0, do_out ? 1 : 0);
-}
-
-// do_shell deleted: now exported directly from Rust via #[export_name]
-
-// make_filter_cmd deleted: now exported directly from Rust via #[export_name]
-
-// append_redir deleted: Rust exports under the C name directly via #[export_name].
-// rs_append_redir deleted: now exported as append_redir via #[export_name]
-
-// rename_buffer + ex_file implemented in Rust (ex_cmds/src/buffer.rs)
-// rs_rename_buffer deleted: now exported as rename_buffer via #[export_name]
-// rs_ex_file deleted: now exported as ex_file via #[export_name]
-
-// rename_buffer deleted: now exported directly from Rust via #[export_name]
-
-// ex_file deleted: now exported directly from Rust via #[export_name]
-
-// ex_update, ex_write, ex_wnext, do_wqall implemented in Rust (ex_cmds/src/write.rs)
-// rs_ex_update deleted: now exported as ex_update via #[export_name]
-// rs_ex_write deleted: now exported as ex_write via #[export_name]
-// rs_ex_wnext deleted: now exported as ex_wnext via #[export_name]
-// rs_do_wqall deleted: now exported as do_wqall via #[export_name]
 extern int rs_not_writing(void);
 extern int rs_check_writable(const char *fname);
 extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
-// rs_do_write deleted: now exported as do_write via #[export_name]
-// rs_check_overwrite deleted: now exported as check_overwrite via #[export_name]
-// rs_getfile deleted: now exported as getfile via #[export_name]
-// rs_set_swapcommand deleted: now exported as set_swapcommand via #[export_name]
-extern bool set_swapcommand(char *command, linenr_T newlnum);
 extern void rs_delbuf_msg(char *name);
-
-// ex_update deleted: now exported directly from Rust via #[export_name]
-
-// ex_write deleted: now exported directly from Rust via #[export_name]
-
-/// Thin wrapper calling Rust rs_check_writable.
-static int check_writable(const char *fname)
-{
-  return rs_check_writable(fname) == 1 ? OK : FAIL;
-}
-
-/// Thin wrapper calling Rust rs_handle_mkdir_p_arg.
-static int handle_mkdir_p_arg(exarg_T *eap, char *fname)
-{
-  return rs_handle_mkdir_p_arg(eap, fname) == 1 ? OK : FAIL;
-}
-
-// do_write deleted: now exported directly from Rust via #[export_name]
-
-// check_overwrite deleted: now exported directly from Rust via #[export_name]
-
-// ex_wnext deleted: now exported directly from Rust via #[export_name]
-
-// do_wqall deleted: now exported directly from Rust via #[export_name]
-
-/// Thin wrapper calling Rust rs_not_writing.
-///
-/// @return  true and give a message when writing is disabled.
-static bool not_writing(void)
-{
-  return rs_not_writing() != 0;
-}
-
-/// Thin wrapper calling Rust rs_check_readonly.
-/// Note: rs_check_readonly reads/sets forceit via the eap pointer.
-/// This wrapper reconstructs an eap with the passed forceit for compatibility.
-static int check_readonly(int *forceit, buf_T *buf)
-{
-  // We use a local exarg_T to pass forceit through the rs_ interface
-  exarg_T fake_eap = { 0 };
-  fake_eap.forceit = (bool)*forceit;
-  int result = rs_check_readonly(&fake_eap, buf);
-  *forceit = (int)fake_eap.forceit;
-  return result;
-}
-
-// getfile deleted: now exported directly from Rust via #[export_name]
-
-// do_ecmd deleted: now exported directly from Rust via #[export_name]
-
-/// Thin wrapper calling Rust rs_delbuf_msg.
-static void delbuf_msg(char *name)
-{
-  rs_delbuf_msg(name);
-}
 
 static int append_indent = 0;       // autoindent for first line
 
@@ -611,9 +512,7 @@ static int global_need_beginline;       // call beginline() after ":g"
 // implemented in Rust (ex_cmds/src/substitute.rs).
 extern void rs_sub_get_replacement(void *ret_sub);
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
-// rs_free_old_sub deleted: now exported as free_old_sub via #[export_name]
-// rs_ex_substitute deleted: now exported as ex_substitute via #[export_name]
-// rs_ex_substitute_preview deleted: now exported as ex_substitute_preview via #[export_name]
+
 
 /// Get old substitute replacement string. Thin wrapper calling Rust.
 ///
@@ -672,13 +571,6 @@ int nvim_excmds_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
 /// Accessor: return messaging() result.
 int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
-// do_sub_msg deleted: now exported from Rust substitute.rs via #[export_name]
-
-// ex_global deleted: now exported directly from Rust via #[export_name] (ex_cmds/src/global.rs)
-
-// global_exe deleted: now exported directly from Rust via #[export_name]
-
-// free_old_sub deleted: now exported directly from Rust via #[export_name]
 
 /// Set up for a tagpreview.
 ///
@@ -726,10 +618,6 @@ void nvim_excmds_set_foldcolumn_zero(void)
   set_option_direct(kOptFoldcolumn, STATIC_CSTR_AS_OPTVAL("0"), 0, SID_NONE);
 }
 
-// prepare_tagpreview deleted: now exported from Rust window.rs via #[export_name]
-// ex_substitute deleted: now exported from Rust substitute.rs via #[export_name]
-// ex_substitute_preview deleted: now exported from Rust substitute.rs via #[export_name]
-
 // --- ex_oldfiles FFI accessors ---
 
 int nvim_excmds_oldfiles_count(void)
@@ -767,8 +655,6 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 }
 void nvim_excmds_xfree(void *ptr) { xfree(ptr); }
 
-// ex_oldfiles deleted: now exported directly from Rust via #[export_name] (ex_cmds/src/display.rs)
-
 // --- do_bang FFI accessors ---
 
 int nvim_excmds_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
@@ -787,12 +673,6 @@ void nvim_excmds_append_to_redobuff(const char *s) { AppendToRedobuff((char *)s)
 void nvim_excmds_ui_cursor_goto(int row, int col) { ui_cursor_goto(row, col); }
 int nvim_excmds_get_msg_row(void) { return msg_row; }
 int nvim_excmds_get_msg_col(void) { return msg_col; }
-void nvim_excmds_do_shell_wrapper(char *cmd, int flags) { do_shell(cmd, flags); }
-void nvim_excmds_do_filter_wrapper(linenr_T line1, linenr_T line2, exarg_T *eap,
-                                    char *cmd, bool do_in, bool do_out)
-{
-  do_filter(line1, line2, eap, cmd, do_in, do_out);
-}
 void nvim_excmds_apply_autocmds_shellfilterpost(void)
 {
   apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
@@ -1027,8 +907,6 @@ int nvim_excmds_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 /// Set curwin->w_cursor.col to 0 (for nested global).
 void nvim_excmds_curwin_set_col_zero(void) { curwin->w_cursor.col = 0; }
 
-// rs_ex_global deleted: now exported as ex_global via #[export_name]
-
 // --- rename_buffer + ex_file FFI accessors ---
 
 /// Save and return curbuf identity (opaque pointer for comparison).
@@ -1133,14 +1011,6 @@ int nvim_excmds_os_path_exists_curbuf_ffname(void)
   return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0;
 }
 
-/// Wrapper for do_write(eap). Returns OK (1) or FAIL (0).
-int nvim_excmds_do_write(exarg_T *eap) { return do_write(eap) == OK ? 1 : 0; }
-
-/// Wrapper for do_bang with the specific args used by ex_write filter.
-void nvim_excmds_do_bang_write_filter(exarg_T *eap)
-{
-  do_bang(1, eap, false, true, false);
-}
 
 /// Check if eap->cmdidx == CMD_saveas.
 int nvim_exarg_cmdidx_is_saveas(const exarg_T *eap)
@@ -1417,11 +1287,6 @@ void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
 /// Wrap no_write_message().
 void nvim_excmds_no_write_message(void) { no_write_message(); }
 
-/// Wrap do_ecmd(fnum, ffname, sfname, NULL, lnum, flags, curwin). Returns 1=OK, 0=FAIL.
-int nvim_excmds_do_ecmd_getfile(int fnum, char *ffname, char *sfname, int lnum, int flags)
-{
-  return do_ecmd(fnum, ffname, sfname, NULL, (linenr_T)lnum, flags, curwin) == OK ? 1 : 0;
-}
 
 /// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
 const char *nvim_excmds_get_vim_var_str_swapcommand(void)
@@ -1499,11 +1364,6 @@ int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out)
   return result;
 }
 
-/// Wrap check_overwrite for wqall (other=false). Returns 1=OK, 0=FAIL.
-int nvim_excmds_check_overwrite_wqall(exarg_T *eap, buf_T *buf)
-{
-  return check_overwrite(eap, buf, buf->b_fname, buf->b_ffname, false) == OK ? 1 : 0;
-}
 
 /// Set a bufref to buf. Opaque handle for buffer reference tracking.
 /// Uses a C-allocated bufref_T. Returns opaque pointer to bufref.
@@ -1523,11 +1383,7 @@ int nvim_excmds_bufref_valid(void *ref)
 /// Free a bufref created with nvim_excmds_new_bufref.
 void nvim_excmds_free_bufref(void *ref) { xfree(ref); }
 
-/// Wrap handle_mkdir_p_arg(eap, buf->b_fname). Returns 1=OK, 0=FAIL.
-int nvim_excmds_handle_mkdir_p_wqall(exarg_T *eap, buf_T *buf)
-{
-  return handle_mkdir_p_arg(eap, buf->b_fname) == OK ? 1 : 0;
-}
+
 
 /// Wrap buf_write_all(buf, forceit). Returns 1=OK, 0=FAIL.
 int nvim_excmds_buf_write_all(buf_T *buf, int forceit)
@@ -1650,11 +1506,11 @@ int nvim_excmds_bt_dontwrite_msg_curbuf(void) { return bt_dontwrite_msg(curbuf) 
 /// Wrap check_fname(). Returns 1=OK, 0=FAIL.
 int nvim_excmds_check_fname(void) { return check_fname() == OK ? 1 : 0; }
 
-/// Check curbuf->b_ffname writable (Unix: check_writable).
+/// Check curbuf->b_ffname writable (Unix: rs_check_writable).
 int nvim_excmds_curbuf_check_writable(void)
 {
 #ifdef UNIX
-  return check_writable(curbuf->b_ffname) == OK ? 1 : 0;
+  return rs_check_writable(curbuf->b_ffname);
 #else
   return 1;
 #endif
@@ -1669,12 +1525,6 @@ int nvim_excmds_dialog_write_partial(void)
   return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
 }
 
-/// Wrap check_overwrite via rs_ (call it directly). Returns 1=OK, 0=FAIL.
-int nvim_excmds_check_overwrite(exarg_T *eap, buf_T *buf, const char *fname,
-                                const char *ffname, int other)
-{
-  return check_overwrite(eap, buf, (char *)fname, (char *)ffname, (bool)other) == OK ? 1 : 0;
-}
 
 /// Do saveas: apply BufFilePre, swap names, BufFilePost, BufAdd autocmds.
 /// Returns 1=OK (write can proceed), 0=FAIL (buffer changed, abort).
@@ -2360,7 +2210,7 @@ void nvim_ecmd_setaltfname(char *ffname, char *sfname, int lnum)
 }
 
 /// Call delbuf_msg(name). Also frees name.
-void nvim_ecmd_delbuf_msg(char *name) { delbuf_msg(name); }
+void nvim_ecmd_delbuf_msg(char *name) { rs_delbuf_msg(name); }
 
 /// Call otherfile(ffname). Returns 1 if different file.
 int nvim_ecmd_otherfile(char *ffname) { return otherfile(ffname) ? 1 : 0; }
@@ -2423,11 +2273,7 @@ void nvim_ecmd_do_cmdline(const char *command)
 /// Call set_vim_var_string(VV_SWAPCOMMAND, NULL, -1) to clear swapcommand
 void nvim_ecmd_clear_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 
-/// Call set_swapcommand(command, newlnum). Returns 1 if swapcommand was set.
-int nvim_ecmd_set_swapcommand(const char *command, int newlnum)
-{
-  return set_swapcommand((char *)command, (linenr_T)newlnum) ? 1 : 0;
-}
+
 
 /// Get p_ur (undoreload option). Returns -1 if unlimited.
 int64_t nvim_ecmd_get_p_ur(void) { return (int64_t)p_ur; }

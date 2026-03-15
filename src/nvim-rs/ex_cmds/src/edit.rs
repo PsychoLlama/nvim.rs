@@ -227,7 +227,7 @@ extern "C" {
     fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char;
     fn nvim_ecmd_do_cmdline(command: *const c_char);
     fn nvim_ecmd_clear_swapcommand();
-    fn nvim_ecmd_set_swapcommand(command: *const c_char, newlnum: c_int) -> c_int;
+
     fn nvim_ecmd_emsg_closing_buffer();
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_ecmd_should_dec_nwindows_on_locked(oldwin: *mut WinHandle) -> c_int;
@@ -395,7 +395,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         }
 
         // Set up v:swapcommand
-        did_set_swapcommand = nvim_ecmd_set_swapcommand(command, newlnum) != 0;
+        did_set_swapcommand = crate::write::rs_set_swapcommand(command, newlnum);
 
         // ================================================================
         // other_file: open or find the buffer for the other file

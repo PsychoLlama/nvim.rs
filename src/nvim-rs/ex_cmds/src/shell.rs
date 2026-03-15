@@ -447,15 +447,6 @@ extern "C" {
     fn nvim_excmds_ui_cursor_goto(row: c_int, col: c_int);
     fn nvim_excmds_get_msg_row() -> c_int;
     fn nvim_excmds_get_msg_col() -> c_int;
-    fn nvim_excmds_do_shell_wrapper(cmd: *mut c_char, flags: c_int);
-    fn nvim_excmds_do_filter_wrapper(
-        line1: c_int,
-        line2: c_int,
-        eap: *mut crate::ExArgHandle,
-        cmd: *mut c_char,
-        do_in: bool,
-        do_out: bool,
-    );
     fn nvim_excmds_apply_autocmds_shellfilterpost();
     fn msg_start();
     fn msg_putchar(c: c_int);
@@ -1025,11 +1016,11 @@ pub unsafe extern "C" fn rs_do_bang(
         let col = nvim_excmds_get_msg_col();
         nvim_excmds_ui_cursor_goto(row, col);
 
-        nvim_excmds_do_shell_wrapper(newcmd, 0);
+        rs_do_shell(newcmd, 0);
     } else {
         // :range! -- filter through shell command
         // Note: This may recursively call do_bang() again (via autocommands).
-        nvim_excmds_do_filter_wrapper(line1, line2, eap, newcmd, do_in, do_out);
+        rs_do_filter(line1, line2, eap, newcmd, do_in as c_int, do_out as c_int);
         nvim_excmds_apply_autocmds_shellfilterpost();
     }
 
