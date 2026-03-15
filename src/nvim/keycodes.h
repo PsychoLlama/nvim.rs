@@ -502,6 +502,8 @@ enum {
 };
 
 // Rust-exported functions (from nvim-rs/keycodes)
+char *replace_termcodes(const char *from, size_t from_len, char **bufp, scid_T sid_arg,
+                        int flags, bool *did_simplify, const char *cpo_val);
 int name_to_mod_mask(int c);
 int simplify_key(int key, int *modifiers);
 int handle_x_keys(int key);

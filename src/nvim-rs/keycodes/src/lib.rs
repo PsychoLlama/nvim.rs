@@ -158,6 +158,10 @@ const FSK_KEEP_X_KEY: c_int = 0x02; // don't translate xHome to Home key
 const FSK_IN_STRING: c_int = 0x04; // in string, double quote is escaped
 const FSK_SIMPLIFY: c_int = 0x08; // simplify <C-H>, etc.
 
+// CPO_* characters used in 'cpoptions' (from option_defs.h)
+/// When 'B' is in 'cpoptions', backslash is NOT a special character
+const CPO_BSLASH: c_int = b'B' as c_int;
+
 // REPTERM_* flags for replace_termcodes
 const REPTERM_FROM_PART: c_int = 1;
 const REPTERM_DO_LT: c_int = 2;
@@ -529,6 +533,10 @@ extern "C" {
 
     /// Emit the "using `<SID>` not in script context" error message.
     fn nvim_keycodes_emit_sid_error();
+
+    /// Search for character `c` in string `s`. Returns pointer to first
+    /// occurrence, or NULL if not found.
+    fn vim_strchr(s: *const std::ffi::c_char, c: c_int) -> *mut std::ffi::c_char;
 }
 
 /// Try to find key "c" in the special key table.
@@ -1981,14 +1989,13 @@ fn starts_with_ignore_case(haystack: &[u8], needle: &[u8]) -> bool {
 /// - `from` must be a valid pointer to at least `from_len` bytes.
 /// - `buf` must be a valid pointer to at least `from_len * 6 + 1` bytes.
 /// - `did_simplify` may be null.
-#[no_mangle]
 #[allow(
     clippy::too_many_lines,
     clippy::too_many_arguments,
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation
 )]
-pub unsafe extern "C" fn rs_replace_termcodes(
+unsafe fn rs_replace_termcodes(
     from: *const std::ffi::c_char,
     from_len: usize,
     buf: *mut std::ffi::c_char,
@@ -2165,6 +2172,76 @@ pub unsafe extern "C" fn rs_replace_termcodes(
     *buf_u8.add(dlen) = 0; // NUL terminate
 
     buf
+}
+
+/// Replace termcodes in `from`, writing the result to `*bufp`.
+///
+/// This is the exported replacement for the C `replace_termcodes` wrapper.
+/// It handles allocation, `CPO_BSLASH` detection, and `REPTERM_NO_SPECIAL` flag.
+///
+/// If `*bufp` is NULL, a buffer is allocated via `xmalloc` and `*bufp` is set
+/// to the (realloc'd) result. If `*bufp` is non-NULL, it is used as-is and
+/// is assumed to be 128 bytes (enough for transcoding LHS of a mapping).
+///
+/// On overflow (fixed buffer too small), `*bufp` is set to NULL and NULL is
+/// returned.
+///
+/// # Safety
+/// - `from` must be a valid pointer to at least `from_len` bytes.
+/// - `bufp` must be a valid non-null pointer to a `*mut c_char`.
+/// - `cpo_val` must be a valid null-terminated C string.
+/// - `did_simplify` may be null.
+#[unsafe(export_name = "replace_termcodes")]
+#[allow(clippy::too_many_arguments, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn exported_replace_termcodes(
+    from: *const std::ffi::c_char,
+    from_len: usize,
+    bufp: *mut *mut std::ffi::c_char,
+    sid_arg: ScidT,
+    flags: c_int,
+    did_simplify: *mut bool,
+    cpo_val: *const std::ffi::c_char,
+) -> *mut std::ffi::c_char {
+    // Determine flags from cpo_val and flags
+    let do_backslash = vim_strchr(cpo_val, CPO_BSLASH).is_null();
+    let do_special = (flags & REPTERM_NO_SPECIAL) == 0;
+
+    let allocated = (*bufp).is_null();
+
+    // Allocate space for the translation. Worst case: 6 bytes per char + NUL.
+    let buf_len = if allocated { from_len * 6 + 1 } else { 128 };
+    let result: *mut std::ffi::c_char = if allocated {
+        nvim_memory::xmalloc(buf_len).cast()
+    } else {
+        *bufp
+    };
+
+    let ret = rs_replace_termcodes(
+        from,
+        from_len,
+        result,
+        sid_arg,
+        flags,
+        did_simplify,
+        do_backslash,
+        do_special,
+    );
+
+    if ret.is_null() {
+        // Overflow with fixed buffer
+        if allocated {
+            nvim_memory::xfree(result.cast());
+        }
+        *bufp = std::ptr::null_mut();
+        return std::ptr::null_mut();
+    }
+
+    if allocated {
+        let new_len = libc::strlen(result) + 1;
+        *bufp = nvim_memory::xrealloc(result.cast(), new_len).cast();
+    }
+
+    *bufp
 }
 
 #[cfg(test)]
