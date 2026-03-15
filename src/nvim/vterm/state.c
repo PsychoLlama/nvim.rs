@@ -3023,3 +3023,65 @@ void nvim_vterm_state_call_setpenattr(VTermState *state, int attr, VTermValue *v
     (*state->callbacks->setpenattr)(attr, val, state->cbdata);
   }
 }
+
+// =============================================================================
+// Thin C wrappers for Rust pen.rs FFI exports (moved from pen.c)
+// =============================================================================
+
+// Rust FFI declarations (implemented in src/nvim-rs/vterm/src/pen.rs)
+extern void rs_vterm_state_newpen(VTermState *state);
+extern void rs_vterm_state_resetpen(VTermState *state);
+extern void rs_vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
+                                              const VTermColor *default_bg);
+extern void rs_vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col);
+extern void rs_vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col);
+extern void rs_vterm_state_savepen(VTermState *state, int save);
+extern int rs_vterm_state_set_penattr(VTermState *state, int attr, int type, VTermValue *val);
+extern void rs_vterm_state_setpen(VTermState *state, const long args[], int argcount);
+extern int rs_vterm_state_getpen(VTermState *state, long args[], int argcount);
+
+void vterm_state_newpen(VTermState *state)
+{
+  rs_vterm_state_newpen(state);
+}
+
+void vterm_state_resetpen(VTermState *state)
+{
+  rs_vterm_state_resetpen(state);
+}
+
+void vterm_state_savepen(VTermState *state, int save)
+{
+  rs_vterm_state_savepen(state, save);
+}
+
+void vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
+                                    const VTermColor *default_bg)
+{
+  rs_vterm_state_set_default_colors(state, default_fg, default_bg);
+}
+
+void vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col)
+{
+  rs_vterm_state_set_palette_color(state, index, col);
+}
+
+void vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col)
+{
+  rs_vterm_state_convert_color_to_rgb(state, col);
+}
+
+void vterm_state_setpen(VTermState *state, const long args[], int argcount)
+{
+  rs_vterm_state_setpen(state, args, argcount);
+}
+
+int vterm_state_getpen(VTermState *state, long args[], int argcount)
+{
+  return rs_vterm_state_getpen(state, args, argcount);
+}
+
+int vterm_state_set_penattr(VTermState *state, VTermAttr attr, VTermValueType type, VTermValue *val)
+{
+  return rs_vterm_state_set_penattr(state, (int)attr, (int)type, val);
+}

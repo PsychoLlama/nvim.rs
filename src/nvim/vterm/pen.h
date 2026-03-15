@@ -4,4 +4,25 @@
 
 #include "nvim/vterm/vterm_defs.h"
 
-#include "vterm/pen.h.generated.h"
+// These functions are implemented in src/nvim-rs/vterm/src/pen.rs (Rust) and
+// wrapped in src/nvim/vterm/state.c (C).
+
+#ifndef DLLEXPORT
+#  ifdef MSWIN
+#    define DLLEXPORT __declspec(dllexport)
+#  else
+#    define DLLEXPORT
+#  endif
+#endif
+
+DLLEXPORT void vterm_state_newpen(VTermState *state);
+DLLEXPORT void vterm_state_resetpen(VTermState *state);
+DLLEXPORT void vterm_state_savepen(VTermState *state, int save);
+DLLEXPORT void vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
+                                              const VTermColor *default_bg);
+DLLEXPORT void vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col);
+DLLEXPORT void vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col);
+DLLEXPORT void vterm_state_setpen(VTermState *state, const long args[], int argcount);
+DLLEXPORT int vterm_state_getpen(VTermState *state, long args[], int argcount);
+DLLEXPORT int vterm_state_set_penattr(VTermState *state, VTermAttr attr, VTermValueType type,
+                                      VTermValue *val);
