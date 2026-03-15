@@ -1071,7 +1071,8 @@ pub unsafe extern "C" fn rs_check_visual_pos() {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[unsafe(export_name = "inc_cursor")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_inc_cursor() -> c_int {
     nvim_inc_cursor()
 }
@@ -1085,7 +1086,8 @@ pub unsafe extern "C" fn rs_inc_cursor() -> c_int {
 ///
 /// # Safety
 /// Requires valid global state (curwin, curbuf).
-#[no_mangle]
+#[unsafe(export_name = "dec_cursor")]
+#[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_dec_cursor() -> c_int {
     nvim_dec_cursor()
 }

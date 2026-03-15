@@ -4,6 +4,8 @@
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
 // Rust-exported functions (from nvim-rs/cursor)
+int inc_cursor(void);
+int dec_cursor(void);
 int gchar_cursor(void);
 int getviscol(void);
 int getviscol2(colnr_T col, colnr_T coladd);
