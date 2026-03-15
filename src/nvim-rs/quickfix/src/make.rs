@@ -69,8 +69,9 @@ extern "C" {
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_didout(val: c_int);
     fn nvim_msg_start();
-    fn nvim_msg_puts_colon_bang();
-    fn nvim_msg_outtrans_cmd(cmd: *const c_char);
+    fn msg_puts(s: *const c_char);
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    // (nvim_msg_puts_colon_bang, nvim_msg_outtrans_cmd deleted: use msg_puts/msg_outtrans directly)
 
     // autowrite, shell, remove
     fn nvim_autowrite_all();
@@ -80,7 +81,8 @@ extern "C" {
     // OS helpers for get_mef_name
     fn nvim_os_get_pid() -> c_int;
     fn nvim_os_fileinfo_link_exists(name: *const c_char) -> bool;
-    fn nvim_emsg_notmp();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_emsg_notmp deleted: use emsg directly)
     fn nvim_vim_tempname() -> *mut c_char;
 
     // Memory
@@ -154,9 +156,8 @@ extern "C" {
     fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
     fn nvim_curbuf_ptr() -> *mut c_void;
     fn nvim_skipdigits_str(s: *const c_char) -> *const c_char;
-    fn nvim_emsg_invarg();
-    fn nvim_emsg_buf_not_loaded();
-    fn nvim_emsg_invrange();
+    // (nvim_emsg_invarg, nvim_emsg_buf_not_loaded, nvim_emsg_invrange deleted: use emsg directly)
+    // emsg declared earlier in this file
     fn nvim_eap_set_line1(eap: EapHandle, lnum: LinenrT);
     fn nvim_eap_set_line2(eap: EapHandle, lnum: LinenrT);
 
@@ -166,7 +167,8 @@ extern "C" {
     fn nvim_tv_get_vval_string(tv: *const c_void) -> *const c_char;
     fn nvim_tv_is_list(tv: *const c_void) -> bool;
     fn nvim_tv_free_void(tv: *mut c_void);
-    fn nvim_emsg_e777();
+    // (nvim_emsg_e777 deleted: use emsg directly)
+    // emsg declared earlier in this file
 
     // autocmd wrappers
     fn nvim_qf_apply_autocmd_pre(au_name: *const c_char) -> bool;
@@ -258,7 +260,7 @@ pub unsafe extern "C" fn rs_get_mef_name() -> *mut c_char {
         // For now call the C wrapper for vim_tempname.
         let name = nvim_vim_tempname();
         if name.is_null() {
-            nvim_emsg_notmp();
+            emsg(c"E483: Can't get temp file name".as_ptr());
         }
         return name;
     }
@@ -361,8 +363,8 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
         nvim_set_msg_didout(0);
     }
     nvim_msg_start();
-    nvim_msg_puts_colon_bang();
-    nvim_msg_outtrans_cmd(cmd);
+    msg_puts(c":!".as_ptr());
+    msg_outtrans(cmd, 0, false);
 
     cmd
 }
@@ -620,12 +622,12 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
     }
 
     if buf.is_null() {
-        nvim_emsg_invarg();
+        emsg(c"E474: Invalid argument".as_ptr());
         return FAIL;
     }
 
     if !nvim_buf_has_ml_mfp_void(buf) {
-        nvim_emsg_buf_not_loaded();
+        emsg(c"E681: Buffer is not loaded".as_ptr());
         return FAIL;
     }
 
@@ -641,7 +643,7 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
     let line2 = nvim_eap_get_line2(eap);
 
     if line1 < 1 || line1 > ml_line_count || line2 < 1 || line2 > ml_line_count {
-        nvim_emsg_invrange();
+        emsg(c"E16: Invalid range".as_ptr());
         return FAIL;
     }
 
@@ -823,7 +825,7 @@ pub unsafe extern "C" fn rs_ex_cexpr(eap: EapHandle) {
 
         nvim_decr_quickfix_busy();
     } else {
-        nvim_emsg_e777();
+        emsg(c"E777: String or List expected".as_ptr());
     }
 
     nvim_tv_free_void(tv);

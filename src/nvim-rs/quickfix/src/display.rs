@@ -425,7 +425,8 @@ const MAXPATHL: usize = 4096;
 
 extern "C" {
     fn nvim_qf_buf_is_curbuf(buf: BufHandle) -> bool;
-    fn nvim_qf_fill_buffer_internal_error();
+    fn internal_error(where_: *const c_char);
+    // (nvim_qf_fill_buffer_internal_error deleted: use internal_error directly)
     fn nvim_qf_delete_all_lines() -> bool;
     fn nvim_qf_zero_skipcol_for_curbuf();
     fn nvim_qf_u_clearallandblockfree();
@@ -779,7 +780,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
 
     if old_last.is_null() {
         if !nvim_qf_buf_is_curbuf(buf) {
-            nvim_qf_fill_buffer_internal_error();
+            internal_error(c"rs_qf_fill_buffer()".as_ptr());
             return;
         }
 
@@ -887,7 +888,11 @@ extern "C" {
     fn nvim_qf_get_listcount(qi: QfInfoHandleConst) -> c_int;
     fn nvim_qf_get_list_at(qi: QfInfoHandleConst, idx: c_int) -> *const c_void;
     fn nvim_qf_get_title(qfl: *const c_void) -> *const c_char;
-    fn nvim_qf_trunc_and_msg(buf: *const c_char);
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize) -> usize;
+    fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int);
+    fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> bool;
+    static Columns: c_int;
+    // (nvim_qf_trunc_and_msg deleted: inlined below)
 }
 // Note: nvim_qf_get_count is already declared in the Phase 3 extern block above.
 
@@ -955,8 +960,21 @@ pub unsafe extern "C" fn rs_qf_msg(qi: QfInfoHandleConst, which: c_int, lead: *c
     // Null-terminate for C
     msg_buf.push('\0');
 
-    // Hand off to C for truncation and display
-    nvim_qf_trunc_and_msg(msg_buf.as_ptr().cast::<c_char>());
+    // Inline nvim_qf_trunc_and_msg: truncate to Columns-1 and display
+    // IOSIZE = 1025 (same as C's IOSIZE for trunc_string)
+    let mut buf = [0u8; 1025];
+    xstrlcpy(
+        buf.as_mut_ptr().cast::<c_char>(),
+        msg_buf.as_ptr().cast::<c_char>(),
+        1025,
+    );
+    trunc_string(
+        buf.as_ptr().cast::<c_char>(),
+        buf.as_mut_ptr().cast::<c_char>(),
+        Columns - 1,
+        1025,
+    );
+    msg(buf.as_ptr().cast::<c_char>(), 0);
 }
 
 // =============================================================================
@@ -971,9 +989,10 @@ extern "C" {
     fn nvim_message_filtered(str: *const c_char) -> c_int;
     // Direct message output (Phase 14: replacing nvim_qf_list_entry_output)
     fn nvim_msg_putchar(c: c_int);
-    fn nvim_msg_outtrans_attr(s: *const c_char, attr: c_int);
-    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
-    fn nvim_msg_puts_plain(s: *const c_char);
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    fn msg_puts_hl(s: *const c_char, attr: c_int, right: bool);
+    fn msg_puts(s: *const c_char);
+    // (nvim_msg_outtrans_attr, nvim_msg_puts_plain deleted: use msg_outtrans/msg_puts directly)
     fn nvim_msg_prt_line(s: *const c_char, list: c_int);
     fn nvim_hlf_qfl() -> c_int;
 
@@ -1205,10 +1224,10 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     } else {
         qf_file_hl_id
     };
-    nvim_msg_outtrans_attr(prefix_string.as_ptr(), prefix_hl);
+    msg_outtrans(prefix_string.as_ptr(), prefix_hl, false);
 
     if lnum != 0 {
-        nvim_msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
+        msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
     }
 
     // Build range+type combined NUL-terminated buffer
@@ -1223,16 +1242,16 @@ pub unsafe extern "C" fn rs_qf_list_entry(
         .unwrap_or(type_buf_arr.len());
     combined.extend_from_slice(&type_buf_arr[..type_len]);
     combined.push(0u8); // NUL terminate
-    nvim_msg_puts_hl(combined.as_ptr().cast::<c_char>(), qf_line_hl_id, false);
-    nvim_msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
+    msg_puts_hl(combined.as_ptr().cast::<c_char>(), qf_line_hl_id, false);
+    msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
 
     if !pattern.is_null() && pattern_len > 0 {
         // pattern_buf is already NUL-terminated at pattern_len
-        nvim_msg_puts_plain(pattern_buf.as_ptr().cast::<c_char>());
-        nvim_msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
+        msg_puts(pattern_buf.as_ptr().cast::<c_char>());
+        msg_puts_hl(c":".as_ptr(), qf_sep_hl_id, false);
     }
 
-    nvim_msg_puts_plain(c" ".as_ptr());
+    msg_puts(c" ".as_ptr());
 
     // body_buf is already NUL-terminated at body_len (or just NUL if empty)
     nvim_msg_prt_line(body_buf.as_ptr().cast::<c_char>(), 0);

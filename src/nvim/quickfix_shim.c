@@ -516,8 +516,6 @@ int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : (
 // nvim_qf_entry_present deleted: logic migrated to rs_qf_entry_present Rust loop (Phase 16).
 // nvim_qf_types deleted: no callers; rs_qf_types handles logic directly (Phase 16).
 
-void nvim_emsg_e_no_more_items(void) { emsg(_(N_("E553: No more items"))); }
-
 void nvim_qf_increment_listcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_listcount++; }
 
 /// Decrement the list count after removing a list
@@ -920,9 +918,6 @@ void *nvim_qf_tv_get_dict(const void *tv) { return (tv == NULL || ((const typval
 /// Get a list from a typval_T (qf-specific void* version).
 void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval_T *)tv)->v_type != VAR_LIST) ? NULL : ((const typval_T *)tv)->vval.v_list; }
 
-/// Emit e_dictreq error.
-void nvim_emsg_dictreq(void) { emsg(_(e_dictreq)); }
-
 /// Get the qfl->qf_ctx as a raw pointer (NULL if not set).
 void *nvim_qfl_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 
@@ -1113,22 +1108,6 @@ bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
 // nvim_tv_dict_find_di_tv deleted: callers use nvim_tv_dict_find directly (Phase 15)
 // nvim_tv_get_string_if_string deleted: no longer called from Rust (Phase 15)
 
-/// Emit E927 invalid action error.
-void nvim_emsg_invact(const char *act)
-{
-  static const char *e_invact = N_("E927: Invalid action: '%s'");
-  semsg(_(e_invact), act);
-}
-
-/// Emit e_listreq error.
-void nvim_emsg_listreq(void) { emsg(_(e_listreq)); }
-
-/// Emit e_au_recursive error.
-void nvim_emsg_au_recursive(void) { emsg(_(e_au_recursive)); }
-
-/// Emit e_string_required error.
-void nvim_emsg_string_required(void) { emsg(_(e_string_required)); }
-
 /// Set typval_T vval.v_number (qf-specific void* version).
 void nvim_qf_tv_set_number(void *tv_void, int64_t nr)
 {
@@ -1315,13 +1294,6 @@ void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
     ((win_T *)wp_void)->w_llist_ref = (qf_info_T *)qi_void;
   }
 }
-
-/// Emit "cannot have both a list and a 'what' argument" error.
-void nvim_semsg_list_and_what(void)
-{
-  semsg(_(e_invarg2), _("cannot have both a list and a \"what\" argument"));
-}
-
 
 // ---- Rust Phase 4 forward declarations ----
 // rs_set_errorlist deleted: now exported as set_errorlist via #[export_name]
@@ -1527,31 +1499,9 @@ const char *nvim_qf_skipwhite(const char *p)
   return p == NULL ? NULL : skipwhite(p);
 }
 
-/// Emit error E379 (missing directory name).
-void nvim_qf_emsg_missing_dir(void)
-{
-  emsg(_("E379: Missing or empty directory name"));
-}
-
 // =============================================================================
 // Phase 9: Reader state accessors for Rust QfParserState
 // =============================================================================
-
-/// Open a file for reading; handles "-" (stdin). Returns NULL on failure.
-/// Emits E_OPENERRF on failure. Caller must fclose() when done.
-FILE *nvim_qf_open_file_for_read(const char *efile)
-{
-  if (efile == NULL) {
-    return NULL;
-  }
-  FILE *fd = (strequal(efile, "-")
-              ? fdopen(os_open_stdin_fd(), "r")
-              : os_fopen(efile, "r"));
-  if (fd == NULL) {
-    semsg(_(e_openerrf), efile);
-  }
-  return fd;
-}
 
 /// Close a FILE*. Safe to call with NULL.
 void nvim_qf_fclose(FILE *fd)
@@ -1736,27 +1686,6 @@ void nvim_qf_vim_regfree(void *prog) { vim_regfree(prog); }
 /// Wrapper for xstrdup used by Rust's EFM cache.
 char *nvim_qf_xstrdup(const char *s) { return s == NULL ? NULL : xstrdup(s); }
 
-/// Error message E372: Too many %%%c in format string
-void nvim_qf_semsg_efm_e372(char ch) { semsg(_("E372: Too many %%%c in format string"), ch); }
-
-/// Error message E373: Unexpected %%%c in format string
-void nvim_qf_semsg_efm_e373(char ch) { semsg(_("E373: Unexpected %%%c in format string"), ch); }
-
-/// Error message E374: Missing ] in format string
-void nvim_qf_emsg_efm_e374(void) { emsg(_("E374: Missing ] in format string")); }
-
-/// Error message E375: Unsupported %%%c in format string
-void nvim_qf_semsg_efm_e375(char ch) { semsg(_("E375: Unsupported %%%c in format string"), ch); }
-
-/// Error message E376: Invalid %%%c in format string prefix
-void nvim_qf_semsg_efm_e376(char ch) { semsg(_("E376: Invalid %%%c in format string prefix"), ch); }
-
-/// Error message E377: Invalid %%%c in format string
-void nvim_qf_semsg_efm_e377(char ch) { semsg(_("E377: Invalid %%%c in format string"), ch); }
-
-/// Error message E378: 'errorformat' contains no pattern
-void nvim_qf_emsg_efm_e378(void) { emsg(_("E378: 'errorformat' contains no pattern")); }
-
 // qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.
 
 // All qf_parse_fmt_* functions, copy_nonerror_line, qf_parse_match, qf_parse_get_fields,
@@ -1831,17 +1760,8 @@ bool nvim_qf_prevwin_valid_for_wfb(void)
   return rs_win_valid(prevwin) && !prevwin->w_p_wfb && !bt_quickfix(prevwin->w_buffer);
 }
 
-/// Emit e_winfixbuf_cannot_go_to_buffer error.
-void nvim_qf_emsg_winfixbuf(void) { emsg(_(e_winfixbuf_cannot_go_to_buffer)); }
-
 // nvim_qf_jump_open_help, nvim_qf_jump_open_file, nvim_qf_jump_loc_win_closed
 // deleted: logic inlined into rs_qf_jump_edit_buffer (Phase 15).
-
-void nvim_qf_jump_emsg_win_closed(void) { emsg(_("E924: Current window was closed")); }
-
-void nvim_qf_jump_emsg_qf_changed(void) { emsg(_(N_("E925: Current quickfix list was changed"))); }
-
-void nvim_qf_jump_emsg_ll_changed(void) { emsg(_(N_("E926: Current location list was changed"))); }
 
 _Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
 _Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
@@ -1980,10 +1900,6 @@ bool nvim_qf_do_search_pattern(const char *pat)
     return false;
   }
   return true;
-}
-bool nvim_msg_keep_qf(const char *s, int attr, bool keep, bool multiline)
-{
-  return msg_keep(s, attr, keep, multiline);
 }
 int nvim_qf_get_curlist_count(const void *qi_void)
 {
@@ -2431,8 +2347,6 @@ bool nvim_qf_get_key_typed(void) { return KeyTyped; }
 
 void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
-void nvim_qf_fill_buffer_internal_error(void) { internal_error("rs_qf_fill_buffer()"); }
-
 void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
 // qf_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 14).
@@ -2457,8 +2371,6 @@ const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
 // Shell/message helpers
 void nvim_append_redir(char *buf, size_t buflen, const char *opt, const char *name) { append_redir(buf, buflen, opt, name); }
-void nvim_msg_puts_colon_bang(void) { msg_puts(":!"); }
-void nvim_msg_outtrans_cmd(const char *cmd) { msg_outtrans(cmd, 0, false); }
 
 // autowrite, shell, remove
 void nvim_autowrite_all(void) { autowrite_all(); }
@@ -2470,7 +2382,6 @@ char *nvim_vim_tempname(void) { return vim_tempname(); }
 // OS helpers for get_mef_name
 int nvim_os_get_pid(void) { return (int)os_get_pid(); }
 bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
-void nvim_emsg_notmp(void) { emsg(_(e_notmp)); }
 
 // curlist id accessor for quickfix list change tracking
 unsigned nvim_qf_get_curlist_id(const void *qi_void)
@@ -2503,9 +2414,6 @@ const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)b
 void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
 void *nvim_curbuf_ptr(void) { return (void *)curbuf; }
 const char *nvim_skipdigits_str(const char *str) { return (const char *)skipdigits(str); }
-void nvim_emsg_invarg(void) { emsg(_(e_invarg)); }
-void nvim_emsg_buf_not_loaded(void) { emsg(_(e_buffer_is_not_loaded)); }
-
 // eval_expr / tv_free wrappers for ex_cexpr
 void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
 // nvim_tv_get_type: already defined in eval/typval.h (takes const typval_T*)
@@ -2515,7 +2423,6 @@ int nvim_tv_get_type_void(const void *tv) { return ((const typval_T *)tv)->v_typ
 const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)tv)->vval.v_string; }
 bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
-void nvim_emsg_e777(void) { emsg(_("E777: String or List expected")); }
 
 // QuickFixCmdPre/Post autocmd wrappers for ex_make cluster
 // Returns true if autocmd fired and aborting() is false (OK to continue),
@@ -2613,20 +2520,6 @@ void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 
 // nvim_qf_msg deleted: Rust bypasses via #[link_name = "rs_qf_msg"]
 
-void nvim_emsg_loclist(void) { emsg(_(e_loclist)); }
-
-void nvim_emsg_no_errors(void) { emsg(_(e_no_errors)); }
-
-void nvim_emsg_at_bottom(void) { emsg(_("E380: At bottom of quickfix stack")); }
-
-void nvim_emsg_at_top(void) { emsg(_("E381: At top of quickfix stack")); }
-
-void nvim_msg_no_entries(void) { msg(_("No entries"), 0); }
-
-void nvim_emsg_invrange(void) { emsg(_(e_invrange)); }
-
-void nvim_qf_trunc_and_msg(const char *buf_in) { char buf[IOSIZE]; xstrlcpy(buf, buf_in, IOSIZE); trunc_string(buf, buf, Columns - 1, IOSIZE); msg(buf, 0); }
-
 bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
 
 bool nvim_qf_is_ll_window(const void *wp_void) { return wp_void != NULL && IS_LL_WINDOW((const win_T *)wp_void); }
@@ -2659,8 +2552,6 @@ void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_
 
 // Phase 14: Direct message output accessors (replacing nvim_qf_list_entry_output and
 // nvim_qf_format_prefix which were deleted after inlining into Rust rs_qf_list_entry).
-void nvim_msg_outtrans_attr(const char *s, int attr) { msg_outtrans((char *)s, attr, false); }
-void nvim_msg_puts_plain(const char *s) { msg_puts(s); }
 int nvim_hlf_qfl(void) { return HLF_QFL; }
 
 // Phase 4: qf_list (:clist/:llist) accessors
@@ -2683,11 +2574,6 @@ void nvim_os_breakcheck_qf(void) { os_breakcheck(); }
 // nvim_msg_start: already defined in undo.c
 // nvim_msg_clr_eos: already defined in change_ffi.c
 // nvim_ui_flush: already defined in change_ffi.c
-char *nvim_msg_strtrunc_free(char *fname) { return msg_strtrunc(fname, true); }
-void nvim_msg_outtrans(const char *str) { msg_outtrans((char *)str, 0, false); }
-void nvim_msg_set_nowait(void) { msg_nowait = true; }
-void nvim_msg_set_col_zero(void) { msg_col = 0; }
-void nvim_msg_set_didout_false(void) { msg_didout = false; }
 
 // Phase 3 buffer management accessors
 // nvim_buf_has_ml_mfp already exists in memline_shim.c (returns int, takes buf_T*)
@@ -2730,9 +2616,6 @@ void nvim_ex_cd_arg(char *arg, bool is_lcd)
   };
   ex_cd(&ea);
 }
-
-/// emsg for e_current_location_list_was_changed
-void nvim_qf_emsg_ll_changed(void) { emsg(_(N_("E926: Current location list was changed"))); }
 
 // Phase 3: path_try_shorten_fname wrapper (rename-compatible)
 char *nvim_path_try_shorten_fname(const char *full_fname) { return path_try_shorten_fname((char *)full_fname); }
@@ -2812,13 +2695,6 @@ _Static_assert(CMD_ldo == 228, "CMD_ldo mismatch");
 _Static_assert(CMD_cfdo == 66, "CMD_cfdo mismatch");
 _Static_assert(CMD_lfdo == 234, "CMD_lfdo mismatch");
 
-/// semsg(e_nomatch2) wrapper for Rust.
-void nvim_semsg_nomatch2(const char *spat) { semsg(_(e_nomatch2), spat); }
-
-/// smsg wrapper for "Cannot open file" (used by rs_vgr_process_files).
-void nvim_vgr_smsg_cannot_open(const char *fname) { smsg(0, _("Cannot open file \"%s\""), fname); }
-
-
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
 /// or NULL if compilation failed (error already emitted).
@@ -2867,11 +2743,6 @@ int nvim_vgr_get_arglist_exp(const char *p, int *fcount_out, char ***fnames_out)
 
 /// FreeWild wrapper for vgr fnames.
 void nvim_vgr_free_wild_raw(int fcount, char **fnames) { FreeWild(fcount, fnames); }
-
-// Error message wrappers for vimgrep argument parsing.
-void nvim_vgr_emsg_invalpat(void) { emsg(_(e_invalpat)); }
-void nvim_vgr_emsg_no_filename(void) { emsg(_("E683: File name missing or invalid pattern")); }
-void nvim_vgr_emsg_nomatch(void) { emsg(_(e_nomatch)); }
 
 // apply_autocmds wrapper for QuickFixCmdPre/Post (for Phase 2 rs_ex_vimgrep).
 bool nvim_apply_autocmds_quickfixcmdpre(const char *au_name)
@@ -3124,12 +2995,6 @@ void *nvim_tv_list_item_dict(const void *li)
 
 // qf_add_entry_from_dict + nvim_qf_add_entry_from_dict deleted:
 // migrated to Rust rs_qf_add_entry_from_dict in list.rs (Phase 11).
-
-/// Emit the "E92: Buffer N not found" error message.
-void nvim_qf_semsg_e92_bufnr(int64_t bufnr)
-{
-  semsg(_("E92: Buffer %" PRId64 " not found"), bufnr);
-}
 
 /// Allocate a single null byte (empty C string). Caller must xfree/nvim_xfree_char.
 char *nvim_qf_alloc_empty_text(void) { return xcalloc(1, 1); }

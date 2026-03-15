@@ -47,8 +47,8 @@ extern "C" {
     // List state accessors
     fn nvim_qf_get_nonevalid(qfl: QfListHandle) -> bool;
 
-    // Error message function
-    fn nvim_emsg_e_no_more_items();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_emsg_e_no_more_items deleted: use emsg directly)
 
     // Position accessors
     fn nvim_pos_get_lnum(pos: PosHandle) -> LinenrT;
@@ -1085,7 +1085,7 @@ unsafe fn get_nth_valid_entry(
             qf_ptr = prev_qf_ptr;
             qf_idx = prev_index;
             if should_emit_error {
-                nvim_emsg_e_no_more_items();
+                emsg(c"E553: No more items".as_ptr());
                 *new_qfidx = qf_idx;
                 return (std::ptr::null(), true);
             }
@@ -1219,9 +1219,11 @@ mod jump_edit {
         // nvim_qflist_valid removed: use crate::qflist_valid_for_qi (Phase 16)
         // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
 
-        fn nvim_qf_jump_emsg_win_closed();
-        fn nvim_qf_jump_emsg_qf_changed();
-        fn nvim_qf_jump_emsg_ll_changed();
+        fn emsg(msg: *const std::ffi::c_char) -> bool;
+        // (nvim_qf_jump_emsg_win_closed deleted: use emsg directly)
+        // (nvim_qf_jump_emsg_qf_changed deleted: use emsg directly)
+        // (nvim_qf_jump_emsg_ll_changed deleted: use emsg directly)
+        // (nvim_qf_emsg_winfixbuf deleted: use emsg directly)
 
         // Phase 15 thin primitives replacing thick jump-open wrappers
         fn nvim_can_abandon_curbuf(forceit: c_int) -> bool;
@@ -1232,7 +1234,6 @@ mod jump_edit {
         fn nvim_qf_curbuf_fnum() -> c_int;
         fn nvim_qf_get_qi_type(qi: *const c_void) -> c_int;
         fn nvim_qf_prevwin_valid_for_wfb() -> bool;
-        fn nvim_qf_emsg_winfixbuf();
         fn nvim_win_id2wp(id: c_int) -> *mut c_void;
         fn nvim_qf_curwin_get_loclist() -> *mut c_void;
         fn nvim_qf_get_prevwin() -> *mut c_void;
@@ -1272,7 +1273,7 @@ mod jump_edit {
             let mut retval = OK;
             if forceit == 0 && nvim_curwin_get_wfb() && nvim_qf_curbuf_fnum() != fnum {
                 if nvim_qf_get_qi_type(qi) == QFLT_LOCATION {
-                    nvim_qf_emsg_winfixbuf();
+                    emsg(c"E1513: Cannot switch buffer. 'winfixbuf' is enabled".as_ptr());
                     return FAIL; // sentinel: location list winfixbuf early return
                 }
                 if nvim_qf_prevwin_valid_for_wfb() {
@@ -1284,7 +1285,7 @@ mod jump_edit {
                         *opened_window = true;
                     }
                     if nvim_curwin_get_wfb() {
-                        nvim_qf_emsg_winfixbuf();
+                        emsg(c"E1513: Cannot switch buffer. 'winfixbuf' is enabled".as_ptr());
                         retval = FAIL;
                     }
                 }
@@ -1301,7 +1302,7 @@ mod jump_edit {
         if qfl_type == QFLT_LOCATION {
             let wp = nvim_win_id2wp(prev_winid);
             if wp.is_null() && nvim_qf_curwin_get_loclist() != qi {
-                nvim_qf_jump_emsg_win_closed();
+                emsg(c"E924: Current window was closed".as_ptr());
                 *opened_window = false;
                 return QF_ABORT;
             }
@@ -1309,7 +1310,7 @@ mod jump_edit {
 
         // Check if the quickfix list is still valid.
         if qfl_type == QFLT_QUICKFIX && !crate::qflist_valid_for_qi(qi, save_qfid) {
-            nvim_qf_jump_emsg_qf_changed();
+            emsg(c"E925: Current quickfix list was changed".as_ptr());
             return QF_ABORT;
         }
 
@@ -1319,9 +1320,9 @@ mod jump_edit {
             || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
-                nvim_qf_jump_emsg_qf_changed();
+                emsg(c"E925: Current quickfix list was changed".as_ptr());
             } else {
-                nvim_qf_jump_emsg_ll_changed();
+                emsg(c"E926: Current location list was changed".as_ptr());
             }
             return QF_ABORT;
         }
@@ -1675,8 +1676,9 @@ pub mod jump_machinery {
         fn nvim_qf_get_qfl_type(qfl: *const c_void) -> c_int;
         fn nvim_qfline_get_type(qfp: QfLineHandle) -> i8;
         // nvim_qf_entry_present removed: use crate::rs_qf_entry_present (Phase 16)
-        fn nvim_qf_jump_emsg_qf_changed();
-        fn nvim_qf_jump_emsg_ll_changed();
+        fn emsg(msg: *const std::ffi::c_char) -> bool;
+        // (nvim_qf_jump_emsg_qf_changed deleted: use emsg directly)
+        // (nvim_qf_jump_emsg_ll_changed deleted: use emsg directly)
 
         // Phase 3 wrappers
         fn nvim_qf_get_curbuf() -> BufHandle;
@@ -1730,12 +1732,8 @@ pub mod jump_machinery {
         fn nvim_ecmd_shortmess_overall() -> c_int;
         fn nvim_get_p_ch() -> i64;
         fn nvim_msg_ext_set_kind(kind: *const std::ffi::c_char);
-        fn nvim_msg_keep_qf(
-            s: *const std::ffi::c_char,
-            attr: c_int,
-            keep: bool,
-            multiline: bool,
-        ) -> bool;
+        fn msg_keep(s: *const std::ffi::c_char, attr: c_int, keep: bool, multiline: bool) -> bool;
+        // (nvim_msg_keep_qf deleted: use msg_keep directly)
         fn nvim_qf_gettext_line_deleted() -> *const std::ffi::c_char;
         // rs_qf_fmt_text (from window.rs, intra-crate symbol)
         #[link_name = "rs_qf_fmt_text"]
@@ -1921,7 +1919,7 @@ pub mod jump_machinery {
             nvim_set_msg_scroll(0);
         }
         nvim_msg_ext_set_kind(c"quickfix".as_ptr());
-        nvim_msg_keep_qf(full_msg.as_ptr().cast::<c_char>(), 0, true, false);
+        msg_keep(full_msg.as_ptr().cast::<c_char>(), 0, true, false);
         nvim_set_msg_scroll(saved_scroll);
     }
 
@@ -1944,9 +1942,9 @@ pub mod jump_machinery {
             || !crate::rs_qf_entry_present(qfl, qf_ptr)
         {
             if qfl_type == QFLT_QUICKFIX {
-                nvim_qf_jump_emsg_qf_changed();
+                emsg(c"E925: Current quickfix list was changed".as_ptr());
             } else {
-                nvim_qf_jump_emsg_ll_changed();
+                emsg(c"E926: Current location list was changed".as_ptr());
             }
             Some(QF_ABORT)
         } else {
@@ -2018,7 +2016,7 @@ pub mod jump_machinery {
         fn nvim_get_ql_info() -> QfInfoHandleMut;
         fn rs_qf_stack_empty(qi: *const c_void) -> bool;
         fn rs_qf_list_empty(qfl: *const c_void) -> bool;
-        fn nvim_emsg_no_errors();
+        // (nvim_emsg_no_errors deleted: use emsg directly, declared earlier in this module)
         #[link_name = "rs_incr_quickfix_busy"]
         fn nvim_incr_quickfix_busy();
         #[link_name = "rs_decr_quickfix_busy"]
@@ -2073,7 +2071,7 @@ pub mod jump_machinery {
         }
 
         if rs_qf_stack_empty(qi) || rs_qf_list_empty(nvim_qf_get_curlist(qi)) {
-            nvim_emsg_no_errors();
+            emsg(c"E42: No Errors".as_ptr());
             return;
         }
 

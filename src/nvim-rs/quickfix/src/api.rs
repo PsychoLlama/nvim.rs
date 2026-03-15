@@ -1226,7 +1226,8 @@ extern "C" {
     fn nvim_tv_is_dict(tv: *const c_void) -> bool;
     fn nvim_qf_tv_get_dict(tv: *const c_void) -> *mut c_void;
     fn nvim_qf_tv_get_list(tv: *const c_void) -> *mut c_void;
-    fn nvim_emsg_dictreq();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_emsg_dictreq deleted: use emsg directly)
 
     fn nvim_qfline_get_type(qfp: *const c_void) -> std::ffi::c_char;
     fn nvim_qfline_get_lnum(qfp: *const c_void) -> i32;
@@ -1267,10 +1268,10 @@ extern "C" {
     fn nvim_qfl_free_qftf_cb(qfl: *mut c_void);
     fn nvim_qfl_set_qftf_cb_from_tv(qfl: *mut c_void, tv: *mut c_void) -> bool;
     fn nvim_qf_set_curlist_idx(qi: *mut c_void, idx: c_int);
-    fn nvim_emsg_invact(act: *const std::ffi::c_char);
-    fn nvim_emsg_listreq();
-    fn nvim_emsg_au_recursive();
-    fn nvim_emsg_string_required();
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    // (nvim_emsg_invact, nvim_emsg_listreq, nvim_emsg_au_recursive,
+    //  nvim_emsg_string_required deleted: use emsg/semsg directly)
+    // emsg declared earlier in this file
     fn nvim_qf_tv_set_number(tv: *mut c_void, nr: i64);
     fn nvim_qf_tv_is_list_type(tv: *const c_void) -> bool;
 
@@ -1735,7 +1736,7 @@ pub unsafe extern "C" fn rs_get_qf_loc_list(
                     rs_qf_get_properties(wp, d, nvim_qf_tv_get_dict(rettv));
                 }
             } else {
-                nvim_emsg_dictreq();
+                emsg(c"E715: Dictionary required".as_ptr());
             }
         }
     }
@@ -1974,11 +1975,11 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
 
     let list_arg = args;
     if nvim_qf_tv_get_list(list_arg).is_null() && !nvim_qf_tv_is_list_type(list_arg) {
-        nvim_emsg_listreq();
+        emsg(c"E714: List required".as_ptr());
         return;
     }
     if RECURSIVE != 0 {
-        nvim_emsg_au_recursive();
+        emsg(c"E952: Autocommand caused recursive behavior".as_ptr());
         return;
     }
 
@@ -1990,7 +1991,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
     if !nvim_tv_is_unknown(action_arg) {
         if nvim_qf_tv_get_type(action_arg) != 5 {
             // 5 = VAR_STRING
-            nvim_emsg_string_required();
+            emsg(c"E928: String required".as_ptr());
             return;
         }
         let act = nvim_qf_tv_get_string_chk(action_arg);
@@ -2007,7 +2008,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
         {
             action = act_byte;
         } else {
-            nvim_emsg_invact(act);
+            semsg(c"E927: Invalid action: '%s'".as_ptr(), act);
             return;
         }
 
@@ -2022,7 +2023,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
             } else if nvim_tv_is_dict(what_arg) {
                 what = nvim_qf_tv_get_dict(what_arg);
             } else {
-                nvim_emsg_dictreq();
+                emsg(c"E715: Dictionary required".as_ptr());
                 return;
             }
         }

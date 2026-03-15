@@ -29,7 +29,12 @@ const LINE_MAXLEN: usize = 4096;
 
 extern "C" {
     // File I/O
-    fn nvim_qf_open_file_for_read(efile: *const c_char) -> *mut libc::FILE;
+    fn os_fopen(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
+    fn os_open_stdin_fd() -> c_int;
+    fn fdopen(fd: c_int, mode: *const c_char) -> *mut libc::FILE;
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_qf_open_file_for_read deleted: inlined below)
     fn nvim_qf_fclose(fd: *mut libc::FILE);
     fn nvim_qf_fgets(buf: *mut c_char, size: c_int, fd: *mut libc::FILE) -> bool;
     fn nvim_qf_errno() -> c_int;
@@ -170,9 +175,18 @@ impl QfParserState {
 
         // Setup file source
         if !efile.is_null() {
-            let fd = nvim_qf_open_file_for_read(efile);
+            // Inline nvim_qf_open_file_for_read: open efile for reading, emit error on failure
+            let is_stdin = {
+                let s = std::ffi::CStr::from_ptr(efile);
+                s.to_bytes() == b"-"
+            };
+            let fd = if is_stdin {
+                fdopen(os_open_stdin_fd(), c"r".as_ptr())
+            } else {
+                os_fopen(efile, c"r".as_ptr())
+            };
             if fd.is_null() {
-                // Error message already emitted by nvim_qf_open_file_for_read
+                semsg(c"E40: Can't open errorfile %s".as_ptr(), efile);
                 return Err(());
             }
             state.fd = fd;
@@ -620,13 +634,8 @@ extern "C" {
     fn nvim_qf_vim_regfree(prog: *mut c_void);
 
     // Error messages (Phase 2: emit efm error messages from C)
-    fn nvim_qf_semsg_efm_e372(ch: c_char);
-    fn nvim_qf_semsg_efm_e373(ch: c_char);
-    fn nvim_qf_emsg_efm_e374();
-    fn nvim_qf_semsg_efm_e375(ch: c_char);
-    fn nvim_qf_semsg_efm_e376(ch: c_char);
-    fn nvim_qf_semsg_efm_e377(ch: c_char);
-    fn nvim_qf_emsg_efm_e378();
+    // semsg and emsg declared in the first extern block
+    // (nvim_qf_semsg_efm_e372-e378 deleted: use semsg/emsg directly)
 
     // Memory helpers for string fields
     fn nvim_qf_xstrdup(s: *const c_char) -> *mut c_char;
@@ -744,13 +753,42 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
             // 1 = OK in Neovim
             // Emit the appropriate error message
             match result.error_code {
-                372 => nvim_qf_semsg_efm_e372(result.error_char),
-                373 => nvim_qf_semsg_efm_e373(result.error_char),
-                374 => nvim_qf_emsg_efm_e374(),
-                375 => nvim_qf_semsg_efm_e375(result.error_char),
-                376 => nvim_qf_semsg_efm_e376(result.error_char),
-                377 => nvim_qf_semsg_efm_e377(result.error_char),
-                _ => nvim_qf_emsg_efm_e378(),
+                372 => {
+                    semsg(
+                        c"E372: Too many %%%c in format string".as_ptr(),
+                        result.error_char as c_int,
+                    );
+                }
+                373 => {
+                    semsg(
+                        c"E373: Unexpected %%%c in format string".as_ptr(),
+                        result.error_char as c_int,
+                    );
+                }
+                374 => {
+                    emsg(c"E374: Missing ] in format string".as_ptr());
+                }
+                375 => {
+                    semsg(
+                        c"E375: Unsupported %%%c in format string".as_ptr(),
+                        result.error_char as c_int,
+                    );
+                }
+                376 => {
+                    semsg(
+                        c"E376: Invalid %%%c in format string prefix".as_ptr(),
+                        result.error_char as c_int,
+                    );
+                }
+                377 => {
+                    semsg(
+                        c"E377: Invalid %%%c in format string".as_ptr(),
+                        result.error_char as c_int,
+                    );
+                }
+                _ => {
+                    emsg(c"E378: 'errorformat' contains no pattern".as_ptr());
+                }
             }
             // fmt_ptr has no prog to free; it will be dropped here (no Drop impl)
             free_efm_pattern_list(fmt_first);
@@ -786,7 +824,7 @@ unsafe fn parse_efm_option(efm: *const c_char) -> *mut EfmPattern {
     }
 
     if fmt_first.is_null() {
-        nvim_qf_emsg_efm_e378();
+        emsg(c"E378: 'errorformat' contains no pattern".as_ptr());
     }
 
     nvim_qf_xfree_buf(fmtstr.cast());

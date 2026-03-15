@@ -2176,7 +2176,8 @@ extern "C" {
     fn nvim_qf_strmove(dst: *mut c_char, src: *const c_char);
     fn nvim_qf_get_iobuff() -> *mut c_char;
     fn nvim_qf_skipwhite(p: *const c_char) -> *const c_char;
-    fn nvim_qf_emsg_missing_dir();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_qf_emsg_missing_dir deleted: use emsg directly)
 
     // Dir/file stack helpers (already exist in Rust, but need C side for push/pop)
     fn rs_qf_push_dir(qfl: *mut c_void, dirbuf: *mut c_char, is_file_stack: bool) -> *const c_char;
@@ -2796,7 +2797,7 @@ unsafe fn qf_parse_dir_pfx_rs(idx: c_char, fields: *mut c_void, qfl: *mut c_void
             // enter directory
             let namebuf = fields_get_namebuf(fields);
             if namebuf.is_null() || *namebuf == 0 {
-                nvim_qf_emsg_missing_dir();
+                emsg(c"E379: Missing or empty directory name".as_ptr());
                 return C_QF_FAIL;
             }
             let dir = rs_qf_push_dir(qfl, namebuf, false);

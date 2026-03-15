@@ -591,7 +591,7 @@ extern "C" {
     fn nvim_got_int() -> c_int;
     fn nvim_msg_putchar(c: c_int);
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
-    fn nvim_msg_outtrans(s: *const c_char);
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_line_breakcheck();
     fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
     fn nvim_get_iobuff() -> *mut c_char;
@@ -798,7 +798,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
         }
 
         nvim_msg_putchar(c_int::from(b'\n'));
-        nvim_msg_outtrans(iobuff.cast::<c_char>());
+        msg_outtrans(iobuff.cast::<c_char>(), 0, false);
         nvim_line_breakcheck();
     }
 }

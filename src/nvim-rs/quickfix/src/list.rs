@@ -982,7 +982,8 @@ extern "C" {
     fn nvim_tv_alloc() -> *mut c_void;
     fn nvim_qf_tv_free(tv: *mut c_void);
     fn nvim_qf_buflist_findnr_exists(bnr: c_int) -> bool;
-    fn nvim_qf_semsg_e92_bufnr(bufnr: i64);
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    // (nvim_qf_semsg_e92_bufnr deleted: use semsg directly)
     fn nvim_qf_alloc_empty_text() -> *mut c_char;
     fn nvim_xfree_char(ptr: *mut c_char);
     fn rs_qf_add_entry(
@@ -1065,7 +1066,7 @@ pub unsafe extern "C" fn rs_qf_add_entry_from_dict(
     if bufnum != 0 && !nvim_qf_buflist_findnr_exists(bufnum) {
         if !DID_BUFNR_EMSG.load(Ordering::Relaxed) {
             DID_BUFNR_EMSG.store(true, Ordering::Relaxed);
-            nvim_qf_semsg_e92_bufnr(i64::from(bufnum));
+            semsg(c"E92: Buffer %lld not found".as_ptr(), i64::from(bufnum));
         }
         valid = false;
         bufnum = 0;

@@ -101,7 +101,8 @@ extern "C" {
     fn nvim_qf_curwin_get_loclist() -> *mut c_void;
     fn nvim_is_loclist_cmd(cmdidx: c_int) -> bool;
     fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
-    fn nvim_emsg_loclist();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_emsg_loclist deleted: use emsg directly)
 
     // --- Phase 4: set_errorlist + qf_free_stack ---
     /// Find the quickfix/location list window for a stack.
@@ -126,7 +127,8 @@ extern "C" {
     /// Return `tv_list_len(list)` -- 0 if list is NULL.
     fn nvim_tv_list_len(list: *const c_void) -> c_int;
     /// Emit "cannot have both a list and a 'what' argument" error.
-    fn nvim_semsg_list_and_what();
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    // (nvim_semsg_list_and_what deleted: use semsg directly)
 }
 
 // =============================================================================
@@ -461,7 +463,7 @@ pub unsafe extern "C" fn rs_qf_cmd_get_stack(eap: *mut c_void, print_emsg: bool)
         qi = nvim_qf_curwin_get_loclist();
         if qi.is_null() {
             if print_emsg {
-                nvim_emsg_loclist();
+                emsg(c"E776: No location list".as_ptr());
             }
             return std::ptr::null_mut();
         }
@@ -616,7 +618,10 @@ pub unsafe extern "C" fn rs_set_errorlist(
 
     // A dict argument cannot be combined with a non-empty list argument.
     if !list.is_null() && nvim_tv_list_len(list) != 0 && !what.is_null() {
-        nvim_semsg_list_and_what();
+        semsg(
+            c"E475: Invalid argument: %s".as_ptr(),
+            c"cannot have both a list and a \"what\" argument".as_ptr(),
+        );
         return FAIL;
     }
 

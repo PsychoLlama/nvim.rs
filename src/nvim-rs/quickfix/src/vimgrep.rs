@@ -308,12 +308,14 @@ extern "C" {
     // Phase 3 accessors
     fn nvim_path_try_shorten_fname(full_fname: *const c_char) -> *mut c_char;
     fn nvim_msg_start();
-    fn nvim_msg_strtrunc_free(fname: *mut c_char) -> *mut c_char;
-    fn nvim_msg_outtrans(str: *const c_char);
-    fn nvim_msg_clr_eos();
-    fn nvim_msg_set_nowait();
-    fn nvim_msg_set_col_zero();
-    fn nvim_msg_set_didout_false();
+    fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    fn msg_clr_eos();
+    static mut msg_nowait: bool;
+    static mut msg_col: c_int;
+    static mut msg_didout: bool;
+    // (nvim_msg_strtrunc_free, nvim_msg_outtrans, nvim_msg_set_nowait,
+    //  nvim_msg_set_col_zero, nvim_msg_set_didout_false deleted)
     fn nvim_ui_flush();
     // nvim_buf_has_ml_mfp: defined in memline_shim.c as int(buf_T*); returns 0/1
     fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
@@ -332,8 +334,9 @@ extern "C" {
     fn nvim_buflist_findname_exp(fname: *const c_char) -> BufHandle;
     fn nvim_apply_filetype_autocmds_and_modelines(buf: BufHandle);
     fn nvim_ex_cd_arg(arg: *mut c_char, is_lcd: bool);
-    fn nvim_vgr_smsg_cannot_open(fname: *const c_char);
-    fn nvim_qf_emsg_ll_changed();
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    // (nvim_vgr_smsg_cannot_open, nvim_qf_emsg_ll_changed deleted: use smsg/emsg directly)
     fn nvim_os_dirname(buf: *mut c_char, size: c_int);
     // jump
     fn rs_qf_jump_newwin(qi: *mut c_void, dir: c_int, errornr: c_int, forceit: c_int, newwin: bool);
@@ -351,17 +354,17 @@ extern "C" {
 /// Inline of `vgr_display_fname`: display filename in the status area during vimgrep.
 unsafe fn vgr_display_fname_rust(fname: *mut c_char) {
     nvim_msg_start();
-    let p = nvim_msg_strtrunc_free(fname);
+    let p = msg_strtrunc(fname, 1);
     if p.is_null() {
-        nvim_msg_outtrans(fname);
+        msg_outtrans(fname, 0, false);
     } else {
-        nvim_msg_outtrans(p);
+        msg_outtrans(p, 0, false);
         nvim_xfree(p.cast());
     }
-    nvim_msg_clr_eos();
-    nvim_msg_set_didout_false();
-    nvim_msg_set_nowait();
-    nvim_msg_set_col_zero();
+    msg_clr_eos();
+    msg_didout = false;
+    msg_nowait = true;
+    msg_col = 0;
     nvim_ui_flush();
 }
 
@@ -388,7 +391,7 @@ unsafe fn vgr_qflist_valid_rust(
 ) -> bool {
     if !rs_qflist_valid(wp, qfid) {
         if !wp.is_null() {
-            nvim_qf_emsg_ll_changed();
+            emsg(c"E926: Current location list was changed".as_ptr());
             return false;
         }
         rs_qf_new_list(qi, title);
@@ -544,7 +547,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
 
             if buf.is_null() {
                 if nvim_get_got_int() == 0 {
-                    nvim_vgr_smsg_cannot_open(fname);
+                    smsg(0, c"Cannot open file \"%s\"".as_ptr(), fname);
                 }
             } else {
                 let found_match = rs_vgr_match_buflines(
@@ -633,9 +636,8 @@ extern "C" {
     fn nvim_vgr_free_wild_raw(fcount: c_int, fnames: *mut *mut c_char);
 
     // Error message wrappers for parse
-    fn nvim_vgr_emsg_invalpat();
-    fn nvim_vgr_emsg_no_filename();
-    fn nvim_vgr_emsg_nomatch();
+    // emsg declared in the second extern block
+    // (nvim_vgr_emsg_invalpat, nvim_vgr_emsg_no_filename, nvim_vgr_emsg_nomatch deleted: use emsg directly)
     fn nvim_skipwhite_const(p: *const c_char) -> *const c_char;
 
     // xstrdup / xfree
@@ -656,7 +658,8 @@ extern "C" {
     fn nvim_qf_set_ptr(qfl: *mut c_void, ptr: *const c_void);
     fn nvim_qf_set_index(qfl: *mut c_void, idx: c_int);
 
-    fn nvim_semsg_nomatch2(spat: *const c_char);
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    // (nvim_semsg_nomatch2 deleted: use semsg directly)
 
     // busy counter
     #[link_name = "rs_incr_quickfix_busy"]
@@ -714,7 +717,7 @@ impl VgrArgs {
         let mut flags: c_int = 0;
         let p = rs_skip_vimgrep_pat(arg, &raw mut spat, &raw mut flags);
         if p.is_null() {
-            nvim_vgr_emsg_invalpat();
+            emsg(c"E682: Invalid search pattern or delimiter".as_ptr());
             nvim_xfree(qf_title.cast());
             return Err(());
         }
@@ -730,7 +733,7 @@ impl VgrArgs {
         // Check that file name is present after pattern
         let p = nvim_skipwhite_const(p);
         if *p == 0 {
-            nvim_vgr_emsg_no_filename();
+            emsg(c"E683: File name missing or invalid pattern".as_ptr());
             nvim_vgr_regmatch_free(regmatch);
             nvim_xfree(qf_title.cast());
             return Err(());
@@ -740,7 +743,7 @@ impl VgrArgs {
         let mut fcount: c_int = 0;
         let mut fnames: *mut *mut c_char = std::ptr::null_mut();
         if nvim_vgr_get_arglist_exp(p, &raw mut fcount, &raw mut fnames) == FAIL || fcount == 0 {
-            nvim_vgr_emsg_nomatch();
+            emsg(c"E479: No match".as_ptr());
             nvim_vgr_regmatch_free(regmatch);
             nvim_xfree(qf_title.cast());
             return Err(());
@@ -889,7 +892,7 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     {
         let qfl = nvim_qf_get_curlist(qi);
         if rs_qf_list_empty(qfl) {
-            nvim_semsg_nomatch2(spat);
+            semsg(c"E480: No match: %s".as_ptr(), spat);
         } else if (flags & VGR_NOJUMP) == 0 {
             // Inline vgr_jump_to_match:
             let buf_before = nvim_qf_get_curbuf();

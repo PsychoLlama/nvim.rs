@@ -55,7 +55,8 @@ extern "C" {
     fn nvim_qf_is_ll_stack_qi(qi: *const c_void) -> bool;
     fn nvim_qf_find_win_with_loclist(ll: *const c_void) -> *mut c_void;
     // nvim_hgr_jump_or_nomatch deleted (Phase 4): inlined via rs_qf_list_empty + rs_qf_jump_newwin
-    fn nvim_semsg_nomatch2(spat: *const c_char);
+    fn semsg(fmt: *const std::ffi::c_char, ...) -> bool;
+    // (nvim_semsg_nomatch2 deleted: use semsg directly)
     // nvim_hgr_is_lhelpgrep deleted (Phase 4): use nvim_eap_get_cmdidx comparison
     // nvim_hgr_cleanup deleted (Phase 4): inlined via curwin accessors + rs_ll_free_all
     fn nvim_qf_get_curwin() -> *mut c_void;
@@ -1190,7 +1191,7 @@ pub unsafe extern "C" fn rs_ex_helpgrep(eap: EapHandle) {
     // Inlined from nvim_hgr_jump_or_nomatch.
     let qfl = nvim_qf_get_curlist_mut(qi);
     if rs_qf_list_empty(qfl.cast_const()) {
-        nvim_semsg_nomatch2(eap_arg.cast_const());
+        semsg(c"E480: No match: %s".as_ptr(), eap_arg.cast_const());
     } else {
         rs_qf_jump_newwin(qi, 0, 0, 0, false);
     }
@@ -1272,12 +1273,10 @@ extern "C" {
     fn nvim_eap_get_forceit(eap: EapHandle) -> bool;
     #[link_name = "rs_qf_msg"]
     fn nvim_qf_msg(qi: QfInfoHandleMut, which: c_int, lead: *const u8);
-    fn nvim_emsg_loclist();
-    fn nvim_emsg_no_errors();
-    fn nvim_emsg_at_bottom();
-    fn nvim_emsg_at_top();
-    fn nvim_msg_no_entries();
-    fn nvim_emsg_invrange();
+    fn emsg(msg: *const std::ffi::c_char) -> bool;
+    fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> bool;
+    // (nvim_emsg_loclist, nvim_emsg_no_errors, nvim_emsg_at_bottom, nvim_emsg_at_top,
+    //  nvim_msg_no_entries, nvim_emsg_invrange deleted: use emsg/msg directly)
     fn nvim_qf_curwin_is_ll() -> bool;
     fn nvim_qf_curwin_get_loclist() -> QfInfoHandleMut;
     fn nvim_qf_get_cursor_lnum() -> LinenrT;
@@ -1300,7 +1299,7 @@ extern "C" {
     fn nvim_qf_curbuf_has_flag(flag: c_int) -> bool;
     fn nvim_qf_curbuf_fnum() -> c_int;
     fn nvim_qf_curwin_pos_adj() -> *const c_void;
-    fn nvim_emsg_e_no_more_items();
+    // (nvim_emsg_e_no_more_items deleted: use emsg directly)
 }
 
 /// `:cc`, `:crewind`, `:cfirst`, `:clast`, `:ll`, `:lrewind`, `:lfirst`,
@@ -1429,7 +1428,7 @@ pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
         count -= 1;
         if cmdidx == CMD_COLDER || cmdidx == CMD_LOLDER {
             if nvim_qf_get_curlist_idx(qi) == 0 {
-                nvim_emsg_at_bottom();
+                emsg(c"E380: At bottom of quickfix stack".as_ptr());
                 break;
             }
             let new_idx = nvim_qf_get_curlist_idx(qi) - 1;
@@ -1438,7 +1437,7 @@ pub unsafe extern "C" fn rs_qf_age(eap: EapHandle) {
             let cur = nvim_qf_get_curlist_idx(qi);
             let lc = nvim_qf_get_listcount(qi);
             if cur >= lc - 1 {
-                nvim_emsg_at_top();
+                emsg(c"E381: At top of quickfix stack".as_ptr());
                 break;
             }
             nvim_qf_set_curlist_idx(qi, cur + 1);
@@ -1462,7 +1461,7 @@ pub unsafe extern "C" fn rs_qf_history(eap: EapHandle) {
 
     if nvim_eap_get_addr_count(eap) > 0 {
         if qi.is_null() {
-            nvim_emsg_loclist();
+            emsg(c"E776: No location list".as_ptr());
             return;
         }
 
@@ -1474,14 +1473,14 @@ pub unsafe extern "C" fn rs_qf_history(eap: EapHandle) {
             nvim_qf_msg(qi, line2 - 1, c"".as_ptr().cast::<u8>());
             nvim_qf_update_buffer(qi, std::ptr::null());
         } else {
-            nvim_emsg_invrange();
+            emsg(c"E16: Invalid range".as_ptr());
         }
 
         return;
     }
 
     if rs_qf_stack_empty(qi) {
-        nvim_msg_no_entries();
+        msg(c"No entries".as_ptr(), 0);
     } else {
         let listcount = nvim_qf_get_listcount(qi);
         let curlist = nvim_qf_get_curlist_idx(qi);
@@ -1513,7 +1512,7 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
 
     let qfl = nvim_qf_get_curlist_mut(qi);
     if crate::rs_qf_list_empty(qfl) {
-        nvim_emsg_no_errors();
+        emsg(c"E42: No Errors".as_ptr());
         return;
     }
 
@@ -1542,7 +1541,7 @@ pub unsafe extern "C" fn rs_qf_view_result(split: bool) {
 pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
     let addr_count = nvim_eap_get_addr_count(eap);
     if addr_count > 0 && nvim_eap_get_line2(eap) <= 0 {
-        nvim_emsg_invrange();
+        emsg(c"E16: Invalid range".as_ptr());
         return;
     }
 
@@ -1560,7 +1559,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
     };
 
     if !nvim_qf_curbuf_has_flag(buf_has_flag) {
-        nvim_emsg_no_errors();
+        emsg(c"E42: No Errors".as_ptr());
         return;
     }
 
@@ -1571,7 +1570,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
 
     let qfl = nvim_qf_get_curlist_mut(qi);
     if !crate::rs_qf_list_has_valid_entries(qfl) {
-        nvim_emsg_no_errors();
+        emsg(c"E42: No Errors".as_ptr());
         return;
     }
 
@@ -1602,7 +1601,7 @@ pub unsafe extern "C" fn rs_ex_cbelow(eap: EapHandle) {
     if errornr > 0 {
         crate::navigate::jump_machinery::rs_qf_jump_newwin(qi, 0, errornr, 0, false);
     } else {
-        nvim_emsg_e_no_more_items();
+        emsg(c"E553: No more items".as_ptr());
     }
 }
 
@@ -2198,7 +2197,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
 
     let qfl = crate::nvim_qf_get_curlist(qi);
     if crate::rs_qf_stack_empty(qi) || crate::rs_qf_list_empty(qfl) {
-        nvim_emsg_no_errors();
+        emsg(c"E42: No Errors".as_ptr());
         return;
     }
 
