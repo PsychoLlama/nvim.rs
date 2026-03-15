@@ -1287,6 +1287,77 @@ extern "C" {
 
     // VTerm output functions (existing C functions)
     fn vterm_push_output_sprintf_ctrl(vt: *mut c_void, c1: u8, fmt: *const i8, ...);
+
+    // --- Pen attribute accessors ---
+
+    // Scalar pen fields
+    pub fn nvim_vterm_state_get_pen_bold(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_bold(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_underline(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_underline(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_italic(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_italic(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_blink(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_blink(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_reverse(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_reverse(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_conceal(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_conceal(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_strike(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_strike(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_font(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_font(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_small(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_small(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_baseline(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_baseline(state: VTermStateHandle, val: c_int);
+    pub fn nvim_vterm_state_get_pen_uri(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_set_pen_uri(state: VTermStateHandle, val: c_int);
+
+    // Color pen fields
+    pub fn nvim_vterm_state_get_pen_fg(state: VTermStateHandle) -> VTermColor;
+    pub fn nvim_vterm_state_set_pen_fg(state: VTermStateHandle, col: VTermColor);
+    pub fn nvim_vterm_state_get_pen_bg(state: VTermStateHandle) -> VTermColor;
+    pub fn nvim_vterm_state_set_pen_bg(state: VTermStateHandle, col: VTermColor);
+
+    // Default fg/bg
+    pub fn nvim_vterm_state_get_default_fg(state: VTermStateHandle) -> VTermColor;
+    pub fn nvim_vterm_state_set_default_fg(state: VTermStateHandle, col: VTermColor);
+    pub fn nvim_vterm_state_get_default_bg(state: VTermStateHandle) -> VTermColor;
+    pub fn nvim_vterm_state_set_default_bg(state: VTermStateHandle, col: VTermColor);
+
+    // Palette color accessors (indices 0-15)
+    pub fn nvim_vterm_state_get_color(state: VTermStateHandle, index: c_int) -> VTermColor;
+    pub fn nvim_vterm_state_set_color(state: VTermStateHandle, index: c_int, col: VTermColor);
+
+    // bold_is_highbright
+    pub fn nvim_vterm_state_get_bold_is_highbright(state: VTermStateHandle) -> c_int;
+
+    // Save/restore pen
+    pub fn nvim_vterm_state_save_pen(state: VTermStateHandle);
+    pub fn nvim_vterm_state_restore_pen(state: VTermStateHandle);
+
+    // Saved pen field accessors
+    pub fn nvim_vterm_state_get_saved_pen_bold(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_underline(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_italic(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_blink(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_reverse(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_conceal(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_strike(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_font(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_small(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_baseline(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_uri(state: VTermStateHandle) -> c_int;
+    pub fn nvim_vterm_state_get_saved_pen_fg(state: VTermStateHandle) -> VTermColor;
+    pub fn nvim_vterm_state_get_saved_pen_bg(state: VTermStateHandle) -> VTermColor;
+
+    // Callback dispatcher for setpenattr
+    pub fn nvim_vterm_state_call_setpenattr(
+        state: VTermStateHandle,
+        attr: c_int,
+        val: *mut crate::VTermValue,
+    );
 }
 
 // =============================================================================
