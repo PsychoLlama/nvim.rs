@@ -2302,7 +2302,7 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
   if (sizeof(tui->buf) - tui->bufpos > TERMINFO_SEQ_LIMIT) {
     TPVAR copy_params[9];
     memcpy(copy_params, params, sizeof copy_params);
-    size_t len = terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str,
+    size_t len = rs_terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str,
                               copy_params);
     if (len > 0) {
       tui->bufpos += len;
@@ -2312,7 +2312,7 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
 
   // try again with fresh buffer
   flush_buf(tui);
-  size_t len = terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str, params);
+  size_t len = rs_terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str, params);
   if (len > 0) {
     tui->bufpos += len;
   }
@@ -2785,7 +2785,7 @@ static size_t flush_buf_start(TUIData *tui, char *buf, size_t len)
     TPVAR null_params[9] = { 0 };
     const char *str = tui->ti.defs[kTerm_cursor_invisible];
     if (str != NULL) {
-      return terminfo_fmt(buf, buf + len, str, null_params);
+      return rs_terminfo_fmt(buf, buf + len, str, null_params);
     }
   }
 
@@ -2818,7 +2818,7 @@ static size_t flush_buf_end(TUIData *tui, char *buf, size_t len)
   }
   TPVAR null_params[9] = { 0 };
   if (str != NULL) {
-    offset += terminfo_fmt(buf + offset, buf + len, str, null_params);
+    offset += rs_terminfo_fmt(buf + offset, buf + len, str, null_params);
   }
 
   return offset;
