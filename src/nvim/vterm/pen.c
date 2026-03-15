@@ -6,6 +6,18 @@
 
 #include "vterm/pen.c.generated.h"
 
+// Rust FFI declarations (implemented in src/nvim-rs/vterm/src/pen.rs)
+extern void rs_vterm_state_newpen(VTermState *state);
+extern void rs_vterm_state_resetpen(VTermState *state);
+extern void rs_vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
+                                              const VTermColor *default_bg);
+extern void rs_vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col);
+extern void rs_vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col);
+extern void rs_vterm_state_savepen(VTermState *state, int save);
+extern int rs_vterm_state_set_penattr(VTermState *state, int attr, int type, VTermValue *val);
+extern void rs_vterm_state_setpen(VTermState *state, const long args[], int argcount);
+extern int rs_vterm_state_getpen(VTermState *state, long args[], int argcount);
+
 // Structure used to store RGB triples without the additional metadata stored in VTermColor.
 typedef struct {
   uint8_t red, green, blue;
@@ -160,35 +172,12 @@ static void set_pen_col_ansi(VTermState *state, VTermAttr attr, long col)
 
 void vterm_state_newpen(VTermState *state)
 {
-  // 90% grey so that pure white is brighter
-  vterm_color_rgb(&state->default_fg, 240, 240, 240);
-  vterm_color_rgb(&state->default_bg, 0, 0, 0);
-  vterm_state_set_default_colors(state, &state->default_fg, &state->default_bg);
-
-  for (int col = 0; col < 16; col++) {
-    lookup_default_colour_ansi(col, &state->colors[col]);
-  }
+  rs_vterm_state_newpen(state);
 }
 
 void vterm_state_resetpen(VTermState *state)
 {
-  state->pen.bold = 0;      setpenattr_bool(state, VTERM_ATTR_BOLD, 0);
-  state->pen.underline = 0; setpenattr_int(state, VTERM_ATTR_UNDERLINE, 0);
-  state->pen.italic = 0;    setpenattr_bool(state, VTERM_ATTR_ITALIC, 0);
-  state->pen.blink = 0;     setpenattr_bool(state, VTERM_ATTR_BLINK, 0);
-  state->pen.reverse = 0;   setpenattr_bool(state, VTERM_ATTR_REVERSE, 0);
-  state->pen.conceal = 0;   setpenattr_bool(state, VTERM_ATTR_CONCEAL, 0);
-  state->pen.strike = 0;    setpenattr_bool(state, VTERM_ATTR_STRIKE, 0);
-  state->pen.font = 0;      setpenattr_int(state, VTERM_ATTR_FONT, 0);
-  state->pen.small = 0;     setpenattr_bool(state, VTERM_ATTR_SMALL, 0);
-  state->pen.baseline = 0;  setpenattr_int(state, VTERM_ATTR_BASELINE, 0);
-
-  state->pen.fg = state->default_fg;
-  setpenattr_col(state, VTERM_ATTR_FOREGROUND, state->default_fg);
-  state->pen.bg = state->default_bg;
-  setpenattr_col(state, VTERM_ATTR_BACKGROUND, state->default_bg);
-
-  state->pen.uri = 0; setpenattr_int(state, VTERM_ATTR_URI, 0);
+  rs_vterm_state_resetpen(state);
 }
 
 void vterm_state_savepen(VTermState *state, int save)
@@ -219,24 +208,12 @@ void vterm_state_savepen(VTermState *state, int save)
 void vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
                                     const VTermColor *default_bg)
 {
-  if (default_fg) {
-    state->default_fg = *default_fg;
-    state->default_fg.type = (state->default_fg.type & ~VTERM_COLOR_DEFAULT_MASK)
-                             | VTERM_COLOR_DEFAULT_FG;
-  }
-
-  if (default_bg) {
-    state->default_bg = *default_bg;
-    state->default_bg.type = (state->default_bg.type & ~VTERM_COLOR_DEFAULT_MASK)
-                             | VTERM_COLOR_DEFAULT_BG;
-  }
+  rs_vterm_state_set_default_colors(state, default_fg, default_bg);
 }
 
 void vterm_state_set_palette_color(VTermState *state, int index, const VTermColor *col)
 {
-  if (index >= 0 && index < 16) {
-    state->colors[index] = *col;
-  }
+  rs_vterm_state_set_palette_color(state, index, col);
 }
 
 /// Makes sure that the given color `col` is indeed an RGB colour. After this
@@ -249,10 +226,7 @@ void vterm_state_set_palette_color(VTermState *state, int index, const VTermColo
 /// to an RGB colour.
 void vterm_state_convert_color_to_rgb(const VTermState *state, VTermColor *col)
 {
-  if (VTERM_COLOR_IS_INDEXED(col)) {  // Convert indexed colors to RGB
-    lookup_colour_palette(state, col->indexed.idx, col);
-  }
-  col->type &= VTERM_COLOR_TYPE_MASK;  // Reset any metadata but the type
+  rs_vterm_state_convert_color_to_rgb(state, col);
 }
 
 void vterm_state_setpen(VTermState *state, const long args[], int argcount)

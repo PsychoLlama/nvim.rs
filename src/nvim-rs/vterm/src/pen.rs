@@ -11,9 +11,11 @@ use std::ffi::{c_int, c_long};
 
 use crate::{
     csi_arg, csi_arg_has_more, csi_arg_is_missing, VTermAttr, VTermColor, VTermUnderline,
-    VTermValueType, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG, VTERM_COLOR_DEFAULT_MASK,
-    VTERM_COLOR_TYPE_MASK,
+    VTermValue, VTermValueType, VTERM_COLOR_DEFAULT_BG, VTERM_COLOR_DEFAULT_FG,
+    VTERM_COLOR_DEFAULT_MASK, VTERM_COLOR_TYPE_MASK,
 };
+
+use crate::state::VTermStateHandle;
 
 // =============================================================================
 // Color Constants
@@ -497,6 +499,213 @@ pub fn parse_sgr_param(args: &[c_long], bold_is_highbright: bool) -> (SgrResult,
 // =============================================================================
 // FFI Functions
 // =============================================================================
+
+// =============================================================================
+// Internal helpers for state-aware pen operations
+// =============================================================================
+
+/// Dispatch setpenattr callback with a boolean value
+///
+/// # Safety
+/// The state handle must be valid.
+unsafe fn setpenattr_bool(state: VTermStateHandle, attr: VTermAttr, boolean: bool) {
+    let mut val = VTermValue {
+        boolean: c_int::from(boolean),
+    };
+    nvim_vterm_state_call_setpenattr(state, attr as c_int, std::ptr::addr_of_mut!(val));
+}
+
+/// Dispatch setpenattr callback with an integer value
+///
+/// # Safety
+/// The state handle must be valid.
+unsafe fn setpenattr_int(state: VTermStateHandle, attr: VTermAttr, number: c_int) {
+    let mut val = VTermValue { number };
+    nvim_vterm_state_call_setpenattr(state, attr as c_int, std::ptr::addr_of_mut!(val));
+}
+
+/// Dispatch setpenattr callback with a color value
+///
+/// # Safety
+/// The state handle must be valid.
+unsafe fn setpenattr_col(state: VTermStateHandle, attr: VTermAttr, color: VTermColor) {
+    let mut val = VTermValue { color };
+    nvim_vterm_state_call_setpenattr(state, attr as c_int, std::ptr::addr_of_mut!(val));
+}
+
+// =============================================================================
+// Phase 2 FFI Functions: simple pen state functions
+// =============================================================================
+
+/// Initialize pen state for a new `VTermState`
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_newpen(state: VTermStateHandle) {
+    // 90% grey so that pure white is brighter
+    let mut fg = VTermColor::rgb(240, 240, 240);
+    let mut bg = VTermColor::rgb(0, 0, 0);
+    // set_default_colors logic inline
+    {
+        let t = fg.get_type();
+        fg.set_type((t & !VTERM_COLOR_DEFAULT_MASK) | VTERM_COLOR_DEFAULT_FG);
+    }
+    {
+        let t = bg.get_type();
+        bg.set_type((t & !VTERM_COLOR_DEFAULT_MASK) | VTERM_COLOR_DEFAULT_BG);
+    }
+    nvim_vterm_state_set_default_fg(state, fg);
+    nvim_vterm_state_set_default_bg(state, bg);
+
+    for col_idx in 0..16i32 {
+        let mut col = VTermColor::default();
+        lookup_default_colour_ansi(col_idx as usize, &mut col);
+        nvim_vterm_state_set_color(state, col_idx, col);
+    }
+}
+
+/// Set the default foreground and background colors
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_default_colors(
+    state: VTermStateHandle,
+    default_fg: *const VTermColor,
+    default_bg: *const VTermColor,
+) {
+    if !default_fg.is_null() {
+        let mut fg = *default_fg;
+        let t = fg.get_type();
+        fg.set_type((t & !VTERM_COLOR_DEFAULT_MASK) | VTERM_COLOR_DEFAULT_FG);
+        nvim_vterm_state_set_default_fg(state, fg);
+    }
+    if !default_bg.is_null() {
+        let mut bg = *default_bg;
+        let t = bg.get_type();
+        bg.set_type((t & !VTERM_COLOR_DEFAULT_MASK) | VTERM_COLOR_DEFAULT_BG);
+        nvim_vterm_state_set_default_bg(state, bg);
+    }
+}
+
+/// Set a single palette color (indices 0-15)
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_palette_color(
+    state: VTermStateHandle,
+    index: c_int,
+    col: *const VTermColor,
+) {
+    if (0..16).contains(&index) && !col.is_null() {
+        nvim_vterm_state_set_color(state, index, *col);
+    }
+}
+
+/// Convert a color to RGB using the state's palette for indexed colors 0-15
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_convert_color_to_rgb(
+    state: VTermStateHandle,
+    col: *mut VTermColor,
+) {
+    if col.is_null() {
+        return;
+    }
+    let c = &mut *col;
+    if c.is_indexed() {
+        let idx = c.indexed.idx as usize;
+        if idx < 16 {
+            // Use the state's palette for indices 0-15
+            // idx < 16 so fits in c_int
+            #[allow(clippy::cast_possible_wrap)]
+            let idx_i = idx as c_int;
+            *c = nvim_vterm_state_get_color(state, idx_i);
+        } else {
+            // Use default palette for 16-255
+            lookup_colour_palette(idx, c);
+        }
+    }
+    // Reset any metadata but the type
+    let t = c.get_type();
+    c.set_type(t & VTERM_COLOR_TYPE_MASK);
+}
+
+/// Reset all pen attributes to defaults
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_resetpen(state: VTermStateHandle) {
+    nvim_vterm_state_set_pen_bold(state, 0);
+    setpenattr_bool(state, VTermAttr::Bold, false);
+
+    nvim_vterm_state_set_pen_underline(state, 0);
+    setpenattr_int(state, VTermAttr::Underline, 0);
+
+    nvim_vterm_state_set_pen_italic(state, 0);
+    setpenattr_bool(state, VTermAttr::Italic, false);
+
+    nvim_vterm_state_set_pen_blink(state, 0);
+    setpenattr_bool(state, VTermAttr::Blink, false);
+
+    nvim_vterm_state_set_pen_reverse(state, 0);
+    setpenattr_bool(state, VTermAttr::Reverse, false);
+
+    nvim_vterm_state_set_pen_conceal(state, 0);
+    setpenattr_bool(state, VTermAttr::Conceal, false);
+
+    nvim_vterm_state_set_pen_strike(state, 0);
+    setpenattr_bool(state, VTermAttr::Strike, false);
+
+    nvim_vterm_state_set_pen_font(state, 0);
+    setpenattr_int(state, VTermAttr::Font, 0);
+
+    nvim_vterm_state_set_pen_small(state, 0);
+    setpenattr_bool(state, VTermAttr::Small, false);
+
+    nvim_vterm_state_set_pen_baseline(state, 0);
+    setpenattr_int(state, VTermAttr::Baseline, 0);
+
+    let fg = nvim_vterm_state_get_default_fg(state);
+    nvim_vterm_state_set_pen_fg(state, fg);
+    setpenattr_col(state, VTermAttr::Foreground, fg);
+
+    let bg = nvim_vterm_state_get_default_bg(state);
+    nvim_vterm_state_set_pen_bg(state, bg);
+    setpenattr_col(state, VTermAttr::Background, bg);
+
+    nvim_vterm_state_set_pen_uri(state, 0);
+    setpenattr_int(state, VTermAttr::Uri, 0);
+}
+
+// Pull in the C accessor functions declared in state.rs
+// All imports are needed across phases 2-4.
+#[allow(unused_imports)]
+use crate::state::{
+    nvim_vterm_state_call_setpenattr, nvim_vterm_state_get_bold_is_highbright,
+    nvim_vterm_state_get_color, nvim_vterm_state_get_default_bg, nvim_vterm_state_get_default_fg,
+    nvim_vterm_state_get_pen_bg, nvim_vterm_state_get_pen_bold, nvim_vterm_state_get_pen_fg,
+    nvim_vterm_state_get_pen_font, nvim_vterm_state_get_pen_underline,
+    nvim_vterm_state_get_saved_pen_baseline, nvim_vterm_state_get_saved_pen_bg,
+    nvim_vterm_state_get_saved_pen_blink, nvim_vterm_state_get_saved_pen_bold,
+    nvim_vterm_state_get_saved_pen_conceal, nvim_vterm_state_get_saved_pen_fg,
+    nvim_vterm_state_get_saved_pen_font, nvim_vterm_state_get_saved_pen_italic,
+    nvim_vterm_state_get_saved_pen_reverse, nvim_vterm_state_get_saved_pen_small,
+    nvim_vterm_state_get_saved_pen_strike, nvim_vterm_state_get_saved_pen_underline,
+    nvim_vterm_state_get_saved_pen_uri, nvim_vterm_state_restore_pen, nvim_vterm_state_save_pen,
+    nvim_vterm_state_set_color, nvim_vterm_state_set_default_bg, nvim_vterm_state_set_default_fg,
+    nvim_vterm_state_set_pen_baseline, nvim_vterm_state_set_pen_bg, nvim_vterm_state_set_pen_blink,
+    nvim_vterm_state_set_pen_bold, nvim_vterm_state_set_pen_conceal, nvim_vterm_state_set_pen_fg,
+    nvim_vterm_state_set_pen_font, nvim_vterm_state_set_pen_italic,
+    nvim_vterm_state_set_pen_reverse, nvim_vterm_state_set_pen_small,
+    nvim_vterm_state_set_pen_strike, nvim_vterm_state_set_pen_underline,
+    nvim_vterm_state_set_pen_uri,
+};
 
 /// Convert an indexed color to RGB using the default palette
 #[no_mangle]
