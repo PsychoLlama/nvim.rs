@@ -783,14 +783,7 @@ extern "C" {
     pub fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
     /// do_join wrapper (count lines, insert_space=false, save_undo=true, use_fo=false, setmark=true).
     pub fn nvim_excmds_do_join(count: c_int) -> c_int;
-    /// Get sub_nsubs global.
-    pub fn nvim_excmds_get_sub_nsubs() -> c_int;
-    /// Set sub_nsubs global.
-    pub fn nvim_excmds_set_sub_nsubs(val: c_int);
-    /// Get sub_nlines global.
-    pub fn nvim_excmds_get_sub_nlines() -> c_int;
-    /// Set sub_nlines global.
-    pub fn nvim_excmds_set_sub_nlines(val: c_int);
+
     /// Format and display the substitution count message (NGETTEXT in C).
     pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
     /// Return KeyTyped global.

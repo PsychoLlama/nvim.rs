@@ -29,8 +29,8 @@ extern "C" {
     // global_exe FFI
     fn setpcmark();
     fn nvim_excmds_set_msg_didout(val: c_int);
-    fn nvim_excmds_set_sub_nsubs(val: c_int);
-    fn nvim_excmds_set_sub_nlines(val: c_int);
+    static mut sub_nsubs: c_int;
+    static mut sub_nlines: c_int;
     fn nvim_excmds_set_global_need_beginline(val: c_int);
     fn nvim_excmds_set_global_busy(val: c_int);
     fn nvim_excmds_global_busy() -> c_int;
@@ -422,8 +422,8 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     // When the command writes a message, don't overwrite the command.
     nvim_excmds_set_msg_didout(1);
 
-    nvim_excmds_set_sub_nsubs(0);
-    nvim_excmds_set_sub_nlines(0);
+    sub_nsubs = 0;
+    sub_nlines = 0;
     nvim_excmds_set_global_need_beginline(0);
     nvim_excmds_set_global_busy(1);
 

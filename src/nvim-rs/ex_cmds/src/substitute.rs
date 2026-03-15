@@ -134,10 +134,8 @@ extern "C" {
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_do_join(count: c_int) -> c_int;
-    fn nvim_excmds_set_sub_nsubs(val: c_int);
-    fn nvim_excmds_sub_nsubs_inc();
-    fn nvim_excmds_set_sub_nlines(val: c_int);
-    fn nvim_excmds_sub_nlines_inc();
+    static mut sub_nsubs: c_int;
+    static mut sub_nlines: c_int;
     fn nvim_excmds_global_busy() -> c_int;
     fn nvim_excmds_set_global_need_beginline(val: c_int);
     fn nvim_excmds_aborting() -> c_int;
@@ -147,10 +145,7 @@ extern "C" {
     fn rs_magic_isset() -> c_int;
 
     // do_sub_msg FFI -- control flow in Rust, formatting/messaging in C
-    /// Return sub_nsubs global.
-    fn nvim_excmds_get_sub_nsubs() -> c_int;
-    /// Return sub_nlines global.
-    fn nvim_excmds_get_sub_nlines() -> c_int;
+    /// Return p_report option value. (sub_nsubs/sub_nlines accessed as extern statics above)
     /// Return p_report option value.
     fn nvim_excmds_p_report() -> i64;
     /// Return KeyTyped global.
@@ -603,8 +598,8 @@ pub unsafe extern "C" fn rs_sub_joining_lines(
 
     if joined_lines_count > 1 {
         nvim_excmds_do_join(joined_lines_count);
-        nvim_excmds_set_sub_nsubs(joined_lines_count - 1);
-        nvim_excmds_set_sub_nlines(1);
+        sub_nsubs = joined_lines_count - 1;
+        sub_nlines = 1;
         rs_do_sub_msg(false);
         nvim_excmds_ex_may_print(eap);
     }
@@ -681,15 +676,15 @@ pub unsafe extern "C" fn rs_sub_grow_buf(
 #[allow(clippy::must_use_candidate)]
 #[export_name = "do_sub_msg"]
 pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
-    let sub_nsubs = nvim_excmds_get_sub_nsubs();
-    let sub_nlines = nvim_excmds_get_sub_nlines();
+    let cur_nsubs = sub_nsubs;
+    let cur_nlines = sub_nlines;
     let p_report = nvim_excmds_p_report();
     let key_typed = nvim_excmds_get_KeyTyped() != 0;
     let messaging = nvim_excmds_messaging() != 0;
     let got_int = nvim_excmds_got_int() != 0;
 
-    let threshold_met = (sub_nsubs as i64 > p_report
-        && (key_typed || sub_nlines > 1 || p_report < 1))
+    let threshold_met = (cur_nsubs as i64 > p_report
+        && (key_typed || cur_nlines > 1 || p_report < 1))
         || count_only;
 
     if threshold_met && messaging {
@@ -1699,11 +1694,11 @@ pub unsafe extern "C" fn rs_do_sub(
 
     // Save current globals for the loop
     let old_line_count = nvim_excmds_curbuf_ml_line_count();
-    let start_nsubs = nvim_excmds_get_sub_nsubs();
+    let start_nsubs = sub_nsubs;
 
     if nvim_excmds_global_busy() == 0 {
-        nvim_excmds_set_sub_nsubs(0);
-        nvim_excmds_set_sub_nlines(0);
+        sub_nsubs = 0;
+        sub_nlines = 0;
     }
 
     let mut first_line: c_int = 0;
@@ -1817,7 +1812,7 @@ pub unsafe extern "C" fn rs_do_sub(
                             nmatch = 1;
                             skip_match = true;
                         }
-                        nvim_excmds_sub_nsubs_inc();
+                        sub_nsubs += 1;
                         did_sub = true;
                         if !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8) {
                             // goto skip
@@ -2095,7 +2090,7 @@ pub unsafe extern "C" fn rs_do_sub(
             } // end inner while
 
             if did_sub {
-                nvim_excmds_sub_nlines_inc();
+                sub_nlines += 1;
             }
             xfree(new_start as *mut std::ffi::c_void);
             xfree(sub_firstline as *mut std::ffi::c_void);
@@ -2131,7 +2126,7 @@ pub unsafe extern "C" fn rs_do_sub(
         nvim_curwin_set_cursor_col(old_cursor_col);
     }
 
-    let cur_sub_nsubs = nvim_excmds_get_sub_nsubs();
+    let cur_sub_nsubs = sub_nsubs;
     if cur_sub_nsubs > start_nsubs {
         if nvim_cmdmod_has_lockmarks() == 0 {
             nvim_do_sub_set_op_start_end(nvim_exarg_get_line1(eap), line2);
@@ -2612,7 +2607,7 @@ unsafe fn goto_sub_main(
             },
     );
     nvim_dec_textlock();
-    nvim_excmds_sub_nsubs_inc();
+    sub_nsubs += 1;
     *did_sub = true;
 
     // Move cursor to start of line

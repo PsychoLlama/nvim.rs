@@ -395,14 +395,6 @@ int nvim_excmds_do_join(int count)
 {
   return do_join((size_t)count, false, true, false, true);
 }
-// Get/set sub_nsubs global
-int nvim_excmds_get_sub_nsubs(void) { return sub_nsubs; }
-void nvim_excmds_set_sub_nsubs(int val) { sub_nsubs = val; }
-void nvim_excmds_sub_nsubs_inc(void) { sub_nsubs++; }
-// Get/set sub_nlines global (linenr_T)
-int nvim_excmds_get_sub_nlines(void) { return (int)sub_nlines; }
-void nvim_excmds_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
-void nvim_excmds_sub_nlines_inc(void) { sub_nlines++; }
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
 // Call ex_may_print
 void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
