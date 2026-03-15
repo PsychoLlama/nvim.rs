@@ -146,116 +146,12 @@ extern const char *highlight_init_light[];
 extern const char *highlight_init_dark[];
 
 
-/// Returns the name of a highlight group.
-char *highlight_group_name(int id)
-{
-  return hl_table[id].sg_name;
-}
-
-/// Returns the ID of the link to a highlight group.
-int highlight_link_id(int id)
-{
-  return hl_table[id].sg_link;
-}
-
-/// Returns the attribute ID (screen attr) of a highlight group.
-/// @param id Highlight group index (0-based)
-/// @return The sg_attr field, or 0 if id is out of bounds
-int highlight_group_attr(int id)
-{
-  if (id < 0 || id >= highlight_ga.ga_len) {
-    return 0;
-  }
-  return hl_table[id].sg_attr;
-}
-
-/// Returns whether a highlight group has been cleared.
-/// @param id Highlight group index (0-based)
-/// @return true if cleared, false otherwise (including out-of-bounds)
-bool highlight_group_cleared(int id)
-{
-  if (id < 0 || id >= highlight_ga.ga_len) {
-    return false;
-  }
-  return hl_table[id].sg_cleared;
-}
-
-/// Returns the sg_set flags of a highlight group.
-/// @param id Highlight group index (0-based)
-/// @return The sg_set field (combination of SG_* flags), or 0 if out of bounds
-int highlight_group_set(int id)
-{
-  if (id < 0 || id >= highlight_ga.ga_len) {
-    return 0;
-  }
-  return hl_table[id].sg_set;
-}
-
-/// Returns the parent ID of a highlight group (for @nested.groups).
-/// @param id Highlight group index (0-based)
-/// @return The sg_parent field, or 0 if out of bounds
-int highlight_group_parent(int id)
-{
-  if (id < 0 || id >= highlight_ga.ga_len) {
-    return 0;
-  }
-  return hl_table[id].sg_parent;
-}
-
 /// Lookup a highlight group by uppercase name.
 /// @param name_u Uppercase name to look up (must be null-terminated)
 /// @return The highlight group ID (1-based), or 0 if not found
 int nvim_highlight_name_lookup(const char *name_u)
 {
   return map_get(cstr_t, int)(&highlight_unames, name_u);
-}
-
-
-/// Load colors from a file if "g:colors_name" is set, otherwise load builtin
-/// colors
-///
-/// @param both include groups where 'bg' doesn't matter
-/// @param reset clear groups first
-void init_highlight(bool both, bool reset)
-{
-  static bool had_both = false;
-
-  // Try finding the color scheme file.  Used when a color file was loaded
-  // and 'background' or 't_Co' is changed.
-  char *p = get_var_value("g:colors_name");
-  if (p != NULL) {
-    // Value of g:colors_name could be freed in load_colors() and make
-    // p invalid, so copy it.
-    char *copy_p = xstrdup(p);
-    bool okay = load_colors(copy_p);
-    xfree(copy_p);
-    if (okay) {
-      return;
-    }
-  }
-
-  // Didn't use a color file, use the compiled-in colors.
-  if (both) {
-    had_both = true;
-    const char *const *const pp = highlight_init_both;
-    for (size_t i = 0; pp[i] != NULL; i++) {
-      do_highlight(pp[i], reset, true);
-    }
-  } else if (!had_both) {
-    // Don't do anything before the call with both == true from main().
-    // Not everything has been setup then, and that call will overrule
-    // everything anyway.
-    return;
-  }
-
-  const char *const *const pp = ((*p_bg == 'l')
-                                 ? highlight_init_light
-                                 : highlight_init_dark);
-  for (size_t i = 0; pp[i] != NULL; i++) {
-    do_highlight(pp[i], reset, true);
-  }
-
-  syn_init_cmdline_highlight(false, false);
 }
 
 /// Load color file "name".

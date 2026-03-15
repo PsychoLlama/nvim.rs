@@ -19,6 +19,15 @@ extern color_name_table_T color_name_table[708];
 
 // Functions implemented in Rust (nvim-highlight crate) via #[export_name]
 int highlight_num_groups(void);
+
+// Functions migrated to Rust (highlight_group crate) via #[export_name]
+char *highlight_group_name(int id);
+int highlight_link_id(int id);
+int highlight_group_attr(int id);
+bool highlight_group_cleared(int id);
+int highlight_group_set(int id);
+int highlight_group_parent(int id);
+void init_highlight(bool both, bool reset);
 void restore_cterm_colors(void);
 const char *highlight_has_attr(int id, int flag, int modec);
 int highlight_exists(const char *name);

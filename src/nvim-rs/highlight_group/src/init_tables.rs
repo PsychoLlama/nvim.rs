@@ -12,7 +12,7 @@ use std::ffi::c_char;
 /// Neovim's C-side uses these tables read-only (iteration only). The pointers
 /// point to static string literals embedded in the binary, so there is no
 /// aliasing or mutation concern.
-pub struct CStrTable<const N: usize>([*const c_char; N]);
+pub struct CStrTable<const N: usize>(pub [*const c_char; N]);
 
 // SAFETY: The arrays hold pointers to `'static` C string literals. They are
 // never mutated after initialization and are safe to share across threads.

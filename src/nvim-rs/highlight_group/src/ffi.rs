@@ -422,3 +422,143 @@ pub unsafe extern "C" fn compat_hl_table_get_sg_gui(idx: c_int) -> c_int {
 pub unsafe extern "C" fn compat_hl_table_get_sg_cterm(idx: c_int) -> c_int {
     (*hl_table_ptr(idx)).sg_cterm
 }
+
+// =============================================================================
+// Accessor functions migrated from highlight_group.c (Phase 2)
+//
+// These replace the C implementations with direct Rust access to highlight_ga.
+// Callers in C and Rust link to these symbols identically.
+// =============================================================================
+
+/// Returns the name of a highlight group (0-based index).
+#[export_name = "highlight_group_name"]
+pub unsafe extern "C" fn rs_highlight_group_name(id: c_int) -> *mut c_char {
+    (*hl_table_ptr(id)).sg_name
+}
+
+/// Returns the link ID of a highlight group (0-based index).
+#[export_name = "highlight_link_id"]
+pub unsafe extern "C" fn rs_highlight_link_id(id: c_int) -> c_int {
+    (*hl_table_ptr(id)).sg_link
+}
+
+/// Returns the screen attribute of a highlight group (0-based index).
+/// Returns 0 if `id` is out of bounds.
+#[export_name = "highlight_group_attr"]
+pub unsafe extern "C" fn rs_highlight_group_attr(id: c_int) -> c_int {
+    if !is_valid_index(id) {
+        return 0;
+    }
+    (*hl_table_ptr(id)).sg_attr
+}
+
+/// Returns whether a highlight group has been cleared (0-based index).
+/// Returns false if `id` is out of bounds.
+#[export_name = "highlight_group_cleared"]
+pub unsafe extern "C" fn rs_highlight_group_cleared(id: c_int) -> bool {
+    if !is_valid_index(id) {
+        return false;
+    }
+    (*hl_table_ptr(id)).sg_cleared
+}
+
+/// Returns the sg_set flags of a highlight group (0-based index).
+/// Returns 0 if `id` is out of bounds.
+#[export_name = "highlight_group_set"]
+pub unsafe extern "C" fn rs_highlight_group_set(id: c_int) -> c_int {
+    if !is_valid_index(id) {
+        return 0;
+    }
+    (*hl_table_ptr(id)).sg_set
+}
+
+/// Returns the parent ID of a highlight group (0-based index).
+/// Returns 0 if `id` is out of bounds.
+#[export_name = "highlight_group_parent"]
+pub unsafe extern "C" fn rs_highlight_group_parent(id: c_int) -> c_int {
+    if !is_valid_index(id) {
+        return 0;
+    }
+    (*hl_table_ptr(id)).sg_parent
+}
+
+// =============================================================================
+// init_highlight migrated from highlight_group.c (Phase 2)
+// =============================================================================
+
+extern "C" {
+    /// Get the value of a global Vimscript variable (e.g. "g:colors_name").
+    /// Returns NULL if the variable is not set.
+    fn get_var_value(name: *const c_char) -> *mut c_char;
+
+    /// Load a colorscheme file by name. Returns 1 (OK) on success, 0 on failure.
+    fn load_colors(name: *mut c_char) -> c_int;
+
+    /// Process one `:highlight` command line (init path).
+    fn do_highlight(line: *const c_char, forceit: bool, init: bool);
+
+    /// Initialize the cmdline syntax highlight colors.
+    fn syn_init_cmdline_highlight(both: bool, reset: bool);
+
+    /// Duplicate a C string (xstrdup).
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+
+    /// Free memory allocated by xmalloc/xstrdup.
+    fn xfree(ptr: *mut c_void);
+}
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Tracks whether `init_highlight(both=true, ...)` has been called yet.
+static HAD_BOTH: AtomicBool = AtomicBool::new(false);
+
+/// Load colors from a file if "g:colors_name" is set, otherwise load
+/// compiled-in defaults.
+///
+/// - `both`: if true, apply groups that apply to both backgrounds and set the
+///   `had_both` flag so subsequent calls with `both=false` proceed.
+/// - `reset`: if true, clear groups before reapplying.
+#[export_name = "init_highlight"]
+pub unsafe extern "C" fn rs_init_highlight(both: bool, reset: bool) {
+    // Try finding a color scheme file. Used when a color file was loaded
+    // and 'background' or 't_Co' is changed.
+    let p = get_var_value(c"g:colors_name".as_ptr());
+    if !p.is_null() {
+        // Value of g:colors_name could be freed inside load_colors(), so copy it.
+        let copy_p = xstrdup(p);
+        let okay = load_colors(copy_p) != 0;
+        xfree(copy_p as *mut c_void);
+        if okay {
+            return;
+        }
+    }
+
+    // Didn't use a color file; use the compiled-in defaults.
+    if both {
+        HAD_BOTH.store(true, Ordering::Relaxed);
+        let mut i = 0;
+        while !crate::init_tables::highlight_init_both.0[i].is_null() {
+            do_highlight(crate::init_tables::highlight_init_both.0[i], reset, true);
+            i += 1;
+        }
+    } else if !HAD_BOTH.load(Ordering::Relaxed) {
+        // Don't do anything before the call with both == true from main().
+        // Not everything has been set up then, and that call will overrule
+        // everything anyway.
+        return;
+    }
+
+    // Apply background-specific defaults.
+    let table = if *p_bg == b'l' as i8 {
+        &crate::init_tables::highlight_init_light.0[..]
+    } else {
+        &crate::init_tables::highlight_init_dark.0[..]
+    };
+    let mut i = 0;
+    while !table[i].is_null() {
+        do_highlight(table[i], reset, true);
+        i += 1;
+    }
+
+    syn_init_cmdline_highlight(false, false);
+}
