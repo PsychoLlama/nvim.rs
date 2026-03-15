@@ -26,4 +26,17 @@ const char *did_set_mousescroll(optset_T *args);
 char *get_fillchars_name(expand_T *xp, int idx);
 char *get_listchars_name(expand_T *xp, int idx);
 
+// Implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
+#include "nvim/option_defs.h"  // optexpand_T
+int expand_set_concealcursor(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_cpoptions(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_shortmess(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_whichwrap(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_str_generic(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_encoding(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches);
+int expand_set_chars_option(optexpand_T *args, int *numMatches, char ***matches);
+
 #include "optionstr.h.generated.h"

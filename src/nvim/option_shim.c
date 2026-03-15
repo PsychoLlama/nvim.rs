@@ -3034,3 +3034,36 @@ const char *nvim_call_expand_env_esc_option(const char *val, int esc_kind)
   }
   return NameBuff;
 }
+
+// =============================================================================
+// optexpand_T field accessors for Rust expand.rs
+// =============================================================================
+
+char *nvim_oe_get_opt_value(const optexpand_T *args) { return args->oe_opt_value; }
+const char *nvim_oe_get_set_arg(const optexpand_T *args) { return args->oe_set_arg; }
+bool nvim_oe_get_append(const optexpand_T *args) { return args->oe_append; }
+bool nvim_oe_get_include_orig_val(const optexpand_T *args) { return args->oe_include_orig_val; }
+regmatch_T *nvim_oe_get_regmatch(const optexpand_T *args) { return args->oe_regmatch; }
+expand_T *nvim_oe_get_xp(const optexpand_T *args) { return args->oe_xp; }
+char *nvim_oe_get_varp(const optexpand_T *args) { return args->oe_varp; }
+int nvim_oe_get_idx(const optexpand_T *args) { return (int)args->oe_idx; }
+
+// Option value array accessors for expand_set_str_generic
+const char **nvim_option_get_values(const vimoption_T *opt) { return (const char **)opt->values; }
+size_t nvim_option_get_values_len(const vimoption_T *opt) { return opt->values_len; }
+
+// Normalize opt_idx for expand_set_str_generic
+// (viewoptions uses sessionoptions values; fileformats uses fileformat values)
+int nvim_normalize_opt_idx_for_expand(int idx)
+{
+  if (idx == kOptViewoptions) {
+    return kOptSessionoptions;
+  }
+  if (idx == kOptFileformats) {
+    return kOptFileformat;
+  }
+  return idx;
+}
+
+// Window p_lcs accessor
+const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }

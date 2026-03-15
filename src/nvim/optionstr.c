@@ -314,12 +314,7 @@ int check_str_opt(OptIndex idx, char **varp)
   return result.ok ? OK : FAIL;
 }
 
-int expand_set_str_generic(optexpand_T *args, int *numMatches, char ***matches)
-{
-  size_t values_len;
-  const char **values = opt_values(args->oe_idx, &values_len);
-  return expand_set_opt_string(args, values, values_len, numMatches, matches);
-}
+// expand_set_str_generic is now implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 const char *did_set_str_generic(optset_T *args)
 {
@@ -397,47 +392,7 @@ static int expand_set_opt_generic(optexpand_T *args, CompleteListItemGetter func
   return OK;
 }
 
-/// Expand an option which is a list of flags.
-static int expand_set_opt_listflag(optexpand_T *args, char *flags, int *numMatches, char ***matches)
-{
-  char *option_val = args->oe_opt_value;
-  char *cmdline_val = args->oe_set_arg;
-  bool append = args->oe_append;
-  bool include_orig_val = args->oe_include_orig_val && (*option_val != NUL);
-
-  size_t num_flags = strlen(flags);
-
-  // Assume we only have small number of flags, so just allocate max size.
-  *matches = xmalloc(sizeof(char *) * (num_flags + 1));
-
-  int count = 0;
-
-  if (include_orig_val) {
-    (*matches)[count++] = xstrdup(option_val);
-  }
-
-  for (char *flag = flags; *flag != NUL; flag++) {
-    if (append && vim_strchr(option_val, *flag) != NULL) {
-      continue;
-    }
-
-    if (vim_strchr(cmdline_val, *flag) == NULL) {
-      if (include_orig_val && option_val[1] == NUL && *flag == option_val[0]) {
-        // This value is already used as the first choice as it's the
-        // existing flag. Just skip it to avoid duplicate.
-        continue;
-      }
-      (*matches)[count++] = xmemdupz(flag, 1);
-    }
-  }
-
-  if (count == 0) {
-    XFREE_CLEAR(*matches);
-    return FAIL;
-  }
-  *numMatches = count;
-  return OK;
-}
+// expand_set_opt_listflag removed: all callers migrated to Rust
 
 /// The 'ambiwidth' option is changed.
 
@@ -573,16 +528,7 @@ const char *did_set_chars_option(optset_T *args)
   return errmsg;
 }
 
-/// Expand 'fillchars' or 'listchars' option value.
-int expand_set_chars_option(optexpand_T *args, int *numMatches, char ***matches)
-{
-  char **varp = (char **)args->oe_varp;
-  bool is_lcs = (varp == &p_lcs || varp == &curwin->w_p_lcs);
-  return expand_set_opt_generic(args,
-                                is_lcs ? get_listchars_name : get_fillchars_name,
-                                numMatches,
-                                matches);
-}
+// expand_set_chars_option is now implemented in Rust (src/nvim-rs/optionstr/src/expand.rs)
 
 /// The 'colorcolumn' option is changed.
 const char *did_set_colorcolumn(optset_T *args)
@@ -743,17 +689,7 @@ const char *did_set_completeslash(optset_T *args)
 }
 #endif
 
-int expand_set_concealcursor(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, COCU_ALL, numMatches, matches);
-}
-
-int expand_set_cpoptions(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, CPO_VI, numMatches, matches);
-}
-
-
+// expand_set_concealcursor and expand_set_cpoptions moved to Rust
 
 int expand_set_diffopt(optexpand_T *args, int *numMatches, char ***matches)
 {
@@ -828,10 +764,7 @@ const char *did_set_encoding(optset_T *args)
   return NULL;
 }
 
-int expand_set_encoding(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_generic(args, get_encoding_name, numMatches, matches);
-}
+// expand_set_encoding moved to Rust
 
 static bool expand_eiw = false;
 
@@ -898,10 +831,7 @@ char *get_fileformat_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 
 
 
-int expand_set_formatoptions(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, FO_ALL, numMatches, matches);
-}
+// expand_set_formatoptions moved to Rust
 
 
 
@@ -991,10 +921,7 @@ const char *did_set_keymap(optset_T *args)
 }
 
 
-int expand_set_mouse(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, MOUSE_ALL, numMatches, matches);
-}
+// expand_set_mouse moved to Rust
 
 
 
@@ -1049,10 +976,7 @@ const char *did_set_shada(optset_T *args)
   return NULL;
 }
 
-int expand_set_shortmess(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, "rmlwaWtToOsAIcCqFSnfxi", numMatches, matches);
-}
+// expand_set_shortmess moved to Rust
 
 /// The 'showbreak' option is changed.
 
@@ -1279,10 +1203,7 @@ const char *did_set_virtualedit(optset_T *args)
   return NULL;
 }
 
-int expand_set_whichwrap(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_listflag(args, WW_ALL, numMatches, matches);
-}
+// expand_set_whichwrap moved to Rust
 
 
 bool parse_border_opt(char *border_opt)
@@ -1299,10 +1220,7 @@ bool parse_border_opt(char *border_opt)
 
 
 
-int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)
-{
-  return expand_set_opt_generic(args, get_highlight_name, numMatches, matches);
-}
+// expand_set_winhighlight moved to Rust
 
 /// @return  OK if "p" is a valid fileformat name, FAIL otherwise.
 int check_ff_value(char *p)
