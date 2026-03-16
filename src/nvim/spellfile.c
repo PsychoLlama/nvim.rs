@@ -428,6 +428,12 @@ extern int rs_put_node(wordnode_T *node, uint8_t *buf, size_t buf_len,
                        int idx, int regionmask, bool prefixtree, size_t *written_out);
 extern void rs_clear_node(wordnode_T *node);
 
+// Phase 6: Rust tree compression.
+// rs_node_compress compresses a sibling list (first sibling of root->wn_sibling).
+// Returns compressed node count; sets *tot_out to total nodes visited.
+// spellinfo_T is forward-declared as an opaque pointer from Rust's perspective.
+extern int rs_node_compress(spellinfo_T *spin, wordnode_T *node, int *tot_out);
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
@@ -615,8 +621,20 @@ void nvim_wordnode_set_index(wordnode_T *n, int idx) { n->wn_u1.index = idx; }
 wordnode_T *nvim_wordnode_get_wnode(const wordnode_T *n) { return n->wn_u2.wnode; }
 void nvim_wordnode_set_wnode(wordnode_T *n, wordnode_T *wn) { n->wn_u2.wnode = wn; }
 
+// Phase 6: additional wordnode_T accessors for compression.
+void nvim_wordnode_get_hashkey(const wordnode_T *n, uint8_t *key_out) {
+  memcpy(key_out, n->wn_u1.hashkey, 6);
+}
+void nvim_wordnode_set_hashkey(wordnode_T *n, const uint8_t *key) {
+  memcpy(n->wn_u1.hashkey, key, 6);
+}
+int nvim_wordnode_get_refs(const wordnode_T *n) { return n->wn_refs; }
+void nvim_wordnode_set_refs(wordnode_T *n, int refs) { n->wn_refs = refs; }
+void nvim_wordnode_set_child_compress(wordnode_T *n, wordnode_T *child) { n->wn_child = child; }
+
 // Info used while reading the spell files.
-typedef struct {
+// (struct tag spellinfo_S is forward-declared in spellfile.h for opaque access.)
+typedef struct spellinfo_S {
   wordnode_T *si_foldroot;     // tree with case-folded words
   int si_foldwcount;           // nr of words in si_foldroot
 
@@ -3419,24 +3437,29 @@ static void free_wordnode(spellinfo_T *spin, wordnode_T *n)
   spin->si_free_count++;
 }
 
+// Phase 6: C callbacks used by Rust compression code.
+int nvim_deref_wordnode(spellinfo_T *spin, wordnode_T *node) {
+  return deref_wordnode(spin, node);
+}
+bool nvim_spell_got_int(void) { return got_int; }
+void nvim_spell_veryfast_breakcheck(void) { veryfast_breakcheck(); }
+
 // Compress a tree: find tails that are identical and can be shared.
+// node_compress and node_equal have been migrated to Rust (rs_node_compress).
 static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-  hashtab_T ht;
-  int tot = 0;
-  long perc;
-
   // Skip the root itself, it's not actually used.  The first sibling is the
   // start of the tree.
   if (root->wn_sibling == NULL) {
     return;
   }
 
-  hash_init(&ht);
-  const int n = node_compress(spin, root->wn_sibling, &ht, &tot);
+  int tot = 0;
+  const int n = rs_node_compress(spin, root->wn_sibling, &tot);
 
   if (spin->si_verbose || p_verbose > 2) {
+    long perc;
     if (tot > 1000000) {
       perc = (tot - n) / (tot / 100);
     } else if (tot == 0) {
@@ -3449,120 +3472,6 @@ static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *n
                  name, n, tot, tot - n, perc);
     spell_message(spin, IObuff);
   }
-  hash_clear(&ht);
-}
-
-/// Compress a node, its siblings and its children, depth first.
-/// Returns the number of compressed nodes.
-///
-/// @param tot  total count of nodes before compressing, incremented while going through the tree
-static int node_compress(spellinfo_T *spin, wordnode_T *node, hashtab_T *ht, int *tot)
-  FUNC_ATTR_NONNULL_ALL
-{
-  wordnode_T *tp;
-  wordnode_T *child;
-  int len = 0;
-  unsigned n;
-  int compressed = 0;
-
-  // Go through the list of siblings.  Compress each child and then try
-  // finding an identical child to replace it.
-  // Note that with "child" we mean not just the node that is pointed to,
-  // but the whole list of siblings of which the child node is the first.
-  for (wordnode_T *np = node; np != NULL && !got_int; np = np->wn_sibling) {
-    len++;
-    if ((child = np->wn_child) != NULL) {
-      // Compress the child first.  This fills hashkey.
-      compressed += node_compress(spin, child, ht, tot);
-
-      // Try to find an identical child.
-      hash_T hash = hash_hash((char *)child->wn_u1.hashkey);
-      hashitem_T *hi = hash_lookup(ht, (const char *)child->wn_u1.hashkey,
-                                   strlen((char *)child->wn_u1.hashkey), hash);
-      if (!HASHITEM_EMPTY(hi)) {
-        // There are children we encountered before with a hash value
-        // identical to the current child.  Now check if there is one
-        // that is really identical.
-        for (tp = HI2WN(hi); tp != NULL; tp = tp->wn_u2.next) {
-          if (node_equal(child, tp)) {
-            // Found one!  Now use that child in place of the
-            // current one.  This means the current child and all
-            // its siblings is unlinked from the tree.
-            tp->wn_refs++;
-            compressed += deref_wordnode(spin, child);
-            np->wn_child = tp;
-            break;
-          }
-        }
-        if (tp == NULL) {
-          // No other child with this hash value equals the child of
-          // the node, add it to the linked list after the first
-          // item.
-          tp = HI2WN(hi);
-          child->wn_u2.next = tp->wn_u2.next;
-          tp->wn_u2.next = child;
-        }
-      } else {
-        // No other child has this hash value, add it to the
-        // hashtable.
-        hash_add_item(ht, hi, (char *)child->wn_u1.hashkey, hash);
-      }
-    }
-  }
-  *tot += len + 1;      // add one for the node that stores the length
-
-  // Make a hash key for the node and its siblings, so that we can quickly
-  // find a lookalike node.  This must be done after compressing the sibling
-  // list, otherwise the hash key would become invalid by the compression.
-  node->wn_u1.hashkey[0] = (uint8_t)len;
-  unsigned nr = 0;
-  for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-    if (np->wn_byte == NUL) {
-      // end node: use wn_flags, wn_region and wn_affixID
-      n = (unsigned)(np->wn_flags + (np->wn_region << 8) + (np->wn_affixID << 16));
-    } else {
-      // byte node: use the byte value and the child pointer
-      n = (unsigned)(np->wn_byte + ((uintptr_t)np->wn_child << 8));
-    }
-    nr = nr * 101 + n;
-  }
-
-  // Avoid NUL bytes, it terminates the hash key.
-  n = nr & 0xff;
-  node->wn_u1.hashkey[1] = n == 0 ? 1 : (uint8_t)n;
-  n = (nr >> 8) & 0xff;
-  node->wn_u1.hashkey[2] = n == 0 ? 1 : (uint8_t)n;
-  n = (nr >> 16) & 0xff;
-  node->wn_u1.hashkey[3] = n == 0 ? 1 : (uint8_t)n;
-  n = (nr >> 24) & 0xff;
-  node->wn_u1.hashkey[4] = n == 0 ? 1 : (uint8_t)n;
-  node->wn_u1.hashkey[5] = NUL;
-
-  // Check for CTRL-C pressed now and then.
-  veryfast_breakcheck();
-
-  return compressed;
-}
-
-// Returns true when two nodes have identical siblings and children.
-static bool node_equal(wordnode_T *n1, wordnode_T *n2)
-{
-  wordnode_T *p1;
-  wordnode_T *p2;
-
-  for (p1 = n1, p2 = n2; p1 != NULL && p2 != NULL;
-       p1 = p1->wn_sibling, p2 = p2->wn_sibling) {
-    if (p1->wn_byte != p2->wn_byte
-        || (p1->wn_byte == NUL
-            ? (p1->wn_flags != p2->wn_flags
-               || p1->wn_region != p2->wn_region
-               || p1->wn_affixID != p2->wn_affixID)
-            : (p1->wn_child != p2->wn_child))) {
-      break;
-    }
-  }
-
-  return p1 == NULL && p2 == NULL;
 }
 
 /// Function given to qsort() to sort the REP items on "from" string.

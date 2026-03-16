@@ -7,4 +7,8 @@
 // Full definition is in spellfile.c; external users only see an opaque pointer.
 typedef struct wordnode_S wordnode_T;
 
+// Forward declaration of the spell compilation state.
+// Full definition is in spellfile.c; external users only see an opaque pointer.
+typedef struct spellinfo_S spellinfo_T;
+
 #include "spellfile.h.generated.h"

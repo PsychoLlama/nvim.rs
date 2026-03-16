@@ -5545,6 +5545,228 @@ pub unsafe extern "C" fn rs_clear_node(node: *mut WordnodeT) {
 }
 
 // =============================================================================
+// Phase 6: Tree compression (node_compress / wordtree_compress)
+// =============================================================================
+
+// Opaque handle for spellinfo_T (C-owned pointer).
+#[repr(C)]
+pub struct SpellinfoT {
+    _private: [u8; 0],
+}
+
+extern "C" {
+    // New Phase 6 accessors for wordnode_T compression fields.
+    fn nvim_wordnode_get_hashkey(n: *const WordnodeT, key_out: *mut u8);
+    fn nvim_wordnode_set_hashkey(n: *mut WordnodeT, key: *const u8);
+    fn nvim_wordnode_get_refs(n: *const WordnodeT) -> c_int;
+    fn nvim_wordnode_set_refs(n: *mut WordnodeT, refs: c_int);
+
+    // C callbacks needed by compression.
+    fn nvim_deref_wordnode(spin: *mut SpellinfoT, node: *mut WordnodeT) -> c_int;
+    fn nvim_spell_got_int() -> bool;
+    fn nvim_spell_veryfast_breakcheck();
+}
+
+/// Recursively compress a node and its siblings and children (depth-first).
+///
+/// Returns the number of compressed (deduplicated) nodes.
+/// `tot` is incremented with the total number of nodes visited.
+///
+/// This mirrors the C `node_compress` function, using a Rust `HashMap`
+/// instead of Vim's `hashtab_T`.
+///
+/// # Safety
+/// - `spin` must be a valid `spellinfo_T` pointer.
+/// - `node` must be a valid (non-null) `wordnode_T` pointer.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn node_compress_inner(
+    spin: *mut SpellinfoT,
+    node: *mut WordnodeT,
+    ht: &mut std::collections::HashMap<[u8; 6], Vec<*mut WordnodeT>>,
+    tot: &mut c_int,
+) -> c_int {
+    let mut len: c_int = 0;
+    let mut compressed: c_int = 0;
+
+    // Walk the sibling list.
+    let mut np = node;
+    while !np.is_null() {
+        if nvim_spell_got_int() {
+            break;
+        }
+        len += 1;
+        let child = nvim_wordnode_get_child(np);
+        if !child.is_null() {
+            // Recursively compress the child subtree first.
+            compressed += node_compress_inner(spin, child, ht, tot);
+
+            // Build the hash key for the (now-compressed) child list.
+            let mut key = [0u8; 6];
+            nvim_wordnode_get_hashkey(child, key.as_mut_ptr());
+
+            // Look up the key in the HashMap.
+            let bucket = ht.entry(key).or_default();
+            let mut found: *mut WordnodeT = std::ptr::null_mut();
+            for &tp in bucket.iter() {
+                if node_equal_inner(child, tp) {
+                    found = tp;
+                    break;
+                }
+            }
+
+            if found.is_null() {
+                // No identical child found: add to bucket.
+                bucket.push(child);
+            } else {
+                // Found identical child: replace and free the current one.
+                let new_refs = nvim_wordnode_get_refs(found) + 1;
+                nvim_wordnode_set_refs(found, new_refs);
+                compressed += nvim_deref_wordnode(spin, child);
+                // Write new child pointer back via the sibling accessor.
+                // We need the child field of np - use the C-provided set:
+                nvim_wordnode_set_child_compress(np, found);
+            }
+        }
+        np = nvim_wordnode_get_sibling(np);
+    }
+
+    *tot += len + 1; // +1 for length field
+
+    // Build hash key for this sibling list.
+    let mut nr: u32 = 0;
+    let mut np = node;
+    while !np.is_null() {
+        let n = if nvim_wordnode_get_byte(np) == 0 {
+            // NUL byte node: encode flags + region + affixID
+            (nvim_wordnode_get_flags(np) as u32)
+                + ((nvim_wordnode_get_region(np) as u16 as u32) << 8)
+                + ((nvim_wordnode_get_affixID(np) as u32) << 16)
+        } else {
+            // byte node: encode byte + child pointer address
+            (nvim_wordnode_get_byte(np) as u32)
+                + (((nvim_wordnode_get_child(np) as usize) as u32) << 8)
+        };
+        nr = nr.wrapping_mul(101).wrapping_add(n);
+        np = nvim_wordnode_get_sibling(np);
+    }
+
+    let mut key = [0u8; 6];
+    key[0] = len as u8;
+    key[1] = {
+        let b = (nr & 0xff) as u8;
+        if b == 0 {
+            1
+        } else {
+            b
+        }
+    };
+    key[2] = {
+        let b = ((nr >> 8) & 0xff) as u8;
+        if b == 0 {
+            1
+        } else {
+            b
+        }
+    };
+    key[3] = {
+        let b = ((nr >> 16) & 0xff) as u8;
+        if b == 0 {
+            1
+        } else {
+            b
+        }
+    };
+    key[4] = {
+        let b = ((nr >> 24) & 0xff) as u8;
+        if b == 0 {
+            1
+        } else {
+            b
+        }
+    };
+    key[5] = 0; // NUL terminator
+
+    nvim_wordnode_set_hashkey(node, key.as_ptr());
+
+    nvim_spell_veryfast_breakcheck();
+
+    compressed
+}
+
+/// Check whether two sibling lists are identical (same bytes, flags, children).
+///
+/// Mirrors the C `node_equal` function.
+///
+/// # Safety
+/// Both `n1` and `n2` must be valid (or null) `wordnode_T` pointers.
+unsafe fn node_equal_inner(n1: *mut WordnodeT, n2: *mut WordnodeT) -> bool {
+    let mut p1 = n1;
+    let mut p2 = n2;
+    loop {
+        match (p1.is_null(), p2.is_null()) {
+            (true, true) => return true,
+            (false, false) => {}
+            _ => return false,
+        }
+        let b1 = nvim_wordnode_get_byte(p1);
+        let b2 = nvim_wordnode_get_byte(p2);
+        if b1 != b2 {
+            return false;
+        }
+        if b1 == 0 {
+            // NUL node: compare flags, region, affixID
+            if nvim_wordnode_get_flags(p1) != nvim_wordnode_get_flags(p2)
+                || nvim_wordnode_get_region(p1) != nvim_wordnode_get_region(p2)
+                || nvim_wordnode_get_affixID(p1) != nvim_wordnode_get_affixID(p2)
+            {
+                return false;
+            }
+        } else {
+            // byte node: compare child pointers (structural sharing)
+            if nvim_wordnode_get_child(p1) != nvim_wordnode_get_child(p2) {
+                return false;
+            }
+        }
+        p1 = nvim_wordnode_get_sibling(p1);
+        p2 = nvim_wordnode_get_sibling(p2);
+    }
+}
+
+// We need a setter for the child pointer during compression (when we replace
+// a child with a deduplicated one). Declare it here as a separate accessor.
+extern "C" {
+    fn nvim_wordnode_set_child_compress(n: *mut WordnodeT, child: *mut WordnodeT);
+}
+
+/// Compress the word tree rooted at `root` by deduplicating identical subtrees.
+///
+/// This is the Rust replacement for the C `node_compress` function.
+/// The caller (`wordtree_compress` in C) handles verbose message display.
+///
+/// Returns `(compressed_count, total_count)`.
+///
+/// # Safety
+/// - `spin` must be a valid `spellinfo_T` pointer.
+/// - `root` must be the first sibling (i.e., `root->wn_sibling` of the tree root).
+#[no_mangle]
+pub unsafe extern "C" fn rs_node_compress(
+    spin: *mut SpellinfoT,
+    node: *mut WordnodeT,
+    tot_out: *mut c_int,
+) -> c_int {
+    if node.is_null() {
+        return 0;
+    }
+    let mut ht = std::collections::HashMap::new();
+    let mut tot: c_int = 0;
+    let compressed = node_compress_inner(spin, node, &mut ht, &mut tot);
+    if !tot_out.is_null() {
+        *tot_out = tot;
+    }
+    compressed
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
