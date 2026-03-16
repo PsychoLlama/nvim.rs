@@ -1079,7 +1079,7 @@ struct NvimPromptState {
 
 extern "C" {
     // Phase 2: prompt_get_input accessors
-    fn nvim_mark_bt_prompt(buf: *mut c_void) -> c_int; // bt_prompt(buf)
+    fn nvim_mark_bt_prompt(buf: *mut c_void) -> c_int; // static inline, needs wrapper
     fn nvim_buf_get_prompt_start_lnum(buf: *mut c_void) -> i32; // linenr_T = i32
     fn nvim_buf_get_b_ml_ml_line_count(buf: *mut c_void) -> i32; // linenr_T = i32
     fn nvim_ml_get_buf_wrapper(buf: *mut c_void, lnum: i32) -> *mut c_char;

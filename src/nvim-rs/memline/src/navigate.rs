@@ -162,7 +162,7 @@ extern "C" {
     fn nvim_edit_coladvance(col: ColNr);
 
     /// setpcmark()
-    fn nvim_mark_setpcmark();
+    fn setpcmark();
 
     /// check_cursor(curwin)
     fn nvim_check_cursor();
@@ -1010,7 +1010,7 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
 
     let curbuf = nvim_get_curbuf();
     rs_ml_flush_line(curbuf, 0); // cached line may be dirty
-    nvim_mark_setpcmark();
+    setpcmark();
     if boff != 0 {
         boff -= 1;
     }

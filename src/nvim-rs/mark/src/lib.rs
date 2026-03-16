@@ -46,19 +46,41 @@ extern "C" {
 }
 
 // =============================================================================
+// Direct C function calls (Phase 3: bypassing mark.c wrappers)
+// =============================================================================
+extern "C" {
+    fn xfree(ptr: *mut c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
+    fn ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
+    fn ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
+    fn ptr2cells(p: *const c_char) -> c_int;
+    fn qf_mark_adjust(
+        buf: BufHandle,
+        win: WinHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    ) -> c_int;
+    fn setpcmark();
+}
+
+// =============================================================================
 // FFI: C accessor functions called from Rust
 // =============================================================================
 extern "C" {
-    // Memory management
-    fn nvim_mark_xfree(ptr: *mut c_void);
-    fn nvim_mark_xstrdup(s: *const c_char) -> *mut c_char;
+    // Memory management (kept for Phase 4+ migration)
 
     // Buffer accessors
     fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
 
-    fn nvim_mark_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     // Window jumplist accessors
     fn nvim_mark_win_get_jumplistlen(win: WinHandle) -> c_int;
     fn nvim_mark_win_set_jumplistlen(win: WinHandle, len: c_int);
@@ -98,15 +120,24 @@ extern "C" {
     fn nvim_mark_get_e_marknotset() -> *const c_char;
     fn nvim_mark_get_e_markinval() -> *const c_char;
 
-    // Global state / cross-function callbacks
-    fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
-    fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
+    // Cross-function callbacks
     fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
     fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
 
+    // Static inline wrappers (can't call these C functions directly from Rust)
+    fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
+    fn nvim_mark_findsent(dir: c_int, count: LinenrT) -> c_int;
+    fn nvim_mark_extmark_adjust(
+        buf: BufHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+        op: c_int,
+    );
+
     // Phase 4: Global state
     fn nvim_mark_get_cmod_flags() -> c_uint;
-    fn nvim_mark_setpcmark();
 
     // Phase 4: Window topline/changelist
     fn nvim_mark_win_get_topline(win: WinHandle) -> LinenrT;
@@ -161,22 +192,6 @@ extern "C" {
     fn nvim_mark_tabpage_firstwin(tp: TabHandle) -> WinHandle;
 
     // Phase 5: External function callbacks
-    fn nvim_mark_qf_mark_adjust(
-        buf: BufHandle,
-        win: WinHandle,
-        line1: LinenrT,
-        line2: LinenrT,
-        amount: LinenrT,
-        amount_after: LinenrT,
-    ) -> c_int;
-    fn nvim_mark_extmark_adjust(
-        buf: BufHandle,
-        line1: LinenrT,
-        line2: LinenrT,
-        amount: LinenrT,
-        amount_after: LinenrT,
-        op: c_int,
-    );
     fn rs_diff_mark_adjust(
         buf: BufHandle,
         line1: LinenrT,
@@ -205,14 +220,6 @@ extern "C" {
     fn nvim_mark_emsg_argreq();
     fn nvim_mark_semsg_invarg2(p: *const c_char);
 
-    // Phase 6: Multibyte functions
-    fn nvim_mark_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
-    fn nvim_mark_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
-    fn nvim_mark_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
-    fn nvim_mark_utf_ptr2char(p: *const c_char) -> c_int;
-    fn nvim_mark_vim_isprintc(c: c_int) -> c_int;
-    fn nvim_mark_ptr2cells(p: *const c_char) -> c_int;
-
     // Phase 6: Motion functions
     fn nvim_mark_findpar(
         inclusive: *mut c_int,
@@ -221,7 +228,6 @@ extern "C" {
         what: c_int,
         do_sentences: c_int,
     ) -> c_int;
-    fn nvim_mark_findsent(dir: c_int, count: LinenrT) -> c_int;
     fn nvim_mark_win_set_cursor(win: WinHandle, pos: PosT);
 
     // exarg_T field accessors (from ex_cmds_shim.c)
@@ -2159,7 +2165,7 @@ pub unsafe extern "C" fn rs_get_jumplist(
         // to list. Careful: If there are duplicates (CTRL-O immediately after
         // starting Vim on a file), another entry may have been removed.
         if idx == len {
-            nvim_mark_setpcmark();
+            setpcmark();
             let new_idx = nvim_mark_win_get_jumplistidx(win) - 1;
             nvim_mark_win_set_jumplistidx(win, new_idx);
             if new_idx + count < 0 {
@@ -2663,8 +2669,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
         one_adjust_nodel(&mut (*vi_end).lnum, line1, line2, amount, amount_after);
 
         // quickfix marks
-        let qf_result =
-            nvim_mark_qf_mark_adjust(buf, WinHandle::null(), line1, line2, amount, amount_after);
+        let qf_result = qf_mark_adjust(buf, WinHandle::null(), line1, line2, amount, amount_after);
         if qf_result == 0 {
             let has_qf = nvim_mark_buf_get_has_qf_entry(buf);
             nvim_mark_buf_set_has_qf_entry(buf, has_qf & !BUF_HAS_QF_ENTRY);
@@ -2676,7 +2681,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
         while !tp.is_null() {
             let mut win = nvim_mark_tabpage_firstwin(tp);
             while !win.is_null() {
-                let result = nvim_mark_qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
+                let result = qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
                 found_one |= result != 0;
                 win = nvim_mark_win_get_next(win);
             }
@@ -3099,7 +3104,7 @@ pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curb
                     (*xfm).fmark.timestamp = timestamp;
                     // XFREE_CLEAR(namedfm[n].fname)
                     if !(*xfm).fname.is_null() {
-                        nvim_mark_xfree((*xfm).fname as *mut c_void);
+                        xfree((*xfm).fname as *mut c_void);
                         (*xfm).fname = std::ptr::null_mut();
                     }
                 }
@@ -3160,18 +3165,18 @@ pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curb
 #[export_name = "mark_mb_adjustpos"]
 pub unsafe extern "C" fn rs_mark_mb_adjustpos(buf: BufHandle, lp: *mut PosT) {
     if (*lp).col > 0 || (*lp).coladd > 1 {
-        let line = nvim_mark_ml_get_buf(buf, (*lp).lnum);
-        if *line == 0 || nvim_mark_ml_get_buf_len(buf, (*lp).lnum) < (*lp).col {
+        let line = ml_get_buf(buf, (*lp).lnum);
+        if *line == 0 || ml_get_buf_len(buf, (*lp).lnum) < (*lp).col {
             (*lp).col = 0;
         } else {
-            (*lp).col -= nvim_mark_utf_head_off(line, line.offset((*lp).col as isize)) as ColnrT;
+            (*lp).col -= utf_head_off(line, line.offset((*lp).col as isize)) as ColnrT;
         }
         // Reset "coladd" when the cursor would be on the right half of a
         // double-wide character.
         if (*lp).coladd == 1
             && *line.offset((*lp).col as isize) != TAB_CHAR as c_char
-            && nvim_mark_vim_isprintc(nvim_mark_utf_ptr2char(line.offset((*lp).col as isize))) != 0
-            && nvim_mark_ptr2cells(line.offset((*lp).col as isize)) > 1
+            && vim_isprintc(utf_ptr2char(line.offset((*lp).col as isize))) != 0
+            && ptr2cells(line.offset((*lp).col as isize)) > 1
         {
             (*lp).coladd = 0;
         }
@@ -4206,7 +4211,7 @@ pub extern "C" fn rs_marks_should_show(_mark_char: c_int, filter_len: c_int) -> 
 pub extern "C" fn rs_free_fmark(fm: FmarkT) {
     if !fm.additional_data.is_null() {
         unsafe {
-            nvim_mark_xfree(fm.additional_data as *mut c_void);
+            xfree(fm.additional_data as *mut c_void);
         }
     }
 }
@@ -4217,7 +4222,7 @@ pub extern "C" fn rs_free_fmark(fm: FmarkT) {
 pub extern "C" fn rs_free_xfmark(fm: XfmarkT) {
     if !fm.fname.is_null() {
         unsafe {
-            nvim_mark_xfree(fm.fname as *mut c_void);
+            xfree(fm.fname as *mut c_void);
         }
     }
     rs_free_fmark(fm.fmark);
@@ -4321,13 +4326,10 @@ pub unsafe extern "C" fn rs_fmarks_check_one(
     name: *const c_char,
     buf: BufHandle,
 ) {
-    if (*fm).fmark.fnum == 0
-        && !(*fm).fname.is_null()
-        && nvim_mark_path_fnamecmp(name, (*fm).fname) == 0
-    {
+    if (*fm).fmark.fnum == 0 && !(*fm).fname.is_null() && path_fnamecmp(name, (*fm).fname) == 0 {
         (*fm).fmark.fnum = nvim_buf_get_fnum(buf);
         // XFREE_CLEAR: free and null the pointer
-        nvim_mark_xfree((*fm).fname as *mut c_void);
+        xfree((*fm).fname as *mut c_void);
         (*fm).fname = std::ptr::null_mut();
     }
 }
@@ -4416,7 +4418,7 @@ pub unsafe extern "C" fn rs_copy_jumplist(from: WinHandle, to: WinHandle) {
         let dst = nvim_mark_win_get_jumplist_entry(to, i);
         *dst = *src;
         if !(*src).fname.is_null() {
-            (*dst).fname = nvim_mark_xstrdup((*src).fname);
+            (*dst).fname = xstrdup((*src).fname);
         }
     }
     nvim_mark_win_set_jumplistlen(to, len);
@@ -4810,7 +4812,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         let cursor_ptr = nvim_mark_win_get_cursor_ptr(curwin);
         if pos == cursor_ptr {
             // setpcmark() then keep prev_pcmark
-            nvim_mark_setpcmark();
+            setpcmark();
             let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
             let prev_pcmark = nvim_mark_win_get_prev_pcmark_ptr(curwin);
             *prev_pcmark = *pcmark;

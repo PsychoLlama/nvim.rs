@@ -1300,10 +1300,10 @@ int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t
   return (fm->timestamp >= entry_ts) ? 1 : 0;
 }
 
-/// Wrapper for nvim_mark_path_fnamecmp (path comparison for marks).
+/// Wrapper for path_fnamecmp (path comparison for marks).
 int nvim_shada_path_fnamecmp(const char *a, const char *b)
 {
-  return nvim_mark_path_fnamecmp(a, b);
+  return path_fnamecmp(a, b);
 }
 
 

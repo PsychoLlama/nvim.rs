@@ -175,23 +175,14 @@ extern void rs_ex_delmarks(const char *arg, int forceit, buf_T *curbuf_ptr);
 // C accessor functions called from Rust
 // =============================================================================
 
-/// Wrapper around xfree for Rust to call
-void nvim_mark_xfree(void *ptr)
+// bt_prompt / buflist_findnr / findsent / extmark_adjust are static inline / internal; keep wrappers
+int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }
+buf_T *nvim_mark_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
+int nvim_mark_findsent(int dir, int count) { return (int)findsent(dir, count); }
+void nvim_mark_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
+                               linenr_T amount, linenr_T amount_after, int op)
 {
-  xfree(ptr);
-}
-
-/// Wrapper around xstrdup for Rust to call
-char *nvim_mark_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
-
-
-/// Compare file names using path_fnamecmp
-int nvim_mark_path_fnamecmp(const char *a, const char *b)
-{
-  return path_fnamecmp(a, b);
+  extmark_adjust(buf, line1, line2, amount, amount_after, (ExtmarkOp)op);
 }
 
 // Window jumplist accessors
@@ -238,8 +229,6 @@ fmark_T *nvim_mark_buf_get_changelist(buf_T *buf, int idx) { return &buf->b_chan
 int nvim_mark_buf_get_changelistlen(buf_T *buf) { return buf->b_changelistlen; }
 void nvim_mark_buf_set_changelistlen(buf_T *buf, int len) { buf->b_changelistlen = len; }
 
-buf_T *nvim_mark_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
-int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }
 
 unsigned nvim_mark_get_cmod_flags(void) { return cmdmod.cmod_flags; }
 
@@ -315,18 +304,6 @@ pos_T *nvim_mark_win_get_prev_pcmark_ptr(win_T *win) { return &win->w_prev_pcmar
 tabpage_T *nvim_mark_tabpage_next(tabpage_T *tp) { return tp->tp_next; }
 win_T *nvim_mark_tabpage_firstwin(tabpage_T *tp) { return (tp == curtab) ? firstwin : tp->tp_firstwin; }
 
-// Phase 5: External function callbacks (keep iteration in C)
-int nvim_mark_qf_mark_adjust(buf_T *buf, win_T *win, linenr_T line1, linenr_T line2,
-                              linenr_T amount, linenr_T amount_after)
-{
-  return qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
-}
-void nvim_mark_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
-                               linenr_T amount, linenr_T amount_after, int op)
-{
-  extmark_adjust(buf, line1, line2, amount, amount_after, (ExtmarkOp)op);
-}
-
 // Phase 5: Wininfo iteration
 int nvim_mark_buf_get_wininfo_count(buf_T *buf) { return (int)kv_size(buf->b_wininfo); }
 pos_T *nvim_mark_buf_get_wininfo_mark(buf_T *buf, int idx) { return &kv_A(buf->b_wininfo, idx)->wi_mark.mark; }
@@ -340,22 +317,13 @@ void nvim_mark_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_mark_emsg_argreq(void) { emsg(_(e_argreq)); }
 void nvim_mark_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
 
-// Phase 6: Multibyte function wrappers
-const char *nvim_mark_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
-colnr_T nvim_mark_ml_get_buf_len(buf_T *buf, linenr_T lnum) { return ml_get_buf_len(buf, lnum); }
-int nvim_mark_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
-int nvim_mark_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
-int nvim_mark_vim_isprintc(int c) { return vim_isprintc(c); }
-int nvim_mark_ptr2cells(const char *p) { return ptr2cells(p); }
-
-// Phase 6: Motion function wrappers
+// Phase 6: Motion function wrappers (findpar kept for bool/int conversion)
 int nvim_mark_findpar(int *inclusive, int dir, int count, int what, int do_sentences) {
   bool pincl = false;
   int result = (int)findpar(&pincl, dir, count, what, (bool)do_sentences);
   if (inclusive) { *inclusive = (int)pincl; }
   return result;
 }
-int nvim_mark_findsent(int dir, int count) { return (int)findsent(dir, count); }
 void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 
 
@@ -914,7 +882,6 @@ void get_global_marks(list_T *l)
 // Cross-function callbacks from Rust (Phase 3)
 // Placed at end of file after static function definitions
 // =============================================================================
-void nvim_mark_setpcmark(void) { setpcmark(); }
 void nvim_mark_fname2fnum(xfmark_T *xfm) { fname2fnum(xfm); }
 char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
   return buflist_nr2name(fnum, listed, unstripped);
