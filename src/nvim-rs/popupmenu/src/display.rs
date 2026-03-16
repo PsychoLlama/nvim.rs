@@ -364,7 +364,7 @@ extern "C" {
         win_col_offset: c_int,
     );
     /// Send external popupmenu select event.
-    fn nvim_pum_ext_select(selected: c_int);
+    fn ui_call_popupmenu_select(selected: i64);
     /// Find preview window and compute above/below row adjustments.
     fn nvim_pum_find_pvwin_rows(above_row_out: *mut c_int, below_row_out: *mut c_int);
     /// Compute vertical placement (writes `PUM_STATE.row`, `.height`, `.above`).
@@ -591,7 +591,7 @@ pub unsafe extern "C" fn rs_pum_display(
                     geom.win_col_offset,
                 );
             } else {
-                nvim_pum_ext_select(selected);
+                ui_call_popupmenu_select(i64::from(selected));
                 return;
             }
         }

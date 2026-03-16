@@ -7,32 +7,27 @@ use std::ffi::{c_char, c_int};
 
 use crate::PUM_STATE;
 
-/// Result from `ui_pum_get_pos` wrapper.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct PumUiPos {
-    valid: c_int,
-    width: f64,
-    height: f64,
-    row: f64,
-    col: f64,
-}
-
-// C accessor functions for event info dict population.
+// Direct C functions for event info dict population.
 extern "C" {
-    /// Get UI-provided popup position (wraps `ui_pum_get_pos`).
-    fn nvim_pum_ui_pum_get_pos() -> PumUiPos;
+    /// Get UI-provided popup position.
+    fn ui_pum_get_pos(pwidth: *mut f64, pheight: *mut f64, prow: *mut f64, pcol: *mut f64) -> bool;
     /// Add a float value to a `dict_T`.
-    fn nvim_pum_dict_add_float(dict: *mut DictHandle, key: *const c_char, key_len: usize, val: f64);
-    /// Add an integer value to a `dict_T`.
-    fn nvim_pum_dict_add_nr(dict: *mut DictHandle, key: *const c_char, key_len: usize, val: c_int);
-    /// Add a boolean value to a `dict_T` (0 = false, nonzero = true).
-    fn nvim_pum_dict_add_bool(
+    fn tv_dict_add_float(
+        dict: *mut DictHandle,
+        key: *const c_char,
+        key_len: usize,
+        val: f64,
+    ) -> c_int;
+    /// Add an integer value to a `dict_T` (`varnumber_T` = `int64_t`).
+    fn tv_dict_add_nr(dict: *mut DictHandle, key: *const c_char, key_len: usize, val: i64)
+        -> c_int;
+    /// Add a boolean value to a `dict_T` (`BoolVarValue`: 0 = false, 1 = true).
+    fn tv_dict_add_bool(
         dict: *mut DictHandle,
         key: *const c_char,
         key_len: usize,
         val: c_int,
-    );
+    ) -> c_int;
 }
 
 /// Popup menu position and size information.
@@ -204,24 +199,24 @@ pub unsafe extern "C" fn rs_pum_set_event_info(dict: *mut DictHandle) {
     }
 
     // Try to get position from the UI; fall back to internal state.
-    let pos = nvim_pum_ui_pum_get_pos();
-    let (w, h, r, c) = if pos.valid != 0 {
-        (pos.width, pos.height, pos.row, pos.col)
-    } else {
-        (
-            f64::from(PUM_STATE.width),
-            f64::from(PUM_STATE.height),
-            f64::from(PUM_STATE.row),
-            f64::from(PUM_STATE.col),
-        )
-    };
+    let mut w: f64 = 0.0;
+    let mut h: f64 = 0.0;
+    let mut r: f64 = 0.0;
+    let mut c: f64 = 0.0;
+    if !ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) {
+        w = f64::from(PUM_STATE.width);
+        h = f64::from(PUM_STATE.height);
+        r = f64::from(PUM_STATE.row);
+        c = f64::from(PUM_STATE.col);
+    }
 
-    nvim_pum_dict_add_float(dict, c"height".as_ptr(), 6, h);
-    nvim_pum_dict_add_float(dict, c"width".as_ptr(), 5, w);
-    nvim_pum_dict_add_float(dict, c"row".as_ptr(), 3, r);
-    nvim_pum_dict_add_float(dict, c"col".as_ptr(), 3, c);
-    nvim_pum_dict_add_nr(dict, c"size".as_ptr(), 4, PUM_STATE.size);
-    nvim_pum_dict_add_bool(dict, c"scrollbar".as_ptr(), 9, PUM_STATE.scrollbar);
+    tv_dict_add_float(dict, c"height".as_ptr(), 6, h);
+    tv_dict_add_float(dict, c"width".as_ptr(), 5, w);
+    tv_dict_add_float(dict, c"row".as_ptr(), 3, r);
+    tv_dict_add_float(dict, c"col".as_ptr(), 3, c);
+    tv_dict_add_nr(dict, c"size".as_ptr(), 4, i64::from(PUM_STATE.size));
+    // kBoolVarFalse=0, kBoolVarTrue=1
+    tv_dict_add_bool(dict, c"scrollbar".as_ptr(), 9, PUM_STATE.scrollbar);
 }
 
 #[cfg(test)]

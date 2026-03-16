@@ -501,7 +501,7 @@ extern "C" {
     fn nvim_pum_xfree(ptr: *mut c_void);
 
     // Highlight operations
-    fn nvim_curwin_hl_attr(hlf: c_int) -> c_int;
+    fn nvim_win_hl_attr(wp: *mut crate::display::WinHandle, hlf: c_int) -> c_int;
     fn nvim_pum_hl_combine_attr(a: c_int, b: c_int) -> c_int;
 
     // Linebuf operations
@@ -549,6 +549,8 @@ extern "C" {
 extern "C" {
     /// C global: `State` (current editor mode).
     static State: c_int;
+    /// C global: `curwin` (current window pointer).
+    static mut curwin: *mut crate::display::WinHandle;
 }
 
 /// `MODE_CMDLINE` = 0x08.
@@ -588,8 +590,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     let pum_selected = PUM_STATE.selected;
 
     let mut row = 0;
-    let attr_scroll = nvim_curwin_hl_attr(hlf::HLF_PSB);
-    let attr_thumb = nvim_curwin_hl_attr(hlf::HLF_PST);
+    let attr_scroll = nvim_win_hl_attr(curwin, hlf::HLF_PSB);
+    let attr_thumb = nvim_win_hl_attr(curwin, hlf::HLF_PST);
     let fcs_trunc = nvim_pum_fcs_trunc(pum_rl as c_int);
     let fill_char = nvim_pum_schar_from_ascii(b' ' as c_char);
 
@@ -719,10 +721,11 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         let idx = i + pum_first;
         let selected = idx == pum_selected;
         let hlfs = if selected { &hlfs_sel } else { &hlfs_norm };
-        let trunc_attr = nvim_curwin_hl_attr(if selected { hlf::HLF_PSI } else { hlf::HLF_PNI });
+        let trunc_attr =
+            nvim_win_hl_attr(curwin, if selected { hlf::HLF_PSI } else { hlf::HLF_PNI });
         let mut hlf = hlfs[0]; // start with "word" highlight
-        let mut attr = nvim_curwin_hl_attr(hlf);
-        attr = nvim_pum_hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), attr);
+        let mut attr = nvim_win_hl_attr(curwin, hlf);
+        attr = nvim_pum_hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
 
         nvim_pum_screengrid_line_start(row, 0);
 
@@ -756,8 +759,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         for j in 0..3 {
             let item_type = order[j];
             hlf = hlfs[item_type as usize];
-            attr = nvim_curwin_hl_attr(hlf);
-            attr = nvim_pum_hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), attr);
+            attr = nvim_win_hl_attr(curwin, hlf);
+            attr = nvim_pum_hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
             orig_attr = attr;
             if item_type < 2 {
                 // try combine attr with user custom

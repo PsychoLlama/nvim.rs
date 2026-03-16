@@ -22,14 +22,6 @@ typedef struct {
 
 EXTERN ScreenGrid pum_grid INIT( = SCREEN_GRID_INIT);
 
-/// Result type for `nvim_pum_ui_pum_get_pos` (Rust FFI).
-typedef struct {
-  int valid;
-  double width;
-  double height;
-  double row;
-  double col;
-} PumUiPos;
 
 /// Result type for `nvim_pum_mouse_find_win_outer` (Rust FFI).
 typedef struct {

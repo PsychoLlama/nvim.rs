@@ -3,7 +3,7 @@
 //! This module provides functions for accessing popup menu item data
 //! and combining highlight attributes.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint};
 
 use crate::PUM_STATE;
 
@@ -34,14 +34,18 @@ extern "C" {
     pub fn nvim_pum_item_get_user_kind_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
     /// Combine highlight attributes (`hl_combine_attr`).
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
-    /// Get the `pumborder` option value.
-    fn nvim_get_p_pumborder() -> *const c_char;
     /// Check if two strings are equal.
     fn strequal(s1: *const c_char, s2: *const c_char) -> c_int;
-    /// Get the completion item align flags global.
-    fn nvim_get_cia_flags() -> c_int;
     /// Compute the display width of a string.
     fn vim_strsize(s: *const c_char) -> c_int;
+}
+
+// C globals for item operations.
+extern "C" {
+    /// C global: `p_pumborder` option value.
+    static p_pumborder: *const c_char;
+    /// C global: `cia_flags` (completion item align flags, unsigned).
+    static cia_flags: c_uint;
 }
 
 // Static string constants for border comparison
@@ -66,12 +70,12 @@ pub struct PumAlignOrder {
 /// Parse the completion item align flags into column order.
 ///
 /// # Arguments
-/// * `cia_flags` - The completion item align flags (0 for default)
+/// * `flags` - The completion item align flags (0 for default)
 ///
 /// Returns struct with [first, second, third] column types.
 #[no_mangle]
-pub const extern "C" fn rs_pum_align_order(cia_flags: c_int) -> PumAlignOrder {
-    if cia_flags == 0 {
+pub const extern "C" fn rs_pum_align_order(flags: c_int) -> PumAlignOrder {
+    if flags == 0 {
         // Default order: abbr, kind, menu
         PumAlignOrder {
             first: CPT_ABBR,
@@ -81,9 +85,9 @@ pub const extern "C" fn rs_pum_align_order(cia_flags: c_int) -> PumAlignOrder {
     } else {
         // Parse flags: hundreds = first, tens = second, units = third
         PumAlignOrder {
-            first: cia_flags / 100,
-            second: (cia_flags / 10) % 10,
-            third: cia_flags % 10,
+            first: flags / 100,
+            second: (flags / 10) % 10,
+            third: flags % 10,
         }
     }
 }
@@ -97,7 +101,8 @@ pub const extern "C" fn rs_pum_align_order(cia_flags: c_int) -> PumAlignOrder {
 /// Calls C accessor for global `cia_flags`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_current_align_order() -> PumAlignOrder {
-    let flags = nvim_get_cia_flags();
+    #[allow(clippy::cast_possible_wrap)]
+    let flags = cia_flags as c_int;
     rs_pum_align_order(flags)
 }
 
@@ -181,8 +186,6 @@ pub unsafe extern "C" fn rs_pum_user_attr_combine(
 /// Calls C accessor functions and string comparisons.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_border_width() -> c_int {
-    let p_pumborder = nvim_get_p_pumborder();
-
     // Check if empty string
     if p_pumborder.is_null() || *p_pumborder == 0 {
         return 0;

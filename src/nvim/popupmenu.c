@@ -149,27 +149,9 @@ int nvim_pum_item_get_user_kind_hlattr(const pumitem_T *array, int index)
   return array[index].pum_user_kind_hlattr;
 }
 
-// Accessor for the 'pumborder' option
-const char *nvim_get_p_pumborder(void)
-{
-  return p_pumborder;
-}
-
-// Accessor for completion item align flags
-int nvim_get_cia_flags(void)
-{
-  return cia_flags;
-}
-
 // Static string constants for border comparison (exposed to Rust)
 const char *const opt_winborder_shadow = "shadow";
 const char *const opt_winborder_none = "none";
-
-// Accessor for window highlight attribute (for Rust FFI)
-int nvim_curwin_hl_attr(int hlf)
-{
-  return win_hl_attr(curwin, hlf);
-}
 
 // Phase 1 accessors: pum_grid field accessors for Rust FFI
 ScreenGrid *nvim_pum_get_grid_ptr(void)
@@ -245,42 +227,6 @@ void nvim_pum_execute_menu_item(void *menu)
   execute_menu(&ea, (vimmenu_T *)menu, -1);
 }
 
-// Phase 1 accessor: ui_pum_get_pos wrapper
-PumUiPos nvim_pum_ui_pum_get_pos(void)
-{
-  PumUiPos result;
-  double w, h, r, c;
-  if (ui_pum_get_pos(&w, &h, &r, &c)) {
-    result.valid = 1;
-    result.width = w;
-    result.height = h;
-    result.row = r;
-    result.col = c;
-  } else {
-    result.valid = 0;
-    result.width = 0;
-    result.height = 0;
-    result.row = 0;
-    result.col = 0;
-  }
-  return result;
-}
-
-// Phase 1 accessor: tv_dict_add_* wrappers for Rust FFI
-void nvim_pum_dict_add_float(void *dict, const char *key, size_t key_len, double val)
-{
-  tv_dict_add_float((dict_T *)dict, key, key_len, val);
-}
-
-void nvim_pum_dict_add_nr(void *dict, const char *key, size_t key_len, int val)
-{
-  tv_dict_add_nr((dict_T *)dict, key, key_len, val);
-}
-
-void nvim_pum_dict_add_bool(void *dict, const char *key, size_t key_len, int val)
-{
-  tv_dict_add_bool((dict_T *)dict, key, key_len, val ? kBoolVarTrue : kBoolVarFalse);
-}
 
 // Static assertions for constants used by Rust FFI
 _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
@@ -1024,11 +970,6 @@ void nvim_pum_ext_show(pumitem_T *array, int size, int selected,
   arena_mem_free(arena_finish(&arena));
 }
 
-/// Call ui_call_popupmenu_select.
-void nvim_pum_ext_select(int selected)
-{
-  ui_call_popupmenu_select(selected);
-}
 
 /// Find preview window row adjustments using FOR_ALL_WINDOWS_IN_TAB.
 /// Returns (above_row_adj, below_row_adj) via output params.

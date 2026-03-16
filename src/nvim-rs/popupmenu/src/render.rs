@@ -37,14 +37,20 @@ pub mod hlf {
 
 // External C functions for rendering
 extern "C" {
-    /// Get current window highlight attribute for highlight group.
-    fn nvim_curwin_hl_attr(hlf: c_int) -> c_int;
+    /// Get highlight attribute for a window and highlight group.
+    fn nvim_win_hl_attr(wp: *mut crate::display::WinHandle, hlf: c_int) -> c_int;
     /// Combine two highlight attributes.
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
     /// Get cell width of a UTF-8 character.
     fn utf_ptr2cells(p: *const u8) -> c_int;
     /// Get byte length of a UTF-8 character sequence.
     fn utfc_ptr2len(p: *const u8) -> c_int;
+}
+
+// C globals for render.
+extern "C" {
+    /// C global: `curwin` (current window pointer).
+    static mut curwin: *mut crate::display::WinHandle;
 }
 
 /// Result of highlight attribute calculation for a cell.
@@ -78,9 +84,9 @@ pub unsafe extern "C" fn rs_pum_base_attr(is_selected: c_int, column_type: c_int
     };
     let hlf = if is_sel { selected_hlf } else { normal_hlf };
 
-    let attr = nvim_curwin_hl_attr(hlf);
+    let attr = nvim_win_hl_attr(curwin, hlf);
     // Combine with base PNI attribute for consistent styling
-    hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), attr)
+    hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr)
 }
 
 /// Compute the highlight attribute for a matched character.
@@ -101,10 +107,10 @@ pub unsafe extern "C" fn rs_pum_match_attr(base_attr: c_int, is_selected: c_int)
         hlf::HLF_PMNI
     };
 
-    let match_attr = nvim_curwin_hl_attr(match_hlf);
-    let combined = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PMNI), match_attr);
+    let match_attr = nvim_win_hl_attr(curwin, match_hlf);
+    let combined = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PMNI), match_attr);
     let combined = hl_combine_attr(base_attr, combined);
-    hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), combined)
+    hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), combined)
 }
 
 /// Combine a highlight attribute with a user-defined attribute.
@@ -147,10 +153,10 @@ pub unsafe extern "C" fn rs_pum_needs_match_highlight(hlf: c_int) -> c_int {
     }
 
     // Check if match highlight attributes differ from normal
-    let match_selected_attr = nvim_curwin_hl_attr(hlf::HLF_PMSI);
-    let selected_attr = nvim_curwin_hl_attr(hlf::HLF_PSI);
-    let match_normal_attr = nvim_curwin_hl_attr(hlf::HLF_PMNI);
-    let normal_attr = nvim_curwin_hl_attr(hlf::HLF_PNI);
+    let match_selected_attr = nvim_win_hl_attr(curwin, hlf::HLF_PMSI);
+    let selected_attr = nvim_win_hl_attr(curwin, hlf::HLF_PSI);
+    let match_normal_attr = nvim_win_hl_attr(curwin, hlf::HLF_PMNI);
+    let normal_attr = nvim_win_hl_attr(curwin, hlf::HLF_PNI);
 
     c_int::from(match_selected_attr != selected_attr || match_normal_attr != normal_attr)
 }
@@ -161,7 +167,7 @@ pub unsafe extern "C" fn rs_pum_needs_match_highlight(hlf: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_scrollbar_attr() -> c_int {
-    nvim_curwin_hl_attr(hlf::HLF_PSB)
+    nvim_win_hl_attr(curwin, hlf::HLF_PSB)
 }
 
 /// Get the scrollbar thumb attribute.
@@ -170,7 +176,7 @@ pub unsafe extern "C" fn rs_pum_scrollbar_attr() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_thumb_attr() -> c_int {
-    nvim_curwin_hl_attr(hlf::HLF_PST)
+    nvim_win_hl_attr(curwin, hlf::HLF_PST)
 }
 
 /// Get the truncation attribute (for truncation indicator).
@@ -183,9 +189,9 @@ pub unsafe extern "C" fn rs_pum_thumb_attr() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_trunc_attr(is_selected: c_int) -> c_int {
     if is_selected != 0 {
-        nvim_curwin_hl_attr(hlf::HLF_PSI)
+        nvim_win_hl_attr(curwin, hlf::HLF_PSI)
     } else {
-        nvim_curwin_hl_attr(hlf::HLF_PNI)
+        nvim_win_hl_attr(curwin, hlf::HLF_PNI)
     }
 }
 
@@ -346,8 +352,8 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     // Early exit: empty text or not a match-highlight-eligible group
     if *text == 0
         || (hlf_id != hlf::HLF_PSI && hlf_id != hlf::HLF_PNI)
-        || (nvim_curwin_hl_attr(hlf::HLF_PMSI) == nvim_curwin_hl_attr(hlf::HLF_PSI)
-            && nvim_curwin_hl_attr(hlf::HLF_PMNI) == nvim_curwin_hl_attr(hlf::HLF_PNI))
+        || (nvim_win_hl_attr(curwin, hlf::HLF_PMSI) == nvim_win_hl_attr(curwin, hlf::HLF_PSI)
+            && nvim_win_hl_attr(curwin, hlf::HLF_PMNI) == nvim_win_hl_attr(curwin, hlf::HLF_PNI))
     {
         return std::ptr::null_mut();
     }
@@ -383,7 +389,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     let mut matched_len: c_int = -1;
 
     while *ptr != 0 {
-        let mut new_attr = nvim_curwin_hl_attr(hlf_id);
+        let mut new_attr = nvim_win_hl_attr(curwin, hlf_id);
 
         if fuzzy_positions.is_null() {
             // Prefix matching
@@ -397,9 +403,9 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
                 } else {
                     hlf::HLF_PMNI
                 };
-                new_attr = nvim_curwin_hl_attr(match_hlf);
-                new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PMNI), new_attr);
-                new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf_id), new_attr);
+                new_attr = nvim_win_hl_attr(curwin, match_hlf);
+                new_attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PMNI), new_attr);
+                new_attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf_id), new_attr);
                 matched_len -= 1;
             }
         } else {
@@ -411,15 +417,15 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
                     } else {
                         hlf::HLF_PMNI
                     };
-                    new_attr = nvim_curwin_hl_attr(match_hlf);
-                    new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PMNI), new_attr);
-                    new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf_id), new_attr);
+                    new_attr = nvim_win_hl_attr(curwin, match_hlf);
+                    new_attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PMNI), new_attr);
+                    new_attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf_id), new_attr);
                     break;
                 }
             }
         }
 
-        new_attr = hl_combine_attr(nvim_curwin_hl_attr(hlf::HLF_PNI), new_attr);
+        new_attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), new_attr);
 
         if user_hlattr > 0 {
             new_attr = hl_combine_attr(new_attr, user_hlattr);
