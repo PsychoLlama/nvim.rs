@@ -519,6 +519,13 @@ extern int rs_write_spell_sections(const SpellSectionParams *params,
                                    uint8_t *buf, size_t buf_len,
                                    size_t *written_out);
 
+// Phase 3: Rust tree serialization - rs_put_node writes tree to buffer and
+// returns the nodecount; rs_clear_node resets index/wnode fields.
+// (Accessor function definitions appear after the full wordnode_S struct below.)
+extern int rs_put_node(wordnode_T *node, uint8_t *buf, size_t buf_len,
+                       int idx, int regionmask, bool prefixtree, size_t *written_out);
+extern void rs_clear_node(wordnode_T *node);
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
@@ -659,7 +666,7 @@ struct sblock_S {
 };
 
 // A node in the tree.
-typedef struct wordnode_S wordnode_T;
+// (Forward declaration is in spellfile.h; full definition here.)
 struct wordnode_S {
   union {   // shared to save space
     uint8_t hashkey[6];         // the hash key, only used while compressing
@@ -692,6 +699,19 @@ struct wordnode_S {
 #define WN_MASK  0xffff         // mask relevant bits of "wn_flags"
 
 #define HI2WN(hi)    (wordnode_T *)((hi)->hi_key)
+
+// Phase 3: wordnode_T accessor functions used by Rust tree-serialization code.
+// Defined here (after the full struct definition) so field access is valid.
+uint8_t nvim_wordnode_get_byte(const wordnode_T *n) { return n->wn_byte; }
+wordnode_T *nvim_wordnode_get_child(const wordnode_T *n) { return n->wn_child; }
+wordnode_T *nvim_wordnode_get_sibling(const wordnode_T *n) { return n->wn_sibling; }
+uint16_t nvim_wordnode_get_flags(const wordnode_T *n) { return n->wn_flags; }
+int16_t nvim_wordnode_get_region(const wordnode_T *n) { return n->wn_region; }
+uint8_t nvim_wordnode_get_affixID(const wordnode_T *n) { return n->wn_affixID; }
+int nvim_wordnode_get_index(const wordnode_T *n) { return n->wn_u1.index; }
+void nvim_wordnode_set_index(wordnode_T *n, int idx) { n->wn_u1.index = idx; }
+wordnode_T *nvim_wordnode_get_wnode(const wordnode_T *n) { return n->wn_u2.wnode; }
+void nvim_wordnode_set_wnode(wordnode_T *n, wordnode_T *wn) { n->wn_u2.wnode = wn; }
 
 // Info used while reading the spell files.
 typedef struct {
@@ -3888,16 +3908,35 @@ static int write_vim_spell(spellinfo_T *spin, char *fname)
     } else {
       tree = spin->si_prefroot->wn_sibling;
     }
+    bool prefixtree = round == 3;
 
-    clear_node(tree);
+    // Count pass: sets wn_u1.index / wn_u2.wnode, returns nodecount.
+    rs_clear_node(tree);
+    size_t dummy_written = 0;
+    int nodecount = rs_put_node(tree, NULL, 0, 0, regionmask, prefixtree,
+                                &dummy_written);
+    if (nodecount < 0) {
+      retval = FAIL;
+      goto theend;
+    }
 
-    size_t nodecount = (size_t)put_node(NULL, tree, 0, regionmask, round == 3);
+    put_bytes(fd, (uintmax_t)nodecount, 4);
+    assert((size_t)nodecount + (size_t)nodecount * sizeof(int) < INT_MAX);
+    spin->si_memtot += nodecount + (int)(nodecount * sizeof(int));
 
-    put_bytes(fd, nodecount, 4);
-    assert(nodecount + nodecount * sizeof(int) < INT_MAX);
-    spin->si_memtot += (int)(nodecount + nodecount * sizeof(int));
-
-    put_node(fd, tree, 0, regionmask, round == 3);
+    // Write pass: allocate buffer, fill it, write to file.
+    size_t tree_buf_len = (size_t)nodecount * 8 + 1024;
+    uint8_t *tree_buf = xmalloc(tree_buf_len);
+    rs_clear_node(tree);
+    size_t tree_written = 0;
+    int nodecount2 = rs_put_node(tree, tree_buf, tree_buf_len, 0, regionmask,
+                                 prefixtree, &tree_written);
+    if (nodecount2 < 0 || (tree_written > 0 && fwrite(tree_buf, tree_written, 1, fd) != 1)) {
+      xfree(tree_buf);
+      retval = FAIL;
+      goto theend;
+    }
+    xfree(tree_buf);
   }
 
   // Write another byte to check for errors (file system full).
@@ -3919,140 +3958,6 @@ theend:
   return retval;
 }
 
-// Clear the index and wnode fields of "node", it siblings and its
-// children.  This is needed because they are a union with other items to save
-// space.
-static void clear_node(wordnode_T *node)
-{
-  if (node != NULL) {
-    for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-      np->wn_u1.index = 0;
-      np->wn_u2.wnode = NULL;
-
-      if (np->wn_byte != NUL) {
-        clear_node(np->wn_child);
-      }
-    }
-  }
-}
-
-/// Dump a word tree at node "node".
-///
-/// This first writes the list of possible bytes (siblings).  Then for each
-/// byte recursively write the children.
-///
-/// NOTE: The code here must match the code in read_tree_node(), since
-/// assumptions are made about the indexes (so that we don't have to write them
-/// in the file).
-///
-/// @param fd  NULL when only counting
-/// @param prefixtree  true for PREFIXTREE
-///
-/// @return  the number of nodes used.
-static int put_node(FILE *fd, wordnode_T *node, int idx, int regionmask, bool prefixtree)
-{
-  // If "node" is zero the tree is empty.
-  if (node == NULL) {
-    return 0;
-  }
-
-  // Store the index where this node is written.
-  node->wn_u1.index = idx;
-
-  // Count the number of siblings.
-  int siblingcount = 0;
-  for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-    siblingcount++;
-  }
-
-  // Write the sibling count.
-  if (fd != NULL) {
-    putc(siblingcount, fd);                             // <siblingcount>
-  }
-  // Write each sibling byte and optionally extra info.
-  for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-    if (np->wn_byte == 0) {
-      if (fd != NULL) {
-        // For a NUL byte (end of word) write the flags etc.
-        if (prefixtree) {
-          // In PREFIXTREE write the required affixID and the
-          // associated condition nr (stored in wn_region).  The
-          // byte value is misused to store the "rare" and "not
-          // combining" flags
-          if (np->wn_flags == (uint16_t)PFX_FLAGS) {
-            putc(BY_NOFLAGS, fd);                       // <byte>
-          } else {
-            putc(BY_FLAGS, fd);                         // <byte>
-            putc(np->wn_flags, fd);                     // <pflags>
-          }
-          putc(np->wn_affixID, fd);                     // <affixID>
-          put_bytes(fd, (uintmax_t)np->wn_region, 2);   // <prefcondnr>
-        } else {
-          // For word trees we write the flag/region items.
-          int flags = np->wn_flags;
-          if (regionmask != 0 && np->wn_region != regionmask) {
-            flags |= WF_REGION;
-          }
-          if (np->wn_affixID != 0) {
-            flags |= WF_AFX;
-          }
-          if (flags == 0) {
-            // word without flags or region
-            putc(BY_NOFLAGS, fd);                               // <byte>
-          } else {
-            if (np->wn_flags >= 0x100) {
-              putc(BY_FLAGS2, fd);                              // <byte>
-              putc(flags, fd);                                  // <flags>
-              putc((int)((unsigned)flags >> 8), fd);            // <flags2>
-            } else {
-              putc(BY_FLAGS, fd);                               // <byte>
-              putc(flags, fd);                                  // <flags>
-            }
-            if (flags & WF_REGION) {
-              putc(np->wn_region, fd);                          // <region>
-            }
-            if (flags & WF_AFX) {
-              putc(np->wn_affixID, fd);                         // <affixID>
-            }
-          }
-        }
-      }
-    } else {
-      if (np->wn_child->wn_u1.index != 0
-          && np->wn_child->wn_u2.wnode != node) {
-        // The child is written elsewhere, write the reference.
-        if (fd != NULL) {
-          putc(BY_INDEX, fd);                                      // <byte>
-          put_bytes(fd, (uintmax_t)np->wn_child->wn_u1.index, 3);  // <nodeidx>
-        }
-      } else if (np->wn_child->wn_u2.wnode == NULL) {
-        // We will write the child below and give it an index.
-        np->wn_child->wn_u2.wnode = node;
-      }
-
-      if (fd != NULL) {
-        if (putc(np->wn_byte, fd) == EOF) {       // <byte> or <xbyte>
-          emsg(_(e_write));
-          return 0;
-        }
-      }
-    }
-  }
-
-  // Space used in the array when reading: one for each sibling and one for
-  // the count.
-  int newindex = idx + siblingcount + 1;
-
-  // Recursively dump the children of each sibling.
-  for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-    if (np->wn_byte != 0 && np->wn_child->wn_u2.wnode == node) {
-      newindex = put_node(fd, np->wn_child, newindex, regionmask,
-                          prefixtree);
-    }
-  }
-
-  return newindex;
-}
 
 // ":mkspell [-ascii] outfile  infile ..."
 // ":mkspell [-ascii] addfile"
@@ -4350,21 +4255,35 @@ static void sug_write(spellinfo_T *spin, char *fname)
   spin->si_memtot = 0;
   wordnode_T *tree = spin->si_foldroot->wn_sibling;
 
-  // Clear the index and wnode fields in the tree.
-  clear_node(tree);
-
-  // Count the number of nodes.  Needed to be able to allocate the
-  // memory when reading the nodes.  Also fills in index for shared
-  // nodes.
-  size_t nodecount = (size_t)put_node(NULL, tree, 0, 0, false);
+  // Count pass: sets wn_u1.index / wn_u2.wnode, returns nodecount.
+  rs_clear_node(tree);
+  size_t sug_dummy = 0;
+  int sug_nodecount = rs_put_node(tree, NULL, 0, 0, 0, false, &sug_dummy);
+  if (sug_nodecount < 0) {
+    emsg(_(e_write));
+    goto theend;
+  }
 
   // number of nodes in 4 bytes
-  put_bytes(fd, nodecount, 4);                          // <nodecount>
-  assert(nodecount + nodecount * sizeof(int) < INT_MAX);
-  spin->si_memtot += (int)(nodecount + nodecount * sizeof(int));
+  put_bytes(fd, (uintmax_t)sug_nodecount, 4);           // <nodecount>
+  assert((size_t)sug_nodecount + (size_t)sug_nodecount * sizeof(int) < INT_MAX);
+  spin->si_memtot += sug_nodecount + (int)(sug_nodecount * sizeof(int));
 
   // Write the nodes.
-  put_node(fd, tree, 0, 0, false);
+  size_t sug_tree_buf_len = (size_t)sug_nodecount * 8 + 1024;
+  uint8_t *sug_tree_buf = xmalloc(sug_tree_buf_len);
+  rs_clear_node(tree);
+  size_t sug_tree_written = 0;
+  int sug_nc2 = rs_put_node(tree, sug_tree_buf, sug_tree_buf_len, 0, 0, false,
+                             &sug_tree_written);
+  if (sug_nc2 < 0
+      || (sug_tree_written > 0
+          && fwrite(sug_tree_buf, sug_tree_written, 1, fd) != 1)) {
+    xfree(sug_tree_buf);
+    emsg(_(e_write));
+    goto theend;
+  }
+  xfree(sug_tree_buf);
 
   // <SUGTABLE>: <sugwcount> <sugline> ...
   linenr_T wcount = spin->si_spellbuf->b_ml.ml_line_count;

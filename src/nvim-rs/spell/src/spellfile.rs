@@ -5302,6 +5302,249 @@ pub unsafe extern "C" fn rs_write_spell_sections(
 }
 
 // =============================================================================
+// Phase 3: wordnode_T tree serialization (put_node / clear_node)
+// =============================================================================
+
+// Opaque handle for wordnode_T (C-owned pointer).
+#[repr(C)]
+pub struct WordnodeT {
+    _private: [u8; 0],
+}
+
+// Accessor functions provided by spellfile.c
+extern "C" {
+    fn nvim_wordnode_get_byte(n: *const WordnodeT) -> u8;
+    fn nvim_wordnode_get_child(n: *const WordnodeT) -> *mut WordnodeT;
+    fn nvim_wordnode_get_sibling(n: *const WordnodeT) -> *mut WordnodeT;
+    fn nvim_wordnode_get_flags(n: *const WordnodeT) -> u16;
+    fn nvim_wordnode_get_region(n: *const WordnodeT) -> i16;
+    fn nvim_wordnode_get_affixID(n: *const WordnodeT) -> u8;
+    fn nvim_wordnode_get_index(n: *const WordnodeT) -> c_int;
+    fn nvim_wordnode_set_index(n: *mut WordnodeT, idx: c_int);
+    fn nvim_wordnode_get_wnode(n: *const WordnodeT) -> *mut WordnodeT;
+    fn nvim_wordnode_set_wnode(n: *mut WordnodeT, wn: *mut WordnodeT);
+}
+
+/// Flag indicating a prefix tree NUL node with no flags.
+const PFX_FLAGS: i32 = -256;
+
+/// BY_NOFLAGS, BY_INDEX, BY_FLAGS, BY_FLAGS2 values (match C enum).
+const BY_NOFLAGS: u8 = 0;
+const BY_INDEX: u8 = 1;
+const BY_FLAGS_VAL: u8 = 2;
+const BY_FLAGS2: u8 = 3;
+
+/// Spell word flags used in .spl tree nodes (from spell_defs.h).
+const WF_REGION: c_int = 0x01; // region byte follows
+const WF_AFX: c_int = 0x20; // affix ID follows
+
+/// Recursively serialize a word tree node into `out`.
+///
+/// Mirrors the C `put_node` function exactly.
+///
+/// # Safety
+/// `node` must be a valid (or null) wordnode_T pointer from C.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+unsafe fn put_node_inner(
+    node: *mut WordnodeT,
+    out: &mut Vec<u8>,
+    idx: c_int,
+    regionmask: c_int,
+    prefixtree: bool,
+) -> c_int {
+    if node.is_null() {
+        return idx;
+    }
+
+    // Store the index where this node starts.
+    nvim_wordnode_set_index(node, idx);
+
+    // Count siblings.
+    let mut siblingcount: c_int = 0;
+    let mut np = node;
+    while !np.is_null() {
+        siblingcount += 1;
+        np = nvim_wordnode_get_sibling(np);
+    }
+
+    // Write <siblingcount>
+    out.push(siblingcount as u8);
+
+    // Write each sibling byte and optional extra info.
+    np = node;
+    while !np.is_null() {
+        let byte = nvim_wordnode_get_byte(np);
+        if byte == 0 {
+            // NUL byte: end of word. Write flags.
+            if prefixtree {
+                let flags = nvim_wordnode_get_flags(np);
+                if flags == PFX_FLAGS as u16 {
+                    out.push(BY_NOFLAGS); // <byte>
+                } else {
+                    out.push(BY_FLAGS_VAL); // <byte>
+                    out.push(flags as u8); // <pflags>
+                }
+                out.push(nvim_wordnode_get_affixID(np)); // <affixID>
+                                                         // <prefcondnr> in 2 bytes BE
+                let region = nvim_wordnode_get_region(np) as u16;
+                out.extend_from_slice(&region.to_be_bytes());
+            } else {
+                let wn_flags = nvim_wordnode_get_flags(np) as c_int;
+                let wn_region = nvim_wordnode_get_region(np) as c_int;
+                let wn_affixid = nvim_wordnode_get_affixID(np) as c_int;
+                let mut flags = wn_flags;
+                if regionmask != 0 && wn_region != regionmask {
+                    flags |= WF_REGION;
+                }
+                if wn_affixid != 0 {
+                    flags |= WF_AFX;
+                }
+                if flags == 0 {
+                    out.push(BY_NOFLAGS); // <byte>
+                } else if wn_flags >= 0x100 {
+                    out.push(BY_FLAGS2); // <byte>
+                    out.push(flags as u8); // <flags>
+                    out.push(((flags as u32) >> 8) as u8); // <flags2>
+                } else {
+                    out.push(BY_FLAGS_VAL); // <byte>
+                    out.push(flags as u8); // <flags>
+                }
+                if flags & WF_REGION != 0 {
+                    out.push(wn_region as u8); // <region>
+                }
+                if flags & WF_AFX != 0 {
+                    out.push(wn_affixid as u8); // <affixID>
+                }
+            }
+        } else {
+            let child = nvim_wordnode_get_child(np);
+            let child_index = nvim_wordnode_get_index(child);
+            let child_wnode = nvim_wordnode_get_wnode(child);
+
+            if child_index != 0 && child_wnode != node {
+                // Child was written elsewhere; write a reference.
+                out.push(BY_INDEX); // <byte>
+                                    // <nodeidx> in 3 bytes BE
+                out.push(((child_index as u32) >> 16) as u8);
+                out.push(((child_index as u32) >> 8) as u8);
+                out.push((child_index as u32) as u8);
+            } else if child_wnode.is_null() {
+                // We will write the child below; claim it.
+                nvim_wordnode_set_wnode(child, node);
+            }
+
+            out.push(byte); // <byte> or <xbyte>
+        }
+        np = nvim_wordnode_get_sibling(np);
+    }
+
+    // Space used when reading: one per sibling plus one for the count.
+    let mut newindex = idx + siblingcount + 1;
+
+    // Recursively write children.
+    np = node;
+    while !np.is_null() {
+        let byte = nvim_wordnode_get_byte(np);
+        if byte != 0 {
+            let child = nvim_wordnode_get_child(np);
+            if nvim_wordnode_get_wnode(child) == node {
+                newindex = put_node_inner(child, out, newindex, regionmask, prefixtree);
+            }
+        }
+        np = nvim_wordnode_get_sibling(np);
+    }
+
+    newindex
+}
+
+/// Recursively clear the index and wnode fields of a word tree.
+///
+/// Mirrors the C `clear_node` function exactly.
+///
+/// # Safety
+/// `node` must be a valid (or null) wordnode_T pointer from C.
+unsafe fn clear_node_inner(node: *mut WordnodeT) {
+    if node.is_null() {
+        return;
+    }
+    let mut np = node;
+    while !np.is_null() {
+        nvim_wordnode_set_index(np, 0);
+        nvim_wordnode_set_wnode(np, std::ptr::null_mut());
+        let byte = nvim_wordnode_get_byte(np);
+        if byte != 0 {
+            clear_node_inner(nvim_wordnode_get_child(np));
+        }
+        np = nvim_wordnode_get_sibling(np);
+    }
+}
+
+/// Write a word tree to `buf` and return the node count (idx returned by traversal).
+///
+/// Two modes:
+///   - Count mode: `buf` is NULL. Traverses the tree, sets `wn_u1.index` and
+///     `wn_u2.wnode` fields, returns nodecount, sets `*written_out = 0`.
+///   - Write mode: `buf` is non-NULL. Traverses the tree, produces bytes in buf,
+///     returns nodecount, sets `*written_out` to bytes produced.
+///
+/// Caller pattern (matches C `clear_node` + two `put_node` calls):
+///   1. `rs_clear_node(tree)`
+///   2. `nodecount = rs_put_node(tree, NULL, 0, 0, regionmask, prefixtree, &dummy)`
+///   3. Write `nodecount` (4 bytes) to file
+///   4. `rs_clear_node(tree)` (reset for write pass)
+///   5. `rs_put_node(tree, buf, buf_len, 0, regionmask, prefixtree, &written)`
+///   6. Write `buf[0..written]` to file
+///
+/// Returns nodecount on success, -1 on buffer-too-small error.
+///
+/// # Safety
+/// `node` must be valid (or null) wordnode_T pointer. `buf` must be valid for `buf_len` bytes if non-NULL.
+/// `written_out` must be a valid pointer.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_put_node(
+    node: *mut WordnodeT,
+    buf: *mut u8,
+    buf_len: usize,
+    idx: c_int,
+    regionmask: c_int,
+    prefixtree: bool,
+    written_out: *mut usize,
+) -> c_int {
+    let mut out: Vec<u8> = Vec::with_capacity(4096);
+    let nodecount = put_node_inner(node, &mut out, idx, regionmask, prefixtree);
+
+    if buf.is_null() {
+        // Count-only mode: caller doesn't want bytes, just nodecount.
+        if !written_out.is_null() {
+            *written_out = 0;
+        }
+        return nodecount;
+    }
+
+    if out.len() > buf_len {
+        return -1;
+    }
+
+    if !out.is_empty() {
+        std::slice::from_raw_parts_mut(buf, out.len()).copy_from_slice(&out);
+    }
+    if !written_out.is_null() {
+        *written_out = out.len();
+    }
+    nodecount
+}
+
+/// Clear the index and wnode fields of a word tree node and its descendants.
+///
+/// # Safety
+/// `node` must be a valid (or null) wordnode_T pointer from C.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_node(node: *mut WordnodeT) {
+    clear_node_inner(node);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
