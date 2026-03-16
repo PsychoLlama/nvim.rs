@@ -6,7 +6,7 @@
 //! - Matchgroup handling
 //! - find_endpos and update_si_end implementations
 
-use std::ffi::{c_char, c_int};
+use std::ffi::c_int;
 
 use crate::ffi_types::StateItem;
 use crate::offset::{limit_pos, syn_add_end_off, RegMatch};
@@ -31,9 +31,7 @@ extern "C" {
     fn nvim_syn_set_extmatch_in(em: ExtMatchHandle);
     fn nvim_syn_clear_extmatch_in();
 
-    // Chartab management
-    fn nvim_syn_save_chartab(buf: *mut c_char);
-    fn nvim_syn_restore_chartab(buf: *mut c_char);
+    // (nvim_syn_save_chartab/restore_chartab deleted: call Rust directly)
 
     // Line operations
     fn nvim_syn_getcurline_len() -> c_int;
@@ -235,7 +233,7 @@ pub unsafe fn find_endpos(
 
     // Use syntax iskeyword option
     let mut buf_chartab = [0i8; 32];
-    nvim_syn_save_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_save_chartab(buf_chartab.as_mut_ptr());
 
     let mut had_match = false;
 
@@ -410,7 +408,7 @@ pub unsafe fn find_endpos(
         result.m_endpos.lnum = 0;
     }
 
-    nvim_syn_restore_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_restore_chartab(buf_chartab.as_mut_ptr());
 
     // Remove external matches
     nvim_syn_clear_extmatch_in();

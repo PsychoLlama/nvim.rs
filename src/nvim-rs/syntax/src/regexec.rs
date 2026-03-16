@@ -59,9 +59,7 @@ extern "C" {
     fn nvim_syn_block_get_linecont_ic() -> c_int;
     fn nvim_syn_block_get_linecont_time_ptr() -> *mut c_void;
 
-    // chartab save/restore (for linecont)
-    fn nvim_syn_save_chartab(buf: *mut i8);
-    fn nvim_syn_restore_chartab(buf: *mut i8);
+    // (nvim_syn_save_chartab/restore_chartab deleted: call Rust directly)
 
     // message for b_syn_slow notification
     fn msg(s: *const i8, hl_id: c_int) -> c_int;
@@ -256,13 +254,13 @@ pub unsafe fn syn_exec_linecont(lnum: i32) -> c_int {
     let st_ptr = nvim_syn_block_get_linecont_time_ptr();
 
     let mut buf_chartab = [0i8; 32];
-    nvim_syn_save_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_save_chartab(buf_chartab.as_mut_ptr());
 
     let mut new_regprog: *mut c_void = std::ptr::null_mut();
     let result = syn_regexec_impl(regprog, ic, lnum, 0, st_ptr, &mut new_regprog);
     nvim_syn_block_set_linecont_prog(new_regprog);
 
-    nvim_syn_restore_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_restore_chartab(buf_chartab.as_mut_ptr());
 
     if result.is_some() {
         1

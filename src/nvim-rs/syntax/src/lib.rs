@@ -324,8 +324,7 @@ extern "C" {
     // Phase 24.1: State Management Helpers
     // -------------------------------------------------------------------------
 
-    /// Find a state entry in the synblock at or before given line
-    fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
+    // (nvim_syn_stack_find_entry deleted: call Rust directly)
 
     /// Call validate_current_state()
     #[link_name = "rs_validate_current_state"]
@@ -2064,7 +2063,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
     let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Find existing entry at or before current line
-    let sp = nvim_syn_stack_find_entry(lnum);
+    let sp = crate::cache::rs_syn_stack_find_entry(lnum);
 
     // Check if current state contains items that span across lines
     // If so, we can't use this state - it's not valid for line boundaries

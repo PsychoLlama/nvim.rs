@@ -66,7 +66,7 @@ extern "C" {
     // Phase 3 accessors
     #[link_name = "rs_load_current_state"]
     fn nvim_syn_load_current_state(from: SynStateHandle);
-    fn nvim_syn_match_linecont(lnum: c_int) -> c_int;
+    // (nvim_syn_match_linecont deleted: call Rust directly)
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
 
     // C-comment sync: thin helper that saves/restores curwin/curbuf/cursor,
@@ -321,7 +321,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
             }
 
             // Check if the previous line has the line-continuation pattern.
-            if lnum > 1 && nvim_syn_match_linecont(lnum - 1) != 0 {
+            if lnum > 1 && crate::line_init::rs_syn_match_linecont(lnum - 1) != 0 {
                 lnum -= 1;
                 continue;
             }

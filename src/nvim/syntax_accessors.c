@@ -401,22 +401,8 @@ void syn_set_timeout(proftime_T *tm)
 // 2. Search backwards for given sync patterns.
 // 3. Simply start on a given number of lines above "lnum".
 
-static void save_chartab(char *chartab)
-{
-  rs_save_chartab(chartab);
-}
-
-static void restore_chartab(char *chartab)
-{
-  rs_restore_chartab(chartab);
-}
-
-/// Return true if the line-continuation pattern matches in line "lnum".
-static int syn_match_linecont(linenr_T lnum)
-{
-  return rs_syn_match_linecont((int)lnum);
-}
-
+// save_chartab/restore_chartab deleted: Rust calls rs_save_chartab/rs_restore_chartab directly.
+// syn_match_linecont deleted: Rust calls rs_syn_match_linecont directly.
 
 /////////////////////////////////////////
 // Handling of the state stack cache.
@@ -451,43 +437,8 @@ static int syn_match_linecont(linenr_T lnum)
 // the distance is fixed at SST_DIST, for large buffers there is a fixed
 // number of entries SST_MAX_ENTRIES, and the distance is computed.
 
-static void syn_stack_free_block(synblock_T *block)
-{
-  rs_syn_stack_free_block(block);
-}
-// Allocate the syntax state stack for syn_buf when needed.
-// Delegated to Rust; actual array allocation is in nvim_syn_do_stack_realloc().
-static void syn_stack_alloc(void)
-{
-  rs_syn_stack_alloc();
-}
-
-static void syn_stack_apply_changes_block(synblock_T *block, buf_T *buf)
-{
-  rs_syn_stack_apply_changes_block(block, buf);
-}
-
-/// Reduce the number of entries in the state stack for syn_buf.
-///
-/// @return  true if at least one entry was freed.
-static bool syn_stack_cleanup(void)
-{
-  return rs_syn_stack_cleanup() != 0;
-}
-
-// Free the allocated memory for a syn_state item.
-// Move the entry into the free list.
-static void syn_stack_free_entry(synblock_T *block, synstate_T *p)
-{
-  rs_syn_stack_free_entry(block, p);
-}
-
-// Find an entry in the list of state stacks at or before "lnum".
-// Returns NULL when there is no entry or the first entry is after "lnum".
-static synstate_T *syn_stack_find_entry(linenr_T lnum)
-{
-  return rs_syn_stack_find_entry((int)lnum);
-}
+// syn_stack_free_block/alloc/apply_changes_block/cleanup/free_entry/find_entry deleted:
+// These static wrappers just called rs_* Rust functions; C callers deleted below.
 
 // End of handling of the state stack.
 // **************************************
@@ -699,7 +650,7 @@ synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
+// nvim_syn_stack_find_entry deleted: Rust calls rs_syn_stack_find_entry directly.
 
 // nvim_syn_validate_current_state deleted: Rust bypasses via #[link_name = "rs_validate_current_state"]
 // nvim_syn_invalidate_current_state deleted: Rust bypasses via #[link_name = "rs_invalidate_current_state"]
@@ -781,9 +732,8 @@ int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywt
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 
 
-void nvim_syn_save_chartab(char *buf) { save_chartab(buf); }
-
-void nvim_syn_restore_chartab(char *buf) { restore_chartab(buf); }
+// nvim_syn_save_chartab deleted: Rust calls rs_save_chartab directly.
+// nvim_syn_restore_chartab deleted: Rust calls rs_restore_chartab directly.
 
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
@@ -833,7 +783,7 @@ void nvim_synstate_set_change_lnum(synstate_T *p, int lnum)
   }
 }
 
-void nvim_syn_stack_alloc(void) { syn_stack_alloc(); }
+// nvim_syn_stack_alloc deleted: Rust calls rs_syn_stack_alloc directly.
 
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
 
@@ -999,7 +949,7 @@ _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
 
-int nvim_syn_match_linecont(linenr_T lnum) { return syn_match_linecont(lnum); }
+// nvim_syn_match_linecont deleted: Rust calls rs_syn_match_linecont directly.
 
 // nvim_syn_get_pattern_sync_idx deleted: Rust uses (*syn_item_at(block, idx)).sp_sync_idx directly.
 

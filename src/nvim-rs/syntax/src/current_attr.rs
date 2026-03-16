@@ -42,9 +42,7 @@ extern "C" {
     #[link_name = "rs_syn_update_ends"]
     fn nvim_syn_update_ends(startofline: c_int);
 
-    // Chartab
-    fn nvim_syn_save_chartab(buf: *mut i8);
-    fn nvim_syn_restore_chartab(buf: *mut i8);
+    // (nvim_syn_save_chartab/restore_chartab deleted: call Rust directly)
 
     // Extmatch management
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
@@ -186,7 +184,7 @@ pub unsafe fn syn_current_attr(
 
     // use syntax iskeyword option
     let mut buf_chartab = [0i8; 32];
-    nvim_syn_save_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_save_chartab(buf_chartab.as_mut_ptr());
 
     // Track cur_extmatch for lifetime management
     let mut cur_extmatch: ExtMatchHandle = ExtMatchHandle(std::ptr::null_mut());
@@ -565,7 +563,7 @@ pub unsafe fn syn_current_attr(
         }
     }
 
-    nvim_syn_restore_chartab(buf_chartab.as_mut_ptr());
+    crate::line_init::rs_restore_chartab(buf_chartab.as_mut_ptr());
 
     // Use attributes from the current state, if within its highlighting.
     // Zero all current_* highlight fields

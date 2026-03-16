@@ -19,9 +19,7 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // State stack management
-    fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
-    fn nvim_syn_stack_alloc();
+    // (nvim_syn_stack_find_entry/stack_alloc deleted: call Rust directly)
 
     // State accessors for comparison
     fn nvim_synstate_get_lnum(state: SynStateHandle) -> c_int;
@@ -404,13 +402,13 @@ pub unsafe extern "C" fn rs_syn_stack_apply_changes(buf: BufHandle) {
 /// Returns the entry at or before the line, or null if none found.
 #[must_use]
 pub fn stack_find_entry(lnum: i32) -> SynStateHandle {
-    unsafe { nvim_syn_stack_find_entry(lnum) }
+    unsafe { rs_syn_stack_find_entry(lnum) }
 }
 
 /// Find a synstate entry for the given line number (alternate interface).
 #[must_use]
 pub fn stack_find_entry_ptr(lnum: i32) -> SynStateHandle {
-    unsafe { nvim_syn_stack_find_entry(lnum) }
+    unsafe { rs_syn_stack_find_entry(lnum) }
 }
 
 /// Remove a synstate entry from the cache.
@@ -436,7 +434,7 @@ pub fn store_state_to_entry(sp: SynStateHandle) {
 
 /// Allocate the syntax stack array (b_sst_array).
 pub fn stack_alloc() {
-    unsafe { nvim_syn_stack_alloc() }
+    unsafe { rs_syn_stack_alloc() }
 }
 
 // =============================================================================
@@ -455,7 +453,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
     let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Find existing entry at or before current line
-    let sp = nvim_syn_stack_find_entry(lnum);
+    let sp = rs_syn_stack_find_entry(lnum);
 
     // Check if current state contains items that span across lines
     // If so, we can't use this state - it's not valid for line boundaries
