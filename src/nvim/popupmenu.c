@@ -386,26 +386,6 @@ char *nvim_pum_menu_get_dname(vimmenu_T *mp)
   return mp->dname;
 }
 
-/// Allocate pumitem_T array.
-pumitem_T *nvim_pum_alloc_items(int count)
-{
-  return (pumitem_T *)xcalloc((size_t)count, sizeof(pumitem_T));
-}
-
-/// Set text for a pumitem_T.
-void nvim_pum_item_set_text(pumitem_T *array, int idx, const char *text)
-{
-  array[idx].pum_text = xstrdup(text);
-}
-
-/// Free text in pumitem_T array and the array itself.
-void nvim_pum_free_items(pumitem_T *array, int count)
-{
-  for (int i = 0; i < count; i++) {
-    xfree(array[i].pum_text);
-  }
-  xfree(array);
-}
 
 
 /// Set mousemoveevent option via UI.

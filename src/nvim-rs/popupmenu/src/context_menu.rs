@@ -336,16 +336,12 @@ extern "C" {
     fn nvim_pum_menu_is_separator(menu: *mut VimMenuHandle) -> c_int;
     /// Get menu item display name.
     fn nvim_pum_menu_get_dname(menu: *mut VimMenuHandle) -> *const std::ffi::c_char;
-    /// Allocate `pumitem_T` array.
-    fn nvim_pum_alloc_items(count: c_int) -> *mut crate::item::PumItemArray;
-    /// Set text for a `pumitem_T`.
-    fn nvim_pum_item_set_text(
-        array: *mut crate::item::PumItemArray,
-        idx: c_int,
-        text: *const std::ffi::c_char,
-    );
-    /// Free `pumitem_T` array and its text.
-    fn nvim_pum_free_items(array: *mut crate::item::PumItemArray, count: c_int);
+    /// Allocate zeroed memory.
+    fn xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
+    /// Duplicate a C string.
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    /// Free memory.
+    fn xfree(ptr: *mut std::ffi::c_void);
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
     /// Get `w_p_rl` for a window.
@@ -405,7 +401,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 /// # Safety
 /// Calls C accessor functions. `menu` must be a valid `vimmenu_T` pointer.
 #[export_name = "pum_show_popupmenu"]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     crate::display::rs_pum_undisplay(1);
     PUM_STATE.size = 0;
@@ -428,7 +424,11 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     }
 
     // Build pumitem_T array from menu children
-    let array = nvim_pum_alloc_items(count);
+    let array = xcalloc(
+        count as usize,
+        std::mem::size_of::<crate::item::PumItemArray>(),
+    )
+    .cast::<crate::item::PumItemArray>();
     let mut idx = 0;
     mp = nvim_pum_menu_children(menu);
     while !mp.is_null() {
@@ -440,7 +440,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
             } else {
                 nvim_pum_menu_get_dname(mp)
             };
-            nvim_pum_item_set_text(array, idx, text);
+            (*array.offset(idx as isize)).pum_text = xstrdup(text);
             idx += 1;
         }
         mp = nvim_pum_menu_next(mp);
@@ -539,7 +539,11 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         }
     }
 
-    nvim_pum_free_items(array, count);
+    // Free each item's text, then the array itself
+    for i in 0..count as isize {
+        xfree((*array.offset(i)).pum_text.cast::<std::ffi::c_void>());
+    }
+    xfree(array.cast::<std::ffi::c_void>());
     crate::display::rs_pum_undisplay(1);
     if mousemev_was_off {
         nvim_pum_ui_set_mousemoveevent(0);
