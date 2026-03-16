@@ -11,7 +11,7 @@
 #![allow(clippy::range_plus_one)]
 #![allow(clippy::option_if_let_else)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Constants
@@ -4440,8 +4440,6 @@ pub unsafe extern "C" fn rs_mkspell_validate_args(
 // Phase 1 & 2: Functions migrated from C spellfile.c
 // =============================================================================
 
-use std::ffi::c_char;
-
 extern "C" {
     // mb_ptr2char_adv: advance *pp by one multibyte char, return codepoint.
     // Matches C signature: int mb_cptr2char_adv(const char **pp)
@@ -5311,6 +5309,12 @@ pub struct WordnodeT {
     _private: [u8; 0],
 }
 
+// Opaque handle for spellinfo_T (C-owned pointer).
+#[repr(C)]
+pub struct SpellinfoT {
+    _private: [u8; 0],
+}
+
 // Accessor functions provided by spellfile.c
 extern "C" {
     fn nvim_wordnode_get_byte(n: *const WordnodeT) -> u8;
@@ -5548,12 +5552,6 @@ pub unsafe extern "C" fn rs_clear_node(node: *mut WordnodeT) {
 // Phase 6: Tree compression (node_compress / wordtree_compress)
 // =============================================================================
 
-// Opaque handle for spellinfo_T (C-owned pointer).
-#[repr(C)]
-pub struct SpellinfoT {
-    _private: [u8; 0],
-}
-
 extern "C" {
     // New Phase 6 accessors for wordnode_T compression fields.
     fn nvim_wordnode_get_hashkey(n: *const WordnodeT, key_out: *mut u8);
@@ -5764,6 +5762,106 @@ pub unsafe extern "C" fn rs_node_compress(
         *tot_out = tot;
     }
     compressed
+}
+
+// =============================================================================
+// Phase 1: Pure affix utility functions (no Vim API dependencies)
+// =============================================================================
+
+/// Returns true when items[0] equals "rulename", there are "mincount" items or
+/// a comment follows after item "mincount".
+///
+/// # Safety
+/// - `items` must be a valid pointer to at least `itemcnt` valid C string pointers.
+/// - `rulename` must be a valid NUL-terminated C string.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_is_aff_rule(
+    items: *const *const c_char,
+    itemcnt: c_int,
+    rulename: *const c_char,
+    mincount: c_int,
+) -> bool {
+    if items.is_null() || rulename.is_null() || itemcnt < 1 {
+        return false;
+    }
+    let item0 = *items;
+    if item0.is_null() {
+        return false;
+    }
+    // Compare items[0] with rulename
+    let a = std::ffi::CStr::from_ptr(item0);
+    let b = std::ffi::CStr::from_ptr(rulename);
+    if a != b {
+        return false;
+    }
+    if itemcnt == mincount {
+        return true;
+    }
+    if itemcnt > mincount && mincount >= 0 {
+        let item_at_min = *items.add(mincount as usize);
+        // c_char is i8; '#' = 0x23, no sign-extension issue
+        if !item_at_min.is_null() && (*item_at_min as u8) == b'#' {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns true if "s" is the name of an info item in the affix file.
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_info_item(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+    let cs = std::ffi::CStr::from_ptr(s);
+    matches!(
+        cs.to_bytes(),
+        b"NAME" | b"HOME" | b"VERSION" | b"AUTHOR" | b"EMAIL" | b"COPYRIGHT"
+    )
+}
+
+/// Returns true if strings "s1" and "s2" are equal.  Also considers both being
+/// NULL as equal.
+///
+/// # Safety
+/// - If non-null, `s1` and `s2` must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_str_equal(s1: *const c_char, s2: *const c_char) -> bool {
+    match (s1.is_null(), s2.is_null()) {
+        (true, true) => true,
+        (false, false) => {
+            let a = std::ffi::CStr::from_ptr(s1);
+            let b = std::ffi::CStr::from_ptr(s2);
+            a == b
+        }
+        _ => false,
+    }
+}
+
+/// qsort comparator for REP items (fromto_T): compares ft_from strings.
+///
+/// # Safety
+/// - `s1` and `s2` must point to valid `fromto_T` structs with non-null `ft_from`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rep_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+    // fromto_T layout: ft_from (*char) then ft_to (*char)
+    // We only need to compare ft_from, which is the first field.
+    let from1 = *(s1 as *const *const c_char);
+    let from2 = *(s2 as *const *const c_char);
+    if from1.is_null() && from2.is_null() {
+        return 0;
+    }
+    if from1.is_null() {
+        return -1;
+    }
+    if from2.is_null() {
+        return 1;
+    }
+    libc::strcmp(from1, from2)
 }
 
 // =============================================================================

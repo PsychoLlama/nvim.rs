@@ -434,6 +434,17 @@ extern void rs_clear_node(wordnode_T *node);
 // spellinfo_T is forward-declared as an opaque pointer from Rust's perspective.
 extern int rs_node_compress(spellinfo_T *spin, wordnode_T *node, int *tot_out);
 
+// Phase 1: Pure affix utility functions migrated to Rust.
+extern bool rs_is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
+extern bool rs_spell_info_item(const char *s);
+extern bool rs_str_equal(const char *s1, const char *s2);
+extern int rs_rep_compare(const void *s1, const void *s2);
+// Map old names to Rust implementations (avoids touching 60+ call sites).
+#define is_aff_rule rs_is_aff_rule
+#define spell_info_item rs_spell_info_item
+#define str_equal rs_str_equal
+#define rep_compare rs_rep_compare
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
@@ -700,6 +711,85 @@ typedef struct spellinfo_S {
   int si_newprefID;             // current value for ah_newID
   int si_newcompID;             // current value for compound ID
 } spellinfo_T;
+
+// Phase 5: forward declarations for functions defined later in this file.
+static bool valid_spell_word(const char *word, const char *end);
+static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name);
+// Compression globals (defined near tree_add_word below).
+static int compress_start;
+static int compress_inc;
+static int compress_added;
+
+// Phase 5: spellinfo_T and sblock_T accessor functions for Rust tree-building.
+// Defined here after the full struct definitions.
+wordnode_T *nvim_spin_get_foldroot(spellinfo_T *s) { return s->si_foldroot; }
+wordnode_T *nvim_spin_get_keeproot(spellinfo_T *s) { return s->si_keeproot; }
+wordnode_T *nvim_spin_get_prefroot(spellinfo_T *s) { return s->si_prefroot; }
+int nvim_spin_get_foldwcount(spellinfo_T *s) { return s->si_foldwcount; }
+void nvim_spin_set_foldwcount(spellinfo_T *s, int v) { s->si_foldwcount = v; }
+int nvim_spin_get_keepwcount(spellinfo_T *s) { return s->si_keepwcount; }
+void nvim_spin_set_keepwcount(spellinfo_T *s, int v) { s->si_keepwcount = v; }
+wordnode_T *nvim_spin_get_first_free(const spellinfo_T *s) { return s->si_first_free; }
+void nvim_spin_set_first_free(spellinfo_T *s, wordnode_T *n) { s->si_first_free = n; }
+int nvim_spin_get_free_count(const spellinfo_T *s) { return s->si_free_count; }
+void nvim_spin_set_free_count(spellinfo_T *s, int v) { s->si_free_count = v; }
+sblock_T *nvim_spin_get_blocks(const spellinfo_T *s) { return s->si_blocks; }
+void nvim_spin_set_blocks(spellinfo_T *s, sblock_T *bl) { s->si_blocks = bl; }
+int nvim_spin_get_blocks_cnt(const spellinfo_T *s) { return s->si_blocks_cnt; }
+void nvim_spin_set_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt = v; }
+void nvim_spin_set_did_emsg(spellinfo_T *s) { s->si_did_emsg = true; }
+int nvim_spin_get_compress_cnt(const spellinfo_T *s) { return s->si_compress_cnt; }
+void nvim_spin_set_compress_cnt(spellinfo_T *s, int v) { s->si_compress_cnt = v; }
+int nvim_spin_get_blocks_cnt_val(const spellinfo_T *s) { return s->si_blocks_cnt; }
+void nvim_spin_add_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt += v; }
+void nvim_spin_sub_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt -= v; }
+int nvim_spin_get_verbose(const spellinfo_T *s) { return s->si_verbose; }
+int nvim_spin_get_sugtree(const spellinfo_T *s) { return s->si_sugtree; }
+void nvim_spin_inc_msg_count(spellinfo_T *s) { s->si_msg_count++; }
+
+// sblock_T accessors for getroom/free_blocks.
+int nvim_sblock_get_used(const sblock_T *bl) { return bl->sb_used; }
+void nvim_sblock_set_used(sblock_T *bl, int v) { bl->sb_used = v; }
+sblock_T *nvim_sblock_get_next(const sblock_T *bl) { return bl->sb_next; }
+void nvim_sblock_set_next(sblock_T *bl, sblock_T *next) { bl->sb_next = next; }
+char *nvim_sblock_get_data_ptr(sblock_T *bl) { return bl->sb_data; }
+sblock_T *nvim_sblock_alloc(void) { return (sblock_T *)xcalloc(1, sizeof(sblock_T)); }
+int nvim_sblock_size(void) { return SBLOCKSIZE; }
+
+// Wrappers for spell-related Vim functions needed by Rust tree-building.
+int nvim_spell_captype(const char *word, const char *end) { return captype(word, end); }
+int nvim_spell_casefold(const char *word, int len, char *buf, int buflen) {
+  return spell_casefold(curwin, word, len, buf, buflen);
+}
+bool nvim_spell_valid_spell_word(const char *word, const char *end) {
+  return valid_spell_word(word, end);
+}
+void nvim_spell_wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name) {
+  wordtree_compress(spin, root, name);
+}
+// Expose compression globals for tree_add_word.
+int nvim_spell_compress_start(void) { return compress_start; }
+int nvim_spell_compress_inc(void) { return compress_inc; }
+int nvim_spell_compress_added(void) { return compress_added; }
+// Show compression message in verbose mode.
+void nvim_spell_show_compress_msg(spellinfo_T *spin) {
+  if (spin->si_verbose) {
+    msg_start();
+    msg_puts(_(msg_compressing));
+    msg_clr_eos();
+    msg_didout = false;
+    msg_col = 0;
+    ui_flush();
+  }
+}
+
+// wordnode_T setters (needed for tree_add_word).
+void nvim_wordnode_set_child(wordnode_T *n, wordnode_T *child) { n->wn_child = child; }
+void nvim_wordnode_set_sibling(wordnode_T *n, wordnode_T *sib) { n->wn_sibling = sib; }
+void nvim_wordnode_set_byte(wordnode_T *n, uint8_t byte) { n->wn_byte = byte; }
+void nvim_wordnode_set_flags(wordnode_T *n, uint16_t flags) { n->wn_flags = flags; }
+void nvim_wordnode_set_region(wordnode_T *n, int16_t region) { n->wn_region = region; }
+void nvim_wordnode_set_affixID(wordnode_T *n, uint8_t id) { n->wn_affixID = id; }
 
 #include "spellfile.c.generated.h"
 
@@ -2116,15 +2206,6 @@ static afffile_T *spell_read_aff(spellinfo_T *spin, char *fname)
   return aff;
 }
 
-/// @return  true when items[0] equals "rulename", there are "mincount" items or
-///          a comment is following after item "mincount".
-static bool is_aff_rule(char **items, int itemcnt, char *rulename, int mincount)
-{
-  return strcmp(items[0], rulename) == 0
-         && (itemcnt == mincount
-             || (itemcnt > mincount && items[mincount][0] == '#'));
-}
-
 // For affix "entry" move COMPOUNDFORBIDFLAG and COMPOUNDPERMITFLAG from
 // ae_flags to ae_comppermit and ae_compforbid.
 static void aff_process_flags(afffile_T *affile, affentry_T *entry)
@@ -2151,17 +2232,6 @@ static void aff_process_flags(afffile_T *affile, affentry_T *entry)
       entry->ae_flags = NULL;           // nothing left
     }
   }
-}
-
-/// @return  true if "s" is the name of an info item in the affix file.
-static bool spell_info_item(char *s)
-{
-  return strcmp(s, "NAME") == 0
-         || strcmp(s, "HOME") == 0
-         || strcmp(s, "VERSION") == 0
-         || strcmp(s, "AUTHOR") == 0
-         || strcmp(s, "EMAIL") == 0
-         || strcmp(s, "COPYRIGHT") == 0;
 }
 
 // Turn an affix flag name into a number, according to the FLAG type.
@@ -2350,16 +2420,6 @@ static void aff_check_string(char *spinval, char *affval, char *name)
     smsg(0, _("%s value differs from what is used in another .aff file"),
          name);
   }
-}
-
-/// @return  true if strings "s1" and "s2" are equal.  Also consider both being
-///          NULL as equal.
-static bool str_equal(char *s1, char *s2)
-{
-  if (s1 == NULL || s2 == NULL) {
-    return s1 == s2;
-  }
-  return strcmp(s1, s2) == 0;
 }
 
 /// Add a from-to item to "gap".  Used for REP and SAL items.
@@ -3472,15 +3532,6 @@ static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *n
                  name, n, tot, tot - n, perc);
     spell_message(spin, IObuff);
   }
-}
-
-/// Function given to qsort() to sort the REP items on "from" string.
-static int rep_compare(const void *s1, const void *s2)
-{
-  fromto_T *p1 = (fromto_T *)s1;
-  fromto_T *p2 = (fromto_T *)s2;
-
-  return strcmp(p1->ft_from, p2->ft_from);
 }
 
 /// Write the Vim .spl file "fname".

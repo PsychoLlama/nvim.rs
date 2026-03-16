@@ -11,4 +11,8 @@ typedef struct wordnode_S wordnode_T;
 // Full definition is in spellfile.c; external users only see an opaque pointer.
 typedef struct spellinfo_S spellinfo_T;
 
+// Forward declaration of the spell arena block.
+// Full definition is in spellfile.c; external users only see an opaque pointer.
+typedef struct sblock_S sblock_T;
+
 #include "spellfile.h.generated.h"
