@@ -38,8 +38,6 @@ extern "C" {
     fn nvim_win_get_keywtab_ic_used(win: WinHandle) -> c_int;
 
     // current_next_list access
-    fn nvim_syn_has_current_next_list() -> c_int;
-    fn nvim_syn_get_current_next_list() -> IdListHandle;
 
     // Phase 11: Rust keyword_find and hash_insert_keyword implementation helpers
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
@@ -298,9 +296,9 @@ pub unsafe fn match_keyword(
     if kp.is_null() {
         return KeyEntryHandle::null();
     }
-    let has_next_list = nvim_syn_has_current_next_list() != 0;
+    let has_next_list = !crate::statics::CURRENT_NEXT_LIST.is_null();
     let current_next_list = if has_next_list {
-        nvim_syn_get_current_next_list()
+        IdListHandle(crate::statics::CURRENT_NEXT_LIST)
     } else {
         IdListHandle::null()
     };

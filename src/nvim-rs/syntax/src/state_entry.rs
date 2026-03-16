@@ -41,7 +41,6 @@ extern "C" {
 
     // Stack size from current_state
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_get_current_next_list() -> IdListHandle;
 
     // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
     fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
@@ -187,7 +186,7 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
 
     // Copy next_flags, next_list, tick, change_lnum
     nvim_synstate_set_sst_next_flags(sp, crate::statics::CURRENT_NEXT_FLAGS);
-    nvim_synstate_set_sst_next_list(sp, nvim_syn_get_current_next_list());
+    nvim_synstate_set_sst_next_list(sp, IdListHandle(crate::statics::CURRENT_NEXT_LIST));
     nvim_synstate_set_tick_to_display(sp);
     nvim_synstate_set_change_lnum(sp, 0);
 }

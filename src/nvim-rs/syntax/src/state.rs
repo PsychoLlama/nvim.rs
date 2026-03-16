@@ -56,7 +56,6 @@ extern "C" {
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_grow_current_state(size: c_int);
     fn nvim_syn_set_current_state_len(len: c_int);
-    fn nvim_syn_set_current_next_list(list: IdListHandle);
 
     // -------------------------------------------------------------------------
     // Stack management functions
@@ -861,7 +860,7 @@ pub fn set_current_state_len(len: i32) {
 
 /// Set the current nextgroup list
 pub fn set_current_next_list(list: IdListHandle) {
-    unsafe { nvim_syn_set_current_next_list(list) }
+    unsafe { crate::statics::CURRENT_NEXT_LIST = list.0 }
 }
 
 /// Set the current next flags

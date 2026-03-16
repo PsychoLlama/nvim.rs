@@ -321,19 +321,31 @@ extern int NEXT_SEQNR;
 
 // The next possible match in the current line for any pattern is remembered,
 // to avoid having to try for a match in each column.
-// If next_match_idx == -1, not tried (in this line) yet.
-// If next_match_col == MAXCOL, no match found in this line.
+// If NEXT_MATCH_IDX == -1, not tried (in this line) yet.
+// If NEXT_MATCH_COL == MAXCOL, no match found in this line.
 // (All end positions have the column of the char after the end)
-static int next_match_col;              // column for start of next match
-static lpos_T next_match_m_endpos;      // position for end of next match
-static lpos_T next_match_h_startpos;    // pos. for highl. start of next match
-static lpos_T next_match_h_endpos;      // pos. for highl. end of next match
-static int next_match_idx;              // index of matched item
-static int next_match_flags;            // flags for next match
-static lpos_T next_match_eos_pos;       // end of start pattn (start region)
-static lpos_T next_match_eoe_pos;       // pos. for end of end pattern
-static int next_match_end_idx;          // ID of group for end pattn or zero
-static reg_extmatch_T *next_match_extmatch = NULL;
+// These are now Rust static variables (statics.rs); accessed via extern.
+extern int NEXT_MATCH_COL;
+extern lpos_T NEXT_MATCH_M_ENDPOS;
+extern lpos_T NEXT_MATCH_H_STARTPOS;
+extern lpos_T NEXT_MATCH_H_ENDPOS;
+extern int NEXT_MATCH_IDX;
+extern int NEXT_MATCH_FLAGS;
+extern lpos_T NEXT_MATCH_EOS_POS;
+extern lpos_T NEXT_MATCH_EOE_POS;
+extern int NEXT_MATCH_END_IDX;
+extern reg_extmatch_T *NEXT_MATCH_EXTMATCH;
+// Aliases for backward compatibility within this file
+#define next_match_col       NEXT_MATCH_COL
+#define next_match_m_endpos  NEXT_MATCH_M_ENDPOS
+#define next_match_h_startpos NEXT_MATCH_H_STARTPOS
+#define next_match_h_endpos  NEXT_MATCH_H_ENDPOS
+#define next_match_idx       NEXT_MATCH_IDX
+#define next_match_flags     NEXT_MATCH_FLAGS
+#define next_match_eos_pos   NEXT_MATCH_EOS_POS
+#define next_match_eoe_pos   NEXT_MATCH_EOE_POS
+#define next_match_end_idx   NEXT_MATCH_END_IDX
+#define next_match_extmatch  NEXT_MATCH_EXTMATCH
 
 // A state stack is an array of integers or stateitem_T, stored in a
 // garray_T.  A state stack is invalid if its itemsize entry is zero.
@@ -361,7 +373,9 @@ extern int CURRENT_LINE_ID;
 #define current_line_id    CURRENT_LINE_ID
 static garray_T current_state              // current stack of state_items
   = GA_EMPTY_INIT_VALUE;
-static int16_t *current_next_list = NULL;  // when non-zero, nextgroup list
+// current_next_list is now a Rust static variable; accessed via extern.
+extern int16_t *CURRENT_NEXT_LIST;
+#define current_next_list CURRENT_NEXT_LIST
 
 #define CUR_STATE(idx)  ((stateitem_T *)(current_state.ga_data))[idx]
 
@@ -683,11 +697,10 @@ size_t nvim_synblock_keywtab_ic_count(synblock_T *block) { return block->b_keywt
 
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 
-int nvim_syn_get_next_match_idx(void) { return next_match_idx; }
-int nvim_syn_get_next_match_col(void) { return next_match_col; }
-int nvim_syn_has_next_match(void) { return next_match_idx >= 0; }
-int16_t *nvim_syn_get_current_next_list(void) { return current_next_list; }
-int nvim_syn_has_current_next_list(void) { return current_next_list != NULL; }
+// nvim_syn_get/set_next_match_* deleted: Rust statics NEXT_MATCH_* accessed directly.
+// nvim_syn_get/has_next_match deleted: Rust reads NEXT_MATCH_IDX >= 0 directly.
+// nvim_syn_get/set/has_current_next_list deleted: Rust static CURRENT_NEXT_LIST accessed directly.
+
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
@@ -701,7 +714,7 @@ synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((l
 void nvim_syn_grow_current_state(int size) { ga_grow(&current_state, size); }
 
 void nvim_syn_set_current_state_len(int len) { current_state.ga_len = len; }
-void nvim_syn_set_current_next_list(int16_t *list) { current_next_list = list; }
+// nvim_syn_set_current_next_list deleted: Rust assigns CURRENT_NEXT_LIST directly.
 
 /// Get sst_next_list from a synstate
 int16_t *nvim_synstate_get_next_list(synstate_T *state)
@@ -765,8 +778,8 @@ int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
   return mb_strcmp_ic(ic, a, b);
 }
 
-void nvim_syn_set_next_match_idx(int idx) { next_match_idx = idx; }
-void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
+// nvim_syn_set_next_match_idx deleted: Rust assigns NEXT_MATCH_IDX directly.
+// nvim_syn_set_next_match_col deleted: Rust assigns NEXT_MATCH_COL directly.
 // nvim_syn_check_state_ends deleted: Rust bypasses via #[link_name = "rs_check_state_ends"]
 
 
@@ -837,28 +850,10 @@ stateitem_T *nvim_syn_get_top_stateitem(void)
   return &CUR_STATE(current_state.ga_len - 1);
 }
 
-/// Bulk getter for all 5 next_match position fields.
-void nvim_syn_get_next_match_positions(int *h_start_lnum, int *h_start_col,
-                                        int *m_end_lnum, int *m_end_col,
-                                        int *h_end_lnum, int *h_end_col,
-                                        int *eos_lnum, int *eos_col,
-                                        int *eoe_lnum, int *eoe_col)
-{
-  *h_start_lnum = next_match_h_startpos.lnum;
-  *h_start_col  = next_match_h_startpos.col;
-  *m_end_lnum   = next_match_m_endpos.lnum;
-  *m_end_col    = next_match_m_endpos.col;
-  *h_end_lnum   = next_match_h_endpos.lnum;
-  *h_end_col    = next_match_h_endpos.col;
-  *eos_lnum     = next_match_eos_pos.lnum;
-  *eos_col      = next_match_eos_pos.col;
-  *eoe_lnum     = next_match_eoe_pos.lnum;
-  *eoe_col      = next_match_eoe_pos.col;
-}
-
-int nvim_syn_get_next_match_flags(void) { return next_match_flags; }
-int nvim_syn_get_next_match_end_idx(void) { return next_match_end_idx; }
-reg_extmatch_T *nvim_syn_get_next_match_extmatch(void) { return next_match_extmatch; }
+// nvim_syn_get_next_match_positions deleted: Rust reads NEXT_MATCH_*POS statics directly.
+// nvim_syn_get_next_match_flags deleted: Rust reads NEXT_MATCH_FLAGS directly.
+// nvim_syn_get_next_match_end_idx deleted: Rust reads NEXT_MATCH_END_IDX directly.
+// nvim_syn_get_next_match_extmatch deleted: Rust reads NEXT_MATCH_EXTMATCH directly.
 
 reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(em); }
 
@@ -984,15 +979,7 @@ void nvim_syn_ensure_current_state_valid(void)
   }
 }
 
-/// Get the attribute for the next match
-int nvim_syn_get_next_match_attr(void)
-{
-  // Get the attribute from current state
-  if (current_id > 0) {
-    return syn_id2attr(current_id);
-  }
-  return 0;
-}
+// nvim_syn_get_next_match_attr deleted: Rust inlines syn_id2attr(CURRENT_ID) directly.
 
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
@@ -1133,32 +1120,8 @@ int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 
 int nvim_syn_utf_head_off(char *base, char *p) { return utf_head_off(base, p); }
 
-void nvim_syn_set_next_match_state(
-    int idx, int col,
-    int m_endpos_lnum, int m_endpos_col,
-    int h_endpos_lnum, int h_endpos_col,
-    int h_startpos_lnum, int h_startpos_col,
-    int flags, int eos_pos_lnum, int eos_pos_col,
-    int eoe_pos_lnum, int eoe_pos_col,
-    int end_idx, reg_extmatch_T *extmatch)
-{
-  next_match_idx = idx;
-  next_match_col = col;
-  next_match_m_endpos.lnum = (linenr_T)m_endpos_lnum;
-  next_match_m_endpos.col = (colnr_T)m_endpos_col;
-  next_match_h_endpos.lnum = (linenr_T)h_endpos_lnum;
-  next_match_h_endpos.col = (colnr_T)h_endpos_col;
-  next_match_h_startpos.lnum = (linenr_T)h_startpos_lnum;
-  next_match_h_startpos.col = (colnr_T)h_startpos_col;
-  next_match_flags = flags;
-  next_match_eos_pos.lnum = (linenr_T)eos_pos_lnum;
-  next_match_eos_pos.col = (colnr_T)eos_pos_col;
-  next_match_eoe_pos.lnum = (linenr_T)eoe_pos_lnum;
-  next_match_eoe_pos.col = (colnr_T)eoe_pos_col;
-  next_match_end_idx = end_idx;
-  unref_extmatch(next_match_extmatch);
-  next_match_extmatch = extmatch;
-}
+// nvim_syn_set_next_match_state deleted: Rust assigns NEXT_MATCH_* statics directly,
+// calling nvim_syn_unref_extmatch before storing the new extmatch pointer.
 
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
 _Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");

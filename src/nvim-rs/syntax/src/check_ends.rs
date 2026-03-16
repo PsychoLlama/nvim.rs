@@ -28,16 +28,8 @@ extern "C" {
     fn nvim_syn_is_current_state_empty() -> c_int;
 
     // Next match
-    fn nvim_syn_get_next_match_idx() -> c_int;
-    fn nvim_syn_set_next_match_idx(idx: c_int);
-    fn nvim_syn_set_next_match_col(col: c_int);
-    fn nvim_syn_get_next_match_flags() -> c_int;
-    fn nvim_syn_get_next_match_end_idx() -> c_int;
-    fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
-    fn nvim_syn_get_next_match_col() -> c_int;
 
     // Current next list
-    fn nvim_syn_set_current_next_list(list: IdListHandle);
 
     // Pattern accessors
     fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
@@ -286,7 +278,7 @@ pub unsafe fn check_keepend() {
 /// # Safety
 /// Accesses C global state extensively.
 pub unsafe fn push_next_match() -> StateItemHandle {
-    let next_match_idx = nvim_syn_get_next_match_idx();
+    let next_match_idx = crate::statics::NEXT_MATCH_IDX;
     let current_col = crate::statics::CURRENT_COL;
     let current_lnum = crate::statics::CURRENT_LNUM;
 
@@ -327,7 +319,7 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     }
 
     (*cp).si_next_list = nvim_syn_get_pattern_next_list(next_match_idx).0;
-    let extmatch = nvim_syn_get_next_match_extmatch();
+    let extmatch = ExtMatchHandle(crate::statics::NEXT_MATCH_EXTMATCH);
     let reffed = nvim_syn_ref_extmatch(extmatch);
     (*cp).si_extmatch = reffed.0 as *mut _;
 
@@ -343,8 +335,8 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         (*cp).si_eoe_pos.lnum = positions.eoe_pos.lnum;
         (*cp).si_eoe_pos.col = positions.eoe_pos.col;
         (*cp).si_ends = 1;
-        (*cp).si_flags |= nvim_syn_get_next_match_flags();
-        (*cp).si_end_idx = nvim_syn_get_next_match_end_idx();
+        (*cp).si_flags |= crate::statics::NEXT_MATCH_FLAGS;
+        (*cp).si_end_idx = crate::statics::NEXT_MATCH_END_IDX;
     }
 
     let keepend_level = crate::statics::KEEPEND_LEVEL;
@@ -394,7 +386,7 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         update_si_attr(new_sl - 1);
     }
 
-    nvim_syn_set_next_match_idx(-1); // try other match next time
+    crate::statics::NEXT_MATCH_IDX = -1; // try other match next time
 
     // Return the top state item
     let final_len = nvim_syn_get_current_state_len();
@@ -466,18 +458,18 @@ pub unsafe fn check_state_ends() {
                 update_si_attr(new_sl - 1);
 
                 // nextgroup= should not match in the end pattern
-                nvim_syn_set_current_next_list(IdListHandle::null());
+                crate::statics::CURRENT_NEXT_LIST = std::ptr::null_mut();
 
                 // What matches next may be different now, clear it
-                nvim_syn_set_next_match_idx(0);
-                nvim_syn_set_next_match_col(MAXCOL);
+                crate::statics::NEXT_MATCH_IDX = 0;
+                crate::statics::NEXT_MATCH_COL = MAXCOL;
                 break;
             }
 
             // Handle next_list
             let si_next_list = IdListHandle((*p).si_next_list);
             let si_flags = (*p).si_flags;
-            nvim_syn_set_current_next_list(si_next_list);
+            crate::statics::CURRENT_NEXT_LIST = si_next_list.0;
             crate::statics::CURRENT_NEXT_FLAGS = si_flags;
 
             // Unless at end of line and no "skipnl" or "skipempty"
@@ -485,7 +477,7 @@ pub unsafe fn check_state_ends() {
             if (next_flags & (HL_SKIPNL | HL_SKIPEMPTY) == 0)
                 && nvim_syn_getcurline_byte_at(current_col) == NUL
             {
-                nvim_syn_set_current_next_list(IdListHandle::null());
+                crate::statics::CURRENT_NEXT_LIST = std::ptr::null_mut();
             }
 
             // When the ended item has "extend", another item with "keepend"

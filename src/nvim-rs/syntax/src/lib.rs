@@ -285,19 +285,14 @@ extern "C" {
     // -------------------------------------------------------------------------
 
     /// Get next_match_idx
-    fn nvim_syn_get_next_match_idx() -> c_int;
 
     /// Get next_match_col
-    fn nvim_syn_get_next_match_col() -> c_int;
 
     /// Check if there is a pending next match
-    fn nvim_syn_has_next_match() -> c_int;
 
     /// Get current_next_list
-    fn nvim_syn_get_current_next_list() -> IdListHandle;
 
     /// Check if there is a current nextgroup list
-    fn nvim_syn_has_current_next_list() -> c_int;
 
     // -------------------------------------------------------------------------
     // Phase 5: Cluster & containedin logic accessors
@@ -346,7 +341,6 @@ extern "C" {
     fn nvim_syn_set_current_state_len(len: c_int);
 
     /// Set current_next_list
-    fn nvim_syn_set_current_next_list(list: IdListHandle);
 
     /// Get sst_next_list from a synstate
     fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
@@ -988,25 +982,25 @@ pub fn id_list_count(list: IdListHandle) -> i32 {
 /// Get the index of the next pattern to match
 #[must_use]
 pub fn next_match_idx() -> i32 {
-    unsafe { nvim_syn_get_next_match_idx() }
+    unsafe { crate::statics::NEXT_MATCH_IDX }
 }
 
 /// Get the column where the next match starts
 #[must_use]
 pub fn next_match_col() -> i32 {
-    unsafe { nvim_syn_get_next_match_col() }
+    unsafe { crate::statics::NEXT_MATCH_COL }
 }
 
 /// Check if there is a pending next match
 #[must_use]
 pub fn has_next_match() -> bool {
-    unsafe { nvim_syn_has_next_match() != 0 }
+    unsafe { crate::statics::NEXT_MATCH_IDX >= 0 }
 }
 
 /// Get the current nextgroup list
 #[must_use]
 pub fn current_next_list() -> Option<IdListHandle> {
-    let list = unsafe { nvim_syn_get_current_next_list() };
+    let list = unsafe { IdListHandle(crate::statics::CURRENT_NEXT_LIST) };
     if list.is_null() {
         None
     } else {
@@ -1017,7 +1011,7 @@ pub fn current_next_list() -> Option<IdListHandle> {
 /// Check if there is a current nextgroup list
 #[must_use]
 pub fn has_current_next_list() -> bool {
-    unsafe { nvim_syn_has_current_next_list() != 0 }
+    unsafe { !crate::statics::CURRENT_NEXT_LIST.is_null() }
 }
 
 // =============================================================================
@@ -2174,7 +2168,7 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
 
     // Copy next_list and next_flags from saved state
     let next_list = nvim_synstate_get_next_list(from);
-    nvim_syn_set_current_next_list(next_list);
+    crate::statics::CURRENT_NEXT_LIST = next_list.0;
     statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
     statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
 }
@@ -2201,7 +2195,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
     // Quick check: next_list pointers must match
     // (We compare raw pointers since they point to the same data)
     let sp_next_list = nvim_synstate_get_next_list(sp);
-    let cur_next_list = nvim_syn_get_current_next_list();
+    let cur_next_list = IdListHandle(crate::statics::CURRENT_NEXT_LIST);
     if sp_next_list.0 != cur_next_list.0 {
         return 0;
     }

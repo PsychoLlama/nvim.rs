@@ -33,10 +33,6 @@ extern "C" {
     fn nvim_syn_ensure_current_state_valid();
     #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut std::ffi::c_char;
-    fn nvim_syn_get_next_match_attr() -> c_int;
-    fn nvim_syn_get_next_match_idx() -> c_int;
-    fn nvim_syn_get_next_match_col() -> c_int;
-
     // get_syntax_attr dependencies
     fn nvim_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
@@ -555,19 +551,24 @@ pub unsafe fn get_current_line() -> *const std::ffi::c_char {
 /// Get the attribute for the next match.
 #[must_use]
 pub fn next_match_attr() -> i32 {
-    unsafe { nvim_syn_get_next_match_attr() }
+    let id = unsafe { crate::statics::CURRENT_ID };
+    if id > 0 {
+        syn_id2attr(id)
+    } else {
+        0
+    }
 }
 
 /// Get the next match pattern index.
 #[must_use]
 pub fn next_match_idx() -> i32 {
-    unsafe { nvim_syn_get_next_match_idx() }
+    unsafe { crate::statics::NEXT_MATCH_IDX }
 }
 
 /// Get the next match column.
 #[must_use]
 pub fn next_match_col() -> i32 {
-    unsafe { nvim_syn_get_next_match_col() }
+    unsafe { crate::statics::NEXT_MATCH_COL }
 }
 
 /// Check if there is a pending next match.

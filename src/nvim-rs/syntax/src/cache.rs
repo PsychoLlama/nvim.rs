@@ -33,12 +33,10 @@ extern "C" {
 
     // Current state accessors
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_get_current_next_list() -> IdListHandle;
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     fn nvim_syn_grow_current_state(size: c_int);
     fn nvim_syn_set_current_state_len(len: c_int);
-    fn nvim_syn_set_current_next_list(list: IdListHandle);
     fn nvim_syn_update_si_attr(idx: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> crate::types::StateItemHandle;
 
@@ -555,7 +553,7 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
 
     // Copy next_list and next_flags from saved state
     let next_list = nvim_synstate_get_next_list(from);
-    nvim_syn_set_current_next_list(next_list);
+    crate::statics::CURRENT_NEXT_LIST = next_list.0;
     crate::statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
     crate::statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
 }
@@ -585,7 +583,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
 
     // Quick check: next_list pointers must match
     let sp_next_list = nvim_synstate_get_next_list(sp);
-    let cur_next_list = nvim_syn_get_current_next_list();
+    let cur_next_list = IdListHandle(crate::statics::CURRENT_NEXT_LIST);
     if sp_next_list.0 != cur_next_list.0 {
         return false;
     }

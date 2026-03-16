@@ -12,6 +12,8 @@
 
 use std::ffi::c_int;
 
+use crate::ffi_types::LPos;
+
 // =============================================================================
 // Phase 1: Scalar statics migrated from syntax_accessors.c
 // =============================================================================
@@ -94,3 +96,55 @@ pub static mut DID_SYNTAX_ONOFF: c_int = 0;
 /// What to expand for `:syn` completion (mapped from C `expand_what`).
 #[no_mangle]
 pub static mut EXPAND_WHAT: c_int = 0;
+
+// =============================================================================
+// Phase 2: Pointer and struct statics migrated from syntax_accessors.c
+// =============================================================================
+
+/// Column for start of next match (mapped from C `next_match_col`).
+/// Value MAXCOL (0x7fffffff) means no match found.
+#[no_mangle]
+pub static mut NEXT_MATCH_COL: c_int = 0;
+
+/// Index of matched item (mapped from C `next_match_idx`).
+/// Value -1 means not tried yet.
+#[no_mangle]
+pub static mut NEXT_MATCH_IDX: c_int = -1;
+
+/// Flags for next match (mapped from C `next_match_flags`).
+#[no_mangle]
+pub static mut NEXT_MATCH_FLAGS: c_int = 0;
+
+/// ID of group for end pattern or zero (mapped from C `next_match_end_idx`).
+#[no_mangle]
+pub static mut NEXT_MATCH_END_IDX: c_int = 0;
+
+/// Position for end of next match (mapped from C `next_match_m_endpos`).
+#[no_mangle]
+pub static mut NEXT_MATCH_M_ENDPOS: LPos = LPos { lnum: 0, col: 0 };
+
+/// Position for highlight start of next match (mapped from C `next_match_h_startpos`).
+#[no_mangle]
+pub static mut NEXT_MATCH_H_STARTPOS: LPos = LPos { lnum: 0, col: 0 };
+
+/// Position for highlight end of next match (mapped from C `next_match_h_endpos`).
+#[no_mangle]
+pub static mut NEXT_MATCH_H_ENDPOS: LPos = LPos { lnum: 0, col: 0 };
+
+/// End of start pattern position (mapped from C `next_match_eos_pos`).
+#[no_mangle]
+pub static mut NEXT_MATCH_EOS_POS: LPos = LPos { lnum: 0, col: 0 };
+
+/// Position for end of end pattern (mapped from C `next_match_eoe_pos`).
+#[no_mangle]
+pub static mut NEXT_MATCH_EOE_POS: LPos = LPos { lnum: 0, col: 0 };
+
+/// Current nextgroup list pointer (mapped from C `current_next_list`).
+/// NULL when not active.
+#[no_mangle]
+pub static mut CURRENT_NEXT_LIST: *mut i16 = std::ptr::null_mut();
+
+/// Extmatch for next match (mapped from C `next_match_extmatch`).
+/// Opaque pointer -- NULL when no match.
+#[no_mangle]
+pub static mut NEXT_MATCH_EXTMATCH: *mut std::ffi::c_void = std::ptr::null_mut();

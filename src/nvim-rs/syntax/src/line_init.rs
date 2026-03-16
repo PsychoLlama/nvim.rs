@@ -25,7 +25,6 @@ use crate::types::{
 extern "C" {
     // Current state globals
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_is_current_state_empty() -> c_int;
 
     // CUR_STATE accessors for syn_update_ends
@@ -147,7 +146,7 @@ pub unsafe extern "C" fn rs_syn_start_line() {
         rs_check_state_ends();
     }
 
-    nvim_syn_set_next_match_idx(-1);
+    crate::statics::NEXT_MATCH_IDX = -1;
     crate::statics::CURRENT_LINE_ID += 1;
     crate::statics::NEXT_SEQNR = 1;
 }

@@ -29,36 +29,10 @@ extern "C" {
     fn nvim_syn_grow_current_state(size: c_int);
 
     // Next list management
-    fn nvim_syn_get_current_next_list() -> IdListHandle;
-    fn nvim_syn_has_current_next_list() -> c_int;
-    fn nvim_syn_set_current_next_list(list: IdListHandle);
 
     // Next match accessors
-    fn nvim_syn_get_next_match_idx() -> c_int;
-    fn nvim_syn_get_next_match_col() -> c_int;
-    fn nvim_syn_has_next_match() -> c_int;
-    fn nvim_syn_set_next_match_idx(idx: c_int);
-    fn nvim_syn_set_next_match_col(col: c_int);
-    fn nvim_syn_get_next_match_flags() -> c_int;
-    fn nvim_syn_get_next_match_end_idx() -> c_int;
-    fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
     #[link_name = "rs_push_next_match"]
     fn nvim_syn_push_next_match() -> StateItemHandle;
-
-    // Bulk next match position getter
-    #[allow(clippy::too_many_arguments)]
-    fn nvim_syn_get_next_match_positions(
-        h_start_lnum: *mut c_int,
-        h_start_col: *mut c_int,
-        m_end_lnum: *mut c_int,
-        m_end_col: *mut c_int,
-        h_end_lnum: *mut c_int,
-        h_end_col: *mut c_int,
-        eos_lnum: *mut c_int,
-        eos_col: *mut c_int,
-        eoe_lnum: *mut c_int,
-        eoe_col: *mut c_int,
-    );
 
     // Line operations
     #[link_name = "rs_syn_start_line"]
@@ -306,13 +280,13 @@ pub unsafe fn push_current_state(idx: i32) {
 /// Get the current next list.
 #[must_use]
 pub fn current_next_list() -> IdListHandle {
-    unsafe { nvim_syn_get_current_next_list() }
+    unsafe { IdListHandle(crate::statics::CURRENT_NEXT_LIST) }
 }
 
 /// Check if there is a current next list.
 #[must_use]
 pub fn has_current_next_list() -> bool {
-    unsafe { nvim_syn_has_current_next_list() != 0 }
+    unsafe { !crate::statics::CURRENT_NEXT_LIST.is_null() }
 }
 
 /// Set the current next list.
@@ -320,7 +294,7 @@ pub fn has_current_next_list() -> bool {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_next_list(list: IdListHandle) {
-    nvim_syn_set_current_next_list(list);
+    crate::statics::CURRENT_NEXT_LIST = list.0;
 }
 
 /// Set the current next flags.
@@ -336,13 +310,13 @@ pub unsafe fn set_current_next_flags(flags: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_next_list_ptr(list: IdListHandle) {
-    nvim_syn_set_current_next_list(list);
+    crate::statics::CURRENT_NEXT_LIST = list.0;
 }
 
 /// Get the current next list pointer.
 #[must_use]
 pub fn current_next_list_ptr() -> IdListHandle {
-    unsafe { nvim_syn_get_current_next_list() }
+    unsafe { IdListHandle(crate::statics::CURRENT_NEXT_LIST) }
 }
 
 // =============================================================================
@@ -375,25 +349,25 @@ pub struct NextMatchInfo {
 /// Get the next match pattern index.
 #[must_use]
 pub fn next_match_idx() -> i32 {
-    unsafe { nvim_syn_get_next_match_idx() }
+    unsafe { crate::statics::NEXT_MATCH_IDX }
 }
 
 /// Get the next match column.
 #[must_use]
 pub fn next_match_col() -> i32 {
-    unsafe { nvim_syn_get_next_match_col() }
+    unsafe { crate::statics::NEXT_MATCH_COL }
 }
 
 /// Check if there is a pending next match.
 #[must_use]
 pub fn has_next_match() -> bool {
-    unsafe { nvim_syn_has_next_match() != 0 }
+    unsafe { crate::statics::NEXT_MATCH_IDX >= 0 }
 }
 
 /// Get the next match index value.
 #[must_use]
 pub fn next_match_idx_value() -> i32 {
-    unsafe { nvim_syn_get_next_match_idx() }
+    unsafe { crate::statics::NEXT_MATCH_IDX }
 }
 
 /// Set the next match index.
@@ -401,7 +375,7 @@ pub fn next_match_idx_value() -> i32 {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_next_match_idx(idx: i32) {
-    nvim_syn_set_next_match_idx(idx);
+    crate::statics::NEXT_MATCH_IDX = idx;
 }
 
 /// Set the next match column.
@@ -409,25 +383,25 @@ pub unsafe fn set_next_match_idx(idx: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_next_match_col(col: i32) {
-    nvim_syn_set_next_match_col(col);
+    crate::statics::NEXT_MATCH_COL = col;
 }
 
 /// Get the next match flags.
 #[must_use]
 pub fn next_match_flags() -> i32 {
-    unsafe { nvim_syn_get_next_match_flags() }
+    unsafe { crate::statics::NEXT_MATCH_FLAGS }
 }
 
 /// Get the next match end index.
 #[must_use]
 pub fn next_match_end_idx() -> i32 {
-    unsafe { nvim_syn_get_next_match_end_idx() }
+    unsafe { crate::statics::NEXT_MATCH_END_IDX }
 }
 
 /// Get the next match extmatch handle.
 #[must_use]
 pub fn next_match_extmatch() -> ExtMatchHandle {
-    unsafe { nvim_syn_get_next_match_extmatch() }
+    unsafe { ExtMatchHandle(crate::statics::NEXT_MATCH_EXTMATCH) }
 }
 
 /// All 5 next_match position fields in one bulk call.
@@ -439,54 +413,36 @@ pub struct NextMatchPositions {
     pub eoe_pos: Position,
 }
 
-/// Fetch all next_match position fields in a single C call.
+/// Fetch all next_match position fields from Rust statics.
 ///
 /// # Safety
-/// Accesses C global syntax state; must be called from main thread.
+/// Accesses global syntax state; must be called from main thread.
 #[must_use]
 pub unsafe fn next_match_positions() -> NextMatchPositions {
-    let mut h_start_lnum: c_int = 0;
-    let mut h_start_col: c_int = 0;
-    let mut m_end_lnum: c_int = 0;
-    let mut m_end_col: c_int = 0;
-    let mut h_end_lnum: c_int = 0;
-    let mut h_end_col: c_int = 0;
-    let mut eos_lnum: c_int = 0;
-    let mut eos_col: c_int = 0;
-    let mut eoe_lnum: c_int = 0;
-    let mut eoe_col: c_int = 0;
-    nvim_syn_get_next_match_positions(
-        &mut h_start_lnum,
-        &mut h_start_col,
-        &mut m_end_lnum,
-        &mut m_end_col,
-        &mut h_end_lnum,
-        &mut h_end_col,
-        &mut eos_lnum,
-        &mut eos_col,
-        &mut eoe_lnum,
-        &mut eoe_col,
-    );
+    use crate::statics::{
+        NEXT_MATCH_EOE_POS, NEXT_MATCH_EOS_POS, NEXT_MATCH_H_ENDPOS, NEXT_MATCH_H_STARTPOS,
+        NEXT_MATCH_M_ENDPOS,
+    };
     NextMatchPositions {
         h_startpos: Position {
-            lnum: h_start_lnum,
-            col: h_start_col,
+            lnum: NEXT_MATCH_H_STARTPOS.lnum,
+            col: NEXT_MATCH_H_STARTPOS.col,
         },
         m_endpos: Position {
-            lnum: m_end_lnum,
-            col: m_end_col,
+            lnum: NEXT_MATCH_M_ENDPOS.lnum,
+            col: NEXT_MATCH_M_ENDPOS.col,
         },
         h_endpos: Position {
-            lnum: h_end_lnum,
-            col: h_end_col,
+            lnum: NEXT_MATCH_H_ENDPOS.lnum,
+            col: NEXT_MATCH_H_ENDPOS.col,
         },
         eos_pos: Position {
-            lnum: eos_lnum,
-            col: eos_col,
+            lnum: NEXT_MATCH_EOS_POS.lnum,
+            col: NEXT_MATCH_EOS_POS.col,
         },
         eoe_pos: Position {
-            lnum: eoe_lnum,
-            col: eoe_col,
+            lnum: NEXT_MATCH_EOE_POS.lnum,
+            col: NEXT_MATCH_EOE_POS.col,
         },
     }
 }

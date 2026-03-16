@@ -37,7 +37,6 @@ extern "C" {
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
 
     // next_match_idx
-    fn nvim_syn_set_next_match_idx(idx: c_int);
 
     // keepend_level
 
@@ -48,7 +47,6 @@ extern "C" {
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
 
     // next_match col setter (kept; used standalone)
-    fn nvim_syn_set_next_match_col(col: c_int);
 
     // Phase 3: extmatch string comparison helpers
     fn nvim_extmatch_get_string(em: ExtMatchHandle, subidx: c_int) -> *const c_char;
@@ -82,7 +80,7 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
     }
     nvim_syn_set_current_state_len(len - 1);
     // After end of a pattern, try matching a keyword or pattern next time
-    nvim_syn_set_next_match_idx(-1);
+    crate::statics::NEXT_MATCH_IDX = -1;
     // If first state with "keepend" is popped, reset keepend_level
     let keepend = crate::statics::KEEPEND_LEVEL;
     if keepend >= len - 1 {

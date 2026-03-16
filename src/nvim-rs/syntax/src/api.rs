@@ -142,7 +142,6 @@ extern "C" {
     fn nvim_syn_get_win() -> WinHandle;
     fn nvim_syn_get_buf() -> BufHandle;
     fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
-    fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
@@ -177,7 +176,7 @@ pub unsafe fn syn_get_id_impl(
     if wp.0 != syn_win.0 || wp_buf.0 != syn_buf.0 || lnum != current_lnum || col < current_col {
         crate::buffer::start_syntax(wp, lnum);
     } else if col > current_col {
-        nvim_syn_set_next_match_idx(-1);
+        crate::statics::NEXT_MATCH_IDX = -1;
     }
 
     let result = crate::highlight::get_syntax_attr(col, keep_state != 0);
