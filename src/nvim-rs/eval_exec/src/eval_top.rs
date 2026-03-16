@@ -1098,8 +1098,8 @@ extern "C" {
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_curbuf_u_clearallandblockfree();
 
-    // Phase 2: invoke_prompt_interrupt accessors (kept)
-    fn nvim_excmds_clear_got_int();
+    // Direct C global
+    pub static mut got_int: bool;
 }
 
 // kCallbackNone = 0
@@ -1245,7 +1245,7 @@ pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
         return false;
     }
 
-    nvim_excmds_clear_got_int(); // got_int = false
+    got_int = false;
 
     // Build argv[1] on the stack: [VAR_UNKNOWN]
     let mut argv_buf = [0u8; TYPVAL_SIZE]; // VAR_UNKNOWN = 0, already zeroed

@@ -545,6 +545,12 @@ extern "C" {
     pub static mut KeyTyped: bool;
     /// Direct C global: g_do_tagpreview (int in C)
     pub static mut g_do_tagpreview: c_int;
+    /// Direct C global: redraw_tabline (bool in C)
+    pub static mut redraw_tabline: bool;
+    /// Direct C global: p_srr (shellredir option, char* in C)
+    pub static mut p_srr: *mut c_char;
+    /// Direct C global: p_shq (shellquote option, char* in C)
+    pub static mut p_shq: *mut c_char;
     /// msg_prt_line wrapper
     pub fn nvim_msg_prt_line(s: *const c_char, list: c_int);
     /// message_filtered wrapper

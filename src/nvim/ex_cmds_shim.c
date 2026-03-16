@@ -404,10 +404,6 @@ void nvim_excmds_add_to_hist_search(const char *pat, size_t patlen)
 // --- make_filter_cmd FFI accessors ---
 // Get shell name tail (e.g., "bash" from "/bin/bash")
 const char *nvim_excmds_shell_name_tail(void) { return invocation_path_tail(p_sh, NULL); }
-// Get p_srr (shellredir option)
-const char *nvim_excmds_get_p_srr(void) { return p_srr; }
-// Get p_shq (shellquote option)
-const char *nvim_excmds_get_p_shq(void) { return p_shq; }
 // xmalloc wrapper for make_filter_cmd
 void *nvim_excmds_xmalloc(size_t size) { return xmalloc(size); }
 
@@ -946,9 +942,6 @@ void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 /// Wrapper for do_autochdir().
 void nvim_excmds_do_autochdir(void) { do_autochdir(); }
 
-/// Set redraw_tabline = true.
-void nvim_excmds_set_redraw_tabline(void) { redraw_tabline = true; }
-
 /// Check !shortmess(SHM_FILEINFO): returns 1 if fileinfo should be shown.
 int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ? 1 : 0; }
 
@@ -1102,9 +1095,6 @@ void nvim_excmds_after_shell(void)
   did_check_timestamps = false;
   need_check_timestamps = true;
 }
-
-/// Set got_int = false.
-void nvim_excmds_clear_got_int(void) { got_int = false; }
 
 /// Wrapper for del_lines(count, true).
 void nvim_excmds_del_lines(int count) { del_lines((linenr_T)count, true); }

@@ -373,7 +373,6 @@ extern "C" {
     fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
     fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
     fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_set_redraw_tabline();
     fn nvim_excmds_shortmess_not_fileinfo() -> c_int;
     fn nvim_excmds_fileinfo(forceit: c_int);
     fn nvim_excmds_emsg_invarg();
@@ -463,7 +462,7 @@ pub unsafe extern "C" fn rs_ex_file(eap: *mut ExArgHandle) {
         if rs_rename_buffer(arg) == 0 {
             return;
         }
-        nvim_excmds_set_redraw_tabline();
+        crate::redraw_tabline = true;
     }
 
     // Print file name if no argument or 'F' is not in 'shortmess'

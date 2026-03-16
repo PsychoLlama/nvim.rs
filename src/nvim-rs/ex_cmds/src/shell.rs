@@ -415,8 +415,6 @@ pub fn count_shell_special(s: &str) -> usize {
 extern "C" {
     // make_filter_cmd FFI
     fn nvim_excmds_shell_name_tail() -> *const c_char;
-    fn nvim_excmds_get_p_srr() -> *const c_char;
-    fn nvim_excmds_get_p_shq() -> *const c_char;
     fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
 
     // do_shell FFI
@@ -551,7 +549,7 @@ pub unsafe extern "C" fn rs_make_filter_cmd(
         result.extend_from_slice(cmd_bytes);
 
         if let Some(itmp_b) = itmp_bytes {
-            let p_shq = CStr::from_ptr(nvim_excmds_get_p_shq()).to_bytes();
+            let p_shq = CStr::from_ptr(crate::p_shq).to_bytes();
             let shq_empty = p_shq.is_empty();
 
             // If shellquote is empty, find a pipe in buf and truncate there
@@ -580,7 +578,7 @@ pub unsafe extern "C" fn rs_make_filter_cmd(
 
     // Handle output redirection: call rs_append_redir on the buffer
     if let Some(otmp_b) = otmp_bytes {
-        let p_srr = CStr::from_ptr(nvim_excmds_get_p_srr()).to_bytes();
+        let p_srr = CStr::from_ptr(crate::p_srr).to_bytes();
 
         // We need to call rs_append_redir, which operates on a C string buffer.
         // Build the null-terminated buffer first, then call rs_append_redir.
@@ -594,7 +592,7 @@ pub unsafe extern "C" fn rs_make_filter_cmd(
         *buf.add(result.len()) = 0;
 
         // Append the output redirect: opt=p_srr, fname=otmp
-        rs_append_redir(buf, total, nvim_excmds_get_p_srr(), otmp);
+        rs_append_redir(buf, total, crate::p_srr, otmp);
 
         return buf;
     }
@@ -961,7 +959,7 @@ pub unsafe extern "C" fn rs_do_bang(
     }
 
     // Add shell quotes if p_shq is non-empty
-    let p_shq = nvim_excmds_get_p_shq();
+    let p_shq = crate::p_shq;
     if *p_shq != 0 {
         let prevcmd_ptr = match PREVCMD {
             Some(ptr) if !ptr.is_null() => ptr,
@@ -1057,7 +1055,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_excmds_call_shell_filter(cmd: *const c_char, flags: c_int);
     fn nvim_excmds_after_shell();
-    fn nvim_excmds_clear_got_int();
     fn nvim_excmds_del_lines(count: c_int);
     fn nvim_excmds_write_lnum_adjust(offset: c_int);
     fn nvim_excmds_redraw_curbuf_later_valid();
@@ -1272,7 +1269,7 @@ pub unsafe extern "C" fn rs_do_filter(
 
     nvim_excmds_after_shell();
     os_breakcheck();
-    nvim_excmds_clear_got_int();
+    crate::got_int = false;
 
     if do_out {
         if !otmp.is_null() {
