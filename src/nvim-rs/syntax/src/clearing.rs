@@ -98,9 +98,6 @@ extern "C" {
     /// Set ht_array[idx].hi_key = key.
     fn nvim_ht_set_hikey_at(ht: *mut c_void, idx: usize, key: *mut c_char);
 
-    /// Set current_state.ga_itemsize = 0 to mark current state invalid.
-    fn nvim_syn_set_current_state_invalid();
-
 }
 
 // SPTYPE_START = 2 (must match C define)
@@ -306,7 +303,7 @@ pub unsafe extern "C" fn rs_clear_keywtab(ht: *mut c_void) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_invalidate_current_state() {
     crate::state_ops::rs_syn_clear_current_state();
-    nvim_syn_set_current_state_invalid();
+    crate::statics::CURRENT_STATE.ga_itemsize = 0;
     crate::statics::CURRENT_NEXT_LIST = std::ptr::null_mut();
     crate::statics::KEEPEND_LEVEL = -1;
 }

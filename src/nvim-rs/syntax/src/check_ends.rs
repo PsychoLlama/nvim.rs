@@ -23,9 +23,6 @@ use crate::types::{
 
 extern "C" {
     // Current state (non-static)
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-    fn nvim_syn_is_current_state_empty() -> c_int;
 
     // Next match
 
@@ -72,14 +69,14 @@ const NUL: i32 = 0;
 /// # Safety
 /// Accesses C global state.
 pub unsafe fn did_match_already(idx: i32, gap_ptr: *mut c_int, gap_len: i32) -> bool {
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
     let current_col = crate::statics::CURRENT_COL;
     let current_lnum = crate::statics::CURRENT_LNUM;
 
     // Check current state stack from top to bottom
     let mut i = state_len - 1;
     while i >= 0 {
-        let item = nvim_syn_get_stateitem(i);
+        let item = crate::statics::current_state_item(i);
         if !item.is_null() {
             let p = item.as_ptr();
             if (*p).si_m_startcol == current_col
@@ -113,12 +110,12 @@ pub unsafe fn did_match_already(idx: i32, gap_ptr: *mut c_int, gap_len: i32) -> 
 /// # Safety
 /// Accesses C global state.
 pub unsafe fn update_si_attr(stack_idx: i32) {
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
     if stack_idx < 0 || stack_idx >= state_len {
         return;
     }
 
-    let sip = nvim_syn_get_stateitem(stack_idx);
+    let sip = crate::statics::current_state_item(stack_idx);
     if sip.is_null() {
         return;
     }
@@ -158,7 +155,7 @@ pub unsafe fn update_si_attr(stack_idx: i32) {
                 (*p).si_cont_list = nvim_syn_get_id_list_all().0;
             }
         } else {
-            let parent = nvim_syn_get_stateitem(stack_idx - 1);
+            let parent = crate::statics::current_state_item(stack_idx - 1);
             let pp = parent.as_ptr();
             (*p).si_attr = (*pp).si_attr;
             (*p).si_trans_id = (*pp).si_trans_id;
@@ -185,13 +182,13 @@ pub unsafe fn check_keepend() {
         return;
     }
 
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Find the last index of an "extend" item. "keepend" items before that
     // won't do anything.
     let mut i = state_len - 1;
     while i > keepend_level {
-        let item = nvim_syn_get_stateitem(i);
+        let item = crate::statics::current_state_item(i);
         if !item.is_null() && ((*item.as_ptr()).si_flags & HL_EXTEND != 0) {
             break;
         }
@@ -202,7 +199,7 @@ pub unsafe fn check_keepend() {
     let mut maxpos_h = Position { lnum: 0, col: 0 };
 
     while i < state_len {
-        let sip = nvim_syn_get_stateitem(i);
+        let sip = crate::statics::current_state_item(i);
         if sip.is_null() {
             i += 1;
             continue;
@@ -289,8 +286,8 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     // Push the item in current_state stack
     crate::state_ops::rs_syn_push_current_state(next_match_idx);
 
-    let state_len = nvim_syn_get_current_state_len();
-    let cur_si = nvim_syn_get_stateitem(state_len - 1);
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
+    let cur_si = crate::statics::current_state_item(state_len - 1);
 
     // Read all next_match position values in a single bulk call
     let positions = crate::match_engine::next_match_positions();
@@ -312,9 +309,9 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     (*cp).si_cchar = pat_cchar;
 
     // Inherit conceal flag from parent
-    let new_state_len = nvim_syn_get_current_state_len();
+    let new_state_len = crate::statics::CURRENT_STATE.ga_len;
     if new_state_len > 1 {
-        let parent = nvim_syn_get_stateitem(new_state_len - 2);
+        let parent = crate::statics::current_state_item(new_state_len - 2);
         (*cp).si_flags |= (*parent.as_ptr()).si_flags & HL_CONCEAL;
     }
 
@@ -342,11 +339,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let keepend_level = crate::statics::KEEPEND_LEVEL;
     let cur_flags = (*cp).si_flags;
     if keepend_level < 0 && (cur_flags & HL_KEEPEND != 0) {
-        let sl = nvim_syn_get_current_state_len();
+        let sl = crate::statics::CURRENT_STATE.ga_len;
         crate::statics::KEEPEND_LEVEL = sl - 1;
     }
     check_keepend();
-    update_si_attr(nvim_syn_get_current_state_len() - 1);
+    update_si_attr(crate::statics::CURRENT_STATE.ga_len - 1);
 
     let save_flags = (*cp).si_flags & (HL_CONCEAL | HL_CONCEALENDS);
 
@@ -355,8 +352,8 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let pat_match_id = nvim_syn_get_pattern_syn_match_id(next_match_idx);
     if pat_type == SPTYPE_START && pat_match_id != 0 {
         crate::state_ops::rs_syn_push_current_state(next_match_idx);
-        let sl = nvim_syn_get_current_state_len();
-        let mg_si = nvim_syn_get_stateitem(sl - 1);
+        let sl = crate::statics::CURRENT_STATE.ga_len;
+        let mg_si = crate::statics::current_state_item(sl - 1);
         let mp = mg_si.as_ptr();
 
         (*mp).si_m_lnum = current_lnum;
@@ -382,15 +379,15 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         }
         (*mp).si_next_list = std::ptr::null_mut();
         check_keepend();
-        let new_sl = nvim_syn_get_current_state_len();
+        let new_sl = crate::statics::CURRENT_STATE.ga_len;
         update_si_attr(new_sl - 1);
     }
 
     crate::statics::NEXT_MATCH_IDX = -1; // try other match next time
 
     // Return the top state item
-    let final_len = nvim_syn_get_current_state_len();
-    nvim_syn_get_stateitem(final_len - 1)
+    let final_len = crate::statics::CURRENT_STATE.ga_len;
+    crate::statics::current_state_item(final_len - 1)
 }
 
 // =============================================================================
@@ -402,7 +399,7 @@ pub unsafe fn push_next_match() -> StateItemHandle {
 /// # Safety
 /// Accesses C global state extensively.
 pub unsafe fn check_state_ends() {
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
     if state_len == 0 {
         return;
     }
@@ -411,11 +408,11 @@ pub unsafe fn check_state_ends() {
     let current_col = crate::statics::CURRENT_COL;
 
     loop {
-        let sl = nvim_syn_get_current_state_len();
+        let sl = crate::statics::CURRENT_STATE.ga_len;
         if sl == 0 {
             break;
         }
-        let cur_si = nvim_syn_get_stateitem(sl - 1);
+        let cur_si = crate::statics::current_state_item(sl - 1);
         if cur_si.is_null() {
             break;
         }
@@ -454,7 +451,7 @@ pub unsafe fn check_state_ends() {
                 if (*p).si_flags & HL_CONCEALENDS != 0 {
                     (*p).si_flags |= HL_CONCEAL;
                 }
-                let new_sl = nvim_syn_get_current_state_len();
+                let new_sl = crate::statics::CURRENT_STATE.ga_len;
                 update_si_attr(new_sl - 1);
 
                 // nextgroup= should not match in the end pattern
@@ -486,22 +483,22 @@ pub unsafe fn check_state_ends() {
 
             crate::state_ops::rs_syn_pop_current_state();
 
-            if nvim_syn_is_current_state_empty() != 0 {
+            if crate::statics::current_state_is_empty() {
                 break;
             }
 
             let keepend_level = crate::statics::KEEPEND_LEVEL;
             if had_extend != 0 && keepend_level >= 0 {
                 nvim_syn_update_ends(0);
-                if nvim_syn_is_current_state_empty() != 0 {
+                if crate::statics::current_state_is_empty() {
                     break;
                 }
             }
 
             // Only for a region the search for the end continues after the end
             // of the contained item.
-            let new_sl = nvim_syn_get_current_state_len();
-            let new_cur = nvim_syn_get_stateitem(new_sl - 1);
+            let new_sl = crate::statics::CURRENT_STATE.ga_len;
+            let new_cur = crate::statics::current_state_item(new_sl - 1);
             let new_idx = (*new_cur.as_ptr()).si_idx;
             let new_flags = (*new_cur.as_ptr()).si_flags;
 

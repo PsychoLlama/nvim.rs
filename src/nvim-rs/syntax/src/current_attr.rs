@@ -33,9 +33,6 @@ extern "C" {
     fn nvim_syn_zero_current();
 
     // State stack
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_is_current_state_empty() -> c_int;
-    fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
 
     // Next match
 
@@ -146,7 +143,7 @@ unsafe fn check_pattern_containment(
             1
         }
     } else {
-        let cur_si = nvim_syn_get_stateitem(si_idx);
+        let cur_si = crate::statics::current_state_item(si_idx);
         let cont_list = IdListHandle((*cur_si.as_ptr()).si_cont_list);
         let flags = nvim_syn_get_pattern_flags(pat_idx);
         rs_syn_in_id_list(cur_si, cont_list, syn_id, inc_tag, cont_in_list, flags)
@@ -222,11 +219,11 @@ pub unsafe fn syn_current_attr(
         let current_col = crate::statics::CURRENT_COL;
 
         // 1. Check for a current state.
-        let state_len = nvim_syn_get_current_state_len();
+        let state_len = crate::statics::CURRENT_STATE.ga_len;
         cur_si_valid = state_len > 0;
 
         if nvim_syn_has_containedin() != 0 || !cur_si_valid || {
-            let si = nvim_syn_get_stateitem(state_len - 1);
+            let si = crate::statics::current_state_item(state_len - 1);
             !(*si.as_ptr()).si_cont_list.is_null()
         } {
             // 2. Check for keywords
@@ -243,7 +240,7 @@ pub unsafe fn syn_current_attr(
                     })
                 {
                     let cur_si_handle = if cur_si_valid {
-                        nvim_syn_get_stateitem(state_len - 1)
+                        crate::statics::current_state_item(state_len - 1)
                     } else {
                         StateItemHandle(std::ptr::null_mut())
                     };
@@ -265,8 +262,8 @@ pub unsafe fn syn_current_attr(
 
                     if syn_id != 0 {
                         crate::state_ops::rs_syn_push_current_state(KEYWORD_IDX);
-                        let new_len = nvim_syn_get_current_state_len();
-                        let cur_si = nvim_syn_get_stateitem(new_len - 1);
+                        let new_len = crate::statics::CURRENT_STATE.ga_len;
+                        let cur_si = crate::statics::current_state_item(new_len - 1);
                         {
                             let p = cur_si.as_ptr();
                             (*p).si_m_lnum = current_lnum;
@@ -289,7 +286,7 @@ pub unsafe fn syn_current_attr(
                         }
 
                         if new_len > 1 {
-                            let prev_si = nvim_syn_get_stateitem(new_len - 2);
+                            let prev_si = crate::statics::current_state_item(new_len - 2);
                             if (*prev_si.as_ptr()).si_flags & HL_CONCEAL != 0 {
                                 (*cur_si.as_ptr()).si_flags |= HL_CONCEAL;
                             }
@@ -307,7 +304,7 @@ pub unsafe fn syn_current_attr(
                                 (*p).si_attr = 0;
                                 (*p).si_trans_id = 0;
                             } else {
-                                let prev_si = nvim_syn_get_stateitem(new_len - 2);
+                                let prev_si = crate::statics::current_state_item(new_len - 2);
                                 let p = cur_si.as_ptr();
                                 (*p).si_attr = (*prev_si.as_ptr()).si_attr;
                                 (*p).si_trans_id = (*prev_si.as_ptr()).si_trans_id;
@@ -338,7 +335,7 @@ pub unsafe fn syn_current_attr(
                     crate::statics::NEXT_MATCH_IDX = 0;
                     crate::statics::NEXT_MATCH_COL = MAXCOL;
                     let current_line_id = crate::statics::CURRENT_LINE_ID;
-                    let state_len = nvim_syn_get_current_state_len();
+                    let state_len = crate::statics::CURRENT_STATE.ga_len;
                     let has_next_list = !crate::statics::CURRENT_NEXT_LIST.is_null();
                     let si_idx = if cur_si_valid { state_len - 1 } else { -1 };
 
@@ -574,13 +571,13 @@ pub unsafe fn syn_current_attr(
     nvim_syn_zero_current();
 
     let current_col = crate::statics::CURRENT_COL;
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     let mut sip_handle = StateItemHandle(std::ptr::null_mut());
 
     if cur_si_valid && state_len > 0 {
         for idx in (0..state_len).rev() {
-            let sip = nvim_syn_get_stateitem(idx);
+            let sip = crate::statics::current_state_item(idx);
             let (h_start_lnum, h_start_col, h_end_lnum, h_end_col) = {
                 let p = sip.as_ptr();
                 (
@@ -610,7 +607,7 @@ pub unsafe fn syn_current_attr(
         // Check for end of current state at the next column.
         if !syncing && !keep_state {
             check_state_ends();
-            if nvim_syn_is_current_state_empty() == 0
+            if !crate::statics::current_state_is_empty()
                 && nvim_syn_getcurline_byte_at(current_col) != 0
             {
                 crate::statics::CURRENT_COL = current_col + 1;
@@ -687,12 +684,12 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
 
 /// Check if pattern `idx` was already matched at the current column.
 fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
-    let state_len = unsafe { nvim_syn_get_current_state_len() };
+    let state_len = unsafe { crate::statics::CURRENT_STATE.ga_len };
     let current_col = unsafe { crate::statics::CURRENT_COL };
     let current_lnum = unsafe { crate::statics::CURRENT_LNUM };
 
     for i in (0..state_len).rev() {
-        let si = unsafe { nvim_syn_get_stateitem(i) };
+        let si = unsafe { crate::statics::current_state_item(i) };
         if si.is_null() {
             continue;
         }
@@ -722,9 +719,9 @@ pub unsafe fn syn_finish_line(syncing: bool) -> bool {
         syn_current_attr(syncing, false, std::ptr::null_mut(), false);
 
         // When syncing, and found some item, need to check the item.
-        if syncing && nvim_syn_get_current_state_len() > 0 {
-            let state_len = nvim_syn_get_current_state_len();
-            let cur_si = nvim_syn_get_stateitem(state_len - 1);
+        if syncing && crate::statics::CURRENT_STATE.ga_len > 0 {
+            let state_len = crate::statics::CURRENT_STATE.ga_len;
+            let cur_si = crate::statics::current_state_item(state_len - 1);
             let si_idx = unsafe { (*cur_si.as_ptr()).si_idx };
             if si_idx >= 0 {
                 let pat_flags = nvim_syn_get_pattern_flags(si_idx);

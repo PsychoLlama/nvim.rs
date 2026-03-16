@@ -25,12 +25,8 @@ use crate::types::{
 
 extern "C" {
     // Current state length/grow
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_set_current_state_len(len: c_int);
-    fn nvim_syn_grow_current_state(size: c_int);
 
     // Stateitem access
-    fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
 
     // Extmatch reference management
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
@@ -41,7 +37,6 @@ extern "C" {
     // keepend_level
 
     // Stateitem append helper (GA_APPEND_VIA_PTR + CLEAR_POINTER)
-    fn nvim_syn_append_new_stateitem() -> StateItemHandle;
 
     // Pattern next_list lookup
     fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
@@ -69,16 +64,16 @@ extern "C" {
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_pop_current_state() {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     if len <= 0 {
         return;
     }
-    let top = nvim_syn_get_stateitem(len - 1);
+    let top = crate::statics::current_state_item(len - 1);
     if !top.is_null() {
         let em = ExtMatchHandle((*top.as_ptr()).si_extmatch as *mut _);
         nvim_syn_unref_extmatch(em);
     }
-    nvim_syn_set_current_state_len(len - 1);
+    crate::statics::CURRENT_STATE.ga_len = len - 1;
     // After end of a pattern, try matching a keyword or pattern next time
     crate::statics::NEXT_MATCH_IDX = -1;
     // If first state with "keepend" is popped, reset keepend_level
@@ -97,7 +92,7 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_push_current_state(idx: c_int) {
-    let p = nvim_syn_append_new_stateitem();
+    let p = crate::statics::current_state_append();
     if !p.is_null() {
         (*p.as_ptr()).si_idx = idx;
     }
@@ -118,11 +113,11 @@ pub unsafe extern "C" fn rs_syn_set_cur_state_item(
     si_cchar: c_int,
     extmatch: ExtMatchHandle,
 ) {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     if idx < 0 || idx >= len {
         return;
     }
-    let item = nvim_syn_get_stateitem(idx);
+    let item = crate::statics::current_state_item(idx);
     if item.is_null() {
         return;
     }
@@ -157,10 +152,10 @@ pub unsafe extern "C" fn rs_syn_set_cur_state_item(
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_count_fold_items() -> c_int {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     let mut count = 0;
     for i in 0..len {
-        let item = nvim_syn_get_stateitem(i);
+        let item = crate::statics::current_state_item(i);
         if !item.is_null() && ((*item.as_ptr()).si_flags & HL_FOLD) != 0 {
             count += 1;
         }
@@ -176,11 +171,11 @@ pub unsafe extern "C" fn rs_syn_count_fold_items() -> c_int {
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     if idx < 0 || idx >= len {
         return 0;
     }
-    let item = nvim_syn_get_stateitem(idx);
+    let item = crate::statics::current_state_item(idx);
     if item.is_null() {
         return 0;
     }
@@ -212,15 +207,15 @@ pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_clear_current_state() {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     for i in 0..len {
-        let item = nvim_syn_get_stateitem(i);
+        let item = crate::statics::current_state_item(i);
         if !item.is_null() {
             let em = ExtMatchHandle((*item.as_ptr()).si_extmatch as *mut _);
             nvim_syn_unref_extmatch(em);
         }
     }
-    nvim_syn_set_current_state_len(0);
+    crate::statics::CURRENT_STATE.ga_len = 0;
 }
 
 /// Walk backwards through current_state items while the item has HL_TRANS_CONT.
@@ -236,12 +231,12 @@ pub unsafe extern "C" fn rs_stateitem_prev_if_trans_cont(item: StateItemHandle) 
         return item;
     }
     // Find the index of this item in current_state
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     // Walk backwards: we need the index of 'item' in current_state.
     // Find it by scanning (the C code uses pointer arithmetic).
     let mut idx = -1i32;
     for i in 0..len {
-        let candidate = nvim_syn_get_stateitem(i);
+        let candidate = crate::statics::current_state_item(i);
         if candidate.0 == item.0 {
             idx = i;
             break;
@@ -254,14 +249,14 @@ pub unsafe extern "C" fn rs_stateitem_prev_if_trans_cont(item: StateItemHandle) 
     // Walk backward while HL_TRANS_CONT is set and we're not at the first item
     let mut cur_idx = idx;
     while cur_idx > 0 {
-        let cur = nvim_syn_get_stateitem(cur_idx);
+        let cur = crate::statics::current_state_item(cur_idx);
         if cur.is_null() || ((*cur.as_ptr()).si_flags & HL_TRANS_CONT) == 0 {
             return cur;
         }
         cur_idx -= 1;
     }
     // Return the item at cur_idx (either HL_TRANS_CONT-free or bottom)
-    nvim_syn_get_stateitem(cur_idx)
+    crate::statics::current_state_item(cur_idx)
 }
 
 // =============================================================================
@@ -336,11 +331,11 @@ pub unsafe extern "C" fn rs_syn_extmatch_strings_equal(
 /// Accesses C global syntax state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_cur_state_set_matchcont(i: c_int) {
-    let len = nvim_syn_get_current_state_len();
+    let len = crate::statics::CURRENT_STATE.ga_len;
     if i < 0 || i >= len {
         return;
     }
-    let item = nvim_syn_get_stateitem(i);
+    let item = crate::statics::current_state_item(i);
     if item.is_null() {
         return;
     }

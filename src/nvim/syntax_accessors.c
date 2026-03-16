@@ -371,8 +371,9 @@ extern int CURRENT_LINE_ID;
 #define current_finished   ((bool)(CURRENT_FINISHED != 0))
 #define current_next_flags CURRENT_NEXT_FLAGS
 #define current_line_id    CURRENT_LINE_ID
-static garray_T current_state              // current stack of state_items
-  = GA_EMPTY_INIT_VALUE;
+// current_state is now a Rust static variable (CURRENT_STATE); accessed via extern.
+extern garray_T CURRENT_STATE;
+#define current_state CURRENT_STATE
 // current_next_list is now a Rust static variable; accessed via extern.
 extern int16_t *CURRENT_NEXT_LIST;
 #define current_next_list CURRENT_NEXT_LIST
@@ -683,8 +684,8 @@ int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
 int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
 
 
-int nvim_syn_get_current_state_len(void) { return current_state.ga_len; }
-int nvim_syn_is_current_state_valid(void) { return VALID_STATE(&current_state) ? 1 : 0; }
+// nvim_syn_get_current_state_len deleted: Rust reads CURRENT_STATE.ga_len directly.
+// nvim_syn_is_current_state_valid deleted: Rust checks CURRENT_STATE.ga_itemsize != 0 directly.
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 
 hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
@@ -711,9 +712,8 @@ synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((l
 // nvim_syn_validate_current_state deleted: Rust bypasses via #[link_name = "rs_validate_current_state"]
 // nvim_syn_invalidate_current_state deleted: Rust bypasses via #[link_name = "rs_invalidate_current_state"]
 
-void nvim_syn_grow_current_state(int size) { ga_grow(&current_state, size); }
-
-void nvim_syn_set_current_state_len(int len) { current_state.ga_len = len; }
+// nvim_syn_grow_current_state deleted: Rust calls ga_grow(&CURRENT_STATE, n) directly.
+// nvim_syn_set_current_state_len deleted: Rust writes CURRENT_STATE.ga_len directly.
 // nvim_syn_set_current_next_list deleted: Rust assigns CURRENT_NEXT_LIST directly.
 
 /// Get sst_next_list from a synstate
@@ -832,23 +832,8 @@ int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
 
-/// Get a stateitem from current_state by index
-stateitem_T *nvim_syn_get_stateitem(int index)
-{
-  if (index < 0 || index >= current_state.ga_len) {
-    return NULL;
-  }
-  return &CUR_STATE(index);
-}
-
-/// Get top stateitem from current_state
-stateitem_T *nvim_syn_get_top_stateitem(void)
-{
-  if (current_state.ga_len == 0) {
-    return NULL;
-  }
-  return &CUR_STATE(current_state.ga_len - 1);
-}
+// nvim_syn_get_stateitem deleted: Rust uses crate::statics::current_state_item() directly.
+// nvim_syn_get_top_stateitem deleted: Rust uses crate::statics::current_state_top() directly.
 
 // nvim_syn_get_next_match_positions deleted: Rust reads NEXT_MATCH_*POS statics directly.
 // nvim_syn_get_next_match_flags deleted: Rust reads NEXT_MATCH_FLAGS directly.
@@ -906,8 +891,7 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
   return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
 }
 
-int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
-
+// nvim_syn_is_current_state_empty deleted: Rust checks CURRENT_STATE.ga_len <= 0 directly.
 
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
@@ -971,13 +955,7 @@ int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == b
 
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 
-/// Validate current state if needed
-void nvim_syn_ensure_current_state_valid(void)
-{
-  if (INVALID_STATE(&current_state)) {
-    rs_validate_current_state();
-  }
-}
+// nvim_syn_ensure_current_state_valid deleted: Rust calls rs_validate_current_state directly via #[link_name].
 
 // nvim_syn_get_next_match_attr deleted: Rust inlines syn_id2attr(CURRENT_ID) directly.
 
@@ -1829,11 +1807,7 @@ void nvim_win_release_synblock(win_T *wp)
 // Phase 5 pass 5 Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
 // =============================================================================
 
-/// Set current_state.ga_itemsize = 0 to mark state as invalid.
-void nvim_syn_set_current_state_invalid(void)
-{
-  current_state.ga_itemsize = 0;
-}
+// nvim_syn_set_current_state_invalid deleted: Rust assigns CURRENT_STATE.ga_itemsize = 0 directly.
 
 // =============================================================================
 // Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
@@ -2071,13 +2045,7 @@ void nvim_syn_block_set_linecont_prog(void *prog)
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
 
-/// Call validate_current_state() to set itemsize/growsize.
-/// Direct implementation to avoid circular call.
-void nvim_syn_do_validate_current_state(void)
-{
-  current_state.ga_itemsize = sizeof(stateitem_T);
-  ga_set_growsize(&current_state, 3);
-}
+// nvim_syn_do_validate_current_state deleted: Rust calls current_state_validate() directly.
 
 /// Return ml_get_buf(syn_buf, current_lnum).
 /// Direct implementation to avoid circular call through syn_getcurline.
@@ -2096,12 +2064,7 @@ void nvim_syn_do_clear_time(syn_time_T *st)
   st->match = 0;
 }
 
-/// Get CUR_STATE(i).si_idx for a given index.
-int nvim_cur_state_get_si_idx(int i)
-{
-  if (i < 0 || i >= current_state.ga_len) return -3;
-  return CUR_STATE(i).si_idx;
-}
+// nvim_cur_state_get_si_idx deleted: Rust accesses current_state_item(i).as_ptr().si_idx directly.
 
 /// Get SYN_ITEMS(syn_block)[idx].sp_type for a given pattern index.
 int nvim_syn_get_sptype_at(int idx)
@@ -2110,27 +2073,9 @@ int nvim_syn_get_sptype_at(int idx)
   return (int)SYN_ITEMS(syn_block)[idx].sp_type;
 }
 
-/// Get CUR_STATE(i).si_m_endpos.lnum.
-int nvim_cur_state_get_m_endpos_lnum(int i)
-{
-  if (i < 0 || i >= current_state.ga_len) return 0;
-  return (int)CUR_STATE(i).si_m_endpos.lnum;
-}
-
-/// Get CUR_STATE(i).si_flags.
-int nvim_cur_state_get_si_flags(int i)
-{
-  if (i < 0 || i >= current_state.ga_len) return 0;
-  return CUR_STATE(i).si_flags;
-}
-
-/// Set CUR_STATE(i).si_h_startpos to (current_lnum, 0).
-void nvim_cur_state_set_h_startpos_cur(int i)
-{
-  if (i < 0 || i >= current_state.ga_len) return;
-  CUR_STATE(i).si_h_startpos.col = 0;
-  CUR_STATE(i).si_h_startpos.lnum = current_lnum;
-}
+// nvim_cur_state_get_m_endpos_lnum deleted: Rust accesses si_m_endpos.lnum directly.
+// nvim_cur_state_get_si_flags deleted: Rust accesses si_flags directly.
+// nvim_cur_state_set_h_startpos_cur deleted: Rust sets si_h_startpos fields directly.
 
 // =============================================================================
 // Phase 9: New C accessors for state_entry.rs migration
@@ -2158,14 +2103,7 @@ void nvim_synstate_set_tick_to_display(synstate_T *state)
 // Phase 9.2: New C accessors for state_ops.rs migration (Phase 2)
 // =============================================================================
 
-/// Append a new zeroed stateitem to current_state and return it.
-/// Combines GA_APPEND_VIA_PTR + CLEAR_POINTER.
-stateitem_T *nvim_syn_append_new_stateitem(void)
-{
-  stateitem_T *p = GA_APPEND_VIA_PTR(stateitem_T, &current_state);
-  CLEAR_POINTER(p);
-  return p;
-}
+// nvim_syn_append_new_stateitem deleted: Rust calls crate::statics::current_state_append() directly.
 
 // =============================================================================
 // Phase 11: New C accessors for clear_syn_state / store_bufstates migration

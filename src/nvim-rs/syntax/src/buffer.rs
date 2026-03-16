@@ -54,7 +54,6 @@ extern "C" {
     fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
     fn nvim_syn_set_sst_lasttick(tick: c_int);
     fn nvim_syn_get_display_tick() -> c_int;
-    fn nvim_syn_is_current_state_valid() -> c_int;
     fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
     #[link_name = "rs_syn_finish_line"]
     fn nvim_syn_finish_line(syncing: c_int) -> c_int;
@@ -138,7 +137,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
 
     // If the state of the end of the previous line is useful, store it.
     let current_lnum = crate::statics::CURRENT_LNUM;
-    if nvim_syn_is_current_state_valid() != 0
+    if crate::statics::current_state_is_valid()
         && current_lnum < lnum
         && current_lnum < nvim_syn_buf_get_line_count(syn_buf)
     {
@@ -158,7 +157,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     }
 
     // Try to synchronize from a saved state in b_sst_array[].
-    if nvim_syn_is_current_state_valid() == 0 && nvim_synblock_has_sst_array(block) != 0 {
+    if !crate::statics::current_state_is_valid() && nvim_synblock_has_sst_array(block) != 0 {
         // Find last valid saved state before start_lnum.
         let sync_minlines = nvim_syn_get_sync_minlines();
         let mut p = nvim_syn_get_sst_first();
@@ -182,7 +181,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     // If "lnum" is before or far beyond a line with a saved state, need to
     // re-synchronize.
     let first_stored;
-    if nvim_syn_is_current_state_valid() == 0 {
+    if !crate::statics::current_state_is_valid() {
         rs_syn_sync(wp, lnum, last_valid);
         if crate::statics::CURRENT_LNUM == 1 {
             first_stored = 1;
@@ -271,7 +270,7 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
     let mut retval: c_int = 1; // true
 
     // Check the state stack when lnum is just below the previously syntaxed line.
-    if nvim_syn_is_current_state_valid() != 0 && lnum == crate::statics::CURRENT_LNUM + 1 {
+    if crate::statics::current_state_is_valid() && lnum == crate::statics::CURRENT_LNUM + 1 {
         let sp = nvim_syn_stack_find_entry(lnum);
         if !sp.is_null() && nvim_synstate_get_lnum(sp) == lnum {
             // finish the previous line (needed when not all of the line was drawn)

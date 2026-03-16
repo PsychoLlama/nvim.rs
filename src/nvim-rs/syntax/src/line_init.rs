@@ -24,19 +24,11 @@ use crate::types::{
 
 extern "C" {
     // Current state globals
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_is_current_state_empty() -> c_int;
 
     // CUR_STATE accessors for syn_update_ends
-    fn nvim_cur_state_get_si_idx(i: c_int) -> c_int;
-    fn nvim_cur_state_get_m_endpos_lnum(i: c_int) -> c_int;
-    fn nvim_cur_state_get_si_flags(i: c_int) -> c_int;
-    fn nvim_cur_state_set_h_startpos_cur(i: c_int);
-    fn nvim_syn_get_stateitem(i: c_int) -> StateItemHandle;
     fn nvim_syn_get_sptype_at(idx: c_int) -> c_int;
 
     // validate_current_state
-    fn nvim_syn_do_validate_current_state();
 
     // syn_getcurline / syn_getcurline_len (direct, avoids circularity with rs_syn_getcurline)
     fn nvim_syn_do_getcurline() -> *mut c_char;
@@ -78,17 +70,20 @@ extern "C" {
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
     let current_lnum = crate::statics::CURRENT_LNUM;
     let startofline = startofline != 0;
 
     if startofline {
         // Check for matches carried over from a previous line.
         for i in 0..state_len {
-            let si_idx = nvim_cur_state_get_si_idx(i);
+            let si_idx = (*crate::statics::current_state_item(i).as_ptr()).si_idx;
             if si_idx >= 0
                 && nvim_syn_get_sptype_at(si_idx) == SPTYPE_MATCH
-                && nvim_cur_state_get_m_endpos_lnum(i) < current_lnum
+                && (*crate::statics::current_state_item(i).as_ptr())
+                    .si_m_endpos
+                    .lnum
+                    < current_lnum
             {
                 crate::state_ops::rs_cur_state_set_matchcont(i);
             }
@@ -100,7 +95,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
     let keepend_level = crate::statics::KEEPEND_LEVEL;
     if keepend_level >= 0 {
         while i > keepend_level {
-            if (nvim_cur_state_get_si_flags(i) & HL_EXTEND) != 0 {
+            if ((*crate::statics::current_state_item(i).as_ptr()).si_flags & HL_EXTEND) != 0 {
                 break;
             }
             i -= 1;
@@ -111,12 +106,18 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
     let current_col = crate::statics::CURRENT_COL;
     let mut seen_keepend = false;
     while i < state_len {
-        let flags = nvim_cur_state_get_si_flags(i);
+        let flags = (*crate::statics::current_state_item(i).as_ptr()).si_flags;
         let is_last = i == state_len - 1;
         if (flags & HL_KEEPEND) != 0 || (seen_keepend && !startofline) || (is_last && startofline) {
-            nvim_cur_state_set_h_startpos_cur(i);
+            {
+                let _p = crate::statics::current_state_item(i).as_ptr();
+                if !_p.is_null() {
+                    (*_p).si_h_startpos.col = 0;
+                    (*_p).si_h_startpos.lnum = crate::statics::CURRENT_LNUM;
+                }
+            };
             if (flags & HL_MATCHCONT) == 0 {
-                let si_ptr = nvim_syn_get_stateitem(i);
+                let si_ptr = crate::statics::current_state_item(i);
                 if !si_ptr.is_null() {
                     rs_update_si_end(si_ptr, current_col, if !startofline { 1 } else { 0 });
                 }
@@ -141,7 +142,7 @@ pub unsafe extern "C" fn rs_syn_start_line() {
     crate::statics::CURRENT_FINISHED = 0;
     crate::statics::CURRENT_COL = 0;
 
-    if nvim_syn_is_current_state_empty() == 0 {
+    if !crate::statics::current_state_is_empty() {
         rs_syn_update_ends(1); // startofline = true
         rs_check_state_ends();
     }
@@ -229,7 +230,7 @@ pub unsafe extern "C" fn rs_clear_syn_state(p: SynStateHandle) {
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_validate_current_state() {
-    nvim_syn_do_validate_current_state();
+    crate::statics::current_state_validate();
 }
 
 /// Get current line from syntax buffer.

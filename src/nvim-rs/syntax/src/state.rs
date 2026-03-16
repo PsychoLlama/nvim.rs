@@ -44,18 +44,11 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Current state accessors (non-static ones remain)
     // -------------------------------------------------------------------------
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_is_current_state_valid() -> c_int;
-    fn nvim_syn_is_current_state_empty() -> c_int;
-    fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
-    fn nvim_syn_get_top_stateitem() -> StateItemHandle;
     // Current state setters (non-static ones remain)
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
-    fn nvim_syn_grow_current_state(size: c_int);
-    fn nvim_syn_set_current_state_len(len: c_int);
 
     // -------------------------------------------------------------------------
     // Stack management functions
@@ -727,19 +720,19 @@ pub fn is_current_state_stored() -> bool {
 /// Get the current state stack length
 #[must_use]
 pub fn current_state_len() -> i32 {
-    unsafe { nvim_syn_get_current_state_len() }
+    unsafe { crate::statics::CURRENT_STATE.ga_len }
 }
 
 /// Check if the current state is valid
 #[must_use]
 pub fn is_current_state_valid() -> bool {
-    unsafe { nvim_syn_is_current_state_valid() != 0 }
+    unsafe { crate::statics::current_state_is_valid() }
 }
 
 /// Check if the current state is empty
 #[must_use]
 pub fn is_current_state_empty() -> bool {
-    unsafe { nvim_syn_is_current_state_empty() != 0 }
+    unsafe { crate::statics::current_state_is_empty() }
 }
 
 /// Get the current highlight ID
@@ -793,7 +786,7 @@ pub fn keepend_level() -> i32 {
 /// Get a state item from the current state at the given index
 #[must_use]
 pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
-    let item = unsafe { nvim_syn_get_stateitem(idx) };
+    let item = unsafe { crate::statics::current_state_item(idx) };
     if item.is_null() {
         None
     } else {
@@ -804,13 +797,13 @@ pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
 /// Get a state item from current_state by index
 #[must_use]
 pub fn get_stateitem(index: i32) -> StateItemHandle {
-    unsafe { nvim_syn_get_stateitem(index) }
+    unsafe { crate::statics::current_state_item(index) }
 }
 
 /// Get the top state item from current_state
 #[must_use]
 pub fn get_top_stateitem() -> StateItemHandle {
-    unsafe { nvim_syn_get_top_stateitem() }
+    unsafe { crate::statics::current_state_top() }
 }
 
 /// Count items with HL_FOLD flag in the current state
@@ -850,12 +843,12 @@ pub fn set_keepend_level(level: i32) {
 
 /// Grow the current state array
 pub fn grow_current_state(size: i32) {
-    unsafe { nvim_syn_grow_current_state(size) }
+    unsafe { crate::statics::current_state_grow(size) }
 }
 
 /// Set the current state length
 pub fn set_current_state_len(len: i32) {
-    unsafe { nvim_syn_set_current_state_len(len) }
+    unsafe { crate::statics::CURRENT_STATE.ga_len = len }
 }
 
 /// Set the current nextgroup list
@@ -1029,7 +1022,7 @@ pub fn get_state_machine_state() -> StateMachineState {
     }
     let len = current_state_len();
     if len > 0 {
-        let top = unsafe { nvim_syn_get_stateitem(len - 1) };
+        let top = unsafe { crate::statics::current_state_item(len - 1) };
         if !top.is_null() {
             // Check if the top item is a match (HL_MATCH flag)
             if unsafe { (*top.as_ptr()).si_flags & crate::types::HL_MATCH != 0 } {
@@ -1070,7 +1063,7 @@ impl Iterator for StateStackIter {
         if self.index >= self.len {
             return None;
         }
-        let item = unsafe { nvim_syn_get_stateitem(self.index) };
+        let item = unsafe { crate::statics::current_state_item(self.index) };
         self.index += 1;
         if item.is_null() {
             None

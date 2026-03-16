@@ -29,8 +29,6 @@ extern "C" {
     // Phase 32.4: Line highlighting
     fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
-    fn nvim_syn_is_current_state_valid() -> c_int;
-    fn nvim_syn_ensure_current_state_valid();
     #[link_name = "rs_syn_getcurline"]
     fn nvim_syn_getcurline() -> *mut std::ffi::c_char;
     // get_syntax_attr dependencies
@@ -45,6 +43,9 @@ extern "C" {
         can_spell: *mut c_int,
         keep_state: c_int,
     ) -> c_int;
+
+    #[link_name = "rs_validate_current_state"]
+    fn nvim_syn_validate_current_state();
 }
 
 // =============================================================================
@@ -442,8 +443,8 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     }
 
     // Make sure current_state is valid
-    if nvim_syn_is_current_state_valid() == 0 {
-        nvim_syn_ensure_current_state_valid();
+    if !crate::statics::current_state_is_valid() {
+        nvim_syn_validate_current_state();
     }
 
     // Skip from the current column to "col", get the attributes for "col".
@@ -531,12 +532,12 @@ pub fn buf_synmaxcol(buf: crate::types::BufHandle) -> i32 {
 /// Check if the current syntax state is valid.
 #[must_use]
 pub fn current_state_valid() -> bool {
-    unsafe { nvim_syn_is_current_state_valid() != 0 }
+    unsafe { crate::statics::current_state_is_valid() }
 }
 
 /// Ensure the current syntax state is valid, validating if needed.
 pub fn ensure_current_state_valid() {
-    unsafe { nvim_syn_ensure_current_state_valid() }
+    unsafe { nvim_syn_validate_current_state() }
 }
 
 /// Get the current line text.

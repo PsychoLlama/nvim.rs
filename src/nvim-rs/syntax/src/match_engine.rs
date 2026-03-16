@@ -16,17 +16,12 @@ use crate::types::{ExtMatchHandle, IdListHandle, StateItemHandle};
 
 extern "C" {
     // Current state status (non-static ones remain)
-    fn nvim_syn_is_current_state_valid() -> c_int;
-    fn nvim_syn_is_current_state_empty() -> c_int;
 
     // Current state management
-    fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_set_current_state_len(len: c_int);
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
-    fn nvim_syn_grow_current_state(size: c_int);
 
     // Next list management
 
@@ -108,13 +103,13 @@ pub fn is_current_state_stored() -> bool {
 /// Check if the current state is valid.
 #[must_use]
 pub fn is_current_state_valid() -> bool {
-    unsafe { nvim_syn_is_current_state_valid() != 0 }
+    unsafe { crate::statics::current_state_is_valid() }
 }
 
 /// Check if the current state stack is empty.
 #[must_use]
 pub fn is_current_state_empty() -> bool {
-    unsafe { nvim_syn_is_current_state_empty() != 0 }
+    unsafe { crate::statics::current_state_is_empty() }
 }
 
 /// Set whether the current line is finished.
@@ -214,7 +209,7 @@ pub unsafe fn set_current_seqnr(seqnr: i32) {
 /// Get the length of the current state stack.
 #[must_use]
 pub fn current_state_len() -> i32 {
-    unsafe { nvim_syn_get_current_state_len() }
+    unsafe { crate::statics::CURRENT_STATE.ga_len }
 }
 
 /// Set the length of the current state stack.
@@ -222,7 +217,7 @@ pub fn current_state_len() -> i32 {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_state_len(len: i32) {
-    nvim_syn_set_current_state_len(len);
+    crate::statics::CURRENT_STATE.ga_len = len;
 }
 
 /// Clear the current state.
@@ -254,7 +249,7 @@ pub unsafe fn invalidate_current_state() {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn grow_current_state(size: i32) {
-    nvim_syn_grow_current_state(size);
+    crate::statics::current_state_grow(size);
 }
 
 /// Pop an item from the current state stack.

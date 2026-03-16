@@ -12,8 +12,7 @@ use crate::check_ends::{check_keepend, check_state_ends, update_si_attr};
 use crate::current_attr::syn_finish_line;
 use crate::region::update_si_end;
 use crate::types::{
-    StateItemHandle, SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX,
-    SPTYPE_START,
+    SynBlockHandle, SynPatHandle, SynStateHandle, WinHandle, KEYWORD_IDX, SPTYPE_START,
 };
 
 // =============================================================================
@@ -59,7 +58,6 @@ extern "C" {
     fn nvim_syn_invalidate_current_state();
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
-    fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
     fn nvim_syn_get_got_int() -> c_int;
@@ -86,7 +84,6 @@ extern "C" {
     fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
 
     // Stateitem accessors
-    fn nvim_syn_get_top_stateitem() -> StateItemHandle;
 
     // Pattern accessors
     fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
@@ -288,7 +285,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 {
                     nvim_syn_validate_current_state();
                     crate::state_ops::rs_syn_push_current_state(idx);
-                    update_si_attr(nvim_syn_get_current_state_len() - 1);
+                    update_si_attr(crate::statics::CURRENT_STATE.ga_len - 1);
                     break;
                 }
                 idx -= 1;
@@ -344,8 +341,8 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                     let had_sync_point = syn_finish_line(true);
                     // When a sync point has been found, remember where, and
                     // continue to look for another one, further on in the line.
-                    if had_sync_point && nvim_syn_get_current_state_len() > 0 {
-                        let cur_si = nvim_syn_get_top_stateitem();
+                    if had_sync_point && crate::statics::CURRENT_STATE.ga_len > 0 {
+                        let cur_si = crate::statics::current_state_top();
                         let (si_m_endpos_lnum, si_m_endpos_col) = {
                             let p = cur_si.as_ptr();
                             ((*p).si_m_endpos.lnum, (*p).si_m_endpos.col)
@@ -410,7 +407,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 crate::state_ops::rs_syn_clear_current_state();
                 if found_match_idx >= 0 {
                     crate::state_ops::rs_syn_push_current_state(found_match_idx);
-                    update_si_attr(nvim_syn_get_current_state_len() - 1);
+                    update_si_attr(crate::statics::CURRENT_STATE.ga_len - 1);
                 }
 
                 // When using "grouphere", continue from the sync point
@@ -418,8 +415,8 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                 // the next line.
                 // For "groupthere" the parsing starts at start_lnum.
                 if found_flags & HL_SYNC_HERE != 0 {
-                    if nvim_syn_get_current_state_len() > 0 {
-                        let cur_si = nvim_syn_get_top_stateitem();
+                    if crate::statics::CURRENT_STATE.ga_len > 0 {
+                        let cur_si = crate::statics::current_state_top();
                         {
                             let p = cur_si.as_ptr();
                             (*p).si_h_startpos.lnum = found_current_lnum;

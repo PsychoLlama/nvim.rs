@@ -136,16 +136,14 @@ impl SyntaxInfo {
 // Phase 3: syn_get_id and query API (Rust implementations)
 // =============================================================================
 
-use crate::types::{BufHandle, StateItemHandle, WinHandle, HL_CONCEAL};
+use crate::types::{BufHandle, WinHandle, HL_CONCEAL};
 
 extern "C" {
     fn nvim_syn_get_win() -> WinHandle;
     fn nvim_syn_get_buf() -> BufHandle;
     fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
-    fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
-    fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
 }
 
 /// MAXCOL: large column value used to invalidate column state.
@@ -224,12 +222,12 @@ pub unsafe fn syn_get_concealed_id_impl(wp: WinHandle, lnum: c_int, col: c_int) 
 /// # Safety
 /// Must be called after `syn_get_id_impl` with `keep_state = 1`.
 pub unsafe fn syn_get_stack_item_impl(i: c_int) -> c_int {
-    if i >= nvim_syn_get_current_state_len() {
+    if i >= crate::statics::CURRENT_STATE.ga_len {
         nvim_syn_invalidate_current_state();
         crate::statics::CURRENT_COL = MAXCOL;
         return -1;
     }
-    let item = nvim_syn_get_stateitem(i);
+    let item = crate::statics::current_state_item(i);
     (*item.as_ptr()).si_id
 }
 

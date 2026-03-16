@@ -246,13 +246,10 @@ extern "C" {
     // -------------------------------------------------------------------------
 
     /// Get the current state stack size
-    fn nvim_syn_get_current_state_len() -> c_int;
 
     /// Check if the current state is valid
-    fn nvim_syn_is_current_state_valid() -> c_int;
 
     /// Get state item at index (NULL if out of bounds)
-    fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
 
     /// Get the current synblock
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
@@ -335,10 +332,8 @@ extern "C" {
     fn nvim_syn_validate_current_state();
 
     /// Grow current_state array
-    fn nvim_syn_grow_current_state(size: c_int);
 
     /// Set current_state.ga_len
-    fn nvim_syn_set_current_state_len(len: c_int);
 
     /// Set current_next_list
 
@@ -389,13 +384,13 @@ pub fn is_current_state_stored() -> bool {
 /// Get the current state stack size
 #[must_use]
 pub fn current_state_len() -> i32 {
-    unsafe { nvim_syn_get_current_state_len() }
+    unsafe { crate::statics::CURRENT_STATE.ga_len }
 }
 
 /// Check if the current state is valid
 #[must_use]
 pub fn is_current_state_valid() -> bool {
-    unsafe { nvim_syn_is_current_state_valid() != 0 }
+    unsafe { crate::statics::current_state_is_valid() }
 }
 
 /// Get the current highlight ID
@@ -449,7 +444,7 @@ pub fn keepend_level() -> i32 {
 /// Get state item at index (None if out of bounds or state invalid)
 #[must_use]
 pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
-    let handle = unsafe { nvim_syn_get_stateitem(idx) };
+    let handle = unsafe { crate::statics::current_state_item(idx) };
     if handle.is_null() {
         None
     } else {
@@ -2066,7 +2061,7 @@ pub extern "C" fn rs_sptype_name(sptype: c_int) -> *const c_char {
 #[no_mangle]
 pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
     let lnum = statics::CURRENT_LNUM;
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Find existing entry at or before current line
     let sp = nvim_syn_stack_find_entry(lnum);
@@ -2127,8 +2122,8 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
     let stacksize = nvim_synstate_get_stacksize(from);
     if stacksize > 0 {
         // Grow current state array
-        nvim_syn_grow_current_state(stacksize);
-        nvim_syn_set_current_state_len(stacksize);
+        crate::statics::current_state_grow(stacksize);
+        crate::statics::CURRENT_STATE.ga_len = stacksize;
 
         // Copy each state item
         let mut keepend_level = -1;
@@ -2185,7 +2180,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
     }
 
     let sp_stacksize = nvim_synstate_get_stacksize(sp);
-    let current_len = nvim_syn_get_current_state_len();
+    let current_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Quick check: stack sizes must match
     if sp_stacksize != current_len {
@@ -2208,7 +2203,7 @@ pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
             return 0;
         }
 
-        let cur_si = nvim_syn_get_stateitem(i);
+        let cur_si = crate::statics::current_state_item(i);
         if cur_si.is_null() {
             return 0;
         }

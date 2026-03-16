@@ -32,13 +32,9 @@ extern "C" {
     fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
 
     // Current state accessors
-    fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
-    fn nvim_syn_grow_current_state(size: c_int);
-    fn nvim_syn_set_current_state_len(len: c_int);
     fn nvim_syn_update_si_attr(idx: c_int);
-    fn nvim_syn_get_stateitem(idx: c_int) -> crate::types::StateItemHandle;
 
     // Synblock accessors
     fn nvim_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle;
@@ -456,7 +452,7 @@ pub fn stack_alloc() {
 #[must_use]
 pub unsafe fn store_current_state() -> SynStateHandle {
     let lnum = crate::statics::CURRENT_LNUM;
-    let state_len = nvim_syn_get_current_state_len();
+    let state_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Find existing entry at or before current line
     let sp = nvim_syn_stack_find_entry(lnum);
@@ -516,8 +512,8 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
     let stacksize = nvim_synstate_get_stacksize(from);
     if stacksize > 0 {
         // Grow current state array
-        nvim_syn_grow_current_state(stacksize);
-        nvim_syn_set_current_state_len(stacksize);
+        crate::statics::current_state_grow(stacksize);
+        crate::statics::CURRENT_STATE.ga_len = stacksize;
 
         // Copy each state item
         let mut keepend_level = -1;
@@ -574,7 +570,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
     }
 
     let sp_stacksize = nvim_synstate_get_stacksize(sp);
-    let current_len = nvim_syn_get_current_state_len();
+    let current_len = crate::statics::CURRENT_STATE.ga_len;
 
     // Quick check: stack sizes must match
     if sp_stacksize != current_len {
@@ -596,7 +592,7 @@ pub unsafe fn syn_stack_equal(sp: SynStateHandle) -> bool {
             return false;
         }
 
-        let cur_si = nvim_syn_get_stateitem(i);
+        let cur_si = crate::statics::current_state_item(i);
         if cur_si.is_null() {
             return false;
         }

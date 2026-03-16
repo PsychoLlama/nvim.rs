@@ -40,7 +40,6 @@ extern "C" {
     fn nvim_synstate_set_tick_to_display(state: SynStateHandle);
 
     // Stack size from current_state
-    fn nvim_syn_get_current_state_len() -> c_int;
 
     // Phase 11 accessors for rs_syn_store_bufstates Rust implementation
     fn nvim_synstate_ga_init_for_store(sp: SynStateHandle);
@@ -178,7 +177,7 @@ pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
     // Clear any existing state data
     rs_clear_syn_state(sp);
 
-    let stacksize = nvim_syn_get_current_state_len();
+    let stacksize = crate::statics::CURRENT_STATE.ga_len;
     nvim_synstate_set_stacksize(sp, stacksize);
 
     // Fill bufstate array (handles union fixed/growarray split)

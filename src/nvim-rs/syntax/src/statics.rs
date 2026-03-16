@@ -10,9 +10,10 @@
 //! engine is single-threaded (runs on the main Neovim thread), so no
 //! synchronization is needed.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::ffi_types::LPos;
+use crate::types::StateItemHandle;
 
 // =============================================================================
 // Phase 1: Scalar statics migrated from syntax_accessors.c
@@ -148,3 +149,123 @@ pub static mut CURRENT_NEXT_LIST: *mut i16 = std::ptr::null_mut();
 /// Opaque pointer -- NULL when no match.
 #[no_mangle]
 pub static mut NEXT_MATCH_EXTMATCH: *mut std::ffi::c_void = std::ptr::null_mut();
+
+// =============================================================================
+// Phase 3: current_state garray migrated from syntax_accessors.c
+// =============================================================================
+
+/// C-compatible growing array (mirrors `garray_T` layout exactly).
+///
+/// Layout matches `garray_T` from `garray_defs.h`:
+/// ```c
+/// typedef struct {
+///   int ga_len;       // current number of items used
+///   int ga_maxlen;    // maximum number of items possible
+///   int ga_itemsize;  // sizeof(item)
+///   int ga_growsize;  // number of items to grow each time
+///   void *ga_data;    // pointer to the first item
+/// } garray_T;
+/// ```
+#[repr(C)]
+pub struct GArray {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
+/// The syntax state stack (mapped from C `current_state`).
+/// Initial value matches `GA_EMPTY_INIT_VALUE = { 0, 0, 0, 1, NULL }`.
+#[no_mangle]
+pub static mut CURRENT_STATE: GArray = GArray {
+    ga_len: 0,
+    ga_maxlen: 0,
+    ga_itemsize: 0,
+    ga_growsize: 1,
+    ga_data: std::ptr::null_mut(),
+};
+
+extern "C" {
+    /// Grow a garray by at least `n` items.
+    fn ga_grow(gap: *mut GArray, n: c_int);
+
+    /// Set the growsize of a garray.
+    fn ga_set_growsize(gap: *mut GArray, growsize: c_int);
+}
+
+// =============================================================================
+// Phase 3: current_state helper functions
+// =============================================================================
+
+/// Return a pointer to CURRENT_STATE item at `index`, or null if out of bounds.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[inline]
+pub unsafe fn current_state_item(index: c_int) -> StateItemHandle {
+    if index < 0 || index >= CURRENT_STATE.ga_len {
+        return StateItemHandle::null();
+    }
+    let base = CURRENT_STATE.ga_data as *mut crate::ffi_types::StateItem;
+    StateItemHandle::from_ptr(base.add(index as usize))
+}
+
+/// Return a pointer to the top item on the state stack, or null if empty.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[inline]
+pub unsafe fn current_state_top() -> StateItemHandle {
+    if CURRENT_STATE.ga_len == 0 {
+        return StateItemHandle::null();
+    }
+    current_state_item(CURRENT_STATE.ga_len - 1)
+}
+
+/// Return true if the current state stack is valid (ga_itemsize != 0).
+#[inline]
+pub unsafe fn current_state_is_valid() -> bool {
+    CURRENT_STATE.ga_itemsize != 0
+}
+
+/// Return true if the current state stack is empty (ga_len == 0).
+#[inline]
+pub unsafe fn current_state_is_empty() -> bool {
+    CURRENT_STATE.ga_len <= 0
+}
+
+/// Grow the current state stack by at least `n` items.
+///
+/// # Safety
+/// Must be called from the main thread. Invalidates all stateitem pointers.
+#[inline]
+pub unsafe fn current_state_grow(n: c_int) {
+    ga_grow(&raw mut CURRENT_STATE, n);
+}
+
+/// Set ga_itemsize and ga_growsize to validate the current state.
+/// Equivalent to C `validate_current_state()`.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[inline]
+pub unsafe fn current_state_validate() {
+    CURRENT_STATE.ga_itemsize = std::mem::size_of::<crate::ffi_types::StateItem>() as c_int;
+    ga_set_growsize(&raw mut CURRENT_STATE, 3);
+}
+
+/// Append a new zeroed StateItem to CURRENT_STATE and return a handle to it.
+/// Equivalent to `GA_APPEND_VIA_PTR(stateitem_T, &current_state)` + `CLEAR_POINTER`.
+///
+/// # Safety
+/// Must be called from the main thread. Invalidates all existing stateitem pointers.
+pub unsafe fn current_state_append() -> StateItemHandle {
+    ga_grow(&raw mut CURRENT_STATE, 1);
+    let idx = CURRENT_STATE.ga_len;
+    CURRENT_STATE.ga_len += 1;
+    let base = CURRENT_STATE.ga_data as *mut crate::ffi_types::StateItem;
+    let p = base.add(idx as usize);
+    std::ptr::write_bytes(p, 0, 1);
+    StateItemHandle::from_ptr(p)
+}
