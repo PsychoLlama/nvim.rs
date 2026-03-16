@@ -100,8 +100,7 @@ extern "C" {
     fn nvim_get_insstart() -> PosT;
     fn nvim_get_vr_lines_changed() -> c_int;
     fn nvim_set_vr_lines_changed(val: c_int);
-    fn nvim_get_curbuf_splice_pending() -> c_int;
-    fn nvim_set_curbuf_splice_pending(val: c_int);
+    static mut curbuf_splice_pending: c_int;
     fn nvim_get_inhibit_delete_count() -> c_int;
     fn nvim_set_inhibit_delete_count(val: c_int);
 
@@ -1049,8 +1048,8 @@ fn open_line_impl(
         }
 
         // Increment splice pending counter
-        let splice_pending = nvim_get_curbuf_splice_pending();
-        nvim_set_curbuf_splice_pending(splice_pending + 1);
+        let splice_pending = curbuf_splice_pending;
+        curbuf_splice_pending = splice_pending + 1;
 
         old_cursor = nvim_change_get_curwin_cursor();
         let old_cmod_flags = nvim_get_cmdmod_cmod_flags();
@@ -1080,7 +1079,7 @@ fn open_line_impl(
             let cursor_lnum = nvim_get_curwin_cursor_lnum();
             if nvim_ml_append(cursor_lnum, p_extra, 0, false) != OK {
                 // Cleanup and return on failure
-                nvim_set_curbuf_splice_pending(nvim_get_curbuf_splice_pending() - 1);
+                curbuf_splice_pending -= 1;
                 nvim_curbuf_set_b_p_pi(saved_pi);
                 nvim_xfree(saved_line.cast());
                 nvim_xfree(next_line.cast());
@@ -1252,7 +1251,7 @@ fn open_line_impl(
             nvim_changed_lines(nvim_get_curbuf(), cursor_lnum, 0, cursor_lnum, 1, true);
         }
 
-        nvim_set_curbuf_splice_pending(nvim_get_curbuf_splice_pending() - 1);
+        curbuf_splice_pending -= 1;
 
         nvim_set_curwin_cursor_col(newcol);
         nvim_set_curwin_cursor_coladd(0);

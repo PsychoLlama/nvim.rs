@@ -27,7 +27,7 @@ extern "C" {
     // Global state
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_get_curbuf_splice_pending() -> c_int;
+    static mut curbuf_splice_pending: c_int;
 
     // Window accessors
     fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
@@ -249,7 +249,7 @@ pub extern "C" fn rs_changed_bytes(lnum: LinenrT, col: ColnrT) {
 fn inserted_bytes_impl(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col: c_int) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        if nvim_get_curbuf_splice_pending() == 0 {
+        if curbuf_splice_pending == 0 {
             let curbuf = nvim_get_curbuf();
             nvim_extmark_splice_cols(
                 curbuf,

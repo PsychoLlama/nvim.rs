@@ -89,8 +89,7 @@ extern "C" {
         new_col: ColnrT,
         undo: c_int,
     );
-    fn nvim_get_curbuf_splice_pending() -> c_int;
-    fn nvim_set_curbuf_splice_pending(val: c_int);
+    static mut curbuf_splice_pending: c_int;
     fn nvim_indent_get_curbuf() -> BufHandle;
 
     // Higher-level cursor advance
@@ -275,8 +274,8 @@ pub unsafe extern "C" fn rs_change_indent(
         nvim_ml_replace_curline(orig_line, false);
         nvim_set_curwin_cursor_col(orig_col);
 
-        let pending = nvim_get_curbuf_splice_pending();
-        nvim_set_curbuf_splice_pending(pending + 1);
+        let pending = curbuf_splice_pending;
+        curbuf_splice_pending = pending + 1;
 
         // Backspace from cursor to start of line
         backspace_until_column(0);
@@ -286,7 +285,7 @@ pub unsafe extern "C" fn rs_change_indent(
 
         nvim_xfree(new_line.cast());
 
-        nvim_set_curbuf_splice_pending(pending);
+        curbuf_splice_pending = pending;
 
         let delta = orig_col - new_col;
         let curbuf = nvim_indent_get_curbuf();

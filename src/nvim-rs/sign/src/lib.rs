@@ -255,7 +255,7 @@ extern "C" {
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
-    fn nvim_describe_ns(ns: c_int, empty: *const c_char) -> *const c_char;
+    fn describe_ns(ns: c_int, unknown: *const c_char) -> *const c_char;
     fn nvim_create_namespace(name: *const c_char) -> c_int;
 
     // Decoration helpers
@@ -270,8 +270,8 @@ extern "C" {
     fn nvim_get_firstbuf() -> SignBufHandle;
     fn nvim_get_curbuf() -> SignBufHandle;
 
-    // Extmark operations
-    fn nvim_extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
+    // Extmark operations (extmark_del_id exported directly from Rust extmark crate)
+    fn extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
 }
 
 // =============================================================================

@@ -295,8 +295,8 @@ extern "C" {
     /// Get curbuf global.
     fn nvim_get_curbuf() -> BufHandle;
 
-    /// Get curbuf_splice_pending global.
-    fn nvim_get_curbuf_splice_pending() -> c_int;
+    /// `curbuf_splice_pending` global (int in C).
+    static curbuf_splice_pending: c_int;
 
     // ========================================================================
     // Map operations
@@ -1127,7 +1127,7 @@ pub fn extmark_adjust(
     amount_after: LinenrT,
     undo: ExtmarkOp,
 ) {
-    if unsafe { nvim_get_curbuf_splice_pending() } != 0 {
+    if unsafe { curbuf_splice_pending } != 0 {
         return;
     }
 

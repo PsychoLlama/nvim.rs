@@ -18,8 +18,8 @@ extern "C" {
     fn nvim_buf_meta_total_sign_hl(buf: SignBufHandle) -> u64;
     fn nvim_buf_meta_total_sign_text(buf: SignBufHandle) -> u64;
 
-    // Extmark deletion
-    fn nvim_extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
+    // Extmark deletion (exported directly from Rust extmark crate)
+    fn extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
 
     // Composite sign deletion (marktree iteration stays in C)
     fn nvim_sign_delete_signs_impl(
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn rs_sign_delete_by_id(buf: SignBufHandle, ns: u32, id: u
     if buf.is_null() {
         return false;
     }
-    nvim_extmark_del_id(buf, ns, id)
+    extmark_del_id(buf, ns, id)
 }
 
 // =============================================================================

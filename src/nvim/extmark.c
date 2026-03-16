@@ -44,16 +44,6 @@
 #include "extmark.c.generated.h"
 
 // ============================================================================
-// Global Accessor Functions (for Rust FFI)
-// ============================================================================
-
-/// Get the curbuf_splice_pending global.
-int nvim_get_curbuf_splice_pending(void)
-{
-  return curbuf_splice_pending;
-}
-
-// ============================================================================
 // Extmark Namespace Map Accessor Functions (for Rust FFI)
 // ============================================================================
 
@@ -117,12 +107,6 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
   return &kv_last(*uvp);
 }
 
-/// Delete extmark by ID (wrapper for Rust FFI, used by sign crate)
-bool nvim_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
-{
-  return extmark_del_id(buf, ns_id, id);
-}
-
 // ============================================================================
 // ExtmarkInfoArray Accessor Functions (for Rust FFI)
 // ============================================================================
@@ -144,12 +128,6 @@ void nvim_extmark_array_push(ExtmarkInfoArray *array, MTPair pair)
 // ============================================================================
 // Namespace Accessor Functions (for Rust FFI)
 // ============================================================================
-
-/// Get the name of a namespace by its ID (wrapper for Rust FFI)
-const char *nvim_describe_ns(int ns_id, const char *unknown)
-{
-  return describe_ns((NS)ns_id, unknown);
-}
 
 /// Look up a namespace ID by name (wrapper for Rust FFI)
 int nvim_namespace_lookup(const char *name)

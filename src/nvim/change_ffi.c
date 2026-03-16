@@ -438,7 +438,6 @@ linenr_T nvim_get_orig_line_count(void) { return orig_line_count; }
 pos_T nvim_get_insstart(void) { return Insstart; }
 int nvim_get_vr_lines_changed(void) { return vr_lines_changed; }
 void nvim_set_vr_lines_changed(int val) { vr_lines_changed = val; }
-void nvim_set_curbuf_splice_pending(int val) { curbuf_splice_pending = val; }
 int nvim_get_inhibit_delete_count(void) { return inhibit_delete_count; }
 void nvim_set_inhibit_delete_count(int val) { inhibit_delete_count = val; }
 

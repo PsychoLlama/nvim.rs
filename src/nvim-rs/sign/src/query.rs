@@ -19,7 +19,7 @@ extern "C" {
 
     // Namespace operations
     fn nvim_namespace_lookup(name: *const c_char) -> c_int;
-    fn nvim_describe_ns(ns: c_int, empty: *const c_char) -> *const c_char;
+    fn describe_ns(ns: c_int, unknown: *const c_char) -> *const c_char;
 
     // Buffer operations
     fn nvim_buf_meta_total_sign_hl(buf: SignBufHandle) -> u64;
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn rs_sign_get_display_name(sh: DecorSignHighlightHandle) 
 #[no_mangle]
 pub unsafe extern "C" fn rs_sign_describe_ns(ns: c_int) -> *const c_char {
     static EMPTY: &[u8] = b"\0";
-    nvim_describe_ns(ns, EMPTY.as_ptr().cast::<c_char>())
+    describe_ns(ns, EMPTY.as_ptr().cast::<c_char>())
 }
 
 /// Check if a namespace matches a filter.

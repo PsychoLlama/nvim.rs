@@ -27,8 +27,8 @@ extern "C" {
     /// Create or get namespace by name
     fn nvim_create_namespace(name: *const c_char) -> c_int;
 
-    /// Describe namespace by ID
-    fn nvim_describe_ns(ns: c_int, empty: *const c_char) -> *const c_char;
+    /// Describe namespace by ID (C function from api/extmark.c)
+    fn describe_ns(ns: c_int, unknown: *const c_char) -> *const c_char;
 }
 
 // =============================================================================
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn rs_sign_describe_namespace(
         return 0;
     }
 
-    let desc = nvim_describe_ns(ns, EMPTY_CSTR.as_ptr().cast());
+    let desc = describe_ns(ns, EMPTY_CSTR.as_ptr().cast());
 
     if desc.is_null() {
         *buf = 0;
