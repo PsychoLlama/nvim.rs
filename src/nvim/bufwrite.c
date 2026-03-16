@@ -299,25 +299,18 @@ int nvim_bw_write_eintr(int fd, const char *buf, size_t len)
 // Backup accessors
 void nvim_bw_os_set_acl(const char *fname, vim_acl_T acl) { os_set_acl(fname, acl); }
 int nvim_bw_os_mkdir_recurse(const char *dir, int32_t mode, char **failed_dir) { return os_mkdir_recurse(dir, mode, failed_dir, NULL); }
-void nvim_bw_xmemcpyz(void *dst, const void *src, size_t len) { xmemcpyz(dst, src, len); }
-int nvim_bw_snprintf_int(char *buf, size_t len, int val) { return snprintf(buf, len, "%d", val); }
-size_t nvim_bw_strlen(const char *s) { return strlen(s); }
 void nvim_bw_XFREE_CLEAR(char **pp) { XFREE_CLEAR(*pp); }
-int nvim_bw_open_flags_creat_wronly_excl_nofollow(void) { return O_CREAT|O_WRONLY|O_EXCL|O_NOFOLLOW; }
-int nvim_bw_uv_fs_copyfile_ficlone(void) { return UV_FS_COPYFILE_FICLONE; }
 size_t nvim_bw_sizeof_FileInfo(void) { return sizeof(FileInfo); }
 #ifdef UNIX
 uint32_t nvim_bw_fi_get_st_uid(FileInfo *fi) { return (uint32_t)fi->stat.st_uid; }
 uint32_t nvim_bw_fi_get_st_gid(FileInfo *fi) { return (uint32_t)fi->stat.st_gid; }
 int64_t nvim_bw_fi_get_atime_sec(FileInfo *fi) { return (int64_t)fi->stat.st_atim.tv_sec; }
 int64_t nvim_bw_fi_get_mtime_sec(FileInfo *fi) { return (int64_t)fi->stat.st_mtim.tv_sec; }
-uint32_t nvim_bw_getuid(void) { return (uint32_t)getuid(); }
 #else
 uint32_t nvim_bw_fi_get_st_uid(FileInfo *fi) { (void)fi; return 0; }
 uint32_t nvim_bw_fi_get_st_gid(FileInfo *fi) { (void)fi; return 0; }
 int64_t nvim_bw_fi_get_atime_sec(FileInfo *fi) { (void)fi; return 0; }
 int64_t nvim_bw_fi_get_mtime_sec(FileInfo *fi) { (void)fi; return 0; }
-uint32_t nvim_bw_getuid(void) { return 0; }
 #endif
 #ifdef HAVE_XATTR
 void nvim_bw_os_copy_xattr(const char *from, const char *to) { os_copy_xattr(from, to); }
@@ -470,19 +463,6 @@ void nvim_bw_info_set_conv_buf(void *p, char *buf) { struct bw_info *ip = p; ip-
 void *nvim_bw_info_get_iconv_fd(void *p) { struct bw_info *ip = p; return (void *)ip->bw_iconv_fd; }
 void nvim_bw_info_set_iconv_fd(void *p, void *fd) { struct bw_info *ip = p; ip->bw_iconv_fd = (iconv_t)fd; }
 
-// Open flags
-int nvim_bw_open_flags_wronly(void) { return O_WRONLY; }
-int nvim_bw_open_flags_append(void) { return O_APPEND; }
-int nvim_bw_open_flags_creat(void) { return O_CREAT; }
-int nvim_bw_open_flags_trunc(void) { return O_TRUNC; }
-int nvim_bw_open_flags_nofollow(void) { return O_NOFOLLOW; }
-int nvim_bw_uv_enotsup(void) { return UV_ENOTSUP; }
-
-#ifdef UNIX
-uint32_t nvim_bw_getgid(void) { return (uint32_t)getgid(); }
-#else
-uint32_t nvim_bw_getgid(void) { return 0; }
-#endif
 
 #include "bufwrite.c.generated.h"
 

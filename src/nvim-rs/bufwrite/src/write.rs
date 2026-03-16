@@ -22,6 +22,25 @@ use std::ptr::addr_of_mut;
 
 use crate::ffi::{AclHandle, BufHandle, ExargHandle, FileInfoHandle, FAIL, NOTDONE, OK};
 
+// libc file-open flags and syscalls (cross-platform)
+#[cfg(unix)]
+use libc::{getgid, getuid, ENOTSUP, O_NOFOLLOW};
+use libc::{strlen, O_APPEND, O_CREAT, O_EXCL, O_TRUNC, O_WRONLY};
+#[cfg(not(unix))]
+const O_NOFOLLOW: c_int = 0;
+
+// UV constants
+const UV_FS_COPYFILE_FICLONE: c_int = 0x0002;
+#[cfg(unix)]
+fn uv_enotsup() -> c_int {
+    -(ENOTSUP)
+}
+// On non-unix, UV_ENOTSUP is -4049 (fixed in libuv)
+#[cfg(not(unix))]
+fn uv_enotsup() -> c_int {
+    -4049
+}
+
 // Character constants
 const NUL: u8 = 0;
 const NL: u8 = b'\n';
@@ -281,15 +300,11 @@ extern "C" {
     fn nvim_bw_fi_get_st_gid(fi: FileInfoHandle) -> u32;
     fn nvim_bw_fi_get_atime_sec(fi: FileInfoHandle) -> i64;
     fn nvim_bw_fi_get_mtime_sec(fi: FileInfoHandle) -> i64;
-    fn nvim_bw_getuid() -> u32;
-    fn nvim_bw_getgid() -> u32;
-
     // Allocation
     fn nvim_bw_verbose_try_malloc(size: usize) -> *mut c_char;
     fn nvim_bw_xmalloc(size: usize) -> *mut c_char;
     fn nvim_bw_xfree(ptr: *mut c_char);
     fn nvim_bw_vim_snprintf(buf: *mut c_char, len: usize, fmt: *const c_char, val: i64);
-    fn nvim_bw_strlen(s: *const c_char) -> usize;
 
     // SHA256
     fn nvim_bw_sizeof_sha256_ctx() -> usize;
@@ -328,16 +343,6 @@ extern "C" {
     fn nvim_bw_info_set_iconv_fd(p: BwInfoHandle, fd: IconvHandle);
     fn nvim_bw_info_set_start_lnum(p: BwInfoHandle, val: i32);
     fn nvim_bw_info_get_conv_buf(p: BwInfoHandle) -> *mut c_char;
-
-    // Open flags
-    fn nvim_bw_open_flags_wronly() -> c_int;
-    fn nvim_bw_open_flags_append() -> c_int;
-    fn nvim_bw_open_flags_creat() -> c_int;
-    fn nvim_bw_open_flags_trunc() -> c_int;
-    fn nvim_bw_open_flags_nofollow() -> c_int;
-    fn nvim_bw_open_flags_creat_wronly_excl_nofollow() -> c_int;
-    fn nvim_bw_uv_enotsup() -> c_int;
-    fn nvim_bw_uv_fs_copyfile_ficlone() -> c_int;
 
     // Existing error helpers
     fn rs_set_err(msg: *const c_char) -> ErrorT;
@@ -467,7 +472,7 @@ pub unsafe extern "C" fn rs_buf_write(
         return FAIL;
     }
     // Avoid crash for long name
-    if unsafe { nvim_bw_strlen(fname) } >= 4096 {
+    if unsafe { strlen(fname) } >= 4096 {
         unsafe {
             emsg(nvim_bw_gettext(c"E75: Name too long".as_ptr()));
         }
@@ -735,7 +740,7 @@ pub unsafe extern "C" fn rs_buf_write(
         if forceit != 0
             && perm >= 0
             && (perm & 0o200) == 0
-            && unsafe { nvim_bw_fi_get_st_uid(file_info_old) } == unsafe { nvim_bw_getuid() }
+            && unsafe { nvim_bw_fi_get_st_uid(file_info_old) } == unsafe { getuid() }
             && unsafe { nvim_bw_cpo_contains(CPO_FWRITE) } == 0
         {
             perm |= 0o200;
@@ -957,10 +962,10 @@ pub unsafe extern "C" fn rs_buf_write(
             fd = -1;
         } else {
             // Open the file
-            let o_wronly = unsafe { nvim_bw_open_flags_wronly() };
-            let o_append_f = unsafe { nvim_bw_open_flags_append() };
-            let o_creat = unsafe { nvim_bw_open_flags_creat() };
-            let o_trunc = unsafe { nvim_bw_open_flags_trunc() };
+            let o_wronly = O_WRONLY;
+            let o_append_f = O_APPEND;
+            let o_creat = O_CREAT;
+            let o_trunc = O_TRUNC;
 
             let fflags = o_wronly
                 | if append != 0 {
@@ -1009,9 +1014,9 @@ pub unsafe extern "C" fn rs_buf_write(
                                 }
                                 perm |= 0o200;
                                 if unsafe { nvim_bw_fi_get_st_uid(file_info_old) }
-                                    != unsafe { nvim_bw_getuid() }
+                                    != unsafe { getuid() }
                                     || unsafe { nvim_bw_fi_get_st_gid(file_info_old) }
-                                        != unsafe { nvim_bw_getgid() }
+                                        != unsafe { getgid() }
                                 {
                                     perm &= 0o777;
                                 }
@@ -1133,7 +1138,7 @@ pub unsafe extern "C" fn rs_buf_write(
             let mut ptr = unsafe { ptr_base.offset(-1) };
             if write_undo_file {
                 let line_ptr = ptr_base;
-                let line_len = unsafe { nvim_bw_strlen(line_ptr) } as u32 + 1;
+                let line_len = unsafe { strlen(line_ptr) } as u32 + 1;
                 unsafe { nvim_bw_sha256_update(sha_ctx, line_ptr.cast(), line_len) };
             }
             loop {
@@ -1249,7 +1254,7 @@ pub unsafe extern "C" fn rs_buf_write(
         // fsync
         if unsafe { p_fs != 0 } {
             let error = unsafe { os_fsync(fd) };
-            if error != 0 && !device && error != unsafe { nvim_bw_uv_enotsup() } {
+            if error != 0 && !device && error != uv_enotsup() {
                 err = unsafe {
                     rs_set_err_arg(nvim_bw_gettext(c"E667: Fsync failed: %s".as_ptr()), error)
                 };
@@ -1385,7 +1390,7 @@ pub unsafe extern "C" fn rs_buf_write(
                         nvim_bw_ui_flush();
                     }
                 }
-                if unsafe { os_copy(backup, fname, nvim_bw_uv_fs_copyfile_ficlone()) } == 0 {
+                if unsafe { os_copy(backup, fname, UV_FS_COPYFILE_FICLONE) } == 0 {
                     end = 1;
                 }
             } else if unsafe { vim_rename(backup, fname) } == 0 {
@@ -1554,7 +1559,7 @@ pub unsafe extern "C" fn rs_buf_write(
                     ));
                 }
             } else {
-                let o_flags = unsafe { nvim_bw_open_flags_creat_wronly_excl_nofollow() };
+                let o_flags = O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW;
                 let empty_fd =
                     unsafe { os_open(org, o_flags, if perm < 0 { 0o666 } else { perm & 0o777 }) };
                 if empty_fd < 0 {

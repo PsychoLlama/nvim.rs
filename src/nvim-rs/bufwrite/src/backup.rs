@@ -10,6 +10,14 @@
 use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
+#[cfg(unix)]
+use libc::O_NOFOLLOW;
+use libc::{snprintf, strlen, O_CREAT, O_EXCL, O_WRONLY};
+#[cfg(not(unix))]
+const O_NOFOLLOW: c_int = 0;
+
+const UV_FS_COPYFILE_FICLONE: c_int = 0x0002;
+
 use crate::error::BwError;
 use crate::ffi::{AclHandle, FileInfoHandle, FAIL, OK};
 
@@ -94,9 +102,6 @@ extern "C" {
     fn nvim_bw_fi_get_st_mode(fi: FileInfoHandle) -> c_int;
     fn nvim_bw_fi_get_atime_sec(fi: FileInfoHandle) -> i64;
     fn nvim_bw_fi_get_mtime_sec(fi: FileInfoHandle) -> i64;
-    #[allow(dead_code)]
-    fn nvim_bw_getuid() -> u32;
-
     // Copy xattr (wraps #ifdef HAVE_XATTR)
     fn nvim_bw_os_copy_xattr(src: *const c_char, dst: *const c_char);
 
@@ -120,14 +125,7 @@ extern "C" {
     fn nvim_bw_gettext(s: *const c_char) -> *const c_char;
     fn nvim_bw_semsg_3(fmt: *const c_char, a: *const c_char, b: *const c_char, c: *const c_char);
     fn nvim_bw_os_strerror(errnum: c_int) -> *const c_char;
-    fn nvim_bw_xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
-    fn nvim_bw_snprintf_int(buf: *mut c_char, bufsize: usize, i: c_int) -> c_int;
-    fn nvim_bw_strlen(s: *const c_char) -> usize;
     fn nvim_bw_XFREE_CLEAR(pp: *mut *mut c_char);
-
-    // O_ flags
-    fn nvim_bw_open_flags_creat_wronly_excl_nofollow() -> c_int;
-    fn nvim_bw_uv_fs_copyfile_ficlone() -> c_int;
 
     // Sizes
     fn nvim_bw_sizeof_FileInfo() -> usize;
@@ -198,13 +196,16 @@ unsafe fn determine_backup_copy(
             // Use a stack buffer for tmp_fname
             let mut tmp_fname = vec![0u8; maxpathl];
             let tmp_ptr = tmp_fname.as_mut_ptr().cast::<c_char>();
-            unsafe { nvim_bw_xmemcpyz(tmp_ptr, fname, dirlen) };
+            unsafe {
+                ptr::copy_nonoverlapping(fname, tmp_ptr, dirlen);
+                *tmp_ptr.add(dirlen) = 0;
+            }
 
             // Find a temp filename that doesn't exist
             let mut i: c_int = 4913;
             loop {
                 unsafe {
-                    nvim_bw_snprintf_int(tmp_ptr.add(dirlen), maxpathl - dirlen, i);
+                    snprintf(tmp_ptr.add(dirlen), maxpathl - dirlen, c"%d".as_ptr(), i);
                 }
                 if unsafe { os_fileinfo_link(tmp_ptr, file_info) } == 0 {
                     break;
@@ -212,7 +213,7 @@ unsafe fn determine_backup_copy(
                 i += 123;
             }
 
-            let open_flags = unsafe { nvim_bw_open_flags_creat_wronly_excl_nofollow() };
+            let open_flags = O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW;
             let fd = unsafe { os_open(tmp_ptr, open_flags, perm) };
             if fd < 0 {
                 *backup_copy = true;
@@ -329,8 +330,8 @@ unsafe fn backup_by_copy(
             } else if unsafe { p_bk == 0 } {
                 // Not keeping backups — try to use another name
                 let bkp = unsafe { *backupp };
-                let bkplen = unsafe { nvim_bw_strlen(bkp) };
-                let extlen = unsafe { nvim_bw_strlen(backup_ext) };
+                let bkplen = unsafe { strlen(bkp) };
+                let extlen = unsafe { strlen(backup_ext) };
                 let offset = if bkplen > 1 + extlen {
                     bkplen - 1 - extlen
                 } else {
@@ -357,8 +358,7 @@ unsafe fn backup_by_copy(
             unsafe { os_remove(*backupp) };
 
             // Copy the file
-            let ficlone = unsafe { nvim_bw_uv_fs_copyfile_ficlone() };
-            if unsafe { os_copy(fname, *backupp, ficlone) } != 0 {
+            if unsafe { os_copy(fname, *backupp, UV_FS_COPYFILE_FICLONE) } != 0 {
                 unsafe {
                     *err = BwError::with_msg(nvim_bw_gettext(E509.as_ptr()));
                     nvim_bw_XFREE_CLEAR(backupp);
@@ -467,8 +467,8 @@ unsafe fn backup_by_rename(
             // delete an existing one, try to use another name.
             if unsafe { p_bk == 0 } && unsafe { os_path_exists(*backupp) } != 0 {
                 let bkp = unsafe { *backupp };
-                let bkplen = unsafe { nvim_bw_strlen(bkp) };
-                let extlen = unsafe { nvim_bw_strlen(backup_ext) };
+                let bkplen = unsafe { strlen(bkp) };
+                let extlen = unsafe { strlen(backup_ext) };
                 let offset = if bkplen > 1 + extlen {
                     bkplen - 1 - extlen
                 } else {
