@@ -25,8 +25,7 @@ use crate::types::{
 extern "C" {
     // Current state globals
 
-    // CUR_STATE accessors for syn_update_ends
-    fn nvim_syn_get_sptype_at(idx: c_int) -> c_int;
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 
     // validate_current_state
 
@@ -79,7 +78,11 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
         for i in 0..state_len {
             let si_idx = (*crate::statics::current_state_item(i).as_ptr()).si_idx;
             if si_idx >= 0
-                && nvim_syn_get_sptype_at(si_idx) == SPTYPE_MATCH
+                && {
+                    let block = nvim_syn_get_syn_block();
+                    let p = crate::statics::syn_item_at(block, si_idx);
+                    !p.is_null() && (*p).sp_type as c_int == SPTYPE_MATCH
+                }
                 && (*crate::statics::current_state_item(i).as_ptr())
                     .si_m_endpos
                     .lnum

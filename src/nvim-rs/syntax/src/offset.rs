@@ -9,8 +9,6 @@ use crate::state::Position;
 use crate::types::SPO_COUNT;
 
 extern "C" {
-    fn nvim_syn_get_pattern_offset(pat_idx: c_int, off_idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_off_flags(pat_idx: c_int) -> c_int;
     fn nvim_syn_get_buf_line_count() -> c_int;
     fn nvim_syn_get_line_len(lnum: c_int) -> c_int;
 
@@ -18,6 +16,8 @@ extern "C" {
     fn nvim_syn_ml_get(lnum: c_int) -> *mut i8;
     fn nvim_syn_utfc_ptr2len(p: *mut i8) -> c_int;
     fn nvim_syn_utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
+
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 }
 
 /// Advance or retreat a column position by `off` multibyte characters.
@@ -102,8 +102,18 @@ pub struct RegMatch {
 /// * `off_idx` - Which offset to apply (SPO_ME_OFF, SPO_HE_OFF, etc.)
 /// * `extra` - Extra chars for offset to start
 pub fn syn_add_end_off(regmatch: &RegMatch, pat_idx: i32, off_idx: i32, extra: i32) -> Position {
-    let off_flags = unsafe { nvim_syn_get_pattern_off_flags(pat_idx) };
-    let offset_val = unsafe { nvim_syn_get_pattern_offset(pat_idx, off_idx) };
+    let (off_flags, offset_val) = unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, pat_idx);
+        if p.is_null() {
+            (0, 0)
+        } else {
+            (
+                (*p).sp_off_flags as c_int,
+                (*p).sp_offsets[off_idx as usize],
+            )
+        }
+    };
 
     let (lnum, col, off) = if off_flags & (1 << off_idx) != 0 {
         // Offset from start of match
@@ -141,8 +151,18 @@ pub fn syn_add_end_off(regmatch: &RegMatch, pat_idx: i32, off_idx: i32, extra: i
 /// * `off_idx` - Which offset to apply (SPO_MS_OFF, SPO_HS_OFF, etc.)
 /// * `extra` - Extra chars for offset to end
 pub fn syn_add_start_off(regmatch: &RegMatch, pat_idx: i32, off_idx: i32, extra: i32) -> Position {
-    let off_flags = unsafe { nvim_syn_get_pattern_off_flags(pat_idx) };
-    let offset_val = unsafe { nvim_syn_get_pattern_offset(pat_idx, off_idx) };
+    let (off_flags, offset_val) = unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, pat_idx);
+        if p.is_null() {
+            (0, 0)
+        } else {
+            (
+                (*p).sp_off_flags as c_int,
+                (*p).sp_offsets[off_idx as usize],
+            )
+        }
+    };
 
     let (mut lnum, col, off) = if off_flags & (1 << (off_idx + SPO_COUNT)) != 0 {
         // Offset from end of match

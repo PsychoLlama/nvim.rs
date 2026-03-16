@@ -21,18 +21,9 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // Pattern type accessors (from syntax.c)
-    fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
-
-    // Matchgroup accessors
-    fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
-
     // Pattern accessors for find_endpos
     fn nvim_syn_get_synblock_pattern_count() -> c_int;
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_offset(pat_idx: c_int, off_idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_off_flags(pat_idx: c_int) -> c_int;
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 
     // (nvim_syn_regexec_pat replaced by crate::regexec::syn_regexec_pat)
 
@@ -134,7 +125,15 @@ pub fn synpat_type(pat: SynPatHandle) -> PatternType {
 /// Get the pattern type for the current synblock's pattern by index.
 #[must_use]
 pub fn pattern_type_at_idx(idx: i32) -> PatternType {
-    PatternType::from_c_int(unsafe { nvim_syn_get_pattern_type(idx) })
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            PatternType::Unknown(0)
+        } else {
+            PatternType::from_c_int((*p).sp_type as c_int)
+        }
+    }
 }
 
 // =============================================================================
@@ -177,7 +176,15 @@ fn regexec_pat(idx: i32, lnum: i32, col: i32) -> Option<RegMatch> {
 
 /// Get pattern type at index from current synblock.
 fn pat_type_at(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_type(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_type as c_int
+        }
+    }
 }
 
 /// Find the end of a start/skip/end syntax region after startpos.
@@ -243,7 +250,15 @@ pub unsafe fn find_endpos(
                 break; // Past last END pattern
             }
 
-            let lc_off = nvim_syn_get_pattern_offset(eidx, SPO_LC_OFF);
+            let lc_off = {
+                let bp = nvim_syn_get_syn_block();
+                let ep = crate::statics::syn_item_at(bp, eidx);
+                if ep.is_null() {
+                    0
+                } else {
+                    (*ep).sp_offsets[SPO_LC_OFF as usize]
+                }
+            };
             let lc_col = (matchcol - lc_off).max(0);
 
             if let Some(m) = regexec_pat(eidx, startpos.lnum, lc_col) {
@@ -265,7 +280,15 @@ pub unsafe fn find_endpos(
         // If the skip pattern matches before the end pattern, continue
         // searching after the skip pattern.
         if let Some(skip_idx) = spp_skip_idx {
-            let lc_off = nvim_syn_get_pattern_offset(skip_idx, SPO_LC_OFF);
+            let lc_off = {
+                let bp = nvim_syn_get_syn_block();
+                let sp = crate::statics::syn_item_at(bp, skip_idx);
+                if sp.is_null() {
+                    0
+                } else {
+                    (*sp).sp_offsets[SPO_LC_OFF as usize]
+                }
+            };
             let lc_col = (matchcol - lc_off).max(0);
 
             if let Some(skip_match) = regexec_pat(skip_idx, startpos.lnum, lc_col) {
@@ -329,19 +352,30 @@ pub unsafe fn find_endpos(
         limit_pos(&mut result.end_endpos, &result.m_endpos);
 
         // If the end group is highlighted differently, adjust the pointers.
-        let best_match_id = nvim_syn_get_pattern_syn_match_id(best_idx);
-        let best_syn_id = nvim_syn_get_pattern_syn_id(best_idx);
+        let (best_match_id, best_syn_id, best_off_flags, best_re_off) = {
+            let bp = nvim_syn_get_syn_block();
+            let best_p = crate::statics::syn_item_at(bp, best_idx);
+            if best_p.is_null() {
+                (0i32, 0i32, 0i32, 0i32)
+            } else {
+                (
+                    (*best_p).sp_syn_match_id as c_int,
+                    (*best_p).sp_syn.id as c_int,
+                    (*best_p).sp_off_flags as c_int,
+                    (*best_p).sp_offsets[SPO_RE_OFF as usize],
+                )
+            }
+        };
         if best_match_id != best_syn_id && best_match_id != 0 {
             result.end_idx = best_idx;
-            let off_flags = nvim_syn_get_pattern_off_flags(best_idx);
-            if off_flags & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0 {
+            if best_off_flags & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0 {
                 result.hl_endpos.lnum = best_regmatch.endpos.lnum;
                 result.hl_endpos.col = best_regmatch.endpos.col;
             } else {
                 result.hl_endpos.lnum = best_regmatch.startpos.lnum;
                 result.hl_endpos.col = best_regmatch.startpos.col;
             }
-            result.hl_endpos.col += nvim_syn_get_pattern_offset(best_idx, SPO_RE_OFF);
+            result.hl_endpos.col += best_re_off;
 
             // Can't end before the start
             if result.hl_endpos.lnum == startpos.lnum && result.hl_endpos.col < startpos.col {
@@ -357,7 +391,15 @@ pub unsafe fn find_endpos(
             result.hl_endpos = result.end_endpos;
         }
 
-        result.flags = nvim_syn_get_pattern_flags(best_idx);
+        result.flags = {
+            let bp = nvim_syn_get_syn_block();
+            let best_p = crate::statics::syn_item_at(bp, best_idx);
+            if best_p.is_null() {
+                0
+            } else {
+                (*best_p).sp_flags
+            }
+        };
 
         had_match = true;
         break;
@@ -413,7 +455,15 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
 
     if result.m_endpos.lnum == 0 {
         // No end pattern matched
-        let pat_flags = nvim_syn_get_pattern_flags(si_idx);
+        let pat_flags = {
+            let bp = nvim_syn_get_syn_block();
+            let sp = crate::statics::syn_item_at(bp, si_idx);
+            if sp.is_null() {
+                0
+            } else {
+                (*sp).sp_flags
+            }
+        };
         let line_len = nvim_syn_getcurline_len();
         if pat_flags & HL_ONELINE != 0 {
             // A "oneline" never continues in the next line
@@ -502,7 +552,15 @@ pub fn synpat_matchgroup_id(pat: SynPatHandle) -> i16 {
 /// Get the matchgroup ID for a pattern by index.
 #[must_use]
 pub fn matchgroup_id_at_idx(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_syn_match_id(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_syn_match_id as c_int
+        }
+    }
 }
 
 // =============================================================================

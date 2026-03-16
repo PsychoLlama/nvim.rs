@@ -809,10 +809,6 @@ pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
 // =============================================================================
 
 extern "C" {
-    // nvim_synblock_cluster_append now delegates to rs_synblock_cluster_append
-    fn nvim_synblock_set_cluster_name(idx: c_int, name: *mut c_char);
-    fn nvim_synblock_set_cluster_name_u(idx: c_int, name_u: *mut c_char);
-    fn nvim_synblock_set_cluster_list(idx: c_int, list: *mut i16);
     fn nvim_synblock_set_spell_cluster_id(id: c_int);
     fn nvim_synblock_set_nospell_cluster_id(id: c_int);
     fn nvim_syn_vim_strsave_up(s: *const c_char) -> *mut c_char;
@@ -872,9 +868,13 @@ unsafe fn syn_add_cluster_impl(name: *mut c_char) -> c_int {
         return 0;
     }
     let name_u = nvim_syn_vim_strsave_up(name as *const c_char);
-    nvim_synblock_set_cluster_name(idx, name);
-    nvim_synblock_set_cluster_name_u(idx, name_u);
-    nvim_synblock_set_cluster_list(idx, std::ptr::null_mut());
+    let block = nvim_syn_get_curwin_synblock();
+    let clp = crate::statics::syn_cluster_at(block, idx);
+    if !clp.is_null() {
+        (*clp).scl_name = name;
+        (*clp).scl_name_u = name_u;
+        (*clp).scl_list = std::ptr::null_mut();
+    }
 
     // Check for special @Spell and @NoSpell clusters.
     let spell = std::ffi::CStr::from_ptr(name as *const c_char);

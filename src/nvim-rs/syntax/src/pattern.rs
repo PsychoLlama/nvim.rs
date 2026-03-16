@@ -23,17 +23,7 @@ extern "C" {
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle;
     fn nvim_synblock_get_folditems(block: SynBlockHandle) -> c_int;
-
-    // Pattern index-based accessors (for current synblock)
-    fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
-
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_cchar(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
-    fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_cont_list(idx: c_int) -> IdListHandle;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
 }
 
 // =============================================================================
@@ -422,95 +412,163 @@ pub fn synpat_containedin_list(pat: SynPatHandle) -> Option<IdListHandle> {
 }
 
 // =============================================================================
-// Index-based pattern accessors (for current synblock)
+// Index-based pattern accessors (for current synblock) - direct field access
 // =============================================================================
 
 /// Get pattern type by index from current synblock
 #[must_use]
 pub fn pattern_type_by_idx(idx: i32) -> PatternType {
-    PatternType::from(unsafe { nvim_syn_get_pattern_type(idx) })
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            PatternType::Unknown(0)
+        } else {
+            PatternType::from((*p).sp_type as c_int)
+        }
+    }
 }
 
 /// Get pattern type as raw integer by index from current synblock
 #[must_use]
 pub fn pattern_type_raw_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_type(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_type as c_int
+        }
+    }
 }
 
 /// Get pattern flags by index from current synblock
 #[must_use]
 pub fn pattern_flags_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_flags(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_flags
+        }
+    }
 }
 
 /// Get pattern syn_id by index from current synblock
 #[must_use]
 pub fn pattern_syn_id_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_syn_id(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_syn.id as c_int
+        }
+    }
 }
 
 /// Get pattern match_id by index from current synblock
 #[must_use]
 pub fn pattern_match_id_by_idx(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_syn_match_id(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_syn_match_id as c_int
+        }
+    }
 }
 
 /// Get pattern contains list by index from current synblock
 #[must_use]
 pub fn pattern_cont_list_by_idx(idx: i32) -> IdListHandle {
-    unsafe { nvim_syn_get_pattern_cont_list(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            IdListHandle(std::ptr::null_mut())
+        } else {
+            IdListHandle((*p).sp_cont_list)
+        }
+    }
 }
 
 /// Get pattern nextgroup list by index from current synblock
 #[must_use]
 pub fn pattern_next_list_by_idx(idx: i32) -> IdListHandle {
-    unsafe { nvim_syn_get_pattern_next_list(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            IdListHandle(std::ptr::null_mut())
+        } else {
+            IdListHandle((*p).sp_next_list)
+        }
+    }
 }
 
 /// Get pattern ignore-case flag by index from current synblock
 #[must_use]
 pub fn pattern_ic_by_idx(idx: i32) -> bool {
-    unsafe { nvim_synblock_pattern_ic(idx) != 0 }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        !p.is_null() && (*p).sp_ic != 0
+    }
 }
 
 // =============================================================================
-// Pattern accessors via nvim_syn_* functions
+// Pattern accessors -- direct field access
 // =============================================================================
 
-/// Get pattern flags using nvim_syn_get_pattern_flags
+/// Get pattern flags by index
 #[must_use]
 pub fn get_pattern_flags(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_flags(idx) }
+    pattern_flags_by_idx(idx)
 }
 
-/// Get pattern cchar using nvim_syn_get_pattern_cchar
+/// Get pattern cchar by index
 #[must_use]
 pub fn get_pattern_cchar(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_cchar(idx) }
+    unsafe {
+        let block = nvim_syn_get_syn_block();
+        let p = crate::statics::syn_item_at(block, idx);
+        if p.is_null() {
+            0
+        } else {
+            (*p).sp_cchar
+        }
+    }
 }
 
-/// Get pattern next_list using nvim_syn_get_pattern_next_list
+/// Get pattern next_list by index
 #[must_use]
 pub fn get_pattern_next_list(idx: i32) -> IdListHandle {
-    unsafe { nvim_syn_get_pattern_next_list(idx) }
+    pattern_next_list_by_idx(idx)
 }
 
-/// Get pattern type using nvim_syn_get_pattern_type
+/// Get pattern type by index
 #[must_use]
 pub fn get_pattern_type(idx: i32) -> PatternType {
-    PatternType::from(unsafe { nvim_syn_get_pattern_type(idx) })
+    pattern_type_by_idx(idx)
 }
 
-/// Get pattern type as raw integer using nvim_syn_get_pattern_type
+/// Get pattern type as raw integer by index
 #[must_use]
 pub fn get_pattern_type_raw(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_type(idx) }
+    pattern_type_raw_by_idx(idx)
 }
 
-/// Get pattern syn_match_id using nvim_syn_get_pattern_syn_match_id
+/// Get pattern syn_match_id by index
 #[must_use]
 pub fn get_pattern_syn_match_id(idx: i32) -> i32 {
-    unsafe { nvim_syn_get_pattern_syn_match_id(idx) }
+    pattern_match_id_by_idx(idx)
 }
 
 // =============================================================================

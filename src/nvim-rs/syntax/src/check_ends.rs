@@ -22,21 +22,6 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // Current state (non-static)
-
-    // Next match
-
-    // Current next list
-
-    // Pattern accessors
-    fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_cchar(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_match_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
-    fn nvim_syn_get_pattern_cont_list(idx: c_int) -> IdListHandle;
-
     // Line operations
     fn nvim_syn_getcurline_byte_at(col: c_int) -> c_int;
     #[link_name = "rs_syn_update_ends"]
@@ -51,6 +36,8 @@ extern "C" {
 
     // ID list
     fn nvim_syn_get_id_list_all() -> IdListHandle;
+
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 }
 
 const MAXCOL: i32 = 0x7fffffff;
@@ -128,11 +115,21 @@ pub unsafe fn update_si_attr(stack_idx: i32) {
 
     let si_flags = (*p).si_flags;
 
+    // Get pattern pointer for direct field access
+    let block = nvim_syn_get_syn_block();
+    let pat_p = crate::statics::syn_item_at(block, si_idx);
+
     // Set highlight ID
     let hl_id = if si_flags & HL_MATCH != 0 {
-        nvim_syn_get_pattern_syn_match_id(si_idx)
+        if pat_p.is_null() {
+            0
+        } else {
+            (*pat_p).sp_syn_match_id as c_int
+        }
+    } else if pat_p.is_null() {
+        0
     } else {
-        nvim_syn_get_pattern_syn_id(si_idx)
+        (*pat_p).sp_syn.id as c_int
     };
     (*p).si_id = hl_id;
     (*p).si_attr = nvim_syn_id2attr_wrapper(hl_id);
@@ -142,11 +139,19 @@ pub unsafe fn update_si_attr(stack_idx: i32) {
     if si_flags & HL_MATCH != 0 {
         (*p).si_cont_list = std::ptr::null_mut();
     } else {
-        (*p).si_cont_list = nvim_syn_get_pattern_cont_list(si_idx).0;
+        (*p).si_cont_list = if pat_p.is_null() {
+            std::ptr::null_mut()
+        } else {
+            (*pat_p).sp_cont_list
+        };
     }
 
     // For transparent items, take attr from outer item.
-    let pat_flags = nvim_syn_get_pattern_flags(si_idx);
+    let pat_flags = if pat_p.is_null() {
+        0
+    } else {
+        (*pat_p).sp_flags
+    };
     if (pat_flags & HL_TRANSP != 0) && (si_flags & HL_MATCH == 0) {
         if stack_idx == 0 {
             (*p).si_attr = 0;
@@ -279,9 +284,23 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     let current_col = crate::statics::CURRENT_COL;
     let current_lnum = crate::statics::CURRENT_LNUM;
 
-    let pat_type = nvim_syn_get_pattern_type(next_match_idx);
-    let pat_flags = nvim_syn_get_pattern_flags(next_match_idx);
-    let pat_cchar = nvim_syn_get_pattern_cchar(next_match_idx);
+    let block = nvim_syn_get_syn_block();
+    let nmi_pat_p = crate::statics::syn_item_at(block, next_match_idx);
+    let pat_type = if nmi_pat_p.is_null() {
+        0
+    } else {
+        (*nmi_pat_p).sp_type as c_int
+    };
+    let pat_flags = if nmi_pat_p.is_null() {
+        0
+    } else {
+        (*nmi_pat_p).sp_flags
+    };
+    let pat_cchar = if nmi_pat_p.is_null() {
+        0
+    } else {
+        (*nmi_pat_p).sp_cchar
+    };
 
     // Push the item in current_state stack
     crate::state_ops::rs_syn_push_current_state(next_match_idx);
@@ -315,7 +334,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         (*cp).si_flags |= (*parent.as_ptr()).si_flags & HL_CONCEAL;
     }
 
-    (*cp).si_next_list = nvim_syn_get_pattern_next_list(next_match_idx).0;
+    (*cp).si_next_list = if nmi_pat_p.is_null() {
+        std::ptr::null_mut()
+    } else {
+        (*nmi_pat_p).sp_next_list
+    };
     let extmatch = ExtMatchHandle(crate::statics::NEXT_MATCH_EXTMATCH);
     let reffed = nvim_syn_ref_extmatch(extmatch);
     (*cp).si_extmatch = reffed.0 as *mut _;
@@ -349,7 +372,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
 
     // If the start pattern has another highlight group, push another item
     // on the stack for the start pattern.
-    let pat_match_id = nvim_syn_get_pattern_syn_match_id(next_match_idx);
+    let pat_match_id = if nmi_pat_p.is_null() {
+        0
+    } else {
+        (*nmi_pat_p).sp_syn_match_id as c_int
+    };
     if pat_type == SPTYPE_START && pat_match_id != 0 {
         crate::state_ops::rs_syn_push_current_state(next_match_idx);
         let sl = crate::statics::CURRENT_STATE.ga_len;
@@ -503,7 +530,11 @@ pub unsafe fn check_state_ends() {
             let new_flags = (*new_cur.as_ptr()).si_flags;
 
             if new_idx >= 0
-                && nvim_syn_get_pattern_type(new_idx) == SPTYPE_START
+                && {
+                    let bp = nvim_syn_get_syn_block();
+                    let pp = crate::statics::syn_item_at(bp, new_idx);
+                    !pp.is_null() && (*pp).sp_type as c_int == SPTYPE_START
+                }
                 && (new_flags & (HL_MATCH | HL_KEEPEND) == 0)
             {
                 crate::region::update_si_end(new_cur, current_col, true);

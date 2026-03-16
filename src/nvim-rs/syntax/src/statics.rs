@@ -12,8 +12,8 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::ffi_types::LPos;
-use crate::types::StateItemHandle;
+use crate::ffi_types::{LPos, SynCluster, SynPat};
+use crate::types::{StateItemHandle, SynBlockHandle};
 
 // =============================================================================
 // Phase 1: Scalar statics migrated from syntax_accessors.c
@@ -192,6 +192,14 @@ extern "C" {
 
     /// Set the growsize of a garray.
     fn ga_set_growsize(gap: *mut GArray, growsize: c_int);
+
+    /// Get base pointer to synpat_T array for a synblock.
+    /// Returns NULL if block is NULL or patterns array is empty.
+    fn nvim_synblock_get_patterns_ga_data(block: SynBlockHandle) -> *mut SynPat;
+
+    /// Get base pointer to syn_cluster_T array for a synblock.
+    /// Returns NULL if block is NULL or clusters array is empty.
+    fn nvim_synblock_get_clusters_ga_data(block: SynBlockHandle) -> *mut SynCluster;
 }
 
 // =============================================================================
@@ -268,4 +276,42 @@ pub unsafe fn current_state_append() -> StateItemHandle {
     let p = base.add(idx as usize);
     std::ptr::write_bytes(p, 0, 1);
     StateItemHandle::from_ptr(p)
+}
+
+// =============================================================================
+// Phase 4: SynPat / SynCluster direct field access helpers
+// =============================================================================
+
+/// Get pointer to SynPat at `idx` in `block`'s patterns array.
+/// Returns null if block is null, idx is out of range, or array is empty.
+///
+/// # Safety
+/// Must be called from the main thread. Do NOT cache across ga_grow calls.
+#[inline]
+pub unsafe fn syn_item_at(block: SynBlockHandle, idx: c_int) -> *mut SynPat {
+    if block.is_null() || idx < 0 {
+        return std::ptr::null_mut();
+    }
+    let base = nvim_synblock_get_patterns_ga_data(block);
+    if base.is_null() {
+        return std::ptr::null_mut();
+    }
+    base.add(idx as usize)
+}
+
+/// Get pointer to SynCluster at `idx` in `block`'s clusters array.
+/// Returns null if block is null, idx is out of range, or array is empty.
+///
+/// # Safety
+/// Must be called from the main thread. Do NOT cache across ga_grow calls.
+#[inline]
+pub unsafe fn syn_cluster_at(block: SynBlockHandle, idx: c_int) -> *mut SynCluster {
+    if block.is_null() || idx < 0 {
+        return std::ptr::null_mut();
+    }
+    let base = nvim_synblock_get_clusters_ga_data(block);
+    if base.is_null() {
+        return std::ptr::null_mut();
+    }
+    base.add(idx as usize)
 }

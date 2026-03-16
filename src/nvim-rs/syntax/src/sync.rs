@@ -78,16 +78,9 @@ extern "C" {
         out_start_lnum: *mut c_int,
     ) -> c_int;
 
-    // Pattern type/id accessors (for ccomment pattern search loop)
-    fn nvim_syn_get_pattern_ga_len() -> c_int;
-    fn nvim_syn_get_sptype_at(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-
-    // Stateitem accessors
-
-    // Pattern accessors
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_sync_idx(idx: c_int) -> c_int;
+    // Synblock pattern count
+    fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
+    fn nvim_syn_get_syn_block() -> SynBlockHandle;
 
     // Line content access
     #[link_name = "rs_syn_getcurline"]
@@ -277,11 +270,14 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
         if found != 0 {
             // Inside a comment: find the syntax item that defines the comment.
             let sync_id = nvim_syn_get_sync_id();
-            let ga_len = nvim_syn_get_pattern_ga_len();
+            let blk = nvim_syn_get_syn_block();
+            let ga_len = nvim_synblock_get_pattern_count(blk);
             let mut idx = ga_len - 1;
             while idx >= 0 {
-                if nvim_syn_get_pattern_syn_id(idx) == sync_id
-                    && nvim_syn_get_sptype_at(idx) == SPTYPE_START
+                let pp = crate::statics::syn_item_at(blk, idx);
+                if !pp.is_null()
+                    && (*pp).sp_syn.id as c_int == sync_id
+                    && (*pp).sp_type as c_int == SPTYPE_START
                 {
                     nvim_syn_validate_current_state();
                     crate::state_ops::rs_syn_push_current_state(idx);
@@ -360,8 +356,15 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                             found_flags = 0;
                             found_match_idx = KEYWORD_IDX;
                         } else {
-                            found_flags = nvim_syn_get_pattern_flags(si_idx);
-                            found_match_idx = nvim_syn_get_pattern_sync_idx(si_idx);
+                            let blk2 = nvim_syn_get_syn_block();
+                            let si_pp = crate::statics::syn_item_at(blk2, si_idx);
+                            if si_pp.is_null() {
+                                found_flags = 0;
+                                found_match_idx = -1;
+                            } else {
+                                found_flags = (*si_pp).sp_flags;
+                                found_match_idx = (*si_pp).sp_sync_idx;
+                            }
                         }
                         found_current_lnum = crate::statics::CURRENT_LNUM;
                         found_current_col = crate::statics::CURRENT_COL;

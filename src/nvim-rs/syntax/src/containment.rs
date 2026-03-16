@@ -17,13 +17,8 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // New accessors for Phase 2: rs_syn_in_id_list implementation
-    fn nvim_syn_get_pattern_syn_id(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_sp_syn_inc_tag(idx: c_int) -> c_int;
-    fn nvim_syn_get_pattern_sp_syn_cont_in_list(idx: c_int) -> IdListHandle;
-    fn nvim_syn_get_pattern_flags(idx: c_int) -> c_int;
-    fn nvim_syn_get_cluster_scl_list(idx: c_int) -> IdListHandle;
     fn nvim_syn_is_id_list_all(list: IdListHandle) -> c_int;
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 }
 
 // =============================================================================
@@ -299,10 +294,18 @@ unsafe fn in_id_list_inner(
         // cur_si->si_idx is -1 for keywords; keywords never contain anything.
         let si_idx = (*actual_si.as_ptr()).si_idx;
         if si_idx >= 0 {
-            let pat_id = nvim_syn_get_pattern_syn_id(si_idx) as i16;
-            let pat_inc_tag = nvim_syn_get_pattern_sp_syn_inc_tag(si_idx);
-            let pat_cont_in = nvim_syn_get_pattern_sp_syn_cont_in_list(si_idx);
-            let pat_flags = nvim_syn_get_pattern_flags(si_idx);
+            let block = nvim_syn_get_syn_block();
+            let pat_p = crate::statics::syn_item_at(block, si_idx);
+            let (pat_id, pat_inc_tag, pat_cont_in, pat_flags) = if pat_p.is_null() {
+                (0i16, 0, IdListHandle::null(), 0)
+            } else {
+                (
+                    (*pat_p).sp_syn.id,
+                    (*pat_p).sp_syn.inc_tag,
+                    IdListHandle((*pat_p).sp_syn.cont_in_list),
+                    (*pat_p).sp_flags,
+                )
+            };
             if in_id_list_inner(
                 StateItemHandle(std::ptr::null_mut()),
                 cont_in_list,
@@ -367,13 +370,19 @@ unsafe fn in_id_list_inner(
         }
         if (item as c_int) >= SYNID_CLUSTER {
             let cluster_idx = (item as c_int) - SYNID_CLUSTER;
-            let scl_list = nvim_syn_get_cluster_scl_list(cluster_idx);
+            let blk = nvim_syn_get_syn_block();
+            let clp = crate::statics::syn_cluster_at(blk, cluster_idx);
+            let scl_list_ptr = if clp.is_null() {
+                std::ptr::null_mut()
+            } else {
+                (*clp).scl_list
+            };
             // Restrict recursiveness to 30 to avoid an endless loop for a
             // cluster that includes itself (indirectly).
-            if !scl_list.is_null() && depth < 30 {
+            if !scl_list_ptr.is_null() && depth < 30 {
                 let r = in_id_list_inner(
                     StateItemHandle(std::ptr::null_mut()),
-                    scl_list,
+                    IdListHandle(scl_list_ptr),
                     id,
                     inc_tag,
                     IdListHandle::null(),

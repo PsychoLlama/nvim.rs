@@ -540,15 +540,7 @@ void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
 /// Returns pointer to the inline syn_time_T field in the synblock.
 /// NOTE: nvim_syn_block_get_linecont_time_ptr already exists; this is a new alias.
 
-/// Get pointer to sp_time for a pattern at index in the current synblock.
-/// Used by Rust to pass as *mut c_void to nvim_syn_time_update.
-void *nvim_syn_get_pat_time_ptr(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return (void *)&SYN_ITEMS(syn_block)[idx].sp_time;
-}
+// nvim_syn_get_pat_time_ptr deleted: Rust uses &raw mut (*pat_ptr).sp_time directly.
 
 /// Update syn_time_T fields from Rust after a regex execution.
 /// elapsed: elapsed time (proftime_T / u64).
@@ -749,16 +741,7 @@ void nvim_syn_update_si_attr(int idx)
   }
 }
 
-/// Compare two extmatch pointers (for syn_stack_equal)
-/// Returns 1 if they match, 0 if different, -1 if needs string comparison
-/// Get the sp_ic (ignore case) flag for a pattern at index
-int nvim_synblock_pattern_ic(int pat_idx)
-{
-  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[pat_idx].sp_ic;
-}
+// nvim_synblock_pattern_ic deleted: Rust uses (*syn_item_at(block, idx)).sp_ic directly.
 
 /// Get matches[subidx] string from a reg_extmatch_T.
 const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx)
@@ -791,32 +774,9 @@ int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 
-/// Get SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag
-int nvim_syn_get_pattern_sp_syn_inc_tag(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.inc_tag;
-}
-
-/// Get SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list
-int16_t *nvim_syn_get_pattern_sp_syn_cont_in_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.cont_in_list;
-}
-
-/// Get SYN_CLSTR(syn_block)[idx].scl_list
-int16_t *nvim_syn_get_cluster_scl_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  return SYN_CLSTR(syn_block)[idx].scl_list;
-}
+// nvim_syn_get_pattern_sp_syn_inc_tag deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.inc_tag directly.
+// nvim_syn_get_pattern_sp_syn_cont_in_list deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.cont_in_list directly.
+// nvim_syn_get_cluster_scl_list deleted: Rust uses (*syn_cluster_at(block, idx)).scl_list directly.
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 
@@ -846,50 +806,11 @@ void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 
 // nvim_syn_push_next_match deleted: Rust match_engine.rs bypasses via #[link_name = "rs_push_next_match"].
 
-/// Get synpat sp_flags by index
-int nvim_syn_get_pattern_flags(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_flags;
-}
-
-/// Get synpat sp_cchar by index
-int nvim_syn_get_pattern_cchar(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_cchar;
-}
-
-/// Get synpat sp_next_list by index
-int16_t *nvim_syn_get_pattern_next_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_next_list;
-}
-
-/// Get synpat sp_type by index
-int nvim_syn_get_pattern_type(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_type;
-}
-
-/// Get synpat sp_syn_match_id by index
-int nvim_syn_get_pattern_syn_match_id(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
-}
+// nvim_syn_get_pattern_flags deleted: Rust uses (*syn_item_at(block, idx)).sp_flags directly.
+// nvim_syn_get_pattern_cchar deleted: Rust uses (*syn_item_at(block, idx)).sp_cchar directly.
+// nvim_syn_get_pattern_next_list deleted: Rust uses (*syn_item_at(block, idx)).sp_next_list directly.
+// nvim_syn_get_pattern_type deleted: Rust uses (*syn_item_at(block, idx)).sp_type directly.
+// nvim_syn_get_pattern_syn_match_id deleted: Rust uses (*syn_item_at(block, idx)).sp_syn_match_id directly.
 
 // nvim_syn_is_current_state_empty deleted: Rust checks CURRENT_STATE.ga_len <= 0 directly.
 
@@ -967,42 +888,10 @@ char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
-/// Get a synpat offset value by pattern index and offset index.
-int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
-{
-  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len
-      || off_idx < 0 || off_idx >= SPO_COUNT) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[pat_idx].sp_offsets[off_idx];
-}
-
-/// Get a synpat off_flags by pattern index.
-int nvim_syn_get_pattern_off_flags(int pat_idx)
-{
-  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[pat_idx].sp_off_flags;
-}
-
-/// Get the sp_syn.id by pattern index.
-int nvim_syn_get_pattern_syn_id(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return 0;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
-}
-
-/// Get the sp_cont_list by pattern index.
-int16_t *nvim_syn_get_pattern_cont_list(int idx)
-{
-  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_cont_list;
-}
+// nvim_syn_get_pattern_offset deleted: Rust uses (*syn_item_at(block, idx)).sp_offsets[off_idx] directly.
+// nvim_syn_get_pattern_off_flags deleted: Rust uses (*syn_item_at(block, idx)).sp_off_flags directly.
+// nvim_syn_get_pattern_syn_id deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.id directly.
+// nvim_syn_get_pattern_cont_list deleted: Rust uses (*syn_item_at(block, idx)).sp_cont_list directly.
 
 /// Get pattern count in the current synblock.
 int nvim_syn_get_synblock_pattern_count(void)
@@ -1034,26 +923,8 @@ void nvim_syn_clear_extmatch_in(void)
 
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
 
-/// Set all current_* fields from a stateitem (replaces 6 individual FFI calls).
-void nvim_syn_set_current_from_stateitem(stateitem_T *item)
-{
-  current_attr = item->si_attr;
-  current_id = item->si_id;
-  current_trans_id = item->si_trans_id;
-  current_flags = item->si_flags;
-  current_seqnr = item->si_seqnr;
-  current_sub_char = item->si_cchar;
-}
-
-/// Zero all current_* highlight fields (replaces 5 individual FFI calls).
-void nvim_syn_zero_current(void)
-{
-  current_attr = 0;
-  current_id = 0;
-  current_trans_id = 0;
-  current_flags = 0;
-  current_seqnr = 0;
-}
+// nvim_syn_set_current_from_stateitem deleted: Rust sets CURRENT_* statics directly.
+// nvim_syn_zero_current deleted: Rust zeroes CURRENT_* statics directly.
 
 /// Get re_extmatch_out, take ownership (sets it to NULL in C)
 reg_extmatch_T *nvim_syn_take_re_extmatch_out(void)
@@ -1070,14 +941,14 @@ void nvim_syn_clear_re_extmatch_out(void)
   re_extmatch_out = NULL;
 }
 
-int nvim_syn_get_pattern_line_id(int idx) { return SYN_ITEMS(syn_block)[idx].sp_line_id; }
-void nvim_syn_set_pattern_line_id(int idx, int line_id) { SYN_ITEMS(syn_block)[idx].sp_line_id = line_id; }
-int nvim_syn_get_pattern_startcol(int idx) { return SYN_ITEMS(syn_block)[idx].sp_startcol; }
-void nvim_syn_set_pattern_startcol(int idx, int col) { SYN_ITEMS(syn_block)[idx].sp_startcol = col; }
-int nvim_syn_get_pattern_lc_off(int idx) { return SYN_ITEMS(syn_block)[idx].sp_offsets[SPO_LC_OFF]; }
-int nvim_syn_get_pattern_syncing(int idx) { return SYN_ITEMS(syn_block)[idx].sp_syncing; }
-int nvim_syn_get_pattern_display(int idx) { return (SYN_ITEMS(syn_block)[idx].sp_flags & HL_DISPLAY) != 0; }
-int nvim_syn_get_pattern_ga_len(void) { return syn_block->b_syn_patterns.ga_len; }
+// nvim_syn_get_pattern_line_id deleted: Rust uses (*syn_item_at(block, idx)).sp_line_id directly.
+// nvim_syn_set_pattern_line_id deleted: Rust uses (*syn_item_at(block, idx)).sp_line_id = val directly.
+// nvim_syn_get_pattern_startcol deleted: Rust uses (*syn_item_at(block, idx)).sp_startcol directly.
+// nvim_syn_set_pattern_startcol deleted: Rust uses (*syn_item_at(block, idx)).sp_startcol = val directly.
+// nvim_syn_get_pattern_lc_off deleted: Rust uses (*syn_item_at(block, idx)).sp_offsets[SPO_LC_OFF] directly.
+// nvim_syn_get_pattern_syncing deleted: Rust uses (*syn_item_at(block, idx)).sp_syncing directly.
+// nvim_syn_get_pattern_display deleted: Rust uses (*syn_item_at(block, idx)).sp_flags & HL_DISPLAY directly.
+// nvim_syn_get_pattern_ga_len deleted: Rust uses nvim_synblock_get_pattern_count or nvim_synblock_get_patterns_ga_data.
 int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
 
 /// Check in_id_list for a pattern by index against the current_next_list or
@@ -1130,14 +1001,7 @@ _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
 int nvim_syn_match_linecont(linenr_T lnum) { return syn_match_linecont(lnum); }
 
-/// Get sp_sync_idx for the current synblock pattern at index idx.
-int nvim_syn_get_pattern_sync_idx(int idx)
-{
-  if (idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
-    return -2;  // NONE_IDX
-  }
-  return SYN_ITEMS(syn_block)[idx].sp_sync_idx;
-}
+// nvim_syn_get_pattern_sync_idx deleted: Rust uses (*syn_item_at(block, idx)).sp_sync_idx directly.
 
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
@@ -1450,11 +1314,7 @@ int nvim_syn_name2id_len_wrapper(const char *arg, int len)
   return syn_name2id_len(arg, (size_t)len);
 }
 
-/// Clear the scl_list of a cluster (by scl_id, not offset by SYNID_CLUSTER).
-void nvim_synblock_clear_cluster_scl_list(synblock_T *block, int scl_id)
-{
-  XFREE_CLEAR(SYN_CLSTR(block)[scl_id].scl_list);
-}
+// nvim_synblock_clear_cluster_scl_list deleted: Rust sets (*syn_cluster_at(block, scl_id)).scl_list = null directly.
 
 // =============================================================================
 // Phase 3 accessors: syn_cmd_include migration
@@ -1813,23 +1673,9 @@ void nvim_win_release_synblock(win_T *wp)
 // Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
 // =============================================================================
 
-/// Set the scl_name field of cluster at index idx in curwin->w_s->b_syn_clusters.
-void nvim_synblock_set_cluster_name(int idx, char *name)
-{
-  SYN_CLSTR(curwin->w_s)[idx].scl_name = name;
-}
-
-/// Set the scl_name_u field of cluster at index idx in curwin->w_s->b_syn_clusters.
-void nvim_synblock_set_cluster_name_u(int idx, char *name_u)
-{
-  SYN_CLSTR(curwin->w_s)[idx].scl_name_u = name_u;
-}
-
-/// Set the scl_list field of cluster at index idx in curwin->w_s->b_syn_clusters.
-void nvim_synblock_set_cluster_list(int idx, int16_t *list)
-{
-  SYN_CLSTR(curwin->w_s)[idx].scl_list = list;
-}
+// nvim_synblock_set_cluster_name deleted: Rust uses (*syn_cluster_at(block, idx)).scl_name = ptr directly.
+// nvim_synblock_set_cluster_name_u deleted: Rust uses (*syn_cluster_at(block, idx)).scl_name_u = ptr directly.
+// nvim_synblock_set_cluster_list deleted: Rust uses (*syn_cluster_at(block, idx)).scl_list = ptr directly.
 
 /// Set b_spell_cluster_id on curwin->w_s.
 void nvim_synblock_set_spell_cluster_id(int id)
@@ -2066,16 +1912,27 @@ void nvim_syn_do_clear_time(syn_time_T *st)
 
 // nvim_cur_state_get_si_idx deleted: Rust accesses current_state_item(i).as_ptr().si_idx directly.
 
-/// Get SYN_ITEMS(syn_block)[idx].sp_type for a given pattern index.
-int nvim_syn_get_sptype_at(int idx)
-{
-  if (!syn_block || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) return -1;
-  return (int)SYN_ITEMS(syn_block)[idx].sp_type;
-}
+// nvim_syn_get_sptype_at deleted: Rust uses (*syn_item_at(block, idx)).sp_type directly.
 
 // nvim_cur_state_get_m_endpos_lnum deleted: Rust accesses si_m_endpos.lnum directly.
 // nvim_cur_state_get_si_flags deleted: Rust accesses si_flags directly.
 // nvim_cur_state_set_h_startpos_cur deleted: Rust sets si_h_startpos fields directly.
+
+/// Get the base pointer to the synpat_T array for a synblock (SYN_ITEMS(block)).
+/// Used by Rust to do direct field access into SynPat via repr(C) pointer arithmetic.
+synpat_T *nvim_synblock_get_patterns_ga_data(synblock_T *block)
+{
+  if (block == NULL || block->b_syn_patterns.ga_len == 0) return NULL;
+  return (synpat_T *)block->b_syn_patterns.ga_data;
+}
+
+/// Get the base pointer to the syn_cluster_T array for a synblock (SYN_CLSTR(block)).
+/// Used by Rust to do direct field access into SynCluster via repr(C) pointer arithmetic.
+syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block)
+{
+  if (block == NULL || block->b_syn_clusters.ga_len == 0) return NULL;
+  return (syn_cluster_T *)block->b_syn_clusters.ga_data;
+}
 
 // =============================================================================
 // Phase 9: New C accessors for state_entry.rs migration

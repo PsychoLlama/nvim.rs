@@ -31,8 +31,7 @@ extern "C" {
     fn rs_syn_scl_namen2id(arg: *const c_char, len: c_int) -> c_int;
     fn nvim_syn_name2id_len_wrapper(arg: *const c_char, len: c_int) -> c_int;
 
-    // Group-level clear operations (kept in C due to hashtab coupling)
-    fn nvim_synblock_clear_cluster_scl_list(block: SynBlockHandle, scl_id: c_int);
+    // (nvim_synblock_clear_cluster_scl_list replaced by direct field access)
 
     // Redraw and free syntax state (Phase 4: decomposed wrappers)
     fn nvim_syn_redraw_curbuf_later();
@@ -110,7 +109,10 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
                 }
                 // Clear the cluster list (make it empty)
                 let scl_id = id - SYNID_CLUSTER;
-                nvim_synblock_clear_cluster_scl_list(block, scl_id);
+                let clp = crate::statics::syn_cluster_at(block, scl_id);
+                if !clp.is_null() {
+                    (*clp).scl_list = std::ptr::null_mut();
+                }
             } else {
                 let id =
                     nvim_syn_name2id_len_wrapper(cur_arg, arg_end.offset_from(cur_arg) as c_int);

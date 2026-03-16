@@ -48,9 +48,6 @@ extern "C" {
 
     // (synpat_T setters removed -- use direct repr(C) field access)
 
-    // Get pointer to sp_time for a pattern at idx in the current synblock
-    fn nvim_syn_get_pat_time_ptr(idx: c_int) -> *mut c_void;
-
     // Current synblock pattern access
     fn nvim_syn_get_synblock_pattern_count() -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
@@ -172,7 +169,7 @@ pub unsafe fn syn_regexec_pat(
 
     let ic = (*pat.as_ptr()).sp_ic;
     let regprog = (*pat.as_ptr()).sp_prog;
-    let st_ptr = nvim_syn_get_pat_time_ptr(idx);
+    let st_ptr = &raw mut (*pat.as_ptr()).sp_time as *mut c_void;
     let mut new_regprog: *mut c_void = std::ptr::null_mut();
 
     let result = syn_regexec_impl(regprog, ic, lnum, col, st_ptr, &mut new_regprog);
@@ -225,7 +222,7 @@ pub unsafe fn syn_regexec_by_idx(
 
     let ic = (*pat.as_ptr()).sp_ic;
     let regprog = (*pat.as_ptr()).sp_prog;
-    let st_ptr = nvim_syn_get_pat_time_ptr(idx);
+    let st_ptr = &raw mut (*pat.as_ptr()).sp_time as *mut c_void;
     let mut new_regprog: *mut c_void = std::ptr::null_mut();
 
     let result = syn_regexec_impl(regprog, ic, lnum, col, st_ptr, &mut new_regprog);

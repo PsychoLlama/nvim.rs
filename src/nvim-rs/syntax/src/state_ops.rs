@@ -15,9 +15,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::types::{
-    ExtMatchHandle, IdListHandle, StateItemHandle, HL_FOLD, HL_MATCHCONT, HL_TRANS_CONT,
-};
+use crate::types::{ExtMatchHandle, StateItemHandle, HL_FOLD, HL_MATCHCONT, HL_TRANS_CONT};
 
 // =============================================================================
 // FFI declarations
@@ -38,15 +36,12 @@ extern "C" {
 
     // Stateitem append helper (GA_APPEND_VIA_PTR + CLEAR_POINTER)
 
-    // Pattern next_list lookup
-    fn nvim_syn_get_pattern_next_list(idx: c_int) -> IdListHandle;
-
     // next_match col setter (kept; used standalone)
 
     // Phase 3: extmatch string comparison helpers
     fn nvim_extmatch_get_string(em: ExtMatchHandle, subidx: c_int) -> *const c_char;
     fn nvim_syn_mb_strcmp_ic(ic: c_int, a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
+    fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 
 }
 
@@ -136,12 +131,18 @@ pub unsafe extern "C" fn rs_syn_set_cur_state_item(
         (*p).si_m_lnum = 0;
     }
     // Set si_next_list based on pattern's sp_next_list
-    let next_list = if si_idx >= 0 {
-        nvim_syn_get_pattern_next_list(si_idx)
+    let next_list_ptr = if si_idx >= 0 {
+        let block = nvim_syn_get_syn_block();
+        let pat_p = crate::statics::syn_item_at(block, si_idx);
+        if pat_p.is_null() {
+            std::ptr::null_mut()
+        } else {
+            (*pat_p).sp_next_list
+        }
     } else {
-        IdListHandle::null()
+        std::ptr::null_mut()
     };
-    (*item.as_ptr()).si_next_list = next_list.0;
+    (*item.as_ptr()).si_next_list = next_list_ptr;
 }
 
 /// Count items with HL_FOLD flag in current_state.
@@ -315,7 +316,15 @@ pub unsafe extern "C" fn rs_syn_extmatch_strings_equal(
         return 0;
     }
 
-    let ic = nvim_synblock_pattern_ic(pat_idx);
+    let ic = {
+        let block = nvim_syn_get_syn_block();
+        let pp = crate::statics::syn_item_at(block, pat_idx);
+        if pp.is_null() {
+            0
+        } else {
+            (*pp).sp_ic
+        }
+    };
     if nvim_syn_mb_strcmp_ic(ic, sa, sb) == 0 {
         1
     } else {
