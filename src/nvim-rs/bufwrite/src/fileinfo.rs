@@ -18,6 +18,11 @@ const NODE_WRITABLE: c_int = 1;
 #[allow(dead_code)]
 const NODE_OTHER: c_int = 2;
 
+unsafe extern "C" {
+    static mut msg_scroll: c_int;
+    static mut msg_silent: c_int;
+}
+
 extern "C" {
     // OS functions
     #[link_name = "os_fileinfo"]
@@ -45,9 +50,7 @@ extern "C" {
     fn nvim_bw_buf_get_mtime_read_ns(buf: BufHandle) -> i64;
     fn nvim_bw_time_differs(info: FileInfoHandle, mtime: i64, mtime_ns: i64) -> c_int;
 
-    // Globals
-    fn nvim_bw_set_msg_scroll(val: c_int);
-    fn nvim_bw_set_msg_silent(val: c_int);
+    // Globals (kept as wrapper since msg_silent has different name pattern)
 
     // Dialog
     #[link_name = "msg"]
@@ -80,9 +83,9 @@ unsafe fn check_mtime_inner(buf: BufHandle, file_info: FileInfoHandle) -> c_int 
     }
     let mtime_read_ns = unsafe { nvim_bw_buf_get_mtime_read_ns(buf) };
     if unsafe { nvim_bw_time_differs(file_info, mtime_read, mtime_read_ns) } != 0 {
-        unsafe { nvim_bw_set_msg_scroll(1) }; // Don't overwrite messages here.
-        unsafe { nvim_bw_set_msg_silent(0) }; // Must give this prompt.
-                                              // Don't use emsg() here, don't want to flush the buffers.
+        unsafe { msg_scroll = 1 }; // Don't overwrite messages here.
+        unsafe { msg_silent = 0 }; // Must give this prompt.
+                                   // Don't use emsg() here, don't want to flush the buffers.
         let msg_text = unsafe {
             nvim_bw_gettext(c"WARNING: The file has been changed since reading it!!!".as_ptr())
         };
@@ -91,7 +94,7 @@ unsafe fn check_mtime_inner(buf: BufHandle, file_info: FileInfoHandle) -> c_int 
         if unsafe { ask_yesno(prompt) } == c_int::from(b'n') {
             return FAIL;
         }
-        unsafe { nvim_bw_set_msg_scroll(0) }; // Always overwrite the file message now.
+        unsafe { msg_scroll = 0 }; // Always overwrite the file message now.
     }
     OK
 }

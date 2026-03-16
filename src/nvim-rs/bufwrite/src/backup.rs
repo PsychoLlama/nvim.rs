@@ -27,6 +27,17 @@ const CPO_FWRITE: c_int = b'W' as c_int;
 // NUL
 const NUL: c_char = 0;
 
+// Size constants
+const IOSIZE: usize = 1025;
+const MAXPATHL: usize = 4096;
+
+unsafe extern "C" {
+    static mut p_bex: *const c_char;
+    static mut p_bdir: *mut c_char;
+    static mut p_bk: c_int;
+    static mut IObuff: [c_char; IOSIZE];
+}
+
 extern "C" {
     // FileInfo operations
     #[link_name = "os_fileinfo_hardlinks"]
@@ -89,11 +100,6 @@ extern "C" {
     // Copy xattr (wraps #ifdef HAVE_XATTR)
     fn nvim_bw_os_copy_xattr(src: *const c_char, dst: *const c_char);
 
-    // Options
-    fn nvim_bw_get_p_bex() -> *const c_char;
-    fn nvim_bw_get_p_bdir() -> *mut c_char;
-    fn nvim_bw_get_p_bk() -> c_int;
-
     // Utility
     #[link_name = "copy_option_part"]
     fn copy_option_part(
@@ -102,8 +108,6 @@ extern "C" {
         maxlen: usize,
         sep: *const c_char,
     ) -> usize;
-    fn nvim_bw_get_IObuff_mut() -> *mut c_char;
-    fn nvim_bw_get_IOSIZE() -> c_int;
     fn nvim_bw_os_mkdir_recurse(
         dir: *const c_char,
         perm: c_int,
@@ -127,8 +131,6 @@ extern "C" {
 
     // Sizes
     fn nvim_bw_sizeof_FileInfo() -> usize;
-    // MAXPATHL
-    fn nvim_bw_get_MAXPATHL() -> c_int;
 }
 
 // Error messages (translated at call site)
@@ -190,7 +192,7 @@ unsafe fn determine_backup_copy(
             // the ones from the original file.
             let tail = unsafe { path_tail(fname) };
             let dirlen = unsafe { tail.offset_from(fname) } as usize;
-            let maxpathl = unsafe { nvim_bw_get_MAXPATHL() } as usize;
+            let maxpathl = MAXPATHL;
             assert!(dirlen < maxpathl);
 
             // Use a stack buffer for tmp_fname
@@ -275,10 +277,10 @@ unsafe fn backup_by_copy(
     err: *mut BwError,
 ) -> c_int {
     let mut some_error = false;
-    let iobuff = unsafe { nvim_bw_get_IObuff_mut() };
-    let iosize = unsafe { nvim_bw_get_IOSIZE() } as usize;
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
+    let iosize = IOSIZE;
 
-    let mut dirp = unsafe { nvim_bw_get_p_bdir() };
+    let mut dirp = unsafe { p_bdir };
 
     while unsafe { *dirp } != NUL {
         let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
@@ -324,7 +326,7 @@ unsafe fn backup_by_copy(
             if unsafe { os_fileinfo_id_equal(file_info_new, file_info_old) } != 0 {
                 // Backup file is same as original file
                 unsafe { nvim_bw_XFREE_CLEAR(backupp) };
-            } else if unsafe { nvim_bw_get_p_bk() } == 0 {
+            } else if unsafe { p_bk == 0 } {
                 // Not keeping backups — try to use another name
                 let bkp = unsafe { *backupp };
                 let bkplen = unsafe { nvim_bw_strlen(bkp) };
@@ -427,9 +429,9 @@ unsafe fn backup_by_rename(
         return FAIL;
     }
 
-    let iobuff = unsafe { nvim_bw_get_IObuff_mut() };
-    let iosize = unsafe { nvim_bw_get_IOSIZE() } as usize;
-    let mut dirp = unsafe { nvim_bw_get_p_bdir() };
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
+    let iosize = IOSIZE;
+    let mut dirp = unsafe { p_bdir };
 
     while unsafe { *dirp } != NUL {
         let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
@@ -463,7 +465,7 @@ unsafe fn backup_by_rename(
         if !unsafe { *backupp }.is_null() {
             // If we are not going to keep the backup file, don't
             // delete an existing one, try to use another name.
-            if unsafe { nvim_bw_get_p_bk() } == 0 && unsafe { os_path_exists(*backupp) } != 0 {
+            if unsafe { p_bk == 0 } && unsafe { os_path_exists(*backupp) } != 0 {
                 let bkp = unsafe { *backupp };
                 let bkplen = unsafe { nvim_bw_strlen(bkp) };
                 let extlen = unsafe { nvim_bw_strlen(backup_ext) };
@@ -536,11 +538,10 @@ pub unsafe extern "C" fn rs_buf_write_make_backup(
     }
 
     // Get backup extension
-    let p_bex = unsafe { nvim_bw_get_p_bex() };
     let backup_ext = if unsafe { *p_bex } == NUL {
         c".bak".as_ptr()
     } else {
-        p_bex
+        unsafe { p_bex }
     };
 
     let result = if backup_copy {

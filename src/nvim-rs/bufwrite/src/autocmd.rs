@@ -50,6 +50,12 @@ type AcoHandle = *mut std::ffi::c_void;
 /// Opaque handle to a C `bufref_T` struct.
 type BufrefHandle = *mut std::ffi::c_void;
 
+unsafe extern "C" {
+    static mut msg_scroll: c_int;
+    static mut no_wait_return: c_int;
+    static mut curbuf: BufHandle;
+}
+
 extern "C" {
     // Autocmd operations (use opaque handles)
     fn nvim_bw_aucmd_prepbuf(aco: AcoHandle, buf: BufHandle);
@@ -73,7 +79,6 @@ extern "C" {
     fn curbufIsChanged() -> c_int;
     #[link_name = "aborting"]
     fn aborting() -> c_int;
-    fn nvim_bw_get_curbuf() -> BufHandle;
 
     // Buffer field accessors (names match C functions exactly)
     fn nvim_bw_buf_get_ml_line_count(buf: BufHandle) -> i32;
@@ -96,9 +101,6 @@ extern "C" {
     fn ml_timestamp(buf: BufHandle);
 
     // Globals
-    fn nvim_bw_dec_no_wait_return();
-    fn nvim_bw_get_msg_scroll() -> c_int;
-    fn nvim_bw_set_msg_scroll(val: c_int);
     fn nvim_bw_get_cmdmod_cmod_flags() -> c_int;
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
 
@@ -138,7 +140,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
     orig_end: PosT,
 ) -> c_int {
     let old_line_count = unsafe { nvim_bw_buf_get_ml_line_count(buf) };
-    let msg_save = unsafe { nvim_bw_get_msg_scroll() };
+    let msg_save = unsafe { msg_scroll };
 
     // Heap-allocate aco_save_T and bufref_T as opaque blobs
     let aco_size = unsafe { nvim_bw_sizeof_aco_save() };
@@ -163,8 +165,6 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
     // Set curwin/curbuf to buf and save a few things
     unsafe { nvim_bw_aucmd_prepbuf(aco, buf) };
     unsafe { nvim_bw_set_bufref(bufref, buf) };
-
-    let curbuf = unsafe { nvim_bw_get_curbuf() };
 
     if append != 0 {
         did_cmd = unsafe {
@@ -253,12 +253,12 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
         }
 
         unsafe {
-            nvim_bw_dec_no_wait_return();
-            nvim_bw_set_msg_scroll(msg_save);
+            no_wait_return -= 1;
+            msg_scroll = msg_save;
         }
 
         if nofile_err {
-            unsafe { nvim_bw_semsg_nofile_err(nvim_bw_get_curbuf()) };
+            unsafe { nvim_bw_semsg_nofile_err(curbuf) };
         }
 
         if nofile_err || unsafe { aborting() } != 0 {
@@ -308,8 +308,8 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             let new_end = end - (old_line_count - new_line_count);
             if new_end < start {
                 unsafe {
-                    nvim_bw_dec_no_wait_return();
-                    nvim_bw_set_msg_scroll(msg_save);
+                    no_wait_return -= 1;
+                    msg_scroll = msg_save;
                     emsg(nvim_bw_gettext(
                         c"E204: Autocommand changed number of lines in unexpected way".as_ptr(),
                     ));
@@ -357,13 +357,10 @@ pub unsafe extern "C" fn rs_buf_write_do_post_autocmds(
     let mut aco_buf = vec![0u8; aco_size];
     let aco: AcoHandle = aco_buf.as_mut_ptr().cast();
 
-    let curbuf = unsafe { nvim_bw_get_curbuf() };
     unsafe { nvim_bw_buf_set_no_eol_lnum(curbuf, 0) };
 
     // Set curwin/curbuf to buf
     unsafe { nvim_bw_aucmd_prepbuf(aco, buf) };
-
-    let curbuf = unsafe { nvim_bw_get_curbuf() };
 
     if append != 0 {
         unsafe {

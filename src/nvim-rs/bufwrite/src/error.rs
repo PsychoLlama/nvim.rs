@@ -66,6 +66,12 @@ impl BwError {
     }
 }
 
+const IOSIZE: usize = 1025;
+
+unsafe extern "C" {
+    static mut IObuff: [c_char; IOSIZE];
+}
+
 extern "C" {
     #[link_name = "emsg"]
     fn nvim_bw_emsg(msg: *const c_char) -> c_int;
@@ -79,7 +85,6 @@ extern "C" {
         d: *const c_char,
     );
     fn nvim_bw_os_strerror(errnum: c_int) -> *const c_char;
-    fn nvim_bw_get_IObuff() -> *mut c_char;
     fn nvim_bw_xfree(ptr: *mut c_char);
 }
 
@@ -94,12 +99,12 @@ unsafe fn emit_err_inner(e: &BwError) {
             // semsg("%s: %s%s: %s", e->num, IObuff, e->msg, os_strerror(e->arg))
             let fmt = c"%s: %s%s: %s".as_ptr();
             let strerr = unsafe { nvim_bw_os_strerror(e.arg) };
-            let iobuff = unsafe { nvim_bw_get_IObuff() };
+            let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
             unsafe { nvim_bw_semsg_4(fmt, e.num, iobuff, e.msg, strerr) };
         } else {
             // semsg("%s: %s%s", e->num, IObuff, e->msg)
             let fmt = c"%s: %s%s".as_ptr();
-            let iobuff = unsafe { nvim_bw_get_IObuff() };
+            let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
             unsafe { nvim_bw_semsg_3(fmt, e.num, iobuff, e.msg) };
         }
     } else if e.arg != 0 {

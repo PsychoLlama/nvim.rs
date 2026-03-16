@@ -160,11 +160,6 @@ const char *nvim_bw_os_strerror(int errnum)
   return os_strerror(errnum);
 }
 
-char *nvim_bw_get_IObuff(void)
-{
-  return IObuff;
-}
-
 void nvim_bw_xfree(char *ptr)
 {
   xfree(ptr);
@@ -213,11 +208,6 @@ int nvim_bw_time_differs(FileInfo *info, int64_t mtime, int64_t mtime_ns)
                          mtime, mtime_ns, 0);
 #endif
 }
-
-// Globals
-int nvim_bw_get_msg_scroll(void) { return msg_scroll; }
-void nvim_bw_set_msg_scroll(int val) { msg_scroll = val; }
-void nvim_bw_set_msg_silent(int val) { msg_silent = val; }
 
 // Options
 int nvim_bw_cpo_contains(int c)
@@ -307,11 +297,6 @@ int nvim_bw_write_eintr(int fd, const char *buf, size_t len)
 }
 
 // Backup accessors
-char *nvim_bw_get_p_bex(void) { return p_bex; }
-char *nvim_bw_get_p_bdir(void) { return p_bdir; }
-int nvim_bw_get_p_bk(void) { return p_bk; }
-char *nvim_bw_get_IObuff_mut(void) { return IObuff; }
-int nvim_bw_get_IOSIZE(void) { return IOSIZE; }
 void nvim_bw_os_set_acl(const char *fname, vim_acl_T acl) { os_set_acl(fname, acl); }
 int nvim_bw_os_mkdir_recurse(const char *dir, int32_t mode, char **failed_dir) { return os_mkdir_recurse(dir, mode, failed_dir, NULL); }
 void nvim_bw_xmemcpyz(void *dst, const void *src, size_t len) { xmemcpyz(dst, src, len); }
@@ -320,7 +305,6 @@ size_t nvim_bw_strlen(const char *s) { return strlen(s); }
 void nvim_bw_XFREE_CLEAR(char **pp) { XFREE_CLEAR(*pp); }
 int nvim_bw_open_flags_creat_wronly_excl_nofollow(void) { return O_CREAT|O_WRONLY|O_EXCL|O_NOFOLLOW; }
 int nvim_bw_uv_fs_copyfile_ficlone(void) { return UV_FS_COPYFILE_FICLONE; }
-int nvim_bw_get_MAXPATHL(void) { return MAXPATHL; }
 size_t nvim_bw_sizeof_FileInfo(void) { return sizeof(FileInfo); }
 #ifdef UNIX
 uint32_t nvim_bw_fi_get_st_uid(FileInfo *fi) { return (uint32_t)fi->stat.st_uid; }
@@ -364,29 +348,11 @@ int nvim_bw_buf_get_changed(buf_T *buf) { return buf->b_changed; }
 void nvim_bw_buf_set_no_eol_lnum(buf_T *buf, linenr_T lnum) { buf->b_no_eol_lnum = lnum; }
 
 // Global state accessors
-buf_T *nvim_bw_get_curbuf(void) { return curbuf; }
 int nvim_bw_bt_nofilename(buf_T *buf) { return bt_nofilename(buf); }
-void nvim_bw_dec_no_wait_return(void) { no_wait_return--; }
 int nvim_bw_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 void nvim_bw_semsg_nofile_err(buf_T *buf) { semsg(_(e_no_matching_autocommands_for_buftype_str_buffer), buf->b_p_bt); }
 
 // Phase 8+9: buf_write main function accessors
-
-// Global state
-int nvim_bw_get_got_int(void) { return got_int; }
-void nvim_bw_set_got_int(int val) { got_int = val != 0; }
-int nvim_bw_get_exiting(void) { return exiting; }
-void nvim_bw_set_ex_no_reprint(int val) { ex_no_reprint = val != 0; }
-void nvim_bw_set_msg_ext_overwrite(int val) { msg_ext_overwrite = val != 0; }
-void nvim_bw_set_need_maketitle(int val) { need_maketitle = val != 0; }
-void nvim_bw_inc_no_wait_return(void) { no_wait_return++; }
-
-// Options
-int nvim_bw_get_p_wb(void) { return p_wb; }
-char *nvim_bw_get_p_pm(void) { return p_pm; }
-char *nvim_bw_get_p_bsk(void) { return p_bsk; }
-char *nvim_bw_get_p_ccv(void) { return p_ccv; }
-int nvim_bw_get_p_fs(void) { return p_fs; }
 
 // Buffer field accessors - phase 8+9
 int nvim_bw_buf_get_ml_flags(buf_T *buf) { return buf->b_ml.ml_flags; }
