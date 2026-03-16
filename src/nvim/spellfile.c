@@ -433,6 +433,12 @@ extern void rs_clear_node(wordnode_T *node);
 // spellinfo_T is forward-declared as an opaque pointer from Rust's perspective.
 extern int rs_node_compress(spellinfo_T *spin, wordnode_T *node, int *tot_out);
 
+// Phase 5: Tree-building functions migrated to Rust.
+extern int rs_tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, int flags,
+                            int region, int affixID);
+extern int rs_store_word(spellinfo_T *spin, const char *word, int flags, int region,
+                         const char *pfxlist, bool need_affix);
+
 // Phase 1: Pure affix utility functions migrated to Rust.
 extern bool rs_is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
 extern bool rs_spell_info_item(const char *s);
@@ -714,6 +720,7 @@ typedef struct spellinfo_S {
 // Phase 5: forward declarations for functions defined later in this file.
 static bool valid_spell_word(const char *word, const char *end);
 static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name);
+static wordnode_T *get_wordnode(spellinfo_T *spin);
 // Compression globals (defined near tree_add_word below).
 static int compress_start;
 static int compress_inc;
@@ -795,6 +802,30 @@ void nvim_wordnode_set_byte(wordnode_T *n, uint8_t byte) { n->wn_byte = byte; }
 void nvim_wordnode_set_flags(wordnode_T *n, uint16_t flags) { n->wn_flags = flags; }
 void nvim_wordnode_set_region(wordnode_T *n, int16_t region) { n->wn_region = region; }
 void nvim_wordnode_set_affixID(wordnode_T *n, uint8_t id) { n->wn_affixID = id; }
+// Bitwise OR into wn_region (for accumulating regions in tree_add_word).
+void nvim_wordnode_or_region(wordnode_T *n, int16_t region) { n->wn_region |= region; }
+
+// Allocate a new wordnode_T from the arena (used by tree_add_word in Rust).
+// Returns NULL on arena failure.
+wordnode_T *nvim_get_wordnode(spellinfo_T *spin)
+{
+  return get_wordnode(spin);
+}
+
+// Clear a wordnode_T in-place (zero all fields, used by get_wordnode for recycled nodes).
+void nvim_wordnode_clear(wordnode_T *n) { CLEAR_POINTER(n); }
+
+// Message helpers needed by tree_add_word for compression progress.
+void nvim_spell_msg_compress(spellinfo_T *spin) {
+  if (spin->si_verbose) {
+    msg_start();
+    msg_puts(_(msg_compressing));
+    msg_clr_eos();
+    msg_didout = false;
+    msg_col = 0;
+    ui_flush();
+  }
+}
 
 #include "spellfile.c.generated.h"
 
@@ -3242,204 +3273,16 @@ static bool valid_spell_word(const char *word, const char *end)
 static int store_word(spellinfo_T *spin, char *word, int flags, int region, const char *pfxlist,
                       bool need_affix)
 {
-  int len = (int)strlen(word);
-  int ct = captype(word, word + len);
-  char foldword[MAXWLEN];
-  int res = OK;
-
-  // Avoid adding illegal bytes to the word tree.
-  if (!valid_spell_word(word, word + len)) {
-    return FAIL;
-  }
-
-  spell_casefold(curwin, word, len, foldword, MAXWLEN);
-  for (const char *p = pfxlist; res == OK; p++) {
-    if (!need_affix || (p != NULL && *p != NUL)) {
-      res = tree_add_word(spin, foldword, spin->si_foldroot, ct | flags,
-                          region, p == NULL ? 0 : *p);
-    }
-    if (p == NULL || *p == NUL) {
-      break;
-    }
-  }
-  spin->si_foldwcount++;
-
-  if (res == OK && (ct == WF_KEEPCAP || (flags & WF_KEEPCAP))) {
-    for (const char *p = pfxlist; res == OK; p++) {
-      if (!need_affix || (p != NULL && *p != NUL)) {
-        res = tree_add_word(spin, word, spin->si_keeproot, flags,
-                            region, p == NULL ? 0 : *p);
-      }
-      if (p == NULL || *p == NUL) {
-        break;
-      }
-    }
-    spin->si_keepwcount++;
-  }
-  return res;
+  return rs_store_word(spin, word, flags, region, pfxlist, need_affix);
 }
 
-// Add word "word" to a word tree at "root".
-// When "flags" < 0 we are adding to the prefix tree where "flags" is used for
-// "rare" and "region" is the condition nr.
-// Returns FAIL when out of memory.
+// Thin wrapper: delegates to Rust rs_tree_add_word.
 static int tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, int flags,
                          int region, int affixID)
 {
-  wordnode_T *node = root;
-  wordnode_T **prev = NULL;
-
-  // Add each byte of the word to the tree, including the NUL at the end.
-  for (int i = 0;; i++) {
-    // When there is more than one reference to this node we need to make
-    // a copy, so that we can modify it.  Copy the whole list of siblings
-    // (we don't optimize for a partly shared list of siblings).
-    if (node != NULL && node->wn_refs > 1) {
-      node->wn_refs--;
-      wordnode_T **copyprev = prev;
-      for (wordnode_T *copyp = node; copyp != NULL; copyp = copyp->wn_sibling) {
-        // Allocate a new node and copy the info.
-        wordnode_T *np = get_wordnode(spin);
-        if (np == NULL) {
-          return FAIL;
-        }
-        np->wn_child = copyp->wn_child;
-        if (np->wn_child != NULL) {
-          np->wn_child->wn_refs++;              // child gets extra ref
-        }
-        np->wn_byte = copyp->wn_byte;
-        if (np->wn_byte == NUL) {
-          np->wn_flags = copyp->wn_flags;
-          np->wn_region = copyp->wn_region;
-          np->wn_affixID = copyp->wn_affixID;
-        }
-
-        // Link the new node in the list, there will be one ref.
-        np->wn_refs = 1;
-        if (copyprev != NULL) {
-          *copyprev = np;
-        }
-        copyprev = &np->wn_sibling;
-
-        // Let "node" point to the head of the copied list.
-        if (copyp == node) {
-          node = np;
-        }
-      }
-    }
-
-    // Look for the sibling that has the same character.  They are sorted
-    // on byte value, thus stop searching when a sibling is found with a
-    // higher byte value.  For zero bytes (end of word) the sorting is
-    // done on flags and then on affixID.
-    while (node != NULL
-           && (node->wn_byte < (uint8_t)word[i]
-               || (node->wn_byte == NUL
-                   && (flags < 0
-                       ? node->wn_affixID < (unsigned)affixID
-                       : (node->wn_flags < (unsigned)(flags & WN_MASK)
-                          || (node->wn_flags == (flags & WN_MASK)
-                              && (spin->si_sugtree
-                                  ? (node->wn_region & 0xffff) < region
-                                  : node->wn_affixID
-                                  < (unsigned)affixID))))))) {
-      prev = &node->wn_sibling;
-      node = *prev;
-    }
-    if (node == NULL
-        || node->wn_byte != (uint8_t)word[i]
-        || (word[i] == NUL
-            && (flags < 0
-                || spin->si_sugtree
-                || node->wn_flags != (flags & WN_MASK)
-                || node->wn_affixID != affixID))) {
-      // Allocate a new node.
-      wordnode_T *np = get_wordnode(spin);
-      if (np == NULL) {
-        return FAIL;
-      }
-      np->wn_byte = (uint8_t)word[i];
-
-      // If "node" is NULL this is a new child or the end of the sibling
-      // list: ref count is one.  Otherwise use ref count of sibling and
-      // make ref count of sibling one (matters when inserting in front
-      // of the list of siblings).
-      if (node == NULL) {
-        np->wn_refs = 1;
-      } else {
-        np->wn_refs = node->wn_refs;
-        node->wn_refs = 1;
-      }
-      if (prev != NULL) {
-        *prev = np;
-      }
-      np->wn_sibling = node;
-      node = np;
-    }
-
-    if (word[i] == NUL) {
-      node->wn_flags = (uint16_t)flags;
-      node->wn_region |= (int16_t)region;
-      node->wn_affixID = (uint8_t)affixID;
-      break;
-    }
-    prev = &node->wn_child;
-    node = *prev;
-  }
-  // count nr of words added since last message
-  spin->si_msg_count++;
-
-  if (spin->si_compress_cnt > 1) {
-    if (--spin->si_compress_cnt == 1) {
-      // Did enough words to lower the block count limit.
-      spin->si_blocks_cnt += compress_inc;
-    }
-  }
-
-  // When we have allocated lots of memory we need to compress the word tree
-  // to free up some room.  But compression is slow, and we might actually
-  // need that room, thus only compress in the following situations:
-  // 1. When not compressed before (si_compress_cnt == 0): when using
-  //    "compress_start" blocks.
-  // 2. When compressed before and used "compress_inc" blocks before
-  //    adding "compress_added" words (si_compress_cnt > 1).
-  // 3. When compressed before, added "compress_added" words
-  //    (si_compress_cnt == 1) and the number of free nodes drops below the
-  //    maximum word length.
-#ifndef SPELL_COMPRESS_ALWAYS
-  if (spin->si_compress_cnt == 1
-      ? spin->si_free_count < MAXWLEN
-      : spin->si_blocks_cnt >= compress_start)
-#endif
-  {
-    // Decrement the block counter.  The effect is that we compress again
-    // when the freed up room has been used and another "compress_inc"
-    // blocks have been allocated.  Unless "compress_added" words have
-    // been added, then the limit is put back again.
-    spin->si_blocks_cnt -= compress_inc;
-    spin->si_compress_cnt = compress_added;
-
-    if (spin->si_verbose) {
-      msg_start();
-      msg_puts(_(msg_compressing));
-      msg_clr_eos();
-      msg_didout = false;
-      msg_col = 0;
-      ui_flush();
-    }
-
-    // Compress both trees.  Either they both have many nodes, which makes
-    // compression useful, or one of them is small, which means
-    // compression goes fast.  But when filling the soundfold word tree
-    // there is no keep-case tree.
-    wordtree_compress(spin, spin->si_foldroot, "case-folded");
-    if (affixID >= 0) {
-      wordtree_compress(spin, spin->si_keeproot, "keep-case");
-    }
-  }
-
-  return OK;
+  return rs_tree_add_word(spin, word, root, flags, region, affixID);
 }
+
 
 // Get a wordnode_T, either from the list of previously freed nodes or
 // allocate a new one.

@@ -5795,6 +5795,369 @@ pub unsafe extern "C" fn rs_node_compress(
 }
 
 // =============================================================================
+// Phase 5: tree_add_word, store_word
+// =============================================================================
+
+extern "C" {
+    // Wordnode allocator
+    fn nvim_get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT;
+    // Wordnode setters
+    fn nvim_wordnode_set_sibling(n: *mut WordnodeT, sib: *mut WordnodeT);
+    fn nvim_wordnode_set_child(n: *mut WordnodeT, child: *mut WordnodeT);
+    fn nvim_wordnode_set_byte(n: *mut WordnodeT, byte: u8);
+    fn nvim_wordnode_set_flags(n: *mut WordnodeT, flags: u16);
+    fn nvim_wordnode_set_region(n: *mut WordnodeT, region: i16);
+    fn nvim_wordnode_set_affixID(n: *mut WordnodeT, id: u8);
+    fn nvim_wordnode_or_region(n: *mut WordnodeT, region: i16);
+    // Spin accessors
+    fn nvim_spin_get_foldroot(s: *const SpellinfoT) -> *mut WordnodeT;
+    fn nvim_spin_get_keeproot(s: *const SpellinfoT) -> *mut WordnodeT;
+    fn nvim_spin_get_foldwcount(s: *const SpellinfoT) -> c_int;
+    fn nvim_spin_set_foldwcount(s: *mut SpellinfoT, v: c_int);
+    fn nvim_spin_get_keepwcount(s: *const SpellinfoT) -> c_int;
+    fn nvim_spin_set_keepwcount(s: *mut SpellinfoT, v: c_int);
+    fn nvim_spin_get_sugtree(s: *const SpellinfoT) -> c_int;
+    fn nvim_spin_inc_msg_count(s: *mut SpellinfoT);
+    fn nvim_spin_get_compress_cnt(s: *const SpellinfoT) -> c_int;
+    fn nvim_spin_set_compress_cnt(s: *mut SpellinfoT, v: c_int);
+    fn nvim_spin_get_blocks_cnt(s: *const SpellinfoT) -> c_int;
+    fn nvim_spin_add_blocks_cnt(s: *mut SpellinfoT, v: c_int);
+    fn nvim_spin_sub_blocks_cnt(s: *mut SpellinfoT, v: c_int);
+    fn nvim_spin_get_free_count(s: *const SpellinfoT) -> c_int;
+    // Spell helpers
+    fn nvim_spell_msg_compress(spin: *mut SpellinfoT);
+    fn nvim_spell_captype(word: *const c_char, end: *const c_char) -> c_int;
+    fn nvim_spell_casefold(
+        word: *const c_char,
+        len: c_int,
+        buf: *mut c_char,
+        buflen: c_int,
+    ) -> c_int;
+    fn nvim_spell_valid_spell_word(word: *const c_char, end: *const c_char) -> bool;
+    fn nvim_spell_wordtree_compress(
+        spin: *mut SpellinfoT,
+        root: *mut WordnodeT,
+        name: *const c_char,
+    );
+    fn nvim_spell_compress_start() -> c_int;
+    fn nvim_spell_compress_inc() -> c_int;
+    fn nvim_spell_compress_added() -> c_int;
+}
+
+/// Tracking where to link a new node when inserting.
+///
+/// Because `wordnode_T` sibling/child fields are accessed via accessor functions,
+/// we can't hold `*mut *mut WordnodeT` into struct fields. Instead we track which
+/// node owns the pointer-slot and whether it's the sibling or child slot.
+#[derive(Copy, Clone)]
+enum Prev {
+    /// No parent yet (only happens when `node = root` before advancing).
+    None,
+    /// Link via the `wn_sibling` field of this node.
+    Sibling(*mut WordnodeT),
+    /// Link via the `wn_child` field of this node.
+    Child(*mut WordnodeT),
+}
+
+impl Prev {
+    /// Write `val` into the tracked field.
+    #[allow(clippy::enum_variant_names)]
+    unsafe fn set(self, val: *mut WordnodeT) {
+        match self {
+            Self::None => {}
+            Self::Sibling(p) => nvim_wordnode_set_sibling(p, val),
+            Self::Child(p) => nvim_wordnode_set_child(p, val),
+        }
+    }
+}
+
+/// Rust implementation of `tree_add_word`.
+///
+/// Adds a NUL-terminated `word` to the trie rooted at `root`.
+/// Returns 0 (OK) or 1 (FAIL).
+///
+/// # Safety
+/// All pointers must be valid. `word` must be a valid NUL-terminated C string.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_tree_add_word(
+    spin: *mut SpellinfoT,
+    word: *const c_char,
+    root: *mut WordnodeT,
+    flags: c_int,
+    region: c_int,
+    affix_id: c_int,
+) -> c_int {
+    let word_len = libc::strlen(word) as usize;
+    // Build a slice including the NUL terminator for iteration
+    let word_bytes = std::slice::from_raw_parts(word.cast::<u8>(), word_len + 1);
+
+    let mut node = root;
+    let mut prev = Prev::None;
+
+    for &byte_i in word_bytes {
+        // ---- COW: if this node has more than one reference, copy the sibling list ----
+        if !node.is_null() && nvim_wordnode_get_refs(node) > 1 {
+            nvim_wordnode_set_refs(node, nvim_wordnode_get_refs(node) - 1);
+            let mut copy_prev = prev;
+            let original_node = node;
+            let mut copy_p = original_node;
+            let mut first_copy: *mut WordnodeT = std::ptr::null_mut();
+            while !copy_p.is_null() {
+                let np = nvim_get_wordnode(spin);
+                if np.is_null() {
+                    return 1; // FAIL
+                }
+                // Copy all fields
+                let child = nvim_wordnode_get_child(copy_p);
+                nvim_wordnode_set_child(np, child);
+                if !child.is_null() {
+                    nvim_wordnode_set_refs(child, nvim_wordnode_get_refs(child) + 1);
+                }
+                let b = nvim_wordnode_get_byte(copy_p);
+                nvim_wordnode_set_byte(np, b);
+                if b == 0 {
+                    nvim_wordnode_set_flags(np, nvim_wordnode_get_flags(copy_p));
+                    nvim_wordnode_set_region(np, nvim_wordnode_get_region(copy_p));
+                    nvim_wordnode_set_affixID(np, nvim_wordnode_get_affixID(copy_p));
+                }
+                nvim_wordnode_set_refs(np, 1);
+                // Link this copy into the new chain via copy_prev
+                copy_prev.set(np);
+                copy_prev = Prev::Sibling(np);
+                // Track the first copy so we can update `node`
+                if copy_p == original_node {
+                    first_copy = np;
+                }
+                copy_p = nvim_wordnode_get_sibling(copy_p);
+            }
+            // `node` now points to the first copy
+            node = first_copy;
+        }
+
+        // ---- Find the sibling with the matching byte ----
+        while !node.is_null() {
+            let nb = nvim_wordnode_get_byte(node);
+            let advance = if byte_i == 0 {
+                // NUL node: compare on flags/region/affixID
+                if flags < 0 {
+                    (nvim_wordnode_get_affixID(node) as c_int) < affix_id
+                } else if (nvim_wordnode_get_flags(node) as c_int) < (flags & WN_MASK) {
+                    true
+                } else if (nvim_wordnode_get_flags(node) as c_int) == (flags & WN_MASK) {
+                    if nvim_spin_get_sugtree(spin) != 0 {
+                        ((nvim_wordnode_get_region(node) as c_int) & 0xffff) < region
+                    } else {
+                        (nvim_wordnode_get_affixID(node) as c_int) < affix_id
+                    }
+                } else {
+                    false
+                }
+            } else {
+                nb < byte_i
+            };
+            if !advance {
+                break;
+            }
+            prev = Prev::Sibling(node);
+            node = nvim_wordnode_get_sibling(node);
+        }
+
+        // ---- Check if the current node matches this byte ----
+        let matched = if node.is_null() {
+            false
+        } else {
+            let nb = nvim_wordnode_get_byte(node);
+            if nb != byte_i {
+                false
+            } else if byte_i == 0 {
+                // NUL: match only if flags/affixID also match (and not sugtree)
+                flags >= 0
+                    && nvim_spin_get_sugtree(spin) == 0
+                    && (nvim_wordnode_get_flags(node) as c_int) == (flags & WN_MASK)
+                    && (nvim_wordnode_get_affixID(node) as c_int) == affix_id
+            } else {
+                true
+            }
+        };
+
+        if !matched {
+            // ---- Allocate a new node ----
+            let np = nvim_get_wordnode(spin);
+            if np.is_null() {
+                return 1; // FAIL
+            }
+            nvim_wordnode_set_byte(np, byte_i);
+            if node.is_null() {
+                nvim_wordnode_set_refs(np, 1);
+            } else {
+                nvim_wordnode_set_refs(np, nvim_wordnode_get_refs(node));
+                nvim_wordnode_set_refs(node, 1);
+            }
+            prev.set(np);
+            nvim_wordnode_set_sibling(np, node);
+            node = np;
+        }
+
+        // ---- At end of word, set flags/region/affixID and stop ----
+        if byte_i == 0 {
+            nvim_wordnode_set_flags(node, (flags & WN_MASK) as u16);
+            nvim_wordnode_or_region(node, region as i16);
+            nvim_wordnode_set_affixID(node, affix_id as u8);
+            break;
+        }
+
+        // ---- Go deeper ----
+        prev = Prev::Child(node);
+        node = nvim_wordnode_get_child(node);
+    }
+
+    // ---- Increment message counter ----
+    nvim_spin_inc_msg_count(spin);
+
+    // ---- Compression trigger logic ----
+    let compress_cnt = nvim_spin_get_compress_cnt(spin);
+    if compress_cnt > 1 {
+        let new_cnt = compress_cnt - 1;
+        nvim_spin_set_compress_cnt(spin, new_cnt);
+        if new_cnt == 1 {
+            nvim_spin_add_blocks_cnt(spin, nvim_spell_compress_inc());
+        }
+    }
+
+    // Check if compression is needed
+    #[allow(clippy::cast_possible_wrap)]
+    let should_compress = if compress_cnt == 1 {
+        nvim_spin_get_free_count(spin) < MAXWLEN as c_int
+    } else {
+        nvim_spin_get_blocks_cnt(spin) >= nvim_spell_compress_start()
+    };
+
+    if should_compress {
+        nvim_spin_sub_blocks_cnt(spin, nvim_spell_compress_inc());
+        nvim_spin_set_compress_cnt(spin, nvim_spell_compress_added());
+        nvim_spell_msg_compress(spin);
+        nvim_spell_wordtree_compress(spin, nvim_spin_get_foldroot(spin), c"case-folded".as_ptr());
+        if affix_id >= 0 {
+            nvim_spell_wordtree_compress(spin, nvim_spin_get_keeproot(spin), c"keep-case".as_ptr());
+        }
+    }
+
+    0 // OK
+}
+
+/// Word flags mask (matches C `WN_MASK = 0xffff`).
+const WN_MASK: c_int = 0xffff;
+
+/// WF_KEEPCAP flag value (matches spell_defs.h).
+const WF_KEEPCAP: c_int = 0x80;
+
+/// `MAXWLEN + 1` (255), for `nvim_spell_casefold` buffer length.
+const FOLDWORD_LEN: c_int = 255;
+
+/// Rust implementation of `store_word`.
+///
+/// Stores a word in the case-folded tree (and keep-case tree if KEEPCAP).
+/// Returns 0 (OK) or 1 (FAIL).
+///
+/// # Safety
+/// - `spin` must be a valid spellinfo_T pointer.
+/// - `word` must be a valid NUL-terminated C string.
+/// - `pfxlist` must be NULL or a valid NUL-terminated byte string of affix IDs.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_store_word(
+    spin: *mut SpellinfoT,
+    word: *const c_char,
+    flags: c_int,
+    region: c_int,
+    pfxlist: *const c_char,
+    need_affix: bool,
+) -> c_int {
+    let word_len = libc::strlen(word) as c_int;
+    let end = word.add(word_len as usize);
+
+    // Reject words with illegal characters.
+    if !nvim_spell_valid_spell_word(word, end) {
+        return 1; // FAIL
+    }
+
+    let ct = nvim_spell_captype(word, end);
+
+    // Case-fold the word.
+    let mut foldword = [0i8; MAXWLEN + 1];
+    nvim_spell_casefold(word, word_len, foldword.as_mut_ptr(), FOLDWORD_LEN);
+
+    let mut res = 0i32;
+    let foldroot = nvim_spin_get_foldroot(spin);
+
+    // Store in case-folded tree for each prefix/compound ID in pfxlist.
+    {
+        let mut p: *const c_char = if pfxlist.is_null() {
+            std::ptr::null()
+        } else {
+            pfxlist
+        };
+        loop {
+            if !need_affix || (!p.is_null() && *p != 0) {
+                let affix_id = if p.is_null() { 0 } else { (*p as u8) as c_int };
+                let r = rs_tree_add_word(
+                    spin,
+                    foldword.as_ptr(),
+                    foldroot,
+                    ct | flags,
+                    region,
+                    affix_id,
+                );
+                if r != 0 {
+                    res = r;
+                }
+            }
+            if p.is_null() || *p == 0 {
+                break;
+            }
+            p = p.add(1);
+        }
+    }
+    nvim_spin_set_foldwcount(spin, nvim_spin_get_foldwcount(spin) + 1);
+
+    // Also store in keep-case tree if the word is flagged as keep-case.
+    if res == 0 && (ct == WF_KEEPCAP || (flags & WF_KEEPCAP) != 0) {
+        let keeproot = nvim_spin_get_keeproot(spin);
+        let mut p: *const c_char = if pfxlist.is_null() {
+            std::ptr::null()
+        } else {
+            pfxlist
+        };
+        loop {
+            if !need_affix || (!p.is_null() && *p != 0) {
+                let affix_id = if p.is_null() { 0 } else { (*p as u8) as c_int };
+                let r = rs_tree_add_word(spin, word, keeproot, flags, region, affix_id);
+                if r != 0 {
+                    res = r;
+                }
+            }
+            if p.is_null() || *p == 0 {
+                break;
+            }
+            p = p.add(1);
+        }
+        nvim_spin_set_keepwcount(spin, nvim_spin_get_keepwcount(spin) + 1);
+    }
+
+    res
+}
+
+// =============================================================================
 // Phase 1: Pure affix utility functions (no Vim API dependencies)
 // =============================================================================
 
