@@ -340,10 +340,6 @@ void nvim_excmds_fold_move_range_all_wins(linenr_T line1, linenr_T line2, linenr
   }
 }
 
-void nvim_excmds_disable_fold_update_inc(void) { disable_fold_update++; }
-void nvim_excmds_disable_fold_update_dec(void) { disable_fold_update--; }
-
-
 void nvim_excmds_smsg_lines_moved(int64_t num_lines)
 {
   smsg(0, NGETTEXT("%" PRId64 " line moved",
@@ -1066,12 +1062,6 @@ int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T
   return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2,
                    eap, false, false, false, true) == OK ? 1 : 0;
 }
-
-/// Increment no_wait_return.
-void nvim_excmds_no_wait_return_inc(void) { no_wait_return++; }
-
-/// Decrement no_wait_return.
-void nvim_excmds_no_wait_return_dec(void) { no_wait_return--; }
 
 /// Call readfile for filter output. Returns 1=OK, 0=FAIL.
 int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)

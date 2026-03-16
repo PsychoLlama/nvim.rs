@@ -1046,8 +1046,6 @@ extern "C" {
         line2: c_int,
         eap: *mut ExArgHandle,
     ) -> c_int;
-    fn nvim_excmds_no_wait_return_inc();
-    fn nvim_excmds_no_wait_return_dec();
     fn nvim_excmds_readfile_filter(
         otmp: *const c_char,
         line2: c_int,
@@ -1199,13 +1197,13 @@ pub unsafe extern "C" fn rs_do_filter(
         }
     }
 
-    nvim_excmds_no_wait_return_inc();
+    crate::no_wait_return += 1;
 
     // Write input temp file if needed
     if !itmp.is_null() {
         if nvim_excmds_buf_write_filter(itmp, line1, line2, eap) == 0 {
             msg_putchar(b'\n' as c_int); // Keep message from buf_write()
-            nvim_excmds_no_wait_return_dec();
+            crate::no_wait_return -= 1;
             if nvim_excmds_aborting() == 0 {
                 nvim_excmds_error_msg(ERR_E482, itmp);
             }
@@ -1246,7 +1244,7 @@ pub unsafe extern "C" fn rs_do_filter(
             xfree(cmd_buf as *mut std::ffi::c_void);
             // goto error
             nvim_excmds_curwin_cursor_restore(cursor_save);
-            nvim_excmds_no_wait_return_dec();
+            crate::no_wait_return -= 1;
             nvim_excmds_wait_return_false();
             goto_filterend(
                 save_cmod_flags,
@@ -1280,7 +1278,7 @@ pub unsafe extern "C" fn rs_do_filter(
                 }
                 // goto error
                 nvim_excmds_curwin_cursor_restore(cursor_save);
-                nvim_excmds_no_wait_return_dec();
+                crate::no_wait_return -= 1;
                 nvim_excmds_wait_return_false();
                 goto_filterend(
                     save_cmod_flags,
@@ -1359,7 +1357,7 @@ pub unsafe extern "C" fn rs_do_filter(
         }
 
         beginline(BL_WHITE | BL_FIX);
-        nvim_excmds_no_wait_return_dec();
+        crate::no_wait_return -= 1;
 
         if (linecount as i64) > crate::p_report {
             if do_in {
@@ -1375,7 +1373,7 @@ pub unsafe extern "C" fn rs_do_filter(
     } else {
         // error path: restore cursor
         nvim_excmds_curwin_cursor_restore(cursor_save);
-        nvim_excmds_no_wait_return_dec();
+        crate::no_wait_return -= 1;
         nvim_excmds_wait_return_false();
     }
 
@@ -1404,7 +1402,7 @@ unsafe fn goto_filterend(
     nvim_excmds_cmdmod_restore_flags(save_cmod_flags);
 
     if nvim_excmds_get_curbuf_identity() != old_curbuf {
-        nvim_excmds_no_wait_return_dec();
+        crate::no_wait_return -= 1;
         nvim_excmds_error_msg(ERR_E135, std::ptr::null());
     } else if nvim_cmdmod_has_lockmarks() != 0 {
         nvim_excmds_curbuf_op_restore(orig_start, orig_end);

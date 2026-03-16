@@ -729,12 +729,11 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     use crate::{
         changed_lines, ml_append, ml_get, ml_get_len, nvim_cmdmod_has_lockmarks,
         nvim_curbuf_get_b_ml_ml_line_count, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
-        nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes,
-        nvim_excmds_disable_fold_update_dec, nvim_excmds_disable_fold_update_inc,
-        nvim_excmds_emsg_e134, nvim_excmds_extmark_move_region,
-        nvim_excmds_fold_move_range_all_wins, nvim_excmds_mark_adjust_nofold,
-        nvim_excmds_ml_delete_flags, nvim_excmds_ml_find_line_or_offset,
-        nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save, xfree, xstrnsave,
+        nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes, nvim_excmds_emsg_e134,
+        nvim_excmds_extmark_move_region, nvim_excmds_fold_move_range_all_wins,
+        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_delete_flags,
+        nvim_excmds_ml_find_line_or_offset, nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save,
+        xfree, xstrnsave,
     };
 
     if dest >= line1 && dest < line2 {
@@ -779,7 +778,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     let mut last_line = nvim_curbuf_get_b_ml_ml_line_count();
     nvim_excmds_mark_adjust_nofold(line1, line2, last_line - line2, 0, KEXTMARK_NOOP_MOVE);
 
-    nvim_excmds_disable_fold_update_inc();
+    crate::disable_fold_update += 1;
     changed_lines(
         nvim_get_curbuf(),
         last_line - num_lines + 1,
@@ -788,7 +787,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         num_lines,
         0,
     );
-    nvim_excmds_disable_fold_update_dec();
+    crate::disable_fold_update -= 1;
 
     let mut line_off: c_int = 0;
     let mut byte_off: i64 = 0;
@@ -817,7 +816,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         KEXTMARK_NOOP_MOVE,
     );
 
-    nvim_excmds_disable_fold_update_inc();
+    crate::disable_fold_update += 1;
     changed_lines(
         nvim_get_curbuf(),
         last_line - num_lines + 1,
@@ -826,7 +825,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         -extra,
         0,
     );
-    nvim_excmds_disable_fold_update_dec();
+    crate::disable_fold_update -= 1;
 
     // Send update regarding the new lines that were added.
     nvim_excmds_buf_updates_send_changes(dest + 1, i64::from(num_lines), 0);

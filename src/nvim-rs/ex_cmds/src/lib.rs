@@ -769,10 +769,10 @@ extern "C" {
     pub fn nvim_excmds_buf_updates_send_changes(lnum: c_int, added: i64, deleted: i64);
     /// FOR_ALL_TAB_WINDOWS fold move range wrapper.
     pub fn nvim_excmds_fold_move_range_all_wins(line1: c_int, line2: c_int, dest: c_int);
-    /// Increment disable_fold_update.
-    pub fn nvim_excmds_disable_fold_update_inc();
-    /// Decrement disable_fold_update.
-    pub fn nvim_excmds_disable_fold_update_dec();
+    /// Direct C global: disable_fold_update (fold update disable counter)
+    pub static mut disable_fold_update: c_int;
+    /// Direct C global: no_wait_return (don't wait for return)
+    pub static mut no_wait_return: c_int;
     /// Direct C global: global_busy (global command busy flag)
     pub static mut global_busy: c_int;
     /// Direct C global: sub_nsubs (number of substitutions made)

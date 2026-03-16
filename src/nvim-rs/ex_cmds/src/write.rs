@@ -426,8 +426,6 @@ extern "C" {
     fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
     fn nvim_excmds_dialog_changed_curbuf();
     fn nvim_excmds_no_write_message();
-    fn nvim_excmds_no_wait_return_inc();
-    fn nvim_excmds_no_wait_return_dec();
     fn setpcmark();
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_get_curwin() -> *mut WinHandle;
@@ -490,7 +488,7 @@ pub unsafe extern "C" fn rs_getfile(
     };
 
     if other != 0 {
-        nvim_excmds_no_wait_return_inc();
+        crate::no_wait_return += 1;
     }
 
     let retval;
@@ -506,7 +504,7 @@ pub unsafe extern "C" fn rs_getfile(
             nvim_excmds_dialog_changed_curbuf();
         }
         if nvim_excmds_curbufIsChanged() != 0 {
-            nvim_excmds_no_wait_return_dec();
+            crate::no_wait_return -= 1;
             nvim_excmds_no_write_message();
             xfree(free_me.cast());
             return GETFILE_NOT_WRITTEN_VAL;
@@ -514,7 +512,7 @@ pub unsafe extern "C" fn rs_getfile(
     }
 
     if other != 0 {
-        nvim_excmds_no_wait_return_dec();
+        crate::no_wait_return -= 1;
     }
     if setpm != 0 {
         setpcmark();
