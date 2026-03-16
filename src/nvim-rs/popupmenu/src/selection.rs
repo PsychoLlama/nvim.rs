@@ -30,9 +30,6 @@ extern "C" {
 
     // Global state
     fn nvim_get_Rows() -> c_int;
-    fn nvim_pum_get_p_pvh() -> c_int;
-    fn nvim_pum_get_cmdwin_type() -> c_int;
-    fn nvim_pum_set_g_do_tagpreview(val: c_int);
 
     // Autocmd / redraw control
     fn block_autocmds();
@@ -82,12 +79,6 @@ extern "C" {
     fn pum_rs_valid_tabpage(tp: *mut TabHandle) -> c_int;
     fn goto_tabpage_tp(tp: *mut TabHandle, trigger_enter: bool, trigger_leave: bool);
 
-    // Context save/restore
-    fn nvim_pum_get_curwin() -> *mut WinHandle;
-    fn nvim_pum_get_curtab() -> *mut TabHandle;
-    fn nvim_pum_curwin_is(wp: *mut WinHandle) -> c_int;
-    fn nvim_pum_curtab_is(tp: *mut TabHandle) -> c_int;
-
     // Completion state
     fn rs_ins_compl_active() -> c_int;
 
@@ -97,9 +88,6 @@ extern "C" {
     fn redraw_later(wp: *mut WinHandle, update_type: c_int);
     fn update_topline(wp: *mut WinHandle);
     fn update_screen();
-
-    // Curbuf for preview text
-    fn nvim_pum_get_curbuf() -> *mut BufHandle;
 
     // Scroll computation (Rust function, called via extern "C")
     fn rs_pum_compute_scroll(
@@ -115,6 +103,18 @@ extern "C" {
     static mut RedrawingDisabled: c_int;
     /// C global: `no_u_sync` counter.
     static mut no_u_sync: c_int;
+    /// C global: `p_pvh` (preview height option, `OptInt = int64_t`).
+    static p_pvh: i64;
+    /// C global: `cmdwin_type`.
+    static cmdwin_type: c_int;
+    /// C global: `g_do_tagpreview`.
+    static mut g_do_tagpreview: c_int;
+    /// C global: `curwin` (current window pointer).
+    static mut curwin: *mut WinHandle;
+    /// C global: `curtab` (current tabpage pointer).
+    static mut curtab: *mut TabHandle;
+    /// C global: `curbuf` (current buffer pointer).
+    static mut curbuf: *mut BufHandle;
 }
 
 /// `kOptCotFlagPopup` = 0x10.
@@ -136,7 +136,11 @@ const OK: c_int = 1;
 /// # Safety
 /// Calls many C accessor functions. The popup menu array must be valid.
 #[no_mangle]
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::cast_possible_truncation
+)]
 pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
     let mut resized = false;
     let prev_selected = PUM_STATE.selected;
@@ -173,10 +177,10 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
             && nvim_get_Rows() > 10
             && repeat <= 1
             && (cur_cot_flags & (K_OPT_COT_FLAG_PREVIEW | K_OPT_COT_FLAG_POPUP)) != 0
-            && !((cur_cot_flags & K_OPT_COT_FLAG_PREVIEW) != 0 && nvim_pum_get_cmdwin_type() != 0)
+            && !((cur_cot_flags & K_OPT_COT_FLAG_PREVIEW) != 0 && cmdwin_type != 0)
         {
-            let curwin_save = nvim_pum_get_curwin();
-            let curtab_save = nvim_pum_get_curtab();
+            let curwin_save = curwin;
+            let curtab_save = curtab;
 
             if use_float {
                 block_autocmds();
@@ -184,12 +188,12 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
             // Open a preview window. 3 lines by default. Prefer
             // 'previewheight' if set and smaller.
-            let mut g_do_tagpreview = 3;
-            let p_pvh = nvim_pum_get_p_pvh();
-            if p_pvh > 0 && p_pvh < g_do_tagpreview {
-                g_do_tagpreview = p_pvh;
+            let mut preview_height = 3;
+            let pvh = p_pvh as c_int;
+            if pvh > 0 && pvh < preview_height {
+                preview_height = pvh;
             }
-            nvim_pum_set_g_do_tagpreview(g_do_tagpreview);
+            g_do_tagpreview = preview_height;
 
             RedrawingDisabled += 1;
             // Prevent undo sync here, if an autocommand syncs undo weird
@@ -212,7 +216,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
             no_u_sync -= 1;
             RedrawingDisabled -= 1;
-            nvim_pum_set_g_do_tagpreview(0);
+            g_do_tagpreview = 0;
 
             if nvim_pum_curwin_is_pvw_or_info() != 0 {
                 let mut res = OK;
@@ -235,7 +239,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                     let mut lnum: i32 = 0;
                     let mut max_info_width: c_int = 0;
                     let info = nvim_pum_array_get_info(pum_selected);
-                    let buf = nvim_pum_get_curbuf();
+                    let buf = curbuf;
                     rs_pum_preview_set_text(
                         buf,
                         info,
@@ -246,7 +250,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                     // Increase the height of the preview window to show the
                     // text, but no more than 'previewheight' lines.
                     if repeat == 0 && !use_float {
-                        let p_pvh_val = nvim_pum_get_p_pvh();
+                        let p_pvh_val = p_pvh as c_int;
                         if p_pvh_val > 0 && lnum > p_pvh_val {
                             lnum = p_pvh_val;
                         }
@@ -272,17 +276,13 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
                     if use_float {
                         // adjust floating window by actual height and max info text width
-                        let curwin = nvim_pum_get_curwin();
                         rs_pum_adjust_info_position(curwin, max_info_width);
                     }
 
-                    if (nvim_pum_curwin_is(curwin_save) == 0 && pum_rs_win_valid(curwin_save) != 0)
-                        || (nvim_pum_curtab_is(curtab_save) == 0
-                            && pum_rs_valid_tabpage(curtab_save) != 0)
+                    if (curwin != curwin_save && pum_rs_win_valid(curwin_save) != 0)
+                        || (curtab != curtab_save && pum_rs_valid_tabpage(curtab_save) != 0)
                     {
-                        if nvim_pum_curtab_is(curtab_save) == 0
-                            && pum_rs_valid_tabpage(curtab_save) != 0
-                        {
+                        if curtab != curtab_save && pum_rs_valid_tabpage(curtab_save) != 0 {
                             goto_tabpage_tp(curtab_save, false, false);
                         }
 
@@ -294,9 +294,8 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         }
 
                         // Return cursor to where we were
-                        let curwin_raw = nvim_pum_get_curwin();
-                        validate_cursor(curwin_raw);
-                        redraw_later(curwin_raw, UPD_SOME_VALID);
+                        validate_cursor(curwin);
+                        redraw_later(curwin, UPD_SOME_VALID);
 
                         // When the preview window was resized we need to
                         // update the view on the buffer. Only go back to
@@ -306,8 +305,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                             no_u_sync += 1;
                             win_enter(curwin_save, false);
                             no_u_sync -= 1;
-                            let cw = nvim_pum_get_curwin();
-                            update_topline(cw);
+                            update_topline(curwin);
                         }
 
                         // Update the screen before drawing the popup menu.

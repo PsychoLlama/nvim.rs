@@ -522,19 +522,6 @@ int nvim_pum_array_is_null(void)
   return PUM_STATE.array == NULL ? 1 : 0;
 }
 
-/// Get curwin->w_p_rl.
-int nvim_pum_curwin_get_p_rl(void)
-{
-  return curwin->w_p_rl ? 1 : 0;
-}
-
-
-/// Get p_mousemev.
-int nvim_pum_get_p_mousemev(void)
-{
-  return p_mousemev ? 1 : 0;
-}
-
 /// Set mousemoveevent option via UI.
 void nvim_pum_ui_set_mousemoveevent(int val)
 {
@@ -751,18 +738,6 @@ void nvim_pum_set_linebuf_attr(int col, int attr)
   linebuf_attr[col] = (sattr_T)attr;
 }
 
-/// Check if `State & MODE_CMDLINE`.
-int nvim_pum_is_cmdline(void)
-{
-  return (State & MODE_CMDLINE) != 0;
-}
-
-/// Get kZIndexCmdlinePopupMenu constant.
-int nvim_pum_kZIndexCmdlinePopupMenu(void)
-{
-  return kZIndexCmdlinePopupMenu;
-}
-
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
 struct PumBorderConfig {
@@ -892,25 +867,6 @@ char *nvim_pum_array_get_info(int idx)
 
 // nvim_get_Rows: already defined in window.c
 
-/// Get `p_pvh` (preview height option).
-int nvim_pum_get_p_pvh(void)
-{
-  return (int)p_pvh;
-}
-
-/// Get `cmdwin_type` global.
-int nvim_pum_get_cmdwin_type(void)
-{
-  return cmdwin_type;
-}
-
-/// Set `g_do_tagpreview` global.
-void nvim_pum_set_g_do_tagpreview(int val)
-{
-  g_do_tagpreview = val;
-}
-
-
 /// Check if curwin is a preview window or float info window.
 int nvim_pum_curwin_is_pvw_or_info(void)
 {
@@ -997,36 +953,6 @@ void nvim_pum_curwin_set_redr_status(int val)
   curwin->w_redr_status = val != 0;
 }
 
-
-/// Get curwin pointer (for save/restore).
-win_T *nvim_pum_get_curwin(void)
-{
-  return curwin;
-}
-
-/// Get curtab pointer (for save/restore).
-tabpage_T *nvim_pum_get_curtab(void)
-{
-  return curtab;
-}
-
-/// Check if curwin equals the saved window pointer.
-int nvim_pum_curwin_is(win_T *wp)
-{
-  return curwin == wp;
-}
-
-/// Check if curtab equals the saved tabpage pointer.
-int nvim_pum_curtab_is(tabpage_T *tp)
-{
-  return curtab == tp;
-}
-
-/// Get curbuf pointer (for preview_set_text).
-void *nvim_pum_get_curbuf(void)
-{
-  return curbuf;
-}
 
 // Phase 8 C accessor functions (display orchestrator)
 

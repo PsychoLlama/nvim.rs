@@ -350,8 +350,6 @@ extern "C" {
 extern "C" {
     /// Validate cursor column in the given window.
     fn validate_cursor_col(wp: *mut WinHandle);
-    /// Get current window.
-    fn nvim_pum_get_curwin() -> *mut WinHandle;
     /// Compute display geometry (`pum_win_row`, `cursor_col`, anchor, offsets, above/below).
     fn nvim_pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry;
     /// Send external popupmenu show event with Arena-allocated arrays.
@@ -381,8 +379,8 @@ extern "C" {
     fn nvim_pum_compute_hp(cursor_col: c_int);
     /// Set grid zindex based on current mode.
     fn nvim_pum_set_grid_zindex_for_mode();
-    /// Get curwin->w_p_rl.
-    fn nvim_pum_curwin_get_p_rl() -> c_int;
+    /// Get `w_p_rl` for a window.
+    fn nvim_win_get_w_p_rl(wp: *mut WinHandle) -> c_int;
     /// Get `Columns`.
     fn nvim_get_Columns() -> c_int;
     /// Set selected item (Rust function via extern "C").
@@ -391,6 +389,12 @@ extern "C" {
     fn rs_pum_border_width() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
+}
+
+// C globals used by display.
+extern "C" {
+    /// C global: `curwin` (current window pointer).
+    static mut curwin: *mut WinHandle;
 }
 
 /// Result of geometry computation from C.
@@ -554,7 +558,7 @@ pub unsafe extern "C" fn rs_pum_display(
         PUM_STATE.external = c_int::from(has_popupmenu || (is_cmdline && has_wildmenu));
     }
 
-    let curwin_rl = nvim_pum_curwin_get_p_rl();
+    let curwin_rl = nvim_win_get_w_p_rl(curwin);
     PUM_STATE.rl = if is_cmdline { 0 } else { curwin_rl };
 
     let border_width = rs_pum_border_width();
@@ -563,7 +567,7 @@ pub unsafe extern "C" fn rs_pum_display(
         // Mark as visible early to avoid must_redraw when 'cursorcolumn' is on
         PUM_STATE.is_visible = 1;
         PUM_STATE.is_drawn = 1;
-        validate_cursor_col(nvim_pum_get_curwin());
+        validate_cursor_col(curwin);
 
         // Compute geometry from C (handles target_win, cmdline_win, grid offsets)
         let geom = nvim_pum_compute_geometry(cmd_startcol);

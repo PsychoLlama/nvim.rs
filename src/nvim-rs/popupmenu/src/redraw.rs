@@ -510,8 +510,6 @@ extern "C" {
     fn nvim_pum_set_linebuf_attr(col: c_int, attr: c_int);
 
     // State queries
-    fn nvim_pum_is_cmdline() -> c_int;
-    fn nvim_pum_kZIndexCmdlinePopupMenu() -> c_int;
     fn nvim_pum_grid_get_zindex() -> c_int;
 
     // Border operations
@@ -547,6 +545,16 @@ extern "C" {
     );
     fn rs_pum_border_width() -> c_int;
 }
+
+extern "C" {
+    /// C global: `State` (current editor mode).
+    static State: c_int;
+}
+
+/// `MODE_CMDLINE` = 0x08.
+const MODE_CMDLINE: c_int = 0x08;
+/// `kZIndexCmdlinePopupMenu` = 250.
+const K_Z_INDEX_CMDLINE_POPUP_MENU: c_int = 250;
 
 /// Redraw the popup menu using current `pum_first` and `pum_selected`.
 ///
@@ -674,8 +682,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     let scroll_range = pum_size - pum_height;
 
     // Avoid border for mouse menu
-    let mouse_menu = nvim_pum_is_cmdline() == 0
-        && nvim_pum_grid_get_zindex() == nvim_pum_kZIndexCmdlinePopupMenu();
+    let mouse_menu =
+        (State & MODE_CMDLINE) == 0 && nvim_pum_grid_get_zindex() == K_Z_INDEX_CMDLINE_POPUP_MENU;
     if !mouse_menu && has_border_chars {
         nvim_pum_border_draw(border_cfg);
         if nvim_pum_border_cfg_is_shadow(border_cfg) == 0 {

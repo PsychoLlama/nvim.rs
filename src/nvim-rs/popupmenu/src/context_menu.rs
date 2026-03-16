@@ -285,6 +285,14 @@ pub struct VimMenuHandle {
     _private: [u8; 0],
 }
 
+// C globals used by context menu.
+extern "C" {
+    /// C global: `p_mousemev`.
+    static p_mousemev: c_int;
+    /// C global: `curwin` (current window pointer).
+    static mut curwin: *mut crate::display::WinHandle;
+}
+
 // C accessor functions for menu traversal.
 extern "C" {
     /// Get `menu->children` (first child menu item).
@@ -342,18 +350,14 @@ extern "C" {
     fn nvim_pum_array_is_null() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
-    /// Get `curwin->w_p_rl`.
-    fn nvim_pum_curwin_get_p_rl() -> c_int;
+    /// Get `w_p_rl` for a window.
+    fn nvim_win_get_w_p_rl(wp: *mut crate::display::WinHandle) -> c_int;
     /// Position popup at mouse.
     fn rs_pum_position_at_mouse(min_width: c_int);
-    /// Get `p_mousemev`.
-    fn nvim_pum_get_p_mousemev() -> c_int;
     /// Set mousemoveevent UI option.
     fn nvim_pum_ui_set_mousemoveevent(val: c_int);
     /// Set `pum_grid.zindex` to `kZIndexCmdlinePopupMenu`.
     fn nvim_pum_grid_set_zindex_cmdline();
-    /// Get current window.
-    fn nvim_pum_get_curwin() -> *mut crate::display::WinHandle;
     /// Call `setcursor_mayforce(wp, force)`.
     fn setcursor_mayforce(wp: *mut crate::display::WinHandle, force: bool);
     /// Call `vgetc()`.
@@ -450,12 +454,12 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     rs_pum_compute_size(PUM_STATE.array);
     PUM_STATE.scrollbar = 0;
     PUM_STATE.height = count;
-    PUM_STATE.rl = nvim_pum_curwin_get_p_rl();
+    PUM_STATE.rl = nvim_win_get_w_p_rl(curwin);
     rs_pum_position_at_mouse(20);
 
     PUM_STATE.selected = -1;
     PUM_STATE.first = 0;
-    let mousemev_was_off = nvim_pum_get_p_mousemev() == 0;
+    let mousemev_was_off = p_mousemev == 0;
     if mousemev_was_off {
         nvim_pum_ui_set_mousemoveevent(1);
     }
@@ -483,7 +487,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         PUM_STATE.is_drawn = 1;
         nvim_pum_grid_set_zindex_cmdline();
         crate::redraw::rs_pum_redraw();
-        setcursor_mayforce(nvim_pum_get_curwin(), true);
+        setcursor_mayforce(curwin, true);
 
         let c = vgetc();
 
