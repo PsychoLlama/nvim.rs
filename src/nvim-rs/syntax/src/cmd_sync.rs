@@ -18,18 +18,18 @@ extern "C" {
     fn nvim_syn_set_eap_arg(eap: *mut c_void, arg: *mut c_char);
 
     // String helpers
-    fn nvim_syn_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_skiptowhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
-    fn nvim_syn_xfree(ptr: *mut c_void);
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
+    fn xfree(ptr: *mut c_void);
     fn nvim_syn_vim_strnsave_up(str: *const c_char, len: c_int) -> *mut c_char;
 
     // Number parsing (wraps getdigits_int32)
     fn nvim_syn_getdigits_int32(pp: *mut *mut c_char, strict: c_int, def: c_int) -> c_int;
 
     // Group resolution
-    fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
-    fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
+    fn syn_name2id(name: *const c_char) -> c_int;
+    fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
 
     // Synblock sync field setters
     fn nvim_synblock_or_sync_flags(block: SynBlockHandle, flags: c_int);
@@ -40,7 +40,7 @@ extern "C" {
     fn nvim_synblock_get_linecont_pat_is_set(block: SynBlockHandle) -> c_int;
 
     // Accessors for linecont fields (replacing nvim_synblock_set_linecont)
-    fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
     fn nvim_synblock_get_syn_ic(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_set_linecont_pat(block: SynBlockHandle, pat: *mut c_char);
     fn nvim_synblock_get_linecont_pat(block: SynBlockHandle) -> *mut c_char;
@@ -99,7 +99,7 @@ unsafe fn synblock_set_linecont(
     pat_len: c_int,
 ) -> c_int {
     // Save a copy of the pattern text.
-    let pat = nvim_syn_xstrnsave(pat_start, pat_len);
+    let pat = xstrnsave(pat_start, pat_len);
     nvim_synblock_set_linecont_pat(block, pat);
 
     // Copy the block's ignore-case setting.
@@ -136,7 +136,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
     let mut arg_start = nvim_syn_get_eap_arg(eap);
 
     // No argument: list sync items
-    if nvim_syn_ends_excmd(*arg_start as c_int) != 0 {
+    if ends_excmd(*arg_start as c_int) != 0 {
         rs_syn_cmd_list(eap, 1);
         return;
     }
@@ -148,10 +148,10 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
     let mut finished = false;
     let mut key: *mut c_char = std::ptr::null_mut();
 
-    while nvim_syn_ends_excmd(*arg_start as c_int) == 0 {
-        let arg_end = nvim_syn_skiptowhite(arg_start);
-        let mut next_arg = nvim_syn_skipwhite(arg_end);
-        nvim_syn_xfree(key.cast());
+    while ends_excmd(*arg_start as c_int) == 0 {
+        let arg_end = skiptowhite(arg_start);
+        let mut next_arg = skipwhite(arg_end);
+        xfree(key.cast());
         key = nvim_syn_vim_strnsave_up(arg_start, arg_end.offset_from(arg_start) as c_int);
 
         let key_bytes = std::ffi::CStr::from_ptr(key).to_bytes();
@@ -160,18 +160,15 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
             if skip == 0 {
                 nvim_synblock_or_sync_flags(block, sf_ccomment);
             }
-            if nvim_syn_ends_excmd(*next_arg as c_int) == 0 {
-                let arg_end2 = nvim_syn_skiptowhite(next_arg);
+            if ends_excmd(*next_arg as c_int) == 0 {
+                let arg_end2 = skiptowhite(next_arg);
                 if skip == 0 {
-                    let id = nvim_syn_check_group_wrapper(
-                        next_arg,
-                        arg_end2.offset_from(next_arg) as c_int,
-                    );
+                    let id = syn_check_group(next_arg, arg_end2.offset_from(next_arg) as c_int);
                     nvim_synblock_set_sync_id(block, id);
                 }
-                next_arg = nvim_syn_skipwhite(arg_end2);
+                next_arg = skipwhite(arg_end2);
             } else if skip == 0 {
-                let comment_id = nvim_syn_name2id_wrapper(STR_COMMENT.as_ptr().cast());
+                let comment_id = syn_name2id(STR_COMMENT.as_ptr().cast());
                 nvim_synblock_set_sync_id(block, comment_id);
             }
         } else if key_bytes.starts_with(b"LINES")
@@ -254,7 +251,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
                     break;
                 }
             }
-            next_arg = nvim_syn_skipwhite(arg_end2.add(1));
+            next_arg = skipwhite(arg_end2.add(1));
         } else {
             // MATCH, REGION, CLEAR, or illegal keyword
             nvim_syn_set_eap_arg(eap, next_arg);
@@ -273,7 +270,7 @@ unsafe fn syn_cmd_sync_impl(eap: *mut c_void, _syncing: c_int) {
         arg_start = next_arg;
     }
 
-    nvim_syn_xfree(key.cast());
+    xfree(key.cast());
 
     if illegal {
         semsg(EMSG_E404_ILLEGAL.as_ptr().cast(), arg_start);

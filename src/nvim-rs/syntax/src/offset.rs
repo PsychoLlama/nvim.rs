@@ -14,8 +14,8 @@ extern "C" {
 
     // Line access and multibyte helpers for mb_adjust_col
     fn nvim_syn_ml_get(lnum: c_int) -> *mut i8;
-    fn nvim_syn_utfc_ptr2len(p: *mut i8) -> c_int;
-    fn nvim_syn_utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
+    fn utfc_ptr2len(p: *mut i8) -> c_int;
+    fn utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
 
     fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
 }
@@ -37,14 +37,14 @@ unsafe fn mb_adjust_col(lnum: i32, col: i32, off: i32) -> i32 {
     if off > 0 {
         let mut remaining = off;
         while remaining > 0 && *p != 0 {
-            let advance = nvim_syn_utfc_ptr2len(p);
+            let advance = utfc_ptr2len(p);
             p = p.offset(advance as isize);
             remaining -= 1;
         }
     } else {
         let mut remaining = off;
         while remaining < 0 && p > base {
-            let retreat = nvim_syn_utf_head_off(base, p.offset(-1)) + 1;
+            let retreat = utf_head_off(base, p.offset(-1)) + 1;
             p = p.offset(-(retreat as isize));
             remaining += 1;
         }
@@ -69,14 +69,14 @@ unsafe fn mb_adjust_col_start(lnum: i32, col: i32, off: i32) -> i32 {
         let mut remaining = off;
         // Note: the C original uses `off--` before the check, so 'off' steps
         while remaining != 0 && *p != 0 {
-            let advance = nvim_syn_utfc_ptr2len(p);
+            let advance = utfc_ptr2len(p);
             p = p.offset(advance as isize);
             remaining -= 1;
         }
     } else {
         let mut remaining = off;
         while remaining != 0 && p > base {
-            let retreat = nvim_syn_utf_head_off(base, p.offset(-1)) + 1;
+            let retreat = utf_head_off(base, p.offset(-1)) + 1;
             p = p.offset(-(retreat as isize));
             remaining += 1;
         }

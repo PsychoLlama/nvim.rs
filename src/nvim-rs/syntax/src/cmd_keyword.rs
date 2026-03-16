@@ -21,7 +21,7 @@ extern "C" {
     fn rs_get_group_name(arg: *mut c_char, name_end: *mut *mut c_char) -> *mut c_char;
 
     // Group checking
-    fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
+    fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
     fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
 
     // Option parsing (Rust)
@@ -56,14 +56,14 @@ extern "C" {
     fn nvim_syn_stack_free_all(block: SynBlockHandle);
 
     // String helpers
-    fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
-    fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
+    fn utfc_ptr2len(p: *mut c_char) -> c_int;
 
     // Memory
-    fn nvim_syn_xmalloc(size: c_int) -> *mut c_void;
-    fn nvim_syn_xfree(ptr: *mut c_void);
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
 
     // Error messages
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
@@ -144,7 +144,7 @@ unsafe fn add_keyword_with_optional(
         }
 
         // Optional char: memmove(p, p+1, l) shifts char left, then p += l.
-        let l = nvim_syn_utfc_ptr2len(p.add(1)) as usize;
+        let l = utfc_ptr2len(p.add(1)) as usize;
         memmove(p as *mut c_void, p.add(1) as *const c_void, l);
         p = p.add(l);
         // Continue loop: p now points to the next char to process.
@@ -166,12 +166,12 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
     } else if skip != 0 {
         -1
     } else {
-        nvim_syn_check_group_wrapper(arg, group_name_end.offset_from(arg) as c_int)
+        syn_check_group(arg, group_name_end.offset_from(arg) as c_int)
     };
 
     // syn_id == 0 means group check failed; -1 means skip mode.
     let keyword_copy: *mut c_char = if syn_id != 0 && !rest_after_group.is_null() {
-        nvim_syn_xmalloc((strlen(rest_after_group) + 1) as c_int) as *mut c_char
+        xmalloc(strlen(rest_after_group) + 1) as *mut c_char
     } else {
         std::ptr::null_mut()
     };
@@ -189,7 +189,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
 
         // Phase 1: collect options and copy keywords to keyword_copy buffer.
         let mut p = keyword_copy;
-        while !rest.is_null() && nvim_syn_ends_excmd(*rest as c_int) == 0 {
+        while !rest.is_null() && ends_excmd(*rest as c_int) == 0 {
             rest = rs_get_syn_options(
                 rest,
                 &mut opt_flags,
@@ -202,7 +202,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
                 &mut conceal_char,
                 skip,
             );
-            if rest.is_null() || nvim_syn_ends_excmd(*rest as c_int) != 0 {
+            if rest.is_null() || ends_excmd(*rest as c_int) != 0 {
                 break;
             }
             // Copy keyword, removing backslashes, then NUL-terminate.
@@ -218,7 +218,7 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
             p = p.add(1);
             cnt += 1;
             if !rest.is_null() {
-                rest = nvim_syn_skipwhite(rest);
+                rest = skipwhite(rest);
             }
         }
 
@@ -249,9 +249,9 @@ unsafe fn syn_cmd_keyword_impl(eap: *mut c_void, _syncing: c_int) {
             }
         }
 
-        nvim_syn_xfree(keyword_copy as *mut c_void);
-        nvim_syn_xfree(cont_in_list as *mut c_void);
-        nvim_syn_xfree(next_list as *mut c_void);
+        xfree(keyword_copy as *mut c_void);
+        xfree(cont_in_list as *mut c_void);
+        xfree(next_list as *mut c_void);
     }
 
     if !rest.is_null() {

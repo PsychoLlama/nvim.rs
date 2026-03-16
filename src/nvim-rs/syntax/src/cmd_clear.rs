@@ -19,9 +19,9 @@ extern "C" {
     fn nvim_syn_find_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
     // String helpers
-    fn nvim_syn_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_skiptowhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
 
     // Synblock
     fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
@@ -76,7 +76,7 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
         return;
     }
 
-    if nvim_syn_ends_excmd(*arg as c_int) != 0 {
+    if ends_excmd(*arg as c_int) != 0 {
         // No argument: clear all syntax items
         if syncing != 0 {
             rs_syntax_sync_clear();
@@ -98,8 +98,8 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
     } else {
         // Clear the group IDs listed in the argument
         let mut cur_arg = arg;
-        while nvim_syn_ends_excmd(*cur_arg as c_int) == 0 {
-            let arg_end = nvim_syn_skiptowhite(cur_arg);
+        while ends_excmd(*cur_arg as c_int) == 0 {
+            let arg_end = skiptowhite(cur_arg);
             if *cur_arg == b'@' as c_char {
                 let id =
                     rs_syn_scl_namen2id(cur_arg.add(1), arg_end.offset_from(cur_arg) as c_int - 1);
@@ -122,7 +122,7 @@ unsafe fn syn_cmd_clear_impl(eap: *mut c_void, syncing: c_int) {
                 }
                 rs_syn_clear_one(id, syncing);
             }
-            cur_arg = nvim_syn_skipwhite(arg_end);
+            cur_arg = skipwhite(arg_end);
         }
     }
     // Redraw and free syntax state (replaces nvim_syn_redraw_and_free_all)

@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_syn_get_rows() -> c_int;
     #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
-    fn nvim_syn_line_breakcheck();
+    fn line_breakcheck();
     fn nvim_syn_get_got_int() -> c_int;
     fn nvim_syn_get_sst_first() -> SynStateHandle;
     // (nvim_syn_stack_find_entry deleted: call Rust directly)
@@ -249,7 +249,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         }
 
         // This can take a long time: break when CTRL-C pressed.
-        nvim_syn_line_breakcheck();
+        line_breakcheck();
         if nvim_syn_get_got_int() != 0 {
             crate::statics::CURRENT_LNUM = lnum;
             break;

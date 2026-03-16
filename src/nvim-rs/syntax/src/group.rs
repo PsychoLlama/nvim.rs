@@ -21,8 +21,7 @@ extern "C" {
     // Synblock group settings
     fn nvim_synblock_get_topgrp(block: SynBlockHandle) -> c_int;
 
-    // Syntax ID to attribute conversion (via highlight crate)
-    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
+    // (syn_id2attr: use crate::highlight::syn_id2attr directly)
 
     // Current state group accessors
 
@@ -85,14 +84,7 @@ pub fn synblock_topgrp(block: SynBlockHandle) -> i32 {
 // Syntax ID to attribute conversion
 // =============================================================================
 
-/// Convert a syntax ID to a highlight attribute.
-///
-/// This is the main function for resolving syntax highlighting
-/// to actual display attributes. It delegates to the highlight crate.
-#[must_use]
-pub fn syn_id2attr(syn_id: i32) -> i32 {
-    unsafe { nvim_syn_id2attr_wrapper(syn_id) }
-}
+// syn_id2attr wrapper deleted: use crate::highlight::syn_id2attr directly.
 
 // =============================================================================
 // Current state group accessors

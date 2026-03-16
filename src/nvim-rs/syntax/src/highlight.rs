@@ -18,7 +18,8 @@ use crate::types::{
 
 extern "C" {
     // Syntax ID to attribute conversion
-    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
+    #[link_name = "syn_id2attr"]
+    fn c_syn_id2attr(syn_id: c_int) -> c_int;
 
     // Synblock conceal settings
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
@@ -58,7 +59,7 @@ extern "C" {
 /// to actual display attributes.
 #[must_use]
 pub fn syn_id2attr(syn_id: i32) -> i32 {
-    unsafe { nvim_syn_id2attr_wrapper(syn_id) }
+    unsafe { c_syn_id2attr(syn_id) }
 }
 
 // =============================================================================

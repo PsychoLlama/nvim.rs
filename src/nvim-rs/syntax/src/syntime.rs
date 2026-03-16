@@ -42,7 +42,7 @@ extern "C" {
     fn profile_msg(tm: Proftime) -> *const c_char;
 
     // Highlight group name
-    fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
+    fn highlight_group_name(idx: c_int) -> *mut c_char;
 
     // Message output
     fn msg_puts(s: *const c_char);
@@ -224,7 +224,7 @@ unsafe fn syntime_report_impl() {
         msg_puts(profile_msg(entry.average));
         msg_puts(MSG_SPACE.as_ptr().cast());
         msg_advance(50);
-        let group_name = nvim_syn_highlight_group_name((entry.id as c_int) - 1);
+        let group_name = highlight_group_name((entry.id as c_int) - 1);
         msg_outtrans(group_name, 0, false);
         msg_puts(MSG_SPACE.as_ptr().cast());
 

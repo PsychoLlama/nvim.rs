@@ -24,9 +24,9 @@ extern "C" {
     fn nvim_syn_set_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
     // String helpers
-    fn nvim_syn_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_skiptowhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
 
     // Syntax presence and state
     fn nvim_syn_syntax_present_curwin() -> c_int;
@@ -36,9 +36,9 @@ extern "C" {
     fn nvim_syn_list_header(did_header: c_int, outlen: c_int, id: c_int, force: c_int) -> c_int;
 
     // Highlight group accessors
-    fn nvim_syn_highlight_num_groups() -> c_int;
-    fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
-    fn nvim_syn_highlight_link_id(id: c_int) -> c_int;
+    fn highlight_num_groups() -> c_int;
+    fn highlight_group_name(idx: c_int) -> *mut c_char;
+    fn highlight_link_id(id: c_int) -> c_int;
 
     // Cluster accessors (explicit block param)
     fn nvim_synblock_get_cluster_count(block: crate::types::SynBlockHandle) -> c_int;
@@ -260,7 +260,7 @@ unsafe fn put_id_list(name: &[u8], list: *const i16, hl_id: c_int) {
                 msg_outtrans(name_ptr, 0, false);
             }
         } else {
-            let group_name = nvim_syn_highlight_group_name(id - 1);
+            let group_name = highlight_group_name(id - 1);
             if !group_name.is_null() {
                 msg_outtrans(group_name, 0, false);
             }
@@ -290,7 +290,7 @@ unsafe fn put_pattern(
         if *last_matchgroup == 0 {
             msg_outtrans(c"NONE".as_ptr(), 0, false);
         } else {
-            let group_name = nvim_syn_highlight_group_name(*last_matchgroup - 1);
+            let group_name = highlight_group_name(*last_matchgroup - 1);
             if !group_name.is_null() {
                 msg_outtrans(group_name, 0, false);
             }
@@ -582,7 +582,7 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             if sync_idx >= 0 {
                 let sync_pat = nvim_synblock_get_pattern(curwin_block, sync_idx);
                 if !sync_pat.is_null() {
-                    let group_name = nvim_syn_highlight_group_name(
+                    let group_name = highlight_group_name(
                         i32::from(unsafe { (*sync_pat.as_ptr()).sp_syn.id }) - 1,
                     );
                     if !group_name.is_null() {
@@ -599,12 +599,12 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     }
 
     // List the link, if there is one
-    let link_id = nvim_syn_highlight_link_id(id - 1);
+    let link_id = highlight_link_id(id - 1);
     if link_id != 0 && (did_header || link_only) && nvim_syn_get_got_int() == 0 {
         nvim_syn_list_header(did_header as c_int, 0, id, 1);
         nvim_msg_puts_hl_syn(c"links to".as_ptr(), hl_id, false);
         msg_putchar(b' ' as c_int);
-        let group_name = nvim_syn_highlight_group_name(link_id - 1);
+        let group_name = highlight_group_name(link_id - 1);
         if !group_name.is_null() {
             msg_outtrans(group_name, 0, false);
         }
@@ -713,9 +713,9 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
     // Track current position for nextcmd at end
     let mut cur = arg;
 
-    if nvim_syn_ends_excmd(*cur as c_int) != 0 {
+    if ends_excmd(*cur as c_int) != 0 {
         // No argument: list all groups and clusters
-        let num_groups = nvim_syn_highlight_num_groups();
+        let num_groups = highlight_num_groups();
         let mut id = 1;
         while id <= num_groups && nvim_syn_get_got_int() == 0 {
             syn_list_one(id, syncing != 0, false);
@@ -729,8 +729,8 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
         }
     } else {
         // List specific groups/clusters from argument
-        while nvim_syn_ends_excmd(*cur as c_int) == 0 && nvim_syn_get_got_int() == 0 {
-            let arg_end = nvim_syn_skiptowhite(cur);
+        while ends_excmd(*cur as c_int) == 0 && nvim_syn_get_got_int() == 0 {
+            let arg_end = skiptowhite(cur);
             if *cur == b'@' as c_char {
                 // Cluster reference
                 let len = arg_end.offset_from(cur) as c_int - 1;
@@ -750,7 +750,7 @@ unsafe fn syn_cmd_list_impl(eap: *mut c_void, syncing: c_int) {
                     syn_list_one(group_id, syncing != 0, true);
                 }
             }
-            cur = nvim_syn_skipwhite(arg_end);
+            cur = skipwhite(arg_end);
         }
     }
 

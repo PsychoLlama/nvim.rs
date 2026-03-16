@@ -543,24 +543,7 @@ extern int EXPAND_WHAT;
 // and reset_expand_highlight are implemented in Rust (expand.rs).
 // Their C thin wrappers are at the bottom of this file.
 
-// Rust implementations of query API (Phase 3 of pass 4)
-extern int rs_syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, int *spellp,
-                         int keep_state);
-
-/// Function called for expression evaluation: get syntax ID at file position.
-///
-/// @param trans       remove transparency
-/// @param spellp      return: can do spell checking
-/// @param keep_state  keep state of char at "col"
-int syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, bool *spellp, int keep_state)
-{
-  int sp = 0;
-  int id = rs_syn_get_id(wp, lnum, col, trans, spellp ? &sp : NULL, keep_state);
-  if (spellp) {
-    *spellp = sp != 0;
-  }
-  return id;
-}
+// syn_get_id deleted: replaced by rs_syn_get_id_public in api.rs with #[export_name = "syn_get_id"].
 
 
 // ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
@@ -719,7 +702,7 @@ int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 
-int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
+// nvim_syn_id2attr_wrapper deleted: Rust uses syn_id2attr directly.
 
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
@@ -737,7 +720,7 @@ int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_ke
 
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
-int nvim_syn_utfc_ptr2len(char *p) { return utfc_ptr2len(p); }
+// nvim_syn_utfc_ptr2len deleted: Rust uses utfc_ptr2len directly.
 
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
@@ -804,7 +787,7 @@ void nvim_syn_set_sst_lasttick(int tick)
 
 int nvim_syn_get_display_tick(void) { return (int)display_tick; }
 
-void nvim_syn_line_breakcheck(void) { line_breakcheck(); }
+// nvim_syn_line_breakcheck deleted: Rust uses line_breakcheck directly.
 
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
@@ -917,7 +900,7 @@ int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 
-int nvim_syn_utf_head_off(char *base, char *p) { return utf_head_off(base, p); }
+// nvim_syn_utf_head_off deleted: Rust uses utf_head_off directly.
 
 // nvim_syn_set_next_match_state deleted: Rust assigns NEXT_MATCH_* statics directly,
 // calling nvim_syn_unref_extmatch before storing the new extmatch pointer.
@@ -1026,43 +1009,29 @@ _Static_assert(offsetof(syn_time_T, count) == 16, "syn_time_T.count");
 _Static_assert(offsetof(syn_time_T, match) == 20, "syn_time_T.match");
 
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
-int nvim_syn_name2id_wrapper(const char *name) { return syn_name2id(name); }
-
-int nvim_syn_check_group_wrapper(const char *name, int len) { return syn_check_group(name, (size_t)len); }
-
-int nvim_syn_highlight_num_groups(void) { return highlight_num_groups(); }
-char *nvim_syn_highlight_group_name(int idx) { return highlight_group_name(idx); }
-
-void *nvim_syn_vim_regcomp(char *pat, int flags) { return vim_regcomp(pat, flags); }
-
-
-void nvim_syn_vim_regfree(void *regprog) { vim_regfree(regprog); }
-
-
-
-int nvim_syn_utf_ptr2char(const char *p) { return utf_ptr2char(p); }
-
-int nvim_syn_vim_isprintc(int c) { return vim_isprintc(c); }
-
-char *nvim_syn_xstrnsave(const char *s, int len) { return xstrnsave(s, (size_t)len); }
-
-void nvim_syn_xfree(void *ptr) { xfree(ptr); }
-
-void *nvim_syn_xmalloc(int size) { return xmalloc((size_t)size); }
+// nvim_syn_name2id_wrapper deleted: Rust uses syn_name2id directly.
+// nvim_syn_check_group_wrapper deleted: Rust uses syn_check_group directly.
+// nvim_syn_highlight_num_groups deleted: Rust uses highlight_num_groups directly.
+// nvim_syn_highlight_group_name deleted: Rust uses highlight_group_name directly.
+// nvim_syn_vim_regcomp deleted: Rust uses vim_regcomp directly.
+// nvim_syn_vim_regfree deleted: Rust uses vim_regfree directly.
+// nvim_syn_utf_ptr2char deleted: Rust uses utf_ptr2char directly.
+// nvim_syn_vim_isprintc deleted: Rust uses vim_isprintc directly.
+// nvim_syn_xstrnsave deleted: Rust uses xstrnsave directly.
+// nvim_syn_xfree deleted: Rust uses xfree directly.
+// nvim_syn_xmalloc deleted: Rust uses xmalloc directly.
 
 void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
 
 char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
 
-void nvim_syn_emsg(const char *msg) { emsg(msg); }
+// nvim_syn_emsg deleted: Rust uses emsg directly.
 
 void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
 
-char *nvim_syn_skipwhite(const char *p) { return skipwhite(p); }
-
-char *nvim_syn_skiptowhite(const char *p) { return skiptowhite(p); }
-
-int nvim_syn_ends_excmd(int c) { return ends_excmd(c); }
+// nvim_syn_skipwhite deleted: Rust uses skipwhite directly.
+// nvim_syn_skiptowhite deleted: Rust uses skiptowhite directly.
+// nvim_syn_ends_excmd deleted: Rust uses ends_excmd directly.
 
 int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
 
@@ -1388,8 +1357,7 @@ int nvim_syn_get_expand_cluster_count(void)
 // Phase listing: accessors for syn_cmd_list migration
 // =============================================================================
 
-/// Get the highlight link ID for highlight group at index (0-based).
-int nvim_syn_highlight_link_id(int id) { return highlight_link_id(id); }
+// nvim_syn_highlight_link_id deleted: Rust uses highlight_link_id directly.
 
 /// Wrap syn_list_header.
 int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline)
@@ -1497,11 +1465,7 @@ char *nvim_syn_get_var_value(const char *name)
   return get_var_value(name);
 }
 
-/// Duplicate a C string via xstrdup (callers must free with xfree).
-char *nvim_syn_xstrdup(const char *s)
-{
-  return xstrdup(s);
-}
+// nvim_syn_xstrdup deleted: Rust uses xstrdup directly.
 
 /// Apply EVENT_SYNTAX autocmds for :ownsyntax.
 void nvim_syn_apply_autocmds_syntax(const char *arg)

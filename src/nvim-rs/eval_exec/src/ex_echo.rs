@@ -91,8 +91,8 @@ extern "C" {
     // do_cmdline for :execute
     fn nvim_do_cmdline_execute(cmd: *mut c_char, eap: ExargHandle);
 
-    // syn_name2id wrapper for ex_echohl
-    fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
+    // syn_name2id (direct C function)
+    fn syn_name2id(name: *const c_char) -> c_int;
 }
 
 // =============================================================================
@@ -122,7 +122,7 @@ pub unsafe extern "C" fn rs_get_echo_hl_id() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_echohl(eap: ExargHandle) {
     let arg = nvim_eap_get_arg_local(eap);
-    ECHO_HL_ID = nvim_syn_name2id_wrapper(arg);
+    ECHO_HL_ID = syn_name2id(arg);
 }
 
 // =============================================================================

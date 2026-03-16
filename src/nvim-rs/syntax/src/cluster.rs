@@ -697,11 +697,11 @@ extern "C" {
     fn nvim_syn_find_nextcmd(eap: *mut c_void, arg: *mut c_char);
 
     // String helpers
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // Error messages
-    fn nvim_syn_emsg(msg: *const c_char);
+    fn emsg(msg: *const c_char);
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
 }
 
@@ -790,9 +790,9 @@ unsafe fn syn_cmd_cluster_impl(eap: *mut c_void, _syncing: c_int) {
     }
 
     if !got_clstr {
-        nvim_syn_emsg(c"E400: No cluster specified".as_ptr());
+        emsg(c"E400: No cluster specified".as_ptr());
     }
-    if rest.is_null() || nvim_syn_ends_excmd(*rest as c_int) == 0 {
+    if rest.is_null() || ends_excmd(*rest as c_int) == 0 {
         nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
     }
 }
@@ -990,8 +990,8 @@ pub unsafe extern "C" fn rs_syn_add_cluster(name: *mut c_char) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_syn_skiptowhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
+    fn skiptowhite(p: *const c_char) -> *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_syn_get_topgrp() -> c_int;
     fn nvim_synblock_ga_init_patterns();
 }
@@ -1012,12 +1012,12 @@ pub unsafe extern "C" fn rs_get_group_name(
     if arg.is_null() || name_end.is_null() {
         return std::ptr::null_mut();
     }
-    *name_end = nvim_syn_skiptowhite(arg);
-    let rest = nvim_syn_skipwhite(*name_end);
+    *name_end = skiptowhite(arg);
+    let rest = skipwhite(*name_end);
 
     // Check if there are enough arguments. The first argument may be a
     // pattern where '|' is allowed, so only check for NUL.
-    if nvim_syn_ends_excmd(*arg as c_int) != 0 || *rest == 0 {
+    if ends_excmd(*arg as c_int) != 0 || *rest == 0 {
         return std::ptr::null_mut();
     }
     rest

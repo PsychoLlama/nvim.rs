@@ -2472,7 +2472,7 @@ pub unsafe extern "C" fn rs_eval_soundfold(word: *const c_char) -> *mut c_char {
 extern "C" {
     // Functions needed by Phase 5
     static mut p_enc: *mut c_char;
-    fn nvim_syn_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn mb_islower(c: c_int) -> bool;
     fn nvim_emsg_no_spell();
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
@@ -2542,7 +2542,7 @@ pub unsafe extern "C" fn rs_advance_camelcase_word(
             // UpperUpperLower: camelCase boundary
             *is_camel_case = true;
             // MB_PTR_BACK(str_, end)
-            let retreat = nvim_syn_utf_head_off(str_, end.sub(1)) + 1;
+            let retreat = utf_head_off(str_, end.sub(1)) + 1;
             end = end.sub(retreat as usize);
             break;
         } else if (this_type == CHAR_UPPER && last_type == CHAR_OTHER)

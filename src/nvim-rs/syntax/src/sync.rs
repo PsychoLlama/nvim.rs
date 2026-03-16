@@ -61,7 +61,7 @@ extern "C" {
     #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
     fn nvim_syn_get_got_int() -> c_int;
-    fn nvim_syn_line_breakcheck();
+    fn line_breakcheck();
 
     // Phase 3 accessors
     #[link_name = "rs_load_current_state"]
@@ -307,7 +307,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
         lnum -= 1; // --lnum before first check
         while lnum > break_lnum {
             // This can take a long time: break when CTRL-C pressed.
-            nvim_syn_line_breakcheck();
+            line_breakcheck();
             if nvim_syn_get_got_int() != 0 {
                 nvim_syn_invalidate_current_state();
                 crate::statics::CURRENT_LNUM = start_lnum;

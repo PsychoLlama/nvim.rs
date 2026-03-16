@@ -21,43 +21,43 @@ const RE_MAGIC: c_int = 1;
 
 extern "C" {
     // String helpers
-    fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_skiptowhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn skiptowhite(p: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
     fn nvim_syn_toupper_asc(c: c_int) -> c_int;
 
     // Memory
-    fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
-    fn nvim_syn_xfree(ptr: *mut c_void);
-    fn nvim_syn_xmalloc(size: c_int) -> *mut c_void;
+    fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    fn xmalloc(size: usize) -> *mut c_void;
     fn nvim_syn_xmemcpyz(dst: *mut c_char, src: *const c_char, len: c_int);
     fn nvim_syn_strpbrk(s: *const c_char, chars: *const c_char) -> *mut c_char;
 
     // Error messages
-    fn nvim_syn_emsg(msg: *const c_char);
+    fn emsg(msg: *const c_char);
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
 
     // Character functions
-    fn nvim_syn_utf_ptr2char(p: *const c_char) -> c_int;
-    fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
-    fn nvim_syn_vim_isprintc(c: c_int) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *mut c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> c_int;
 
     // Syntax functions
     fn nvim_syn_get_b_syn_conceal() -> c_int;
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
-    fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
-    fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
-    fn nvim_syn_highlight_num_groups() -> c_int;
-    fn nvim_syn_highlight_group_name(idx: c_int) -> *mut c_char;
+    fn syn_name2id(name: *const c_char) -> c_int;
+    fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
+    fn highlight_num_groups() -> c_int;
+    fn highlight_group_name(idx: c_int) -> *mut c_char;
     // Synblock accessors (synblock_T is not repr(C) yet)
     fn nvim_syn_get_curwin_synblock() -> crate::types::SynBlockHandle;
     fn nvim_synblock_get_pattern_count(block: crate::types::SynBlockHandle) -> c_int;
     fn nvim_synblock_get_pattern(block: crate::types::SynBlockHandle, idx: c_int) -> SynPatHandle;
 
     // Regexp
-    fn nvim_syn_vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
-    fn nvim_syn_vim_regfree(regprog: *mut c_void);
+    fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
+    fn vim_regfree(regprog: *mut c_void);
 
     // Direct regexp exec:
     // takes *mut *mut c_void so regprog updates on NFA fallback are visible
@@ -295,7 +295,7 @@ pub unsafe fn get_syn_options_impl(
                     next_char == b'='
                 } else {
                     nvim_syn_ascii_iswhite_char(next_char as c_int) != 0
-                        || nvim_syn_ends_excmd(next_char as c_int) != 0
+                        || ends_excmd(next_char as c_int) != 0
                 };
                 if is_match {
                     // Treat "display", "fold" and "extend" as keywords
@@ -323,7 +323,7 @@ pub unsafe fn get_syn_options_impl(
         if flag.argtype == 1 {
             // contains=
             if opt_has_cont_list == 0 {
-                nvim_syn_emsg(c"E395: Contains argument not accepted here".as_ptr());
+                emsg(c"E395: Contains argument not accepted here".as_ptr());
                 return std::ptr::null_mut();
             }
             if get_id_list_impl(&mut arg, 8, opt_cont_list, skip) == FAIL {
@@ -341,31 +341,31 @@ pub unsafe fn get_syn_options_impl(
             }
         } else if flag.argtype == 11 && *arg.add(5) as u8 == b'=' {
             // cchar=?
-            *conceal_char = nvim_syn_utf_ptr2char(arg.add(6));
-            let char_len = nvim_syn_utfc_ptr2len(arg.add(6));
+            *conceal_char = utf_ptr2char(arg.add(6));
+            let char_len = utfc_ptr2len(arg.add(6));
             arg = arg.add(char_len as usize - 1);
-            if nvim_syn_vim_isprintc(*conceal_char) == 0 {
-                nvim_syn_emsg(c"E844: invalid cchar value".as_ptr());
+            if vim_isprintc(*conceal_char) == 0 {
+                emsg(c"E844: invalid cchar value".as_ptr());
                 return std::ptr::null_mut();
             }
-            arg = nvim_syn_skipwhite(arg.add(7));
+            arg = skipwhite(arg.add(7));
         } else {
             // Simple flag
             *opt_flags |= flag.flags;
-            arg = nvim_syn_skipwhite(arg.add(matched_len));
+            arg = skipwhite(arg.add(matched_len));
 
             if flag.flags == HL_SYNC_HERE || flag.flags == HL_SYNC_THERE {
                 if opt_sync_idx.is_null() {
-                    nvim_syn_emsg(c"E393: group[t]here not accepted here".as_ptr());
+                    emsg(c"E393: group[t]here not accepted here".as_ptr());
                     return std::ptr::null_mut();
                 }
                 let gname_start = arg;
-                arg = nvim_syn_skiptowhite(arg);
+                arg = skiptowhite(arg);
                 if gname_start == arg {
                     return std::ptr::null_mut();
                 }
                 let gname_len = arg.offset_from(gname_start) as c_int;
-                let gname = nvim_syn_xstrnsave(gname_start, gname_len);
+                let gname = xstrnsave(gname_start, gname_len);
 
                 // Check for "NONE"
                 let is_none = *gname.add(0) == b'N' as c_char
@@ -377,18 +377,18 @@ pub unsafe fn get_syn_options_impl(
                 if is_none {
                     *opt_sync_idx = NONE_IDX;
                 } else {
-                    let syn_id = nvim_syn_name2id_wrapper(gname);
+                    let syn_id = syn_name2id(gname);
                     let idx = find_sync_pattern_idx(syn_id);
                     if idx < 0 {
                         nvim_syn_semsg_1s(c"E394: Didn't find region item for %s".as_ptr(), gname);
-                        nvim_syn_xfree(gname as *mut c_void);
+                        xfree(gname as *mut c_void);
                         return std::ptr::null_mut();
                     }
                     *opt_sync_idx = idx;
                 }
 
-                nvim_syn_xfree(gname as *mut c_void);
-                arg = nvim_syn_skipwhite(arg);
+                xfree(gname as *mut c_void);
+                arg = skipwhite(arg);
             } else if flag.flags == HL_FOLD && rs_foldmethod_is_syntax(nvim_get_curwin()) != 0 {
                 rs_fold_update_all(nvim_get_curwin());
             }
@@ -422,14 +422,14 @@ pub unsafe fn get_id_list_impl(
     let mut failed = false;
 
     // skip keyword (e.g., "contains")
-    let mut p = nvim_syn_skipwhite((*arg).add(keylen as usize));
+    let mut p = skipwhite((*arg).add(keylen as usize));
     if *p as u8 != b'=' {
         nvim_syn_semsg_1s(c"E405: Missing equal sign: %s".as_ptr(), *arg);
         *arg = p;
         return FAIL;
     }
-    p = nvim_syn_skipwhite(p.add(1));
-    if nvim_syn_ends_excmd(*p as c_int) != 0 {
+    p = skipwhite(p.add(1));
+    if ends_excmd(*p as c_int) != 0 {
         nvim_syn_semsg_1s(c"E406: Empty argument: %s".as_ptr(), *arg);
         *arg = p;
         return FAIL;
@@ -447,7 +447,7 @@ pub unsafe fn get_id_list_impl(
         let item_len = end.offset_from(p) as c_int;
 
         // Allocate name with room for "^" prefix and "$" suffix
-        let name = nvim_syn_xmalloc(item_len + 3) as *mut c_char;
+        let name = xmalloc((item_len + 3) as usize) as *mut c_char;
         nvim_syn_xmemcpyz(name.add(1), p, item_len);
         *name = 0; // placeholder for potential "^"
 
@@ -464,7 +464,7 @@ pub unsafe fn get_id_list_impl(
             if nvim_syn_toupper_asc(**arg as c_int) != b'C' as c_int {
                 nvim_syn_semsg_1s(c"E407: %s not allowed here".as_ptr(), name_str);
                 failed = true;
-                nvim_syn_xfree(name as *mut c_void);
+                xfree(name as *mut c_void);
                 break;
             }
             if count != 0 {
@@ -473,7 +473,7 @@ pub unsafe fn get_id_list_impl(
                     name_str,
                 );
                 failed = true;
-                nvim_syn_xfree(name as *mut c_void);
+                xfree(name as *mut c_void);
                 break;
             }
             if is_allbut || is_all {
@@ -496,7 +496,7 @@ pub unsafe fn get_id_list_impl(
             let metacharset = b"\\.*^$~[\0";
             if nvim_syn_strpbrk(name_str, metacharset.as_ptr() as *const c_char).is_null() {
                 // Simple name
-                id = nvim_syn_check_group_wrapper(name_str, item_len);
+                id = syn_check_group(name_str, item_len);
             } else {
                 // Regexp match against group names
                 *name = b'^' as c_char;
@@ -505,28 +505,28 @@ pub unsafe fn get_id_list_impl(
                 *name_end = b'$' as c_char;
                 *name_end.add(1) = 0;
 
-                let regprog = nvim_syn_vim_regcomp(name, RE_MAGIC);
+                let regprog = vim_regcomp(name, RE_MAGIC);
                 if regprog.is_null() {
                     failed = true;
-                    nvim_syn_xfree(name as *mut c_void);
+                    xfree(name as *mut c_void);
                     break;
                 }
 
                 id = 0;
-                let num_groups = nvim_syn_highlight_num_groups();
+                let num_groups = highlight_num_groups();
                 let mut cur_regprog = regprog;
                 for i in (0..num_groups).rev() {
-                    let group_name = nvim_syn_highlight_group_name(i);
+                    let group_name = highlight_group_name(i);
                     if rs_vim_regexec_prog(&mut cur_regprog, 1, group_name.cast::<u8>(), 0) != 0 {
                         ids.push((i + 1) as i16);
                         id = -1; // Remember we found one
                     }
                 }
-                nvim_syn_vim_regfree(cur_regprog);
+                vim_regfree(cur_regprog);
             }
         }
 
-        nvim_syn_xfree(name as *mut c_void);
+        xfree(name as *mut c_void);
 
         if id == 0 {
             nvim_syn_semsg_1s(c"E409: Unknown group name: %s".as_ptr(), p);
@@ -538,12 +538,12 @@ pub unsafe fn get_id_list_impl(
         }
         count += 1;
 
-        p = nvim_syn_skipwhite(end);
+        p = skipwhite(end);
         if *p as u8 != b',' {
             break;
         }
-        p = nvim_syn_skipwhite(p.add(1)); // skip comma
-        if nvim_syn_ends_excmd(*p as c_int) != 0 {
+        p = skipwhite(p.add(1)); // skip comma
+        if ends_excmd(*p as c_int) != 0 {
             break;
         }
     }
@@ -555,8 +555,7 @@ pub unsafe fn get_id_list_impl(
 
     if (*list).is_null() {
         // Allocate C array from the Vec and store it
-        let c_list =
-            nvim_syn_xmalloc(((ids.len() + 1) * std::mem::size_of::<i16>()) as c_int) as *mut i16;
+        let c_list = xmalloc((ids.len() + 1) * std::mem::size_of::<i16>()) as *mut i16;
         for (i, &id) in ids.iter().enumerate() {
             *c_list.add(i) = id;
         }

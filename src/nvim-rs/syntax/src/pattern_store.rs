@@ -50,7 +50,7 @@ extern "C" {
     // Pattern parsing
     fn rs_get_syn_pattern(arg: *mut c_char, ci: SynPatHandle) -> *mut c_char;
     // Memory management (outer shell free only -- does NOT free sp_prog/sp_pattern)
-    fn nvim_syn_xfree(ptr: *mut c_void);
+    fn xfree(ptr: *mut c_void);
 }
 
 // REX_SET=1, REX_USE=2
@@ -125,7 +125,7 @@ pub unsafe fn free_compiled_pattern(pat: SynPatHandle) {
 /// now owned by the garray and must NOT be freed here.
 pub unsafe fn free_compiled_pattern_shell(pat: SynPatHandle) {
     if !pat.is_null() {
-        nvim_syn_xfree(pat.0 as *mut c_void);
+        xfree(pat.0 as *mut c_void);
     }
 }
 

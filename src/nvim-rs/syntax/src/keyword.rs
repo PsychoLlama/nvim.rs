@@ -20,7 +20,7 @@ use crate::types::{
 extern "C" {
     // Keyword matching functions (nvim_syn_keyword_find replaced by rs_syn_keyword_find Rust impl)
     fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
-    fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
+    fn utfc_ptr2len(p: *mut c_char) -> c_int;
     fn nvim_syn_vim_iswordp_buf(p: *mut c_char) -> c_int;
 
     // Keyword table accessors
@@ -361,7 +361,7 @@ pub unsafe fn check_keyword_id(
     // Scan forward to find end of keyword.  First character was already checked.
     let mut kwlen: c_int = 0;
     loop {
-        kwlen += nvim_syn_utfc_ptr2len(kwp.add(kwlen as usize));
+        kwlen += utfc_ptr2len(kwp.add(kwlen as usize));
         if nvim_syn_vim_iswordp_buf(kwp.add(kwlen as usize)) == 0 {
             break;
         }
@@ -410,14 +410,7 @@ pub unsafe fn keyword_foldcase(src: *mut c_char, srclen: i32, dst: *mut c_char, 
     nvim_syn_keyword_foldcase(src, srclen, dst, dstlen);
 }
 
-/// Get the length of a UTF-8 character at the given position.
-///
-/// # Safety
-/// The pointer must be valid.
-#[must_use]
-pub unsafe fn utfc_ptr2len(p: *mut c_char) -> i32 {
-    nvim_syn_utfc_ptr2len(p)
-}
+// utfc_ptr2len wrapper deleted: callers use extern directly.
 
 /// Get the maximum keyword length constant.
 #[must_use]

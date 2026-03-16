@@ -33,13 +33,13 @@ extern "C" {
     fn nvim_syn_get_curwin_syn_ic() -> c_int;
 
     // regexp
-    fn nvim_syn_vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
+    fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
 
     // string helpers
-    fn nvim_syn_skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
-    fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
 }
 
@@ -83,13 +83,13 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
 
     // Store the pattern (xstrnsave(arg+1, end - arg - 1))
     let pat_len = end.offset_from(arg) as c_int - 1;
-    let pattern = nvim_syn_xstrnsave(arg.add(1), pat_len);
+    let pattern = xstrnsave(arg.add(1), pat_len);
     (*ci.as_ptr()).sp_pattern = pattern;
 
     // Make 'cpoptions' empty to avoid the 'l' flag, then compile
     let cpo_save = nvim_syn_get_p_cpo();
     nvim_syn_set_p_cpo(nvim_syn_get_empty_string_option());
-    let prog = nvim_syn_vim_regcomp(pattern, RE_MAGIC);
+    let prog = vim_regcomp(pattern, RE_MAGIC);
     nvim_syn_set_p_cpo(cpo_save);
 
     if prog.is_null() {
@@ -174,12 +174,12 @@ unsafe fn get_syn_pattern_impl(arg: *mut c_char, ci: SynPatHandle) -> *mut c_cha
     }
 
     // Trailing garbage check
-    if nvim_syn_ends_excmd(*cur as c_int) == 0 && nvim_syn_ascii_iswhite_char(*cur as c_int) == 0 {
+    if ends_excmd(*cur as c_int) == 0 && nvim_syn_ascii_iswhite_char(*cur as c_int) == 0 {
         nvim_syn_semsg_1s(c"E402: Garbage after pattern: %s".as_ptr(), arg);
         return std::ptr::null_mut();
     }
 
-    nvim_syn_skipwhite(cur)
+    skipwhite(cur)
 }
 
 // =============================================================================

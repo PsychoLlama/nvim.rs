@@ -29,13 +29,13 @@ extern "C" {
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
     // Reused from earlier phases
-    fn nvim_syn_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_skiptowhite(s: *const c_char) -> *mut c_char;
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn skiptowhite(s: *const c_char) -> *mut c_char;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
-    fn nvim_syn_xfree(ptr: *mut c_void);
-    fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
-    fn nvim_syn_emsg(msg: *const c_char);
+    fn xfree(ptr: *mut c_void);
+    fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
+    fn emsg(msg: *const c_char);
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
 }
 
@@ -77,7 +77,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
     let mut key: *mut c_char = std::ptr::null_mut();
 
     // Parse options and patterns
-    while !rest.is_null() && nvim_syn_ends_excmd(*rest as c_int) == 0 {
+    while !rest.is_null() && ends_excmd(*rest as c_int) == 0 {
         // Check for option arguments
         rest = crate::opt_parse::rs_get_syn_options(
             rest,
@@ -91,7 +91,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             &mut conceal_char,
             skip,
         );
-        if rest.is_null() || nvim_syn_ends_excmd(*rest as c_int) != 0 {
+        if rest.is_null() || ends_excmd(*rest as c_int) != 0 {
             break;
         }
 
@@ -104,7 +104,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             key_end = key_end.add(1);
         }
         if !key.is_null() {
-            nvim_syn_xfree(key as *mut c_void);
+            xfree(key as *mut c_void);
         }
         let key_len = key_end.offset_from(rest) as c_int;
         key = nvim_syn_vim_strnsave_up(rest, key_len);
@@ -125,31 +125,31 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
             break;
         };
 
-        rest = nvim_syn_skipwhite(key_end);
+        rest = skipwhite(key_end);
         if *rest as u8 != b'=' {
             rest = std::ptr::null_mut();
             nvim_syn_semsg_1s(c"E398: Missing '=': %s".as_ptr(), arg);
             break;
         }
-        rest = nvim_syn_skipwhite(rest.add(1));
+        rest = skipwhite(rest.add(1));
         if *rest == 0 {
             not_enough = true;
             break;
         }
 
         if item == ITEM_MATCHGROUP {
-            let p = nvim_syn_skiptowhite(rest);
+            let p = skiptowhite(rest);
             let mg_len = p.offset_from(rest) as c_int;
             if (mg_len == 4 && strncmp(rest, c"NONE".as_ptr(), 4) == 0) || skip != 0 {
                 matchgroup_id = 0;
             } else {
-                matchgroup_id = nvim_syn_check_group_wrapper(rest, mg_len);
+                matchgroup_id = syn_check_group(rest, mg_len);
                 if matchgroup_id == 0 {
                     illegal = true;
                     break;
                 }
             }
-            rest = nvim_syn_skipwhite(p);
+            rest = skipwhite(p);
         } else {
             // Compile the pattern (Rust)
             let mut pattern_rest: *mut c_char = std::ptr::null_mut();
@@ -175,7 +175,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
     }
 
     if !key.is_null() {
-        nvim_syn_xfree(key as *mut c_void);
+        xfree(key as *mut c_void);
     }
 
     if illegal || not_enough {
@@ -195,11 +195,10 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
     if !rest.is_null() {
         // Check for trailing garbage or command
         nvim_syn_set_nextcmd(eap, rest);
-        if nvim_syn_ends_excmd(*rest as c_int) == 0 || skip != 0 {
+        if ends_excmd(*rest as c_int) == 0 || skip != 0 {
             rest = std::ptr::null_mut();
         } else {
-            let syn_id =
-                nvim_syn_check_group_wrapper(arg, group_name_end.offset_from(arg) as c_int);
+            let syn_id = syn_check_group(arg, group_name_end.offset_from(arg) as c_int);
             if syn_id != 0 {
                 rs_syn_incl_toplevel(syn_id, &mut opt_flags);
 
@@ -240,9 +239,9 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
         for cp in &patterns {
             pattern_store::free_compiled_pattern(cp.pat);
         }
-        nvim_syn_xfree(cont_list as *mut c_void);
-        nvim_syn_xfree(cont_in_list as *mut c_void);
-        nvim_syn_xfree(next_list as *mut c_void);
+        xfree(cont_list as *mut c_void);
+        xfree(cont_in_list as *mut c_void);
+        xfree(next_list as *mut c_void);
         if not_enough {
             nvim_syn_semsg_1s(
                 c"E399: Not enough arguments: syntax region %s".as_ptr(),
@@ -257,7 +256,7 @@ unsafe fn syn_cmd_region_impl(eap: *mut c_void, syncing: c_int) {
         // only need to free the outer allocation (not sp_prog or sp_pattern).
         for cp in &patterns {
             // Free the outer synpat_T allocation only (data already in garray).
-            // We use nvim_syn_xfree to free just the struct allocation.
+            // We use xfree to free just the struct allocation.
             crate::pattern_store::free_compiled_pattern_shell(cp.pat);
         }
     }

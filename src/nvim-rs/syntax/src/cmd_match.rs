@@ -40,13 +40,13 @@ extern "C" {
     ) -> *mut c_char;
 
     // Group checking
-    fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
+    fn syn_check_group(name: *const c_char, len: c_int) -> c_int;
     fn rs_syn_incl_toplevel(id: c_int, flagsp: *mut c_int);
 
     // Helpers
-    fn nvim_syn_ends_excmd(c: c_int) -> c_int;
+    fn ends_excmd(c: c_int) -> c_int;
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);
-    fn nvim_syn_xfree(ptr: *mut c_void);
+    fn xfree(ptr: *mut c_void);
 }
 
 // ITEM_START=0: use REX_SET for \z specials on match patterns.
@@ -122,9 +122,8 @@ unsafe fn syn_cmd_match_impl(eap: *mut c_void, syncing: c_int) {
     if !rest.is_null() && !pat.is_null() {
         // Check for trailing command and illegal trailing arguments
         nvim_syn_set_nextcmd(eap, rest);
-        if nvim_syn_ends_excmd(*rest as c_int) != 0 && skip == 0 {
-            let syn_id =
-                nvim_syn_check_group_wrapper(arg, group_name_end.offset_from(arg) as c_int);
+        if ends_excmd(*rest as c_int) != 0 && skip == 0 {
+            let syn_id = syn_check_group(arg, group_name_end.offset_from(arg) as c_int);
             if syn_id != 0 {
                 rs_syn_incl_toplevel(syn_id, &mut opt_flags);
 
@@ -149,9 +148,9 @@ unsafe fn syn_cmd_match_impl(eap: *mut c_void, syncing: c_int) {
         if !pat.is_null() {
             pattern_store::free_compiled_pattern(pat);
         }
-        nvim_syn_xfree(cont_list as *mut c_void);
-        nvim_syn_xfree(cont_in_list as *mut c_void);
-        nvim_syn_xfree(next_list as *mut c_void);
+        xfree(cont_list as *mut c_void);
+        xfree(cont_in_list as *mut c_void);
+        xfree(next_list as *mut c_void);
         if rest.is_null() {
             nvim_syn_semsg_1s(c"E475: Invalid argument: %s".as_ptr(), arg);
         }

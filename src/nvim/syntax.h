@@ -52,5 +52,8 @@ int syn_get_stack_item(int i);
 void set_context_in_syntax_cmd(expand_T *xp, const char *arg);
 void set_context_in_echohl_cmd(expand_T *xp, const char *arg);
 
+// syn_get_id is now implemented in Rust (api.rs) via #[export_name = "syn_get_id"].
+int syn_get_id(win_T *wp, linenr_T lnum, colnr_T col, int trans, bool *spellp, int keep_state);
+
 #include "syntax_accessors.h.generated.h"
 #include "nvim/syntax_bridge.h"

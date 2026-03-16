@@ -1137,7 +1137,7 @@ extern "C" {
     fn nvim_syn_set_eap_arg(eap: *mut c_void, arg: *mut c_char);
 
     /// Allocate a copy of `s[0..len]`.
-    fn nvim_syn_xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
 
     /// Free memory allocated with xmalloc/xstrdup/etc.
     fn xfree(ptr: *mut c_void);
@@ -1203,7 +1203,7 @@ pub unsafe extern "C" fn rs_ex_syntax(eap: *mut c_void) {
     }
 
     let name_len = subcmd_end.offset_from(arg) as c_int;
-    let subcmd_name = nvim_syn_xstrnsave(arg, name_len);
+    let subcmd_name = xstrnsave(arg, name_len);
 
     if nvim_syn_get_eap_skip(eap) != 0 {
         nvim_syn_emsg_skip_inc();
@@ -1267,7 +1267,7 @@ extern "C" {
     fn nvim_syn_get_var_value(name: *const c_char) -> *mut c_char;
 
     /// Duplicate a C string.
-    fn nvim_syn_xstrdup(s: *const c_char) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     /// Apply EVENT_SYNTAX autocmds.
     fn nvim_syn_apply_autocmds_syntax(arg: *const c_char);
@@ -1345,7 +1345,7 @@ pub unsafe extern "C" fn rs_ex_ownsyntax(eap: *mut c_void) {
     let old_value: *mut c_char = if old_raw.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_syn_xstrdup(old_raw)
+        xstrdup(old_raw)
     };
 
     // Apply "syntax" autocommand event

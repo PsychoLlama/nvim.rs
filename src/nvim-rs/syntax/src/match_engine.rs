@@ -41,7 +41,7 @@ extern "C" {
     fn nvim_syn_getcurline_at_col() -> c_char;
     #[link_name = "rs_check_state_ends"]
     fn nvim_syn_check_state_ends();
-    fn nvim_syn_line_breakcheck();
+    fn line_breakcheck();
 
     // Extmatch management
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
@@ -551,13 +551,7 @@ pub unsafe fn check_state_ends() {
     nvim_syn_check_state_ends();
 }
 
-/// Perform a line breakcheck.
-///
-/// # Safety
-/// This may modify global state.
-pub unsafe fn line_breakcheck() {
-    nvim_syn_line_breakcheck();
-}
+// line_breakcheck wrapper deleted: callers use extern directly.
 
 // =============================================================================
 // Line ID tracking

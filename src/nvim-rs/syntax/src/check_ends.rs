@@ -31,8 +31,7 @@ extern "C" {
     // Extmatch
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
 
-    // Highlight
-    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
+    // (syn_id2attr: use crate::highlight::syn_id2attr directly)
 
     // ID list
     fn nvim_syn_get_id_list_all() -> IdListHandle;
@@ -132,7 +131,7 @@ pub unsafe fn update_si_attr(stack_idx: i32) {
         (*pat_p).sp_syn.id as c_int
     };
     (*p).si_id = hl_id;
-    (*p).si_attr = nvim_syn_id2attr_wrapper(hl_id);
+    (*p).si_attr = crate::highlight::syn_id2attr(hl_id);
     (*p).si_trans_id = hl_id;
 
     // Set continue list

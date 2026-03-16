@@ -22,8 +22,8 @@ extern "C" {
     fn nvim_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle;
 
     // Memory management
-    fn nvim_syn_xfree(ptr: *mut c_void);
-    fn nvim_syn_vim_regfree(ptr: *mut c_void);
+    fn xfree(ptr: *mut c_void);
+    fn vim_regfree(ptr: *mut c_void);
 
     // New accessors added for clearing.rs
     fn nvim_synblock_set_pattern_count(block: SynBlockHandle, len: c_int);
@@ -122,8 +122,8 @@ pub unsafe extern "C" fn rs_syn_clear_pattern(block: SynBlockHandle, i: c_int) {
     }
 
     let pp = pat.as_ptr();
-    nvim_syn_xfree((*pp).sp_pattern as *mut c_void);
-    nvim_syn_vim_regfree((*pp).sp_prog);
+    xfree((*pp).sp_pattern as *mut c_void);
+    vim_regfree((*pp).sp_prog);
 
     // Only free sp_cont_list, sp_next_list, and sp_syn.cont_in_list for
     // the first start pattern of a group (i == 0 or prev is not SPTYPE_START).
@@ -135,9 +135,9 @@ pub unsafe extern "C" fn rs_syn_clear_pattern(block: SynBlockHandle, i: c_int) {
     };
 
     if free_lists {
-        nvim_syn_xfree((*pp).sp_cont_list.cast());
-        nvim_syn_xfree((*pp).sp_next_list.cast());
-        nvim_syn_xfree((*pp).sp_syn.cont_in_list.cast());
+        xfree((*pp).sp_cont_list.cast());
+        xfree((*pp).sp_next_list.cast());
+        xfree((*pp).sp_syn.cont_in_list.cast());
     }
 }
 
@@ -152,9 +152,9 @@ pub unsafe extern "C" fn rs_syn_clear_cluster(block: SynBlockHandle, i: c_int) {
         return;
     }
     let cp = cluster.as_ptr();
-    nvim_syn_xfree((*cp).scl_name as *mut c_void);
-    nvim_syn_xfree((*cp).scl_name_u as *mut c_void);
-    nvim_syn_xfree((*cp).scl_list.cast());
+    xfree((*cp).scl_name as *mut c_void);
+    xfree((*cp).scl_name_u as *mut c_void);
+    xfree((*cp).scl_list.cast());
 }
 
 /// Remove one pattern from the buffer's pattern list (compact with memmove).

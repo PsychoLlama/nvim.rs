@@ -257,6 +257,40 @@ pub unsafe extern "C" fn rs_syn_get_id(
     syn_get_id_impl(wp, lnum, col, trans, spellp, keep_state)
 }
 
+/// Public C API for `syn_get_id` -- converts `bool*` caller to `int*` internally.
+///
+/// Replaces the C thin wrapper that performed the same bool/int conversion.
+///
+/// # Safety
+/// Must be called from the main thread during syntax highlighting.
+#[export_name = "syn_get_id"]
+pub unsafe extern "C" fn rs_syn_get_id_public(
+    wp: WinHandle,
+    lnum: c_int,
+    col: c_int,
+    trans: c_int,
+    spellp: *mut bool,
+    keep_state: c_int,
+) -> c_int {
+    let mut sp: c_int = 0;
+    let id = syn_get_id_impl(
+        wp,
+        lnum,
+        col,
+        trans,
+        if spellp.is_null() {
+            std::ptr::null_mut()
+        } else {
+            &raw mut sp
+        },
+        keep_state,
+    );
+    if !spellp.is_null() {
+        *spellp = sp != 0;
+    }
+    id
+}
+
 /// Get extra syntax info -- Rust implementation of `get_syntax_info`.
 ///
 /// # Safety

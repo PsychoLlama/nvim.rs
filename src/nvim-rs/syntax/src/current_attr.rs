@@ -49,8 +49,7 @@ extern "C" {
     fn nvim_syn_take_re_extmatch_out() -> ExtMatchHandle;
     fn nvim_syn_clear_re_extmatch_out();
 
-    // ID to attribute
-    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
+    // (syn_id2attr: use crate::highlight::syn_id2attr directly)
 
     // Synblock queries
     fn nvim_syn_has_containedin() -> c_int;
@@ -69,7 +68,7 @@ extern "C" {
 
     // Word check
     fn nvim_syn_vim_iswordp_buf(p: *mut i8) -> c_int;
-    fn nvim_syn_utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
+    fn utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // getcurline
@@ -218,7 +217,7 @@ pub unsafe fn syn_current_attr(
                 if nvim_syn_vim_iswordp_buf(cur_pos) != 0
                     && (current_col == 0 || {
                         let prev = cur_pos.offset(-1);
-                        let head_off = nvim_syn_utf_head_off(line, prev);
+                        let head_off = utf_head_off(line, prev);
                         let word_start = prev.offset(-(head_off as isize));
                         nvim_syn_vim_iswordp_buf(word_start) == 0
                     })
@@ -294,7 +293,7 @@ pub unsafe fn syn_current_attr(
                                 (*p).si_trans_id = (*prev_si.as_ptr()).si_trans_id;
                             }
                         } else {
-                            (*cur_si.as_ptr()).si_attr = nvim_syn_id2attr_wrapper(syn_id);
+                            (*cur_si.as_ptr()).si_attr = crate::highlight::syn_id2attr(syn_id);
                         }
 
                         {
