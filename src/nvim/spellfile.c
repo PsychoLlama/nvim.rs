@@ -653,9 +653,6 @@ struct wordnode_S {
   uint16_t wn_flags;            // WF_ flags
   int16_t wn_region;            // region mask
 
-#ifdef SPELL_PRINTTREE
-  int wn_nr;                    // sequence nr for printing
-#endif
 };
 
 #define WN_MASK  0xffff         // mask relevant bits of "wn_flags"
@@ -683,9 +680,6 @@ typedef struct {
   wordnode_T *si_first_free;   // List of nodes that have been freed during
                                // compression, linked by "wn_child" field.
   int si_free_count;           // number of nodes in si_first_free
-#ifdef SPELL_PRINTTREE
-  int si_wordnode_nr;           // sequence nr for nodes
-#endif
   buf_T *si_spellbuf;     // buffer used to store soundfold word table
 
   int si_ascii;                 // handling only ASCII words
@@ -1406,100 +1400,6 @@ int spell_check_msm(void)
   compress_added = added;
   return OK;
 }
-
-#ifdef SPELL_PRINTTREE
-// For debugging the tree code: print the current tree in a (more or less)
-// readable format, so that we can see what happens when adding a word and/or
-// compressing the tree.
-// Based on code from Olaf Seibert.
-# define PRINTLINESIZE   1000
-# define PRINTWIDTH      6
-
-# define PRINTSOME(l, depth, fmt, a1, a2) vim_snprintf(l + depth * PRINTWIDTH, \
-                                                       PRINTLINESIZE - PRINTWIDTH * depth, fmt, a1, \
-                                                       a2)
-
-static char line1[PRINTLINESIZE];
-static char line2[PRINTLINESIZE];
-static char line3[PRINTLINESIZE];
-
-static void spell_clear_flags(wordnode_T *node)
-{
-  wordnode_T *np;
-
-  for (np = node; np != NULL; np = np->wn_sibling) {
-    np->wn_u1.index = false;
-    spell_clear_flags(np->wn_child);
-  }
-}
-
-static void spell_print_node(wordnode_T *node, int depth)
-{
-  if (node->wn_u1.index) {
-    // Done this node before, print the reference.
-    PRINTSOME(line1, depth, "(%d)", node->wn_nr, 0);
-    PRINTSOME(line2, depth, "    ", 0, 0);
-    PRINTSOME(line3, depth, "    ", 0, 0);
-    msg(line1, 0);
-    msg(line2, 0);
-    msg(line3, 0);
-  } else {
-    node->wn_u1.index = true;
-
-    if (node->wn_byte != NUL) {
-      if (node->wn_child != NULL) {
-        PRINTSOME(line1, depth, " %c -> ", node->wn_byte, 0);
-      } else {
-        // Cannot happen?
-        PRINTSOME(line1, depth, " %c ???", node->wn_byte, 0);
-      }
-    } else {
-      PRINTSOME(line1, depth, " $    ", 0, 0);
-    }
-
-    PRINTSOME(line2, depth, "%d/%d    ", node->wn_nr, node->wn_refs);
-
-    if (node->wn_sibling != NULL) {
-      PRINTSOME(line3, depth, " |    ", 0, 0);
-    } else {
-      PRINTSOME(line3, depth, "      ", 0, 0);
-    }
-
-    if (node->wn_byte == NUL) {
-      msg(line1, 0);
-      msg(line2, 0);
-      msg(line3, 0);
-    }
-
-    // do the children
-    if (node->wn_byte != NUL && node->wn_child != NULL) {
-      spell_print_node(node->wn_child, depth + 1);
-    }
-
-    // do the siblings
-    if (node->wn_sibling != NULL) {
-      // get rid of all parent details except |
-      STRCPY(line1, line3);
-      STRCPY(line2, line3);
-      spell_print_node(node->wn_sibling, depth);
-    }
-  }
-}
-
-static void spell_print_tree(wordnode_T *root)
-{
-  if (root == NULL) {
-    return;
-  }
-
-  // Clear the "wn_u1.index" fields, used to remember what has been done.
-  spell_clear_flags(root);
-
-  // Recursively print the tree.
-  spell_print_node(root, 0);
-}
-
-#endif  // SPELL_PRINTTREE
 
 // Reads the affix file "fname".
 // Returns an afffile_T, NULL for complete failure.
@@ -3458,11 +3358,6 @@ static int tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, 
     prev = &node->wn_child;
     node = *prev;
   }
-#ifdef SPELL_PRINTTREE
-  smsg(0, "Added \"%s\"", word);
-  spell_print_tree(root->wn_sibling);
-#endif
-
   // count nr of words added since last message
   spin->si_msg_count++;
 
@@ -3533,11 +3428,6 @@ static wordnode_T *get_wordnode(spellinfo_T *spin)
     CLEAR_POINTER(n);
     spin->si_free_count--;
   }
-#ifdef SPELL_PRINTTREE
-  if (n != NULL) {
-    n->wn_nr = ++spin->si_wordnode_nr;
-  }
-#endif
   return n;
 }
 
@@ -3590,10 +3480,7 @@ static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *n
   hash_init(&ht);
   const int n = node_compress(spin, root->wn_sibling, &ht, &tot);
 
-#ifndef SPELL_PRINTTREE
-  if (spin->si_verbose || p_verbose > 2)
-#endif
-  {
+  if (spin->si_verbose || p_verbose > 2) {
     if (tot > 1000000) {
       perc = (tot - n) / (tot / 100);
     } else if (tot == 0) {
@@ -3606,9 +3493,6 @@ static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *n
                  name, n, tot, tot - n, perc);
     spell_message(spin, IObuff);
   }
-#ifdef SPELL_PRINTTREE
-  spell_print_tree(root->wn_sibling);
-#endif
   hash_clear(&ht);
 }
 
