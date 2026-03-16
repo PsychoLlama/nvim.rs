@@ -1,13 +1,11 @@
 // bufwrite.c: functions for writing a buffer
 
-#include <fcntl.h>
 #include <iconv.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <uv.h>
 
 #include "auto/config.h"
 #include "nvim/ascii_defs.h"
@@ -102,21 +100,9 @@ _Static_assert(SHA256_SUM_SIZE == 32, "UNDO_HASH_SIZE");
 // Rust FFI forward declarations (used by accessor functions below)
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
                            int fat_tolerance);
-extern int rs_get_fio_flags(const char *name);
 
-static const char *err_readonly = "is read-only (cannot override: \"W\" in 'cpoptions')";
 static const char e_no_matching_autocommands_for_buftype_str_buffer[]
   = N_("E676: No matching autocommands for buftype=%s buffer");
-
-typedef struct {
-  const char *num;
-  char *msg;
-  int arg;
-  bool alloc;
-} Error_T;
-_Static_assert(sizeof(Error_T) == 24, "Error_T size");
-
-#define SMALLBUFSIZE 256     // size of emergency write buffer
 
 // Structure to pass arguments from buf_write() to buf_write_bytes().
 struct bw_info {
