@@ -68,6 +68,7 @@ pub mod ui_flush;
 pub mod utility;
 pub mod viml;
 pub mod win_struct;
+pub mod wrappers;
 
 use std::ffi::{c_char, c_int};
 

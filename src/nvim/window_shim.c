@@ -194,7 +194,7 @@ void nvim_set_curwin_cursor_pos(const void *pos) { const int32_t *p = (const int
 /// Compare two positions for equality (accessor for Rust).
 int nvim_equalpos(const void *pos1, const void *pos2) { const int32_t *p1 = (const int32_t *)pos1; const int32_t *p2 = (const int32_t *)pos2; return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2]; }
 
-void nvim_validate_cursor(void) { validate_cursor(curwin); }
+// nvim_validate_cursor: migrated to Rust wrappers.rs (Phase 8)
 char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
 int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
@@ -211,7 +211,7 @@ void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
-void nvim_redraw_all_later(int type) { redraw_all_later(type); }
+// nvim_redraw_all_later: migrated to Rust wrappers.rs (Phase 8)
 int nvim_get_real_state(void) { return get_real_state(); }
 int nvim_win_buf_meta_total_lines(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0; }
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
@@ -244,7 +244,7 @@ int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
-int nvim_ui_has_tabline(void) { return ui_has(kUITabline); }
+// nvim_ui_has_tabline: migrated to Rust wrappers.rs (Phase 8)
 
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
@@ -425,7 +425,7 @@ void nvim_win_setup_first_buffer(win_T *wp, buf_T *buf)
 }
 
 /// curwin_init() for current window.
-void nvim_curwin_init(void) { curwin_init(); }
+// nvim_curwin_init: migrated to Rust wrappers.rs (Phase 8)
 
 /// RESET_BINDING for window wp.
 void nvim_win_reset_binding(win_T *wp) { RESET_BINDING(wp); }
@@ -533,8 +533,7 @@ void nvim_tabpage_free_dirs(tabpage_T *tp)
   xfree(tp->tp_prevdir);
 }
 
-/// Free raw tabpage struct (xfree only — does not clear fields).
-void nvim_xfree_tabpage_raw(tabpage_T *tp) { xfree(tp); }
+// nvim_xfree_tabpage_raw: migrated to Rust wrappers.rs (Phase 8)
 
 
 
@@ -841,19 +840,19 @@ int nvim_win_get_p_spk_char(void) { return (int)(unsigned char)*p_spk; }
 // nvim_validate_cursor_win already defined in move.c
 // nvim_changed_line_abv_curs_win already defined in change_ffi.c
 // nvim_invalidate_botline already defined in move.c
-void nvim_curs_columns_win(win_T *wp) { if (wp) { curs_columns(wp, true); } }
+// nvim_curs_columns_win: migrated to Rust wrappers.rs (Phase 8)
 void nvim_terminal_check_size_win(win_T *wp) { if (wp && wp->w_buffer->terminal) { terminal_check_size(wp->w_buffer->terminal); } }
 int nvim_win_border_height_wrapper(win_T *wp) { return wp ? win_border_height(wp) : 0; }
 int nvim_win_border_width_wrapper(win_T *wp) { return wp ? win_border_width(wp) : 0; }
 int nvim_win_get_w_handle(win_T *wp) { return wp ? wp->handle : 0; }
 // nvim_win_get_border_adj already defined earlier in this file
-int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
-void nvim_ui_call_grid_destroy_handle(int handle) { ui_call_grid_destroy(handle); }
-void nvim_clear_matches_win(win_T *wp) { clear_matches(wp); }
-void nvim_free_jumplist_win(win_T *wp) { free_jumplist(wp); }
+// nvim_ui_has_multigrid: migrated to Rust wrappers.rs (Phase 8)
+// nvim_ui_call_grid_destroy_handle: migrated to Rust wrappers.rs (Phase 8)
+// nvim_clear_matches_win: migrated to Rust wrappers.rs (Phase 8)
+// nvim_free_jumplist_win: migrated to Rust wrappers.rs (Phase 8)
 win_T *nvim_get_au_pending_free_win(void) { return au_pending_free_win; }
 void nvim_set_au_pending_free_win(win_T *wp) { au_pending_free_win = wp; }
-void nvim_xfree_win_raw(win_T *wp) { xfree(wp); }
+// nvim_xfree_win_raw: migrated to Rust wrappers.rs (Phase 8)
 void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
   if (wp && ui_has(kUIMultigrid)) {
     ui_call_win_viewport_margins(wp->w_grid_alloc.handle, wp->handle,
@@ -889,7 +888,7 @@ int nvim_ga_get_len(garray_T *gap) { return gap ? gap->ga_len : 0; }
 int nvim_ga_get_int(garray_T *gap, int idx) { return (gap && gap->ga_data && idx >= 0 && idx < gap->ga_len) ? ((int *)gap->ga_data)[idx] : 0; }
 
 void nvim_ga_set_int(garray_T *gap, int idx, int val) { if (gap && gap->ga_data && idx >= 0) { ((int *)gap->ga_data)[idx] = val; } }
-void nvim_comp_col(void) { comp_col(); }
+// nvim_comp_col: migrated to Rust wrappers.rs (Phase 8)
 
 /// Compound accessor: clear and free w_status_click_defs.
 void nvim_win_stl_clear_click_defs(win_T *wp)
@@ -904,7 +903,7 @@ void nvim_win_stl_clear_click_defs(win_T *wp)
 }
 
 int nvim_win_get_prev_height(win_T *wp) { return wp ? wp->w_prev_height : 0; }
-void nvim_win_float_anchor_laststatus(void) { win_float_anchor_laststatus(); }
+// nvim_win_float_anchor_laststatus: migrated to Rust wrappers.rs (Phase 8)
 int nvim_win_get_fraction(win_T *wp) { return wp ? wp->w_fraction : 0; }
 
 // nvim_get_p_ch() — already defined in message.c
@@ -926,9 +925,9 @@ void nvim_merge_win_config_init(win_T *wp)
   }
 }
 
-void nvim_redraw_later_wrapper(win_T *wp, int type) { if (wp) { redraw_later(wp, type); } }
-void nvim_status_redraw_all_wrapper(void) { status_redraw_all(); }
-void nvim_msg_clr_eos_force(void) { msg_clr_eos_force(); }
+// nvim_redraw_later_wrapper: migrated to Rust wrappers.rs (Phase 8)
+// nvim_status_redraw_all_wrapper: migrated to Rust wrappers.rs (Phase 8)
+// nvim_msg_clr_eos_force: migrated to Rust wrappers.rs (Phase 8)
 int nvim_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp) ? 1 : 0; }
 // nvim_win_get_config_external_int: migrated to Rust win_struct.rs (Phase 7)
 
@@ -938,13 +937,13 @@ int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_iemsg_move_other_frame(void) { iemsg("INTERNAL: trying to move a window into another frame"); }
 int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
-void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
+// nvim_win_enter: migrated to Rust wrappers.rs (Phase 8)
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
 // nvim_win_free_mem_wrapper deleted: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
 void nvim_dec_split_disallowed(void) { split_disallowed--; }
-void nvim_ui_call_win_close_win(win_T *wp) { if (wp) { ui_call_win_close(wp->w_grid_alloc.handle); } }
-void nvim_check_cursor_win_wrapper(win_T *wp) { check_cursor(wp); }
+// nvim_ui_call_win_close_win: caller uses nvim_win_get_grid_alloc_handle directly (Phase 8)
+// nvim_check_cursor_win_wrapper: migrated to Rust wrappers.rs (Phase 8)
 
 /// Get w_frame->fr_parent from a window (for win_close frame comparison).
 frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp->w_frame->fr_parent : NULL; }
@@ -983,7 +982,7 @@ win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp(ptr); }
 
 /// setpcmark() wrapper.
-void nvim_setpcmark_curwin(void) { setpcmark(); }
+// nvim_setpcmark_curwin: migrated to Rust wrappers.rs (Phase 8)
 
 /// win_split(0,0) wrapper returning OK/FAIL.
 // (nvim_win_split_wrapper already exists)
@@ -998,10 +997,9 @@ int nvim_do_ecmd_lastl_hide(const char *ptr)
 }
 
 /// check_cursor_lnum(curwin) wrapper.
-void nvim_check_cursor_lnum_curwin(void) { check_cursor_lnum(curwin); }
+// nvim_check_cursor_lnum_curwin: migrated to Rust wrappers.rs (Phase 8)
 
-/// beginline(BL_SOL | BL_FIX) wrapper.
-void nvim_beginline_sol_fix(void) { beginline(BL_SOL | BL_FIX); }
+// nvim_beginline_sol_fix: migrated to Rust wrappers.rs (Phase 8)
 
 // nvim_set_curwin_cursor_lnum already exists in change_ffi.c
 
@@ -1023,7 +1021,7 @@ size_t nvim_find_ident_under_cursor(char **pp) { return rs_find_ident_under_curs
 // (nvim_inc/dec_no_mapping, nvim_inc/dec_allow_keys, nvim_goto_tabpage,
 //  nvim_langmap_adjust, nvim_goto_tabpage_lastused, nvim_set_g_do_tagpreview,
 //  nvim_set_postponed_split already exist in normal_shim.c / tag_shim.c)
-void nvim_do_nv_ident(int prefix, int xchar) { do_nv_ident(prefix, xchar); }
+// nvim_do_nv_ident: migrated to Rust wrappers.rs (Phase 8)
 void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
 
 // nvim_do_window_g_external deleted: logic migrated to Rust dispatch.rs (Phase 10)
@@ -1105,7 +1103,7 @@ win_T *nvim_handle_get_window(int handle)
 }
 
 // Call win_grid_alloc on a window
-void nvim_win_call_win_grid_alloc(win_T *wp) { if (wp) { win_grid_alloc(wp); } }
+// nvim_win_call_win_grid_alloc: migrated to Rust wrappers.rs (Phase 8)
 
 // UI call wrappers (these wrap auto-generated ui_call_* functions)
 void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height)
@@ -1125,7 +1123,7 @@ void nvim_win_ui_call_win_float_pos(int grid_handle, int win_handle, int anchor,
                         row, col, (bool)mouse, zindex, comp_index, screen_row, screen_col);
 }
 
-void nvim_win_ui_call_win_hide(int grid_handle) { ui_call_win_hide(grid_handle); }
+// nvim_win_ui_call_win_hide: migrated to Rust wrappers.rs (Phase 8)
 
 void nvim_win_ui_call_win_external_pos(int grid_handle, int win_handle)
 {
@@ -1177,7 +1175,7 @@ void nvim_win_set_script_ctx_scroll(win_T *wp)
 }
 
 /// Call win_reconfig_floats() (for win_new_screen_cols).
-void nvim_win_reconfig_floats(void) { win_reconfig_floats(); }
+// nvim_win_reconfig_floats: migrated to Rust wrappers.rs (Phase 8)
 
 
 
@@ -1188,7 +1186,7 @@ int nvim_win_get_prev_winrow(win_T *wp) { return wp ? wp->w_prev_winrow : 0; }
 
 // Phase 4 accessors: win_new_screen_rows, unuse_tabpage, use_tabpage, win_goto,
 // restore_snapshot, do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
-void nvim_compute_cmdrow(void) { compute_cmdrow(); }
+// nvim_compute_cmdrow: migrated to Rust wrappers.rs (Phase 8)
 int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
 // nvim_apply_autocmds_winclosed deleted: logic migrated to Rust events.rs (Phase 8)
 /// Apply WinClosed autocmd using pre-formatted handle string (Phase 8).
@@ -1241,16 +1239,16 @@ void nvim_apply_autocmds_event(int event)
 
 
 /// Update topline for curwin (used in win_enter_ext).
-void nvim_update_topline_curwin_enter(void) { update_topline(curwin); }
+// nvim_update_topline_curwin_enter: migrated to Rust wrappers.rs (Phase 8)
 
 /// Copy buffer options on enter: buf_copy_options(buf, BCO_ENTER | BCO_NOHELP).
 void nvim_buf_copy_options_enter(buf_T *buf) { buf_copy_options(buf, BCO_ENTER | BCO_NOHELP); }
 
 /// Call changed_line_abv_curs().
-void nvim_changed_line_abv_curs_wrap(void) { changed_line_abv_curs(); }
+// nvim_changed_line_abv_curs_wrap: migrated to Rust wrappers.rs (Phase 8)
 
 /// Call do_autochdir().
-void nvim_do_autochdir_wrap(void) { do_autochdir(); }
+// nvim_do_autochdir_wrap: migrated to Rust wrappers.rs (Phase 8)
 
 /// Get restart_edit global (non-zero if in restart-edit mode).
 int nvim_get_restart_edit_bool(void) { return restart_edit ? 1 : 0; }
@@ -1479,10 +1477,8 @@ void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botli
 // Phase 6 accessors: tabpage_check_windows + win_ui_flush
 
 /// Wrap pum_ui_flush() for Rust.
-void nvim_pum_ui_flush_wrapper(void) { pum_ui_flush(); }
-
-/// Wrap msg_ui_flush() for Rust.
-void nvim_msg_ui_flush_wrapper(void) { msg_ui_flush(); }
+// nvim_pum_ui_flush_wrapper: migrated to Rust wrappers.rs (Phase 8)
+// nvim_msg_ui_flush_wrapper: migrated to Rust wrappers.rs (Phase 8)
 
 // nvim_win_get_grid_pending_comp/set/get_grid_chars_valid: migrated to Rust win_struct.rs (Phase 7)
 
@@ -1510,7 +1506,7 @@ void nvim_set_cmdmod_tab(int val) { cmdmod.cmod_tab = val; }
 
 
 /// Call reset_dragwin().
-void nvim_reset_dragwin(void) { reset_dragwin(); }
+// nvim_reset_dragwin: migrated to Rust wrappers.rs (Phase 8)
 
 /// Set firstwin = NULL (without syncing curtab->tp_firstwin).
 void nvim_set_firstwin_null(void) { firstwin = NULL; }
@@ -1522,13 +1518,13 @@ void nvim_set_lastwin_null(void) { lastwin = NULL; }
 int nvim_get_starting(void) { return starting; }
 
 /// Call win_float_update_statusline().
-void nvim_win_float_update_statusline(void) { win_float_update_statusline(); }
+// nvim_win_float_update_statusline: migrated to Rust wrappers.rs (Phase 8)
 
 /// Set lastused_tabpage global (for enter_tabpage migration).
 void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp; }
 
 /// Call set_keep_msg(NULL, 0).
-void nvim_set_keep_msg_null(void) { set_keep_msg(NULL, 0); }
+// nvim_set_keep_msg_null: migrated to Rust wrappers.rs (Phase 8)
 
 /// Set skip_win_fix_scroll global.
 void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
@@ -1831,8 +1827,7 @@ win_T *nvim_win_float_find_altwin(win_T *win, tabpage_T *tp)
   return win_float_find_altwin(win, tp);
 }
 
-/// xfree wrapper for frame_T* (frees the frame pointer).
-void nvim_xfree_frame(void *frp) { xfree(frp); }
+// nvim_xfree_frame: migrated to Rust wrappers.rs (Phase 8)
 
 /// win_free(win, tp) wrapper.
 // nvim_win_free_wrapper deleted: callers updated to call rs_win_free directly (Phase 12)
@@ -2160,7 +2155,7 @@ void nvim_status_redraw_all(void)
 }
 
 /// Trigger a full screen update (Rust incsearch).
-void nvim_update_screen(void) { update_screen(); }
+// nvim_update_screen: migrated to Rust wrappers.rs (Phase 8)
 
 /// Get w_view_width for a window (visible text column count).
 int nvim_win_get_w_view_width(win_T *wp) { return wp ? wp->w_view_width : 0; }
@@ -2176,20 +2171,11 @@ int nvim_win_get_w_p_rnu(win_T *wp) { return wp ? wp->w_p_rnu : 0; }
 
 // Moved from drawscreen.c — display Rust FFI wrappers
 
-/// Wrapper for win_check_ns_hl() for Rust FFI.
-void nvim_win_check_ns_hl(win_T *wp) { win_check_ns_hl(wp); }
-
-/// Wrapper for win_redr_winbar() for Rust FFI.
-void nvim_win_redr_winbar(win_T *wp) { win_redr_winbar(wp); }
-
-/// Wrapper for win_redr_status() for Rust FFI.
-void nvim_win_redr_status(win_T *wp) { win_redr_status(wp); }
-
-/// Wrapper for draw_tabline() for Rust FFI.
-void nvim_draw_tabline(void) { draw_tabline(); }
-
-/// Wrapper for maketitle() for Rust FFI.
-void nvim_maketitle(void) { maketitle(); }
+// nvim_win_check_ns_hl: migrated to Rust wrappers.rs (Phase 8)
+// nvim_win_redr_winbar: migrated to Rust wrappers.rs (Phase 8)
+// nvim_win_redr_status: migrated to Rust wrappers.rs (Phase 8)
+// nvim_draw_tabline: migrated to Rust wrappers.rs (Phase 8)
+// nvim_maketitle: migrated to Rust wrappers.rs (Phase 8)
 
 // Moved from drawscreen.c — title/icon Rust FFI helpers
 
