@@ -20,6 +20,16 @@ impl TabHandle {
 }
 
 // =============================================================================
+// C global variables accessed directly from Rust
+// =============================================================================
+extern "C" {
+    #[link_name = "curwin"]
+    static mut g_curwin: WinHandle;
+    #[link_name = "curbuf"]
+    static mut g_curbuf: BufHandle;
+}
+
+// =============================================================================
 // FFI: C accessor functions called from Rust
 // =============================================================================
 extern "C" {
@@ -214,6 +224,10 @@ extern "C" {
     fn nvim_mark_findsent(dir: c_int, count: LinenrT) -> c_int;
     fn nvim_mark_set_listcmd_busy(val: c_int);
     fn nvim_mark_win_set_cursor(win: WinHandle, pos: PosT);
+
+    // exarg_T field accessors (from ex_cmds_shim.c)
+    fn nvim_exarg_get_arg(eap: *mut c_void) -> *const c_char;
+    fn nvim_exarg_get_forceit(eap: *mut c_void) -> c_int;
 }
 
 /// Number of possible named marks (a-z)
@@ -5026,4 +5040,240 @@ mod phase7_tests {
         assert_eq!(rs_marks_index_to_char(0, 0), c_int::from(b'a'));
         assert_eq!(rs_marks_index_to_char(25, 0), c_int::from(b'z'));
     }
+}
+
+// =============================================================================
+// Phase 1: #[export_name] wrappers replacing C pass-through functions
+// =============================================================================
+
+/// Set the previous context mark to the current position.
+/// Replaces the C `setpcmark()` function which called `rs_setpcmark(curwin, curbuf)`.
+///
+/// # Safety
+/// `g_curwin` and `g_curbuf` globals must be valid.
+#[export_name = "setpcmark"]
+pub unsafe extern "C" fn exported_setpcmark() {
+    rs_setpcmark(g_curwin, g_curbuf);
+}
+
+/// Check the previous context mark.
+/// Replaces the C `checkpcmark()` which called `rs_checkpcmark(curwin)`.
+///
+/// # Safety
+/// `g_curwin` global must be valid.
+#[export_name = "checkpcmark"]
+pub unsafe extern "C" fn exported_checkpcmark() {
+    rs_checkpcmark(g_curwin);
+}
+
+/// Get mark in "count" position in the jumplist.
+/// Replaces the C `get_jumplist(win, count)` which called `rs_get_jumplist(win, curbuf, count)`.
+///
+/// # Safety
+/// `win` and `g_curbuf` must be valid.
+#[export_name = "get_jumplist"]
+pub unsafe extern "C" fn exported_get_jumplist(win: WinHandle, count: c_int) -> *mut FmarkT {
+    rs_get_jumplist(win, g_curbuf, count)
+}
+
+/// Get a named mark.
+/// Replaces the C `mark_get()` which called `rs_mark_get(buf, win, fmp, flag, name)`.
+///
+/// # Safety
+/// All handles must be valid.
+#[export_name = "mark_get"]
+pub unsafe extern "C" fn exported_mark_get(
+    buf: BufHandle,
+    win: WinHandle,
+    fmp: *mut FmarkT,
+    flag: c_int,
+    name: c_int,
+) -> *mut FmarkT {
+    rs_mark_get(buf, win, fmp, flag, name)
+}
+
+/// Get a global mark {A-Z0-9}.
+/// Replaces the C `mark_get_global(bool resolve, int name)`.
+///
+/// # Safety
+/// Global namedfm array must be accessible.
+#[export_name = "mark_get_global"]
+pub unsafe extern "C" fn exported_mark_get_global(resolve: bool, name: c_int) -> *mut XfmarkT {
+    rs_mark_get_global(c_int::from(resolve), name)
+}
+
+/// Get a local mark.
+/// Replaces the C `mark_get_local(buf, win, name)` which called `rs_mark_get_local(..., curbuf)`.
+///
+/// # Safety
+/// `buf`, `win`, `g_curbuf` must be valid.
+#[export_name = "mark_get_local"]
+pub unsafe extern "C" fn exported_mark_get_local(
+    buf: BufHandle,
+    win: WinHandle,
+    name: c_int,
+) -> *mut FmarkT {
+    rs_mark_get_local(buf, win, name, g_curbuf)
+}
+
+/// Restore the mark view.
+/// Replaces the C `mark_view_restore(fm)` which called `rs_mark_view_restore(fm, curwin)`.
+///
+/// # Safety
+/// `fm` may be null. `g_curwin` must be valid.
+#[export_name = "mark_view_restore"]
+pub unsafe extern "C" fn exported_mark_view_restore(fm: *const FmarkT) {
+    rs_mark_view_restore(fm, g_curwin);
+}
+
+/// Create fmarkv_T from topline and position.
+/// Replaces the C `mark_view_make(topline, pos)` which called `rs_mark_view_make(topline, pos.lnum)`.
+#[export_name = "mark_view_make"]
+pub extern "C" fn exported_mark_view_make(topline: LinenrT, pos: PosT) -> FmarkvT {
+    rs_mark_view_make(topline, pos.lnum)
+}
+
+/// Search for the next named mark from a start position.
+/// Replaces the C `getnextmark(startpos, dir, begin_line)` which called `rs_getnextmark(..., curbuf)`.
+///
+/// # Safety
+/// `startpos` and `g_curbuf` must be valid.
+#[export_name = "getnextmark"]
+pub unsafe extern "C" fn exported_getnextmark(
+    startpos: *mut PosT,
+    dir: c_int,
+    begin_line: c_int,
+) -> *mut FmarkT {
+    rs_getnextmark(startpos, dir, begin_line, g_curbuf)
+}
+
+/// Check if a mark is valid.
+/// Replaces the C `mark_check(fm, errormsg)` which called `rs_mark_check(fm, errormsg, curbuf)`.
+///
+/// # Safety
+/// `fm` may be null. `errormsg` must be a valid pointer. `g_curbuf` must be valid.
+#[export_name = "mark_check"]
+pub unsafe extern "C" fn exported_mark_check(
+    fm: *const FmarkT,
+    errormsg: *mut *const c_char,
+) -> bool {
+    rs_mark_check(fm, errormsg, g_curbuf) != 0
+}
+
+/// Clean up the jumplist.
+/// Replaces the C `cleanup_jumplist(wp, loadfiles)` which called `rs_cleanup_jumplist(wp, loadfiles)`.
+///
+/// # Safety
+/// `wp` must be valid.
+#[export_name = "cleanup_jumplist"]
+pub unsafe extern "C" fn exported_cleanup_jumplist(wp: WinHandle, loadfiles: bool) {
+    rs_cleanup_jumplist(wp, c_int::from(loadfiles));
+}
+
+/// Get name of file from a filemark.
+/// Replaces the C `fm_getname(fmark, lead_len)` which called `rs_fm_getname(fmark, lead_len, curbuf)`.
+///
+/// # Safety
+/// `fmark` must be valid. `g_curbuf` must be valid.
+#[export_name = "fm_getname"]
+pub unsafe extern "C" fn exported_fm_getname(fmark: *mut FmarkT, lead_len: c_int) -> *mut c_char {
+    rs_fm_getname(fmark, lead_len, g_curbuf)
+}
+
+/// Set a global mark.
+/// Replaces the C `mark_set_global(name, fm, update)` which called `rs_mark_set_global(name, fm, update)`.
+///
+/// # Safety
+/// Global namedfm array must be accessible.
+#[export_name = "mark_set_global"]
+pub unsafe extern "C" fn exported_mark_set_global(name: c_char, fm: XfmarkT, update: bool) -> bool {
+    rs_mark_set_global(c_int::from(name), fm, c_int::from(update)) != 0
+}
+
+/// Set a local mark.
+/// Replaces the C `mark_set_local(name, buf, fm, update)` which called `rs_mark_set_local(name, buf, fm, update)`.
+///
+/// # Safety
+/// `buf` must be valid.
+#[export_name = "mark_set_local"]
+pub unsafe extern "C" fn exported_mark_set_local(
+    name: c_char,
+    buf: BufHandle,
+    fm: FmarkT,
+    update: bool,
+) -> bool {
+    rs_mark_set_local(c_int::from(name), buf, fm, c_int::from(update)) != 0
+}
+
+/// Check if a mark line number is within buffer bounds.
+/// Replaces the C `mark_check_line_bounds(buf, fm, errormsg)`.
+///
+/// # Safety
+/// `buf` must be valid. `fm` must be a valid pointer. `errormsg` must be valid.
+#[export_name = "mark_check_line_bounds"]
+pub unsafe extern "C" fn exported_mark_check_line_bounds(
+    buf: BufHandle,
+    fm: *const FmarkT,
+    errormsg: *mut *const c_char,
+) -> bool {
+    let e_markinval_str = nvim_mark_get_e_markinval();
+    rs_mark_check_line_bounds(buf, (*fm).mark.lnum, errormsg, e_markinval_str) != 0
+}
+
+/// Clear jumps for current window.
+/// Replaces the C `ex_clearjumps(eap)` which called `rs_ex_clearjumps(curwin)`.
+///
+/// # Safety
+/// `g_curwin` must be valid.
+#[export_name = "ex_clearjumps"]
+pub unsafe extern "C" fn exported_ex_clearjumps(_eap: *mut c_void) {
+    rs_ex_clearjumps(g_curwin);
+}
+
+/// Get a raw global mark by name.
+/// Replaces the C `get_raw_global_mark(name)` which called `rs_get_raw_global_mark(name)`.
+///
+/// # Safety
+/// Global namedfm array must be accessible.
+#[export_name = "get_raw_global_mark"]
+pub unsafe extern "C" fn exported_get_raw_global_mark(name: c_char) -> XfmarkT {
+    rs_get_raw_global_mark(c_int::from(name))
+}
+
+/// Free all marks.
+/// Replaces the C `free_all_marks()` (inside `#if defined(EXITFREE)`) which called `rs_free_all_marks()`.
+///
+/// # Safety
+/// Global namedfm array must be accessible.
+#[export_name = "free_all_marks"]
+pub unsafe extern "C" fn exported_free_all_marks() {
+    rs_free_all_marks();
+}
+
+/// Delete marks.
+/// Replaces the C `ex_delmarks(eap)` which extracted fields then called `rs_ex_delmarks(arg, forceit, curbuf)`.
+/// Uses opaque ExargT handle to extract arg and forceit.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer. `g_curbuf` must be valid.
+#[export_name = "ex_delmarks"]
+pub unsafe extern "C" fn exported_ex_delmarks(eap: *mut c_void) {
+    let arg = nvim_exarg_get_arg(eap);
+    let forceit = nvim_exarg_get_forceit(eap);
+    rs_ex_delmarks(arg, forceit, g_curbuf);
+}
+
+/// Set named mark "c" at current cursor position.
+/// Replaces the C `setmark(c)` which called mark_view_make and setmark_pos.
+///
+/// # Safety
+/// `g_curwin` and `g_curbuf` globals must be valid.
+#[export_name = "setmark"]
+pub unsafe extern "C" fn exported_setmark(c: c_int) -> c_int {
+    let topline = nvim_mark_win_get_topline(g_curwin);
+    let cursor = nvim_mark_win_get_cursor(g_curwin);
+    let view = rs_mark_view_make(topline, cursor.lnum);
+    let cursor_ptr = nvim_mark_win_get_cursor_ptr(g_curwin);
+    let fnum = nvim_buf_get_fnum(g_curbuf);
+    rs_setmark_pos(c, cursor_ptr, fnum, &view)
 }

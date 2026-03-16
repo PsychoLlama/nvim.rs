@@ -29,6 +29,28 @@ extern int rs_pos_in_range(pos_T pos, int line_count);
 
 // Functions implemented in Rust (exported under their C names via #[export_name])
 extern void fmarks_check_names(buf_T *buf);
+
+// Phase 1: Pass-through wrappers now implemented in Rust
+extern int setmark(int c);
+extern void setpcmark(void);
+extern void checkpcmark(void);
+extern fmark_T *get_jumplist(win_T *win, int count);
+extern fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name);
+extern xfmark_T *mark_get_global(bool resolve, int name);
+extern fmark_T *mark_get_local(buf_T *buf, win_T *win, int name);
+extern void mark_view_restore(fmark_T *fm);
+extern fmarkv_T mark_view_make(linenr_T topline, pos_T pos);
+extern fmark_T *getnextmark(pos_T *startpos, int dir, int begin_line);
+extern bool mark_check(fmark_T *fm, const char **errormsg);
+extern bool mark_check_line_bounds(buf_T *buf, fmark_T *fm, const char **errormsg);
+extern char *fm_getname(fmark_T *fmark, int lead_len);
+extern bool mark_set_global(const char name, const xfmark_T fm, const bool update);
+extern bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const bool update);
+extern void free_all_marks(void);
+extern xfmark_T get_raw_global_mark(char name);
+extern void ex_clearjumps(exarg_T *eap);
+extern void ex_delmarks(exarg_T *eap);
+extern void cleanup_jumplist(win_T *wp, bool loadfiles);
 extern void free_fmark(fmark_T fm);
 extern void free_xfmark(xfmark_T fm);
 extern void clear_fmark(fmark_T *fm, Timestamp timestamp);

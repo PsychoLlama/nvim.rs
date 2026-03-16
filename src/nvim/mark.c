@@ -387,87 +387,6 @@ void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 
 #include "mark.c.generated.h"
 
-// Set named mark "c" at current cursor position.
-// Returns OK on success, FAIL if bad name given.
-int setmark(int c)
-{
-  fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_cursor);
-  return setmark_pos(c, &curwin->w_cursor, curbuf->b_fnum, &view);
-}
-
-
-// Set named mark "c" to position "pos".
-// Set the previous context mark to the current position and add it to the
-// jump list.
-void setpcmark(void)
-{
-  rs_setpcmark(curwin, curbuf);
-}
-
-// To change context, call setpcmark(), then move the current position to
-// where ever, then call checkpcmark().  This ensures that the previous
-// context will only be changed if the cursor moved to a different line.
-// If pcmark was deleted (with "dG") the previous mark is restored.
-void checkpcmark(void)
-{
-  rs_checkpcmark(curwin);
-}
-
-/// Get mark in "count" position in the |jumplist| relative to the current index.
-fmark_T *get_jumplist(win_T *win, int count)
-{
-  return rs_get_jumplist(win, curbuf, count);
-}
-
-
-/// Get a named mark.
-///
-/// All types of marks, even those that are not technically a mark will be returned as such. Use
-/// mark_move_to() to move to the mark.
-/// @note Some of the pointers are statically allocated, if in doubt make a copy. For more
-/// information read mark_get_local().
-/// @param buf  Buffer to get the mark from.
-/// @param win  Window to get or calculate the mark from (motion type marks, context mark).
-/// @param fmp[out] Optional pointer to store the result in, as a workaround for the note above.
-/// @param flag MarkGet value
-/// @param name Name of the mark.
-///
-/// @return          Mark if found, otherwise NULL.  For @c kMarkBufLocal, NULL is returned
-///                  when no mark is found in @a buf.
-fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name)
-{
-  return rs_mark_get(buf, win, fmp, (int)flag, name);
-}
-
-/// Get a global mark {A-Z0-9}.
-///
-/// @param name  the name of the mark.
-/// @param resolve  Whether to try resolving the mark fnum (i.e., load the buffer stored in
-///                 the mark fname and update the xfmark_T (expensive)).
-///
-/// @return  Mark
-xfmark_T *mark_get_global(bool resolve, int name)
-{
-  return rs_mark_get_global(resolve ? 1 : 0, name);
-}
-
-/// Get a local mark (lowercase and symbols).
-///
-/// Some marks are not actually marks, but positions that are never adjusted or motions presented as
-/// marks. Search first for marks and fallback to finding motion type marks. If it's known
-/// ahead of time that the mark is actually a motion use the mark_get_motion() directly.
-///
-/// @note  Lowercase, last_cursor '"', last insert '^', last change '.' are not statically
-/// allocated, everything else is.
-/// @param name  the name of the mark.
-/// @param win  window to retrieve marks that belong to it (motions and context mark).
-/// @param buf  buf to retrieve marks that belong to it.
-///
-/// @return  Mark, NULL if not found.
-fmark_T *mark_get_local(buf_T *buf, win_T *win, int name)
-{
-  return rs_mark_get_local(buf, win, name, curbuf);
-}
 
 
 /// Attempt to switch to the buffer of the given global mark
@@ -550,35 +469,7 @@ end:
   return res;
 }
 
-/// Restore the mark view.
-/// By remembering the offset between topline and mark lnum at the time of
-/// definition, this function restores the "view".
-/// Restore the mark view.
-/// By remembering the offset between topline and mark lnum at the time of
-/// definition, this function restores the "view".
-/// @note  Assumes the mark has been checked, is valid.
-/// @param  fm the named mark.
-void mark_view_restore(fmark_T *fm)
-{
-  rs_mark_view_restore(fm, curwin);
-}
 
-/// Create fmarkv_T from topline and position. Rust implementation.
-fmarkv_T mark_view_make(linenr_T topline, pos_T pos)
-{
-  return rs_mark_view_make(topline, pos.lnum);
-}
-
-/// Search for the next named mark in the current file from a start position.
-///
-/// @param startpos  where to start.
-/// @param dir  direction for search.
-///
-/// @return  next mark or NULL if no mark is found.
-fmark_T *getnextmark(pos_T *startpos, int dir, int begin_line)
-{
-  return rs_getnextmark(startpos, dir, begin_line, curbuf);
-}
 
 // For an xtended filemark: set the fnum from the fname.
 // This is used for marks obtained from the .shada file.  It's postponed
@@ -611,42 +502,6 @@ static void fname2fnum(xfmark_T *fm)
 // Used for marks that come from the .shada file.
 extern void fmarks_check_names(buf_T *buf);
 
-/// Check the position in @a fm is valid.
-///
-/// Checks for:
-/// - NULL raising unknown mark error.
-/// - Line number <= 0 raising mark not set.
-/// - Line number > buffer line count, raising invalid mark.
-///
-/// @param fm[in]  File mark to check.
-/// @param errormsg[out]  Error message, if any.
-///
-/// @return  true if the mark passes all the above checks, else false.
-bool mark_check(fmark_T *fm, const char **errormsg)
-{
-  return rs_mark_check(fm, errormsg, curbuf) != 0;
-}
-
-/// Check if a mark line number is greater than the buffer line count, and set e_markinval.
-///
-/// @note  Should be done after the buffer is loaded into memory.
-/// @param buf  Buffer where the mark is set.
-/// @param fm  Mark to check.
-/// @param errormsg[out]  Error message, if any.
-/// @return  true if below line count else false.
-bool mark_check_line_bounds(buf_T *buf, fmark_T *fm, const char **errormsg)
-{
-  return rs_mark_check_line_bounds(buf, fm->mark.lnum, errormsg, _(e_markinval)) != 0;
-}
-
-
-// Get name of file from a filemark.
-// When it's in the current buffer, return the text at the mark.
-// Returns an allocated string.
-char *fm_getname(fmark_T *fmark, int lead_len)
-{
-  return rs_fm_getname(fmark, lead_len, curbuf);
-}
 
 /// Return the line at mark "mp".  Truncate to fit in window.
 /// The returned string has been allocated.
@@ -774,11 +629,7 @@ static void show_one_mark(int c, char *arg, pos_T *p, char *name_arg, int curren
   }
 }
 
-// ":delmarks[!] [marks]"
-void ex_delmarks(exarg_T *eap)
-{
-  rs_ex_delmarks(eap->arg, eap->forceit, curbuf);
-}
+
 
 // print the jumplist
 void ex_jumps(exarg_T *eap)
@@ -822,10 +673,7 @@ void ex_jumps(exarg_T *eap)
   }
 }
 
-void ex_clearjumps(exarg_T *eap)
-{
-  rs_ex_clearjumps(curwin);
-}
+
 
 // print the changelist
 void ex_changes(exarg_T *eap)
@@ -859,14 +707,6 @@ void ex_changes(exarg_T *eap)
 }
 
 
-// When deleting lines, this may create duplicate marks in the
-// jumplist. They will be removed here for the specified window.
-// When "loadfiles" is true first ensure entries have the "fnum" field set
-// (this may be a bit slow).
-void cleanup_jumplist(win_T *wp, bool loadfiles)
-{
-  rs_cleanup_jumplist(wp, (int)loadfiles);
-}
 
 
 /// Iterate over jumplist items
@@ -1013,40 +853,6 @@ const void *mark_buffer_iter(const void *const iter, const buf_T *const buf, cha
   return (const void *)iter_mark;
 }
 
-/// Set global mark
-///
-/// @param[in]  name    Mark name.
-/// @param[in]  fm      Mark to be set.
-/// @param[in]  update  If true then only set global mark if it was created
-///                     later then existing one.
-///
-/// @return true on success, false on failure.
-bool mark_set_global(const char name, const xfmark_T fm, const bool update)
-{
-  return rs_mark_set_global((int)name, fm, update ? 1 : 0) != 0;
-}
-
-/// Set local mark
-///
-/// @param[in]  name    Mark name.
-/// @param[in]  buf     Pointer to the buffer to set mark in.
-/// @param[in]  fm      Mark to be set.
-/// @param[in]  update  If true then only set global mark if it was created
-///                     later then existing one.
-///
-/// @return true on success, false on failure.
-bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const bool update)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_mark_set_local((int)name, buf, fm, update ? 1 : 0) != 0;
-}
-
-#if defined(EXITFREE)
-void free_all_marks(void)
-{
-  rs_free_all_marks();
-}
-#endif
 
 // Add information about mark 'mname' to list 'l'
 static int add_mark(list_T *l, const char *mname, const pos_T *pos, int bufnr, const char *fname)
@@ -1102,15 +908,6 @@ void get_buf_local_marks(const buf_T *buf, list_T *l)
   add_mark(l, "'>", &buf->b_visual.vi_end, buf->b_fnum, NULL);
 }
 
-/// Get a global mark
-///
-/// @note  Mark might not have it's fnum resolved.
-/// @param[in]  Name of named mark
-/// @param[out] Global/file mark
-xfmark_T get_raw_global_mark(char name)
-{
-  return rs_get_raw_global_mark((int)name);
-}
 
 /// Get information about global marks ('A' to 'Z' and '0' to '9')
 ///
