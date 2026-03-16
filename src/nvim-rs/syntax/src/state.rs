@@ -42,42 +42,21 @@ extern "C" {
     fn nvim_synblock_get_sst_check_lnum(block: SynBlockHandle) -> c_int;
 
     // -------------------------------------------------------------------------
-    // Current state accessors
+    // Current state accessors (non-static ones remain)
     // -------------------------------------------------------------------------
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_is_current_finished() -> c_int;
-    fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_is_current_state_valid() -> c_int;
-    fn nvim_syn_get_current_id() -> c_int;
-    fn nvim_syn_get_current_trans_id() -> c_int;
-    fn nvim_syn_get_current_attr() -> c_int;
-    fn nvim_syn_get_current_flags() -> c_int;
-    fn nvim_syn_get_current_seqnr() -> c_int;
-    fn nvim_syn_get_current_sub_char() -> c_int;
-    fn nvim_syn_get_current_next_flags() -> c_int;
-    fn nvim_syn_get_keepend_level() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
     fn nvim_syn_get_top_stateitem() -> StateItemHandle;
-    // Current state setters
-    fn nvim_syn_set_state_stored(stored: c_int);
+    // Current state setters (non-static ones remain)
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
-    fn nvim_syn_set_keepend_level(level: c_int);
     fn nvim_syn_grow_current_state(size: c_int);
     fn nvim_syn_set_current_state_len(len: c_int);
     fn nvim_syn_set_current_next_list(list: IdListHandle);
-    fn nvim_syn_set_current_next_flags(flags: c_int);
-    fn nvim_syn_set_current_lnum(lnum: c_int);
-    fn nvim_syn_set_current_finished(finished: c_int);
-    fn nvim_syn_set_current_id(id: c_int);
-    fn nvim_syn_set_current_trans_id(id: c_int);
-    fn nvim_syn_set_current_flags(flags: c_int);
-    fn nvim_syn_set_current_seqnr(seqnr: c_int);
 
     // -------------------------------------------------------------------------
     // Stack management functions
@@ -725,25 +704,25 @@ pub fn synblock_check_lnum(block: SynBlockHandle) -> i32 {
 /// Get the current line number being processed
 #[must_use]
 pub fn current_lnum() -> i32 {
-    unsafe { nvim_syn_get_current_lnum() }
+    unsafe { crate::statics::CURRENT_LNUM }
 }
 
 /// Get the current column being processed
 #[must_use]
 pub fn current_col() -> i32 {
-    unsafe { nvim_syn_get_current_col() }
+    unsafe { crate::statics::CURRENT_COL }
 }
 
 /// Check if the current line has been finished
 #[must_use]
 pub fn is_current_finished() -> bool {
-    unsafe { nvim_syn_is_current_finished() != 0 }
+    unsafe { crate::statics::CURRENT_FINISHED != 0 }
 }
 
 /// Check if the current state has been stored
 #[must_use]
 pub fn is_current_state_stored() -> bool {
-    unsafe { nvim_syn_is_current_state_stored() != 0 }
+    unsafe { crate::statics::CURRENT_STATE_STORED != 0 }
 }
 
 /// Get the current state stack length
@@ -767,49 +746,49 @@ pub fn is_current_state_empty() -> bool {
 /// Get the current highlight ID
 #[must_use]
 pub fn current_id() -> i32 {
-    unsafe { nvim_syn_get_current_id() }
+    unsafe { crate::statics::CURRENT_ID }
 }
 
 /// Get the current transparent ID
 #[must_use]
 pub fn current_trans_id() -> i32 {
-    unsafe { nvim_syn_get_current_trans_id() }
+    unsafe { crate::statics::CURRENT_TRANS_ID }
 }
 
 /// Get the current attribute
 #[must_use]
 pub fn current_attr() -> i32 {
-    unsafe { nvim_syn_get_current_attr() }
+    unsafe { crate::statics::CURRENT_ATTR }
 }
 
 /// Get the current flags
 #[must_use]
 pub fn current_flags() -> i32 {
-    unsafe { nvim_syn_get_current_flags() }
+    unsafe { crate::statics::CURRENT_FLAGS }
 }
 
 /// Get the current sequence number
 #[must_use]
 pub fn current_seqnr() -> i32 {
-    unsafe { nvim_syn_get_current_seqnr() }
+    unsafe { crate::statics::CURRENT_SEQNR }
 }
 
 /// Get the current substitution character
 #[must_use]
 pub fn current_sub_char() -> i32 {
-    unsafe { nvim_syn_get_current_sub_char() }
+    unsafe { crate::statics::CURRENT_SUB_CHAR }
 }
 
 /// Get the current next flags
 #[must_use]
 pub fn current_next_flags() -> i32 {
-    unsafe { nvim_syn_get_current_next_flags() }
+    unsafe { crate::statics::CURRENT_NEXT_FLAGS }
 }
 
 /// Get the keepend level (-1 if none)
 #[must_use]
 pub fn keepend_level() -> i32 {
-    unsafe { nvim_syn_get_keepend_level() }
+    unsafe { crate::statics::KEEPEND_LEVEL }
 }
 
 /// Get a state item from the current state at the given index
@@ -847,7 +826,7 @@ pub fn count_fold_items() -> i32 {
 
 /// Set whether the current state has been stored
 pub fn set_state_stored(stored: bool) {
-    unsafe { nvim_syn_set_state_stored(if stored { 1 } else { 0 }) }
+    unsafe { crate::statics::CURRENT_STATE_STORED = if stored { 1 } else { 0 } }
 }
 
 /// Clear the current state
@@ -867,7 +846,7 @@ pub fn invalidate_current_state() {
 
 /// Set the keepend level
 pub fn set_keepend_level(level: i32) {
-    unsafe { nvim_syn_set_keepend_level(level) }
+    unsafe { crate::statics::KEEPEND_LEVEL = level }
 }
 
 /// Grow the current state array
@@ -887,37 +866,37 @@ pub fn set_current_next_list(list: IdListHandle) {
 
 /// Set the current next flags
 pub fn set_current_next_flags(flags: i32) {
-    unsafe { nvim_syn_set_current_next_flags(flags) }
+    unsafe { crate::statics::CURRENT_NEXT_FLAGS = flags }
 }
 
 /// Set the current line number
 pub fn set_current_lnum(lnum: i32) {
-    unsafe { nvim_syn_set_current_lnum(lnum) }
+    unsafe { crate::statics::CURRENT_LNUM = lnum }
 }
 
 /// Set whether the current line is finished
 pub fn set_current_finished(finished: bool) {
-    unsafe { nvim_syn_set_current_finished(if finished { 1 } else { 0 }) }
+    unsafe { crate::statics::CURRENT_FINISHED = if finished { 1 } else { 0 } }
 }
 
 /// Set the current highlight ID
 pub fn set_current_id(id: i32) {
-    unsafe { nvim_syn_set_current_id(id) }
+    unsafe { crate::statics::CURRENT_ID = id }
 }
 
 /// Set the current transparent ID
 pub fn set_current_trans_id(id: i32) {
-    unsafe { nvim_syn_set_current_trans_id(id) }
+    unsafe { crate::statics::CURRENT_TRANS_ID = id }
 }
 
 /// Set the current flags
 pub fn set_current_flags(flags: i32) {
-    unsafe { nvim_syn_set_current_flags(flags) }
+    unsafe { crate::statics::CURRENT_FLAGS = flags }
 }
 
 /// Set the current sequence number
 pub fn set_current_seqnr(seqnr: i32) {
-    unsafe { nvim_syn_set_current_seqnr(seqnr) }
+    unsafe { crate::statics::CURRENT_SEQNR = seqnr }
 }
 
 /// Pop the top item from the current state stack

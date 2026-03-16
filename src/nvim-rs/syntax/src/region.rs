@@ -47,7 +47,6 @@ extern "C" {
     // Line operations
     fn nvim_syn_getcurline_len() -> c_int;
     fn nvim_syn_get_line_len(lnum: c_int) -> c_int;
-    fn nvim_syn_get_current_lnum() -> c_int;
 }
 
 // =============================================================================
@@ -397,7 +396,7 @@ pub unsafe fn update_si_end(sip: StateItemHandle, startcol: i32, force: bool) {
         return;
     }
 
-    let current_lnum = nvim_syn_get_current_lnum();
+    let current_lnum = crate::statics::CURRENT_LNUM;
 
     // Don't update when it's already done
     if !force && (*p).si_m_endpos.lnum >= current_lnum {

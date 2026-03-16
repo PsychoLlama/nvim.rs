@@ -32,18 +32,13 @@ extern "C" {
     fn nvim_synstate_set_change_lnum(state: SynStateHandle, lnum: c_int);
 
     // Current state accessors
-    fn nvim_syn_get_current_lnum() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
     fn nvim_syn_get_current_next_list() -> IdListHandle;
-    fn nvim_syn_set_state_stored(stored: c_int);
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
-    fn nvim_syn_set_keepend_level(level: c_int);
     fn nvim_syn_grow_current_state(size: c_int);
     fn nvim_syn_set_current_state_len(len: c_int);
     fn nvim_syn_set_current_next_list(list: IdListHandle);
-    fn nvim_syn_set_current_next_flags(flags: c_int);
-    fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_update_si_attr(idx: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> crate::types::StateItemHandle;
 
@@ -462,7 +457,7 @@ pub fn stack_alloc() {
 /// This function accesses C global state and must be called from the main thread.
 #[must_use]
 pub unsafe fn store_current_state() -> SynStateHandle {
-    let lnum = nvim_syn_get_current_lnum();
+    let lnum = crate::statics::CURRENT_LNUM;
     let state_len = nvim_syn_get_current_state_len();
 
     // Find existing entry at or before current line
@@ -484,7 +479,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
         if !sp.is_null() {
             crate::state_entry::rs_syn_stack_remove_entry(sp);
         }
-        nvim_syn_set_state_stored(1);
+        crate::statics::CURRENT_STATE_STORED = 1;
         return SynStateHandle::null();
     }
 
@@ -502,7 +497,7 @@ pub unsafe fn store_current_state() -> SynStateHandle {
         crate::state_entry::rs_syn_store_state_to_entry(entry);
     }
 
-    nvim_syn_set_state_stored(1);
+    crate::statics::CURRENT_STATE_STORED = 1;
     entry
 }
 
@@ -518,7 +513,7 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
     // Clear and validate current state
     crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_validate_current_state();
-    nvim_syn_set_keepend_level(-1);
+    crate::statics::KEEPEND_LEVEL = -1;
 
     let stacksize = nvim_synstate_get_stacksize(from);
     if stacksize > 0 {
@@ -555,14 +550,14 @@ pub unsafe fn load_current_state(from: SynStateHandle) {
             nvim_syn_update_si_attr(i);
         }
 
-        nvim_syn_set_keepend_level(keepend_level);
+        crate::statics::KEEPEND_LEVEL = keepend_level;
     }
 
     // Copy next_list and next_flags from saved state
     let next_list = nvim_synstate_get_next_list(from);
     nvim_syn_set_current_next_list(next_list);
-    nvim_syn_set_current_next_flags(nvim_synstate_get_next_flags(from));
-    nvim_syn_set_current_lnum(nvim_synstate_get_lnum(from));
+    crate::statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
+    crate::statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
 }
 
 // =============================================================================

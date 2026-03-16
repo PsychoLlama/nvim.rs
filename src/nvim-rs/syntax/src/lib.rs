@@ -56,6 +56,7 @@ pub mod region;
 pub mod state;
 pub mod state_entry;
 pub mod state_ops;
+pub mod statics;
 pub mod sync;
 pub mod syntime;
 pub mod types;
@@ -244,47 +245,11 @@ extern "C" {
     // Syntax state global accessors
     // -------------------------------------------------------------------------
 
-    /// Get the current line number being processed
-    fn nvim_syn_get_current_lnum() -> c_int;
-
-    /// Get the current column being processed
-    fn nvim_syn_get_current_col() -> c_int;
-
-    /// Check if the current line has been finished
-    fn nvim_syn_is_current_finished() -> c_int;
-
-    /// Check if the current state has been stored
-    fn nvim_syn_is_current_state_stored() -> c_int;
-
     /// Get the current state stack size
     fn nvim_syn_get_current_state_len() -> c_int;
 
     /// Check if the current state is valid
     fn nvim_syn_is_current_state_valid() -> c_int;
-
-    /// Get the current highlight ID
-    fn nvim_syn_get_current_id() -> c_int;
-
-    /// Get the current transparent ID
-    fn nvim_syn_get_current_trans_id() -> c_int;
-
-    /// Get the current attribute
-    fn nvim_syn_get_current_attr() -> c_int;
-
-    /// Get the current flags
-    fn nvim_syn_get_current_flags() -> c_int;
-
-    /// Get the current sequence number
-    fn nvim_syn_get_current_seqnr() -> c_int;
-
-    /// Get the current substitution character
-    fn nvim_syn_get_current_sub_char() -> c_int;
-
-    /// Get the current next flags
-    fn nvim_syn_get_current_next_flags() -> c_int;
-
-    /// Get the keepend level
-    fn nvim_syn_get_keepend_level() -> c_int;
 
     /// Get state item at index (NULL if out of bounds)
     fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
@@ -363,12 +328,6 @@ extern "C" {
     /// Get the syntax block's conceal setting
     fn nvim_synblock_get_conceal(block: SynBlockHandle) -> c_int;
 
-    /// Get expand_what variable
-    fn nvim_syn_get_expand_what() -> c_int;
-
-    /// Set expand_what variable
-    fn nvim_syn_set_expand_what(what: c_int);
-
     // -------------------------------------------------------------------------
     // Phase 24.1: State Management Helpers
     // -------------------------------------------------------------------------
@@ -376,14 +335,9 @@ extern "C" {
     /// Find a state entry in the synblock at or before given line
     fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
 
-    /// Mark current state as stored
-    fn nvim_syn_set_state_stored(stored: c_int);
-
     /// Call validate_current_state()
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
-    /// Set keepend_level
-    fn nvim_syn_set_keepend_level(level: c_int);
 
     /// Grow current_state array
     fn nvim_syn_grow_current_state(size: c_int);
@@ -393,12 +347,6 @@ extern "C" {
 
     /// Set current_next_list
     fn nvim_syn_set_current_next_list(list: IdListHandle);
-
-    /// Set current_next_flags
-    fn nvim_syn_set_current_next_flags(flags: c_int);
-
-    /// Set current_lnum
-    fn nvim_syn_set_current_lnum(lnum: c_int);
 
     /// Get sst_next_list from a synstate
     fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
@@ -423,25 +371,25 @@ extern "C" {
 /// Get the current line number being processed
 #[must_use]
 pub fn current_lnum() -> i32 {
-    unsafe { nvim_syn_get_current_lnum() }
+    unsafe { statics::CURRENT_LNUM }
 }
 
 /// Get the current column being processed
 #[must_use]
 pub fn current_col() -> i32 {
-    unsafe { nvim_syn_get_current_col() }
+    unsafe { statics::CURRENT_COL }
 }
 
 /// Check if the current line has been finished
 #[must_use]
 pub fn is_current_finished() -> bool {
-    unsafe { nvim_syn_is_current_finished() != 0 }
+    unsafe { statics::CURRENT_FINISHED != 0 }
 }
 
 /// Check if the current state has been stored
 #[must_use]
 pub fn is_current_state_stored() -> bool {
-    unsafe { nvim_syn_is_current_state_stored() != 0 }
+    unsafe { statics::CURRENT_STATE_STORED != 0 }
 }
 
 /// Get the current state stack size
@@ -459,49 +407,49 @@ pub fn is_current_state_valid() -> bool {
 /// Get the current highlight ID
 #[must_use]
 pub fn current_id() -> i32 {
-    unsafe { nvim_syn_get_current_id() }
+    unsafe { statics::CURRENT_ID }
 }
 
 /// Get the current transparent ID
 #[must_use]
 pub fn current_trans_id() -> i32 {
-    unsafe { nvim_syn_get_current_trans_id() }
+    unsafe { statics::CURRENT_TRANS_ID }
 }
 
 /// Get the current attribute
 #[must_use]
 pub fn current_attr() -> i32 {
-    unsafe { nvim_syn_get_current_attr() }
+    unsafe { statics::CURRENT_ATTR }
 }
 
 /// Get the current flags
 #[must_use]
 pub fn current_flags() -> i32 {
-    unsafe { nvim_syn_get_current_flags() }
+    unsafe { statics::CURRENT_FLAGS }
 }
 
 /// Get the current sequence number
 #[must_use]
 pub fn current_seqnr() -> i32 {
-    unsafe { nvim_syn_get_current_seqnr() }
+    unsafe { statics::CURRENT_SEQNR }
 }
 
 /// Get the current substitution character
 #[must_use]
 pub fn current_sub_char() -> i32 {
-    unsafe { nvim_syn_get_current_sub_char() }
+    unsafe { statics::CURRENT_SUB_CHAR }
 }
 
 /// Get the current next flags
 #[must_use]
 pub fn current_next_flags() -> i32 {
-    unsafe { nvim_syn_get_current_next_flags() }
+    unsafe { statics::CURRENT_NEXT_FLAGS }
 }
 
 /// Get the keepend level (-1 if no keepend on stack)
 #[must_use]
 pub fn keepend_level() -> i32 {
-    unsafe { nvim_syn_get_keepend_level() }
+    unsafe { statics::KEEPEND_LEVEL }
 }
 
 /// Get state item at index (None if out of bounds or state invalid)
@@ -1312,12 +1260,12 @@ pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
 /// Get the expand_what variable
 #[must_use]
 pub fn expand_what() -> i32 {
-    unsafe { nvim_syn_get_expand_what() }
+    unsafe { statics::EXPAND_WHAT }
 }
 
 /// Set the expand_what variable
 pub fn set_expand_what(what: i32) {
-    unsafe { nvim_syn_set_expand_what(what) }
+    unsafe { statics::EXPAND_WHAT = what }
 }
 
 // =============================================================================
@@ -2123,7 +2071,7 @@ pub extern "C" fn rs_sptype_name(sptype: c_int) -> *const c_char {
 /// This function accesses C global state and must be called from the main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
-    let lnum = nvim_syn_get_current_lnum();
+    let lnum = statics::CURRENT_LNUM;
     let state_len = nvim_syn_get_current_state_len();
 
     // Find existing entry at or before current line
@@ -2145,7 +2093,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
         if !sp.is_null() {
             crate::state_entry::rs_syn_stack_remove_entry(sp);
         }
-        nvim_syn_set_state_stored(1);
+        statics::CURRENT_STATE_STORED = 1;
         return SynStateHandle::null();
     }
 
@@ -2163,7 +2111,7 @@ pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
         crate::state_entry::rs_syn_store_state_to_entry(entry);
     }
 
-    nvim_syn_set_state_stored(1);
+    statics::CURRENT_STATE_STORED = 1;
     entry
 }
 
@@ -2180,7 +2128,7 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
     // Clear and validate current state
     crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_validate_current_state();
-    nvim_syn_set_keepend_level(-1);
+    statics::KEEPEND_LEVEL = -1;
 
     let stacksize = nvim_synstate_get_stacksize(from);
     if stacksize > 0 {
@@ -2221,14 +2169,14 @@ pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
             nvim_syn_update_si_attr(i);
         }
 
-        nvim_syn_set_keepend_level(keepend_level);
+        statics::KEEPEND_LEVEL = keepend_level;
     }
 
     // Copy next_list and next_flags from saved state
     let next_list = nvim_synstate_get_next_list(from);
     nvim_syn_set_current_next_list(next_list);
-    nvim_syn_set_current_next_flags(nvim_synstate_get_next_flags(from));
-    nvim_syn_set_current_lnum(nvim_synstate_get_lnum(from));
+    statics::CURRENT_NEXT_FLAGS = nvim_synstate_get_next_flags(from);
+    statics::CURRENT_LNUM = nvim_synstate_get_lnum(from);
 }
 
 /// Compare saved state stack with the current state.

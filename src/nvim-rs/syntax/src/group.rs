@@ -25,8 +25,6 @@ extern "C" {
     fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
 
     // Current state group accessors
-    fn nvim_syn_get_current_id() -> c_int;
-    fn nvim_syn_get_current_trans_id() -> c_int;
 
     // syn_get_id - main entry point for getting syntax ID at position
     fn syn_get_id(
@@ -103,13 +101,13 @@ pub fn syn_id2attr(syn_id: i32) -> i32 {
 /// Get the current highlight group ID.
 #[must_use]
 pub fn current_id() -> i32 {
-    unsafe { nvim_syn_get_current_id() }
+    unsafe { crate::statics::CURRENT_ID }
 }
 
 /// Get the current transparent group ID.
 #[must_use]
 pub fn current_trans_id() -> i32 {
-    unsafe { nvim_syn_get_current_trans_id() }
+    unsafe { crate::statics::CURRENT_TRANS_ID }
 }
 
 // =============================================================================

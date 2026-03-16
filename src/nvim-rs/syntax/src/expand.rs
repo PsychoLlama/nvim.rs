@@ -25,8 +25,6 @@ extern "C" {
     fn nvim_syn_set_include_none(val: c_int);
 
     // expand_what get/set
-    fn nvim_syn_get_expand_what() -> c_int;
-    fn nvim_syn_set_expand_what(what: c_int);
 
     // cluster expansion: get count and name from current synblock
     fn nvim_syn_get_expand_cluster_count() -> c_int;
@@ -128,7 +126,7 @@ pub unsafe extern "C" fn rs_set_context_in_echohl_cmd(xp: *mut c_void, arg: *con
 pub unsafe extern "C" fn rs_set_context_in_syntax_cmd(xp: *mut c_void, arg: *const c_char) {
     // Default: expand subcommands
     nvim_xp_set_context(xp, EXPAND_SYNTAX);
-    nvim_syn_set_expand_what(EXP_SUBCMD);
+    crate::statics::EXPAND_WHAT = EXP_SUBCMD;
     nvim_xp_set_pattern(xp, arg.cast_mut());
     nvim_syn_set_include_link(0);
     nvim_syn_set_include_default(0);
@@ -158,16 +156,16 @@ pub unsafe extern "C" fn rs_set_context_in_syntax_cmd(xp: *mut c_void, arg: *con
     let cmd_len = p.offset_from(arg) as usize;
 
     if strnicmp_n(arg, b"case", cmd_len) {
-        nvim_syn_set_expand_what(EXP_CASE);
+        crate::statics::EXPAND_WHAT = EXP_CASE;
     } else if strnicmp_n(arg, b"spell", cmd_len) {
-        nvim_syn_set_expand_what(EXP_SPELL);
+        crate::statics::EXPAND_WHAT = EXP_SPELL;
     } else if strnicmp_n(arg, b"sync", cmd_len) {
-        nvim_syn_set_expand_what(EXP_SYNC);
+        crate::statics::EXPAND_WHAT = EXP_SYNC;
     } else if strnicmp_n(arg, b"list", cmd_len) {
         // For "list @...", expand cluster names; otherwise expand highlight groups
         let p2 = skipwhite(p);
         if *p2 == b'@' as c_char {
-            nvim_syn_set_expand_what(EXP_CLUSTER);
+            crate::statics::EXPAND_WHAT = EXP_CLUSTER;
         } else {
             nvim_xp_set_context(xp, EXPAND_HIGHLIGHT);
         }
@@ -192,7 +190,7 @@ pub unsafe extern "C" fn rs_get_syntax_name(xp: *mut c_void, idx: c_int) -> *mut
         return std::ptr::null_mut();
     }
 
-    let what = nvim_syn_get_expand_what();
+    let what = crate::statics::EXPAND_WHAT;
     match what {
         w if w == EXP_SUBCMD => {
             let u = idx as usize;

@@ -42,7 +42,6 @@ extern "C" {
     fn nvim_syn_cur_foldlevel() -> c_int;
 
     // syntax_start dependencies
-    fn nvim_syn_set_current_sub_char(c: c_int);
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
     fn nvim_syn_set_syn_buf(buf: BufHandle);
@@ -56,12 +55,9 @@ extern "C" {
     fn nvim_syn_set_sst_lasttick(tick: c_int);
     fn nvim_syn_get_display_tick() -> c_int;
     fn nvim_syn_is_current_state_valid() -> c_int;
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_set_current_lnum(lnum: c_int);
     fn nvim_syn_buf_get_line_count(buf: BufHandle) -> c_int;
     #[link_name = "rs_syn_finish_line"]
     fn nvim_syn_finish_line(syncing: c_int) -> c_int;
-    fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_syn_get_sync_minlines() -> c_int;
     fn nvim_syn_get_sst_len() -> c_int;
     fn nvim_syn_get_rows() -> c_int;
@@ -112,7 +108,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     let mut last_min_valid = SynStateHandle::null();
     let mut prev = SynStateHandle::null();
 
-    nvim_syn_set_current_sub_char(0); // NUL
+    crate::statics::CURRENT_SUB_CHAR = 0; // NUL
 
     // After switching buffers, invalidate current_state.
     let syn_block = nvim_syn_get_syn_block();
@@ -141,20 +137,20 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     nvim_syn_set_sst_lasttick(nvim_syn_get_display_tick());
 
     // If the state of the end of the previous line is useful, store it.
-    let current_lnum = nvim_syn_get_current_lnum();
+    let current_lnum = crate::statics::CURRENT_LNUM;
     if nvim_syn_is_current_state_valid() != 0
         && current_lnum < lnum
         && current_lnum < nvim_syn_buf_get_line_count(syn_buf)
     {
         nvim_syn_finish_line(0);
-        if nvim_syn_is_current_state_stored() == 0 {
-            nvim_syn_set_current_lnum(current_lnum + 1);
+        if crate::statics::CURRENT_STATE_STORED == 0 {
+            crate::statics::CURRENT_LNUM = current_lnum + 1;
             rs_store_current_state();
         }
 
         // If current_lnum is now the same as "lnum", keep the current state.
         // Otherwise invalidate current_state and figure it out below.
-        if nvim_syn_get_current_lnum() != lnum {
+        if crate::statics::CURRENT_LNUM != lnum {
             nvim_syn_invalidate_current_state();
         }
     } else {
@@ -188,13 +184,13 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
     let first_stored;
     if nvim_syn_is_current_state_valid() == 0 {
         rs_syn_sync(wp, lnum, last_valid);
-        if nvim_syn_get_current_lnum() == 1 {
+        if crate::statics::CURRENT_LNUM == 1 {
             first_stored = 1;
         } else {
-            first_stored = nvim_syn_get_current_lnum() + nvim_syn_get_sync_minlines();
+            first_stored = crate::statics::CURRENT_LNUM + nvim_syn_get_sync_minlines();
         }
     } else {
-        first_stored = nvim_syn_get_current_lnum();
+        first_stored = crate::statics::CURRENT_LNUM;
     }
 
     // Advance from the sync point or saved state until the current line.
@@ -206,15 +202,15 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         nvim_syn_buf_get_line_count(syn_buf) / (sst_len - rows) + 1
     };
 
-    while nvim_syn_get_current_lnum() < lnum {
+    while crate::statics::CURRENT_LNUM < lnum {
         nvim_syn_start_line();
         nvim_syn_finish_line(0);
-        let cur_lnum = nvim_syn_get_current_lnum();
-        nvim_syn_set_current_lnum(cur_lnum + 1);
+        let cur_lnum = crate::statics::CURRENT_LNUM;
+        crate::statics::CURRENT_LNUM = cur_lnum + 1;
 
         // If we parsed at least "minlines" lines or started at a valid
         // state, the current state is considered valid.
-        let cur_lnum = nvim_syn_get_current_lnum();
+        let cur_lnum = crate::statics::CURRENT_LNUM;
         if cur_lnum >= first_stored {
             if prev.is_null() {
                 prev = nvim_syn_stack_find_entry(cur_lnum - 1);
@@ -256,7 +252,7 @@ unsafe fn syntax_start_impl(wp: WinHandle, lnum: c_int) {
         // This can take a long time: break when CTRL-C pressed.
         nvim_syn_line_breakcheck();
         if nvim_syn_get_got_int() != 0 {
-            nvim_syn_set_current_lnum(lnum);
+            crate::statics::CURRENT_LNUM = lnum;
             break;
         }
     }
@@ -275,7 +271,7 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
     let mut retval: c_int = 1; // true
 
     // Check the state stack when lnum is just below the previously syntaxed line.
-    if nvim_syn_is_current_state_valid() != 0 && lnum == nvim_syn_get_current_lnum() + 1 {
+    if nvim_syn_is_current_state_valid() != 0 && lnum == crate::statics::CURRENT_LNUM + 1 {
         let sp = nvim_syn_stack_find_entry(lnum);
         if !sp.is_null() && nvim_synstate_get_lnum(sp) == lnum {
             // finish the previous line (needed when not all of the line was drawn)
@@ -287,8 +283,8 @@ unsafe fn syntax_check_changed_impl(lnum: c_int) -> c_int {
             }
 
             // Store the current state in b_sst_array[] for later use.
-            let cur_lnum = nvim_syn_get_current_lnum();
-            nvim_syn_set_current_lnum(cur_lnum + 1);
+            let cur_lnum = crate::statics::CURRENT_LNUM;
+            crate::statics::CURRENT_LNUM = cur_lnum + 1;
             rs_store_current_state();
         }
     }

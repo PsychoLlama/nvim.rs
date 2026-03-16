@@ -16,8 +16,6 @@ type Proftime = u64;
 
 extern "C" {
     // syn_time_on toggle
-    fn nvim_syn_get_syn_time_on() -> c_int;
-    fn nvim_syn_set_syn_time_on(val: c_int);
 
     // synblock pattern access (synblock_T is not repr(C) yet)
     fn nvim_synblock_get_pattern_count(block: SynBlockHandle) -> c_int;
@@ -106,9 +104,9 @@ pub unsafe extern "C" fn rs_ex_syntime(eap: *mut c_void) {
     let arg_bytes = std::ffi::CStr::from_ptr(arg).to_bytes();
 
     if arg_bytes == b"on" {
-        nvim_syn_set_syn_time_on(1);
+        crate::statics::SYN_TIME_ON = 1;
     } else if arg_bytes == b"off" {
-        nvim_syn_set_syn_time_on(0);
+        crate::statics::SYN_TIME_ON = 0;
     } else if arg_bytes == b"clear" {
         syntime_clear_impl();
     } else if arg_bytes == b"report" {

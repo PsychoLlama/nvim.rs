@@ -28,8 +28,6 @@ extern "C" {
     fn nvim_syn_get_include_none() -> c_int;
 
     // Running inc_tag for :syntax include
-    fn nvim_syn_get_running_inc_tag() -> c_int;
-    fn nvim_syn_set_running_inc_tag(tag: c_int);
 
     // -------------------------------------------------------------------------
     // Phase 18a: Synblock getters/setters for simple :syntax commands
@@ -447,7 +445,7 @@ pub fn include_none() -> bool {
 /// This is used by `:syntax include` to track nested includes.
 #[must_use]
 pub fn running_inc_tag() -> i32 {
-    unsafe { nvim_syn_get_running_inc_tag() }
+    unsafe { crate::statics::RUNNING_SYN_INC_TAG }
 }
 
 /// Set the running include tag.
@@ -455,7 +453,7 @@ pub fn running_inc_tag() -> i32 {
 /// # Safety
 /// Must be called from the main thread.
 pub unsafe fn set_running_inc_tag(tag: i32) {
-    nvim_syn_set_running_inc_tag(tag);
+    crate::statics::RUNNING_SYN_INC_TAG = tag;
 }
 
 // =============================================================================
@@ -940,8 +938,6 @@ extern "C" {
     fn nvim_syn_init_highlight(reset: c_int, init: c_int);
 
     // did_syntax_onoff flag getter/setter (Phase 11)
-    fn nvim_syn_get_did_syntax_onoff() -> c_int;
-    fn nvim_syn_set_did_syntax_onoff(v: c_int);
 
     // Run a cmdline command string (Phase 11)
     fn nvim_syn_do_cmdline_cmd(cmd: *const c_char);
@@ -971,7 +967,7 @@ unsafe fn do_onoff_impl(eap: *mut c_void, name: *const c_char) {
     let arg = nvim_syn_get_eap_arg(eap);
     nvim_syn_set_nextcmd(eap, arg);
     if nvim_syn_get_eap_skip(eap) == 0 {
-        nvim_syn_set_did_syntax_onoff(1);
+        crate::statics::DID_SYNTAX_ONOFF = 1;
         // Build "so $VIMRUNTIME/syntax/<name>.vim"
         let name_str = std::ffi::CStr::from_ptr(name).to_string_lossy();
         let cmd = format!("so {}", SYNTAX_FNAME.replace("%s", &name_str));
@@ -1006,7 +1002,7 @@ pub unsafe extern "C" fn rs_syn_do_onoff_impl(eap: *mut c_void, name: *const c_c
 /// Must be called from main thread.
 #[export_name = "syn_maybe_enable"]
 pub unsafe extern "C" fn rs_syn_maybe_enable() {
-    if nvim_syn_get_did_syntax_onoff() == 0 {
+    if crate::statics::DID_SYNTAX_ONOFF == 0 {
         rs_syn_do_maybe_enable_impl();
     }
 }
@@ -1018,7 +1014,7 @@ pub unsafe extern "C" fn rs_syn_maybe_enable() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_do_maybe_enable_impl() {
     // Build the "so $VIMRUNTIME/syntax/syntax.vim" command directly
-    nvim_syn_set_did_syntax_onoff(1);
+    crate::statics::DID_SYNTAX_ONOFF = 1;
     let cmd = format!("so {}", SYNTAX_FNAME.replace("%s", "syntax"));
     let cmd_cstr = std::ffi::CString::new(cmd).unwrap_or_default();
     nvim_syn_do_cmdline_cmd(cmd_cstr.as_ptr());

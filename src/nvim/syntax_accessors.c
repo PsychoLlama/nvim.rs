@@ -86,7 +86,8 @@ extern void rs_clear_keywtab(hashtab_T *ht);
 
 // Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
 
-static bool did_syntax_onoff = false;
+// Now a Rust static variable; accessed via extern.
+extern int DID_SYNTAX_ONOFF;
 
 // different types of offsets that are possible
 #define SPO_MS_OFF      0       // match  start offset
@@ -242,12 +243,20 @@ extern void rs_ex_ownsyntax(exarg_T *eap);
 #define MAXKEYWLEN      80          // maximum length of a keyword
 
 // The attributes of the syntax item that has been recognized.
-static int current_attr = 0;        // attr of current syntax word
-static int current_id = 0;          // ID of current char for syn_get_id()
-static int current_trans_id = 0;    // idem, transparency removed
-static int current_flags = 0;
-static int current_seqnr = 0;
-static int current_sub_char = 0;
+// These are now Rust static variables (statics.rs); accessed via extern.
+extern int CURRENT_ATTR;
+extern int CURRENT_ID;
+extern int CURRENT_TRANS_ID;
+extern int CURRENT_FLAGS;
+extern int CURRENT_SEQNR;
+extern int CURRENT_SUB_CHAR;
+// Aliases for backward compatibility within this file
+#define current_attr    CURRENT_ATTR
+#define current_id      CURRENT_ID
+#define current_trans_id CURRENT_TRANS_ID
+#define current_flags   CURRENT_FLAGS
+#define current_seqnr   CURRENT_SEQNR
+#define current_sub_char CURRENT_SUB_CHAR
 
 // Methods of combining two clusters
 #define CLUSTER_REPLACE     1   // replace first list with second
@@ -278,8 +287,11 @@ static char **syn_cmdlinep;
 // Another Annoying Hack(TM):  To prevent rules from other ":syn include"'d
 // files from leaking into ALLBUT lists, we assign a unique ID to the
 // rules in each ":syn include"'d file.
-static int current_syn_inc_tag = 0;
-static int running_syn_inc_tag = 0;
+// These are now Rust static variables; accessed via extern.
+extern int CURRENT_SYN_INC_TAG;
+extern int RUNNING_SYN_INC_TAG;
+#define current_syn_inc_tag CURRENT_SYN_INC_TAG
+#define running_syn_inc_tag RUNNING_SYN_INC_TAG
 
 // In a hashtable item "hi_key" points to "keyword" in a keyentry.
 // This avoids adding a pointer to the hashtable item.
@@ -294,14 +306,18 @@ static keyentry_T dumkey;
 // To reduce the time spent in keepend(), remember at which level in the state
 // stack the first item with "keepend" is present.  When "-1", there is no
 // "keepend" on the stack.
-static int keepend_level = -1;
+// Now a Rust static variable; accessed via extern.
+extern int KEEPEND_LEVEL;
+#define keepend_level KEEPEND_LEVEL
 
 // value of si_idx for keywords
 #define KEYWORD_IDX     (-1)
 // valid of si_cont_list for containing all but contained groups
 #define ID_LIST_ALL     ((int16_t *)-1)
 
-static int next_seqnr = 1;              // value to use for si_seqnr
+// next_seqnr: now a Rust static variable; accessed via extern.
+extern int NEXT_SEQNR;
+#define next_seqnr NEXT_SEQNR
 
 // The next possible match in the current line for any pattern is remembered,
 // to avoid having to try for a match in each column.
@@ -330,20 +346,28 @@ static win_T *syn_win;                  // current window for highlighting
 static buf_T *syn_buf;                  // current buffer for highlighting
 static synblock_T *syn_block;              // current buffer for highlighting
 static proftime_T *syn_tm;                 // timeout limit
-static linenr_T current_lnum = 0;          // lnum of current state
-static colnr_T current_col = 0;            // column of current state
-static bool current_state_stored = false;  // true if stored current state
-                                           // after setting current_finished
-static bool current_finished = false;      // current line has been finished
+// These are now Rust static variables (statics.rs); accessed via extern.
+extern int CURRENT_LNUM;
+extern int CURRENT_COL;
+extern int CURRENT_STATE_STORED;
+extern int CURRENT_FINISHED;
+extern int CURRENT_NEXT_FLAGS;
+extern int CURRENT_LINE_ID;
+#define current_lnum       ((linenr_T)CURRENT_LNUM)
+#define current_col        ((colnr_T)CURRENT_COL)
+#define current_state_stored ((bool)(CURRENT_STATE_STORED != 0))
+#define current_finished   ((bool)(CURRENT_FINISHED != 0))
+#define current_next_flags CURRENT_NEXT_FLAGS
+#define current_line_id    CURRENT_LINE_ID
 static garray_T current_state              // current stack of state_items
   = GA_EMPTY_INIT_VALUE;
 static int16_t *current_next_list = NULL;  // when non-zero, nextgroup list
-static int current_next_flags = 0;         // flags for current_next_list
-static int current_line_id = 0;            // unique number for current line
 
 #define CUR_STATE(idx)  ((stateitem_T *)(current_state.ga_data))[idx]
 
-static bool syn_time_on = false;
+// Now a Rust static variable; accessed via extern.
+extern int SYN_TIME_ON;
+#define syn_time_on (SYN_TIME_ON != 0)
 #define IF_SYN_TIME(p) (p)
 
 // Set the timeout used for syntax highlighting.
@@ -545,13 +569,17 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 #define ITEM_MATCHGROUP     3
 
 
-static enum {
-  EXP_SUBCMD,       // expand ":syn" sub-commands
-  EXP_CASE,         // expand ":syn case" arguments
-  EXP_SPELL,        // expand ":syn spell" arguments
-  EXP_SYNC,         // expand ":syn sync" arguments
-  EXP_CLUSTER,      // expand ":syn list @cluster" arguments
-} expand_what;
+// expand_what enum constants (matching values in Rust expand.rs)
+enum {
+  EXP_SUBCMD = 0,   // expand ":syn" sub-commands
+  EXP_CASE = 1,     // expand ":syn case" arguments
+  EXP_SPELL = 2,    // expand ":syn spell" arguments
+  EXP_SYNC = 3,     // expand ":syn sync" arguments
+  EXP_CLUSTER = 4,  // expand ":syn list @cluster" arguments
+};
+// expand_what is now a Rust static variable; accessed via extern.
+extern int EXPAND_WHAT;
+#define expand_what EXPAND_WHAT
 
 // set_context_in_syntax_cmd, get_syntax_name, set_context_in_echohl_cmd,
 // and reset_expand_highlight are implemented in Rust (expand.rs).
@@ -641,20 +669,9 @@ int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
 int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
 
 
-int nvim_syn_get_current_lnum(void) { return (int)current_lnum; }
-int nvim_syn_get_current_col(void) { return (int)current_col; }
-int nvim_syn_is_current_finished(void) { return current_finished ? 1 : 0; }
-int nvim_syn_is_current_state_stored(void) { return current_state_stored ? 1 : 0; }
 int nvim_syn_get_current_state_len(void) { return current_state.ga_len; }
 int nvim_syn_is_current_state_valid(void) { return VALID_STATE(&current_state) ? 1 : 0; }
-int nvim_syn_get_current_id(void) { return current_id; }
-int nvim_syn_get_current_trans_id(void) { return current_trans_id; }
-int nvim_syn_get_current_attr(void) { return current_attr; }
-int nvim_syn_get_current_flags(void) { return current_flags; }
-int nvim_syn_get_current_seqnr(void) { return current_seqnr; }
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
-int nvim_syn_get_current_next_flags(void) { return current_next_flags; }
-int nvim_syn_get_keepend_level(void) { return keepend_level; }
 
 hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
 hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block) { return &block->b_keywtab_ic; }
@@ -676,25 +693,15 @@ synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-int nvim_syn_get_expand_what(void) { return expand_what; }
-void nvim_syn_set_expand_what(int what) { expand_what = what; }
-
 synstate_T *nvim_syn_stack_find_entry(int lnum) { return syn_stack_find_entry((linenr_T)lnum); }
-
-void nvim_syn_set_state_stored(int stored) { current_state_stored = stored ? true : false; }
-
 
 // nvim_syn_validate_current_state deleted: Rust bypasses via #[link_name = "rs_validate_current_state"]
 // nvim_syn_invalidate_current_state deleted: Rust bypasses via #[link_name = "rs_invalidate_current_state"]
-
-void nvim_syn_set_keepend_level(int level) { keepend_level = level; }
 
 void nvim_syn_grow_current_state(int size) { ga_grow(&current_state, size); }
 
 void nvim_syn_set_current_state_len(int len) { current_state.ga_len = len; }
 void nvim_syn_set_current_next_list(int16_t *list) { current_next_list = list; }
-void nvim_syn_set_current_next_flags(int flags) { current_next_flags = flags; }
-void nvim_syn_set_current_lnum(int lnum) { current_lnum = (linenr_T)lnum; }
 
 /// Get sst_next_list from a synstate
 int16_t *nvim_synstate_get_next_list(synstate_T *state)
@@ -765,8 +772,6 @@ void nvim_syn_set_next_match_col(int col) { next_match_col = col; }
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 
-void nvim_syn_set_current_finished(int finished) { current_finished = finished ? true : false; }
-
 int nvim_syn_id2attr_wrapper(int syn_id) { return syn_id2attr(syn_id); }
 
 
@@ -831,8 +836,6 @@ stateitem_T *nvim_syn_get_top_stateitem(void)
   }
   return &CUR_STATE(current_state.ga_len - 1);
 }
-
-int nvim_syn_incr_next_seqnr(void) { return next_seqnr++; }
 
 /// Bulk getter for all 5 next_match position fields.
 void nvim_syn_get_next_match_positions(int *h_start_lnum, int *h_start_col,
@@ -911,10 +914,6 @@ int nvim_syn_get_pattern_syn_match_id(int idx)
 int nvim_syn_is_current_state_empty(void) { return GA_EMPTY(&current_state) ? 1 : 0; }
 
 
-int nvim_syn_get_current_line_id(void) { return (int)current_line_id; }
-
-void nvim_syn_incr_current_line_id(void) { current_line_id++; }
-
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
 void nvim_syn_set_syn_win(void *win) { syn_win = (win_T *)win; }
@@ -934,10 +933,6 @@ void nvim_synstate_set_change_lnum(synstate_T *p, int lnum)
   }
 }
 
-void nvim_syn_set_current_id(int id) { current_id = (int16_t)id; }
-void nvim_syn_set_current_trans_id(int id) { current_trans_id = (int16_t)id; }
-void nvim_syn_set_current_flags(int flags) { current_flags = (int16_t)flags; }
-void nvim_syn_set_current_seqnr(int seqnr) { current_seqnr = seqnr; }
 void nvim_syn_stack_alloc(void) { syn_stack_alloc(); }
 
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
@@ -979,8 +974,6 @@ int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_conta
 int nvim_synblock_is_spell_cluster(synblock_T *block, int id) { return id == block->b_spell_cluster_id; }
 int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == block->b_nospell_cluster_id; }
 
-void nvim_syn_set_current_col(int col) { current_col = col; }
-
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 
 /// Validate current state if needed
@@ -1009,8 +1002,6 @@ char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
-int nvim_syn_get_running_inc_tag(void) { return running_syn_inc_tag; }
-void nvim_syn_set_running_inc_tag(int tag) { running_syn_inc_tag = tag; }
 /// Get a synpat offset value by pattern index and offset index.
 int nvim_syn_get_pattern_offset(int pat_idx, int off_idx)
 {
@@ -1077,8 +1068,6 @@ void nvim_syn_clear_extmatch_in(void)
 }
 
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
-
-void nvim_syn_set_current_sub_char(int c) { current_sub_char = c; }
 
 /// Set all current_* fields from a stateitem (replaces 6 individual FFI calls).
 void nvim_syn_set_current_from_stateitem(stateitem_T *item)
@@ -1229,7 +1218,7 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
       break;
     }
   }
-  current_lnum = (linenr_T)start_lnum;
+  CURRENT_LNUM = (int)start_lnum;
 
   pos_T cursor_save = wp->w_cursor;
   wp->w_cursor.lnum = (linenr_T)start_lnum;
@@ -1281,7 +1270,6 @@ _Static_assert(offsetof(syn_time_T, slowest) == 8, "syn_time_T.slowest");
 _Static_assert(offsetof(syn_time_T, count) == 16, "syn_time_T.count");
 _Static_assert(offsetof(syn_time_T, match) == 20, "syn_time_T.match");
 
-int nvim_syn_get_current_inc_tag(void) { return current_syn_inc_tag; }
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
 int nvim_syn_name2id_wrapper(const char *name) { return syn_name2id(name); }
 
@@ -1531,20 +1519,6 @@ void nvim_synblock_clear_cluster_scl_list(synblock_T *block, int scl_id)
 // Phase 3 accessors: syn_cmd_include migration
 // =============================================================================
 
-/// Set current_syn_inc_tag.
-void nvim_syn_set_current_inc_tag(int tag)
-{
-  current_syn_inc_tag = tag;
-}
-
-/// Atomically do: current_syn_inc_tag = ++running_syn_inc_tag.
-/// Returns the new current_syn_inc_tag value.
-int nvim_syn_increment_and_set_inc_tag(void)
-{
-  current_syn_inc_tag = ++running_syn_inc_tag;
-  return current_syn_inc_tag;
-}
-
 /// Prepare for :syntax include.
 /// Sets EX_XFILE|EX_NOSPC argt flags, calls separate_nextcmd,
 /// checks if path is absolute/$/<, and optionally calls expand_filename.
@@ -1594,22 +1568,10 @@ void nvim_syn_init_highlight(int reset, int init)
   init_highlight((bool)reset, (bool)init);
 }
 
-/// Getter for did_syntax_onoff.
-int nvim_syn_get_did_syntax_onoff(void)
-{
-  return did_syntax_onoff ? 1 : 0;
-}
-
 /// Wrap do_cmdline_cmd for Rust callers (Phase 11).
 void nvim_syn_do_cmdline_cmd(const char *cmd)
 {
   do_cmdline_cmd(cmd);
-}
-
-/// Set did_syntax_onoff flag (Phase 11).
-void nvim_syn_set_did_syntax_onoff(int v)
-{
-  did_syntax_onoff = (bool)v;
 }
 
 /// Redraw curwin with UPD_NOT_VALID (used after :syntax spell dispatch from Rust).
@@ -1645,9 +1607,6 @@ void nvim_syn_redraw_curbuf_later(void)
 // =============================================================================
 // Phase syntime: accessors for syn_time_on and synpat timing fields
 // =============================================================================
-
-int nvim_syn_get_syn_time_on(void) { return syn_time_on ? 1 : 0; }
-void nvim_syn_set_syn_time_on(int val) { syn_time_on = (val != 0); }
 
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
@@ -1891,12 +1850,6 @@ void nvim_synblock_sync_clear(synblock_T *block)
   XFREE_CLEAR(block->b_syn_linecont_pat);
   // Clear iskeyword option
   clear_string_option(&block->b_syn_isk);
-}
-
-/// Reset running_syn_inc_tag to 0.
-void nvim_syn_reset_inc_tag(void)
-{
-  running_syn_inc_tag = 0;
 }
 
 /// Release ownsyntax block for a window: clear it, free it, reset to buf's b_s.
@@ -2154,9 +2107,6 @@ void nvim_syn_block_set_linecont_prog(void *prog)
 {
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
-
-/// Set next_seqnr to 1.
-void nvim_syn_reset_next_seqnr(void) { next_seqnr = 1; }
 
 /// Call validate_current_state() to set itemsize/growsize.
 /// Direct implementation to avoid circular call.

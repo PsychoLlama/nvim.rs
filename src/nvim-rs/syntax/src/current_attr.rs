@@ -25,13 +25,8 @@ const MAXCOL: i32 = 0x7fff_ffff;
 
 extern "C" {
     // Current position
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_set_current_col(col: c_int);
 
     // Current state status
-    fn nvim_syn_set_current_finished(finished: c_int);
-    fn nvim_syn_set_state_stored(stored: c_int);
 
     // Current match attributes (bulk setters)
     fn nvim_syn_set_current_from_stateitem(item: StateItemHandle);
@@ -48,15 +43,10 @@ extern "C" {
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_set_next_match_col(col: c_int);
 
-    // Next sequence number
-    fn nvim_syn_incr_next_seqnr() -> c_int;
-
     // Next list management
     fn nvim_syn_has_current_next_list() -> c_int;
     fn nvim_syn_set_current_next_list(list: IdListHandle);
     fn nvim_syn_get_current_next_list() -> IdListHandle;
-    fn nvim_syn_set_current_next_flags(flags: c_int);
-    fn nvim_syn_get_current_next_flags() -> c_int;
 
     // Line operations
     fn nvim_syn_getcurline_byte_at(col: c_int) -> c_int;
@@ -102,7 +92,6 @@ extern "C" {
     fn nvim_syn_has_keywords_ic() -> c_int;
 
     // Line ID tracking
-    fn nvim_syn_get_current_line_id() -> c_int;
 
     // Spell
     fn nvim_syn_get_syn_block() -> crate::types::SynBlockHandle;
@@ -199,8 +188,8 @@ pub unsafe fn syn_current_attr(
     can_spell: *mut c_int,
     keep_state: bool,
 ) -> i32 {
-    let current_lnum = nvim_syn_get_current_lnum();
-    let current_col = nvim_syn_get_current_col();
+    let current_lnum = crate::statics::CURRENT_LNUM;
+    let current_col = crate::statics::CURRENT_COL;
 
     // No character, no attributes! Past end of line?
     // Do try matching with an empty line (could be the start of a region).
@@ -212,15 +201,15 @@ pub unsafe fn syn_current_attr(
         if next_idx >= 0 && next_col >= current_col && next_col != MAXCOL {
             push_next_match();
         }
-        nvim_syn_set_current_finished(1);
-        nvim_syn_set_state_stored(0);
+        crate::statics::CURRENT_FINISHED = 1;
+        crate::statics::CURRENT_STATE_STORED = 0;
         return 0;
     }
 
     // if the current or next character is NUL, we will finish the line now
     if line_byte == 0 || nvim_syn_getcurline_byte_at(current_col + 1) == 0 {
-        nvim_syn_set_current_finished(1);
-        nvim_syn_set_state_stored(0);
+        crate::statics::CURRENT_FINISHED = 1;
+        crate::statics::CURRENT_STATE_STORED = 0;
     }
 
     // When in the previous column there was a match but it could not be used
@@ -256,7 +245,7 @@ pub unsafe fn syn_current_attr(
         found_match = false;
         keep_next_list = false;
         let mut syn_id: i32 = 0;
-        let current_col = nvim_syn_get_current_col();
+        let current_col = crate::statics::CURRENT_COL;
 
         // 1. Check for a current state.
         let state_len = nvim_syn_get_current_state_len();
@@ -317,7 +306,11 @@ pub unsafe fn syn_current_attr(
                             (*p).si_ends = 1;
                             (*p).si_end_idx = 0;
                             (*p).si_flags = flags;
-                            (*p).si_seqnr = nvim_syn_incr_next_seqnr();
+                            (*p).si_seqnr = {
+                                let _s = crate::statics::NEXT_SEQNR;
+                                crate::statics::NEXT_SEQNR += 1;
+                                _s
+                            };
                             (*p).si_cchar = cchar;
                         }
 
@@ -362,7 +355,7 @@ pub unsafe fn syn_current_attr(
 
             // 3. Check for patterns (only if no keyword found).
             if syn_id == 0 && nvim_syn_get_pattern_ga_len() > 0 {
-                let current_col = nvim_syn_get_current_col();
+                let current_col = crate::statics::CURRENT_COL;
                 let next_match_idx = nvim_syn_get_next_match_idx();
                 let next_match_col = nvim_syn_get_next_match_col();
 
@@ -370,7 +363,7 @@ pub unsafe fn syn_current_attr(
                     // Check all relevant patterns for a match at this position.
                     nvim_syn_set_next_match_idx(0);
                     nvim_syn_set_next_match_col(MAXCOL);
-                    let current_line_id = nvim_syn_get_current_line_id();
+                    let current_line_id = crate::statics::CURRENT_LINE_ID;
                     let state_len = nvim_syn_get_current_state_len();
                     let has_next_list = nvim_syn_has_current_next_list() != 0;
                     let si_idx = if cur_si_valid { state_len - 1 } else { -1 };
@@ -540,7 +533,7 @@ pub unsafe fn syn_current_attr(
                 }
 
                 // If we found a match at the current column, use it.
-                let current_col = nvim_syn_get_current_col();
+                let current_col = crate::statics::CURRENT_COL;
                 let next_match_idx = nvim_syn_get_next_match_idx();
                 let next_match_col = nvim_syn_get_next_match_col();
 
@@ -556,7 +549,7 @@ pub unsafe fn syn_current_attr(
                     {
                         let pat_flags = nvim_syn_get_pattern_flags(next_match_idx);
                         nvim_syn_set_current_next_list(pat_next_list);
-                        nvim_syn_set_current_next_flags(pat_flags);
+                        crate::statics::CURRENT_NEXT_FLAGS = pat_flags;
                         keep_next_list = true;
                         zero_width_next_list = true;
 
@@ -574,8 +567,8 @@ pub unsafe fn syn_current_attr(
         // Handle searching for nextgroup match.
         if nvim_syn_has_current_next_list() != 0 && !keep_next_list {
             if !found_match {
-                let current_col = nvim_syn_get_current_col();
-                let current_next_flags = nvim_syn_get_current_next_flags();
+                let current_col = crate::statics::CURRENT_COL;
+                let current_next_flags = crate::statics::CURRENT_NEXT_FLAGS;
                 let line_byte = nvim_syn_getcurline_byte_at(current_col);
 
                 if (current_next_flags & HL_SKIPWHITE) != 0
@@ -605,7 +598,7 @@ pub unsafe fn syn_current_attr(
     // Use attributes from the current state, if within its highlighting.
     nvim_syn_zero_current();
 
-    let current_col = nvim_syn_get_current_col();
+    let current_col = crate::statics::CURRENT_COL;
     let state_len = nvim_syn_get_current_state_len();
 
     let mut sip_handle = StateItemHandle(std::ptr::null_mut());
@@ -645,9 +638,9 @@ pub unsafe fn syn_current_attr(
             if nvim_syn_is_current_state_empty() == 0
                 && nvim_syn_getcurline_byte_at(current_col) != 0
             {
-                nvim_syn_set_current_col(current_col + 1);
+                crate::statics::CURRENT_COL = current_col + 1;
                 check_state_ends();
-                nvim_syn_set_current_col(current_col);
+                crate::statics::CURRENT_COL = current_col;
             }
         }
     } else if !can_spell.is_null() {
@@ -663,11 +656,11 @@ pub unsafe fn syn_current_attr(
     }
 
     // nextgroup ends at end of line, unless "skipnl" or "skipempty" present
-    let current_col = nvim_syn_get_current_col();
+    let current_col = crate::statics::CURRENT_COL;
     if nvim_syn_has_current_next_list() != 0
         && nvim_syn_getcurline_byte_at(current_col) != 0
         && nvim_syn_getcurline_byte_at(current_col + 1) == 0
-        && (nvim_syn_get_current_next_flags() & (HL_SKIPNL | HL_SKIPEMPTY)) == 0
+        && (crate::statics::CURRENT_NEXT_FLAGS & (HL_SKIPNL | HL_SKIPEMPTY)) == 0
     {
         nvim_syn_set_current_next_list(IdListHandle(std::ptr::null_mut()));
     }
@@ -676,11 +669,7 @@ pub unsafe fn syn_current_attr(
     nvim_syn_clear_re_extmatch_out();
     nvim_syn_unref_extmatch(cur_extmatch);
 
-    nvim_syn_get_current_attr()
-}
-
-extern "C" {
-    fn nvim_syn_get_current_attr() -> c_int;
+    crate::statics::CURRENT_ATTR
 }
 
 /// Compute can_spell based on spell clusters.
@@ -693,7 +682,7 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
         0
     } else {
         // Read from the global (we just set it above)
-        nvim_syn_get_current_trans_id()
+        crate::statics::CURRENT_TRANS_ID
     };
 
     if spell_cluster == 0 {
@@ -721,15 +710,11 @@ unsafe fn compute_can_spell(sip: StateItemHandle, can_spell: *mut c_int) {
     }
 }
 
-extern "C" {
-    fn nvim_syn_get_current_trans_id() -> c_int;
-}
-
 /// Check if pattern `idx` was already matched at the current column.
 fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
     let state_len = unsafe { nvim_syn_get_current_state_len() };
-    let current_col = unsafe { nvim_syn_get_current_col() };
-    let current_lnum = unsafe { nvim_syn_get_current_lnum() };
+    let current_col = unsafe { crate::statics::CURRENT_COL };
+    let current_lnum = unsafe { crate::statics::CURRENT_LNUM };
 
     for i in (0..state_len).rev() {
         let si = unsafe { nvim_syn_get_stateitem(i) };
@@ -758,7 +743,7 @@ fn did_match_already(idx: i32, zero_width_ga: &[i32]) -> bool {
 ///
 /// Returns true if a sync item is found.
 pub unsafe fn syn_finish_line(syncing: bool) -> bool {
-    while nvim_syn_is_current_finished() == 0 {
+    while crate::statics::CURRENT_FINISHED == 0 {
         syn_current_attr(syncing, false, std::ptr::null_mut(), false);
 
         // When syncing, and found some item, need to check the item.
@@ -775,22 +760,18 @@ pub unsafe fn syn_finish_line(syncing: bool) -> bool {
 
             // syn_current_attr() will have skipped the check for an item
             // that ends here, need to do that now.
-            let current_col = nvim_syn_get_current_col();
+            let current_col = crate::statics::CURRENT_COL;
             if nvim_syn_getcurline_byte_at(current_col) != 0 {
-                nvim_syn_set_current_col(current_col + 1);
+                crate::statics::CURRENT_COL = current_col + 1;
             }
             check_state_ends();
-            nvim_syn_set_current_col(current_col);
+            crate::statics::CURRENT_COL = current_col;
         }
 
-        let current_col = nvim_syn_get_current_col();
-        nvim_syn_set_current_col(current_col + 1);
+        let current_col = crate::statics::CURRENT_COL;
+        crate::statics::CURRENT_COL = current_col + 1;
     }
     false
-}
-
-extern "C" {
-    fn nvim_syn_is_current_finished() -> c_int;
 }
 
 // =============================================================================

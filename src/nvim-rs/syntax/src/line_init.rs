@@ -25,14 +25,7 @@ use crate::types::{
 extern "C" {
     // Current state globals
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_keepend_level() -> c_int;
-    fn nvim_syn_set_current_finished(v: c_int);
-    fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_set_next_match_idx(idx: c_int);
-    fn nvim_syn_incr_current_line_id();
-    fn nvim_syn_reset_next_seqnr();
     fn nvim_syn_is_current_state_empty() -> c_int;
 
     // CUR_STATE accessors for syn_update_ends
@@ -87,7 +80,7 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
     let state_len = nvim_syn_get_current_state_len();
-    let current_lnum = nvim_syn_get_current_lnum();
+    let current_lnum = crate::statics::CURRENT_LNUM;
     let startofline = startofline != 0;
 
     if startofline {
@@ -105,7 +98,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
 
     // Find starting point for the second pass
     let mut i = state_len - 1;
-    let keepend_level = nvim_syn_get_keepend_level();
+    let keepend_level = crate::statics::KEEPEND_LEVEL;
     if keepend_level >= 0 {
         while i > keepend_level {
             if (nvim_cur_state_get_si_flags(i) & HL_EXTEND) != 0 {
@@ -116,7 +109,7 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
     }
 
     // Update end positions for relevant items
-    let current_col = nvim_syn_get_current_col();
+    let current_col = crate::statics::CURRENT_COL;
     let mut seen_keepend = false;
     while i < state_len {
         let flags = nvim_cur_state_get_si_flags(i);
@@ -146,8 +139,8 @@ pub unsafe extern "C" fn rs_syn_update_ends(startofline: c_int) {
 /// Accesses C global state; must be called from main thread.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_start_line() {
-    nvim_syn_set_current_finished(0);
-    nvim_syn_set_current_col(0);
+    crate::statics::CURRENT_FINISHED = 0;
+    crate::statics::CURRENT_COL = 0;
 
     if nvim_syn_is_current_state_empty() == 0 {
         rs_syn_update_ends(1); // startofline = true
@@ -155,8 +148,8 @@ pub unsafe extern "C" fn rs_syn_start_line() {
     }
 
     nvim_syn_set_next_match_idx(-1);
-    nvim_syn_incr_current_line_id();
-    nvim_syn_reset_next_seqnr();
+    crate::statics::CURRENT_LINE_ID += 1;
+    crate::statics::NEXT_SEQNR = 1;
 }
 
 /// Check if the line-continuation pattern matches in line "lnum".

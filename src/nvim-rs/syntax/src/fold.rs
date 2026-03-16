@@ -289,9 +289,6 @@ extern "C" {
     fn nvim_synblock_get_syn_slow(block: SynBlockHandle) -> c_int;
     fn nvim_synblock_get_syn_foldlevel(block: SynBlockHandle) -> c_int;
     fn nvim_win_get_foldnestmax(wp: WinHandle) -> c_int;
-    fn nvim_syn_is_current_finished() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_set_current_col(col: c_int);
 
     #[link_name = "syntax_start"]
     fn rs_syntax_start(wp: WinHandle, lnum: c_int);
@@ -328,7 +325,7 @@ unsafe fn syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
             // Find the lowest fold level that is followed by a higher one.
             let mut cur_level = level;
             let mut low_level = cur_level;
-            while nvim_syn_is_current_finished() == 0 {
+            while crate::statics::CURRENT_FINISHED == 0 {
                 rs_syn_current_attr_impl(0, 0, std::ptr::null_mut(), 0);
                 cur_level = crate::state_ops::rs_syn_count_fold_items();
                 if cur_level < low_level {
@@ -336,8 +333,8 @@ unsafe fn syn_get_foldlevel_impl(wp: WinHandle, lnum: c_int) -> c_int {
                 } else if cur_level > low_level {
                     level = low_level;
                 }
-                let col = nvim_syn_get_current_col();
-                nvim_syn_set_current_col(col + 1);
+                let col = crate::statics::CURRENT_COL;
+                crate::statics::CURRENT_COL = col + 1;
             }
         }
     }

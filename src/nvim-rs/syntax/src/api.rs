@@ -142,17 +142,10 @@ extern "C" {
     fn nvim_syn_get_win() -> WinHandle;
     fn nvim_syn_get_buf() -> BufHandle;
     fn nvim_syn_win_get_buffer_ptr(wp: WinHandle) -> BufHandle;
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_get_current_id() -> c_int;
-    fn nvim_syn_get_current_trans_id() -> c_int;
-    fn nvim_syn_get_current_flags() -> c_int;
-    fn nvim_syn_get_current_seqnr() -> c_int;
     fn nvim_syn_set_next_match_idx(idx: c_int);
     fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_invalidate_current_state"]
     fn nvim_syn_invalidate_current_state();
-    fn nvim_syn_set_current_col(col: c_int);
     fn nvim_syn_get_stateitem(idx: c_int) -> StateItemHandle;
 }
 
@@ -178,8 +171,8 @@ pub unsafe fn syn_get_id_impl(
     let syn_win = nvim_syn_get_win();
     let syn_buf = nvim_syn_get_buf();
     let wp_buf = nvim_syn_win_get_buffer_ptr(wp);
-    let current_lnum = nvim_syn_get_current_lnum();
-    let current_col = nvim_syn_get_current_col();
+    let current_lnum = crate::statics::CURRENT_LNUM;
+    let current_col = crate::statics::CURRENT_COL;
 
     if wp.0 != syn_win.0 || wp_buf.0 != syn_buf.0 || lnum != current_lnum || col < current_col {
         crate::buffer::start_syntax(wp, lnum);
@@ -193,9 +186,9 @@ pub unsafe fn syn_get_id_impl(
     }
 
     if trans != 0 {
-        nvim_syn_get_current_trans_id()
+        crate::statics::CURRENT_TRANS_ID
     } else {
-        nvim_syn_get_current_id()
+        crate::statics::CURRENT_ID
     }
 }
 
@@ -206,8 +199,8 @@ pub unsafe fn syn_get_id_impl(
 /// # Safety
 /// Must be called right after `syn_get_id_impl` (or equivalent).
 pub unsafe fn get_syntax_info_impl(seqnrp: *mut c_int) -> c_int {
-    *seqnrp = nvim_syn_get_current_seqnr();
-    nvim_syn_get_current_flags()
+    *seqnrp = crate::statics::CURRENT_SEQNR;
+    crate::statics::CURRENT_FLAGS
 }
 
 /// Core implementation of `syn_get_concealed_id`.
@@ -234,7 +227,7 @@ pub unsafe fn syn_get_concealed_id_impl(wp: WinHandle, lnum: c_int, col: c_int) 
 pub unsafe fn syn_get_stack_item_impl(i: c_int) -> c_int {
     if i >= nvim_syn_get_current_state_len() {
         nvim_syn_invalidate_current_state();
-        nvim_syn_set_current_col(MAXCOL);
+        crate::statics::CURRENT_COL = MAXCOL;
         return -1;
     }
     let item = nvim_syn_get_stateitem(i);

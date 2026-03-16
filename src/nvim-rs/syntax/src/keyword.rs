@@ -562,7 +562,6 @@ impl KeywordMatch {
 // =============================================================================
 
 extern "C" {
-    fn nvim_syn_get_current_inc_tag() -> c_int;
     fn nvim_syn_get_curwin_syn_ic() -> c_int;
 }
 
@@ -621,7 +620,7 @@ pub unsafe extern "C" fn rs_add_keyword(
     }
 
     let use_ic = nvim_syn_get_curwin_syn_ic();
-    let inc_tag = nvim_syn_get_current_inc_tag();
+    let inc_tag = crate::statics::CURRENT_SYN_INC_TAG;
 
     // Perform case folding if needed.
     let (name_ic_ptr, name_ic_len): (*const c_char, c_int) = if use_ic != 0 {

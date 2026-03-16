@@ -59,10 +59,6 @@ extern "C" {
     fn nvim_syn_invalidate_current_state();
     #[link_name = "rs_validate_current_state"]
     fn nvim_syn_validate_current_state();
-    fn nvim_syn_set_current_lnum(lnum: c_int);
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_set_current_col(col: c_int);
-    fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_get_current_state_len() -> c_int;
     #[link_name = "rs_syn_start_line"]
     fn nvim_syn_start_line();
@@ -270,7 +266,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
             start_lnum -= lnum;
         }
     }
-    nvim_syn_set_current_lnum(start_lnum);
+    crate::statics::CURRENT_LNUM = start_lnum;
 
     // 1. Search backwards for the end of a C-style comment.
     if sync_fl & SF_CCOMMENT != 0 {
@@ -279,7 +275,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
         // It returns 1 if we are inside a comment.
         let mut adjusted_lnum = start_lnum;
         let found = nvim_syn_ccomment_find(wp, start_lnum, &mut adjusted_lnum);
-        nvim_syn_set_current_lnum(adjusted_lnum);
+        crate::statics::CURRENT_LNUM = adjusted_lnum;
 
         if found != 0 {
             // Inside a comment: find the syntax item that defines the comment.
@@ -321,7 +317,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
             nvim_syn_line_breakcheck();
             if nvim_syn_get_got_int() != 0 {
                 nvim_syn_invalidate_current_state();
-                nvim_syn_set_current_lnum(start_lnum);
+                crate::statics::CURRENT_LNUM = start_lnum;
                 break;
             }
 
@@ -342,7 +338,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
 
             let mut current_lnum = lnum;
             while current_lnum < end_lnum {
-                nvim_syn_set_current_lnum(current_lnum);
+                crate::statics::CURRENT_LNUM = current_lnum;
                 nvim_syn_start_line();
                 loop {
                     let had_sync_point = syn_finish_line(true);
@@ -370,35 +366,35 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                             found_flags = nvim_syn_get_pattern_flags(si_idx);
                             found_match_idx = nvim_syn_get_pattern_sync_idx(si_idx);
                         }
-                        found_current_lnum = nvim_syn_get_current_lnum();
-                        found_current_col = nvim_syn_get_current_col();
+                        found_current_lnum = crate::statics::CURRENT_LNUM;
+                        found_current_col = crate::statics::CURRENT_COL;
                         found_m_endpos_lnum = si_m_endpos_lnum;
                         found_m_endpos_col = si_m_endpos_col;
 
                         // Continue after the match (be aware of a zero-length match).
                         if found_m_endpos_lnum > current_lnum {
                             current_lnum = found_m_endpos_lnum;
-                            nvim_syn_set_current_lnum(current_lnum);
-                            nvim_syn_set_current_col(found_m_endpos_col);
+                            crate::statics::CURRENT_LNUM = current_lnum;
+                            crate::statics::CURRENT_COL = found_m_endpos_col;
                             if current_lnum >= end_lnum {
                                 break;
                             }
-                        } else if found_m_endpos_col > nvim_syn_get_current_col() {
-                            nvim_syn_set_current_col(found_m_endpos_col);
+                        } else if found_m_endpos_col > crate::statics::CURRENT_COL {
+                            crate::statics::CURRENT_COL = found_m_endpos_col;
                         } else {
-                            nvim_syn_set_current_col(nvim_syn_get_current_col() + 1);
+                            crate::statics::CURRENT_COL += 1;
                         }
 
                         // syn_current_attr() will have skipped the check for
                         // an item that ends here, need to do that now. Be
                         // careful not to go past the NUL.
-                        let prev_current_col = nvim_syn_get_current_col();
+                        let prev_current_col = crate::statics::CURRENT_COL;
                         let curline = nvim_syn_getcurline();
                         if !curline.is_null() && *curline.offset(prev_current_col as isize) != 0 {
-                            nvim_syn_set_current_col(prev_current_col + 1);
+                            crate::statics::CURRENT_COL = prev_current_col + 1;
                         }
                         check_state_ends();
-                        nvim_syn_set_current_col(prev_current_col);
+                        crate::statics::CURRENT_COL = prev_current_col;
                     } else {
                         break;
                     }
@@ -429,15 +425,15 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
                             (*p).si_h_startpos.lnum = found_current_lnum;
                             (*p).si_h_startpos.col = found_current_col;
                         }
-                        update_si_end(cur_si, nvim_syn_get_current_col(), true);
+                        update_si_end(cur_si, crate::statics::CURRENT_COL, true);
                         check_keepend();
                     }
-                    nvim_syn_set_current_col(found_m_endpos_col);
-                    nvim_syn_set_current_lnum(found_m_endpos_lnum);
+                    crate::statics::CURRENT_COL = found_m_endpos_col;
+                    crate::statics::CURRENT_LNUM = found_m_endpos_lnum;
                     syn_finish_line(false);
-                    nvim_syn_set_current_lnum(nvim_syn_get_current_lnum() + 1);
+                    crate::statics::CURRENT_LNUM += 1;
                 } else {
-                    nvim_syn_set_current_lnum(start_lnum);
+                    crate::statics::CURRENT_LNUM = start_lnum;
                 }
 
                 break;
@@ -451,7 +447,7 @@ pub unsafe fn syn_sync_impl(wp: WinHandle, mut start_lnum: i32, last_valid: SynS
         // Ran into start of the file or exceeded maximum number of lines
         if lnum <= break_lnum {
             nvim_syn_invalidate_current_state();
-            nvim_syn_set_current_lnum(break_lnum + 1);
+            crate::statics::CURRENT_LNUM = break_lnum + 1;
         }
     }
 

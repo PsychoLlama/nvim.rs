@@ -34,7 +34,6 @@ extern "C" {
     ) -> c_int;
 
     // syn_time_on flag
-    fn nvim_syn_get_syn_time_on() -> c_int;
 
     // b_syn_slow flag
     fn nvim_syn_get_b_syn_slow() -> c_int;
@@ -97,7 +96,7 @@ unsafe fn syn_regexec_impl(
     st_ptr: *mut c_void,
     out_regprog: &mut *mut c_void,
 ) -> Option<(i32, i32, i32, i32)> {
-    let syn_time_on = nvim_syn_get_syn_time_on() != 0;
+    let syn_time_on = crate::statics::SYN_TIME_ON != 0;
 
     let pt = if syn_time_on { profile_start() } else { 0 };
 

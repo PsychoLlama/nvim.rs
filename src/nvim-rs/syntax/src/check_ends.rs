@@ -22,14 +22,10 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
-    // Current state
+    // Current state (non-static)
     fn nvim_syn_get_current_state_len() -> c_int;
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
     fn nvim_syn_get_stateitem(index: c_int) -> StateItemHandle;
     fn nvim_syn_is_current_state_empty() -> c_int;
-    fn nvim_syn_get_keepend_level() -> c_int;
-    fn nvim_syn_set_keepend_level(level: c_int);
 
     // Next match
     fn nvim_syn_get_next_match_idx() -> c_int;
@@ -40,12 +36,8 @@ extern "C" {
     fn nvim_syn_get_next_match_extmatch() -> ExtMatchHandle;
     fn nvim_syn_get_next_match_col() -> c_int;
 
-    // Next sequence number
-    fn nvim_syn_incr_next_seqnr() -> c_int;
-
     // Current next list
     fn nvim_syn_set_current_next_list(list: IdListHandle);
-    fn nvim_syn_set_current_next_flags(flags: c_int);
 
     // Pattern accessors
     fn nvim_syn_get_pattern_type(idx: c_int) -> c_int;
@@ -89,8 +81,8 @@ const NUL: i32 = 0;
 /// Accesses C global state.
 pub unsafe fn did_match_already(idx: i32, gap_ptr: *mut c_int, gap_len: i32) -> bool {
     let state_len = nvim_syn_get_current_state_len();
-    let current_col = nvim_syn_get_current_col();
-    let current_lnum = nvim_syn_get_current_lnum();
+    let current_col = crate::statics::CURRENT_COL;
+    let current_lnum = crate::statics::CURRENT_LNUM;
 
     // Check current state stack from top to bottom
     let mut i = state_len - 1;
@@ -196,7 +188,7 @@ pub unsafe fn update_si_attr(stack_idx: i32) {
 /// # Safety
 /// Accesses C global state.
 pub unsafe fn check_keepend() {
-    let keepend_level = nvim_syn_get_keepend_level();
+    let keepend_level = crate::statics::KEEPEND_LEVEL;
     if keepend_level < 0 {
         return;
     }
@@ -295,8 +287,8 @@ pub unsafe fn check_keepend() {
 /// Accesses C global state extensively.
 pub unsafe fn push_next_match() -> StateItemHandle {
     let next_match_idx = nvim_syn_get_next_match_idx();
-    let current_col = nvim_syn_get_current_col();
-    let current_lnum = nvim_syn_get_current_lnum();
+    let current_col = crate::statics::CURRENT_COL;
+    let current_lnum = crate::statics::CURRENT_LNUM;
 
     let pat_type = nvim_syn_get_pattern_type(next_match_idx);
     let pat_flags = nvim_syn_get_pattern_flags(next_match_idx);
@@ -319,7 +311,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
     (*cp).si_h_startpos.lnum = h_start_lnum;
     (*cp).si_h_startpos.col = h_start_col;
     (*cp).si_flags = pat_flags;
-    let seqnr = nvim_syn_incr_next_seqnr();
+    let seqnr = {
+        let _s = crate::statics::NEXT_SEQNR;
+        crate::statics::NEXT_SEQNR += 1;
+        _s
+    };
     (*cp).si_seqnr = seqnr;
     (*cp).si_cchar = pat_cchar;
 
@@ -351,11 +347,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         (*cp).si_end_idx = nvim_syn_get_next_match_end_idx();
     }
 
-    let keepend_level = nvim_syn_get_keepend_level();
+    let keepend_level = crate::statics::KEEPEND_LEVEL;
     let cur_flags = (*cp).si_flags;
     if keepend_level < 0 && (cur_flags & HL_KEEPEND != 0) {
         let sl = nvim_syn_get_current_state_len();
-        nvim_syn_set_keepend_level(sl - 1);
+        crate::statics::KEEPEND_LEVEL = sl - 1;
     }
     check_keepend();
     update_si_attr(nvim_syn_get_current_state_len() - 1);
@@ -382,7 +378,11 @@ pub unsafe fn push_next_match() -> StateItemHandle {
         (*mp).si_ends = 1;
         (*mp).si_end_idx = 0;
         (*mp).si_flags = HL_MATCH;
-        let mg_seqnr = nvim_syn_incr_next_seqnr();
+        let mg_seqnr = {
+            let _s = crate::statics::NEXT_SEQNR;
+            crate::statics::NEXT_SEQNR += 1;
+            _s
+        };
         (*mp).si_seqnr = mg_seqnr;
         (*mp).si_flags |= save_flags;
         if (*mp).si_flags & HL_CONCEALENDS != 0 {
@@ -415,8 +415,8 @@ pub unsafe fn check_state_ends() {
         return;
     }
 
-    let current_lnum = nvim_syn_get_current_lnum();
-    let current_col = nvim_syn_get_current_col();
+    let current_lnum = crate::statics::CURRENT_LNUM;
+    let current_col = crate::statics::CURRENT_COL;
 
     loop {
         let sl = nvim_syn_get_current_state_len();
@@ -453,7 +453,11 @@ pub unsafe fn check_state_ends() {
                 (*p).si_h_endpos.lnum = eoe_lnum;
                 (*p).si_h_endpos.col = eoe_col;
                 (*p).si_flags |= HL_MATCH;
-                let seqnr = nvim_syn_incr_next_seqnr();
+                let seqnr = {
+                    let _s = crate::statics::NEXT_SEQNR;
+                    crate::statics::NEXT_SEQNR += 1;
+                    _s
+                };
                 (*p).si_seqnr = seqnr;
                 if (*p).si_flags & HL_CONCEALENDS != 0 {
                     (*p).si_flags |= HL_CONCEAL;
@@ -474,7 +478,7 @@ pub unsafe fn check_state_ends() {
             let si_next_list = IdListHandle((*p).si_next_list);
             let si_flags = (*p).si_flags;
             nvim_syn_set_current_next_list(si_next_list);
-            nvim_syn_set_current_next_flags(si_flags);
+            crate::statics::CURRENT_NEXT_FLAGS = si_flags;
 
             // Unless at end of line and no "skipnl" or "skipempty"
             let next_flags = si_flags;
@@ -494,7 +498,7 @@ pub unsafe fn check_state_ends() {
                 break;
             }
 
-            let keepend_level = nvim_syn_get_keepend_level();
+            let keepend_level = crate::statics::KEEPEND_LEVEL;
             if had_extend != 0 && keepend_level >= 0 {
                 nvim_syn_update_ends(0);
                 if nvim_syn_is_current_state_empty() != 0 {
@@ -516,7 +520,7 @@ pub unsafe fn check_state_ends() {
                 crate::region::update_si_end(new_cur, current_col, true);
                 check_keepend();
                 if (next_flags & HL_HAS_EOL != 0)
-                    && nvim_syn_get_keepend_level() < 0
+                    && crate::statics::KEEPEND_LEVEL < 0
                     && nvim_syn_getcurline_byte_at(current_col) == NUL
                 {
                     break;

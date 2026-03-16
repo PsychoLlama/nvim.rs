@@ -27,10 +27,6 @@ extern "C" {
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
 
     // Phase 32.4: Line highlighting
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_set_current_col(col: c_int);
-    fn nvim_syn_is_current_finished() -> c_int;
-    fn nvim_syn_is_current_state_stored() -> c_int;
     fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
     fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
     fn nvim_syn_is_current_state_valid() -> c_int;
@@ -46,10 +42,6 @@ extern "C" {
     fn nvim_synblock_has_sst_array(block: SynBlockHandle) -> c_int;
     fn nvim_syn_get_syn_block() -> SynBlockHandle;
     fn nvim_syn_get_buf() -> crate::types::BufHandle;
-    fn nvim_syn_set_current_id(id: c_int);
-    fn nvim_syn_set_current_trans_id(id: c_int);
-    fn nvim_syn_set_current_flags(flags: c_int);
-    fn nvim_syn_set_current_seqnr(seqnr: c_int);
 
     fn rs_syn_current_attr_impl(
         syncing: c_int,
@@ -446,10 +438,10 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     let synmaxcol = nvim_buf_get_synmaxcol(buf);
     if synmaxcol > 0 && col >= synmaxcol {
         crate::state_ops::rs_syn_clear_current_state();
-        nvim_syn_set_current_id(0);
-        nvim_syn_set_current_trans_id(0);
-        nvim_syn_set_current_flags(0);
-        nvim_syn_set_current_seqnr(0);
+        crate::statics::CURRENT_ID = 0;
+        crate::statics::CURRENT_TRANS_ID = 0;
+        crate::statics::CURRENT_FLAGS = 0;
+        crate::statics::CURRENT_SEQNR = 0;
         return SyntaxAttrResult { attr: 0, can_spell };
     }
 
@@ -461,7 +453,7 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
     // Skip from the current column to "col", get the attributes for "col".
     let mut attr = 0;
     let mut spell_result: c_int = if can_spell { 1 } else { 0 };
-    let mut current_col = nvim_syn_get_current_col();
+    let mut current_col = crate::statics::CURRENT_COL;
     while current_col <= col {
         let ks = if current_col == col {
             keep_state
@@ -469,9 +461,9 @@ unsafe fn get_syntax_attr_impl(col: c_int, keep_state: bool) -> SyntaxAttrResult
             false
         };
         attr = rs_syn_current_attr_impl(0, 1, &mut spell_result, if ks { 1 } else { 0 });
-        current_col = nvim_syn_get_current_col();
-        nvim_syn_set_current_col(current_col + 1);
-        current_col = nvim_syn_get_current_col();
+        current_col = crate::statics::CURRENT_COL;
+        crate::statics::CURRENT_COL = current_col + 1;
+        current_col = crate::statics::CURRENT_COL;
     }
 
     SyntaxAttrResult {
@@ -492,24 +484,24 @@ pub unsafe fn get_syntax_attr_simple(col: i32, keep_state: bool) -> i32 {
 /// Get the current column being processed.
 #[must_use]
 pub fn current_col() -> i32 {
-    unsafe { nvim_syn_get_current_col() }
+    unsafe { crate::statics::CURRENT_COL }
 }
 
 /// Set the current column for processing.
 pub fn set_current_col(col: i32) {
-    unsafe { nvim_syn_set_current_col(col) }
+    unsafe { crate::statics::CURRENT_COL = col }
 }
 
 /// Check if the current line processing is finished.
 #[must_use]
 pub fn current_finished() -> bool {
-    unsafe { nvim_syn_is_current_finished() != 0 }
+    unsafe { crate::statics::CURRENT_FINISHED != 0 }
 }
 
 /// Check if the current state has been stored.
 #[must_use]
 pub fn current_state_stored() -> bool {
-    unsafe { nvim_syn_is_current_state_stored() != 0 }
+    unsafe { crate::statics::CURRENT_STATE_STORED != 0 }
 }
 
 /// Spell checking mode constants.

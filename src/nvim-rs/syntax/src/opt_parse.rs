@@ -45,7 +45,6 @@ extern "C" {
 
     // Syntax functions
     fn nvim_syn_get_b_syn_conceal() -> c_int;
-    fn nvim_syn_get_current_inc_tag() -> c_int;
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
     fn nvim_syn_name2id_wrapper(name: *const c_char) -> c_int;
     fn nvim_syn_check_group_wrapper(name: *const c_char, len: c_int) -> c_int;
@@ -484,7 +483,7 @@ pub unsafe fn get_id_list_impl(
             } else {
                 id = SYNID_CONTAINED;
             }
-            id += nvim_syn_get_current_inc_tag();
+            id += crate::statics::CURRENT_SYN_INC_TAG;
         } else if *name_str as u8 == b'@' {
             // Cluster reference
             if skip != 0 {

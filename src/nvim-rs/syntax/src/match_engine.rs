@@ -15,32 +15,9 @@ use crate::types::{ExtMatchHandle, IdListHandle, StateItemHandle};
 // =============================================================================
 
 extern "C" {
-    // Current position accessors
-    fn nvim_syn_get_current_lnum() -> c_int;
-    fn nvim_syn_get_current_col() -> c_int;
-    fn nvim_syn_set_current_lnum(lnum: c_int);
-
-    // Current state status
-    fn nvim_syn_is_current_finished() -> c_int;
-    fn nvim_syn_is_current_state_stored() -> c_int;
+    // Current state status (non-static ones remain)
     fn nvim_syn_is_current_state_valid() -> c_int;
     fn nvim_syn_is_current_state_empty() -> c_int;
-    fn nvim_syn_set_current_finished(finished: c_int);
-
-    // Current match attributes
-    fn nvim_syn_get_current_id() -> c_int;
-    fn nvim_syn_get_current_trans_id() -> c_int;
-    fn nvim_syn_get_current_attr() -> c_int;
-    fn nvim_syn_get_current_flags() -> c_int;
-    fn nvim_syn_get_current_seqnr() -> c_int;
-    fn nvim_syn_get_current_sub_char() -> c_int;
-    fn nvim_syn_get_current_next_flags() -> c_int;
-
-    // Current match setters
-    fn nvim_syn_set_current_id(id: c_int);
-    fn nvim_syn_set_current_trans_id(id: c_int);
-    fn nvim_syn_set_current_flags(flags: c_int);
-    fn nvim_syn_set_current_seqnr(seqnr: c_int);
 
     // Current state management
     fn nvim_syn_get_current_state_len() -> c_int;
@@ -55,7 +32,6 @@ extern "C" {
     fn nvim_syn_get_current_next_list() -> IdListHandle;
     fn nvim_syn_has_current_next_list() -> c_int;
     fn nvim_syn_set_current_next_list(list: IdListHandle);
-    fn nvim_syn_set_current_next_flags(flags: c_int);
 
     // Next match accessors
     fn nvim_syn_get_next_match_idx() -> c_int;
@@ -98,10 +74,6 @@ extern "C" {
     fn nvim_syn_check_state_ends();
     fn nvim_syn_line_breakcheck();
 
-    // Line ID tracking
-    fn nvim_syn_get_current_line_id() -> c_int;
-    fn nvim_syn_incr_current_line_id();
-
     // Extmatch management
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
@@ -117,13 +89,13 @@ extern "C" {
 /// Get the current line number being processed.
 #[must_use]
 pub fn current_lnum() -> i32 {
-    unsafe { nvim_syn_get_current_lnum() }
+    unsafe { crate::statics::CURRENT_LNUM }
 }
 
 /// Get the current column being processed.
 #[must_use]
 pub fn current_col() -> i32 {
-    unsafe { nvim_syn_get_current_col() }
+    unsafe { crate::statics::CURRENT_COL }
 }
 
 /// Get the current position (lnum, col).
@@ -140,7 +112,7 @@ pub fn current_pos() -> Position {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_lnum(lnum: i32) {
-    nvim_syn_set_current_lnum(lnum);
+    crate::statics::CURRENT_LNUM = lnum;
 }
 
 // =============================================================================
@@ -150,13 +122,13 @@ pub unsafe fn set_current_lnum(lnum: i32) {
 /// Check if the current line processing is finished.
 #[must_use]
 pub fn is_current_finished() -> bool {
-    unsafe { nvim_syn_is_current_finished() != 0 }
+    unsafe { crate::statics::CURRENT_FINISHED != 0 }
 }
 
 /// Check if the current state has been stored.
 #[must_use]
 pub fn is_current_state_stored() -> bool {
-    unsafe { nvim_syn_is_current_state_stored() != 0 }
+    unsafe { crate::statics::CURRENT_STATE_STORED != 0 }
 }
 
 /// Check if the current state is valid.
@@ -176,7 +148,7 @@ pub fn is_current_state_empty() -> bool {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_finished(finished: bool) {
-    nvim_syn_set_current_finished(if finished { 1 } else { 0 });
+    crate::statics::CURRENT_FINISHED = if finished { 1 } else { 0 };
 }
 
 // =============================================================================
@@ -186,43 +158,43 @@ pub unsafe fn set_current_finished(finished: bool) {
 /// Get the current syntax ID.
 #[must_use]
 pub fn current_id() -> i32 {
-    unsafe { nvim_syn_get_current_id() }
+    unsafe { crate::statics::CURRENT_ID }
 }
 
 /// Get the current transparent ID.
 #[must_use]
 pub fn current_trans_id() -> i32 {
-    unsafe { nvim_syn_get_current_trans_id() }
+    unsafe { crate::statics::CURRENT_TRANS_ID }
 }
 
 /// Get the current attribute.
 #[must_use]
 pub fn current_attr() -> i32 {
-    unsafe { nvim_syn_get_current_attr() }
+    unsafe { crate::statics::CURRENT_ATTR }
 }
 
 /// Get the current flags.
 #[must_use]
 pub fn current_flags() -> i32 {
-    unsafe { nvim_syn_get_current_flags() }
+    unsafe { crate::statics::CURRENT_FLAGS }
 }
 
 /// Get the current sequence number.
 #[must_use]
 pub fn current_seqnr() -> i32 {
-    unsafe { nvim_syn_get_current_seqnr() }
+    unsafe { crate::statics::CURRENT_SEQNR }
 }
 
 /// Get the current substitute character (for conceal).
 #[must_use]
 pub fn current_sub_char() -> i32 {
-    unsafe { nvim_syn_get_current_sub_char() }
+    unsafe { crate::statics::CURRENT_SUB_CHAR }
 }
 
 /// Get the current next flags.
 #[must_use]
 pub fn current_next_flags() -> i32 {
-    unsafe { nvim_syn_get_current_next_flags() }
+    unsafe { crate::statics::CURRENT_NEXT_FLAGS }
 }
 
 // =============================================================================
@@ -234,7 +206,7 @@ pub fn current_next_flags() -> i32 {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_id(id: i32) {
-    nvim_syn_set_current_id(id);
+    crate::statics::CURRENT_ID = id;
 }
 
 /// Set the current transparent ID.
@@ -242,7 +214,7 @@ pub unsafe fn set_current_id(id: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_trans_id(id: i32) {
-    nvim_syn_set_current_trans_id(id);
+    crate::statics::CURRENT_TRANS_ID = id;
 }
 
 /// Set the current flags.
@@ -250,7 +222,7 @@ pub unsafe fn set_current_trans_id(id: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_flags(flags: i32) {
-    nvim_syn_set_current_flags(flags);
+    crate::statics::CURRENT_FLAGS = flags;
 }
 
 /// Set the current sequence number.
@@ -258,7 +230,7 @@ pub unsafe fn set_current_flags(flags: i32) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_seqnr(seqnr: i32) {
-    nvim_syn_set_current_seqnr(seqnr);
+    crate::statics::CURRENT_SEQNR = seqnr;
 }
 
 // =============================================================================
@@ -356,7 +328,7 @@ pub unsafe fn set_current_next_list(list: IdListHandle) {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn set_current_next_flags(flags: i32) {
-    nvim_syn_set_current_next_flags(flags);
+    crate::statics::CURRENT_NEXT_FLAGS = flags;
 }
 
 /// Set the current next list pointer.
@@ -643,7 +615,7 @@ pub unsafe fn line_breakcheck() {
 /// Get the current line ID.
 #[must_use]
 pub fn current_line_id() -> i32 {
-    unsafe { nvim_syn_get_current_line_id() }
+    unsafe { crate::statics::CURRENT_LINE_ID }
 }
 
 /// Increment the current line ID.
@@ -651,7 +623,7 @@ pub fn current_line_id() -> i32 {
 /// # Safety
 /// This modifies global state.
 pub unsafe fn incr_current_line_id() {
-    nvim_syn_incr_current_line_id();
+    crate::statics::CURRENT_LINE_ID += 1;
 }
 
 // =============================================================================

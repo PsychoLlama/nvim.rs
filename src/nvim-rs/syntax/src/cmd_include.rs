@@ -21,15 +21,8 @@ extern "C" {
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
 
     // State management
-    fn nvim_syn_get_current_inc_tag() -> c_int;
-    fn nvim_syn_set_current_inc_tag(tag: c_int);
-    fn nvim_syn_get_running_inc_tag() -> c_int;
     fn nvim_syn_get_topgrp() -> c_int;
     fn nvim_syn_set_topgrp(topgrp: c_int);
-
-    /// Atomically increment running_syn_inc_tag and assign to current_syn_inc_tag.
-    /// Returns the new current_syn_inc_tag value.
-    fn nvim_syn_increment_and_set_inc_tag() -> c_int;
 
     // File sourcing compound accessors
     /// Prepare the include: sets EX_XFILE|EX_NOSPC, calls separate_nextcmd,
@@ -91,14 +84,18 @@ unsafe fn syn_cmd_include_impl(eap: *mut c_void, _syncing: c_int) {
     }
 
     // Check include tag overflow
-    if nvim_syn_get_running_inc_tag() >= MAX_SYN_INC_TAG {
+    if crate::statics::RUNNING_SYN_INC_TAG >= MAX_SYN_INC_TAG {
         emsg(EMSG_E847.as_ptr().cast());
         return;
     }
 
     // Save/restore inc_tag and topgrp around the actual file load
-    let prev_syn_inc_tag = nvim_syn_get_current_inc_tag();
-    nvim_syn_increment_and_set_inc_tag();
+    let prev_syn_inc_tag = crate::statics::CURRENT_SYN_INC_TAG;
+    {
+        crate::statics::RUNNING_SYN_INC_TAG += 1;
+        crate::statics::CURRENT_SYN_INC_TAG = crate::statics::RUNNING_SYN_INC_TAG;
+        crate::statics::CURRENT_SYN_INC_TAG
+    };
 
     let prev_toplvl_grp = nvim_syn_get_topgrp();
     nvim_syn_set_topgrp(sgl_id);
@@ -109,7 +106,7 @@ unsafe fn syn_cmd_include_impl(eap: *mut c_void, _syncing: c_int) {
     }
 
     nvim_syn_set_topgrp(prev_toplvl_grp);
-    nvim_syn_set_current_inc_tag(prev_syn_inc_tag);
+    crate::statics::CURRENT_SYN_INC_TAG = prev_syn_inc_tag;
 }
 
 /// Entry point called from C thin wrapper.

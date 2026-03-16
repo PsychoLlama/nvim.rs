@@ -59,7 +59,6 @@ extern "C" {
     fn nvim_syn_invalidate_current_state();
 
     /// Reset running_syn_inc_tag to 0.
-    fn nvim_syn_reset_inc_tag();
 
     /// Release ownsyntax block: clear it, free it, reset to buf's b_s.
     fn nvim_win_release_synblock(wp: WinHandle);
@@ -104,9 +103,6 @@ extern "C" {
 
     /// Set current_next_list.
     fn nvim_syn_set_current_next_list(list: *mut i16);
-
-    /// Set keepend_level.
-    fn nvim_syn_set_keepend_level(level: c_int);
 }
 
 // SPTYPE_START = 2 (must match C define)
@@ -314,7 +310,7 @@ pub unsafe extern "C" fn rs_invalidate_current_state() {
     crate::state_ops::rs_syn_clear_current_state();
     nvim_syn_set_current_state_invalid();
     nvim_syn_set_current_next_list(std::ptr::null_mut());
-    nvim_syn_set_keepend_level(-1);
+    crate::statics::KEEPEND_LEVEL = -1;
 }
 
 // =============================================================================
@@ -353,7 +349,7 @@ pub unsafe extern "C" fn rs_syntax_clear(block: SynBlockHandle) {
     nvim_syn_invalidate_current_state();
 
     // Reset the counter for ":syn include"
-    nvim_syn_reset_inc_tag();
+    crate::statics::RUNNING_SYN_INC_TAG = 0;
 }
 
 /// Get rid of ownsyntax for window wp.

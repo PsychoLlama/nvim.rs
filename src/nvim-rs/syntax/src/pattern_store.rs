@@ -38,7 +38,6 @@ extern "C" {
     fn nvim_synblock_ga_append_pattern() -> SynPatHandle;
 
     // Current inc tag
-    fn nvim_syn_get_current_inc_tag() -> c_int;
 
     // Redraw + cache invalidation
     fn nvim_syn_redraw_curbuf_later();
@@ -162,7 +161,7 @@ pub unsafe fn store_match_pattern(
         (*p).sp_syncing = syncing != 0;
         (*p).sp_type = SPTYPE_MATCH as i8;
         (*p).sp_syn.id = syn_id as i16;
-        (*p).sp_syn.inc_tag = nvim_syn_get_current_inc_tag();
+        (*p).sp_syn.inc_tag = crate::statics::CURRENT_SYN_INC_TAG;
         (*p).sp_flags = flags;
         (*p).sp_sync_idx = sync_idx;
         (*p).sp_cont_list = cont_list;
@@ -213,7 +212,7 @@ pub unsafe fn store_region_patterns(
     next_list: *mut i16,
     syncing: c_int,
 ) -> c_int {
-    let inc_tag = nvim_syn_get_current_inc_tag();
+    let inc_tag = crate::statics::CURRENT_SYN_INC_TAG;
 
     for &(pat, matchgroup_id, item_type) in pats {
         let spp = nvim_synblock_ga_append_pattern();

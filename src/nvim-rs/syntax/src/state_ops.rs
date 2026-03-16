@@ -40,8 +40,6 @@ extern "C" {
     fn nvim_syn_set_next_match_idx(idx: c_int);
 
     // keepend_level
-    fn nvim_syn_get_keepend_level() -> c_int;
-    fn nvim_syn_set_keepend_level(level: c_int);
 
     // Stateitem append helper (GA_APPEND_VIA_PTR + CLEAR_POINTER)
     fn nvim_syn_append_new_stateitem() -> StateItemHandle;
@@ -86,9 +84,9 @@ pub unsafe extern "C" fn rs_syn_pop_current_state() {
     // After end of a pattern, try matching a keyword or pattern next time
     nvim_syn_set_next_match_idx(-1);
     // If first state with "keepend" is popped, reset keepend_level
-    let keepend = nvim_syn_get_keepend_level();
+    let keepend = crate::statics::KEEPEND_LEVEL;
     if keepend >= len - 1 {
-        nvim_syn_set_keepend_level(-1);
+        crate::statics::KEEPEND_LEVEL = -1;
     }
 }
 
