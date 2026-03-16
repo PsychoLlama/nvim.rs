@@ -438,6 +438,8 @@ extern int rs_tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *roo
                             int region, int affixID);
 extern int rs_store_word(spellinfo_T *spin, const char *word, int flags, int region,
                          const char *pfxlist, bool need_affix);
+#define store_word rs_store_word
+#define tree_add_word rs_tree_add_word
 
 // Phase 1: Pure affix utility functions migrated to Rust.
 extern bool rs_is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
@@ -3258,30 +3260,8 @@ static bool valid_spell_word(const char *word, const char *end)
   return true;
 }
 
-/// Store a word in the tree(s).
-/// Always store it in the case-folded tree.  For a keep-case word this is
-/// useful when the word can also be used with all caps (no WF_FIXCAP flag) and
-/// used to find suggestions.
-/// For a keep-case word also store it in the keep-case tree.
-/// When "pfxlist" is not NULL store the word for each postponed prefix ID and
-/// compound flag.
-///
-/// @param flags  extra flags, wf_banned
-/// @param region  supported region(s)
-/// @param pfxlist  list of prefix ids or null
-/// @param need_affix  only store word with affix id
-static int store_word(spellinfo_T *spin, char *word, int flags, int region, const char *pfxlist,
-                      bool need_affix)
-{
-  return rs_store_word(spin, word, flags, region, pfxlist, need_affix);
-}
-
-// Thin wrapper: delegates to Rust rs_tree_add_word.
-static int tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, int flags,
-                         int region, int affixID)
-{
-  return rs_tree_add_word(spin, word, root, flags, region, affixID);
-}
+// store_word and tree_add_word are provided by Rust (rs_store_word,
+// rs_tree_add_word) and mapped via #define above.
 
 
 // Get a wordnode_T, either from the list of previously freed nodes or
