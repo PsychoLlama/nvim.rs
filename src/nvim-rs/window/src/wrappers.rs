@@ -11,7 +11,7 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::WinHandle;
+use crate::{win_struct::win_ref, BufHandle, WinHandle};
 
 // =============================================================================
 // Underlying C functions (actual implementations, not wrappers)
@@ -345,4 +345,100 @@ pub unsafe extern "C" fn wrap_ui_call_win_close_win(wp: WinHandle) {
 
 extern "C" {
     fn ui_call_win_close(handle: c_int);
+}
+
+// =============================================================================
+// Phase 9: Buffer-via-window accessors (using WinStruct direct access + C APIs)
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn buf_is_empty(buf: BufHandle) -> bool;
+    fn nvim_buf_meta_total(buf: BufHandle, kind: c_int) -> c_int;
+    fn is_aucmd_win(wp: WinHandle) -> c_int;
+}
+
+// kMTMetaInline=0, kMTMetaLines=1, kMTMetaSignHL=2, kMTMetaSignText=3 (from marktree_defs.h)
+const K_MT_META_SIGN_TEXT: c_int = 3;
+const K_MT_META_LINES: c_int = 1;
+
+/// W_ENDROW(wp) = wp->w_winrow + wp->w_height
+#[must_use]
+#[allow(clippy::missing_const_for_fn)]
+#[export_name = "nvim_win_get_endrow"]
+pub unsafe extern "C" fn wrap_win_get_endrow(wp: WinHandle) -> c_int {
+    let ws = win_ref(wp);
+    ws.w_winrow + ws.w_height
+}
+
+/// W_ENDCOL(wp) = wp->w_wincol + wp->w_width
+#[must_use]
+#[allow(clippy::missing_const_for_fn)]
+#[export_name = "nvim_win_get_endcol"]
+pub unsafe extern "C" fn wrap_win_get_endcol(wp: WinHandle) -> c_int {
+    let ws = win_ref(wp);
+    ws.w_wincol + ws.w_width
+}
+
+// nvim_win_hl_attr: kept in C (win_hl_attr is static inline; can't link directly from Rust)
+
+/// wp->w_buffer == buf comparison.
+#[must_use]
+#[export_name = "nvim_win_buffer_eq"]
+pub unsafe extern "C" fn wrap_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let win_buf = nvim_win_get_buffer(wp);
+    c_int::from(win_buf == buf)
+}
+
+/// buf_is_empty(wp->w_buffer) wrapper.
+#[must_use]
+#[export_name = "nvim_win_buf_is_empty"]
+pub unsafe extern "C" fn wrap_win_buf_is_empty(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 1;
+    }
+    let buf = nvim_win_get_buffer(wp);
+    if buf.is_null() {
+        return 1;
+    }
+    c_int::from(buf_is_empty(buf))
+}
+
+/// wp->w_buffer == curbuf comparison.
+#[must_use]
+#[export_name = "nvim_win_buf_is_curbuf"]
+pub unsafe extern "C" fn wrap_win_buf_is_curbuf(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let buf = nvim_win_get_buffer(wp);
+    let curbuf = nvim_get_curbuf();
+    c_int::from(buf == curbuf)
+}
+
+/// buf_meta_total(wp->w_buffer, kMTMetaSignText) > 0.
+#[must_use]
+#[export_name = "nvim_win_buf_meta_total_signtext"]
+pub unsafe extern "C" fn wrap_win_buf_meta_total_signtext(wp: WinHandle) -> c_int {
+    let buf = nvim_win_get_buffer(wp);
+    c_int::from(nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) > 0)
+}
+
+/// buf_meta_total(wp->w_buffer, kMTMetaLines) > 0.
+#[must_use]
+#[export_name = "nvim_win_buf_meta_total_lines"]
+pub unsafe extern "C" fn wrap_win_buf_meta_total_lines(wp: WinHandle) -> c_int {
+    let buf = nvim_win_get_buffer(wp);
+    c_int::from(nvim_buf_meta_total(buf, K_MT_META_LINES) > 0)
+}
+
+/// is_aucmd_win(wp) wrapper.
+#[must_use]
+#[export_name = "nvim_is_aucmd_win"]
+pub unsafe extern "C" fn wrap_is_aucmd_win(wp: WinHandle) -> c_int {
+    c_int::from(is_aucmd_win(wp) != 0)
 }

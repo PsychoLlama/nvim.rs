@@ -206,14 +206,14 @@ int nvim_win_is_curwin(win_T *wp) { return wp == curwin; }
 char *nvim_win_get_p_stc(win_T *wp) { return wp->w_p_stc; }
 char *nvim_win_get_p_cocu(win_T *wp) { return wp->w_p_cocu; }
 linenr_T nvim_win_buf_line_count(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
-int nvim_win_buf_meta_total_signtext(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaSignText) > 0; }
+// nvim_win_buf_meta_total_signtext: migrated to Rust wrappers.rs (Phase 9)
 void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
 // nvim_redraw_all_later: migrated to Rust wrappers.rs (Phase 8)
 int nvim_get_real_state(void) { return get_real_state(); }
-int nvim_win_buf_meta_total_lines(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0; }
+// nvim_win_buf_meta_total_lines: migrated to Rust wrappers.rs (Phase 9)
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
 char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 // Colorcolumn accessors
@@ -224,8 +224,8 @@ int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
 void nvim_win_free_p_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); wp->w_p_cc_cols = NULL; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
-int nvim_win_get_endrow(win_T *wp) { return W_ENDROW(wp); }
-int nvim_win_get_endcol(win_T *wp) { return W_ENDCOL(wp); }
+// nvim_win_get_endrow: migrated to Rust wrappers.rs (Phase 9)
+// nvim_win_get_endcol: migrated to Rust wrappers.rs (Phase 9)
 int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
 int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
 
@@ -824,12 +824,12 @@ void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 
 // check_colorcolumn: exported directly from Rust (Phase 15)
 
-int nvim_win_buffer_eq(win_T *wp, buf_T *buf) { return (wp && wp->w_buffer == buf) ? 1 : 0; }
+// nvim_win_buffer_eq: migrated to Rust wrappers.rs (Phase 9)
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
 int nvim_win_get_scbind_pos(win_T *wp) { return wp ? wp->w_scbind_pos : 0; }
-int nvim_win_buf_is_empty(win_T *wp) { return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1; }
+// nvim_win_buf_is_empty: migrated to Rust wrappers.rs (Phase 9)
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
 
 // Accessors for rs_win_set_inner_size (Phase 4)
@@ -864,7 +864,7 @@ void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
 
 // nvim_curbuf_line_count() — already defined in move.c
 
-int nvim_win_buf_is_curbuf(win_T *wp) { return wp && wp->w_buffer == curbuf; }
+// nvim_win_buf_is_curbuf: migrated to Rust wrappers.rs (Phase 9)
 
 /// Check if w_save_cursor.w_cursor_corr equals w_cursor (via equalpos).
 
@@ -928,7 +928,7 @@ void nvim_merge_win_config_init(win_T *wp)
 // nvim_redraw_later_wrapper: migrated to Rust wrappers.rs (Phase 8)
 // nvim_status_redraw_all_wrapper: migrated to Rust wrappers.rs (Phase 8)
 // nvim_msg_clr_eos_force: migrated to Rust wrappers.rs (Phase 8)
-int nvim_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp) ? 1 : 0; }
+// nvim_is_aucmd_win: migrated to Rust wrappers.rs (Phase 9)
 // nvim_win_get_config_external_int: migrated to Rust win_struct.rs (Phase 7)
 
 // nvim_fixup_external_curwin deleted: logic migrated to Rust win_close.rs (Phase 8)
