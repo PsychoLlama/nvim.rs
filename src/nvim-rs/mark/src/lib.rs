@@ -38,6 +38,9 @@ extern "C" {
     // first_tabpage and curtab use TabHandle (defined below, forward reference)
     // namedfm: array of 36 XfmarkT entries (NGLOBALMARKS = 36)
     // Declared after XfmarkT is defined
+
+    // Screen dimensions
+    static mut Columns: c_int;
 }
 
 // os_time() Timestamp function (Phase 2)
@@ -52,6 +55,10 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn ml_get(lnum: LinenrT) -> *const c_char;
+    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+    fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
     fn ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
     fn ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
@@ -168,7 +175,6 @@ extern "C" {
     fn nvim_mark_win_tagstack_clear_entry(win: WinHandle, idx: c_int);
     fn nvim_mark_win_tagstack_remove(win: WinHandle, from_idx: c_int, len: c_int);
     fn nvim_mark_buflist_nr2name(fnum: c_int, listed: c_int, unstripped: c_int) -> *mut c_char;
-    fn nvim_mark_mark_line(pos: *mut PosT, lead_len: c_int) -> *mut c_char;
 
     // Phase 5: Mark adjustment accessors
     fn nvim_mark_buf_get_visual_start_ptr(buf: BufHandle) -> *mut PosT;
@@ -4731,7 +4737,7 @@ pub unsafe extern "C" fn rs_fm_getname(
     curbuf_ptr: BufHandle,
 ) -> *mut c_char {
     if (*fmark).fnum == nvim_buf_get_fnum(curbuf_ptr) {
-        return nvim_mark_mark_line(&raw mut (*fmark).mark, lead_len);
+        return rs_mark_line(&raw mut (*fmark).mark, lead_len);
     }
     nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
 }
@@ -5271,4 +5277,41 @@ pub unsafe extern "C" fn exported_setmark(c: c_int) -> c_int {
     let cursor_ptr = nvim_mark_win_get_cursor_ptr(g_curwin);
     let fnum = nvim_buf_get_fnum(g_curbuf);
     rs_setmark_pos(c, cursor_ptr, fnum, &view)
+}
+
+/// Return the line text at mark position `mp`, truncated to fit in the window.
+/// The returned string is heap-allocated and must be freed by the caller.
+/// Replaces the static C `mark_line()` function in mark.c.
+///
+/// # Safety
+/// `mp` must be a valid pointer. `g_curbuf` must be valid.
+#[export_name = "mark_line"]
+pub unsafe extern "C" fn rs_mark_line(mp: *mut PosT, lead_len: c_int) -> *mut c_char {
+    const INVALID: &[u8] = b"-invalid-\0";
+    let lnum = (*mp).lnum;
+    let line_count = nvim_buf_get_ml_line_count(g_curbuf);
+    if lnum == 0 || lnum > line_count {
+        return xstrdup(INVALID.as_ptr() as *const c_char);
+    }
+    let columns = Columns;
+    assert!(columns >= 0);
+    // Get the line and skip leading whitespace
+    let raw_line = ml_get(lnum);
+    let ws_skipped = nvim_skipwhite(raw_line);
+    // Allow up to 5 bytes per character
+    let save_len = (columns as usize) * 5;
+    let s = nvim_xstrnsave(ws_skipped, save_len);
+
+    // Truncate to fit in the window
+    let mut p = s;
+    let mut len: c_int = 0;
+    while *p != 0 {
+        len += ptr2cells(p);
+        if len >= columns - lead_len {
+            break;
+        }
+        p = p.offset(nvim_utfc_ptr2len(p) as isize);
+    }
+    *p = 0;
+    s
 }

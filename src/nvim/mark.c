@@ -292,31 +292,9 @@ static void fname2fnum(xfmark_T *fm)
 extern void fmarks_check_names(buf_T *buf);
 
 
-/// Return the line at mark "mp".  Truncate to fit in window.
-/// The returned string has been allocated.
-static char *mark_line(pos_T *mp, int lead_len)
-  FUNC_ATTR_NONNULL_RET
-{
-  char *p;
-
-  if (mp->lnum == 0 || mp->lnum > curbuf->b_ml.ml_line_count) {
-    return xstrdup("-invalid-");
-  }
-  assert(Columns >= 0);
-  // Allow for up to 5 bytes per character.
-  char *s = xstrnsave(skipwhite(ml_get(mp->lnum)), (size_t)Columns * 5);
-
-  // Truncate the line to fit it in the window
-  int len = 0;
-  for (p = s; *p != NUL; MB_PTR_ADV(p)) {
-    len += ptr2cells(p);
-    if (len >= Columns - lead_len) {
-      break;
-    }
-  }
-  *p = NUL;
-  return s;
-}
+// mark_line() is now implemented in Rust (mark/src/lib.rs, rs_mark_line).
+// The Rust implementation exports as "mark_line" via #[export_name].
+extern char *mark_line(pos_T *mp, int lead_len);
 
 // print the marks
 void ex_marks(exarg_T *eap)
@@ -733,4 +711,3 @@ void nvim_mark_fname2fnum(xfmark_T *xfm) { fname2fnum(xfm); }
 char *nvim_mark_buflist_nr2name(int fnum, int listed, int unstripped) {
   return buflist_nr2name(fnum, listed, unstripped);
 }
-char *nvim_mark_mark_line(pos_T *pos, int lead_len) { return mark_line(pos, lead_len); }
