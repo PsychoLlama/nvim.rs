@@ -479,12 +479,7 @@ extern "C" {
         anchor_col: c_int,
     );
     fn nvim_pum_ui_has_multigrid() -> c_int;
-    fn nvim_pum_grid_line_puts(
-        col: c_int,
-        text: *const c_char,
-        textlen: c_int,
-        attr: c_int,
-    ) -> c_int;
+    fn grid_line_puts(col: c_int, text: *const c_char, textlen: c_int, attr: c_int) -> c_int;
 
     // State accessors
     fn nvim_set_must_redraw_pum(val: c_int);
@@ -493,16 +488,16 @@ extern "C" {
     fn nvim_pum_curwin_end_col() -> c_int;
     fn nvim_pum_fcs_trunc(is_rl: c_int) -> ScharT;
     fn nvim_pum_schar_from_ascii(c: c_char) -> ScharT;
-    fn nvim_pum_transstr(s: *const c_char) -> *mut c_char;
-    fn nvim_pum_reverse_text(s: *mut c_char) -> *mut c_char;
-    fn nvim_pum_mb_string2cells(s: *const c_char) -> c_int;
-    fn nvim_pum_ptr2cells(p: *const c_char) -> c_int;
-    fn nvim_pum_mb_ptr_adv(p: *const c_char) -> c_int;
-    fn nvim_pum_xfree(ptr: *mut c_void);
+    fn transstr(s: *const c_char, untab: bool) -> *mut c_char;
+    fn reverse_text(s: *mut c_char) -> *mut c_char;
+    fn mb_string2cells(s: *const c_char) -> usize;
+    fn ptr2cells(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn xfree(ptr: *mut c_void);
 
     // Highlight operations
     fn nvim_win_hl_attr(wp: *mut crate::display::WinHandle, hlf: c_int) -> c_int;
-    fn nvim_pum_hl_combine_attr(a: c_int, b: c_int) -> c_int;
+    fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
 
     // Linebuf operations
     fn nvim_pum_set_linebuf_char(col: c_int, sc: ScharT);
@@ -725,7 +720,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
             nvim_win_hl_attr(curwin, if selected { hlf::HLF_PSI } else { hlf::HLF_PNI });
         let mut hlf = hlfs[0]; // start with "word" highlight
         let mut attr = nvim_win_hl_attr(curwin, hlf);
-        attr = nvim_pum_hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
+        attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
 
         nvim_pum_screengrid_line_start(row, 0);
 
@@ -733,9 +728,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         if extra_space {
             let space = b" \0";
             if pum_rl {
-                nvim_pum_grid_line_puts(col_off + 1, space.as_ptr().cast(), 1, attr);
+                grid_line_puts(col_off + 1, space.as_ptr().cast(), 1, attr);
             } else {
-                nvim_pum_grid_line_puts(col_off - 1, space.as_ptr().cast(), 1, attr);
+                grid_line_puts(col_off - 1, space.as_ptr().cast(), 1, attr);
             }
         }
 
@@ -760,7 +755,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
             let item_type = order[j];
             hlf = hlfs[item_type as usize];
             attr = nvim_win_hl_attr(curwin, hlf);
-            attr = nvim_pum_hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
+            attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
             orig_attr = attr;
             if item_type < 2 {
                 // try combine attr with user custom
@@ -778,10 +773,10 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     if s.is_null() {
                         s = p;
                     }
-                    let w = nvim_pum_ptr2cells(p);
+                    let w = ptr2cells(p);
                     if *p as u8 != NUL && *p as u8 != TAB && totwidth + w <= pum_width {
                         width += w;
-                        let adv = nvim_pum_mb_ptr_adv(p);
+                        let adv = utfc_ptr2len(p);
                         p = p.add(adv as usize);
                         continue;
                     }
@@ -791,7 +786,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     if saved as u8 != NUL {
                         *p = 0;
                     }
-                    let st = nvim_pum_transstr(s);
+                    let st = transstr(s, true);
                     if saved as u8 != NUL {
                         *p = saved;
                     }
@@ -805,9 +800,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     };
 
                     if pum_rl {
-                        let rt = nvim_pum_reverse_text(st);
+                        let rt = reverse_text(st);
                         let rt_start = rt;
-                        let cells = nvim_pum_mb_string2cells(rt);
+                        let cells = mb_string2cells(rt) as c_int;
                         let mut rt_cur = rt;
                         let pad = if next_isempty { 0 } else { 2 };
                         if pum_width - totwidth < cells + pad {
@@ -818,9 +813,9 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                         let mut cur_cells = cells;
                         if grid_col - cur_cells < col_off - pum_width {
                             while grid_col - cur_cells < col_off - pum_width {
-                                let c = nvim_pum_ptr2cells(rt_cur);
+                                let c = ptr2cells(rt_cur);
                                 cur_cells -= c;
-                                let adv = nvim_pum_mb_ptr_adv(rt_cur);
+                                let adv = utfc_ptr2len(rt_cur);
                                 rt_cur = rt_cur.add(adv as usize);
                             }
                             if grid_col - cur_cells > col_off - pum_width {
@@ -832,7 +827,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                         }
 
                         if attrs.is_null() {
-                            nvim_pum_grid_line_puts(grid_col - cur_cells + 1, rt_cur, -1, attr);
+                            grid_line_puts(grid_col - cur_cells + 1, rt_cur, -1, attr);
                         } else {
                             rs_pum_grid_puts_with_attrs(
                                 grid_col - cur_cells + 1,
@@ -842,27 +837,27 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                                 attrs,
                             );
                         }
-                        nvim_pum_xfree(rt_start.cast());
-                        nvim_pum_xfree(st.cast());
+                        xfree(rt_start.cast());
+                        xfree(st.cast());
                         grid_col -= width;
                     } else {
-                        let cells = nvim_pum_mb_string2cells(st);
+                        let cells = mb_string2cells(st) as c_int;
                         let pad = if next_isempty { 0 } else { 2 };
                         if pum_width - totwidth < cells + pad {
                             need_fcs_trunc = true;
                         }
 
                         if attrs.is_null() {
-                            nvim_pum_grid_line_puts(grid_col, st, -1, attr);
+                            grid_line_puts(grid_col, st, -1, attr);
                         } else {
                             rs_pum_grid_puts_with_attrs(grid_col, cells, st, -1, attrs);
                         }
-                        nvim_pum_xfree(st.cast());
+                        xfree(st.cast());
                         grid_col += width;
                     }
 
                     if !attrs.is_null() {
-                        nvim_pum_xfree(attrs.cast());
+                        xfree(attrs.cast());
                     }
 
                     if *p as u8 != TAB {
@@ -872,17 +867,17 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     // Display two spaces for a Tab.
                     let two_spaces = b"  \0";
                     if pum_rl {
-                        nvim_pum_grid_line_puts(grid_col - 1, two_spaces.as_ptr().cast(), 2, attr);
+                        grid_line_puts(grid_col - 1, two_spaces.as_ptr().cast(), 2, attr);
                         grid_col -= 2;
                     } else {
-                        nvim_pum_grid_line_puts(grid_col, two_spaces.as_ptr().cast(), 2, attr);
+                        grid_line_puts(grid_col, two_spaces.as_ptr().cast(), 2, attr);
                         grid_col += 2;
                     }
                     totwidth += 2;
                     s = std::ptr::null(); // start text at next char
                     width = 0;
 
-                    let adv = nvim_pum_mb_ptr_adv(p);
+                    let adv = utfc_ptr2len(p);
                     p = p.add(adv as usize);
                 }
             }

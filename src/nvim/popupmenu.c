@@ -275,29 +275,6 @@ uint32_t *nvim_pum_fuzzy_match_positions(const char *text, const char *leader, i
   return positions;
 }
 
-/// Case-insensitive multibyte string comparison.
-int nvim_pum_mb_strnicmp(const char *s1, const char *s2, size_t len)
-{
-  return mb_strnicmp(s1, s2, len);
-}
-
-/// Allocate int array via xmalloc.
-int *nvim_pum_alloc_int_array(int count)
-{
-  return xmalloc(sizeof(int) * (size_t)count);
-}
-
-/// Get display width of string in cells.
-int nvim_pum_vim_strsize(const char *text)
-{
-  return vim_strsize(text);
-}
-
-// Phase 3 accessors: grid rendering
-int nvim_pum_grid_line_puts(int col, const char *text, int textlen, int attr)
-{
-  return grid_line_puts(col, text, textlen, attr);
-}
 
 // Phase 3 accessors: position_at_mouse helpers
 
@@ -538,48 +515,6 @@ schar_T nvim_pum_schar_from_ascii(char c)
   return schar_from_ascii(c);
 }
 
-/// `hl_combine_attr` wrapper.
-int nvim_pum_hl_combine_attr(int a, int b)
-{
-  return hl_combine_attr(a, b);
-}
-
-/// `transstr` wrapper.
-char *nvim_pum_transstr(const char *s)
-{
-  return transstr(s, true);
-}
-
-/// `reverse_text` wrapper.
-char *nvim_pum_reverse_text(char *s)
-{
-  return reverse_text(s);
-}
-
-/// `mb_string2cells` wrapper.
-int nvim_pum_mb_string2cells(const char *s)
-{
-  return (int)mb_string2cells(s);
-}
-
-/// `ptr2cells` wrapper.
-int nvim_pum_ptr2cells(const char *p)
-{
-  return ptr2cells(p);
-}
-
-/// Advance multi-byte pointer. Returns number of bytes advanced.
-int nvim_pum_mb_ptr_adv(const char *p)
-{
-  int len = utfc_ptr2len(p);
-  return len > 0 ? len : 1;
-}
-
-/// `xfree` wrapper.
-void nvim_pum_xfree(void *ptr)
-{
-  xfree(ptr);
-}
 
 /// Set `linebuf_char[col]`.
 void nvim_pum_set_linebuf_char(int col, schar_T sc)

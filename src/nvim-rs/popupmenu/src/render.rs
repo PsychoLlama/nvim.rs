@@ -44,7 +44,7 @@ extern "C" {
     /// Get cell width of a UTF-8 character.
     fn utf_ptr2cells(p: *const u8) -> c_int;
     /// Get byte length of a UTF-8 character sequence.
-    fn utfc_ptr2len(p: *const u8) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
 }
 
 // C globals for render.
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn rs_pum_text_width(text: *const u8, max_bytes: c_int) ->
 
     while *ptr != 0 && (max_bytes < 0 || bytes_read < max_bytes) {
         let char_cells = utf_ptr2cells(ptr);
-        let char_len = utfc_ptr2len(ptr);
+        let char_len = utfc_ptr2len(ptr.cast());
 
         cells += char_cells;
         chars += 1;
@@ -315,18 +315,13 @@ extern "C" {
         out_len: *mut c_int,
     ) -> *mut u32;
     /// Case-insensitive multibyte string comparison.
-    fn nvim_pum_mb_strnicmp(s1: *const c_char, s2: *const c_char, len: c_ulong) -> c_int;
-    /// Allocate int array via xmalloc.
-    fn nvim_pum_alloc_int_array(count: c_int) -> *mut c_int;
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, len: c_ulong) -> c_int;
+    /// Allocate memory via xmalloc.
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
     /// Get display width of string in cells.
-    fn nvim_pum_vim_strsize(text: *const c_char) -> c_int;
+    fn vim_strsize(text: *const c_char) -> c_int;
     /// Display text on popup grid at column with attribute.
-    fn nvim_pum_grid_line_puts(
-        col: c_int,
-        text: *const c_char,
-        textlen: c_int,
-        attr: c_int,
-    ) -> c_int;
+    fn grid_line_puts(col: c_int, text: *const c_char, textlen: c_int, attr: c_int) -> c_int;
     /// Free memory allocated by C.
     fn nvim_xfree(ptr: *mut u8);
     /// Get C strlen.
@@ -363,8 +358,9 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
         return std::ptr::null_mut();
     }
 
-    let text_cells = nvim_pum_vim_strsize(text);
-    let attrs = nvim_pum_alloc_int_array(text_cells);
+    let text_cells = vim_strsize(text);
+    #[allow(clippy::cast_sign_loss)]
+    let attrs = xmalloc(std::mem::size_of::<c_int>() * text_cells as usize).cast::<c_int>();
     let in_fuzzy = nvim_pum_compl_is_fuzzy() != 0;
     let leader_len = strlen(leader) as c_ulong;
     let is_select = hlf_id == hlf::HLF_PSI;
@@ -394,7 +390,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
         if fuzzy_positions.is_null() {
             // Prefix matching
             #[allow(clippy::cast_possible_truncation)]
-            if matched_len < 0 && nvim_pum_mb_strnicmp(ptr.cast(), leader, leader_len) == 0 {
+            if matched_len < 0 && mb_strnicmp(ptr.cast(), leader, leader_len) == 0 {
                 matched_len = leader_len as c_int;
             }
             if matched_len > 0 {
@@ -437,7 +433,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
         }
         cell_idx += char_cells;
 
-        let char_len = utfc_ptr2len(ptr);
+        let char_len = utfc_ptr2len(ptr.cast());
         ptr = ptr.add(char_len as usize);
         char_pos += 1;
     }
@@ -472,14 +468,14 @@ pub unsafe extern "C" fn rs_pum_grid_puts_with_attrs(
     let pum_rl = PUM_STATE.rl != 0;
 
     while *ptr != 0 && (textlen < 0 || (ptr as isize - text as isize) < textlen as isize) {
-        let char_len = utfc_ptr2len(ptr);
+        let char_len = utfc_ptr2len(ptr.cast());
         let attr_idx = if pum_rl {
             col_start + cells - col - 1
         } else {
             col - col_start
         };
         let attr = *attrs.offset(attr_idx as isize);
-        nvim_pum_grid_line_puts(col, ptr.cast(), char_len, attr);
+        grid_line_puts(col, ptr.cast(), char_len, attr);
         col += utf_ptr2cells(ptr);
         ptr = ptr.add(char_len as usize);
     }

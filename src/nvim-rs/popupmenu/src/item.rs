@@ -28,13 +28,13 @@ pub const CPT_MENU: c_int = 2;
 #[repr(C)]
 pub struct PumItemArray {
     /// Main menu text (abbr).
-    pub pum_text: *const c_char,
+    pub pum_text: *mut c_char,
     /// Extra kind text (may be truncated).
-    pub pum_kind: *const c_char,
+    pub pum_kind: *mut c_char,
     /// Extra menu text (may be truncated).
-    pub pum_extra: *const c_char,
+    pub pum_extra: *mut c_char,
     /// Extra info text.
-    pub pum_info: *const c_char,
+    pub pum_info: *mut c_char,
     /// Index of completion source in 'cpt'.
     pub pum_cpt_source_idx: c_int,
     /// Highlight attribute for abbr.
