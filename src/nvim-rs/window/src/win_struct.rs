@@ -3053,6 +3053,16 @@ pub unsafe extern "C" fn win_fcs_foldinner(wp: WinHandle) -> ScharT {
 pub unsafe extern "C" fn win_fcs_diff(wp: WinHandle) -> ScharT {
     fcs_get_u32(wp, 60)
 }
+#[must_use]
+#[export_name = "nvim_win_get_fcs_trunc"]
+pub unsafe extern "C" fn win_fcs_trunc(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 76)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_truncrl"]
+pub unsafe extern "C" fn win_fcs_truncrl(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 80)
+}
 
 // -------------------------------------------------------------------------
 // ScreenGrid (w_grid_alloc at WinStruct offset 10296) accessors

@@ -498,7 +498,8 @@ extern "C" {
     // Text/string operations
     fn nvim_win_get_wincol(wp: *mut crate::display::WinHandle) -> c_int;
     fn nvim_win_get_view_width(wp: *mut crate::display::WinHandle) -> c_int;
-    fn nvim_pum_fcs_trunc(is_rl: c_int) -> ScharT;
+    fn nvim_win_get_fcs_trunc(wp: *mut crate::display::WinHandle) -> ScharT;
+    fn nvim_win_get_fcs_truncrl(wp: *mut crate::display::WinHandle) -> ScharT;
     fn transstr(s: *const c_char, untab: bool) -> *mut c_char;
     fn reverse_text(s: *mut c_char) -> *mut c_char;
     fn mb_string2cells(s: *const c_char) -> usize;
@@ -608,7 +609,11 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     let mut row = 0;
     let attr_scroll = nvim_win_hl_attr(curwin, hlf::HLF_PSB);
     let attr_thumb = nvim_win_hl_attr(curwin, hlf::HLF_PST);
-    let fcs_trunc = nvim_pum_fcs_trunc(pum_rl as c_int);
+    let fcs_trunc = if pum_rl {
+        nvim_win_get_fcs_truncrl(curwin)
+    } else {
+        nvim_win_get_fcs_trunc(curwin)
+    };
     let fill_char = schar_from_ascii(b' ');
 
     //                         "word"   "kind"   "extra text"

@@ -255,12 +255,6 @@ void nvim_pum_emsg_menu_mode(void)
   emsg(_(e_menu_only_exists_in_another_mode));
 }
 
-/// Get `fcs_trunc` character for current pum_rl.
-schar_T nvim_pum_fcs_trunc(int is_rl)
-{
-  return is_rl ? curwin->w_p_fcs_chars.truncrl : curwin->w_p_fcs_chars.trunc;
-}
-
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
 struct PumBorderConfig {
