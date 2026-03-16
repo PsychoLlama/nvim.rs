@@ -3,7 +3,7 @@
 //! This module provides helper functions for showing, hiding, and managing
 //! the popup menu display state.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::c_int;
 
 use crate::PUM_STATE;
 
@@ -21,26 +21,10 @@ extern "C" {
     fn nvim_get_State() -> c_int;
 }
 
-// Grid accessor functions for pum_grid fields.
+// Direct grid function declarations.
 extern "C" {
-    /// Get pointer to `pum_grid` (`ScreenGrid`*).
-    fn nvim_pum_get_grid_ptr() -> *mut c_void;
     /// Compose grid (calls `ui_comp_compose_grid`).
-    fn ui_comp_compose_grid(grid: *mut c_void);
-    /// Get `pum_grid.handle`.
-    fn nvim_pum_grid_get_handle() -> c_int;
-    /// Get `pum_grid.pending_comp_index_update`.
-    fn nvim_pum_grid_get_pending_comp_index_update() -> c_int;
-    /// Set `pum_grid.pending_comp_index_update`.
-    fn nvim_pum_grid_set_pending_comp_index_update(val: c_int);
-    /// Get `pum_grid.zindex`.
-    fn nvim_pum_grid_get_zindex() -> c_int;
-    /// Get `pum_grid.comp_index`.
-    fn nvim_pum_grid_get_comp_index() -> c_int;
-    /// Get `pum_grid.comp_row`.
-    fn nvim_pum_grid_get_comp_row() -> c_int;
-    /// Get `pum_grid.comp_col`.
-    fn nvim_pum_grid_get_comp_col() -> c_int;
+    fn ui_comp_compose_grid(grid: *mut crate::ScreenGrid);
     /// Call `ui_call_win_float_pos` with pum parameters.
     fn nvim_pum_ui_call_win_float_pos(
         handle: c_int,
@@ -328,18 +312,18 @@ pub const extern "C" fn rs_pum_has_room(height: c_int, size: c_int, border_width
 /// UI capability for multigrid mode (kUIMultigrid = 6).
 const K_UI_MULTIGRID: c_int = 6;
 
-// C accessor functions for check_clear.
+// Direct C function declarations for check_clear.
 extern "C" {
     /// Call `ui_call_popupmenu_hide()`.
-    fn nvim_pum_ui_call_popupmenu_hide();
-    /// Call `ui_comp_remove_grid(&pum_grid)`.
-    fn nvim_pum_ui_comp_remove_grid();
-    /// Call `ui_call_win_close(pum_grid.handle)`.
-    fn nvim_pum_ui_call_win_close_grid();
-    /// Call `ui_call_grid_destroy(pum_grid.handle)`.
-    fn nvim_pum_ui_call_grid_destroy();
-    /// Call `grid_free(&pum_grid)`.
-    fn nvim_pum_grid_free();
+    fn ui_call_popupmenu_hide();
+    /// Remove grid from compositor.
+    fn ui_comp_remove_grid(grid: *mut crate::ScreenGrid);
+    /// Notify UI of window close.
+    fn ui_call_win_close(grid: i64);
+    /// Notify UI of grid destruction.
+    fn ui_call_grid_destroy(grid: i64);
+    /// Free a `ScreenGrid`.
+    fn grid_free(grid: *mut crate::ScreenGrid);
     /// Find the floating preview window (returns NULL if none).
     fn win_float_find_preview() -> *mut WinHandle;
     /// Close a window.
@@ -377,8 +361,6 @@ extern "C" {
     );
     /// Compute horizontal placement (writes `PUM_STATE.col`, `.width`).
     fn nvim_pum_compute_hp(cursor_col: c_int);
-    /// Set grid zindex based on current mode.
-    fn nvim_pum_set_grid_zindex_for_mode();
     /// Get `w_p_rl` for a window.
     fn nvim_win_get_w_p_rl(wp: *mut WinHandle) -> c_int;
     /// Get `Columns`.
@@ -395,6 +377,8 @@ extern "C" {
 extern "C" {
     /// C global: `curwin` (current window pointer).
     static mut curwin: *mut WinHandle;
+    /// C global: `pum_grid` (the popup menu grid).
+    static mut pum_grid: crate::ScreenGrid;
 }
 
 /// Result of geometry computation from C.
@@ -431,8 +415,7 @@ pub struct WinHandle {
 /// Calls C accessor functions.
 #[export_name = "pum_recompose"]
 pub unsafe extern "C" fn rs_pum_recompose() {
-    let grid = nvim_pum_get_grid_ptr();
-    ui_comp_compose_grid(grid);
+    ui_comp_compose_grid(&raw mut pum_grid);
 }
 
 /// Check and clear the popup menu display if needed.
@@ -451,14 +434,14 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
     if !is_visible && is_drawn {
         let is_external = PUM_STATE.external != 0;
         if is_external {
-            nvim_pum_ui_call_popupmenu_hide();
+            ui_call_popupmenu_hide();
         } else {
-            nvim_pum_ui_comp_remove_grid();
+            ui_comp_remove_grid(&raw mut pum_grid);
             if ui_has(K_UI_MULTIGRID) {
-                nvim_pum_ui_call_win_close_grid();
-                nvim_pum_ui_call_grid_destroy();
+                ui_call_win_close(pum_grid.handle as i64);
+                ui_call_grid_destroy(pum_grid.handle as i64);
             }
-            nvim_pum_grid_free();
+            grid_free(&raw mut pum_grid);
         }
         PUM_STATE.is_drawn = 0;
         PUM_STATE.external = 0;
@@ -483,8 +466,8 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
     let has_multigrid = ui_has(K_UI_MULTIGRID);
     let is_drawn = PUM_STATE.is_drawn != 0;
     let is_external = PUM_STATE.external != 0;
-    let handle = nvim_pum_grid_get_handle();
-    let pending = nvim_pum_grid_get_pending_comp_index_update() != 0;
+    let handle = pum_grid.handle;
+    let pending = pum_grid.pending_comp_index_update != 0;
 
     if has_multigrid && is_drawn && !is_external && handle != 0 && pending {
         let pum_above = PUM_STATE.above != 0;
@@ -500,10 +483,11 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
         let win_row_offset = PUM_STATE.win_row_offset;
         let win_col_offset = PUM_STATE.win_col_offset;
         let anchor_grid = PUM_STATE.anchor_grid;
-        let zindex = nvim_pum_grid_get_zindex();
-        let comp_index = nvim_pum_grid_get_comp_index();
-        let comp_row = nvim_pum_grid_get_comp_row();
-        let comp_col = nvim_pum_grid_get_comp_col();
+        let zindex = pum_grid.zindex;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let comp_index = pum_grid.comp_index as c_int;
+        let comp_row = pum_grid.comp_row;
+        let comp_col = pum_grid.comp_col;
 
         nvim_pum_ui_call_win_float_pos(
             handle,
@@ -516,7 +500,7 @@ pub unsafe extern "C" fn rs_pum_ui_flush() {
             comp_row,
             comp_col,
         );
-        nvim_pum_grid_set_pending_comp_index_update(0);
+        pum_grid.pending_comp_index_update = 0;
     }
 }
 
@@ -656,7 +640,12 @@ pub unsafe extern "C" fn rs_pum_display(
         }
     }
 
-    nvim_pum_set_grid_zindex_for_mode();
+    // kZIndexCmdlinePopupMenu = 250, kZIndexPopupMenu = 100
+    pum_grid.zindex = if (nvim_get_State() & MODE_CMDLINE) != 0 {
+        250
+    } else {
+        100
+    };
     crate::redraw::rs_pum_redraw();
 }
 

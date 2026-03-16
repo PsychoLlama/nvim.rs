@@ -291,6 +291,8 @@ extern "C" {
     static p_mousemev: c_int;
     /// C global: `curwin` (current window pointer).
     static mut curwin: *mut crate::display::WinHandle;
+    /// C global: `pum_grid`.
+    static mut pum_grid: crate::ScreenGrid;
 }
 
 // C accessor functions for menu traversal.
@@ -350,8 +352,6 @@ extern "C" {
     fn rs_pum_position_at_mouse(min_width: c_int);
     /// Set mousemoveevent UI option.
     fn nvim_pum_ui_set_mousemoveevent(val: c_int);
-    /// Set `pum_grid.zindex` to `kZIndexCmdlinePopupMenu`.
-    fn nvim_pum_grid_set_zindex_cmdline();
     /// Call `setcursor_mayforce(wp, force)`.
     fn setcursor_mayforce(wp: *mut crate::display::WinHandle, force: bool);
     /// Call `vgetc()`.
@@ -481,7 +481,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     loop {
         PUM_STATE.is_visible = 1;
         PUM_STATE.is_drawn = 1;
-        nvim_pum_grid_set_zindex_cmdline();
+        pum_grid.zindex = 250; // kZIndexCmdlinePopupMenu
         crate::redraw::rs_pum_redraw();
         setcursor_mayforce(curwin, true);
 

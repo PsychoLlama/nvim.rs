@@ -456,29 +456,40 @@ const NUL: u8 = 0;
 /// TAB character value.
 const TAB: u8 = 0x09;
 
-// C accessor functions for Phase 6 redraw.
+// C function declarations for redraw.
 #[allow(dead_code)]
 extern "C" {
-    // Grid operations
-    fn nvim_pum_screengrid_line_start(row: c_int, col: c_int);
-    fn nvim_pum_grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int);
-    fn nvim_pum_grid_line_put_schar(col: c_int, sc: ScharT, attr: c_int);
-    fn nvim_pum_grid_line_flush();
-    fn nvim_pum_grid_assign_handle();
-    fn nvim_pum_grid_alloc(rows: c_int, cols: c_int, keep_contents: c_int);
-    fn nvim_pum_grid_invalidate();
-    fn nvim_pum_ui_call_grid_resize();
-    fn nvim_pum_grid_has_chars() -> c_int;
-    fn nvim_pum_grid_get_rows() -> c_int;
-    fn nvim_pum_grid_get_cols() -> c_int;
-    fn nvim_pum_ui_comp_put_grid(row: c_int, col: c_int, height: c_int, width: c_int) -> c_int;
-    fn nvim_pum_ui_call_win_float_pos_grid(
+    // Direct grid operations
+    fn screengrid_line_start(grid: *mut crate::ScreenGrid, row: c_int, col: c_int);
+    fn grid_line_fill(start: c_int, end: c_int, fillchar: ScharT, attr: c_int) -> c_int;
+    fn grid_line_put_schar(col: c_int, sc: ScharT, attr: c_int);
+    fn grid_line_flush();
+    fn grid_assign_handle(grid: *mut crate::ScreenGrid);
+    fn grid_alloc(grid: *mut crate::ScreenGrid, rows: c_int, cols: c_int, copy: bool, valid: bool);
+    fn grid_invalidate(grid: *mut crate::ScreenGrid);
+    fn ui_call_grid_resize(grid: i64, width: i64, height: i64);
+    fn ui_comp_put_grid(
+        grid: *mut crate::ScreenGrid,
+        row: c_int,
+        col: c_int,
+        height: c_int,
+        width: c_int,
+        valid: bool,
+        on_top: bool,
+    ) -> bool;
+    /// Wrapper: calls `ui_call_win_float_pos` for `pum_grid` using given params.
+    fn nvim_pum_ui_call_win_float_pos(
+        handle: c_int,
         anchor: *const c_char,
         anchor_grid: c_int,
-        anchor_row: c_int,
-        anchor_col: c_int,
+        row: c_int,
+        col: c_int,
+        zindex: c_int,
+        comp_index: c_int,
+        comp_row: c_int,
+        comp_col: c_int,
     );
-    fn nvim_pum_ui_has_multigrid() -> c_int;
+    fn ui_has(what: c_int) -> bool;
     fn grid_line_puts(col: c_int, text: *const c_char, textlen: c_int, attr: c_int) -> c_int;
 
     // State accessors
@@ -498,14 +509,6 @@ extern "C" {
     // Highlight operations
     fn nvim_win_hl_attr(wp: *mut crate::display::WinHandle, hlf: c_int) -> c_int;
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
-
-    // Linebuf operations
-    fn nvim_pum_set_linebuf_char(col: c_int, sc: ScharT);
-    fn nvim_pum_get_linebuf_char(col: c_int) -> ScharT;
-    fn nvim_pum_set_linebuf_attr(col: c_int, attr: c_int);
-
-    // State queries
-    fn nvim_pum_grid_get_zindex() -> c_int;
 
     // Border operations
     fn nvim_pum_parse_border(has_scrollbar: c_int) -> *mut c_void;
@@ -546,12 +549,20 @@ extern "C" {
     static State: c_int;
     /// C global: `curwin` (current window pointer).
     static mut curwin: *mut crate::display::WinHandle;
+    /// C global: `pum_grid`.
+    static mut pum_grid: crate::ScreenGrid;
+    /// C global: `linebuf_char`.
+    static mut linebuf_char: *mut ScharT;
+    /// C global: `linebuf_attr`.
+    static mut linebuf_attr: *mut i32;
 }
 
 /// `MODE_CMDLINE` = 0x08.
 const MODE_CMDLINE: c_int = 0x08;
 /// `kZIndexCmdlinePopupMenu` = 250.
 const K_Z_INDEX_CMDLINE_POPUP_MENU: c_int = 250;
+/// `kUIMultigrid` = 6.
+const K_UI_MULTIGRID: c_int = 6;
 
 /// Redraw the popup menu using current `pum_first` and `pum_selected`.
 ///
@@ -566,6 +577,7 @@ const K_Z_INDEX_CMDLINE_POPUP_MENU: c_int = 250;
     clippy::too_many_lines,
     clippy::cognitive_complexity,
     clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr,
     clippy::if_then_some_else_none,
@@ -632,55 +644,70 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         }
     }
 
-    nvim_pum_grid_assign_handle();
+    grid_assign_handle(&raw mut pum_grid);
 
     PUM_STATE.left_col = pum_col - col_off;
     let pum_left_col = pum_col - col_off;
     PUM_STATE.right_col = pum_left_col + grid_width;
 
-    let moved = nvim_pum_ui_comp_put_grid(
+    let moved = ui_comp_put_grid(
+        &raw mut pum_grid,
         pum_row,
         pum_left_col,
         pum_height + border_width,
         grid_width + border_width,
-    ) != 0;
+        false,
+        true,
+    );
     let invalid_grid = moved || PUM_STATE.invalid != 0;
     PUM_STATE.invalid = 0;
     nvim_set_must_redraw_pum(0);
 
-    if nvim_pum_grid_has_chars() == 0
-        || nvim_pum_grid_get_rows() != pum_height + border_width
-        || nvim_pum_grid_get_cols() != grid_width + border_width
+    if pum_grid.chars.is_null()
+        || pum_grid.rows != pum_height + border_width
+        || pum_grid.cols != grid_width + border_width
     {
-        nvim_pum_grid_alloc(
+        grid_alloc(
+            &raw mut pum_grid,
             pum_height + border_width,
             grid_width + border_width,
-            !invalid_grid as c_int,
+            !invalid_grid,
+            false,
         );
-        nvim_pum_ui_call_grid_resize();
+        #[allow(clippy::cast_lossless)]
+        ui_call_grid_resize(
+            pum_grid.handle as i64,
+            pum_grid.cols as i64,
+            pum_grid.rows as i64,
+        );
     } else if invalid_grid {
-        nvim_pum_grid_invalidate();
+        grid_invalidate(&raw mut pum_grid);
     }
 
-    if nvim_pum_ui_has_multigrid() != 0 {
+    if ui_has(K_UI_MULTIGRID) {
         let anchor: &[u8] = if pum_above { b"SW\0" } else { b"NW\0" };
         let row_off = if pum_above { -pum_height } else { 0 };
         let anchor_grid = PUM_STATE.anchor_grid;
         let win_row_offset = PUM_STATE.win_row_offset;
         let win_col_offset = PUM_STATE.win_col_offset;
-        nvim_pum_ui_call_win_float_pos_grid(
+        #[allow(clippy::cast_possible_truncation)]
+        nvim_pum_ui_call_win_float_pos(
+            pum_grid.handle,
             anchor.as_ptr().cast(),
             anchor_grid,
             pum_row - row_off - win_row_offset,
             pum_left_col - win_col_offset,
+            pum_grid.zindex,
+            pum_grid.comp_index as c_int,
+            pum_grid.comp_row,
+            pum_grid.comp_col,
         );
     }
 
     let scroll_range = pum_size - pum_height;
 
     // Avoid border for mouse menu
-    let mouse_menu =
-        (State & MODE_CMDLINE) == 0 && nvim_pum_grid_get_zindex() == K_Z_INDEX_CMDLINE_POPUP_MENU;
+    let mouse_menu = (State & MODE_CMDLINE) == 0 && pum_grid.zindex == K_Z_INDEX_CMDLINE_POPUP_MENU;
     if !mouse_menu && has_border_chars {
         nvim_pum_border_draw(border_cfg);
         if nvim_pum_border_cfg_is_shadow(border_cfg) == 0 {
@@ -722,7 +749,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         let mut attr = nvim_win_hl_attr(curwin, hlf);
         attr = hl_combine_attr(nvim_win_hl_attr(curwin, hlf::HLF_PNI), attr);
 
-        nvim_pum_screengrid_line_start(row, 0);
+        screengrid_line_start(&raw mut pum_grid, row, 0);
 
         // Prepend a space if there is room
         if extra_space {
@@ -904,7 +931,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
             // Fill space between columns
             let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
             if pum_rl {
-                nvim_pum_grid_line_fill(
+                grid_line_fill(
                     col_off - basic_width - n + 1,
                     grid_col + 1,
                     space_char,
@@ -912,7 +939,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                 );
                 grid_col = col_off - basic_width - n;
             } else {
-                nvim_pum_grid_line_fill(grid_col, col_off + basic_width + n, space_char, orig_attr);
+                grid_line_fill(grid_col, col_off + basic_width + n, space_char, orig_attr);
                 grid_col = col_off + basic_width + n;
             }
             totwidth = basic_width + n;
@@ -922,33 +949,33 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
         if pum_rl {
             let lcol = col_off - pum_width + 1;
-            nvim_pum_grid_line_fill(lcol, grid_col + 1, space_char, orig_attr);
+            grid_line_fill(lcol, grid_col + 1, space_char, orig_attr);
             if need_fcs_trunc {
                 let trunc_char = if fcs_trunc == NUL as ScharT {
                     nvim_pum_schar_from_ascii(b'<' as c_char)
                 } else {
                     fcs_trunc
                 };
-                nvim_pum_set_linebuf_char(lcol, trunc_char);
-                nvim_pum_set_linebuf_attr(lcol, trunc_attr);
-                if pum_width > 1 && nvim_pum_get_linebuf_char(lcol + 1) == NUL as ScharT {
-                    nvim_pum_set_linebuf_char(lcol + 1, space_char);
+                *linebuf_char.add(lcol as usize) = trunc_char;
+                *linebuf_attr.add(lcol as usize) = trunc_attr;
+                if pum_width > 1 && *linebuf_char.add((lcol + 1) as usize) == NUL as ScharT {
+                    *linebuf_char.add((lcol + 1) as usize) = space_char;
                 }
             }
         } else {
             let rcol = col_off + pum_width;
-            nvim_pum_grid_line_fill(grid_col, rcol, space_char, orig_attr);
+            grid_line_fill(grid_col, rcol, space_char, orig_attr);
             if need_fcs_trunc {
-                if pum_width > 1 && nvim_pum_get_linebuf_char(rcol - 1) == NUL as ScharT {
-                    nvim_pum_set_linebuf_char(rcol - 2, space_char);
+                if pum_width > 1 && *linebuf_char.add((rcol - 1) as usize) == NUL as ScharT {
+                    *linebuf_char.add((rcol - 2) as usize) = space_char;
                 }
                 let trunc_char = if fcs_trunc == NUL as ScharT {
                     nvim_pum_schar_from_ascii(b'>' as c_char)
                 } else {
                     fcs_trunc
                 };
-                nvim_pum_set_linebuf_char(rcol - 1, trunc_char);
-                nvim_pum_set_linebuf_attr(rcol - 1, trunc_attr);
+                *linebuf_char.add((rcol - 1) as usize) = trunc_char;
+                *linebuf_attr.add((rcol - 1) as usize) = trunc_attr;
             }
         }
 
@@ -968,10 +995,10 @@ pub unsafe extern "C" fn rs_pum_redraw() {
             } else {
                 attr_scroll
             };
-            nvim_pum_grid_line_put_schar(scrollbar_col, sc, sc_attr);
+            grid_line_put_schar(scrollbar_col, sc, sc_attr);
         }
 
-        nvim_pum_grid_line_flush();
+        grid_line_flush();
         row += 1;
     }
 

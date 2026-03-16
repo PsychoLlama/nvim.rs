@@ -317,6 +317,12 @@ pub const extern "C" fn rs_pum_scrollbar_click_to_first(
     }
 }
 
+// C globals used by mouse.
+extern "C" {
+    /// C global: `pum_grid`.
+    static mut pum_grid: crate::ScreenGrid;
+}
+
 // C accessor functions for mouse globals and selection.
 extern "C" {
     /// Get `mouse_grid`.
@@ -325,8 +331,6 @@ extern "C" {
     fn nvim_get_mouse_row() -> c_int;
     /// Get `mouse_col`.
     fn nvim_get_mouse_col() -> c_int;
-    /// Get `pum_grid.handle`.
-    fn nvim_pum_grid_get_handle() -> c_int;
     /// Find window from outer grid coords, returning adjusted grid/row/col.
     fn nvim_pum_mouse_find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult;
 }
@@ -403,7 +407,7 @@ pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
         }
     }
 
-    let pum_grid_handle = nvim_pum_grid_get_handle();
+    let pum_grid_handle = pum_grid.handle;
     if pum_grid_handle != 0 && grid == pum_grid_handle {
         // Repositioning the menu by right-clicking on itself
         row += PUM_STATE.row;
@@ -496,7 +500,7 @@ pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
         col = result.col;
     }
 
-    let pum_grid_handle = nvim_pum_grid_get_handle();
+    let pum_grid_handle = pum_grid.handle;
     if grid == pum_grid_handle {
         PUM_STATE.selected = row;
         return;

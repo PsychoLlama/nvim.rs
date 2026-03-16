@@ -103,46 +103,6 @@ extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_c
 const char *const opt_winborder_shadow = "shadow";
 const char *const opt_winborder_none = "none";
 
-// Phase 1 accessors: pum_grid field accessors for Rust FFI
-ScreenGrid *nvim_pum_get_grid_ptr(void)
-{
-  return &pum_grid;
-}
-
-int nvim_pum_grid_get_handle(void)
-{
-  return pum_grid.handle;
-}
-
-int nvim_pum_grid_get_pending_comp_index_update(void)
-{
-  return pum_grid.pending_comp_index_update;
-}
-
-void nvim_pum_grid_set_pending_comp_index_update(int val)
-{
-  pum_grid.pending_comp_index_update = val != 0;
-}
-
-int nvim_pum_grid_get_zindex(void)
-{
-  return pum_grid.zindex;
-}
-
-int nvim_pum_grid_get_comp_index(void)
-{
-  return (int)pum_grid.comp_index;
-}
-
-int nvim_pum_grid_get_comp_row(void)
-{
-  return pum_grid.comp_row;
-}
-
-int nvim_pum_grid_get_comp_col(void)
-{
-  return pum_grid.comp_col;
-}
 
 // Phase 1 accessor: ui_call_win_float_pos wrapper for pum_grid
 void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_grid,
@@ -182,33 +142,6 @@ void nvim_pum_execute_menu_item(void *menu)
 _Static_assert(kUIMultigrid == 6, "kUIMultigrid must be 6");
 _Static_assert(kUIPopupmenu == 1, "kUIPopupmenu must be 1");
 _Static_assert(kUIWildmenu == 3, "kUIWildmenu must be 3");
-
-// Phase 2 accessors: grid cleanup wrappers for Rust FFI
-void nvim_pum_ui_call_popupmenu_hide(void)
-{
-  ui_call_popupmenu_hide();
-}
-
-void nvim_pum_ui_comp_remove_grid(void)
-{
-  ui_comp_remove_grid(&pum_grid);
-}
-
-void nvim_pum_ui_call_win_close_grid(void)
-{
-  ui_call_win_close(pum_grid.handle);
-}
-
-void nvim_pum_ui_call_grid_destroy(void)
-{
-  ui_call_grid_destroy(pum_grid.handle);
-}
-
-void nvim_pum_grid_free(void)
-{
-  grid_free(&pum_grid);
-}
-
 
 // Phase 2 accessors: mouse_find_win_outer wrapper
 PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
@@ -371,13 +304,6 @@ void nvim_pum_ui_set_mousemoveevent(int val)
   ui_call_option_set(STATIC_CSTR_AS_STRING("mousemoveevent"), BOOLEAN_OBJ(val != 0));
 }
 
-/// Call `rs_pum_undisplay(1)`.
-/// Set pum_grid.zindex to kZIndexCmdlinePopupMenu.
-void nvim_pum_grid_set_zindex_cmdline(void)
-{
-  pum_grid.zindex = kZIndexCmdlinePopupMenu;
-}
-
 /// Batch key constant accessor (replaces 15 individual nvim_key_* functions).
 PumKeyConstants nvim_pum_get_key_constants(void)
 {
@@ -407,96 +333,6 @@ void nvim_pum_emsg_menu_mode(void)
   emsg(_(e_menu_only_exists_in_another_mode));
 }
 
-// Phase 6 accessors: grid operations for redraw
-
-/// Call `screengrid_line_start` for pum_grid.
-void nvim_pum_screengrid_line_start(int row, int col)
-{
-  screengrid_line_start(&pum_grid, row, col);
-}
-
-/// Call `grid_line_fill`.
-void nvim_pum_grid_line_fill(int start, int end, schar_T fillchar, int attr)
-{
-  grid_line_fill(start, end, fillchar, attr);
-}
-
-/// Call `grid_line_put_schar`.
-void nvim_pum_grid_line_put_schar(int col, schar_T sc, int attr)
-{
-  grid_line_put_schar(col, sc, attr);
-}
-
-/// Call `grid_line_flush`.
-void nvim_pum_grid_line_flush(void)
-{
-  grid_line_flush();
-}
-
-/// Call `grid_assign_handle` for pum_grid.
-void nvim_pum_grid_assign_handle(void)
-{
-  grid_assign_handle(&pum_grid);
-}
-
-/// Call `grid_alloc` for pum_grid.
-void nvim_pum_grid_alloc(int rows, int cols, int keep_contents)
-{
-  grid_alloc(&pum_grid, rows, cols, keep_contents != 0, false);
-}
-
-/// Call `grid_invalidate` for pum_grid.
-void nvim_pum_grid_invalidate(void)
-{
-  grid_invalidate(&pum_grid);
-}
-
-/// Call `ui_call_grid_resize` for pum_grid.
-void nvim_pum_ui_call_grid_resize(void)
-{
-  ui_call_grid_resize(pum_grid.handle, pum_grid.cols, pum_grid.rows);
-}
-
-/// Check if pum_grid.chars is non-null.
-int nvim_pum_grid_has_chars(void)
-{
-  return pum_grid.chars != NULL;
-}
-
-/// Get pum_grid.rows.
-int nvim_pum_grid_get_rows(void)
-{
-  return pum_grid.rows;
-}
-
-/// Get pum_grid.cols.
-int nvim_pum_grid_get_cols(void)
-{
-  return pum_grid.cols;
-}
-
-/// Call `ui_comp_put_grid` for pum_grid. Returns 1 if grid moved.
-int nvim_pum_ui_comp_put_grid(int row, int col, int height, int width)
-{
-  return ui_comp_put_grid(&pum_grid, row, col, height, width, false, true) ? 1 : 0;
-}
-
-/// Call `ui_call_win_float_pos` for pum_grid.
-void nvim_pum_ui_call_win_float_pos_grid(const char *anchor, int anchor_grid,
-                                          int anchor_row, int anchor_col)
-{
-  ui_call_win_float_pos(pum_grid.handle, -1, cstr_as_string(anchor), anchor_grid,
-                        anchor_row, anchor_col,
-                        false, pum_grid.zindex, (int)pum_grid.comp_index,
-                        pum_grid.comp_row, pum_grid.comp_col);
-}
-
-/// Check if `ui_has(kUIMultigrid)`.
-int nvim_pum_ui_has_multigrid(void)
-{
-  return ui_has(kUIMultigrid) ? 1 : 0;
-}
-
 /// Get `W_ENDCOL(curwin)`.
 int nvim_pum_curwin_end_col(void)
 {
@@ -515,24 +351,6 @@ schar_T nvim_pum_schar_from_ascii(char c)
   return schar_from_ascii(c);
 }
 
-
-/// Set `linebuf_char[col]`.
-void nvim_pum_set_linebuf_char(int col, schar_T sc)
-{
-  linebuf_char[col] = sc;
-}
-
-/// Get `linebuf_char[col]`.
-schar_T nvim_pum_get_linebuf_char(int col)
-{
-  return linebuf_char[col];
-}
-
-/// Set `linebuf_attr[col]`.
-void nvim_pum_set_linebuf_attr(int col, int attr)
-{
-  linebuf_attr[col] = (sattr_T)attr;
-}
 
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
@@ -892,12 +710,6 @@ void nvim_pum_compute_hp(int cursor_col)
       PUM_STATE.base_width, PUM_STATE.kind_width, PUM_STATE.extra_width);
   PUM_STATE.col = result.col;
   PUM_STATE.width = result.width;
-}
-
-/// Set grid zindex based on current mode (Phase 8 accessor).
-void nvim_pum_set_grid_zindex_for_mode(void)
-{
-  pum_grid.zindex = (State & MODE_CMDLINE) ? kZIndexCmdlinePopupMenu : kZIndexPopupMenu;
 }
 
 /// Show the popup menu with items "array[size]".

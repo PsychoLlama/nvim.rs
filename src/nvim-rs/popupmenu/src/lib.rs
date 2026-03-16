@@ -156,6 +156,60 @@ pub struct PumWantState {
     _pad1: [u8; 2],
 }
 
+/// `ScreenGrid` struct matching C layout (verified: sizeof=96).
+///
+/// Layout (`x86_64`):
+/// - `handle`  at offset 0 (4 bytes), 4 bytes padding
+/// - `chars`   at offset 8 (8 bytes)
+/// - `attrs`   at offset 16 (8 bytes)
+/// - `vcols`   at offset 24 (8 bytes)
+/// - `line_offset` at offset 32 (8 bytes)
+/// - `dirty_col`   at offset 40 (8 bytes)
+/// - `rows`    at offset 48 (4 bytes)
+/// - `cols`    at offset 52 (4 bytes)
+/// - `valid`   at offset 56 (1 byte)
+/// - `throttled` at offset 57 (1 byte)
+/// - `blending`  at offset 58 (1 byte)
+/// - `mouse_enabled` at offset 59 (1 byte)
+/// - `zindex`  at offset 60 (4 bytes)
+/// - `comp_row` at offset 64 (4 bytes)
+/// - `comp_col` at offset 68 (4 bytes)
+/// - `comp_width` at offset 72 (4 bytes)
+/// - `comp_height` at offset 76 (4 bytes)
+/// - `comp_index` at offset 80 (8 bytes, `size_t`)
+/// - `comp_disabled` at offset 88 (1 byte)
+/// - `pending_comp_index_update` at offset 89 (1 byte), 6 bytes padding
+#[repr(C)]
+pub struct ScreenGrid {
+    pub handle: c_int,
+    _pad0: [u8; 4],      // padding: handle(4) + pad(4) = offset 8 for chars
+    pub chars: *mut u32, // schar_T*
+    pub attrs: *mut i32, // sattr_T*
+    pub vcols: *mut i32, // colnr_T*
+    pub line_offset: *mut usize,
+    pub dirty_col: *mut c_int,
+    pub rows: c_int,
+    pub cols: c_int,
+    pub valid: u8,
+    pub throttled: u8,
+    pub blending: u8,
+    pub mouse_enabled: u8,
+    pub zindex: c_int,
+    pub comp_row: c_int,
+    pub comp_col: c_int,
+    pub comp_width: c_int,
+    pub comp_height: c_int,
+    // offset 80: comp_index (size_t, 8-byte aligned; 76+4=80, already aligned)
+    pub comp_index: usize,
+    pub comp_disabled: u8,
+    pub pending_comp_index_update: u8,
+    _pad1: [u8; 6], // padding to reach sizeof=96
+}
+
+// SAFETY: ScreenGrid is only accessed from the main thread.
+unsafe impl Sync for ScreenGrid {}
+unsafe impl Send for ScreenGrid {}
+
 // Global accessors still needed (not part of PumState)
 extern "C" {
     /// Get the UI popup menu height (iterates over UIs).
@@ -168,6 +222,12 @@ extern "C" {
     fn nvim_get_p_pmw() -> i64;
     /// C global: `pum_want` struct.
     pub static mut pum_want: PumWantState;
+    /// C global: `pum_grid` (the popup menu grid).
+    pub static mut pum_grid: ScreenGrid;
+    /// C global: `linebuf_char` (screen line character buffer).
+    pub static mut linebuf_char: *mut u32;
+    /// C global: `linebuf_attr` (screen line attribute buffer).
+    pub static mut linebuf_attr: *mut i32;
 }
 
 /// Check if the popup menu is displayed.
