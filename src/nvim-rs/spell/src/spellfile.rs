@@ -6158,6 +6158,61 @@ pub unsafe extern "C" fn rs_store_word(
 }
 
 // =============================================================================
+// Phase 5b: deref_wordnode and free_wordnode
+// =============================================================================
+
+extern "C" {
+    fn nvim_spin_get_first_free(s: *const SpellinfoT) -> *mut WordnodeT;
+    fn nvim_spin_set_first_free(s: *mut SpellinfoT, n: *mut WordnodeT);
+    fn nvim_spin_set_free_count(s: *mut SpellinfoT, v: c_int);
+}
+
+/// Rust replacement for C `deref_wordnode` / `nvim_deref_wordnode`.
+///
+/// Decrement the reference count on a node (head of a sibling list). If it
+/// reaches zero, recursively free all children then all siblings, returning
+/// the number of nodes freed (plus one for the length field).
+///
+/// # Safety
+/// `spin` and `node` must be valid non-null pointers.
+#[export_name = "nvim_deref_wordnode"]
+pub unsafe extern "C" fn rs_deref_wordnode(spin: *mut SpellinfoT, node: *mut WordnodeT) -> c_int {
+    let refs = nvim_wordnode_get_refs(node);
+    nvim_wordnode_set_refs(node, refs - 1);
+    if refs - 1 != 0 {
+        return 0;
+    }
+
+    let mut cnt = 0;
+    let mut np = node;
+    while !np.is_null() {
+        let child = nvim_wordnode_get_child(np);
+        if !child.is_null() {
+            cnt += rs_deref_wordnode(spin, child);
+        }
+        let sibling = nvim_wordnode_get_sibling(np);
+        rs_free_wordnode(spin, np);
+        cnt += 1;
+        np = sibling;
+    }
+    cnt + 1 // length field
+}
+
+/// Rust replacement for C `free_wordnode`.
+///
+/// Returns a node to the free list in `spin->si_first_free`.
+///
+/// # Safety
+/// `spin` and `n` must be valid non-null pointers.
+unsafe fn rs_free_wordnode(spin: *mut SpellinfoT, n: *mut WordnodeT) {
+    let first_free = nvim_spin_get_first_free(spin);
+    // Chain this node onto the free list via wn_child.
+    nvim_wordnode_set_child(n, first_free);
+    nvim_spin_set_first_free(spin, n);
+    nvim_spin_set_free_count(spin, nvim_spin_get_free_count(spin) + 1);
+}
+
+// =============================================================================
 // Phase 1: Pure affix utility functions (no Vim API dependencies)
 // =============================================================================
 

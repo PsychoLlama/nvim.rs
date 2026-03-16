@@ -3302,42 +3302,10 @@ static wordnode_T *get_wordnode(spellinfo_T *spin)
   return n;
 }
 
-// Decrement the reference count on a node (which is the head of a list of
-// siblings).  If the reference count becomes zero free the node and its
-// siblings.
-// Returns the number of nodes actually freed.
-static int deref_wordnode(spellinfo_T *spin, wordnode_T *node)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int cnt = 0;
-
-  if (--node->wn_refs == 0) {
-    for (wordnode_T *np = node; np != NULL; np = np->wn_sibling) {
-      if (np->wn_child != NULL) {
-        cnt += deref_wordnode(spin, np->wn_child);
-      }
-      free_wordnode(spin, np);
-      cnt++;
-    }
-    cnt++;          // length field
-  }
-  return cnt;
-}
-
-// Free a wordnode_T for re-use later.
-// Only the "wn_child" field becomes invalid.
-static void free_wordnode(spellinfo_T *spin, wordnode_T *n)
-  FUNC_ATTR_NONNULL_ALL
-{
-  n->wn_child = spin->si_first_free;
-  spin->si_first_free = n;
-  spin->si_free_count++;
-}
+// deref_wordnode, free_wordnode, and nvim_deref_wordnode have been migrated
+// to Rust (rs_deref_wordnode with #[export_name = "nvim_deref_wordnode"]).
 
 // Phase 6: C callbacks used by Rust compression code.
-int nvim_deref_wordnode(spellinfo_T *spin, wordnode_T *node) {
-  return deref_wordnode(spin, node);
-}
 bool nvim_spell_got_int(void) { return got_int; }
 void nvim_spell_veryfast_breakcheck(void) { veryfast_breakcheck(); }
 
