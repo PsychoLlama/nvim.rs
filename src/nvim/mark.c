@@ -187,17 +187,6 @@ char *nvim_mark_xstrdup(const char *s)
   return xstrdup(s);
 }
 
-/// Wrapper around os_time for Rust to call
-Timestamp nvim_mark_os_time(void)
-{
-  return os_time();
-}
-
-/// Get pointer to the global namedfm array
-xfmark_T *nvim_mark_get_namedfm(void)
-{
-  return namedfm;
-}
 
 /// Compare file names using path_fnamecmp
 int nvim_mark_path_fnamecmp(const char *a, const char *b)
@@ -229,8 +218,6 @@ const char *nvim_mark_get_e_umark(void) { return _(e_umark); }
 const char *nvim_mark_get_e_marknotset(void) { return _(e_marknotset); }
 const char *nvim_mark_get_e_markinval(void) { return _(e_markinval); }
 
-// Clear the global namedfm array
-void nvim_mark_clear_namedfm(void) { CLEAR_FIELD(namedfm); }
 
 // Buffer mark field accessors (Phase 3)
 fmark_T *nvim_mark_buf_get_namedm(buf_T *buf, int idx) { return &buf->b_namedm[idx]; }
@@ -251,16 +238,9 @@ fmark_T *nvim_mark_buf_get_changelist(buf_T *buf, int idx) { return &buf->b_chan
 int nvim_mark_buf_get_changelistlen(buf_T *buf) { return buf->b_changelistlen; }
 void nvim_mark_buf_set_changelistlen(buf_T *buf, int len) { buf->b_changelistlen = len; }
 
-// Global state (Phase 3)
-win_T *nvim_mark_get_curwin(void) { return curwin; }
-buf_T *nvim_mark_get_curbuf(void) { return curbuf; }
 buf_T *nvim_mark_buflist_findnr(int fnum) { return buflist_findnr(fnum); }
 int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }
 
-// Phase 4: Global state accessors
-int nvim_mark_get_global_busy(void) { return global_busy; }
-int nvim_mark_get_listcmd_busy(void) { return (int)listcmd_busy; }
-unsigned nvim_mark_get_jop_flags(void) { return jop_flags; }
 unsigned nvim_mark_get_cmod_flags(void) { return cmdmod.cmod_flags; }
 
 // Phase 4: Window topline accessor
@@ -319,7 +299,6 @@ void nvim_mark_win_jumplist_free_fname(win_T *win, int idx) { xfree(win->w_jumpl
 // Phase 5: Mark adjustment accessors
 int nvim_mark_buf_get_has_qf_entry(buf_T *buf) { return buf->b_has_qf_entry; }
 void nvim_mark_buf_set_has_qf_entry(buf_T *buf, int val) { buf->b_has_qf_entry = val; }
-pos_T *nvim_mark_get_saved_cursor(void) { return &saved_cursor; }
 win_T *nvim_mark_win_get_next(win_T *win) { return win->w_next; }
 buf_T *nvim_mark_win_get_buf(win_T *win) { return win->w_buffer; }
 linenr_T nvim_mark_win_get_old_cursor_lnum(win_T *win) { return win->w_old_cursor_lnum; }
@@ -333,7 +312,6 @@ pos_T *nvim_mark_win_get_pcmark_ptr(win_T *win) { return &win->w_pcmark; }
 pos_T *nvim_mark_win_get_prev_pcmark_ptr(win_T *win) { return &win->w_prev_pcmark; }
 
 // Phase 5: Tabpage iteration
-tabpage_T *nvim_mark_get_first_tabpage(void) { return first_tabpage; }
 tabpage_T *nvim_mark_tabpage_next(tabpage_T *tp) { return tp->tp_next; }
 win_T *nvim_mark_tabpage_firstwin(tabpage_T *tp) { return (tp == curtab) ? firstwin : tp->tp_firstwin; }
 
@@ -357,9 +335,6 @@ pos_T *nvim_mark_buf_get_wininfo_mark(buf_T *buf, int idx) { return &kv_A(buf->b
 pos_T *nvim_mark_win_get_jumplist_mark_ptr(win_T *win, int idx) { return &win->w_jumplist[idx].fmark.mark; }
 pos_T *nvim_mark_win_get_tagstack_mark_ptr(win_T *win, int idx) { return &win->w_tagstack[idx].fmark.mark; }
 
-// Phase 5: curtab accessor
-tabpage_T *nvim_mark_get_curtab(void) { return curtab; }
-
 // Phase 6: Error message wrappers
 void nvim_mark_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_mark_emsg_argreq(void) { emsg(_(e_argreq)); }
@@ -381,7 +356,6 @@ int nvim_mark_findpar(int *inclusive, int dir, int count, int what, int do_sente
   return result;
 }
 int nvim_mark_findsent(int dir, int count) { return (int)findsent(dir, count); }
-void nvim_mark_set_listcmd_busy(int val) { listcmd_busy = (bool)val; }
 void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 
 

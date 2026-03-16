@@ -13,6 +13,14 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use crate::BufHandle;
 
 // =============================================================================
+// External C Statics
+// =============================================================================
+
+extern "C" {
+    static mut jop_flags: c_uint;
+}
+
+// =============================================================================
 // External C Functions
 // =============================================================================
 
@@ -43,7 +51,6 @@ extern "C" {
     fn nvim_mark_win_set_jumplistidx(win: *mut c_void, idx: c_int);
     fn nvim_mark_win_get_jumplistidx(win: *mut c_void) -> c_int;
     fn nvim_mark_win_get_jumplist_fnum(win: *mut c_void, idx: c_int) -> c_int;
-    fn nvim_mark_get_jop_flags() -> c_uint;
     fn mark_jumplist_forget_file(win: *mut c_void, fnum: c_int);
 
     // au_new_curbuf accessors (implemented in ex_cmds_shim.c)
@@ -480,7 +487,6 @@ pub unsafe fn get_lifecycle_position(buf: BufHandle) -> LifecyclePosition {
 pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_int) -> BufHandle {
     let curbuf = nvim_get_curbuf();
     let curwin = nvim_get_curwin();
-    let jop_flags = nvim_mark_get_jop_flags();
     let jop_clean = (jop_flags & K_OPT_JOP_FLAG_CLEAN) != 0;
 
     // 1. Use au_new_curbuf if set and still valid.

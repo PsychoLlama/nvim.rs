@@ -27,6 +27,22 @@ extern "C" {
     static mut g_curwin: WinHandle;
     #[link_name = "curbuf"]
     static mut g_curbuf: BufHandle;
+
+    // Phase 2 globals
+    static mut global_busy: c_int;
+    static mut listcmd_busy: bool;
+    #[link_name = "jop_flags"]
+    static mut g_jop_flags: c_uint;
+    #[link_name = "saved_cursor"]
+    static mut g_saved_cursor: PosT;
+    // first_tabpage and curtab use TabHandle (defined below, forward reference)
+    // namedfm: array of 36 XfmarkT entries (NGLOBALMARKS = 36)
+    // Declared after XfmarkT is defined
+}
+
+// os_time() Timestamp function (Phase 2)
+extern "C" {
+    fn os_time() -> Timestamp;
 }
 
 // =============================================================================
@@ -42,8 +58,6 @@ extern "C" {
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
 
-    // Global state
-    fn nvim_mark_get_namedfm() -> *mut XfmarkT;
     fn nvim_mark_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     // Window jumplist accessors
     fn nvim_mark_win_get_jumplistlen(win: WinHandle) -> c_int;
@@ -84,22 +98,13 @@ extern "C" {
     fn nvim_mark_get_e_marknotset() -> *const c_char;
     fn nvim_mark_get_e_markinval() -> *const c_char;
 
-    // Timestamp
-    fn nvim_mark_os_time() -> Timestamp;
-
     // Global state / cross-function callbacks
-    fn nvim_mark_clear_namedfm();
-    fn nvim_mark_get_curwin() -> WinHandle;
-    fn nvim_mark_get_curbuf() -> BufHandle;
     fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
     fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
     fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
 
     // Phase 4: Global state
-    fn nvim_mark_get_global_busy() -> c_int;
-    fn nvim_mark_get_listcmd_busy() -> c_int;
-    fn nvim_mark_get_jop_flags() -> c_uint;
     fn nvim_mark_get_cmod_flags() -> c_uint;
     fn nvim_mark_setpcmark();
 
@@ -139,7 +144,6 @@ extern "C" {
     fn nvim_mark_buf_get_visual_end_ptr(buf: BufHandle) -> *mut PosT;
     fn nvim_mark_buf_get_has_qf_entry(buf: BufHandle) -> c_int;
     fn nvim_mark_buf_set_has_qf_entry(buf: BufHandle, val: c_int);
-    fn nvim_mark_get_saved_cursor() -> *mut PosT;
     fn nvim_mark_win_get_next(win: WinHandle) -> WinHandle;
     fn nvim_mark_win_get_buf(win: WinHandle) -> BufHandle;
     fn nvim_mark_win_get_old_cursor_lnum(win: WinHandle) -> LinenrT;
@@ -153,7 +157,6 @@ extern "C" {
     fn nvim_mark_win_get_prev_pcmark_ptr(win: WinHandle) -> *mut PosT;
 
     // Phase 5: Tabpage iteration
-    fn nvim_mark_get_first_tabpage() -> TabHandle;
     fn nvim_mark_tabpage_next(tp: TabHandle) -> TabHandle;
     fn nvim_mark_tabpage_firstwin(tp: TabHandle) -> WinHandle;
 
@@ -197,9 +200,6 @@ extern "C" {
     fn nvim_mark_win_get_jumplist_mark_ptr(win: WinHandle, idx: c_int) -> *mut PosT;
     fn nvim_mark_win_get_tagstack_mark_ptr(win: WinHandle, idx: c_int) -> *mut PosT;
 
-    // Phase 5: curtab
-    fn nvim_mark_get_curtab() -> TabHandle;
-
     // Phase 6: Error message wrappers
     fn nvim_mark_emsg_invarg();
     fn nvim_mark_emsg_argreq();
@@ -222,7 +222,6 @@ extern "C" {
         do_sentences: c_int,
     ) -> c_int;
     fn nvim_mark_findsent(dir: c_int, count: LinenrT) -> c_int;
-    fn nvim_mark_set_listcmd_busy(val: c_int);
     fn nvim_mark_win_set_cursor(win: WinHandle, pos: PosT);
 
     // exarg_T field accessors (from ex_cmds_shim.c)
@@ -1476,6 +1475,21 @@ pub struct XfmarkT {
     pub fname: *mut std::ffi::c_char,
 }
 
+// Number of global marks as a usize for array type
+const NGLOBALMARKS_USIZE: usize = 36; // NMARKS(26) + EXTRA_MARKS(10)
+
+extern "C" {
+    /// Global named file marks array (namedfm[NGLOBALMARKS])
+    #[link_name = "namedfm"]
+    static mut g_namedfm: [XfmarkT; NGLOBALMARKS_USIZE];
+    /// First tabpage (first_tabpage global)
+    #[link_name = "first_tabpage"]
+    static mut g_first_tabpage: TabHandle;
+    /// Current tabpage (curtab global)
+    #[link_name = "curtab"]
+    static mut g_curtab: TabHandle;
+}
+
 /// Mark validation result codes
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2071,10 +2085,7 @@ pub extern "C" fn rs_pos_clamp_lnum_min(lnum: LinenrT) -> LinenrT {
 #[no_mangle]
 pub unsafe extern "C" fn rs_setpcmark(win: WinHandle, buf: BufHandle) {
     // for :global the mark is set only once
-    if nvim_mark_get_global_busy() != 0
-        || nvim_mark_get_listcmd_busy() != 0
-        || (nvim_mark_get_cmod_flags() & CMOD_KEEPJUMPS) != 0
-    {
+    if global_busy != 0 || listcmd_busy || (nvim_mark_get_cmod_flags() & CMOD_KEEPJUMPS) != 0 {
         return;
     }
 
@@ -2088,7 +2099,7 @@ pub unsafe extern "C" fn rs_setpcmark(win: WinHandle, buf: BufHandle) {
     let mut jumplistlen = nvim_mark_win_get_jumplistlen(win);
     let jumplistidx = nvim_mark_win_get_jumplistidx(win);
 
-    if (nvim_mark_get_jop_flags() & K_OPT_JOP_FLAG_STACK) != 0 {
+    if (g_jop_flags & K_OPT_JOP_FLAG_STACK) != 0 {
         // jumpoptions=stack: discard everything after current index
         let trim_len = rs_jumplist_stack_trim(jumplistidx, jumplistlen);
         if trim_len >= 0 {
@@ -2229,7 +2240,7 @@ pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
 
     let mut to = 0;
     let len = nvim_mark_win_get_jumplistlen(wp);
-    let jop_flags = nvim_mark_get_jop_flags();
+    let jop_flags = g_jop_flags;
 
     for from in 0..len {
         if nvim_mark_win_get_jumplistidx(wp) == from {
@@ -2283,7 +2294,7 @@ pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
     let new_len = nvim_mark_win_get_jumplistlen(wp);
     let new_idx = nvim_mark_win_get_jumplistidx(wp);
     if loadfiles && new_len > 0 && new_idx == new_len {
-        let curbuf_ptr = nvim_mark_get_curbuf();
+        let curbuf_ptr = g_curbuf;
         let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
         let cursor_lnum = nvim_mark_win_get_cursor(wp).lnum;
         let last_fnum = nvim_mark_win_get_jumplist_fnum(wp, new_len - 1);
@@ -2478,16 +2489,7 @@ pub unsafe extern "C" fn rs_mark_adjust(
     amount_after: LinenrT,
     op: c_int,
 ) {
-    rs_mark_adjust_buf(
-        nvim_mark_get_curbuf(),
-        line1,
-        line2,
-        amount,
-        amount_after,
-        1,
-        0,
-        op,
-    );
+    rs_mark_adjust_buf(g_curbuf, line1, line2, amount, amount_after, 1, 0, op);
 }
 
 /// Thin wrapper: mark_adjust_nofold calls rs_mark_adjust_buf with curbuf and adjust_folds=false.
@@ -2502,16 +2504,7 @@ pub unsafe extern "C" fn rs_mark_adjust_nofold(
     amount_after: LinenrT,
     op: c_int,
 ) {
-    rs_mark_adjust_buf(
-        nvim_mark_get_curbuf(),
-        line1,
-        line2,
-        amount,
-        amount_after,
-        0,
-        0,
-        op,
-    );
+    rs_mark_adjust_buf(g_curbuf, line1, line2, amount, amount_after, 0, 0, op);
 }
 
 /// Thin wrapper: mark_adjust_buf delegates to rs_mark_adjust_buf with type casts.
@@ -2581,7 +2574,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
             let namedm = nvim_mark_buf_get_namedm(buf, i);
             one_adjust(&mut (*namedm).mark.lnum, line1, line2, amount, amount_after);
 
-            let namedfm_ptr = nvim_mark_get_namedfm();
+            let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
             let gmark = &mut *namedfm_ptr.offset(i as isize);
             if gmark.fmark.fnum == fnum {
                 one_adjust_nodel(
@@ -2594,7 +2587,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
             }
         }
         for i in NMARKS..NGLOBALMARKS {
-            let namedfm_ptr = nvim_mark_get_namedfm();
+            let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
             let gmark = &mut *namedfm_ptr.offset(i as isize);
             if gmark.fmark.fnum == fnum {
                 one_adjust_nodel(
@@ -2679,7 +2672,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
 
         // location lists
         let mut found_one = false;
-        let mut tp = nvim_mark_get_first_tabpage();
+        let mut tp = g_first_tabpage;
         while !tp.is_null() {
             let mut win = nvim_mark_tabpage_firstwin(tp);
             while !win.is_null() {
@@ -2699,7 +2692,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
         nvim_mark_extmark_adjust(buf, line1, line2, amount, amount_after, op);
     }
 
-    let curwin = nvim_mark_get_curwin();
+    let curwin = g_curwin;
 
     if nvim_mark_win_get_buf(curwin) == buf {
         // previous context mark
@@ -2711,14 +2704,14 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
         one_adjust(&mut (*prev_pcmark).lnum, line1, line2, amount, amount_after);
 
         // saved cursor for formatting
-        let saved = nvim_mark_get_saved_cursor();
+        let saved = std::ptr::addr_of_mut!(g_saved_cursor);
         if (*saved).lnum != 0 {
             one_adjust_nodel(&mut (*saved).lnum, line1, line2, amount, amount_after);
         }
     }
 
     // Adjust items in all windows related to the current buffer.
-    let mut tp = nvim_mark_get_first_tabpage();
+    let mut tp = g_first_tabpage;
     while !tp.is_null() {
         let mut win = nvim_mark_tabpage_firstwin(tp);
         while !win.is_null() {
@@ -2843,7 +2836,7 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
     col_amount: ColnrT,
     spaces_removed: c_int,
 ) {
-    let curbuf_ptr = nvim_mark_get_curbuf();
+    let curbuf_ptr = g_curbuf;
     let fnum = nvim_buf_get_fnum(curbuf_ptr);
 
     if (col_amount == 0 && lnum_amount == 0) || (nvim_mark_get_cmod_flags() & CMOD_LOCKMARKS) != 0 {
@@ -2862,7 +2855,7 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
             spaces_removed,
         );
 
-        let namedfm_ptr = nvim_mark_get_namedfm();
+        let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
         let gmark = &mut *namedfm_ptr.offset(i as isize);
         if gmark.fmark.fnum == fnum {
             col_adjust(
@@ -2876,7 +2869,7 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
         }
     }
     for i in NMARKS..NGLOBALMARKS {
-        let namedfm_ptr = nvim_mark_get_namedfm();
+        let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
         let gmark = &mut *namedfm_ptr.offset(i as isize);
         if gmark.fmark.fnum == fnum {
             col_adjust(
@@ -2947,7 +2940,7 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
     );
 
     // previous context mark
-    let curwin = nvim_mark_get_curwin();
+    let curwin = g_curwin;
     let pcmark = nvim_mark_win_get_pcmark_ptr(curwin);
     col_adjust(
         pcmark,
@@ -2970,11 +2963,11 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
     );
 
     // saved cursor for formatting
-    let saved = nvim_mark_get_saved_cursor();
+    let saved = std::ptr::addr_of_mut!(g_saved_cursor);
     col_adjust(saved, lnum, mincol, lnum_amount, col_amount, spaces_removed);
 
     // Adjust items in all windows related to the current buffer (current tab only)
-    let curtab = nvim_mark_get_curtab();
+    let curtab = g_curtab;
     let mut win = nvim_mark_tabpage_firstwin(curtab);
     while !win.is_null() {
         // marks in the jumplist
@@ -3036,7 +3029,7 @@ pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curb
 
     if arg_empty && forceit != 0 {
         // :delmarks! — clear all marks
-        let ts = nvim_mark_os_time();
+        let ts = os_time();
         rs_clrallmarks(curbuf, ts);
         return;
     }
@@ -3054,8 +3047,8 @@ pub unsafe extern "C" fn rs_ex_delmarks(arg: *const c_char, forceit: c_int, curb
     }
 
     // Parse and clear specified marks
-    let timestamp = nvim_mark_os_time();
-    let namedfm_ptr = nvim_mark_get_namedfm();
+    let timestamp = os_time();
+    let namedfm_ptr = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     let mut p = arg;
     while *p != 0 {
         let ch = *p as u8;
@@ -3198,8 +3191,8 @@ pub unsafe extern "C" fn rs_mark_get_motion(
     name: c_int,
 ) -> *mut FmarkT {
     let pos = nvim_mark_win_get_cursor(win);
-    let slcb = nvim_mark_get_listcmd_busy();
-    nvim_mark_set_listcmd_busy(1); // avoid that '' is changed
+    let slcb = listcmd_busy;
+    listcmd_busy = true; // avoid that '' is changed
 
     let mark: *mut FmarkT;
     if name == b'{' as c_int || name == b'}' as c_int {
@@ -3234,7 +3227,7 @@ pub unsafe extern "C" fn rs_mark_get_motion(
     }
 
     nvim_mark_win_set_cursor(win, pos);
-    nvim_mark_set_listcmd_busy(slcb);
+    listcmd_busy = slcb;
     mark
 }
 
@@ -4289,7 +4282,7 @@ pub unsafe extern "C" fn rs_pos_to_mark(
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_raw_global_mark(name: c_int) -> XfmarkT {
     let idx = rs_mark_global_index(name);
-    let namedfm = nvim_mark_get_namedfm();
+    let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     *namedfm.offset(idx as isize)
 }
 
@@ -4359,7 +4352,7 @@ pub unsafe extern "C" fn rs_set_last_cursor(win: WinHandle) {
             rs_free_fmark(*last_cursor);
             (*last_cursor).mark = cursor;
             (*last_cursor).fnum = 0;
-            (*last_cursor).timestamp = nvim_mark_os_time();
+            (*last_cursor).timestamp = os_time();
             (*last_cursor).view = FmarkvT {
                 topline_offset: MAXLNUM,
             };
@@ -4400,14 +4393,14 @@ pub unsafe extern "C" fn rs_ex_clearjumps(win: WinHandle) {
 /// Global namedfm array must be valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_free_all_marks() {
-    let namedfm = nvim_mark_get_namedfm();
+    let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     for i in 0..NGLOBALMARKS {
         let entry = &*namedfm.offset(i as isize);
         if entry.fmark.mark.lnum != 0 {
             rs_free_xfmark(*entry);
         }
     }
-    nvim_mark_clear_namedfm();
+    std::ptr::write_bytes(std::ptr::addr_of_mut!(g_namedfm), 0, 1);
 }
 
 /// Copy the jumplist from one window to another.
@@ -4515,7 +4508,7 @@ pub unsafe extern "C" fn rs_mark_check(
 pub unsafe extern "C" fn rs_mark_get_global(resolve: c_int, name: c_int) -> *mut XfmarkT {
     let idx = rs_mark_global_index(name);
     assert!(idx >= 0);
-    let namedfm = nvim_mark_get_namedfm();
+    let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     let mark = namedfm.offset(idx as isize);
     if resolve != 0 && (*mark).fmark.fnum == 0 {
         nvim_mark_fname2fnum(mark);
@@ -4626,7 +4619,7 @@ pub unsafe extern "C" fn rs_mark_get(
             return rs_pos_to_mark(buf, std::ptr::null_mut(), zero_pos);
         }
     } else if name > 0 && name < NMARK_LOCAL_MAX {
-        let curbuf_ptr = nvim_mark_get_curbuf();
+        let curbuf_ptr = g_curbuf;
         fm = rs_mark_get_local(buf, win, name, curbuf_ptr);
     }
     if !fmp.is_null() && !fm.is_null() {
@@ -4646,7 +4639,7 @@ pub unsafe extern "C" fn rs_mark_set_global(name: c_int, fm: XfmarkT, update: c_
     if idx == -1 {
         return 0;
     }
-    let namedfm = nvim_mark_get_namedfm();
+    let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     let fm_tgt = namedfm.offset(idx as isize);
     if update != 0 && fm.fmark.timestamp <= (*fm_tgt).fmark.timestamp {
         return 0;
@@ -4757,13 +4750,13 @@ pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
     }
 
     // Check global marks (namedfm[0..NGLOBALMARKS])
-    let namedfm = nvim_mark_get_namedfm();
+    let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
     for i in 0..NGLOBALMARKS {
         rs_fmarks_check_one(namedfm.offset(i as isize), name, buf);
     }
 
     // Check jumplist of all windows in the current tabpage
-    let curtab = nvim_mark_get_curtab();
+    let curtab = g_curtab;
     let mut win = nvim_mark_tabpage_firstwin(curtab);
     while !win.is_null() {
         let jumplistlen = nvim_mark_win_get_jumplistlen(win);
@@ -4810,7 +4803,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         return FAIL;
     }
 
-    let curwin = nvim_mark_get_curwin();
+    let curwin = g_curwin;
 
     if rs_mark_is_jump_mark(c) {
         // Compare pointer to see if pos is &curwin->w_cursor
@@ -4842,7 +4835,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         *last_cursor = FmarkT {
             mark: *pos,
             fnum: buf_fnum,
-            timestamp: nvim_mark_os_time(),
+            timestamp: os_time(),
             view,
             additional_data: std::ptr::null_mut(),
         };
@@ -4881,7 +4874,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         *prompt_start = FmarkT {
             mark: *pos,
             fnum: buf_fnum,
-            timestamp: nvim_mark_os_time(),
+            timestamp: os_time(),
             view,
             additional_data: std::ptr::null_mut(),
         };
@@ -4895,7 +4888,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         *fm_ptr = FmarkT {
             mark: *pos,
             fnum,
-            timestamp: nvim_mark_os_time(),
+            timestamp: os_time(),
             view,
             additional_data: std::ptr::null_mut(),
         };
@@ -4904,14 +4897,14 @@ pub unsafe extern "C" fn rs_setmark_pos(
 
     let global_idx = rs_mark_global_index(c);
     if global_idx >= 0 {
-        let namedfm = nvim_mark_get_namedfm();
+        let namedfm = std::ptr::addr_of_mut!(g_namedfm).cast::<XfmarkT>();
         let xfm_ptr = namedfm.offset(global_idx as isize);
         rs_free_xfmark(*xfm_ptr);
         *xfm_ptr = XfmarkT {
             fmark: FmarkT {
                 mark: *pos,
                 fnum,
-                timestamp: nvim_mark_os_time(),
+                timestamp: os_time(),
                 view,
                 additional_data: std::ptr::null_mut(),
             },
