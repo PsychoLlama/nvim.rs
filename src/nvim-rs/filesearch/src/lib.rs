@@ -168,7 +168,7 @@ extern "C" {
     fn nvim_get_namebuff() -> *const c_char;
 
     // Visual mode and cursor functions
-    fn VIsual_active_get() -> c_int;
+    static VIsual_active: bool;
     fn rs_get_visual_text(cmdp: *mut libc::c_void, pp: *mut *mut c_char, lenp: *mut usize) -> bool;
     fn get_cursor_line_ptr() -> *mut c_char;
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
@@ -2218,7 +2218,7 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
 pub unsafe extern "C" fn rs_grab_file_name(count: c_int, file_lnum: *mut i32) -> *mut c_char {
     let options = FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC;
 
-    if VIsual_active_get() != 0 {
+    if VIsual_active {
         let mut len: usize = 0;
         let mut ptr: *mut c_char = ptr::null_mut();
 

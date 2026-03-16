@@ -4,7 +4,6 @@
 // etc.) are implemented in the Rust filesearch crate.
 //
 // This file contains:
-//   VIsual_active_get()        - C accessor for Rust
 //   eval_includeexpr()         - requires eval infrastructure (deferred)
 //   do_autocmd_dirchanged()    - requires VimL dict/autocmd (deferred)
 
@@ -29,8 +28,6 @@
 #include "nvim/option_vars.h"
 #include "nvim/vim_defs.h"
 
-// Accessor functions for Rust
-int VIsual_active_get(void) { return VIsual_active ? 1 : 0; }
 
 /// Evaluate 'includeexpr' and return the result (caller must free).
 char *eval_includeexpr(const char *const ptr, const size_t len)
