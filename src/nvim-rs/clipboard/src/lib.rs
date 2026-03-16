@@ -343,12 +343,12 @@ static mut CLIPBOARD_STATE: ClipboardModuleState = ClipboardModuleState::new();
 
 extern "C" {
     static mut cb_flags: c_uint;
-    /// Check if clipboard provider is available
-    fn nvim_clipboard_eval_has_provider() -> bool;
+    /// Check if clipboard provider is available (exported from Rust eval_exec crate)
+    fn eval_has_provider(feat: *const std::ffi::c_char, throw_if_fast: bool) -> bool;
     /// Show a non-error message
-    fn nvim_clipboard_msg(s: *const std::ffi::c_char);
+    fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> c_int;
     /// Check if output is being redirected
-    fn nvim_clipboard_redirecting() -> bool;
+    fn redirecting() -> c_int;
     /// Get register by array index (0-38)
     fn get_y_register(reg: c_int) -> *mut YankregHandle;
     /// Get previous yank register
@@ -393,16 +393,16 @@ unsafe fn adjust_clipboard_name_impl(
         return std::ptr::null_mut();
     }
 
-    if !unsafe { nvim_clipboard_eval_has_provider() } {
+    if !unsafe { eval_has_provider(c"clipboard".as_ptr(), false) } {
         let batch_count = unsafe { (*s).batch.count };
         let didwarn = unsafe { (*s).didwarn };
         if batch_count <= 1
             && !quiet
-            && (!didwarn || (explicit_cb_reg && !unsafe { nvim_clipboard_redirecting() }))
+            && (!didwarn || (explicit_cb_reg && unsafe { redirecting() } == 0))
         {
             unsafe { (*s).didwarn = true };
             // Use msg() not emsg() — interrupting :redir causes a weird state
-            unsafe { nvim_clipboard_msg(MSG_NO_CLIP.as_ptr().cast()) };
+            unsafe { msg(MSG_NO_CLIP.as_ptr().cast(), 0) };
         }
         return std::ptr::null_mut();
     }

@@ -29,24 +29,6 @@ _Static_assert(kOptCbFlagUnnamedplus == 0x02, "kOptCbFlagUnnamedplus mismatch");
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
 
 
-// =============================================================================
-// C accessor functions for Rust to call back into
-// =============================================================================
-
-bool nvim_clipboard_eval_has_provider(void)
-{
-  return eval_has_provider("clipboard", false);
-}
-
-void nvim_clipboard_msg(const char *s)
-{
-  msg(s, 0);
-}
-
-bool nvim_clipboard_redirecting(void)
-{
-  return redirecting() != 0;
-}
 
 /// Provider get: calls eval_call_provider("clipboard","get",...), parses the
 /// result, and populates reg.  Returns true on success.
