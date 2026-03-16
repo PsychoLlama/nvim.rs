@@ -201,3 +201,25 @@ _Static_assert(sizeof(winopt_T) == 1640, "winopt_T size mismatch");
 _Static_assert(sizeof(WinConfig) == 480, "WinConfig size mismatch");
 _Static_assert(sizeof(ScreenGrid) == 96, "ScreenGrid size mismatch");
 _Static_assert(sizeof(GridView) == 16, "GridView size mismatch");
+
+// tabpage_T layout assertions (for TabpageStruct in tabpage_struct.rs)
+_Static_assert(sizeof(tabpage_T) == 224, "tabpage_T size mismatch: update TabpageStruct in tabpage_struct.rs");
+_Static_assert(offsetof(tabpage_T, handle) == 0, "tabpage handle offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_next) == 8, "tabpage tp_next offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_topframe) == 16, "tabpage tp_topframe offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_curwin) == 24, "tabpage tp_curwin offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_prevwin) == 32, "tabpage tp_prevwin offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_firstwin) == 40, "tabpage tp_firstwin offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_lastwin) == 48, "tabpage tp_lastwin offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_old_Rows_avail) == 56, "tabpage tp_old_Rows_avail offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_old_Columns) == 64, "tabpage tp_old_Columns offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_ch_used) == 72, "tabpage tp_ch_used offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_first_diff) == 80, "tabpage tp_first_diff offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_diffbuf) == 88, "tabpage tp_diffbuf offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_diff_invalid) == 152, "tabpage tp_diff_invalid offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_diff_update) == 156, "tabpage tp_diff_update offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_snapshot) == 160, "tabpage tp_snapshot offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_winvar) == 176, "tabpage tp_winvar offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_vars) == 200, "tabpage tp_vars offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_localdir) == 208, "tabpage tp_localdir offset mismatch");
+_Static_assert(offsetof(tabpage_T, tp_prevdir) == 216, "tabpage tp_prevdir offset mismatch");

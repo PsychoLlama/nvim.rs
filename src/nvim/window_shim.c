@@ -182,9 +182,6 @@ void nvim_win_set_grid_blending(win_T *wp, bool val) { wp->w_grid_alloc.blending
 
 
 
-void nvim_tabpage_set_firstwin(tabpage_T *tp, win_T *wp) { tp->tp_firstwin = wp; }
-void nvim_tabpage_set_lastwin(tabpage_T *tp, win_T *wp) { tp->tp_lastwin = wp; }
-win_T *nvim_tabpage_get_lastwin(tabpage_T *tp) { return tp->tp_lastwin; }
 ScreenGrid *nvim_get_curwin_grid_alloc(void) { return curwin ? &curwin->w_grid_alloc : NULL; }
 
 /// Get the current window's cursor position for incsearch state (accessor for Rust).
@@ -205,10 +202,6 @@ void nvim_set_curwin_cursor_pos(const void *pos) { const int32_t *p = (const int
 int nvim_equalpos(const void *pos1, const void *pos2) { const int32_t *p1 = (const int32_t *)pos1; const int32_t *p2 = (const int32_t *)pos2; return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2]; }
 
 void nvim_validate_cursor(void) { validate_cursor(curwin); }
-win_T *nvim_tabpage_get_firstwin(tabpage_T *tp) { return tp->tp_firstwin; }
-tabpage_T *nvim_tabpage_get_next(tabpage_T *tp) { return tp->tp_next; }
-win_T *nvim_tabpage_get_curwin(tabpage_T *tp) { return tp->tp_curwin; }
-int nvim_tabpage_get_handle(tabpage_T *tp) { return (int)tp->handle; }
 char nvim_win_get_fdm_char(win_T *wp, int idx) { return wp->w_p_fdm[idx]; }
 int nvim_win_buf_has_terminal(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
@@ -252,7 +245,6 @@ int nvim_win_get_config_window(win_T *wp) { return wp ? wp->w_config.window : 0;
 int nvim_win_get_config_zindex(win_T *wp) { return wp ? wp->w_config.zindex : 50; }
 
 int nvim_win_get_config_focusable(win_T *wp) { return wp ? wp->w_config.focusable : 0; }
-frame_T *nvim_tabpage_get_topframe(tabpage_T *tp) { return tp->tp_topframe; }
 int nvim_win_get_endrow(win_T *wp) { return W_ENDROW(wp); }
 int nvim_win_get_endcol(win_T *wp) { return W_ENDCOL(wp); }
 schar_T nvim_win_get_fcs_vert(win_T *wp) { return wp->w_p_fcs_chars.vert; }
@@ -880,7 +872,6 @@ int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
 int nvim_win_get_scbind_pos(win_T *wp) { return wp ? wp->w_scbind_pos : 0; }
 int nvim_win_buf_is_empty(win_T *wp) { return (wp && wp->w_buffer) ? buf_is_empty(wp->w_buffer) : 1; }
-int nvim_tabpage_get_ch_used(tabpage_T *tp) { return tp ? (int)tp->tp_ch_used : 0; }
 int nvim_win_has_winnr(win_T *wp, tabpage_T *tp) { return (wp && tp) ? (int)win_has_winnr(wp, tp) : 0; }
 
 // Accessors for rs_win_set_inner_size (Phase 4)
@@ -913,16 +904,6 @@ void nvim_ui_call_win_viewport_margins_wrapper(win_T *wp) {
   }
 }
 
-/// Get a snapshot pointer from a tabpage.
-frame_T *nvim_tabpage_get_snapshot(tabpage_T *tp, int idx)
-{
-  if (!tp || idx < 0 || idx >= SNAP_COUNT) {
-    return NULL;
-  }
-  return tp->tp_snapshot[idx];
-}
-
-void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val) { if (tp && idx >= 0 && idx < SNAP_COUNT) { tp->tp_snapshot[idx] = val; } }
 
 // nvim_curbuf_line_count() — already defined in move.c
 
@@ -995,7 +976,6 @@ int nvim_win_get_config_external_int(win_T *wp) { return wp ? (int)wp->w_config.
 
 // nvim_fixup_external_curwin deleted: logic migrated to Rust win_close.rs (Phase 8)
 
-void nvim_tabpage_set_next(tabpage_T *tp, tabpage_T *next) { tp->tp_next = next; }
 int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_iemsg_move_other_frame(void) { iemsg("INTERNAL: trying to move a window into another frame"); }
@@ -1006,7 +986,6 @@ void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()")
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
 void nvim_dec_split_disallowed(void) { split_disallowed--; }
 void nvim_ui_call_win_close_win(win_T *wp) { if (wp) { ui_call_win_close(wp->w_grid_alloc.handle); } }
-void nvim_tabpage_set_curwin(tabpage_T *tp, win_T *wp) { tp->tp_curwin = wp; }
 void nvim_check_cursor_win_wrapper(win_T *wp) { check_cursor(wp); }
 
 /// Get w_frame->fr_parent from a window (for win_close frame comparison).
@@ -1257,8 +1236,6 @@ int nvim_win_get_prev_winrow(win_T *wp) { return wp ? wp->w_prev_winrow : 0; }
 
 // Phase 4 accessors: win_new_screen_rows, unuse_tabpage, use_tabpage, win_goto,
 // restore_snapshot, do_autocmd_winclosed, can_close_in_cmdwin, set_winbar_win, set_winbar
-void nvim_tabpage_set_topframe(tabpage_T *tp, frame_T *fr) { if (tp) { tp->tp_topframe = fr; } }
-void nvim_tabpage_set_ch_used(tabpage_T *tp, int64_t val) { if (tp) { tp->tp_ch_used = val; } }
 void nvim_compute_cmdrow(void) { compute_cmdrow(); }
 int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
 // nvim_apply_autocmds_winclosed deleted: logic migrated to Rust events.rs (Phase 8)
@@ -1597,23 +1574,6 @@ void nvim_set_cmdmod_tab(int val) { cmdmod.cmod_tab = val; }
 // Phase 7 accessors: leave_tabpage, enter_tabpage, goto_tabpage_tp
 // =============================================================================
 
-/// Set tp->tp_prevwin.
-void nvim_tabpage_set_prevwin(tabpage_T *tp, win_T *wp) { if (tp) { tp->tp_prevwin = wp; } }
-
-/// Get tp->tp_prevwin.
-win_T *nvim_tabpage_get_prevwin(tabpage_T *tp) { return tp ? tp->tp_prevwin : NULL; }
-
-/// Set tp->tp_old_Rows_avail.
-void nvim_tabpage_set_old_rows_avail(tabpage_T *tp, int val) { if (tp) { tp->tp_old_Rows_avail = val; } }
-
-/// Get tp->tp_old_Rows_avail.
-int nvim_tabpage_get_old_rows_avail(tabpage_T *tp) { return tp ? tp->tp_old_Rows_avail : 0; }
-
-/// Get tp->tp_old_Columns.
-int nvim_tabpage_get_old_columns(tabpage_T *tp) { return tp ? tp->tp_old_Columns : 0; }
-
-/// Set tp->tp_old_Columns.
-void nvim_tabpage_set_old_columns(tabpage_T *tp, int val) { if (tp) { tp->tp_old_Columns = val; } }
 
 /// Call reset_dragwin().
 void nvim_reset_dragwin(void) { reset_dragwin(); }
@@ -1649,11 +1609,6 @@ void nvim_set_cmdheight_for_tabpage(int64_t new_ch)
   command_frame_height = true;
 }
 
-/// Get w_winrow from tp->tp_firstwin (for enter_tabpage old_off comparison).
-int nvim_tabpage_get_firstwin_winrow(tabpage_T *tp)
-{
-  return (tp && tp->tp_firstwin) ? tp->tp_firstwin->w_winrow : 0;
-}
 
 // =============================================================================
 // Phase 9 accessors: win_init migration
@@ -2357,7 +2312,6 @@ void nvim_eval_tv_set_number(typval_T *tv, int64_t n) { tv->v_type = VAR_NUMBER;
 void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }
 void nvim_eval_tv_set_type(typval_T *tv, int t) { tv->v_type = (VarType)t; }
 dict_T *nvim_win_get_vars(win_T *wp) { return wp->w_vars; }
-dict_T *nvim_tabpage_get_vars(tabpage_T *tp) { return tp->tp_vars; }
 
 // ============================================================================
 // draw_statuscol accessors for Rust (Phase 1 drawline migration)

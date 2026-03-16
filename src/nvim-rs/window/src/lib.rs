@@ -63,6 +63,7 @@ pub mod state;
 pub mod state_validation;
 pub mod statusline;
 pub mod tabpage;
+pub mod tabpage_struct;
 pub mod ui_flush;
 pub mod utility;
 pub mod viml;
