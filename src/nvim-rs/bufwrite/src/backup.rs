@@ -29,37 +29,55 @@ const NUL: c_char = 0;
 
 extern "C" {
     // FileInfo operations
-    fn nvim_bw_os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo_id_equal(fi1: FileInfoHandle, fi2: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_hardlinks"]
+    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_link"]
+    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_id_equal"]
+    fn os_fileinfo_id_equal(fi1: FileInfoHandle, fi2: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo"]
+    fn os_fileinfo(fname: *const c_char, fi: FileInfoHandle) -> c_int;
 
     // Path operations
-    fn nvim_bw_path_tail(fname: *const c_char) -> *const c_char;
-    fn nvim_bw_after_pathsep(dir: *const c_char, p: *const c_char) -> c_int;
-    fn nvim_bw_make_percent_swname(
+    #[link_name = "path_tail"]
+    fn path_tail(fname: *const c_char) -> *const c_char;
+    #[link_name = "after_pathsep"]
+    fn after_pathsep(dir: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "make_percent_swname"]
+    fn make_percent_swname(
         dir: *const c_char,
         p: *const c_char,
         fname: *const c_char,
     ) -> *mut c_char;
-    fn nvim_bw_modname(fname: *const c_char, ext: *const c_char, prepend_dot: c_int)
-        -> *mut c_char;
-    fn nvim_bw_get_file_in_dir(fname: *const c_char, dir: *const c_char) -> *mut c_char;
-    fn nvim_bw_os_path_exists(fname: *const c_char) -> c_int;
+    #[link_name = "modname"]
+    fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char;
+    #[link_name = "get_file_in_dir"]
+    fn get_file_in_dir(fname: *const c_char, dir: *const c_char) -> *mut c_char;
+    #[link_name = "os_path_exists"]
+    fn os_path_exists(fname: *const c_char) -> c_int;
 
     // File system operations
-    fn nvim_bw_os_open(fname: *const c_char, flags: c_int, perm: c_int) -> c_int;
-    fn nvim_bw_os_close(fd: c_int) -> c_int;
-    fn nvim_bw_os_remove(fname: *const c_char) -> c_int;
-    fn nvim_bw_os_copy(src: *const c_char, dst: *const c_char, flags: c_int) -> c_int;
-    fn nvim_bw_os_setperm(fname: *const c_char, perm: c_int) -> c_int;
+    #[link_name = "os_open"]
+    fn os_open(fname: *const c_char, flags: c_int, perm: c_int) -> c_int;
+    #[link_name = "os_close"]
+    fn os_close(fd: c_int) -> c_int;
+    #[link_name = "os_remove"]
+    fn os_remove(fname: *const c_char) -> c_int;
+    #[link_name = "os_copy"]
+    fn os_copy(src: *const c_char, dst: *const c_char, flags: c_int) -> c_int;
+    #[link_name = "os_setperm"]
+    fn os_setperm(fname: *const c_char, perm: c_int) -> c_int;
     fn nvim_bw_os_set_acl(fname: *const c_char, acl: AclHandle);
-    fn nvim_bw_vim_rename(src: *const c_char, dst: *const c_char) -> c_int;
+    #[link_name = "vim_rename"]
+    fn vim_rename(src: *const c_char, dst: *const c_char) -> c_int;
 
     // Unix-specific
-    fn nvim_bw_os_fchown(fd: c_int, uid: u32, gid: u32);
-    fn nvim_bw_os_chown(fname: *const c_char, uid: u32, gid: u32) -> c_int;
-    fn nvim_bw_os_file_settime(fname: *const c_char, atime: f64, mtime: f64);
+    #[link_name = "os_fchown"]
+    fn os_fchown(fd: c_int, uid: u32, gid: u32);
+    #[link_name = "os_chown"]
+    fn os_chown(fname: *const c_char, uid: u32, gid: u32) -> c_int;
+    #[link_name = "os_file_settime"]
+    fn os_file_settime(fname: *const c_char, atime: f64, mtime: f64);
     fn nvim_bw_fi_get_st_uid(fi: FileInfoHandle) -> u32;
     fn nvim_bw_fi_get_st_gid(fi: FileInfoHandle) -> u32;
     fn nvim_bw_fi_get_st_mode(fi: FileInfoHandle) -> c_int;
@@ -77,7 +95,8 @@ extern "C" {
     fn nvim_bw_get_p_bk() -> c_int;
 
     // Utility
-    fn nvim_bw_copy_option_part(
+    #[link_name = "copy_option_part"]
+    fn copy_option_part(
         dirp: *mut *mut c_char,
         buf: *mut c_char,
         maxlen: usize,
@@ -90,7 +109,8 @@ extern "C" {
         perm: c_int,
         failed_dir: *mut *mut c_char,
     ) -> c_int;
-    fn nvim_bw_os_isdir(fname: *const c_char) -> c_int;
+    #[link_name = "os_isdir"]
+    fn os_isdir(fname: *const c_char) -> c_int;
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
     fn nvim_bw_xfree(ptr: *mut c_char);
     fn nvim_bw_gettext(s: *const c_char) -> *const c_char;
@@ -160,15 +180,15 @@ unsafe fn determine_backup_copy(
         // - it's a hard link
         // - it's a symbolic link
         // - we don't have write permission in the directory
-        if unsafe { nvim_bw_os_fileinfo_hardlinks(file_info_old) } > 1
-            || unsafe { nvim_bw_os_fileinfo_link(fname, file_info) } == 0
-            || unsafe { nvim_bw_os_fileinfo_id_equal(file_info, file_info_old) } == 0
+        if unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
+            || unsafe { os_fileinfo_link(fname, file_info) } == 0
+            || unsafe { os_fileinfo_id_equal(file_info, file_info_old) } == 0
         {
             *backup_copy = true;
         } else {
             // Check if we can create a file and set the owner/group to
             // the ones from the original file.
-            let tail = unsafe { nvim_bw_path_tail(fname) };
+            let tail = unsafe { path_tail(fname) };
             let dirlen = unsafe { tail.offset_from(fname) } as usize;
             let maxpathl = unsafe { nvim_bw_get_MAXPATHL() } as usize;
             assert!(dirlen < maxpathl);
@@ -184,14 +204,14 @@ unsafe fn determine_backup_copy(
                 unsafe {
                     nvim_bw_snprintf_int(tmp_ptr.add(dirlen), maxpathl - dirlen, i);
                 }
-                if unsafe { nvim_bw_os_fileinfo_link(tmp_ptr, file_info) } == 0 {
+                if unsafe { os_fileinfo_link(tmp_ptr, file_info) } == 0 {
                     break;
                 }
                 i += 123;
             }
 
             let open_flags = unsafe { nvim_bw_open_flags_creat_wronly_excl_nofollow() };
-            let fd = unsafe { nvim_bw_os_open(tmp_ptr, open_flags, perm) };
+            let fd = unsafe { os_open(tmp_ptr, open_flags, perm) };
             if fd < 0 {
                 *backup_copy = true;
             } else {
@@ -199,8 +219,8 @@ unsafe fn determine_backup_copy(
                 {
                     let uid = unsafe { nvim_bw_fi_get_st_uid(file_info_old) };
                     let gid = unsafe { nvim_bw_fi_get_st_gid(file_info_old) };
-                    unsafe { nvim_bw_os_fchown(fd, uid, gid) };
-                    if unsafe { nvim_bw_os_fileinfo(tmp_ptr, file_info) } == 0
+                    unsafe { os_fchown(fd, uid, gid) };
+                    if unsafe { os_fileinfo(tmp_ptr, file_info) } == 0
                         || unsafe { nvim_bw_fi_get_st_uid(file_info) } != uid
                         || unsafe { nvim_bw_fi_get_st_gid(file_info) } != gid
                         || unsafe { nvim_bw_fi_get_st_mode(file_info) } != perm
@@ -208,8 +228,8 @@ unsafe fn determine_backup_copy(
                         *backup_copy = true;
                     }
                 }
-                unsafe { nvim_bw_os_close(fd) };
-                unsafe { nvim_bw_os_remove(tmp_ptr) };
+                unsafe { os_close(fd) };
+                unsafe { os_remove(tmp_ptr) };
             }
         }
     }
@@ -219,20 +239,20 @@ unsafe fn determine_backup_copy(
     if (bkc & BKC_BREAKSYMLINK != 0) || (bkc & BKC_BREAKHARDLINK != 0) {
         let mut file_info_buf2 = vec![0u8; unsafe { nvim_bw_sizeof_FileInfo() }];
         let file_info2: FileInfoHandle = file_info_buf2.as_mut_ptr().cast();
-        let link_ok = unsafe { nvim_bw_os_fileinfo_link(fname, file_info2) } != 0;
+        let link_ok = unsafe { os_fileinfo_link(fname, file_info2) } != 0;
 
         // Symlinks
         if (bkc & BKC_BREAKSYMLINK != 0)
             && link_ok
-            && unsafe { nvim_bw_os_fileinfo_id_equal(file_info2, file_info_old) } == 0
+            && unsafe { os_fileinfo_id_equal(file_info2, file_info_old) } == 0
         {
             *backup_copy = false;
         }
 
         // Hardlinks
         if (bkc & BKC_BREAKHARDLINK != 0)
-            && unsafe { nvim_bw_os_fileinfo_hardlinks(file_info_old) } > 1
-            && (!link_ok || unsafe { nvim_bw_os_fileinfo_id_equal(file_info2, file_info_old) } != 0)
+            && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
+            && (!link_ok || unsafe { os_fileinfo_id_equal(file_info2, file_info_old) } != 0)
         {
             *backup_copy = false;
         }
@@ -261,24 +281,23 @@ unsafe fn backup_by_copy(
     let mut dirp = unsafe { nvim_bw_get_p_bdir() };
 
     while unsafe { *dirp } != NUL {
-        let dir_len =
-            unsafe { nvim_bw_copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
+        let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
         let p = unsafe { iobuff.add(dir_len) };
 
-        if unsafe { *dirp } == NUL && unsafe { nvim_bw_os_isdir(iobuff) } == 0 {
+        if unsafe { *dirp } == NUL && unsafe { os_isdir(iobuff) } == 0 {
             unsafe { ensure_backup_dir(iobuff) };
         }
 
-        if unsafe { nvim_bw_after_pathsep(iobuff, p) } != 0 && unsafe { *p.sub(1) == *p.sub(2) } {
+        if unsafe { after_pathsep(iobuff, p) } != 0 && unsafe { *p.sub(1) == *p.sub(2) } {
             // Ends with '//', use full path
-            let swname = unsafe { nvim_bw_make_percent_swname(iobuff, p, fname) };
+            let swname = unsafe { make_percent_swname(iobuff, p, fname) };
             if !swname.is_null() {
-                unsafe { *backupp = nvim_bw_modname(swname, backup_ext, 0) };
+                unsafe { *backupp = modname(swname, backup_ext, false) };
                 unsafe { nvim_bw_xfree(swname) };
             }
         }
 
-        let rootname = unsafe { nvim_bw_get_file_in_dir(fname, iobuff) };
+        let rootname = unsafe { get_file_in_dir(fname, iobuff) };
         if rootname.is_null() {
             some_error = true;
             // goto nobackup equivalent — break out
@@ -291,7 +310,7 @@ unsafe fn backup_by_copy(
 
         // Make the backup file name
         if unsafe { *backupp }.is_null() {
-            unsafe { *backupp = nvim_bw_modname(rootname, backup_ext, 0) };
+            unsafe { *backupp = modname(rootname, backup_ext, false) };
         }
 
         if unsafe { *backupp }.is_null() {
@@ -301,8 +320,8 @@ unsafe fn backup_by_copy(
         }
 
         // Check if backup file already exists
-        if unsafe { nvim_bw_os_fileinfo(*backupp, file_info_new) } != 0 {
-            if unsafe { nvim_bw_os_fileinfo_id_equal(file_info_new, file_info_old) } != 0 {
+        if unsafe { os_fileinfo(*backupp, file_info_new) } != 0 {
+            if unsafe { os_fileinfo_id_equal(file_info_new, file_info_old) } != 0 {
                 // Backup file is same as original file
                 unsafe { nvim_bw_XFREE_CLEAR(backupp) };
             } else if unsafe { nvim_bw_get_p_bk() } == 0 {
@@ -318,7 +337,7 @@ unsafe fn backup_by_copy(
                 let wp = unsafe { bkp.add(offset) };
                 unsafe { *wp = b'z' as c_char };
                 while unsafe { *wp } > b'a' as c_char
-                    && unsafe { nvim_bw_os_fileinfo(*backupp, file_info_new) } != 0
+                    && unsafe { os_fileinfo(*backupp, file_info_new) } != 0
                 {
                     unsafe { *wp -= 1 };
                 }
@@ -333,11 +352,11 @@ unsafe fn backup_by_copy(
         // Try to create the backup file
         if !unsafe { *backupp }.is_null() {
             // Remove old backup
-            unsafe { nvim_bw_os_remove(*backupp) };
+            unsafe { os_remove(*backupp) };
 
             // Copy the file
             let ficlone = unsafe { nvim_bw_uv_fs_copyfile_ficlone() };
-            if unsafe { nvim_bw_os_copy(fname, *backupp, ficlone) } != 0 {
+            if unsafe { os_copy(fname, *backupp, ficlone) } != 0 {
                 unsafe {
                     *err = BwError::with_msg(nvim_bw_gettext(E509.as_ptr()));
                     nvim_bw_XFREE_CLEAR(backupp);
@@ -346,25 +365,23 @@ unsafe fn backup_by_copy(
             }
 
             // Set file protection same as original file, but strip s-bit
-            unsafe { nvim_bw_os_setperm(*backupp, perm & 0o777) };
+            unsafe { os_setperm(*backupp, perm & 0o777) };
 
             #[cfg(unix)]
             {
                 // Try to set group of backup same as original file
                 let old_gid = unsafe { nvim_bw_fi_get_st_gid(file_info_old) };
                 let new_gid = unsafe { nvim_bw_fi_get_st_gid(file_info_new) };
-                if new_gid != old_gid
-                    && unsafe { nvim_bw_os_chown(*backupp, u32::MAX, old_gid) } != 0
-                {
+                if new_gid != old_gid && unsafe { os_chown(*backupp, u32::MAX, old_gid) } != 0 {
                     unsafe {
-                        nvim_bw_os_setperm(*backupp, (perm & 0o707) | ((perm & 0o7) << 3));
+                        os_setperm(*backupp, (perm & 0o707) | ((perm & 0o7) << 3));
                     }
                 }
                 #[allow(clippy::cast_precision_loss)]
                 let atime = unsafe { nvim_bw_fi_get_atime_sec(file_info_old) } as f64;
                 #[allow(clippy::cast_precision_loss)]
                 let mtime = unsafe { nvim_bw_fi_get_mtime_sec(file_info_old) } as f64;
-                unsafe { nvim_bw_os_file_settime(*backupp, atime, mtime) };
+                unsafe { os_file_settime(*backupp, atime, mtime) };
             }
 
             unsafe { nvim_bw_os_set_acl(*backupp, acl) };
@@ -415,30 +432,29 @@ unsafe fn backup_by_rename(
     let mut dirp = unsafe { nvim_bw_get_p_bdir() };
 
     while unsafe { *dirp } != NUL {
-        let dir_len =
-            unsafe { nvim_bw_copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
+        let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
         let p = unsafe { iobuff.add(dir_len) };
 
-        if unsafe { *dirp } == NUL && unsafe { nvim_bw_os_isdir(iobuff) } == 0 {
+        if unsafe { *dirp } == NUL && unsafe { os_isdir(iobuff) } == 0 {
             unsafe { ensure_backup_dir(iobuff) };
         }
 
-        if unsafe { nvim_bw_after_pathsep(iobuff, p) } != 0 && unsafe { *p.sub(1) == *p.sub(2) } {
+        if unsafe { after_pathsep(iobuff, p) } != 0 && unsafe { *p.sub(1) == *p.sub(2) } {
             // Path ends with '//', use full path
-            let swname = unsafe { nvim_bw_make_percent_swname(iobuff, p, fname) };
+            let swname = unsafe { make_percent_swname(iobuff, p, fname) };
             if !swname.is_null() {
-                unsafe { *backupp = nvim_bw_modname(swname, backup_ext, 0) };
+                unsafe { *backupp = modname(swname, backup_ext, false) };
                 unsafe { nvim_bw_xfree(swname) };
             }
         }
 
         if unsafe { *backupp }.is_null() {
-            let rootname = unsafe { nvim_bw_get_file_in_dir(fname, iobuff) };
+            let rootname = unsafe { get_file_in_dir(fname, iobuff) };
             if rootname.is_null() {
                 unsafe { *backupp = ptr::null_mut() };
             } else {
                 unsafe {
-                    *backupp = nvim_bw_modname(rootname, backup_ext, 0);
+                    *backupp = modname(rootname, backup_ext, false);
                     nvim_bw_xfree(rootname);
                 }
             }
@@ -447,9 +463,7 @@ unsafe fn backup_by_rename(
         if !unsafe { *backupp }.is_null() {
             // If we are not going to keep the backup file, don't
             // delete an existing one, try to use another name.
-            if unsafe { nvim_bw_get_p_bk() } == 0
-                && unsafe { nvim_bw_os_path_exists(*backupp) } != 0
-            {
+            if unsafe { nvim_bw_get_p_bk() } == 0 && unsafe { os_path_exists(*backupp) } != 0 {
                 let bkp = unsafe { *backupp };
                 let bkplen = unsafe { nvim_bw_strlen(bkp) };
                 let extlen = unsafe { nvim_bw_strlen(backup_ext) };
@@ -460,9 +474,7 @@ unsafe fn backup_by_rename(
                 };
                 let wp = unsafe { bkp.add(offset) };
                 unsafe { *wp = b'z' as c_char };
-                while unsafe { *wp } > b'a' as c_char
-                    && unsafe { nvim_bw_os_path_exists(*backupp) } != 0
-                {
+                while unsafe { *wp } > b'a' as c_char && unsafe { os_path_exists(*backupp) } != 0 {
                     unsafe { *wp -= 1 };
                 }
                 if unsafe { *wp } == b'a' as c_char {
@@ -473,7 +485,7 @@ unsafe fn backup_by_rename(
 
         if !unsafe { *backupp }.is_null() {
             // Delete any existing backup and rename
-            if unsafe { nvim_bw_vim_rename(fname, *backupp) } == 0 {
+            if unsafe { vim_rename(fname, *backupp) } == 0 {
                 break;
             }
             unsafe { nvim_bw_XFREE_CLEAR(backupp) };

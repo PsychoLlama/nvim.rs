@@ -1065,6 +1065,7 @@ extern "C" {
     fn nvim_excmds_curbuf_op_save(out_start: *mut u64, out_end: *mut u64);
     fn nvim_excmds_curbuf_op_restore(saved_start: u64, saved_end: u64);
     fn nvim_excmds_curbuf_op_adjust_lnum(delta: c_int);
+    #[link_name = "os_remove"]
     fn nvim_bw_os_remove(path: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;

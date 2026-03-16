@@ -116,7 +116,8 @@ extern "C" {
     fn nvim_bw_get_msg_scroll() -> c_int;
     fn nvim_bw_set_msg_scroll(val: c_int);
     fn nvim_bw_get_cmdmod_cmod_flags() -> c_int;
-    fn nvim_bw_aborting() -> c_int;
+    #[link_name = "aborting"]
+    fn aborting() -> c_int;
 
     // Options
     fn nvim_bw_get_p_wb() -> c_int;
@@ -164,32 +165,41 @@ extern "C" {
 
     // File/Path
     fn rs_check_secure() -> c_int;
-    fn nvim_bw_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_bw_get_bkc_flags(buf: BufHandle) -> u32;
+    #[link_name = "path_fnamecmp"]
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    #[link_name = "get_bkc_flags"]
+    fn get_bkc_flags(buf: BufHandle) -> u32;
     fn nvim_bw_set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int;
     fn nvim_bw_vim_tempname() -> *mut c_char;
-    fn nvim_bw_match_file_list(
-        list: *const c_char,
-        sfname: *const c_char,
-        ffname: *const c_char,
-    ) -> c_int;
-    fn nvim_bw_os_path_exists(path: *const c_char) -> c_int;
-    fn nvim_bw_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
-    fn nvim_bw_os_remove(path: *const c_char) -> c_int;
-    fn nvim_bw_os_copy(from: *const c_char, to: *const c_char, flags: c_int) -> c_int;
-    fn nvim_bw_os_setperm(path: *const c_char, perm: c_int) -> c_int;
-    fn nvim_bw_os_getperm(path: *const c_char) -> c_int;
-    fn nvim_bw_os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
-    fn nvim_bw_os_close(fd: c_int) -> c_int;
-    fn nvim_bw_modname(fname: *const c_char, ext: *const c_char, prepend_dot: c_int)
-        -> *mut c_char;
+    #[link_name = "match_file_list"]
+    fn match_file_list(list: *const c_char, sfname: *const c_char, ffname: *const c_char) -> c_int;
+    #[link_name = "os_path_exists"]
+    fn os_path_exists(path: *const c_char) -> c_int;
+    #[link_name = "vim_rename"]
+    fn vim_rename(from: *const c_char, to: *const c_char) -> c_int;
+    #[link_name = "os_remove"]
+    fn os_remove(path: *const c_char) -> c_int;
+    #[link_name = "os_copy"]
+    fn os_copy(from: *const c_char, to: *const c_char, flags: c_int) -> c_int;
+    #[link_name = "os_setperm"]
+    fn os_setperm(path: *const c_char, perm: c_int) -> c_int;
+    #[link_name = "os_getperm"]
+    fn os_getperm(path: *const c_char) -> c_int;
+    #[link_name = "os_open"]
+    fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+    #[link_name = "os_close"]
+    fn os_close(fd: c_int) -> c_int;
+    #[link_name = "modname"]
+    fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char;
 
     // Encoding
-    fn nvim_bw_enc_canonize(enc: *const c_char) -> *mut c_char;
+    #[link_name = "enc_canonize"]
+    fn enc_canonize(enc: *const c_char) -> *mut c_char;
     #[link_name = "rs_need_conversion"]
     fn nvim_bw_need_conversion(fenc: *const c_char) -> c_int;
     fn rs_get_fio_flags(name: *const c_char) -> c_int;
-    fn nvim_bw_get_fileformat_force(buf: BufHandle, eap: ExargHandle) -> c_int;
+    #[link_name = "get_fileformat_force"]
+    fn get_fileformat_force(buf: BufHandle, eap: ExargHandle) -> c_int;
 
     // iconv
     fn nvim_bw_my_iconv_open(tocode: *const c_char, fromcode: *const c_char) -> IconvHandle;
@@ -197,14 +207,18 @@ extern "C" {
 
     // Memline
     fn nvim_bw_ml_get_buf(buf: BufHandle, lnum: i32) -> *mut c_char;
-    fn nvim_bw_ml_preserve(buf: BufHandle, message: c_int, do_fsync: c_int);
+    #[link_name = "ml_preserve"]
+    fn ml_preserve(buf: BufHandle, message: bool, do_fsync: bool);
 
     // Message/UI
-    fn nvim_bw_emsg(msg: *const c_char);
+    #[link_name = "emsg"]
+    fn emsg(msg: *const c_char) -> c_int;
     fn nvim_bw_gettext(s: *const c_char) -> *const c_char;
-    fn nvim_bw_shortmess_emit(c: c_int, result: *mut c_int);
+    #[link_name = "shortmess"]
+    fn shortmess_direct(c: c_int) -> c_int;
     fn nvim_bw_filemess(buf: BufHandle, fname: *const c_char, s: *const c_char);
-    fn nvim_bw_msg_ext_set_kind(kind: *const c_char);
+    #[link_name = "msg_ext_set_kind"]
+    fn msg_ext_set_kind(kind: *const c_char);
     fn nvim_bw_add_quoted_fname(
         buf: *mut c_char,
         bufsize: c_int,
@@ -215,34 +229,49 @@ extern "C" {
     fn nvim_bw_vim_snprintf_add(buf: *mut c_char, len: usize, fmt: *const c_char, val: i64);
     fn nvim_bw_msg_add_fileformat(fileformat: c_int) -> c_int;
     fn nvim_bw_msg_add_lines(insert_space: c_int, lnum: i32, nchars: c_int);
-    fn nvim_bw_msg_trunc(s: *mut c_char, force: c_int, attr: c_int) -> *mut c_char;
-    fn nvim_bw_set_keep_msg(s: *mut c_char, attr: c_int);
-    fn nvim_bw_msg_puts_hl(s: *const c_char, hl_id: c_int, wrap: c_int);
+    #[link_name = "msg_trunc"]
+    fn msg_trunc(s: *mut c_char, force: bool, attr: c_int) -> *mut c_char;
+    #[link_name = "set_keep_msg"]
+    fn set_keep_msg(s: *mut c_char, attr: c_int);
+    #[link_name = "msg_puts_hl"]
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, wrap: bool);
+    #[link_name = "msg"]
     fn nvim_bw_msg(s: *const c_char, hlf: c_int);
     fn nvim_bw_ui_flush();
-    fn nvim_bw_status_redraw_all();
+    #[link_name = "status_redraw_all"]
+    fn status_redraw_all();
 
     // Buffer change tracking
-    fn nvim_bw_unchanged(buf: BufHandle, mesg: c_int, ff: c_int);
+    #[link_name = "unchanged"]
+    fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
     fn nvim_bw_buf_get_changedtick(buf: BufHandle) -> i64;
     fn nvim_bw_buf_set_file_id(buf: BufHandle);
     fn nvim_bw_buf_store_file_info(buf: BufHandle, fi: FileInfoHandle);
-    fn nvim_bw_u_unchanged(buf: BufHandle);
-    fn nvim_bw_u_update_save_nr(buf: BufHandle);
-    fn nvim_bw_ml_timestamp(buf: BufHandle);
+    #[link_name = "u_unchanged"]
+    fn u_unchanged(buf: BufHandle);
+    #[link_name = "u_update_save_nr"]
+    fn u_update_save_nr(buf: BufHandle);
+    #[link_name = "ml_timestamp"]
+    fn ml_timestamp(buf: BufHandle);
     fn nvim_bw_bt_nofilename(buf: BufHandle) -> c_int;
 
     // OS operations
-    fn nvim_bw_os_fsync(fd: c_int) -> c_int;
+    #[link_name = "os_fsync"]
+    fn os_fsync(fd: c_int) -> c_int;
     fn nvim_bw_os_get_acl(fname: *const c_char) -> AclHandle;
     fn nvim_bw_os_free_acl(acl: AclHandle);
     fn nvim_bw_os_set_acl(fname: *const c_char, acl: AclHandle);
     fn nvim_bw_os_breakcheck();
-    fn nvim_bw_os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fileinfo_id_equal(a: FileInfoHandle, b: FileInfoHandle) -> c_int;
-    fn nvim_bw_os_fchown(fd: c_int, uid: u32, gid: u32);
+    #[link_name = "os_fileinfo"]
+    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_hardlinks"]
+    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_link"]
+    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo_id_equal"]
+    fn os_fileinfo_id_equal(a: FileInfoHandle, b: FileInfoHandle) -> c_int;
+    #[link_name = "os_fchown"]
+    fn os_fchown(fd: c_int, uid: u32, gid: u32);
     fn nvim_bw_os_copy_xattr(from: *const c_char, to: *const c_char);
     fn nvim_bw_fi_get_st_uid(fi: FileInfoHandle) -> u32;
     fn nvim_bw_fi_get_st_gid(fi: FileInfoHandle) -> u32;
@@ -274,7 +303,8 @@ extern "C" {
         src: *const c_char,
         dst: *const c_char,
     ) -> c_int;
-    fn nvim_bw_should_abort(retval: c_int) -> c_int;
+    #[link_name = "should_abort"]
+    fn should_abort(retval: c_int) -> c_int;
 
     // I/O
     fn nvim_bw_write_eintr_direct(fd: c_int, buf: *const c_char, len: usize) -> c_int;
@@ -370,6 +400,7 @@ extern "C" {
     fn nvim_bw_sizeof_FileInfo() -> usize;
     fn nvim_bw_get_curbuf() -> BufHandle;
     fn nvim_bw_XFREE_CLEAR(pp: *mut *mut c_char);
+    #[link_name = "os_file_settime"]
     fn nvim_bw_os_file_settime(path: *const c_char, atime: f64, mtime: f64);
 }
 
@@ -380,9 +411,7 @@ unsafe fn c_str_empty(s: *const c_char) -> bool {
 
 /// Helper: shortmess check
 unsafe fn shortmess(c: c_int) -> bool {
-    let mut result: c_int = 0;
-    unsafe { nvim_bw_shortmess_emit(c, &raw mut result) };
-    result != 0
+    unsafe { shortmess_direct(c) != 0 }
 }
 
 /// Main buf_write orchestrator.
@@ -420,7 +449,7 @@ pub unsafe extern "C" fn rs_buf_write(
     let mut sha_buf = vec![0u8; sha_size];
     let sha_ctx: Sha256Handle = sha_buf.as_mut_ptr().cast();
 
-    let bkc = unsafe { nvim_bw_get_bkc_flags(buf) };
+    let bkc = unsafe { get_bkc_flags(buf) };
 
     // Safety check: NULL or empty fname
     if unsafe { c_str_empty(fname) } {
@@ -429,7 +458,7 @@ pub unsafe extern "C" fn rs_buf_write(
     // Check memline
     if unsafe { nvim_bw_buf_get_ml_mfp_nonnull(buf) } == 0 {
         unsafe {
-            nvim_bw_emsg(nvim_bw_gettext(c"E749: Empty buffer".as_ptr()));
+            emsg(nvim_bw_gettext(c"E749: Empty buffer".as_ptr()));
         }
         return FAIL;
     }
@@ -440,7 +469,7 @@ pub unsafe extern "C" fn rs_buf_write(
     // Avoid crash for long name
     if unsafe { nvim_bw_strlen(fname) } >= 4096 {
         unsafe {
-            nvim_bw_emsg(nvim_bw_gettext(c"E75: Name too long".as_ptr()));
+            emsg(nvim_bw_gettext(c"E75: Name too long".as_ptr()));
         }
         return FAIL;
     }
@@ -486,7 +515,7 @@ pub unsafe extern "C" fn rs_buf_write(
 
     // Check if overwriting original file
     let overwriting = !unsafe { nvim_bw_buf_get_ffname(buf) }.is_null()
-        && unsafe { nvim_bw_path_fnamecmp(ffname, nvim_bw_buf_get_ffname(buf)) } == 0;
+        && unsafe { path_fnamecmp(ffname, nvim_bw_buf_get_ffname(buf)) } == 0;
 
     unsafe { nvim_bw_inc_no_wait_return() };
 
@@ -550,7 +579,7 @@ pub unsafe extern "C" fn rs_buf_write(
         unsafe { nvim_bw_set_msg_scroll(1) };
     }
     if filtering == 0 {
-        unsafe { nvim_bw_msg_ext_set_kind(c"bufwrite".as_ptr()) };
+        unsafe { msg_ext_set_kind(c"bufwrite".as_ptr()) };
         #[cfg(not(unix))]
         unsafe {
             nvim_bw_filemess(buf, sfname, c"".as_ptr());
@@ -632,8 +661,7 @@ pub unsafe extern "C" fn rs_buf_write(
         || !unsafe { c_str_empty(p_pm) };
     if dobackup {
         let p_bsk = unsafe { nvim_bw_get_p_bsk() };
-        if !unsafe { c_str_empty(p_bsk) }
-            && unsafe { nvim_bw_match_file_list(p_bsk, sfname, ffname) } != 0
+        if !unsafe { c_str_empty(p_bsk) } && unsafe { match_file_list(p_bsk, sfname, ffname) } != 0
         {
             dobackup = false;
         }
@@ -713,7 +741,7 @@ pub unsafe extern "C" fn rs_buf_write(
             && unsafe { nvim_bw_cpo_contains(CPO_FWRITE) } == 0
         {
             perm |= 0o200;
-            unsafe { nvim_bw_os_setperm(fname, perm) };
+            unsafe { os_setperm(fname, perm) };
             made_writable = true;
         }
     }
@@ -723,7 +751,7 @@ pub unsafe extern "C" fn rs_buf_write(
         unsafe {
             nvim_bw_buf_set_p_ro(buf, 0);
             nvim_bw_set_need_maketitle(1);
-            nvim_bw_status_redraw_all();
+            status_redraw_all();
         }
     }
 
@@ -748,7 +776,7 @@ pub unsafe extern "C" fn rs_buf_write(
         let exiting = unsafe { nvim_bw_get_exiting() } != 0;
         if !exiting || backup.is_null() {
             let p_fs = unsafe { nvim_bw_get_p_fs() };
-            unsafe { nvim_bw_ml_preserve(buf, 0, c_int::from(p_fs != 0)) };
+            unsafe { ml_preserve(buf, false, p_fs != 0) };
             if unsafe { nvim_bw_get_got_int() } != 0 {
                 err = unsafe { rs_set_err(nvim_bw_gettext(c"Interrupted".as_ptr())) };
                 // goto restore_backup
@@ -788,7 +816,7 @@ pub unsafe extern "C" fn rs_buf_write(
     if force_enc != 0 {
         let cmd = unsafe { nvim_bw_eap_get_cmd(eap) };
         let enc_ptr = unsafe { cmd.add(force_enc as usize) };
-        fenc = unsafe { nvim_bw_enc_canonize(enc_ptr) };
+        fenc = unsafe { enc_canonize(enc_ptr) };
         fenc_tofree = fenc;
     } else {
         fenc = unsafe { nvim_bw_buf_get_p_fenc(buf) };
@@ -950,7 +978,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 };
             let mode = if perm < 0 { 0o666 } else { perm & 0o777 };
 
-            fd = unsafe { nvim_bw_os_open(wfname, fflags, mode) };
+            fd = unsafe { os_open(wfname, fflags, mode) };
             while fd < 0 {
                 if err.msg.is_null() {
                     #[cfg(unix)]
@@ -958,11 +986,9 @@ pub unsafe extern "C" fn rs_buf_write(
                         // Don't delete if hard/symbolic link
                         let mut fi_buf2 = vec![0u8; fi_size];
                         let file_info: FileInfoHandle = fi_buf2.as_mut_ptr().cast();
-                        if (!newfile && unsafe { nvim_bw_os_fileinfo_hardlinks(file_info_old) } > 1)
-                            || (unsafe { nvim_bw_os_fileinfo_link(fname, file_info) } != 0
-                                && unsafe {
-                                    nvim_bw_os_fileinfo_id_equal(file_info, file_info_old)
-                                } == 0)
+                        if (!newfile && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1)
+                            || (unsafe { os_fileinfo_link(fname, file_info) } != 0
+                                && unsafe { os_fileinfo_id_equal(file_info, file_info_old) } == 0)
                         {
                             err = unsafe {
                                 rs_set_err(nvim_bw_gettext(
@@ -994,9 +1020,9 @@ pub unsafe extern "C" fn rs_buf_write(
                                     perm &= 0o777;
                                 }
                                 if append == 0 {
-                                    unsafe { nvim_bw_os_remove(wfname) };
+                                    unsafe { os_remove(wfname) };
                                 }
-                                fd = unsafe { nvim_bw_os_open(wfname, fflags, mode) };
+                                fd = unsafe { os_open(wfname, fflags, mode) };
                                 continue;
                             }
                         }
@@ -1014,9 +1040,9 @@ pub unsafe extern "C" fn rs_buf_write(
                             && perm >= 0
                         {
                             if append == 0 {
-                                unsafe { nvim_bw_os_remove(wfname) };
+                                unsafe { os_remove(wfname) };
                             }
-                            fd = unsafe { nvim_bw_os_open(wfname, fflags, mode) };
+                            fd = unsafe { os_open(wfname, fflags, mode) };
                             continue;
                         }
                     }
@@ -1101,7 +1127,7 @@ pub unsafe extern "C" fn rs_buf_write(
             nvim_bw_info_set_len(write_info, bufsize);
             nvim_bw_info_set_flags(write_info, wb_flags);
         }
-        fileformat = unsafe { nvim_bw_get_fileformat_force(buf, eap) };
+        fileformat = unsafe { get_fileformat_force(buf, eap) };
         let mut s = buffer;
         let mut len: c_int = 0;
 
@@ -1226,7 +1252,7 @@ pub unsafe extern "C" fn rs_buf_write(
     if !checking_conversion {
         // fsync
         if unsafe { nvim_bw_get_p_fs() } != 0 {
-            let error = unsafe { nvim_bw_os_fsync(fd) };
+            let error = unsafe { os_fsync(fd) };
             if error != 0 && !device && error != unsafe { nvim_bw_uv_enotsup() } {
                 err = unsafe {
                     rs_set_err_arg(nvim_bw_gettext(c"E667: Fsync failed: %s".as_ptr()), error)
@@ -1245,21 +1271,21 @@ pub unsafe extern "C" fn rs_buf_write(
             if !backup.is_null() && !backup_copy {
                 let mut fi_buf3 = vec![0u8; fi_size];
                 let file_info: FileInfoHandle = fi_buf3.as_mut_ptr().cast();
-                if unsafe { nvim_bw_os_fileinfo(wfname, file_info) } == 0
+                if unsafe { os_fileinfo(wfname, file_info) } == 0
                     || unsafe { nvim_bw_fi_get_st_uid(file_info) }
                         != unsafe { nvim_bw_fi_get_st_uid(file_info_old) }
                     || unsafe { nvim_bw_fi_get_st_gid(file_info) }
                         != unsafe { nvim_bw_fi_get_st_gid(file_info_old) }
                 {
                     unsafe {
-                        nvim_bw_os_fchown(
+                        os_fchown(
                             fd,
                             nvim_bw_fi_get_st_uid(file_info_old),
                             nvim_bw_fi_get_st_gid(file_info_old),
                         );
                     }
                     if perm >= 0 {
-                        unsafe { nvim_bw_os_setperm(wfname, perm) };
+                        unsafe { os_setperm(wfname, perm) };
                     }
                 }
                 unsafe { nvim_bw_buf_set_file_id(buf) };
@@ -1268,7 +1294,7 @@ pub unsafe extern "C" fn rs_buf_write(
             }
         }
 
-        let close_error = unsafe { nvim_bw_os_close(fd) };
+        let close_error = unsafe { os_close(fd) };
         if close_error != 0 {
             err = unsafe {
                 rs_set_err_arg(
@@ -1285,7 +1311,7 @@ pub unsafe extern "C" fn rs_buf_write(
         }
 
         if perm >= 0 {
-            unsafe { nvim_bw_os_setperm(wfname, perm) };
+            unsafe { os_setperm(wfname, perm) };
         }
 
         if !backup_copy {
@@ -1304,7 +1330,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 }
                 end = 0;
             }
-            unsafe { nvim_bw_os_remove(wfname) };
+            unsafe { os_remove(wfname) };
             if wfname_allocated {
                 unsafe { nvim_bw_xfree(wfname) };
             }
@@ -1363,11 +1389,10 @@ pub unsafe extern "C" fn rs_buf_write(
                         nvim_bw_ui_flush();
                     }
                 }
-                if unsafe { nvim_bw_os_copy(backup, fname, nvim_bw_uv_fs_copyfile_ficlone()) } == 0
-                {
+                if unsafe { os_copy(backup, fname, nvim_bw_uv_fs_copyfile_ficlone()) } == 0 {
                     end = 1;
                 }
-            } else if unsafe { nvim_bw_vim_rename(backup, fname) } == 0 {
+            } else if unsafe { vim_rename(backup, fname) } == 0 {
                 end = 1;
             }
         }
@@ -1482,9 +1507,9 @@ pub unsafe extern "C" fn rs_buf_write(
         }
 
         unsafe {
-            nvim_bw_msg_ext_set_kind(c"bufwrite".as_ptr());
+            msg_ext_set_kind(c"bufwrite".as_ptr());
             nvim_bw_set_msg_ext_overwrite(1);
-            nvim_bw_set_keep_msg(nvim_bw_msg_trunc(iobuff, 0, 0), 0);
+            set_keep_msg(msg_trunc(iobuff, false, 0), 0);
         }
     }
 
@@ -1497,21 +1522,21 @@ pub unsafe extern "C" fn rs_buf_write(
         && (overwriting || unsafe { nvim_bw_cpo_contains(CPO_PLUS) } != 0)
     {
         unsafe {
-            nvim_bw_unchanged(buf, 1, 0);
+            unchanged(buf, true, false);
         }
         let changedtick = unsafe { nvim_bw_buf_get_changedtick(buf) };
         if unsafe { nvim_bw_buf_get_last_changedtick(buf) } + 1 == changedtick {
             unsafe { nvim_bw_buf_set_last_changedtick(buf, changedtick) };
         }
         unsafe {
-            nvim_bw_u_unchanged(buf);
-            nvim_bw_u_update_save_nr(buf);
+            u_unchanged(buf);
+            u_update_save_nr(buf);
         }
     }
 
     // Update timestamp and flags
     if overwriting {
-        unsafe { nvim_bw_ml_timestamp(buf) };
+        unsafe { ml_timestamp(buf) };
         let flags = unsafe { nvim_bw_buf_get_flags(buf) };
         if append != 0 {
             unsafe { nvim_bw_buf_set_flags(buf, flags & !BF_NEW) };
@@ -1523,39 +1548,38 @@ pub unsafe extern "C" fn rs_buf_write(
     // Patchmode
     let p_pm = unsafe { nvim_bw_get_p_pm() };
     if !unsafe { c_str_empty(p_pm) } && dobackup {
-        let org = unsafe { nvim_bw_modname(fname, p_pm, 0) };
+        let org = unsafe { modname(fname, p_pm, false) };
         if backup.is_null() {
             // Create empty original file
             if org.is_null() {
                 unsafe {
-                    nvim_bw_emsg(nvim_bw_gettext(
+                    emsg(nvim_bw_gettext(
                         c"E206: Patchmode: can't touch empty original file".as_ptr(),
                     ));
                 }
             } else {
                 let o_flags = unsafe { nvim_bw_open_flags_creat_wronly_excl_nofollow() };
-                let empty_fd = unsafe {
-                    nvim_bw_os_open(org, o_flags, if perm < 0 { 0o666 } else { perm & 0o777 })
-                };
+                let empty_fd =
+                    unsafe { os_open(org, o_flags, if perm < 0 { 0o666 } else { perm & 0o777 }) };
                 if empty_fd < 0 {
                     unsafe {
-                        nvim_bw_emsg(nvim_bw_gettext(
+                        emsg(nvim_bw_gettext(
                             c"E206: Patchmode: can't touch empty original file".as_ptr(),
                         ));
                     }
                 } else {
-                    unsafe { nvim_bw_os_close(empty_fd) };
+                    unsafe { os_close(empty_fd) };
                 }
             }
         } else if org.is_null() {
             unsafe {
-                nvim_bw_emsg(nvim_bw_gettext(
+                emsg(nvim_bw_gettext(
                     c"E205: Patchmode: can't save original file".as_ptr(),
                 ));
             }
-        } else if unsafe { nvim_bw_os_path_exists(org) } == 0 {
+        } else if unsafe { os_path_exists(org) } == 0 {
             unsafe {
-                nvim_bw_vim_rename(backup, org);
+                vim_rename(backup, org);
                 nvim_bw_XFREE_CLEAR(&raw mut backup);
             }
             #[cfg(unix)]
@@ -1571,7 +1595,7 @@ pub unsafe extern "C" fn rs_buf_write(
             }
         }
         if !org.is_null() {
-            unsafe { nvim_bw_os_setperm(org, nvim_bw_os_getperm(fname) & 0o777) };
+            unsafe { os_setperm(org, os_getperm(fname) & 0o777) };
             unsafe { nvim_bw_xfree(org) };
         }
     }
@@ -1580,9 +1604,9 @@ pub unsafe extern "C" fn rs_buf_write(
     if unsafe { nvim_bw_get_p_bk() } == 0
         && !backup.is_null()
         && conv_error == 0
-        && unsafe { nvim_bw_os_remove(backup) } != 0
+        && unsafe { os_remove(backup) } != 0
     {
-        unsafe { nvim_bw_emsg(nvim_bw_gettext(c"E207: Can't delete backup file".as_ptr())) };
+        unsafe { emsg(nvim_bw_gettext(c"E207: Can't delete backup file".as_ptr())) };
     }
 
     // ===== nofail cleanup =====
@@ -1616,7 +1640,7 @@ pub unsafe extern "C" fn rs_buf_write(
     }
 
     // Post-autocmds
-    if unsafe { nvim_bw_should_abort(retval) } == 0 {
+    if unsafe { should_abort(retval) } == 0 {
         unsafe {
             rs_buf_write_do_post_autocmds(
                 buf,
@@ -1628,7 +1652,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 c_int::from(whole),
             );
         }
-        if unsafe { nvim_bw_aborting() } != 0 {
+        if unsafe { aborting() } != 0 {
             retval = FAIL;
         }
     }
@@ -1654,18 +1678,18 @@ unsafe fn restore_backup_and_fail(
     let backup = *backup;
     if !backup.is_null() && std::ptr::eq(wfname, fname) {
         if backup_copy {
-            if unsafe { nvim_bw_os_path_exists(fname) } == 0 {
-                unsafe { nvim_bw_vim_rename(backup, fname) };
+            if unsafe { os_path_exists(fname) } == 0 {
+                unsafe { vim_rename(backup, fname) };
             }
-            if unsafe { nvim_bw_os_path_exists(fname) } != 0 {
-                unsafe { nvim_bw_os_remove(backup) };
+            if unsafe { os_path_exists(fname) } != 0 {
+                unsafe { os_remove(backup) };
             }
         } else {
-            unsafe { nvim_bw_vim_rename(backup, fname) };
+            unsafe { vim_rename(backup, fname) };
         }
     }
 
-    if !newfile && unsafe { nvim_bw_os_path_exists(fname) } == 0 {
+    if !newfile && unsafe { os_path_exists(fname) } == 0 {
         // Original file lost - end = 0 is handled by caller
     }
 }
@@ -1739,17 +1763,17 @@ unsafe fn report_write_error(
 
     if end == 0 {
         unsafe {
-            nvim_bw_msg_puts_hl(
+            msg_puts_hl(
                 nvim_bw_gettext(c"\nWARNING: Original file may be lost or damaged\n".as_ptr()),
                 HLF_E,
-                1,
+                true,
             );
-            nvim_bw_msg_puts_hl(
+            msg_puts_hl(
                 nvim_bw_gettext(
                     c"don't quit the editor until the file is successfully written!".as_ptr(),
                 ),
                 HLF_E,
-                1,
+                true,
             );
         }
 
@@ -1757,7 +1781,7 @@ unsafe fn report_write_error(
         let fi_size = unsafe { nvim_bw_sizeof_FileInfo() };
         let mut fi_buf = vec![0u8; fi_size];
         let fi: FileInfoHandle = fi_buf.as_mut_ptr().cast();
-        if unsafe { nvim_bw_os_fileinfo(fname, fi) } != 0 {
+        if unsafe { os_fileinfo(fname, fi) } != 0 {
             unsafe {
                 nvim_bw_buf_store_file_info(buf, fi);
                 let mtime = nvim_bw_buf_get_mtime(buf);

@@ -67,7 +67,8 @@ impl BwError {
 }
 
 extern "C" {
-    fn nvim_bw_emsg(msg: *const c_char);
+    #[link_name = "emsg"]
+    fn nvim_bw_emsg(msg: *const c_char) -> c_int;
     fn nvim_bw_semsg_2(fmt: *const c_char, a: *const c_char, b: *const c_char);
     fn nvim_bw_semsg_3(fmt: *const c_char, a: *const c_char, b: *const c_char, c: *const c_char);
     fn nvim_bw_semsg_4(

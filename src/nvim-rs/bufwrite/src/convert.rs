@@ -35,9 +35,12 @@ extern "C" {
     fn nvim_bw_iconv_convert(ip: BwInfoHandle, bufp: *mut *mut c_char, lenp: *mut c_int) -> c_int;
 
     // mbyte
-    fn nvim_bw_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
-    fn nvim_bw_utf_ptr2char(p: *const c_char) -> c_int;
-    fn nvim_bw_utf_ptr2len_len(p: *const c_char, len: c_int) -> c_int;
+    #[link_name = "utf_char2bytes"]
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    #[link_name = "utf_ptr2char"]
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    #[link_name = "utf_ptr2len_len"]
+    fn utf_ptr2len_len(p: *const c_char, len: c_int) -> c_int;
 
     // I/O
     fn nvim_bw_write_eintr(fd: c_int, buf: *const c_char, len: usize) -> c_int;
@@ -70,7 +73,7 @@ unsafe fn convert_utf8_path(ip: BwInfoHandle, bufp: *mut *mut c_char, lenp: *mut
     let len = unsafe { *lenp };
     for wlen in 0..len {
         let byte = unsafe { *buf.add(wlen as usize) } as u8;
-        let n = unsafe { nvim_bw_utf_char2bytes(c_int::from(byte), p) };
+        let n = unsafe { utf_char2bytes(c_int::from(byte), p) };
         p = unsafe { p.add(n as usize) };
     }
     unsafe { *bufp = conv_buf };
@@ -116,9 +119,8 @@ unsafe fn convert_ucs_path(
                     l as usize,
                 );
             }
-            let seq_len = unsafe {
-                nvim_bw_utf_ptr2len_len(rest_ptr.cast::<c_char>().cast_const(), restlen + l)
-            };
+            let seq_len =
+                unsafe { utf_ptr2len_len(rest_ptr.cast::<c_char>().cast_const(), restlen + l) };
             if seq_len > restlen + len {
                 // Incomplete byte sequence at the end.
                 if restlen + len > crate::CONV_RESTLEN as c_int {
@@ -128,7 +130,7 @@ unsafe fn convert_ucs_path(
                 break;
             }
             c = if seq_len > 1 {
-                (unsafe { nvim_bw_utf_ptr2char(rest_ptr.cast::<c_char>().cast_const()) }) as u32
+                (unsafe { utf_ptr2char(rest_ptr.cast::<c_char>().cast_const()) }) as u32
             } else {
                 u32::from(unsafe { *rest_ptr })
             };
@@ -148,7 +150,7 @@ unsafe fn convert_ucs_path(
                 n = 0;
             }
         } else {
-            let seq_len = unsafe { nvim_bw_utf_ptr2len_len(buf.add(wlen as usize), len - wlen) };
+            let seq_len = unsafe { utf_ptr2len_len(buf.add(wlen as usize), len - wlen) };
             if seq_len > len - wlen {
                 // Incomplete byte sequence at the end.
                 let remaining = len - wlen;
@@ -166,7 +168,7 @@ unsafe fn convert_ucs_path(
                 break;
             }
             c = if seq_len > 1 {
-                (unsafe { nvim_bw_utf_ptr2char(buf.add(wlen as usize)) }) as u32
+                (unsafe { utf_ptr2char(buf.add(wlen as usize)) }) as u32
             } else {
                 u32::from(unsafe { *(buf.add(wlen as usize)) } as u8)
             };

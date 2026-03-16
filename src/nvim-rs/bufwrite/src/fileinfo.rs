@@ -20,13 +20,17 @@ const NODE_OTHER: c_int = 2;
 
 extern "C" {
     // OS functions
-    fn nvim_bw_os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
+    #[link_name = "os_fileinfo"]
+    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
     fn nvim_bw_os_nodetype(fname: *const c_char) -> c_int;
     #[cfg(not(unix))]
-    fn nvim_bw_os_getperm(fname: *const c_char) -> c_int;
+    #[link_name = "os_getperm"]
+    fn os_getperm(fname: *const c_char) -> c_int;
     #[cfg(not(unix))]
-    fn nvim_bw_os_isdir(fname: *const c_char) -> c_int;
-    fn nvim_bw_os_file_is_writable(fname: *const c_char) -> c_int;
+    #[link_name = "os_isdir"]
+    fn os_isdir(fname: *const c_char) -> c_int;
+    #[link_name = "os_file_is_writable"]
+    fn os_file_is_writable(fname: *const c_char) -> c_int;
 
     // FileInfo field accessors
     #[cfg(unix)]
@@ -46,8 +50,10 @@ extern "C" {
     fn nvim_bw_set_msg_silent(val: c_int);
 
     // Dialog
-    fn nvim_bw_msg(msg: *const c_char, hlf: c_int);
-    fn nvim_bw_ask_yesno(msg: *const c_char) -> c_int;
+    #[link_name = "msg"]
+    fn msg(msg: *const c_char, hlf: c_int);
+    #[link_name = "ask_yesno"]
+    fn ask_yesno(msg: *const c_char) -> c_int;
 
     // Options
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
@@ -80,9 +86,9 @@ unsafe fn check_mtime_inner(buf: BufHandle, file_info: FileInfoHandle) -> c_int 
         let msg_text = unsafe {
             nvim_bw_gettext(c"WARNING: The file has been changed since reading it!!!".as_ptr())
         };
-        unsafe { nvim_bw_msg(msg_text, HLF_E) };
+        unsafe { msg(msg_text, HLF_E) };
         let prompt = unsafe { nvim_bw_gettext(c"Do you really want to write to it".as_ptr()) };
-        if unsafe { nvim_bw_ask_yesno(prompt) } == c_int::from(b'n') {
+        if unsafe { ask_yesno(prompt) } == c_int::from(b'n') {
             return FAIL;
         }
         unsafe { nvim_bw_set_msg_scroll(0) }; // Always overwrite the file message now.
@@ -106,7 +112,7 @@ unsafe fn get_fileinfo_os_inner(
     err: *mut BwError,
 ) -> c_int {
     unsafe { *perm = -1 };
-    if unsafe { nvim_bw_os_fileinfo(fname, file_info_old) } == 0 {
+    if unsafe { os_fileinfo(fname, file_info_old) } == 0 {
         unsafe { *newfile = true };
     } else {
         unsafe { *perm = nvim_bw_fi_get_st_mode(file_info_old) };
@@ -170,17 +176,17 @@ unsafe fn get_fileinfo_os_inner(
             *perm = -1;
         }
     } else {
-        unsafe { *perm = nvim_bw_os_getperm(fname) };
+        unsafe { *perm = os_getperm(fname) };
         if unsafe { *perm } < 0 {
             unsafe { *newfile = true };
-        } else if unsafe { nvim_bw_os_isdir(fname) } != 0 {
+        } else if unsafe { os_isdir(fname) } != 0 {
             let num = c"E502".as_ptr();
             let msg = unsafe { nvim_bw_gettext(c"is a directory".as_ptr()) };
             unsafe { *err = BwError::with_num(num, msg) };
             return FAIL;
         }
         if overwriting {
-            unsafe { nvim_bw_os_fileinfo(fname, file_info_old) };
+            unsafe { os_fileinfo(fname, file_info_old) };
         }
     }
     OK
@@ -222,7 +228,7 @@ unsafe fn get_fileinfo_inner(
 
     if !unsafe { *device } && !unsafe { *newfile } {
         // Check if the file is really writable
-        unsafe { *readonly = nvim_bw_os_file_is_writable(fname) == 0 };
+        unsafe { *readonly = os_file_is_writable(fname) == 0 };
 
         if !forceit && unsafe { *readonly } {
             if unsafe { nvim_bw_cpo_contains(CPO_FWRITE) } != 0 {

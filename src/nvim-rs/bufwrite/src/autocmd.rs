@@ -55,20 +55,24 @@ extern "C" {
     fn nvim_bw_aucmd_prepbuf(aco: AcoHandle, buf: BufHandle);
     fn nvim_bw_aucmd_restbuf(aco: AcoHandle);
     fn nvim_bw_set_bufref(bufref: BufrefHandle, buf: BufHandle);
-    fn nvim_bw_bufref_valid(bufref: BufrefHandle) -> c_int;
-    fn nvim_bw_apply_autocmds_exarg(
+    #[link_name = "bufref_valid"]
+    fn bufref_valid(bufref: BufrefHandle) -> bool;
+    #[link_name = "apply_autocmds_exarg"]
+    fn apply_autocmds_exarg(
         event: c_int,
         fname: *const c_char,
         fname_io: *const c_char,
-        force: c_int,
+        force: bool,
         buf: BufHandle,
         eap: ExargHandle,
-    ) -> c_int;
+    ) -> bool;
 
     // Buffer queries
     fn nvim_bw_bt_nofilename(buf: BufHandle) -> c_int;
-    fn nvim_bw_curbufIsChanged() -> c_int;
-    fn nvim_bw_aborting() -> c_int;
+    #[link_name = "curbufIsChanged"]
+    fn curbufIsChanged() -> c_int;
+    #[link_name = "aborting"]
+    fn aborting() -> c_int;
     fn nvim_bw_get_curbuf() -> BufHandle;
 
     // Buffer field accessors (names match C functions exactly)
@@ -84,9 +88,12 @@ extern "C" {
     fn nvim_bw_buf_set_no_eol_lnum(buf: BufHandle, val: i32);
 
     // Undo
-    fn nvim_bw_u_unchanged(buf: BufHandle);
-    fn nvim_bw_u_update_save_nr(buf: BufHandle);
-    fn nvim_bw_ml_timestamp(buf: BufHandle);
+    #[link_name = "u_unchanged"]
+    fn u_unchanged(buf: BufHandle);
+    #[link_name = "u_update_save_nr"]
+    fn u_update_save_nr(buf: BufHandle);
+    #[link_name = "ml_timestamp"]
+    fn ml_timestamp(buf: BufHandle);
 
     // Globals
     fn nvim_bw_dec_no_wait_return();
@@ -96,7 +103,8 @@ extern "C" {
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
 
     // Error/message
-    fn nvim_bw_emsg(msg: *const c_char);
+    #[link_name = "emsg"]
+    fn emsg(msg: *const c_char) -> c_int;
     fn nvim_bw_gettext(s: *const c_char) -> *const c_char;
     fn nvim_bw_semsg_nofile_err(buf: BufHandle);
 
@@ -160,65 +168,56 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
 
     if append != 0 {
         did_cmd = unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILEAPPENDCMD, sfname, sfname, 0, curbuf, eap)
-        } != 0;
+            apply_autocmds_exarg(EVENT_FILEAPPENDCMD, sfname, sfname, false, curbuf, eap)
+        };
         if !did_cmd {
             if overwriting != 0 && unsafe { nvim_bw_bt_nofilename(curbuf) } != 0 {
                 nofile_err = true;
             } else {
                 unsafe {
-                    nvim_bw_apply_autocmds_exarg(
-                        EVENT_FILEAPPENDPRE,
-                        sfname,
-                        sfname,
-                        0,
-                        curbuf,
-                        eap,
-                    );
+                    apply_autocmds_exarg(EVENT_FILEAPPENDPRE, sfname, sfname, false, curbuf, eap);
                 }
             }
         }
     } else if filtering != 0 {
         unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILTERWRITEPRE, ptr::null(), sfname, 0, curbuf, eap);
+            apply_autocmds_exarg(
+                EVENT_FILTERWRITEPRE,
+                ptr::null(),
+                sfname,
+                false,
+                curbuf,
+                eap,
+            );
         }
     } else if reset_changed != 0 && whole != 0 {
-        let was_changed = unsafe { nvim_bw_curbufIsChanged() } != 0;
+        let was_changed = unsafe { curbufIsChanged() } != 0;
 
-        did_cmd = unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, 0, curbuf, eap)
-        } != 0;
+        did_cmd =
+            unsafe { apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf, eap) };
         if did_cmd {
-            if was_changed && unsafe { nvim_bw_curbufIsChanged() } == 0 {
+            if was_changed && unsafe { curbufIsChanged() } == 0 {
                 unsafe {
-                    nvim_bw_u_unchanged(curbuf);
-                    nvim_bw_u_update_save_nr(curbuf);
+                    u_unchanged(curbuf);
+                    u_update_save_nr(curbuf);
                 }
             }
         } else if overwriting != 0 && unsafe { nvim_bw_bt_nofilename(curbuf) } != 0 {
             nofile_err = true;
         } else {
             unsafe {
-                nvim_bw_apply_autocmds_exarg(EVENT_BUFWRITEPRE, sfname, sfname, 0, curbuf, eap);
+                apply_autocmds_exarg(EVENT_BUFWRITEPRE, sfname, sfname, false, curbuf, eap);
             }
         }
     } else {
-        did_cmd = unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, 0, curbuf, eap)
-        } != 0;
+        did_cmd =
+            unsafe { apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, false, curbuf, eap) };
         if !did_cmd {
             if overwriting != 0 && unsafe { nvim_bw_bt_nofilename(curbuf) } != 0 {
                 nofile_err = true;
             } else {
                 unsafe {
-                    nvim_bw_apply_autocmds_exarg(
-                        EVENT_FILEWRITEPRE,
-                        sfname,
-                        sfname,
-                        0,
-                        curbuf,
-                        eap,
-                    );
+                    apply_autocmds_exarg(EVENT_FILEWRITEPRE, sfname, sfname, false, curbuf, eap);
                 }
             }
         }
@@ -228,10 +227,10 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
     unsafe { nvim_bw_aucmd_restbuf(aco) };
 
     // Check if buffer was deleted/unloaded
-    let buf = if unsafe { nvim_bw_bufref_valid(bufref) } == 0 {
-        ptr::null_mut()
-    } else {
+    let buf = if unsafe { bufref_valid(bufref) } {
         buf
+    } else {
+        ptr::null_mut()
     };
 
     // C condition: buf == NULL
@@ -243,7 +242,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             && !empty_memline)
         || did_cmd
         || nofile_err
-        || unsafe { nvim_bw_aborting() } != 0;
+        || unsafe { aborting() } != 0;
 
     if should_return {
         if !buf.is_null() && (unsafe { nvim_bw_get_cmdmod_cmod_flags() } & CMOD_LOCKMARKS != 0) {
@@ -262,7 +261,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             unsafe { nvim_bw_semsg_nofile_err(nvim_bw_get_curbuf()) };
         }
 
-        if nofile_err || unsafe { nvim_bw_aborting() } != 0 {
+        if nofile_err || unsafe { aborting() } != 0 {
             return FAIL;
         }
         if did_cmd {
@@ -270,7 +269,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
                 return OK;
             }
             if overwriting != 0 {
-                unsafe { nvim_bw_ml_timestamp(buf) };
+                unsafe { ml_timestamp(buf) };
                 let flags = unsafe { nvim_bw_buf_get_flags(buf) };
                 if append != 0 {
                     unsafe { nvim_bw_buf_set_flags(buf, flags & !BF_NEW) };
@@ -287,9 +286,9 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             }
             return OK;
         }
-        if unsafe { nvim_bw_aborting() } == 0 {
+        if unsafe { aborting() } == 0 {
             unsafe {
-                nvim_bw_emsg(nvim_bw_gettext(
+                emsg(nvim_bw_gettext(
                     c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr(),
                 ));
             }
@@ -311,7 +310,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
                 unsafe {
                     nvim_bw_dec_no_wait_return();
                     nvim_bw_set_msg_scroll(msg_save);
-                    nvim_bw_emsg(nvim_bw_gettext(
+                    emsg(nvim_bw_gettext(
                         c"E204: Autocommand changed number of lines in unexpected way".as_ptr(),
                     ));
                 }
@@ -368,19 +367,26 @@ pub unsafe extern "C" fn rs_buf_write_do_post_autocmds(
 
     if append != 0 {
         unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILEAPPENDPOST, fname, fname, 0, curbuf, eap);
+            apply_autocmds_exarg(EVENT_FILEAPPENDPOST, fname, fname, false, curbuf, eap);
         }
     } else if filtering != 0 {
         unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILTERWRITEPOST, ptr::null(), fname, 0, curbuf, eap);
+            apply_autocmds_exarg(
+                EVENT_FILTERWRITEPOST,
+                ptr::null(),
+                fname,
+                false,
+                curbuf,
+                eap,
+            );
         }
     } else if reset_changed != 0 && whole != 0 {
         unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_BUFWRITEPOST, fname, fname, 0, curbuf, eap);
+            apply_autocmds_exarg(EVENT_BUFWRITEPOST, fname, fname, false, curbuf, eap);
         }
     } else {
         unsafe {
-            nvim_bw_apply_autocmds_exarg(EVENT_FILEWRITEPOST, fname, fname, 0, curbuf, eap);
+            apply_autocmds_exarg(EVENT_FILEWRITEPOST, fname, fname, false, curbuf, eap);
         }
     }
 
