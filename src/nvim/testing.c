@@ -93,173 +93,15 @@ int nvim_testing_tv_get_bool_value(const typval_T *tv)
   return (int)tv->vval.v_bool;
 }
 
-/// Get called_vim_beep global state.
-int nvim_testing_get_called_vim_beep(void)
-{
-  return called_vim_beep ? 1 : 0;
-}
-
-/// Set called_vim_beep global state.
-void nvim_testing_set_called_vim_beep(int val)
-{
-  called_vim_beep = val != 0;
-}
-
-/// Get suppress_errthrow global state.
-int nvim_testing_get_suppress_errthrow(void)
-{
-  return suppress_errthrow ? 1 : 0;
-}
-
-/// Set suppress_errthrow global state.
-void nvim_testing_set_suppress_errthrow(int val)
-{
-  suppress_errthrow = val != 0;
-}
-
-/// Get emsg_silent global state.
-int nvim_testing_get_emsg_silent(void)
-{
-  return emsg_silent;
-}
-
-/// Set emsg_silent global state.
-void nvim_testing_set_emsg_silent(int val)
-{
-  emsg_silent = val;
-}
-
 /// Check if a typval is a float type.
 int nvim_testing_tv_is_float(const typval_T *tv)
 {
   return tv != NULL && tv->v_type == VAR_FLOAT;
 }
 
-/// Format range string for float values.
-void nvim_testing_format_range_float(char *buf, size_t size, double lower, double upper)
-{
-  vim_snprintf(buf, size, "range %g - %g,", lower, upper);
-}
-
-/// Wrapper for gettext translation.
-const char *nvim_testing_gettext(const char *s)
-{
-  return _(s);
-}
-
-/// Format a "Can't read file" error message into buf (for e_notread).
-void nvim_testing_format_notread(char *buf, size_t size, const char *fname)
-{
-  vim_snprintf(buf, size, _(e_notread), fname);
-}
-
 // =============================================================================
 // C accessor functions for f_assert_fails (Rust)
 // =============================================================================
-
-/// Get the current trylevel.
-int nvim_testing_get_trylevel(void)
-{
-  return trylevel;
-}
-
-/// Set the current trylevel.
-void nvim_testing_set_trylevel(int val)
-{
-  trylevel = val;
-}
-
-/// Get the called_emsg counter.
-int nvim_testing_get_called_emsg(void)
-{
-  return called_emsg;
-}
-
-/// Set in_assert_fails flag.
-void nvim_testing_set_in_assert_fails(int val)
-{
-  in_assert_fails = val != 0;
-}
-
-/// Increment no_wait_return counter.
-void nvim_testing_increment_no_wait_return(void)
-{
-  no_wait_return++;
-}
-
-/// Decrement no_wait_return counter.
-void nvim_testing_decrement_no_wait_return(void)
-{
-  no_wait_return--;
-}
-
-/// Set did_emsg flag.
-void nvim_testing_set_did_emsg(int val)
-{
-  did_emsg = val;
-}
-
-/// Set got_int flag.
-void nvim_testing_set_got_int(int val)
-{
-  got_int = val != 0;
-}
-
-/// Set msg_col.
-void nvim_testing_set_msg_col(int val)
-{
-  msg_col = val;
-}
-
-/// Set need_wait_return flag.
-void nvim_testing_set_need_wait_return(int val)
-{
-  need_wait_return = val != 0;
-}
-
-/// Set emsg_on_display flag.
-void nvim_testing_set_emsg_on_display(int val)
-{
-  emsg_on_display = val != 0;
-}
-
-/// Reset lines_left to Rows.
-void nvim_testing_reset_lines_left(void)
-{
-  lines_left = Rows;
-}
-
-/// Call msg_reset_scroll().
-void nvim_testing_call_msg_reset_scroll(void)
-{
-  msg_reset_scroll();
-}
-
-/// Take ownership of emsg_assert_fails_msg (returns pointer, clears global).
-char *nvim_testing_take_emsg_assert_fails_msg(void)
-{
-  char *msg = emsg_assert_fails_msg;
-  emsg_assert_fails_msg = NULL;
-  return msg;
-}
-
-/// Get emsg_assert_fails_lnum.
-long nvim_testing_get_emsg_assert_fails_lnum(void)
-{
-  return emsg_assert_fails_lnum;
-}
-
-/// Get emsg_assert_fails_context (borrowed pointer).
-char *nvim_testing_get_emsg_assert_fails_context(void)
-{
-  return emsg_assert_fails_context;
-}
-
-/// Clear v:errmsg by setting it to NULL.
-void nvim_testing_clear_vim_var_errmsg(void)
-{
-  set_vim_var_string(VV_ERRMSG, NULL, 0);
-}
 
 /// Get the list length from a typval that contains a list.
 int nvim_testing_tv_list_len(const typval_T *tv)
@@ -396,31 +238,6 @@ void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_
   *got_tv = got_diff;
 }
 
-static const char e_assert_fails_second_arg[]
-  = N_(
-      "E856: \"assert_fails()\" second argument must be a string or a list with one or two strings");
-static const char e_assert_fails_fourth_argument[]
-  = N_("E1115: \"assert_fails()\" fourth argument must be a number");
-static const char e_assert_fails_fifth_argument[]
-  = N_("E1116: \"assert_fails()\" fifth argument must be a string");
-
-/// Get translated e_assert_fails_second_arg string.
-const char *nvim_testing_get_e_assert_fails_second_arg(void)
-{
-  return _(e_assert_fails_second_arg);
-}
-
-/// Get translated e_assert_fails_fourth_argument string.
-const char *nvim_testing_get_e_assert_fails_fourth_argument(void)
-{
-  return _(e_assert_fails_fourth_argument);
-}
-
-/// Get translated e_assert_fails_fifth_argument string.
-const char *nvim_testing_get_e_assert_fails_fifth_argument(void)
-{
-  return _(e_assert_fails_fifth_argument);
-}
 
 /// Append "p[clen]" to "gap", escaping unprintable characters.
 /// Changes NL to \n, CR to \r, etc.
