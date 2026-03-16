@@ -1226,9 +1226,6 @@ int nvim_excmds_autowrite_curbuf(int forceit)
   return autowrite(curbuf, (bool)forceit) == OK ? 1 : 0;
 }
 
-/// Get p_confirm option.
-int nvim_excmds_get_p_confirm(void) { return p_confirm ? 1 : 0; }
-
 /// Wrap dialog_changed(curbuf, false).
 void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
 
@@ -1264,9 +1261,6 @@ void nvim_excmds_getout(int code) { getout(code); }
 
 /// Wrap not_exiting().
 void nvim_excmds_not_exiting(void) { not_exiting(); }
-
-/// Get firstbuf (the first buffer in the buffer list).
-buf_T *nvim_excmds_get_firstbuf(void) { return firstbuf; }
 
 /// Get buf->b_next (next buffer in list, or NULL).
 buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
@@ -2087,20 +2081,9 @@ void nvim_ecmd_cmdwin_restore_free(void *bundle)
   xfree(s);
 }
 
-/// Get keep_help_flag
-int nvim_ecmd_get_keep_help_flag(void) { return keep_help_flag ? 1 : 0; }
-
 /// Check if CMOD_KEEPALT is set in cmdmod.cmod_flags
 int nvim_ecmd_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPALT) != 0 ? 1 : 0; }
 
-/// Get p_awa (autowrite all)
-int nvim_ecmd_get_p_awa(void) { return p_awa ? 1 : 0; }
-
-/// Set msg_scrolled_ign
-void nvim_ecmd_set_msg_scrolled_ign(int val) { msg_scrolled_ign = (bool)val; }
-
-/// Get msg_listdo_overwrite
-int nvim_ecmd_get_msg_listdo_overwrite(void) { return msg_listdo_overwrite ? 1 : 0; }
 
 // --- Misc wrappers ---
 

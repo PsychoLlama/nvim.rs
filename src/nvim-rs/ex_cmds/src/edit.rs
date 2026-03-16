@@ -185,13 +185,9 @@ extern "C" {
     fn nvim_ecmd_cmdwin_restore_free(bundle: *mut std::ffi::c_void);
     fn nvim_get_exmode_active() -> bool;
     fn nvim_get_skip_redraw() -> bool;
-    fn nvim_ecmd_get_keep_help_flag() -> c_int;
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
-    fn nvim_ecmd_get_p_awa() -> c_int;
     fn nvim_get_p_sol() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_ecmd_set_msg_scrolled_ign(val: c_int);
-    fn nvim_ecmd_get_msg_listdo_overwrite() -> c_int;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ecmd_get_p_ur() -> i64;
 
@@ -365,11 +361,8 @@ pub unsafe extern "C" fn rs_do_ecmd(
             || (nvim_excmds_curbuf_get_b_nwindows() == 1
                 && (flags & (ECMD_HIDE | ECMD_ADDBUF | ECMD_ALTBUF)) == 0);
         if need_check {
-            let ccgd = if nvim_ecmd_get_p_awa() != 0 {
-                CCGD_AW
-            } else {
-                0
-            } | if other_file { 0 } else { CCGD_MULTWIN }
+            let ccgd = if crate::p_awa != 0 { CCGD_AW } else { 0 }
+                | if other_file { 0 } else { CCGD_MULTWIN }
                 | if (flags & ECMD_FORCEIT) != 0 {
                     CCGD_FORCEIT
                 } else {
@@ -641,7 +634,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
         buf = nvim_get_curbuf();
 
-        if (flags & ECMD_SET_HELP) != 0 || nvim_ecmd_get_keep_help_flag() != 0 {
+        if (flags & ECMD_SET_HELP) != 0 || crate::keep_help_flag {
             prepare_help_buffer();
         } else if nvim_ecmd_curbuf_get_help() == 0 {
             set_buflisted(1);
@@ -836,7 +829,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
             // 'O' flag in 'cpoptions': overwrite previous file message
             if nvim_ecmd_shortmess_overall() != 0
-                && nvim_ecmd_get_msg_listdo_overwrite() == 0
+                && crate::msg_listdo_overwrite == 0
                 && !crate::exiting
                 && nvim_get_p_verbose() == 0
             {
@@ -847,13 +840,13 @@ pub unsafe extern "C" fn rs_do_ecmd(
             }
             msg_start();
             nvim_set_msg_scroll(msg_scroll_save);
-            nvim_ecmd_set_msg_scrolled_ign(1);
+            crate::msg_scrolled_ign = true;
 
             if nvim_ecmd_shortmess_fileinfo() == 0 {
                 nvim_fileinfo_call();
             }
 
-            nvim_ecmd_set_msg_scrolled_ign(0);
+            crate::msg_scrolled_ign = false;
         }
 
         nvim_ecmd_curbuf_set_last_used();

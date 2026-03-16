@@ -424,7 +424,6 @@ extern "C" {
     fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
     fn nvim_excmds_buf_hide_curbuf() -> c_int;
     fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
-    fn nvim_excmds_get_p_confirm() -> c_int;
     fn nvim_excmds_dialog_changed_curbuf();
     fn nvim_excmds_no_write_message();
     fn nvim_excmds_no_wait_return_inc();
@@ -503,7 +502,7 @@ pub unsafe extern "C" fn rs_getfile(
         && nvim_excmds_curbufIsChanged() != 0
         && nvim_excmds_autowrite_curbuf(forceit) == 0
     {
-        if nvim_excmds_get_p_confirm() != 0 && crate::p_write != 0 {
+        if crate::p_confirm != 0 && crate::p_write != 0 {
             nvim_excmds_dialog_changed_curbuf();
         }
         if nvim_excmds_curbufIsChanged() != 0 {
@@ -609,7 +608,6 @@ extern "C" {
     fn nvim_excmds_before_quit_all(eap: *mut ExArgHandle) -> c_int;
     fn nvim_excmds_getout(code: c_int);
     fn nvim_excmds_not_exiting();
-    fn nvim_excmds_get_firstbuf() -> *mut BufHandle;
     fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
     fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_no_write_message_nobang(buf: *mut BufHandle);
@@ -655,7 +653,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
     }
 
     // Iterate all buffers (manually walk the linked list)
-    let mut buf = nvim_excmds_get_firstbuf();
+    let mut buf = crate::firstbuf;
     while !buf.is_null() {
         let exiting = crate::exiting;
 
@@ -699,7 +697,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
                     if nvim_excmds_bufref_valid(bufref) == 0 {
                         nvim_excmds_free_bufref(bufref);
                         // Reset to start of list
-                        buf = nvim_excmds_get_firstbuf();
+                        buf = crate::firstbuf;
                         nvim_excmds_set_forceit(eap, save_forceit);
                         continue;
                     }

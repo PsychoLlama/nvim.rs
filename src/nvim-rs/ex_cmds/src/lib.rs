@@ -694,6 +694,18 @@ extern "C" {
     pub static mut p_write: c_int;
     /// Direct C global: p_stmp (shelltemp option)
     pub static mut p_stmp: c_int;
+    /// Direct C global: p_confirm (confirm option)
+    pub static mut p_confirm: c_int;
+    /// Direct C global: p_awa (autowriteall option)
+    pub static mut p_awa: c_int;
+    /// Direct C global: msg_scrolled_ign (bool in C)
+    pub static mut msg_scrolled_ign: bool;
+    /// Direct C global: firstbuf (pointer to first buffer)
+    pub static mut firstbuf: *mut BufHandle;
+    /// Direct C global: msg_listdo_overwrite (int in C)
+    pub static mut msg_listdo_overwrite: c_int;
+    /// Direct C global: keep_help_flag (bool in C)
+    pub static mut keep_help_flag: bool;
 
     // Exarg mutation
     /// Set eap->nextcmd.
