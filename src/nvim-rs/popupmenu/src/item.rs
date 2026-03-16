@@ -14,24 +14,39 @@ pub const CPT_KIND: c_int = 1;
 /// Completion item type for menu/extra text.
 pub const CPT_MENU: c_int = 2;
 
-/// Opaque handle to a popup menu item array.
+/// Popup menu item, matching C `pumitem_T` layout (sizeof=48).
+///
+/// Layout (verified via C static assertions):
+/// - `pum_text` at offset 0 (8 bytes)
+/// - `pum_kind` at offset 8 (8 bytes)
+/// - `pum_extra` at offset 16 (8 bytes)
+/// - `pum_info` at offset 24 (8 bytes)
+/// - `pum_cpt_source_idx` at offset 32 (4 bytes)
+/// - `pum_user_abbr_hlattr` at offset 36 (4 bytes)
+/// - `pum_user_kind_hlattr` at offset 40 (4 bytes)
+/// - 4 bytes padding
 #[repr(C)]
 pub struct PumItemArray {
-    _private: [u8; 0],
+    /// Main menu text (abbr).
+    pub pum_text: *const c_char,
+    /// Extra kind text (may be truncated).
+    pub pum_kind: *const c_char,
+    /// Extra menu text (may be truncated).
+    pub pum_extra: *const c_char,
+    /// Extra info text.
+    pub pum_info: *const c_char,
+    /// Index of completion source in 'cpt'.
+    pub pum_cpt_source_idx: c_int,
+    /// Highlight attribute for abbr.
+    pub pum_user_abbr_hlattr: c_int,
+    /// Highlight attribute for kind.
+    pub pum_user_kind_hlattr: c_int,
+    /// Padding to match C struct size.
+    _pad: c_int,
 }
 
-// FFI declarations for item access
+// FFI declarations for item operations
 extern "C" {
-    /// Get item text field from array at index.
-    pub fn nvim_pum_item_get_text(array: *const PumItemArray, index: c_int) -> *const c_char;
-    /// Get item kind field from array at index.
-    pub fn nvim_pum_item_get_kind(array: *const PumItemArray, index: c_int) -> *const c_char;
-    /// Get item extra field from array at index.
-    pub fn nvim_pum_item_get_extra(array: *const PumItemArray, index: c_int) -> *const c_char;
-    /// Get item user abbr highlight attr from array at index.
-    pub fn nvim_pum_item_get_user_abbr_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
-    /// Get item user kind highlight attr from array at index.
-    pub fn nvim_pum_item_get_user_kind_hlattr(array: *const PumItemArray, index: c_int) -> c_int;
     /// Combine highlight attributes (`hl_combine_attr`).
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
     /// Check if two strings are equal.
@@ -119,6 +134,7 @@ pub unsafe extern "C" fn rs_pum_get_current_align_order() -> PumAlignOrder {
 /// The caller must ensure `array` is a valid pointer to a `pumitem_T` array
 /// with at least `index + 1` elements.
 #[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
 pub unsafe extern "C" fn rs_pum_get_item(
     array: *const PumItemArray,
     index: c_int,
@@ -128,10 +144,11 @@ pub unsafe extern "C" fn rs_pum_get_item(
         return std::ptr::null();
     }
 
+    let item = &*array.offset(index as isize);
     match item_type {
-        CPT_ABBR => nvim_pum_item_get_text(array, index),
-        CPT_KIND => nvim_pum_item_get_kind(array, index),
-        CPT_MENU => nvim_pum_item_get_extra(array, index),
+        CPT_ABBR => item.pum_text,
+        CPT_KIND => item.pum_kind,
+        CPT_MENU => item.pum_extra,
         _ => std::ptr::null(),
     }
 }
@@ -162,10 +179,11 @@ pub unsafe extern "C" fn rs_pum_user_attr_combine(
         return attr;
     }
 
+    let item = &*array.offset(idx as isize);
     let user_attr = if item_type == 0 {
-        nvim_pum_item_get_user_abbr_hlattr(array, idx)
+        item.pum_user_abbr_hlattr
     } else {
-        nvim_pum_item_get_user_kind_hlattr(array, idx)
+        item.pum_user_kind_hlattr
     };
 
     if user_attr > 0 {
@@ -250,23 +268,21 @@ pub unsafe extern "C" fn rs_pum_compute_size(array: *const PumItemArray) {
     let mut extra_width: c_int = 0;
 
     for i in 0..size {
-        let text = nvim_pum_item_get_text(array, i);
-        if !text.is_null() {
-            let w = vim_strsize(text);
+        let item = &*array.offset(i as isize);
+        if !item.pum_text.is_null() {
+            let w = vim_strsize(item.pum_text);
             if base_width < w {
                 base_width = w;
             }
         }
-        let kind = nvim_pum_item_get_kind(array, i);
-        if !kind.is_null() {
-            let w = vim_strsize(kind) + 1;
+        if !item.pum_kind.is_null() {
+            let w = vim_strsize(item.pum_kind) + 1;
             if kind_width < w {
                 kind_width = w;
             }
         }
-        let extra = nvim_pum_item_get_extra(array, i);
-        if !extra.is_null() {
-            let w = vim_strsize(extra) + 1;
+        if !item.pum_extra.is_null() {
+            let w = vim_strsize(item.pum_extra) + 1;
             if extra_width < w {
                 extra_width = w;
             }

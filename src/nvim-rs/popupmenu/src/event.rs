@@ -107,37 +107,19 @@ pub struct PumWant {
     pub finish: c_int,
 }
 
-// C accessor functions for pum_want.
-extern "C" {
-    /// Get `pum_want.active`.
-    fn nvim_get_pum_want_active() -> c_int;
-    /// Set `pum_want.active`.
-    fn nvim_set_pum_want_active(val: c_int);
-    /// Get `pum_want.item`.
-    fn nvim_get_pum_want_item() -> c_int;
-    /// Set `pum_want.item`.
-    fn nvim_set_pum_want_item(val: c_int);
-    /// Get `pum_want.insert`.
-    fn nvim_get_pum_want_insert() -> c_int;
-    /// Set `pum_want.insert`.
-    fn nvim_set_pum_want_insert(val: c_int);
-    /// Get `pum_want.finish`.
-    fn nvim_get_pum_want_finish() -> c_int;
-    /// Set `pum_want.finish`.
-    fn nvim_set_pum_want_finish(val: c_int);
-}
+use crate::pum_want;
 
 /// Get the current external UI selection request.
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Reads `pum_want` global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_get_want() -> PumWant {
     PumWant {
-        active: nvim_get_pum_want_active(),
-        item: nvim_get_pum_want_item(),
-        insert: nvim_get_pum_want_insert(),
-        finish: nvim_get_pum_want_finish(),
+        active: c_int::from(pum_want.active),
+        item: pum_want.item,
+        insert: c_int::from(pum_want.insert),
+        finish: c_int::from(pum_want.finish),
     }
 }
 
@@ -149,22 +131,22 @@ pub unsafe extern "C" fn rs_pum_get_want() -> PumWant {
 /// * `finish` - Whether to finish completion
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Writes `pum_want` global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_set_want(item: c_int, insert: c_int, finish: c_int) {
-    nvim_set_pum_want_active(1);
-    nvim_set_pum_want_item(item);
-    nvim_set_pum_want_insert(insert);
-    nvim_set_pum_want_finish(finish);
+    pum_want.active = 1;
+    pum_want.item = item;
+    pum_want.insert = (insert != 0) as u8;
+    pum_want.finish = (finish != 0) as u8;
 }
 
 /// Clear the external UI selection request.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Writes `pum_want` global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_clear_want() {
-    nvim_set_pum_want_active(0);
+    pum_want.active = 0;
 }
 
 /// Check if there is an active external UI selection request.
@@ -172,10 +154,10 @@ pub unsafe extern "C" fn rs_pum_clear_want() {
 /// Returns 1 if active, 0 otherwise.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Reads `pum_want` global directly.
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_has_want() -> c_int {
-    nvim_get_pum_want_active()
+    c_int::from(pum_want.active)
 }
 
 /// Opaque handle to a `dict_T`.

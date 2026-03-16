@@ -797,8 +797,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     }
 
                     let attrs: *mut c_int = if item_type == CPT_ABBR {
-                        let user_hlattr =
-                            crate::item::nvim_pum_item_get_user_abbr_hlattr(pum_array, idx);
+                        let item = &*pum_array.offset(idx as isize);
+                        let user_hlattr = item.pum_user_abbr_hlattr;
                         rs_pum_compute_text_attrs(st, hlf, user_hlattr)
                     } else {
                         std::ptr::null_mut()

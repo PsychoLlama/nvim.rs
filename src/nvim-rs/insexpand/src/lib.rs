@@ -46,6 +46,21 @@ use std::os::raw::{c_char, c_int, c_uint};
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
+/// C `pum_want` struct (sizeof=12, matches popupmenu.h layout).
+#[repr(C)]
+struct PumWantState {
+    active: u8,
+    _pad0: [u8; 3],
+    item: c_int,
+    insert: u8,
+    finish: u8,
+    _pad1: [u8; 2],
+}
+
+extern "C" {
+    static mut pum_want: PumWantState;
+}
+
 // CTRL-X mode constants (from insexpand.c)
 // These must match the C enum values exactly
 const CTRL_X_WANT_IDENT: c_int = 0x100;
@@ -171,9 +186,6 @@ extern "C" {
 
     // Popup menu and selection accessors
     fn nvim_get_compl_selected_item() -> c_int;
-    fn nvim_get_pum_want_item() -> c_int;
-    fn nvim_get_pum_want_active() -> c_int;
-    fn nvim_get_pum_want_insert() -> c_int;
     fn pum_visible() -> c_int;
     fn pum_get_height() -> c_int;
 }
@@ -804,7 +816,7 @@ pub unsafe extern "C" fn rs_ins_compl_lnum_in_range(lnum: c_int) -> c_int {
 pub unsafe extern "C" fn rs_ins_compl_key2dir(c: c_int) -> c_int {
     // For event/command/lua keys, compare pum_want.item with compl_selected_item
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
-        let pum_want_item = nvim_get_pum_want_item();
+        let pum_want_item = pum_want.item;
         let selected = nvim_get_compl_selected_item();
         return if pum_want_item < selected {
             BACKWARD
@@ -847,7 +859,7 @@ pub unsafe extern "C" fn rs_ins_compl_pum_key(c: c_int) -> c_int {
 pub unsafe extern "C" fn rs_ins_compl_key2count(c: c_int) -> c_int {
     // For event/command/lua keys, return absolute offset
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
-        let offset = nvim_get_pum_want_item() - nvim_get_compl_selected_item();
+        let offset = pum_want.item - nvim_get_compl_selected_item();
         return offset.abs();
     }
 
@@ -870,9 +882,7 @@ pub unsafe extern "C" fn rs_ins_compl_key2count(c: c_int) -> c_int {
 pub unsafe extern "C" fn rs_ins_compl_use_match(c: c_int) -> c_int {
     match c {
         K_UP | K_DOWN | K_PAGEDOWN | K_KPAGEDOWN | K_S_DOWN | K_PAGEUP | K_KPAGEUP | K_S_UP => 0,
-        K_EVENT | K_COMMAND | K_LUA => {
-            c_int::from(nvim_get_pum_want_active() != 0 && nvim_get_pum_want_insert() != 0)
-        }
+        K_EVENT | K_COMMAND | K_LUA => c_int::from(pum_want.active != 0 && pum_want.insert != 0),
         _ => 1,
     }
 }

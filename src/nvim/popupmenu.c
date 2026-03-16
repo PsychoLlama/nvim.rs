@@ -97,57 +97,7 @@ extern PumHorizontalResult rs_pum_compute_horizontal(int cursor_col, int max_col
 extern void rs_pum_display(pumitem_T *array, int size, int selected, int array_changed,
                             int cmd_startcol);
 
-// pum_want setters for Rust FFI (some getters are defined elsewhere)
-int nvim_get_pum_want_finish(void)
-{
-  return pum_want.finish;
-}
 
-void nvim_set_pum_want_active(int val)
-{
-  pum_want.active = val != 0;
-}
-
-void nvim_set_pum_want_item(int val)
-{
-  pum_want.item = val;
-}
-
-void nvim_set_pum_want_insert(int val)
-{
-  pum_want.insert = val != 0;
-}
-
-void nvim_set_pum_want_finish(int val)
-{
-  pum_want.finish = val != 0;
-}
-
-// Accessors for pum_array items (for Rust FFI)
-const char *nvim_pum_item_get_text(const pumitem_T *array, int index)
-{
-  return array[index].pum_text;
-}
-
-const char *nvim_pum_item_get_kind(const pumitem_T *array, int index)
-{
-  return array[index].pum_kind;
-}
-
-const char *nvim_pum_item_get_extra(const pumitem_T *array, int index)
-{
-  return array[index].pum_extra;
-}
-
-int nvim_pum_item_get_user_abbr_hlattr(const pumitem_T *array, int index)
-{
-  return array[index].pum_user_abbr_hlattr;
-}
-
-int nvim_pum_item_get_user_kind_hlattr(const pumitem_T *array, int index)
-{
-  return array[index].pum_user_kind_hlattr;
-}
 
 // Static string constants for border comparison (exposed to Rust)
 const char *const opt_winborder_shadow = "shadow";

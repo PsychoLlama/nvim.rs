@@ -135,6 +135,27 @@ pub static mut PUM_STATE: PumState = PumState {
     invalid: 0,
 };
 
+/// C `pum_want` struct layout (verified: sizeof=12, C bool=1 byte).
+///
+/// Layout:
+/// - `active` at offset 0 (1 byte), 3 bytes padding
+/// - `item` at offset 4 (4 bytes)
+/// - `insert` at offset 8 (1 byte)
+/// - `finish` at offset 9 (1 byte), 2 bytes padding
+#[repr(C)]
+pub struct PumWantState {
+    /// Whether there is an active selection request.
+    pub active: u8,
+    _pad0: [u8; 3],
+    /// Item index to select (-1 for none).
+    pub item: c_int,
+    /// Whether to insert the selected item.
+    pub insert: u8,
+    /// Whether to finish completion.
+    pub finish: u8,
+    _pad1: [u8; 2],
+}
+
 // Global accessors still needed (not part of PumState)
 extern "C" {
     /// Get the UI popup menu height (iterates over UIs).
@@ -145,15 +166,8 @@ extern "C" {
     fn nvim_get_p_pw() -> i64;
     /// Get the 'pummaxwidth' option value.
     fn nvim_get_p_pmw() -> i64;
-    // pum_want accessors (pum_want stays in C)
-    /// Set the `pum_want.active` field.
-    fn nvim_set_pum_want_active(val: c_int);
-    /// Set the `pum_want.item` field.
-    fn nvim_set_pum_want_item(val: c_int);
-    /// Set the `pum_want.insert` field.
-    fn nvim_set_pum_want_insert(val: c_int);
-    /// Set the `pum_want.finish` field.
-    fn nvim_set_pum_want_finish(val: c_int);
+    /// C global: `pum_want` struct.
+    pub static mut pum_want: PumWantState;
 }
 
 /// Check if the popup menu is displayed.
@@ -891,10 +905,10 @@ pub unsafe extern "C" fn rs_pum_ext_select_item(item: c_int, insert: c_int, fini
     if PUM_STATE.is_visible == 0 || item < -1 || item >= PUM_STATE.size {
         return;
     }
-    nvim_set_pum_want_active(1);
-    nvim_set_pum_want_item(item);
-    nvim_set_pum_want_insert(insert);
-    nvim_set_pum_want_finish(finish);
+    pum_want.active = 1;
+    pum_want.item = item;
+    pum_want.insert = (insert != 0) as u8;
+    pum_want.finish = (finish != 0) as u8;
 }
 
 /// Check if a row is within the scrollbar thumb area.
