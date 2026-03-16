@@ -318,9 +318,6 @@ int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
 // NOTE: nvim_win_set_lines_valid already defined earlier in this file
 
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
-linenr_T nvim_win_get_valid_cursor_lnum(win_T *wp) { return wp->w_valid_cursor.lnum; }
-colnr_T nvim_win_get_valid_cursor_col(win_T *wp) { return wp->w_valid_cursor.col; }
-colnr_T nvim_win_get_valid_cursor_coladd(win_T *wp) { return wp->w_valid_cursor.coladd; }
 
 /// Set the valid cursor position (all fields).
 
@@ -984,25 +981,15 @@ void nvim_tabpage_set_snapshot(tabpage_T *tp, int idx, frame_T *val) { if (tp &&
 // nvim_curbuf_line_count() — already defined in move.c
 
 int nvim_win_buf_is_curbuf(win_T *wp) { return wp && wp->w_buffer == curbuf; }
-void nvim_win_save_cursor_to_save(win_T *wp) { if (wp) { wp->w_save_cursor.w_cursor_save = wp->w_cursor; } }
-void nvim_win_save_topline_to_save(win_T *wp) { if (wp) { wp->w_save_cursor.w_topline_save = wp->w_topline; } }
-void nvim_win_save_cursor_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_cursor_corr = wp->w_cursor; } }
-void nvim_win_save_topline_to_corr(win_T *wp) { if (wp) { wp->w_save_cursor.w_topline_corr = wp->w_topline; } }
 
 /// Check if w_save_cursor.w_cursor_corr equals w_cursor (via equalpos).
-int nvim_win_cursor_eq_save_corr(win_T *wp) { return wp ? equalpos(wp->w_save_cursor.w_cursor_corr, wp->w_cursor) : 0; }
 
 /// Check if w_save_cursor.w_topline_corr equals w_topline.
-int nvim_win_topline_eq_save_corr(win_T *wp) { return wp ? wp->w_save_cursor.w_topline_corr == wp->w_topline : 0; }
 
 /// Get w_save_cursor.w_cursor_save.lnum.
-linenr_T nvim_win_get_save_cursor_save_lnum(win_T *wp) { return wp ? wp->w_save_cursor.w_cursor_save.lnum : 0; }
 
 /// Get w_save_cursor.w_topline_save.
-linenr_T nvim_win_get_save_topline_save(win_T *wp) { return wp ? wp->w_save_cursor.w_topline_save : 0; }
 
-void nvim_win_restore_cursor_from_save(win_T *wp) { if (wp) { wp->w_cursor = wp->w_save_cursor.w_cursor_save; } }
-void nvim_win_restore_topline_from_save(win_T *wp) { if (wp) { wp->w_topline = wp->w_save_cursor.w_topline_save; } }
 
 /// Check if w_save_cursor.w_topline_save > buffer line count.
 int nvim_win_save_topline_gt_buf_line_count(win_T *wp) { return (wp && wp->w_buffer) ? wp->w_save_cursor.w_topline_save > wp->w_buffer->b_ml.ml_line_count : 0; }
@@ -1074,7 +1061,6 @@ int nvim_win_get_tcl_flags(void) { return (int)tcl_flags; }
 void nvim_buf_inc_nwindows(buf_T *buf) { buf->b_nwindows++; }
 void nvim_iemsg_move_other_frame(void) { iemsg("INTERNAL: trying to move a window into another frame"); }
 int nvim_text_or_buf_locked(void) { return text_or_buf_locked() ? 1 : 0; }
-void nvim_win_copy_cursor(win_T *dst, win_T *src) { if (dst && src) { dst->w_cursor = src->w_cursor; } }
 void nvim_win_enter(win_T *wp, int undo_sync) { win_enter(wp, undo_sync != 0); }
 void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()"); }
 // nvim_win_free_mem_wrapper deleted: rs_win_close_structural now calls rs_win_free_mem directly (Phase 10)
@@ -1305,22 +1291,7 @@ void nvim_set_stop_insert_mode(int val) { stop_insert_mode = val != 0; }
 buf_T *nvim_win_get_buf_ptr(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 
 /// Set w_pcmark (lnum and col).
-void nvim_win_set_pcmark(win_T *wp, linenr_T lnum, colnr_T col)
-{
-  if (wp) {
-    wp->w_pcmark.lnum = lnum;
-    wp->w_pcmark.col = col;
-  }
-}
 
-/// Set w_prev_pcmark (lnum and col).
-void nvim_win_set_prev_pcmark(win_T *wp, linenr_T lnum, colnr_T col)
-{
-  if (wp) {
-    wp->w_prev_pcmark.lnum = lnum;
-    wp->w_prev_pcmark.col = col;
-  }
-}
 
 /// Sync w_s to point to the window's buffer's b_s.
 void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }
@@ -1345,47 +1316,8 @@ void nvim_win_set_script_ctx_scroll(win_T *wp)
 /// Call win_reconfig_floats() (for win_new_screen_cols).
 void nvim_win_reconfig_floats(void) { win_reconfig_floats(); }
 
-/// Bulk-set all w_last_* snapshot fields from a WinSnapshot struct.
-void nvim_win_set_snapshot(win_T *wp, const WinSnapshot *s)
-{
-  if (!wp || !s) {
-    return;
-  }
-  wp->w_last_topline = (linenr_T)s->topline;
-  wp->w_last_topfill = s->topfill;
-  wp->w_last_leftcol = (colnr_T)s->leftcol;
-  wp->w_last_skipcol = (colnr_T)s->skipcol;
-  wp->w_last_width = s->width;
-  wp->w_last_height = s->height;
-}
 
-/// Bulk-get all w_last_* snapshot fields into a WinSnapshot struct.
-void nvim_win_get_snapshot(win_T *wp, WinSnapshot *out)
-{
-  if (!wp || !out) {
-    return;
-  }
-  out->topline = (int)wp->w_last_topline;
-  out->topfill = wp->w_last_topfill;
-  out->leftcol = (int)wp->w_last_leftcol;
-  out->skipcol = (int)wp->w_last_skipcol;
-  out->width = wp->w_last_width;
-  out->height = wp->w_last_height;
-}
 
-/// Bulk-get current scroll fields into a WinSnapshot struct (for float init).
-void nvim_win_get_scroll_fields(win_T *wp, WinSnapshot *out)
-{
-  if (!wp || !out) {
-    return;
-  }
-  out->topline = (int)wp->w_topline;
-  out->topfill = wp->w_topfill;
-  out->leftcol = (int)wp->w_leftcol;
-  out->skipcol = (int)wp->w_skipcol;
-  out->width = wp->w_width;
-  out->height = wp->w_height;
-}
 
 // Phase 3 accessors: win_fix_scroll, win_fix_cursor, may_make_initial_scroll_size_snapshot
 int nvim_get_skip_win_fix_cursor(void) { return skip_win_fix_cursor ? 1 : 0; }
@@ -1678,29 +1610,7 @@ int nvim_win_buf_b_locked(win_T *wp)
 
 // Phase 6 accessors: ui_ext_win_viewport
 
-/// Bulk-get w_viewport_last_* fields into a WinViewportSnapshot.
-void nvim_win_get_viewport_snapshot(win_T *wp, WinViewportSnapshot *out)
-{
-  if (!wp || !out) {
-    return;
-  }
-  out->topline = (int32_t)wp->w_viewport_last_topline;
-  out->botline = (int32_t)wp->w_viewport_last_botline;
-  out->topfill = (int32_t)wp->w_viewport_last_topfill;
-  out->skipcol = (int32_t)wp->w_viewport_last_skipcol;
-}
 
-/// Bulk-set w_viewport_last_* fields from a WinViewportSnapshot.
-void nvim_win_set_viewport_snapshot(win_T *wp, const WinViewportSnapshot *s)
-{
-  if (!wp || !s) {
-    return;
-  }
-  wp->w_viewport_last_topline = (linenr_T)s->topline;
-  wp->w_viewport_last_botline = (linenr_T)s->botline;
-  wp->w_viewport_last_topfill = (int)s->topfill;
-  wp->w_viewport_last_skipcol = (colnr_T)s->skipcol;
-}
 
 /// Wrap ui_call_win_viewport for Rust.
 void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botline,
@@ -2648,12 +2558,6 @@ colnr_T nvim_win_get_virtcol_val(win_T *wp) { return wp->w_virtcol; }
 
 /// w_cursor compound setter (temporarily move cursor, e.g. for spell checking)
 /// Renamed to avoid clash with Neovim API nvim_win_set_cursor(Window, Array, Error*).
-void nvim_win_set_cursor_pos(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  wp->w_cursor.lnum = lnum;
-  wp->w_cursor.col = col;
-  wp->w_cursor.coladd = coladd;
-}
 
 // nvim_win_get_botfill already defined above.
 

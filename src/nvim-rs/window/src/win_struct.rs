@@ -2412,3 +2412,351 @@ pub unsafe extern "C" fn win_set_redr_border(wp: WinHandle, val: c_int) {
     }
     win_mut(wp).w_redr_border = val != 0;
 }
+
+// =============================================================================
+// Phase 4: Compound accessors - cursor save/restore, snapshots, pcmark.
+// =============================================================================
+
+/// Mirror of C `WinSnapshot` from `window.h`.
+/// Contains 6 fields, each an `int`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WinSnapshot {
+    pub topline: c_int,
+    pub topfill: c_int,
+    pub leftcol: c_int,
+    pub skipcol: c_int,
+    pub width: c_int,
+    pub height: c_int,
+}
+
+/// Mirror of C `WinViewportSnapshot` from `window.h`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WinViewportSnapshot {
+    pub topline: i32,
+    pub botline: i32,
+    pub topfill: i32,
+    pub skipcol: i32,
+}
+
+/// Returns `wp->w_valid_cursor.lnum`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[must_use]
+#[export_name = "nvim_win_get_valid_cursor_lnum"]
+pub const unsafe extern "C" fn win_get_valid_cursor_lnum(wp: WinHandle) -> LineNr {
+    win_ref(wp).w_valid_cursor.lnum
+}
+
+/// Returns `wp->w_valid_cursor.col`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[must_use]
+#[export_name = "nvim_win_get_valid_cursor_col"]
+pub const unsafe extern "C" fn win_get_valid_cursor_col(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_valid_cursor.col
+}
+
+/// Returns `wp->w_valid_cursor.coladd`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[must_use]
+#[export_name = "nvim_win_get_valid_cursor_coladd"]
+pub const unsafe extern "C" fn win_get_valid_cursor_coladd(wp: WinHandle) -> ColNr {
+    win_ref(wp).w_valid_cursor.coladd
+}
+
+/// Copies `wp->w_cursor` into `w_save_cursor.w_cursor_save`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_save_cursor_to_save"]
+pub unsafe extern "C" fn win_save_cursor_to_save(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_save_cursor.w_cursor_save = ws.w_cursor;
+}
+
+/// Copies `wp->w_topline` into `w_save_cursor.w_topline_save`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_save_topline_to_save"]
+pub unsafe extern "C" fn win_save_topline_to_save(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_save_cursor.w_topline_save = ws.w_topline;
+}
+
+/// Copies `wp->w_cursor` into `w_save_cursor.w_cursor_corr`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_save_cursor_to_corr"]
+pub unsafe extern "C" fn win_save_cursor_to_corr(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_save_cursor.w_cursor_corr = ws.w_cursor;
+}
+
+/// Copies `wp->w_topline` into `w_save_cursor.w_topline_corr`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_save_topline_to_corr"]
+pub unsafe extern "C" fn win_save_topline_to_corr(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_save_cursor.w_topline_corr = ws.w_topline;
+}
+
+/// Returns true if `w_save_cursor.w_cursor_corr == w_cursor`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[must_use]
+#[export_name = "nvim_win_cursor_eq_save_corr"]
+pub const unsafe extern "C" fn win_cursor_eq_save_corr(wp: WinHandle) -> c_int {
+    if wp.as_ptr().is_null() {
+        return 0;
+    }
+    let ws = win_ref(wp);
+    let corr = &ws.w_save_cursor.w_cursor_corr;
+    let cur = &ws.w_cursor;
+    if corr.lnum == cur.lnum && corr.col == cur.col && corr.coladd == cur.coladd {
+        1
+    } else {
+        0
+    }
+}
+
+/// Returns true if `w_save_cursor.w_topline_corr == w_topline`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[must_use]
+#[export_name = "nvim_win_topline_eq_save_corr"]
+pub const unsafe extern "C" fn win_topline_eq_save_corr(wp: WinHandle) -> c_int {
+    if wp.as_ptr().is_null() {
+        return 0;
+    }
+    let ws = win_ref(wp);
+    if ws.w_save_cursor.w_topline_corr == ws.w_topline {
+        1
+    } else {
+        0
+    }
+}
+
+/// Returns `wp->w_save_cursor.w_cursor_save.lnum`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[must_use]
+#[export_name = "nvim_win_get_save_cursor_save_lnum"]
+pub const unsafe extern "C" fn win_get_save_cursor_save_lnum(wp: WinHandle) -> LineNr {
+    if wp.as_ptr().is_null() {
+        return 0;
+    }
+    win_ref(wp).w_save_cursor.w_cursor_save.lnum
+}
+
+/// Returns `wp->w_save_cursor.w_topline_save`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[must_use]
+#[export_name = "nvim_win_get_save_topline_save"]
+pub const unsafe extern "C" fn win_get_save_topline_save(wp: WinHandle) -> LineNr {
+    if wp.as_ptr().is_null() {
+        return 0;
+    }
+    win_ref(wp).w_save_cursor.w_topline_save
+}
+
+/// Restores `w_cursor` from `w_save_cursor.w_cursor_save`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_restore_cursor_from_save"]
+pub unsafe extern "C" fn win_restore_cursor_from_save(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_cursor = ws.w_save_cursor.w_cursor_save;
+}
+
+/// Restores `w_topline` from `w_save_cursor.w_topline_save`.
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_restore_topline_from_save"]
+pub unsafe extern "C" fn win_restore_topline_from_save(wp: WinHandle) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_topline = ws.w_save_cursor.w_topline_save;
+}
+
+/// Copies `src->w_cursor` into `dst->w_cursor`.
+///
+/// # Safety
+/// Both `dst` and `src` must be valid `win_T*` (may be null individually).
+#[export_name = "nvim_win_copy_cursor"]
+pub unsafe extern "C" fn win_copy_cursor(dst: WinHandle, src: WinHandle) {
+    if dst.as_ptr().is_null() || src.as_ptr().is_null() {
+        return;
+    }
+    let cursor = win_ref(src).w_cursor;
+    win_mut(dst).w_cursor = cursor;
+}
+
+/// Sets `wp->w_pcmark` (lnum and col).
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_set_pcmark"]
+pub unsafe extern "C" fn win_set_pcmark(wp: WinHandle, lnum: LineNr, col: ColNr) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_pcmark.lnum = lnum;
+    ws.w_pcmark.col = col;
+}
+
+/// Sets `wp->w_prev_pcmark` (lnum and col).
+///
+/// # Safety
+/// `wp` must be a valid `win_T*` (may be null).
+#[export_name = "nvim_win_set_prev_pcmark"]
+pub unsafe extern "C" fn win_set_prev_pcmark(wp: WinHandle, lnum: LineNr, col: ColNr) {
+    if wp.as_ptr().is_null() {
+        return;
+    }
+    let ws = win_mut(wp);
+    ws.w_prev_pcmark.lnum = lnum;
+    ws.w_prev_pcmark.col = col;
+}
+
+/// Sets `wp->w_cursor` fields (lnum, col, coladd).
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_set_cursor_pos"]
+pub unsafe extern "C" fn win_set_cursor_pos(
+    wp: WinHandle,
+    lnum: LineNr,
+    col: ColNr,
+    coladd: ColNr,
+) {
+    let ws = win_mut(wp);
+    ws.w_cursor.lnum = lnum;
+    ws.w_cursor.col = col;
+    ws.w_cursor.coladd = coladd;
+}
+
+/// Bulk-get all `w_last_*` snapshot fields into a `WinSnapshot` struct.
+///
+/// # Safety
+/// `wp` and `out` must be valid non-null pointers.
+#[export_name = "nvim_win_get_snapshot"]
+pub unsafe extern "C" fn win_get_snapshot(wp: WinHandle, out: *mut WinSnapshot) {
+    if wp.as_ptr().is_null() || out.is_null() {
+        return;
+    }
+    let ws = win_ref(wp);
+    let snap = &mut *out;
+    snap.topline = ws.w_last_topline;
+    snap.topfill = ws.w_last_topfill;
+    snap.leftcol = ws.w_last_leftcol;
+    snap.skipcol = ws.w_last_skipcol;
+    snap.width = ws.w_last_width;
+    snap.height = ws.w_last_height;
+}
+
+/// Bulk-set all `w_last_*` snapshot fields from a `WinSnapshot` struct.
+///
+/// # Safety
+/// `wp` and `s` must be valid non-null pointers.
+#[export_name = "nvim_win_set_snapshot"]
+pub unsafe extern "C" fn win_set_snapshot(wp: WinHandle, s: *const WinSnapshot) {
+    if wp.as_ptr().is_null() || s.is_null() {
+        return;
+    }
+    let snap = &*s;
+    let ws = win_mut(wp);
+    ws.w_last_topline = snap.topline;
+    ws.w_last_topfill = snap.topfill;
+    ws.w_last_leftcol = snap.leftcol;
+    ws.w_last_skipcol = snap.skipcol;
+    ws.w_last_width = snap.width;
+    ws.w_last_height = snap.height;
+}
+
+/// Bulk-get current scroll fields into a `WinSnapshot` struct (for float init).
+///
+/// # Safety
+/// `wp` and `out` must be valid non-null pointers.
+#[export_name = "nvim_win_get_scroll_fields"]
+pub unsafe extern "C" fn win_get_scroll_fields(wp: WinHandle, out: *mut WinSnapshot) {
+    if wp.as_ptr().is_null() || out.is_null() {
+        return;
+    }
+    let ws = win_ref(wp);
+    let snap = &mut *out;
+    snap.topline = ws.w_topline;
+    snap.topfill = ws.w_topfill;
+    snap.leftcol = ws.w_leftcol;
+    snap.skipcol = ws.w_skipcol;
+    snap.width = ws.w_width;
+    snap.height = ws.w_height;
+}
+
+/// Bulk-get `w_viewport_last_*` fields into a `WinViewportSnapshot`.
+///
+/// # Safety
+/// `wp` and `out` must be valid non-null pointers.
+#[export_name = "nvim_win_get_viewport_snapshot"]
+pub unsafe extern "C" fn win_get_viewport_snapshot(wp: WinHandle, out: *mut WinViewportSnapshot) {
+    if wp.as_ptr().is_null() || out.is_null() {
+        return;
+    }
+    let ws = win_ref(wp);
+    let snap = &mut *out;
+    snap.topline = ws.w_viewport_last_topline;
+    snap.botline = ws.w_viewport_last_botline;
+    snap.topfill = ws.w_viewport_last_topfill;
+    snap.skipcol = ws.w_viewport_last_skipcol;
+}
+
+/// Bulk-set `w_viewport_last_*` fields from a `WinViewportSnapshot`.
+///
+/// # Safety
+/// `wp` and `s` must be valid non-null pointers.
+#[export_name = "nvim_win_set_viewport_snapshot"]
+pub unsafe extern "C" fn win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot) {
+    if wp.as_ptr().is_null() || s.is_null() {
+        return;
+    }
+    let snap = &*s;
+    let ws = win_mut(wp);
+    ws.w_viewport_last_topline = snap.topline;
+    ws.w_viewport_last_botline = snap.botline;
+    ws.w_viewport_last_topfill = snap.topfill;
+    ws.w_viewport_last_skipcol = snap.skipcol;
+}
