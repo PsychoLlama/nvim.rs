@@ -217,11 +217,6 @@ PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
   return (PumMouseFindResult){ grid, row, col };
 }
 
-// Phase 2 accessor: check if pum_array item text is non-empty
-int nvim_pum_array_item_is_nonempty(int idx)
-{
-  return PUM_STATE.array != NULL && *PUM_STATE.array[idx].pum_text != NUL;
-}
 
 // Phase 2 accessors: curwin geometry for make_popup
 /// Batch curwin geometry accessor (replaces 10 individual nvim_pum_curwin_* functions).
@@ -412,11 +407,6 @@ void nvim_pum_free_items(pumitem_T *array, int count)
   xfree(array);
 }
 
-/// Get pum_array pointer (NULL check).
-int nvim_pum_array_is_null(void)
-{
-  return PUM_STATE.array == NULL ? 1 : 0;
-}
 
 /// Set mousemoveevent option via UI.
 void nvim_pum_ui_set_mousemoveevent(int val)
@@ -453,11 +443,6 @@ PumKeyConstants nvim_pum_get_key_constants(void)
   };
 }
 
-/// Get pum_array[idx].pum_text[0] (first character, NUL check).
-int nvim_pum_array_item_text_char(int idx)
-{
-  return (int)(unsigned char)PUM_STATE.array[idx].pum_text[0];
-}
 
 /// Emit error message.
 void nvim_pum_emsg_menu_mode(void)
@@ -749,17 +734,6 @@ void nvim_pum_win_config_float_hide(win_T *wp)
   win_config_float(wp, wp->w_config);
 }
 
-/// Check if pum_array[idx] has pum_info (non-NULL).
-int nvim_pum_array_has_info(int idx)
-{
-  return PUM_STATE.array[idx].pum_info != NULL;
-}
-
-/// Get pum_array[idx].pum_info pointer.
-char *nvim_pum_array_get_info(int idx)
-{
-  return PUM_STATE.array[idx].pum_info;
-}
 
 // nvim_get_Rows: already defined in window.c
 

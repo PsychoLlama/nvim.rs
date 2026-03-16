@@ -346,8 +346,6 @@ extern "C" {
     );
     /// Free `pumitem_T` array and its text.
     fn nvim_pum_free_items(array: *mut crate::item::PumItemArray, count: c_int);
-    /// Check if `pum_array` is NULL.
-    fn nvim_pum_array_is_null() -> c_int;
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
     /// Get `w_p_rl` for a window.
@@ -366,8 +364,6 @@ extern "C" {
     fn vungetc(c: c_int);
     /// Select popup entry at mouse position.
     fn rs_pum_select_mouse_pos();
-    /// Get text char at `pum_array[idx].pum_text[0]`.
-    fn nvim_pum_array_item_text_char(idx: c_int) -> c_int;
     /// Emit error for wrong menu mode.
     fn nvim_pum_emsg_menu_mode();
     /// Batch key constants accessor.
@@ -492,7 +488,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         let c = vgetc();
 
         // Bail out on Esc, Ctrl-C, or if a callback cleared pum_array
-        if c == key_esc || c == key_ctrl_c || nvim_pum_array_is_null() != 0 {
+        if c == key_esc || c == key_ctrl_c || PUM_STATE.array.is_null() {
             break;
         } else if c == key_car || c == key_nl {
             // Enter: select current item and close
@@ -503,7 +499,9 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
             let mut sel = PUM_STATE.selected;
             while sel > 0 {
                 sel -= 1;
-                if nvim_pum_array_item_text_char(sel) != 0 {
+                if !(*PUM_STATE.array.offset(sel as isize)).pum_text.is_null()
+                    && *(*PUM_STATE.array.offset(sel as isize)).pum_text != 0
+                {
                     break;
                 }
             }
@@ -514,7 +512,9 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
             let mut sel = PUM_STATE.selected;
             while sel < pum_size - 1 {
                 sel += 1;
-                if nvim_pum_array_item_text_char(sel) != 0 {
+                if !(*PUM_STATE.array.offset(sel as isize)).pum_text.is_null()
+                    && *(*PUM_STATE.array.offset(sel as isize)).pum_text != 0
+                {
                     break;
                 }
             }

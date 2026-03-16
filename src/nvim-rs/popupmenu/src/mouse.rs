@@ -327,8 +327,6 @@ extern "C" {
     fn nvim_get_mouse_col() -> c_int;
     /// Get `pum_grid.handle`.
     fn nvim_pum_grid_get_handle() -> c_int;
-    /// Check if `pum_array[idx].pum_text` is non-empty.
-    fn nvim_pum_array_item_is_nonempty(idx: c_int) -> c_int;
     /// Find window from outer grid coords, returning adjusted grid/row/col.
     fn nvim_pum_mouse_find_win_outer(grid: c_int, row: c_int, col: c_int) -> PumMouseFindResult;
 }
@@ -524,8 +522,11 @@ pub unsafe extern "C" fn rs_pum_select_mouse_pos() {
 
     if idx < 0 || idx >= pum_height {
         PUM_STATE.selected = -1;
-    } else if nvim_pum_array_item_is_nonempty(idx) != 0 {
-        PUM_STATE.selected = idx;
+    } else if !PUM_STATE.array.is_null() {
+        let item = &*PUM_STATE.array.offset(idx as isize);
+        if !item.pum_text.is_null() && *item.pum_text != 0 {
+            PUM_STATE.selected = idx;
+        }
     }
 }
 

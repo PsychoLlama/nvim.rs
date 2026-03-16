@@ -24,10 +24,6 @@ extern "C" {
     fn win_float_find_preview() -> *mut WinHandle;
     fn nvim_pum_win_config_float_hide(wp: *mut WinHandle);
 
-    // Array info access
-    fn nvim_pum_array_has_info(idx: c_int) -> c_int;
-    fn nvim_pum_array_get_info(idx: c_int) -> *mut c_char;
-
     // Global state
     fn nvim_get_Rows() -> c_int;
 
@@ -154,7 +150,10 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
 
     // Close the floating preview window if 'selected' is -1, indicating a return to the original
     // state. It is also closed when the selected item has no corresponding info item.
-    if use_float && (pum_selected < 0 || nvim_pum_array_has_info(pum_selected) == 0) {
+    let has_info = |idx: c_int| -> bool {
+        !PUM_STATE.array.is_null() && !(*PUM_STATE.array.offset(idx as isize)).pum_info.is_null()
+    };
+    if use_float && (pum_selected < 0 || !has_info(pum_selected)) {
         let wp = win_float_find_preview();
         if !wp.is_null() {
             nvim_pum_win_config_float_hide(wp);
@@ -173,7 +172,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
         // Skip this also when there is not much room.
         // Skip this for command-window when 'completeopt' contains "preview".
         // NOTE: Be very careful not to sync undo!
-        if nvim_pum_array_has_info(pum_selected) != 0
+        if has_info(pum_selected)
             && nvim_get_Rows() > 10
             && repeat <= 1
             && (cur_cot_flags & (K_OPT_COT_FLAG_PREVIEW | K_OPT_COT_FLAG_POPUP)) != 0
@@ -238,7 +237,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                 if res == OK {
                     let mut lnum: i32 = 0;
                     let mut max_info_width: c_int = 0;
-                    let info = nvim_pum_array_get_info(pum_selected);
+                    let info = (*PUM_STATE.array.offset(pum_selected as isize)).pum_info;
                     let buf = curbuf;
                     rs_pum_preview_set_text(
                         buf,
