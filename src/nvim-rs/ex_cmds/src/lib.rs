@@ -710,6 +710,8 @@ extern "C" {
     pub static mut p_ur: i64;
     /// C global in ex_cmds_shim.c: global_need_beginline (int in C)
     pub static mut global_need_beginline: c_int;
+    /// C global in ex_cmds_shim.c: append_indent (autoindent for first appended line)
+    pub static mut append_indent: c_int;
 
     // Exarg mutation
     /// Set eap->nextcmd.
@@ -787,8 +789,6 @@ extern "C" {
     // ex_change accessors and functions
     /// Get curbuf->b_p_ai (autoindent)
     pub fn nvim_curbuf_get_b_p_ai() -> c_int;
-    /// Set append_indent
-    pub fn nvim_set_append_indent(val: c_int);
     /// Set eap->line2
     pub fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
     /// Call check_cursor_lnum(curwin)

@@ -387,8 +387,7 @@ pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
     use crate::{
         deleted_lines_mark, get_indent_lnum, ml_delete, nvim_check_cursor_lnum_call,
         nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_exarg_get_forceit,
-        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_line2, nvim_set_append_indent,
-        u_save,
+        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_line2, u_save,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -402,7 +401,7 @@ pub unsafe extern "C" fn rs_ex_change(eap: *mut crate::ExArgHandle) {
     let forceit = nvim_exarg_get_forceit(eap) != 0;
     let b_p_ai = nvim_curbuf_get_b_p_ai() != 0;
     if if forceit { !b_p_ai } else { b_p_ai } {
-        nvim_set_append_indent(get_indent_lnum(line1));
+        crate::append_indent = get_indent_lnum(line1);
     }
 
     let mut lnum = line2;
@@ -462,9 +461,9 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_excmds_call_getline, nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut,
         nvim_excmds_get_b_p_iminsert, nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd,
         nvim_excmds_set_nextcmd_direct, nvim_excmds_toggle_b_p_ai, nvim_get_Rows, nvim_get_State,
-        nvim_set_State, nvim_set_append_indent, nvim_set_ex_no_reprint, nvim_set_lines_left,
-        nvim_set_msg_scroll, nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save,
-        vim_strchr, xfree, xmemdupz, xstrdup,
+        nvim_set_State, nvim_set_ex_no_reprint, nvim_set_lines_left, nvim_set_msg_scroll,
+        nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save, vim_strchr, xfree,
+        xmemdupz, xstrdup,
     };
 
     let mut did_undo = false;
@@ -480,7 +479,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
 
     // First autoindent comes from the line we start on
     if cmdidx != nvim_docmd_cmd_change() && nvim_curbuf_get_b_p_ai() != 0 && lnum > 0 {
-        nvim_set_append_indent(get_indent_lnum(lnum));
+        crate::append_indent = get_indent_lnum(lnum);
     }
 
     if cmdidx != nvim_docmd_cmd_append() {
@@ -503,10 +502,10 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_set_msg_scroll(1);
         nvim_set_need_wait_return(0);
         if nvim_curbuf_get_b_p_ai() != 0 {
-            let append_indent_val = nvim_get_append_indent_val();
+            let append_indent_val = crate::append_indent;
             if append_indent_val >= 0 {
                 indent = append_indent_val;
-                nvim_set_append_indent(-1);
+                crate::append_indent = -1;
             } else if lnum > 0 {
                 indent = get_indent_lnum(lnum);
             }
@@ -625,20 +624,6 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
 
     nvim_set_need_wait_return(0); // don't use wait_return() now
     nvim_set_ex_no_reprint(1);
-}
-
-/// Get the current append_indent value.
-/// This is a helper needed because append_indent is a static in C.
-/// We read it via the existing set_append_indent accessor by using a get wrapper.
-///
-/// # Safety
-/// Must be called from Neovim's main thread.
-unsafe fn nvim_get_append_indent_val() -> c_int {
-    // We need a C accessor to read append_indent. Let's use the FFI declaration.
-    extern "C" {
-        fn nvim_excmds_get_append_indent() -> c_int;
-    }
-    nvim_excmds_get_append_indent()
 }
 
 /// `:copy`/`:t` command implementation.

@@ -465,16 +465,7 @@ extern int rs_handle_mkdir_p_arg(exarg_T *eap, const char *fname);
 extern int rs_check_readonly(exarg_T *eap, buf_T *buf);
 extern void rs_delbuf_msg(char *name);
 
-static int append_indent = 0;       // autoindent for first line
-
-/// Set append_indent (used by ex_change before calling ex_append).
-void nvim_set_append_indent(int val)
-{
-  append_indent = val;
-}
-
-/// Get append_indent value
-int nvim_excmds_get_append_indent(void) { return append_indent; }
+int append_indent = 0;              // autoindent for first line
 
 // ex_append has been migrated to Rust (rs_ex_append in lines.rs)
 
