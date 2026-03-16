@@ -364,8 +364,7 @@ extern int *rs_mb_str2wide(const char *s);
 extern void rs_tree_count_words(const uint8_t *byts, int *idxs, int len);
 extern void rs_set_sal_first(slang_T *slang);
 extern void rs_set_map_str(slang_T *slang, const char *map);
-// Phase 4: spell_check_msm replacement
-extern int rs_spell_check_msm(const char *msm, int *start_out, int *incr_out, int *added_out);
+// spell_check_msm is now in Rust via #[export_name = "spell_check_msm"]; no extern needed.
 // Phase 4: set_sofo replacement
 extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
 // Phase 4: read_compound replacement
@@ -767,10 +766,16 @@ bool nvim_spell_valid_spell_word(const char *word, const char *end) {
 void nvim_spell_wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name) {
   wordtree_compress(spin, root, name);
 }
-// Expose compression globals for tree_add_word.
+// Expose compression globals for tree_add_word and spell_check_msm.
 int nvim_spell_compress_start(void) { return compress_start; }
 int nvim_spell_compress_inc(void) { return compress_inc; }
 int nvim_spell_compress_added(void) { return compress_added; }
+void nvim_spell_set_compress_params(int start, int inc, int added) {
+  compress_start = start;
+  compress_inc = inc;
+  compress_added = added;
+}
+const char *nvim_spell_get_msm(void) { return p_msm; }
 // Show compression message in verbose mode.
 void nvim_spell_show_compress_msg(spellinfo_T *spin) {
   if (spin->si_verbose) {
@@ -1450,20 +1455,9 @@ static int compress_start = 30000;     // memory / SBLOCKSIZE
 static int compress_inc = 100;         // memory / SBLOCKSIZE
 static int compress_added = 500000;    // word count
 
-// Check the 'mkspellmem' option.  Return FAIL if it's wrong.
-// Sets compress_start, compress_inc, compress_added from the parsed values.
-// Parsing and validation delegated to Rust (rs_spell_check_msm).
-int spell_check_msm(void)
-{
-  int start, incr, added;
-  if (rs_spell_check_msm(p_msm, &start, &incr, &added) != 0) {
-    return FAIL;
-  }
-  compress_start = start;
-  compress_inc = incr;
-  compress_added = added;
-  return OK;
-}
+// spell_check_msm() is implemented in Rust (rs_do_spell_check_msm) via
+// #[export_name = "spell_check_msm"].  The declaration appears in the
+// generated header via the forward declarations below.
 
 // Reads the affix file "fname".
 // Returns an afffile_T, NULL for complete failure.

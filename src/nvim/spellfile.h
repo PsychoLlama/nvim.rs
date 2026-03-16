@@ -15,4 +15,7 @@ typedef struct spellinfo_S spellinfo_T;
 // Full definition is in spellfile.c; external users only see an opaque pointer.
 typedef struct sblock_S sblock_T;
 
+// spell_check_msm is implemented in Rust; declare it here for callers.
+int spell_check_msm(void);
+
 #include "spellfile.h.generated.h"

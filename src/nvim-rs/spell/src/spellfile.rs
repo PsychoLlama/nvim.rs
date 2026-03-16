@@ -4900,6 +4900,36 @@ pub unsafe extern "C" fn rs_spell_check_msm(
     }
 }
 
+extern "C" {
+    fn nvim_spell_set_compress_params(start: c_int, inc: c_int, added: c_int);
+    fn nvim_spell_get_msm() -> *const c_char;
+}
+
+/// Rust replacement for the C `spell_check_msm()` function.
+/// Parses the 'mkspellmem' option and sets the compression globals.
+/// Returns 0 (OK) on success, 1 (FAIL) on error.
+///
+/// This replaces the C thin-wrapper that called `rs_spell_check_msm` then set globals.
+///
+/// # Safety
+/// Called from C; no raw pointer arguments.
+#[export_name = "spell_check_msm"]
+pub unsafe extern "C" fn rs_do_spell_check_msm() -> c_int {
+    let msm = nvim_spell_get_msm();
+    if msm.is_null() {
+        return 1; // FAIL
+    }
+    let len = libc::strlen(msm);
+    let bytes = std::slice::from_raw_parts(msm.cast::<u8>(), len);
+    match parse_msm(bytes) {
+        Some((start, incr, added)) => {
+            nvim_spell_set_compress_params(start, incr, added);
+            0 // OK
+        }
+        None => 1, // FAIL
+    }
+}
+
 // =============================================================================
 // Phase 2: Spell Section Writing (write_vim_spell helper)
 // =============================================================================
