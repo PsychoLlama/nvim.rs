@@ -255,12 +255,6 @@ void nvim_pum_emsg_menu_mode(void)
   emsg(_(e_menu_only_exists_in_another_mode));
 }
 
-/// Get `W_ENDCOL(curwin)`.
-int nvim_pum_curwin_end_col(void)
-{
-  return W_ENDCOL(curwin);
-}
-
 /// Get `fcs_trunc` character for current pum_rl.
 schar_T nvim_pum_fcs_trunc(int is_rl)
 {
@@ -384,12 +378,6 @@ void nvim_pum_win_config_float_hide(win_T *wp)
 
 
 // nvim_get_Rows: already defined in window.c
-
-/// Check if curwin is a preview window or float info window.
-int nvim_pum_curwin_is_pvw_or_info(void)
-{
-  return curwin->w_p_pvw || curwin->w_float_is_info;
-}
 
 /// Check if the current buffer can be reused as a wipeout buffer.
 /// Checks: b_nwindows == 1, no filename, nofile buftype, bh starts with 'w'.

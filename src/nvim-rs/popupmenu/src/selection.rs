@@ -36,8 +36,10 @@ extern "C" {
     fn prepare_tagpreview(undo_sync: bool) -> bool;
     fn win_float_create(enter: bool, new_buf: bool) -> *mut WinHandle;
 
-    // Curwin/curbuf queries (via existing nvim_pum_* wrappers for complex multi-field checks)
-    fn nvim_pum_curwin_is_pvw_or_info() -> c_int;
+    // Window field queries
+    fn nvim_win_get_pvw(wp: *mut WinHandle) -> c_int;
+    fn nvim_win_get_float_is_info(wp: *mut WinHandle) -> c_int;
+    // Curbuf reuse check (multi-field, keep C wrapper for now)
     fn nvim_pum_curbuf_can_reuse() -> c_int;
 
     // Buffer operations
@@ -226,7 +228,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
             RedrawingDisabled -= 1;
             g_do_tagpreview = 0;
 
-            if nvim_pum_curwin_is_pvw_or_info() != 0 {
+            if nvim_win_get_pvw(curwin) != 0 || nvim_win_get_float_is_info(curwin) != 0 {
                 let mut res = OK;
                 if !resized && nvim_pum_curbuf_can_reuse() != 0 {
                     // Already a "wipeout" buffer, make it empty.

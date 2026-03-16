@@ -496,7 +496,8 @@ extern "C" {
     fn nvim_set_must_redraw_pum(val: c_int);
 
     // Text/string operations
-    fn nvim_pum_curwin_end_col() -> c_int;
+    fn nvim_win_get_wincol(wp: *mut crate::display::WinHandle) -> c_int;
+    fn nvim_win_get_view_width(wp: *mut crate::display::WinHandle) -> c_int;
     fn nvim_pum_fcs_trunc(is_rl: c_int) -> ScharT;
     fn transstr(s: *const c_char, untab: bool) -> *mut c_char;
     fn reverse_text(s: *mut c_char) -> *mut c_char;
@@ -619,7 +620,8 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     // Calculate grid width and column offset
     let mut grid_width = pum_width;
     let (mut col_off, extra_space) = if pum_rl {
-        let win_end_col = nvim_pum_curwin_end_col();
+        // W_ENDCOL(curwin) = w_wincol + w_view_width
+        let win_end_col = nvim_win_get_wincol(curwin) + nvim_win_get_view_width(curwin);
         (pum_width - 1, pum_col < win_end_col - 1)
     } else {
         let es = pum_col > 0;

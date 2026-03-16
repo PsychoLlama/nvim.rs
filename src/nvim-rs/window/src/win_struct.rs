@@ -1569,6 +1569,16 @@ pub const unsafe extern "C" fn win_get_alt_fnum(wp: WinHandle) -> c_int {
     win_ref(wp).w_alt_fnum
 }
 
+/// Returns `wp->w_float_is_info`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_float_is_info"]
+#[must_use]
+pub const unsafe extern "C" fn win_get_float_is_info(wp: WinHandle) -> c_int {
+    win_ref(wp).w_float_is_info as c_int
+}
+
 // =============================================================================
 // Phase 3: Simple setter #[export_name] functions replacing C setters.
 //
