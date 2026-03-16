@@ -858,7 +858,6 @@ pub extern "C" fn rs_line_number_width(max_lnum: c_int) -> c_int {
 extern "C" {
     fn nvim_excmds_oldfiles_count() -> c_int;
     fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const std::ffi::c_char;
-    fn nvim_excmds_set_msg_scroll(val: c_int);
     fn msg_start();
     fn msg_outnum(nr: c_int);
     fn nvim_message_filtered(msg: *const std::ffi::c_char) -> c_int;
@@ -866,10 +865,7 @@ extern "C" {
     fn msg_clr_eos();
     fn msg_putchar(c: c_int);
     fn os_breakcheck();
-    fn nvim_excmds_got_int() -> c_int;
-    fn nvim_excmds_set_got_int(val: c_int);
     fn nvim_excmds_cmdmod_has_browse() -> c_int;
-    fn nvim_excmds_set_quit_more(val: c_int);
     fn nvim_excmds_prompt_for_input() -> c_int;
     fn msg_starthere();
     fn nvim_excmds_expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
@@ -892,10 +888,10 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     }
 
     msg_start();
-    nvim_excmds_set_msg_scroll(1);
+    crate::msg_scroll = 1;
 
     for i in 0..count {
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             break;
         }
         let fname_ptr = nvim_excmds_oldfiles_find_str(i);
@@ -916,11 +912,11 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
     }
 
     // Reset got_int (it was set to truncate listing)
-    nvim_excmds_set_got_int(0);
+    crate::got_int = false;
 
     // File selection prompt on ":browse oldfiles"
     if nvim_excmds_cmdmod_has_browse() != 0 {
-        nvim_excmds_set_quit_more(0);
+        crate::quit_more = false;
         let selected = nvim_excmds_prompt_for_input();
         msg_starthere();
         let list_len = nvim_excmds_oldfiles_count();

@@ -256,7 +256,6 @@ pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_get_p_write() -> c_int;
     fn nvim_excmds_os_nodetype(fname: *const c_char) -> c_int;
     fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_os_file_mkdir(fname: *const c_char) -> c_int;
@@ -283,7 +282,7 @@ extern "C" {
 /// No pointers involved.
 #[no_mangle]
 pub unsafe extern "C" fn rs_not_writing() -> c_int {
-    if nvim_excmds_get_p_write() != 0 {
+    if crate::p_write != 0 {
         return 0; // writing is enabled, no error
     }
     nvim_excmds_error_msg(ERR_E142, std::ptr::null());
@@ -504,7 +503,7 @@ pub unsafe extern "C" fn rs_getfile(
         && nvim_excmds_curbufIsChanged() != 0
         && nvim_excmds_autowrite_curbuf(forceit) == 0
     {
-        if nvim_excmds_get_p_confirm() != 0 && nvim_excmds_get_p_write() != 0 {
+        if nvim_excmds_get_p_confirm() != 0 && crate::p_write != 0 {
             nvim_excmds_dialog_changed_curbuf();
         }
         if nvim_excmds_curbufIsChanged() != 0 {
@@ -608,8 +607,6 @@ extern "C" {
     fn nvim_excmds_cmd_xall() -> c_int;
     fn nvim_excmds_cmd_wqall() -> c_int;
     fn nvim_excmds_before_quit_all(eap: *mut ExArgHandle) -> c_int;
-    fn nvim_excmds_set_exiting();
-    fn nvim_excmds_get_exiting() -> c_int;
     fn nvim_excmds_getout(code: c_int);
     fn nvim_excmds_not_exiting();
     fn nvim_excmds_get_firstbuf() -> *mut BufHandle;
@@ -654,13 +651,13 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
         if nvim_excmds_before_quit_all(eap) == 0 {
             return; // FAIL from before_quit_all
         }
-        nvim_excmds_set_exiting();
+        crate::exiting = true;
     }
 
     // Iterate all buffers (manually walk the linked list)
     let mut buf = nvim_excmds_get_firstbuf();
     while !buf.is_null() {
-        let exiting = nvim_excmds_get_exiting() != 0;
+        let exiting = crate::exiting;
 
         if exiting && nvim_excmds_buf_has_running_job(buf) != 0 {
             nvim_excmds_no_write_message_nobang(buf);
@@ -715,7 +712,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
         buf = nvim_excmds_buf_get_next(buf);
     }
 
-    if nvim_excmds_get_exiting() != 0 {
+    if crate::exiting {
         if error == 0 {
             nvim_excmds_getout(0); // exit Vim (diverges)
         }
@@ -740,7 +737,6 @@ extern "C" {
         ffname: *const c_char,
         dir: *const c_char,
     ) -> *mut c_char;
-    fn nvim_excmds_get_emsg_silent() -> c_int;
     fn nvim_excmds_dialog_swapfile(eap: *mut ExArgHandle, swapname: *const c_char) -> c_int;
 }
 
@@ -770,7 +766,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
                 || ((b_flags & BF_NEW_VAL) != 0 && nvim_excmds_cpo_no_overnew() != 0)
                 || (b_flags & BF_READERR_VAL) != 0));
 
-    if !needs_check || nvim_excmds_get_p_wa() != 0 || nvim_excmds_os_path_exists(ffname) == 0 {
+    if !needs_check || crate::p_wa != 0 || nvim_excmds_os_path_exists(ffname) == 0 {
         return 1; // OK
     }
 
@@ -799,7 +795,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
     }
 
     // For ":w! filename" check that no swap file exists for "filename".
-    if other != 0 && nvim_excmds_get_emsg_silent() == 0 {
+    if other != 0 && crate::emsg_silent == 0 {
         let dir = nvim_excmds_get_first_dir();
         let swapname = nvim_excmds_makeswapname(fname, ffname, dir);
         xfree(dir.cast());
@@ -846,7 +842,6 @@ extern "C" {
     fn nvim_excmds_bt_dontwrite_msg_curbuf() -> c_int;
     fn nvim_excmds_check_fname() -> c_int;
     fn nvim_excmds_curbuf_check_writable() -> c_int;
-    fn nvim_excmds_get_p_wa() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
@@ -956,7 +951,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         let line_count = nvim_curbuf_get_b_ml_ml_line_count();
         let forceit = nvim_exarg_get_forceit(eap);
         let append = nvim_excmds_eap_get_append(eap);
-        let p_wa = nvim_excmds_get_p_wa();
+        let p_wa = crate::p_wa;
 
         if (line1 != 1 || line2 != line_count) && forceit == 0 && append == 0 && p_wa == 0 {
             if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {

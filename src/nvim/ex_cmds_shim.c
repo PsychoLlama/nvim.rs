@@ -267,17 +267,11 @@ char *nvim_excmds_skiptohex(const char *p) { return skiptohex((char *)p); }
 char *nvim_excmds_skiptobin(const char *p) { return (char *)skiptobin((char *)p); }
 char *nvim_excmds_skiptodigit(const char *p) { return skiptodigit((char *)p); }
 
-// Interrupt check
-int nvim_excmds_got_int(void) { return got_int; }
-
 // Error message wrappers (can't call variadic semsg from Rust)
 void nvim_excmds_semsg_invarg2(const char *p) { semsg(_(e_invarg2), p); }
 void nvim_excmds_emsg_invarg(void) { emsg(_(e_invarg)); }
 void nvim_excmds_emsg_noprevre(void) { emsg(_(e_noprevre)); }
 void nvim_excmds_emsg_interr(void) { emsg(_(e_interr)); }
-
-// Global option accessor
-int nvim_excmds_get_p_ic(void) { return p_ic; }
 
 // Exarg mutation
 void nvim_exarg_set_nextcmd(exarg_T *eap, const char *p)
@@ -350,8 +344,6 @@ void nvim_excmds_fold_move_range_all_wins(linenr_T line1, linenr_T line2, linenr
 void nvim_excmds_disable_fold_update_inc(void) { disable_fold_update++; }
 void nvim_excmds_disable_fold_update_dec(void) { disable_fold_update--; }
 
-int nvim_excmds_global_busy(void) { return global_busy; }
-int64_t nvim_excmds_p_report(void) { return (int64_t)p_report; }
 
 void nvim_excmds_smsg_lines_moved(int64_t num_lines)
 {
@@ -395,6 +387,14 @@ int nvim_excmds_do_join(int count)
 {
   return do_join((size_t)count, false, true, false, true);
 }
+// Get/set sub_nsubs global
+int nvim_excmds_get_sub_nsubs(void) { return sub_nsubs; }
+void nvim_excmds_set_sub_nsubs(int val) { sub_nsubs = val; }
+void nvim_excmds_sub_nsubs_inc(void) { sub_nsubs++; }
+// Get/set sub_nlines global (linenr_T)
+int nvim_excmds_get_sub_nlines(void) { return (int)sub_nlines; }
+void nvim_excmds_set_sub_nlines(int val) { sub_nlines = (linenr_T)val; }
+void nvim_excmds_sub_nlines_inc(void) { sub_nlines++; }
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
 // Call ex_may_print
 void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
@@ -557,9 +557,6 @@ bool nvim_excmds_format_sub_msg(bool count_only)
   return true;
 }
 
-/// Accessor: return KeyTyped global.
-int nvim_excmds_get_KeyTyped(void) { return KeyTyped ? 1 : 0; }
-
 /// Accessor: return messaging() result.
 int nvim_excmds_messaging(void) { return messaging() ? 1 : 0; }
 
@@ -598,8 +595,6 @@ int nvim_excmds_win_split(int size, int flags)
   return win_split(size, flags) == FAIL ? -1 : 0;
 }
 
-int nvim_excmds_get_g_do_tagpreview(void) { return g_do_tagpreview; }
-
 void nvim_excmds_reset_binding_curwin(void)
 {
   RESET_BINDING(curwin);
@@ -627,11 +622,8 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
   return tv_list_find_str(l, idx);
 }
 
-void nvim_excmds_set_msg_scroll(int val) { msg_scroll = (bool)val; }
 void nvim_excmds_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
-void nvim_excmds_set_got_int(int val) { got_int = (bool)val; }
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
-void nvim_excmds_set_quit_more(int val) { quit_more = (bool)val; }
 int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
 char *nvim_excmds_expand_env_save(const char *p) { return expand_env_save((char *)p); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
@@ -649,10 +641,7 @@ void nvim_excmds_xfree(void *ptr) { xfree(ptr); }
 
 // --- do_bang FFI accessors ---
 
-int nvim_excmds_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 void nvim_excmds_autowrite_all(void) { autowrite_all(); }
-int nvim_excmds_get_bangredo(void) { return bangredo ? 1 : 0; }
-void nvim_excmds_set_bangredo(int val) { bangredo = (bool)val; }
 char *nvim_excmds_vim_strsave_escaped(const char *s, const char *chars)
 {
   return vim_strsave_escaped((char *)s, (char *)chars);
@@ -663,17 +652,12 @@ void nvim_excmds_append_to_redobuff_lit(const char *s, int len)
 }
 void nvim_excmds_append_to_redobuff(const char *s) { AppendToRedobuff((char *)s); }
 void nvim_excmds_ui_cursor_goto(int row, int col) { ui_cursor_goto(row, col); }
-int nvim_excmds_get_msg_row(void) { return msg_row; }
-int nvim_excmds_get_msg_col(void) { return msg_col; }
 void nvim_excmds_apply_autocmds_shellfilterpost(void)
 {
   apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
 }
 
 // --- do_shell FFI accessors ---
-int nvim_excmds_get_p_warn(void) { return p_warn ? 1 : 0; }
-int nvim_excmds_get_autocmd_busy(void) { return autocmd_busy ? 1 : 0; }
-int nvim_excmds_get_msg_silent(void) { return msg_silent; }
 int nvim_excmds_any_buf_changed(void)
 {
   FOR_ALL_BUFFERS(buf) {
@@ -687,18 +671,12 @@ void nvim_excmds_call_shell(char *cmd, int flags)
 {
   call_shell(cmd, flags, NULL);
 }
-void nvim_excmds_set_msg_didout(int val) { msg_didout = (bool)val; }
-void nvim_excmds_set_did_check_timestamps(int val) { did_check_timestamps = (bool)val; }
-void nvim_excmds_set_need_check_timestamps(int val) { need_check_timestamps = (bool)val; }
-void nvim_excmds_set_msg_row(int val) { msg_row = val; }
-void nvim_excmds_set_msg_col(int val) { msg_col = val; }
 void nvim_excmds_apply_autocmds_shellcmdpost(void)
 {
   apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
 }
 
 // --- global_exe FFI accessors ---
-void nvim_excmds_set_global_busy(int val) { global_busy = val; }
 int nvim_excmds_get_global_need_beginline(void) { return global_need_beginline ? 1 : 0; }
 void nvim_excmds_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }
 linenr_T nvim_excmds_ml_firstmarked(void) { return ml_firstmarked(); }
@@ -712,7 +690,6 @@ void nvim_excmds_do_cmdline_global(const char *cmd)
 }
 void nvim_excmds_check_cursor_curwin(void) { check_cursor(curwin); }
 void nvim_excmds_changed_line_abv_curs(void) { changed_line_abv_curs(); }
-int nvim_excmds_get_msg_scrolled(void) { return msg_scrolled; }
 // --- show_sub FFI accessors ---
 
 /// Save and set p_shm to "F" (disable file info message). Returns strdup of p_shm.
@@ -1057,9 +1034,6 @@ void nvim_excmds_eap_arg_restore(exarg_T *eap, char *saved) { eap->arg = saved; 
 
 // --- do_filter FFI accessors ---
 
-/// Get p_stmp (shelltemp option).
-int nvim_excmds_get_p_stmp(void) { return p_stmp ? 1 : 0; }
-
 /// Get curbuf->b_op_start.lnum
 int nvim_excmds_curbuf_op_start_lnum(void) { return (int)curbuf->b_op_start.lnum; }
 
@@ -1303,12 +1277,6 @@ int nvim_excmds_cmd_wqall(void) { return (int)CMD_wqall; }
 /// Wrap before_quit_all(eap). Returns 1=OK, 0=FAIL.
 int nvim_excmds_before_quit_all(exarg_T *eap) { return before_quit_all(eap) == OK ? 1 : 0; }
 
-/// Set exiting=true.
-void nvim_excmds_set_exiting(void) { exiting = true; }
-
-/// Get exiting global.
-int nvim_excmds_get_exiting(void) { return exiting ? 1 : 0; }
-
 /// Wrap getout(code). Diverges (process exit).
 void nvim_excmds_getout(int code) { getout(code); }
 
@@ -1433,9 +1401,6 @@ char *nvim_excmds_makeswapname(const char *fname, const char *ffname, const char
   return makeswapname((char *)fname, (char *)ffname, curbuf, (char *)dir);
 }
 
-/// Get emsg_silent. Returns 1 if silent, 0 otherwise.
-int nvim_excmds_get_emsg_silent(void) { return emsg_silent ? 1 : 0; }
-
 /// Dialog: "Swap file "sname" exists, overwrite anyway?" Returns 1 if yes, sets forceit.
 int nvim_excmds_dialog_swapfile(exarg_T *eap, const char *swapname)
 {
@@ -1507,9 +1472,6 @@ int nvim_excmds_curbuf_check_writable(void)
   return 1;
 #endif
 }
-
-/// Get p_wa option.
-int nvim_excmds_get_p_wa(void) { return p_wa ? 1 : 0; }
 
 /// Dialog: "Write partial file?" Returns 1 if user said yes.
 int nvim_excmds_dialog_write_partial(void)
@@ -1584,9 +1546,6 @@ void nvim_excmds_saveas_post_success(void)
 int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 : 0; }
 
 // --- Write Validation Helpers FFI accessors ---
-
-/// Get p_write option.
-int nvim_excmds_get_p_write(void) { return p_write ? 1 : 0; }
 
 /// Wrap os_nodetype(fname). Returns NODE_OTHER constant value for comparison.
 int nvim_excmds_os_nodetype(const char *fname) { return (int)os_nodetype(fname); }

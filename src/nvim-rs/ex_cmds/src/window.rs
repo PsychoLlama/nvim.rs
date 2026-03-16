@@ -363,7 +363,6 @@ extern "C" {
     fn nvim_excmds_find_preview_win() -> *mut std::ffi::c_void;
     fn nvim_excmds_win_enter(wp: *mut std::ffi::c_void, undo_sync: c_int);
     fn nvim_excmds_win_split(size: c_int, flags: c_int) -> c_int;
-    fn nvim_excmds_get_g_do_tagpreview() -> c_int;
     fn nvim_excmds_reset_binding_curwin();
     fn nvim_excmds_set_foldcolumn_zero();
 }
@@ -394,7 +393,7 @@ pub unsafe extern "C" fn rs_prepare_tagpreview(undo_sync: c_int) -> bool {
     }
 
     // No preview window exists yet -- create one.
-    let tagpreview_size = nvim_excmds_get_g_do_tagpreview();
+    let tagpreview_size = crate::g_do_tagpreview;
     let split_size = if tagpreview_size > 0 {
         tagpreview_size
     } else {

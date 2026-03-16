@@ -189,11 +189,9 @@ extern "C" {
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
     fn nvim_ecmd_get_p_awa() -> c_int;
     fn nvim_get_p_sol() -> c_int;
-    fn nvim_excmds_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_ecmd_set_msg_scrolled_ign(val: c_int);
     fn nvim_ecmd_get_msg_listdo_overwrite() -> c_int;
-    fn nvim_excmds_get_exiting() -> c_int;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ecmd_get_p_ur() -> i64;
 
@@ -834,17 +832,17 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
         // Show file info for old buffers that weren't re-read
         if oldbuf != 0 && !auto_buf {
-            let msg_scroll_save = nvim_excmds_get_msg_scroll();
+            let msg_scroll_save = crate::msg_scroll;
 
             // 'O' flag in 'cpoptions': overwrite previous file message
             if nvim_ecmd_shortmess_overall() != 0
                 && nvim_ecmd_get_msg_listdo_overwrite() == 0
-                && nvim_excmds_get_exiting() == 0
+                && !crate::exiting
                 && nvim_get_p_verbose() == 0
             {
                 nvim_set_msg_scroll(0);
             }
-            if nvim_excmds_get_msg_scroll() == 0 {
+            if crate::msg_scroll == 0 {
                 msg_check_for_delay(false);
             }
             msg_start();

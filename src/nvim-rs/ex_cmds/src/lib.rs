@@ -513,6 +513,38 @@ extern "C" {
     pub static mut silent_mode: bool;
     /// info_message global (bool in C)
     pub static mut info_message: bool;
+    // Message state globals (direct C access)
+    /// Direct C global: msg_scroll (int in C)
+    pub static mut msg_scroll: c_int;
+    /// Direct C global: msg_scrolled (int in C)
+    pub static mut msg_scrolled: c_int;
+    /// Direct C global: msg_row (int in C)
+    pub static mut msg_row: c_int;
+    /// Direct C global: msg_col (int in C)
+    pub static mut msg_col: c_int;
+    /// Direct C global: msg_silent (int in C)
+    pub static mut msg_silent: c_int;
+    /// Direct C global: msg_didout (bool in C)
+    pub static mut msg_didout: bool;
+    /// Direct C global: emsg_silent (int in C)
+    pub static mut emsg_silent: c_int;
+    // Misc state globals
+    /// Direct C global: bangredo (bool in C)
+    pub static mut bangredo: bool;
+    /// Direct C global: quit_more (bool in C)
+    pub static mut quit_more: bool;
+    /// Direct C global: autocmd_busy (bool in C)
+    pub static mut autocmd_busy: bool;
+    /// Direct C global: did_check_timestamps (bool in C)
+    pub static mut did_check_timestamps: bool;
+    /// Direct C global: need_check_timestamps (bool in C)
+    pub static mut need_check_timestamps: bool;
+    /// Direct C global: exiting (bool in C)
+    pub static mut exiting: bool;
+    /// Direct C global: KeyTyped (bool in C)
+    pub static mut KeyTyped: bool;
+    /// Direct C global: g_do_tagpreview (int in C)
+    pub static mut g_do_tagpreview: c_int;
     /// msg_prt_line wrapper
     pub fn nvim_msg_prt_line(s: *const c_char, list: c_int);
     /// message_filtered wrapper
@@ -628,8 +660,8 @@ extern "C" {
     pub fn nvim_excmds_skiptodigit(p: *const c_char) -> *mut c_char;
 
     // Interrupt
-    /// Check if got_int is set.
-    pub fn nvim_excmds_got_int() -> c_int;
+    /// Direct C global: got_int (user interrupt flag)
+    pub static mut got_int: bool;
     /// fast_breakcheck() - check for user interrupt.
     pub fn fast_breakcheck();
 
@@ -643,9 +675,19 @@ extern "C" {
     /// emsg(_(e_interr)) - "Interrupted".
     pub fn nvim_excmds_emsg_interr();
 
-    // Global option
-    /// Get p_ic (ignore case option).
-    pub fn nvim_excmds_get_p_ic() -> c_int;
+    // Global options (direct static access)
+    /// Direct C global: p_ic (ignorecase option)
+    pub static mut p_ic: c_int;
+    /// Direct C global: p_report (report option, int64_t/OptInt)
+    pub static mut p_report: i64;
+    /// Direct C global: p_warn (warn option)
+    pub static mut p_warn: c_int;
+    /// Direct C global: p_wa (writeany option)
+    pub static mut p_wa: c_int;
+    /// Direct C global: p_write (write option)
+    pub static mut p_write: c_int;
+    /// Direct C global: p_stmp (shelltemp option)
+    pub static mut p_stmp: c_int;
 
     // Exarg mutation
     /// Set eap->nextcmd.
@@ -709,10 +751,12 @@ extern "C" {
     pub fn nvim_excmds_disable_fold_update_inc();
     /// Decrement disable_fold_update.
     pub fn nvim_excmds_disable_fold_update_dec();
-    /// Get global_busy flag.
-    pub fn nvim_excmds_global_busy() -> c_int;
-    /// Get p_report option value.
-    pub fn nvim_excmds_p_report() -> i64;
+    /// Direct C global: global_busy (global command busy flag)
+    pub static mut global_busy: c_int;
+    /// Direct C global: sub_nsubs (number of substitutions made)
+    pub static mut sub_nsubs: c_int;
+    /// Direct C global: sub_nlines (number of lines substituted)
+    pub static mut sub_nlines: c_int;
     /// Display "N line(s) moved" message.
     pub fn nvim_excmds_smsg_lines_moved(num_lines: i64);
     /// Display E134 error message.
@@ -783,11 +827,16 @@ extern "C" {
     pub fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
     /// do_join wrapper (count lines, insert_space=false, save_undo=true, use_fo=false, setmark=true).
     pub fn nvim_excmds_do_join(count: c_int) -> c_int;
-
+    /// Get sub_nsubs global.
+    pub fn nvim_excmds_get_sub_nsubs() -> c_int;
+    /// Set sub_nsubs global.
+    pub fn nvim_excmds_set_sub_nsubs(val: c_int);
+    /// Get sub_nlines global.
+    pub fn nvim_excmds_get_sub_nlines() -> c_int;
+    /// Set sub_nlines global.
+    pub fn nvim_excmds_set_sub_nlines(val: c_int);
     /// Format and display the substitution count message (NGETTEXT in C).
     pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
-    /// Return KeyTyped global.
-    pub fn nvim_excmds_get_KeyTyped() -> c_int;
     /// Return messaging() result (1 = messaging on, 0 = off).
     pub fn nvim_excmds_messaging() -> c_int;
     /// Call ex_may_print(eap).

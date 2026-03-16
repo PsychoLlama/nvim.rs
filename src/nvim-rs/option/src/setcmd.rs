@@ -1186,7 +1186,7 @@ extern "C" {
     fn os_breakcheck();
     fn nvim_get_got_int() -> c_int;
     fn nvim_get_Columns() -> c_int;
-    fn nvim_excmds_set_msg_col(val: c_int);
+    static mut msg_col: c_int;
     fn nvim_get_namebuff() -> *mut c_char;
     fn nvim_excmds_curbufIsChanged() -> c_int;
     fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
@@ -1377,7 +1377,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
             let mut col: c_int = 0;
             let mut i = row;
             while i < item_count {
-                nvim_excmds_set_msg_col(col); // make columns
+                msg_col = col; // make columns
                 let show_opt_idx = *items.add(i as usize);
                 rs_showoneopt(show_opt_idx, opt_flags);
                 col += INC;

@@ -420,33 +420,19 @@ extern "C" {
     fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
 
     // do_shell FFI
-    fn nvim_excmds_get_p_warn() -> c_int;
-    fn nvim_excmds_get_autocmd_busy() -> c_int;
-    fn nvim_excmds_get_msg_silent() -> c_int;
     fn nvim_excmds_any_buf_changed() -> c_int;
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_call_shell(cmd: *mut c_char, flags: c_int);
-    fn nvim_excmds_set_msg_didout(val: c_int);
-    fn nvim_excmds_set_did_check_timestamps(val: c_int);
-    fn nvim_excmds_set_need_check_timestamps(val: c_int);
-    fn nvim_excmds_set_msg_row(val: c_int);
-    fn nvim_excmds_set_msg_col(val: c_int);
     fn nvim_excmds_apply_autocmds_shellcmdpost();
     fn nvim_get_Rows() -> c_int;
 
     // do_bang FFI
     fn rs_check_secure() -> c_int;
-    fn nvim_excmds_get_msg_scroll() -> c_int;
-    fn nvim_excmds_set_msg_scroll(val: c_int);
     fn nvim_excmds_autowrite_all();
-    fn nvim_excmds_get_bangredo() -> c_int;
-    fn nvim_excmds_set_bangredo(val: c_int);
     fn nvim_excmds_vim_strsave_escaped(s: *const c_char, chars: *const c_char) -> *mut c_char;
     fn nvim_excmds_append_to_redobuff_lit(s: *const c_char, len: c_int);
     fn nvim_excmds_append_to_redobuff(s: *const c_char);
     fn nvim_excmds_ui_cursor_goto(row: c_int, col: c_int);
-    fn nvim_excmds_get_msg_row() -> c_int;
-    fn nvim_excmds_get_msg_col() -> c_int;
     fn nvim_excmds_apply_autocmds_shellfilterpost();
     fn msg_start();
     fn msg_putchar(c: c_int);
@@ -791,9 +777,9 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
     crate::msg_putchar(b'\n' as c_int); // may shift screen one line up
 
     // Warning message before calling the shell
-    if nvim_excmds_get_p_warn() != 0
-        && nvim_excmds_get_autocmd_busy() == 0
-        && nvim_excmds_get_msg_silent() == 0
+    if crate::p_warn != 0
+        && !crate::autocmd_busy
+        && crate::msg_silent == 0
         && nvim_excmds_any_buf_changed() != 0
     {
         nvim_excmds_emsg_by_id(11); // msg_puts_no_write_warning
@@ -801,22 +787,22 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
 
     // This ui_cursor_goto is required for when the '\n' resulted in a
     // "delete line 1" command to the terminal.
-    let row = nvim_excmds_get_msg_row();
-    let col = nvim_excmds_get_msg_col();
+    let row = crate::msg_row;
+    let col = crate::msg_col;
     nvim_excmds_ui_cursor_goto(row, col);
     nvim_excmds_call_shell(cmd, flags);
 
-    if nvim_excmds_get_msg_silent() == 0 {
-        nvim_excmds_set_msg_didout(1);
+    if crate::msg_silent == 0 {
+        crate::msg_didout = true;
     }
-    nvim_excmds_set_did_check_timestamps(0);
-    nvim_excmds_set_need_check_timestamps(1);
+    crate::did_check_timestamps = false;
+    crate::need_check_timestamps = true;
 
     // Put the message cursor at the end of the screen to avoid wait_return()
     // overwriting the text the external command showed.
     let rows = nvim_get_Rows();
-    nvim_excmds_set_msg_row(rows - 1);
-    nvim_excmds_set_msg_col(0);
+    crate::msg_row = rows - 1;
+    crate::msg_col = 0;
 
     nvim_excmds_apply_autocmds_shellcmdpost();
 }
@@ -848,10 +834,10 @@ pub unsafe extern "C" fn rs_do_bang(
 
     if addr_count == 0 {
         // :! -- don't scroll here
-        let scroll_save = nvim_excmds_get_msg_scroll();
-        nvim_excmds_set_msg_scroll(0);
+        let scroll_save = crate::msg_scroll;
+        crate::msg_scroll = 0;
         nvim_excmds_autowrite_all();
-        nvim_excmds_set_msg_scroll(scroll_save);
+        crate::msg_scroll = scroll_save;
     }
 
     // Build the command by bang-substituting.
@@ -954,7 +940,7 @@ pub unsafe extern "C" fn rs_do_bang(
     }
 
     // Handle bangredo: put cmd in redo buffer
-    if nvim_excmds_get_bangredo() != 0 {
+    if crate::bangredo {
         let prevcmd_ptr = match PREVCMD {
             Some(ptr) if !ptr.is_null() => ptr,
             _ => {
@@ -971,7 +957,7 @@ pub unsafe extern "C" fn rs_do_bang(
         nvim_excmds_append_to_redobuff_lit(escaped, -1);
         xfree(escaped as *mut std::ffi::c_void);
         nvim_excmds_append_to_redobuff(c"\n".as_ptr());
-        nvim_excmds_set_bangredo(0);
+        crate::bangredo = false;
     }
 
     // Add shell quotes if p_shq is non-empty
@@ -1012,8 +998,8 @@ pub unsafe extern "C" fn rs_do_bang(
         msg_putchar(b'!' as c_int);
         nvim_excmds_msg_outtrans(newcmd);
         msg_clr_eos();
-        let row = nvim_excmds_get_msg_row();
-        let col = nvim_excmds_get_msg_col();
+        let row = crate::msg_row;
+        let col = crate::msg_col;
         nvim_excmds_ui_cursor_goto(row, col);
 
         rs_do_shell(newcmd, 0);
@@ -1045,7 +1031,6 @@ use crate::ExArgHandle;
 
 extern "C" {
     // do_filter accessors
-    fn nvim_excmds_get_p_stmp() -> c_int;
     fn nvim_excmds_curbuf_op_start_lnum() -> c_int;
     fn nvim_excmds_curbuf_op_end_lnum() -> c_int;
     fn nvim_excmds_curbuf_set_op_start_lnum(lnum: c_int);
@@ -1139,7 +1124,7 @@ pub unsafe extern "C" fn rs_do_filter(
 
     // Save state for cleanup
     let old_curbuf = nvim_excmds_get_curbuf_identity();
-    let stmp = nvim_excmds_get_p_stmp() != 0;
+    let stmp = crate::p_stmp != 0;
     let mut orig_start: u64 = 0;
     let mut orig_end: u64 = 0;
     nvim_excmds_curbuf_op_save(&mut orig_start, &mut orig_end);
@@ -1379,7 +1364,7 @@ pub unsafe extern "C" fn rs_do_filter(
         beginline(BL_WHITE | BL_FIX);
         nvim_excmds_no_wait_return_dec();
 
-        if (linecount as i64) > crate::nvim_excmds_p_report() {
+        if (linecount as i64) > crate::p_report {
             if do_in {
                 nvim_excmds_msg_lines_filtered(linecount);
             } else {

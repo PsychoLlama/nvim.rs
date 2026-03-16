@@ -28,14 +28,8 @@ extern crate libc;
 extern "C" {
     // global_exe FFI
     fn setpcmark();
-    fn nvim_excmds_set_msg_didout(val: c_int);
-    static mut sub_nsubs: c_int;
-    static mut sub_nlines: c_int;
     fn nvim_excmds_set_global_need_beginline(val: c_int);
-    fn nvim_excmds_set_global_busy(val: c_int);
-    fn nvim_excmds_global_busy() -> c_int;
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
-    fn nvim_excmds_got_int() -> c_int;
     fn nvim_excmds_ml_firstmarked() -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
@@ -45,8 +39,6 @@ extern "C" {
     fn beginline(flags: c_int);
     fn nvim_excmds_check_cursor_curwin();
     fn nvim_excmds_changed_line_abv_curs();
-    fn nvim_excmds_get_msg_col() -> c_int;
-    fn nvim_excmds_get_msg_scrolled() -> c_int;
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
 
@@ -420,19 +412,19 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     setpcmark();
 
     // When the command writes a message, don't overwrite the command.
-    nvim_excmds_set_msg_didout(1);
+    crate::msg_didout = true;
 
-    sub_nsubs = 0;
-    sub_nlines = 0;
+    crate::sub_nsubs = 0;
+    crate::sub_nlines = 0;
     nvim_excmds_set_global_need_beginline(0);
-    nvim_excmds_set_global_busy(1);
+    crate::global_busy = 1;
 
     let old_lcount = nvim_curbuf_get_b_ml_ml_line_count();
     let old_buf = nvim_excmds_get_curbuf_identity();
 
-    while nvim_excmds_got_int() == 0 {
+    while !crate::got_int {
         let lnum = nvim_excmds_ml_firstmarked();
-        if lnum == 0 || nvim_excmds_global_busy() != 1 {
+        if lnum == 0 || crate::global_busy != 1 {
             break;
         }
         // global_exe_one: set cursor position and execute command
@@ -442,7 +434,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
         os_breakcheck();
     }
 
-    nvim_excmds_set_global_busy(0);
+    crate::global_busy = 0;
     if nvim_excmds_get_global_need_beginline() != 0 {
         beginline(BL_WHITE | BL_FIX);
     } else {
@@ -455,8 +447,8 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
 
     // If it looks like no message was written, allow overwriting the command
     // with the report for number of changes.
-    if nvim_excmds_get_msg_col() == 0 && nvim_excmds_get_msg_scrolled() == 0 {
-        nvim_excmds_set_msg_didout(0);
+    if crate::msg_col == 0 && crate::msg_scrolled == 0 {
+        crate::msg_didout = false;
     }
 
     // If substitutes done, report number of substitutes; otherwise report
@@ -570,7 +562,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
 
     // When nesting the command works on one line. This allows for
     // ":g/found/v/notfound/command".
-    if nvim_excmds_global_busy() != 0 && (line1 != 1 || line2 != ml_line_count) {
+    if crate::global_busy != 0 && (line1 != 1 || line2 != ml_line_count) {
         // will increment global_busy to break out of the loop
         nvim_excmds_emsg_by_id(2); // E147: Cannot do :global recursive with a range
         return;
@@ -630,7 +622,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         return;
     }
 
-    if nvim_excmds_global_busy() != 0 {
+    if crate::global_busy != 0 {
         // Nested global: work on the current line only.
         let lnum = nvim_excmds_curwin_cursor_lnum();
         let matched = nvim_excmds_vim_regexec_multi(regmatch, lnum);
@@ -643,7 +635,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         // Pass 1: mark all (not) matching lines
         let mut lnum = nvim_exarg_get_line1(eap);
         let end_lnum = nvim_exarg_get_line2(eap);
-        while lnum <= end_lnum && nvim_excmds_got_int() == 0 {
+        while lnum <= end_lnum && !crate::got_int {
             let matched = nvim_excmds_vim_regexec_multi(regmatch, lnum);
             if nvim_excmds_regmmatch_regprog_null(regmatch) != 0 {
                 break; // re-compiling regprog failed
@@ -657,7 +649,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         }
 
         // Pass 2: execute the command for each marked line
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             nvim_excmds_emsg_by_id(6); // e_interr (msg)
         } else if ndone == 0 {
             if type_char == b'v' {

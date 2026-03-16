@@ -732,10 +732,9 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
         nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes,
         nvim_excmds_disable_fold_update_dec, nvim_excmds_disable_fold_update_inc,
         nvim_excmds_emsg_e134, nvim_excmds_extmark_move_region,
-        nvim_excmds_fold_move_range_all_wins, nvim_excmds_global_busy,
-        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_delete_flags,
-        nvim_excmds_ml_find_line_or_offset, nvim_excmds_p_report, nvim_excmds_smsg_lines_moved,
-        nvim_get_curbuf, u_save, xfree, xstrnsave,
+        nvim_excmds_fold_move_range_all_wins, nvim_excmds_mark_adjust_nofold,
+        nvim_excmds_ml_delete_flags, nvim_excmds_ml_find_line_or_offset,
+        nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save, xfree, xstrnsave,
     };
 
     if dest >= line1 && dest < line2 {
@@ -840,7 +839,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     for _ in line1..=line2 {
         nvim_excmds_ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
     }
-    if nvim_excmds_global_busy() == 0 && i64::from(num_lines) > nvim_excmds_p_report() {
+    if crate::global_busy == 0 && i64::from(num_lines) > crate::p_report {
         nvim_excmds_smsg_lines_moved(i64::from(num_lines));
     }
 

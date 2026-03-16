@@ -479,12 +479,12 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
         nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
         nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg,
-        nvim_excmds_emsg_noprevre, nvim_excmds_extmark_splice, nvim_excmds_get_p_ic,
-        nvim_excmds_got_int, nvim_excmds_last_search_pat, nvim_excmds_mark_adjust,
-        nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
-        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
-        nvim_excmds_skip_regexp_err, nvim_excmds_skiptobin, nvim_excmds_skiptodigit,
-        nvim_excmds_skiptohex, nvim_excmds_str2nr, nvim_get_curbuf, u_save,
+        nvim_excmds_emsg_noprevre, nvim_excmds_extmark_splice, nvim_excmds_last_search_pat,
+        nvim_excmds_mark_adjust, nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree,
+        nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0,
+        nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err, nvim_excmds_skiptobin,
+        nvim_excmds_skiptodigit, nvim_excmds_skiptohex, nvim_excmds_str2nr, nvim_get_curbuf,
+        u_save,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -571,7 +571,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
                 return;
             }
             p = s; // continue after the regexp
-            nvim_excmds_regmatch_set_ic(regmatch, nvim_excmds_get_p_ic());
+            nvim_excmds_regmatch_set_ic(regmatch, crate::p_ic);
         } else {
             nvim_excmds_semsg_invarg2(p);
             nvim_excmds_regfree(regmatch);
@@ -682,7 +682,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         if !regmatch.is_null() {
             fast_breakcheck();
         }
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             nvim_excmds_regfree(regmatch);
             nvim_excmds_emsg_interr();
             return;
@@ -701,7 +701,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
             return std::cmp::Ordering::Equal;
         }
         fast_breakcheck();
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             sort_abort = true;
             return std::cmp::Ordering::Equal;
         }
@@ -822,7 +822,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         }
 
         fast_breakcheck();
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             nvim_excmds_regfree(regmatch);
             nvim_excmds_emsg_interr();
             return;
@@ -870,7 +870,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
 
     // Cleanup
     nvim_excmds_regfree(regmatch);
-    if nvim_excmds_got_int() != 0 {
+    if crate::got_int {
         nvim_excmds_emsg_interr();
     }
 }
@@ -890,9 +890,8 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
         nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_is_nextcmd_null,
         nvim_exarg_set_nextcmd, nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr,
-        nvim_excmds_emsg_noprevre, nvim_excmds_get_p_ic, nvim_excmds_got_int,
-        nvim_excmds_last_search_pat, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
-        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        nvim_excmds_emsg_noprevre, nvim_excmds_last_search_pat, nvim_excmds_mark_adjust,
+        nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
         nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
         nvim_excmds_skip_regexp_err, nvim_get_curbuf, u_save,
     };
@@ -966,7 +965,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
                 return;
             }
             p = s;
-            nvim_excmds_regmatch_set_ic(regmatch, nvim_excmds_get_p_ic());
+            nvim_excmds_regmatch_set_ic(regmatch, crate::p_ic);
         } else {
             nvim_excmds_semsg_invarg2(p);
             nvim_excmds_regfree(regmatch);
@@ -982,7 +981,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         if len > maxlen {
             maxlen = len;
         }
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             nvim_excmds_regfree(regmatch);
             nvim_excmds_emsg_interr();
             return;
@@ -1112,7 +1111,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         }
 
         fast_breakcheck();
-        if nvim_excmds_got_int() != 0 {
+        if crate::got_int {
             nvim_excmds_regfree(regmatch);
             nvim_excmds_emsg_interr();
             return;
@@ -1138,7 +1137,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
 
     // Cleanup
     nvim_excmds_regfree(regmatch);
-    if nvim_excmds_got_int() != 0 {
+    if crate::got_int {
         nvim_excmds_emsg_interr();
     }
 }
