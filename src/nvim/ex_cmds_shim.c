@@ -485,7 +485,7 @@ int nvim_excmds_get_append_indent(void) { return append_indent; }
 /// Previous substitute replacement string
 static SubReplacementString old_sub = { NULL, 0, NULL };
 
-static int global_need_beginline;       // call beginline() after ":g"
+int global_need_beginline = 0;           // call beginline() after ":g"
 
 // sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview
 // implemented in Rust (ex_cmds/src/substitute.rs).
@@ -664,8 +664,6 @@ void nvim_excmds_apply_autocmds_shellcmdpost(void)
 }
 
 // --- global_exe FFI accessors ---
-int nvim_excmds_get_global_need_beginline(void) { return global_need_beginline ? 1 : 0; }
-void nvim_excmds_set_global_need_beginline(int val) { global_need_beginline = (bool)val; }
 linenr_T nvim_excmds_ml_firstmarked(void) { return ml_firstmarked(); }
 void nvim_excmds_do_cmdline_global(const char *cmd)
 {

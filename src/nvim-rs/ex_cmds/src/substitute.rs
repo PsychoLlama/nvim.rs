@@ -134,7 +134,6 @@ extern "C" {
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_do_join(count: c_int) -> c_int;
-    fn nvim_excmds_set_global_need_beginline(val: c_int);
     fn nvim_excmds_aborting() -> c_int;
     fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
@@ -2139,7 +2138,7 @@ pub unsafe extern "C" fn rs_do_sub(
                 nvim_excmds_emsg_by_id(8); // msg_empty
             }
         } else {
-            nvim_excmds_set_global_need_beginline(1);
+            crate::global_need_beginline = 1;
         }
         if subflags_local.do_print {
             rs_print_line(

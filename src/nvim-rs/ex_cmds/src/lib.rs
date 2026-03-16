@@ -708,6 +708,8 @@ extern "C" {
     pub static mut keep_help_flag: bool;
     /// Direct C global: p_ur (undoreload option, OptInt = i64)
     pub static mut p_ur: i64;
+    /// C global in ex_cmds_shim.c: global_need_beginline (int in C)
+    pub static mut global_need_beginline: c_int;
 
     // Exarg mutation
     /// Set eap->nextcmd.

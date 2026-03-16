@@ -28,14 +28,12 @@ extern crate libc;
 extern "C" {
     // global_exe FFI
     fn setpcmark();
-    fn nvim_excmds_set_global_need_beginline(val: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_ml_firstmarked() -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_excmds_do_cmdline_global(cmd: *const c_char);
     fn os_breakcheck();
-    fn nvim_excmds_get_global_need_beginline() -> c_int;
     fn beginline(flags: c_int);
     fn nvim_excmds_check_cursor_curwin();
     fn nvim_excmds_changed_line_abv_curs();
@@ -416,7 +414,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
 
     crate::sub_nsubs = 0;
     crate::sub_nlines = 0;
-    nvim_excmds_set_global_need_beginline(0);
+    crate::global_need_beginline = 0;
     crate::global_busy = 1;
 
     let old_lcount = nvim_curbuf_get_b_ml_ml_line_count();
@@ -435,7 +433,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     }
 
     crate::global_busy = 0;
-    if nvim_excmds_get_global_need_beginline() != 0 {
+    if crate::global_need_beginline != 0 {
         beginline(BL_WHITE | BL_FIX);
     } else {
         nvim_excmds_check_cursor_curwin();
