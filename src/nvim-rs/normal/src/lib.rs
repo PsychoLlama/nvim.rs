@@ -23,6 +23,7 @@ pub mod operator_cmds;
 pub mod pending;
 pub mod scrollbind;
 pub mod showcmd;
+pub mod types;
 pub mod visual;
 
 use nvim_ascii::{rs_ascii_isdigit, rs_ascii_iswhite, rs_ascii_iswhite_or_nul};

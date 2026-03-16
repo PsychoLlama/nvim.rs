@@ -1242,6 +1242,71 @@ _Static_assert(OP_NOP == 0, "OP_NOP changed");
 _Static_assert(OP_COLON == 10, "OP_COLON changed");
 _Static_assert(CA_COMMAND_BUSY == 1, "CA_COMMAND_BUSY changed");
 
+// =============================================================================
+// Layout guards for repr(C) struct mirrors in src/nvim-rs/normal/src/types.rs
+// =============================================================================
+
+_Static_assert(sizeof(pos_T) == 12, "pos_T size changed");
+_Static_assert(offsetof(pos_T, lnum) == 0, "pos_T.lnum offset changed");
+_Static_assert(offsetof(pos_T, col) == 4, "pos_T.col offset changed");
+_Static_assert(offsetof(pos_T, coladd) == 8, "pos_T.coladd offset changed");
+
+_Static_assert(sizeof(oparg_T) == 84, "oparg_T size changed - update OpargT in types.rs");
+_Static_assert(offsetof(oparg_T, op_type) == 0, "oparg_T.op_type offset changed");
+_Static_assert(offsetof(oparg_T, regname) == 4, "oparg_T.regname offset changed");
+_Static_assert(offsetof(oparg_T, motion_type) == 8, "oparg_T.motion_type offset changed");
+_Static_assert(offsetof(oparg_T, motion_force) == 12, "oparg_T.motion_force offset changed");
+_Static_assert(offsetof(oparg_T, use_reg_one) == 16, "oparg_T.use_reg_one offset changed");
+_Static_assert(offsetof(oparg_T, inclusive) == 17, "oparg_T.inclusive offset changed");
+_Static_assert(offsetof(oparg_T, end_adjusted) == 18, "oparg_T.end_adjusted offset changed");
+_Static_assert(offsetof(oparg_T, start) == 20, "oparg_T.start offset changed");
+_Static_assert(offsetof(oparg_T, end) == 32, "oparg_T.end offset changed");
+_Static_assert(offsetof(oparg_T, cursor_start) == 44, "oparg_T.cursor_start offset changed");
+_Static_assert(offsetof(oparg_T, line_count) == 56, "oparg_T.line_count offset changed");
+_Static_assert(offsetof(oparg_T, empty) == 60, "oparg_T.empty offset changed");
+_Static_assert(offsetof(oparg_T, is_VIsual) == 61, "oparg_T.is_VIsual offset changed");
+_Static_assert(offsetof(oparg_T, start_vcol) == 64, "oparg_T.start_vcol offset changed");
+_Static_assert(offsetof(oparg_T, end_vcol) == 68, "oparg_T.end_vcol offset changed");
+_Static_assert(offsetof(oparg_T, prev_opcount) == 72, "oparg_T.prev_opcount offset changed");
+_Static_assert(offsetof(oparg_T, prev_count0) == 76, "oparg_T.prev_count0 offset changed");
+_Static_assert(offsetof(oparg_T, excl_tr_ws) == 80, "oparg_T.excl_tr_ws offset changed");
+
+_Static_assert(sizeof(cmdarg_T) == 88, "cmdarg_T size changed - update CmdargT in types.rs");
+_Static_assert(offsetof(cmdarg_T, oap) == 0, "cmdarg_T.oap offset changed");
+_Static_assert(offsetof(cmdarg_T, prechar) == 8, "cmdarg_T.prechar offset changed");
+_Static_assert(offsetof(cmdarg_T, cmdchar) == 12, "cmdarg_T.cmdchar offset changed");
+_Static_assert(offsetof(cmdarg_T, nchar) == 16, "cmdarg_T.nchar offset changed");
+_Static_assert(offsetof(cmdarg_T, nchar_composing) == 20, "cmdarg_T.nchar_composing offset changed");
+_Static_assert(offsetof(cmdarg_T, nchar_len) == 52, "cmdarg_T.nchar_len offset changed");
+_Static_assert(offsetof(cmdarg_T, extra_char) == 56, "cmdarg_T.extra_char offset changed");
+_Static_assert(offsetof(cmdarg_T, opcount) == 60, "cmdarg_T.opcount offset changed");
+_Static_assert(offsetof(cmdarg_T, count0) == 64, "cmdarg_T.count0 offset changed");
+_Static_assert(offsetof(cmdarg_T, count1) == 68, "cmdarg_T.count1 offset changed");
+_Static_assert(offsetof(cmdarg_T, arg) == 72, "cmdarg_T.arg offset changed");
+_Static_assert(offsetof(cmdarg_T, retval) == 76, "cmdarg_T.retval offset changed");
+_Static_assert(offsetof(cmdarg_T, searchbuf) == 80, "cmdarg_T.searchbuf offset changed");
+
+_Static_assert(sizeof(VimState) == 16, "VimState size changed - update VimState in types.rs");
+
+_Static_assert(sizeof(NormalState) == 232, "NormalState size changed - update NormalState in types.rs");
+_Static_assert(offsetof(NormalState, state) == 0, "NormalState.state offset changed");
+_Static_assert(offsetof(NormalState, command_finished) == 16, "NormalState.command_finished offset changed");
+_Static_assert(offsetof(NormalState, ctrl_w) == 17, "NormalState.ctrl_w offset changed");
+_Static_assert(offsetof(NormalState, need_flushbuf) == 18, "NormalState.need_flushbuf offset changed");
+_Static_assert(offsetof(NormalState, set_prevcount) == 19, "NormalState.set_prevcount offset changed");
+_Static_assert(offsetof(NormalState, previous_got_int) == 20, "NormalState.previous_got_int offset changed");
+_Static_assert(offsetof(NormalState, cmdwin) == 21, "NormalState.cmdwin offset changed");
+_Static_assert(offsetof(NormalState, noexmode) == 22, "NormalState.noexmode offset changed");
+_Static_assert(offsetof(NormalState, toplevel) == 23, "NormalState.toplevel offset changed");
+_Static_assert(offsetof(NormalState, oa) == 24, "NormalState.oa offset changed");
+_Static_assert(offsetof(NormalState, ca) == 112, "NormalState.ca offset changed");
+_Static_assert(offsetof(NormalState, mapped_len) == 200, "NormalState.mapped_len offset changed");
+_Static_assert(offsetof(NormalState, old_mapped_len) == 204, "NormalState.old_mapped_len offset changed");
+_Static_assert(offsetof(NormalState, idx) == 208, "NormalState.idx offset changed");
+_Static_assert(offsetof(NormalState, c) == 212, "NormalState.c offset changed");
+_Static_assert(offsetof(NormalState, old_col) == 216, "NormalState.old_col offset changed");
+_Static_assert(offsetof(NormalState, old_pos) == 220, "NormalState.old_pos offset changed");
+
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
 
