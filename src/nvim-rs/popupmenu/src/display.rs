@@ -341,15 +341,17 @@ extern "C" {
     /// Call `grid_free(&pum_grid)`.
     fn nvim_pum_grid_free();
     /// Find the floating preview window (returns NULL if none).
-    fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
+    fn win_float_find_preview() -> *mut WinHandle;
     /// Close a window.
-    fn nvim_pum_win_close(wp: *mut WinHandle);
+    fn win_close(wp: *mut WinHandle, free_buf: bool, force: bool) -> c_int;
 }
 
 // Phase 8: Display orchestrator C accessor functions.
 extern "C" {
-    /// Validate cursor column in curwin.
-    fn nvim_pum_validate_cursor_col();
+    /// Validate cursor column in the given window.
+    fn validate_cursor_col(wp: *mut WinHandle);
+    /// Get current window.
+    fn nvim_pum_get_curwin() -> *mut WinHandle;
     /// Compute display geometry (`pum_win_row`, `cursor_col`, anchor, offsets, above/below).
     fn nvim_pum_compute_geometry(cmd_startcol: c_int) -> PumDisplayGeometry;
     /// Send external popupmenu show event with Arena-allocated arrays.
@@ -457,9 +459,9 @@ pub unsafe extern "C" fn rs_pum_check_clear() {
         PUM_STATE.is_drawn = 0;
         PUM_STATE.external = 0;
 
-        let wp = nvim_pum_win_float_find_preview();
+        let wp = win_float_find_preview();
         if !wp.is_null() {
-            nvim_pum_win_close(wp);
+            win_close(wp, false, false);
         }
     }
 }
@@ -561,7 +563,7 @@ pub unsafe extern "C" fn rs_pum_display(
         // Mark as visible early to avoid must_redraw when 'cursorcolumn' is on
         PUM_STATE.is_visible = 1;
         PUM_STATE.is_drawn = 1;
-        nvim_pum_validate_cursor_col();
+        validate_cursor_col(nvim_pum_get_curwin());
 
         // Compute geometry from C (handles target_win, cmdline_win, grid offsets)
         let geom = nvim_pum_compute_geometry(cmd_startcol);

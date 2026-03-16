@@ -352,12 +352,14 @@ extern "C" {
     fn nvim_pum_ui_set_mousemoveevent(val: c_int);
     /// Set `pum_grid.zindex` to `kZIndexCmdlinePopupMenu`.
     fn nvim_pum_grid_set_zindex_cmdline();
-    /// Call `setcursor_mayforce(curwin, true)`.
-    fn nvim_pum_setcursor_mayforce();
+    /// Get current window.
+    fn nvim_pum_get_curwin() -> *mut crate::display::WinHandle;
+    /// Call `setcursor_mayforce(wp, force)`.
+    fn setcursor_mayforce(wp: *mut crate::display::WinHandle, force: bool);
     /// Call `vgetc()`.
-    fn nvim_pum_vgetc() -> c_int;
+    fn vgetc() -> c_int;
     /// Call `vungetc(c)`.
-    fn nvim_pum_vungetc(c: c_int);
+    fn vungetc(c: c_int);
     /// Select popup entry at mouse position.
     fn rs_pum_select_mouse_pos();
     /// Get text char at `pum_array[idx].pum_text[0]`.
@@ -481,9 +483,9 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
         PUM_STATE.is_drawn = 1;
         nvim_pum_grid_set_zindex_cmdline();
         crate::redraw::rs_pum_redraw();
-        nvim_pum_setcursor_mayforce();
+        setcursor_mayforce(nvim_pum_get_curwin(), true);
 
-        let c = nvim_pum_vgetc();
+        let c = vgetc();
 
         // Bail out on Esc, Ctrl-C, or if a callback cleared pum_array
         if c == key_esc || c == key_ctrl_c || nvim_pum_array_is_null() != 0 {
@@ -515,7 +517,7 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
             PUM_STATE.selected = sel;
         } else if c == key_k_rightmouse {
             // Right mouse: reposition the menu
-            nvim_pum_vungetc(c);
+            vungetc(c);
             break;
         } else if c == key_k_leftdrag || c == key_k_rightdrag || c == key_k_mousemove {
             // Mouse moved: select item at mouse position

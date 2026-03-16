@@ -313,15 +313,6 @@ void nvim_pum_grid_free(void)
   grid_free(&pum_grid);
 }
 
-void *nvim_pum_win_float_find_preview(void)
-{
-  return win_float_find_preview();
-}
-
-void nvim_pum_win_close(void *wp)
-{
-  win_close((win_T *)wp, false, false);
-}
 
 // Phase 2 accessors: mouse_find_win_outer wrapper
 PumMouseFindResult nvim_pum_mouse_find_win_outer(int grid, int row, int col)
@@ -463,47 +454,6 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
 }
 
 
-/// Block autocmds.
-void nvim_pum_block_autocmds(void)
-{
-  block_autocmds();
-}
-
-/// Unblock autocmds.
-void nvim_pum_unblock_autocmds(void)
-{
-  unblock_autocmds();
-}
-
-/// Increment RedrawingDisabled.
-void nvim_pum_redrawing_disabled_inc(void)
-{
-  RedrawingDisabled++;
-}
-
-/// Decrement RedrawingDisabled.
-void nvim_pum_redrawing_disabled_dec(void)
-{
-  RedrawingDisabled--;
-}
-
-/// Increment no_u_sync.
-void nvim_pum_no_u_sync_inc(void)
-{
-  no_u_sync++;
-}
-
-/// Decrement no_u_sync.
-void nvim_pum_no_u_sync_dec(void)
-{
-  no_u_sync--;
-}
-
-/// Create a floating info window (false, true args).
-win_T *nvim_pum_win_float_create_info(void)
-{
-  return win_float_create(false, true);
-}
 
 /// Set w_topline for a window.
 void nvim_pum_win_set_topline(win_T *wp, int val)
@@ -521,12 +471,6 @@ void nvim_pum_win_set_wfb(win_T *wp, int val)
 buf_T *nvim_pum_win_get_buffer(win_T *wp)
 {
   return wp->w_buffer;
-}
-
-/// Call redraw_later for a window.
-void nvim_pum_redraw_later_win(win_T *wp, int type)
-{
-  redraw_later(wp, type);
 }
 
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
@@ -584,23 +528,6 @@ int nvim_pum_curwin_get_p_rl(void)
   return curwin->w_p_rl ? 1 : 0;
 }
 
-/// Call vgetc().
-int nvim_pum_vgetc(void)
-{
-  return vgetc();
-}
-
-/// Call vungetc().
-void nvim_pum_vungetc(int c)
-{
-  vungetc(c);
-}
-
-/// Call setcursor_mayforce(curwin, true).
-void nvim_pum_setcursor_mayforce(void)
-{
-  setcursor_mayforce(curwin, true);
-}
 
 /// Get p_mousemev.
 int nvim_pum_get_p_mousemev(void)
@@ -983,25 +910,6 @@ void nvim_pum_set_g_do_tagpreview(int val)
   g_do_tagpreview = val;
 }
 
-/// Enter a window (wrapper for win_enter).
-void nvim_pum_win_enter(win_T *wp, int set_curwin)
-{
-  win_enter(wp, set_curwin != 0);
-}
-
-/// Prepare tag preview window (wrapper for prepare_tagpreview).
-/// Returns 1 if window was resized.
-int nvim_pum_prepare_tagpreview(void)
-{
-  return prepare_tagpreview(false) ? 1 : 0;
-}
-
-/// Create a floating preview window (wrapper for win_float_create).
-/// Returns the window pointer, or NULL if failed.
-win_T *nvim_pum_win_float_create_preview(void)
-{
-  return win_float_create(true, true);
-}
 
 /// Check if curwin is a preview window or float info window.
 int nvim_pum_curwin_is_pvw_or_info(void)
@@ -1019,11 +927,6 @@ int nvim_pum_curbuf_can_reuse(void)
          && (curbuf->b_p_bh[0] == 'w');
 }
 
-/// Clear the current buffer (wrapper for buf_clear).
-void nvim_pum_buf_clear(void)
-{
-  buf_clear();
-}
 
 /// Execute do_ecmd to edit a new empty buffer.
 /// Returns OK (1) or FAIL (0).
@@ -1087,12 +990,6 @@ int nvim_pum_curbuf_line_count(void)
 }
 
 
-/// Go to a tabpage (wrapper for goto_tabpage_tp).
-void nvim_pum_goto_tabpage(tabpage_T *tp)
-{
-  goto_tabpage_tp(tp, false, false);
-}
-
 
 /// Set curwin->w_redr_status.
 void nvim_pum_curwin_set_redr_status(int val)
@@ -1100,29 +997,6 @@ void nvim_pum_curwin_set_redr_status(int val)
   curwin->w_redr_status = val != 0;
 }
 
-/// Validate cursor in curwin (wrapper for validate_cursor).
-void nvim_pum_validate_cursor(void)
-{
-  validate_cursor(curwin);
-}
-
-/// Redraw later for curwin (wrapper for redraw_later).
-void nvim_pum_redraw_later_curwin(int update_type)
-{
-  redraw_later(curwin, update_type);
-}
-
-/// Update topline for curwin (wrapper for update_topline).
-void nvim_pum_update_topline(void)
-{
-  update_topline(curwin);
-}
-
-/// Update screen (wrapper for update_screen).
-void nvim_pum_update_screen(void)
-{
-  update_screen();
-}
 
 /// Get curwin pointer (for save/restore).
 win_T *nvim_pum_get_curwin(void)
@@ -1203,11 +1077,6 @@ PumDisplayGeometry nvim_pum_compute_geometry(int cmd_startcol)
   return g;
 }
 
-/// Call validate_cursor_col(curwin).
-void nvim_pum_validate_cursor_col(void)
-{
-  validate_cursor_col(curwin);
-}
 
 /// Call ui_call_popupmenu_show with Arena-built array. Handles all Arena allocation.
 void nvim_pum_ext_show(pumitem_T *array, int size, int selected,

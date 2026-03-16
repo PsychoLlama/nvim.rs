@@ -13,21 +13,13 @@ extern "C" {
     /// Check if selected item matches current completion selection.
     fn rs_compl_match_curr_select(selected: c_int) -> c_int;
     /// Block autocmds.
-    fn nvim_pum_block_autocmds();
+    fn block_autocmds();
     /// Unblock autocmds.
-    fn nvim_pum_unblock_autocmds();
-    /// Increment `RedrawingDisabled`.
-    fn nvim_pum_redrawing_disabled_inc();
-    /// Decrement `RedrawingDisabled`.
-    fn nvim_pum_redrawing_disabled_dec();
-    /// Increment `no_u_sync`.
-    fn nvim_pum_no_u_sync_inc();
-    /// Decrement `no_u_sync`.
-    fn nvim_pum_no_u_sync_dec();
+    fn unblock_autocmds();
     /// Find the floating preview window.
-    fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
-    /// Create a floating info window.
-    fn nvim_pum_win_float_create_info() -> *mut WinHandle;
+    fn win_float_find_preview() -> *mut WinHandle;
+    /// Create a floating window.
+    fn win_float_create(enter: bool, new_buf: bool) -> *mut WinHandle;
     /// Set `w_topline` for a window.
     fn nvim_pum_win_set_topline(wp: *mut WinHandle, val: c_int);
     /// Set `w_p_wfb` for a window.
@@ -35,7 +27,7 @@ extern "C" {
     /// Get buffer from a window.
     fn nvim_pum_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
     /// Call `redraw_later` for a window.
-    fn nvim_pum_redraw_later_win(wp: *mut WinHandle, update_type: c_int);
+    fn redraw_later(wp: *mut WinHandle, update_type: c_int);
     /// Set preview text in buffer (C wrapper for `nvim_buf_set_lines`).
     fn nvim_pum_preview_set_text_impl(
         buf: *mut BufHandle,
@@ -43,6 +35,13 @@ extern "C" {
         lnum: *mut i32,
         max_width: *mut c_int,
     );
+}
+
+extern "C" {
+    /// C global: `RedrawingDisabled` counter.
+    static mut RedrawingDisabled: c_int;
+    /// C global: `no_u_sync` counter.
+    static mut no_u_sync: c_int;
 }
 
 // C accessor functions for adjust_info_position.
@@ -157,17 +156,17 @@ pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> 
         return std::ptr::null_mut();
     }
 
-    nvim_pum_block_autocmds();
-    nvim_pum_redrawing_disabled_inc();
-    nvim_pum_no_u_sync_inc();
+    block_autocmds();
+    RedrawingDisabled += 1;
+    no_u_sync += 1;
 
-    let mut wp = nvim_pum_win_float_find_preview();
+    let mut wp = win_float_find_preview();
     if wp.is_null() {
-        wp = nvim_pum_win_float_create_info();
+        wp = win_float_create(false, true);
         if wp.is_null() {
-            nvim_pum_no_u_sync_dec();
-            nvim_pum_redrawing_disabled_dec();
-            nvim_pum_unblock_autocmds();
+            no_u_sync -= 1;
+            RedrawingDisabled -= 1;
+            unblock_autocmds();
             return std::ptr::null_mut();
         }
         nvim_pum_win_set_topline(wp, 1);
@@ -184,11 +183,11 @@ pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> 
         std::ptr::addr_of_mut!(max_info_width),
     );
 
-    nvim_pum_no_u_sync_dec();
-    nvim_pum_redrawing_disabled_dec();
-    nvim_pum_redraw_later_win(wp, UPD_NOT_VALID);
+    no_u_sync -= 1;
+    RedrawingDisabled -= 1;
+    redraw_later(wp, UPD_NOT_VALID);
 
     rs_pum_adjust_info_position(wp, max_info_width);
-    nvim_pum_unblock_autocmds();
+    unblock_autocmds();
     wp
 }

@@ -21,7 +21,7 @@ extern "C" {
     fn rs_get_cot_flags() -> c_uint;
 
     // Preview window hide
-    fn nvim_pum_win_float_find_preview() -> *mut WinHandle;
+    fn win_float_find_preview() -> *mut WinHandle;
     fn nvim_pum_win_config_float_hide(wp: *mut WinHandle);
 
     // Array info access
@@ -35,24 +35,20 @@ extern "C" {
     fn nvim_pum_set_g_do_tagpreview(val: c_int);
 
     // Autocmd / redraw control
-    fn nvim_pum_block_autocmds();
-    fn nvim_pum_unblock_autocmds();
-    fn nvim_pum_redrawing_disabled_inc();
-    fn nvim_pum_redrawing_disabled_dec();
-    fn nvim_pum_no_u_sync_inc();
-    fn nvim_pum_no_u_sync_dec();
+    fn block_autocmds();
+    fn unblock_autocmds();
 
     // Window operations
-    fn nvim_pum_win_enter(wp: *mut WinHandle, set_curwin: c_int);
-    fn nvim_pum_prepare_tagpreview() -> c_int;
-    fn nvim_pum_win_float_create_preview() -> *mut WinHandle;
+    fn win_enter(wp: *mut WinHandle, undo_sync: bool);
+    fn prepare_tagpreview(undo_sync: bool) -> bool;
+    fn win_float_create(enter: bool, new_buf: bool) -> *mut WinHandle;
 
     // Curwin/curbuf queries
     fn nvim_pum_curwin_is_pvw_or_info() -> c_int;
     fn nvim_pum_curbuf_can_reuse() -> c_int;
 
     // Buffer operations
-    fn nvim_pum_buf_clear();
+    fn buf_clear();
     fn nvim_pum_do_ecmd() -> c_int;
     fn nvim_pum_set_wipeout_options();
 
@@ -84,7 +80,7 @@ extern "C" {
     fn pum_rs_win_valid(wp: *mut WinHandle) -> c_int;
     #[link_name = "rs_valid_tabpage"]
     fn pum_rs_valid_tabpage(tp: *mut TabHandle) -> c_int;
-    fn nvim_pum_goto_tabpage(tp: *mut TabHandle);
+    fn goto_tabpage_tp(tp: *mut TabHandle, trigger_enter: bool, trigger_leave: bool);
 
     // Context save/restore
     fn nvim_pum_get_curwin() -> *mut WinHandle;
@@ -97,10 +93,10 @@ extern "C" {
 
     // Redraw helpers
     fn nvim_pum_curwin_set_redr_status(val: c_int);
-    fn nvim_pum_validate_cursor();
-    fn nvim_pum_redraw_later_curwin(update_type: c_int);
-    fn nvim_pum_update_topline();
-    fn nvim_pum_update_screen();
+    fn validate_cursor(wp: *mut WinHandle);
+    fn redraw_later(wp: *mut WinHandle, update_type: c_int);
+    fn update_topline(wp: *mut WinHandle);
+    fn update_screen();
 
     // Curbuf for preview text
     fn nvim_pum_get_curbuf() -> *mut BufHandle;
@@ -112,6 +108,13 @@ extern "C" {
         height: c_int,
         size: c_int,
     ) -> c_int;
+}
+
+extern "C" {
+    /// C global: `RedrawingDisabled` counter.
+    static mut RedrawingDisabled: c_int;
+    /// C global: `no_u_sync` counter.
+    static mut no_u_sync: c_int;
 }
 
 /// `kOptCotFlagPopup` = 0x10.
@@ -148,7 +151,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
     // Close the floating preview window if 'selected' is -1, indicating a return to the original
     // state. It is also closed when the selected item has no corresponding info item.
     if use_float && (pum_selected < 0 || nvim_pum_array_has_info(pum_selected) == 0) {
-        let wp = nvim_pum_win_float_find_preview();
+        let wp = win_float_find_preview();
         if !wp.is_null() {
             nvim_pum_win_config_float_hide(wp);
         }
@@ -176,7 +179,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
             let curtab_save = nvim_pum_get_curtab();
 
             if use_float {
-                nvim_pum_block_autocmds();
+                block_autocmds();
             }
 
             // Open a preview window. 3 lines by default. Prefer
@@ -188,39 +191,39 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
             }
             nvim_pum_set_g_do_tagpreview(g_do_tagpreview);
 
-            nvim_pum_redrawing_disabled_inc();
+            RedrawingDisabled += 1;
             // Prevent undo sync here, if an autocommand syncs undo weird
             // things can happen to the undo tree.
-            nvim_pum_no_u_sync_inc();
+            no_u_sync += 1;
 
             if use_float {
-                let wp = nvim_pum_win_float_find_preview();
+                let wp = win_float_find_preview();
                 if wp.is_null() {
-                    let wp2 = nvim_pum_win_float_create_preview();
+                    let wp2 = win_float_create(true, true);
                     if !wp2.is_null() {
                         resized = true;
                     }
                 } else {
-                    nvim_pum_win_enter(wp, 0);
+                    win_enter(wp, false);
                 }
             } else {
-                resized = nvim_pum_prepare_tagpreview() != 0;
+                resized = prepare_tagpreview(false);
             }
 
-            nvim_pum_no_u_sync_dec();
-            nvim_pum_redrawing_disabled_dec();
+            no_u_sync -= 1;
+            RedrawingDisabled -= 1;
             nvim_pum_set_g_do_tagpreview(0);
 
             if nvim_pum_curwin_is_pvw_or_info() != 0 {
                 let mut res = OK;
                 if !resized && nvim_pum_curbuf_can_reuse() != 0 {
                     // Already a "wipeout" buffer, make it empty.
-                    nvim_pum_buf_clear();
+                    buf_clear();
                 } else {
                     // Don't want to sync undo in the current buffer.
-                    nvim_pum_no_u_sync_inc();
+                    no_u_sync += 1;
                     res = nvim_pum_do_ecmd();
-                    nvim_pum_no_u_sync_dec();
+                    no_u_sync -= 1;
 
                     if res == OK {
                         // Edit a new, empty buffer. Set options for a "wipeout" buffer.
@@ -280,7 +283,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         if nvim_pum_curtab_is(curtab_save) == 0
                             && pum_rs_valid_tabpage(curtab_save) != 0
                         {
-                            nvim_pum_goto_tabpage(curtab_save);
+                            goto_tabpage_tp(curtab_save, false, false);
                         }
 
                         // When the first completion is done and the preview
@@ -291,43 +294,45 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         }
 
                         // Return cursor to where we were
-                        nvim_pum_validate_cursor();
-                        nvim_pum_redraw_later_curwin(UPD_SOME_VALID);
+                        let curwin_raw = nvim_pum_get_curwin();
+                        validate_cursor(curwin_raw);
+                        redraw_later(curwin_raw, UPD_SOME_VALID);
 
                         // When the preview window was resized we need to
                         // update the view on the buffer. Only go back to
                         // the window when needed, otherwise it will always be
                         // redrawn.
                         if resized && pum_rs_win_valid(curwin_save) != 0 {
-                            nvim_pum_no_u_sync_inc();
-                            nvim_pum_win_enter(curwin_save, 1);
-                            nvim_pum_no_u_sync_dec();
-                            nvim_pum_update_topline();
+                            no_u_sync += 1;
+                            win_enter(curwin_save, false);
+                            no_u_sync -= 1;
+                            let cw = nvim_pum_get_curwin();
+                            update_topline(cw);
                         }
 
                         // Update the screen before drawing the popup menu.
                         // Enable updating the status lines.
                         PUM_STATE.is_visible = 0;
-                        nvim_pum_update_screen();
+                        update_screen();
                         PUM_STATE.is_visible = 1;
 
                         if !resized && pum_rs_win_valid(curwin_save) != 0 {
-                            nvim_pum_no_u_sync_inc();
-                            nvim_pum_win_enter(curwin_save, 1);
-                            nvim_pum_no_u_sync_dec();
+                            no_u_sync += 1;
+                            win_enter(curwin_save, false);
+                            no_u_sync -= 1;
                         }
 
                         // May need to update the screen again when there are
                         // autocommands involved.
                         PUM_STATE.is_visible = 0;
-                        nvim_pum_update_screen();
+                        update_screen();
                         PUM_STATE.is_visible = 1;
                     }
                 }
             }
 
             if use_float {
-                nvim_pum_unblock_autocmds();
+                unblock_autocmds();
             }
         }
     }
