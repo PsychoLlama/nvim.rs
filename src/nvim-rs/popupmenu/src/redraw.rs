@@ -498,7 +498,6 @@ extern "C" {
     // Text/string operations
     fn nvim_pum_curwin_end_col() -> c_int;
     fn nvim_pum_fcs_trunc(is_rl: c_int) -> ScharT;
-    fn nvim_pum_schar_from_ascii(c: c_char) -> ScharT;
     fn transstr(s: *const c_char, untab: bool) -> *mut c_char;
     fn reverse_text(s: *mut c_char) -> *mut c_char;
     fn mb_string2cells(s: *const c_char) -> usize;
@@ -564,6 +563,15 @@ const K_Z_INDEX_CMDLINE_POPUP_MENU: c_int = 250;
 /// `kUIMultigrid` = 6.
 const K_UI_MULTIGRID: c_int = 6;
 
+/// Inline equivalent of the C `schar_from_ascii(c)` macro.
+///
+/// On little-endian systems (`x86_64` Linux), `schar_from_ascii(x)` expands to `(schar_T)(x)`,
+/// so a plain ASCII byte maps directly to its `u32` value.
+#[inline]
+const fn schar_from_ascii(c: u8) -> ScharT {
+    c as ScharT
+}
+
 /// Redraw the popup menu using current `pum_first` and `pum_selected`.
 ///
 /// This is the core rendering function that handles grid allocation,
@@ -600,7 +608,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
     let attr_scroll = nvim_win_hl_attr(curwin, hlf::HLF_PSB);
     let attr_thumb = nvim_win_hl_attr(curwin, hlf::HLF_PST);
     let fcs_trunc = nvim_pum_fcs_trunc(pum_rl as c_int);
-    let fill_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+    let fill_char = schar_from_ascii(b' ');
 
     //                         "word"   "kind"   "extra text"
     let hlfs_norm: [c_int; 3] = [hlf::HLF_PNI, hlf::HLF_PNK, hlf::HLF_PNX];
@@ -929,7 +937,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
             }
 
             // Fill space between columns
-            let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+            let space_char = schar_from_ascii(b' ');
             if pum_rl {
                 grid_line_fill(
                     col_off - basic_width - n + 1,
@@ -946,13 +954,13 @@ pub unsafe extern "C" fn rs_pum_redraw() {
         }
 
         // Fill remaining space and handle truncation indicator
-        let space_char = nvim_pum_schar_from_ascii(b' ' as c_char);
+        let space_char = schar_from_ascii(b' ');
         if pum_rl {
             let lcol = col_off - pum_width + 1;
             grid_line_fill(lcol, grid_col + 1, space_char, orig_attr);
             if need_fcs_trunc {
                 let trunc_char = if fcs_trunc == NUL as ScharT {
-                    nvim_pum_schar_from_ascii(b'<' as c_char)
+                    schar_from_ascii(b'<')
                 } else {
                     fcs_trunc
                 };
@@ -970,7 +978,7 @@ pub unsafe extern "C" fn rs_pum_redraw() {
                     *linebuf_char.add((rcol - 2) as usize) = space_char;
                 }
                 let trunc_char = if fcs_trunc == NUL as ScharT {
-                    nvim_pum_schar_from_ascii(b'>' as c_char)
+                    schar_from_ascii(b'>')
                 } else {
                     fcs_trunc
                 };

@@ -4,7 +4,7 @@
 //! popup menu to show the selected item, and opening/updating the
 //! preview window for completion item info.
 
-use std::ffi::{c_char, c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::display::{BufHandle, WinHandle};
 use crate::PUM_STATE;
@@ -36,13 +36,21 @@ extern "C" {
     fn prepare_tagpreview(undo_sync: bool) -> bool;
     fn win_float_create(enter: bool, new_buf: bool) -> *mut WinHandle;
 
-    // Curwin/curbuf queries
+    // Curwin/curbuf queries (via existing nvim_pum_* wrappers for complex multi-field checks)
     fn nvim_pum_curwin_is_pvw_or_info() -> c_int;
     fn nvim_pum_curbuf_can_reuse() -> c_int;
 
     // Buffer operations
     fn buf_clear();
-    fn nvim_pum_do_ecmd() -> c_int;
+    fn do_ecmd(
+        fnum: c_int,
+        ffname: *const c_char,
+        sfname: *const c_char,
+        eap: *mut c_void,
+        newlnum: c_int,
+        flags: c_int,
+        oldwin: *mut WinHandle,
+    ) -> c_int;
     fn nvim_pum_set_wipeout_options();
 
     // Preview text
@@ -56,17 +64,18 @@ extern "C" {
 
     // Window height
     fn rs_win_setheight(height: c_int);
-    fn nvim_pum_curwin_get_height() -> c_int;
+    fn nvim_win_get_w_height(wp: *mut WinHandle) -> c_int;
 
     // Buffer state
-    fn nvim_pum_set_curbuf_changed(val: c_int);
-    fn nvim_pum_set_curbuf_modifiable(val: c_int);
-    fn nvim_pum_curbuf_line_count() -> c_int;
+    fn nvim_buf_set_b_changed(buf: *mut BufHandle, val: bool);
+    fn nvim_buf_set_b_p_ma(buf: *mut BufHandle, val: c_int);
+    fn nvim_win_buf_line_count(wp: *mut WinHandle) -> c_int;
 
-    // Cursor/topline
-    fn nvim_pum_curwin_get_topline() -> c_int;
-    fn nvim_pum_curwin_set_topline(val: c_int);
-    fn nvim_pum_curwin_set_cursor(lnum: c_int, col: c_int);
+    // Cursor/topline (via existing nvim_win_* accessors from win_struct.rs)
+    fn nvim_win_get_topline(wp: *mut WinHandle) -> c_int;
+    fn nvim_win_set_topline(wp: *mut WinHandle, val: c_int);
+    fn nvim_win_set_cursor_lnum(wp: *mut WinHandle, lnum: c_int);
+    fn nvim_win_set_cursor_col(wp: *mut WinHandle, col: c_int);
 
     // Window/tabpage validity (calls Rust rs_win_valid/rs_valid_tabpage directly)
     #[link_name = "rs_win_valid"]
@@ -79,7 +88,7 @@ extern "C" {
     fn rs_ins_compl_active() -> c_int;
 
     // Redraw helpers
-    fn nvim_pum_curwin_set_redr_status(val: c_int);
+    fn nvim_win_set_redr_status(wp: *mut WinHandle, val: c_int);
     fn validate_cursor(wp: *mut WinHandle);
     fn redraw_later(wp: *mut WinHandle, update_type: c_int);
     fn update_topline(wp: *mut WinHandle);
@@ -225,7 +234,16 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                 } else {
                     // Don't want to sync undo in the current buffer.
                     no_u_sync += 1;
-                    res = nvim_pum_do_ecmd();
+                    // do_ecmd(0, NULL, NULL, NULL, ECMD_ONE=1, 0, NULL)
+                    res = do_ecmd(
+                        0,
+                        std::ptr::null(),
+                        std::ptr::null(),
+                        std::ptr::null_mut(),
+                        1,
+                        0,
+                        std::ptr::null_mut(),
+                    );
                     no_u_sync -= 1;
 
                     if res == OK {
@@ -253,25 +271,26 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         if p_pvh_val > 0 && lnum > p_pvh_val {
                             lnum = p_pvh_val;
                         }
-                        if nvim_pum_curwin_get_height() < lnum {
+                        if nvim_win_get_w_height(curwin) < lnum {
                             rs_win_setheight(lnum);
                             resized = true;
                         }
                     }
 
-                    nvim_pum_set_curbuf_changed(0);
-                    nvim_pum_set_curbuf_modifiable(0);
+                    nvim_buf_set_b_changed(curbuf, false);
+                    nvim_buf_set_b_p_ma(curbuf, 0);
 
                     if pum_selected == prev_selected {
-                        let topline = nvim_pum_curwin_get_topline();
-                        let line_count = nvim_pum_curbuf_line_count();
+                        let topline = nvim_win_get_topline(curwin);
+                        let line_count = nvim_win_buf_line_count(curwin);
                         if topline > line_count {
-                            nvim_pum_curwin_set_topline(line_count);
+                            nvim_win_set_topline(curwin, line_count);
                         }
                     } else {
-                        nvim_pum_curwin_set_topline(1);
+                        nvim_win_set_topline(curwin, 1);
                     }
-                    nvim_pum_curwin_set_cursor(1, 0);
+                    nvim_win_set_cursor_lnum(curwin, 1);
+                    nvim_win_set_cursor_col(curwin, 0);
 
                     if use_float {
                         // adjust floating window by actual height and max info text width
@@ -289,7 +308,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
                         // window is not resized, skip the preview window's
                         // status line redrawing.
                         if rs_ins_compl_active() != 0 && !resized {
-                            nvim_pum_curwin_set_redr_status(0);
+                            nvim_win_set_redr_status(curwin, 0);
                         }
 
                         // Return cursor to where we were

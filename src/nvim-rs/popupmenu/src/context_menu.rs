@@ -324,7 +324,7 @@ extern "C" {
     /// Batch curwin geometry accessor.
     fn nvim_pum_get_curwin_geometry() -> PumCurwinGeometry;
     /// Find menu by path name (returns NULL if not found).
-    fn nvim_pum_menu_find(path_name: *const std::ffi::c_char) -> *mut VimMenuHandle;
+    fn menu_find(path_name: *const std::ffi::c_char) -> *mut VimMenuHandle;
 }
 
 /// UI capability for multigrid mode (kUIMultigrid = 6).
@@ -332,8 +332,8 @@ const K_UI_MULTIGRID: c_int = 6;
 
 // C accessor functions for show_popupmenu.
 extern "C" {
-    /// Get menu mode flag.
-    fn nvim_pum_get_menu_mode_flag() -> c_int;
+    /// Get menu mode flag (from menu.c).
+    fn get_menu_mode_flag() -> c_int;
     /// Check if menu item is a separator.
     fn nvim_pum_menu_is_separator(menu: *mut VimMenuHandle) -> c_int;
     /// Get menu item display name.
@@ -405,7 +405,7 @@ pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_i
 pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     crate::display::rs_pum_undisplay(1);
     PUM_STATE.size = 0;
-    let mode = nvim_pum_get_menu_mode_flag();
+    let mode = get_menu_mode_flag();
 
     // Count matching menu items
     let mut count = 0;
@@ -587,7 +587,7 @@ pub unsafe extern "C" fn rs_pum_make_popup(
         }
     }
 
-    let menu = nvim_pum_menu_find(path_name);
+    let menu = menu_find(path_name);
     if !menu.is_null() {
         rs_pum_show_popupmenu(menu);
     }

@@ -20,12 +20,12 @@ extern "C" {
     fn win_float_find_preview() -> *mut WinHandle;
     /// Create a floating window.
     fn win_float_create(enter: bool, new_buf: bool) -> *mut WinHandle;
-    /// Set `w_topline` for a window.
-    fn nvim_pum_win_set_topline(wp: *mut WinHandle, val: c_int);
+    /// Set `w_topline` for a window (from `win_struct.rs`).
+    fn nvim_win_set_topline(wp: *mut WinHandle, val: c_int);
     /// Set `w_p_wfb` for a window.
-    fn nvim_pum_win_set_wfb(wp: *mut WinHandle, val: c_int);
+    fn nvim_win_set_p_wfb(wp: *mut WinHandle, val: c_int);
     /// Get buffer from a window.
-    fn nvim_pum_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
+    fn nvim_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
     /// Call `redraw_later` for a window.
     fn redraw_later(wp: *mut WinHandle, update_type: c_int);
     /// Set preview text in buffer (C wrapper for `nvim_buf_set_lines`).
@@ -50,10 +50,10 @@ extern "C" {
     fn nvim_get_Columns() -> c_int;
     /// Get `Rows`.
     fn nvim_get_Rows() -> c_int;
-    /// Get line count for window's buffer.
-    fn nvim_pum_win_get_line_count(wp: *mut WinHandle) -> c_int;
-    /// Wrapper for `plines_m_win`.
-    fn nvim_pum_plines_m_win(wp: *mut WinHandle, first: c_int, last: c_int, max: c_int) -> c_int;
+    /// Get line count for window's buffer (from `window_shim.c`).
+    fn nvim_win_buf_line_count(wp: *mut WinHandle) -> c_int;
+    /// `plines_m_win` directly.
+    fn plines_m_win(wp: *mut WinHandle, first: c_int, last: c_int, max: c_int) -> c_int;
     /// Set window config fields and apply via `win_config_float`.
     fn nvim_pum_win_config_set_and_apply(
         wp: *mut WinHandle,
@@ -133,9 +133,9 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
     };
 
     let anchor = if pum_above { K_FLOAT_ANCHOR_SOUTH } else { 0 };
-    let line_count = nvim_pum_win_get_line_count(wp);
+    let line_count = nvim_win_buf_line_count(wp);
     let rows = nvim_get_Rows();
-    let height = nvim_pum_plines_m_win(wp, 1, line_count, rows);
+    let height = plines_m_win(wp, 1, line_count, rows);
     let row = if pum_above { pum_row + height } else { pum_row };
 
     nvim_pum_win_config_set_and_apply(wp, cfg_width, cfg_col, anchor, height, row, 0);
@@ -169,13 +169,13 @@ pub unsafe extern "C" fn rs_pum_set_info(selected: c_int, info: *mut c_char) -> 
             unblock_autocmds();
             return std::ptr::null_mut();
         }
-        nvim_pum_win_set_topline(wp, 1);
-        nvim_pum_win_set_wfb(wp, 1);
+        nvim_win_set_topline(wp, 1);
+        nvim_win_set_p_wfb(wp, 1);
     }
 
     let mut lnum: i32 = 0;
     let mut max_info_width: c_int = 0;
-    let buf = nvim_pum_win_get_buffer(wp);
+    let buf = nvim_win_get_buffer(wp);
     nvim_pum_preview_set_text_impl(
         buf,
         info,

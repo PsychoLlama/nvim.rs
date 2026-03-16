@@ -242,6 +242,7 @@ void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
 bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
+void nvim_win_set_p_wfb(win_T *wp, int val) { wp->w_p_wfb = val != 0; }
 const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp->w_buffer, lnum); }
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
 // nvim_ui_has_tabline: migrated to Rust wrappers.rs (Phase 8)

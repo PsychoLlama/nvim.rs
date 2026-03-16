@@ -169,11 +169,6 @@ PumCurwinGeometry nvim_pum_get_curwin_geometry(void)
   };
 }
 
-void *nvim_pum_menu_find(const char *path_name)
-{
-  return menu_find(path_name);
-}
-
 // Phase 3 accessors: text attrs computation helpers
 
 /// Get completion leader string.
@@ -228,18 +223,6 @@ _Static_assert(kOptCotFlagFuzzy == 0x80, "kOptCotFlagFuzzy must be 0x80");
 
 // Phase 4 accessors: preview window helpers
 
-/// Get line count for a window's buffer.
-int nvim_pum_win_get_line_count(win_T *wp)
-{
-  return (int)wp->w_buffer->b_ml.ml_line_count;
-}
-
-/// Wrapper for plines_m_win.
-int nvim_pum_plines_m_win(win_T *wp, int first, int last, int max_lines)
-{
-  return plines_m_win(wp, first, last, max_lines);
-}
-
 /// Set window config fields and call win_config_float.
 void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor,
                                        int height, int row, int hide)
@@ -256,33 +239,9 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
 
 
 
-/// Set w_topline for a window.
-void nvim_pum_win_set_topline(win_T *wp, int val)
-{
-  wp->w_topline = val;
-}
-
-/// Set w_p_wfb for a window.
-void nvim_pum_win_set_wfb(win_T *wp, int val)
-{
-  wp->w_p_wfb = val != 0;
-}
-
-/// Get buffer handle from a window.
-buf_T *nvim_pum_win_get_buffer(win_T *wp)
-{
-  return wp->w_buffer;
-}
-
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
 // Phase 5 accessors: show_popupmenu helpers
-
-/// Get get_menu_mode_flag().
-int nvim_pum_get_menu_mode_flag(void)
-{
-  return get_menu_mode_flag();
-}
 
 /// Check if menu item name is a separator.
 int nvim_pum_menu_is_separator(vimmenu_T *mp)
@@ -344,13 +303,6 @@ schar_T nvim_pum_fcs_trunc(int is_rl)
 {
   return is_rl ? curwin->w_p_fcs_chars.truncrl : curwin->w_p_fcs_chars.trunc;
 }
-
-/// `schar_from_ascii` wrapper.
-schar_T nvim_pum_schar_from_ascii(char c)
-{
-  return schar_from_ascii(c);
-}
-
 
 /// Opaque border configuration for popup menu rendering.
 /// Bundles WinConfig + border attrs/chars so Rust doesn't need WinConfig layout.
@@ -487,13 +439,6 @@ int nvim_pum_curbuf_can_reuse(void)
 }
 
 
-/// Execute do_ecmd to edit a new empty buffer.
-/// Returns OK (1) or FAIL (0).
-int nvim_pum_do_ecmd(void)
-{
-  return do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, 0, NULL);
-}
-
 /// Set wipeout buffer options on curbuf (swapfile, buflisted, buftype, bufhidden, diff).
 void nvim_pum_set_wipeout_options(void)
 {
@@ -502,58 +447,6 @@ void nvim_pum_set_wipeout_options(void)
   set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
   set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL);
   set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-}
-
-
-/// Get curwin->w_height.
-int nvim_pum_curwin_get_height(void)
-{
-  return curwin->w_height;
-}
-
-/// Set curbuf->b_changed.
-void nvim_pum_set_curbuf_changed(int val)
-{
-  curbuf->b_changed = val != 0;
-}
-
-/// Set curbuf->b_p_ma (modifiable).
-void nvim_pum_set_curbuf_modifiable(int val)
-{
-  curbuf->b_p_ma = val != 0;
-}
-
-/// Get curwin->w_topline.
-int nvim_pum_curwin_get_topline(void)
-{
-  return (int)curwin->w_topline;
-}
-
-/// Set curwin->w_topline.
-void nvim_pum_curwin_set_topline(int val)
-{
-  curwin->w_topline = (linenr_T)val;
-}
-
-/// Set curwin->w_cursor.lnum and w_cursor.col.
-void nvim_pum_curwin_set_cursor(int lnum, int col)
-{
-  curwin->w_cursor.lnum = (linenr_T)lnum;
-  curwin->w_cursor.col = (colnr_T)col;
-}
-
-/// Get curbuf->b_ml.ml_line_count.
-int nvim_pum_curbuf_line_count(void)
-{
-  return (int)curbuf->b_ml.ml_line_count;
-}
-
-
-
-/// Set curwin->w_redr_status.
-void nvim_pum_curwin_set_redr_status(int val)
-{
-  curwin->w_redr_status = val != 0;
 }
 
 
