@@ -62,35 +62,6 @@ size_t nvim_get_key_names_table_name_size(int idx)
   return key_names_table[idx].name.size;
 }
 
-// =============================================================================
-// Accessor functions for replace_termcodes (for Rust FFI)
-// =============================================================================
-
-/// Get current script ID for <SID> translation.
-scid_T nvim_keycodes_get_current_sid(void)
-{
-  return current_sctx.sc_sid;
-}
-
-/// Get value of g:mapleader variable.
-/// Returns NULL if not set.
-char *nvim_keycodes_get_leader(void)
-{
-  return get_var_value("g:mapleader");
-}
-
-/// Get value of g:maplocalleader variable.
-/// Returns NULL if not set.
-char *nvim_keycodes_get_local_leader(void)
-{
-  return get_var_value("g:maplocalleader");
-}
-
-/// Emit the "using <SID> not in script context" error message.
-void nvim_keycodes_emit_sid_error(void)
-{
-  emsg(_(e_usingsid));
-}
 
 /// Lookup a special key code by name using the generated hash function.
 /// Returns the index in key_names_table, or -1 if not found.

@@ -12,6 +12,17 @@ use std::os::raw::{c_int, c_uint};
 /// Script ID type (same as int in C).
 type ScidT = c_int;
 
+/// Mirror of C's `sctx_T` struct (script context).
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[allow(clippy::struct_field_names)]
+struct SctxT {
+    sc_sid: c_int,
+    sc_seq: c_int,
+    sc_lnum: i32,
+    sc_chan: u64,
+}
+
 // Modifier mask constants (from keycodes.h)
 const MOD_MASK_SHIFT: c_int = 0x02;
 const MOD_MASK_CTRL: c_int = 0x04;
@@ -513,26 +524,20 @@ extern "C" {
     /// Emit error message.
     fn emsg(s: *const std::ffi::c_char) -> c_int;
 
+    /// Translate a message string.
+    fn gettext(msgid: *const std::ffi::c_char) -> *const std::ffi::c_char;
+
     /// Get `e_invarg` error string.
     static e_invarg: *const std::ffi::c_char;
 
-    // =============================================================================
-    // Accessor functions for replace_termcodes
-    // =============================================================================
+    /// "Using <SID> not in a script context" error string.
+    static e_usingsid: std::ffi::c_char;
 
-    /// Get current script ID for `<SID>` translation.
-    fn nvim_keycodes_get_current_sid() -> ScidT;
+    /// Current script context (`sctx_T` in C).
+    static mut current_sctx: SctxT;
 
-    /// Get value of `g:mapleader` variable.
-    /// Returns NULL if not set.
-    fn nvim_keycodes_get_leader() -> *mut std::ffi::c_char;
-
-    /// Get value of `g:maplocalleader` variable.
-    /// Returns NULL if not set.
-    fn nvim_keycodes_get_local_leader() -> *mut std::ffi::c_char;
-
-    /// Emit the "using `<SID>` not in script context" error message.
-    fn nvim_keycodes_emit_sid_error();
+    /// Get value of a variable by name (e.g. `g:mapleader`).
+    fn rs_get_var_value(name: *const std::ffi::c_char) -> *const std::ffi::c_char;
 
     /// Search for character `c` in string `s`. Returns pointer to first
     /// occurrence, or NULL if not found.
@@ -2040,9 +2045,9 @@ unsafe fn rs_replace_termcodes(
             if remaining >= 5
                 && starts_with_ignore_case(std::slice::from_raw_parts(src, 5), b"<SID>")
             {
-                let current_sid = nvim_keycodes_get_current_sid();
+                let current_sid = current_sctx.sc_sid;
                 if sid_arg < 0 || (sid_arg == 0 && current_sid <= 0) {
-                    nvim_keycodes_emit_sid_error();
+                    emsg(gettext(std::ptr::addr_of!(e_usingsid)));
                 } else {
                     let sid = if sid_arg != 0 { sid_arg } else { current_sid };
                     src = src.add(5);
@@ -2096,11 +2101,14 @@ unsafe fn rs_replace_termcodes(
             let (leader_len, leader_value) = if remaining >= 8
                 && starts_with_ignore_case(std::slice::from_raw_parts(src, 8), b"<Leader>")
             {
-                (8, nvim_keycodes_get_leader())
+                (8, rs_get_var_value(c"g:mapleader".as_ptr()).cast_mut())
             } else if remaining >= 13
                 && starts_with_ignore_case(std::slice::from_raw_parts(src, 13), b"<LocalLeader>")
             {
-                (13, nvim_keycodes_get_local_leader())
+                (
+                    13,
+                    rs_get_var_value(c"g:maplocalleader".as_ptr()).cast_mut(),
+                )
             } else {
                 (0, std::ptr::null_mut())
             };
