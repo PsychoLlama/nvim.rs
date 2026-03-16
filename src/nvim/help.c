@@ -61,16 +61,9 @@ bool nvim_help_curwin_bt_help(void) { return bt_help(curwin->w_buffer); }
 int nvim_help_get_cmdmod_tab(void) { return cmdmod.cmod_tab; }
 int nvim_help_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 int nvim_help_get_cmdmod_flags(void) { return cmdmod.cmod_flags; }
-int nvim_help_get_columns(void) { return Columns; }
 int nvim_help_get_curwin_width(void) { return curwin->w_width; }
 int nvim_help_get_curwin_height(void) { return curwin->w_height; }
-int nvim_help_get_p_sb(void) { return p_sb; }
 int64_t nvim_help_get_p_hh(void) { return p_hh; }
-const char *nvim_help_get_p_hf(void) { return p_hf; }
-
-bool nvim_help_get_KeyTyped(void) { return KeyTyped; }
-void nvim_help_set_KeyTyped(bool val) { KeyTyped = val; }
-void nvim_help_set_restart_edit(int val) { restart_edit = val; }
 
 int nvim_help_get_curbuf_fnum(void) { return curbuf->b_fnum; }
 int nvim_help_get_curwin_alt_fnum(void) { return curwin->w_alt_fnum; }
@@ -137,17 +130,12 @@ void nvim_help_set_win_help_options(void)
   curwin->w_p_spell = false;
 }
 
-// C accessor for 'helplang' option
-const char *nvim_help_get_p_hlg(void) { return p_hlg; }
-
 // C accessors for Phase 6 (helptags + get_local_additions)
 char *nvim_help_get_namebuff_mut(void) { return NameBuff; }
 size_t nvim_help_get_namebuff_size(void) { return sizeof(NameBuff); }
-const char *nvim_help_get_p_rtp(void) { return p_rtp; }
 char *nvim_help_get_curbuf_fname(void) { return curbuf->b_fname; }
 int nvim_help_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void *nvim_help_get_curbuf_ptr(void) { return curbuf; }
-bool nvim_help_get_got_int(void) { return got_int; }
 
 /// Wrap ExpandInit + ExpandOne for ex_helptags to avoid exposing expand_T.
 char *nvim_help_expand_dir(const char *arg)

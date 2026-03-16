@@ -232,7 +232,7 @@ extern "C" {
         buf_ffname: *const c_char,
     ) -> c_int;
     fn xfree(ptr: *mut c_void);
-    fn nvim_help_get_p_hlg() -> *const c_char;
+    static p_hlg: *mut c_char;
     fn do_cmdline_cmd(cmd: *const c_char);
     fn set_buflisted(listed: bool);
     fn nvim_help_set_curbuf_b_help(val: bool);
@@ -254,16 +254,15 @@ extern "C" {
     fn nvim_help_get_cmdmod_tab() -> c_int;
     fn nvim_help_get_cmdmod_split() -> c_int;
     fn nvim_help_get_cmdmod_flags() -> c_int;
-    fn nvim_help_get_columns() -> c_int;
+    static Columns: c_int;
     fn nvim_help_get_curwin_width() -> c_int;
     fn nvim_help_get_curwin_height() -> c_int;
-    fn nvim_help_get_p_sb() -> c_int;
+    static p_sb: c_int;
     fn nvim_help_get_p_hh() -> i64;
-    fn nvim_help_get_p_hf() -> *const c_char;
+    static p_hf: *mut c_char;
 
-    fn nvim_help_get_KeyTyped() -> bool;
-    fn nvim_help_set_KeyTyped(val: bool);
-    fn nvim_help_set_restart_edit(val: c_int);
+    static mut KeyTyped: bool;
+    static mut restart_edit: c_int;
 
     fn nvim_help_get_curbuf_fnum() -> c_int;
     fn nvim_help_get_curwin_alt_fnum() -> c_int;
@@ -643,9 +642,9 @@ pub unsafe extern "C" fn rs_cleanup_help_tags(num_file: c_int, file: *mut *mut c
     let mut buf = [0u8; 4];
     let mut buf_len: usize = 0;
 
-    let p_hlg = unsafe { nvim_help_get_p_hlg() };
-    if !p_hlg.is_null() {
-        let hlg_bytes = unsafe { CStr::from_ptr(p_hlg) }.to_bytes();
+    let hlg_ptr = unsafe { p_hlg };
+    if !hlg_ptr.is_null() {
+        let hlg_bytes = unsafe { CStr::from_ptr(hlg_ptr) }.to_bytes();
         if !hlg_bytes.is_empty() && (hlg_bytes[0] != b'e' || hlg_bytes.get(1) != Some(&b'n')) {
             buf[0] = b'@';
             buf[1] = hlg_bytes[0];
@@ -743,7 +742,7 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
     let mut arg: *mut c_char;
     let mut empty_fnum: c_int = 0;
     let mut alt_fnum: c_int = 0;
-    let old_key_typed = unsafe { nvim_help_get_KeyTyped() };
+    let old_key_typed = unsafe { KeyTyped };
 
     if !eap_is_null {
         // A ":help" command ends at the first LF, or at a '|' that is
@@ -865,10 +864,10 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
             } else {
                 // There is no help window yet.
                 // Try to open the file specified by the "helpfile" option.
-                let p_hf = unsafe { nvim_help_get_p_hf() };
-                let helpfd = unsafe { os_fopen(p_hf, c"rb".as_ptr()) };
+                let hf_ptr = unsafe { p_hf };
+                let helpfd = unsafe { os_fopen(hf_ptr, c"rb".as_ptr()) };
                 if helpfd.is_null() {
-                    unsafe { smsg(0, c"Sorry, help file \"%s\" not found".as_ptr(), p_hf) };
+                    unsafe { smsg(0, c"Sorry, help file \"%s\" not found".as_ptr(), hf_ptr) };
                     return false; // goto erret
                 }
                 unsafe { libc::fclose(helpfd as *mut libc::FILE) };
@@ -876,10 +875,10 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
                 // Split off help window
                 let mut split_flags = WSP_HELP;
                 if unsafe { nvim_help_get_cmdmod_split() } == 0
-                    && unsafe { nvim_help_get_curwin_width() } != unsafe { nvim_help_get_columns() }
+                    && unsafe { nvim_help_get_curwin_width() } != unsafe { Columns }
                     && unsafe { nvim_help_get_curwin_width() } < 80
                 {
-                    if unsafe { nvim_help_get_p_sb() } != 0 {
+                    if unsafe { p_sb } != 0 {
                         split_flags |= WSP_BOT;
                     } else {
                         split_flags |= WSP_TOP;
@@ -910,8 +909,8 @@ pub unsafe extern "C" fn rs_ex_help(eap: ExargHandle) {
     let success = do_help();
 
     if success {
-        unsafe { nvim_help_set_restart_edit(0) };
-        unsafe { nvim_help_set_KeyTyped(old_key_typed) };
+        unsafe { restart_edit = 0 };
+        unsafe { KeyTyped = old_key_typed };
         unsafe { rs_do_tag(tag, DT_HELP, 1, 0, true) };
 
         // Delete the empty buffer if we're not using it.
@@ -991,11 +990,11 @@ extern "C" {
     // Phase 6 FFI
     fn nvim_help_get_namebuff_mut() -> *mut c_char;
     fn nvim_help_get_namebuff_size() -> usize;
-    fn nvim_help_get_p_rtp() -> *const c_char;
+    static p_rtp: *mut c_char;
     fn nvim_help_get_curbuf_fname() -> *mut c_char;
     fn nvim_help_get_curbuf_ml_line_count() -> c_int;
     fn nvim_help_get_curbuf_ptr() -> *mut c_void;
-    fn nvim_help_get_got_int() -> bool;
+    static got_int: bool;
     fn nvim_help_expand_dir(arg: *const c_char) -> *mut c_char;
     fn nvim_help_convert_help_line(buf: *mut c_char) -> *mut c_char;
 
@@ -1084,7 +1083,7 @@ pub unsafe extern "C" fn rs_helptags_one(
         )
     };
     if res == FAIL || filecount == 0 {
-        if !unsafe { nvim_help_get_got_int() } {
+        if !unsafe { got_int } {
             unsafe { semsg(c"E151: No match: %s".as_ptr(), namebuff) };
         }
         if res != FAIL {
@@ -1133,7 +1132,7 @@ pub unsafe extern "C" fn rs_helptags_one(
 
     // Go over all the files and extract the tags.
     let mut fi = 0;
-    while fi < filecount && !unsafe { nvim_help_get_got_int() } {
+    while fi < filecount && !unsafe { got_int } {
         let fd = unsafe { os_fopen(*files.add(fi as usize), c"r".as_ptr()) };
         if fd.is_null() {
             unsafe {
@@ -1148,9 +1147,7 @@ pub unsafe extern "C" fn rs_helptags_one(
         let fname = unsafe { (*files.add(fi as usize)).add(dirlen + 1) };
 
         let mut in_example = false;
-        while !unsafe { vim_fgets(iobuff, IOSIZE as c_int, fd) }
-            && !unsafe { nvim_help_get_got_int() }
-        {
+        while !unsafe { vim_fgets(iobuff, IOSIZE as c_int, fd) } && !unsafe { got_int } {
             if in_example {
                 // skip over example; a non-white in the first column ends it
                 let ch = unsafe { *iobuff } as u8;
@@ -1228,7 +1225,7 @@ pub unsafe extern "C" fn rs_helptags_one(
 
     unsafe { FreeWild(filecount, files) };
 
-    if !unsafe { nvim_help_get_got_int() } && !tags.is_empty() {
+    if !unsafe { got_int } && !tags.is_empty() {
         // Sort the tags.
         unsafe {
             sort_strings(tags.as_mut_ptr(), tags.len() as c_int);
@@ -1442,7 +1439,6 @@ pub unsafe extern "C" fn rs_ex_helptags(eap: ExargHandle) {
     }
 
     if unsafe { libc::strcmp(arg, c"ALL".as_ptr()) } == 0 {
-        let p_rtp = unsafe { nvim_help_get_p_rtp() };
         let mut add_ht = add_help_tags;
         unsafe {
             do_in_path(
@@ -1500,8 +1496,7 @@ pub unsafe extern "C" fn rs_get_local_additions() {
         let mut lnum = lnum_check;
 
         // Go through all directories in 'runtimepath', skipping $VIMRUNTIME.
-        let p_rtp = unsafe { nvim_help_get_p_rtp() };
-        let mut p = p_rtp as *mut c_char;
+        let mut p = unsafe { p_rtp } as *mut c_char;
         let namebuff = unsafe { nvim_help_get_namebuff_mut() };
         let namebuff_size = unsafe { nvim_help_get_namebuff_size() };
         let iobuff = unsafe { nvim_get_iobuff() };
