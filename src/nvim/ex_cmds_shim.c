@@ -198,7 +198,6 @@ void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist
 // print_line accessors
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
 int nvim_number_width_curwin(void) { return number_width(curwin); }
-int nvim_get_info_message(void) { return info_message; }
 void nvim_msg_prt_line(const char *s, int list) { msg_prt_line((char *)s, list != 0); }
 int nvim_message_filtered(const char *msg) { return message_filtered((char *)msg); }
 void nvim_msg_ext_set_kind_excmd(const char *kind) { msg_ext_set_kind(kind); }
@@ -2190,9 +2189,6 @@ void nvim_ecmd_do_cmdline(const char *command)
 void nvim_ecmd_clear_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
 
 
-
-/// Get p_ur (undoreload option). Returns -1 if unlimited.
-int64_t nvim_ecmd_get_p_ur(void) { return (int64_t)p_ur; }
 
 /// Emit emsg(_(e_cannot_switch_to_a_closing_buffer))
 void nvim_ecmd_emsg_closing_buffer(void) { emsg(_(e_cannot_switch_to_a_closing_buffer)); }

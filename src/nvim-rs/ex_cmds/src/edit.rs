@@ -189,8 +189,6 @@ extern "C" {
     fn nvim_get_p_sol() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_get_p_verbose() -> c_int;
-    fn nvim_ecmd_get_p_ur() -> i64;
-
     // Misc wrappers
     fn nvim_ecmd_buflist_altfpos(win: *mut WinHandle);
     fn nvim_ecmd_buflist_findfmark(buf: *mut BufHandle, lnum: *mut c_int, col: *mut c_int);
@@ -667,7 +665,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
 
             // Store current contents for undo if buffer was used before
             let line_count = nvim_excmds_curbuf_ml_line_count();
-            let p_ur = nvim_ecmd_get_p_ur();
+            let p_ur = crate::p_ur;
             if (nvim_ecmd_curbuf_get_b_flags() & BF_NEVERLOADED) == 0
                 && (p_ur < 0 || line_count as i64 <= p_ur)
             {

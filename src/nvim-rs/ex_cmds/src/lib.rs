@@ -706,6 +706,8 @@ extern "C" {
     pub static mut msg_listdo_overwrite: c_int;
     /// Direct C global: keep_help_flag (bool in C)
     pub static mut keep_help_flag: bool;
+    /// Direct C global: p_ur (undoreload option, OptInt = i64)
+    pub static mut p_ur: i64;
 
     // Exarg mutation
     /// Set eap->nextcmd.
