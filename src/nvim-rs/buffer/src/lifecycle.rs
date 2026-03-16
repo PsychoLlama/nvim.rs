@@ -98,15 +98,13 @@ pub mod buf_flags {
     use std::ffi::c_int;
 
     /// Buffer needs read-only check
-    pub const BF_CHECK_RO: c_int = 0x01;
+    pub const BF_CHECK_RO: c_int = 0x02;
     /// Buffer was never loaded
-    pub const BF_NEVERLOADED: c_int = 0x02;
+    pub const BF_NEVERLOADED: c_int = 0x04;
     /// Buffer has read error
-    pub const BF_READERR: c_int = 0x04;
-    /// Preserve buffer (no reclaim)
-    pub const BF_PRESERVED: c_int = 0x08;
+    pub const BF_READERR: c_int = 0x40;
     /// Dummy buffer for internal use
-    pub const BF_DUMMY: c_int = 0x8000;
+    pub const BF_DUMMY: c_int = 0x80;
 }
 
 /// Buffer action types for `close_buffer`

@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn test_constants() {
         // Verify buffer flag constants are correct
-        assert_eq!(BF_NEVERLOADED, 0x01);
-        assert_eq!(BF_NEW, 0x02);
+        assert_eq!(BF_NEVERLOADED, 0x04);
+        assert_eq!(BF_NEW, 0x10);
     }
 }

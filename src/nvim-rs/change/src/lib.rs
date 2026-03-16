@@ -261,10 +261,10 @@ pub const HLF_W: c_int = 26;
 pub const VV_WARNINGMSG: c_int = 4;
 
 /// Buffer flag: buffer never loaded.
-pub const BF_NEVERLOADED: c_int = 0x01;
+pub const BF_NEVERLOADED: c_int = 0x04;
 
 /// Buffer flag: new buffer.
-pub const BF_NEW: c_int = 0x02;
+pub const BF_NEW: c_int = 0x10;
 
 /// Extmark undo operation type.
 pub const KEXTMARK_UNDO: c_int = 0;
