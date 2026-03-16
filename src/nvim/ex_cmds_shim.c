@@ -1230,9 +1230,6 @@ int nvim_excmds_before_quit_all(exarg_T *eap) { return before_quit_all(eap) == O
 /// Wrap getout(code). Diverges (process exit).
 void nvim_excmds_getout(int code) { getout(code); }
 
-/// Wrap not_exiting().
-void nvim_excmds_not_exiting(void) { not_exiting(); }
-
 /// Get buf->b_next (next buffer in list, or NULL).
 buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
 

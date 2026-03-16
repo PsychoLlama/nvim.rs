@@ -605,7 +605,6 @@ extern "C" {
     fn nvim_excmds_cmd_wqall() -> c_int;
     fn nvim_excmds_before_quit_all(eap: *mut ExArgHandle) -> c_int;
     fn nvim_excmds_getout(code: c_int);
-    fn nvim_excmds_not_exiting();
     fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
     fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_no_write_message_nobang(buf: *mut BufHandle);
@@ -712,7 +711,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
         if error == 0 {
             nvim_excmds_getout(0); // exit Vim (diverges)
         }
-        nvim_excmds_not_exiting();
+        crate::exiting = false;
     }
 }
 
