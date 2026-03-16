@@ -288,70 +288,7 @@
 extern int offset2bytes(int nr, uint8_t *buf);
 extern bool sal_to_bool(const char *s);
 
-// Spellfile header functions
-extern int rs_write_spellfile_header(uint8_t *out, size_t max_len, const void *header);
-// rs_parse_rep_item, rs_parse_sal_header, rs_parse_sofo_section,
-// rs_parse_compound_header - declarations moved to Phase B1 section below
-
-// Write functions
-extern int rs_write_section_header(uint8_t *out, size_t max_len, int id, int flags, int data_len);
-extern int rs_write_rep_item(uint8_t *out, size_t max_len, const void *rep_item);
-extern int rs_write_charflags_section(uint8_t *out, size_t max_len, const void *flags);
-extern int rs_write_sofo_section(uint8_t *out, size_t max_len, const void *sofo);
-extern int rs_write_sal_header(uint8_t *out, size_t max_len, const void *sal);
-extern int rs_write_compound_header(uint8_t *out, size_t max_len, const void *compound);
-extern int rs_write_tree_nodecount(uint8_t *out, size_t max_len, int count);
-extern int rs_write_timestamp(uint8_t *out, size_t max_len, int64_t timestamp);
-extern int rs_write_tree_node_flags(uint8_t *out, size_t max_len, int flags);
-extern int rs_write_tree_sibling_byte(uint8_t *out, size_t max_len, int byte);
-extern int rs_write_tree_child_index(uint8_t *out, size_t max_len, int index);
-extern int rs_write_region_section(uint8_t *out, size_t max_len, const void *regions);
-extern int rs_write_end_section(uint8_t *out, size_t max_len);
-
-// Phase B1: Section reading functions
-// Prefix condition parsing
-extern int rs_parse_prefcond_count(const uint8_t *buf, size_t buf_len, uint16_t *count_out,
-                                   size_t *consumed_out);
-
-// REP/REPSAL section parsing
-typedef struct {
-  uint8_t from[256];
-  uint8_t from_len;
-  uint8_t to[256];
-  uint8_t to_len;
-} RsFromTo;
-
-extern int rs_parse_rep_count(const uint8_t *buf, size_t buf_len, uint16_t *count_out,
-                              size_t *consumed_out);
-extern int rs_parse_rep_item(const uint8_t *buf, size_t buf_len, RsFromTo *item_out,
-                             size_t *consumed_out);
-
-// SAL section parsing
-typedef struct {
-  uint8_t flags;
-  uint16_t count;
-} RsSalHeader;
-
-// Parsed SAL item from rs_parse_sal_item().
-// The 'from' buffer holds lead\0[oneof\0]rules\0 consecutively.
-// oneof_offset == 0xFFFF means no oneof field.
-typedef struct {
-  uint8_t from[512];      // combined lead+NUL+oneof+NUL+rules+NUL buffer
-  uint16_t from_used;     // total bytes used in from (including NULs)
-  uint16_t lead_offset;   // always 0; lead starts at from[0]
-  uint16_t lead_len;      // length of lead (excluding NUL)
-  uint16_t oneof_offset;  // offset of oneof in from (0xFFFF = absent)
-  uint16_t rules_offset;  // offset of rules in from
-  uint8_t to[256];        // to string (null-terminated)
-  uint16_t to_len;        // length of to (0 if none/empty)
-  bool has_to;            // whether 'to' is present
-} RsSalItem;
-
-extern int rs_parse_sal_header(const uint8_t *buf, size_t buf_len, RsSalHeader *header_out,
-                               size_t *consumed_out);
-extern int rs_parse_sal_item(const uint8_t *buf, size_t buf_len, RsSalItem *item_out,
-                             size_t *consumed_out);
-
+// Section reading functions (Rust implementations)
 // SOFO section parsing
 typedef struct {
   uint8_t from[512];
@@ -367,46 +304,11 @@ extern int rs_parse_sofo_section(const uint8_t *buf, size_t buf_len, RsSofoSecti
 extern int rs_parse_words_entry(const uint8_t *buf, size_t buf_len, uint8_t *output,
                                 size_t output_len, size_t *consumed_out);
 
-// Compound section parsing
-typedef struct {
-  uint8_t compmax;
-  uint8_t compminlen;
-  uint8_t compsylmax;
-  uint16_t compoptions;
-  uint16_t comppatcount;
-} RsCompoundHeader;
-
-extern int rs_parse_compound_header(const uint8_t *buf, size_t buf_len, RsCompoundHeader *header_out,
-                                    size_t *consumed_out);
-
-// Compound flags pattern builder result from rs_parse_compound_flags().
-// MAXWLEN == 254 from spell_defs.h.
-#define RS_MAXWLEN 254
-typedef struct {
-  uint8_t pattern[4096];         // regex pattern "^\(...\)$" (null-terminated)
-  uint32_t pattern_len;          // length of pattern (excluding NUL)
-  uint8_t startflags[RS_MAXWLEN + 1];  // flags that can start a compound word
-  uint32_t startflags_len;
-  uint8_t allflags[RS_MAXWLEN + 1];    // all non-special flags seen
-  uint32_t allflags_len;
-  uint8_t comprules[RS_MAXWLEN + 1];   // original rules bytes (if no wildcards)
-  uint32_t comprules_len;
-  bool comprules_valid;          // false if a wildcard was encountered
-} RsCompoundFlagsResult;
-
-extern int rs_parse_compound_flags(const uint8_t *buf, size_t buf_len,
-                                   RsCompoundFlagsResult *result_out);
-
-// Phase B2: Tree reading functions
+// Tree reading functions
 extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32_t *idxs,
                         size_t array_len, bool prefixtree, int prefixcnt,
                         size_t *bytes_consumed_out, int *node_count_out);
 extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint32_t *nodecount_out);
-
-// Phase 2: Write helpers
-extern int rs_write_prefcond_section(uint8_t *buf, size_t buf_len,
-                                     const uint8_t **strs, size_t count,
-                                     size_t *written_out);
 
 // Phase 4: Dictionary and wordfile line parsers
 
