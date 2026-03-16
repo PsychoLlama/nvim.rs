@@ -1052,7 +1052,6 @@ extern "C" {
         eap: *mut ExArgHandle,
     ) -> c_int;
     fn nvim_excmds_call_shell_filter(cmd: *const c_char, flags: c_int);
-    fn nvim_excmds_after_shell();
     fn nvim_excmds_del_lines(count: c_int);
     fn nvim_excmds_write_lnum_adjust(offset: c_int);
     fn nvim_excmds_redraw_curbuf_later_valid();
@@ -1265,7 +1264,8 @@ pub unsafe extern "C" fn rs_do_filter(
     nvim_excmds_call_shell_filter(cmd_buf, k_shell_opt_filter | shell_flags);
     xfree(cmd_buf as *mut std::ffi::c_void);
 
-    nvim_excmds_after_shell();
+    crate::did_check_timestamps = false;
+    crate::need_check_timestamps = true;
     os_breakcheck();
     crate::got_int = false;
 

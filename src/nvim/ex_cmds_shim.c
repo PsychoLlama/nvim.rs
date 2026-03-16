@@ -1067,13 +1067,6 @@ void nvim_excmds_call_shell_filter(const char *cmd, int flags)
   call_shell((char *)cmd, flags, NULL);
 }
 
-/// Set did_check_timestamps=false, need_check_timestamps=true.
-void nvim_excmds_after_shell(void)
-{
-  did_check_timestamps = false;
-  need_check_timestamps = true;
-}
-
 /// Wrapper for del_lines(count, true).
 void nvim_excmds_del_lines(int count) { del_lines((linenr_T)count, true); }
 
