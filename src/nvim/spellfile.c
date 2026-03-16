@@ -475,15 +475,49 @@ extern int rs_read_prefcond_section(FILE *fd, slang_T *lp);
 // Phase 4: read_rep_section replacement
 extern int rs_read_rep_section(FILE *fd, garray_T *gap, int16_t *first);
 
-// Phase B7: mkspell and Write Operations
-// The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
-// as they orchestrate file I/O and coordinate multiple write operations.
-// Individual Rust write helpers declared above:
-//   rs_write_spellfile_header, rs_write_section_header, rs_write_rep_item,
-//   rs_write_charflags_section, rs_write_sofo_section, rs_write_sal_header,
-//   rs_write_compound_header, rs_write_tree_nodecount, rs_write_timestamp,
-//   rs_write_tree_node_flags, rs_write_tree_sibling_byte, rs_write_tree_child_index,
-//   rs_write_region_section, rs_write_end_section
+// Phase 2: Spell section writing (write_vim_spell helper)
+// SpellSectionParams is filled from spellinfo_T and passed to Rust.
+// Rust writes all sections (except SN_CHARFLAGS and SN_WORDS) to a buffer.
+typedef struct {
+  const char *si_info;
+  int si_region_count;
+  const uint8_t *si_region_name;
+  bool si_skip_charflags;
+  const char *si_midword;
+  const uint8_t **si_prefcond_strs;
+  int si_prefcond_count;
+  const uint8_t **si_rep_from;
+  const uint8_t **si_rep_to;
+  int si_rep_count;
+  bool si_use_sal;
+  const uint8_t **si_sal_from;
+  const uint8_t **si_sal_to;
+  int si_sal_count;
+  uint8_t si_sal_flags;
+  const uint8_t **si_repsal_from;
+  const uint8_t **si_repsal_to;
+  int si_repsal_count;
+  const char *si_sofofr;
+  const char *si_sofoto;
+  const uint8_t *si_map_data;
+  int si_map_len;
+  int64_t si_sugtime;
+  bool si_nosplitsugs;
+  bool si_nocompoundsugs;
+  const char *si_compflags;
+  uint8_t si_compmax;
+  uint8_t si_compminlen;
+  uint8_t si_compsylmax;
+  uint16_t si_compoptions;
+  const uint8_t **si_comppat_strs;
+  int si_comppat_count;
+  bool si_nobreak;
+  const char *si_syllable;
+} SpellSectionParams;
+
+extern int rs_write_spell_sections(const SpellSectionParams *params,
+                                   uint8_t *buf, size_t buf_len,
+                                   size_t *written_out);
 
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
@@ -3633,63 +3667,33 @@ static int write_vim_spell(spellinfo_T *spin, char *fname)
   }
 
   // <HEADER>: <fileID> <versionnr>
-  // <fileID>
   size_t fwv = fwrite(VIMSPELLMAGIC, VIMSPELLMAGICL, 1, fd);
   if (fwv != 1) {
-    // Catch first write error, don't try writing more.
     goto theend;
   }
+  putc(VIMSPELLVERSION, fd);
 
-  putc(VIMSPELLVERSION, fd);                                // <versionnr>
+  // Compute regionmask (needed for tree writing below).
+  regionmask = spin->si_region_count > 1
+               ? (1 << spin->si_region_count) - 1
+               : 0;
 
   // <SECTIONS>: <section> ... <sectionend>
 
-  // SN_INFO: <infotext>
-  if (spin->si_info != NULL) {
-    putc(SN_INFO, fd);                                  // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-    size_t i = strlen(spin->si_info);
-    put_bytes(fd, i, 4);                                // <sectionlen>
-    fwv &= fwrite(spin->si_info, i, 1, fd);             // <infotext>
-  }
-
-  // SN_REGION: <regionname> ...
-  // Write the region names only if there is more than one.
-  if (spin->si_region_count > 1) {
-    putc(SN_REGION, fd);                                // <sectionID>
-    putc(SNF_REQUIRED, fd);                             // <sectionflags>
-    size_t l = (size_t)spin->si_region_count * 2;
-    put_bytes(fd, l, 4);                                // <sectionlen>
-    fwv &= fwrite(spin->si_region_name, l, 1, fd);
-    // <regionname> ...
-    regionmask = (1 << spin->si_region_count) - 1;
-  } else {
-    regionmask = 0;
-  }
-
-  // SN_CHARFLAGS: <charflagslen> <charflags> <folcharslen> <folchars>
-  //
-  // The table with character flags and the table for case folding.
-  // This makes sure the same characters are recognized as word characters
-  // when generating and when using a spell file.
-  // Skip this for ASCII, the table may conflict with the one used for
-  // 'encoding'.
-  // Also skip this for an .add.spl file, the main spell file must contain
-  // the table (avoids that it conflicts).  File is shorter too.
+  // SN_CHARFLAGS: must stay in C (uses spelltab + utf_char2bytes).
   if (!spin->si_ascii && !spin->si_add) {
     char folchars[128 * 8];
 
-    putc(SN_CHARFLAGS, fd);                             // <sectionID>
-    putc(SNF_REQUIRED, fd);                             // <sectionflags>
+    putc(SN_CHARFLAGS, fd);
+    putc(SNF_REQUIRED, fd);
 
-    // Form the <folchars> string first, we need to know its length.
     size_t l = 0;
     for (size_t i = 128; i < 256; i++) {
       l += (size_t)utf_char2bytes(spelltab.st_fold[i], folchars + l);
     }
-    put_bytes(fd, 1 + 128 + 2 + l, 4);                  // <sectionlen>
+    put_bytes(fd, 1 + 128 + 2 + l, 4);
 
-    fputc(128, fd);                                     // <charflagslen>
+    fputc(128, fd);
     for (size_t i = 128; i < 256; i++) {
       int flags = 0;
       if (spelltab.st_isw[i]) {
@@ -3698,262 +3702,180 @@ static int write_vim_spell(spellinfo_T *spin, char *fname)
       if (spelltab.st_isu[i]) {
         flags |= CF_UPPER;
       }
-      fputc(flags, fd);                                 // <charflags>
+      fputc(flags, fd);
     }
 
-    put_bytes(fd, l, 2);                                // <folcharslen>
-    fwv &= fwrite(folchars, l, 1, fd);                  // <folchars>
+    put_bytes(fd, l, 2);
+    fwv &= fwrite(folchars, l, 1, fd);
   }
 
-  // SN_MIDWORD: <midword>
-  if (spin->si_midword != NULL) {
-    putc(SN_MIDWORD, fd);                               // <sectionID>
-    putc(SNF_REQUIRED, fd);                             // <sectionflags>
-
-    size_t i = strlen(spin->si_midword);
-    put_bytes(fd, i, 4);                                // <sectionlen>
-    fwv &= fwrite(spin->si_midword, i, 1, fd);
-    // <midword>
-  }
-
-  // SN_PREFCOND: <prefcondcnt> <prefcond> ...
-  if (!GA_EMPTY(&spin->si_prefcond)) {
-    putc(SN_PREFCOND, fd);                              // <sectionID>
-    putc(SNF_REQUIRED, fd);                             // <sectionflags>
-
-    size_t l = (size_t)write_spell_prefcond(NULL, &spin->si_prefcond, &fwv);
-    put_bytes(fd, l, 4);                                // <sectionlen>
-
-    write_spell_prefcond(fd, &spin->si_prefcond, &fwv);
-  }
-
-  // SN_REP: <repcount> <rep> ...
-  // SN_SAL: <salflags> <salcount> <sal> ...
-  // SN_REPSAL: <repcount> <rep> ...
-
-  // round 1: SN_REP section
-  // round 2: SN_SAL section (unless SN_SOFO is used)
-  // round 3: SN_REPSAL section
-  for (unsigned round = 1; round <= 3; round++) {
-    garray_T *gap;
-    if (round == 1) {
-      gap = &spin->si_rep;
-    } else if (round == 2) {
-      // Don't write SN_SAL when using a SN_SOFO section
-      if (spin->si_sofofr != NULL && spin->si_sofoto != NULL) {
-        continue;
-      }
-      gap = &spin->si_sal;
-    } else {
-      gap = &spin->si_repsal;
+  // All other sections are written by Rust via rs_write_spell_sections.
+  {
+    // Sort REP and REPSAL before passing pointers to Rust.
+    if (!GA_EMPTY(&spin->si_rep)) {
+      qsort(spin->si_rep.ga_data, (size_t)spin->si_rep.ga_len,
+            sizeof(fromto_T), rep_compare);
     }
-
-    // Don't write the section if there are no items.
-    if (GA_EMPTY(gap)) {
-      continue;
-    }
-
-    // Sort the REP/REPSAL items.
-    if (round != 2) {
-      qsort(gap->ga_data, (size_t)gap->ga_len,
+    if (!GA_EMPTY(&spin->si_repsal)) {
+      qsort(spin->si_repsal.ga_data, (size_t)spin->si_repsal.ga_len,
             sizeof(fromto_T), rep_compare);
     }
 
-    int sect_id = round == 1 ? SN_REP : (round == 2 ? SN_SAL : SN_REPSAL);
-    putc(sect_id, fd);                                  // <sectionID>
-
-    // This is for making suggestions, section is not required.
-    putc(0, fd);                                        // <sectionflags>
-
-    // Compute the length of what follows.
-    size_t l = 2;  // count <repcount> or <salcount>
-    assert(gap->ga_len >= 0);
-    for (size_t i = 0; i < (size_t)gap->ga_len; i++) {
-      fromto_T *ftp = &((fromto_T *)gap->ga_data)[i];
-      l += 1 + strlen(ftp->ft_from);  // count <*fromlen> and <*from>
-      l += 1 + strlen(ftp->ft_to);    // count <*tolen> and <*to>
-    }
-    if (round == 2) {
-      l++;                            // count <salflags>
-    }
-    put_bytes(fd, l, 4);                                // <sectionlen>
-
-    if (round == 2) {
-      int i = 0;
-      if (spin->si_followup) {
-        i |= SAL_F0LLOWUP;
-      }
-      if (spin->si_collapse) {
-        i |= SAL_COLLAPSE;
-      }
-      if (spin->si_rem_accents) {
-        i |= SAL_REM_ACCENTS;
-      }
-      putc(i, fd);                                      // <salflags>
+    // Set si_sugtime now (needed for SN_SUGFILE section).
+    int64_t sugtime = 0;
+    if (!spin->si_nosugfile
+        && (!GA_EMPTY(&spin->si_sal)
+            || (spin->si_sofofr != NULL && spin->si_sofoto != NULL))) {
+      spin->si_sugtime = time(NULL);
+      sugtime = (int64_t)spin->si_sugtime;
     }
 
-    put_bytes(fd, (uintmax_t)gap->ga_len, 2);    // <repcount> or <salcount>
-    for (size_t i = 0; i < (size_t)gap->ga_len; i++) {
-      // <rep> : <repfromlen> <repfrom> <reptolen> <repto>
-      // <sal> : <salfromlen> <salfrom> <saltolen> <salto>
-      fromto_T *ftp = &((fromto_T *)gap->ga_data)[i];
-      for (unsigned rr = 1; rr <= 2; rr++) {
-        char *p = rr == 1 ? ftp->ft_from : ftp->ft_to;
-        l = strlen(p);
-        assert(l < INT_MAX);
-        putc((int)l, fd);
-        if (l > 0) {
-          fwv &= fwrite(p, l, 1, fd);
-        }
-      }
+    // Build flat pointer arrays for REP / SAL / REPSAL from-to pairs.
+    int rep_count = spin->si_rep.ga_len;
+    const uint8_t **rep_from = rep_count > 0
+        ? xmalloc((size_t)rep_count * sizeof(uint8_t *)) : NULL;
+    const uint8_t **rep_to = rep_count > 0
+        ? xmalloc((size_t)rep_count * sizeof(uint8_t *)) : NULL;
+    for (int i = 0; i < rep_count; i++) {
+      fromto_T *ftp = &((fromto_T *)spin->si_rep.ga_data)[i];
+      rep_from[i] = (const uint8_t *)ftp->ft_from;
+      rep_to[i]   = (const uint8_t *)ftp->ft_to;
     }
-  }
 
-  // SN_SOFO: <sofofromlen> <sofofrom> <sofotolen> <sofoto>
-  // This is for making suggestions, section is not required.
-  if (spin->si_sofofr != NULL && spin->si_sofoto != NULL) {
-    putc(SN_SOFO, fd);                                  // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
+    bool use_sal = !(spin->si_sofofr != NULL && spin->si_sofoto != NULL);
+    int sal_count = use_sal ? spin->si_sal.ga_len : 0;
+    const uint8_t **sal_from = sal_count > 0
+        ? xmalloc((size_t)sal_count * sizeof(uint8_t *)) : NULL;
+    const uint8_t **sal_to = sal_count > 0
+        ? xmalloc((size_t)sal_count * sizeof(uint8_t *)) : NULL;
+    for (int i = 0; i < sal_count; i++) {
+      fromto_T *ftp = &((fromto_T *)spin->si_sal.ga_data)[i];
+      sal_from[i] = (const uint8_t *)ftp->ft_from;
+      sal_to[i]   = (const uint8_t *)ftp->ft_to;
+    }
+    uint8_t sal_flags = 0;
+    if (spin->si_followup) { sal_flags |= (uint8_t)SAL_F0LLOWUP; }
+    if (spin->si_collapse) { sal_flags |= (uint8_t)SAL_COLLAPSE; }
+    if (spin->si_rem_accents) { sal_flags |= (uint8_t)SAL_REM_ACCENTS; }
 
-    size_t l = strlen(spin->si_sofofr);
-    put_bytes(fd, l + strlen(spin->si_sofoto) + 4, 4);  // <sectionlen>
+    int repsal_count = spin->si_repsal.ga_len;
+    const uint8_t **repsal_from = repsal_count > 0
+        ? xmalloc((size_t)repsal_count * sizeof(uint8_t *)) : NULL;
+    const uint8_t **repsal_to = repsal_count > 0
+        ? xmalloc((size_t)repsal_count * sizeof(uint8_t *)) : NULL;
+    for (int i = 0; i < repsal_count; i++) {
+      fromto_T *ftp = &((fromto_T *)spin->si_repsal.ga_data)[i];
+      repsal_from[i] = (const uint8_t *)ftp->ft_from;
+      repsal_to[i]   = (const uint8_t *)ftp->ft_to;
+    }
 
-    put_bytes(fd, l, 2);                                // <sofofromlen>
-    fwv &= fwrite(spin->si_sofofr, l, 1, fd);           // <sofofrom>
+    // Build flat pointer arrays for prefcond and comppat strings.
+    int prefcond_count = spin->si_prefcond.ga_len;
+    const uint8_t **prefcond_strs = prefcond_count > 0
+        ? xmalloc((size_t)prefcond_count * sizeof(uint8_t *)) : NULL;
+    for (int i = 0; i < prefcond_count; i++) {
+      char *p = ((char **)spin->si_prefcond.ga_data)[i];
+      prefcond_strs[i] = (const uint8_t *)(p != NULL ? p : "");
+    }
 
-    l = strlen(spin->si_sofoto);
-    put_bytes(fd, l, 2);                                // <sofotolen>
-    fwv &= fwrite(spin->si_sofoto, l, 1, fd);           // <sofoto>
+    int comppat_count = spin->si_comppat.ga_len;
+    const uint8_t **comppat_strs = comppat_count > 0
+        ? xmalloc((size_t)comppat_count * sizeof(uint8_t *)) : NULL;
+    for (int i = 0; i < comppat_count; i++) {
+      char *p = ((char **)spin->si_comppat.ga_data)[i];
+      comppat_strs[i] = (const uint8_t *)(p != NULL ? p : "");
+    }
+
+    SpellSectionParams params = {
+      .si_info            = spin->si_info,
+      .si_region_count    = spin->si_region_count,
+      .si_region_name     = (const uint8_t *)spin->si_region_name,
+      .si_skip_charflags  = false,
+      .si_midword         = spin->si_midword,
+      .si_prefcond_strs   = prefcond_strs,
+      .si_prefcond_count  = prefcond_count,
+      .si_rep_from        = rep_from,
+      .si_rep_to          = rep_to,
+      .si_rep_count       = rep_count,
+      .si_use_sal         = use_sal,
+      .si_sal_from        = sal_from,
+      .si_sal_to          = sal_to,
+      .si_sal_count       = sal_count,
+      .si_sal_flags       = sal_flags,
+      .si_repsal_from     = repsal_from,
+      .si_repsal_to       = repsal_to,
+      .si_repsal_count    = repsal_count,
+      .si_sofofr          = spin->si_sofofr,
+      .si_sofoto          = spin->si_sofoto,
+      .si_map_data        = (const uint8_t *)spin->si_map.ga_data,
+      .si_map_len         = spin->si_map.ga_len,
+      .si_sugtime         = sugtime,
+      .si_nosplitsugs     = spin->si_nosplitsugs,
+      .si_nocompoundsugs  = spin->si_nocompoundsugs,
+      .si_compflags       = spin->si_compflags,
+      .si_compmax         = spin->si_compmax,
+      .si_compminlen      = spin->si_compminlen,
+      .si_compsylmax      = spin->si_compsylmax,
+      .si_compoptions     = spin->si_compoptions,
+      .si_comppat_strs    = comppat_strs,
+      .si_comppat_count   = comppat_count,
+      .si_nobreak         = spin->si_nobreak,
+      .si_syllable        = spin->si_syllable,
+    };
+
+    // Allocate output buffer; 256 KB should be more than enough for all sections.
+    size_t sec_buf_len = 256 * 1024;
+    uint8_t *sec_buf = xmalloc(sec_buf_len);
+    size_t written = 0;
+
+    int rs_ret = rs_write_spell_sections(&params, sec_buf, sec_buf_len, &written);
+    if (rs_ret != 0 || (written > 0 && fwrite(sec_buf, written, 1, fd) != 1)) {
+      retval = FAIL;
+    }
+
+    xfree(sec_buf);
+    xfree(rep_from);
+    xfree(rep_to);
+    xfree(sal_from);
+    xfree(sal_to);
+    xfree(repsal_from);
+    xfree(repsal_to);
+    xfree(prefcond_strs);
+    xfree(comppat_strs);
+
+    if (retval == FAIL) {
+      goto theend;
+    }
   }
 
   // SN_WORDS: <word> ...
-  // This is for making suggestions, section is not required.
+  // Stays in C: requires hashtable iteration with HASHITEM_EMPTY macro.
   if (spin->si_commonwords.ht_used > 0) {
-    putc(SN_WORDS, fd);                                 // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
+    putc(SN_WORDS, fd);
+    putc(0, fd);
 
-    // round 1: count the bytes
-    // round 2: write the bytes
+    // round 1: count the bytes; round 2: write the bytes
     for (unsigned round = 1; round <= 2; round++) {
-      size_t todo;
+      size_t todo = spin->si_commonwords.ht_used;
       size_t len = 0;
-      hashitem_T *hi;
-
-      todo = spin->si_commonwords.ht_used;
-      for (hi = spin->si_commonwords.ht_array; todo > 0; hi++) {
+      for (hashitem_T *hi = spin->si_commonwords.ht_array; todo > 0; hi++) {
         if (!HASHITEM_EMPTY(hi)) {
           size_t l = strlen(hi->hi_key) + 1;
           len += l;
-          if (round == 2) {                             // <word>
+          if (round == 2) {
             fwv &= fwrite(hi->hi_key, l, 1, fd);
           }
           todo--;
         }
       }
       if (round == 1) {
-        put_bytes(fd, len, 4);                          // <sectionlen>
+        put_bytes(fd, len, 4);
       }
     }
   }
 
-  // SN_MAP: <mapstr>
-  // This is for making suggestions, section is not required.
-  if (!GA_EMPTY(&spin->si_map)) {
-    putc(SN_MAP, fd);                                   // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-    size_t l = (size_t)spin->si_map.ga_len;
-    put_bytes(fd, l, 4);                                // <sectionlen>
-    fwv &= fwrite(spin->si_map.ga_data, l, 1, fd);      // <mapstr>
-  }
-
-  // SN_SUGFILE: <timestamp>
-  // This is used to notify that a .sug file may be available and at the
-  // same time allows for checking that a .sug file that is found matches
-  // with this .spl file.  That's because the word numbers must be exactly
-  // right.
-  if (!spin->si_nosugfile
-      && (!GA_EMPTY(&spin->si_sal)
-          || (spin->si_sofofr != NULL && spin->si_sofoto != NULL))) {
-    putc(SN_SUGFILE, fd);                               // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-    put_bytes(fd, 8, 4);                                // <sectionlen>
-
-    // Set si_sugtime and write it to the file.
-    spin->si_sugtime = time(NULL);
-    put_time(fd, spin->si_sugtime);                     // <timestamp>
-  }
-
-  // SN_NOSPLITSUGS: nothing
-  // This is used to notify that no suggestions with word splits are to be
-  // made.
-  if (spin->si_nosplitsugs) {
-    putc(SN_NOSPLITSUGS, fd);                           // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-    put_bytes(fd, 0, 4);                                // <sectionlen>
-  }
-
-  // SN_NOCOMPUNDSUGS: nothing
-  // This is used to notify that no suggestions with compounds are to be
-  // made.
-  if (spin->si_nocompoundsugs) {
-    putc(SN_NOCOMPOUNDSUGS, fd);                        // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-    put_bytes(fd, 0, 4);                                // <sectionlen>
-  }
-
-  // SN_COMPOUND: compound info.
-  // We don't mark it required, when not supported all compound words will
-  // be bad words.
-  if (spin->si_compflags != NULL) {
-    putc(SN_COMPOUND, fd);                              // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-
-    size_t l = strlen(spin->si_compflags);
-    assert(spin->si_comppat.ga_len >= 0);
-    for (size_t i = 0; i < (size_t)spin->si_comppat.ga_len; i++) {
-      l += strlen(((char **)(spin->si_comppat.ga_data))[i]) + 1;
-    }
-    put_bytes(fd, l + 7, 4);                            // <sectionlen>
-
-    putc(spin->si_compmax, fd);                         // <compmax>
-    putc(spin->si_compminlen, fd);                      // <compminlen>
-    putc(spin->si_compsylmax, fd);                      // <compsylmax>
-    putc(0, fd);                // for Vim 7.0b compatibility
-    putc(spin->si_compoptions, fd);                     // <compoptions>
-    put_bytes(fd, (uintmax_t)spin->si_comppat.ga_len, 2);  // <comppatcount>
-    for (size_t i = 0; i < (size_t)spin->si_comppat.ga_len; i++) {
-      char *p = ((char **)(spin->si_comppat.ga_data))[i];
-      assert(strlen(p) < INT_MAX);
-      putc((int)strlen(p), fd);                         // <comppatlen>
-      fwv &= fwrite(p, strlen(p), 1, fd);               // <comppattext>
-    }
-    // <compflags>
-    fwv &= fwrite(spin->si_compflags, strlen(spin->si_compflags), 1, fd);
-  }
-
-  // SN_NOBREAK: NOBREAK flag
-  if (spin->si_nobreak) {
-    putc(SN_NOBREAK, fd);                               // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-
-    // It's empty, the presence of the section flags the feature.
-    put_bytes(fd, 0, 4);                                // <sectionlen>
-  }
-
-  // SN_SYLLABLE: syllable info.
-  // We don't mark it required, when not supported syllables will not be
-  // counted.
-  if (spin->si_syllable != NULL) {
-    putc(SN_SYLLABLE, fd);                              // <sectionID>
-    putc(0, fd);                                        // <sectionflags>
-
-    size_t l = strlen(spin->si_syllable);
-    put_bytes(fd, l, 4);                                // <sectionlen>
-    fwv &= fwrite(spin->si_syllable, l, 1, fd);         // <syllable>
-  }
-
   // end of <SECTIONS>
-  putc(SN_END, fd);                                     // <sectionend>
+  putc(SN_END, fd);
 
   // <LWORDTREE>  <KWORDTREE>  <PREFIXTREE>
   spin->si_memtot = 0;
@@ -3967,20 +3889,14 @@ static int write_vim_spell(spellinfo_T *spin, char *fname)
       tree = spin->si_prefroot->wn_sibling;
     }
 
-    // Clear the index and wnode fields in the tree.
     clear_node(tree);
 
-    // Count the number of nodes.  Needed to be able to allocate the
-    // memory when reading the nodes.  Also fills in index for shared
-    // nodes.
     size_t nodecount = (size_t)put_node(NULL, tree, 0, regionmask, round == 3);
 
-    // number of nodes in 4 bytes
-    put_bytes(fd, nodecount, 4);                        // <nodecount>
+    put_bytes(fd, nodecount, 4);
     assert(nodecount + nodecount * sizeof(int) < INT_MAX);
     spin->si_memtot += (int)(nodecount + nodecount * sizeof(int));
 
-    // Write the nodes.
     put_node(fd, tree, 0, regionmask, round == 3);
   }
 
@@ -4968,42 +4884,4 @@ static void init_spellfile(void)
 /// Set the spell character tables from strings in the .spl file.
 ///
 /// @param cnt  length of "flags"
-
-// Write the table with prefix conditions to the .spl file.
-// When "fd" is NULL only count the length of what is written.
-// Uses Rust (rs_write_prefcond_section) to serialize the section.
-static int write_spell_prefcond(FILE *fd, garray_T *gap, size_t *fwv)
-{
-  assert(gap->ga_len >= 0);
-  int count = gap->ga_len;
-
-  // Compute maximum buffer size: 2 bytes header + count * (1 + max_str_len)
-  // Use generous estimate: each condition string up to 256 bytes.
-  size_t max_len = 2 + (size_t)count * (1 + 256);
-  uint8_t *sec_buf = xmalloc(max_len);
-
-  // Build array of string pointers for Rust.
-  const uint8_t **strs = xmalloc((size_t)count * sizeof(uint8_t *));
-  for (int i = 0; i < count; i++) {
-    char *p = ((char **)gap->ga_data)[i];
-    strs[i] = (const uint8_t *)(p != NULL ? p : "");
-  }
-
-  size_t written = 0;
-  int res = rs_write_prefcond_section(sec_buf, max_len, strs, (size_t)count, &written);
-  xfree(strs);
-
-  if (res != 0) {
-    xfree(sec_buf);
-    return 0;
-  }
-
-  if (fd != NULL) {
-    *fwv &= fwrite(sec_buf, written, 1, fd);
-  }
-
-  xfree(sec_buf);
-  assert(written <= INT_MAX);
-  return (int)written;
-}
 

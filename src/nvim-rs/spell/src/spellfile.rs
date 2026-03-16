@@ -4903,6 +4903,405 @@ pub unsafe extern "C" fn rs_spell_check_msm(
 }
 
 // =============================================================================
+// Phase 2: Spell Section Writing (write_vim_spell helper)
+// =============================================================================
+
+/// Section flags: section is required for correct spell checking.
+const SNF_REQUIRED_U8: u8 = 1;
+
+/// Write a simple string section (SN_INFO, SN_MIDWORD, SN_SYLLABLE).
+/// Returns bytes written (0 if s is null).
+unsafe fn write_cstr_section(buf: &mut Vec<u8>, section_id: u8, flags: u8, s: *const c_char) {
+    if s.is_null() {
+        return;
+    }
+    let len = libc::strlen(s);
+    if len == 0 {
+        return;
+    }
+    // section header: id + flags + len(4 bytes BE)
+    buf.push(section_id);
+    buf.push(flags);
+    buf.extend_from_slice(&(len as u32).to_be_bytes());
+    // section data
+    let data = std::slice::from_raw_parts(s.cast::<u8>(), len);
+    buf.extend_from_slice(data);
+}
+
+/// Write a fromto (REP/SAL/REPSAL) section to buf.
+/// For SAL sections, sal_flags is non-zero.
+unsafe fn write_fromto_section(
+    buf: &mut Vec<u8>,
+    section_id: u8,
+    sal_flags: u8,
+    from_ptrs: *const *const u8,
+    to_ptrs: *const *const u8,
+    count: usize,
+) {
+    if count == 0 {
+        return;
+    }
+    let has_sal_header = sal_flags != 0;
+
+    // Compute section length
+    let mut data_len: usize = 2; // count (2 bytes)
+    if has_sal_header {
+        data_len += 1; // salflags (1 byte)
+    }
+    for i in 0..count {
+        let from = *from_ptrs.add(i);
+        let to = *to_ptrs.add(i);
+        let flen = libc::strlen(from.cast::<c_char>());
+        let tlen = libc::strlen(to.cast::<c_char>());
+        data_len += 1 + flen + 1 + tlen;
+    }
+
+    // Write section header
+    buf.push(section_id);
+    buf.push(0); // sectionflags: not required
+    buf.extend_from_slice(&(data_len as u32).to_be_bytes());
+
+    // Write SAL flags if applicable
+    if has_sal_header {
+        buf.push(sal_flags);
+    }
+
+    // Write count (2 bytes BE)
+    buf.extend_from_slice(&(count as u16).to_be_bytes());
+
+    // Write each from-to pair
+    for i in 0..count {
+        let from = *from_ptrs.add(i);
+        let to = *to_ptrs.add(i);
+        let flen = libc::strlen(from.cast::<c_char>());
+        let tlen = libc::strlen(to.cast::<c_char>());
+        buf.push(flen as u8);
+        if flen > 0 {
+            buf.extend_from_slice(std::slice::from_raw_parts(from, flen));
+        }
+        buf.push(tlen as u8);
+        if tlen > 0 {
+            buf.extend_from_slice(std::slice::from_raw_parts(to, tlen));
+        }
+    }
+}
+
+/// Parameters for writing spell sections.
+/// All fields correspond to spellinfo_T fields, extracted by the C caller.
+#[repr(C)]
+pub struct SpellSectionParams {
+    /// SN_INFO: info text (nullable)
+    pub si_info: *const c_char,
+
+    /// SN_REGION: region count (0 or 1 = no region section)
+    pub si_region_count: c_int,
+    /// SN_REGION: region name bytes (si_region_count * 2 bytes)
+    pub si_region_name: *const u8,
+
+    /// SN_CHARFLAGS: skip if true (ascii mode or add file)
+    pub si_skip_charflags: bool,
+
+    /// SN_MIDWORD: midword chars (nullable)
+    pub si_midword: *const c_char,
+
+    /// SN_PREFCOND: condition strings
+    pub si_prefcond_strs: *const *const u8,
+    pub si_prefcond_count: c_int,
+
+    /// SN_REP (pre-sorted by caller)
+    pub si_rep_from: *const *const u8,
+    pub si_rep_to: *const *const u8,
+    pub si_rep_count: c_int,
+
+    /// SN_SAL: use SAL section (vs SOFO)
+    pub si_use_sal: bool,
+    pub si_sal_from: *const *const u8,
+    pub si_sal_to: *const *const u8,
+    pub si_sal_count: c_int,
+    /// SAL flags: combination of SAL_F0LLOWUP, SAL_COLLAPSE, SAL_REM_ACCENTS
+    pub si_sal_flags: u8,
+
+    /// SN_REPSAL (pre-sorted by caller)
+    pub si_repsal_from: *const *const u8,
+    pub si_repsal_to: *const *const u8,
+    pub si_repsal_count: c_int,
+
+    /// SN_SOFO: soundfold from/to (nullable; only written if not using SAL)
+    pub si_sofofr: *const c_char,
+    pub si_sofoto: *const c_char,
+
+    /// SN_MAP: map string data
+    pub si_map_data: *const u8,
+    pub si_map_len: c_int,
+
+    /// SN_SUGFILE: timestamp (0 = don't write)
+    pub si_sugtime: i64,
+
+    /// SN_NOSPLITSUGS
+    pub si_nosplitsugs: bool,
+
+    /// SN_NOCOMPOUNDSUGS
+    pub si_nocompoundsugs: bool,
+
+    /// SN_COMPOUND: compound flags (nullable = no compound section)
+    pub si_compflags: *const c_char,
+    pub si_compmax: u8,
+    pub si_compminlen: u8,
+    pub si_compsylmax: u8,
+    pub si_compoptions: u16,
+    pub si_comppat_strs: *const *const u8,
+    pub si_comppat_count: c_int,
+
+    /// SN_NOBREAK
+    pub si_nobreak: bool,
+
+    /// SN_SYLLABLE: syllable string (nullable)
+    pub si_syllable: *const c_char,
+}
+
+/// Write all spell file sections (except SN_CHARFLAGS, SN_WORDS, and tree data)
+/// to the output buffer.
+///
+/// The caller is responsible for:
+/// - Writing the file header (VIMSPELLMAGIC + version) before calling this
+/// - Writing SN_CHARFLAGS section (needs spelltab)
+/// - Writing SN_WORDS section (needs hashtable iteration)
+/// - Writing tree data (LWORDTREE, KWORDTREE, PREFIXTREE) after sections
+/// - Writing the final 0 byte error check
+///
+/// Returns the number of bytes written to buf, or -1 on error.
+///
+/// # Safety
+/// All pointers in params must be valid for the duration of the call.
+/// buf must be a valid writable buffer of buf_len bytes.
+#[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_write_spell_sections(
+    params: *const SpellSectionParams,
+    buf: *mut u8,
+    buf_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if params.is_null() || buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+    let p = &*params;
+    let mut out: Vec<u8> = Vec::with_capacity(4096);
+
+    // SN_INFO: <infotext>
+    if !p.si_info.is_null() {
+        let len = libc::strlen(p.si_info);
+        if len > 0 {
+            out.push(SN_INFO);
+            out.push(0); // sectionflags
+            out.extend_from_slice(&(len as u32).to_be_bytes());
+            out.extend_from_slice(std::slice::from_raw_parts(p.si_info.cast::<u8>(), len));
+        }
+    }
+
+    // SN_REGION: <regionname> ...
+    if p.si_region_count > 1 {
+        let region_len = (p.si_region_count as usize) * 2;
+        out.push(SN_REGION);
+        out.push(SNF_REQUIRED_U8);
+        out.extend_from_slice(&(region_len as u32).to_be_bytes());
+        out.extend_from_slice(std::slice::from_raw_parts(p.si_region_name, region_len));
+    }
+
+    // SN_CHARFLAGS is written by C (needs spelltab + utf_char2bytes)
+    // Placeholder: caller inserts it between SN_REGION and SN_MIDWORD.
+
+    // SN_MIDWORD: <midword>
+    write_cstr_section(&mut out, SN_MIDWORD, SNF_REQUIRED_U8, p.si_midword);
+
+    // SN_PREFCOND: <prefcondcnt> <prefcond> ...
+    if p.si_prefcond_count > 0 && !p.si_prefcond_strs.is_null() {
+        let count = p.si_prefcond_count as usize;
+        // Compute data length: 2 bytes for count + sum of (1 + len) for each
+        let mut data_len: usize = 2;
+        for i in 0..count {
+            let s = *p.si_prefcond_strs.add(i);
+            let slen = if s.is_null() {
+                0
+            } else {
+                libc::strlen(s.cast::<c_char>())
+            };
+            data_len += 1 + slen;
+        }
+        out.push(SN_PREFCOND);
+        out.push(SNF_REQUIRED_U8);
+        out.extend_from_slice(&(data_len as u32).to_be_bytes());
+        // Write count (2 bytes BE)
+        out.extend_from_slice(&(count as u16).to_be_bytes());
+        for i in 0..count {
+            let s = *p.si_prefcond_strs.add(i);
+            let slen = if s.is_null() {
+                0
+            } else {
+                libc::strlen(s.cast::<c_char>())
+            };
+            out.push(slen as u8);
+            if slen > 0 {
+                out.extend_from_slice(std::slice::from_raw_parts(s, slen));
+            }
+        }
+    }
+
+    // SN_REP: <repcount> <rep> ...
+    if p.si_rep_count > 0 && !p.si_rep_from.is_null() {
+        write_fromto_section(
+            &mut out,
+            SN_REP,
+            0,
+            p.si_rep_from,
+            p.si_rep_to,
+            p.si_rep_count as usize,
+        );
+    }
+
+    // SN_SAL or SN_SOFO
+    if p.si_use_sal {
+        // SN_SAL: <salflags> <salcount> <sal> ...
+        if p.si_sal_count > 0 && !p.si_sal_from.is_null() {
+            write_fromto_section(
+                &mut out,
+                SN_SAL,
+                p.si_sal_flags,
+                p.si_sal_from,
+                p.si_sal_to,
+                p.si_sal_count as usize,
+            );
+        }
+    } else if !p.si_sofofr.is_null() && !p.si_sofoto.is_null() {
+        // SN_SOFO: <sofofromlen> <sofofrom> <sofotolen> <sofoto>
+        let flen = libc::strlen(p.si_sofofr);
+        let tlen = libc::strlen(p.si_sofoto);
+        let data_len = 2 + flen + 2 + tlen;
+        out.push(SN_SOFO);
+        out.push(0);
+        out.extend_from_slice(&(data_len as u32).to_be_bytes());
+        out.extend_from_slice(&(flen as u16).to_be_bytes());
+        out.extend_from_slice(std::slice::from_raw_parts(p.si_sofofr.cast::<u8>(), flen));
+        out.extend_from_slice(&(tlen as u16).to_be_bytes());
+        out.extend_from_slice(std::slice::from_raw_parts(p.si_sofoto.cast::<u8>(), tlen));
+    }
+
+    // SN_REPSAL: <repcount> <rep> ...
+    if p.si_repsal_count > 0 && !p.si_repsal_from.is_null() {
+        write_fromto_section(
+            &mut out,
+            SN_REPSAL,
+            0,
+            p.si_repsal_from,
+            p.si_repsal_to,
+            p.si_repsal_count as usize,
+        );
+    }
+
+    // SN_WORDS is written by C (needs hashtable iteration)
+
+    // SN_MAP: <mapstr>
+    if p.si_map_len > 0 && !p.si_map_data.is_null() {
+        let mlen = p.si_map_len as usize;
+        out.push(SN_MAP);
+        out.push(0);
+        out.extend_from_slice(&(mlen as u32).to_be_bytes());
+        out.extend_from_slice(std::slice::from_raw_parts(p.si_map_data, mlen));
+    }
+
+    // SN_SUGFILE: <timestamp>
+    if p.si_sugtime != 0 {
+        out.push(SN_SUGFILE);
+        out.push(0);
+        out.extend_from_slice(&8u32.to_be_bytes()); // section len = 8
+        out.extend_from_slice(&p.si_sugtime.to_be_bytes());
+    }
+
+    // SN_NOSPLITSUGS: nothing (presence is what matters)
+    if p.si_nosplitsugs {
+        out.push(SN_NOSPLITSUGS);
+        out.push(0);
+        out.extend_from_slice(&0u32.to_be_bytes());
+    }
+
+    // SN_NOCOMPOUNDSUGS: nothing
+    if p.si_nocompoundsugs {
+        out.push(SN_NOCOMPOUNDSUGS);
+        out.push(0);
+        out.extend_from_slice(&0u32.to_be_bytes());
+    }
+
+    // SN_COMPOUND
+    if !p.si_compflags.is_null() {
+        let cflen = libc::strlen(p.si_compflags);
+        let npat = p.si_comppat_count as usize;
+        // Fixed overhead: max(1)+minlen(1)+sylmax(1)+compat0(1)+compoptions(1)+patcount(2) = 7
+        // Note: compoptions is written as compat0 byte then low byte (2 bytes total),
+        // matching C's: putc(0, fd); putc(compoptions, fd);
+        let mut data_len: usize = 1 + 1 + 1 + 1 + 1 + 2; // max,minlen,sylmax,compat0,compoptions,patcount
+        data_len += cflen; // compflags
+        for i in 0..npat {
+            let s = *p.si_comppat_strs.add(i);
+            let slen = if s.is_null() {
+                0
+            } else {
+                libc::strlen(s.cast::<c_char>())
+            };
+            data_len += 1 + slen;
+        }
+        out.push(SN_COMPOUND);
+        out.push(0);
+        out.extend_from_slice(&(data_len as u32).to_be_bytes());
+        out.push(p.si_compmax);
+        out.push(p.si_compminlen);
+        out.push(p.si_compsylmax);
+        out.push(0); // Vim 7.0b compatibility
+                     // compoptions: 1 byte (low byte only, matching C's putc(compoptions, fd))
+        out.push((p.si_compoptions & 0xFF) as u8);
+        // comppatcount: 2 bytes BE
+        out.extend_from_slice(&(npat as u16).to_be_bytes());
+        for i in 0..npat {
+            let s = *p.si_comppat_strs.add(i);
+            let slen = if s.is_null() {
+                0
+            } else {
+                libc::strlen(s.cast::<c_char>())
+            };
+            out.push(slen as u8);
+            if slen > 0 {
+                out.extend_from_slice(std::slice::from_raw_parts(s, slen));
+            }
+        }
+        // compflags
+        out.extend_from_slice(std::slice::from_raw_parts(
+            p.si_compflags.cast::<u8>(),
+            cflen,
+        ));
+    }
+
+    // SN_NOBREAK: nothing (presence is what matters)
+    if p.si_nobreak {
+        out.push(SN_NOBREAK);
+        out.push(0);
+        out.extend_from_slice(&0u32.to_be_bytes());
+    }
+
+    // SN_SYLLABLE: <syllable>
+    write_cstr_section(&mut out, SN_SYLLABLE, 0, p.si_syllable);
+
+    // Note: SN_CHARFLAGS, SN_WORDS, and SN_END are written by the C caller.
+
+    // Copy to output buffer
+    if out.len() > buf_len {
+        return SP_TRUNCERROR;
+    }
+    let out_slice = std::slice::from_raw_parts_mut(buf, out.len());
+    out_slice.copy_from_slice(&out);
+    *written_out = out.len();
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
