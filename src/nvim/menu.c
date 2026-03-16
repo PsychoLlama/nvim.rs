@@ -577,6 +577,14 @@ void nvim_menu_emsg_invarg(void)
   emsg(_(e_invarg));
 }
 
+/// Execute a menu item: clears ea, then calls execute_menu.
+void nvim_menu_execute(vimmenu_T *mp)
+{
+  exarg_T ea;
+  CLEAR_FIELD(ea);
+  execute_menu(&ea, mp, -1);
+}
+
 // _Static_assert for Phase 6 constants
 _Static_assert(EXPAND_MENUS == 11, "EXPAND_MENUS must be 11");
 _Static_assert(EXPAND_MENUNAMES == 21, "EXPAND_MENUNAMES must be 21");

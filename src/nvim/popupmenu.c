@@ -113,29 +113,6 @@ void nvim_pum_ui_call_win_float_pos(int handle, const char *anchor, int anchor_g
                         row, col, false, zindex, comp_index, comp_row, comp_col);
 }
 
-// Phase 1 accessor: menu linked-list traversal
-void *nvim_pum_menu_children(void *menu)
-{
-  return ((vimmenu_T *)menu)->children;
-}
-
-void *nvim_pum_menu_next(void *menu)
-{
-  return ((vimmenu_T *)menu)->next;
-}
-
-int nvim_pum_menu_matches_mode(void *menu, int mode)
-{
-  vimmenu_T *mp = (vimmenu_T *)menu;
-  return (mp->modes & mp->enabled & mode) != 0;
-}
-
-void nvim_pum_execute_menu_item(void *menu)
-{
-  exarg_T ea;
-  CLEAR_FIELD(ea);
-  execute_menu(&ea, (vimmenu_T *)menu, -1);
-}
 
 
 // Static assertions for constants used by Rust FFI
@@ -242,20 +219,6 @@ void nvim_pum_win_config_set_and_apply(win_T *wp, int width, int col, int anchor
 _Static_assert(kFloatAnchorSouth == 2, "kFloatAnchorSouth must be 2");
 
 // Phase 5 accessors: show_popupmenu helpers
-
-/// Check if menu item name is a separator.
-int nvim_pum_menu_is_separator(vimmenu_T *mp)
-{
-  return menu_is_separator(mp->dname) ? 1 : 0;
-}
-
-/// Get menu item display name.
-char *nvim_pum_menu_get_dname(vimmenu_T *mp)
-{
-  return mp->dname;
-}
-
-
 
 /// Set mousemoveevent option via UI.
 void nvim_pum_ui_set_mousemoveevent(int val)

@@ -279,10 +279,46 @@ pub const extern "C" fn rs_pum_menu_key_action(
     PumMenuKeyResult { action: 0 }
 }
 
-/// Opaque handle to a `vimmenu_T`.
+/// Number of menu modes (`MENU_MODES` constant from `menu_defs.h`).
+const MENU_MODES: usize = 8;
+
+/// `#[repr(C)]` mirror of `vimmenu_T`.
+///
+/// Layout is verified by `_Static_assert` checks in `menu.c`.
 #[repr(C)]
 pub struct VimMenuHandle {
-    _private: [u8; 0],
+    /// Which modes this menu is visible for.
+    pub modes: c_int,
+    /// For which modes the menu is enabled.
+    pub enabled: c_int,
+    /// Name of menu, possibly translated.
+    pub name: *mut std::ffi::c_char,
+    /// Displayed name (`"name"` without `'&'`).
+    pub dname: *mut std::ffi::c_char,
+    /// `"name"` untranslated, `NULL` when was not translated.
+    pub en_name: *mut std::ffi::c_char,
+    /// `NULL` when `"dname"` untranslated.
+    pub en_dname: *mut std::ffi::c_char,
+    /// Mnemonic key (after `'&'`).
+    pub mnemonic: c_int,
+    _pad_mnemonic: [u8; 4],
+    /// Accelerator text (after TAB).
+    pub actext: *mut std::ffi::c_char,
+    /// Menu order priority.
+    pub priority: c_int,
+    _pad_priority: [u8; 4],
+    /// Mapped string for each mode.
+    pub strings: [*mut std::ffi::c_char; MENU_MODES],
+    /// A `REMAP_VALUES` flag for each mode.
+    pub noremap: [c_int; MENU_MODES],
+    /// A silent flag for each mode.
+    pub silent: [bool; MENU_MODES],
+    /// Children of sub-menu.
+    pub children: *mut VimMenuHandle,
+    /// Parent of menu.
+    pub parent: *mut VimMenuHandle,
+    /// Next item in menu.
+    pub next: *mut VimMenuHandle,
 }
 
 // C globals used by context menu.
@@ -295,16 +331,12 @@ extern "C" {
     static mut pum_grid: crate::ScreenGrid;
 }
 
-// C accessor functions for menu traversal.
+// C functions for menu operations.
 extern "C" {
-    /// Get `menu->children` (first child menu item).
-    fn nvim_pum_menu_children(menu: *mut VimMenuHandle) -> *mut VimMenuHandle;
-    /// Get `menu->next` (next sibling menu item).
-    fn nvim_pum_menu_next(menu: *mut VimMenuHandle) -> *mut VimMenuHandle;
-    /// Check if menu item matches mode: `(mp->modes & mp->enabled & mode) != 0`.
-    fn nvim_pum_menu_matches_mode(menu: *mut VimMenuHandle, mode: c_int) -> c_int;
     /// Execute a menu item (`CLEAR_FIELD(ea); execute_menu(&ea, mp, -1)`).
-    fn nvim_pum_execute_menu_item(menu: *mut VimMenuHandle);
+    fn nvim_menu_execute(menu: *mut VimMenuHandle);
+    /// Check if menu name is a separator.
+    fn menu_is_separator(name: *mut std::ffi::c_char) -> bool;
 }
 
 // C accessor functions for make_popup.
@@ -332,12 +364,8 @@ const K_UI_MULTIGRID: c_int = 6;
 
 // C accessor functions for show_popupmenu.
 extern "C" {
-    /// Get menu mode flag (from menu.c).
+    /// Get menu mode flag (from `menu.c`).
     fn get_menu_mode_flag() -> c_int;
-    /// Check if menu item is a separator.
-    fn nvim_pum_menu_is_separator(menu: *mut VimMenuHandle) -> c_int;
-    /// Get menu item display name.
-    fn nvim_pum_menu_get_dname(menu: *mut VimMenuHandle) -> *const std::ffi::c_char;
     /// Allocate zeroed memory.
     fn xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
     /// Duplicate a C string.
@@ -378,16 +406,16 @@ extern "C" {
 pub unsafe extern "C" fn rs_pum_execute_menu(menu: *mut VimMenuHandle, mode: c_int) {
     let pum_selected = PUM_STATE.selected;
     let mut idx = 0;
-    let mut mp = nvim_pum_menu_children(menu);
+    let mut mp = (*menu).children;
     while !mp.is_null() {
-        if nvim_pum_menu_matches_mode(mp, mode) != 0 {
+        if ((*mp).modes & (*mp).enabled & mode) != 0 {
             if idx == pum_selected {
-                nvim_pum_execute_menu_item(mp);
+                nvim_menu_execute(mp);
                 return;
             }
             idx += 1;
         }
-        mp = nvim_pum_menu_next(mp);
+        mp = (*mp).next;
     }
 }
 
@@ -409,12 +437,14 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
 
     // Count matching menu items
     let mut count = 0;
-    let mut mp = nvim_pum_menu_children(menu);
+    let mut mp = (*menu).children;
     while !mp.is_null() {
-        if nvim_pum_menu_is_separator(mp) != 0 || nvim_pum_menu_matches_mode(mp, mode) != 0 {
+        let is_sep = menu_is_separator((*mp).dname);
+        let matches_mode = ((*mp).modes & (*mp).enabled & mode) != 0;
+        if is_sep || matches_mode {
             count += 1;
         }
-        mp = nvim_pum_menu_next(mp);
+        mp = (*mp).next;
     }
     PUM_STATE.size = count;
 
@@ -430,20 +460,20 @@ pub unsafe extern "C" fn rs_pum_show_popupmenu(menu: *mut VimMenuHandle) {
     )
     .cast::<crate::item::PumItemArray>();
     let mut idx = 0;
-    mp = nvim_pum_menu_children(menu);
+    mp = (*menu).children;
     while !mp.is_null() {
-        let is_sep = nvim_pum_menu_is_separator(mp) != 0;
-        let matches_mode = nvim_pum_menu_matches_mode(mp, mode) != 0;
+        let is_sep = menu_is_separator((*mp).dname);
+        let matches_mode = ((*mp).modes & (*mp).enabled & mode) != 0;
         if is_sep || matches_mode {
             let text = if is_sep {
                 c"".as_ptr()
             } else {
-                nvim_pum_menu_get_dname(mp)
+                (*mp).dname.cast_const()
             };
             (*array.offset(idx as isize)).pum_text = xstrdup(text);
             idx += 1;
         }
-        mp = nvim_pum_menu_next(mp);
+        mp = (*mp).next;
     }
 
     PUM_STATE.array = array;
