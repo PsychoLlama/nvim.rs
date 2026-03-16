@@ -171,14 +171,7 @@ extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int fo
 extern win_T *rs_win_free_mem(win_T *win, int *dirp, tabpage_T *tp);
 
 int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
-bool nvim_win_get_config_external(win_T *wp) { return wp->w_config.external; }
-bool nvim_win_get_config_border(win_T *wp) { return wp->w_config.border; }
-int nvim_win_get_config_border_hl_id(win_T *wp, int idx) { return wp->w_config.border_hl_ids[idx]; }
-void nvim_win_set_config_border_attr(win_T *wp, int idx, int val) { wp->w_config.border_attr[idx] = val; }
-void nvim_win_set_config_shadow(win_T *wp, bool val) { wp->w_config.shadow = val; }
-bool nvim_win_get_config_shadow(win_T *wp) { return wp->w_config.shadow; }
 int nvim_win_get_p_winbl(win_T *wp) { return (int)wp->w_p_winbl; }
-void nvim_win_set_grid_blending(win_T *wp, bool val) { wp->w_grid_alloc.blending = val; }
 
 
 
@@ -219,10 +212,6 @@ void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
 void nvim_redraw_all_later(int type) { redraw_all_later(type); }
-int nvim_win_get_config_height(win_T *wp) { return wp->w_config.height; }
-void nvim_win_set_config_height(win_T *wp, int val) { wp->w_config.height = val; }
-int nvim_win_get_config_width(win_T *wp) { return wp->w_config.width; }
-void nvim_win_set_config_width(win_T *wp, int val) { wp->w_config.width = val; }
 int nvim_get_real_state(void) { return get_real_state(); }
 int nvim_win_buf_meta_total_lines(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0; }
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
@@ -234,34 +223,9 @@ int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
 int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
 void nvim_win_free_p_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); wp->w_p_cc_cols = NULL; }
-uint32_t nvim_win_get_lcs_prec(win_T *wp) { return wp->w_p_lcs_chars.prec; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
-ScreenGrid *nvim_win_get_grid_alloc(win_T *wp) { return &wp->w_grid_alloc; }
-int nvim_win_get_config_hide(win_T *wp) { return wp ? wp->w_config.hide : 0; }
-int nvim_win_get_config_relative(win_T *wp) { return (int)wp->w_config.relative; }
-int nvim_win_get_config_window(win_T *wp) { return wp ? wp->w_config.window : 0; }
-
-/// Get the w_config.zindex field.
-int nvim_win_get_config_zindex(win_T *wp) { return wp ? wp->w_config.zindex : 50; }
-
-int nvim_win_get_config_focusable(win_T *wp) { return wp ? wp->w_config.focusable : 0; }
 int nvim_win_get_endrow(win_T *wp) { return W_ENDROW(wp); }
 int nvim_win_get_endcol(win_T *wp) { return W_ENDCOL(wp); }
-schar_T nvim_win_get_fcs_vert(win_T *wp) { return wp->w_p_fcs_chars.vert; }
-schar_T nvim_win_get_fcs_horiz(win_T *wp) { return wp->w_p_fcs_chars.horiz; }
-schar_T nvim_win_get_fcs_verthoriz(win_T *wp) { return wp->w_p_fcs_chars.verthoriz; }
-schar_T nvim_win_get_fcs_vertright(win_T *wp) { return wp->w_p_fcs_chars.vertright; }
-schar_T nvim_win_get_fcs_vertleft(win_T *wp) { return wp->w_p_fcs_chars.vertleft; }
-schar_T nvim_win_get_fcs_horizdown(win_T *wp) { return wp->w_p_fcs_chars.horizdown; }
-schar_T nvim_win_get_fcs_horizup(win_T *wp) { return wp->w_p_fcs_chars.horizup; }
-schar_T nvim_win_get_fcs_stl(win_T *wp) { return wp->w_p_fcs_chars.stl; }
-schar_T nvim_win_get_fcs_stlnc(win_T *wp) { return wp->w_p_fcs_chars.stlnc; }
-schar_T nvim_win_get_fcs_foldclosed(win_T *wp) { return wp->w_p_fcs_chars.foldclosed; }
-schar_T nvim_win_get_fcs_foldopen(win_T *wp) { return wp->w_p_fcs_chars.foldopen; }
-schar_T nvim_win_get_fcs_foldsep(win_T *wp) { return wp->w_p_fcs_chars.foldsep; }
-schar_T nvim_win_get_fcs_foldinner(win_T *wp) { return wp->w_p_fcs_chars.foldinner; }
-schar_T nvim_win_get_fcs_diff(win_T *wp) { return wp->w_p_fcs_chars.diff; }
-schar_T nvim_win_get_lcs_ext(win_T *wp) { return wp->w_p_lcs_chars.ext; }
 int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
 int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
 
@@ -275,7 +239,6 @@ colnr_T nvim_win_get_valid_leftcol(win_T *wp) { return wp->w_valid_leftcol; }
 colnr_T nvim_win_get_valid_skipcol(win_T *wp) { return wp->w_valid_skipcol; }
 int nvim_win_get_viewport_invalid(win_T *wp) { return wp->w_viewport_invalid ? 1 : 0; }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
-uint32_t nvim_win_get_lcs_tab1(win_T *wp) { return wp->w_p_lcs_chars.tab1; }
 bool nvim_win_get_briopt_sbr(win_T *wp) { return wp->w_briopt_sbr; }
 int nvim_win_hl_attr(win_T *wp, int hlf) { return win_hl_attr(wp, hlf); }
 buf_T *nvim_win_get_buffer(win_T *wp) { return wp->w_buffer; }
@@ -283,8 +246,6 @@ const char *nvim_win_ml_get_buf(win_T *wp, linenr_T lnum) { return ml_get_buf(wp
 colnr_T nvim_win_ml_get_buf_len(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
 int nvim_ui_has_tabline(void) { return ui_has(kUITabline); }
 
-/// Get a specific border adjustment value for a window.
-int nvim_win_get_border_adj(win_T *wp, int idx) { return (wp && idx >= 0 && idx < 4) ? wp->w_border_adj[idx] : 0; }
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
@@ -865,8 +826,6 @@ void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 // check_colorcolumn: exported directly from Rust (Phase 15)
 
 int nvim_win_buffer_eq(win_T *wp, buf_T *buf) { return (wp && wp->w_buffer == buf) ? 1 : 0; }
-int nvim_win_grid_alloc_valid(win_T *wp) { return wp ? wp->w_grid_alloc.valid : 0; }
-void nvim_win_grid_alloc_set_valid(win_T *wp, int val) { if (wp) { wp->w_grid_alloc.valid = (val != 0); } }
 int nvim_win_get_filler_rows(win_T *wp) { return wp ? wp->w_filler_rows : 0; }
 int nvim_win_get_botfill(win_T *wp) { return wp ? (wp->w_botfill ? 1 : 0) : 0; }
 int nvim_win_grid_has_target(win_T *wp) { return (wp && wp->w_grid.target) ? 1 : 0; }
@@ -886,7 +845,6 @@ void nvim_curs_columns_win(win_T *wp) { if (wp) { curs_columns(wp, true); } }
 void nvim_terminal_check_size_win(win_T *wp) { if (wp && wp->w_buffer->terminal) { terminal_check_size(wp->w_buffer->terminal); } }
 int nvim_win_border_height_wrapper(win_T *wp) { return wp ? win_border_height(wp) : 0; }
 int nvim_win_border_width_wrapper(win_T *wp) { return wp ? win_border_width(wp) : 0; }
-int nvim_win_get_grid_alloc_handle(win_T *wp) { return wp ? wp->w_grid_alloc.handle : 0; }
 int nvim_win_get_w_handle(win_T *wp) { return wp ? wp->handle : 0; }
 // nvim_win_get_border_adj already defined earlier in this file
 int nvim_ui_has_multigrid(void) { return ui_has(kUIMultigrid) ? 1 : 0; }
@@ -972,7 +930,7 @@ void nvim_redraw_later_wrapper(win_T *wp, int type) { if (wp) { redraw_later(wp,
 void nvim_status_redraw_all_wrapper(void) { status_redraw_all(); }
 void nvim_msg_clr_eos_force(void) { msg_clr_eos_force(); }
 int nvim_is_aucmd_win(win_T *wp) { return is_aucmd_win(wp) ? 1 : 0; }
-int nvim_win_get_config_external_int(win_T *wp) { return wp ? (int)wp->w_config.external : 0; }
+// nvim_win_get_config_external_int: migrated to Rust win_struct.rs (Phase 7)
 
 // nvim_fixup_external_curwin deleted: logic migrated to Rust win_close.rs (Phase 8)
 
@@ -1133,13 +1091,7 @@ _Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
 
 // WinConfig field accessors
 int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
-double nvim_win_get_config_row(win_T *wp) { return wp ? wp->w_config.row : 0.0; }
-double nvim_win_get_config_col(win_T *wp) { return wp ? wp->w_config.col : 0.0; }
-int nvim_win_get_config_anchor(win_T *wp) { return wp ? (int)wp->w_config.anchor : 0; }
-int nvim_win_get_config_fixed(win_T *wp) { return wp ? wp->w_config.fixed : 0; }
-int nvim_win_get_config_mouse_flag(win_T *wp) { return wp ? wp->w_config.mouse : 0; }
-int nvim_win_get_config_bufpos_lnum(win_T *wp) { return wp ? (int)wp->w_config.bufpos.lnum : -1; }
-int nvim_win_get_config_bufpos_col(win_T *wp) { return wp ? (int)wp->w_config.bufpos.col : 0; }
+// nvim_win_get_config_row/col/anchor/fixed/mouse_flag/bufpos_*: migrated to Rust win_struct.rs (Phase 7)
 int nvim_win_get_w_height_outer(win_T *wp) { return wp ? wp->w_height_outer : 0; }
 int nvim_win_get_w_width_outer(win_T *wp) { return wp ? wp->w_width_outer : 0; }
 
@@ -1532,25 +1484,7 @@ void nvim_pum_ui_flush_wrapper(void) { pum_ui_flush(); }
 /// Wrap msg_ui_flush() for Rust.
 void nvim_msg_ui_flush_wrapper(void) { msg_ui_flush(); }
 
-/// Get wp->w_grid_alloc.pending_comp_index_update.
-int nvim_win_get_grid_pending_comp(win_T *wp)
-{
-  return (wp && wp->w_grid_alloc.pending_comp_index_update) ? 1 : 0;
-}
-
-/// Set wp->w_grid_alloc.pending_comp_index_update.
-void nvim_win_set_grid_pending_comp(win_T *wp, int val)
-{
-  if (wp) {
-    wp->w_grid_alloc.pending_comp_index_update = (val != 0);
-  }
-}
-
-/// Check if wp->w_grid_alloc.chars != NULL.
-int nvim_win_get_grid_chars_valid(win_T *wp)
-{
-  return (wp && wp->w_grid_alloc.chars != NULL) ? 1 : 0;
-}
+// nvim_win_get_grid_pending_comp/set/get_grid_chars_valid: migrated to Rust win_struct.rs (Phase 7)
 
 // tabpage_check_windows: dead static wrapper (Phase 15)
 
@@ -2405,23 +2339,7 @@ int nvim_win_syntax_present(win_T *wp) { return syntax_present(wp) ? 1 : 0; }
 /// w_p_fdt (foldtext option, check if set)
 int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
 
-/// w_p_lcs_chars field accessors
-schar_T nvim_win_lcs_space(win_T *wp) { return wp->w_p_lcs_chars.space; }
-schar_T nvim_win_lcs_trail(win_T *wp) { return wp->w_p_lcs_chars.trail; }
-schar_T nvim_win_lcs_lead(win_T *wp) { return wp->w_p_lcs_chars.lead; }
-schar_T nvim_win_lcs_nbsp(win_T *wp) { return wp->w_p_lcs_chars.nbsp; }
-schar_T nvim_win_lcs_eol(win_T *wp) { return wp->w_p_lcs_chars.eol; }
-schar_T nvim_win_lcs_tab1(win_T *wp) { return wp->w_p_lcs_chars.tab1; }
-schar_T nvim_win_lcs_tab2(win_T *wp) { return wp->w_p_lcs_chars.tab2; }
-schar_T nvim_win_lcs_tab3(win_T *wp) { return wp->w_p_lcs_chars.tab3; }
-schar_T nvim_win_lcs_conceal(win_T *wp) { return wp->w_p_lcs_chars.conceal; }
-const schar_T *nvim_win_lcs_multispace(win_T *wp) { return wp->w_p_lcs_chars.multispace; }
-const schar_T *nvim_win_lcs_leadmultispace(win_T *wp) { return wp->w_p_lcs_chars.leadmultispace; }
-int nvim_win_lcs_has_multispace(win_T *wp) { return wp->w_p_lcs_chars.multispace != NULL ? 1 : 0; }
-int nvim_win_lcs_has_leadmultispace(win_T *wp) { return wp->w_p_lcs_chars.leadmultispace != NULL ? 1 : 0; }
-
-/// w_p_fcs_chars (fillchars) - fold character
-schar_T nvim_win_fcs_fold(win_T *wp) { return wp->w_p_fcs_chars.fold; }
+// nvim_win_lcs_*/fcs_fold: migrated to Rust win_struct.rs (Phase 7)
 
 /// w_p_cc_cols (colorcolumn array, NULL if not set)
 int *nvim_win_get_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }

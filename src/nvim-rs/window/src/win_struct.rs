@@ -10,8 +10,12 @@
 
 #![allow(dead_code)]
 #![allow(clippy::struct_field_names)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::used_underscore_binding)]
+// Phase 7 helper fns could technically be const but const extern "C" is unstable:
+#![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_double, c_int, c_void};
 
 use crate::{Frame, WinHandle};
 
@@ -2759,4 +2763,561 @@ pub unsafe extern "C" fn win_set_viewport_snapshot(wp: WinHandle, s: *const WinV
     ws.w_viewport_last_botline = snap.botline;
     ws.w_viewport_last_topfill = snap.topfill;
     ws.w_viewport_last_skipcol = snap.skipcol;
+}
+
+// =============================================================================
+// Phase 7: fcs_chars_T, lcs_chars_T, w_config, w_grid_alloc accessors
+//
+// These access fields within opaque [u8; N] blobs using byte offsets derived
+// from the C struct layouts (validated by window_struct_check.c assertions).
+//
+// WinStruct layout:
+//   offset 200:   w_p_lcs_chars [u8; 64]   (lcs_chars_T)
+//   offset 264:   w_p_fcs_chars [u8; 84]   (fcs_chars_T)
+//   offset 10296: _w_grid_alloc [u8; 96]   (ScreenGrid)
+//   offset 10400: _w_config     [u8; 480]  (WinConfig)
+//
+// lcs_chars_T field offsets (u32 fields unless noted):
+//   eol=0, ext=4, prec=8, nbsp=12, space=16, tab1=20, tab2=24, tab3=28,
+//   lead=32, trail=36, multispace=40(*ptr), leadmultispace=48(*ptr), conceal=56
+//
+// fcs_chars_T field offsets (all u32):
+//   stl=0, stlnc=4, wbr=8, horiz=12, horizup=16, horizdown=20, vert=24,
+//   vertleft=28, vertright=32, verthoriz=36, fold=40, foldopen=44,
+//   foldclosed=48, foldsep=52, foldinner=56, diff=60, msgsep=64,
+//   eob=68, lastline=72, trunc=76, truncrl=80
+//
+// ScreenGrid field offsets:
+//   handle=0(i32), chars=8(*ptr), rows=48(i32), cols=52(i32),
+//   valid=56(bool), blending=58(bool), pending_comp_index_update=89(bool)
+//
+// WinConfig field offsets:
+//   window=0(i32), bufpos.lnum=4(i32), bufpos.col=8(i32),
+//   height=12(i32), width=16(i32), row=24(f64), col=32(f64),
+//   anchor=40(i32), relative=44(i32),
+//   external=48(bool), focusable=49(bool), mouse=50(bool),
+//   split=52(i32), zindex=56(i32), style=60(i32),
+//   border=64(bool), shadow=65(bool),
+//   border_chars=66([u8;256]), border_hl_ids=324([i32;8]),
+//   border_attr=356([i32;8]),
+//   fixed=469(bool), hide=470(bool)
+// =============================================================================
+
+/// Type alias for schar_T (uint32_t).
+pub type ScharT = u32;
+
+// -------------------------------------------------------------------------
+// lcs_chars_T field accessors (w_p_lcs_chars at offset 200)
+// -------------------------------------------------------------------------
+
+/// Read a u32 field from w_p_lcs_chars at given byte offset.
+///
+/// # Safety
+/// `wp` must be valid and `field_off` must be within bounds (0..64).
+#[inline]
+unsafe fn lcs_get_u32(wp: WinHandle, field_off: usize) -> u32 {
+    let base = win_ref(wp).w_p_lcs_chars.as_ptr();
+    base.add(field_off).cast::<u32>().read_unaligned()
+}
+
+/// Read a pointer field from w_p_lcs_chars at given byte offset.
+///
+/// # Safety
+/// `wp` must be valid and `field_off` must be within bounds (0..64).
+#[inline]
+unsafe fn lcs_get_ptr(wp: WinHandle, field_off: usize) -> *mut u32 {
+    let base = win_ref(wp).w_p_lcs_chars.as_ptr();
+    base.add(field_off).cast::<*mut u32>().read_unaligned()
+}
+
+/// Read a u32 field from w_p_fcs_chars at given byte offset.
+///
+/// # Safety
+/// `wp` must be valid and `field_off` must be within bounds (0..84).
+#[inline]
+unsafe fn fcs_get_u32(wp: WinHandle, field_off: usize) -> u32 {
+    let base = win_ref(wp).w_p_fcs_chars.as_ptr();
+    base.add(field_off).cast::<u32>().read_unaligned()
+}
+
+/// Read a field from `_w_grid_alloc` at given byte offset.
+///
+/// # Safety
+/// `wp` must be valid.
+#[inline]
+unsafe fn grid_alloc_ptr(ws: &WinStruct) -> *const u8 {
+    ws._w_grid_alloc.as_ptr()
+}
+
+/// Read a field from `_w_config` at given byte offset.
+///
+/// # Safety
+/// `wp` must be valid.
+#[inline]
+unsafe fn config_ptr(ws: &WinStruct) -> *const u8 {
+    ws._w_config.as_ptr()
+}
+
+#[inline]
+unsafe fn config_read_i32(ws: &WinStruct, off: usize) -> i32 {
+    config_ptr(ws).add(off).cast::<i32>().read_unaligned()
+}
+
+#[inline]
+unsafe fn config_read_f64(ws: &WinStruct, off: usize) -> f64 {
+    config_ptr(ws).add(off).cast::<f64>().read_unaligned()
+}
+
+#[inline]
+unsafe fn config_read_bool(ws: &WinStruct, off: usize) -> bool {
+    *config_ptr(ws).add(off) != 0
+}
+
+#[inline]
+unsafe fn config_write_i32(ws: &mut WinStruct, off: usize, val: i32) {
+    ws._w_config
+        .as_mut_ptr()
+        .add(off)
+        .cast::<i32>()
+        .write_unaligned(val);
+}
+
+#[inline]
+unsafe fn config_write_bool(ws: &mut WinStruct, off: usize, val: bool) {
+    *ws._w_config.as_mut_ptr().add(off) = u8::from(val);
+}
+
+// -------------------------------------------------------------------------
+// lcs_chars_T accessors
+// -------------------------------------------------------------------------
+
+#[must_use]
+#[export_name = "nvim_win_lcs_eol"]
+pub unsafe extern "C" fn win_lcs_eol(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 0)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_ext"]
+pub unsafe extern "C" fn win_lcs_ext(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 4)
+}
+#[must_use]
+#[export_name = "nvim_win_get_lcs_prec"]
+pub unsafe extern "C" fn win_lcs_prec(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 8)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_nbsp"]
+pub unsafe extern "C" fn win_lcs_nbsp(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 12)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_space"]
+pub unsafe extern "C" fn win_lcs_space(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 16)
+}
+#[must_use]
+#[export_name = "nvim_win_get_lcs_tab1"]
+pub unsafe extern "C" fn win_lcs_tab1(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 20)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_tab2"]
+pub unsafe extern "C" fn win_lcs_tab2(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 24)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_tab3"]
+pub unsafe extern "C" fn win_lcs_tab3(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 28)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_lead"]
+pub unsafe extern "C" fn win_lcs_lead(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 32)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_trail"]
+pub unsafe extern "C" fn win_lcs_trail(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 36)
+}
+#[must_use]
+#[export_name = "nvim_win_lcs_conceal"]
+pub unsafe extern "C" fn win_lcs_conceal(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 56)
+}
+#[must_use]
+#[export_name = "nvim_win_get_lcs_ext"]
+pub unsafe extern "C" fn win_lcs_ext_v2(wp: WinHandle) -> ScharT {
+    lcs_get_u32(wp, 4)
+}
+
+#[must_use]
+#[export_name = "nvim_win_lcs_has_multispace"]
+pub unsafe extern "C" fn win_lcs_has_multispace(wp: WinHandle) -> c_int {
+    c_int::from(!lcs_get_ptr(wp, 40).is_null())
+}
+
+#[must_use]
+#[export_name = "nvim_win_lcs_has_leadmultispace"]
+pub unsafe extern "C" fn win_lcs_has_leadmultispace(wp: WinHandle) -> c_int {
+    c_int::from(!lcs_get_ptr(wp, 48).is_null())
+}
+
+// -------------------------------------------------------------------------
+// fcs_chars_T accessors
+// -------------------------------------------------------------------------
+
+#[must_use]
+#[export_name = "nvim_win_get_fcs_stl"]
+pub unsafe extern "C" fn win_fcs_stl(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 0)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_stlnc"]
+pub unsafe extern "C" fn win_fcs_stlnc(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 4)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_horiz"]
+pub unsafe extern "C" fn win_fcs_horiz(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 12)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_horizup"]
+pub unsafe extern "C" fn win_fcs_horizup(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 16)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_horizdown"]
+pub unsafe extern "C" fn win_fcs_horizdown(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 20)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_vert"]
+pub unsafe extern "C" fn win_fcs_vert(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 24)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_vertleft"]
+pub unsafe extern "C" fn win_fcs_vertleft(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 28)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_vertright"]
+pub unsafe extern "C" fn win_fcs_vertright(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 32)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_verthoriz"]
+pub unsafe extern "C" fn win_fcs_verthoriz(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 36)
+}
+#[must_use]
+#[export_name = "nvim_win_fcs_fold"]
+pub unsafe extern "C" fn win_fcs_fold(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 40)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_foldopen"]
+pub unsafe extern "C" fn win_fcs_foldopen(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 44)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_foldclosed"]
+pub unsafe extern "C" fn win_fcs_foldclosed(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 48)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_foldsep"]
+pub unsafe extern "C" fn win_fcs_foldsep(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 52)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_foldinner"]
+pub unsafe extern "C" fn win_fcs_foldinner(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 56)
+}
+#[must_use]
+#[export_name = "nvim_win_get_fcs_diff"]
+pub unsafe extern "C" fn win_fcs_diff(wp: WinHandle) -> ScharT {
+    fcs_get_u32(wp, 60)
+}
+
+// -------------------------------------------------------------------------
+// ScreenGrid (w_grid_alloc at WinStruct offset 10296) accessors
+// -------------------------------------------------------------------------
+
+#[must_use]
+#[export_name = "nvim_win_get_grid_alloc_handle"]
+pub unsafe extern "C" fn win_grid_alloc_handle(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    grid_alloc_ptr(win_ref(wp)).cast::<i32>().read_unaligned()
+}
+
+#[must_use]
+#[export_name = "nvim_win_grid_alloc_valid"]
+pub unsafe extern "C" fn win_grid_alloc_valid(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    // valid at offset 56 (bool)
+    c_int::from(*grid_alloc_ptr(win_ref(wp)).add(56) != 0)
+}
+
+#[export_name = "nvim_win_grid_alloc_set_valid"]
+pub unsafe extern "C" fn win_grid_alloc_set_valid(wp: WinHandle, val: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    // valid at offset 56 (bool)
+    *win_mut(wp)._w_grid_alloc.as_mut_ptr().add(56) = u8::from(val != 0);
+}
+
+#[export_name = "nvim_win_set_grid_blending"]
+pub unsafe extern "C" fn win_set_grid_blending(wp: WinHandle, val: bool) {
+    // blending at offset 58 (bool)
+    *win_mut(wp)._w_grid_alloc.as_mut_ptr().add(58) = u8::from(val);
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_grid_alloc"]
+pub unsafe extern "C" fn win_get_grid_alloc(wp: WinHandle) -> *mut c_void {
+    win_mut(wp)._w_grid_alloc.as_mut_ptr().cast()
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_grid_chars_valid"]
+pub unsafe extern "C" fn win_get_grid_chars_valid(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    // chars pointer at offset 8 (ptr = 8 bytes)
+    let ptr = grid_alloc_ptr(win_ref(wp))
+        .add(8)
+        .cast::<*const c_void>()
+        .read_unaligned();
+    c_int::from(!ptr.is_null())
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_grid_pending_comp"]
+pub unsafe extern "C" fn win_get_grid_pending_comp(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    // pending_comp_index_update at offset 89 (bool)
+    c_int::from(*grid_alloc_ptr(win_ref(wp)).add(89) != 0)
+}
+
+#[export_name = "nvim_win_set_grid_pending_comp"]
+pub unsafe extern "C" fn win_set_grid_pending_comp(wp: WinHandle, val: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    *win_mut(wp)._w_grid_alloc.as_mut_ptr().add(89) = u8::from(val != 0);
+}
+
+// -------------------------------------------------------------------------
+// WinConfig (w_config at WinStruct offset 10400) accessors
+// -------------------------------------------------------------------------
+
+#[must_use]
+#[export_name = "nvim_win_get_config_external"]
+pub unsafe extern "C" fn win_config_external(wp: WinHandle) -> bool {
+    config_read_bool(win_ref(wp), 48)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_external_int"]
+pub unsafe extern "C" fn win_config_external_int(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    c_int::from(config_read_bool(win_ref(wp), 48))
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_border"]
+pub unsafe extern "C" fn win_config_border(wp: WinHandle) -> bool {
+    config_read_bool(win_ref(wp), 64)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_shadow"]
+pub unsafe extern "C" fn win_config_shadow(wp: WinHandle) -> bool {
+    config_read_bool(win_ref(wp), 65)
+}
+
+#[export_name = "nvim_win_set_config_shadow"]
+pub unsafe extern "C" fn win_set_config_shadow(wp: WinHandle, val: bool) {
+    config_write_bool(win_mut(wp), 65, val);
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_height"]
+pub unsafe extern "C" fn win_config_height(wp: WinHandle) -> c_int {
+    config_read_i32(win_ref(wp), 12)
+}
+
+#[export_name = "nvim_win_set_config_height"]
+pub unsafe extern "C" fn win_set_config_height(wp: WinHandle, val: c_int) {
+    config_write_i32(win_mut(wp), 12, val);
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_width"]
+pub unsafe extern "C" fn win_config_width(wp: WinHandle) -> c_int {
+    config_read_i32(win_ref(wp), 16)
+}
+
+#[export_name = "nvim_win_set_config_width"]
+pub unsafe extern "C" fn win_set_config_width(wp: WinHandle, val: c_int) {
+    config_write_i32(win_mut(wp), 16, val);
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_hide"]
+pub unsafe extern "C" fn win_config_hide(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    c_int::from(config_read_bool(win_ref(wp), 470))
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_relative"]
+pub unsafe extern "C" fn win_config_relative(wp: WinHandle) -> c_int {
+    config_read_i32(win_ref(wp), 44)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_window"]
+pub unsafe extern "C" fn win_config_window(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    config_read_i32(win_ref(wp), 0)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_zindex"]
+pub unsafe extern "C" fn win_config_zindex(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 50; // kZIndexFloatDefault
+    }
+    config_read_i32(win_ref(wp), 56)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_focusable"]
+pub unsafe extern "C" fn win_config_focusable(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    c_int::from(config_read_bool(win_ref(wp), 49))
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_fixed"]
+pub unsafe extern "C" fn win_config_fixed(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    c_int::from(config_read_bool(win_ref(wp), 469))
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_mouse_flag"]
+pub unsafe extern "C" fn win_config_mouse_flag(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    c_int::from(config_read_bool(win_ref(wp), 50))
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_anchor"]
+pub unsafe extern "C" fn win_config_anchor(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    config_read_i32(win_ref(wp), 40)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_row"]
+pub unsafe extern "C" fn win_config_row(wp: WinHandle) -> c_double {
+    if wp.is_null() {
+        return 0.0;
+    }
+    config_ptr(win_ref(wp))
+        .add(24)
+        .cast::<f64>()
+        .read_unaligned()
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_col"]
+pub unsafe extern "C" fn win_config_col(wp: WinHandle) -> c_double {
+    if wp.is_null() {
+        return 0.0;
+    }
+    config_ptr(win_ref(wp))
+        .add(32)
+        .cast::<f64>()
+        .read_unaligned()
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_bufpos_lnum"]
+pub unsafe extern "C" fn win_config_bufpos_lnum(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return -1;
+    }
+    config_read_i32(win_ref(wp), 4)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_bufpos_col"]
+pub unsafe extern "C" fn win_config_bufpos_col(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    config_read_i32(win_ref(wp), 8)
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_config_border_hl_id"]
+pub unsafe extern "C" fn win_config_border_hl_id(wp: WinHandle, idx: c_int) -> c_int {
+    if !(0..8).contains(&idx) {
+        return 0;
+    }
+    // border_hl_ids at config offset 324, each element 4 bytes
+    #[allow(clippy::cast_sign_loss)]
+    let off = 324 + idx as usize * 4;
+    config_read_i32(win_ref(wp), off)
+}
+
+#[export_name = "nvim_win_set_config_border_attr"]
+pub unsafe extern "C" fn win_set_config_border_attr(wp: WinHandle, idx: c_int, val: c_int) {
+    if !(0..8).contains(&idx) {
+        return;
+    }
+    // border_attr at config offset 356, each element 4 bytes
+    #[allow(clippy::cast_sign_loss)]
+    let off = 356 + idx as usize * 4;
+    config_write_i32(win_mut(wp), off, val);
+}
+
+#[must_use]
+#[export_name = "nvim_win_get_border_adj"]
+pub unsafe extern "C" fn win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int {
+    if wp.is_null() || !(0..4).contains(&idx) {
+        return 0;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    win_ref(wp).w_border_adj[idx as usize]
 }
