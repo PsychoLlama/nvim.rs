@@ -315,6 +315,8 @@ extern void ex_mode(exarg_T *eap);
 extern void ex_swapname(exarg_T *eap);
 // Phase 6 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_tabnext(exarg_T *eap);
+// Phase 7 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_undo(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -3058,43 +3060,6 @@ void ex_may_print(exarg_T *eap)
   }
 }
 
-/// ":undo".
-static void ex_undo(exarg_T *eap)
-{
-  if (eap->addr_count != 1) {
-    if (eap->forceit) {
-      u_undo_and_forget(1, true);   // :undo!
-    } else {
-      u_undo(1);                    // :undo
-    }
-    return;
-  }
-
-  linenr_T step = eap->line2;
-
-  if (eap->forceit) {             // undo! 123
-    // change number for "undo!" must be lesser than current change number
-    if (step >= curbuf->b_u_seq_cur) {
-      emsg(_(e_undobang_cannot_redo_or_move_branch));
-      return;
-    }
-    // ensure that target change number is in same branch
-    // while also counting the amount of undoes it'd take to reach target
-    u_header_T *uhp;
-    int count = 0;
-
-    for (uhp = curbuf->b_u_curhead ? curbuf->b_u_curhead : curbuf->b_u_newhead;
-         uhp != NULL && uhp->uh_seq > step;
-         uhp = uhp->uh_next.ptr, ++count) {}
-    if (step != 0 && (uhp == NULL || uhp->uh_seq < step)) {
-      emsg(_(e_undobang_cannot_redo_or_move_branch));
-      return;
-    }
-    u_undo_and_forget(count, true);
-  } else {                        // :undo 123
-    undo_time(step, false, false, true);
-  }
-}
 
 static void close_redir(void)
 {
@@ -3935,6 +3900,24 @@ int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
   }
   *errmsg_set = 0;
   return tab_number;
+}
+
+// Phase 7 accessors for ex_undo migration
+const char *nvim_docmd_get_e_undobang(void)
+{
+  return _(e_undobang_cannot_redo_or_move_branch);
+}
+// Count the number of undo steps to reach sequence 'step' in the current branch.
+// Sets *found to 1 if the target was found in the branch, 0 otherwise.
+int nvim_docmd_undo_count_steps(linenr_T step, int *found)
+{
+  u_header_T *uhp;
+  int count = 0;
+  for (uhp = curbuf->b_u_curhead ? curbuf->b_u_curhead : curbuf->b_u_newhead;
+       uhp != NULL && uhp->uh_seq > step;
+       uhp = uhp->uh_next.ptr, ++count) {}
+  *found = (step == 0 || (uhp != NULL && uhp->uh_seq >= step)) ? 1 : 0;
+  return count;
 }
 
 /// ":checkhealth [plugins]"

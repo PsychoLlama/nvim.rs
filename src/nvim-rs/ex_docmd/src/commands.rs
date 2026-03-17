@@ -309,6 +309,14 @@ extern "C" {
     fn goto_tabpage(n: c_int);
     fn nvim_get_e_invrange() -> *const c_char;
     fn nvim_docmd_parse_tabnext_count(eap: ExArgHandle, errmsg_set: *mut c_int) -> c_int;
+
+    // Phase 7: ex_undo helpers
+    fn u_undo(count: c_int);
+    fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool;
+    fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool);
+    fn nvim_curbuf_get_u_seq_cur() -> c_int;
+    fn nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int;
+    fn nvim_docmd_get_e_undobang() -> *const c_char;
 }
 
 // =============================================================================
@@ -2375,5 +2383,44 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
         if nvim_eap_get_errmsg(eap).is_null() {
             goto_tabpage(tab_number);
         }
+    }
+}
+
+// =============================================================================
+// Phase 7: ex_undo
+// =============================================================================
+
+/// `:undo` -- undo last change(s), optionally to a target sequence number.
+///
+/// Matches C `ex_undo()`.
+#[export_name = "ex_undo"]
+pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
+    if nvim_eap_get_addr_count(eap) != 1 {
+        if nvim_eap_get_forceit(eap) {
+            let _ = u_undo_and_forget(1, true); // :undo!
+        } else {
+            u_undo(1); // :undo
+        }
+        return;
+    }
+
+    let step = nvim_eap_get_line2(eap);
+
+    if nvim_eap_get_forceit(eap) {
+        // :undo! N -- must go to an earlier change in the same branch
+        if step >= nvim_curbuf_get_u_seq_cur() as LinenrT {
+            emsg(nvim_docmd_get_e_undobang());
+            return;
+        }
+        let mut found: c_int = 0;
+        let count = nvim_docmd_undo_count_steps(step, &mut found);
+        if found == 0 {
+            emsg(nvim_docmd_get_e_undobang());
+            return;
+        }
+        let _ = u_undo_and_forget(count, true);
+    } else {
+        // :undo N -- navigate undo tree to sequence N
+        undo_time(step as c_int, false, false, true);
     }
 }
