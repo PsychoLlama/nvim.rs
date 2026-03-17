@@ -656,7 +656,7 @@ pub unsafe extern "C" fn rs_is_other_file(fnum: c_int, ffname: *const c_char) ->
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "ex_redir"]
 pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -775,7 +775,7 @@ const SAVE_STATE_SIZE: usize = 4096;
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "ex_normal"]
 pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -918,7 +918,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "ex_filetype"]
 pub unsafe extern "C" fn rs_ex_filetype(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -1050,7 +1050,7 @@ unsafe fn tristate_str(val: c_int) -> *const c_char {
 /// # Safety
 ///
 /// `eap` must be a valid ExArgHandle.
-#[no_mangle]
+#[export_name = "ex_quit"]
 pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
     if eap.is_null() {
         return;
@@ -1537,70 +1537,70 @@ extern "C" {
 }
 
 /// ":buffer" -- delegates to do_exbuffer.
-#[no_mangle]
+#[export_name = "ex_buffer"]
 pub unsafe extern "C" fn rs_ex_buffer(eap: ExArgHandle) {
     nvim_docmd_do_exbuffer(eap);
 }
 
 /// ":bmodified" and similar -- goto modified buffer.
-#[no_mangle]
+#[export_name = "ex_bmodified"]
 pub unsafe extern "C" fn rs_ex_bmodified(eap: ExArgHandle) {
     nvim_docmd_goto_buffer_mod(eap);
 }
 
 /// ":bnext" -- go to next buffer.
-#[no_mangle]
+#[export_name = "ex_bnext"]
 pub unsafe extern "C" fn rs_ex_bnext(eap: ExArgHandle) {
     nvim_docmd_goto_buffer_next(eap);
 }
 
 /// ":bprevious" -- go to previous buffer.
-#[no_mangle]
+#[export_name = "ex_bprevious"]
 pub unsafe extern "C" fn rs_ex_bprevious(eap: ExArgHandle) {
     nvim_docmd_goto_buffer_prev(eap);
 }
 
 /// ":brewind" / ":bfirst" -- go to first buffer.
-#[no_mangle]
+#[export_name = "ex_brewind"]
 pub unsafe extern "C" fn rs_ex_brewind(eap: ExArgHandle) {
     nvim_docmd_goto_buffer_rewind(eap);
 }
 
 /// ":blast" -- go to last buffer.
-#[no_mangle]
+#[export_name = "ex_blast"]
 pub unsafe extern "C" fn rs_ex_blast(eap: ExArgHandle) {
     nvim_docmd_goto_buffer_last(eap);
 }
 
 /// ":highlight" -- call do_highlight (including easter egg).
-#[no_mangle]
+#[export_name = "ex_highlight"]
 pub unsafe extern "C" fn rs_ex_highlight(eap: ExArgHandle) {
     nvim_docmd_ex_highlight(eap);
 }
 
 /// not_exiting -- clear exiting flag (already exists as C function, not migrated).
 /// not_restarting -- clear restarting flag.
-#[no_mangle]
+#[export_name = "not_restarting"]
 pub unsafe extern "C" fn rs_not_restarting() {
     nvim_docmd_not_restarting();
 }
 
 /// ":preserve" -- call ml_preserve.
-#[no_mangle]
+#[export_name = "ex_preserve"]
 pub unsafe extern "C" fn rs_ex_preserve(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_ml_preserve();
 }
 
 /// ":redo" -- call u_redo(1).
-#[no_mangle]
+#[export_name = "ex_redo"]
 pub unsafe extern "C" fn rs_ex_redo(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_u_redo();
 }
 
 /// ":!" -- call do_bang.
-#[no_mangle]
+#[export_name = "ex_bang"]
 pub unsafe extern "C" fn rs_ex_bang(eap: ExArgHandle) {
     let addr_count = nvim_eap_get_addr_count(eap);
     let forceit = nvim_eap_get_forceit(eap);
@@ -1608,21 +1608,21 @@ pub unsafe extern "C" fn rs_ex_bang(eap: ExArgHandle) {
 }
 
 /// Command modifier used in the wrong context.
-#[no_mangle]
+#[export_name = "ex_wrongmodifier"]
 pub unsafe extern "C" fn rs_ex_wrongmodifier(eap: ExArgHandle) {
     let msg = nvim_docmd_get_e_invcmd();
     nvim_eap_set_errmsg_const(eap, msg);
 }
 
 /// ":nogui" -- set error message (Nvim has no built-in GUI).
-#[no_mangle]
+#[export_name = "ex_nogui"]
 pub unsafe extern "C" fn rs_ex_nogui(eap: ExArgHandle) {
     let msg = nvim_docmd_get_e_nogvim();
     nvim_eap_set_errmsg_const(eap, msg);
 }
 
 /// ":popup" -- call pum_make_popup.
-#[no_mangle]
+#[export_name = "ex_popup"]
 pub unsafe extern "C" fn rs_ex_popup(eap: ExArgHandle) {
     let arg = nvim_eap_get_arg(eap);
     let forceit = nvim_eap_get_forceit(eap);
@@ -1630,7 +1630,7 @@ pub unsafe extern "C" fn rs_ex_popup(eap: ExArgHandle) {
 }
 
 /// ":wundo" -- write undo file.
-#[no_mangle]
+#[export_name = "ex_wundo"]
 pub unsafe extern "C" fn rs_ex_wundo(eap: ExArgHandle) {
     let arg = nvim_eap_get_arg(eap);
     let forceit = nvim_eap_get_forceit(eap);
@@ -1638,14 +1638,14 @@ pub unsafe extern "C" fn rs_ex_wundo(eap: ExArgHandle) {
 }
 
 /// ":rundo" -- read undo file.
-#[no_mangle]
+#[export_name = "ex_rundo"]
 pub unsafe extern "C" fn rs_ex_rundo(eap: ExArgHandle) {
     let arg = nvim_eap_get_arg(eap);
     nvim_docmd_rundo(arg as *const c_char);
 }
 
 /// ":tabmove" -- move tab page.
-#[no_mangle]
+#[export_name = "ex_tabmove"]
 pub unsafe extern "C" fn rs_ex_tabmove(eap: ExArgHandle) {
     let tab_number = nvim_docmd_get_tabpage_arg(eap);
     let errmsg = nvim_eap_get_errmsg(eap);
@@ -1655,13 +1655,13 @@ pub unsafe extern "C" fn rs_ex_tabmove(eap: ExArgHandle) {
 }
 
 /// set_no_hlsearch -- set the no_hlsearch flag.
-#[no_mangle]
+#[export_name = "set_no_hlsearch"]
 pub unsafe extern "C" fn rs_set_no_hlsearch(flag: bool) {
     nvim_docmd_set_no_hlsearch(flag);
 }
 
 /// ":nohlsearch" -- disable search highlighting.
-#[no_mangle]
+#[export_name = "ex_nohlsearch"]
 pub unsafe extern "C" fn rs_ex_nohlsearch(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_set_no_hlsearch(true);
@@ -1669,7 +1669,7 @@ pub unsafe extern "C" fn rs_ex_nohlsearch(eap: ExArgHandle) {
 }
 
 /// ":stopinsert" -- stop insert mode.
-#[no_mangle]
+#[export_name = "ex_stopinsert"]
 pub unsafe extern "C" fn rs_ex_stopinsert(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_clear_restart_edit();
@@ -1678,7 +1678,7 @@ pub unsafe extern "C" fn rs_ex_stopinsert(eap: ExArgHandle) {
 }
 
 /// ":checkpath" -- find pattern in path.
-#[no_mangle]
+#[export_name = "ex_checkpath"]
 pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
     let forceit = nvim_eap_get_forceit(eap);
     nvim_docmd_checkpath(forceit);
@@ -1686,13 +1686,13 @@ pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
 
 /// ":psearch" -- preview search (delegates to ex_psearch via C since it calls ex_findpat).
 /// We set g_do_tagpreview and call ex_findpat indirectly.
-#[no_mangle]
+#[export_name = "ex_psearch"]
 pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
     nvim_docmd_ex_psearch(eap);
 }
 
 /// set_pressedreturn -- set ex_pressedreturn flag.
-#[no_mangle]
+#[export_name = "set_pressedreturn"]
 pub unsafe extern "C" fn rs_set_pressedreturn(val: bool) {
     nvim_docmd_set_pressedreturn(val);
 }
@@ -1739,7 +1739,7 @@ const DOBUF_DEL: c_int = 3;
 const DOBUF_WIPE: c_int = 4;
 
 /// ":bunload" / ":bdelete" / ":bwipeout".
-#[no_mangle]
+#[export_name = "ex_bunload"]
 pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
     let cmd_bdelete = nvim_get_cmd_bdelete();
@@ -1768,7 +1768,7 @@ pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
 }
 
 /// ":autocmd" / ":augroup".
-#[no_mangle]
+#[export_name = "ex_autocmd"]
 pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
     let secure = nvim_get_secure();
     if secure != 0 {
@@ -1789,7 +1789,7 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
 }
 
 /// ":doautocmd".
-#[no_mangle]
+#[export_name = "ex_doautocmd"]
 pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
     let mut arg = nvim_eap_get_arg(eap);
     let call_do_modelines = nvim_docmd_check_nomodeline(&mut arg);
@@ -1801,7 +1801,7 @@ pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
 }
 
 /// ":quitall".
-#[no_mangle]
+#[export_name = "ex_quitall"]
 pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
     if nvim_docmd_before_quit_all(eap) == 0 {
         // FAIL
@@ -1817,56 +1817,56 @@ pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
 }
 
 /// ":setfiletype [FALLBACK] {name}".
-#[no_mangle]
+#[export_name = "ex_setfiletype"]
 pub unsafe extern "C" fn rs_ex_setfiletype(eap: ExArgHandle) {
     nvim_docmd_ex_setfiletype(eap);
 }
 
 /// ":rshada" / ":wshada".
-#[no_mangle]
+#[export_name = "ex_shada"]
 pub unsafe extern "C" fn rs_ex_shada(eap: ExArgHandle) {
     nvim_docmd_ex_shada(eap);
 }
 
 /// ":folddo" / ":folddoclosed".
-#[no_mangle]
+#[export_name = "ex_folddo"]
 pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
     nvim_docmd_ex_folddo(eap);
 }
 
 /// ":redrawtabline".
-#[no_mangle]
+#[export_name = "ex_redrawtabline"]
 pub unsafe extern "C" fn rs_ex_redrawtabline(eap: ExArgHandle) {
     let _ = eap;
     nvim_docmd_ex_redrawtabline();
 }
 
 /// ":join".
-#[no_mangle]
+#[export_name = "ex_join"]
 pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
     nvim_docmd_ex_join(eap);
 }
 
 /// ":put".
-#[no_mangle]
+#[export_name = "ex_put"]
 pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
     nvim_docmd_ex_put(eap);
 }
 
 /// ":iput".
-#[no_mangle]
+#[export_name = "ex_iput"]
 pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
     nvim_docmd_ex_iput(eap);
 }
 
 /// ":=" (equal).
-#[no_mangle]
+#[export_name = "ex_equal"]
 pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
     nvim_docmd_ex_equal(eap);
 }
 
 /// ":recover".
-#[no_mangle]
+#[export_name = "ex_recover"]
 pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
     nvim_docmd_ex_recover(eap);
 }
@@ -1886,67 +1886,67 @@ extern "C" {
 }
 
 /// ":winsize" (obsolete).
-#[no_mangle]
+#[export_name = "ex_winsize"]
 pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
     nvim_docmd_ex_winsize(eap);
 }
 
 /// ":colorscheme".
-#[no_mangle]
+#[export_name = "ex_colorscheme"]
 pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
     nvim_docmd_ex_colorscheme(eap);
 }
 
 /// ":mark" / ":k".
-#[no_mangle]
+#[export_name = "ex_mark"]
 pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
     nvim_docmd_ex_mark(eap);
 }
 
 /// ":print" / ":list" / ":number".
-#[no_mangle]
+#[export_name = "ex_print"]
 pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
     nvim_docmd_ex_print(eap);
 }
 
 /// ":edit" / ":badd" / ":balt" / ":visual" / ":enew".
-#[no_mangle]
+#[export_name = "ex_edit"]
 pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
     nvim_docmd_ex_edit(eap);
 }
 
 /// ":pwd".
-#[no_mangle]
+#[export_name = "ex_pwd"]
 pub unsafe extern "C" fn rs_ex_pwd(eap: ExArgHandle) {
     nvim_docmd_ex_pwd(eap);
 }
 
 /// ":only".
-#[no_mangle]
+#[export_name = "ex_only"]
 pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
     nvim_docmd_ex_only(eap);
 }
 
 /// ":close".
-#[no_mangle]
+#[export_name = "ex_close"]
 pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
     nvim_docmd_ex_close(eap);
 }
 
 /// check_more: check if more files remain; returns OK (0) or FAIL (non-0).
-#[no_mangle]
+#[export_name = "check_more"]
 pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int {
     nvim_docmd_check_more(message, forceit)
 }
 
 /// before_quit_all: pre-quit-all checks.
-#[no_mangle]
+#[export_name = "before_quit_all"]
 pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
     nvim_docmd_before_quit_all(eap)
 }
 
 /// get_argopt_name: expansion for ++opt names.
-#[no_mangle]
+#[export_name = "get_argopt_name"]
 pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
     nvim_docmd_get_argopt_name(idx)
 }
@@ -1970,79 +1970,79 @@ extern "C" {
 }
 
 /// ex_range_without_command: handle range-only commands.
-#[no_mangle]
+#[export_name = "ex_range_without_command"]
 pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
     nvim_docmd_ex_range_without_command(eap)
 }
 
 /// ":tabclose".
-#[no_mangle]
+#[export_name = "ex_tabclose"]
 pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
     nvim_docmd_ex_tabclose(eap);
 }
 
 /// ":hide".
-#[no_mangle]
+#[export_name = "ex_hide"]
 pub unsafe extern "C" fn rs_ex_hide(eap: ExArgHandle) {
     nvim_docmd_ex_hide(eap);
 }
 
 /// ":exit" / ":xit" / ":wq".
-#[no_mangle]
+#[export_name = "ex_exit"]
 pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
     nvim_docmd_ex_exit(eap);
 }
 
 /// ":resize".
-#[no_mangle]
+#[export_name = "ex_resize"]
 pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
     nvim_docmd_ex_resize(eap);
 }
 
 /// ":cd" / ":tcd" / ":lcd" / ":chdir" etc.
-#[no_mangle]
+#[export_name = "ex_cd"]
 pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
     nvim_docmd_ex_cd(eap);
 }
 
 /// ":wincmd".
-#[no_mangle]
+#[export_name = "ex_wincmd"]
 pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
     nvim_docmd_ex_wincmd(eap);
 }
 
 /// ":copy" / ":move".
-#[no_mangle]
+#[export_name = "ex_copymove"]
 pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
     nvim_docmd_ex_copymove(eap);
 }
 
 /// ":@" (execute register).
-#[no_mangle]
+#[export_name = "ex_at"]
 pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     nvim_docmd_ex_at(eap);
 }
 
 /// ":earlier" / ":later".
-#[no_mangle]
+#[export_name = "ex_later"]
 pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
     nvim_docmd_ex_later(eap);
 }
 
 /// ":redraw".
-#[no_mangle]
+#[export_name = "ex_redraw"]
 pub unsafe extern "C" fn rs_ex_redraw(eap: ExArgHandle) {
     nvim_docmd_ex_redraw(eap);
 }
 
 /// ":redrawstatus".
-#[no_mangle]
+#[export_name = "ex_redrawstatus"]
 pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
     nvim_docmd_ex_redrawstatus(eap);
 }
 
 /// ":startinsert" / ":startreplace" / ":startgreplace".
-#[no_mangle]
+#[export_name = "ex_startinsert"]
 pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     nvim_docmd_ex_startinsert(eap);
 }

@@ -135,6 +135,10 @@ int getargopt(exarg_T *eap);
 char *skip_cmd_arg(char *p, bool rembs);
 int get_tabpage_arg(exarg_T *eap);
 bool changedir_func(char *new_dir, CdScope scope);
+// Forward declarations for Phase 1 (ex_docmd plan): static functions replaced by Rust exports
+int check_more(bool message, bool forceit);
+char *ex_range_without_command(exarg_T *eap);
+char *get_argopt_name(expand_T *xp, int idx);
 // Forward declarations for Phase 2 Rust exports (static functions replaced by Rust)
 bool is_other_file(int fnum, char *ffname);
 void msg_verbose_cmd(linenr_T lnum, char *cmd);
@@ -233,6 +237,66 @@ extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening,
 
 extern int rs_get_scrolloff_value(win_T *wp);
 
+// Declarations for ex_* functions now exported directly from Rust (Phase 1 migration).
+// These functions used to be static C stubs calling rs_ex_*; now Rust exports them directly.
+extern void ex_autocmd(exarg_T *eap);
+extern void ex_doautocmd(exarg_T *eap);
+extern void ex_bunload(exarg_T *eap);
+extern void ex_buffer(exarg_T *eap);
+extern void ex_bmodified(exarg_T *eap);
+extern void ex_bnext(exarg_T *eap);
+extern void ex_bprevious(exarg_T *eap);
+extern void ex_brewind(exarg_T *eap);
+extern void ex_blast(exarg_T *eap);
+extern void ex_colorscheme(exarg_T *eap);
+extern void ex_highlight(exarg_T *eap);
+extern void ex_quit(exarg_T *eap);
+extern void ex_quitall(exarg_T *eap);
+extern void ex_close(exarg_T *eap);
+extern void ex_tabclose(exarg_T *eap);
+extern void ex_only(exarg_T *eap);
+extern void ex_hide(exarg_T *eap);
+extern void ex_exit(exarg_T *eap);
+extern void ex_print(exarg_T *eap);
+extern void ex_preserve(exarg_T *eap);
+extern void ex_recover(exarg_T *eap);
+extern void ex_wrongmodifier(exarg_T *eap);
+extern void ex_tabmove(exarg_T *eap);
+extern void ex_resize(exarg_T *eap);
+extern void ex_edit(exarg_T *eap);
+extern void ex_cd(exarg_T *eap);
+extern void ex_pwd(exarg_T *eap);
+extern void ex_equal(exarg_T *eap);
+extern void ex_winsize(exarg_T *eap);
+extern void ex_wincmd(exarg_T *eap);
+extern void ex_put(exarg_T *eap);
+extern void ex_iput(exarg_T *eap);
+extern void ex_copymove(exarg_T *eap);
+extern void ex_join(exarg_T *eap);
+extern void ex_at(exarg_T *eap);
+extern void ex_bang(exarg_T *eap);
+extern void ex_wundo(exarg_T *eap);
+extern void ex_rundo(exarg_T *eap);
+extern void ex_redo(exarg_T *eap);
+extern void ex_later(exarg_T *eap);
+extern void ex_redir(exarg_T *eap);
+extern void ex_redraw(exarg_T *eap);
+extern void ex_redrawstatus(exarg_T *eap);
+extern void ex_redrawtabline(exarg_T *eap);
+extern void ex_mark(exarg_T *eap);
+extern void ex_normal(exarg_T *eap);
+extern void ex_startinsert(exarg_T *eap);
+extern void ex_stopinsert(exarg_T *eap);
+extern void ex_checkpath(exarg_T *eap);
+extern void ex_psearch(exarg_T *eap);
+extern void ex_shada(exarg_T *eap);
+extern void ex_filetype(exarg_T *eap);
+extern void ex_setfiletype(exarg_T *eap);
+extern void ex_nohlsearch(exarg_T *eap);
+extern void ex_folddo(exarg_T *eap);
+extern void ex_nogui(exarg_T *eap);
+extern void ex_popup(exarg_T *eap);
+
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
 
@@ -252,78 +316,8 @@ extern void rs_win_setheight_win(int height, win_T *win);
 extern void rs_win_setwidth_win(int width, win_T *wp);
 extern int rs_get_vtopline(win_T *wp);
 
-// Phase 1 Rust FFI declarations (commands.rs)
+// Rust FFI declarations still needed from C
 extern void verify_command(const char *cmd);
-extern void rs_ex_redir(exarg_T *eap);
-extern void rs_ex_normal(exarg_T *eap);
-extern void rs_ex_filetype(exarg_T *eap);
-extern void rs_ex_quit(exarg_T *eap);
-// Phase 2 (batch plan) Rust FFI declarations
-extern void rs_ex_bunload(exarg_T *eap);
-extern void rs_ex_autocmd(exarg_T *eap);
-extern void rs_ex_doautocmd(exarg_T *eap);
-extern void rs_ex_quitall(exarg_T *eap);
-extern void rs_ex_setfiletype(exarg_T *eap);
-extern void rs_ex_shada(exarg_T *eap);
-extern void rs_ex_folddo(exarg_T *eap);
-
-extern void rs_ex_redrawtabline(exarg_T *eap);
-extern void rs_ex_join(exarg_T *eap);
-extern void rs_ex_put(exarg_T *eap);
-extern void rs_ex_iput(exarg_T *eap);
-extern void rs_ex_equal(exarg_T *eap);
-extern void rs_ex_recover(exarg_T *eap);
-extern void rs_do_exbuffer(exarg_T *eap);
-// Phase 1 (batch plan) Rust FFI declarations
-extern void rs_ex_buffer(exarg_T *eap);
-extern void rs_ex_bmodified(exarg_T *eap);
-extern void rs_ex_bnext(exarg_T *eap);
-extern void rs_ex_bprevious(exarg_T *eap);
-extern void rs_ex_brewind(exarg_T *eap);
-extern void rs_ex_blast(exarg_T *eap);
-extern void rs_ex_highlight(exarg_T *eap);
-extern void rs_not_restarting(void);
-extern void rs_ex_preserve(exarg_T *eap);
-extern void rs_ex_redo(exarg_T *eap);
-extern void rs_ex_bang(exarg_T *eap);
-extern void rs_ex_wrongmodifier(exarg_T *eap);
-extern void rs_ex_nogui(exarg_T *eap);
-extern void rs_ex_popup(exarg_T *eap);
-extern void rs_ex_wundo(exarg_T *eap);
-extern void rs_ex_rundo(exarg_T *eap);
-extern void rs_ex_tabmove(exarg_T *eap);
-extern void rs_set_no_hlsearch(bool flag);
-extern void rs_ex_nohlsearch(exarg_T *eap);
-extern void rs_ex_stopinsert(exarg_T *eap);
-extern void rs_ex_checkpath(exarg_T *eap);
-extern void rs_ex_psearch(exarg_T *eap);
-extern void rs_set_pressedreturn(bool val);
-// Phase 3 (batch plan) Rust FFI declarations
-extern void rs_ex_winsize(exarg_T *eap);
-extern void rs_ex_colorscheme(exarg_T *eap);
-extern void rs_ex_mark(exarg_T *eap);
-extern void rs_ex_print(exarg_T *eap);
-extern void rs_ex_edit(exarg_T *eap);
-extern void rs_ex_pwd(exarg_T *eap);
-extern void rs_ex_only(exarg_T *eap);
-extern void rs_ex_close(exarg_T *eap);
-extern int rs_check_more(int message, int forceit);
-extern int rs_before_quit_all(exarg_T *eap);
-extern char *rs_get_argopt_name(void *xp, int idx);
-// Phase 4 (batch plan) Rust FFI declarations
-extern void rs_ex_hide(exarg_T *eap);
-extern void rs_ex_resize(exarg_T *eap);
-extern char *rs_ex_range_without_command(exarg_T *eap);
-extern void rs_ex_redrawstatus(exarg_T *eap);
-extern void rs_ex_tabclose(exarg_T *eap);
-extern void rs_ex_cd(exarg_T *eap);
-extern void rs_ex_wincmd(exarg_T *eap);
-extern void rs_ex_copymove(exarg_T *eap);
-extern void rs_ex_at(exarg_T *eap);
-extern void rs_ex_later(exarg_T *eap);
-extern void rs_ex_exit(exarg_T *eap);
-extern void rs_ex_redraw(exarg_T *eap);
-extern void rs_ex_startinsert(exarg_T *eap);
 
 // Helper function to get first character of command name for Rust FFI
 // Returns 0 if cmdidx is out of bounds
@@ -1757,13 +1751,6 @@ char *ex_errmsg(const char *const msg, const char *const arg)
 /// This string is used in pointer comparison.
 static char exmode_plus[] = "+";
 
-/// Handle a range without a command.
-/// Returns an error message on failure.
-static char *ex_range_without_command(exarg_T *eap)
-{
-  return rs_ex_range_without_command(eap);
-}
-
 /// Parse and skip over command modifiers:
 /// - update eap->cmd
 /// - store flags in "cmod".
@@ -1951,12 +1938,6 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 }
 
 
-/// Function given to ExpandGeneric() to obtain the list of ++opt names.
-static char *get_argopt_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  return rs_get_argopt_name(xp, idx);
-}
-
 /// Command-line expansion for ++opt=name.
 int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
 {
@@ -2002,32 +1983,6 @@ int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int
   return OK;
 }
 
-static void ex_autocmd(exarg_T *eap)
-{
-  rs_ex_autocmd(eap);
-}
-
-/// ":doautocmd": Apply the automatic commands to the current buffer.
-static void ex_doautocmd(exarg_T *eap)
-{
-  rs_ex_doautocmd(eap);
-}
-
-/// :[N]bunload[!] [N] [bufname] unload buffer
-/// :[N]bdelete[!] [N] [bufname] delete buffer from buffer list
-/// :[N]bwipeout[!] [N] [bufname] delete buffer really
-static void ex_bunload(exarg_T *eap)
-{
-  rs_ex_bunload(eap);
-}
-
-/// :[N]buffer [N]       to buffer N
-/// :[N]sbuffer [N]      to buffer N
-static void ex_buffer(exarg_T *eap)
-{
-  rs_ex_buffer(eap);
-}
-
 /// ":buffer" command and alike.
 static void do_exbuffer(exarg_T *eap)
 {
@@ -2045,82 +2000,13 @@ static void do_exbuffer(exarg_T *eap)
   }
 }
 
-/// :[N]bmodified [N]    to next mod. buffer
-/// :[N]sbmodified [N]   to next mod. buffer
-static void ex_bmodified(exarg_T *eap)
-{
-  rs_ex_bmodified(eap);
-}
 
-/// :[N]bnext [N]        to next buffer
-/// :[N]sbnext [N]       split and to next buffer
-static void ex_bnext(exarg_T *eap)
-{
-  rs_ex_bnext(eap);
-}
-
-/// :[N]bNext [N]        to previous buffer
-/// :[N]bprevious [N]    to previous buffer
-/// :[N]sbNext [N]       split and to previous buffer
-/// :[N]sbprevious [N]   split and to previous buffer
-static void ex_bprevious(exarg_T *eap)
-{
-  rs_ex_bprevious(eap);
-}
-
-/// :brewind             to first buffer
-/// :bfirst              to first buffer
-/// :sbrewind            split and to first buffer
-/// :sbfirst             split and to first buffer
-static void ex_brewind(exarg_T *eap)
-{
-  rs_ex_brewind(eap);
-}
-
-/// :blast               to last buffer
-/// :sblast              split and to last buffer
-static void ex_blast(exarg_T *eap)
-{
-  rs_ex_blast(eap);
-}
-
-
-/// - if there are more files to edit
-/// - and this is the last window
-/// - and forceit not used
-/// - and not repeated twice on a row
-///
-/// @param   message  when false check only, no messages
-///
-/// @return  FAIL and give error message if 'message' true, return OK otherwise
-static int check_more(bool message, bool forceit)
-{
-  return rs_check_more(message ? 1 : 0, forceit ? 1 : 0);
-}
-
-
-static void ex_colorscheme(exarg_T *eap)
-{
-  rs_ex_colorscheme(eap);
-}
-
-static void ex_highlight(exarg_T *eap)
-{
-  rs_ex_highlight(eap);
-}
 
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
 void not_exiting(void)
 {
   exiting = false;
-}
-
-/// Call this function if we thought we were going to restart, but we won't
-/// (because of an error).
-void not_restarting(void)
-{
-  rs_not_restarting();
 }
 
 bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
@@ -2152,13 +2038,6 @@ bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
   return false;
 }
 
-/// ":quit": quit current window, quit Vim if the last window is closed.
-/// ":{nr}quit": quit window {nr}
-static void ex_quit(exarg_T *eap)
-{
-  rs_ex_quit(eap);
-}
-
 /// ":cquit".
 static void ex_cquit(exarg_T *eap)
   FUNC_ATTR_NORETURN
@@ -2167,19 +2046,6 @@ static void ex_cquit(exarg_T *eap)
   int status = eap->addr_count > 0 ? (int)eap->line2 : EXIT_FAILURE;
   ui_call_error_exit(status);
   getout(status);
-}
-
-/// Do preparations for "qall" and "wqall".
-/// Returns FAIL when quitting should be aborted.
-int before_quit_all(exarg_T *eap)
-{
-  return rs_before_quit_all(eap);
-}
-
-/// ":qall": try to quit all windows
-static void ex_quitall(exarg_T *eap)
-{
-  rs_ex_quitall(eap);
 }
 
 /// ":restart": restart the Nvim server (using ":qall!").
@@ -2234,12 +2100,6 @@ static void ex_restart(exarg_T *eap)
   }
 }
 
-/// ":close": close current window, unless it is the last one
-static void ex_close(exarg_T *eap)
-{
-  rs_ex_close(eap);
-}
-
 /// ":pclose": Close any preview window.
 static void ex_pclose(exarg_T *eap)
 {
@@ -2291,11 +2151,6 @@ void ex_win_close(int forceit, win_T *win, tabpage_T *tp)
 
 /// ":tabclose": close current tab page, unless it is the last one.
 /// ":tabclose N": close tab page N.
-static void ex_tabclose(exarg_T *eap)
-{
-  rs_ex_tabclose(eap);
-}
-
 /// ":tabonly": close all tab pages except the current one
 static void ex_tabonly(exarg_T *eap)
 {
@@ -2377,16 +2232,6 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
 }
 
 /// ":only".
-static void ex_only(exarg_T *eap)
-{
-  rs_ex_only(eap);
-}
-
-static void ex_hide(exarg_T *eap)
-{
-  rs_ex_hide(eap);
-}
-
 /// ":stop" and ":suspend": Suspend Vim.
 static void ex_stop(exarg_T *eap)
 {
@@ -2398,39 +2243,9 @@ static void ex_stop(exarg_T *eap)
   ui_flush();
 }
 
-/// ":exit", ":xit" and ":wq": Write file and quit the current window.
-static void ex_exit(exarg_T *eap)
-{
-  rs_ex_exit(eap);
-}
-
-/// ":print", ":list", ":number".
-static void ex_print(exarg_T *eap)
-{
-  rs_ex_print(eap);
-}
-
 static void ex_goto(exarg_T *eap)
 {
   rs_goto_byte(eap->line2);
-}
-
-/// ":preserve".
-static void ex_preserve(exarg_T *eap)
-{
-  rs_ex_preserve(eap);
-}
-
-/// ":recover".
-static void ex_recover(exarg_T *eap)
-{
-  rs_ex_recover(eap);
-}
-
-/// Command modifier used in a wrong way.
-static void ex_wrongmodifier(exarg_T *eap)
-{
-  rs_ex_wrongmodifier(eap);
 }
 
 /// callback function for 'findfunc'
@@ -2741,12 +2556,6 @@ static void ex_tabnext(exarg_T *eap)
   }
 }
 
-/// :tabmove command
-static void ex_tabmove(exarg_T *eap)
-{
-  rs_ex_tabmove(eap);
-}
-
 /// :tabs command: List tabs and their contents.
 static void ex_tabs(exarg_T *eap)
 {
@@ -2882,11 +2691,6 @@ static void ex_mode(exarg_T *eap)
 
 /// ":resize".
 /// set, increment or decrement current window height
-static void ex_resize(exarg_T *eap)
-{
-  rs_ex_resize(eap);
-}
-
 /// ":find [+command] <file>" command.
 static void ex_find(exarg_T *eap)
 {
@@ -2927,11 +2731,6 @@ static void ex_find(exarg_T *eap)
 }
 
 /// ":edit", ":badd", ":balt", ":visual".
-static void ex_edit(exarg_T *eap)
-{
-  rs_ex_edit(eap);
-}
-
 /// ":edit <file>" command and alike.
 ///
 /// @param old_curwin  curwin before doing a split or NULL
@@ -3054,17 +2853,6 @@ void do_exedit(exarg_T *eap, win_T *old_curwin)
   }
 
   ex_no_reprint = true;
-}
-
-/// ":gui" and ":gvim" when there is no GUI.
-static void ex_nogui(exarg_T *eap)
-{
-  rs_ex_nogui(eap);
-}
-
-static void ex_popup(exarg_T *eap)
-{
-  rs_ex_popup(eap);
 }
 
 static void ex_swapname(exarg_T *eap)
@@ -3260,24 +3048,8 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
 }
 
 
-/// ":cd", ":tcd", ":lcd", ":chdir", "tchdir" and ":lchdir".
-void ex_cd(exarg_T *eap)
-{
-  rs_ex_cd(eap);
-}
-
 /// ":pwd".
-static void ex_pwd(exarg_T *eap)
-{
-  rs_ex_pwd(eap);
-}
-
 /// ":=".
-static void ex_equal(exarg_T *eap)
-{
-  rs_ex_equal(eap);
-}
-
 static void ex_sleep(exarg_T *eap)
 {
   if (cursor_valid(curwin)) {
@@ -3322,16 +3094,6 @@ void do_sleep(int64_t msec, bool hide_cursor)
 }
 
 /// ":winsize" command (obsolete).
-static void ex_winsize(exarg_T *eap)
-{
-  rs_ex_winsize(eap);
-}
-
-static void ex_wincmd(exarg_T *eap)
-{
-  rs_ex_wincmd(eap);
-}
-
 /// Handle command that work like operators: ":delete", ":yank", ":>" and ":<".
 static void ex_operators(exarg_T *eap)
 {
@@ -3379,24 +3141,6 @@ static void ex_operators(exarg_T *eap)
   ex_may_print(eap);
 }
 
-/// ":put".
-static void ex_put(exarg_T *eap)
-{
-  rs_ex_put(eap);
-}
-
-/// ":iput".
-static void ex_iput(exarg_T *eap)
-{
-  rs_ex_iput(eap);
-}
-
-/// Handle ":copy" and ":move".
-static void ex_copymove(exarg_T *eap)
-{
-  rs_ex_copymove(eap);
-}
-
 /// Print the current line if flags were given to the Ex command.
 void ex_may_print(exarg_T *eap)
 {
@@ -3427,24 +3171,6 @@ static int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdprev
   magic_overruled = saved;
 
   return retv;
-}
-
-/// ":join".
-static void ex_join(exarg_T *eap)
-{
-  rs_ex_join(eap);
-}
-
-/// ":[addr]@r": execute register
-static void ex_at(exarg_T *eap)
-{
-  rs_ex_at(eap);
-}
-
-/// ":!".
-static void ex_bang(exarg_T *eap)
-{
-  rs_ex_bang(eap);
 }
 
 /// ":undo".
@@ -3483,52 +3209,6 @@ static void ex_undo(exarg_T *eap)
   } else {                        // :undo 123
     undo_time(step, false, false, true);
   }
-}
-
-static void ex_wundo(exarg_T *eap)
-{
-  rs_ex_wundo(eap);
-}
-
-static void ex_rundo(exarg_T *eap)
-{
-  rs_ex_rundo(eap);
-}
-
-/// ":redo".
-static void ex_redo(exarg_T *eap)
-{
-  rs_ex_redo(eap);
-}
-
-/// ":earlier" and ":later".
-static void ex_later(exarg_T *eap)
-{
-  rs_ex_later(eap);
-}
-
-/// ":redir": start/stop redirection.
-static void ex_redir(exarg_T *eap)
-{
-  rs_ex_redir(eap);
-}
-
-/// ":redraw": force redraw
-static void ex_redraw(exarg_T *eap)
-{
-  rs_ex_redraw(eap);
-}
-
-/// ":redrawstatus": force redraw of status line(s) and window bar(s)
-static void ex_redrawstatus(exarg_T *eap)
-{
-  rs_ex_redrawstatus(eap);
-}
-
-/// ":redrawtabline": force redraw of the tabline
-static void ex_redrawtabline(exarg_T *eap FUNC_ATTR_UNUSED)
-{
-  rs_ex_redrawtabline(eap);
 }
 
 static void close_redir(void)
@@ -3586,12 +3266,6 @@ FILE *open_exfile(char *fname, int forceit, char *mode)
   }
 
   return fd;
-}
-
-/// ":mark" and ":k".
-static void ex_mark(exarg_T *eap)
-{
-  rs_ex_mark(eap);
 }
 
 /// Update w_topline, w_leftcol and the cursor position.
@@ -3659,24 +3333,6 @@ void restore_current_state(save_state_T *sst)
 }
 
 
-/// ":normal[!] {commands}": Execute normal mode commands.
-static void ex_normal(exarg_T *eap)
-{
-  rs_ex_normal(eap);
-}
-
-/// ":startinsert", ":startreplace" and ":startgreplace"
-static void ex_startinsert(exarg_T *eap)
-{
-  rs_ex_startinsert(eap);
-}
-
-/// ":stopinsert"
-static void ex_stopinsert(exarg_T *eap)
-{
-  rs_ex_stopinsert(eap);
-}
-
 /// Execute normal mode command "cmd".
 /// "remap" can be REMAP_NONE or REMAP_YES.
 void exec_normal_cmd(char *cmd, int remap, bool silent)
@@ -3707,17 +3363,6 @@ void exec_normal(bool was_typed, bool use_vpeekc)
     update_topline_cursor();
     normal_cmd(&oa, true);      // execute a Normal mode cmd
   }
-}
-
-static void ex_checkpath(exarg_T *eap)
-{
-  rs_ex_checkpath(eap);
-}
-
-/// ":psearch"
-static void ex_psearch(exarg_T *eap)
-{
-  rs_ex_psearch(eap);
 }
 
 static void ex_findpat(exarg_T *eap)
@@ -4265,12 +3910,6 @@ char *expand_sfile(char *arg)
   return result;
 }
 
-/// ":rshada" and ":wshada".
-static void ex_shada(exarg_T *eap)
-{
-  rs_ex_shada(eap);
-}
-
 /// Make a dialog message in "buff[DIALOG_MSG_SIZE]".
 /// "format" must contain "%s".
 void dialog_msg(char *buff, char *format, char *fname)
@@ -4292,11 +3931,6 @@ static TriState filetype_indent = kNone;
 /// plugin off: load ftplugof.vim
 /// indent on: load filetype.vim and indent.vim
 /// indent off: load indoff.vim
-static void ex_filetype(exarg_T *eap)
-{
-  rs_ex_filetype(eap);
-}
-
 /// Source ftplugin.vim and indent.vim to create the necessary FileType
 /// autocommands. We do this separately from filetype.vim so that these
 /// autocommands will always fire first (and thus can be overridden) while still
@@ -4325,12 +3959,6 @@ void filetype_maybe_enable(void)
   }
 }
 
-/// ":setfiletype [FALLBACK] {name}"
-static void ex_setfiletype(exarg_T *eap)
-{
-  rs_ex_setfiletype(eap);
-}
-
 static void ex_digraphs(exarg_T *eap)
 {
   if (*eap->arg != NUL) {
@@ -4338,17 +3966,6 @@ static void ex_digraphs(exarg_T *eap)
   } else {
     rs_listdigraphs(eap->forceit ? 1 : 0);
   }
-}
-
-void set_no_hlsearch(bool flag)
-{
-  rs_set_no_hlsearch(flag);
-}
-
-/// ":nohlsearch"
-static void ex_nohlsearch(exarg_T *eap)
-{
-  rs_ex_nohlsearch(eap);
 }
 
 static void ex_fold(exarg_T *eap)
@@ -4363,16 +3980,6 @@ static void ex_foldopen(exarg_T *eap)
   rs_opFoldRange(eap->line1, eap->line2, eap->cmdidx == CMD_foldopen, eap->forceit, false);
 }
 
-static void ex_folddo(exarg_T *eap)
-{
-  rs_ex_folddo(eap);
-}
-
-
-void set_pressedreturn(bool val)
-{
-  rs_set_pressedreturn(val);
-}
 
 // C accessor for Rust to read ex_pressedreturn
 int nvim_get_ex_pressedreturn(void)

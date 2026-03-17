@@ -84,3 +84,9 @@ int getargopt(exarg_T *eap);
 char *skip_cmd_arg(char *p, bool rembs);
 bool changedir_func(char *new_dir, CdScope scope);
 void verify_command(const char *cmd);
+// Phase 1 (ex_docmd plan): thin C stubs eliminated; Rust functions now exported directly.
+void not_restarting(void);
+int before_quit_all(exarg_T *eap);
+void set_no_hlsearch(bool flag);
+void set_pressedreturn(bool val);
+void ex_cd(exarg_T *eap);
