@@ -626,29 +626,6 @@ struct wordnode_S {
 
 #define HI2WN(hi)    (wordnode_T *)((hi)->hi_key)
 
-// Phase 3: wordnode_T accessor functions used by Rust tree-serialization code.
-// Defined here (after the full struct definition) so field access is valid.
-uint8_t nvim_wordnode_get_byte(const wordnode_T *n) { return n->wn_byte; }
-wordnode_T *nvim_wordnode_get_child(const wordnode_T *n) { return n->wn_child; }
-wordnode_T *nvim_wordnode_get_sibling(const wordnode_T *n) { return n->wn_sibling; }
-uint16_t nvim_wordnode_get_flags(const wordnode_T *n) { return n->wn_flags; }
-int16_t nvim_wordnode_get_region(const wordnode_T *n) { return n->wn_region; }
-uint8_t nvim_wordnode_get_affixID(const wordnode_T *n) { return n->wn_affixID; }
-int nvim_wordnode_get_index(const wordnode_T *n) { return n->wn_u1.index; }
-void nvim_wordnode_set_index(wordnode_T *n, int idx) { n->wn_u1.index = idx; }
-wordnode_T *nvim_wordnode_get_wnode(const wordnode_T *n) { return n->wn_u2.wnode; }
-void nvim_wordnode_set_wnode(wordnode_T *n, wordnode_T *wn) { n->wn_u2.wnode = wn; }
-
-// Phase 6: additional wordnode_T accessors for compression.
-void nvim_wordnode_get_hashkey(const wordnode_T *n, uint8_t *key_out) {
-  memcpy(key_out, n->wn_u1.hashkey, 6);
-}
-void nvim_wordnode_set_hashkey(wordnode_T *n, const uint8_t *key) {
-  memcpy(n->wn_u1.hashkey, key, 6);
-}
-int nvim_wordnode_get_refs(const wordnode_T *n) { return n->wn_refs; }
-void nvim_wordnode_set_refs(wordnode_T *n, int refs) { n->wn_refs = refs; }
-void nvim_wordnode_set_child_compress(wordnode_T *n, wordnode_T *child) { n->wn_child = child; }
 
 // Info used while reading the spell files.
 // (struct tag spellinfo_S is forward-declared in spellfile.h for opaque access.)
@@ -797,25 +774,6 @@ void nvim_spell_show_compress_msg(spellinfo_T *spin) {
   }
 }
 
-// wordnode_T setters (needed for tree_add_word).
-void nvim_wordnode_set_child(wordnode_T *n, wordnode_T *child) { n->wn_child = child; }
-void nvim_wordnode_set_sibling(wordnode_T *n, wordnode_T *sib) { n->wn_sibling = sib; }
-void nvim_wordnode_set_byte(wordnode_T *n, uint8_t byte) { n->wn_byte = byte; }
-void nvim_wordnode_set_flags(wordnode_T *n, uint16_t flags) { n->wn_flags = flags; }
-void nvim_wordnode_set_region(wordnode_T *n, int16_t region) { n->wn_region = region; }
-void nvim_wordnode_set_affixID(wordnode_T *n, uint8_t id) { n->wn_affixID = id; }
-// Bitwise OR into wn_region (for accumulating regions in tree_add_word).
-void nvim_wordnode_or_region(wordnode_T *n, int16_t region) { n->wn_region |= region; }
-
-// Allocate a new wordnode_T from the arena (used by tree_add_word in Rust).
-// Returns NULL on arena failure.
-wordnode_T *nvim_get_wordnode(spellinfo_T *spin)
-{
-  return get_wordnode(spin);
-}
-
-// Clear a wordnode_T in-place (zero all fields, used by get_wordnode for recycled nodes).
-void nvim_wordnode_clear(wordnode_T *n) { CLEAR_POINTER(n); }
 
 // Message helpers needed by tree_add_word for compression progress.
 void nvim_spell_msg_compress(spellinfo_T *spin) {
@@ -3281,6 +3239,9 @@ static wordnode_T *get_wordnode(spellinfo_T *spin)
   }
   return n;
 }
+
+// Thin wrapper so Rust can call the static get_wordnode.
+wordnode_T *nvim_get_wordnode(spellinfo_T *spin) { return get_wordnode(spin); }
 
 // deref_wordnode, free_wordnode, and nvim_deref_wordnode have been migrated
 // to Rust (rs_deref_wordnode with #[export_name = "nvim_deref_wordnode"]).

@@ -5330,33 +5330,76 @@ pub unsafe extern "C" fn rs_write_spell_sections(
 }
 
 // =============================================================================
-// Phase 3: wordnode_T tree serialization (put_node / clear_node)
+// Phase 1: repr(C) struct for wordnode_T -- direct field access, no accessors
 // =============================================================================
 
-// Opaque handle for wordnode_T (C-owned pointer).
+/// Union for wn_u1 field: hashkey (during compression) or index (after first pass).
+/// C layout: union { uint8_t hashkey[6]; int index; }
+/// sizeof = 8 (6 rounded up to 4-alignment), alignof = 4.
 #[repr(C)]
-pub struct WordnodeT {
-    _private: [u8; 0],
+pub union WordnodeU1 {
+    pub hashkey: [u8; 6],
+    pub index: c_int,
+    _pad: [u8; 8],
 }
 
-// Opaque handle for spellinfo_T (C-owned pointer).
+/// Union for wn_u2 field: next node (compression) or wnode parent (serialization).
+/// C layout: union { wordnode_T *next; wordnode_T *wnode; }
+/// sizeof = 8, alignof = 8.
+#[repr(C)]
+pub union WordnodeU2 {
+    pub next: *mut WordnodeT,
+    pub wnode: *mut WordnodeT,
+}
+
+/// Full repr(C) mirror of C `wordnode_T` (spellfile.c lines 596-623).
+#[allow(non_snake_case)]
+///
+/// Layout (64-bit):
+///   offset  0: wn_u1   (8 bytes, union of hashkey[6]/index)
+///   offset  8: wn_u2   (8 bytes, union of next*/wnode*)
+///   offset 16: wn_child   (8 bytes)
+///   offset 24: wn_sibling (8 bytes)
+///   offset 32: wn_refs    (4 bytes, c_int)
+///   offset 36: wn_byte    (1 byte, u8)
+///   offset 37: wn_affixID (1 byte, u8)
+///   offset 38: wn_flags   (2 bytes, u16)
+///   offset 40: wn_region  (2 bytes, i16)
+///   offset 42: _pad       (6 bytes)
+///   sizeof = 48, alignof = 8
+#[repr(C)]
+pub struct WordnodeT {
+    pub wn_u1: WordnodeU1,
+    pub wn_u2: WordnodeU2,
+    pub wn_child: *mut WordnodeT,
+    pub wn_sibling: *mut WordnodeT,
+    pub wn_refs: c_int,
+    pub wn_byte: u8,
+    pub wn_affixID: u8,
+    pub wn_flags: u16,
+    pub wn_region: i16,
+    _pad: [u8; 6],
+}
+
+// Compile-time layout assertions for WordnodeT.
+const _: () = {
+    assert!(std::mem::size_of::<WordnodeT>() == 48);
+    assert!(std::mem::align_of::<WordnodeT>() == 8);
+    assert!(std::mem::offset_of!(WordnodeT, wn_u1) == 0);
+    assert!(std::mem::offset_of!(WordnodeT, wn_u2) == 8);
+    assert!(std::mem::offset_of!(WordnodeT, wn_child) == 16);
+    assert!(std::mem::offset_of!(WordnodeT, wn_sibling) == 24);
+    assert!(std::mem::offset_of!(WordnodeT, wn_refs) == 32);
+    assert!(std::mem::offset_of!(WordnodeT, wn_byte) == 36);
+    assert!(std::mem::offset_of!(WordnodeT, wn_affixID) == 37);
+    assert!(std::mem::offset_of!(WordnodeT, wn_flags) == 38);
+    assert!(std::mem::offset_of!(WordnodeT, wn_region) == 40);
+};
+
+// Opaque handle for spellinfo_T (C-owned pointer, full repr(C) comes in Phase 2).
 #[repr(C)]
 pub struct SpellinfoT {
     _private: [u8; 0],
-}
-
-// Accessor functions provided by spellfile.c
-extern "C" {
-    fn nvim_wordnode_get_byte(n: *const WordnodeT) -> u8;
-    fn nvim_wordnode_get_child(n: *const WordnodeT) -> *mut WordnodeT;
-    fn nvim_wordnode_get_sibling(n: *const WordnodeT) -> *mut WordnodeT;
-    fn nvim_wordnode_get_flags(n: *const WordnodeT) -> u16;
-    fn nvim_wordnode_get_region(n: *const WordnodeT) -> i16;
-    fn nvim_wordnode_get_affixID(n: *const WordnodeT) -> u8;
-    fn nvim_wordnode_get_index(n: *const WordnodeT) -> c_int;
-    fn nvim_wordnode_set_index(n: *mut WordnodeT, idx: c_int);
-    fn nvim_wordnode_get_wnode(n: *const WordnodeT) -> *mut WordnodeT;
-    fn nvim_wordnode_set_wnode(n: *mut WordnodeT, wn: *mut WordnodeT);
 }
 
 /// Flag indicating a prefix tree NUL node with no flags.
@@ -5391,14 +5434,14 @@ unsafe fn put_node_inner(
     }
 
     // Store the index where this node starts.
-    nvim_wordnode_set_index(node, idx);
+    (*node).wn_u1.index = idx;
 
     // Count siblings.
     let mut siblingcount: c_int = 0;
     let mut np = node;
     while !np.is_null() {
         siblingcount += 1;
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 
     // Write <siblingcount>
@@ -5407,25 +5450,25 @@ unsafe fn put_node_inner(
     // Write each sibling byte and optional extra info.
     np = node;
     while !np.is_null() {
-        let byte = nvim_wordnode_get_byte(np);
+        let byte = (*np).wn_byte;
         if byte == 0 {
             // NUL byte: end of word. Write flags.
             if prefixtree {
-                let flags = nvim_wordnode_get_flags(np);
+                let flags = (*np).wn_flags;
                 if flags == PFX_FLAGS as u16 {
                     out.push(BY_NOFLAGS); // <byte>
                 } else {
                     out.push(BY_FLAGS_VAL); // <byte>
                     out.push(flags as u8); // <pflags>
                 }
-                out.push(nvim_wordnode_get_affixID(np)); // <affixID>
-                                                         // <prefcondnr> in 2 bytes BE
-                let region = nvim_wordnode_get_region(np) as u16;
+                out.push((*np).wn_affixID); // <affixID>
+                                            // <prefcondnr> in 2 bytes BE
+                let region = (*np).wn_region as u16;
                 out.extend_from_slice(&region.to_be_bytes());
             } else {
-                let wn_flags = nvim_wordnode_get_flags(np) as c_int;
-                let wn_region = nvim_wordnode_get_region(np) as c_int;
-                let wn_affixid = nvim_wordnode_get_affixID(np) as c_int;
+                let wn_flags = (*np).wn_flags as c_int;
+                let wn_region = (*np).wn_region as c_int;
+                let wn_affixid = (*np).wn_affixID as c_int;
                 let mut flags = wn_flags;
                 if regionmask != 0 && wn_region != regionmask {
                     flags |= WF_REGION;
@@ -5451,9 +5494,9 @@ unsafe fn put_node_inner(
                 }
             }
         } else {
-            let child = nvim_wordnode_get_child(np);
-            let child_index = nvim_wordnode_get_index(child);
-            let child_wnode = nvim_wordnode_get_wnode(child);
+            let child = (*np).wn_child;
+            let child_index = (*child).wn_u1.index;
+            let child_wnode = (*child).wn_u2.wnode;
 
             if child_index != 0 && child_wnode != node {
                 // Child was written elsewhere; write a reference.
@@ -5464,12 +5507,12 @@ unsafe fn put_node_inner(
                 out.push((child_index as u32) as u8);
             } else if child_wnode.is_null() {
                 // We will write the child below; claim it.
-                nvim_wordnode_set_wnode(child, node);
+                (*child).wn_u2.wnode = node;
             }
 
             out.push(byte); // <byte> or <xbyte>
         }
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 
     // Space used when reading: one per sibling plus one for the count.
@@ -5478,14 +5521,14 @@ unsafe fn put_node_inner(
     // Recursively write children.
     np = node;
     while !np.is_null() {
-        let byte = nvim_wordnode_get_byte(np);
+        let byte = (*np).wn_byte;
         if byte != 0 {
-            let child = nvim_wordnode_get_child(np);
-            if nvim_wordnode_get_wnode(child) == node {
+            let child = (*np).wn_child;
+            if (*child).wn_u2.wnode == node {
                 newindex = put_node_inner(child, out, newindex, regionmask, prefixtree);
             }
         }
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 
     newindex
@@ -5503,13 +5546,13 @@ unsafe fn clear_node_inner(node: *mut WordnodeT) {
     }
     let mut np = node;
     while !np.is_null() {
-        nvim_wordnode_set_index(np, 0);
-        nvim_wordnode_set_wnode(np, std::ptr::null_mut());
-        let byte = nvim_wordnode_get_byte(np);
+        (*np).wn_u1.index = 0;
+        (*np).wn_u2.wnode = std::ptr::null_mut();
+        let byte = (*np).wn_byte;
         if byte != 0 {
-            clear_node_inner(nvim_wordnode_get_child(np));
+            clear_node_inner((*np).wn_child);
         }
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 }
 
@@ -5583,12 +5626,6 @@ pub unsafe extern "C" fn rs_clear_node(node: *mut WordnodeT) {
 // =============================================================================
 
 extern "C" {
-    // New Phase 6 accessors for wordnode_T compression fields.
-    fn nvim_wordnode_get_hashkey(n: *const WordnodeT, key_out: *mut u8);
-    fn nvim_wordnode_set_hashkey(n: *mut WordnodeT, key: *const u8);
-    fn nvim_wordnode_get_refs(n: *const WordnodeT) -> c_int;
-    fn nvim_wordnode_set_refs(n: *mut WordnodeT, refs: c_int);
-
     // C callbacks needed by compression.
     fn nvim_deref_wordnode(spin: *mut SpellinfoT, node: *mut WordnodeT) -> c_int;
     fn nvim_spell_got_int() -> bool;
@@ -5623,14 +5660,13 @@ unsafe fn node_compress_inner(
             break;
         }
         len += 1;
-        let child = nvim_wordnode_get_child(np);
+        let child = (*np).wn_child;
         if !child.is_null() {
             // Recursively compress the child subtree first.
             compressed += node_compress_inner(spin, child, ht, tot);
 
             // Build the hash key for the (now-compressed) child list.
-            let mut key = [0u8; 6];
-            nvim_wordnode_get_hashkey(child, key.as_mut_ptr());
+            let key = (*child).wn_u1.hashkey;
 
             // Look up the key in the HashMap.
             let bucket = ht.entry(key).or_default();
@@ -5647,15 +5683,12 @@ unsafe fn node_compress_inner(
                 bucket.push(child);
             } else {
                 // Found identical child: replace and free the current one.
-                let new_refs = nvim_wordnode_get_refs(found) + 1;
-                nvim_wordnode_set_refs(found, new_refs);
+                (*found).wn_refs += 1;
                 compressed += nvim_deref_wordnode(spin, child);
-                // Write new child pointer back via the sibling accessor.
-                // We need the child field of np - use the C-provided set:
-                nvim_wordnode_set_child_compress(np, found);
+                (*np).wn_child = found;
             }
         }
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 
     *tot += len + 1; // +1 for length field
@@ -5664,18 +5697,17 @@ unsafe fn node_compress_inner(
     let mut nr: u32 = 0;
     let mut np = node;
     while !np.is_null() {
-        let n = if nvim_wordnode_get_byte(np) == 0 {
+        let n = if (*np).wn_byte == 0 {
             // NUL byte node: encode flags + region + affixID
-            (nvim_wordnode_get_flags(np) as u32)
-                + ((nvim_wordnode_get_region(np) as u16 as u32) << 8)
-                + ((nvim_wordnode_get_affixID(np) as u32) << 16)
+            ((*np).wn_flags as u32)
+                + (((*np).wn_region as u16 as u32) << 8)
+                + (((*np).wn_affixID as u32) << 16)
         } else {
             // byte node: encode byte + child pointer address
-            (nvim_wordnode_get_byte(np) as u32)
-                + (((nvim_wordnode_get_child(np) as usize) as u32) << 8)
+            ((*np).wn_byte as u32) + ((((*np).wn_child as usize) as u32) << 8)
         };
         nr = nr.wrapping_mul(101).wrapping_add(n);
-        np = nvim_wordnode_get_sibling(np);
+        np = (*np).wn_sibling;
     }
 
     let mut key = [0u8; 6];
@@ -5714,7 +5746,7 @@ unsafe fn node_compress_inner(
     };
     key[5] = 0; // NUL terminator
 
-    nvim_wordnode_set_hashkey(node, key.as_ptr());
+    (*node).wn_u1.hashkey = key;
 
     nvim_spell_veryfast_breakcheck();
 
@@ -5736,35 +5768,31 @@ unsafe fn node_equal_inner(n1: *mut WordnodeT, n2: *mut WordnodeT) -> bool {
             (false, false) => {}
             _ => return false,
         }
-        let b1 = nvim_wordnode_get_byte(p1);
-        let b2 = nvim_wordnode_get_byte(p2);
+        let b1 = (*p1).wn_byte;
+        let b2 = (*p2).wn_byte;
         if b1 != b2 {
             return false;
         }
         if b1 == 0 {
             // NUL node: compare flags, region, affixID
-            if nvim_wordnode_get_flags(p1) != nvim_wordnode_get_flags(p2)
-                || nvim_wordnode_get_region(p1) != nvim_wordnode_get_region(p2)
-                || nvim_wordnode_get_affixID(p1) != nvim_wordnode_get_affixID(p2)
+            if (*p1).wn_flags != (*p2).wn_flags
+                || (*p1).wn_region != (*p2).wn_region
+                || (*p1).wn_affixID != (*p2).wn_affixID
             {
                 return false;
             }
         } else {
             // byte node: compare child pointers (structural sharing)
-            if nvim_wordnode_get_child(p1) != nvim_wordnode_get_child(p2) {
+            if (*p1).wn_child != (*p2).wn_child {
                 return false;
             }
         }
-        p1 = nvim_wordnode_get_sibling(p1);
-        p2 = nvim_wordnode_get_sibling(p2);
+        p1 = (*p1).wn_sibling;
+        p2 = (*p2).wn_sibling;
     }
 }
 
-// We need a setter for the child pointer during compression (when we replace
-// a child with a deduplicated one). Declare it here as a separate accessor.
-extern "C" {
-    fn nvim_wordnode_set_child_compress(n: *mut WordnodeT, child: *mut WordnodeT);
-}
+// (Compression no longer needs a separate child setter; direct field access is used.)
 
 /// Compress the word tree rooted at `root` by deduplicating identical subtrees.
 ///
@@ -5799,17 +5827,9 @@ pub unsafe extern "C" fn rs_node_compress(
 // =============================================================================
 
 extern "C" {
-    // Wordnode allocator
+    // Wordnode allocator (still in C: get_wordnode / Phase 3 memory management)
     fn nvim_get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT;
-    // Wordnode setters
-    fn nvim_wordnode_set_sibling(n: *mut WordnodeT, sib: *mut WordnodeT);
-    fn nvim_wordnode_set_child(n: *mut WordnodeT, child: *mut WordnodeT);
-    fn nvim_wordnode_set_byte(n: *mut WordnodeT, byte: u8);
-    fn nvim_wordnode_set_flags(n: *mut WordnodeT, flags: u16);
-    fn nvim_wordnode_set_region(n: *mut WordnodeT, region: i16);
-    fn nvim_wordnode_set_affixID(n: *mut WordnodeT, id: u8);
-    fn nvim_wordnode_or_region(n: *mut WordnodeT, region: i16);
-    // Spin accessors
+    // Spin accessors (still in C until Phase 2)
     fn nvim_spin_get_foldroot(s: *const SpellinfoT) -> *mut WordnodeT;
     fn nvim_spin_get_keeproot(s: *const SpellinfoT) -> *mut WordnodeT;
     fn nvim_spin_get_foldwcount(s: *const SpellinfoT) -> c_int;
@@ -5865,8 +5885,8 @@ impl Prev {
     unsafe fn set(self, val: *mut WordnodeT) {
         match self {
             Self::None => {}
-            Self::Sibling(p) => nvim_wordnode_set_sibling(p, val),
-            Self::Child(p) => nvim_wordnode_set_child(p, val),
+            Self::Sibling(p) => (*p).wn_sibling = val,
+            Self::Child(p) => (*p).wn_child = val,
         }
     }
 }
@@ -5902,8 +5922,8 @@ pub unsafe extern "C" fn rs_tree_add_word(
 
     for &byte_i in word_bytes {
         // ---- COW: if this node has more than one reference, copy the sibling list ----
-        if !node.is_null() && nvim_wordnode_get_refs(node) > 1 {
-            nvim_wordnode_set_refs(node, nvim_wordnode_get_refs(node) - 1);
+        if !node.is_null() && (*node).wn_refs > 1 {
+            (*node).wn_refs -= 1;
             let mut copy_prev = prev;
             let original_node = node;
             let mut copy_p = original_node;
@@ -5914,19 +5934,19 @@ pub unsafe extern "C" fn rs_tree_add_word(
                     return 1; // FAIL
                 }
                 // Copy all fields
-                let child = nvim_wordnode_get_child(copy_p);
-                nvim_wordnode_set_child(np, child);
+                let child = (*copy_p).wn_child;
+                (*np).wn_child = child;
                 if !child.is_null() {
-                    nvim_wordnode_set_refs(child, nvim_wordnode_get_refs(child) + 1);
+                    (*child).wn_refs += 1;
                 }
-                let b = nvim_wordnode_get_byte(copy_p);
-                nvim_wordnode_set_byte(np, b);
+                let b = (*copy_p).wn_byte;
+                (*np).wn_byte = b;
                 if b == 0 {
-                    nvim_wordnode_set_flags(np, nvim_wordnode_get_flags(copy_p));
-                    nvim_wordnode_set_region(np, nvim_wordnode_get_region(copy_p));
-                    nvim_wordnode_set_affixID(np, nvim_wordnode_get_affixID(copy_p));
+                    (*np).wn_flags = (*copy_p).wn_flags;
+                    (*np).wn_region = (*copy_p).wn_region;
+                    (*np).wn_affixID = (*copy_p).wn_affixID;
                 }
-                nvim_wordnode_set_refs(np, 1);
+                (*np).wn_refs = 1;
                 // Link this copy into the new chain via copy_prev
                 copy_prev.set(np);
                 copy_prev = Prev::Sibling(np);
@@ -5934,7 +5954,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
                 if copy_p == original_node {
                     first_copy = np;
                 }
-                copy_p = nvim_wordnode_get_sibling(copy_p);
+                copy_p = (*copy_p).wn_sibling;
             }
             // `node` now points to the first copy
             node = first_copy;
@@ -5942,18 +5962,18 @@ pub unsafe extern "C" fn rs_tree_add_word(
 
         // ---- Find the sibling with the matching byte ----
         while !node.is_null() {
-            let nb = nvim_wordnode_get_byte(node);
+            let nb = (*node).wn_byte;
             let advance = if byte_i == 0 {
                 // NUL node: compare on flags/region/affixID
                 if flags < 0 {
-                    (nvim_wordnode_get_affixID(node) as c_int) < affix_id
-                } else if (nvim_wordnode_get_flags(node) as c_int) < (flags & WN_MASK) {
+                    ((*node).wn_affixID as c_int) < affix_id
+                } else if ((*node).wn_flags as c_int) < (flags & WN_MASK) {
                     true
-                } else if (nvim_wordnode_get_flags(node) as c_int) == (flags & WN_MASK) {
+                } else if ((*node).wn_flags as c_int) == (flags & WN_MASK) {
                     if nvim_spin_get_sugtree(spin) != 0 {
-                        ((nvim_wordnode_get_region(node) as c_int) & 0xffff) < region
+                        (((*node).wn_region as c_int) & 0xffff) < region
                     } else {
-                        (nvim_wordnode_get_affixID(node) as c_int) < affix_id
+                        ((*node).wn_affixID as c_int) < affix_id
                     }
                 } else {
                     false
@@ -5965,22 +5985,22 @@ pub unsafe extern "C" fn rs_tree_add_word(
                 break;
             }
             prev = Prev::Sibling(node);
-            node = nvim_wordnode_get_sibling(node);
+            node = (*node).wn_sibling;
         }
 
         // ---- Check if the current node matches this byte ----
         let matched = if node.is_null() {
             false
         } else {
-            let nb = nvim_wordnode_get_byte(node);
+            let nb = (*node).wn_byte;
             if nb != byte_i {
                 false
             } else if byte_i == 0 {
                 // NUL: match only if flags/affixID also match (and not sugtree)
                 flags >= 0
                     && nvim_spin_get_sugtree(spin) == 0
-                    && (nvim_wordnode_get_flags(node) as c_int) == (flags & WN_MASK)
-                    && (nvim_wordnode_get_affixID(node) as c_int) == affix_id
+                    && ((*node).wn_flags as c_int) == (flags & WN_MASK)
+                    && ((*node).wn_affixID as c_int) == affix_id
             } else {
                 true
             }
@@ -5992,29 +6012,29 @@ pub unsafe extern "C" fn rs_tree_add_word(
             if np.is_null() {
                 return 1; // FAIL
             }
-            nvim_wordnode_set_byte(np, byte_i);
+            (*np).wn_byte = byte_i;
             if node.is_null() {
-                nvim_wordnode_set_refs(np, 1);
+                (*np).wn_refs = 1;
             } else {
-                nvim_wordnode_set_refs(np, nvim_wordnode_get_refs(node));
-                nvim_wordnode_set_refs(node, 1);
+                (*np).wn_refs = (*node).wn_refs;
+                (*node).wn_refs = 1;
             }
             prev.set(np);
-            nvim_wordnode_set_sibling(np, node);
+            (*np).wn_sibling = node;
             node = np;
         }
 
         // ---- At end of word, set flags/region/affixID and stop ----
         if byte_i == 0 {
-            nvim_wordnode_set_flags(node, (flags & WN_MASK) as u16);
-            nvim_wordnode_or_region(node, region as i16);
-            nvim_wordnode_set_affixID(node, affix_id as u8);
+            (*node).wn_flags = (flags & WN_MASK) as u16;
+            (*node).wn_region |= region as i16;
+            (*node).wn_affixID = affix_id as u8;
             break;
         }
 
         // ---- Go deeper ----
         prev = Prev::Child(node);
-        node = nvim_wordnode_get_child(node);
+        node = (*node).wn_child;
     }
 
     // ---- Increment message counter ----
@@ -6161,6 +6181,8 @@ pub unsafe extern "C" fn rs_store_word(
 // Phase 5b: deref_wordnode and free_wordnode
 // =============================================================================
 
+// nvim_spin_get_first_free / nvim_spin_set_first_free / nvim_spin_set_free_count
+// remain via the SpellinfoT accessors until Phase 2.
 extern "C" {
     fn nvim_spin_get_first_free(s: *const SpellinfoT) -> *mut WordnodeT;
     fn nvim_spin_set_first_free(s: *mut SpellinfoT, n: *mut WordnodeT);
@@ -6177,20 +6199,19 @@ extern "C" {
 /// `spin` and `node` must be valid non-null pointers.
 #[export_name = "nvim_deref_wordnode"]
 pub unsafe extern "C" fn rs_deref_wordnode(spin: *mut SpellinfoT, node: *mut WordnodeT) -> c_int {
-    let refs = nvim_wordnode_get_refs(node);
-    nvim_wordnode_set_refs(node, refs - 1);
-    if refs - 1 != 0 {
+    (*node).wn_refs -= 1;
+    if (*node).wn_refs != 0 {
         return 0;
     }
 
     let mut cnt = 0;
     let mut np = node;
     while !np.is_null() {
-        let child = nvim_wordnode_get_child(np);
+        let child = (*np).wn_child;
         if !child.is_null() {
             cnt += rs_deref_wordnode(spin, child);
         }
-        let sibling = nvim_wordnode_get_sibling(np);
+        let sibling = (*np).wn_sibling;
         rs_free_wordnode(spin, np);
         cnt += 1;
         np = sibling;
@@ -6207,7 +6228,7 @@ pub unsafe extern "C" fn rs_deref_wordnode(spin: *mut SpellinfoT, node: *mut Wor
 unsafe fn rs_free_wordnode(spin: *mut SpellinfoT, n: *mut WordnodeT) {
     let first_free = nvim_spin_get_first_free(spin);
     // Chain this node onto the free list via wn_child.
-    nvim_wordnode_set_child(n, first_free);
+    (*n).wn_child = first_free;
     nvim_spin_set_first_free(spin, n);
     nvim_spin_set_free_count(spin, nvim_spin_get_free_count(spin) + 1);
 }
