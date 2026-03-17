@@ -4012,6 +4012,7 @@ char *nvim_eap_get_arg(const exarg_T *eap) { return eap->arg; }
 void nvim_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
 int nvim_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
 uint32_t nvim_eap_get_argt(const exarg_T *eap) { return eap->argt; }
+void nvim_eap_set_argt(exarg_T *eap, uint32_t argt) { eap->argt = argt; }
 int nvim_eap_get_flags(const exarg_T *eap) { return eap->flags; }
 void nvim_eap_set_flags(exarg_T *eap, int flags) { eap->flags = flags; }
 linenr_T nvim_eap_get_line1(const exarg_T *eap) { return eap->line1; }
@@ -5129,28 +5130,6 @@ const char *nvim_docmd_get_e_curdir(void) { return _(e_curdir); }
 /// Wrapper for check_nomodeline.
 int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
 
-/// before_quit_all logic (direct implementation for Rust FFI).
-int nvim_docmd_before_quit_all(exarg_T *eap)
-{
-  if (cmdwin_type != 0) {
-    cmdwin_result = eap->forceit
-                    ? K_XF1  // open_cmdwin() takes care of this
-                    : K_XF2;
-    return FAIL;
-  }
-
-  // Don't quit while editing the command line.
-  if (text_locked()) {
-    text_locked_msg();
-    return FAIL;
-  }
-
-  if (before_quit_autocmds(curwin, true, eap->forceit)) {
-    return FAIL;
-  }
-
-  return OK;
-}
 
 // Phase 20 accessors for Rust FFI
 
@@ -5289,33 +5268,6 @@ char *nvim_docmd_get_argopt_name(int idx)
 // Phase 4 C wrappers (direct implementations for Rust FFI)
 
 /// ex_range_without_command logic.
-char *nvim_docmd_ex_range_without_command(exarg_T *eap)
-{
-  char *errormsg = NULL;
-
-  if (*eap->cmd == '|' || (exmode_active && eap->cmd != exmode_plus + 1)) {
-    eap->cmdidx = CMD_print;
-    eap->argt = EX_RANGE | EX_COUNT | EX_TRLBAR;
-    if ((errormsg = invalid_range(eap)) == NULL) {
-      correct_range(eap);
-      ex_print(eap);
-    }
-  } else if (eap->addr_count != 0) {
-    eap->line2 = MIN(eap->line2, curbuf->b_ml.ml_line_count);
-
-    if (eap->line2 < 0) {
-      errormsg = _(e_invrange);
-    } else {
-      if (eap->line2 == 0) {
-        curwin->w_cursor.lnum = 1;
-      } else {
-        curwin->w_cursor.lnum = eap->line2;
-      }
-      beginline(BL_SOL | BL_FIX);
-    }
-  }
-  return errormsg;
-}
 
 
 

@@ -1841,7 +1841,13 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
-    fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
+    // Phase 22: before_quit_all, ex_range_without_command helpers
+    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
+    fn nvim_eap_set_argt(eap: ExArgHandle, argt: u32);
+    fn nvim_docmd_get_exmode_plus() -> *mut c_char;
+    static mut exmode_active: bool;
+    fn invalid_range(eap: ExArgHandle) -> *mut c_char;
+    fn correct_range(eap: ExArgHandle);
     // Phase 20: recover, winsize, setfiletype helpers
     static mut recoverymode: bool;
     fn nvim_docmd_setfname_curbuf(arg: *const c_char) -> c_int;
@@ -1933,7 +1939,7 @@ pub unsafe extern "C" fn rs_ex_doautocmd(eap: ExArgHandle) {
 /// ":quitall".
 #[export_name = "ex_quitall"]
 pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
-    if nvim_docmd_before_quit_all(eap) == 0 {
+    if rs_before_quit_all(eap) == 0 {
         // FAIL
         return;
     }
@@ -2345,7 +2351,21 @@ pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int 
 /// before_quit_all: pre-quit-all checks.
 #[export_name = "before_quit_all"]
 pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
-    nvim_docmd_before_quit_all(eap)
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        let forceit = nvim_eap_get_forceit(eap);
+        nvim_set_cmdwin_result(if forceit { K_XF1 } else { K_XF2 });
+        return 0; // FAIL
+    }
+    if text_locked() {
+        text_locked_msg();
+        return 0; // FAIL
+    }
+    let forceit = nvim_eap_get_forceit(eap);
+    if before_quit_autocmds(nvim_get_curwin(), true, forceit) {
+        return 0; // FAIL
+    }
+    OK
 }
 
 /// get_argopt_name: expansion for ++opt names.
@@ -2357,7 +2377,6 @@ pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mu
 // Phase 4: Substantial Command Handlers
 
 extern "C" {
-    fn nvim_docmd_ex_range_without_command(eap: ExArgHandle) -> *mut c_char;
     fn nvim_docmd_ex_at(eap: ExArgHandle);
 
     // Phase 18: ex_exit, ex_resize, ex_cd helpers
@@ -2463,11 +2482,42 @@ const BL_FIX: c_int = 4;
 const BL_SOL: c_int = 2;
 const EXFLAG_LIST: c_int = 0x01;
 const EXFLAG_NR: c_int = 0x02;
+const CMD_PRINT: c_int = 317;
+const EX_RANGE: u32 = 0x001;
+const EX_TRLBAR: u32 = 0x100;
+const EX_COUNT: u32 = 0x400;
+const K_XF1: c_int = -14845;
+const K_XF2: c_int = -15101;
 
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]
 pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
-    nvim_docmd_ex_range_without_command(eap)
+    let mut errormsg: *mut c_char = std::ptr::null_mut();
+    let cmd = nvim_eap_get_cmd(eap);
+    let exmode_plus_p1 = nvim_docmd_get_exmode_plus().add(1);
+    if !cmd.is_null() && *(cmd as *const u8) == b'|' || (exmode_active && cmd != exmode_plus_p1) {
+        nvim_eap_set_cmdidx(eap, CMD_PRINT);
+        nvim_eap_set_argt(eap, EX_RANGE | EX_COUNT | EX_TRLBAR);
+        let err = invalid_range(eap);
+        if err.is_null() {
+            correct_range(eap);
+            rs_ex_print(eap);
+        } else {
+            errormsg = err;
+        }
+    } else if nvim_eap_get_addr_count(eap) != 0 {
+        let line_count = nvim_docmd_get_curbuf_line_count();
+        let line2 = nvim_eap_get_line2(eap).min(line_count);
+        nvim_eap_set_line2(eap, line2);
+        if line2 < 0 {
+            errormsg = nvim_get_e_invrange() as *mut c_char;
+        } else {
+            let new_lnum = if line2 == 0 { 1 } else { line2 };
+            nvim_docmd_set_curwin_cursor_lnum(new_lnum);
+            beginline(BL_SOL | BL_FIX);
+        }
+    }
+    errormsg
 }
 
 /// ":tabclose".
