@@ -15,6 +15,11 @@ pub type ExpandHandle = *mut c_void;
 // Expand context constants (from cmdexpand_defs.h)
 // =============================================================================
 
+// CMD_* enum constants (stable values from ex_cmds.lua)
+const CMD_LET: c_int = 231;
+const CMD_CONST: c_int = 99;
+const CMD_CALL: c_int = 53;
+
 const EXPAND_NOTHING: c_int = 0;
 const EXPAND_COMMANDS: c_int = 1;
 const EXPAND_SETTINGS: c_int = 4;
@@ -33,11 +38,6 @@ extern "C" {
     fn nvim_expand_set_pattern(xp: ExpandHandle, pattern: *mut c_char);
     fn nvim_expand_get_context(xp: ExpandHandle) -> c_int;
     fn nvim_cmdexpand_get_xp_pattern(xp: ExpandHandle) -> *mut c_char;
-
-    // CMD_* enum value accessors
-    fn nvim_docmd_cmd_let() -> c_int;
-    fn nvim_docmd_cmd_const() -> c_int;
-    fn nvim_docmd_cmd_call() -> c_int;
 
     // String utility functions
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
@@ -76,9 +76,9 @@ pub unsafe extern "C" fn rs_set_context_for_expression(
 ) {
     // SAFETY: All pointer operations assume valid pointers from C callers.
     unsafe {
-        let cmd_let = nvim_docmd_cmd_let();
-        let cmd_const = nvim_docmd_cmd_const();
-        let cmd_call = nvim_docmd_cmd_call();
+        let cmd_let = CMD_LET;
+        let cmd_const = CMD_CONST;
+        let cmd_call = CMD_CALL;
 
         let mut got_eq = false;
         let mut arg = arg;

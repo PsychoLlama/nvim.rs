@@ -3961,14 +3961,6 @@ bool is_map_cmd(cmdidx_T cmdidx)
 /// Get the E319 "not available" error message string.
 const char *nvim_docmd_e319_msg(void) { return _("E319: The command is not available in this version"); }
 
-/// Get the CMD_let enum value.
-int nvim_docmd_cmd_let(void) { return (int)CMD_let; }
-
-/// Get the CMD_const enum value.
-int nvim_docmd_cmd_const(void) { return (int)CMD_const; }
-
-/// Get the CMD_call enum value.
-int nvim_docmd_cmd_call(void) { return (int)CMD_call; }
 
 /// Get a pointer to IObuff.
 char *nvim_docmd_get_iobuff(void)
@@ -4030,16 +4022,6 @@ int nvim_eap_get_addr_type(const exarg_T *eap) { return (int)eap->addr_type; }
 int nvim_eap_get_addr_count(const exarg_T *eap) { return eap->addr_count; }
 void nvim_eap_set_addr_count(exarg_T *eap, int count) { eap->addr_count = count; }
 
-/// Get CMD_execute enum value (used by eval_exec crate).
-int nvim_docmd_cmd_execute(void) { return (int)CMD_execute; }
-/// Get CMD_echo enum value (used by eval_exec crate).
-int nvim_docmd_cmd_echo(void) { return (int)CMD_echo; }
-/// Get CMD_echon enum value (used by eval_exec crate).
-int nvim_docmd_cmd_echon(void) { return (int)CMD_echon; }
-/// Get CMD_echomsg enum value (used by eval_exec crate).
-int nvim_docmd_cmd_echomsg(void) { return (int)CMD_echomsg; }
-/// Get CMD_echoerr enum value (used by eval_exec crate).
-int nvim_docmd_cmd_echoerr(void) { return (int)CMD_echoerr; }
 
 /// Check if a command function is "not implemented" (ex_ni or ex_script_ni).
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx)
@@ -4172,9 +4154,6 @@ char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap->nextcmd; }
 void nvim_eap_set_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 int nvim_eap_get_skip(const exarg_T *eap) { return eap->skip; }
 
-// CMD enum accessors (used by ex_cmds crate)
-int nvim_docmd_cmd_append(void) { return (int)CMD_append; }
-int nvim_docmd_cmd_change(void) { return (int)CMD_change; }
 
 // Helper function wrappers
 int nvim_docmd_valid_yank_reg(int regname, int writing)
@@ -4790,7 +4769,6 @@ char *nvim_skip_colon_white(const char *p, bool skipleadingwhite)
 {
   return skip_colon_white(p, skipleadingwhite);
 }
-int nvim_eap_get_cmdsize(void) { return (int)CMD_SIZE; }
 char *nvim_eap_get_cmd_field(const exarg_T *eap) { return eap->cmd; }
 bool nvim_parse_bang(exarg_T *eap, char **p_ptr) { return parse_bang(eap, p_ptr); }
 void nvim_set_eap_arg_from_p(exarg_T *eap, char *p)

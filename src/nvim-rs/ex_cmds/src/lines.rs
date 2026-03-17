@@ -456,8 +456,8 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         appended_lines, appended_lines_mark, beginline, get_indent_lnum, ml_append, ml_delete,
         nvim_check_cursor_lnum_call, nvim_cmdmod_has_lockmarks, nvim_curbuf_get_b_ml_ml_line_count,
         nvim_curbuf_get_b_p_ai, nvim_curbuf_get_ml_flags, nvim_curbuf_set_op_end,
-        nvim_curbuf_set_op_start, nvim_curwin_set_cursor_lnum, nvim_docmd_cmd_append,
-        nvim_docmd_cmd_change, nvim_exarg_get_cmdidx, nvim_exarg_get_forceit, nvim_exarg_get_line2,
+        nvim_curbuf_set_op_start, nvim_curwin_set_cursor_lnum, nvim_exarg_get_cmdidx,
+        nvim_exarg_get_forceit, nvim_exarg_get_line2,
         nvim_excmds_call_getline, nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut,
         nvim_excmds_get_b_p_iminsert, nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd,
         nvim_excmds_set_nextcmd_direct, nvim_excmds_toggle_b_p_ai, nvim_get_Rows, nvim_get_State,
@@ -478,11 +478,11 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
     }
 
     // First autoindent comes from the line we start on
-    if cmdidx != nvim_docmd_cmd_change() && nvim_curbuf_get_b_p_ai() != 0 && lnum > 0 {
+    if cmdidx != crate::CMD_CHANGE && nvim_curbuf_get_b_p_ai() != 0 && lnum > 0 {
         crate::append_indent = get_indent_lnum(lnum);
     }
 
-    if cmdidx != nvim_docmd_cmd_append() {
+    if cmdidx != crate::CMD_APPEND {
         lnum -= 1;
     }
 
@@ -611,7 +611,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         } else {
             ml_line_count
         };
-        if cmdidx != nvim_docmd_cmd_append() {
+        if cmdidx != crate::CMD_APPEND {
             start_lnum -= 1;
         }
         let end_lnum = if line2 < lnum { lnum } else { start_lnum };

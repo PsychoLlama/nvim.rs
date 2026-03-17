@@ -11,6 +11,13 @@ use nvim_collections::garray::GArray;
 
 use crate::eval::{EvalargHandle, EvalargT, ExargHandle, TypevalHandle};
 
+// CMD_* enum constants (stable values from ex_cmds.lua)
+const CMD_ECHO: c_int = 135;
+const CMD_ECHON: c_int = 139;
+const CMD_EXECUTE: c_int = 151;
+const CMD_ECHOMSG: c_int = 138;
+const CMD_ECHOERR: c_int = 136;
+
 // =============================================================================
 // C Extern Functions
 // =============================================================================
@@ -52,12 +59,6 @@ extern "C" {
     fn nvim_eap_set_nextcmd_checked(eap: ExargHandle, arg: *mut c_char);
     fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
 
-    // CMD_xxx constants
-    fn nvim_docmd_cmd_echo() -> c_int;
-    fn nvim_docmd_cmd_echon() -> c_int;
-    fn nvim_docmd_cmd_execute() -> c_int;
-    fn nvim_docmd_cmd_echomsg() -> c_int;
-    fn nvim_docmd_cmd_echoerr() -> c_int;
 
     // Message functions
     fn nvim_msg_ext_set_kind(kind: *const c_char);
@@ -192,7 +193,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     let mut arg = nvim_eap_get_arg_local(eap);
     let skip = nvim_eap_get_skip_local(eap) != 0;
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    let cmd_echo = nvim_docmd_cmd_echo();
+    let cmd_echo = CMD_ECHO;
 
     let mut atstart = true;
     let mut need_clear = true;
@@ -256,7 +257,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
                 nvim_msg_puts_hl(KIND_SPACE.as_ptr() as *const c_char, echo_hl_id, false);
             }
             let tofree = nvim_encode_tv2echo(rettv);
-            nvim_set_msg_ext_append(cmdidx == nvim_docmd_cmd_echon());
+            nvim_set_msg_ext_append(cmdidx == CMD_ECHON);
             nvim_msg_multiline_cstr(tofree, echo_hl_id, true, false, &mut need_clear);
             xfree(tofree as *mut c_void);
         }
@@ -307,9 +308,9 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
     let mut arg = nvim_eap_get_arg_local(eap);
     let skip = nvim_eap_get_skip_local(eap) != 0;
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    let cmd_execute = nvim_docmd_cmd_execute();
-    let cmd_echomsg = nvim_docmd_cmd_echomsg();
-    let cmd_echoerr = nvim_docmd_cmd_echoerr();
+    let cmd_execute = CMD_EXECUTE;
+    let cmd_echomsg = CMD_ECHOMSG;
+    let cmd_echoerr = CMD_ECHOERR;
 
     // Heap-allocate a GArray for byte-string accumulation (ga_init(&ga, 1, 80))
     let ga_raw = xmalloc(std::mem::size_of::<GArray>()) as *mut GArray;

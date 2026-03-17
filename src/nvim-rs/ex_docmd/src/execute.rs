@@ -387,7 +387,6 @@ extern "C" {
     fn nvim_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char);
     fn parse_cmd_address(eap: ExArgHandle, errormsg: *mut *const c_char, silent: bool) -> c_int;
     fn nvim_skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char;
-    fn nvim_eap_get_cmdsize() -> c_int;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
     fn nvim_get_iobuff() -> *mut c_char;
     fn nvim_append_command(cmdname: *const c_char);
@@ -881,7 +880,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     }
 
     // Fail if command is invalid.
-    let cmd_size = nvim_eap_get_cmdsize();
+    let cmd_size = crate::commands::CMD_SIZE;
     if nvim_eap_get_cmdidx(eap) == cmd_size {
         nvim_xstrlcpy(
             nvim_get_iobuff(),

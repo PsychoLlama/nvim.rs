@@ -48,6 +48,10 @@ pub mod write;
 // Opaque Handles
 // =============================================================================
 
+// CMD_* enum constants (stable values from ex_cmds.lua)
+pub(crate) const CMD_APPEND: c_int = 0;
+pub(crate) const CMD_CHANGE: c_int = 43;
+
 /// Opaque handle to a C `exarg_T` struct.
 ///
 /// Represents Ex command arguments passed from the command parser.
@@ -837,10 +841,6 @@ extern "C" {
     pub fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
     /// Duplicate a string
     pub fn xstrdup(s: *const c_char) -> *mut c_char;
-    /// CMD_append constant accessor
-    pub fn nvim_docmd_cmd_append() -> c_int;
-    /// CMD_change constant accessor
-    pub fn nvim_docmd_cmd_change() -> c_int;
 
     // --- sub_joining_lines + sub_grow_buf FFI accessors ---
     /// Get eap->skip flag.

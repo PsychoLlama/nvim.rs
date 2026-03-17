@@ -66,7 +66,6 @@ pub const VGR_FUZZY: c_int = 4;
 // FFI declarations for C helper functions
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
-    fn nvim_eap_get_cmdsize() -> c_int;
     fn nvim_get_ex_pressedreturn() -> c_int;
     fn nvim_get_expr_map_lock() -> c_int;
     fn nvim_curbuf_is_dummy() -> c_int;
@@ -213,7 +212,7 @@ pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *mut c_char {
 /// Returns false if the index is out of bounds.
 #[inline]
 pub fn is_loclist_cmd(cmdidx: i32) -> bool {
-    let cmd_size = unsafe { nvim_eap_get_cmdsize() };
+    let cmd_size = crate::commands::CMD_SIZE;
     if cmdidx < 0 || cmdidx >= cmd_size {
         return false;
     }
