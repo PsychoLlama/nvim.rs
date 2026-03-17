@@ -2024,7 +2024,6 @@ pub unsafe extern "C" fn rs_ex_redrawtabline(_eap: ExArgHandle) {
 /// ":join".
 #[export_name = "ex_join"]
 pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
-    const BL_WHITE: c_int = 1;
     let line1 = nvim_eap_get_line1(eap);
     let line2 = nvim_eap_get_line2(eap);
     nvim_docmd_set_curwin_cursor_lnum(line1);
@@ -2138,14 +2137,31 @@ pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
 // Phase 3: Larger Ex Command Handlers
 
 extern "C" {
-    fn nvim_docmd_ex_colorscheme(eap: ExArgHandle);
-    fn nvim_docmd_ex_mark(eap: ExArgHandle);
-    fn nvim_docmd_ex_print(eap: ExArgHandle);
     fn nvim_docmd_ex_edit(eap: ExArgHandle);
-    fn nvim_docmd_ex_pwd(eap: ExArgHandle);
-    fn nvim_docmd_ex_only(eap: ExArgHandle);
-    fn nvim_docmd_ex_close(eap: ExArgHandle);
     fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char;
+
+    // Phase 21 helpers
+    fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
+    fn nvim_docmd_load_colors(name: *const c_char) -> c_int;
+    fn nvim_docmd_curbuf_ml_empty() -> bool;
+    fn nvim_docmd_os_breakcheck();
+    fn nvim_docmd_get_curwin_cursor_pos(lnum: *mut c_int, col: *mut c_int, coladd: *mut c_int);
+    fn nvim_docmd_set_curwin_cursor_pos(lnum: c_int, col: c_int, coladd: c_int);
+    fn nvim_docmd_get_last_chdir_reason() -> *const c_char;
+    fn nvim_docmd_curwin_has_localdir() -> bool;
+    fn nvim_docmd_curtab_has_localdir() -> bool;
+    fn nvim_docmd_nth_curtab_window(nr: c_int) -> WinHandle;
+    fn nvim_docmd_win_goto(wp: WinHandle);
+    fn nvim_docmd_close_others(message: bool, forceit: bool);
+    fn nvim_docmd_ex_win_close(forceit: bool, win: WinHandle);
+    fn nvim_setmark(name: c_int) -> bool;
+    fn rs_print_line(lnum: LinenrT, use_number: c_int, list: c_int, first: c_int);
+    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
+    static mut got_int: bool;
+    static mut ex_no_reprint: bool;
+    static e_argreq: c_char;
+    static e_trailing_arg: c_char;
+    static e_empty_buffer: c_char;
 }
 
 /// ":winsize" (obsolete).
@@ -2170,19 +2186,97 @@ pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
 /// ":colorscheme".
 #[export_name = "ex_colorscheme"]
 pub unsafe extern "C" fn rs_ex_colorscheme(eap: ExArgHandle) {
-    nvim_docmd_ex_colorscheme(eap);
+    let arg = nvim_eap_get_arg(eap);
+    if arg.is_null() || *(arg as *const u8) == 0 {
+        let p = nvim_docmd_eval_to_string_g_colors_name();
+        if !p.is_null() {
+            msg(p as *const c_char, 0);
+            xfree(p as *mut c_void);
+        } else {
+            msg(c"default".as_ptr(), 0);
+        }
+    } else if nvim_docmd_load_colors(arg as *const c_char) == 0 {
+        // FAIL = 0
+        semsg(
+            c"E185: Cannot find color scheme '%s'".as_ptr(),
+            arg as *const c_char,
+        );
+    }
 }
 
 /// ":mark" / ":k".
 #[export_name = "ex_mark"]
 pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
-    nvim_docmd_ex_mark(eap);
+    let arg = nvim_eap_get_arg(eap);
+    if arg.is_null() || *(arg as *const u8) == 0 {
+        emsg(&e_argreq as *const c_char);
+        return;
+    }
+    if *(arg.add(1) as *const u8) != 0 {
+        semsg(&e_trailing_arg as *const c_char, arg as *const c_char);
+        return;
+    }
+    let mut saved_lnum: c_int = 0;
+    let mut saved_col: c_int = 0;
+    let mut saved_coladd: c_int = 0;
+    nvim_docmd_get_curwin_cursor_pos(&mut saved_lnum, &mut saved_col, &mut saved_coladd);
+    nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+    beginline(BL_WHITE | BL_FIX);
+    if !nvim_setmark(*(arg as *const u8) as c_int) {
+        emsg(c"E191: Argument must be a letter or forward/backward quote".as_ptr());
+    }
+    nvim_docmd_set_curwin_cursor_pos(saved_lnum, saved_col, saved_coladd);
 }
 
 /// ":print" / ":list" / ":number".
 #[export_name = "ex_print"]
 pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
-    nvim_docmd_ex_print(eap);
+    if nvim_docmd_curbuf_ml_empty() {
+        emsg(&e_empty_buffer as *const c_char);
+    } else {
+        let line1 = nvim_eap_get_line1(eap);
+        let line2 = nvim_eap_get_line2(eap);
+        let cmdidx = nvim_eap_get_cmdidx(eap);
+        let flags = nvim_eap_get_flags(eap);
+        let mut line = line1;
+        while line <= line2 && !got_int {
+            rs_print_line(
+                line,
+                (cmdidx == CMD_NUMBER || cmdidx == CMD_POUND || (flags & EXFLAG_NR) != 0) as c_int,
+                (cmdidx == CMD_LIST || (flags & EXFLAG_LIST) != 0) as c_int,
+                (line == line1) as c_int,
+            );
+            line += 1;
+            nvim_docmd_os_breakcheck();
+        }
+        setpcmark();
+        nvim_docmd_set_curwin_cursor_lnum(line2);
+        beginline(BL_SOL | BL_FIX);
+    }
+    ex_no_reprint = true;
+}
+
+/// Internal helper: print working directory.
+unsafe fn do_ex_pwd() {
+    if nvim_os_dirname_namebuff() == 1 {
+        let namebuff = nvim_get_namebuff();
+        if p_verbose > 0 {
+            let context: *const c_char = if !nvim_docmd_get_last_chdir_reason().is_null() {
+                nvim_docmd_get_last_chdir_reason()
+            } else if nvim_docmd_curwin_has_localdir() {
+                c"window".as_ptr()
+            } else if nvim_docmd_curtab_has_localdir() {
+                c"tabpage".as_ptr()
+            } else {
+                c"global".as_ptr()
+            };
+            smsg(0, c"[%s] %s".as_ptr(), context, namebuff);
+        } else {
+            msg(namebuff as *const c_char, 0);
+        }
+    } else {
+        emsg(c"E187: Unknown".as_ptr());
+    }
 }
 
 /// ":edit" / ":badd" / ":balt" / ":visual" / ":enew".
@@ -2193,20 +2287,53 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
 
 /// ":pwd".
 #[export_name = "ex_pwd"]
-pub unsafe extern "C" fn rs_ex_pwd(eap: ExArgHandle) {
-    nvim_docmd_ex_pwd(eap);
+pub unsafe extern "C" fn rs_ex_pwd(_eap: ExArgHandle) {
+    do_ex_pwd();
 }
 
 /// ":only".
 #[export_name = "ex_only"]
 pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
-    nvim_docmd_ex_only(eap);
+    let wp = if nvim_eap_get_addr_count(eap) > 0 {
+        let line2 = nvim_eap_get_line2(eap) as c_int;
+        let mut wnr = line2;
+        let mut wp = nvim_get_firstwin();
+        while wnr > 1 {
+            wnr -= 1;
+            let next = nvim_win_get_next(wp);
+            if next.is_null() {
+                break;
+            }
+            wp = next;
+        }
+        wp
+    } else {
+        nvim_get_curwin()
+    };
+    let curwin = nvim_get_curwin();
+    if wp != curwin {
+        nvim_docmd_win_goto(wp);
+    }
+    nvim_docmd_close_others(true, nvim_eap_get_forceit(eap));
 }
 
 /// ":close".
 #[export_name = "ex_close"]
 pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
-    nvim_docmd_ex_close(eap);
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        nvim_set_cmdwin_result(CTRL_C);
+        return;
+    }
+    if text_locked() || nvim_curbuf_locked() != 0 {
+        return;
+    }
+    if nvim_eap_get_addr_count(eap) == 0 {
+        nvim_docmd_ex_win_close(nvim_eap_get_forceit(eap), nvim_get_curwin());
+    } else {
+        let win = nvim_docmd_nth_curtab_window(nvim_eap_get_line2(eap) as c_int);
+        nvim_docmd_ex_win_close(nvim_eap_get_forceit(eap), win);
+    }
 }
 
 /// check_more: check if more files remain; returns OK (0) or FAIL (non-0).
@@ -2328,6 +2455,14 @@ const CMD_TCHDIR: c_int = 448;
 const CMD_RSHADA: c_int = 374;
 const CMD_RVIMINFO: c_int = 380;
 const CMD_FOLDDOCLOSED: c_int = 165;
+const CMD_NUMBER: c_int = 303;
+const CMD_POUND: c_int = 548;
+const CMD_LIST: c_int = 210;
+const BL_WHITE: c_int = 1;
+const BL_FIX: c_int = 4;
+const BL_SOL: c_int = 2;
+const EXFLAG_LIST: c_int = 0x01;
+const EXFLAG_NR: c_int = 0x02;
 
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]
@@ -2476,7 +2611,7 @@ pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
 
     let new_dir = nvim_eap_get_arg(eap);
     if new_dir.is_null() || (*(new_dir as *const u8) == 0 && !p_cdh) {
-        nvim_docmd_ex_pwd(eap);
+        do_ex_pwd();
         return;
     }
 
@@ -2490,7 +2625,7 @@ pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
     };
 
     if changedir_func(new_dir as *const c_char, scope) && (KeyTyped || p_verbose >= 5) {
-        nvim_docmd_ex_pwd(eap);
+        do_ex_pwd();
     }
 }
 
@@ -3106,10 +3241,6 @@ pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
 // =============================================================================
 // Phase 10: ex_operators (Phase 10 migration)
 // =============================================================================
-
-/// BL_ flags for beginline()
-const BL_SOL: c_int = 2;
-const BL_FIX: c_int = 4;
 
 /// MotionType kMTLineWise = 1
 const K_MT_LINEWISE: c_int = 1;

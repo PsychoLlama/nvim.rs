@@ -5172,73 +5172,78 @@ int nvim_docmd_setfname_curbuf(const char *arg)
   return setfname(curbuf, (char *)arg, NULL, true);
 }
 
+// Phase 21 accessors for Rust FFI
+
+/// Get eval_to_string for colorscheme query.
+char *nvim_docmd_eval_to_string_g_colors_name(void)
+{
+  char *expr = xstrdup("g:colors_name");
+  emsg_off++;
+  char *p = eval_to_string(expr, false, false);
+  emsg_off--;
+  xfree(expr);
+  return p;
+}
+
+/// load_colors wrapper.
+int nvim_docmd_load_colors(const char *name) { return load_colors((char *)name); }
+
+/// Get curbuf ml_flags & ML_EMPTY.
+bool nvim_docmd_curbuf_ml_empty(void) { return curbuf->b_ml.ml_flags & ML_EMPTY; }
+
+/// Call os_breakcheck().
+void nvim_docmd_os_breakcheck(void) { os_breakcheck(); }
+
+/// Save curwin cursor position (lnum, col, coladd).
+void nvim_docmd_get_curwin_cursor_pos(int *lnum, int *col, int *coladd)
+{
+  *lnum = (int)curwin->w_cursor.lnum;
+  *col = (int)curwin->w_cursor.col;
+  *coladd = (int)curwin->w_cursor.coladd;
+}
+
+/// Restore curwin cursor position (lnum, col, coladd).
+void nvim_docmd_set_curwin_cursor_pos(int lnum, int col, int coladd)
+{
+  curwin->w_cursor.lnum = (linenr_T)lnum;
+  curwin->w_cursor.col = (colnr_T)col;
+  curwin->w_cursor.coladd = (colnr_T)coladd;
+}
+
+/// Get last_chdir_reason (NULL if not set).
+const char *nvim_docmd_get_last_chdir_reason(void) { return last_chdir_reason; }
+
+/// True if curwin has a local directory.
+bool nvim_docmd_curwin_has_localdir(void) { return curwin->w_localdir != NULL; }
+
+/// True if curtab has a local directory.
+bool nvim_docmd_curtab_has_localdir(void) { return curtab->tp_localdir != NULL; }
+
+/// Find Nth window in curtab (1-based). Returns lastwin if not found.
+win_T *nvim_docmd_nth_curtab_window(int nr)
+{
+  win_T *win = NULL;
+  int winnr = 0;
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    winnr++;
+    if (winnr == nr) {
+      win = wp;
+      break;
+    }
+  }
+  return win != NULL ? win : lastwin;
+}
+
+/// win_goto wrapper.
+void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
+
+/// close_others wrapper.
+void nvim_docmd_close_others(bool message, bool forceit) { close_others(message, forceit); }
+
+/// ex_win_close with NULL tabpage.
+void nvim_docmd_ex_win_close(bool forceit, win_T *win) { ex_win_close(forceit, win, NULL); }
+
 // Phase 3 C wrappers (direct implementations for Rust FFI)
-
-/// ex_colorscheme logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_colorscheme(exarg_T *eap)
-{
-  if (*eap->arg == NUL) {
-    char *expr = xstrdup("g:colors_name");
-
-    emsg_off++;
-    char *p = eval_to_string(expr, false, false);
-    emsg_off--;
-    xfree(expr);
-
-    if (p != NULL) {
-      msg(p, 0);
-      xfree(p);
-    } else {
-      msg("default", 0);
-    }
-  } else if (load_colors(eap->arg) == FAIL) {
-    semsg(_("E185: Cannot find color scheme '%s'"), eap->arg);
-  }
-}
-
-/// ex_mark logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_mark(exarg_T *eap)
-{
-  if (*eap->arg == NUL) {
-    emsg(_(e_argreq));
-    return;
-  }
-
-  if (eap->arg[1] != NUL) {
-    semsg(_(e_trailing_arg), eap->arg);
-    return;
-  }
-
-  pos_T pos = curwin->w_cursor;
-  curwin->w_cursor.lnum = eap->line2;
-  beginline(BL_WHITE | BL_FIX);
-  if (setmark(*eap->arg) == FAIL) {
-    emsg(_("E191: Argument must be a letter or forward/backward quote"));
-  }
-  curwin->w_cursor = pos;
-}
-
-/// ex_print logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_print(exarg_T *eap)
-{
-  if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-    emsg(_(e_empty_buffer));
-  } else {
-    for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; os_breakcheck()) {
-      rs_print_line(line,
-                    (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
-                     || (eap->flags & EXFLAG_NR)),
-                    eap->cmdidx == CMD_list || (eap->flags & EXFLAG_LIST),
-                    line == eap->line1);
-      line++;
-    }
-    setpcmark();
-    curwin->w_cursor.lnum = eap->line2;
-    beginline(BL_SOL | BL_FIX);
-  }
-
-  ex_no_reprint = true;
-}
 
 /// ex_edit logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_edit(exarg_T *eap)
@@ -5259,79 +5264,6 @@ void nvim_docmd_ex_edit(exarg_T *eap)
   }
 
   do_exedit(eap, NULL);
-}
-
-/// ex_pwd logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_pwd(exarg_T *eap)
-{
-  if (os_dirname(NameBuff, MAXPATHL) == OK) {
-#ifdef BACKSLASH_IN_FILENAME
-    slash_adjust(NameBuff);
-#endif
-    if (p_verbose > 0) {
-      char *context = "global";
-      if (last_chdir_reason != NULL) {
-        context = last_chdir_reason;
-      } else if (curwin->w_localdir != NULL) {
-        context = "window";
-      } else if (curtab->tp_localdir != NULL) {
-        context = "tabpage";
-      }
-      smsg(0, "[%s] %s", context, NameBuff);
-    } else {
-      msg(NameBuff, 0);
-    }
-  } else {
-    emsg(_("E187: Unknown"));
-  }
-}
-
-/// ex_only logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_only(exarg_T *eap)
-{
-  win_T *wp;
-
-  if (eap->addr_count > 0) {
-    linenr_T wnr = eap->line2;
-    for (wp = firstwin; --wnr > 0;) {
-      if (wp->w_next == NULL) {
-        break;
-      }
-      wp = wp->w_next;
-    }
-  } else {
-    wp = curwin;
-  }
-  if (wp != curwin) {
-    win_goto(wp);
-  }
-  close_others(true, eap->forceit);
-}
-
-/// ex_close logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_close(exarg_T *eap)
-{
-  win_T *win = NULL;
-  int winnr = 0;
-  if (cmdwin_type != 0) {
-    cmdwin_result = Ctrl_C;
-  } else if (!text_locked() && !curbuf_locked()) {
-    if (eap->addr_count == 0) {
-      ex_win_close(eap->forceit, curwin, NULL);
-    } else {
-      FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-        winnr++;
-        if (winnr == eap->line2) {
-          win = wp;
-          break;
-        }
-      }
-      if (win == NULL) {
-        win = lastwin;
-      }
-      ex_win_close(eap->forceit, win, NULL);
-    }
-  }
 }
 
 /// get_argopt_name logic (direct implementation for Rust FFI).
