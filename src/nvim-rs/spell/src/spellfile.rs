@@ -4835,7 +4835,8 @@ pub unsafe extern "C" fn rs_set_sofo(
 }
 
 // Size of spell block in bytes (matches SBLOCKSIZE in spellfile.c).
-const SBLOCKSIZE: i32 = 16000;
+// Used as i32 for msm calculation arithmetic.
+const SBLOCKSIZE_I32: i32 = 16000;
 
 /// Parse integer digits from a byte slice, advancing the slice past the digits.
 /// Returns None if no digits are present.
@@ -4865,8 +4866,8 @@ fn parse_msm(msm: &[u8]) -> Option<(i32, i32, i32)> {
     if !rest.is_empty() {
         return None;
     }
-    let start = (raw_start * 10) / (SBLOCKSIZE / 102);
-    let incr = (raw_incr * 102) / (SBLOCKSIZE / 10);
+    let start = (raw_start * 10) / (SBLOCKSIZE_I32 / 102);
+    let incr = (raw_incr * 102) / (SBLOCKSIZE_I32 / 10);
     let added = raw_added * 1024;
     if start == 0 || incr == 0 || added == 0 || incr > start {
         return None;
@@ -5396,11 +5397,146 @@ const _: () = {
     assert!(std::mem::offset_of!(WordnodeT, wn_region) == 40);
 };
 
-// Opaque handle for spellinfo_T (C-owned pointer, full repr(C) comes in Phase 2).
+// =============================================================================
+// Phase 2: repr(C) structs for sblock_T and spellinfo_T -- direct field access
+// =============================================================================
+
+/// sblock_T header: the flexible array `sb_data[]` follows immediately after.
+///
+/// C layout (64-bit):
+///   offset  0: sb_used  (4 bytes, c_int)
+///   offset  4: _pad     (4 bytes)
+///   offset  8: sb_next  (8 bytes, *mut SblockT)
+///   sizeof header = 16, flexible sb_data[] starts at offset 16.
+/// SBLOCKSIZE = 16000 bytes for sb_data
 #[repr(C)]
-pub struct SpellinfoT {
-    _private: [u8; 0],
+pub struct SblockT {
+    pub sb_used: c_int,
+    _pad: [u8; 4],
+    pub sb_next: *mut SblockT,
+    // sb_data[] flexible array follows; accessed via pointer arithmetic
 }
+
+/// Size of the sb_data[] region in each sblock.
+pub const SBLOCKSIZE: usize = 16000;
+
+// Compile-time layout assertions for SblockT.
+const _: () = {
+    assert!(std::mem::size_of::<SblockT>() == 16);
+    assert!(std::mem::align_of::<SblockT>() == 8);
+    assert!(std::mem::offset_of!(SblockT, sb_used) == 0);
+    assert!(std::mem::offset_of!(SblockT, sb_next) == 8);
+};
+
+/// Opaque vimconv_T: 24 bytes, not accessed from Rust.
+/// Layout: int vc_type, int vc_factor, iconv_t vc_fd (8 bytes), bool vc_fail + 7 pad.
+type VimconvOpaque = [u8; 24];
+
+/// Full repr(C) mirror of C `spellinfo_T` (spellfile.c lines 655-720).
+///
+/// sizeof = 736, alignof = 8 (on 64-bit Linux).
+///
+/// Key offsets (verified by /tmp/check_offsets):
+///   0: si_foldroot, 8: si_foldwcount, 16: si_keeproot, 24: si_keepwcount
+///   32: si_prefroot, 40: si_sugtree, 48: si_blocks, 56: si_blocks_cnt
+///   60: si_did_emsg, 64: si_compress_cnt, 72: si_first_free, 80: si_free_count
+///   88: si_spellbuf, 96: si_ascii, 112: si_conv (24 bytes), 140: si_verbose
+///   144: si_msg_count, 152: si_info, 160: si_region_count, 164: si_region_name
+///   184: si_rep, 208: si_repsal, 232: si_sal, 256: si_sofofr, 296: si_commonwords
+///   592: si_sugtime, 600: si_rem_accents, 608: si_map, 632: si_midword
+///   680: si_compflags, 696: si_syllable, 704: si_prefcond, 728: si_newprefID, 732: si_newcompID
+#[repr(C)]
+#[allow(non_snake_case)]
+pub struct SpellinfoT {
+    pub si_foldroot: *mut WordnodeT,       // offset 0
+    pub si_foldwcount: c_int,              // offset 8
+    _pad0: [u8; 4],                        // offset 12 (pad to align si_keeproot)
+    pub si_keeproot: *mut WordnodeT,       // offset 16
+    pub si_keepwcount: c_int,              // offset 24
+    _pad1: [u8; 4],                        // offset 28
+    pub si_prefroot: *mut WordnodeT,       // offset 32
+    pub si_sugtree: c_int,                 // offset 40
+    _pad2: [u8; 4],                        // offset 44
+    pub si_blocks: *mut SblockT,           // offset 48
+    pub si_blocks_cnt: c_int,              // offset 56
+    pub si_did_emsg: c_int,                // offset 60
+    pub si_compress_cnt: c_int,            // offset 64
+    _pad3: [u8; 4],                        // offset 68
+    pub si_first_free: *mut WordnodeT,     // offset 72
+    pub si_free_count: c_int,              // offset 80
+    _pad4: [u8; 4],                        // offset 84
+    pub si_spellbuf: *mut c_void,          // offset 88
+    pub si_ascii: c_int,                   // offset 96
+    pub si_add: c_int,                     // offset 100
+    pub si_clear_chartab: c_int,           // offset 104
+    pub si_region: c_int,                  // offset 108
+    si_conv: VimconvOpaque,                // offset 112 (24 bytes, opaque)
+    pub si_memtot: c_int,                  // offset 136
+    pub si_verbose: c_int,                 // offset 140
+    pub si_msg_count: c_int,               // offset 144
+    _pad5: [u8; 4],                        // offset 148
+    pub si_info: *mut c_char,              // offset 152
+    pub si_region_count: c_int,            // offset 160
+    pub si_region_name: [c_char; 17],      // offset 164 (MAXREGIONS*2+1 = 17)
+    _pad6: [u8; 3],                        // offset 181 (pad to 8-align si_rep)
+    pub si_rep: crate::GArrayRaw,          // offset 184 (24 bytes)
+    pub si_repsal: crate::GArrayRaw,       // offset 208 (24 bytes)
+    pub si_sal: crate::GArrayRaw,          // offset 232 (24 bytes)
+    pub si_sofofr: *mut c_char,            // offset 256
+    pub si_sofoto: *mut c_char,            // offset 264
+    pub si_nosugfile: c_int,               // offset 272
+    pub si_nosplitsugs: c_int,             // offset 276
+    pub si_nocompoundsugs: c_int,          // offset 280
+    pub si_followup: c_int,                // offset 284
+    pub si_collapse: c_int,                // offset 288
+    _pad7: [u8; 4],                        // offset 292
+    pub si_commonwords: crate::HashtabRaw, // offset 296 (296 bytes)
+    pub si_sugtime: i64,                   // offset 592 (time_t = 8 bytes)
+    pub si_rem_accents: c_int,             // offset 600
+    _pad8: [u8; 4],                        // offset 604
+    pub si_map: crate::GArrayRaw,          // offset 608 (24 bytes)
+    pub si_midword: *mut c_char,           // offset 632
+    pub si_compmax: c_int,                 // offset 640
+    pub si_compminlen: c_int,              // offset 644
+    pub si_compsylmax: c_int,              // offset 648
+    pub si_compoptions: c_int,             // offset 652
+    pub si_comppat: crate::GArrayRaw,      // offset 656 (24 bytes)
+    pub si_compflags: *mut c_char,         // offset 680
+    pub si_nobreak: c_char,                // offset 688
+    _pad9: [u8; 7],                        // offset 689
+    pub si_syllable: *mut c_char,          // offset 696
+    pub si_prefcond: crate::GArrayRaw,     // offset 704 (24 bytes)
+    pub si_newprefID: c_int,               // offset 728
+    pub si_newcompID: c_int,               // offset 732
+}
+
+// Compile-time layout assertions for SpellinfoT.
+const _: () = {
+    assert!(std::mem::size_of::<SpellinfoT>() == 736);
+    assert!(std::mem::align_of::<SpellinfoT>() == 8);
+    assert!(std::mem::offset_of!(SpellinfoT, si_foldroot) == 0);
+    assert!(std::mem::offset_of!(SpellinfoT, si_foldwcount) == 8);
+    assert!(std::mem::offset_of!(SpellinfoT, si_keeproot) == 16);
+    assert!(std::mem::offset_of!(SpellinfoT, si_sugtree) == 40);
+    assert!(std::mem::offset_of!(SpellinfoT, si_blocks) == 48);
+    assert!(std::mem::offset_of!(SpellinfoT, si_blocks_cnt) == 56);
+    assert!(std::mem::offset_of!(SpellinfoT, si_did_emsg) == 60);
+    assert!(std::mem::offset_of!(SpellinfoT, si_compress_cnt) == 64);
+    assert!(std::mem::offset_of!(SpellinfoT, si_first_free) == 72);
+    assert!(std::mem::offset_of!(SpellinfoT, si_free_count) == 80);
+    assert!(std::mem::offset_of!(SpellinfoT, si_verbose) == 140);
+    assert!(std::mem::offset_of!(SpellinfoT, si_msg_count) == 144);
+    assert!(std::mem::offset_of!(SpellinfoT, si_region_name) == 164);
+    assert!(std::mem::offset_of!(SpellinfoT, si_rep) == 184);
+    assert!(std::mem::offset_of!(SpellinfoT, si_commonwords) == 296);
+    assert!(std::mem::offset_of!(SpellinfoT, si_sugtime) == 592);
+    assert!(std::mem::offset_of!(SpellinfoT, si_map) == 608);
+    assert!(std::mem::offset_of!(SpellinfoT, si_compflags) == 680);
+    assert!(std::mem::offset_of!(SpellinfoT, si_syllable) == 696);
+    assert!(std::mem::offset_of!(SpellinfoT, si_prefcond) == 704);
+    assert!(std::mem::offset_of!(SpellinfoT, si_newprefID) == 728);
+    assert!(std::mem::offset_of!(SpellinfoT, si_newcompID) == 732);
+};
 
 /// Flag indicating a prefix tree NUL node with no flags.
 const PFX_FLAGS: i32 = -256;
@@ -5829,23 +5965,7 @@ pub unsafe extern "C" fn rs_node_compress(
 extern "C" {
     // Wordnode allocator (still in C: get_wordnode / Phase 3 memory management)
     fn nvim_get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT;
-    // Spin accessors (still in C until Phase 2)
-    fn nvim_spin_get_foldroot(s: *const SpellinfoT) -> *mut WordnodeT;
-    fn nvim_spin_get_keeproot(s: *const SpellinfoT) -> *mut WordnodeT;
-    fn nvim_spin_get_foldwcount(s: *const SpellinfoT) -> c_int;
-    fn nvim_spin_set_foldwcount(s: *mut SpellinfoT, v: c_int);
-    fn nvim_spin_get_keepwcount(s: *const SpellinfoT) -> c_int;
-    fn nvim_spin_set_keepwcount(s: *mut SpellinfoT, v: c_int);
-    fn nvim_spin_get_sugtree(s: *const SpellinfoT) -> c_int;
-    fn nvim_spin_inc_msg_count(s: *mut SpellinfoT);
-    fn nvim_spin_get_compress_cnt(s: *const SpellinfoT) -> c_int;
-    fn nvim_spin_set_compress_cnt(s: *mut SpellinfoT, v: c_int);
-    fn nvim_spin_get_blocks_cnt(s: *const SpellinfoT) -> c_int;
-    fn nvim_spin_add_blocks_cnt(s: *mut SpellinfoT, v: c_int);
-    fn nvim_spin_sub_blocks_cnt(s: *mut SpellinfoT, v: c_int);
-    fn nvim_spin_get_free_count(s: *const SpellinfoT) -> c_int;
-    // Spell helpers
-    fn nvim_spell_msg_compress(spin: *mut SpellinfoT);
+    // Spell helpers (C-owned logic that needs curwin, etc.)
     fn nvim_spell_captype(word: *const c_char, end: *const c_char) -> c_int;
     fn nvim_spell_casefold(
         word: *const c_char,
@@ -5862,6 +5982,8 @@ extern "C" {
     fn nvim_spell_compress_start() -> c_int;
     fn nvim_spell_compress_inc() -> c_int;
     fn nvim_spell_compress_added() -> c_int;
+    // Show the "Compressing..." message (C-side, uses msg_start etc.)
+    fn nvim_spell_show_compress_msg(spin: *mut SpellinfoT);
 }
 
 /// Tracking where to link a new node when inserting.
@@ -5970,7 +6092,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
                 } else if ((*node).wn_flags as c_int) < (flags & WN_MASK) {
                     true
                 } else if ((*node).wn_flags as c_int) == (flags & WN_MASK) {
-                    if nvim_spin_get_sugtree(spin) != 0 {
+                    if (*spin).si_sugtree != 0 {
                         (((*node).wn_region as c_int) & 0xffff) < region
                     } else {
                         ((*node).wn_affixID as c_int) < affix_id
@@ -5998,7 +6120,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
             } else if byte_i == 0 {
                 // NUL: match only if flags/affixID also match (and not sugtree)
                 flags >= 0
-                    && nvim_spin_get_sugtree(spin) == 0
+                    && (*spin).si_sugtree == 0
                     && ((*node).wn_flags as c_int) == (flags & WN_MASK)
                     && ((*node).wn_affixID as c_int) == affix_id
             } else {
@@ -6038,33 +6160,36 @@ pub unsafe extern "C" fn rs_tree_add_word(
     }
 
     // ---- Increment message counter ----
-    nvim_spin_inc_msg_count(spin);
+    (*spin).si_msg_count += 1;
 
     // ---- Compression trigger logic ----
-    let compress_cnt = nvim_spin_get_compress_cnt(spin);
+    let compress_cnt = (*spin).si_compress_cnt;
     if compress_cnt > 1 {
         let new_cnt = compress_cnt - 1;
-        nvim_spin_set_compress_cnt(spin, new_cnt);
+        (*spin).si_compress_cnt = new_cnt;
         if new_cnt == 1 {
-            nvim_spin_add_blocks_cnt(spin, nvim_spell_compress_inc());
+            (*spin).si_blocks_cnt += nvim_spell_compress_inc();
         }
     }
 
     // Check if compression is needed
     #[allow(clippy::cast_possible_wrap)]
     let should_compress = if compress_cnt == 1 {
-        nvim_spin_get_free_count(spin) < MAXWLEN as c_int
+        (*spin).si_free_count < MAXWLEN as c_int
     } else {
-        nvim_spin_get_blocks_cnt(spin) >= nvim_spell_compress_start()
+        (*spin).si_blocks_cnt >= nvim_spell_compress_start()
     };
 
     if should_compress {
-        nvim_spin_sub_blocks_cnt(spin, nvim_spell_compress_inc());
-        nvim_spin_set_compress_cnt(spin, nvim_spell_compress_added());
-        nvim_spell_msg_compress(spin);
-        nvim_spell_wordtree_compress(spin, nvim_spin_get_foldroot(spin), c"case-folded".as_ptr());
+        (*spin).si_blocks_cnt -= nvim_spell_compress_inc();
+        (*spin).si_compress_cnt = nvim_spell_compress_added();
+        // Show compression message if verbose
+        if (*spin).si_verbose != 0 {
+            nvim_spell_show_compress_msg(spin);
+        }
+        nvim_spell_wordtree_compress(spin, (*spin).si_foldroot, c"case-folded".as_ptr());
         if affix_id >= 0 {
-            nvim_spell_wordtree_compress(spin, nvim_spin_get_keeproot(spin), c"keep-case".as_ptr());
+            nvim_spell_wordtree_compress(spin, (*spin).si_keeproot, c"keep-case".as_ptr());
         }
     }
 
@@ -6118,7 +6243,7 @@ pub unsafe extern "C" fn rs_store_word(
     nvim_spell_casefold(word, word_len, foldword.as_mut_ptr(), FOLDWORD_LEN);
 
     let mut res = 0i32;
-    let foldroot = nvim_spin_get_foldroot(spin);
+    let foldroot = (*spin).si_foldroot;
 
     // Store in case-folded tree for each prefix/compound ID in pfxlist.
     {
@@ -6148,11 +6273,11 @@ pub unsafe extern "C" fn rs_store_word(
             p = p.add(1);
         }
     }
-    nvim_spin_set_foldwcount(spin, nvim_spin_get_foldwcount(spin) + 1);
+    (*spin).si_foldwcount += 1;
 
     // Also store in keep-case tree if the word is flagged as keep-case.
     if res == 0 && (ct == WF_KEEPCAP || (flags & WF_KEEPCAP) != 0) {
-        let keeproot = nvim_spin_get_keeproot(spin);
+        let keeproot = (*spin).si_keeproot;
         let mut p: *const c_char = if pfxlist.is_null() {
             std::ptr::null()
         } else {
@@ -6171,7 +6296,7 @@ pub unsafe extern "C" fn rs_store_word(
             }
             p = p.add(1);
         }
-        nvim_spin_set_keepwcount(spin, nvim_spin_get_keepwcount(spin) + 1);
+        (*spin).si_keepwcount += 1;
     }
 
     res
@@ -6181,13 +6306,8 @@ pub unsafe extern "C" fn rs_store_word(
 // Phase 5b: deref_wordnode and free_wordnode
 // =============================================================================
 
-// nvim_spin_get_first_free / nvim_spin_set_first_free / nvim_spin_set_free_count
-// remain via the SpellinfoT accessors until Phase 2.
-extern "C" {
-    fn nvim_spin_get_first_free(s: *const SpellinfoT) -> *mut WordnodeT;
-    fn nvim_spin_set_first_free(s: *mut SpellinfoT, n: *mut WordnodeT);
-    fn nvim_spin_set_free_count(s: *mut SpellinfoT, v: c_int);
-}
+// (nvim_spin_get/set_first_free and nvim_spin_set_free_count removed in Phase 2;
+// using direct SpellinfoT field access now.)
 
 /// Rust replacement for C `deref_wordnode` / `nvim_deref_wordnode`.
 ///
@@ -6226,11 +6346,10 @@ pub unsafe extern "C" fn rs_deref_wordnode(spin: *mut SpellinfoT, node: *mut Wor
 /// # Safety
 /// `spin` and `n` must be valid non-null pointers.
 unsafe fn rs_free_wordnode(spin: *mut SpellinfoT, n: *mut WordnodeT) {
-    let first_free = nvim_spin_get_first_free(spin);
     // Chain this node onto the free list via wn_child.
-    (*n).wn_child = first_free;
-    nvim_spin_set_first_free(spin, n);
-    nvim_spin_set_free_count(spin, nvim_spin_get_free_count(spin) + 1);
+    (*n).wn_child = (*spin).si_first_free;
+    (*spin).si_first_free = n;
+    (*spin).si_free_count += 1;
 }
 
 // =============================================================================

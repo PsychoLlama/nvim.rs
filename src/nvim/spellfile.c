@@ -705,41 +705,6 @@ static int compress_start;
 static int compress_inc;
 static int compress_added;
 
-// Phase 5: spellinfo_T and sblock_T accessor functions for Rust tree-building.
-// Defined here after the full struct definitions.
-wordnode_T *nvim_spin_get_foldroot(spellinfo_T *s) { return s->si_foldroot; }
-wordnode_T *nvim_spin_get_keeproot(spellinfo_T *s) { return s->si_keeproot; }
-wordnode_T *nvim_spin_get_prefroot(spellinfo_T *s) { return s->si_prefroot; }
-int nvim_spin_get_foldwcount(spellinfo_T *s) { return s->si_foldwcount; }
-void nvim_spin_set_foldwcount(spellinfo_T *s, int v) { s->si_foldwcount = v; }
-int nvim_spin_get_keepwcount(spellinfo_T *s) { return s->si_keepwcount; }
-void nvim_spin_set_keepwcount(spellinfo_T *s, int v) { s->si_keepwcount = v; }
-wordnode_T *nvim_spin_get_first_free(const spellinfo_T *s) { return s->si_first_free; }
-void nvim_spin_set_first_free(spellinfo_T *s, wordnode_T *n) { s->si_first_free = n; }
-int nvim_spin_get_free_count(const spellinfo_T *s) { return s->si_free_count; }
-void nvim_spin_set_free_count(spellinfo_T *s, int v) { s->si_free_count = v; }
-sblock_T *nvim_spin_get_blocks(const spellinfo_T *s) { return s->si_blocks; }
-void nvim_spin_set_blocks(spellinfo_T *s, sblock_T *bl) { s->si_blocks = bl; }
-int nvim_spin_get_blocks_cnt(const spellinfo_T *s) { return s->si_blocks_cnt; }
-void nvim_spin_set_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt = v; }
-void nvim_spin_set_did_emsg(spellinfo_T *s) { s->si_did_emsg = true; }
-int nvim_spin_get_compress_cnt(const spellinfo_T *s) { return s->si_compress_cnt; }
-void nvim_spin_set_compress_cnt(spellinfo_T *s, int v) { s->si_compress_cnt = v; }
-int nvim_spin_get_blocks_cnt_val(const spellinfo_T *s) { return s->si_blocks_cnt; }
-void nvim_spin_add_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt += v; }
-void nvim_spin_sub_blocks_cnt(spellinfo_T *s, int v) { s->si_blocks_cnt -= v; }
-int nvim_spin_get_verbose(const spellinfo_T *s) { return s->si_verbose; }
-int nvim_spin_get_sugtree(const spellinfo_T *s) { return s->si_sugtree; }
-void nvim_spin_inc_msg_count(spellinfo_T *s) { s->si_msg_count++; }
-
-// sblock_T accessors for getroom/free_blocks.
-int nvim_sblock_get_used(const sblock_T *bl) { return bl->sb_used; }
-void nvim_sblock_set_used(sblock_T *bl, int v) { bl->sb_used = v; }
-sblock_T *nvim_sblock_get_next(const sblock_T *bl) { return bl->sb_next; }
-void nvim_sblock_set_next(sblock_T *bl, sblock_T *next) { bl->sb_next = next; }
-char *nvim_sblock_get_data_ptr(sblock_T *bl) { return bl->sb_data; }
-sblock_T *nvim_sblock_alloc(void) { return (sblock_T *)xcalloc(1, sizeof(sblock_T)); }
-int nvim_sblock_size(void) { return SBLOCKSIZE; }
 
 // Wrappers for spell-related Vim functions needed by Rust tree-building.
 int nvim_spell_captype(const char *word, const char *end) { return captype(word, end); }
