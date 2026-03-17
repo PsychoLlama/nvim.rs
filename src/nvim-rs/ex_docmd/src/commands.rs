@@ -2083,8 +2083,11 @@ extern "C" {
     fn nvim_tag_get_magic_overruled() -> c_int;
     fn nvim_tag_set_magic_overruled(val: c_int);
     fn ex_substitute(eap: ExArgHandle);
-    fn ex_substitute_preview(eap: ExArgHandle, cmdpreview_ns: c_int, cmdpreview_bufnr: c_int)
-        -> c_int;
+    fn ex_substitute_preview(
+        eap: ExArgHandle,
+        cmdpreview_ns: c_int,
+        cmdpreview_bufnr: c_int,
+    ) -> c_int;
     fn script_get(eap: ExArgHandle, lenp: *mut usize) -> *mut c_char;
     fn nvim_docmd_e319_msg() -> *const c_char;
 }
@@ -2147,7 +2150,11 @@ pub unsafe extern "C" fn rs_ex_stop(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_submagic(eap: ExArgHandle) {
     let saved = nvim_tag_get_magic_overruled();
     // OPTION_MAGIC_ON = 1, OPTION_MAGIC_OFF = 2
-    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC { 1 } else { 2 };
+    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC {
+        1
+    } else {
+        2
+    };
     nvim_tag_set_magic_overruled(new_val);
     ex_substitute(eap);
     nvim_tag_set_magic_overruled(saved);
@@ -2161,9 +2168,60 @@ pub unsafe extern "C" fn rs_ex_submagic_preview(
     cmdpreview_bufnr: c_int,
 ) -> c_int {
     let saved = nvim_tag_get_magic_overruled();
-    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC { 1 } else { 2 };
+    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC {
+        1
+    } else {
+        2
+    };
     nvim_tag_set_magic_overruled(new_val);
     let retv = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
     nvim_tag_set_magic_overruled(saved);
     retv
+}
+
+// =============================================================================
+// find_cmdline_var -- Phase 4 pure Rust migration
+// =============================================================================
+
+/// Spec string table (matches SPEC_* enum in ex_docmd.c).
+static SPEC_STRINGS: &[&[u8]] = &[
+    b"%",        // SPEC_PERC = 0
+    b"#",        // SPEC_HASH = 1
+    b"<cword>",  // SPEC_CWORD = 2
+    b"<cWORD>",  // SPEC_CCWORD = 3
+    b"<cexpr>",  // SPEC_CEXPR = 4
+    b"<cfile>",  // SPEC_CFILE = 5
+    b"<sfile>",  // SPEC_SFILE = 6
+    b"<slnum>",  // SPEC_SLNUM = 7
+    b"<stack>",  // SPEC_STACK = 8
+    b"<script>", // SPEC_SCRIPT = 9
+    b"<afile>",  // SPEC_AFILE = 10
+    b"<abuf>",   // SPEC_ABUF = 11
+    b"<amatch>", // SPEC_AMATCH = 12
+    b"<sflnum>", // SPEC_SFLNUM = 13
+    b"<SID>",    // SPEC_SID = 14
+];
+
+/// Check `src` for starting with a special cmdline variable.
+/// Returns the index of the match, or -1 if no match.
+/// Sets `*usedlen` to the length of the matched spec string.
+///
+/// Matches C `find_cmdline_var()`.
+#[export_name = "find_cmdline_var"]
+pub unsafe extern "C" fn rs_find_cmdline_var(src: *const c_char, usedlen: *mut usize) -> isize {
+    if src.is_null() {
+        return -1;
+    }
+    let src_len = strlen(src);
+    let src_bytes = std::slice::from_raw_parts(src as *const u8, src_len);
+
+    for (i, spec) in SPEC_STRINGS.iter().enumerate() {
+        if src_bytes.starts_with(spec) {
+            if !usedlen.is_null() {
+                *usedlen = spec.len();
+            }
+            return i as isize;
+        }
+    }
+    -1
 }

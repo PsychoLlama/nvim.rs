@@ -305,6 +305,8 @@ extern void ex_fclose(exarg_T *eap);
 extern void ex_stop(exarg_T *eap);
 extern void ex_submagic(exarg_T *eap);
 extern int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
+// Phase 4 (ex_docmd plan): C implementations replaced by Rust exports.
+extern ssize_t find_cmdline_var(const char *src, size_t *usedlen);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -3485,41 +3487,6 @@ enum {
   // SPEC_CLIENT,
 };
 
-/// Check "str" for starting with a special cmdline variable.
-/// If found return one of the SPEC_ values and set "*usedlen" to the length of
-/// the variable.  Otherwise return -1 and "*usedlen" is unchanged.
-ssize_t find_cmdline_var(const char *src, size_t *usedlen)
-  FUNC_ATTR_NONNULL_ALL
-{
-  static char *(spec_str[]) = {
-    [SPEC_PERC] = "%",
-    [SPEC_HASH] = "#",
-    [SPEC_CWORD] = "<cword>",           // cursor word
-    [SPEC_CCWORD] = "<cWORD>",          // cursor WORD
-    [SPEC_CEXPR] = "<cexpr>",           // expr under cursor
-    [SPEC_CFILE] = "<cfile>",           // cursor path name
-    [SPEC_SFILE] = "<sfile>",           // ":so" file name
-    [SPEC_SLNUM] = "<slnum>",           // ":so" file line number
-    [SPEC_STACK] = "<stack>",           // call stack
-    [SPEC_SCRIPT] = "<script>",         // script file name
-    [SPEC_AFILE] = "<afile>",           // autocommand file name
-    [SPEC_ABUF] = "<abuf>",             // autocommand buffer number
-    [SPEC_AMATCH] = "<amatch>",         // autocommand match name
-    [SPEC_SFLNUM] = "<sflnum>",         // script file line number
-    [SPEC_SID] = "<SID>",               // script ID: <SNR>123_
-    // [SPEC_CLIENT] = "<client>",
-  };
-
-  for (size_t i = 0; i < ARRAY_SIZE(spec_str); i++) {
-    size_t len = strlen(spec_str[i]);
-    if (strncmp(src, spec_str[i], len) == 0) {
-      *usedlen = len;
-      assert(i <= SSIZE_MAX);
-      return (ssize_t)i;
-    }
-  }
-  return -1;
-}
 
 /// Evaluate cmdline variables.
 ///

@@ -26,13 +26,15 @@ pub struct PosT {
 impl PosT {
     /// Return true if self < other (mirrors C `lt(a, b)`).
     #[inline]
-    pub fn lt(&self, other: &PosT) -> bool {
+    #[must_use]
+    pub fn lt(&self, other: &Self) -> bool {
         self.lnum < other.lnum || (self.lnum == other.lnum && self.col < other.col)
     }
 
     /// Return true if self == other (lnum + col, ignoring coladd).
     #[inline]
-    pub fn eq_pos(&self, other: &PosT) -> bool {
+    #[must_use]
+    pub fn eq_pos(&self, other: &Self) -> bool {
         self.lnum == other.lnum && self.col == other.col
     }
 }
@@ -74,6 +76,7 @@ impl PosT {
 /// - line_count:56, empty:60, is_VIsual:61, [pad:62-63]
 /// - start_vcol:64, end_vcol:68, prev_opcount:72, prev_count0:76
 /// - excl_tr_ws:80, [pad:81-83]
+///
 /// sizeof(oparg_T) = 84
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -109,11 +112,13 @@ impl OpargT {
     }
 
     #[inline]
-    pub fn op_type(&self) -> c_int {
+    #[must_use]
+    pub fn get_op_type(&self) -> c_int {
         self.op_type
     }
 
     #[inline]
+    #[must_use]
     pub fn is_nop(&self) -> bool {
         self.op_type == OP_NOP
     }
@@ -152,6 +157,7 @@ impl Default for OpargT {
 /// - nchar_composing:20 (32 bytes), nchar_len:52, extra_char:56
 /// - opcount:60, count0:64, count1:68, arg:72, retval:76
 /// - searchbuf:80 (ptr, 8 bytes)
+///
 /// sizeof(cmdarg_T) = 88
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -228,6 +234,7 @@ pub struct VimState {
 /// - oa:24 (84 bytes), [pad:108-111], ca:112 (88 bytes)
 /// - mapped_len:200, old_mapped_len:204, idx:208, c:212, old_col:216
 /// - old_pos:220 (12 bytes)
+///
 /// sizeof(NormalState) = 232
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
