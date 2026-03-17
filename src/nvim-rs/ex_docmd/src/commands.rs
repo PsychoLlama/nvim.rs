@@ -2143,8 +2143,12 @@ pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
 // Phase 3: Larger Ex Command Handlers
 
 extern "C" {
-    fn nvim_docmd_ex_edit(eap: ExArgHandle);
     fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char;
+    // Phase 23: ex_edit helpers
+    fn nvim_docmd_is_other_file(ffname: *const c_char) -> bool;
+    fn nvim_docmd_check_can_set_curbuf_forceit(forceit: bool) -> bool;
+    fn nvim_docmd_bt_prompt_curbuf() -> bool;
+    fn nvim_docmd_do_exedit(eap: ExArgHandle);
 
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
@@ -2288,7 +2292,30 @@ unsafe fn do_ex_pwd() {
 /// ":edit" / ":badd" / ":balt" / ":visual" / ":enew".
 #[export_name = "ex_edit"]
 pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
-    nvim_docmd_ex_edit(eap);
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let arg = nvim_eap_get_arg(eap);
+    let ffname = if cmdidx == CMD_ENEW {
+        std::ptr::null()
+    } else {
+        arg as *const c_char
+    };
+    // Exclude commands which keep the window's current buffer
+    if cmdidx != CMD_BADD
+        && cmdidx != CMD_BALT
+        && (nvim_docmd_is_other_file(ffname)
+            && !nvim_docmd_check_can_set_curbuf_forceit(nvim_eap_get_forceit(eap)))
+    {
+        return;
+    }
+    // prevent use of :edit on prompt-buffers
+    if nvim_docmd_bt_prompt_curbuf()
+        && cmdidx == CMD_EDIT
+        && (arg.is_null() || *(arg as *const u8) == 0)
+    {
+        emsg(c"cannot :edit a prompt buffer".as_ptr());
+        return;
+    }
+    nvim_docmd_do_exedit(eap);
 }
 
 /// ":pwd".
@@ -2377,7 +2404,13 @@ pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mu
 // Phase 4: Substantial Command Handlers
 
 extern "C" {
-    fn nvim_docmd_ex_at(eap: ExArgHandle);
+    // Phase 23: ex_at helpers
+    fn nvim_docmd_typebuf_tb_len() -> c_int;
+    fn nvim_docmd_p_cpo_has_execbuf() -> bool;
+    fn nvim_docmd_do_cmdline_getexline();
+    fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
+    fn stuff_empty() -> bool;
+    static mut exec_from_reg: bool;
 
     // Phase 18: ex_exit, ex_resize, ex_cd helpers
     static mut KeyTyped: bool;
@@ -2486,6 +2519,9 @@ const CMD_PRINT: c_int = 317;
 const EX_RANGE: u32 = 0x001;
 const EX_TRLBAR: u32 = 0x100;
 const EX_COUNT: u32 = 0x400;
+const CMD_ENEW: c_int = 148;
+const CMD_BADD: c_int = 23;
+const CMD_BALT: c_int = 24;
 const K_XF1: c_int = -14845;
 const K_XF2: c_int = -15101;
 
@@ -2762,7 +2798,36 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
 /// ":@" (execute register).
 #[export_name = "ex_at"]
 pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
-    nvim_docmd_ex_at(eap);
+    let prev_len = nvim_docmd_typebuf_tb_len();
+
+    nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line2(eap));
+    nvim_docmd_check_cursor_col();
+
+    // Get the register name. No name means use the previous one.
+    let arg = nvim_eap_get_arg(eap);
+    let c = if arg.is_null() || *(arg as *const u8) == 0 {
+        b'@' as c_int
+    } else {
+        *(arg as *const u8) as c_int
+    };
+
+    // Put the register in the typeahead buffer with the "silent" flag.
+    if do_execreg(c, 1, nvim_docmd_p_cpo_has_execbuf() as c_int, 1) == 0 {
+        beep_flush();
+        return;
+    }
+
+    let save_efr = exec_from_reg;
+    exec_from_reg = true;
+
+    // Execute from the typeahead buffer.
+    // Continue until the stuff buffer is empty and all added characters
+    // have been consumed.
+    while !stuff_empty() || nvim_docmd_typebuf_tb_len() > prev_len {
+        nvim_docmd_do_cmdline_getexline();
+    }
+
+    exec_from_reg = save_efr;
 }
 
 /// ":earlier" / ":later".

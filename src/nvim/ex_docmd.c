@@ -5225,25 +5225,14 @@ void nvim_docmd_ex_win_close(bool forceit, win_T *win) { ex_win_close(forceit, w
 // Phase 3 C wrappers (direct implementations for Rust FFI)
 
 /// ex_edit logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_edit(exarg_T *eap)
+// Phase 23 accessors for ex_edit
+bool nvim_docmd_is_other_file(const char *ffname) { return is_other_file(0, (char *)ffname); }
+bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
 {
-  char *ffname = eap->cmdidx == CMD_enew ? NULL : eap->arg;
-
-  // Exclude commands which keep the window's current buffer
-  if (eap->cmdidx != CMD_badd
-      && eap->cmdidx != CMD_balt
-      && (is_other_file(0, ffname) && !check_can_set_curbuf_forceit(eap->forceit))) {
-    return;
-  }
-
-  // prevent use of :edit on prompt-buffers
-  if (bt_prompt(curbuf) && eap->cmdidx == CMD_edit && *eap->arg == NUL) {
-    emsg("cannot :edit a prompt buffer");
-    return;
-  }
-
-  do_exedit(eap, NULL);
+  return check_can_set_curbuf_forceit(forceit);
 }
+bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
+void nvim_docmd_do_exedit(exarg_T *eap) { do_exedit(eap, NULL); }
 
 /// get_argopt_name logic (direct implementation for Rust FFI).
 char *nvim_docmd_get_argopt_name(int idx)
@@ -5265,45 +5254,13 @@ char *nvim_docmd_get_argopt_name(int idx)
   return NULL;
 }
 
-// Phase 4 C wrappers (direct implementations for Rust FFI)
 
-/// ex_range_without_command logic.
-
-
-
-
-/// ex_at logic.
-void nvim_docmd_ex_at(exarg_T *eap)
+// Phase 23 accessors for ex_at
+int nvim_docmd_typebuf_tb_len(void) { return typebuf.tb_len; }
+bool nvim_docmd_p_cpo_has_execbuf(void) { return vim_strchr(p_cpo, CPO_EXECBUF) != NULL; }
+void nvim_docmd_do_cmdline_getexline(void)
 {
-  int prev_len = typebuf.tb_len;
-
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-
-  // Get the register name. No name means use the previous one.
-  int c = (uint8_t)(*eap->arg);
-  if (c == NUL) {
-    c = '@';
-  }
-
-  // Put the register in the typeahead buffer with the "silent" flag.
-  if (do_execreg(c, true, vim_strchr(p_cpo, CPO_EXECBUF) != NULL, true) == FAIL) {
-    beep_flush();
-    return;
-  }
-
-  const bool save_efr = exec_from_reg;
-
-  exec_from_reg = true;
-
-  // Execute from the typeahead buffer.
-  // Continue until the stuff buffer is empty and all added characters
-  // have been consumed.
-  while (!stuff_empty() || typebuf.tb_len > prev_len) {
-    do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT|DOCMD_VERBOSE);
-  }
-
-  exec_from_reg = save_efr;
+  do_cmdline(NULL, getexline, NULL, DOCMD_NOWAIT | DOCMD_VERBOSE);
 }
 
 
