@@ -5069,14 +5069,6 @@ void nvim_docmd_goto_buffer_last(exarg_T *eap)
   }
 }
 
-/// Wrapper for ex_highlight (including easter egg check).
-void nvim_docmd_ex_highlight(exarg_T *eap)
-{
-  if (*eap->arg == NUL && eap->cmd[2] == '!') {
-    msg(_("Greetings, Vim user!"), 0);
-  }
-  do_highlight(eap->arg, eap->forceit, false);
-}
 
 /// Wrapper for do_bang().
 void nvim_docmd_do_bang(int addr_count, exarg_T *eap, bool forceit)
@@ -5243,24 +5235,7 @@ void nvim_docmd_ex_redrawtabline(void)
   ui_flush();
 }
 
-/// ex_join logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_join(exarg_T *eap)
-{
-  curwin->w_cursor.lnum = eap->line1;
-  if (eap->line1 == eap->line2) {
-    if (eap->addr_count >= 2) {
-      return;
-    }
-    if (eap->line2 == curbuf->b_ml.ml_line_count) {
-      beep_flush();
-      return;
-    }
-    eap->line2++;
-  }
-  do_join((size_t)((ssize_t)eap->line2 - eap->line1 + 1), !eap->forceit, true, true, true);
-  beginline(BL_WHITE | BL_FIX);
-  ex_may_print(eap);
-}
+
 
 /// ex_put logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_put(exarg_T *eap)
@@ -5801,39 +5776,6 @@ void nvim_docmd_ex_at(exarg_T *eap)
   exec_from_reg = save_efr;
 }
 
-/// ex_later logic.
-void nvim_docmd_ex_later(exarg_T *eap)
-{
-  int count = 0;
-  bool sec = false;
-  bool file = false;
-  char *p = eap->arg;
-
-  if (*p == NUL) {
-    count = 1;
-  } else if (isdigit((uint8_t)(*p))) {
-    count = getdigits_int(&p, false, 0);
-    switch (*p) {
-    case 's':
-      p++; sec = true; break;
-    case 'm':
-      p++; sec = true; count *= 60; break;
-    case 'h':
-      p++; sec = true; count *= 60 * 60; break;
-    case 'd':
-      p++; sec = true; count *= 24 * 60 * 60; break;
-    case 'f':
-      p++; file = true; break;
-    }
-  }
-
-  if (*p != NUL) {
-    semsg(_(e_invarg2), eap->arg);
-  } else {
-    undo_time(eap->cmdidx == CMD_earlier ? -count : count,
-              sec, file, false);
-  }
-}
 
 /// ex_redraw logic.
 void nvim_docmd_ex_redraw(exarg_T *eap)

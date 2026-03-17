@@ -134,6 +134,7 @@ pub(crate) const CMD_TABLAST: c_int = 459;
 pub(crate) const CMD_TABPREVIOUS: c_int = 463;
 pub(crate) const CMD_TABNEXT_BACKWARD: c_int = 464; // CMD_tabNext
 pub(crate) const CMD_TABREWIND: c_int = 465;
+pub(crate) const CMD_EARLIER: c_int = 134;
 pub(crate) const CMD_DELETE: c_int = 110;
 pub(crate) const CMD_YANK: c_int = 546;
 pub(crate) const CMD_RSHIFT: c_int = 553;
@@ -180,6 +181,8 @@ extern "C" {
     fn nvim_eap_get_line2(eap: ExArgHandle) -> LinenrT;
     fn nvim_eap_get_addr_count(eap: ExArgHandle) -> c_int;
     fn nvim_eap_set_line1(eap: ExArgHandle, line: LinenrT);
+    fn nvim_eap_set_line2(eap: ExArgHandle, line: LinenrT);
+    fn nvim_docmd_get_curbuf_line_count() -> LinenrT;
 
     // Global state accessors
     fn nvim_get_cmdwin_type() -> c_int;
@@ -346,6 +349,9 @@ extern "C" {
     fn op_shift(oap: *mut OpargT, curs_top: bool, amount: c_int);
     fn nvim_curwin_get_w_p_rl() -> c_int;
     fn ex_may_print(eap: ExArgHandle);
+    fn beep_flush();
+    fn do_join(count: usize, insert_space: bool, save_undo: bool, use_cursor: bool, setmark: bool);
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -1619,7 +1625,7 @@ extern "C" {
     fn nvim_docmd_goto_buffer_prev(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_rewind(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_last(eap: ExArgHandle);
-    fn nvim_docmd_ex_highlight(eap: ExArgHandle);
+    fn do_highlight(line: *const c_char, forceit: bool, init: bool);
     fn nvim_docmd_do_bang(addr_count: c_int, eap: ExArgHandle, forceit: bool);
     fn nvim_docmd_ml_preserve();
     fn nvim_docmd_u_redo();
@@ -1674,7 +1680,12 @@ pub unsafe extern "C" fn rs_ex_blast(eap: ExArgHandle) {
 /// ":highlight" -- call do_highlight (including easter egg).
 #[export_name = "ex_highlight"]
 pub unsafe extern "C" fn rs_ex_highlight(eap: ExArgHandle) {
-    nvim_docmd_ex_highlight(eap);
+    let arg = nvim_eap_get_arg(eap);
+    let cmd = nvim_eap_get_cmd(eap);
+    if !arg.is_null() && *arg == 0 && !cmd.is_null() && *cmd.add(2) == b'!' as c_char {
+        msg(c"Greetings, Vim user!".as_ptr(), 0);
+    }
+    do_highlight(arg, nvim_eap_get_forceit(eap), false);
 }
 
 /// not_exiting -- clear exiting flag (already exists as C function, not migrated).
@@ -1820,7 +1831,6 @@ extern "C" {
     fn nvim_docmd_ex_shada(eap: ExArgHandle);
     fn nvim_docmd_ex_folddo(eap: ExArgHandle);
     fn nvim_docmd_ex_redrawtabline();
-    fn nvim_docmd_ex_join(eap: ExArgHandle);
     fn nvim_docmd_ex_put(eap: ExArgHandle);
     fn nvim_docmd_ex_iput(eap: ExArgHandle);
     fn nvim_docmd_ex_equal(eap: ExArgHandle);
@@ -1937,7 +1947,27 @@ pub unsafe extern "C" fn rs_ex_redrawtabline(eap: ExArgHandle) {
 /// ":join".
 #[export_name = "ex_join"]
 pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
-    nvim_docmd_ex_join(eap);
+    const BL_WHITE: c_int = 1;
+    let line1 = nvim_eap_get_line1(eap);
+    let line2 = nvim_eap_get_line2(eap);
+    nvim_docmd_set_curwin_cursor_lnum(line1);
+    let line2 = if line1 == line2 {
+        if nvim_eap_get_addr_count(eap) >= 2 {
+            return;
+        }
+        if line2 == nvim_docmd_get_curbuf_line_count() {
+            beep_flush();
+            return;
+        }
+        let new_line2 = line2 + 1;
+        nvim_eap_set_line2(eap, new_line2);
+        new_line2
+    } else {
+        line2
+    };
+    do_join((line2 - line1 + 1) as usize, !nvim_eap_get_forceit(eap), true, true, true);
+    beginline(BL_WHITE | BL_FIX);
+    ex_may_print(eap);
 }
 
 /// ":put".
@@ -2056,7 +2086,6 @@ extern "C" {
     fn nvim_docmd_ex_wincmd(eap: ExArgHandle);
     fn nvim_docmd_ex_copymove(eap: ExArgHandle);
     fn nvim_docmd_ex_at(eap: ExArgHandle);
-    fn nvim_docmd_ex_later(eap: ExArgHandle);
     fn nvim_docmd_ex_redraw(eap: ExArgHandle);
     fn nvim_docmd_ex_redrawstatus(eap: ExArgHandle);
     fn nvim_docmd_ex_startinsert(eap: ExArgHandle);
@@ -2119,7 +2148,32 @@ pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
 /// ":earlier" / ":later".
 #[export_name = "ex_later"]
 pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
-    nvim_docmd_ex_later(eap);
+    let mut count = 0i32;
+    let mut sec = false;
+    let mut file = false;
+    let arg = nvim_eap_get_arg(eap);
+    let mut p = arg;
+    if p.is_null() || *p == 0 {
+        count = 1;
+    } else if (*(p as *const u8)).is_ascii_digit() {
+        let mut pp = p as *mut c_char;
+        count = getdigits_int(&mut pp as *mut *mut c_char, false, 0);
+        p = pp;
+        match *(p as *const u8) {
+            b's' => { p = p.add(1); sec = true; }
+            b'm' => { p = p.add(1); sec = true; count *= 60; }
+            b'h' => { p = p.add(1); sec = true; count *= 60 * 60; }
+            b'd' => { p = p.add(1); sec = true; count *= 24 * 60 * 60; }
+            b'f' => { p = p.add(1); file = true; }
+            _ => {}
+        }
+    }
+    if !p.is_null() && *p != 0 {
+        semsg(nvim_get_e_invarg2() as *const c_char, arg);
+    } else {
+        let step = if nvim_eap_get_cmdidx(eap) == CMD_EARLIER { -count } else { count };
+        undo_time(step, sec, file, false);
+    }
 }
 
 /// ":redraw".
