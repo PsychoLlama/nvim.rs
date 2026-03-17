@@ -21,84 +21,112 @@ type WinHandle = *mut c_void;
 // CMD_ enum constants for skip_cmd
 // =============================================================================
 
-const CMD_ABOVELEFT: c_int = 3;
-const CMD_AND: c_int = 549;
-const CMD_BELOWRIGHT: c_int = 26;
-const CMD_BOTRIGHT: c_int = 31;
-const CMD_BROWSE: c_int = 38;
-const CMD_CALL: c_int = 53;
-const CMD_CATCH: c_int = 54;
-const CMD_CONFIRM: c_int = 97;
-const CMD_CONST: c_int = 99;
-const CMD_DELFUNCTION: c_int = 115;
-const CMD_DJUMP: c_int = 126;
-const CMD_DLIST: c_int = 127;
-const CMD_DSEARCH: c_int = 131;
-const CMD_DSPLIT: c_int = 132;
-const CMD_ECHO: c_int = 135;
-const CMD_ECHOERR: c_int = 136;
-const CMD_ECHOMSG: c_int = 138;
-const CMD_ECHON: c_int = 139;
-const CMD_ELSE: c_int = 140;
-const CMD_ELSEIF: c_int = 141;
-const CMD_ENDIF: c_int = 143;
-const CMD_ENDFOR: c_int = 145;
-const CMD_ENDTRY: c_int = 146;
-const CMD_ENDWHILE: c_int = 147;
-const CMD_EVAL: c_int = 149;
-const CMD_EXECUTE: c_int = 151;
-const CMD_FILTER: c_int = 157;
-const CMD_FINALLY: c_int = 159;
-const CMD_FOR: c_int = 167;
-const CMD_FUNCTION: c_int = 168;
-const CMD_HELP: c_int = 176;
-const CMD_HIDE: c_int = 181;
-const CMD_HORIZONTAL: c_int = 183;
-const CMD_IF: c_int = 187;
-const CMD_IJUMP: c_int = 188;
-const CMD_ILIST: c_int = 189;
-const CMD_ISEARCH: c_int = 198;
-const CMD_ISPLIT: c_int = 199;
-const CMD_KEEPALT: c_int = 209;
-const CMD_KEEPJUMPS: c_int = 207;
-const CMD_KEEPMARKS: c_int = 206;
-const CMD_KEEPPATTERNS: c_int = 208;
-const CMD_LEFTABOVE: c_int = 230;
-const CMD_LET: c_int = 231;
-const CMD_LOCKMARKS: c_int = 255;
-const CMD_LOCKVAR: c_int = 256;
-const CMD_LUA: c_int = 264;
-const CMD_MATCH: c_int = 277;
-const CMD_MZSCHEME: c_int = 287;
-const CMD_NOAUTOCMD: c_int = 297;
-const CMD_NOSWAPFILE: c_int = 301;
-const CMD_PERL: c_int = 322;
-const CMD_PSEARCH: c_int = 333;
-const CMD_PYTHON: c_int = 345;
-const CMD_PY3: c_int = 348;
-const CMD_PYTHON3: c_int = 350;
-const CMD_PYTHONX: c_int = 354;
-const CMD_PYX: c_int = 352;
-const CMD_RETURN: c_int = 370;
-const CMD_RIGHTBELOW: c_int = 373;
-const CMD_RUBY: c_int = 377;
-const CMD_SILENT: c_int = 406;
-const CMD_SMAGIC: c_int = 409;
-const CMD_SNOMAGIC: c_int = 414;
-const CMD_SUBSTITUTE: c_int = 381;
-const CMD_SYNTAX: c_int = 443;
-const CMD_TAB: c_int = 452;
-const CMD_TCL: c_int = 467;
-const CMD_THROW: c_int = 472;
-const CMD_TILDE: c_int = 554;
-const CMD_TOPLEFT: c_int = 483;
-const CMD_TRY: c_int = 487;
-const CMD_UNLET: c_int = 497;
-const CMD_UNLOCKVAR: c_int = 498;
-const CMD_VERBOSE: c_int = 505;
-const CMD_VERTICAL: c_int = 506;
-const CMD_WHILE: c_int = 524;
-const CMD_WINCMD: c_int = 526;
+pub(crate) const CMD_APPEND: c_int = 0;
+pub(crate) const CMD_AUTOCMD: c_int = 17;
+pub(crate) const CMD_AT: c_int = 553;
+pub(crate) const CMD_BANG: c_int = 547;
+pub(crate) const CMD_BDELETE: c_int = 25;
+pub(crate) const CMD_BUNLOAD: c_int = 41;
+pub(crate) const CMD_BWIPEOUT: c_int = 42;
+pub(crate) const CMD_CC: c_int = 59;
+pub(crate) const CMD_CHANGE: c_int = 43;
+pub(crate) const CMD_CHECKTIME: c_int = 75;
+pub(crate) const CMD_DIFFGET: c_int = 119;
+pub(crate) const CMD_DIFFPUT: c_int = 122;
+pub(crate) const CMD_EDIT: c_int = 133;
+pub(crate) const CMD_FILE: c_int = 154;
+pub(crate) const CMD_INSERT: c_int = 184;
+pub(crate) const CMD_IPUT: c_int = 197;
+pub(crate) const CMD_K: c_int = 205;
+pub(crate) const CMD_LL: c_int = 243;
+pub(crate) const CMD_LVIMGREP: c_int = 267;
+pub(crate) const CMD_LVIMGREPADD: c_int = 268;
+pub(crate) const CMD_NEXT: c_int = 555;
+pub(crate) const CMD_PUT: c_int = 343;
+pub(crate) const CMD_REDIR: c_int = 362;
+pub(crate) const CMD_SIZE: c_int = 556;
+pub(crate) const CMD_TABMOVE: c_int = 458;
+pub(crate) const CMD_TABNEXT: c_int = 460;
+pub(crate) const CMD_VIMGREP: c_int = 509;
+pub(crate) const CMD_VIMGREPADD: c_int = 510;
+pub(crate) const CMD_ABOVELEFT: c_int = 3;
+pub(crate) const CMD_AND: c_int = 549;
+pub(crate) const CMD_BELOWRIGHT: c_int = 26;
+pub(crate) const CMD_BOTRIGHT: c_int = 31;
+pub(crate) const CMD_BROWSE: c_int = 38;
+pub(crate) const CMD_CALL: c_int = 53;
+pub(crate) const CMD_CATCH: c_int = 54;
+pub(crate) const CMD_CONFIRM: c_int = 97;
+pub(crate) const CMD_CONST: c_int = 99;
+pub(crate) const CMD_DELFUNCTION: c_int = 115;
+pub(crate) const CMD_DJUMP: c_int = 126;
+pub(crate) const CMD_DLIST: c_int = 127;
+pub(crate) const CMD_DSEARCH: c_int = 131;
+pub(crate) const CMD_DSPLIT: c_int = 132;
+pub(crate) const CMD_ECHO: c_int = 135;
+pub(crate) const CMD_ECHOERR: c_int = 136;
+pub(crate) const CMD_ECHOMSG: c_int = 138;
+pub(crate) const CMD_ECHON: c_int = 139;
+pub(crate) const CMD_ELSE: c_int = 140;
+pub(crate) const CMD_ELSEIF: c_int = 141;
+pub(crate) const CMD_ENDIF: c_int = 143;
+pub(crate) const CMD_ENDFOR: c_int = 145;
+pub(crate) const CMD_ENDTRY: c_int = 146;
+pub(crate) const CMD_ENDWHILE: c_int = 147;
+pub(crate) const CMD_EVAL: c_int = 149;
+pub(crate) const CMD_EXECUTE: c_int = 151;
+pub(crate) const CMD_FILTER: c_int = 157;
+pub(crate) const CMD_FINALLY: c_int = 159;
+pub(crate) const CMD_FOR: c_int = 167;
+pub(crate) const CMD_FUNCTION: c_int = 168;
+pub(crate) const CMD_HELP: c_int = 176;
+pub(crate) const CMD_HIDE: c_int = 181;
+pub(crate) const CMD_HORIZONTAL: c_int = 183;
+pub(crate) const CMD_IF: c_int = 187;
+pub(crate) const CMD_IJUMP: c_int = 188;
+pub(crate) const CMD_ILIST: c_int = 189;
+pub(crate) const CMD_ISEARCH: c_int = 198;
+pub(crate) const CMD_ISPLIT: c_int = 199;
+pub(crate) const CMD_KEEPALT: c_int = 209;
+pub(crate) const CMD_KEEPJUMPS: c_int = 207;
+pub(crate) const CMD_KEEPMARKS: c_int = 206;
+pub(crate) const CMD_KEEPPATTERNS: c_int = 208;
+pub(crate) const CMD_LEFTABOVE: c_int = 230;
+pub(crate) const CMD_LET: c_int = 231;
+pub(crate) const CMD_LOCKMARKS: c_int = 255;
+pub(crate) const CMD_LOCKVAR: c_int = 256;
+pub(crate) const CMD_LUA: c_int = 264;
+pub(crate) const CMD_MATCH: c_int = 277;
+pub(crate) const CMD_MZSCHEME: c_int = 287;
+pub(crate) const CMD_NOAUTOCMD: c_int = 297;
+pub(crate) const CMD_NOSWAPFILE: c_int = 301;
+pub(crate) const CMD_PERL: c_int = 322;
+pub(crate) const CMD_PSEARCH: c_int = 333;
+pub(crate) const CMD_PYTHON: c_int = 345;
+pub(crate) const CMD_PY3: c_int = 348;
+pub(crate) const CMD_PYTHON3: c_int = 350;
+pub(crate) const CMD_PYTHONX: c_int = 354;
+pub(crate) const CMD_PYX: c_int = 352;
+pub(crate) const CMD_RETURN: c_int = 370;
+pub(crate) const CMD_RIGHTBELOW: c_int = 373;
+pub(crate) const CMD_RUBY: c_int = 377;
+pub(crate) const CMD_SILENT: c_int = 406;
+pub(crate) const CMD_SMAGIC: c_int = 409;
+pub(crate) const CMD_SNOMAGIC: c_int = 414;
+pub(crate) const CMD_SUBSTITUTE: c_int = 381;
+pub(crate) const CMD_SYNTAX: c_int = 443;
+pub(crate) const CMD_TAB: c_int = 452;
+pub(crate) const CMD_TCL: c_int = 467;
+pub(crate) const CMD_THROW: c_int = 472;
+pub(crate) const CMD_TILDE: c_int = 554;
+pub(crate) const CMD_TOPLEFT: c_int = 483;
+pub(crate) const CMD_TRY: c_int = 487;
+pub(crate) const CMD_UNLET: c_int = 497;
+pub(crate) const CMD_UNLOCKVAR: c_int = 498;
+pub(crate) const CMD_VERBOSE: c_int = 505;
+pub(crate) const CMD_VERTICAL: c_int = 506;
+pub(crate) const CMD_WHILE: c_int = 524;
+pub(crate) const CMD_WINCMD: c_int = 526;
 
 // =============================================================================
 // FFI declarations
@@ -1717,7 +1745,6 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
-    fn nvim_docmd_cmd_autocmd() -> c_int;
     fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_ex_shada(eap: ExArgHandle);
     fn nvim_docmd_ex_folddo(eap: ExArgHandle);
@@ -1727,8 +1754,6 @@ extern "C" {
     fn nvim_docmd_ex_iput(eap: ExArgHandle);
     fn nvim_docmd_ex_equal(eap: ExArgHandle);
     fn nvim_docmd_ex_recover(eap: ExArgHandle);
-    fn nvim_get_cmd_bdelete() -> c_int;
-    fn nvim_get_cmd_bwipeout() -> c_int;
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     fn nvim_docmd_ex_setfiletype(eap: ExArgHandle);
 }
@@ -1742,11 +1767,9 @@ const DOBUF_WIPE: c_int = 4;
 #[export_name = "ex_bunload"]
 pub unsafe extern "C" fn rs_ex_bunload(eap: ExArgHandle) {
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    let cmd_bdelete = nvim_get_cmd_bdelete();
-    let cmd_bwipeout = nvim_get_cmd_bwipeout();
-    let command = if cmdidx == cmd_bdelete {
+    let command = if cmdidx == CMD_BDELETE {
         DOBUF_DEL
-    } else if cmdidx == cmd_bwipeout {
+    } else if cmdidx == CMD_BWIPEOUT {
         DOBUF_WIPE
     } else {
         DOBUF_UNLOAD
@@ -1777,10 +1800,9 @@ pub unsafe extern "C" fn rs_ex_autocmd(eap: ExArgHandle) {
         nvim_eap_set_errmsg_const(eap, e_curdir);
     } else {
         let cmdidx = nvim_eap_get_cmdidx(eap);
-        let cmd_autocmd = nvim_docmd_cmd_autocmd();
         let arg = nvim_eap_get_arg(eap);
         let forceit = nvim_eap_get_forceit(eap);
-        if cmdidx == cmd_autocmd {
+        if cmdidx == CMD_AUTOCMD {
             nvim_docmd_do_autocmd(eap, arg as *const c_char, forceit as c_int);
         } else {
             nvim_docmd_do_augroup(arg as *const c_char, forceit as c_int);

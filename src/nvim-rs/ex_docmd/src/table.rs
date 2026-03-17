@@ -266,13 +266,6 @@ pub extern "C" fn rs_cmd_allows_cmdarg(argt: u32) -> c_int {
 // cmd_has_expr_args - Check if command expects expression arguments
 // =============================================================================
 
-extern "C" {
-    fn nvim_docmd_cmd_execute() -> c_int;
-    fn nvim_docmd_cmd_echo() -> c_int;
-    fn nvim_docmd_cmd_echon() -> c_int;
-    fn nvim_docmd_cmd_echomsg() -> c_int;
-    fn nvim_docmd_cmd_echoerr() -> c_int;
-}
 
 /// Check if a command expects expression arguments.
 ///
@@ -282,13 +275,11 @@ extern "C" {
 /// Matches C `cmd_has_expr_args()`.
 #[export_name = "cmd_has_expr_args"]
 pub extern "C" fn rs_cmd_has_expr_args(cmdidx: c_int) -> bool {
-    unsafe {
-        cmdidx == nvim_docmd_cmd_execute()
-            || cmdidx == nvim_docmd_cmd_echo()
-            || cmdidx == nvim_docmd_cmd_echon()
-            || cmdidx == nvim_docmd_cmd_echomsg()
-            || cmdidx == nvim_docmd_cmd_echoerr()
-    }
+    cmdidx == crate::commands::CMD_EXECUTE
+        || cmdidx == crate::commands::CMD_ECHO
+        || cmdidx == crate::commands::CMD_ECHON
+        || cmdidx == crate::commands::CMD_ECHOMSG
+        || cmdidx == crate::commands::CMD_ECHOERR
 }
 
 // =============================================================================

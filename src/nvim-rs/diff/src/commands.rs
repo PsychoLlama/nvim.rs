@@ -13,6 +13,11 @@ use crate::buffer::{BufHandle, DiffBlockHandle, WinHandle, DB_COUNT};
 /// Line number type matching linenr_T (i32).
 type LinenrT = i32;
 
+/// CMD_diffget enum value (matches C CMD_diffget = 119).
+const CMD_DIFFGET: c_int = 119;
+/// CMD_diffput enum value (matches C CMD_diffput = 122).
+const CMD_DIFFPUT: c_int = 122;
+
 /// Result constants.
 const OK: c_int = 1;
 const FAIL: c_int = 0;
@@ -37,8 +42,6 @@ extern "C" {
     fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_vim_beep_operator();
     fn nvim_get_curwin_cursor_lnum() -> c_int;
-    fn nvim_docmd_cmd_diffget() -> c_int;
-    fn nvim_docmd_cmd_diffput() -> c_int;
     fn nvim_get_curwin() -> WinHandle;
 
     // Phase 3: ex_diffgetput accessors
@@ -586,11 +589,7 @@ pub unsafe extern "C" fn rs_nv_diffgetput(put: bool, count: usize) {
     }
 
     let lnum = nvim_get_curwin_cursor_lnum();
-    let cmdidx = if put {
-        nvim_docmd_cmd_diffput()
-    } else {
-        nvim_docmd_cmd_diffget()
-    };
+    let cmdidx = if put { CMD_DIFFPUT } else { CMD_DIFFGET };
 
     // Build a minimal exarg_T on the stack and call rs_ex_diffgetput.
     // We use the C accessor nvim_diff_call_nv_diffgetput_impl to build the eap.

@@ -7,10 +7,6 @@ use std::ffi::{c_char, c_int};
 
 extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_docmd_cmd_k() -> c_int;
-    fn nvim_docmd_cmd_substitute() -> c_int;
-    fn nvim_docmd_cmd_match() -> c_int;
-    fn nvim_docmd_cmd_size() -> c_int;
     fn nvim_docmd_cmd_exists_inner(
         name: *const c_char,
         out_cmdidx: *mut c_int,
@@ -25,8 +21,6 @@ extern "C" {
     fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
     fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
     fn nvim_eap_set_flags(eap: ExArgHandle, flags: c_int);
-    fn nvim_docmd_cmd_next() -> c_int;
-    fn nvim_docmd_cmd_bang() -> c_int;
     fn nvim_docmd_get_command_count() -> c_int;
     fn nvim_docmd_get_cmdidxs1(c: c_int) -> c_int;
     fn nvim_docmd_get_cmdidxs2(c1: c_int, c2: c_int) -> c_int;
@@ -276,7 +270,7 @@ pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) ->
     // 'k' command - mark
     // Match: k followed by anything except "ee" (which would be :keepXXX)
     if p0 == b'k' && !(p1 == b'e' && p2 == b'e') {
-        *idx = nvim_docmd_cmd_k();
+        *idx = crate::commands::CMD_K;
         return 1;
     }
 
@@ -292,7 +286,7 @@ pub unsafe extern "C" fn rs_one_letter_cmd(p: *const c_char, idx: *mut c_int) ->
             || p1 == b'I'
             || (p1 == b'r' && p2 != b'e')
         {
-            *idx = nvim_docmd_cmd_substitute();
+            *idx = crate::commands::CMD_SUBSTITUTE;
             return 1;
         }
     }
@@ -338,7 +332,7 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
         return 3;
     }
 
-    if (*name as u8).is_ascii_digit() && cmdidx != nvim_docmd_cmd_match() {
+    if (*name as u8).is_ascii_digit() && cmdidx != crate::commands::CMD_MATCH {
         return 0;
     }
 
@@ -346,7 +340,7 @@ pub unsafe extern "C" fn rs_cmd_exists(name: *const c_char) -> c_int {
         return 0; // trailing garbage
     }
 
-    if cmdidx == nvim_docmd_cmd_size() {
+    if cmdidx == crate::commands::CMD_SIZE {
         0
     } else if full != 0 {
         2
@@ -467,8 +461,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
                 *cmd.add(1) as u8 as c_int
             };
 
-            let cmd_size = nvim_docmd_cmd_size();
-            if nvim_docmd_get_command_count() != cmd_size {
+            if nvim_docmd_get_command_count() != crate::commands::CMD_SIZE {
                 nvim_docmd_e943_abort();
             }
 
@@ -478,9 +471,9 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             }
             nvim_eap_set_cmdidx(eap, start_idx);
         } else if c0.is_ascii_uppercase() {
-            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_next());
+            nvim_eap_set_cmdidx(eap, crate::commands::CMD_NEXT);
         } else {
-            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_bang());
+            nvim_eap_set_cmdidx(eap, crate::commands::CMD_BANG);
         }
 
         // Make :def an unknown command (#23149).
@@ -489,13 +482,12 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             && *cmd.add(1) as u8 == b'e'
             && *cmd.add(2) as u8 == b'f'
         {
-            nvim_eap_set_cmdidx(eap, nvim_docmd_cmd_size());
+            nvim_eap_set_cmdidx(eap, crate::commands::CMD_SIZE);
         }
 
         // Iterate cmdnames[] for prefix match.
-        let cmd_size = nvim_docmd_cmd_size();
         let mut cidx = nvim_eap_get_cmdidx(eap);
-        while cidx < cmd_size {
+        while cidx < crate::commands::CMD_SIZE {
             if nvim_docmd_cmdnames_prefix_match(cidx, cmd as *const c_char, effective_len) != 0 {
                 if !full.is_null() && nvim_docmd_cmdnames_name_complete(cidx, effective_len) != 0 {
                     *full = 1;
@@ -507,7 +499,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
         nvim_eap_set_cmdidx(eap, cidx);
 
         // Look for a user defined command as a last resort.
-        if nvim_eap_get_cmdidx(eap) == cmd_size && (*cmd as u8) >= b'A' && (*cmd as u8) <= b'Z' {
+        if nvim_eap_get_cmdidx(eap) == crate::commands::CMD_SIZE && (*cmd as u8) >= b'A' && (*cmd as u8) <= b'Z' {
             // User defined commands may contain digits.
             while (*p as u8).is_ascii_alphanumeric() {
                 p = p.add(1);
@@ -515,7 +507,7 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
             p = nvim_docmd_find_ucmd(eap, p, full);
         }
         if p == cmd {
-            nvim_eap_set_cmdidx(eap, cmd_size);
+            nvim_eap_set_cmdidx(eap, crate::commands::CMD_SIZE);
         }
     }
 
@@ -536,12 +528,12 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
 #[export_name = "excmd_get_cmdidx"]
 pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> c_int {
     if cmd.is_null() {
-        return nvim_docmd_cmd_size();
+        return crate::commands::CMD_SIZE;
     }
 
     // Make :def an unknown command (#23149).
     if len == 3 && *cmd as u8 == b'd' && *cmd.add(1) as u8 == b'e' && *cmd.add(2) as u8 == b'f' {
-        return nvim_docmd_cmd_size();
+        return crate::commands::CMD_SIZE;
     }
 
     let mut idx_val: c_int = 0;
@@ -549,10 +541,9 @@ pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> 
         return idx_val;
     }
 
-    let cmd_size = nvim_docmd_cmd_size();
     let len_i = len as c_int;
     let mut idx: c_int = 0;
-    while idx < cmd_size {
+    while idx < crate::commands::CMD_SIZE {
         if nvim_docmd_cmdnames_prefix_match(idx, cmd, len_i) != 0 {
             break;
         }
@@ -577,8 +568,7 @@ pub unsafe extern "C" fn rs_excmd_get_cmdidx(cmd: *const c_char, len: usize) -> 
 /// `xp` is unused (passed through for API compat). `idx` must be valid.
 #[export_name = "get_command_name"]
 pub unsafe extern "C" fn rs_get_command_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
-    let cmd_size = nvim_docmd_cmd_size();
-    if idx >= cmd_size {
+    if idx >= crate::commands::CMD_SIZE {
         return nvim_docmd_expand_user_cmd_name(idx);
     }
     nvim_docmd_cmdnames_name(idx)
@@ -620,8 +610,7 @@ pub unsafe extern "C" fn rs_f_fullcommand(argvars: *mut c_void, rettv: *mut c_vo
         &mut useridx,
     );
 
-    let cmd_size = nvim_docmd_cmd_size();
-    if p.is_null() || cmdidx == cmd_size {
+    if p.is_null() || cmdidx == crate::commands::CMD_SIZE {
         return;
     }
 

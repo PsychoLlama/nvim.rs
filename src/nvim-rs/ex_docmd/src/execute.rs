@@ -404,15 +404,6 @@ extern "C" {
     fn nvim_set_cmd_dflall_range(eap: ExArgHandle);
     fn nvim_parse_register(eap: ExArgHandle);
     fn nvim_iosize() -> usize;
-    fn nvim_get_cmd_try() -> c_int;
-    fn nvim_get_cmd_bdelete() -> c_int;
-    fn nvim_get_cmd_bwipeout() -> c_int;
-    fn nvim_get_cmd_bunload() -> c_int;
-    fn nvim_get_cmd_put() -> c_int;
-    fn nvim_get_cmd_iput() -> c_int;
-    fn nvim_get_cmd_checktime() -> c_int;
-    fn nvim_get_cmd_edit() -> c_int;
-    fn nvim_get_cmd_file() -> c_int;
 }
 
 /// FFI wrapper for line range validation.
@@ -614,9 +605,9 @@ pub unsafe extern "C" fn rs_execute_cmd0(
         let (line2, advance) = if args.is_null() {
             // No argument positions — search arg for buffer name.
             let arg = nvim_eap_get_arg(eap);
-            let p = if cmdidx == nvim_get_cmd_bdelete()
-                || cmdidx == nvim_get_cmd_bwipeout()
-                || cmdidx == nvim_get_cmd_bunload()
+            let p = if cmdidx == crate::commands::CMD_BDELETE
+                || cmdidx == crate::commands::CMD_BWIPEOUT
+                || cmdidx == crate::commands::CMD_BUNLOAD
             {
                 skiptowhite_esc(arg)
             } else {
@@ -657,7 +648,7 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     // The :try command saves the emsg_silent flag, reset it here when
     // ":silent! try" was used, it should only apply to :try itself.
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    if cmdidx == nvim_get_cmd_try() && nvim_cmdmod_get_did_esilent() > 0 {
+    if cmdidx == crate::commands::CMD_TRY && nvim_cmdmod_get_did_esilent() > 0 {
         let new_val = nvim_get_emsg_silent() - nvim_cmdmod_get_did_esilent();
         nvim_set_emsg_silent(new_val.max(0));
         nvim_cmdmod_set_did_esilent(0);
@@ -718,8 +709,8 @@ pub unsafe extern "C" fn rs_execute_cmd(
         && (argt & EX_MODIFY_P2) != 0
         // allow :put and :iput in terminals
         && !(nvim_curbuf_is_terminal() != 0
-            && (nvim_eap_get_cmdidx(eap) == nvim_get_cmd_put()
-                || nvim_eap_get_cmdidx(eap) == nvim_get_cmd_iput()))
+            && (nvim_eap_get_cmdidx(eap) == crate::commands::CMD_PUT
+                || nvim_eap_get_cmdidx(eap) == crate::commands::CMD_IPUT))
     {
         errormsg = nvim_get_e_modifiable();
         goto_end(errormsg, save_buf, eap, cmdinfo, retv);
@@ -741,9 +732,9 @@ pub unsafe extern "C" fn rs_execute_cmd(
 
     // Disallow editing another buffer when curbuf is locked.
     if (argt & EX_CMDWIN_P2) == 0
-        && nvim_eap_get_cmdidx(eap) != nvim_get_cmd_checktime()
-        && nvim_eap_get_cmdidx(eap) != nvim_get_cmd_edit()
-        && !(nvim_eap_get_cmdidx(eap) == nvim_get_cmd_file() && *nvim_eap_get_arg(eap) == 0)
+        && nvim_eap_get_cmdidx(eap) != crate::commands::CMD_CHECKTIME
+        && nvim_eap_get_cmdidx(eap) != crate::commands::CMD_EDIT
+        && !(nvim_eap_get_cmdidx(eap) == crate::commands::CMD_FILE && *nvim_eap_get_arg(eap) == 0)
         && !nvim_eap_is_user_cmdidx(eap)
         && curbuf_locked() != 0
     {

@@ -4202,24 +4202,6 @@ bool is_map_cmd(cmdidx_T cmdidx)
 // C accessor functions for Rust FFI
 // =========================================================================
 
-/// Get the CMD_k enum value.
-int nvim_docmd_cmd_k(void)
-{
-  return (int)CMD_k;
-}
-
-/// Get the CMD_substitute enum value.
-int nvim_docmd_cmd_substitute(void)
-{
-  return (int)CMD_substitute;
-}
-
-/// Get the CMD_match enum value.
-int nvim_docmd_cmd_match(void)
-{
-  return (int)CMD_match;
-}
-
 /// Get the CMD_let enum value.
 int nvim_docmd_cmd_let(void) { return (int)CMD_let; }
 
@@ -4228,12 +4210,6 @@ int nvim_docmd_cmd_const(void) { return (int)CMD_const; }
 
 /// Get the CMD_call enum value.
 int nvim_docmd_cmd_call(void) { return (int)CMD_call; }
-
-/// Get the CMD_SIZE sentinel value.
-int nvim_docmd_cmd_size(void)
-{
-  return (int)CMD_SIZE;
-}
 
 /// Get a pointer to IObuff.
 char *nvim_docmd_get_iobuff(void)
@@ -4317,28 +4293,16 @@ int nvim_eap_get_addr_type(const exarg_T *eap) { return (int)eap->addr_type; }
 int nvim_eap_get_addr_count(const exarg_T *eap) { return eap->addr_count; }
 void nvim_eap_set_addr_count(exarg_T *eap, int count) { eap->addr_count = count; }
 
-/// Get CMD_smagic enum value.
-int nvim_docmd_cmd_smagic(void) { return (int)CMD_smagic; }
-/// Get CMD_snomagic enum value.
-int nvim_docmd_cmd_snomagic(void) { return (int)CMD_snomagic; }
-/// Get CMD_execute enum value.
+/// Get CMD_execute enum value (used by eval_exec crate).
 int nvim_docmd_cmd_execute(void) { return (int)CMD_execute; }
-/// Get CMD_echo enum value.
+/// Get CMD_echo enum value (used by eval_exec crate).
 int nvim_docmd_cmd_echo(void) { return (int)CMD_echo; }
-/// Get CMD_echon enum value.
+/// Get CMD_echon enum value (used by eval_exec crate).
 int nvim_docmd_cmd_echon(void) { return (int)CMD_echon; }
-/// Get CMD_echomsg enum value.
+/// Get CMD_echomsg enum value (used by eval_exec crate).
 int nvim_docmd_cmd_echomsg(void) { return (int)CMD_echomsg; }
-/// Get CMD_echoerr enum value.
+/// Get CMD_echoerr enum value (used by eval_exec crate).
 int nvim_docmd_cmd_echoerr(void) { return (int)CMD_echoerr; }
-/// Get CMD_vimgrep enum value.
-int nvim_docmd_cmd_vimgrep(void) { return (int)CMD_vimgrep; }
-/// Get CMD_lvimgrep enum value.
-int nvim_docmd_cmd_lvimgrep(void) { return (int)CMD_lvimgrep; }
-/// Get CMD_vimgrepadd enum value.
-int nvim_docmd_cmd_vimgrepadd(void) { return (int)CMD_vimgrepadd; }
-/// Get CMD_lvimgrepadd enum value.
-int nvim_docmd_cmd_lvimgrepadd(void) { return (int)CMD_lvimgrepadd; }
 
 /// Check if a command function is "not implemented" (ex_ni or ex_script_ni).
 int nvim_docmd_cmdnames_func_is_ni(int cmdidx)
@@ -4371,10 +4335,6 @@ char *nvim_eap_get_cmd(const exarg_T *eap) { return eap->cmd; }
 /// Set eap->cmdidx.
 void nvim_eap_set_cmdidx(exarg_T *eap, int idx) { eap->cmdidx = (cmdidx_T)idx; }
 
-/// Get CMD_Next enum value.
-int nvim_docmd_cmd_next(void) { return (int)CMD_Next; }
-/// Get CMD_bang enum value.
-int nvim_docmd_cmd_bang(void) { return (int)CMD_bang; }
 
 /// Get command_count (total commands in table).
 int nvim_docmd_get_command_count(void) { return command_count; }
@@ -4480,14 +4440,9 @@ char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap->nextcmd; }
 void nvim_eap_set_nextcmd(exarg_T *eap, char *p) { eap->nextcmd = p; }
 int nvim_eap_get_skip(const exarg_T *eap) { return eap->skip; }
 
-// CMD enum accessors
-int nvim_docmd_cmd_put(void) { return (int)CMD_put; }
-int nvim_docmd_cmd_iput(void) { return (int)CMD_iput; }
-int nvim_docmd_cmd_at(void) { return (int)CMD_at; }
-int nvim_docmd_cmd_redir(void) { return (int)CMD_redir; }
+// CMD enum accessors (used by ex_cmds crate)
 int nvim_docmd_cmd_append(void) { return (int)CMD_append; }
 int nvim_docmd_cmd_change(void) { return (int)CMD_change; }
-int nvim_docmd_cmd_insert(void) { return (int)CMD_insert; }
 
 // Helper function wrappers
 int nvim_docmd_valid_yank_reg(int regname, int writing)
@@ -4633,14 +4588,6 @@ char *nvim_eap_get_errmsg(const exarg_T *eap) { return eap->errmsg; }
 void nvim_eap_set_errmsg(exarg_T *eap, char *msg) { eap->errmsg = msg; }
 char **nvim_eap_get_cmdlinep(const exarg_T *eap) { return eap->cmdlinep; }
 
-// CMD enum accessors for Phase 5
-int nvim_docmd_cmd_wincmd(void) { return (int)CMD_wincmd; }
-int nvim_docmd_cmd_cc(void) { return (int)CMD_cc; }
-int nvim_docmd_cmd_ll(void) { return (int)CMD_ll; }
-int nvim_docmd_cmd_diffget(void) { return (int)CMD_diffget; }
-int nvim_docmd_cmd_diffput(void) { return (int)CMD_diffput; }
-int nvim_docmd_cmd_tabmove(void) { return (int)CMD_tabmove; }
-int nvim_docmd_cmd_tabnext(void) { return (int)CMD_tabnext; }
 
 // cmdnames table accessor
 int nvim_docmd_cmdnames_addr_type(int idx)
@@ -5290,16 +5237,6 @@ const char *nvim_get_e_nobang(void) { return _(e_nobang); }
 // ascii_iswhite wrapper (the inline version can't be called from Rust)
 int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 
-// CMD_try value (for execute_cmd0 special case)
-int nvim_get_cmd_try(void) { return (int)CMD_try; }
-int nvim_get_cmd_bdelete(void) { return (int)CMD_bdelete; }
-int nvim_get_cmd_bwipeout(void) { return (int)CMD_bwipeout; }
-int nvim_get_cmd_bunload(void) { return (int)CMD_bunload; }
-int nvim_get_cmd_put(void) { return (int)CMD_put; }
-int nvim_get_cmd_iput(void) { return (int)CMD_iput; }
-int nvim_get_cmd_checktime(void) { return (int)CMD_checktime; }
-int nvim_get_cmd_edit(void) { return (int)CMD_edit; }
-int nvim_get_cmd_file(void) { return (int)CMD_file; }
 
 
 // Wrappers for static Phase 2 helpers called from Rust
@@ -5613,9 +5550,6 @@ char *nvim_docmd_do_bufdel(int command, const char *arg, int addr_count, int sta
   return do_bufdel(command, (char *)arg, addr_count, start_bnr, end_bnr, forceit);
 }
 
-/// CMD enum values for ex_bunload.
-int nvim_docmd_cmd_bunload(void) { return (int)CMD_bunload; }
-
 /// Wrapper for do_autocmd.
 void nvim_docmd_do_autocmd(exarg_T *eap, const char *arg, int forceit)
 {
@@ -5630,9 +5564,6 @@ const char *nvim_docmd_get_e_curdir(void) { return _(e_curdir); }
 
 /// Wrapper for check_nomodeline.
 int nvim_docmd_check_nomodeline(char **argp) { return check_nomodeline(argp) ? 1 : 0; }
-
-/// CMD_autocmd value.
-int nvim_docmd_cmd_autocmd(void) { return (int)CMD_autocmd; }
 
 /// before_quit_all logic (direct implementation for Rust FFI).
 int nvim_docmd_before_quit_all(exarg_T *eap)

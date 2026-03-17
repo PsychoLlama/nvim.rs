@@ -36,24 +36,8 @@ extern "C" {
     fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
     fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
-    fn nvim_docmd_cmd_substitute() -> c_int;
-    fn nvim_docmd_cmd_smagic() -> c_int;
-    fn nvim_docmd_cmd_snomagic() -> c_int;
-    fn nvim_docmd_cmd_vimgrep() -> c_int;
-    fn nvim_docmd_cmd_lvimgrep() -> c_int;
-    fn nvim_docmd_cmd_vimgrepadd() -> c_int;
-    fn nvim_docmd_cmd_lvimgrepadd() -> c_int;
     fn nvim_docmd_grep_internal(cmdidx: c_int) -> c_int;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
-
-    // Phase 4: CMD enum accessors
-    fn nvim_docmd_cmd_put() -> c_int;
-    fn nvim_docmd_cmd_iput() -> c_int;
-    fn nvim_docmd_cmd_at() -> c_int;
-    fn nvim_docmd_cmd_redir() -> c_int;
-    fn nvim_docmd_cmd_append() -> c_int;
-    fn nvim_docmd_cmd_change() -> c_int;
-    fn nvim_docmd_cmd_insert() -> c_int;
 
     // Phase 4: helper function wrappers
     fn skipwhite(p: *const c_char) -> *mut c_char;
@@ -337,9 +321,9 @@ pub unsafe extern "C" fn rs_parse_bang(eap: ExArgHandle, p: *mut *mut c_char) ->
     let cmdidx = nvim_eap_get_cmdidx(eap);
 
     if *(*p) as u8 == b'!'
-        && cmdidx != nvim_docmd_cmd_substitute()
-        && cmdidx != nvim_docmd_cmd_smagic()
-        && cmdidx != nvim_docmd_cmd_snomagic()
+        && cmdidx != crate::commands::CMD_SUBSTITUTE
+        && cmdidx != crate::commands::CMD_SMAGIC
+        && cmdidx != crate::commands::CMD_SNOMAGIC
     {
         *p = (*p).add(1);
         return true;
@@ -371,10 +355,10 @@ pub unsafe extern "C" fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char {
 
     let cmdidx = nvim_eap_get_cmdidx(eap);
 
-    if cmdidx == nvim_docmd_cmd_vimgrep()
-        || cmdidx == nvim_docmd_cmd_lvimgrep()
-        || cmdidx == nvim_docmd_cmd_vimgrepadd()
-        || cmdidx == nvim_docmd_cmd_lvimgrepadd()
+    if cmdidx == crate::commands::CMD_VIMGREP
+        || cmdidx == crate::commands::CMD_LVIMGREP
+        || cmdidx == crate::commands::CMD_VIMGREPADD
+        || cmdidx == crate::commands::CMD_LVIMGREPADD
         || nvim_docmd_grep_internal(cmdidx) != 0
     {
         let p = rs_skip_vimgrep_pat(arg, ptr::null_mut(), ptr::null_mut());
@@ -477,7 +461,7 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
 
     // Check writing: allowed if not user command and not :put/:iput
     let writing =
-        if !is_user_cmd && cmdidx != nvim_docmd_cmd_put() && cmdidx != nvim_docmd_cmd_iput() {
+        if !is_user_cmd && cmdidx != crate::commands::CMD_PUT && cmdidx != crate::commands::CMD_IPUT {
             1
         } else {
             0
@@ -866,15 +850,15 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
             // Check for '"' (comment) or '|' (next command) or '\n'
             let is_comment = c == b'"'
                 && (argt & crate::table::EX_NOTRLCOM) == 0
-                && (cmdidx != nvim_docmd_cmd_at() || p != eap_arg)
-                && (cmdidx != nvim_docmd_cmd_redir()
+                && (cmdidx != crate::commands::CMD_AT || p != eap_arg)
+                && (cmdidx != crate::commands::CMD_REDIR
                     || p != eap_arg.add(1)
                     || *p.sub(1) as u8 != b'@');
 
             let is_pipe = c == b'|'
-                && cmdidx != nvim_docmd_cmd_append()
-                && cmdidx != nvim_docmd_cmd_change()
-                && cmdidx != nvim_docmd_cmd_insert();
+                && cmdidx != crate::commands::CMD_APPEND
+                && cmdidx != crate::commands::CMD_CHANGE
+                && cmdidx != crate::commands::CMD_INSERT;
 
             let is_newline = c == b'\n';
 

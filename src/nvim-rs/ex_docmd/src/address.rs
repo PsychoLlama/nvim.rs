@@ -240,14 +240,6 @@ extern "C" {
     fn nvim_eap_set_addr_count(eap: ExArgHandle, count: c_int);
     fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
 
-    // CMD enum accessors
-    fn nvim_docmd_cmd_size() -> c_int;
-    fn nvim_docmd_cmd_wincmd() -> c_int;
-    fn nvim_docmd_cmd_cc() -> c_int;
-    fn nvim_docmd_cmd_ll() -> c_int;
-    fn nvim_docmd_cmd_tabmove() -> c_int;
-    fn nvim_docmd_cmd_tabnext() -> c_int;
-
     // cmdnames table accessor
     fn nvim_docmd_cmdnames_addr_type(idx: c_int) -> c_int;
 
@@ -376,8 +368,7 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
         return;
     }
 
-    let cmd_size = nvim_docmd_cmd_size();
-    if cmdidx != cmd_size {
+    if cmdidx != crate::commands::CMD_SIZE {
         let addr_type = nvim_docmd_cmdnames_addr_type(cmdidx);
         nvim_eap_set_addr_type(eap, addr_type);
     } else {
@@ -385,13 +376,13 @@ pub unsafe extern "C" fn rs_set_cmd_addr_type(eap: ExArgHandle, p: *mut c_char) 
     }
 
     // :wincmd range depends on the argument
-    if cmdidx == nvim_docmd_cmd_wincmd() && !p.is_null() {
+    if cmdidx == crate::commands::CMD_WINCMD && !p.is_null() {
         let whiteskipped = skipwhite(p);
         get_wincmd_addr_type(whiteskipped, eap);
     }
 
     // :.cc in quickfix window uses line number
-    if (cmdidx == nvim_docmd_cmd_cc() || cmdidx == nvim_docmd_cmd_ll())
+    if (cmdidx == crate::commands::CMD_CC || cmdidx == crate::commands::CMD_LL)
         && nvim_docmd_bt_quickfix_curbuf() != 0
     {
         nvim_eap_set_addr_type(eap, ADDR_OTHER);
@@ -502,8 +493,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 #[export_name = "get_tabpage_arg"]
 pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    let cmd_tabmove = nvim_docmd_cmd_tabmove();
-    let unaccept_arg0: c_int = if cmdidx == cmd_tabmove { 0 } else { 1 };
+    let unaccept_arg0: c_int = if cmdidx == crate::commands::CMD_TABMOVE { 0 } else { 1 };
 
     let arg = nvim_eap_get_arg(eap);
     let last_tab_nr = nvim_docmd_last_tab_nr();
@@ -584,19 +574,16 @@ pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
             }
         }
         tab_number
-    } else {
-        let cmd_tabnext = nvim_docmd_cmd_tabnext();
-        if cmdidx == cmd_tabnext {
-            let mut tab_number = nvim_rs_tabpage_index(nvim_get_curtab()) + 1;
-            if tab_number > last_tab_nr {
-                tab_number = 1;
-            }
-            tab_number
-        } else if cmdidx == cmd_tabmove {
-            last_tab_nr
-        } else {
-            nvim_rs_tabpage_index(nvim_get_curtab())
+    } else if cmdidx == crate::commands::CMD_TABNEXT {
+        let mut tab_number = nvim_rs_tabpage_index(nvim_get_curtab()) + 1;
+        if tab_number > last_tab_nr {
+            tab_number = 1;
         }
+        tab_number
+    } else if cmdidx == crate::commands::CMD_TABMOVE {
+        last_tab_nr
+    } else {
+        nvim_rs_tabpage_index(nvim_get_curtab())
     }
 }
 
