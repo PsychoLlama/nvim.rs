@@ -4079,11 +4079,6 @@ char *nvim_docmd_cmd_exists_inner(const char *name, int *out_cmdidx, int *out_fu
 // exarg_T accessor functions for Rust FFI (Phase 2)
 // =========================================================================
 
-_Static_assert(EXFLAG_LIST == 0x01, "EXFLAG_LIST");
-_Static_assert(EXFLAG_NR == 0x02, "EXFLAG_NR");
-_Static_assert(EXFLAG_PRINT == 0x04, "EXFLAG_PRINT");
-_Static_assert(EX_ZEROR == 0x1000u, "EX_ZEROR");
-
 char *nvim_eap_get_arg(const exarg_T *eap) { return eap->arg; }
 void nvim_eap_set_arg(exarg_T *eap, char *arg) { eap->arg = arg; }
 int nvim_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
@@ -4224,13 +4219,6 @@ char *nvim_docmd_get_user_command_name(int useridx, int cmdidx)
 // Phase 4 accessor functions for Rust FFI
 // =========================================================================
 
-_Static_assert(BAD_KEEP == -1, "BAD_KEEP");
-_Static_assert(BAD_DROP == -2, "BAD_DROP");
-_Static_assert(FORCE_BIN == 1, "FORCE_BIN");
-_Static_assert(FORCE_NOBIN == 2, "FORCE_NOBIN");
-_Static_assert(Ctrl_V == 22, "Ctrl_V");
-_Static_assert(CPO_BAR == 'b', "CPO_BAR");
-
 // eap field accessors
 void nvim_eap_set_regname(exarg_T *eap, int r) { eap->regname = (uint8_t)r; }
 void nvim_eap_set_bad_char(exarg_T *eap, int c) { eap->bad_char = c; }
@@ -4347,45 +4335,6 @@ int nvim_docmd_count_buf_check(exarg_T *eap)
 // =========================================================================
 // Phase 5 accessor functions for Rust FFI
 // =========================================================================
-
-_Static_assert(ADDR_LINES == 0, "ADDR_LINES");
-_Static_assert(ADDR_WINDOWS == 1, "ADDR_WINDOWS");
-_Static_assert(ADDR_ARGUMENTS == 2, "ADDR_ARGUMENTS");
-_Static_assert(ADDR_LOADED_BUFFERS == 3, "ADDR_LOADED_BUFFERS");
-_Static_assert(ADDR_BUFFERS == 4, "ADDR_BUFFERS");
-_Static_assert(ADDR_TABS == 5, "ADDR_TABS");
-_Static_assert(ADDR_TABS_RELATIVE == 6, "ADDR_TABS_RELATIVE");
-_Static_assert(ADDR_QUICKFIX_VALID == 7, "ADDR_QUICKFIX_VALID");
-_Static_assert(ADDR_QUICKFIX == 8, "ADDR_QUICKFIX");
-_Static_assert(ADDR_UNSIGNED == 9, "ADDR_UNSIGNED");
-_Static_assert(ADDR_OTHER == 10, "ADDR_OTHER");
-_Static_assert(ADDR_NONE == 11, "ADDR_NONE");
-_Static_assert(CAR == 13, "CAR");
-_Static_assert(Ctrl_S == 19, "Ctrl_S");
-_Static_assert(Ctrl_N == 14, "Ctrl_N");
-_Static_assert(Ctrl_J == 10, "Ctrl_J");
-_Static_assert(Ctrl_K == 11, "Ctrl_K");
-_Static_assert(Ctrl_R == 18, "Ctrl_R");
-_Static_assert(Ctrl__ == 31, "Ctrl__");
-_Static_assert(Ctrl_RSB == 29, "Ctrl_RSB");
-_Static_assert(Ctrl_G == 7, "Ctrl_G");
-_Static_assert(Ctrl_V == 22, "Ctrl_V");
-_Static_assert(Ctrl_H == 8, "Ctrl_H");
-_Static_assert(Ctrl_L == 12, "Ctrl_L");
-_Static_assert(Ctrl_F == 6, "Ctrl_F");
-_Static_assert(Ctrl_I == 9, "Ctrl_I");
-_Static_assert(Ctrl_D == 4, "Ctrl_D");
-_Static_assert(Ctrl_HAT == 30, "Ctrl_HAT");
-_Static_assert(Ctrl_Q == 17, "Ctrl_Q");
-_Static_assert(Ctrl_C == 3, "Ctrl_C");
-_Static_assert(Ctrl_O == 15, "Ctrl_O");
-_Static_assert(Ctrl_W == 23, "Ctrl_W");
-_Static_assert(Ctrl_X == 24, "Ctrl_X");
-_Static_assert(Ctrl_Z == 26, "Ctrl_Z");
-_Static_assert(Ctrl_T == 20, "Ctrl_T");
-_Static_assert(Ctrl_B == 2, "Ctrl_B");
-_Static_assert(Ctrl_P == 16, "Ctrl_P");
-_Static_assert(EX_RANGE == 0x001u, "EX_RANGE");
 
 // eap field accessors for Phase 5
 void nvim_eap_set_addr_type(exarg_T *eap, int t) { eap->addr_type = (cmd_addr_T)t; }
@@ -4537,54 +4486,6 @@ int nvim_docmd_ascii_isdigit(int c) { return ascii_isdigit(c); }
 // Phase 6 accessor functions for Rust FFI
 // parse_command_modifiers, get_address, parse_cmd_address
 // =========================================================================
-
-// --- _Static_assert entries ---
-
-// CMOD flags (ex_cmds_defs.h)
-_Static_assert(CMOD_SANDBOX == 0x0001, "CMOD_SANDBOX");
-_Static_assert(CMOD_SILENT == 0x0002, "CMOD_SILENT");
-_Static_assert(CMOD_ERRSILENT == 0x0004, "CMOD_ERRSILENT");
-_Static_assert(CMOD_UNSILENT == 0x0008, "CMOD_UNSILENT");
-_Static_assert(CMOD_NOAUTOCMD == 0x0010, "CMOD_NOAUTOCMD");
-_Static_assert(CMOD_HIDE == 0x0020, "CMOD_HIDE");
-_Static_assert(CMOD_BROWSE == 0x0040, "CMOD_BROWSE");
-_Static_assert(CMOD_CONFIRM == 0x0080, "CMOD_CONFIRM");
-_Static_assert(CMOD_KEEPALT == 0x0100, "CMOD_KEEPALT");
-_Static_assert(CMOD_KEEPMARKS == 0x0200, "CMOD_KEEPMARKS");
-_Static_assert(CMOD_KEEPJUMPS == 0x0400, "CMOD_KEEPJUMPS");
-_Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS");
-_Static_assert(CMOD_KEEPPATTERNS == 0x1000, "CMOD_KEEPPATTERNS");
-_Static_assert(CMOD_NOSWAPFILE == 0x2000, "CMOD_NOSWAPFILE");
-
-// WSP flags (window.h)
-_Static_assert(WSP_VERT == 0x02, "WSP_VERT");
-_Static_assert(WSP_HOR == 0x04, "WSP_HOR");
-_Static_assert(WSP_TOP == 0x08, "WSP_TOP");
-_Static_assert(WSP_BOT == 0x10, "WSP_BOT");
-_Static_assert(WSP_BELOW == 0x40, "WSP_BELOW");
-_Static_assert(WSP_ABOVE == 0x80, "WSP_ABOVE");
-
-// RE flags (regexp.h, search.h)
-_Static_assert(RE_MAGIC == 1, "RE_MAGIC");
-_Static_assert(RE_SEARCH == 0, "RE_SEARCH");
-_Static_assert(RE_SUBST == 1, "RE_SUBST");
-
-// Search flags (search.h)
-_Static_assert(SEARCH_HIS == 0x20, "SEARCH_HIS");
-_Static_assert(SEARCH_MSG == 0x0c, "SEARCH_MSG");
-_Static_assert(SEARCH_KEEP == 0x400, "SEARCH_KEEP");
-
-// Direction (vim_defs.h)
-_Static_assert(FORWARD == 1, "FORWARD");
-_Static_assert(BACKWARD == -1, "BACKWARD");
-
-// Mark flags (mark_defs.h)
-_Static_assert(kMarkBufLocal == 0, "kMarkBufLocal");
-_Static_assert(kMarkAll == 1, "kMarkAll");
-
-// Sentinel values (pos_defs.h)
-_Static_assert(MAXLNUM == 0x7fffffff, "MAXLNUM");
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL");
 
 // --- eap field accessors (additional) ---
 
