@@ -390,6 +390,18 @@ const CTRL_C: c_int = 3;
 
 /// UPD_CLEAR = 50 (from drawscreen.h)
 const UPD_CLEAR: c_int = 50;
+/// UPD_NOT_VALID = 40
+const UPD_NOT_VALID: c_int = 40;
+/// UPD_INVERTED = 20
+const UPD_INVERTED: c_int = 20;
+
+/// MODE_CMDLINE = 0x08
+const MODE_CMDLINE: c_int = 0x08;
+/// MODE_INSERT = 0x10
+const MODE_INSERT: c_int = 0x10;
+
+/// CMD_startinsert = 431, CMD_startgreplace = 432, CMD_startreplace = 433
+pub(crate) const CMD_STARTINSERT: c_int = 431;
 
 // =============================================================================
 // verify_command - smile easter egg
@@ -1830,7 +1842,6 @@ extern "C" {
     fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_ex_shada(eap: ExArgHandle);
     fn nvim_docmd_ex_folddo(eap: ExArgHandle);
-    fn nvim_docmd_ex_redrawtabline();
     fn nvim_docmd_ex_put(eap: ExArgHandle);
     fn nvim_docmd_ex_iput(eap: ExArgHandle);
     fn nvim_docmd_ex_equal(eap: ExArgHandle);
@@ -1939,9 +1950,15 @@ pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
 
 /// ":redrawtabline".
 #[export_name = "ex_redrawtabline"]
-pub unsafe extern "C" fn rs_ex_redrawtabline(eap: ExArgHandle) {
-    let _ = eap;
-    nvim_docmd_ex_redrawtabline();
+pub unsafe extern "C" fn rs_ex_redrawtabline(_eap: ExArgHandle) {
+    let r = RedrawingDisabled;
+    let p = p_lz;
+    RedrawingDisabled = 0;
+    p_lz = false;
+    draw_tabline();
+    RedrawingDisabled = r;
+    p_lz = p;
+    ui_flush();
 }
 
 /// ":join".
@@ -2086,9 +2103,33 @@ extern "C" {
     fn nvim_docmd_ex_wincmd(eap: ExArgHandle);
     fn nvim_docmd_ex_copymove(eap: ExArgHandle);
     fn nvim_docmd_ex_at(eap: ExArgHandle);
-    fn nvim_docmd_ex_redraw(eap: ExArgHandle);
-    fn nvim_docmd_ex_redrawstatus(eap: ExArgHandle);
-    fn nvim_docmd_ex_startinsert(eap: ExArgHandle);
+
+    // Phase 14: redraw/startinsert helpers
+    static mut RedrawingDisabled: c_int;
+    static mut p_lz: bool;
+    static mut cmdpreview: bool;
+    static mut VIsual_active: bool;
+    static mut redraw_cmdline: bool;
+    static mut msg_didout: bool;
+    static mut msg_col: c_int;
+    static mut need_wait_return: bool;
+    static mut need_maketitle: bool;
+    static mut State: c_int;
+
+    fn draw_tabline();
+    fn validate_cursor(wp: WinHandle);
+    fn update_topline(wp: WinHandle);
+    fn redraw_all_later(type_: c_int);
+    fn redraw_curbuf_later(type_: c_int);
+    fn update_screen();
+    fn maketitle();
+    fn status_redraw_all();
+    fn status_redraw_curbuf();
+    fn redraw_statuslines();
+    fn showmode();
+    fn rs_set_cursor_for_append_to_line();
+    fn nvim_edit_set_restart_edit(val: c_int);
+    fn nvim_docmd_set_curwin_curswant(val: c_int);
 }
 
 /// ex_range_without_command: handle range-only commands.
@@ -2179,19 +2220,111 @@ pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
 /// ":redraw".
 #[export_name = "ex_redraw"]
 pub unsafe extern "C" fn rs_ex_redraw(eap: ExArgHandle) {
-    nvim_docmd_ex_redraw(eap);
+    if cmdpreview {
+        return; // Ignore :redraw during 'inccommand' preview. #9777
+    }
+    let r = RedrawingDisabled;
+    let p = p_lz;
+    RedrawingDisabled = 0;
+    p_lz = false;
+    validate_cursor(nvim_get_curwin());
+    update_topline(nvim_get_curwin());
+    if nvim_eap_get_forceit(eap) {
+        redraw_all_later(UPD_NOT_VALID);
+        redraw_cmdline = true;
+    } else if VIsual_active {
+        redraw_curbuf_later(UPD_INVERTED);
+    }
+    update_screen();
+    if need_maketitle {
+        maketitle();
+    }
+    RedrawingDisabled = r;
+    p_lz = p;
+    // Reset msg_didout, so that a message that's there is overwritten.
+    msg_didout = false;
+    msg_col = 0;
+    // No need to wait after an intentional redraw.
+    need_wait_return = false;
+    ui_flush();
 }
 
 /// ":redrawstatus".
 #[export_name = "ex_redrawstatus"]
 pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
-    nvim_docmd_ex_redrawstatus(eap);
+    if cmdpreview {
+        return; // Ignore :redrawstatus during 'inccommand' preview. #9777
+    }
+    let r = RedrawingDisabled;
+    let p = p_lz;
+    if nvim_eap_get_forceit(eap) {
+        status_redraw_all();
+    } else {
+        status_redraw_curbuf();
+    }
+    RedrawingDisabled = 0;
+    p_lz = false;
+    if State & MODE_CMDLINE != 0 {
+        redraw_statuslines();
+    } else {
+        if VIsual_active {
+            redraw_curbuf_later(UPD_INVERTED);
+        }
+        update_screen();
+    }
+    RedrawingDisabled = r;
+    p_lz = p;
+    ui_flush();
 }
 
 /// ":startinsert" / ":startreplace" / ":startgreplace".
+///
+/// CMD_startinsert=431, CMD_startgreplace=432, CMD_startreplace=433
 #[export_name = "ex_startinsert"]
 pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
-    nvim_docmd_ex_startinsert(eap);
+    const CMD_STARTGREPLACE: c_int = CMD_STARTINSERT + 1; // 432
+    // CMD_startreplace = 433
+
+    let forceit = nvim_eap_get_forceit(eap);
+    if forceit {
+        // cursor line can be zero on startup
+        let lnum = nvim_eap_get_line1(eap);
+        if lnum == 0 {
+            nvim_docmd_set_curwin_cursor_lnum(1);
+        }
+        rs_set_cursor_for_append_to_line();
+    }
+
+    // Ignore the command when already in Insert mode.
+    if State & MODE_INSERT != 0 {
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    // First assignment (matches the if/elseif/else in C)
+    let restart_char = if cmdidx == CMD_STARTINSERT {
+        b'a' as c_int
+    } else if cmdidx == CMD_STARTGREPLACE {
+        b'V' as c_int
+    } else {
+        // CMD_startreplace
+        b'R' as c_int
+    };
+    // Override for non-forceit startinsert: 'a' becomes 'i'
+    let restart_char = if !forceit && cmdidx == CMD_STARTINSERT {
+        b'i' as c_int
+    } else {
+        restart_char
+    };
+    nvim_edit_set_restart_edit(restart_char);
+
+    if !forceit {
+        nvim_docmd_set_curwin_curswant(0); // avoid MAXCOL
+    }
+
+    if VIsual_active {
+        showmode();
+    }
 }
 
 // =============================================================================

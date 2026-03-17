@@ -5222,20 +5222,6 @@ void nvim_docmd_ex_folddo(exarg_T *eap)
   ml_clearmarked();
 }
 
-/// Wrapper for ex_redrawtabline logic.
-void nvim_docmd_ex_redrawtabline(void)
-{
-  const int r = RedrawingDisabled;
-  const int p = p_lz;
-  RedrawingDisabled = 0;
-  p_lz = false;
-  draw_tabline();
-  RedrawingDisabled = r;
-  p_lz = p;
-  ui_flush();
-}
-
-
 
 /// ex_put logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_put(exarg_T *eap)
@@ -5777,108 +5763,8 @@ void nvim_docmd_ex_at(exarg_T *eap)
 }
 
 
-/// ex_redraw logic.
-void nvim_docmd_ex_redraw(exarg_T *eap)
-{
-  if (cmdpreview) {
-    return;  // Ignore :redraw during 'inccommand' preview. #9777
-  }
-  int r = RedrawingDisabled;
-  int p = p_lz;
 
-  RedrawingDisabled = 0;
-  p_lz = false;
-  validate_cursor(curwin);
-  update_topline(curwin);
-  if (eap->forceit) {
-    redraw_all_later(UPD_NOT_VALID);
-    redraw_cmdline = true;
-  } else if (VIsual_active) {
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-  update_screen();
-  if (need_maketitle) {
-    maketitle();
-  }
-  RedrawingDisabled = r;
-  p_lz = p;
 
-  // Reset msg_didout, so that a message that's there is overwritten.
-  msg_didout = false;
-  msg_col = 0;
-
-  // No need to wait after an intentional redraw.
-  need_wait_return = false;
-
-  ui_flush();
-}
-
-/// ex_redrawstatus logic.
-void nvim_docmd_ex_redrawstatus(exarg_T *eap)
-{
-  if (cmdpreview) {
-    return;  // Ignore :redrawstatus during 'inccommand' preview. #9777
-  }
-  int r = RedrawingDisabled;
-  int p = p_lz;
-
-  if (eap->forceit) {
-    status_redraw_all();
-  } else {
-    status_redraw_curbuf();
-  }
-
-  RedrawingDisabled = 0;
-  p_lz = false;
-  if (State & MODE_CMDLINE) {
-    redraw_statuslines();
-  } else {
-    if (VIsual_active) {
-      redraw_curbuf_later(UPD_INVERTED);
-    }
-    update_screen();
-  }
-  RedrawingDisabled = r;
-  p_lz = p;
-  ui_flush();
-}
-
-/// ex_startinsert logic.
-void nvim_docmd_ex_startinsert(exarg_T *eap)
-{
-  if (eap->forceit) {
-    // cursor line can be zero on startup
-    if (!curwin->w_cursor.lnum) {
-      curwin->w_cursor.lnum = 1;
-    }
-    rs_set_cursor_for_append_to_line();
-  }
-
-  // Ignore the command when already in Insert mode.  Inserting an
-  // expression register that invokes a function can do this.
-  if (State & MODE_INSERT) {
-    return;
-  }
-
-  if (eap->cmdidx == CMD_startinsert) {
-    restart_edit = 'a';
-  } else if (eap->cmdidx == CMD_startreplace) {
-    restart_edit = 'R';
-  } else {
-    restart_edit = 'V';
-  }
-
-  if (!eap->forceit) {
-    if (eap->cmdidx == CMD_startinsert) {
-      restart_edit = 'i';
-    }
-    curwin->w_curswant = 0;  // avoid MAXCOL
-  }
-
-  if (VIsual_active) {
-    showmode();
-  }
-}
 
 // =============================================================================
 // Phase 10 accessor functions for Rust FFI
@@ -5889,3 +5775,6 @@ int nvim_docmd_get_VIsual_active(void) { return VIsual_active ? 1 : 0; }
 
 /// Set virtual_op to kFalse (0).
 void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
+
+/// Set curwin->w_curswant (for ex_startinsert Rust FFI).
+void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
