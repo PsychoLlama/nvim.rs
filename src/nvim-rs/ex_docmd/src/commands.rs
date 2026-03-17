@@ -2143,14 +2143,35 @@ pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mu
 
 extern "C" {
     fn nvim_docmd_ex_range_without_command(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_docmd_ex_tabclose(eap: ExArgHandle);
-    fn nvim_docmd_ex_hide(eap: ExArgHandle);
     fn nvim_docmd_ex_exit(eap: ExArgHandle);
     fn nvim_docmd_ex_resize(eap: ExArgHandle);
     fn nvim_docmd_ex_cd(eap: ExArgHandle);
-    fn nvim_docmd_ex_wincmd(eap: ExArgHandle);
-    fn nvim_docmd_ex_copymove(eap: ExArgHandle);
     fn nvim_docmd_ex_at(eap: ExArgHandle);
+
+    // Phase 17: tabclose, hide, wincmd, copymove helpers
+    static mut postponed_split_flags: c_int;
+    static mut postponed_split_tab: c_int;
+
+    fn nvim_get_curbuf() -> *mut c_void;
+    fn rs_find_tabpage(n: c_int) -> *mut c_void;
+    fn nvim_docmd_is_only_tabpage() -> c_int;
+    fn nvim_docmd_tabpage_close(forceit: c_int);
+    fn nvim_docmd_tabpage_close_other(tp: *mut c_void, forceit: c_int);
+    fn nvim_docmd_tabpage_is_current(tp: *mut c_void) -> c_int;
+    fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
+    fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
+    fn nvim_docmd_get_cmdmod_cmod_tab() -> c_int;
+    fn nvim_docmd_get_address_for_copymove(
+        eap: ExArgHandle,
+        errormsg: *mut *const c_char,
+    ) -> LinenrT;
+    fn nvim_get_e_invarg() -> *const c_char;
+    fn get_flags(eap: ExArgHandle);
+    fn u_clearline(buf: *mut c_void);
+    fn rs_do_window(nchar: c_int, count: c_int, xchar: c_int);
+    fn check_nextcmd(p: *const c_char) -> *mut c_char;
+    fn rs_do_move(line1: LinenrT, line2: LinenrT, dest: LinenrT) -> c_int;
+    fn rs_ex_copy(line1: LinenrT, line2: LinenrT, n: LinenrT);
 
     // Phase 14: redraw/startinsert helpers
     static mut RedrawingDisabled: c_int;
@@ -2195,6 +2216,9 @@ const PUT_FIXINDENT: c_int = 1;
 const PUT_CURSLINE: c_int = 4;
 const PUT_LINE: c_int = 8;
 
+/// CMD_ constants for Phase 17.
+const CMD_MOVE: c_int = 271;
+
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]
 pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c_char {
@@ -2204,13 +2228,50 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
 /// ":tabclose".
 #[export_name = "ex_tabclose"]
 pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
-    nvim_docmd_ex_tabclose(eap);
+    const K_IGNORE: c_int = -13821;
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        nvim_set_cmdwin_result(K_IGNORE);
+        return;
+    }
+
+    if nvim_docmd_is_only_tabpage() != 0 {
+        emsg(c"E784: Cannot close last tab page".as_ptr());
+        return;
+    }
+
+    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    if !nvim_eap_get_errmsg(eap).is_null() {
+        return;
+    }
+
+    let tp = rs_find_tabpage(tab_number);
+    if tp.is_null() {
+        beep_flush();
+        return;
+    }
+
+    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    if nvim_docmd_tabpage_is_current(tp) == 0 {
+        nvim_docmd_tabpage_close_other(tp, forceit);
+    } else if !text_locked() && nvim_curbuf_locked() == 0 {
+        nvim_docmd_tabpage_close(forceit);
+    }
 }
 
 /// ":hide".
 #[export_name = "ex_hide"]
 pub unsafe extern "C" fn rs_ex_hide(eap: ExArgHandle) {
-    nvim_docmd_ex_hide(eap);
+    if nvim_eap_get_skip(eap) != 0 {
+        return;
+    }
+    let forceit = nvim_eap_get_forceit(eap);
+    if nvim_eap_get_addr_count(eap) == 0 {
+        win_close(nvim_get_curwin(), false, forceit);
+    } else {
+        let win = nvim_docmd_nth_window(nvim_eap_get_line2(eap) as c_int);
+        win_close(win, false, forceit);
+    }
 }
 
 /// ":exit" / ":xit" / ":wq".
@@ -2234,13 +2295,81 @@ pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
 /// ":wincmd".
 #[export_name = "ex_wincmd"]
 pub unsafe extern "C" fn rs_ex_wincmd(eap: ExArgHandle) {
-    nvim_docmd_ex_wincmd(eap);
+    let arg = nvim_eap_get_arg(eap);
+    if arg.is_null() {
+        return;
+    }
+    let first_char = *(arg as *const u8);
+    let mut xchar: c_int = 0; // NUL
+    let p: *const c_char;
+    if first_char == b'g' || first_char == 7 {
+        // Ctrl_G = 7
+        if *(arg.add(1) as *const u8) == 0 {
+            // NUL
+            emsg(nvim_get_e_invarg());
+            return;
+        }
+        xchar = *(arg.add(1) as *const u8) as c_int;
+        p = arg.add(2);
+    } else {
+        p = arg.add(1);
+    }
+
+    let nextcmd = check_nextcmd(p);
+    nvim_eap_set_nextcmd(eap, nextcmd as *mut c_char);
+    let p2 = skipwhite(p);
+    if *(p2 as *const u8) != 0 && *(p2 as *const u8) != b'"' && nextcmd.is_null() {
+        emsg(nvim_get_e_invarg());
+    } else if nvim_eap_get_skip(eap) == 0 {
+        postponed_split_flags = nvim_docmd_get_cmdmod_cmod_split();
+        postponed_split_tab = nvim_docmd_get_cmdmod_cmod_tab();
+        let count = if nvim_eap_get_addr_count(eap) > 0 {
+            nvim_eap_get_line2(eap)
+        } else {
+            0
+        };
+        rs_do_window(first_char as c_int, count, xchar);
+        postponed_split_flags = 0;
+        postponed_split_tab = 0;
+    }
 }
 
 /// ":copy" / ":move".
 #[export_name = "ex_copymove"]
 pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
-    nvim_docmd_ex_copymove(eap);
+    let mut errormsg: *const c_char = std::ptr::null();
+    let n = nvim_docmd_get_address_for_copymove(eap, &mut errormsg);
+    if nvim_eap_get_arg(eap).is_null() {
+        // error detected
+        if !errormsg.is_null() {
+            emsg(errormsg);
+        }
+        nvim_eap_set_nextcmd(eap, std::ptr::null_mut());
+        return;
+    }
+    get_flags(eap);
+
+    const MAXLNUM: LinenrT = 0x7fffffff;
+    let line_count = nvim_docmd_get_curbuf_line_count();
+    if n == MAXLNUM || n < 0 || n > line_count {
+        emsg(nvim_get_e_invrange());
+        return;
+    }
+
+    let line1 = nvim_eap_get_line1(eap);
+    let line2 = nvim_eap_get_line2(eap);
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    if cmdidx == CMD_MOVE {
+        if rs_do_move(line1, line2, n) == 0 {
+            // FAIL
+            return;
+        }
+    } else {
+        rs_ex_copy(line1, line2, n);
+    }
+    u_clearline(nvim_get_curbuf());
+    beginline(BL_SOL | BL_FIX);
+    ex_may_print(eap);
 }
 
 /// ":@" (execute register).

@@ -5451,64 +5451,6 @@ char *nvim_docmd_ex_range_without_command(exarg_T *eap)
   return errormsg;
 }
 
-/// ex_tabclose logic.
-void nvim_docmd_ex_tabclose(exarg_T *eap)
-{
-  if (cmdwin_type != 0) {
-    cmdwin_result = K_IGNORE;
-    return;
-  }
-
-  if (first_tabpage->tp_next == NULL) {
-    emsg(_("E784: Cannot close last tab page"));
-    return;
-  }
-
-  int tab_number = get_tabpage_arg(eap);
-  if (eap->errmsg != NULL) {
-    return;
-  }
-
-  tabpage_T *tp = rs_find_tabpage(tab_number);
-  if (tp == NULL) {
-    beep_flush();
-    return;
-  }
-  if (tp != curtab) {
-    tabpage_close_other(tp, eap->forceit);
-    return;
-  } else if (!text_locked() && !curbuf_locked()) {
-    tabpage_close(eap->forceit);
-  }
-}
-
-/// ex_hide logic.
-void nvim_docmd_ex_hide(exarg_T *eap)
-{
-  // ":hide" or ":hide | cmd": hide current window
-  if (eap->skip) {
-    return;
-  }
-
-  if (eap->addr_count == 0) {
-    win_close(curwin, false, eap->forceit);  // don't free buffer
-  } else {
-    int winnr = 0;
-    win_T *win = NULL;
-
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      winnr++;
-      if (winnr == eap->line2) {
-        win = wp;
-        break;
-      }
-    }
-    if (win == NULL) {
-      win = lastwin;
-    }
-    win_close(win, false, eap->forceit);
-  }
-}
 
 /// ex_exit logic.
 void nvim_docmd_ex_exit(exarg_T *eap)
@@ -5605,69 +5547,6 @@ void nvim_docmd_ex_cd(exarg_T *eap)
   }
 }
 
-/// ex_wincmd logic.
-void nvim_docmd_ex_wincmd(exarg_T *eap)
-{
-  int xchar = NUL;
-  char *p;
-
-  if (*eap->arg == 'g' || *eap->arg == Ctrl_G) {
-    // CTRL-W g and CTRL-W CTRL-G  have an extra command character
-    if (eap->arg[1] == NUL) {
-      emsg(_(e_invarg));
-      return;
-    }
-    xchar = (uint8_t)eap->arg[1];
-    p = eap->arg + 2;
-  } else {
-    p = eap->arg + 1;
-  }
-
-  eap->nextcmd = check_nextcmd(p);
-  p = skipwhite(p);
-  if (*p != NUL && *p != '"' && eap->nextcmd == NULL) {
-    emsg(_(e_invarg));
-  } else if (!eap->skip) {
-    // Pass flags on for ":vertical wincmd ]".
-    postponed_split_flags = cmdmod.cmod_split;
-    postponed_split_tab = cmdmod.cmod_tab;
-    rs_do_window(*eap->arg, eap->addr_count > 0 ? eap->line2 : 0, xchar);
-    postponed_split_flags = 0;
-    postponed_split_tab = 0;
-  }
-}
-
-/// ex_copymove logic.
-void nvim_docmd_ex_copymove(exarg_T *eap)
-{
-  const char *errormsg = NULL;
-  linenr_T n = get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, &errormsg);
-  if (eap->arg == NULL) {  // error detected
-    if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    eap->nextcmd = NULL;
-    return;
-  }
-  get_flags(eap);
-
-  // move or copy lines from 'eap->line1'-'eap->line2' to below line 'n'
-  if (n == MAXLNUM || n < 0 || n > curbuf->b_ml.ml_line_count) {
-    emsg(_(e_invrange));
-    return;
-  }
-
-  if (eap->cmdidx == CMD_move) {
-    if (rs_do_move(eap->line1, eap->line2, n) == FAIL) {
-      return;
-    }
-  } else {
-    rs_ex_copy(eap->line1, eap->line2, n);
-  }
-  u_clearline(curbuf);
-  beginline(BL_SOL | BL_FIX);
-  ex_may_print(eap);
-}
 
 /// ex_at logic.
 void nvim_docmd_ex_at(exarg_T *eap)
@@ -5719,3 +5598,48 @@ void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
 
 /// Set curwin->w_curswant (for ex_startinsert Rust FFI).
 void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val; }
+
+// =============================================================================
+// Phase 17 accessor functions for Rust FFI (ex_tabclose, ex_hide, ex_wincmd,
+//   ex_copymove)
+// =============================================================================
+
+/// Check if there is only one tab page.
+int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
+
+/// Close the current tab page.
+void nvim_docmd_tabpage_close(int forceit) { tabpage_close((bool)forceit); }
+
+/// Close another tab page.
+void nvim_docmd_tabpage_close_other(void *tp, int forceit)
+{
+  tabpage_close_other((tabpage_T *)tp, (bool)forceit);
+}
+
+/// Check if a tabpage handle equals curtab.
+int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }
+
+/// Return the nth window in curtab (1-based), or lastwin if not found.
+win_T *nvim_docmd_nth_window(int nr)
+{
+  int winnr = 0;
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    winnr++;
+    if (winnr == nr) {
+      return wp;
+    }
+  }
+  return lastwin;
+}
+
+/// Get cmdmod.cmod_split.
+int nvim_docmd_get_cmdmod_cmod_split(void) { return cmdmod.cmod_split; }
+
+/// Get cmdmod.cmod_tab.
+int nvim_docmd_get_cmdmod_cmod_tab(void) { return cmdmod.cmod_tab; }
+
+/// Wrap get_address for the ex_copymove use case.
+linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg)
+{
+  return get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, errormsg);
+}
