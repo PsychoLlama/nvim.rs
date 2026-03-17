@@ -176,6 +176,7 @@ extern "C" {
     fn nvim_eap_get_arg(eap: ExArgHandle) -> *mut c_char;
     fn nvim_eap_get_cmdidx(eap: ExArgHandle) -> c_int;
     fn nvim_eap_get_forceit(eap: ExArgHandle) -> bool;
+    fn nvim_eap_set_forceit(eap: ExArgHandle, forceit: bool);
     fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
     fn nvim_eap_get_line1(eap: ExArgHandle) -> LinenrT;
     fn nvim_eap_get_line2(eap: ExArgHandle) -> LinenrT;
@@ -1842,9 +1843,6 @@ extern "C" {
     fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_ex_shada(eap: ExArgHandle);
     fn nvim_docmd_ex_folddo(eap: ExArgHandle);
-    fn nvim_docmd_ex_put(eap: ExArgHandle);
-    fn nvim_docmd_ex_iput(eap: ExArgHandle);
-    fn nvim_docmd_ex_equal(eap: ExArgHandle);
     fn nvim_docmd_ex_recover(eap: ExArgHandle);
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     fn nvim_docmd_ex_setfiletype(eap: ExArgHandle);
@@ -1982,7 +1980,13 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
     } else {
         line2
     };
-    do_join((line2 - line1 + 1) as usize, !nvim_eap_get_forceit(eap), true, true, true);
+    do_join(
+        (line2 - line1 + 1) as usize,
+        !nvim_eap_get_forceit(eap),
+        true,
+        true,
+        true,
+    );
     beginline(BL_WHITE | BL_FIX);
     ex_may_print(eap);
 }
@@ -1990,19 +1994,63 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
 /// ":put".
 #[export_name = "ex_put"]
 pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
-    nvim_docmd_ex_put(eap);
+    let mut line2 = nvim_eap_get_line2(eap);
+    let mut forceit = nvim_eap_get_forceit(eap);
+    if line2 == 0 {
+        line2 = 1;
+        nvim_eap_set_line2(eap, line2);
+        forceit = true;
+        nvim_eap_set_forceit(eap, true);
+    }
+    nvim_docmd_set_curwin_cursor_lnum(line2);
+    nvim_docmd_check_cursor_col();
+    let regname = nvim_eap_get_regname(eap);
+    let dir = if forceit { BACKWARD } else { FORWARD };
+    do_put(
+        regname,
+        std::ptr::null_mut(),
+        dir,
+        1,
+        PUT_LINE | PUT_CURSLINE,
+    );
 }
 
 /// ":iput".
 #[export_name = "ex_iput"]
 pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
-    nvim_docmd_ex_iput(eap);
+    let mut line2 = nvim_eap_get_line2(eap);
+    let mut forceit = nvim_eap_get_forceit(eap);
+    if line2 == 0 {
+        line2 = 1;
+        nvim_eap_set_line2(eap, line2);
+        forceit = true;
+        nvim_eap_set_forceit(eap, true);
+    }
+    nvim_docmd_set_curwin_cursor_lnum(line2);
+    nvim_docmd_check_cursor_col();
+    let regname = nvim_eap_get_regname(eap);
+    let dir = if forceit { BACKWARD } else { FORWARD };
+    do_put(
+        regname,
+        std::ptr::null_mut(),
+        dir,
+        1,
+        PUT_LINE | PUT_CURSLINE | PUT_FIXINDENT,
+    );
 }
 
 /// ":=" (equal).
 #[export_name = "ex_equal"]
 pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
-    nvim_docmd_ex_equal(eap);
+    let arg = nvim_eap_get_arg(eap);
+    if !arg.is_null() && (*arg != 0 && *arg as u8 != b'|') {
+        ex_lua(eap);
+    } else {
+        let nextcmd = find_nextcmd(arg as *const c_char);
+        nvim_eap_set_nextcmd(eap, nextcmd);
+        let line2 = nvim_eap_get_line2(eap);
+        smsg(0, c"%ld".as_ptr(), line2 as std::ffi::c_long);
+    }
 }
 
 /// ":recover".
@@ -2130,7 +2178,22 @@ extern "C" {
     fn rs_set_cursor_for_append_to_line();
     fn nvim_edit_set_restart_edit(val: c_int);
     fn nvim_docmd_set_curwin_curswant(val: c_int);
+
+    // Phase 16: ex_put, ex_iput, ex_equal helpers
+    fn do_put(regname: c_int, reg: *mut c_void, dir: c_int, count: c_int, flags: c_int);
+    fn ex_lua(eap: ExArgHandle);
+    fn find_nextcmd(p: *const c_char) -> *mut c_char;
+    fn nvim_docmd_check_cursor_col();
 }
+
+/// do_put direction constants (from vim_defs.h).
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
+
+/// do_put flag constants (from register_defs.h).
+const PUT_FIXINDENT: c_int = 1;
+const PUT_CURSLINE: c_int = 4;
+const PUT_LINE: c_int = 8;
 
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]
@@ -2201,18 +2264,40 @@ pub unsafe extern "C" fn rs_ex_later(eap: ExArgHandle) {
         count = getdigits_int(&mut pp as *mut *mut c_char, false, 0);
         p = pp;
         match *(p as *const u8) {
-            b's' => { p = p.add(1); sec = true; }
-            b'm' => { p = p.add(1); sec = true; count *= 60; }
-            b'h' => { p = p.add(1); sec = true; count *= 60 * 60; }
-            b'd' => { p = p.add(1); sec = true; count *= 24 * 60 * 60; }
-            b'f' => { p = p.add(1); file = true; }
+            b's' => {
+                p = p.add(1);
+                sec = true;
+            }
+            b'm' => {
+                p = p.add(1);
+                sec = true;
+                count *= 60;
+            }
+            b'h' => {
+                p = p.add(1);
+                sec = true;
+                count *= 60 * 60;
+            }
+            b'd' => {
+                p = p.add(1);
+                sec = true;
+                count *= 24 * 60 * 60;
+            }
+            b'f' => {
+                p = p.add(1);
+                file = true;
+            }
             _ => {}
         }
     }
     if !p.is_null() && *p != 0 {
         semsg(nvim_get_e_invarg2() as *const c_char, arg);
     } else {
-        let step = if nvim_eap_get_cmdidx(eap) == CMD_EARLIER { -count } else { count };
+        let step = if nvim_eap_get_cmdidx(eap) == CMD_EARLIER {
+            -count
+        } else {
+            count
+        };
         undo_time(step, sec, file, false);
     }
 }
@@ -2283,7 +2368,7 @@ pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
 #[export_name = "ex_startinsert"]
 pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     const CMD_STARTGREPLACE: c_int = CMD_STARTINSERT + 1; // 432
-    // CMD_startreplace = 433
+                                                          // CMD_startreplace = 433
 
     let forceit = nvim_eap_get_forceit(eap);
     if forceit {

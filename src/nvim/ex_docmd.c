@@ -5201,43 +5201,6 @@ void nvim_docmd_ex_folddo(exarg_T *eap)
 }
 
 
-/// ex_put logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_put(exarg_T *eap)
-{
-  if (eap->line2 == 0) {
-    eap->line2 = 1;
-    eap->forceit = true;
-  }
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1, PUT_LINE|PUT_CURSLINE);
-}
-
-/// ex_iput logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_iput(exarg_T *eap)
-{
-  if (eap->line2 == 0) {
-    eap->line2 = 1;
-    eap->forceit = true;
-  }
-  curwin->w_cursor.lnum = eap->line2;
-  check_cursor_col(curwin);
-  do_put(eap->regname, NULL, eap->forceit ? BACKWARD : FORWARD, 1L, PUT_LINE|PUT_CURSLINE|PUT_FIXINDENT);
-}
-
-/// ex_equal logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_equal(exarg_T *eap)
-{
-  if (*eap->arg != NUL && *eap->arg != '|') {
-    ex_lua(eap);
-  } else {
-    eap->nextcmd = find_nextcmd(eap->arg);
-    smsg(0, "%" PRId64, (int64_t)eap->line2);
-  }
-}
-
-
-
 /// ex_recover logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_recover(exarg_T *eap)
 {
