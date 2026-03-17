@@ -127,6 +127,7 @@ pub(crate) const CMD_VERBOSE: c_int = 505;
 pub(crate) const CMD_VERTICAL: c_int = 506;
 pub(crate) const CMD_WHILE: c_int = 524;
 pub(crate) const CMD_WINCMD: c_int = 526;
+pub(crate) const CMD_FOLDOPEN: c_int = 166;
 
 // =============================================================================
 // FFI declarations
@@ -277,6 +278,27 @@ extern "C" {
     fn nvim_get_namebuff() -> *mut c_char;
     fn nvim_get_e_failed() -> *const c_char;
     fn xstrdup(str: *const c_char) -> *mut c_char;
+
+    // Phase 5: ex_fold / ex_foldopen / ex_digraphs helpers
+    fn rs_foldManualAllowed(create: bool) -> c_int;
+    fn rs_foldCreate(wp: WinHandle, start_lnum: LinenrT, end_lnum: LinenrT);
+    fn rs_opFoldRange(
+        first_lnum: LinenrT,
+        last_lnum: LinenrT,
+        opening: c_int,
+        recurse: c_int,
+        had_visual: bool,
+    );
+    fn putdigraph(str: *mut c_char);
+    fn rs_listdigraphs(use_headers: c_int);
+
+    // Phase 5: ex_mode helpers
+    fn nvim_docmd_set_must_redraw(val: c_int);
+    fn nvim_docmd_get_e_screenmode() -> *const c_char;
+
+    // Phase 5: ex_swapname helpers
+    fn nvim_docmd_get_curbuf_swapname() -> *const c_char;
+    fn nvim_docmd_no_swap_file_msg() -> *const c_char;
 }
 
 // =============================================================================
@@ -312,6 +334,9 @@ const KE_FILLER: u8 = 1;
 
 /// Ctrl_C = 3
 const CTRL_C: c_int = 3;
+
+/// UPD_CLEAR = 50 (from drawscreen.h)
+const UPD_CLEAR: c_int = 50;
 
 // =============================================================================
 // verify_command - smile easter egg
@@ -2224,4 +2249,74 @@ pub unsafe extern "C" fn rs_find_cmdline_var(src: *const c_char, usedlen: *mut u
         }
     }
     -1
+}
+
+// =============================================================================
+// Phase 5: ex_fold, ex_foldopen, ex_digraphs, ex_mode, ex_swapname
+// =============================================================================
+
+/// `:fold`: Create a manual fold.
+///
+/// Matches C `ex_fold()`.
+#[export_name = "ex_fold"]
+pub unsafe extern "C" fn rs_ex_fold(eap: ExArgHandle) {
+    if rs_foldManualAllowed(true) != 0 {
+        rs_foldCreate(nvim_get_curwin(), nvim_eap_get_line1(eap), nvim_eap_get_line2(eap));
+    }
+}
+
+/// `:foldopen` / `:foldclose`: Open or close a fold.
+///
+/// Matches C `ex_foldopen()`.
+#[export_name = "ex_foldopen"]
+pub unsafe extern "C" fn rs_ex_foldopen(eap: ExArgHandle) {
+    let opening = c_int::from(nvim_eap_get_cmdidx(eap) == CMD_FOLDOPEN);
+    let recurse = c_int::from(nvim_eap_get_forceit(eap));
+    rs_opFoldRange(
+        nvim_eap_get_line1(eap),
+        nvim_eap_get_line2(eap),
+        opening,
+        recurse,
+        false,
+    );
+}
+
+/// `:digraphs`: List or add digraphs.
+///
+/// Matches C `ex_digraphs()`.
+#[export_name = "ex_digraphs"]
+pub unsafe extern "C" fn rs_ex_digraphs(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    if !arg.is_null() && *arg != 0 {
+        putdigraph(arg);
+    } else {
+        rs_listdigraphs(c_int::from(nvim_eap_get_forceit(eap)));
+    }
+}
+
+/// `:mode`: Redraw the screen or report invalid argument.
+///
+/// Matches C `ex_mode()`.
+#[export_name = "ex_mode"]
+pub unsafe extern "C" fn rs_ex_mode(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    if arg.is_null() || *arg == 0 {
+        nvim_docmd_set_must_redraw(UPD_CLEAR);
+        rs_ex_redraw(eap);
+    } else {
+        emsg(nvim_docmd_get_e_screenmode());
+    }
+}
+
+/// `:swapname`: Show the swap file name of the current buffer.
+///
+/// Matches C `ex_swapname()`.
+#[export_name = "ex_swapname"]
+pub unsafe extern "C" fn rs_ex_swapname(_eap: ExArgHandle) {
+    let fname = nvim_docmd_get_curbuf_swapname();
+    if fname.is_null() {
+        msg(nvim_docmd_no_swap_file_msg(), 0);
+    } else {
+        msg(fname, 0);
+    }
 }

@@ -307,6 +307,12 @@ extern void ex_submagic(exarg_T *eap);
 extern int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
 // Phase 4 (ex_docmd plan): C implementations replaced by Rust exports.
 extern ssize_t find_cmdline_var(const char *src, size_t *usedlen);
+// Phase 5 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_fold(exarg_T *eap);
+extern void ex_foldopen(exarg_T *eap);
+extern void ex_digraphs(exarg_T *eap);
+extern void ex_mode(exarg_T *eap);
+extern void ex_swapname(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2643,18 +2649,6 @@ static void ex_connect(exarg_T *eap)
   }
 }
 
-/// ":mode":
-/// If no argument given, get the screen size and redraw.
-static void ex_mode(exarg_T *eap)
-{
-  if (*eap->arg == NUL) {
-    must_redraw = UPD_CLEAR;
-    ex_redraw(eap);
-  } else {
-    emsg(_(e_screenmode));
-  }
-}
-
 /// ":resize".
 /// set, increment or decrement current window height
 /// ":find [+command] <file>" command.
@@ -2819,15 +2813,6 @@ void do_exedit(exarg_T *eap, win_T *old_curwin)
   }
 
   ex_no_reprint = true;
-}
-
-static void ex_swapname(exarg_T *eap)
-{
-  if (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) {
-    msg(_("No swap file"), 0);
-  } else {
-    msg(curbuf->b_ml.ml_mfp->mf_fname, 0);
-  }
 }
 
 /// ":syncbind" forces all 'scrollbind' windows to have the same relative
@@ -3868,26 +3853,6 @@ void filetype_maybe_enable(void)
   }
 }
 
-static void ex_digraphs(exarg_T *eap)
-{
-  if (*eap->arg != NUL) {
-    putdigraph(eap->arg);
-  } else {
-    rs_listdigraphs(eap->forceit ? 1 : 0);
-  }
-}
-
-static void ex_fold(exarg_T *eap)
-{
-  if (rs_foldManualAllowed(true)) {
-    rs_foldCreate(curwin, eap->line1, eap->line2);
-  }
-}
-
-static void ex_foldopen(exarg_T *eap)
-{
-  rs_opFoldRange(eap->line1, eap->line2, eap->cmdidx == CMD_foldopen, eap->forceit, false);
-}
 
 
 // C accessor for Rust to read ex_pressedreturn
@@ -3986,6 +3951,18 @@ int nvim_get_exestack_len(void)
 {
   return exestack.ga_len;
 }
+
+// Phase 5 accessors for ex_mode, ex_swapname, ex_digraphs, ex_fold migrations
+void nvim_docmd_set_must_redraw(int val) { must_redraw = val; }
+const char *nvim_docmd_get_e_screenmode(void) { return _(e_screenmode); }
+const char *nvim_docmd_get_curbuf_swapname(void)
+{
+  if (curbuf->b_ml.ml_mfp == NULL || curbuf->b_ml.ml_mfp->mf_fname == NULL) {
+    return NULL;
+  }
+  return curbuf->b_ml.ml_mfp->mf_fname;
+}
+const char *nvim_docmd_no_swap_file_msg(void) { return _("No swap file"); }
 
 /// ":checkhealth [plugins]"
 static void ex_checkhealth(exarg_T *eap)
