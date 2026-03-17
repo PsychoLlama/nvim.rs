@@ -2143,10 +2143,25 @@ pub unsafe extern "C" fn rs_get_argopt_name(_xp: *mut c_void, idx: c_int) -> *mu
 
 extern "C" {
     fn nvim_docmd_ex_range_without_command(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_docmd_ex_exit(eap: ExArgHandle);
-    fn nvim_docmd_ex_resize(eap: ExArgHandle);
-    fn nvim_docmd_ex_cd(eap: ExArgHandle);
     fn nvim_docmd_ex_at(eap: ExArgHandle);
+
+    // Phase 18: ex_exit, ex_resize, ex_cd helpers
+    static mut KeyTyped: bool;
+    static mut p_cdh: bool;
+    static mut p_verbose: std::ffi::c_long;
+
+    fn not_exiting();
+    fn curbufIsChanged() -> bool;
+    fn do_write(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_buf_hide_curwin() -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
+    fn nvim_get_Columns() -> c_int;
+    fn nvim_get_Rows() -> c_int;
+    fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
+    fn rs_win_setheight_win(height: c_int, wp: WinHandle);
+    fn atol(s: *const c_char) -> std::ffi::c_long;
+    fn changedir_func(new_dir: *const c_char, scope: c_int) -> bool;
 
     // Phase 17: tabclose, hide, wincmd, copymove helpers
     static mut postponed_split_flags: c_int;
@@ -2216,8 +2231,12 @@ const PUT_FIXINDENT: c_int = 1;
 const PUT_CURSLINE: c_int = 4;
 const PUT_LINE: c_int = 8;
 
-/// CMD_ constants for Phase 17.
+/// CMD_ constants for Phase 17-18.
 const CMD_MOVE: c_int = 271;
+const CMD_LCD: c_int = 225;
+const CMD_LCHDIR: c_int = 226;
+const CMD_TCD: c_int = 447;
+const CMD_TCHDIR: c_int = 448;
 
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]
@@ -2277,19 +2296,111 @@ pub unsafe extern "C" fn rs_ex_hide(eap: ExArgHandle) {
 /// ":exit" / ":xit" / ":wq".
 #[export_name = "ex_exit"]
 pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
-    nvim_docmd_ex_exit(eap);
+    const CTRL_C: c_int = 3;
+    const CMD_WQ: c_int = 531;
+    const FAIL: c_int = 0;
+    const OK: c_int = 1;
+
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        nvim_set_cmdwin_result(CTRL_C);
+        return;
+    }
+    if text_locked() {
+        text_locked_msg();
+        return;
+    }
+
+    let forceit = nvim_eap_get_forceit(eap);
+    // we plan to exit if there is only one relevant window
+    if nvim_docmd_check_more(0, forceit as c_int) == OK && rs_only_one_window() != 0 {
+        nvim_docmd_set_exiting(1);
+    }
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    if ((cmdidx == CMD_WQ || curbufIsChanged()) && do_write(eap) == FAIL)
+        || before_quit_autocmds(nvim_get_curwin(), false, forceit)
+        || nvim_docmd_check_more(1, forceit as c_int) == FAIL
+        || (rs_only_one_window() != 0 && check_changed_any(forceit, false))
+    {
+        not_exiting();
+    } else {
+        if rs_only_one_window() != 0 {
+            getout(0);
+        }
+        not_exiting();
+        let free_buf = nvim_docmd_buf_hide_curwin() == 0;
+        win_close(nvim_get_curwin(), free_buf, forceit);
+    }
 }
 
 /// ":resize".
 #[export_name = "ex_resize"]
 pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
-    nvim_docmd_ex_resize(eap);
+    const WSP_VERT: c_int = 0x02;
+
+    let mut wp = nvim_get_curwin();
+
+    if nvim_eap_get_addr_count(eap) > 0 {
+        let mut n = nvim_eap_get_line2(eap);
+        wp = nvim_get_firstwin();
+        while !nvim_win_get_next(wp).is_null() {
+            n -= 1;
+            if n <= 0 {
+                break;
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
+
+    let arg = nvim_eap_get_arg(eap);
+    let n_raw = atol(arg) as c_int;
+    let cmod_split = nvim_docmd_get_cmdmod_cmod_split();
+    if cmod_split & WSP_VERT != 0 {
+        let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
+            n_raw + nvim_win_get_w_width(wp)
+        } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
+            nvim_get_Columns()
+        } else {
+            n_raw
+        };
+        rs_win_setwidth_win(n, wp);
+    } else {
+        let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
+            n_raw + nvim_win_get_w_height(wp)
+        } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
+            nvim_get_Rows() - 1
+        } else {
+            n_raw
+        };
+        rs_win_setheight_win(n, wp);
+    }
 }
 
 /// ":cd" / ":tcd" / ":lcd" / ":chdir" etc.
 #[export_name = "ex_cd"]
 pub unsafe extern "C" fn rs_ex_cd(eap: ExArgHandle) {
-    nvim_docmd_ex_cd(eap);
+    const CD_SCOPE_WINDOW: c_int = 0;
+    const CD_SCOPE_TABPAGE: c_int = 1;
+    const CD_SCOPE_GLOBAL: c_int = 2;
+
+    let new_dir = nvim_eap_get_arg(eap);
+    if new_dir.is_null() || (*(new_dir as *const u8) == 0 && !p_cdh) {
+        nvim_docmd_ex_pwd(eap);
+        return;
+    }
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let scope = if cmdidx == CMD_TCD || cmdidx == CMD_TCHDIR {
+        CD_SCOPE_TABPAGE
+    } else if cmdidx == CMD_LCD || cmdidx == CMD_LCHDIR {
+        CD_SCOPE_WINDOW
+    } else {
+        CD_SCOPE_GLOBAL
+    };
+
+    if changedir_func(new_dir as *const c_char, scope) && (KeyTyped || p_verbose >= 5) {
+        nvim_docmd_ex_pwd(eap);
+    }
 }
 
 /// ":wincmd".

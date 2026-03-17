@@ -5452,100 +5452,6 @@ char *nvim_docmd_ex_range_without_command(exarg_T *eap)
 }
 
 
-/// ex_exit logic.
-void nvim_docmd_ex_exit(exarg_T *eap)
-{
-  if (cmdwin_type != 0) {
-    cmdwin_result = Ctrl_C;
-    return;
-  }
-  // Don't quit while editing the command line.
-  if (text_locked()) {
-    text_locked_msg();
-    return;
-  }
-
-  // we plan to exit if there is only one relevant window
-  if (check_more(false, eap->forceit) == OK && rs_only_one_window()) {
-    exiting = true;
-  }
-  // Write the buffer for ":wq" or when it was changed.
-  // Trigger QuitPre and ExitPre.
-  // Check if we can exit now, after autocommands have changed things.
-  if (((eap->cmdidx == CMD_wq || curbufIsChanged()) && do_write(eap) == FAIL)
-      || before_quit_autocmds(curwin, false, eap->forceit)
-      || check_more(true, eap->forceit) == FAIL
-      || (rs_only_one_window() && check_changed_any(eap->forceit, false))) {
-    not_exiting();
-  } else {
-    if (rs_only_one_window()) {
-      // quit last window, exit Vim
-      getout(0);
-    }
-    not_exiting();
-    // Quit current window, may free the buffer.
-    win_close(curwin, !buf_hide(curwin->w_buffer), eap->forceit);
-  }
-}
-
-/// ex_resize logic.
-void nvim_docmd_ex_resize(exarg_T *eap)
-{
-  win_T *wp = curwin;
-
-  if (eap->addr_count > 0) {
-    int n = (int)eap->line2;
-    for (wp = firstwin; wp->w_next != NULL && --n > 0; wp = wp->w_next) {}
-  }
-
-  int n = (int)atol(eap->arg);
-  if (cmdmod.cmod_split & WSP_VERT) {
-    if (*eap->arg == '-' || *eap->arg == '+') {
-      n += wp->w_width;
-    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very wide
-      n = Columns;
-    }
-    rs_win_setwidth_win(n, wp);
-  } else {
-    if (*eap->arg == '-' || *eap->arg == '+') {
-      n += wp->w_height;
-    } else if (n == 0 && eap->arg[0] == NUL) {  // default is very high
-      n = Rows - 1;
-    }
-    rs_win_setheight_win(n, wp);
-  }
-}
-
-/// ex_cd logic.
-void nvim_docmd_ex_cd(exarg_T *eap)
-{
-  char *new_dir = eap->arg;
-  // for non-UNIX ":cd" means: print current directory unless 'cdhome' is set
-  if (*new_dir == NUL && !p_cdh) {
-    ex_pwd(NULL);
-    return;
-  }
-
-  CdScope scope = kCdScopeGlobal;
-  switch (eap->cmdidx) {
-  case CMD_tcd:
-  case CMD_tchdir:
-    scope = kCdScopeTabpage;
-    break;
-  case CMD_lcd:
-  case CMD_lchdir:
-    scope = kCdScopeWindow;
-    break;
-  default:
-    break;
-  }
-  if (changedir_func(new_dir, scope)) {
-    // Echo the new current directory if the command was typed.
-    if (KeyTyped || p_verbose >= 5) {
-      ex_pwd(eap);
-    }
-  }
-}
 
 
 /// ex_at logic.
@@ -5643,3 +5549,8 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 {
   return get_address(eap, &eap->arg, eap->addr_type, false, false, false, 1, errormsg);
 }
+
+// Phase 18 accessors
+
+/// Check if curwin->w_buffer should be hidden (for ex_exit).
+int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
