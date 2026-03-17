@@ -282,18 +282,24 @@ extern "C" {
     fn nvim_docmd_set_ex_pressedreturn(val: c_int);
     fn nvim_docmd_get_curwin_cursor_lnum() -> i32;
     fn nvim_docmd_get_curbuf_line_count() -> i32;
+    #[link_name = "vim_strchr"]
     fn nvim_docmd_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_docmd_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    #[link_name = "xstrdup"]
     fn nvim_docmd_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
     #[link_name = "rs_tabpage_index"]
     fn nvim_rs_tabpage_index(tp: *mut std::ffi::c_void) -> c_int;
     fn nvim_docmd_LAST_TAB_NR() -> c_int;
+    #[link_name = "atoi"]
     fn nvim_docmd_atoi(s: *const c_char) -> c_int;
     fn nvim_docmd_skip_range(cmd: *const c_char) -> *mut c_char;
+    #[link_name = "skipwhite"]
     fn nvim_docmd_skipwhite(p: *const c_char) -> *mut c_char;
     fn nvim_docmd_get_e_invrange_msg() -> *mut c_char;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_isdigit"]
     fn nvim_docmd_ascii_isdigit(c: c_int) -> c_int;
 
 }

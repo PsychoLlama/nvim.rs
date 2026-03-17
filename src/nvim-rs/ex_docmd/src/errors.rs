@@ -49,8 +49,11 @@ extern "C" {
     // IObuff accessors for append_command
     fn nvim_docmd_get_iobuff() -> *mut c_char;
     fn nvim_docmd_get_iosize() -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_docmd_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "mb_copy_char"]
     fn nvim_docmd_mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char);
     fn nvim_docmd_xstrlcat_iobuff(src: *const c_char);
 }

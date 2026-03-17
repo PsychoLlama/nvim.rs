@@ -3982,23 +3982,6 @@ int nvim_docmd_get_iosize(void)
   return IOSIZE;
 }
 
-/// Get utf_head_off for IObuff.
-int nvim_docmd_utf_head_off(const char *base, const char *p)
-{
-  return utf_head_off(base, p);
-}
-
-/// Get utfc_ptr2len.
-int nvim_docmd_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
-
-/// Copy a multibyte character, advancing both pointers.
-void nvim_docmd_mb_copy_char(const char **fp, char **tp)
-{
-  mb_copy_char(fp, tp);
-}
 
 /// Concatenate to IObuff with size limit.
 void nvim_docmd_xstrlcat_iobuff(const char *src)
@@ -4214,19 +4197,9 @@ void nvim_docmd_strmove(char *dst, const char *src)
   STRMOVE(dst, src);
 }
 
-int nvim_docmd_mb_ptr_adv_len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
-
 int nvim_docmd_mb_byte2len(int b)
 {
   return MB_BYTE2LEN((uint8_t)b);
-}
-
-char nvim_docmd_tolower_asc(int c)
-{
-  return (char)TOLOWER_ASC(c);
 }
 
 void nvim_docmd_skip_expr(char **pp)
@@ -4237,11 +4210,6 @@ void nvim_docmd_skip_expr(char **pp)
 int nvim_docmd_cpo_has_bar(void)
 {
   return vim_strchr(p_cpo, CPO_BAR) != NULL;
-}
-
-void nvim_docmd_del_trailing_spaces(char *p)
-{
-  del_trailing_spaces(p);
 }
 
 char *nvim_docmd_get_dollar_command(void)
@@ -4432,11 +4400,6 @@ char *nvim_docmd_ex_errmsg_invarg2(const char *arg)
   return (char *)ex_errmsg(e_invarg2, arg);
 }
 
-/// Check ascii_iswhite.
-int nvim_docmd_ascii_iswhite(int c) { return ascii_iswhite(c); }
-
-/// Check ascii_isdigit.
-int nvim_docmd_ascii_isdigit(int c) { return ascii_isdigit(c); }
 
 // =========================================================================
 // Phase 6 accessor functions for Rust FFI
@@ -4496,32 +4459,20 @@ char *nvim_docmd_get_exmode_plus(void)
 /// Set ex_pressedreturn.
 void nvim_docmd_set_ex_pressedreturn(int val) { ex_pressedreturn = (bool)val; }
 
-/// Wrap vim_strchr for Rust.
-char *nvim_docmd_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
-
 /// Wrap vim_regcomp for Rust.
 void *nvim_docmd_vim_regcomp(const char *pat, int flags)
 {
   return vim_regcomp((char *)pat, flags);
 }
 
-/// Wrap xstrdup for Rust.
-char *nvim_docmd_xstrdup(const char *s) { return xstrdup(s); }
-
 /// Wrap LAST_TAB_NR for Rust.
 int nvim_docmd_LAST_TAB_NR(void) { return LAST_TAB_NR; }
-
-/// Wrap atoi for Rust (verbose count parsing).
-int nvim_docmd_atoi(const char *s) { return atoi(s); }
 
 /// Wrap skip_range for Rust.
 char *nvim_docmd_skip_range(const char *cmd)
 {
   return skip_range(cmd, NULL);
 }
-
-/// Wrap skipwhite for Rust.
-char *nvim_docmd_skipwhite(const char *p) { return skipwhite(p); }
 
 /// Get _(e_invrange).
 char *nvim_docmd_get_e_invrange_msg(void) { return _(e_invrange); }
@@ -4629,8 +4580,6 @@ char *nvim_docmd_get_e_backslash(void) { return _(e_backslash); }
 /// Get _(e_line_number_out_of_range).
 char *nvim_docmd_get_e_line_number_out_of_range(void) { return _(e_line_number_out_of_range); }
 
-/// Get strlen of a string.
-size_t nvim_docmd_strlen(const char *s) { return strlen(s); }
 
 // --- Accessors for parse_cmd_address ---
 
@@ -5349,12 +5298,6 @@ void nvim_docmd_ex_equal(exarg_T *eap)
 }
 
 
-/// Wrapper for get_bad_name expansion function (pass function pointer via index).
-/// Returns the idx-th bad= option value string.
-char *nvim_docmd_get_bad_name(int idx)
-{
-  return get_bad_name(NULL, idx);
-}
 
 /// ex_recover logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_recover(exarg_T *eap)

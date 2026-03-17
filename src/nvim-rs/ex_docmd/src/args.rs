@@ -45,11 +45,14 @@ extern "C" {
     fn nvim_docmd_set_expr_line(arg: *const c_char);
     fn nvim_docmd_check_ff_value(p: *const c_char) -> c_int;
     fn nvim_docmd_strmove(dst: *mut c_char, src: *const c_char);
+    #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_mb_ptr_adv_len(p: *const c_char) -> c_int;
     fn nvim_docmd_mb_byte2len(b: c_int) -> c_int;
-    fn nvim_docmd_tolower_asc(c: c_int) -> c_char;
+    #[link_name = "rs_ascii_tolower"]
+    fn nvim_docmd_tolower_asc(c: c_int) -> c_int;
     fn nvim_docmd_skip_expr(pp: *mut *mut c_char);
     fn nvim_docmd_cpo_has_bar() -> c_int;
+    #[link_name = "del_trailing_spaces"]
     fn nvim_docmd_del_trailing_spaces(p: *mut c_char);
     fn nvim_docmd_get_dollar_command() -> *mut c_char;
     fn nvim_docmd_parse_count_digits(eap: ExArgHandle) -> c_int;
@@ -460,12 +463,14 @@ pub unsafe extern "C" fn rs_parse_register(eap: ExArgHandle) {
     }
 
     // Check writing: allowed if not user command and not :put/:iput
-    let writing =
-        if !is_user_cmd && cmdidx != crate::commands::CMD_PUT && cmdidx != crate::commands::CMD_IPUT {
-            1
-        } else {
-            0
-        };
+    let writing = if !is_user_cmd
+        && cmdidx != crate::commands::CMD_PUT
+        && cmdidx != crate::commands::CMD_IPUT
+    {
+        1
+    } else {
+        0
+    };
 
     if nvim_docmd_valid_yank_reg(*arg as c_int, writing) != 0 {
         let reg_char = *arg as u8;
@@ -697,7 +702,7 @@ pub unsafe extern "C" fn rs_getargopt(eap: ExArgHandle) -> c_int {
             // Make 'fileencoding' lower case
             let mut p = cmd.add(val_offset as usize);
             while *p as u8 != 0 {
-                *p = nvim_docmd_tolower_asc(*p as c_int);
+                *p = nvim_docmd_tolower_asc(*p as c_int) as c_char;
                 p = p.add(1);
             }
             nvim_eap_set_force_enc(eap, val_offset);

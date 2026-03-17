@@ -286,7 +286,9 @@ extern "C" {
     fn nvim_docmd_ex_errmsg_invarg2(arg: *const c_char) -> *mut c_char;
     fn nvim_docmd_get_e_invrange() -> *mut c_char;
     fn nvim_docmd_last_win_nr() -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_docmd_ascii_iswhite(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_isdigit"]
     fn nvim_docmd_ascii_isdigit(c: c_int) -> c_int;
 }
 
@@ -493,7 +495,11 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 #[export_name = "get_tabpage_arg"]
 pub unsafe extern "C" fn rs_get_tabpage_arg(eap: ExArgHandle) -> c_int {
     let cmdidx = nvim_eap_get_cmdidx(eap);
-    let unaccept_arg0: c_int = if cmdidx == crate::commands::CMD_TABMOVE { 0 } else { 1 };
+    let unaccept_arg0: c_int = if cmdidx == crate::commands::CMD_TABMOVE {
+        0
+    } else {
+        1
+    };
 
     let arg = nvim_eap_get_arg(eap);
     let last_tab_nr = nvim_docmd_last_tab_nr();
@@ -637,6 +643,7 @@ extern "C" {
         start_col: i32,
         flags: c_int,
     ) -> i32;
+    #[link_name = "strlen"]
     fn nvim_docmd_strlen(s: *const c_char) -> usize;
     #[link_name = "rs_magic_isset"]
     fn nvim_docmd_magic_isset() -> c_int;

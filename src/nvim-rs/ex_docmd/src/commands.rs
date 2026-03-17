@@ -168,6 +168,7 @@ extern "C" {
     fn isupper(c: c_int) -> c_int;
 
     // Character-level iteration helpers
+    #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
 
     // eap accessors
