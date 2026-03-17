@@ -313,6 +313,8 @@ extern void ex_foldopen(exarg_T *eap);
 extern void ex_digraphs(exarg_T *eap);
 extern void ex_mode(exarg_T *eap);
 extern void ex_swapname(exarg_T *eap);
+// Phase 6 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_tabnext(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2481,52 +2483,6 @@ void tabpage_new(void)
   ex_splitview(&ea);
 }
 
-/// :tabnext command
-static void ex_tabnext(exarg_T *eap)
-{
-  int tab_number;
-
-  switch (eap->cmdidx) {
-  case CMD_tabfirst:
-  case CMD_tabrewind:
-    goto_tabpage(1);
-    break;
-  case CMD_tablast:
-    goto_tabpage(9999);
-    break;
-  case CMD_tabprevious:
-  case CMD_tabNext:
-    if (eap->arg && *eap->arg != NUL) {
-      char *p = eap->arg;
-      char *p_save = p;
-      tab_number = (int)getdigits(&p, false, 0);
-      if (p == p_save || *p_save == '-' || *p_save == '+' || *p != NUL
-          || tab_number == 0) {
-        // No numbers as argument.
-        eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
-        return;
-      }
-    } else {
-      if (eap->addr_count == 0) {
-        tab_number = 1;
-      } else {
-        tab_number = (int)eap->line2;
-        if (tab_number < 1) {
-          eap->errmsg = _(e_invrange);
-          return;
-        }
-      }
-    }
-    goto_tabpage(-tab_number);
-    break;
-  default:       // CMD_tabnext
-    tab_number = get_tabpage_arg(eap);
-    if (eap->errmsg == NULL) {
-      goto_tabpage(tab_number);
-    }
-    break;
-  }
-}
 
 /// :tabs command: List tabs and their contents.
 static void ex_tabs(exarg_T *eap)
@@ -3963,6 +3919,23 @@ const char *nvim_docmd_get_curbuf_swapname(void)
   return curbuf->b_ml.ml_mfp->mf_fname;
 }
 const char *nvim_docmd_no_swap_file_msg(void) { return _("No swap file"); }
+
+// Phase 6 accessor for ex_tabnext: parse tabprevious/tabNext count argument.
+// Returns the parsed count, or 0 on error (sets *errmsg_set = 1).
+int nvim_docmd_parse_tabnext_count(exarg_T *eap, int *errmsg_set)
+{
+  char *p = eap->arg;
+  char *p_save = p;
+  int tab_number = (int)getdigits(&p, false, 0);
+  if (p == p_save || *p_save == '-' || *p_save == '+' || *p != NUL
+      || tab_number == 0) {
+    eap->errmsg = ex_errmsg(e_invarg2, eap->arg);
+    *errmsg_set = 1;
+    return 0;
+  }
+  *errmsg_set = 0;
+  return tab_number;
+}
 
 /// ":checkhealth [plugins]"
 static void ex_checkhealth(exarg_T *eap)

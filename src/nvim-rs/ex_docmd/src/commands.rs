@@ -128,6 +128,11 @@ pub(crate) const CMD_VERTICAL: c_int = 506;
 pub(crate) const CMD_WHILE: c_int = 524;
 pub(crate) const CMD_WINCMD: c_int = 526;
 pub(crate) const CMD_FOLDOPEN: c_int = 166;
+pub(crate) const CMD_TABFIRST: c_int = 457;
+pub(crate) const CMD_TABLAST: c_int = 459;
+pub(crate) const CMD_TABPREVIOUS: c_int = 463;
+pub(crate) const CMD_TABNEXT_BACKWARD: c_int = 464; // CMD_tabNext
+pub(crate) const CMD_TABREWIND: c_int = 465;
 
 // =============================================================================
 // FFI declarations
@@ -299,6 +304,11 @@ extern "C" {
     // Phase 5: ex_swapname helpers
     fn nvim_docmd_get_curbuf_swapname() -> *const c_char;
     fn nvim_docmd_no_swap_file_msg() -> *const c_char;
+
+    // Phase 6: ex_tabnext helpers
+    fn goto_tabpage(n: c_int);
+    fn nvim_get_e_invrange() -> *const c_char;
+    fn nvim_docmd_parse_tabnext_count(eap: ExArgHandle, errmsg_set: *mut c_int) -> c_int;
 }
 
 // =============================================================================
@@ -2261,7 +2271,11 @@ pub unsafe extern "C" fn rs_find_cmdline_var(src: *const c_char, usedlen: *mut u
 #[export_name = "ex_fold"]
 pub unsafe extern "C" fn rs_ex_fold(eap: ExArgHandle) {
     if rs_foldManualAllowed(true) != 0 {
-        rs_foldCreate(nvim_get_curwin(), nvim_eap_get_line1(eap), nvim_eap_get_line2(eap));
+        rs_foldCreate(
+            nvim_get_curwin(),
+            nvim_eap_get_line1(eap),
+            nvim_eap_get_line2(eap),
+        );
     }
 }
 
@@ -2318,5 +2332,48 @@ pub unsafe extern "C" fn rs_ex_swapname(_eap: ExArgHandle) {
         msg(nvim_docmd_no_swap_file_msg(), 0);
     } else {
         msg(fname, 0);
+    }
+}
+
+// =============================================================================
+// Phase 6: ex_tabnext
+// =============================================================================
+
+/// `:tabnext`, `:tabprevious`, `:tabfirst`, `:tablast` etc.
+///
+/// Matches C `ex_tabnext()`.
+#[export_name = "ex_tabnext"]
+pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    if cmdidx == CMD_TABFIRST || cmdidx == CMD_TABREWIND {
+        goto_tabpage(1);
+    } else if cmdidx == CMD_TABLAST {
+        goto_tabpage(9999);
+    } else if cmdidx == CMD_TABPREVIOUS || cmdidx == CMD_TABNEXT_BACKWARD {
+        let arg = nvim_eap_get_arg(eap);
+        let tab_number = if !arg.is_null() && *arg != 0 {
+            let mut errmsg_set: c_int = 0;
+            let n = nvim_docmd_parse_tabnext_count(eap, &mut errmsg_set);
+            if errmsg_set != 0 {
+                return;
+            }
+            n
+        } else if nvim_eap_get_addr_count(eap) == 0 {
+            1
+        } else {
+            let n = nvim_eap_get_line2(eap) as c_int;
+            if n < 1 {
+                nvim_eap_set_errmsg_const(eap, nvim_get_e_invrange());
+                return;
+            }
+            n
+        };
+        goto_tabpage(-tab_number);
+    } else {
+        // CMD_tabnext and everything else
+        let tab_number = nvim_docmd_get_tabpage_arg(eap);
+        if nvim_eap_get_errmsg(eap).is_null() {
+            goto_tabpage(tab_number);
+        }
     }
 }
