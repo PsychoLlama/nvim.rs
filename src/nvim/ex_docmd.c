@@ -317,6 +317,9 @@ extern void ex_swapname(exarg_T *eap);
 extern void ex_tabnext(exarg_T *eap);
 // Phase 7 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_undo(exarg_T *eap);
+// Phase 8 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_sleep(exarg_T *eap);
+extern void do_sleep(int64_t msec, bool hide_cursor);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2957,50 +2960,6 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
 }
 
 
-/// ":pwd".
-/// ":=".
-static void ex_sleep(exarg_T *eap)
-{
-  if (cursor_valid(curwin)) {
-    setcursor_mayforce(curwin, true);
-  }
-
-  int64_t len = eap->line2;
-  switch (*eap->arg) {
-  case 'm':
-    break;
-  case NUL:
-    len *= 1000; break;
-  default:
-    semsg(_(e_invarg2), eap->arg); return;
-  }
-
-  // Hide the cursor if invoked with !
-  do_sleep(len, eap->forceit);
-}
-
-/// Sleep for "msec" milliseconds, but return early on CTRL-C.
-///
-/// @param hide_cursor  hide the cursor if true
-void do_sleep(int64_t msec, bool hide_cursor)
-{
-  if (hide_cursor) {
-    ui_busy_start();
-  }
-
-  ui_flush();  // flush before waiting
-  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int);
-
-  // If CTRL-C was typed to interrupt the sleep, drop the CTRL-C from the
-  // input buffer, otherwise a following call to input() fails.
-  if (got_int) {
-    vpeekc();
-  }
-
-  if (hide_cursor) {
-    ui_busy_stop();
-  }
-}
 
 /// ":winsize" command (obsolete).
 /// Handle command that work like operators: ":delete", ":yank", ":>" and ":<".
@@ -3918,6 +3877,14 @@ int nvim_docmd_undo_count_steps(linenr_T step, int *found)
        uhp = uhp->uh_next.ptr, ++count) {}
   *found = (step == 0 || (uhp != NULL && uhp->uh_seq >= step)) ? 1 : 0;
   return count;
+}
+
+// Phase 8 accessors for ex_sleep / do_sleep migration
+int nvim_docmd_cursor_valid_curwin(void) { return cursor_valid(curwin) ? 1 : 0; }
+void nvim_docmd_setcursor_mayforce_curwin(void) { setcursor_mayforce(curwin, true); }
+void nvim_docmd_loop_sleep(int64_t msec)
+{
+  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int);
 }
 
 /// ":checkhealth [plugins]"

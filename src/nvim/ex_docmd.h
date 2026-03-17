@@ -90,3 +90,4 @@ int before_quit_all(exarg_T *eap);
 void set_no_hlsearch(bool flag);
 void set_pressedreturn(bool val);
 void ex_cd(exarg_T *eap);
+void do_sleep(int64_t msec, bool hide_cursor);

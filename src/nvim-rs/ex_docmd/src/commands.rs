@@ -317,6 +317,14 @@ extern "C" {
     fn nvim_curbuf_get_u_seq_cur() -> c_int;
     fn nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int;
     fn nvim_docmd_get_e_undobang() -> *const c_char;
+
+    // Phase 8: ex_sleep / do_sleep helpers
+    fn nvim_docmd_cursor_valid_curwin() -> c_int;
+    fn nvim_docmd_setcursor_mayforce_curwin();
+    fn ui_busy_start();
+    fn ui_busy_stop();
+    fn nvim_docmd_loop_sleep(msec: i64);
+    fn vpeekc() -> c_int;
 }
 
 // =============================================================================
@@ -2423,4 +2431,50 @@ pub unsafe extern "C" fn rs_ex_undo(eap: ExArgHandle) {
         // :undo N -- navigate undo tree to sequence N
         undo_time(step as c_int, false, false, true);
     }
+}
+
+// =============================================================================
+// Phase 8: ex_sleep and do_sleep
+// =============================================================================
+
+/// Sleep for `msec` milliseconds, optionally hiding the cursor.
+///
+/// Matches C `do_sleep()`.
+#[export_name = "do_sleep"]
+pub unsafe extern "C" fn rs_do_sleep(msec: i64, hide_cursor: bool) {
+    if hide_cursor {
+        ui_busy_start();
+    }
+    ui_flush(); // flush before waiting
+    nvim_docmd_loop_sleep(msec);
+    // If CTRL-C interrupted the sleep, drop it from the input buffer.
+    if nvim_docmd_get_got_int() != 0 {
+        vpeekc();
+    }
+    if hide_cursor {
+        ui_busy_stop();
+    }
+}
+
+/// `:sleep`: Sleep for a given time.
+///
+/// Matches C `ex_sleep()`.
+#[export_name = "ex_sleep"]
+pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
+    if nvim_docmd_cursor_valid_curwin() != 0 {
+        nvim_docmd_setcursor_mayforce_curwin();
+    }
+    let len_base = nvim_eap_get_line2(eap) as i64;
+    let arg = nvim_eap_get_arg(eap);
+    let len = if arg.is_null() || *arg == 0 {
+        // No suffix: interpret as seconds
+        len_base * 1000
+    } else if *arg == b'm' as c_char {
+        // 'm' suffix: milliseconds
+        len_base
+    } else {
+        semsg(nvim_get_e_invarg2(), arg as *const c_char);
+        return;
+    };
+    rs_do_sleep(len, nvim_eap_get_forceit(eap));
 }
