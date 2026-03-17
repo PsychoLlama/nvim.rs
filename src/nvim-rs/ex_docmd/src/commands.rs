@@ -245,7 +245,6 @@ extern "C" {
     fn nvim_ex2_buf_hide(buf: *mut c_void) -> bool;
     fn check_changed(buf: *mut c_void, flags: c_int) -> bool;
     fn check_changed_any(hidden: bool, unload: bool) -> bool;
-    fn not_exiting();
     fn getout(exitval: c_int);
     fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
     fn nvim_docmd_one_window_p(addr_count: c_int) -> c_int;
@@ -1143,13 +1142,13 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         || nvim_docmd_check_more(1, forceit) != OK
         || (rs_only_one_window() != 0 && check_changed_any(forceit_bool, true))
     {
-        not_exiting();
+        nvim_docmd_set_exiting(0);
     } else {
         // quit last window
         if rs_only_one_window() != 0 && nvim_docmd_one_window_p(addr_count) != 0 {
             getout(0);
         }
-        not_exiting();
+        nvim_docmd_set_exiting(0);
         // close window; may free buffer
         let free_buf = !buf_hidden || forceit_bool;
         win_close(wp, free_buf, forceit_bool);
@@ -1832,7 +1831,7 @@ pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
     nvim_docmd_set_exiting(1);
     let forceit = nvim_eap_get_forceit(eap);
     if !forceit && check_changed_any(false, false) {
-        not_exiting();
+        nvim_docmd_set_exiting(0);
         return;
     }
     getout(0);
@@ -2067,4 +2066,104 @@ pub unsafe extern "C" fn rs_ex_redrawstatus(eap: ExArgHandle) {
 #[export_name = "ex_startinsert"]
 pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     nvim_docmd_ex_startinsert(eap);
+}
+
+// =============================================================================
+// Phase 3: Migrate medium-complexity command implementations
+// =============================================================================
+
+extern "C" {
+    // Phase 3: new FFI functions
+    fn ui_call_error_exit(status: c_int);
+    fn win_float_remove(bang: bool, count: c_int);
+    fn autowrite_all();
+    fn may_trigger_vim_suspend_resume(suspend: bool);
+    fn ui_call_suspend();
+    fn ui_flush();
+    fn nvim_tag_get_magic_overruled() -> c_int;
+    fn nvim_tag_set_magic_overruled(val: c_int);
+    fn ex_substitute(eap: ExArgHandle);
+    fn ex_substitute_preview(eap: ExArgHandle, cmdpreview_ns: c_int, cmdpreview_bufnr: c_int)
+        -> c_int;
+    fn script_get(eap: ExArgHandle, lenp: *mut usize) -> *mut c_char;
+    fn nvim_docmd_e319_msg() -> *const c_char;
+}
+
+/// not_exiting -- clear exiting flag.
+#[export_name = "not_exiting"]
+pub unsafe extern "C" fn rs_not_exiting() {
+    nvim_docmd_set_exiting(0);
+}
+
+/// ":cquit" -- quit with error code.
+#[export_name = "ex_cquit"]
+pub unsafe extern "C" fn rs_ex_cquit(eap: ExArgHandle) {
+    let status = if nvim_eap_get_addr_count(eap) > 0 {
+        nvim_eap_get_line2(eap)
+    } else {
+        1 // EXIT_FAILURE
+    };
+    ui_call_error_exit(status);
+    getout(status);
+}
+
+/// ":fclose" -- remove floating window.
+#[export_name = "ex_fclose"]
+pub unsafe extern "C" fn rs_ex_fclose(eap: ExArgHandle) {
+    win_float_remove(nvim_eap_get_forceit(eap), nvim_eap_get_line1(eap));
+}
+
+/// ex_ni -- command is not available in this version.
+#[export_name = "ex_ni"]
+pub unsafe extern "C" fn rs_ex_ni(eap: ExArgHandle) {
+    if nvim_eap_get_skip(eap) == 0 {
+        nvim_eap_set_errmsg_const(eap, nvim_docmd_e319_msg());
+    }
+}
+
+/// ex_script_ni -- not-implemented stub for script commands (skips <<EOF blocks).
+#[export_name = "ex_script_ni"]
+pub unsafe extern "C" fn rs_ex_script_ni(eap: ExArgHandle) {
+    if nvim_eap_get_skip(eap) == 0 {
+        rs_ex_ni(eap);
+    } else {
+        xfree(script_get(eap, std::ptr::null_mut()) as *mut c_void);
+    }
+}
+
+/// ":stop" -- suspend Neovim.
+#[export_name = "ex_stop"]
+pub unsafe extern "C" fn rs_ex_stop(eap: ExArgHandle) {
+    if !nvim_eap_get_forceit(eap) {
+        autowrite_all();
+    }
+    may_trigger_vim_suspend_resume(true);
+    ui_call_suspend();
+    ui_flush();
+}
+
+/// ":smagic" and ":snomagic" -- substitute with magic overrule.
+#[export_name = "ex_submagic"]
+pub unsafe extern "C" fn rs_ex_submagic(eap: ExArgHandle) {
+    let saved = nvim_tag_get_magic_overruled();
+    // OPTION_MAGIC_ON = 1, OPTION_MAGIC_OFF = 2
+    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC { 1 } else { 2 };
+    nvim_tag_set_magic_overruled(new_val);
+    ex_substitute(eap);
+    nvim_tag_set_magic_overruled(saved);
+}
+
+/// ":smagic" and ":snomagic" preview callback.
+#[export_name = "ex_submagic_preview"]
+pub unsafe extern "C" fn rs_ex_submagic_preview(
+    eap: ExArgHandle,
+    cmdpreview_ns: c_int,
+    cmdpreview_bufnr: c_int,
+) -> c_int {
+    let saved = nvim_tag_get_magic_overruled();
+    let new_val = if nvim_eap_get_cmdidx(eap) == CMD_SMAGIC { 1 } else { 2 };
+    nvim_tag_set_magic_overruled(new_val);
+    let retv = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
+    nvim_tag_set_magic_overruled(saved);
+    retv
 }

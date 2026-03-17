@@ -296,6 +296,15 @@ extern void ex_nohlsearch(exarg_T *eap);
 extern void ex_folddo(exarg_T *eap);
 extern void ex_nogui(exarg_T *eap);
 extern void ex_popup(exarg_T *eap);
+// Phase 3 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_ni(exarg_T *eap);
+extern void ex_script_ni(exarg_T *eap);
+extern void not_exiting(void);
+extern void ex_cquit(exarg_T *eap);
+extern void ex_fclose(exarg_T *eap);
+extern void ex_stop(exarg_T *eap);
+extern void ex_submagic(exarg_T *eap);
+extern int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1862,25 +1871,6 @@ uint32_t excmd_get_argt(cmdidx_T idx)
   return cmdnames[(int)idx].cmd_argt;
 }
 
-/// Stub function for command which is Not Implemented. NI!
-void ex_ni(exarg_T *eap)
-{
-  if (!eap->skip) {
-    eap->errmsg = _("E319: The command is not available in this version");
-  }
-}
-
-/// Stub function for script command which is Not Implemented. NI!
-/// Skips over ":perl <<EOF" constructs.
-static void ex_script_ni(exarg_T *eap)
-{
-  if (!eap->skip) {
-    ex_ni(eap);
-  } else {
-    size_t len;
-    xfree(script_get(eap, &len));
-  }
-}
 
 /// Correct the range for zero line number, if required.
 /// For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
@@ -2004,10 +1994,6 @@ static void do_exbuffer(exarg_T *eap)
 
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
-void not_exiting(void)
-{
-  exiting = false;
-}
 
 bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
 {
@@ -2036,16 +2022,6 @@ bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
   }
 
   return false;
-}
-
-/// ":cquit".
-static void ex_cquit(exarg_T *eap)
-  FUNC_ATTR_NORETURN
-{
-  // this does not always pass on the exit code to the Manx compiler. why?
-  int status = eap->addr_count > 0 ? (int)eap->line2 : EXIT_FAILURE;
-  ui_call_error_exit(status);
-  getout(status);
 }
 
 /// ":restart": restart the Nvim server (using ":qall!").
@@ -2229,18 +2205,6 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
       break;
     }
   }
-}
-
-/// ":only".
-/// ":stop" and ":suspend": Suspend Vim.
-static void ex_stop(exarg_T *eap)
-{
-  if (!eap->forceit) {
-    autowrite_all();
-  }
-  may_trigger_vim_suspend_resume(true);
-  ui_call_suspend();
-  ui_flush();
 }
 
 static void ex_goto(exarg_T *eap)
@@ -3149,28 +3113,6 @@ void ex_may_print(exarg_T *eap)
                   (eap->flags & EXFLAG_LIST), true);
     ex_no_reprint = true;
   }
-}
-
-/// ":smagic" and ":snomagic".
-static void ex_submagic(exarg_T *eap)
-{
-  const optmagic_T saved = magic_overruled;
-
-  magic_overruled = eap->cmdidx == CMD_smagic ? OPTION_MAGIC_ON : OPTION_MAGIC_OFF;
-  ex_substitute(eap);
-  magic_overruled = saved;
-}
-
-/// ":smagic" and ":snomagic" preview callback.
-static int ex_submagic_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_bufnr)
-{
-  const optmagic_T saved = magic_overruled;
-
-  magic_overruled = eap->cmdidx == CMD_smagic ? OPTION_MAGIC_ON : OPTION_MAGIC_OFF;
-  int retv = ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr);
-  magic_overruled = saved;
-
-  return retv;
 }
 
 /// ":undo".
@@ -4170,13 +4112,6 @@ static void ex_terminal(exarg_T *eap)
   do_cmdline_cmd(ex_cmd);
 }
 
-/// ":fclose"
-static void ex_fclose(exarg_T *eap)
-{
-  win_float_remove(eap->forceit, eap->line1);
-}
-
-
 /// Get argt of command with id
 uint32_t get_cmd_argt(cmdidx_T cmdidx)
 {
@@ -4201,6 +4136,9 @@ bool is_map_cmd(cmdidx_T cmdidx)
 // =========================================================================
 // C accessor functions for Rust FFI
 // =========================================================================
+
+/// Get the E319 "not available" error message string.
+const char *nvim_docmd_e319_msg(void) { return _("E319: The command is not available in this version"); }
 
 /// Get the CMD_let enum value.
 int nvim_docmd_cmd_let(void) { return (int)CMD_let; }
