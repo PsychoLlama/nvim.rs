@@ -1650,7 +1650,6 @@ extern "C" {
     fn nvim_docmd_checkpath(forceit: bool);
     fn nvim_docmd_redraw_all_later_some_valid();
     fn nvim_docmd_set_pressedreturn(val: bool);
-    fn nvim_docmd_ex_psearch(eap: ExArgHandle);
     fn nvim_docmd_get_e_nogvim() -> *const c_char;
 }
 
@@ -1807,11 +1806,12 @@ pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
     nvim_docmd_checkpath(forceit);
 }
 
-/// ":psearch" -- preview search (delegates to ex_psearch via C since it calls ex_findpat).
-/// We set g_do_tagpreview and call ex_findpat indirectly.
+/// ":psearch" -- preview search.
 #[export_name = "ex_psearch"]
 pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
-    nvim_docmd_ex_psearch(eap);
+    g_do_tagpreview = p_pvh as c_int;
+    nvim_docmd_call_findpat(eap);
+    g_do_tagpreview = 0;
 }
 
 /// set_pressedreturn -- set ex_pressedreturn flag.
@@ -1841,11 +1841,26 @@ extern "C" {
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
     fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_ex_shada(eap: ExArgHandle);
-    fn nvim_docmd_ex_folddo(eap: ExArgHandle);
     fn nvim_docmd_ex_recover(eap: ExArgHandle);
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     fn nvim_docmd_ex_setfiletype(eap: ExArgHandle);
+
+    // Phase 19: psearch, shada, folddo helpers
+    static mut g_do_tagpreview: c_int;
+    static mut p_pvh: std::ffi::c_long;
+    fn nvim_docmd_call_findpat(eap: ExArgHandle);
+    static mut p_shada: *mut c_char;
+    fn rs_shada_read_everything(fname: *const c_char, forceit: bool, missing_ok: bool) -> c_int;
+    fn rs_shada_write_file(file: *const c_char, nomerge: bool) -> c_int;
+    fn hasFolding(
+        win: WinHandle,
+        lnum: LinenrT,
+        firstp: *mut LinenrT,
+        lastp: *mut LinenrT,
+    ) -> bool;
+    fn ml_setmarked(lnum: LinenrT);
+    fn ml_clearmarked();
+    fn global_exe(cmd: *mut c_char);
 }
 
 /// DOBUF_* constants for do_bufdel.
@@ -1937,13 +1952,40 @@ pub unsafe extern "C" fn rs_ex_setfiletype(eap: ExArgHandle) {
 /// ":rshada" / ":wshada".
 #[export_name = "ex_shada"]
 pub unsafe extern "C" fn rs_ex_shada(eap: ExArgHandle) {
-    nvim_docmd_ex_shada(eap);
+    let save_shada = p_shada;
+    if p_shada.is_null() || *p_shada == 0 {
+        p_shada = c"'100".as_ptr() as *mut c_char;
+    }
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    if cmdidx == CMD_RVIMINFO || cmdidx == CMD_RSHADA {
+        rs_shada_read_everything(arg as *const c_char, forceit, false);
+    } else {
+        rs_shada_write_file(arg as *const c_char, forceit);
+    }
+    p_shada = save_shada;
 }
 
 /// ":folddo" / ":folddoclosed".
 #[export_name = "ex_folddo"]
 pub unsafe extern "C" fn rs_ex_folddo(eap: ExArgHandle) {
-    nvim_docmd_ex_folddo(eap);
+    let line1 = nvim_eap_get_line1(eap);
+    let line2 = nvim_eap_get_line2(eap);
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let win = nvim_get_curwin();
+    let mut lnum = line1;
+    while lnum <= line2 {
+        if hasFolding(win, lnum, std::ptr::null_mut(), std::ptr::null_mut())
+            == (cmdidx == CMD_FOLDDOCLOSED)
+        {
+            ml_setmarked(lnum);
+        }
+        lnum += 1;
+    }
+    let arg = nvim_eap_get_arg(eap);
+    global_exe(arg);
+    ml_clearmarked();
 }
 
 /// ":redrawtabline".
@@ -2231,12 +2273,15 @@ const PUT_FIXINDENT: c_int = 1;
 const PUT_CURSLINE: c_int = 4;
 const PUT_LINE: c_int = 8;
 
-/// CMD_ constants for Phase 17-18.
+/// CMD_ constants for Phase 17-19.
 const CMD_MOVE: c_int = 271;
 const CMD_LCD: c_int = 225;
 const CMD_LCHDIR: c_int = 226;
 const CMD_TCD: c_int = 447;
 const CMD_TCHDIR: c_int = 448;
+const CMD_RSHADA: c_int = 374;
+const CMD_RVIMINFO: c_int = 380;
+const CMD_FOLDDOCLOSED: c_int = 165;
 
 /// ex_range_without_command: handle range-only commands.
 #[export_name = "ex_range_without_command"]

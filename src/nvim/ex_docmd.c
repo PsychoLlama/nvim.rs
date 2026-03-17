@@ -5100,13 +5100,8 @@ void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VA
 /// Set ex_pressedreturn (direct implementation for Rust FFI).
 void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
 
-/// Wrapper for ex_psearch logic (sets g_do_tagpreview then calls ex_findpat).
-void nvim_docmd_ex_psearch(exarg_T *eap)
-{
-  g_do_tagpreview = (int)p_pvh;
-  ex_findpat(eap);
-  g_do_tagpreview = 0;
-}
+/// Accessor: call static ex_findpat for Rust FFI.
+void nvim_docmd_call_findpat(exarg_T *eap) { ex_findpat(eap); }
 
 // =============================================================================
 // Phase 2 (batch plan) accessor functions for Rust FFI
@@ -5173,32 +5168,6 @@ void nvim_docmd_ex_setfiletype(exarg_T *eap)
   }
 }
 
-/// ex_shada logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_shada(exarg_T *eap)
-{
-  char *save_shada = p_shada;
-  if (*p_shada == NUL) {
-    p_shada = "'100";
-  }
-  if (eap->cmdidx == CMD_rviminfo || eap->cmdidx == CMD_rshada) {
-    rs_shada_read_everything(eap->arg, eap->forceit, false);
-  } else {
-    rs_shada_write_file(eap->arg, eap->forceit);
-  }
-  p_shada = save_shada;
-}
-
-/// ex_folddo logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_folddo(exarg_T *eap)
-{
-  for (linenr_T lnum = eap->line1; lnum <= eap->line2; lnum++) {
-    if (hasFolding(curwin, lnum, NULL, NULL) == (eap->cmdidx == CMD_folddoclosed)) {
-      ml_setmarked(lnum);
-    }
-  }
-  global_exe(eap->arg);
-  ml_clearmarked();
-}
 
 
 /// ex_recover logic (direct implementation for Rust FFI).
