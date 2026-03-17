@@ -4860,7 +4860,6 @@ void nvim_eap_set_nextcmd_from_colon_white(exarg_T *eap)
     eap->nextcmd = skip_colon_white(eap->nextcmd, true);
   }
 }
-bool nvim_eap_argt_has_xfile(const exarg_T *eap) { return (eap->argt & EX_XFILE) != 0; }
 bool nvim_eap_argt_has_trlbar(const exarg_T *eap) { return (eap->argt & EX_TRLBAR) != 0; }
 bool nvim_eap_argt_has_bang(const exarg_T *eap) { return (eap->argt & EX_BANG) != 0; }
 bool nvim_eap_argt_has_range(const exarg_T *eap) { return (eap->argt & EX_RANGE) != 0; }
@@ -5167,12 +5166,6 @@ void nvim_docmd_rundo(const char *arg)
 /// Wrapper for get_tabpage_arg(eap).
 int nvim_docmd_get_tabpage_arg(exarg_T *eap) { return get_tabpage_arg(eap); }
 
-/// Wrapper for ins_typebuf + exec_normal_cmd pattern.
-void nvim_docmd_exec_normal_cmd(const char *cmd, int remap, bool silent)
-{
-  exec_normal_cmd((char *)cmd, remap, silent);
-}
-
 /// Wrapper for find_pattern_in_path for :checkpath.
 void nvim_docmd_checkpath(bool forceit)
 {
@@ -5181,14 +5174,9 @@ void nvim_docmd_checkpath(bool forceit)
                        1, (linenr_T)MAXLNUM, forceit, false);
 }
 
-/// Get eap->addr_count.
-int nvim_eap_get_addr_count_val(const exarg_T *eap) { return (int)eap->addr_count; }
-
 /// Wrapper for redraw_all_later(UPD_SOME_VALID).
 void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VALID); }
 
-/// Wrapper for store_loop_line.
-void nvim_docmd_store_loop_line(garray_T *gap, char *line) { store_loop_line(gap, line); }
 
 /// Set ex_pressedreturn (direct implementation for Rust FFI).
 void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
@@ -5293,9 +5281,6 @@ void nvim_docmd_ex_folddo(exarg_T *eap)
   ml_clearmarked();
 }
 
-/// Wrapper for close_redir (static).
-void nvim_docmd_do_close_redir(void) { close_redir(); }
-
 /// Wrapper for ex_redrawtabline logic.
 void nvim_docmd_ex_redrawtabline(void)
 {
@@ -5363,17 +5348,6 @@ void nvim_docmd_ex_equal(exarg_T *eap)
   }
 }
 
-/// Wrapper for filetype_plugin_enable.
-void nvim_docmd_filetype_plugin_enable(void) { filetype_plugin_enable(); }
-
-/// Wrapper for filetype_maybe_enable.
-void nvim_docmd_filetype_maybe_enable(void) { filetype_maybe_enable(); }
-
-/// Wrapper for get_prevdir(scope).
-char *nvim_docmd_get_prevdir(int scope) { return get_prevdir((CdScope)scope); }
-
-/// Wrapper for tabpage_close(forceit).
-void nvim_docmd_tabpage_close(int forceit) { tabpage_close(forceit); }
 
 /// Wrapper for get_bad_name expansion function (pass function pointer via index).
 /// Returns the idx-th bad= option value string.
@@ -5398,17 +5372,6 @@ void nvim_docmd_ex_recover(exarg_T *eap)
   recoverymode = false;
 }
 
-/// Wrapper for back_to_current_window.
-void nvim_docmd_back_to_current_window(win_T *curwin_save)
-{
-  back_to_current_window(curwin_save);
-}
-
-/// Wrapper for do_exbuffer (Phase 2 - 15 lines).
-void nvim_docmd_do_exbuffer_full(exarg_T *eap)
-{
-  do_exbuffer(eap);
-}
 
 // Phase 3 C wrappers (direct implementations for Rust FFI)
 
