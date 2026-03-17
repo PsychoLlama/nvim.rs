@@ -371,6 +371,7 @@ const OK: c_int = 1;
 
 /// CCGD_AW = 1, CCGD_FORCEIT = 4, CCGD_EXCMD = 16
 const CCGD_AW: c_int = 1;
+const CCGD_MULTWIN: c_int = 2;
 const CCGD_FORCEIT: c_int = 4;
 const CCGD_EXCMD: c_int = 16;
 
@@ -1841,10 +1842,16 @@ extern "C" {
     fn nvim_set_secure(val: c_int);
     fn nvim_docmd_check_nomodeline(argp: *mut *mut c_char) -> c_int;
     fn nvim_docmd_before_quit_all(eap: ExArgHandle) -> c_int;
-    fn nvim_docmd_ex_recover(eap: ExArgHandle);
+    // Phase 20: recover, winsize, setfiletype helpers
+    static mut recoverymode: bool;
+    fn nvim_docmd_setfname_curbuf(arg: *const c_char) -> c_int;
+    fn ml_recover(checkext: bool);
+    fn rs_ascii_isdigit(c: c_int) -> c_int;
+    fn screen_resize(width: c_int, height: c_int);
+    fn nvim_docmd_curbuf_get_did_filetype() -> bool;
+    fn nvim_docmd_curbuf_set_did_filetype(val: bool);
+    fn nvim_docmd_set_filetype_option(arg: *const c_char);
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
-    fn nvim_docmd_ex_setfiletype(eap: ExArgHandle);
-
     // Phase 19: psearch, shada, folddo helpers
     static mut g_do_tagpreview: c_int;
     static mut p_pvh: std::ffi::c_long;
@@ -1852,12 +1859,8 @@ extern "C" {
     static mut p_shada: *mut c_char;
     fn rs_shada_read_everything(fname: *const c_char, forceit: bool, missing_ok: bool) -> c_int;
     fn rs_shada_write_file(file: *const c_char, nomerge: bool) -> c_int;
-    fn hasFolding(
-        win: WinHandle,
-        lnum: LinenrT,
-        firstp: *mut LinenrT,
-        lastp: *mut LinenrT,
-    ) -> bool;
+    fn hasFolding(win: WinHandle, lnum: LinenrT, firstp: *mut LinenrT, lastp: *mut LinenrT)
+        -> bool;
     fn ml_setmarked(lnum: LinenrT);
     fn ml_clearmarked();
     fn global_exe(cmd: *mut c_char);
@@ -1946,7 +1949,24 @@ pub unsafe extern "C" fn rs_ex_quitall(eap: ExArgHandle) {
 /// ":setfiletype [FALLBACK] {name}".
 #[export_name = "ex_setfiletype"]
 pub unsafe extern "C" fn rs_ex_setfiletype(eap: ExArgHandle) {
-    nvim_docmd_ex_setfiletype(eap);
+    if nvim_docmd_curbuf_get_did_filetype() {
+        return;
+    }
+    let arg = nvim_eap_get_arg(eap);
+    const FALLBACK: &[u8] = b"FALLBACK ";
+    // Check if arg starts with "FALLBACK "
+    let (arg_to_set, is_fallback) = if !arg.is_null() && {
+        let prefix = std::slice::from_raw_parts(arg as *const u8, FALLBACK.len());
+        prefix == FALLBACK
+    } {
+        (arg.add(FALLBACK.len()), true)
+    } else {
+        (arg, false)
+    };
+    nvim_docmd_set_filetype_option(arg_to_set as *const c_char);
+    if is_fallback {
+        nvim_docmd_curbuf_set_did_filetype(false);
+    }
 }
 
 /// ":rshada" / ":wshada".
@@ -2098,13 +2118,26 @@ pub unsafe extern "C" fn rs_ex_equal(eap: ExArgHandle) {
 /// ":recover".
 #[export_name = "ex_recover"]
 pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
-    nvim_docmd_ex_recover(eap);
+    recoverymode = true;
+    let curbuf = nvim_get_curbuf();
+    let p_awa = nvim_docmd_get_p_awa();
+    let forceit = nvim_eap_get_forceit(eap);
+    let flags = (if p_awa != 0 { CCGD_AW } else { 0 })
+        | CCGD_MULTWIN
+        | (if forceit { CCGD_FORCEIT } else { 0 })
+        | CCGD_EXCMD;
+    if !check_changed(curbuf, flags) {
+        let arg = nvim_eap_get_arg(eap);
+        if arg.is_null() || *arg == 0 || nvim_docmd_setfname_curbuf(arg as *const c_char) == OK {
+            ml_recover(true);
+        }
+    }
+    recoverymode = false;
 }
 
 // Phase 3: Larger Ex Command Handlers
 
 extern "C" {
-    fn nvim_docmd_ex_winsize(eap: ExArgHandle);
     fn nvim_docmd_ex_colorscheme(eap: ExArgHandle);
     fn nvim_docmd_ex_mark(eap: ExArgHandle);
     fn nvim_docmd_ex_print(eap: ExArgHandle);
@@ -2118,7 +2151,20 @@ extern "C" {
 /// ":winsize" (obsolete).
 #[export_name = "ex_winsize"]
 pub unsafe extern "C" fn rs_ex_winsize(eap: ExArgHandle) {
-    nvim_docmd_ex_winsize(eap);
+    let mut arg = nvim_eap_get_arg(eap);
+    if rs_ascii_isdigit(*(arg as *const u8) as c_int) == 0 {
+        semsg(nvim_get_e_invarg2() as *const c_char, arg as *const c_char);
+        return;
+    }
+    let w = getdigits_int(&mut arg, false, 10);
+    arg = skipwhite(arg as *const c_char);
+    let p = arg;
+    let h = getdigits_int(&mut arg, false, 10);
+    if *(p as *const u8) != 0 && *(arg as *const u8) == 0 {
+        screen_resize(w, h);
+    } else {
+        emsg(c"E465: :winsize requires two number arguments".as_ptr());
+    }
 }
 
 /// ":colorscheme".

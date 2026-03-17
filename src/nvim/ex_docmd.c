@@ -5152,62 +5152,27 @@ int nvim_docmd_before_quit_all(exarg_T *eap)
   return OK;
 }
 
-/// ex_setfiletype logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_setfiletype(exarg_T *eap)
+// Phase 20 accessors for Rust FFI
+
+/// Get curbuf->b_did_filetype.
+bool nvim_docmd_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
+
+/// Set curbuf->b_did_filetype.
+void nvim_docmd_curbuf_set_did_filetype(bool val) { curbuf->b_did_filetype = val; }
+
+/// Set filetype option to arg via set_option_value_give_err.
+void nvim_docmd_set_filetype_option(const char *arg)
 {
-  if (curbuf->b_did_filetype) {
-    return;
-  }
-  char *arg = eap->arg;
-  if (strncmp(arg, "FALLBACK ", 9) == 0) {
-    arg += 9;
-  }
-  set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL(arg), OPT_LOCAL);
-  if (arg != eap->arg) {
-    curbuf->b_did_filetype = false;
-  }
+  set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL((char *)arg), OPT_LOCAL);
 }
 
-
-
-/// ex_recover logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_recover(exarg_T *eap)
+/// setfname(curbuf, arg, NULL, true) for Rust FFI.
+int nvim_docmd_setfname_curbuf(const char *arg)
 {
-  recoverymode = true;
-  if (!check_changed(curbuf, (p_awa ? CCGD_AW : 0)
-                     | CCGD_MULTWIN
-                     | (eap->forceit ? CCGD_FORCEIT : 0)
-                     | CCGD_EXCMD)
-
-      && (*eap->arg == NUL
-          || setfname(curbuf, eap->arg, NULL, true) == OK)) {
-    ml_recover(true);
-  }
-  recoverymode = false;
+  return setfname(curbuf, (char *)arg, NULL, true);
 }
-
 
 // Phase 3 C wrappers (direct implementations for Rust FFI)
-
-/// ex_winsize logic (direct implementation for Rust FFI).
-void nvim_docmd_ex_winsize(exarg_T *eap)
-{
-  char *arg = eap->arg;
-
-  if (!ascii_isdigit(*arg)) {
-    semsg(_(e_invarg2), arg);
-    return;
-  }
-  int w = getdigits_int(&arg, false, 10);
-  arg = skipwhite(arg);
-  char *p = arg;
-  int h = getdigits_int(&arg, false, 10);
-  if (*p != NUL && *arg == NUL) {
-    screen_resize(w, h);
-  } else {
-    emsg(_("E465: :winsize requires two number arguments"));
-  }
-}
 
 /// ex_colorscheme logic (direct implementation for Rust FFI).
 void nvim_docmd_ex_colorscheme(exarg_T *eap)
