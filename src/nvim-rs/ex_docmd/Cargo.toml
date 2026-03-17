@@ -5,6 +5,7 @@ edition = "2021"
 description = "Ex command utilities for Neovim"
 
 [dependencies]
+nvim-normal = { path = "../normal" }
 
 [lib]
 crate-type = ["rlib"]

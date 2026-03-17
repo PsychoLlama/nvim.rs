@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::ExArgHandle;
+use nvim_normal::types::OpargT;
 
 // =============================================================================
 // Type aliases
@@ -133,6 +134,9 @@ pub(crate) const CMD_TABLAST: c_int = 459;
 pub(crate) const CMD_TABPREVIOUS: c_int = 463;
 pub(crate) const CMD_TABNEXT_BACKWARD: c_int = 464; // CMD_tabNext
 pub(crate) const CMD_TABREWIND: c_int = 465;
+pub(crate) const CMD_DELETE: c_int = 110;
+pub(crate) const CMD_YANK: c_int = 546;
+pub(crate) const CMD_RSHIFT: c_int = 553;
 
 // =============================================================================
 // FFI declarations
@@ -325,6 +329,22 @@ extern "C" {
     fn ui_busy_stop();
     fn nvim_docmd_loop_sleep(msec: i64);
     fn vpeekc() -> c_int;
+
+    // Phase 10: ex_operators helpers
+    fn nvim_eap_get_regname(eap: ExArgHandle) -> c_int;
+    fn nvim_eap_get_amount(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_get_VIsual_active() -> c_int;
+    fn nvim_set_virtual_op_false();
+    fn nvim_set_virtual_op_none();
+    fn setpcmark();
+    fn beginline(flags: c_int);
+    fn end_visual_mode();
+    fn clear_oparg(oap: *mut OpargT);
+    fn op_delete(oap: *mut OpargT) -> c_int;
+    fn op_yank(oap: *mut OpargT, message: bool) -> bool;
+    fn op_shift(oap: *mut OpargT, curs_top: bool, amount: c_int);
+    fn nvim_curwin_get_w_p_rl() -> c_int;
+    fn ex_may_print(eap: ExArgHandle);
 }
 
 // =============================================================================
@@ -2477,4 +2497,72 @@ pub unsafe extern "C" fn rs_ex_sleep(eap: ExArgHandle) {
         return;
     };
     rs_do_sleep(len, nvim_eap_get_forceit(eap));
+}
+
+// =============================================================================
+// Phase 10: ex_operators (Phase 10 migration)
+// =============================================================================
+
+/// BL_ flags for beginline()
+const BL_SOL: c_int = 2;
+const BL_FIX: c_int = 4;
+
+/// MotionType kMTLineWise = 1
+const K_MT_LINEWISE: c_int = 1;
+
+/// Operator type constants (from ops.h)
+const OP_DELETE: c_int = 1;
+const OP_YANK: c_int = 2;
+const OP_LSHIFT: c_int = 4;
+const OP_RSHIFT: c_int = 5;
+
+/// Rust implementation of `ex_operators`.
+///
+/// Handles `:delete`, `:yank`, `:<`, and `:>` commands.
+///
+/// # Safety
+///
+/// `eap` must be a valid `exarg_T` pointer.
+#[export_name = "ex_operators"]
+pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
+    let mut oa = OpargT::default();
+
+    clear_oparg(&raw mut oa);
+    oa.regname = nvim_eap_get_regname(eap);
+    oa.start.lnum = nvim_eap_get_line1(eap);
+    oa.end.lnum = nvim_eap_get_line2(eap);
+    oa.line_count = nvim_eap_get_line2(eap) - nvim_eap_get_line1(eap) + 1;
+    oa.motion_type = K_MT_LINEWISE;
+    nvim_set_virtual_op_false();
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    if cmdidx != CMD_YANK {
+        // position cursor for undo
+        setpcmark();
+        nvim_docmd_set_curwin_cursor_lnum(nvim_eap_get_line1(eap));
+        beginline(BL_SOL | BL_FIX);
+    }
+
+    if nvim_docmd_get_VIsual_active() != 0 {
+        end_visual_mode();
+    }
+
+    if cmdidx == CMD_DELETE {
+        oa.op_type = OP_DELETE;
+        op_delete(&raw mut oa);
+    } else if cmdidx == CMD_YANK {
+        oa.op_type = OP_YANK;
+        op_yank(&raw mut oa, true);
+    } else {
+        // CMD_rshift or CMD_lshift
+        let p_rl = nvim_curwin_get_w_p_rl();
+        if (cmdidx == CMD_RSHIFT) ^ (p_rl != 0) {
+            oa.op_type = OP_RSHIFT;
+        } else {
+            oa.op_type = OP_LSHIFT;
+        }
+        op_shift(&raw mut oa, false, nvim_eap_get_amount(eap));
+    }
+    nvim_set_virtual_op_none();
+    ex_may_print(eap);
 }

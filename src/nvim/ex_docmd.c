@@ -320,6 +320,8 @@ extern void ex_undo(exarg_T *eap);
 // Phase 8 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_sleep(exarg_T *eap);
 extern void do_sleep(int64_t msec, bool hide_cursor);
+// Phase 10 (ex_docmd plan): C implementations replaced by Rust exports.
+extern void ex_operators(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2961,54 +2963,6 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
 
 
 
-/// ":winsize" command (obsolete).
-/// Handle command that work like operators: ":delete", ":yank", ":>" and ":<".
-static void ex_operators(exarg_T *eap)
-{
-  oparg_T oa;
-
-  clear_oparg(&oa);
-  oa.regname = eap->regname;
-  oa.start.lnum = eap->line1;
-  oa.end.lnum = eap->line2;
-  oa.line_count = eap->line2 - eap->line1 + 1;
-  oa.motion_type = kMTLineWise;
-  virtual_op = kFalse;
-  if (eap->cmdidx != CMD_yank) {  // position cursor for undo
-    setpcmark();
-    curwin->w_cursor.lnum = eap->line1;
-    beginline(BL_SOL | BL_FIX);
-  }
-
-  if (VIsual_active) {
-    end_visual_mode();
-  }
-
-  switch (eap->cmdidx) {
-  case CMD_delete:
-    oa.op_type = OP_DELETE;
-    op_delete(&oa);
-    break;
-
-  case CMD_yank:
-    oa.op_type = OP_YANK;
-    op_yank(&oa, true);
-    break;
-
-  default:          // CMD_rshift or CMD_lshift
-    if (
-        (eap->cmdidx == CMD_rshift) ^ curwin->w_p_rl) {
-      oa.op_type = OP_RSHIFT;
-    } else {
-      oa.op_type = OP_LSHIFT;
-    }
-    op_shift(&oa, false, eap->amount);
-    break;
-  }
-  virtual_op = kNone;
-  ex_may_print(eap);
-}
-
 /// Print the current line if flags were given to the Ex command.
 void ex_may_print(exarg_T *eap)
 {
@@ -4220,6 +4174,8 @@ char *nvim_docmd_get_user_command_name(int useridx, int cmdidx)
 // =========================================================================
 
 // eap field accessors
+int nvim_eap_get_regname(const exarg_T *eap) { return (int)eap->regname; }
+int nvim_eap_get_amount(const exarg_T *eap) { return (int)eap->amount; }
 void nvim_eap_set_regname(exarg_T *eap, int r) { eap->regname = (uint8_t)r; }
 void nvim_eap_set_bad_char(exarg_T *eap, int c) { eap->bad_char = c; }
 int nvim_eap_get_force_bin(const exarg_T *eap) { return eap->force_bin; }
@@ -6075,3 +6031,13 @@ void nvim_docmd_ex_startinsert(exarg_T *eap)
     showmode();
   }
 }
+
+// =============================================================================
+// Phase 10 accessor functions for Rust FFI
+// =============================================================================
+
+/// Get VIsual_active as int.
+int nvim_docmd_get_VIsual_active(void) { return VIsual_active ? 1 : 0; }
+
+/// Set virtual_op to kFalse (0).
+void nvim_set_virtual_op_false(void) { virtual_op = kFalse; }
