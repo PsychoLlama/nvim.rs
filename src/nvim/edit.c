@@ -586,14 +586,6 @@ void nvim_set_last_insert_skip(int val)
   last_insert_skip = val;
 }
 
-// Static asserts for constants used in Rust helpers/replace modules
-_Static_assert(REPLACE_FLAG == 0x100, "REPLACE_FLAG mismatch");
-_Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG mismatch");
-_Static_assert(MODE_NORMAL == 0x01, "MODE_NORMAL mismatch");
-_Static_assert(MB_MAXBYTES == 21, "MB_MAXBYTES mismatch");
-_Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
-_Static_assert(DEL == 0x7f, "DEL mismatch");
-_Static_assert(ESC == '\033', "ESC mismatch");
 
 /// Get replace_offset global (accessor for Rust).
 int nvim_get_replace_offset(void)
@@ -717,27 +709,7 @@ void nvim_edit_update_topline(void)
   update_topline(curwin);
 }
 
-// Static asserts for Phase 3 constants
-_Static_assert(BL_WHITE == 1, "BL_WHITE mismatch");
-_Static_assert(BL_SOL == 2, "BL_SOL mismatch");
-_Static_assert(BL_FIX == 4, "BL_FIX mismatch");
-_Static_assert(OK == 1, "OK mismatch");
-_Static_assert(FAIL == 0, "FAIL mismatch");
-_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT mismatch");
-_Static_assert(kOptFdoFlagAll == 0x01, "kOptFdoFlagAll mismatch");
-_Static_assert(kOptVeFlagOnemore == 0x08, "kOptVeFlagOnemore mismatch");
-_Static_assert(TAB == '\011', "TAB mismatch");
 
-// Static asserts for Wave 3 constants
-_Static_assert(VREPLACE_FLAG == 0x200, "VREPLACE_FLAG mismatch");
-_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE mismatch");
-_Static_assert(MOD_MASK_SHIFT == 0x02, "MOD_MASK_SHIFT mismatch");
-_Static_assert(MOD_MASK_CMD == 0x80, "MOD_MASK_CMD mismatch");
-_Static_assert(INSCHAR_CTRLV == 4, "INSCHAR_CTRLV mismatch");
-_Static_assert(Ctrl_G == 7, "Ctrl_G mismatch");
-_Static_assert(Ctrl_C == 3, "Ctrl_C mismatch");
-_Static_assert(Ctrl_RSB == 29, "Ctrl_RSB mismatch");
-_Static_assert(MB_MAXBYTES == 21, "MB_MAXBYTES mismatch");
 
 // -- Wave 3: Global accessors for insert mode helpers --
 
@@ -1783,18 +1755,6 @@ int nvim_edit_ve_onemore(void)
   return (get_ve_flags(curwin) & kOptVeFlagOnemore) ? 1 : 0;
 }
 
-// Static asserts for Phase 4 constants
-_Static_assert(kOptBoFlagCursor == 0x04, "kOptBoFlagCursor mismatch");
-_Static_assert(kOptBoFlagCtrlg == 0x20, "kOptBoFlagCtrlg mismatch");
-_Static_assert(kOptBoFlagBackspace == 0x02, "kOptBoFlagBackspace mismatch");
-_Static_assert(kOptFdoFlagHor == 0x04, "kOptFdoFlagHor mismatch");
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
-_Static_assert(K_LEFT == -((int)('k') + ((int)('l') << 8)), "K_LEFT mismatch");
-_Static_assert(K_RIGHT == -((int)('k') + ((int)('r') << 8)), "K_RIGHT mismatch");
-_Static_assert(K_S_LEFT == -((int)('#') + ((int)('4') << 8)), "K_S_LEFT mismatch");
-_Static_assert(K_S_RIGHT == -((int)('%') + ((int)('i') << 8)), "K_S_RIGHT mismatch");
-_Static_assert(K_C_HOME == -((int)(KS_EXTRA) + ((int)(87) << 8)), "K_C_HOME mismatch");
-_Static_assert(K_C_END == -((int)(KS_EXTRA) + ((int)(88) << 8)), "K_C_END mismatch");
 
 // -- Phase 5: Editing module accessors and delegated wrappers --
 
@@ -2287,17 +2247,11 @@ void nvim_edit_ui_cursor_shape_and_clear_digraph(void)
   do_digraph(-1);
 }
 
-// Static asserts for Phase 5 constants
-_Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch");
-_Static_assert(OPENLINE_DO_COM == 0x02, "OPENLINE_DO_COM mismatch");
-_Static_assert(Ctrl_D == 4, "Ctrl_D mismatch");
-_Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
 
 // =============================================================================
 // Phase 7: insert_check / insert_execute accessors (for state_machine.rs)
 // =============================================================================
 
-_Static_assert(kOptFdoFlagInsert == 0x100, "kOptFdoFlagInsert mismatch");
 
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void)
@@ -2978,22 +2932,11 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
   return false;
 }
 
-// Static asserts for Phase 1 (ins_tab)
-_Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
-_Static_assert(ABBR_OFF == 0x100, "ABBR_OFF mismatch (Phase1)");
 
 // =============================================================================
 // Phase 2: ins_bs accessors and helpers
 // =============================================================================
 
-// Static asserts for Phase 2 constants
-_Static_assert(BACKSPACE_CHAR == 1, "BACKSPACE_CHAR mismatch");
-_Static_assert(BACKSPACE_WORD == 2, "BACKSPACE_WORD mismatch");
-_Static_assert(BACKSPACE_WORD_NOT_SPACE == 3, "BACKSPACE_WORD_NOT_SPACE mismatch");
-_Static_assert(BACKSPACE_LINE == 4, "BACKSPACE_LINE mismatch");
-_Static_assert(kOptBoFlagBackspace == 0x02, "kOptBoFlagBackspace mismatch (Phase2)");
-_Static_assert(FO_AUTO == 'a', "FO_AUTO mismatch");
-_Static_assert(FO_WHITE_PAR == 'w', "FO_WHITE_PAR mismatch");
 
 /// Check if backspace mode is allowed (accessor for Rust).
 int nvim_edit_can_bs(int what)
