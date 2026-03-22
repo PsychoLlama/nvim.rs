@@ -716,47 +716,6 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
 
 // check_opt_wim() is implemented in Rust (cmdline crate, wildmenu.rs).
 
-// Give an error message for a command that isn't allowed while the cmdline
-// window is open or editing the cmdline in another way.
-void text_locked_msg(void)
-{
-  emsg(_(get_text_locked_msg()));
-}
-
-/// Check for text, window or buffer locked.
-/// Give an error message and return true if something is locked.
-bool text_or_buf_locked(void)
-{
-  if (text_locked()) {
-    text_locked_msg();
-    return true;
-  }
-  return curbuf_locked();
-}
-
-/// Check if "curbuf->b_ro_locked" or "allbuf_lock" is set and
-/// return true when it is and give an error message.
-bool curbuf_locked(void)
-{
-  if (curbuf->b_ro_locked > 0) {
-    emsg(_(e_cannot_edit_other_buf));
-    return true;
-  }
-  return allbuf_locked();
-}
-
-// Check if "allbuf_lock" is set and return true when it is and give an error
-// message.
-bool allbuf_locked(void)
-{
-  if (allbuf_lock > 0) {
-    emsg(_("E811: Not allowed to change buffer information now"));
-    return true;
-  }
-  return false;
-}
-
-
 /// Get an Ex command line for the ":" command.
 ///
 /// @param c  normally ':', NUL for ":append"
