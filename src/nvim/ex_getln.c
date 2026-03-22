@@ -1502,56 +1502,6 @@ enum { MAX_CB_ERRORS = 1, };
 /// @param[out]  ret_ccline_colors  What should be colored.
 ///
 /// Always colors the whole cmdline.
-static void color_expr_cmdline(const CmdlineInfo *const colored_ccline,
-                               ColoredCmdline *const ret_ccline_colors)
-  FUNC_ATTR_NONNULL_ALL
-{
-  ParserLine parser_lines[] = {
-    {
-      .data = colored_ccline->cmdbuff,
-      .size = strlen(colored_ccline->cmdbuff),
-      .allocated = false,
-    },
-    { NULL, 0, false },
-  };
-  ParserLine *plines_p = parser_lines;
-  ParserHighlight colors;
-  kvi_init(colors);
-  ParserState pstate;
-  viml_parser_init(&pstate, parser_simple_get_line, &plines_p, &colors);
-  ExprAST east = viml_pexpr_parse(&pstate, kExprFlagsDisallowEOC);
-  viml_pexpr_free_ast(east);
-  viml_parser_destroy(&pstate);
-  kv_resize(ret_ccline_colors->colors, kv_size(colors));
-  size_t prev_end = 0;
-  for (size_t i = 0; i < kv_size(colors); i++) {
-    const ParserHighlightChunk chunk = kv_A(colors, i);
-    assert(chunk.start.col < INT_MAX);
-    assert(chunk.end_col < INT_MAX);
-    if (chunk.start.col != prev_end) {
-      kv_push(ret_ccline_colors->colors, ((CmdlineColorChunk) {
-        .start = (int)prev_end,
-        .end = (int)chunk.start.col,
-        .hl_id = 0,
-      }));
-    }
-    kv_push(ret_ccline_colors->colors, ((CmdlineColorChunk) {
-      .start = (int)chunk.start.col,
-      .end = (int)chunk.end_col,
-      .hl_id = syn_name2id(chunk.group),
-    }));
-    prev_end = chunk.end_col;
-  }
-  if (prev_end < (size_t)colored_ccline->cmdlen) {
-    kv_push(ret_ccline_colors->colors, ((CmdlineColorChunk) {
-      .start = (int)prev_end,
-      .end = colored_ccline->cmdlen,
-      .hl_id = 0,
-    }));
-  }
-  kvi_destroy(colors);
-}
-
 /// Color command-line
 ///
 /// Should use built-in command parser or user-specified one. Currently only the
@@ -1633,7 +1583,51 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
     });
     can_free_cb = true;
   } else if (colored_ccline->cmdfirstc == '=') {
-    color_expr_cmdline(colored_ccline, ccline_colors);
+    // Inline color_expr_cmdline: parse expression and build highlight chunks.
+    ParserLine parser_lines[] = {
+      {
+        .data = colored_ccline->cmdbuff,
+        .size = strlen(colored_ccline->cmdbuff),
+        .allocated = false,
+      },
+      { NULL, 0, false },
+    };
+    ParserLine *plines_p = parser_lines;
+    ParserHighlight expr_colors;
+    kvi_init(expr_colors);
+    ParserState pstate;
+    viml_parser_init(&pstate, parser_simple_get_line, &plines_p, &expr_colors);
+    ExprAST east = viml_pexpr_parse(&pstate, kExprFlagsDisallowEOC);
+    viml_pexpr_free_ast(east);
+    viml_parser_destroy(&pstate);
+    kv_resize(ccline_colors->colors, kv_size(expr_colors));
+    size_t expr_prev_end = 0;
+    for (size_t ei = 0; ei < kv_size(expr_colors); ei++) {
+      const ParserHighlightChunk chunk = kv_A(expr_colors, ei);
+      assert(chunk.start.col < INT_MAX);
+      assert(chunk.end_col < INT_MAX);
+      if (chunk.start.col != expr_prev_end) {
+        kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
+          .start = (int)expr_prev_end,
+          .end = (int)chunk.start.col,
+          .hl_id = 0,
+        }));
+      }
+      kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
+        .start = (int)chunk.start.col,
+        .end = (int)chunk.end_col,
+        .hl_id = syn_name2id(chunk.group),
+      }));
+      expr_prev_end = chunk.end_col;
+    }
+    if (expr_prev_end < (size_t)colored_ccline->cmdlen) {
+      kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
+        .start = (int)expr_prev_end,
+        .end = colored_ccline->cmdlen,
+        .hl_id = 0,
+      }));
+    }
+    kvi_destroy(expr_colors);
   }
   if (ERROR_SET(&err) || !dgc_ret) {
     goto color_cmdline_error;
@@ -1787,57 +1781,7 @@ color_cmdline_error:
 // when cmdline_star is true.
 // draw_cmdline() is implemented in Rust (cmdline crate, screen.rs).
 
-static void ui_ext_cmdline_show(CmdlineInfo *line)
-{
-  Arena arena = ARENA_EMPTY;
-  Array content;
-  if (cmdline_star) {
-    content = arena_array(&arena, 1);
-    size_t len = 0;
-    for (char *p = ccline.cmdbuff; *p; MB_PTR_ADV(p)) {
-      len++;
-    }
-    char *buf = arena_alloc(&arena, len, false);
-    memset(buf, '*', len);
-    Array item = arena_array(&arena, 3);
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(item, STRING_OBJ(cbuf_as_string(buf, len)));
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(content, ARRAY_OBJ(item));
-  } else if (kv_size(line->last_colors.colors)) {
-    content = arena_array(&arena, kv_size(line->last_colors.colors));
-    for (size_t i = 0; i < kv_size(line->last_colors.colors); i++) {
-      CmdlineColorChunk chunk = kv_A(line->last_colors.colors, i);
-      Array item = arena_array(&arena, 3);
-      ADD_C(item, INTEGER_OBJ(chunk.hl_id == 0 ? 0 : syn_id2attr(chunk.hl_id)));
-
-      assert(chunk.end >= chunk.start);
-      ADD_C(item, STRING_OBJ(cbuf_as_string(line->cmdbuff + chunk.start,
-                                            (size_t)(chunk.end - chunk.start))));
-      ADD_C(item, INTEGER_OBJ(chunk.hl_id));
-      ADD_C(content, ARRAY_OBJ(item));
-    }
-  } else {
-    Array item = arena_array(&arena, 3);
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(item, CSTR_AS_OBJ(line->cmdbuff));
-    ADD_C(item, INTEGER_OBJ(0));
-    content = arena_array(&arena, 1);
-    ADD_C(content, ARRAY_OBJ(item));
-  }
-  char charbuf[2] = { (char)line->cmdfirstc, 0 };
-  ui_call_cmdline_show(content, line->cmdpos,
-                       cstr_as_string(charbuf),
-                       cstr_as_string((line->cmdprompt)),
-                       line->cmdindent, line->level, line->hl_id);
-  if (line->special_char) {
-    charbuf[0] = line->special_char;
-    ui_call_cmdline_special_char(cstr_as_string(charbuf),
-                                 line->special_shift,
-                                 line->level);
-  }
-  arena_mem_free(arena_finish(&arena));
-}
+// ui_ext_cmdline_show: inlined into cmdline_ui_flush below.
 
 void ui_ext_cmdline_block_append(size_t indent, const char *line)
 {
@@ -1906,7 +1850,56 @@ void cmdline_ui_flush(void)
       line->redraw_state = kCmdRedrawNone;
       if (redraw_state == kCmdRedrawAll) {
         cmdline_was_last_drawn = true;
-        ui_ext_cmdline_show(line);
+        // Inline of former static ui_ext_cmdline_show(line):
+        {
+          Arena arena = ARENA_EMPTY;
+          Array content;
+          if (cmdline_star) {
+            content = arena_array(&arena, 1);
+            size_t len = 0;
+            for (char *p = ccline.cmdbuff; *p; MB_PTR_ADV(p)) {
+              len++;
+            }
+            char *buf = arena_alloc(&arena, len, false);
+            memset(buf, '*', len);
+            Array item = arena_array(&arena, 3);
+            ADD_C(item, INTEGER_OBJ(0));
+            ADD_C(item, STRING_OBJ(cbuf_as_string(buf, len)));
+            ADD_C(item, INTEGER_OBJ(0));
+            ADD_C(content, ARRAY_OBJ(item));
+          } else if (kv_size(line->last_colors.colors)) {
+            content = arena_array(&arena, kv_size(line->last_colors.colors));
+            for (size_t i = 0; i < kv_size(line->last_colors.colors); i++) {
+              CmdlineColorChunk chunk = kv_A(line->last_colors.colors, i);
+              Array item = arena_array(&arena, 3);
+              ADD_C(item, INTEGER_OBJ(chunk.hl_id == 0 ? 0 : syn_id2attr(chunk.hl_id)));
+              assert(chunk.end >= chunk.start);
+              ADD_C(item, STRING_OBJ(cbuf_as_string(line->cmdbuff + chunk.start,
+                                                    (size_t)(chunk.end - chunk.start))));
+              ADD_C(item, INTEGER_OBJ(chunk.hl_id));
+              ADD_C(content, ARRAY_OBJ(item));
+            }
+          } else {
+            Array item = arena_array(&arena, 3);
+            ADD_C(item, INTEGER_OBJ(0));
+            ADD_C(item, CSTR_AS_OBJ(line->cmdbuff));
+            ADD_C(item, INTEGER_OBJ(0));
+            content = arena_array(&arena, 1);
+            ADD_C(content, ARRAY_OBJ(item));
+          }
+          char charbuf[2] = { (char)line->cmdfirstc, 0 };
+          ui_call_cmdline_show(content, line->cmdpos,
+                               cstr_as_string(charbuf),
+                               cstr_as_string((line->cmdprompt)),
+                               line->cmdindent, line->level, line->hl_id);
+          if (line->special_char) {
+            charbuf[0] = line->special_char;
+            ui_call_cmdline_special_char(cstr_as_string(charbuf),
+                                         line->special_shift,
+                                         line->level);
+          }
+          arena_mem_free(arena_finish(&arena));
+        }
       } else if (redraw_state == kCmdRedrawPos && cmdline_was_last_drawn) {
         ui_call_cmdline_pos(line->cmdpos, line->level);
       }
