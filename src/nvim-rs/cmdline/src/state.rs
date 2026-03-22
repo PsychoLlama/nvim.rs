@@ -1106,6 +1106,19 @@ unsafe extern "C" {
     fn vim_strchr(haystack: *const c_char, needle: c_int) -> *mut c_char;
     fn nvim_get_p_cpo() -> *const c_char;
     fn cmdline_pum_active() -> c_int;
+    // For command_line_check
+    fn nvim_cls_set_prev_cmdpos(s: *mut c_void, val: c_int);
+    fn nvim_cls_xfree_prev_cmdbuff(s: *mut c_void);
+    fn nvim_cls_dup_cmdbuff_to_prev(s: *mut c_void);
+    fn nvim_cls_set_skip_pum_redraw(s: *mut c_void, val: c_int);
+    fn nvim_set_redir_off(val: c_int);
+    fn nvim_set_quit_more(val: bool);
+    fn nvim_set_did_emsg(val: c_int);
+    fn nvim_get_typebuf_len() -> c_int;
+    fn stuff_empty() -> c_int;
+    fn may_trigger_safestate(pending: bool);
+    fn cursorcmd();
+    fn ui_cursor_shape();
 }
 
 // CPO_ESC is 'x' in C's cpoptions
@@ -1609,4 +1622,48 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // Dispatch to command_line_handle_key (now Rust-exported)
     crate::keys::rs_command_line_handle_key(s)
+}
+
+/// Rust replacement for `command_line_check(VimState *state)`.
+///
+/// VimState check callback: called by the state machine before each key read.
+/// Sets up state for the next key, triggers incsearch highlights, and moves cursor.
+///
+/// # Safety
+///
+/// `state` must be a valid non-null pointer to a `CommandLineState`.
+#[unsafe(export_name = "command_line_check")]
+pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
+    let s = state;
+
+    nvim_cls_set_prev_cmdpos(s, nvim_get_ccline_cmdpos());
+    nvim_cls_xfree_prev_cmdbuff(s);
+
+    nvim_set_redir_off(1); // Don't redirect the typed command.
+    nvim_set_quit_more(false); // reset after CTRL-D which had a more-prompt
+
+    nvim_set_did_emsg(0); // There can't really be a reason why an error
+                          // that occurs while typing a command should
+                          // cause the command not to be executed.
+
+    if stuff_empty() != 0 && nvim_get_typebuf_len() == 0 {
+        // There is no pending input from sources other than user input, so
+        // Vim is going to wait for the user to type a key.  Consider the
+        // command line typed even if next key will trigger a mapping.
+        nvim_cls_set_some_key_typed(s, 1);
+    }
+
+    // Trigger SafeState if nothing is pending.
+    may_trigger_safestate(nvim_cls_get_xpc_numfiles(s) <= 0);
+
+    nvim_cls_dup_cmdbuff_to_prev(s);
+
+    // Defer screen update to avoid pum flicker during wildtrigger()
+    if nvim_cls_get_c(s) == K_WILD && nvim_cls_get_firstc(s) != b'@' as c_int {
+        nvim_cls_set_skip_pum_redraw(s, 1);
+    }
+
+    cursorcmd(); // set the cursor on the right spot
+    ui_cursor_shape();
+    1
 }

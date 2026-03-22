@@ -327,6 +327,8 @@ extern int command_line_handle_key(void *s);
 extern int command_line_wildchar_complete(void *s);
 // command_line_execute() is implemented in Rust (cmdline crate, state.rs).
 extern int command_line_execute(VimState *state, int key);
+// command_line_check() is implemented in Rust (cmdline crate, state.rs).
+extern int command_line_check(VimState *state);
 
 
 static handle_T cmdpreview_bufnr = 0;
@@ -829,45 +831,7 @@ theend:
   return (uint8_t *)p;
 }
 
-static int command_line_check(VimState *state)
-{
-  CommandLineState *s = (CommandLineState *)state;
-
-  s->prev_cmdpos = ccline.cmdpos;
-  XFREE_CLEAR(s->prev_cmdbuff);
-
-  redir_off = true;        // Don't redirect the typed command.
-  // Repeated, because a ":redir" inside
-  // completion may switch it on.
-  quit_more = false;       // reset after CTRL-D which had a more-prompt
-
-  did_emsg = false;        // There can't really be a reason why an error
-                           // that occurs while typing a command should
-                           // cause the command not to be executed.
-
-  if (stuff_empty() && typebuf.tb_len == 0) {
-    // There is no pending input from sources other than user input, so
-    // Vim is going to wait for the user to type a key.  Consider the
-    // command line typed even if next key will trigger a mapping.
-    s->some_key_typed = true;
-  }
-
-  // Trigger SafeState if nothing is pending.
-  may_trigger_safestate(s->xpc.xp_numfiles <= 0);
-
-  if (ccline.cmdbuff != NULL) {
-    s->prev_cmdbuff = xstrdup(ccline.cmdbuff);
-  }
-
-  // Defer screen update to avoid pum flicker during wildtrigger()
-  if (s->c == K_WILD && s->firstc != '@') {
-    s->skip_pum_redraw = true;
-  }
-
-  cursorcmd();             // set the cursor on the right spot
-  ui_cursor_shape();
-  return 1;
-}
+// command_line_check() is implemented in Rust (cmdline crate, state.rs).
 
 // command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
 
@@ -957,28 +921,8 @@ static void command_line_left_right_mouse(CommandLineState *s)
 
 
 /// Trigger CursorMovedC autocommands.
-static void may_trigger_cursormovedc(CommandLineState *s)
-{
-  if (ccline.cmdpos != s->prev_cmdpos) {
-    trigger_cmd_autocmd(s->cmdline_type, EVENT_CURSORMOVEDC);
-    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
-  }
-}
-
-static int command_line_not_changed(CommandLineState *s)
-{
-  may_trigger_cursormovedc(s);
-  s->prev_cmdpos = ccline.cmdpos;
-  // Incremental searches for "/" and "?":
-  // Enter command_line_not_changed() when a character has been read but the
-  // command line did not change. Then we only search and redraw if something
-  // changed in the past.
-  // Enter command_line_changed() when the command line did change.
-  if (!s->is_state.incsearch_postponed) {
-    return 1;
-  }
-  return command_line_changed(s);
-}
+// may_trigger_cursormovedc: inlined into nvim_may_trigger_cursormovedc wrapper below
+// command_line_not_changed: inlined into nvim_command_line_not_changed wrapper below
 
 
 handle_T cmdpreview_get_bufnr(void)
@@ -1448,7 +1392,7 @@ static int command_line_changed(CommandLineState *s)
     do_autocmd_cmdlinechanged(s->firstc > 0 ? s->firstc : '-');
   }
 
-  may_trigger_cursormovedc(s);
+  nvim_may_trigger_cursormovedc(s);
 
   if (p_arshape && !p_tbidi) {
     // Always redraw the whole command line to fix shaping and
@@ -3282,10 +3226,17 @@ bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
   return cmdline_paste(regname, literally, remcr);
 }
 
-/// Wrapper for command_line_not_changed (called from Rust via opaque handle).
+/// Handle no-change return path for command-line mode (called from Rust).
 int nvim_command_line_not_changed(void *s)
 {
-  return command_line_not_changed((CommandLineState *)s);
+  CommandLineState *cs = (CommandLineState *)s;
+  nvim_may_trigger_cursormovedc(s);
+  cs->prev_cmdpos = ccline.cmdpos;
+  // Incremental searches: only search/redraw if something changed in the past.
+  if (!cs->is_state.incsearch_postponed) {
+    return 1;
+  }
+  return nvim_command_line_changed(s);
 }
 
 /// Wrapper for command_line_changed (called from Rust via opaque handle).
@@ -3345,10 +3296,14 @@ void nvim_command_line_end_wildmenu(void *s, bool key_is_wc)
   command_line_end_wildmenu((CommandLineState *)s, key_is_wc);
 }
 
-/// Wrapper for may_trigger_cursormovedc (called from Rust via opaque handle).
+/// Trigger CursorMovedC autocmd if cursor position changed (called from Rust).
 void nvim_may_trigger_cursormovedc(void *s)
 {
-  may_trigger_cursormovedc((CommandLineState *)s);
+  CommandLineState *cs = (CommandLineState *)s;
+  if (ccline.cmdpos != cs->prev_cmdpos) {
+    trigger_cmd_autocmd(cs->cmdline_type, EVENT_CURSORMOVEDC);
+    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
+  }
 }
 
 /// Wrapper for do_autocmd_cmdlinechanged (called from Rust via opaque handle).
@@ -3501,6 +3456,21 @@ void nvim_cls_set_prev_cmdpos(void *s, int val)
 char *nvim_cls_get_prev_cmdbuff(void *s)
 {
   return ((CommandLineState *)s)->prev_cmdbuff;
+}
+
+/// Free s->prev_cmdbuff and set to NULL.
+void nvim_cls_xfree_prev_cmdbuff(void *s)
+{
+  XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff);
+}
+
+/// Set s->prev_cmdbuff to a copy of ccline.cmdbuff (if non-NULL).
+void nvim_cls_dup_cmdbuff_to_prev(void *s)
+{
+  if (ccline.cmdbuff != NULL) {
+    XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff);
+    ((CommandLineState *)s)->prev_cmdbuff = xstrdup(ccline.cmdbuff);
+  }
 }
 
 /// Get s->some_key_typed field.
