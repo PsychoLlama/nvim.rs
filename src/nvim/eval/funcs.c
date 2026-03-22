@@ -7039,3 +7039,268 @@ void nvim_eval_sha256(typval_T *argvars, typval_T *rettv)
   }
 }
 
+// Rust helpers needed by VimL cmdline functions
+extern int rs_clamp_cmdpos(int pos, int cmdlen);
+extern int rs_get_echo_hl_id(void);
+
+/// "getcmdcomplpat()" function
+void f_getcmdcomplpat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_STRING;
+  if (cmdline_star > 0) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  CmdlineInfo *p = nvim_get_ccline_ptr();
+  if (p == NULL || p->xpc == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  int xp_context = p->xpc->xp_context;
+  if (xp_context == EXPAND_NOTHING) {
+    set_expand_context(p->xpc);
+    xp_context = p->xpc->xp_context;
+    p->xpc->xp_context = EXPAND_NOTHING;
+  }
+  if (xp_context == EXPAND_UNSUCCESSFUL || p->xpc->xp_pattern == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  rettv->vval.v_string = xstrdup(p->xpc->xp_pattern);
+}
+
+/// "getcmdcompltype()" function
+void f_getcmdcompltype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rettv->v_type = VAR_STRING;
+  if (cmdline_star > 0) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  CmdlineInfo *p = nvim_get_ccline_ptr();
+  if (p == NULL || p->xpc == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  int xp_context = p->xpc->xp_context;
+  if (xp_context == EXPAND_NOTHING) {
+    set_expand_context(p->xpc);
+    xp_context = p->xpc->xp_context;
+    p->xpc->xp_context = EXPAND_NOTHING;
+  }
+  if (xp_context == EXPAND_UNSUCCESSFUL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  rettv->vval.v_string = cmdcomplete_type_to_str(xp_context, p->xpc->xp_arg);
+}
+
+/// "setcmdline()" function: set the command line to str at position pos.
+void f_setcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  if (tv_check_for_string_arg(argvars, 0) == FAIL
+      || tv_check_for_opt_number_arg(argvars, 1) == FAIL) {
+    return;
+  }
+
+  int pos = -1;
+  if (argvars[1].v_type != VAR_UNKNOWN) {
+    bool error = false;
+
+    pos = (int)tv_get_number_chk(&argvars[1], &error) - 1;
+    if (error) {
+      return;
+    }
+    if (pos < 0) {
+      emsg(_(e_positive));
+      return;
+    }
+  }
+
+  // Use tv_get_string() to handle a NULL string like an empty string.
+  const char *str = tv_get_string(&argvars[0]);
+  CmdlineInfo *p = nvim_get_ccline_ptr();
+  if (p == NULL) {
+    rettv->vval.v_number = 1;
+  } else {
+    int len = (int)strlen(str);
+    realloc_cmdbuff(len + 1);
+    p->cmdlen = len;
+    STRCPY(p->cmdbuff, str);
+    p->cmdpos = rs_clamp_cmdpos(pos, p->cmdlen);
+    nvim_set_new_cmdpos(p->cmdpos);
+    redrawcmd();
+    nvim_do_autocmd_cmdlinechanged(nvim_get_cmdline_type());
+    rettv->vval.v_number = 0;
+  }
+}
+
+/// "setcmdpos()" function
+void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  const int pos = (int)tv_get_number(&argvars[0]) - 1;
+
+  if (pos >= 0) {
+    CmdlineInfo *p = nvim_get_ccline_ptr();
+    if (p == NULL) {
+      rettv->vval.v_number = 1;
+    } else {
+      nvim_set_new_cmdpos(MAX(0, pos));
+      rettv->vval.v_number = 0;
+    }
+  }
+}
+
+/// "wildtrigger()" function
+void f_wildtrigger(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  if (!(State & MODE_CMDLINE) || char_avail()
+      || wild_menu_showing
+      || cmdline_pum_active()) {
+    return;
+  }
+
+  int cmd_type = nvim_get_cmdline_type();
+
+  if (cmd_type == ':' || cmd_type == '/' || cmd_type == '?') {
+    // Add K_WILD as a single special key
+    uint8_t key_string[4];
+    key_string[0] = K_SPECIAL;
+    key_string[1] = KS_EXTRA;
+    key_string[2] = KE_WILD;
+    key_string[3] = NUL;
+
+    // Insert it into the typeahead buffer
+    ins_typebuf((char *)key_string, REMAP_NONE, 0, true, false);
+  }
+}
+
+/// This function is used by f_input() and f_inputdialog() functions. The third
+/// argument to f_input() specifies the type of completion to use at the
+/// prompt. The third argument to f_inputdialog() specifies the value to return
+/// when the user cancels the prompt.
+void get_user_input(const typval_T *const argvars, typval_T *const rettv, const bool inputdialog,
+                    const bool secret)
+  FUNC_ATTR_NONNULL_ALL
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  if (cmdpreview) {
+    return;
+  }
+
+  const char *prompt;
+  const char *defstr = "";
+  typval_T *cancelreturn = NULL;
+  typval_T cancelreturn_strarg2 = TV_INITIAL_VALUE;
+  const char *xp_name = NULL;
+  Callback input_callback = { .type = kCallbackNone };
+  char prompt_buf[NUMBUFLEN];
+  char defstr_buf[NUMBUFLEN];
+  char cancelreturn_buf[NUMBUFLEN];
+  char xp_name_buf[NUMBUFLEN];
+  char def[1] = { 0 };
+  if (argvars[0].v_type == VAR_DICT) {
+    if (argvars[1].v_type != VAR_UNKNOWN) {
+      emsg(_("E5050: {opts} must be the only argument"));
+      return;
+    }
+    dict_T *const dict = argvars[0].vval.v_dict;
+    prompt = tv_dict_get_string_buf_chk(dict, S_LEN("prompt"), prompt_buf, "");
+    if (prompt == NULL) {
+      return;
+    }
+    defstr = tv_dict_get_string_buf_chk(dict, S_LEN("default"), defstr_buf, "");
+    if (defstr == NULL) {
+      return;
+    }
+    dictitem_T *cancelreturn_di = tv_dict_find(dict, S_LEN("cancelreturn"));
+    if (cancelreturn_di != NULL) {
+      cancelreturn = &cancelreturn_di->di_tv;
+    }
+    xp_name = tv_dict_get_string_buf_chk(dict, S_LEN("completion"),
+                                         xp_name_buf, def);
+    if (xp_name == NULL) {  // error
+      return;
+    }
+    if (xp_name == def) {  // default to NULL
+      xp_name = NULL;
+    }
+    if (!tv_dict_get_callback(dict, S_LEN("highlight"), &input_callback)) {
+      return;
+    }
+  } else {
+    prompt = tv_get_string_buf_chk(&argvars[0], prompt_buf);
+    if (prompt == NULL) {
+      return;
+    }
+    if (argvars[1].v_type != VAR_UNKNOWN) {
+      defstr = tv_get_string_buf_chk(&argvars[1], defstr_buf);
+      if (defstr == NULL) {
+        return;
+      }
+      if (argvars[2].v_type != VAR_UNKNOWN) {
+        const char *const strarg2 = tv_get_string_buf_chk(&argvars[2], cancelreturn_buf);
+        if (strarg2 == NULL) {
+          return;
+        }
+        if (inputdialog) {
+          cancelreturn_strarg2.v_type = VAR_STRING;
+          cancelreturn_strarg2.vval.v_string = (char *)strarg2;
+          cancelreturn = &cancelreturn_strarg2;
+        } else {
+          xp_name = strarg2;
+        }
+      }
+    }
+  }
+
+  int xp_type = EXPAND_NOTHING;
+  char *xp_arg = NULL;
+  if (xp_name != NULL) {
+    // input() with a third argument: completion
+    const int xp_namelen = (int)strlen(xp_name);
+
+    uint32_t argt = 0;
+    if (parse_compl_arg(xp_name, xp_namelen, &xp_type,
+                        &argt, &xp_arg) == FAIL) {
+      return;
+    }
+  }
+
+  // Only the part of the message after the last NL is considered as
+  // prompt for the command line, unlsess cmdline is externalized
+  const char *p = prompt;
+  if (!ui_has(kUICmdline)) {
+    const char *lastnl = strrchr(prompt, '\n');
+    if (lastnl != NULL) {
+      p = lastnl + 1;
+      msg_start();
+      msg_clr_eos();
+      msg_puts_len(prompt, p - prompt, rs_get_echo_hl_id(), false);
+      msg_didout = false;
+      msg_starthere();
+    }
+  }
+  cmdline_row = msg_row;
+
+  stuffReadbuffSpec(defstr);
+
+  const int save_ex_normal_busy = ex_normal_busy;
+  ex_normal_busy = 0;
+  rettv->vval.v_string = getcmdline_prompt(secret ? NUL : '@', p, rs_get_echo_hl_id(),
+                                           xp_type, xp_arg, input_callback, false, NULL);
+  ex_normal_busy = save_ex_normal_busy;
+  callback_free(&input_callback);
+
+  if (rettv->vval.v_string == NULL && cancelreturn != NULL) {
+    tv_copy(cancelreturn, rettv);
+  }
+
+  xfree(xp_arg);
+
+  // Since the user typed this, no need to wait for return.
+  need_wait_return = false;
+  msg_didout = false;
+}
