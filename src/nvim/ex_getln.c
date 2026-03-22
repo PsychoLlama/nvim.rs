@@ -4043,3 +4043,310 @@ bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
   return cmdline_paste(regname, literally, remcr);
 }
 
+/// Wrapper for command_line_not_changed (called from Rust via opaque handle).
+int nvim_command_line_not_changed(void *s)
+{
+  return command_line_not_changed((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_changed (called from Rust via opaque handle).
+int nvim_command_line_changed(void *s)
+{
+  return command_line_changed((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_toggle_langmap (called from Rust via opaque handle).
+void nvim_command_line_toggle_langmap(void *s)
+{
+  command_line_toggle_langmap((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_left_right_mouse (called from Rust via opaque handle).
+void nvim_command_line_left_right_mouse(void *s)
+{
+  command_line_left_right_mouse((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_browse_history (called from Rust via opaque handle).
+int nvim_command_line_browse_history(void *s)
+{
+  return command_line_browse_history((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_wildchar_complete (called from Rust via opaque handle).
+int nvim_command_line_wildchar_complete(void *s)
+{
+  return command_line_wildchar_complete((CommandLineState *)s);
+}
+
+/// Wrapper for command_line_end_wildmenu (called from Rust via opaque handle).
+void nvim_command_line_end_wildmenu(void *s, bool key_is_wc)
+{
+  command_line_end_wildmenu((CommandLineState *)s, key_is_wc);
+}
+
+/// Wrapper for may_trigger_cursormovedc (called from Rust via opaque handle).
+void nvim_may_trigger_cursormovedc(void *s)
+{
+  may_trigger_cursormovedc((CommandLineState *)s);
+}
+
+/// Wrapper for do_autocmd_cmdlinechanged (called from Rust via opaque handle).
+void nvim_do_autocmd_cmdlinechanged(int firstc)
+{
+  do_autocmd_cmdlinechanged(firstc);
+}
+
+/// Wrapper for trigger_cmd_autocmd (called from Rust).
+void nvim_trigger_cmd_autocmd(int typechar, int evt)
+{
+  trigger_cmd_autocmd(typechar, (event_T)evt);
+}
+
+/// Wrapper for cmdpreview_may_show (called from Rust via opaque handle).
+int nvim_cmdpreview_may_show(void *s)
+{
+  return (int)cmdpreview_may_show((CommandLineState *)s);
+}
+
+/// Wrapper for abandon_cmdline (called from Rust).
+void nvim_abandon_cmdline(void)
+{
+  abandon_cmdline();
+}
+
+// CommandLineState field accessors (for Rust opaque handle pattern)
+
+/// Get s->c field.
+int nvim_cls_get_c(void *s)
+{
+  return ((CommandLineState *)s)->c;
+}
+
+/// Set s->c field.
+void nvim_cls_set_c(void *s, int val)
+{
+  ((CommandLineState *)s)->c = val;
+}
+
+/// Get s->firstc field.
+int nvim_cls_get_firstc(void *s)
+{
+  return ((CommandLineState *)s)->firstc;
+}
+
+/// Get s->count field.
+int nvim_cls_get_count(void *s)
+{
+  return ((CommandLineState *)s)->count;
+}
+
+/// Get s->indent field.
+int nvim_cls_get_indent(void *s)
+{
+  return ((CommandLineState *)s)->indent;
+}
+
+/// Get s->gotesc field.
+int nvim_cls_get_gotesc(void *s)
+{
+  return ((CommandLineState *)s)->gotesc ? 1 : 0;
+}
+
+/// Set s->gotesc field.
+void nvim_cls_set_gotesc(void *s, int val)
+{
+  ((CommandLineState *)s)->gotesc = (val != 0);
+}
+
+/// Get s->do_abbr field.
+int nvim_cls_get_do_abbr(void *s)
+{
+  return ((CommandLineState *)s)->do_abbr ? 1 : 0;
+}
+
+/// Set s->do_abbr field.
+void nvim_cls_set_do_abbr(void *s, int val)
+{
+  ((CommandLineState *)s)->do_abbr = (val != 0);
+}
+
+/// Get s->ignore_drag_release field.
+int nvim_cls_get_ignore_drag_release(void *s)
+{
+  return ((CommandLineState *)s)->ignore_drag_release ? 1 : 0;
+}
+
+/// Set s->ignore_drag_release field.
+void nvim_cls_set_ignore_drag_release(void *s, int val)
+{
+  ((CommandLineState *)s)->ignore_drag_release = (val != 0);
+}
+
+/// Get s->did_wild_list field.
+int nvim_cls_get_did_wild_list(void *s)
+{
+  return ((CommandLineState *)s)->did_wild_list ? 1 : 0;
+}
+
+/// Set s->did_wild_list field.
+void nvim_cls_set_did_wild_list(void *s, int val)
+{
+  ((CommandLineState *)s)->did_wild_list = (val != 0);
+}
+
+/// Get s->wim_index field.
+int nvim_cls_get_wim_index(void *s)
+{
+  return ((CommandLineState *)s)->wim_index;
+}
+
+/// Set s->wim_index field.
+void nvim_cls_set_wim_index(void *s, int val)
+{
+  ((CommandLineState *)s)->wim_index = val;
+}
+
+/// Get s->skip_pum_redraw field.
+int nvim_cls_get_skip_pum_redraw(void *s)
+{
+  return ((CommandLineState *)s)->skip_pum_redraw ? 1 : 0;
+}
+
+/// Set s->skip_pum_redraw field.
+void nvim_cls_set_skip_pum_redraw(void *s, int val)
+{
+  ((CommandLineState *)s)->skip_pum_redraw = (val != 0);
+}
+
+/// Get s->cmdline_type field.
+int nvim_cls_get_cmdline_type(void *s)
+{
+  return ((CommandLineState *)s)->cmdline_type;
+}
+
+/// Get s->prev_cmdpos field.
+int nvim_cls_get_prev_cmdpos(void *s)
+{
+  return ((CommandLineState *)s)->prev_cmdpos;
+}
+
+/// Set s->prev_cmdpos field.
+void nvim_cls_set_prev_cmdpos(void *s, int val)
+{
+  ((CommandLineState *)s)->prev_cmdpos = val;
+}
+
+/// Get s->prev_cmdbuff field.
+char *nvim_cls_get_prev_cmdbuff(void *s)
+{
+  return ((CommandLineState *)s)->prev_cmdbuff;
+}
+
+/// Get s->some_key_typed field.
+int nvim_cls_get_some_key_typed(void *s)
+{
+  return ((CommandLineState *)s)->some_key_typed ? 1 : 0;
+}
+
+/// Set s->some_key_typed field.
+void nvim_cls_set_some_key_typed(void *s, int val)
+{
+  ((CommandLineState *)s)->some_key_typed = (val != 0);
+}
+
+/// Get s->did_hist_navigate field.
+int nvim_cls_get_did_hist_navigate(void *s)
+{
+  return ((CommandLineState *)s)->did_hist_navigate ? 1 : 0;
+}
+
+/// Set s->did_hist_navigate field.
+void nvim_cls_set_did_hist_navigate(void *s, int val)
+{
+  ((CommandLineState *)s)->did_hist_navigate = (val != 0);
+}
+
+/// Get s->hiscnt field.
+int nvim_cls_get_hiscnt(void *s)
+{
+  return ((CommandLineState *)s)->hiscnt;
+}
+
+/// Get s->save_hiscnt field.
+int nvim_cls_get_save_hiscnt(void *s)
+{
+  return ((CommandLineState *)s)->save_hiscnt;
+}
+
+/// Get s->histype field.
+int nvim_cls_get_histype(void *s)
+{
+  return ((CommandLineState *)s)->histype;
+}
+
+/// Get pointer to s->is_state (incsearch state).
+void *nvim_cls_get_is_state(void *s)
+{
+  return (void *)&((CommandLineState *)s)->is_state;
+}
+
+/// Get pointer to s->xpc (expand context).
+void *nvim_cls_get_xpc(void *s)
+{
+  return (void *)&((CommandLineState *)s)->xpc;
+}
+
+/// Get s->xpc.xp_numfiles field.
+int nvim_cls_get_xpc_numfiles(void *s)
+{
+  return ((CommandLineState *)s)->xpc.xp_numfiles;
+}
+
+/// Set s->xpc.xp_context field.
+void nvim_cls_set_xpc_context(void *s, int val)
+{
+  ((CommandLineState *)s)->xpc.xp_context = val;
+}
+
+/// Get s->xpc.xp_context field.
+int nvim_cls_get_xpc_context(void *s)
+{
+  return ((CommandLineState *)s)->xpc.xp_context;
+}
+
+// nvim_get_mod_mask, nvim_set_mod_mask defined in getchar.c
+// nvim_get_iobuff defined in option_shim.c
+
+/// Get s->event_cmdlineleavepre_triggered field.
+int nvim_cls_get_event_cmdlineleavepre_triggered(void *s)
+{
+  return ((CommandLineState *)s)->event_cmdlineleavepre_triggered ? 1 : 0;
+}
+
+/// Set s->event_cmdlineleavepre_triggered field.
+void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val)
+{
+  ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0);
+}
+
+/// Get s->break_ctrl_c field.
+int nvim_cls_get_break_ctrl_c(void *s)
+{
+  return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0;
+}
+
+/// Get ccline.mouse_used pointer (may be NULL).
+int nvim_cls_get_ccline_mouse_used(void)
+{
+  return ccline.mouse_used != NULL ? 1 : 0;
+}
+
+/// Set the value at ccline.mouse_used if non-NULL.
+void nvim_cls_set_ccline_mouse_used_val(int val)
+{
+  if (ccline.mouse_used != NULL) {
+    *ccline.mouse_used = (val != 0);
+  }
+}
+
