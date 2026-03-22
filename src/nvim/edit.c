@@ -1269,11 +1269,6 @@ void nvim_edit_ins_del(void)
 
 
 
-/// Get pum_want.active (accessor for Rust).
-int nvim_edit_get_pum_want_active(void)
-{
-  return pum_want.active ? 1 : 0;
-}
 
 /// Set pum_want.active (accessor for Rust).
 void nvim_edit_set_pum_want_active(int val)
@@ -1293,11 +1288,6 @@ void nvim_edit_clear_edit_submode_extra(void)
   edit_submode_extra = NULL;
 }
 
-/// Get cmdwin_type (accessor for Rust).
-int nvim_edit_get_cmdwin_type(void)
-{
-  return cmdwin_type;
-}
 
 /// Set cmdwin_result (accessor for Rust).
 void nvim_edit_set_cmdwin_result(int val)
@@ -1702,11 +1692,6 @@ void nvim_edit_invalidate_wrow_wcol_virtcol(void)
   curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
 }
 
-/// Get curbuf->b_p_iminsert (accessor for Rust).
-int nvim_edit_get_curbuf_b_p_iminsert(void)
-{
-  return curbuf->b_p_iminsert;
-}
 
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
@@ -1755,11 +1740,6 @@ int nvim_edit_vv_char_is_empty(void)
   return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0;
 }
 
-/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
-int nvim_edit_get_curbuf_ml_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
 
 /// Set State to MODE_INSERT temporarily, call check_cursor_col, restore State.
 void nvim_edit_check_cursor_col_in_insert_mode(void)
@@ -1894,11 +1874,6 @@ void nvim_set_Insstart_orig_from_Insstart(void)
   Insstart_orig = Insstart;
 }
 
-/// Check if curbuf->terminal is set (accessor for Rust state_machine).
-int nvim_edit_curbuf_is_terminal(void)
-{
-  return curbuf->terminal != NULL ? 1 : 0;
-}
 
 /// Call stuffcharReadbuff(K_NOP) (accessor for Rust state_machine).
 void nvim_stuffcharReadbuff_K_NOP(void)

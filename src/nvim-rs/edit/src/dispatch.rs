@@ -151,11 +151,11 @@ extern "C" {
 
     // -- Phase 4 dispatch accessors --
     fn pum_visible() -> bool;
-    fn nvim_edit_get_pum_want_active() -> c_int;
+    fn nvim_get_pum_want_active() -> c_int;
     fn nvim_edit_set_pum_want_active(val: c_int);
     fn nvim_edit_get_pum_want_finish() -> c_int;
     fn nvim_edit_clear_edit_submode_extra();
-    fn nvim_edit_get_cmdwin_type() -> c_int;
+    fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_edit_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_set_did_cursorhold(val: bool);
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
 
 /// Handle the `check_pum` label logic.
 unsafe fn do_check_pum(s: *mut InsertState) {
-    if nvim_edit_get_pum_want_active() != 0 {
+    if nvim_get_pum_want_active() != 0 {
         if pum_visible() {
             nvim_edit_clear_edit_submode_extra();
             rs_insert_do_complete(s);
@@ -664,7 +664,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_C => {
-            if nvim_edit_get_cmdwin_type() != 0 {
+            if nvim_get_cmdwin_type() != 0 {
                 nvim_edit_set_cmdwin_result(K_IGNORE);
                 nvim_set_got_int(0);
                 (*s).nomove = true;
@@ -1069,7 +1069,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         }
         return SwitchAction::Continue;
     }
-    if nvim_edit_get_cmdwin_type() != 0 {
+    if nvim_get_cmdwin_type() != 0 {
         nvim_edit_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }

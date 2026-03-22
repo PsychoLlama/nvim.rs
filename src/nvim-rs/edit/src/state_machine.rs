@@ -64,7 +64,7 @@ extern "C" {
     // --- stop_insert_mode / terminal ---
     fn nvim_edit_get_stop_insert_mode() -> c_int;
     fn nvim_edit_set_stop_insert_mode(val: c_int);
-    fn nvim_edit_curbuf_is_terminal() -> c_int;
+    fn nvim_curbuf_is_terminal() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
     fn nvim_stuffcharReadbuff_K_NOP();
 
@@ -213,8 +213,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Terminal buffer: exit insert mode and go to terminal mode
-    if unsafe { nvim_edit_curbuf_is_terminal() } != 0
-        && unsafe { nvim_edit_get_stop_insert_mode() } == 0
+    if unsafe { nvim_curbuf_is_terminal() } != 0 && unsafe { nvim_edit_get_stop_insert_mode() } == 0
     {
         unsafe { nvim_edit_set_stop_insert_mode(1) };
         unsafe { nvim_set_restart_edit(c_int::from(b'I')) };

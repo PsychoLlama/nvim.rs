@@ -74,8 +74,8 @@ extern "C" {
     fn nvim_edit_check_cursor_col_in_insert_mode();
 
     // Buffer
-    fn nvim_edit_get_curbuf_ml_line_count() -> c_int;
-    fn nvim_edit_get_curbuf_b_p_iminsert() -> c_int;
+    fn nvim_get_curbuf_ml_line_count() -> LinenrT;
+    fn nvim_get_curbuf_b_p_iminsert() -> c_int;
 
     // Insstart
     fn nvim_edit_init_Insstart(startln: c_int);
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         // case the text was modified.
         if nvim_edit_cursor_equals_saved(save_lnum, save_col, save_coladd) == 0
             && nvim_edit_vv_char_is_empty() != 0
-            && save_lnum <= nvim_edit_get_curbuf_ml_line_count()
+            && save_lnum <= nvim_get_curbuf_ml_line_count()
         {
             nvim_edit_restore_cursor_pos(save_lnum, save_col, save_coladd);
             nvim_edit_check_cursor_col_in_insert_mode();
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     } else if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {
         nvim_set_State(MODE_VREPLACE);
         (*s).replace_state = MODE_VREPLACE;
-        nvim_edit_set_orig_line_count(nvim_edit_get_curbuf_ml_line_count());
+        nvim_edit_set_orig_line_count(nvim_get_curbuf_ml_line_count());
         nvim_set_vr_lines_changed(1);
     } else {
         nvim_set_State(MODE_INSERT);
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     }
 
     // Enable langmap or IME, indicated by 'iminsert'.
-    if nvim_edit_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
+    if nvim_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
         nvim_set_State(nvim_get_State() | MODE_LANGMAP);
     }
 
