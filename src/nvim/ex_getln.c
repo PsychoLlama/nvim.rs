@@ -1998,6 +1998,8 @@ unsigned get_cmdline_last_prompt_id(void)
 
 /// Get pointer to the command line info to use. save_cmdline() may clear
 /// ccline and put the previous value in ccline.prev_ccline.
+/// Get pointer to the command line info to use. save_cmdline() may clear
+/// ccline and put the previous value in ccline.prev_ccline.
 static CmdlineInfo *get_ccline_ptr(void)
 {
   if ((State & MODE_CMDLINE) == 0) {
@@ -2018,7 +2020,6 @@ static CmdlineInfo *get_ccline_ptr(void)
 static int get_cmdline_type(void)
 {
   CmdlineInfo *p = get_ccline_ptr();
-
   if (p == NULL) {
     return NUL;
   }
@@ -2028,117 +2029,86 @@ static int get_cmdline_type(void)
   return p->cmdfirstc;
 }
 
-/// Get the current command-line completion pattern.
-static char *get_cmdline_completion_pattern(void)
-{
-  if (cmdline_star > 0) {
-    return NULL;
-  }
-
-  CmdlineInfo *p = get_ccline_ptr();
-  if (p == NULL || p->xpc == NULL) {
-    return NULL;
-  }
-
-  int xp_context = p->xpc->xp_context;
-  if (xp_context == EXPAND_NOTHING) {
-    set_expand_context(p->xpc);
-    xp_context = p->xpc->xp_context;
-    p->xpc->xp_context = EXPAND_NOTHING;
-  }
-  if (xp_context == EXPAND_UNSUCCESSFUL) {
-    return NULL;
-  }
-
-  char *compl_pat = p->xpc->xp_pattern;
-  if (compl_pat == NULL) {
-    return NULL;
-  }
-
-  return xstrdup(compl_pat);
-}
-
-/// Get the command-line completion type.
-static char *get_cmdline_completion(void)
-{
-  if (cmdline_star > 0) {
-    return NULL;
-  }
-
-  CmdlineInfo *p = get_ccline_ptr();
-  if (p == NULL || p->xpc == NULL) {
-    return NULL;
-  }
-
-  int xp_context = p->xpc->xp_context;
-  if (xp_context == EXPAND_NOTHING) {
-    set_expand_context(p->xpc);
-    xp_context = p->xpc->xp_context;
-    p->xpc->xp_context = EXPAND_NOTHING;
-  }
-  if (xp_context == EXPAND_UNSUCCESSFUL) {
-    return NULL;
-  }
-
-  return cmdcomplete_type_to_str(xp_context, p->xpc->xp_arg);
-}
-
 /// "getcmdcomplpat()" function
 void f_getcmdcomplpat(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = get_cmdline_completion_pattern();
+  if (cmdline_star > 0) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  CmdlineInfo *p = get_ccline_ptr();
+  if (p == NULL || p->xpc == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  int xp_context = p->xpc->xp_context;
+  if (xp_context == EXPAND_NOTHING) {
+    set_expand_context(p->xpc);
+    xp_context = p->xpc->xp_context;
+    p->xpc->xp_context = EXPAND_NOTHING;
+  }
+  if (xp_context == EXPAND_UNSUCCESSFUL || p->xpc->xp_pattern == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  rettv->vval.v_string = xstrdup(p->xpc->xp_pattern);
 }
 
 /// "getcmdcompltype()" function
 void f_getcmdcompltype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = get_cmdline_completion();
+  if (cmdline_star > 0) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  CmdlineInfo *p = get_ccline_ptr();
+  if (p == NULL || p->xpc == NULL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  int xp_context = p->xpc->xp_context;
+  if (xp_context == EXPAND_NOTHING) {
+    set_expand_context(p->xpc);
+    xp_context = p->xpc->xp_context;
+    p->xpc->xp_context = EXPAND_NOTHING;
+  }
+  if (xp_context == EXPAND_UNSUCCESSFUL) {
+    rettv->vval.v_string = NULL;
+    return;
+  }
+  rettv->vval.v_string = cmdcomplete_type_to_str(xp_context, p->xpc->xp_arg);
 }
 
-/// Set the command line str to "str".
+/// "setcmdline()" implementation: set the command line to str at position pos.
 /// @return  1 when failed, 0 when OK.
 static int set_cmdline_str(const char *str, int pos)
 {
   CmdlineInfo *p = get_ccline_ptr();
-
   if (p == NULL) {
     return 1;
   }
-
   int len = (int)strlen(str);
   realloc_cmdbuff(len + 1);
   p->cmdlen = len;
   STRCPY(p->cmdbuff, str);
-
-  // Use Rust helper to clamp position to valid range.
   p->cmdpos = rs_clamp_cmdpos(pos, p->cmdlen);
   new_cmdpos = p->cmdpos;
-
   redrawcmd();
-
-  // Trigger CmdlineChanged autocommands.
   do_autocmd_cmdlinechanged(get_cmdline_type());
-
   return 0;
 }
 
-/// Set the command line byte position to "pos".  Zero is the first position.
-/// Only works when the command line is being edited.
+/// "setcmdpos()" implementation: set the command line byte position to pos.
 /// @return  1 when failed, 0 when OK.
 static int set_cmdline_pos(int pos)
 {
   CmdlineInfo *p = get_ccline_ptr();
-
   if (p == NULL) {
     return 1;
   }
-
-  // The position is not set directly but after CTRL-\ e or CTRL-R = has
-  // changed the command line.
   new_cmdpos = MAX(0, pos);
-
   return 0;
 }
 
