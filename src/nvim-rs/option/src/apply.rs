@@ -102,7 +102,7 @@ extern "C" {
     fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
     fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
     fn nvim_curwin_get_w_curswant() -> c_int;
-    fn nvim_curwin_set_w_set_curswant(val: c_int);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
     fn nvim_curwin_get_w_briopt_list() -> c_int;
 
     // comp_col(), setmouse(), redraw_all_later(), set_winbar()
@@ -298,7 +298,7 @@ pub unsafe extern "C" fn rs_did_set_option(
         && (opt_flags_val & (K_OPT_FLAG_CURSWANT | K_OPT_FLAG_REDR_ALL)) != 0
         && (opt_flags_val & K_OPT_FLAG_HL_ONLY) == 0
     {
-        nvim_curwin_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     }
 
     rs_check_redraw_for(curbuf, curwin, opt_flags_val);

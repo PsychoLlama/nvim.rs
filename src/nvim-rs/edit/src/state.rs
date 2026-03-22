@@ -89,7 +89,7 @@ extern "C" {
     fn nvim_set_ai_col(val: ColnrT);
     fn nvim_edit_set_orig_line_count(val: LinenrT);
     fn nvim_set_vr_lines_changed(val: c_int);
-    fn nvim_edit_curbuf_line_count() -> LinenrT;
+    fn nvim_qf_curbuf_line_count() -> LinenrT;
     fn rs_foldOpenCursor();
 }
 
@@ -616,7 +616,7 @@ unsafe fn stop_arrow_impl() -> c_int {
         }
         nvim_set_ai_col(0);
         if nvim_get_State() & VREPLACE_FLAG != 0 {
-            nvim_edit_set_orig_line_count(nvim_edit_curbuf_line_count());
+            nvim_edit_set_orig_line_count(nvim_qf_curbuf_line_count());
             nvim_set_vr_lines_changed(1);
         }
         ResetRedobuff();

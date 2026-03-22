@@ -56,7 +56,7 @@ extern "C" {
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
     fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
-    fn nvim_edit_ins_str(p: *const c_char, len: usize);
+    fn nvim_ins_str(p: *const c_char, len: usize);
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
     fn stop_arrow() -> c_int;
@@ -67,8 +67,8 @@ extern "C" {
     fn add_to_showcmd(c: c_int) -> bool;
     fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
     fn vungetc(c: c_int);
-    fn nvim_edit_inc_no_mapping();
-    fn nvim_edit_dec_no_mapping();
+    fn nvim_digraph_inc_no_mapping();
+    fn nvim_digraph_dec_no_mapping();
     fn nvim_get_got_int() -> c_int;
     fn nvim_set_got_int(val: c_int);
     fn nvim_edit_get_K_ZERO() -> c_int;
@@ -384,7 +384,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
             // Temporarily NUL-terminate before the last char
             let saved = *p.add(len - 1);
             *p.add(len - 1) = 0;
-            nvim_edit_ins_str(p.cast_const(), len - 1);
+            nvim_ins_str(p.cast_const(), len - 1);
             AppendToRedobuffLit(p.cast_const(), -1);
             *p.add(len - 1) = saved;
             ctrlv = 0;
@@ -441,7 +441,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
         return CTRL_C;
     }
 
-    nvim_edit_inc_no_mapping(); // don't map the next key hits
+    nvim_digraph_inc_no_mapping(); // don't map the next key hits
     let mut cc: c_int = 0;
     let mut i: c_int = 0;
     loop {
@@ -524,7 +524,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
         cc = c_int::from(b'\n');
     }
 
-    nvim_edit_dec_no_mapping();
+    nvim_digraph_dec_no_mapping();
     if nc != 0 {
         vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.

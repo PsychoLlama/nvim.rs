@@ -579,28 +579,12 @@ const void *nvim_curwin_get_cursor_ptr(void)
 }
 
 /// Get curwin->w_cursor.coladd (accessor for Rust).
-colnr_T nvim_edit_get_cursor_coladd(void)
-{
-  return curwin->w_cursor.coladd;
-}
 
 /// Set curwin->w_cursor.coladd (accessor for Rust).
-void nvim_edit_set_cursor_coladd(colnr_T val)
-{
-  curwin->w_cursor.coladd = val;
-}
 
 /// Get curwin->w_curswant (accessor for Rust).
-colnr_T nvim_edit_get_w_curswant(void)
-{
-  return curwin->w_curswant;
-}
 
 /// Set curwin->w_set_curswant (accessor for Rust).
-void nvim_edit_set_w_set_curswant(int val)
-{
-  curwin->w_set_curswant = (val != 0);
-}
 
 /// Call coladvance(curwin, col) (accessor for Rust).
 void nvim_edit_coladvance(colnr_T col)
@@ -656,10 +640,6 @@ int nvim_edit_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T
 }
 
 /// Call update_topline(curwin) (accessor for Rust).
-void nvim_edit_update_topline(void)
-{
-  update_topline(curwin);
-}
 
 /// Get spell_redraw_lnum (accessor for Rust).
 
@@ -680,16 +660,8 @@ void nvim_edit_set_orig_line_count(linenr_T val)
 /// Set vr_lines_changed (accessor for Rust).
 
 /// Increment no_mapping (accessor for Rust).
-void nvim_edit_inc_no_mapping(void)
-{
-  no_mapping++;
-}
 
 /// Decrement no_mapping (accessor for Rust).
-void nvim_edit_dec_no_mapping(void)
-{
-  no_mapping--;
-}
 
 /// Get got_int (accessor for Rust).
 
@@ -738,10 +710,6 @@ colnr_T nvim_edit_linetabsize_cursor_line(void)
 }
 
 /// Get curbuf->b_ml.ml_line_count (accessor for Rust).
-linenr_T nvim_edit_curbuf_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
 
 
 
@@ -774,10 +742,6 @@ char *nvim_edit_get_special_key_name(int c, int modifiers)
 }
 
 /// Call ins_str(p, len) (accessor for Rust).
-void nvim_edit_ins_str(const char *p, size_t len)
-{
-  ins_str((char *)p, len);
-}
 
 /// Call comp_textwidth(ff) (accessor for Rust).
 int nvim_edit_comp_textwidth(int ff)
@@ -1056,10 +1020,6 @@ void nvim_edit_set_w_curswant(colnr_T val)
 }
 
 /// Get curbuf->b_ml.ml_line_count via curwin (accessor for Rust).
-linenr_T nvim_edit_curwin_buf_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
 
 /// Call coladvance(curwin, getvcol_nolist(&Insstart)) (accessor for Rust).
 void nvim_edit_coladvance_insstart(void)

@@ -83,7 +83,7 @@ extern "C" {
     fn nvim_test_disable_char_avail() -> c_int;
 
     // -- insertion --
-    fn nvim_edit_ins_str(p: *const c_char, len: usize);
+    fn nvim_ins_str(p: *const c_char, len: usize);
     fn ins_char(c: c_int);
     fn nvim_edit_ins_char_bytes(buf: *const c_char, charlen: usize);
 
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         do_digraph(c_int::from(buf[i - 1])); // may be the start of a digraph
         buf[i] = 0; // NUL-terminate
 
-        nvim_edit_ins_str(buf.as_ptr().cast::<c_char>(), i);
+        nvim_ins_str(buf.as_ptr().cast::<c_char>(), i);
 
         let start: usize = if flags & INSCHAR_CTRLV != 0 {
             rs_redo_literal(c_int::from(buf[0]));

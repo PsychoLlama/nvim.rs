@@ -150,10 +150,10 @@ extern "C" {
     fn nvim_curwin_set_cursor_col(col: ColNr);
 
     /// Set curwin->w_cursor.coladd
-    fn nvim_edit_set_cursor_coladd(val: ColNr);
+    fn nvim_set_curwin_cursor_coladd(val: ColNr);
 
     /// Set curwin->w_set_curswant
-    fn nvim_edit_set_w_set_curswant(val: c_int);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
 
     /// Set curwin->w_curswant
     fn nvim_edit_set_w_curswant(val: ColNr);
@@ -1025,8 +1025,8 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
     } else {
         nvim_curwin_set_cursor_lnum(lnum);
         nvim_curwin_set_cursor_col(boff as ColNr);
-        nvim_edit_set_cursor_coladd(0);
-        nvim_edit_set_w_set_curswant(1);
+        nvim_set_curwin_cursor_coladd(0);
+        nvim_curwin_set_w_set_curswant(true);
     }
     nvim_check_cursor();
     // Make sure the cursor is on the first byte of a multi-byte char.

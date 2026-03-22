@@ -43,8 +43,8 @@ extern "C" {
     fn nvim_get_curwin() -> *mut c_void;
 
     // Phase 3 accessors (movement)
-    fn nvim_edit_set_cursor_coladd(val: ColnrT);
-    fn nvim_edit_set_w_set_curswant(val: c_int);
+    fn nvim_set_curwin_cursor_coladd(val: ColnrT);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
     fn nvim_edit_coladvance(col: ColnrT);
     fn virtual_active(wp: *mut c_void) -> bool;
 
@@ -101,7 +101,7 @@ extern "C" {
     fn nvim_get_State() -> c_int;
 
     // p_ww (whichwrap) checks
-    fn nvim_edit_curwin_buf_line_count() -> LinenrT;
+    fn nvim_qf_curbuf_line_count() -> LinenrT;
 
     // utfc_ptr2len and cursor pos (u8 matches other modules; c_char in helpers.rs is ABI-compatible)
     #[allow(clashing_extern_declarations)]
@@ -169,7 +169,7 @@ unsafe fn ins_left_impl() {
         nvim_edit_start_arrow_from_slot(0);
         nvim_edit_set_cursor_lnum_rel(-1);
         nvim_edit_coladvance(MAXCOL);
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
@@ -198,7 +198,7 @@ unsafe fn ins_right_impl() {
         if !end_change {
             AppendCharToRedobuff(K_RIGHT);
         }
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
         if virtual_active(nvim_get_curwin()) {
             oneright();
         } else {
@@ -212,11 +212,11 @@ unsafe fn ins_right_impl() {
             nvim_set_revins_chars(nvim_get_revins_chars() - 1);
         }
     } else if nvim_edit_ww_allows(i32::from(b']')) != 0
-        && nvim_curwin_get_cursor_lnum() < nvim_edit_curwin_buf_line_count()
+        && nvim_curwin_get_cursor_lnum() < nvim_qf_curbuf_line_count()
     {
         // if 'whichwrap' set for cursor in insert mode, may move to next line
         nvim_edit_start_arrow_curpos();
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
         nvim_edit_set_cursor_lnum_rel(1);
         nvim_curwin_set_cursor_col(0);
     } else {
@@ -248,7 +248,7 @@ unsafe fn ins_s_left_impl() {
             AppendCharToRedobuff(K_S_LEFT);
         }
         nvim_bck_word(1, false, false);
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
@@ -272,14 +272,13 @@ unsafe fn ins_s_right_impl() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
-    if nvim_curwin_get_cursor_lnum() < nvim_edit_curwin_buf_line_count() || nvim_gchar_cursor() != 0
-    {
+    if nvim_curwin_get_cursor_lnum() < nvim_qf_curbuf_line_count() || nvim_gchar_cursor() != 0 {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
             AppendCharToRedobuff(K_S_RIGHT);
         }
         nvim_fwd_word(1, false, 0);
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
@@ -306,7 +305,7 @@ unsafe fn ins_home_impl(c: c_int) {
         nvim_edit_set_cursor_lnum_abs(1);
     }
     nvim_curwin_set_cursor_col(0);
-    nvim_edit_set_cursor_coladd(0);
+    nvim_set_curwin_cursor_coladd(0);
     nvim_edit_set_w_curswant(0);
     nvim_edit_start_arrow_from_slot(0);
 }
@@ -328,7 +327,7 @@ unsafe fn ins_end_impl(c: c_int) {
     undisplay_dollar();
     nvim_edit_save_cursor(0);
     if c == K_C_END {
-        nvim_edit_set_cursor_lnum_abs(nvim_edit_curwin_buf_line_count());
+        nvim_edit_set_cursor_lnum_abs(nvim_qf_curbuf_line_count());
     }
     nvim_edit_coladvance(MAXCOL);
     nvim_edit_set_w_curswant(MAXCOL);

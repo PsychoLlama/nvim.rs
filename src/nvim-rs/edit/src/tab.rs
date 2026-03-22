@@ -78,7 +78,7 @@ extern "C" {
 
     // Character insertion
     fn ins_char(c: c_int);
-    fn nvim_edit_ins_str(s: *const c_char, len: usize);
+    fn nvim_ins_str(s: *const c_char, len: usize);
     fn replace_push_nul();
 
     // Space-to-TAB replacement (complex C helper)
@@ -195,7 +195,7 @@ unsafe fn ins_tab_impl() -> bool {
         if state & VREPLACE_FLAG != 0 {
             ins_char(c_int::from(b' '));
         } else {
-            nvim_edit_ins_str(c" ".as_ptr(), 1);
+            nvim_ins_str(c" ".as_ptr(), 1);
             if state & REPLACE_FLAG != 0 {
                 replace_push_nul();
             }

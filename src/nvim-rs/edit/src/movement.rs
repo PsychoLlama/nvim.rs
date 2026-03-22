@@ -32,12 +32,12 @@ extern "C" {
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
 
     // Cursor coladd (curwin)
-    fn nvim_edit_get_cursor_coladd() -> ColnrT;
-    fn nvim_edit_set_cursor_coladd(val: ColnrT);
+    fn nvim_curwin_get_cursor_coladd() -> ColnrT;
+    fn nvim_set_curwin_cursor_coladd(val: ColnrT);
 
     // w_curswant / w_set_curswant (curwin)
-    fn nvim_edit_get_w_curswant() -> ColnrT;
-    fn nvim_edit_set_w_set_curswant(val: c_int);
+    fn nvim_curwin_get_w_curswant() -> ColnrT;
+    fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // Window-parameterized cursor access
     fn nvim_edit_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
@@ -85,7 +85,7 @@ extern "C" {
     fn nvim_edit_get_fdo_flags() -> c_int;
 
     // Topline
-    fn nvim_edit_update_topline();
+    fn nvim_excmds_update_topline_curwin();
 
     // ASCII helpers (Rust-implemented, callable via FFI)
     fn rs_ascii_iswhite(c: c_int) -> c_int;
@@ -136,10 +136,10 @@ const TAB: c_char = 9;
 /// - `BL_FIX`: don't leave cursor on a NUL
 unsafe fn beginline_impl(flags: c_int) {
     if (flags & BL_SOL) != 0 && nvim_get_p_sol() == 0 {
-        nvim_edit_coladvance(nvim_edit_get_w_curswant());
+        nvim_edit_coladvance(nvim_curwin_get_w_curswant());
     } else {
         nvim_curwin_set_cursor_col(0);
-        nvim_edit_set_cursor_coladd(0);
+        nvim_set_curwin_cursor_coladd(0);
 
         if (flags & (BL_WHITE | BL_SOL)) != 0 {
             let mut ptr = get_cursor_line_ptr();
@@ -150,7 +150,7 @@ unsafe fn beginline_impl(flags: c_int) {
                 ptr = ptr.add(1);
             }
         }
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     }
     adjust_skipcol();
 }
@@ -171,7 +171,7 @@ pub unsafe extern "C" fn rs_beginline(flags: c_int) {
 unsafe fn oneright_impl() -> c_int {
     if virtual_active(nvim_get_curwin()) {
         let prev_col = nvim_curwin_get_cursor_col();
-        let prev_coladd = nvim_edit_get_cursor_coladd();
+        let prev_coladd = nvim_curwin_get_cursor_coladd();
 
         // Adjust for multi-wide char (excluding TAB)
         let ptr = nvim_get_cursor_pos_ptr();
@@ -182,10 +182,11 @@ unsafe fn oneright_impl() -> c_int {
             1
         };
         nvim_edit_coladvance(viscol + advance);
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
 
         // Return OK if the cursor moved, FAIL otherwise
-        if prev_col != nvim_curwin_get_cursor_col() || prev_coladd != nvim_edit_get_cursor_coladd()
+        if prev_col != nvim_curwin_get_cursor_col()
+            || prev_coladd != nvim_curwin_get_cursor_coladd()
         {
             return OK;
         }
@@ -206,7 +207,7 @@ unsafe fn oneright_impl() -> c_int {
     }
     nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() + l as ColnrT);
 
-    nvim_edit_set_w_set_curswant(1);
+    nvim_curwin_set_w_set_curswant(true);
     adjust_skipcol();
     OK
 }
@@ -246,15 +247,15 @@ unsafe fn oneleft_impl() -> c_int {
             width += 1;
         }
 
-        if nvim_edit_get_cursor_coladd() == 1 {
+        if nvim_curwin_get_cursor_coladd() == 1 {
             // Adjust for multi-wide char (not a TAB)
             let ptr = nvim_get_cursor_pos_ptr();
             if *ptr != TAB && vim_isprintc(utf_ptr2char(ptr.cast::<u8>())) && ptr2cells(ptr) > 1 {
-                nvim_edit_set_cursor_coladd(0);
+                nvim_set_curwin_cursor_coladd(0);
             }
         }
 
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
         adjust_skipcol();
         return OK;
     }
@@ -263,7 +264,7 @@ unsafe fn oneleft_impl() -> c_int {
         return FAIL;
     }
 
-    nvim_edit_set_w_set_curswant(1);
+    nvim_curwin_set_w_set_curswant(true);
     nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
 
     // if the character on the left of the current cursor is a multi-byte
@@ -366,10 +367,10 @@ unsafe fn cursor_up_impl(n: LinenrT, upd_topline: bool) -> c_int {
     cursor_up_inner_impl(curwin, n, false);
 
     // try to advance to the column we want to be at
-    nvim_edit_coladvance(nvim_edit_get_w_curswant());
+    nvim_edit_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
-        nvim_edit_update_topline();
+        nvim_excmds_update_topline_curwin();
     }
 
     OK
@@ -460,10 +461,10 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     cursor_down_inner_impl(curwin, n, false);
 
     // try to advance to the column we want to be at
-    nvim_edit_coladvance(nvim_edit_get_w_curswant());
+    nvim_edit_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
-        nvim_edit_update_topline();
+        nvim_excmds_update_topline_curwin();
     }
 
     OK

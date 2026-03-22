@@ -75,7 +75,7 @@ extern "C" {
     fn rs_ins_compl_init_get_longest();
 
     // --- curswant ---
-    fn nvim_edit_set_w_set_curswant(val: c_int);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // --- timestamps ---
     fn nvim_stuff_empty() -> bool;
@@ -108,7 +108,7 @@ extern "C" {
     ) -> c_int;
 
     // --- topline update ---
-    fn nvim_edit_update_topline();
+    fn nvim_excmds_update_topline_curwin();
 
     // --- validate cursor ---
     fn nvim_validate_cursor_curwin_wrapper();
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
 
     // Set curwin->w_curswant for next K_DOWN or K_UP
     if unsafe { nvim_get_arrow_used() } == 0 {
-        unsafe { nvim_edit_set_w_set_curswant(1) };
+        unsafe { nvim_curwin_set_w_set_curswant(true) };
     }
 
     // Check for timestamps when no typeahead
@@ -277,7 +277,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
 
     // Update topline
     if unsafe { (*s).count } <= 1 {
-        unsafe { nvim_edit_update_topline() };
+        unsafe { nvim_excmds_update_topline_curwin() };
     }
 
     unsafe { (*s).did_backspace = false };

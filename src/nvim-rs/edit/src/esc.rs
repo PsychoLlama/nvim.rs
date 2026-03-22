@@ -42,7 +42,7 @@ extern "C" {
     // Cursor
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_curwin_get_cursor_coladd() -> c_int;
-    fn nvim_edit_set_cursor_coladd(val: c_int);
+    fn nvim_set_curwin_cursor_coladd(val: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_edit_curwin_clear_wcol_virtcol();
     fn nvim_edit_curwin_clear_wrow_wcol_virtcol();
@@ -68,7 +68,7 @@ extern "C" {
     fn nvim_edit_get_ve_flags_curwin() -> c_int;
 
     // `curswant`
-    fn nvim_edit_set_w_set_curswant(val: c_int);
+    fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // Last insert mark
     fn nvim_edit_set_b_last_insert_mark();
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // When an autoindent was removed, curswant stays after the indent
     if nvim_get_restart_edit() == 0 && temp == nvim_curwin_get_cursor_col() {
-        nvim_edit_set_w_set_curswant(1);
+        nvim_curwin_set_w_set_curswant(true);
     }
 
     // Remember the last Insert position in the '^ mark.
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         {
             oneleft();
             if nvim_get_restart_edit() != 0 {
-                nvim_edit_set_cursor_coladd(nvim_curwin_get_cursor_coladd() + 1);
+                nvim_set_curwin_cursor_coladd(nvim_curwin_get_cursor_coladd() + 1);
             }
         } else {
             let col = nvim_curwin_get_cursor_col();

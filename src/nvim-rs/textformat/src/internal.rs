@@ -87,7 +87,7 @@ extern "C" {
     fn nvim_set_can_si(val: bool);
     fn nvim_set_can_si_back(val: bool);
     fn nvim_set_can_cindent(val: bool);
-    fn nvim_edit_update_topline(win: *mut c_void);
+    fn nvim_excmds_update_topline_curwin(win: *mut c_void);
     fn nvim_line_breakcheck();
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_curbuf_get_b_p_cin() -> c_int;
@@ -98,7 +98,7 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_void);
     fn nvim_ins_bytes(p: *const c_char);
-    fn nvim_edit_ins_str(p: *const c_char, len: usize);
+    fn nvim_ins_str(p: *const c_char, len: usize);
     fn nvim_textfmt_get_leader_len_simple(line: *const c_char) -> c_int;
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;
@@ -535,7 +535,7 @@ pub(crate) unsafe fn internal_format_impl(
                     } else if leader_len > 0 && second_indent - leader_len > 0 {
                         let padding = second_indent - leader_len;
                         for _ in 0..padding {
-                            nvim_edit_ins_str(c" ".as_ptr(), 1);
+                            nvim_ins_str(c" ".as_ptr(), 1);
                         }
                     } else {
                         rs_set_indent(second_indent, SIN_CHANGED);
@@ -577,7 +577,7 @@ pub(crate) unsafe fn internal_format_impl(
     nvim_textfmt_set_curwin_w_p_lbr(has_lbr);
 
     if !format_only && haveto_redraw {
-        nvim_edit_update_topline(nvim_textfmt_get_curwin());
+        nvim_excmds_update_topline_curwin(nvim_textfmt_get_curwin());
         nvim_textfmt_redraw_curbuf_later(UPD_VALID);
     }
 }

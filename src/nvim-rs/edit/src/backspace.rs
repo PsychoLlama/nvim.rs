@@ -32,8 +32,8 @@ extern "C" {
     fn nvim_curwin_get_cursor_col() -> ColnrT;
     fn nvim_curwin_set_cursor_col(col: ColnrT);
     fn nvim_edit_set_cursor_lnum_abs(lnum: LinenrT);
-    fn nvim_edit_get_cursor_coladd() -> ColnrT;
-    fn nvim_edit_set_cursor_coladd(val: ColnrT);
+    fn nvim_curwin_get_cursor_coladd() -> ColnrT;
+    fn nvim_set_curwin_cursor_coladd(val: ColnrT);
     fn inc_cursor() -> c_int;
     fn dec_cursor() -> c_int;
 
@@ -227,17 +227,17 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     }
 
     // Virtualedit: handle coladd
-    let coladd = nvim_edit_get_cursor_coladd();
+    let coladd = nvim_curwin_get_cursor_coladd();
     if coladd > 0 {
         if mode == BACKSPACE_CHAR {
-            nvim_edit_set_cursor_coladd(coladd - 1);
+            nvim_set_curwin_cursor_coladd(coladd - 1);
             return true;
         }
         if mode == BACKSPACE_WORD {
-            nvim_edit_set_cursor_coladd(0);
+            nvim_set_curwin_cursor_coladd(0);
             return true;
         }
-        nvim_edit_set_cursor_coladd(0);
+        nvim_set_curwin_cursor_coladd(0);
     }
 
     let state = nvim_get_State();
