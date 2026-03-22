@@ -66,7 +66,7 @@ extern "C" {
     fn fex_format(lnum: LinenrT, count: c_long, c: c_int) -> c_int;
 
     // -- format option checks --
-    fn nvim_edit_has_format_option(c: c_int) -> c_int;
+    fn nvim_has_format_option(c: c_int) -> bool;
 
     // -- formatexpr availability --
     fn nvim_edit_has_b_p_fex() -> c_int;
@@ -99,7 +99,7 @@ extern "C" {
     fn cindent_on() -> bool;
 
     // -- vim_iswordc --
-    fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
 
     // -- utf --
     fn utf_char2len(c: c_int) -> c_int;
@@ -152,7 +152,7 @@ const MB_MAXCHAR: usize = 21;
 pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     let force_format = flags & INSCHAR_FORMAT;
     let textwidth = nvim_edit_comp_textwidth(force_format);
-    let fo_ins_blank = nvim_edit_has_format_option(FO_INS_BLANK) != 0;
+    let fo_ins_blank = nvim_has_format_option(FO_INS_BLANK);
 
     // Try to break the line in two or more pieces when conditions are met.
     if textwidth > 0
@@ -253,8 +253,8 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
                     break;
                 }
             }
-            let prev_word = nvim_edit_vim_iswordc(c_int::from(buf[i - 1])) != 0;
-            let nc_word = nvim_edit_vim_iswordc(nc) != 0;
+            let prev_word = vim_iswordc(c_int::from(buf[i - 1]));
+            let nc_word = vim_iswordc(nc);
             if nvim_get_no_abbr() == 0 && !nc_word && prev_word {
                 break;
             }
@@ -314,7 +314,7 @@ const fn is_special(c: c_int) -> bool {
 
 /// Returns true if `has_format_option(FO_INS_LONG)` (format option `'l'`).
 unsafe fn has_fo_ins_long() -> bool {
-    nvim_edit_has_format_option(FO_INS_LONG) != 0
+    nvim_has_format_option(FO_INS_LONG)
 }
 
 // ============================================================================

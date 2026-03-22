@@ -187,7 +187,7 @@ extern "C" {
     fn ins_try_si(c: c_int);
     fn update_screen() -> c_int;
     fn ui_flush();
-    fn nvim_edit_bt_quickfix_curbuf() -> c_int;
+    fn nvim_bt_quickfix_curbuf() -> c_int;
     fn nvim_edit_bt_prompt_curbuf() -> c_int;
     fn nvim_edit_get_curwin_p_rl() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
@@ -1061,7 +1061,7 @@ unsafe fn handle_tab(s: *mut InsertState) -> SwitchAction {
 
 unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     // In quickfix window, <CR> jumps to error under cursor.
-    if nvim_edit_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
+    if nvim_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
         if nvim_edit_curwin_is_qf_not_ll() != 0 {
             nvim_edit_quickfix_cc();
         } else {

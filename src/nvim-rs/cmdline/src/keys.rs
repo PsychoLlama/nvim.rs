@@ -1070,7 +1070,7 @@ unsafe extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
-    fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
     fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool;
     fn cmdline_pum_active() -> c_int;
     fn cmd_screencol(bytepos: c_int) -> c_int;
@@ -1592,7 +1592,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
     let c_curr = nvim_cls_get_c(s);
     let do_abbr = nvim_cls_get_do_abbr(s) != 0;
     if do_abbr
-        && (is_special_key(c_curr) || nvim_edit_vim_iswordc(c_curr) == 0)
+        && (is_special_key(c_curr) || !vim_iswordc(c_curr))
         && (crate::edit::rs_ccheck_abbr(if c_curr >= 0x100 {
             c_curr + ABBR_OFF
         } else {

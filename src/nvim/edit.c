@@ -1431,12 +1431,6 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 
 
 
-/// Check if bt_quickfix(curbuf) (accessor for Rust).
-int nvim_edit_bt_quickfix_curbuf(void)
-{
-  return bt_quickfix(curbuf) ? 1 : 0;
-}
-
 /// Check if bt_prompt(curbuf) (accessor for Rust).
 int nvim_edit_bt_prompt_curbuf(void)
 {
@@ -1896,13 +1890,6 @@ void nvim_edit_state_enter(void *state)
 }
 
 /// Call ins_esc(&count, cmdchar, nomove) (accessor for Rust).
-
-
-/// Call msg_check_for_delay(true) (accessor for Rust).
-void nvim_edit_msg_check_for_delay(void)
-{
-  msg_check_for_delay(true);
-}
 
 
 
@@ -2548,12 +2535,6 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
 /// Call u_save(lnum1, lnum2) (accessor for Rust).
 
 
-/// Get has_format_option(c) (accessor for Rust).
-int nvim_edit_has_format_option(int c)
-{
-  return has_format_option((char)c) ? 1 : 0;
-}
-
 /// Trim last char of previous line if space (FO_WHITE_PAR helper).
 void nvim_edit_trim_eol_space(void)
 {
@@ -2577,11 +2558,6 @@ int nvim_edit_mb_get_class_cursor(void)
   return mb_get_class(get_cursor_pos_ptr());
 }
 
-/// Get vim_iswordc(c) (accessor for Rust).
-int nvim_edit_vim_iswordc(int c)
-{
-  return vim_iswordc((unsigned)c) ? 1 : 0;
-}
 
 /// Check utf_composinglike at cursor (accessor for Rust).
 int nvim_edit_cursor_has_composing(void)

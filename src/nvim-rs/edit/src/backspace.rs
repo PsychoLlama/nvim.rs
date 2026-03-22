@@ -85,7 +85,7 @@ extern "C" {
 
     // Character ops
     fn nvim_gchar_cursor() -> c_int;
-    fn nvim_edit_has_format_option(c: c_int) -> c_int;
+    fn nvim_has_format_option(c: c_int) -> bool;
     fn nvim_edit_trim_eol_space();
     fn nvim_edit_do_join_simple();
 
@@ -112,7 +112,7 @@ extern "C" {
 
     // Word class
     fn nvim_edit_mb_get_class_cursor() -> c_int;
-    fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
     fn nvim_edit_cursor_has_composing() -> c_int;
 
     // Softtabstop helpers
@@ -274,9 +274,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 nvim_edit_set_cursor_lnum_abs(new_lnum);
 
                 // When "aw" is in 'formatoptions': delete trailing space
-                if nvim_edit_has_format_option(FO_AUTO) != 0
-                    && nvim_edit_has_format_option(FO_WHITE_PAR) != 0
-                {
+                if nvim_has_format_option(FO_AUTO) && nvim_has_format_option(FO_WHITE_PAR) {
                     nvim_edit_trim_eol_space();
                 }
 
@@ -328,7 +326,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         } else {
             // Delete up to starting point, start of line or previous word.
             let mut cur_mode = mode;
-            let mut temp = 0;
+            let mut temp = false;
             let mut cclass = nvim_edit_mb_get_class_cursor();
             loop {
                 if !revins_on {
@@ -341,11 +339,11 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 if cur_mode == BACKSPACE_WORD && cc != c_int::from(b' ') && cc != c_int::from(b'\t')
                 {
                     cur_mode = BACKSPACE_WORD_NOT_SPACE;
-                    temp = nvim_edit_vim_iswordc(cc);
+                    temp = vim_iswordc(cc);
                 } else if cur_mode == BACKSPACE_WORD_NOT_SPACE
                     && (cc == c_int::from(b' ')
                         || cc == c_int::from(b'\t')
-                        || nvim_edit_vim_iswordc(cc) != temp
+                        || vim_iswordc(cc) != temp
                         || prev_cclass != cclass)
                 {
                     // End of word

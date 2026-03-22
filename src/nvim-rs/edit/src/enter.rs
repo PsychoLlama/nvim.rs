@@ -131,7 +131,7 @@ extern "C" {
     fn gchar_cursor() -> c_int;
 
     // Utilities
-    fn nvim_edit_msg_check_for_delay();
+    fn nvim_drawscreen_msg_check_for_delay();
     fn showmode() -> c_int;
     fn nvim_edit_change_warning(col: c_int);
     fn pum_check_clear();
@@ -173,7 +173,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     nvim_set_did_restart_edit(nvim_get_restart_edit());
 
     // Sleep before redrawing, needed for "CTRL-O :" that results in an error message
-    nvim_edit_msg_check_for_delay();
+    nvim_drawscreen_msg_check_for_delay();
 
     // Set Insstart_orig to Insstart
     nvim_set_update_Insstart_orig(1);
