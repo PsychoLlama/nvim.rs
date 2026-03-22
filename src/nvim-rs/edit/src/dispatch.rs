@@ -165,7 +165,7 @@ extern "C" {
     fn nvim_edit_update_can_si_from_may_do_si();
     fn nvim_edit_ins_complete(c: c_int) -> c_int;
     fn nvim_edit_check_compl_option(allow_always: c_int) -> c_int;
-    fn nvim_edit_ins_ctrl_x();
+    fn ins_ctrl_x();
     fn nvim_edit_do_cmdline_getcmdkeycmd();
     fn nvim_edit_map_execute_lua();
     fn nvim_edit_paste_repeat();
@@ -182,11 +182,11 @@ extern "C" {
     fn nvim_edit_inindent() -> c_int;
     fn nvim_edit_auto_format(force_format: c_int);
     fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
-    fn nvim_edit_do_c_expr_indent();
+    fn do_c_expr_indent();
     fn nvim_edit_ins_reg();
     fn nvim_edit_ins_try_si(c: c_int);
-    fn nvim_edit_update_screen();
-    fn nvim_edit_ui_flush();
+    fn update_screen() -> c_int;
+    fn ui_flush();
     fn nvim_edit_bt_quickfix_curbuf() -> c_int;
     fn nvim_edit_bt_prompt_curbuf() -> c_int;
     fn nvim_edit_get_curwin_p_rl() -> c_int;
@@ -438,7 +438,7 @@ pub unsafe extern "C" fn rs_insert_do_cindent(s: *mut InsertState) {
     if nvim_edit_in_cinkeys((*s).c, c_int::from(b' '), c_int::from((*s).line_is_white)) != 0
         && stop_arrow() == OK
     {
-        nvim_edit_do_c_expr_indent();
+        do_c_expr_indent();
     }
 }
 
@@ -510,8 +510,8 @@ unsafe fn do_check_pum(s: *mut InsertState) {
 /// Returns true when autocomplete was triggered (caller should break from switch).
 unsafe fn trigger_autocomplete(s: *mut InsertState) {
     nvim_edit_redraw_later_valid();
-    nvim_edit_update_screen();
-    nvim_edit_ui_flush();
+    update_screen();
+    ui_flush();
     rs_ins_compl_enable_autocomplete();
     rs_insert_do_complete(s);
 }
@@ -990,7 +990,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_X => {
-            nvim_edit_ins_ctrl_x();
+            ins_ctrl_x();
             SwitchAction::Continue
         }
 

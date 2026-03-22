@@ -119,7 +119,7 @@ extern "C" {
     fn nvim_edit_ins_apply_insertenter();
     fn nvim_edit_ins_apply_insertleave();
     fn nvim_edit_vv_char_is_empty() -> c_int;
-    fn nvim_edit_highlight_changed();
+    fn highlight_changed();
 
     // Redo
     fn nvim_edit_ResetRedobuff();
@@ -133,7 +133,7 @@ extern "C" {
 
     // Utilities
     fn nvim_edit_msg_check_for_delay();
-    fn nvim_edit_showmode() -> c_int;
+    fn showmode() -> c_int;
     fn nvim_edit_change_warning(col: c_int);
     fn nvim_edit_pum_check_clear();
     fn nvim_edit_state_enter(state: *mut c_void);
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
         // Check for changed highlighting, e.g. for ModeMsg.
         if nvim_edit_get_need_highlight_changed() != 0 {
-            nvim_edit_highlight_changed();
+            highlight_changed();
         }
 
         // Make sure the cursor didn't move. Do call check_cursor_col() in
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // A warning message for changing a readonly file is given here, before
     // actually changing anything.
     let show_i = if nvim_edit_get_p_smd() != 0 && nvim_edit_get_msg_silent() == 0 {
-        nvim_edit_showmode()
+        showmode()
     } else {
         0
     };

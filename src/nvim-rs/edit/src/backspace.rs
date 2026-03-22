@@ -77,7 +77,7 @@ extern "C" {
     fn nvim_set_can_cindent(val: c_int);
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_edit_cindent_on() -> c_int;
-    fn nvim_edit_fix_indent();
+    fn fix_indent();
     fn beginline(flags: c_int);
 
     // ml_get_len
@@ -405,7 +405,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     }
 
     if call_fix_indent {
-        nvim_edit_fix_indent();
+        fix_indent();
     }
 
     // It's a little strange to put backspaces into the redo buffer, but

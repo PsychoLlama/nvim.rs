@@ -1543,11 +1543,7 @@ int nvim_edit_check_compl_option(int allow_always)
   return check_compl_option(allow_always != 0) ? 1 : 0;
 }
 
-/// Call ins_ctrl_x() (accessor for Rust).
-void nvim_edit_ins_ctrl_x(void)
-{
-  ins_ctrl_x();
-}
+
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, 0) (accessor for Rust).
 void nvim_edit_do_cmdline_getcmdkeycmd(void)
@@ -1645,11 +1641,7 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
   return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0;
 }
 
-/// Call do_c_expr_indent() (accessor for Rust).
-void nvim_edit_do_c_expr_indent(void)
-{
-  do_c_expr_indent();
-}
+
 
 /// Call ins_reg() (accessor for Rust).
 void nvim_edit_ins_reg(void)
@@ -1663,17 +1655,9 @@ void nvim_edit_ins_try_si(int c)
   ins_try_si(c);
 }
 
-/// Call update_screen() (accessor for Rust).
-void nvim_edit_update_screen(void)
-{
-  update_screen();
-}
 
-/// Call ui_flush() (accessor for Rust).
-void nvim_edit_ui_flush(void)
-{
-  ui_flush();
-}
+
+
 
 /// Check if bt_quickfix(curbuf) (accessor for Rust).
 int nvim_edit_bt_quickfix_curbuf(void)
@@ -2151,11 +2135,7 @@ void nvim_edit_AppendNumberToRedobuff(int n)
   AppendNumberToRedobuff(n);
 }
 
-/// Call showmode() and return result (accessor for Rust).
-int nvim_edit_showmode(void)
-{
-  return showmode();
-}
+
 
 /// Call change_warning(curbuf, col) (accessor for Rust).
 void nvim_edit_change_warning(int col)
@@ -2188,11 +2168,7 @@ void nvim_edit_msg_check_for_delay(void)
   msg_check_for_delay(true);
 }
 
-/// Call highlight_changed() (accessor for Rust).
-void nvim_edit_highlight_changed(void)
-{
-  highlight_changed();
-}
+
 
 /// Call ui_cursor_shape() and do_digraph(-1) (accessor for Rust).
 void nvim_edit_ui_cursor_shape_and_clear_digraph(void)
@@ -2889,11 +2865,7 @@ int nvim_edit_cursor_has_composing(void)
   return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0;
 }
 
-/// Call fix_indent() (accessor for Rust).
-void nvim_edit_fix_indent(void)
-{
-  fix_indent();
-}
+
 
 /// Check if p_cpo contains CPO_BACKSPACE (accessor for Rust).
 int nvim_edit_p_cpo_has_backspace(void)
@@ -3082,11 +3054,7 @@ size_t nvim_edit_reg_y_size(void *reg)
   return ((yankreg_T *)reg)->y_size;
 }
 
-/// Call end_visual_mode() (accessor for Rust).
-void nvim_edit_end_visual_mode(void)
-{
-  end_visual_mode();
-}
+
 
 /// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
 void nvim_edit_set_pc_status_unset(void)

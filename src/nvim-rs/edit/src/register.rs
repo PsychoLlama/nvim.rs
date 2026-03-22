@@ -74,7 +74,7 @@ extern "C" {
     fn nvim_edit_get_stop_insert_mode() -> c_int;
     fn nvim_stuff_empty() -> bool;
     fn nvim_VIsual_active() -> c_int;
-    fn nvim_edit_end_visual_mode();
+    fn end_visual_mode();
 }
 
 // ============================================================================
@@ -172,6 +172,6 @@ pub unsafe extern "C" fn rs_ins_reg() {
 
     // Disallow starting Visual mode here.
     if vis_active == 0 && nvim_VIsual_active() != 0 {
-        nvim_edit_end_visual_mode();
+        end_visual_mode();
     }
 }
