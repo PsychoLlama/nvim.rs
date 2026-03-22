@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_edit_get_yank_register(regname: c_int) -> *mut std::ffi::c_void;
     fn nvim_edit_reg_y_size(reg: *const std::ffi::c_void) -> usize;
     fn nvim_edit_is_literal_register(regname: c_int) -> c_int;
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendCharToRedobuff(c: c_int);
     fn nvim_put_do_put(
         regname: c_int,
         savereg: *mut std::ffi::c_void,
@@ -131,9 +131,9 @@ pub unsafe extern "C" fn rs_ins_reg() {
 
         if literally == CTRL_O || literally == CTRL_P {
             // Append the command to the redo buffer.
-            nvim_edit_append_char_to_redobuff(CTRL_R);
-            nvim_edit_append_char_to_redobuff(literally);
-            nvim_edit_append_char_to_redobuff(regname);
+            AppendCharToRedobuff(CTRL_R);
+            AppendCharToRedobuff(literally);
+            AppendCharToRedobuff(regname);
             nvim_put_do_put(
                 regname,
                 std::ptr::null_mut(),
@@ -146,8 +146,8 @@ pub unsafe extern "C" fn rs_ins_reg() {
                 },
             );
         } else if nvim_edit_reg_y_size(reg) > 1 && nvim_edit_is_literal_register(regname) != 0 {
-            nvim_edit_append_char_to_redobuff(CTRL_R);
-            nvim_edit_append_char_to_redobuff(regname);
+            AppendCharToRedobuff(CTRL_R);
+            AppendCharToRedobuff(regname);
             nvim_put_do_put(regname, std::ptr::null_mut(), BACKWARD, 1, PUT_CURSEND);
         } else if nvim_edit_insert_reg(regname, literally) == FAIL {
             vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);

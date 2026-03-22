@@ -627,23 +627,11 @@ int nvim_edit_get_ve_flags(void)
   return (int)get_ve_flags(curwin);
 }
 
-/// Call vim_isprintc(c) (accessor for Rust).
-int nvim_edit_vim_isprintc(int c)
-{
-  return vim_isprintc(c) ? 1 : 0;
-}
 
-/// Call ptr2cells(ptr) (accessor for Rust).
-int nvim_edit_ptr2cells(const char *ptr)
-{
-  return ptr2cells(ptr);
-}
 
-/// Call utf_ptr2char(ptr) (accessor for Rust).
-int nvim_edit_utf_ptr2char(const char *ptr)
-{
-  return utf_ptr2char(ptr);
-}
+
+
+
 
 /// Get wp->w_cursor.lnum (accessor for Rust).
 linenr_T nvim_edit_win_get_cursor_lnum(win_T *wp)
@@ -771,17 +759,9 @@ void nvim_edit_textlock_dec(void)
   textlock--;
 }
 
-/// Call AppendToRedobuff(s) (accessor for Rust).
-void nvim_edit_AppendToRedobuff(const char *s)
-{
-  AppendToRedobuff(s);
-}
 
-/// Call AppendToRedobuffLit(s, len) (accessor for Rust).
-void nvim_edit_AppendToRedobuffLit(const char *s, int len)
-{
-  AppendToRedobuffLit(s, len);
-}
+
+
 
 
 
@@ -819,11 +799,7 @@ int nvim_edit_merge_modifiers(int c)
   return merge_modifiers(c, &mod_mask);
 }
 
-/// Call add_to_showcmd(c) (accessor for Rust).
-void nvim_edit_add_to_showcmd(int c)
-{
-  add_to_showcmd(c);
-}
+
 
 /// Call MB_BYTE2LEN_CHECK(c) (accessor for Rust).
 int nvim_edit_MB_BYTE2LEN_CHECK(int c)
@@ -831,11 +807,7 @@ int nvim_edit_MB_BYTE2LEN_CHECK(int c)
   return MB_BYTE2LEN_CHECK(c);
 }
 
-/// Call vungetc(c) (accessor for Rust).
-void nvim_edit_vungetc(int c)
-{
-  vungetc(c);
-}
+
 
 /// Get K_ZERO computed macro value (accessor for Rust).
 int nvim_edit_get_K_ZERO(void)
@@ -867,17 +839,9 @@ void nvim_edit_internal_format(int textwidth, int second_indent, int flags, int 
   internal_format(textwidth, second_indent, flags, (bool)format_only, c);
 }
 
-/// Call fex_format(lnum, count, c) (accessor for Rust).
-int nvim_edit_fex_format(linenr_T lnum, long count, int c)
-{
-  return fex_format(lnum, count, c);
-}
 
-/// Call char2cells(c) (accessor for Rust).
-int nvim_edit_char2cells(int c)
-{
-  return char2cells(c);
-}
+
+
 
 
 
@@ -891,17 +855,9 @@ int nvim_edit_byte2cells(int b)
 
 
 
-/// Call do_digraph(c) (accessor for Rust).
-int nvim_edit_do_digraph(int c)
-{
-  return do_digraph(c);
-}
 
-/// Call ins_char(c) (accessor for Rust).
-void nvim_edit_ins_char(int c)
-{
-  ins_char(c);
-}
+
+
 
 /// Call ins_char_bytes(buf, charlen) (accessor for Rust).
 void nvim_edit_ins_char_bytes(const char *buf, size_t charlen)
@@ -909,11 +865,7 @@ void nvim_edit_ins_char_bytes(const char *buf, size_t charlen)
   ins_char_bytes((char *)buf, charlen);
 }
 
-/// Call utf_char2len(c) (accessor for Rust).
-int nvim_edit_utf_char2len(int c)
-{
-  return utf_char2len(c);
-}
+
 
 /// Check if curbuf->b_p_fex (formatexpr) is non-empty (accessor for Rust).
 int nvim_edit_has_b_p_fex(void)
@@ -1124,11 +1076,7 @@ void nvim_edit_start_arrow_with_change_curpos(bool end_change)
   start_arrow_with_change(&curwin->w_cursor, end_change);
 }
 
-/// Call AppendCharToRedobuff(c) (accessor for Rust).
-void nvim_edit_append_char_to_redobuff(int c)
-{
-  AppendCharToRedobuff(c);
-}
+
 
 
 /// Check if p_ww (whichwrap) allows the given character (accessor for Rust).
@@ -1589,11 +1537,7 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 
 
 
-/// Call ins_try_si(c) (accessor for Rust).
-void nvim_edit_ins_try_si(int c)
-{
-  ins_try_si(c);
-}
+
 
 
 
@@ -1629,11 +1573,7 @@ int nvim_edit_get_cpt_first_char(void)
   return (unsigned char)*curbuf->b_p_cpt;
 }
 
-/// Get vim_iswordc(c) (accessor for Rust -- thin wrapper to avoid name clashes).
-int nvim_edit_vim_iswordc_dispatch(int c)
-{
-  return vim_iswordc(c) ? 1 : 0;
-}
+
 
 /// Get get_ve_flags(curwin) & kOptVeFlagOnemore (accessor for Rust).
 int nvim_edit_ve_onemore(void)
@@ -2069,11 +2009,7 @@ int nvim_edit_handle_restart_edit_cursor(void)
   return 0;
 }
 
-/// Call AppendNumberToRedobuff(n) (accessor for Rust).
-void nvim_edit_AppendNumberToRedobuff(int n)
-{
-  AppendNumberToRedobuff(n);
-}
+
 
 
 
@@ -2092,11 +2028,7 @@ void nvim_edit_state_enter(void *state)
 }
 
 /// Call ins_esc(&count, cmdchar, nomove) (accessor for Rust).
-/// ins_esc is now implemented in Rust (src/nvim-rs/edit/src/esc.rs).
-int nvim_edit_ins_esc(int *count, int cmdchar, int nomove)
-{
-  return ins_esc(count, cmdchar, nomove);
-}
+
 
 /// Call msg_check_for_delay(true) (accessor for Rust).
 void nvim_edit_msg_check_for_delay(void)

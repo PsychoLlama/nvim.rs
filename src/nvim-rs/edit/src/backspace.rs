@@ -99,7 +99,7 @@ extern "C" {
     fn del_char(fixpos: c_int) -> c_int;
 
     // Redo buffer
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendCharToRedobuff(c: c_int);
 
     // p_cpo backspace check
     fn nvim_edit_p_cpo_has_backspace() -> c_int;
@@ -407,7 +407,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
     // It's a little strange to put backspaces into the redo buffer, but
     // it makes auto-indent a lot easier to deal with.
-    nvim_edit_append_char_to_redobuff(c);
+    AppendCharToRedobuff(c);
 
     // If deleted before the insertion point, adjust it
     let cursor_lnum = nvim_curwin_get_cursor_lnum();

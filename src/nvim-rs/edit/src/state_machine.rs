@@ -137,7 +137,7 @@ extern "C" {
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
     fn nvim_curwin_get_cursor_col() -> c_int;
-    fn nvim_edit_vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 
     // --- insert_handle_key / post ---
     fn insert_do_complete(s: *mut InsertState);
@@ -324,7 +324,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
             && unsafe { nvim_curwin_get_cursor_col() } > 0
         {
             let c = unsafe { char_before_cursor() };
-            if unsafe { nvim_edit_vim_isprintc(c) } != 0 {
+            if unsafe { vim_isprintc(c) } {
                 unsafe { (*s).c = c };
                 unsafe { rs_ins_compl_enable_autocomplete() };
                 unsafe { rs_ins_compl_init_get_longest() };

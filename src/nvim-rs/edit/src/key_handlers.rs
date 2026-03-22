@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_edit_start_arrow_from_slot(slot: c_int);
     fn nvim_edit_start_arrow_with_change_from_slot(slot: c_int, end_change: c_int);
     fn nvim_edit_start_arrow_curpos();
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendCharToRedobuff(c: c_int);
     fn vim_beep(val: c_uint);
     fn nvim_edit_ww_allows(ch: c_int) -> c_int;
     fn nvim_edit_set_cursor_lnum_rel(delta: LinenrT);
@@ -155,7 +155,7 @@ unsafe fn ins_left_impl() {
     if oneleft() == OK {
         nvim_edit_start_arrow_with_change_from_slot(0, c_int::from(end_change));
         if !end_change {
-            nvim_edit_append_char_to_redobuff(K_LEFT);
+            AppendCharToRedobuff(K_LEFT);
         }
         // If exit reversed string, position is fixed
         if nvim_get_revins_scol() != -1
@@ -196,7 +196,7 @@ unsafe fn ins_right_impl() {
     if nvim_gchar_cursor() != 0 || virtual_active(nvim_get_curwin()) {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
-            nvim_edit_append_char_to_redobuff(K_RIGHT);
+            AppendCharToRedobuff(K_RIGHT);
         }
         nvim_edit_set_w_set_curswant(1);
         if virtual_active(nvim_get_curwin()) {
@@ -245,7 +245,7 @@ unsafe fn ins_s_left_impl() {
     if nvim_curwin_get_cursor_lnum() > 1 || nvim_curwin_get_cursor_col() > 0 {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
-            nvim_edit_append_char_to_redobuff(K_S_LEFT);
+            AppendCharToRedobuff(K_S_LEFT);
         }
         nvim_bck_word(1, false, false);
         nvim_edit_set_w_set_curswant(1);
@@ -276,7 +276,7 @@ unsafe fn ins_s_right_impl() {
     {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
-            nvim_edit_append_char_to_redobuff(K_S_RIGHT);
+            AppendCharToRedobuff(K_S_RIGHT);
         }
         nvim_fwd_word(1, false, 0);
         nvim_edit_set_w_set_curswant(1);

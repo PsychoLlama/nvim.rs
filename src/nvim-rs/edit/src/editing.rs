@@ -37,8 +37,8 @@ extern "C" {
     fn nvim_emsg_noinstext();
 
     // -- redo_literal dependencies --
-    fn nvim_edit_AppendToRedobuff(s: *const c_char);
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendToRedobuff(s: *const c_char);
+    fn AppendCharToRedobuff(c: c_int);
 
     // -- do_insert_char_pre dependencies --
     fn nvim_edit_has_event_insertcharpre() -> c_int;
@@ -57,16 +57,16 @@ extern "C" {
     fn nvim_edit_set_mod_mask(val: c_int);
     fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
     fn nvim_edit_ins_str(p: *const c_char, len: usize);
-    fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
     fn stop_arrow() -> c_int;
 
     // -- get_literal dependencies --
     fn plain_vgetc() -> c_int;
     fn nvim_edit_merge_modifiers(c: c_int) -> c_int;
-    fn nvim_edit_add_to_showcmd(c: c_int);
+    fn add_to_showcmd(c: c_int) -> bool;
     fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
-    fn nvim_edit_vungetc(c: c_int);
+    fn vungetc(c: c_int);
     fn nvim_edit_inc_no_mapping();
     fn nvim_edit_dec_no_mapping();
     fn nvim_edit_get_got_int() -> c_int;
@@ -274,9 +274,9 @@ unsafe fn redo_literal_impl(c: c_int) {
         // Find NUL terminator position and ensure it
         let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         buf[len] = 0;
-        nvim_edit_AppendToRedobuff(buf.as_ptr().cast());
+        AppendToRedobuff(buf.as_ptr().cast());
     } else {
-        nvim_edit_append_char_to_redobuff(c);
+        AppendCharToRedobuff(c);
     }
 }
 
@@ -385,7 +385,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
             let saved = *p.add(len - 1);
             *p.add(len - 1) = 0;
             nvim_edit_ins_str(p.cast_const(), len - 1);
-            nvim_edit_AppendToRedobuffLit(p.cast_const(), -1);
+            AppendToRedobuffLit(p.cast_const(), -1);
             *p.add(len - 1) = saved;
             ctrlv = 0;
         }
@@ -457,7 +457,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
         }
         let state = nvim_get_State();
         if (state & MODE_CMDLINE) == 0 && nvim_edit_MB_BYTE2LEN_CHECK(nc) == 1 {
-            nvim_edit_add_to_showcmd(nc);
+            add_to_showcmd(nc);
         }
         if nc == c_int::from(b'x') || nc == c_int::from(b'X') {
             hex = true;
@@ -526,7 +526,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
 
     nvim_edit_dec_no_mapping();
     if nc != 0 {
-        nvim_edit_vungetc(nc);
+        vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.
         nvim_edit_set_mod_mask(0);
     }

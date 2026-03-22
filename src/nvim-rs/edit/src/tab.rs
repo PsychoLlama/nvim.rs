@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_set_can_si_back(val: bool);
 
     // Redo buffer via existing accessor
-    fn nvim_edit_AppendToRedobuff(str: *const c_char);
+    fn AppendToRedobuff(str: *const c_char);
 
     // stop_arrow
     fn stop_arrow() -> c_int;
@@ -169,7 +169,7 @@ unsafe fn ins_tab_impl() -> bool {
     nvim_set_did_si(false);
     nvim_set_can_si(false);
     nvim_set_can_si_back(false);
-    nvim_edit_AppendToRedobuff(c"\t".as_ptr());
+    AppendToRedobuff(c"\t".as_ptr());
 
     // Determine how many spaces to insert
     let temp: c_int = if sta && ind {

@@ -52,7 +52,7 @@ extern "C" {
     fn nvim_get_arrow_used() -> c_int;
 
     // Redo buffer / interrupt
-    fn nvim_edit_AppendToRedobuff(s: *const std::ffi::c_char);
+    fn AppendToRedobuff(s: *const std::ffi::c_char);
     fn line_breakcheck();
     fn start_redo_ins() -> c_int;
     fn stuffRedoReadbuff(s: *const u8);
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     if nvim_get_arrow_used() == 0 {
         // Don't append ESC for "r<CR>" and "grx".
         if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') {
-            nvim_edit_AppendToRedobuff(ESC_STR.as_ptr().cast());
+            AppendToRedobuff(ESC_STR.as_ptr().cast());
         }
 
         // Repeating insert may take a long time; check for interrupt.

@@ -71,8 +71,8 @@ extern "C" {
     fn nvim_get_State() -> c_int;
 
     // Redo buffer ops
-    fn nvim_edit_AppendToRedobuff(s: *const c_char);
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendToRedobuff(s: *const c_char);
+    fn AppendCharToRedobuff(c: c_int);
     fn ResetRedobuff();
 
     // stop_insert (stays C, pass end_insert_pos as opaque pointer)
@@ -544,7 +544,7 @@ const ESC_STR: &[u8; 2] = b"\x1b\0";
 unsafe fn start_arrow_common_impl(end_insert_pos: *mut c_void, end_change: c_int) {
     if nvim_get_arrow_used() == 0 && end_change != 0 {
         // something has been inserted
-        nvim_edit_AppendToRedobuff(ESC_STR.as_ptr().cast());
+        AppendToRedobuff(ESC_STR.as_ptr().cast());
         nvim_edit_stop_insert(end_insert_pos, 0, 0);
         nvim_set_arrow_used(1); // This means we stopped the current insert.
     }
@@ -588,8 +588,8 @@ pub unsafe extern "C" fn rs_start_arrow_with_change(
 ) {
     start_arrow_common_impl(end_insert_pos, end_change);
     if end_change == 0 {
-        nvim_edit_append_char_to_redobuff(CTRL_G);
-        nvim_edit_append_char_to_redobuff(c_int::from(b'U'));
+        AppendCharToRedobuff(CTRL_G);
+        AppendCharToRedobuff(c_int::from(b'U'));
     }
 }
 
@@ -620,7 +620,7 @@ unsafe fn stop_arrow_impl() -> c_int {
             nvim_edit_set_vr_lines_changed(1);
         }
         ResetRedobuff();
-        nvim_edit_AppendToRedobuff(c"1i".as_ptr()); // Pretend we start an insertion.
+        AppendToRedobuff(c"1i".as_ptr()); // Pretend we start an insertion.
         new_insert_skip_set(2);
     } else if ins_need_undo_get() && u_save_cursor() == OK {
         ins_need_undo_set(false);

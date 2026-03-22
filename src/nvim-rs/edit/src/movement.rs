@@ -57,9 +57,9 @@ extern "C" {
     // Character operations
     fn nvim_get_cursor_pos_ptr() -> *const c_char;
     fn get_cursor_line_ptr() -> *mut c_char;
-    fn nvim_edit_vim_isprintc(c: c_int) -> c_int;
-    fn nvim_edit_ptr2cells(ptr: *const c_char) -> c_int;
-    fn nvim_edit_utf_ptr2char(ptr: *const c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
+    fn ptr2cells(ptr: *const c_char) -> c_int;
+    fn utf_ptr2char(ptr: *const u8) -> c_int;
     fn utfc_ptr2len(p: *const u8) -> c_int;
     fn mb_adjust_cursor();
 
@@ -176,8 +176,8 @@ unsafe fn oneright_impl() -> c_int {
         // Adjust for multi-wide char (excluding TAB)
         let ptr = nvim_get_cursor_pos_ptr();
         let viscol = getviscol();
-        let advance = if *ptr != TAB && nvim_edit_vim_isprintc(nvim_edit_utf_ptr2char(ptr)) != 0 {
-            nvim_edit_ptr2cells(ptr)
+        let advance = if *ptr != TAB && vim_isprintc(utf_ptr2char(ptr.cast::<u8>())) {
+            ptr2cells(ptr)
         } else {
             1
         };
@@ -249,10 +249,7 @@ unsafe fn oneleft_impl() -> c_int {
         if nvim_edit_get_cursor_coladd() == 1 {
             // Adjust for multi-wide char (not a TAB)
             let ptr = nvim_get_cursor_pos_ptr();
-            if *ptr != TAB
-                && nvim_edit_vim_isprintc(nvim_edit_utf_ptr2char(ptr)) != 0
-                && nvim_edit_ptr2cells(ptr) > 1
-            {
+            if *ptr != TAB && vim_isprintc(utf_ptr2char(ptr.cast::<u8>())) && ptr2cells(ptr) > 1 {
                 nvim_edit_set_cursor_coladd(0);
             }
         }

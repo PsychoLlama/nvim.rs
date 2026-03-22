@@ -54,7 +54,7 @@ extern "C" {
     // -- textformat --
     fn nvim_edit_comp_textwidth(force_format: c_int) -> c_int;
     fn get_nolist_virtcol() -> c_int;
-    fn nvim_edit_char2cells(c: c_int) -> c_int;
+    fn char2cells(c: c_int) -> c_int;
     fn gchar_cursor() -> c_int;
     fn nvim_edit_internal_format(
         textwidth: c_int,
@@ -63,7 +63,7 @@ extern "C" {
         format_only: c_int,
         c: c_int,
     );
-    fn nvim_edit_fex_format(lnum: LinenrT, count: c_long, c: c_int) -> c_int;
+    fn fex_format(lnum: LinenrT, count: c_long, c: c_int) -> c_int;
 
     // -- format option checks --
     fn nvim_edit_has_format_option(c: c_int) -> c_int;
@@ -79,17 +79,17 @@ extern "C" {
     fn vgetc() -> c_int;
     fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
     fn nvim_edit_byte2cells(c: c_int) -> c_int;
-    fn nvim_edit_do_digraph(c: c_int) -> c_int;
+    fn do_digraph(c: c_int) -> c_int;
     fn nvim_test_disable_char_avail() -> c_int;
 
     // -- insertion --
     fn nvim_edit_ins_str(p: *const c_char, len: usize);
-    fn nvim_edit_ins_char(c: c_int);
+    fn ins_char(c: c_int);
     fn nvim_edit_ins_char_bytes(buf: *const c_char, charlen: usize);
 
     // -- redo --
-    fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
-    fn nvim_edit_append_char_to_redobuff(c: c_int);
+    fn AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn AppendCharToRedobuff(c: c_int);
     fn rs_redo_literal(c: c_int);
 
     // -- events --
@@ -102,7 +102,7 @@ extern "C" {
     fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
 
     // -- utf --
-    fn nvim_edit_utf_char2len(c: c_int) -> c_int;
+    fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
 }
 
@@ -169,14 +169,13 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         // Format with 'formatexpr' when it's set. Use internal formatting
         // when 'formatexpr' isn't set or it returns non-zero.
         let mut do_internal = true;
-        let virtcol =
-            get_nolist_virtcol() + nvim_edit_char2cells(if c != 0 { c } else { gchar_cursor() });
+        let virtcol = get_nolist_virtcol() + char2cells(if c != 0 { c } else { gchar_cursor() });
 
         if nvim_edit_has_b_p_fex() != 0
             && (flags & INSCHAR_NO_FEX == 0)
             && (force_format != 0 || virtcol > textwidth)
         {
-            do_internal = nvim_edit_fex_format(nvim_curwin_get_cursor_lnum(), 1, c) != 0;
+            do_internal = fex_format(nvim_curwin_get_cursor_lnum(), 1, c) != 0;
             // It may be required to save for undo again, e.g. when setline() was called.
             nvim_set_ins_need_undo(1);
         }
@@ -210,7 +209,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
     // Do the check for `InsertCharPre` before the call to `vpeekc()` because the
     // `InsertCharPre` autocommand could change the input buffer.
     if !is_special(c)
-        && nvim_edit_utf_char2len(c) == 1
+        && utf_char2len(c) == 1
         && nvim_edit_has_event_insertcharpre() == 0
         && nvim_test_disable_char_avail() == 0
         && vpeekc() != 0 // != NUL
@@ -264,8 +263,8 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             i += 1;
         }
 
-        nvim_edit_do_digraph(-1); // clear digraphs
-        nvim_edit_do_digraph(c_int::from(buf[i - 1])); // may be the start of a digraph
+        do_digraph(-1); // clear digraphs
+        do_digraph(c_int::from(buf[i - 1])); // may be the start of a digraph
         buf[i] = 0; // NUL-terminate
 
         nvim_edit_ins_str(buf.as_ptr().cast::<c_char>(), i);
@@ -277,22 +276,22 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             0
         };
         if buf[start] != 0 {
-            nvim_edit_AppendToRedobuffLit(buf.as_ptr().add(start).cast::<c_char>(), -1);
+            AppendToRedobuffLit(buf.as_ptr().add(start).cast::<c_char>(), -1);
         }
     } else {
-        let cc = nvim_edit_utf_char2len(c);
+        let cc = utf_char2len(c);
         if cc > 1 {
             let mut buf = [0u8; MB_MAXCHAR + 1];
             utf_char2bytes(c, buf.as_mut_ptr());
             buf[cc as usize] = 0;
             nvim_edit_ins_char_bytes(buf.as_ptr().cast::<c_char>(), cc as usize);
-            nvim_edit_append_char_to_redobuff(c);
+            AppendCharToRedobuff(c);
         } else {
-            nvim_edit_ins_char(c);
+            ins_char(c);
             if flags & INSCHAR_CTRLV != 0 {
                 rs_redo_literal(c);
             } else {
-                nvim_edit_append_char_to_redobuff(c);
+                AppendCharToRedobuff(c);
             }
         }
     }

@@ -184,7 +184,7 @@ extern "C" {
     fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
     fn do_c_expr_indent();
     fn ins_reg();
-    fn nvim_edit_ins_try_si(c: c_int);
+    fn ins_try_si(c: c_int);
     fn update_screen() -> c_int;
     fn ui_flush();
     fn nvim_edit_bt_quickfix_curbuf() -> c_int;
@@ -192,10 +192,10 @@ extern "C" {
     fn nvim_edit_get_curwin_p_rl() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
     fn nvim_edit_get_cpt_first_char() -> c_int;
-    fn nvim_edit_vim_iswordc_dispatch(c: c_int) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
     fn nvim_edit_ve_onemore() -> c_int;
     fn nvim_edit_redraw_later_valid();
-    fn nvim_edit_vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
     fn nvim_get_dont_sync_undo() -> c_int;
     fn nvim_set_dont_sync_undo(val: c_int);
 
@@ -521,7 +521,7 @@ unsafe fn trigger_autocomplete(s: *mut InsertState) {
 unsafe fn may_trigger_autocomplete(s: *mut InsertState) -> bool {
     if rs_ins_compl_has_autocomplete() != 0 && !char_avail() && nvim_curwin_get_cursor_col() > 0 {
         (*s).c = char_before_cursor();
-        if nvim_edit_vim_isprintc((*s).c) != 0 {
+        if vim_isprintc((*s).c) {
             trigger_autocomplete(s);
             return true;
         }
@@ -611,7 +611,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
         }
     }
 
-    nvim_edit_ins_try_si((*s).c);
+    ins_try_si((*s).c);
 
     if (*s).c == SPACE {
         (*s).inserted_space = 1;
@@ -625,7 +625,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
         }
     }
 
-    if nvim_edit_vim_iswordc_dispatch((*s).c) != 0
+    if vim_iswordc((*s).c)
         || (echeck_abbr(if (*s).c >= ABBR_OFF {
             (*s).c + ABBR_OFF
         } else {
@@ -643,8 +643,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
     rs_foldOpenCursor();
 
     // Trigger autocompletion
-    if rs_ins_compl_has_autocomplete() != 0 && !char_avail() && nvim_edit_vim_isprintc((*s).c) != 0
-    {
+    if rs_ins_compl_has_autocomplete() != 0 && !char_avail() && vim_isprintc((*s).c) {
         trigger_autocomplete(s);
     }
 
@@ -1117,14 +1116,14 @@ extern "C" {
     #[link_name = "xfree"]
     fn xfree_void(ptr: *mut c_void);
     // UTF helpers for normalchar path
-    fn nvim_edit_utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_ptr2char(p: *const u8) -> c_int;
     fn utfc_ptr2len(p: *const u8) -> c_int;
-    fn nvim_edit_AppendToRedobuffLit(s: *const c_char, len: c_int);
+    fn AppendToRedobuffLit(s: *const c_char, len: c_int);
 }
 
 /// Decode one UTF-8 character and advance `p` past it.
 unsafe fn utf_ptr2char_and_advance(p: *mut *mut c_char) -> c_int {
-    let c = nvim_edit_utf_ptr2char(*p);
+    let c = utf_ptr2char((*p).cast::<u8>());
     let len = utfc_ptr2len((*p).cast::<u8>());
     *p = (*p).add(len as usize);
     c
@@ -1132,7 +1131,7 @@ unsafe fn utf_ptr2char_and_advance(p: *mut *mut c_char) -> c_int {
 
 /// Call `AppendToRedobuffLit(str, -1)`.
 unsafe fn append_to_redo_lit(s: *mut c_char) {
-    nvim_edit_AppendToRedobuffLit(s, -1);
+    AppendToRedobuffLit(s, -1);
 }
 
 // ============================================================================
