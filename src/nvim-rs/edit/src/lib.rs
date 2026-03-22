@@ -21,6 +21,7 @@ pub mod mode;
 pub mod movement;
 pub mod replace;
 pub mod state;
+pub mod state_machine;
 pub mod tab;
 pub mod undo;
 

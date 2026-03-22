@@ -184,6 +184,10 @@ extern void ins_ctrl_v(void);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
 
+// Phase 7: insert_check and insert_execute Rust implementations
+extern int insert_check_rs(VimState *state);
+extern int insert_execute_rs(VimState *state, int key);
+
 // Rust functions exported with canonical C names (Phase 1+2 wrappers eliminated)
 // Phase 1: static wrappers
 extern void insert_special(int c, int allow_modmask, int ctrlv);
@@ -2211,364 +2215,143 @@ _Static_assert(OPENLINE_DO_COM == 0x02, "OPENLINE_DO_COM mismatch");
 _Static_assert(Ctrl_D == 4, "Ctrl_D mismatch");
 _Static_assert(kOptBoFlagCopy == 0x10, "kOptBoFlagCopy mismatch");
 
-#define TRIGGER_AUTOCOMPLETE() \
-  do { \
-    redraw_later(curwin, UPD_VALID); \
-    update_screen();  /* Show char deletion immediately */ \
-    ui_flush(); \
-    rs_ins_compl_enable_autocomplete(); \
-    insert_do_complete(s); \
-    break; \
-  } while (0)
+// =============================================================================
+// Phase 7: insert_check / insert_execute accessors (for state_machine.rs)
+// =============================================================================
 
-#define MAY_TRIGGER_AUTOCOMPLETE(c) \
-  do { \
-    if (rs_ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) { \
-      (c) = char_before_cursor(); \
-      if (vim_isprintc(c)) { \
-        TRIGGER_AUTOCOMPLETE(); \
-      } \
-    } \
-  } while (0)
+_Static_assert(kOptFdoFlagInsert == 0x100, "kOptFdoFlagInsert mismatch");
+
+/// Set Insstart_orig to Insstart (accessor for Rust state_machine).
+void nvim_set_Insstart_orig_from_Insstart(void)
+{
+  Insstart_orig = Insstart;
+}
+
+/// Check if curbuf->terminal is set (accessor for Rust state_machine).
+int nvim_edit_curbuf_is_terminal(void)
+{
+  return curbuf->terminal != NULL ? 1 : 0;
+}
+
+/// Call stuffcharReadbuff(K_NOP) (accessor for Rust state_machine).
+void nvim_stuffcharReadbuff_K_NOP(void)
+{
+  stuffcharReadbuff(K_NOP);
+}
+
+/// Get curwin->w_p_scb (accessor for Rust state_machine).
+int nvim_edit_curwin_p_scb(void)
+{
+  return curwin->w_p_scb ? 1 : 0;
+}
+
+/// Get curwin->w_p_crb (accessor for Rust state_machine).
+int nvim_edit_curwin_p_crb(void)
+{
+  return curwin->w_p_crb ? 1 : 0;
+}
+
+/// Get curwin->w_topline (accessor for Rust state_machine).
+linenr_T nvim_edit_get_curwin_topline(void)
+{
+  return curwin->w_topline;
+}
+
+/// Get curwin->w_topfill (accessor for Rust state_machine).
+int nvim_edit_get_curwin_topfill(void)
+{
+  return curwin->w_topfill;
+}
+
+/// Handle the scroll detection block from insert_check (composite accessor for Rust).
+/// Checks if window should be scrolled up one line. Returns new mincol if scroll
+/// was adjusted (side effect: may call set_topline()), or -1 if no change.
+int nvim_edit_insert_check_scroll(int mincol, linenr_T old_topline, int old_topfill,
+                                  int did_backspace, int count)
+{
+  if (!curbuf->b_mod_set
+      || !curwin->w_p_wrap
+      || curwin->w_p_sms
+      || did_backspace
+      || curwin->w_topline != old_topline
+      || curwin->w_topfill != old_topfill
+      || count > 1) {
+    return -1;
+  }
+
+  int new_mincol = curwin->w_wcol;
+  validate_cursor_col(curwin);
+
+  if (curwin->w_wcol < new_mincol - tabstop_at(get_nolist_virtcol(),
+                                                curbuf->b_p_ts,
+                                                curbuf->b_p_vts_array,
+                                                false)
+      && curwin->w_wrow == curwin->w_view_height - 1 - rs_get_scrolloff_value(curwin)
+      && (curwin->w_cursor.lnum != curwin->w_topline
+          || curwin->w_topfill > 0)) {
+    if (curwin->w_topfill > 0) {
+      curwin->w_topfill--;
+    } else if (hasFolding(curwin, curwin->w_topline, NULL, &old_topline)) {
+      set_topline(curwin, old_topline + 1);
+    } else {
+      set_topline(curwin, curwin->w_topline + 1);
+    }
+  }
+  return new_mincol;
+}
+
+/// Set did_cursorhold (accessor for Rust state_machine, to avoid duplicate).
+void nvim_edit_set_did_cursorhold_rs(int val)
+{
+  did_cursorhold = val != 0;
+}
+
+/// Call ins_redraw(false) (accessor for Rust state_machine).
+void ins_redraw_false(void)
+{
+  ins_redraw(false);
+}
+
+/// Call plain_vgetc() with no_mapping++/-- around it (for CTRL-\ handling in Rust).
+int nvim_edit_plain_vgetc_no_mapping(void)
+{
+  no_mapping++;
+  allow_keys++;
+  int c = plain_vgetc();
+  no_mapping--;
+  allow_keys--;
+  return c;
+}
+
+/// Call ins_ctrl_v() (wrapper for Rust state_machine to avoid name clash).
+void ins_ctrl_v_fn(void)
+{
+  ins_ctrl_v();
+}
+
+/// Init prompt for Rust state_machine (wraps static init_prompt).
+void init_prompt_rs(int cmdchar_todo)
+{
+  init_prompt(cmdchar_todo);
+}
+
+
+/// nvim_edit_iswhite_nl_or_nul: returns 1 if c is whitespace, newline, or NUL (accessor for Rust).
+int nvim_edit_iswhite_nl_or_nul(int c)
+{
+  return (ascii_iswhite(c) || c == NL || c == CAR || c == NUL) ? 1 : 0;
+}
+
 
 // insert_enter is now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
 // The forward declaration is near the top of this file.
 // insert_enter body deleted: now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
 
-static int insert_check(VimState *state)
-{
-  InsertState *s = (InsertState *)state;
+// insert_check: now implemented in Rust (state_machine.rs, export_name = "insert_check_rs").
 
-  if (!revins_legal) {
-    revins_scol = -1;     // reset on illegal motions
-  } else {
-    revins_legal = 0;
-  }
 
-  if (arrow_used) {       // don't repeat insert when arrow key used
-    s->count = 0;
-  }
+// insert_execute: now implemented in Rust (state_machine.rs, export_name = "insert_execute_rs").
 
-  if (update_Insstart_orig) {
-    Insstart_orig = Insstart;
-  }
-
-  if (curbuf->terminal && !stop_insert_mode) {
-    // Exit Insert mode and go to Terminal mode.
-    stop_insert_mode = true;
-    restart_edit = 'I';
-    stuffcharReadbuff(K_NOP);
-  }
-
-  if (stop_insert_mode && !rs_ins_compl_active()) {
-    // ":stopinsert" used
-    s->count = 0;
-    return 0;  // exit insert mode
-  }
-
-  // set curwin->w_curswant for next K_DOWN or K_UP
-  if (!arrow_used) {
-    curwin->w_set_curswant = true;
-  }
-
-  // If there is no typeahead may check for timestamps (e.g., for when a
-  // menu invoked a shell command).
-  if (stuff_empty()) {
-    did_check_timestamps = false;
-    if (need_check_timestamps) {
-      check_timestamps(false);
-    }
-  }
-
-  // When emsg() was called msg_scroll will have been set.
-  msg_scroll = false;
-
-  // Open fold at the cursor line, according to 'foldopen'.
-  if (fdo_flags & kOptFdoFlagInsert) {
-    rs_foldOpenCursor();
-  }
-
-  // Close folds where the cursor isn't, according to 'foldclose'
-  if (!char_avail()) {
-    rs_foldCheckClose();
-  }
-
-  if (bt_prompt(curbuf)) {
-    init_prompt(s->cmdchar_todo);
-    s->cmdchar_todo = NUL;
-  }
-
-  // If we inserted a character at the last position of the last line in the
-  // window, scroll the window one line up. This avoids an extra redraw.  This
-  // is detected when the cursor column is smaller after inserting something.
-  // Don't do this when the topline changed already, it has already been
-  // adjusted (by insertchar() calling open_line())).
-  // Also don't do this when 'smoothscroll' is set, as the window should then
-  // be scrolled by screen lines.
-  if (curbuf->b_mod_set
-      && curwin->w_p_wrap
-      && !curwin->w_p_sms
-      && !s->did_backspace
-      && curwin->w_topline == s->old_topline
-      && curwin->w_topfill == s->old_topfill
-      && s->count <= 1) {
-    s->mincol = curwin->w_wcol;
-    validate_cursor_col(curwin);
-
-    if (curwin->w_wcol < s->mincol - tabstop_at(get_nolist_virtcol(),
-                                                curbuf->b_p_ts,
-                                                curbuf->b_p_vts_array,
-                                                false)
-        && curwin->w_wrow == curwin->w_view_height - 1 - rs_get_scrolloff_value(curwin)
-        && (curwin->w_cursor.lnum != curwin->w_topline
-            || curwin->w_topfill > 0)) {
-      if (curwin->w_topfill > 0) {
-        curwin->w_topfill--;
-      } else if (hasFolding(curwin, curwin->w_topline, NULL, &s->old_topline)) {
-        set_topline(curwin, s->old_topline + 1);
-      } else {
-        set_topline(curwin, curwin->w_topline + 1);
-      }
-    }
-  }
-
-  // May need to adjust w_topline to show the cursor.
-  if (s->count <= 1) {
-    update_topline(curwin);
-  }
-
-  s->did_backspace = false;
-
-  if (s->count <= 1) {
-    validate_cursor(curwin);  // may set must_redraw
-  }
-
-  // Redraw the display when no characters are waiting.
-  // Also shows mode, ruler and positions cursor.
-  ins_redraw(true);
-
-  if (curwin->w_p_scb) {
-    do_check_scrollbind(true);
-  }
-
-  if (curwin->w_p_crb) {
-    do_check_cursorbind();
-  }
-
-  if (s->count <= 1) {
-    update_curswant();
-  }
-  s->old_topline = curwin->w_topline;
-  s->old_topfill = curwin->w_topfill;
-
-  if (s->c != K_EVENT) {
-    s->lastc = s->c;  // remember previous char for CTRL-D
-  }
-
-  // After using CTRL-G U the next cursor key will not break undo.
-  if (dont_sync_undo == kNone) {
-    dont_sync_undo = kTrue;
-  } else {
-    dont_sync_undo = kFalse;
-  }
-
-  // Trigger autocomplete when entering Insert mode, either directly
-  // or via change commands like 'ciw', 'cw', etc., before the first
-  // character is typed.
-  if (s->ins_just_started) {
-    s->ins_just_started = false;
-    if (rs_ins_compl_has_autocomplete() && !char_avail() && curwin->w_cursor.col > 0) {
-      s->c = char_before_cursor();
-      if (vim_isprintc(s->c)) {
-        rs_ins_compl_enable_autocomplete();
-        rs_ins_compl_init_get_longest();
-        insert_do_complete(s);
-        insert_handle_key_post(s);
-        return 1;
-      }
-    }
-  }
-
-  return 1;
-}
-
-static int insert_execute(VimState *state, int key)
-{
-  InsertState *const s = (InsertState *)state;
-  if (stop_insert_mode) {
-    // Insert mode ended, possibly from a callback.
-    if (key != K_IGNORE && key != K_NOP) {
-      vungetc(key);
-    }
-    s->count = 0;
-    s->nomove = true;
-    rs_ins_compl_prep(ESC);
-    return 0;
-  }
-
-  if (key == K_IGNORE || key == K_NOP) {
-    return -1;  // get another key
-  }
-  s->c = key;
-
-  // Don't want K_EVENT with cursorhold for the second key, e.g., after CTRL-V.
-  if (key != K_EVENT) {
-    did_cursorhold = true;
-  }
-
-  // Special handling of keys while the popup menu is visible or wanted
-  // and the cursor is still in the completed word.  Only when there is
-  // a match, skip this when no matches were found.
-  if (rs_ins_compl_active() && curwin->w_cursor.col >= rs_ins_compl_col()
-      && rs_ins_compl_has_shown_match() && rs_pum_wanted()) {
-    // BS: Delete one character from "compl_leader".
-    if ((s->c == K_BS || s->c == Ctrl_H)
-        && curwin->w_cursor.col > rs_ins_compl_col()
-        && (s->c = rs_ins_compl_bs()) == NUL) {
-      return 1;  // continue
-    }
-
-    // When no match was selected or it was edited.
-    if (!rs_ins_compl_used_match()) {
-      // CTRL-L: Add one character from the current match to
-      // "compl_leader".  Except when at the original match and
-      // there is nothing to add, CTRL-L works like CTRL-P then.
-      if (s->c == Ctrl_L
-          && (!rs_ctrl_x_mode_line_or_eval()
-              || rs_ins_compl_long_shown_match())) {
-        rs_ins_compl_addfrommatch();
-        return 1;  // continue
-      }
-
-      // A non-white character that fits in with the current
-      // completion: Add to "compl_leader".
-      if (rs_ins_compl_accept_char(s->c)) {
-        // Trigger InsertCharPre.
-        char *str = do_insert_char_pre(s->c);
-
-        if (str != NULL) {
-          for (char *p = str; *p != NUL; MB_PTR_ADV(p)) {
-            rs_ins_compl_addleader(utf_ptr2char(p));
-          }
-          xfree(str);
-        } else {
-          rs_ins_compl_addleader(s->c);
-        }
-        return 1;  // continue
-      }
-
-      // Pressing CTRL-Y selects the current match.  When
-      // compl_enter_selects is set the Enter key does the same.
-      if ((s->c == Ctrl_Y
-           || (rs_ins_compl_enter_selects()
-               && (s->c == CAR || s->c == K_KENTER || s->c == NL)))
-          && stop_arrow() == OK) {
-        rs_ins_compl_delete(0);
-        if (rs_ins_compl_preinsert_longest() && !rs_ins_compl_is_match_selected()) {
-          rs_ins_compl_insert(0, 1);
-          rs_ins_compl_init_get_longest();
-          return 1;  // continue
-        } else {
-          rs_ins_compl_insert(0, 0);
-        }
-      } else if (ascii_iswhite_nl_or_nul(s->c) && rs_ins_compl_preinsert_effect()) {
-        // Delete preinserted text when typing special chars
-        rs_ins_compl_delete(0);
-      }
-    }
-  }
-
-  // Prepare for or stop CTRL-X mode. This doesn't do completion, but it does
-  // fix up the text when finishing completion.
-  rs_ins_compl_init_get_longest();
-  if (rs_ins_compl_prep(s->c)) {
-    return 1;  // continue
-  }
-
-  // CTRL-\ CTRL-N goes to Normal mode,
-  // CTRL-\ CTRL-O is like CTRL-O but without moving the cursor
-  if (s->c == Ctrl_BSL) {
-    // may need to redraw when no more chars available now
-    ins_redraw(false);
-    no_mapping++;
-    allow_keys++;
-    s->c = plain_vgetc();
-    no_mapping--;
-    allow_keys--;
-    if (s->c != Ctrl_N && s->c != Ctrl_G && s->c != Ctrl_O) {
-      // it's something else
-      vungetc(s->c);
-      s->c = Ctrl_BSL;
-    } else {
-      if (s->c == Ctrl_O) {
-        ins_ctrl_o();
-        ins_at_eol = false;  // cursor keeps its column
-        s->nomove = true;
-      }
-      s->count = 0;
-      return 0;
-    }
-  }
-
-  if (s->c != K_EVENT) {
-    s->c = do_digraph(s->c);
-  }
-
-  if ((s->c == Ctrl_V || s->c == Ctrl_Q) && rs_ctrl_x_mode_cmdline()) {
-    insert_do_complete(s);
-    insert_handle_key_post(s);
-    return 1;
-  }
-
-  if (s->c == Ctrl_V || s->c == Ctrl_Q) {
-    ins_ctrl_v();
-    s->c = Ctrl_V;       // pretend CTRL-V is last typed character
-    return 1;  // continue
-  }
-
-  if (cindent_on() && rs_ctrl_x_mode_none()) {
-    s->line_is_white = inindent(0);
-    // A key name preceded by a bang means this key is not to be
-    // inserted.  Skip ahead to the re-indenting below.
-    if (in_cinkeys(s->c, '!', s->line_is_white)
-        && stop_arrow() == OK) {
-      do_c_expr_indent();
-      return 1;  // continue
-    }
-    // A key name preceded by a star means that indenting has to be
-    // done before inserting the key.
-    if (can_cindent && in_cinkeys(s->c, '*', s->line_is_white)
-        && stop_arrow() == OK) {
-      do_c_expr_indent();
-    }
-  }
-
-  if (curwin->w_p_rl) {
-    switch (s->c) {
-    case K_LEFT:
-      s->c = K_RIGHT; break;
-    case K_S_LEFT:
-      s->c = K_S_RIGHT; break;
-    case K_C_LEFT:
-      s->c = K_C_RIGHT; break;
-    case K_RIGHT:
-      s->c = K_LEFT; break;
-    case K_S_RIGHT:
-      s->c = K_S_LEFT; break;
-    case K_C_RIGHT:
-      s->c = K_C_LEFT; break;
-    }
-  }
-
-  // If 'keymodel' contains "startsel", may start selection.  If it
-  // does, a CTRL-O and c will be stuffed, we need to get these
-  // characters.
-  if (ins_start_select(s->c)) {
-    return 1;  // continue
-  }
-
-  return insert_handle_key(s);
-}
 
 // insert_handle_key, insert_do_complete, insert_do_cindent, and
 // insert_handle_key_post are now implemented in Rust (dispatch.rs).
@@ -2627,8 +2410,8 @@ bool edit(int cmdchar, bool startln, int count)
 
   InsertState s[1];
   memset(s, 0, sizeof(InsertState));
-  s->state.execute = insert_execute;
-  s->state.check = insert_check;
+  s->state.execute = insert_execute_rs;
+  s->state.check = insert_check_rs;
   s->cmdchar = cmdchar;
   s->startln = startln;
   s->count = count;
