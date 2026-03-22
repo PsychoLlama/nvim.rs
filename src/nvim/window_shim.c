@@ -2507,6 +2507,9 @@ void nvim_curwin_set_p_cul(bool val) { curwin->w_p_cul = val; }
 void nvim_curwin_set_p_cuc(bool val) { curwin->w_p_cuc = val; }
 void nvim_curwin_set_p_spell(bool val) { curwin->w_p_spell = val; }
 
+// General fold accessor (migrated from edit.c)
+int nvim_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp) { return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0; }
+
 // General curwin/Insstart accessors (migrated from edit.c)
 linenr_T nvim_curwin_get_topline(void) { return curwin->w_topline; }
 int nvim_curwin_get_topfill(void) { return curwin->w_topfill; }

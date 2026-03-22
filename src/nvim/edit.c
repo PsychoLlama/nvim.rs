@@ -591,42 +591,12 @@ const void *nvim_curwin_get_cursor_ptr(void)
 
 
 
-/// Get get_ve_flags(curwin) (accessor for Rust).
-int nvim_edit_get_ve_flags(void)
-{
-  return (int)get_ve_flags(curwin);
-}
 
 
 
 
 
 
-
-/// Get wp->w_cursor.lnum (accessor for Rust).
-linenr_T nvim_edit_win_get_cursor_lnum(win_T *wp)
-{
-  return wp->w_cursor.lnum;
-}
-
-/// Set wp->w_cursor.lnum (accessor for Rust).
-void nvim_edit_win_set_cursor_lnum(win_T *wp, linenr_T lnum)
-{
-  wp->w_cursor.lnum = lnum;
-}
-
-
-/// Get fdo_flags global (accessor for Rust).
-int nvim_edit_get_fdo_flags(void)
-{
-  return (int)fdo_flags;
-}
-
-/// Call hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) (accessor for Rust).
-int nvim_edit_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
-{
-  return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0;
-}
 
 /// Call update_topline(curwin) (accessor for Rust).
 
@@ -1331,11 +1301,6 @@ void nvim_edit_quickfix_ll(void)
 
 
 
-/// Get curbuf->b_u_synced (accessor for Rust).
-int nvim_edit_get_curbuf_b_u_synced(void)
-{
-  return curbuf->b_u_synced ? 1 : 0;
-}
 
 /// Get p_paste option (accessor for Rust).
 
@@ -2640,11 +2605,6 @@ int nvim_edit_p_cpo_has_replcnt(void)
   return vim_strchr(p_cpo, CPO_REPLCNT) != NULL ? 1 : 0;
 }
 
-/// Get get_ve_flags(curwin) (accessor for Rust).
-int nvim_edit_get_ve_flags_curwin(void)
-{
-  return (int)get_ve_flags(curwin);
-}
 
 /// Check if (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 (accessor for Rust).
 int nvim_edit_cmod_keepjumps(void)

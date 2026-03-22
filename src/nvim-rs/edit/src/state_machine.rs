@@ -11,7 +11,7 @@
 #![allow(clippy::cognitive_complexity)]
 #![allow(dead_code)]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_int, c_uint, c_void};
 
 use crate::dispatch::{InsertState, VimState};
 
@@ -35,7 +35,7 @@ const K_NOP: c_int = -25085;
 const K_EVENT: c_int = -26365;
 
 // kOptFdoFlagInsert (verified via _Static_assert in edit.c)
-const K_OPT_FDO_FLAG_INSERT: c_int = 0x100;
+const K_OPT_FDO_FLAG_INSERT: c_uint = 0x100;
 
 // TriState values (matches C kFalse=0, kTrue=1, kNone=-1)
 const K_FALSE: c_int = 0;
@@ -87,7 +87,7 @@ extern "C" {
     fn nvim_set_msg_scroll(val: c_int);
 
     // --- fold ---
-    fn nvim_edit_get_fdo_flags() -> c_int;
+    fn nvim_get_fdo_flags() -> c_uint;
     fn rs_foldOpenCursor();
     fn rs_foldCheckClose();
     fn nvim_char_avail() -> c_int;
@@ -243,7 +243,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     unsafe { nvim_set_msg_scroll(0) };
 
     // Open fold at cursor line per 'foldopen'
-    if unsafe { nvim_edit_get_fdo_flags() } & K_OPT_FDO_FLAG_INSERT != 0 {
+    if unsafe { nvim_get_fdo_flags() } & K_OPT_FDO_FLAG_INSERT != 0 {
         unsafe { rs_foldOpenCursor() };
     }
 

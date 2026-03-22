@@ -1021,3 +1021,5 @@ void nvim_cmdwin_set_filetype_vim(void)
 {
   set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("vim"), OPT_LOCAL);
 }
+
+bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }

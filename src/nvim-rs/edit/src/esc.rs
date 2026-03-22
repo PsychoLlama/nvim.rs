@@ -12,7 +12,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint};
 
 // ============================================================================
 // Constants
@@ -25,7 +25,7 @@ const MODE_NORMAL: c_int = 0x01;
 const REPLACE_FLAG: c_int = 0x100;
 
 /// `kOptVeFlagAll` (virtualedit=all) value
-const K_OPT_VE_FLAG_ALL: c_int = 0x01;
+const K_OPT_VE_FLAG_ALL: c_uint = 0x01;
 
 // ============================================================================
 // C accessors
@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_edit_p_cpo_has_replcnt() -> c_int;
 
     // `ve_flags`
-    fn nvim_edit_get_ve_flags_curwin() -> c_int;
+    fn nvim_get_ve_flags() -> c_uint;
 
     // `curswant`
     fn nvim_curwin_set_w_set_curswant(val: bool);
@@ -217,9 +217,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         && (nvim_get_restart_edit() == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
         && nvim_get_revins_on() == 0
     {
-        if nvim_curwin_get_cursor_coladd() > 0
-            || nvim_edit_get_ve_flags_curwin() == K_OPT_VE_FLAG_ALL
-        {
+        if nvim_curwin_get_cursor_coladd() > 0 || nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
             oneleft();
             if nvim_get_restart_edit() != 0 {
                 nvim_set_curwin_cursor_coladd(nvim_curwin_get_cursor_coladd() + 1);

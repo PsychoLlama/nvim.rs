@@ -9,7 +9,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::ptr;
 
 /// Column number type (matches `colnr_T` in Neovim).
@@ -40,8 +40,8 @@ extern "C" {
     fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // Window-parameterized cursor access
-    fn nvim_edit_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_edit_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
     fn nvim_win_get_buf_line_count(wp: WinHandle) -> LinenrT;
 
     // Current window handle
@@ -52,7 +52,7 @@ extern "C" {
     fn adjust_skipcol();
     fn getviscol() -> c_int;
     fn virtual_active(wp: WinHandle) -> bool;
-    fn nvim_edit_get_ve_flags() -> c_int;
+    fn nvim_get_ve_flags() -> c_uint;
 
     // Character operations
     fn nvim_get_cursor_pos_ptr() -> *const c_char;
@@ -70,7 +70,7 @@ extern "C" {
         firstp: *mut LinenrT,
         lastp: *mut LinenrT,
     ) -> c_int;
-    fn nvim_edit_hasFoldingWin(
+    fn nvim_hasFoldingWin(
         wp: WinHandle,
         lnum: LinenrT,
         firstp: *mut LinenrT,
@@ -82,7 +82,7 @@ extern "C" {
     // State / option globals
     fn nvim_get_State() -> c_int;
     fn nvim_get_p_sol() -> c_int;
-    fn nvim_edit_get_fdo_flags() -> c_int;
+    fn nvim_get_fdo_flags() -> c_uint;
 
     // Topline
     fn nvim_excmds_update_topline_curwin();
@@ -114,10 +114,10 @@ const FAIL: c_int = 0;
 const MODE_INSERT: c_int = 0x10;
 
 /// `kOptFdoFlagAll` from generated `option_vars`
-const K_OPT_FDO_FLAG_ALL: c_int = 0x01;
+const K_OPT_FDO_FLAG_ALL: c_uint = 0x01;
 
 /// `kOptVeFlagOnemore` from generated `option_vars`
-const K_OPT_VE_FLAG_ONEMORE: c_int = 0x08;
+const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x08;
 
 /// NUL byte
 const NUL: c_char = 0;
@@ -202,7 +202,7 @@ unsafe fn oneright_impl() -> c_int {
 
     // move "l" bytes right, but don't end up on the NUL, unless 'virtualedit'
     // contains "onemore".
-    if *ptr.add(l as usize) == NUL && (nvim_edit_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0 {
+    if *ptr.add(l as usize) == NUL && (nvim_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0 {
         return FAIL;
     }
     nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() + l as ColnrT);
@@ -289,7 +289,7 @@ pub unsafe extern "C" fn rs_oneleft() -> c_int {
 /// Takes care of closed folds. Skips over concealed lines when
 /// `skip_conceal` is true.
 unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool) {
-    let mut lnum = nvim_edit_win_get_cursor_lnum(wp);
+    let mut lnum = nvim_win_get_cursor_lnum(wp);
 
     if n >= lnum {
         lnum = 1;
@@ -320,7 +320,7 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
             // in a moment.
             if n > 0
                 || !((nvim_get_State() & MODE_INSERT) != 0
-                    || (nvim_edit_get_fdo_flags() & K_OPT_FDO_FLAG_ALL) != 0)
+                    || (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_ALL) != 0)
             {
                 let mut fold_first: LinenrT = 0;
                 if nvim_hasFolding(
@@ -341,7 +341,7 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
         lnum -= n;
     }
 
-    nvim_edit_win_set_cursor_lnum(wp, lnum);
+    nvim_win_set_cursor_lnum(wp, lnum);
 }
 
 /// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn rs_cursor_up(n: LinenrT, upd_topline: bool) -> c_int {
 /// Takes care of closed folds. Skips over concealed lines when
 /// `skip_conceal` is true.
 unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool) {
-    let mut lnum = nvim_edit_win_get_cursor_lnum(wp);
+    let mut lnum = nvim_win_get_cursor_lnum(wp);
     let line_count = nvim_win_get_buf_line_count(wp);
 
     if lnum + n as LinenrT >= line_count {
@@ -404,8 +404,7 @@ unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool
             }
             n -= 1;
             let mut last: LinenrT = 0;
-            if nvim_edit_hasFoldingWin(wp, lnum, ptr::null_mut(), std::ptr::addr_of_mut!(last)) != 0
-            {
+            if nvim_hasFoldingWin(wp, lnum, ptr::null_mut(), std::ptr::addr_of_mut!(last)) != 0 {
                 lnum = last + 1;
             } else {
                 lnum += 1;
@@ -424,7 +423,7 @@ unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool
         lnum += n as LinenrT;
     }
 
-    nvim_edit_win_set_cursor_lnum(wp, lnum);
+    nvim_win_set_cursor_lnum(wp, lnum);
 }
 
 /// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
@@ -446,7 +445,7 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     let mut lnum = nvim_curwin_get_cursor_lnum();
     // This fails if the cursor is already in the last (folded) line.
     let mut fold_last: LinenrT = 0;
-    if nvim_edit_hasFoldingWin(
+    if nvim_hasFoldingWin(
         curwin,
         lnum,
         ptr::null_mut(),
