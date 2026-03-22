@@ -59,7 +59,6 @@ extern "C" {
     fn nvim_eap_set_nextcmd_checked(eap: ExargHandle, arg: *mut c_char);
     fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
 
-
     // Message functions
     fn nvim_msg_ext_set_kind(kind: *const c_char);
     fn nvim_msg_sb_eol();

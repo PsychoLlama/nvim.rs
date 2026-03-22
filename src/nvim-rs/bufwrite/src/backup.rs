@@ -49,13 +49,13 @@ unsafe extern "C" {
 extern "C" {
     // FileInfo operations
     #[link_name = "os_fileinfo_hardlinks"]
-    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
+    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> u64;
     #[link_name = "os_fileinfo_link"]
-    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> bool;
     #[link_name = "os_fileinfo_id_equal"]
-    fn os_fileinfo_id_equal(fi1: FileInfoHandle, fi2: FileInfoHandle) -> c_int;
+    fn os_fileinfo_id_equal(fi1: FileInfoHandle, fi2: FileInfoHandle) -> bool;
     #[link_name = "os_fileinfo"]
-    fn os_fileinfo(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    fn os_fileinfo(fname: *const c_char, fi: FileInfoHandle) -> bool;
 
     // Path operations
     #[link_name = "path_tail"]
@@ -73,7 +73,7 @@ extern "C" {
     #[link_name = "get_file_in_dir"]
     fn get_file_in_dir(fname: *const c_char, dir: *const c_char) -> *mut c_char;
     #[link_name = "os_path_exists"]
-    fn os_path_exists(fname: *const c_char) -> c_int;
+    fn os_path_exists(fname: *const c_char) -> bool;
 
     // File system operations
     #[link_name = "os_open"]
@@ -181,8 +181,8 @@ unsafe fn determine_backup_copy(
         // - it's a symbolic link
         // - we don't have write permission in the directory
         if unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
-            || unsafe { os_fileinfo_link(fname, file_info) } == 0
-            || unsafe { os_fileinfo_id_equal(file_info, file_info_old) } == 0
+            || !unsafe { os_fileinfo_link(fname, file_info) }
+            || !unsafe { os_fileinfo_id_equal(file_info, file_info_old) }
         {
             *backup_copy = true;
         } else {
@@ -207,7 +207,8 @@ unsafe fn determine_backup_copy(
                 unsafe {
                     snprintf(tmp_ptr.add(dirlen), maxpathl - dirlen, c"%d".as_ptr(), i);
                 }
-                if unsafe { os_fileinfo_link(tmp_ptr, file_info) } == 0 {
+                let exists = unsafe { os_fileinfo_link(tmp_ptr, file_info) };
+                if !exists {
                     break;
                 }
                 i += 123;
@@ -223,7 +224,7 @@ unsafe fn determine_backup_copy(
                     let uid = unsafe { nvim_bw_fi_get_st_uid(file_info_old) };
                     let gid = unsafe { nvim_bw_fi_get_st_gid(file_info_old) };
                     unsafe { os_fchown(fd, uid, gid) };
-                    if unsafe { os_fileinfo(tmp_ptr, file_info) } == 0
+                    if !unsafe { os_fileinfo(tmp_ptr, file_info) }
                         || unsafe { nvim_bw_fi_get_st_uid(file_info) } != uid
                         || unsafe { nvim_bw_fi_get_st_gid(file_info) } != gid
                         || unsafe { nvim_bw_fi_get_st_mode(file_info) } != perm
@@ -242,12 +243,12 @@ unsafe fn determine_backup_copy(
     if (bkc & BKC_BREAKSYMLINK != 0) || (bkc & BKC_BREAKHARDLINK != 0) {
         let mut file_info_buf2 = vec![0u8; unsafe { nvim_bw_sizeof_FileInfo() }];
         let file_info2: FileInfoHandle = file_info_buf2.as_mut_ptr().cast();
-        let link_ok = unsafe { os_fileinfo_link(fname, file_info2) } != 0;
+        let link_ok = unsafe { os_fileinfo_link(fname, file_info2) };
 
         // Symlinks
         if (bkc & BKC_BREAKSYMLINK != 0)
             && link_ok
-            && unsafe { os_fileinfo_id_equal(file_info2, file_info_old) } == 0
+            && !unsafe { os_fileinfo_id_equal(file_info2, file_info_old) }
         {
             *backup_copy = false;
         }
@@ -255,7 +256,7 @@ unsafe fn determine_backup_copy(
         // Hardlinks
         if (bkc & BKC_BREAKHARDLINK != 0)
             && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1
-            && (!link_ok || unsafe { os_fileinfo_id_equal(file_info2, file_info_old) } != 0)
+            && (!link_ok || unsafe { os_fileinfo_id_equal(file_info2, file_info_old) })
         {
             *backup_copy = false;
         }
@@ -323,8 +324,8 @@ unsafe fn backup_by_copy(
         }
 
         // Check if backup file already exists
-        if unsafe { os_fileinfo(*backupp, file_info_new) } != 0 {
-            if unsafe { os_fileinfo_id_equal(file_info_new, file_info_old) } != 0 {
+        if unsafe { os_fileinfo(*backupp, file_info_new) } {
+            if unsafe { os_fileinfo_id_equal(file_info_new, file_info_old) } {
                 // Backup file is same as original file
                 unsafe { nvim_bw_XFREE_CLEAR(backupp) };
             } else if unsafe { p_bk == 0 } {
@@ -340,7 +341,7 @@ unsafe fn backup_by_copy(
                 let wp = unsafe { bkp.add(offset) };
                 unsafe { *wp = b'z' as c_char };
                 while unsafe { *wp } > b'a' as c_char
-                    && unsafe { os_fileinfo(*backupp, file_info_new) } != 0
+                    && unsafe { os_fileinfo(*backupp, file_info_new) }
                 {
                     unsafe { *wp -= 1 };
                 }
@@ -465,7 +466,7 @@ unsafe fn backup_by_rename(
         if !unsafe { *backupp }.is_null() {
             // If we are not going to keep the backup file, don't
             // delete an existing one, try to use another name.
-            if unsafe { p_bk == 0 } && unsafe { os_path_exists(*backupp) } != 0 {
+            if unsafe { p_bk == 0 } && unsafe { os_path_exists(*backupp) } {
                 let bkp = unsafe { *backupp };
                 let bkplen = unsafe { strlen(bkp) };
                 let extlen = unsafe { strlen(backup_ext) };
@@ -476,7 +477,7 @@ unsafe fn backup_by_rename(
                 };
                 let wp = unsafe { bkp.add(offset) };
                 unsafe { *wp = b'z' as c_char };
-                while unsafe { *wp } > b'a' as c_char && unsafe { os_path_exists(*backupp) } != 0 {
+                while unsafe { *wp } > b'a' as c_char && unsafe { os_path_exists(*backupp) } {
                     unsafe { *wp -= 1 };
                 }
                 if unsafe { *wp } == b'a' as c_char {

@@ -26,14 +26,14 @@ unsafe extern "C" {
 extern "C" {
     // OS functions
     #[link_name = "os_fileinfo"]
-    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
+    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> bool;
     fn nvim_bw_os_nodetype(fname: *const c_char) -> c_int;
     #[cfg(not(unix))]
     #[link_name = "os_getperm"]
     fn os_getperm(fname: *const c_char) -> c_int;
     #[cfg(not(unix))]
     #[link_name = "os_isdir"]
-    fn os_isdir(fname: *const c_char) -> c_int;
+    fn os_isdir(fname: *const c_char) -> bool;
     #[link_name = "os_file_is_writable"]
     fn os_file_is_writable(fname: *const c_char) -> c_int;
 
@@ -115,9 +115,7 @@ unsafe fn get_fileinfo_os_inner(
     err: *mut BwError,
 ) -> c_int {
     unsafe { *perm = -1 };
-    if unsafe { os_fileinfo(fname, file_info_old) } == 0 {
-        unsafe { *newfile = true };
-    } else {
+    if unsafe { os_fileinfo(fname, file_info_old) } {
         unsafe { *perm = nvim_bw_fi_get_st_mode(file_info_old) };
         if unsafe { nvim_bw_fi_is_regular(file_info_old) } == 0 {
             // not a file
@@ -141,6 +139,8 @@ unsafe fn get_fileinfo_os_inner(
                 *perm = -1;
             }
         }
+    } else {
+        unsafe { *newfile = true };
     }
     OK
 }
@@ -182,7 +182,7 @@ unsafe fn get_fileinfo_os_inner(
         unsafe { *perm = os_getperm(fname) };
         if unsafe { *perm } < 0 {
             unsafe { *newfile = true };
-        } else if unsafe { os_isdir(fname) } != 0 {
+        } else if unsafe { os_isdir(fname) } {
             let num = c"E502".as_ptr();
             let msg = unsafe { nvim_bw_gettext(c"is a directory".as_ptr()) };
             unsafe { *err = BwError::with_num(num, msg) };

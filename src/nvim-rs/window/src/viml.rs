@@ -122,8 +122,8 @@ extern "C" {
 
     // buffer accessors
     fn nvim_buf_get_fnum(buf: crate::BufHandle) -> c_int;
-    fn rs_bt_terminal(buf: crate::BufHandle) -> c_int;
-    fn rs_bt_quickfix(buf: crate::BufHandle) -> c_int;
+    fn rs_bt_terminal(buf: crate::BufHandle) -> bool;
+    fn rs_bt_quickfix(buf: crate::BufHandle) -> bool;
 
     // navigation/update helpers
     fn win_col_off(wp: WinHandle) -> c_int;
@@ -767,7 +767,7 @@ unsafe fn get_win_info_impl(wp: WinHandle, tpnr: i16, winnr: i16) -> DictPtr {
         let llist_ref = nvim_win_get_llist_ref(wp);
         add_nr!(
             "loclist",
-            (rs_bt_quickfix(buf) != 0 && !llist_ref.is_null()) as c_int
+            (rs_bt_quickfix(buf) && !llist_ref.is_null()) as c_int
         );
 
         tv_dict_add_dict(

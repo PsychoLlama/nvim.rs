@@ -46,7 +46,6 @@ extern "C" {
     fn nvim_docmd_last_tab_nr() -> c_int;
     fn nvim_docmd_qf_get_valid_size(eap: ExArgHandle) -> usize;
 
-
     // Error messages
     fn nvim_docmd_get_e_invrange() -> *mut c_char;
     fn nvim_docmd_get_e_no_errors() -> *mut c_char;
@@ -717,12 +716,13 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
         match addr_type {
             x if x == ADDR_LINES => {
                 let cmdidx = nvim_eap_get_cmdidx(eap);
-                let diff_extra =
-                    if cmdidx == crate::commands::CMD_DIFFGET || cmdidx == crate::commands::CMD_DIFFPUT {
-                        1
-                    } else {
-                        0
-                    };
+                let diff_extra = if cmdidx == crate::commands::CMD_DIFFGET
+                    || cmdidx == crate::commands::CMD_DIFFPUT
+                {
+                    1
+                } else {
+                    0
+                };
                 if line2 > nvim_docmd_get_curbuf_line_count() + diff_extra {
                     return nvim_docmd_get_e_invrange();
                 }

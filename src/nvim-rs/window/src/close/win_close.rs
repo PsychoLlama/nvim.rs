@@ -47,8 +47,8 @@ extern "C" {
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;
-    fn rs_bt_quickfix(buf: BufHandle) -> c_int;
-    fn rs_bt_help(buf: BufHandle) -> c_int;
+    fn rs_bt_quickfix(buf: BufHandle) -> bool;
+    fn rs_bt_help(buf: BufHandle) -> bool;
     fn rs_get_snapshot_curwin(idx: c_int) -> WinHandle;
     fn rs_last_status(morewin: c_int);
     fn rs_win_comp_pos() -> c_int;
@@ -487,7 +487,7 @@ pub extern "C" fn rs_win_close_structural(
             nvim_set_curwin(wp);
 
             // If cursor goes to preview or quickfix window, find another.
-            if nvim_win_get_pvw(wp) != 0 || rs_bt_quickfix(nvim_win_get_buffer(wp)) != 0 {
+            if nvim_win_get_pvw(wp) != 0 || rs_bt_quickfix(nvim_win_get_buffer(wp)) {
                 wp = find_non_preview_quickfix_win(wp);
                 nvim_set_curwin(wp);
             }
@@ -544,7 +544,7 @@ unsafe fn find_non_preview_quickfix_win(start: WinHandle) -> WinHandle {
         if nvim_win_get_pvw(wp) != 0 {
             continue;
         }
-        if rs_bt_quickfix(nvim_win_get_buffer(wp)) != 0 {
+        if rs_bt_quickfix(nvim_win_get_buffer(wp)) {
             continue;
         }
         if nvim_win_get_floating(wp) != 0

@@ -266,7 +266,6 @@ pub extern "C" fn rs_cmd_allows_cmdarg(argt: u32) -> c_int {
 // cmd_has_expr_args - Check if command expects expression arguments
 // =============================================================================
 
-
 /// Check if a command expects expression arguments.
 ///
 /// Commands that need VimL expression parsing: :execute, :echo, :echon,

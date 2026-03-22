@@ -197,7 +197,7 @@ extern "C" {
     #[link_name = "match_file_list"]
     fn match_file_list(list: *const c_char, sfname: *const c_char, ffname: *const c_char) -> c_int;
     #[link_name = "os_path_exists"]
-    fn os_path_exists(path: *const c_char) -> c_int;
+    fn os_path_exists(path: *const c_char) -> bool;
     #[link_name = "vim_rename"]
     fn vim_rename(from: *const c_char, to: *const c_char) -> c_int;
     #[link_name = "os_remove"]
@@ -286,13 +286,13 @@ extern "C" {
     fn nvim_bw_os_set_acl(fname: *const c_char, acl: AclHandle);
     fn nvim_bw_os_breakcheck();
     #[link_name = "os_fileinfo"]
-    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> c_int;
+    fn os_fileinfo(fname: *const c_char, info: FileInfoHandle) -> bool;
     #[link_name = "os_fileinfo_hardlinks"]
-    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> c_int;
+    fn os_fileinfo_hardlinks(fi: FileInfoHandle) -> u64;
     #[link_name = "os_fileinfo_link"]
-    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> c_int;
+    fn os_fileinfo_link(fname: *const c_char, fi: FileInfoHandle) -> bool;
     #[link_name = "os_fileinfo_id_equal"]
-    fn os_fileinfo_id_equal(a: FileInfoHandle, b: FileInfoHandle) -> c_int;
+    fn os_fileinfo_id_equal(a: FileInfoHandle, b: FileInfoHandle) -> bool;
     #[link_name = "os_fchown"]
     fn os_fchown(fd: c_int, uid: u32, gid: u32);
     fn nvim_bw_os_copy_xattr(from: *const c_char, to: *const c_char);
@@ -988,8 +988,8 @@ pub unsafe extern "C" fn rs_buf_write(
                         let mut fi_buf2 = vec![0u8; fi_size];
                         let file_info: FileInfoHandle = fi_buf2.as_mut_ptr().cast();
                         if (!newfile && unsafe { os_fileinfo_hardlinks(file_info_old) } > 1)
-                            || (unsafe { os_fileinfo_link(fname, file_info) } != 0
-                                && unsafe { os_fileinfo_id_equal(file_info, file_info_old) } == 0)
+                            || (unsafe { os_fileinfo_link(fname, file_info) }
+                                && !unsafe { os_fileinfo_id_equal(file_info, file_info_old) })
                         {
                             err = unsafe {
                                 rs_set_err(nvim_bw_gettext(
@@ -1272,7 +1272,7 @@ pub unsafe extern "C" fn rs_buf_write(
             if !backup.is_null() && !backup_copy {
                 let mut fi_buf3 = vec![0u8; fi_size];
                 let file_info: FileInfoHandle = fi_buf3.as_mut_ptr().cast();
-                if unsafe { os_fileinfo(wfname, file_info) } == 0
+                if !unsafe { os_fileinfo(wfname, file_info) }
                     || unsafe { nvim_bw_fi_get_st_uid(file_info) }
                         != unsafe { nvim_bw_fi_get_st_uid(file_info_old) }
                     || unsafe { nvim_bw_fi_get_st_gid(file_info) }
@@ -1578,7 +1578,7 @@ pub unsafe extern "C" fn rs_buf_write(
                     c"E205: Patchmode: can't save original file".as_ptr(),
                 ));
             }
-        } else if unsafe { os_path_exists(org) } == 0 {
+        } else if !unsafe { os_path_exists(org) } {
             unsafe {
                 vim_rename(backup, org);
                 nvim_bw_XFREE_CLEAR(&raw mut backup);
@@ -1677,10 +1677,10 @@ unsafe fn restore_backup_and_fail(
     let backup = *backup;
     if !backup.is_null() && std::ptr::eq(wfname, fname) {
         if backup_copy {
-            if unsafe { os_path_exists(fname) } == 0 {
+            if !unsafe { os_path_exists(fname) } {
                 unsafe { vim_rename(backup, fname) };
             }
-            if unsafe { os_path_exists(fname) } != 0 {
+            if unsafe { os_path_exists(fname) } {
                 unsafe { os_remove(backup) };
             }
         } else {
@@ -1688,7 +1688,7 @@ unsafe fn restore_backup_and_fail(
         }
     }
 
-    if !newfile && unsafe { os_path_exists(fname) } == 0 {
+    if !newfile && !unsafe { os_path_exists(fname) } {
         // Original file lost - end = 0 is handled by caller
     }
 }
@@ -1780,7 +1780,7 @@ unsafe fn report_write_error(
         let fi_size = unsafe { nvim_bw_sizeof_FileInfo() };
         let mut fi_buf = vec![0u8; fi_size];
         let fi: FileInfoHandle = fi_buf.as_mut_ptr().cast();
-        if unsafe { os_fileinfo(fname, fi) } != 0 {
+        if unsafe { os_fileinfo(fname, fi) } {
             unsafe {
                 nvim_bw_buf_store_file_info(buf, fi);
                 let mtime = nvim_bw_buf_get_mtime(buf);

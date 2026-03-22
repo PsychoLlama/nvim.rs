@@ -39,7 +39,7 @@ extern "C" {
     #[link_name = "reset_synblock"]
     fn rs_reset_synblock_c(wp: WinHandle);
     #[link_name = "rs_bt_quickfix"]
-    fn rs_bt_quickfix_c(buf: BufHandle) -> c_int;
+    fn rs_bt_quickfix_c(buf: BufHandle) -> bool;
     #[link_name = "rs_valid_tabpage"]
     fn rs_valid_tabpage_c(tp: TabpageHandle) -> c_int;
     #[link_name = "rs_winframe_remove"]
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn rs_win_close_buffer(win: WinHandle, action: c_int, abor
 
     // When a quickfix/location list window is closed and the buffer is
     // displayed in only one window, then unlist the buffer.
-    if rs_bt_quickfix_c(buf) != 0 && nvim_buf_get_nwindows(buf) == 1 {
+    if rs_bt_quickfix_c(buf) && nvim_buf_get_nwindows(buf) == 1 {
         nvim_buf_set_p_bl(buf, 0);
     }
 

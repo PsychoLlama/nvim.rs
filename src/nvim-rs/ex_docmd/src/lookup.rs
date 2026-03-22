@@ -499,7 +499,10 @@ pub unsafe extern "C" fn rs_find_ex_command(eap: ExArgHandle, full: *mut c_int) 
         nvim_eap_set_cmdidx(eap, cidx);
 
         // Look for a user defined command as a last resort.
-        if nvim_eap_get_cmdidx(eap) == crate::commands::CMD_SIZE && (*cmd as u8) >= b'A' && (*cmd as u8) <= b'Z' {
+        if nvim_eap_get_cmdidx(eap) == crate::commands::CMD_SIZE
+            && (*cmd as u8) >= b'A'
+            && (*cmd as u8) <= b'Z'
+        {
             // User defined commands may contain digits.
             while (*p as u8).is_ascii_alphanumeric() {
                 p = p.add(1);

@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     /// Check if buffer is a help buffer.
-    fn rs_bt_help(buf: BufHandle) -> c_int;
+    fn rs_bt_help(buf: BufHandle) -> bool;
 
     /// Check if window is an aucmd_win.
     #[link_name = "is_aucmd_win"]
@@ -163,7 +163,7 @@ fn only_one_window_impl() -> bool {
 
         let curwin = nvim_get_curwin();
         let curbuf = nvim_get_curbuf();
-        let curbuf_is_help = rs_bt_help(curbuf) != 0;
+        let curbuf_is_help = rs_bt_help(curbuf);
 
         let curtab = nvim_get_curtab();
         let mut count = 0;
@@ -172,7 +172,7 @@ fn only_one_window_impl() -> bool {
         while !wp.is_null() {
             let buf = nvim_win_get_buffer(wp);
             if !buf.is_null() {
-                let is_help = rs_bt_help(buf) != 0;
+                let is_help = rs_bt_help(buf);
                 let is_floating = nvim_win_get_floating(wp) != 0;
                 let is_pvw = nvim_win_get_pvw(wp) != 0;
                 let is_curwin = wp == curwin;
