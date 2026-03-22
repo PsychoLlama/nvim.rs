@@ -204,11 +204,11 @@ enum {
 };
 
 /// The current cmdline_info.  It is initialized in getcmdline() and after that
-/// used by other functions.  When invoking getcmdline() recursively it needs
-/// to be saved with save_cmdline() and restored with restore_cmdline().
+/// used by other functions.  When invoking getcmdline() recursively, the old
+/// value is copied to a local variable and ccline.prev_ccline is set.
 static CmdlineInfo ccline;
 
-static int new_cmdpos;          // position set by set_cmdline_pos()
+static int new_cmdpos;          // position set by setcmdpos()/setcmdline() VimL functions
 
 /// currently displayed block of context
 static Array cmdline_block = ARRAY_DICT_INIT;
@@ -522,7 +522,10 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
     assert(clear_ccline);
     // Being called recursively.  Since ccline is global, we need to save
     // the current buffer and restore it when returning.
-    save_cmdline(&save_ccline);
+    save_ccline = ccline;
+    CLEAR_FIELD(ccline);
+    ccline.prev_ccline = &save_ccline;
+    ccline.cmdbuff = NULL;  // signal that ccline is not in use
     did_save_ccline = true;
   } else if (clear_ccline) {
     CLEAR_FIELD(ccline);
@@ -810,7 +813,7 @@ theend:
   cmdline_level--;
 
   if (did_save_ccline) {
-    restore_cmdline(&save_ccline);
+    ccline = save_ccline;
   } else {
     ccline.cmdbuff = NULL;
   }
@@ -1322,7 +1325,10 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   bool did_save_ccline = false;
   if (ccline.cmdbuff != NULL) {
     // Save the values of the current cmdline and restore them below.
-    save_cmdline(&save_ccline);
+    save_ccline = ccline;
+    CLEAR_FIELD(ccline);
+    ccline.prev_ccline = &save_ccline;
+    ccline.cmdbuff = NULL;  // signal that ccline is not in use
     did_save_ccline = true;
   } else {
     CLEAR_FIELD(ccline);
@@ -1346,7 +1352,7 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
   ccline.redraw_state = kCmdRedrawNone;
 
   if (did_save_ccline) {
-    restore_cmdline(&save_ccline);
+    ccline = save_ccline;
   }
   msg_silent = msg_silent_saved;
   cmd_silent = cmd_silent_saved;
@@ -1918,23 +1924,6 @@ void unputcmdline(void)
 
 // put_on_cmdline() is implemented in Rust (cmdline crate, edit.rs).
 
-/// Save ccline, because obtaining the "=" register may execute "normal :cmd"
-/// and overwrite it.
-static void save_cmdline(CmdlineInfo *ccp)
-{
-  *ccp = ccline;
-  CLEAR_FIELD(ccline);
-  ccline.prev_ccline = ccp;
-  ccline.cmdbuff = NULL;  // signal that ccline is not in use
-}
-
-/// Restore ccline after it has been saved with save_cmdline().
-static void restore_cmdline(CmdlineInfo *ccp)
-  FUNC_ATTR_NONNULL_ALL
-{
-  ccline = *ccp;
-}
-
 // cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
 // redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
 
@@ -1951,10 +1940,8 @@ unsigned get_cmdline_last_prompt_id(void)
   return last_prompt_id;
 }
 
-/// Get pointer to the command line info to use. save_cmdline() may clear
-/// ccline and put the previous value in ccline.prev_ccline.
-/// Get pointer to the command line info to use. save_cmdline() may clear
-/// ccline and put the previous value in ccline.prev_ccline.
+/// Get pointer to the command line info to use.
+/// When ccline is saved recursively, the previous value is in ccline.prev_ccline.
 static CmdlineInfo *get_ccline_ptr(void)
 {
   if ((State & MODE_CMDLINE) == 0) {
@@ -1972,7 +1959,7 @@ static CmdlineInfo *get_ccline_ptr(void)
 /// Returns ':' or '/' or '?' or '@' or '>' or '-'
 /// Only works when the command line is being edited.
 /// Returns NUL when something is wrong.
-static int get_cmdline_type(void)
+int nvim_get_cmdline_type(void)
 {
   CmdlineInfo *p = get_ccline_ptr();
   if (p == NULL) {
@@ -2038,35 +2025,6 @@ void f_getcmdcompltype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
 /// "setcmdline()" implementation: set the command line to str at position pos.
 /// @return  1 when failed, 0 when OK.
-static int set_cmdline_str(const char *str, int pos)
-{
-  CmdlineInfo *p = get_ccline_ptr();
-  if (p == NULL) {
-    return 1;
-  }
-  int len = (int)strlen(str);
-  realloc_cmdbuff(len + 1);
-  p->cmdlen = len;
-  STRCPY(p->cmdbuff, str);
-  p->cmdpos = rs_clamp_cmdpos(pos, p->cmdlen);
-  new_cmdpos = p->cmdpos;
-  redrawcmd();
-  do_autocmd_cmdlinechanged(get_cmdline_type());
-  return 0;
-}
-
-/// "setcmdpos()" implementation: set the command line byte position to pos.
-/// @return  1 when failed, 0 when OK.
-static int set_cmdline_pos(int pos)
-{
-  CmdlineInfo *p = get_ccline_ptr();
-  if (p == NULL) {
-    return 1;
-  }
-  new_cmdpos = MAX(0, pos);
-  return 0;
-}
-
 /// "setcmdline()" function
 void f_setcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -2090,7 +2048,21 @@ void f_setcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   // Use tv_get_string() to handle a NULL string like an empty string.
-  rettv->vval.v_number = set_cmdline_str(tv_get_string(&argvars[0]), pos);
+  const char *str = tv_get_string(&argvars[0]);
+  CmdlineInfo *p = get_ccline_ptr();
+  if (p == NULL) {
+    rettv->vval.v_number = 1;
+  } else {
+    int len = (int)strlen(str);
+    realloc_cmdbuff(len + 1);
+    p->cmdlen = len;
+    STRCPY(p->cmdbuff, str);
+    p->cmdpos = rs_clamp_cmdpos(pos, p->cmdlen);
+    new_cmdpos = p->cmdpos;
+    redrawcmd();
+    do_autocmd_cmdlinechanged(nvim_get_cmdline_type());
+    rettv->vval.v_number = 0;
+  }
 }
 
 /// "setcmdpos()" function
@@ -2099,7 +2071,13 @@ void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   const int pos = (int)tv_get_number(&argvars[0]) - 1;
 
   if (pos >= 0) {
-    rettv->vval.v_number = set_cmdline_pos(pos);
+    CmdlineInfo *p = get_ccline_ptr();
+    if (p == NULL) {
+      rettv->vval.v_number = 1;
+    } else {
+      new_cmdpos = MAX(0, pos);
+      rettv->vval.v_number = 0;
+    }
   }
 }
 
@@ -2186,7 +2164,7 @@ int nvim_open_cmdwin(void)
   got_int = false;
 
   // Set "cmdwin_..." variables before any autocommands may mess things up.
-  cmdwin_type = get_cmdline_type();
+  cmdwin_type = nvim_get_cmdline_type();
   cmdwin_level = ccline.level;
   cmdwin_win = curwin;
   cmdwin_old_curwin = old_curwin;
@@ -2604,7 +2582,7 @@ void f_wildtrigger(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     return;
   }
 
-  int cmd_type = get_cmdline_type();
+  int cmd_type = nvim_get_cmdline_type();
 
   if (cmd_type == ':' || cmd_type == '/' || cmd_type == '?') {
     // Add K_WILD as a single special key
@@ -2641,11 +2619,6 @@ int nvim_get_cmdwin_type(void)
   return cmdwin_type;
 }
 
-// C accessor wrapper for static get_cmdline_type()
-int nvim_get_cmdline_type(void)
-{
-  return get_cmdline_type();
-}
 
 // C accessor for textlock global
 int nvim_get_textlock(void)
