@@ -84,7 +84,7 @@ extern "C" {
     fn nvim_VIsual_active() -> c_int;
 
     // `gchar_cursor`
-    fn nvim_edit_gchar_cursor() -> c_int;
+    fn gchar_cursor() -> c_int;
 
     // `buf_meta_total` curbuf inline
     fn nvim_edit_curbuf_meta_total_inline() -> c_int;
@@ -100,7 +100,7 @@ extern "C" {
     fn nvim_showmode();
     fn nvim_edit_unshowmode_false();
     fn nvim_edit_get_p_smd() -> c_int;
-    fn nvim_edit_skip_showmode() -> c_int;
+    fn skip_showmode() -> bool;
     fn nvim_get_got_int() -> c_int;
     fn ui_cursor_shape();
 
@@ -215,8 +215,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     // The cursor should end up on the last inserted character.
     if nomove == 0
         && (nvim_curwin_get_cursor_col() != 0 || nvim_curwin_get_cursor_coladd() > 0)
-        && (nvim_edit_get_restart_edit() == 0
-            || (nvim_edit_gchar_cursor() == 0 && nvim_VIsual_active() == 0))
+        && (nvim_edit_get_restart_edit() == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
         && nvim_get_revins_on() == 0
     {
         if nvim_curwin_get_cursor_coladd() > 0
@@ -239,7 +238,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text.
-    if nvim_edit_gchar_cursor() == c_int::from(b'\t') || nvim_edit_curbuf_meta_total_inline() > 0 {
+    if gchar_cursor() == c_int::from(b'\t') || nvim_edit_curbuf_meta_total_inline() > 0 {
         nvim_edit_curwin_clear_wrow_wcol_virtcol();
     }
 
@@ -251,7 +250,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     if nvim_get_reg_recording() != 0 || nvim_edit_get_restart_edit() != 0 {
         nvim_showmode();
     } else if nvim_edit_get_p_smd() != 0
-        && (nvim_get_got_int() != 0 || nvim_edit_skip_showmode() == 0)
+        && (nvim_get_got_int() != 0 || !skip_showmode())
         && nvim_edit_get_p_ch_zero_no_ui_messages() == 0
     {
         nvim_edit_unshowmode_false();

@@ -62,7 +62,7 @@ extern "C" {
     fn stop_arrow() -> c_int;
 
     // -- get_literal dependencies --
-    fn nvim_edit_plain_vgetc() -> c_int;
+    fn plain_vgetc() -> c_int;
     fn nvim_edit_merge_modifiers(c: c_int) -> c_int;
     fn nvim_edit_add_to_showcmd(c: c_int);
     fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
@@ -445,7 +445,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     let mut cc: c_int = 0;
     let mut i: c_int = 0;
     loop {
-        nc = nvim_edit_plain_vgetc();
+        nc = plain_vgetc();
         if no_simplify == 0 {
             nc = nvim_edit_merge_modifiers(nc);
         }

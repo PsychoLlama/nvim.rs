@@ -150,7 +150,7 @@ extern "C" {
     fn nvim_edit_set_got_int(val: c_int);
 
     // -- Phase 4 dispatch accessors --
-    fn nvim_edit_pum_visible() -> c_int;
+    fn pum_visible() -> bool;
     fn nvim_edit_get_pum_want_active() -> c_int;
     fn nvim_edit_set_pum_want_active(val: c_int);
     fn nvim_edit_get_pum_want_finish() -> c_int;
@@ -169,21 +169,21 @@ extern "C" {
     fn nvim_edit_do_cmdline_getcmdkeycmd();
     fn nvim_edit_map_execute_lua();
     fn nvim_edit_paste_repeat();
-    fn nvim_edit_state_handle_k_event();
+    fn state_handle_k_event();
     fn nvim_edit_curwin_is_qf_not_ll() -> c_int;
     fn nvim_edit_quickfix_cc();
     fn nvim_edit_quickfix_ll();
-    fn nvim_edit_invoke_prompt_interrupt() -> c_int;
-    fn nvim_edit_prompt_invoke_callback();
+    fn invoke_prompt_interrupt() -> bool;
+    fn prompt_invoke_callback();
     fn nvim_edit_get_curbuf_b_u_synced() -> c_int;
     fn nvim_edit_get_p_paste() -> c_int;
-    fn nvim_edit_char_before_cursor() -> c_int;
-    fn nvim_edit_char_avail() -> c_int;
+    fn char_before_cursor() -> c_int;
+    fn char_avail() -> bool;
     fn nvim_edit_inindent() -> c_int;
     fn nvim_edit_auto_format(force_format: c_int);
     fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
     fn do_c_expr_indent();
-    fn nvim_edit_ins_reg();
+    fn ins_reg();
     fn nvim_edit_ins_try_si(c: c_int);
     fn update_screen() -> c_int;
     fn ui_flush();
@@ -487,7 +487,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
 /// Handle the `check_pum` label logic.
 unsafe fn do_check_pum(s: *mut InsertState) {
     if nvim_edit_get_pum_want_active() != 0 {
-        if nvim_edit_pum_visible() != 0 {
+        if pum_visible() {
             nvim_edit_clear_edit_submode_extra();
             rs_insert_do_complete(s);
             if nvim_edit_get_pum_want_finish() != 0 {
@@ -519,11 +519,8 @@ unsafe fn trigger_autocomplete(s: *mut InsertState) {
 /// May trigger autocomplete (equivalent to `MAY_TRIGGER_AUTOCOMPLETE` macro).
 /// Updates `s->c` to the char before cursor, returns true if triggered.
 unsafe fn may_trigger_autocomplete(s: *mut InsertState) -> bool {
-    if rs_ins_compl_has_autocomplete() != 0
-        && nvim_edit_char_avail() == 0
-        && nvim_curwin_get_cursor_col() > 0
-    {
-        (*s).c = nvim_edit_char_before_cursor();
+    if rs_ins_compl_has_autocomplete() != 0 && !char_avail() && nvim_curwin_get_cursor_col() > 0 {
+        (*s).c = char_before_cursor();
         if nvim_edit_vim_isprintc((*s).c) != 0 {
             trigger_autocomplete(s);
             return true;
@@ -646,9 +643,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
     rs_foldOpenCursor();
 
     // Trigger autocompletion
-    if rs_ins_compl_has_autocomplete() != 0
-        && nvim_edit_char_avail() == 0
-        && nvim_edit_vim_isprintc((*s).c) != 0
+    if rs_ins_compl_has_autocomplete() != 0 && !char_avail() && nvim_edit_vim_isprintc((*s).c) != 0
     {
         trigger_autocomplete(s);
     }
@@ -676,7 +671,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 (*s).nomove = true;
                 return SwitchAction::Exit(0);
             }
-            if nvim_edit_bt_prompt_curbuf() != 0 && nvim_edit_invoke_prompt_interrupt() != 0 {
+            if nvim_edit_bt_prompt_curbuf() != 0 && invoke_prompt_interrupt() {
                 if nvim_edit_bt_prompt_curbuf() == 0 {
                     return SwitchAction::Exit(0);
                 }
@@ -734,7 +729,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 rs_insert_do_complete(s);
                 return SwitchAction::Continue;
             }
-            nvim_edit_ins_reg();
+            ins_reg();
             nvim_edit_auto_format(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
@@ -862,7 +857,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_EVENT => {
-            nvim_edit_state_handle_k_event();
+            state_handle_k_event();
             // If CTRL-G U was used, apply it to the next typed key.
             if nvim_get_dont_sync_undo() == K_TRUE {
                 nvim_set_dont_sync_undo(K_NONE);
@@ -920,7 +915,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_UP => {
-            if nvim_edit_pum_visible() != 0 {
+            if pum_visible() {
                 rs_insert_do_complete(s);
             } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
                 ins_pageup();
@@ -931,7 +926,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_S_UP | K_PAGEUP | K_KPAGEUP => {
-            if nvim_edit_pum_visible() != 0 {
+            if pum_visible() {
                 rs_insert_do_complete(s);
             } else {
                 ins_pageup();
@@ -940,7 +935,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_DOWN => {
-            if nvim_edit_pum_visible() != 0 {
+            if pum_visible() {
                 rs_insert_do_complete(s);
             } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
                 ins_pagedown();
@@ -951,7 +946,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_S_DOWN | K_PAGEDOWN | K_KPAGEDOWN => {
-            if nvim_edit_pum_visible() != 0 {
+            if pum_visible() {
                 rs_insert_do_complete(s);
             } else {
                 ins_pagedown();
@@ -1081,7 +1076,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         return SwitchAction::Exit(0);
     }
     if (nvim_edit_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_edit_bt_prompt_curbuf() != 0 {
-        nvim_edit_prompt_invoke_callback();
+        prompt_invoke_callback();
         if nvim_edit_bt_prompt_curbuf() == 0 {
             return SwitchAction::Exit(0);
         }

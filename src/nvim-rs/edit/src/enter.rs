@@ -122,20 +122,20 @@ extern "C" {
     fn highlight_changed();
 
     // Redo
-    fn nvim_edit_ResetRedobuff();
+    fn ResetRedobuff();
     fn nvim_edit_AppendNumberToRedobuff(n: c_int);
     fn nvim_edit_append_char_to_redobuff(c: c_int);
 
     // Mode state machinery
     fn nvim_may_trigger_modechanged();
     fn nvim_setmouse();
-    fn nvim_edit_gchar_cursor() -> c_int;
+    fn gchar_cursor() -> c_int;
 
     // Utilities
     fn nvim_edit_msg_check_for_delay();
     fn showmode() -> c_int;
     fn nvim_edit_change_warning(col: c_int);
-    fn nvim_edit_pum_check_clear();
+    fn pum_check_clear();
     fn nvim_edit_state_enter(state: *mut c_void);
     fn nvim_edit_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_edit_get_inserted_size() -> c_int;
@@ -221,7 +221,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Set up redo buffer
     if cmdchar != 0 && nvim_edit_get_restart_edit() == 0 {
-        nvim_edit_ResetRedobuff();
+        ResetRedobuff();
         nvim_edit_AppendNumberToRedobuff((*s).count);
         if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {
             // "gR" or "gr" command
@@ -337,7 +337,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // still puts the cursor back after the inserted text.
     nvim_edit_update_o_lnum_if_at_eol();
 
-    nvim_edit_pum_check_clear();
+    pum_check_clear();
 
     rs_foldUpdateAfterInsert();
 

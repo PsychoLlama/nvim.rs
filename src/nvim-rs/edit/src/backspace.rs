@@ -76,7 +76,7 @@ extern "C" {
     fn inindent(extra: c_int) -> c_int;
     fn nvim_set_can_cindent(val: c_int);
     fn nvim_curbuf_get_b_p_ai() -> c_int;
-    fn nvim_edit_cindent_on() -> c_int;
+    fn cindent_on() -> bool;
     fn fix_indent();
     fn beginline(flags: c_int);
 
@@ -311,10 +311,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         let mut mincol: ColnrT = 0;
 
         // Keep indent for BACKSPACE_LINE
-        if mode == BACKSPACE_LINE
-            && (nvim_curbuf_get_b_p_ai() != 0 || nvim_edit_cindent_on() != 0)
-            && !revins_on
-        {
+        if mode == BACKSPACE_LINE && (nvim_curbuf_get_b_p_ai() != 0 || cindent_on()) && !revins_on {
             let save_col = nvim_curwin_get_cursor_col();
             beginline(BL_WHITE);
             if nvim_curwin_get_cursor_col() < save_col {

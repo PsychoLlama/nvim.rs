@@ -36,10 +36,10 @@ const K_OPT_BO_FLAG_REGISTER: c_int = 0x40;
 
 extern "C" {
     fn nvim_redrawing() -> c_int;
-    fn nvim_edit_char_avail() -> c_int;
+    fn char_avail() -> bool;
     fn ins_redraw_false();
     fn nvim_edit_putchar(c: c_int, highlight: c_int);
-    fn nvim_edit_edit_unputchar();
+    fn edit_unputchar();
     fn nvim_edit_set_pc_status_unset();
     fn add_to_showcmd_c(c: c_int);
     fn rs_clear_showcmd();
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
 
     // If we are going to wait for a character, show a `"`.
     nvim_edit_set_pc_status_unset();
-    if nvim_redrawing() != 0 && nvim_edit_char_avail() == 0 {
+    if nvim_redrawing() != 0 && !char_avail() {
         ins_redraw_false();
         nvim_edit_putchar(c_int::from(b'"'), 1);
         add_to_showcmd_c(CTRL_R);
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
 
     // If the inserted register is empty, remove the `"`.
     if need_redraw || nvim_stuff_empty() {
-        nvim_edit_edit_unputchar();
+        edit_unputchar();
     }
     rs_clear_showcmd();
 

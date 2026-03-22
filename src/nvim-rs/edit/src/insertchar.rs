@@ -55,7 +55,7 @@ extern "C" {
     fn nvim_edit_comp_textwidth(force_format: c_int) -> c_int;
     fn get_nolist_virtcol() -> c_int;
     fn nvim_edit_char2cells(c: c_int) -> c_int;
-    fn nvim_edit_gchar_cursor() -> c_int;
+    fn gchar_cursor() -> c_int;
     fn nvim_edit_internal_format(
         textwidth: c_int,
         second_indent: c_int,
@@ -75,8 +75,8 @@ extern "C" {
     fn nvim_edit_handle_end_comment_pending(c: c_int);
 
     // -- input / char --
-    fn nvim_edit_vpeekc() -> c_int;
-    fn nvim_edit_vgetc() -> c_int;
+    fn vpeekc() -> c_int;
+    fn vgetc() -> c_int;
     fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
     fn nvim_edit_byte2cells(c: c_int) -> c_int;
     fn nvim_edit_do_digraph(c: c_int) -> c_int;
@@ -96,7 +96,7 @@ extern "C" {
     fn nvim_edit_has_event_insertcharpre() -> c_int;
 
     // -- cindent --
-    fn nvim_edit_cindent_on() -> c_int;
+    fn cindent_on() -> bool;
 
     // -- vim_iswordc --
     fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             || (!(ascii_iswhite(c)
                 || (nvim_get_State() & REPLACE_FLAG != 0)
                     && (nvim_get_State() & VREPLACE_FLAG == 0)
-                    && nvim_edit_gchar_cursor() != 0) // != NUL
+                    && gchar_cursor() != 0) // != NUL
                 && (nvim_curwin_get_cursor_lnum() != nvim_get_Insstart_lnum()
                     || ((!has_fo_ins_long() || nvim_get_Insstart_textlen() <= textwidth as ColnrT)
                         && (!fo_ins_blank
@@ -169,8 +169,8 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         // Format with 'formatexpr' when it's set. Use internal formatting
         // when 'formatexpr' isn't set or it returns non-zero.
         let mut do_internal = true;
-        let virtcol = get_nolist_virtcol()
-            + nvim_edit_char2cells(if c != 0 { c } else { nvim_edit_gchar_cursor() });
+        let virtcol =
+            get_nolist_virtcol() + nvim_edit_char2cells(if c != 0 { c } else { gchar_cursor() });
 
         if nvim_edit_has_b_p_fex() != 0
             && (flags & INSCHAR_NO_FEX == 0)
@@ -213,9 +213,9 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         && nvim_edit_utf_char2len(c) == 1
         && nvim_edit_has_event_insertcharpre() == 0
         && nvim_test_disable_char_avail() == 0
-        && nvim_edit_vpeekc() != 0 // != NUL
+        && vpeekc() != 0 // != NUL
         && nvim_get_State() & REPLACE_FLAG == 0
-        && nvim_edit_cindent_on() == 0
+        && !cindent_on()
         && nvim_get_p_ri() == 0
     {
         let mut buf = [0u8; INPUT_BUFLEN + 1];
@@ -233,7 +233,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         // - running into the 'textwidth' boundary
         // - need to check for abbreviation: A non-word char after a word-char
         loop {
-            let nc = nvim_edit_vpeekc();
+            let nc = vpeekc();
             if nc == 0 {
                 // NUL: no more chars
                 break;
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             if nvim_get_no_abbr() == 0 && !nc_word && prev_word {
                 break;
             }
-            let nc = nvim_edit_vgetc();
+            let nc = vgetc();
             buf[i] = nc as u8;
             i += 1;
         }

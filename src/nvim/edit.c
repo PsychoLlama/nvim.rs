@@ -616,17 +616,9 @@ void nvim_edit_coladvance(colnr_T col)
   coladvance(curwin, col);
 }
 
-/// Call adjust_skipcol() (accessor for Rust).
-void nvim_edit_adjust_skipcol(void)
-{
-  adjust_skipcol();
-}
 
-/// Call getviscol() (accessor for Rust).
-colnr_T nvim_edit_getviscol(void)
-{
-  return getviscol();
-}
+
+
 
 
 /// Get get_ve_flags(curwin) (accessor for Rust).
@@ -791,17 +783,9 @@ void nvim_edit_AppendToRedobuffLit(const char *s, int len)
   AppendToRedobuffLit(s, len);
 }
 
-/// Call ResetRedobuff() (accessor for Rust).
-void nvim_edit_ResetRedobuff(void)
-{
-  ResetRedobuff();
-}
 
-/// Call u_save_cursor() (accessor for Rust).
-int nvim_edit_u_save_cursor(void)
-{
-  return u_save_cursor();
-}
+
+
 
 /// Set Insstart from curwin->w_cursor (accessor for Rust).
 void nvim_edit_set_insstart_from_cursor(void)
@@ -827,11 +811,7 @@ linenr_T nvim_edit_curbuf_line_count(void)
   return curbuf->b_ml.ml_line_count;
 }
 
-/// Call plain_vgetc() (accessor for Rust).
-int nvim_edit_plain_vgetc(void)
-{
-  return plain_vgetc();
-}
+
 
 /// Call merge_modifiers(c, &mod_mask) — mutates global mod_mask (accessor for Rust).
 int nvim_edit_merge_modifiers(int c)
@@ -899,11 +879,7 @@ int nvim_edit_char2cells(int c)
   return char2cells(c);
 }
 
-/// Call gchar_cursor() (accessor for Rust).
-int nvim_edit_gchar_cursor(void)
-{
-  return gchar_cursor();
-}
+
 
 /// Call byte2cells(b) (accessor for Rust).
 int nvim_edit_byte2cells(int b)
@@ -911,17 +887,9 @@ int nvim_edit_byte2cells(int b)
   return byte2cells((uint8_t)b);
 }
 
-/// Call vpeekc() (accessor for Rust).
-int nvim_edit_vpeekc(void)
-{
-  return vpeekc();
-}
 
-/// Call vgetc() (accessor for Rust).
-int nvim_edit_vgetc(void)
-{
-  return vgetc();
-}
+
+
 
 /// Call do_digraph(c) (accessor for Rust).
 int nvim_edit_do_digraph(int c)
@@ -1453,11 +1421,7 @@ void nvim_edit_ins_del(void)
   AppendCharToRedobuff(K_DEL);
 }
 
-/// Check if pum (popup menu) is visible (accessor for Rust).
-int nvim_edit_pum_visible(void)
-{
-  return pum_visible() ? 1 : 0;
-}
+
 
 /// Get pum_want.active (accessor for Rust).
 int nvim_edit_get_pum_want_active(void)
@@ -1563,11 +1527,7 @@ void nvim_edit_paste_repeat(void)
   paste_repeat(1);
 }
 
-/// Call state_handle_k_event() (accessor for Rust).
-void nvim_edit_state_handle_k_event(void)
-{
-  state_handle_k_event();
-}
+
 
 /// Check if curwin->w_llist_ref is NULL (for quickfix window check) (accessor for Rust).
 int nvim_edit_curwin_is_qf_not_ll(void)
@@ -1587,17 +1547,9 @@ void nvim_edit_quickfix_ll(void)
   do_cmdline_cmd(".ll");
 }
 
-/// Call invoke_prompt_interrupt() (accessor for Rust).
-int nvim_edit_invoke_prompt_interrupt(void)
-{
-  return invoke_prompt_interrupt() ? 1 : 0;
-}
 
-/// Call prompt_invoke_callback() (accessor for Rust).
-void nvim_edit_prompt_invoke_callback(void)
-{
-  prompt_invoke_callback();
-}
+
+
 
 /// Get curbuf->b_u_synced (accessor for Rust).
 int nvim_edit_get_curbuf_b_u_synced(void)
@@ -1611,17 +1563,9 @@ int nvim_edit_get_p_paste(void)
   return p_paste ? 1 : 0;
 }
 
-/// Call char_before_cursor() (accessor for Rust).
-int nvim_edit_char_before_cursor(void)
-{
-  return char_before_cursor();
-}
 
-/// Call char_avail() (accessor for Rust).
-int nvim_edit_char_avail(void)
-{
-  return char_avail() ? 1 : 0;
-}
+
+
 
 /// Call inindent(0) (accessor for Rust).
 int nvim_edit_inindent(void)
@@ -1643,11 +1587,7 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 
 
 
-/// Call ins_reg() (accessor for Rust).
-void nvim_edit_ins_reg(void)
-{
-  ins_reg();
-}
+
 
 /// Call ins_try_si(c) (accessor for Rust).
 void nvim_edit_ins_try_si(int c)
@@ -2143,11 +2083,7 @@ void nvim_edit_change_warning(int col)
   change_warning(curbuf, col);
 }
 
-/// Call pum_check_clear() (accessor for Rust).
-void nvim_edit_pum_check_clear(void)
-{
-  pum_check_clear();
-}
+
 
 /// Call state_enter(&s->state) (accessor for Rust).
 void nvim_edit_state_enter(void *state)
@@ -2873,11 +2809,7 @@ int nvim_edit_p_cpo_has_backspace(void)
   return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL ? 1 : 0;
 }
 
-/// Get cindent_on() (accessor for Rust).
-int nvim_edit_cindent_on(void)
-{
-  return cindent_on() ? 1 : 0;
-}
+
 
 /// Handle softtabstop-aware backspace alignment (helper for Rust ins_bs).
 ///
@@ -2998,11 +2930,7 @@ void nvim_edit_unshowmode_false(void)
   unshowmode(false);
 }
 
-/// Call skip_showmode() (accessor for Rust).
-int nvim_edit_skip_showmode(void)
-{
-  return skip_showmode() ? 1 : 0;
-}
+
 
 /// Set curbuf->b_last_insert mark to current cursor + topline (composite for Rust).
 /// Calls mark_view_make and RESET_FMARK.
@@ -3068,11 +2996,7 @@ void nvim_edit_putchar(int c, int highlight)
   edit_putchar(c, highlight != 0);
 }
 
-/// Call edit_unputchar() (accessor for Rust).
-void nvim_edit_edit_unputchar(void)
-{
-  edit_unputchar();
-}
+
 
 // ---- ins_esc accessors ----
 

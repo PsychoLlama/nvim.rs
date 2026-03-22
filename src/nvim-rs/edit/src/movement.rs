@@ -49,8 +49,8 @@ extern "C" {
 
     // Movement helpers
     fn nvim_edit_coladvance(col: ColnrT);
-    fn nvim_edit_adjust_skipcol();
-    fn nvim_edit_getviscol() -> ColnrT;
+    fn adjust_skipcol();
+    fn getviscol() -> c_int;
     fn virtual_active(wp: WinHandle) -> bool;
     fn nvim_edit_get_ve_flags() -> c_int;
 
@@ -152,7 +152,7 @@ unsafe fn beginline_impl(flags: c_int) {
         }
         nvim_edit_set_w_set_curswant(1);
     }
-    nvim_edit_adjust_skipcol();
+    adjust_skipcol();
 }
 
 #[unsafe(export_name = "beginline")]
@@ -175,7 +175,7 @@ unsafe fn oneright_impl() -> c_int {
 
         // Adjust for multi-wide char (excluding TAB)
         let ptr = nvim_get_cursor_pos_ptr();
-        let viscol = nvim_edit_getviscol();
+        let viscol = getviscol();
         let advance = if *ptr != TAB && nvim_edit_vim_isprintc(nvim_edit_utf_ptr2char(ptr)) != 0 {
             nvim_edit_ptr2cells(ptr)
         } else {
@@ -207,7 +207,7 @@ unsafe fn oneright_impl() -> c_int {
     nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() + l as ColnrT);
 
     nvim_edit_set_w_set_curswant(1);
-    nvim_edit_adjust_skipcol();
+    adjust_skipcol();
     OK
 }
 
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn rs_oneright() -> c_int {
 /// Returns OK on success, FAIL at line boundary.
 unsafe fn oneleft_impl() -> c_int {
     if virtual_active(nvim_get_curwin()) {
-        let v = nvim_edit_getviscol();
+        let v = getviscol();
 
         if v == 0 {
             return FAIL;
@@ -240,7 +240,7 @@ unsafe fn oneleft_impl() -> c_int {
             nvim_edit_coladvance(v - width);
             // getviscol() is slow, skip it when 'showbreak' is empty,
             // 'breakindent' is not set and there are no multi-byte characters
-            if nvim_edit_getviscol() < v {
+            if getviscol() < v {
                 break;
             }
             width += 1;
@@ -258,7 +258,7 @@ unsafe fn oneleft_impl() -> c_int {
         }
 
         nvim_edit_set_w_set_curswant(1);
-        nvim_edit_adjust_skipcol();
+        adjust_skipcol();
         return OK;
     }
 
@@ -272,7 +272,7 @@ unsafe fn oneleft_impl() -> c_int {
     // if the character on the left of the current cursor is a multi-byte
     // character, move to its first byte
     mb_adjust_cursor();
-    nvim_edit_adjust_skipcol();
+    adjust_skipcol();
     OK
 }
 

@@ -73,7 +73,7 @@ extern "C" {
     // Redo buffer ops
     fn nvim_edit_AppendToRedobuff(s: *const c_char);
     fn nvim_edit_append_char_to_redobuff(c: c_int);
-    fn nvim_edit_ResetRedobuff();
+    fn ResetRedobuff();
 
     // stop_insert (stays C, pass end_insert_pos as opaque pointer)
     fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
@@ -85,7 +85,7 @@ extern "C" {
     fn nvim_edit_set_insstart_from_cursor();
     fn nvim_edit_insstart_col_gt_orig() -> c_int;
     fn nvim_edit_linetabsize_cursor_line() -> ColnrT;
-    fn nvim_edit_u_save_cursor() -> c_int;
+    fn u_save_cursor() -> c_int;
     fn nvim_edit_set_ai_col(val: ColnrT);
     fn nvim_edit_set_orig_line_count(val: LinenrT);
     fn nvim_edit_set_vr_lines_changed(val: c_int);
@@ -610,7 +610,7 @@ unsafe fn stop_arrow_impl() -> c_int {
         }
         insstart_textlen_set(nvim_edit_linetabsize_cursor_line());
 
-        if nvim_edit_u_save_cursor() == OK {
+        if u_save_cursor() == OK {
             nvim_set_arrow_used(0);
             ins_need_undo_set(false);
         }
@@ -619,10 +619,10 @@ unsafe fn stop_arrow_impl() -> c_int {
             nvim_edit_set_orig_line_count(nvim_edit_curbuf_line_count());
             nvim_edit_set_vr_lines_changed(1);
         }
-        nvim_edit_ResetRedobuff();
+        ResetRedobuff();
         nvim_edit_AppendToRedobuff(c"1i".as_ptr()); // Pretend we start an insertion.
         new_insert_skip_set(2);
-    } else if ins_need_undo_get() && nvim_edit_u_save_cursor() == OK {
+    } else if ins_need_undo_get() && u_save_cursor() == OK {
         ins_need_undo_set(false);
     }
 

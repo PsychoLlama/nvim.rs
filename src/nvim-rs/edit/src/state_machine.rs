@@ -134,8 +134,8 @@ extern "C" {
     fn nvim_set_dont_sync_undo(val: c_int);
 
     // --- autocomplete trigger ---
-    fn nvim_edit_char_before_cursor() -> c_int;
-    fn nvim_edit_char_avail() -> c_int;
+    fn char_before_cursor() -> c_int;
+    fn char_avail() -> bool;
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_edit_vim_isprintc(c: c_int) -> c_int;
 
@@ -320,10 +320,10 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     if unsafe { (*s).ins_just_started } {
         unsafe { (*s).ins_just_started = false };
         if unsafe { rs_ins_compl_has_autocomplete() } != 0
-            && unsafe { nvim_edit_char_avail() } == 0
+            && !unsafe { char_avail() }
             && unsafe { nvim_curwin_get_cursor_col() } > 0
         {
-            let c = unsafe { nvim_edit_char_before_cursor() };
+            let c = unsafe { char_before_cursor() };
             if unsafe { nvim_edit_vim_isprintc(c) } != 0 {
                 unsafe { (*s).c = c };
                 unsafe { rs_ins_compl_enable_autocomplete() };
