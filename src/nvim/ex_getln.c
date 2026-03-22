@@ -344,7 +344,6 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
 }
 
 
-// set_search_match: inlined into nvim_set_search_match wrapper below.
 
 /// Parses the :[range]s/foo like commands and returns details needed for
 /// incsearch and wildmenu completion.
@@ -834,11 +833,6 @@ theend:
 // command_line_handle_key is implemented in Rust (cmdline/keys.rs).
 
 
-/// Trigger CursorMovedC autocommands.
-// may_trigger_cursormovedc: inlined into nvim_may_trigger_cursormovedc wrapper below
-// command_line_not_changed: inlined into nvim_command_line_not_changed wrapper below
-
-
 handle_T cmdpreview_get_bufnr(void)
 {
   return cmdpreview_bufnr;
@@ -1276,8 +1270,6 @@ static void do_autocmd_cmdlinechanged(int firstc)
     }
   }
 }
-
-// command_line_changed: inlined into nvim_command_line_changed wrapper below.
 
 /// Abandon the command line.
 static void abandon_cmdline(void)
@@ -1972,7 +1964,6 @@ static void restore_cmdline(CmdlineInfo *ccp)
   ccline = *ccp;
 }
 
-// cmdline_paste: inlined into nvim_cmdline_paste wrapper below.
 // cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
 // redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
 
@@ -3220,11 +3211,6 @@ void nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)
   wildmenu_cleanup(&ccline);
 }
 
-// nvim_may_trigger_cursormovedc: inlined into callers above.
-// nvim_trigger_cmd_autocmd: removed (no external callers).
-// nvim_cmdpreview_may_show: removed (no external callers).
-// nvim_abandon_cmdline: removed (no external callers).
-
 // CommandLineState field accessors (for Rust opaque handle pattern)
 
 /// Get s->c field.
@@ -3397,8 +3383,6 @@ void nvim_cls_set_xpc_context(void *s, int val)
 // nvim_get_mod_mask, nvim_set_mod_mask defined in getchar.c
 // nvim_get_iobuff defined in option_shim.c
 
-// nvim_cls_get_event_cmdlineleavepre_triggered: removed (no callers).
-
 /// Set s->event_cmdlineleavepre_triggered field.
 void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val)
 {
@@ -3449,12 +3433,6 @@ int nvim_nextwild(void *xp, int type, int options, bool escape)
 // nvim_get_typebuf_len: defined in getchar.c
 // nvim_get_p_ari: defined in edit.c
 
-/// Get cmdline_row global (different from existing nvim_get_cmdline_row).
-int nvim_get_cmdline_row_exgetln(void)
-{
-  return cmdline_row;
-}
-
 /// Get getln_interrupted_highlight global.
 int nvim_get_getln_interrupted_highlight(void)
 {
@@ -3487,10 +3465,6 @@ int nvim_get_cedit_key(void)
   return cedit_key;
 }
 
-// nvim_open_cmdwin is now an alias for open_cmdwin (declared in header).
-
-// Phase 4: Accessors for command_line_execute and command_line_wildchar_complete
-
 /// Get s->lookfor field (may be NULL).
 char *nvim_cls_get_lookfor(void *s)
 {
@@ -3504,10 +3478,6 @@ void nvim_cls_xfree_lookfor(void *s)
   XFREE_CLEAR(cs->lookfor);
   cs->lookforlen = 0;
 }
-
-// nvim_cls_set_lookforlen: removed (no callers; lookforlen is managed via nvim_cls_xfree_lookfor).
-// nvim_cls_get_event_cmdlineleavepre_triggered_val: removed (duplicate of nvim_cls_get_event_cmdlineleavepre_triggered).
-// nvim_cls_set_event_cmdlineleavepre_triggered_val: removed (duplicate of nvim_cls_set_event_cmdlineleavepre_triggered).
 
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
@@ -3563,9 +3533,6 @@ void nvim_cls_trigger_cmdlineleavepre(void *s)
   set_vim_var_char(cs->c);
   trigger_cmd_autocmd(cs->cmdline_type, EVENT_CMDLINELEAVEPRE);
 }
-
-/// Wrapper for trigger_cmd_autocmd with STATE lookup (called from Rust).
-// nvim_cls_trigger_cmd_autocmd: removed (no external callers).
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void)
