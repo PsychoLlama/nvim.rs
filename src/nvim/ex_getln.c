@@ -227,14 +227,11 @@ extern int rs_win_valid(win_T *win);
 extern int rs_last_window(win_T *win);
 
 // Rust FFI declarations
-extern int rs_global_stl_height(void);
 extern void correct_screencol(int idx, int cells, int *col);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_win_size_save(garray_T *gap);
 extern void rs_clear_showcmd(void);
 extern int rs_magic_isset(void);
-extern int rs_cmdline_delete_char_before(void);
-extern int rs_cmdline_delete_word_before(void);
 
 // History browsing state (used by Rust cmdline/history.rs)
 typedef struct {
@@ -266,11 +263,6 @@ extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
 // draw_cmdline: implemented in Rust (cmdline/screen.rs)
 extern void draw_cmdline(int start, int len);
 
-// Rust key dispatch helpers
-extern int rs_invert_rtl_key(int key);
-extern int rs_should_end_wildmenu(int key, int p_wc, int p_wcm);
-extern int rs_should_end_wildmenu_pum(int key);
-extern int rs_is_stab_to_ctrl_p(int key, int p_wc);
 
 // Entry/exit orchestration helpers from Rust
 extern int rs_entry_should_use_cmdmsg_rl(int firstc, int win_p_rl, int win_p_rlc_has_s);
@@ -304,9 +296,7 @@ extern int rs_clamp_cmdpos(int pos, int cmdlen);
 extern int rs_cmd_startcol(void);
 extern int rs_cmdline_charsize(int idx);
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
-extern int rs_empty_pattern(char *p, size_t len, int delim);
 extern void rs_redrawcmdprompt(void);
-extern int rs_ccheck_abbr(int c);
 extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
 extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
 
@@ -1974,9 +1964,7 @@ void f_getcmdcompltype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_string = cmdcomplete_type_to_str(xp_context, p->xpc->xp_arg);
 }
 
-/// "setcmdline()" implementation: set the command line to str at position pos.
-/// @return  1 when failed, 0 when OK.
-/// "setcmdline()" function
+/// "setcmdline()" function: set the command line to str at position pos.
 void f_setcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   if (tv_check_for_string_arg(argvars, 0) == FAIL
