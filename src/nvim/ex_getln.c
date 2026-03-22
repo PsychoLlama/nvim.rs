@@ -344,17 +344,7 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
 }
 
 
-static void set_search_match(pos_T *t)
-{
-  // First move cursor to end of match, then to the start.  This
-  // moves the whole match onto the screen when 'nowrap' is set.
-  t->lnum += search_match_lines;
-  t->col = search_match_endcol;
-  if (t->lnum > curbuf->b_ml.ml_line_count) {
-    t->lnum = curbuf->b_ml.ml_line_count;
-    coladvance(curwin, MAXCOL);
-  }
-}
+// set_search_match: inlined into nvim_set_search_match wrapper below.
 
 /// Parses the :[range]s/foo like commands and returns details needed for
 /// incsearch and wildmenu completion.
@@ -835,88 +825,12 @@ theend:
 
 // command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
 
-static void command_line_end_wildmenu(CommandLineState *s, bool key_is_wc)
-{
-  if (cmdline_pum_active()) {
-    s->skip_pum_redraw = (s->skip_pum_redraw && !key_is_wc
-                          && !ascii_iswhite(s->c)
-                          && (vim_isprintc(s->c)
-                              || s->c == K_BS || s->c == Ctrl_H || s->c == K_DEL
-                              || s->c == K_KDEL || s->c == Ctrl_W || s->c == Ctrl_U));
-    cmdline_pum_remove(s->skip_pum_redraw);
-  }
-  if (s->xpc.xp_numfiles != -1) {
-    ExpandOne(&s->xpc, NULL, NULL, 0, WILD_FREE);
-  }
-  s->did_wild_list = false;
-  if (!p_wmnu || (s->c != K_UP && s->c != K_DOWN)) {
-    s->xpc.xp_context = EXPAND_NOTHING;
-  }
-  s->wim_index = 0;
-  wildmenu_cleanup(&ccline);
-}
-
 // may_do_command_line_next_incsearch() is implemented in Rust (cmdline crate, search.rs).
 // command_line_erase_chars() is implemented in Rust (cmdline crate, keys.rs).
-
-/// Handle the CTRL-^ key in the command-line mode and toggle the use of the
-/// language :lmap mappings and/or Input Method.
-static void command_line_toggle_langmap(CommandLineState *s)
-{
-  OptInt *b_im_ptr = buf_valid(s->b_im_ptr_buf) ? s->b_im_ptr : NULL;
-  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
-    // ":lmap" mappings exists, toggle use of mappings.
-    State ^= MODE_LANGMAP;
-    if (b_im_ptr != NULL) {
-      if (State & MODE_LANGMAP) {
-        *b_im_ptr = B_IMODE_LMAP;
-      } else {
-        *b_im_ptr = B_IMODE_NONE;
-      }
-    }
-  }
-
-  if (b_im_ptr != NULL) {
-    if (b_im_ptr == &curbuf->b_p_iminsert) {
-      set_iminsert_global(curbuf);
-    } else {
-      set_imsearch_global(curbuf);
-    }
-  }
-  ui_cursor_shape();                // may show different cursor shape
-  // Show/unshow value of 'keymap' in status lines later.
-  status_redraw_curbuf();
-}
-
 // command_line_insert_reg() is implemented in Rust (cmdline crate, keys.rs).
-
-/// Handle the Left and Right mouse clicks in the command-line mode.
-static void command_line_left_right_mouse(CommandLineState *s)
-{
-  if (s->c == K_LEFTRELEASE || s->c == K_RIGHTRELEASE) {
-    s->ignore_drag_release = true;
-  } else {
-    s->ignore_drag_release = false;
-  }
-
-  ccline.cmdspos = rs_cmd_startcol();
-  for (ccline.cmdpos = 0; ccline.cmdpos < ccline.cmdlen;
-       ccline.cmdpos++) {
-    int cells = rs_cmdline_charsize(ccline.cmdpos);
-    if (mouse_row <= cmdline_row + ccline.cmdspos / Columns
-        && mouse_col < ccline.cmdspos % Columns + cells) {
-      break;
-    }
-
-    // Count ">" for double-wide char that doesn't fit.
-    correct_screencol(ccline.cmdpos, cells, &ccline.cmdspos);
-    ccline.cmdpos += utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos) - 1;
-    ccline.cmdspos += cells;
-  }
-}
-
+// command_line_toggle_langmap, command_line_left_right_mouse, command_line_end_wildmenu:
+//   inlined into their nvim_* wrappers below.
 // command_line_browse_history is now implemented via nvim_command_line_browse_history (below).
-
 // command_line_handle_key is implemented in Rust (cmdline/keys.rs).
 
 
@@ -1363,50 +1277,7 @@ static void do_autocmd_cmdlinechanged(int firstc)
   }
 }
 
-static int command_line_changed(CommandLineState *s)
-{
-  const bool prev_cmdpreview = cmdpreview;
-  if (s->firstc == ':'
-      && current_sctx.sc_sid == 0    // only if interactive
-      && *p_icm != NUL       // 'inccommand' is set
-      && !exmode_active      // not in ex mode
-      && cmdline_star == 0   // not typing a password
-      && !vpeekc_any()
-      && cmdpreview_may_show(s)) {
-    // 'inccommand' preview has been shown.
-  } else {
-    cmdpreview = false;
-    if (prev_cmdpreview) {
-      // TODO(bfredl): add an immediate redraw flag for cmdline mode which will trigger
-      // at next wait-for-input
-      update_screen();  // Clear 'inccommand' preview.
-    }
-    if (s->xpc.xp_context == EXPAND_NOTHING && (KeyTyped || vpeekc() == NUL)) {
-      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
-    }
-  }
-
-  if (ccline.cmdpos != s->prev_cmdpos
-      || (s->prev_cmdbuff != NULL && strcmp(s->prev_cmdbuff, ccline.cmdbuff) != 0)) {
-    // Trigger CmdlineChanged autocommands.
-    do_autocmd_cmdlinechanged(s->firstc > 0 ? s->firstc : '-');
-  }
-
-  nvim_may_trigger_cursormovedc(s);
-
-  if (p_arshape && !p_tbidi) {
-    // Always redraw the whole command line to fix shaping and
-    // right-left typing.  Not efficient, but it works.
-    // Do it only when there are no characters left to read
-    // to avoid useless intermediate redraws.
-    // if cmdline is external the ui handles shaping, no redraw needed.
-    if (!ui_has(kUICmdline) && vpeekc() == NUL) {
-      redrawcmd();
-    }
-  }
-
-  return 1;
-}
+// command_line_changed: inlined into nvim_command_line_changed wrapper below.
 
 /// Abandon the command line.
 static void abandon_cmdline(void)
@@ -2108,79 +1979,7 @@ static void restore_cmdline(CmdlineInfo *ccp)
   ccline = *ccp;
 }
 
-/// Paste a yank register into the command line.
-/// Used by CTRL-R command in command-line mode.
-/// insert_reg() can't be used here, because special characters from the
-/// register contents will be interpreted as commands.
-///
-/// @param regname   Register name.
-/// @param literally Insert text literally instead of "as typed".
-/// @param remcr     When true, remove trailing CR.
-///
-/// @returns FAIL for failure, OK otherwise
-static bool cmdline_paste(int regname, bool literally, bool remcr)
-{
-  char *arg;
-  bool allocated;
-
-  // check for valid regname; also accept special characters for CTRL-R in
-  // the command line
-  if (regname != Ctrl_F && regname != Ctrl_P && regname != Ctrl_W
-      && regname != Ctrl_A && regname != Ctrl_L
-      && !valid_yank_reg(regname, false)) {
-    return FAIL;
-  }
-
-  // A register containing CTRL-R can cause an endless loop.  Allow using
-  // CTRL-C to break the loop.
-  line_breakcheck();
-  if (got_int) {
-    return FAIL;
-  }
-
-  // Need to  set "textlock" to avoid nasty things like going to another
-  // buffer when evaluating an expression.
-  textlock++;
-  const bool i = get_spec_reg(regname, &arg, &allocated, true);
-  textlock--;
-
-  if (i) {
-    // Got the value of a special register in "arg".
-    if (arg == NULL) {
-      return FAIL;
-    }
-
-    // When 'incsearch' is set and CTRL-R CTRL-W used: skip the duplicate
-    // part of the word.
-    char *p = arg;
-    if (p_is && regname == Ctrl_W) {
-      char *w;
-      int len;
-
-      // Locate start of last word in the cmd buffer.
-      for (w = ccline.cmdbuff + ccline.cmdpos; w > ccline.cmdbuff;) {
-        len = utf_head_off(ccline.cmdbuff, w - 1) + 1;
-        if (!vim_iswordc(utf_ptr2char(w - len))) {
-          break;
-        }
-        w -= len;
-      }
-      len = (int)((ccline.cmdbuff + ccline.cmdpos) - w);
-      if (p_ic ? STRNICMP(w, arg, len) == 0 : strncmp(w, arg, (size_t)len) == 0) {
-        p += len;
-      }
-    }
-
-    cmdline_paste_str(p, literally);
-    if (allocated) {
-      xfree(arg);
-    }
-    return OK;
-  }
-
-  return cmdline_paste_reg(regname, literally, remcr);
-}
-
+// cmdline_paste: inlined into nvim_cmdline_paste wrapper below.
 // cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
 // redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
 
@@ -3208,8 +3007,18 @@ void nvim_msg_check(void) { msg_check(); }
 /// Get p_ru option (ruler) for Rust.
 int nvim_get_p_ru(void) { return p_ru; }
 
-/// Call set_search_match() for Rust.
-void nvim_set_search_match(pos_T *t) { set_search_match(t); }
+/// Move cursor to end of search match (called from Rust).
+void nvim_set_search_match(pos_T *t)
+{
+  // First move cursor to end of match, then to the start.  This
+  // moves the whole match onto the screen when 'nowrap' is set.
+  t->lnum += search_match_lines;
+  t->col = search_match_endcol;
+  if (t->lnum > curbuf->b_ml.ml_line_count) {
+    t->lnum = curbuf->b_ml.ml_line_count;
+    coladvance(curwin, MAXCOL);
+  }
+}
 
 /// Get new_cmdpos (used by set_cmdline_pos).
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }
@@ -3220,10 +3029,68 @@ void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
 /// Set KeyTyped global.
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
-/// Thin non-static wrapper for cmdline_paste (called from Rust).
+/// Paste a yank register into the command line (called from Rust).
+/// insert_reg() can't be used here, because special characters from the
+/// register contents will be interpreted as commands.
 bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
 {
-  return cmdline_paste(regname, literally, remcr);
+  char *arg;
+  bool allocated;
+
+  // check for valid regname; also accept special characters for CTRL-R in
+  // the command line
+  if (regname != Ctrl_F && regname != Ctrl_P && regname != Ctrl_W
+      && regname != Ctrl_A && regname != Ctrl_L
+      && !valid_yank_reg(regname, false)) {
+    return FAIL;
+  }
+
+  // A register containing CTRL-R can cause an endless loop.  Allow using
+  // CTRL-C to break the loop.
+  line_breakcheck();
+  if (got_int) {
+    return FAIL;
+  }
+
+  // Need to set "textlock" to avoid nasty things like going to another
+  // buffer when evaluating an expression.
+  textlock++;
+  const bool i = get_spec_reg(regname, &arg, &allocated, true);
+  textlock--;
+
+  if (i) {
+    if (arg == NULL) {
+      return FAIL;
+    }
+
+    // When 'incsearch' is set and CTRL-R CTRL-W used: skip the duplicate
+    // part of the word.
+    char *p = arg;
+    if (p_is && regname == Ctrl_W) {
+      char *w;
+      int len;
+
+      for (w = ccline.cmdbuff + ccline.cmdpos; w > ccline.cmdbuff;) {
+        len = utf_head_off(ccline.cmdbuff, w - 1) + 1;
+        if (!vim_iswordc(utf_ptr2char(w - len))) {
+          break;
+        }
+        w -= len;
+      }
+      len = (int)((ccline.cmdbuff + ccline.cmdpos) - w);
+      if (p_ic ? STRNICMP(w, arg, len) == 0 : strncmp(w, arg, (size_t)len) == 0) {
+        p += len;
+      }
+    }
+
+    cmdline_paste_str(p, literally);
+    if (allocated) {
+      xfree(arg);
+    }
+    return OK;
+  }
+
+  return cmdline_paste_reg(regname, literally, remcr);
 }
 
 /// Handle no-change return path for command-line mode (called from Rust).
@@ -3239,22 +3106,91 @@ int nvim_command_line_not_changed(void *s)
   return nvim_command_line_changed(s);
 }
 
-/// Wrapper for command_line_changed (called from Rust via opaque handle).
-int nvim_command_line_changed(void *s)
+/// Handle post-key-press command line update (called from Rust via opaque handle).
+int nvim_command_line_changed(void *vs)
 {
-  return command_line_changed((CommandLineState *)s);
+  CommandLineState *s = (CommandLineState *)vs;
+  const bool prev_cmdpreview = cmdpreview;
+  if (s->firstc == ':'
+      && current_sctx.sc_sid == 0    // only if interactive
+      && *p_icm != NUL       // 'inccommand' is set
+      && !exmode_active      // not in ex mode
+      && cmdline_star == 0   // not typing a password
+      && !vpeekc_any()
+      && cmdpreview_may_show(s)) {
+    // 'inccommand' preview has been shown.
+  } else {
+    cmdpreview = false;
+    if (prev_cmdpreview) {
+      update_screen();  // Clear 'inccommand' preview.
+    }
+    if (s->xpc.xp_context == EXPAND_NOTHING && (KeyTyped || vpeekc() == NUL)) {
+      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
+    }
+  }
+
+  if (ccline.cmdpos != s->prev_cmdpos
+      || (s->prev_cmdbuff != NULL && strcmp(s->prev_cmdbuff, ccline.cmdbuff) != 0)) {
+    do_autocmd_cmdlinechanged(s->firstc > 0 ? s->firstc : '-');
+  }
+
+  nvim_may_trigger_cursormovedc(s);
+
+  if (p_arshape && !p_tbidi) {
+    if (!ui_has(kUICmdline) && vpeekc() == NUL) {
+      redrawcmd();
+    }
+  }
+
+  return 1;
 }
 
-/// Wrapper for command_line_toggle_langmap (called from Rust via opaque handle).
-void nvim_command_line_toggle_langmap(void *s)
+/// Toggle langmap (CTRL-^ in command-line mode). Called from Rust via opaque handle.
+void nvim_command_line_toggle_langmap(void *vs)
 {
-  command_line_toggle_langmap((CommandLineState *)s);
+  CommandLineState *s = (CommandLineState *)vs;
+  OptInt *b_im_ptr = buf_valid(s->b_im_ptr_buf) ? s->b_im_ptr : NULL;
+  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
+    State ^= MODE_LANGMAP;
+    if (b_im_ptr != NULL) {
+      if (State & MODE_LANGMAP) {
+        *b_im_ptr = B_IMODE_LMAP;
+      } else {
+        *b_im_ptr = B_IMODE_NONE;
+      }
+    }
+  }
+  if (b_im_ptr != NULL) {
+    if (b_im_ptr == &curbuf->b_p_iminsert) {
+      set_iminsert_global(curbuf);
+    } else {
+      set_imsearch_global(curbuf);
+    }
+  }
+  ui_cursor_shape();
+  status_redraw_curbuf();
 }
 
-/// Wrapper for command_line_left_right_mouse (called from Rust via opaque handle).
-void nvim_command_line_left_right_mouse(void *s)
+/// Handle Left/Right mouse clicks in command-line mode. Called from Rust via opaque handle.
+void nvim_command_line_left_right_mouse(void *vs)
 {
-  command_line_left_right_mouse((CommandLineState *)s);
+  CommandLineState *s = (CommandLineState *)vs;
+  if (s->c == K_LEFTRELEASE || s->c == K_RIGHTRELEASE) {
+    s->ignore_drag_release = true;
+  } else {
+    s->ignore_drag_release = false;
+  }
+  ccline.cmdspos = rs_cmd_startcol();
+  for (ccline.cmdpos = 0; ccline.cmdpos < ccline.cmdlen; ccline.cmdpos++) {
+    int cells = rs_cmdline_charsize(ccline.cmdpos);
+    if (mouse_row <= cmdline_row + ccline.cmdspos / Columns
+        && mouse_col < ccline.cmdspos % Columns + cells) {
+      break;
+    }
+    correct_screencol(ccline.cmdpos, cells, &ccline.cmdspos);
+    ccline.cmdpos += utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos) - 1;
+    ccline.cmdspos += cells;
+  }
 }
 
 /// Browse history (called from Rust via opaque handle).
@@ -3290,10 +3226,27 @@ int nvim_command_line_browse_history(void *vs)
   return result;
 }
 
-/// Wrapper for command_line_end_wildmenu (called from Rust via opaque handle).
-void nvim_command_line_end_wildmenu(void *s, bool key_is_wc)
+/// End wildmenu (called from Rust via opaque handle).
+void nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)
 {
-  command_line_end_wildmenu((CommandLineState *)s, key_is_wc);
+  CommandLineState *s = (CommandLineState *)vs;
+  if (cmdline_pum_active()) {
+    s->skip_pum_redraw = (s->skip_pum_redraw && !key_is_wc
+                          && !ascii_iswhite(s->c)
+                          && (vim_isprintc(s->c)
+                              || s->c == K_BS || s->c == Ctrl_H || s->c == K_DEL
+                              || s->c == K_KDEL || s->c == Ctrl_W || s->c == Ctrl_U));
+    cmdline_pum_remove(s->skip_pum_redraw);
+  }
+  if (s->xpc.xp_numfiles != -1) {
+    ExpandOne(&s->xpc, NULL, NULL, 0, WILD_FREE);
+  }
+  s->did_wild_list = false;
+  if (!p_wmnu || (s->c != K_UP && s->c != K_DOWN)) {
+    s->xpc.xp_context = EXPAND_NOTHING;
+  }
+  s->wim_index = 0;
+  wildmenu_cleanup(&ccline);
 }
 
 /// Trigger CursorMovedC autocmd if cursor position changed (called from Rust).
