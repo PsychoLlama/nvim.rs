@@ -184,18 +184,13 @@ extern void ins_ctrl_v(void);
 extern void rs_clear_showcmd(void);
 extern void rs_start_selection(void);
 
-// Phase 7: insert_check and insert_execute Rust implementations
 extern int insert_check_rs(VimState *state);
 extern int insert_execute_rs(VimState *state, int key);
 
-// Phase 2: ins_esc and ins_reg are now implemented in Rust.
-// Declaring them extern so C wrappers can call through to Rust-exported symbols.
 // NOTE: ins_esc returns int (not bool) to match Rust c_int ABI.
 extern int ins_esc(int *count, int cmdchar, int nomove);
 extern void ins_reg(void);
 
-// Rust functions exported with canonical C names (Phase 1+2 wrappers eliminated)
-// Phase 1: static wrappers
 extern void insert_special(int c, int allow_modmask, int ctrlv);
 extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
 extern void check_spell_redraw(void);
@@ -209,7 +204,6 @@ extern void ins_ctrl_o(void);
 extern int ins_start_select(int c);
 extern char *do_insert_char_pre(int c);
 extern int del_char_after_col(int limit_col);
-// Phase 2: public wrappers
 extern void undisplay_dollar(void);
 extern void backspace_until_column(int col);
 extern int get_literal(bool no_simplify);
@@ -235,8 +229,6 @@ int nvim_get_no_abbr(void)
 {
   return no_abbr;
 }
-
-// nvim_get_p_paste is defined in indent_c.c
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
@@ -503,10 +495,6 @@ int nvim_get_p_ari(void)
   return p_ari;
 }
 
-// ============================================================================
-// Accessors for helpers.rs (Phase 1)
-// ============================================================================
-
 /// Check if curwin buffer is valid for cursor operations (accessor for Rust).
 int nvim_curwin_buf_valid(void)
 {
@@ -586,7 +574,6 @@ void nvim_set_last_insert_skip(int val)
   last_insert_skip = val;
 }
 
-
 /// Get replace_offset global (accessor for Rust).
 int nvim_get_replace_offset(void)
 {
@@ -598,8 +585,6 @@ const void *nvim_curwin_get_cursor_ptr(void)
 {
   return &curwin->w_cursor;
 }
-
-// -- Phase 3: Movement module accessors --
 
 /// Get curwin->w_cursor.coladd (accessor for Rust).
 colnr_T nvim_edit_get_cursor_coladd(void)
@@ -708,10 +693,6 @@ void nvim_edit_update_topline(void)
 {
   update_topline(curwin);
 }
-
-
-
-// -- Wave 3: Global accessors for insert mode helpers --
 
 /// Get spell_redraw_lnum (accessor for Rust).
 linenr_T nvim_edit_get_spell_redraw_lnum(void)
@@ -851,7 +832,6 @@ linenr_T nvim_edit_curbuf_line_count(void)
   return curbuf->b_ml.ml_line_count;
 }
 
-
 /// Call plain_vgetc() (accessor for Rust).
 int nvim_edit_plain_vgetc(void)
 {
@@ -899,8 +879,6 @@ void nvim_edit_ins_str(const char *p, size_t len)
 {
   ins_str((char *)p, len);
 }
-
-// -- Phase 3 accessors (for insertchar Rust migration) --
 
 /// Call comp_textwidth(ff) (accessor for Rust).
 int nvim_edit_comp_textwidth(int ff)
@@ -1142,8 +1120,6 @@ int nvim_edit_ins_apply_autocmds_insertcharpre(void)
   return ins_apply_autocmds(EVENT_INSERTCHARPRE);
 }
 
-// -- Phase 4: Key handler module accessors --
-
 // Saved cursor positions for start_arrow calls (2 slots)
 static pos_T edit_saved_cursor[2];
 static linenr_T saved_topline;
@@ -1276,8 +1252,6 @@ int nvim_edit_pagescroll_forward(void)
 {
   return pagescroll(FORWARD, 1, false);
 }
-
-// -- Phase 4b: Complex key handler delegated wrappers --
 
 /// ins_insert() wrapper — handles set_vim_var_string, autocmds, mode change.
 void nvim_edit_ins_insert(int replaceState)
@@ -1488,8 +1462,6 @@ void nvim_edit_ins_del(void)
   can_si_back = false;
   AppendCharToRedobuff(K_DEL);
 }
-
-// -- Phase 4 dispatch module accessors --
 
 /// Check if pum (popup menu) is visible (accessor for Rust).
 int nvim_edit_pum_visible(void)
@@ -1755,10 +1727,6 @@ int nvim_edit_ve_onemore(void)
   return (get_ve_flags(curwin) & kOptVeFlagOnemore) ? 1 : 0;
 }
 
-
-// -- Phase 5: Editing module accessors and delegated wrappers --
-
-// Forward declarations for Phase 5 wrappers (definitions are later in the file)
 static int pc_status;
 #ifndef PC_STATUS_UNSET
 #define PC_STATUS_UNSET 0
@@ -1954,11 +1922,7 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
   stuffReadbuffLen(data, len);
 }
 
-// nvim_emsg_noinstext is already defined in register.c
-
-// -- Phase 6: insert_enter accessors --
-
-/// Get restart_edit (accessor for Rust, Phase 6).
+/// Get restart_edit (accessor for Rust).
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
 int nvim_edit_get_restart_edit(void)
 {
@@ -2058,7 +2022,7 @@ void nvim_edit_set_old_indent(int val)
   old_indent = val;
 }
 
-/// Save curwin->w_cursor into out-params (accessor for Rust, Phase 6).
+/// Save curwin->w_cursor into out-params (accessor for Rust).
 void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out)
 {
   *lnum_out = curwin->w_cursor.lnum;
@@ -2066,7 +2030,7 @@ void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *co
   *coladd_out = curwin->w_cursor.coladd;
 }
 
-/// Restore curwin->w_cursor from saved values (accessor for Rust, Phase 6).
+/// Restore curwin->w_cursor from saved values (accessor for Rust).
 void nvim_edit_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd)
 {
   curwin->w_cursor.lnum = lnum;
@@ -2074,7 +2038,7 @@ void nvim_edit_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd)
   curwin->w_cursor.coladd = coladd;
 }
 
-/// Check if current cursor equals saved pos (accessor for Rust, Phase 6).
+/// Check if current cursor equals saved pos (accessor for Rust).
 int nvim_edit_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd)
 {
   pos_T saved = { .lnum = lnum, .col = col, .coladd = coladd };
@@ -2247,12 +2211,6 @@ void nvim_edit_ui_cursor_shape_and_clear_digraph(void)
   do_digraph(-1);
 }
 
-
-// =============================================================================
-// Phase 7: insert_check / insert_execute accessors (for state_machine.rs)
-// =============================================================================
-
-
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void)
 {
@@ -2402,14 +2360,11 @@ void nvim_edit_init_prompt_impl(int cmdchar_todo)
   check_cursor(curwin);
 }
 
-
 /// nvim_edit_iswhite_nl_or_nul: returns 1 if c is whitespace, newline, or NUL (accessor for Rust).
 int nvim_edit_iswhite_nl_or_nul(int c)
 {
   return (ascii_iswhite(c) || c == NL || c == CAR || c == NUL) ? 1 : 0;
 }
-
-
 
 /// edit(): Start inserting text.
 ///
@@ -2477,7 +2432,6 @@ bool nvim_edit_edit_entry(int cmdchar, bool startln, int count)
   insert_enter(s);
   return s->c == Ctrl_O;
 }
-
 
 /// Composite implementation of ins_redraw() for the Rust port.
 void nvim_edit_ins_redraw_impl(int ready)
@@ -2576,7 +2530,6 @@ void nvim_edit_ins_redraw_impl(int ready)
   emsg_on_display = false;      // may remove error message now
 }
 
-
 // Put a character directly onto the screen.  It's not stored in a buffer.
 // Used while handling CTRL-K, CTRL-V, etc. in Insert mode.
 static int pc_status;
@@ -2634,8 +2587,6 @@ void edit_putchar(int c, bool highlight)
   grid_line_flush();
 }
 
-
-
 // Undo the previous edit_putchar().
 void edit_unputchar(void)
 {
@@ -2678,36 +2629,12 @@ void display_dollar(colnr_T col_arg)
   curwin->w_cursor.col = save_col;
 }
 
-
 String get_last_insert(void)
   FUNC_ATTR_PURE
 {
   RsNvimString rs = rs_get_last_insert();
   return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
 }
-
-
-/// Check the word in front of the cursor for an abbreviation.
-/// Called when the non-id character "c" has been entered.
-// replace-stack functions
-//
-// When replacing characters, the replaced characters are remembered for each
-// new character.  This is used to re-insert the old text when backspacing.
-//
-// There is a NUL headed list of characters for each character that is
-// currently in the file after the insertion point.  When BS is used, one NUL
-// headed list is put back for the deleted character.
-//
-// For a newline, there are two NUL headed lists.  One contains the characters
-// that the NL replaced.  The extra one stores the characters after the cursor
-// that were deleted (always white space).
-
-/// Push character that is replaced onto the replace stack.
-///
-/// replace_offset is normally 0, in which case replace_push will add a new
-/// character at the end of the stack.  If replace_offset is not 0, that many
-/// characters will be left on the stack above the newly inserted character.
-// get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").
 
 void set_can_cindent(bool val)
 {
@@ -2731,12 +2658,6 @@ int ins_apply_autocmds(event_T event)
   return r;
 }
 
-// =============================================================================
-// C Wrappers for Rust FFI
-// =============================================================================
-
-// nvim_scroll_cursor_up, nvim_scroll_cursor_down: deleted (move crate now calls cursor_up/cursor_down directly).
-
 /// Get the dollar_vcol global variable (accessor for Rust).
 colnr_T nvim_get_dollar_vcol(void)
 {
@@ -2748,14 +2669,6 @@ void nvim_set_dollar_vcol(colnr_T val)
 {
   dollar_vcol = val;
 }
-
-// =============================================================================
-// Phase 1: ins_tab accessors
-// (did_ai, did_si, can_si, can_si_back are in change_ffi.c)
-// =============================================================================
-
-// nvim_get_p_sta is in option_shim.c
-// nvim_curbuf_get_b_p_et is in option_shim.c
 
 /// Get curbuf->b_p_sts (accessor for Rust).
 long nvim_curbuf_get_b_p_sts(void)
@@ -2932,12 +2845,6 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
   return false;
 }
 
-
-// =============================================================================
-// Phase 2: ins_bs accessors and helpers
-// =============================================================================
-
-
 /// Check if backspace mode is allowed (accessor for Rust).
 int nvim_edit_can_bs(int what)
 {
@@ -2955,9 +2862,6 @@ void nvim_edit_dec_cursor(void)
 {
   dec_cursor();
 }
-
-// nvim_edit_get_cursor_coladd and nvim_edit_set_cursor_coladd are defined
-// in the Phase 3 accessors section (lines ~701-710).
 
 /// Call u_save(lnum1, lnum2) (accessor for Rust).
 int nvim_edit_u_save(int lnum1, int lnum2)
@@ -3127,10 +3031,6 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
             || (*(get_cursor_pos_ptr() - 1) == ' '
                 && (!*inserted_space_p || arrow_used))));
 }
-
-// =============================================================================
-// Phase 2 accessors: stop_insert, ins_esc, ins_reg
-// =============================================================================
 
 /// Clear VALID_WCOL and VALID_VIRTCOL bits from curwin->w_valid (accessor for Rust).
 void nvim_edit_curwin_clear_wcol_virtcol(void)
