@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "nvim/autocmd.h"
+#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/clipboard.h"
@@ -58,11 +60,21 @@ extern void rs_win_size_save(garray_T *gap);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_clear_showcmd(void);
 
-// Cmdwin autocmd triggers from ex_getln.c
-extern void nvim_trigger_cmdwinenter(void);
-extern void nvim_trigger_cmdwinleave(void);
-
 #include "cmdwin.c.generated.h"
+
+/// Trigger CmdwinEnter autocommand for the current cmdwin_type.
+static void trigger_cmdwinenter(void)
+{
+  char typestr[2] = { (char)cmdwin_type, NUL };
+  apply_autocmds(EVENT_CMDWINENTER, typestr, typestr, false, curbuf);
+}
+
+/// Trigger CmdwinLeave autocommand for the current cmdwin_type.
+static void trigger_cmdwinleave(void)
+{
+  char typestr[2] = { (char)cmdwin_type, NUL };
+  apply_autocmds(EVENT_CMDWINLEAVE, typestr, typestr, false, curbuf);
+}
 
 static const char e_cmdwin_active_window_or_buffer_changed_or_deleted[]
   = N_("E199: Active window or buffer changed or deleted");
@@ -225,7 +237,7 @@ int nvim_open_cmdwin(void)
   cmdwin_result = 0;
 
   // Trigger CmdwinEnter autocommands.
-  nvim_trigger_cmdwinenter();
+  trigger_cmdwinenter();
   if (restart_edit != 0) {  // autocmd with ":startinsert"
     stuffcharReadbuff(K_NOP);
   }
@@ -243,7 +255,7 @@ int nvim_open_cmdwin(void)
   const bool save_KeyTyped = KeyTyped;
 
   // Trigger CmdwinLeave autocommands.
-  nvim_trigger_cmdwinleave();
+  trigger_cmdwinleave();
 
   // Restore KeyTyped in case it is modified by autocommands
   KeyTyped = save_KeyTyped;

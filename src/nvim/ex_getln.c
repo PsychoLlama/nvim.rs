@@ -4,10 +4,8 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include "klib/kvec.h"
 #include "nvim/api/extmark.h"
@@ -22,6 +20,7 @@
 #include "nvim/charset.h"
 #include "nvim/clipboard.h"
 #include "nvim/cmdexpand.h"
+#include "nvim/cmdpreview.h"
 #include "nvim/cmdexpand_defs.h"
 #include "nvim/cmdhist.h"
 #include "nvim/cursor.h"
@@ -64,11 +63,8 @@
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/input.h"
-#include "nvim/os/os.h"
-#include "nvim/path.h"
 #include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
-#include "nvim/profile.h"
 #include "nvim/regexp.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/register.h"
@@ -79,8 +75,6 @@
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/ui_defs.h"
-#include "nvim/undo.h"
-#include "nvim/undo_defs.h"
 #include "nvim/usercmd.h"
 #include "nvim/vim_defs.h"
 #include "nvim/viml/parser/expressions.h"
@@ -173,6 +167,28 @@ extern int rs_get_echo_hl_id(void);
 // Rust FFI declarations
 extern void correct_screencol(int idx, int cells, int *col);
 extern int rs_magic_isset(void);
+extern void rs_init_incsearch_state(incsearch_state_T *state);
+extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
+                                             int call_update_screen);
+extern void rs_may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s);
+extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
+extern void draw_cmdline(int start, int len);
+extern int rs_entry_should_use_cmdmsg_rl(int firstc, int win_p_rl, int win_p_rlc_has_s);
+extern int rs_entry_should_add_to_history(int histype, int cmdlen, int firstc, int some_key_typed);
+extern int rs_entry_should_save_last_cmdline(int firstc);
+extern int rs_entry_hist_char2type(int firstc);
+extern int rs_entry_cmdline_type(int firstc);
+extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int prev_prompt_id,
+                                   int prev_errors);
+extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
+                                           unsigned int prev_prompt_id);
+extern int rs_cmd_startcol(void);
+extern int rs_cmdline_charsize(int idx);
+extern void rs_redrawcmdprompt(void);
+extern int command_line_handle_key(void *s);
+extern int command_line_wildchar_complete(void *s);
+extern int command_line_execute(VimState *state, int key);
+extern int command_line_check(VimState *state);
 
 // History browsing state (used by Rust cmdline/history.rs)
 typedef struct {
@@ -186,71 +202,11 @@ typedef struct {
 } HistoryBrowseState;
 extern int rs_command_line_browse_history(HistoryBrowseState *state);
 
-// Rust incsearch state functions
-extern void rs_init_incsearch_state(incsearch_state_T *state);
-extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
-                                             int call_update_screen);
-
-// Incsearch highlighting functions from Rust (cmdline/search.rs)
-extern void rs_may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s);
-extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
-// draw_cmdline: implemented in Rust (cmdline/screen.rs)
-extern void draw_cmdline(int start, int len);
-
-
-// Entry/exit orchestration helpers from Rust
-extern int rs_entry_should_use_cmdmsg_rl(int firstc, int win_p_rl, int win_p_rlc_has_s);
-extern int rs_entry_should_add_to_history(int histype, int cmdlen, int firstc, int some_key_typed);
-extern int rs_entry_should_save_last_cmdline(int firstc);
-extern int rs_entry_hist_char2type(int firstc);
-extern int rs_entry_cmdline_type(int firstc);
-
-// Drawing and coloring helpers from Rust
-extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int prev_prompt_id,
-                                   int prev_errors);
-extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
-                                           unsigned int prev_prompt_id);
-
-// Screen position and drawing helpers from Rust
-extern int rs_cmd_startcol(void);
-extern int rs_cmdline_charsize(int idx);
-extern void rs_redrawcmdprompt(void);
-
-// command_line_handle_key implemented in Rust (cmdline/keys.rs)
-extern int command_line_handle_key(void *s);
-// command_line_wildchar_complete() is implemented in Rust (cmdline crate, state.rs).
-extern int command_line_wildchar_complete(void *s);
-// command_line_execute() is implemented in Rust (cmdline crate, state.rs).
-extern int command_line_execute(VimState *state, int key);
-// command_line_check() is implemented in Rust (cmdline crate, state.rs).
-extern int command_line_check(VimState *state);
-
-
-
 static void trigger_cmd_autocmd(int typechar, event_T evt)
 {
   char typestr[2] = { (char)typechar, NUL };
   apply_autocmds(evt, typestr, typestr, false, curbuf);
 }
-
-/// Trigger CmdwinEnter autocommand for the current cmdwin_type.
-void nvim_trigger_cmdwinenter(void)
-{
-  trigger_cmd_autocmd(cmdwin_type, EVENT_CMDWINENTER);
-}
-
-/// Trigger CmdwinLeave autocommand for the current cmdwin_type.
-void nvim_trigger_cmdwinleave(void)
-{
-  trigger_cmd_autocmd(cmdwin_type, EVENT_CMDWINLEAVE);
-}
-
-/// Parses the :[range]s/foo like commands and returns details needed for
-/// incsearch and wildmenu completion.
-/// Returns true if pattern is valid.
-/// Sets skiplen, patlen, search_first_line, and search_last_line.
-/// Initialize the current command-line info.
-
 
 /// Internal entry point for cmdline mode.
 ///
@@ -587,8 +543,6 @@ theend:
   xfree(s->prev_cmdbuff);
   return (uint8_t *)p;
 }
-// cmdpreview functions moved to cmdpreview.c
-extern bool cmdpreview_may_show(void);
 
 /// Trigger CmdlineChanged autocommands.
 static void do_autocmd_cmdlinechanged(int firstc)
@@ -729,7 +683,6 @@ char *getexline(int c, void *cookie, int indent, bool do_concat)
 
   return getcmdline(c, 1, indent, do_concat);
 }
-
 
 /// Deallocate a command line buffer, updating the buffer size and length.
 void dealloc_cmdbuff(void)
@@ -1234,9 +1187,9 @@ unsigned get_cmdline_last_prompt_id(void)
   return last_prompt_id;
 }
 
-/// Get pointer to the command line info to use.
+/// Get pointer to the active command line info, or NULL if not in cmdline mode.
 /// When ccline is saved recursively, the previous value is in ccline.prev_ccline.
-static CmdlineInfo *get_ccline_ptr(void)
+CmdlineInfo *nvim_get_ccline_ptr(void)
 {
   if ((State & MODE_CMDLINE) == 0) {
     return NULL;
@@ -1247,12 +1200,6 @@ static CmdlineInfo *get_ccline_ptr(void)
   } else {
     return NULL;
   }
-}
-
-/// Public accessor for the active command line info (for VimL functions in other files).
-CmdlineInfo *nvim_get_ccline_ptr(void)
-{
-  return get_ccline_ptr();
 }
 
 /// Public wrapper for do_autocmd_cmdlinechanged (for VimL functions in other files).
@@ -1267,7 +1214,7 @@ void nvim_do_autocmd_cmdlinechanged(int firstc)
 /// Returns NUL when something is wrong.
 int nvim_get_cmdline_type(void)
 {
-  CmdlineInfo *p = get_ccline_ptr();
+  CmdlineInfo *p = nvim_get_ccline_ptr();
   if (p == NULL) {
     return NUL;
   }
@@ -1280,7 +1227,6 @@ int nvim_get_cmdline_type(void)
 
 // C accessor for ccline.cmdfirstc (used by Rust)
 int nvim_get_ccline_cmdfirstc(void) { return ccline.cmdfirstc; }
-
 
 void cmdline_init(void)
 {
@@ -1302,197 +1248,45 @@ const char *did_set_cedit(optset_T *args)
   }
   return NULL;
 }
-// C accessors for Rust to read ccline fields
-int nvim_get_ccline_overstrike(void)
-{
-  return ccline.overstrike;
-}
+// C accessors for Rust to read/write ccline fields
+int nvim_get_ccline_overstrike(void) { return ccline.overstrike; }
+int nvim_get_ccline_cmdpos(void) { return ccline.cmdpos; }
+int nvim_get_ccline_cmdlen(void) { return ccline.cmdlen; }
+int nvim_get_cmdwin_type(void) { return cmdwin_type; }
+int nvim_get_textlock(void) { return textlock; }
+const char *nvim_get_e_cmdwin(void) { return e_cmdwin; }
+const char *nvim_get_e_textlock(void) { return e_textlock; }
+int nvim_get_ccline_cmdspos(void) { return ccline.cmdspos; }
+int nvim_get_ccline_cmdindent(void) { return ccline.cmdindent; }
+unsigned int nvim_get_ccline_prompt_id(void) { return ccline.prompt_id; }
+int nvim_get_ccline_level(void) { return ccline.level; }
+int nvim_get_ccline_input_fn(void) { return ccline.input_fn; }
+char *nvim_get_ccline_cmdbuff(void) { return ccline.cmdbuff; }
+int nvim_get_ccline_cmdbufflen(void) { return ccline.cmdbufflen; }
+void nvim_set_ccline_cmdpos(int pos) { ccline.cmdpos = pos; }
+void nvim_set_ccline_cmdlen(int len) { ccline.cmdlen = len; }
+void nvim_set_ccline_cmdspos(int spos) { ccline.cmdspos = spos; }
+void nvim_set_ccline_cmdbuff(char *buff) { ccline.cmdbuff = buff; }
+void nvim_set_ccline_cmdbufflen(int len) { ccline.cmdbufflen = len; }
+void nvim_set_ccline_overstrike(int overstrike) { ccline.overstrike = overstrike; }
+int nvim_get_ccline_redraw_state(void) { return (int)ccline.redraw_state; }
+void nvim_set_ccline_redraw_state(int state) { ccline.redraw_state = (CmdRedraw)state; }
+int nvim_get_ccline_special_char(void) { return ccline.special_char; }
+void nvim_set_ccline_special_char(int c) { ccline.special_char = (char)c; }
+int nvim_get_ccline_special_shift(void) { return ccline.special_shift; }
+void nvim_set_ccline_special_shift(int shift) { ccline.special_shift = shift; }
+int nvim_get_ccline_one_key(void) { return ccline.one_key; }
+void nvim_set_ccline_one_key(int one_key) { ccline.one_key = one_key; }
 
-int nvim_get_ccline_cmdpos(void)
-{
-  return ccline.cmdpos;
-}
-
-int nvim_get_ccline_cmdlen(void)
-{
-  return ccline.cmdlen;
-}
-
-// C accessor for cmdwin_type global
-int nvim_get_cmdwin_type(void)
-{
-  return cmdwin_type;
-}
-
-// C accessor for textlock global
-int nvim_get_textlock(void)
-{
-  return textlock;
-}
-
-// C accessor for e_cmdwin error message
-const char *nvim_get_e_cmdwin(void)
-{
-  return e_cmdwin;
-}
-
-// C accessor for e_textlock error message
-const char *nvim_get_e_textlock(void)
-{
-  return e_textlock;
-}
-
-// Additional C accessors for Rust cmdline state management
-int nvim_get_ccline_cmdspos(void)
-{
-  return ccline.cmdspos;
-}
-
-int nvim_get_ccline_cmdindent(void)
-{
-  return ccline.cmdindent;
-}
-
-unsigned int nvim_get_ccline_prompt_id(void)
-{
-  return ccline.prompt_id;
-}
-
-int nvim_get_ccline_level(void)
-{
-  return ccline.level;
-}
-
-int nvim_get_ccline_input_fn(void)
-{
-  return ccline.input_fn;
-}
-
-char *nvim_get_ccline_cmdbuff(void)
-{
-  return ccline.cmdbuff;
-}
-
-int nvim_get_ccline_cmdbufflen(void)
-{
-  return ccline.cmdbufflen;
-}
-
-// Setters for Rust to update ccline state
-void nvim_set_ccline_cmdpos(int pos)
-{
-  ccline.cmdpos = pos;
-}
-
-void nvim_set_ccline_cmdlen(int len)
-{
-  ccline.cmdlen = len;
-}
-
-void nvim_set_ccline_cmdspos(int spos)
-{
-  ccline.cmdspos = spos;
-}
-
-void nvim_set_ccline_cmdbuff(char *buff)
-{
-  ccline.cmdbuff = buff;
-}
-
-void nvim_set_ccline_cmdbufflen(int len)
-{
-  ccline.cmdbufflen = len;
-}
-
-void nvim_set_ccline_overstrike(int overstrike)
-{
-  ccline.overstrike = overstrike;
-}
-
-int nvim_get_ccline_redraw_state(void)
-{
-  return (int)ccline.redraw_state;
-}
-
-void nvim_set_ccline_redraw_state(int state)
-{
-  ccline.redraw_state = (CmdRedraw)state;
-}
-
-int nvim_get_ccline_special_char(void)
-{
-  return ccline.special_char;
-}
-
-void nvim_set_ccline_special_char(int c)
-{
-  ccline.special_char = (char)c;
-}
-
-int nvim_get_ccline_special_shift(void)
-{
-  return ccline.special_shift;
-}
-
-void nvim_set_ccline_special_shift(int shift)
-{
-  ccline.special_shift = shift;
-}
-
-int nvim_get_ccline_one_key(void)
-{
-  return ccline.one_key;
-}
-
-void nvim_set_ccline_one_key(int one_key)
-{
-  ccline.one_key = one_key;
-}
-
-int nvim_get_ccline_hl_id(void)
-{
-  return ccline.hl_id;
-}
-
-void nvim_set_ccline_hl_id(int hl_id)
-{
-  ccline.hl_id = hl_id;
-}
-
-int nvim_get_ccline_xp_context(void)
-{
-  return ccline.xp_context;
-}
-
-void nvim_set_ccline_xp_context(int context)
-{
-  ccline.xp_context = context;
-}
-
-char *nvim_get_ccline_cmdprompt(void)
-{
-  return ccline.cmdprompt;
-}
-
-void nvim_set_ccline_cmdprompt(char *prompt)
-{
-  ccline.cmdprompt = prompt;
-}
-
-void nvim_set_ccline_cmdindent(int indent)
-{
-  ccline.cmdindent = indent;
-}
-
-void nvim_set_ccline_cmdfirstc(int firstc)
-{
-  ccline.cmdfirstc = firstc;
-}
-
-void nvim_set_ccline_cmdbuff_at(int idx, char val)
-{
-  ccline.cmdbuff[idx] = val;
-}
+int nvim_get_ccline_hl_id(void) { return ccline.hl_id; }
+void nvim_set_ccline_hl_id(int hl_id) { ccline.hl_id = hl_id; }
+int nvim_get_ccline_xp_context(void) { return ccline.xp_context; }
+void nvim_set_ccline_xp_context(int context) { ccline.xp_context = context; }
+char *nvim_get_ccline_cmdprompt(void) { return ccline.cmdprompt; }
+void nvim_set_ccline_cmdprompt(char *prompt) { ccline.cmdprompt = prompt; }
+void nvim_set_ccline_cmdindent(int indent) { ccline.cmdindent = indent; }
+void nvim_set_ccline_cmdfirstc(int firstc) { ccline.cmdfirstc = firstc; }
+void nvim_set_ccline_cmdbuff_at(int idx, char val) { ccline.cmdbuff[idx] = val; }
 
 void nvim_strcpy_cmdbuff(const char *src)
 {
@@ -1501,45 +1295,14 @@ void nvim_strcpy_cmdbuff(const char *src)
   }
 }
 
-int nvim_get_columns(void)
-{
-  return Columns;
-}
-
-int nvim_get_rows(void)
-{
-  return Rows;
-}
-
-int nvim_get_key_typed(void)
-{
-  return KeyTyped;
-}
-
-int nvim_get_cmdline_star(void)
-{
-  return cmdline_star;
-}
-
-int nvim_get_cmdline_row(void)
-{
-  return cmdline_row;
-}
-
-int nvim_cmdline_win_is_active(void)
-{
-  return cmdline_win != NULL;
-}
-
-int nvim_cmdline_win_width(void)
-{
-  return cmdline_win ? cmdline_win->w_view_width : 0;
-}
-
-int nvim_cmdline_win_height(void)
-{
-  return cmdline_win ? cmdline_win->w_view_height : 0;
-}
+int nvim_get_columns(void) { return Columns; }
+int nvim_get_rows(void) { return Rows; }
+int nvim_get_key_typed(void) { return KeyTyped; }
+int nvim_get_cmdline_star(void) { return cmdline_star; }
+int nvim_get_cmdline_row(void) { return cmdline_row; }
+int nvim_cmdline_win_is_active(void) { return cmdline_win != NULL; }
+int nvim_cmdline_win_width(void) { return cmdline_win ? cmdline_win->w_view_width : 0; }
+int nvim_cmdline_win_height(void) { return cmdline_win ? cmdline_win->w_view_height : 0; }
 
 /// Simplified wrapper around getcmdline_prompt for FFI use.
 /// Avoids passing the complex Callback union across FFI boundary.
@@ -1867,107 +1630,24 @@ void nvim_cls_set_c(void *s, int val)
   ((CommandLineState *)s)->c = val;
 }
 
-/// Get s->firstc field.
-int nvim_cls_get_firstc(void *s)
-{
-  return ((CommandLineState *)s)->firstc;
-}
-
-/// Get s->count field.
-int nvim_cls_get_count(void *s)
-{
-  return ((CommandLineState *)s)->count;
-}
-
-/// Get s->indent field.
-int nvim_cls_get_indent(void *s)
-{
-  return ((CommandLineState *)s)->indent;
-}
-
-/// Get s->gotesc field.
-int nvim_cls_get_gotesc(void *s)
-{
-  return ((CommandLineState *)s)->gotesc ? 1 : 0;
-}
-
-/// Set s->gotesc field.
-void nvim_cls_set_gotesc(void *s, int val)
-{
-  ((CommandLineState *)s)->gotesc = (val != 0);
-}
-
-/// Get s->do_abbr field.
-int nvim_cls_get_do_abbr(void *s)
-{
-  return ((CommandLineState *)s)->do_abbr ? 1 : 0;
-}
-
-/// Set s->do_abbr field.
-void nvim_cls_set_do_abbr(void *s, int val)
-{
-  ((CommandLineState *)s)->do_abbr = (val != 0);
-}
-
-/// Get s->ignore_drag_release field.
-int nvim_cls_get_ignore_drag_release(void *s)
-{
-  return ((CommandLineState *)s)->ignore_drag_release ? 1 : 0;
-}
-
-/// Set s->ignore_drag_release field.
-void nvim_cls_set_ignore_drag_release(void *s, int val)
-{
-  ((CommandLineState *)s)->ignore_drag_release = (val != 0);
-}
-
-/// Get s->did_wild_list field.
-int nvim_cls_get_did_wild_list(void *s)
-{
-  return ((CommandLineState *)s)->did_wild_list ? 1 : 0;
-}
-
-/// Set s->did_wild_list field.
-void nvim_cls_set_did_wild_list(void *s, int val)
-{
-  ((CommandLineState *)s)->did_wild_list = (val != 0);
-}
-
-/// Get s->wim_index field.
-int nvim_cls_get_wim_index(void *s)
-{
-  return ((CommandLineState *)s)->wim_index;
-}
-
-/// Set s->wim_index field.
-void nvim_cls_set_wim_index(void *s, int val)
-{
-  ((CommandLineState *)s)->wim_index = val;
-}
-
-/// Set s->skip_pum_redraw field.
-void nvim_cls_set_skip_pum_redraw(void *s, int val)
-{
-  ((CommandLineState *)s)->skip_pum_redraw = (val != 0);
-}
-
-/// Set s->prev_cmdpos field.
-void nvim_cls_set_prev_cmdpos(void *s, int val)
-{
-  ((CommandLineState *)s)->prev_cmdpos = val;
-}
-
-/// Get s->prev_cmdbuff field.
-char *nvim_cls_get_prev_cmdbuff(void *s)
-{
-  return ((CommandLineState *)s)->prev_cmdbuff;
-}
-
-/// Free s->prev_cmdbuff and set to NULL.
-void nvim_cls_xfree_prev_cmdbuff(void *s)
-{
-  XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff);
-}
+// CommandLineState field accessors
+int nvim_cls_get_firstc(void *s) { return ((CommandLineState *)s)->firstc; }
+int nvim_cls_get_count(void *s) { return ((CommandLineState *)s)->count; }
+int nvim_cls_get_indent(void *s) { return ((CommandLineState *)s)->indent; }
+int nvim_cls_get_gotesc(void *s) { return ((CommandLineState *)s)->gotesc ? 1 : 0; }
+void nvim_cls_set_gotesc(void *s, int val) { ((CommandLineState *)s)->gotesc = (val != 0); }
+int nvim_cls_get_do_abbr(void *s) { return ((CommandLineState *)s)->do_abbr ? 1 : 0; }
+void nvim_cls_set_do_abbr(void *s, int val) { ((CommandLineState *)s)->do_abbr = (val != 0); }
+int nvim_cls_get_ignore_drag_release(void *s) { return ((CommandLineState *)s)->ignore_drag_release ? 1 : 0; }
+void nvim_cls_set_ignore_drag_release(void *s, int val) { ((CommandLineState *)s)->ignore_drag_release = (val != 0); }
+int nvim_cls_get_did_wild_list(void *s) { return ((CommandLineState *)s)->did_wild_list ? 1 : 0; }
+void nvim_cls_set_did_wild_list(void *s, int val) { ((CommandLineState *)s)->did_wild_list = (val != 0); }
+int nvim_cls_get_wim_index(void *s) { return ((CommandLineState *)s)->wim_index; }
+void nvim_cls_set_wim_index(void *s, int val) { ((CommandLineState *)s)->wim_index = val; }
+void nvim_cls_set_skip_pum_redraw(void *s, int val) { ((CommandLineState *)s)->skip_pum_redraw = (val != 0); }
+void nvim_cls_set_prev_cmdpos(void *s, int val) { ((CommandLineState *)s)->prev_cmdpos = val; }
+char *nvim_cls_get_prev_cmdbuff(void *s) { return ((CommandLineState *)s)->prev_cmdbuff; }
+void nvim_cls_xfree_prev_cmdbuff(void *s) { XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff); }
 
 /// Set s->prev_cmdbuff to a copy of ccline.cmdbuff (if non-NULL).
 void nvim_cls_dup_cmdbuff_to_prev(void *s)
@@ -1978,64 +1658,15 @@ void nvim_cls_dup_cmdbuff_to_prev(void *s)
   }
 }
 
-/// Set s->some_key_typed field.
-void nvim_cls_set_some_key_typed(void *s, int val)
-{
-  ((CommandLineState *)s)->some_key_typed = (val != 0);
-}
-
-/// Get s->did_hist_navigate field.
-int nvim_cls_get_did_hist_navigate(void *s)
-{
-  return ((CommandLineState *)s)->did_hist_navigate ? 1 : 0;
-}
-
-/// Set s->did_hist_navigate field.
-void nvim_cls_set_did_hist_navigate(void *s, int val)
-{
-  ((CommandLineState *)s)->did_hist_navigate = (val != 0);
-}
-
-
-/// Get pointer to s->is_state (incsearch state).
-void *nvim_cls_get_is_state(void *s)
-{
-  return (void *)&((CommandLineState *)s)->is_state;
-}
-
-/// Get pointer to s->xpc (expand context).
-void *nvim_cls_get_xpc(void *s)
-{
-  return (void *)&((CommandLineState *)s)->xpc;
-}
-
-/// Get s->xpc.xp_numfiles field.
-int nvim_cls_get_xpc_numfiles(void *s)
-{
-  return ((CommandLineState *)s)->xpc.xp_numfiles;
-}
-
-/// Set s->xpc.xp_context field.
-void nvim_cls_set_xpc_context(void *s, int val)
-{
-  ((CommandLineState *)s)->xpc.xp_context = val;
-}
-
-
-// nvim_get_mod_mask, nvim_set_mod_mask defined in getchar.c
-// nvim_get_iobuff defined in option_shim.c
-
-/// Set s->event_cmdlineleavepre_triggered field.
-void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val)
-{
-  ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0);
-}
-
-/// Get s->break_ctrl_c field.
-int nvim_cls_get_break_ctrl_c(void *s)
-{
-  return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0;
-}
+void nvim_cls_set_some_key_typed(void *s, int val) { ((CommandLineState *)s)->some_key_typed = (val != 0); }
+int nvim_cls_get_did_hist_navigate(void *s) { return ((CommandLineState *)s)->did_hist_navigate ? 1 : 0; }
+void nvim_cls_set_did_hist_navigate(void *s, int val) { ((CommandLineState *)s)->did_hist_navigate = (val != 0); }
+void *nvim_cls_get_is_state(void *s) { return (void *)&((CommandLineState *)s)->is_state; }
+void *nvim_cls_get_xpc(void *s) { return (void *)&((CommandLineState *)s)->xpc; }
+int nvim_cls_get_xpc_numfiles(void *s) { return ((CommandLineState *)s)->xpc.xp_numfiles; }
+void nvim_cls_set_xpc_context(void *s, int val) { ((CommandLineState *)s)->xpc.xp_context = val; }
+void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val) { ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0); }
+int nvim_cls_get_break_ctrl_c(void *s) { return ((CommandLineState *)s)->break_ctrl_c ? 1 : 0; }
 
 /// Get ccline.mouse_used pointer (may be NULL).
 int nvim_cls_get_ccline_mouse_used(void)
@@ -2068,12 +1699,6 @@ int nvim_nextwild(void *xp, int type, int options, bool escape)
 {
   return nextwild((expand_T *)xp, type, options, escape);
 }
-
-// nvim_get_mouse_row: defined in getchar.c
-// nvim_get_cmdline_row: use nvim_get_cmdline_row from existing accessors
-// nvim_get_ex_normal_busy: defined in getchar.c
-// nvim_get_typebuf_len: defined in getchar.c
-// nvim_get_p_ari: defined in edit.c
 
 /// Get getln_interrupted_highlight global.
 int nvim_get_getln_interrupted_highlight(void)
@@ -2144,7 +1769,6 @@ int nvim_wildmenu_process_key(void *s)
   CommandLineState *cs = (CommandLineState *)s;
   return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
 }
-// Note: nvim_command_line_end_wildmenu is already defined earlier in this file.
 
 /// Check if is_state.winid != curwin->handle and if so, reset incsearch state.
 void nvim_cls_maybe_reset_incsearch_state(void *s)
