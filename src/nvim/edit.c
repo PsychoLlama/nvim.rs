@@ -1027,11 +1027,6 @@ int nvim_edit_topline_changed(void)
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
 
-/// Call redraw_later(curwin, UPD_VALID) (accessor for Rust).
-void nvim_edit_redraw_later_valid(void)
-{
-  redraw_later(curwin, UPD_VALID);
-}
 
 /// Check if mod_mask has MOD_MASK_CTRL (accessor for Rust).
 int nvim_edit_mod_mask_ctrl(void)
@@ -1282,18 +1277,6 @@ int nvim_edit_get_pum_want_finish(void)
   return pum_want.finish ? 1 : 0;
 }
 
-/// Set edit_submode_extra to NULL (accessor for Rust).
-void nvim_edit_clear_edit_submode_extra(void)
-{
-  edit_submode_extra = NULL;
-}
-
-
-/// Set cmdwin_result (accessor for Rust).
-void nvim_edit_set_cmdwin_result(int val)
-{
-  cmdwin_result = val;
-}
 
 /// Set ins_at_eol (accessor for Rust).
 
@@ -2735,12 +2718,6 @@ void nvim_edit_putchar(int c, int highlight)
 void nvim_edit_dec_redrawing_disabled(void)
 {
   RedrawingDisabled--;
-}
-
-/// Increment RedrawingDisabled (for ins_esc repeat path).
-void nvim_edit_inc_RedrawingDisabled(void)
-{
-  RedrawingDisabled++;
 }
 
 /// Check if p_cpo contains CPO_REPLCNT (accessor for Rust).

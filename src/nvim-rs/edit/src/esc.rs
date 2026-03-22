@@ -37,7 +37,7 @@ extern "C" {
 
     // `RedrawingDisabled` counter
     fn nvim_edit_dec_redrawing_disabled();
-    fn nvim_edit_inc_RedrawingDisabled();
+    fn nvim_inc_RedrawingDisabled();
 
     // Cursor
     fn nvim_curwin_get_cursor_col() -> c_int;
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
             if cmdchar == c_int::from(b'r') || cmdchar == c_int::from(b'v') {
                 stuffRedoReadbuff(ESC_STR.as_ptr());
             }
-            nvim_edit_inc_RedrawingDisabled();
+            nvim_inc_RedrawingDisabled();
             DISABLED_REDRAW = true;
             return 0; // repeat the insert
         }

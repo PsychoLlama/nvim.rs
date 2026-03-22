@@ -85,7 +85,7 @@ extern "C" {
     // Up/Down with Insstart column
     fn nvim_edit_coladvance_insstart();
     fn nvim_edit_topline_changed() -> c_int;
-    fn nvim_edit_redraw_later_valid();
+    fn nvim_redraw_later_valid();
 
     // -- Control key helpers (Phase 4b) --
     fn nvim_edit_ins_insert(replace_state: c_int);
@@ -353,7 +353,7 @@ unsafe fn ins_up_impl(startcol: bool) {
             nvim_edit_coladvance_insstart();
         }
         if nvim_edit_topline_changed() != 0 {
-            nvim_edit_redraw_later_valid();
+            nvim_redraw_later_valid();
         }
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
@@ -381,7 +381,7 @@ unsafe fn ins_down_impl(startcol: bool) {
             nvim_edit_coladvance_insstart();
         }
         if nvim_edit_topline_changed() != 0 {
-            nvim_edit_redraw_later_valid();
+            nvim_redraw_later_valid();
         }
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);

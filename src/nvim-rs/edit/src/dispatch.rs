@@ -154,9 +154,9 @@ extern "C" {
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_edit_set_pum_want_active(val: c_int);
     fn nvim_edit_get_pum_want_finish() -> c_int;
-    fn nvim_edit_clear_edit_submode_extra();
+    fn nvim_clear_edit_submode_extra();
     fn nvim_get_cmdwin_type() -> c_int;
-    fn nvim_edit_set_cmdwin_result(val: c_int);
+    fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_edit_inc_disable_fold_update();
@@ -194,7 +194,7 @@ extern "C" {
     fn nvim_edit_get_cpt_first_char() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
     fn nvim_edit_ve_onemore() -> c_int;
-    fn nvim_edit_redraw_later_valid();
+    fn nvim_redraw_later_valid();
     fn vim_isprintc(c: c_int) -> bool;
     fn nvim_get_dont_sync_undo() -> c_int;
     fn nvim_set_dont_sync_undo(val: c_int);
@@ -488,7 +488,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
 unsafe fn do_check_pum(s: *mut InsertState) {
     if nvim_get_pum_want_active() != 0 {
         if pum_visible() {
-            nvim_edit_clear_edit_submode_extra();
+            nvim_clear_edit_submode_extra();
             rs_insert_do_complete(s);
             if nvim_edit_get_pum_want_finish() != 0 {
                 rs_ins_compl_prep(CTRL_Y);
@@ -509,7 +509,7 @@ unsafe fn do_check_pum(s: *mut InsertState) {
 /// Trigger autocomplete (equivalent to the C `TRIGGER_AUTOCOMPLETE` macro).
 /// Returns true when autocomplete was triggered (caller should break from switch).
 unsafe fn trigger_autocomplete(s: *mut InsertState) {
-    nvim_edit_redraw_later_valid();
+    nvim_redraw_later_valid();
     update_screen();
     ui_flush();
     rs_ins_compl_enable_autocomplete();
@@ -665,7 +665,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_C => {
             if nvim_get_cmdwin_type() != 0 {
-                nvim_edit_set_cmdwin_result(K_IGNORE);
+                nvim_set_cmdwin_result(K_IGNORE);
                 nvim_set_got_int(0);
                 (*s).nomove = true;
                 return SwitchAction::Exit(0);
@@ -1070,7 +1070,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         return SwitchAction::Continue;
     }
     if nvim_get_cmdwin_type() != 0 {
-        nvim_edit_set_cmdwin_result(CAR);
+        nvim_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }
     if (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_bt_prompt_curbuf() {
