@@ -1478,12 +1478,6 @@ void nvim_edit_set_cmdwin_result(int val)
   cmdwin_result = val;
 }
 
-/// Get ins_at_eol (accessor for Rust).
-int nvim_edit_get_ins_at_eol(void)
-{
-  return ins_at_eol ? 1 : 0;
-}
-
 /// Set ins_at_eol (accessor for Rust).
 void nvim_edit_set_ins_at_eol(int val)
 {
@@ -1938,12 +1932,6 @@ int nvim_edit_get_stop_insert_mode(void)
 void nvim_edit_set_stop_insert_mode(int val)
 {
   stop_insert_mode = (val != 0);
-}
-
-/// Get where_paste_started.lnum (accessor for Rust).
-linenr_T nvim_edit_get_where_paste_started_lnum(void)
-{
-  return where_paste_started.lnum;
 }
 
 /// Set where_paste_started.lnum to 0 (accessor for Rust).
@@ -3216,18 +3204,6 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
 // Phase 2 accessors: stop_insert, ins_esc, ins_reg
 // =============================================================================
 
-/// Call auto_format(true, false) -- trail blank variant (accessor for Rust).
-void nvim_edit_auto_format_trail_blank(void)
-{
-  auto_format(true, false);
-}
-
-/// Call del_char(true) and return result (accessor for Rust).
-int nvim_edit_del_char_true(void)
-{
-  return del_char(true);
-}
-
 /// Set curbuf->b_op_start = Insstart, b_op_start_orig = Insstart_orig,
 /// b_op_end = *end_insert_pos (composite accessor for Rust).
 void nvim_edit_set_b_op_marks(void *end_insert_pos)
@@ -3235,19 +3211,6 @@ void nvim_edit_set_b_op_marks(void *end_insert_pos)
   curbuf->b_op_start = Insstart;
   curbuf->b_op_start_orig = Insstart_orig;
   curbuf->b_op_end = *(pos_T *)end_insert_pos;
-}
-
-/// Check if p_cpo does NOT contain CPO_INDENT (accessor for Rust).
-/// Returns 1 when CPO_INDENT is absent (i.e. auto-indent strip is enabled).
-int nvim_edit_p_cpo_no_indent(void)
-{
-  return vim_strchr(p_cpo, CPO_INDENT) == NULL ? 1 : 0;
-}
-
-/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
-int nvim_edit_curbuf_ml_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
 }
 
 /// Clear VALID_WCOL and VALID_VIRTCOL bits from curwin->w_valid (accessor for Rust).

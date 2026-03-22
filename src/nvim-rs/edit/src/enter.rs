@@ -95,11 +95,9 @@ extern "C" {
     // Flags
     fn nvim_edit_get_stop_insert_mode() -> c_int;
     fn nvim_edit_set_stop_insert_mode(val: c_int);
-    fn nvim_edit_get_where_paste_started_lnum() -> LinenrT;
     fn nvim_edit_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
-    fn nvim_edit_get_ins_at_eol() -> c_int;
     fn nvim_edit_set_ins_at_eol(val: c_int);
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);

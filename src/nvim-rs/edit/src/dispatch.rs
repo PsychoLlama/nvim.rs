@@ -157,7 +157,6 @@ extern "C" {
     fn nvim_edit_clear_edit_submode_extra();
     fn nvim_edit_get_cmdwin_type() -> c_int;
     fn nvim_edit_set_cmdwin_result(val: c_int);
-    fn nvim_edit_get_ins_at_eol() -> c_int;
     fn nvim_edit_set_ins_at_eol(val: c_int);
     fn nvim_edit_set_did_cursorhold(val: c_int);
     fn nvim_edit_inc_disable_fold_update();
