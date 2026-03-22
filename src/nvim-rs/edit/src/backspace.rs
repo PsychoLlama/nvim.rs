@@ -31,7 +31,7 @@ extern "C" {
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> ColnrT;
     fn nvim_curwin_set_cursor_col(col: ColnrT);
-    fn nvim_edit_set_cursor_lnum_abs(lnum: LinenrT);
+    fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_curwin_get_cursor_coladd() -> ColnrT;
     fn nvim_set_curwin_cursor_coladd(val: ColnrT);
     fn inc_cursor() -> c_int;
@@ -271,7 +271,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             if state & VREPLACE_FLAG == 0 || nvim_curwin_get_cursor_lnum() > orig_line_count {
                 let temp = nvim_gchar_cursor(); // remember current char
                 let new_lnum = nvim_curwin_get_cursor_lnum() - 1;
-                nvim_edit_set_cursor_lnum_abs(new_lnum);
+                nvim_curwin_set_cursor_lnum(new_lnum);
 
                 // When "aw" is in 'formatoptions': delete trailing space
                 if nvim_has_format_option(FO_AUTO) && nvim_has_format_option(FO_WHITE_PAR) {

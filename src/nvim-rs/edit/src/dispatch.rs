@@ -189,7 +189,7 @@ extern "C" {
     fn ui_flush();
     fn nvim_bt_quickfix_curbuf() -> c_int;
     fn nvim_bt_prompt_curbuf() -> bool;
-    fn nvim_edit_get_curwin_p_rl() -> c_int;
+    fn nvim_search_get_curwin_w_p_rl() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
     fn nvim_edit_get_cpt_first_char() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
@@ -544,7 +544,7 @@ unsafe fn may_trigger_autocomplete(s: *mut InsertState) -> bool {
 #[unsafe(export_name = "insert_handle_key")]
 pub unsafe extern "C" fn rs_insert_handle_key(s: *mut InsertState) -> c_int {
     // Handle right-to-left key swapping (p_rl option).
-    if nvim_edit_get_curwin_p_rl() != 0 {
+    if nvim_search_get_curwin_w_p_rl() != 0 {
         (*s).c = match (*s).c {
             K_LEFT => K_RIGHT,
             K_S_LEFT => K_S_RIGHT,

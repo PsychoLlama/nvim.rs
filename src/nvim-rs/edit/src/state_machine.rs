@@ -119,7 +119,7 @@ extern "C" {
     // --- scroll bind ---
     fn nvim_edit_curwin_p_scb() -> c_int;
     fn nvim_do_check_scrollbind_wrapper(flag: bool);
-    fn nvim_edit_curwin_p_crb() -> c_int;
+    fn nvim_curwin_get_w_p_crb() -> c_int;
     fn nvim_do_check_cursorbind_wrapper();
 
     // --- curswant update ---
@@ -175,7 +175,7 @@ extern "C" {
     fn do_c_expr_indent();
     fn inindent(n: c_int) -> c_int;
     fn ins_start_select(c: c_int) -> c_int;
-    fn nvim_edit_get_curwin_p_rl() -> c_int;
+    fn nvim_search_get_curwin_w_p_rl() -> c_int;
 
     fn xfree(p: *mut c_void);
 }
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     if unsafe { nvim_edit_curwin_p_scb() } != 0 {
         unsafe { nvim_do_check_scrollbind_wrapper(true) };
     }
-    if unsafe { nvim_edit_curwin_p_crb() } != 0 {
+    if unsafe { nvim_curwin_get_w_p_crb() } != 0 {
         unsafe { nvim_do_check_cursorbind_wrapper() };
     }
 
@@ -519,7 +519,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
     }
 
     // RTL key swap
-    if unsafe { nvim_edit_get_curwin_p_rl() } != 0 {
+    if unsafe { nvim_search_get_curwin_w_p_rl() } != 0 {
         let c = unsafe { (*s).c };
         unsafe {
             (*s).c = match c {

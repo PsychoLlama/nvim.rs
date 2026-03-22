@@ -615,11 +615,6 @@ void nvim_edit_win_set_cursor_lnum(win_T *wp, linenr_T lnum)
   wp->w_cursor.lnum = lnum;
 }
 
-/// Get wp->w_buffer->b_ml.ml_line_count (accessor for Rust).
-linenr_T nvim_edit_win_get_buf_line_count(win_T *wp)
-{
-  return wp->w_buffer->b_ml.ml_line_count;
-}
 
 /// Get fdo_flags global (accessor for Rust).
 int nvim_edit_get_fdo_flags(void)
@@ -993,17 +988,6 @@ void nvim_edit_set_cursor_lnum_rel(linenr_T delta)
   curwin->w_cursor.lnum += delta;
 }
 
-/// Set cursor lnum to an absolute value (accessor for Rust).
-void nvim_edit_set_cursor_lnum_abs(linenr_T lnum)
-{
-  curwin->w_cursor.lnum = lnum;
-}
-
-/// Set curwin->w_curswant (accessor for Rust).
-void nvim_edit_set_w_curswant(colnr_T val)
-{
-  curwin->w_curswant = val;
-}
 
 /// Get curbuf->b_ml.ml_line_count via curwin (accessor for Rust).
 
@@ -1398,11 +1382,6 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 
 
 
-/// Get curwin->w_p_rl (right-to-left option) (accessor for Rust).
-int nvim_edit_get_curwin_p_rl(void)
-{
-  return curwin->w_p_rl ? 1 : 0;
-}
 
 /// Check if curwin->w_cursor.col >= rs_ins_compl_col() (accessor for Rust).
 int nvim_edit_cursor_col_ge_compl_col(void)
@@ -1740,11 +1719,6 @@ void nvim_edit_set_vv_insertmode(int cmdchar)
   set_vim_var_string(VV_INSERTMODE, ptr, 1);
 }
 
-/// Call set_vim_var_string(VV_CHAR, NULL, -1) (accessor for Rust).
-void nvim_edit_clear_vv_char(void)
-{
-  set_vim_var_string(VV_CHAR, NULL, -1);
-}
 
 /// Call ins_apply_autocmds(EVENT_INSERTENTER) (accessor for Rust).
 void nvim_edit_ins_apply_insertenter(void)
@@ -1870,11 +1844,6 @@ int nvim_edit_curwin_p_scb(void)
   return curwin->w_p_scb ? 1 : 0;
 }
 
-/// Get curwin->w_p_crb (accessor for Rust state_machine).
-int nvim_edit_curwin_p_crb(void)
-{
-  return curwin->w_p_crb ? 1 : 0;
-}
 
 /// Get curwin->w_topline (accessor for Rust state_machine).
 linenr_T nvim_edit_get_curwin_topline(void)
@@ -2714,11 +2683,6 @@ void nvim_edit_putchar(int c, int highlight)
 
 // ---- ins_esc accessors ----
 
-/// Decrement RedrawingDisabled (for ins_esc undo of repeat-path increment).
-void nvim_edit_dec_redrawing_disabled(void)
-{
-  RedrawingDisabled--;
-}
 
 /// Check if p_cpo contains CPO_REPLCNT (accessor for Rust).
 int nvim_edit_p_cpo_has_replcnt(void)

@@ -302,11 +302,11 @@ unsafe fn ins_home_impl(c: c_int) {
     undisplay_dollar();
     nvim_edit_save_cursor(0);
     if c == K_C_HOME {
-        nvim_edit_set_cursor_lnum_abs(1);
+        nvim_curwin_set_cursor_lnum(1);
     }
     nvim_curwin_set_cursor_col(0);
     nvim_set_curwin_cursor_coladd(0);
-    nvim_edit_set_w_curswant(0);
+    nvim_set_curswant(0);
     nvim_edit_start_arrow_from_slot(0);
 }
 
@@ -327,10 +327,10 @@ unsafe fn ins_end_impl(c: c_int) {
     undisplay_dollar();
     nvim_edit_save_cursor(0);
     if c == K_C_END {
-        nvim_edit_set_cursor_lnum_abs(nvim_qf_curbuf_line_count());
+        nvim_curwin_set_cursor_lnum(nvim_qf_curbuf_line_count());
     }
     nvim_coladvance(MAXCOL);
-    nvim_edit_set_w_curswant(MAXCOL);
+    nvim_set_curswant(MAXCOL);
     nvim_edit_start_arrow_from_slot(0);
 }
 
@@ -565,8 +565,8 @@ extern "C" {
     fn nvim_edit_start_arrow_with_change_curpos(end_change: bool);
     fn nvim_edit_save_topline();
     fn nvim_edit_mod_mask_ctrl() -> c_int;
-    fn nvim_edit_set_w_curswant(val: ColnrT);
-    fn nvim_edit_set_cursor_lnum_abs(lnum: LinenrT);
+    fn nvim_set_curswant(val: ColnrT);
+    fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_edit_ctrl_g_u_sync();
 }
 

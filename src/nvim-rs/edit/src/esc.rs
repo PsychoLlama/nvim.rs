@@ -36,7 +36,7 @@ extern "C" {
     fn check_spell_redraw();
 
     // `RedrawingDisabled` counter
-    fn nvim_edit_dec_redrawing_disabled();
+    fn nvim_dec_RedrawingDisabled();
     fn nvim_inc_RedrawingDisabled();
 
     // Cursor
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     let temp = nvim_curwin_get_cursor_col();
     if DISABLED_REDRAW {
-        nvim_edit_dec_redrawing_disabled();
+        nvim_dec_RedrawingDisabled();
         DISABLED_REDRAW = false;
     }
     if nvim_get_arrow_used() == 0 {

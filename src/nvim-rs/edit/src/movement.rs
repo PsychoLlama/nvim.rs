@@ -42,7 +42,7 @@ extern "C" {
     // Window-parameterized cursor access
     fn nvim_edit_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_edit_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    fn nvim_edit_win_get_buf_line_count(wp: WinHandle) -> LinenrT;
+    fn nvim_win_get_buf_line_count(wp: WinHandle) -> LinenrT;
 
     // Current window handle
     fn nvim_get_curwin() -> WinHandle;
@@ -392,7 +392,7 @@ pub unsafe extern "C" fn rs_cursor_up(n: LinenrT, upd_topline: bool) -> c_int {
 /// `skip_conceal` is true.
 unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool) {
     let mut lnum = nvim_edit_win_get_cursor_lnum(wp);
-    let line_count = nvim_edit_win_get_buf_line_count(wp);
+    let line_count = nvim_win_get_buf_line_count(wp);
 
     if lnum + n as LinenrT >= line_count {
         lnum = line_count;
@@ -455,7 +455,7 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     {
         lnum = fold_last;
     }
-    if n > 0 && lnum >= nvim_edit_win_get_buf_line_count(curwin) {
+    if n > 0 && lnum >= nvim_win_get_buf_line_count(curwin) {
         return FAIL;
     }
     cursor_down_inner_impl(curwin, n, false);

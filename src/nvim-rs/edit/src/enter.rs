@@ -114,7 +114,7 @@ extern "C" {
 
     // AutocmdS
     fn nvim_edit_set_vv_insertmode(cmdchar: c_int);
-    fn nvim_edit_clear_vv_char();
+    fn nvim_textfmt_clear_vv_char();
     fn nvim_edit_ins_apply_insertenter();
     fn nvim_edit_ins_apply_insertleave();
     fn nvim_edit_vv_char_is_empty() -> c_int;
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         nvim_edit_save_cursor_pos(&raw mut save_lnum, &raw mut save_col, &raw mut save_coladd);
 
         nvim_edit_set_vv_insertmode(cmdchar);
-        nvim_edit_clear_vv_char();
+        nvim_textfmt_clear_vv_char();
         nvim_edit_ins_apply_insertenter();
 
         // Check for changed highlighting, e.g. for ModeMsg.

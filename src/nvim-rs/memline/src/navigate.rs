@@ -156,7 +156,7 @@ extern "C" {
     fn nvim_curwin_set_w_set_curswant(val: bool);
 
     /// Set curwin->w_curswant
-    fn nvim_edit_set_w_curswant(val: ColNr);
+    fn nvim_set_curswant(val: ColNr);
 
     /// coladvance(curwin, col) wrapper
     fn nvim_coladvance(col: ColNr);
@@ -1020,7 +1020,7 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
         // past the end
         let line_count = nvim_buf_get_ml_line_count(curbuf);
         nvim_curwin_set_cursor_lnum(line_count);
-        nvim_edit_set_w_curswant(maxcol);
+        nvim_set_curswant(maxcol);
         nvim_coladvance(maxcol);
     } else {
         nvim_curwin_set_cursor_lnum(lnum);
