@@ -323,6 +323,10 @@ extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
 
 // Phase 3: command_line_handle_key implemented in Rust (cmdline/keys.rs)
 extern int command_line_handle_key(void *s);
+// command_line_wildchar_complete() is implemented in Rust (cmdline crate, state.rs).
+extern int command_line_wildchar_complete(void *s);
+// command_line_execute() is implemented in Rust (cmdline crate, state.rs).
+extern int command_line_execute(VimState *state, int key);
 
 
 static handle_T cmdpreview_bufnr = 0;
@@ -867,127 +871,6 @@ static int command_line_check(VimState *state)
 
 // command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
 
-/// Completion for 'wildchar' or 'wildcharm' key.
-/// - hitting <ESC> twice means: abandon command line.
-/// - wildcard expansion is only done when the 'wildchar' key is really
-///   typed, not when it comes from a macro
-/// @return  CMDLINE_CHANGED if command line is changed or CMDLINE_NOT_CHANGED.
-static int command_line_wildchar_complete(CommandLineState *s)
-{
-  int res;
-  int options = WILD_NO_BEEP;
-  bool escape = s->firstc != '@';
-  bool redraw_if_menu_empty = s->c == K_WILD;
-  bool wim_noselect = p_wmnu && (wim_flags[0] & kOptWimFlagNoselect) != 0;
-
-  if (wim_flags[s->wim_index] & kOptWimFlagLastused) {
-    options |= WILD_BUFLASTUSED;
-  }
-  if (s->xpc.xp_numfiles > 0) {       // typed p_wc at least twice
-    // If "list" is present, list matches unless already listed
-    if (s->xpc.xp_numfiles > 1
-        && !s->did_wild_list
-        && (wim_flags[s->wim_index] & kOptWimFlagList)) {
-      showmatches(&s->xpc, false, true, wim_noselect);
-      redrawcmd();
-      s->did_wild_list = true;
-    }
-    if (wim_flags[s->wim_index] & kOptWimFlagLongest) {
-      res = nextwild(&s->xpc, WILD_LONGEST, options, escape);
-    } else if (wim_flags[s->wim_index] & kOptWimFlagFull) {
-      res = nextwild(&s->xpc, WILD_NEXT, options, escape);
-    } else {
-      res = OK;                 // don't insert 'wildchar' now
-    }
-  } else {                    // typed p_wc first time
-    bool wim_longest = (wim_flags[0] & kOptWimFlagLongest);
-    bool wim_list = (wim_flags[0] & kOptWimFlagList);
-    bool wim_full = (wim_flags[0] & kOptWimFlagFull);
-
-    s->wim_index = 0;
-    if (s->c == p_wc || s->c == p_wcm || s->c == K_WILD || s->c == Ctrl_Z) {
-      options |= WILD_MAY_EXPAND_PATTERN;
-      if (s->c == K_WILD) {
-        options |= WILD_FUNC_TRIGGER;
-      }
-      s->xpc.xp_pre_incsearch_pos = s->is_state.search_start;
-    }
-    int cmdpos_before = ccline.cmdpos;
-
-    // if 'wildmode' first contains "longest", get longest
-    // common part
-    if (wim_longest) {
-      res = nextwild(&s->xpc, WILD_LONGEST, options, escape);
-    } else {
-      if (wim_noselect || wim_list) {
-        options |= WILD_NOSELECT;
-      }
-      res = nextwild(&s->xpc, WILD_EXPAND_KEEP, options, escape);
-    }
-
-    // Remove popup menu if no completion items are available
-    if (redraw_if_menu_empty && s->xpc.xp_numfiles <= 0) {
-      pum_check_clear();
-    }
-
-    // if interrupted while completing, behave like it failed
-    if (got_int) {
-      vpeekc();               // remove <C-C> from input stream
-      got_int = false;              // don't abandon the command line
-      ExpandOne(&s->xpc, NULL, NULL, 0, WILD_FREE);
-      s->xpc.xp_context = EXPAND_NOTHING;
-      return CMDLINE_CHANGED;
-    }
-
-    // Display matches
-    if (res == OK && s->xpc.xp_numfiles > (wim_noselect ? 0 : 1)) {
-      if (wim_longest) {
-        bool found_longest_prefix = (ccline.cmdpos != cmdpos_before);
-        if (wim_list || (p_wmnu && wim_full)) {
-          showmatches(&s->xpc, p_wmnu, wim_list, true);
-        } else if (!found_longest_prefix) {
-          bool wim_list_next = (wim_flags[1] & kOptWimFlagList);
-          bool wim_full_next = (wim_flags[1] & kOptWimFlagFull);
-          bool wim_noselect_next = (wim_flags[1] & kOptWimFlagNoselect);
-          if (wim_list_next || (p_wmnu && (wim_full_next || wim_noselect_next))) {
-            if (wim_full_next && !wim_noselect_next) {
-              nextwild(&s->xpc, WILD_NEXT, options, escape);
-            } else {
-              showmatches(&s->xpc, p_wmnu, wim_list_next, wim_noselect_next);
-            }
-            if (wim_list_next) {
-              s->did_wild_list = true;
-            }
-          }
-        }
-      } else {
-        if (wim_list || (p_wmnu && (wim_full || wim_noselect))) {
-          showmatches(&s->xpc, p_wmnu, wim_list, wim_noselect);
-        } else {
-          vim_beep(kOptBoFlagWildmode);
-        }
-      }
-
-      redrawcmd();
-      if (wim_list) {
-        s->did_wild_list = true;
-      }
-    } else if (s->xpc.xp_numfiles == -1) {
-      s->xpc.xp_context = EXPAND_NOTHING;
-    }
-  }
-
-  if (s->wim_index < 3) {
-    s->wim_index++;
-  }
-
-  if (s->c == ESC) {
-    s->gotesc = true;
-  }
-
-  return (res == OK) ? CMDLINE_CHANGED : CMDLINE_NOT_CHANGED;
-}
-
 static void command_line_end_wildmenu(CommandLineState *s, bool key_is_wc)
 {
   if (cmdline_pum_active()) {
@@ -1007,259 +890,6 @@ static void command_line_end_wildmenu(CommandLineState *s, bool key_is_wc)
   }
   s->wim_index = 0;
   wildmenu_cleanup(&ccline);
-}
-
-static int command_line_execute(VimState *state, int key)
-{
-  if (key == K_IGNORE || key == K_NOP) {
-    return -1;  // get another key
-  }
-
-  disptick_T display_tick_saved = display_tick;
-  CommandLineState *s = (CommandLineState *)state;
-  s->c = key;
-
-  // Skip wildmenu during history navigation via Up/Down keys
-  if (s->c == K_WILD && s->did_hist_navigate) {
-    s->did_hist_navigate = false;
-    return 1;
-  }
-
-  if (s->c == K_EVENT || s->c == K_COMMAND || s->c == K_LUA) {
-    if (s->c == K_EVENT) {
-      state_handle_k_event();
-    } else if (s->c == K_COMMAND) {
-      do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT);
-    } else {
-      map_execute_lua(false, false);
-    }
-    // If the window changed incremental search state is not valid.
-    if (s->is_state.winid != curwin->handle) {
-      rs_init_incsearch_state(&s->is_state);
-    }
-    // Re-apply 'incsearch' highlighting in case it was cleared.
-    if (display_tick > display_tick_saved && s->is_state.did_incsearch) {
-      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
-    }
-
-    // nvim_select_popupmenu_item() can be called from the handling of
-    // K_EVENT, K_COMMAND, or K_LUA.
-    if (pum_want.active) {
-      if (cmdline_pum_active()) {
-        nextwild(&s->xpc, WILD_PUM_WANT, 0, s->firstc != '@');
-        if (pum_want.finish) {
-          nextwild(&s->xpc, WILD_APPLY, WILD_NO_BEEP, s->firstc != '@');
-          command_line_end_wildmenu(s, false);
-        }
-      }
-      pum_want.active = false;
-    }
-
-    if (!cmdline_was_last_drawn) {
-      redrawcmdline();
-    }
-    return 1;
-  }
-
-  if (KeyTyped) {
-    s->some_key_typed = true;
-
-    if (cmdmsg_rl && !KeyStuffed) {
-      // Invert horizontal movements and operations.  Only when
-      // typed by the user directly, not when the result of a
-      // mapping.
-      s->c = rs_invert_rtl_key(s->c);
-    }
-  }
-
-  // Ignore got_int when CTRL-C was typed here.
-  // Don't ignore it in :global, we really need to break then, e.g., for
-  // ":g/pat/normal /pat" (without the <CR>).
-  // Don't ignore it for the input() function.
-  if ((s->c == Ctrl_C)
-      && s->firstc != '@'
-      // do clear got_int in Ex mode to avoid infinite Ctrl-C loop
-      && (!s->break_ctrl_c || exmode_active)
-      && !global_busy) {
-    got_int = false;
-  }
-
-  // free old command line when finished moving around in the history
-  // list
-  if (s->lookfor != NULL
-      && s->c != K_S_DOWN && s->c != K_S_UP
-      && s->c != K_DOWN && s->c != K_UP
-      && s->c != K_PAGEDOWN && s->c != K_PAGEUP
-      && s->c != K_KPAGEDOWN && s->c != K_KPAGEUP
-      && s->c != K_LEFT && s->c != K_RIGHT
-      && (s->xpc.xp_numfiles > 0 || (s->c != Ctrl_P && s->c != Ctrl_N))) {
-    XFREE_CLEAR(s->lookfor);
-    s->lookforlen = 0;
-  }
-
-  // When there are matching completions to select <S-Tab> works like
-  // CTRL-P (unless 'wc' is <S-Tab>).
-  if (rs_is_stab_to_ctrl_p(s->c, (int)p_wc) && s->xpc.xp_numfiles > 0) {
-    s->c = Ctrl_P;
-  }
-
-  if (p_wmnu) {
-    s->c = wildmenu_translate_key(&ccline, s->c, &s->xpc, s->did_wild_list);
-  }
-
-  int wild_type = 0;
-  const bool key_is_wc = (s->c == p_wc && KeyTyped) || s->c == p_wcm;
-  if ((cmdline_pum_active() || wild_menu_showing || s->did_wild_list) && !key_is_wc) {
-    // Ctrl-Y: Accept the current selection and close the popup menu.
-    // Ctrl-E: cancel the cmdline popup menu and return the original text.
-    if (s->c == Ctrl_E || s->c == Ctrl_Y) {
-      wild_type = (s->c == Ctrl_E) ? WILD_CANCEL : WILD_APPLY;
-      nextwild(&s->xpc, wild_type, WILD_NO_BEEP, s->firstc != '@');
-    }
-  }
-
-  // Trigger CmdlineLeavePre autocommand
-  if ((KeyTyped && (s->c == '\n' || s->c == '\r' || s->c == K_KENTER || s->c == ESC))
-      || s->c == Ctrl_C) {
-    set_vim_var_char(s->c);  // Set v:char
-    trigger_cmd_autocmd(s->cmdline_type, EVENT_CMDLINELEAVEPRE);
-    s->event_cmdlineleavepre_triggered = true;
-    if ((s->c == ESC || s->c == Ctrl_C) && (wim_flags[0] & kOptWimFlagList)) {
-      set_no_hlsearch(true);
-    }
-  }
-
-  // The wildmenu is cleared if the pressed key is not used for
-  // navigating the wild menu (i.e. the key is not 'wildchar' or
-  // 'wildcharm' or Ctrl-N or Ctrl-P or Ctrl-A or Ctrl-L).
-  // If the popup menu is displayed, then PageDown and PageUp keys are
-  // also used to navigate the menu.
-  bool end_wildmenu = !key_is_wc && rs_should_end_wildmenu(s->c, (int)p_wc, (int)p_wcm);
-  end_wildmenu = end_wildmenu && (!cmdline_pum_active() || rs_should_end_wildmenu_pum(s->c));
-
-  // free expanded names when finished walking through matches
-  if (end_wildmenu) {
-    command_line_end_wildmenu(s, key_is_wc);
-  }
-
-  if (p_wmnu) {
-    s->c = wildmenu_process_key(&ccline, s->c, &s->xpc);
-  }
-
-  // CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode,
-  // CTRL-\ e prompts for an expression.
-  if (s->c == Ctrl_BSL) {
-    switch (rs_command_line_handle_ctrl_bsl(&s->c, &s->gotesc)) {
-    case CMDLINE_CHANGED:
-      return command_line_changed(s);
-    case CMDLINE_NOT_CHANGED:
-      return command_line_not_changed(s);
-    case GOTO_NORMAL_MODE:
-      return 0;                   // back to cmd mode
-    default:
-      s->c = Ctrl_BSL;            // backslash key not processed by
-                                  // rs_command_line_handle_ctrl_bsl()
-    }
-  }
-
-  if (s->c == cedit_key || s->c == K_CMDWIN) {
-    // TODO(vim): why is ex_normal_busy checked here?
-    if ((s->c == K_CMDWIN || ex_normal_busy == 0)
-        && got_int == false) {
-      // Open a window to edit the command line (and history).
-      s->c = open_cmdwin();
-      s->some_key_typed = true;
-    }
-  } else {
-    s->c = do_digraph(s->c);
-  }
-
-  if (s->c == '\n'
-      || s->c == '\r'
-      || s->c == K_KENTER
-      || (s->c == ESC
-          && (!KeyTyped || vim_strchr(p_cpo, CPO_ESC) != NULL))) {
-    // In Ex mode a backslash escapes a newline.
-    if (exmode_active
-        && s->c != ESC
-        && ccline.cmdpos == ccline.cmdlen
-        && ccline.cmdpos > 0
-        && ccline.cmdbuff[ccline.cmdpos - 1] == '\\') {
-      if (s->c == K_KENTER) {
-        s->c = '\n';
-      }
-    } else {
-      s->gotesc = false;         // Might have typed ESC previously, don't
-                                 // truncate the cmdline now.
-      if (rs_ccheck_abbr(s->c + ABBR_OFF)) {
-        return command_line_changed(s);
-      }
-
-      if (!cmd_silent) {
-        if (!ui_has(kUICmdline)) {
-          msg_cursor_goto(msg_row, 0);
-        }
-        ui_flush();
-      }
-      return 0;
-    }
-  }
-
-  // Completion for 'wildchar', 'wildcharm', and wildtrigger()
-  if ((s->c == p_wc && !s->gotesc && KeyTyped) || s->c == p_wcm || s->c == K_WILD
-      || s->c == Ctrl_Z) {
-    if (s->c == K_WILD) {
-      emsg_silent++;  // Silence the bell
-    }
-    int res = command_line_wildchar_complete(s);
-    if (s->c == K_WILD) {
-      emsg_silent--;
-    }
-    if (res == CMDLINE_CHANGED) {
-      return command_line_changed(s);
-    }
-    if (s->c == K_WILD) {
-      return command_line_not_changed(s);
-    }
-  }
-
-  s->gotesc = false;
-
-  // <S-Tab> goes to last match, in a clumsy way
-  if (s->c == K_S_TAB && KeyTyped) {
-    if (nextwild(&s->xpc, WILD_EXPAND_KEEP, 0, s->firstc != '@') == OK) {
-      if (s->xpc.xp_numfiles > 1
-          && ((!s->did_wild_list && (wim_flags[s->wim_index] & kOptWimFlagList)) || p_wmnu)) {
-        // Trigger the popup menu when wildoptions=pum
-        showmatches(&s->xpc, p_wmnu, wim_flags[s->wim_index] & kOptWimFlagList,
-                    wim_flags[0] & kOptWimFlagNoselect);
-      }
-      nextwild(&s->xpc, WILD_PREV, 0, s->firstc != '@');
-      nextwild(&s->xpc, WILD_PREV, 0, s->firstc != '@');
-      return command_line_changed(s);
-    }
-  }
-
-  if (s->c == NUL || s->c == K_ZERO) {
-    // NUL is stored as NL
-    s->c = NL;
-  }
-
-  s->do_abbr = true;             // default: check for abbreviation
-
-  // If already used to cancel/accept wildmenu, don't process the key further.
-  if (wild_type == WILD_CANCEL || wild_type == WILD_APPLY) {
-    // Apply search highlighting
-    if (s->is_state.winid != curwin->handle) {
-      rs_init_incsearch_state(&s->is_state);
-    }
-    if (KeyTyped || vpeekc() == NUL) {
-      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
-    }
-    return command_line_not_changed(s);
-  }
-
-  return command_line_handle_key(s);
 }
 
 // may_do_command_line_next_incsearch() is implemented in Rust (cmdline crate, search.rs).
@@ -3709,12 +3339,6 @@ int nvim_command_line_browse_history(void *vs)
   return result;
 }
 
-/// Wrapper for command_line_wildchar_complete (called from Rust via opaque handle).
-int nvim_command_line_wildchar_complete(void *s)
-{
-  return command_line_wildchar_complete((CommandLineState *)s);
-}
-
 /// Wrapper for command_line_end_wildmenu (called from Rust via opaque handle).
 void nvim_command_line_end_wildmenu(void *s, bool key_is_wc)
 {
@@ -4052,5 +3676,109 @@ int nvim_get_cedit_key(void)
 int nvim_open_cmdwin(void)
 {
   return open_cmdwin();
+}
+
+// Phase 4: Accessors for command_line_execute and command_line_wildchar_complete
+
+/// Get s->lookfor field (may be NULL).
+char *nvim_cls_get_lookfor(void *s)
+{
+  return ((CommandLineState *)s)->lookfor;
+}
+
+/// Free s->lookfor and set to NULL (XFREE_CLEAR equivalent).
+void nvim_cls_xfree_lookfor(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  XFREE_CLEAR(cs->lookfor);
+  cs->lookforlen = 0;
+}
+
+/// Set s->lookforlen field.
+void nvim_cls_set_lookforlen(void *s, int val)
+{
+  ((CommandLineState *)s)->lookforlen = val;
+}
+
+/// Get s->event_cmdlineleavepre_triggered field.
+int nvim_cls_get_event_cmdlineleavepre_triggered_val(void *s)
+{
+  return ((CommandLineState *)s)->event_cmdlineleavepre_triggered ? 1 : 0;
+}
+
+/// Set s->event_cmdlineleavepre_triggered field.
+void nvim_cls_set_event_cmdlineleavepre_triggered_val(void *s, int val)
+{
+  ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0);
+}
+
+/// Get cmdline_was_last_drawn global.
+int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
+
+/// Set s->xpc.xp_pre_incsearch_pos from s->is_state.search_start.
+void nvim_cls_set_xpc_pre_incsearch_from_is_state(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  cs->xpc.xp_pre_incsearch_pos = cs->is_state.search_start;
+}
+
+/// Wrapper for wildmenu_translate_key (called from Rust).
+int nvim_wildmenu_translate_key(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  return wildmenu_translate_key(&ccline, cs->c, &cs->xpc, cs->did_wild_list);
+}
+
+/// Wrapper for wildmenu_process_key (called from Rust).
+int nvim_wildmenu_process_key(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
+}
+// Note: nvim_command_line_end_wildmenu is already defined earlier in this file.
+
+/// Check if is_state.winid != curwin->handle and if so, reset incsearch state.
+void nvim_cls_maybe_reset_incsearch_state(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  if (cs->is_state.winid != curwin->handle) {
+    rs_init_incsearch_state(&cs->is_state);
+  }
+}
+
+/// May do incsearch highlighting for given state (wraps rs_may_do_incsearch_highlighting).
+void nvim_cls_may_do_incsearch(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  rs_may_do_incsearch_highlighting(cs->firstc, cs->count, &cs->is_state);
+}
+
+/// Get is_state.did_incsearch field.
+int nvim_cls_get_is_state_did_incsearch(void *s)
+{
+  return ((CommandLineState *)s)->is_state.did_incsearch ? 1 : 0;
+}
+
+/// Set v:char and trigger CmdlineLeavePre for the given state.
+void nvim_cls_trigger_cmdlineleavepre(void *s)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  set_vim_var_char(cs->c);
+  trigger_cmd_autocmd(cs->cmdline_type, EVENT_CMDLINELEAVEPRE);
+}
+
+/// Wrapper for trigger_cmd_autocmd with STATE lookup (called from Rust).
+void nvim_cls_trigger_cmd_autocmd(void *s, int evt)
+{
+  CommandLineState *cs = (CommandLineState *)s;
+  trigger_cmd_autocmd(cs->cmdline_type, (event_T)evt);
+}
+
+// Note: nvim_cls_get_gotesc and nvim_cls_set_gotesc already exist above.
+
+/// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
+void nvim_cmdline_do_cmdline_nowait(void)
+{
+  do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT);
 }
 

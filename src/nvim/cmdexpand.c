@@ -287,6 +287,12 @@ int nvim_get_wild_menu_showing(void)
   return wild_menu_showing;
 }
 
+/// Set pum_want.active (for Rust FFI).
+void nvim_set_pum_want_active(int val)
+{
+  pum_want.active = (val != 0);
+}
+
 
 // =============================================================================
 // Phase 1: C accessors for Rust leaf utility functions

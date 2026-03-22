@@ -2274,3 +2274,6 @@ void nvim_paste_repeat_discard(void)
 {
   paste_repeat(0);
 }
+
+/// Get KeyStuffed global.
+int nvim_get_key_stuffed(void) { return KeyStuffed ? 1 : 0; }

@@ -3097,3 +3097,9 @@ void nvim_option_set_flags_var_if_present(OptIndex idx, unsigned val)
     *opt->flags_var = val;
   }
 }
+
+/// Get p_wc (wildchar option) for Rust.
+int nvim_get_p_wc(void) { return (int)p_wc; }
+
+/// Get p_wcm (wildcharm option) for Rust.
+int nvim_get_p_wcm(void) { return (int)p_wcm; }

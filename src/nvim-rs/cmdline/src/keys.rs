@@ -50,68 +50,77 @@ const KE_KDEL: c_int = 80;
 const KE_C_LEFT: c_int = 85;
 const KE_C_RIGHT: c_int = 86;
 const KE_WILD: c_int = 108;
+const KE_NOP: c_int = 97;
+const KE_EVENT: c_int = 102;
+const KE_LUA: c_int = 103;
+const KE_COMMAND: c_int = 104;
+const KS_ZERO: c_int = 255;
 
 // Arrow keys: TERMCAP2KEY('k', 'u'), etc.
-const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
-const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
-const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
-const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
+pub const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+pub const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+pub const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
+pub const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
 
 // Shifted arrow keys
-const K_S_UP: c_int = termcap2key(KS_EXTRA, KE_S_UP);
-const K_S_DOWN: c_int = termcap2key(KS_EXTRA, KE_S_DOWN);
-const K_S_LEFT: c_int = termcap2key(b'#' as c_int, b'4' as c_int);
-const K_S_RIGHT: c_int = termcap2key(b'%' as c_int, b'i' as c_int);
+pub const K_S_UP: c_int = termcap2key(KS_EXTRA, KE_S_UP);
+pub const K_S_DOWN: c_int = termcap2key(KS_EXTRA, KE_S_DOWN);
+pub const K_S_LEFT: c_int = termcap2key(b'#' as c_int, b'4' as c_int);
+pub const K_S_RIGHT: c_int = termcap2key(b'%' as c_int, b'i' as c_int);
 
 // Control arrow keys
-const K_C_LEFT: c_int = termcap2key(KS_EXTRA, KE_C_LEFT);
-const K_C_RIGHT: c_int = termcap2key(KS_EXTRA, KE_C_RIGHT);
+pub const K_C_LEFT: c_int = termcap2key(KS_EXTRA, KE_C_LEFT);
+pub const K_C_RIGHT: c_int = termcap2key(KS_EXTRA, KE_C_RIGHT);
 
 // Home/End
-const K_HOME: c_int = termcap2key(b'k' as c_int, b'h' as c_int);
-const K_END: c_int = termcap2key(b'@' as c_int, b'7' as c_int);
-const K_XHOME: c_int = termcap2key(KS_EXTRA, KE_XHOME);
-const K_XEND: c_int = termcap2key(KS_EXTRA, KE_XEND);
-const K_S_HOME: c_int = termcap2key(b'#' as c_int, b'2' as c_int);
-const K_S_END: c_int = termcap2key(b'*' as c_int, b'7' as c_int);
+pub const K_HOME: c_int = termcap2key(b'k' as c_int, b'h' as c_int);
+pub const K_END: c_int = termcap2key(b'@' as c_int, b'7' as c_int);
+pub const K_XHOME: c_int = termcap2key(KS_EXTRA, KE_XHOME);
+pub const K_XEND: c_int = termcap2key(KS_EXTRA, KE_XEND);
+pub const K_S_HOME: c_int = termcap2key(b'#' as c_int, b'2' as c_int);
+pub const K_S_END: c_int = termcap2key(b'*' as c_int, b'7' as c_int);
 
 // Delete/Insert
-const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
-const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
-const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
+pub const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
+pub const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
+pub const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
 
 // Page Up/Down
-const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
-const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
-const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
-const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
+pub const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+pub const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
+pub const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
+pub const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
 
 // Enter keys
-const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
+pub const K_KENTER: c_int = termcap2key(b'K' as c_int, b'A' as c_int);
 
 // Tab
-const K_TAB: c_int = termcap2key(KS_EXTRA, KE_TAB);
-const K_S_TAB: c_int = termcap2key(b'k' as c_int, b'B' as c_int);
+pub const K_TAB: c_int = termcap2key(KS_EXTRA, KE_TAB);
+pub const K_S_TAB: c_int = termcap2key(b'k' as c_int, b'B' as c_int);
 
 // Mouse events
-const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
-const K_LEFTMOUSE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE_NM);
-const K_LEFTRELEASE: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE);
-const K_LEFTRELEASE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE_NM);
-const K_MIDDLEMOUSE: c_int = termcap2key(KS_EXTRA, KE_MIDDLEMOUSE);
-const K_MIDDLERELEASE: c_int = termcap2key(KS_EXTRA, KE_MIDDLERELEASE);
-const K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, KE_RIGHTMOUSE);
-const K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, KE_RIGHTRELEASE);
-const K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, KE_LEFTDRAG);
-const K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, KE_RIGHTDRAG);
-const K_MIDDLEDRAG: c_int = termcap2key(KS_EXTRA, KE_MIDDLEDRAG);
-const K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, KE_MOUSEDOWN);
-const K_MOUSEUP: c_int = termcap2key(KS_EXTRA, KE_MOUSEUP);
-const K_MOUSELEFT: c_int = termcap2key(KS_EXTRA, KE_MOUSELEFT);
-const K_MOUSERIGHT: c_int = termcap2key(KS_EXTRA, KE_MOUSERIGHT);
+pub const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
+pub const K_LEFTMOUSE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE_NM);
+pub const K_LEFTRELEASE: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE);
+pub const K_LEFTRELEASE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE_NM);
+pub const K_MIDDLEMOUSE: c_int = termcap2key(KS_EXTRA, KE_MIDDLEMOUSE);
+pub const K_MIDDLERELEASE: c_int = termcap2key(KS_EXTRA, KE_MIDDLERELEASE);
+pub const K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, KE_RIGHTMOUSE);
+pub const K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, KE_RIGHTRELEASE);
+pub const K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, KE_LEFTDRAG);
+pub const K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, KE_RIGHTDRAG);
+pub const K_MIDDLEDRAG: c_int = termcap2key(KS_EXTRA, KE_MIDDLEDRAG);
+pub const K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, KE_MOUSEDOWN);
+pub const K_MOUSEUP: c_int = termcap2key(KS_EXTRA, KE_MOUSEUP);
+pub const K_MOUSELEFT: c_int = termcap2key(KS_EXTRA, KE_MOUSELEFT);
+pub const K_MOUSERIGHT: c_int = termcap2key(KS_EXTRA, KE_MOUSERIGHT);
 
-// Wildcard
-const K_WILD: c_int = termcap2key(KS_EXTRA, KE_WILD);
+// Wildcard and special keys (K_IGNORE, K_CMDWIN defined in extended block below)
+pub const K_WILD: c_int = termcap2key(KS_EXTRA, KE_WILD);
+pub const K_NOP: c_int = termcap2key(KS_EXTRA, KE_NOP);
+pub const K_EVENT: c_int = termcap2key(KS_EXTRA, KE_EVENT);
+pub const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
+pub const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
 
 // Control characters
 const CTRL_A: c_int = 1;
@@ -937,7 +946,7 @@ const KS_SELECT: c_int = 245;
 const KE_FILLER: c_int = 88; // 'X'
 
 const K_KINS: c_int = termcap2key(KS_EXTRA, KE_KINS);
-const K_CMDWIN: c_int = termcap2key(KS_EXTRA, KE_CMDWIN);
+pub const K_CMDWIN: c_int = termcap2key(KS_EXTRA, KE_CMDWIN);
 const K_X1MOUSE: c_int = termcap2key(KS_EXTRA, KE_X1MOUSE);
 const K_X1DRAG: c_int = termcap2key(KS_EXTRA, KE_X1DRAG);
 const K_X1RELEASE: c_int = termcap2key(KS_EXTRA, KE_X1RELEASE);
@@ -945,8 +954,9 @@ const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
 const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
 const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
 const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
-const K_IGNORE: c_int = termcap2key(KS_EXTRA, KE_IGNORE);
+pub const K_IGNORE: c_int = termcap2key(KS_EXTRA, KE_IGNORE);
 const K_SELECT: c_int = termcap2key(KS_SELECT, KE_FILLER);
+pub const K_ZERO: c_int = termcap2key(KS_ZERO, KE_FILLER);
 
 // Additional Home/End keys
 const K_KHOME: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
