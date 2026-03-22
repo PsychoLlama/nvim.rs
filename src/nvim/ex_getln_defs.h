@@ -4,6 +4,18 @@
 
 #include "klib/kvec.h"
 #include "nvim/cmdexpand_defs.h"
+#include "nvim/pos_defs.h"  // IWYU pragma: keep
+
+/// Viewstate saved during 'incsearch' highlighting and 'inccommand' preview.
+typedef struct {
+  colnr_T vs_curswant;
+  colnr_T vs_leftcol;
+  colnr_T vs_skipcol;
+  linenr_T vs_topline;
+  int vs_topfill;
+  linenr_T vs_botline;
+  int vs_empty_rows;
+} viewstate_T;
 
 /// Command-line colors: one chunk
 ///

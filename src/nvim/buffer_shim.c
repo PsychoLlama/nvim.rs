@@ -1004,3 +1004,20 @@ void nvim_fuzzymatches_to_strmatches(void *fuzmatch, char ***file, int count, bo
 {
   fuzzymatches_to_strmatches((fuzmatch_str_T *)fuzmatch, file, count, escape);
 }
+
+// Accessors for cmdwin migration
+int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
+void nvim_curbuf_set_p_ma(bool val) { curbuf->b_p_ma = val; }
+void nvim_curbuf_ro_locked_inc(void) { curbuf->b_ro_locked++; }
+void nvim_curbuf_ro_locked_dec(void) { curbuf->b_ro_locked--; }
+void nvim_curbuf_set_p_tw(int64_t val) { curbuf->b_p_tw = val; }
+/// Set current buffer's bufhidden to "wipe" (for cmdwin migration).
+void nvim_cmdwin_set_bufhidden_wipe(void)
+{
+  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL);
+}
+/// Set current buffer's filetype to "vim" (for cmdwin migration).
+void nvim_cmdwin_set_filetype_vim(void)
+{
+  set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("vim"), OPT_LOCAL);
+}

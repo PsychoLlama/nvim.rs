@@ -522,6 +522,7 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
 int nvim_get_cmdmsg_rl(void) { return cmdmsg_rl ? 1 : 0; }
+void nvim_set_cmdmsg_rl(int val) { cmdmsg_rl = (val != 0); }
 int nvim_get_msg_grid_cols(void) { return msg_grid.cols; }
 
 // Phase 5 (msg_puts_len): wrappers for static functions and state

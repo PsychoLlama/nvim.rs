@@ -1198,6 +1198,11 @@ void nvim_apply_autocmds_winclosed_by_handle(const char *handle_str, win_T *win)
 }
 win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
 win_T *nvim_get_cmdwin_old_curwin(void) { return cmdwin_old_curwin; }
+void nvim_set_cmdwin_type(int val) { cmdwin_type = val; }
+void nvim_set_cmdwin_level(int val) { cmdwin_level = val; }
+void nvim_set_cmdwin_win(win_T *val) { cmdwin_win = val; }
+void nvim_set_cmdwin_old_curwin(win_T *val) { cmdwin_old_curwin = val; }
+void nvim_set_cmdwin_buf(buf_T *val) { cmdwin_buf = val; }
 // nvim_can_close_in_cmdwin_check deleted: logic migrated to Rust focus.rs (Phase 8)
 // nvim_set_cmdwin_result already exists in normal_shim.c
 /// Set api_error for cmdwin (Phase 8 accessor).
@@ -1529,6 +1534,8 @@ void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp;
 
 /// Set skip_win_fix_scroll global.
 void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
+/// Set skip_win_fix_cursor global.
+void nvim_set_skip_win_fix_cursor(int val) { skip_win_fix_cursor = (val != 0); }
 
 /// Wrap set_option_value for cmdheight with command_frame_height guard.
 /// Sets command_frame_height=false, calls set_option_value(kOptCmdheight, new_ch, 0),
@@ -2491,6 +2498,14 @@ void nvim_curwin_set_stl_state(int32_t state, int32_t empty_line,
 /// its address directly via extern static without generating a double-dereference.
 /// This thin C wrapper returns the correct address.
 char *nvim_get_empty_string_option(void) { return empty_string_option; }
+
+// Accessors for cmdwin migration
+void nvim_curwin_set_p_fen(bool val) { curwin->w_p_fen = val; }
+void nvim_curwin_set_p_rl(bool val) { curwin->w_p_rl = val; }
+void nvim_curwin_set_p_cole(int val) { curwin->w_p_cole = val; }
+void nvim_curwin_set_p_cul(bool val) { curwin->w_p_cul = val; }
+void nvim_curwin_set_p_cuc(bool val) { curwin->w_p_cuc = val; }
+void nvim_curwin_set_p_spell(bool val) { curwin->w_p_spell = val; }
 
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
