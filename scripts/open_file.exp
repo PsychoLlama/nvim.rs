@@ -40,9 +40,10 @@ set nvim [expr {[info exists env(NVIM)] ? $env(NVIM) : "nvim"}]
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 
-# No -u flag: plugins (including netrwPlugin) load normally from runtimepath.
-# VIMRUNTIME is the sole source of runtime files.
-spawn $nvim .
+# --clean disables swap/shada/viminfo so stale swapfiles don't trigger
+# interactive prompts that block the test.  Plugins (including netrwPlugin)
+# still load normally from runtimepath.
+spawn $nvim --clean .
 log_user 0
 
 # Wait for netrw to render the directory listing.  The header line
@@ -127,10 +128,8 @@ expect {
         exit 1
     }
     eof {
-        set detail [strip_escapes $expect_out(buffer)]
-        if {$detail ne ""} {
-            puts stderr "CRASH: $detail"
-        }
+        # Clean exit — residual terminal output in the buffer is normal.
+        # The actual crash check happens via the exit code below.
     }
     timeout {}
 }
