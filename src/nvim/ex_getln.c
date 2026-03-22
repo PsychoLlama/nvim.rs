@@ -1585,48 +1585,6 @@ const char *did_set_cedit(optset_T *args)
   return NULL;
 }
 
-/// Open a window on the current command line and history.  Allow editing in
-/// the window.  Returns when the window is closed.
-/// Returns:
-///     CR       if the command is to be executed
-///     Ctrl_C   if it is to be abandoned
-///     K_IGNORE if editing continues
-char *script_get(exarg_T *const eap, size_t *const lenp)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
-{
-  char *cmd = eap->arg;
-
-  if (cmd[0] != '<' || cmd[1] != '<' || eap->ea_getline == NULL) {
-    *lenp = strlen(eap->arg);
-    return eap->skip ? NULL : xmemdupz(eap->arg, *lenp);
-  }
-  cmd += 2;
-
-  garray_T ga = { .ga_data = NULL, .ga_len = 0 };
-
-  list_T *const l = heredoc_get(eap, cmd, true);
-  if (l == NULL) {
-    return NULL;
-  }
-
-  if (!eap->skip) {
-    ga_init(&ga, 1, 0x400);
-  }
-
-  TV_LIST_ITER_CONST(l, li, {
-    if (!eap->skip) {
-      ga_concat(&ga, tv_get_string(TV_LIST_ITEM_TV(li)));
-      ga_append(&ga, '\n');
-    }
-  });
-  *lenp = (size_t)ga.ga_len;  // Set length without trailing NUL.
-  if (!eap->skip) {
-    ga_append(&ga, NUL);
-  }
-
-  tv_list_free(l);
-  return (char *)ga.ga_data;
-}
 
 /// This function is used by f_input() and f_inputdialog() functions. The third
 /// argument to f_input() specifies the type of completion to use at the

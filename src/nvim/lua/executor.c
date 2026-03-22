@@ -34,6 +34,7 @@
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/cmdpreview.h"
+#include "nvim/eval/vars.h"
 #include "nvim/ex_getln.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"

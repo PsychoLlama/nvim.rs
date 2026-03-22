@@ -3544,3 +3544,45 @@ void nvim_vars_emsg_e5700(void)
   emsg(_("E5700: Expression from 'spellsuggest' must yield lists with "
          "exactly two values"));
 }
+
+/// Get a script line to execute, from a heredoc (<<) or regular string.
+/// Used by python, tcl, etc. when the argument starts with "<<".
+/// @param eap  ex argument
+/// @param lenp  set to length of returned string
+/// @return  allocated string, or NULL on error/skip
+char *script_get(exarg_T *const eap, size_t *const lenp)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
+{
+  char *cmd = eap->arg;
+
+  if (cmd[0] != '<' || cmd[1] != '<' || eap->ea_getline == NULL) {
+    *lenp = strlen(eap->arg);
+    return eap->skip ? NULL : xmemdupz(eap->arg, *lenp);
+  }
+  cmd += 2;
+
+  garray_T ga = { .ga_data = NULL, .ga_len = 0 };
+
+  list_T *const l = heredoc_get(eap, cmd, true);
+  if (l == NULL) {
+    return NULL;
+  }
+
+  if (!eap->skip) {
+    ga_init(&ga, 1, 0x400);
+  }
+
+  TV_LIST_ITER_CONST(l, li, {
+    if (!eap->skip) {
+      ga_concat(&ga, tv_get_string(TV_LIST_ITEM_TV(li)));
+      ga_append(&ga, '\n');
+    }
+  });
+  *lenp = (size_t)ga.ga_len;  // Set length without trailing NUL.
+  if (!eap->skip) {
+    ga_append(&ga, NUL);
+  }
+
+  tv_list_free(l);
+  return (char *)ga.ga_data;
+}
