@@ -1057,10 +1057,23 @@ void nvim_edit_handle_end_comment_pending(int c)
   }
 }
 
-/// Call stop_insert(end_insert_pos, esc, nomove) (accessor for Rust).
+/// Call stop_insert logic for end_insert_pos (accessor for Rust).
 void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
 {
-  stop_insert((pos_T *)end_insert_pos, esc, nomove);
+  pos_T *pos = (pos_T *)end_insert_pos;
+  stop_redo_ins();
+  rs_replace_stack_clear();
+  nvim_edit_stop_insert_save_text();
+  if (!arrow_used && pos != NULL) {
+    nvim_edit_stop_insert_do_format(pos, esc, nomove);
+  }
+  did_ai = false;
+  did_si = false;
+  can_si = false;
+  can_si_back = false;
+  if (pos != NULL) {
+    nvim_edit_set_b_op_marks(pos);
+  }
 }
 
 /// Check has_event(EVENT_INSERTCHARPRE) (accessor for Rust).
@@ -2324,11 +2337,45 @@ void ins_ctrl_v_fn(void)
   ins_ctrl_v();
 }
 
-/// Composite implementation of init_prompt() for the Rust port.
-/// init_prompt is now implemented in Rust (src/nvim-rs/edit/src/redraw.rs).
+/// Composite: prepare prompt buffer for insert mode (for Rust redraw.rs).
+/// Ensures the last line has prompt text and positions the cursor.
 void nvim_edit_init_prompt_impl(int cmdchar_todo)
 {
-  init_prompt(cmdchar_todo);
+  char *prompt = prompt_text();
+
+  if (curwin->w_cursor.lnum < curbuf->b_prompt_start.mark.lnum) {
+    curwin->w_cursor.lnum = curbuf->b_prompt_start.mark.lnum;
+  }
+  char *text = get_cursor_line_ptr();
+  if ((curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum
+       && strncmp(text, prompt, strlen(prompt)) != 0)
+      || curbuf->b_prompt_start.mark.lnum > curwin->w_cursor.lnum) {
+    if (*text == NUL) {
+      ml_replace(curbuf->b_ml.ml_line_count, prompt, true);
+    } else {
+      ml_append(curbuf->b_ml.ml_line_count, prompt, 0, false);
+      curbuf->b_prompt_start.mark.lnum += 1;
+    }
+    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
+    coladvance(curwin, MAXCOL);
+    inserted_bytes(curbuf->b_ml.ml_line_count, 0, 0, (colnr_T)strlen(prompt));
+  }
+  if (Insstart_orig.lnum != curbuf->b_prompt_start.mark.lnum
+      || Insstart_orig.col != (colnr_T)strlen(prompt)) {
+    Insstart.lnum = curbuf->b_prompt_start.mark.lnum;
+    Insstart.col = (colnr_T)strlen(prompt);
+    Insstart_orig = Insstart;
+    Insstart_textlen = Insstart.col;
+    Insstart_blank_vcol = MAXCOL;
+    arrow_used = false;
+  }
+  if (cmdchar_todo == 'A') {
+    coladvance(curwin, MAXCOL);
+  }
+  if (curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum) {
+    curwin->w_cursor.col = MAX(curwin->w_cursor.col, (colnr_T)strlen(prompt));
+  }
+  check_cursor(curwin);
 }
 
 
@@ -2563,51 +2610,6 @@ void edit_putchar(int c, bool highlight)
   grid_line_flush();
 }
 
-// init_prompt: now implemented in Rust (src/nvim-rs/edit/src/redraw.rs).
-// Body available via nvim_edit_init_prompt_impl below.
-static void init_prompt(int cmdchar_todo)
-{
-  char *prompt = prompt_text();
-
-  if (curwin->w_cursor.lnum < curbuf->b_prompt_start.mark.lnum) {
-    curwin->w_cursor.lnum = curbuf->b_prompt_start.mark.lnum;
-  }
-  char *text = get_cursor_line_ptr();
-  if ((curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum
-       && strncmp(text, prompt, strlen(prompt)) != 0)
-      || curbuf->b_prompt_start.mark.lnum > curwin->w_cursor.lnum) {
-    // prompt is missing, insert it or append a line with it
-    if (*text == NUL) {
-      ml_replace(curbuf->b_ml.ml_line_count, prompt, true);
-    } else {
-      ml_append(curbuf->b_ml.ml_line_count, prompt, 0, false);
-      curbuf->b_prompt_start.mark.lnum += 1;
-    }
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    coladvance(curwin, MAXCOL);
-    inserted_bytes(curbuf->b_ml.ml_line_count, 0, 0, (colnr_T)strlen(prompt));
-  }
-
-  // Insert always starts after the prompt, allow editing text after it.
-  if (Insstart_orig.lnum != curbuf->b_prompt_start.mark.lnum
-      || Insstart_orig.col != (colnr_T)strlen(prompt)) {
-    Insstart.lnum = curbuf->b_prompt_start.mark.lnum;
-    Insstart.col = (colnr_T)strlen(prompt);
-    Insstart_orig = Insstart;
-    Insstart_textlen = Insstart.col;
-    Insstart_blank_vcol = MAXCOL;
-    arrow_used = false;
-  }
-
-  if (cmdchar_todo == 'A') {
-    coladvance(curwin, MAXCOL);
-  }
-  if (curbuf->b_prompt_start.mark.lnum == curwin->w_cursor.lnum) {
-    curwin->w_cursor.col = MAX(curwin->w_cursor.col, (colnr_T)strlen(prompt));
-  }
-  // Make sure the cursor is in a valid position.
-  check_cursor(curwin);
-}
 
 
 // Undo the previous edit_putchar().
@@ -2650,32 +2652,6 @@ void display_dollar(colnr_T col_arg)
     dollar_vcol = curwin->w_virtcol;
   }
   curwin->w_cursor.col = save_col;
-}
-
-
-/// Do a few things to stop inserting.
-/// "end_insert_pos" is where insert ended.  It is NULL when we already jumped
-/// to another window/buffer.
-///
-/// @param esc     called by ins_esc()
-/// @param nomove  <c-\><c-o>, don't move cursor
-///
-/// Thin wrapper: logic is now in composite helpers called from Rust rs_stop_insert.
-static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
-{
-  stop_redo_ins();
-  rs_replace_stack_clear();
-  nvim_edit_stop_insert_save_text();
-  if (!arrow_used && end_insert_pos != NULL) {
-    nvim_edit_stop_insert_do_format(end_insert_pos, esc, nomove);
-  }
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  if (end_insert_pos != NULL) {
-    nvim_edit_set_b_op_marks(end_insert_pos);
-  }
 }
 
 
@@ -3289,10 +3265,21 @@ int nvim_edit_cmod_keepjumps(void)
   return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 ? 1 : 0;
 }
 
-/// Call stop_insert(&curwin->w_cursor, true, nomove) (composite for Rust).
+/// Call stop_insert logic at curwin->w_cursor (composite for Rust).
 void nvim_edit_stop_insert_curpos(int nomove)
 {
-  stop_insert(&curwin->w_cursor, true, nomove != 0);
+  pos_T *pos = &curwin->w_cursor;
+  stop_redo_ins();
+  rs_replace_stack_clear();
+  nvim_edit_stop_insert_save_text();
+  if (!arrow_used) {
+    nvim_edit_stop_insert_do_format(pos, true, nomove != 0);
+  }
+  did_ai = false;
+  did_si = false;
+  can_si = false;
+  can_si_back = false;
+  nvim_edit_set_b_op_marks(pos);
 }
 
 /// Get p_ch == 0 && !ui_has(kUIMessages) (accessor for Rust ins_esc showmode check).
