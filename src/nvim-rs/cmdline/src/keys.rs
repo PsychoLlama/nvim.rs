@@ -9,7 +9,7 @@
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Key Code Constants
@@ -908,6 +908,713 @@ pub unsafe extern "C" fn rs_command_line_erase_chars(
         return GOTO_NORMAL_MODE;
     }
     CMDLINE_CHANGED
+}
+
+// =============================================================================
+// Phase 3: command_line_handle_key
+// =============================================================================
+
+// Additional key constants needed for command_line_handle_key
+const K_BS: c_int = termcap2key(b'k' as c_int, b'b' as c_int);
+const CTRL_RSB: c_int = 29;
+const CTRL_HAT: c_int = 30;
+const CTRL_UU: c_int = 31; // Ctrl-_ (Ctrl-underscore)
+const NUL: c_int = 0;
+const FAIL: c_int = 0;
+
+// Key extra codes needed
+const KE_KINS: c_int = 79;
+const KE_CMDWIN: c_int = 84;
+const KE_X1MOUSE: c_int = 89;
+const KE_X1DRAG: c_int = 90;
+const KE_X1RELEASE: c_int = 91;
+const KE_X2MOUSE: c_int = 92;
+const KE_X2DRAG: c_int = 93;
+const KE_X2RELEASE: c_int = 94;
+const KE_MOUSEMOVE: c_int = 100;
+const KE_IGNORE: c_int = 53;
+const KS_SELECT: c_int = 245;
+const KE_FILLER: c_int = 88; // 'X'
+
+const K_KINS: c_int = termcap2key(KS_EXTRA, KE_KINS);
+const K_CMDWIN: c_int = termcap2key(KS_EXTRA, KE_CMDWIN);
+const K_X1MOUSE: c_int = termcap2key(KS_EXTRA, KE_X1MOUSE);
+const K_X1DRAG: c_int = termcap2key(KS_EXTRA, KE_X1DRAG);
+const K_X1RELEASE: c_int = termcap2key(KS_EXTRA, KE_X1RELEASE);
+const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
+const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
+const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
+const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
+const K_IGNORE: c_int = termcap2key(KS_EXTRA, KE_IGNORE);
+const K_SELECT: c_int = termcap2key(KS_SELECT, KE_FILLER);
+
+// Additional Home/End keys
+const K_KHOME: c_int = termcap2key(b'K' as c_int, b'1' as c_int);
+const K_KEND: c_int = termcap2key(b'K' as c_int, b'4' as c_int);
+// K_S_HOME and K_S_END defined earlier in this file
+const K_C_HOME: c_int = -22101; // TERMCAP2KEY(KS_EXTRA, KE_C_HOME)
+const K_C_END: c_int = -22101 - 1; // placeholder, will use accessor
+
+// Modifier masks
+const MOD_MASK_SHIFT: c_int = 0x02;
+const MOD_MASK_CTRL: c_int = 0x04;
+
+// Wild expansion types
+const WILD_ALL: c_int = 6;
+const WILD_LONGEST: c_int = 7;
+const WILD_NEXT: c_int = 4;
+const WILD_PREV: c_int = 5;
+const WILD_PAGEUP: c_int = 11;
+const WILD_PAGEDOWN: c_int = 12;
+const EXPAND_NOTHING: c_int = 0;
+
+// IS_SPECIAL(c) macro: c < 0
+#[inline]
+const fn is_special_key(c: c_int) -> bool {
+    c < 0
+}
+
+// ABBR_OFF constant
+const ABBR_OFF: c_int = 0x100;
+
+// kOptWimFlagNoselect
+const K_OPT_WIM_FLAG_NOSELECT: u8 = 0x10;
+
+// kUICmdline
+const K_UI_CMDLINE_MAIN: c_int = 24;
+
+unsafe extern "C" {
+    // CommandLineState field accessors (only those used by rs_command_line_handle_key)
+    fn nvim_cls_get_c(s: *mut c_void) -> c_int;
+    fn nvim_cls_set_c(s: *mut c_void, val: c_int);
+    fn nvim_cls_get_firstc(s: *mut c_void) -> c_int;
+    fn nvim_cls_get_count(s: *mut c_void) -> c_int;
+    fn nvim_cls_get_indent(s: *mut c_void) -> c_int;
+    fn nvim_cls_get_gotesc(s: *mut c_void) -> c_int;
+    fn nvim_cls_set_gotesc(s: *mut c_void, val: c_int);
+    fn nvim_cls_get_do_abbr(s: *mut c_void) -> c_int;
+    fn nvim_cls_set_do_abbr(s: *mut c_void, val: c_int);
+    fn nvim_cls_get_ignore_drag_release(s: *mut c_void) -> c_int;
+    fn nvim_cls_set_ignore_drag_release(s: *mut c_void, val: c_int);
+    fn nvim_cls_set_did_hist_navigate(s: *mut c_void, val: c_int);
+    fn nvim_cls_set_did_wild_list(s: *mut c_void, val: c_int);
+    fn nvim_cls_get_is_state(s: *mut c_void) -> *mut c_void;
+    fn nvim_cls_get_xpc(s: *mut c_void) -> *mut c_void;
+    fn nvim_cls_get_xpc_numfiles(s: *mut c_void) -> c_int;
+    fn nvim_cls_set_xpc_context(s: *mut c_void, val: c_int);
+    fn nvim_cls_get_ccline_mouse_used() -> c_int;
+    fn nvim_cls_set_ccline_mouse_used_val(val: c_int);
+
+    // Wrapper functions for CLS operations
+    fn nvim_command_line_not_changed(s: *mut c_void) -> c_int;
+    fn nvim_command_line_changed(s: *mut c_void) -> c_int;
+    fn nvim_command_line_toggle_langmap(s: *mut c_void);
+    fn nvim_command_line_left_right_mouse(s: *mut c_void);
+    fn nvim_command_line_browse_history(s: *mut c_void) -> c_int;
+    fn nvim_cmdline_pum_cleanup();
+    fn nvim_showmatches(
+        xp: *mut c_void,
+        display_wildmenu: bool,
+        display_list: bool,
+        noselect: bool,
+    ) -> c_int;
+    fn nvim_nextwild(xp: *mut c_void, wild_type: c_int, options: c_int, escape: bool) -> c_int;
+    fn nvim_may_add_char_to_search(firstc: c_int, c: *mut c_int, is_state: *mut c_void) -> c_int;
+
+    // Global accessors
+    fn nvim_get_ccline_one_key() -> c_int;
+    fn nvim_get_ccline_special_char() -> c_int;
+    fn nvim_get_ccline_special_shift() -> c_int;
+    fn nvim_set_ccline_overstrike(val: c_int);
+    fn nvim_get_ccline_overstrike() -> c_int;
+    fn nvim_get_mod_mask() -> c_int;
+    fn nvim_set_mod_mask(val: c_int);
+    fn nvim_get_iobuff() -> *mut c_char;
+    fn nvim_get_columns() -> c_int;
+    fn nvim_get_rows() -> c_int;
+    fn nvim_get_mouse_row() -> c_int;
+    fn nvim_get_cmdline_row() -> c_int;
+    fn nvim_get_ex_normal_busy() -> c_int;
+    fn nvim_get_getln_interrupted_highlight() -> c_int;
+    fn nvim_set_getln_interrupted_highlight(val: c_int);
+    fn nvim_get_typebuf_len() -> c_int;
+    fn nvim_get_p_ari() -> c_int;
+    fn nvim_ccline_cmdbuff_set_nul();
+    fn nvim_get_wim_flags(idx: c_int) -> u8;
+
+    // Screen position accessors (not in the earlier extern block)
+    fn nvim_get_ccline_cmdspos() -> c_int;
+    fn nvim_set_ccline_cmdspos(val: c_int);
+
+    // Functions to call
+    fn ui_cursor_shape();
+    fn may_trigger_modechanged();
+    fn status_redraw_curbuf();
+    fn redraw_statuslines();
+    // putcmdline(c, shift) declared in the earlier extern block in this file
+    fn unputcmdline();
+    fn nvim_get_literal_call(no_simplify: bool) -> c_int;
+    fn nvim_get_digraph(flag: bool) -> c_int;
+    fn nvim_utf_iscomposing_first(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
+    fn nvim_edit_vim_iswordc(c: c_int) -> c_int;
+    fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool;
+    fn cmdline_pum_active() -> c_int;
+    fn cmd_screencol(bytepos: c_int) -> c_int;
+    fn nvim_get_cedit_key() -> c_int;
+    fn nvim_open_cmdwin() -> c_int;
+}
+
+// Inline helper to get cedit key
+#[inline]
+unsafe fn get_cedit_key() -> c_int {
+    nvim_get_cedit_key()
+}
+
+/// Rust replacement for `command_line_handle_key(CommandLineState *s)`.
+///
+/// Handles a key press in command-line mode.
+///
+/// # Safety
+///
+/// `s` must be a valid non-null pointer to a `CommandLineState`.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::similar_names)]
+#[unsafe(export_name = "command_line_handle_key")]
+pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
+    let c = nvim_cls_get_c(s);
+    let one_key = nvim_get_ccline_one_key() != 0;
+
+    // For one key prompt, avoid putting ESC and Ctrl_C onto cmdline.
+    // For all other keys, just put onto cmdline and exit.
+    if one_key && c != ESC && c != CTRL_C {
+        // goto end
+        return handle_key_end(s, c);
+    }
+
+    // Big switch for a typed command line character.
+    match c {
+        // Backspace / Delete
+        k if k == K_BS || k == BS || k == K_DEL || k == K_KDEL || k == CTRL_W => {
+            let indent = nvim_cls_get_indent(s);
+            let is_state = nvim_cls_get_is_state(s);
+            match rs_command_line_erase_chars(c, indent, is_state.cast()) {
+                x if x == CMDLINE_NOT_CHANGED => return nvim_command_line_not_changed(s),
+                x if x == GOTO_NORMAL_MODE => return 0,
+                _ => return nvim_command_line_changed(s),
+            }
+        }
+
+        // Insert toggle
+        k if k == K_INS || k == K_KINS => {
+            let overstrike = nvim_get_ccline_overstrike();
+            nvim_set_ccline_overstrike((overstrike == 0) as c_int);
+            ui_cursor_shape();
+            may_trigger_modechanged();
+            status_redraw_curbuf();
+            redraw_statuslines();
+            return nvim_command_line_not_changed(s);
+        }
+
+        // CTRL-^: toggle language map
+        x if x == CTRL_HAT => {
+            nvim_command_line_toggle_langmap(s);
+            return nvim_command_line_not_changed(s);
+        }
+
+        // CTRL-U: delete all chars left of cursor
+        x if x == CTRL_U => {
+            let j = nvim_get_ccline_cmdpos();
+            let new_len = nvim_get_ccline_cmdlen() - j;
+            nvim_set_ccline_cmdlen(new_len);
+            let mut i = 0;
+            let mut jj = j;
+            let cmdbuff = nvim_get_ccline_cmdbuff();
+            while i < new_len {
+                *cmdbuff.add(i as usize) = *cmdbuff.add(jj as usize);
+                i += 1;
+                jj += 1;
+            }
+            // Truncate at end
+            *cmdbuff.add(new_len as usize) = 0;
+            nvim_set_ccline_cmdpos(0);
+            if nvim_get_ccline_cmdlen() == 0 {
+                let is_state = nvim_cls_get_is_state(s);
+                let is_state_ptr: *mut crate::search::IncsearchStateT = is_state.cast();
+                (*is_state_ptr).search_start = (*is_state_ptr).save_cursor;
+            }
+            crate::screen::redrawcmd_rs();
+            return nvim_command_line_changed(s);
+        }
+
+        // ESC / CTRL-C: cancel command line
+        x if x == ESC || x == CTRL_C => {
+            let exmode = nvim_get_exmode_active();
+            let ex_normal = nvim_get_ex_normal_busy();
+            let typebuf_len = nvim_get_typebuf_len();
+            let getln_interrupted = nvim_get_getln_interrupted_highlight();
+
+            if (exmode && (ex_normal == 0 || typebuf_len > 0))
+                || (getln_interrupted != 0 && c == CTRL_C)
+            {
+                nvim_set_getln_interrupted_highlight(0);
+                return nvim_command_line_not_changed(s);
+            }
+
+            nvim_cls_set_gotesc(s, 1);
+            return 0;
+        }
+
+        // CTRL-R: insert register
+        x if x == CTRL_R => {
+            let mut c_val = nvim_cls_get_c(s);
+            let mut gotesc_val = (nvim_cls_get_gotesc(s) != 0) as bool;
+            match rs_command_line_insert_reg(&raw mut c_val, &raw mut gotesc_val) {
+                x if x == GOTO_NORMAL_MODE => {
+                    nvim_cls_set_c(s, c_val);
+                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
+                    return 0;
+                }
+                x if x == CMDLINE_CHANGED => {
+                    nvim_cls_set_c(s, c_val);
+                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
+                    return nvim_command_line_changed(s);
+                }
+                _ => {
+                    nvim_cls_set_c(s, c_val);
+                    nvim_cls_set_gotesc(s, gotesc_val as c_int);
+                    return nvim_command_line_not_changed(s);
+                }
+            }
+        }
+
+        // CTRL-D: show matches
+        x if x == CTRL_D => {
+            let xp = nvim_cls_get_xpc(s);
+            let wim_noselect = (nvim_get_wim_flags(0) & K_OPT_WIM_FLAG_NOSELECT) != 0;
+            if nvim_showmatches(xp, false, true, wim_noselect) == EXPAND_NOTHING {
+                // fall through to normal char handling
+            } else {
+                crate::screen::redrawcmd_rs();
+                return 1; // don't do incremental search now
+            }
+        }
+
+        // Arrow right / CTRL-right
+        k if k == K_RIGHT || k == K_S_RIGHT || k == K_C_RIGHT => {
+            loop {
+                let cmdpos = nvim_get_ccline_cmdpos();
+                let cmdlen = nvim_get_ccline_cmdlen();
+                if cmdpos >= cmdlen {
+                    break;
+                }
+                let cells = crate::screen::rs_cmdline_charsize(cmdpos);
+                let cols = nvim_get_columns();
+                let rows = nvim_get_rows();
+                let cmdspos = nvim_get_ccline_cmdspos();
+                if nvim_get_key_typed_cmdline() != 0 && cmdspos + cells >= cols * rows {
+                    break;
+                }
+                nvim_set_ccline_cmdspos(cmdspos + cells);
+                let cmdbuff = nvim_get_ccline_cmdbuff();
+                let adv = utfc_ptr2len(cmdbuff.add(cmdpos as usize));
+                nvim_set_ccline_cmdpos(cmdpos + adv);
+                let c_curr = nvim_cls_get_c(s);
+                let mod_mask = nvim_get_mod_mask();
+                let cmdbuff = nvim_get_ccline_cmdbuff();
+                let cmdpos = nvim_get_ccline_cmdpos();
+                if !((c_curr == K_S_RIGHT
+                    || c_curr == K_C_RIGHT
+                    || (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
+                    && *cmdbuff.add(cmdpos as usize) != b' ' as c_char)
+                {
+                    break;
+                }
+            }
+            let cmdpos = nvim_get_ccline_cmdpos();
+            nvim_set_ccline_cmdspos(cmd_screencol(cmdpos));
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Arrow left / CTRL-left
+        k if k == K_LEFT || k == K_S_LEFT || k == K_C_LEFT => {
+            if nvim_get_ccline_cmdpos() == 0 {
+                return nvim_command_line_not_changed(s);
+            }
+            loop {
+                let cmdpos = nvim_get_ccline_cmdpos();
+                nvim_set_ccline_cmdpos(cmdpos - 1);
+                let cmdbuff = nvim_get_ccline_cmdbuff();
+                let new_cmdpos = nvim_get_ccline_cmdpos();
+                let head_off = utf_head_off(cmdbuff, cmdbuff.add(new_cmdpos as usize));
+                nvim_set_ccline_cmdpos(new_cmdpos - head_off);
+                let new_cmdpos = nvim_get_ccline_cmdpos();
+                let cells = crate::screen::rs_cmdline_charsize(new_cmdpos);
+                let cmdspos = nvim_get_ccline_cmdspos();
+                nvim_set_ccline_cmdspos(cmdspos - cells);
+
+                let c_curr = nvim_cls_get_c(s);
+                let mod_mask = nvim_get_mod_mask();
+                let cmdpos = nvim_get_ccline_cmdpos();
+                if !(cmdpos > 0
+                    && (c_curr == K_S_LEFT
+                        || c_curr == K_C_LEFT
+                        || (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) != 0)
+                    && *cmdbuff.add(cmdpos as usize - 1) != b' ' as c_char)
+                {
+                    break;
+                }
+            }
+            let cmdpos = nvim_get_ccline_cmdpos();
+            nvim_set_ccline_cmdspos(cmd_screencol(cmdpos));
+            let special_char = nvim_get_ccline_special_char();
+            if special_char != NUL {
+                putcmdline(special_char as c_char, nvim_get_ccline_special_shift() != 0);
+            }
+            return nvim_command_line_not_changed(s);
+        }
+
+        // K_IGNORE: ignore mouse event or open_cmdwin() result
+        x if x == K_IGNORE => {
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Middle mouse drag/release: ignored
+        k if k == K_MIDDLEDRAG || k == K_MIDDLERELEASE => {
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Middle mouse button: paste
+        x if x == K_MIDDLEMOUSE => {
+            let clipboard_star = b'*' as c_int;
+            let regname = if eval_has_provider(c"clipboard".as_ptr(), false) {
+                clipboard_star
+            } else {
+                0
+            };
+            nvim_cmdline_paste(regname, true, true);
+            crate::screen::redrawcmd_rs();
+            return nvim_command_line_changed(s);
+        }
+
+        // Left/right drag and release (may be ignored)
+        k if k == K_LEFTDRAG || k == K_LEFTRELEASE || k == K_RIGHTDRAG || k == K_RIGHTRELEASE => {
+            if nvim_cls_get_ignore_drag_release(s) != 0 {
+                return nvim_command_line_not_changed(s);
+            }
+            // FALLTHROUGH to K_LEFTMOUSE / K_RIGHTMOUSE
+            nvim_command_line_left_right_mouse(s);
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Left mouse: check if above number prompt
+        x if x == K_LEFTMOUSE => {
+            let mouse_used = nvim_cls_get_ccline_mouse_used();
+            if mouse_used != 0 {
+                let mouse_row = nvim_get_mouse_row();
+                let cmdline_row = nvim_get_cmdline_row();
+                if mouse_row < cmdline_row {
+                    nvim_cls_set_ccline_mouse_used_val(1);
+                    return 0;
+                }
+            }
+            nvim_command_line_left_right_mouse(s);
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Right mouse
+        x if x == K_RIGHTMOUSE => {
+            nvim_command_line_left_right_mouse(s);
+            return nvim_command_line_not_changed(s);
+        }
+
+        // Mouse scroll/alternate buttons: ignored
+        k if k == K_MOUSEDOWN
+            || k == K_MOUSEUP
+            || k == K_MOUSELEFT
+            || k == K_MOUSERIGHT
+            || k == K_X1MOUSE
+            || k == K_X1DRAG
+            || k == K_X1RELEASE
+            || k == K_X2MOUSE
+            || k == K_X2DRAG
+            || k == K_X2RELEASE
+            || k == K_MOUSEMOVE
+            || k == K_SELECT =>
+        {
+            return nvim_command_line_not_changed(s);
+        }
+
+        // CTRL-B / Home: beginning of command line
+        k if k == CTRL_B
+            || k == K_HOME
+            || k == K_XHOME
+            || k == K_KHOME
+            || k == K_S_HOME
+            || k == K_C_HOME =>
+        {
+            nvim_set_ccline_cmdpos(0);
+            nvim_set_ccline_cmdspos(crate::screen::rs_cmd_startcol());
+            return nvim_command_line_not_changed(s);
+        }
+
+        // CTRL-E / End: end of command line
+        k if k == CTRL_E
+            || k == K_END
+            || k == K_XEND
+            || k == K_KEND
+            || k == K_S_END
+            || k == K_C_END =>
+        {
+            let cmdlen = nvim_get_ccline_cmdlen();
+            nvim_set_ccline_cmdpos(cmdlen);
+            nvim_set_ccline_cmdspos(cmd_screencol(cmdlen));
+            return nvim_command_line_not_changed(s);
+        }
+
+        // CTRL-A: all matches
+        x if x == CTRL_A => {
+            if cmdline_pum_active() != 0 {
+                nvim_cmdline_pum_cleanup();
+            }
+            let xp = nvim_cls_get_xpc(s);
+            let firstc = nvim_cls_get_firstc(s);
+            if nvim_nextwild(xp, WILD_ALL, 0, firstc != b'@' as c_int) == FAIL {
+                // fall through to normal char
+            } else {
+                nvim_cls_set_xpc_context(s, EXPAND_NOTHING);
+                nvim_cls_set_did_wild_list(s, 0);
+                return nvim_command_line_changed(s);
+            }
+        }
+
+        // CTRL-L: longest common part
+        x if x == CTRL_L => {
+            let firstc = nvim_cls_get_firstc(s);
+            let is_state = nvim_cls_get_is_state(s);
+            let mut c_val = c;
+            if nvim_may_add_char_to_search(firstc, &raw mut c_val, is_state) == 1 {
+                // OK
+                nvim_cls_set_c(s, c_val);
+                return nvim_command_line_not_changed(s);
+            }
+            let xp = nvim_cls_get_xpc(s);
+            if nvim_nextwild(xp, WILD_LONGEST, 0, firstc != b'@' as c_int) == FAIL {
+                // fall through
+            } else {
+                return nvim_command_line_changed(s);
+            }
+        }
+
+        // CTRL-N / CTRL-P: next/prev match (or history)
+        k if k == CTRL_N || k == CTRL_P => {
+            let xpc_numfiles = nvim_cls_get_xpc_numfiles(s);
+            if xpc_numfiles > 0 {
+                let wild_type = if c == CTRL_P { WILD_PREV } else { WILD_NEXT };
+                let xp = nvim_cls_get_xpc(s);
+                let firstc = nvim_cls_get_firstc(s);
+                if nvim_nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
+                    // fall through to history
+                } else {
+                    return nvim_command_line_changed(s);
+                }
+            }
+            // FALLTHROUGH to history
+            match nvim_command_line_browse_history(s) {
+                x if x == CMDLINE_CHANGED => {
+                    nvim_cls_set_did_hist_navigate(s, 1);
+                    return nvim_command_line_changed(s);
+                }
+                x if x == GOTO_NORMAL_MODE => return 0,
+                _ => return nvim_command_line_not_changed(s),
+            }
+        }
+
+        // K_UP / K_DOWN / K_S_UP / K_S_DOWN / K_PAGEUP / K_KPAGEUP / K_PAGEDOWN / K_KPAGEDOWN
+        k if k == K_UP
+            || k == K_DOWN
+            || k == K_S_UP
+            || k == K_S_DOWN
+            || k == K_PAGEUP
+            || k == K_KPAGEUP
+            || k == K_PAGEDOWN
+            || k == K_KPAGEDOWN =>
+        {
+            if cmdline_pum_active() != 0
+                && (c == K_PAGEUP || c == K_PAGEDOWN || c == K_KPAGEUP || c == K_KPAGEDOWN)
+            {
+                let wild_type = if c == K_PAGEDOWN || c == K_KPAGEDOWN {
+                    WILD_PAGEDOWN
+                } else {
+                    WILD_PAGEUP
+                };
+                let xp = nvim_cls_get_xpc(s);
+                let firstc = nvim_cls_get_firstc(s);
+                if nvim_nextwild(xp, wild_type, 0, firstc != b'@' as c_int) == FAIL {
+                    // fall through
+                } else {
+                    return nvim_command_line_changed(s);
+                }
+            } else {
+                match nvim_command_line_browse_history(s) {
+                    x if x == CMDLINE_CHANGED => {
+                        nvim_cls_set_did_hist_navigate(s, 1);
+                        return nvim_command_line_changed(s);
+                    }
+                    x if x == GOTO_NORMAL_MODE => return 0,
+                    _ => return nvim_command_line_not_changed(s),
+                }
+            }
+        }
+
+        // CTRL-G / CTRL-T: next/previous incsearch match
+        k if k == CTRL_G || k == CTRL_T => {
+            let firstc = nvim_cls_get_firstc(s);
+            let count = nvim_cls_get_count(s);
+            let is_state = nvim_cls_get_is_state(s);
+            if crate::search::rs_may_do_command_line_next_incsearch(
+                firstc,
+                count,
+                is_state.cast(),
+                c == CTRL_G,
+            ) == FAIL
+            {
+                return nvim_command_line_not_changed(s);
+            }
+            // break: fall through to end
+        }
+
+        // CTRL-V / CTRL-Q: literal insert
+        k if k == CTRL_V || k == CTRL_Q => {
+            nvim_cls_set_ignore_drag_release(s, 1);
+            putcmdline(b'^' as c_char, true);
+
+            let mod_mask = nvim_get_mod_mask();
+            let c_new = nvim_get_literal_call((mod_mask & MOD_MASK_SHIFT) != 0);
+            nvim_cls_set_c(s, c_new);
+            nvim_cls_set_do_abbr(s, 0);
+            nvim_set_ccline_special_char(NUL);
+
+            let c_curr = nvim_cls_get_c(s);
+            if nvim_utf_iscomposing_first(c_curr) != 0 && nvim_get_cmd_silent() == 0 {
+                if ui_has(K_UI_CMDLINE_MAIN) != 0 {
+                    unputcmdline();
+                } else {
+                    let cmdpos = nvim_get_ccline_cmdpos();
+                    let cmdlen = nvim_get_ccline_cmdlen();
+                    crate::screen::draw_cmdline_rs(cmdpos, cmdlen - cmdpos);
+                    msg_putchar(b' ' as c_int);
+                    crate::screen::cursorcmd_rs();
+                }
+            }
+            // break: fall through to end
+        }
+
+        // CTRL-K: digraph
+        x if x == CTRL_K => {
+            nvim_cls_set_ignore_drag_release(s, 1);
+            putcmdline(b'?' as c_char, true);
+            let c_new = nvim_get_digraph(true);
+            nvim_cls_set_c(s, c_new);
+            nvim_set_ccline_special_char(NUL);
+
+            if nvim_cls_get_c(s) == NUL {
+                crate::screen::redrawcmd_rs();
+                return nvim_command_line_not_changed(s);
+            }
+            // else: break - fall through to end
+        }
+
+        // CTRL-_: switch language mode (Arabic)
+        x if x == CTRL_UU => {
+            if nvim_get_p_ari() == 0 {
+                // fall through to normal char
+            } else {
+                return nvim_command_line_not_changed(s);
+            }
+        }
+
+        // 'q': return on mouse prompt with NUL
+        x if x == b'q' as c_int => {
+            if nvim_cls_get_ccline_mouse_used() != 0 {
+                nvim_ccline_cmdbuff_set_nul();
+                return 0;
+            }
+            // FALLTHROUGH to default
+        }
+
+        // Open command window
+        k if k == get_cedit_key() || k == K_CMDWIN => {
+            let ex_normal = nvim_get_ex_normal_busy();
+            if (c == K_CMDWIN || ex_normal == 0) && nvim_get_ccline_cmdfirstc() != b'@' as c_int {
+                nvim_open_cmdwin();
+                // K_IGNORE after command window means nothing changed
+                let c_new = nvim_cls_get_c(s);
+                if c_new == K_IGNORE {
+                    return nvim_command_line_not_changed(s);
+                }
+                // Otherwise re-check the char (it may have been replaced)
+                let c_check = nvim_cls_get_c(s);
+                if c_check == K_IGNORE {
+                    return nvim_command_line_not_changed(s);
+                }
+                // fall through to handle key
+            }
+            // break: fall through to normal char handling
+        }
+
+        // Default: normal character
+        _ => {
+            let c_curr = nvim_cls_get_c(s);
+            if !is_special_key(c_curr) {
+                nvim_set_mod_mask(0);
+            }
+            // break: fall through to end
+        }
+    }
+
+    // End of switch: handle as normal character or check abbreviation
+    let c_curr = nvim_cls_get_c(s);
+    let do_abbr = nvim_cls_get_do_abbr(s) != 0;
+    if do_abbr
+        && (is_special_key(c_curr) || nvim_edit_vim_iswordc(c_curr) == 0)
+        && (crate::edit::rs_ccheck_abbr(if c_curr >= 0x100 {
+            c_curr + ABBR_OFF
+        } else {
+            c_curr
+        }) != 0
+            || c_curr == CTRL_RSB)
+    {
+        return nvim_command_line_changed(s);
+    }
+
+    handle_key_end(s, c_curr)
+}
+
+/// Put the character in the command line (the "end:" goto target in C).
+#[inline]
+unsafe fn handle_key_end(s: *mut c_void, c: c_int) -> c_int {
+    let mod_mask = nvim_get_mod_mask();
+    if is_special_key(c) || mod_mask != 0 {
+        let key_name = nvim_edit_get_special_key_name(c, mod_mask);
+        crate::edit::put_on_cmdline_rs(key_name, -1, true);
+    } else {
+        let iobuff = nvim_get_iobuff();
+        let j = utf_char2bytes(c, iobuff);
+        *iobuff.add(j as usize) = 0; // NUL terminate, exclude composing chars
+        crate::edit::put_on_cmdline_rs(iobuff, j, true);
+    }
+    let one_key = nvim_get_ccline_one_key() != 0;
+    if one_key {
+        0
+    } else {
+        nvim_command_line_changed(s)
+    }
 }
 
 // =============================================================================

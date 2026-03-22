@@ -321,6 +321,9 @@ extern int rs_ccheck_abbr(int c);
 extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
 extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
 
+// Phase 3: command_line_handle_key implemented in Rust (cmdline/keys.rs)
+extern int command_line_handle_key(void *s);
+
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -1318,404 +1321,10 @@ static void command_line_left_right_mouse(CommandLineState *s)
   }
 }
 
-/// Handle the Up, Down, Page Up, Page down, CTRL-N and CTRL-P key in the
-/// command-line mode.
-static int command_line_browse_history(CommandLineState *s)
-{
-  // Save current command string so it can be restored later (required before calling Rust)
-  if (s->lookfor == NULL) {
-    s->lookfor = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
-    s->lookfor[ccline.cmdpos] = NUL;
-    s->lookforlen = ccline.cmdpos;
-  }
+// command_line_browse_history is now implemented via nvim_command_line_browse_history (below).
 
-  // Pack state for Rust
-  HistoryBrowseState rs_state = {
-    .c = s->c,
-    .firstc = s->firstc,
-    .hiscnt = s->hiscnt,
-    .save_hiscnt = s->save_hiscnt,
-    .histype = s->histype,
-    .lookfor = s->lookfor,
-    .lookforlen = s->lookforlen,
-  };
+// command_line_handle_key is implemented in Rust (cmdline/keys.rs).
 
-  // Call Rust implementation
-  int result = rs_command_line_browse_history(&rs_state);
-
-  // Update state from Rust
-  s->hiscnt = rs_state.hiscnt;
-  s->save_hiscnt = rs_state.save_hiscnt;
-
-  // Clear xp_context on history change
-  if (result == CMDLINE_CHANGED) {
-    s->xpc.xp_context = EXPAND_NOTHING;
-  }
-
-  return result;
-}
-
-static int command_line_handle_key(CommandLineState *s)
-{
-  // For one key prompt, avoid putting ESC and Ctrl_C onto cmdline.
-  // For all other keys, just put onto cmdline and exit.
-  if (ccline.one_key && s->c != ESC && s->c != Ctrl_C) {
-    goto end;
-  }
-
-  // Big switch for a typed command line character.
-  switch (s->c) {
-  case K_BS:
-  case Ctrl_H:
-  case K_DEL:
-  case K_KDEL:
-  case Ctrl_W:
-    switch (rs_command_line_erase_chars(s->c, s->indent, &s->is_state)) {
-    case CMDLINE_NOT_CHANGED:
-      return command_line_not_changed(s);
-    case GOTO_NORMAL_MODE:
-      return 0;  // back to cmd mode
-    default:
-      return command_line_changed(s);
-    }
-
-  case K_INS:
-  case K_KINS:
-    ccline.overstrike = !ccline.overstrike;
-    ui_cursor_shape();                // may show different cursor shape
-    may_trigger_modechanged();
-    status_redraw_curbuf();
-    redraw_statuslines();
-    return command_line_not_changed(s);
-
-  case Ctrl_HAT:
-    command_line_toggle_langmap(s);
-    return command_line_not_changed(s);
-
-  case Ctrl_U: {
-    // delete all characters left of the cursor
-    int j = ccline.cmdpos;
-    ccline.cmdlen -= j;
-    int i = ccline.cmdpos = 0;
-    while (i < ccline.cmdlen) {
-      ccline.cmdbuff[i++] = ccline.cmdbuff[j++];
-    }
-
-    // Truncate at the end, required for multi-byte chars.
-    ccline.cmdbuff[ccline.cmdlen] = NUL;
-    if (ccline.cmdlen == 0) {
-      s->is_state.search_start = s->is_state.save_cursor;
-    }
-    redrawcmd();
-    return command_line_changed(s);
-  }
-
-  case ESC:           // get here if p_wc != ESC or when ESC typed twice
-  case Ctrl_C:
-    // In exmode it doesn't make sense to return.  Except when
-    // ":normal" runs out of characters. Also when highlight callback is active
-    // <C-c> should interrupt only it.
-    if ((exmode_active && (ex_normal_busy == 0 || typebuf.tb_len > 0))
-        || (getln_interrupted_highlight && s->c == Ctrl_C)) {
-      getln_interrupted_highlight = false;
-      return command_line_not_changed(s);
-    }
-
-    s->gotesc = true;                 // will free ccline.cmdbuff after
-                                      // putting it in history
-    return 0;                         // back to cmd mode
-
-  case Ctrl_R:                        // insert register
-    switch (rs_command_line_insert_reg(&s->c, &s->gotesc)) {
-    case GOTO_NORMAL_MODE:
-      return 0;  // back to cmd mode
-    case CMDLINE_CHANGED:
-      return command_line_changed(s);
-    default:
-      return command_line_not_changed(s);
-    }
-
-  case Ctrl_D:
-    if (showmatches(&s->xpc, false, true, wim_flags[0] & kOptWimFlagNoselect)
-        == EXPAND_NOTHING) {
-      break;                  // Use ^D as normal char instead
-    }
-
-    redrawcmd();
-    return 1;                 // don't do incremental search now
-
-  case K_RIGHT:
-  case K_S_RIGHT:
-  case K_C_RIGHT:
-    do {
-      if (ccline.cmdpos >= ccline.cmdlen) {
-        break;
-      }
-
-      int cells = rs_cmdline_charsize(ccline.cmdpos);
-      if (KeyTyped && ccline.cmdspos + cells >= Columns * Rows) {
-        break;
-      }
-
-      ccline.cmdspos += cells;
-      ccline.cmdpos += utfc_ptr2len(ccline.cmdbuff + ccline.cmdpos);
-    } while ((s->c == K_S_RIGHT || s->c == K_C_RIGHT
-              || (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL)))
-             && ccline.cmdbuff[ccline.cmdpos] != ' ');
-    ccline.cmdspos = cmd_screencol(ccline.cmdpos);
-    return command_line_not_changed(s);
-
-  case K_LEFT:
-  case K_S_LEFT:
-  case K_C_LEFT:
-    if (ccline.cmdpos == 0) {
-      return command_line_not_changed(s);
-    }
-    do {
-      ccline.cmdpos--;
-      // Move to first byte of possibly multibyte char.
-      ccline.cmdpos -= utf_head_off(ccline.cmdbuff,
-                                    ccline.cmdbuff + ccline.cmdpos);
-      ccline.cmdspos -= rs_cmdline_charsize(ccline.cmdpos);
-    } while (ccline.cmdpos > 0
-             && (s->c == K_S_LEFT || s->c == K_C_LEFT
-                 || (mod_mask & (MOD_MASK_SHIFT|MOD_MASK_CTRL)))
-             && ccline.cmdbuff[ccline.cmdpos - 1] != ' ');
-
-    ccline.cmdspos = cmd_screencol(ccline.cmdpos);
-    if (ccline.special_char != NUL) {
-      putcmdline(ccline.special_char, ccline.special_shift);
-    }
-
-    return command_line_not_changed(s);
-
-  case K_IGNORE:
-    // Ignore mouse event or open_cmdwin() result.
-    return command_line_not_changed(s);
-
-  case K_MIDDLEDRAG:
-  case K_MIDDLERELEASE:
-    return command_line_not_changed(s);                 // Ignore mouse
-
-  case K_MIDDLEMOUSE:
-    cmdline_paste(eval_has_provider("clipboard", false) ? '*' : 0, true, true);
-    redrawcmd();
-    return command_line_changed(s);
-
-  case K_LEFTDRAG:
-  case K_LEFTRELEASE:
-  case K_RIGHTDRAG:
-  case K_RIGHTRELEASE:
-    // Ignore drag and release events when the button-down wasn't
-    // seen before.
-    if (s->ignore_drag_release) {
-      return command_line_not_changed(s);
-    }
-    FALLTHROUGH;
-  case K_LEFTMOUSE:
-    // Return on left click above number prompt
-    if (ccline.mouse_used && mouse_row < cmdline_row) {
-      *ccline.mouse_used = true;
-      return 0;
-    }
-    FALLTHROUGH;
-  case K_RIGHTMOUSE:
-    command_line_left_right_mouse(s);
-    return command_line_not_changed(s);
-
-  // Mouse scroll wheel: ignored here
-  case K_MOUSEDOWN:
-  case K_MOUSEUP:
-  case K_MOUSELEFT:
-  case K_MOUSERIGHT:
-  // Alternate buttons ignored here
-  case K_X1MOUSE:
-  case K_X1DRAG:
-  case K_X1RELEASE:
-  case K_X2MOUSE:
-  case K_X2DRAG:
-  case K_X2RELEASE:
-  case K_MOUSEMOVE:
-    return command_line_not_changed(s);
-
-  case K_SELECT:          // end of Select mode mapping - ignore
-    return command_line_not_changed(s);
-
-  case Ctrl_B:            // begin of command line
-  case K_HOME:
-  case K_KHOME:
-  case K_S_HOME:
-  case K_C_HOME:
-    ccline.cmdpos = 0;
-    ccline.cmdspos = rs_cmd_startcol();
-    return command_line_not_changed(s);
-
-  case Ctrl_E:            // end of command line
-  case K_END:
-  case K_KEND:
-  case K_S_END:
-  case K_C_END:
-    ccline.cmdpos = ccline.cmdlen;
-    ccline.cmdspos = cmd_screencol(ccline.cmdpos);
-    return command_line_not_changed(s);
-
-  case Ctrl_A:            // all matches
-    if (cmdline_pum_active()) {
-      // As Ctrl-A completes all the matches, close the popup
-      // menu (if present)
-      cmdline_pum_cleanup(&ccline);
-    }
-
-    if (nextwild(&s->xpc, WILD_ALL, 0, s->firstc != '@') == FAIL) {
-      break;
-    }
-    s->xpc.xp_context = EXPAND_NOTHING;
-    s->did_wild_list = false;
-    return command_line_changed(s);
-
-  case Ctrl_L:
-    if (may_add_char_to_search(s->firstc, &s->c, &s->is_state) == OK) {
-      return command_line_not_changed(s);
-    }
-
-    // completion: longest common part
-    if (nextwild(&s->xpc, WILD_LONGEST, 0, s->firstc != '@') == FAIL) {
-      break;
-    }
-    return command_line_changed(s);
-
-  case Ctrl_N:            // next match
-  case Ctrl_P:            // previous match
-    if (s->xpc.xp_numfiles > 0) {
-      const int wild_type = (s->c == Ctrl_P) ? WILD_PREV : WILD_NEXT;
-      if (nextwild(&s->xpc, wild_type, 0, s->firstc != '@') == FAIL) {
-        break;
-      }
-      return command_line_changed(s);
-    }
-    FALLTHROUGH;
-
-  case K_UP:
-  case K_DOWN:
-  case K_S_UP:
-  case K_S_DOWN:
-  case K_PAGEUP:
-  case K_KPAGEUP:
-  case K_PAGEDOWN:
-  case K_KPAGEDOWN:
-    if (cmdline_pum_active()
-        && (s->c == K_PAGEUP || s->c == K_PAGEDOWN
-            || s->c == K_KPAGEUP || s->c == K_KPAGEDOWN)) {
-      // If the popup menu is displayed, then PageUp and PageDown
-      // are used to scroll the menu.
-      const int wild_type =
-        (s->c == K_PAGEDOWN || s->c == K_KPAGEDOWN) ? WILD_PAGEDOWN : WILD_PAGEUP;
-      if (nextwild(&s->xpc, wild_type, 0, s->firstc != '@') == FAIL) {
-        break;
-      }
-      return command_line_changed(s);
-    } else {
-      switch (command_line_browse_history(s)) {
-      case CMDLINE_CHANGED:
-        s->did_hist_navigate = true;
-        return command_line_changed(s);
-      case GOTO_NORMAL_MODE:
-        return 0;
-      default:
-        return command_line_not_changed(s);
-      }
-    }
-
-  case Ctrl_G:  // next match
-  case Ctrl_T:  // previous match
-    if (rs_may_do_command_line_next_incsearch(s->firstc, s->count, &s->is_state,
-                                              s->c == Ctrl_G) == FAIL) {
-      return command_line_not_changed(s);
-    }
-    break;
-
-  case Ctrl_V:
-  case Ctrl_Q:
-    s->ignore_drag_release = true;
-    putcmdline('^', true);
-
-    // Get next (two) characters.
-    // Do not include modifiers into the key for CTRL-SHIFT-V.
-    s->c = get_literal(mod_mask & MOD_MASK_SHIFT);
-
-    s->do_abbr = false;                   // don't do abbreviation now
-    ccline.special_char = NUL;
-    // may need to remove ^ when composing char was typed
-    if (utf_iscomposing_first(s->c) && !cmd_silent) {
-      if (ui_has(kUICmdline)) {
-        // TODO(bfredl): why not make unputcmdline also work with true?
-        unputcmdline();
-      } else {
-        draw_cmdline(ccline.cmdpos, ccline.cmdlen - ccline.cmdpos);
-        msg_putchar(' ');
-        cursorcmd();
-      }
-    }
-    break;
-
-  case Ctrl_K:
-    s->ignore_drag_release = true;
-    putcmdline('?', true);
-    s->c = get_digraph(true);
-    ccline.special_char = NUL;
-
-    if (s->c != NUL) {
-      break;
-    }
-
-    redrawcmd();
-    return command_line_not_changed(s);
-
-  case Ctrl__:            // CTRL-_: switch language mode
-    if (!p_ari) {
-      break;
-    }
-    return command_line_not_changed(s);
-
-  case 'q':
-    // Number prompts use the mouse and return on 'q' press
-    if (ccline.mouse_used) {
-      *ccline.cmdbuff = NUL;
-      return 0;
-    }
-    FALLTHROUGH;
-
-  default:
-    // Normal character with no special meaning.  Just set mod_mask
-    // to 0x0 so that typing Shift-Space in the GUI doesn't enter
-    // the string <S-Space>.  This should only happen after ^V.
-    if (!IS_SPECIAL(s->c)) {
-      mod_mask = 0x0;
-    }
-    break;
-  }
-
-  // End of switch on command line character.
-  // We come here if we have a normal character.
-  if (s->do_abbr && (IS_SPECIAL(s->c) || !vim_iswordc(s->c))
-      // Add ABBR_OFF for characters above 0x100, this is
-      // what check_abbr() expects.
-      && (rs_ccheck_abbr((s->c >= 0x100) ? (s->c + ABBR_OFF) : s->c)
-          || s->c == Ctrl_RSB)) {
-    return command_line_changed(s);
-  }
-
-end:
-  // put the character in the command line
-  if (IS_SPECIAL(s->c) || mod_mask != 0) {
-    put_on_cmdline(get_special_key_name(s->c, mod_mask), -1, true);
-  } else {
-    int j = utf_char2bytes(s->c, IObuff);
-    IObuff[j] = NUL;                // exclude composing chars
-    put_on_cmdline(IObuff, j, true);
-  }
-  return ccline.one_key ? 0 : command_line_changed(s);
-}
 
 /// Trigger CursorMovedC autocommands.
 static void may_trigger_cursormovedc(CommandLineState *s)
@@ -4067,10 +3676,37 @@ void nvim_command_line_left_right_mouse(void *s)
   command_line_left_right_mouse((CommandLineState *)s);
 }
 
-/// Wrapper for command_line_browse_history (called from Rust via opaque handle).
-int nvim_command_line_browse_history(void *s)
+/// Browse history (called from Rust via opaque handle).
+/// Inlines the former C static command_line_browse_history.
+int nvim_command_line_browse_history(void *vs)
 {
-  return command_line_browse_history((CommandLineState *)s);
+  CommandLineState *s = (CommandLineState *)vs;
+  // Save current command string so it can be restored later.
+  if (s->lookfor == NULL) {
+    s->lookfor = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
+    s->lookfor[ccline.cmdpos] = NUL;
+    s->lookforlen = ccline.cmdpos;
+  }
+  // Pack state for Rust
+  HistoryBrowseState rs_state = {
+    .c = s->c,
+    .firstc = s->firstc,
+    .hiscnt = s->hiscnt,
+    .save_hiscnt = s->save_hiscnt,
+    .histype = s->histype,
+    .lookfor = s->lookfor,
+    .lookforlen = s->lookforlen,
+  };
+  // Call Rust implementation
+  int result = rs_command_line_browse_history(&rs_state);
+  // Update state from Rust
+  s->hiscnt = rs_state.hiscnt;
+  s->save_hiscnt = rs_state.save_hiscnt;
+  // Clear xp_context on history change
+  if (result == CMDLINE_CHANGED) {
+    s->xpc.xp_context = EXPAND_NOTHING;
+  }
+  return result;
 }
 
 /// Wrapper for command_line_wildchar_complete (called from Rust via opaque handle).
@@ -4348,5 +3984,73 @@ void nvim_cls_set_ccline_mouse_used_val(int val)
   if (ccline.mouse_used != NULL) {
     *ccline.mouse_used = (val != 0);
   }
+}
+
+/// Wrapper for cmdline_pum_cleanup(&ccline) (called from Rust).
+void nvim_cmdline_pum_cleanup(void)
+{
+  cmdline_pum_cleanup(&ccline);
+}
+
+/// Call showmatches for &s->xpc (called from Rust with opaque xp pointer).
+int nvim_showmatches(void *xp, bool display_wildmenu, bool display_list, bool noselect)
+{
+  return showmatches((expand_T *)xp, display_wildmenu, display_list, noselect);
+}
+
+/// Call nextwild for &s->xpc (called from Rust with opaque xp pointer).
+int nvim_nextwild(void *xp, int type, int options, bool escape)
+{
+  return nextwild((expand_T *)xp, type, options, escape);
+}
+
+// nvim_get_mouse_row: defined in getchar.c
+// nvim_get_cmdline_row: use nvim_get_cmdline_row from existing accessors
+// nvim_get_ex_normal_busy: defined in getchar.c
+// nvim_get_typebuf_len: defined in getchar.c
+// nvim_get_p_ari: defined in edit.c
+
+/// Get cmdline_row global (different from existing nvim_get_cmdline_row).
+int nvim_get_cmdline_row_exgetln(void)
+{
+  return cmdline_row;
+}
+
+/// Get getln_interrupted_highlight global.
+int nvim_get_getln_interrupted_highlight(void)
+{
+  return getln_interrupted_highlight ? 1 : 0;
+}
+
+/// Set getln_interrupted_highlight global.
+void nvim_set_getln_interrupted_highlight(int val)
+{
+  getln_interrupted_highlight = (val != 0);
+}
+
+/// Set ccline.cmdbuff[0] to NUL (for 'q' with mouse prompt).
+void nvim_ccline_cmdbuff_set_nul(void)
+{
+  if (ccline.cmdbuff != NULL) {
+    *ccline.cmdbuff = NUL;
+  }
+}
+
+/// Get may_add_char_to_search result (called from Rust).
+int nvim_may_add_char_to_search(int firstc, int *c, void *is_state)
+{
+  return may_add_char_to_search(firstc, c, (incsearch_state_T *)is_state);
+}
+
+/// Get cedit_key value (static variable, exposed for Rust).
+int nvim_get_cedit_key(void)
+{
+  return cedit_key;
+}
+
+/// Non-static wrapper for open_cmdwin (static function, exposed for Rust).
+int nvim_open_cmdwin(void)
+{
+  return open_cmdwin();
 }
 
