@@ -332,8 +332,6 @@ static void trigger_cmd_autocmd(int typechar, event_T evt)
   apply_autocmds(evt, typestr, typestr, false, curbuf);
 }
 
-
-
 /// Parses the :[range]s/foo like commands and returns details needed for
 /// incsearch and wildmenu completion.
 /// Returns true if pattern is valid.
@@ -1910,8 +1908,6 @@ void unputcmdline(void)
 // cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
 // redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
 
-
-
 /// Get a pointer to the current command line info.
 CmdlineInfo *get_cmdline_info(void)
 {
@@ -2889,7 +2885,7 @@ void nvim_set_search_match(pos_T *t)
   }
 }
 
-/// Get new_cmdpos (used by set_cmdline_pos).
+/// Get new_cmdpos (set by setcmdpos()/setcmdline() VimL functions, consumed by cmdline state loop).
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }
 
 /// Set new_cmdpos.
