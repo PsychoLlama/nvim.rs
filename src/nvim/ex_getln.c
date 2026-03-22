@@ -250,15 +250,8 @@ extern void rs_init_incsearch_state(incsearch_state_T *state);
 extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
                                              int call_update_screen);
 
-// do_incsearch_highlighting: implemented in Rust (cmdline/search.rs)
-extern bool do_incsearch_highlighting(int firstc, int *search_delim, incsearch_state_T *is_state,
-                                      int *skiplen, int *patlen);
-// may_do_incsearch_highlighting: implemented in Rust (cmdline/search.rs)
+// Incsearch highlighting functions from Rust (cmdline/search.rs)
 extern void rs_may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s);
-// may_do_command_line_next_incsearch: implemented in Rust (cmdline/search.rs)
-extern int rs_may_do_command_line_next_incsearch(int firstc, int count, incsearch_state_T *s,
-                                                 bool next_match);
-// may_add_char_to_search: implemented in Rust (cmdline/search.rs)
 extern int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s);
 // draw_cmdline: implemented in Rust (cmdline/screen.rs)
 extern void draw_cmdline(int start, int len);
@@ -2334,7 +2327,6 @@ int nvim_open_cmdwin(void)
   return cmdwin_result;
 }
 
-
 /// Get script string
 ///
 /// Used for commands which accept either `:command script` or
@@ -2561,7 +2553,6 @@ int nvim_get_cmdwin_type(void)
 {
   return cmdwin_type;
 }
-
 
 // C accessor for textlock global
 int nvim_get_textlock(void)
