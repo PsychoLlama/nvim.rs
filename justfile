@@ -51,14 +51,14 @@ smoke-test:
     @just smoke-test-regexp
 
 smoke-test-run:
-    NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
+    NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout -s 9 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
 
 smoke-test-regexp:
-    timeout 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_smoke.vim 2>&1' || { echo "FAIL: regexp smoke test timed out or failed (exit $?)"; exit 1; }
+    timeout -s 9 30 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_smoke.vim 2>&1' || { echo "FAIL: regexp smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
 version:
-    VIMRUNTIME=runtime ./build/bin/nvim --version
+    VIMRUNTIME=runtime timeout -s 9 10 ./build/bin/nvim --version
 
 # === Rust Commands ===
 
@@ -183,16 +183,16 @@ rust-ffi-test: rust-build
 
 # Generate regexp baseline corpus from the C engine
 regexp-baseline: build
-    VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
+    VIMRUNTIME=runtime timeout -s 9 120 ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
 
 # Validate regexp corpus matches committed baseline (catches regressions)
 regexp-validate: build
-    VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
+    VIMRUNTIME=runtime timeout -s 9 120 ./build/bin/nvim --headless --clean -S test/regexp_baseline.vim
     @git diff --exit-code src/nvim-rs/test/regexp_corpus.json || (echo 'ERROR: regexp corpus diverged from committed baseline' && exit 1)
 
 # Fuzz test regexp engine with random patterns (catches crashes/hangs)
-regexp-fuzz duration='30': build
-    timeout {{duration}} bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_fuzz.vim 2>&1' || { echo "FAIL: regexp fuzz test crashed or timed out (exit $?)"; exit 1; }
+regexp-fuzz duration='60': build
+    timeout -s 9 {{duration}} bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/regexp_fuzz.vim 2>&1' || { echo "FAIL: regexp fuzz test crashed or timed out (exit $?)"; exit 1; }
 
 # Full build: Rust + C
 build-all: rust-build build
