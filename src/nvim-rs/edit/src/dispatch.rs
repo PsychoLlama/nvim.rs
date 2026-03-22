@@ -158,7 +158,7 @@ extern "C" {
     fn nvim_edit_get_cmdwin_type() -> c_int;
     fn nvim_edit_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
-    fn nvim_edit_set_did_cursorhold(val: c_int);
+    fn nvim_set_did_cursorhold(val: bool);
     fn nvim_edit_inc_disable_fold_update();
     fn nvim_edit_dec_disable_fold_update();
     fn nvim_edit_set_compl_busy(val: c_int);
@@ -179,7 +179,7 @@ extern "C" {
     fn nvim_get_p_paste() -> c_int;
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
-    fn nvim_edit_inindent() -> c_int;
+    fn nvim_inindent_zero() -> bool;
     fn nvim_edit_auto_format(force_format: c_int);
     fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
     fn do_c_expr_indent();
@@ -457,7 +457,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
     // If typed something, may trigger CursorHoldI again.
     // But not in CTRL-X mode — a script can't restore the state.
     if (*s).c != K_EVENT && rs_ctrl_x_mode_normal() != 0 {
-        nvim_edit_set_did_cursorhold(0);
+        nvim_set_did_cursorhold(false);
     }
 
     // Cancel completion if window or tab page changed.
@@ -615,7 +615,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
 
     if (*s).c == SPACE {
         (*s).inserted_space = 1;
-        if nvim_edit_inindent() != 0 {
+        if nvim_inindent_zero() {
             nvim_set_can_cindent(0);
         }
         if nvim_get_Insstart_blank_vcol() == MAXCOL

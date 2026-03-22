@@ -672,16 +672,8 @@ void nvim_edit_set_orig_line_count(linenr_T val)
 /// Set mod_mask (accessor for Rust).
 
 /// Increment textlock (accessor for Rust).
-void nvim_edit_textlock_inc(void)
-{
-  textlock++;
-}
 
 /// Decrement textlock (accessor for Rust).
-void nvim_edit_textlock_dec(void)
-{
-  textlock--;
-}
 
 
 
@@ -1322,10 +1314,6 @@ void nvim_edit_set_cmdwin_result(int val)
 /// Set ins_at_eol (accessor for Rust).
 
 /// Set did_cursorhold (accessor for Rust).
-void nvim_edit_set_did_cursorhold(int val)
-{
-  did_cursorhold = val != 0;
-}
 
 /// Increment disable_fold_update (accessor for Rust).
 void nvim_edit_inc_disable_fold_update(void)
@@ -1420,10 +1408,6 @@ int nvim_edit_get_curbuf_b_u_synced(void)
 
 
 /// Call inindent(0) (accessor for Rust).
-int nvim_edit_inindent(void)
-{
-  return inindent(0) ? 1 : 0;
-}
 
 /// Call auto_format(false, force_format) (accessor for Rust).
 void nvim_edit_auto_format(int force_format)
@@ -2009,10 +1993,6 @@ int nvim_edit_insert_check_scroll(int mincol, linenr_T old_topline, int old_topf
 }
 
 /// Set did_cursorhold (accessor for Rust state_machine, to avoid duplicate).
-void nvim_edit_set_did_cursorhold_rs(int val)
-{
-  did_cursorhold = val != 0;
-}
 
 /// Call ins_redraw(false) (accessor for Rust state_machine).
 void ins_redraw_false(void)
@@ -2566,10 +2546,6 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
 
 
 /// Call u_save(lnum1, lnum2) (accessor for Rust).
-int nvim_edit_u_save(int lnum1, int lnum2)
-{
-  return u_save((linenr_T)lnum1, (linenr_T)lnum2);
-}
 
 
 /// Get has_format_option(c) (accessor for Rust).

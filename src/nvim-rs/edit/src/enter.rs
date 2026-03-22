@@ -110,7 +110,7 @@ extern "C" {
     fn nvim_set_new_insert_skip(val: c_int);
     fn nvim_get_p_ri() -> c_int;
     fn nvim_edit_get_need_highlight_changed() -> c_int;
-    fn nvim_edit_set_did_cursorhold(val: c_int);
+    fn nvim_set_did_cursorhold(val: bool);
 
     // AutocmdS
     fn nvim_edit_set_vv_insertmode(cmdchar: c_int);
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') && (*s).c != CTRL_C {
         nvim_edit_ins_apply_insertleave();
     }
-    nvim_edit_set_did_cursorhold(0);
+    nvim_set_did_cursorhold(false);
 
     // ins_redraw() triggers TextChangedI only when no characters are in the
     // typeahead buffer, so reset curbuf->b_last_changedtick if TextChangedI

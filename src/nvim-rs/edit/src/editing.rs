@@ -42,8 +42,8 @@ extern "C" {
 
     // -- do_insert_char_pre dependencies --
     fn nvim_edit_has_event_insertcharpre() -> c_int;
-    fn nvim_edit_textlock_inc();
-    fn nvim_edit_textlock_dec();
+    fn nvim_inc_textlock();
+    fn nvim_dec_textlock();
     fn nvim_edit_set_vim_var_char(buf: *const c_char, len: isize);
     fn nvim_edit_get_vim_var_char() -> *const c_char;
     fn nvim_edit_ins_apply_autocmds_insertcharpre() -> c_int;
@@ -310,7 +310,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     let save_state = nvim_get_State();
 
     // Lock the text to avoid weird things from happening.
-    nvim_edit_textlock_inc();
+    nvim_inc_textlock();
     nvim_edit_set_vim_var_char(buf.as_ptr().cast(), buflen as isize);
 
     let mut res: *mut c_char = std::ptr::null_mut();
@@ -327,7 +327,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     }
 
     nvim_edit_set_vim_var_char(std::ptr::null(), -1);
-    nvim_edit_textlock_dec();
+    nvim_dec_textlock();
 
     // Restore the State, it may have been changed.
     nvim_set_State(save_state);

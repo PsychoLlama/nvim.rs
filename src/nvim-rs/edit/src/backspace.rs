@@ -70,7 +70,7 @@ extern "C" {
 
     // Undo / stop_arrow
     fn stop_arrow() -> c_int;
-    fn nvim_edit_u_save(lnum1: c_int, lnum2: c_int) -> c_int;
+    fn nvim_u_save(lnum1: c_int, lnum2: c_int) -> c_int;
 
     // Indent
     fn inindent(extra: c_int) -> c_int;
@@ -250,7 +250,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         let lnum = nvim_get_Insstart_lnum();
         if nvim_curwin_get_cursor_lnum() == lnum || revins_on {
             let cur_lnum = nvim_curwin_get_cursor_lnum();
-            if nvim_edit_u_save(cur_lnum - 2, cur_lnum + 1) == FAIL {
+            if nvim_u_save(cur_lnum - 2, cur_lnum + 1) == FAIL {
                 return false;
             }
             nvim_set_Insstart(lnum - 1, ml_get_len(lnum - 1));

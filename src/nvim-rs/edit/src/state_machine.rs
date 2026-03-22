@@ -551,7 +551,7 @@ extern "C" {
     fn nvim_get_can_cindent() -> c_int;
     fn rs_ins_compl_col() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
-    fn nvim_edit_set_did_cursorhold_rs(val: c_int);
+    fn nvim_set_did_cursorhold(val: bool);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_edit_plain_vgetc_no_mapping() -> c_int;
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
@@ -585,5 +585,5 @@ const K_C_RIGHT: c_int = -22269;
 /// Wrapper to avoid duplicate declaration of `nvim_edit_set_did_cursorhold`.
 #[inline]
 unsafe fn nvim_edit_set_did_cursorhold_true() {
-    unsafe { nvim_edit_set_did_cursorhold_rs(1) };
+    unsafe { nvim_set_did_cursorhold(true) };
 }
