@@ -152,7 +152,7 @@ extern "C" {
     // -- Phase 4 dispatch accessors --
     fn pum_visible() -> bool;
     fn nvim_get_pum_want_active() -> c_int;
-    fn nvim_edit_set_pum_want_active(val: c_int);
+    fn nvim_set_pum_want_active(val: c_int);
     fn nvim_edit_get_pum_want_finish() -> c_int;
     fn nvim_clear_edit_submode_extra();
     fn nvim_get_cmdwin_type() -> c_int;
@@ -170,7 +170,7 @@ extern "C" {
     fn nvim_edit_map_execute_lua();
     fn nvim_edit_paste_repeat();
     fn state_handle_k_event();
-    fn nvim_edit_curwin_is_qf_not_ll() -> c_int;
+    fn nvim_curwin_is_qf_not_ll() -> c_int;
     fn nvim_edit_quickfix_cc();
     fn nvim_edit_quickfix_ll();
     fn invoke_prompt_interrupt() -> bool;
@@ -494,7 +494,7 @@ unsafe fn do_check_pum(s: *mut InsertState) {
                 rs_ins_compl_prep(CTRL_Y);
             }
         }
-        nvim_edit_set_pum_want_active(0);
+        nvim_set_pum_want_active(0);
     }
 
     if nvim_edit_get_curbuf_b_u_synced() != 0 {
@@ -1062,7 +1062,7 @@ unsafe fn handle_tab(s: *mut InsertState) -> SwitchAction {
 unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     // In quickfix window, <CR> jumps to error under cursor.
     if nvim_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
-        if nvim_edit_curwin_is_qf_not_ll() != 0 {
+        if nvim_curwin_is_qf_not_ll() != 0 {
             nvim_edit_quickfix_cc();
         } else {
             nvim_edit_quickfix_ll();

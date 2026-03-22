@@ -117,7 +117,7 @@ extern "C" {
     fn nvim_edit_ins_redraw_impl(ready: c_int);
 
     // --- scroll bind ---
-    fn nvim_edit_curwin_p_scb() -> c_int;
+    fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_do_check_scrollbind_wrapper(flag: bool);
     fn nvim_curwin_get_w_p_crb() -> c_int;
     fn nvim_do_check_cursorbind_wrapper();
@@ -126,8 +126,8 @@ extern "C" {
     fn nvim_update_curswant_wrapper();
 
     // --- topline / topfill for saving ---
-    fn nvim_edit_get_curwin_topline() -> LinenrT;
-    fn nvim_edit_get_curwin_topfill() -> c_int;
+    fn nvim_curwin_get_topline() -> LinenrT;
+    fn nvim_curwin_get_topfill() -> c_int;
 
     // --- dont_sync_undo ---
     fn nvim_get_dont_sync_undo() -> c_int;
@@ -288,7 +288,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     // Redraw when no chars waiting
     unsafe { nvim_edit_ins_redraw_impl(1) };
 
-    if unsafe { nvim_edit_curwin_p_scb() } != 0 {
+    if unsafe { nvim_curwin_get_p_scb() } {
         unsafe { nvim_do_check_scrollbind_wrapper(true) };
     }
     if unsafe { nvim_curwin_get_w_p_crb() } != 0 {
@@ -299,8 +299,8 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
         unsafe { nvim_update_curswant_wrapper() };
     }
 
-    unsafe { (*s).old_topline = nvim_edit_get_curwin_topline() };
-    unsafe { (*s).old_topfill = nvim_edit_get_curwin_topfill() };
+    unsafe { (*s).old_topline = nvim_curwin_get_topline() };
+    unsafe { (*s).old_topfill = nvim_curwin_get_topfill() };
 
     if unsafe { (*s).c } != K_EVENT {
         unsafe { (*s).lastc = (*s).c }; // remember previous char for CTRL-D

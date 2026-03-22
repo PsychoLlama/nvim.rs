@@ -2507,6 +2507,16 @@ void nvim_curwin_set_p_cul(bool val) { curwin->w_p_cul = val; }
 void nvim_curwin_set_p_cuc(bool val) { curwin->w_p_cuc = val; }
 void nvim_curwin_set_p_spell(bool val) { curwin->w_p_spell = val; }
 
+// General curwin/Insstart accessors (migrated from edit.c)
+linenr_T nvim_curwin_get_topline(void) { return curwin->w_topline; }
+int nvim_curwin_get_topfill(void) { return curwin->w_topfill; }
+int nvim_curwin_is_qf_not_ll(void) { return curwin->w_llist_ref == NULL ? 1 : 0; }
+void nvim_curwin_invalidate_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL); }
+void nvim_curwin_clear_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WCOL | VALID_VIRTCOL); }
+void nvim_curwin_clear_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL); }
+void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
+void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");

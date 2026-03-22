@@ -57,7 +57,7 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
     fn vim_beep(val: c_uint);
     fn nvim_edit_ww_allows(ch: c_int) -> c_int;
-    fn nvim_edit_set_cursor_lnum_rel(delta: LinenrT);
+    fn nvim_curwin_cursor_lnum_add(delta: LinenrT);
 
     // Movement functions (canonical names, exported from Rust)
     fn oneleft() -> c_int;
@@ -167,7 +167,7 @@ unsafe fn ins_left_impl() {
     } else if nvim_edit_ww_allows(i32::from(b'[')) != 0 && nvim_curwin_get_cursor_lnum() > 1 {
         // if 'whichwrap' set for cursor in insert mode may go to previous line
         nvim_edit_start_arrow_from_slot(0);
-        nvim_edit_set_cursor_lnum_rel(-1);
+        nvim_curwin_cursor_lnum_add(-1);
         nvim_coladvance(MAXCOL);
         nvim_curwin_set_w_set_curswant(true);
     } else {
@@ -217,7 +217,7 @@ unsafe fn ins_right_impl() {
         // if 'whichwrap' set for cursor in insert mode, may move to next line
         nvim_edit_start_arrow_curpos();
         nvim_curwin_set_w_set_curswant(true);
-        nvim_edit_set_cursor_lnum_rel(1);
+        nvim_curwin_cursor_lnum_add(1);
         nvim_curwin_set_cursor_col(0);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);

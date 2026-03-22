@@ -44,8 +44,8 @@ extern "C" {
     fn nvim_curwin_get_cursor_coladd() -> c_int;
     fn nvim_set_curwin_cursor_coladd(val: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
-    fn nvim_edit_curwin_clear_wcol_virtcol();
-    fn nvim_edit_curwin_clear_wrow_wcol_virtcol();
+    fn nvim_curwin_clear_wcol_virtcol();
+    fn nvim_curwin_clear_wrow_wcol_virtcol();
     fn mb_adjust_cursor();
 
     // Arrow used
@@ -227,7 +227,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         } else {
             let col = nvim_curwin_get_cursor_col();
             nvim_curwin_set_cursor_col(col - 1);
-            nvim_edit_curwin_clear_wcol_virtcol();
+            nvim_curwin_clear_wcol_virtcol();
             mb_adjust_cursor();
         }
     }
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text.
     if gchar_cursor() == c_int::from(b'\t') || nvim_edit_curbuf_meta_total_inline() > 0 {
-        nvim_edit_curwin_clear_wrow_wcol_virtcol();
+        nvim_curwin_clear_wrow_wcol_virtcol();
     }
 
     nvim_setmouse();

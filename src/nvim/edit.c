@@ -672,11 +672,6 @@ void nvim_edit_set_orig_line_count(linenr_T val)
 
 
 
-/// Set Insstart from curwin->w_cursor (accessor for Rust).
-void nvim_edit_set_insstart_from_cursor(void)
-{
-  Insstart = curwin->w_cursor;
-}
 
 /// Check if Insstart.col > Insstart_orig.col (accessor for Rust).
 int nvim_edit_insstart_col_gt_orig(void)
@@ -982,11 +977,6 @@ int nvim_edit_ww_allows(int ch)
   return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0;
 }
 
-/// Adjust cursor lnum relative to current position (accessor for Rust).
-void nvim_edit_set_cursor_lnum_rel(linenr_T delta)
-{
-  curwin->w_cursor.lnum += delta;
-}
 
 
 /// Get curbuf->b_ml.ml_line_count via curwin (accessor for Rust).
@@ -1324,11 +1314,6 @@ void nvim_edit_paste_repeat(void)
 
 
 
-/// Check if curwin->w_llist_ref is NULL (for quickfix window check) (accessor for Rust).
-int nvim_edit_curwin_is_qf_not_ll(void)
-{
-  return curwin->w_llist_ref == NULL ? 1 : 0;
-}
 
 /// Call do_cmdline_cmd(".cc") for quickfix (accessor for Rust).
 void nvim_edit_quickfix_cc(void)
@@ -1648,11 +1633,6 @@ int nvim_edit_cursor_on_tab_or_inline(void)
   return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0;
 }
 
-/// Invalidate WROW/WCOL/VIRTCOL in curwin->w_valid (accessor for Rust).
-void nvim_edit_invalidate_wrow_wcol_virtcol(void)
-{
-  curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
-}
 
 
 /// Set revins_on (accessor for Rust).
@@ -1838,24 +1818,6 @@ void nvim_stuffcharReadbuff_K_NOP(void)
   stuffcharReadbuff(K_NOP);
 }
 
-/// Get curwin->w_p_scb (accessor for Rust state_machine).
-int nvim_edit_curwin_p_scb(void)
-{
-  return curwin->w_p_scb ? 1 : 0;
-}
-
-
-/// Get curwin->w_topline (accessor for Rust state_machine).
-linenr_T nvim_edit_get_curwin_topline(void)
-{
-  return curwin->w_topline;
-}
-
-/// Get curwin->w_topfill (accessor for Rust state_machine).
-int nvim_edit_get_curwin_topfill(void)
-{
-  return curwin->w_topfill;
-}
 
 /// Handle the scroll detection block from insert_check (composite accessor for Rust).
 /// Checks if window should be scrolled up one line. Returns new mincol if scroll
@@ -2588,18 +2550,6 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
                 && (!*inserted_space_p || arrow_used))));
 }
 
-/// Clear VALID_WCOL and VALID_VIRTCOL bits from curwin->w_valid (accessor for Rust).
-void nvim_edit_curwin_clear_wcol_virtcol(void)
-{
-  curwin->w_valid &= ~(VALID_WCOL | VALID_VIRTCOL);
-}
-
-/// Clear VALID_WROW, VALID_WCOL, VALID_VIRTCOL bits from curwin->w_valid
-/// (for gchar_cursor() == TAB or inline virtual text -- accessor for Rust).
-void nvim_edit_curwin_clear_wrow_wcol_virtcol(void)
-{
-  curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
-}
 
 /// Call ins_apply_autocmds(EVENT_INSERTLEAVEPRE) (accessor for Rust).
 void nvim_edit_ins_apply_autocmds_insertleavepre(void)
