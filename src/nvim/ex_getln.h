@@ -71,8 +71,10 @@ void f_getcmdtype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 // Phase 67 (this migration): Functions implemented in Rust
 int check_opt_wim(void);
 void redrawcmd(void);
+void redrawcmdline(void);
 void draw_cmdline(int start, int len);
 void put_on_cmdline(const char *str, int len, bool redraw);
+void cmdline_paste_str(const char *s, bool literally);
 
 // Phase 67.5: CommandLineState helper functions implemented in Rust
 int rs_command_line_handle_ctrl_bsl(int *c, bool *gotesc);

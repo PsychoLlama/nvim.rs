@@ -719,7 +719,7 @@ pub unsafe extern "C" fn redrawcmd_rs() {
 /// # Safety
 ///
 /// Calls C functions to access and set global state.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "redrawcmdline")]
 pub unsafe extern "C" fn rs_redrawcmdline() {
     if nvim_get_cmd_silent() != 0 {
         return;

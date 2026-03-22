@@ -877,7 +877,7 @@ const NL: c_int = 10;
 /// # Safety
 ///
 /// `s` must be a valid NUL-terminated string.
-#[unsafe(no_mangle)]
+#[unsafe(export_name = "cmdline_paste_str")]
 pub unsafe extern "C" fn rs_cmdline_paste_str(s: *const c_char, literally: bool) {
     if literally {
         put_on_cmdline_rs(s, -1, true);

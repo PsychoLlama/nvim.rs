@@ -312,14 +312,10 @@ extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 extern int rs_empty_pattern(char *p, size_t len, int delim);
 
 // Phase 67: Redraw helpers from Rust
-extern void rs_redrawcmdline(void);
 extern void rs_redrawcmdprompt(void);
 
 // Phase 67: Abbreviation check from Rust
 extern int rs_ccheck_abbr(int c);
-
-// Phase 67: Paste string from Rust
-extern void rs_cmdline_paste_str(const char *s, bool literally);
 
 // Phase 67: Viewstate helpers from Rust
 extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
@@ -481,13 +477,7 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
 // do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs);
 // declared below in the extern section.
 
-// may_do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs).
-static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state_T *s)
-{
-  rs_may_do_incsearch_highlighting(firstc, count, s);
-}
-
-// may_add_char_to_search() is implemented in Rust (cmdline crate, search.rs).
+// may_do_incsearch_highlighting() and may_add_char_to_search() are implemented in Rust (cmdline crate, search.rs).
 
 /// Initialize the current command-line info.
 static void init_ccline(int firstc, int indent)
@@ -872,14 +862,7 @@ static int command_line_check(VimState *state)
   return 1;
 }
 
-/// Handle CTRL-\ pressed in Command-line mode:
-/// - CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode.
-/// - CTRL-\ e prompts for an expression.
 // command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
-static int command_line_handle_ctrl_bsl(CommandLineState *s)
-{
-  return rs_command_line_handle_ctrl_bsl(&s->c, &s->gotesc);
-}
 
 /// Completion for 'wildchar' or 'wildcharm' key.
 /// - hitting <ESC> twice means: abandon command line.
@@ -1053,7 +1036,7 @@ static int command_line_execute(VimState *state, int key)
     }
     // Re-apply 'incsearch' highlighting in case it was cleared.
     if (display_tick > display_tick_saved && s->is_state.did_incsearch) {
-      may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
+      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
     }
 
     // nvim_select_popupmenu_item() can be called from the handling of
@@ -1163,7 +1146,7 @@ static int command_line_execute(VimState *state, int key)
   // CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode,
   // CTRL-\ e prompts for an expression.
   if (s->c == Ctrl_BSL) {
-    switch (command_line_handle_ctrl_bsl(s)) {
+    switch (rs_command_line_handle_ctrl_bsl(&s->c, &s->gotesc)) {
     case CMDLINE_CHANGED:
       return command_line_changed(s);
     case CMDLINE_NOT_CHANGED:
@@ -1172,7 +1155,7 @@ static int command_line_execute(VimState *state, int key)
       return 0;                   // back to cmd mode
     default:
       s->c = Ctrl_BSL;            // backslash key not processed by
-                                  // command_line_handle_ctrl_bsl()
+                                  // rs_command_line_handle_ctrl_bsl()
     }
   }
 
@@ -1268,7 +1251,7 @@ static int command_line_execute(VimState *state, int key)
       rs_init_incsearch_state(&s->is_state);
     }
     if (KeyTyped || vpeekc() == NUL) {
-      may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
+      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
     }
     return command_line_not_changed(s);
   }
@@ -1276,21 +1259,8 @@ static int command_line_execute(VimState *state, int key)
   return command_line_handle_key(s);
 }
 
-// May adjust 'incsearch' highlighting for typing CTRL-G and CTRL-T, go to next
-// or previous match.
-// Returns FAIL when calling command_line_not_changed.
 // may_do_command_line_next_incsearch() is implemented in Rust (cmdline crate, search.rs).
-static int may_do_command_line_next_incsearch(int firstc, int count, incsearch_state_T *s,
-                                              bool next_match)
-{
-  return rs_may_do_command_line_next_incsearch(firstc, count, s, next_match);
-}
-
 // command_line_erase_chars() is implemented in Rust (cmdline crate, keys.rs).
-static int command_line_erase_chars(CommandLineState *s)
-{
-  return rs_command_line_erase_chars(s->c, s->indent, &s->is_state);
-}
 
 /// Handle the CTRL-^ key in the command-line mode and toggle the use of the
 /// language :lmap mappings and/or Input Method.
@@ -1322,10 +1292,6 @@ static void command_line_toggle_langmap(CommandLineState *s)
 }
 
 // command_line_insert_reg() is implemented in Rust (cmdline crate, keys.rs).
-static int command_line_insert_reg(CommandLineState *s)
-{
-  return rs_command_line_insert_reg(&s->c, &s->gotesc);
-}
 
 /// Handle the Left and Right mouse clicks in the command-line mode.
 static void command_line_left_right_mouse(CommandLineState *s)
@@ -1404,7 +1370,7 @@ static int command_line_handle_key(CommandLineState *s)
   case K_DEL:
   case K_KDEL:
   case Ctrl_W:
-    switch (command_line_erase_chars(s)) {
+    switch (rs_command_line_erase_chars(s->c, s->indent, &s->is_state)) {
     case CMDLINE_NOT_CHANGED:
       return command_line_not_changed(s);
     case GOTO_NORMAL_MODE:
@@ -1460,7 +1426,7 @@ static int command_line_handle_key(CommandLineState *s)
     return 0;                         // back to cmd mode
 
   case Ctrl_R:                        // insert register
-    switch (command_line_insert_reg(s)) {
+    switch (rs_command_line_insert_reg(&s->c, &s->gotesc)) {
     case GOTO_NORMAL_MODE:
       return 0;  // back to cmd mode
     case CMDLINE_CHANGED:
@@ -1662,8 +1628,8 @@ static int command_line_handle_key(CommandLineState *s)
 
   case Ctrl_G:  // next match
   case Ctrl_T:  // previous match
-    if (may_do_command_line_next_incsearch(s->firstc, s->count, &s->is_state,
-                                           s->c == Ctrl_G) == FAIL) {
+    if (rs_may_do_command_line_next_incsearch(s->firstc, s->count, &s->is_state,
+                                              s->c == Ctrl_G) == FAIL) {
       return command_line_not_changed(s);
     }
     break;
@@ -2233,7 +2199,7 @@ static int command_line_changed(CommandLineState *s)
       update_screen();  // Clear 'inccommand' preview.
     }
     if (s->xpc.xp_context == EXPAND_NOTHING && (KeyTyped || vpeekc() == NUL)) {
-      may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
+      rs_may_do_incsearch_highlighting(s->firstc, s->count, &s->is_state);
     }
   }
 
@@ -3032,24 +2998,8 @@ static bool cmdline_paste(int regname, bool literally, bool remcr)
   return cmdline_paste_reg(regname, literally, remcr);
 }
 
-// Put a string on the command line.
-// When "literally" is true, insert literally.
-// When "literally" is false, insert as typed, but don't leave the command
-// line.
-void cmdline_paste_str(const char *s, bool literally)
-{
-  rs_cmdline_paste_str(s, literally);
-}
-
-// This function is called when the screen size changes and with incremental
-// search and in other situations where the command line may have been
-// overwritten.
-void redrawcmdline(void)
-{
-  rs_redrawcmdline();
-}
-
-// redrawcmd() is implemented in Rust (cmdline crate, screen.rs).
+// cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
+// redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
 
 
 
