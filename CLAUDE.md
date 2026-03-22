@@ -6,6 +6,12 @@
 - Use `just` to run builds, tests, and static analysis.
 - Keep the `justfile` up to date.
 
+## Process Safety
+
+- **Never launch nvim without `timeout -s 9`**. Use `just` recipes which have timeouts built in.
+- **Always set `timeout: 300000`** (5 min) on Bash tool calls. For builds, use `timeout: 600000` (10 min).
+- **No unbounded processes.** Every launched process must have a kill timeout. No exceptions.
+
 ## Reference
 
 `ref/crates.md` lists all Rust crates and their domains. Check it first to see if code belongs in an existing crate or warrants a new one.

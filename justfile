@@ -3,16 +3,16 @@ _:
 
 # Build neovim using system dependencies from nix
 build:
-    cargo build --release
+    timeout -s 9 1800 cargo build --release
     @test -f build/build.ninja || cmake -B build -G Ninja -DUSE_BUNDLED=OFF
     @# Force relink when Rust library is newer than the binary (cmake doesn't track imported libs)
     @if [ -f build/bin/nvim ] && [ target/release/libnvim_rs.a -nt build/bin/nvim ]; then rm -f build/bin/nvim; fi
-    cmake --build build --target nvim_bin
+    timeout -s 9 1800 cmake --build build --target nvim_bin
 
 # Build with bundled dependencies (downloads deps)
 build-bundled:
     cmake -B build -G Ninja
-    cmake --build build
+    timeout -s 9 1800 cmake --build build
 
 # Configure only (no build)
 configure:
@@ -20,7 +20,7 @@ configure:
 
 # Build only (after configure)
 compile:
-    cmake --build build
+    timeout -s 9 1800 cmake --build build
 
 # Clean build directory
 clean:
@@ -32,11 +32,11 @@ test: unittest functionaltest
 
 # Run functional tests
 functionaltest:
-    cmake --build build --target functionaltest
+    timeout -s 9 1800 cmake --build build --target functionaltest
 
 # Run unit tests
 unittest:
-    cmake --build build --target unittest
+    timeout -s 9 1800 cmake --build build --target unittest
 
 # Run the built nvim
 run *ARGS:
@@ -64,16 +64,16 @@ version:
 
 # Build Rust components
 rust-build:
-    cargo build --release
+    timeout -s 9 1800 cargo build --release
 
 # Build Rust components (debug)
 rust-build-debug:
-    cargo build
+    timeout -s 9 1800 cargo build
 
 # Run Rust tests for pure Rust crates (no FFI linking needed)
 # These crates don't call into C code, only export functions to C
 rust-test:
-    cargo nextest run \
+    timeout -s 9 1800 cargo nextest run \
       --show-progress=none \
       --status-level=fail \
       --cargo-quiet \
@@ -159,7 +159,7 @@ rust-test:
 
 # Run Rust linter
 rust-clippy:
-    cargo clippy --all-targets --all-features -- -D warnings
+    timeout -s 9 1800 cargo clippy --all-targets --all-features -- -D warnings
 
 # Format Rust code
 rust-fmt:
