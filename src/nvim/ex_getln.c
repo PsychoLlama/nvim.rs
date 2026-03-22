@@ -228,18 +228,15 @@ extern int rs_last_window(win_T *win);
 
 // Rust FFI declarations
 extern int rs_global_stl_height(void);
-// Phase 3: Rust-implemented functions replacing C static/non-static functions
 extern void correct_screencol(int idx, int cells, int *col);
 extern void rs_win_size_restore(garray_T *gap);
 extern void rs_win_size_save(garray_T *gap);
 extern void rs_clear_showcmd(void);
-
 extern int rs_magic_isset(void);
-
 extern int rs_cmdline_delete_char_before(void);
 extern int rs_cmdline_delete_word_before(void);
 
-// Phase 1: History browsing from Rust
+// History browsing state (used by Rust cmdline/history.rs)
 typedef struct {
   int c;
   int firstc;
@@ -282,7 +279,7 @@ extern int rs_entry_should_save_last_cmdline(int firstc);
 extern int rs_entry_hist_char2type(int firstc);
 extern int rs_entry_cmdline_type(int firstc);
 
-// Phase 7: Command window helpers from Rust
+// Command window helpers from Rust
 extern int rs_cmdwin_can_open(int cmdwin_type_active, int text_locked, int cmdline_star);
 extern int rs_cmdwin_split_invalid(int old_curwin_valid, int curwin_is_old,
                                    int old_curbuf_valid, int buf_changed);
@@ -300,28 +297,20 @@ extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int 
 extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
                                            unsigned int prev_prompt_id);
 
-// Phase 10: VimL API helpers from Rust
+// VimL API helpers from Rust
 extern int rs_clamp_cmdpos(int pos, int cmdlen);
 
-// Phase 67: Screen position helpers from Rust
+// Screen position and drawing helpers from Rust
 extern int rs_cmd_startcol(void);
 extern int rs_cmdline_charsize(int idx);
-
-// Phase 67: Empty pattern detection from Rust
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 extern int rs_empty_pattern(char *p, size_t len, int delim);
-
-// Phase 67: Redraw helpers from Rust
 extern void rs_redrawcmdprompt(void);
-
-// Phase 67: Abbreviation check from Rust
 extern int rs_ccheck_abbr(int c);
-
-// Phase 67: Viewstate helpers from Rust
 extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
 extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
 
-// Phase 3: command_line_handle_key implemented in Rust (cmdline/keys.rs)
+// command_line_handle_key implemented in Rust (cmdline/keys.rs)
 extern int command_line_handle_key(void *s);
 // command_line_wildchar_complete() is implemented in Rust (cmdline crate, state.rs).
 extern int command_line_wildchar_complete(void *s);
@@ -2693,8 +2682,6 @@ void nvim_set_ccline_overstrike(int overstrike)
   ccline.overstrike = overstrike;
 }
 
-// Additional accessors for Phase 13.1
-
 int nvim_get_ccline_redraw_state(void)
 {
   return (int)ccline.redraw_state;
@@ -2775,8 +2762,6 @@ void nvim_set_ccline_cmdfirstc(int firstc)
   ccline.cmdfirstc = firstc;
 }
 
-// Accessors for history browsing (Phase 1 cmdline migration)
-
 void nvim_set_ccline_cmdbuff_at(int idx, char val)
 {
   ccline.cmdbuff[idx] = val;
@@ -2788,8 +2773,6 @@ void nvim_strcpy_cmdbuff(const char *src)
     STRCPY(ccline.cmdbuff, src);
   }
 }
-
-// Accessors for screen position calculations (Phase 13.2)
 
 int nvim_get_columns(void)
 {
@@ -2854,9 +2837,6 @@ uint8_t nvim_get_wim_flags(int idx) { return wim_flags[idx]; }
 /// Set a wim_flags entry for Rust.
 void nvim_set_wim_flags(int idx, uint8_t val) { wim_flags[idx] = val; }
 
-// Phase 67 Phase 2: Accessors for draw_cmdline and redrawcmd
-
-
 /// Get number of color chunks in ccline.last_colors.colors.
 size_t nvim_get_ccline_colors_size(void) { return kv_size(ccline.last_colors.colors); }
 
@@ -2881,8 +2861,6 @@ void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
 /// Set skip_redraw global.
 void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
 
-// Phase 67 Phase 3: Accessors for put_on_cmdline
-
 /// Get cmdbuff byte at given index.
 char nvim_get_ccline_cmdbuff_byte(int idx) { return ccline.cmdbuff[idx]; }
 
@@ -2894,9 +2872,6 @@ int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
 
 /// Call msg_check() for Rust.
 void nvim_msg_check(void) { msg_check(); }
-
-// Phase 67 (Phase 5): Accessors for command_line_handle_ctrl_bsl, command_line_insert_reg,
-// and command_line_erase_chars
 
 /// Get p_ru option (ruler) for Rust.
 int nvim_get_p_ru(void) { return p_ru; }
