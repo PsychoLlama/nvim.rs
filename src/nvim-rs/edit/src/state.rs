@@ -86,9 +86,9 @@ extern "C" {
     fn nvim_edit_insstart_col_gt_orig() -> c_int;
     fn nvim_edit_linetabsize_cursor_line() -> ColnrT;
     fn u_save_cursor() -> c_int;
-    fn nvim_edit_set_ai_col(val: ColnrT);
+    fn nvim_set_ai_col(val: ColnrT);
     fn nvim_edit_set_orig_line_count(val: LinenrT);
-    fn nvim_edit_set_vr_lines_changed(val: c_int);
+    fn nvim_set_vr_lines_changed(val: c_int);
     fn nvim_edit_curbuf_line_count() -> LinenrT;
     fn rs_foldOpenCursor();
 }
@@ -614,10 +614,10 @@ unsafe fn stop_arrow_impl() -> c_int {
             nvim_set_arrow_used(0);
             ins_need_undo_set(false);
         }
-        nvim_edit_set_ai_col(0);
+        nvim_set_ai_col(0);
         if nvim_get_State() & VREPLACE_FLAG != 0 {
             nvim_edit_set_orig_line_count(nvim_edit_curbuf_line_count());
-            nvim_edit_set_vr_lines_changed(1);
+            nvim_set_vr_lines_changed(1);
         }
         ResetRedobuff();
         AppendToRedobuff(c"1i".as_ptr()); // Pretend we start an insertion.

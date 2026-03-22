@@ -29,9 +29,9 @@ mod consts {
 extern "C" {
     // Global state accessors (getters exist in window.c and cursor_shape.c)
     fn nvim_get_State() -> c_int;
-    fn nvim_edit_set_State(val: c_int);
+    fn nvim_set_State(val: c_int);
     fn nvim_get_restart_edit() -> c_int;
-    fn nvim_edit_set_restart_edit(val: c_int);
+    fn nvim_set_restart_edit(val: c_int);
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
     fn nvim_get_p_ri() -> c_int;
@@ -107,7 +107,7 @@ pub fn get_state() -> c_int {
 pub fn set_state(state: c_int) {
     // SAFETY: Simple global setter
     unsafe {
-        nvim_edit_set_State(state);
+        nvim_set_State(state);
     }
 }
 
@@ -124,7 +124,7 @@ pub fn get_restart_edit() -> c_int {
 pub fn set_restart_edit(val: c_int) {
     // SAFETY: Simple global setter
     unsafe {
-        nvim_edit_set_restart_edit(val);
+        nvim_set_restart_edit(val);
     }
 }
 

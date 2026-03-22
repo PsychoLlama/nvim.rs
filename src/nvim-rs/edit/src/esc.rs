@@ -60,7 +60,6 @@ extern "C" {
     // State
     fn nvim_get_State() -> c_int;
     fn nvim_set_State(val: c_int);
-    fn nvim_edit_set_State(val: c_int);
 
     // `CPO_REPLCNT` / `p_cpo`
     fn nvim_edit_p_cpo_has_replcnt() -> c_int;
@@ -99,7 +98,7 @@ extern "C" {
     fn nvim_setmouse();
     fn nvim_showmode();
     fn nvim_edit_unshowmode_false();
-    fn nvim_edit_get_p_smd() -> c_int;
+    fn nvim_get_p_smd() -> c_int;
     fn skip_showmode() -> bool;
     fn nvim_get_got_int() -> c_int;
     fn ui_cursor_shape();
@@ -108,7 +107,7 @@ extern "C" {
     fn nvim_get_reg_recording() -> c_int;
 
     // `restart_edit`
-    fn nvim_edit_get_restart_edit() -> c_int;
+    fn nvim_get_restart_edit() -> c_int;
 
     // `p_ch == 0 && !ui_has(kUIMessages)`
     fn nvim_edit_get_p_ch_zero_no_ui_messages() -> c_int;
@@ -203,7 +202,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     }
 
     // When an autoindent was removed, curswant stays after the indent
-    if nvim_edit_get_restart_edit() == 0 && temp == nvim_curwin_get_cursor_col() {
+    if nvim_get_restart_edit() == 0 && temp == nvim_curwin_get_cursor_col() {
         nvim_edit_set_w_set_curswant(1);
     }
 
@@ -215,14 +214,14 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     // The cursor should end up on the last inserted character.
     if nomove == 0
         && (nvim_curwin_get_cursor_col() != 0 || nvim_curwin_get_cursor_coladd() > 0)
-        && (nvim_edit_get_restart_edit() == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
+        && (nvim_get_restart_edit() == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
         && nvim_get_revins_on() == 0
     {
         if nvim_curwin_get_cursor_coladd() > 0
             || nvim_edit_get_ve_flags_curwin() == K_OPT_VE_FLAG_ALL
         {
             oneleft();
-            if nvim_edit_get_restart_edit() != 0 {
+            if nvim_get_restart_edit() != 0 {
                 nvim_edit_set_cursor_coladd(nvim_curwin_get_cursor_coladd() + 1);
             }
         } else {
@@ -233,7 +232,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         }
     }
 
-    nvim_edit_set_State(MODE_NORMAL);
+    nvim_set_State(MODE_NORMAL);
     nvim_may_trigger_modechanged();
 
     // Need to position cursor again when on a TAB and
@@ -247,9 +246,9 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // When recording or for CTRL-O, need to display the new mode.
     // Otherwise remove the mode message.
-    if nvim_get_reg_recording() != 0 || nvim_edit_get_restart_edit() != 0 {
+    if nvim_get_reg_recording() != 0 || nvim_get_restart_edit() != 0 {
         nvim_showmode();
-    } else if nvim_edit_get_p_smd() != 0
+    } else if nvim_get_p_smd() != 0
         && (nvim_get_got_int() != 0 || !skip_showmode())
         && nvim_edit_get_p_ch_zero_no_ui_messages() == 0
     {

@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_edit_get_stop_insert_mode() -> c_int;
     fn nvim_edit_set_stop_insert_mode(val: c_int);
     fn nvim_edit_curbuf_is_terminal() -> c_int;
-    fn nvim_edit_set_restart_edit(val: c_int);
+    fn nvim_set_restart_edit(val: c_int);
     fn nvim_stuffcharReadbuff_K_NOP();
 
     // --- completion ---
@@ -217,7 +217,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
         && unsafe { nvim_edit_get_stop_insert_mode() } == 0
     {
         unsafe { nvim_edit_set_stop_insert_mode(1) };
-        unsafe { nvim_edit_set_restart_edit(c_int::from(b'I')) };
+        unsafe { nvim_set_restart_edit(c_int::from(b'I')) };
         unsafe { nvim_stuffcharReadbuff_K_NOP() };
     }
 
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
         } else {
             if c2 == CTRL_O {
                 unsafe { ins_ctrl_o() };
-                unsafe { nvim_edit_set_ins_at_eol(0) }; // cursor keeps column
+                unsafe { nvim_set_ins_at_eol(false) }; // cursor keeps column
                 unsafe { (*s).nomove = true };
             }
             unsafe { (*s).count = 0 };
@@ -552,7 +552,7 @@ extern "C" {
     fn rs_ins_compl_col() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
     fn nvim_edit_set_did_cursorhold_rs(val: c_int);
-    fn nvim_edit_set_ins_at_eol(val: c_int);
+    fn nvim_set_ins_at_eol(val: bool);
     fn nvim_edit_plain_vgetc_no_mapping() -> c_int;
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
     fn nvim_utf_ptr2len(p: *const std::ffi::c_char) -> c_int;

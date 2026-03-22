@@ -46,7 +46,7 @@ extern "C" {
 
     // Mode flags
     fn nvim_get_State() -> c_int;
-    fn nvim_edit_set_State(val: c_int);
+    fn nvim_set_State(val: c_int);
 
     // Global variables
     fn nvim_get_revins_on() -> c_int;
@@ -55,13 +55,13 @@ extern "C" {
     fn nvim_get_revins_legal() -> c_int;
     fn nvim_set_revins_legal(val: c_int);
     fn nvim_get_arrow_used() -> c_int;
-    fn nvim_edit_get_ai_col() -> ColnrT;
+    fn nvim_get_ai_col() -> ColnrT;
     fn nvim_set_did_ai(val: bool);
     fn nvim_set_did_si(val: bool);
     fn nvim_set_can_si(val: bool);
     fn nvim_set_can_si_back(val: bool);
     fn nvim_set_end_comment_pending(val: c_int);
-    fn nvim_edit_get_orig_line_count() -> LinenrT;
+    fn nvim_get_orig_line_count() -> LinenrT;
     fn nvim_get_dollar_vcol() -> ColnrT;
     fn nvim_set_dollar_vcol(val: ColnrT);
 
@@ -194,7 +194,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     let cursor_lnum = nvim_curwin_get_cursor_lnum();
     let cursor_col = nvim_curwin_get_cursor_col();
     let arrow_used = nvim_get_arrow_used() != 0;
-    let ai_col = nvim_edit_get_ai_col();
+    let ai_col = nvim_get_ai_col();
 
     // Can't delete anything in an empty file; can't backup past first char;
     // can't backup past starting point unless 'backspace' > 1.
@@ -267,7 +267,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             // In replace mode, in the line we started replacing, only move cursor
             dec_cursor();
         } else {
-            let orig_line_count = nvim_edit_get_orig_line_count();
+            let orig_line_count = nvim_get_orig_line_count();
             if state & VREPLACE_FLAG == 0 || nvim_curwin_get_cursor_lnum() > orig_line_count {
                 let temp = nvim_gchar_cursor(); // remember current char
                 let new_lnum = nvim_curwin_get_cursor_lnum() - 1;
@@ -291,7 +291,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             // In REPLACE mode: restore text replaced by the NL
             if state & REPLACE_FLAG != 0 {
                 let old_state = nvim_get_State();
-                nvim_edit_set_State(MODE_NORMAL);
+                nvim_set_State(MODE_NORMAL);
                 while cc > 0 {
                     let save_col = nvim_curwin_get_cursor_col();
                     mb_replace_pop_ins();
@@ -299,7 +299,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                     cc = replace_pop_if_nul();
                 }
                 replace_pop_ins();
-                nvim_edit_set_State(old_state);
+                nvim_set_State(old_state);
             }
         }
         nvim_set_did_ai(false);

@@ -47,14 +47,14 @@ extern "C" {
     fn nvim_edit_set_vim_var_char(buf: *const c_char, len: isize);
     fn nvim_edit_get_vim_var_char() -> *const c_char;
     fn nvim_edit_ins_apply_autocmds_insertcharpre() -> c_int;
-    fn nvim_edit_set_State(val: c_int);
+    fn nvim_set_State(val: c_int);
     fn nvim_get_State() -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // -- insert_special dependencies --
-    fn nvim_edit_get_mod_mask() -> c_int;
-    fn nvim_edit_set_mod_mask(val: c_int);
+    fn nvim_get_mod_mask() -> c_int;
+    fn nvim_set_mod_mask(val: c_int);
     fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
     fn nvim_edit_ins_str(p: *const c_char, len: usize);
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
@@ -69,8 +69,8 @@ extern "C" {
     fn vungetc(c: c_int);
     fn nvim_edit_inc_no_mapping();
     fn nvim_edit_dec_no_mapping();
-    fn nvim_edit_get_got_int() -> c_int;
-    fn nvim_edit_set_got_int(val: c_int);
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
     fn nvim_edit_get_K_ZERO() -> c_int;
 }
 
@@ -330,7 +330,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     nvim_edit_textlock_dec();
 
     // Restore the State, it may have been changed.
-    nvim_edit_set_State(save_state);
+    nvim_set_State(save_state);
 
     res
 }
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn rs_do_insert_char_pre(c: c_int) -> *mut c_char {
 /// `allow_modmask`: if true, use `mod_mask` for non-special keys too.
 /// `ctrlv`: if true, `c` was typed after CTRL-V.
 unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
-    let mod_mask = nvim_edit_get_mod_mask();
+    let mod_mask = nvim_get_mod_mask();
 
     // Command-key never produces a normal key.
     if mod_mask & MOD_MASK_CMD != 0 {
@@ -437,7 +437,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     let mut octal = false;
     let mut unicode: c_int = 0;
 
-    if nvim_edit_get_got_int() != 0 {
+    if nvim_get_got_int() != 0 {
         return CTRL_C;
     }
 
@@ -449,7 +449,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
         if no_simplify == 0 {
             nc = nvim_edit_merge_modifiers(nc);
         }
-        let mod_mask = nvim_edit_get_mod_mask();
+        let mod_mask = nvim_get_mod_mask();
         if (mod_mask & !MOD_MASK_SHIFT) != 0 {
             // A character with non-Shift modifiers should not be a valid
             // character for i_CTRL-V_digit.
@@ -528,9 +528,9 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     if nc != 0 {
         vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.
-        nvim_edit_set_mod_mask(0);
+        nvim_set_mod_mask(0);
     }
-    nvim_edit_set_got_int(0); // CTRL-C typed after CTRL-V is not an interrupt
+    nvim_set_got_int(0); // CTRL-C typed after CTRL-V is not an interrupt
     cc
 }
 

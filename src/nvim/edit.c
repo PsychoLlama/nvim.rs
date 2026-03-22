@@ -460,16 +460,8 @@ void nvim_set_o_lnum(linenr_T val)
 }
 
 /// Set State (accessor for Rust).
-void nvim_edit_set_State(int val)
-{
-  State = val;
-}
 
 /// Set restart_edit (accessor for Rust).
-void nvim_edit_set_restart_edit(int val)
-{
-  restart_edit = val;
-}
 
 /// Get arrow_used (accessor for Rust).
 int nvim_get_arrow_used(void)
@@ -670,34 +662,14 @@ void nvim_edit_update_topline(void)
 }
 
 /// Get spell_redraw_lnum (accessor for Rust).
-linenr_T nvim_edit_get_spell_redraw_lnum(void)
-{
-  return spell_redraw_lnum;
-}
 
 /// Set spell_redraw_lnum (accessor for Rust).
-void nvim_edit_set_spell_redraw_lnum(linenr_T val)
-{
-  spell_redraw_lnum = val;
-}
 
 /// Get ai_col (accessor for Rust).
-colnr_T nvim_edit_get_ai_col(void)
-{
-  return ai_col;
-}
 
 /// Set ai_col (accessor for Rust).
-void nvim_edit_set_ai_col(colnr_T val)
-{
-  ai_col = val;
-}
 
 /// Get orig_line_count (accessor for Rust).
-linenr_T nvim_edit_get_orig_line_count(void)
-{
-  return orig_line_count;
-}
 
 /// Set orig_line_count (accessor for Rust).
 void nvim_edit_set_orig_line_count(linenr_T val)
@@ -706,10 +678,6 @@ void nvim_edit_set_orig_line_count(linenr_T val)
 }
 
 /// Set vr_lines_changed (accessor for Rust).
-void nvim_edit_set_vr_lines_changed(int val)
-{
-  vr_lines_changed = val;
-}
 
 /// Increment no_mapping (accessor for Rust).
 void nvim_edit_inc_no_mapping(void)
@@ -724,28 +692,12 @@ void nvim_edit_dec_no_mapping(void)
 }
 
 /// Get got_int (accessor for Rust).
-int nvim_edit_get_got_int(void)
-{
-  return got_int ? 1 : 0;
-}
 
 /// Set got_int (accessor for Rust).
-void nvim_edit_set_got_int(int val)
-{
-  got_int = val != 0;
-}
 
 /// Get mod_mask (accessor for Rust).
-int nvim_edit_get_mod_mask(void)
-{
-  return mod_mask;
-}
 
 /// Set mod_mask (accessor for Rust).
-void nvim_edit_set_mod_mask(int val)
-{
-  mod_mask = val;
-}
 
 /// Increment textlock (accessor for Rust).
 void nvim_edit_textlock_inc(void)
@@ -1408,10 +1360,6 @@ void nvim_edit_set_cmdwin_result(int val)
 }
 
 /// Set ins_at_eol (accessor for Rust).
-void nvim_edit_set_ins_at_eol(int val)
-{
-  ins_at_eol = val != 0;
-}
 
 /// Set did_cursorhold (accessor for Rust).
 void nvim_edit_set_did_cursorhold(int val)
@@ -1506,10 +1454,6 @@ int nvim_edit_get_curbuf_b_u_synced(void)
 }
 
 /// Get p_paste option (accessor for Rust).
-int nvim_edit_get_p_paste(void)
-{
-  return p_paste ? 1 : 0;
-}
 
 
 
@@ -1778,10 +1722,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
 
 /// Get restart_edit (accessor for Rust).
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
-int nvim_edit_get_restart_edit(void)
-{
-  return restart_edit;
-}
 
 /// Get stop_insert_mode (accessor for Rust).
 int nvim_edit_get_stop_insert_mode(void)
@@ -1817,10 +1757,6 @@ void nvim_edit_init_Insstart(int startln)
 }
 
 /// Get did_ai (accessor for Rust).
-int nvim_edit_get_did_ai(void)
-{
-  return did_ai ? 1 : 0;
-}
 
 /// Get need_highlight_changed (accessor for Rust).
 int nvim_edit_get_need_highlight_changed(void)
@@ -1859,22 +1795,10 @@ void nvim_edit_set_need_start_insertmode(int val)
 }
 
 /// Get p_smd (showmode option) (accessor for Rust).
-int nvim_edit_get_p_smd(void)
-{
-  return p_smd;
-}
 
 /// Get msg_silent (accessor for Rust).
-int nvim_edit_get_msg_silent(void)
-{
-  return msg_silent;
-}
 
 /// Set old_indent (accessor for Rust).
-void nvim_edit_set_old_indent(int val)
-{
-  old_indent = val;
-}
 
 /// Save curwin->w_cursor into out-params (accessor for Rust).
 void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out)

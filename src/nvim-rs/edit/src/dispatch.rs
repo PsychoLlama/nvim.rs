@@ -144,10 +144,10 @@ extern "C" {
     fn nvim_set_Insstart_blank_vcol(val: c_int);
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> c_int;
-    fn nvim_edit_get_mod_mask() -> c_int;
+    fn nvim_get_mod_mask() -> c_int;
     fn nvim_edit_mod_mask_ctrl() -> c_int;
-    fn nvim_edit_get_got_int() -> c_int;
-    fn nvim_edit_set_got_int(val: c_int);
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_set_got_int(val: c_int);
 
     // -- Phase 4 dispatch accessors --
     fn pum_visible() -> bool;
@@ -157,7 +157,7 @@ extern "C" {
     fn nvim_edit_clear_edit_submode_extra();
     fn nvim_edit_get_cmdwin_type() -> c_int;
     fn nvim_edit_set_cmdwin_result(val: c_int);
-    fn nvim_edit_set_ins_at_eol(val: c_int);
+    fn nvim_set_ins_at_eol(val: bool);
     fn nvim_edit_set_did_cursorhold(val: c_int);
     fn nvim_edit_inc_disable_fold_update();
     fn nvim_edit_dec_disable_fold_update();
@@ -176,7 +176,7 @@ extern "C" {
     fn invoke_prompt_interrupt() -> bool;
     fn prompt_invoke_callback();
     fn nvim_edit_get_curbuf_b_u_synced() -> c_int;
-    fn nvim_edit_get_p_paste() -> c_int;
+    fn nvim_get_p_paste() -> c_int;
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
     fn nvim_edit_inindent() -> c_int;
@@ -585,7 +585,7 @@ pub unsafe extern "C" fn rs_insert_handle_key(s: *mut InsertState) -> c_int {
 
 /// Run the normalchar path (insert character as normal char).
 unsafe fn handle_normalchar(s: *mut InsertState) {
-    if nvim_edit_get_p_paste() == 0 {
+    if nvim_get_p_paste() == 0 {
         let str_ptr = do_insert_char_pre((*s).c);
         if !str_ptr.is_null() {
             if *str_ptr != 0 && stop_arrow() != FAIL {
@@ -666,7 +666,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         CTRL_C => {
             if nvim_edit_get_cmdwin_type() != 0 {
                 nvim_edit_set_cmdwin_result(K_IGNORE);
-                nvim_edit_set_got_int(0);
+                nvim_set_got_int(0);
                 (*s).nomove = true;
                 return SwitchAction::Exit(0);
             }
@@ -691,7 +691,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             }
             ins_ctrl_o();
             if nvim_edit_ve_onemore() != 0 {
-                nvim_edit_set_ins_at_eol(0);
+                nvim_set_ins_at_eol(false);
                 (*s).nomove = true;
             }
             (*s).count = 0;
@@ -793,10 +793,9 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_W => {
-            if nvim_edit_bt_prompt_curbuf() != 0 && (nvim_edit_get_mod_mask() & MOD_MASK_SHIFT) == 0
-            {
+            if nvim_edit_bt_prompt_curbuf() != 0 && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
                 nvim_stuffcharReadbuff(CTRL_W);
-                nvim_edit_set_restart_edit(c_int::from(b'A'));
+                nvim_set_restart_edit(c_int::from(b'A'));
                 (*s).nomove = true;
                 (*s).count = 0;
                 return SwitchAction::Exit(0);
@@ -886,7 +885,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_LEFT => {
-            if nvim_edit_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if nvim_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
                 ins_s_left();
             } else {
                 ins_left();
@@ -900,7 +899,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_RIGHT => {
-            if nvim_edit_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
+            if nvim_get_mod_mask() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
                 ins_s_right();
             } else {
                 ins_right();
@@ -916,7 +915,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         K_UP => {
             if pum_visible() {
                 rs_insert_do_complete(s);
-            } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
+            } else if nvim_get_mod_mask() & MOD_MASK_SHIFT != 0 {
                 ins_pageup();
             } else {
                 ins_up(0);
@@ -936,7 +935,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         K_DOWN => {
             if pum_visible() {
                 rs_insert_do_complete(s);
-            } else if nvim_edit_get_mod_mask() & MOD_MASK_SHIFT != 0 {
+            } else if nvim_get_mod_mask() & MOD_MASK_SHIFT != 0 {
                 ins_pagedown();
             } else {
                 ins_down(0);
@@ -1074,7 +1073,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         nvim_edit_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }
-    if (nvim_edit_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_edit_bt_prompt_curbuf() != 0 {
+    if (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_edit_bt_prompt_curbuf() != 0 {
         prompt_invoke_callback();
         if nvim_edit_bt_prompt_curbuf() == 0 {
             return SwitchAction::Exit(0);
@@ -1108,7 +1107,7 @@ unsafe fn handle_completion_pn(s: *mut InsertState) -> SwitchAction {
 
 extern "C" {
     fn nvim_stuffcharReadbuff(c: c_int);
-    fn nvim_edit_set_restart_edit(val: c_int);
+    fn nvim_set_restart_edit(val: c_int);
     fn nvim_get_p_ari() -> c_int;
     fn rs_compl_status_local() -> c_int;
     #[link_name = "cindent_on"]

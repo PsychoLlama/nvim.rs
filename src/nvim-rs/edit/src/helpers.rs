@@ -70,8 +70,8 @@ extern "C" {
     fn nvim_curwin_get_w_virtcol() -> ColnrT;
 
     // Spell redraw
-    fn nvim_edit_get_spell_redraw_lnum() -> LinenrT;
-    fn nvim_edit_set_spell_redraw_lnum(val: LinenrT);
+    fn nvim_get_spell_redraw_lnum() -> LinenrT;
+    fn nvim_set_spell_redraw_lnum(val: LinenrT);
 
     // Last-insert management
     fn nvim_get_last_insert_data() -> *mut c_char;
@@ -392,9 +392,9 @@ pub unsafe extern "C" fn rs_get_last_insert_save() -> *mut c_char {
 /// If we skipped highlighting word at cursor, do it now.
 /// It may be skipped again, thus reset `spell_redraw_lnum` first.
 unsafe fn check_spell_redraw_impl() {
-    let lnum = nvim_edit_get_spell_redraw_lnum();
+    let lnum = nvim_get_spell_redraw_lnum();
     if lnum != 0 {
-        nvim_edit_set_spell_redraw_lnum(0);
+        nvim_set_spell_redraw_lnum(0);
         let curwin = nvim_get_curwin();
         redrawWinline(curwin, lnum);
     }

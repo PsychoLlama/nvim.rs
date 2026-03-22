@@ -45,11 +45,10 @@ extern "C" {
     // State
     fn nvim_get_State() -> c_int;
     fn nvim_set_State(val: c_int);
-    fn nvim_edit_set_State(val: c_int);
     fn nvim_get_did_restart_edit() -> c_int;
     fn nvim_set_did_restart_edit(val: c_int);
-    fn nvim_edit_get_restart_edit() -> c_int;
-    fn nvim_edit_set_restart_edit(val: c_int);
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_set_restart_edit(val: c_int);
     fn nvim_get_update_Insstart_orig() -> c_int;
     fn nvim_set_update_Insstart_orig(val: c_int);
 
@@ -83,14 +82,14 @@ extern "C" {
     fn nvim_edit_init_Insstart_textlen();
 
     // ai_col
-    fn nvim_edit_get_ai_col() -> ColnrT;
-    fn nvim_edit_set_ai_col(val: ColnrT);
-    fn nvim_edit_get_did_ai() -> c_int;
+    fn nvim_get_ai_col() -> ColnrT;
+    fn nvim_set_ai_col(val: ColnrT);
+    fn nvim_get_did_ai() -> bool;
 
     // orig_line_count / vr_lines_changed
-    fn nvim_edit_get_orig_line_count() -> LinenrT;
+    fn nvim_get_orig_line_count() -> LinenrT;
     fn nvim_edit_set_orig_line_count(val: LinenrT);
-    fn nvim_edit_set_vr_lines_changed(val: c_int);
+    fn nvim_set_vr_lines_changed(val: c_int);
 
     // Flags
     fn nvim_edit_get_stop_insert_mode() -> c_int;
@@ -98,16 +97,16 @@ extern "C" {
     fn nvim_edit_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
-    fn nvim_edit_set_ins_at_eol(val: c_int);
+    fn nvim_set_ins_at_eol(val: bool);
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
     fn nvim_edit_set_need_start_insertmode(val: c_int);
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_get_can_cindent() -> c_int;
     fn nvim_set_can_cindent(val: c_int);
-    fn nvim_edit_get_p_smd() -> c_int;
-    fn nvim_edit_get_msg_silent() -> c_int;
-    fn nvim_edit_set_old_indent(val: c_int);
+    fn nvim_get_p_smd() -> c_int;
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_set_old_indent(val: c_int);
     fn nvim_set_new_insert_skip(val: c_int);
     fn nvim_get_p_ri() -> c_int;
     fn nvim_edit_get_need_highlight_changed() -> c_int;
@@ -171,7 +170,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     (*s).ins_just_started = true;
 
     // Remember whether editing was restarted after CTRL-O
-    nvim_set_did_restart_edit(nvim_edit_get_restart_edit());
+    nvim_set_did_restart_edit(nvim_get_restart_edit());
 
     // Sleep before redrawing, needed for "CTRL-O :" that results in an error message
     nvim_edit_msg_check_for_delay();
@@ -215,12 +214,12 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     nvim_edit_init_Insstart_textlen();
 
-    if nvim_edit_get_did_ai() == 0 {
-        nvim_edit_set_ai_col(0);
+    if !nvim_get_did_ai() {
+        nvim_set_ai_col(0);
     }
 
     // Set up redo buffer
-    if cmdchar != 0 && nvim_edit_get_restart_edit() == 0 {
+    if cmdchar != 0 && nvim_get_restart_edit() == 0 {
         ResetRedobuff();
         AppendNumberToRedobuff((*s).count);
         if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {
@@ -250,7 +249,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         nvim_set_State(MODE_VREPLACE);
         (*s).replace_state = MODE_VREPLACE;
         nvim_edit_set_orig_line_count(nvim_edit_get_curbuf_ml_line_count());
-        nvim_edit_set_vr_lines_changed(1);
+        nvim_set_vr_lines_changed(1);
     } else {
         nvim_set_State(MODE_INSERT);
     }
@@ -303,7 +302,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // If 'showmode' is set, show the current (insert/replace/..) mode.
     // A warning message for changing a readonly file is given here, before
     // actually changing anything.
-    let show_i = if nvim_edit_get_p_smd() != 0 && nvim_edit_get_msg_silent() == 0 {
+    let show_i = if nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0 {
         showmode()
     } else {
         0
@@ -322,7 +321,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     let insert_skip = nvim_edit_get_inserted_size();
     nvim_set_new_insert_skip(insert_skip);
 
-    nvim_edit_set_old_indent(0);
+    nvim_set_old_indent(0);
 
     // Main insert event loop.
     // If count != 0, ins_esc will return false to repeat.
