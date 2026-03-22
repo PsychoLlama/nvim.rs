@@ -2172,7 +2172,7 @@ const char *did_set_cedit(optset_T *args)
 ///     CR       if the command is to be executed
 ///     Ctrl_C   if it is to be abandoned
 ///     K_IGNORE if editing continues
-static int open_cmdwin(void)
+int nvim_open_cmdwin(void)
 {
   bufref_T old_curbuf;
   bufref_T bufref;
@@ -3558,11 +3558,7 @@ int nvim_get_cedit_key(void)
   return cedit_key;
 }
 
-/// Non-static wrapper for open_cmdwin (static function, exposed for Rust).
-int nvim_open_cmdwin(void)
-{
-  return open_cmdwin();
-}
+// nvim_open_cmdwin is now an alias for open_cmdwin (declared in header).
 
 // Phase 4: Accessors for command_line_execute and command_line_wildchar_complete
 
