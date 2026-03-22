@@ -188,6 +188,12 @@ extern void rs_start_selection(void);
 extern int insert_check_rs(VimState *state);
 extern int insert_execute_rs(VimState *state, int key);
 
+// Phase 2: ins_esc and ins_reg are now implemented in Rust.
+// Declaring them extern so C wrappers can call through to Rust-exported symbols.
+// NOTE: ins_esc returns int (not bool) to match Rust c_int ABI.
+extern int ins_esc(int *count, int cmdchar, int nomove);
+extern void ins_reg(void);
+
 // Rust functions exported with canonical C names (Phase 1+2 wrappers eliminated)
 // Phase 1: static wrappers
 extern void insert_special(int c, int allow_modmask, int ctrlv);
@@ -2185,9 +2191,10 @@ void nvim_edit_state_enter(void *state)
 }
 
 /// Call ins_esc(&count, cmdchar, nomove) (accessor for Rust).
+/// ins_esc is now implemented in Rust (src/nvim-rs/edit/src/esc.rs).
 int nvim_edit_ins_esc(int *count, int cmdchar, int nomove)
 {
-  return ins_esc(count, cmdchar, (bool)nomove) ? 1 : 0;
+  return ins_esc(count, cmdchar, nomove);
 }
 
 /// Call msg_check_for_delay(true) (accessor for Rust).
@@ -2689,119 +2696,22 @@ void display_dollar(colnr_T col_arg)
 ///
 /// @param esc     called by ins_esc()
 /// @param nomove  <c-\><c-o>, don't move cursor
+///
+/// Thin wrapper: logic is now in composite helpers called from Rust rs_stop_insert.
 static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
 {
   stop_redo_ins();
-  rs_replace_stack_clear();  // abandon replace stack
-
-  // Save the inserted text for later redo with ^@ and CTRL-A.
-  // Don't do it when "restart_edit" was set and nothing was inserted,
-  // otherwise CTRL-O w and then <Left> will clear "last_insert".
-  String inserted = get_inserted();
-  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
-  if (did_restart_edit == 0 || added > 0) {
-    xfree(last_insert.data);
-    last_insert = inserted;  // structure copy
-    last_insert_skip = added < 0 ? 0 : new_insert_skip;
-  } else {
-    xfree(inserted.data);
-  }
-
+  rs_replace_stack_clear();
+  nvim_edit_stop_insert_save_text();
   if (!arrow_used && end_insert_pos != NULL) {
-    int cc;
-    // Auto-format now.  It may seem strange to do this when stopping an
-    // insertion (or moving the cursor), but it's required when appending
-    // a line and having it end in a space.  But only do it when something
-    // was actually inserted, otherwise undo won't work.
-    if (!ins_need_undo && has_format_option(FO_AUTO)) {
-      pos_T tpos = curwin->w_cursor;
-
-      // When the cursor is at the end of the line after a space the
-      // formatting will move it to the following word.  Avoid that by
-      // moving the cursor onto the space.
-      cc = 'x';
-      if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
-        dec_cursor();
-        cc = gchar_cursor();
-        if (!ascii_iswhite(cc)) {
-          curwin->w_cursor = tpos;
-        }
-      }
-
-      auto_format(true, false);
-
-      if (ascii_iswhite(cc)) {
-        if (gchar_cursor() != NUL) {
-          inc_cursor();
-        }
-        // If the cursor is still at the same character, also keep
-        // the "coladd".
-        if (gchar_cursor() == NUL
-            && curwin->w_cursor.lnum == tpos.lnum
-            && curwin->w_cursor.col == tpos.col) {
-          curwin->w_cursor.coladd = tpos.coladd;
-        }
-      }
-    }
-
-    // If a space was inserted for auto-formatting, remove it now.
-    check_auto_format(true);
-
-    // If we just did an auto-indent, remove the white space from the end
-    // of the line, and put the cursor back.
-    // Do this when ESC was used or moving the cursor up/down.
-    // Check for the old position still being valid, just in case the text
-    // got changed unexpectedly.
-    if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
-                                      && curwin->w_cursor.lnum !=
-                                      end_insert_pos->lnum))
-        && end_insert_pos->lnum <= curbuf->b_ml.ml_line_count) {
-      pos_T tpos = curwin->w_cursor;
-      colnr_T prev_col = end_insert_pos->col;
-
-      curwin->w_cursor = *end_insert_pos;
-      check_cursor_col(curwin);        // make sure it is not past the line
-      while (true) {
-        if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
-          curwin->w_cursor.col--;
-        }
-        cc = gchar_cursor();
-        if (!ascii_iswhite(cc)) {
-          break;
-        }
-        if (del_char(true) == FAIL) {
-          break;            // should not happen
-        }
-      }
-      if (curwin->w_cursor.lnum != tpos.lnum) {
-        curwin->w_cursor = tpos;
-      } else if (curwin->w_cursor.col < prev_col) {
-        // reset tpos, could have been invalidated in the loop above
-        tpos = curwin->w_cursor;
-        tpos.col++;
-        if (cc != NUL && gchar_pos(&tpos) == NUL) {
-          curwin->w_cursor.col++;         // put cursor back on the NUL
-        }
-      }
-
-      // <C-S-Right> may have started Visual mode, adjust the position for
-      // deleted characters.
-      if (VIsual_active) {
-        check_visual_pos();
-      }
-    }
+    nvim_edit_stop_insert_do_format(end_insert_pos, esc, nomove);
   }
   did_ai = false;
   did_si = false;
   can_si = false;
   can_si_back = false;
-
-  // Set '[ and '] to the inserted text.  When end_insert_pos is NULL we are
-  // now in a different buffer.
   if (end_insert_pos != NULL) {
-    curbuf->b_op_start = Insstart;
-    curbuf->b_op_start_orig = Insstart_orig;
-    curbuf->b_op_end = *end_insert_pos;
+    nvim_edit_set_b_op_marks(end_insert_pos);
   }
 }
 
@@ -2849,211 +2759,11 @@ String get_last_insert(void)
 
 // replace_push_nul: now exported directly from Rust (export_name = "replace_push_nul").
 
-static void ins_reg(void)
-{
-  bool need_redraw = false;
-  int literally = 0;
-  int vis_active = VIsual_active;
+// ins_reg: now implemented in Rust (src/nvim-rs/edit/src/register.rs).
+// Rust export_name = "ins_reg".
 
-  // If we are going to wait for a character, show a '"'.
-  pc_status = PC_STATUS_UNSET;
-  if (redrawing() && !char_avail()) {
-    // may need to redraw when no more chars available now
-    ins_redraw(false);
-
-    edit_putchar('"', true);
-    add_to_showcmd_c(Ctrl_R);
-  }
-
-  // Don't map the register name. This also prevents the mode message to be
-  // deleted when ESC is hit.
-  no_mapping++;
-  allow_keys++;
-  int regname = plain_vgetc();
-  LANGMAP_ADJUST(regname, true);
-  if (regname == Ctrl_R || regname == Ctrl_O || regname == Ctrl_P) {
-    // Get a third key for literal register insertion
-    literally = regname;
-    add_to_showcmd_c(literally);
-    regname = plain_vgetc();
-    LANGMAP_ADJUST(regname, true);
-  }
-  no_mapping--;
-  allow_keys--;
-
-  // Don't call u_sync() while typing the expression or giving an error
-  // message for it. Only call it explicitly.
-  no_u_sync++;
-  if (regname == '=') {
-    pos_T curpos = curwin->w_cursor;
-
-    // Sync undo when evaluating the expression calls setline() or
-    // append(), so that it can be undone separately.
-    u_sync_once = 2;
-
-    regname = get_expr_register();
-
-    // Cursor may be moved back a column.
-    curwin->w_cursor = curpos;
-    check_cursor(curwin);
-  }
-  if (regname == NUL || !valid_yank_reg(regname, false)) {
-    vim_beep(kOptBoFlagRegister);
-    need_redraw = true;  // remove the '"'
-  } else {
-    yankreg_T *reg = get_yank_register(regname, YREG_PASTE);
-
-    if (literally == Ctrl_O || literally == Ctrl_P) {
-      // Append the command to the redo buffer.
-      AppendCharToRedobuff(Ctrl_R);
-      AppendCharToRedobuff(literally);
-      AppendCharToRedobuff(regname);
-
-      do_put(regname, NULL, BACKWARD, 1,
-             (literally == Ctrl_P ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-    } else if (reg->y_size > 1 && is_literal_register(regname)) {
-      AppendCharToRedobuff(Ctrl_R);
-      AppendCharToRedobuff(regname);
-      do_put(regname, NULL, BACKWARD, 1, PUT_CURSEND);
-    } else if (insert_reg(regname, NULL, !!literally) == FAIL) {
-      vim_beep(kOptBoFlagRegister);
-      need_redraw = true;  // remove the '"'
-    } else if (stop_insert_mode) {
-      // When the '=' register was used and a function was invoked that
-      // did ":stopinsert" then stuff_empty() returns false but we won't
-      // insert anything, need to remove the '"'
-      need_redraw = true;
-    }
-  }
-  no_u_sync--;
-  if (u_sync_once == 1) {
-    ins_need_undo = true;
-  }
-  u_sync_once = 0;
-
-  // If the inserted register is empty, we need to remove the '"'. Do this before
-  // clearing showcmd, which emits an event that can also update the screen.
-  if (need_redraw || stuff_empty()) {
-    edit_unputchar();
-  }
-  rs_clear_showcmd();
-
-  // Disallow starting Visual mode here, would get a weird mode.
-  if (!vis_active && VIsual_active) {
-    end_visual_mode();
-  }
-}
-
-/// Handle ESC in insert mode.
-///
-/// @param[in,out]  count    repeat count of the insert command
-/// @param          cmdchar  command that started the insert
-/// @param          nomove   when true, don't move the cursor
-///
-/// @return true when leaving insert mode, false when repeating the insert.
-static bool ins_esc(int *count, int cmdchar, bool nomove)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  static bool disabled_redraw = false;
-
-  check_spell_redraw();
-
-  int temp = curwin->w_cursor.col;
-  if (disabled_redraw) {
-    RedrawingDisabled--;
-    disabled_redraw = false;
-  }
-  if (!arrow_used) {
-    // Don't append the ESC for "r<CR>" and "grx".
-    if (cmdchar != 'r' && cmdchar != 'v') {
-      AppendToRedobuff(ESC_STR);
-    }
-
-    // Repeating insert may take a long time.  Check for
-    // interrupt now and then.
-    if (*count > 0) {
-      line_breakcheck();
-      if (got_int) {
-        *count = 0;
-      }
-    }
-
-    if (--*count > 0) {         // repeat what was typed
-      // Vi repeats the insert without replacing characters.
-      if (vim_strchr(p_cpo, CPO_REPLCNT) != NULL) {
-        State &= ~REPLACE_FLAG;
-      }
-
-      start_redo_ins();
-      if (cmdchar == 'r' || cmdchar == 'v') {
-        stuffRedoReadbuff(ESC_STR);  // No ESC in redo buffer
-      }
-      RedrawingDisabled++;
-      disabled_redraw = true;
-      // Repeat the insert
-      return false;
-    }
-    stop_insert(&curwin->w_cursor, true, nomove);
-    undisplay_dollar();
-  }
-
-  if (cmdchar != 'r' && cmdchar != 'v') {
-    ins_apply_autocmds(EVENT_INSERTLEAVEPRE);
-  }
-
-  // When an autoindent was removed, curswant stays after the
-  // indent
-  if (restart_edit == NUL && (colnr_T)temp == curwin->w_cursor.col) {
-    curwin->w_set_curswant = true;
-  }
-
-  // Remember the last Insert position in the '^ mark.
-  if ((cmdmod.cmod_flags & CMOD_KEEPJUMPS) == 0) {
-    fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_cursor);
-    RESET_FMARK(&curbuf->b_last_insert, curwin->w_cursor, curbuf->b_fnum, view);
-  }
-
-  // The cursor should end up on the last inserted character.
-  // Don't do it for CTRL-O, unless past the end of the line.
-  if (!nomove
-      && (curwin->w_cursor.col != 0 || curwin->w_cursor.coladd > 0)
-      && (restart_edit == NUL || (gchar_cursor() == NUL && !VIsual_active))
-      && !revins_on) {
-    if (curwin->w_cursor.coladd > 0 || get_ve_flags(curwin) == kOptVeFlagAll) {
-      oneleft();
-      if (restart_edit != NUL) {
-        curwin->w_cursor.coladd++;
-      }
-    } else {
-      curwin->w_cursor.col--;
-      curwin->w_valid &= ~(VALID_WCOL|VALID_VIRTCOL);
-      // Correct cursor for multi-byte character.
-      mb_adjust_cursor();
-    }
-  }
-
-  State = MODE_NORMAL;
-  may_trigger_modechanged();
-  // need to position cursor again when on a TAB and
-  // when on a char with inline virtual text
-  if (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) {
-    curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL);
-  }
-
-  setmouse();
-  ui_cursor_shape();            // may show different cursor shape
-
-  // When recording or for CTRL-O, need to display the new mode.
-  // Otherwise remove the mode message.
-  if (reg_recording != 0 || restart_edit != NUL) {
-    showmode();
-  } else if (p_smd && (got_int || !skip_showmode())
-             && !(p_ch == 0 && !ui_has(kUIMessages))) {
-    unshowmode(false);
-  }
-  // Exit Insert mode
-  return true;
-}
+// ins_esc: now implemented in Rust (src/nvim-rs/edit/src/esc.rs).
+// Rust export_name = "ins_esc".
 
 // ins_bs is now implemented in Rust (src/nvim-rs/edit/src/backspace.rs).
 
@@ -3497,4 +3207,302 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
         && (*(get_cursor_pos_ptr() - 1) == TAB
             || (*(get_cursor_pos_ptr() - 1) == ' '
                 && (!*inserted_space_p || arrow_used))));
+}
+
+// =============================================================================
+// Phase 2 accessors: stop_insert, ins_esc, ins_reg
+// =============================================================================
+
+/// Call auto_format(true, false) -- trail blank variant (accessor for Rust).
+void nvim_edit_auto_format_trail_blank(void)
+{
+  auto_format(true, false);
+}
+
+/// Call del_char(true) and return result (accessor for Rust).
+int nvim_edit_del_char_true(void)
+{
+  return del_char(true);
+}
+
+/// Set curbuf->b_op_start = Insstart, b_op_start_orig = Insstart_orig,
+/// b_op_end = *end_insert_pos (composite accessor for Rust).
+void nvim_edit_set_b_op_marks(void *end_insert_pos)
+{
+  curbuf->b_op_start = Insstart;
+  curbuf->b_op_start_orig = Insstart_orig;
+  curbuf->b_op_end = *(pos_T *)end_insert_pos;
+}
+
+/// Check if p_cpo does NOT contain CPO_INDENT (accessor for Rust).
+/// Returns 1 when CPO_INDENT is absent (i.e. auto-indent strip is enabled).
+int nvim_edit_p_cpo_no_indent(void)
+{
+  return vim_strchr(p_cpo, CPO_INDENT) == NULL ? 1 : 0;
+}
+
+/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
+int nvim_edit_curbuf_ml_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Clear VALID_WCOL and VALID_VIRTCOL bits from curwin->w_valid (accessor for Rust).
+void nvim_edit_curwin_clear_wcol_virtcol(void)
+{
+  curwin->w_valid &= ~(VALID_WCOL | VALID_VIRTCOL);
+}
+
+/// Clear VALID_WROW, VALID_WCOL, VALID_VIRTCOL bits from curwin->w_valid
+/// (for gchar_cursor() == TAB or inline virtual text -- accessor for Rust).
+void nvim_edit_curwin_clear_wrow_wcol_virtcol(void)
+{
+  curwin->w_valid &= ~(VALID_WROW | VALID_WCOL | VALID_VIRTCOL);
+}
+
+/// Call ins_apply_autocmds(EVENT_INSERTLEAVEPRE) (accessor for Rust).
+void nvim_edit_ins_apply_autocmds_insertleavepre(void)
+{
+  ins_apply_autocmds(EVENT_INSERTLEAVEPRE);
+}
+
+/// Call unshowmode(false) (accessor for Rust).
+void nvim_edit_unshowmode_false(void)
+{
+  unshowmode(false);
+}
+
+/// Call skip_showmode() (accessor for Rust).
+int nvim_edit_skip_showmode(void)
+{
+  return skip_showmode() ? 1 : 0;
+}
+
+/// Set curbuf->b_last_insert mark to current cursor + topline (composite for Rust).
+/// Calls mark_view_make and RESET_FMARK.
+void nvim_edit_set_b_last_insert_mark(void)
+{
+  fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_cursor);
+  RESET_FMARK(&curbuf->b_last_insert, curwin->w_cursor, curbuf->b_fnum, view);
+}
+
+/// Get buf_meta_total(curbuf, kMTMetaInline) (accessor for Rust).
+int nvim_edit_curbuf_meta_total_inline(void)
+{
+  return buf_meta_total(curbuf, kMTMetaInline);
+}
+
+/// Get u_sync_once global (accessor for Rust).
+int nvim_get_u_sync_once(void)
+{
+  return u_sync_once;
+}
+
+/// Set u_sync_once global (accessor for Rust).
+void nvim_set_u_sync_once(int val)
+{
+  u_sync_once = val;
+}
+
+/// Get yankreg_T* for register regname (YREG_PASTE), as void* (accessor for Rust).
+void *nvim_edit_get_yank_register(int regname)
+{
+  return get_yank_register(regname, YREG_PASTE);
+}
+
+/// Call insert_reg(regname, NULL, literally != 0) (accessor for Rust).
+int nvim_edit_insert_reg(int regname, int literally)
+{
+  return insert_reg(regname, NULL, literally != 0);
+}
+
+/// Call is_literal_register(regname) (accessor for Rust).
+int nvim_edit_is_literal_register(int regname)
+{
+  return is_literal_register(regname) ? 1 : 0;
+}
+
+/// Get reg->y_size for a yankreg_T* (accessor for Rust).
+size_t nvim_edit_reg_y_size(void *reg)
+{
+  return ((yankreg_T *)reg)->y_size;
+}
+
+/// Call end_visual_mode() (accessor for Rust).
+void nvim_edit_end_visual_mode(void)
+{
+  end_visual_mode();
+}
+
+/// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
+void nvim_edit_set_pc_status_unset(void)
+{
+  pc_status = PC_STATUS_UNSET;
+}
+
+/// Call edit_putchar(c, highlight != 0) (accessor for Rust).
+void nvim_edit_putchar(int c, int highlight)
+{
+  edit_putchar(c, highlight != 0);
+}
+
+/// Call edit_unputchar() (accessor for Rust).
+void nvim_edit_edit_unputchar(void)
+{
+  edit_unputchar();
+}
+
+// ---- ins_esc accessors ----
+
+/// Decrement RedrawingDisabled (for ins_esc undo of repeat-path increment).
+void nvim_edit_dec_redrawing_disabled(void)
+{
+  RedrawingDisabled--;
+}
+
+/// Increment RedrawingDisabled (for ins_esc repeat path).
+void nvim_edit_inc_RedrawingDisabled(void)
+{
+  RedrawingDisabled++;
+}
+
+/// Check if p_cpo contains CPO_REPLCNT (accessor for Rust).
+int nvim_edit_p_cpo_has_replcnt(void)
+{
+  return vim_strchr(p_cpo, CPO_REPLCNT) != NULL ? 1 : 0;
+}
+
+/// Get get_ve_flags(curwin) (accessor for Rust).
+int nvim_edit_get_ve_flags_curwin(void)
+{
+  return (int)get_ve_flags(curwin);
+}
+
+/// Check if (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 (accessor for Rust).
+int nvim_edit_cmod_keepjumps(void)
+{
+  return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 ? 1 : 0;
+}
+
+/// Call stop_insert(&curwin->w_cursor, true, nomove) (composite for Rust).
+void nvim_edit_stop_insert_curpos(int nomove)
+{
+  stop_insert(&curwin->w_cursor, true, nomove != 0);
+}
+
+/// Get p_ch == 0 && !ui_has(kUIMessages) (accessor for Rust ins_esc showmode check).
+int nvim_edit_get_p_ch_zero_no_ui_messages(void)
+{
+  return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0;
+}
+
+/// Get curwin->w_cursor.coladd (accessor for Rust).
+colnr_T nvim_curwin_get_cursor_coladd(void)
+{
+  return curwin->w_cursor.coladd;
+}
+
+// ---- ins_reg accessors ----
+
+/// Save cursor position for expression register evaluation (composite for Rust).
+static pos_T ins_reg_saved_cursor;
+void nvim_edit_ins_reg_restore_cursor_save(void)
+{
+  ins_reg_saved_cursor = curwin->w_cursor;
+}
+
+/// Restore cursor position after expression register evaluation (composite for Rust).
+void nvim_edit_ins_reg_restore_cursor(void)
+{
+  curwin->w_cursor = ins_reg_saved_cursor;
+  check_cursor(curwin);
+}
+
+// ---- stop_insert composite helpers ----
+
+/// Save inserted text for redo (^@ / CTRL-A).
+/// Composite helper for rs_stop_insert: handles get_inserted + last_insert update.
+void nvim_edit_stop_insert_save_text(void)
+{
+  String inserted = get_inserted();
+  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
+  if (did_restart_edit == 0 || added > 0) {
+    xfree(last_insert.data);
+    last_insert = inserted;  // structure copy
+    last_insert_skip = added < 0 ? 0 : new_insert_skip;
+  } else {
+    xfree(inserted.data);
+  }
+}
+
+/// Composite: auto-format + strip trailing auto-indent whitespace (for rs_stop_insert).
+/// This handles the complex cursor/pos_T manipulation inside stop_insert.
+void nvim_edit_stop_insert_do_format(void *end_insert_pos_v, int esc, int nomove)
+{
+  pos_T *end_insert_pos = (pos_T *)end_insert_pos_v;
+  int cc;
+
+  if (!ins_need_undo && has_format_option(FO_AUTO)) {
+    pos_T tpos = curwin->w_cursor;
+
+    cc = 'x';
+    if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
+      dec_cursor();
+      cc = gchar_cursor();
+      if (!ascii_iswhite(cc)) {
+        curwin->w_cursor = tpos;
+      }
+    }
+
+    auto_format(true, false);
+
+    if (ascii_iswhite(cc)) {
+      if (gchar_cursor() != NUL) {
+        inc_cursor();
+      }
+      if (gchar_cursor() == NUL
+          && curwin->w_cursor.lnum == tpos.lnum
+          && curwin->w_cursor.col == tpos.col) {
+        curwin->w_cursor.coladd = tpos.coladd;
+      }
+    }
+  }
+
+  check_auto_format(true);
+
+  if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
+                                    && curwin->w_cursor.lnum !=
+                                    end_insert_pos->lnum))
+      && end_insert_pos->lnum <= curbuf->b_ml.ml_line_count) {
+    pos_T tpos = curwin->w_cursor;
+    colnr_T prev_col = end_insert_pos->col;
+
+    curwin->w_cursor = *end_insert_pos;
+    check_cursor_col(curwin);
+    while (true) {
+      if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
+        curwin->w_cursor.col--;
+      }
+      cc = gchar_cursor();
+      if (!ascii_iswhite(cc)) {
+        break;
+      }
+      if (del_char(true) == FAIL) {
+        break;
+      }
+    }
+    if (curwin->w_cursor.lnum != tpos.lnum) {
+      curwin->w_cursor = tpos;
+    } else if (curwin->w_cursor.col < prev_col) {
+      tpos = curwin->w_cursor;
+      tpos.col++;
+      if (cc != NUL && gchar_pos(&tpos) == NUL) {
+        curwin->w_cursor.col++;
+      }
+    }
+
+    if (VIsual_active) {
+      check_visual_pos();
+    }
+  }
 }
