@@ -459,11 +459,6 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
   return true;
 }
 
-// do_incsearch_highlighting() is implemented in Rust (cmdline crate, search.rs);
-// declared below in the extern section.
-
-// may_do_incsearch_highlighting() and may_add_char_to_search() are implemented in Rust (cmdline crate, search.rs).
-
 /// Initialize the current command-line info.
 
 
@@ -802,19 +797,6 @@ theend:
   xfree(s->prev_cmdbuff);
   return (uint8_t *)p;
 }
-
-// command_line_check() is implemented in Rust (cmdline crate, state.rs).
-
-// command_line_handle_ctrl_bsl() is implemented in Rust (cmdline crate, keys.rs).
-
-// may_do_command_line_next_incsearch() is implemented in Rust (cmdline crate, search.rs).
-// command_line_erase_chars() is implemented in Rust (cmdline crate, keys.rs).
-// command_line_insert_reg() is implemented in Rust (cmdline crate, keys.rs).
-// command_line_toggle_langmap, command_line_left_right_mouse, command_line_end_wildmenu:
-//   inlined into their nvim_* wrappers below.
-// command_line_browse_history is now implemented via nvim_command_line_browse_history (below).
-// command_line_handle_key is implemented in Rust (cmdline/keys.rs).
-
 
 handle_T cmdpreview_get_bufnr(void)
 {
@@ -1727,12 +1709,6 @@ color_cmdline_error:
 #undef PRINT_ERRMSG
 }
 
-// Draw part of the cmdline at the current cursor position.  But draw stars
-// when cmdline_star is true.
-// draw_cmdline() is implemented in Rust (cmdline crate, screen.rs).
-
-// ui_ext_cmdline_show: inlined into cmdline_ui_flush below.
-
 void ui_ext_cmdline_block_append(size_t indent, const char *line)
 {
   char *buf = xmallocz(indent + strlen(line));
@@ -1800,7 +1776,6 @@ void cmdline_ui_flush(void)
       line->redraw_state = kCmdRedrawNone;
       if (redraw_state == kCmdRedrawAll) {
         cmdline_was_last_drawn = true;
-        // Inline of former static ui_ext_cmdline_show(line):
         {
           Arena arena = ARENA_EMPTY;
           Array content;
@@ -1903,10 +1878,7 @@ void unputcmdline(void)
   ui_cursor_shape();
 }
 
-// put_on_cmdline() is implemented in Rust (cmdline crate, edit.rs).
-
-// cmdline_paste_str() and redrawcmdline() are implemented in Rust (cmdline crate).
-// redrawcmd() is also implemented in Rust (cmdline crate, screen.rs).
+// put_on_cmdline, cmdline_paste_str, redrawcmdline, redrawcmd: implemented in Rust (cmdline crate).
 
 /// Get a pointer to the current command line info.
 CmdlineInfo *get_cmdline_info(void)
