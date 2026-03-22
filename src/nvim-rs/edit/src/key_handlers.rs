@@ -45,7 +45,7 @@ extern "C" {
     // Phase 3 accessors (movement)
     fn nvim_set_curwin_cursor_coladd(val: ColnrT);
     fn nvim_curwin_set_w_set_curswant(val: bool);
-    fn nvim_edit_coladvance(col: ColnrT);
+    fn nvim_coladvance(col: ColnrT);
     fn virtual_active(wp: *mut c_void) -> bool;
 
     // -- Navigation helpers (all new Phase 4 accessors in edit.c) --
@@ -168,7 +168,7 @@ unsafe fn ins_left_impl() {
         // if 'whichwrap' set for cursor in insert mode may go to previous line
         nvim_edit_start_arrow_from_slot(0);
         nvim_edit_set_cursor_lnum_rel(-1);
-        nvim_edit_coladvance(MAXCOL);
+        nvim_coladvance(MAXCOL);
         nvim_curwin_set_w_set_curswant(true);
     } else {
         vim_beep(K_BO_FLAG_CURSOR as c_uint);
@@ -329,7 +329,7 @@ unsafe fn ins_end_impl(c: c_int) {
     if c == K_C_END {
         nvim_edit_set_cursor_lnum_abs(nvim_qf_curbuf_line_count());
     }
-    nvim_edit_coladvance(MAXCOL);
+    nvim_coladvance(MAXCOL);
     nvim_edit_set_w_curswant(MAXCOL);
     nvim_edit_start_arrow_from_slot(0);
 }

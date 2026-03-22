@@ -159,7 +159,7 @@ extern "C" {
     fn nvim_edit_set_w_curswant(val: ColNr);
 
     /// coladvance(curwin, col) wrapper
-    fn nvim_edit_coladvance(col: ColNr);
+    fn nvim_coladvance(col: ColNr);
 
     /// setpcmark()
     fn setpcmark();
@@ -1021,7 +1021,7 @@ pub unsafe extern "C" fn rs_goto_byte(cnt: c_int) {
         let line_count = nvim_buf_get_ml_line_count(curbuf);
         nvim_curwin_set_cursor_lnum(line_count);
         nvim_edit_set_w_curswant(maxcol);
-        nvim_edit_coladvance(maxcol);
+        nvim_coladvance(maxcol);
     } else {
         nvim_curwin_set_cursor_lnum(lnum);
         nvim_curwin_set_cursor_col(boff as ColNr);

@@ -93,7 +93,7 @@ extern "C" {
     fn nvim_char_avail() -> c_int;
 
     // --- prompt buffer ---
-    fn nvim_edit_bt_prompt_curbuf() -> c_int;
+    fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_edit_init_prompt_impl(cmdchar_todo: c_int);
 
     // --- scroll detection (composite accessor) ---
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Prompt buffer: ensure prompt text exists
-    if unsafe { nvim_edit_bt_prompt_curbuf() } != 0 {
+    if unsafe { nvim_bt_prompt_curbuf() } {
         let cmdchar_todo = unsafe { (*s).cmdchar_todo };
         unsafe { nvim_edit_init_prompt_impl(cmdchar_todo) };
         unsafe { (*s).cmdchar_todo = NUL };

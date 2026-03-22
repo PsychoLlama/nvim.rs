@@ -48,7 +48,7 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
 
     // Movement helpers
-    fn nvim_edit_coladvance(col: ColnrT);
+    fn nvim_coladvance(col: ColnrT);
     fn adjust_skipcol();
     fn getviscol() -> c_int;
     fn virtual_active(wp: WinHandle) -> bool;
@@ -136,7 +136,7 @@ const TAB: c_char = 9;
 /// - `BL_FIX`: don't leave cursor on a NUL
 unsafe fn beginline_impl(flags: c_int) {
     if (flags & BL_SOL) != 0 && nvim_get_p_sol() == 0 {
-        nvim_edit_coladvance(nvim_curwin_get_w_curswant());
+        nvim_coladvance(nvim_curwin_get_w_curswant());
     } else {
         nvim_curwin_set_cursor_col(0);
         nvim_set_curwin_cursor_coladd(0);
@@ -181,7 +181,7 @@ unsafe fn oneright_impl() -> c_int {
         } else {
             1
         };
-        nvim_edit_coladvance(viscol + advance);
+        nvim_coladvance(viscol + advance);
         nvim_curwin_set_w_set_curswant(true);
 
         // Return OK if the cursor moved, FAIL otherwise
@@ -238,7 +238,7 @@ unsafe fn oneleft_impl() -> c_int {
         // We might get stuck on 'showbreak', skip over it.
         let mut width: ColnrT = 1;
         loop {
-            nvim_edit_coladvance(v - width);
+            nvim_coladvance(v - width);
             // getviscol() is slow, skip it when 'showbreak' is empty,
             // 'breakindent' is not set and there are no multi-byte characters
             if getviscol() < v {
@@ -367,7 +367,7 @@ unsafe fn cursor_up_impl(n: LinenrT, upd_topline: bool) -> c_int {
     cursor_up_inner_impl(curwin, n, false);
 
     // try to advance to the column we want to be at
-    nvim_edit_coladvance(nvim_curwin_get_w_curswant());
+    nvim_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
         nvim_excmds_update_topline_curwin();
@@ -461,7 +461,7 @@ unsafe fn cursor_down_impl(n: c_int, upd_topline: bool) -> c_int {
     cursor_down_inner_impl(curwin, n, false);
 
     // try to advance to the column we want to be at
-    nvim_edit_coladvance(nvim_curwin_get_w_curswant());
+    nvim_coladvance(nvim_curwin_get_w_curswant());
 
     if upd_topline {
         nvim_excmds_update_topline_curwin();

@@ -586,12 +586,6 @@ const void *nvim_curwin_get_cursor_ptr(void)
 
 /// Set curwin->w_set_curswant (accessor for Rust).
 
-/// Call coladvance(curwin, col) (accessor for Rust).
-void nvim_edit_coladvance(colnr_T col)
-{
-  coladvance(curwin, col);
-}
-
 
 
 
@@ -1430,12 +1424,6 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 
 
 
-
-/// Check if bt_prompt(curbuf) (accessor for Rust).
-int nvim_edit_bt_prompt_curbuf(void)
-{
-  return bt_prompt(curbuf) ? 1 : 0;
-}
 
 /// Get curwin->w_p_rl (right-to-left option) (accessor for Rust).
 int nvim_edit_get_curwin_p_rl(void)

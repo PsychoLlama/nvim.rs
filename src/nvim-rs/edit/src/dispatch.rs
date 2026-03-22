@@ -188,7 +188,7 @@ extern "C" {
     fn update_screen() -> c_int;
     fn ui_flush();
     fn nvim_bt_quickfix_curbuf() -> c_int;
-    fn nvim_edit_bt_prompt_curbuf() -> c_int;
+    fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_edit_get_curwin_p_rl() -> c_int;
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
     fn nvim_edit_get_cpt_first_char() -> c_int;
@@ -670,8 +670,8 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 (*s).nomove = true;
                 return SwitchAction::Exit(0);
             }
-            if nvim_edit_bt_prompt_curbuf() != 0 && invoke_prompt_interrupt() {
-                if nvim_edit_bt_prompt_curbuf() == 0 {
+            if nvim_bt_prompt_curbuf() && invoke_prompt_interrupt() {
+                if !nvim_bt_prompt_curbuf() {
                     return SwitchAction::Exit(0);
                 }
                 return SwitchAction::Continue;
@@ -793,7 +793,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_W => {
-            if nvim_edit_bt_prompt_curbuf() != 0 && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
+            if nvim_bt_prompt_curbuf() && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
                 nvim_stuffcharReadbuff(CTRL_W);
                 nvim_set_restart_edit(c_int::from(b'A'));
                 (*s).nomove = true;
@@ -1073,9 +1073,9 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         nvim_edit_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }
-    if (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_edit_bt_prompt_curbuf() != 0 {
+    if (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 && nvim_bt_prompt_curbuf() {
         prompt_invoke_callback();
-        if nvim_edit_bt_prompt_curbuf() == 0 {
+        if !nvim_bt_prompt_curbuf() {
             return SwitchAction::Exit(0);
         }
         return SwitchAction::Continue;
