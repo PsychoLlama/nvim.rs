@@ -1063,16 +1063,86 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   pos_T *pos = (pos_T *)end_insert_pos;
   stop_redo_ins();
   rs_replace_stack_clear();
-  nvim_edit_stop_insert_save_text();
-  if (!arrow_used && pos != NULL) {
-    nvim_edit_stop_insert_do_format(pos, esc, nomove);
+
+  // Save inserted text for redo (^@ / CTRL-A).
+  String inserted = get_inserted();
+  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
+  if (did_restart_edit == 0 || added > 0) {
+    xfree(last_insert.data);
+    last_insert = inserted;
+    last_insert_skip = added < 0 ? 0 : new_insert_skip;
+  } else {
+    xfree(inserted.data);
   }
+
+  if (!arrow_used && pos != NULL) {
+    // Auto-format + strip trailing auto-indent whitespace.
+    int cc;
+    if (!ins_need_undo && has_format_option(FO_AUTO)) {
+      pos_T tpos = curwin->w_cursor;
+      cc = 'x';
+      if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
+        dec_cursor();
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          curwin->w_cursor = tpos;
+        }
+      }
+      auto_format(true, false);
+      if (ascii_iswhite(cc)) {
+        if (gchar_cursor() != NUL) {
+          inc_cursor();
+        }
+        if (gchar_cursor() == NUL
+            && curwin->w_cursor.lnum == tpos.lnum
+            && curwin->w_cursor.col == tpos.col) {
+          curwin->w_cursor.coladd = tpos.coladd;
+        }
+      }
+    }
+    check_auto_format(true);
+    if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
+                                      && curwin->w_cursor.lnum != pos->lnum))
+        && pos->lnum <= curbuf->b_ml.ml_line_count) {
+      pos_T tpos = curwin->w_cursor;
+      colnr_T prev_col = pos->col;
+      curwin->w_cursor = *pos;
+      check_cursor_col(curwin);
+      while (true) {
+        if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
+          curwin->w_cursor.col--;
+        }
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          break;
+        }
+        if (del_char(true) == FAIL) {
+          break;
+        }
+      }
+      if (curwin->w_cursor.lnum != tpos.lnum) {
+        curwin->w_cursor = tpos;
+      } else if (curwin->w_cursor.col < prev_col) {
+        tpos = curwin->w_cursor;
+        tpos.col++;
+        if (cc != NUL && gchar_pos(&tpos) == NUL) {
+          curwin->w_cursor.col++;
+        }
+      }
+      if (VIsual_active) {
+        check_visual_pos();
+      }
+    }
+  }
+
   did_ai = false;
   did_si = false;
   can_si = false;
   can_si_back = false;
   if (pos != NULL) {
-    nvim_edit_set_b_op_marks(pos);
+    curbuf->b_op_start = Insstart;
+    curbuf->b_op_start_orig = Insstart_orig;
+    curbuf->b_op_end = *pos;
   }
 }
 
@@ -3119,15 +3189,6 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
 // Phase 2 accessors: stop_insert, ins_esc, ins_reg
 // =============================================================================
 
-/// Set curbuf->b_op_start = Insstart, b_op_start_orig = Insstart_orig,
-/// b_op_end = *end_insert_pos (composite accessor for Rust).
-void nvim_edit_set_b_op_marks(void *end_insert_pos)
-{
-  curbuf->b_op_start = Insstart;
-  curbuf->b_op_start_orig = Insstart_orig;
-  curbuf->b_op_end = *(pos_T *)end_insert_pos;
-}
-
 /// Clear VALID_WCOL and VALID_VIRTCOL bits from curwin->w_valid (accessor for Rust).
 void nvim_edit_curwin_clear_wcol_virtcol(void)
 {
@@ -3271,15 +3332,84 @@ void nvim_edit_stop_insert_curpos(int nomove)
   pos_T *pos = &curwin->w_cursor;
   stop_redo_ins();
   rs_replace_stack_clear();
-  nvim_edit_stop_insert_save_text();
-  if (!arrow_used) {
-    nvim_edit_stop_insert_do_format(pos, true, nomove != 0);
+
+  // Save inserted text for redo (^@ / CTRL-A).
+  String inserted = get_inserted();
+  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
+  if (did_restart_edit == 0 || added > 0) {
+    xfree(last_insert.data);
+    last_insert = inserted;
+    last_insert_skip = added < 0 ? 0 : new_insert_skip;
+  } else {
+    xfree(inserted.data);
   }
+
+  if (!arrow_used) {
+    // Auto-format + strip trailing auto-indent whitespace.
+    int cc;
+    if (!ins_need_undo && has_format_option(FO_AUTO)) {
+      pos_T tpos = curwin->w_cursor;
+      cc = 'x';
+      if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
+        dec_cursor();
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          curwin->w_cursor = tpos;
+        }
+      }
+      auto_format(true, false);
+      if (ascii_iswhite(cc)) {
+        if (gchar_cursor() != NUL) {
+          inc_cursor();
+        }
+        if (gchar_cursor() == NUL
+            && curwin->w_cursor.lnum == tpos.lnum
+            && curwin->w_cursor.col == tpos.col) {
+          curwin->w_cursor.coladd = tpos.coladd;
+        }
+      }
+    }
+    check_auto_format(true);
+    // esc=true (called from ins_esc path), so the esc||... condition is always true.
+    if (!nomove && did_ai && pos->lnum <= curbuf->b_ml.ml_line_count) {
+      pos_T tpos = curwin->w_cursor;
+      colnr_T prev_col = pos->col;
+      curwin->w_cursor = *pos;
+      check_cursor_col(curwin);
+      while (true) {
+        if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
+          curwin->w_cursor.col--;
+        }
+        cc = gchar_cursor();
+        if (!ascii_iswhite(cc)) {
+          break;
+        }
+        if (del_char(true) == FAIL) {
+          break;
+        }
+      }
+      if (curwin->w_cursor.lnum != tpos.lnum) {
+        curwin->w_cursor = tpos;
+      } else if (curwin->w_cursor.col < prev_col) {
+        tpos = curwin->w_cursor;
+        tpos.col++;
+        if (cc != NUL && gchar_pos(&tpos) == NUL) {
+          curwin->w_cursor.col++;
+        }
+      }
+      if (VIsual_active) {
+        check_visual_pos();
+      }
+    }
+  }
+
   did_ai = false;
   did_si = false;
   can_si = false;
   can_si_back = false;
-  nvim_edit_set_b_op_marks(pos);
+  curbuf->b_op_start = Insstart;
+  curbuf->b_op_start_orig = Insstart_orig;
+  curbuf->b_op_end = *pos;
 }
 
 /// Get p_ch == 0 && !ui_has(kUIMessages) (accessor for Rust ins_esc showmode check).
@@ -3310,91 +3440,3 @@ void nvim_edit_ins_reg_restore_cursor(void)
   check_cursor(curwin);
 }
 
-// ---- stop_insert composite helpers ----
-
-/// Save inserted text for redo (^@ / CTRL-A).
-/// Composite helper for rs_stop_insert: handles get_inserted + last_insert update.
-void nvim_edit_stop_insert_save_text(void)
-{
-  String inserted = get_inserted();
-  int added = inserted.data == NULL ? 0 : (int)inserted.size - new_insert_skip;
-  if (did_restart_edit == 0 || added > 0) {
-    xfree(last_insert.data);
-    last_insert = inserted;  // structure copy
-    last_insert_skip = added < 0 ? 0 : new_insert_skip;
-  } else {
-    xfree(inserted.data);
-  }
-}
-
-/// Composite: auto-format + strip trailing auto-indent whitespace (for rs_stop_insert).
-/// This handles the complex cursor/pos_T manipulation inside stop_insert.
-void nvim_edit_stop_insert_do_format(void *end_insert_pos_v, int esc, int nomove)
-{
-  pos_T *end_insert_pos = (pos_T *)end_insert_pos_v;
-  int cc;
-
-  if (!ins_need_undo && has_format_option(FO_AUTO)) {
-    pos_T tpos = curwin->w_cursor;
-
-    cc = 'x';
-    if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
-      dec_cursor();
-      cc = gchar_cursor();
-      if (!ascii_iswhite(cc)) {
-        curwin->w_cursor = tpos;
-      }
-    }
-
-    auto_format(true, false);
-
-    if (ascii_iswhite(cc)) {
-      if (gchar_cursor() != NUL) {
-        inc_cursor();
-      }
-      if (gchar_cursor() == NUL
-          && curwin->w_cursor.lnum == tpos.lnum
-          && curwin->w_cursor.col == tpos.col) {
-        curwin->w_cursor.coladd = tpos.coladd;
-      }
-    }
-  }
-
-  check_auto_format(true);
-
-  if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
-                                    && curwin->w_cursor.lnum !=
-                                    end_insert_pos->lnum))
-      && end_insert_pos->lnum <= curbuf->b_ml.ml_line_count) {
-    pos_T tpos = curwin->w_cursor;
-    colnr_T prev_col = end_insert_pos->col;
-
-    curwin->w_cursor = *end_insert_pos;
-    check_cursor_col(curwin);
-    while (true) {
-      if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
-        curwin->w_cursor.col--;
-      }
-      cc = gchar_cursor();
-      if (!ascii_iswhite(cc)) {
-        break;
-      }
-      if (del_char(true) == FAIL) {
-        break;
-      }
-    }
-    if (curwin->w_cursor.lnum != tpos.lnum) {
-      curwin->w_cursor = tpos;
-    } else if (curwin->w_cursor.col < prev_col) {
-      tpos = curwin->w_cursor;
-      tpos.col++;
-      if (cc != NUL && gchar_pos(&tpos) == NUL) {
-        curwin->w_cursor.col++;
-      }
-    }
-
-    if (VIsual_active) {
-      check_visual_pos();
-    }
-  }
-}
