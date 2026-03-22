@@ -478,34 +478,6 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
 // may_do_incsearch_highlighting() and may_add_char_to_search() are implemented in Rust (cmdline crate, search.rs).
 
 /// Initialize the current command-line info.
-static void init_ccline(int firstc, int indent)
-{
-  ccline.overstrike = false;                // always start in insert mode
-
-  assert(indent >= 0);
-
-  // set some variables for redrawcmd()
-  ccline.cmdfirstc = (firstc == '@' ? 0 : firstc);
-  ccline.cmdindent = (firstc > 0 ? indent : 0);
-
-  // alloc initial ccline.cmdbuff
-  alloc_cmdbuff(indent + 50);
-  ccline.cmdlen = ccline.cmdpos = 0;
-  ccline.cmdbuff[0] = NUL;
-
-  ccline.last_colors = (ColoredCmdline){ .cmdbuff = NULL,
-                                         .colors = KV_INITIAL_VALUE };
-  sb_text_start_cmdline();
-
-  // autoindent for :insert and :append
-  if (firstc <= 0) {
-    memset(ccline.cmdbuff, ' ', (size_t)indent);
-    ccline.cmdbuff[indent] = NUL;
-    ccline.cmdpos = indent;
-    ccline.cmdspos = indent;
-    ccline.cmdlen = indent;
-  }
-}
 
 static void ui_ext_cmdline_hide(bool abort)
 {
@@ -561,7 +533,26 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
     s->break_ctrl_c = true;
   }
 
-  init_ccline(s->firstc, s->indent);
+  ccline.overstrike = false;                // always start in insert mode
+  assert(s->indent >= 0);
+  // set some variables for redrawcmd()
+  ccline.cmdfirstc = (s->firstc == '@' ? 0 : s->firstc);
+  ccline.cmdindent = (s->firstc > 0 ? s->indent : 0);
+  // alloc initial ccline.cmdbuff
+  alloc_cmdbuff(s->indent + 50);
+  ccline.cmdlen = ccline.cmdpos = 0;
+  ccline.cmdbuff[0] = NUL;
+  ccline.last_colors = (ColoredCmdline){ .cmdbuff = NULL,
+                                         .colors = KV_INITIAL_VALUE };
+  sb_text_start_cmdline();
+  // autoindent for :insert and :append
+  if (s->firstc <= 0) {
+    memset(ccline.cmdbuff, ' ', (size_t)s->indent);
+    ccline.cmdbuff[s->indent] = NUL;
+    ccline.cmdpos = s->indent;
+    ccline.cmdspos = s->indent;
+    ccline.cmdlen = s->indent;
+  }
   ccline.prompt_id = last_prompt_id++;
   ccline.level = cmdline_level;
 
@@ -757,7 +748,15 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
     }
 
     if (s->gotesc) {
-      abandon_cmdline();
+      dealloc_cmdbuff();
+      if (msg_scrolled == 0) {
+        compute_cmdrow();
+      }
+      // Avoid overwriting key prompt
+      if (!ccline.one_key) {
+        msg("", 0);
+        redraw_cmdline = true;
+      }
     }
   }
 
@@ -1272,19 +1271,6 @@ static void do_autocmd_cmdlinechanged(int firstc)
 }
 
 /// Abandon the command line.
-static void abandon_cmdline(void)
-{
-  dealloc_cmdbuff();
-  if (msg_scrolled == 0) {
-    compute_cmdrow();
-  }
-  // Avoid overwriting key prompt
-  if (!ccline.one_key) {
-    msg("", 0);
-    redraw_cmdline = true;
-  }
-}
-
 /// getcmdline() - accept a command line starting with firstc.
 ///
 /// firstc == ':'            get ":" command line.
@@ -1488,29 +1474,14 @@ void realloc_cmdbuff(int len)
 
 enum { MAX_CB_ERRORS = 1, };
 
-/// Color expression cmdline using built-in expressions parser
+/// Color the command-line (ccline).
 ///
-/// @param[in]  colored_ccline  Command-line to color.
-/// @param[out]  ret_ccline_colors  What should be colored.
+/// Uses built-in expression parser for '=' prompt, or user-specified callback.
+/// Caches results: if prompt_id and cmdbuff are unchanged, returns immediately.
 ///
-/// Always colors the whole cmdline.
-/// Color command-line
-///
-/// Should use built-in command parser or user-specified one. Currently only the
-/// latter is supported.
-///
-/// @param[in,out]  colored_ccline  Command-line to color. Also holds a cache:
-///                                 if ->prompt_id and ->cmdbuff values happen
-///                                 to be equal to those from colored_cmdline it
-///                                 will just do nothing, assuming that ->colors
-///                                 already contains needed data.
-///
-/// Always colors the whole cmdline.
-///
-/// @return true if draw_cmdline may proceed, false if it does not need anything
-///         to do.
-static bool color_cmdline(CmdlineInfo *colored_ccline)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+/// @return true if draw_cmdline may proceed, false if nothing to do.
+bool nvim_color_cmdline(void)
+  FUNC_ATTR_WARN_UNUSED_RESULT
 {
   bool printed_errmsg = false;
 
@@ -1523,18 +1494,18 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
   } while (0)
   bool ret = true;
 
-  ColoredCmdline *ccline_colors = &colored_ccline->last_colors;
+  ColoredCmdline *ccline_colors = &ccline.last_colors;
 
   // Check whether result of the previous call is still valid.
-  if (ccline_colors->prompt_id == colored_ccline->prompt_id
+  if (ccline_colors->prompt_id == ccline.prompt_id
       && ccline_colors->cmdbuff != NULL
-      && strcmp(ccline_colors->cmdbuff, colored_ccline->cmdbuff) == 0) {
+      && strcmp(ccline_colors->cmdbuff, ccline.cmdbuff) == 0) {
     return ret;
   }
 
   kv_size(ccline_colors->colors) = 0;
 
-  if (colored_ccline->cmdbuff == NULL || *colored_ccline->cmdbuff == NUL) {
+  if (ccline.cmdbuff == NULL || *ccline.cmdbuff == NUL) {
     // Nothing to do, exiting.
     XFREE_CLEAR(ccline_colors->cmdbuff);
     return ret;
@@ -1543,7 +1514,7 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
   bool arg_allocated = false;
   typval_T arg = {
     .v_type = VAR_STRING,
-    .vval.v_string = colored_ccline->cmdbuff,
+    .vval.v_string = ccline.cmdbuff,
   };
   typval_T tv = { .v_type = VAR_UNKNOWN };
 
@@ -1556,30 +1527,30 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
   bool dgc_ret = true;
 
   // Use Rust helper to check if callback errors should be reset.
-  if (rs_should_reset_callback_errors(colored_ccline->prompt_id, prev_prompt_id)) {
+  if (rs_should_reset_callback_errors(ccline.prompt_id, prev_prompt_id)) {
     prev_prompt_errors = 0;
-    prev_prompt_id = colored_ccline->prompt_id;
-  } else if (rs_should_skip_coloring(colored_ccline->prompt_id, prev_prompt_id, prev_prompt_errors)) {
+    prev_prompt_id = ccline.prompt_id;
+  } else if (rs_should_skip_coloring(ccline.prompt_id, prev_prompt_id, prev_prompt_errors)) {
     // Skip coloring due to too many previous errors.
     goto color_cmdline_end;
   }
-  if (colored_ccline->highlight_callback.type != kCallbackNone) {
+  if (ccline.highlight_callback.type != kCallbackNone) {
     // Currently this should only happen while processing input() prompts.
-    assert(colored_ccline->input_fn);
-    color_cb = colored_ccline->highlight_callback;
-  } else if (colored_ccline->cmdfirstc == ':') {
+    assert(ccline.input_fn);
+    color_cb = ccline.highlight_callback;
+  } else if (ccline.cmdfirstc == ':') {
     TRY_WRAP(&err, {
       err_errmsg = N_("E5408: Unable to get g:Nvim_color_cmdline callback: %s");
       dgc_ret = tv_dict_get_callback(get_globvar_dict(), S_LEN("Nvim_color_cmdline"),
                                      &color_cb);
     });
     can_free_cb = true;
-  } else if (colored_ccline->cmdfirstc == '=') {
+  } else if (ccline.cmdfirstc == '=') {
     // Inline color_expr_cmdline: parse expression and build highlight chunks.
     ParserLine parser_lines[] = {
       {
-        .data = colored_ccline->cmdbuff,
-        .size = strlen(colored_ccline->cmdbuff),
+        .data = ccline.cmdbuff,
+        .size = strlen(ccline.cmdbuff),
         .allocated = false,
       },
       { NULL, 0, false },
@@ -1612,10 +1583,10 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
       }));
       expr_prev_end = chunk.end_col;
     }
-    if (expr_prev_end < (size_t)colored_ccline->cmdlen) {
+    if (expr_prev_end < (size_t)ccline.cmdlen) {
       kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
         .start = (int)expr_prev_end,
-        .end = colored_ccline->cmdlen,
+        .end = ccline.cmdlen,
         .hl_id = 0,
       }));
     }
@@ -1628,9 +1599,9 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
   if (color_cb.type == kCallbackNone) {
     goto color_cmdline_end;
   }
-  if (colored_ccline->cmdbuff[colored_ccline->cmdlen] != NUL) {
+  if (ccline.cmdbuff[ccline.cmdlen] != NUL) {
     arg_allocated = true;
-    arg.vval.v_string = xmemdupz(colored_ccline->cmdbuff, (size_t)colored_ccline->cmdlen);
+    arg.vval.v_string = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
   }
   // msg_start() called by e.g. :echo may shift command-line to the first column
   // even though msg_silent is here. Two ways to workaround this problem without
@@ -1685,12 +1656,12 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
                                tv_get_number_chk(TV_LIST_ITEM_TV(tv_list_first(l)), &error));
     if (error) {
       goto color_cmdline_error;
-    } else if (!(prev_end <= start && start < colored_ccline->cmdlen)) {
+    } else if (!(prev_end <= start && start < ccline.cmdlen)) {
       PRINT_ERRMSG(_("E5403: Chunk %i start %" PRIdVARNUMBER " not in range "
                      "[%" PRIdVARNUMBER ", %i)"),
-                   i, start, prev_end, colored_ccline->cmdlen);
+                   i, start, prev_end, ccline.cmdlen);
       goto color_cmdline_error;
-    } else if (utf8len_tab_zero[(uint8_t)colored_ccline->cmdbuff[start]] == 0) {
+    } else if (utf8len_tab_zero[(uint8_t)ccline.cmdbuff[start]] == 0) {
       PRINT_ERRMSG(_("E5405: Chunk %i start %" PRIdVARNUMBER " splits "
                      "multibyte character"), i, start);
       goto color_cmdline_error;
@@ -1706,13 +1677,13 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
       tv_get_number_chk(TV_LIST_ITEM_TV(TV_LIST_ITEM_NEXT(l, tv_list_first(l))), &error);
     if (error) {
       goto color_cmdline_error;
-    } else if (!(start < end && end <= colored_ccline->cmdlen)) {
+    } else if (!(start < end && end <= ccline.cmdlen)) {
       PRINT_ERRMSG(_("E5404: Chunk %i end %" PRIdVARNUMBER " not in range "
                      "(%" PRIdVARNUMBER ", %i]"),
-                   i, end, start, colored_ccline->cmdlen);
+                   i, end, start, ccline.cmdlen);
       goto color_cmdline_error;
-    } else if (end < colored_ccline->cmdlen
-               && (utf8len_tab_zero[(uint8_t)colored_ccline->cmdbuff[end]]
+    } else if (end < ccline.cmdlen
+               && (utf8len_tab_zero[(uint8_t)ccline.cmdbuff[end]]
                    == 0)) {
       PRINT_ERRMSG(_("E5406: Chunk %i end %" PRIdVARNUMBER " splits multibyte "
                      "character"), i, end);
@@ -1730,10 +1701,10 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
     }));
     i++;
   });
-  if (prev_end < colored_ccline->cmdlen) {
+  if (prev_end < ccline.cmdlen) {
     kv_push(ccline_colors->colors, ((CmdlineColorChunk) {
       .start = (int)prev_end,
-      .end = colored_ccline->cmdlen,
+      .end = ccline.cmdlen,
       .hl_id = 0,
     }));
   }
@@ -1745,11 +1716,11 @@ color_cmdline_end:
   }
   xfree(ccline_colors->cmdbuff);
   // Note: errors “output” is cached just as well as regular results.
-  ccline_colors->prompt_id = colored_ccline->prompt_id;
+  ccline_colors->prompt_id = ccline.prompt_id;
   if (arg_allocated) {
     ccline_colors->cmdbuff = arg.vval.v_string;
   } else {
-    ccline_colors->cmdbuff = xmemdupz(colored_ccline->cmdbuff, (size_t)colored_ccline->cmdlen);
+    ccline_colors->cmdbuff = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
   }
   tv_clear(&tv);
   return ret;
@@ -2914,8 +2885,6 @@ void nvim_set_wim_flags(int idx, uint8_t val) { wim_flags[idx] = val; }
 
 // Phase 67 Phase 2: Accessors for draw_cmdline and redrawcmd
 
-/// Call color_cmdline(&ccline) and return its result.
-bool nvim_color_cmdline(void) { return color_cmdline(&ccline); }
 
 /// Get number of color chunks in ccline.last_colors.colors.
 size_t nvim_get_ccline_colors_size(void) { return kv_size(ccline.last_colors.colors); }
