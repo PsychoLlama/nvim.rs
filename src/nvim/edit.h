@@ -55,6 +55,10 @@ void cursor_down_inner(win_T *wp, int n, bool skip_conceal);
 void replace_push(char *str, size_t len);
 bool get_can_cindent(void);
 
+// Phase 3: functions now implemented in Rust (src/nvim-rs/edit/src/redraw.rs).
+bool edit(int cmdchar, bool startln, int count);
+void ins_redraw(bool ready);
+
 // Phase 2: public thin-wrapper eliminations (Rust exports canonical names).
 void undisplay_dollar(void);
 void backspace_until_column(int col);

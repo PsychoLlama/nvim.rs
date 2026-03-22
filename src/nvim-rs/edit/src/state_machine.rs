@@ -94,7 +94,7 @@ extern "C" {
 
     // --- prompt buffer ---
     fn nvim_edit_bt_prompt_curbuf() -> c_int;
-    fn init_prompt_rs(cmdchar_todo: c_int);
+    fn nvim_edit_init_prompt_impl(cmdchar_todo: c_int);
 
     // --- scroll detection (composite accessor) ---
     /// Handles the scroll-up check block from `insert_check`.
@@ -113,8 +113,8 @@ extern "C" {
     // --- validate cursor ---
     fn nvim_validate_cursor_curwin_wrapper();
 
-    // --- ins_redraw ---
-    fn ins_redraw(ready: bool);
+    // --- ins_redraw (delegate to C composite to avoid same-crate FFI loop) ---
+    fn nvim_edit_ins_redraw_impl(ready: c_int);
 
     // --- scroll bind ---
     fn nvim_edit_curwin_p_scb() -> c_int;
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     // Prompt buffer: ensure prompt text exists
     if unsafe { nvim_edit_bt_prompt_curbuf() } != 0 {
         let cmdchar_todo = unsafe { (*s).cmdchar_todo };
-        unsafe { init_prompt_rs(cmdchar_todo) };
+        unsafe { nvim_edit_init_prompt_impl(cmdchar_todo) };
         unsafe { (*s).cmdchar_todo = NUL };
     }
 
@@ -287,7 +287,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Redraw when no chars waiting
-    unsafe { ins_redraw(true) };
+    unsafe { nvim_edit_ins_redraw_impl(1) };
 
     if unsafe { nvim_edit_curwin_p_scb() } != 0 {
         unsafe { nvim_do_check_scrollbind_wrapper(true) };

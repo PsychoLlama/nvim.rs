@@ -2316,7 +2316,7 @@ void nvim_edit_set_did_cursorhold_rs(int val)
 /// Call ins_redraw(false) (accessor for Rust state_machine).
 void ins_redraw_false(void)
 {
-  ins_redraw(false);
+  nvim_edit_ins_redraw_impl(false);
 }
 
 /// Call plain_vgetc() with no_mapping++/-- around it (for CTRL-\ handling in Rust).
@@ -2336,8 +2336,9 @@ void ins_ctrl_v_fn(void)
   ins_ctrl_v();
 }
 
-/// Init prompt for Rust state_machine (wraps static init_prompt).
-void init_prompt_rs(int cmdchar_todo)
+/// Composite implementation of init_prompt() for the Rust port.
+/// init_prompt is now implemented in Rust (src/nvim-rs/edit/src/redraw.rs).
+void nvim_edit_init_prompt_impl(int cmdchar_todo)
 {
   init_prompt(cmdchar_todo);
 }
@@ -2385,7 +2386,12 @@ int nvim_edit_iswhite_nl_or_nul(int c)
 /// @param  count    repeat count for the command
 ///
 /// @return true if a CTRL-O command caused the return (insert mode pending).
-bool edit(int cmdchar, bool startln, int count)
+// edit: now implemented in Rust (src/nvim-rs/edit/src/enter.rs, export_name = "edit").
+// The full body is provided by nvim_edit_edit_entry below.
+
+/// Composite entry point for `edit()` called by the Rust implementation.
+/// Returns the same bool as `edit()`: true iff a CTRL-O caused the return.
+bool nvim_edit_edit_entry(int cmdchar, bool startln, int count)
 {
   if (curbuf->terminal) {
     if (ex_normal_busy) {
@@ -2428,14 +2434,11 @@ bool edit(int cmdchar, bool startln, int count)
 
 // ins_need_undo_get: now exported directly from Rust (export_name = "ins_need_undo_get").
 
-/// Redraw for Insert mode.
-/// This is postponed until getting the next character to make '$' in the 'cpo'
-/// option work correctly.
-/// Only redraw when there are no characters available.  This speeds up
-/// inserting sequences of characters (e.g., for CTRL-R).
-///
-/// @param ready  not busy with something
-void ins_redraw(bool ready)
+// ins_redraw: now implemented in Rust (src/nvim-rs/edit/src/redraw.rs, export_name = "ins_redraw").
+// Full body provided by nvim_edit_ins_redraw_impl below.
+
+/// Composite implementation of ins_redraw() for the Rust port.
+void nvim_edit_ins_redraw_impl(int ready)
 {
   if (char_avail()) {
     return;
