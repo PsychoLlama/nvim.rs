@@ -169,14 +169,9 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
 extern int rs_get_echo_hl_id(void);
-extern int rs_win_valid(win_T *win);
-extern int rs_last_window(win_T *win);
 
 // Rust FFI declarations
 extern void correct_screencol(int idx, int cells, int *col);
-extern void rs_win_size_restore(garray_T *gap);
-extern void rs_win_size_save(garray_T *gap);
-extern void rs_clear_showcmd(void);
 extern int rs_magic_isset(void);
 
 // History browsing state (used by Rust cmdline/history.rs)
@@ -210,34 +205,16 @@ extern int rs_entry_should_save_last_cmdline(int firstc);
 extern int rs_entry_hist_char2type(int firstc);
 extern int rs_entry_cmdline_type(int firstc);
 
-// Command window helpers from Rust
-extern int rs_cmdwin_can_open(int cmdwin_type_active, int text_locked, int cmdline_star);
-extern int rs_cmdwin_split_invalid(int old_curwin_valid, int curwin_is_old,
-                                   int old_curbuf_valid, int buf_changed);
-extern int rs_cmdwin_buffer_invalid(int newbuf_status_ok, int cmdwin_valid,
-                                    int curwin_is_cmdwin, int old_curwin_valid,
-                                    int old_curbuf_valid, int buf_changed);
-extern int rs_cmdwin_needs_tab_mapping(int histtype, int p_wc);
-extern int rs_cmdwin_needs_vim_filetype(int histtype);
-extern int rs_cmdwin_cleanup_had_error(int old_curwin_valid, int old_curbuf_valid, int buf_changed);
-extern int rs_cmdwin_to_hist_type(int win_type);
-
 // Drawing and coloring helpers from Rust
 extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int prev_prompt_id,
                                    int prev_errors);
 extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
                                            unsigned int prev_prompt_id);
 
-// VimL API helpers from Rust
-extern int rs_clamp_cmdpos(int pos, int cmdlen);
-
 // Screen position and drawing helpers from Rust
 extern int rs_cmd_startcol(void);
 extern int rs_cmdline_charsize(int idx);
-extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 extern void rs_redrawcmdprompt(void);
-extern void rs_save_viewstate_win(win_T *wp, viewstate_T *vs);
-extern void rs_restore_viewstate_win(win_T *wp, viewstate_T *vs);
 
 // command_line_handle_key implemented in Rust (cmdline/keys.rs)
 extern int command_line_handle_key(void *s);
