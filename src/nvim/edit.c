@@ -2339,19 +2339,6 @@ int nvim_edit_iswhite_nl_or_nul(int c)
 }
 
 
-// insert_enter is now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
-// The forward declaration is near the top of this file.
-// insert_enter body deleted: now implemented in Rust (src/nvim-rs/edit/src/enter.rs).
-
-// insert_check: now implemented in Rust (state_machine.rs, export_name = "insert_check_rs").
-
-
-// insert_execute: now implemented in Rust (state_machine.rs, export_name = "insert_execute_rs").
-
-
-// insert_handle_key, insert_do_complete, insert_do_cindent, and
-// insert_handle_key_post are now implemented in Rust (dispatch.rs).
-// Forward declarations are near the top of this file.
 
 /// edit(): Start inserting text.
 ///
@@ -2420,10 +2407,6 @@ bool nvim_edit_edit_entry(int cmdchar, bool startln, int count)
   return s->c == Ctrl_O;
 }
 
-// ins_need_undo_get: now exported directly from Rust (export_name = "ins_need_undo_get").
-
-// ins_redraw: now implemented in Rust (src/nvim-rs/edit/src/redraw.rs, export_name = "ins_redraw").
-// Full body provided by nvim_edit_ins_redraw_impl below.
 
 /// Composite implementation of ins_redraw() for the Rust port.
 void nvim_edit_ins_redraw_impl(int ready)
@@ -2580,12 +2563,8 @@ void edit_putchar(int c, bool highlight)
   grid_line_flush();
 }
 
-/// @return    the effective prompt for the specified buffer.
-// buf_prompt_text: now exported directly from Rust (export_name = "buf_prompt_text").
-// prompt_text: now exported directly from Rust (export_name = "prompt_text").
-
-// Prepare for prompt mode: Make sure the last line has the prompt text.
-// Move the cursor to this line.
+// init_prompt: now implemented in Rust (src/nvim-rs/edit/src/redraw.rs).
+// Body available via nvim_edit_init_prompt_impl below.
 static void init_prompt(int cmdchar_todo)
 {
   char *prompt = prompt_text();
@@ -2630,7 +2609,6 @@ static void init_prompt(int cmdchar_todo)
   check_cursor(curwin);
 }
 
-// prompt_curpos_editable: now exported directly from Rust (export_name = "prompt_curpos_editable").
 
 // Undo the previous edit_putchar().
 void edit_unputchar(void)
@@ -2674,12 +2652,6 @@ void display_dollar(colnr_T col_arg)
   curwin->w_cursor.col = save_col;
 }
 
-// undisplay_dollar: now exported directly from Rust (export_name = "undisplay_dollar").
-// truncate_spaces: now exported directly from Rust (export_name = "truncate_spaces").
-// backspace_until_column: now exported directly from Rust (export_name = "backspace_until_column").
-// get_literal: now exported directly from Rust (export_name = "get_literal").
-// start_arrow: now exported directly from Rust (export_name = "start_arrow").
-// stop_arrow: now exported directly from Rust (export_name = "stop_arrow").
 
 /// Do a few things to stop inserting.
 /// "end_insert_pos" is where insert ended.  It is NULL when we already jumped
@@ -2706,16 +2678,6 @@ static void stop_insert(pos_T *end_insert_pos, int esc, int nomove)
   }
 }
 
-// set_last_insert: now exported directly from Rust (export_name = "set_last_insert").
-// free_last_insert: now exported directly from Rust (export_name = "free_last_insert").
-// beginline: now exported directly from Rust (export_name = "beginline").
-// oneright: now exported directly from Rust (export_name = "oneright").
-// oneleft: now exported directly from Rust (export_name = "oneleft").
-// cursor_up_inner: now exported directly from Rust (export_name = "cursor_up_inner").
-// cursor_up: now exported directly from Rust (export_name = "cursor_up").
-// cursor_down_inner: now exported directly from Rust (export_name = "cursor_down_inner").
-// cursor_down: now exported directly from Rust (export_name = "cursor_down").
-// stuff_inserted: now exported directly from Rust (export_name = "stuff_inserted").
 
 String get_last_insert(void)
   FUNC_ATTR_PURE
@@ -2724,7 +2686,6 @@ String get_last_insert(void)
   return rs.data == NULL ? NULL_STRING : (String){ .data = rs.data, .size = rs.size };
 }
 
-// get_last_insert_save: now exported directly from Rust (export_name = "get_last_insert_save").
 
 /// Check the word in front of the cursor for an abbreviation.
 /// Called when the non-id character "c" has been entered.
@@ -2746,28 +2707,6 @@ String get_last_insert(void)
 /// replace_offset is normally 0, in which case replace_push will add a new
 /// character at the end of the stack.  If replace_offset is not 0, that many
 /// characters will be left on the stack above the newly inserted character.
-// replace_push: now exported directly from Rust (export_name = "replace_push").
-
-// replace_push_nul: now exported directly from Rust (export_name = "replace_push_nul").
-
-// ins_reg: now implemented in Rust (src/nvim-rs/edit/src/register.rs).
-// Rust export_name = "ins_reg".
-
-// ins_esc: now implemented in Rust (src/nvim-rs/edit/src/esc.rs).
-// Rust export_name = "ins_esc".
-
-// ins_bs is now implemented in Rust (src/nvim-rs/edit/src/backspace.rs).
-
-// ins_tab is now implemented in Rust (src/nvim-rs/edit/src/tab.rs).
-// ins_eol delegates to Rust rs_ins_eol (symbol exported directly).
-
-// Handle digraph in insert mode -- now exported directly from Rust as ins_digraph.
-// Handle CTRL-Y/E -- now exported directly from Rust as ins_ctrl_ey.
-
-// ins_copychar: now exported directly from Rust (export_name = "ins_copychar").
-// get_nolist_virtcol: now exported directly from Rust (export_name = "get_nolist_virtcol").
-// nvim_get_nolist_virtcol: deleted (no more callers after Phase 2).
-
 // get_can_cindent: now exported directly from Rust (export_name = "get_can_cindent").
 
 void set_can_cindent(bool val)
