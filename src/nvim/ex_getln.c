@@ -479,14 +479,6 @@ bool parse_pattern_and_range(pos_T *incsearch_start, int *search_delim, int *ski
 
 /// Initialize the current command-line info.
 
-static void ui_ext_cmdline_hide(bool abort)
-{
-  if (ui_has(kUICmdline)) {
-    cmdline_was_last_drawn = false;
-    ccline.redraw_state = kCmdRedrawNone;
-    ui_call_cmdline_hide(ccline.level, abort);
-  }
-}
 
 /// Internal entry point for cmdline mode.
 ///
@@ -803,7 +795,9 @@ theend:
   char *p = ccline.cmdbuff;
 
   if (ui_has(kUICmdline)) {
-    ui_ext_cmdline_hide(s->gotesc);
+    cmdline_was_last_drawn = false;
+    ccline.redraw_state = kCmdRedrawNone;
+    ui_call_cmdline_hide(ccline.level, s->gotesc);
   }
   if (!cmd_silent) {
     redraw_custom_title_later();
@@ -2250,7 +2244,11 @@ int nvim_open_cmdwin(void)
   curwin->w_cursor.col = ccline.cmdpos;
   changed_line_abv_curs();
   invalidate_botline(curwin);
-  ui_ext_cmdline_hide(false);
+  if (ui_has(kUICmdline)) {
+    cmdline_was_last_drawn = false;
+    ccline.redraw_state = kCmdRedrawNone;
+    ui_call_cmdline_hide(ccline.level, false);
+  }
   redraw_later(curwin, UPD_SOME_VALID);
 
   // No Ex mode here!
