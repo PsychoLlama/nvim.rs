@@ -51,7 +51,7 @@ extern "C" {
     fn nvim_edit_coladvance(col: ColnrT);
     fn nvim_edit_adjust_skipcol();
     fn nvim_edit_getviscol() -> ColnrT;
-    fn nvim_edit_virtual_active() -> c_int;
+    fn virtual_active(wp: WinHandle) -> bool;
     fn nvim_edit_get_ve_flags() -> c_int;
 
     // Character operations
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn rs_beginline(flags: c_int) {
 /// Handles virtual editing mode and multi-byte characters.
 /// Returns OK on success, FAIL at line boundary.
 unsafe fn oneright_impl() -> c_int {
-    if nvim_edit_virtual_active() != 0 {
+    if virtual_active(nvim_get_curwin()) {
         let prev_col = nvim_curwin_get_cursor_col();
         let prev_coladd = nvim_edit_get_cursor_coladd();
 
@@ -227,7 +227,7 @@ pub unsafe extern "C" fn rs_oneright() -> c_int {
 /// multi-byte characters, and adjusts cursor to first byte.
 /// Returns OK on success, FAIL at line boundary.
 unsafe fn oneleft_impl() -> c_int {
-    if nvim_edit_virtual_active() != 0 {
+    if virtual_active(nvim_get_curwin()) {
         let v = nvim_edit_getviscol();
 
         if v == 0 {

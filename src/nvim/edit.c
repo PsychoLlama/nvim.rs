@@ -628,11 +628,6 @@ colnr_T nvim_edit_getviscol(void)
   return getviscol();
 }
 
-/// Call virtual_active(curwin) (accessor for Rust).
-int nvim_edit_virtual_active(void)
-{
-  return virtual_active(curwin) ? 1 : 0;
-}
 
 /// Get get_ve_flags(curwin) (accessor for Rust).
 int nvim_edit_get_ve_flags(void)
@@ -1167,11 +1162,6 @@ void nvim_edit_append_char_to_redobuff(int c)
   AppendCharToRedobuff(c);
 }
 
-/// Call vim_beep(val) (accessor for Rust).
-void nvim_edit_vim_beep(int val)
-{
-  vim_beep((unsigned)val);
-}
 
 /// Check if p_ww (whichwrap) allows the given character (accessor for Rust).
 int nvim_edit_ww_allows(int ch)
@@ -2845,23 +2835,7 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
   return false;
 }
 
-/// Check if backspace mode is allowed (accessor for Rust).
-int nvim_edit_can_bs(int what)
-{
-  return can_bs((char)what) ? 1 : 0;
-}
 
-/// Increment cursor position (accessor for Rust).
-void nvim_edit_inc_cursor(void)
-{
-  inc_cursor();
-}
-
-/// Decrement cursor position (accessor for Rust).
-void nvim_edit_dec_cursor(void)
-{
-  dec_cursor();
-}
 
 /// Call u_save(lnum1, lnum2) (accessor for Rust).
 int nvim_edit_u_save(int lnum1, int lnum2)
@@ -2869,11 +2843,6 @@ int nvim_edit_u_save(int lnum1, int lnum2)
   return u_save((linenr_T)lnum1, (linenr_T)lnum2);
 }
 
-/// Get ml_get_len(lnum) (accessor for Rust).
-int nvim_edit_ml_get_len(int lnum)
-{
-  return ml_get_len((linenr_T)lnum);
-}
 
 /// Get has_format_option(c) (accessor for Rust).
 int nvim_edit_has_format_option(int c)

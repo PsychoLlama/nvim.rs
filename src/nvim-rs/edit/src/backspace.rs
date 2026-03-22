@@ -10,7 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::too_many_lines)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint};
 
 /// Column number type (matches `colnr_T` in Neovim).
 type ColnrT = i32;
@@ -34,8 +34,8 @@ extern "C" {
     fn nvim_edit_set_cursor_lnum_abs(lnum: LinenrT);
     fn nvim_edit_get_cursor_coladd() -> ColnrT;
     fn nvim_edit_set_cursor_coladd(val: ColnrT);
-    fn nvim_edit_inc_cursor();
-    fn nvim_edit_dec_cursor();
+    fn inc_cursor() -> c_int;
+    fn dec_cursor() -> c_int;
 
     // Insert start tracking
     fn nvim_get_Insstart_lnum() -> LinenrT;
@@ -66,7 +66,7 @@ extern "C" {
     fn nvim_set_dollar_vcol(val: ColnrT);
 
     // can_bs check
-    fn nvim_edit_can_bs(what: c_int) -> c_int;
+    fn can_bs(what: c_int) -> bool;
 
     // Undo / stop_arrow
     fn stop_arrow() -> c_int;
@@ -81,7 +81,7 @@ extern "C" {
     fn beginline(flags: c_int);
 
     // ml_get_len
-    fn nvim_edit_ml_get_len(lnum: c_int) -> c_int;
+    fn ml_get_len(lnum: c_int) -> c_int;
 
     // Character ops
     fn nvim_gchar_cursor() -> c_int;
@@ -120,7 +120,7 @@ extern "C" {
     fn nvim_edit_ins_bs_softtabstop(inserted_space_p: *mut c_int, in_indent: bool) -> bool;
 
     // vim_beep
-    fn nvim_edit_vim_beep(val: c_int);
+    fn vim_beep(val: c_uint);
 }
 
 // ============================================================================
@@ -201,17 +201,14 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     if nvim_curbuf_is_empty() != 0
         || (!revins_on
             && ((cursor_lnum == 1 && cursor_col == 0)
-                || (nvim_edit_can_bs(BS_START) == 0
+                || (!can_bs(BS_START)
                     && ((arrow_used && nvim_curbuf_is_prompt() == 0)
                         || (cursor_lnum == nvim_get_Insstart_orig_lnum()
                             && cursor_col <= nvim_get_Insstart_orig_col())))
-                || (nvim_edit_can_bs(BS_INDENT) == 0
-                    && !arrow_used
-                    && ai_col > 0
-                    && cursor_col <= ai_col)
-                || (nvim_edit_can_bs(BS_EOL) == 0 && cursor_col == 0)))
+                || (!can_bs(BS_INDENT) && !arrow_used && ai_col > 0 && cursor_col <= ai_col)
+                || (!can_bs(BS_EOL) && cursor_col == 0)))
     {
-        nvim_edit_vim_beep(BO_FLAG_BACKSPACE);
+        vim_beep(BO_FLAG_BACKSPACE as c_uint);
         return false;
     }
 
@@ -226,7 +223,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
     nvim_set_end_comment_pending(NUL); // After BS, don't auto-end comment
     if revins_on {
-        nvim_edit_inc_cursor(); // put cursor after last inserted char
+        inc_cursor(); // put cursor after last inserted char
     }
 
     // Virtualedit: handle coladd
@@ -256,7 +253,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             if nvim_edit_u_save(cur_lnum - 2, cur_lnum + 1) == FAIL {
                 return false;
             }
-            nvim_set_Insstart(lnum - 1, nvim_edit_ml_get_len(lnum - 1));
+            nvim_set_Insstart(lnum - 1, ml_get_len(lnum - 1));
         }
 
         // In replace mode: cc < 0 means NL was inserted; cc >= 0 means replaced
@@ -268,7 +265,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
         if state & REPLACE_FLAG != 0 && nvim_curwin_get_cursor_lnum() <= lnum {
             // In replace mode, in the line we started replacing, only move cursor
-            nvim_edit_dec_cursor();
+            dec_cursor();
         } else {
             let orig_line_count = nvim_edit_get_orig_line_count();
             if state & VREPLACE_FLAG == 0 || nvim_curwin_get_cursor_lnum() > orig_line_count {
@@ -285,10 +282,10 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
                 nvim_edit_do_join_simple();
                 if temp == NUL && nvim_gchar_cursor() != NUL {
-                    nvim_edit_inc_cursor();
+                    inc_cursor();
                 }
             } else {
-                nvim_edit_dec_cursor();
+                dec_cursor();
             }
 
             // In REPLACE mode: restore text replaced by the NL
@@ -309,7 +306,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     } else {
         // Delete character(s) before the cursor.
         if revins_on {
-            nvim_edit_dec_cursor(); // put cursor on last inserted char
+            dec_cursor(); // put cursor on last inserted char
         }
         let mut mincol: ColnrT = 0;
 
@@ -338,7 +335,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             let mut cclass = nvim_edit_mb_get_class_cursor();
             loop {
                 if !revins_on {
-                    nvim_edit_dec_cursor();
+                    dec_cursor();
                 }
                 let cc = nvim_gchar_cursor();
                 let prev_cclass = cclass;
@@ -356,9 +353,9 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 {
                     // End of word
                     if !revins_on {
-                        nvim_edit_inc_cursor();
+                        inc_cursor();
                     } else if state & REPLACE_FLAG != 0 {
-                        nvim_edit_dec_cursor();
+                        dec_cursor();
                     }
                     break;
                 }
@@ -369,7 +366,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                     let has_composing = nvim_edit_cursor_has_composing();
                     del_char(0);
                     if has_composing != 0 {
-                        nvim_edit_inc_cursor();
+                        inc_cursor();
                     }
                     let revins_chars = nvim_get_revins_chars();
                     if revins_chars > 0 {
@@ -389,7 +386,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 let col_now = nvim_curwin_get_cursor_col();
                 let can_continue = revins_on
                     || (col_now > mincol
-                        && (nvim_edit_can_bs(BS_NOSTOP) != 0
+                        && (can_bs(BS_NOSTOP)
                             || (nvim_curwin_get_cursor_lnum() != nvim_get_Insstart_orig_lnum()
                                 || col_now != nvim_get_Insstart_orig_col())));
                 if !can_continue {

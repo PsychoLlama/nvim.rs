@@ -10,7 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_snake_case)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint, c_void};
 
 /// Column number type (matches `colnr_T` in Neovim).
 type ColnrT = i32;
@@ -39,11 +39,14 @@ extern "C" {
     fn nvim_curwin_set_cursor_col(col: ColnrT);
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
 
+    // Cursor shape / mode
+    fn nvim_get_curwin() -> *mut c_void;
+
     // Phase 3 accessors (movement)
     fn nvim_edit_set_cursor_coladd(val: ColnrT);
     fn nvim_edit_set_w_set_curswant(val: c_int);
     fn nvim_edit_coladvance(col: ColnrT);
-    fn nvim_edit_virtual_active() -> c_int;
+    fn virtual_active(wp: *mut c_void) -> bool;
 
     // -- Navigation helpers (all new Phase 4 accessors in edit.c) --
     fn nvim_edit_fdo_hor_and_key_typed() -> c_int;
@@ -52,7 +55,7 @@ extern "C" {
     fn nvim_edit_start_arrow_with_change_from_slot(slot: c_int, end_change: c_int);
     fn nvim_edit_start_arrow_curpos();
     fn nvim_edit_append_char_to_redobuff(c: c_int);
-    fn nvim_edit_vim_beep(val: c_int);
+    fn vim_beep(val: c_uint);
     fn nvim_edit_ww_allows(ch: c_int) -> c_int;
     fn nvim_edit_set_cursor_lnum_rel(delta: LinenrT);
 
@@ -168,7 +171,7 @@ unsafe fn ins_left_impl() {
         nvim_edit_coladvance(MAXCOL);
         nvim_edit_set_w_set_curswant(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
     nvim_set_dont_sync_undo(K_FALSE);
 }
@@ -190,13 +193,13 @@ unsafe fn ins_right_impl() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
-    if nvim_gchar_cursor() != 0 || nvim_edit_virtual_active() != 0 {
+    if nvim_gchar_cursor() != 0 || virtual_active(nvim_get_curwin()) {
         nvim_edit_start_arrow_with_change_curpos(end_change);
         if !end_change {
             nvim_edit_append_char_to_redobuff(K_RIGHT);
         }
         nvim_edit_set_w_set_curswant(1);
-        if nvim_edit_virtual_active() != 0 {
+        if virtual_active(nvim_get_curwin()) {
             oneright();
         } else {
             let ptr = nvim_get_cursor_pos_ptr();
@@ -217,7 +220,7 @@ unsafe fn ins_right_impl() {
         nvim_edit_set_cursor_lnum_rel(1);
         nvim_curwin_set_cursor_col(0);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
     nvim_set_dont_sync_undo(K_FALSE);
 }
@@ -247,7 +250,7 @@ unsafe fn ins_s_left_impl() {
         nvim_bck_word(1, false, false);
         nvim_edit_set_w_set_curswant(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
     nvim_set_dont_sync_undo(K_FALSE);
 }
@@ -278,7 +281,7 @@ unsafe fn ins_s_right_impl() {
         nvim_fwd_word(1, false, 0);
         nvim_edit_set_w_set_curswant(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
     nvim_set_dont_sync_undo(K_FALSE);
 }
@@ -356,7 +359,7 @@ unsafe fn ins_up_impl(startcol: bool) {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
 }
 
@@ -384,7 +387,7 @@ unsafe fn ins_down_impl(startcol: bool) {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
 }
 
@@ -415,7 +418,7 @@ unsafe fn ins_pageup_impl() {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
 }
 
@@ -446,7 +449,7 @@ unsafe fn ins_pagedown_impl() {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
-        nvim_edit_vim_beep(K_BO_FLAG_CURSOR);
+        vim_beep(K_BO_FLAG_CURSOR as c_uint);
     }
 }
 
@@ -525,7 +528,7 @@ unsafe fn ins_ctrl_g_impl() {
         }
         CTRL_G_ESC | CTRL_G_UNKNOWN => {
             if key == CTRL_G_UNKNOWN {
-                nvim_edit_vim_beep(K_BO_FLAG_CTRLG);
+                vim_beep(K_BO_FLAG_CTRLG as c_uint);
             }
         }
         _ => {}

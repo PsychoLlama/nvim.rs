@@ -9,7 +9,7 @@
 
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint};
 
 // ============================================================================
 // Constants
@@ -58,7 +58,7 @@ extern "C" {
     fn nvim_edit_ins_reg_restore_cursor_save();
     fn nvim_edit_ins_reg_restore_cursor();
     fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
-    fn nvim_edit_vim_beep(val: c_int);
+    fn vim_beep(val: c_uint);
     fn nvim_edit_get_yank_register(regname: c_int) -> *mut std::ffi::c_void;
     fn nvim_edit_reg_y_size(reg: *const std::ffi::c_void) -> usize;
     fn nvim_edit_is_literal_register(regname: c_int) -> c_int;
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
     }
 
     if regname == NUL || !nvim_valid_yank_reg(regname, false) {
-        nvim_edit_vim_beep(K_OPT_BO_FLAG_REGISTER);
+        vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
         need_redraw = true;
     } else {
         let reg = nvim_edit_get_yank_register(regname);
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
             nvim_edit_append_char_to_redobuff(regname);
             nvim_put_do_put(regname, std::ptr::null_mut(), BACKWARD, 1, PUT_CURSEND);
         } else if nvim_edit_insert_reg(regname, literally) == FAIL {
-            nvim_edit_vim_beep(K_OPT_BO_FLAG_REGISTER);
+            vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
             need_redraw = true;
         } else if nvim_edit_get_stop_insert_mode() != 0 {
             // `":stopinsert"` was invoked; nothing will be inserted.

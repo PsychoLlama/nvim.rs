@@ -309,7 +309,7 @@ extern "C" {
     fn get_cursor_pos_ptr() -> *mut c_char;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn ins_bytes_len(p: *const c_char, len: usize);
-    fn dec_cursor();
+    fn dec_cursor() -> c_int;
     fn del_char(fixpos: c_int) -> c_int;
     fn getvcol(wp: *mut c_void, pos: *const c_void, scol: *mut i32, ccol: *mut i32, ecol: *mut i32);
     fn nvim_curwin_get_cursor_ptr() -> *const c_void;
