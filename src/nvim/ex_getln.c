@@ -3060,7 +3060,11 @@ bool nvim_cmdline_paste(int regname, bool literally, bool remcr)
 int nvim_command_line_not_changed(void *s)
 {
   CommandLineState *cs = (CommandLineState *)s;
-  nvim_may_trigger_cursormovedc(s);
+  // Inline of nvim_may_trigger_cursormovedc:
+  if (ccline.cmdpos != cs->prev_cmdpos) {
+    trigger_cmd_autocmd(cs->cmdline_type, EVENT_CURSORMOVEDC);
+    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
+  }
   cs->prev_cmdpos = ccline.cmdpos;
   // Incremental searches: only search/redraw if something changed in the past.
   if (!cs->is_state.incsearch_postponed) {
@@ -3097,7 +3101,11 @@ int nvim_command_line_changed(void *vs)
     do_autocmd_cmdlinechanged(s->firstc > 0 ? s->firstc : '-');
   }
 
-  nvim_may_trigger_cursormovedc(s);
+  // Inline of nvim_may_trigger_cursormovedc:
+  if (ccline.cmdpos != s->prev_cmdpos) {
+    trigger_cmd_autocmd(s->cmdline_type, EVENT_CURSORMOVEDC);
+    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
+  }
 
   if (p_arshape && !p_tbidi) {
     if (!ui_has(kUICmdline) && vpeekc() == NUL) {
@@ -3212,39 +3220,10 @@ void nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)
   wildmenu_cleanup(&ccline);
 }
 
-/// Trigger CursorMovedC autocmd if cursor position changed (called from Rust).
-void nvim_may_trigger_cursormovedc(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  if (ccline.cmdpos != cs->prev_cmdpos) {
-    trigger_cmd_autocmd(cs->cmdline_type, EVENT_CURSORMOVEDC);
-    ccline.redraw_state = MAX(ccline.redraw_state, kCmdRedrawPos);
-  }
-}
-
-/// Wrapper for do_autocmd_cmdlinechanged (called from Rust via opaque handle).
-void nvim_do_autocmd_cmdlinechanged(int firstc)
-{
-  do_autocmd_cmdlinechanged(firstc);
-}
-
-/// Wrapper for trigger_cmd_autocmd (called from Rust).
-void nvim_trigger_cmd_autocmd(int typechar, int evt)
-{
-  trigger_cmd_autocmd(typechar, (event_T)evt);
-}
-
-/// Wrapper for cmdpreview_may_show (called from Rust via opaque handle).
-int nvim_cmdpreview_may_show(void *s)
-{
-  return (int)cmdpreview_may_show((CommandLineState *)s);
-}
-
-/// Wrapper for abandon_cmdline (called from Rust).
-void nvim_abandon_cmdline(void)
-{
-  abandon_cmdline();
-}
+// nvim_may_trigger_cursormovedc: inlined into callers above.
+// nvim_trigger_cmd_autocmd: removed (no external callers).
+// nvim_cmdpreview_may_show: removed (no external callers).
+// nvim_abandon_cmdline: removed (no external callers).
 
 // CommandLineState field accessors (for Rust opaque handle pattern)
 
@@ -3338,28 +3317,10 @@ void nvim_cls_set_wim_index(void *s, int val)
   ((CommandLineState *)s)->wim_index = val;
 }
 
-/// Get s->skip_pum_redraw field.
-int nvim_cls_get_skip_pum_redraw(void *s)
-{
-  return ((CommandLineState *)s)->skip_pum_redraw ? 1 : 0;
-}
-
 /// Set s->skip_pum_redraw field.
 void nvim_cls_set_skip_pum_redraw(void *s, int val)
 {
   ((CommandLineState *)s)->skip_pum_redraw = (val != 0);
-}
-
-/// Get s->cmdline_type field.
-int nvim_cls_get_cmdline_type(void *s)
-{
-  return ((CommandLineState *)s)->cmdline_type;
-}
-
-/// Get s->prev_cmdpos field.
-int nvim_cls_get_prev_cmdpos(void *s)
-{
-  return ((CommandLineState *)s)->prev_cmdpos;
 }
 
 /// Set s->prev_cmdpos field.
@@ -3389,12 +3350,6 @@ void nvim_cls_dup_cmdbuff_to_prev(void *s)
   }
 }
 
-/// Get s->some_key_typed field.
-int nvim_cls_get_some_key_typed(void *s)
-{
-  return ((CommandLineState *)s)->some_key_typed ? 1 : 0;
-}
-
 /// Set s->some_key_typed field.
 void nvim_cls_set_some_key_typed(void *s, int val)
 {
@@ -3413,23 +3368,6 @@ void nvim_cls_set_did_hist_navigate(void *s, int val)
   ((CommandLineState *)s)->did_hist_navigate = (val != 0);
 }
 
-/// Get s->hiscnt field.
-int nvim_cls_get_hiscnt(void *s)
-{
-  return ((CommandLineState *)s)->hiscnt;
-}
-
-/// Get s->save_hiscnt field.
-int nvim_cls_get_save_hiscnt(void *s)
-{
-  return ((CommandLineState *)s)->save_hiscnt;
-}
-
-/// Get s->histype field.
-int nvim_cls_get_histype(void *s)
-{
-  return ((CommandLineState *)s)->histype;
-}
 
 /// Get pointer to s->is_state (incsearch state).
 void *nvim_cls_get_is_state(void *s)
@@ -3455,20 +3393,11 @@ void nvim_cls_set_xpc_context(void *s, int val)
   ((CommandLineState *)s)->xpc.xp_context = val;
 }
 
-/// Get s->xpc.xp_context field.
-int nvim_cls_get_xpc_context(void *s)
-{
-  return ((CommandLineState *)s)->xpc.xp_context;
-}
 
 // nvim_get_mod_mask, nvim_set_mod_mask defined in getchar.c
 // nvim_get_iobuff defined in option_shim.c
 
-/// Get s->event_cmdlineleavepre_triggered field.
-int nvim_cls_get_event_cmdlineleavepre_triggered(void *s)
-{
-  return ((CommandLineState *)s)->event_cmdlineleavepre_triggered ? 1 : 0;
-}
+// nvim_cls_get_event_cmdlineleavepre_triggered: removed (no callers).
 
 /// Set s->event_cmdlineleavepre_triggered field.
 void nvim_cls_set_event_cmdlineleavepre_triggered(void *s, int val)
@@ -3576,23 +3505,9 @@ void nvim_cls_xfree_lookfor(void *s)
   cs->lookforlen = 0;
 }
 
-/// Set s->lookforlen field.
-void nvim_cls_set_lookforlen(void *s, int val)
-{
-  ((CommandLineState *)s)->lookforlen = val;
-}
-
-/// Get s->event_cmdlineleavepre_triggered field.
-int nvim_cls_get_event_cmdlineleavepre_triggered_val(void *s)
-{
-  return ((CommandLineState *)s)->event_cmdlineleavepre_triggered ? 1 : 0;
-}
-
-/// Set s->event_cmdlineleavepre_triggered field.
-void nvim_cls_set_event_cmdlineleavepre_triggered_val(void *s, int val)
-{
-  ((CommandLineState *)s)->event_cmdlineleavepre_triggered = (val != 0);
-}
+// nvim_cls_set_lookforlen: removed (no callers; lookforlen is managed via nvim_cls_xfree_lookfor).
+// nvim_cls_get_event_cmdlineleavepre_triggered_val: removed (duplicate of nvim_cls_get_event_cmdlineleavepre_triggered).
+// nvim_cls_set_event_cmdlineleavepre_triggered_val: removed (duplicate of nvim_cls_set_event_cmdlineleavepre_triggered).
 
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
@@ -3650,13 +3565,7 @@ void nvim_cls_trigger_cmdlineleavepre(void *s)
 }
 
 /// Wrapper for trigger_cmd_autocmd with STATE lookup (called from Rust).
-void nvim_cls_trigger_cmd_autocmd(void *s, int evt)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  trigger_cmd_autocmd(cs->cmdline_type, (event_T)evt);
-}
-
-// Note: nvim_cls_get_gotesc and nvim_cls_set_gotesc already exist above.
+// nvim_cls_trigger_cmd_autocmd: removed (no external callers).
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
 void nvim_cmdline_do_cmdline_nowait(void)
