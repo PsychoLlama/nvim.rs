@@ -79,7 +79,7 @@ extern "C" {
     fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut std::ffi::c_void;
     fn nvim_get_option_var(opt_idx: OptIndex) -> *mut std::ffi::c_void;
     fn nvim_get_option_flags(opt_idx: OptIndex) -> c_uint;
-    fn nvim_option_clear_was_set_flag(opt_idx: OptIndex);
+    fn nvim_option_get_flags_ptr(opt_idx: OptIndex) -> *mut c_uint;
 
     // TTY option handling
     fn rs_find_tty_option_end(arg: *const c_char) -> *const c_char;
@@ -407,7 +407,7 @@ pub unsafe extern "C" fn rs_option_was_set(opt_idx: OptIndex) -> c_int {
 #[export_name = "reset_option_was_set"]
 pub unsafe extern "C" fn rs_reset_option_was_set(opt_idx: OptIndex) {
     if opt_idx != OPT_INVALID {
-        nvim_option_clear_was_set_flag(opt_idx);
+        *nvim_option_get_flags_ptr(opt_idx) &= !crate::setops::K_OPT_FLAG_WAS_SET;
     }
 }
 

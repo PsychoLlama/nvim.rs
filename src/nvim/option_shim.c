@@ -714,8 +714,6 @@ int nvim_get_option_immutable(OptIndex opt_idx) { return (int)options[opt_idx].i
 const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options[opt_idx].def_val.data; }
 // Returns &options[opt_idx].script_ctx as void* for Rust metadata.rs
 void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
-// Clears kOptFlagWasSet from options[opt_idx].flags (write accessor for Rust)
-void nvim_option_clear_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags &= ~(uint32_t)kOptFlagWasSet; }
 
 // =============================================================================
 // Phase 8 default value management accessors (Phase 2)
