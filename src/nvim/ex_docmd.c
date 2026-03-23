@@ -2093,44 +2093,6 @@ void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
 }
 
 /// ":tabonly" implementation called by Rust ex_tabonly.
-void nvim_docmd_ex_tabonly_impl(exarg_T *eap)
-{
-  if (cmdwin_type != 0) {
-    cmdwin_result = K_IGNORE;
-    return;
-  }
-
-  if (first_tabpage->tp_next == NULL) {
-    msg(_("Already only one tab page"), 0);
-    return;
-  }
-
-  int tab_number = get_tabpage_arg(eap);
-  if (eap->errmsg != NULL) {
-    return;
-  }
-
-  goto_tabpage(tab_number);
-  // Repeat this up to a 1000 times, because autocommands may
-  // mess up the lists.
-  for (int done = 0; done < 1000; done++) {
-    FOR_ALL_TABS(tp) {
-      if (tp->tp_topframe != topframe) {
-        nvim_docmd_tabpage_close_other_impl(tp, eap->forceit);
-        // if we failed to close it quit
-        if (rs_valid_tabpage(tp)) {
-          done = 1000;
-        }
-        // start over, "tp" is now invalid
-        break;
-      }
-    }
-    assert(first_tabpage);
-    if (first_tabpage->tp_next == NULL) {
-      break;
-    }
-  }
-}
 
 /// Close the current tab page.
 void nvim_docmd_tabpage_close_impl(int forceit)
@@ -5060,6 +5022,9 @@ int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1
 
 /// Check if a tabpage handle equals curtab.
 int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }
+
+/// Check if a tabpage's topframe equals the global topframe.
+int nvim_docmd_tabpage_is_curtopframe(void *tp) { return ((tabpage_T *)tp)->tp_topframe == topframe ? 1 : 0; }
 
 /// Return the nth window in curtab (1-based), or lastwin if not found.
 win_T *nvim_docmd_nth_window(int nr)

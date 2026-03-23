@@ -131,10 +131,24 @@ extern "C" {
     fn nvim_docmd_ex_checkhealth_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_terminal_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_restart_impl(eap: ExArgHandle);
-    fn nvim_docmd_ex_tabonly_impl(eap: ExArgHandle);
 
     // curwin accessor
     fn nvim_get_curwin() -> WinHandle;
+
+    // cmdwin_type global (for ex_tabonly and others)
+    static cmdwin_type: c_int;
+
+    // Tabpage iteration (for ex_tabonly)
+    fn nvim_get_first_tabpage() -> *mut c_void;
+    fn nvim_tabpage_get_next(tp: *mut c_void) -> *mut c_void;
+    fn nvim_docmd_tabpage_is_curtopframe(tp: *mut c_void) -> c_int;
+    fn nvim_docmd_get_tabpage_arg(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_is_only_tabpage() -> c_int;
+    fn goto_tabpage(n: c_int);
+    #[link_name = "rs_valid_tabpage"]
+    fn rs_valid_tabpage(tp: *mut c_void) -> c_int;
+    fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_set_cmdwin_result(val: c_int);
 }
 
 /// Ends-excmd check (inline, same as in lib.rs)
@@ -462,7 +476,46 @@ pub unsafe extern "C" fn rs_ex_restart(eap: ExArgHandle) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_tabonly"]
 pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
-    nvim_docmd_ex_tabonly_impl(eap);
+    const K_IGNORE: c_int = -13821;
+
+    if cmdwin_type != 0 {
+        nvim_set_cmdwin_result(K_IGNORE);
+        return;
+    }
+
+    if nvim_docmd_is_only_tabpage() != 0 {
+        msg(c"Already only one tab page".as_ptr(), 0);
+        return;
+    }
+
+    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    if !nvim_eap_get_errmsg(eap).is_null() {
+        return;
+    }
+
+    goto_tabpage(tab_number);
+
+    // Repeat up to 1000 times: autocommands may mess up the lists.
+    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    'outer: for _ in 0..1000 {
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            if nvim_docmd_tabpage_is_curtopframe(tp) == 0 {
+                nvim_docmd_tabpage_close_other_impl(tp, forceit);
+                // If we failed to close it, quit
+                if rs_valid_tabpage(tp) != 0 {
+                    break 'outer;
+                }
+                // Start over: tp is now invalid
+                break;
+            }
+            tp = nvim_tabpage_get_next(tp);
+        }
+        // Check if done
+        if nvim_docmd_is_only_tabpage() != 0 {
+            break;
+        }
+    }
 }
 
 // =============================================================================
