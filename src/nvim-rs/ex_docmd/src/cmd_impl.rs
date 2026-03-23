@@ -473,3 +473,115 @@ pub unsafe extern "C" fn rs_ex_restart(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
     nvim_docmd_ex_tabonly_impl(eap);
 }
+
+// =============================================================================
+// Phase 2: Public utility functions (delegate to C implementations)
+// =============================================================================
+
+extern "C" {
+    // Phase 2 C implementation wrappers
+    fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
+    fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
+    fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
+    fn nvim_docmd_before_quit_autocmds_impl(wp: WinHandle, quit_all: bool, forceit: bool) -> bool;
+    fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
+    fn nvim_docmd_tabpage_close_impl(forceit: c_int);
+    fn nvim_docmd_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int);
+    fn nvim_docmd_tabpage_new_impl();
+    fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
+    fn nvim_docmd_handle_did_throw_impl();
+}
+
+/// `do_exedit` - edit/badd/visual command dispatch.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle. `old_curwin` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn do_exedit(eap: ExArgHandle, old_curwin: WinHandle) {
+    nvim_docmd_do_exedit_impl(eap, old_curwin);
+}
+
+/// `ex_splitview` - split/vsplit/tabedit dispatch.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "ex_splitview"]
+pub unsafe extern "C" fn rs_ex_splitview(eap: ExArgHandle) {
+    nvim_docmd_ex_splitview_impl(eap);
+}
+
+/// `:find` command.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "ex_find"]
+pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
+    nvim_docmd_ex_find_impl(eap);
+}
+
+/// `before_quit_autocmds` - fire pre-quit autocmds.
+///
+/// # Safety
+/// `wp` must be a valid WinHandle.
+#[no_mangle]
+pub unsafe extern "C" fn before_quit_autocmds(
+    wp: WinHandle,
+    quit_all: bool,
+    forceit: bool,
+) -> bool {
+    nvim_docmd_before_quit_autocmds_impl(wp, quit_all, forceit)
+}
+
+/// `ex_win_close` - close a window, handling modified buffers.
+///
+/// # Safety
+/// `win` must be a valid WinHandle. `tp` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn ex_win_close(forceit: c_int, win: WinHandle, tp: *mut c_void) {
+    nvim_docmd_ex_win_close_impl(forceit, win, tp);
+}
+
+/// `tabpage_close` - close the current tab page.
+///
+/// # Safety
+/// This function is safe to call.
+#[no_mangle]
+pub unsafe extern "C" fn tabpage_close(forceit: c_int) {
+    nvim_docmd_tabpage_close_impl(forceit);
+}
+
+/// `tabpage_close_other` - close another tab page.
+///
+/// # Safety
+/// `tp` must be a valid tabpage handle.
+#[no_mangle]
+pub unsafe extern "C" fn tabpage_close_other(tp: *mut c_void, forceit: c_int) {
+    nvim_docmd_tabpage_close_other_impl(tp, forceit);
+}
+
+/// `tabpage_new` - open a new tab page.
+///
+/// # Safety
+/// This function is safe to call.
+#[no_mangle]
+pub unsafe extern "C" fn tabpage_new() {
+    nvim_docmd_tabpage_new_impl();
+}
+
+/// `do_exbuffer` - execute buffer command.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "do_exbuffer"]
+pub unsafe extern "C" fn rs_do_exbuffer(eap: ExArgHandle) {
+    nvim_docmd_do_exbuffer_impl(eap);
+}
+
+/// `handle_did_throw` - report uncaught exception.
+///
+/// # Safety
+/// This function accesses global exception state.
+#[no_mangle]
+pub unsafe extern "C" fn handle_did_throw() {
+    nvim_docmd_handle_did_throw_impl();
+}

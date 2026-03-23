@@ -91,3 +91,12 @@ void set_no_hlsearch(bool flag);
 void set_pressedreturn(bool val);
 void ex_cd(exarg_T *eap);
 void do_sleep(int64_t msec, bool hide_cursor);
+// Phase 2 (ex_docmd plan): C bodies renamed to nvim_docmd_*_impl; Rust exports old names.
+void do_exedit(exarg_T *eap, win_T *old_curwin);
+void ex_splitview(exarg_T *eap);
+bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit);
+void ex_win_close(int forceit, win_T *win, tabpage_T *tp);
+void tabpage_close(int forceit);
+void tabpage_close_other(tabpage_T *tp, int forceit);
+void tabpage_new(void);
+void handle_did_throw(void);

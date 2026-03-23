@@ -322,6 +322,16 @@ extern void ex_sleep(exarg_T *eap);
 extern void do_sleep(int64_t msec, bool hide_cursor);
 // Phase 10 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_operators(exarg_T *eap);
+// Wave 2, Phase 2: Public utility functions migrated to Rust.
+extern void do_exedit(exarg_T *eap, win_T *old_curwin);
+extern void ex_splitview(exarg_T *eap);
+extern void ex_find(exarg_T *eap);
+extern bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit);
+extern void ex_win_close(int forceit, win_T *win, tabpage_T *tp);
+extern void tabpage_close(int forceit);
+extern void tabpage_close_other(tabpage_T *tp, int forceit);
+extern void tabpage_new(void);
+extern void handle_did_throw(void);
 // Wave 2, Phase 1: Static command functions migrated to Rust.
 extern void ex_goto(exarg_T *eap);
 extern void ex_tag(exarg_T *eap);
@@ -1103,7 +1113,8 @@ int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
 }
 
 /// Handle when "did_throw" is set after executing commands.
-void handle_did_throw(void)
+/// handle_did_throw implementation. Called by Rust handle_did_throw.
+void nvim_docmd_handle_did_throw_impl(void)
 {
   assert(current_exception != NULL);
   char *p = NULL;
@@ -2009,7 +2020,8 @@ int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int
 }
 
 /// ":buffer" command and alike.
-static void do_exbuffer(exarg_T *eap)
+/// do_exbuffer implementation. Called by Rust do_exbuffer.
+void nvim_docmd_do_exbuffer_impl(exarg_T *eap)
 {
   if (*eap->arg) {
     eap->errmsg = ex_errmsg(e_trailing_arg, eap->arg);
@@ -2030,7 +2042,8 @@ static void do_exbuffer(exarg_T *eap)
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
 
-bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
+/// before_quit_autocmds implementation. Called by Rust before_quit_autocmds.
+bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit)
 {
   apply_autocmds(EVENT_QUITPRE, NULL, NULL, false, wp->w_buffer);
 
@@ -2117,7 +2130,8 @@ void nvim_docmd_ex_restart_impl(exarg_T *eap)
 /// modified buffer.
 ///
 /// @param tp  NULL or the tab page "win" is in
-void ex_win_close(int forceit, win_T *win, tabpage_T *tp)
+/// ex_win_close implementation. Called by Rust ex_win_close.
+void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
 {
   // Never close the autocommand window.
   if (is_aucmd_win(win)) {
@@ -2175,7 +2189,7 @@ void nvim_docmd_ex_tabonly_impl(exarg_T *eap)
   for (int done = 0; done < 1000; done++) {
     FOR_ALL_TABS(tp) {
       if (tp->tp_topframe != topframe) {
-        tabpage_close_other(tp, eap->forceit);
+        nvim_docmd_tabpage_close_other_impl(tp, eap->forceit);
         // if we failed to close it quit
         if (rs_valid_tabpage(tp)) {
           done = 1000;
@@ -2192,7 +2206,7 @@ void nvim_docmd_ex_tabonly_impl(exarg_T *eap)
 }
 
 /// Close the current tab page.
-void tabpage_close(int forceit)
+void nvim_docmd_tabpage_close_impl(int forceit)
 {
   // First close all the windows but the current one.  If that worked then
   // close the last window in this tab, that will close it.
@@ -2211,7 +2225,7 @@ void tabpage_close(int forceit)
 /// Note that autocommands may make "tp" invalid.
 /// Also takes care of the tab pages line disappearing when closing the
 /// last-but-one tab page.
-void tabpage_close_other(tabpage_T *tp, int forceit)
+void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit)
 {
   int done = 0;
   char prev_idx[NUMBUFLEN];
@@ -2413,7 +2427,7 @@ bool set_ref_in_findfunc(int copyID)
 /// :tabedit [+command] file     open new Tab page and edit "file"
 /// :tabnew [[+command] file]    just like :tabedit
 /// :tabfind [+command] file     open new Tab page and find "file"
-void ex_splitview(exarg_T *eap)
+void nvim_docmd_ex_splitview_impl(exarg_T *eap)
 {
   win_T *old_curwin = curwin;
   char *fname = NULL;
@@ -2454,7 +2468,7 @@ void ex_splitview(exarg_T *eap)
   if (use_tab) {
     if (win_new_tabpage(cmdmod.cmod_tab != 0 ? cmdmod.cmod_tab : eap->addr_count == 0
                         ? 0 : (int)eap->line2 + 1, eap->arg) != FAIL) {
-      do_exedit(eap, old_curwin);
+      nvim_docmd_do_exedit_impl(eap, old_curwin);
       apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
 
       // set the alternate buffer for the window we came from
@@ -2474,7 +2488,7 @@ void ex_splitview(exarg_T *eap)
     } else {
       do_check_scrollbind(false);
     }
-    do_exedit(eap, old_curwin);
+    nvim_docmd_do_exedit_impl(eap, old_curwin);
   }
 
 theend:
@@ -2482,14 +2496,14 @@ theend:
 }
 
 /// Open a new tab page.
-void tabpage_new(void)
+void nvim_docmd_tabpage_new_impl(void)
 {
   exarg_T ea = {
     .cmdidx = CMD_tabnew,
     .cmd = "tabn",
     .arg = "",
   };
-  ex_splitview(&ea);
+  nvim_docmd_ex_splitview_impl(&ea);
 }
 
 
@@ -2608,7 +2622,7 @@ void nvim_docmd_ex_connect_impl(exarg_T *eap)
 /// ":resize".
 /// set, increment or decrement current window height
 /// ":find [+command] <file>" command.
-static void ex_find(exarg_T *eap)
+void nvim_docmd_ex_find_impl(exarg_T *eap)
 {
   if (!check_can_set_curbuf_forceit(eap->forceit)) {
     return;
@@ -2642,7 +2656,7 @@ static void ex_find(exarg_T *eap)
   }
 
   eap->arg = fname;
-  do_exedit(eap, NULL);
+  nvim_docmd_do_exedit_impl(eap, NULL);
   xfree(fname);
 }
 
@@ -2650,7 +2664,7 @@ static void ex_find(exarg_T *eap)
 /// ":edit <file>" command and alike.
 ///
 /// @param old_curwin  curwin before doing a split or NULL
-void do_exedit(exarg_T *eap, win_T *old_curwin)
+void nvim_docmd_do_exedit_impl(exarg_T *eap, win_T *old_curwin)
 {
   // ":vi" command ends Ex mode.
   if (exmode_active && (eap->cmdidx == CMD_visual
@@ -4859,8 +4873,8 @@ const char *nvim_docmd_get_e_nogvim(void) { return _("E25: Nvim does not have a 
 /// Get _(e_invcmd).
 const char *nvim_docmd_get_e_invcmd(void) { return _(e_invcmd); }
 
-/// Wrapper for do_exbuffer(eap).
-void nvim_docmd_do_exbuffer(exarg_T *eap) { do_exbuffer(eap); }
+/// Wrapper for do_exbuffer(eap) -- now calls Rust-owned impl.
+void nvim_docmd_do_exbuffer(exarg_T *eap) { nvim_docmd_do_exbuffer_impl(eap); }
 
 /// Wrapper for goto_buffer(eap, DOBUF_MOD, FORWARD, eap->line2) + do_cmdline_cmd.
 void nvim_docmd_goto_buffer_mod(exarg_T *eap)
@@ -5076,7 +5090,7 @@ void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
 void nvim_docmd_close_others(bool message, bool forceit) { close_others(message, forceit); }
 
 /// ex_win_close with NULL tabpage.
-void nvim_docmd_ex_win_close(bool forceit, win_T *win) { ex_win_close(forceit, win, NULL); }
+void nvim_docmd_ex_win_close(bool forceit, win_T *win) { nvim_docmd_ex_win_close_impl(forceit, win, NULL); }
 
 // Phase 3 C wrappers (direct implementations for Rust FFI)
 
@@ -5088,7 +5102,7 @@ bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
   return check_can_set_curbuf_forceit(forceit);
 }
 bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
-void nvim_docmd_do_exedit(exarg_T *eap) { do_exedit(eap, NULL); }
+void nvim_docmd_do_exedit(exarg_T *eap) { nvim_docmd_do_exedit_impl(eap, NULL); }
 
 /// get_argopt_name logic (direct implementation for Rust FFI).
 char *nvim_docmd_get_argopt_name(int idx)
@@ -5145,12 +5159,12 @@ void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val
 int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
 
 /// Close the current tab page.
-void nvim_docmd_tabpage_close(int forceit) { tabpage_close((bool)forceit); }
+void nvim_docmd_tabpage_close(int forceit) { nvim_docmd_tabpage_close_impl((bool)forceit); }
 
 /// Close another tab page.
 void nvim_docmd_tabpage_close_other(void *tp, int forceit)
 {
-  tabpage_close_other((tabpage_T *)tp, (bool)forceit);
+  nvim_docmd_tabpage_close_other_impl((tabpage_T *)tp, (bool)forceit);
 }
 
 /// Check if a tabpage handle equals curtab.
