@@ -554,11 +554,41 @@ use crate::index::OptIndex;
 use crate::opt_index::K_OPT_INVALID;
 use crate::{BufHandle, WinHandle, FAIL, OK};
 
-extern "C" {
-    // expand_option static variable accessors
-    fn nvim_get_expand_option_idx() -> OptIndex;
-    fn nvim_get_expand_option_flags() -> c_int;
+// =============================================================================
+// expand_option_* static state (moved from C option_shim.c)
+// These are the expand_option_idx, expand_option_name, expand_option_flags
+// statics from option_shim.c. expand_option_start_col and expand_option_append
+// remain in C because nvim_option_invoke_expand_cb reads them directly.
+// =============================================================================
 
+/// Current option index being expanded (kOptInvalid for terminal options).
+static mut EXPAND_OPTION_IDX: OptIndex = K_OPT_INVALID;
+/// Terminal option name buffer: "t_XX\0" (index 2+3 hold the key chars).
+static mut EXPAND_OPTION_NAME: [c_char; 5] = [b't' as c_char, b'_' as c_char, 0, 0, 0];
+/// Option flags for the option being expanded.
+static mut EXPAND_OPTION_FLAGS: c_int = 0;
+
+pub(crate) unsafe fn get_expand_option_idx() -> OptIndex {
+    EXPAND_OPTION_IDX
+}
+pub(crate) unsafe fn set_expand_option_idx(val: OptIndex) {
+    EXPAND_OPTION_IDX = val;
+}
+pub(crate) unsafe fn get_expand_option_flags() -> c_int {
+    EXPAND_OPTION_FLAGS
+}
+pub(crate) unsafe fn set_expand_option_flags(val: c_int) {
+    EXPAND_OPTION_FLAGS = val;
+}
+pub(crate) unsafe fn get_expand_option_name_ptr() -> *const c_char {
+    std::ptr::addr_of!(EXPAND_OPTION_NAME).cast::<c_char>()
+}
+pub(crate) unsafe fn set_expand_option_name_chars(c2: c_char, c3: c_char) {
+    EXPAND_OPTION_NAME[2] = c2;
+    EXPAND_OPTION_NAME[3] = c3;
+}
+
+extern "C" {
     // option varp scope accessor
     fn get_option_varp_scope_from(
         opt_idx: OptIndex,
@@ -617,14 +647,14 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    let expand_option_idx = nvim_get_expand_option_idx();
+    let expand_option_idx = get_expand_option_idx();
 
     if expand_option_idx == K_OPT_INVALID {
         // Terminal option: delegate to rs_expand_old_setting.
         return rs_expand_old_setting(num_matches, matches);
     }
 
-    let expand_option_flags = nvim_get_expand_option_flags();
+    let expand_option_flags = get_expand_option_flags();
     let curbuf = nvim_opt_get_curbuf();
     let curwin = nvim_opt_get_curwin();
 
@@ -765,9 +795,7 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
 extern "C" {
     fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
     static escape_chars: *const c_char;
-    fn nvim_get_expand_option_name_ptr() -> *const c_char;
     fn find_option(name: *const c_char) -> OptIndex;
-    fn nvim_set_expand_option_idx(val: OptIndex);
     fn nvim_get_namebuff() -> *mut c_char;
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
     fn nvim_option_invoke_expand_cb(
@@ -818,14 +846,14 @@ pub unsafe extern "C" fn rs_expand_old_setting(
     let matches_arr = xmalloc(std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
     *matches = matches_arr;
 
-    let mut expand_option_idx = nvim_get_expand_option_idx();
-    let expand_option_flags = nvim_get_expand_option_flags();
+    let mut expand_option_idx = get_expand_option_idx();
+    let expand_option_flags = get_expand_option_flags();
 
     // For a terminal key code expand_option_idx is kOptInvalid.
     if expand_option_idx == K_OPT_INVALID {
-        let name = nvim_get_expand_option_name_ptr();
+        let name = get_expand_option_name_ptr();
         expand_option_idx = find_option(name);
-        nvim_set_expand_option_idx(expand_option_idx);
+        set_expand_option_idx(expand_option_idx);
     }
 
     let var: *const c_char = if expand_option_idx == K_OPT_INVALID {
@@ -856,8 +884,8 @@ pub unsafe extern "C" fn rs_expand_string_setting(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> c_int {
-    let expand_option_idx = nvim_get_expand_option_idx();
-    let expand_option_flags = nvim_get_expand_option_flags();
+    let expand_option_idx = get_expand_option_idx();
+    let expand_option_flags = get_expand_option_flags();
 
     if nvim_option_has_expand_cb(expand_option_idx) == 0 {
         // Not supposed to reach here.

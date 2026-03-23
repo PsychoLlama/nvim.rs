@@ -448,7 +448,7 @@ extern "C" {
     fn didset_string_options();
     fn spell_check_msm() -> c_int;
     fn spell_check_sps() -> c_int;
-    fn nvim_call_compile_cap_prog_curwin();
+    fn nvim_compile_cap_prog_win(win: crate::WinHandle) -> *const std::ffi::c_char;
     fn did_set_spell_option() -> *const std::ffi::c_char;
     fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
     fn did_set_breakat(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn rs_didset_options() {
     didset_string_options();
     spell_check_msm();
     spell_check_sps();
-    nvim_call_compile_cap_prog_curwin();
+    nvim_compile_cap_prog_win(nvim_opt_get_curwin());
     did_set_spell_option();
     did_set_cedit(std::ptr::null_mut());
     did_set_breakat(std::ptr::null_mut());

@@ -19,7 +19,8 @@ extern "C" {
     // From charset.c
     fn transchar(c: c_int) -> *const c_char;
 
-    // Global variable accessors
+    // Global variable accessors (nvim_get_secure defined in ex_docmd.c)
+    #[link_name = "nvim_get_secure"]
     fn nvim_option_get_secure() -> c_int;
 }
 

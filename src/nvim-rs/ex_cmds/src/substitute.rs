@@ -1153,7 +1153,7 @@ extern "C" {
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     static mut p_ch: i64;
-    fn nvim_option_p_cpo_has_undo() -> c_int;
+    static p_cpo: *const c_char;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_get_w_botline() -> c_int;
     fn nvim_curwin_get_w_p_crb() -> c_int;
@@ -2246,7 +2246,7 @@ unsafe fn handle_do_ask(
         nvim_do_check_cursorbind_wrapper();
     }
 
-    if nvim_option_p_cpo_has_undo() != 0 {
+    if !vim_strchr(p_cpo, b'u' as c_int).is_null() {
         nvim_inc_no_u_sync();
     }
 
@@ -2383,7 +2383,7 @@ unsafe fn handle_do_ask(
 
     // Restore state
     setmouse();
-    if nvim_option_p_cpo_has_undo() != 0 {
+    if !vim_strchr(p_cpo, b'u' as c_int).is_null() {
         nvim_dec_no_u_sync();
     }
 

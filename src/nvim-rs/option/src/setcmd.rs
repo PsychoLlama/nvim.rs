@@ -1564,13 +1564,10 @@ extern "C" {
     fn nvim_xp_get_backslash(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_xp_set_backslash(xp: *mut std::ffi::c_void, val: c_int);
 
-    // expand_option static variable accessors
-    fn nvim_get_expand_option_idx() -> OptIndex;
-    fn nvim_set_expand_option_idx(val: OptIndex);
+    // expand_option_start_col and expand_option_append are C statics used by
+    // nvim_option_invoke_expand_cb; keep these C wrapper setters.
     fn nvim_set_expand_option_start_col(val: c_int);
-    fn nvim_set_expand_option_flags(val: c_int);
     fn nvim_set_expand_option_append(val: c_int);
-    fn nvim_set_expand_option_name_chars(c2: c_char, c3: c_char);
 
     // options[] array accessors
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
@@ -1604,7 +1601,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     arg: *mut c_char,
     opt_flags: c_int,
 ) {
-    nvim_set_expand_option_flags(opt_flags);
+    crate::expand::set_expand_option_flags(opt_flags);
 
     nvim_xp_set_context(xp, expand_ctx::EXPAND_SETTINGS);
     if *arg == NUL {
@@ -1684,7 +1681,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
         let neg_key = (-(key as i32)) as u32;
         let c2 = (neg_key & 0xff) as u8 as c_char;
         let c3 = ((neg_key >> 8) & 0xff) as u8 as c_char;
-        nvim_set_expand_option_name_chars(c2, c3);
+        crate::expand::set_expand_option_name_chars(c2, c3);
     } else if *p == b't' as c_char && *p.add(1) == b'_' as c_char {
         // t_ terminal option
         p = p.add(2);
@@ -1699,7 +1696,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
         is_term_option = true;
         let c2 = *p.sub(2);
         let c3 = *p.sub(1);
-        nvim_set_expand_option_name_chars(c2, c3);
+        crate::expand::set_expand_option_name_chars(c2, c3);
     } else {
         // Regular option name: walk over alphanumeric + '_' + '*'
         while is_alnum_or_ident(*p as u8) {
@@ -1750,9 +1747,9 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
 
     // Set expand_option_idx
     if is_term_option {
-        nvim_set_expand_option_idx(K_OPT_INVALID);
+        crate::expand::set_expand_option_idx(K_OPT_INVALID);
     } else {
-        nvim_set_expand_option_idx(opt_idx);
+        crate::expand::set_expand_option_idx(opt_idx);
     }
 
     nvim_xp_set_pattern(xp, p.add(1));
@@ -1775,7 +1772,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     }
 
     // Determine expansion context
-    let current_expand_idx = nvim_get_expand_option_idx();
+    let current_expand_idx = crate::expand::get_expand_option_idx();
     if expand_option_subtract {
         nvim_xp_set_context(xp, expand_ctx::EXPAND_SETTING_SUBTRACT);
         return;

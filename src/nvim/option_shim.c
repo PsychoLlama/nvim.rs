@@ -1579,10 +1579,7 @@ static char *copy_option_val(const char *val)
 
 extern void rs_check_winopt(winopt_T *wop);
 
-static OptIndex expand_option_idx = kOptInvalid;
 static int expand_option_start_col = 0;
-static char expand_option_name[5] = { 't', '_', NUL, NUL, NUL };
-static int expand_option_flags = 0;
 static bool expand_option_append = false;
 
 // =============================================================================
@@ -1601,19 +1598,11 @@ void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 /// Return xp->xp_buf (fixed-size buffer, EXPAND_BUF_LEN bytes).
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 
-// expand_option static variable get/set accessors
-OptIndex nvim_get_expand_option_idx(void) { return expand_option_idx; }
-void nvim_set_expand_option_idx(OptIndex val) { expand_option_idx = val; }
+// expand_option static variable set accessors (start_col and append remain
+// in C because nvim_option_invoke_expand_cb reads them directly).
+// expand_option_idx, expand_option_flags, expand_option_name moved to Rust.
 void nvim_set_expand_option_start_col(int val) { expand_option_start_col = val; }
-int nvim_get_expand_option_flags(void) { return expand_option_flags; }
-void nvim_set_expand_option_flags(int val) { expand_option_flags = val; }
 void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
-const char *nvim_get_expand_option_name_ptr(void) { return expand_option_name; }
-void nvim_set_expand_option_name_chars(char c2, char c3)
-{
-  expand_option_name[2] = c2;
-  expand_option_name[3] = c3;
-}
 
 // options[opt_idx] field accessors for set_context logic
 int nvim_option_has_expand_cb(OptIndex opt_idx)
@@ -2335,11 +2324,6 @@ void nvim_buf_clear_b_p_bt_if_help(buf_T *buf)
   }
 }
 
-/// Check if CPO_UNDO is in p_cpo.
-int nvim_option_p_cpo_has_undo(void)
-{
-  return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
-}
 
 // =============================================================================
 // Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
@@ -2469,8 +2453,3 @@ void nvim_option_set_flags_var_if_present(OptIndex idx, unsigned val)
   }
 }
 
-/// Get p_wc (wildchar option) for Rust.
-int nvim_get_p_wc(void) { return (int)p_wc; }
-
-/// Get p_wcm (wildcharm option) for Rust.
-int nvim_get_p_wcm(void) { return (int)p_wcm; }

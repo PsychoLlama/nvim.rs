@@ -1061,8 +1061,8 @@ unsafe extern "C" {
 
     // Global accessors
     fn nvim_get_wim_flags(idx: c_int) -> u8;
-    fn nvim_get_p_wc() -> c_int;
-    fn nvim_get_p_wcm() -> c_int;
+    static p_wc: i64;
+    static p_wcm: i64;
     fn nvim_get_p_wmnu() -> c_int;
     fn nvim_get_key_typed_cmdline() -> c_int;
     fn nvim_get_cmdmsg_rl() -> c_int;
@@ -1177,9 +1177,9 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
         let wim_full = (nvim_get_wim_flags(0) & WIM_FLAG_FULL) != 0;
 
         nvim_cls_set_wim_index(s, 0);
-        let p_wc = nvim_get_p_wc();
-        let p_wcm = nvim_get_p_wcm();
-        if c == p_wc || c == p_wcm || c == K_WILD || c == CTRL_Z {
+        let wc = p_wc as c_int;
+        let wcm = p_wcm as c_int;
+        if c == wc || c == wcm || c == K_WILD || c == CTRL_Z {
             options |= WILD_MAY_EXPAND_PATTERN;
             if c == K_WILD {
                 options |= WILD_FUNC_TRIGGER;
@@ -1391,9 +1391,8 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     // When there are matching completions to select <S-Tab> works like CTRL-P
     {
         let c_curr = nvim_cls_get_c(s);
-        let p_wc = nvim_get_p_wc();
-        if crate::keys::rs_is_stab_to_ctrl_p(c_curr, p_wc) != 0 && nvim_cls_get_xpc_numfiles(s) > 0
-        {
+        let wc = p_wc as c_int;
+        if crate::keys::rs_is_stab_to_ctrl_p(c_curr, wc) != 0 && nvim_cls_get_xpc_numfiles(s) > 0 {
             nvim_cls_set_c(s, CTRL_P);
         }
     }
@@ -1404,9 +1403,9 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     }
 
     let c_curr = nvim_cls_get_c(s);
-    let p_wc = nvim_get_p_wc();
-    let p_wcm = nvim_get_p_wcm();
-    let key_is_wc = (c_curr == p_wc && nvim_get_key_typed_cmdline() != 0) || c_curr == p_wcm;
+    let wc = p_wc as c_int;
+    let wcm = p_wcm as c_int;
+    let key_is_wc = (c_curr == wc && nvim_get_key_typed_cmdline() != 0) || c_curr == wcm;
 
     let mut wild_type = 0_i32;
     if (cmdline_pum_active() != 0
@@ -1448,7 +1447,8 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
 
     // The wildmenu is cleared if the pressed key is not used for navigating
     let c_check = nvim_cls_get_c(s);
-    let end_wildmenu = !key_is_wc && crate::keys::rs_should_end_wildmenu(c_check, p_wc, p_wcm) != 0;
+    let end_wildmenu = !key_is_wc
+        && crate::keys::rs_should_end_wildmenu(c_check, p_wc as c_int, p_wcm as c_int) != 0;
     let end_wildmenu = end_wildmenu
         && (cmdline_pum_active() == 0 || crate::keys::rs_should_end_wildmenu_pum(c_check) != 0);
 
@@ -1553,10 +1553,10 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     // Completion for 'wildchar', 'wildcharm', and wildtrigger()
     {
         let c_check = nvim_cls_get_c(s);
-        let p_wc = nvim_get_p_wc();
-        let p_wcm = nvim_get_p_wcm();
-        if (c_check == p_wc && nvim_cls_get_gotesc(s) == 0 && nvim_get_key_typed_cmdline() != 0)
-            || c_check == p_wcm
+        let wc = p_wc as c_int;
+        let wcm = p_wcm as c_int;
+        if (c_check == wc && nvim_cls_get_gotesc(s) == 0 && nvim_get_key_typed_cmdline() != 0)
+            || c_check == wcm
             || c_check == K_WILD
             || c_check == CTRL_Z
         {
