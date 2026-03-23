@@ -6,7 +6,7 @@
 #![allow(dead_code, unused_imports)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::os::raw::{c_int, c_void};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 
 /// Opaque handle to a completion match (compl_T).
@@ -104,6 +104,19 @@ extern "C" {
     fn nvim_compl_match_get_cp_number(m: ComplMatch) -> c_int;
     fn nvim_compl_match_set_cp_number(m: ComplMatch, num: c_int);
 
+    // cp_str accessors
+    pub(crate) fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
+    pub(crate) fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
+
+    // cp_score accessor
+    pub(crate) fn nvim_compl_match_get_score(m: ComplMatch) -> c_int;
+
+    // cp_cpt_source_idx accessor
+    pub(crate) fn nvim_compl_match_get_cpt_source_idx(m: ComplMatch) -> c_int;
+
+    // cp_fname accessor
+    pub(crate) fn nvim_compl_match_has_fname(m: ComplMatch) -> c_int;
+
     // Direction check (from lib.rs)
     fn rs_compl_dir_forward() -> c_int;
 }
@@ -116,6 +129,88 @@ const CP_ORIGINAL_TEXT: c_int = 1;
 #[inline]
 pub(crate) unsafe fn is_first_match(m: ComplMatch) -> bool {
     !m.is_null() && m == compl_first_match
+}
+
+/// Check if compl_shown_match is singular (only one item in ring: next == self).
+#[inline]
+pub(crate) unsafe fn shown_match_is_singular() -> bool {
+    let sm = compl_shown_match;
+    !sm.is_null() && sm == nvim_compl_match_get_next(sm)
+}
+
+/// Check if compl_shown_match is the first match (original text entry).
+#[inline]
+pub(crate) unsafe fn shown_match_is_first() -> bool {
+    !compl_shown_match.is_null() && is_first_match(compl_shown_match)
+}
+
+/// Get the cp_str.size of compl_shown_match (0 if null or no data).
+#[inline]
+pub(crate) unsafe fn shown_match_str_size() -> usize {
+    let sm = compl_shown_match;
+    if sm.is_null() || nvim_compl_match_get_cp_str_data(sm).is_null() {
+        0
+    } else {
+        nvim_compl_match_get_cp_str_size(sm)
+    }
+}
+
+/// Check if compl_shown_match is at the original text entry.
+#[inline]
+pub(crate) unsafe fn shown_match_at_orig_text() -> bool {
+    !compl_shown_match.is_null() && nvim_compl_match_at_original_text(compl_shown_match) != 0
+}
+
+/// Check if compl_curr_match is at the original text entry.
+#[inline]
+pub(crate) unsafe fn curr_match_at_original_text() -> bool {
+    !compl_curr_match.is_null() && nvim_compl_match_at_original_text(compl_curr_match) != 0
+}
+
+/// Get cp_str.data of compl_shown_match (null if match is null).
+#[inline]
+pub(crate) unsafe fn shown_match_cp_str_data() -> *const c_char {
+    if compl_shown_match.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_compl_match_get_cp_str_data(compl_shown_match)
+    }
+}
+
+/// Get cp_str.size of compl_shown_match (0 if null).
+#[inline]
+pub(crate) unsafe fn shown_match_cp_str_size() -> usize {
+    if compl_shown_match.is_null() {
+        0
+    } else {
+        nvim_compl_match_get_cp_str_size(compl_shown_match)
+    }
+}
+
+/// Get cp_cpt_source_idx of compl_shown_match (-1 if null).
+#[inline]
+pub(crate) unsafe fn shown_match_cpt_source_idx() -> c_int {
+    if compl_shown_match.is_null() {
+        -1
+    } else {
+        nvim_compl_match_get_cpt_source_idx(compl_shown_match)
+    }
+}
+
+/// Get cp_score of compl_shown_match (FUZZY_SCORE_NONE=INT_MIN if null).
+#[inline]
+pub(crate) unsafe fn shown_match_score() -> c_int {
+    if compl_shown_match.is_null() {
+        c_int::MIN // FUZZY_SCORE_NONE = INT_MIN
+    } else {
+        nvim_compl_match_get_score(compl_shown_match)
+    }
+}
+
+/// Check if compl_shown_match has a filename (cp_fname != NULL).
+#[inline]
+pub(crate) unsafe fn shown_match_has_fname() -> bool {
+    !compl_shown_match.is_null() && nvim_compl_match_has_fname(compl_shown_match) != 0
 }
 
 /// Check if a match represents the original text.

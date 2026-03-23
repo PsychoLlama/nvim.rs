@@ -1209,6 +1209,7 @@ void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, t
 void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
+int nvim_compl_match_has_fname(void *m) { return (m && ((compl_T *)m)->cp_fname != NULL) ? 1 : 0; }
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
@@ -1930,11 +1931,11 @@ int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 // Complex null-guard accessors
-int nvim_compl_shown_match_is_singular(void) { return compl_shown_match ? (compl_shown_match == compl_shown_match->cp_next ? 1 : 0) : 0; }
-int nvim_compl_shown_match_is_first(void) { return compl_shown_match ? (is_first_match(compl_shown_match) ? 1 : 0) : 0; }
-size_t nvim_compl_shown_match_str_size(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? compl_shown_match->cp_str.size : 0; }
+// nvim_compl_shown_match_is_singular: deleted (Phase 14, inlined in Rust)
+// nvim_compl_shown_match_is_first: deleted (Phase 14, inlined in Rust)
+// nvim_compl_shown_match_str_size: deleted (Phase 14, inlined in Rust)
 int nvim_compl_shown_match_has_newline(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0; }
-int nvim_compl_curr_match_at_original_text(void) { return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0; }
+// nvim_compl_curr_match_at_original_text: deleted (Phase 14, inlined in Rust)
 // Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
 // nvim_set_edit_submode_null, nvim_set_edit_submode_pre_null, nvim_set_redraw_mode_true,
@@ -2014,10 +2015,10 @@ int nvim_ins_compl_delete_body(int col) {
   return 1;
 }
 // Compound accessors for ins_compl_insert (Phase 3)
-const char *nvim_compl_shown_cp_str_data(void) { return compl_shown_match ? compl_shown_match->cp_str.data : NULL; }
-size_t nvim_compl_shown_cp_str_size(void) { return compl_shown_match ? compl_shown_match->cp_str.size : 0; }
+// nvim_compl_shown_cp_str_data: deleted (Phase 14, inlined in Rust)
+// nvim_compl_shown_cp_str_size: deleted (Phase 14, inlined in Rust)
 // nvim_find_common_prefix_data: deleted (Rust calls rs_find_common_prefix directly)
-int nvim_compl_shown_cp_cpt_source_idx(void) { return compl_shown_match ? compl_shown_match->cp_cpt_source_idx : -1; }
+// nvim_compl_shown_cp_cpt_source_idx: deleted (Phase 14, inlined in Rust)
 int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
 int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
 int nvim_get_cpt_source_cs_flag(int idx) { return (cpt_sources_array && idx >= 0) ? (int)(unsigned char)cpt_sources_array[idx].cs_flag : 0; }
@@ -2046,7 +2047,7 @@ void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
   }
   compl_ins_end_col = curwin->w_cursor.col;
 }
-int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
+// nvim_compl_shown_match_at_orig_text: deleted (Phase 14, inlined in Rust)
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
 // nvim_set_compl_hi_on_longest: deleted (Phase 2, COMPL_HI_ON_AUTOCOMPL_LONGEST moved to Rust)
 
@@ -2104,8 +2105,8 @@ int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNo
 // Phase 1 (pass 8) accessors for rs_ins_compl_next / find_next_completion_match
 int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
 int nvim_get_compl_startpos_col(void) { return (int)compl_startpos.col; }
-int nvim_compl_shown_match_score(void) { return compl_shown_match ? compl_shown_match->cp_score : FUZZY_SCORE_NONE; }
-int nvim_compl_shown_match_has_fname(void) { return (compl_shown_match && compl_shown_match->cp_fname != NULL) ? 1 : 0; }
+// nvim_compl_shown_match_score: deleted (Phase 14, inlined in Rust)
+// nvim_compl_shown_match_has_fname: deleted (Phase 14, inlined in Rust)
 int nvim_compl_shown_match_str_eq_orig(void) {
   return (compl_shown_match && compl_orig_text.data
           && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;

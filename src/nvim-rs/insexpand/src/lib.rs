@@ -165,12 +165,9 @@ extern "C" {
     fn nvim_get_compl_orig_text_data() -> *const c_char;
     fn nvim_get_compl_orig_text_size() -> usize;
 
-    // Shown match accessors (compl_T field accessors - still in C)
-    fn nvim_compl_shown_match_is_singular() -> c_int;
-    fn nvim_compl_shown_match_is_first() -> c_int;
+    // Shown match (accessed via compl_shown_match global in match_list)
     #[link_name = "compl_shown_match"]
     static mut g_compl_shown_match: crate::match_list::ComplMatch;
-    fn nvim_compl_shown_match_str_size() -> usize;
     fn nvim_compl_shown_match_has_newline() -> c_int;
 
     // Popup menu and selection accessors
@@ -741,14 +738,14 @@ pub unsafe extern "C" fn rs_ins_compl_leader_len() -> usize {
 /// (the original text entry).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_is_match_selected() -> c_int {
-    c_int::from(!g_compl_shown_match.is_null() && nvim_compl_shown_match_is_first() == 0)
+    c_int::from(!g_compl_shown_match.is_null() && !crate::match_list::shown_match_is_first())
 }
 
 /// Return whether there currently is a shown match.
 /// Returns true if compl_shown_match is NULL or is not singular.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_has_shown_match() -> c_int {
-    c_int::from(g_compl_shown_match.is_null() || nvim_compl_shown_match_is_singular() == 0)
+    c_int::from(g_compl_shown_match.is_null() || !crate::match_list::shown_match_is_singular())
 }
 
 /// Return whether the shown match is long enough.
@@ -760,7 +757,7 @@ pub unsafe extern "C" fn rs_ins_compl_long_shown_match() -> c_int {
     if g_compl_shown_match.is_null() {
         return 0;
     }
-    let str_size = nvim_compl_shown_match_str_size();
+    let str_size = crate::match_list::shown_match_str_size();
     if str_size == 0 {
         return 0;
     }

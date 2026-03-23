@@ -14,9 +14,7 @@ extern "C" {
     // State accessors
     fn nvim_get_cursor_col() -> c_int;
 
-    // Match accessors
-    fn nvim_compl_shown_match_str_size() -> usize;
-    #[allow(dead_code)]
+    // Match accessors (newline check still in C)
     fn nvim_compl_shown_match_has_newline() -> c_int;
 
     // Leader accessors
@@ -157,15 +155,11 @@ extern "C" {
     fn nvim_set_cursor_col(col: c_int);
 
     // Accessors for rs_ins_compl_insert
-    fn nvim_compl_shown_cp_str_data() -> *const c_char;
-    fn nvim_compl_shown_cp_str_size() -> usize;
     // rs_find_common_prefix is defined in Rust (leader.rs)
-    fn nvim_compl_shown_cp_cpt_source_idx() -> c_int;
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
-    fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_ins_compl_dict_alloc_set_shown();
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn rs_compl_status_adding() -> c_int;
@@ -268,8 +262,8 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
     let preinsert = rs_ins_compl_has_preinsert();
     let leader_len = rs_ins_compl_leader_len();
 
-    let mut cp_str = nvim_compl_shown_cp_str_data();
-    let mut cp_str_len = nvim_compl_shown_cp_str_size();
+    let mut cp_str = crate::match_list::shown_match_cp_str_data();
+    let mut cp_str_len = crate::match_list::shown_match_cp_str_size();
 
     if insert_prefix != 0 {
         let mut plen: usize = cp_str_len;
@@ -288,7 +282,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
             cp_str_len = plen;
         }
     } else if nvim_cpt_sources_array_exists() != 0 {
-        let cpt_idx = nvim_compl_shown_cp_cpt_source_idx();
+        let cpt_idx = crate::match_list::shown_match_cpt_source_idx();
         let compl_col = crate::vars::nvim_get_compl_col();
         if cpt_idx >= 0 && compl_col >= 0 {
             let startcol = nvim_get_cpt_source_startcol(cpt_idx);
@@ -352,7 +346,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
     }
 
     let used_match =
-        nvim_compl_shown_match_at_orig_text() == 0 && (preinsert == 0 || insert_prefix != 0);
+        !crate::match_list::shown_match_at_orig_text() && (preinsert == 0 || insert_prefix != 0);
     crate::vars::nvim_set_compl_used_match(c_int::from(used_match));
 
     nvim_ins_compl_dict_alloc_set_shown();

@@ -19,11 +19,6 @@
 use std::os::raw::c_int;
 
 // C accessor functions for state
-extern "C" {
-    // Match state (compl_T field accessors - still in C)
-    fn nvim_compl_shown_match_is_singular() -> c_int;
-    fn nvim_compl_shown_match_is_first() -> c_int;
-}
 
 // =============================================================================
 // Phase 2: Scalar state variables moved from C to Rust (Phase 1 of plan)
@@ -364,7 +359,6 @@ extern "C" {
     fn nvim_compl_match_get_next(m: crate::match_list::ComplMatch)
         -> crate::match_list::ComplMatch;
     fn rs_compl_status_adding() -> c_int;
-    fn nvim_compl_curr_match_at_original_text() -> c_int;
     fn nvim_compl_curr_match_next_eq_prev() -> c_int;
     fn nvim_compl_curr_match_cp_number() -> c_int;
     fn nvim_compl_curr_match_set_cp_number(val: c_int);
@@ -494,7 +488,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
     }
 
     if g_edit_submode_extra.is_null() {
-        if nvim_compl_curr_match_at_original_text() != 0 {
+        if crate::match_list::curr_match_at_original_text() {
             nvim_set_edit_submode_extra_back_at_original();
             g_edit_submode_highl = HLF_W;
         } else {

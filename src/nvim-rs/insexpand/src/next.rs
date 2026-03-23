@@ -18,16 +18,13 @@ extern "C" {
     // cot flags
     fn rs_get_cot_flags() -> c_uint;
 
-    // compl_shown_match compound accessors (still in C, need compl_T fields)
-    fn nvim_compl_shown_match_at_orig_text() -> c_int;
-    fn nvim_compl_shown_match_score() -> c_int;
-    fn nvim_compl_shown_match_has_fname() -> c_int;
-    fn nvim_compl_shown_match_str_eq_orig() -> c_int;
-
     // match list traversal
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
     fn nvim_get_compl_match_array_exists() -> c_int;
+
+    // compl_shown_match str eq orig (still in C, needs compl_orig_text comparison)
+    fn nvim_compl_shown_match_str_eq_orig() -> c_int;
 
     // leader/startcol: rs_get_leader_for_startcol_data/size are defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const std::ffi::c_char;
@@ -204,10 +201,10 @@ unsafe fn find_next_completion_match(
         let leader_data = crate::leader::rs_get_leader_for_startcol_data(shown, 0);
         let leader_size = crate::leader::rs_get_leader_for_startcol_size(shown, 0);
 
-        if nvim_compl_shown_match_at_orig_text() == 0
+        if !crate::match_list::shown_match_at_orig_text()
             && !leader_data.is_null()
             && rs_ins_compl_equal(shown, leader_data, leader_size) == 0
-            && (rs_cot_fuzzy() == 0 || nvim_compl_shown_match_score() == FUZZY_SCORE_NONE)
+            && (rs_cot_fuzzy() == 0 || crate::match_list::shown_match_score() == FUZZY_SCORE_NONE)
         {
             todo += 1;
         } else {
@@ -271,7 +268,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
     }
 
     if !nvim_get_compl_leader_data().is_null()
-        && nvim_compl_shown_match_at_orig_text() == 0
+        && !crate::match_list::shown_match_at_orig_text()
         && rs_cot_fuzzy() == 0
     {
         // Update "compl_shown_match" to the actually shown match
@@ -328,8 +325,8 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         if crate::vars::nvim_get_compl_get_longest() == 0
             || crate::vars::nvim_get_compl_used_match() != 0
         {
-            let preinsert_longest =
-                rs_ins_compl_preinsert_longest() != 0 && nvim_compl_shown_match_at_orig_text() != 0; // none selected
+            let preinsert_longest = rs_ins_compl_preinsert_longest() != 0
+                && crate::match_list::shown_match_at_orig_text(); // none selected
             rs_ins_compl_insert(
                 c_int::from(compl_preinsert || preinsert_longest),
                 c_int::from(preinsert_longest),
@@ -365,7 +362,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
 
     // Enter will select a match when the match wasn't inserted and the popup
     // menu is visible.
-    if compl_no_insert && !started && nvim_compl_shown_match_at_orig_text() == 0 {
+    if compl_no_insert && !started && !crate::match_list::shown_match_at_orig_text() {
         crate::vars::nvim_set_compl_enter_selects(1);
     } else {
         crate::vars::nvim_set_compl_enter_selects(c_int::from(
@@ -374,7 +371,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
     }
 
     // Show the file name for the match (if any)
-    if nvim_compl_shown_match_has_fname() != 0 {
+    if crate::match_list::shown_match_has_fname() {
         rs_ins_compl_show_filename();
     }
 
