@@ -465,7 +465,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
             break;
         }
 
-        nvim_msg_putchar(b'\n' as c_int);
+        msg_putchar(b'\n' as c_int);
         let label = nvim_docmd_tab_page_fmt(tabcount);
         nvim_docmd_msg_outtrans_attr(label, HLF_T);
         tabcount += 1;
@@ -481,22 +481,22 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
                 continue;
             }
 
-            nvim_msg_putchar(b'\n' as c_int);
-            nvim_msg_putchar(if wp == curwin {
+            msg_putchar(b'\n' as c_int);
+            msg_putchar(if wp == curwin {
                 b'>' as c_int
             } else if wp == lastused_win {
                 b'#' as c_int
             } else {
                 b' ' as c_int
             });
-            nvim_msg_putchar(b' ' as c_int);
+            msg_putchar(b' ' as c_int);
             let buf = nvim_win_get_buffer(wp);
-            nvim_msg_putchar(if bufIsChanged(buf) != 0 {
+            msg_putchar(if bufIsChanged(buf) != 0 {
                 b'+' as c_int
             } else {
                 b' ' as c_int
             });
-            nvim_msg_putchar(b' ' as c_int);
+            msg_putchar(b' ' as c_int);
 
             let spname = nvim_docmd_buf_spname(buf);
             if !spname.is_null() {
@@ -836,7 +836,7 @@ extern "C" {
     fn nvim_get_lastused_tabpage() -> *mut c_void;
     fn nvim_tabpage_get_firstwin(tp: *mut c_void) -> WinHandle;
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_msg_putchar(c: c_int);
+    fn msg_putchar(c: c_int);
     fn nvim_docmd_get_got_int() -> c_int;
     fn nvim_docmd_os_breakcheck();
     fn nvim_iosize() -> usize;

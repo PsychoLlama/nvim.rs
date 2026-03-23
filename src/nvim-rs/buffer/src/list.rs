@@ -590,7 +590,7 @@ extern "C" {
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
-    fn nvim_msg_putchar(c: c_int);
+    fn msg_putchar(c: c_int);
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_line_breakcheck();
@@ -798,7 +798,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
             libc::snprintf(iobuff.add(len), IOSIZE_LIST - len, fmt, lnum);
         }
 
-        nvim_msg_putchar(c_int::from(b'\n'));
+        msg_putchar(c_int::from(b'\n'));
         msg_outtrans(iobuff.cast::<c_char>(), 0, false);
         nvim_line_breakcheck();
     }

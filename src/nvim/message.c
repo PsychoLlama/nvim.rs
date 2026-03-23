@@ -199,7 +199,6 @@ int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 // C accessors for message formatting (used by Rust)
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
-void nvim_msg_putchar(int c) { msg_putchar(c); }
 
 // Rust implementation of emsg_not_now()
 extern int rs_emsg_not_now(void);

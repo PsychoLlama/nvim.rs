@@ -1010,7 +1010,7 @@ extern "C" {
     // nvim_message_filtered is defined in ex_cmds_shim.c, returns int (non-zero = filtered)
     fn nvim_message_filtered(str: *const c_char) -> c_int;
     // Direct message output (Phase 14: replacing nvim_qf_list_entry_output)
-    fn nvim_msg_putchar(c: c_int);
+    fn msg_putchar(c: c_int);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn msg_puts_hl(s: *const c_char, attr: c_int, right: bool);
     fn msg_puts(s: *const c_char);
@@ -1240,7 +1240,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     }
 
     // --- Direct message output (Phase 14: inlined from nvim_qf_list_entry_output) ---
-    nvim_msg_putchar(c_int::from(b'\n'));
+    msg_putchar(c_int::from(b'\n'));
     let prefix_hl = if cursel { HLF_QFL } else { qf_file_hl_id };
     msg_outtrans(prefix_string.as_ptr(), prefix_hl, false);
 

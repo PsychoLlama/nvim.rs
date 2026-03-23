@@ -925,7 +925,7 @@ extern "C" {
     fn nvim_get_ptag_entry() -> *mut c_void;
 
     // msg functions
-    fn nvim_msg_putchar(c: c_int); // from message.c
+    fn msg_putchar(c: c_int); // from message.c
     fn msg_advance(col: c_int);
 
     // path comparison
@@ -969,7 +969,7 @@ pub unsafe extern "C" fn rs_tag_freematch() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_taglen_advance(l: c_int) {
     if l == MAXCOL {
-        nvim_msg_putchar(c_int::from(b'\n'));
+        msg_putchar(c_int::from(b'\n'));
         msg_advance(24);
     } else {
         msg_advance(13 + l);
