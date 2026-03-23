@@ -365,6 +365,7 @@ extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 extern void nvim_docmd_handle_did_throw_impl(void);
 extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
 extern void nvim_docmd_ex_find_impl(exarg_T *eap);
+extern void nvim_docmd_ex_syncbind_impl(exarg_T *eap);
 extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
 extern void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc);
 
@@ -2353,61 +2354,6 @@ void nvim_docmd_do_exedit_impl(exarg_T *eap, win_T *old_curwin)
   ex_no_reprint = true;
 }
 
-/// ":syncbind" forces all 'scrollbind' windows to have the same relative
-/// offset.
-/// (1998-11-02 16:21:01  R. Edward Ralston <eralston@computer.org>)
-/// ":syncbind" implementation called by Rust ex_syncbind.
-void nvim_docmd_ex_syncbind_impl(exarg_T *eap)
-{
-  linenr_T vtopline;  // Target topline (including fill)
-
-  linenr_T old_linenr = curwin->w_cursor.lnum;
-
-  setpcmark();
-
-  // determine max (virtual) topline
-  if (curwin->w_p_scb) {
-    vtopline = rs_get_vtopline(curwin);
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_p_scb && wp->w_buffer) {
-        linenr_T y = plines_m_win_fill(wp, 1, wp->w_buffer->b_ml.ml_line_count)
-                     - rs_get_scrolloff_value(curwin);
-        vtopline = MIN(vtopline, y);
-      }
-    }
-    vtopline = MAX(vtopline, 1);
-  } else {
-    vtopline = 1;
-  }
-
-  // Set all scrollbind windows to the same topline.
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_p_scb) {
-      int y = vtopline - rs_get_vtopline(wp);
-      if (y > 0) {
-        scrollup(wp, y, true);
-      } else {
-        scrolldown(wp, -y, true);
-      }
-      wp->w_scbind_pos = vtopline;
-      redraw_later(wp, UPD_VALID);
-      cursor_correct(wp);
-      wp->w_redr_status = true;
-    }
-  }
-
-  if (curwin->w_p_scb) {
-    did_syncbind = true;
-    checkpcmark();
-    if (old_linenr != curwin->w_cursor.lnum) {
-      char ctrl_o[2];
-
-      ctrl_o[0] = Ctrl_O;
-      ctrl_o[1] = 0;
-      ins_typebuf(ctrl_o, REMAP_NONE, 0, true, false);
-    }
-  }
-}
 
 /// ":read" implementation called by Rust ex_read.
 void nvim_docmd_ex_read_impl(exarg_T *eap)

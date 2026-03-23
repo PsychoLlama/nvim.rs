@@ -32,6 +32,12 @@ const ACTION_GOTO: c_int = 2;
 const ACTION_SPLIT: c_int = 3;
 const ACTION_SHOW_ALL: c_int = 4;
 
+// redraw type constants
+const UPD_VALID: c_int = 10;
+
+// remap constants
+const REMAP_NONE: c_int = -1;
+
 // Tag type constants
 const DT_TAG: c_int = 1;
 const DT_POP: c_int = 2;
@@ -124,8 +130,34 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
 
+    // syncbind window/buffer accessors
+    fn nvim_win_get_w_p_scb(wp: WinHandle) -> bool;
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_win_set_scbind_pos(wp: WinHandle, val: c_int);
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn nvim_curtab_first_win() -> WinHandle;
+    fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
+    #[link_name = "rs_get_vtopline"]
+    fn nvim_docmd_get_vtopline(wp: WinHandle) -> c_int;
+    #[link_name = "rs_get_scrolloff_value"]
+    fn nvim_docmd_get_scrolloff_value(wp: WinHandle) -> c_int;
+    fn plines_m_win_fill(wp: WinHandle, first: LinenrT, last: LinenrT) -> c_int;
+    #[link_name = "cursor_correct"]
+    fn nvim_docmd_cursor_correct(wp: WinHandle);
+    fn nvim_setpcmark();
+    fn nvim_checkpcmark_wrapper();
+    fn nvim_set_did_syncbind(val: bool);
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+    // scrollup/scrolldown (Rust exports)
+    #[link_name = "scrollup"]
+    fn scrollup(wp: WinHandle, line_count: LinenrT, byfold: c_int) -> c_int;
+    #[link_name = "scrolldown"]
+    fn scrolldown(wp: WinHandle, line_count: LinenrT, byfold: c_int) -> c_int;
+    // redraw_later
+    #[link_name = "redraw_later"]
+    fn nvim_redraw_later(wp: WinHandle, rtype: c_int);
+
     // Complex implementation wrappers (C delegates for complex functions)
-    fn nvim_docmd_ex_syncbind_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_read_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_detach_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_connect_impl(eap: ExArgHandle);
@@ -487,13 +519,76 @@ pub unsafe extern "C" fn rs_ex_tabs(eap: ExArgHandle) {
     rs_ex_tabs_impl(eap);
 }
 
+/// `:syncbind` implementation.
+///
+/// # Safety
+/// All window/buffer handles must be valid.
+#[export_name = "nvim_docmd_ex_syncbind_impl"]
+pub unsafe extern "C" fn rs_ex_syncbind_impl(_eap: ExArgHandle) {
+    let curwin = nvim_get_curwin();
+    let old_linenr = nvim_win_get_cursor_lnum(curwin);
+
+    nvim_setpcmark();
+
+    // Determine the minimum virtual topline across all scrollbind windows.
+    let vtopline: LinenrT;
+    if nvim_win_get_w_p_scb(curwin) {
+        let mut vt = nvim_docmd_get_vtopline(curwin);
+        let mut wp = nvim_curtab_first_win();
+        while !wp.is_null() {
+            if nvim_win_get_w_p_scb(wp) {
+                let buf = nvim_win_get_buffer(wp);
+                if !buf.is_null() {
+                    let lcount = nvim_buf_get_ml_line_count(buf);
+                    let y =
+                        plines_m_win_fill(wp, 1, lcount) - nvim_docmd_get_scrolloff_value(curwin);
+                    if y < vt {
+                        vt = y;
+                    }
+                }
+            }
+            wp = nvim_win_get_next_in_tab(wp);
+        }
+        vtopline = if vt < 1 { 1 } else { vt };
+    } else {
+        vtopline = 1;
+    }
+
+    // Scroll all scrollbind windows to the target topline.
+    let mut wp = nvim_curtab_first_win();
+    while !wp.is_null() {
+        if nvim_win_get_w_p_scb(wp) {
+            let y = vtopline - nvim_docmd_get_vtopline(wp);
+            if y > 0 {
+                scrollup(wp, y, 1);
+            } else {
+                scrolldown(wp, -y, 1);
+            }
+            nvim_win_set_scbind_pos(wp, vtopline);
+            nvim_redraw_later(wp, UPD_VALID);
+            nvim_docmd_cursor_correct(wp);
+            nvim_win_set_redr_status(wp, 1);
+        }
+        wp = nvim_win_get_next_in_tab(wp);
+    }
+
+    if nvim_win_get_w_p_scb(curwin) {
+        nvim_set_did_syncbind(true);
+        nvim_checkpcmark_wrapper();
+        if old_linenr != nvim_win_get_cursor_lnum(curwin) {
+            let ctrl_o = [b'\x0f' as c_char, 0i8];
+            nvim_docmd_ins_typebuf(ctrl_o.as_ptr(), REMAP_NONE, 0, true, false);
+        }
+    }
+}
+
 /// `:syncbind` - synchronize scrollbind windows.
 ///
 /// # Safety
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_syncbind"]
 pub unsafe extern "C" fn rs_ex_syncbind(eap: ExArgHandle) {
-    nvim_docmd_ex_syncbind_impl(eap);
+    rs_ex_syncbind_impl(eap);
 }
 
 /// `:read` - read file or filter output.
