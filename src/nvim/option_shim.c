@@ -577,17 +577,6 @@ const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 
 
-static const char e_unknown_option[]
-  = N_("E518: Unknown option");
-static const char e_not_allowed_in_modeline[]
-  = N_("E520: Not allowed in a modeline");
-static const char e_not_allowed_in_modeline_when_modelineexpr_is_off[]
-  = N_("E992: Not allowed in a modeline when 'modelineexpr' is off");
-static const char e_number_required_after_equal[]
-  = N_("E521: Number required after =");
-static const char e_preview_window_already_exists[]
-  = N_("E590: A preview window already exists");
-const char *nvim_get_e_preview_window_exists(void) { return _(e_preview_window_already_exists); }
 #define OPTION_COUNT ARRAY_SIZE(options)
 
 /// :set boolean option prefix
@@ -1718,11 +1707,6 @@ void nvim_call_vim_str2nr(const char *arg, int *len_out, int64_t *num_out)
   vim_str2nr(arg, NULL, len_out, STR2NR_ALL, num_out, NULL, 0, true, NULL);
 }
 
-/// Get the e_number_required_after_equal error string.
-const char *nvim_get_e_number_required_after_equal(void)
-{
-  return e_number_required_after_equal;
-}
 
 // =============================================================================
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force

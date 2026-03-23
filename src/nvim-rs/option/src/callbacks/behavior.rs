@@ -122,7 +122,7 @@ extern "C" {
         callback: unsafe extern "C" fn(WinHandle, *mut c_void),
         ud: *mut c_void,
     );
-    fn nvim_get_e_preview_window_exists() -> *const std::ffi::c_char;
+    fn gettext(s: *const c_char) -> *const c_char;
 
     // Spell callback
     fn nvim_win_get_p_spell(win: WinHandle) -> c_int;
@@ -691,7 +691,7 @@ pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> Callback
 
     if PVW_CONFLICT {
         nvim_win_set_p_pvw(win, 0);
-        return nvim_get_e_preview_window_exists();
+        return gettext(c"E590: A preview window already exists".as_ptr());
     }
 
     callback_ok()

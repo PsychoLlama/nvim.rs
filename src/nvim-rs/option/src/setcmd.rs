@@ -545,12 +545,14 @@ extern "C" {
     ) -> *mut c_char;
     static p_wc: crate::OptInt;
     static p_wcm: crate::OptInt;
-    fn nvim_get_e_number_required_after_equal() -> *const c_char;
 }
 
 // =============================================================================
 // Types from C
 // =============================================================================
+
+/// Error: number required after '='
+const E_NUMBER_REQUIRED_AFTER_EQUAL: &std::ffi::CStr = c"E521: Number required after =";
 
 /// Invalid option index constant
 const K_OPT_INVALID: c_int = -1;
@@ -1061,12 +1063,12 @@ unsafe fn get_option_newval_impl(
                     || (*arg.add(len as usize) != 0
                         && rs_ascii_iswhite(c_int::from(*arg.add(len as usize) as u8)) == 0)
                 {
-                    *errmsg = nvim_get_e_number_required_after_equal();
+                    *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
                     return newval;
                 }
                 newval_num = parsed;
             } else {
-                *errmsg = nvim_get_e_number_required_after_equal();
+                *errmsg = E_NUMBER_REQUIRED_AFTER_EQUAL.as_ptr();
                 return newval;
             }
 
