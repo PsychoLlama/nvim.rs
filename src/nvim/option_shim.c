@@ -1006,19 +1006,11 @@ OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
-// change_option_default wrapper (for reset_modifiable)
-void nvim_change_option_default_bool(OptIndex opt_idx, int value) { rs_change_option_default(opt_idx, BOOLEAN_OPTVAL(value != 0)); }
 // TTY and key accessors
 const char *nvim_option_get_p_term(void) { return p_term; }
 const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
 void nvim_option_set_p_term(char *val) { p_term = val; }
 void nvim_option_set_p_ttytype(char *val) { p_ttytype = val; }
-// FullName_save wrapper (for vimrc_found)
-char *nvim_option_FullName_save(const char *fname, bool force) { return FullName_save(fname, force); }
-// vim_getenv wrapper (for vimrc_found)
-char *nvim_option_vim_getenv(const char *envname) { return vim_getenv(envname); }
-// os_setenv wrapper (for vimrc_found)
-int nvim_option_os_setenv(const char *name, const char *value, int overwrite) { return os_setenv(name, value, overwrite); }
 
 // insecure_flag pointer accessors
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }

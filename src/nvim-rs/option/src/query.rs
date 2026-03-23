@@ -46,9 +46,9 @@ extern "C" {
     fn nvim_win_get_ve_flags(wp: WinHandle) -> c_uint;
 
     // vimrc_found
-    fn nvim_option_vim_getenv(envname: *const c_char) -> *mut c_char;
-    fn nvim_option_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
-    fn nvim_option_os_setenv(name: *const c_char, value: *const c_char, overwrite: c_int) -> c_int;
+    fn vim_getenv(envname: *const c_char) -> *mut c_char;
+    fn FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
+    fn os_setenv(name: *const c_char, value: *const c_char, overwrite: c_int) -> c_int;
     fn xfree(ptr: *mut c_char);
 
     // set_iminsert_global / set_imsearch_global
@@ -60,7 +60,6 @@ extern "C" {
     // reset_modifiable
     fn nvim_option_set_p_ma(v: c_int);
     fn nvim_curbuf_set_b_p_ma(v: c_int);
-    fn nvim_change_option_default_bool(opt_idx: c_int, value: c_int);
 
     // TTY options (Phase 2)
     fn nvim_option_get_p_term() -> *const c_char;
@@ -192,12 +191,12 @@ pub unsafe extern "C" fn rs_vimrc_found(fname: *const c_char, envname: *const c_
     if fname.is_null() || envname.is_null() {
         return;
     }
-    let p = nvim_option_vim_getenv(envname);
+    let p = vim_getenv(envname);
     if p.is_null() {
         // Set $envname to the full path of the first vimrc file found.
-        let full = nvim_option_FullName_save(fname, false);
+        let full = FullName_save(fname, false);
         if !full.is_null() {
-            nvim_option_os_setenv(envname, full, 1);
+            os_setenv(envname, full, 1);
             xfree(full);
         }
     } else {
@@ -224,7 +223,13 @@ pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
 pub unsafe extern "C" fn rs_reset_modifiable() {
     nvim_curbuf_set_b_p_ma(0);
     nvim_option_set_p_ma(0);
-    nvim_change_option_default_bool(K_OPT_MODIFIABLE, 0);
+    crate::defaults::rs_change_option_default(
+        K_OPT_MODIFIABLE as c_int,
+        OptVal {
+            type_: OptValType::Boolean,
+            data: crate::storage::OptValData { boolean: 0 },
+        },
+    );
 }
 
 // =============================================================================
