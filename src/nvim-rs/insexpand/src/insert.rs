@@ -14,8 +14,7 @@ extern "C" {
     // State accessors
     fn nvim_get_cursor_col() -> c_int;
 
-    // Match accessors (newline check still in C)
-    fn nvim_compl_shown_match_has_newline() -> c_int;
+    // (nvim_compl_shown_match_has_newline: inlined in match_list.rs)
 
     // Leader accessors
     fn nvim_get_compl_leader_data() -> *const c_char;

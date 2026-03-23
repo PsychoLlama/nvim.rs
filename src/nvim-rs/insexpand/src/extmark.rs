@@ -11,7 +11,6 @@ use std::os::raw::c_int;
 extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
-    fn nvim_compl_shown_match_has_newline() -> c_int;
 
     // Compound accessors for extmark management and cleanup
     fn nvim_save_orig_extmarks_impl();

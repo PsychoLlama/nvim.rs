@@ -23,8 +23,7 @@ extern "C" {
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
     fn nvim_get_compl_match_array_exists() -> c_int;
 
-    // compl_shown_match str eq orig (still in C, needs compl_orig_text comparison)
-    fn nvim_compl_shown_match_str_eq_orig() -> c_int;
+    // (nvim_compl_shown_match_str_eq_orig: inlined in match_list.rs)
 
     // leader/startcol: rs_get_leader_for_startcol_data/size are defined in Rust (leader.rs)
     fn nvim_get_compl_leader_data() -> *const std::ffi::c_char;
@@ -339,7 +338,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
             #[allow(clippy::cast_sign_loss)]
             nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
         }
-        if nvim_compl_shown_match_str_eq_orig() != 0 {
+        if crate::match_list::shown_match_str_eq_orig() {
             nvim_restore_orig_extmarks();
         }
     } else {

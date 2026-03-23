@@ -117,6 +117,9 @@ extern "C" {
     // cp_fname accessor
     pub(crate) fn nvim_compl_match_has_fname(m: ComplMatch) -> c_int;
 
+    // compl_orig_text accessors (String_T)
+    fn nvim_get_compl_orig_text_data() -> *const c_char;
+
     // Direction check (from lib.rs)
     fn rs_compl_dir_forward() -> c_int;
 }
@@ -260,6 +263,30 @@ pub(crate) unsafe fn compl_curr_rewind_to_head() {
         }
         compl_curr_match = prev;
     }
+}
+
+/// Check if compl_shown_match cp_str has a newline character.
+#[inline]
+pub(crate) unsafe fn shown_match_has_newline() -> bool {
+    let data = shown_match_cp_str_data();
+    if data.is_null() {
+        return false;
+    }
+    let s = std::ffi::CStr::from_ptr(data);
+    s.to_bytes().contains(&b'\n')
+}
+
+/// Check if compl_shown_match cp_str equals compl_orig_text.
+#[inline]
+pub(crate) unsafe fn shown_match_str_eq_orig() -> bool {
+    let orig = nvim_get_compl_orig_text_data();
+    let shown = shown_match_cp_str_data();
+    if shown.is_null() || orig.is_null() {
+        return false;
+    }
+    let a = std::ffi::CStr::from_ptr(shown);
+    let b = std::ffi::CStr::from_ptr(orig);
+    a == b
 }
 
 /// Check if a match represents the original text.

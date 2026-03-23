@@ -168,7 +168,6 @@ extern "C" {
     // Shown match (accessed via compl_shown_match global in match_list)
     #[link_name = "compl_shown_match"]
     static mut g_compl_shown_match: crate::match_list::ComplMatch;
-    fn nvim_compl_shown_match_has_newline() -> c_int;
 
     // Popup menu and selection accessors
     fn pum_visible() -> c_int;
@@ -773,7 +772,7 @@ pub unsafe extern "C" fn rs_ins_compl_long_shown_match() -> c_int {
 /// Check if the current completion contains newline characters (multi-line).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_has_multiple() -> c_int {
-    nvim_compl_shown_match_has_newline()
+    c_int::from(crate::match_list::shown_match_has_newline())
 }
 
 /// Check if line is in multi-line completion range.

@@ -1934,7 +1934,7 @@ int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 // nvim_compl_shown_match_is_singular: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_is_first: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_str_size: deleted (Phase 14, inlined in Rust)
-int nvim_compl_shown_match_has_newline(void) { return (compl_shown_match && compl_shown_match->cp_str.data) ? (vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0) : 0; }
+// nvim_compl_shown_match_has_newline: deleted (Phase 16, inlined in match_list.rs)
 // nvim_compl_curr_match_at_original_text: deleted (Phase 14, inlined in Rust)
 // Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
@@ -2107,10 +2107,7 @@ int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
 int nvim_get_compl_startpos_col(void) { return (int)compl_startpos.col; }
 // nvim_compl_shown_match_score: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_has_fname: deleted (Phase 14, inlined in Rust)
-int nvim_compl_shown_match_str_eq_orig(void) {
-  return (compl_shown_match && compl_orig_text.data
-          && strequal(compl_shown_match->cp_str.data, compl_orig_text.data)) ? 1 : 0;
-}
+// nvim_compl_shown_match_str_eq_orig: deleted (Phase 16, inlined in match_list.rs)
 int nvim_p_cto(void) { return (int)p_cto; }
 
 // Phase 2 (pass 8): compound accessors for rs_ins_compl_get_exp / get_next_completion_match
