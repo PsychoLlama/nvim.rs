@@ -1551,6 +1551,14 @@ mod opt_flag {
 /// NUL character
 const NUL: c_char = 0;
 
+/// Column offset where the option value starts, used by nvim_option_invoke_expand_cb in C.
+#[no_mangle]
+pub static mut expand_option_start_col: c_int = 0;
+
+/// Whether to append (+=) rather than replace, used by nvim_option_invoke_expand_cb in C.
+#[no_mangle]
+pub static mut expand_option_append: bool = false;
+
 extern "C" {
     // expand_T field accessors
     fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
@@ -1561,11 +1569,6 @@ extern "C" {
     fn nvim_xp_get_line(xp: *mut std::ffi::c_void) -> *mut c_char;
     fn nvim_xp_get_backslash(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_xp_set_backslash(xp: *mut std::ffi::c_void, val: c_int);
-
-    // expand_option_start_col and expand_option_append are C statics used by
-    // nvim_option_invoke_expand_cb; keep these C wrapper setters.
-    fn nvim_set_expand_option_start_col(val: c_int);
-    fn nvim_set_expand_option_append(val: c_int);
 
     // options[] array accessors
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
@@ -1718,7 +1721,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     }
 
     // Handle "-=", "+=", "^="
-    nvim_set_expand_option_append(0);
+    expand_option_append = false;
     let mut expand_option_subtract = false;
     let nextchar =
         if (nextchar == b'-' as c_char || nextchar == b'+' as c_char || nextchar == b'^' as c_char)
@@ -1728,7 +1731,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
                 expand_option_subtract = true;
             }
             if nextchar == b'+' as c_char || nextchar == b'^' as c_char {
-                nvim_set_expand_option_append(1);
+                expand_option_append = true;
             }
             p = p.add(1);
             b'=' as c_char
@@ -1753,7 +1756,7 @@ pub unsafe extern "C" fn rs_set_context_in_set_cmd(
     nvim_xp_set_pattern(xp, p.add(1));
     let xp_line = nvim_xp_get_line(xp);
     let col = p.add(1).offset_from(xp_line);
-    nvim_set_expand_option_start_col(col as c_int);
+    expand_option_start_col = col as c_int;
 
     // Special-case options that reuse expansion logic from other commands
     if nvim_opt_var_is_p_syn(opt_idx) != 0 {

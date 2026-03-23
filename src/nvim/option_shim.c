@@ -1506,8 +1506,9 @@ static char *copy_option_val(const char *val)
 
 extern void rs_check_winopt(winopt_T *wop);
 
-static int expand_option_start_col = 0;
-static bool expand_option_append = false;
+// expand_option_start_col and expand_option_append live in Rust (setcmd.rs).
+extern int expand_option_start_col;
+extern bool expand_option_append;
 
 // =============================================================================
 // Accessors for rs_set_context_in_set_cmd (Rust Phase 3)
@@ -1524,12 +1525,6 @@ int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 /// Return xp->xp_buf (fixed-size buffer, EXPAND_BUF_LEN bytes).
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
-
-// expand_option static variable set accessors (start_col and append remain
-// in C because nvim_option_invoke_expand_cb reads them directly).
-// expand_option_idx, expand_option_flags, expand_option_name moved to Rust.
-void nvim_set_expand_option_start_col(int val) { expand_option_start_col = val; }
-void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
 
 // options[opt_idx] field accessors for set_context logic
 int nvim_option_has_expand_cb(OptIndex opt_idx)
