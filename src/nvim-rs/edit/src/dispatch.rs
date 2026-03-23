@@ -155,7 +155,7 @@ extern "C" {
     fn nvim_get_pum_want_finish() -> c_int;
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_set_did_cursorhold(val: bool);
@@ -664,7 +664,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         CTRL_C => {
-            if nvim_get_cmdwin_type() != 0 {
+            if cmdwin_type != 0 {
                 nvim_set_cmdwin_result(K_IGNORE);
                 unsafe {
                     got_int = false;
@@ -1071,7 +1071,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         }
         return SwitchAction::Continue;
     }
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_set_cmdwin_result(CAR);
         return SwitchAction::Exit(0);
     }

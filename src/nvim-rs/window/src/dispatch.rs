@@ -236,7 +236,7 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_lastwin() -> WinHandle;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     #[link_name = "rs_lastwin_nofloating"]
     fn nvim_lastwin_nofloating_wrapper() -> WinHandle;
     // nvim_get_valid_prevwin removed: replaced inline by get_valid_prevwin (Phase 8)
@@ -277,7 +277,7 @@ extern "C" {
 /// Check if we're in the command-line window; if so, emit error and return true.
 #[inline]
 unsafe fn check_cmdwin() -> bool {
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_emsg_e_cmdwin();
         true
     } else {

@@ -1383,7 +1383,7 @@ extern "C" {
     fn nvim_redraw_all_later(type_: c_int);
 
     // goto_tabpage_tp dependencies
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_emsg_e_cmdwin();
     fn nvim_set_keep_msg_null();
     fn nvim_set_skip_win_fix_scroll(val: c_int);
@@ -1562,7 +1562,7 @@ pub unsafe extern "C" fn rs_enter_tabpage(
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn goto_tabpage_tp_impl(tp: TabpageHandle, trigger_enter: bool, trigger_leave: bool) {
-    if (trigger_enter || trigger_leave) && nvim_get_cmdwin_type() != 0 {
+    if (trigger_enter || trigger_leave) && cmdwin_type != 0 {
         nvim_emsg_e_cmdwin();
         return;
     }
@@ -1649,7 +1649,7 @@ const UPD_NOT_VALID_TAB: c_int = 40;
 /// Calls C accessor functions. Must only be called from the main Neovim thread.
 unsafe fn win_new_tabpage_impl(after: c_int, filename: *const u8) -> c_int {
     // Check for command-line window
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_emsg_e_cmdwin();
         return FAIL;
     }

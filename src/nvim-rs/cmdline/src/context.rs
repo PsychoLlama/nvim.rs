@@ -35,7 +35,7 @@ extern "C" {
 
     // Global state accessors (from existing C code)
     fn nvim_get_wop_flags() -> c_uint;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
 
     // Cmdline window check - NULL means not in cmdwin
     fn nvim_get_cmdline_win_is_null() -> c_int;

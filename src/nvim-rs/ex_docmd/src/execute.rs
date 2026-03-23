@@ -335,7 +335,7 @@ extern "C" {
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_get_e_modifiable() -> *const c_char;
     fn curbuf_locked() -> c_int;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
     fn text_locked() -> bool;
     fn get_text_locked_msg() -> *const c_char;
@@ -717,7 +717,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
     }
 
     if !nvim_eap_is_user_cmdidx(eap) {
-        if nvim_get_cmdwin_type() != 0 && (argt & EX_CMDWIN_P2) == 0 {
+        if cmdwin_type != 0 && (argt & EX_CMDWIN_P2) == 0 {
             errormsg = nvim_get_e_cmdwin();
             goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
             return retv;

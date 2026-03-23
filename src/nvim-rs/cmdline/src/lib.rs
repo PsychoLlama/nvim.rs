@@ -43,7 +43,7 @@ extern "C" {
     fn nvim_get_ccline_overstrike() -> c_int;
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_get_cmdline_type() -> c_int;
     fn nvim_get_cmdpreview_ns() -> c_int;
     fn nvim_get_ccline_cmdfirstc() -> c_int;
@@ -105,7 +105,6 @@ const NUL: c_int = 0;
 /// Calls external C functions to access global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
-    let cmdwin_type = nvim_get_cmdwin_type();
     let cmdline_type = nvim_get_cmdline_type();
 
     c_int::from(cmdwin_type != 0 && cmdline_type == NUL)
@@ -119,7 +118,6 @@ pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
 #[must_use]
 #[export_name = "is_in_cmdwin"]
 pub unsafe extern "C" fn is_in_cmdwin_rs() -> bool {
-    let cmdwin_type = nvim_get_cmdwin_type();
     let cmdline_type = nvim_get_cmdline_type();
     cmdwin_type != 0 && cmdline_type == NUL
 }

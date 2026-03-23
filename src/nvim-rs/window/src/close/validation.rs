@@ -68,7 +68,7 @@ extern "C" {
     fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
 
     /// Check cmdwin_type global.
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
 }
 
 // =============================================================================
@@ -107,7 +107,7 @@ fn win_or_buf_locked_impl(wp: WinHandle) -> bool {
 /// Returns 1 if in cmdwin, 0 otherwise.
 /// The detailed cmdwin window check (which window is cmdwin) must be done in C.
 fn in_cmdwin_impl() -> bool {
-    unsafe { nvim_get_cmdwin_type() != 0 }
+    unsafe { cmdwin_type != 0 }
 }
 
 /// Check if floating windows in the current tabpage can be closed.

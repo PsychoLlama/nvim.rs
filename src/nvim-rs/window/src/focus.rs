@@ -90,7 +90,7 @@ extern "C" {
     // --- can_close_in_cmdwin dependencies (Phase 8 inlined) ---
 
     /// Get cmdwin_type global.
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
 
     /// Get cmdwin_win global.
     fn nvim_get_cmdwin_win() -> WinHandle;
@@ -503,7 +503,7 @@ pub unsafe extern "C" fn win_goto(wp: WinHandle) {
 /// # Safety
 /// Calls C accessor functions with a valid window handle.
 unsafe fn can_close_in_cmdwin_impl(win: WinHandle, err: *mut std::ffi::c_void) -> bool {
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         let cmdwin_win = nvim_get_cmdwin_win();
         if win == cmdwin_win {
             // Ctrl-C (3) closes the cmdwin itself

@@ -58,7 +58,7 @@ extern "C" {
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get cmdwin_type global.
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
 }
 
 // =============================================================================
@@ -126,7 +126,7 @@ fn classify_win_cmd_impl(nchar: c_int) -> WinCmdCategory {
 /// Check if command is blocked in command-line window.
 fn cmd_blocked_in_cmdwin_impl(nchar: c_int) -> bool {
     unsafe {
-        if nvim_get_cmdwin_type() == 0 {
+        if cmdwin_type == 0 {
             return false;
         }
 

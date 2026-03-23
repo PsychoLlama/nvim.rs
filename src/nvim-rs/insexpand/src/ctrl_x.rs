@@ -151,7 +151,7 @@ extern "C" {
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
     // nvim_clear_compl_best_matches: inlined in vars.rs (Phase 24)
     fn nvim_get_arrow_used() -> c_int;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_cursor_on_nul() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     crate::vars::nvim_clear_compl_best_matches();
     crate::vars::nvim_set_compl_ins_end_col(0);
 
-    if c == CTRL_C && nvim_get_cmdwin_type() != 0 {
+    if c == CTRL_C && cmdwin_type != 0 {
         // Avoid the popup menu remaining displayed when leaving the command
         // line window.
         update_screen();

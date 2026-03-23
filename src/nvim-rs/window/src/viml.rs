@@ -147,7 +147,7 @@ extern "C" {
     fn nvim_curbuf_get_ml_line_count() -> c_int;
 
     // globals
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_get_lastused_tabpage() -> TabpageHandle;
 
     // find window by nr or id (direct call)
@@ -461,7 +461,7 @@ pub unsafe extern "C" fn rs_f_getcmdwintype(
 ) {
     unsafe {
         let s = xmallocz(1).cast::<c_char>();
-        *s = nvim_get_cmdwin_type() as c_char;
+        *s = cmdwin_type as c_char;
         nvim_eval_tv_set_type(rettv, VAR_STRING);
         nvim_eval_tv_set_string(rettv, s);
     }

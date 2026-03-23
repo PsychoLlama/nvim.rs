@@ -71,7 +71,7 @@ extern "C" {
     fn nvim_get_ex_pressedreturn() -> c_int;
     fn nvim_get_expr_map_lock() -> c_int;
     fn nvim_curbuf_is_dummy() -> c_int;
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_get_textlock() -> c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
     fn nvim_get_e_textlock() -> *const c_char;
@@ -273,7 +273,6 @@ pub unsafe extern "C" fn rs_expr_map_locked() -> c_int {
 /// Calls external C functions to access global variables.
 #[no_mangle]
 pub unsafe extern "C" fn rs_text_locked() -> c_int {
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         return 1;
     }
@@ -292,7 +291,6 @@ pub unsafe extern "C" fn rs_text_locked() -> c_int {
 #[must_use]
 #[export_name = "text_locked"]
 pub unsafe extern "C" fn text_locked_rs() -> bool {
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         return true;
     }
@@ -313,7 +311,7 @@ pub unsafe extern "C" fn text_locked_rs() -> bool {
 /// Returns a pointer to a static C string. Caller must not free it.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_text_locked_msg() -> *const c_char {
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_get_e_cmdwin()
     } else {
         nvim_get_e_textlock()
@@ -328,7 +326,7 @@ pub unsafe extern "C" fn rs_get_text_locked_msg() -> *const c_char {
 #[must_use]
 #[export_name = "get_text_locked_msg"]
 pub unsafe extern "C" fn get_text_locked_msg_rs() -> *const c_char {
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_get_e_cmdwin()
     } else {
         nvim_get_e_textlock()

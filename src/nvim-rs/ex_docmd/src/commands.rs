@@ -188,7 +188,7 @@ extern "C" {
     fn nvim_docmd_get_curbuf_line_count() -> LinenrT;
 
     // Global state accessors
-    fn nvim_get_cmdwin_type() -> c_int;
+    static cmdwin_type: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_docmd_set_exiting(val: c_int);
     fn nvim_curbuf_locked() -> c_int;
@@ -1181,7 +1181,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
         return;
     }
 
-    if nvim_get_cmdwin_type() != 0 {
+    if cmdwin_type != 0 {
         nvim_set_cmdwin_result(CTRL_C);
         return;
     }
@@ -2359,7 +2359,6 @@ pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
 /// ":close".
 #[export_name = "ex_close"]
 pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         nvim_set_cmdwin_result(CTRL_C);
         return;
@@ -2392,7 +2391,6 @@ pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int 
 /// before_quit_all: pre-quit-all checks.
 #[export_name = "before_quit_all"]
 pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         let forceit = nvim_eap_get_forceit(eap);
         nvim_set_cmdwin_result(if forceit { K_XF1 } else { K_XF2 });
@@ -2572,7 +2570,6 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
 #[export_name = "ex_tabclose"]
 pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
     const K_IGNORE: c_int = -13821;
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         nvim_set_cmdwin_result(K_IGNORE);
         return;
@@ -2625,7 +2622,6 @@ pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
     const FAIL: c_int = 0;
     const OK: c_int = 1;
 
-    let cmdwin_type = nvim_get_cmdwin_type();
     if cmdwin_type != 0 {
         nvim_set_cmdwin_result(CTRL_C);
         return;
