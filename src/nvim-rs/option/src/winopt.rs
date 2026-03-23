@@ -25,8 +25,8 @@ extern "C" {
     // memmove of wo_script_ctx
     fn nvim_copy_winopt_script_ctx(from: WinoptHandle, to: WinoptHandle);
 
-    // copy_option_val: returns empty_string_option if val == empty_string_option, else xstrdup
-    fn nvim_call_copy_option_val(val: *const c_char) -> *mut c_char;
+    fn nvim_get_empty_string_option() -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Per-field string manipulation
     fn clear_string_option(ptr: *mut *mut c_char);
@@ -85,7 +85,11 @@ pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
         if from_field.is_null() || to_field.is_null() {
             continue;
         }
-        *to_field = nvim_call_copy_option_val(*from_field);
+        *to_field = if *from_field == nvim_get_empty_string_option() {
+            nvim_get_empty_string_option()
+        } else {
+            xstrdup(*from_field)
+        };
     }
 
     // Handle wo_fdc_save and wo_fdm_save with conditional xstrdup (diff-mode save fields)

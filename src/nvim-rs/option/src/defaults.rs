@@ -39,8 +39,9 @@ extern "C" {
     fn nvim_get_cmdheight_def_number() -> i64;
     /// Set p_ch (cmdheight) global variable
     fn nvim_set_p_ch(value: i64);
-    /// Copy a C string (xstrdup equivalent via copy_option_val)
-    fn nvim_call_copy_option_val(val: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    #[link_name = "nvim_get_empty_string_option"]
+    fn nvim_get_empty_string_option_d() -> *mut std::ffi::c_char;
 }
 
 /// kOptValTypeString constant (must match C kOptValTypeString = 2)
@@ -89,10 +90,12 @@ pub unsafe extern "C" fn rs_set_string_default_opt(
     allocated: c_int,
 ) {
     // Build an OptVal from the string. If not already allocated, copy it.
-    let ptr = if allocated != 0 {
+    // copy_option_val logic: empty_string_option sentinel is returned as-is;
+    // all other values are xstrdup'd.
+    let ptr = if allocated != 0 || val == nvim_get_empty_string_option_d() {
         val
     } else {
-        nvim_call_copy_option_val(val)
+        xstrdup(val)
     };
     // Build a string OptVal wrapping ptr. This mirrors CSTR_AS_OPTVAL(ptr).
     // OptVal layout: type=2 (String), data.string = { ptr, strlen(ptr) }

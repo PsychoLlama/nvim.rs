@@ -774,7 +774,8 @@ extern "C" {
     fn nvim_get_sandbox() -> c_int;
     fn nvim_get_e_sandbox() -> *const c_char;
     static e_unknown_option2: c_char;
-    fn nvim_call_emsg_translated(msg: *const c_char);
+    fn emsg(msg: *const c_char) -> c_int;
+    fn gettext(s: *const c_char) -> *const c_char;
     fn rs_is_tty_option(name: *const c_char) -> c_int;
     fn rs_set_option_impl(
         opt_idx: c_int,
@@ -1192,7 +1193,7 @@ pub unsafe extern "C" fn rs_set_option_value_give_err(
 ) {
     let errmsg = rs_set_option_value(opt_idx, value, opt_flags);
     if !errmsg.is_null() {
-        nvim_call_emsg_translated(errmsg);
+        let _ = emsg(gettext(errmsg));
     }
 }
 

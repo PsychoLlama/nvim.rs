@@ -1077,9 +1077,6 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
   memmove(to->wo_script_ctx, from->wo_script_ctx, sizeof(to->wo_script_ctx));
 }
 
-// Wrap copy_option_val (static) for use from Rust.
-char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); }
-
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
@@ -1496,14 +1493,6 @@ void win_copy_options(win_T *wp_from, win_T *wp_to)
   didset_window_options(wp_to, true);
 }
 
-static char *copy_option_val(const char *val)
-{
-  if (val == empty_string_option) {
-    return empty_string_option;  // no need to allocate memory
-  }
-  return xstrdup(val);
-}
-
 extern void rs_check_winopt(winopt_T *wop);
 
 // expand_option_start_col and expand_option_append live in Rust (setcmd.rs).
@@ -1916,8 +1905,6 @@ int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_d
 /// Error message strings for did_set_option
 
 /// Call emsg(_(msg)) -- translates and shows error message
-void nvim_call_emsg_translated(const char *msg) { emsg(_(msg)); }
-
 
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
