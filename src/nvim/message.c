@@ -315,7 +315,6 @@ static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse
 int nvim_get_p_eb(void) { return p_eb ? 1 : 0; }
 void nvim_flush_buffers_minimal(void) { flush_buffers(FLUSH_MINIMAL); }
 // Wrappers for static functions used by emsg_multiline:
-int nvim_emsg_not_now(void) { return emsg_not_now(); }
 int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore)
 {
   return cause_errthrow(s, multiline, severe, ignore) ? 1 : 0;
@@ -377,27 +376,6 @@ void nvim_msg_clr_eos_force_impl(void)
     clear_cmdline = false;
     mode_displayed = false;
   }
-}
-
-// Phase 4: inc_msg_scrolled helper (handles VV_SCROLLSTART logic + increment)
-void nvim_inc_msg_scrolled(void)
-{
-  if (*get_vim_var_str(VV_SCROLLSTART) == NUL) {
-    char *p = SOURCING_NAME;
-    char *tofree = NULL;
-    if (p == NULL) {
-      p = _("Unknown");
-    } else {
-      size_t len = strlen(p) + 40;
-      tofree = xmalloc(len);
-      vim_snprintf(tofree, len, _("%s line %" PRId64), p, (int64_t)SOURCING_LNUM);
-      p = tofree;
-    }
-    set_vim_var_string(VV_SCROLLSTART, p, -1);
-    xfree(tofree);
-  }
-  msg_scrolled++;
-  set_must_redraw(UPD_VALID);
 }
 
 // Phase 4: msg_reset_scroll helper (grid clearing loop)
@@ -468,9 +446,6 @@ bool nvim_message_filtered_impl(const char *msg)
   bool match = vim_regexec(&cmdmod.cmod_filter_regmatch, msg, 0);
   return cmdmod.cmod_filter_force ? match : !match;
 }
-
-// Phase 1: transchar_buf with NULL buffer (for emsg_invreg)
-const char *nvim_transchar_buf_null(int c) { return transchar_buf(NULL, c); }
 
 // Phase 1: msg_ui_refresh and msg_ui_flush implementation helpers
 void nvim_msg_ui_refresh_impl(void)

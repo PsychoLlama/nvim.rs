@@ -459,7 +459,6 @@ extern "C" {
     fn redirecting() -> c_int;
 
     // Accessors for emsg_multiline implementation
-    fn nvim_emsg_not_now() -> c_int;
     fn nvim_cause_errthrow(
         s: *const std::ffi::c_char,
         multiline: c_int,
@@ -529,7 +528,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
     multiline: c_int,
 ) -> c_int {
     // Skip this if not giving error messages at the moment.
-    if nvim_emsg_not_now() != 0 {
+    if rs_emsg_not_now() != 0 {
         return 1;
     }
 
