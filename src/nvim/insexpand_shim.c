@@ -3744,3 +3744,5 @@ add_word_check:
   }
   return 2;
 }
+
+void nvim_update_can_si_from_may_do_si(void) { can_si = may_do_si(); }

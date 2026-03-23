@@ -49,7 +49,7 @@ extern "C" {
     fn virtual_active(wp: *mut c_void) -> bool;
 
     // -- Navigation helpers (all new Phase 4 accessors in edit.c) --
-    fn nvim_edit_fdo_hor_and_key_typed() -> c_int;
+    fn nvim_fdo_hor_and_key_typed() -> bool;
     fn nvim_edit_save_cursor(slot: c_int);
     fn nvim_edit_start_arrow_from_slot(slot: c_int);
     fn nvim_edit_start_arrow_with_change_from_slot(slot: c_int, end_change: c_int);
@@ -79,7 +79,7 @@ extern "C" {
     // Scrolling / tab pages
     fn nvim_edit_pagescroll_backward() -> c_int;
     fn nvim_edit_pagescroll_forward() -> c_int;
-    fn nvim_edit_has_next_tabpage() -> c_int;
+    fn nvim_first_tabpage_has_next() -> c_int;
     fn nvim_goto_tabpage(n: c_int);
 
     // Up/Down with Insstart column
@@ -147,7 +147,7 @@ const CTRL_G_UNKNOWN: c_int = 0;
 unsafe fn ins_left_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn rs_ins_left() {
 unsafe fn ins_right_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn rs_ins_right() {
 unsafe fn ins_s_left_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn rs_ins_s_left() {
 unsafe fn ins_s_right_impl() {
     let end_change = nvim_get_dont_sync_undo() == K_FALSE;
 
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -296,7 +296,7 @@ pub unsafe extern "C" fn rs_ins_s_right() {
 
 /// Handle Home key in Insert mode.
 unsafe fn ins_home_impl(c: c_int) {
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn rs_ins_home(c: c_int) {
 
 /// Handle End key in Insert mode.
 unsafe fn ins_end_impl(c: c_int) {
-    if nvim_edit_fdo_hor_and_key_typed() != 0 {
+    if nvim_fdo_hor_and_key_typed() {
         rs_foldOpenCursor();
     }
     undisplay_dollar();
@@ -403,9 +403,9 @@ pub unsafe extern "C" fn rs_ins_down(startcol: c_int) {
 unsafe fn ins_pageup_impl() {
     undisplay_dollar();
 
-    if nvim_edit_mod_mask_ctrl() != 0 {
+    if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageUp>: tab page back
-        if nvim_edit_has_next_tabpage() != 0 {
+        if nvim_first_tabpage_has_next() != 0 {
             nvim_edit_start_arrow_curpos();
             nvim_goto_tabpage(-1);
         }
@@ -434,9 +434,9 @@ pub unsafe extern "C" fn rs_ins_pageup() {
 unsafe fn ins_pagedown_impl() {
     undisplay_dollar();
 
-    if nvim_edit_mod_mask_ctrl() != 0 {
+    if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageDown>: tab page forward
-        if nvim_edit_has_next_tabpage() != 0 {
+        if nvim_first_tabpage_has_next() != 0 {
             nvim_edit_start_arrow_curpos();
             nvim_goto_tabpage(0);
         }
@@ -564,7 +564,7 @@ pub unsafe extern "C" fn rs_ins_del() {
 extern "C" {
     fn nvim_edit_start_arrow_with_change_curpos(end_change: bool);
     fn nvim_edit_save_topline();
-    fn nvim_edit_mod_mask_ctrl() -> c_int;
+    fn nvim_has_mod_mask_ctrl() -> c_int;
     fn nvim_set_curswant(val: ColnrT);
     fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_edit_ctrl_g_u_sync();

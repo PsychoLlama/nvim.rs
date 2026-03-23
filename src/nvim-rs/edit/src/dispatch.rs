@@ -145,7 +145,7 @@ extern "C" {
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_get_mod_mask() -> c_int;
-    fn nvim_edit_mod_mask_ctrl() -> c_int;
+    fn nvim_has_mod_mask_ctrl() -> c_int;
     fn nvim_get_got_int() -> c_int;
     fn nvim_set_got_int(val: c_int);
 
@@ -159,10 +159,10 @@ extern "C" {
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_set_did_cursorhold(val: bool);
-    fn nvim_edit_inc_disable_fold_update();
-    fn nvim_edit_dec_disable_fold_update();
-    fn nvim_edit_set_compl_busy(val: c_int);
-    fn nvim_edit_update_can_si_from_may_do_si();
+    fn nvim_inc_disable_fold_update();
+    fn nvim_dec_disable_fold_update();
+    fn nvim_set_compl_busy(val: bool);
+    fn nvim_update_can_si_from_may_do_si();
     fn nvim_edit_ins_complete(c: c_int) -> c_int;
     fn nvim_edit_check_compl_option(allow_always: c_int) -> c_int;
     fn ins_ctrl_x();
@@ -193,7 +193,7 @@ extern "C" {
     fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
     fn nvim_edit_get_cpt_first_char() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
-    fn nvim_edit_ve_onemore() -> c_int;
+    fn nvim_has_ve_flag_onemore() -> bool;
     fn nvim_redraw_later_valid();
     fn vim_isprintc(c: c_int) -> bool;
     fn nvim_get_dont_sync_undo() -> c_int;
@@ -413,14 +413,14 @@ enum SwitchAction {
 /// Accesses C globals via accessor functions.
 #[unsafe(export_name = "insert_do_complete")]
 pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
-    nvim_edit_set_compl_busy(1);
-    nvim_edit_inc_disable_fold_update();
+    nvim_set_compl_busy(true);
+    nvim_inc_disable_fold_update();
     if nvim_edit_ins_complete((*s).c) == FAIL {
         rs_compl_status_clear();
     }
-    nvim_edit_dec_disable_fold_update();
-    nvim_edit_set_compl_busy(0);
-    nvim_edit_update_can_si_from_may_do_si();
+    nvim_dec_disable_fold_update();
+    nvim_set_compl_busy(false);
+    nvim_update_can_si_from_may_do_si();
 }
 
 // ============================================================================
@@ -690,7 +690,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Continue;
             }
             ins_ctrl_o();
-            if nvim_edit_ve_onemore() != 0 {
+            if nvim_has_ve_flag_onemore() {
                 nvim_set_ins_at_eol(false);
                 (*s).nomove = true;
             }
@@ -713,7 +713,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         SPACE => {
-            if nvim_edit_mod_mask_ctrl() != 0 {
+            if nvim_has_mod_mask_ctrl() != 0 {
                 // FALLTHROUGH to K_ZERO / NUL / Ctrl-A
                 handle_insert_previously_inserted(s)
             } else {

@@ -157,7 +157,7 @@ extern "C" {
     fn rs_ins_compl_delete(do_bs: c_int);
     fn rs_ins_compl_insert(preinsert: c_int, new_leader: c_int);
     fn rs_ins_compl_preinsert_effect() -> c_int;
-    fn nvim_edit_iswhite_nl_or_nul(c: c_int) -> c_int;
+    fn rs_ascii_iswhite_nl_or_nul(c: c_int) -> c_int;
     fn rs_ins_compl_prep(c: c_int) -> c_int;
     fn rs_ins_compl_has_shown_match() -> c_int;
     fn rs_pum_wanted() -> c_int;
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
                     return 1;
                 }
                 unsafe { rs_ins_compl_insert(0, 0) };
-            } else if unsafe { nvim_edit_iswhite_nl_or_nul(c) } != 0
+            } else if unsafe { rs_ascii_iswhite_nl_or_nul(c) } != 0
                 && unsafe { rs_ins_compl_preinsert_effect() } != 0
             {
                 // Delete preinserted text when typing special chars

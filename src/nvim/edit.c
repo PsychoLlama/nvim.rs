@@ -412,6 +412,12 @@ int nvim_get_compl_busy(void)
   return compl_busy;
 }
 
+/// Set compl_busy (accessor for Rust).
+void nvim_set_compl_busy(bool val)
+{
+  compl_busy = val;
+}
+
 /// Get last_insert_skip (accessor for Rust).
 int nvim_get_last_insert_skip(void)
 {
@@ -902,11 +908,6 @@ static pos_T edit_saved_cursor[2];
 static linenr_T saved_topline;
 static int saved_topfill;
 
-/// Check fdo_flags & kOptFdoFlagHor && KeyTyped (accessor for Rust).
-int nvim_edit_fdo_hor_and_key_typed(void)
-{
-  return ((fdo_flags & kOptFdoFlagHor) && KeyTyped) ? 1 : 0;
-}
 
 /// Save cursor position to a slot (accessor for Rust).
 void nvim_edit_save_cursor(int slot)
@@ -972,17 +973,6 @@ int nvim_edit_topline_changed(void)
 }
 
 
-/// Check if mod_mask has MOD_MASK_CTRL (accessor for Rust).
-int nvim_edit_mod_mask_ctrl(void)
-{
-  return (mod_mask & MOD_MASK_CTRL) ? 1 : 0;
-}
-
-/// Check if there is a next tab page (accessor for Rust).
-int nvim_edit_has_next_tabpage(void)
-{
-  return first_tabpage->tp_next != NULL ? 1 : 0;
-}
 
 /// Call pagescroll(BACKWARD, 1, false) and return result (accessor for Rust).
 int nvim_edit_pagescroll_backward(void)
@@ -1226,29 +1216,6 @@ int nvim_edit_get_pum_want_finish(void)
 
 /// Set did_cursorhold (accessor for Rust).
 
-/// Increment disable_fold_update (accessor for Rust).
-void nvim_edit_inc_disable_fold_update(void)
-{
-  disable_fold_update++;
-}
-
-/// Decrement disable_fold_update (accessor for Rust).
-void nvim_edit_dec_disable_fold_update(void)
-{
-  disable_fold_update--;
-}
-
-/// Set compl_busy (accessor for Rust).
-void nvim_edit_set_compl_busy(int val)
-{
-  compl_busy = val != 0;
-}
-
-/// Call may_do_si() and assign to can_si (accessor for Rust).
-void nvim_edit_update_can_si_from_may_do_si(void)
-{
-  can_si = may_do_si();
-}
 
 /// Call ins_complete(c, true) (accessor for Rust).
 int nvim_edit_ins_complete(int c)
@@ -1347,11 +1314,6 @@ int nvim_edit_get_cpt_first_char(void)
 
 
 
-/// Get get_ve_flags(curwin) & kOptVeFlagOnemore (accessor for Rust).
-int nvim_edit_ve_onemore(void)
-{
-  return (get_ve_flags(curwin) & kOptVeFlagOnemore) ? 1 : 0;
-}
 
 static int pc_status;
 #ifndef PC_STATUS_UNSET
@@ -1887,11 +1849,6 @@ void nvim_edit_init_prompt_impl(int cmdchar_todo)
   check_cursor(curwin);
 }
 
-/// nvim_edit_iswhite_nl_or_nul: returns 1 if c is whitespace, newline, or NUL (accessor for Rust).
-int nvim_edit_iswhite_nl_or_nul(int c)
-{
-  return (ascii_iswhite(c) || c == NL || c == CAR || c == NUL) ? 1 : 0;
-}
 
 /// edit(): Start inserting text.
 ///

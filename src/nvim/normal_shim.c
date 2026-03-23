@@ -2283,3 +2283,7 @@ void nvim_set_VIsual_col_val(int val) { VIsual.col = val; }
 void nvim_del_lines(int count, bool undo) { del_lines((linenr_T)count, undo); }
 /// Truncate the current line (called for OP_CHANGE linewise).
 void nvim_truncate_line(bool del_newline) { truncate_line(del_newline); }
+
+int nvim_has_mod_mask_ctrl(void) { return (mod_mask & MOD_MASK_CTRL) ? 1 : 0; }
+bool nvim_has_ve_flag_onemore(void) { return (get_ve_flags(curwin) & kOptVeFlagOnemore) != 0; }
+bool nvim_fdo_hor_and_key_typed(void) { return (fdo_flags & kOptFdoFlagHor) && KeyTyped; }

@@ -566,3 +566,6 @@ char *nvim_fold_win_get_p_fdt(win_T *wp)
 {
   return wp->w_p_fdt;
 }
+
+void nvim_inc_disable_fold_update(void) { disable_fold_update++; }
+void nvim_dec_disable_fold_update(void) { disable_fold_update--; }
