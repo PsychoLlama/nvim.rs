@@ -602,29 +602,105 @@ extern "C" {
         ex_cmd: c_int,
     ) -> c_int;
 
-    /// Call vim_dialog_yesno() C function
-    fn vim_dialog_yesno(
-        dialog_type: c_int,
-        title: *const c_char,
-        message: *const c_char,
-        dflt: c_int,
-    ) -> c_int;
+    fn gettext(msgid: *const c_char) -> *const c_char;
+}
 
-    /// Call vim_dialog_yesnocancel() C function
-    fn vim_dialog_yesnocancel(
-        dialog_type: c_int,
-        title: *const c_char,
-        message: *const c_char,
-        dflt: c_int,
-    ) -> c_int;
+/// Yes/No dialog (Rust replacement for C vim_dialog_yesno).
+///
+/// # Safety
+/// `title` and `message` must be valid C strings or NULL.
+#[export_name = "vim_dialog_yesno"]
+pub unsafe extern "C" fn rs_vim_dialog_yesno(
+    dialog_type: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
+    let question = gettext(c"Question".as_ptr());
+    let effective_title = if title.is_null() {
+        question
+    } else {
+        title.cast_const()
+    };
+    if do_dialog(
+        dialog_type,
+        effective_title,
+        message.cast_const(),
+        gettext(c"&Yes\n&No".as_ptr()),
+        dflt,
+        std::ptr::null(),
+        0,
+    ) == 1
+    {
+        DialogResponse::YES.0
+    } else {
+        DialogResponse::NO.0
+    }
+}
 
-    /// Call vim_dialog_yesnoallcancel() C function
-    fn vim_dialog_yesnoallcancel(
-        dialog_type: c_int,
-        title: *const c_char,
-        message: *const c_char,
-        dflt: c_int,
-    ) -> c_int;
+/// Yes/No/Cancel dialog (Rust replacement for C vim_dialog_yesnocancel).
+///
+/// # Safety
+/// `title` and `message` must be valid C strings or NULL.
+#[export_name = "vim_dialog_yesnocancel"]
+pub unsafe extern "C" fn rs_vim_dialog_yesnocancel(
+    dialog_type: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
+    let question = gettext(c"Question".as_ptr());
+    let effective_title = if title.is_null() {
+        question
+    } else {
+        title.cast_const()
+    };
+    match do_dialog(
+        dialog_type,
+        effective_title,
+        message.cast_const(),
+        gettext(c"&Yes\n&No\n&Cancel".as_ptr()),
+        dflt,
+        std::ptr::null(),
+        0,
+    ) {
+        1 => DialogResponse::YES.0,
+        2 => DialogResponse::NO.0,
+        _ => DialogResponse::CANCEL.0,
+    }
+}
+
+/// Yes/No/All/Discard All/Cancel dialog (Rust replacement for C vim_dialog_yesnoallcancel).
+///
+/// # Safety
+/// `title` and `message` must be valid C strings or NULL.
+#[export_name = "vim_dialog_yesnoallcancel"]
+pub unsafe extern "C" fn rs_vim_dialog_yesnoallcancel(
+    dialog_type: c_int,
+    title: *mut c_char,
+    message: *mut c_char,
+    dflt: c_int,
+) -> c_int {
+    let effective_title = if title.is_null() {
+        c"Question".as_ptr()
+    } else {
+        title.cast_const()
+    };
+    match do_dialog(
+        dialog_type,
+        effective_title,
+        message.cast_const(),
+        gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel".as_ptr()),
+        dflt,
+        std::ptr::null(),
+        0,
+    ) {
+        1 => DialogResponse::YES.0,
+        2 => DialogResponse::NO.0,
+        3 => DialogResponse::ALL.0,
+        4 => DialogResponse::DISCARD_ALL.0,
+        _ => DialogResponse::CANCEL.0,
+    }
 }
 
 /// Show a dialog and wait for a response.
@@ -691,7 +767,7 @@ pub unsafe extern "C" fn rs_dialog_yesno(
     message: *const c_char,
     dflt: c_int,
 ) -> c_int {
-    vim_dialog_yesno(dialog_type, title, message, dflt)
+    rs_vim_dialog_yesno(dialog_type, title.cast_mut(), message.cast_mut(), dflt)
 }
 
 /// Show a Yes/No/Cancel dialog.
@@ -718,7 +794,7 @@ pub unsafe extern "C" fn rs_dialog_yesnocancel(
     message: *const c_char,
     dflt: c_int,
 ) -> c_int {
-    vim_dialog_yesnocancel(dialog_type, title, message, dflt)
+    rs_vim_dialog_yesnocancel(dialog_type, title.cast_mut(), message.cast_mut(), dflt)
 }
 
 /// Show a Yes/No/All/Discard All/Cancel dialog.
@@ -747,7 +823,7 @@ pub unsafe extern "C" fn rs_dialog_yesnoallcancel(
     message: *const c_char,
     dflt: c_int,
 ) -> c_int {
-    vim_dialog_yesnoallcancel(dialog_type, title, message, dflt)
+    rs_vim_dialog_yesnoallcancel(dialog_type, title.cast_mut(), message.cast_mut(), dflt)
 }
 
 /// Quick yes/no dialog with default type.
@@ -758,7 +834,12 @@ pub unsafe extern "C" fn rs_dialog_yesnoallcancel(
 /// - `message` must be a valid C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_yesno(message: *const c_char) -> c_int {
-    vim_dialog_yesno(DialogType::QUESTION.0, ptr::null(), message, 1)
+    rs_vim_dialog_yesno(
+        DialogType::QUESTION.0,
+        ptr::null_mut(),
+        message.cast_mut(),
+        1,
+    )
 }
 
 /// Quick yes/no/cancel dialog with default type.
@@ -769,7 +850,12 @@ pub unsafe extern "C" fn rs_confirm_yesno(message: *const c_char) -> c_int {
 /// - `message` must be a valid C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_yesnocancel(message: *const c_char) -> c_int {
-    vim_dialog_yesnocancel(DialogType::QUESTION.0, ptr::null(), message, 1)
+    rs_vim_dialog_yesnocancel(
+        DialogType::QUESTION.0,
+        ptr::null_mut(),
+        message.cast_mut(),
+        1,
+    )
 }
 
 /// Check if dialog result was affirmative (Yes or All).

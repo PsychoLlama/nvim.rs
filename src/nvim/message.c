@@ -2483,51 +2483,8 @@ static void copy_confirm_hotkeys(const char *buttons, int default_button_idx,
   *msgp = NUL;
 }
 
-// display_confirm_msg migrated to Rust (dialog.rs)
-
-int vim_dialog_yesno(int type, char *title, char *message, int dflt)
-{
-  if (do_dialog(type,
-                title == NULL ? _("Question") : title,
-                message,
-                _("&Yes\n&No"), dflt, NULL, false) == 1) {
-    return VIM_YES;
-  }
-  return VIM_NO;
-}
-
-int vim_dialog_yesnocancel(int type, char *title, char *message, int dflt)
-{
-  switch (do_dialog(type,
-                    title == NULL ? _("Question") : title,
-                    message,
-                    _("&Yes\n&No\n&Cancel"), dflt, NULL, false)) {
-  case 1:
-    return VIM_YES;
-  case 2:
-    return VIM_NO;
-  }
-  return VIM_CANCEL;
-}
-
-int vim_dialog_yesnoallcancel(int type, char *title, char *message, int dflt)
-{
-  switch (do_dialog(type,
-                    title == NULL ? "Question" : title,
-                    message,
-                    _("&Yes\n&No\nSave &All\n&Discard All\n&Cancel"),
-                    dflt, NULL, false)) {
-  case 1:
-    return VIM_YES;
-  case 2:
-    return VIM_NO;
-  case 3:
-    return VIM_ALL;
-  case 4:
-    return VIM_DISCARDALL;
-  }
-  return VIM_CANCEL;
-}
+// display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel
+// migrated to Rust (dialog.rs)
 
 /// Check if there should be a delay to allow the user to see a message.
 ///
