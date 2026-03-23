@@ -93,9 +93,8 @@ extern "C" {
     // Item freeing (C handles actual memory)
     fn nvim_compl_item_free(m: ComplMatch);
 
-    // Pattern and leader clearing
+    // Pattern clearing (compl_leader clearing inlined in vars.rs)
     fn nvim_compl_clear_pattern();
-    fn nvim_compl_clear_leader();
 
     // Popup menu operations
     fn pum_clear();
@@ -351,7 +350,7 @@ pub unsafe extern "C" fn rs_ins_compl_make_linear() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_free() {
     nvim_compl_clear_pattern();
-    nvim_compl_clear_leader();
+    crate::vars::nvim_compl_clear_leader();
 
     let first = nvim_compl_get_first_match();
     if first.is_null() {

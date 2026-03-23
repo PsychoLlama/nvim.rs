@@ -546,7 +546,6 @@ extern "C" {
     fn rs_ins_compl_enable_autocomplete();
     fn nvim_ins_complete_ctrl_n() -> c_int;
     fn rs_ins_compl_show_pum();
-    fn nvim_get_compl_match_array_exists() -> c_int;
     fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int);
     fn rs_ins_compl_preinsert_longest() -> c_int;
     fn rs_get_compl_len() -> c_int;
@@ -619,7 +618,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     rs_ins_compl_show_pum();
 
     // Don't let Enter select the original text when there is no popup menu.
-    if nvim_get_compl_match_array_exists() == 0 {
+    if crate::vars::nvim_get_compl_match_array_exists() == 0 {
         crate::vars::nvim_set_compl_enter_selects(0);
     } else if rs_ins_compl_has_preinsert() != 0 && crate::vars::nvim_get_compl_leader_size() > 0 {
         rs_ins_compl_insert(1, 0);

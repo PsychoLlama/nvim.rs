@@ -86,13 +86,11 @@ const CONT_LOCAL: c_int = 32;
 
 extern "C" {
     fn nvim_compl_clear_pattern();
-    fn nvim_compl_clear_leader();
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     #[link_name = "edit_submode_highl"]
     static mut g_edit_submode_highl: c_int;
     fn nvim_clear_compl_orig_extmarks();
-    fn nvim_compl_clear_orig_text();
     fn nvim_cpt_sources_clear();
     fn nvim_set_completed_item_empty();
 }
@@ -114,10 +112,10 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     crate::vars::nvim_clear_compl_curr_win();
     crate::vars::nvim_clear_compl_curr_buf();
     nvim_compl_clear_pattern();
-    nvim_compl_clear_leader();
+    crate::vars::nvim_compl_clear_leader();
     g_edit_submode_extra = core::ptr::null_mut();
     nvim_clear_compl_orig_extmarks();
-    nvim_compl_clear_orig_text();
+    crate::vars::nvim_compl_clear_orig_text();
     crate::vars::nvim_set_compl_enter_selects(0);
     nvim_cpt_sources_clear();
     crate::vars::nvim_set_compl_autocomplete(0);

@@ -21,7 +21,7 @@ extern "C" {
     // match list traversal
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
-    fn nvim_get_compl_match_array_exists() -> c_int;
+    // (nvim_get_compl_match_array_exists: inlined in vars.rs)
 
     // (nvim_compl_shown_match_str_eq_orig: inlined in match_list.rs)
 
@@ -117,7 +117,7 @@ unsafe fn find_next_completion_match(
 
         let found_end: bool;
         if rs_compl_shows_dir_forward() != 0 && !shown_next.is_null() {
-            if nvim_get_compl_match_array_exists() != 0 {
+            if crate::vars::nvim_get_compl_match_array_exists() != 0 {
                 rs_find_next_match_in_menu();
             } else {
                 nvim_compl_set_shown_match(shown_next);
@@ -129,7 +129,7 @@ unsafe fn find_next_completion_match(
                     || is_first_match(updated_shown));
         } else if rs_compl_shows_dir_backward() != 0 && !shown_prev.is_null() {
             let was_first = is_first_match(shown);
-            if nvim_get_compl_match_array_exists() != 0 {
+            if crate::vars::nvim_get_compl_match_array_exists() != 0 {
                 rs_find_next_match_in_menu();
             } else {
                 nvim_compl_set_shown_match(shown_prev);
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         crate::vars::nvim_set_compl_enter_selects(1);
     } else {
         crate::vars::nvim_set_compl_enter_selects(c_int::from(
-            !insert_match && nvim_get_compl_match_array_exists() != 0,
+            !insert_match && crate::vars::nvim_get_compl_match_array_exists() != 0,
         ));
     }
 

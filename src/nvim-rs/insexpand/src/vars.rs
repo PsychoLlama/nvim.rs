@@ -368,6 +368,12 @@ pub unsafe fn nvim_get_cpt_sources_count() -> c_int {
     cpt_sources_count
 }
 
+/// Check if compl_match_array is non-null (i.e., the popup menu array exists).
+#[inline]
+pub unsafe fn nvim_get_compl_match_array_exists() -> c_int {
+    c_int::from(!compl_match_array.is_null())
+}
+
 /// Free and clear compl_match_array (equivalent to C XFREE_CLEAR macro).
 #[inline]
 pub unsafe fn nvim_xfree_compl_match_array() {
@@ -511,4 +517,30 @@ pub unsafe fn nvim_get_compl_orig_text_data() -> *const std::os::raw::c_char {
 #[inline]
 pub unsafe fn nvim_get_compl_orig_text_size() -> usize {
     compl_orig_text.size
+}
+
+/// Free and clear compl_leader (equivalent to C API_CLEAR_STRING macro).
+#[inline]
+pub unsafe fn nvim_compl_clear_leader() {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+    }
+    if !compl_leader.data.is_null() {
+        xfree(compl_leader.data.cast());
+        compl_leader.data = core::ptr::null_mut();
+        compl_leader.size = 0;
+    }
+}
+
+/// Free and clear compl_orig_text (equivalent to C API_CLEAR_STRING macro).
+#[inline]
+pub unsafe fn nvim_compl_clear_orig_text() {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+    }
+    if !compl_orig_text.data.is_null() {
+        xfree(compl_orig_text.data.cast());
+        compl_orig_text.data = core::ptr::null_mut();
+        compl_orig_text.size = 0;
+    }
 }

@@ -1184,10 +1184,10 @@ int nvim_find_shown_match_in_match_array(void) {
 // Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
 void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
-void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
+// nvim_compl_clear_leader: deleted (Phase 21, inlined in vars.rs)
 // NOTE: nvim_ins_compl_del_pum deleted (Phase 15). Rust calls rs_ins_compl_del_pum() directly.
 // nvim_pum_clear: deleted (Phase 3, Rust calls pum_clear directly)
-int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
+// nvim_get_compl_match_array_exists: deleted (Phase 21, inlined in vars.rs)
 
 // Completion state accessors (used by Rust insexpand crate)
 int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_number : -1; }
@@ -1196,7 +1196,7 @@ const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
 void nvim_set_cpt_sources_start_tv(int idx, uint64_t ts) { cpt_sources_array[idx].compl_start_tv = ts; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
-void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
+// nvim_compl_clear_orig_text: deleted (Phase 21, inlined in vars.rs)
 void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
 void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
 

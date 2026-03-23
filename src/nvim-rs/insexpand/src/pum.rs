@@ -23,9 +23,6 @@ extern "C" {
     // Match identification
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
-    // Match array accessor
-    fn nvim_get_compl_match_array_exists() -> c_int;
-
     // For rs_ins_compl_del_pum
     #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
@@ -214,7 +211,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
 
     let (cur, array_changed): (c_int, c_int);
 
-    if nvim_get_compl_match_array_exists() == 0 {
+    if crate::vars::nvim_get_compl_match_array_exists() == 0 {
         array_changed = 1;
         // Need to build the popup menu list.
         cur = rs_ins_compl_build_pum();
@@ -224,7 +221,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
         cur = nvim_find_shown_match_in_match_array();
     }
 
-    if nvim_get_compl_match_array_exists() == 0 {
+    if crate::vars::nvim_get_compl_match_array_exists() == 0 {
         if crate::vars::nvim_get_compl_started() != 0 && nvim_has_completechanged_event() != 0 {
             nvim_trigger_complete_changed(cur);
         }
@@ -541,7 +538,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
 /// Requires valid completion state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_del_pum() {
-    if nvim_get_compl_match_array_exists() == 0 {
+    if crate::vars::nvim_get_compl_match_array_exists() == 0 {
         return;
     }
     nvim_pum_undisplay(0);
