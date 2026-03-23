@@ -174,7 +174,9 @@ extern "C" {
     fn nvim_optset_set_value_checked(args: *mut c_void, val: c_int);
     fn nvim_optset_get_oldval_str(args: *const c_void) -> *const std::ffi::c_char;
     fn nvim_verbose_check_and_open() -> c_int;
-    fn nvim_unset_vim_env();
+    fn vim_unsetenv_ext(var: *const c_char);
+    static mut didset_vim: bool;
+    static mut didset_vimruntime: bool;
 
     // Phase 100: optexpr / foldexpr accessors
     fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char;
@@ -1244,7 +1246,12 @@ pub unsafe extern "C" fn rs_did_set_verbosefile(_args: *mut c_void) -> CallbackR
 /// Unsets $VIM and $VIMRUNTIME if they were set by us.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_helpfile(_args: *mut c_void) -> CallbackResult {
-    nvim_unset_vim_env();
+    if didset_vim {
+        vim_unsetenv_ext(c"VIM".as_ptr());
+    }
+    if didset_vimruntime {
+        vim_unsetenv_ext(c"VIMRUNTIME".as_ptr());
+    }
     callback_ok()
 }
 

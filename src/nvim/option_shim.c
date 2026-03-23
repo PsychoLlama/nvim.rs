@@ -368,14 +368,6 @@ int nvim_verbose_check_and_open(void) {
   }
   return 1;  // OK
 }
-void nvim_unset_vim_env(void) {
-  if (didset_vim) {
-    vim_unsetenv_ext("VIM");
-  }
-  if (didset_vimruntime) {
-    vim_unsetenv_ext("VIMRUNTIME");
-  }
-}
 
 
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
