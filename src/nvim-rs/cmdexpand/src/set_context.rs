@@ -224,6 +224,15 @@ const CMD_xmap: c_int = 538;
 const CMD_xmapclear: c_int = 539;
 const CMD_xnoremap: c_int = 541;
 const CMD_xunmap: c_int = 543;
+// Extra CMD_* constants needed for set_one_cmd_context
+const CMD_bang: c_int = 547;
+const CMD_lshift: c_int = 550;
+const CMD_read: c_int = 359;
+const CMD_redir: c_int = 362;
+const CMD_rshift: c_int = 552;
+const CMD_terminal: c_int = 470;
+const CMD_update: c_int = 502;
+const CMD_write: c_int = 521;
 // Special values (negative)
 const CMD_USER: c_int = -1;
 const CMD_USER_BUF: c_int = -2;
@@ -242,12 +251,37 @@ const OPT_LOCAL: c_int = 0x02;
 const K_OPT_WOP_FLAG_TAGFILE: c_uint = 0x02;
 
 // =============================================================================
+// EX_ argument flags (from ex_cmds_defs.h)
+// =============================================================================
+
+const EX_EXTRA: u32 = 0x004;
+const EX_XFILE: u32 = 0x008;
+const EX_TRLBAR: u32 = 0x100;
+const EX_NOTRLCOM: u32 = 0x800;
+const EX_CMDARG: u32 = 0x4000;
+const EX_ARGOPT: u32 = 0x20000;
+
+// =============================================================================
 // External C functions
 // =============================================================================
 
 extern "C" {
     fn nvim_get_wop_flags() -> c_uint;
     fn get_findfunc() -> *const c_char;
+
+    // Functions needed for set_one_cmd_context
+    fn ExpandInit(xp: ExpandHandle);
+    fn skip_range(cmd: *const c_char, ctx: *mut c_int) -> *const c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn excmd_get_argt(idx: c_int) -> u32;
+    fn skip_cmd_arg(p: *mut c_char, rembs: c_int) -> *mut c_char;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_cmdexpand_set_cmd_index(
+        cmd: *const c_char,
+        xp: ExpandHandle,
+        complp: *mut c_int,
+        cmdidx_out: *mut c_int,
+    ) -> *const c_char;
 
     // Context-setting functions still in C
     fn set_context_in_user_cmd(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
@@ -300,6 +334,13 @@ extern "C" {
     fn rs_set_context_in_scriptnames_cmd(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
     fn rs_set_context_in_filetype_cmd(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
     fn rs_set_context_with_pattern(xp: ExpandHandle);
+    fn rs_set_context_in_argopt(xp: ExpandHandle, arg: *const c_char) -> *const c_char;
+    fn rs_set_context_for_wildcard_arg(
+        arg: *const c_char,
+        is_shell_cmd: c_int,
+        xp: ExpandHandle,
+        context: *mut c_int,
+    );
 
     // vim_strchr
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
@@ -820,4 +861,221 @@ extern "C" {
 fn may_expand_pattern() -> bool {
     // SAFETY: simple accessor reading a C global
     unsafe { nvim_cmdexpand_get_may_expand_pattern() }
+}
+
+// =============================================================================
+// set_one_cmd_context: port of C set_one_cmd_context
+// =============================================================================
+
+/// Returns true if `c` is an ASCII whitespace character.
+#[inline]
+const fn ascii_isspace(c: c_char) -> bool {
+    matches!(c as u8, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+}
+
+/// Set the completion context for one command in the command-line buffer.
+///
+/// Ports the C `set_one_cmd_context` static function to Rust.
+///
+/// # Safety
+///
+/// `xp` must be a valid `ExpandHandle`. `buff` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_set_one_cmd_context(
+    xp: ExpandHandle,
+    buff: *const c_char,
+) -> *const c_char {
+    let xp = &mut *xp;
+    let xph = std::ptr::from_mut(xp);
+
+    let mut context: c_int = ExpandContext::Nothing as c_int;
+    let mut forceit = false;
+    let mut usefilter = false;
+
+    ExpandInit(xph);
+    xp.xp_pattern = buff.cast_mut();
+    xp.xp_line = buff.cast_mut();
+    xp.xp_context = ExpandContext::Commands as c_int;
+
+    // 1. skip leading whitespace, colons, and bars
+    let mut cmd = buff;
+    while *cmd != 0
+        && (*cmd == b' ' as c_char
+            || *cmd == b'\t' as c_char
+            || *cmd == b':' as c_char
+            || *cmd == b'|' as c_char)
+    {
+        cmd = cmd.add(1);
+    }
+    xp.xp_pattern = cmd.cast_mut();
+
+    if *cmd == 0 {
+        return std::ptr::null();
+    }
+    if *cmd == b'"' as c_char {
+        xp.xp_context = ExpandContext::Nothing as c_int;
+        return std::ptr::null();
+    }
+
+    // 3. skip over a range specifier: addr [,addr] [;addr] ..
+    cmd = skip_range(cmd, &raw mut xp.xp_context);
+    xp.xp_pattern = cmd.cast_mut();
+    if *cmd == 0 {
+        return std::ptr::null();
+    }
+    if *cmd == b'"' as c_char {
+        xp.xp_context = ExpandContext::Nothing as c_int;
+        return std::ptr::null();
+    }
+
+    if *cmd == b'|' as c_char || *cmd == b'\n' as c_char {
+        return cmd.add(1); // There's another command
+    }
+
+    // Get the command index via C wrapper (avoids needing exarg_T layout).
+    let mut cmdidx: c_int = 0;
+    let p = nvim_cmdexpand_set_cmd_index(cmd, xph, &raw mut context, &raw mut cmdidx);
+    if p.is_null() {
+        return std::ptr::null();
+    }
+
+    xp.xp_context = ExpandContext::Nothing as c_int; // Default past command
+
+    let mut p = p;
+    if *p == b'!' as c_char {
+        forceit = true;
+        p = p.add(1);
+    }
+
+    // 6. parse arguments
+    // IS_USER_CMDIDX: cmdidx < 0
+    let argt: u32 = if cmdidx >= 0 {
+        excmd_get_argt(cmdidx)
+    } else {
+        0
+    };
+
+    let mut arg = skipwhite(p).cast_const();
+
+    // Does command allow "++argopt" argument?
+    if (argt & EX_ARGOPT) != 0 {
+        while *arg != 0 && *arg == b'+' as c_char && *arg.add(1) == b'+' as c_char {
+            p = arg.add(2);
+            while *p != 0 && !ascii_isspace(*p) {
+                p = p.add(utfc_ptr2len(p) as usize);
+            }
+
+            // Still touching the command after "++"?
+            if *p == 0 {
+                return rs_set_context_in_argopt(xph, arg.add(2));
+            }
+
+            arg = skipwhite(p).cast_const();
+        }
+    }
+
+    if cmdidx == CMD_write || cmdidx == CMD_update {
+        if *arg == b'>' as c_char {
+            // append
+            arg = arg.add(1);
+            if *arg == b'>' as c_char {
+                arg = arg.add(1);
+            }
+            arg = skipwhite(arg).cast_const();
+        } else if *arg == b'!' as c_char && cmdidx == CMD_write {
+            // :w !filter
+            arg = arg.add(1);
+            usefilter = true;
+        }
+    }
+
+    if cmdidx == CMD_read {
+        usefilter = forceit; // :r! filter if forced
+        if *arg == b'!' as c_char {
+            // :r !filter
+            arg = arg.add(1);
+            usefilter = true;
+        }
+    }
+
+    if cmdidx == CMD_lshift || cmdidx == CMD_rshift {
+        while *arg == *cmd {
+            // allow any number of '>' or '<'
+            arg = arg.add(1);
+        }
+        arg = skipwhite(arg).cast_const();
+    }
+
+    // Does command allow "+command"?
+    if (argt & EX_CMDARG) != 0 && !usefilter && *arg == b'+' as c_char {
+        // Check if we're in the +command
+        p = arg.add(1);
+        arg = skip_cmd_arg(arg.cast_mut(), 0).cast_const();
+
+        // Still touching the command after '+'?
+        if *arg == 0 {
+            return p;
+        }
+
+        // Skip space(s) after +command to get to the real argument.
+        arg = skipwhite(arg).cast_const();
+    }
+
+    // Check for '|' to separate commands and '"' to start comments.
+    // Don't do this for ":read !cmd" and ":write !cmd".
+    if (argt & EX_TRLBAR) != 0 && !usefilter {
+        p = arg;
+        // ":redir @" is not the start of a comment
+        if cmdidx == CMD_redir && *p == b'@' as c_char && *p.add(1) == b'"' as c_char {
+            p = p.add(2);
+        }
+        while *p != 0 {
+            if *p == 0x16_i8 {
+                // Ctrl_V
+                if *p.add(1) != 0 {
+                    p = p.add(1);
+                }
+            } else if ((*p == b'"' as c_char && (argt & EX_NOTRLCOM) == 0)
+                || *p == b'|' as c_char
+                || *p == b'\n' as c_char)
+                && *p.sub(1) != b'\\' as c_char
+            {
+                if *p == b'|' as c_char || *p == b'\n' as c_char {
+                    return p.add(1);
+                }
+                return std::ptr::null(); // It's a comment
+            }
+            p = p.add(utfc_ptr2len(p) as usize);
+        }
+    }
+
+    if (argt & EX_EXTRA) == 0 && *arg != 0 && *arg != b'|' as c_char && *arg != b'"' as c_char {
+        // no arguments allowed but there is something
+        return std::ptr::null();
+    }
+
+    // Find start of last argument (argument just before cursor):
+    p = buff;
+    xp.xp_pattern = p.cast_mut();
+    let len = libc::strlen(buff);
+    while *p != 0 && p < buff.add(len) {
+        if *p == b' ' as c_char || *p == b'\t' as c_char {
+            // argument starts after a space
+            p = p.add(1);
+            xp.xp_pattern = p.cast_mut();
+        } else {
+            if *p == b'\\' as c_char && *p.add(1) != 0 {
+                p = p.add(1); // skip over escaped character
+            }
+            p = p.add(utfc_ptr2len(p) as usize);
+        }
+    }
+
+    if (argt & EX_XFILE) != 0 {
+        let is_shell_cmd = c_int::from(usefilter || cmdidx == CMD_bang || cmdidx == CMD_terminal);
+        rs_set_context_for_wildcard_arg(arg, is_shell_cmd, xph, &raw mut context);
+    }
+
+    // Switch on command name.
+    rs_set_context_by_cmdname(cmd, cmdidx, xph, arg, argt, context, forceit)
 }

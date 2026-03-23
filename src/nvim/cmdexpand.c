@@ -151,6 +151,7 @@ extern int rs_expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, in
 extern const char *rs_set_context_by_cmdname(const char *cmd, int cmdidx, expand_T *xp,
                                               const char *arg, uint32_t argt, int context,
                                               bool forceit);
+extern const char *rs_set_one_cmd_context(expand_T *xp, const char *buff);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
@@ -1457,193 +1458,16 @@ static const char *set_cmd_index(const char *cmd, exarg_T *eap, expand_T *xp, in
   return p;
 }
 
-
-/// This is all pretty much copied from do_one_cmd(), with all the extra stuff
-/// we don't need/want deleted.  Maybe this could be done better if we didn't
-/// repeat all this stuff.  The only problem is that they may not stay
-/// perfectly compatible with each other, but then the command line syntax
-/// probably won't change that much -- webb.
+/// C accessor for Rust: wraps set_cmd_index and returns cmdidx via out-param.
 ///
-/// @param buff  buffer for command string
-static const char *set_one_cmd_context(expand_T *xp, const char *buff)
+/// Allows Rust to call set_cmd_index without needing a repr(C) exarg_T layout.
+const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *complp,
+                                         int *cmdidx_out)
 {
-  size_t len = 0;
-  exarg_T ea;
-  int context = EXPAND_NOTHING;
-  bool forceit = false;
-  bool usefilter = false;  // Filter instead of file name.
-
-  ExpandInit(xp);
-  xp->xp_pattern = (char *)buff;
-  xp->xp_line = (char *)buff;
-  xp->xp_context = EXPAND_COMMANDS;  // Default until we get past command
-  ea.argt = 0;
-
-  // 1. skip comment lines and leading space, colons or bars
-  const char *cmd;
-  for (cmd = buff; vim_strchr(" \t:|", (uint8_t)(*cmd)) != NULL; cmd++) {}
-  xp->xp_pattern = (char *)cmd;
-
-  if (*cmd == NUL) {
-    return NULL;
-  }
-  if (*cmd == '"') {  // ignore comment lines
-    xp->xp_context = EXPAND_NOTHING;
-    return NULL;
-  }
-
-  // 3. skip over a range specifier of the form: addr [,addr] [;addr] ..
-  cmd = skip_range(cmd, &xp->xp_context);
-  xp->xp_pattern = (char *)cmd;
-  if (*cmd == NUL) {
-    return NULL;
-  }
-  if (*cmd == '"') {
-    xp->xp_context = EXPAND_NOTHING;
-    return NULL;
-  }
-
-  if (*cmd == '|' || *cmd == '\n') {
-    return cmd + 1;  // There's another command
-  }
-
-  // Get the command index.
-  const char *p = set_cmd_index(cmd, &ea, xp, &context);
-  if (p == NULL) {
-    return NULL;
-  }
-
-  xp->xp_context = EXPAND_NOTHING;  // Default now that we're past command
-
-  if (*p == '!') {  // forced commands
-    forceit = true;
-    p++;
-  }
-
-  // 6. parse arguments
-  if (!IS_USER_CMDIDX(ea.cmdidx)) {
-    ea.argt = excmd_get_argt(ea.cmdidx);
-  }
-
-  const char *arg = skipwhite(p);
-
-  // Does command allow "++argopt" argument?
-  if (ea.argt & EX_ARGOPT) {
-    while (*arg != NUL && strncmp(arg, "++", 2) == 0) {
-      p = arg + 2;
-      while (*p && !ascii_isspace(*p)) {
-        MB_PTR_ADV(p);
-      }
-
-      // Still touching the command after "++"?
-      if (*p == NUL) {
-        if (ea.argt & EX_ARGOPT) {
-          return rs_set_context_in_argopt(xp, arg + 2);
-        }
-      }
-
-      arg = skipwhite(p);
-    }
-  }
-
-  if (ea.cmdidx == CMD_write || ea.cmdidx == CMD_update) {
-    if (*arg == '>') {  // append
-      if (*++arg == '>') {
-        arg++;
-      }
-      arg = skipwhite(arg);
-    } else if (*arg == '!' && ea.cmdidx == CMD_write) {  // :w !filter
-      arg++;
-      usefilter = true;
-    }
-  }
-
-  if (ea.cmdidx == CMD_read) {
-    usefilter = forceit;  // :r! filter if forced
-    if (*arg == '!') {    // :r !filter
-      arg++;
-      usefilter = true;
-    }
-  }
-
-  if (ea.cmdidx == CMD_lshift || ea.cmdidx == CMD_rshift) {
-    while (*arg == *cmd) {  // allow any number of '>' or '<'
-      arg++;
-    }
-    arg = skipwhite(arg);
-  }
-
-  // Does command allow "+command"?
-  if ((ea.argt & EX_CMDARG) && !usefilter && *arg == '+') {
-    // Check if we're in the +command
-    p = arg + 1;
-    arg = skip_cmd_arg((char *)arg, false);
-
-    // Still touching the command after '+'?
-    if (*arg == NUL) {
-      return p;
-    }
-
-    // Skip space(s) after +command to get to the real argument.
-    arg = skipwhite(arg);
-  }
-
-  // Check for '|' to separate commands and '"' to start comments.
-  // Don't do this for ":read !cmd" and ":write !cmd".
-  if ((ea.argt & EX_TRLBAR) && !usefilter) {
-    p = arg;
-    // ":redir @" is not the start of a comment
-    if (ea.cmdidx == CMD_redir && p[0] == '@' && p[1] == '"') {
-      p += 2;
-    }
-    while (*p) {
-      if (*p == Ctrl_V) {
-        if (p[1] != NUL) {
-          p++;
-        }
-      } else if ((*p == '"' && !(ea.argt & EX_NOTRLCOM))
-                 || *p == '|'
-                 || *p == '\n') {
-        if (*(p - 1) != '\\') {
-          if (*p == '|' || *p == '\n') {
-            return p + 1;
-          }
-          return NULL;  // It's a comment
-        }
-      }
-      MB_PTR_ADV(p);
-    }
-  }
-
-  if (!(ea.argt & EX_EXTRA) && *arg != NUL && strchr("|\"", *arg) == NULL) {
-    // no arguments allowed but there is something
-    return NULL;
-  }
-
-  // Find start of last argument (argument just before cursor):
-  p = buff;
-  xp->xp_pattern = (char *)p;
-  len = strlen(buff);
-  while (*p && p < buff + len) {
-    if (*p == ' ' || *p == TAB) {
-      // argument starts after a space
-      xp->xp_pattern = (char *)++p;
-    } else {
-      if (*p == '\\' && *(p + 1) != NUL) {
-        p++;  // skip over escaped character
-      }
-      MB_PTR_ADV(p);
-    }
-  }
-
-  if (ea.argt & EX_XFILE) {
-    int is_shell_cmd = usefilter
-                       || (ea.cmdidx == CMD_bang || ea.cmdidx == CMD_terminal);
-    rs_set_context_for_wildcard_arg(arg, is_shell_cmd ? 1 : 0, xp, &context);
-  }
-
-  // Switch on command name.
-  return rs_set_context_by_cmdname(cmd, ea.cmdidx, xp, arg, ea.argt, context, forceit);
+  exarg_T ea = { 0 };
+  const char *p = set_cmd_index(cmd, &ea, xp, complp);
+  *cmdidx_out = (int)ea.cmdidx;
+  return p;
 }
 
 /// Set the completion context in "xp" for command "str"
@@ -1678,7 +1502,7 @@ void set_cmd_context(expand_T *xp, char *str, int len, int col, int use_ccline)
     }
   } else {
     while (nextcomm != NULL) {
-      nextcomm = set_one_cmd_context(xp, nextcomm);
+      nextcomm = rs_set_one_cmd_context(xp, nextcomm);
     }
   }
 
