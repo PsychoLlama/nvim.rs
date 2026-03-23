@@ -456,8 +456,8 @@ typedef struct cpt_source_T {
   char cs_flag;             ///< Flag indicating the type of source
 } cpt_source_T;
 
-/// Pointer to the array of completion sources
-static cpt_source_T *cpt_sources_array;
+/// Pointer to the array of completion sources (made non-static for Rust access Phase 23)
+cpt_source_T *cpt_sources_array;
 /// Total number of completion sources specified in the 'cpt' option
 int cpt_sources_count;
 /// Index of the current completion source being expanded
@@ -1193,8 +1193,8 @@ void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
 int nvim_compl_match_get_cp_number(void *m) { return m ? ((compl_T *)m)->cp_number : -1; }
 void nvim_compl_match_set_cp_number(void *m, int num) { if (m) ((compl_T *)m)->cp_number = num; }
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
-uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
-void nvim_set_cpt_sources_start_tv(int idx, uint64_t ts) { cpt_sources_array[idx].compl_start_tv = ts; }
+// nvim_get_cpt_start_tv: deleted (Phase 23, inlined in vars.rs)
+// nvim_set_cpt_sources_start_tv: deleted (Phase 23, inlined in vars.rs)
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 // nvim_compl_clear_orig_text: deleted (Phase 21, inlined in vars.rs)
 void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
@@ -2004,10 +2004,10 @@ int nvim_ins_compl_delete_body(int col) {
 // nvim_compl_shown_cp_str_size: deleted (Phase 14, inlined in Rust)
 // nvim_find_common_prefix_data: deleted (Rust calls rs_find_common_prefix directly)
 // nvim_compl_shown_cp_cpt_source_idx: deleted (Phase 14, inlined in Rust)
-int nvim_get_cpt_source_startcol(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_startcol : -1; }
-int nvim_cpt_sources_array_exists(void) { return cpt_sources_array != NULL ? 1 : 0; }
-int nvim_get_cpt_source_cs_flag(int idx) { return (cpt_sources_array && idx >= 0) ? (int)(unsigned char)cpt_sources_array[idx].cs_flag : 0; }
-int nvim_get_cpt_source_cs_max_matches(int idx) { return (cpt_sources_array && idx >= 0) ? cpt_sources_array[idx].cs_max_matches : 0; }
+// nvim_get_cpt_source_startcol: deleted (Phase 23, inlined in vars.rs)
+// nvim_cpt_sources_array_exists: deleted (Phase 23, inlined in vars.rs)
+// nvim_get_cpt_source_cs_flag: deleted (Phase 23, inlined in vars.rs)
+// nvim_get_cpt_source_cs_max_matches: deleted (Phase 23, inlined in vars.rs)
 int nvim_mb_byte2len(int b) { return (b >= 0 && b <= 255) ? MB_BYTE2LEN((uint8_t)b) : 1; }
 // nvim_get_cursor_line_ptr: defined in change_ffi.c (returns char *)
 // nvim_get_curwin_cursor_col: defined in change_ffi.c (returns colnr_T)
@@ -2625,35 +2625,11 @@ void nvim_cpt_sources_alloc(int count)
     cpt_sources_count = count;
   }
 }
-void nvim_cpt_sources_set_flag(int idx, int flag)
-{
-  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
-    cpt_sources_array[idx].cs_flag = (char)flag;
-  }
-}
-void nvim_cpt_sources_set_max_matches(int idx, int val)
-{
-  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
-    cpt_sources_array[idx].cs_max_matches = val;
-  }
-}
-void nvim_cpt_sources_set_startcol(int idx, int val)
-{
-  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
-    cpt_sources_array[idx].cs_startcol = val;
-  }
-}
-void nvim_cpt_sources_set_refresh_always(int idx, int val)
-{
-  if (cpt_sources_array && idx >= 0 && idx < cpt_sources_count) {
-    cpt_sources_array[idx].cs_refresh_always = val != 0;
-  }
-}
-int nvim_cpt_sources_get_refresh_always(int idx)
-{
-  return (cpt_sources_array && idx >= 0 && idx < cpt_sources_count)
-         ? (cpt_sources_array[idx].cs_refresh_always ? 1 : 0) : 0;
-}
+// nvim_cpt_sources_set_flag: deleted (Phase 23, inlined in vars.rs)
+// nvim_cpt_sources_set_max_matches: deleted (Phase 23, inlined in vars.rs)
+// nvim_cpt_sources_set_startcol: deleted (Phase 23, inlined in vars.rs)
+// nvim_cpt_sources_set_refresh_always: deleted (Phase 23, inlined in vars.rs)
+// nvim_cpt_sources_get_refresh_always: deleted (Phase 23, inlined in vars.rs)
 // copy_option_part wrapper: advances *src past the next option segment, writes to buf.
 // Returns the number of bytes written (excluding NUL).
 size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep)

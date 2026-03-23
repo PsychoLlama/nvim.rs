@@ -149,8 +149,7 @@ extern "C" {
 
     // Accessors for rs_ins_compl_insert
     // rs_find_common_prefix is defined in Rust (leader.rs)
-    fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
-    fn nvim_cpt_sources_array_exists() -> c_int;
+    // (nvim_get_cpt_source_startcol, nvim_cpt_sources_array_exists: inlined in vars.rs Phase 23)
     fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn nvim_ins_compl_dict_alloc_set_shown();
@@ -274,11 +273,11 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
             cp_str = p;
             cp_str_len = plen;
         }
-    } else if nvim_cpt_sources_array_exists() != 0 {
+    } else if crate::vars::nvim_cpt_sources_array_exists() != 0 {
         let cpt_idx = crate::match_list::shown_match_cpt_source_idx();
         let compl_col = crate::vars::nvim_get_compl_col();
         if cpt_idx >= 0 && compl_col >= 0 {
-            let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+            let startcol = crate::vars::nvim_get_cpt_source_startcol(cpt_idx);
             if startcol >= 0 && startcol < compl_col {
                 let skip = compl_col - startcol;
                 #[allow(clippy::cast_sign_loss)]

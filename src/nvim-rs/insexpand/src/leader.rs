@@ -244,8 +244,7 @@ pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col:
 extern "C" {
     fn nvim_ml_get_curline() -> *const c_char;
     // nvim_get_compl_col is in crate::vars
-    fn nvim_cpt_sources_array_exists() -> c_int;
-    fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
+    // (nvim_cpt_sources_array_exists, nvim_get_cpt_source_startcol: inlined in vars.rs Phase 23)
     fn nvim_xfree(ptr: *mut u8);
     fn nvim_xmalloc(size: usize) -> *mut u8;
     fn nvim_compl_match_get_cpt_source_idx(m: crate::match_list::ComplMatch) -> c_int;
@@ -334,7 +333,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
     }
 
     // No cpt_sources or no leader -> return compl_leader directly
-    if nvim_cpt_sources_array_exists() == 0 {
+    if crate::vars::nvim_cpt_sources_array_exists() == 0 {
         return crate::vars::nvim_get_compl_leader_data();
     }
     let leader_data = crate::vars::nvim_get_compl_leader_data();
@@ -348,7 +347,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
         return leader_data;
     }
 
-    let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+    let startcol = crate::vars::nvim_get_cpt_source_startcol(cpt_idx);
     if startcol >= 0 && startcol < compl_col {
         let leader_size = crate::vars::nvim_get_compl_leader_size();
         let prepend_len = (compl_col - startcol) as usize;
@@ -393,7 +392,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
         return 0;
     }
 
-    if nvim_cpt_sources_array_exists() == 0 {
+    if crate::vars::nvim_cpt_sources_array_exists() == 0 {
         return crate::vars::nvim_get_compl_leader_size();
     }
     let leader_data = crate::vars::nvim_get_compl_leader_data();
@@ -407,7 +406,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
         return crate::vars::nvim_get_compl_leader_size();
     }
 
-    let startcol = nvim_get_cpt_source_startcol(cpt_idx);
+    let startcol = crate::vars::nvim_get_cpt_source_startcol(cpt_idx);
     if startcol >= 0 && startcol < compl_col {
         let leader_size = crate::vars::nvim_get_compl_leader_size();
         let prepend_len = (compl_col - startcol) as usize;
@@ -752,8 +751,7 @@ extern "C" {
     fn nvim_compl_match_clear_icase(m: ComplMatch);
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
     fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
-    fn nvim_get_cpt_source_cs_flag(idx: c_int) -> c_int;
-    fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
+    // (nvim_get_cpt_source_cs_flag, nvim_get_cpt_source_cs_max_matches: inlined in vars.rs Phase 23)
     fn xcalloc(count: usize, size: usize) -> *mut c_int;
     // nvim_xfree already declared above
     fn nvim_get_p_inf() -> c_int;
@@ -793,7 +791,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
     curbuf_only: c_int,
 ) -> *const c_char {
     // Only applies to cpt-completion
-    if nvim_cpt_sources_array_exists() == 0 {
+    if crate::vars::nvim_cpt_sources_array_exists() == 0 {
         return std::ptr::null();
     }
 
@@ -842,14 +840,14 @@ pub unsafe extern "C" fn rs_find_common_prefix(
                 let idx = cur_source as usize;
                 let cur = std::ptr::read(match_count.add(idx));
                 std::ptr::write(match_count.add(idx), cur + 1);
-                let max_matches = nvim_get_cpt_source_cs_max_matches(cur_source);
+                let max_matches = crate::vars::nvim_get_cpt_source_cs_max_matches(cur_source);
                 if max_matches > 0 && cur + 1 > max_matches {
                     match_limit_exceeded = true;
                 }
             }
 
             // Check cs_flag == '.' (ascii 0x2E = 46) for curbuf_only
-            let cs_flag = nvim_get_cpt_source_cs_flag(cur_source);
+            let cs_flag = crate::vars::nvim_get_cpt_source_cs_flag(cur_source);
             if !match_limit_exceeded && (curbuf_only == 0 || cs_flag == c_int::from(b'.')) {
                 let cp_str = nvim_compl_match_get_cp_str_data(compl);
                 if cp_str.is_null() {

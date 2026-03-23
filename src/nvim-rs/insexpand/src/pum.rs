@@ -301,8 +301,7 @@ extern "C" {
     fn nvim_compl_match_clear_icase(m: ComplMatch);
     // (nvim_compl_leader_eq_orig_text and nvim_set_compl_shown_to_first_or_next: inlined in match_list.rs)
     fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
-    fn nvim_cpt_sources_array_exists() -> c_int;
-    fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
+    // (nvim_cpt_sources_array_exists, nvim_get_cpt_source_cs_max_matches: inlined in vars.rs Phase 23)
     fn nvim_xfree(ptr: *mut u8);
     fn xmalloc(size: usize) -> *mut c_int;
 
@@ -359,7 +358,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
             && crate::rs_ins_compl_has_preinsert() == 0);
 
     let is_forward = crate::rs_compl_shows_dir_forward() != 0;
-    let is_cpt_completion = nvim_cpt_sources_array_exists() != 0;
+    let is_cpt_completion = crate::vars::nvim_cpt_sources_array_exists() != 0;
 
     // If the current match is the original text don't find the first
     // match after it, don't highlight anything.
@@ -434,7 +433,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
             if is_forward && cur_source >= 0 && is_cpt_completion && !match_count_ptr.is_null() {
                 let cnt = match_count_ptr.add(cur_source as usize);
                 *cnt += 1;
-                let max_matches = nvim_get_cpt_source_cs_max_matches(cur_source);
+                let max_matches = crate::vars::nvim_get_cpt_source_cs_max_matches(cur_source);
                 if max_matches > 0 && *cnt > max_matches {
                     match_limit_exceeded = true;
                 }

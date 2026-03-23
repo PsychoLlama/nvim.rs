@@ -11,7 +11,7 @@ use std::os::raw::{c_char, c_int, c_uint};
 // C accessor functions
 extern "C" {
     fn nvim_curbuf_get_b_p_cpt() -> *const c_char;
-    fn nvim_get_cpt_start_tv() -> u64;
+    // (nvim_get_cpt_start_tv: inlined in vars.rs Phase 23)
     fn os_hrtime() -> u64;
 
     // Multibyte helpers
@@ -24,7 +24,7 @@ extern "C" {
 
     // Accessors for Phase 4 (pass 4) inline implementations
     fn nvim_p_cto() -> c_int;
-    fn nvim_set_cpt_sources_start_tv(idx: c_int, ts: u64);
+    // (nvim_set_cpt_sources_start_tv: inlined in vars.rs Phase 23)
     fn nvim_semsg_list_index_out_of_range(idx: c_int);
 }
 
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn rs_get_cpt_sources_count() -> c_int {
 /// Requires valid cpt_sources_array state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_elapsed_time() {
-    let start_tv = nvim_get_cpt_start_tv();
+    let start_tv = crate::vars::nvim_get_cpt_start_tv();
     let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
 
     if elapsed_ms > crate::vars::nvim_get_compl_timeout_ms() {
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
     if crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
-        nvim_set_cpt_sources_start_tv(source_idx, os_hrtime());
+        crate::vars::nvim_set_cpt_sources_start_tv(source_idx, os_hrtime());
         crate::vars::nvim_set_compl_time_slice_expired(0);
     }
 }
@@ -281,12 +281,7 @@ const CARET: c_char = b'^' as c_char;
 extern "C" {
     // cpt_sources_array management
     fn nvim_cpt_sources_alloc(count: c_int);
-    fn nvim_cpt_sources_set_flag(idx: c_int, flag: c_int);
-    fn nvim_cpt_sources_set_max_matches(idx: c_int, val: c_int);
-    fn nvim_cpt_sources_set_startcol(idx: c_int, val: c_int);
-    fn nvim_cpt_sources_set_refresh_always(idx: c_int, val: c_int);
-    fn nvim_cpt_sources_get_refresh_always(idx: c_int) -> c_int;
-    fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
+    // (cpt_sources_array accessors: inlined in vars.rs Phase 23)
 
     // Option parsing helpers
     fn nvim_copy_option_part_ffi(
@@ -354,7 +349,7 @@ pub unsafe extern "C" fn rs_setup_cpt_sources() {
 
         // cs_flag = first char of segment
         let flag = c_int::from(*p);
-        nvim_cpt_sources_set_flag(idx, flag);
+        crate::vars::nvim_cpt_sources_set_flag(idx, flag);
 
         // Reset buf and call copy_option_part to advance p
         buf.fill(0);
@@ -370,7 +365,7 @@ pub unsafe extern "C" fn rs_setup_cpt_sources() {
                 // Parse integer after the caret
                 let digits_start = caret_ptr.add(1);
                 let max_matches = parse_c_int(digits_start);
-                nvim_cpt_sources_set_max_matches(idx, max_matches);
+                crate::vars::nvim_cpt_sources_set_max_matches(idx, max_matches);
             }
         }
 
@@ -413,20 +408,20 @@ pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
 
         let cb = nvim_get_callback_if_cpt_func_impl(p.cast_const(), idx);
         if cb.is_null() {
-            nvim_cpt_sources_set_startcol(idx, -3);
+            crate::vars::nvim_cpt_sources_set_startcol(idx, -3);
         } else {
             let mut startcol: c_int = 0;
             let ret = rs_get_userdefined_compl_info(curs_col, cb, &raw mut startcol);
             if ret == FAIL {
                 if startcol == -3 {
-                    nvim_cpt_sources_set_refresh_always(idx, 0);
+                    crate::vars::nvim_cpt_sources_set_refresh_always(idx, 0);
                 } else {
                     startcol = -2;
                 }
             } else if startcol < 0 || startcol > curs_col {
                 startcol = curs_col;
             }
-            nvim_cpt_sources_set_startcol(idx, startcol);
+            crate::vars::nvim_cpt_sources_set_startcol(idx, startcol);
         }
 
         // Advance p past this segment using IObuff
@@ -449,7 +444,7 @@ pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_void) {
     let src_idx = crate::vars::nvim_get_cpt_sources_index();
-    let startcol = nvim_get_cpt_source_startcol(src_idx);
+    let startcol = crate::vars::nvim_get_cpt_source_startcol(src_idx);
 
     if startcol == -2 || startcol == -3 {
         return;
@@ -458,7 +453,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
     let curs_col = nvim_get_cursor_col();
     rs_set_compl_globals(startcol, curs_col, 1);
 
-    let refresh_always = nvim_cpt_sources_get_refresh_always(src_idx) != 0;
+    let refresh_always = crate::vars::nvim_cpt_sources_get_refresh_always(src_idx) != 0;
 
     if !refresh_always {
         nvim_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
@@ -472,7 +467,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
 
     // cpt_src->cs_refresh_always = compl_opt_refresh_always; compl_opt_refresh_always = false;
     let opt_refresh = crate::vars::nvim_get_compl_opt_refresh_always() != 0;
-    nvim_cpt_sources_set_refresh_always(src_idx, c_int::from(opt_refresh));
+    crate::vars::nvim_cpt_sources_set_refresh_always(src_idx, c_int::from(opt_refresh));
     crate::vars::nvim_set_compl_opt_refresh_always(0);
 }
 

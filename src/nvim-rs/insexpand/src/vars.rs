@@ -12,7 +12,13 @@
 //! Neovim is single-threaded for completion operations, so accesses to
 //! these mutable statics are safe in practice.
 
-#![allow(dead_code, clippy::missing_safety_doc, clippy::must_use_candidate)]
+#![allow(
+    dead_code,
+    clippy::missing_safety_doc,
+    clippy::must_use_candidate,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
 
 use std::ffi::c_int;
 
@@ -33,9 +39,26 @@ pub(crate) struct NvimString {
     pub size: usize,
 }
 
+/// C cpt_source_T struct (Phase 23 migration).
+/// Exact layout verified via offsetof checks.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CptSourceT {
+    pub cs_refresh_always: bool,
+    _pad1: [u8; 3],
+    pub cs_startcol: c_int,
+    pub cs_max_matches: c_int,
+    _pad2: [u8; 4],
+    pub compl_start_tv: u64,
+    pub cs_flag: i8,
+    _pad3: [u8; 7],
+}
+
 extern "C" {
     // --- compl_pattern String struct ---
     pub(crate) static mut compl_pattern: NvimString;
+    // --- cpt_sources_array pointer (made non-static Phase 23) ---
+    pub(crate) static mut cpt_sources_array: *mut CptSourceT;
 }
 
 extern "C" {
@@ -585,4 +608,94 @@ pub unsafe fn nvim_compl_pattern_set_from_alloc(data: *mut std::os::raw::c_char,
     nvim_compl_clear_pattern();
     compl_pattern.data = data;
     compl_pattern.size = size;
+}
+
+// ============================================================================
+// cpt_sources_array accessors (Phase 23)
+// ============================================================================
+
+/// Check if cpt_sources_array is non-null.
+#[inline]
+pub unsafe fn nvim_cpt_sources_array_exists() -> c_int {
+    c_int::from(!cpt_sources_array.is_null())
+}
+
+/// Get cs_startcol for the given source index (-1 if array is null or idx < 0).
+#[inline]
+pub unsafe fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int {
+    if cpt_sources_array.is_null() || idx < 0 {
+        return -1;
+    }
+    (*cpt_sources_array.add(idx as usize)).cs_startcol
+}
+
+/// Get cs_flag (as unsigned byte cast to c_int) for the given source index.
+#[inline]
+pub unsafe fn nvim_get_cpt_source_cs_flag(idx: c_int) -> c_int {
+    if cpt_sources_array.is_null() || idx < 0 {
+        return 0;
+    }
+    c_int::from((*cpt_sources_array.add(idx as usize)).cs_flag as u8)
+}
+
+/// Get cs_max_matches for the given source index.
+#[inline]
+pub unsafe fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int {
+    if cpt_sources_array.is_null() || idx < 0 {
+        return 0;
+    }
+    (*cpt_sources_array.add(idx as usize)).cs_max_matches
+}
+
+/// Get cs_refresh_always for the given source index.
+#[inline]
+pub unsafe fn nvim_cpt_sources_get_refresh_always(idx: c_int) -> c_int {
+    if cpt_sources_array.is_null() || idx < 0 {
+        return 0;
+    }
+    c_int::from((*cpt_sources_array.add(idx as usize)).cs_refresh_always)
+}
+
+/// Get compl_start_tv for the current source (cpt_sources_index).
+#[inline]
+pub unsafe fn nvim_get_cpt_start_tv() -> u64 {
+    (*cpt_sources_array.add(cpt_sources_index as usize)).compl_start_tv
+}
+
+/// Set compl_start_tv for a specific source index.
+#[inline]
+pub unsafe fn nvim_set_cpt_sources_start_tv(idx: c_int, ts: u64) {
+    (*cpt_sources_array.add(idx as usize)).compl_start_tv = ts;
+}
+
+/// Set cs_flag for a specific source index.
+#[inline]
+pub unsafe fn nvim_cpt_sources_set_flag(idx: c_int, flag: c_int) {
+    if !cpt_sources_array.is_null() && idx >= 0 {
+        (*cpt_sources_array.add(idx as usize)).cs_flag = flag as i8;
+    }
+}
+
+/// Set cs_max_matches for a specific source index.
+#[inline]
+pub unsafe fn nvim_cpt_sources_set_max_matches(idx: c_int, val: c_int) {
+    if !cpt_sources_array.is_null() && idx >= 0 {
+        (*cpt_sources_array.add(idx as usize)).cs_max_matches = val;
+    }
+}
+
+/// Set cs_startcol for a specific source index.
+#[inline]
+pub unsafe fn nvim_cpt_sources_set_startcol(idx: c_int, val: c_int) {
+    if !cpt_sources_array.is_null() && idx >= 0 {
+        (*cpt_sources_array.add(idx as usize)).cs_startcol = val;
+    }
+}
+
+/// Set cs_refresh_always for a specific source index.
+#[inline]
+pub unsafe fn nvim_cpt_sources_set_refresh_always(idx: c_int, val: c_int) {
+    if !cpt_sources_array.is_null() && idx >= 0 {
+        (*cpt_sources_array.add(idx as usize)).cs_refresh_always = val != 0;
+    }
 }
