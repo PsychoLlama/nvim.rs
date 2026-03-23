@@ -465,9 +465,6 @@ void nvim_set_o_lnum(linenr_T val)
   o_lnum = val;
 }
 
-/// Set State (accessor for Rust).
-
-/// Set restart_edit (accessor for Rust).
 
 /// Get arrow_used (accessor for Rust).
 int nvim_get_arrow_used(void)
@@ -578,75 +575,17 @@ int nvim_get_replace_offset(void)
   return replace_offset;
 }
 
-/// Get &curwin->w_cursor as opaque pointer (accessor for Rust).
 const void *nvim_curwin_get_cursor_ptr(void)
 {
   return &curwin->w_cursor;
 }
 
-/// Get curwin->w_cursor.coladd (accessor for Rust).
-
-/// Set curwin->w_cursor.coladd (accessor for Rust).
-
-/// Get curwin->w_curswant (accessor for Rust).
-
-/// Set curwin->w_set_curswant (accessor for Rust).
-
-
-
-
-
-
-
-
-
-
-
-
-
-/// Call update_topline(curwin) (accessor for Rust).
-
-/// Get spell_redraw_lnum (accessor for Rust).
-
-/// Set spell_redraw_lnum (accessor for Rust).
-
-/// Get ai_col (accessor for Rust).
-
-/// Set ai_col (accessor for Rust).
-
-/// Get orig_line_count (accessor for Rust).
 
 /// Set orig_line_count (accessor for Rust).
 void nvim_edit_set_orig_line_count(linenr_T val)
 {
   orig_line_count = val;
 }
-
-/// Set vr_lines_changed (accessor for Rust).
-
-/// Increment no_mapping (accessor for Rust).
-
-/// Decrement no_mapping (accessor for Rust).
-
-/// Get got_int (accessor for Rust).
-
-/// Set got_int (accessor for Rust).
-
-/// Get mod_mask (accessor for Rust).
-
-/// Set mod_mask (accessor for Rust).
-
-/// Increment textlock (accessor for Rust).
-
-/// Decrement textlock (accessor for Rust).
-
-
-
-
-
-
-
-
 
 
 /// Check if Insstart.col > Insstart_orig.col (accessor for Rust).
@@ -661,42 +600,7 @@ colnr_T nvim_edit_linetabsize_cursor_line(void)
   return linetabsize_str(get_cursor_line_ptr());
 }
 
-/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
 
-
-
-
-
-
-
-
-
-
-
-/// Call ins_str(p, len) (accessor for Rust).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/// Handle the end_comment_pending char replacement for insertchar (accessor for Rust).
 /// This is the complex comment-leader removal section from insertchar().
 void nvim_edit_handle_end_comment_pending(int c)
 {
@@ -846,7 +750,6 @@ void nvim_edit_set_vim_var_char(const char *buf, ptrdiff_t len)
   set_vim_var_string(VV_CHAR, buf, len);
 }
 
-/// Get get_vim_var_str(VV_CHAR) (accessor for Rust).
 const char *nvim_edit_get_vim_var_char(void)
 {
   return get_vim_var_str(VV_CHAR);
@@ -895,17 +798,12 @@ void nvim_edit_start_arrow_with_change_curpos(bool end_change)
 }
 
 
-
-
 /// Check if p_ww (whichwrap) allows the given character (accessor for Rust).
 int nvim_edit_ww_allows(int ch)
 {
   return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0;
 }
 
-
-
-/// Get curbuf->b_ml.ml_line_count via curwin (accessor for Rust).
 
 /// Call coladvance(curwin, getvcol_nolist(&Insstart)) (accessor for Rust).
 void nvim_edit_coladvance_insstart(void)
@@ -926,7 +824,6 @@ int nvim_edit_topline_changed(void)
   return (saved_topline != curwin->w_topline
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
-
 
 
 /// Call pagescroll(BACKWARD, 1, false) and return result (accessor for Rust).
@@ -1152,8 +1049,6 @@ void nvim_edit_ins_del(void)
 }
 
 
-
-
 /// Set pum_want.active (accessor for Rust).
 void nvim_edit_set_pum_want_active(int val)
 {
@@ -1167,11 +1062,6 @@ int nvim_edit_get_pum_want_finish(void)
 }
 
 
-/// Set ins_at_eol (accessor for Rust).
-
-/// Set did_cursorhold (accessor for Rust).
-
-
 /// Call ins_complete(c, true) (accessor for Rust).
 int nvim_edit_ins_complete(int c)
 {
@@ -1183,7 +1073,6 @@ int nvim_edit_check_compl_option(int allow_always)
 {
   return check_compl_option(allow_always != 0) ? 1 : 0;
 }
-
 
 
 /// Call do_cmdline(NULL, getcmdkeycmd, NULL, 0) (accessor for Rust).
@@ -1205,8 +1094,6 @@ void nvim_edit_paste_repeat(void)
 }
 
 
-
-
 /// Call do_cmdline_cmd(".cc") for quickfix (accessor for Rust).
 void nvim_edit_quickfix_cc(void)
 {
@@ -1219,18 +1106,6 @@ void nvim_edit_quickfix_ll(void)
   do_cmdline_cmd(".ll");
 }
 
-
-
-
-
-
-/// Get p_paste option (accessor for Rust).
-
-
-
-
-
-/// Call inindent(0) (accessor for Rust).
 
 /// Call auto_format(false, force_format) (accessor for Rust).
 void nvim_edit_auto_format(int force_format)
@@ -1245,16 +1120,6 @@ int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 }
 
 
-
-
-
-
-
-
-
-
-
-
 /// Check if curwin->w_cursor.col >= rs_ins_compl_col() (accessor for Rust).
 int nvim_edit_cursor_col_ge_compl_col(void)
 {
@@ -1266,8 +1131,6 @@ int nvim_edit_get_cpt_first_char(void)
 {
   return (unsigned char)*curbuf->b_p_cpt;
 }
-
-
 
 
 static int pc_status;
@@ -1465,7 +1328,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
   stuffReadbuffLen(data, len);
 }
 
-/// Get restart_edit (accessor for Rust).
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
 
 
@@ -1475,7 +1337,6 @@ void nvim_edit_clear_where_paste_started(void)
   where_paste_started.lnum = 0;
 }
 
-/// Set Insstart from where_paste_started or curwin->w_cursor (accessor for Rust).
 /// If where_paste_started.lnum != 0, use it; otherwise use curwin->w_cursor.
 /// If startln is nonzero, set Insstart.col = 0.
 void nvim_edit_init_Insstart(int startln)
@@ -1490,7 +1351,6 @@ void nvim_edit_init_Insstart(int startln)
   }
 }
 
-/// Get did_ai (accessor for Rust).
 
 /// Get need_highlight_changed (accessor for Rust).
 int nvim_edit_get_need_highlight_changed(void)
@@ -1505,7 +1365,6 @@ int nvim_edit_cursor_on_tab_or_inline(void)
 }
 
 
-
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
 {
@@ -1518,11 +1377,6 @@ void nvim_edit_set_need_start_insertmode(int val)
   need_start_insertmode = (val != 0);
 }
 
-/// Get p_smd (showmode option) (accessor for Rust).
-
-/// Get msg_silent (accessor for Rust).
-
-/// Set old_indent (accessor for Rust).
 
 /// Save curwin->w_cursor into out-params (accessor for Rust).
 void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out)
@@ -1617,7 +1471,6 @@ void nvim_edit_update_o_lnum_if_at_eol(void)
   }
 }
 
-/// Check restart_edit conditions and maybe advance cursor (accessor for Rust).
 /// Returns: 0=arrow_used=false path, 1=restart_edit path (arrow_used set from paste).
 int nvim_edit_handle_restart_edit_cursor(void)
 {
@@ -1648,9 +1501,6 @@ int nvim_edit_handle_restart_edit_cursor(void)
 }
 
 
-
-
-
 /// Call change_warning(curbuf, col) (accessor for Rust).
 void nvim_edit_change_warning(int col)
 {
@@ -1658,15 +1508,11 @@ void nvim_edit_change_warning(int col)
 }
 
 
-
 /// Call state_enter(&s->state) (accessor for Rust).
 void nvim_edit_state_enter(void *state)
 {
   state_enter((VimState *)state);
 }
-
-/// Call ins_esc(&count, cmdchar, nomove) (accessor for Rust).
-
 
 
 /// Call ui_cursor_shape() and do_digraph(-1) (accessor for Rust).
@@ -2098,7 +1944,6 @@ void nvim_set_dollar_vcol(colnr_T val)
   dollar_vcol = val;
 }
 
-/// Get curbuf->b_p_sts (accessor for Rust).
 long nvim_curbuf_get_b_p_sts(void)
 {
   return (long)curbuf->b_p_sts;
@@ -2116,19 +1961,16 @@ int nvim_curbuf_tabstop_count_vsts(void)
   return (int)tabstop_count(curbuf->b_p_vsts_array);
 }
 
-/// Get tabstop_first(curbuf->b_p_vts_array) (accessor for Rust).
 long nvim_curbuf_tabstop_first_vts(void)
 {
   return (long)tabstop_first(curbuf->b_p_vts_array);
 }
 
-/// Get get_sw_value(curbuf) (accessor for Rust).
 long nvim_curbuf_get_sw_value(void)
 {
   return get_sw_value(curbuf);
 }
 
-/// Get get_sts_value() (accessor for Rust).
 long nvim_get_sts_value(void)
 {
   return get_sts_value();
@@ -2274,10 +2116,6 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
 }
 
 
-
-/// Call u_save(lnum1, lnum2) (accessor for Rust).
-
-
 /// Trim last char of previous line if space (FO_WHITE_PAR helper).
 void nvim_trim_eol_space(void)
 {
@@ -2288,7 +2126,6 @@ void nvim_trim_eol_space(void)
     curbuf->b_ml.ml_line_len--;
   }
 }
-
 
 
 /// Handle softtabstop-aware backspace alignment (helper for Rust ins_bs).
@@ -2370,7 +2207,6 @@ bool nvim_edit_ins_bs_softtabstop(int *inserted_space_p, bool in_indent)
   return true;
 }
 
-/// Check if softtabstop-aware backspace should be used (accessor for Rust).
 /// Returns true when the BACKSPACE_CHAR softtabstop path is taken.
 bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
 {
@@ -2399,8 +2235,6 @@ void nvim_unshowmode_false(void)
 }
 
 
-
-/// Set curbuf->b_last_insert mark to current cursor + topline (composite for Rust).
 /// Calls mark_view_make and RESET_FMARK.
 void nvim_set_b_last_insert_mark(void)
 {
@@ -2422,7 +2256,6 @@ void nvim_set_u_sync_once(int val)
 }
 
 
-
 /// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
 void nvim_set_pc_status_unset(void)
 {
@@ -2436,10 +2269,7 @@ void nvim_putchar(int c, int highlight)
 }
 
 
-
 // ---- ins_esc accessors ----
-
-
 
 
 /// Call stop_insert logic at curwin->w_cursor (composite for Rust).
