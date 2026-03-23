@@ -199,14 +199,12 @@ const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 extern int rs_emsg_not_now(void);
 
 // Forward declarations for static functions used by Phase 4/5 accessors below
-static char *get_emsg_source(void);
-static char *get_emsg_lnum(void);
-static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
-static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
+char *get_emsg_source(void);
+char *get_emsg_lnum(void);
+void msg_puts_printf(const char *str, ptrdiff_t maxlen);
+void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
-void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxlen); }
-char *nvim_get_emsg_source(void) { return get_emsg_source(); }
-char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
+// redir_write, get_emsg_source, get_emsg_lnum now non-static, called directly from Rust
 
 // C accessors for did_emsg_syntax (used by Rust)
 
@@ -287,12 +285,7 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
 
-// Phase 5 (msg_puts_len): wrappers for static functions and state
-void nvim_msg_puts_printf(const char *str, ptrdiff_t len) { msg_puts_printf(str, len); }
-void nvim_msg_puts_display(const char *str, int len, int hl_id)
-{
-  msg_puts_display(str, len, hl_id, false);
-}
+// msg_puts_printf, msg_puts_display now non-static, called directly from Rust
 void nvim_msg_show_empty(void)
 {
   ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
@@ -599,7 +592,7 @@ extern char *last_sourcing_name;
 ///
 /// @return [allocated] String with room for one more character. NULL when no
 ///                     message is to be given.
-static char *get_emsg_source(void)
+char *get_emsg_source(void)
   FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
 {
   bool other_name = HAVE_SOURCING_INFO && SOURCING_NAME != NULL
@@ -627,7 +620,7 @@ static char *get_emsg_source(void)
 ///
 /// @return [allocated] String with room for one more character. NULL when no
 ///                     message is to be given.
-static char *get_emsg_lnum(void)
+char *get_emsg_lnum(void)
   FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
 {
   // lnum is 0 when executing a command from the command line
@@ -1364,7 +1357,7 @@ static void msg_ext_emit_chunk(void)
 
 /// The display part of msg_puts_len().
 /// May be called recursively to display scroll-back text.
-static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse)
+void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse)
 {
   const char *s = str;
   const char *sb_str = str;
@@ -1672,7 +1665,7 @@ static msgchunk_T *disp_sb_line(int row, msgchunk_T *smp)
 }
 
 /// Print a message when there is no valid screen.
-static void msg_puts_printf(const char *str, const ptrdiff_t maxlen)
+void msg_puts_printf(const char *str, const ptrdiff_t maxlen)
 {
   const char *s = str;
   char buf[7];
@@ -2080,7 +2073,7 @@ void msg_ext_flush_showmode(void)
 /// May write a string to the redirection file.
 ///
 /// @param maxlen  if -1, write the whole string, otherwise up to "maxlen" bytes.
-static void redir_write(const char *const str, const ptrdiff_t maxlen)
+void redir_write(const char *const str, const ptrdiff_t maxlen)
 {
   const char *s = str;
   static int cur_col = 0;

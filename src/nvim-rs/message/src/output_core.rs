@@ -72,7 +72,7 @@ extern "C" {
     static mut need_fileinfo: bool;
     fn xfree(ptr: *mut std::ffi::c_void);
     fn msg_grid_validate();
-    fn nvim_redir_write(str_: *const c_char, maxlen: isize);
+    fn redir_write(str_: *const c_char, maxlen: isize);
     fn msg_clr_eos();
 
     // Phase 3: msg_keep accessors
@@ -507,7 +507,7 @@ pub unsafe extern "C" fn rs_msg_start() {
 
     // When redirecting, may need to start a new line.
     if !did_return {
-        nvim_redir_write(c"\n".as_ptr(), 1);
+        redir_write(c"\n".as_ptr(), 1);
     }
 }
 

@@ -373,11 +373,11 @@ pub unsafe extern "C" fn rs_reset_wait_return_state() {
 // ============================================================================
 
 extern "C" {
-    fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
+    fn redir_write(str_: *const std::ffi::c_char, maxlen: isize);
     fn msg_hist_add(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn msg_use_printf() -> c_int;
-    fn nvim_msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
-    fn nvim_msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int);
+    fn msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
+    fn msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int, recurse: c_int);
     fn nvim_msg_show_empty();
     static mut headless_mode: bool;
     static mut default_grid: crate::ScreenGrid;
@@ -409,7 +409,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     hist: bool,
 ) {
     // If redirection is on, also write to the redirection file.
-    nvim_redir_write(str_, len);
+    redir_write(str_, len);
 
     // Don't print anything when using ":silent cmd" or empty message.
     let first_byte = *str_.cast::<u8>();
@@ -444,13 +444,13 @@ pub unsafe extern "C" fn rs_msg_puts_len(
 
     if msg_use_printf() != 0 {
         let saved_msg_col = msg_col;
-        nvim_msg_puts_printf(str_, len);
+        msg_puts_printf(str_, len);
         if headless_mode {
             msg_col = saved_msg_col;
         }
     }
     if msg_use_printf() == 0 || (headless_mode && !default_grid.chars.is_null()) {
-        nvim_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
+        msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id, 0);
     }
 
     need_fileinfo = false;

@@ -474,9 +474,9 @@ extern "C" {
     fn nvim_get_sourcing_lnum() -> c_int;
     fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
-    fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
-    fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
-    fn nvim_get_emsg_lnum() -> *mut std::ffi::c_char;
+    fn redir_write(str_: *const std::ffi::c_char, maxlen: isize);
+    fn get_emsg_source() -> *mut std::ffi::c_char;
+    fn get_emsg_lnum() -> *mut std::ffi::c_char;
     static mut ex_exitval: c_int;
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
@@ -578,26 +578,26 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         if emsg_silent != 0 {
             if !emsg_noredir {
                 crate::output_core::rs_msg_start();
-                let p = nvim_get_emsg_source();
+                let p = get_emsg_source();
                 if !p.is_null() {
                     let p_len = libc_strlen(p.cast());
                     // Append newline then write (p_len + 1 bytes including newline)
                     // SAFETY: newline '\n' = 10, which fits in i8 without wrap.
                     #[allow(clippy::cast_possible_wrap)]
                     p.add(p_len).write(10i8); // '\n'
-                    nvim_redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
+                    redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
                     xfree(p.cast());
                 }
-                let p = nvim_get_emsg_lnum();
+                let p = get_emsg_lnum();
                 if !p.is_null() {
                     let p_len = libc_strlen(p.cast());
                     #[allow(clippy::cast_possible_wrap)]
                     p.add(p_len).write(10i8); // '\n'
-                    nvim_redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
+                    redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
                     xfree(p.cast());
                 }
                 let s_len = libc_strlen(s.cast());
-                nvim_redir_write(s, isize::try_from(s_len).unwrap_or(isize::MAX));
+                redir_write(s, isize::try_from(s_len).unwrap_or(isize::MAX));
             }
             return 1;
         }
@@ -757,14 +757,14 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 
     no_wait_return += 1;
 
-    let p = nvim_get_emsg_source();
+    let p = get_emsg_source();
     if !p.is_null() {
         msg_scroll = 1; // this will take more than one line
         let _ = crate::output_core::rs_msg(p, hl_id);
         xfree(p.cast());
     }
 
-    let p = nvim_get_emsg_lnum();
+    let p = get_emsg_lnum();
     if !p.is_null() {
         let _ = crate::output_core::rs_msg(p, HLF_N_LINE_NR);
         xfree(p.cast());
