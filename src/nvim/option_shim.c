@@ -377,18 +377,6 @@ void nvim_unset_vim_env(void) {
   }
 }
 
-// Numeric option accessors
-OptInt nvim_option_get_so(void) { return p_so; }
-OptInt nvim_option_get_siso(void) { return p_siso; }
-OptInt nvim_option_get_report(void) { return p_report; }
-OptInt nvim_option_get_mat(void) { return p_mat; }
-OptInt nvim_option_get_ut(void) { return p_ut; }
-OptInt nvim_option_get_tm(void) { return p_tm; }
-OptInt nvim_option_get_hi(void) { return p_hi; }
-OptInt nvim_option_get_ls(void) { return p_ls; }
-OptInt nvim_option_get_stal(void) { return p_stal; }
-OptInt nvim_option_get_re(void) { return p_re; }
-
 // Special accessors
 int nvim_option_get_secure(void) { return secure; }
 
@@ -650,9 +638,7 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 // IO buffer accessor
 char *nvim_get_iobuff(void) { return IObuff; }
 
-// Lines/columns callback accessors
-OptInt nvim_get_p_lines(void) { return p_lines; }
-OptInt nvim_get_p_columns(void) { return p_columns; }
+
 int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 
 // fill_culopt_flags accessors
@@ -1061,9 +1047,7 @@ const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
 // iminsert/imsearch global accessors (for set_iminsert/imsearch_global)
-OptInt nvim_get_p_iminsert(void) { return p_iminsert; }
 void nvim_set_p_iminsert(OptInt v) { p_iminsert = v; }
-OptInt nvim_get_p_imsearch(void) { return p_imsearch; }
 void nvim_set_p_imsearch(OptInt v) { p_imsearch = v; }
 // buf b_p_iminsert/imsearch accessors (for set_iminsert/imsearch_global)
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
@@ -2360,12 +2344,9 @@ int nvim_get_backslash_in_filename(void) {
 #endif
 }
 
-OptInt nvim_get_p_sw(void) { return p_sw; }
-OptInt nvim_get_p_scbk(void) { return p_scbk; }
 // nvim_get_p_tw / nvim_get_p_wm: already defined at lines 793/795
 OptInt nvim_get_p_sts(void) { return p_sts; }
 OptInt nvim_get_p_ts(void) { return p_ts; }
-OptInt nvim_get_p_smc(void) { return p_smc; }
 
 bool nvim_get_p_ai_nopaste(void) { return p_ai_nopaste; }
 bool nvim_get_p_et_nopaste(void) { return p_et_nopaste; }
