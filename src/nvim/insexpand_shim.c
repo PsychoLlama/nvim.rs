@@ -1766,7 +1766,7 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
 
 // nvim_get_did_ai: defined in change_ffi.c (bool nvim_get_did_ai(void))
 // nvim_set_did_ai: defined in change_ffi.c (void nvim_set_did_ai(bool val))
-void nvim_clear_indent_flags(void) { did_si = false; can_si = false; can_si_back = false; }
+// nvim_clear_indent_flags: deleted (Phase 32, inlined in vars.rs)
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
@@ -1912,7 +1912,7 @@ int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 // nvim_get_compl_leader_size: deleted (Phase 20, direct Rust access via extern static)
 // nvim_get_compl_orig_text_data: deleted (Phase 20, direct Rust access via extern static)
 // nvim_get_compl_orig_text_size: deleted (Phase 20, direct Rust access via extern static)
-int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
+// nvim_get_pum_want_insert: deleted (Phase 32, dead code - no Rust callers)
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 // Complex null-guard accessors

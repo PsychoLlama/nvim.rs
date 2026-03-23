@@ -100,6 +100,10 @@ extern "C" {
     static mut p_ic: c_int; // 'ignorecase'
                             // --- editor state (Phase 31) ---
     static mut State: c_int; // current editor mode
+                             // --- indent flags (Phase 32) ---
+    static mut did_si: bool;
+    static mut can_si: bool;
+    static mut can_si_back: bool;
     static mut p_ac: c_int; // 'autocomplete'
     pub(crate) static mut p_acl: i64; // 'autocompletedelay' (OptInt = i64)
     static mut p_cto: i64; // 'completetimeout' (OptInt = i64)
@@ -302,6 +306,14 @@ const REPLACE_FLAG: c_int = 0x100;
 #[inline]
 pub unsafe fn nvim_get_state_replace_flag() -> c_int {
     c_int::from((State & REPLACE_FLAG) != 0)
+}
+
+/// Clear the C indent flags did_si, can_si, can_si_back.
+#[inline]
+pub unsafe fn nvim_clear_indent_flags() {
+    did_si = false;
+    can_si = false;
+    can_si_back = false;
 }
 
 // ============================================================================

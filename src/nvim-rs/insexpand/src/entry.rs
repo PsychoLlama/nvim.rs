@@ -42,7 +42,7 @@ extern "C" {
     // Accessors for ins_compl_start (Phase 10)
     fn nvim_get_did_ai() -> bool;
     fn nvim_set_did_ai(val: bool);
-    fn nvim_clear_indent_flags();
+    // nvim_clear_indent_flags: inlined in vars.rs (Phase 32)
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     #[link_name = "ins_eol"]
     fn nvim_ins_eol_wrap(c: c_int) -> bool;
@@ -171,7 +171,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     // (was nvim_ins_compl_start_init_impl; inlined here in Phase 10)
     let save_did_ai: bool = nvim_get_did_ai();
     nvim_set_did_ai(false);
-    nvim_clear_indent_flags();
+    crate::vars::nvim_clear_indent_flags();
     if stop_arrow() == FAIL {
         nvim_restore_did_ai(c_int::from(save_did_ai));
         return FAIL;
