@@ -407,10 +407,8 @@ extern "C" {
     fn nvim_tilde_replace_wrap(pat: *mut c_char, num_matches: c_int, matches: *mut *mut c_char);
     fn nvim_get_p_fic_or_wic() -> c_int;
 
-    // compl_pattern management
+    // compl_pattern management (set_star still in C, others inlined in vars.rs Phase 22)
     fn nvim_compl_pattern_set_star();
-    fn nvim_compl_pattern_set_from_alloc(data: *mut c_char, size: usize);
-    fn nvim_compl_pattern_get_data() -> *mut c_char;
 
     // Fuzzy matching
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
@@ -503,7 +501,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
             *buf.add(path_len + 1) = 0;
 
             // Transfer ownership to compl_pattern
-            nvim_compl_pattern_set_from_alloc(buf, path_len + 1);
+            crate::vars::nvim_compl_pattern_set_from_alloc(buf, path_len + 1);
 
             // Advance leader to the file part
             fuzzy_leader = last_sep.add(1).cast_mut();
@@ -512,7 +510,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
     }
 
     // Expand wildcards using compl_pattern.data
-    let pat_data = nvim_compl_pattern_get_data();
+    let pat_data = crate::vars::nvim_compl_pattern_get_data();
     if pat_data.is_null() {
         return;
     }

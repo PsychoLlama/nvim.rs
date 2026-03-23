@@ -85,7 +85,7 @@ const CONT_LOCAL: c_int = 32;
 // =============================================================================
 
 extern "C" {
-    fn nvim_compl_clear_pattern();
+    // (nvim_compl_clear_pattern: inlined in vars.rs Phase 22)
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     #[link_name = "edit_submode_highl"]
@@ -111,7 +111,7 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     crate::vars::nvim_set_compl_ins_end_col(0);
     crate::vars::nvim_clear_compl_curr_win();
     crate::vars::nvim_clear_compl_curr_buf();
-    nvim_compl_clear_pattern();
+    crate::vars::nvim_compl_clear_pattern();
     crate::vars::nvim_compl_clear_leader();
     g_edit_submode_extra = core::ptr::null_mut();
     nvim_clear_compl_orig_extmarks();

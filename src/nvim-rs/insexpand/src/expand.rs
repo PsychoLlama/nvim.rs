@@ -51,8 +51,7 @@ extern "C" {
     fn rs_is_nearest_active() -> c_int;
     fn rs_ins_compl_has_preinsert() -> c_int;
 
-    // completion state
-    fn nvim_get_compl_pattern_is_null() -> c_int;
+    // (nvim_get_compl_pattern_is_null: inlined in vars.rs Phase 22)
 
     fn nvim_p_cto() -> c_int;
     fn nvim_get_p_act() -> c_int;
@@ -592,7 +591,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         found_new_match = get_next_completion_match(compl_type, start_lnum, start_col);
 
         // If complete() was called then compl_pattern has been reset. Bail out.
-        if nvim_get_compl_pattern_is_null() != 0 {
+        if crate::vars::nvim_get_compl_pattern_is_null() != 0 {
             if normal_mode_strict
                 && compl_type == CTRL_X_FUNCTION
                 && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)

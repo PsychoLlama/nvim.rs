@@ -377,7 +377,7 @@ bool compl_started = false;
 int ctrl_x_mode = CTRL_X_NORMAL;
 
 int compl_matches = 0;           ///< number of completion matches
-static String compl_pattern = STRING_INIT;      ///< search pattern for matching items
+String compl_pattern = STRING_INIT;      ///< search pattern for matching items, made non-static for Rust access (Phase 22)
 static String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt'
 Direction compl_direction = FORWARD;
 Direction compl_shows_dir = FORWARD;
@@ -1183,7 +1183,7 @@ int nvim_find_shown_match_in_match_array(void) {
 
 // Memory operations for Rust
 void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
-void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
+// nvim_compl_clear_pattern: deleted (Phase 22, inlined in vars.rs)
 // nvim_compl_clear_leader: deleted (Phase 21, inlined in vars.rs)
 // NOTE: nvim_ins_compl_del_pum deleted (Phase 15). Rust calls rs_ins_compl_del_pum() directly.
 // nvim_pum_clear: deleted (Phase 3, Rust calls pum_clear directly)
@@ -2119,7 +2119,7 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 // nvim_compl_curr_rewind_to_head: deleted (Phase 15, inlined in match_list.rs)
 
 void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
-int nvim_get_compl_pattern_is_null(void) { return compl_pattern.data == NULL ? 1 : 0; }
+// nvim_get_compl_pattern_is_null: deleted (Phase 22, inlined in vars.rs)
 int nvim_get_p_act(void) { return (int)p_act; }
 int nvim_normal_mode_strict(void) {
   return (rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
@@ -2196,13 +2196,8 @@ void nvim_compl_pattern_set_star(void)
   API_CLEAR_STRING(compl_pattern);
   compl_pattern = cbuf_to_string("*", 1);
 }
-void nvim_compl_pattern_set_from_alloc(char *data, size_t size)
-{
-  API_CLEAR_STRING(compl_pattern);
-  compl_pattern.data = data;
-  compl_pattern.size = size;
-}
-char *nvim_compl_pattern_get_data(void) { return compl_pattern.data; }
+// nvim_compl_pattern_set_from_alloc: deleted (Phase 22, inlined in vars.rs)
+// nvim_compl_pattern_get_data: deleted (Phase 22, inlined in vars.rs)
 
 // NOTE: nvim_ins_compl_new_leader_wrapper deleted (Phase 15).
 // insert.rs and leader.rs call rs_ins_compl_new_leader() directly.

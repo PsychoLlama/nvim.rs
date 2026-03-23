@@ -34,6 +34,11 @@ pub(crate) struct NvimString {
 }
 
 extern "C" {
+    // --- compl_pattern String struct ---
+    pub(crate) static mut compl_pattern: NvimString;
+}
+
+extern "C" {
     // --- bool variables ---
     static mut compl_interrupted: bool;
     static mut compl_time_slice_expired: bool;
@@ -543,4 +548,41 @@ pub unsafe fn nvim_compl_clear_orig_text() {
         compl_orig_text.data = core::ptr::null_mut();
         compl_orig_text.size = 0;
     }
+}
+
+// ============================================================================
+// compl_pattern accessors (String struct, made non-static Phase 22)
+// ============================================================================
+
+/// Check if compl_pattern.data is null.
+#[inline]
+pub unsafe fn nvim_get_compl_pattern_is_null() -> c_int {
+    c_int::from(compl_pattern.data.is_null())
+}
+
+/// Get compl_pattern.data (mutable).
+#[inline]
+pub unsafe fn nvim_compl_pattern_get_data() -> *mut std::os::raw::c_char {
+    compl_pattern.data
+}
+
+/// Free and clear compl_pattern (equivalent to C API_CLEAR_STRING macro).
+#[inline]
+pub unsafe fn nvim_compl_clear_pattern() {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+    }
+    if !compl_pattern.data.is_null() {
+        xfree(compl_pattern.data.cast());
+        compl_pattern.data = core::ptr::null_mut();
+        compl_pattern.size = 0;
+    }
+}
+
+/// Set compl_pattern from pre-allocated data and size (takes ownership).
+#[inline]
+pub unsafe fn nvim_compl_pattern_set_from_alloc(data: *mut std::os::raw::c_char, size: usize) {
+    nvim_compl_clear_pattern();
+    compl_pattern.data = data;
+    compl_pattern.size = size;
 }
