@@ -23,7 +23,6 @@ extern "C" {
     fn nvim_callback_call_findstart(cb_opaque: *mut c_void) -> c_int;
     fn nvim_ctrl_x_mode_reset_to_normal();
     fn nvim_emit_completefunc_not_set_error(is_function: c_int);
-    fn nvim_clear_compl_opt_refresh_always();
     fn rs_set_compl_globals(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
     fn aborting() -> c_int;
 
@@ -150,7 +149,7 @@ pub unsafe extern "C" fn rs_get_userdefined_compl_info(
     }
 
     // Reset extended completion parameters.
-    nvim_clear_compl_opt_refresh_always();
+    crate::vars::nvim_set_compl_opt_refresh_always(0);
 
     // Set global completion state (only for the non-cpt path).
     if !is_cpt_function {

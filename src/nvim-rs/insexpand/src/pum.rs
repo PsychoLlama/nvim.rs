@@ -193,8 +193,7 @@ extern "C" {
     fn nvim_has_completechanged_event() -> c_int;
     fn nvim_set_dollar_vcol(val: c_int);
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_set_cursor_col_to_compl_col();
-    fn nvim_restore_cursor_col(col: c_int);
+    fn nvim_set_cursor_col(col: c_int);
     fn nvim_pum_display_compl(cur: c_int, array_changed: c_int);
     fn nvim_compl_curr_neq_shown() -> c_int;
     fn nvim_compl_set_curr_to_shown();
@@ -250,10 +249,10 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     // Compute the screen column of the start of the completed text.
     // Use the cursor to get all wrapping and other settings right.
     let col = nvim_get_cursor_col();
-    nvim_set_cursor_col_to_compl_col();
+    nvim_set_cursor_col(crate::vars::nvim_get_compl_col());
     crate::vars::nvim_set_compl_selected_item(cur);
     nvim_pum_display_compl(cur, array_changed);
-    nvim_restore_cursor_col(col);
+    nvim_set_cursor_col(col);
 
     // After adding leader, set the current match to shown match.
     if crate::vars::nvim_get_compl_started() != 0 && nvim_compl_curr_neq_shown() != 0 {

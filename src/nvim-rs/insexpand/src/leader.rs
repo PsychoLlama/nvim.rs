@@ -552,7 +552,6 @@ extern "C" {
     fn rs_ins_compl_has_autocomplete() -> c_int;
     fn rs_ins_compl_enable_autocomplete();
     fn nvim_ins_complete_ctrl_n() -> c_int;
-    fn nvim_update_compl_enter_selects();
     fn rs_ins_compl_show_pum();
     fn nvim_get_compl_match_array_exists() -> c_int;
     fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int);
@@ -618,7 +617,10 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         crate::state::COMPL_RESTARTING = false;
     }
 
-    nvim_update_compl_enter_selects();
+    crate::vars::nvim_set_compl_enter_selects(c_int::from(
+        crate::vars::nvim_get_compl_used_match() == 0
+            && crate::vars::nvim_get_compl_selected_item() != -1,
+    ));
 
     // Show the popup menu with a different set of matches.
     rs_ins_compl_show_pum();

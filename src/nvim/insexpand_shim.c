@@ -1902,12 +1902,6 @@ void nvim_ins_complete_update_cont_s_ipos(void)
   }
 }
 
-/// Compound accessor: remove CONT_N_ADDS from compl_cont_status.
-void nvim_compl_cont_status_remove_n_adds(void)
-{
-  compl_cont_status &= ~CONT_N_ADDS;
-}
-
 /// Compound accessor: eat the ESC vgetc() returns after CTRL-C (got_int handling).
 void nvim_ins_complete_eat_got_int(void)
 {
@@ -1915,19 +1909,6 @@ void nvim_ins_complete_eat_got_int(void)
     vgetc();
     got_int = false;
   }
-}
-
-/// Compound accessor: set compl_was_interrupted = compl_interrupted, compl_interrupted = false.
-void nvim_ins_complete_finish_interrupted(void)
-{
-  compl_was_interrupted = compl_interrupted;
-  compl_interrupted = false;
-}
-
-/// Compound accessor: set compl_ins_end_col = compl_col.
-void nvim_set_compl_ins_end_col_to_compl_col(void)
-{
-  compl_ins_end_col = compl_col;
 }
 
 // ins_complete deleted: now exported from Rust entry.rs via #[export_name = "ins_complete"]
@@ -2030,8 +2011,6 @@ void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()")
 // nvim_find_shown_match_in_array: deleted (Rust calls nvim_find_shown_match_in_match_array directly)
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
-void nvim_set_cursor_col_to_compl_col(void) { curwin->w_cursor.col = (colnr_T)compl_col; }
-void nvim_restore_cursor_col(int col) { curwin->w_cursor.col = (colnr_T)col; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
 int nvim_compl_curr_neq_shown(void) { return (compl_curr_match != compl_shown_match) ? 1 : 0; }
 void nvim_compl_set_curr_to_shown(void) { compl_curr_match = compl_shown_match; }
@@ -2116,7 +2095,6 @@ void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_I
 // Compound accessors for Phase 4 (ins_compl_restart, ins_ctrl_x, check_compl_option,
 // ins_compl_addleader, ins_compl_addfrommatch, ins_compl_set_original_text,
 // ins_compl_check_keys)
-void nvim_compl_cont_status_or(int mask) { compl_cont_status |= mask; }
 void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(CTRL_X_MSG(mode)); }
 // nvim_may_trigger_modechanged: defined in normal_shim.c
 // nvim_stop_arrow: deleted (Phase 3, Rust calls stop_arrow directly)
@@ -2224,7 +2202,6 @@ void nvim_compl_curr_rewind_to_head(void) {
 // --- timeout / cpt_sources_index / misc ---
 void nvim_set_cpt_sources_index(int val) { cpt_sources_index = val; }
 void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
-int nvim_get_compl_num_bests(void) { return compl_num_bests; }
 void nvim_set_compl_timeout_ms(uint64_t val) { compl_timeout_ms = val; }
 int nvim_get_compl_pattern_is_null(void) { return compl_pattern.data == NULL ? 1 : 0; }
 int nvim_get_p_act(void) { return (int)p_act; }
@@ -2364,9 +2341,6 @@ void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
 void nvim_set_spell_bad_len(int val) { spell_bad_len = val; }
 // nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
-// Compound accessor: compl_enter_selects = !compl_used_match && compl_selected_item != -1
-void nvim_update_compl_enter_selects(void) { compl_enter_selects = !compl_used_match && compl_selected_item != -1; }
-
 // Accessor for Phase 5: ins_compl_del_pum migration
 void nvim_xfree_compl_match_array(void) { XFREE_CLEAR(compl_match_array); }
 
@@ -2620,8 +2594,7 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
 // show_statusmsg migration to Rust.
 // =============================================================================
 
-// --- compl_length / compl_startpos setters ---
-void nvim_set_compl_length(int val) { compl_length = val; }
+// --- compl_startpos setters ---
 void nvim_set_compl_startpos_col(int val) { compl_startpos.col = (colnr_T)val; }
 void nvim_set_compl_startpos_lnum_to_cursor(void) { compl_startpos.lnum = curwin->w_cursor.lnum; }
 
@@ -2860,8 +2833,6 @@ void nvim_expand_by_function_with_cb(void *cb_opaque)
 {
   expand_by_function(0, cpt_compl_pattern.data, (Callback *)cb_opaque);
 }
-// set compl_opt_refresh_always = false
-void nvim_clear_compl_opt_refresh_always(void) { compl_opt_refresh_always = false; }
 // Advance p past cpt option segment using IObuff (for prepare_cpt_compl_funcs)
 size_t nvim_copy_option_part_iobuff_ffi(char **src)
 {

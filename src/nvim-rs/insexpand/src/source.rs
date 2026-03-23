@@ -315,8 +315,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_expand_by_function_with_cb(cb_opaque: *mut c_void);
-    fn nvim_clear_compl_opt_refresh_always();
-
     // Completion state
     fn rs_set_compl_globals(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
@@ -480,7 +478,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
     // cpt_src->cs_refresh_always = compl_opt_refresh_always; compl_opt_refresh_always = false;
     let opt_refresh = crate::vars::nvim_get_compl_opt_refresh_always() != 0;
     nvim_cpt_sources_set_refresh_always(src_idx, c_int::from(opt_refresh));
-    nvim_clear_compl_opt_refresh_always();
+    crate::vars::nvim_set_compl_opt_refresh_always(0);
 }
 
 /// Parse a C-string as an ASCII decimal integer (like atoi).
