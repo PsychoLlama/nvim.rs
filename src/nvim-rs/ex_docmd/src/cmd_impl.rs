@@ -8,6 +8,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::ExArgHandle;
+use nvim_normal::types::OpargT;
 
 // =============================================================================
 // Type aliases
@@ -805,6 +806,25 @@ extern "C" {
     fn nvim_docmd_vim_findfile_cleanup(search_ctx: *mut c_void);
     #[link_name = "check_can_set_curbuf_forceit"]
     fn nvim_docmd_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
+
+    // exec_normal helpers
+    #[link_name = "ins_typebuf"]
+    fn nvim_docmd_ins_typebuf(
+        str: *const c_char,
+        noremap: c_int,
+        offset: c_int,
+        nottyped: bool,
+        silent: bool,
+    ) -> c_int;
+    fn nvim_set_finish_op(val: bool);
+    #[link_name = "stuff_empty"]
+    fn nvim_docmd_stuff_empty() -> c_int;
+    #[link_name = "typebuf_typed"]
+    fn nvim_docmd_typebuf_typed() -> c_int;
+    fn nvim_docmd_typebuf_tb_len() -> c_int;
+    #[link_name = "vpeekc"]
+    fn nvim_docmd_vpeekc() -> c_int;
+    fn normal_cmd(oap: *mut OpargT, toplevel: bool);
 }
 
 /// `do_exedit` - edit/badd/visual command dispatch.
@@ -899,6 +919,54 @@ pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
 #[export_name = "ex_find"]
 pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
     rs_ex_find_impl(eap);
+}
+
+/// Execute normal mode commands from typeahead until buffer is empty.
+///
+/// # Safety
+/// Must be called with valid global state.
+#[export_name = "nvim_docmd_exec_normal_impl"]
+pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) {
+    let mut oa = OpargT::default();
+    nvim_set_finish_op(false);
+    // Ctrl_C = 3
+    const CTRL_C: c_int = 3;
+    loop {
+        // C: (!stuff_empty() || typebuf_has_data || vpeekc_avail) && !got_int
+        // stuff_empty() returns 1=empty, 0=not-empty
+        let cont = if nvim_docmd_stuff_empty() != 0 {
+            // stuff buffer IS empty; check typeahead and vpeekc
+            let typed_or_not = was_typed || nvim_docmd_typebuf_typed() == 0;
+            let has_typebuf = typed_or_not && nvim_docmd_typebuf_tb_len() > 0;
+            if has_typebuf {
+                true
+            } else if use_vpeekc {
+                let c = nvim_docmd_vpeekc();
+                c != 0 && c != CTRL_C
+            } else {
+                false
+            }
+        } else {
+            // stuff buffer NOT empty → continue
+            true
+        };
+        if !cont || nvim_docmd_get_got_int() != 0 {
+            break;
+        }
+        rs_update_topline_cursor_impl();
+        normal_cmd(&raw mut oa, true);
+    }
+}
+
+/// Execute normal mode command "cmd".
+/// "remap" can be REMAP_NONE (= -1) or REMAP_YES (= 0).
+///
+/// # Safety
+/// `cmd` must be a valid null-terminated string.
+#[export_name = "nvim_docmd_exec_normal_cmd_impl"]
+pub unsafe extern "C" fn rs_exec_normal_cmd_impl(cmd: *mut c_char, remap: c_int, silent: bool) {
+    nvim_docmd_ins_typebuf(cmd, remap, 0, true, silent);
+    rs_exec_normal_impl(false, false);
 }
 
 /// `nvim_docmd_before_quit_autocmds_impl` - fire pre-quit autocmds.

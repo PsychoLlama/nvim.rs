@@ -2460,7 +2460,7 @@ extern "C" {
     fn nvim_docmd_p_cpo_has_execbuf() -> bool;
     fn nvim_docmd_do_cmdline_getexline();
     fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
-    fn stuff_empty() -> bool;
+    fn stuff_empty() -> c_int;
     static mut exec_from_reg: bool;
 
     // Phase 18: ex_exit, ex_resize, ex_cd helpers
@@ -2869,7 +2869,7 @@ pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     // Execute from the typeahead buffer.
     // Continue until the stuff buffer is empty and all added characters
     // have been consumed.
-    while !stuff_empty() || nvim_docmd_typebuf_tb_len() > prev_len {
+    while stuff_empty() == 0 || nvim_docmd_typebuf_tb_len() > prev_len {
         nvim_docmd_do_cmdline_getexline();
     }
 

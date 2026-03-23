@@ -365,6 +365,8 @@ extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 extern void nvim_docmd_handle_did_throw_impl(void);
 extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
 extern void nvim_docmd_ex_find_impl(exarg_T *eap);
+extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
+extern void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2535,38 +2537,6 @@ void nvim_docmd_restore_current_state_impl(save_state_T *sst)
   ui_cursor_shape();  // may show different cursor shape
 }
 
-
-/// Execute normal mode command "cmd".
-/// "remap" can be REMAP_NONE or REMAP_YES.
-void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent)
-{
-  // Stuff the argument into the typeahead buffer.
-  ins_typebuf(cmd, remap, 0, true, silent);
-  nvim_docmd_exec_normal_impl(false, false);
-}
-
-/// Execute normal_cmd() until there is no typeahead left.
-///
-/// @param was_typed whether or not something was typed
-/// @param use_vpeekc  true to use vpeekc() to check for available chars
-void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc)
-{
-  oparg_T oa;
-  int c;
-
-  // When calling vpeekc() from feedkeys() it will return Ctrl_C when there
-  // is nothing to get, so also check for Ctrl_C.
-  clear_oparg(&oa);
-  finish_op = false;
-  while ((!stuff_empty()
-          || ((was_typed || !typebuf_typed())
-              && typebuf.tb_len > 0)
-          || (use_vpeekc && (c = vpeekc()) != NUL && c != Ctrl_C))
-         && !got_int) {
-    nvim_docmd_update_topline_cursor_impl();
-    normal_cmd(&oa, true);      // execute a Normal mode cmd
-  }
-}
 
 /// Open the preview window or popup and make it the current window.
 /// Called by Rust ex_pedit / ex_pbuffer.
