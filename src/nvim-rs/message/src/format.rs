@@ -38,8 +38,6 @@ extern "C" {
     fn nvim_ui_has_messages() -> c_int;
     /// Calculate string width in cells
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
-    /// Calculate truncation point
-    fn nvim_mb_trunc_len(s: *const c_char, width: c_int) -> c_int;
     /// Get `cmdline_row` global
     static mut cmdline_row: c_int;
 }
@@ -253,7 +251,20 @@ pub unsafe extern "C" fn rs_msg_trunc_len(s: *const c_char, width: c_int) -> c_i
     if s.is_null() || width <= 0 {
         return 0;
     }
-    nvim_mb_trunc_len(s, width)
+    let mut len: c_int = 0;
+    let mut cells: c_int = 0;
+    let mut p = s;
+    while *p.cast::<u8>() != 0 && cells < width {
+        let char_cells = rs_ptr2cells(p);
+        if cells + char_cells > width {
+            break;
+        }
+        cells += char_cells;
+        let char_len = utfc_ptr2len(p);
+        len += char_len;
+        p = p.add(char_len.unsigned_abs() as usize);
+    }
+    len
 }
 
 /// Calculate buffer size needed for truncated string.

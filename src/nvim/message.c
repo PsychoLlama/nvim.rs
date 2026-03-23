@@ -277,32 +277,6 @@ int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
 
-/// Calculate the byte length of string that fits in given cell width.
-/// Returns the number of bytes that would fit in `width` cells.
-int nvim_mb_trunc_len(const char *s, int width)
-{
-  if (s == NULL || width <= 0) {
-    return 0;
-  }
-
-  int len = 0;
-  int cells = 0;
-  const char *p = s;
-
-  while (*p != NUL && cells < width) {
-    int char_cells = ptr2cells(p);
-    if (cells + char_cells > width) {
-      break;
-    }
-    cells += char_cells;
-    int char_len = utfc_ptr2len(p);
-    len += char_len;
-    p += char_len;
-  }
-
-  return len;
-}
-
 // Forward declarations for static functions used by Phase 4/5 accessors below
 static int emsg_not_now(void);
 static char *get_emsg_source(void);
