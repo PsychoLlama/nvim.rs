@@ -226,7 +226,7 @@ extern "C" {
 
     // Phase 104: guicursor / ambiwidth / emoji / showbreak
     fn parse_shape_opt(what: c_int) -> CallbackResult;
-    fn nvim_get_visual_active_opt() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_redrawWinline_curwin();
     fn check_chars_options() -> CallbackResult;
     fn rs_check_str_opt(idx: c_int, varp: *mut *mut std::ffi::c_char) -> c_int;
@@ -1042,7 +1042,7 @@ pub unsafe extern "C" fn rs_did_set_guicursor(_args: *mut c_void) -> CallbackRes
     if !errmsg.is_null() {
         return errmsg;
     }
-    if nvim_get_visual_active_opt() != 0 {
+    if VIsual_active {
         nvim_redrawWinline_curwin();
     }
     callback_ok()

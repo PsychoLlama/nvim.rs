@@ -436,7 +436,6 @@ void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
-int nvim_get_visual_active_opt(void) { return VIsual_active ? 1 : 0; }
 void nvim_redrawWinline_curwin(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
 
 // Phase 102: highlight accessor
@@ -2143,19 +2142,6 @@ int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array =
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
-/// Returns p_csl (completeslash), or "" on non-Windows.
-#ifdef BACKSLASH_IN_FILENAME
-const char *nvim_get_p_csl(void) { return p_csl; }
-#else
-const char *nvim_get_p_csl(void) { return ""; }
-#endif
-int nvim_get_backslash_in_filename(void) {
-#ifdef BACKSLASH_IN_FILENAME
-  return 1;
-#else
-  return 0;
-#endif
-}
 
 // Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
 
