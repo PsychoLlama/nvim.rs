@@ -52,13 +52,13 @@ extern "C" {
     fn xfree(ptr: *mut c_char);
 
     // set_iminsert_global / set_imsearch_global
-    fn nvim_set_p_iminsert(v: i64);
-    fn nvim_set_p_imsearch(v: i64);
+    static mut p_iminsert: i64;
+    static mut p_imsearch: i64;
     fn nvim_buf_get_b_p_iminsert(buf: BufHandle) -> i64;
     fn nvim_buf_get_b_p_imsearch(buf: BufHandle) -> i64;
 
     // reset_modifiable
-    fn nvim_option_set_p_ma(v: c_int);
+    static mut p_ma: c_int;
     fn nvim_curbuf_set_b_p_ma(v: c_int);
 
     // TTY options (Phase 2)
@@ -207,22 +207,20 @@ pub unsafe extern "C" fn rs_vimrc_found(fname: *const c_char, envname: *const c_
 /// Set the global value for 'iminsert' to the local value.
 #[export_name = "set_iminsert_global"]
 pub unsafe extern "C" fn rs_set_iminsert_global(buf: BufHandle) {
-    let val = nvim_buf_get_b_p_iminsert(buf);
-    nvim_set_p_iminsert(val);
+    p_iminsert = nvim_buf_get_b_p_iminsert(buf);
 }
 
 /// Set the global value for 'imsearch' to the local value.
 #[export_name = "set_imsearch_global"]
 pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
-    let val = nvim_buf_get_b_p_imsearch(buf);
-    nvim_set_p_imsearch(val);
+    p_imsearch = nvim_buf_get_b_p_imsearch(buf);
 }
 
 /// Reset the 'modifiable' option and its default value.
 #[export_name = "reset_modifiable"]
 pub unsafe extern "C" fn rs_reset_modifiable() {
     nvim_curbuf_set_b_p_ma(0);
-    nvim_option_set_p_ma(0);
+    p_ma = 0;
     crate::defaults::rs_change_option_default(
         K_OPT_MODIFIABLE as c_int,
         OptVal {

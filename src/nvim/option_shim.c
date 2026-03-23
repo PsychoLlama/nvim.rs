@@ -990,14 +990,10 @@ const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 // p_flp / b_p_flp accessors (for get_flp_value)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
-// iminsert/imsearch global accessors (for set_iminsert/imsearch_global)
-void nvim_set_p_iminsert(OptInt v) { p_iminsert = v; }
-void nvim_set_p_imsearch(OptInt v) { p_imsearch = v; }
 // buf b_p_iminsert/imsearch accessors (for set_iminsert/imsearch_global)
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
 OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 // p_ma / b_p_ma accessors (for reset_modifiable)
-void nvim_option_set_p_ma(int v) { p_ma = v != 0; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
 // TTY and key accessors
@@ -1062,8 +1058,6 @@ OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_v
 
 // Phase 1 init function accessors: expose static helpers to Rust
 void nvim_set_fenc_default(char *val) { fenc_default = val; }
-void nvim_set_p_title(int v) { p_title = v; }
-void nvim_set_p_icon(int v) { p_icon = v; }
 int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_idx); }
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)

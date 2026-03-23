@@ -439,8 +439,8 @@ extern "C" {
     // Phase 1 accessors (added to option_shim.c)
     fn enc_locale() -> *mut c_char;
     fn nvim_set_fenc_default(val: *mut c_char);
-    fn nvim_set_p_title(v: c_int);
-    fn nvim_set_p_icon(v: c_int);
+    static mut p_title: c_int;
+    static mut p_icon: c_int;
     fn os_getenv(name: *const c_char) -> *mut c_char;
     fn vim_getenv(name: *const c_char) -> *mut c_char;
     fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
@@ -657,12 +657,12 @@ pub unsafe extern "C" fn rs_set_title_defaults() {
     let title_flags = nvim_get_option_flags(K_OPT_TITLE);
     if (title_flags & K_OPT_FLAG_WAS_SET) == 0 {
         crate::defaults::rs_change_option_default(K_OPT_TITLE, boolean_optval(false));
-        nvim_set_p_title(0);
+        p_title = 0;
     }
     let icon_flags = nvim_get_option_flags(K_OPT_ICON);
     if (icon_flags & K_OPT_FLAG_WAS_SET) == 0 {
         crate::defaults::rs_change_option_default(K_OPT_ICON, boolean_optval(false));
-        nvim_set_p_icon(0);
+        p_icon = 0;
     }
 }
 
