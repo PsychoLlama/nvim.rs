@@ -437,13 +437,13 @@ use crate::OptValType;
 
 extern "C" {
     // Phase 1 accessors (added to option_shim.c)
-    fn nvim_call_enc_locale() -> *mut c_char;
+    fn enc_locale() -> *mut c_char;
     fn nvim_set_fenc_default(val: *mut c_char);
     fn nvim_set_p_title(v: c_int);
     fn nvim_set_p_icon(v: c_int);
-    fn nvim_call_os_getenv(name: *const c_char) -> *mut c_char;
-    fn nvim_call_vim_getenv(name: *const c_char) -> *mut c_char;
-    fn nvim_call_after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
+    fn os_getenv(name: *const c_char) -> *mut c_char;
+    fn vim_getenv(name: *const c_char) -> *mut c_char;
+    fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int;
     #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
@@ -489,7 +489,7 @@ fn boolean_optval(b: bool) -> OptVal {
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_init_default_shell() {
     let shell_env = c"SHELL";
-    let shell = nvim_call_os_getenv(shell_env.as_ptr());
+    let shell = os_getenv(shell_env.as_ptr());
     if shell.is_null() {
         return;
     }
@@ -548,7 +548,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
         }
 
         let plen = libc::strlen(path);
-        let has_trailing = nvim_call_after_pathsep(path, path.add(plen)) != 0;
+        let has_trailing = after_pathsep(path, path.add(plen)) != 0;
 
         // Build pattern: path[/]* where / is path separator on current platform
         let sep: &[u8] = if has_trailing { b"" } else { b"/" };
@@ -597,7 +597,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
     // Add TMPDIR, TEMP, TMP from environment
     for name in env_names {
         let env_name = name.as_ptr().cast::<c_char>();
-        let p = nvim_call_vim_getenv(env_name);
+        let p = vim_getenv(env_name);
         try_add_path(p, true);
     }
 
@@ -617,7 +617,7 @@ pub unsafe extern "C" fn rs_set_init_default_backupskip() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_init_default_cdpath() {
     let cdpath_key = c"CDPATH";
-    let cdpath = nvim_call_vim_getenv(cdpath_key.as_ptr());
+    let cdpath = vim_getenv(cdpath_key.as_ptr());
     if cdpath.is_null() {
         return;
     }
@@ -639,7 +639,7 @@ pub unsafe extern "C" fn rs_set_init_default_cdpath() {
 /// Replaces C `set_init_fenc_default()`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_init_fenc_default() {
-    let mut p = nvim_call_enc_locale();
+    let mut p = enc_locale();
     if p.is_null() {
         // Use utf-8 as "default" if locale encoding can't be detected.
         let utf8 = c"utf-8";
@@ -683,13 +683,13 @@ extern "C" {
 
     // set_init_2 accessors
     fn nvim_option_ilog_rtp();
-    fn nvim_call_comp_col();
+    fn comp_col();
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
 
     // set_init_3 accessors
     fn nvim_call_parse_shape_opt();
-    fn nvim_call_invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
-    fn nvim_call_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
     fn nvim_curbuf_is_empty() -> c_int;
     fn rs_default_fileformat() -> c_int;
@@ -743,7 +743,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
     if (scroll_flags & K_OPT_FLAG_WAS_SET_2) == 0 {
         crate::defaults::rs_set_option_default(K_OPT_SCROLL, OPT_LOCAL);
     }
-    nvim_call_comp_col();
+    comp_col();
 
     // 'window' is only for backwards compatibility with Vi.
     // Default is Rows - 1.
@@ -757,7 +757,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
 ///
 /// Helper used by `rs_set_init_3`.
 unsafe fn shell_is(p: *const c_char, name: *const c_char) -> bool {
-    nvim_call_path_fnamecmp(p, name) == 0
+    path_fnamecmp(p, name) == 0
 }
 
 /// Initialize the options, part three: After reading the .vimrc.
@@ -772,7 +772,7 @@ pub unsafe extern "C" fn rs_set_init_3() {
     let do_sp = (nvim_get_option_flags(K_OPT_SHELLPIPE) & K_OPT_FLAG_WAS_SET_2) == 0;
 
     let mut len: usize = 0;
-    let tail_ptr = nvim_call_invocation_path_tail(p_sh.cast_const(), &raw mut len);
+    let tail_ptr = invocation_path_tail(p_sh.cast_const(), &raw mut len);
     // Duplicate just the basename so we can compare safely.
     let p = xmemdupz(tail_ptr, len);
 
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn rs_set_init_3() {
 // =============================================================================
 
 extern "C" {
-    fn nvim_call_langmap_init();
+    fn langmap_init();
     fn nvim_call_stdpaths_user_state_subpath(name: *const c_char) -> *mut c_char;
     fn nvim_call_runtimepath_default(clean_arg: c_int) -> *mut c_char;
     fn nvim_curbuf_set_b_p_initialized();
@@ -832,12 +832,12 @@ extern "C" {
     fn rs_check_options();
     #[link_name = "rs_last_status"]
     fn nvim_last_status_0(morewin: c_int);
-    fn nvim_call_init_spell_chartab();
+    fn init_spell_chartab();
     fn nvim_call_set_init_expand_env();
     fn nvim_call_save_file_ff_curbuf();
     fn nvim_call_os_env_exists(name: *const c_char) -> c_int;
     fn nvim_call_set_termbidi_true();
-    fn nvim_call_lang_init();
+    fn lang_init();
     fn nvim_call_bind_textdomain_codeset();
     fn nvim_call_set_helplang_default_from_mess_lang();
 
@@ -857,7 +857,7 @@ extern "C" {
 /// Must only be called once during startup, from C main().
 #[export_name = "set_init_1"]
 pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
-    nvim_call_langmap_init();
+    langmap_init();
 
     // Allocate the default option values.
     crate::defaults::rs_alloc_options_default();
@@ -910,7 +910,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
 
     // Use the current chartab for the generic chartab.
     // This is not in didset_options() because it only depends on 'encoding'.
-    nvim_call_init_spell_chartab();
+    init_spell_chartab();
 
     // Expand environment variables and things like "~" for the defaults.
     nvim_call_set_init_expand_env();
@@ -926,7 +926,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
 
     crate::sideeffect::rs_didset_options2();
 
-    nvim_call_lang_init();
+    lang_init();
     rs_set_init_fenc_default();
 
     // GNU gettext: set codeset for translated messages

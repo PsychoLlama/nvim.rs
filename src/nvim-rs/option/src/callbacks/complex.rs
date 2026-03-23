@@ -1369,6 +1369,49 @@ pub unsafe extern "C" fn nvim_bin_didset_sctx_all(opt_flags: c_int) {
     }
 }
 
+// =============================================================================
+// Binary option nobin statics (moved from C option_shim.c)
+// These save/restore global and per-buffer option values when 'binary' changes.
+// =============================================================================
+
+static mut P_ET_NOBIN: c_int = 0;
+static mut P_ML_NOBIN: c_int = 0;
+static mut P_TW_NOBIN: crate::OptInt = 0;
+static mut P_WM_NOBIN: crate::OptInt = 0;
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_tw_nobin() -> crate::OptInt {
+    P_TW_NOBIN
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_set_p_tw_nobin(v: crate::OptInt) {
+    P_TW_NOBIN = v;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_wm_nobin() -> crate::OptInt {
+    P_WM_NOBIN
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_set_p_wm_nobin(v: crate::OptInt) {
+    P_WM_NOBIN = v;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_ml_nobin() -> c_int {
+    P_ML_NOBIN
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_set_p_ml_nobin(v: c_int) {
+    P_ML_NOBIN = c_int::from(v != 0);
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_et_nobin() -> c_int {
+    P_ET_NOBIN
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_set_p_et_nobin(v: c_int) {
+    P_ET_NOBIN = c_int::from(v != 0);
+}
+
 // Saved state for when 'paste' is toggled on.
 static mut PASTE_OLD_P_PASTE: c_int = 0;
 static mut PASTE_SAVE_SM: c_int = 0;

@@ -667,12 +667,6 @@ const char *nvim_get_e_preview_window_exists(void) { return _(e_preview_window_a
 static char *p_term = NULL;
 static char *p_ttytype = NULL;
 
-// Saved values for when 'bin' is set.
-static int p_et_nobin;
-static int p_ml_nobin;
-static OptInt p_tw_nobin;
-static OptInt p_wm_nobin;
-
 #define OPTION_COUNT ARRAY_SIZE(options)
 
 /// :set boolean option prefix
@@ -1011,16 +1005,6 @@ int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
 void nvim_curbuf_set_b_p_ml(int v) { curbuf->b_p_ml = v != 0; }
 int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
-// set_options_bin helpers: nobin statics
-OptInt nvim_get_p_tw_nobin(void) { return p_tw_nobin; }
-void nvim_set_p_tw_nobin(OptInt v) { p_tw_nobin = v; }
-OptInt nvim_get_p_wm_nobin(void) { return p_wm_nobin; }
-void nvim_set_p_wm_nobin(OptInt v) { p_wm_nobin = v; }
-int nvim_get_p_ml_nobin(void) { return p_ml_nobin; }
-void nvim_set_p_ml_nobin(int v) { p_ml_nobin = v != 0; }
-int nvim_get_p_et_nobin(void) { return p_et_nobin; }
-void nvim_set_p_et_nobin(int v) { p_et_nobin = v != 0; }
-
 // =============================================================================
 // Phase 4 (option pass 4) accessors for query.rs migration
 // =============================================================================
@@ -2358,9 +2342,6 @@ void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val)
 OptInt nvim_buf_get_optint_field(buf_T *buf, ptrdiff_t offset) { return *(OptInt *)(((char *)buf) + offset); }
 /// Generic buf_T bool field getter: reads bool field via byte offset (returns 0 or 1).
 int nvim_buf_get_bool_field(buf_T *buf, ptrdiff_t offset) { return (int)(*(bool *)(((char *)buf) + offset)); }
-/// Generic buf_T char* field getter: reads char* value via byte offset.
-char *nvim_buf_get_string_field(buf_T *buf, ptrdiff_t offset) { return *(char **)(((char *)buf) + offset); }
-
 /// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
 

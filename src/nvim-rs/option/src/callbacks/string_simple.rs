@@ -47,9 +47,9 @@ extern "C" {
     fn utf_ptr2char(p: *const c_char) -> c_int;
 
     // Side-effect helpers
-    fn nvim_call_init_chartab();
-    fn nvim_call_msg_grid_validate();
-    fn nvim_call_check_opt_wim() -> c_int;
+    fn init_chartab();
+    fn msg_grid_validate();
+    fn check_opt_wim() -> c_int;
     fn nvim_call_briopt_check_win(val: *const c_char, win: crate::WinHandle) -> c_int;
     fn nvim_win_get_p_briopt_addr(win: crate::WinHandle) -> *const c_void;
     static mut cmdpreview: bool;
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn rs_did_set_lispoptions(args: *mut c_void) -> CallbackRe
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_wildmode(args: *mut c_void) -> CallbackResult {
     let _ = args;
-    if nvim_call_check_opt_wim() == FAIL {
+    if check_opt_wim() == FAIL {
         return E_INVARG;
     }
     callback_ok()
@@ -300,8 +300,8 @@ pub unsafe extern "C" fn rs_did_set_display(args: *mut c_void) -> CallbackResult
     if !errmsg.is_null() {
         return errmsg;
     }
-    nvim_call_init_chartab();
-    nvim_call_msg_grid_validate();
+    init_chartab();
+    msg_grid_validate();
     callback_ok()
 }
 
