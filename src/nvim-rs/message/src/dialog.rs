@@ -15,6 +15,10 @@ extern "C" {
     static silent_mode: bool;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+    /// Set message kind for ext_messages protocol (implemented in Rust display.rs)
+    fn msg_ext_set_kind(kind: *const c_char);
+    /// Output highlighted message string
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
 }
 
 // ============================================================================
@@ -229,6 +233,31 @@ pub const extern "C" fn rs_dialog_yes() -> c_int {
 #[no_mangle]
 pub const extern "C" fn rs_dialog_no() -> c_int {
     DialogResponse::NO.0
+}
+
+// ============================================================================
+// Confirm message display (migrated from C display_confirm_msg)
+// ============================================================================
+
+/// Highlight field for MoreMsg (HLF_M = 6)
+const HLF_M: c_int = 6;
+
+/// Display the current confirm message.
+///
+/// Equivalent to the C function `display_confirm_msg()`.
+/// Avoids truncation by q at the more prompt by incrementing confirm_msg_used.
+///
+/// # Safety
+/// Accesses global message state.
+#[export_name = "display_confirm_msg"]
+pub unsafe extern "C" fn rs_display_confirm_msg() {
+    // Avoid that 'q' at the more prompt truncates the message here.
+    confirm_msg_used += 1;
+    if !confirm_msg.is_null() {
+        msg_ext_set_kind(c"confirm".as_ptr());
+        msg_puts_hl(confirm_msg.cast_const(), HLF_M, false);
+    }
+    confirm_msg_used -= 1;
 }
 
 /// Get the VIM_CANCEL response value.

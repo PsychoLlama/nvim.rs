@@ -2612,17 +2612,7 @@ static void copy_confirm_hotkeys(const char *buttons, int default_button_idx,
   *msgp = NUL;
 }
 
-/// Display the ":confirm" message.  Also called when screen resized.
-static void display_confirm_msg(void)
-{
-  // Avoid that 'q' at the more prompt truncates the message here.
-  confirm_msg_used++;
-  if (confirm_msg != NULL) {
-    msg_ext_set_kind("confirm");
-    msg_puts_hl(confirm_msg, HLF_M, false);
-  }
-  confirm_msg_used--;
-}
+// display_confirm_msg migrated to Rust (dialog.rs)
 
 int vim_dialog_yesno(int type, char *title, char *message, int dflt)
 {
