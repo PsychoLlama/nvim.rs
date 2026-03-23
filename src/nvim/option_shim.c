@@ -377,8 +377,6 @@ void nvim_unset_vim_env(void) {
   }
 }
 
-// Special accessors
-int nvim_option_get_secure(void) { return secure; }
 
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 
@@ -2033,11 +2031,7 @@ int nvim_curwin_get_w_briopt_list(void) { return curwin->w_briopt_list ? 1 : 0; 
 // nvim_get_secure, nvim_set_secure are defined in ex_docmd.c
 // nvim_get_sandbox is defined in undo.c
 
-/// Call do_filetype_autocmd(curbuf, value_changed)
-void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, value_changed != 0); }
 
-/// Set options[opt_idx].flags |= kOptFlagWasSet
-void nvim_option_set_was_set_flag(OptIndex opt_idx) { options[opt_idx].flags |= kOptFlagWasSet; }
 
 /// Error message strings for did_set_option
 const char *nvim_get_e_unknown_option2(void) { return e_unknown_option2; }
@@ -2383,8 +2377,6 @@ int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 // didset_string_options is now implemented in Rust; this call goes directly to Rust.
 // (The Rust implementation is registered via #[export_name = "didset_string_options"])
 extern void didset_string_options(void);  // defined in Rust optionstr crate
-/// compile_cap_prog(curwin->w_s) wrapper.
-void nvim_call_compile_cap_prog_curwin(void) { compile_cap_prog(curwin->w_s); }
 /// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
 void nvim_call_curbuf_tabstop_set_vsts(void)
 {

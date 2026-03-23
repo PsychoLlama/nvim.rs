@@ -45,7 +45,7 @@ extern "C" {
     // Option metadata accessors
     fn nvim_get_option_immutable(opt_idx: c_int) -> c_int;
     fn nvim_option_get_flags_val(opt_idx: c_int) -> c_uint;
-    fn nvim_option_set_was_set_flag(opt_idx: c_int);
+    fn nvim_option_get_flags_ptr(opt_idx: c_int) -> *mut c_uint;
 
     // Security/sandbox state
     fn nvim_get_secure() -> c_int;
@@ -95,7 +95,7 @@ extern "C" {
 
     // Special autocmds for file type / syntax / spell
     fn rs_do_syntax_autocmd(buf: *mut std::ffi::c_void, value_changed: c_int);
-    fn nvim_do_filetype_autocmd(value_changed: c_int);
+    fn do_filetype_autocmd(buf: *mut std::ffi::c_void, force: bool);
     fn rs_do_spelllang_source(win: *mut std::ffi::c_void);
 
     // curbuf / curwin accessors
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn rs_did_set_option(
         rs_do_syntax_autocmd(curbuf, value_changed);
     } else if varp == ft_addr {
         if (opt_flags & OPT_MODELINE) == 0 || value_changed != 0 {
-            nvim_do_filetype_autocmd(value_changed);
+            do_filetype_autocmd(curbuf, value_changed != 0);
         }
     } else if varp == spl_addr {
         rs_do_spelllang_source(curwin);
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     rs_check_redraw_for(curbuf, curwin, opt_flags_val);
 
     if errmsg.is_null() {
-        nvim_option_set_was_set_flag(opt_idx);
+        *nvim_option_get_flags_ptr(opt_idx) |= crate::setops::K_OPT_FLAG_WAS_SET;
 
         let flagsp = rs_insecure_flag(curwin, opt_idx, opt_flags);
         let flagsp_local = if scope_both {
