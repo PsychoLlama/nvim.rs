@@ -50,7 +50,6 @@ use std::os::raw::c_char;
 // Additional C accessor functions
 extern "C" {
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_compl_shown_match_exists() -> c_int;
 
     // For ins_compl_col_range_attr
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)

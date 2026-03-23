@@ -10,32 +10,25 @@ use std::os::raw::{c_int, c_uint};
 
 use crate::match_list::ComplMatch;
 
+use crate::match_list::{
+    is_first_match, nvim_compl_get_curr_match, nvim_compl_get_first_match,
+    nvim_compl_get_shown_match, nvim_compl_set_curr_match, nvim_compl_set_shown_match,
+};
+
 // C accessor functions
 extern "C" {
-    // Match list accessors
-    fn nvim_compl_get_first_match() -> ComplMatch;
-
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
 
     // Match identification
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
     // Match array accessor
     fn nvim_get_compl_match_array_exists() -> c_int;
 
-    // Completeopt flags
-
     // For rs_ins_compl_del_pum
     #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
-}
-
-/// Check if a match is the first match.
-#[inline]
-unsafe fn is_first_match(m: ComplMatch) -> bool {
-    !m.is_null() && nvim_compl_is_first_match(m) != 0
 }
 
 /// Check if a match is at the original text position.
@@ -123,7 +116,6 @@ pub const extern "C" fn rs_pum_calculate_selected(
 // =============================================================================
 
 extern "C" {
-    fn nvim_compl_get_curr_match() -> ComplMatch;
     fn nvim_compl_match_get_cp_number(m: ComplMatch) -> c_int;
 }
 
@@ -194,8 +186,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_pum_display_compl(cur: c_int, array_changed: c_int);
-    fn nvim_compl_curr_neq_shown() -> c_int;
-    fn nvim_compl_set_curr_to_shown();
 }
 
 /// Show the popup menu for completion matches.
@@ -254,8 +244,10 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     nvim_set_cursor_col(col);
 
     // After adding leader, set the current match to shown match.
-    if crate::vars::nvim_get_compl_started() != 0 && nvim_compl_curr_neq_shown() != 0 {
-        nvim_compl_set_curr_to_shown();
+    if crate::vars::nvim_get_compl_started() != 0
+        && nvim_compl_get_curr_match() != nvim_compl_get_shown_match()
+    {
+        nvim_compl_set_curr_match(nvim_compl_get_shown_match());
     }
 
     if nvim_has_completechanged_event() != 0 {
@@ -312,8 +304,6 @@ extern "C" {
     fn nvim_compl_match_clear_icase(m: ComplMatch);
     fn nvim_compl_leader_eq_orig_text() -> c_int;
     fn nvim_set_compl_shown_to_first_or_next(no_select: c_int);
-    fn nvim_compl_get_shown_match() -> ComplMatch;
-    fn nvim_compl_set_shown_match(m: ComplMatch);
     fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;

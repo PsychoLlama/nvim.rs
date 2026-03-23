@@ -337,10 +337,10 @@ static const char e_compldel[] = N_("E840: Completion function deleted text");
 // ins_compl_get_exp(), when new matches are added to the list.
 // "compl_old_match" points to previous "compl_curr_match".
 
-static compl_T *compl_first_match = NULL;
-static compl_T *compl_curr_match = NULL;
-static compl_T *compl_shown_match = NULL;
-static compl_T *compl_old_match = NULL;
+compl_T *compl_first_match = NULL;
+compl_T *compl_curr_match = NULL;
+compl_T *compl_shown_match = NULL;
+compl_T *compl_old_match = NULL;
 
 /// list used to store the compl_T which have the max score
 static compl_T **compl_best_matches = NULL;
@@ -397,8 +397,8 @@ static extmark_undo_vec_t compl_orig_extmarks;
 int compl_cont_mode = 0;
 static expand_T compl_xp;
 
-static win_T *compl_curr_win = NULL;  ///< win where completion is active
-static buf_T *compl_curr_buf = NULL;  ///< buf where completion is active
+win_T *compl_curr_win = NULL;  ///< win where completion is active
+buf_T *compl_curr_buf = NULL;  ///< buf where completion is active
 
 #define COMPL_INITIAL_TIMEOUT_MS    80
 // Autocomplete uses a decaying timeout: starting from COMPL_INITIAL_TIMEOUT_MS,
@@ -1126,27 +1126,13 @@ static void ins_compl_item_free(compl_T *match)
   xfree(match);
 }
 
-// C accessors for completion state (used by Rust)
-win_T *nvim_get_compl_curr_win(void) { return compl_curr_win; }
-buf_T *nvim_get_compl_curr_buf(void) { return compl_curr_buf; }
-// Match list accessors for Rust (using void* since compl_T is static)
-void *nvim_compl_get_first_match(void) { return compl_first_match; }
-void nvim_compl_set_first_match(void *m) { compl_first_match = (compl_T *)m; }
-void *nvim_compl_get_curr_match(void) { return compl_curr_match; }
-void nvim_compl_set_curr_match(void *m) { compl_curr_match = (compl_T *)m; }
-void *nvim_compl_get_shown_match(void) { return compl_shown_match; }
-void nvim_compl_set_shown_match(void *m) { compl_shown_match = (compl_T *)m; }
-void *nvim_compl_get_old_match(void) { return compl_old_match; }
-void nvim_compl_set_old_match(void *m) { compl_old_match = (compl_T *)m; }
-
-// Match node accessors for Rust (using void* since compl_T is static)
+// Match node accessors for Rust (using void* since compl_T is opaque)
 void *nvim_compl_match_get_next(void *m) { return m ? ((compl_T *)m)->cp_next : NULL; }
 void nvim_compl_match_set_next(void *m, void *next) { if (m) ((compl_T *)m)->cp_next = (compl_T *)next; }
 void *nvim_compl_match_get_prev(void *m) { return m ? ((compl_T *)m)->cp_prev : NULL; }
 void nvim_compl_match_set_prev(void *m, void *prev) { if (m) ((compl_T *)m)->cp_prev = (compl_T *)prev; }
 int nvim_compl_match_get_flags(void *m) { return m ? ((compl_T *)m)->cp_flags : 0; }
 int nvim_compl_match_get_score(void *m) { return m ? ((compl_T *)m)->cp_score : -1; }
-int nvim_compl_is_first_match(void *m) { return m == compl_first_match ? 1 : 0; }
 int nvim_compl_match_at_original_text(void *m) { return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0; }
 int nvim_compl_match_get_cpt_source_idx(void *m) { return m ? ((compl_T *)m)->cp_cpt_source_idx : -1; }
 int nvim_compl_match_get_in_match_array(void *m) { return (m && ((compl_T *)m)->cp_in_match_array) ? 1 : 0; }
@@ -1215,8 +1201,6 @@ void nvim_compl_match_set_cp_number(void *m, int num) { if (m) ((compl_T *)m)->c
 const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 uint64_t nvim_get_cpt_start_tv(void) { return cpt_sources_array[cpt_sources_index].compl_start_tv; }
 void nvim_set_cpt_sources_start_tv(int idx, uint64_t ts) { cpt_sources_array[idx].compl_start_tv = ts; }
-void nvim_clear_compl_curr_win(void) { compl_curr_win = NULL; }
-void nvim_clear_compl_curr_buf(void) { compl_curr_buf = NULL; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
 void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
@@ -1949,11 +1933,7 @@ const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
 size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
 const char *nvim_get_compl_orig_text_data(void) { return compl_orig_text.data; }
 size_t nvim_get_compl_orig_text_size(void) { return compl_orig_text.size; }
-int nvim_compl_shown_match_exists(void) { return compl_shown_match != NULL ? 1 : 0; }
 int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
-// Match list and popup menu accessors (used by Rust insexpand crate)
-int nvim_compl_first_match_is_null(void) { return compl_first_match == NULL ? 1 : 0; }
-int nvim_compl_curr_match_is_null(void) { return compl_curr_match == NULL ? 1 : 0; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 
 // Complex null-guard accessors
@@ -2005,9 +1985,6 @@ void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()")
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
-int nvim_compl_curr_neq_shown(void) { return (compl_curr_match != compl_shown_match) ? 1 : 0; }
-void nvim_compl_set_curr_to_shown(void) { compl_curr_match = compl_shown_match; }
-
 // Compound accessors for ins_compl_delete (Phase 3)
 int nvim_ins_compl_delete_body(int col) {
   String remaining = STRING_INIT;
@@ -2163,7 +2140,6 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 }
 
 // --- compl_old_match / compl_curr_match compound ops ---
-void nvim_ins_compl_set_old_match_to_curr(void) { compl_old_match = compl_curr_match; }
 int nvim_compl_curr_vs_old_match_changed(void) {
   return (compl_curr_match != compl_old_match) ? 1 : 0;
 }
@@ -2289,9 +2265,6 @@ void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
   API_CLEAR_STRING(compl_leader);
   compl_leader = cbuf_to_string(data, len);
 }
-int nvim_compl_shown_match_is_null(void) { return compl_shown_match == NULL ? 1 : 0; }
-void nvim_compl_set_shown_to_first(void) { compl_shown_match = compl_first_match; }
-
 // Raw mergesort accessor: sorts linked list starting at `head`, returns new head.
 // compare_type: 0 = fuzzy (descending score), 1 = nearest (ascending score).
 void *nvim_mergesort_compl_list_raw(void *head, int compare_type)

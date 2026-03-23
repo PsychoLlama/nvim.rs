@@ -65,11 +65,6 @@ pub unsafe extern "C" fn rs_refresh_count_chars(ptr: *const c_char, len: usize) 
 // Phase 8: Restart and Cleanup Helpers
 // =============================================================================
 
-// Additional C accessor functions
-extern "C" {
-    fn nvim_compl_first_match_is_null() -> c_int;
-}
-
 /// Calculate how much the leader has changed.
 ///
 /// Returns the difference in size between current leader and original text.

@@ -20,15 +20,9 @@ use std::os::raw::c_int;
 
 // C accessor functions for state
 extern "C" {
-    // State flag accessors
-
-    // Match state
-    fn nvim_compl_first_match_is_null() -> c_int;
-    fn nvim_compl_curr_match_is_null() -> c_int;
-    fn nvim_compl_shown_match_exists() -> c_int;
+    // Match state (compl_T field accessors - still in C)
     fn nvim_compl_shown_match_is_singular() -> c_int;
     fn nvim_compl_shown_match_is_first() -> c_int;
-
 }
 
 // =============================================================================
@@ -96,8 +90,6 @@ const CONT_LOCAL: c_int = 32;
 // =============================================================================
 
 extern "C" {
-    fn nvim_clear_compl_curr_win();
-    fn nvim_clear_compl_curr_buf();
     fn nvim_compl_clear_pattern();
     fn nvim_compl_clear_leader();
     #[link_name = "edit_submode_extra"]
@@ -124,8 +116,8 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     crate::vars::nvim_set_compl_matches(0);
     crate::vars::nvim_set_compl_selected_item(-1);
     crate::vars::nvim_set_compl_ins_end_col(0);
-    nvim_clear_compl_curr_win();
-    nvim_clear_compl_curr_buf();
+    crate::vars::nvim_clear_compl_curr_win();
+    crate::vars::nvim_clear_compl_curr_buf();
     nvim_compl_clear_pattern();
     nvim_compl_clear_leader();
     g_edit_submode_extra = core::ptr::null_mut();

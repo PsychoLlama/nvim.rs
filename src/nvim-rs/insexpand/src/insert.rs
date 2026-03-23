@@ -7,13 +7,14 @@
 #![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int};
 
+use crate::match_list::compl_shown_match;
+
 // C accessor functions
 extern "C" {
     // State accessors
     fn nvim_get_cursor_col() -> c_int;
 
     // Match accessors
-    fn nvim_compl_shown_match_exists() -> c_int;
     fn nvim_compl_shown_match_str_size() -> usize;
     #[allow(dead_code)]
     fn nvim_compl_shown_match_has_newline() -> c_int;
@@ -259,7 +260,7 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
 /// Requires valid completion state; called from insert mode only.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int) {
-    if nvim_compl_shown_match_exists() == 0 {
+    if compl_shown_match.is_null() {
         return;
     }
 

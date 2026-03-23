@@ -154,7 +154,6 @@ extern "C" {
     fn nvim_get_compl_leader_size() -> usize;
     fn nvim_get_compl_orig_text_data() -> *const c_char;
     fn nvim_get_compl_orig_text_size() -> usize;
-    fn nvim_compl_first_match_is_null() -> c_int;
     fn nvim_clear_compl_best_matches();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
@@ -513,7 +512,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
         if !leader.is_null() {
             p = leader;
             plen = nvim_get_compl_leader_size();
-        } else if nvim_compl_first_match_is_null() == 0 {
+        } else if !crate::match_list::compl_first_match.is_null() {
             p = nvim_get_compl_orig_text_data();
             plen = nvim_get_compl_orig_text_size();
         }

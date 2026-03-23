@@ -85,7 +85,6 @@ extern "C" {
     fn nvim_ins_compl_st_get_first_lnum() -> c_int;
 
     // old_match / curr_match ops
-    fn nvim_ins_compl_set_old_match_to_curr();
     fn nvim_compl_curr_vs_old_match_changed() -> c_int;
     fn nvim_compl_old_match_advance_curr();
     fn nvim_compl_curr_rewind_to_head();
@@ -511,7 +510,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     }
 
     // Remember the last current match
-    nvim_ins_compl_set_old_match_to_curr();
+    crate::match_list::nvim_compl_set_old_match(crate::match_list::nvim_compl_get_curr_match());
 
     // Set cur_match_pos based on direction
     nvim_ins_compl_st_set_cur_match_dir();

@@ -10,10 +10,6 @@ use std::os::raw::{c_char, c_int};
 // C accessor functions
 extern "C" {
     fn pum_visible() -> c_int;
-
-    // Match info accessors
-    fn nvim_compl_first_match_is_null() -> c_int;
-    fn nvim_compl_curr_match_is_null() -> c_int;
 }
 
 // CTRL-X mode constants (for mode string conversion)

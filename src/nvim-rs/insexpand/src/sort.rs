@@ -25,24 +25,22 @@ const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
 const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
 const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
 
+use crate::match_list::{
+    is_first_match, nvim_compl_get_first_match, nvim_compl_get_shown_match,
+    nvim_compl_set_first_match, nvim_compl_set_shown_match,
+};
+
 // C accessor functions
 extern "C" {
-    // Match list accessors
-    fn nvim_compl_get_first_match() -> ComplMatch;
-
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_next(m: ComplMatch, next: ComplMatch);
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_prev(m: ComplMatch, prev: ComplMatch);
 
-    // Match list mutations
-    fn nvim_compl_set_first_match(m: ComplMatch);
+    // Match list compound operations still in C
     fn nvim_compl_first_match_get_prev() -> ComplMatch;
     fn nvim_compl_first_match_next_is_first() -> c_int;
-
-    // Match identification
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
 
     // Match score accessor
     fn nvim_compl_match_get_score(m: ComplMatch) -> c_int;
@@ -62,8 +60,6 @@ extern "C" {
 
     // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
     fn nvim_mergesort_compl_list_raw(head: ComplMatch, compare_type: c_int) -> ComplMatch;
-    fn nvim_compl_get_shown_match() -> ComplMatch;
-    fn nvim_compl_set_shown_match(m: ComplMatch);
     fn nvim_compl_shown_match_is_sentinel(forward: c_int) -> c_int;
     fn rs_get_cot_flags() -> c_uint;
     fn rs_compl_shows_dir_forward() -> c_int;
@@ -81,12 +77,6 @@ extern "C" {
     fn rs_ctrl_x_mode_whole_line() -> c_int;
     fn nvim_xmalloc(size: usize) -> *mut u8;
     fn nvim_xfree(ptr: *mut u8);
-}
-
-/// Check if a match is the first match.
-#[inline]
-unsafe fn is_first_match(m: ComplMatch) -> bool {
-    !m.is_null() && nvim_compl_is_first_match(m) != 0
 }
 
 /// Set fuzzy score for all completion matches.
@@ -291,7 +281,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
     } else {
         nvim_compl_match_get_next(next1)
     };
-    let more_candidates = !nn_compl.is_null() && nvim_compl_is_first_match(nn_compl) == 0;
+    let more_candidates = !nn_compl.is_null() && !is_first_match(nn_compl);
 
     // compl = whole_line ? first : first->cp_next
     let compl = if rs_ctrl_x_mode_whole_line() != 0 {

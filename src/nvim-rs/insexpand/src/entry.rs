@@ -301,7 +301,6 @@ extern "C" {
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
-    fn nvim_compl_set_curr_to_shown();
     fn nvim_ins_complete_eat_got_int();
     fn nvim_compl_first_match_next_is_first() -> c_int;
     fn rs_ctrl_x_mode_path_patterns() -> c_int;
@@ -380,7 +379,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
         // All matches have been found
         crate::vars::nvim_set_compl_matches(n);
     }
-    nvim_compl_set_curr_to_shown();
+    crate::match_list::nvim_compl_set_curr_match(crate::match_list::nvim_compl_get_shown_match());
     crate::vars::nvim_set_compl_direction(crate::vars::nvim_get_compl_shows_dir());
 
     // Eat the ESC that vgetc() returns after a CTRL-C to avoid leaving Insert mode

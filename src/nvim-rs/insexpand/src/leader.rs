@@ -439,16 +439,18 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
 // Phase 2: rs_ins_compl_bs
 // =============================================================================
 
+use crate::match_list::{
+    compl_first_match, compl_shown_match, is_first_match, nvim_compl_get_curr_match,
+    nvim_compl_get_first_match, nvim_compl_get_shown_match, nvim_compl_set_curr_match,
+    nvim_compl_set_shown_match,
+};
+
 extern "C" {
     // For ins_compl_bs
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
     fn nvim_mb_ptr_back(line: *const c_char, p: *const c_char) -> *const c_char;
     fn nvim_can_bs_start() -> c_int;
     fn nvim_api_clear_and_set_compl_leader(data: *const c_char, len: usize);
-    fn nvim_compl_shown_match_is_null() -> c_int;
-    fn nvim_compl_set_shown_to_first();
-    fn nvim_compl_set_curr_to_shown();
-    fn nvim_compl_first_match_is_null() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_delete(new_leader: c_int);
     fn rs_ins_compl_need_restart() -> c_int;
@@ -516,16 +518,16 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 
     // Clear selection if a menu item is currently selected in autocompletion
     if crate::vars::nvim_get_compl_autocomplete() != 0
-        && nvim_compl_first_match_is_null() == 0
+        && !compl_first_match.is_null()
         && rs_ins_compl_has_preinsert() == 0
     {
-        nvim_compl_set_shown_to_first();
+        compl_shown_match = compl_first_match;
     }
 
     rs_ins_compl_new_leader();
-    if nvim_compl_shown_match_is_null() == 0 {
+    if !compl_shown_match.is_null() {
         // Make sure current match is not a hidden item.
-        nvim_compl_set_curr_to_shown();
+        nvim_compl_set_curr_match(compl_shown_match);
     }
     NUL
 }
@@ -754,9 +756,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_compl_get_first_match() -> ComplMatch;
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
     fn nvim_compl_match_clear_icase(m: ComplMatch);
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
@@ -825,7 +825,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
             break;
         }
         // Stop when we wrap back to the first match
-        if !first.is_null() && nvim_compl_is_first_match(compl) != 0 {
+        if !first.is_null() && is_first_match(compl) {
             break;
         }
 
@@ -920,7 +920,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
         if compl.is_null() {
             break;
         }
-        if nvim_compl_is_first_match(compl) != 0 {
+        if is_first_match(compl) {
             break;
         }
     }
@@ -970,10 +970,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
 // nvim_ins_compl_addfrommatch_body (called from edit.c)
 // =============================================================================
 
-extern "C" {
-    fn nvim_compl_get_shown_match() -> crate::match_list::ComplMatch;
-    // rs_ins_compl_addleader is defined in crate::insert, call directly
-}
+// rs_ins_compl_addleader is defined in crate::insert, call directly
 
 /// Add one character from the currently shown match to the leader.
 ///
@@ -1016,7 +1013,7 @@ pub unsafe extern "C" fn rs_ins_compl_addfrommatch() {
         let mut found: *const c_char = std::ptr::null();
         let mut found_size: usize = 0;
         let mut cp: ComplMatch = nvim_compl_match_get_next(shown);
-        while !cp.is_null() && nvim_compl_is_first_match(cp) == 0 {
+        while !cp.is_null() && !is_first_match(cp) {
             let leader_data = nvim_get_compl_leader_data();
             let leader_size = nvim_get_compl_leader_size();
             if leader_data.is_null() || rs_ins_compl_equal(cp, leader_data, leader_size) != 0 {

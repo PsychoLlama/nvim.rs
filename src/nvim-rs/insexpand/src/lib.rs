@@ -143,9 +143,11 @@ extern "C" {
     #[link_name = "vim_iswordc"]
     fn rs_vim_iswordc(c: c_int) -> bool;
 
-    // Completion window/buffer accessors
-    fn nvim_get_compl_curr_win() -> WinHandle;
-    fn nvim_get_compl_curr_buf() -> BufHandle;
+    // Completion window/buffer globals (direct access)
+    #[link_name = "compl_curr_win"]
+    static mut g_compl_curr_win: WinHandle;
+    #[link_name = "compl_curr_buf"]
+    static mut g_compl_curr_buf: BufHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     // Option accessors
     fn nvim_get_p_ic() -> c_int;
@@ -163,10 +165,11 @@ extern "C" {
     fn nvim_get_compl_orig_text_data() -> *const c_char;
     fn nvim_get_compl_orig_text_size() -> usize;
 
-    // Shown match accessors
-    fn nvim_compl_shown_match_exists() -> c_int;
+    // Shown match accessors (compl_T field accessors - still in C)
     fn nvim_compl_shown_match_is_singular() -> c_int;
     fn nvim_compl_shown_match_is_first() -> c_int;
+    #[link_name = "compl_shown_match"]
+    static mut g_compl_shown_match: crate::match_list::ComplMatch;
     fn nvim_compl_shown_match_str_size() -> usize;
     fn nvim_compl_shown_match_has_newline() -> c_int;
 
@@ -355,8 +358,8 @@ pub unsafe extern "C" fn rs_ins_compl_win_active(wp: WinHandle) -> c_int {
     if vars::nvim_get_compl_started() == 0 {
         return 0;
     }
-    let curr_win = nvim_get_compl_curr_win();
-    let curr_buf = nvim_get_compl_curr_buf();
+    let curr_win = g_compl_curr_win;
+    let curr_buf = g_compl_curr_buf;
     let wp_buf = nvim_win_get_buffer(wp);
     c_int::from(wp == curr_win && wp_buf == curr_buf)
 }
@@ -738,14 +741,14 @@ pub unsafe extern "C" fn rs_ins_compl_leader_len() -> usize {
 /// (the original text entry).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_is_match_selected() -> c_int {
-    c_int::from(nvim_compl_shown_match_exists() != 0 && nvim_compl_shown_match_is_first() == 0)
+    c_int::from(!g_compl_shown_match.is_null() && nvim_compl_shown_match_is_first() == 0)
 }
 
 /// Return whether there currently is a shown match.
 /// Returns true if compl_shown_match is NULL or is not singular.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_has_shown_match() -> c_int {
-    c_int::from(nvim_compl_shown_match_exists() == 0 || nvim_compl_shown_match_is_singular() == 0)
+    c_int::from(g_compl_shown_match.is_null() || nvim_compl_shown_match_is_singular() == 0)
 }
 
 /// Return whether the shown match is long enough.
@@ -754,7 +757,7 @@ pub unsafe extern "C" fn rs_ins_compl_has_shown_match() -> c_int {
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ins_compl_long_shown_match() -> c_int {
-    if nvim_compl_shown_match_exists() == 0 {
+    if g_compl_shown_match.is_null() {
         return 0;
     }
     let str_size = nvim_compl_shown_match_str_size();

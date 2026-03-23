@@ -49,6 +49,16 @@ extern "C" {
     static mut cpt_sources_count: c_int;
     // pumitem_T* - treated as opaque pointer
     static mut compl_match_array: *mut u8;
+
+    // --- compl_T* match list pointers (treated as opaque *mut c_void) ---
+    static mut compl_first_match: *mut core::ffi::c_void;
+    static mut compl_curr_match: *mut core::ffi::c_void;
+    static mut compl_shown_match: *mut core::ffi::c_void;
+    static mut compl_old_match: *mut core::ffi::c_void;
+
+    // --- window/buffer pointers (opaque handles) ---
+    static mut compl_curr_win: *mut core::ffi::c_void;
+    static mut compl_curr_buf: *mut core::ffi::c_void;
 }
 
 // ============================================================================
@@ -340,4 +350,74 @@ pub unsafe fn nvim_xfree_compl_match_array() {
         xfree(compl_match_array);
         compl_match_array = core::ptr::null_mut();
     }
+}
+
+// ============================================================================
+// Match list pointer accessors (compl_first_match, compl_curr_match, etc.)
+// ============================================================================
+
+use core::ffi::c_void;
+
+#[inline]
+pub unsafe fn nvim_get_compl_first_match() -> *mut c_void {
+    compl_first_match
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_first_match(m: *mut c_void) {
+    compl_first_match = m;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_curr_match() -> *mut c_void {
+    compl_curr_match
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_curr_match(m: *mut c_void) {
+    compl_curr_match = m;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_shown_match() -> *mut c_void {
+    compl_shown_match
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_shown_match(m: *mut c_void) {
+    compl_shown_match = m;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_old_match() -> *mut c_void {
+    compl_old_match
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_old_match(m: *mut c_void) {
+    compl_old_match = m;
+}
+
+// ============================================================================
+// Window/buffer pointer accessors
+// ============================================================================
+
+#[inline]
+pub unsafe fn nvim_get_compl_curr_win() -> *mut c_void {
+    compl_curr_win
+}
+
+#[inline]
+pub unsafe fn nvim_clear_compl_curr_win() {
+    compl_curr_win = core::ptr::null_mut();
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_curr_buf() -> *mut c_void {
+    compl_curr_buf
+}
+
+#[inline]
+pub unsafe fn nvim_clear_compl_curr_buf() {
+    compl_curr_buf = core::ptr::null_mut();
 }

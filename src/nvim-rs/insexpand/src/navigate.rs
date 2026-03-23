@@ -7,21 +7,19 @@ use std::os::raw::{c_int, c_void};
 
 use crate::match_list::ComplMatch;
 
+use crate::match_list::{
+    is_first_match, nvim_compl_get_curr_match, nvim_compl_get_first_match,
+    nvim_compl_get_shown_match, nvim_compl_set_curr_match, nvim_compl_set_first_match,
+    nvim_compl_set_shown_match,
+};
+
 // C accessor functions
 extern "C" {
-    fn nvim_compl_get_first_match() -> ComplMatch;
-    fn nvim_compl_set_first_match(m: ComplMatch);
-    fn nvim_compl_get_curr_match() -> ComplMatch;
-    fn nvim_compl_set_curr_match(m: ComplMatch);
-    fn nvim_compl_get_shown_match() -> ComplMatch;
-    fn nvim_compl_set_shown_match(m: ComplMatch);
-
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_next(m: ComplMatch, next: ComplMatch);
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_prev(m: ComplMatch, prev: ComplMatch);
 
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
     fn nvim_compl_item_free(m: ComplMatch);
 
@@ -45,12 +43,6 @@ const BACKWARD: c_int = -1;
 #[inline]
 unsafe fn match_at_original_text(m: ComplMatch) -> bool {
     !m.is_null() && nvim_compl_match_at_original_text(m) != 0
-}
-
-/// Check if a match is the first match.
-#[inline]
-unsafe fn is_first_match(m: ComplMatch) -> bool {
-    !m.is_null() && nvim_compl_is_first_match(m) != 0
 }
 
 // =============================================================================

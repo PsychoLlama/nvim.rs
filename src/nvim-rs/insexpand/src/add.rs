@@ -31,13 +31,10 @@ const CP_FAST: c_int = 32;
 
 use std::os::raw::c_char;
 
+use crate::match_list::{is_first_match, nvim_compl_get_curr_match, nvim_compl_get_first_match};
+
 // C accessor functions
 extern "C" {
-    // Match list accessors
-    fn nvim_compl_get_first_match() -> ComplMatch;
-    #[allow(dead_code)]
-    fn nvim_compl_get_curr_match() -> ComplMatch;
-
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
@@ -45,7 +42,6 @@ extern "C" {
     fn nvim_compl_match_set_prev(m: ComplMatch, prev: ComplMatch);
 
     // Match identification
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
     // Match properties
@@ -57,20 +53,12 @@ extern "C" {
 
     // Standard string comparison (from libc, always available)
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
-
-    // Direction accessor
 }
 
 /// Check if a match is at the original text position.
 #[inline]
 unsafe fn match_at_original_text(m: ComplMatch) -> bool {
     !m.is_null() && nvim_compl_match_at_original_text(m) != 0
-}
-
-/// Check if a match is the first match.
-#[inline]
-unsafe fn is_first_match(m: ComplMatch) -> bool {
-    !m.is_null() && nvim_compl_is_first_match(m) != 0
 }
 
 /// Check if a completion match's string equals a given prefix.

@@ -11,15 +11,14 @@ use nvim_buffer::BufHandle;
 
 use crate::match_list::ComplMatch;
 
+use crate::match_list::{is_first_match, nvim_compl_get_shown_match, nvim_compl_set_shown_match};
+
 // C accessor functions
 extern "C" {
     // cot flags
     fn rs_get_cot_flags() -> c_uint;
 
-    // compl_shown_match accessors
-    fn nvim_compl_get_shown_match() -> ComplMatch;
-    fn nvim_compl_set_shown_match(m: ComplMatch);
-    fn nvim_compl_shown_match_exists() -> c_int;
+    // compl_shown_match compound accessors (still in C, need compl_T fields)
     fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_compl_shown_match_score() -> c_int;
     fn nvim_compl_shown_match_has_fname() -> c_int;
@@ -28,8 +27,6 @@ extern "C" {
     // match list traversal
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
-    fn nvim_compl_first_match_is_null() -> c_int;
     fn nvim_get_compl_match_array_exists() -> c_int;
 
     // leader/startcol: rs_get_leader_for_startcol_data/size are defined in Rust (leader.rs)
@@ -133,19 +130,18 @@ unsafe fn find_next_completion_match(
             }
             let updated_shown = nvim_compl_get_shown_match();
             let updated_shown_next = nvim_compl_match_get_next(updated_shown);
-            found_end = nvim_compl_first_match_is_null() == 0
-                && ((!updated_shown_next.is_null()
-                    && nvim_compl_is_first_match(updated_shown_next) != 0)
-                    || nvim_compl_is_first_match(updated_shown) != 0);
+            found_end = !crate::match_list::compl_first_match.is_null()
+                && ((!updated_shown_next.is_null() && is_first_match(updated_shown_next))
+                    || is_first_match(updated_shown));
         } else if rs_compl_shows_dir_backward() != 0 && !shown_prev.is_null() {
-            let was_first = nvim_compl_is_first_match(shown) != 0;
+            let was_first = is_first_match(shown);
             if nvim_get_compl_match_array_exists() != 0 {
                 rs_find_next_match_in_menu();
             } else {
                 nvim_compl_set_shown_match(shown_prev);
             }
             let updated_shown = nvim_compl_get_shown_match();
-            found_end = was_first || nvim_compl_is_first_match(updated_shown) != 0;
+            found_end = was_first || is_first_match(updated_shown);
         } else {
             if !allow_get_expansion {
                 if advance {
@@ -270,7 +266,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
 
     // When user complete function return -1 for findstart which is next
     // time of 'always', compl_shown_match become NULL.
-    if nvim_compl_shown_match_exists() == 0 {
+    if crate::match_list::compl_shown_match.is_null() {
         return -1;
     }
 

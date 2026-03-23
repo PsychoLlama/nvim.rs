@@ -30,19 +30,53 @@ impl ComplMatch {
     }
 }
 
-// C accessor functions for the match list
+// Direct access to match list pointer globals
 extern "C" {
-    // Match list accessors
-    fn nvim_compl_get_first_match() -> ComplMatch;
-    fn nvim_compl_set_first_match(m: ComplMatch);
-    fn nvim_compl_get_curr_match() -> ComplMatch;
-    fn nvim_compl_set_curr_match(m: ComplMatch);
+    pub(crate) static mut compl_first_match: ComplMatch;
+    pub(crate) static mut compl_curr_match: ComplMatch;
     #[allow(dead_code)]
-    fn nvim_compl_get_shown_match() -> ComplMatch;
-    fn nvim_compl_set_shown_match(m: ComplMatch);
+    pub(crate) static mut compl_shown_match: ComplMatch;
     #[allow(dead_code)]
-    fn nvim_compl_get_old_match() -> ComplMatch;
-    fn nvim_compl_set_old_match(m: ComplMatch);
+    pub(crate) static mut compl_old_match: ComplMatch;
+}
+
+// Helper inline accessors so callers can keep similar API
+#[inline]
+pub(crate) unsafe fn nvim_compl_get_first_match() -> ComplMatch {
+    compl_first_match
+}
+#[inline]
+pub(crate) unsafe fn nvim_compl_set_first_match(m: ComplMatch) {
+    compl_first_match = m;
+}
+#[inline]
+pub(crate) unsafe fn nvim_compl_get_curr_match() -> ComplMatch {
+    compl_curr_match
+}
+#[inline]
+pub(crate) unsafe fn nvim_compl_set_curr_match(m: ComplMatch) {
+    compl_curr_match = m;
+}
+#[inline]
+#[allow(dead_code)]
+pub(crate) unsafe fn nvim_compl_get_shown_match() -> ComplMatch {
+    compl_shown_match
+}
+#[inline]
+pub(crate) unsafe fn nvim_compl_set_shown_match(m: ComplMatch) {
+    compl_shown_match = m;
+}
+#[inline]
+#[allow(dead_code)]
+pub(crate) unsafe fn nvim_compl_get_old_match() -> ComplMatch {
+    compl_old_match
+}
+#[inline]
+pub(crate) unsafe fn nvim_compl_set_old_match(m: ComplMatch) {
+    compl_old_match = m;
+}
+
+extern "C" {
 
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
@@ -53,7 +87,6 @@ extern "C" {
     fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
 
     // Match identification
-    fn nvim_compl_is_first_match(m: ComplMatch) -> c_int;
     #[allow(dead_code)]
     fn nvim_compl_match_at_original_text(m: ComplMatch) -> c_int;
 
@@ -81,8 +114,8 @@ const CP_ORIGINAL_TEXT: c_int = 1;
 
 /// Check if a match is the first match (original text entry).
 #[inline]
-unsafe fn is_first_match(m: ComplMatch) -> bool {
-    !m.is_null() && nvim_compl_is_first_match(m) != 0
+pub(crate) unsafe fn is_first_match(m: ComplMatch) -> bool {
+    !m.is_null() && m == compl_first_match
 }
 
 /// Check if a match represents the original text.
