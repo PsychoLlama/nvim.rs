@@ -1091,7 +1091,6 @@ char **nvim_winopt_string_field_ptr(winopt_T *wop, int idx)
   default: return NULL;
   }
 }
-int nvim_winopt_string_field_count(void) { return 23; }
 
 // Copy all scalar (bool/int/flags) fields from one winopt_T to another.
 // Does NOT copy string fields or wo_script_ctx.

@@ -10,10 +10,13 @@ use std::ffi::{c_char, c_int, c_void};
 type WinoptHandle = *mut c_void;
 type WinHandle = *mut c_void;
 
+/// Number of string fields in winopt_T (indices 0..22 in nvim_winopt_string_field_ptr).
+/// Must stay in sync with the switch in option_shim.c:nvim_winopt_string_field_ptr.
+const WINOPT_STRING_FIELD_COUNT: c_int = 23;
+
 extern "C" {
     // String field accessor: returns &mut *char for field at index [0..22]
     fn nvim_winopt_string_field_ptr(wop: WinoptHandle, idx: c_int) -> *mut *mut c_char;
-    fn nvim_winopt_string_field_count() -> c_int;
 
     // Scalar copy: copies all bool/int/flags fields from->to
     fn nvim_copy_winopt_scalars(from: WinoptHandle, to: WinoptHandle);
@@ -72,7 +75,7 @@ pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
 
     // Copy all string fields via copy_option_val (which handles empty_string_option).
     // Skip indices 1 (wo_fdc_save) and 4 (wo_fdm_save) -- handled specially below.
-    let n = nvim_winopt_string_field_count();
+    let n = WINOPT_STRING_FIELD_COUNT;
     for i in 0..n {
         if i == 1 || i == 4 {
             continue; // handled by nvim_copy_winopt_save_strs
@@ -101,7 +104,7 @@ pub unsafe extern "C" fn rs_copy_winopt(from: WinoptHandle, to: WinoptHandle) {
 /// `wop` must be a valid non-null winopt_T pointer.
 #[export_name = "clear_winopt"]
 pub unsafe extern "C" fn rs_clear_winopt(wop: WinoptHandle) {
-    let n = nvim_winopt_string_field_count();
+    let n = WINOPT_STRING_FIELD_COUNT;
     for i in 0..n {
         let field = nvim_winopt_string_field_ptr(wop, i);
         if !field.is_null() {
@@ -116,7 +119,7 @@ pub unsafe extern "C" fn rs_clear_winopt(wop: WinoptHandle) {
 /// `wop` must be a valid non-null winopt_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_check_winopt(wop: WinoptHandle) {
-    let n = nvim_winopt_string_field_count();
+    let n = WINOPT_STRING_FIELD_COUNT;
     for i in 0..n {
         let field = nvim_winopt_string_field_ptr(wop, i);
         if !field.is_null() {
