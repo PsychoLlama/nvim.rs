@@ -2316,13 +2316,6 @@ void nvim_call_bind_textdomain_codeset(void)
 #endif
 }
 
-/// If buf->b_p_bt[0] == 'h', clear it with clear_string_option.
-void nvim_buf_clear_b_p_bt_if_help(buf_T *buf)
-{
-  if (buf && buf->b_p_bt && buf->b_p_bt[0] == 'h') {
-    clear_string_option(&buf->b_p_bt);
-  }
-}
 
 
 // =============================================================================
