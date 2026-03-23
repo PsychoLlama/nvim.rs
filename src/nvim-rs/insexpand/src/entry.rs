@@ -61,7 +61,9 @@ extern "C" {
     fn nvim_restore_did_ai(saved_val: c_int);
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
     fn nvim_set_edit_submode_adding();
-    fn nvim_clear_edit_submode_pre();
+    // nvim_clear_edit_submode_pre: inlined below (Phase 34)
+    #[link_name = "edit_submode_pre"]
+    static mut g_edit_submode_pre: *mut c_char;
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     #[link_name = "edit_submode_highl"]
@@ -251,7 +253,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             crate::vars::nvim_set_compl_lnum(nvim_get_curwin_cursor_lnum());
         }
     } else {
-        nvim_clear_edit_submode_pre();
+        g_edit_submode_pre = core::ptr::null_mut();
         crate::vars::nvim_set_compl_startpos_col_to_compl_col();
     }
 

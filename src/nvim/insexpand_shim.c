@@ -1824,11 +1824,7 @@ void nvim_set_edit_submode_adding(void)
   edit_submode_pre = _(" Adding");
 }
 
-/// Compound accessor: clear edit_submode_pre (set to NULL).
-void nvim_clear_edit_submode_pre(void)
-{
-  edit_submode_pre = NULL;
-}
+// nvim_clear_edit_submode_pre: deleted (Phase 34, inlined in entry.rs)
 
 /// Accessor: return the current buffer line at cursor position.
 const char *nvim_ml_get_curline(void)
