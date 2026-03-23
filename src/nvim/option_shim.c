@@ -2397,11 +2397,6 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
 
-/// XFREE_CLEAR(p_term) wrapper.
-void nvim_call_xfree_clear_p_term(void) { XFREE_CLEAR(p_term); }
-
-/// XFREE_CLEAR(p_ttytype) wrapper.
-void nvim_call_xfree_clear_p_ttytype(void) { XFREE_CLEAR(p_ttytype); }
 
 /// Return escape kind for option_expand:
 ///   0 = no escape needed

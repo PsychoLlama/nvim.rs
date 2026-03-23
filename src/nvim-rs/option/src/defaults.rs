@@ -540,10 +540,12 @@ extern "C" {
     fn rs_free_tagfunc_option();
     /// xfree(ptr) - free memory allocated with C allocator
     fn xfree(ptr: *mut std::ffi::c_char);
-    /// XFREE_CLEAR(p_term)
-    fn nvim_call_xfree_clear_p_term();
-    /// XFREE_CLEAR(p_ttytype)
-    fn nvim_call_xfree_clear_p_ttytype();
+    /// p_term accessor (static in option_shim.c)
+    fn nvim_option_get_p_term() -> *const std::ffi::c_char;
+    fn nvim_option_set_p_term(val: *mut std::ffi::c_char);
+    /// p_ttytype accessor (static in option_shim.c)
+    fn nvim_option_get_p_ttytype() -> *const std::ffi::c_char;
+    fn nvim_option_set_p_ttytype(val: *mut std::ffi::c_char);
     /// fenc_default global variable
     static mut fenc_default: *mut std::ffi::c_char;
     /// option_expand escape kind for opt_idx (0=none, 1=esc, 2=file:)
@@ -691,8 +693,10 @@ pub unsafe extern "C" fn rs_free_all_options() {
     nvim_docmd_free_findfunc_option_impl();
     xfree(fenc_default);
     fenc_default = std::ptr::null_mut();
-    nvim_call_xfree_clear_p_term();
-    nvim_call_xfree_clear_p_ttytype();
+    xfree(nvim_option_get_p_term().cast_mut());
+    nvim_option_set_p_term(std::ptr::null_mut());
+    xfree(nvim_option_get_p_ttytype().cast_mut());
+    nvim_option_set_p_ttytype(std::ptr::null_mut());
 }
 
 // =============================================================================
