@@ -66,7 +66,8 @@ extern "C" {
     fn nvim_set_edit_submode_adding();
     fn nvim_clear_edit_submode_pre();
     fn nvim_set_edit_submode_highl_count();
-    fn nvim_clear_edit_submode_extra();
+    #[link_name = "edit_submode_extra"]
+    static mut g_edit_submode_extra: *mut c_char;
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_ml_get_curline() -> *const c_char;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
@@ -280,7 +281,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         nvim_set_edit_submode_extra_searching();
         nvim_set_edit_submode_highl_count();
         showmode();
-        nvim_clear_edit_submode_extra();
+        g_edit_submode_extra = core::ptr::null_mut();
         nvim_ui_flush();
     }
 

@@ -1224,7 +1224,6 @@ void nvim_decay_compl_timeout(void) { DECAY_COMPL_TIMEOUT(); }
 
 void nvim_clear_compl_curr_win(void) { compl_curr_win = NULL; }
 void nvim_clear_compl_curr_buf(void) { compl_curr_buf = NULL; }
-void nvim_clear_edit_submode_extra(void) { edit_submode_extra = NULL; }
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
 void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
@@ -1999,9 +1998,8 @@ int nvim_compl_shown_match_has_newline(void) { return (compl_shown_match && comp
 int nvim_compl_curr_match_at_original_text(void) { return compl_curr_match ? ((compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0) : 0; }
 // Accessors for set_ctrl_x_mode / may_advance_cpt_index (Phase 1)
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
-void nvim_set_edit_submode_null(void) { edit_submode = NULL; }
-void nvim_set_edit_submode_pre_null(void) { edit_submode_pre = NULL; }
-void nvim_set_redraw_mode_true(void) { redraw_mode = true; }
+// nvim_set_edit_submode_null, nvim_set_edit_submode_pre_null, nvim_set_redraw_mode_true,
+// nvim_clear_edit_submode_extra: deleted (Phase 6, Rust writes globals directly)
 int nvim_get_state_replace_flag(void) { return (State & REPLACE_FLAG) ? 1 : 0; }
 void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
 // nvim_vpeekc: deleted (Phase 3, Rust calls vpeekc directly)
@@ -2663,7 +2661,6 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
   }
   edit_submode_extra = match_ref;
 }
-int nvim_get_edit_submode_extra_is_null(void) { return edit_submode_extra == NULL ? 1 : 0; }
 const char *nvim_get_edit_submode_extra_ptr(void) { return edit_submode_extra; }
 
 // --- edit_submode_highl setters (using HLF enum values) ---

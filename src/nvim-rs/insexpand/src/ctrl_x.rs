@@ -123,8 +123,14 @@ const K_OPT_COT_FLAG_LONGEST: u32 = 0x04;
 extern "C" {
     // Phase 1 accessors
     fn nvim_set_edit_submode_scroll(is_replace: c_int);
-    fn nvim_set_edit_submode_null();
-    fn nvim_set_redraw_mode_true();
+    #[link_name = "edit_submode"]
+    static mut g_edit_submode: *mut c_char;
+    #[link_name = "edit_submode_extra"]
+    static mut g_edit_submode_extra: *mut c_char;
+    #[link_name = "edit_submode_pre"]
+    static mut g_edit_submode_pre: *mut c_char;
+    #[link_name = "redraw_mode"]
+    static mut g_redraw_mode: bool;
     fn nvim_get_state_replace_flag() -> c_int;
     fn nvim_spell_back_safe();
     fn vpeekc() -> c_int;
@@ -133,7 +139,6 @@ extern "C" {
     // Phase 2 accessors
     fn nvim_get_cot_flags_global() -> u32;
     fn nvim_curbuf_get_b_cot_flags() -> u32;
-    fn nvim_clear_edit_submode_extra();
 
     // Phase 2: C functions called (not pure accessors)
     fn rs_do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c_char);
@@ -224,8 +229,8 @@ unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
         CTRL_V | CTRL_Q => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_CMDLINE),
         CTRL_Z => {
             crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
-            nvim_set_edit_submode_null();
-            nvim_set_redraw_mode_true();
+            g_edit_submode = core::ptr::null_mut();
+            g_redraw_mode = true;
             retval = true;
         }
         CTRL_P | CTRL_N => {
@@ -256,8 +261,8 @@ unsafe fn set_ctrl_x_mode_default(c: c_int) {
         }
     }
     crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
-    nvim_set_edit_submode_null();
-    nvim_set_redraw_mode_true();
+    g_edit_submode = core::ptr::null_mut();
+    g_redraw_mode = true;
 }
 
 // =============================================================================
@@ -314,7 +319,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     // Forget any previous 'special' messages if this is actually a ^X mode key
     // - bar ^R, in which case we wait to see what it gives us.
     if c != CTRL_R && crate::rs_vim_is_ctrl_x_key(c) != 0 {
-        nvim_clear_edit_submode_extra();
+        g_edit_submode_extra = core::ptr::null_mut();
     }
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
@@ -375,9 +380,9 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
                 CTRL_X_FINISHED
             };
             crate::vars::nvim_set_ctrl_x_mode(new_mode);
-            nvim_set_edit_submode_null();
+            g_edit_submode = core::ptr::null_mut();
         }
-        nvim_set_redraw_mode_true();
+        g_redraw_mode = true;
     }
 
     if crate::vars::nvim_get_compl_started() != 0
@@ -385,7 +390,7 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     {
         // Show error message from attempted keyword completion until another key
         // is hit, then go back to showing what mode we are in.
-        nvim_set_redraw_mode_true();
+        g_redraw_mode = true;
         if (crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_NORMAL
             && c != CTRL_N
             && c != CTRL_P
@@ -590,7 +595,6 @@ extern "C" {
 // Additional extern "C" declarations for Phase 4
 extern "C" {
     fn nvim_set_edit_submode_ctrl_x_msg(mode: c_int);
-    fn nvim_set_edit_submode_pre_null();
     fn nvim_may_trigger_modechanged();
 }
 
@@ -619,8 +623,8 @@ pub unsafe extern "C" fn rs_ins_ctrl_x() {
         // We're not sure which CTRL-X mode it will be yet
         crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
         nvim_set_edit_submode_ctrl_x_msg(CTRL_X_NOT_DEFINED_YET);
-        nvim_set_edit_submode_pre_null();
-        nvim_set_redraw_mode_true();
+        g_edit_submode_pre = core::ptr::null_mut();
+        g_redraw_mode = true;
     } else {
         // CTRL-X in CTRL-X CTRL-V mode behaves differently to make CTRL-X
         // CTRL-V look like CTRL-N
@@ -668,7 +672,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
 
     if is_empty != 0 {
         crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
-        nvim_set_edit_submode_null();
+        g_edit_submode = core::ptr::null_mut();
         nvim_emsg_dict_empty(dict_opt);
         if nvim_emsg_silent_is_zero() != 0 && !nvim_in_assert_fails() {
             nvim_vim_beep_complete();

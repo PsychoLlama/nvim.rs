@@ -102,7 +102,8 @@ extern "C" {
     fn nvim_clear_compl_curr_buf();
     fn nvim_compl_clear_pattern();
     fn nvim_compl_clear_leader();
-    fn nvim_clear_edit_submode_extra();
+    #[link_name = "edit_submode_extra"]
+    static mut g_edit_submode_extra: *mut c_char;
     fn nvim_clear_compl_orig_extmarks();
     fn nvim_compl_clear_orig_text();
     fn nvim_cpt_sources_clear();
@@ -127,7 +128,7 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     nvim_clear_compl_curr_buf();
     nvim_compl_clear_pattern();
     nvim_compl_clear_leader();
-    nvim_clear_edit_submode_extra();
+    g_edit_submode_extra = core::ptr::null_mut();
     nvim_clear_compl_orig_extmarks();
     nvim_compl_clear_orig_text();
     crate::vars::nvim_set_compl_enter_selects(0);
@@ -378,7 +379,8 @@ extern "C" {
     fn rs_ins_compl_update_sequence_numbers();
     fn nvim_get_dollar_vcol() -> c_int;
     fn nvim_curs_columns_curwin();
-    fn nvim_set_redraw_mode_true();
+    #[link_name = "redraw_mode"]
+    static mut g_redraw_mode: bool;
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_get_p_smd() -> c_int;
     fn nvim_set_edit_submode_extra_hitend();
@@ -387,7 +389,6 @@ extern "C" {
     fn nvim_set_edit_submode_extra_word_from_other_line();
     fn nvim_set_edit_submode_extra_the_only_match();
     fn nvim_set_edit_submode_extra_match_ref(cp_number: c_int, compl_matches: c_int);
-    fn nvim_get_edit_submode_extra_is_null() -> c_int;
     fn nvim_set_edit_submode_highl_e();
     fn nvim_set_edit_submode_highl_w();
     fn nvim_set_edit_submode_highl_r();
@@ -494,7 +495,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
         nvim_set_edit_submode_highl_e();
     }
 
-    if nvim_get_edit_submode_extra_is_null() != 0 {
+    if g_edit_submode_extra.is_null() {
         if nvim_compl_curr_match_at_original_text() != 0 {
             nvim_set_edit_submode_extra_back_at_original();
             nvim_set_edit_submode_highl_w();
@@ -530,9 +531,11 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
     }
 
     // Show a message about what (completion) mode we're in.
-    nvim_set_redraw_mode_true();
+    g_redraw_mode = true;
     if !nvim_shortmess_completionmenu() {
-        if nvim_get_edit_submode_extra_is_null() == 0 {
+        if g_edit_submode_extra.is_null() {
+            nvim_msg_clr_cmdline_wrap(); // necessary for "noshowmode"
+        } else {
             // edit_submode_extra is non-null
             if nvim_get_p_smd() == 0 {
                 nvim_msg_hist_off_set(1);
@@ -543,8 +546,6 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                 );
                 nvim_msg_hist_off_set(0);
             }
-        } else {
-            nvim_msg_clr_cmdline_wrap(); // necessary for "noshowmode"
         }
     }
 }

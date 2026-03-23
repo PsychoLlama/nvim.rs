@@ -154,7 +154,8 @@ extern "C" {
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_set_pum_want_active(val: c_int);
     fn nvim_get_pum_want_finish() -> c_int;
-    fn nvim_clear_edit_submode_extra();
+    #[link_name = "edit_submode_extra"]
+    static mut g_edit_submode_extra: *mut c_char;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
@@ -488,7 +489,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
 unsafe fn do_check_pum(s: *mut InsertState) {
     if nvim_get_pum_want_active() != 0 {
         if pum_visible() {
-            nvim_clear_edit_submode_extra();
+            g_edit_submode_extra = core::ptr::null_mut();
             rs_insert_do_complete(s);
             if nvim_get_pum_want_finish() != 0 {
                 rs_ins_compl_prep(CTRL_Y);

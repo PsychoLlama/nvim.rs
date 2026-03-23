@@ -2597,8 +2597,9 @@ extern "C" {
     fn nvim_set_msg_didout(val: c_int);
     fn redraw_ruler();
     fn nvim_drawscreen_msg_grid_validate();
-    /// edit_submode_extra null check (from insexpand_shim.c).
-    fn nvim_get_edit_submode_extra_is_null() -> c_int;
+    /// edit_submode_extra global (from globals.h).
+    #[link_name = "edit_submode_extra"]
+    static mut g_edit_submode_extra: *mut c_char;
     /// edit_submode_extra pointer (from insexpand_shim.c).
     fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
     /// w_p_arab window option accessor.
@@ -2631,8 +2632,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
         } else {
             *length = (Rows - msg_row) * Columns - 3;
         }
-        let extra_is_null = nvim_get_edit_submode_extra_is_null();
-        if extra_is_null == 0 {
+        if !g_edit_submode_extra.is_null() {
             *length -= nvim_vim_strsize(nvim_get_edit_submode_extra_ptr());
         }
         if *length > 0 {
@@ -2646,7 +2646,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
                 }
                 msg_puts_hl(submode, hl_id, false);
             }
-            if extra_is_null == 0 {
+            if !g_edit_submode_extra.is_null() {
                 msg_puts_hl(c" ".as_ptr(), hl_id, false);
                 // nvim_get_edit_submode_highl_attr returns highl+1 if valid, else 0
                 let highl_attr = nvim_get_edit_submode_highl_attr();
