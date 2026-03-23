@@ -15,6 +15,7 @@ use crate::ExArgHandle;
 
 type LinenrT = i32;
 type WinHandle = *mut c_void;
+type BufHandle = *mut c_void;
 
 // =============================================================================
 // Constants
@@ -608,11 +609,22 @@ extern "C" {
     fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
     fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
-    fn nvim_docmd_before_quit_autocmds_impl(wp: WinHandle, quit_all: bool, forceit: bool) -> bool;
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
     fn nvim_docmd_tabpage_new_impl();
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_handle_did_throw_impl();
+
+    // before_quit_autocmds helpers
+    fn rs_win_valid(wp: WinHandle) -> bool;
+    fn nvim_curbuf_locked() -> c_int;
+    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_get_curbuf() -> BufHandle;
+    fn rs_only_one_window() -> c_int;
+    fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int;
+    fn nvim_docmd_apply_autocmds_quitpre(buf: BufHandle);
+    fn nvim_docmd_apply_autocmds_exitpre();
 
     // tabpage_close helpers (for Rust implementations)
     fn nvim_docmd_curwin_is_floating() -> c_int;
@@ -651,7 +663,48 @@ pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
     nvim_docmd_ex_find_impl(eap);
 }
 
-/// `before_quit_autocmds` - fire pre-quit autocmds.
+/// `nvim_docmd_before_quit_autocmds_impl` - fire pre-quit autocmds.
+///
+/// Fires QUITPRE, checks window validity and buffer locks, and optionally
+/// fires EXITPRE if this is the last window. Returns true if the quit should
+/// be cancelled.
+///
+/// # Safety
+/// `wp` must be a valid WinHandle.
+#[export_name = "nvim_docmd_before_quit_autocmds_impl"]
+pub unsafe extern "C" fn rs_before_quit_autocmds_impl(
+    wp: WinHandle,
+    quit_all: bool,
+    forceit: bool,
+) -> bool {
+    let buf = nvim_win_get_buffer(wp);
+    nvim_docmd_apply_autocmds_quitpre(buf);
+
+    // Bail out when autocommands closed the window, or the buffer is locked.
+    if !rs_win_valid(wp)
+        || nvim_curbuf_locked() != 0
+        || (nvim_buf_get_nwindows(buf) == 1 && nvim_buf_get_locked(buf) > 0)
+    {
+        return true;
+    }
+
+    let ok: c_int = 1; // OK
+    if quit_all || (nvim_docmd_check_more(0, forceit as c_int) == ok && rs_only_one_window() != 0) {
+        nvim_docmd_apply_autocmds_exitpre();
+        // Refuse to quit when locked or the window was closed.
+        let curbuf = nvim_get_curbuf();
+        if !rs_win_valid(wp)
+            || nvim_curbuf_locked() != 0
+            || (nvim_buf_get_nwindows(curbuf) == 1 && nvim_buf_get_locked(curbuf) > 0)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// `before_quit_autocmds` - public C-callable name.
 ///
 /// # Safety
 /// `wp` must be a valid WinHandle.
@@ -661,7 +714,7 @@ pub unsafe extern "C" fn before_quit_autocmds(
     quit_all: bool,
     forceit: bool,
 ) -> bool {
-    nvim_docmd_before_quit_autocmds_impl(wp, quit_all, forceit)
+    rs_before_quit_autocmds_impl(wp, quit_all, forceit)
 }
 
 /// `ex_win_close` - close a window, handling modified buffers.

@@ -670,6 +670,18 @@ bool nvim_apply_autocmds_bufdelete(buf_T *buf)
   return apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, buf);
 }
 
+/// Call apply_autocmds with EVENT_QUITPRE for the given buffer (accessor for Rust).
+void nvim_docmd_apply_autocmds_quitpre(buf_T *buf)
+{
+  apply_autocmds(EVENT_QUITPRE, NULL, NULL, false, buf);
+}
+
+/// Call apply_autocmds with EVENT_EXITPRE for curbuf (accessor for Rust).
+void nvim_docmd_apply_autocmds_exitpre(void)
+{
+  apply_autocmds(EVENT_EXITPRE, NULL, NULL, false, curbuf);
+}
+
 // ============================================================
 // Phase 4 accessor functions for buflist_list.
 // ============================================================

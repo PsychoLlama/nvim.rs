@@ -359,6 +359,7 @@ extern char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmd
 extern void nvim_docmd_close_redir_impl(void);
 extern void nvim_docmd_tabpage_close_impl(int forceit);
 extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
+extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1907,35 +1908,6 @@ void nvim_docmd_do_exbuffer_impl(exarg_T *eap)
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
 
-/// before_quit_autocmds implementation. Called by Rust before_quit_autocmds.
-bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit)
-{
-  apply_autocmds(EVENT_QUITPRE, NULL, NULL, false, wp->w_buffer);
-
-  // Bail out when autocommands closed the window.
-  // Refuse to quit when the buffer in the last window is being closed (can
-  // only happen in autocommands).
-  if (!rs_win_valid(wp)
-      || curbuf_locked()
-      || (wp->w_buffer->b_nwindows == 1 && wp->w_buffer->b_locked > 0)) {
-    return true;
-  }
-
-  if (quit_all
-      || (check_more(false, forceit) == OK && rs_only_one_window())) {
-    apply_autocmds(EVENT_EXITPRE, NULL, NULL, false, curbuf);
-    // Refuse to quit when locked or when the window was closed or the
-    // buffer in the last window is being closed (can only happen in
-    // autocommands).
-    if (!rs_win_valid(wp)
-        || curbuf_locked()
-        || (curbuf->b_nwindows == 1 && curbuf->b_locked > 0)) {
-      return true;
-    }
-  }
-
-  return false;
-}
 
 /// ":restart": restart the Nvim server (using ":qall!").
 /// ":restart +cmd": restart the Nvim server using ":cmd".
