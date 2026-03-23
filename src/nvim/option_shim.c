@@ -1038,15 +1038,6 @@ void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
 
 const void *nvim_option_get_p_wc_ptr(void) { return &p_wc; }
 const void *nvim_option_get_p_wcm_ptr(void) { return &p_wcm; }
-// curwin fold option varp pointers for rs_makefoldset
-void *nvim_curwin_p_fdm_varp(void) { return &curwin->w_p_fdm; }
-void *nvim_curwin_p_fde_varp(void) { return &curwin->w_p_fde; }
-void *nvim_curwin_p_fmr_varp(void) { return &curwin->w_p_fmr; }
-void *nvim_curwin_p_fdi_varp(void) { return &curwin->w_p_fdi; }
-void *nvim_curwin_p_fdl_varp(void) { return &curwin->w_p_fdl; }
-void *nvim_curwin_p_fml_varp(void) { return &curwin->w_p_fml; }
-void *nvim_curwin_p_fdn_varp(void) { return &curwin->w_p_fdn; }
-void *nvim_curwin_p_fen_varp(void) { return &curwin->w_p_fen; }
 
 void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
 {
@@ -1175,15 +1166,6 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 // Wrap copy_option_val (static) for use from Rust.
 char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); }
 
-// Wrappers for didset_window_options internals.
-void nvim_call_set_chars_option_fcs(win_T *wp)
-{
-  set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0);
-}
-void nvim_call_set_chars_option_lcs(win_T *wp)
-{
-  set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0);
-}
 
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
@@ -2403,16 +2385,6 @@ int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 extern void didset_string_options(void);  // defined in Rust optionstr crate
 /// compile_cap_prog(curwin->w_s) wrapper.
 void nvim_call_compile_cap_prog_curwin(void) { compile_cap_prog(curwin->w_s); }
-/// set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0)
-void nvim_call_set_chars_option_fcs_curwin(void)
-{
-  set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0);
-}
-/// set_chars_option(curwin, curwin->w_p_lcs, kListchars, true, NULL, 0)
-void nvim_call_set_chars_option_lcs_curwin(void)
-{
-  set_chars_option(curwin, curwin->w_p_lcs, kListchars, true, NULL, 0);
-}
 /// xfree(curbuf->b_p_vsts_array) + tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array).
 void nvim_call_curbuf_tabstop_set_vsts(void)
 {

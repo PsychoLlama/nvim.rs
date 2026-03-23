@@ -456,8 +456,15 @@ extern "C" {
     fn nvim_opt_get_curwin() -> crate::WinHandle;
     fn highlight_changed();
     fn check_opt_wim() -> c_int;
-    fn nvim_call_set_chars_option_fcs_curwin();
-    fn nvim_call_set_chars_option_lcs_curwin();
+    fn nvim_win_get_opt_field_addr(win: crate::WinHandle, idx: c_int) -> *mut std::ffi::c_void;
+    fn set_chars_option(
+        wp: crate::WinHandle,
+        value: *const std::ffi::c_char,
+        what: c_int,
+        apply: bool,
+        errbuf: *mut std::ffi::c_char,
+        errbuflen: usize,
+    ) -> *const std::ffi::c_char;
     fn nvim_call_curbuf_tabstop_set_vsts();
     fn nvim_call_curbuf_tabstop_set_vts();
 }
@@ -488,8 +495,14 @@ pub unsafe extern "C" fn rs_didset_options() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_didset_options2() {
     highlight_changed();
-    nvim_call_set_chars_option_fcs_curwin();
-    nvim_call_set_chars_option_lcs_curwin();
+    let curwin = nvim_opt_get_curwin();
+    // kFillchars=0, kListchars=1 (CharsOption enum from optionstr.h)
+    let fcs = *(nvim_win_get_opt_field_addr(curwin, crate::opt_index::K_OPT_FILLCHARS)
+        as *const *const std::ffi::c_char);
+    let lcs = *(nvim_win_get_opt_field_addr(curwin, crate::opt_index::K_OPT_LISTCHARS)
+        as *const *const std::ffi::c_char);
+    set_chars_option(curwin, fcs, 0, true, std::ptr::null_mut(), 0);
+    set_chars_option(curwin, lcs, 1, true, std::ptr::null_mut(), 0);
     check_opt_wim();
     nvim_call_curbuf_tabstop_set_vsts();
     nvim_call_curbuf_tabstop_set_vts();

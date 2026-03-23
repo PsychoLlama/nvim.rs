@@ -82,15 +82,9 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
-    // makefoldset - curwin fold option varp pointers
-    fn nvim_curwin_p_fdm_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fde_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fmr_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fdi_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fdl_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fml_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fdn_varp() -> *mut std::ffi::c_void;
-    fn nvim_curwin_p_fen_varp() -> *mut std::ffi::c_void;
+    // makefoldset - get curwin and opt field addr directly
+    fn nvim_opt_get_curwin() -> crate::WinHandle;
+    fn nvim_win_get_opt_field_addr(win: crate::WinHandle, idx: c_int) -> *mut std::ffi::c_void;
 }
 
 // OptValType int values matching C enum
@@ -414,14 +408,55 @@ unsafe fn write_int64(fd: *mut libc::FILE, val: i64) -> c_int {
 pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
     let setlocal = c"setlocal".as_ptr();
 
-    if rs_put_set(fd, setlocal, K_OPT_FOLDMETHOD, nvim_curwin_p_fdm_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDEXPR, nvim_curwin_p_fde_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDMARKER, nvim_curwin_p_fmr_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDIGNORE, nvim_curwin_p_fdi_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDLEVEL, nvim_curwin_p_fdl_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDMINLINES, nvim_curwin_p_fml_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDNESTMAX, nvim_curwin_p_fdn_varp()) == FAIL
-        || rs_put_set(fd, setlocal, K_OPT_FOLDENABLE, nvim_curwin_p_fen_varp()) == FAIL
+    let curwin = nvim_opt_get_curwin();
+    if rs_put_set(
+        fd,
+        setlocal,
+        K_OPT_FOLDMETHOD,
+        nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDMETHOD),
+    ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDEXPR,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDEXPR),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDMARKER,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDMARKER),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDIGNORE,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDIGNORE),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDLEVEL,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDLEVEL),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDMINLINES,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDMINLINES),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDNESTMAX,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDNESTMAX),
+        ) == FAIL
+        || rs_put_set(
+            fd,
+            setlocal,
+            K_OPT_FOLDENABLE,
+            nvim_win_get_opt_field_addr(curwin, K_OPT_FOLDENABLE),
+        ) == FAIL
     {
         return FAIL;
     }

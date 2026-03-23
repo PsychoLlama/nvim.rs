@@ -40,8 +40,15 @@ extern "C" {
     fn briopt_check(briopt: *const c_char, wp: WinHandle) -> bool;
     /// fill_culopt_flags(val, wp) -- pass NULL for val to use current w_p_culopt
     fn fill_culopt_flags(val: *mut c_char, wp: WinHandle) -> c_int;
-    fn nvim_call_set_chars_option_fcs(wp: WinHandle);
-    fn nvim_call_set_chars_option_lcs(wp: WinHandle);
+    fn nvim_win_get_opt_field_addr(win: WinHandle, idx: c_int) -> *mut c_void;
+    fn set_chars_option(
+        wp: WinHandle,
+        value: *const c_char,
+        what: c_int,
+        apply: bool,
+        errbuf: *mut c_char,
+        errbuflen: usize,
+    ) -> *const c_char;
     fn check_blending(wp: WinHandle);
     /// set_winbar_win(wp, make_room, valid_cursor)
     fn set_winbar_win(wp: WinHandle, make_room: bool, valid_cursor: bool) -> c_int;
@@ -133,8 +140,13 @@ pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: b
     check_colorcolumn(std::ptr::null(), wp);
     briopt_check(std::ptr::null(), wp);
     fill_culopt_flags(std::ptr::null_mut(), wp);
-    nvim_call_set_chars_option_fcs(wp);
-    nvim_call_set_chars_option_lcs(wp);
+    // kFillchars=0, kListchars=1 (CharsOption enum from optionstr.h)
+    let fcs = *(nvim_win_get_opt_field_addr(wp, crate::opt_index::K_OPT_FILLCHARS)
+        as *const *const c_char);
+    let lcs = *(nvim_win_get_opt_field_addr(wp, crate::opt_index::K_OPT_LISTCHARS)
+        as *const *const c_char);
+    set_chars_option(wp, fcs, 0, true, std::ptr::null_mut(), 0);
+    set_chars_option(wp, lcs, 1, true, std::ptr::null_mut(), 0);
     crate::callbacks::winhl::rs_parse_winhl_opt(std::ptr::null(), wp); // sets w_hl_needs_update also for w_p_winbl
     check_blending(wp);
     set_winbar_win(wp, false, valid_cursor);
