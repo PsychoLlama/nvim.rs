@@ -88,7 +88,7 @@ extern "C" {
     fn nvim_get_need_check_timestamps() -> bool;
     fn nvim_get_need_wait_return() -> c_int;
     fn nvim_wait_return(redraw: bool);
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
     fn nvim_get_opcount() -> c_int;
     static mut VIsual_active: bool;
     fn nvim_get_KeyTyped() -> bool;
@@ -243,7 +243,7 @@ unsafe fn normal_check_window_scrolled(_s: NormalStateHandle) {
 
 /// Inline of normal_check_safe_state.
 unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
-    nvim_may_trigger_safestate_call(!rs_op_pending() && nvim_get_restart_edit() == 0);
+    nvim_may_trigger_safestate_call(!rs_op_pending() && restart_edit == 0);
 }
 
 /// Inline of normal_check_cursor_moved.
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
         (p_smd != 0
             && msg_silent == 0
             // must restart insert mode or just entered visual mode
-            && (nvim_get_restart_edit() != 0
+            && (restart_edit != 0
                 || (VIsual_active
                     && nvim_ns_get_old_pos_lnum(s) == nvim_get_cursor_lnum()
                     && nvim_ns_get_old_pos_col(s) == nvim_get_cursor_col()))
@@ -369,7 +369,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             // the command was the result of direct user input and not a mapping
             && nvim_get_KeyTyped())
             // must restart insert mode, not in visual mode and error message showing
-            || (nvim_get_restart_edit() != 0
+            || (restart_edit != 0
                 && !VIsual_active
                 && nvim_get_msg_scroll_val()
                 && nvim_get_emsg_on_display() != 0)
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     let save_state = State;
 
     // Draw the cursor with the right shape here
-    if nvim_get_restart_edit() != 0 {
+    if restart_edit != 0 {
         State = MODE_INSERT;
     }
 

@@ -314,11 +314,9 @@ extern "C" {
     fn nvim_buf_set_prompt_insert(buf: *mut std::ffi::c_void, val: c_int);
 
     /// Get the restart_edit global.
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
 
     /// Set the restart_edit global.
-    fn nvim_set_restart_edit(val: c_int);
-
     /// Get the mode_displayed global (returns bool from C).
     fn nvim_get_mode_displayed() -> bool;
 
@@ -347,7 +345,6 @@ unsafe fn leaving_window_impl(win: WinHandle) {
     }
 
     let buf = nvim_win_get_buf_ptr(win);
-    let restart_edit = nvim_get_restart_edit();
 
     // Save restart_edit into b_prompt_insert.
     nvim_buf_set_prompt_insert(buf, restart_edit);
@@ -356,7 +353,7 @@ unsafe fn leaving_window_impl(win: WinHandle) {
     if restart_edit != NUL && nvim_get_mode_displayed() {
         nvim_set_clear_cmdline(true);
     }
-    nvim_set_restart_edit(NUL);
+    restart_edit = NUL;
 
     // If in Insert mode and not stopping already, break out and restart on re-entry.
     if (State & MODE_INSERT) != 0 && nvim_get_stop_insert_mode() == 0 {
@@ -387,7 +384,7 @@ unsafe fn entering_window_impl(win: WinHandle) {
 
     // Restart Insert mode if we were in it and not already in Insert mode.
     if (State & MODE_INSERT) == 0 {
-        nvim_set_restart_edit(nvim_buf_get_prompt_insert(buf));
+        restart_edit = nvim_buf_get_prompt_insert(buf);
     }
 }
 

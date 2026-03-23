@@ -1256,9 +1256,6 @@ void nvim_buf_copy_options_enter(buf_T *buf) { buf_copy_options(buf, BCO_ENTER |
 /// Call do_autochdir().
 // nvim_do_autochdir_wrap: migrated to Rust wrappers.rs (Phase 8)
 
-/// Get restart_edit global (non-zero if in restart-edit mode).
-int nvim_get_restart_edit_bool(void) { return restart_edit ? 1 : 0; }
-
 // =============================================================================
 // Phase 2 accessors: win_fix_current_dir, buf_jump_open_win/tab, swbuf_goto
 // =============================================================================

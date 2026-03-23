@@ -158,16 +158,6 @@ char nvim_get_p_sel_first(void)
   return *p_sel;
 }
 
-int nvim_get_restart_edit(void)
-{
-  return restart_edit;
-}
-
-void nvim_set_restart_edit(int val)
-{
-  restart_edit = val;
-}
-
 const char *nvim_get_shape_table_name(int idx)
 {
   return shape_table[idx].full_name;

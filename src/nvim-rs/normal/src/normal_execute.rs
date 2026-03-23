@@ -80,7 +80,7 @@ extern "C" {
     fn nvim_oap_set_prev_count0(oap: OapHandle, val: c_int);
 
     // Global accessors (existing)
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
     static mut VIsual_active: bool;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_KeyTyped() -> bool;
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
     nvim_ns_set_c(s, adjusted);
 
     // If a mapping was started in Visual or Select mode, remember the length.
-    if nvim_get_restart_edit() == 0 {
+    if restart_edit == 0 {
         nvim_ns_set_old_mapped_len(s, 0);
     } else if nvim_ns_get_old_mapped_len(s) != 0
         || (VIsual_active && nvim_ns_get_mapped_len(s) == 0 && nvim_typebuf_maplen_wrapper() > 0)
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             ungetchars(len);
         }
 
-        if nvim_get_restart_edit() != 0 {
+        if restart_edit != 0 {
             nvim_ns_set_c(s, c_int::from(b'd'));
         } else {
             nvim_ns_set_c(s, c_int::from(b'c'));

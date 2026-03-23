@@ -2564,7 +2564,7 @@ extern "C" {
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
     static p_smd: c_int;
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
     fn nvim_VIsual_active() -> c_int;
     fn nvim_get_p_ch() -> i64;
     // nvim_ui_has_messages is already declared in the Phase 1 extern block above.
@@ -2679,7 +2679,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             }
             msg_puts_hl(c" INSERT".as_ptr(), hl_id, false);
         } else {
-            let re = nvim_get_restart_edit();
+            let re = restart_edit;
             if re == c_int::from(b'I')
                 || re == c_int::from(b'i')
                 || re == c_int::from(b'a')
@@ -2744,7 +2744,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     let do_mode = (p_smd != 0 && msg_silent == 0)
         && ((state & MODE_TERMINAL) != 0
             || (state & MODE_INSERT) != 0
-            || nvim_get_restart_edit() != 0
+            || restart_edit != 0
             || nvim_VIsual_active() != 0);
 
     let can_show_mode = nvim_get_p_ch() != 0 || nvim_ui_has_messages() != 0;

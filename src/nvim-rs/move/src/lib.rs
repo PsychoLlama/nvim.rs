@@ -3951,11 +3951,9 @@ extern "C" {
     fn nvim_mb_adjust_cursor();
 
     /// Get `restart_edit` global.
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
 
     /// Set `restart_edit` global.
-    fn nvim_set_restart_edit(val: c_int);
-
     /// Update topline.
     fn nvim_update_topline(wp: WinHandle);
 
@@ -4041,8 +4039,8 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
             // Make sure the cursor is in a valid position.
             // Temporarily set "restart_edit" to allow the cursor to be beyond EOL.
-            let restart_edit_save = nvim_get_restart_edit();
-            nvim_set_restart_edit(1);
+            let re_save = restart_edit;
+            restart_edit = 1;
             nvim_check_cursor(); // Uses curwin global which we just set
 
             // Avoid a scroll here for the cursor position, 'scrollbind' is
@@ -4051,7 +4049,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
                 rs_validate_cursor(wp);
             }
 
-            nvim_set_restart_edit(restart_edit_save);
+            restart_edit = re_save;
 
             // Correct cursor for multi-byte character.
             nvim_mb_adjust_cursor();

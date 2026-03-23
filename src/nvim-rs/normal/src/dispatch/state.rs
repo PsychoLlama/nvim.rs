@@ -30,9 +30,7 @@ extern "C" {
     fn nvim_set_VIsual_select(val: bool);
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_set_VIsual_mode(val: c_int);
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
-
+    static mut restart_edit: c_int;
     // Current operation accessors
     fn nvim_oap_get_op_type() -> c_int;
     fn nvim_oap_set_op_type(oap: OpArgHandle, val: c_int);
@@ -152,13 +150,13 @@ fn set_visual_mode_impl(val: c_int) {
 /// Get restart_edit value.
 #[inline]
 fn get_restart_edit_impl() -> c_int {
-    unsafe { nvim_get_restart_edit() }
+    unsafe { restart_edit }
 }
 
 /// Set restart_edit value.
 #[inline]
 fn set_restart_edit_impl(val: c_int) {
-    unsafe { nvim_set_restart_edit(val) };
+    unsafe { restart_edit = val };
 }
 
 // =============================================================================

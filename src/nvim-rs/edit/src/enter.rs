@@ -47,8 +47,7 @@ extern "C" {
     // State
     fn nvim_get_did_restart_edit() -> c_int;
     fn nvim_set_did_restart_edit(val: c_int);
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
+    static mut restart_edit: c_int;
     fn nvim_get_update_Insstart_orig() -> c_int;
     fn nvim_set_update_Insstart_orig(val: c_int);
 
@@ -167,7 +166,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     (*s).ins_just_started = true;
 
     // Remember whether editing was restarted after CTRL-O
-    nvim_set_did_restart_edit(nvim_get_restart_edit());
+    nvim_set_did_restart_edit(restart_edit);
 
     // Sleep before redrawing, needed for "CTRL-O :" that results in an error message
     nvim_drawscreen_msg_check_for_delay();
@@ -216,7 +215,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     }
 
     // Set up redo buffer
-    if cmdchar != 0 && nvim_get_restart_edit() == 0 {
+    if cmdchar != 0 && restart_edit == 0 {
         ResetRedobuff();
         AppendNumberToRedobuff((*s).count);
         if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {

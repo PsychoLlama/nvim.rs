@@ -257,9 +257,7 @@ extern "C" {
     fn nvim_get_cursor_coladd() -> c_int;
     fn nvim_normal_get_cmdwin_type() -> c_int;
     fn nvim_set_cmdwin_result(val: c_int);
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
-
+    static mut restart_edit: c_int;
     // Wave 2 Phase 5: Visual complex function accessors
     fn nvim_set_VIsual_active(val: bool);
     fn nvim_check_cursor();
@@ -2393,12 +2391,12 @@ unsafe fn invoke_edit_impl(cap: CapHandle, repl: bool, cmd: c_int, startln: bool
     // Complicated: When the user types "a<C-O>a" we don't want to do Insert
     // mode recursively.  But when doing "a<C-O>." or "a<C-O>rx" we do allow it.
     let restart_edit_save = if repl || !nvim_stuff_empty() {
-        nvim_get_restart_edit()
+        restart_edit
     } else {
         0
     };
     // Always reset "restart_edit", this is not a restarted edit.
-    nvim_set_restart_edit(0);
+    restart_edit = 0;
     // Reset b_last_changedtick_i, so that TextChangedI will only be triggered
     // for stuff from insert mode; for 'o/O' this has already been done in n_opencmd.
     let cmdchar = nvim_cap_get_cmdchar(cap);
@@ -2408,8 +2406,8 @@ unsafe fn invoke_edit_impl(cap: CapHandle, repl: bool, cmd: c_int, startln: bool
     if nvim_edit_call(cmd, startln, nvim_cap_get_count1(cap)) {
         nvim_cap_or_retval(cap, CA_COMMAND_BUSY);
     }
-    if nvim_get_restart_edit() == 0 {
-        nvim_set_restart_edit(restart_edit_save);
+    if restart_edit == 0 {
+        restart_edit = restart_edit_save;
     }
 }
 
@@ -2439,17 +2437,13 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
 
     if nvim_cap_get_arg(cap) != 0 {
         // true for CTRL-C
-        if nvim_get_restart_edit() == 0
-            && nvim_normal_get_cmdwin_type() == 0
-            && !VIsual_active
-            && no_reason
-        {
+        if restart_edit == 0 && nvim_normal_get_cmdwin_type() == 0 && !VIsual_active && no_reason {
             nvim_esc_show_msg();
         }
-        if nvim_get_restart_edit() != 0 {
+        if restart_edit != 0 {
             redraw_mode = 1; // remove "-- (insert) --"
         }
-        nvim_set_restart_edit(0);
+        restart_edit = 0;
         if nvim_normal_get_cmdwin_type() != 0 {
             nvim_set_cmdwin_result(K_IGNORE);
             unsafe {
@@ -3031,7 +3025,7 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
             buf.pop(); // remove NUL
             nvim_ident_set_g_tag_at_cursor(false);
             if cmdchar_byte == b'K' && !kp_ex && !kp_help {
-                nvim_set_restart_edit(c_int::from(b'i'));
+                restart_edit = c_int::from(b'i');
                 add_map(
                     c"<esc>".as_ptr().cast_mut(),
                     c"<Cmd>bdelete!<CR>".as_ptr().cast_mut(),
@@ -4066,7 +4060,6 @@ pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
 
     // If restart_edit is non-zero, the last but one command is repeated
     // instead of the last command (inserting text). Used for CTRL-O <.>.
-    let restart_edit = nvim_get_restart_edit();
     let arrow_used = nvim_get_arrow_used() != 0;
     let count0 = nvim_cap_get_count0(cap);
     if !nvim_start_redo(count0, restart_edit != 0 && !arrow_used) {
@@ -5514,8 +5507,8 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
         {
             // In a prompt buffer a <CR> in the last line invokes the callback.
             nvim_prompt_invoke_callback();
-            if nvim_get_restart_edit() == 0 {
-                nvim_set_restart_edit(c_int::from(b'a'));
+            if restart_edit == 0 {
+                restart_edit = c_int::from(b'a');
             }
         } else {
             nvim_oap_set_motion_type(oap, K_MT_LINEWISE);
@@ -6970,10 +6963,10 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     if nchar == CTRL_N || nchar == CTRL_G {
         rs_clearop(oap);
-        if nvim_get_restart_edit() != 0 && nvim_get_mode_displayed() {
+        if restart_edit != 0 && nvim_get_mode_displayed() {
             nvim_set_clear_cmdline(true);
         }
-        nvim_set_restart_edit(0);
+        restart_edit = 0;
         if nvim_normal_get_cmdwin_type() != 0 {
             nvim_set_cmdwin_result(CTRL_C);
         }
@@ -7428,7 +7421,7 @@ pub unsafe extern "C" fn rs_nv_paste(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
     // Disable garbage collection during event handling (see comment in C original).
     nvim_set_may_garbage_collect(false);
-    let may_restart = nvim_get_restart_edit() != 0 || nvim_get_restart_VIsual_select() != 0;
+    let may_restart = restart_edit != 0 || nvim_get_restart_VIsual_select() != 0;
     nvim_state_handle_k_event();
     nvim_set_finish_op(false);
     if may_restart {

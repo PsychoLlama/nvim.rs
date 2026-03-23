@@ -524,7 +524,7 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_gchar_cursor() -> c_int;
     fn nvim_get_ve_flags() -> c_int;
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
     fn nvim_dec_cursor() -> c_int;
     // getvcol for cursor (returns scol and ecol via out-params)
     fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
@@ -544,7 +544,7 @@ pub unsafe extern "C" fn rs_adjust_cursor_eol() {
     let col = nvim_get_cursor_col();
     let ch = nvim_gchar_cursor();
     let onemore = (cur_ve_flags & K_OPT_VE_FLAG_ONEMORE) == 0;
-    let restart = nvim_get_restart_edit() != 0;
+    let restart = restart_edit != 0;
     let state = State;
     let in_insert = (state & MODE_INSERT) != 0;
 

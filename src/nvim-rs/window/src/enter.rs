@@ -113,8 +113,7 @@ extern "C" {
     fn nvim_redraw_later_wrapper(wp: WinHandle, type_: c_int);
 
     // restart_edit
-    fn nvim_get_restart_edit_bool() -> c_int;
-
+    static mut restart_edit: c_int;
     // setmouse()
     fn nvim_setmouse();
 
@@ -262,7 +261,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         nvim_win_set_redr_status(new_curwin, 1);
         redraw_tabline = true;
 
-        if nvim_get_restart_edit_bool() != 0 {
+        if restart_edit != 0 {
             nvim_redraw_later_wrapper(new_curwin, UPD_VALID);
         }
 

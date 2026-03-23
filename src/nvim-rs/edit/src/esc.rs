@@ -108,7 +108,7 @@ extern "C" {
     fn nvim_get_reg_recording() -> c_int;
 
     // `restart_edit`
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
 
     // `p_ch == 0 && !ui_has(kUIMessages)`
     fn nvim_get_p_ch_zero_no_ui_messages() -> c_int;
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     }
 
     // When an autoindent was removed, curswant stays after the indent
-    if nvim_get_restart_edit() == 0 && temp == nvim_curwin_get_cursor_col() {
+    if restart_edit == 0 && temp == nvim_curwin_get_cursor_col() {
         nvim_curwin_set_w_set_curswant(true);
     }
 
@@ -215,12 +215,12 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     // The cursor should end up on the last inserted character.
     if nomove == 0
         && (nvim_curwin_get_cursor_col() != 0 || nvim_curwin_get_cursor_coladd() > 0)
-        && (nvim_get_restart_edit() == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
+        && (restart_edit == 0 || (gchar_cursor() == 0 && nvim_VIsual_active() == 0))
         && nvim_get_revins_on() == 0
     {
         if nvim_curwin_get_cursor_coladd() > 0 || nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
             oneleft();
-            if nvim_get_restart_edit() != 0 {
+            if restart_edit != 0 {
                 nvim_set_curwin_cursor_coladd(nvim_curwin_get_cursor_coladd() + 1);
             }
         } else {
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // When recording or for CTRL-O, need to display the new mode.
     // Otherwise remove the mode message.
-    if nvim_get_reg_recording() != 0 || nvim_get_restart_edit() != 0 {
+    if nvim_get_reg_recording() != 0 || restart_edit != 0 {
         nvim_showmode();
     } else if p_smd != 0
         && (unsafe { got_int } || !skip_showmode())

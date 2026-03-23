@@ -147,6 +147,7 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     static mut msg_silent: c_int;
+    static mut restart_edit: c_int;
     // Message functions
     fn msg(s: *const c_char, a: c_int);
     fn smsg(a: c_int, fmt: *const c_char, ...);
@@ -2489,7 +2490,6 @@ extern "C" {
     fn redraw_statuslines();
     fn showmode();
     fn rs_set_cursor_for_append_to_line();
-    fn nvim_set_restart_edit(val: c_int);
     fn nvim_docmd_set_curwin_curswant(val: c_int);
 
     // Phase 16: ex_put, ex_iput, ex_equal helpers
@@ -2990,7 +2990,7 @@ pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     } else {
         restart_char
     };
-    nvim_set_restart_edit(restart_char);
+    restart_edit = restart_char;
 
     if !forceit {
         nvim_docmd_set_curwin_curswant(0); // avoid MAXCOL

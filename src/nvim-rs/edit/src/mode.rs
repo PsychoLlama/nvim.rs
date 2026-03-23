@@ -29,8 +29,7 @@ mod consts {
 extern "C" {
     static mut State: c_int;
     // Global state accessors (getters exist in window.c and cursor_shape.c)
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
+    static mut restart_edit: c_int;
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
     fn nvim_get_p_ri() -> c_int;
@@ -115,7 +114,7 @@ pub fn set_state(state: c_int) {
 #[must_use]
 pub fn get_restart_edit() -> c_int {
     // SAFETY: Simple global accessor
-    unsafe { nvim_get_restart_edit() }
+    unsafe { restart_edit }
 }
 
 /// Set the `restart_edit` flag.
@@ -123,7 +122,7 @@ pub fn get_restart_edit() -> c_int {
 pub fn set_restart_edit(val: c_int) {
     // SAFETY: Simple global setter
     unsafe {
-        nvim_set_restart_edit(val);
+        restart_edit = val;
     }
 }
 

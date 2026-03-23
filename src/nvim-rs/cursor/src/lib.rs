@@ -144,7 +144,7 @@ extern "C" {
     fn nvim_get_ve_flags(win: WinHandle) -> c_int;
 
     /// Check if insert mode restart is pending
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
 
     /// Check if Visual mode is active
     static mut VIsual_active: bool;
@@ -559,7 +559,6 @@ pub unsafe extern "C" fn rs_cursor_clamp_col(
 pub unsafe extern "C" fn rs_cursor_one_more(win: WinHandle) -> bool {
     let state = nvim_get_state();
     let ve_flags = nvim_get_ve_flags(win);
-    let restart_edit = nvim_get_restart_edit();
     let visual_active = VIsual_active;
     let sel_first = nvim_get_p_sel_first();
 
@@ -963,7 +962,6 @@ pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
         // - in Visual mode and 'selection' isn't "old"
         // - 'virtualedit' is set
         let state = nvim_get_state();
-        let restart_edit = nvim_get_restart_edit();
         let visual_active = VIsual_active;
         let sel_first = nvim_get_p_sel_first();
         let virtual_active = nvim_virtual_active_win(win);

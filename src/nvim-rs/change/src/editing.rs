@@ -37,7 +37,7 @@ extern "C" {
     fn nvim_coladvance_force(vcol: ColnrT) -> c_int;
     fn nvim_getviscol() -> ColnrT;
     fn nvim_get_state() -> c_int;
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
     fn nvim_change_get_ve_flags(win: WinHandle) -> c_int;
 
     // Multi-byte functions
@@ -451,7 +451,7 @@ fn del_bytes_impl(count: ColnrT, fixpos_arg: bool, use_delcombine: bool) -> c_in
             // fixpos is true, we don't want to end up positioned at the NUL.
             if col > 0
                 && fixpos
-                && nvim_get_restart_edit() == 0
+                && restart_edit == 0
                 && (nvim_change_get_ve_flags(curwin) & K_OPT_VE_FLAG_ONEMORE) == 0
             {
                 let mut cur_col = nvim_win_get_cursor_col(curwin) - 1;

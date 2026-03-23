@@ -156,6 +156,7 @@ extern "C" {
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     static cmdwin_type: c_int;
+    static mut restart_edit: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_set_did_cursorhold(val: bool);
@@ -797,7 +798,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         CTRL_W => {
             if nvim_bt_prompt_curbuf() && (nvim_get_mod_mask() & MOD_MASK_SHIFT) == 0 {
                 nvim_stuffcharReadbuff(CTRL_W);
-                nvim_set_restart_edit(c_int::from(b'A'));
+                restart_edit = c_int::from(b'A');
                 (*s).nomove = true;
                 (*s).count = 0;
                 return SwitchAction::Exit(0);
@@ -1109,7 +1110,6 @@ unsafe fn handle_completion_pn(s: *mut InsertState) -> SwitchAction {
 
 extern "C" {
     fn nvim_stuffcharReadbuff(c: c_int);
-    fn nvim_set_restart_edit(val: c_int);
     fn nvim_get_p_ari() -> c_int;
     fn rs_compl_status_local() -> c_int;
     #[link_name = "cindent_on"]

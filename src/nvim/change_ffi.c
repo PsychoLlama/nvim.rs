@@ -246,7 +246,6 @@ bool nvim_p_sr(void) { return p_sr; }
 
 // nvim_get_state exists in cursor_shape.c
 void nvim_set_state(int state) { State = state; }
-// nvim_get_restart_edit exists in cursor_shape.c
 int nvim_change_get_ve_flags(win_T *win) { return get_ve_flags(win); }
 
 // =============================================================================

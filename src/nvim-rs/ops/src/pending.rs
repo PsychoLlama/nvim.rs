@@ -114,9 +114,7 @@ extern "C" {
     fn nvim_dpo_append_repeat_cmdline_to_redo(is_colon: c_int);
 
     // restart_edit
-    fn nvim_get_restart_edit() -> c_int;
-    fn nvim_set_restart_edit(val: c_int);
-
+    static mut restart_edit: c_int;
     // p_sol
     fn nvim_dpo_get_p_sol() -> bool;
 
@@ -927,20 +925,16 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 nvim_vim_beep_operator();
                 nvim_CancelRedo();
             } else {
-                let restart_edit_save = if nvim_get_KeyTyped() {
-                    0
-                } else {
-                    nvim_get_restart_edit()
-                };
-                nvim_set_restart_edit(0);
+                let restart_edit_save = if nvim_get_KeyTyped() { 0 } else { restart_edit };
+                restart_edit = 0;
                 restore_lbr(lbr_saved);
                 nvim_sync_curbuf_last_changedtick_i();
                 if op_change(oap) != 0 {
                     let rv = nvim_cap_get_retval(cap);
                     nvim_cap_set_retval(cap, rv | CA_COMMAND_BUSY);
                 }
-                if nvim_get_restart_edit() == 0 {
-                    nvim_set_restart_edit(restart_edit_save);
+                if restart_edit == 0 {
+                    restart_edit = restart_edit_save;
                 }
             }
         }
@@ -1000,16 +994,16 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 nvim_vim_beep_operator();
                 nvim_CancelRedo();
             } else {
-                let restart_edit_save = nvim_get_restart_edit();
-                nvim_set_restart_edit(0);
+                let re_save = restart_edit;
+                restart_edit = 0;
                 restore_lbr(lbr_saved);
                 nvim_sync_curbuf_last_changedtick_i();
                 let count1 = nvim_cap_get_count1(cap);
                 op_insert(oap, count1);
                 nvim_curwin_reset_lbr();
                 auto_format(false, true);
-                if nvim_get_restart_edit() == 0 {
-                    nvim_set_restart_edit(restart_edit_save);
+                if restart_edit == 0 {
+                    restart_edit = re_save;
                 } else {
                     let rv = nvim_cap_get_retval(cap);
                     nvim_cap_set_retval(cap, rv | CA_COMMAND_BUSY);

@@ -764,7 +764,7 @@ pub unsafe extern "C" fn rs_get_recorded() -> *mut u8 {
     recordbuff().clear();
 
     let last_len = nvim_get_last_recorded_len();
-    let restart_edit_val = nvim_get_restart_edit();
+    let restart_edit_val = restart_edit;
 
     if contents.is_empty() {
         // Match C behavior: get_buffcont with dozero=true returns empty string
@@ -815,7 +815,7 @@ pub unsafe extern "C" fn rs_get_inserted_len() -> usize {
 extern "C" {
     fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
     fn nvim_get_last_recorded_len() -> usize;
-    fn nvim_get_restart_edit() -> c_int;
+    static mut restart_edit: c_int;
 }
 
 /// Neovim API `String` type: `{ char *data; size_t size; }`.
