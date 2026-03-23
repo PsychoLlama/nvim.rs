@@ -543,11 +543,6 @@ void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
 // Return address of win->w_p_winhl for varp comparison
 const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
-// syn_check_group wrapper (reuse existing signature: name + len)
-int nvim_syn_check_group_for_winhl(const char *name, size_t len)
-{
-  return syn_check_group(name, len);
-}
 // Prepare namespace for winhighlight: create if absent, bump hl_valid if existing.
 // Returns the namespace id.
 int nvim_winhl_ns_prepare(win_T *wp)
@@ -960,15 +955,6 @@ void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s",
 int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
 
-// Phase 2 makeset accessors
-// Write "if &optname != 'val'\n" to fd; returns OK or FAIL (< 0 = FAIL like fprintf)
-int nvim_call_makeset_if_line(FILE *fd, const char *optname, const char *val)
-{
-  if (fprintf(fd, "if &%s != '%s'", optname, val) < 0) {
-    return FAIL;
-  }
-  return put_eol(fd) < 0 ? FAIL : OK;
-}
 // Get the option fullname for writing to session files
 const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
 // Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)

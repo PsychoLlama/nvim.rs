@@ -34,6 +34,7 @@ extern "C" {
     fn nvim_winhl_ns_prepare(win: crate::WinHandle) -> c_int;
 
     /// Call syn_check_group(name, len) and return the group id.
+    #[link_name = "syn_check_group"]
     fn nvim_syn_check_group_for_winhl(name: *const c_char, len: usize) -> c_int;
 
     /// Call rs_ns_hl_def(ns_id, hl_id_link, attrs_with_global, hl_id)

@@ -33,11 +33,6 @@ extern "C" {
     #[link_name = "rs_option_is_window_local"]
     fn nvim_option_is_window_local(opt_idx: c_int) -> c_int;
     fn put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
-    fn nvim_call_makeset_if_line(
-        fd: *mut libc::FILE,
-        optname: *const c_char,
-        val: *const c_char,
-    ) -> c_int;
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
 }
 
@@ -104,6 +99,23 @@ const FAIL: c_int = 0;
 #[inline]
 fn is_special(c: OptInt) -> bool {
     c < 0
+}
+
+/// Inline port of C `nvim_call_makeset_if_line`.
+/// Writes `if &optname != 'val'` + EOL to fd; returns OK or FAIL.
+unsafe fn makeset_if_line(
+    fd: *mut libc::FILE,
+    optname: *const c_char,
+    val: *const c_char,
+) -> c_int {
+    if libc::fprintf(fd, c"if &%s != '%s'".as_ptr(), optname, val) < 0 {
+        return FAIL;
+    }
+    if put_eol(fd) < 0 {
+        FAIL
+    } else {
+        OK
+    }
 }
 
 // =============================================================================
@@ -575,7 +587,7 @@ pub unsafe extern "C" fn rs_makeset(
                 let do_endif = if opt_idx == K_OPT_SYNTAX || opt_idx == K_OPT_FILETYPE {
                     let optname = nvim_option_get_fullname(opt_idx);
                     let str_val = *(cur_varp.cast::<*const c_char>());
-                    if nvim_call_makeset_if_line(fd, optname, str_val) == FAIL {
+                    if makeset_if_line(fd, optname, str_val) == FAIL {
                         return FAIL;
                     }
                     true
