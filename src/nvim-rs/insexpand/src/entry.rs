@@ -62,9 +62,10 @@ extern "C" {
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
     fn nvim_set_edit_submode_adding();
     fn nvim_clear_edit_submode_pre();
-    fn nvim_set_edit_submode_highl_count();
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
+    #[link_name = "edit_submode_highl"]
+    static mut g_edit_submode_highl: c_int;
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_ml_get_curline() -> *const c_char;
     // (compl_pending moved to Rust static in state.rs)
@@ -86,6 +87,7 @@ const CTRL_X_CMDLINE: c_int = 11;
 const CONT_ADDING: c_int = 1;
 const CONT_INTRPT: c_int = 6; // 2 + 4
 const CONT_N_ADDS: c_int = 4;
+const HLF_COUNT: c_int = 76; // sentinel HLF value (from highlight_defs.h)
 const CONT_LOCAL: c_int = 32;
 
 // Control key constants
@@ -277,7 +279,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
     if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
         nvim_set_edit_submode_extra_searching();
-        nvim_set_edit_submode_highl_count();
+        g_edit_submode_highl = HLF_COUNT;
         showmode();
         g_edit_submode_extra = core::ptr::null_mut();
         nvim_ui_flush();

@@ -102,6 +102,8 @@ extern "C" {
     fn nvim_compl_clear_leader();
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
+    #[link_name = "edit_submode_highl"]
+    static mut g_edit_submode_highl: c_int;
     fn nvim_clear_compl_orig_extmarks();
     fn nvim_compl_clear_orig_text();
     fn nvim_cpt_sources_clear();
@@ -386,10 +388,6 @@ extern "C" {
     fn nvim_set_edit_submode_extra_word_from_other_line();
     fn nvim_set_edit_submode_extra_the_only_match();
     fn nvim_set_edit_submode_extra_match_ref(cp_number: c_int, compl_matches: c_int);
-    fn nvim_set_edit_submode_highl_e();
-    fn nvim_set_edit_submode_highl_w();
-    fn nvim_set_edit_submode_highl_r();
-    fn nvim_set_edit_submode_highl_count();
     fn nvim_get_edit_submode_highl_attr() -> c_int;
     fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
     #[link_name = "msg_hist_off"]
@@ -407,6 +405,12 @@ extern "C" {
 
 /// Buffer size used by C (IOSIZE = 1025, MIN_SPACE = 75)
 const IOSIZE_MINUS_MIN_SPACE: c_int = 1025 - 75;
+
+// HLF enum values (from highlight_defs.h, verified by test)
+const HLF_E: c_int = 6; // ErrorMsg
+const HLF_W: c_int = 26; // WarningMsg
+const HLF_R: c_int = 18; // Question
+const HLF_COUNT: c_int = 76; // sentinel (not a real highlight)
 
 /// Resume interrupted completion: adjust compl_startpos, compl_col,
 /// compl_length, and compl_cont_status.
@@ -492,21 +496,21 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
         } else {
             nvim_set_edit_submode_extra_patnotf();
         }
-        nvim_set_edit_submode_highl_e();
+        g_edit_submode_highl = HLF_E;
     }
 
     if g_edit_submode_extra.is_null() {
         if nvim_compl_curr_match_at_original_text() != 0 {
             nvim_set_edit_submode_extra_back_at_original();
-            nvim_set_edit_submode_highl_w();
+            g_edit_submode_highl = HLF_W;
         } else {
             let cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_S_IPOS) != 0 {
                 nvim_set_edit_submode_extra_word_from_other_line();
-                nvim_set_edit_submode_highl_count();
+                g_edit_submode_highl = HLF_COUNT;
             } else if nvim_compl_curr_match_next_eq_prev() != 0 {
                 nvim_set_edit_submode_extra_the_only_match();
-                nvim_set_edit_submode_highl_count();
+                g_edit_submode_highl = HLF_COUNT;
                 nvim_compl_curr_match_set_cp_number(1);
             } else {
                 // Update completion sequence number when needed.
@@ -521,7 +525,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                         nvim_compl_curr_match_cp_number(),
                         crate::vars::nvim_get_compl_matches(),
                     );
-                    nvim_set_edit_submode_highl_r();
+                    g_edit_submode_highl = HLF_R;
                     if nvim_get_dollar_vcol() >= 0 {
                         nvim_curs_columns_curwin();
                     }

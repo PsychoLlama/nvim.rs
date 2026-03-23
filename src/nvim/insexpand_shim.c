@@ -2604,11 +2604,6 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
 }
 const char *nvim_get_edit_submode_extra_ptr(void) { return edit_submode_extra; }
 
-// --- edit_submode_highl setters (using HLF enum values) ---
-void nvim_set_edit_submode_highl_e(void) { edit_submode_highl = HLF_E; }
-void nvim_set_edit_submode_highl_w(void) { edit_submode_highl = HLF_W; }
-void nvim_set_edit_submode_highl_r(void) { edit_submode_highl = HLF_R; }
-void nvim_set_edit_submode_highl_count(void) { edit_submode_highl = HLF_COUNT; }
 /// Returns (edit_submode_highl < HLF_COUNT ? edit_submode_highl + 1 : 0)
 int nvim_get_edit_submode_highl_attr(void) {
   return edit_submode_highl < HLF_COUNT ? (int)edit_submode_highl + 1 : 0;
