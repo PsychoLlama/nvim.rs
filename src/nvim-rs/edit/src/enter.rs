@@ -100,7 +100,9 @@ extern "C" {
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_get_can_cindent() -> c_int;
     fn nvim_set_can_cindent(val: c_int);
-    fn nvim_get_p_smd() -> c_int;
+    // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
+    #[link_name = "p_smd"]
+    static p_smd: c_int;
     fn nvim_get_msg_silent() -> c_int;
     fn nvim_set_old_indent(val: c_int);
     fn nvim_set_new_insert_skip(val: c_int);
@@ -298,7 +300,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // If 'showmode' is set, show the current (insert/replace/..) mode.
     // A warning message for changing a readonly file is given here, before
     // actually changing anything.
-    let show_i = if nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0 {
+    let show_i = if p_smd != 0 && nvim_get_msg_silent() == 0 {
         showmode()
     } else {
         0

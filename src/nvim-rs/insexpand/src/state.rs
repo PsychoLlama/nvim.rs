@@ -362,7 +362,9 @@ extern "C" {
     #[link_name = "redraw_mode"]
     static mut g_redraw_mode: bool;
     fn nvim_shortmess_completionmenu() -> bool;
-    fn nvim_get_p_smd() -> c_int;
+    // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
+    #[link_name = "p_smd"]
+    static p_smd: c_int;
     fn nvim_set_edit_submode_extra_hitend();
     fn nvim_set_edit_submode_extra_patnotf();
     fn nvim_set_edit_submode_extra_back_at_original();
@@ -523,7 +525,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
             nvim_msg_clr_cmdline_wrap(); // necessary for "noshowmode"
         } else {
             // edit_submode_extra is non-null
-            if nvim_get_p_smd() == 0 {
+            if p_smd == 0 {
                 g_msg_hist_off = true;
                 nvim_msg_ext_set_kind_completion();
                 nvim_msg_with_attr(

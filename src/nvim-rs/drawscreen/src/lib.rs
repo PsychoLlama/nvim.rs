@@ -2563,7 +2563,9 @@ const SHM_COMPLETIONMENU: c_int = b'c' as c_int;
 const HLF_COUNT: c_int = 76;
 
 extern "C" {
-    fn nvim_get_p_smd() -> c_int;
+    // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
+    #[link_name = "p_smd"]
+    static p_smd: c_int;
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_VIsual_active() -> c_int;
     fn nvim_get_p_ch() -> i64;
@@ -2741,7 +2743,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     nvim_drawscreen_msg_grid_validate();
 
     let state = nvim_get_State();
-    let do_mode = (nvim_get_p_smd() != 0 && nvim_get_msg_silent() == 0)
+    let do_mode = (p_smd != 0 && nvim_get_msg_silent() == 0)
         && ((state & MODE_TERMINAL) != 0
             || (state & MODE_INSERT) != 0
             || nvim_get_restart_edit() != 0

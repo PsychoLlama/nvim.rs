@@ -528,7 +528,7 @@ void nvim_set_VIsual_reselect(bool val) { VIsual_reselect = val; }
 
 void nvim_setmouse(void) { setmouse(); }
 
-int nvim_get_p_smd(void) { return p_smd; }
+// nvim_get_p_smd: deleted (Phase 39, use p_smd directly)
 
 void nvim_check_cursor(void) { check_cursor(curwin); }
 
