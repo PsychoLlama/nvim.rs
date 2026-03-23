@@ -658,12 +658,12 @@ extern "C" {
     // Folding
     fn nvim_docmd_hasFolding(lnum: i32) -> i32;
 
-    // Buffer local count (for +/- on buffer addresses)
-    fn nvim_docmd_compute_buffer_local_count_impl(
-        addr_type: c_int,
-        lnum: i32,
-        offset: c_int,
-    ) -> c_int;
+    // Buffer list navigation (for compute_buffer_local_count)
+    fn nvim_get_firstbuf() -> *mut c_void;
+    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_prev(buf: *mut c_void) -> *mut c_void;
+    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_ml_mfp_null(buf: *mut c_void) -> c_int;
 
     // Digit parsing (getdigits_int32 not in the existing block)
     fn nvim_docmd_getdigits_int32(pp: *mut *mut c_char) -> c_int;
@@ -681,6 +681,72 @@ extern "C" {
     fn nvim_docmd_mark_get_visual(ch: c_int) -> *mut c_void;
     fn nvim_docmd_check_cursor();
     fn nvim_docmd_check_cursor_col();
+}
+
+/// Compute the buffer number reached by stepping `offset` buffers from the
+/// buffer at `lnum` in the buffer list.
+///
+/// Mirrors `nvim_docmd_compute_buffer_local_count_impl` in ex_docmd.c.
+///
+/// # Safety
+/// Accesses C globals (firstbuf/buf list). Must only be called from C context.
+#[export_name = "nvim_docmd_compute_buffer_local_count_impl"]
+pub unsafe extern "C" fn rs_compute_buffer_local_count(
+    addr_type: c_int,
+    lnum: i32,
+    offset: c_int,
+) -> c_int {
+    let mut count = offset;
+
+    let mut buf = nvim_get_firstbuf();
+    // Advance to the buffer with fnum >= lnum.
+    while !nvim_buf_get_next(buf).is_null() && nvim_buf_get_fnum(buf) < lnum {
+        buf = nvim_buf_get_next(buf);
+    }
+
+    while count != 0 {
+        count += if count < 0 { 1 } else { -1 };
+        let nextbuf = if offset < 0 {
+            nvim_buf_get_prev(buf)
+        } else {
+            nvim_buf_get_next(buf)
+        };
+        if nextbuf.is_null() {
+            break;
+        }
+        buf = nextbuf;
+        if addr_type == ADDR_LOADED_BUFFERS {
+            // skip over unloaded buffers
+            loop {
+                let nextbuf2 = if offset < 0 {
+                    nvim_buf_get_prev(buf)
+                } else {
+                    nvim_buf_get_next(buf)
+                };
+                if nvim_buf_get_ml_mfp_null(buf) == 0 || nextbuf2.is_null() {
+                    break;
+                }
+                buf = nextbuf2;
+            }
+        }
+    }
+
+    // We might have gone too far; last buffer is not loaded.
+    if addr_type == ADDR_LOADED_BUFFERS {
+        loop {
+            let nextbuf = if offset >= 0 {
+                nvim_buf_get_prev(buf)
+            } else {
+                nvim_buf_get_next(buf)
+            };
+            if nvim_buf_get_ml_mfp_null(buf) == 0 || nextbuf.is_null() {
+                break;
+            }
+            buf = nextbuf;
+        }
+    }
+
+    nvim_buf_get_fnum(buf)
 }
 
 /// Return the appropriate error message for an invalid address type.
@@ -1027,7 +1093,7 @@ pub unsafe fn get_address_impl(
                 *ptr = cmd;
                 return lnum;
             } else if addr_type == ADDR_LOADED_BUFFERS || addr_type == ADDR_BUFFERS {
-                lnum = nvim_docmd_compute_buffer_local_count_impl(
+                lnum = rs_compute_buffer_local_count(
                     addr_type,
                     lnum,
                     if i == b'-' { -(n as c_int) } else { n as c_int },

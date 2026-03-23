@@ -1178,44 +1178,8 @@ void *getline_cookie(LineGetter fgetline, void *cookie)
 /// ":bwipeout", etc.
 ///
 /// @return  the buffer number.
-int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset)
-{
-  int count = offset;
-
-  buf_T *buf = firstbuf;
-  while (buf->b_next != NULL && buf->b_fnum < lnum) {
-    buf = buf->b_next;
-  }
-  while (count != 0) {
-    count += (count < 0) ? 1 : -1;
-    buf_T *nextbuf = (offset < 0) ? buf->b_prev : buf->b_next;
-    if (nextbuf == NULL) {
-      break;
-    }
-    buf = nextbuf;
-    if (addr_type == ADDR_LOADED_BUFFERS) {
-      // skip over unloaded buffers
-      while (buf->b_ml.ml_mfp == NULL) {
-        nextbuf = (offset < 0) ? buf->b_prev : buf->b_next;
-        if (nextbuf == NULL) {
-          break;
-        }
-        buf = nextbuf;
-      }
-    }
-  }
-  // we might have gone too far, last buffer is not loaded
-  if (addr_type == ADDR_LOADED_BUFFERS) {
-    while (buf->b_ml.ml_mfp == NULL) {
-      buf_T *nextbuf = (offset >= 0) ? buf->b_prev : buf->b_next;
-      if (nextbuf == NULL) {
-        break;
-      }
-      buf = nextbuf;
-    }
-  }
-  return buf->b_fnum;
-}
+// nvim_docmd_compute_buffer_local_count_impl is implemented in Rust (address.rs).
+extern int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset);
 
 /// @return  the window number of "win" or,
 ///          the number of windows if "win" is NULL
