@@ -4,7 +4,7 @@
 //! callbacks. These callbacks handle options that affect editor behavior
 //! such as diff mode, spell checking, swap files, undo, folds, etc.
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::callbacks::{callback_ok, CallbackResult};
 use crate::{BufHandle, OptInt, WinHandle};
@@ -177,7 +177,9 @@ extern "C" {
     fn nvim_unset_vim_env();
 
     // Phase 100: optexpr / foldexpr accessors
-    fn nvim_apply_scriptlocal_funcname(varp_ptr: *mut c_void);
+    fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char;
+    #[link_name = "free_string_option"]
+    fn nvim_free_string_option(p: *mut c_char);
     #[link_name = "rs_foldmethodIsExpr"]
     fn nvim_foldmethodIsExpr(win: WinHandle) -> c_int;
 
@@ -189,7 +191,7 @@ extern "C" {
     ) -> CallbackResult;
 
     // Phase 102: highlight / titleiconstring accessors
-    fn nvim_check_highlight_init(args: *mut c_void) -> c_int;
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn did_set_titleiconstring(args: *mut c_void, flagval: c_int) -> CallbackResult;
 
     // Phase 103: isopt / signcolumn / tagcase / virtualedit - call C directly
@@ -1118,11 +1120,15 @@ pub unsafe extern "C" fn rs_did_set_virtualedit_full(args: *mut c_void) -> Callb
     did_set_virtualedit(args)
 }
 
+// Default value of 'highlight' option (must match HIGHLIGHT_INIT in option_vars.h)
+const HIGHLIGHT_INIT: &std::ffi::CStr = c"8:SpecialKey,~:EndOfBuffer,z:TermCursor,@:NonText,d:Directory,e:ErrorMsg,i:IncSearch,l:Search,y:CurSearch,m:MoreMsg,M:ModeMsg,n:LineNr,a:LineNrAbove,b:LineNrBelow,N:CursorLineNr,G:CursorLineSign,O:CursorLineFold,r:Question,s:StatusLine,S:StatusLineNC,c:VertSplit,t:Title,v:Visual,V:VisualNOS,w:WarningMsg,W:WildMenu,f:Folded,F:FoldColumn,A:DiffAdd,C:DiffChange,D:DiffDelete,T:DiffText,E:DiffTextAdd,>:SignColumn,-:Conceal,B:SpellBad,P:SpellCap,R:SpellRare,L:SpellLocal,+:Pmenu,=:PmenuSel,k:PmenuMatch,<:PmenuMatchSel,[:PmenuKind,]:PmenuKindSel,{:PmenuExtra,}:PmenuExtraSel,x:PmenuSbar,X:PmenuThumb,*:TabLine,#:TabLineSel,_:TabLineFill,!:CursorColumn,.:CursorLine,o:ColorColumn,q:QuickFixLine,z:StatusLineTerm,Z:StatusLineTermNC,g:MsgArea,h:ComplMatchIns,0:Whitespace,I:PreInsert";
+
 /// Callback for 'highlight' option (Phase 102).
 /// Validates that the value is HIGHLIGHT_INIT.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_highlight(args: *mut c_void) -> CallbackResult {
-    if nvim_check_highlight_init(args) == 0 {
+    let varp = nvim_optset_get_varp_str(args);
+    if strcmp(varp, HIGHLIGHT_INIT.as_ptr()) != 0 {
         return (&raw const crate::e_unsupportedoption).cast::<std::ffi::c_char>();
     }
     callback_ok()
@@ -1179,8 +1185,12 @@ pub unsafe extern "C" fn rs_did_set_winbar(args: *mut c_void) -> CallbackResult 
 /// Replaces <SID> or s: prefixes with script identifier.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_optexpr(args: *mut c_void) -> CallbackResult {
-    let varp = nvim_optset_get_varp(args);
-    nvim_apply_scriptlocal_funcname(varp);
+    let varp = nvim_optset_get_varp(args).cast::<*mut c_char>();
+    let name = get_scriptlocal_funcname(*varp);
+    if !name.is_null() {
+        nvim_free_string_option(*varp);
+        *varp = name;
+    }
     callback_ok()
 }
 

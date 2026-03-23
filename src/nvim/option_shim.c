@@ -428,22 +428,6 @@ const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win-
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
 
-// Phase 102: highlight accessor
-int nvim_check_highlight_init(void *args) {
-  char **varp = (char **)((optset_T *)args)->os_varp;
-  return strcmp(*varp, HIGHLIGHT_INIT) == 0 ? 1 : 0;
-}
-
-// Phase 100: optexpr / foldexpr accessors
-void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
-  char **varp = (char **)varp_ptr;
-  char *name = get_scriptlocal_funcname(*varp);
-  if (name != NULL) {
-    free_string_option(*varp);
-    *varp = name;
-  }
-}
-
 // Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
 
@@ -592,13 +576,6 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 
-// set_helplang_default accessors
-void nvim_set_p_hlg_from_code(const char *code)
-{
-  free_string_option(p_hlg);
-  // code is a 2-char null-terminated string (or empty)
-  p_hlg = (code && code[0]) ? xstrdup(code) : xstrdup("");
-}
 
 static const char e_unknown_option[]
   = N_("E518: Unknown option");

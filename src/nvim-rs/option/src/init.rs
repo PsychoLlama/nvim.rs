@@ -399,10 +399,12 @@ pub extern "C" fn rs_default_tmpdir() -> *const c_char {
 // =============================================================================
 
 extern "C" {
-    /// Set p_hlg from a 2-char code, freeing the old value.
-    fn nvim_set_p_hlg_from_code(code: *const c_char);
     #[link_name = "rs_get_option_flags"]
     fn nvim_hlg_get_option_flags(opt_idx: c_int) -> u32;
+    static mut p_hlg: *mut c_char;
+    #[link_name = "free_string_option"]
+    fn nvim_free_string_option_hlg(p: *mut c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
 /// Set 'helplang' to a default value derived from a locale string, if it
@@ -425,7 +427,13 @@ pub unsafe extern "C" fn rs_set_helplang_default(lang: *const c_char) {
         return;
     }
 
-    nvim_set_p_hlg_from_code(result.code.as_ptr());
+    // Set p_hlg from 2-char code, freeing old value (matches C: p_hlg = code[0] ? xstrdup(code) : xstrdup(""))
+    nvim_free_string_option_hlg(p_hlg);
+    p_hlg = if result.code[0] != 0 {
+        xstrdup(result.code.as_ptr())
+    } else {
+        xstrdup(c"".as_ptr())
+    };
 }
 
 // =============================================================================
