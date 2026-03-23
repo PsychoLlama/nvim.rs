@@ -18,7 +18,6 @@
 #include "nvim/change.h"
 #include "nvim/charset.h"
 #include "nvim/cursor.h"
-#include "nvim/decoration.h"
 #include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
@@ -28,8 +27,6 @@
 #include "nvim/eval/vars.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/extmark.h"
-#include "nvim/extmark_defs.h"
 #include "nvim/fileio.h"
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
@@ -39,16 +36,13 @@
 #include "nvim/grid_defs.h"
 #include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
-#include "nvim/highlight_group.h"
 #include "nvim/indent.h"
-#include "nvim/indent_c.h"
 #include "nvim/insexpand.h"
 #include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mapping.h"
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
-#include "nvim/marktree_defs.h"
 #include "nvim/mbyte.h"
 #include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
@@ -85,7 +79,6 @@
 // Rust implementations (called directly instead of C wrappers)
 extern int rs_ctrl_x_mode_scroll(void);
 extern int rs_ins_compl_active(void);
-extern int rs_ins_compl_col(void);
 
 typedef struct {
   VimState state;
@@ -114,8 +107,6 @@ typedef struct {
 extern void insert_enter(InsertState *s);
 
 #include "edit.c.generated.h"
-
-extern int rs_get_scrolloff_value(win_T *wp);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
@@ -162,8 +153,6 @@ extern RsNvimString rs_get_last_insert(void);
 extern void rs_replace_stack_clear(void);
 extern void ins_ctrl_v(void);
 extern void rs_clear_showcmd(void);
-extern void rs_start_selection(void);
-
 extern int insert_check_rs(VimState *state);
 extern int insert_execute_rs(VimState *state, int key);
 
@@ -175,20 +164,7 @@ extern int echeck_abbr(int c);
 extern void replace_join(int off);
 extern void replace_pop_ins(void);
 extern void replace_do_bs(int limit_col);
-extern void ins_ctrl_o(void);
-extern int ins_start_select(int c);
 extern char *do_insert_char_pre(int c);
-extern void undisplay_dollar(void);
-extern void backspace_until_column(int col);
-extern int get_literal(bool no_simplify);
-extern void start_arrow(pos_T *end_insert_pos);
-extern int stop_arrow(void);
-extern char *get_last_insert_save(void);
-extern void replace_push_nul(void);
-extern int ins_copychar(linenr_T lnum);
-extern colnr_T get_nolist_virtcol(void);
-extern char *buf_prompt_text(const buf_T *buf);
-extern char *prompt_text(void);
 
 /// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
@@ -552,54 +528,6 @@ const void *nvim_curwin_get_cursor_ptr(void)
   return &curwin->w_cursor;
 }
 
-/// This is the complex comment-leader removal section from insertchar().
-void nvim_edit_handle_end_comment_pending(int c)
-{
-  char *p;
-  char lead_end[COM_MAX_LEN];  // end-comment string
-
-  // Need to remove existing (middle) comment leader and insert end
-  // comment leader.  First, check what comment leader we can find.
-  char *line = get_cursor_line_ptr();
-  int i = get_leader_len(line, &p, false, true);
-  if (i > 0 && vim_strchr(p, COM_MIDDLE) != NULL) {  // Just checking
-    // Skip middle-comment string
-    while (*p && p[-1] != ':') {  // find end of middle flags
-      p++;
-    }
-    int middle_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
-    // Don't count trailing white space for middle_len
-    while (middle_len > 0 && ascii_iswhite(lead_end[middle_len - 1])) {
-      middle_len--;
-    }
-
-    // Find the end-comment string
-    while (*p && p[-1] != ':') {  // find end of end flags
-      p++;
-    }
-    int end_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
-
-    // Skip white space before the cursor
-    i = curwin->w_cursor.col;
-    while (--i >= 0 && ascii_iswhite(line[i])) {}
-    i++;
-
-    // Skip to before the middle leader
-    i -= middle_len;
-
-    // Check some expected things before we go on
-    if (i >= 0 && end_len > 0
-        && (uint8_t)lead_end[end_len - 1] == end_comment_pending) {
-      // Backspace over all the stuff we want to replace
-      backspace_until_column(i);
-
-      // Insert the end-comment string, except for the last
-      // character, which will get inserted as normal later.
-      ins_bytes_len(lead_end, (size_t)(end_len - 1));
-    }
-  }
-}
-
 /// Call stop_insert logic for end_insert_pos (accessor for Rust).
 void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
 {
@@ -726,7 +654,6 @@ int nvim_edit_topline_changed(void)
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
 
-
 /// ins_ctrl_() helper — handles the state changes that need C access.
 /// The Rust side computes revins_on, this function handles the rest.
 void nvim_edit_ins_ctrl_(int new_revins_on)
@@ -748,7 +675,6 @@ void nvim_edit_ins_ctrl_(int new_revins_on)
   }
   showmode();
 }
-
 
 /// ins_ctrl_g 'u' sync handler (accessor for Rust).
 void nvim_edit_ctrl_g_u_sync(void)
@@ -883,7 +809,6 @@ void nvim_edit_ins_ctrl_v(void)
   revins_legal++;
 }
 
-
 /// Delegated wrapper for ins_ctrl_ey (Rust FFI export).
 int nvim_edit_ins_ctrl_ey(int tc)
 {
@@ -984,9 +909,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
   stuffReadbuffLen(data, len);
 }
 
-/// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
-
-
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
 {
@@ -1041,9 +963,6 @@ void nvim_stuffcharReadbuff_K_NOP(void)
 {
   stuffcharReadbuff(K_NOP);
 }
-
-
-/// Set did_cursorhold (accessor for Rust state_machine, to avoid duplicate).
 
 /// Call ins_redraw(false) (accessor for Rust state_machine).
 void ins_redraw_false(void)

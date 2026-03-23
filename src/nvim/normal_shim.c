@@ -2536,3 +2536,34 @@ int nvim_ins_start_select(int c)
   }
   return 0;
 }
+
+void nvim_handle_end_comment_pending(int c)
+{
+  char *p;
+  char lead_end[COM_MAX_LEN];
+
+  char *line = get_cursor_line_ptr();
+  int i = get_leader_len(line, &p, false, true);
+  if (i > 0 && vim_strchr(p, COM_MIDDLE) != NULL) {
+    while (*p && p[-1] != ':') {
+      p++;
+    }
+    int middle_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
+    while (middle_len > 0 && ascii_iswhite(lead_end[middle_len - 1])) {
+      middle_len--;
+    }
+    while (*p && p[-1] != ':') {
+      p++;
+    }
+    int end_len = (int)copy_option_part(&p, lead_end, COM_MAX_LEN, ",");
+    i = curwin->w_cursor.col;
+    while (--i >= 0 && ascii_iswhite(line[i])) {}
+    i++;
+    i -= middle_len;
+    if (i >= 0 && end_len > 0
+        && (uint8_t)lead_end[end_len - 1] == end_comment_pending) {
+      backspace_until_column(i);
+      ins_bytes_len(lead_end, (size_t)(end_len - 1));
+    }
+  }
+}

@@ -72,7 +72,7 @@ extern "C" {
     fn nvim_curbuf_has_b_p_fex() -> bool;
 
     // -- end_comment_pending comment replacement (complex C logic) --
-    fn nvim_edit_handle_end_comment_pending(c: c_int);
+    fn nvim_handle_end_comment_pending(c: c_int);
 
     // -- input / char --
     fn vpeekc() -> c_int;
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
 
     // Check whether this character should end a comment.
     if nvim_get_did_ai() && c == nvim_get_end_comment_pending() {
-        nvim_edit_handle_end_comment_pending(c);
+        nvim_handle_end_comment_pending(c);
     }
     nvim_set_end_comment_pending(0 /* NUL */);
 
