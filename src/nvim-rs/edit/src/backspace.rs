@@ -23,6 +23,7 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Buffer state
     fn nvim_curbuf_is_empty() -> c_int;
     fn nvim_curbuf_is_prompt() -> c_int;
@@ -45,8 +46,6 @@ extern "C" {
     fn nvim_set_Insstart_orig(lnum: LinenrT, col: ColnrT);
 
     // Mode flags
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
 
     // Global variables
     fn nvim_get_revins_on() -> c_int;
@@ -240,7 +239,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         nvim_set_curwin_cursor_coladd(0);
     }
 
-    let state = nvim_get_State();
+    let state = State;
     let mut did_backspace = false;
     let mut call_fix_indent = false;
     let cursor_col = nvim_curwin_get_cursor_col(); // re-read after coladd
@@ -288,8 +287,8 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
             // In REPLACE mode: restore text replaced by the NL
             if state & REPLACE_FLAG != 0 {
-                let old_state = nvim_get_State();
-                nvim_set_State(MODE_NORMAL);
+                let old_state = State;
+                State = MODE_NORMAL;
                 while cc > 0 {
                     let save_col = nvim_curwin_get_cursor_col();
                     mb_replace_pop_ins();
@@ -297,7 +296,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                     cc = replace_pop_if_nul();
                 }
                 replace_pop_ins();
-                nvim_set_State(old_state);
+                State = old_state;
             }
         }
         nvim_set_did_ai(false);

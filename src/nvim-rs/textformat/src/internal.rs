@@ -48,6 +48,7 @@ const FO_PERIOD_ABBR: c_int = b'p' as c_int;
 // =============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Cursor/window
     fn nvim_textfmt_get_curwin_cursor_lnum() -> c_int;
     fn nvim_textfmt_get_curwin_cursor_col() -> c_int;
@@ -91,7 +92,6 @@ extern "C" {
     fn nvim_line_breakcheck();
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_curbuf_get_b_p_cin() -> c_int;
-    fn nvim_get_State() -> c_int;
     fn nvim_get_got_int() -> c_int;
     fn nvim_get_Insstart_lnum() -> c_int;
     fn nvim_get_Insstart_col() -> c_int;
@@ -158,7 +158,7 @@ pub(crate) unsafe fn internal_format_impl(
 
     // When 'ai' is off we don't want a space under the cursor to be
     // deleted. Replace it with an 'x' temporarily.
-    if nvim_curbuf_get_b_p_ai() == 0 && (nvim_get_State() & VREPLACE_FLAG) == 0 {
+    if nvim_curbuf_get_b_p_ai() == 0 && (State & VREPLACE_FLAG) == 0 {
         let cc = nvim_textfmt_gchar_cursor();
         if ascii_iswhite(cc) {
             save_char = cc;
@@ -444,7 +444,7 @@ pub(crate) unsafe fn internal_format_impl(
         // Offset between cursor position and line break is used by replace
         // stack functions. MODE_VREPLACE does not use this, and backspaces
         // over the text instead.
-        if (nvim_get_State() & VREPLACE_FLAG) != 0 {
+        if (State & VREPLACE_FLAG) != 0 {
             orig_col = startcol; // Will start backspacing from here
         } else {
             nvim_textfmt_set_replace_offset(startcol - end_foundcol);
@@ -470,7 +470,7 @@ pub(crate) unsafe fn internal_format_impl(
             startcol = 0;
         }
 
-        if (nvim_get_State() & VREPLACE_FLAG) != 0 {
+        if (State & VREPLACE_FLAG) != 0 {
             // In MODE_VREPLACE state, we will backspace over the text to be
             // wrapped, so save a copy now to put on the next line.
             saved_text = nvim_xstrnsave(
@@ -530,7 +530,7 @@ pub(crate) unsafe fn internal_format_impl(
                         nvim_textfmt_get_number_indent(nvim_textfmt_get_curwin_cursor_lnum() - 1);
                 }
                 if second_indent >= 0 {
-                    if (nvim_get_State() & VREPLACE_FLAG) != 0 {
+                    if (State & VREPLACE_FLAG) != 0 {
                         rs_change_indent(INDENT_SET, second_indent, 0, true);
                     } else if leader_len > 0 && second_indent - leader_len > 0 {
                         let padding = second_indent - leader_len;
@@ -545,7 +545,7 @@ pub(crate) unsafe fn internal_format_impl(
             first_line = false;
         }
 
-        if (nvim_get_State() & VREPLACE_FLAG) != 0 {
+        if (State & VREPLACE_FLAG) != 0 {
             // In MODE_VREPLACE state we have backspaced over the text to be
             // moved, now we re-insert it into the new line.
             nvim_ins_bytes(saved_text);

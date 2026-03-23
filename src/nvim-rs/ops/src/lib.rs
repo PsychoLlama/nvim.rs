@@ -232,6 +232,7 @@ pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
 
 // C accessor functions for operator state
 extern "C" {
+    static mut State: c_int;
     /// Check if current_oap is NULL.
     fn nvim_oap_is_null() -> c_int;
 
@@ -524,7 +525,6 @@ extern "C" {
     fn nvim_gchar_cursor() -> c_int;
     fn nvim_get_ve_flags() -> c_int;
     fn nvim_get_restart_edit() -> c_int;
-    fn nvim_get_State() -> c_int;
     fn nvim_dec_cursor() -> c_int;
     // getvcol for cursor (returns scol and ecol via out-params)
     fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
@@ -545,7 +545,7 @@ pub unsafe extern "C" fn rs_adjust_cursor_eol() {
     let ch = nvim_gchar_cursor();
     let onemore = (cur_ve_flags & K_OPT_VE_FLAG_ONEMORE) == 0;
     let restart = nvim_get_restart_edit() != 0;
-    let state = nvim_get_State();
+    let state = State;
     let in_insert = (state & MODE_INSERT) != 0;
 
     let adj_cursor = col > 0 && ch == 0 && onemore && !restart && !in_insert;

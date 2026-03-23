@@ -38,6 +38,7 @@ const FO_WHITE_PAR: c_int = b'w' as c_int;
 // =============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Cursor and window
     fn nvim_textfmt_get_curwin_cursor_lnum() -> c_int;
     fn nvim_textfmt_get_curwin_cursor_col() -> c_int;
@@ -53,8 +54,6 @@ extern "C" {
     fn nvim_textfmt_get_ml_line_count() -> c_int;
 
     // State
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
     fn nvim_get_got_int() -> c_int;
 
     // Format lines helpers
@@ -145,7 +144,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
     let mut need_set_indent: bool = true;
     let first_line = nvim_textfmt_get_curwin_cursor_lnum();
     let mut force_format: bool = false;
-    let old_state = nvim_get_State();
+    let old_state = State;
 
     // length of a line to force formatting: 3 * 'tw'
     let max_len = crate::textwidth::comp_textwidth_impl(true) * 3;
@@ -302,7 +301,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 }
 
                 // put cursor on last non-space
-                nvim_set_State(MODE_NORMAL); // don't go past end-of-line
+                State = MODE_NORMAL; // don't go past end-of-line
                 nvim_textfmt_coladvance(nvim_textfmt_get_curwin(), MAXCOL);
                 while {
                     nvim_textfmt_get_curwin_cursor_col() > 0
@@ -312,7 +311,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 }
 
                 // do the formatting, without 'showmode'
-                nvim_set_State(MODE_INSERT); // for open_line()
+                State = MODE_INSERT; // for open_line()
                 let smd_save = nvim_textfmt_get_p_smd();
                 nvim_textfmt_set_p_smd(0);
 
@@ -328,7 +327,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 }
                 insertchar(0, flags, second_indent);
 
-                nvim_set_State(old_state);
+                State = old_state;
                 nvim_textfmt_set_p_smd(smd_save);
                 // Cursor shape may have been updated (e.g. by :normal) in insertchar(),
                 // so it needs to be updated here.

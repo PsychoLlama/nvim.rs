@@ -12,11 +12,11 @@ const INDENT_SET: c_int = 1;
 const SIN_CHANGED: c_int = 1;
 
 extern "C" {
+    static mut State: c_int;
     fn nvim_get_indent() -> c_int;
     fn nvim_curbuf_get_b_p_sw() -> i64;
     fn nvim_curbuf_get_b_p_ts() -> c_int;
     fn nvim_curbuf_get_b_p_vts_array() -> *const c_int;
-    fn nvim_get_State() -> c_int;
     fn nvim_change_indent(type_: c_int, amount: c_int, round: c_int, call_changed_bytes: bool);
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
     fn trim_to_int(x: i64) -> c_int;
@@ -712,7 +712,7 @@ pub unsafe extern "C" fn rs_shift_line(
     };
 
     let count_int = trim_to_int(count);
-    if nvim_get_State() & VREPLACE_FLAG != 0 {
+    if State & VREPLACE_FLAG != 0 {
         nvim_change_indent(INDENT_SET, count_int, 0, call_changed_bytes != 0);
     } else {
         nvim_set_indent(

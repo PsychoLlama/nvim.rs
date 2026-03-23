@@ -825,10 +825,7 @@ extern "C" {
     pub fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
     /// Mark lines as appended (without mark adjustment)
     pub fn appended_lines(lnum: c_int, count: c_int);
-    /// Get State global
-    pub fn nvim_get_State() -> c_int;
-    /// Set State global
-    pub fn nvim_set_State(val: c_int);
+    pub static mut State: c_int;
     /// Set msg_scroll global
     pub fn nvim_set_msg_scroll(val: c_int);
     /// Set need_wait_return global

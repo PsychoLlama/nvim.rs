@@ -42,9 +42,8 @@ const CTRL_C: c_int = 3;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // State
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
     fn nvim_get_did_restart_edit() -> c_int;
     fn nvim_set_did_restart_edit(val: c_int);
     fn nvim_get_restart_edit() -> c_int;
@@ -242,14 +241,14 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Set State
     if cmdchar == c_int::from(b'R') {
-        nvim_set_State(MODE_REPLACE);
+        State = MODE_REPLACE;
     } else if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {
-        nvim_set_State(MODE_VREPLACE);
+        State = MODE_VREPLACE;
         (*s).replace_state = MODE_VREPLACE;
         nvim_set_orig_line_count(nvim_get_curbuf_ml_line_count());
         nvim_set_vr_lines_changed(1);
     } else {
-        nvim_set_State(MODE_INSERT);
+        State = MODE_INSERT;
     }
 
     nvim_may_trigger_modechanged();
@@ -263,14 +262,14 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Enable langmap or IME, indicated by 'iminsert'.
     if nvim_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
-        nvim_set_State(nvim_get_State() | MODE_LANGMAP);
+        State |= MODE_LANGMAP;
     }
 
     nvim_setmouse();
     rs_clear_showcmd();
 
     // There is no reverse replace mode
-    let in_insert_mode = nvim_get_State() == MODE_INSERT;
+    let in_insert_mode = State == MODE_INSERT;
     let revins_on_val = in_insert_mode && nvim_get_p_ri() != 0;
     nvim_edit_set_revins_on(c_int::from(revins_on_val));
     if revins_on_val {

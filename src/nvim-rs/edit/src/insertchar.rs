@@ -26,8 +26,8 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // -- cursor / state accessors --
-    fn nvim_get_State() -> c_int;
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_get_Insstart_lnum() -> LinenrT;
@@ -159,8 +159,8 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
     if textwidth > 0
         && (force_format != 0
             || (!(ascii_iswhite(c)
-                || (nvim_get_State() & REPLACE_FLAG != 0)
-                    && (nvim_get_State() & VREPLACE_FLAG == 0)
+                || (State & REPLACE_FLAG != 0)
+                    && (State & VREPLACE_FLAG == 0)
                     && gchar_cursor() != 0) // != NUL
                 && (nvim_curwin_get_cursor_lnum() != nvim_get_Insstart_lnum()
                     || ((!has_fo_ins_long() || nvim_get_Insstart_textlen() <= textwidth as ColnrT)
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         && nvim_has_event_insertcharpre() == 0
         && !nvim_test_disable_char_avail
         && vpeekc() != 0 // != NUL
-        && nvim_get_State() & REPLACE_FLAG == 0
+        && State & REPLACE_FLAG == 0
         && !cindent_on()
         && nvim_get_p_ri() == 0
     {

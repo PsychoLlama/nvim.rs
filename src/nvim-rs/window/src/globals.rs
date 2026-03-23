@@ -392,29 +392,6 @@ pub unsafe extern "C" fn get_rows_avail() -> c_int {
     Rows - ch - tabline_height() - global_stl_height()
 }
 
-// -------------------------------------------------------------------------
-// State accessors
-// -------------------------------------------------------------------------
-
-/// Get the current editor State.
-///
-/// # Safety
-/// Accesses C global State.
-#[must_use]
-#[export_name = "nvim_get_State"]
-pub unsafe extern "C" fn get_state() -> c_int {
-    State
-}
-
-/// Set the editor State.
-///
-/// # Safety
-/// Accesses C global State.
-#[export_name = "nvim_set_State"]
-pub unsafe extern "C" fn set_state(val: c_int) {
-    State = val;
-}
-
 /// Get exiting (1 if true, 0 if false).
 ///
 /// # Safety

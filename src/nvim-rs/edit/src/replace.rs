@@ -299,8 +299,7 @@ where
 
 // C accessor functions for replace_do_bs
 extern "C" {
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
+    static mut State: c_int;
     fn nvim_get_replace_offset() -> c_int;
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_curwin_get_cursor_col() -> i32;
@@ -434,13 +433,13 @@ pub extern "C" fn rs_replace_join(off: c_int) {
 /// Pop bytes from the replace stack until a NUL is found, and insert them
 /// before the cursor. Temporarily sets State to `MODE_NORMAL`.
 unsafe fn replace_pop_ins_impl() {
-    let old_state = nvim_get_State();
-    nvim_set_State(MODE_NORMAL);
+    let old_state = State;
+    State = MODE_NORMAL;
     while replace_pop_if_nul_impl() > 0 {
         mb_replace_pop_ins_impl();
         dec_cursor();
     }
-    nvim_set_State(old_state);
+    State = old_state;
 }
 
 #[unsafe(export_name = "replace_pop_ins")]
@@ -486,7 +485,7 @@ pub unsafe extern "C" fn rs_mb_replace_pop_ins() {
 /// - `cc == 0`: character was inserted, delete it
 /// - `cc > 0`: character was replaced, put original char back
 unsafe fn replace_do_bs_impl(limit_col: c_int) {
-    let l_state = nvim_get_State();
+    let l_state = State;
     let cc = replace_pop_if_nul_impl();
 
     if cc > 0 {

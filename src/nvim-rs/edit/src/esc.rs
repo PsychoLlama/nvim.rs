@@ -32,6 +32,7 @@ const K_OPT_VE_FLAG_ALL: c_uint = 0x01;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Spell redraw
     fn check_spell_redraw();
 
@@ -58,8 +59,6 @@ extern "C" {
     fn stuffRedoReadbuff(s: *const u8);
 
     // State
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
 
     // `CPO_REPLCNT` / `p_cpo`
     fn nvim_p_cpo_has_replcnt() -> bool;
@@ -182,8 +181,8 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         if *count > 0 {
             // Vi repeats insert without replacing characters.
             if nvim_p_cpo_has_replcnt() {
-                let state = nvim_get_State();
-                nvim_set_State(state & !REPLACE_FLAG);
+                let state = State;
+                State = state & !REPLACE_FLAG;
             }
 
             start_redo_ins();
@@ -232,7 +231,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         }
     }
 
-    nvim_set_State(MODE_NORMAL);
+    State = MODE_NORMAL;
     nvim_may_trigger_modechanged();
 
     // Need to position cursor again when on a TAB and

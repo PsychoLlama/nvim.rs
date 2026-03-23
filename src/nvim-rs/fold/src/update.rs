@@ -277,6 +277,7 @@ use crate::level::{
 use crate::{fold_flags, tristate, FoldHandle};
 
 extern "C" {
+    static mut State: c_int;
     // Global state access
     fn nvim_get_got_int() -> c_int;
     fn nvim_line_breakcheck();
@@ -311,7 +312,6 @@ extern "C" {
     fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
 
     // Global state for foldUpdate
-    fn nvim_get_State() -> c_int;
     fn nvim_get_disable_fold_update() -> c_int;
     fn nvim_get_need_diff_redraw() -> c_int;
     fn nvim_set_got_int(val: c_int);
@@ -541,7 +541,7 @@ pub fn fold_update_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
     if disable != 0 {
         return;
     }
-    let state = unsafe { nvim_get_State() };
+    let state = unsafe { State };
     if state & MODE_INSERT != 0 && !crate::foldmethod_is_indent_impl(wp) {
         return;
     }

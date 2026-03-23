@@ -23,6 +23,7 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // -- Delegated wrappers for complex functions --
     fn nvim_edit_ins_eol(c: c_int) -> c_int;
     fn nvim_edit_ins_ctrl_v();
@@ -47,8 +48,6 @@ extern "C" {
     fn nvim_set_vim_var_char(buf: *const c_char, len: isize);
     fn nvim_get_vim_var_char() -> *const c_char;
     fn nvim_ins_apply_autocmds_insertcharpre() -> c_int;
-    fn nvim_set_State(val: c_int);
-    fn nvim_get_State() -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
@@ -307,7 +306,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     let buflen = utf_char2bytes(c, buf.as_mut_ptr()) as usize;
     buf[buflen] = 0; // NUL-terminate
 
-    let save_state = nvim_get_State();
+    let save_state = State;
 
     // Lock the text to avoid weird things from happening.
     nvim_inc_textlock();
@@ -330,7 +329,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     nvim_dec_textlock();
 
     // Restore the State, it may have been changed.
-    nvim_set_State(save_state);
+    State = save_state;
 
     res
 }
@@ -455,7 +454,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
             // character for i_CTRL-V_digit.
             break;
         }
-        let state = nvim_get_State();
+        let state = State;
         if (state & MODE_CMDLINE) == 0 && nvim_MB_BYTE2LEN_CHECK(nc) == 1 {
             add_to_showcmd(nc);
         }

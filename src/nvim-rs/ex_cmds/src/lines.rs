@@ -446,6 +446,10 @@ const BL_SOL: c_int = 2;
 /// BL_FIX constant for beginline.
 const BL_FIX: c_int = 4;
 
+extern "C" {
+    static mut State: c_int;
+}
+
 /// `:insert` and `:append` command implementation, also used by `:change`.
 ///
 /// # Safety
@@ -460,10 +464,9 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_excmds_call_getline,
         nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut, nvim_excmds_get_b_p_iminsert,
         nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd, nvim_excmds_set_nextcmd_direct,
-        nvim_excmds_toggle_b_p_ai, nvim_get_Rows, nvim_get_State, nvim_set_State,
-        nvim_set_ex_no_reprint, nvim_set_lines_left, nvim_set_msg_scroll,
-        nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save, vim_strchr, xfree,
-        xmemdupz, xstrdup,
+        nvim_excmds_toggle_b_p_ai, nvim_get_Rows, nvim_set_ex_no_reprint, nvim_set_lines_left,
+        nvim_set_msg_scroll, nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save,
+        vim_strchr, xfree, xmemdupz, xstrdup,
     };
 
     let mut did_undo = false;
@@ -493,9 +496,9 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
     }
 
     // behave like in Insert mode
-    nvim_set_State(MODE_INSERT);
+    State = MODE_INSERT;
     if nvim_excmds_get_b_p_iminsert() == B_IMODE_LMAP {
-        nvim_set_State(nvim_get_State() | MODE_LANGMAP);
+        State |= MODE_LANGMAP;
     }
 
     loop {
@@ -536,16 +539,16 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
                 nvim_excmds_set_nextcmd_direct(eap, std::ptr::null_mut());
             }
         } else {
-            let save_state = nvim_get_State();
+            let save_state = State;
             // Set State to avoid cursor shape being set to MODE_INSERT when getline() returns.
-            nvim_set_State(MODE_CMDLINE);
+            State = MODE_CMDLINE;
             let c = if nvim_excmds_get_cstack_looplevel(eap) > 0 {
                 -1
             } else {
                 c_int::from(NUL)
             };
             theline = nvim_excmds_call_getline(eap, c, indent);
-            nvim_set_State(save_state);
+            State = save_state;
         }
         nvim_set_lines_left(nvim_get_Rows() - 1);
         if theline.is_null() {
@@ -594,7 +597,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
             empty_flag = false;
         }
     }
-    nvim_set_State(MODE_NORMAL);
+    State = MODE_NORMAL;
     nvim_ui_cursor_shape_wrapper();
 
     if forceit {

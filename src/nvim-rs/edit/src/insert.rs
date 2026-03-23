@@ -13,6 +13,7 @@ pub const MB_MAXCHAR: usize = 6;
 
 // C functions for character operations.
 extern "C" {
+    static mut State: c_int;
     // Character conversion
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     fn utf_ptr2char(p: *const u8) -> c_int;
@@ -23,7 +24,6 @@ extern "C" {
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
 
     // Mode check
-    fn nvim_get_State() -> c_int;
 }
 
 /// Mode flags for State (from `vim_defs.h`).
@@ -108,7 +108,7 @@ impl CharInfo {
 #[must_use]
 pub fn in_replace_mode() -> bool {
     // SAFETY: Simple global accessor
-    let state = unsafe { nvim_get_State() };
+    let state = unsafe { State };
     (state & mode_flags::REPLACE_FLAG) != 0
 }
 
@@ -117,7 +117,7 @@ pub fn in_replace_mode() -> bool {
 #[must_use]
 pub fn in_vreplace_mode() -> bool {
     // SAFETY: Simple global accessor
-    let state = unsafe { nvim_get_State() };
+    let state = unsafe { State };
     (state & mode_flags::VREPLACE_FLAG) != 0
 }
 
@@ -126,7 +126,7 @@ pub fn in_vreplace_mode() -> bool {
 #[must_use]
 pub fn in_insert_mode_flag() -> bool {
     // SAFETY: Simple global accessor
-    let state = unsafe { nvim_get_State() };
+    let state = unsafe { State };
     (state & mode_flags::MODE_INSERT) != 0
 }
 

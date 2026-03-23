@@ -30,6 +30,7 @@ const CTRL_G: c_int = 7;
 // =============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // NormalState accessors
     fn nvim_ns_get_c(s: NormalStateHandle) -> c_int;
     fn nvim_ns_set_c(s: NormalStateHandle, val: c_int);
@@ -61,7 +62,6 @@ extern "C" {
     fn nvim_dec_allow_keys();
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
-    fn nvim_set_State(val: c_int);
     fn nvim_ui_cursor_shape_no_check_conceal();
     fn nvim_get_digraph(flag: bool) -> c_int;
     fn nvim_vpeekc_wrapper() -> c_int;
@@ -129,16 +129,16 @@ unsafe fn read_target_char(
 ) {
     let mut langmap_active = false;
     if repl {
-        nvim_set_State(MODE_REPLACE);
+        State = MODE_REPLACE;
         nvim_ui_cursor_shape_no_check_conceal();
     }
     if lang && nvim_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
         nvim_dec_no_mapping();
         nvim_dec_allow_keys();
         if repl {
-            nvim_set_State(MODE_LREPLACE);
+            State = MODE_LREPLACE;
         } else {
-            nvim_set_State(MODE_LANGMAP);
+            State = MODE_LANGMAP;
         }
         langmap_active = true;
     }
@@ -150,7 +150,7 @@ unsafe fn read_target_char(
         nvim_inc_no_mapping();
         nvim_inc_allow_keys();
     }
-    nvim_set_State(MODE_NORMAL_BUSY);
+    State = MODE_NORMAL_BUSY;
     nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(target.get(ca)));
 
     if !lit {

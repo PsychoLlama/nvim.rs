@@ -158,8 +158,7 @@ extern "C" {
     #[link_name = "nvim_get_did_emsg"]
     fn nvim_stl_get_did_emsg() -> c_int;
     fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
-    #[link_name = "nvim_get_State"]
-    fn nvim_stl_get_State() -> c_int;
+    static mut State: c_int;
     fn nvim_stl_buf_ml_empty(buf: BufHandle) -> c_int;
 
     // Memory (direct link to C implementations)
@@ -1044,7 +1043,7 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_COLUMN => {
-                num = if (nvim_stl_get_State() & MODE_INSERT) == 0 && empty_line {
+                num = if (State & MODE_INSERT) == 0 && empty_line {
                     0
                 } else {
                     nvim_stl_win_get_cursor_col(wp) + 1
@@ -1054,7 +1053,7 @@ pub unsafe fn build_stl_str_hl(
             STL_VIRTCOL | STL_VIRTCOL_ALT => {
                 let virtcol = nvim_stl_win_get_w_virtcol(wp) + 1;
                 if opt == STL_VIRTCOL_ALT {
-                    let col = if (nvim_stl_get_State() & MODE_INSERT) == 0 && empty_line {
+                    let col = if (State & MODE_INSERT) == 0 && empty_line {
                         0
                     } else {
                         nvim_stl_win_get_cursor_col(wp) + 1
@@ -1115,7 +1114,7 @@ pub unsafe fn build_stl_str_hl(
                     num = 0;
                 } else {
                     num += 1;
-                    if (nvim_stl_get_State() & MODE_INSERT) == 0 && empty_line {
+                    if (State & MODE_INSERT) == 0 && empty_line {
                         // don't add col
                     } else {
                         num += nvim_stl_win_get_cursor_col(wp);
@@ -1129,7 +1128,7 @@ pub unsafe fn build_stl_str_hl(
                     num = 0;
                 } else {
                     num += 1;
-                    if (nvim_stl_get_State() & MODE_INSERT) == 0 && empty_line {
+                    if (State & MODE_INSERT) == 0 && empty_line {
                         // don't add col
                     } else {
                         num += nvim_stl_win_get_cursor_col(wp);

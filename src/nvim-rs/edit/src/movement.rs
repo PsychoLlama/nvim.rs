@@ -26,6 +26,7 @@ type WinHandle = *mut c_void;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Cursor position (curwin)
     fn nvim_curwin_get_cursor_col() -> ColnrT;
     fn nvim_curwin_set_cursor_col(col: ColnrT);
@@ -80,7 +81,6 @@ extern "C" {
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
 
     // State / option globals
-    fn nvim_get_State() -> c_int;
     fn nvim_get_p_sol() -> c_int;
     fn nvim_get_fdo_flags() -> c_uint;
 
@@ -319,8 +319,7 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
             // Insert mode or when 'foldopen' contains "all": it will open
             // in a moment.
             if n > 0
-                || !((nvim_get_State() & MODE_INSERT) != 0
-                    || (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_ALL) != 0)
+                || !((State & MODE_INSERT) != 0 || (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_ALL) != 0)
             {
                 let mut fold_first: LinenrT = 0;
                 if nvim_hasFolding(

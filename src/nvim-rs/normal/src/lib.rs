@@ -31,6 +31,7 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 extern "C" {
+    static mut State: c_int;
     static mut redraw_mode: c_int;
     static mut p_sta: c_int;
 }
@@ -2284,8 +2285,6 @@ extern "C" {
     fn nvim_vim_beep_esc();
     fn nvim_get_curbuf_terminal() -> bool;
     fn nvim_esc_show_msg();
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
     fn nvim_getviscol() -> c_int;
     fn nvim_edit_call(cmd: c_int, startln: bool, count: c_int) -> bool;
     fn nvim_vim_append_digit_int(n_ptr: *mut c_int, digit: c_int) -> c_int;
@@ -2531,12 +2530,12 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
             }
         }
         if nvim_get_cursor_coladd() != 0 && cmdchar != c_int::from(b'A') {
-            let save_state = nvim_get_State();
+            let save_state = State;
             // Pretend Insert mode here to allow the cursor on the
             // character past the end of the line
-            nvim_set_State(MODE_INSERT);
+            State = MODE_INSERT;
             nvim_coladvance(nvim_getviscol());
-            nvim_set_State(save_state);
+            State = save_state;
         }
         invoke_edit_impl(cap, false, cmdchar, false);
     }
@@ -4261,7 +4260,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
         // Inlined nvim_replace_chars: character replacement loop
         nvim_set_b_op_start_cursor();
-        let old_state = nvim_get_State();
+        let old_state = State;
 
         let nchar_len = nvim_cap_get_nchar_len(cap);
         if nchar_len > 0 {
@@ -4271,7 +4270,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
         }
 
         for _ in 0..count1 {
-            nvim_set_State(MODE_REPLACE);
+            State = MODE_REPLACE;
             let ctrl_e = c_int::from(b'\x05'); // Ctrl-E
             let ctrl_y = c_int::from(b'\x19'); // Ctrl-Y
             if nchar == ctrl_e || nchar == ctrl_y {
@@ -4287,7 +4286,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
             } else {
                 nvim_ins_char_call(nchar);
             }
-            nvim_set_State(old_state);
+            State = old_state;
         }
         nvim_dec_cursor_col();
         nvim_mb_adjust_cursor();
@@ -7782,10 +7781,10 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
     nvim_curwin_set_curswant(true);
     if nvim_get_ve_flags() == K_OPT_VE_FLAG_ALL {
         // Pretend Insert mode to allow cursor past end of line
-        let save_state = nvim_get_State();
-        nvim_set_State(MODE_INSERT);
+        let save_state = State;
+        State = MODE_INSERT;
         nvim_coladvance_maxcol();
-        nvim_set_State(save_state);
+        State = save_state;
     } else {
         let extra = nvim_get_cursor_pos_ptr_len();
         nvim_set_cursor_col(nvim_get_cursor_col() + extra);

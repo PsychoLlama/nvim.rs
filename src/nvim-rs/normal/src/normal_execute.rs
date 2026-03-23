@@ -42,6 +42,7 @@ const K_KDEL: c_int = -20733;
 // =============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // NormalState accessors
     fn nvim_ns_set_command_finished(s: NormalStateHandle, val: bool);
     fn nvim_ns_set_ctrl_w(s: NormalStateHandle, val: bool);
@@ -95,7 +96,6 @@ extern "C" {
     fn nvim_set_msg_didout(val: c_int);
     fn nvim_set_msg_col(val: c_int);
     fn nvim_set_did_cursorhold(val: bool);
-    fn nvim_set_State(val: c_int);
 
     // Function wrappers (existing)
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
@@ -296,7 +296,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             nvim_set_did_cursorhold(false);
         }
 
-        nvim_set_State(MODE_NORMAL);
+        State = MODE_NORMAL;
 
         if nvim_cap_get_nchar(ca) == ESC || nvim_cap_get_extra_char(ca) == ESC {
             rs_clearop(oa);

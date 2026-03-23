@@ -23,6 +23,7 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // -- Globals (get/set) --
     fn nvim_get_dont_sync_undo() -> c_int;
     fn nvim_set_dont_sync_undo(val: c_int);
@@ -98,7 +99,6 @@ extern "C" {
     fn nvim_edit_ins_del();
 
     // State
-    fn nvim_get_State() -> c_int;
 
     // p_ww (whichwrap) checks
     fn nvim_qf_curbuf_line_count() -> LinenrT;
@@ -490,7 +490,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_hat() {
 
 /// Handle Ctrl-_ in Insert mode (toggle reverse insert).
 unsafe fn ins_ctrl__impl() {
-    let revins_on_val = nvim_get_p_ri() != 0 && nvim_get_State() == MODE_INSERT;
+    let revins_on_val = nvim_get_p_ri() != 0 && State == MODE_INSERT;
     nvim_edit_ins_ctrl_(c_int::from(revins_on_val));
 }
 

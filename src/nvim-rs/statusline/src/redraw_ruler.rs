@@ -73,8 +73,7 @@ extern "C" {
     #[link_name = "nvim_get_Rows"]
     fn nvim_stl_get_Rows() -> c_int;
     fn nvim_stl_get_ru_col() -> c_int;
-    #[link_name = "nvim_get_State"]
-    fn nvim_stl_get_State() -> c_int;
+    static mut State: c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
     #[link_name = "nvim_ui_has_messages"]
     fn nvim_stl_ui_has_messages() -> c_int;
@@ -219,8 +218,7 @@ pub unsafe fn redraw_ruler() {
     }
 
     // Check if not in Insert mode and the line is empty (will show "0-1").
-    let empty_line =
-        (nvim_stl_get_State() & MODE_INSERT) == 0 && nvim_stl_ml_get_buf_first_char(wp) == NUL;
+    let empty_line = (State & MODE_INSERT) == 0 && nvim_stl_ml_get_buf_first_char(wp) == NUL;
 
     let mut buffer = [0u8; RULER_BUF_LEN];
 

@@ -12,6 +12,7 @@ use crate::list::{
 };
 
 extern "C" {
+    static mut State: c_int;
     /// Get the `w_wcol` field from a window (cursor column in window).
     fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
 
@@ -332,9 +333,6 @@ extern "C" {
 
     /// Get win's buffer pointer.
     fn nvim_win_get_buf_ptr(wp: WinHandle) -> *mut std::ffi::c_void;
-
-    /// Get the State global.
-    fn nvim_get_State() -> c_int;
 }
 
 /// Handle prompt buffer state when leaving a window.
@@ -361,7 +359,7 @@ unsafe fn leaving_window_impl(win: WinHandle) {
     nvim_set_restart_edit(NUL);
 
     // If in Insert mode and not stopping already, break out and restart on re-entry.
-    if (nvim_get_State() & MODE_INSERT) != 0 && nvim_get_stop_insert_mode() == 0 {
+    if (State & MODE_INSERT) != 0 && nvim_get_stop_insert_mode() == 0 {
         nvim_set_stop_insert_mode(1);
         if nvim_buf_get_prompt_insert(buf) == NUL {
             nvim_buf_set_prompt_insert(buf, c_int::from(b'A'));
@@ -388,7 +386,7 @@ unsafe fn entering_window_impl(win: WinHandle) {
     }
 
     // Restart Insert mode if we were in it and not already in Insert mode.
-    if (nvim_get_State() & MODE_INSERT) == 0 {
+    if (State & MODE_INSERT) == 0 {
         nvim_set_restart_edit(nvim_buf_get_prompt_insert(buf));
     }
 }

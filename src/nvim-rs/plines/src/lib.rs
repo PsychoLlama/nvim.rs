@@ -33,6 +33,7 @@ impl CharsizeArgHandle {
 
 // C accessor functions
 extern "C" {
+    static mut State: c_int;
     // Window display properties
     fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
@@ -62,7 +63,6 @@ extern "C" {
 
     // Global state
     fn nvim_get_p_wmw() -> i64;
-    fn nvim_get_State() -> c_int;
     fn nvim_get_real_state() -> c_int;
 
     // String utilities
@@ -330,7 +330,7 @@ fn conceal_cursor_line_impl(wp: WinHandle) -> bool {
         }
 
         let real_state = nvim_get_real_state();
-        let state = nvim_get_State();
+        let state = State;
 
         let c: c_int = if (real_state & MODE_VISUAL) != 0 {
             b'v' as c_int
@@ -613,7 +613,7 @@ fn get_scrolloff_value_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let state = nvim_get_State();
+        let state = State;
         let is_terminal_buf = nvim_win_buf_is_terminal(wp) != 0;
 
         // Disallow scrolloff in terminal-mode for terminal buffers
@@ -1746,7 +1746,7 @@ fn getvcol_impl(
 
         if !cursor_out.is_null() {
             // Complex cursor logic for tabs in visual mode
-            let state = nvim_get_State();
+            let state = State;
             let p_list = nvim_win_get_p_list(wp) != 0;
             let virtual_active = nvim_virtual_active(wp);
             let visual_active = nvim_get_VIsual_active() != 0;
@@ -2000,7 +2000,7 @@ fn plines_win_col_impl(
         // in MODE_INSERT state, then col must be adjusted so that it represents the
         // last screen position of the TAB.
         let mut col = vcol;
-        let state = nvim_get_State();
+        let state = State;
         let use_tabstop = nvim_csarg_get_use_tabstop(csarg) != 0;
 
         if char_value == TAB && (state & MODE_NORMAL) != 0 && use_tabstop {

@@ -27,6 +27,7 @@ use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // Direct access to C globals (avoids thin C accessor functions).
 extern "C" {
+    static mut State: c_int;
     /// Global must_redraw flag (int in C).
     static mut must_redraw: c_int;
     /// Global redraw_not_allowed flag (bool in C, mapped as c_int for atomics).
@@ -160,7 +161,6 @@ extern "C" {
     // Phase 1: Flag/guard function accessors
     fn nvim_char_avail() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_get_State() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_cmdline_mouse_used() -> c_int;
     #[link_name = "rs_min_rows_for_all_tabpages"]
@@ -1884,9 +1884,7 @@ pub extern "C" fn rs_check_screensize() {
 /// This is static in C so we keep the rs_ prefix for now.
 fn cmdline_number_prompt_impl() -> bool {
     unsafe {
-        nvim_ui_has_messages() == 0
-            && (nvim_get_State() & MODE_CMDLINE) != 0
-            && nvim_cmdline_mouse_used() != 0
+        nvim_ui_has_messages() == 0 && (State & MODE_CMDLINE) != 0 && nvim_cmdline_mouse_used() != 0
     }
 }
 
@@ -2668,7 +2666,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             }
         }
     } else {
-        let state = nvim_get_State();
+        let state = State;
         if (state & MODE_TERMINAL) != 0 {
             msg_puts_hl(c" TERMINAL".as_ptr(), hl_id, false);
         } else if (state & VREPLACE_FLAG) != 0 {
@@ -2742,7 +2740,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     msg_ext_ui_flush();
     nvim_drawscreen_msg_grid_validate();
 
-    let state = nvim_get_State();
+    let state = State;
     let do_mode = (p_smd != 0 && nvim_get_msg_silent() == 0)
         && ((state & MODE_TERMINAL) != 0
             || (state & MODE_INSERT) != 0
@@ -2915,7 +2913,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
     let curwin = nvim_get_curwin();
     let state = nvim_get_real_state();
-    let empty_line = if (nvim_get_State() & MODE_INSERT) == 0 {
+    let empty_line = if (State & MODE_INSERT) == 0 {
         nvim_curwin_cursor_line_is_nul()
     } else {
         0

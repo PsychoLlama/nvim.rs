@@ -26,6 +26,7 @@ type WinHandle = *mut c_void;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // Dollar display
     fn nvim_get_dollar_vcol() -> ColnrT;
     fn nvim_set_dollar_vcol(val: ColnrT);
@@ -38,7 +39,6 @@ extern "C" {
     fn nvim_curwin_set_cursor_col(col: ColnrT);
 
     // State
-    fn nvim_get_State() -> c_int;
 
     // Replace stack (Rust-owned in replace.rs, accessed via rs_* functions)
     fn replace_join(off: c_int);
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn rs_truncate_spaces(line: *mut c_char, len: usize) {
         return;
     }
 
-    let state = nvim_get_State();
+    let state = State;
     let mut i = len as isize - 1;
 
     // Find start of trailing whitespace
@@ -277,7 +277,7 @@ pub unsafe extern "C" fn rs_del_char_after_col(limit_col: c_int) -> c_int {
 pub unsafe extern "C" fn rs_backspace_until_column(col: c_int) {
     while nvim_curwin_get_cursor_col() as c_int > col {
         nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
-        if nvim_get_State() & REPLACE_FLAG != 0 {
+        if State & REPLACE_FLAG != 0 {
             replace_do_bs(col);
         } else if !del_char_after_col_impl(col) {
             break;

@@ -21,6 +21,7 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut State: c_int;
     static mut p_sta: c_int;
 }
 
@@ -60,7 +61,6 @@ extern "C" {
     fn stop_arrow() -> c_int;
 
     // State (REPLACE_FLAG / VREPLACE_FLAG)
-    fn nvim_get_State() -> c_int;
 
     // expandtab and tabstop options
     fn nvim_curbuf_get_b_p_et() -> c_int; // from option_shim.c
@@ -188,7 +188,7 @@ unsafe fn ins_tab_impl() -> bool {
     // Insert spaces (first via ins_char, rest via ins_str or ins_char for VREPLACE).
     // ins_char handles replace mode (deletes one char).
     // ins_str does not delete chars.
-    let state = nvim_get_State();
+    let state = State;
     ins_char(c_int::from(b' '));
     let mut remaining = temp - 1;
     while remaining > 0 {

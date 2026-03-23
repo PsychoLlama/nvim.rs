@@ -9,6 +9,7 @@ use crate::PUM_STATE;
 
 // External functions needed (not PumState fields)
 extern "C" {
+    static mut State: c_int;
     /// Set the `must_redraw_pum` global variable.
     fn nvim_set_must_redraw_pum(val: c_int);
 }
@@ -17,8 +18,6 @@ extern "C" {
 extern "C" {
     /// Check if UI has a capability.
     fn ui_has(what: c_int) -> bool;
-    /// Get the current State variable.
-    fn nvim_get_State() -> c_int;
 }
 
 // Direct grid function declarations.
@@ -69,7 +68,7 @@ pub unsafe extern "C" fn rs_pum_determine_display_mode(
     is_visible: c_int,
     curwin_rl: c_int,
 ) -> PumDisplayMode {
-    let state = nvim_get_State();
+    let state = State;
     let is_cmdline = (state & MODE_CMDLINE) != 0;
 
     // Only change draw mode when popup is not visible
@@ -533,7 +532,7 @@ pub unsafe extern "C" fn rs_pum_display(
 
     // Determine display mode (external/rl) only when not already visible
     let is_visible = PUM_STATE.is_visible;
-    let state = nvim_get_State();
+    let state = State;
     let is_cmdline = (state & MODE_CMDLINE) != 0;
 
     if is_visible == 0 {
@@ -641,7 +640,7 @@ pub unsafe extern "C" fn rs_pum_display(
     }
 
     // kZIndexCmdlinePopupMenu = 250, kZIndexPopupMenu = 100
-    pum_grid.zindex = if (nvim_get_State() & MODE_CMDLINE) != 0 {
+    pum_grid.zindex = if (State & MODE_CMDLINE) != 0 {
         250
     } else {
         100

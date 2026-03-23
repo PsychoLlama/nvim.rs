@@ -51,8 +51,7 @@ const INT_MAX: i64 = i32::MAX as i64;
 // =============================================================================
 
 extern "C" {
-    // State accessors
-    fn nvim_get_State() -> c_int;
+    static mut State: c_int;
     fn nvim_get_cmdline_star() -> c_int;
 
     // ccline field accessors
@@ -104,7 +103,7 @@ extern "C" {
 ///
 /// Calls C functions to read global state.
 unsafe fn in_active_cmdline() -> bool {
-    let state = nvim_get_State();
+    let state = State;
     if state & MODE_CMDLINE == 0 {
         return false;
     }

@@ -14,6 +14,7 @@ pub type ColnrT = i32;
 
 // C accessor functions for edit state.
 extern "C" {
+    static mut State: c_int;
     // Insert position tracking
     fn nvim_get_Insstart_lnum() -> LinenrT;
     fn nvim_get_Insstart_col() -> ColnrT;
@@ -68,7 +69,6 @@ extern "C" {
     // Arrow state
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
-    fn nvim_get_State() -> c_int;
 
     // Redo buffer ops
     fn AppendToRedobuff(s: *const c_char);
@@ -615,7 +615,7 @@ unsafe fn stop_arrow_impl() -> c_int {
             ins_need_undo_set(false);
         }
         nvim_set_ai_col(0);
-        if nvim_get_State() & VREPLACE_FLAG != 0 {
+        if State & VREPLACE_FLAG != 0 {
             nvim_set_orig_line_count(nvim_qf_curbuf_line_count());
             nvim_set_vr_lines_changed(1);
         }

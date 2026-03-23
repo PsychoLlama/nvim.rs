@@ -28,13 +28,13 @@ unsafe fn ascii_iswhite(c: c_char) -> bool {
 
 // C accessor functions
 extern "C" {
+    static mut State: c_int;
     // Existing accessors (change_ffi.c, window.c, etc.)
     fn nvim_get_did_si() -> bool;
     fn nvim_get_can_si() -> bool;
     fn nvim_get_can_si_back() -> bool;
     fn nvim_get_ai_col() -> ColnrT;
     fn nvim_set_ai_col(val: ColnrT);
-    fn nvim_get_State() -> c_int;
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
     fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_findmatch(initc: *mut c_char, ch: c_char) -> *mut PosT;
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn rs_ins_try_si(c: c_int) {
             }
             let indent = rs_get_indent();
             nvim_set_curwin_cursor(old_pos);
-            if nvim_get_State() & VREPLACE_FLAG != 0 {
+            if State & VREPLACE_FLAG != 0 {
                 nvim_change_indent(INDENT_SET, indent, 0, true);
             } else {
                 let _ = rs_set_indent(indent, SIN_CHANGED);

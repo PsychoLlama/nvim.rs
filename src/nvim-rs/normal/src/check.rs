@@ -11,6 +11,7 @@ use crate::dispatch::types::NormalStateHandle;
 use crate::WinHandle;
 
 extern "C" {
+    static mut State: c_int;
     static must_redraw: c_int;
     static redraw_mode: c_int;
 }
@@ -91,7 +92,6 @@ extern "C" {
     fn nvim_get_opcount() -> c_int;
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_get_State() -> c_int;
 
     // Message/display globals
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
@@ -143,7 +143,6 @@ extern "C" {
     fn nvim_char_avail_call() -> bool;
     fn nvim_fdo_has_all_flag() -> bool;
     fn nvim_vgetc_and_discard();
-    fn nvim_set_State(val: c_int);
     fn rs_op_pending() -> bool;
     fn nvim_ui_cursor_shape_wrapper();
     fn nvim_ui_flush_wrapper();
@@ -220,7 +219,7 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
             // Typed two CTRL-C in a row: go back to ex mode as if "Q" was
             // used and keep "got_int" set, so that it aborts ":g".
             nvim_set_exmode_active(true);
-            nvim_set_State(MODE_NORMAL);
+            State = MODE_NORMAL;
         } else if !nvim_get_global_busy() || !nvim_get_exmode_active() {
             if !nvim_get_quit_more() {
                 // flush all buffers
@@ -393,11 +392,11 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
-    let save_state = nvim_get_State();
+    let save_state = State;
 
     // Draw the cursor with the right shape here
     if nvim_get_restart_edit() != 0 {
-        nvim_set_State(MODE_INSERT);
+        State = MODE_INSERT;
     }
 
     // If need to redraw and there is a keep_msg, redraw before the delay
@@ -413,7 +412,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     if nvim_ui_has_messages() != 0 {
         nvim_os_delay_wrapper(3003, false); // wait up to three seconds
     }
-    nvim_set_State(save_state);
+    State = save_state;
 
     nvim_set_msg_scroll_val(false);
     nvim_set_emsg_on_display(0);
@@ -464,7 +463,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     }
 
     nvim_ns_set_mapped_len(s, nvim_typebuf_maplen_wrapper());
-    nvim_set_State(MODE_NORMAL_BUSY);
+    State = MODE_NORMAL_BUSY;
 
     // Set v:count here when called from main() and not a stuffed command.
     if nvim_ns_get_toplevel(s) && readbuf1_empty() {

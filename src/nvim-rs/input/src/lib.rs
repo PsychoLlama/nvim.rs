@@ -281,6 +281,7 @@ const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
 // =============================================================================
 
 extern "C" {
+    static mut State: c_int;
     // UTF-8 length table (mbyte.c)
     static utf8len_tab: [u8; 256];
 
@@ -288,8 +289,6 @@ extern "C" {
     static mut no_wait_return: c_int;
 
     // Global state accessors
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
     fn nvim_set_need_wait_return(val: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_msg_row() -> c_int;
@@ -415,7 +414,7 @@ unsafe fn prompt_for_input_impl(
 /// Port of `ask_yesno` from input.c.
 #[export_name = "ask_yesno"]
 pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
-    let save_state = nvim_get_State();
+    let save_state = State;
 
     no_wait_return += 1;
 
@@ -440,7 +439,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
     let msg_scrolled = nvim_get_msg_scrolled();
     nvim_set_need_wait_return(c_int::from(msg_scrolled != 0));
     no_wait_return -= 1;
-    nvim_set_State(save_state);
+    State = save_state;
     setmouse();
     nvim_xfree(prompt.cast::<c_void>());
 

@@ -27,9 +27,8 @@ fn replace_normal(state: c_int) -> bool {
 
 // C accessor functions
 extern "C" {
+    static mut State: c_int;
     // State
-    fn nvim_get_State() -> c_int;
-    fn nvim_set_State(val: c_int);
 
     // Cursor
     fn nvim_get_curwin_cursor_lnum() -> LinenrT;
@@ -118,7 +117,7 @@ pub unsafe extern "C" fn rs_change_indent(
     let mut orig_col: ColnrT = 0;
     let mut orig_line: *mut c_char = std::ptr::null_mut();
 
-    let state = nvim_get_State();
+    let state = State;
 
     // MODE_VREPLACE state needs to know what the line was like before changing
     if state & VREPLACE_FLAG != 0 {
@@ -162,11 +161,11 @@ pub unsafe extern "C" fn rs_change_indent(
     if type_ == INDENT_SET {
         let _ = rs_set_indent(amount, if call_changed_bytes { SIN_CHANGED } else { 0 });
     } else {
-        let save_state = nvim_get_State();
+        let save_state = State;
 
         // Avoid being called recursively.
         if save_state & VREPLACE_FLAG != 0 {
-            nvim_set_State(MODE_INSERT);
+            State = MODE_INSERT;
         }
         nvim_shift_line(
             type_ == INDENT_DEC,
@@ -174,7 +173,7 @@ pub unsafe extern "C" fn rs_change_indent(
             1,
             call_changed_bytes as c_int,
         );
-        nvim_set_State(save_state);
+        State = save_state;
     }
     let mut insstart_less: c_int = insstart_less_before - nvim_get_curwin_cursor_col();
 
