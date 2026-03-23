@@ -14,44 +14,32 @@ extern "C" {
     static mut msg_hist_max: c_int;
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
-    /// Get `msg_silent`
-    /// Get entry->next pointer
-    fn nvim_msg_hist_entry_get_next(
-        entry: *mut MessageHistoryEntryHandle,
-    ) -> *mut MessageHistoryEntryHandle;
-    /// Get entry->prev pointer
-    fn nvim_msg_hist_entry_get_prev(
-        entry: *mut MessageHistoryEntryHandle,
-    ) -> *mut MessageHistoryEntryHandle;
-    /// Get entry->temp flag
-    fn nvim_msg_hist_entry_get_temp(entry: *mut MessageHistoryEntryHandle) -> c_int;
-    /// Get entry->kind pointer
-    fn nvim_msg_hist_entry_get_kind(entry: *mut MessageHistoryEntryHandle) -> *const c_char;
-    /// Get entry->append flag
-    fn nvim_msg_hist_entry_get_append(entry: *mut MessageHistoryEntryHandle) -> c_int;
-    /// Free an HlMessage
-    fn nvim_hl_msg_free(entry: *mut MessageHistoryEntryHandle);
+    /// Free an HlMessage (takes entry pointer, calls hl_msg_free(entry->msg) in C)
+    fn nvim_hl_msg_free(entry: *mut MessageHistoryEntry);
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
-    /// Set entry->next
-    fn nvim_msg_hist_entry_set_next(
-        entry: *mut MessageHistoryEntryHandle,
-        next: *mut MessageHistoryEntryHandle,
-    );
-    /// Set entry->prev
-    fn nvim_msg_hist_entry_set_prev(
-        entry: *mut MessageHistoryEntryHandle,
-        prev: *mut MessageHistoryEntryHandle,
-    );
 }
 
-/// Opaque handle to `MessageHistoryEntry` in C.
+/// Layout-compatible representation of `MessageHistoryEntry` in C.
 ///
-/// This type is never instantiated in Rust; it exists only to provide
-/// type safety for pointers passed across the FFI boundary.
+/// Field offsets verified against C struct:
+/// - next:   offset 0  (8 bytes, pointer)
+/// - prev:   offset 8  (8 bytes, pointer)
+/// - msg:    offset 16 (24 bytes, HlMessage = kvec_t(HlMessageChunk))
+/// - kind:   offset 40 (8 bytes, const char*)
+/// - temp:   offset 48 (1 byte, bool)
+/// - append: offset 49 (1 byte, bool)
+/// - padding: 6 bytes (total: 56 bytes)
 #[repr(C)]
-pub struct MessageHistoryEntryHandle {
-    _private: [u8; 0],
+pub struct MessageHistoryEntry {
+    pub next: *mut MessageHistoryEntry,
+    pub prev: *mut MessageHistoryEntry,
+    /// HlMessage (kvec_t) — opaque blob, only passed to C functions
+    _msg: [u8; 24],
+    pub kind: *const c_char,
+    pub temp: bool,
+    pub append: bool,
+    _pad: [u8; 6],
 }
 
 // ============================================================================
@@ -60,15 +48,15 @@ pub struct MessageHistoryEntryHandle {
 
 /// First message in history linked list (replaces C static msg_hist_first)
 #[no_mangle]
-pub static mut msg_hist_first: *mut MessageHistoryEntryHandle = std::ptr::null_mut();
+pub static mut msg_hist_first: *mut MessageHistoryEntry = std::ptr::null_mut();
 
 /// Last message in history linked list (replaces C non-static msg_hist_last)
 #[no_mangle]
-pub static mut msg_hist_last: *mut MessageHistoryEntryHandle = std::ptr::null_mut();
+pub static mut msg_hist_last: *mut MessageHistoryEntry = std::ptr::null_mut();
 
 /// First potentially temporary message (replaces C static msg_hist_temp)
 #[no_mangle]
-pub static mut msg_hist_temp: *mut MessageHistoryEntryHandle = std::ptr::null_mut();
+pub static mut msg_hist_temp: *mut MessageHistoryEntry = std::ptr::null_mut();
 
 /// Current history length (replaces C static msg_hist_len)
 #[no_mangle]
@@ -97,7 +85,7 @@ pub unsafe extern "C" fn rs_msg_hist_max() -> c_int {
 /// # Safety
 /// Calls C accessor function for `msg_hist_first`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_first() -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_first() -> *mut MessageHistoryEntry {
     msg_hist_first
 }
 
@@ -106,76 +94,72 @@ pub unsafe extern "C" fn rs_msg_hist_first() -> *mut MessageHistoryEntryHandle {
 /// # Safety
 /// Calls C accessor function for `msg_hist_last`.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_last() -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_last() -> *mut MessageHistoryEntry {
     msg_hist_last
 }
 
 /// Get the next entry in the message history.
 ///
 /// # Safety
-/// Calls C accessor function for entry->next.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_next(
-    entry: *mut MessageHistoryEntryHandle,
-) -> *mut MessageHistoryEntryHandle {
+    entry: *mut MessageHistoryEntry,
+) -> *mut MessageHistoryEntry {
     if entry.is_null() {
         return ptr::null_mut();
     }
-    nvim_msg_hist_entry_get_next(entry)
+    (*entry).next
 }
 
 /// Get the previous entry in the message history.
 ///
 /// # Safety
-/// Calls C accessor function for entry->prev.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_prev(
-    entry: *mut MessageHistoryEntryHandle,
-) -> *mut MessageHistoryEntryHandle {
+    entry: *mut MessageHistoryEntry,
+) -> *mut MessageHistoryEntry {
     if entry.is_null() {
         return ptr::null_mut();
     }
-    nvim_msg_hist_entry_get_prev(entry)
+    (*entry).prev
 }
 
 /// Check if an entry is temporary.
 ///
 /// # Safety
-/// Calls C accessor function for entry->temp.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_entry_is_temp(entry: *mut MessageHistoryEntryHandle) -> c_int {
+pub unsafe extern "C" fn rs_msg_hist_entry_is_temp(entry: *mut MessageHistoryEntry) -> c_int {
     if entry.is_null() {
         return 0;
     }
-    nvim_msg_hist_entry_get_temp(entry)
+    c_int::from((*entry).temp)
 }
 
 /// Check if an entry should be appended to the previous message.
 ///
 /// # Safety
-/// Calls C accessor function for entry->append.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_entry_is_append(
-    entry: *mut MessageHistoryEntryHandle,
-) -> c_int {
+pub unsafe extern "C" fn rs_msg_hist_entry_is_append(entry: *mut MessageHistoryEntry) -> c_int {
     if entry.is_null() {
         return 0;
     }
-    nvim_msg_hist_entry_get_append(entry)
+    c_int::from((*entry).append)
 }
 
 /// Get the message kind for an entry.
 ///
 /// # Safety
-/// Calls C accessor function for entry->kind.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_entry_kind(
-    entry: *mut MessageHistoryEntryHandle,
-) -> *const c_char {
+pub unsafe extern "C" fn rs_msg_hist_entry_kind(entry: *mut MessageHistoryEntry) -> *const c_char {
     if entry.is_null() {
         return ptr::null();
     }
-    nvim_msg_hist_entry_get_kind(entry)
+    (*entry).kind
 }
 
 /// Free a single message history entry, unlinking it from the list.
@@ -184,26 +168,26 @@ pub unsafe extern "C" fn rs_msg_hist_entry_kind(
 /// - `entry` must be a valid pointer or NULL.
 /// - After this call, the entry is freed and must not be used.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_free_entry(entry: *mut MessageHistoryEntryHandle) {
+pub unsafe extern "C" fn rs_msg_hist_free_entry(entry: *mut MessageHistoryEntry) {
     if entry.is_null() {
         return;
     }
 
-    let next = nvim_msg_hist_entry_get_next(entry);
-    let prev = nvim_msg_hist_entry_get_prev(entry);
+    let next = (*entry).next;
+    let prev = (*entry).prev;
 
     // Update next's prev pointer
     if next.is_null() {
         msg_hist_last = prev;
     } else {
-        nvim_msg_hist_entry_set_prev(next, prev);
+        (*next).prev = prev;
     }
 
     // Update prev's next pointer
     if prev.is_null() {
         msg_hist_first = next;
     } else {
-        nvim_msg_hist_entry_set_next(prev, next);
+        (*prev).next = next;
     }
 
     // Update msg_hist_temp if needed
@@ -233,7 +217,7 @@ pub unsafe extern "C" fn rs_msg_hist_clear(keep: c_int) {
         }
 
         // Decrement length if not temporary
-        if !first.is_null() && nvim_msg_hist_entry_get_temp(first) == 0 {
+        if !first.is_null() && !(*first).temp {
             msg_hist_len = len - 1;
         }
 
@@ -250,9 +234,9 @@ pub unsafe extern "C" fn rs_msg_hist_clear_temp() {
     let mut current = msg_hist_temp;
 
     while !current.is_null() {
-        let next = nvim_msg_hist_entry_get_next(current);
+        let next = (*current).next;
 
-        if nvim_msg_hist_entry_get_temp(current) != 0 {
+        if (*current).temp {
             rs_msg_hist_free_entry(current);
         }
 
@@ -308,7 +292,7 @@ pub unsafe extern "C" fn rs_msg_hist_count() -> c_int {
     let mut entry = msg_hist_first;
     while !entry.is_null() {
         count += 1;
-        entry = nvim_msg_hist_entry_get_next(entry);
+        entry = (*entry).next;
     }
     count
 }
@@ -316,16 +300,16 @@ pub unsafe extern "C" fn rs_msg_hist_count() -> c_int {
 /// Count temporary entries in the history.
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_temp_count() -> c_int {
     let mut count = 0;
     let mut entry = msg_hist_temp;
     while !entry.is_null() {
-        if nvim_msg_hist_entry_get_temp(entry) != 0 {
+        if (*entry).temp {
             count += 1;
         }
-        entry = nvim_msg_hist_entry_get_next(entry);
+        entry = (*entry).next;
     }
     count
 }
@@ -335,7 +319,7 @@ pub unsafe extern "C" fn rs_msg_hist_temp_count() -> c_int {
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_temp() -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_temp() -> *mut MessageHistoryEntry {
     msg_hist_temp
 }
 
@@ -344,7 +328,7 @@ pub unsafe extern "C" fn rs_msg_hist_temp() -> *mut MessageHistoryEntryHandle {
 /// # Safety
 /// Calls C mutator function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_set_msg_hist_temp(entry: *mut MessageHistoryEntryHandle) {
+pub unsafe extern "C" fn rs_set_msg_hist_temp(entry: *mut MessageHistoryEntry) {
     msg_hist_temp = entry;
 }
 
@@ -388,7 +372,7 @@ pub unsafe extern "C" fn rs_dec_msg_hist_len() {
 /// # Safety
 /// Calls C mutator function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_set_msg_hist_first(entry: *mut MessageHistoryEntryHandle) {
+pub unsafe extern "C" fn rs_set_msg_hist_first(entry: *mut MessageHistoryEntry) {
     msg_hist_first = entry;
 }
 
@@ -397,7 +381,7 @@ pub unsafe extern "C" fn rs_set_msg_hist_first(entry: *mut MessageHistoryEntryHa
 /// # Safety
 /// Calls C mutator function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_set_msg_hist_last(entry: *mut MessageHistoryEntryHandle) {
+pub unsafe extern "C" fn rs_set_msg_hist_last(entry: *mut MessageHistoryEntry) {
     msg_hist_last = entry;
 }
 
@@ -411,7 +395,7 @@ pub unsafe extern "C" fn rs_msg_hist_single() -> c_int {
     if first.is_null() {
         return 0;
     }
-    c_int::from(nvim_msg_hist_entry_get_next(first).is_null())
+    c_int::from((*first).next.is_null())
 }
 
 /// Check if a specific entry is the last one in history.
@@ -419,7 +403,7 @@ pub unsafe extern "C" fn rs_msg_hist_single() -> c_int {
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_is_last(entry: *mut MessageHistoryEntryHandle) -> c_int {
+pub unsafe extern "C" fn rs_msg_hist_is_last(entry: *mut MessageHistoryEntry) -> c_int {
     if entry.is_null() {
         return 0;
     }
@@ -431,7 +415,7 @@ pub unsafe extern "C" fn rs_msg_hist_is_last(entry: *mut MessageHistoryEntryHand
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_is_first(entry: *mut MessageHistoryEntryHandle) -> c_int {
+pub unsafe extern "C" fn rs_msg_hist_is_first(entry: *mut MessageHistoryEntry) -> c_int {
     if entry.is_null() {
         return 0;
     }
@@ -489,7 +473,7 @@ pub unsafe extern "C" fn rs_msg_hist_clear_all() {
 /// # Safety
 /// Calls C accessor functions.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_nth(n: c_int) -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_nth(n: c_int) -> *mut MessageHistoryEntry {
     if n < 0 {
         return ptr::null_mut();
     }
@@ -498,7 +482,7 @@ pub unsafe extern "C" fn rs_msg_hist_nth(n: c_int) -> *mut MessageHistoryEntryHa
     let mut i = 0;
 
     while !entry.is_null() && i < n {
-        entry = nvim_msg_hist_entry_get_next(entry);
+        entry = (*entry).next;
         i += 1;
     }
 
@@ -512,7 +496,7 @@ pub unsafe extern "C" fn rs_msg_hist_nth(n: c_int) -> *mut MessageHistoryEntryHa
 /// # Safety
 /// Calls C accessor functions.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_nth_last(n: c_int) -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_nth_last(n: c_int) -> *mut MessageHistoryEntry {
     if n < 0 {
         return ptr::null_mut();
     }
@@ -521,7 +505,7 @@ pub unsafe extern "C" fn rs_msg_hist_nth_last(n: c_int) -> *mut MessageHistoryEn
     let mut i = 0;
 
     while !entry.is_null() && i < n {
-        entry = nvim_msg_hist_entry_get_prev(entry);
+        entry = (*entry).prev;
         i += 1;
     }
 
@@ -535,7 +519,7 @@ pub unsafe extern "C" fn rs_msg_hist_nth_last(n: c_int) -> *mut MessageHistoryEn
 /// # Safety
 /// Calls C accessor functions.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_hist_skip(skip: c_int) -> *mut MessageHistoryEntryHandle {
+pub unsafe extern "C" fn rs_msg_hist_skip(skip: c_int) -> *mut MessageHistoryEntry {
     rs_msg_hist_nth(skip)
 }
 

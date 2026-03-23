@@ -3,43 +3,37 @@
 //! Implements the `msgchunk_T` equivalent for storing text chunks
 //! in the scrollback buffer used by "more" and "hit-enter" prompts.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 use std::ptr;
 
 // C accessor declarations
 extern "C" {
     // last_msgchunk: Rust-owned static in scrollback.rs
-    static mut last_msgchunk: *mut MsgChunkHandle;
-    /// Get chunk->sb_next
-    fn nvim_msgchunk_get_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
-    /// Set chunk->sb_next
-    fn nvim_msgchunk_set_next(chunk: *mut MsgChunkHandle, next: *mut MsgChunkHandle);
-    /// Get chunk->sb_prev
-    fn nvim_msgchunk_get_prev(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
-    /// Set chunk->sb_prev (kept for future use)
-    #[allow(dead_code)]
-    fn nvim_msgchunk_set_prev(chunk: *mut MsgChunkHandle, prev: *mut MsgChunkHandle);
-    /// Get chunk->sb_eol
-    fn nvim_msgchunk_get_eol(chunk: *mut MsgChunkHandle) -> c_int;
-    /// Set chunk->sb_eol
-    fn nvim_msgchunk_set_eol(chunk: *mut MsgChunkHandle, eol: c_int);
-    /// Get chunk->sb_msg_col
-    fn nvim_msgchunk_get_msg_col(chunk: *mut MsgChunkHandle) -> c_int;
-    /// Get chunk->sb_hl_id
-    fn nvim_msgchunk_get_hl_id(chunk: *mut MsgChunkHandle) -> c_int;
-    /// Get chunk->sb_text pointer
-    fn nvim_msgchunk_get_text(chunk: *mut MsgChunkHandle) -> *const std::ffi::c_char;
+    static mut last_msgchunk: *mut MsgChunk;
+    /// Get chunk->sb_text pointer (flexible array, can't be accessed via repr(C) field)
+    fn nvim_msgchunk_get_text(chunk: *mut MsgChunk) -> *const c_char;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
 
-/// Opaque handle to `msgchunk_T` in C.
+/// Layout-compatible representation of `msgchunk_T` in C.
 ///
-/// This type is never instantiated in Rust; it exists only to provide
-/// type safety for pointers passed across the FFI boundary.
+/// Field offsets verified against C struct:
+/// - sb_next:    offset 0  (8 bytes)
+/// - sb_prev:    offset 8  (8 bytes)
+/// - sb_eol:     offset 16 (1 byte, char)
+/// - _pad:       offset 17 (3 bytes padding)
+/// - sb_msg_col: offset 20 (4 bytes, int)
+/// - sb_hl_id:   offset 24 (4 bytes, int)
+/// - sb_text[]:  offset 28 (flexible array, not in Rust struct)
 #[repr(C)]
-pub struct MsgChunkHandle {
-    _private: [u8; 0],
+pub struct MsgChunk {
+    pub sb_next: *mut MsgChunk,
+    pub sb_prev: *mut MsgChunk,
+    pub sb_eol: c_char,
+    _pad: [u8; 3],
+    pub sb_msg_col: c_int,
+    pub sb_hl_id: c_int,
 }
 
 /// Get the last message chunk in the scrollback buffer.
@@ -47,76 +41,78 @@ pub struct MsgChunkHandle {
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_sb_last() -> *mut MsgChunkHandle {
+pub unsafe extern "C" fn rs_msg_sb_last() -> *mut MsgChunk {
     last_msgchunk
 }
 
 /// Get the next chunk in the scrollback buffer.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_next.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
+pub unsafe extern "C" fn rs_msgchunk_next(chunk: *mut MsgChunk) -> *mut MsgChunk {
     if chunk.is_null() {
         return ptr::null_mut();
     }
-    nvim_msgchunk_get_next(chunk)
+    (*chunk).sb_next
 }
 
 /// Get the previous chunk in the scrollback buffer.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_prev.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_prev(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
+pub unsafe extern "C" fn rs_msgchunk_prev(chunk: *mut MsgChunk) -> *mut MsgChunk {
     if chunk.is_null() {
         return ptr::null_mut();
     }
-    nvim_msgchunk_get_prev(chunk)
+    (*chunk).sb_prev
 }
 
 /// Check if a chunk marks end-of-line.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_eol.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_is_eol(chunk: *mut MsgChunkHandle) -> c_int {
+pub unsafe extern "C" fn rs_msgchunk_is_eol(chunk: *mut MsgChunk) -> c_int {
     if chunk.is_null() {
         return 0;
     }
-    nvim_msgchunk_get_eol(chunk)
+    c_int::from((*chunk).sb_eol != 0)
 }
 
 /// Get the message column for a chunk.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_msg_col.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_col(chunk: *mut MsgChunkHandle) -> c_int {
+pub unsafe extern "C" fn rs_msgchunk_col(chunk: *mut MsgChunk) -> c_int {
     if chunk.is_null() {
         return 0;
     }
-    nvim_msgchunk_get_msg_col(chunk)
+    (*chunk).sb_msg_col
 }
 
 /// Get the highlight ID for a chunk.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_hl_id.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_hl_id(chunk: *mut MsgChunkHandle) -> c_int {
+pub unsafe extern "C" fn rs_msgchunk_hl_id(chunk: *mut MsgChunk) -> c_int {
     if chunk.is_null() {
         return 0;
     }
-    nvim_msgchunk_get_hl_id(chunk)
+    (*chunk).sb_hl_id
 }
 
 /// Get the text pointer for a chunk.
 ///
+/// Uses C accessor for the flexible array member sb_text[].
+///
 /// # Safety
 /// Calls C accessor function for chunk->sb_text.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunkHandle) -> *const std::ffi::c_char {
+pub unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunk) -> *const c_char {
     if chunk.is_null() {
         return ptr::null();
     }
@@ -129,9 +125,9 @@ pub unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunkHandle) -> *const 
 /// a chunk where the previous chunk has `sb_eol` set (or there is no previous).
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
+pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
     if mps.is_null() {
         return ptr::null_mut();
     }
@@ -139,11 +135,11 @@ pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgCh
     let mut mp = mps;
 
     loop {
-        let prev = nvim_msgchunk_get_prev(mp);
+        let prev = (*mp).sb_prev;
         if prev.is_null() {
             break;
         }
-        if nvim_msgchunk_get_eol(prev) != 0 {
+        if (*prev).sb_eol != 0 {
             break;
         }
         mp = prev;
@@ -157,12 +153,12 @@ pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgCh
 /// Sets `sb_eol` to true on the last chunk if it exists.
 ///
 /// # Safety
-/// Calls C accessor and mutator functions.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_eol() {
     let last = last_msgchunk;
     if !last.is_null() {
-        nvim_msgchunk_set_eol(last, 1);
+        (*last).sb_eol = 1;
     }
 }
 
@@ -171,13 +167,13 @@ pub unsafe extern "C" fn rs_msg_sb_eol() {
 /// Frees all chunks from the buffer, walking from the end to the beginning.
 ///
 /// # Safety
-/// Calls C accessor and mutator functions, frees memory.
+/// Direct field access on repr(C) struct, frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_clear_all() {
     let mut chunk = last_msgchunk;
 
     while !chunk.is_null() {
-        let prev = nvim_msgchunk_get_prev(chunk);
+        let prev = (*chunk).sb_prev;
         xfree(chunk.cast());
         chunk = prev;
     }
@@ -191,7 +187,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_all() {
 /// * `count` - Number of lines to clear
 ///
 /// # Safety
-/// Calls C accessor and mutator functions, frees memory.
+/// Direct field access on repr(C) struct, frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
     let last = last_msgchunk;
@@ -206,7 +202,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
     }
 
     // Walk back to find the line to clear
-    let prev = nvim_msgchunk_get_prev(mp);
+    let prev = (*mp).sb_prev;
     if prev.is_null() {
         return;
     }
@@ -215,7 +211,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
     let mut lines_to_clear = count;
 
     while lines_to_clear > 0 && !target.is_null() {
-        let target_prev = nvim_msgchunk_get_prev(target);
+        let target_prev = (*target).sb_prev;
         if target_prev.is_null() {
             break;
         }
@@ -225,17 +221,17 @@ pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
 
     // Free chunks from target to the start
     if !target.is_null() {
-        let target_prev = nvim_msgchunk_get_prev(target);
+        let target_prev = (*target).sb_prev;
         let mut to_free = target;
 
         // Disconnect from the rest of the list
         if !target_prev.is_null() {
-            nvim_msgchunk_set_next(target_prev, ptr::null_mut());
+            (*target_prev).sb_next = ptr::null_mut();
         }
 
         // Free the chunks
         while !to_free.is_null() {
-            let next = nvim_msgchunk_get_next(to_free);
+            let next = (*to_free).sb_next;
             xfree(to_free.cast());
             to_free = next;
         }
@@ -245,7 +241,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
 /// Check if there are any lines in the scrollback before the current position.
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Direct field access on repr(C) struct.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_has_prev_line() -> c_int {
     let last = last_msgchunk;
@@ -258,7 +254,7 @@ pub unsafe extern "C" fn rs_msg_sb_has_prev_line() -> c_int {
         return 0;
     }
 
-    let prev = nvim_msgchunk_get_prev(start);
+    let prev = (*start).sb_prev;
     c_int::from(!prev.is_null())
 }
 

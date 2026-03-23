@@ -199,42 +199,7 @@ int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
 int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
 
-// C accessors for message history entry fields (used by Rust)
-MessageHistoryEntry *nvim_msg_hist_entry_get_next(MessageHistoryEntry *entry)
-{
-  return entry->next;
-}
-
-MessageHistoryEntry *nvim_msg_hist_entry_get_prev(MessageHistoryEntry *entry)
-{
-  return entry->prev;
-}
-
-int nvim_msg_hist_entry_get_temp(MessageHistoryEntry *entry)
-{
-  return entry->temp ? 1 : 0;
-}
-
-const char *nvim_msg_hist_entry_get_kind(MessageHistoryEntry *entry)
-{
-  return entry->kind;
-}
-
-int nvim_msg_hist_entry_get_append(MessageHistoryEntry *entry)
-{
-  return entry->append ? 1 : 0;
-}
-
-void nvim_msg_hist_entry_set_next(MessageHistoryEntry *entry, MessageHistoryEntry *next)
-{
-  entry->next = next;
-}
-
-void nvim_msg_hist_entry_set_prev(MessageHistoryEntry *entry, MessageHistoryEntry *prev)
-{
-  entry->prev = prev;
-}
-
+// nvim_hl_msg_free: still used by Rust (history.rs), calls hl_msg_free(entry->msg) by value
 void nvim_hl_msg_free(MessageHistoryEntry *entry)
 {
   hl_msg_free(entry->msg);
@@ -242,15 +207,7 @@ void nvim_hl_msg_free(MessageHistoryEntry *entry)
 
 extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
-// C accessors for scrollback chunk fields (used by Rust)
-msgchunk_T *nvim_msgchunk_get_next(msgchunk_T *chunk) { return chunk->sb_next; }
-void nvim_msgchunk_set_next(msgchunk_T *chunk, msgchunk_T *next) { chunk->sb_next = next; }
-msgchunk_T *nvim_msgchunk_get_prev(msgchunk_T *chunk) { return chunk->sb_prev; }
-void nvim_msgchunk_set_prev(msgchunk_T *chunk, msgchunk_T *prev) { chunk->sb_prev = prev; }
-int nvim_msgchunk_get_eol(msgchunk_T *chunk) { return chunk->sb_eol ? 1 : 0; }
-void nvim_msgchunk_set_eol(msgchunk_T *chunk, int eol) { chunk->sb_eol = (char)eol; }
-int nvim_msgchunk_get_msg_col(msgchunk_T *chunk) { return chunk->sb_msg_col; }
-int nvim_msgchunk_get_hl_id(msgchunk_T *chunk) { return chunk->sb_hl_id; }
+// nvim_msgchunk_get_text: still used by Rust (chunk.rs) for flexible array member access
 const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 
 // Additional C accessors for message system (used by Rust)

@@ -7,20 +7,10 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use crate::chunk::MsgChunkHandle;
+use crate::chunk::MsgChunk;
 
 // C accessor declarations
 extern "C" {
-    /// Get chunk->sb_next
-    fn nvim_msgchunk_get_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
-    /// Set chunk->sb_next
-    fn nvim_msgchunk_set_next(chunk: *mut MsgChunkHandle, next: *mut MsgChunkHandle);
-    /// Get chunk->sb_prev
-    fn nvim_msgchunk_get_prev(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
-    /// Get chunk->sb_eol
-    fn nvim_msgchunk_get_eol(chunk: *mut MsgChunkHandle) -> c_int;
-    /// Set chunk->sb_eol
-    fn nvim_msgchunk_set_eol(chunk: *mut MsgChunkHandle, eol: c_int);
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
@@ -31,7 +21,7 @@ extern "C" {
 
 /// Last message chunk in scrollback buffer (replaces C static last_msgchunk)
 #[no_mangle]
-pub static mut last_msgchunk: *mut MsgChunkHandle = std::ptr::null_mut();
+pub static mut last_msgchunk: *mut MsgChunk = std::ptr::null_mut();
 
 /// Scrollback clear state (replaces C static do_clear_sb_text, 0 = SB_CLEAR_NONE)
 #[no_mangle]
@@ -102,24 +92,22 @@ pub unsafe extern "C" fn rs_sb_cmdline_busy() -> c_int {
 /// chunk has sb_eol set (or there is no previous chunk).
 ///
 /// # Safety
-/// Calls C accessor functions.
-fn msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
+/// Direct field access on repr(C) struct.
+unsafe fn msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
     if mps.is_null() {
         return ptr::null_mut();
     }
 
     let mut mp = mps;
-    unsafe {
-        loop {
-            let prev = nvim_msgchunk_get_prev(mp);
-            if prev.is_null() {
-                break;
-            }
-            if nvim_msgchunk_get_eol(prev) != 0 {
-                break;
-            }
-            mp = prev;
+    loop {
+        let prev = (*mp).sb_prev;
+        if prev.is_null() {
+            break;
         }
+        if (*prev).sb_eol != 0 {
+            break;
+        }
+        mp = prev;
     }
     mp
 }
@@ -127,12 +115,12 @@ fn msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
 /// Mark the end of a line in scrollback.
 ///
 /// # Safety
-/// Calls C accessor and mutator functions.
+/// Direct field access on repr(C) struct.
 #[export_name = "msg_sb_eol"]
 pub unsafe extern "C" fn rs_sb_mark_eol() {
     let last = last_msgchunk;
     if !last.is_null() {
-        nvim_msgchunk_set_eol(last, 1);
+        (*last).sb_eol = 1;
     }
 }
 
@@ -161,13 +149,13 @@ pub unsafe extern "C" fn rs_sb_start_cmdline() {
 /// Called when redrawing the command line.
 ///
 /// # Safety
-/// Calls C accessor and mutator functions, frees memory.
+/// Direct field access on repr(C) struct, frees memory.
 #[export_name = "sb_text_restart_cmdline"]
 pub unsafe extern "C" fn rs_sb_restart_cmdline() {
     do_clear_sb_text = SbClearState::CMDLINE_BUSY.0;
 
     let last = last_msgchunk;
-    if last.is_null() || nvim_msgchunk_get_eol(last) != 0 {
+    if last.is_null() || (*last).sb_eol != 0 {
         // No unfinished line
         return;
     }
@@ -175,17 +163,17 @@ pub unsafe extern "C" fn rs_sb_restart_cmdline() {
     // Find start of the unfinished line and free it
     let tofree = msg_sb_start(last);
     if !tofree.is_null() {
-        let prev = nvim_msgchunk_get_prev(tofree);
+        let prev = (*tofree).sb_prev;
         last_msgchunk = prev;
 
         if !prev.is_null() {
-            nvim_msgchunk_set_next(prev, ptr::null_mut());
+            (*prev).sb_next = ptr::null_mut();
         }
 
         // Free all chunks in this line
         let mut current = tofree;
         while !current.is_null() {
-            let next = nvim_msgchunk_get_next(current);
+            let next = (*current).sb_next;
             xfree(current.cast());
             current = next;
         }
@@ -229,7 +217,7 @@ pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
         // Clear everything
         let mut current = last;
         while !current.is_null() {
-            let prev = nvim_msgchunk_get_prev(current);
+            let prev = (*current).sb_prev;
             xfree(current.cast());
             current = prev;
         }
@@ -245,7 +233,7 @@ pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
             return;
         }
 
-        let before_start = nvim_msgchunk_get_prev(line_start);
+        let before_start = (*line_start).sb_prev;
         if before_start.is_null() {
             // Only one line, nothing to clear
             return;
@@ -254,7 +242,7 @@ pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
         // Clear everything before the last line
         let mut current = before_start;
         while !current.is_null() {
-            let prev = nvim_msgchunk_get_prev(current);
+            let prev = (*current).sb_prev;
             xfree(current.cast());
             current = prev;
         }
@@ -279,7 +267,7 @@ pub unsafe extern "C" fn rs_sb_line_count() -> c_int {
     let mut mp = msg_sb_start(last);
 
     while !mp.is_null() {
-        let prev = nvim_msgchunk_get_prev(mp);
+        let prev = (*mp).sb_prev;
         if prev.is_null() {
             break;
         }
@@ -308,7 +296,7 @@ pub unsafe extern "C" fn rs_sb_has_content() -> c_int {
         return 0;
     }
 
-    let prev = nvim_msgchunk_get_prev(start);
+    let prev = (*start).sb_prev;
     c_int::from(!prev.is_null())
 }
 
