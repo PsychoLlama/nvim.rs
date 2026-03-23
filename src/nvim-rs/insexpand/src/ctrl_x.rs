@@ -159,7 +159,7 @@ extern "C" {
     fn nvim_ins_apply_autocmds_completedonepre();
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_in_cinkeys_key_complete(when: c_int, line_is_empty: bool) -> bool;
-    fn nvim_set_edit_submode_null_if_set();
+    // nvim_set_edit_submode_null_if_set: inlined below (Phase 33)
     fn nvim_get_curwin() -> *mut u8; // opaque curwin pointer
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_xfree(ptr: *mut u8);
@@ -542,7 +542,10 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     }
     crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
     crate::vars::nvim_set_compl_enter_selects(0);
-    nvim_set_edit_submode_null_if_set();
+    if !g_edit_submode.is_null() {
+        g_edit_submode = core::ptr::null_mut();
+        g_redraw_mode = true;
+    }
     crate::vars::nvim_set_compl_autocomplete(0);
     crate::vars::nvim_set_compl_from_nonkeyword(0);
     crate::vars::nvim_clear_compl_best_matches();

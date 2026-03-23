@@ -1941,7 +1941,7 @@ int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line 
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 bool nvim_shortmess_completionmenu(void) { return shortmess(SHM_COMPLETIONMENU); }
 bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
-void nvim_set_edit_submode_null_if_set(void) { if (edit_submode != NULL) { edit_submode = NULL; redraw_mode = true; } }
+// nvim_set_edit_submode_null_if_set: deleted (Phase 33, inlined in ctrl_x.rs)
 void nvim_ins_compl_insert_bytes(const char *p, int len) {
   char *q = (char *)p;
   if (len == -1) {
