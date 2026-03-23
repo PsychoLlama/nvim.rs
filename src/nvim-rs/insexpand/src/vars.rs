@@ -98,6 +98,8 @@ extern "C" {
     // --- global options (Phase 28, 29, 30) ---
     static mut cot_flags: std::os::raw::c_uint; // 'completeopt' flags
     static mut p_ic: c_int; // 'ignorecase'
+                            // --- editor state (Phase 31) ---
+    static mut State: c_int; // current editor mode
     static mut p_ac: c_int; // 'autocomplete'
     pub(crate) static mut p_acl: i64; // 'autocompletedelay' (OptInt = i64)
     static mut p_cto: i64; // 'completetimeout' (OptInt = i64)
@@ -291,6 +293,15 @@ pub unsafe fn nvim_get_cot_flags_global() -> std::os::raw::c_uint {
 #[inline]
 pub unsafe fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int {
     c_int::from((cot_flags & (K_OPT_COT_FLAG_NOINSERT | K_OPT_COT_FLAG_FUZZY)) != 0)
+}
+
+/// REPLACE_FLAG = 0x100 (from state_defs.h)
+const REPLACE_FLAG: c_int = 0x100;
+
+/// Return 1 if current State has REPLACE_FLAG set, 0 otherwise.
+#[inline]
+pub unsafe fn nvim_get_state_replace_flag() -> c_int {
+    c_int::from((State & REPLACE_FLAG) != 0)
 }
 
 // ============================================================================

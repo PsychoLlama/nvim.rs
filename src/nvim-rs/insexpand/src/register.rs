@@ -19,7 +19,7 @@ extern "C" {
     fn nvim_put_free_register(reg: *mut std::ffi::c_void);
 
     // Register field accessors (from insexpand_shim.c)
-    fn nvim_get_num_registers() -> c_int;
+    // nvim_get_num_registers: deleted (Phase 31, use NUM_REGISTERS = 39 constant)
     fn nvim_yankreg_y_size(reg: *mut std::ffi::c_void) -> usize;
     fn nvim_yankreg_y_array_null(reg: *mut std::ffi::c_void) -> c_int;
     fn nvim_yankreg_y_array_entry_data(reg: *mut std::ffi::c_void, j: usize) -> *const c_char;
@@ -70,6 +70,9 @@ unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
     }
 }
 
+/// NUM_REGISTERS = 39 (register_defs.h)
+const NUM_REGISTERS: c_int = 39;
+
 /// Perform register-based completion.
 ///
 /// Iterates all named registers and adds their contents as completion matches.
@@ -88,9 +91,8 @@ pub unsafe extern "C" fn rs_get_register_completion() {
     let mut dir = crate::vars::nvim_get_compl_direction();
     let adding_mode = rs_compl_status_adding() != 0;
     let p_ic = crate::vars::nvim_get_p_ic() != 0;
-    let num_registers = nvim_get_num_registers();
 
-    for i in 0..num_registers {
+    for i in 0..NUM_REGISTERS {
         let regname = rs_get_register_name(i);
 
         // Skip invalid or black hole register

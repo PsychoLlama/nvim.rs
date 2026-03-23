@@ -131,7 +131,7 @@ extern "C" {
     static mut g_edit_submode_pre: *mut c_char;
     #[link_name = "redraw_mode"]
     static mut g_redraw_mode: bool;
-    fn nvim_get_state_replace_flag() -> c_int;
+    // nvim_get_state_replace_flag: inlined in vars.rs (Phase 31)
     fn nvim_spell_back_safe();
     fn vpeekc() -> c_int;
 
@@ -199,7 +199,7 @@ unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
     match c {
         CTRL_E | CTRL_Y => {
             crate::vars::nvim_set_ctrl_x_mode(CTRL_X_SCROLL);
-            nvim_set_edit_submode_scroll(nvim_get_state_replace_flag());
+            nvim_set_edit_submode_scroll(crate::vars::nvim_get_state_replace_flag());
         }
         CTRL_L => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_WHOLE_LINE),
         CTRL_F => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_FILES),

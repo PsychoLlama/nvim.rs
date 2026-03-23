@@ -1925,7 +1925,7 @@ int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 void nvim_set_edit_submode_scroll(int is_replace) { edit_submode = is_replace ? _(" (replace) Scroll (^E/^Y)") : _(" (insert) Scroll (^E/^Y)"); edit_submode_pre = NULL; redraw_mode = true; }
 // nvim_set_edit_submode_null, nvim_set_edit_submode_pre_null, nvim_set_redraw_mode_true,
 // nvim_clear_edit_submode_extra: deleted (Phase 6, Rust writes globals directly)
-int nvim_get_state_replace_flag(void) { return (State & REPLACE_FLAG) ? 1 : 0; }
+// nvim_get_state_replace_flag: deleted (Phase 31, inlined in vars.rs)
 void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl(); emsg_off--; }
 // nvim_vpeekc: deleted (Phase 3, Rust calls vpeekc directly)
 // Accessors for Phase 2 (pass 12): ins_compl_longest_match
@@ -2581,7 +2581,7 @@ void nvim_get_next_tag_completion_impl(void)
 // nvim_advance_cpt_sources_index_safe_impl: migrated to Rust rs_advance_cpt_sources_index_safe (Phase 4)
 
 // Accessors for Phase 3 (pass 12): register completion migration
-int nvim_get_num_registers(void) { return NUM_REGISTERS; }
+// nvim_get_num_registers: deleted (Phase 31, use NUM_REGISTERS = 39 in Rust)
 size_t nvim_yankreg_y_size(void *reg) { return reg ? ((yankreg_T *)reg)->y_size : 0; }
 int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y_array == NULL) ? 1 : 0; }
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
