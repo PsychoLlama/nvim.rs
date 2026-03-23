@@ -639,6 +639,8 @@ const GOTO_NORMAL_MODE: c_int = 3;
 const PROCESS_NEXT_KEY: c_int = 4;
 
 unsafe extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut got_int: bool;
     // Getters/setters for globals needed by these functions
     fn nvim_get_ccline_cmdfirstc() -> c_int;
@@ -1042,8 +1044,6 @@ unsafe extern "C" {
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
     fn nvim_get_iobuff() -> *mut c_char;
-    fn nvim_get_columns() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_mouse_row() -> c_int;
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_get_ex_normal_busy() -> c_int;
@@ -1226,8 +1226,8 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                     break;
                 }
                 let cells = crate::screen::rs_cmdline_charsize(cmdpos);
-                let cols = nvim_get_columns();
-                let rows = nvim_get_rows();
+                let cols = Columns;
+                let rows = Rows;
                 let cmdspos = nvim_get_ccline_cmdspos();
                 if nvim_get_key_typed_cmdline() != 0 && cmdspos + cells >= cols * rows {
                     break;

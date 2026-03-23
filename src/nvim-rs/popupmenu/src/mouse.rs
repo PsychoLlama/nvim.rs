@@ -319,6 +319,8 @@ pub const extern "C" fn rs_pum_scrollbar_click_to_first(
 
 // C globals used by mouse.
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     /// C global: `pum_grid`.
     static mut pum_grid: crate::ScreenGrid;
 }
@@ -347,9 +349,7 @@ struct PumMouseFindResult {
 // C accessor functions for position_at_mouse.
 extern "C" {
     /// Get `Rows` global.
-    fn nvim_get_Rows() -> c_int;
     /// Get `Columns` global.
-    fn nvim_get_Columns() -> c_int;
     /// Get window info by grid handle.
     fn nvim_pum_get_win_by_grid(grid: c_int) -> PumWinInfo;
     /// Check if UI has multigrid.
@@ -378,8 +378,8 @@ struct PumWinInfo {
 pub unsafe extern "C" fn rs_pum_position_at_mouse(min_width: c_int) {
     let min_row = 0;
     let min_col = 0;
-    let mut max_row = nvim_get_Rows();
-    let mut max_col = nvim_get_Columns();
+    let mut max_row = Rows;
+    let mut max_col = Columns;
     let mut grid = nvim_get_mouse_grid();
     let mut row = nvim_get_mouse_row();
     let mut col = nvim_get_mouse_col();

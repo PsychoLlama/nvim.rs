@@ -40,12 +40,12 @@ const UPD_NOT_VALID: c_int = 40;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // --- Global state ---
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_topframe() -> *mut Frame;
-    fn nvim_get_Rows() -> c_int;
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_sc_col() -> c_int;
 
     // --- Options ---
@@ -310,11 +310,11 @@ unsafe fn win_split_ins_impl(
     nvim_status_redraw_all_wrapper();
 
     if need_status != 0 {
-        nvim_set_msg_row_val(nvim_get_Rows() - 1);
+        nvim_set_msg_row_val(Rows - 1);
         nvim_set_msg_col_val(nvim_get_sc_col());
         nvim_msg_clr_eos_force();
         nvim_comp_col();
-        nvim_set_msg_row_val(nvim_get_Rows() - 1);
+        nvim_set_msg_row_val(Rows - 1);
         nvim_set_msg_col_val(0);
     }
 
@@ -841,7 +841,7 @@ unsafe fn assign_horizontal_dimensions(
 
     if toplevel {
         nvim_win_set_wincol(wp, 0);
-        rs_win_new_width(wp, nvim_get_Columns());
+        rs_win_new_width(wp, Columns);
         nvim_win_set_vsep_width(wp, 0);
     } else {
         nvim_win_set_wincol(wp, nvim_win_get_wincol(oldwin));

@@ -117,6 +117,8 @@ const WSP_BOT: c_int = 0x10;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // --- Wrappers for complex cases (keep logic in C) ---
     // nvim_do_window_wW removed: replaced by rs_do_window_wW (Phase 4)
     // nvim_do_window_P removed: replaced by rs_do_window_P (Phase 4)
@@ -229,8 +231,6 @@ extern "C" {
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_get_min_set_ch() -> i64;
-    fn nvim_get_rows() -> c_int;
-    fn nvim_get_columns() -> c_int;
 
     // --- Accessors ---
     fn nvim_get_curwin() -> WinHandle;
@@ -759,7 +759,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if prenum != 0 {
                     rs_win_setheight(prenum);
                 } else {
-                    rs_win_setheight(nvim_get_rows() - nvim_get_min_set_ch() as c_int);
+                    rs_win_setheight(Rows - nvim_get_min_set_ch() as c_int);
                 }
             }
 
@@ -786,7 +786,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
                 if prenum != 0 {
                     rs_win_setwidth(prenum);
                 } else {
-                    rs_win_setwidth(nvim_get_columns());
+                    rs_win_setwidth(Columns);
                 }
             }
 

@@ -71,8 +71,6 @@ extern "C" {
     fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
 
     // Lines/columns callback accessors
-    fn nvim_get_Rows() -> c_int;
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_full_screen() -> bool;
     fn screen_resize(width: c_int, height: c_int);
     fn check_screensize();
@@ -433,8 +431,8 @@ pub extern "C" fn rs_did_set_listchars() -> CallbackResult {
 pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> CallbackResult {
     let p_lines = crate::p_lines;
     let p_columns = crate::p_columns;
-    let rows = nvim_get_Rows();
-    let columns = nvim_get_Columns();
+    let rows = Rows;
+    let columns = Columns;
 
     if p_lines != OptInt::from(rows) || p_columns != OptInt::from(columns) {
         if updating_screen {
@@ -448,21 +446,21 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
             Columns = p_columns as c_int;
             check_screensize();
             let p_ch = nvim_get_p_ch();
-            let new_row = nvim_get_Rows() - std::cmp::max(p_ch as c_int, 1);
+            let new_row = Rows - std::cmp::max(p_ch as c_int, 1);
             let cmdline_row = nvim_get_cmdline_row();
-            if cmdline_row > new_row && nvim_get_Rows() > p_ch as c_int {
+            if cmdline_row > new_row && Rows > p_ch as c_int {
                 nvim_set_cmdline_row(new_row);
             }
         }
         let window = p_window;
-        if window >= OptInt::from(nvim_get_Rows()) || nvim_option_was_set_window() == 0 {
-            p_window = OptInt::from(nvim_get_Rows()) - 1;
+        if window >= OptInt::from(Rows) || nvim_option_was_set_window() == 0 {
+            p_window = OptInt::from(Rows) - 1;
         }
     }
 
     // Adjust 'scrolljump' if needed.
-    if nvim_get_p_sj() >= OptInt::from(nvim_get_Rows()) && nvim_get_full_screen() {
-        nvim_set_p_sj(OptInt::from(nvim_get_Rows()) / 2);
+    if nvim_get_p_sj() >= OptInt::from(Rows) && nvim_get_full_screen() {
+        nvim_set_p_sj(OptInt::from(Rows) / 2);
     }
 
     callback_ok()

@@ -11,6 +11,7 @@ use std::ffi::{c_char, c_int};
 // ============================================================================
 
 extern "C" {
+    static Rows: c_int;
     // ext_messages protocol functions
     fn nvim_set_msg_ext_kind(kind: *const c_char);
     fn msg_ext_ui_flush();
@@ -36,7 +37,6 @@ extern "C" {
 
     // Position and display state
     fn nvim_get_msg_col() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_sc_col() -> c_int;
     fn nvim_set_need_wait_return(val: c_int);
     fn nvim_set_redraw_cmdline(val: bool);
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn rs_msg_check() {
     if nvim_ui_has_messages() != 0 {
         return;
     }
-    if nvim_get_msg_row() == nvim_get_rows() - 1 && nvim_get_msg_col() >= nvim_get_sc_col() {
+    if nvim_get_msg_row() == Rows - 1 && nvim_get_msg_col() >= nvim_get_sc_col() {
         nvim_set_need_wait_return(1);
         nvim_set_redraw_cmdline(true);
     }

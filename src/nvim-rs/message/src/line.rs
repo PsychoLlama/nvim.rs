@@ -7,11 +7,10 @@ use std::ffi::c_int;
 
 // C function declarations
 extern "C" {
+    static Columns: c_int;
     static mut got_int: bool;
     /// Check if in list mode
     fn nvim_get_list_mode() -> c_int;
-    /// Get Columns (screen width)
-    fn nvim_get_columns() -> c_int;
     /// Get current message column
     fn nvim_get_msg_col() -> c_int;
 }
@@ -83,7 +82,7 @@ pub unsafe extern "C" fn rs_line_continue() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_remaining() -> c_int {
-    let columns = nvim_get_columns();
+    let columns = Columns;
     let msg_col = nvim_get_msg_col();
     if msg_col < columns {
         columns - msg_col

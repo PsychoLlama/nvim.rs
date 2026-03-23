@@ -18,6 +18,8 @@ use crate::{Frame, WinHandle, FR_LEAF};
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // curtab->tp_ch_used
     fn nvim_get_curtab_ch_used() -> c_int;
 
@@ -29,7 +31,6 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     // Columns global
-    fn nvim_get_columns() -> c_int;
 
     // p_ch option
     fn nvim_get_p_ch() -> i64;
@@ -103,7 +104,7 @@ fn command_height_impl() {
             return;
         }
 
-        let columns = nvim_get_columns();
+        let columns = Columns;
         while !frp.is_null() && (*frp).fr_width != columns {
             let parent = (*frp).fr_parent;
             if parent.is_null() {

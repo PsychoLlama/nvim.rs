@@ -15,9 +15,9 @@ use std::ffi::{c_char, c_int};
 
 #[allow(dead_code)]
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Global screen state
-    fn nvim_get_columns() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_key_typed() -> c_int;
     fn nvim_get_cmdline_star() -> c_int;
     fn nvim_get_cmdline_row() -> c_int;
@@ -60,7 +60,7 @@ const NUL: c_int = 0;
 /// Calls C function to access global.
 #[must_use]
 pub unsafe fn get_columns() -> c_int {
-    nvim_get_columns()
+    Columns
 }
 
 /// Get the screen height in rows.
@@ -70,7 +70,7 @@ pub unsafe fn get_columns() -> c_int {
 /// Calls C function to access global.
 #[must_use]
 pub unsafe fn get_rows() -> c_int {
-    nvim_get_rows()
+    Rows
 }
 
 /// Check if a key was typed (vs from a mapping).
@@ -198,7 +198,7 @@ pub unsafe fn correct_screencol(idx: c_int, cells: c_int, col: &mut c_int) {
         return;
     }
     let p = cmdbuff.add(idx as usize);
-    let columns = nvim_get_columns();
+    let columns = Columns;
 
     // If multi-byte char (>1 byte) is double-wide (2 cells)
     // and doesn't fit at end of line, increment column
@@ -217,8 +217,8 @@ pub unsafe fn correct_screencol(idx: c_int, cells: c_int, col: &mut c_int) {
 /// Calls C functions to access buffer and screen state.
 #[must_use]
 pub unsafe fn cmd_screencol(bytepos: c_int) -> c_int {
-    let columns = nvim_get_columns();
-    let rows = nvim_get_rows();
+    let columns = Columns;
+    let rows = Rows;
     let mut col = cmd_startcol();
 
     // Calculate maximum displayable column
@@ -356,7 +356,7 @@ pub unsafe extern "C" fn cmdline_is_password_rs() -> bool {
 /// Calls C function to access global.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_get_columns() -> c_int {
-    nvim_get_columns()
+    Columns
 }
 
 /// Get screen rows.
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn rs_get_columns() -> c_int {
 /// Calls C function to access global.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_get_rows() -> c_int {
-    nvim_get_rows()
+    Rows
 }
 
 // =============================================================================
@@ -446,7 +446,7 @@ const K_UI_CMDLINE: c_int = 32; // kUICmdline
 /// Calls C functions to access global state.
 #[export_name = "compute_cmdrow"]
 pub unsafe extern "C" fn compute_cmdrow_rs() {
-    let rows = nvim_get_rows();
+    let rows = Rows;
     let new_row = if nvim_get_exmode_active() || nvim_get_msg_scrolled() != 0 {
         rows - 1
     } else {
@@ -482,8 +482,8 @@ pub unsafe extern "C" fn cursorcmd_rs() {
         return;
     }
 
-    let rows = nvim_get_rows();
-    let columns = nvim_get_columns();
+    let rows = Rows;
+    let columns = Columns;
     let cmdline_row = nvim_get_cmdline_row();
     let cmdspos = nvim_get_ccline_cmdspos();
 
@@ -565,7 +565,7 @@ pub unsafe extern "C" fn rs_redrawcmdprompt() {
         }
     } else {
         msg_puts_hl(cmdprompt, nvim_get_ccline_hl_id(), false);
-        let columns = nvim_get_columns();
+        let columns = Columns;
         let msg_col = nvim_get_msg_col();
         let msg_row = nvim_get_msg_row();
         let cmdline_row = nvim_get_cmdline_row();

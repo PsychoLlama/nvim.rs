@@ -144,6 +144,8 @@ pub(crate) const CMD_RSHIFT: c_int = 553;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut msg_silent: c_int;
     // Message functions
     fn msg(s: *const c_char, a: c_int);
@@ -2435,8 +2437,6 @@ extern "C" {
     fn nvim_docmd_buf_hide_curwin() -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_get_Columns() -> c_int;
-    fn nvim_get_Rows() -> c_int;
     fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
     fn rs_win_setheight_win(height: c_int, wp: WinHandle);
     fn atol(s: *const c_char) -> std::ffi::c_long;
@@ -2683,7 +2683,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
         let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
             n_raw + nvim_win_get_w_width(wp)
         } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
-            nvim_get_Columns()
+            Columns
         } else {
             n_raw
         };
@@ -2692,7 +2692,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
         let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
             n_raw + nvim_win_get_w_height(wp)
         } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
-            nvim_get_Rows() - 1
+            Rows - 1
         } else {
             n_raw
         };

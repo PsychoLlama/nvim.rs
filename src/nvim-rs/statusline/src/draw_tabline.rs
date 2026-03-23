@@ -25,6 +25,8 @@ const K_STL_CLICK_TAB_CLOSE: c_int = 2;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Grid operations
     fn nvim_stl_default_grid_line_start(row: c_int);
     #[link_name = "grid_line_put_schar"]
@@ -60,8 +62,6 @@ extern "C" {
     fn nvim_stl_ui_has_tabline() -> c_int;
     #[link_name = "rs_tabline_height"]
     fn nvim_stl_tabline_height() -> c_int;
-    #[link_name = "nvim_get_Columns"]
-    fn nvim_stl_get_Columns() -> c_int;
     fn nvim_stl_get_p_tal() -> *mut c_char;
     fn nvim_stl_get_p_sc() -> c_int;
     fn nvim_stl_showcmd_loc_is_tabline() -> c_int;
@@ -133,7 +133,7 @@ pub unsafe fn draw_tabline() {
     }
 
     // Clear tab_page_click_defs
-    let columns = nvim_stl_get_Columns();
+    let columns = Columns;
     let click_defs = nvim_stl_get_tab_page_click_defs();
     let click_defs_size = nvim_stl_get_tab_page_click_defs_size();
     debug_assert!(click_defs_size >= columns as usize);

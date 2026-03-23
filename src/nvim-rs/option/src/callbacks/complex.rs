@@ -11,6 +11,7 @@ use std::ffi::{c_char, c_int, c_void};
 use super::{callback_ok, CallbackResult};
 
 extern "C" {
+    static Rows: c_int;
     static p_ru: c_int;
 }
 
@@ -1164,14 +1165,13 @@ pub unsafe extern "C" fn rs_did_set_wildchar(args: *mut c_void) -> CallbackResul
 
 extern "C" {
     static mut p_window: crate::OptInt;
-    fn nvim_get_Rows() -> c_int;
 }
 
 /// Callback for 'window' option.
 /// Ensure 'window' is clamped to [1, Rows-1].
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_window(_args: *mut c_void) -> CallbackResult {
-    let rows = crate::OptInt::from(nvim_get_Rows());
+    let rows = crate::OptInt::from(Rows);
     let window = p_window;
 
     if window < 1 || window >= rows {

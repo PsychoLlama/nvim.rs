@@ -12,6 +12,7 @@ use crate::types::{GArray, HlGroup, RgbValue};
 // =============================================================================
 
 extern "C" {
+    static Columns: c_int;
     static mut msg_silent: c_int;
     static mut got_int: bool;
     /// The highlight group table (was `static garray_T highlight_ga` in C).
@@ -701,7 +702,6 @@ extern "C" {
     fn nvim_set_msg_col(col: c_int);
 
     /// Get the Columns (screen width) global.
-    fn nvim_get_columns() -> c_int;
 
     /// Get the unsafe { got_int } global (returns c_int; non-zero means interrupted).
 
@@ -861,7 +861,7 @@ pub unsafe extern "C" fn rs_syn_list_header(
     } else if (ui_has(K_UI_MESSAGES) || msg_silent != 0) && !force_newline {
         msg_putchar(b' ' as c_int);
         adjust = false;
-    } else if nvim_get_msg_col() + outlen + 1 >= nvim_get_columns() || force_newline {
+    } else if nvim_get_msg_col() + outlen + 1 >= Columns || force_newline {
         msg_putchar(b'\n' as c_int);
         if unsafe { got_int } {
             return true;
@@ -881,7 +881,7 @@ pub unsafe extern "C" fn rs_syn_list_header(
 
     // Show "xxx" with the attributes.
     if !did_header {
-        if endcol == nvim_get_columns() - 1 && endcol <= name_col {
+        if endcol == Columns - 1 && endcol <= name_col {
             msg_putchar(b' ' as c_int);
         }
         msg_puts_hl(c"xxx".as_ptr(), id, false);

@@ -7,6 +7,8 @@ use std::ffi::{c_char, c_int};
 
 // C accessor declarations
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut msg_silent: c_int;
     /// Get `msg_col` global
     fn nvim_get_msg_col() -> c_int;
@@ -17,9 +19,7 @@ extern "C" {
     /// Set `msg_row` global
     fn nvim_set_msg_row(row: c_int);
     /// Get `Rows` global (screen rows)
-    fn nvim_get_rows() -> c_int;
     /// Get `Columns` global (screen columns)
-    fn nvim_get_columns() -> c_int;
     /// Get `msg_scrolled` global
     fn nvim_get_msg_scrolled() -> c_int;
     /// Get `sc_col` global (showcmd column)
@@ -107,8 +107,8 @@ pub unsafe extern "C" fn rs_set_msg_row(row: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_room() -> c_int {
-    let rows = nvim_get_rows();
-    let columns = nvim_get_columns();
+    let rows = Rows;
+    let columns = Columns;
     let msg_row = nvim_get_msg_row();
     let msg_scrolled = nvim_get_msg_scrolled();
     let sc_col = nvim_get_sc_col();
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_msg_advance_spaces(col: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_screen_columns() -> c_int {
-    nvim_get_columns()
+    Columns
 }
 
 /// Get the number of screen rows.
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_screen_columns() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_screen_rows() -> c_int {
-    nvim_get_rows()
+    Rows
 }
 
 /// Calculate the truncation point for a string.
@@ -347,7 +347,7 @@ pub const extern "C" fn rs_msg_fits(len: c_int, room: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_outtrans_long_room() -> c_int {
-    nvim_get_columns() - nvim_get_msg_col()
+    Columns - nvim_get_msg_col()
 }
 
 /// Calculate if outtrans long should truncate.
@@ -409,7 +409,7 @@ pub unsafe extern "C" fn rs_is_msg_silent() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_clamp_col(col: c_int) -> c_int {
-    let columns = nvim_get_columns();
+    let columns = Columns;
     if col < 0 {
         0
     } else if col >= columns {
@@ -629,9 +629,9 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
 
     let len = nvim_vim_strsize(s);
     let msg_scrolled = nvim_get_msg_scrolled();
-    let rows = nvim_get_rows();
+    let rows = Rows;
     let msg_row = nvim_get_msg_row();
-    let columns = nvim_get_columns();
+    let columns = Columns;
     let sc_col = nvim_get_sc_col();
 
     let room = if msg_scrolled != 0 {
@@ -1020,9 +1020,9 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
         return s;
     }
 
-    let rows = nvim_get_rows();
+    let rows = Rows;
     let cmdline_row = nvim_get_cmdline_row();
-    let columns = nvim_get_columns();
+    let columns = Columns;
     let sc_col = nvim_get_sc_col();
     let room = (rows - cmdline_row - 1) * columns + sc_col - 1;
 

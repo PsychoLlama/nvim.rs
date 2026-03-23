@@ -10,6 +10,8 @@ use std::ffi::{c_char, c_int};
 // ============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut msg_silent: c_int;
     // Home directory handling (Phase 77: now implemented in Rust)
     fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
@@ -19,7 +21,6 @@ extern "C" {
     // For msg_outtrans_long (Phase 80)
     fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
-    fn nvim_get_columns() -> c_int;
     fn nvim_get_msg_col() -> c_int;
 
     // Note: msg_source is wrapped in error.rs
@@ -41,7 +42,6 @@ extern "C" {
     fn nvim_set_msg_grid_scroll_discount(val: c_int);
     fn nvim_msg_set_pos_for_scroll(pos: c_int);
     fn nvim_msg_grid_scroll_up(to_scroll: c_int);
-    fn nvim_get_rows() -> c_int;
     fn nvim_msg_grid_get_rows() -> c_int;
     fn nvim_msg_grid_flush_dirty_line(row: c_int);
 
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_i
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let len = (p as usize - longstr as usize) as c_int;
     let mut slen = len;
-    let room = nvim_get_columns() - nvim_get_msg_col();
+    let room = Columns - nvim_get_msg_col();
     if nvim_ui_has_messages() == 0 && len > room && room >= 20 {
         slen = (room - 3) / 2;
         msg_outtrans_len(longstr, slen, hl_id, false);
@@ -347,7 +347,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
             nvim_msg_grid_scroll_up(to_scroll);
         }
 
-        let rows = nvim_get_rows();
+        let rows = Rows;
         let start = (rows - delta.max(1)).max(0);
         for i in start..rows {
             let row = i - nvim_get_msg_grid_pos();

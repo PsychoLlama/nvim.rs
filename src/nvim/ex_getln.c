@@ -1295,8 +1295,6 @@ void nvim_strcpy_cmdbuff(const char *src)
   }
 }
 
-int nvim_get_columns(void) { return Columns; }
-int nvim_get_rows(void) { return Rows; }
 int nvim_get_key_typed(void) { return KeyTyped; }
 int nvim_get_cmdline_star(void) { return cmdline_star; }
 int nvim_get_cmdline_row(void) { return cmdline_row; }

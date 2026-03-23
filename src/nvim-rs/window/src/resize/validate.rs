@@ -11,8 +11,8 @@ use std::os::raw::c_char;
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_Rows() -> c_int;
-    fn nvim_get_Columns() -> c_int;
+    static Rows: c_int;
+    static Columns: c_int;
     fn nvim_get_window_p_ch() -> i64;
     fn nvim_get_p_wmh() -> i64;
     fn nvim_get_p_wmw() -> i64;
@@ -44,7 +44,7 @@ fn did_set_winminheight_impl() -> *const c_char {
         // loop until there is a 'winminheight' that is possible
         while nvim_get_p_wmh() > 0 {
             #[allow(clippy::cast_possible_truncation)]
-            let room = nvim_get_Rows() - nvim_get_window_p_ch() as c_int;
+            let room = Rows - nvim_get_window_p_ch() as c_int;
             let needed = rs_min_rows_for_all_tabpages();
             if room >= needed {
                 break;
@@ -68,7 +68,7 @@ fn did_set_winminwidth_impl() -> *const c_char {
 
         // loop until there is a 'winminwidth' that is possible
         while nvim_get_p_wmw() > 0 {
-            let room = nvim_get_Columns();
+            let room = Columns;
             let needed = rs_frame_minwidth(nvim_get_topframe(), crate::WinHandle::null());
             if room >= needed {
                 break;

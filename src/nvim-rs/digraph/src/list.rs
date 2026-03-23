@@ -19,6 +19,7 @@ use crate::DigrT;
 
 // C accessor functions
 extern "C" {
+    static Columns: c_int;
     /// Get pointer to user digraphs array data.
     fn nvim_get_user_digraphs_data() -> *const c_void;
 
@@ -54,8 +55,6 @@ extern "C" {
     /// Get the current message column.
     fn nvim_get_msg_col() -> c_int;
 
-    /// Get the screen width (Columns).
-    fn nvim_get_Columns() -> c_int;
 }
 
 /// Highlight group for special keys text (`HLF_8` = 1).
@@ -591,7 +590,7 @@ pub unsafe extern "C" fn rs_printdigraph(
     }
 
     // Wrap to next line if not enough room
-    if unsafe { nvim_get_msg_col() } > unsafe { nvim_get_Columns() } - list_width {
+    if unsafe { nvim_get_msg_col() } > unsafe { Columns } - list_width {
         unsafe { msg_putchar(c_int::from(b'\n')) };
     }
 

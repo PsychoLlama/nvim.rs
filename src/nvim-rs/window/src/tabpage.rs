@@ -20,6 +20,8 @@ use crate::list::{
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut redraw_tabline: bool;
 }
 
@@ -1361,7 +1363,6 @@ extern "C" {
     fn nvim_tabpage_get_old_columns(tp: TabpageHandle) -> c_int;
     fn nvim_tabpage_set_old_columns(tp: TabpageHandle, val: c_int);
     fn nvim_get_rows_avail() -> c_int;
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_prevwin() -> WinHandle;
     fn nvim_set_firstwin_null();
     fn nvim_set_lastwin_null();
@@ -1439,7 +1440,7 @@ unsafe fn leave_tabpage_impl(new_curbuf: crate::BufHandle, trigger_leave: bool) 
     nvim_tabpage_set_lastwin(tp, nvim_get_lastwin());
     nvim_tabpage_set_old_rows_avail(tp, nvim_get_rows_avail());
     if nvim_tabpage_get_old_columns(tp) != -1 {
-        nvim_tabpage_set_old_columns(tp, nvim_get_Columns());
+        nvim_tabpage_set_old_columns(tp, Columns);
     }
     nvim_set_firstwin_null();
     nvim_set_lastwin_null();
@@ -1517,10 +1518,10 @@ unsafe fn enter_tabpage_impl(
     {
         crate::resize::screen::rs_win_new_screen_rows();
     }
-    if nvim_tabpage_get_old_columns(curtab) != nvim_get_Columns() {
+    if nvim_tabpage_get_old_columns(curtab) != Columns {
         if nvim_get_starting() == 0 {
             crate::resize::screen::rs_win_new_screen_cols();
-            nvim_tabpage_set_old_columns(curtab, nvim_get_Columns());
+            nvim_tabpage_set_old_columns(curtab, Columns);
         } else {
             nvim_tabpage_set_old_columns(curtab, -1);
         }

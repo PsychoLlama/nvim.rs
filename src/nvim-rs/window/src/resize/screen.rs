@@ -24,9 +24,9 @@ struct WinSnapshot {
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // --- Globals ---
-    fn nvim_get_Rows() -> c_int;
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_rows_avail() -> c_int;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_topframe() -> *mut Frame;
@@ -151,7 +151,7 @@ unsafe fn win_new_screen_cols_impl() {
     }
 
     let topframe = nvim_get_topframe();
-    let columns = nvim_get_Columns();
+    let columns = Columns;
 
     // First try setting the widths of windows with 'winfixwidth'. If that
     // doesn't result in the right width, forget about that option.
@@ -199,8 +199,8 @@ static OLD_COLUMNS: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32:
 unsafe fn win_new_screensize_impl() {
     use std::sync::atomic::Ordering;
 
-    let rows = nvim_get_Rows();
-    let columns = nvim_get_Columns();
+    let rows = Rows;
+    let columns = Columns;
     let old_rows = OLD_ROWS.load(Ordering::Relaxed);
     let old_columns = OLD_COLUMNS.load(Ordering::Relaxed);
 
@@ -253,7 +253,7 @@ unsafe fn win_init_size_impl() {
     let firstwin = nvim_get_firstwin();
     let topframe = nvim_get_topframe();
     let rows_avail = nvim_get_rows_avail();
-    let columns = nvim_get_Columns();
+    let columns = Columns;
     let winbar_height = nvim_win_get_winbar_height(firstwin);
 
     nvim_win_set_field_height(firstwin, rows_avail);

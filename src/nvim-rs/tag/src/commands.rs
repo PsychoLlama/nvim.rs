@@ -39,6 +39,7 @@ type ColnrT = c_int;
 // =============================================================================
 
 extern "C" {
+    static Columns: c_int;
     static mut got_int: bool;
     // Window tag stack accessors
     fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
@@ -945,7 +946,6 @@ extern "C" {
     // Global variable accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_didout(val: c_int);
-    fn nvim_get_Columns() -> c_int;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
@@ -1057,7 +1057,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
 
     let tagname_len = tagp_tagname_end(tagp_ptr).offset_from(tagp_tagname(tagp_ptr)) as c_int + 2;
     let taglen = if tagname_len < 18 { 18 } else { tagname_len };
-    let taglen = if taglen > nvim_get_Columns() - 25 {
+    let taglen = if taglen > Columns - 25 {
         MAXCOL
     } else {
         taglen
@@ -1171,7 +1171,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 // print all other extra fields
                 let mut hl_id: c_int = HLF_CM;
                 while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
-                    if nvim_get_msg_col() + nvim_ptr2cells(p) >= nvim_get_Columns() {
+                    if nvim_get_msg_col() + nvim_ptr2cells(p) >= Columns {
                         msg_putchar(b'\n' as c_int);
                         if unsafe { got_int } {
                             break;
@@ -1229,7 +1229,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             } else {
                 nvim_ptr2cells(p)
             };
-            if nvim_get_msg_col() + cell_width > nvim_get_Columns() {
+            if nvim_get_msg_col() + cell_width > Columns {
                 msg_putchar(b'\n' as c_int);
             }
             if unsafe { got_int } {

@@ -46,6 +46,8 @@ type ClickDefsHandle = *mut c_void;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Window layout (direct link to window_shim.c accessors)
     #[link_name = "nvim_win_get_floating"]
     fn nvim_stl_win_get_floating(wp: WinHandle) -> c_int;
@@ -66,10 +68,6 @@ extern "C" {
     fn nvim_stl_win_get_fcs_wbr(wp: WinHandle) -> ScharT;
 
     // Global state
-    #[link_name = "nvim_get_Columns"]
-    fn nvim_stl_get_Columns() -> c_int;
-    #[link_name = "nvim_get_Rows"]
-    fn nvim_stl_get_Rows() -> c_int;
     #[link_name = "nvim_get_p_ch"]
     fn nvim_stl_get_p_ch() -> i64;
     fn nvim_stl_get_ru_col() -> c_int;
@@ -274,7 +272,7 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
         fillchar = nvim_stl_schar_from_ascii_char(b' ' as c_char);
         group = HLF_TPF;
         let attr = nvim_stl_HL_ATTR(group);
-        maxwidth = nvim_stl_get_Columns();
+        maxwidth = Columns;
         opt_idx = K_OPT_TABLINE;
 
         // Early exit check
@@ -373,14 +371,14 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
             maxwidth = nvim_stl_win_get_view_width(wp);
         } else {
             row = if is_stl_global {
-                nvim_stl_get_Rows() - nvim_stl_get_p_ch() as c_int - 1
+                Rows - nvim_stl_get_p_ch() as c_int - 1
             } else {
                 nvim_stl_W_ENDROW(wp)
             };
             maxwidth = if in_status_line && !is_stl_global {
                 nvim_win_get_w_width(wp)
             } else {
-                nvim_stl_get_Columns()
+                Columns
             };
         }
 
@@ -414,14 +412,14 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
                     stl = stl.add(1);
                 }
             }
-            let columns = nvim_stl_get_Columns();
+            let columns = Columns;
             let ru_col = nvim_stl_get_ru_col();
             let offset = ru_col - (columns - maxwidth);
             let half = (maxwidth + 1) / 2;
             col = if offset > half { offset } else { half };
             maxwidth -= col;
             if !in_status_line {
-                row = nvim_stl_get_Rows() - 1;
+                row = Rows - 1;
                 let _grid = nvim_stl_grid_adjust_msg(&mut row, &mut col);
                 maxwidth -= 1; // writing in last column may cause scrolling
                 fillchar = nvim_stl_schar_from_ascii_char(b' ' as c_char);

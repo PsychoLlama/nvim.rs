@@ -497,10 +497,6 @@ extern "C" {
     pub fn nvim_set_ex_no_reprint(val: c_int);
     /// Get curbuf->b_ml.ml_line_count
     pub fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
-    /// Get Rows (screen height)
-    pub fn nvim_get_Rows() -> c_int;
-    /// Get Columns (screen width)
-    pub fn nvim_get_Columns() -> c_int;
     /// Direct C global: p_window
     pub static mut p_window: i64;
     /// Set curwin->w_cursor.col

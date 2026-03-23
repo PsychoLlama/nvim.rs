@@ -19,6 +19,8 @@ use crate::state::{next_char_pos, prev_char_pos, utf8_char_len, NUL};
 
 #[allow(dead_code)]
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Buffer management
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
     fn nvim_get_ccline_cmdbufflen() -> c_int;
@@ -55,8 +57,6 @@ extern "C" {
     fn nvim_get_cmdline_row() -> c_int;
 
     // Globals
-    fn nvim_get_columns() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_key_typed_cmdline() -> c_int;
     fn nvim_set_msg_no_more(val: c_int);
     fn nvim_msg_check();
@@ -1066,8 +1066,8 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
     }
 
     let screen_limit = if nvim_get_key_typed_cmdline() != 0 {
-        let cols = nvim_get_columns();
-        let rows = nvim_get_rows();
+        let cols = Columns;
+        let rows = Rows;
         let prod = cols.saturating_mul(rows);
         if prod < 0 {
             MAXCOL

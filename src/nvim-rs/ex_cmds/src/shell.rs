@@ -413,6 +413,7 @@ pub fn count_shell_special(s: &str) -> usize {
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
     // make_filter_cmd FFI
     fn nvim_excmds_shell_name_tail() -> *const c_char;
     fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
@@ -422,7 +423,6 @@ extern "C" {
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_call_shell(cmd: *mut c_char, flags: c_int);
     fn nvim_excmds_apply_autocmds_shellcmdpost();
-    fn nvim_get_Rows() -> c_int;
 
     // do_bang FFI
     fn rs_check_secure() -> c_int;
@@ -798,7 +798,7 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
 
     // Put the message cursor at the end of the screen to avoid wait_return()
     // overwriting the text the external command showed.
-    let rows = nvim_get_Rows();
+    let rows = Rows;
     crate::msg_row = rows - 1;
     crate::msg_col = 0;
 
@@ -1236,7 +1236,7 @@ pub unsafe extern "C" fn rs_do_filter(
 
     // Create shell command
     let cmd_buf = rs_make_filter_cmd(cmd, itmp, otmp, c_int::from(do_in));
-    nvim_excmds_ui_cursor_goto(nvim_get_Rows() - 1, 0);
+    nvim_excmds_ui_cursor_goto(Rows - 1, 0);
 
     if do_out {
         if u_save(line2, line2 + 1) == 0 {

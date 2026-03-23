@@ -30,6 +30,8 @@ pub struct NvimString {
 }
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     static mut msg_silent: c_int;
     static mut got_int: bool;
     // Core message output functions (call into C until fully migrated)
@@ -50,7 +52,6 @@ extern "C" {
     // State accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
-    fn nvim_get_columns() -> c_int;
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_set_lines_left(val: c_int);
     fn nvim_set_msg_didany(val: c_int);
@@ -76,7 +77,6 @@ extern "C" {
     fn nvim_set_need_fileinfo(val: c_int);
     fn nvim_set_keep_msg_raw(s: *const c_char);
     fn nvim_set_msg_row(val: c_int);
-    fn nvim_get_rows() -> c_int;
     fn msg_grid_validate();
     fn nvim_redir_write_newline();
     fn msg_clr_eos();
@@ -225,9 +225,7 @@ pub(crate) unsafe fn msg_keep_impl(
 
     if keep != 0
         && retval != 0
-        && nvim_vim_strsize(s)
-            < (nvim_get_rows() - nvim_get_cmdline_row() - 1) * nvim_get_columns()
-                + nvim_get_sc_col()
+        && nvim_vim_strsize(s) < (Rows - nvim_get_cmdline_row() - 1) * Columns + nvim_get_sc_col()
     {
         crate::misc::rs_set_keep_msg(s, 0);
     }
@@ -462,7 +460,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         rs_msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
         let scrolled = nvim_get_msg_scrolled();
         nvim_set_msg_scrolled(scrolled + 1);
-        nvim_set_cmdline_row(nvim_get_rows() - 1);
+        nvim_set_cmdline_row(Rows - 1);
     }
 
     if nvim_get_msg_scroll() == 0 && nvim_get_full_screen() {
@@ -734,7 +732,7 @@ pub unsafe extern "C" fn rs_msg_advance(col: c_int) {
         return;
     }
     // not enough room - clamp to Columns - 1
-    let columns = nvim_get_columns();
+    let columns = Columns;
     let col = if col > columns - 1 { columns - 1 } else { col };
     while nvim_get_msg_col() < col {
         rs_msg_putchar(c_int::from(b' '));

@@ -145,6 +145,8 @@ pub type TabpageHandle = *mut std::ffi::c_void;
 
 #[allow(dead_code)]
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     /// Get the original topline for double-click detection.
     fn nvim_get_orig_topline() -> linenr_T;
 
@@ -1115,7 +1117,6 @@ extern "C" {
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
 
     /// Get `Rows` global.
-    fn nvim_get_Rows() -> c_int;
 
     /// Get `p_ch` global (command height).
     fn nvim_get_p_ch() -> i64;
@@ -1276,7 +1277,7 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
     if winrow >= view_height + status_height {
         // Below window — check for global status line
         let mouse_grid_val = nvim_get_mouse_grid();
-        let rows = nvim_get_Rows();
+        let rows = Rows;
         #[allow(clippy::cast_possible_truncation)]
         let p_ch = nvim_get_p_ch() as c_int;
         if mouse_grid_val <= 1 && row < rows - p_ch && row >= rows - p_ch - nvim_global_stl_height()

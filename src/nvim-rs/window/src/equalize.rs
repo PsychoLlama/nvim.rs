@@ -27,6 +27,8 @@ const NOWIN: WinHandle = unsafe { WinHandle::from_ptr((-1isize) as *mut std::ffi
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     /// Get curwin.
     fn nvim_get_curwin() -> WinHandle;
 
@@ -61,7 +63,6 @@ extern "C" {
     fn nvim_get_p_ls() -> i64;
 
     /// Get global Columns.
-    fn nvim_get_Columns() -> c_int;
 
     /// Check if winbar is globally enabled.
     #[link_name = "rs_global_winbar_height"]
@@ -114,8 +115,6 @@ extern "C" {
     /// Get w_wincol from a window.
     fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
-    /// Get Rows global.
-    fn nvim_get_Rows() -> c_int;
 }
 
 /// Get the window from a frame (first leaf window).
@@ -213,7 +212,7 @@ fn get_maximum_wincount_impl(frp: *const Frame, height: c_int) -> c_int {
 ///
 /// Returns 1 if this is the rightmost column (no separator needed), 0 otherwise.
 fn compute_extra_sep_horizontal_impl(col: c_int, width: c_int) -> c_int {
-    unsafe { c_int::from(col + width == nvim_get_Columns()) }
+    unsafe { c_int::from(col + width == Columns) }
 }
 
 /// Calculate extra separator adjustment for horizontal equalization.
@@ -444,7 +443,7 @@ fn win_equal_impl(next_curwin: WinHandle, current: bool, mut dir: c_int) {
             dir,
             0,
             tabline_height(),
-            nvim_get_Columns(),
+            Columns,
             (*topframe).fr_height,
         );
 
@@ -526,7 +525,7 @@ fn win_equal_rec_impl(
             if dir != c_int::from(b'v') {
                 // Equalize frame widths
                 let n = rs_frame_minwidth(topfr, NOWIN);
-                extra_sep = c_int::from(col + width == nvim_get_Columns());
+                extra_sep = c_int::from(col + width == Columns);
                 totwincount = (n + extra_sep) / (p_wmw + 1);
                 has_next_curwin = rs_frame_has_win(topfr, next_curwin) != 0;
 

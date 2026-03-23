@@ -215,7 +215,6 @@ extern "C" {
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_get_msg_row() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(val: c_int);
 

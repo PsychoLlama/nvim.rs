@@ -7,11 +7,11 @@ use std::ffi::{c_char, c_int};
 
 // C function declarations
 extern "C" {
+    static Columns: c_int;
     static mut msg_silent: c_int;
     // State accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
-    fn nvim_get_columns() -> c_int;
 
     // For give_warning
     fn no_wait_return_inc();
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn rs_give_warning_plain(message: *const c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_advance_count(col: c_int) -> c_int {
     let msg_col = nvim_get_msg_col();
-    let columns = nvim_get_columns();
+    let columns = Columns;
 
     // Clamp target to valid range
     let target = if col >= columns { columns - 1 } else { col };
@@ -217,7 +217,7 @@ pub const extern "C" fn rs_info_hl_id() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_line_space() -> c_int {
-    let columns = nvim_get_columns();
+    let columns = Columns;
     let msg_col = nvim_get_msg_col();
     columns - msg_col
 }

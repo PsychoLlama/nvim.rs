@@ -61,6 +61,8 @@ const UPD_NOT_VALID: c_int = 40;
 // ---------------------------------------------------------------------------
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Window field accessors
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_handle(wp: WinHandle) -> c_int;
@@ -179,8 +181,6 @@ extern "C" {
     fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
 
     // Globals
-    fn nvim_get_rows() -> c_int;
-    fn nvim_get_columns() -> c_int;
     fn nvim_get_p_ch() -> i64;
 
     // redraw_later
@@ -340,7 +340,7 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
         ag
     } else {
         if relative == K_FLOAT_RELATIVE_LASTSTATUS {
-            let rows = nvim_get_rows();
+            let rows = Rows;
             let p_ch = nvim_get_p_ch() as c_int;
             row += f64::from(rows - p_ch - last_stl_height(0));
         } else if relative == K_FLOAT_RELATIVE_TABLINE {
@@ -391,8 +391,8 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
     comp_row += nvim_screengrid_get_comp_row(anchor_grid);
     comp_col += nvim_screengrid_get_comp_col(anchor_grid);
 
-    let rows = nvim_get_rows();
-    let columns = nvim_get_columns();
+    let rows = Rows;
+    let columns = Columns;
     let max_row = rows - height_outer - above_ch;
     comp_row = comp_row.min(max_row).max(0);
 

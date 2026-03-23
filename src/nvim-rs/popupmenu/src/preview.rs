@@ -10,6 +10,8 @@ use crate::PUM_STATE;
 
 // C accessor functions for preview window operations.
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     /// Check if selected item matches current completion selection.
     fn rs_compl_match_curr_select(selected: c_int) -> c_int;
     /// Block autocmds.
@@ -47,9 +49,7 @@ extern "C" {
 // C accessor functions for adjust_info_position.
 extern "C" {
     /// Get `Columns`.
-    fn nvim_get_Columns() -> c_int;
     /// Get `Rows`.
-    fn nvim_get_Rows() -> c_int;
     /// Get line count for window's buffer (from `window_shim.c`).
     fn nvim_win_buf_line_count(wp: *mut WinHandle) -> c_int;
     /// `plines_m_win` directly.
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
     let pum_col = PUM_STATE.col;
     let pum_width = PUM_STATE.width;
     let pum_scrollbar = PUM_STATE.scrollbar;
-    let columns = nvim_get_Columns();
+    let columns = Columns;
     let pum_above = PUM_STATE.above != 0;
     let pum_row = PUM_STATE.row;
 
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn rs_pum_adjust_info_position(wp: *mut WinHandle, width: 
 
     let anchor = if pum_above { K_FLOAT_ANCHOR_SOUTH } else { 0 };
     let line_count = nvim_win_buf_line_count(wp);
-    let rows = nvim_get_Rows();
+    let rows = Rows;
     let height = plines_m_win(wp, 1, line_count, rows);
     let row = if pum_above { pum_row + height } else { pum_row };
 

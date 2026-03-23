@@ -356,30 +356,6 @@ pub unsafe extern "C" fn set_topframe(fr: *mut crate::Frame) {
     topframe = fr;
 }
 
-// -------------------------------------------------------------------------
-// Screen dimension accessors
-// -------------------------------------------------------------------------
-
-/// Get Rows (number of rows in the screen).
-///
-/// # Safety
-/// Accesses C global Rows.
-#[must_use]
-#[export_name = "nvim_get_Rows"]
-pub unsafe extern "C" fn get_rows() -> c_int {
-    Rows
-}
-
-/// Get Columns (number of columns in the screen).
-///
-/// # Safety
-/// Accesses C global Columns.
-#[must_use]
-#[export_name = "nvim_get_Columns"]
-pub unsafe extern "C" fn get_columns() -> c_int {
-    Columns
-}
-
 /// Get ROWS_AVAIL = Rows - p_ch - rs_tabline_height() - rs_global_stl_height().
 ///
 /// # Safety

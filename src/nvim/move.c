@@ -328,11 +328,6 @@ int nvim_get_p_sol(void)
   return p_sol ? 1 : 0;
 }
 
-/// Get Rows value (accessor for Rust).
-int nvim_get_rows_val(void)
-{
-  return Rows;
-}
 
 /// Get w_p_scr (scroll option) value (accessor for Rust).
 OptInt nvim_win_get_p_scr(win_T *wp)

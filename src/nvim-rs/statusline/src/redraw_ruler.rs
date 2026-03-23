@@ -35,6 +35,8 @@ thread_local! {
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Window accessors (direct link to window_shim.c)
     #[link_name = "nvim_win_get_status_height"]
     fn nvim_stl_win_get_status_height(wp: WinHandle) -> c_int;
@@ -68,10 +70,6 @@ extern "C" {
     #[link_name = "nvim_get_p_ch"]
     fn nvim_stl_get_p_ch() -> i64;
     fn nvim_stl_get_p_ruf() -> *mut c_char;
-    #[link_name = "nvim_get_Columns"]
-    fn nvim_stl_get_Columns() -> c_int;
-    #[link_name = "nvim_get_Rows"]
-    fn nvim_stl_get_Rows() -> c_int;
     fn nvim_stl_get_ru_col() -> c_int;
     static mut State: c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
@@ -167,7 +165,7 @@ pub unsafe fn redraw_ruler() {
             DID_SHOW_EXT_RULER.set(false);
         } else if did_ruler_col > 0 {
             nvim_stl_set_msg_col(did_ruler_col);
-            nvim_stl_set_msg_row(nvim_stl_get_Rows() - 1);
+            nvim_stl_set_msg_row(Rows - 1);
             nvim_stl_msg_clr_eos();
         }
         DID_RULER_COL.set(-1);
@@ -200,7 +198,7 @@ pub unsafe fn redraw_ruler() {
     let width = if status_height != 0 {
         nvim_win_get_w_width(wp)
     } else {
-        nvim_stl_get_Columns()
+        Columns
     };
     let fillchar = if part_of_status {
         nvim_stl_fillchar_status(&mut group, wp)
@@ -274,7 +272,7 @@ pub unsafe fn redraw_ruler() {
         n1 += 1;
     }
 
-    let columns = nvim_stl_get_Columns();
+    let columns = Columns;
     let ru_col = nvim_stl_get_ru_col();
     let mut this_ru_col = ru_col - (columns - width);
     // Never use more than half the window/screen width
@@ -345,7 +343,7 @@ pub unsafe fn redraw_ruler() {
             byte_pos += nvim_stl_utfc_ptr2len(ptr) as usize;
         }
 
-        let rows = nvim_stl_get_Rows();
+        let rows = Rows;
         nvim_stl_msg_grid_line_start(rows - 1);
         let did_ruler_col = off + this_ru_col;
         DID_RULER_COL.set(did_ruler_col);

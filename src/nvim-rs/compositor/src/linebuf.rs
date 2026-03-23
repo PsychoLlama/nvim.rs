@@ -20,6 +20,8 @@ use crate::{SattrT, ScharT, ScreenGridHandle};
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Line buffer accessors
     fn nvim_comp_get_linebuf_char() -> *mut ScharT;
     fn nvim_comp_get_linebuf_attr() -> *mut SattrT;
@@ -555,7 +557,6 @@ extern "C" {
     fn nvim_get_msg_sep_row() -> c_int;
 
     // Global state
-    fn nvim_get_columns() -> c_int;
     fn nvim_get_hl_attr_active() -> *const c_int;
 
     // schar_from_char for the braille character
@@ -778,7 +779,7 @@ fn compose_line_impl(row: i64, mut startcol: i64, mut endcol: i64, mut flags: c_
         }
 
         // Clear wrap flag if not at full width
-        let columns = nvim_get_columns();
+        let columns = Columns;
         if last_grid.is_null()
             || (last_grid.0 != default_grid.0
                 && !(nvim_screengrid_get_comp_col(last_grid) == 0
@@ -1046,7 +1047,6 @@ extern "C" {
     fn nvim_set_msg_sep_row(row: c_int);
 
     // Global dimensions
-    fn nvim_get_rows() -> c_int;
 
     // schar_from_buf
     fn rs_schar_from_buf(buf: *const u8, len: usize) -> ScharT;
@@ -1116,8 +1116,8 @@ fn ui_comp_msg_set_pos_impl(
 
         let msg_current_row = nvim_get_msg_current_row();
         let msg_was_scrolled = nvim_get_msg_was_scrolled();
-        let rows = i64::from(nvim_get_rows());
-        let columns = i64::from(nvim_get_columns());
+        let rows = i64::from(Rows);
+        let columns = i64::from(Columns);
         let default_grid = nvim_get_default_grid();
         let default_cols = i64::from(nvim_screengrid_get_cols(default_grid));
 

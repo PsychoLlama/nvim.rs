@@ -12,6 +12,7 @@ use crate::{BufHandle, HLF_W, VV_WARNINGMSG};
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
     static mut redraw_tabline: bool;
     static mut need_maketitle: bool;
 }
@@ -71,7 +72,6 @@ extern "C" {
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_get_msg_row() -> c_int;
-    fn nvim_get_rows() -> c_int;
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(val: c_int);
 
@@ -163,7 +163,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         // be after the mode message.
         nvim_msg_start();
 
-        if nvim_get_msg_row() == nvim_get_rows() - 1 {
+        if nvim_get_msg_row() == Rows - 1 {
             nvim_set_msg_col(col);
         }
 
@@ -191,7 +191,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         nvim_buf_set_b_did_warn(buf, true);
         nvim_set_redraw_cmdline(false); // don't redraw and erase the message
 
-        if nvim_get_msg_row() < nvim_get_rows() - 1 {
+        if nvim_get_msg_row() < Rows - 1 {
             nvim_showmode();
         }
     }

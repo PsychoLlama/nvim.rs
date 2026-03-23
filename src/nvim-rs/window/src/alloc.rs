@@ -28,6 +28,8 @@ use crate::{TabpageHandle, WinHandle};
 
 // C accessor functions for window list manipulation.
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Getters
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
@@ -353,7 +355,6 @@ extern "C" {
     fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
 
     /// Get Columns global.
-    fn nvim_get_Columns() -> c_int;
 
     /// Set w_scbind_pos.
     fn nvim_win_set_scbind_pos(wp: WinHandle, val: c_int);
@@ -425,7 +426,7 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
     }
 
     nvim_win_set_wincol(wp, 0);
-    nvim_win_set_field_width(wp, nvim_get_Columns());
+    nvim_win_set_field_width(wp, Columns);
 
     // Position display and cursor at top of file.
     nvim_win_set_topline(wp, 1);

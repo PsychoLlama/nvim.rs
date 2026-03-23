@@ -44,6 +44,8 @@ type ColnrT = i32;
 // =============================================================================
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     // Window validity flags
     fn nvim_win_get_valid(wp: WinHandle) -> c_int;
     fn nvim_win_set_valid(wp: WinHandle, val: c_int);
@@ -3513,7 +3515,6 @@ extern "C" {
     fn nvim_one_window() -> c_int;
     static mut p_window: OptInt;
     fn nvim_get_p_sol() -> c_int;
-    fn nvim_get_rows_val() -> c_int;
 
     // Scroll option accessors
     fn nvim_win_get_p_scr(wp: WinHandle) -> OptInt;
@@ -3603,7 +3604,7 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
         }
     } else {
         // Scroll [count] times 'window' or current window height lines.
-        let rows = nvim_get_rows_val();
+        let rows = Rows;
         let one_window = nvim_one_window() != 0;
 
         let scroll_amount = if one_window && p_window > 0 && p_window < (rows - 1).into() {

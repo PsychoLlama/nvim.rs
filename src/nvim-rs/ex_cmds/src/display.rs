@@ -386,6 +386,8 @@ pub fn calculate_z_range(
 }
 
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     fn atol(s: *const std::ffi::c_char) -> c_long;
 }
 
@@ -618,8 +620,8 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
         emsg, msg_putchar, nvim_curbuf_get_b_ml_ml_line_count, nvim_curwin_get_cursor_lnum,
         nvim_curwin_get_p_scr, nvim_curwin_get_view_height, nvim_curwin_set_cursor_col,
         nvim_curwin_set_cursor_lnum, nvim_exarg_get_addr_count, nvim_exarg_get_arg,
-        nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_get_Columns,
-        nvim_get_Rows, nvim_is_one_window, nvim_set_ex_no_reprint, p_window,
+        nvim_exarg_get_flags, nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_is_one_window,
+        nvim_set_ex_no_reprint, p_window,
     };
 
     let lnum = nvim_exarg_get_line2(eap);
@@ -627,7 +629,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
     // Vi compatible: ":z!" uses display height, without a count uses 'scroll'
     let forceit = nvim_exarg_get_forceit(eap) != 0;
     let mut bigness: i64 = if forceit {
-        i64::from(nvim_get_Rows()) - 1
+        i64::from(Rows) - 1
     } else if nvim_is_one_window() != 0 {
         nvim_curwin_get_p_scr() * 2
     } else {
@@ -750,7 +752,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
     for i in range.start..=range.end {
         if range.show_separator && i == lnum {
             msg_putchar(b'\n' as c_int);
-            let columns = nvim_get_Columns();
+            let columns = Columns;
             for _j in 1..columns {
                 msg_putchar(b'-' as c_int);
             }
@@ -765,7 +767,7 @@ pub unsafe extern "C" fn rs_ex_z(eap: *mut ExArgHandle) {
 
         if range.show_separator && i == lnum {
             msg_putchar(b'\n' as c_int);
-            let columns = nvim_get_Columns();
+            let columns = Columns;
             for _j in 1..columns {
                 msg_putchar(b'-' as c_int);
             }

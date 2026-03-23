@@ -16,6 +16,7 @@ use crate::{OptInt, OptScope, OptValType, SetPrefix, FAIL, OK};
 // =============================================================================
 
 extern "C" {
+    static Columns: c_int;
     static mut got_int: bool;
     // State accessors
     fn nvim_get_p_verbose() -> OptInt;
@@ -1185,7 +1186,6 @@ extern "C" {
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     fn os_breakcheck();
-    fn nvim_get_Columns() -> c_int;
     static mut msg_col: c_int;
     fn nvim_get_namebuff() -> *mut c_char;
     fn nvim_excmds_curbufIsChanged() -> c_int;
@@ -1341,7 +1341,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
 
             let len: c_int;
             if (opt_flags & set_flags::OPT_ONECOLUMN) != 0 {
-                len = nvim_get_Columns();
+                len = Columns;
             } else if nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_BOOLEAN) != 0 {
                 len = 1; // a toggle option fits always
             } else {
@@ -1357,7 +1357,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
         }
 
         let rows: c_int = if run == 1 {
-            let columns = nvim_get_Columns();
+            let columns = Columns;
             let mut cols = (columns + GAP - 3) / INC;
             if cols == 0 {
                 cols = 1;

@@ -9,6 +9,7 @@ use crate::PUM_STATE;
 
 // External functions needed (not PumState fields)
 extern "C" {
+    static Columns: c_int;
     static mut State: c_int;
     /// Set the `must_redraw_pum` global variable.
     fn nvim_set_must_redraw_pum(val: c_int);
@@ -363,7 +364,6 @@ extern "C" {
     /// Get `w_p_rl` for a window.
     fn nvim_win_get_w_p_rl(wp: *mut WinHandle) -> c_int;
     /// Get `Columns`.
-    fn nvim_get_Columns() -> c_int;
     /// Set selected item (Rust function via extern "C").
     fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int;
     /// Get border width from Rust.
@@ -625,7 +625,7 @@ pub unsafe extern "C" fn rs_pum_display(
         // Adjust for border overflow
         let pum_col = PUM_STATE.col;
         let pum_width = PUM_STATE.width;
-        let columns = nvim_get_Columns();
+        let columns = Columns;
         if pum_col + border_width + pum_width > columns {
             PUM_STATE.col = pum_col - border_width;
         }

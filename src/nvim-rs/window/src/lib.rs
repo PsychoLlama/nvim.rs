@@ -260,6 +260,8 @@ pub type FramePtr = *mut Frame;
 // These are defined in window.c and provide safe access to win_T fields.
 // Note: Frame accessors are no longer needed since Frame is now repr(C).
 extern "C" {
+    static Rows: c_int;
+    static Columns: c_int;
     /// Get the `w_locked` field from a window.
     fn nvim_win_get_locked(win: WinHandle) -> c_int;
 
@@ -1575,10 +1577,8 @@ pub extern "C" fn rs_win_comp_pos() -> c_int {
 
 extern "C" {
     /// Get the global Rows value.
-    fn nvim_get_Rows() -> c_int;
 
     /// Get the global Columns value.
-    fn nvim_get_Columns() -> c_int;
 
     /// Set the w_height field of a window (raw field accessor).
     fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
@@ -1761,10 +1761,10 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                     frp = fr.fr_next;
                 }
 
-                if frame.fr_width == nvim_get_Columns() {
+                if frame.fr_width == Columns {
                     let wp = lastwin_nofloating_impl();
                     let p_ch = nvim_get_window_p_ch() as c_int;
-                    room_cmdline = nvim_get_Rows()
+                    room_cmdline = Rows
                         - p_ch
                         - global_stl_height()
                         - (nvim_win_get_winrow(wp)
@@ -1779,7 +1779,7 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                 if height <= room + room_cmdline {
                     break;
                 }
-                if run == 2 || frame.fr_width == nvim_get_Columns() {
+                if run == 2 || frame.fr_width == Columns {
                     height = room + room_cmdline;
                     break;
                 }
@@ -2152,7 +2152,7 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
             let p_ch = nvim_get_window_p_ch() as c_int;
             let min_set_ch = nvim_get_min_set_ch() as c_int;
 
-            let mut r = nvim_get_Rows() - cmdline_row;
+            let mut r = Rows - cmdline_row;
             if !(*curfr).fr_next.is_null() {
                 r -= p_ch + global_stl_height();
             } else if min_set_ch > 0 {

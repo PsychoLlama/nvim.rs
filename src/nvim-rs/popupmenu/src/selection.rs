@@ -17,6 +17,7 @@ pub struct TabHandle {
 
 // C accessor functions for selection/preview operations.
 extern "C" {
+    static Rows: c_int;
     // COT flags
     fn rs_get_cot_flags() -> c_uint;
 
@@ -25,7 +26,6 @@ extern "C" {
     fn nvim_pum_win_config_float_hide(wp: *mut WinHandle);
 
     // Global state
-    fn nvim_get_Rows() -> c_int;
 
     // Autocmd / redraw control
     fn block_autocmds();
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn rs_pum_set_selected(n: c_int, repeat: c_int) -> c_int {
         // Skip this for command-window when 'completeopt' contains "preview".
         // NOTE: Be very careful not to sync undo!
         if has_info(pum_selected)
-            && nvim_get_Rows() > 10
+            && Rows > 10
             && repeat <= 1
             && (cur_cot_flags & (K_OPT_COT_FLAG_PREVIEW | K_OPT_COT_FLAG_POPUP)) != 0
             && !((cur_cot_flags & K_OPT_COT_FLAG_PREVIEW) != 0 && cmdwin_type != 0)
