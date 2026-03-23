@@ -207,7 +207,6 @@ extern int rs_emsg_not_now(void);
 // Forward declarations for static functions used by Phase 4/5 accessors below
 static char *get_emsg_source(void);
 static char *get_emsg_lnum(void);
-static bool other_sourcing_name(void);
 static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
@@ -618,36 +617,9 @@ int smsg_keep(int hl_id, const char *s, ...)
   return msg_keep(IObuff, hl_id, true, false);
 }
 
-// Remember the last sourcing name/lnum used in an error message, so that it
-// isn't printed each time when it didn't change.
-extern int last_sourcing_lnum;  // owned by Rust (error.rs)
-static char *last_sourcing_name = NULL;
-
-// Phase 1: sourcing state accessors for reset_last_sourcing (Rust implementation)
-void nvim_clear_last_sourcing_name(void) { XFREE_CLEAR(last_sourcing_name); }
-
-// Phase 2 (msg_source): additional sourcing accessors
-int nvim_other_sourcing_name(void) { return other_sourcing_name() ? 1 : 0; }
-int nvim_sourcing_name_is_null(void) { return SOURCING_NAME == NULL ? 1 : 0; }
-void nvim_update_last_sourcing_name(void)
-{
-  XFREE_CLEAR(last_sourcing_name);
-  if (SOURCING_NAME != NULL) {
-    last_sourcing_name = xstrdup(SOURCING_NAME);
-  }
-}
-
-/// @return  true if "SOURCING_NAME" differs from "last_sourcing_name".
-static bool other_sourcing_name(void)
-{
-  if (HAVE_SOURCING_INFO && SOURCING_NAME != NULL) {
-    if (last_sourcing_name != NULL) {
-      return strcmp(SOURCING_NAME, last_sourcing_name) != 0;
-    }
-    return true;
-  }
-  return false;
-}
+// last_sourcing_lnum and last_sourcing_name owned by Rust (error.rs)
+extern int last_sourcing_lnum;
+extern char *last_sourcing_name;
 
 /// Get the message about the source, as used for an error message
 ///
@@ -656,7 +628,10 @@ static bool other_sourcing_name(void)
 static char *get_emsg_source(void)
   FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (HAVE_SOURCING_INFO && SOURCING_NAME != NULL && other_sourcing_name()) {
+  bool other_name = HAVE_SOURCING_INFO && SOURCING_NAME != NULL
+                    && (last_sourcing_name == NULL
+                        || strcmp(SOURCING_NAME, last_sourcing_name) != 0);
+  if (other_name) {
     char *sname = estack_sfile(ESTACK_NONE);
     char *tofree = sname;
 
@@ -683,8 +658,11 @@ static char *get_emsg_lnum(void)
 {
   // lnum is 0 when executing a command from the command line
   // argument, we don't want a line number then
+  bool other_name = HAVE_SOURCING_INFO && SOURCING_NAME != NULL
+                    && (last_sourcing_name == NULL
+                        || strcmp(SOURCING_NAME, last_sourcing_name) != 0);
   if (SOURCING_NAME != NULL
-      && (other_sourcing_name() || SOURCING_LNUM != last_sourcing_lnum)
+      && (other_name || SOURCING_LNUM != last_sourcing_lnum)
       && SOURCING_LNUM != 0) {
     const char *const p = _("line %4" PRIdLINENR ":");
     const size_t buf_len = 20 + strlen(p);

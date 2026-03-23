@@ -445,22 +445,20 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
 #[no_mangle]
 pub static mut last_sourcing_lnum: c_int = 0;
 
+/// Last sourcing name (replaces C static last_sourcing_name in message.c)
+#[no_mangle]
+pub static mut last_sourcing_name: *mut std::ffi::c_char = std::ptr::null_mut();
+
 // ============================================================================
 // Phase 423: Error Message Output Functions
 // ============================================================================
 
 extern "C" {
-    // Phase 1: sourcing state accessors for reset_last_sourcing
-    fn nvim_clear_last_sourcing_name();
-    // last_sourcing_lnum: Rust-owned static (error.rs)
-
-    // Accessors for msg_source implementation
-    fn nvim_other_sourcing_name() -> c_int;
-    fn nvim_sourcing_name_is_null() -> c_int;
-    fn nvim_update_last_sourcing_name();
+    // last_sourcing_lnum/last_sourcing_name: Rust-owned statics (error.rs)
     static mut no_wait_return: c_int;
     fn msg_putchar_hl(c: c_int, hl_id: c_int);
     fn redirecting() -> c_int;
+    fn strcmp(s1: *const std::ffi::c_char, s2: *const std::ffi::c_char) -> c_int;
 
     // Accessors for emsg_multiline implementation
     fn nvim_cause_errthrow(
@@ -769,9 +767,19 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
     }
 
     // remember the last sourcing name printed, also when it's empty
-    if nvim_sourcing_name_is_null() != 0 || nvim_other_sourcing_name() != 0 {
-        nvim_update_last_sourcing_name();
-        if nvim_sourcing_name_is_null() == 0 && redirecting() == 0 {
+    let sourcing_name = nvim_get_sourcing_name();
+    let sourcing_is_null = sourcing_name.is_null();
+    let other_name = !sourcing_is_null
+        && (last_sourcing_name.is_null() || strcmp(sourcing_name, last_sourcing_name) != 0);
+    if sourcing_is_null || other_name {
+        // update last_sourcing_name
+        xfree(last_sourcing_name.cast());
+        last_sourcing_name = if sourcing_name.is_null() {
+            std::ptr::null_mut()
+        } else {
+            nvim_xstrdup(sourcing_name)
+        };
+        if !sourcing_is_null && redirecting() == 0 {
             msg_putchar_hl(c_int::from(b'\n'), hl_id);
         }
     }
@@ -794,7 +802,8 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 /// Calls C accessor functions that manage allocated memory.
 #[export_name = "reset_last_sourcing"]
 pub unsafe extern "C" fn rs_reset_last_sourcing() {
-    nvim_clear_last_sourcing_name();
+    xfree(last_sourcing_name.cast());
+    last_sourcing_name = std::ptr::null_mut();
     last_sourcing_lnum = 0;
 }
 
