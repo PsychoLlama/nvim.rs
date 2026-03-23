@@ -91,7 +91,7 @@ extern "C" {
     #[link_name = "edit_submode_highl"]
     static mut g_edit_submode_highl: c_int;
     fn nvim_clear_compl_orig_extmarks();
-    fn nvim_cpt_sources_clear();
+    // (nvim_cpt_sources_clear: inlined in vars.rs Phase 23+)
     fn nvim_set_completed_item_empty();
 }
 
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     nvim_clear_compl_orig_extmarks();
     crate::vars::nvim_compl_clear_orig_text();
     crate::vars::nvim_set_compl_enter_selects(0);
-    nvim_cpt_sources_clear();
+    crate::vars::nvim_cpt_sources_clear();
     crate::vars::nvim_set_compl_autocomplete(0);
     crate::vars::nvim_set_compl_from_nonkeyword(0);
     crate::vars::nvim_set_compl_num_bests(0);
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn rs_ins_compl_restart() {
     crate::vars::nvim_set_compl_matches(0);
     crate::vars::nvim_set_compl_cont_status(0);
     crate::vars::nvim_set_compl_cont_mode(0);
-    nvim_cpt_sources_clear();
+    crate::vars::nvim_cpt_sources_clear();
     crate::vars::nvim_set_compl_autocomplete(0);
     crate::vars::nvim_set_compl_from_nonkeyword(0);
     crate::vars::nvim_set_compl_num_bests(0);

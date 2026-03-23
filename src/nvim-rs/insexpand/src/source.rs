@@ -280,8 +280,8 @@ const CARET: c_char = b'^' as c_char;
 
 extern "C" {
     // cpt_sources_array management
-    fn nvim_cpt_sources_alloc(count: c_int);
-    // (cpt_sources_array accessors: inlined in vars.rs Phase 23)
+    // (nvim_cpt_sources_alloc: inlined in vars.rs)
+    // (cpt_sources_array accessors and nvim_cpt_sources_alloc: inlined in vars.rs Phase 23)
 
     // Option parsing helpers
     fn nvim_copy_option_part_ffi(
@@ -327,7 +327,7 @@ extern "C" {
 )]
 pub unsafe extern "C" fn rs_setup_cpt_sources() {
     let count = rs_get_cpt_sources_count();
-    nvim_cpt_sources_alloc(count);
+    crate::vars::nvim_cpt_sources_alloc(count);
     if count == 0 {
         return;
     }

@@ -699,3 +699,36 @@ pub unsafe fn nvim_cpt_sources_set_refresh_always(idx: c_int, val: c_int) {
         (*cpt_sources_array.add(idx as usize)).cs_refresh_always = val != 0;
     }
 }
+
+/// Allocate (or reset) cpt_sources_array for `count` sources.
+#[inline]
+pub unsafe fn nvim_cpt_sources_alloc(count: c_int) {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+        fn xcalloc(count: usize, size: usize) -> *mut u8;
+    }
+    if !cpt_sources_array.is_null() {
+        xfree(cpt_sources_array.cast());
+        cpt_sources_array = core::ptr::null_mut();
+    }
+    cpt_sources_index = -1;
+    cpt_sources_count = 0;
+    if count > 0 {
+        cpt_sources_array = xcalloc(count as usize, core::mem::size_of::<CptSourceT>()).cast();
+        cpt_sources_count = count;
+    }
+}
+
+/// Free and clear cpt_sources_array; reset cpt_sources_index and cpt_sources_count.
+#[inline]
+pub unsafe fn nvim_cpt_sources_clear() {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+    }
+    if !cpt_sources_array.is_null() {
+        xfree(cpt_sources_array.cast());
+        cpt_sources_array = core::ptr::null_mut();
+    }
+    cpt_sources_index = -1;
+    cpt_sources_count = 0;
+}

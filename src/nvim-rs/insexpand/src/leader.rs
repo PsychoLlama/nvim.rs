@@ -752,7 +752,7 @@ extern "C" {
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
     fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
     // (nvim_get_cpt_source_cs_flag, nvim_get_cpt_source_cs_max_matches: inlined in vars.rs Phase 23)
-    fn xcalloc(count: usize, size: usize) -> *mut c_int;
+    fn xcalloc(count: usize, size: usize) -> *mut u8;
     // nvim_xfree already declared above
     fn nvim_get_p_inf() -> c_int;
     fn nvim_ignorecase(pat: *const c_char) -> bool;
@@ -800,7 +800,8 @@ pub unsafe extern "C" fn rs_find_common_prefix(
         return std::ptr::null();
     }
 
-    let match_count = xcalloc(sources_count as usize, std::mem::size_of::<c_int>());
+    #[allow(clippy::cast_ptr_alignment)]
+    let match_count = xcalloc(sources_count as usize, std::mem::size_of::<c_int>()).cast::<c_int>();
 
     // Clear the adjusted-leader cache
     let _ = rs_get_leader_for_startcol_data(ComplMatch::null(), 1);

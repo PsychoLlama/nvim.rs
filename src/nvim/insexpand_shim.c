@@ -1197,7 +1197,7 @@ const char *nvim_curbuf_get_b_p_cpt(void) { return curbuf->b_p_cpt; }
 // nvim_set_cpt_sources_start_tv: deleted (Phase 23, inlined in vars.rs)
 void nvim_clear_compl_orig_extmarks(void) { kv_destroy(compl_orig_extmarks); }
 // nvim_compl_clear_orig_text: deleted (Phase 21, inlined in vars.rs)
-void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
+// nvim_cpt_sources_clear: deleted (Phase 23+, inlined in vars.rs)
 void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
 
 void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
@@ -2614,17 +2614,7 @@ int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int 
                        NULL, score);
 }
 
-// Accessors for Phase 5 (pass 12): cpt-source migration
-void nvim_cpt_sources_alloc(int count)
-{
-  XFREE_CLEAR(cpt_sources_array);
-  cpt_sources_index = -1;
-  cpt_sources_count = 0;
-  if (count > 0) {
-    cpt_sources_array = xcalloc((size_t)count, sizeof(cpt_source_T));
-    cpt_sources_count = count;
-  }
-}
+// nvim_cpt_sources_alloc: deleted (Phase 23+, inlined in vars.rs)
 // nvim_cpt_sources_set_flag: deleted (Phase 23, inlined in vars.rs)
 // nvim_cpt_sources_set_max_matches: deleted (Phase 23, inlined in vars.rs)
 // nvim_cpt_sources_set_startcol: deleted (Phase 23, inlined in vars.rs)
