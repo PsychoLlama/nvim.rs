@@ -343,7 +343,7 @@ compl_T *compl_shown_match = NULL;
 compl_T *compl_old_match = NULL;
 
 /// list used to store the compl_T which have the max score
-static compl_T **compl_best_matches = NULL;
+compl_T **compl_best_matches = NULL;
 int compl_num_bests = 0;
 
 /// After using a cursor key <Enter> selects a match in the popup menu,
@@ -1935,7 +1935,7 @@ void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl();
 // Accessors for ins_compl_stop (Phase 3)
 // nvim_get_compl_curr_match_str_data: deleted (Phase 15, inlined in match_list.rs)
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
-void nvim_clear_compl_best_matches(void) { compl_best_matches = 0; }
+// nvim_clear_compl_best_matches: deleted (Phase 24, inlined in vars.rs)
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 // Compound accessors for ins_compl_stop (Phase 3)
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }

@@ -100,6 +100,8 @@ extern "C" {
     static mut compl_curr_match: *mut core::ffi::c_void;
     static mut compl_shown_match: *mut core::ffi::c_void;
     static mut compl_old_match: *mut core::ffi::c_void;
+    // compl_T** - treated as opaque pointer-to-pointer
+    static mut compl_best_matches: *mut core::ffi::c_void;
 
     // --- window/buffer pointers (opaque handles) ---
     static mut compl_curr_win: *mut core::ffi::c_void;
@@ -458,6 +460,12 @@ pub unsafe fn nvim_get_compl_old_match() -> *mut c_void {
 #[inline]
 pub unsafe fn nvim_set_compl_old_match(m: *mut c_void) {
     compl_old_match = m;
+}
+
+/// Clear compl_best_matches (set to NULL). Replaces C nvim_clear_compl_best_matches.
+#[inline]
+pub unsafe fn nvim_clear_compl_best_matches() {
+    compl_best_matches = core::ptr::null_mut();
 }
 
 // ============================================================================

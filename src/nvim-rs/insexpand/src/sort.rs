@@ -59,7 +59,7 @@ extern "C" {
     // For rs_fuzzy_longest_match
     #[link_name = "ins_redraw"]
     fn nvim_ins_redraw(ready: c_int);
-    fn nvim_clear_compl_best_matches();
+    // nvim_clear_compl_best_matches: inlined in vars.rs (Phase 24)
     fn rs_ins_compl_delete(new_leader: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_get_compl_len() -> c_int;
@@ -307,7 +307,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
 
     if best_matches.is_empty() {
         crate::vars::nvim_set_compl_num_bests(0);
-        nvim_clear_compl_best_matches();
+        crate::vars::nvim_clear_compl_best_matches();
         return;
     }
 
@@ -376,7 +376,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
         nvim_xfree(dup.cast::<u8>());
     }
 
-    nvim_clear_compl_best_matches();
+    crate::vars::nvim_clear_compl_best_matches();
     crate::vars::nvim_set_compl_num_bests(0);
 }
 

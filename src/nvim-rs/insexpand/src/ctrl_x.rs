@@ -150,7 +150,7 @@ extern "C" {
     fn pum_visible() -> c_int;
     // (nvim_get_compl_curr_match_str_data: inlined in match_list.rs)
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
-    fn nvim_clear_compl_best_matches();
+    // nvim_clear_compl_best_matches: inlined in vars.rs (Phase 24)
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_cursor_on_nul() -> c_int;
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     nvim_set_edit_submode_null_if_set();
     crate::vars::nvim_set_compl_autocomplete(0);
     crate::vars::nvim_set_compl_from_nonkeyword(0);
-    nvim_clear_compl_best_matches();
+    crate::vars::nvim_clear_compl_best_matches();
     crate::vars::nvim_set_compl_ins_end_col(0);
 
     if c == CTRL_C && nvim_get_cmdwin_type() != 0 {
