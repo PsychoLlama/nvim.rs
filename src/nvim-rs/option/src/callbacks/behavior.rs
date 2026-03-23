@@ -23,6 +23,10 @@ extern "C" {
     static mut readonlymode: bool;
     static mut km_stopsel: bool;
     static mut km_startsel: bool;
+    static mut curbuf: BufHandle;
+    static mut curwin: WinHandle;
+    static mut firstwin: WinHandle;
+    static mut lastwin: WinHandle;
 }
 
 // =============================================================================
@@ -71,9 +75,8 @@ extern "C" {
     fn nvim_u_sync(force: bool);
 
     // State accessors
-    fn nvim_callback_is_one_window() -> c_int;
-    fn nvim_callback_is_curbuf_help() -> c_int;
-    fn nvim_callback_get_curwin_height() -> c_int;
+    fn nvim_buf_get_b_help(buf: BufHandle) -> c_int;
+    fn nvim_ses_win_get_height(wp: WinHandle) -> c_int;
     // Buffer accessors
     fn nvim_buf_get_p_swf(buf: BufHandle) -> c_int;
 
@@ -88,7 +91,7 @@ extern "C" {
     // Additional window/option accessors for full callbacks
     #[link_name = "rs_win_setwidth"]
     fn win_setwidth(width: c_int);
-    fn nvim_callback_get_curwin_width() -> c_int;
+    fn nvim_ses_win_get_width(wp: WinHandle) -> c_int;
 
     // Modified/readonly callback accessors
     fn save_file_ff(buf: BufHandle);
@@ -266,19 +269,19 @@ fn get_equalalways() -> bool {
 /// Check if there's only one window.
 #[inline]
 fn is_one_window() -> bool {
-    unsafe { nvim_callback_is_one_window() != 0 }
+    unsafe { firstwin == lastwin }
 }
 
 /// Check if current buffer is help buffer.
 #[inline]
 fn is_curbuf_help() -> bool {
-    unsafe { nvim_callback_is_curbuf_help() != 0 }
+    unsafe { nvim_buf_get_b_help(curbuf) != 0 }
 }
 
 /// Get current window height.
 #[inline]
 fn get_curwin_height() -> c_int {
-    unsafe { nvim_callback_get_curwin_height() }
+    unsafe { nvim_ses_win_get_height(curwin) }
 }
 
 /// Get 'helpheight' option value.
@@ -486,7 +489,7 @@ pub unsafe extern "C" fn rs_did_set_winheight(_args: *mut c_void) -> CallbackRes
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_did_set_winwidth(_args: *mut c_void) -> CallbackResult {
     let wiw = p_wiw as c_int;
-    if !is_one_window() && nvim_callback_get_curwin_width() < wiw {
+    if !is_one_window() && nvim_ses_win_get_width(curwin) < wiw {
         win_setwidth(wiw);
     }
     callback_ok()

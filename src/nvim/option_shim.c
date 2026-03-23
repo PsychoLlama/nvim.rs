@@ -416,11 +416,6 @@ void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidt
 int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 
-// Behavior callback accessors
-int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
-int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
-int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
-int nvim_callback_get_curwin_width(void) { return curwin->w_width; }
 // Buffer accessors for behavior callbacks
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
