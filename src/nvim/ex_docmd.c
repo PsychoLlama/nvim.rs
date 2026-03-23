@@ -366,6 +366,8 @@ extern void nvim_docmd_handle_did_throw_impl(void);
 extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
 extern void nvim_docmd_apply_cmdmod_impl(cmdmod_T *cmod);
 extern void nvim_docmd_undo_cmdmod_impl(cmdmod_T *cmod);
+extern bool nvim_docmd_save_current_state_impl(save_state_T *sst);
+extern void nvim_docmd_restore_current_state_impl(save_state_T *sst);
 extern void nvim_docmd_ex_find_impl(exarg_T *eap);
 extern void nvim_docmd_ex_syncbind_impl(exarg_T *eap);
 extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
@@ -2351,56 +2353,6 @@ extern void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged);
 /// Save the current State and go to Normal mode.
 ///
 /// @return  true if the typeahead could be saved.
-bool nvim_docmd_save_current_state_impl(save_state_T *sst)
-  FUNC_ATTR_NONNULL_ALL
-{
-  sst->save_msg_scroll = msg_scroll;
-  sst->save_restart_edit = restart_edit;
-  sst->save_msg_didout = msg_didout;
-  sst->save_State = State;
-  sst->save_finish_op = finish_op;
-  sst->save_opcount = opcount;
-  sst->save_reg_executing = reg_executing;
-  sst->save_pending_end_reg_executing = pending_end_reg_executing;
-
-  msg_scroll = false;   // no msg scrolling in Normal mode
-  restart_edit = 0;     // don't go to Insert mode
-
-  // Save the current typeahead.  This is required to allow using ":normal"
-  // from an event handler and makes sure we don't hang when the argument
-  // ends with half a command.
-  save_typeahead(&sst->tabuf);
-  return sst->tabuf.typebuf_valid;
-}
-
-void nvim_docmd_restore_current_state_impl(save_state_T *sst)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Restore the previous typeahead.
-  restore_typeahead(&sst->tabuf);
-
-  msg_scroll = sst->save_msg_scroll;
-  if (force_restart_edit) {
-    force_restart_edit = false;
-  } else {
-    // Some function (terminal_enter()) was aware of ex_normal and decided to
-    // override the value of restart_edit anyway.
-    restart_edit = sst->save_restart_edit;
-  }
-  finish_op = sst->save_finish_op;
-  opcount = sst->save_opcount;
-  reg_executing = sst->save_reg_executing;
-  pending_end_reg_executing = sst->save_pending_end_reg_executing;
-
-  // don't reset msg_didout now
-  msg_didout |= sst->save_msg_didout;
-
-  // Restore the state (needed when called from a function executed for
-  // 'indentexpr'). Update the mouse and cursor, they may have changed.
-  State = sst->save_State;
-  ui_cursor_shape();  // may show different cursor shape
-}
-
 
 /// Open the preview window or popup and make it the current window.
 /// Called by Rust ex_pedit / ex_pbuffer.
@@ -4578,6 +4530,51 @@ FILE *open_exfile(char *fname, int forceit, char *mode)
 {
   return nvim_docmd_open_exfile_impl(fname, forceit, mode);
 }
+// --- Accessors for save_current_state_impl / restore_current_state_impl (Phase N+15) ---
+// Global accessors
+int nvim_get_restart_edit(void) { return restart_edit; }
+void nvim_set_restart_edit(int val) { restart_edit = val; }
+int nvim_get_force_restart_edit(void) { return force_restart_edit ? 1 : 0; }
+void nvim_set_force_restart_edit(int val) { force_restart_edit = (bool)val; }
+void nvim_set_current_State(int val) { State = val; }
+// sst field setters
+void nvim_docmd_sst_set_msg_scroll(save_state_T *sst, int v) { sst->save_msg_scroll = v; }
+void nvim_docmd_sst_set_restart_edit(save_state_T *sst, int v) { sst->save_restart_edit = v; }
+void nvim_docmd_sst_set_msg_didout(save_state_T *sst, int v) { sst->save_msg_didout = (bool)v; }
+void nvim_docmd_sst_set_State(save_state_T *sst, int v) { sst->save_State = v; }
+void nvim_docmd_sst_set_finish_op(save_state_T *sst, int v) { sst->save_finish_op = (bool)v; }
+void nvim_docmd_sst_set_opcount(save_state_T *sst, int v) { sst->save_opcount = v; }
+void nvim_docmd_sst_set_reg_executing(save_state_T *sst, int v) { sst->save_reg_executing = v; }
+void nvim_docmd_sst_set_pending_end_reg_executing(save_state_T *sst, int v)
+{
+  sst->save_pending_end_reg_executing = (bool)v;
+}
+// sst field getters
+int nvim_docmd_sst_get_msg_scroll(save_state_T *sst) { return sst->save_msg_scroll; }
+int nvim_docmd_sst_get_restart_edit(save_state_T *sst) { return sst->save_restart_edit; }
+int nvim_docmd_sst_get_State(save_state_T *sst) { return sst->save_State; }
+int nvim_docmd_sst_get_finish_op(save_state_T *sst) { return sst->save_finish_op ? 1 : 0; }
+int nvim_docmd_sst_get_opcount(save_state_T *sst) { return sst->save_opcount; }
+int nvim_docmd_sst_get_reg_executing(save_state_T *sst) { return sst->save_reg_executing; }
+int nvim_docmd_sst_get_pending_end_reg_executing(save_state_T *sst)
+{
+  return sst->save_pending_end_reg_executing ? 1 : 0;
+}
+int nvim_docmd_sst_get_msg_didout(save_state_T *sst) { return sst->save_msg_didout ? 1 : 0; }
+// typeahead save/restore
+int nvim_docmd_sst_save_typeahead(save_state_T *sst)
+{
+  save_typeahead(&sst->tabuf);
+  return sst->tabuf.typebuf_valid ? 1 : 0;
+}
+void nvim_docmd_sst_restore_typeahead(save_state_T *sst)
+{
+  restore_typeahead(&sst->tabuf);
+}
+// forward decls for Rust implementations
+extern bool nvim_docmd_save_current_state_impl(save_state_T *sst);
+extern void nvim_docmd_restore_current_state_impl(save_state_T *sst);
+
 bool save_current_state(save_state_T *sst) { return nvim_docmd_save_current_state_impl(sst); }
 void restore_current_state(save_state_T *sst) { nvim_docmd_restore_current_state_impl(sst); }
 char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,

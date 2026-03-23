@@ -969,6 +969,107 @@ extern "C" {
 
 type CmodHandle = *mut c_void;
 
+// =============================================================================
+// Phase N+15: save_current_state_impl / restore_current_state_impl
+// =============================================================================
+
+type SstHandle = *mut c_void;
+
+extern "C" {
+    // Global accessors for save/restore state
+    fn nvim_get_msg_scroll() -> c_int;
+    fn nvim_set_msg_scroll(val: c_int);
+    fn nvim_get_restart_edit() -> c_int;
+    fn nvim_set_restart_edit(val: c_int);
+    fn nvim_get_msg_didout() -> c_int;
+    fn nvim_set_msg_didout(val: c_int);
+    fn nvim_get_current_State() -> c_int;
+    fn nvim_set_current_State(val: c_int);
+    fn nvim_get_finish_op() -> c_int;
+    fn nvim_get_opcount() -> c_int;
+    fn nvim_set_opcount(val: c_int);
+    fn nvim_get_reg_executing() -> c_int;
+    fn nvim_set_reg_executing(val: c_int);
+    fn nvim_get_pending_end_reg_executing() -> c_int;
+    fn nvim_set_pending_end_reg_executing(val: c_int);
+    fn nvim_get_force_restart_edit() -> c_int;
+    fn nvim_set_force_restart_edit(val: c_int);
+    // sst field setters
+    fn nvim_docmd_sst_set_msg_scroll(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_restart_edit(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_msg_didout(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_State(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_finish_op(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_opcount(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_reg_executing(sst: SstHandle, v: c_int);
+    fn nvim_docmd_sst_set_pending_end_reg_executing(sst: SstHandle, v: c_int);
+    // sst field getters
+    fn nvim_docmd_sst_get_msg_scroll(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_restart_edit(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_State(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_finish_op(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_opcount(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_reg_executing(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_pending_end_reg_executing(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_get_msg_didout(sst: SstHandle) -> c_int;
+    // typeahead
+    fn nvim_docmd_sst_save_typeahead(sst: SstHandle) -> c_int;
+    fn nvim_docmd_sst_restore_typeahead(sst: SstHandle);
+    // ui_cursor_shape
+    fn ui_cursor_shape();
+}
+
+/// Save current editor state for :normal execution.
+///
+/// # Safety
+/// `sst` must be a valid save_state_T pointer.
+#[export_name = "nvim_docmd_save_current_state_impl"]
+pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
+    nvim_docmd_sst_set_msg_scroll(sst, nvim_get_msg_scroll());
+    nvim_docmd_sst_set_restart_edit(sst, nvim_get_restart_edit());
+    nvim_docmd_sst_set_msg_didout(sst, nvim_get_msg_didout());
+    nvim_docmd_sst_set_State(sst, nvim_get_current_State());
+    nvim_docmd_sst_set_finish_op(sst, nvim_get_finish_op());
+    nvim_docmd_sst_set_opcount(sst, nvim_get_opcount());
+    nvim_docmd_sst_set_reg_executing(sst, nvim_get_reg_executing());
+    nvim_docmd_sst_set_pending_end_reg_executing(sst, nvim_get_pending_end_reg_executing());
+
+    nvim_set_msg_scroll(0); // no msg scrolling in Normal mode
+    nvim_set_restart_edit(0); // don't go to Insert mode
+
+    // Save typeahead; return typebuf_valid.
+    nvim_docmd_sst_save_typeahead(sst) != 0
+}
+
+/// Restore current editor state after :normal execution.
+///
+/// # Safety
+/// `sst` must be a valid save_state_T pointer.
+#[export_name = "nvim_docmd_restore_current_state_impl"]
+pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
+    nvim_docmd_sst_restore_typeahead(sst);
+
+    nvim_set_msg_scroll(nvim_docmd_sst_get_msg_scroll(sst));
+    if nvim_get_force_restart_edit() != 0 {
+        nvim_set_force_restart_edit(0);
+    } else {
+        // Some function (terminal_enter()) may have overridden restart_edit.
+        nvim_set_restart_edit(nvim_docmd_sst_get_restart_edit(sst));
+    }
+    nvim_set_finish_op(nvim_docmd_sst_get_finish_op(sst) != 0);
+    nvim_set_opcount(nvim_docmd_sst_get_opcount(sst));
+    nvim_set_reg_executing(nvim_docmd_sst_get_reg_executing(sst));
+    nvim_set_pending_end_reg_executing(nvim_docmd_sst_get_pending_end_reg_executing(sst));
+
+    // Don't reset msg_didout now; OR in the saved value.
+    nvim_set_msg_didout(nvim_get_msg_didout() | nvim_docmd_sst_get_msg_didout(sst));
+
+    // Restore the state (needed when called from a function executed for
+    // 'indentexpr'). Update the mouse and cursor.
+    nvim_set_current_State(nvim_docmd_sst_get_State(sst));
+    ui_cursor_shape();
+}
+
 /// `do_exedit` - edit/badd/visual command dispatch.
 ///
 /// # Safety
@@ -1433,10 +1534,6 @@ extern "C" {
 
     // global_busy
     fn nvim_get_global_busy() -> bool;
-
-    // msg_scroll get/set
-    fn nvim_get_msg_scroll() -> c_int;
-    fn nvim_set_msg_scroll(val: c_int);
 
     // RedrawingDisabled get/set
     fn nvim_get_RedrawingDisabled() -> c_int;
