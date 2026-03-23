@@ -223,9 +223,9 @@ extern "C" {
     fn expr_map_locked() -> bool;
     fn nvim_docmd_save_current_state_impl(save: *mut c_void) -> bool;
     fn nvim_docmd_restore_current_state_impl(save: *mut c_void);
-    fn exec_normal_cmd(cmd: *const c_char, remap: c_int, silent: bool);
+    fn nvim_docmd_exec_normal_cmd_impl(cmd: *const c_char, remap: c_int, silent: bool);
     fn check_cursor_moved(wp: WinHandle);
-    fn update_topline_cursor();
+    fn nvim_docmd_update_topline_cursor_impl();
     fn setmouse();
     fn ui_cursor_shape();
 
@@ -353,7 +353,7 @@ extern "C" {
     fn op_yank(oap: *mut OpargT, message: bool) -> bool;
     fn op_shift(oap: *mut OpargT, curs_top: bool, amount: c_int);
     fn nvim_curwin_get_w_p_rl() -> c_int;
-    fn ex_may_print(eap: ExArgHandle);
+    fn nvim_docmd_ex_may_print_impl(eap: ExArgHandle);
     fn beep_flush();
     fn do_join(count: usize, insert_space: bool, save_undo: bool, use_cursor: bool, setmark: bool);
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
@@ -1002,7 +1002,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
             let cmd_to_run = if !arg.is_null() { arg } else { eap_arg };
             let forceit = nvim_eap_get_forceit(eap);
             let remap = if forceit { REMAP_NONE } else { REMAP_YES };
-            exec_normal_cmd(cmd_to_run, remap, false);
+            nvim_docmd_exec_normal_cmd_impl(cmd_to_run, remap, false);
 
             if addr_count == 0 {
                 break;
@@ -1016,7 +1016,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     }
 
     // Might not return to the main loop when in an event handler.
-    update_topline_cursor();
+    nvim_docmd_update_topline_cursor_impl();
     nvim_docmd_restore_current_state_impl(save_state);
 
     let busy = nvim_docmd_get_ex_normal_busy();
@@ -2059,7 +2059,7 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
         true,
     );
     beginline(BL_WHITE | BL_FIX);
-    ex_may_print(eap);
+    nvim_docmd_ex_may_print_impl(eap);
 }
 
 /// ":put".
@@ -2796,7 +2796,7 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
     }
     u_clearline(nvim_get_curbuf());
     beginline(BL_SOL | BL_FIX);
-    ex_may_print(eap);
+    nvim_docmd_ex_may_print_impl(eap);
 }
 
 /// ":@" (execute register).
@@ -3418,5 +3418,5 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
         op_shift(&raw mut oa, false, nvim_eap_get_amount(eap));
     }
     nvim_set_virtual_op_none();
-    ex_may_print(eap);
+    nvim_docmd_ex_may_print_impl(eap);
 }

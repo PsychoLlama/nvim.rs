@@ -384,7 +384,7 @@ int nvim_excmds_do_join(int count)
 }
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
 // Call ex_may_print
-void nvim_excmds_ex_may_print(exarg_T *eap) { ex_may_print(eap); }
+void nvim_excmds_ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // Call save_re_pat
 void nvim_excmds_save_re_pat(int idx, const char *pat, size_t patlen, int magic)
 {

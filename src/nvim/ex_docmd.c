@@ -1246,7 +1246,7 @@ void *getline_cookie(LineGetter fgetline, void *cookie)
 /// ":bwipeout", etc.
 ///
 /// @return  the buffer number.
-static int compute_buffer_local_count(cmd_addr_T addr_type, linenr_T lnum, int offset)
+static int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset)
 {
   int count = offset;
 
@@ -2369,7 +2369,7 @@ static char *findfunc_find_file(char *findarg, size_t findarg_len, int count)
 
 /// Process the 'findfunc' option value.
 /// Returns NULL on success and an error message on failure.
-const char *did_set_findfunc(optset_T *args)
+const char *nvim_docmd_did_set_findfunc_impl(optset_T *args)
 {
   buf_T *buf = (buf_T *)args->os_buf;
   int retval;
@@ -2402,14 +2402,14 @@ const char *did_set_findfunc(optset_T *args)
   return NULL;
 }
 
-void free_findfunc_option(void)
+void nvim_docmd_free_findfunc_option_impl(void)
 {
   callback_free(&ffu_cb);
 }
 
 /// Mark the global 'findfunc' callback with "copyID" so that it is not
 /// garbage collected.
-bool set_ref_in_findfunc(int copyID)
+bool nvim_docmd_set_ref_in_findfunc_impl(int copyID)
 {
   bool abort = false;
   abort = rs_set_ref_in_callback(&ffu_cb, copyID, NULL, NULL);
@@ -2973,7 +2973,7 @@ static void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged)
 
 
 /// Print the current line if flags were given to the Ex command.
-void ex_may_print(exarg_T *eap)
+void nvim_docmd_ex_may_print_impl(exarg_T *eap)
 {
   if (eap->flags != 0) {
     rs_print_line(curwin->w_cursor.lnum, (eap->flags & EXFLAG_NR),
@@ -3002,7 +3002,7 @@ static void nvim_docmd_close_redir_impl(void)
 /// @param[in]  prot  Directory permissions.
 ///
 /// @return OK in case of success, FAIL otherwise.
-int vim_mkdir_emsg(const char *const name, const int prot)
+int nvim_docmd_vim_mkdir_emsg_impl(const char *const name, const int prot)
   FUNC_ATTR_NONNULL_ALL
 {
   int ret;
@@ -3041,7 +3041,7 @@ FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode)
 }
 
 /// Update w_topline, w_leftcol and the cursor position.
-void update_topline_cursor(void)
+void nvim_docmd_update_topline_cursor_impl(void)
 {
   check_cursor(curwin);               // put cursor on valid line
   update_topline(curwin);
@@ -3107,18 +3107,18 @@ void nvim_docmd_restore_current_state_impl(save_state_T *sst)
 
 /// Execute normal mode command "cmd".
 /// "remap" can be REMAP_NONE or REMAP_YES.
-void exec_normal_cmd(char *cmd, int remap, bool silent)
+void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent)
 {
   // Stuff the argument into the typeahead buffer.
   ins_typebuf(cmd, remap, 0, true, silent);
-  exec_normal(false, false);
+  nvim_docmd_exec_normal_impl(false, false);
 }
 
 /// Execute normal_cmd() until there is no typeahead left.
 ///
 /// @param was_typed whether or not something was typed
 /// @param use_vpeekc  true to use vpeekc() to check for available chars
-void exec_normal(bool was_typed, bool use_vpeekc)
+void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc)
 {
   oparg_T oa;
   int c;
@@ -3132,7 +3132,7 @@ void exec_normal(bool was_typed, bool use_vpeekc)
               && typebuf.tb_len > 0)
           || (use_vpeekc && (c = vpeekc()) != NUL && c != Ctrl_C))
          && !got_int) {
-    update_topline_cursor();
+    nvim_docmd_update_topline_cursor_impl();
     normal_cmd(&oa, true);      // execute a Normal mode cmd
   }
 }
@@ -3511,7 +3511,7 @@ char *nvim_docmd_expand_sfile_impl(char *arg)
 
 /// Make a dialog message in "buff[DIALOG_MSG_SIZE]".
 /// "format" must contain "%s".
-void dialog_msg(char *buff, char *format, char *fname)
+void nvim_docmd_dialog_msg_impl(char *buff, char *format, char *fname)
 {
   if (fname == NULL) {
     fname = _("Untitled");
@@ -4408,7 +4408,7 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
 /// Wrap compute_buffer_local_count for Rust.
 int nvim_docmd_compute_buf_local_count(int addr_type, linenr_T lnum, int offset)
 {
-  return compute_buffer_local_count((cmd_addr_T)addr_type, lnum, offset);
+  return nvim_docmd_compute_buffer_local_count_impl((cmd_addr_T)addr_type, lnum, offset);
 }
 
 
@@ -5199,6 +5199,17 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 
 /// Check if curwin->w_buffer should be hidden (for ex_exit).
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
+
+// Phase 4 C forwarding wrappers.
+void exec_normal_cmd(char *cmd, int remap, bool silent) { nvim_docmd_exec_normal_cmd_impl(cmd, remap, silent); }
+void exec_normal(bool was_typed, bool use_vpeekc) { nvim_docmd_exec_normal_impl(was_typed, use_vpeekc); }
+void update_topline_cursor(void) { nvim_docmd_update_topline_cursor_impl(); }
+int vim_mkdir_emsg(const char *const name, const int prot) { return nvim_docmd_vim_mkdir_emsg_impl(name, prot); }
+void dialog_msg(char *buff, char *format, char *fname) { nvim_docmd_dialog_msg_impl(buff, format, fname); }
+void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
+// set_ref_in_findfunc: only called from Rust directly as nvim_docmd_set_ref_in_findfunc_impl
+// free_findfunc_option: only called from option_shim.c as nvim_docmd_free_findfunc_option_impl
+// did_set_findfunc: only called from option_shim.c as nvim_docmd_did_set_findfunc_impl
 
 // Phase 3 C forwarding wrappers (original names forward to renamed impl bodies).
 // These maintain ABI compatibility while Rust takes ownership via #[export_name].

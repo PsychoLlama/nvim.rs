@@ -484,11 +484,11 @@ const char *nvim_did_set_fileformat(void *args) { return did_set_fileformat((opt
 // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
 extern const char *did_set_cedit(optset_T *args);
 extern const char *did_set_operatorfunc(optset_T *args);
-extern const char *did_set_findfunc(optset_T *args);
+extern const char *nvim_docmd_did_set_findfunc_impl(optset_T *args);
 const char *did_set_completeitemalign(optset_T *args);
 const char *nvim_did_set_cedit(void *args) { return did_set_cedit((optset_T *)args); }
 const char *nvim_did_set_operatorfunc(void *args) { return did_set_operatorfunc((optset_T *)args); }
-const char *nvim_did_set_findfunc(void *args) { return did_set_findfunc((optset_T *)args); }
+const char *nvim_did_set_findfunc(void *args) { return nvim_docmd_did_set_findfunc_impl((optset_T *)args); }
 const char *nvim_did_set_completeitemalign(void *args) { return did_set_completeitemalign((optset_T *)args); }
 
 // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
@@ -3000,7 +3000,7 @@ void nvim_call_free_operatorfunc_option(void) {}
 #endif
 
 /// free_findfunc_option() wrapper.
-void nvim_call_free_findfunc_option(void) { free_findfunc_option(); }
+void nvim_call_free_findfunc_option(void) { nvim_docmd_free_findfunc_option_impl(); }
 
 /// XFREE_CLEAR(fenc_default) wrapper.
 void nvim_call_xfree_clear_fenc_default(void) { XFREE_CLEAR(fenc_default); }

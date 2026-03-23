@@ -74,7 +74,7 @@ extern "C" {
     fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool;
     fn set_ref_in_opfunc(copy_id: c_int) -> bool;
     fn rs_set_ref_in_tagfunc(copy_id: c_int) -> bool;
-    fn set_ref_in_findfunc(copy_id: c_int) -> bool;
+    fn nvim_docmd_set_ref_in_findfunc_impl(copy_id: c_int) -> bool;
     fn garbage_collect_globvars(copy_id: c_int) -> c_int;
     fn set_ref_in_call_stack(copy_id: c_int) -> bool;
     fn set_ref_in_functions(copy_id: c_int) -> bool;
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     abort = abort || rs_set_ref_in_tagfunc(copy_id);
 
     // 'findfunc' callback
-    abort = abort || set_ref_in_findfunc(copy_id);
+    abort = abort || nvim_docmd_set_ref_in_findfunc_impl(copy_id);
 
     // window-local variables (all tab windows + autocmd windows)
     abort = nvim_gc_mark_tab_windows(copy_id, abort);
