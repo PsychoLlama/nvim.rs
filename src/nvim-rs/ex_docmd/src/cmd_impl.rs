@@ -322,7 +322,7 @@ pub unsafe extern "C" fn rs_ex_pclose(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_pedit(eap: ExArgHandle) {
     let curwin_save = nvim_get_curwin();
     nvim_docmd_prepare_preview_window();
-    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
+    rs_do_exedit_impl(eap, std::ptr::null_mut());
     nvim_docmd_back_to_current_window(curwin_save);
 }
 
@@ -787,7 +787,6 @@ pub unsafe extern "C" fn rs_open_exfile_impl(
 
 extern "C" {
     // Phase 2 C implementation wrappers
-    fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
     fn nvim_docmd_tabpage_new_impl();
 
     // ex_win_close_impl helpers
@@ -1075,7 +1074,7 @@ pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
 /// `eap` must be a valid ExArgHandle. `old_curwin` may be null.
 #[no_mangle]
 pub unsafe extern "C" fn do_exedit(eap: ExArgHandle, old_curwin: WinHandle) {
-    nvim_docmd_do_exedit_impl(eap, old_curwin);
+    rs_do_exedit_impl(eap, old_curwin);
 }
 
 /// `ex_splitview` - split/vsplit/tabedit dispatch.
@@ -1150,7 +1149,7 @@ pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
     }
 
     nvim_eap_set_arg(eap, fname);
-    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
+    rs_do_exedit_impl(eap, std::ptr::null_mut());
     xfree(fname as *mut c_void);
 }
 
@@ -2125,7 +2124,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
             nvim_eap_get_line2(eap) as c_int + 1
         };
         if nvim_docmd_win_new_tabpage(after, nvim_eap_get_arg(eap) as *const u8) != FAIL {
-            nvim_docmd_do_exedit_impl(eap, old_curwin);
+            rs_do_exedit_impl(eap, old_curwin);
             nvim_apply_autocmds_tabnewentered();
 
             // Set the alternate buffer for the window we came from.
@@ -2159,9 +2158,148 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
             } else {
                 nvim_do_check_scrollbind_wrapper(false);
             }
-            nvim_docmd_do_exedit_impl(eap, old_curwin);
+            rs_do_exedit_impl(eap, old_curwin);
         }
     }
 
     xfree(fname as *mut c_void);
+}
+
+// =============================================================================
+// Phase N+17: do_exedit_impl
+// =============================================================================
+
+extern "C" {
+    fn nvim_docmd_get_CMD_view() -> c_int;
+    fn nvim_docmd_get_CMD_enew() -> c_int;
+    fn nvim_docmd_get_CMD_sview() -> c_int;
+    fn nvim_docmd_get_CMD_balt() -> c_int;
+    fn nvim_docmd_get_CMD_badd() -> c_int;
+    fn nvim_docmd_get_readonlymode() -> c_int;
+    fn nvim_docmd_set_readonlymode(v: c_int);
+    fn nvim_docmd_buf_hide_buf(buf: BufHandle) -> c_int;
+    fn nvim_docmd_set_curbuf_b_p_ro(v: c_int);
+    fn nvim_docmd_eap_get_do_ecmd_lnum(eap: ExArgHandle) -> LinenrT;
+    fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) -> c_int;
+    fn nvim_docmd_do_exedit_split_fail_cleanup();
+    fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle);
+    fn nvim_text_or_buf_locked() -> c_int;
+    #[link_name = "do_ecmd"]
+    fn nvim_docmd_do_ecmd(
+        fnum: c_int,
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        eap: ExArgHandle,
+        newlnum: LinenrT,
+        flags: c_int,
+        oldwin: WinHandle,
+    ) -> c_int;
+}
+
+const ECMD_HIDE: c_int = 0x01;
+const ECMD_OLDBUF: c_int = 0x04;
+const ECMD_FORCEIT: c_int = 0x08;
+const ECMD_ADDBUF: c_int = 0x10;
+const ECMD_ALTBUF: c_int = 0x20;
+const ECMD_ONE: LinenrT = 1;
+
+#[export_name = "nvim_docmd_do_exedit_impl"]
+pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle) {
+    let cmd_new = nvim_docmd_get_CMD_new();
+    let cmd_tabnew = nvim_docmd_get_CMD_tabnew();
+    let cmd_tabedit = nvim_docmd_get_CMD_tabedit();
+    let cmd_vnew = nvim_docmd_get_CMD_vnew();
+    let cmd_split = nvim_docmd_get_CMD_split();
+    let cmd_vsplit = nvim_docmd_get_CMD_vsplit();
+    let cmd_view = nvim_docmd_get_CMD_view();
+    let cmd_enew = nvim_docmd_get_CMD_enew();
+    let cmd_sview = nvim_docmd_get_CMD_sview();
+    let cmd_balt = nvim_docmd_get_CMD_balt();
+    let cmd_badd = nvim_docmd_get_CMD_badd();
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let arg = nvim_eap_get_arg(eap);
+    let forceit = nvim_eap_get_forceit(eap);
+    if nvim_docmd_do_exedit_handle_exmode(eap) != 0 {
+        return;
+    }
+    if (cmdidx == cmd_new || cmdidx == cmd_tabnew || cmdidx == cmd_tabedit || cmdidx == cmd_vnew)
+        && (*arg == 0)
+    {
+        nvim_setpcmark();
+        let oldwin = if old_curwin.is_null() {
+            nvim_get_curwin()
+        } else {
+            std::ptr::null_mut()
+        };
+        nvim_docmd_do_ecmd(
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            eap,
+            ECMD_ONE,
+            ECMD_HIDE + if forceit { ECMD_FORCEIT } else { 0 },
+            oldwin,
+        );
+    } else if (cmdidx != cmd_split && cmdidx != cmd_vsplit) || (*arg != 0) {
+        if *arg != 0 && nvim_text_or_buf_locked() != 0 {
+            return;
+        }
+        let n = nvim_docmd_get_readonlymode();
+        if cmdidx == cmd_view || cmdidx == cmd_sview {
+            nvim_docmd_set_readonlymode(1);
+        } else if cmdidx == cmd_enew {
+            nvim_docmd_set_readonlymode(0);
+        }
+        if cmdidx != cmd_balt && cmdidx != cmd_badd {
+            nvim_setpcmark();
+        }
+        let curbuf = nvim_get_curbuf();
+        let flags = (if nvim_docmd_buf_hide_buf(curbuf) != 0 {
+            ECMD_HIDE
+        } else {
+            0
+        }) + (if forceit { ECMD_FORCEIT } else { 0 })
+            + (if !old_curwin.is_null() {
+                ECMD_OLDBUF
+            } else {
+                0
+            })
+            + (if cmdidx == cmd_badd { ECMD_ADDBUF } else { 0 })
+            + (if cmdidx == cmd_balt { ECMD_ALTBUF } else { 0 });
+        let ffname = if cmdidx == cmd_enew {
+            std::ptr::null_mut()
+        } else {
+            arg
+        };
+        let oldwin = if old_curwin.is_null() {
+            nvim_get_curwin()
+        } else {
+            std::ptr::null_mut()
+        };
+        let newlnum = nvim_docmd_eap_get_do_ecmd_lnum(eap);
+        if nvim_docmd_do_ecmd(0, ffname, std::ptr::null_mut(), eap, newlnum, flags, oldwin) == FAIL
+        {
+            if !old_curwin.is_null() {
+                nvim_docmd_do_exedit_split_fail_cleanup();
+            }
+        } else if nvim_docmd_get_readonlymode() != 0
+            && nvim_buf_get_nwindows(nvim_get_curbuf()) == 1
+        {
+            nvim_docmd_set_curbuf_b_p_ro(1);
+        }
+        nvim_docmd_set_readonlymode(n);
+    } else {
+        nvim_docmd_do_exedit_split_fallback(eap);
+    }
+    let curwin = nvim_get_curwin();
+    if !old_curwin.is_null()
+        && *arg != 0
+        && curwin != old_curwin
+        && rs_win_valid(old_curwin)
+        && nvim_win_buf_is_curbuf(old_curwin) == 0
+        && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
+    {
+        nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_curbuf_b_fnum());
+    }
+    nvim_set_ex_no_reprint(1);
 }

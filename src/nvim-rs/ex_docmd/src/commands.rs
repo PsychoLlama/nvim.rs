@@ -2193,7 +2193,6 @@ extern "C" {
     fn nvim_docmd_is_other_file(ffname: *const c_char) -> bool;
     fn nvim_docmd_check_can_set_curbuf_forceit(forceit: bool) -> bool;
     fn nvim_docmd_bt_prompt_curbuf() -> bool;
-    fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: *mut c_void);
 
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
@@ -2360,7 +2359,7 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
         emsg(c"cannot :edit a prompt buffer".as_ptr());
         return;
     }
-    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
+    super::cmd_impl::rs_do_exedit_impl(eap, std::ptr::null_mut());
 }
 
 /// ":pwd".

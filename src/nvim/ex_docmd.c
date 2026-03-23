@@ -2088,126 +2088,7 @@ void nvim_docmd_ex_connect_impl(exarg_T *eap)
 /// ":edit <file>" command and alike.
 ///
 /// @param old_curwin  curwin before doing a split or NULL
-void nvim_docmd_do_exedit_impl(exarg_T *eap, win_T *old_curwin)
-{
-  // ":vi" command ends Ex mode.
-  if (exmode_active && (eap->cmdidx == CMD_visual
-                        || eap->cmdidx == CMD_view)) {
-    exmode_active = false;
-    ex_pressedreturn = false;
-    if (*eap->arg == NUL) {
-      // Special case:  ":global/pat/visual\NLvi-commands"
-      if (global_busy) {
-        if (eap->nextcmd != NULL) {
-          stuffReadbuff(eap->nextcmd);
-          eap->nextcmd = NULL;
-        }
-
-        const int save_rd = RedrawingDisabled;
-        RedrawingDisabled = 0;
-        const int save_nwr = no_wait_return;
-        no_wait_return = 0;
-        need_wait_return = false;
-        const int save_ms = msg_scroll;
-        msg_scroll = 0;
-        redraw_all_later(UPD_NOT_VALID);
-        pending_exmode_active = true;
-
-        normal_enter(false, true);
-
-        pending_exmode_active = false;
-        RedrawingDisabled = save_rd;
-        no_wait_return = save_nwr;
-        msg_scroll = save_ms;
-      }
-      return;
-    }
-  }
-
-  if ((eap->cmdidx == CMD_new
-       || eap->cmdidx == CMD_tabnew
-       || eap->cmdidx == CMD_tabedit
-       || eap->cmdidx == CMD_vnew) && *eap->arg == NUL) {
-    // ":new" or ":tabnew" without argument: edit a new empty buffer
-    setpcmark();
-    do_ecmd(0, NULL, NULL, eap, ECMD_ONE,
-            ECMD_HIDE + (eap->forceit ? ECMD_FORCEIT : 0),
-            old_curwin == NULL ? curwin : NULL);
-  } else if ((eap->cmdidx != CMD_split && eap->cmdidx != CMD_vsplit)
-             || *eap->arg != NUL) {
-    // Can't edit another file when "textlock" or "curbuf->b_ro_locked" is set.
-    // Only ":edit" or ":script" can bring us here, others are stopped earlier.
-    if (*eap->arg != NUL && text_or_buf_locked()) {
-      return;
-    }
-    int n = readonlymode;
-    if (eap->cmdidx == CMD_view || eap->cmdidx == CMD_sview) {
-      readonlymode = true;
-    } else if (eap->cmdidx == CMD_enew) {
-      readonlymode = false;  // 'readonly' doesn't make sense
-                             // in an empty buffer
-    }
-    if (eap->cmdidx != CMD_balt && eap->cmdidx != CMD_badd) {
-      setpcmark();
-    }
-    if (do_ecmd(0, eap->cmdidx == CMD_enew ? NULL : eap->arg,
-                NULL, eap, eap->do_ecmd_lnum,
-                (buf_hide(curbuf) ? ECMD_HIDE : 0)
-                + (eap->forceit ? ECMD_FORCEIT : 0)
-                // After a split we can use an existing buffer.
-                + (old_curwin != NULL ? ECMD_OLDBUF : 0)
-                + (eap->cmdidx == CMD_badd ? ECMD_ADDBUF : 0)
-                + (eap->cmdidx == CMD_balt ? ECMD_ALTBUF : 0),
-                old_curwin == NULL ? curwin : NULL) == FAIL) {
-      // Editing the file failed.  If the window was split, close it.
-      if (old_curwin != NULL) {
-        bool need_hide = (curbufIsChanged() && curbuf->b_nwindows <= 1);
-        if (!need_hide || buf_hide(curbuf)) {
-          cleanup_T cs;
-
-          // Reset the error/interrupt/exception state here so that
-          // aborting() returns false when closing a window.
-          enter_cleanup(&cs);
-          win_close(curwin, !need_hide && !buf_hide(curbuf), false);
-
-          // Restore the error/interrupt/exception state if not
-          // discarded by a new aborting error, interrupt, or
-          // uncaught exception.
-          leave_cleanup(&cs);
-        }
-      }
-    } else if (readonlymode && curbuf->b_nwindows == 1) {
-      // When editing an already visited buffer, 'readonly' won't be set
-      // but the previous value is kept.  With ":view" and ":sview" we
-      // want the  file to be readonly, except when another window is
-      // editing the same buffer.
-      curbuf->b_p_ro = true;
-    }
-    readonlymode = n;
-  } else {
-    if (eap->do_ecmd_cmd != NULL) {
-      do_cmdline_cmd(eap->do_ecmd_cmd);
-    }
-    int n = curwin->w_arg_idx_invalid;
-    check_arg_idx(curwin);
-    if (n != curwin->w_arg_idx_invalid) {
-      maketitle();
-    }
-  }
-
-  // if ":split file" worked, set alternate file name in old window to new
-  // file
-  if (old_curwin != NULL
-      && *eap->arg != NUL
-      && curwin != old_curwin
-      && rs_win_valid(old_curwin)
-      && old_curwin->w_buffer != curbuf
-      && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-    old_curwin->w_alt_fnum = curbuf->b_fnum;
-  }
-
-  ex_no_reprint = true;
-}
+// Body migrated to Rust (Phase N+17). Forward decl at top of file.
 
 
 /// ":read" implementation called by Rust ex_read.
@@ -4527,6 +4408,75 @@ void nvim_docmd_win_set_alt_fnum(win_T *wp, int fnum) { wp->w_alt_fnum = fnum; }
 int nvim_docmd_curbuf_b_fnum(void) { return curbuf->b_fnum; }
 /// Get cmdmod.cmod_flags (global).
 int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
+
+// --- Accessors for do_exedit_impl (Phase N+17) ---
+int nvim_docmd_get_CMD_visual(void) { return (int)CMD_visual; }
+int nvim_docmd_get_CMD_view(void) { return (int)CMD_view; }
+int nvim_docmd_get_CMD_enew(void) { return (int)CMD_enew; }
+int nvim_docmd_get_CMD_sview(void) { return (int)CMD_sview; }
+int nvim_docmd_get_CMD_balt(void) { return (int)CMD_balt; }
+int nvim_docmd_get_CMD_badd(void) { return (int)CMD_badd; }
+int nvim_docmd_get_readonlymode(void) { return readonlymode ? 1 : 0; }
+void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
+int nvim_docmd_buf_hide_buf(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
+void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
+linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
+/// Handle the exmode_active early-return branch of do_exedit_impl.
+/// Returns 1 if the caller should return early, 0 otherwise.
+int nvim_docmd_do_exedit_handle_exmode(exarg_T *eap)
+{
+  if (exmode_active && (eap->cmdidx == CMD_visual || eap->cmdidx == CMD_view)) {
+    exmode_active = false;
+    ex_pressedreturn = false;
+    if (*eap->arg == NUL) {
+      if (global_busy) {
+        if (eap->nextcmd != NULL) {
+          stuffReadbuff(eap->nextcmd);
+          eap->nextcmd = NULL;
+        }
+        const int save_rd = RedrawingDisabled;
+        RedrawingDisabled = 0;
+        const int save_nwr = no_wait_return;
+        no_wait_return = 0;
+        need_wait_return = false;
+        const int save_ms = msg_scroll;
+        msg_scroll = 0;
+        redraw_all_later(UPD_NOT_VALID);
+        pending_exmode_active = true;
+        normal_enter(false, true);
+        pending_exmode_active = false;
+        RedrawingDisabled = save_rd;
+        no_wait_return = save_nwr;
+        msg_scroll = save_ms;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+/// Close curwin with cleanup on do_ecmd failure (for split windows).
+void nvim_docmd_do_exedit_split_fail_cleanup(void)
+{
+  bool need_hide = (curbufIsChanged() && curbuf->b_nwindows <= 1);
+  if (!need_hide || buf_hide(curbuf)) {
+    cleanup_T cs;
+    enter_cleanup(&cs);
+    win_close(curwin, !need_hide && !buf_hide(curbuf), false);
+    leave_cleanup(&cs);
+  }
+}
+/// Handle the split-with-no-arg fallback branch of do_exedit_impl.
+void nvim_docmd_do_exedit_split_fallback(exarg_T *eap)
+{
+  if (eap->do_ecmd_cmd != NULL) {
+    do_cmdline_cmd(eap->do_ecmd_cmd);
+  }
+  int n = curwin->w_arg_idx_invalid;
+  check_arg_idx(curwin);
+  if (n != curwin->w_arg_idx_invalid) {
+    maketitle();
+  }
+}
 
 char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
                 const char **errormsg, int *escaped, bool empty_is_error)
