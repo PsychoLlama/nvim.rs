@@ -867,16 +867,6 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
 int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                           int prefix, const char **errmsg);
 
-// set_fileformat helper: set the 'fileformat' option string and trigger redraws
-void nvim_set_fileformat_option(const char *p, int opt_flags)
-{
-  if (p != NULL) {
-    set_option_direct(kOptFileformat, CSTR_AS_OPTVAL(p), opt_flags, 0);
-  }
-  redraw_buf_status_later(curbuf);
-  redraw_tabline = true;
-  need_maketitle = true;
-}
 
 // set_options_bin helpers: accessors for curbuf binary-save fields
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }

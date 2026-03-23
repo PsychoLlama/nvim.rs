@@ -467,8 +467,16 @@ const EOL_DOS: c_int = 1;
 const EOL_MAC: c_int = 2;
 
 extern "C" {
-    /// C helper: set 'fileformat' option string and trigger redraws.
-    fn nvim_set_fileformat_option(p: *const std::ffi::c_char, opt_flags: c_int);
+    fn set_option_direct(
+        opt_idx: crate::index::OptIndex,
+        value: crate::storage::OptVal,
+        opt_flags: c_int,
+        set_sid: i32,
+    );
+    fn nvim_redraw_buf_status_later(buf: *mut core::ffi::c_void);
+    static mut curbuf: *mut core::ffi::c_void;
+    static mut redraw_tabline: bool;
+    static mut need_maketitle: bool;
 }
 
 /// Set the 'fileformat' option to match an EOL style, then trigger redraws.
@@ -478,13 +486,32 @@ extern "C" {
 /// redraws are still triggered.
 #[export_name = "set_fileformat"]
 pub unsafe extern "C" fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int) {
+    use crate::opt_index::K_OPT_FILEFORMAT;
+    use crate::storage::{OptVal, OptValData, String_};
+    use crate::OptValType;
+
     let p: *const std::ffi::c_char = match eol_style {
         EOL_UNIX => c"unix".as_ptr(),
         EOL_DOS => c"dos".as_ptr(),
         EOL_MAC => c"mac".as_ptr(),
         _ => std::ptr::null(),
     };
-    nvim_set_fileformat_option(p, opt_flags);
+    if !p.is_null() {
+        let len = libc::strlen(p);
+        let val = OptVal {
+            type_: OptValType::String,
+            data: OptValData {
+                string: String_ {
+                    data: p.cast_mut(),
+                    size: len,
+                },
+            },
+        };
+        set_option_direct(K_OPT_FILEFORMAT, val, opt_flags, 0);
+    }
+    nvim_redraw_buf_status_later(curbuf);
+    redraw_tabline = true;
+    need_maketitle = true;
 }
 
 // =============================================================================
