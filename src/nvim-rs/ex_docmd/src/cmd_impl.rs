@@ -543,6 +543,20 @@ pub unsafe extern "C" fn rs_nvim_docmd_ex_may_print_impl(eap: ExArgHandle) {
 const FAIL: c_int = 0;
 const OK: c_int = 1;
 
+/// `nvim_docmd_update_topline_cursor_impl` - update topline, leftcol, cursor.
+///
+/// # Safety
+/// Accesses global curwin.
+#[export_name = "nvim_docmd_update_topline_cursor_impl"]
+pub unsafe extern "C" fn rs_update_topline_cursor_impl() {
+    nvim_docmd_check_cursor();
+    nvim_docmd_update_topline();
+    if nvim_docmd_curwin_p_wrap() == 0 {
+        nvim_docmd_validate_cursor();
+    }
+    nvim_docmd_update_curswant();
+}
+
 /// `nvim_docmd_vim_mkdir_emsg_impl` - create directory, emit error on failure.
 ///
 /// # Safety
@@ -825,6 +839,13 @@ extern "C" {
     fn nvim_docmd_os_isdir(fname: *const c_char) -> c_int;
     fn nvim_docmd_os_path_exists(fname: *const c_char) -> c_int;
     fn nvim_docmd_os_fopen(fname: *const c_char, mode: *const c_char) -> *mut c_void;
+
+    // Accessors for update_topline_cursor (migrated to Rust)
+    fn nvim_docmd_curwin_p_wrap() -> c_int;
+    fn nvim_docmd_check_cursor();
+    fn nvim_docmd_update_topline();
+    fn nvim_docmd_validate_cursor();
+    fn nvim_docmd_update_curswant();
 
     // filetype constants
     fn nvim_docmd_get_ftplugin_file() -> *const c_char;

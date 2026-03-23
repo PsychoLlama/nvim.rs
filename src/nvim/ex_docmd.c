@@ -354,6 +354,7 @@ extern void ex_tabonly(exarg_T *eap);
 extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
 extern int nvim_docmd_vim_mkdir_emsg_impl(const char *name, int prot);
 extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
+extern void nvim_docmd_update_topline_cursor_impl(void);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2880,16 +2881,6 @@ static void nvim_docmd_close_redir_impl(void)
 }
 
 
-/// Update w_topline, w_leftcol and the cursor position.
-void nvim_docmd_update_topline_cursor_impl(void)
-{
-  check_cursor(curwin);               // put cursor on valid line
-  update_topline(curwin);
-  if (!curwin->w_p_wrap) {
-    validate_cursor(curwin);
-  }
-  update_curswant();
-}
 
 /// Save the current State and go to Normal mode.
 ///
@@ -5006,6 +4997,12 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 
 /// Check if curwin->w_buffer should be hidden (for ex_exit).
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
+
+// Accessor for update_topline_cursor_impl (migrated to Rust).
+int nvim_docmd_curwin_p_wrap(void) { return curwin->w_p_wrap ? 1 : 0; }
+void nvim_docmd_update_topline(void) { update_topline(curwin); }
+void nvim_docmd_validate_cursor(void) { validate_cursor(curwin); }
+void nvim_docmd_update_curswant(void) { update_curswant(); }
 
 // Helpers for vim_mkdir_emsg_impl and open_exfile_impl (migrated to Rust).
 void nvim_docmd_semsg_mkdir_err(const char *name, int errcode) {
