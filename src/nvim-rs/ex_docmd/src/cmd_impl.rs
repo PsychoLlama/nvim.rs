@@ -956,7 +956,7 @@ extern "C" {
     #[link_name = "free_string_option"]
     fn nvim_free_string_option(p: *mut c_char);
     fn nvim_did_emsg_check() -> c_int;
-    fn nvim_redirecting_check() -> c_int;
+    fn redirecting() -> c_int;
     static mut msg_col: c_int;
     fn nvim_docmd_restore_msg_scroll(cmod: CmodHandle);
     fn nvim_cmod_get_filter_pat(cmod: CmodHandle) -> *mut c_char;
@@ -1977,7 +1977,7 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
         // Restore msg_scroll (set by file I/O commands even with no message).
         nvim_docmd_restore_msg_scroll(cmod);
         // Restore msg_col if redirecting.
-        if nvim_redirecting_check() != 0 {
+        if redirecting() != 0 {
             msg_col = 0;
         }
         nvim_cmod_set_save_msg_silent(cmod, 0);

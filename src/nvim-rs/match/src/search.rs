@@ -91,7 +91,7 @@ extern "C" {
 
     // Existing global accessors
     static mut called_emsg: c_int;
-    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+    fn syn_id2attr(hl_id: c_int) -> c_int;
     fn nvim_win_hl_attr(wp: *mut WinHandle, hlf: c_int) -> c_int;
     fn nvim_profile_passed_limit(tm: *mut u8) -> c_int;
 
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn rs_init_search_hl(wp: *mut WinHandle, search_hl: *mut M
         if hlg_id == 0 {
             nvim_match_hl_set_attr(hl, 0);
         } else {
-            nvim_match_hl_set_attr(hl, nvim_syn_id2attr(hlg_id));
+            nvim_match_hl_set_attr(hl, syn_id2attr(hlg_id));
         }
         nvim_match_hl_set_buf(hl, buf);
         nvim_match_hl_set_lnum(hl, 0);

@@ -8,9 +8,9 @@ use std::ffi::c_int;
 // C accessor declarations
 extern "C" {
     /// Convert highlight ID to attribute
-    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+    fn syn_id2attr(hl_id: c_int) -> c_int;
     /// Combine two attributes
-    fn nvim_hl_combine_attr(a: c_int, b: c_int) -> c_int;
+    fn hl_combine_attr(a: c_int, b: c_int) -> c_int;
     /// hl_attr_active: pointer to the active highlight attribute table
     static mut hl_attr_active: *mut c_int;
 }
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn rs_msg_hl_id2attr(hl_id: c_int) -> c_int {
     if hl_id == 0 {
         return 0;
     }
-    nvim_syn_id2attr(hl_id)
+    syn_id2attr(hl_id)
 }
 
 /// Combine message attribute with a base attribute.
@@ -75,13 +75,9 @@ pub unsafe extern "C" fn rs_msg_hl_id2attr(hl_id: c_int) -> c_int {
 /// Calls C functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_combine_attr(hl_id: c_int) -> c_int {
-    let attr = if hl_id != 0 {
-        nvim_syn_id2attr(hl_id)
-    } else {
-        0
-    };
+    let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
     let msg_attr = hl_attr(HlField::MSG.0);
-    nvim_hl_combine_attr(msg_attr, attr)
+    hl_combine_attr(msg_attr, attr)
 }
 
 /// Get the attribute for error messages.

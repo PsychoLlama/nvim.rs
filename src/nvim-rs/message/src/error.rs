@@ -472,7 +472,7 @@ extern "C" {
     static mut emsg_assert_fails_context: *mut std::ffi::c_char;
     fn nvim_get_sourcing_name() -> *const std::ffi::c_char;
     fn nvim_get_sourcing_lnum() -> c_int;
-    fn nvim_xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
     fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
     fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
@@ -562,12 +562,12 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         }
 
         if nvim_get_in_assert_fails() != 0 && emsg_assert_fails_msg.is_null() {
-            emsg_assert_fails_msg = nvim_xstrdup(s);
+            emsg_assert_fails_msg = xstrdup(s);
             emsg_assert_fails_lnum = c_long::from(nvim_get_sourcing_lnum());
             xfree(emsg_assert_fails_context.cast::<std::ffi::c_void>());
             let sname = nvim_get_sourcing_name();
             let ctx: *const c_char = if sname.is_null() { c"".as_ptr() } else { sname };
-            emsg_assert_fails_context = nvim_xstrdup(ctx);
+            emsg_assert_fails_context = xstrdup(ctx);
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
@@ -782,7 +782,7 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
         last_sourcing_name = if sourcing_name.is_null() {
             std::ptr::null_mut()
         } else {
-            nvim_xstrdup(sourcing_name)
+            xstrdup(sourcing_name)
         };
         if !sourcing_is_null && redirecting() == 0 {
             msg_putchar_hl(c_int::from(b'\n'), hl_id);

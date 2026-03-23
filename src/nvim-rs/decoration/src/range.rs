@@ -580,7 +580,7 @@ extern "C" {
     fn nvim_decor_items_get(idx: u32) -> DecorShHandle;
 
     // syn_id2attr
-    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+    fn syn_id2attr(hl_id: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -672,7 +672,7 @@ pub unsafe extern "C" fn rs_decor_range_add_sh(
     let has_spell_off = flags & KSH_SPELL_OFF != 0;
 
     if has_hl || has_url || has_conceal || has_spell_on || has_spell_off {
-        let attr_id = if has_hl { nvim_syn_id2attr(hl_id) } else { 0 };
+        let attr_id = if has_hl { syn_id2attr(hl_id) } else { 0 };
 
         nvim_decor_range_insert_hl(
             state,
@@ -695,7 +695,7 @@ pub unsafe extern "C" fn rs_decor_range_add_sh(
             VirtTextPos::EndOfLine as c_int
         };
         // attr_id for UI watched ranges is 0 (or same as highlight if also highlight)
-        let attr_id = if has_hl { nvim_syn_id2attr(hl_id) } else { 0 };
+        let attr_id = if has_hl { syn_id2attr(hl_id) } else { 0 };
 
         nvim_decor_range_insert_ui(
             state,

@@ -403,7 +403,7 @@ extern "C" {
     fn nvim_get_rdb_flags() -> u32;
 
     // Highlight function
-    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+    fn syn_id2attr(hl_id: c_int) -> c_int;
 
     // Default grid accessors
     fn nvim_get_default_grid() -> crate::ScreenGridHandle;
@@ -469,7 +469,7 @@ fn compose_debug_impl(
 
         let endrow = endrow.min(grid_rows);
         let endcol = endcol.min(grid_cols);
-        let attr = i64::from(nvim_syn_id2attr(syn_id));
+        let attr = i64::from(syn_id2attr(syn_id));
 
         if delay {
             debug_delay_impl(endrow - startrow);

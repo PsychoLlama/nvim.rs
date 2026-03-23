@@ -218,8 +218,6 @@ char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
 
 // C accessors for no_wait_return (used by Rust)
 
-int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
-
 // Phase 4: msg_scroll_up helper wrappers
 void nvim_msg_grid_clear_first_line(void)
 {
@@ -335,11 +333,6 @@ void nvim_msg_ui_flush_impl(void)
 }
 
 // Phase 2: msg_start accessors
-void nvim_redir_write_newline(void) { redir_write("\n", 1); }
-
-// C accessors for attribute functions (used by Rust)
-int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
-int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 
 // Phase 68: keep_msg raw setters (used by Rust set_keep_msg)
 // Note: nvim_set_keep_msg (with xfree/xstrdup) is defined in buffer_shim.c
