@@ -92,7 +92,7 @@ extern "C" {
 
     // Phase 4: msg_scroll_up helpers
     static mut msg_did_scroll: bool;
-    fn nvim_get_msg_grid_pos() -> c_int;
+    static mut msg_grid_pos: c_int;
     fn msg_grid_set_pos(row: c_int, scrolled: bool);
     fn nvim_msg_grid_clear_first_line();
     fn nvim_msg_grid_del_and_shift();
@@ -551,8 +551,8 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
     }
     msg_did_scroll = true;
 
-    if nvim_get_msg_grid_pos() > 0 {
-        msg_grid_set_pos(nvim_get_msg_grid_pos() - 1, zerocmd == 0);
+    if msg_grid_pos > 0 {
+        msg_grid_set_pos(msg_grid_pos - 1, zerocmd == 0);
         // When displaying the first line with cmdheight=0, draw over the existing last line.
         if zerocmd != 0 {
             nvim_msg_grid_clear_first_line();

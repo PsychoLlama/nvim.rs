@@ -1065,7 +1065,7 @@ unsafe extern "C" {
     static p_wcm: i64;
     fn nvim_get_p_wmnu() -> c_int;
     fn nvim_get_key_typed_cmdline() -> c_int;
-    fn nvim_get_cmdmsg_rl() -> c_int;
+    static mut cmdmsg_rl: bool;
     fn nvim_get_key_stuffed() -> c_int;
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_get_global_busy() -> bool;
@@ -1340,7 +1340,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     if nvim_get_key_typed_cmdline() != 0 {
         nvim_cls_set_some_key_typed(s, 1);
 
-        if nvim_get_cmdmsg_rl() != 0 && nvim_get_key_stuffed() == 0 {
+        if cmdmsg_rl && nvim_get_key_stuffed() == 0 {
             // Invert horizontal movements and operations. Only when typed by user
             // directly, not when the result of a mapping.
             let c_curr = nvim_cls_get_c(s);

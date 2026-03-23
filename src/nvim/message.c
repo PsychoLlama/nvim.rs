@@ -383,8 +383,6 @@ void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
 // C accessors for no_wait_return (used by Rust)
 
 // C accessors for msg_silent (used by Rust apply_cmdmod_impl / undo_cmdmod_impl)
-int nvim_get_msg_silent(void) { return msg_silent; }
-void nvim_set_msg_silent(int val) { msg_silent = val; }
 void nvim_inc_emsg_silent(void) { emsg_silent++; }
 int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
@@ -393,10 +391,6 @@ void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
 
 // Phase 429: Message grid state accessors
-int nvim_get_msg_grid_pos(void) { return msg_grid_pos; }
-void nvim_set_msg_grid_pos(int pos) { msg_grid_pos = pos; }
-int nvim_get_msg_scrolled_at_flush(void) { return msg_scrolled_at_flush; }
-void nvim_set_msg_scrolled_at_flush(int val) { msg_scrolled_at_flush = val; }
 int nvim_msg_grid_has_chars(void) { return msg_grid.chars != NULL ? 1 : 0; }
 int nvim_msg_grid_is_throttled(void) { return msg_grid.throttled ? 1 : 0; }
 void nvim_msg_grid_set_throttled(int val) { msg_grid.throttled = (val != 0); }
@@ -508,8 +502,6 @@ int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }
 int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
-int nvim_get_cmdmsg_rl(void) { return cmdmsg_rl ? 1 : 0; }
-void nvim_set_cmdmsg_rl(int val) { cmdmsg_rl = (val != 0); }
 int nvim_get_msg_grid_cols(void) { return msg_grid.cols; }
 
 // Phase 5 (msg_puts_len): wrappers for static functions and state
@@ -562,7 +554,6 @@ void nvim_redir_write_newline(void) { redir_write("\n", 1); }
 // Phase 3.4: Display state accessors (used by Rust display.rs)
 void nvim_set_cmdline_row(int val) { cmdline_row = val; }
 const char *nvim_get_keep_msg(void) { return keep_msg; }
-int nvim_get_keep_msg_hl_id(void) { return keep_msg_hl_id; }
 void nvim_set_need_clr_eos(int val) { need_clr_eos = (val != 0); }
 
 // C accessors for attribute functions (used by Rust)

@@ -34,10 +34,9 @@ extern "C" {
     fn nvim_msg_grid_set_throttled(val: c_int);
     fn nvim_get_msg_grid_pos_at_flush() -> c_int;
     fn nvim_set_msg_grid_pos_at_flush(val: c_int);
-    fn nvim_get_msg_grid_pos() -> c_int;
+    static mut msg_grid_pos: c_int;
     fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_get_msg_scrolled_at_flush() -> c_int;
-    fn nvim_set_msg_scrolled_at_flush(val: c_int);
+    static mut msg_scrolled_at_flush: c_int;
     static mut msg_grid_scroll_discount: c_int;
     fn nvim_msg_set_pos_for_scroll(pos: c_int);
     fn nvim_msg_grid_scroll_up(to_scroll: c_int);
@@ -330,33 +329,32 @@ pub unsafe extern "C" fn rs_msg_ui_flush() {
 pub unsafe extern "C" fn rs_msg_scroll_flush() {
     if nvim_msg_grid_is_throttled() != 0 {
         nvim_msg_grid_set_throttled(0);
-        let pos_delta = nvim_get_msg_grid_pos_at_flush() - nvim_get_msg_grid_pos();
+        let pos_delta = nvim_get_msg_grid_pos_at_flush() - msg_grid_pos;
         assert!(pos_delta >= 0);
-        let delta = (nvim_get_msg_scrolled() - nvim_get_msg_scrolled_at_flush())
-            .min(nvim_msg_grid_get_rows());
+        let delta = (nvim_get_msg_scrolled() - msg_scrolled_at_flush).min(nvim_msg_grid_get_rows());
 
         if pos_delta > 0 {
-            nvim_msg_set_pos_for_scroll(nvim_get_msg_grid_pos());
+            nvim_msg_set_pos_for_scroll(msg_grid_pos);
         }
 
         let to_scroll = delta - pos_delta - msg_grid_scroll_discount;
         assert!(to_scroll >= 0);
 
-        if to_scroll > 0 && nvim_get_msg_grid_pos() == 0 {
+        if to_scroll > 0 && msg_grid_pos == 0 {
             nvim_msg_grid_scroll_up(to_scroll);
         }
 
         let rows = Rows;
         let start = (rows - delta.max(1)).max(0);
         for i in start..rows {
-            let row = i - nvim_get_msg_grid_pos();
+            let row = i - msg_grid_pos;
             assert!(row >= 0);
             nvim_msg_grid_flush_dirty_line(row);
         }
     }
-    nvim_set_msg_scrolled_at_flush(nvim_get_msg_scrolled());
+    msg_scrolled_at_flush = nvim_get_msg_scrolled();
     msg_grid_scroll_discount = 0;
-    nvim_set_msg_grid_pos_at_flush(nvim_get_msg_grid_pos());
+    nvim_set_msg_grid_pos_at_flush(msg_grid_pos);
 }
 
 // Note: rs_msg_reset_scroll() is defined in scrollback.rs

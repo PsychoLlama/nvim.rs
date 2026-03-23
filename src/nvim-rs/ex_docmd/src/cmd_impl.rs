@@ -945,8 +945,7 @@ extern "C" {
     fn nvim_cmod_regfree_filter(cmod: CmodHandle);
     fn nvim_docmd_set_eventignore_all();
     fn nvim_docmd_set_eventignore_str(s: *mut c_char);
-    fn nvim_get_msg_silent() -> c_int;
-    fn nvim_set_msg_silent(val: c_int);
+    static mut msg_silent: c_int;
     fn nvim_inc_msg_silent();
     fn nvim_inc_emsg_silent();
     fn nvim_set_emsg_silent(val: c_int);
@@ -1908,14 +1907,14 @@ pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
 
     // :silent / :unsilent
     if (flags & (CMOD_SILENT | CMOD_UNSILENT)) != 0 && nvim_cmod_get_save_msg_silent(cmod) == 0 {
-        nvim_cmod_set_save_msg_silent(cmod, nvim_get_msg_silent() + 1);
+        nvim_cmod_set_save_msg_silent(cmod, msg_silent + 1);
         nvim_cmod_capture_msg_scroll(cmod);
     }
     if (flags & CMOD_SILENT) != 0 {
         nvim_inc_msg_silent();
     }
     if (flags & CMOD_UNSILENT) != 0 {
-        nvim_set_msg_silent(0);
+        msg_silent = 0;
     }
 
     // :silent!
@@ -1968,9 +1967,9 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
     let save_msg_silent = nvim_cmod_get_save_msg_silent(cmod);
     if save_msg_silent > 0 {
         // Prevent counters from going negative if a serious error enabled messages.
-        let cur_msg_silent = nvim_get_msg_silent();
+        let cur_msg_silent = msg_silent;
         if nvim_did_emsg_check() == 0 || cur_msg_silent > save_msg_silent - 1 {
-            nvim_set_msg_silent(save_msg_silent - 1);
+            msg_silent = save_msg_silent - 1;
         }
         let did_esilent = nvim_cmod_get_did_esilent(cmod);
         let new_emsg_silent = nvim_get_emsg_silent() - did_esilent;

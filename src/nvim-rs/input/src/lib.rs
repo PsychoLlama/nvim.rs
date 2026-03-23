@@ -303,7 +303,7 @@ extern "C" {
     fn nvim_set_mapped_ctrl_c(val: c_int);
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_get_keep_msg() -> *const c_char;
-    fn nvim_get_keep_msg_hl_id() -> c_int;
+    static mut keep_msg_hl_id: c_int;
 
     // Display / UI
     fn ui_flush();
@@ -401,7 +401,7 @@ unsafe fn prompt_for_input_impl(
     }
 
     if !kmsg.is_null() {
-        let keep_hl = nvim_get_keep_msg_hl_id();
+        let keep_hl = keep_msg_hl_id;
         set_keep_msg(kmsg, keep_hl);
         nvim_xfree(kmsg.cast::<c_void>());
     }

@@ -32,7 +32,7 @@ extern "C" {
     // grid_line_mirror and grid_line_flush_if_valid_row are implemented in Rust (grid crate)
     fn grid_line_mirror(width: c_int);
     fn grid_line_flush_if_valid_row();
-    fn nvim_get_cmdmsg_rl() -> c_int;
+    static mut cmdmsg_rl: bool;
     fn nvim_get_msg_grid_cols() -> c_int;
 
     // Position and display state
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn rs_msg_grid_validate() {
 /// Calls grid functions that modify display state.
 #[export_name = "msg_line_flush"]
 pub unsafe extern "C" fn rs_msg_line_flush() {
-    if nvim_get_cmdmsg_rl() != 0 {
+    if cmdmsg_rl {
         grid_line_mirror(nvim_get_msg_grid_cols());
     }
     grid_line_flush_if_valid_row();

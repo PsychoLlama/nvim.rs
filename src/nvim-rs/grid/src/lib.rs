@@ -2561,13 +2561,11 @@ pub unsafe extern "C" fn rs_ui_has(ext: c_int) -> c_int {
 
 extern "C" {
     /// Get msg_grid_pos (current message grid row position)
-    fn nvim_get_msg_grid_pos() -> c_int;
+    static mut msg_grid_pos: c_int;
     /// Set msg_grid_pos
-    fn nvim_set_msg_grid_pos(pos: c_int);
     /// Get msg_scrolled_at_flush
-    fn nvim_get_msg_scrolled_at_flush() -> c_int;
+    static mut msg_scrolled_at_flush: c_int;
     /// Set msg_scrolled_at_flush
-    fn nvim_set_msg_scrolled_at_flush(val: c_int);
     /// Check if msg_grid has chars allocated
     fn nvim_msg_grid_has_chars() -> c_int;
     /// Check if msg_grid is throttled
@@ -2586,7 +2584,7 @@ extern "C" {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_pos() -> c_int {
-    nvim_get_msg_grid_pos()
+    msg_grid_pos
 }
 
 /// Set the message grid row position.
@@ -2595,7 +2593,7 @@ pub unsafe extern "C" fn rs_msg_grid_pos() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_grid_pos(pos: c_int) {
-    nvim_set_msg_grid_pos(pos);
+    msg_grid_pos = pos;
 }
 
 /// Get the msg_scrolled value at last flush.
@@ -2604,7 +2602,7 @@ pub unsafe extern "C" fn rs_set_msg_grid_pos(pos: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_scrolled_at_flush() -> c_int {
-    nvim_get_msg_scrolled_at_flush()
+    msg_scrolled_at_flush
 }
 
 /// Set the msg_scrolled value at flush.
@@ -2613,7 +2611,7 @@ pub unsafe extern "C" fn rs_msg_scrolled_at_flush() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_scrolled_at_flush(val: c_int) {
-    nvim_set_msg_scrolled_at_flush(val);
+    msg_scrolled_at_flush = val;
 }
 
 /// Check if the message grid has chars allocated.
@@ -2685,7 +2683,7 @@ pub unsafe extern "C" fn rs_msg_grid_ready() -> c_int {
 pub unsafe extern "C" fn rs_msg_grid_needs_flush() -> c_int {
     let throttled = nvim_msg_grid_is_throttled() != 0;
     let scrolled = nvim_get_msg_scrolled();
-    let at_flush = nvim_get_msg_scrolled_at_flush();
+    let at_flush = msg_scrolled_at_flush;
     c_int::from(throttled && scrolled > at_flush)
 }
 
@@ -2698,7 +2696,7 @@ pub unsafe extern "C" fn rs_msg_grid_needs_flush() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_scroll_delta() -> c_int {
     let scrolled = nvim_get_msg_scrolled();
-    let at_flush = nvim_get_msg_scrolled_at_flush();
+    let at_flush = msg_scrolled_at_flush;
     if scrolled > at_flush {
         scrolled - at_flush
     } else {
@@ -2715,7 +2713,7 @@ pub unsafe extern "C" fn rs_msg_grid_scroll_delta() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_sync_flush() {
     let scrolled = nvim_get_msg_scrolled();
-    nvim_set_msg_scrolled_at_flush(scrolled);
+    msg_scrolled_at_flush = scrolled;
 }
 
 /// Enable message grid throttling.
