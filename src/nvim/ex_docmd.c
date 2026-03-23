@@ -364,6 +364,7 @@ extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
 extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 extern void nvim_docmd_handle_did_throw_impl(void);
 extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
+extern void nvim_docmd_ex_find_impl(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2225,47 +2226,6 @@ void nvim_docmd_ex_connect_impl(exarg_T *eap)
   }
 }
 
-/// ":resize".
-/// set, increment or decrement current window height
-/// ":find [+command] <file>" command.
-void nvim_docmd_ex_find_impl(exarg_T *eap)
-{
-  if (!check_can_set_curbuf_forceit(eap->forceit)) {
-    return;
-  }
-
-  char *fname = NULL;
-  if (*get_findfunc() != NUL) {
-    fname = findfunc_find_file(eap->arg, strlen(eap->arg),
-                               eap->addr_count > 0 ? eap->line2 : 1);
-  } else {
-    char *file_to_find = NULL;
-    char *search_ctx = NULL;
-    fname = find_file_in_path(eap->arg, strlen(eap->arg), FNAME_MESS, true,
-                              curbuf->b_ffname, &file_to_find, &search_ctx);
-    if (eap->addr_count > 0) {
-      // Repeat finding the file "count" times.  This matters when it appears
-      // several times in the path.
-      linenr_T count = eap->line2;
-      while (fname != NULL && --count > 0) {
-        xfree(fname);
-        fname = find_file_in_path(NULL, 0, FNAME_MESS, false,
-                                  curbuf->b_ffname, &file_to_find, &search_ctx);
-      }
-    }
-    xfree(file_to_find);
-    vim_findfile_cleanup(search_ctx);
-  }
-
-  if (fname == NULL) {
-    return;
-  }
-
-  eap->arg = fname;
-  nvim_docmd_do_exedit_impl(eap, NULL);
-  xfree(fname);
-}
-
 /// ":edit", ":badd", ":balt", ":visual".
 /// ":edit <file>" command and alike.
 ///
@@ -4106,6 +4066,16 @@ void nvim_docmd_goto_buffer_first(exarg_T *eap, int n)
 char *nvim_docmd_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
 /// For do_exbuffer_impl: ex_errmsg(e_trailing_arg, arg).
 char *nvim_docmd_errmsg_trailing_arg(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
+
+/// For ex_find_impl: returns true if 'findfunc' option is non-empty.
+bool nvim_docmd_get_findfunc_nonempty(void) { return *get_findfunc() != NUL; }
+/// For ex_find_impl: wraps the static findfunc_find_file().
+char *nvim_docmd_findfunc_find_file(char *arg, size_t len, int count)
+{
+  return findfunc_find_file(arg, len, count);
+}
+/// For ex_find_impl: returns curbuf->b_ffname.
+const char *nvim_docmd_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 
 /// For handle_did_throw_impl: free SOURCING_NAME then pop estack.
 void nvim_docmd_free_sourcing_name_and_pop(void)

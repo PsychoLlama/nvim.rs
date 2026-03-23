@@ -686,7 +686,6 @@ extern "C" {
     // Phase 2 C implementation wrappers
     fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
     fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
-    fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
     fn nvim_docmd_tabpage_new_impl();
 
     // ex_win_close_impl helpers
@@ -786,6 +785,26 @@ extern "C" {
     fn nvim_docmd_tabpage_get_lastwin(tp: *mut c_void) -> WinHandle;
     fn nvim_docmd_tabpage_lastwin_eq(tp: *mut c_void, wp: WinHandle) -> c_int;
     fn nvim_docmd_ex_win_close_in_tab(forceit: c_int, wp: WinHandle, tp: *mut c_void);
+
+    // ex_find helpers
+    fn nvim_eap_set_arg(eap: ExArgHandle, arg: *mut c_char);
+    fn nvim_docmd_get_findfunc_nonempty() -> bool;
+    fn nvim_docmd_findfunc_find_file(arg: *mut c_char, len: usize, count: c_int) -> *mut c_char;
+    fn nvim_docmd_curbuf_b_ffname() -> *const c_char;
+    #[link_name = "find_file_in_path"]
+    fn nvim_docmd_find_file_in_path(
+        ptr: *mut c_char,
+        len: usize,
+        options: c_int,
+        first: c_int,
+        rel_fname: *const c_char,
+        file_to_find: *mut *mut c_char,
+        search_ctx: *mut *mut c_void,
+    ) -> *mut c_char;
+    #[link_name = "nvim_vim_findfile_cleanup"]
+    fn nvim_docmd_vim_findfile_cleanup(search_ctx: *mut c_void);
+    #[link_name = "check_can_set_curbuf_forceit"]
+    fn nvim_docmd_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
 }
 
 /// `do_exedit` - edit/badd/visual command dispatch.
@@ -806,13 +825,80 @@ pub unsafe extern "C" fn rs_ex_splitview(eap: ExArgHandle) {
     nvim_docmd_ex_splitview_impl(eap);
 }
 
-/// `:find` command.
+/// `:find` - find file in path and edit it.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "nvim_docmd_ex_find_impl"]
+pub unsafe extern "C" fn rs_ex_find_impl(eap: ExArgHandle) {
+    let forceit = nvim_eap_get_forceit(eap) as c_int;
+    if !nvim_docmd_check_can_set_curbuf_forceit(forceit) {
+        return;
+    }
+
+    let arg = nvim_eap_get_arg(eap);
+    let len = std::ffi::CStr::from_ptr(arg).to_bytes().len();
+
+    let fname: *mut c_char = if nvim_docmd_get_findfunc_nonempty() {
+        let count = if nvim_eap_get_addr_count(eap) > 0 {
+            nvim_eap_get_line2(eap) as c_int
+        } else {
+            1
+        };
+        nvim_docmd_findfunc_find_file(arg, len, count)
+    } else {
+        let mut file_to_find: *mut c_char = std::ptr::null_mut();
+        let mut search_ctx: *mut c_void = std::ptr::null_mut();
+        const FNAME_MESS: c_int = 1;
+        let rel = nvim_docmd_curbuf_b_ffname();
+        let mut fname = nvim_docmd_find_file_in_path(
+            arg,
+            len,
+            FNAME_MESS,
+            1,
+            rel,
+            &mut file_to_find,
+            &mut search_ctx,
+        );
+        if nvim_eap_get_addr_count(eap) > 0 {
+            let mut count = nvim_eap_get_line2(eap) as c_int;
+            while !fname.is_null() && {
+                count -= 1;
+                count > 0
+            } {
+                xfree(fname as *mut c_void);
+                fname = nvim_docmd_find_file_in_path(
+                    std::ptr::null_mut(),
+                    0,
+                    FNAME_MESS,
+                    0,
+                    rel,
+                    &mut file_to_find,
+                    &mut search_ctx,
+                );
+            }
+        }
+        xfree(file_to_find as *mut c_void);
+        nvim_docmd_vim_findfile_cleanup(search_ctx);
+        fname
+    };
+
+    if fname.is_null() {
+        return;
+    }
+
+    nvim_eap_set_arg(eap, fname);
+    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
+    xfree(fname as *mut c_void);
+}
+
+/// `:find` command - public entry point.
 ///
 /// # Safety
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_find"]
 pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
-    nvim_docmd_ex_find_impl(eap);
+    rs_ex_find_impl(eap);
 }
 
 /// `nvim_docmd_before_quit_autocmds_impl` - fire pre-quit autocmds.
