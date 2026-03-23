@@ -38,9 +38,9 @@ extern "C" {
     fn nvim_redrawing() -> c_int;
     fn char_avail() -> bool;
     fn ins_redraw_false();
-    fn nvim_edit_putchar(c: c_int, highlight: c_int);
+    fn nvim_putchar(c: c_int, highlight: c_int);
     fn edit_unputchar();
-    fn nvim_edit_set_pc_status_unset();
+    fn nvim_set_pc_status_unset();
     fn add_to_showcmd_c(c: c_int);
     fn rs_clear_showcmd();
     fn nvim_inc_no_mapping();
@@ -55,13 +55,13 @@ extern "C" {
     fn nvim_set_u_sync_once(val: c_int);
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_get_expr_register() -> c_int;
-    fn nvim_edit_ins_reg_restore_cursor_save();
-    fn nvim_edit_ins_reg_restore_cursor();
+    fn nvim_ins_reg_restore_cursor_save();
+    fn nvim_ins_reg_restore_cursor();
     fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn vim_beep(val: c_uint);
-    fn nvim_edit_get_yank_register(regname: c_int) -> *mut std::ffi::c_void;
-    fn nvim_edit_reg_y_size(reg: *const std::ffi::c_void) -> usize;
-    fn nvim_edit_is_literal_register(regname: c_int) -> c_int;
+    fn nvim_get_yank_register_paste(regname: c_int) -> *mut std::ffi::c_void;
+    fn nvim_reg_y_size(reg: *const std::ffi::c_void) -> usize;
+    fn nvim_is_literal_register(regname: c_int) -> bool;
     fn AppendCharToRedobuff(c: c_int);
     fn nvim_put_do_put(
         regname: c_int,
@@ -70,8 +70,8 @@ extern "C" {
         count: c_int,
         flags: c_int,
     );
-    fn nvim_edit_insert_reg(regname: c_int, literally: c_int) -> c_int;
-    fn nvim_edit_get_stop_insert_mode() -> c_int;
+    fn nvim_insert_reg(regname: c_int, literally: c_int) -> c_int;
+    fn nvim_get_stop_insert_mode() -> c_int;
     fn nvim_stuff_empty() -> bool;
     fn nvim_VIsual_active() -> c_int;
     fn end_visual_mode();
@@ -92,10 +92,10 @@ pub unsafe extern "C" fn rs_ins_reg() {
     let vis_active = nvim_VIsual_active();
 
     // If we are going to wait for a character, show a `"`.
-    nvim_edit_set_pc_status_unset();
+    nvim_set_pc_status_unset();
     if nvim_redrawing() != 0 && !char_avail() {
         ins_redraw_false();
-        nvim_edit_putchar(c_int::from(b'"'), 1);
+        nvim_putchar(c_int::from(b'"'), 1);
         add_to_showcmd_c(CTRL_R);
     }
 
@@ -117,17 +117,17 @@ pub unsafe extern "C" fn rs_ins_reg() {
     // Don't call `u_sync()` while typing the expression or giving error message.
     nvim_inc_no_u_sync();
     if regname == EQ_CHAR {
-        nvim_edit_ins_reg_restore_cursor_save();
+        nvim_ins_reg_restore_cursor_save();
         nvim_set_u_sync_once(2);
         regname = nvim_get_expr_register();
-        nvim_edit_ins_reg_restore_cursor();
+        nvim_ins_reg_restore_cursor();
     }
 
     if regname == NUL || !nvim_valid_yank_reg(regname, false) {
         vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
         need_redraw = true;
     } else {
-        let reg = nvim_edit_get_yank_register(regname);
+        let reg = nvim_get_yank_register_paste(regname);
 
         if literally == CTRL_O || literally == CTRL_P {
             // Append the command to the redo buffer.
@@ -145,14 +145,14 @@ pub unsafe extern "C" fn rs_ins_reg() {
                     PUT_CURSEND
                 },
             );
-        } else if nvim_edit_reg_y_size(reg) > 1 && nvim_edit_is_literal_register(regname) != 0 {
+        } else if nvim_reg_y_size(reg) > 1 && nvim_is_literal_register(regname) {
             AppendCharToRedobuff(CTRL_R);
             AppendCharToRedobuff(regname);
             nvim_put_do_put(regname, std::ptr::null_mut(), BACKWARD, 1, PUT_CURSEND);
-        } else if nvim_edit_insert_reg(regname, literally) == FAIL {
+        } else if nvim_insert_reg(regname, literally) == FAIL {
             vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
             need_redraw = true;
-        } else if nvim_edit_get_stop_insert_mode() != 0 {
+        } else if nvim_get_stop_insert_mode() != 0 {
             // `":stopinsert"` was invoked; nothing will be inserted.
             need_redraw = true;
         }

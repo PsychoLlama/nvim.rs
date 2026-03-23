@@ -71,7 +71,7 @@ extern "C" {
     fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // Last insert mark
-    fn nvim_edit_set_b_last_insert_mark();
+    fn nvim_set_b_last_insert_mark();
 
     // `cmod_flags` / `CMOD_KEEPJUMPS`
     fn nvim_cmod_keepjumps() -> bool;
@@ -86,7 +86,7 @@ extern "C" {
     fn gchar_cursor() -> c_int;
 
     // `buf_meta_total` curbuf inline
-    fn nvim_edit_curbuf_meta_total_inline() -> c_int;
+    fn nvim_curbuf_meta_total_inline() -> c_int;
 
     // `revins_on`
     fn nvim_get_revins_on() -> c_int;
@@ -97,7 +97,7 @@ extern "C" {
     // `setmouse` / `showmode` / `unshowmode`
     fn nvim_setmouse();
     fn nvim_showmode();
-    fn nvim_edit_unshowmode_false();
+    fn nvim_unshowmode_false();
     fn nvim_get_p_smd() -> c_int;
     fn skip_showmode() -> bool;
     fn nvim_get_got_int() -> c_int;
@@ -110,13 +110,13 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
 
     // `p_ch == 0 && !ui_has(kUIMessages)`
-    fn nvim_edit_get_p_ch_zero_no_ui_messages() -> c_int;
+    fn nvim_get_p_ch_zero_no_ui_messages() -> c_int;
 
     // Autocmds
-    fn nvim_edit_ins_apply_autocmds_insertleavepre();
+    fn nvim_ins_apply_autocmds_insertleavepre();
 
     // `stop_insert(&curwin->w_cursor, true, nomove)`
-    fn nvim_edit_stop_insert_curpos(nomove: c_int);
+    fn nvim_stop_insert_curpos(nomove: c_int);
 
     // `undisplay_dollar`
     fn undisplay_dollar();
@@ -193,12 +193,12 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
             return 0; // repeat the insert
         }
 
-        nvim_edit_stop_insert_curpos(nomove);
+        nvim_stop_insert_curpos(nomove);
         undisplay_dollar();
     }
 
     if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') {
-        nvim_edit_ins_apply_autocmds_insertleavepre();
+        nvim_ins_apply_autocmds_insertleavepre();
     }
 
     // When an autoindent was removed, curswant stays after the indent
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // Remember the last Insert position in the '^ mark.
     if !nvim_cmod_keepjumps() {
-        nvim_edit_set_b_last_insert_mark();
+        nvim_set_b_last_insert_mark();
     }
 
     // The cursor should end up on the last inserted character.
@@ -235,7 +235,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text.
-    if gchar_cursor() == c_int::from(b'\t') || nvim_edit_curbuf_meta_total_inline() > 0 {
+    if gchar_cursor() == c_int::from(b'\t') || nvim_curbuf_meta_total_inline() > 0 {
         nvim_curwin_clear_wrow_wcol_virtcol();
     }
 
@@ -248,9 +248,9 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         nvim_showmode();
     } else if nvim_get_p_smd() != 0
         && (nvim_get_got_int() != 0 || !skip_showmode())
-        && nvim_edit_get_p_ch_zero_no_ui_messages() == 0
+        && nvim_get_p_ch_zero_no_ui_messages() == 0
     {
-        nvim_edit_unshowmode_false();
+        nvim_unshowmode_false();
     }
 
     1 // leaving insert mode

@@ -1468,17 +1468,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
 /// Get restart_edit (accessor for Rust).
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
 
-/// Get stop_insert_mode (accessor for Rust).
-int nvim_edit_get_stop_insert_mode(void)
-{
-  return stop_insert_mode ? 1 : 0;
-}
-
-/// Set stop_insert_mode (accessor for Rust).
-void nvim_edit_set_stop_insert_mode(int val)
-{
-  stop_insert_mode = (val != 0);
-}
 
 /// Set where_paste_started.lnum to 0 (accessor for Rust).
 void nvim_edit_clear_where_paste_started(void)
@@ -2398,13 +2387,13 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
 
 
 /// Call ins_apply_autocmds(EVENT_INSERTLEAVEPRE) (accessor for Rust).
-void nvim_edit_ins_apply_autocmds_insertleavepre(void)
+void nvim_ins_apply_autocmds_insertleavepre(void)
 {
   ins_apply_autocmds(EVENT_INSERTLEAVEPRE);
 }
 
 /// Call unshowmode(false) (accessor for Rust).
-void nvim_edit_unshowmode_false(void)
+void nvim_unshowmode_false(void)
 {
   unshowmode(false);
 }
@@ -2413,17 +2402,12 @@ void nvim_edit_unshowmode_false(void)
 
 /// Set curbuf->b_last_insert mark to current cursor + topline (composite for Rust).
 /// Calls mark_view_make and RESET_FMARK.
-void nvim_edit_set_b_last_insert_mark(void)
+void nvim_set_b_last_insert_mark(void)
 {
   fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_cursor);
   RESET_FMARK(&curbuf->b_last_insert, curwin->w_cursor, curbuf->b_fnum, view);
 }
 
-/// Get buf_meta_total(curbuf, kMTMetaInline) (accessor for Rust).
-int nvim_edit_curbuf_meta_total_inline(void)
-{
-  return buf_meta_total(curbuf, kMTMetaInline);
-}
 
 /// Get u_sync_once global (accessor for Rust).
 int nvim_get_u_sync_once(void)
@@ -2437,40 +2421,16 @@ void nvim_set_u_sync_once(int val)
   u_sync_once = val;
 }
 
-/// Get yankreg_T* for register regname (YREG_PASTE), as void* (accessor for Rust).
-void *nvim_edit_get_yank_register(int regname)
-{
-  return get_yank_register(regname, YREG_PASTE);
-}
-
-/// Call insert_reg(regname, NULL, literally != 0) (accessor for Rust).
-int nvim_edit_insert_reg(int regname, int literally)
-{
-  return insert_reg(regname, NULL, literally != 0);
-}
-
-/// Call is_literal_register(regname) (accessor for Rust).
-int nvim_edit_is_literal_register(int regname)
-{
-  return is_literal_register(regname) ? 1 : 0;
-}
-
-/// Get reg->y_size for a yankreg_T* (accessor for Rust).
-size_t nvim_edit_reg_y_size(void *reg)
-{
-  return ((yankreg_T *)reg)->y_size;
-}
-
 
 
 /// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
-void nvim_edit_set_pc_status_unset(void)
+void nvim_set_pc_status_unset(void)
 {
   pc_status = PC_STATUS_UNSET;
 }
 
 /// Call edit_putchar(c, highlight != 0) (accessor for Rust).
-void nvim_edit_putchar(int c, int highlight)
+void nvim_putchar(int c, int highlight)
 {
   edit_putchar(c, highlight != 0);
 }
@@ -2483,7 +2443,7 @@ void nvim_edit_putchar(int c, int highlight)
 
 
 /// Call stop_insert logic at curwin->w_cursor (composite for Rust).
-void nvim_edit_stop_insert_curpos(int nomove)
+void nvim_stop_insert_curpos(int nomove)
 {
   pos_T *pos = &curwin->w_cursor;
   stop_redo_ins();
@@ -2568,11 +2528,6 @@ void nvim_edit_stop_insert_curpos(int nomove)
   curbuf->b_op_end = *pos;
 }
 
-/// Get p_ch == 0 && !ui_has(kUIMessages) (accessor for Rust ins_esc showmode check).
-int nvim_edit_get_p_ch_zero_no_ui_messages(void)
-{
-  return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0;
-}
 
 /// Get curwin->w_cursor.coladd (accessor for Rust).
 colnr_T nvim_curwin_get_cursor_coladd(void)
@@ -2584,13 +2539,13 @@ colnr_T nvim_curwin_get_cursor_coladd(void)
 
 /// Save cursor position for expression register evaluation (composite for Rust).
 static pos_T ins_reg_saved_cursor;
-void nvim_edit_ins_reg_restore_cursor_save(void)
+void nvim_ins_reg_restore_cursor_save(void)
 {
   ins_reg_saved_cursor = curwin->w_cursor;
 }
 
 /// Restore cursor position after expression register evaluation (composite for Rust).
-void nvim_edit_ins_reg_restore_cursor(void)
+void nvim_ins_reg_restore_cursor(void)
 {
   curwin->w_cursor = ins_reg_saved_cursor;
   check_cursor(curwin);

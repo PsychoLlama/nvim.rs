@@ -2298,3 +2298,11 @@ void nvim_internal_format(int textwidth, int second_indent, int flags, int forma
 int nvim_byte2cells(int b) { return byte2cells((uint8_t)b); }
 int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }
 int nvim_cursor_has_composing(void) { if (!p_deco) { return 0; } char *p0 = get_cursor_pos_ptr(); return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0; }
+
+// General register accessors (migrated from edit.c)
+void *nvim_get_yank_register_paste(int regname) { return get_yank_register(regname, YREG_PASTE); }
+int nvim_insert_reg(int regname, int literally) { return insert_reg(regname, NULL, literally != 0); }
+bool nvim_is_literal_register(int regname) { return is_literal_register(regname); }
+size_t nvim_reg_y_size(void *reg) { return ((yankreg_T *)reg)->y_size; }
+int nvim_curbuf_meta_total_inline(void) { return buf_meta_total(curbuf, kMTMetaInline); }
+int nvim_get_p_ch_zero_no_ui_messages(void) { return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0; }

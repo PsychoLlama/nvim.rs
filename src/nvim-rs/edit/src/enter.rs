@@ -92,8 +92,8 @@ extern "C" {
     fn nvim_set_vr_lines_changed(val: c_int);
 
     // Flags
-    fn nvim_edit_get_stop_insert_mode() -> c_int;
-    fn nvim_edit_set_stop_insert_mode(val: c_int);
+    fn nvim_get_stop_insert_mode() -> c_int;
+    fn nvim_set_stop_insert_mode(val: c_int);
     fn nvim_edit_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
@@ -255,7 +255,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     }
 
     nvim_may_trigger_modechanged();
-    nvim_edit_set_stop_insert_mode(0);
+    nvim_set_stop_insert_mode(0);
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text
