@@ -302,8 +302,7 @@ extern "C" {
     fn nvim_compl_match_get_match_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_match_next(m: ComplMatch, next: ComplMatch);
     fn nvim_compl_match_clear_icase(m: ComplMatch);
-    fn nvim_compl_leader_eq_orig_text() -> c_int;
-    fn nvim_set_compl_shown_to_first_or_next(no_select: c_int);
+    // (nvim_compl_leader_eq_orig_text and nvim_set_compl_shown_to_first_or_next: inlined in match_list.rs)
     fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
@@ -370,8 +369,8 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     let shown_match = nvim_compl_get_shown_match();
     let mut shown_match_ok = !shown_match.is_null() && match_at_original_text(shown_match);
 
-    if nvim_compl_leader_eq_orig_text() != 0 && !shown_match_ok {
-        nvim_set_compl_shown_to_first_or_next(c_int::from(compl_no_select));
+    if crate::match_list::compl_leader_eq_orig_text() && !shown_match_ok {
+        crate::match_list::set_compl_shown_to_first_or_next(compl_no_select);
     }
 
     let mut did_find_shown_match = false;

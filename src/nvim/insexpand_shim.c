@@ -1141,13 +1141,8 @@ void nvim_compl_match_set_in_match_array(void *m, int val) { if (m) ((compl_T *)
 void *nvim_compl_match_get_match_next(void *m) { return m ? ((compl_T *)m)->cp_match_next : NULL; }
 void nvim_compl_match_set_match_next(void *m, void *next) { if (m) ((compl_T *)m)->cp_match_next = (compl_T *)next; }
 void nvim_compl_match_clear_icase(void *m) { if (m) ((compl_T *)m)->cp_flags &= ~CP_ICASE; }
-int nvim_compl_leader_eq_orig_text(void) {
-  return (compl_leader.data && compl_orig_text.data
-          && strequal(compl_leader.data, compl_orig_text.data)) ? 1 : 0;
-}
-void nvim_set_compl_shown_to_first_or_next(int no_select) {
-  compl_shown_match = no_select ? compl_first_match : compl_first_match->cp_next;
-}
+// nvim_compl_leader_eq_orig_text: deleted (Phase 17, inlined in match_list.rs)
+// nvim_set_compl_shown_to_first_or_next: deleted (Phase 17, inlined in match_list.rs)
 /// Build and fill compl_match_array from the cp_match_next linked list.
 /// Allocates compl_match_array[0..count-1] and populates pumitem_T fields.
 /// Returns the count of filled entries (same as count parameter).
@@ -2553,12 +2548,9 @@ int nvim_get_edit_submode_highl_attr(void) {
 }
 
 // --- compl_curr_match accessors ---
-int nvim_compl_curr_match_cp_number(void) { return compl_curr_match ? compl_curr_match->cp_number : -1; }
-void nvim_compl_curr_match_set_cp_number(int val) { if (compl_curr_match) compl_curr_match->cp_number = val; }
-int nvim_compl_curr_match_next_eq_prev(void) {
-  return (compl_curr_match
-          && compl_curr_match->cp_next == compl_curr_match->cp_prev) ? 1 : 0;
-}
+// nvim_compl_curr_match_cp_number: deleted (Phase 17, inlined in match_list.rs)
+// nvim_compl_curr_match_set_cp_number: deleted (Phase 17, inlined in match_list.rs)
+// nvim_compl_curr_match_next_eq_prev: deleted (Phase 17, inlined in match_list.rs)
 
 // --- misc message / display wrappers ---
 // nvim_get_p_smd: defined in normal_shim.c

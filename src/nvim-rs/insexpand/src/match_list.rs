@@ -117,8 +117,9 @@ extern "C" {
     // cp_fname accessor
     pub(crate) fn nvim_compl_match_has_fname(m: ComplMatch) -> c_int;
 
-    // compl_orig_text accessors (String_T)
+    // compl_orig_text and compl_leader accessors (String_T)
     fn nvim_get_compl_orig_text_data() -> *const c_char;
+    fn nvim_get_compl_leader_data() -> *const c_char;
 
     // Direction check (from lib.rs)
     fn rs_compl_dir_forward() -> c_int;
@@ -452,6 +453,61 @@ pub unsafe extern "C" fn rs_ins_compl_update_sequence_numbers() {
             }
         }
     }
+}
+
+/// Get cp_number of compl_curr_match (-1 if null).
+#[inline]
+pub(crate) unsafe fn curr_match_cp_number() -> c_int {
+    if compl_curr_match.is_null() {
+        -1
+    } else {
+        nvim_compl_match_get_cp_number(compl_curr_match)
+    }
+}
+
+/// Set cp_number of compl_curr_match (no-op if null).
+#[inline]
+pub(crate) unsafe fn curr_match_set_cp_number(val: c_int) {
+    if !compl_curr_match.is_null() {
+        nvim_compl_match_set_cp_number(compl_curr_match, val);
+    }
+}
+
+/// Check if compl_curr_match->cp_next == cp_prev (singleton ring).
+#[inline]
+pub(crate) unsafe fn curr_match_next_eq_prev() -> bool {
+    if compl_curr_match.is_null() {
+        return false;
+    }
+    let next = nvim_compl_match_get_next(compl_curr_match);
+    let prev = nvim_compl_match_get_prev(compl_curr_match);
+    !next.is_null() && next == prev
+}
+
+/// Check if compl_leader equals compl_orig_text (both non-null).
+#[inline]
+pub(crate) unsafe fn compl_leader_eq_orig_text() -> bool {
+    let leader = nvim_get_compl_leader_data();
+    let orig = nvim_get_compl_orig_text_data();
+    if leader.is_null() || orig.is_null() {
+        return false;
+    }
+    let a = std::ffi::CStr::from_ptr(leader);
+    let b = std::ffi::CStr::from_ptr(orig);
+    a == b
+}
+
+/// Set compl_shown_match to first match or first->cp_next based on no_select flag.
+#[inline]
+pub(crate) unsafe fn set_compl_shown_to_first_or_next(no_select: bool) {
+    if compl_first_match.is_null() {
+        return;
+    }
+    compl_shown_match = if no_select {
+        compl_first_match
+    } else {
+        nvim_compl_match_get_next(compl_first_match)
+    };
 }
 
 #[cfg(test)]

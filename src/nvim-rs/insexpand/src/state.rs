@@ -359,9 +359,7 @@ extern "C" {
     fn nvim_compl_match_get_next(m: crate::match_list::ComplMatch)
         -> crate::match_list::ComplMatch;
     fn rs_compl_status_adding() -> c_int;
-    fn nvim_compl_curr_match_next_eq_prev() -> c_int;
-    fn nvim_compl_curr_match_cp_number() -> c_int;
-    fn nvim_compl_curr_match_set_cp_number(val: c_int);
+    // (nvim_compl_curr_match_next_eq_prev, _cp_number, _set_cp_number: inlined in match_list.rs)
     fn rs_ins_compl_update_sequence_numbers();
     fn nvim_get_dollar_vcol() -> c_int;
     fn nvim_curs_columns_curwin();
@@ -496,21 +494,21 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
             if (cont_status & CONT_S_IPOS) != 0 {
                 nvim_set_edit_submode_extra_word_from_other_line();
                 g_edit_submode_highl = HLF_COUNT;
-            } else if nvim_compl_curr_match_next_eq_prev() != 0 {
+            } else if crate::match_list::curr_match_next_eq_prev() {
                 nvim_set_edit_submode_extra_the_only_match();
                 g_edit_submode_highl = HLF_COUNT;
-                nvim_compl_curr_match_set_cp_number(1);
+                crate::match_list::curr_match_set_cp_number(1);
             } else {
                 // Update completion sequence number when needed.
-                if nvim_compl_curr_match_cp_number() == -1 {
+                if crate::match_list::curr_match_cp_number() == -1 {
                     rs_ins_compl_update_sequence_numbers();
                 }
 
                 // The match should always have a sequence number now;
                 // this is just a safety check.
-                if nvim_compl_curr_match_cp_number() != -1 {
+                if crate::match_list::curr_match_cp_number() != -1 {
                     nvim_set_edit_submode_extra_match_ref(
-                        nvim_compl_curr_match_cp_number(),
+                        crate::match_list::curr_match_cp_number(),
                         crate::vars::nvim_get_compl_matches(),
                     );
                     g_edit_submode_highl = HLF_R;
