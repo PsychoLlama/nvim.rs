@@ -846,7 +846,6 @@ extern "C" {
     #[link_name = "rs_last_status"]
     fn nvim_last_status_0(morewin: c_int);
     fn init_spell_chartab();
-    fn nvim_call_set_init_expand_env();
     fn save_file_ff(buf: *mut core::ffi::c_void);
     fn os_env_exists(name: *const c_char, nonempty: bool) -> bool;
     fn lang_init();
@@ -930,7 +929,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     init_spell_chartab();
 
     // Expand environment variables and things like "~" for the defaults.
-    nvim_call_set_init_expand_env();
+    crate::defaults::rs_set_init_expand_env();
 
     save_file_ff(curbuf);
 

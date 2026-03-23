@@ -612,6 +612,32 @@ pub unsafe extern "C" fn rs_option_expand(
     nvim_call_expand_env_esc_option(actual_val, esc_kind)
 }
 
+/// Expand environment variables for all option defaults at init time.
+///
+/// Mirrors C `nvim_call_set_init_expand_env`.
+/// The kOptFlagGettext branch is omitted: no option in options.lua sets that flag.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_init_expand_env() {
+    for opt_idx in 0..K_OPT_COUNT {
+        if (nvim_get_option_flags(opt_idx) & K_OPT_FLAG_NO_DEF_EXP) != 0 {
+            continue;
+        }
+        let p = rs_option_expand(opt_idx, std::ptr::null());
+        if p.is_null() {
+            continue;
+        }
+        let var = nvim_get_option_var(opt_idx);
+        let len = libc_strlen(p);
+        let val = build_string_optval(xstrdup(p), len);
+        let val2 = crate::storage::rs_optval_copy(val);
+        crate::value::rs_set_option_varp(opt_idx, var, val, 1);
+        rs_change_option_default(opt_idx, val2);
+    }
+}
+
 /// Set one option to its default value.
 ///
 /// Mirrors C `set_option_default`.

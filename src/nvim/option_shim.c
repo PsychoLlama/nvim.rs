@@ -2097,27 +2097,6 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-/// set_init_expand_env() implementation called from Rust.
-/// Iterates over all options and expands environment variables for defaults.
-void nvim_call_set_init_expand_env(void)
-{
-  for (OptIndex opt_idx = 0; opt_idx < kOptCount; opt_idx++) {
-    vimoption_T *opt = &options[opt_idx];
-    if (opt->flags & kOptFlagNoDefExp) {
-      continue;
-    }
-    char *p;
-    if ((opt->flags & kOptFlagGettext) && opt->var != NULL) {
-      p = _(*(char **)opt->var);
-    } else {
-      p = rs_option_expand((int)opt_idx, NULL);
-    }
-    if (p != NULL) {
-      rs_set_option_varp(opt_idx, opt->var, CSTR_TO_OPTVAL(p), 1);
-      rs_change_option_default(opt_idx, CSTR_TO_OPTVAL(p));
-    }
-  }
-}
 
 // Compile-time boundary validation for kBufOpt enum (Rust K_BUF_OPT_* constants).
 // Checks first value, last value, and count; specific index alignment is validated at
