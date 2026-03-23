@@ -38,7 +38,6 @@ extern "C" {
         optname: *const c_char,
         val: *const c_char,
     ) -> c_int;
-    fn nvim_get_varp_string_val(varp: *const std::ffi::c_void) -> *const c_char;
     fn nvim_option_get_fullname(opt_idx: c_int) -> *const c_char;
 }
 
@@ -569,7 +568,7 @@ pub unsafe extern "C" fn rs_makeset(
                 // syntax and filetype get an 'if' guard to avoid reloading
                 let do_endif = if opt_idx == K_OPT_SYNTAX || opt_idx == K_OPT_FILETYPE {
                     let optname = nvim_option_get_fullname(opt_idx);
-                    let str_val = nvim_get_varp_string_val(cur_varp);
+                    let str_val = *(cur_varp.cast::<*const c_char>());
                     if nvim_call_makeset_if_line(fd, optname, str_val) == FAIL {
                         return FAIL;
                     }

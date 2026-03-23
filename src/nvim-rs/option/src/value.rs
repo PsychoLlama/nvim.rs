@@ -773,7 +773,7 @@ extern "C" {
     fn rs_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_sandbox() -> c_int;
     fn nvim_get_e_sandbox() -> *const c_char;
-    fn nvim_get_e_unknown_option2() -> *const c_char;
+    static e_unknown_option2: c_char;
     fn nvim_call_emsg_translated(msg: *const c_char);
     fn rs_is_tty_option(name: *const c_char) -> c_int;
     fn rs_set_option_impl(
@@ -1172,7 +1172,7 @@ pub unsafe extern "C" fn rs_set_option_value_handle_tty(
         // Format error message into thread-local buffer
         return TTY_ERRBUF.with(|cell| {
             let buf = cell.get().cast::<c_char>();
-            let fmt = nvim_get_e_unknown_option2();
+            let fmt = std::ptr::addr_of!(e_unknown_option2).cast::<c_char>();
             snprintf(buf, IOSIZE, fmt, name);
             buf.cast_const()
         });

@@ -1374,10 +1374,10 @@ pub unsafe extern "C" fn nvim_bin_didset_sctx_all(opt_flags: c_int) {
 // These save/restore global and per-buffer option values when 'binary' changes.
 // =============================================================================
 
-static mut P_ET_NOBIN: c_int = 0;
-static mut P_ML_NOBIN: c_int = 0;
-static mut P_TW_NOBIN: crate::OptInt = 0;
-static mut P_WM_NOBIN: crate::OptInt = 0;
+pub(crate) static mut P_ET_NOBIN: c_int = 0;
+pub(crate) static mut P_ML_NOBIN: c_int = 0;
+pub(crate) static mut P_TW_NOBIN: crate::OptInt = 0;
+pub(crate) static mut P_WM_NOBIN: crate::OptInt = 0;
 
 #[no_mangle]
 pub unsafe extern "C" fn nvim_get_p_tw_nobin() -> crate::OptInt {

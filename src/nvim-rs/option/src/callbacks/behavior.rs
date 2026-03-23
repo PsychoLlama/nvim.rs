@@ -152,14 +152,6 @@ extern "C" {
     fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
     fn nvim_win_set_p_culopt_flags(win: WinHandle, flags: u8);
 
-    fn nvim_get_p_tw_nobin() -> OptInt;
-    fn nvim_set_p_tw_nobin(v: OptInt);
-    fn nvim_get_p_wm_nobin() -> OptInt;
-    fn nvim_set_p_wm_nobin(v: OptInt);
-    fn nvim_get_p_ml_nobin() -> c_int;
-    fn nvim_set_p_ml_nobin(v: c_int);
-    fn nvim_get_p_et_nobin() -> c_int;
-    fn nvim_set_p_et_nobin(v: c_int);
     fn nvim_curbuf_get_b_p_tw() -> c_int;
     fn nvim_curbuf_set_b_p_tw(v: OptInt);
     fn nvim_curbuf_get_b_p_wm() -> c_int;
@@ -967,10 +959,10 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             }
             if (opt_flags & OPT_LOCAL_BIN) == 0 {
                 // save global options
-                nvim_set_p_tw_nobin(p_tw);
-                nvim_set_p_wm_nobin(p_wm);
-                nvim_set_p_ml_nobin(p_ml);
-                nvim_set_p_et_nobin(p_et);
+                crate::callbacks::complex::P_TW_NOBIN = p_tw;
+                crate::callbacks::complex::P_WM_NOBIN = p_wm;
+                crate::callbacks::complex::P_ML_NOBIN = p_ml;
+                crate::callbacks::complex::P_ET_NOBIN = p_et;
             }
         }
 
@@ -998,10 +990,10 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et());
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
-            crate::set_textwidth(nvim_get_p_tw_nobin());
-            crate::set_wrapmargin(nvim_get_p_wm_nobin());
-            p_ml = nvim_get_p_ml_nobin();
-            p_et = nvim_get_p_et_nobin();
+            crate::set_textwidth(crate::callbacks::complex::P_TW_NOBIN);
+            crate::set_wrapmargin(crate::callbacks::complex::P_WM_NOBIN);
+            p_ml = crate::callbacks::complex::P_ML_NOBIN;
+            p_et = crate::callbacks::complex::P_ET_NOBIN;
         }
     }
 

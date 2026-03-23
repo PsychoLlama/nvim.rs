@@ -1020,8 +1020,6 @@ int nvim_call_makeset_if_line(FILE *fd, const char *optname, const char *val)
   }
   return put_eol(fd) < 0 ? FAIL : OK;
 }
-// Dereference a void* as char** to get the string value (for string option varp)
-const char *nvim_get_varp_string_val(const void *varp) { return *(char *const *)varp; }
 // Get the option fullname for writing to session files
 const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx].fullname; }
 // Get kOptSyntax and kOptFiletype indices (already exist as enum values in opt_index.rs)
@@ -1117,7 +1115,6 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 
 // Wrap copy_option_val (static) for use from Rust.
 char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); }
-
 
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
@@ -1958,7 +1955,6 @@ int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_d
 
 
 /// Error message strings for did_set_option
-const char *nvim_get_e_unknown_option2(void) { return e_unknown_option2; }
 
 /// Call emsg(_(msg)) -- translates and shows error message
 void nvim_call_emsg_translated(const char *msg) { emsg(_(msg)); }
