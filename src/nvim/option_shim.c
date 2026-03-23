@@ -447,9 +447,6 @@ void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
 // Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
 
-// Colorcolumn check wrapper
-void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
-
 // Iterate callback for all tab windows
 void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
   FOR_ALL_TAB_WINDOWS(tp, wp) {

@@ -82,7 +82,10 @@ extern "C" {
     fn pum_redraw();
 
     // Textwidth helper
-    fn check_colorcolumn_win(win: crate::WinHandle);
+    fn check_colorcolumn(
+        cc: *const std::ffi::c_char,
+        wp: crate::WinHandle,
+    ) -> *const std::ffi::c_char;
     fn nvim_callback_for_all_tab_windows(callback: unsafe extern "C" fn(crate::WinHandle));
 
     // Winblend accessors
@@ -270,7 +273,7 @@ pub extern "C" fn rs_did_set_smoothscroll() -> CallbackResult {
 
 /// Callback for check_colorcolumn on a single window (used as fn pointer).
 unsafe extern "C" fn check_colorcolumn_for_win(win: crate::WinHandle) {
-    check_colorcolumn_win(win);
+    check_colorcolumn(std::ptr::null(), win);
 }
 
 /// Callback for 'textwidth' option.
