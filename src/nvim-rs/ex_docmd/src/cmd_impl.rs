@@ -501,7 +501,7 @@ pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
         let mut tp = nvim_get_first_tabpage();
         while !tp.is_null() {
             if nvim_docmd_tabpage_is_curtopframe(tp) == 0 {
-                nvim_docmd_tabpage_close_other_impl(tp, forceit);
+                rs_tabpage_close_other_impl(tp, forceit);
                 // If we failed to close it, quit
                 if rs_valid_tabpage(tp) != 0 {
                     break 'outer;
@@ -610,11 +610,18 @@ extern "C" {
     fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
     fn nvim_docmd_before_quit_autocmds_impl(wp: WinHandle, quit_all: bool, forceit: bool) -> bool;
     fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
-    fn nvim_docmd_tabpage_close_impl(forceit: c_int);
-    fn nvim_docmd_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int);
     fn nvim_docmd_tabpage_new_impl();
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_handle_did_throw_impl();
+
+    // tabpage_close helpers (for Rust implementations)
+    fn nvim_docmd_curwin_is_floating() -> c_int;
+    fn nvim_docmd_is_one_window() -> c_int;
+    fn nvim_docmd_ex_win_close_curwin(forceit: c_int);
+    fn nvim_docmd_close_others(message: bool, forceit: bool);
+    fn nvim_docmd_tabpage_get_lastwin(tp: *mut c_void) -> WinHandle;
+    fn nvim_docmd_tabpage_lastwin_eq(tp: *mut c_void, wp: WinHandle) -> c_int;
+    fn nvim_docmd_ex_win_close_in_tab(forceit: c_int, wp: WinHandle, tp: *mut c_void);
 }
 
 /// `do_exedit` - edit/badd/visual command dispatch.
@@ -666,22 +673,64 @@ pub unsafe extern "C" fn ex_win_close(forceit: c_int, win: WinHandle, tp: *mut c
     nvim_docmd_ex_win_close_impl(forceit, win, tp);
 }
 
-/// `tabpage_close` - close the current tab page.
+/// `nvim_docmd_tabpage_close_impl` - close the current tab page.
+///
+/// Closes floating windows, then all non-current windows, then the last window.
 ///
 /// # Safety
-/// This function is safe to call.
-#[no_mangle]
-pub unsafe extern "C" fn tabpage_close(forceit: c_int) {
-    nvim_docmd_tabpage_close_impl(forceit);
+/// Accesses C globals (curwin). Must only be called from C context.
+#[export_name = "nvim_docmd_tabpage_close_impl"]
+pub unsafe extern "C" fn rs_tabpage_close_impl(forceit: c_int) {
+    // First close all floating windows in this tab.
+    while nvim_docmd_curwin_is_floating() != 0 {
+        nvim_docmd_ex_win_close_curwin(forceit);
+    }
+    // Close all other non-floating windows.
+    if nvim_docmd_is_one_window() == 0 {
+        nvim_docmd_close_others(true, forceit != 0);
+    }
+    // If only one window left, close it too (which closes the tab).
+    if nvim_docmd_is_one_window() != 0 {
+        nvim_docmd_ex_win_close_curwin(forceit);
+    }
 }
 
-/// `tabpage_close_other` - close another tab page.
+/// `tabpage_close` - C ABI entry point for closing current tab page.
 ///
 /// # Safety
-/// `tp` must be a valid tabpage handle.
+/// Accesses C globals (curwin). Must only be called from C context.
+#[no_mangle]
+pub unsafe extern "C" fn tabpage_close(forceit: c_int) {
+    rs_tabpage_close_impl(forceit);
+}
+
+/// `nvim_docmd_tabpage_close_other_impl` - close another tab page.
+///
+/// Iterates windows in `tp` (up to 1000) closing each one.
+///
+/// # Safety
+/// `tp` must be a valid tabpage handle. Must only be called from C context.
+#[export_name = "nvim_docmd_tabpage_close_other_impl"]
+pub unsafe extern "C" fn rs_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int) {
+    let mut done = 0;
+    while done < 1000 {
+        done += 1;
+        let wp = nvim_docmd_tabpage_get_lastwin(tp);
+        nvim_docmd_ex_win_close_in_tab(forceit, wp, tp);
+        // Stop if the tabpage is gone or the last window didn't change.
+        if rs_valid_tabpage(tp) == 0 || nvim_docmd_tabpage_lastwin_eq(tp, wp) != 0 {
+            break;
+        }
+    }
+}
+
+/// `tabpage_close_other` - C ABI entry point for closing another tab page.
+///
+/// # Safety
+/// `tp` must be a valid tabpage handle. Must only be called from C context.
 #[no_mangle]
 pub unsafe extern "C" fn tabpage_close_other(tp: *mut c_void, forceit: c_int) {
-    nvim_docmd_tabpage_close_other_impl(tp, forceit);
+    rs_tabpage_close_other_impl(tp, forceit);
 }
 
 /// `tabpage_new` - open a new tab page.

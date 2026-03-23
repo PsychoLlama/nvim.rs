@@ -357,6 +357,8 @@ extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
 extern void nvim_docmd_update_topline_cursor_impl(void);
 extern char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep);
 extern void nvim_docmd_close_redir_impl(void);
+extern void nvim_docmd_tabpage_close_impl(int forceit);
+extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2028,47 +2030,7 @@ void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
   }
 }
 
-/// ":tabonly" implementation called by Rust ex_tabonly.
-
-/// Close the current tab page.
-void nvim_docmd_tabpage_close_impl(int forceit)
-{
-  // First close all the windows but the current one.  If that worked then
-  // close the last window in this tab, that will close it.
-  while (curwin->w_floating) {
-    ex_win_close(forceit, curwin, NULL);
-  }
-  if (!ONE_WINDOW) {
-    close_others(true, forceit);
-  }
-  if (ONE_WINDOW) {
-    ex_win_close(forceit, curwin, NULL);
-  }
-}
-
-/// Close tab page "tp", which is not the current tab page.
-/// Note that autocommands may make "tp" invalid.
-/// Also takes care of the tab pages line disappearing when closing the
-/// last-but-one tab page.
-void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit)
-{
-  int done = 0;
-  char prev_idx[NUMBUFLEN];
-
-  // Limit to 1000 windows, autocommands may add a window while we close
-  // one.  OK, so I'm paranoid...
-  while (++done < 1000) {
-    snprintf(prev_idx, sizeof(prev_idx), "%i", rs_tabpage_index(tp));
-    win_T *wp = tp->tp_lastwin;
-    ex_win_close(forceit, wp, tp);
-
-    // Autocommands may delete the tab page under our fingers and we may
-    // fail to close a window with a modified buffer.
-    if (!rs_valid_tabpage(tp) || tp->tp_lastwin == wp) {
-      break;
-    }
-  }
-}
+// nvim_docmd_tabpage_close_impl and nvim_docmd_tabpage_close_other_impl are implemented in Rust (cmd_impl.rs).
 
 /// callback function for 'findfunc'
 static Callback ffu_cb;
@@ -4892,6 +4854,17 @@ const char *nvim_docmd_get_grep_or_make_program(int isgrep)
 {
   return isgrep ? (*curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp)
                 : (*curbuf->b_p_mp == NUL ? p_mp : curbuf->b_p_mp);
+}
+
+// Phase N: tabpage_close_impl / tabpage_close_other_impl helpers for Rust FFI
+int nvim_docmd_curwin_is_floating(void) { return curwin->w_floating ? 1 : 0; }
+int nvim_docmd_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
+void nvim_docmd_ex_win_close_curwin(int forceit) { ex_win_close(forceit, curwin, NULL); }
+win_T *nvim_docmd_tabpage_get_lastwin(void *tp) { return ((tabpage_T *)tp)->tp_lastwin; }
+int nvim_docmd_tabpage_lastwin_eq(void *tp, void *wp) { return ((tabpage_T *)tp)->tp_lastwin == (win_T *)wp ? 1 : 0; }
+void nvim_docmd_ex_win_close_in_tab(int forceit, void *wp, void *tp)
+{
+  ex_win_close(forceit, (win_T *)wp, (tabpage_T *)tp);
 }
 
 // Phase N: post_chdir_impl helpers for Rust FFI
