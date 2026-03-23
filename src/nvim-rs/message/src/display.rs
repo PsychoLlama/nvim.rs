@@ -43,7 +43,7 @@ extern "C" {
     fn grid_line_mirror(width: c_int);
     fn grid_line_flush_if_valid_row();
     static mut cmdmsg_rl: bool;
-    fn nvim_get_msg_grid_cols() -> c_int;
+    static mut msg_grid: crate::ScreenGrid;
 
     // Position and display state
     static mut sc_col: c_int;
@@ -289,7 +289,7 @@ pub unsafe extern "C" fn rs_msg_grid_validate() {
 #[export_name = "msg_line_flush"]
 pub unsafe extern "C" fn rs_msg_line_flush() {
     if cmdmsg_rl {
-        grid_line_mirror(nvim_get_msg_grid_cols());
+        grid_line_mirror(msg_grid.cols);
     }
     grid_line_flush_if_valid_row();
 }

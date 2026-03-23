@@ -2559,23 +2559,45 @@ pub unsafe extern "C" fn rs_ui_has(ext: c_int) -> c_int {
 // Phase 429: Additional Message Grid Functions
 // ============================================================================
 
+/// C `ScreenGrid` struct layout (verified with offsetof).
+///
+/// Offsets: handle=0, chars=8, attrs=16, vcols=24, line_offset=32,
+/// dirty_col=40, rows=48, cols=52, valid=56, throttled=57, blending=58,
+/// mouse_enabled=59, zindex=60, comp_row=64..comp_index=80, total=96 bytes.
+#[repr(C)]
+pub struct ScreenGrid {
+    pub handle: c_int,
+    _pad0: c_int,
+    pub chars: *mut u32,
+    pub attrs: *mut i32,
+    pub vcols: *mut c_int,
+    pub line_offset: *mut usize,
+    pub dirty_col: *mut c_int,
+    pub rows: c_int,
+    pub cols: c_int,
+    pub valid: bool,
+    pub throttled: bool,
+    pub blending: bool,
+    pub mouse_enabled: bool,
+    pub zindex: c_int,
+    pub comp_row: c_int,
+    pub comp_col: c_int,
+    pub comp_width: c_int,
+    pub comp_height: c_int,
+    _pad1: c_int,
+    pub comp_index: usize,
+    pub comp_disabled: bool,
+    pub pending_comp_index_update: bool,
+    _pad2: [u8; 6],
+}
+
 extern "C" {
     /// Get msg_grid_pos (current message grid row position)
     static mut msg_grid_pos: c_int;
-    /// Set msg_grid_pos
     /// Get msg_scrolled_at_flush
     static mut msg_scrolled_at_flush: c_int;
-    /// Set msg_scrolled_at_flush
-    /// Check if msg_grid has chars allocated
-    fn nvim_msg_grid_has_chars() -> c_int;
-    /// Check if msg_grid is throttled
-    fn nvim_msg_grid_is_throttled() -> c_int;
-    /// Set msg_grid throttled state
-    fn nvim_msg_grid_set_throttled(val: c_int);
-    /// Get msg_grid rows
-    fn nvim_msg_grid_get_rows() -> c_int;
-    /// Get msg_grid cols
-    fn nvim_msg_grid_get_cols() -> c_int;
+    /// The message grid
+    static mut msg_grid: ScreenGrid;
 }
 
 /// Get the current message grid row position.
@@ -2617,46 +2639,46 @@ pub unsafe extern "C" fn rs_set_msg_scrolled_at_flush(val: c_int) {
 /// Check if the message grid has chars allocated.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_allocated() -> c_int {
-    nvim_msg_grid_has_chars()
+    c_int::from(!msg_grid.chars.is_null())
 }
 
 /// Check if the message grid is being throttled.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_throttled() -> c_int {
-    nvim_msg_grid_is_throttled()
+    c_int::from(msg_grid.throttled)
 }
 
 /// Set the message grid throttled state.
 ///
 /// # Safety
-/// Calls C mutator function.
+/// Writes to msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_grid_throttled(val: c_int) {
-    nvim_msg_grid_set_throttled(val);
+    msg_grid.throttled = val != 0;
 }
 
 /// Get the number of rows in the message grid.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_rows() -> c_int {
-    nvim_msg_grid_get_rows()
+    msg_grid.rows
 }
 
 /// Get the number of columns in the message grid.
 ///
 /// # Safety
-/// Calls C accessor function.
+/// Accesses msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_cols() -> c_int {
-    nvim_msg_grid_get_cols()
+    msg_grid.cols
 }
 
 /// Check if message grid is ready for use.
@@ -2664,12 +2686,12 @@ pub unsafe extern "C" fn rs_msg_grid_cols() -> c_int {
 /// Returns true if grid is allocated and has valid dimensions.
 ///
 /// # Safety
-/// Calls C accessor functions.
+/// Accesses msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_ready() -> c_int {
-    let has_chars = nvim_msg_grid_has_chars() != 0;
-    let rows = nvim_msg_grid_get_rows();
-    let cols = nvim_msg_grid_get_cols();
+    let has_chars = !msg_grid.chars.is_null();
+    let rows = msg_grid.rows;
+    let cols = msg_grid.cols;
     c_int::from(has_chars && rows > 0 && cols > 0)
 }
 
@@ -2681,7 +2703,7 @@ pub unsafe extern "C" fn rs_msg_grid_ready() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_needs_flush() -> c_int {
-    let throttled = nvim_msg_grid_is_throttled() != 0;
+    let throttled = msg_grid.throttled;
     let scrolled = msg_scrolled;
     let at_flush = msg_scrolled_at_flush;
     c_int::from(throttled && scrolled > at_flush)
@@ -2722,16 +2744,16 @@ pub unsafe extern "C" fn rs_msg_grid_sync_flush() {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_start_throttle() {
-    nvim_msg_grid_set_throttled(1);
+    msg_grid.throttled = true;
 }
 
 /// Disable message grid throttling.
 ///
 /// # Safety
-/// Calls C mutator function.
+/// Writes to msg_grid global.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_stop_throttle() {
-    nvim_msg_grid_set_throttled(0);
+    msg_grid.throttled = false;
 }
 
 #[cfg(test)]

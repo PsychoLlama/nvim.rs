@@ -68,15 +68,13 @@ extern "C" {
     fn nvim_msg_ui_flush_impl();
 
     // Phase 4: msg_scroll_flush accessors
-    fn nvim_msg_grid_is_throttled() -> c_int;
-    fn nvim_msg_grid_set_throttled(val: c_int);
+    static mut msg_grid: crate::ScreenGrid;
     static mut msg_grid_pos: c_int;
     static mut msg_scrolled: c_int;
     static mut msg_scrolled_at_flush: c_int;
     static mut msg_grid_scroll_discount: c_int;
     fn nvim_msg_set_pos_for_scroll(pos: c_int);
     fn nvim_msg_grid_scroll_up(to_scroll: c_int);
-    fn nvim_msg_grid_get_rows() -> c_int;
     fn nvim_msg_grid_flush_dirty_line(row: c_int);
 
     // Phase 1: message_filtered C implementation
@@ -360,11 +358,11 @@ pub unsafe extern "C" fn rs_msg_ui_flush() {
 #[allow(clippy::cast_sign_loss)]
 #[export_name = "msg_scroll_flush"]
 pub unsafe extern "C" fn rs_msg_scroll_flush() {
-    if nvim_msg_grid_is_throttled() != 0 {
-        nvim_msg_grid_set_throttled(0);
+    if msg_grid.throttled {
+        msg_grid.throttled = false;
         let pos_delta = msg_grid_pos_at_flush - msg_grid_pos;
         assert!(pos_delta >= 0);
-        let delta = (msg_scrolled - msg_scrolled_at_flush).min(nvim_msg_grid_get_rows());
+        let delta = (msg_scrolled - msg_scrolled_at_flush).min(msg_grid.rows);
 
         if pos_delta > 0 {
             nvim_msg_set_pos_for_scroll(msg_grid_pos);

@@ -377,7 +377,7 @@ extern "C" {
     fn nvim_msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn nvim_msg_show_empty();
     static mut headless_mode: bool;
-    fn nvim_default_grid_has_chars() -> c_int;
+    static mut default_grid: crate::ScreenGrid;
     static mut msg_col: c_int;
 }
 
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
             msg_col = saved_msg_col;
         }
     }
-    if msg_use_printf() == 0 || (headless_mode && nvim_default_grid_has_chars() != 0) {
+    if msg_use_printf() == 0 || (headless_mode && !default_grid.chars.is_null()) {
         nvim_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
     }
 

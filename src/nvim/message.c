@@ -229,13 +229,6 @@ char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
 
 int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
-// Phase 429: Message grid state accessors
-int nvim_msg_grid_has_chars(void) { return msg_grid.chars != NULL ? 1 : 0; }
-int nvim_msg_grid_is_throttled(void) { return msg_grid.throttled ? 1 : 0; }
-void nvim_msg_grid_set_throttled(int val) { msg_grid.throttled = (val != 0); }
-int nvim_msg_grid_get_rows(void) { return msg_grid.rows; }
-int nvim_msg_grid_get_cols(void) { return msg_grid.cols; }
-
 // Phase 4: msg_scroll_up helper wrappers
 void nvim_msg_grid_clear_first_line(void)
 {
@@ -291,7 +284,6 @@ void nvim_msg_reset_scroll_grid(void)
   msg_grid_scroll_discount = 0;
 }
 
-int nvim_msg_grid_get_handle(void) { return msg_grid.handle; }
 void nvim_msg_grid_flush_dirty_line(int row)
 {
   ui_line(&msg_grid, row, false, 0, msg_grid.dirty_col[row], msg_grid.cols,
@@ -311,7 +303,6 @@ void nvim_msg_grid_scroll_up(int to_scroll)
 int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
-int nvim_get_msg_grid_cols(void) { return msg_grid.cols; }
 
 // Phase 5 (msg_puts_len): wrappers for static functions and state
 void nvim_msg_puts_printf(const char *str, ptrdiff_t len) { msg_puts_printf(str, len); }
@@ -324,7 +315,6 @@ void nvim_msg_show_empty(void)
   ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
                    INTEGER_OBJ(-1));
 }
-int nvim_default_grid_has_chars(void) { return default_grid.chars != NULL ? 1 : 0; }
 
 // Phase 1: message_filtered implementation helper (does the regex check in C)
 // This is the actual implementation; message_filtered() is replaced by

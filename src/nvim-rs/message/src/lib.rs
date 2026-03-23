@@ -38,6 +38,36 @@
 
 use std::ffi::c_int;
 
+/// C `ScreenGrid` struct layout (96 bytes, verified with offsetof).
+///
+/// Shared extern static `msg_grid` accessed from multiple message sub-modules.
+#[repr(C)]
+pub(crate) struct ScreenGrid {
+    pub handle: c_int,
+    _pad0: c_int,
+    pub chars: *mut u32,
+    pub attrs: *mut i32,
+    pub vcols: *mut c_int,
+    pub line_offset: *mut usize,
+    pub dirty_col: *mut c_int,
+    pub rows: c_int,
+    pub cols: c_int,
+    pub valid: bool,
+    pub throttled: bool,
+    pub blending: bool,
+    pub mouse_enabled: bool,
+    pub zindex: c_int,
+    pub comp_row: c_int,
+    pub comp_col: c_int,
+    pub comp_width: c_int,
+    pub comp_height: c_int,
+    _pad1: c_int,
+    pub comp_index: usize,
+    pub comp_disabled: bool,
+    pub pending_comp_index_update: bool,
+    _pad2: [u8; 6],
+}
+
 pub mod attr;
 pub mod chunk;
 pub mod dialog;

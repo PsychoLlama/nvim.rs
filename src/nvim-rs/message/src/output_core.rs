@@ -86,11 +86,11 @@ extern "C" {
     // Phase 4: msg_scroll_up helpers
     static mut msg_did_scroll: bool;
     static mut msg_grid_pos: c_int;
+    static mut msg_grid: crate::ScreenGrid;
     fn msg_grid_set_pos(row: c_int, scrolled: bool);
     fn nvim_msg_grid_clear_first_line();
     fn nvim_msg_grid_del_and_shift();
     fn nvim_msg_grid_adj_clear_bottom();
-    fn nvim_msg_grid_set_throttled(val: c_int);
 
     // Phase 4: msg_clr_eos_force helper
     fn nvim_msg_clr_eos_force_impl();
@@ -564,7 +564,7 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
         fn msg_do_throttle() -> bool;
     }
     if may_throttle != 0 && msg_do_throttle() {
-        nvim_msg_grid_set_throttled(1);
+        msg_grid.throttled = true;
     }
     msg_did_scroll = true;
 
