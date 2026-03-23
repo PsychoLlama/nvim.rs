@@ -6,7 +6,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
-use crate::index::{val_type, OptIndex};
+use crate::index::{val_type, FindOptionEndResult, OptIndex, ValidateOptIdxResult};
 use crate::opt_index::K_OPT_COUNT;
 use crate::storage::OptVal;
 use crate::{OptInt, OptScope, OptValType, SetPrefix, FAIL, OK};
@@ -470,16 +470,17 @@ extern "C" {
     fn redraw_all_later(type_: c_int);
 
     // Option lookup and validation
-    fn find_option_end(arg: *const c_char, opt_idx: *mut c_int) -> *const c_char;
+    #[link_name = "rs_find_option_end"]
+    fn rs_find_option_end_foe(arg: *const c_char) -> FindOptionEndResult;
     fn rs_is_tty_option(name: *const c_char) -> c_int;
-    fn nvim_validate_opt_idx(
-        win: *const std::ffi::c_void,
+    #[link_name = "rs_validate_opt_idx"]
+    fn rs_validate_opt_idx_voi(
+        win: *mut std::ffi::c_void,
         opt_idx: c_int,
         opt_flags: c_int,
-        flags: u32,
+        flags: c_uint,
         prefix: c_int,
-        errmsg: *mut *const c_char,
-    ) -> c_int;
+    ) -> ValidateOptIdxResult;
     fn option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn option_has_scope(opt_idx: c_int, scope: c_int) -> c_int;
     #[link_name = "rs_option_scope_idx"]
@@ -802,8 +803,9 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     let arg = *argp;
 
     // Find end of option name and get option index
-    let mut opt_idx: c_int = K_OPT_INVALID;
-    let option_end = find_option_end(arg, &raw mut opt_idx);
+    let foe = rs_find_option_end_foe(arg);
+    let opt_idx: c_int = foe.opt_idx;
+    let option_end = foe.end;
 
     if opt_idx != K_OPT_INVALID {
         // Valid option found
@@ -836,7 +838,17 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
 
     // Validate option
-    if nvim_validate_opt_idx(nvim_get_curwin(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
+    let vr = rs_validate_opt_idx_voi(
+        nvim_get_curwin().cast_mut(),
+        opt_idx,
+        opt_flags,
+        flags,
+        prefix,
+    );
+    if vr.result == FAIL {
+        if !vr.errmsg.is_null() {
+            *errmsg = vr.errmsg;
+        }
         return;
     }
 

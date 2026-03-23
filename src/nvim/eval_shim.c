@@ -1715,14 +1715,15 @@ linenr_T nvim_sourcing_lnum_get(void)
   return SOURCING_LNUM;
 }
 
-/// Wrap find_option_end(p, opt_idxp) - accessor for rs_find_option_var_end.
+/// Wrap rs_find_option_end(p) - accessor for rs_find_option_var_end.
 /// Returns pointer after option name, or NULL on failure.
 const char *nvim_find_option_end_wrapper(const char *p, int *opt_idxp)
 {
-  OptIndex opt_idx = kOptInvalid;
-  const char *end = find_option_end(p, &opt_idx);
-  *opt_idxp = (int)opt_idx;
-  return end;
+  typedef struct { const char *end; int opt_idx; } FindOptionEndResult_;
+  extern FindOptionEndResult_ rs_find_option_end(const char *arg);
+  FindOptionEndResult_ r = rs_find_option_end(p);
+  *opt_idxp = r.opt_idx;
+  return r.end;
 }
 
 /// Wrap tv_list_set_lock - accessor for rs_set_argv_var.

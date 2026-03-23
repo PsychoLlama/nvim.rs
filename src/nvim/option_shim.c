@@ -869,30 +869,8 @@ extern void rs_set_options_default(int opt_flags);
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
 
-static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
-                            set_prefix_T prefix, const char **errmsg)
-{
-  ValidateOptIdxResult r = rs_validate_opt_idx(win, opt_idx, opt_flags, flags, (int)prefix);
-  if (r.errmsg != NULL) {
-    *errmsg = r.errmsg;
-  }
-  return r.result;
-}
-
-/// Skip over the name of a TTY option or keycode option.
-///
-/// Skip over the name of an option.
-///
-/// @param[in]   arg       Start of option name.
-/// @param[out]  opt_idxp  Set to option index in options[] table.
-///
-/// @return NULL when no option name found. Otherwise pointer to the char after the option name.
-const char *find_option_end(const char *arg, OptIndex *opt_idxp)
-{
-  FindOptionEndResult r = rs_find_option_end(arg);
-  *opt_idxp = (OptIndex)r.opt_idx;
-  return r.end;
-}
+// validate_opt_idx: broken circular wrapper deleted; setcmd.rs now calls rs_validate_opt_idx directly.
+// find_option_end: broken circular wrapper deleted; setcmd.rs now calls rs_find_option_end directly.
 
 /// Parse 'arg' for option settings.
 ///
@@ -1441,16 +1419,7 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
   return dict;
 }
 
-// =============================================================================
-// Wrapper function implementations for Rust setcmd module
-// =============================================================================
-
-int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
-                          int prefix, const char **errmsg)
-{
-  return validate_opt_idx(win, opt_idx, opt_flags, flags, (set_prefix_T)prefix, errmsg);
-}
-
+// nvim_validate_opt_idx: broken circular wrapper deleted; setcmd.rs now calls rs_validate_opt_idx directly.
 
 // =============================================================================
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
