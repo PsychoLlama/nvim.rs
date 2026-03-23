@@ -579,9 +579,6 @@ const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
   return rs_illegal_char(errbuf, errbuflen, c);
 }
 // Wrappers for side-effect functions
-void nvim_call_init_chartab(void) { init_chartab(); }
-void nvim_call_msg_grid_validate(void) { msg_grid_validate(); }
-int nvim_call_check_opt_wim(void) { return check_opt_wim(); }
 int nvim_call_briopt_check_win(const char *val, win_T *win)
 {
   return briopt_check(val, win) == OK ? 1 : 0;
@@ -1094,12 +1091,7 @@ char *nvim_option_vim_getenv(const char *envname) { return vim_getenv(envname); 
 // os_setenv wrapper (for vimrc_found)
 int nvim_option_os_setenv(const char *name, const char *value, int overwrite) { return os_setenv(name, value, overwrite); }
 
-// Phase 4 pass 3: check_redraw_for accessors
-void nvim_call_status_redraw_all(void) { status_redraw_all(); }
-void nvim_call_changed_window_setting(win_T *win) { changed_window_setting(win); }
-void nvim_call_redraw_later(win_T *win, int type) { redraw_later(win, type); }
-void nvim_call_redraw_buf_later(buf_T *buf, int type) { redraw_buf_later(buf, type); }
-void nvim_call_redraw_all_later(int type) { redraw_all_later(type); }
+
 
 // insecure_flag pointer accessors
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }
@@ -1116,7 +1108,7 @@ uint32_t *nvim_win_allbuf_p_fdt_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.
 uint32_t *nvim_option_get_flags_ptr(OptIndex opt_idx) { return &options[opt_idx].flags; }
 // set_option_sctx accessors (nvim_get_sourcing_lnum already defined in ex_docmd.c as int)
 int64_t nvim_option_get_sourcing_lnum(void) { return (int64_t)SOURCING_LNUM; }
-void nvim_call_nlua_set_sctx(sctx_T *sctx) { nlua_set_sctx(sctx); }
+
 void nvim_curbuf_set_p_script_ctx(int idx, sctx_T sctx) { curbuf->b_p_script_ctx[idx] = sctx; }
 void nvim_curwin_set_p_script_ctx(int idx, sctx_T sctx) { curwin->w_p_script_ctx[idx] = sctx; }
 void nvim_curwin_set_allbuf_opt_script_ctx(int idx, sctx_T sctx) { curwin->w_allbuf_opt.wo_script_ctx[idx] = sctx; }
@@ -1134,8 +1126,7 @@ void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
 {
   home_replace(NULL, src, dst, dstlen, false);
 }
-int nvim_call_put_escstr(FILE *fd, const char *str, int what) { return put_escstr(fd, str, what); }
-int nvim_call_put_eol(FILE *fd) { return put_eol(fd); }
+
 const void *nvim_option_get_p_wc_ptr(void) { return &p_wc; }
 const void *nvim_option_get_p_wcm_ptr(void) { return &p_wcm; }
 // curwin fold option varp pointers for rs_makefoldset
@@ -1161,23 +1152,14 @@ void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
 // Phase 1 init function accessors: expose static helpers to Rust
-char *nvim_call_enc_locale(void) { return enc_locale(); }
 void nvim_set_fenc_default(char *val) { fenc_default = val; }
 void nvim_set_p_title(int v) { p_title = v; }
 void nvim_set_p_icon(int v) { p_icon = v; }
-char *nvim_call_os_getenv(const char *name) { return os_getenv(name); }
-char *nvim_call_vim_getenv(const char *name) { return vim_getenv(name); }
 int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_idx); }
-// For set_init_default_backupskip: expose after_pathsep
-int nvim_call_after_pathsep(const char *b, const char *p) { return after_pathsep(b, p); }
-// For rs_find_dup_item call in backupskip (flags accessor already exists)
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-void nvim_call_comp_col(void) { comp_col(); }
 void nvim_call_parse_shape_opt(void) { parse_shape_opt(SHAPE_CURSOR); }
-const char *nvim_call_invocation_path_tail(const char *p_sh, size_t *lenp) { return invocation_path_tail(p_sh, lenp); }
-int nvim_call_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp(a, b); }
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
 void nvim_call_set_option_direct(int opt_idx, OptVal val, int opt_flags) { set_option_direct((OptIndex)opt_idx, val, opt_flags, SID_NONE); }
 
@@ -1186,7 +1168,6 @@ int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
 
 // Phase 2 makeset accessors
-int nvim_call_put_line(FILE *fd, const char *str) { return put_line(fd, str); }
 // Write "if &optname != 'val'\n" to fd; returns OK or FAIL (< 0 = FAIL like fprintf)
 int nvim_call_makeset_if_line(FILE *fd, const char *optname, const char *val)
 {
@@ -1294,15 +1275,7 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 // Wrap copy_option_val (static) for use from Rust.
 char *nvim_call_copy_option_val(const char *val) { return copy_option_val(val); }
 
-// Wrap clear_string_option / check_string_option for Rust.
-void nvim_call_clear_string_option(char **ptr) { clear_string_option(ptr); }
-void nvim_call_check_string_option(char **ptr) { check_string_option(ptr); }
-
-
 // Wrappers for didset_window_options internals.
-void nvim_call_check_colorcolumn(win_T *wp) { check_colorcolumn(NULL, wp); }
-void nvim_call_briopt_check(win_T *wp) { briopt_check(NULL, wp); }
-void nvim_call_fill_culopt_flags(win_T *wp) { fill_culopt_flags(NULL, wp); }
 void nvim_call_set_chars_option_fcs(win_T *wp)
 {
   set_chars_option(wp, wp->w_p_fcs, kFillchars, true, NULL, 0);
@@ -1311,12 +1284,7 @@ void nvim_call_set_chars_option_lcs(win_T *wp)
 {
   set_chars_option(wp, wp->w_p_lcs, kListchars, true, NULL, 0);
 }
-void nvim_call_check_blending(win_T *wp) { check_blending(wp); }
-void nvim_call_set_winbar_win(win_T *wp, int valid_cursor)
-{
-  set_winbar_win(wp, false, (bool)valid_cursor);
-}
-void nvim_call_check_signcolumn(win_T *wp) { check_signcolumn(NULL, wp); }
+
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
@@ -2252,10 +2220,7 @@ int nvim_curwin_get_w_briopt_list(void) { return curwin->w_briopt_list ? 1 : 0; 
 
 /// Call buf_init_chartab(curbuf, true)
 void nvim_call_buf_init_chartab(void) { buf_init_chartab(curbuf, true); }
-/// Call setmouse()
-void nvim_call_setmouse(void) { setmouse(); }
-/// Call set_winbar(true)
-void nvim_call_set_winbar(void) { set_winbar(true); }
+
 /// Call do_filetype_autocmd(curbuf, value_changed)
 void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, value_changed != 0); }
 
@@ -2408,12 +2373,6 @@ void nvim_buf_clear_b_p_ro(buf_T *buf) { buf->b_p_ro = false; }
 /// free_buf_options(buf, free_flags)
 void nvim_call_free_buf_options(buf_T *buf, int free_flags) { free_buf_options(buf, free_flags != 0); }
 
-/// check_buf_options(buf)
-void nvim_call_check_buf_options(buf_T *buf) { check_buf_options(buf); }
-
-/// buf_init_chartab(buf, false)
-void nvim_call_buf_init_chartab_buf(buf_T *buf) { buf_init_chartab(buf, false); }
-
 /// compile_cap_prog(&buf->b_s)
 void nvim_call_compile_cap_prog_buf(buf_T *buf) { compile_cap_prog(&buf->b_s); }
 
@@ -2425,12 +2384,7 @@ void nvim_call_tabstop_set_vts(buf_T *buf, const char *str) { tabstop_set(str, &
 /// Returns buf->b_p_vts_array (for null check)
 int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array == NULL ? 1 : 0; }
 
-/// set_buflocal_cpt_callbacks(buf)
-void nvim_call_set_buflocal_cpt_callbacks(buf_T *buf) { set_buflocal_cpt_callbacks(buf); }
-/// set_buflocal_cfu_callback(buf)
-void nvim_call_set_buflocal_cfu_callback(buf_T *buf) { set_buflocal_cfu_callback(buf); }
-/// set_buflocal_ofu_callback(buf)
-void nvim_call_set_buflocal_ofu_callback(buf_T *buf) { set_buflocal_ofu_callback(buf); }
+
 
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
@@ -2561,20 +2515,13 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // =============================================================================
 
 
-/// langmap_init() wrapper.
-void nvim_call_langmap_init(void) { langmap_init(); }
+
 
 /// save_file_ff(curbuf) wrapper.
 void nvim_call_save_file_ff_curbuf(void) { save_file_ff(curbuf); }
 
 /// os_env_exists(name, false) wrapper. Returns 1 if env exists, 0 otherwise.
 int nvim_call_os_env_exists(const char *name) { return os_env_exists(name, false) ? 1 : 0; }
-
-/// init_spell_chartab() wrapper.
-void nvim_call_init_spell_chartab(void) { init_spell_chartab(); }
-
-/// lang_init() wrapper.
-void nvim_call_lang_init(void) { lang_init(); }
 
 /// set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0) wrapper.
 void nvim_call_set_termbidi_true(void)
@@ -2645,8 +2592,6 @@ _Static_assert((int)kBufOptAutocomplete == 0, "K_BUF_OPT_AUTOCOMPLETE mismatch")
 _Static_assert((int)kBufOptWrapmargin == 90, "K_BUF_OPT_WRAPMARGIN mismatch");
 _Static_assert(kBufOptCount == 91, "K_BUF_OPT_COUNT mismatch");
 
-/// vim_strchr wrapper for Rust.
-const char *nvim_call_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
 
 /// Calls bind_textdomain_codeset(PROJECT_NAME, p_enc) if HAVE_WORKING_LIBINTL.
 /// No-op otherwise.
@@ -2834,15 +2779,8 @@ void nvim_paste_didset_sctx_all(void)
 // didset_string_options is now implemented in Rust; this call goes directly to Rust.
 // (The Rust implementation is registered via #[export_name = "didset_string_options"])
 extern void didset_string_options(void);  // defined in Rust optionstr crate
-void nvim_call_didset_string_options(void) { didset_string_options(); }
-/// spell_check_msm() wrapper.
-void nvim_call_spell_check_msm(void) { spell_check_msm(); }
-/// spell_check_sps() wrapper.
-void nvim_call_spell_check_sps(void) { spell_check_sps(); }
 /// compile_cap_prog(curwin->w_s) wrapper.
 void nvim_call_compile_cap_prog_curwin(void) { compile_cap_prog(curwin->w_s); }
-/// did_set_spell_option() wrapper.
-void nvim_call_did_set_spell_option(void) { did_set_spell_option(); }
 /// did_set_cedit(NULL) wrapper.
 void nvim_call_did_set_cedit(void) { did_set_cedit(NULL); }
 /// did_set_breakat(NULL) wrapper.

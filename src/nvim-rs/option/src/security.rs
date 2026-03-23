@@ -40,11 +40,11 @@ extern "C" {
 
 extern "C" {
     // check_redraw_for
-    fn nvim_call_status_redraw_all();
-    fn nvim_call_changed_window_setting(win: WinHandle);
-    fn nvim_call_redraw_later(win: WinHandle, redraw_type: c_int);
-    fn nvim_call_redraw_buf_later(buf: BufHandle, redraw_type: c_int);
-    fn nvim_call_redraw_all_later(redraw_type: c_int);
+    fn status_redraw_all();
+    fn changed_window_setting(win: WinHandle);
+    fn redraw_later(win: WinHandle, redraw_type: c_int);
+    fn redraw_buf_later(buf: BufHandle, redraw_type: c_int);
+    fn redraw_all_later(redraw_type: c_int);
 
     // insecure_flag pointer accessors
     fn nvim_win_get_p_wrap_flags_ptr(wp: WinHandle) -> *mut c_uint;
@@ -62,7 +62,7 @@ extern "C" {
 
     // set_option_sctx
     fn nvim_option_get_sourcing_lnum() -> i64;
-    fn nvim_call_nlua_set_sctx(sctx: *mut ScriptContext);
+    fn nlua_set_sctx(sctx: *mut ScriptContext);
     fn nvim_curbuf_set_p_script_ctx(idx: c_int, sctx: ScriptContext);
     fn nvim_curwin_set_p_script_ctx(idx: c_int, sctx: ScriptContext);
     fn nvim_curwin_set_allbuf_opt_script_ctx(idx: c_int, sctx: ScriptContext);
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, fla
     let all = (flags & redr_all) == redr_all;
 
     if (flags & OptFlags::REDR_STAT.0) != 0 || all {
-        nvim_call_status_redraw_all();
+        status_redraw_all();
     }
 
     if (flags & OptFlags::REDR_TABL.0) != 0 || all {
@@ -108,16 +108,16 @@ pub unsafe extern "C" fn rs_check_redraw_for(buf: BufHandle, win: WinHandle, fla
 
     if (flags & OptFlags::REDR_BUF.0) != 0 || (flags & OptFlags::REDR_WIN.0) != 0 || all {
         if (flags & OptFlags::HL_ONLY.0) != 0 {
-            nvim_call_redraw_later(win, UPD_NOT_VALID);
+            redraw_later(win, UPD_NOT_VALID);
         } else {
-            nvim_call_changed_window_setting(win);
+            changed_window_setting(win);
         }
     }
     if (flags & OptFlags::REDR_BUF.0) != 0 {
-        nvim_call_redraw_buf_later(buf, UPD_NOT_VALID);
+        redraw_buf_later(buf, UPD_NOT_VALID);
     }
     if all {
-        nvim_call_redraw_all_later(UPD_NOT_VALID);
+        redraw_all_later(UPD_NOT_VALID);
     }
 }
 
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn rs_set_option_sctx(
     if (opt_flags & OPT_MODELINE) == 0 {
         script_ctx.sc_lnum += nvim_option_get_sourcing_lnum();
     }
-    nvim_call_nlua_set_sctx(&mut script_ctx);
+    nlua_set_sctx(&mut script_ctx);
 
     // Remember where the option was set. For local options need to do that
     // in the buffer or window structure.

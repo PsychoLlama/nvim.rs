@@ -106,10 +106,10 @@ extern "C" {
     fn nvim_curwin_get_w_briopt_list() -> c_int;
 
     // comp_col(), setmouse(), redraw_all_later(), set_winbar()
-    fn nvim_call_comp_col();
-    fn nvim_call_setmouse();
-    fn nvim_call_redraw_all_later(kind: c_int);
-    fn nvim_call_set_winbar();
+    fn comp_col();
+    fn setmouse();
+    fn redraw_all_later(kind: c_int);
+    fn set_winbar(make_room: bool);
     #[link_name = "check_redraw_for"]
     fn rs_check_redraw_for(buf: *mut std::ffi::c_void, win: *mut std::ffi::c_void, flags: c_uint);
 
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     }
 
     // Redraw comp_col in case ruler/showcmd/columns/ls changed.
-    nvim_call_comp_col();
+    comp_col();
 
     let mouse_addr: *mut c_void = (&raw mut crate::p_mouse).cast::<c_void>();
     let flp_addr: *mut c_void = (&raw mut crate::p_flp).cast::<c_void>();
@@ -285,11 +285,11 @@ pub unsafe extern "C" fn rs_did_set_option(
     let win_wbr_addr = nvim_curwin_p_wbr_addr();
 
     if varp == mouse_addr {
-        nvim_call_setmouse();
+        setmouse();
     } else if (varp == flp_addr || varp == buf_flp_addr) && nvim_curwin_get_w_briopt_list() != 0 {
-        nvim_call_redraw_all_later(UPD_NOT_VALID);
+        redraw_all_later(UPD_NOT_VALID);
     } else if varp == wbr_addr || varp == win_wbr_addr {
-        nvim_call_set_winbar();
+        set_winbar(true);
     }
 
     let maxcol = nvim_get_maxcol();

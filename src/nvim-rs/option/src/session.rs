@@ -32,7 +32,7 @@ extern "C" {
     fn nvim_option_is_global_only(opt_idx: c_int) -> c_int;
     #[link_name = "rs_option_is_window_local"]
     fn nvim_option_is_window_local(opt_idx: c_int) -> c_int;
-    fn nvim_call_put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
+    fn put_line(fd: *mut libc::FILE, str_: *const c_char) -> c_int;
     fn nvim_call_makeset_if_line(
         fd: *mut libc::FILE,
         optname: *const c_char,
@@ -75,8 +75,8 @@ extern "C" {
     // put_set
     fn nvim_put_set_get_opt_name_flags(opt_idx: c_int, name: *mut *const c_char, flags: *mut u64);
     fn nvim_option_get_var_ptr(opt_idx: c_int) -> *mut std::ffi::c_void;
-    fn nvim_call_put_escstr(fd: *mut libc::FILE, str_: *const c_char, what: c_int) -> c_int;
-    fn nvim_call_put_eol(fd: *mut libc::FILE) -> c_int;
+    fn put_escstr(fd: *mut libc::FILE, str_: *const c_char, what: c_int) -> c_int;
+    fn put_eol(fd: *mut libc::FILE) -> c_int;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn strlen(s: *const c_char) -> usize;
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_put_set(
                     {
                         // Write each comma-separated part as a separate +=
                         let part = xmalloc(size);
-                        if nvim_call_put_eol(fd) == FAIL {
+                        if put_eol(fd) == FAIL {
                             xfree(buf);
                             xfree(part);
                             return FAIL;
@@ -330,9 +330,7 @@ pub unsafe extern "C" fn rs_put_set(
                                 size,
                                 c",".as_ptr() as *const c_char,
                             );
-                            if nvim_call_put_escstr(fd, part, 2) == FAIL
-                                || nvim_call_put_eol(fd) == FAIL
-                            {
+                            if put_escstr(fd, part, 2) == FAIL || put_eol(fd) == FAIL {
                                 xfree(buf);
                                 xfree(part);
                                 return FAIL;
@@ -342,19 +340,19 @@ pub unsafe extern "C" fn rs_put_set(
                         xfree(part);
                         return OK;
                     }
-                    let r = nvim_call_put_escstr(fd, buf as *const c_char, 2);
+                    let r = put_escstr(fd, buf as *const c_char, 2);
                     xfree(buf);
                     if r == FAIL {
                         return FAIL;
                     }
-                } else if nvim_call_put_escstr(fd, value_str, 2) == FAIL {
+                } else if put_escstr(fd, value_str, 2) == FAIL {
                     return FAIL;
                 }
             }
         }
     }
 
-    if nvim_call_put_eol(fd) < 0 {
+    if put_eol(fd) < 0 {
         return FAIL;
     }
     OK
@@ -553,7 +551,7 @@ pub unsafe extern "C" fn rs_makeset(
                     return FAIL;
                 }
 
-                if do_endif && nvim_call_put_line(fd, c"endif".as_ptr()) == FAIL {
+                if do_endif && put_line(fd, c"endif".as_ptr()) == FAIL {
                     return FAIL;
                 }
 

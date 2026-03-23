@@ -38,7 +38,7 @@ extern "C" {
         wfh: c_int,
         trigger_resize_aucmds: c_int,
     );
-    fn check_signcolumn(buf: *mut std::ffi::c_void, win: WinHandle);
+    fn check_signcolumn(scl: *const std::ffi::c_char, win: WinHandle) -> c_int;
 
     // Direct C globals
     static mut p_window: crate::OptInt;
@@ -231,7 +231,7 @@ pub unsafe extern "C" fn rs_did_set_number_relativenumber(args: *mut c_void) -> 
     if !stc.is_null() && *stc != 0 {
         nvim_option_win_set_nrwidth(win, 0);
     }
-    check_signcolumn(std::ptr::null_mut(), win);
+    check_signcolumn(std::ptr::null(), win);
     callback_ok()
 }
 

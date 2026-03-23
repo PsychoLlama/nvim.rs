@@ -74,7 +74,7 @@ extern "C" {
 }
 
 extern "C" {
-    fn nvim_call_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_cmdmod_get_cmod_flags() -> c_int;
 
     fn nvim_buf_get_b_p_initialized(buf: *mut core::ffi::c_void) -> c_int;
@@ -88,17 +88,17 @@ extern "C" {
     fn nvim_buf_get_b_p_bt_is_help(buf: *mut core::ffi::c_void) -> c_int;
 
     fn nvim_call_free_buf_options(buf: *mut core::ffi::c_void, free_flags: c_int);
-    fn nvim_call_check_buf_options(buf: *mut core::ffi::c_void);
-    fn nvim_call_buf_init_chartab_buf(buf: *mut core::ffi::c_void);
+    fn check_buf_options(buf: *mut core::ffi::c_void);
+    fn buf_init_chartab(buf: *mut core::ffi::c_void, global: c_int) -> c_int;
     fn nvim_call_compile_cap_prog_buf(buf: *mut core::ffi::c_void);
 
     fn nvim_call_tabstop_set_vsts(buf: *mut core::ffi::c_void, s: *const c_char);
     fn nvim_call_tabstop_set_vts(buf: *mut core::ffi::c_void, s: *const c_char);
     fn nvim_buf_get_b_p_vts_array_is_null(buf: *mut core::ffi::c_void) -> c_int;
 
-    fn nvim_call_set_buflocal_cpt_callbacks(buf: *mut core::ffi::c_void);
-    fn nvim_call_set_buflocal_cfu_callback(buf: *mut core::ffi::c_void);
-    fn nvim_call_set_buflocal_ofu_callback(buf: *mut core::ffi::c_void);
+    fn set_buflocal_cpt_callbacks(buf: *mut core::ffi::c_void);
+    fn set_buflocal_cfu_callback(buf: *mut core::ffi::c_void);
+    fn set_buflocal_ofu_callback(buf: *mut core::ffi::c_void);
     fn rs_set_buflocal_tfu_callback(buf: *mut core::ffi::c_void);
 
     fn nvim_buf_kmap_state_set_init(buf: *mut core::ffi::c_void);
@@ -251,7 +251,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
 
     nvim_buf_set_string_field(buf, field_offset(K_OPT_COMPLETE), crate::p_cpt.cast_const());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_COMPLETE);
-    nvim_call_set_buflocal_cpt_callbacks(buf);
+    set_buflocal_cpt_callbacks(buf);
 
     // completeslash only on BACKSLASH_IN_FILENAME platforms
     if nvim_get_backslash_in_filename() != 0 {
@@ -265,11 +265,11 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
         crate::p_cfu.cast_const(),
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_COMPLETEFUNC);
-    nvim_call_set_buflocal_cfu_callback(buf);
+    set_buflocal_cfu_callback(buf);
 
     nvim_buf_set_string_field(buf, field_offset(K_OPT_OMNIFUNC), crate::p_ofu.cast_const());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_OMNIFUNC);
-    nvim_call_set_buflocal_ofu_callback(buf);
+    set_buflocal_ofu_callback(buf);
 
     nvim_buf_set_string_field(buf, field_offset(K_OPT_TAGFUNC), crate::p_tfu.cast_const());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_TAGFUNC);
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     let p_cpo = crate::p_cpo.cast_const();
     // Skip when option defaults have not been set yet (first buffer allocation).
     if p_cpo.is_null() {
-        nvim_call_check_buf_options(buf);
+        check_buf_options(buf);
         return;
     }
 
@@ -572,10 +572,8 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     //     X         no          no        yes     false
     //     X         no          no        no      true
     //    no         yes         no         X      true
-    let should_copy = !((nvim_call_vim_strchr(p_cpo, cpo_cap_s).is_null()
-        || (flags & bco_enter) == 0)
-        && (initialized
-            || ((flags & bco_enter) == 0 && !nvim_call_vim_strchr(p_cpo, cpo_s).is_null())));
+    let should_copy = !((vim_strchr(p_cpo, cpo_cap_s).is_null() || (flags & bco_enter) == 0)
+        && (initialized || ((flags & bco_enter) == 0 && !vim_strchr(p_cpo, cpo_s).is_null())));
 
     if should_copy || (flags & bco_always) != 0 {
         nvim_buf_clear_b_p_script_ctx(buf);
@@ -619,7 +617,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
         nvim_buf_set_b_p_initialized(buf, 1);
     }
 
-    nvim_call_check_buf_options(buf);
+    check_buf_options(buf);
 
     // If isk was copied (took the !dont_do_help branch), reinit the chartab.
     //
@@ -637,6 +635,6 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     let did_isk = did_copy && !dont_do_help_recomputed;
 
     if did_isk {
-        nvim_call_buf_init_chartab_buf(buf);
+        buf_init_chartab(buf, 0); // 0 = false (not global)
     }
 }

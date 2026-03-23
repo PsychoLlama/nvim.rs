@@ -26,22 +26,27 @@ extern "C" {
     fn nvim_call_copy_option_val(val: *const c_char) -> *mut c_char;
 
     // Per-field string manipulation
-    fn nvim_call_clear_string_option(ptr: *mut *mut c_char);
-    fn nvim_call_check_string_option(ptr: *mut *mut c_char);
+    fn clear_string_option(ptr: *mut *mut c_char);
+    fn check_string_option(ptr: *mut *mut c_char);
 
     // didset_window_options sub-calls
     // nvim_win_get_p_wrap, nvim_win_set_leftcol, nvim_win_set_skipcol defined in window_shim.c
     fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
     fn nvim_win_set_leftcol(wp: WinHandle, v: c_int);
     fn nvim_win_set_skipcol(wp: WinHandle, v: c_int);
-    fn nvim_call_check_colorcolumn(wp: WinHandle);
-    fn nvim_call_briopt_check(wp: WinHandle);
-    fn nvim_call_fill_culopt_flags(wp: WinHandle);
+    /// check_colorcolumn(cc, wp) -- pass NULL for cc to use current w_p_cc
+    fn check_colorcolumn(cc: *const c_char, wp: WinHandle) -> *const c_char;
+    /// briopt_check(briopt, wp) -- pass NULL for briopt to use current w_p_briopt
+    fn briopt_check(briopt: *const c_char, wp: WinHandle) -> bool;
+    /// fill_culopt_flags(val, wp) -- pass NULL for val to use current w_p_culopt
+    fn fill_culopt_flags(val: *const c_char, wp: WinHandle) -> c_int;
     fn nvim_call_set_chars_option_fcs(wp: WinHandle);
     fn nvim_call_set_chars_option_lcs(wp: WinHandle);
-    fn nvim_call_check_blending(wp: WinHandle);
-    fn nvim_call_set_winbar_win(wp: WinHandle, valid_cursor: c_int);
-    fn nvim_call_check_signcolumn(wp: WinHandle);
+    fn check_blending(wp: WinHandle);
+    /// set_winbar_win(wp, make_room, valid_cursor)
+    fn set_winbar_win(wp: WinHandle, make_room: bool, valid_cursor: bool) -> c_int;
+    /// check_signcolumn(scl, wp) -- pass NULL for scl to use current w_p_scl
+    fn check_signcolumn(scl: *const c_char, wp: WinHandle) -> c_int;
     // nvim_win_update_grid_blending defined in option_shim.c (uses w_p_winbl > 0 logic)
     fn nvim_win_update_grid_blending(wp: WinHandle);
 }
@@ -93,7 +98,7 @@ pub unsafe extern "C" fn rs_clear_winopt(wop: WinoptHandle) {
     for i in 0..n {
         let field = nvim_winopt_string_field_ptr(wop, i);
         if !field.is_null() {
-            nvim_call_clear_string_option(field);
+            clear_string_option(field);
         }
     }
 }
@@ -108,7 +113,7 @@ pub unsafe extern "C" fn rs_check_winopt(wop: WinoptHandle) {
     for i in 0..n {
         let field = nvim_winopt_string_field_ptr(wop, i);
         if !field.is_null() {
-            nvim_call_check_string_option(field);
+            check_string_option(field);
         }
     }
 }
@@ -125,14 +130,14 @@ pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: b
     } else {
         nvim_win_set_skipcol(wp, 0);
     }
-    nvim_call_check_colorcolumn(wp);
-    nvim_call_briopt_check(wp);
-    nvim_call_fill_culopt_flags(wp);
+    check_colorcolumn(std::ptr::null(), wp);
+    briopt_check(std::ptr::null(), wp);
+    fill_culopt_flags(std::ptr::null(), wp);
     nvim_call_set_chars_option_fcs(wp);
     nvim_call_set_chars_option_lcs(wp);
     crate::callbacks::winhl::rs_parse_winhl_opt(std::ptr::null(), wp); // sets w_hl_needs_update also for w_p_winbl
-    nvim_call_check_blending(wp);
-    nvim_call_set_winbar_win(wp, c_int::from(valid_cursor));
-    nvim_call_check_signcolumn(wp);
+    check_blending(wp);
+    set_winbar_win(wp, false, valid_cursor);
+    check_signcolumn(std::ptr::null(), wp);
     nvim_win_update_grid_blending(wp);
 }

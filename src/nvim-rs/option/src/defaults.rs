@@ -34,7 +34,7 @@ extern "C" {
     /// Returns get_varp(&options[opt_idx]) for check_options loop
     fn nvim_get_option_varp_for_check(opt_idx: c_int) -> *mut std::ffi::c_void;
     /// Call check_string_option on the given pointer
-    fn nvim_call_check_string_option(ptr: *mut *mut std::ffi::c_char);
+    fn check_string_option(ptr: *mut *mut std::ffi::c_char);
     /// Get cmdheight default value as number
     fn nvim_get_cmdheight_def_number() -> i64;
     /// Set p_ch (cmdheight) global variable
@@ -127,7 +127,7 @@ pub unsafe extern "C" fn rs_check_options() {
             && !nvim_get_option_var(opt_idx).is_null()
         {
             let varp = nvim_get_option_varp_for_check(opt_idx);
-            nvim_call_check_string_option(varp.cast());
+            check_string_option(varp.cast());
         }
     }
 }
