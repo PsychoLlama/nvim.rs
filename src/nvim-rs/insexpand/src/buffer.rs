@@ -14,11 +14,6 @@ type WinPtr = *mut u8;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
 
     // Compound accessor for buffer name completion
     fn nvim_get_next_bufname_token_impl();

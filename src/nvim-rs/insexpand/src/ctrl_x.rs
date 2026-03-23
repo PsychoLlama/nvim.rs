@@ -122,11 +122,6 @@ const K_OPT_COT_FLAG_LONGEST: u32 = 0x04;
 
 extern "C" {
     // Phase 1 accessors
-    fn nvim_set_ctrl_x_mode(val: c_int);
-    fn nvim_set_compl_cont_mode(val: c_int);
-    fn nvim_set_compl_cont_status(val: c_int);
-    fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_cont_mode() -> c_int;
     fn nvim_set_edit_submode_scroll(is_replace: c_int);
     fn nvim_set_edit_submode_null();
     fn nvim_set_redraw_mode_true();
@@ -136,10 +131,6 @@ extern "C" {
     fn nvim_get_cpt_sources_index() -> c_int;
 
     // Phase 2 accessors
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_set_compl_used_match(val: c_int);
-    fn nvim_set_compl_get_longest(val: c_int);
     fn nvim_get_cot_flags_global() -> u32;
     fn nvim_curbuf_get_b_cot_flags() -> u32;
     fn nvim_clear_edit_submode_extra();
@@ -152,7 +143,6 @@ extern "C" {
     fn rs_ctrl_x_mode_cmdline() -> c_int;
 
     // Phase 3 state accessors
-    fn nvim_get_compl_enter_selects() -> c_int;
     fn pum_visible() -> c_int;
     fn nvim_get_compl_curr_match_str_data() -> *const c_char;
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
@@ -161,18 +151,11 @@ extern "C" {
     fn nvim_get_compl_orig_text_data() -> *const c_char;
     fn nvim_get_compl_orig_text_size() -> usize;
     fn nvim_compl_first_match_is_null() -> c_int;
-    fn nvim_set_compl_started(val: c_int);
-    fn nvim_set_compl_matches(val: c_int);
-    fn nvim_set_compl_enter_selects(val: c_int);
-    fn nvim_set_compl_autocomplete(val: c_int);
-    fn nvim_set_compl_from_nonkeyword(val: c_int);
     fn nvim_clear_compl_best_matches();
-    fn nvim_set_compl_ins_end_col(val: c_int);
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_cursor_on_nul() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_get_compl_used_match() -> c_int;
 
     // Phase 3 compound accessors
     fn nvim_ins_apply_autocmds_completedonepre();
@@ -217,40 +200,40 @@ unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
 
     match c {
         CTRL_E | CTRL_Y => {
-            nvim_set_ctrl_x_mode(CTRL_X_SCROLL);
+            crate::vars::nvim_set_ctrl_x_mode(CTRL_X_SCROLL);
             nvim_set_edit_submode_scroll(nvim_get_state_replace_flag());
         }
-        CTRL_L => nvim_set_ctrl_x_mode(CTRL_X_WHOLE_LINE),
-        CTRL_F => nvim_set_ctrl_x_mode(CTRL_X_FILES),
-        CTRL_K => nvim_set_ctrl_x_mode(CTRL_X_DICTIONARY),
+        CTRL_L => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_WHOLE_LINE),
+        CTRL_F => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_FILES),
+        CTRL_K => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_DICTIONARY),
         CTRL_R => {
             if vpeekc() != i32::from(b'=') {
-                nvim_set_ctrl_x_mode(CTRL_X_REGISTER);
+                crate::vars::nvim_set_ctrl_x_mode(CTRL_X_REGISTER);
             }
         }
-        CTRL_T => nvim_set_ctrl_x_mode(CTRL_X_THESAURUS),
-        CTRL_U => nvim_set_ctrl_x_mode(CTRL_X_FUNCTION),
-        CTRL_O => nvim_set_ctrl_x_mode(CTRL_X_OMNI),
+        CTRL_T => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_THESAURUS),
+        CTRL_U => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_FUNCTION),
+        CTRL_O => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_OMNI),
         x if x == i32::from(b's') || x == CTRL_S => {
-            nvim_set_ctrl_x_mode(CTRL_X_SPELL);
+            crate::vars::nvim_set_ctrl_x_mode(CTRL_X_SPELL);
             nvim_spell_back_safe();
         }
-        CTRL_RSB => nvim_set_ctrl_x_mode(CTRL_X_TAGS),
-        CTRL_I | K_S_TAB => nvim_set_ctrl_x_mode(CTRL_X_PATH_PATTERNS),
-        CTRL_D => nvim_set_ctrl_x_mode(CTRL_X_PATH_DEFINES),
-        CTRL_V | CTRL_Q => nvim_set_ctrl_x_mode(CTRL_X_CMDLINE),
+        CTRL_RSB => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_TAGS),
+        CTRL_I | K_S_TAB => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_PATH_PATTERNS),
+        CTRL_D => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_PATH_DEFINES),
+        CTRL_V | CTRL_Q => crate::vars::nvim_set_ctrl_x_mode(CTRL_X_CMDLINE),
         CTRL_Z => {
-            nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+            crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
             nvim_set_edit_submode_null();
             nvim_set_redraw_mode_true();
             retval = true;
         }
         CTRL_P | CTRL_N => {
-            let cont_status = nvim_get_compl_cont_status();
+            let cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_INTRPT) == 0 {
-                nvim_set_compl_cont_status(cont_status | CONT_LOCAL);
-            } else if nvim_get_compl_cont_mode() != 0 {
-                nvim_set_compl_cont_status(cont_status & !CONT_LOCAL);
+                crate::vars::nvim_set_compl_cont_status(cont_status | CONT_LOCAL);
+            } else if crate::vars::nvim_get_compl_cont_mode() != 0 {
+                crate::vars::nvim_set_compl_cont_status(cont_status & !CONT_LOCAL);
             }
             set_ctrl_x_mode_default(c);
         }
@@ -266,13 +249,13 @@ unsafe fn rs_set_ctrl_x_mode(c: c_int) -> c_int {
 /// and from the default arm.
 unsafe fn set_ctrl_x_mode_default(c: c_int) {
     if c == CTRL_X {
-        if nvim_get_compl_cont_mode() != 0 {
-            nvim_set_compl_cont_status(0);
+        if crate::vars::nvim_get_compl_cont_mode() != 0 {
+            crate::vars::nvim_set_compl_cont_status(0);
         } else {
-            nvim_set_compl_cont_mode(CTRL_X_NOT_DEFINED_YET);
+            crate::vars::nvim_set_compl_cont_mode(CTRL_X_NOT_DEFINED_YET);
         }
     }
-    nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+    crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
     nvim_set_edit_submode_null();
     nvim_set_redraw_mode_true();
 }
@@ -326,7 +309,7 @@ unsafe fn get_cot_flags() -> u32 {
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     let mut retval = false;
-    let prev_mode = nvim_get_ctrl_x_mode();
+    let prev_mode = crate::vars::nvim_get_ctrl_x_mode();
 
     // Forget any previous 'special' messages if this is actually a ^X mode key
     // - bar ^R, in which case we wait to see what it gives us.
@@ -348,9 +331,9 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
         return 0;
     }
 
-    if nvim_get_ctrl_x_mode() == CTRL_X_CMDLINE_CTRL_X && c != CTRL_X {
+    if crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_CMDLINE_CTRL_X && c != CTRL_X {
         // In all cases, drop back to CMDLINE mode first.
-        nvim_set_ctrl_x_mode(CTRL_X_CMDLINE);
+        crate::vars::nvim_set_ctrl_x_mode(CTRL_X_CMDLINE);
         if c == CTRL_V
             || c == CTRL_Q
             || c == CTRL_Z
@@ -366,53 +349,56 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
             // Other CTRL-X keys first stop completion, then start another
             // completion mode.
             rs_ins_compl_prep(c_int::from(b' '));
-            nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
+            crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
         }
     }
 
     // Set "compl_get_longest" when finding the first matches.
-    if nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET
-        || (nvim_get_ctrl_x_mode() == CTRL_X_NORMAL && nvim_get_compl_started() == 0)
+    if crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET
+        || (crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_NORMAL
+            && crate::vars::nvim_get_compl_started() == 0)
     {
         let longest = (get_cot_flags() & K_OPT_COT_FLAG_LONGEST) != 0;
-        nvim_set_compl_get_longest(c_int::from(longest));
-        nvim_set_compl_used_match(1);
+        crate::vars::nvim_set_compl_get_longest(c_int::from(longest));
+        crate::vars::nvim_set_compl_used_match(1);
     }
 
-    if nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET {
+    if crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET {
         // We have just typed CTRL-X and aren't sure which mode yet. Now decide.
         retval = rs_set_ctrl_x_mode(c) != 0;
-    } else if nvim_get_ctrl_x_mode() != CTRL_X_NORMAL {
+    } else if crate::vars::nvim_get_ctrl_x_mode() != CTRL_X_NORMAL {
         // We're already in CTRL-X mode, do we stay in it?
         if crate::rs_vim_is_ctrl_x_key(c) == 0 {
-            let new_mode = if nvim_get_ctrl_x_mode() == CTRL_X_SCROLL {
+            let new_mode = if crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_SCROLL {
                 CTRL_X_NORMAL
             } else {
                 CTRL_X_FINISHED
             };
-            nvim_set_ctrl_x_mode(new_mode);
+            crate::vars::nvim_set_ctrl_x_mode(new_mode);
             nvim_set_edit_submode_null();
         }
         nvim_set_redraw_mode_true();
     }
 
-    if nvim_get_compl_started() != 0 || nvim_get_ctrl_x_mode() == CTRL_X_FINISHED {
+    if crate::vars::nvim_get_compl_started() != 0
+        || crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_FINISHED
+    {
         // Show error message from attempted keyword completion until another key
         // is hit, then go back to showing what mode we are in.
         nvim_set_redraw_mode_true();
-        if (nvim_get_ctrl_x_mode() == CTRL_X_NORMAL
+        if (crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_NORMAL
             && c != CTRL_N
             && c != CTRL_P
             && c != CTRL_R
             && rs_ins_compl_pum_key(c) == 0)
-            || nvim_get_ctrl_x_mode() == CTRL_X_FINISHED
+            || crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_FINISHED
         {
             retval = rs_ins_compl_stop(c, prev_mode, c_int::from(retval)) != 0;
         }
-    } else if nvim_get_ctrl_x_mode() == CTRL_X_LOCAL_MSG {
+    } else if crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act upon
         // the (possibly failed) completion.
-        rs_do_autocmd_completedone(c, nvim_get_ctrl_x_mode(), std::ptr::null_mut());
+        rs_do_autocmd_completedone(c, crate::vars::nvim_get_ctrl_x_mode(), std::ptr::null_mut());
     }
 
     may_trigger_modechanged();
@@ -420,8 +406,8 @@ pub unsafe extern "C" fn rs_ins_compl_prep(c: c_int) -> c_int {
     // reset continue_* if we left expansion mode; if we stay they'll be
     // (re)set properly in ins_complete()
     if crate::rs_vim_is_ctrl_x_key(c) == 0 {
-        nvim_set_compl_cont_status(0);
-        nvim_set_compl_cont_mode(0);
+        crate::vars::nvim_set_compl_cont_status(0);
+        crate::vars::nvim_set_compl_cont_mode(0);
     }
 
     c_int::from(retval)
@@ -458,12 +444,14 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
         // ignorecase is set), we must add back-spaces to the redo buffer.
         // When using the longest match, edited the match or used CTRL-E then
         // don't use the current match.
-        let ptr: *const c_char =
-            if !curr_match_str.is_null() && nvim_get_compl_used_match() != 0 && c != CTRL_E {
-                curr_match_str
-            } else {
-                std::ptr::null()
-            };
+        let ptr: *const c_char = if !curr_match_str.is_null()
+            && crate::vars::nvim_get_compl_used_match() != 0
+            && c != CTRL_E
+        {
+            curr_match_str
+        } else {
+            std::ptr::null()
+        };
         rs_ins_compl_fixRedoBufForLeader(ptr);
     }
 
@@ -471,7 +459,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
 
     // When completing whole lines: fix indent for 'cindent'.
     // Otherwise, break line if it's too long.
-    if nvim_get_compl_cont_mode() == CTRL_X_WHOLE_LINE {
+    if crate::vars::nvim_get_compl_cont_mode() == CTRL_X_WHOLE_LINE {
         // re-indent the current line
         if want_cindent {
             do_c_expr_indent();
@@ -501,7 +489,8 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // selection without inserting anything. When compl_enter_selects is set
     // the Enter key does the same.
     if (c == CTRL_Y
-        || (nvim_get_compl_enter_selects() != 0 && (c == CAR || c == K_KENTER || c == NL)))
+        || (crate::vars::nvim_get_compl_enter_selects() != 0
+            && (c == CAR || c == K_KENTER || c == NL)))
         && pum_visible() != 0
     {
         word = nvim_get_compl_shown_match_str_dup().cast::<u8>();
@@ -544,22 +533,22 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // Trigger the CompleteDonePre event to give scripts a chance to act upon
     // the completion before clearing the info, and restore ctrl_x_mode so
     // that complete_info() can be used.
-    nvim_set_ctrl_x_mode(prev_mode);
+    crate::vars::nvim_set_ctrl_x_mode(prev_mode);
     nvim_ins_apply_autocmds_completedonepre();
 
     rs_ins_compl_free();
-    nvim_set_compl_started(0);
-    nvim_set_compl_matches(0);
+    crate::vars::nvim_set_compl_started(0);
+    crate::vars::nvim_set_compl_matches(0);
     if !nvim_shortmess_completionmenu() {
         msg_clr_cmdline(); // necessary for "noshowmode"
     }
-    nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
-    nvim_set_compl_enter_selects(0);
+    crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+    crate::vars::nvim_set_compl_enter_selects(0);
     nvim_set_edit_submode_null_if_set();
-    nvim_set_compl_autocomplete(0);
-    nvim_set_compl_from_nonkeyword(0);
+    crate::vars::nvim_set_compl_autocomplete(0);
+    crate::vars::nvim_set_compl_from_nonkeyword(0);
     nvim_clear_compl_best_matches();
-    nvim_set_compl_ins_end_col(0);
+    crate::vars::nvim_set_compl_ins_end_col(0);
 
     if c == CTRL_C && nvim_get_cmdwin_type() != 0 {
         // Avoid the popup menu remaining displayed when leaving the command
@@ -587,7 +576,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
 /// Cancel completion: calls rs_ins_compl_stop(' ', ctrl_x_mode, true).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_cancel() -> c_int {
-    rs_ins_compl_stop(c_int::from(b' '), nvim_get_ctrl_x_mode(), 1)
+    rs_ins_compl_stop(c_int::from(b' '), crate::vars::nvim_get_ctrl_x_mode(), 1)
 }
 
 extern "C" {
@@ -621,21 +610,21 @@ const CONT_N_ADDS: c_int = 4; // next ^X<> will add-new or expand-current
 pub unsafe extern "C" fn rs_ins_ctrl_x() {
     if rs_ctrl_x_mode_cmdline() == 0 {
         // if the next ^X<> won't ADD nothing, then reset compl_cont_status
-        let status = nvim_get_compl_cont_status();
+        let status = crate::vars::nvim_get_compl_cont_status();
         if (status & CONT_N_ADDS) != 0 {
-            nvim_set_compl_cont_status(status | CONT_INTRPT);
+            crate::vars::nvim_set_compl_cont_status(status | CONT_INTRPT);
         } else {
-            nvim_set_compl_cont_status(0);
+            crate::vars::nvim_set_compl_cont_status(0);
         }
         // We're not sure which CTRL-X mode it will be yet
-        nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
+        crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NOT_DEFINED_YET);
         nvim_set_edit_submode_ctrl_x_msg(CTRL_X_NOT_DEFINED_YET);
         nvim_set_edit_submode_pre_null();
         nvim_set_redraw_mode_true();
     } else {
         // CTRL-X in CTRL-X CTRL-V mode behaves differently to make CTRL-X
         // CTRL-V look like CTRL-N
-        nvim_set_ctrl_x_mode(CTRL_X_CMDLINE_CTRL_X);
+        crate::vars::nvim_set_ctrl_x_mode(CTRL_X_CMDLINE_CTRL_X);
     }
 
     nvim_may_trigger_modechanged();
@@ -678,7 +667,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
     };
 
     if is_empty != 0 {
-        nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
+        crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
         nvim_set_edit_submode_null();
         nvim_emsg_dict_empty(dict_opt);
         if nvim_emsg_silent_is_zero() != 0 && !nvim_in_assert_fails() {

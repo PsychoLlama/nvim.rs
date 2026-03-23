@@ -25,7 +25,6 @@ extern "C" {
     fn rs_ins_compl_show_pum();
 
     // Completion direction
-    fn nvim_get_compl_direction() -> c_int;
 
     // ins_compl_add wrapper (from insexpand_shim.c)
     fn nvim_ins_compl_add_simple(
@@ -90,7 +89,7 @@ pub unsafe extern "C" fn rs_ins_compl_add_matches(
     icase: c_int,
 ) {
     let mut add_r = 0; // OK = 0
-    let mut dir = nvim_get_compl_direction();
+    let mut dir = crate::vars::nvim_get_compl_direction();
     let flags = CP_FAST | (if icase != 0 { CP_ICASE } else { 0 });
 
     let mut i = 0;

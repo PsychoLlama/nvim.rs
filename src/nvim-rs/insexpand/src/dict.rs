@@ -10,11 +10,8 @@ use std::os::raw::{c_char, c_int};
 // C accessor functions
 extern "C" {
     // CTRL-X mode checking
-    fn nvim_get_ctrl_x_mode() -> c_int;
 
     // State accessors
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
 
     // UTF-8 functions
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
@@ -180,10 +177,6 @@ pub unsafe extern "C" fn rs_dict_count_words_in_line(mut ptr: *const c_char) -> 
 // =============================================================================
 
 // Additional C accessor functions
-extern "C" {
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
-}
 
 /// Compare two strings case-insensitively (ASCII only).
 #[no_mangle]

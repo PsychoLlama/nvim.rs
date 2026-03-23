@@ -9,12 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_was_interrupted() -> c_int;
-    fn nvim_get_compl_opt_refresh_always() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
     fn nvim_get_compl_leader_data() -> *const c_char;
     fn nvim_get_compl_leader_size() -> usize;
     fn nvim_get_compl_orig_text_data() -> *const c_char;
@@ -73,9 +67,6 @@ pub unsafe extern "C" fn rs_refresh_count_chars(ptr: *const c_char, len: usize) 
 
 // Additional C accessor functions
 extern "C" {
-    fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_cont_mode() -> c_int;
-    fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_compl_first_match_is_null() -> c_int;
 }
 

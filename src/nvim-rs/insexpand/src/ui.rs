@@ -11,12 +11,6 @@ use std::os::raw::c_int;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
-    fn nvim_get_compl_selected_item() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_time_slice_expired() -> c_int;
     fn pum_visible() -> c_int;
     fn pum_get_height() -> c_int;
 }
@@ -58,12 +52,10 @@ extern "C" {
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_compl_shown_match_exists() -> c_int;
-    fn nvim_get_compl_autocomplete() -> c_int;
 
     // For ins_compl_col_range_attr
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn nvim_syn_name2attr(name: *const c_char) -> c_int;
-    fn nvim_get_compl_ins_end_col() -> c_int;
     fn nvim_get_compl_lnum() -> c_int;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
 
@@ -132,7 +124,7 @@ pub unsafe extern "C" fn rs_ins_compl_col_range_attr(lnum: c_int, col: c_int) ->
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let start_col = nvim_get_compl_col() + rs_ins_compl_leader_len() as c_int;
-    let compl_ins_end_col = nvim_get_compl_ins_end_col();
+    let compl_ins_end_col = crate::vars::nvim_get_compl_ins_end_col();
     let compl_lnum = nvim_get_compl_lnum();
     let cursor_lnum = nvim_get_curwin_cursor_lnum();
 

@@ -28,10 +28,6 @@ extern "C" {
     fn nvim_compl_match_get_cpt_source_idx(m: ComplMatch) -> c_int;
     fn nvim_compl_match_get_in_match_array(m: ComplMatch) -> c_int;
 
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_set_compl_direction(val: c_int);
-    fn nvim_get_compl_shows_dir() -> c_int;
-    fn nvim_set_compl_shows_dir(val: c_int);
     fn nvim_get_cpt_sources_index() -> c_int;
 
     // leader-for-startcol (Rust implementation in leader.rs)
@@ -178,8 +174,8 @@ pub unsafe extern "C" fn rs_remove_old_matches() {
 
     let forward = nvim_compl_match_get_cpt_source_idx(first) < 0;
     let direction = if forward { FORWARD } else { BACKWARD };
-    nvim_set_compl_direction(direction);
-    nvim_set_compl_shows_dir(direction);
+    crate::vars::nvim_set_compl_direction(direction);
+    crate::vars::nvim_set_compl_shows_dir(direction);
 
     let shown_before_removal = nvim_compl_get_shown_match();
     let mut shown_match_removed = false;

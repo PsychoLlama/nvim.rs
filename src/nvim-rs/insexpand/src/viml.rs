@@ -9,13 +9,7 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
     fn nvim_get_compl_col() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
-    fn nvim_get_compl_selected_item() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
     fn pum_visible() -> c_int;
 
     // Match info accessors
@@ -70,7 +64,7 @@ static MODE_UNKNOWN: &[u8] = b"unknown\0";
 #[no_mangle]
 #[allow(clippy::match_same_arms)]
 pub unsafe extern "C" fn rs_viml_get_mode_str() -> *const c_char {
-    let mode = nvim_get_ctrl_x_mode();
+    let mode = crate::vars::nvim_get_ctrl_x_mode();
 
     let s = match mode {
         CTRL_X_NORMAL | CTRL_X_NOT_DEFINED_YET | CTRL_X_SCROLL => MODE_KEYWORD,

@@ -26,7 +26,6 @@ extern "C" {
     fn nvim_get_compl_match_array_exists() -> c_int;
 
     // Completeopt flags
-    fn nvim_get_compl_autocomplete() -> c_int;
 
     // For rs_ins_compl_del_pum
     fn nvim_pum_undisplay(undo: c_int);
@@ -79,7 +78,7 @@ unsafe fn pum_count_visible_matches() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_pum_enough_matches(menuone: c_int) -> c_int {
     let count = pum_count_visible_matches();
-    let threshold = if menuone != 0 || nvim_get_compl_autocomplete() != 0 {
+    let threshold = if menuone != 0 || crate::vars::nvim_get_compl_autocomplete() != 0 {
         1
     } else {
         2
@@ -183,8 +182,6 @@ pub unsafe extern "C" fn rs_compl_match_curr_select(selected: c_int) -> c_int {
 // Additional C accessors for Phase 2
 extern "C" {
     fn pum_visible() -> c_int;
-    fn nvim_get_compl_selected_item() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
 }
 
 // Accessors for rs_ins_compl_show_pum
@@ -200,7 +197,6 @@ extern "C" {
     fn nvim_pum_display_compl(cur: c_int, array_changed: c_int);
     fn nvim_compl_curr_neq_shown() -> c_int;
     fn nvim_compl_set_curr_to_shown();
-    fn nvim_set_compl_selected_item(val: c_int);
 }
 
 /// Show the popup menu for completion matches.
@@ -218,7 +214,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     if crate::rs_pum_wanted() == 0
         || rs_pum_enough_matches(c_int::from(
             (crate::rs_get_cot_flags() & K_OPT_COT_FLAG_MENUONE) != 0
-                || nvim_get_compl_autocomplete() != 0,
+                || crate::vars::nvim_get_compl_autocomplete() != 0,
         )) == 0
     {
         return;
@@ -240,7 +236,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     }
 
     if nvim_get_compl_match_array_exists() == 0 {
-        if nvim_get_compl_started() != 0 && nvim_has_completechanged_event() != 0 {
+        if crate::vars::nvim_get_compl_started() != 0 && nvim_has_completechanged_event() != 0 {
             nvim_trigger_complete_changed(cur);
         }
         return;
@@ -254,12 +250,12 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
     // Use the cursor to get all wrapping and other settings right.
     let col = nvim_get_cursor_col();
     nvim_set_cursor_col_to_compl_col();
-    nvim_set_compl_selected_item(cur);
+    crate::vars::nvim_set_compl_selected_item(cur);
     nvim_pum_display_compl(cur, array_changed);
     nvim_restore_cursor_col(col);
 
     // After adding leader, set the current match to shown match.
-    if nvim_get_compl_started() != 0 && nvim_compl_curr_neq_shown() != 0 {
+    if crate::vars::nvim_get_compl_started() != 0 && nvim_compl_curr_neq_shown() != 0 {
         nvim_compl_set_curr_to_shown();
     }
 
@@ -376,7 +372,8 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     }
 
     let compl_no_select = (crate::rs_get_cot_flags() & K_OPT_COT_FLAG_NOSELECT) != 0
-        || (nvim_get_compl_autocomplete() != 0 && crate::rs_ins_compl_has_preinsert() == 0);
+        || (crate::vars::nvim_get_compl_autocomplete() != 0
+            && crate::rs_ins_compl_has_preinsert() == 0);
 
     let is_forward = crate::rs_compl_shows_dir_forward() != 0;
     let is_cpt_completion = nvim_cpt_sources_array_exists() != 0;

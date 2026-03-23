@@ -8,9 +8,6 @@ use std::os::raw::c_int;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 // C accessor functions
-extern "C" {
-    fn nvim_get_compl_started() -> c_int;
-}
 
 // Key constants (from keycode definitions)
 const CTRL_N: c_int = 14; // ^N
@@ -28,9 +25,7 @@ const ESC: c_int = 27; // Escape
 
 // Additional C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
     fn nvim_get_compl_col() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 }
 
@@ -64,17 +59,13 @@ extern "C" {
     fn vungetc(c: c_int);
     fn nvim_got_int() -> c_int;
     fn nvim_key_typed() -> c_int;
-    fn nvim_set_compl_interrupted(val: c_int);
     fn nvim_using_script() -> c_int;
     fn nvim_ex_normal_busy() -> c_int;
     // (compl_pending moved to Rust static in state.rs)
     fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int;
-    fn nvim_get_compl_autocomplete() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
     fn nvim_cpt_sources_index_non_neg() -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_p_cto() -> c_int;
-    fn nvim_set_compl_shows_dir(val: c_int);
     fn rs_ctrl_x_mode_normal() -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
     fn rs_check_elapsed_time();
@@ -121,7 +112,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
         // Eat or inspect the character
         let c = safe_vgetc();
         if crate::rs_vim_is_ctrl_x_key(peeked) != 0 && peeked != CTRL_X && peeked != CTRL_R {
-            nvim_set_compl_shows_dir(crate::rs_ins_compl_key2dir(c));
+            crate::vars::nvim_set_compl_shows_dir(crate::rs_ins_compl_key2dir(c));
             let todo = crate::rs_ins_compl_key2count(c);
             let advance = c_int::from(c != K_UP && c != K_DOWN);
             crate::next::rs_ins_compl_next(0, todo, advance);
@@ -132,7 +123,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
                 // Don't interrupt completion when the character wasn't typed,
                 // e.g., when doing @q to replay keys.
                 if c != CTRL_R && nvim_key_typed() != 0 {
-                    nvim_set_compl_interrupted(1);
+                    crate::vars::nvim_set_compl_interrupted(1);
                 }
                 vungetc(c);
             }
@@ -140,10 +131,12 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     } else {
         let normal_mode_strict = rs_ctrl_x_mode_normal() != 0
             && rs_ctrl_x_mode_line_or_eval() == 0
-            && (nvim_get_compl_cont_status() & CONT_LOCAL) == 0
+            && (crate::vars::nvim_get_compl_cont_status() & CONT_LOCAL) == 0
             && nvim_cpt_sources_array_exists() != 0
             && nvim_cpt_sources_index_non_neg() != 0;
-        if normal_mode_strict && (nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0) {
+        if normal_mode_strict
+            && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+        {
             rs_check_elapsed_time();
         }
     }
@@ -152,7 +145,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     if pending != 0
         && nvim_got_int() == 0
         && nvim_cot_flags_has_noinsert_fuzzy() == 0
-        && (nvim_get_compl_autocomplete() == 0 || rs_ins_compl_has_preinsert() != 0)
+        && (crate::vars::nvim_get_compl_autocomplete() == 0 || rs_ins_compl_has_preinsert() != 0)
     {
         // Insert the first match immediately and advance compl_shown_match,
         // before finding other matches.

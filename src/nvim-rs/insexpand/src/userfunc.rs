@@ -15,9 +15,6 @@ const CURSOR_MOVED_ERROR: c_int = c_int::MIN;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
 
     // Accessors for get_userdefined_compl_info migration (Phase 2)
     fn nvim_get_complete_funcname_empty(ctrl_x_mode: c_int) -> c_int;
@@ -118,7 +115,7 @@ pub unsafe extern "C" fn rs_get_userdefined_compl_info(
         cb_opaque
     } else {
         // Use the global mode callback; check that it's set.
-        let ctrl_x_mode = nvim_get_ctrl_x_mode();
+        let ctrl_x_mode = crate::vars::nvim_get_ctrl_x_mode();
         if nvim_get_complete_funcname_empty(ctrl_x_mode) != 0 {
             nvim_emit_completefunc_not_set_error(rs_ctrl_x_mode_function());
             return FAIL;

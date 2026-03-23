@@ -8,14 +8,6 @@
 use std::os::raw::{c_char, c_int};
 
 // C accessor functions
-extern "C" {
-    // CTRL-X mode checking
-    fn nvim_get_ctrl_x_mode() -> c_int;
-
-    // State accessors
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-}
 
 // CTRL-X mode constants
 const CTRL_X_FILES: c_int = 4;
@@ -204,7 +196,6 @@ pub unsafe extern "C" fn rs_file_count_path_components(path: *const c_char) -> c
 
 // Additional C accessor functions
 extern "C" {
-    fn nvim_get_compl_started() -> c_int;
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 }
@@ -436,9 +427,6 @@ extern "C" {
     fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
 
     // Completion state (nvim_get_compl_direction already declared above)
-    fn nvim_get_compl_get_longest() -> c_int;
-    fn nvim_get_compl_num_bests() -> c_int;
-    fn nvim_set_compl_num_bests(val: c_int);
 
     // xmalloc / FreeWild
     fn nvim_xmalloc(size: usize) -> *mut u8;
@@ -476,9 +464,9 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
     let leader = rs_ins_compl_leader().cast_mut();
     let leader_len = rs_ins_compl_leader_len();
     let mut in_fuzzy_collect = rs_cot_fuzzy() != 0 && leader_len > 0;
-    let need_collect_bests = in_fuzzy_collect && nvim_get_compl_get_longest() != 0;
+    let need_collect_bests = in_fuzzy_collect && crate::vars::nvim_get_compl_get_longest() != 0;
     let mut max_score: c_int = 0;
-    let mut dir = nvim_get_compl_direction();
+    let mut dir = crate::vars::nvim_get_compl_direction();
 
     // On Linux/non-Windows, pathsep is always '/'.
     // BACKSLASH_IN_FILENAME blocks are Windows-only dead code on this platform.
@@ -587,7 +575,9 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
                 }
 
                 if need_collect_bests && (i == 0 || current_score == max_score) {
-                    nvim_set_compl_num_bests(nvim_get_compl_num_bests() + 1);
+                    crate::vars::nvim_set_compl_num_bests(
+                        crate::vars::nvim_get_compl_num_bests() + 1,
+                    );
                     max_score = current_score;
                 }
             }
@@ -597,7 +587,9 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
             FreeWild(num_matches, matches);
         }
 
-        if nvim_get_compl_num_bests() > 0 && nvim_get_compl_get_longest() != 0 {
+        if crate::vars::nvim_get_compl_num_bests() > 0
+            && crate::vars::nvim_get_compl_get_longest() != 0
+        {
             rs_fuzzy_longest_match();
         }
         return;

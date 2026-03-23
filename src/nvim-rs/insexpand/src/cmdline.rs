@@ -9,9 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
 
     // Compound accessor for cmdline pattern setup
     fn nvim_get_cmdline_compl_info_impl(line: *mut c_char, curs_col: c_int) -> c_int;

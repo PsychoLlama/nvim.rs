@@ -7,11 +7,6 @@
 use std::os::raw::c_int;
 
 // C accessor functions
-extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-}
 
 // CTRL-X mode constant
 const CTRL_X_SPELL: c_int = 14;

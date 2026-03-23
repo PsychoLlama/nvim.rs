@@ -36,7 +36,6 @@ extern "C" {
     ) -> c_int;
 
     // Completion state accessors
-    fn nvim_get_compl_direction() -> c_int;
     fn rs_compl_status_adding() -> c_int;
     fn nvim_get_p_ic() -> c_int;
     fn nvim_get_compl_orig_text_data() -> *const c_char;
@@ -88,7 +87,7 @@ unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_get_register_completion() {
-    let mut dir = nvim_get_compl_direction();
+    let mut dir = crate::vars::nvim_get_compl_direction();
     let adding_mode = rs_compl_status_adding() != 0;
     let p_ic = nvim_get_p_ic() != 0;
     let num_registers = nvim_get_num_registers();

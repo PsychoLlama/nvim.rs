@@ -62,7 +62,6 @@ extern "C" {
 
     // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
     fn nvim_mergesort_compl_list_raw(head: ComplMatch, compare_type: c_int) -> ComplMatch;
-    fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_compl_get_shown_match() -> ComplMatch;
     fn nvim_compl_set_shown_match(m: ComplMatch);
     fn nvim_compl_shown_match_is_sentinel(forward: c_int) -> c_int;
@@ -71,8 +70,6 @@ extern "C" {
 
     // For rs_fuzzy_longest_match
     fn nvim_ins_redraw(ready: c_int);
-    fn nvim_get_compl_num_bests() -> c_int;
-    fn nvim_set_compl_num_bests(val: c_int);
     fn nvim_clear_compl_best_matches();
     fn rs_ins_compl_delete(new_leader: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
@@ -249,7 +246,7 @@ pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
     }
 
     let first = nvim_compl_get_first_match();
-    let new_shown = if nvim_get_compl_autocomplete() == 0 && forward {
+    let new_shown = if crate::vars::nvim_get_compl_autocomplete() == 0 && forward {
         nvim_compl_match_get_next(first)
     } else {
         first
@@ -275,14 +272,14 @@ pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_fuzzy_longest_match() {
-    let num_bests = nvim_get_compl_num_bests();
+    let num_bests = crate::vars::nvim_get_compl_num_bests();
     if num_bests == 0 {
         return;
     }
 
     let first = nvim_compl_get_first_match();
     if first.is_null() {
-        nvim_set_compl_num_bests(0);
+        crate::vars::nvim_set_compl_num_bests(0);
         return;
     }
 
@@ -310,7 +307,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
             nvim_ins_compl_insert_bytes(str_data.add(compl_len), -1);
             nvim_ins_redraw(0);
         }
-        nvim_set_compl_num_bests(0);
+        crate::vars::nvim_set_compl_num_bests(0);
         return;
     }
 
@@ -325,7 +322,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
     }
 
     if best_matches.is_empty() {
-        nvim_set_compl_num_bests(0);
+        crate::vars::nvim_set_compl_num_bests(0);
         nvim_clear_compl_best_matches();
         return;
     }
@@ -396,7 +393,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
     }
 
     nvim_clear_compl_best_matches();
-    nvim_set_compl_num_bests(0);
+    crate::vars::nvim_set_compl_num_bests(0);
 }
 
 #[cfg(test)]

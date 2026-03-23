@@ -11,9 +11,7 @@ use std::os::raw::{c_char, c_int};
 extern "C" {
     // State accessors
     fn nvim_get_compl_col() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_get_compl_ins_end_col() -> c_int;
 
     // Match accessors
     fn nvim_compl_shown_match_exists() -> c_int;
@@ -28,7 +26,6 @@ extern "C" {
     fn nvim_get_compl_orig_text_size() -> usize;
 
     // Status functions
-    fn nvim_get_compl_cont_status() -> c_int;
 
     // UTF-8 functions
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
@@ -40,7 +37,7 @@ const CONT_ADDING: c_int = 1;
 /// Check if we're in "adding" mode (compl_cont_status & CONT_ADDING).
 #[inline]
 unsafe fn is_compl_adding() -> bool {
-    (nvim_get_compl_cont_status() & CONT_ADDING) != 0
+    (crate::vars::nvim_get_compl_cont_status() & CONT_ADDING) != 0
 }
 
 /// Find the common prefix length between two strings.
@@ -141,10 +138,6 @@ pub unsafe extern "C" fn rs_insert_find_newline(s: *const c_char) -> c_int {
 
 // Additional C accessor functions for Phase 7
 extern "C" {
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_autocomplete() -> c_int;
 
     // Rust functions from lib.rs
     fn rs_ins_compl_has_preinsert() -> c_int;
@@ -177,7 +170,6 @@ extern "C" {
     fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_ins_compl_dict_alloc_set_shown();
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
-    fn nvim_set_compl_used_match(val: c_int);
     fn rs_compl_status_adding() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_leader_len() -> usize;
@@ -241,7 +233,7 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
     }
 
     let compl_col = nvim_get_compl_col();
-    let compl_length = nvim_get_compl_length();
+    let compl_length = crate::vars::nvim_get_compl_length();
     let mut col = compl_col
         + if rs_compl_status_adding() != 0 {
             compl_length
@@ -363,7 +355,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
 
     let used_match =
         nvim_compl_shown_match_at_orig_text() == 0 && (preinsert == 0 || insert_prefix != 0);
-    nvim_set_compl_used_match(c_int::from(used_match));
+    crate::vars::nvim_set_compl_used_match(c_int::from(used_match));
 
     nvim_ins_compl_dict_alloc_set_shown();
     crate::state::COMPL_HI_ON_AUTOCOMPL_LONGEST = insert_prefix != 0 && move_cursor != 0;

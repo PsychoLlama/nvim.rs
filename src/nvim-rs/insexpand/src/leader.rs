@@ -171,10 +171,6 @@ pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) 
 // =============================================================================
 
 // Additional C accessor functions
-extern "C" {
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
-}
 
 /// Calculate how much extra text was typed beyond the original.
 ///
@@ -451,7 +447,6 @@ extern "C" {
     fn nvim_compl_shown_match_is_null() -> c_int;
     fn nvim_compl_set_shown_to_first();
     fn nvim_compl_set_curr_to_shown();
-    fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_compl_first_match_is_null() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_delete(new_leader: c_int);
@@ -491,7 +486,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     let p_off = p.offset_from(line.cast_const()) as c_int;
 
     let compl_col = nvim_get_compl_col();
-    let compl_length = nvim_get_compl_length();
+    let compl_length = crate::vars::nvim_get_compl_length();
 
     // Stop completion when the whole word was deleted. For Omni completion
     // allow the word to be deleted. Respect the 'backspace' option.
@@ -519,7 +514,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     );
 
     // Clear selection if a menu item is currently selected in autocompletion
-    if nvim_get_compl_autocomplete() != 0
+    if crate::vars::nvim_get_compl_autocomplete() != 0
         && nvim_compl_first_match_is_null() == 0
         && rs_ins_compl_has_preinsert() == 0
     {
@@ -540,8 +535,6 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 
 extern "C" {
     // For ins_compl_new_leader
-    fn nvim_set_compl_used_match(val: c_int);
-    fn nvim_get_compl_used_match() -> c_int;
     fn nvim_get_p_acl() -> c_int;
     fn nvim_pum_undisplay(undo: c_int);
     fn nvim_redraw_later_valid();
@@ -556,9 +549,7 @@ extern "C" {
     // (compl_restarting moved to Rust static in state.rs)
     fn rs_ins_compl_has_autocomplete() -> c_int;
     fn rs_ins_compl_enable_autocomplete();
-    fn nvim_set_compl_autocomplete(val: c_int);
     fn nvim_ins_complete_ctrl_n() -> c_int;
-    fn nvim_set_compl_cont_status(val: c_int);
     fn nvim_update_compl_enter_selects();
     fn rs_ins_compl_show_pum();
     fn nvim_get_compl_match_array_exists() -> c_int;
@@ -567,7 +558,6 @@ extern "C" {
     fn rs_get_compl_len() -> c_int;
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_ins_compl_refresh_always() -> c_int;
-    fn nvim_set_compl_enter_selects(val: c_int);
 }
 
 const FAIL: c_int = 0;
@@ -589,7 +579,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         let compl_len = rs_get_compl_len();
         nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
     }
-    nvim_set_compl_used_match(0);
+    crate::vars::nvim_set_compl_used_match(0);
 
     if nvim_get_p_acl() > 0 {
         nvim_pum_undisplay(1);
@@ -598,7 +588,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         nvim_ui_flush();
     }
 
-    if nvim_get_compl_started() != 0 {
+    if crate::vars::nvim_get_compl_started() != 0 {
         let leader_data = nvim_get_compl_leader_data();
         let leader_size = nvim_get_compl_leader_size();
         if !leader_data.is_null() {
@@ -618,10 +608,10 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         if rs_ins_compl_has_autocomplete() != 0 {
             rs_ins_compl_enable_autocomplete();
         } else {
-            nvim_set_compl_autocomplete(0);
+            crate::vars::nvim_set_compl_autocomplete(0);
         }
         if nvim_ins_complete_ctrl_n() == FAIL {
-            nvim_set_compl_cont_status(0);
+            crate::vars::nvim_set_compl_cont_status(0);
         }
         crate::state::COMPL_RESTARTING = false;
     }
@@ -633,10 +623,10 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
 
     // Don't let Enter select the original text when there is no popup menu.
     if nvim_get_compl_match_array_exists() == 0 {
-        nvim_set_compl_enter_selects(0);
+        crate::vars::nvim_set_compl_enter_selects(0);
     } else if rs_ins_compl_has_preinsert() != 0 && nvim_get_compl_leader_size() > 0 {
         rs_ins_compl_insert(1, 0);
-    } else if nvim_get_compl_started() != 0
+    } else if crate::vars::nvim_get_compl_started() != 0
         && rs_ins_compl_preinsert_longest() != 0
         && nvim_get_compl_leader_size() > 0
         && rs_ins_compl_preinsert_effect() == 0
@@ -645,7 +635,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     }
     // Don't let Enter select when use user function and refresh_always is set
     if rs_ins_compl_refresh_always() != 0 {
-        nvim_set_compl_enter_selects(0);
+        crate::vars::nvim_set_compl_enter_selects(0);
     }
 }
 
@@ -699,7 +689,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         if !had_match {
             rs_ins_compl_delete(0);
         }
-        nvim_set_compl_used_match(0);
+        crate::vars::nvim_set_compl_used_match(0);
         return;
     }
 
@@ -753,7 +743,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         }
     }
 
-    nvim_set_compl_used_match(0);
+    crate::vars::nvim_set_compl_used_match(0);
 }
 
 // =============================================================================

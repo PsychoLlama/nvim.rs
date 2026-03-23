@@ -59,7 +59,6 @@ extern "C" {
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
     // Direction accessor
-    fn nvim_get_compl_direction() -> c_int;
 }
 
 /// Check if a match is at the original text position.

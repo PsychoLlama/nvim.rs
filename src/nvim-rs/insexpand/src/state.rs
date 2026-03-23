@@ -21,16 +21,6 @@ use std::os::raw::c_int;
 // C accessor functions for state
 extern "C" {
     // State flag accessors
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_time_slice_expired() -> c_int;
-    fn nvim_get_compl_enter_selects() -> c_int;
-    fn nvim_get_compl_used_match() -> c_int;
-    fn nvim_get_compl_was_interrupted() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_autocomplete() -> c_int;
-    fn nvim_get_compl_get_longest() -> c_int;
 
     // Match state
     fn nvim_compl_first_match_is_null() -> c_int;
@@ -40,11 +30,7 @@ extern "C" {
     fn nvim_compl_shown_match_is_first() -> c_int;
 
     // Numeric state
-    fn nvim_get_compl_matches() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
     fn nvim_get_compl_col() -> c_int;
-    fn nvim_get_compl_selected_item() -> c_int;
-    fn nvim_get_compl_cont_mode() -> c_int;
 }
 
 // =============================================================================
@@ -112,11 +98,6 @@ const CONT_LOCAL: c_int = 32;
 // =============================================================================
 
 extern "C" {
-    fn nvim_set_compl_cont_status(val: c_int);
-    fn nvim_set_compl_started(val: c_int);
-    fn nvim_set_compl_matches(val: c_int);
-    fn nvim_set_compl_selected_item(val: c_int);
-    fn nvim_set_compl_ins_end_col(val: c_int);
     fn nvim_clear_compl_curr_win();
     fn nvim_clear_compl_curr_buf();
     fn nvim_compl_clear_pattern();
@@ -124,12 +105,7 @@ extern "C" {
     fn nvim_clear_edit_submode_extra();
     fn nvim_clear_compl_orig_extmarks();
     fn nvim_compl_clear_orig_text();
-    fn nvim_set_compl_enter_selects(val: c_int);
     fn nvim_cpt_sources_clear();
-    fn nvim_set_compl_autocomplete(val: c_int);
-    fn nvim_set_compl_get_longest(val: c_int);
-    fn nvim_set_compl_from_nonkeyword(val: c_int);
-    fn nvim_set_compl_num_bests(val: c_int);
     fn nvim_set_completed_item_empty();
 }
 
@@ -142,11 +118,11 @@ extern "C" {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_clear() {
-    nvim_set_compl_cont_status(0);
-    nvim_set_compl_started(0);
-    nvim_set_compl_matches(0);
-    nvim_set_compl_selected_item(-1);
-    nvim_set_compl_ins_end_col(0);
+    crate::vars::nvim_set_compl_cont_status(0);
+    crate::vars::nvim_set_compl_started(0);
+    crate::vars::nvim_set_compl_matches(0);
+    crate::vars::nvim_set_compl_selected_item(-1);
+    crate::vars::nvim_set_compl_ins_end_col(0);
     nvim_clear_compl_curr_win();
     nvim_clear_compl_curr_buf();
     nvim_compl_clear_pattern();
@@ -154,11 +130,11 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
     nvim_clear_edit_submode_extra();
     nvim_clear_compl_orig_extmarks();
     nvim_compl_clear_orig_text();
-    nvim_set_compl_enter_selects(0);
+    crate::vars::nvim_set_compl_enter_selects(0);
     nvim_cpt_sources_clear();
-    nvim_set_compl_autocomplete(0);
-    nvim_set_compl_from_nonkeyword(0);
-    nvim_set_compl_num_bests(0);
+    crate::vars::nvim_set_compl_autocomplete(0);
+    crate::vars::nvim_set_compl_from_nonkeyword(0);
+    crate::vars::nvim_set_compl_num_bests(0);
     nvim_set_completed_item_empty();
 }
 
@@ -168,7 +144,7 @@ pub unsafe extern "C" fn rs_ins_compl_clear() {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_status_clear() {
-    nvim_set_compl_cont_status(0);
+    crate::vars::nvim_set_compl_cont_status(0);
 }
 
 /// Initialize get longest common string (compl_get_longest = false).
@@ -177,7 +153,7 @@ pub unsafe extern "C" fn rs_compl_status_clear() {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_init_get_longest() {
-    nvim_set_compl_get_longest(0);
+    crate::vars::nvim_set_compl_get_longest(0);
 }
 
 /// Enable autocompletion (compl_autocomplete = true, compl_get_longest = false).
@@ -186,8 +162,8 @@ pub unsafe extern "C" fn rs_ins_compl_init_get_longest() {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_enable_autocomplete() {
-    nvim_set_compl_autocomplete(1);
-    nvim_set_compl_get_longest(0);
+    crate::vars::nvim_set_compl_autocomplete(1);
+    crate::vars::nvim_set_compl_get_longest(0);
 }
 
 // =============================================================================
@@ -199,7 +175,7 @@ pub unsafe extern "C" fn rs_ins_compl_enable_autocomplete() {
 /// Returns true if ctrl_x_mode is CTRL_X_EVAL.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_eval() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_EVAL)
+    c_int::from(crate::vars::nvim_get_ctrl_x_mode() == CTRL_X_EVAL)
 }
 
 // =============================================================================
@@ -209,7 +185,6 @@ pub unsafe extern "C" fn rs_ctrl_x_mode_eval() -> c_int {
 extern "C" {
     fn nvim_update_screen();
     fn rs_ins_compl_free();
-    fn nvim_set_compl_cont_mode(val: c_int);
 }
 
 /// Setup for finding completions again without leaving CTRL-X mode.
@@ -225,14 +200,14 @@ pub unsafe extern "C" fn rs_ins_compl_restart() {
     // will stay to the last popup menu and reduce flicker
     nvim_update_screen();
     rs_ins_compl_free();
-    nvim_set_compl_started(0);
-    nvim_set_compl_matches(0);
-    nvim_set_compl_cont_status(0);
-    nvim_set_compl_cont_mode(0);
+    crate::vars::nvim_set_compl_started(0);
+    crate::vars::nvim_set_compl_matches(0);
+    crate::vars::nvim_set_compl_cont_status(0);
+    crate::vars::nvim_set_compl_cont_mode(0);
     nvim_cpt_sources_clear();
-    nvim_set_compl_autocomplete(0);
-    nvim_set_compl_from_nonkeyword(0);
-    nvim_set_compl_num_bests(0);
+    crate::vars::nvim_set_compl_autocomplete(0);
+    crate::vars::nvim_set_compl_from_nonkeyword(0);
+    crate::vars::nvim_set_compl_num_bests(0);
 }
 
 // =============================================================================
@@ -288,8 +263,8 @@ extern "C" {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_mode() -> *const c_char {
-    let mode = nvim_get_ctrl_x_mode();
-    let started = nvim_get_compl_started();
+    let mode = crate::vars::nvim_get_ctrl_x_mode();
+    let started = crate::vars::nvim_get_compl_started();
 
     // Check conditions: not-defined-yet, scroll, or compl_started
     let not_defined_yet = mode == CTRL_X_NOT_DEFINED_YET;
@@ -379,7 +354,6 @@ pub unsafe extern "C" fn rs_ins_compl_show_filename() {
 extern "C" {
     // New accessors for continue_search (Phase 10)
     fn nvim_set_compl_col(val: c_int);
-    fn nvim_set_compl_length(val: c_int);
     fn nvim_get_compl_startpos_lnum() -> c_int;
     fn nvim_get_compl_startpos_col() -> c_int;
     fn nvim_set_compl_startpos_col(val: c_int);
@@ -443,22 +417,22 @@ const IOSIZE_MINUS_MIN_SPACE: c_int = 1025 - 75;
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
     // Remove CONT_INTRPT flag
-    let mut cont_status = nvim_get_compl_cont_status();
+    let mut cont_status = crate::vars::nvim_get_compl_cont_status();
     cont_status &= !CONT_INTRPT;
-    nvim_set_compl_cont_status(cont_status);
+    crate::vars::nvim_set_compl_cont_status(cont_status);
 
     if rs_ctrl_x_mode_normal() != 0
         || rs_ctrl_x_mode_path_patterns() != 0
         || rs_ctrl_x_mode_path_defines() != 0
     {
         if nvim_get_compl_startpos_lnum() == nvim_get_curwin_cursor_lnum() {
-            cont_status = nvim_get_compl_cont_status();
+            cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_S_IPOS) != 0 {
                 cont_status |= CONT_SOL;
-                nvim_set_compl_cont_status(cont_status);
+                crate::vars::nvim_set_compl_cont_status(cont_status);
                 let new_col = nvim_skipwhite_offset(
                     line,
-                    nvim_get_compl_length(),
+                    crate::vars::nvim_get_compl_length(),
                     nvim_get_compl_startpos_col(),
                 );
                 nvim_set_compl_startpos_col(new_col);
@@ -470,32 +444,32 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
             nvim_set_compl_startpos_col(wcols);
             nvim_set_compl_startpos_lnum_to_cursor();
             // Clear CONT_SOL
-            cont_status = nvim_get_compl_cont_status();
+            cont_status = crate::vars::nvim_get_compl_cont_status();
             cont_status &= !CONT_SOL;
-            nvim_set_compl_cont_status(cont_status);
+            crate::vars::nvim_set_compl_cont_status(cont_status);
         }
         let new_length = nvim_get_cursor_col() - nvim_get_compl_col();
-        nvim_set_compl_length(new_length);
-        if nvim_get_compl_length() > IOSIZE_MINUS_MIN_SPACE {
+        crate::vars::nvim_set_compl_length(new_length);
+        if crate::vars::nvim_get_compl_length() > IOSIZE_MINUS_MIN_SPACE {
             // Clear CONT_SOL and clamp length
-            cont_status = nvim_get_compl_cont_status();
+            cont_status = crate::vars::nvim_get_compl_cont_status();
             cont_status &= !CONT_SOL;
-            nvim_set_compl_cont_status(cont_status);
-            nvim_set_compl_length(IOSIZE_MINUS_MIN_SPACE);
-            nvim_set_compl_col(nvim_get_cursor_col() - nvim_get_compl_length());
+            crate::vars::nvim_set_compl_cont_status(cont_status);
+            crate::vars::nvim_set_compl_length(IOSIZE_MINUS_MIN_SPACE);
+            nvim_set_compl_col(nvim_get_cursor_col() - crate::vars::nvim_get_compl_length());
         }
-        cont_status = nvim_get_compl_cont_status();
+        cont_status = crate::vars::nvim_get_compl_cont_status();
         cont_status |= CONT_ADDING | CONT_N_ADDS;
-        nvim_set_compl_cont_status(cont_status);
-        if nvim_get_compl_length() < 1 {
-            cont_status = nvim_get_compl_cont_status();
+        crate::vars::nvim_set_compl_cont_status(cont_status);
+        if crate::vars::nvim_get_compl_length() < 1 {
+            cont_status = crate::vars::nvim_get_compl_cont_status();
             cont_status &= CONT_LOCAL;
-            nvim_set_compl_cont_status(cont_status);
+            crate::vars::nvim_set_compl_cont_status(cont_status);
         }
     } else if rs_ctrl_x_mode_line_or_eval() != 0 || rs_ctrl_x_mode_register() != 0 {
-        nvim_set_compl_cont_status(CONT_ADDING | CONT_N_ADDS);
+        crate::vars::nvim_set_compl_cont_status(CONT_ADDING | CONT_N_ADDS);
     } else {
-        nvim_set_compl_cont_status(0);
+        crate::vars::nvim_set_compl_cont_status(0);
     }
 }
 
@@ -510,7 +484,7 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
 pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
     // We found no match if the list has only the "compl_orig_text"-entry
     if nvim_compl_first_match_next_is_first() != 0 {
-        if rs_compl_status_adding() != 0 && nvim_get_compl_length() > 1 {
+        if rs_compl_status_adding() != 0 && crate::vars::nvim_get_compl_length() > 1 {
             nvim_set_edit_submode_extra_hitend();
         } else {
             nvim_set_edit_submode_extra_patnotf();
@@ -523,7 +497,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
             nvim_set_edit_submode_extra_back_at_original();
             nvim_set_edit_submode_highl_w();
         } else {
-            let cont_status = nvim_get_compl_cont_status();
+            let cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_S_IPOS) != 0 {
                 nvim_set_edit_submode_extra_word_from_other_line();
                 nvim_set_edit_submode_highl_count();
@@ -542,7 +516,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                 if nvim_compl_curr_match_cp_number() != -1 {
                     nvim_set_edit_submode_extra_match_ref(
                         nvim_compl_curr_match_cp_number(),
-                        nvim_get_compl_matches(),
+                        crate::vars::nvim_get_compl_matches(),
                     );
                     nvim_set_edit_submode_highl_r();
                     if nvim_get_dollar_vcol() >= 0 {

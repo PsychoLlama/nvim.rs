@@ -11,16 +11,8 @@ use nvim_window::WinHandle;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_was_interrupted() -> c_int;
-    fn nvim_get_compl_used_match() -> c_int;
-    fn nvim_get_compl_enter_selects() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
     fn pum_visible() -> c_int;
 
     // Dispatch helpers for compl_get_info
@@ -64,11 +56,7 @@ extern "C" {
     fn nvim_set_edit_submode_extra_searching();
     fn showmode() -> c_int;
     fn nvim_set_compl_col(val: c_int);
-    fn nvim_set_compl_length(val: c_int);
-    fn nvim_get_compl_cont_mode() -> c_int;
-    fn nvim_set_compl_cont_status(val: c_int);
     fn nvim_compl_cont_status_or(mask: c_int);
-    fn nvim_set_compl_cont_mode(val: c_int);
     fn nvim_set_compl_startpos_to_cursor();
     fn nvim_set_compl_col_zero();
     fn nvim_set_compl_startpos_col_to_compl_col();
@@ -79,7 +67,6 @@ extern "C" {
     fn nvim_set_edit_submode_highl_count();
     fn nvim_clear_edit_submode_extra();
     fn nvim_shortmess_completionmenu() -> bool;
-    fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_ml_get_curline() -> *const c_char;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     // (compl_pending moved to Rust static in state.rs)
@@ -128,7 +115,7 @@ pub unsafe extern "C" fn rs_compl_get_info(
     curs_col: c_int,
     line_invalid: *mut c_int,
 ) -> c_int {
-    let ctrl_x_mode = nvim_get_ctrl_x_mode();
+    let ctrl_x_mode = crate::vars::nvim_get_ctrl_x_mode();
 
     if rs_ctrl_x_mode_normal() != 0
         || rs_ctrl_x_mode_register() != 0
@@ -196,24 +183,24 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     let curs_col = nvim_get_cursor_col();
 
     // Block 2: check for continued search or reset cont_status
-    let cont_status = nvim_get_compl_cont_status();
-    let cont_mode = nvim_get_compl_cont_mode();
-    let ctrl_x_mode = nvim_get_ctrl_x_mode();
+    let cont_status = crate::vars::nvim_get_compl_cont_status();
+    let cont_mode = crate::vars::nvim_get_compl_cont_mode();
+    let ctrl_x_mode = crate::vars::nvim_get_ctrl_x_mode();
 
     if (cont_status & CONT_INTRPT) == CONT_INTRPT && cont_mode == ctrl_x_mode {
         // This same ctrl_x_mode was interrupted previously. Continue the completion.
         rs_ins_compl_continue_search(line);
     } else {
-        nvim_set_compl_cont_status(cont_status & CONT_LOCAL);
+        crate::vars::nvim_set_compl_cont_status(cont_status & CONT_LOCAL);
     }
 
     // Block 3: set up startcol for normal (non-adding) expansion
     let startcol: c_int = if rs_compl_status_adding() == 0 {
         // Normal expansion
-        nvim_set_compl_cont_mode(ctrl_x_mode);
+        crate::vars::nvim_set_compl_cont_mode(ctrl_x_mode);
         if rs_ctrl_x_mode_not_default() != 0 {
             // Remove LOCAL if ctrl_x_mode != CTRL_X_NORMAL
-            nvim_set_compl_cont_status(0);
+            crate::vars::nvim_set_compl_cont_status(0);
         }
         nvim_compl_cont_status_or(CONT_N_ADDS);
         nvim_set_compl_startpos_to_cursor();
@@ -257,7 +244,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             nvim_set_compl_startpos_lnum_col(1, compl_col);
             nvim_ins_eol_wrap(c_int::from(b'\r'));
             nvim_restore_curbuf_b_p_com(old_b_p_com);
-            nvim_set_compl_length(0);
+            crate::vars::nvim_set_compl_length(0);
             nvim_set_compl_col(nvim_get_cursor_col());
             nvim_set_compl_lnum_to_cursor();
         }
@@ -267,7 +254,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     }
 
     // Block 6: set edit_submode to the CTRL-X mode message
-    if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
+    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
         nvim_set_edit_submode_ctrl_x_local_or_mode();
     }
 
@@ -288,7 +275,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 9: show "Searching..." status message
     // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
-    if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
+    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
         nvim_set_edit_submode_extra_searching();
         nvim_set_edit_submode_highl_count();
         showmode();
@@ -302,7 +289,6 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
 // Additional extern declarations for rs_ins_complete
 extern "C" {
-    fn nvim_get_compl_length() -> c_int;
     fn rs_ins_compl_key2dir(c: c_int) -> c_int;
     fn rs_ins_compl_use_match(c: c_int) -> c_int;
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
@@ -313,10 +299,7 @@ extern "C" {
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
-    fn nvim_set_compl_matches(val: c_int);
     fn nvim_compl_set_curr_to_shown();
-    fn nvim_set_compl_direction(val: c_int);
-    fn nvim_get_compl_shows_dir() -> c_int;
     fn nvim_ins_complete_eat_got_int();
     fn nvim_compl_first_match_next_is_first() -> c_int;
     fn nvim_compl_cont_status_remove_n_adds();
@@ -333,7 +316,6 @@ extern "C" {
     fn nvim_get_curwin() -> *mut u8;
     fn rs_ins_compl_delete(new_leader: c_int);
     fn rs_ins_compl_restart();
-    fn nvim_set_compl_interrupted(val: c_int);
     fn nvim_set_compl_ins_end_col_to_compl_col();
     // nvim_os_delay: ms is c_long, allow_input is bool
     fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
@@ -358,14 +340,14 @@ const CONT_S_IPOS: c_int = 8;
 pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     // Compute disable_ac_delay: disable autocomplete delay if already started
     // and key is a regular forward/backward completion key or pum key.
-    let compl_started = nvim_get_compl_started() != 0;
+    let compl_started = crate::vars::nvim_get_compl_started() != 0;
     let disable_ac_delay = compl_started
         && rs_ctrl_x_mode_normal() != 0
         && (c == CTRL_N || c == CTRL_P || c == CTRL_R || rs_ins_compl_pum_key(c) != 0);
 
     // Set direction and insert_match from the key
     let direction = rs_ins_compl_key2dir(c);
-    nvim_set_compl_direction(direction);
+    crate::vars::nvim_set_compl_direction(direction);
     let insert_match = rs_ins_compl_use_match(c);
 
     // Start completion if not already started; otherwise call stop_arrow if inserting
@@ -378,12 +360,14 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     }
 
     // Set up timestamp for autocomplete delay
-    let compl_start_tv: u64 =
-        if nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0 && !disable_ac_delay {
-            os_hrtime()
-        } else {
-            0
-        };
+    let compl_start_tv: u64 = if crate::vars::nvim_get_compl_autocomplete() != 0
+        && nvim_get_p_acl() > 0
+        && !disable_ac_delay
+    {
+        os_hrtime()
+    } else {
+        0
+    };
 
     // Set up completion window/buffer/match/direction state
     nvim_ins_complete_setup_match_state(direction);
@@ -395,10 +379,10 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
 
     if n > 1 {
         // All matches have been found
-        nvim_set_compl_matches(n);
+        crate::vars::nvim_set_compl_matches(n);
     }
     nvim_compl_set_curr_to_shown();
-    nvim_set_compl_direction(nvim_get_compl_shows_dir());
+    crate::vars::nvim_set_compl_direction(crate::vars::nvim_get_compl_shows_dir());
 
     // Eat the ESC that vgetc() returns after a CTRL-C to avoid leaving Insert mode
     nvim_ins_complete_eat_got_int();
@@ -408,7 +392,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     if no_matches_found {
         // Remove N_ADDS flag so next ^X<> won't try to go to ADDING mode,
         // unless we might want to add-expand a single-char-word.
-        let compl_length = nvim_get_compl_length();
+        let compl_length = crate::vars::nvim_get_compl_length();
         if compl_length > 1
             || rs_compl_status_adding() != 0
             || (rs_ctrl_x_mode_not_default() != 0
@@ -423,7 +407,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     nvim_ins_complete_update_cont_s_ipos();
 
     // Show status message if appropriate
-    if !nvim_shortmess_completionmenu() && nvim_get_compl_autocomplete() == 0 {
+    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
         rs_ins_compl_show_statusmsg();
     }
 
@@ -431,7 +415,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     let p_acl = nvim_get_p_acl();
     #[allow(clippy::cast_sign_loss)]
     let p_acl_ms: u64 = if p_acl > 0 { p_acl as u64 } else { 0 };
-    if nvim_get_compl_autocomplete() != 0
+    if crate::vars::nvim_get_compl_autocomplete() != 0
         && p_acl > 0
         && !disable_ac_delay
         && !no_matches_found
@@ -448,7 +432,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
                     nvim_set_compl_ins_end_col_to_compl_col();
                 }
                 rs_ins_compl_restart();
-                nvim_set_compl_interrupted(1);
+                crate::vars::nvim_set_compl_interrupted(1);
                 break;
             }
             nvim_os_delay(2, false);
@@ -459,7 +443,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     }
 
     // Show the popup menu, unless we got interrupted
-    if enable_pum != 0 && nvim_get_compl_interrupted() == 0 {
+    if enable_pum != 0 && crate::vars::nvim_get_compl_interrupted() == 0 {
         rs_show_pum(save_w_wrow, save_w_leftcol);
     }
     nvim_ins_complete_finish_interrupted();

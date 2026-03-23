@@ -39,6 +39,7 @@ pub mod tag;
 pub mod types;
 pub mod ui;
 pub mod userfunc;
+pub mod vars;
 pub mod viml;
 
 use std::os::raw::{c_char, c_int, c_uint};
@@ -120,22 +121,15 @@ const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
 const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
 const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
 
-// C accessors for static variables
+// Phase 1: nvim_get_ctrl_x_mode, nvim_get_compl_cont_status, nvim_get_compl_started,
+// nvim_get_compl_interrupted, nvim_get_compl_time_slice_expired, nvim_get_compl_enter_selects,
+// nvim_get_compl_used_match, nvim_get_compl_length, nvim_get_compl_autocomplete,
+// nvim_get_compl_from_nonkeyword, nvim_get_compl_was_interrupted, nvim_get_compl_opt_refresh_always,
+// nvim_get_compl_direction, nvim_get_compl_shows_dir, nvim_get_compl_ins_end_col,
+// nvim_get_compl_selected_item: deleted -- use vars::nvim_get_* wrappers instead.
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_time_slice_expired() -> c_int;
-    fn nvim_get_compl_enter_selects() -> c_int;
-    fn nvim_get_compl_used_match() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
     fn nvim_get_cot_flags_global() -> c_uint;
     fn nvim_curbuf_get_b_cot_flags() -> c_uint;
-    fn nvim_get_compl_autocomplete() -> c_int;
-    fn nvim_get_compl_from_nonkeyword() -> c_int;
-    fn nvim_get_compl_was_interrupted() -> c_int;
-    fn nvim_get_compl_opt_refresh_always() -> c_int;
     // Character checking functions from charset.c
     #[link_name = "vim_isIDc"]
     fn rs_vim_isIDc(c: c_int) -> bool;
@@ -155,16 +149,11 @@ extern "C" {
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_get_compl_col() -> c_int;
 
-    // Direction and state accessors
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_shows_dir() -> c_int;
-
     // Option accessors
     fn nvim_get_p_ic() -> c_int;
     fn nvim_get_p_inf() -> c_int;
     fn nvim_get_p_ac() -> c_int;
     fn nvim_curbuf_get_b_p_ac() -> c_int;
-    fn nvim_get_compl_ins_end_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 
     // Line/column accessors
@@ -185,7 +174,6 @@ extern "C" {
     fn nvim_compl_shown_match_has_newline() -> c_int;
 
     // Popup menu and selection accessors
-    fn nvim_get_compl_selected_item() -> c_int;
     fn pum_visible() -> c_int;
     fn pum_get_height() -> c_int;
 }
@@ -229,111 +217,111 @@ const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
 /// Check if CTRL-X mode is none (0).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_none() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == 0)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == 0)
 }
 
 /// Check if CTRL-X mode is normal (CTRL_X_NORMAL).
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_normal() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_NORMAL)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_NORMAL)
 }
 
 /// Check if CTRL-X mode is scroll.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_scroll() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_SCROLL)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_SCROLL)
 }
 
 /// Check if CTRL-X mode is whole line completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_whole_line() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_WHOLE_LINE)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_WHOLE_LINE)
 }
 
 /// Check if CTRL-X mode is file name completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_files() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_FILES)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_FILES)
 }
 
 /// Check if CTRL-X mode is tag completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_tags() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_TAGS)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_TAGS)
 }
 
 /// Check if CTRL-X mode is path pattern completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_path_patterns() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_PATH_PATTERNS)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_PATH_PATTERNS)
 }
 
 /// Check if CTRL-X mode is path defines completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_path_defines() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_PATH_DEFINES)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_PATH_DEFINES)
 }
 
 /// Check if CTRL-X mode is dictionary completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_dictionary() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_DICTIONARY)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_DICTIONARY)
 }
 
 /// Check if CTRL-X mode is thesaurus completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_thesaurus() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_THESAURUS)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_THESAURUS)
 }
 
 /// Check if CTRL-X mode is command-line completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_cmdline() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
+    let mode = vars::nvim_get_ctrl_x_mode();
     c_int::from(mode == CTRL_X_CMDLINE || mode == CTRL_X_CMDLINE_CTRL_X)
 }
 
 /// Check if CTRL-X mode is user-defined function completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_function() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_FUNCTION)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_FUNCTION)
 }
 
 /// Check if CTRL-X mode is omni completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_omni() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_OMNI)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_OMNI)
 }
 
 /// Check if CTRL-X mode is spell completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_spell() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_SPELL)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_SPELL)
 }
 
 /// Check if CTRL-X mode is whole line or eval completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_line_or_eval() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
+    let mode = vars::nvim_get_ctrl_x_mode();
     c_int::from(mode == CTRL_X_WHOLE_LINE || mode == CTRL_X_EVAL)
 }
 
 /// Check if CTRL-X mode is register completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_register() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_REGISTER)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_REGISTER)
 }
 
 /// Check if other than default completion has been selected.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_not_default() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() != CTRL_X_NORMAL)
+    c_int::from(vars::nvim_get_ctrl_x_mode() != CTRL_X_NORMAL)
 }
 
 /// Check if CTRL-X was typed without a following character.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_not_defined_yet() -> c_int {
-    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET)
+    c_int::from(vars::nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET)
 }
 
 // =============================================================================
@@ -343,31 +331,31 @@ pub unsafe extern "C" fn rs_ctrl_x_mode_not_defined_yet() -> c_int {
 /// Check if in "normal" or "adding" completion state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_status_adding() -> c_int {
-    c_int::from((nvim_get_compl_cont_status() & CONT_ADDING) != 0)
+    c_int::from((vars::nvim_get_compl_cont_status() & CONT_ADDING) != 0)
 }
 
 /// Check if completion pattern includes start of line.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_status_sol() -> c_int {
-    c_int::from((nvim_get_compl_cont_status() & CONT_SOL) != 0)
+    c_int::from((vars::nvim_get_compl_cont_status() & CONT_SOL) != 0)
 }
 
 /// Check if ^X^P/^X^N will do local completion.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_status_local() -> c_int {
-    c_int::from((nvim_get_compl_cont_status() & CONT_LOCAL) != 0)
+    c_int::from((vars::nvim_get_compl_cont_status() & CONT_LOCAL) != 0)
 }
 
 /// Check if Insert completion is active.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_active() -> c_int {
-    nvim_get_compl_started()
+    vars::nvim_get_compl_started()
 }
 
 /// Return true when wp is the actual completion window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_win_active(wp: WinHandle) -> c_int {
-    if nvim_get_compl_started() == 0 {
+    if vars::nvim_get_compl_started() == 0 {
         return 0;
     }
     let curr_win = nvim_get_compl_curr_win();
@@ -379,25 +367,27 @@ pub unsafe extern "C" fn rs_ins_compl_win_active(wp: WinHandle) -> c_int {
 /// Check if completion was interrupted.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_interrupted() -> c_int {
-    c_int::from(nvim_get_compl_interrupted() != 0 || nvim_get_compl_time_slice_expired() != 0)
+    c_int::from(
+        vars::nvim_get_compl_interrupted() != 0 || vars::nvim_get_compl_time_slice_expired() != 0,
+    )
 }
 
 /// Check if pressing Enter selects a match in the completion popup.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_enter_selects() -> c_int {
-    nvim_get_compl_enter_selects()
+    vars::nvim_get_compl_enter_selects()
 }
 
 /// Check if one of the matches was selected.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_used_match() -> c_int {
-    nvim_get_compl_used_match()
+    vars::nvim_get_compl_used_match()
 }
 
 /// Return the length in bytes of the text being completed.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_len() -> c_int {
-    nvim_get_compl_length()
+    vars::nvim_get_compl_length()
 }
 
 /// Return the column where the completion text starts.
@@ -427,7 +417,7 @@ unsafe fn get_cot_flags() -> c_uint {
 pub unsafe extern "C" fn rs_pum_wanted() -> c_int {
     let cot_flags = get_cot_flags();
     let has_menu_flag = (cot_flags & (K_OPT_COT_FLAG_MENU | K_OPT_COT_FLAG_MENUONE)) != 0;
-    c_int::from(has_menu_flag || nvim_get_compl_autocomplete() != 0)
+    c_int::from(has_menu_flag || vars::nvim_get_compl_autocomplete() != 0)
 }
 
 // =============================================================================
@@ -438,10 +428,10 @@ pub unsafe extern "C" fn rs_pum_wanted() -> c_int {
 /// Only applies to function and omni completion modes.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_refresh_always() -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
+    let mode = vars::nvim_get_ctrl_x_mode();
     let is_function = mode == CTRL_X_FUNCTION;
     let is_omni = mode == CTRL_X_OMNI;
-    c_int::from((is_function || is_omni) && nvim_get_compl_opt_refresh_always() != 0)
+    c_int::from((is_function || is_omni) && vars::nvim_get_compl_opt_refresh_always() != 0)
 }
 
 /// Check that we need to find matches again (ins_compl_restart is to be called).
@@ -450,7 +440,7 @@ pub unsafe extern "C" fn rs_ins_compl_refresh_always() -> c_int {
 /// "completefunc" returned "always" in the "refresh" dictionary item.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_need_restart() -> c_int {
-    c_int::from(nvim_get_compl_was_interrupted() != 0 || rs_ins_compl_refresh_always() != 0)
+    c_int::from(vars::nvim_get_compl_was_interrupted() != 0 || rs_ins_compl_refresh_always() != 0)
 }
 
 // =============================================================================
@@ -462,11 +452,11 @@ pub unsafe extern "C" fn rs_ins_compl_need_restart() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
     // If autocomplete is active and started from non-keyword, reject all chars
-    if nvim_get_compl_autocomplete() != 0 && nvim_get_compl_from_nonkeyword() != 0 {
+    if vars::nvim_get_compl_autocomplete() != 0 && vars::nvim_get_compl_from_nonkeyword() != 0 {
         return 0;
     }
 
-    let ctrl_x_mode = nvim_get_ctrl_x_mode();
+    let ctrl_x_mode = vars::nvim_get_ctrl_x_mode();
 
     // When expanding an identifier only accept identifier chars
     if (ctrl_x_mode & CTRL_X_WANT_IDENT) != 0 {
@@ -562,7 +552,7 @@ pub unsafe extern "C" fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char {
 #[no_mangle]
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_vim_is_ctrl_x_key(c: c_int) -> c_int {
-    let mode = nvim_get_ctrl_x_mode();
+    let mode = vars::nvim_get_ctrl_x_mode();
 
     // Always allow ^R - let its results then be checked
     if c == CTRL_R && mode != CTRL_X_REGISTER {
@@ -629,19 +619,19 @@ pub unsafe extern "C" fn rs_vim_is_ctrl_x_key(c: c_int) -> c_int {
 /// Return true if completion is using the forward direction matches.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_dir_forward() -> c_int {
-    c_int::from(nvim_get_compl_direction() == FORWARD)
+    c_int::from(vars::nvim_get_compl_direction() == FORWARD)
 }
 
 /// Return true if currently showing forward completion matches.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_shows_dir_forward() -> c_int {
-    c_int::from(nvim_get_compl_shows_dir() == FORWARD)
+    c_int::from(vars::nvim_get_compl_shows_dir() == FORWARD)
 }
 
 /// Return true if currently showing backward completion matches.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_shows_dir_backward() -> c_int {
-    c_int::from(nvim_get_compl_shows_dir() == BACKWARD)
+    c_int::from(vars::nvim_get_compl_shows_dir() == BACKWARD)
 }
 
 // =============================================================================
@@ -654,7 +644,7 @@ pub unsafe extern "C" fn rs_ins_compl_has_preinsert() -> c_int {
     let cur_cot_flags = get_cot_flags();
 
     // If autocomplete is active and ignorecase is set but infercase is not, disable preinsert
-    if nvim_get_compl_autocomplete() != 0 && nvim_get_p_ic() != 0 && nvim_get_p_inf() == 0 {
+    if vars::nvim_get_compl_autocomplete() != 0 && nvim_get_p_ic() != 0 && nvim_get_p_inf() == 0 {
         return 0;
     }
 
@@ -664,7 +654,7 @@ pub unsafe extern "C" fn rs_ins_compl_has_preinsert() -> c_int {
     // When in autocomplete mode:
     //   preinsert is active if (preinsert|fuzzy) == preinsert
     //   i.e., preinsert is set but fuzzy is NOT set
-    let result = if nvim_get_compl_autocomplete() == 0 {
+    let result = if vars::nvim_get_compl_autocomplete() == 0 {
         (cur_cot_flags & (K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_FUZZY | K_OPT_COT_FLAG_MENUONE))
             == (K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_MENUONE)
     } else {
@@ -679,7 +669,7 @@ pub unsafe extern "C" fn rs_ins_compl_has_preinsert() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_preinsert_longest() -> c_int {
     let cur_cot_flags = get_cot_flags();
-    let result = nvim_get_compl_autocomplete() != 0
+    let result = vars::nvim_get_compl_autocomplete() != 0
         && (cur_cot_flags
             & (K_OPT_COT_FLAG_LONGEST | K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_FUZZY))
             == K_OPT_COT_FLAG_LONGEST;
@@ -693,7 +683,7 @@ pub unsafe extern "C" fn rs_ins_compl_preinsert_effect() -> c_int {
     if rs_ins_compl_has_preinsert() == 0 && rs_ins_compl_preinsert_longest() == 0 {
         return 0;
     }
-    c_int::from(nvim_get_cursor_col() < nvim_get_compl_ins_end_col())
+    c_int::from(nvim_get_cursor_col() < vars::nvim_get_compl_ins_end_col())
 }
 
 // =============================================================================
@@ -817,7 +807,7 @@ pub unsafe extern "C" fn rs_ins_compl_key2dir(c: c_int) -> c_int {
     // For event/command/lua keys, compare pum_want.item with compl_selected_item
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
         let pum_want_item = pum_want.item;
-        let selected = nvim_get_compl_selected_item();
+        let selected = vars::nvim_get_compl_selected_item();
         return if pum_want_item < selected {
             BACKWARD
         } else {
@@ -859,7 +849,7 @@ pub unsafe extern "C" fn rs_ins_compl_pum_key(c: c_int) -> c_int {
 pub unsafe extern "C" fn rs_ins_compl_key2count(c: c_int) -> c_int {
     // For event/command/lua keys, return absolute offset
     if c == K_EVENT || c == K_COMMAND || c == K_LUA {
-        let offset = pum_want.item - nvim_get_compl_selected_item();
+        let offset = pum_want.item - vars::nvim_get_compl_selected_item();
         return offset.abs();
     }
 
@@ -909,7 +899,7 @@ pub unsafe extern "C" fn rs_cot_fuzzy() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_nearest_active() -> c_int {
     let flags = get_cot_flags();
-    let autocomplete = nvim_get_compl_autocomplete() != 0;
+    let autocomplete = vars::nvim_get_compl_autocomplete() != 0;
     let nearest_flag = (flags & K_OPT_COT_FLAG_NEAREST) != 0;
     c_int::from((autocomplete || nearest_flag) && !cot_fuzzy_impl(flags))
 }

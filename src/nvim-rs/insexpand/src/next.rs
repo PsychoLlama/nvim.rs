@@ -48,8 +48,6 @@ extern "C" {
     // (compl_pending moved to Rust static in state.rs)
 
     // compl_direction / compl_shows_dir
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_shows_dir() -> c_int;
 
     // get expansion
     fn nvim_get_compl_startpos_lnum() -> c_int;
@@ -59,12 +57,7 @@ extern "C" {
     fn rs_cot_fuzzy() -> c_int;
 
     // compl state
-    fn nvim_get_compl_started() -> c_int;
     // (compl_restarting moved to Rust static in state.rs)
-    fn nvim_get_compl_get_longest() -> c_int;
-    fn nvim_get_compl_used_match() -> c_int;
-    fn nvim_set_compl_used_match(val: c_int);
-    fn nvim_get_compl_autocomplete() -> c_int;
 
     // insert/delete operations
     fn rs_ins_compl_delete(new_leader: c_int);
@@ -81,7 +74,6 @@ extern "C" {
     fn rs_get_compl_len() -> c_int;
 
     // enter selects
-    fn nvim_set_compl_enter_selects(val: c_int);
 
     // preinsert
     fn rs_ins_compl_has_preinsert() -> c_int;
@@ -120,7 +112,7 @@ unsafe fn find_next_completion_match(
     let mut found_compl = ComplMatch::null();
     let cur_cot_flags = rs_get_cot_flags();
     let compl_no_select = (cur_cot_flags & K_OPT_COT_FLAG_NOSELECT) != 0
-        || (nvim_get_compl_autocomplete() != 0 && rs_ins_compl_has_preinsert() == 0);
+        || (crate::vars::nvim_get_compl_autocomplete() != 0 && rs_ins_compl_has_preinsert() == 0);
 
     loop {
         todo -= 1;
@@ -185,7 +177,8 @@ unsafe fn find_next_completion_match(
             loop {
                 let pending = crate::state::COMPL_PENDING;
                 if pending == 0
-                    || nvim_get_compl_direction() != nvim_get_compl_shows_dir()
+                    || crate::vars::nvim_get_compl_direction()
+                        != crate::vars::nvim_get_compl_shows_dir()
                     || !advance
                 {
                     break;
@@ -266,13 +259,14 @@ pub unsafe extern "C" fn rs_ins_compl_next(
 
     let mut num_matches: c_int = -1;
     let todo = count;
-    let started = nvim_get_compl_started() != 0;
+    let started = crate::vars::nvim_get_compl_started() != 0;
     let orig_curbuf = nvim_get_curbuf();
     let cur_cot_flags = rs_get_cot_flags();
     let compl_no_insert = (cur_cot_flags & K_OPT_COT_FLAG_NOINSERT) != 0
-        || (nvim_get_compl_autocomplete() != 0 && rs_ins_compl_has_preinsert() == 0);
+        || (crate::vars::nvim_get_compl_autocomplete() != 0 && rs_ins_compl_has_preinsert() == 0);
     let compl_preinsert = rs_ins_compl_has_preinsert() != 0;
-    let has_autocomplete_delay = nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0;
+    let has_autocomplete_delay =
+        crate::vars::nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0;
 
     // When user complete function return -1 for findstart which is next
     // time of 'always', compl_shown_match become NULL.
@@ -290,7 +284,8 @@ pub unsafe extern "C" fn rs_ins_compl_next(
 
     if allow_get_expansion
         && insert_match
-        && (nvim_get_compl_get_longest() == 0 || nvim_get_compl_used_match() != 0)
+        && (crate::vars::nvim_get_compl_get_longest() == 0
+            || crate::vars::nvim_get_compl_used_match() != 0)
     {
         // Delete old text to be replaced
         rs_ins_compl_delete(0);
@@ -298,7 +293,8 @@ pub unsafe extern "C" fn rs_ins_compl_next(
 
     // When finding the longest common text we stick at the original text,
     // don't let CTRL-N or CTRL-P move to the first match.
-    let mut advance = count != 1 || !allow_get_expansion || nvim_get_compl_get_longest() == 0;
+    let mut advance =
+        count != 1 || !allow_get_expansion || crate::vars::nvim_get_compl_get_longest() == 0;
 
     // When restarting the search don't insert the first match either.
     if crate::state::COMPL_RESTARTING {
@@ -330,10 +326,12 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         debug_assert!(compl_len >= 0);
         #[allow(clippy::cast_sign_loss)]
         nvim_ins_compl_insert_bytes(orig_data.add(compl_len as usize), -1);
-        nvim_set_compl_used_match(0);
+        crate::vars::nvim_set_compl_used_match(0);
         nvim_restore_orig_extmarks();
     } else if insert_match {
-        if nvim_get_compl_get_longest() == 0 || nvim_get_compl_used_match() != 0 {
+        if crate::vars::nvim_get_compl_get_longest() == 0
+            || crate::vars::nvim_get_compl_used_match() != 0
+        {
             let preinsert_longest =
                 rs_ins_compl_preinsert_longest() != 0 && nvim_compl_shown_match_at_orig_text() != 0; // none selected
             rs_ins_compl_insert(
@@ -352,7 +350,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
             nvim_restore_orig_extmarks();
         }
     } else {
-        nvim_set_compl_used_match(0);
+        crate::vars::nvim_set_compl_used_match(0);
     }
 
     if !allow_get_expansion {
@@ -372,9 +370,9 @@ pub unsafe extern "C" fn rs_ins_compl_next(
     // Enter will select a match when the match wasn't inserted and the popup
     // menu is visible.
     if compl_no_insert && !started && nvim_compl_shown_match_at_orig_text() == 0 {
-        nvim_set_compl_enter_selects(1);
+        crate::vars::nvim_set_compl_enter_selects(1);
     } else {
-        nvim_set_compl_enter_selects(c_int::from(
+        crate::vars::nvim_set_compl_enter_selects(c_int::from(
             !insert_match && nvim_get_compl_match_array_exists() != 0,
         ));
     }

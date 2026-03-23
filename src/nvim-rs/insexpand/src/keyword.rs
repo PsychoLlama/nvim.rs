@@ -9,12 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_cont_status() -> c_int;
-    fn nvim_get_compl_length() -> c_int;
 
     // UTF-8 and character class functions
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
@@ -50,7 +44,7 @@ pub unsafe extern "C" fn rs_keyword_word_is_long_enough(
         return 0;
     }
 
-    let min_len = nvim_get_compl_length();
+    let min_len = crate::vars::nvim_get_compl_length();
     if min_len <= 0 {
         return 1; // No minimum length requirement
     }

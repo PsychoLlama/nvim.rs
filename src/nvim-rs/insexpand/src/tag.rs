@@ -8,9 +8,6 @@ use std::os::raw::c_int;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_direction() -> c_int;
-    fn nvim_get_compl_interrupted() -> c_int;
 
     // Compound accessor for tag completion
     fn nvim_get_next_tag_completion_impl();

@@ -10,13 +10,9 @@ use std::os::raw::{c_char, c_int, c_uint};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_ctrl_x_mode() -> c_int;
-    fn nvim_get_compl_started() -> c_int;
-    fn nvim_get_compl_matches() -> c_int;
     fn nvim_curbuf_get_b_p_cpt() -> *const c_char;
     fn nvim_get_cpt_start_tv() -> u64;
     fn nvim_get_compl_timeout_ms() -> u64;
-    fn nvim_set_compl_time_slice_expired(val: c_int);
     fn nvim_decay_compl_timeout();
     fn os_hrtime() -> u64;
 
@@ -29,7 +25,6 @@ extern "C" {
     fn rs_magic_isset() -> c_int;
 
     // Accessors for Phase 4 (pass 4) inline implementations
-    fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_p_cto() -> c_int;
     fn nvim_set_cpt_sources_start_tv(idx: c_int, ts: u64);
     fn nvim_semsg_list_index_out_of_range(idx: c_int);
@@ -104,7 +99,7 @@ pub unsafe extern "C" fn rs_check_elapsed_time() {
     let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
 
     if elapsed_ms > nvim_get_compl_timeout_ms() {
-        nvim_set_compl_time_slice_expired(1);
+        crate::vars::nvim_set_compl_time_slice_expired(1);
         nvim_decay_compl_timeout();
     }
 }
@@ -243,9 +238,9 @@ pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
 /// Requires valid cpt_sources_array state with source_idx in bounds.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
-    if nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
+    if crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
         nvim_set_cpt_sources_start_tv(source_idx, os_hrtime());
-        nvim_set_compl_time_slice_expired(0);
+        crate::vars::nvim_set_compl_time_slice_expired(0);
     }
 }
 
@@ -319,7 +314,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_expand_by_function_with_cb(cb_opaque: *mut c_void);
-    fn nvim_get_compl_opt_refresh_always() -> c_int;
     fn nvim_clear_compl_opt_refresh_always();
 
     // Completion state
@@ -483,7 +477,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
     }
 
     // cpt_src->cs_refresh_always = compl_opt_refresh_always; compl_opt_refresh_always = false;
-    let opt_refresh = nvim_get_compl_opt_refresh_always() != 0;
+    let opt_refresh = crate::vars::nvim_get_compl_opt_refresh_always() != 0;
     nvim_cpt_sources_set_refresh_always(src_idx, c_int::from(opt_refresh));
     nvim_clear_compl_opt_refresh_always();
 }

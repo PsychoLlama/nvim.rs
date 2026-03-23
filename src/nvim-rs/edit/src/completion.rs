@@ -10,7 +10,9 @@ use std::ffi::c_int;
 // C accessor functions for completion state.
 extern "C" {
     fn nvim_get_compl_busy() -> c_int;
-    fn nvim_get_ctrl_x_mode() -> c_int;
+    // ctrl_x_mode is now a non-static C global (Phase 1 migration).
+    #[link_name = "ctrl_x_mode"]
+    static mut g_ctrl_x_mode: c_int;
 }
 
 /// CTRL-X mode values (from `insexpand.h`).
@@ -80,8 +82,8 @@ pub fn compl_busy() -> bool {
 #[inline]
 #[must_use]
 pub fn ctrl_x_mode() -> i32 {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_ctrl_x_mode() }
+    // SAFETY: ctrl_x_mode is a C global; Neovim is single-threaded for completion.
+    unsafe { g_ctrl_x_mode }
 }
 
 /// Check if we're in CTRL-X mode (any completion sub-mode).
