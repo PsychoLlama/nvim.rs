@@ -459,10 +459,6 @@ void nvim_apply_scriptlocal_funcname(void *varp_ptr) {
 
 // Phase 98: spell / border option accessors
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
-int nvim_spell_check_sps(void) { return spell_check_sps(); }
-int nvim_spell_check_msm(void) { return spell_check_msm(); }
-int nvim_check_winborder(void) { return parse_border_opt(p_winborder) ? 1 : 0; }
-int nvim_check_pumborder(void) { return parse_border_opt(p_pumborder) ? 1 : 0; }
 
 // Colorcolumn check wrapper
 void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
@@ -1940,18 +1936,6 @@ int nvim_varp_is_curbuf_b_changed(const void *varp)
 // Phase 6 accessors: ExpandSettings / match_str / escape_option_str_cmdline
 // =============================================================================
 
-/// Get the escape_chars static string used by escape_option_str_cmdline.
-const char *nvim_get_escape_chars(void)
-{
-  return escape_chars;
-}
-
-/// Wrap vim_strsave_escaped.
-char *nvim_vim_strsave_escaped(const char *s, const char *esc)
-{
-  return vim_strsave_escaped(s, esc);
-}
-
 extern char *rs_escape_option_str_cmdline(const char *var);
 
 /// Invoke the expand callback for an option (constructs optexpand_T in C).
@@ -2000,22 +1984,10 @@ void nvim_regmatch_set_rm_ic(void *regmatch, int val)
   ((regmatch_T *)regmatch)->rm_ic = val;
 }
 
-/// Call fuzzy_match_str with opaque pointer.
-int nvim_option_fuzzy_match_str(const char *str, const char *pat)
-{
-  return fuzzy_match_str((char *)str, pat);
-}
-
 /// Call fuzzymatches_to_strmatches with opaque pointer.
 void nvim_option_fuzzymatches_to_strmatches(void *fuzmatch, char ***matches, int count)
 {
   fuzzymatches_to_strmatches((fuzmatch_str_T *)fuzmatch, matches, count, false);
-}
-
-/// Call cmdline_fuzzy_complete.
-int nvim_option_cmdline_fuzzy_complete(const char *fuzzystr)
-{
-  return cmdline_fuzzy_complete(fuzzystr);
 }
 
 /// Get fuzmatch_str_T size.

@@ -763,8 +763,8 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
 // =============================================================================
 
 extern "C" {
-    fn nvim_get_escape_chars() -> *const c_char;
-    fn nvim_vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
+    fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
+    static escape_chars: *const c_char;
     fn nvim_get_expand_option_name_ptr() -> *const c_char;
     fn find_option(name: *const c_char) -> OptIndex;
     fn nvim_set_expand_option_idx(val: OptIndex);
@@ -796,8 +796,7 @@ extern "C" {
 #[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_escape_option_str_cmdline(var: *const c_char) -> *mut c_char {
     // Call vim_strsave_escaped(var, escape_chars)
-    let escape_chars = nvim_get_escape_chars();
-    nvim_vim_strsave_escaped(var, escape_chars)
+    vim_strsave_escaped(var, escape_chars)
     // Note: BACKSLASH_IN_FILENAME path is Windows-only, skipped on Linux.
 }
 

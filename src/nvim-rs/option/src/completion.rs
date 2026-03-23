@@ -523,13 +523,13 @@ extern "C" {
     fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;
     fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
     fn nvim_excmds_regexec(rm: *mut std::ffi::c_void, line: *const c_char) -> c_int;
-    fn nvim_option_fuzzy_match_str(str_: *const c_char, pat: *const c_char) -> c_int;
+    fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
     fn nvim_option_fuzzymatches_to_strmatches(
         fuzmatch: *mut std::ffi::c_void,
         matches: *mut *mut *mut c_char,
         count: c_int,
     );
-    fn nvim_option_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int;
+    fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool;
     fn nvim_option_get_fuzmatch_size() -> usize;
     fn nvim_option_fuzmatch_set(
         fuzmatch: *mut std::ffi::c_void,
@@ -575,7 +575,7 @@ unsafe fn match_str_impl(
     fuzzy_ctx: Option<&FuzzyCtx>,
 ) -> bool {
     if let Some(ctx) = fuzzy_ctx {
-        let score = nvim_option_fuzzy_match_str(str_, ctx.fuzzystr);
+        let score = fuzzy_match_str(str_.cast_mut(), ctx.fuzzystr);
         if score != FUZZY_SCORE_NONE {
             if !test_only && !ctx.fuzmatch.is_null() {
                 nvim_option_fuzmatch_set(ctx.fuzmatch, idx, str_, score);
@@ -616,7 +616,7 @@ pub unsafe extern "C" fn rs_expand_option_settings(
     let mut num_normal: c_int = 0;
     let mut count: c_int = 0;
     let ic = nvim_regmatch_get_rm_ic(regmatch);
-    let fuzzy = can_fuzzy != 0 && nvim_option_cmdline_fuzzy_complete(fuzzystr) != 0;
+    let fuzzy = can_fuzzy != 0 && cmdline_fuzzy_complete(fuzzystr);
     let mut fuzmatch: *mut std::ffi::c_void = std::ptr::null_mut();
     // Two-pass loop: loop==0 counts, loop==1 fills
     let mut loop_: c_int = 0;

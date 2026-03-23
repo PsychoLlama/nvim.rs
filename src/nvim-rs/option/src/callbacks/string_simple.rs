@@ -631,9 +631,9 @@ pub unsafe extern "C" fn rs_did_set_langmap(args: *mut c_void) -> CallbackResult
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_spellsuggest(_args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn nvim_spell_check_sps() -> c_int;
+        fn spell_check_sps() -> c_int;
     }
-    if nvim_spell_check_sps() == FAIL {
+    if spell_check_sps() == FAIL {
         return E_INVARG;
     }
     callback_ok()
@@ -643,9 +643,9 @@ pub unsafe extern "C" fn rs_did_set_spellsuggest(_args: *mut c_void) -> Callback
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_mkspellmem(_args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn nvim_spell_check_msm() -> c_int;
+        fn spell_check_msm() -> c_int;
     }
-    if nvim_spell_check_msm() == FAIL {
+    if spell_check_msm() == FAIL {
         return E_INVARG;
     }
     callback_ok()
@@ -655,9 +655,10 @@ pub unsafe extern "C" fn rs_did_set_mkspellmem(_args: *mut c_void) -> CallbackRe
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_winborder(_args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn nvim_check_winborder() -> c_int;
+        fn parse_border_opt(border_opt: *mut std::ffi::c_char) -> bool;
+        static mut p_winborder: *mut std::ffi::c_char;
     }
-    if nvim_check_winborder() == FAIL {
+    if !parse_border_opt(p_winborder) {
         return E_INVARG;
     }
     callback_ok()
@@ -667,9 +668,10 @@ pub unsafe extern "C" fn rs_did_set_winborder(_args: *mut c_void) -> CallbackRes
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_pumborder(_args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn nvim_check_pumborder() -> c_int;
+        fn parse_border_opt(border_opt: *mut std::ffi::c_char) -> bool;
+        static mut p_pumborder: *mut std::ffi::c_char;
     }
-    if nvim_check_pumborder() == FAIL {
+    if !parse_border_opt(p_pumborder) {
         return E_INVARG;
     }
     callback_ok()

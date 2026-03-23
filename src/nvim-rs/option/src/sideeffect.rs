@@ -446,8 +446,8 @@ impl CallbackState {
 extern "C" {
     fn init_chartab();
     fn didset_string_options();
-    fn spell_check_msm();
-    fn spell_check_sps();
+    fn spell_check_msm() -> c_int;
+    fn spell_check_sps() -> c_int;
     fn nvim_call_compile_cap_prog_curwin();
     fn did_set_spell_option() -> *const std::ffi::c_char;
     fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
