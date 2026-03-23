@@ -1399,7 +1399,7 @@ static char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter
   if (parse_command_modifiers(&ea, &errormsg, &cmdmod, false) == FAIL) {
     goto doend;
   }
-  apply_cmdmod(&cmdmod);
+  nvim_docmd_apply_cmdmod_impl(&cmdmod);
 
   char *after_modifier = ea.cmd;
 
@@ -1612,7 +1612,7 @@ static char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter
 
   // For the ":make" and ":grep" commands we insert the 'makeprg'/'grepprg'
   // option here, so things like % get expanded.
-  p = replace_makeprg(&ea, p, cmdlinep);
+  p = nvim_docmd_replace_makeprg_impl(&ea, p, cmdlinep);
   if (p == NULL) {
     goto doend;
   }
@@ -1775,7 +1775,7 @@ doend:
               (ea.cmdidx != CMD_SIZE
                && !IS_USER_CMDIDX(ea.cmdidx)) ? cmdnames[(int)ea.cmdidx].cmd_name : NULL);
 
-  undo_cmdmod(&cmdmod);
+  nvim_docmd_undo_cmdmod_impl(&cmdmod);
   cmdmod = save_cmdmod;
   reg_executing = save_reg_executing;
   pending_end_reg_executing = save_pending_end_reg_executing;
@@ -1824,7 +1824,7 @@ static char exmode_plus[] = "+";
 ///
 /// Apply the command modifiers.  Saves current state in "cmdmod", call
 /// undo_cmdmod() later.
-void apply_cmdmod(cmdmod_T *cmod)
+void nvim_docmd_apply_cmdmod_impl(cmdmod_T *cmod)
 {
   if ((cmod->cmod_flags & CMOD_SANDBOX) && !cmod->cmod_did_sandbox) {
     sandbox++;
@@ -1863,7 +1863,7 @@ void apply_cmdmod(cmdmod_T *cmod)
 }
 
 /// Undo and free contents of "cmod".
-void undo_cmdmod(cmdmod_T *cmod)
+void nvim_docmd_undo_cmdmod_impl(cmdmod_T *cmod)
   FUNC_ATTR_NONNULL_ALL
 {
   if (cmod->cmod_verbose_save > 0) {
@@ -1921,7 +1921,7 @@ uint32_t excmd_get_argt(cmdidx_T idx)
 /// Correct the range for zero line number, if required.
 /// For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
 /// in the command line, so that things like % get expanded.
-char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
+char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep)
 {
   bool isgrep = eap->cmdidx == CMD_grep
                 || eap->cmdidx == CMD_lgrep
@@ -1975,7 +1975,7 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 
 
 /// Command-line expansion for ++opt=name.
-int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
+int nvim_docmd_expand_argopt_impl(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
 {
   if (xp->xp_pattern > xp->xp_line && *(xp->xp_pattern - 1) == '=') {
     CompleteListItemGetter cb = NULL;
@@ -2908,7 +2908,7 @@ void free_cd_dir(void)
 #endif
 
 /// Get the previous directory for the given chdir scope.
-static char *get_prevdir(CdScope scope)
+static char *nvim_docmd_get_prevdir_impl(CdScope scope)
 {
   switch (scope) {
   case kCdScopeTabpage:
@@ -2925,7 +2925,7 @@ static char *get_prevdir(CdScope scope)
 /// Deal with the side effects of changing the current directory.
 ///
 /// @param scope  Scope of the function call (global, tab or window).
-static void post_chdir(CdScope scope, bool trigger_dirchanged)
+static void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged)
 {
   // Always overwrite the window-local CWD.
   XFREE_CLEAR(curwin->w_localdir);
@@ -2936,7 +2936,7 @@ static void post_chdir(CdScope scope, bool trigger_dirchanged)
   }
 
   if (scope < kCdScopeGlobal) {
-    char *pdir = get_prevdir(scope);
+    char *pdir = nvim_docmd_get_prevdir_impl(scope);
     // If still in global directory, set CWD as the global directory.
     if (globaldir == NULL && pdir != NULL) {
       globaldir = xstrdup(pdir);
@@ -2983,7 +2983,7 @@ void ex_may_print(exarg_T *eap)
 }
 
 
-static void close_redir(void)
+static void nvim_docmd_close_redir_impl(void)
 {
   if (redir_fd != NULL) {
     fclose(redir_fd);
@@ -3018,7 +3018,7 @@ int vim_mkdir_emsg(const char *const name, const int prot)
 /// @param mode  "w" for create new file or "a" for append
 ///
 /// @return  file descriptor, or NULL on failure.
-FILE *open_exfile(char *fname, int forceit, char *mode)
+FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode)
 {
 #ifdef UNIX
   // with Unix it is possible to open a directory
@@ -3054,7 +3054,7 @@ void update_topline_cursor(void)
 /// Save the current State and go to Normal mode.
 ///
 /// @return  true if the typeahead could be saved.
-bool save_current_state(save_state_T *sst)
+bool nvim_docmd_save_current_state_impl(save_state_T *sst)
   FUNC_ATTR_NONNULL_ALL
 {
   sst->save_msg_scroll = msg_scroll;
@@ -3076,7 +3076,7 @@ bool save_current_state(save_state_T *sst)
   return sst->tabuf.typebuf_valid;
 }
 
-void restore_current_state(save_state_T *sst)
+void nvim_docmd_restore_current_state_impl(save_state_T *sst)
   FUNC_ATTR_NONNULL_ALL
 {
   // Restore the previous typeahead.
@@ -3208,8 +3208,8 @@ enum {
 /// @return          an allocated string if a valid match was found.
 ///                  Returns NULL if no match was found.  "usedlen" then still contains the
 ///                  number of characters to skip.
-char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
-                const char **errormsg, int *escaped, bool empty_is_error)
+char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
+                                const char **errormsg, int *escaped, bool empty_is_error)
 {
   char *result = "";
   char *resultbuf = NULL;
@@ -3470,7 +3470,7 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
 /// Expand the <sfile> string in "arg".
 ///
 /// @return  an allocated string, or NULL for any error.
-char *expand_sfile(char *arg)
+char *nvim_docmd_expand_sfile_impl(char *arg)
 {
   char *result = xstrdup(arg);
 
@@ -3481,7 +3481,7 @@ char *expand_sfile(char *arg)
       // replace "<sfile>" with the sourced file name, and do ":" stuff
       size_t srclen;
       const char *errormsg;
-      char *repl = eval_vars(p, result, &srclen, NULL, &errormsg, NULL, true);
+      char *repl = nvim_docmd_eval_vars_impl(p, result, &srclen, NULL, &errormsg, NULL, true);
       if (errormsg != NULL) {
         if (*errormsg) {
           emsg(errormsg);
@@ -4461,7 +4461,7 @@ int nvim_docmd_is_user_cmdidx(const exarg_T *eap) { return IS_USER_CMDIDX(eap->c
 // Note: nvim_eap_get_forceit already exists in indent_ffi.c
 
 // Wrapper for static close_redir
-void nvim_docmd_close_redir(void) { close_redir(); }
+void nvim_docmd_close_redir(void) { nvim_docmd_close_redir_impl(); }
 
 // redir_fd: lives in globals.h as FILE*, exposed as *mut c_void
 void *nvim_docmd_get_redir_fd(void) { return redir_fd; }
@@ -4671,7 +4671,7 @@ int nvim_parse_count(exarg_T *eap, const char **errormsg, bool after_unknown_ran
 {
   return parse_count(eap, errormsg, after_unknown_range);
 }
-void nvim_undo_cmdmod(CmdParseInfo *cmdinfo) { undo_cmdmod(&cmdinfo->cmdmod); }
+void nvim_undo_cmdmod(CmdParseInfo *cmdinfo) { nvim_docmd_undo_cmdmod_impl(&cmdinfo->cmdmod); }
 void nvim_clear_cmdinfo(CmdParseInfo *cmdinfo) { CLEAR_POINTER(cmdinfo); }
 bool nvim_eap_cmd_is_nul_or_comment(const exarg_T *eap)
 {
@@ -4688,9 +4688,9 @@ void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
 //       are all public functions accessible from Rust via extern "C"
 
 // apply_cmdmod / undo_cmdmod on global cmdmod
-void nvim_apply_global_cmdmod(void) { apply_cmdmod(&cmdmod); }
-void nvim_undo_global_cmdmod(void) { undo_cmdmod(&cmdmod); }
-void nvim_undo_cmdmod_p(CmdParseInfo *cmdinfo) { undo_cmdmod(&cmdinfo->cmdmod); }
+void nvim_apply_global_cmdmod(void) { nvim_docmd_apply_cmdmod_impl(&cmdmod); }
+void nvim_undo_global_cmdmod(void) { nvim_docmd_undo_cmdmod_impl(&cmdmod); }
+void nvim_undo_cmdmod_p(CmdParseInfo *cmdinfo) { nvim_docmd_undo_cmdmod_impl(&cmdinfo->cmdmod); }
 
 // e_nobang and e_norange error strings
 const char *nvim_get_e_nobang(void) { return _(e_nobang); }
@@ -4719,7 +4719,7 @@ bool nvim_allbuf_locked(void) { return allbuf_locked(); }
 // Get previous directory string for scope (0=global, 1=tabpage, 2=window).
 char *nvim_get_prevdir(int scope)
 {
-  return get_prevdir((CdScope)scope);
+  return nvim_docmd_get_prevdir_impl((CdScope)scope);
 }
 
 // Set previous directory for scope. Returns old pdir (caller must free if replaced).
@@ -4762,7 +4762,7 @@ void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope)
 // post_chdir wrapper.
 void nvim_post_chdir(int scope, bool dir_differs)
 {
-  post_chdir((CdScope)scope, dir_differs);
+  nvim_docmd_post_chdir_impl((CdScope)scope, dir_differs);
 }
 
 const char *nvim_get_e_failed(void) { return _(e_failed); }
@@ -4780,7 +4780,7 @@ char *nvim_eval_vars_wrap(exarg_T *eap, char *p, size_t *srclenp, const char **e
                           int *escapedp)
 {
   int escaped = 0;
-  char *repl = eval_vars(p, eap->arg, srclenp, &eap->do_ecmd_lnum, errormsgp, &escaped, true);
+  char *repl = nvim_docmd_eval_vars_impl(p, eap->arg, srclenp, &eap->do_ecmd_lnum, errormsgp, &escaped, true);
   *escapedp = escaped;
   return repl;
 }
@@ -5199,3 +5199,30 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 
 /// Check if curwin->w_buffer should be hidden (for ex_exit).
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
+
+// Phase 3 C forwarding wrappers (original names forward to renamed impl bodies).
+// These maintain ABI compatibility while Rust takes ownership via #[export_name].
+
+void apply_cmdmod(cmdmod_T *cmod) { nvim_docmd_apply_cmdmod_impl(cmod); }
+void undo_cmdmod(cmdmod_T *cmod) { nvim_docmd_undo_cmdmod_impl(cmod); }
+char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
+{
+  return nvim_docmd_replace_makeprg_impl(eap, arg, cmdlinep);
+}
+int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
+{
+  return nvim_docmd_expand_argopt_impl(pat, xp, rmp, matches, numMatches);
+}
+FILE *open_exfile(char *fname, int forceit, char *mode)
+{
+  return nvim_docmd_open_exfile_impl(fname, forceit, mode);
+}
+bool save_current_state(save_state_T *sst) { return nvim_docmd_save_current_state_impl(sst); }
+void restore_current_state(save_state_T *sst) { nvim_docmd_restore_current_state_impl(sst); }
+char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
+                const char **errormsg, int *escaped, bool empty_is_error)
+{
+  return nvim_docmd_eval_vars_impl(src, srcstart, usedlen, lnump, errormsg, escaped,
+                                   empty_is_error);
+}
+char *expand_sfile(char *arg) { return nvim_docmd_expand_sfile_impl(arg); }

@@ -152,8 +152,7 @@ extern "C" {
     fn nvim_autocmd_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     #[link_name = "expand_env_save"]
     fn nvim_autocmd_expand_env_save(pat: *const c_char) -> *mut c_char;
-    #[link_name = "expand_sfile"]
-    fn nvim_autocmd_expand_sfile(cmd: *const c_char) -> *mut c_char;
+    fn nvim_docmd_expand_sfile_impl(cmd: *const c_char) -> *mut c_char;
     fn nvim_autocmd_show_header();
     fn nvim_autocmd_get_e_cannot_define_for_all() -> *const c_char;
     fn nvim_autocmd_get_current_augroup() -> c_int;
@@ -1352,7 +1351,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
 
         // Expand <sfile> in command
         if *cmd != 0 {
-            cmd = nvim_autocmd_expand_sfile(cmd);
+            cmd = nvim_docmd_expand_sfile_impl(cmd);
             if cmd.is_null() {
                 return;
             }

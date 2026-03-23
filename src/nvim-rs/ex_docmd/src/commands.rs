@@ -203,7 +203,11 @@ extern "C" {
 
     // Redir helpers
     fn nvim_docmd_close_redir();
-    fn open_exfile(fname: *const c_char, forceit: c_int, mode: *const c_char) -> *mut c_void;
+    fn nvim_docmd_open_exfile_impl(
+        fname: *const c_char,
+        forceit: c_int,
+        mode: *const c_char,
+    ) -> *mut c_void;
     fn expand_env_save(arg: *const c_char) -> *mut c_char;
     fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn write_reg_contents(regname: c_int, str_: *const c_char, len: isize, must_append: c_int);
@@ -217,8 +221,8 @@ extern "C" {
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
     fn nvim_docmd_curwin_in_terminal_mode() -> c_int;
     fn expr_map_locked() -> bool;
-    fn save_current_state(save: *mut c_void) -> bool;
-    fn restore_current_state(save: *mut c_void);
+    fn nvim_docmd_save_current_state_impl(save: *mut c_void) -> bool;
+    fn nvim_docmd_restore_current_state_impl(save: *mut c_void);
     fn exec_normal_cmd(cmd: *const c_char, remap: c_int, silent: bool);
     fn check_cursor_moved(wp: WinHandle);
     fn update_topline_cursor();
@@ -816,7 +820,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         }
 
         let forceit = c_int::from(nvim_eap_get_forceit(eap));
-        let fd = open_exfile(fname, forceit, mode);
+        let fd = nvim_docmd_open_exfile_impl(fname, forceit, mode);
         xfree(fname as *mut c_void);
         nvim_docmd_set_redir_fd(fd);
     } else if *arg == b'@' as c_char {
@@ -983,7 +987,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
     let mut save_state_buf = [0u8; SAVE_STATE_SIZE];
     let save_state = save_state_buf.as_mut_ptr() as *mut c_void;
 
-    if save_current_state(save_state) {
+    if nvim_docmd_save_current_state_impl(save_state) {
         let addr_count = nvim_eap_get_addr_count(eap);
         loop {
             if addr_count != 0 {
@@ -1013,7 +1017,7 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
 
     // Might not return to the main loop when in an event handler.
     update_topline_cursor();
-    restore_current_state(save_state);
+    nvim_docmd_restore_current_state_impl(save_state);
 
     let busy = nvim_docmd_get_ex_normal_busy();
     nvim_docmd_set_ex_normal_busy(busy - 1);
