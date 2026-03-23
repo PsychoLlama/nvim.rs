@@ -690,7 +690,7 @@ extern "C" {
     fn parse_shape_opt(what: c_int) -> *const c_char;
     fn invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
+    fn set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int, set_sid: c_int);
     fn nvim_curbuf_is_empty() -> c_int;
     fn rs_default_fileformat() -> c_int;
     #[link_name = "set_fileformat"]
@@ -792,13 +792,13 @@ pub unsafe extern "C" fn rs_set_init_3() {
         if do_sp {
             let sp_str: &[u8] = if is_csh { b"|& tee" } else { b"2>&1| tee" };
             let sp = static_cstr_as_optval(sp_str.as_ptr(), sp_str.len());
-            nvim_call_set_option_direct(K_OPT_SHELLPIPE, sp, 0);
+            set_option_direct(K_OPT_SHELLPIPE, sp, 0, -6 /* SID_NONE */);
             crate::defaults::rs_change_option_default(K_OPT_SHELLPIPE, rs_optval_copy(sp));
         }
         if do_srr {
             let srr_str: &[u8] = if is_csh { b">&" } else { b">%s 2>&1" };
             let srr = static_cstr_as_optval(srr_str.as_ptr(), srr_str.len());
-            nvim_call_set_option_direct(K_OPT_SHELLREDIR, srr, 0);
+            set_option_direct(K_OPT_SHELLREDIR, srr, 0, -6 /* SID_NONE */);
             crate::defaults::rs_change_option_default(K_OPT_SHELLREDIR, rs_optval_copy(srr));
         }
     }
@@ -820,12 +820,16 @@ pub unsafe extern "C" fn rs_set_init_3() {
 
 extern "C" {
     fn langmap_init();
-    fn nvim_call_stdpaths_user_state_subpath(name: *const c_char) -> *mut c_char;
-    fn nvim_call_runtimepath_default(clean_arg: c_int) -> *mut c_char;
-    fn nvim_curbuf_set_b_p_initialized();
-    fn nvim_curbuf_set_b_p_ac_minus1();
-    fn nvim_curbuf_set_b_p_ar_minus1();
-    fn nvim_curbuf_set_b_p_ul_no_local();
+    fn stdpaths_user_state_subpath(
+        fname: *const c_char,
+        trailing_pathseps: usize,
+        escape_commas: bool,
+    ) -> *mut c_char;
+    fn runtimepath_default(clean_arg: bool) -> *mut c_char;
+    fn nvim_buf_set_b_p_initialized(buf: *mut core::ffi::c_void, val: c_int);
+    fn nvim_buf_set_b_p_ac_minus1(buf: *mut core::ffi::c_void);
+    fn nvim_buf_set_b_p_ar_minus1(buf: *mut core::ffi::c_void);
+    fn nvim_buf_set_b_p_ul_no_local(buf: *mut core::ffi::c_void);
     fn nvim_call_check_win_options();
     #[link_name = "check_options"]
     fn rs_check_options();
@@ -868,22 +872,22 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     rs_set_init_default_cdpath();
 
     // backupdir: prepend ".," to the state subpath
-    let backupdir_raw = nvim_call_stdpaths_user_state_subpath(c"backup".as_ptr());
+    let backupdir_raw = stdpaths_user_state_subpath(c"backup".as_ptr(), 2, true);
     let backupdir = prepend_dot_comma(backupdir_raw);
     crate::defaults::rs_set_string_default_opt(K_OPT_BACKUPDIR, backupdir, 1);
 
-    let viewdir = nvim_call_stdpaths_user_state_subpath(c"view".as_ptr());
+    let viewdir = stdpaths_user_state_subpath(c"view".as_ptr(), 2, true);
     crate::defaults::rs_set_string_default_opt(K_OPT_VIEWDIR, viewdir, 1);
 
-    let directory = nvim_call_stdpaths_user_state_subpath(c"swap".as_ptr());
+    let directory = stdpaths_user_state_subpath(c"swap".as_ptr(), 2, true);
     crate::defaults::rs_set_string_default_opt(K_OPT_DIRECTORY, directory, 1);
 
-    let undodir = nvim_call_stdpaths_user_state_subpath(c"undo".as_ptr());
+    let undodir = stdpaths_user_state_subpath(c"undo".as_ptr(), 2, true);
     crate::defaults::rs_set_string_default_opt(K_OPT_UNDODIR, undodir, 1);
 
     // Set default for &runtimepath. All necessary expansions are performed in
     // runtimepath_default().
-    let rtp = nvim_call_runtimepath_default(clean_arg);
+    let rtp = runtimepath_default(clean_arg != 0);
     if !rtp.is_null() {
         crate::defaults::rs_set_string_default_opt(K_OPT_RUNTIMEPATH, rtp, 1);
         // Make a copy of rtp for packpath (allocated=false means a copy is made)
@@ -894,10 +898,11 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // Set all options (except terminal options) to their default value.
     crate::defaults::rs_set_options_default(0);
 
-    nvim_curbuf_set_b_p_initialized();
-    nvim_curbuf_set_b_p_ac_minus1();
-    nvim_curbuf_set_b_p_ar_minus1();
-    nvim_curbuf_set_b_p_ul_no_local();
+    let curbuf = nvim_opt_get_curbuf();
+    nvim_buf_set_b_p_initialized(curbuf, 1);
+    nvim_buf_set_b_p_ac_minus1(curbuf);
+    nvim_buf_set_b_p_ar_minus1(curbuf);
+    nvim_buf_set_b_p_ul_no_local(curbuf);
     check_buf_options(nvim_opt_get_curbuf());
     nvim_call_check_win_options();
     rs_check_options();

@@ -1069,8 +1069,6 @@ int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_i
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
-void nvim_call_set_option_direct(int opt_idx, OptVal val, int opt_flags) { set_option_direct((OptIndex)opt_idx, val, opt_flags, SID_NONE); }
-
 // Accessors for rs_ex_set and rs_validate_opt_idx (option pass 7 phase 3)
 int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }
@@ -2348,24 +2346,6 @@ void nvim_call_check_win_options(void)
   rs_check_winopt(&curwin->w_allbuf_opt);
 }
 
-/// curbuf->b_p_initialized = true
-void nvim_curbuf_set_b_p_initialized(void) { curbuf->b_p_initialized = true; }
-
-/// curbuf->b_p_ac = -1
-void nvim_curbuf_set_b_p_ac_minus1(void) { curbuf->b_p_ac = -1; }
-
-/// curbuf->b_p_ar = -1
-void nvim_curbuf_set_b_p_ar_minus1(void) { curbuf->b_p_ar = -1; }
-
-/// curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL
-void nvim_curbuf_set_b_p_ul_no_local(void) { curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
-
-/// stdpaths_user_state_subpath(name, 2, true), returns allocated string.
-char *nvim_call_stdpaths_user_state_subpath(const char *name) { return stdpaths_user_state_subpath(name, 2, true); }
-
-/// runtimepath_default(clean_arg) wrapper.
-char *nvim_call_runtimepath_default(int clean_arg) { return runtimepath_default(clean_arg != 0); }
-
 /// set_init_expand_env() implementation called from Rust.
 /// Iterates over all options and expands environment variables for defaults.
 void nvim_call_set_init_expand_env(void)
@@ -2457,12 +2437,6 @@ void nvim_call_curbuf_tabstop_set_vts(void)
 // option_expand, free_all_options)
 // =============================================================================
 
-/// set_option_direct(opt_idx, val, opt_flags, current_sctx.sc_sid) wrapper.
-void nvim_call_set_option_direct_with_sctx(int opt_idx, OptVal val, int opt_flags)
-{
-  set_option_direct((OptIndex)opt_idx, val, opt_flags, current_sctx.sc_sid);
-}
-
 /// FOR_ALL_TAB_WINDOWS win_comp_scroll wrapper.
 void nvim_call_comp_scroll_all_windows(void)
 {
@@ -2477,9 +2451,6 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 #else
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
-
-/// XFREE_CLEAR(fenc_default) wrapper.
-void nvim_call_xfree_clear_fenc_default(void) { XFREE_CLEAR(fenc_default); }
 
 /// XFREE_CLEAR(p_term) wrapper.
 void nvim_call_xfree_clear_p_term(void) { XFREE_CLEAR(p_term); }

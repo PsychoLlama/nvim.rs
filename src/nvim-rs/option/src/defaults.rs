@@ -524,24 +524,28 @@ extern "C" {
     fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
     /// win_comp_scroll(wp) - recompute scroll for a window
     fn win_comp_scroll(win: *mut std::ffi::c_void);
-    /// set_option_direct with current_sctx.sc_sid
-    fn nvim_call_set_option_direct_with_sctx(opt_idx: c_int, val: OptVal, opt_flags: c_int);
+    /// set_option_direct(opt_idx, val, opt_flags, set_sid)
+    fn set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int, set_sid: c_int);
+    /// nvim_get_current_sctx_sid() - get current_sctx.sc_sid
+    fn nvim_get_current_sctx_sid() -> c_int;
     /// FOR_ALL_TAB_WINDOWS { win_comp_scroll(wp) }
     fn nvim_call_comp_scroll_all_windows();
     /// parse_cino(buf)
     fn parse_cino(buf: *mut std::ffi::c_void);
-    /// free_operatorfunc_option()
+    /// free_operatorfunc_option() wrapper (EXITFREE only)
     fn nvim_call_free_operatorfunc_option();
     /// free_findfunc_option() (implemented in ex_docmd.c)
     fn nvim_docmd_free_findfunc_option_impl();
     /// rs_free_tagfunc_option() - free tagfunc option
     fn rs_free_tagfunc_option();
-    /// XFREE_CLEAR(fenc_default)
-    fn nvim_call_xfree_clear_fenc_default();
+    /// xfree(ptr) - free memory allocated with C allocator
+    fn xfree(ptr: *mut std::ffi::c_char);
     /// XFREE_CLEAR(p_term)
     fn nvim_call_xfree_clear_p_term();
     /// XFREE_CLEAR(p_ttytype)
     fn nvim_call_xfree_clear_p_ttytype();
+    /// fenc_default global variable
+    static mut fenc_default: *mut std::ffi::c_char;
     /// option_expand escape kind for opt_idx (0=none, 1=esc, 2=file:)
     fn nvim_option_expand_escape_kind(opt_idx: c_int) -> c_int;
     /// expand_env_esc into NameBuff; returns NameBuff or NULL if no change
@@ -619,7 +623,7 @@ pub unsafe extern "C" fn rs_option_expand(
 pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int) {
     let both = (opt_flags & (OPT_LOCAL_P12 | OPT_GLOBAL_P12)) == 0;
     let def_val = rs_get_option_default(opt_idx, opt_flags);
-    nvim_call_set_option_direct_with_sctx(opt_idx, def_val, opt_flags);
+    set_option_direct(opt_idx, def_val, opt_flags, nvim_get_current_sctx_sid());
 
     if opt_idx == K_OPT_SCROLL {
         win_comp_scroll(nvim_opt_get_curwin());
@@ -685,7 +689,8 @@ pub unsafe extern "C" fn rs_free_all_options() {
     nvim_call_free_operatorfunc_option();
     rs_free_tagfunc_option();
     nvim_docmd_free_findfunc_option_impl();
-    nvim_call_xfree_clear_fenc_default();
+    xfree(fenc_default);
+    fenc_default = std::ptr::null_mut();
     nvim_call_xfree_clear_p_term();
     nvim_call_xfree_clear_p_ttytype();
 }
