@@ -355,6 +355,7 @@ extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
 extern int nvim_docmd_vim_mkdir_emsg_impl(const char *name, int prot);
 extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
 extern void nvim_docmd_update_topline_cursor_impl(void);
+extern char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1815,42 +1816,7 @@ uint32_t excmd_get_argt(cmdidx_T idx)
 
 
 /// Correct the range for zero line number, if required.
-/// For the ":make" and ":grep" commands insert the 'makeprg'/'grepprg' option
-/// in the command line, so that things like % get expanded.
-char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep)
-{
-  bool isgrep = eap->cmdidx == CMD_grep
-                || eap->cmdidx == CMD_lgrep
-                || eap->cmdidx == CMD_grepadd
-                || eap->cmdidx == CMD_lgrepadd;
-
-  // Don't do it when ":vimgrep" is used for ":grep".
-  if ((eap->cmdidx == CMD_make || eap->cmdidx == CMD_lmake || isgrep)
-      && !grep_internal(eap->cmdidx)) {
-    const char *program = isgrep ? (*curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp)
-                                 : (*curbuf->b_p_mp == NUL ? p_mp : curbuf->b_p_mp);
-
-    arg = skipwhite(arg);
-
-    char *new_cmdline;
-    // Replace $* by given arguments
-    if ((new_cmdline = strrep(program, "$*", arg)) == NULL) {
-      // No $* in arg, build "<makeprg> <arg>" instead
-      new_cmdline = xmalloc(strlen(program) + strlen(arg) + 2);
-      STRCPY(new_cmdline, program);
-      strcat(new_cmdline, " ");
-      strcat(new_cmdline, arg);
-    }
-
-    msg_make(arg);
-
-    // 'eap->cmd' is not set here, because it is not used at CMD_make
-    xfree(*cmdlinep);
-    *cmdlinep = new_cmdline;
-    arg = new_cmdline;
-  }
-  return arg;
-}
+// nvim_docmd_replace_makeprg_impl is implemented in Rust (args.rs).
 
 
 /// Function given to ExpandGeneric() to obtain the list of bad= names.
@@ -2764,21 +2730,6 @@ void free_cd_dir(void)
 }
 
 #endif
-
-/// Get the previous directory for the given chdir scope.
-static char *nvim_docmd_get_prevdir_impl(CdScope scope)
-{
-  switch (scope) {
-  case kCdScopeTabpage:
-    return curtab->tp_prevdir;
-    break;
-  case kCdScopeWindow:
-    return curwin->w_prevdir;
-    break;
-  default:
-    return prev_dir;
-  }
-}
 
 // nvim_docmd_post_chdir_impl is implemented in Rust (cmd_impl.rs).
 extern void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged);
@@ -4446,7 +4397,11 @@ bool nvim_allbuf_locked(void) { return allbuf_locked(); }
 // Get previous directory string for scope (0=global, 1=tabpage, 2=window).
 char *nvim_get_prevdir(int scope)
 {
-  return nvim_docmd_get_prevdir_impl((CdScope)scope);
+  switch ((CdScope)scope) {
+  case kCdScopeTabpage: return curtab->tp_prevdir;
+  case kCdScopeWindow:  return curwin->w_prevdir;
+  default:              return prev_dir;
+  }
 }
 
 // Set previous directory for scope. Returns old pdir (caller must free if replaced).
@@ -4938,6 +4893,14 @@ int nvim_docmd_os_mkdir(const char *name, int prot) { return os_mkdir(name, prot
 int nvim_docmd_os_isdir(const char *fname) { return os_isdir(fname) ? 1 : 0; }
 int nvim_docmd_os_path_exists(const char *fname) { return os_path_exists(fname) ? 1 : 0; }
 FILE *nvim_docmd_os_fopen(const char *fname, const char *mode) { return os_fopen(fname, mode); }
+
+// Phase N: replace_makeprg_impl helpers for Rust FFI
+// Returns the effective grep or make program string (buffer-local if set, else global).
+const char *nvim_docmd_get_grep_or_make_program(int isgrep)
+{
+  return isgrep ? (*curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp)
+                : (*curbuf->b_p_mp == NUL ? p_mp : curbuf->b_p_mp);
+}
 
 // Phase N: post_chdir_impl helpers for Rust FFI
 void nvim_docmd_curwin_clear_localdir(void) { XFREE_CLEAR(curwin->w_localdir); }

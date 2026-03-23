@@ -3,7 +3,7 @@
 //! This module provides types and functions for parsing command arguments,
 //! including ++opt options, counts, registers, and filename expansion.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::ExArgHandle;
@@ -64,6 +64,15 @@ extern "C" {
     fn rs_checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool;
     #[link_name = "check_nextcmd"]
     fn rs_check_nextcmd(p: *const c_char) -> *mut c_char;
+
+    // replace_makeprg helpers
+    fn nvim_docmd_get_grep_or_make_program(isgrep: c_int) -> *const c_char;
+    fn msg_make(arg: *const c_char);
+    fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char;
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    #[link_name = "strlen"]
+    fn c_strlen(s: *const c_char) -> usize;
 }
 
 /// Address type: lines in current buffer (matches ADDR_LINES in C).
@@ -892,6 +901,67 @@ pub unsafe extern "C" fn rs_separate_nextcmd(eap: ExArgHandle) {
     if (argt & crate::table::EX_NOTRLCOM) == 0 {
         nvim_docmd_del_trailing_spaces(nvim_eap_get_arg(eap));
     }
+}
+
+/// `nvim_docmd_replace_makeprg_impl` - replace make/grep program in command line.
+///
+/// When `eap->cmdidx` is CMD_make, CMD_lmake, CMD_grep, etc. and NOT vimgrep,
+/// replace the argument with the makeprg/grepprg program string, substituting
+/// `$*` for the provided args. Returns the new argument pointer.
+///
+/// # Safety
+/// `eap`, `arg`, `cmdlinep` must be valid. `arg` must be a valid C string.
+#[export_name = "nvim_docmd_replace_makeprg_impl"]
+pub unsafe extern "C" fn rs_replace_makeprg(
+    eap: ExArgHandle,
+    arg: *mut c_char,
+    cmdlinep: *mut *mut c_char,
+) -> *mut c_char {
+    use crate::commands::{CMD_GREP, CMD_GREPADD, CMD_LGREP, CMD_LGREPADD, CMD_LMAKE, CMD_MAKE};
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let isgrep = (cmdidx == CMD_GREP
+        || cmdidx == CMD_LGREP
+        || cmdidx == CMD_GREPADD
+        || cmdidx == CMD_LGREPADD) as c_int;
+
+    // Only act for make/grep commands when not using internal vimgrep.
+    if (cmdidx == CMD_MAKE
+        || cmdidx == CMD_LMAKE
+        || cmdidx == CMD_GREP
+        || cmdidx == CMD_LGREP
+        || cmdidx == CMD_GREPADD
+        || cmdidx == CMD_LGREPADD)
+        && nvim_docmd_grep_internal(cmdidx) == 0
+    {
+        let program = nvim_docmd_get_grep_or_make_program(isgrep);
+        let arg = skipwhite(arg as *const c_char);
+
+        // Replace $* by given arguments, or build "<program> <arg>".
+        let new_cmdline = strrep(program, c"$*".as_ptr(), arg);
+        let new_cmdline: *mut c_char = if new_cmdline.is_null() {
+            // No $* in program: build "<program> <arg>"
+            let prog_len = c_strlen(program);
+            let arg_len = c_strlen(arg);
+            let buf = xmalloc(prog_len + arg_len + 2) as *mut c_char;
+            std::ptr::copy_nonoverlapping(program, buf, prog_len);
+            *buf.add(prog_len) = b' ' as c_char;
+            std::ptr::copy_nonoverlapping(arg, buf.add(prog_len + 1), arg_len);
+            *buf.add(prog_len + 1 + arg_len) = 0;
+            buf
+        } else {
+            new_cmdline
+        };
+
+        msg_make(arg);
+
+        // Replace the old cmdline string with the new one.
+        xfree(*cmdlinep as *mut c_void);
+        *cmdlinep = new_cmdline;
+        return new_cmdline;
+    }
+
+    arg
 }
 
 #[cfg(test)]
