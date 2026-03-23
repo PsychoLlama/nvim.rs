@@ -29,9 +29,8 @@ extern "C" {
     /// Set `emsg_noredir` flag
     fn nvim_set_emsg_noredir(val: c_int);
     /// Get `did_emsg` counter
-    fn nvim_get_did_emsg() -> c_int;
+    static mut did_emsg: c_int;
     /// Set `did_emsg` counter
-    fn nvim_set_did_emsg(val: c_int);
     /// Get `called_emsg` counter
     fn nvim_get_called_emsg() -> c_int;
     /// Set `called_emsg` counter
@@ -42,6 +41,7 @@ extern "C" {
     fn nvim_set_emsg_on_display(val: c_int);
     /// Check if p_debug contains a specific character
     fn nvim_p_debug_contains(c: c_int) -> c_int;
+    static mut need_wait_return: bool;
 }
 
 /// Get the emsg_off counter (error messages disabled).
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn rs_set_emsg_noredir(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_emsg() -> c_int {
-    nvim_get_did_emsg()
+    did_emsg
 }
 
 /// Set the did_emsg counter.
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn rs_did_emsg() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_did_emsg(val: c_int) {
-    nvim_set_did_emsg(val);
+    did_emsg = val;
 }
 
 /// Increment did_emsg.
@@ -254,8 +254,8 @@ pub unsafe extern "C" fn rs_set_did_emsg(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_inc_did_emsg() {
-    let val = nvim_get_did_emsg();
-    nvim_set_did_emsg(val + 1);
+    let val = did_emsg;
+    did_emsg = val + 1;
 }
 
 /// Check if any error message was displayed.
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn rs_inc_did_emsg() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_did_emsg() -> c_int {
-    c_int::from(nvim_get_did_emsg() > 0)
+    c_int::from(did_emsg > 0)
 }
 
 /// Get the called_emsg counter.
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn rs_emsg_now() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_reset_counters() {
-    nvim_set_did_emsg(0);
+    did_emsg = 0;
     nvim_set_called_emsg(0);
     nvim_set_emsg_on_display(0);
 }
@@ -496,7 +496,6 @@ extern "C" {
     fn nvim_get_p_eb() -> c_int;
     fn nvim_beep_flush();
     fn nvim_flush_buffers_minimal();
-    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_set_msg_nowait(val: c_int);
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_get_msg_ext_skip_flush() -> c_int;
@@ -565,8 +564,8 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         // SAFETY: ignore is a local variable, valid for the duration of the call.
         if nvim_cause_errthrow(s, multiline, severe, std::ptr::addr_of_mut!(ignore)) != 0 {
             if ignore == 0 {
-                let did = nvim_get_did_emsg();
-                nvim_set_did_emsg(did + 1);
+                let did = did_emsg;
+                did_emsg = did + 1;
             }
             return 1;
         }
@@ -631,14 +630,14 @@ pub unsafe extern "C" fn rs_emsg_multiline(
             nvim_flush_buffers_minimal(); // flush internal buffers
         }
 
-        let did = nvim_get_did_emsg();
-        nvim_set_did_emsg(did + 1); // flag for DoOneCmd()
+        let did = did_emsg;
+        did_emsg = did + 1; // flag for DoOneCmd()
     }
 
     nvim_set_emsg_on_display(1); // remember there is an error message
     if nvim_get_msg_scrolled() != 0 {
-        nvim_set_need_wait_return(1); // needed in case emsg() is called after
-                                      // wait_return() has reset need_wait_return
+        need_wait_return = true; // needed in case emsg() is called after
+                                 // wait_return() has reset need_wait_return
     }
     crate::display::rs_msg_ext_set_kind(kind);
 

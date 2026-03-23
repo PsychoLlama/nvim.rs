@@ -68,8 +68,7 @@ extern "C" {
     // Global accessors
     fn nvim_get_did_throw_direct() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
-    fn nvim_get_exmode_active() -> bool;
-    fn nvim_set_exmode_active(val: bool);
+    static mut exmode_active: bool;
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_set_quit_more(val: bool);
     fn nvim_get_quit_more() -> bool;
@@ -86,7 +85,7 @@ extern "C" {
     fn nvim_get_global_busy() -> bool;
     fn nvim_set_did_check_timestamps(val: bool);
     fn nvim_get_need_check_timestamps() -> bool;
-    fn nvim_get_need_wait_return() -> c_int;
+    static mut need_wait_return: bool;
     fn nvim_wait_return(redraw: bool);
     static mut restart_edit: c_int;
     fn nvim_get_opcount() -> c_int;
@@ -110,7 +109,7 @@ extern "C" {
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_get_in_assert_fails() -> bool;
     fn nvim_get_did_wait_return_val() -> bool;
-    fn nvim_set_did_emsg(val: c_int); // defined in message.c
+    static mut did_emsg: c_int; // defined in message.c
 
     // Cursor globals
     fn nvim_get_cursor_lnum() -> c_int;
@@ -200,7 +199,7 @@ unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
             nvim_check_timestamps_call(false);
         }
 
-        if nvim_get_need_wait_return() != 0 {
+        if need_wait_return {
             // if wait_return still needed call it now
             nvim_wait_return(false);
         }
@@ -212,14 +211,14 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
     if unsafe { got_int } {
         if nvim_ns_get_noexmode(s)
             && nvim_get_global_busy()
-            && !nvim_get_exmode_active()
+            && !exmode_active
             && nvim_ns_get_previous_got_int(s)
         {
             // Typed two CTRL-C in a row: go back to ex mode as if "Q" was
             // used and keep "got_int" set, so that it aborts ":g".
-            nvim_set_exmode_active(true);
+            exmode_active = true;
             State = MODE_NORMAL;
-        } else if !nvim_get_global_busy() || !nvim_get_exmode_active() {
+        } else if !nvim_get_global_busy() || !exmode_active {
             if !nvim_get_quit_more() {
                 // flush all buffers
                 nvim_vgetc_and_discard();
@@ -332,7 +331,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     }
 
     nvim_set_emsg_on_display(0); // can delete error message now
-    nvim_set_did_emsg(0);
+    did_emsg = 0;
     nvim_set_msg_didany(0); // reset lines_left in msg_start()
     nvim_may_clear_sb_text_call(); // clear scroll-back text on next msg
 
@@ -494,7 +493,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         discard_current_exception();
     }
 
-    if !nvim_get_exmode_active() {
+    if !exmode_active {
         nvim_set_msg_scroll(0);
     }
     nvim_set_quit_more(false);
@@ -504,7 +503,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     // If skip redraw is set (for ":" in wait_return()), don't redraw now.
     // If there is nothing in the stuff_buffer or do_redraw is true,
     // update cursor and redraw.
-    if nvim_get_skip_redraw() || nvim_get_exmode_active() {
+    if nvim_get_skip_redraw() || exmode_active {
         nvim_set_skip_redraw(false);
         nvim_setcursor_wrapper();
     } else if do_redraw || nvim_stuff_empty() {
@@ -554,7 +553,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     // Update w_curswant if w_set_curswant has been set.
     nvim_update_curswant_wrapper();
 
-    if nvim_get_exmode_active() {
+    if exmode_active {
         if nvim_ns_get_noexmode(s) {
             return 0;
         }

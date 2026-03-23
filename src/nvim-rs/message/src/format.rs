@@ -27,7 +27,7 @@ extern "C" {
     /// Get `msg_scroll` flag
     fn nvim_get_msg_scroll() -> c_int;
     /// Get `need_wait_return` flag
-    fn nvim_get_need_wait_return() -> c_int;
+    static mut need_wait_return: bool;
     /// Check shortmess option flag (used by other message code that has not been migrated)
     fn nvim_shortmess(flag: c_int) -> c_int;
     /// Get the 'shortmess' option string value
@@ -35,8 +35,7 @@ extern "C" {
     /// Search for character in string (returns pointer or NULL)
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     /// Get `exmode_active` flag
-    fn nvim_get_exmode_active() -> bool;
-    /// Get `msg_silent` count
+    static mut exmode_active: bool;
     /// Check if UI has messages capability
     fn nvim_ui_has_messages() -> c_int;
     /// Calculate string width in cells
@@ -137,9 +136,7 @@ pub unsafe extern "C" fn rs_msg_room() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
     let msg_scroll = nvim_get_msg_scroll() != 0;
-    let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let exmode_active = nvim_get_exmode_active();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(
@@ -617,9 +614,9 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
     // Check conditions for truncation
     let should_truncate = force != 0
         || (nvim_get_msg_scroll() == 0
-            && nvim_get_need_wait_return() == 0
+            && !need_wait_return
             && nvim_shortmess(SHM_TRUNCALL) != 0
-            && !nvim_get_exmode_active()
+            && !exmode_active
             && msg_silent == 0
             && nvim_ui_has_messages() == 0);
 
@@ -958,9 +955,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_special(
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
     let msg_scroll = nvim_get_msg_scroll() != 0;
-    let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let exmode_active = nvim_get_exmode_active();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(
@@ -1028,7 +1023,7 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let len = libc_strlen(s.cast_const()) as c_int;
-    if (force || (nvim_shortmess(SHM_TRUNC) != 0 && !nvim_get_exmode_active())) && len - room > 0 {
+    if (force || (nvim_shortmess(SHM_TRUNC) != 0 && !exmode_active)) && len - room > 0 {
         let size = nvim_vim_strsize(s.cast_const());
         if size <= room {
             return s;

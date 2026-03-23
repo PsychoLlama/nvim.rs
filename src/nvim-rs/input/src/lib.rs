@@ -287,9 +287,9 @@ extern "C" {
 
     // Direct C globals
     static mut no_wait_return: c_int;
+    static mut need_wait_return: bool;
 
     // Global state accessors
-    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_msg_row() -> c_int;
     fn nvim_set_cmdline_row(val: c_int);
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
     }
 
     let msg_scrolled = nvim_get_msg_scrolled();
-    nvim_set_need_wait_return(c_int::from(msg_scrolled != 0));
+    need_wait_return = msg_scrolled != 0;
     no_wait_return -= 1;
     State = save_state;
     setmouse();

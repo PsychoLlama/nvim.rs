@@ -111,8 +111,7 @@ extern "C" {
     ) -> bool;
 
     // -- Error state accessors --
-    fn nvim_get_did_emsg() -> c_int;
-    fn nvim_set_did_emsg(val: c_int);
+    static mut did_emsg: c_int;
     fn nvim_get_called_emsg() -> c_int;
     fn nvim_get_did_throw() -> c_int;
     fn nvim_get_pressedreturn() -> c_int;
@@ -281,7 +280,7 @@ pub unsafe extern "C" fn rs_timer_stop(timer: TimerHandle) {
 pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_void) {
     let timer = data as TimerHandle;
 
-    let save_did_emsg = nvim_get_did_emsg();
+    let save_did_emsg = did_emsg;
     let called_emsg_before = nvim_get_called_emsg();
     let save_ex_pressedreturn = nvim_get_pressedreturn();
 
@@ -331,7 +330,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
 
     // Handle error message
     let called_emsg_now = nvim_get_called_emsg();
-    let did_emsg_now = nvim_get_did_emsg();
+    let did_emsg_now = did_emsg;
     if called_emsg_now > called_emsg_before && did_emsg_now != 0 {
         let mut f2 = read_fields(timer);
         f2.emsg_count += 1;
@@ -340,7 +339,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
             nvim_discard_current_exception();
         }
     }
-    nvim_set_did_emsg(save_did_emsg);
+    did_emsg = save_did_emsg;
     nvim_set_pressedreturn(save_ex_pressedreturn);
 
     let f3 = read_fields(timer);

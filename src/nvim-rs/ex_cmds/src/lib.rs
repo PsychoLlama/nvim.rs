@@ -821,10 +821,9 @@ extern "C" {
     /// Mark lines as appended (without mark adjustment)
     pub fn appended_lines(lnum: c_int, count: c_int);
     pub static mut State: c_int;
+    pub static mut need_wait_return: bool;
     /// Set msg_scroll global
     pub fn nvim_set_msg_scroll(val: c_int);
-    /// Set need_wait_return global
-    pub fn nvim_set_need_wait_return(val: c_int);
     /// Set lines_left global
     pub fn nvim_set_lines_left(val: c_int);
     /// Call ui_cursor_shape()

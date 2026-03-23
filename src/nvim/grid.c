@@ -268,11 +268,6 @@ GridView *nvim_get_default_gridview(void)
   return &default_gridview;
 }
 
-bool nvim_get_exmode_active(void)
-{
-  return exmode_active;
-}
-
 int nvim_get_p_arshape(void)
 {
   return p_arshape;

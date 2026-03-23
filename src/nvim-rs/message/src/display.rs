@@ -38,7 +38,6 @@ extern "C" {
     // Position and display state
     fn nvim_get_msg_col() -> c_int;
     fn nvim_get_sc_col() -> c_int;
-    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Wait state
@@ -56,6 +55,7 @@ extern "C" {
     // Clear EOS flag
     fn nvim_get_need_clr_eos() -> c_int;
     fn nvim_set_need_clr_eos(val: c_int);
+    static mut need_wait_return: bool;
 }
 
 // ============================================================================
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn rs_msg_check() {
         return;
     }
     if nvim_get_msg_row() == Rows - 1 && nvim_get_msg_col() >= nvim_get_sc_col() {
-        nvim_set_need_wait_return(1);
+        need_wait_return = true;
         nvim_set_redraw_cmdline(true);
     }
 }

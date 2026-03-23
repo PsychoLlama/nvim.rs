@@ -27,9 +27,8 @@ extern "C" {
     /// Set `lines_left` counter
     fn nvim_set_lines_left(val: c_int);
     /// Get `need_wait_return` flag
-    fn nvim_get_need_wait_return() -> c_int;
+    static mut need_wait_return: bool;
     /// Set `need_wait_return` flag
-    fn nvim_set_need_wait_return(val: c_int);
     /// Get `msg_scrolled` global
     fn nvim_get_msg_scrolled() -> c_int;
     /// Get `msg_scrolled_ign` flag
@@ -126,7 +125,7 @@ pub unsafe extern "C" fn rs_set_lines_left(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_need_wait_return() -> c_int {
-    nvim_get_need_wait_return()
+    c_int::from(need_wait_return)
 }
 
 /// Set the need_wait_return flag.
@@ -135,7 +134,7 @@ pub unsafe extern "C" fn rs_need_wait_return() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_need_wait_return(val: c_int) {
-    nvim_set_need_wait_return(val);
+    need_wait_return = (val) != 0;
 }
 
 /// Check if error message is on display.
@@ -340,10 +339,10 @@ pub unsafe extern "C" fn rs_wait_return_blocked() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_should_wait_return() -> c_int {
-    let need_wait = nvim_get_need_wait_return();
+    let need_wait = need_wait_return;
     let blocked = rs_wait_return_blocked();
 
-    c_int::from(need_wait != 0 && blocked == 0)
+    c_int::from(need_wait && blocked == 0)
 }
 
 /// Set need_wait_return flag.
@@ -352,7 +351,7 @@ pub unsafe extern "C" fn rs_should_wait_return() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_request_wait_return() {
-    nvim_set_need_wait_return(1);
+    need_wait_return = true;
 }
 
 /// Clear need_wait_return flag.
@@ -361,7 +360,7 @@ pub unsafe extern "C" fn rs_request_wait_return() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_wait_return() {
-    nvim_set_need_wait_return(0);
+    need_wait_return = false;
 }
 
 /// Reset wait return state after handling.
@@ -372,7 +371,7 @@ pub unsafe extern "C" fn rs_clear_wait_return() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reset_wait_return_state() {
-    nvim_set_need_wait_return(0);
+    need_wait_return = false;
     nvim_set_msg_didout(0);
 }
 
@@ -448,7 +447,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
             && (len < 0 || len == 1)
             && (len >= 0 || *str_.add(1).cast::<u8>() == 0);
         if !is_cr_only {
-            nvim_set_need_wait_return(1);
+            need_wait_return = true;
         }
     }
     nvim_set_msg_didany(1); // remember that something was outputted

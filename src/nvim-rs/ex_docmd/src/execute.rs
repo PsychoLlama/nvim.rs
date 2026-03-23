@@ -358,7 +358,7 @@ extern "C" {
     fn nvim_do_profiling_active() -> bool;
     fn nvim_cstack_get_idx(cs: CstackHandle) -> c_int;
     fn nvim_cstack_get_flags(cs: CstackHandle, idx: c_int) -> c_int;
-    fn nvim_get_did_emsg() -> c_int;
+    static mut did_emsg: c_int;
     fn nvim_get_did_throw() -> c_int;
     fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn nvim_getline_equal_getsourceline(fgetline: LineGetter, cookie: *mut c_void) -> bool;
@@ -514,7 +514,7 @@ pub unsafe extern "C" fn rs_profile_cmd(
         return;
     }
 
-    let did_emsg = nvim_get_did_emsg() != 0;
+    let did_emsg_val = did_emsg != 0;
     let got_int_val = unsafe { got_int };
     let did_throw_val = nvim_get_did_throw() != 0;
 
@@ -525,11 +525,11 @@ pub unsafe extern "C" fn rs_profile_cmd(
         let active_throw = cs_idx >= 0
             && (nvim_cstack_get_flags(cstack, cs_idx) & CSF_THROWN) != 0
             && (nvim_cstack_get_flags(cstack, cs_idx) & CSF_CAUGHT) == 0;
-        !did_emsg && !got_int_val && !did_throw_val || !active_throw
+        !did_emsg_val && !got_int_val && !did_throw_val || !active_throw
     } else if cmdidx == CMD_ELSE_P2 || cmdidx == CMD_ELSEIF_P2 {
         let no_active =
             cs_idx < 0 || (nvim_cstack_get_flags(cstack, cs_idx) & (CSF_ACTIVE | CSF_TRUE)) != 0;
-        did_emsg || got_int_val || did_throw_val || no_active
+        did_emsg_val || got_int_val || did_throw_val || no_active
     } else if cmdidx == CMD_FINALLY_P2 {
         false
     } else if cmdidx == CMD_ENDIF_P2
@@ -537,7 +537,7 @@ pub unsafe extern "C" fn rs_profile_cmd(
         || cmdidx == CMD_ENDTRY_P2
         || cmdidx == CMD_ENDWHILE_P2
     {
-        did_emsg || got_int_val || did_throw_val
+        did_emsg_val || got_int_val || did_throw_val
     } else {
         eap_skip != 0
     };

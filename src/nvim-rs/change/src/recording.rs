@@ -67,8 +67,7 @@ extern "C" {
     fn nvim_wait_return(redraw: bool);
     fn nvim_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_get_need_wait_return() -> c_int;
-    fn nvim_set_need_wait_return(val: c_int);
+    static mut need_wait_return: bool;
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_get_msg_row() -> c_int;
@@ -224,16 +223,16 @@ fn changed_impl(buf: BufHandle) {
             // Create a swap file if that is wanted.
             // Don't do this for "nofile" and "nowrite" buffer types.
             if nvim_buf_get_b_may_swap(buf) && !nvim_bt_dontwrite(buf) {
-                let save_need_wait_return = nvim_get_need_wait_return();
+                let save_need_wait_return = need_wait_return;
 
-                nvim_set_need_wait_return(0);
+                need_wait_return = false;
                 nvim_ml_open_file(buf);
 
                 // The ml_open_file() can cause an ATTENTION message.
                 // Wait two seconds, to make sure the user reads this unexpected
                 // message.  Since we could be anywhere, call wait_return() now,
                 // and don't let the emsg() set msg_scroll.
-                if nvim_get_need_wait_return() != 0
+                if need_wait_return
                     && nvim_get_emsg_silent() == 0
                     && !nvim_in_assert_fails()
                     && nvim_ui_has_messages() == 0
@@ -243,7 +242,7 @@ fn changed_impl(buf: BufHandle) {
                     nvim_wait_return(true);
                     nvim_set_msg_scroll(save_msg_scroll);
                 } else {
-                    nvim_set_need_wait_return(save_need_wait_return);
+                    need_wait_return = save_need_wait_return;
                 }
             }
             changed_internal_impl(buf);

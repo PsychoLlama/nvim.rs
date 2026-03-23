@@ -29,6 +29,7 @@ use crate::types::{
 extern "C" {
     static mut msg_silent: c_int;
     static mut got_int: bool;
+    static mut need_wait_return: bool;
     // -------------------------------------------------------------------------
     // Buffer Accessors
     // -------------------------------------------------------------------------
@@ -413,7 +414,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
     // Report error if we tried directories but couldn't create a swap file
     let p_dir_first = nvim_get_p_dir();
     if *p_dir_first != 0 && nvim_mf_get_fname(mfp).is_null() {
-        nvim_set_need_wait_return(1); // call wait_return() later
+        need_wait_return = true; // call wait_return() later
         nvim_inc_no_wait_return();
         let spname = buf_spname(buf);
         let display_name = if spname.is_null() {
@@ -1735,8 +1736,6 @@ extern "C" {
     /// Get p_verbose global
     fn nvim_get_p_verbose() -> c_int;
 
-    /// Set need_wait_return global
-    fn nvim_set_need_wait_return(val: c_int);
 }
 
 use crate::types::{BF_DUMMY, SEA_NONE, SEA_QUIT, SEA_READONLY, SEA_RECOVER};
@@ -2129,7 +2128,7 @@ pub unsafe extern "C" fn rs_findswapname(
                             nvim_msg_puts_newline();
                             if msg_silent == 0 {
                                 // call wait_return() later
-                                nvim_set_need_wait_return(1);
+                                need_wait_return = true;
                             }
                         }
                     }

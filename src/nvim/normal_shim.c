@@ -1549,8 +1549,6 @@ void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
 // For normal_check_interrupt
 bool nvim_get_quit_more(void) { return quit_more; }
 void nvim_vgetc_and_discard(void) { (void)vgetc(); }
-void nvim_set_exmode_active(bool val) { exmode_active = val; }
-
 /// Check if last_cursormoved_win != curwin or cursor position differs.
 bool nvim_last_cursormoved_check(void)
 {

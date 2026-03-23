@@ -283,12 +283,9 @@ int nvim_get_msg_row(void) { return msg_row; }
 void nvim_set_msg_row(int row) { msg_row = row; }
 int nvim_get_sc_col(void) { return sc_col; }
 int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
-int nvim_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
-void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 /// Check if p_debug contains a specific character
 int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0; }
-// nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
@@ -349,8 +346,6 @@ int nvim_get_emsg_severe(void) { return emsg_severe ? 1 : 0; }
 void nvim_set_emsg_severe(int val) { emsg_severe = (val != 0); }
 int nvim_get_emsg_noredir(void) { return emsg_noredir ? 1 : 0; }
 void nvim_set_emsg_noredir(int val) { emsg_noredir = (val != 0); }
-int nvim_get_did_emsg(void) { return did_emsg; }
-void nvim_set_did_emsg(int val) { did_emsg = val; }
 int nvim_get_called_emsg(void) { return called_emsg; }
 void nvim_set_called_emsg(int val) { called_emsg = val; }
 

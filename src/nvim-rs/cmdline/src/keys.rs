@@ -642,6 +642,7 @@ unsafe extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     static mut got_int: bool;
+    static mut did_emsg: c_int;
     // Getters/setters for globals needed by these functions
     fn nvim_get_ccline_cmdfirstc() -> c_int;
     fn nvim_get_ccline_cmdpos() -> c_int;
@@ -662,9 +663,8 @@ unsafe extern "C" {
     fn nvim_set_no_mapping(val: c_int);
     fn nvim_get_allow_keys() -> c_int;
     fn nvim_set_allow_keys(val: c_int);
-    fn nvim_set_did_emsg(val: c_int);
     fn nvim_set_emsg_on_display(val: c_int);
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
     fn ui_has(what: c_int) -> c_int;
@@ -762,7 +762,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
         unsafe {
             got_int = false;
         } // don't abandon the command line
-        nvim_set_did_emsg(0);
+        did_emsg = 0;
         nvim_set_emsg_on_display(0);
         crate::screen::redrawcmd_rs();
         return CMDLINE_NOT_CHANGED;
@@ -906,7 +906,7 @@ pub unsafe extern "C" fn rs_command_line_erase_chars(
         && indent == 0
     {
         // In ex and debug mode it doesn't make sense to return.
-        if nvim_get_exmode_active() || nvim_get_ccline_cmdfirstc() == b'>' as c_int {
+        if exmode_active || nvim_get_ccline_cmdfirstc() == b'>' as c_int {
             return CMDLINE_NOT_CHANGED;
         }
 
@@ -1166,7 +1166,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
 
         // ESC / CTRL-C: cancel command line
         x if x == ESC || x == CTRL_C => {
-            let exmode = nvim_get_exmode_active();
+            let exmode = exmode_active;
             let ex_normal = nvim_get_ex_normal_busy();
             let typebuf_len = nvim_get_typebuf_len();
             let getln_interrupted = nvim_get_getln_interrupted_highlight();

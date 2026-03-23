@@ -2292,7 +2292,6 @@ size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen
 // nvim_get_search_match_lines, nvim_get_search_match_endcol already defined in search.c.
 // nvim_get_dollar_vcol already defined in edit.c.
 // nvim_get_cmdwin_type already defined in ex_getln.c.
-// nvim_get_did_emsg, nvim_set_did_emsg already defined in message.c.
 
 /// 'selection' option
 const char *nvim_get_p_sel(void) { return p_sel; }

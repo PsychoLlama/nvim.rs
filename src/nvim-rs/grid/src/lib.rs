@@ -754,7 +754,7 @@ extern "C" {
 
     // Global accessors
     fn nvim_get_default_grid() -> *mut std::ffi::c_void;
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
     fn nvim_get_p_arshape() -> c_int;
     fn nvim_get_p_tbidi() -> c_int;
 
@@ -1260,7 +1260,7 @@ unsafe fn grid_char_needs_redraw(
     }
 
     // Force redraw in exmode or with nodelta flag
-    if nvim_get_exmode_active() || (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_NODELTA) != 0 {
+    if exmode_active || (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_NODELTA) != 0 {
         return true;
     }
 

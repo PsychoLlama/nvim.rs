@@ -155,8 +155,7 @@ extern "C" {
     fn nvim_stl_get_redraw_not_allowed() -> c_int;
     fn nvim_stl_get_KeyTyped() -> c_int;
     fn nvim_stl_set_KeyTyped(val: c_int);
-    #[link_name = "nvim_get_did_emsg"]
-    fn nvim_stl_get_did_emsg() -> c_int;
+    static mut did_emsg: c_int;
     fn nvim_stl_set_option_empty(opt_idx: c_int, opt_scope: c_int);
     static mut State: c_int;
     fn nvim_stl_buf_ml_empty(buf: BufHandle) -> c_int;
@@ -538,7 +537,7 @@ pub unsafe fn build_stl_str_hl(
     // Save global state
     let save_redraw_not_allowed = nvim_stl_get_redraw_not_allowed();
     let save_key_typed = nvim_stl_get_KeyTyped();
-    let did_emsg_before = nvim_stl_get_did_emsg();
+    let did_emsg_before = did_emsg;
 
     if nvim_stl_get_updating_screen() != 0 {
         nvim_stl_set_redraw_not_allowed(1);
@@ -1779,7 +1778,7 @@ pub unsafe fn build_stl_str_hl(
     // Restore global state
     nvim_stl_set_redraw_not_allowed(save_redraw_not_allowed);
 
-    if opt_idx != K_OPT_INVALID && nvim_stl_get_did_emsg() > did_emsg_before {
+    if opt_idx != K_OPT_INVALID && did_emsg > did_emsg_before {
         nvim_stl_set_option_empty(opt_idx, opt_scope);
     }
 

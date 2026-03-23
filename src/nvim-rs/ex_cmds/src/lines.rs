@@ -466,8 +466,8 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut, nvim_excmds_get_b_p_iminsert,
         nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd, nvim_excmds_set_nextcmd_direct,
         nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, nvim_set_lines_left,
-        nvim_set_msg_scroll, nvim_set_need_wait_return, nvim_ui_cursor_shape_wrapper, u_save,
-        vim_strchr, xfree, xmemdupz, xstrdup,
+        nvim_set_msg_scroll, nvim_ui_cursor_shape_wrapper, u_save, vim_strchr, xfree, xmemdupz,
+        xstrdup,
     };
 
     let mut did_undo = false;
@@ -504,7 +504,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
 
     loop {
         nvim_set_msg_scroll(1);
-        nvim_set_need_wait_return(0);
+        crate::need_wait_return = false;
         if nvim_curbuf_get_b_p_ai() != 0 {
             let append_indent_val = crate::append_indent;
             if append_indent_val >= 0 {
@@ -626,7 +626,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
     nvim_check_cursor_lnum_call();
     beginline(BL_SOL | BL_FIX);
 
-    nvim_set_need_wait_return(0); // don't use wait_return() now
+    crate::need_wait_return = false; // don't use wait_return() now
     nvim_set_ex_no_reprint(1);
 }
 

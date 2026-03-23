@@ -602,8 +602,8 @@ extern "C" {
 
     // State / mode
     fn nvim_set_state(state: c_int);
-    fn nvim_set_exmode_active(val: bool);
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
+    static mut need_wait_return: bool;
 
     // may_trigger_modechanged
     fn may_trigger_modechanged();
@@ -675,7 +675,6 @@ extern "C" {
     fn msg_clr_eos();
 
     // need_wait_return
-    fn nvim_set_need_wait_return(val: c_int);
 
     // redraw_all_later / update_screen
     fn nvim_redraw_all_later(redraw_type: c_int);
@@ -771,7 +770,7 @@ pub unsafe extern "C" fn filetype_maybe_enable() {
 /// Accesses many C globals. Must only be called from C context.
 #[no_mangle]
 pub unsafe extern "C" fn do_exmode() {
-    nvim_set_exmode_active(true);
+    exmode_active = true;
     nvim_set_state(MODE_NORMAL);
     may_trigger_modechanged();
 
@@ -789,14 +788,14 @@ pub unsafe extern "C" fn do_exmode() {
         c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr(),
         0,
     );
-    while nvim_get_exmode_active() {
+    while exmode_active {
         // Check for a ":normal" command and no more characters left.
         if nvim_ex_normal_busy > 0 && nvim_get_typebuf_len() == 0 {
-            nvim_set_exmode_active(false);
+            exmode_active = false;
             break;
         }
         nvim_set_msg_scroll(1);
-        nvim_set_need_wait_return(0);
+        need_wait_return = false;
         nvim_docmd_set_pressedreturn(false);
         nvim_set_ex_no_reprint(0);
         let changedtick = nvim_docmd_curbuf_changedtick();
@@ -842,6 +841,6 @@ pub unsafe extern "C" fn do_exmode() {
     nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() - 1);
     nvim_redraw_all_later(UPD_NOT_VALID);
     update_screen();
-    nvim_set_need_wait_return(0);
+    need_wait_return = false;
     nvim_set_msg_scroll(save_msg_scroll);
 }

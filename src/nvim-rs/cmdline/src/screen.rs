@@ -383,7 +383,8 @@ extern "C" {
     fn nvim_win_get_status_height(wp: *mut ()) -> c_int;
 
     // Global state accessors
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
+    static mut need_wait_return: bool;
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_p_ch() -> i64;
     fn nvim_set_cmdline_row(val: c_int);
@@ -397,7 +398,6 @@ extern "C" {
     fn msg_clr_eos();
 
     // For redrawcmdline
-    fn nvim_set_need_wait_return(val: c_int);
     fn ui_cursor_shape();
 
     // For redrawcmdprompt
@@ -447,7 +447,7 @@ const K_UI_CMDLINE: c_int = 32; // kUICmdline
 #[export_name = "compute_cmdrow"]
 pub unsafe extern "C" fn compute_cmdrow_rs() {
     let rows = Rows;
-    let new_row = if nvim_get_exmode_active() || nvim_get_msg_scrolled() != 0 {
+    let new_row = if exmode_active || nvim_get_msg_scrolled() != 0 {
         rows - 1
     } else {
         let wp = rs_lastwin_nofloating();
@@ -724,7 +724,7 @@ pub unsafe extern "C" fn rs_redrawcmdline() {
     if nvim_get_cmd_silent() != 0 {
         return;
     }
-    nvim_set_need_wait_return(0);
+    need_wait_return = false;
     compute_cmdrow_rs();
     redrawcmd_rs();
     cursorcmd_rs();

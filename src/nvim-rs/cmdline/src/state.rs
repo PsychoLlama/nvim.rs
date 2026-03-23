@@ -210,6 +210,7 @@ impl CmdlineState {
 #[allow(dead_code)]
 extern "C" {
     static mut got_int: bool;
+    static mut did_emsg: c_int;
     // Current ccline accessors
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
@@ -1069,7 +1070,7 @@ unsafe extern "C" {
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_get_global_busy() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
     fn nvim_get_cedit_key() -> c_int;
     fn nvim_open_cmdwin() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
@@ -1111,7 +1112,6 @@ unsafe extern "C" {
     fn nvim_cls_set_skip_pum_redraw(s: *mut c_void, val: c_int);
     fn nvim_set_redir_off(val: c_int);
     fn nvim_set_quit_more(val: bool);
-    fn nvim_set_did_emsg(val: c_int);
     fn nvim_get_typebuf_len() -> c_int;
     fn stuff_empty() -> c_int;
     fn may_trigger_safestate(pending: bool);
@@ -1355,7 +1355,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         let c_curr = nvim_cls_get_c(s);
         let firstc = nvim_cls_get_firstc(s);
         let break_ctrl_c = nvim_cls_get_break_ctrl_c(s) != 0;
-        let exmode = nvim_get_exmode_active();
+        let exmode = exmode_active;
         if c_curr == CTRL_C
             && firstc != b'@' as c_int
             && (!break_ctrl_c || exmode)
@@ -1520,7 +1520,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 && (nvim_get_key_typed_cmdline() == 0
                     || !vim_strchr(nvim_get_p_cpo(), CPO_ESC_CHAR).is_null()))
         {
-            let exmode = nvim_get_exmode_active();
+            let exmode = exmode_active;
             let cmdpos = nvim_get_ccline_cmdpos();
             let cmdlen = nvim_get_ccline_cmdlen();
             // In Ex mode a backslash escapes a newline
@@ -1644,9 +1644,9 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
     nvim_set_redir_off(1); // Don't redirect the typed command.
     nvim_set_quit_more(false); // reset after CTRL-D which had a more-prompt
 
-    nvim_set_did_emsg(0); // There can't really be a reason why an error
-                          // that occurs while typing a command should
-                          // cause the command not to be executed.
+    did_emsg = 0; // There can't really be a reason why an error
+                  // that occurs while typing a command should
+                  // cause the command not to be executed.
 
     if stuff_empty() != 0 && nvim_get_typebuf_len() == 0 {
         // There is no pending input from sources other than user input, so

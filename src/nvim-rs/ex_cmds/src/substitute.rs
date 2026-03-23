@@ -1139,13 +1139,13 @@ extern "C" {
     fn nvim_set_RedrawingDisabled(val: c_int);
     fn nvim_inc_no_u_sync();
     fn nvim_dec_no_u_sync();
-    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_set_msg_didout(val: c_int);
     fn nvim_set_highlight_match(val: c_int);
     fn nvim_set_search_match_lines(val: c_int);
     fn nvim_set_search_match_endcol(val: c_int);
     fn nvim_get_ex_normal_busy() -> c_int;
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
+    static mut need_wait_return: bool;
     fn nvim_get_sandbox() -> c_int;
     fn nvim_inc_sandbox();
     fn nvim_dec_sandbox();
@@ -2253,7 +2253,7 @@ unsafe fn handle_do_ask(
     let mut typed: c_int = 0;
 
     while subflags.do_ask {
-        if nvim_get_exmode_active() {
+        if exmode_active {
             // Exmode: use getcmdline_prompt
             rs_print_line_no_prefix(lnum, subflags.do_number as c_int, subflags.do_list as c_int);
 
@@ -2348,7 +2348,7 @@ unsafe fn handle_do_ask(
             let _ = save_state;
         }
 
-        nvim_set_need_wait_return(0);
+        need_wait_return = false;
         if typed == b'q' as c_int || typed == 27 /* ESC */ || typed == 3
         /* Ctrl-C */
         {

@@ -183,7 +183,7 @@ extern "C" {
     fn nvim_ecmd_cmdwin_buf_is_nonnull() -> c_int;
     fn nvim_ecmd_cmdwin_save_clear() -> *mut std::ffi::c_void;
     fn nvim_ecmd_cmdwin_restore_free(bundle: *mut std::ffi::c_void);
-    fn nvim_get_exmode_active() -> bool;
+    static mut exmode_active: bool;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
     fn nvim_get_p_sol() -> c_int;
@@ -811,7 +811,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 }
             } else {
                 // No line number -- go to last line in Ex mode
-                if nvim_get_exmode_active() {
+                if exmode_active {
                     nvim_ecmd_curwin_set_cursor(nvim_excmds_curbuf_ml_line_count(), 0);
                 }
                 nvim_beginline(BL_WHITE | BL_FIX);

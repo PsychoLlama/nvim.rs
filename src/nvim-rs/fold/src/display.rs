@@ -106,9 +106,7 @@ extern "C" {
     /// Get wp->w_p_fdt (foldtext option string).
     fn nvim_fold_win_get_p_fdt(wp: WinHandle) -> *const c_char;
     /// Get did_emsg (generic accessor from message.c).
-    fn nvim_get_did_emsg() -> c_int;
-    /// Set did_emsg (generic accessor from message.c).
-    fn nvim_set_did_emsg(val: c_int);
+    static mut did_emsg: c_int;
     /// Get next chunk from a VirtText (from decoration.c).
     fn nvim_next_virt_text_chunk(
         vt_ptr: *mut c_void,
@@ -742,7 +740,7 @@ unsafe fn eval_foldtext_full_impl(
     // emsg_off--
     nvim_set_emsg_off(old_emsg_off);
 
-    if ((*out_text).is_null() && *out_has_virt_text == 0) || nvim_get_did_emsg() != 0 {
+    if ((*out_text).is_null() && *out_has_virt_text == 0) || did_emsg != 0 {
         *out_had_error = 1;
     }
 
@@ -874,11 +872,11 @@ unsafe fn get_foldtext_impl(
     }
 
     let got_fdt_error = GOT_FDT_ERROR.load(Ordering::Relaxed);
-    let save_did_emsg = nvim_get_did_emsg();
+    let save_did_emsg = did_emsg;
 
     if !got_fdt_error {
         // A previous error should not abort evaluating 'foldexpr'
-        nvim_set_did_emsg(0);
+        did_emsg = 0;
     }
 
     let p_fdt = nvim_fold_win_get_p_fdt(wp);
@@ -910,7 +908,7 @@ unsafe fn get_foldtext_impl(
                 result.text_is_allocated = true;
             }
 
-            if result.text.is_null() || nvim_get_did_emsg() != 0 {
+            if result.text.is_null() || did_emsg != 0 {
                 GOT_FDT_ERROR.store(true, Ordering::Relaxed);
             }
         }
@@ -919,8 +917,8 @@ unsafe fn get_foldtext_impl(
         LAST_WP.store(wp_id, Ordering::Relaxed);
         clear_fold_vvars_impl();
 
-        if nvim_get_did_emsg() == 0 && save_did_emsg != 0 {
-            nvim_set_did_emsg(save_did_emsg);
+        if did_emsg == 0 && save_did_emsg != 0 {
+            did_emsg = save_did_emsg;
         }
 
         // Replace unprintable characters in text (if text is a string, not VirtText)

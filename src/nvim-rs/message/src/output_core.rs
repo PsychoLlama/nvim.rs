@@ -41,7 +41,7 @@ extern "C" {
 
     // For msg_end
     fn nvim_get_exiting() -> c_int;
-    fn nvim_get_need_wait_return() -> c_int;
+    static mut need_wait_return: bool;
     fn nvim_get_state() -> c_int;
     fn nvim_wait_return(redraw: bool);
 
@@ -55,7 +55,6 @@ extern "C" {
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_set_lines_left(val: c_int);
     fn nvim_set_msg_didany(val: c_int);
-    fn nvim_set_need_wait_return(val: c_int);
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_set_cmdline_row(val: c_int);
     fn nvim_get_msg_row() -> c_int;
@@ -510,10 +509,7 @@ pub unsafe extern "C" fn rs_msg_end() -> c_int {
     // we have to redraw the window.
     // Do not do this if we are abandoning the file or editing the command line.
     const MODE_CMDLINE: c_int = 0x08;
-    if nvim_get_exiting() == 0
-        && nvim_get_need_wait_return() != 0
-        && (nvim_get_state() & MODE_CMDLINE) == 0
-    {
+    if nvim_get_exiting() == 0 && need_wait_return && (nvim_get_state() & MODE_CMDLINE) == 0 {
         nvim_wait_return(false);
         return 0;
     }
@@ -785,7 +781,7 @@ pub unsafe extern "C" fn rs_msg_clr_eos_export() {
 /// Calls C functions that modify global state and display.
 #[export_name = "msg_end_prompt"]
 pub unsafe extern "C" fn rs_msg_end_prompt() {
-    nvim_set_need_wait_return(0);
+    need_wait_return = false;
     nvim_set_emsg_on_display(0);
     nvim_set_cmdline_row(nvim_get_msg_row());
     nvim_set_msg_col(0);

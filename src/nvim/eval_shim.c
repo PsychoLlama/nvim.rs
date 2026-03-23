@@ -1308,9 +1308,6 @@ void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
 }
 
 
-/// Set did_emsg global - accessor for Rust.
-// nvim_set_did_emsg already defined in message.c -- no duplicate needed here.
-
 // =============================================================================
 // Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
 // =============================================================================

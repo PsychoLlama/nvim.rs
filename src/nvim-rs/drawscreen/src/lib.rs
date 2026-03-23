@@ -2568,8 +2568,7 @@ extern "C" {
     fn nvim_VIsual_active() -> c_int;
     fn nvim_get_p_ch() -> i64;
     // nvim_ui_has_messages is already declared in the Phase 1 extern block above.
-    fn nvim_get_need_wait_return() -> c_int;
-    fn nvim_set_need_wait_return(val: c_int);
+    static mut need_wait_return: bool;
     fn nvim_drawscreen_msg_check_for_delay();
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_set_clear_cmdline(val: bool);
@@ -2754,7 +2753,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
             return 0;
         }
 
-        let nwr_save = nvim_get_need_wait_return();
+        let nwr_save = need_wait_return;
         nvim_drawscreen_msg_check_for_delay();
 
         let mut need_clear = nvim_get_clear_cmdline();
@@ -2788,7 +2787,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         msg_col = 0;
         nvim_set_msg_no_more(0);
         nvim_set_lines_left(save_lines_left);
-        nvim_set_need_wait_return(nwr_save);
+        need_wait_return = nwr_save;
     } else if nvim_get_clear_cmdline() && msg_silent == 0 {
         nvim_drawscreen_msg_clr_cmdline();
     } else if redraw_mode != 0 {

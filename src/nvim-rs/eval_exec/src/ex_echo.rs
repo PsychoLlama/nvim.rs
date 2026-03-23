@@ -48,8 +48,7 @@ extern "C" {
     fn nvim_get_msg_didout() -> c_int;
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
-    fn nvim_get_did_emsg() -> c_int;
-    fn nvim_set_did_emsg(val: c_int);
+    static mut did_emsg: c_int;
     fn nvim_get_force_abort() -> c_int;
 
     // semsg with e_invexpr2: now in nvim_eval::errors
@@ -226,7 +225,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             // has been cancelled due to an aborting error, an interrupt, or an
             // exception.
             if !nvim_aborting()
-                && nvim_get_did_emsg() == did_emsg_before
+                && did_emsg == did_emsg_before
                 && called_emsg_get() == called_emsg_before
             {
                 nvim_eval::errors::semsg_invexpr2(p);
@@ -383,10 +382,10 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
             nvim_msg_echomsg(data, echo_hl_id);
         } else if cmdidx == cmd_echoerr {
             // We don't want to abort following commands, restore did_emsg.
-            let save_did_emsg = nvim_get_did_emsg();
+            let save_did_emsg = did_emsg;
             nvim_emsg_multiline_echoerr(data);
             if nvim_get_force_abort() == 0 {
-                nvim_set_did_emsg(save_did_emsg);
+                did_emsg = save_did_emsg;
             }
         } else if cmdidx == cmd_execute {
             nvim_do_cmdline_execute(data, eap);
