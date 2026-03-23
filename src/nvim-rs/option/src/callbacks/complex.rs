@@ -12,7 +12,7 @@ use super::{callback_ok, CallbackResult};
 
 extern "C" {
     static Rows: c_int;
-    static p_ru: c_int;
+    static mut p_ru: c_int;
 }
 
 // =============================================================================
@@ -1024,24 +1024,349 @@ extern "C" {
     static mut p_sm: c_int;
     static mut p_sta: c_int;
     static mut p_ri: c_int;
+    // Global option vars used by paste
+    static mut p_ai: c_int;
+    static mut p_et: c_int;
+    static mut p_sts: crate::OptInt;
+    static mut p_tw: crate::OptInt;
+    static mut p_wm: crate::OptInt;
+    static mut p_vsts: *mut c_char;
+    // status_redraw_all for ruler refresh
+    fn status_redraw_all();
+    // memory functions
+    fn xfree(ptr: *mut c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn free_string_option(p: *mut c_char);
+    fn nvim_get_empty_string_option() -> *mut c_char;
+    // tabstop_set for vsts_array management
+    fn tabstop_set(var: *const c_char, array: *mut *mut c_int) -> bool;
+    // per-buffer field readers (used by buf paste functions)
+    fn nvim_buf_get_optint_field(buf: *mut c_void, offset: isize) -> crate::OptInt;
+    fn nvim_buf_get_bool_field(buf: *mut c_void, offset: isize) -> c_int;
+    fn nvim_buf_get_b_p_ai_nopaste(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_b_p_tw_nopaste(buf: *mut c_void) -> crate::OptInt;
+    fn nvim_buf_get_b_p_wm_nopaste(buf: *mut c_void) -> crate::OptInt;
+    fn nvim_buf_get_b_p_sts_nopaste(buf: *mut c_void) -> crate::OptInt;
+    fn nvim_buf_get_b_p_et_nopaste(buf: *mut c_void) -> c_int;
+    fn nvim_buf_get_b_p_vsts(buf: *mut c_void) -> *mut c_char;
+    fn nvim_buf_get_b_p_vsts_nopaste(buf: *mut c_void) -> *mut c_char;
+    fn nvim_buf_get_b_p_vsts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
+    // per-buffer field setters
+    fn nvim_buf_set_optint_field(buf: *mut c_void, offset: isize, val: crate::OptInt);
+    fn nvim_buf_set_bool_field(buf: *mut c_void, offset: isize, val: c_int);
+    fn nvim_buf_set_b_p_ai_nopaste(buf: *mut c_void, v: c_int);
+    fn nvim_buf_set_b_p_tw_nopaste(buf: *mut c_void, v: crate::OptInt);
+    fn nvim_buf_set_b_p_wm_nopaste(buf: *mut c_void, v: crate::OptInt);
+    fn nvim_buf_set_b_p_sts_nopaste(buf: *mut c_void, v: crate::OptInt);
+    fn nvim_buf_set_b_p_et_nopaste(buf: *mut c_void, v: c_int);
+    fn nvim_buf_set_b_p_vsts_nopaste_dup(buf: *mut c_void, s: *const c_char);
+    fn nvim_buf_set_b_p_vsts_raw(buf: *mut c_void, val: *mut c_char);
+    // set_option_sctx_from_sid for didset_options_sctx replacement
+    fn nvim_set_option_sctx_from_sid(opt_idx: c_int, opt_flags: c_int, set_sid: c_int);
 }
 
-extern "C" {
-    // Compound paste buf operations (Phase 12 Pass 1)
-    fn nvim_buf_paste_save_scalars(buf: *mut c_void);
-    fn nvim_buf_paste_save_vsts(buf: *mut c_void);
-    fn nvim_buf_paste_activate_scalars(buf: *mut c_void);
-    fn nvim_buf_paste_activate_vsts(buf: *mut c_void);
-    fn nvim_buf_paste_restore_scalars(buf: *mut c_void);
-    fn nvim_buf_paste_restore_vsts(buf: *mut c_void);
-    // Compound paste global operations (Phase 12 Pass 1)
-    fn nvim_paste_global_save_scalars();
-    fn nvim_paste_global_save_vsts();
-    fn nvim_paste_global_activate_scalars();
-    fn nvim_paste_global_activate_vsts();
-    fn nvim_paste_global_restore_scalars(sm: c_int, sta: c_int, ru: c_int, ri: c_int);
-    fn nvim_paste_global_restore_vsts();
-    fn nvim_paste_didset_sctx_all();
+// Saved global values for when 'paste' is toggled on.
+static mut P_AI_NOPASTE: c_int = 0;
+static mut P_ET_NOPASTE: c_int = 0;
+static mut P_STS_NOPASTE: crate::OptInt = 0;
+static mut P_TW_NOPASTE: crate::OptInt = 0;
+static mut P_WM_NOPASTE: crate::OptInt = 0;
+static mut P_VSTS_NOPASTE: *mut c_char = std::ptr::null_mut();
+
+/// Get p_ai_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_ai_nopaste() -> bool {
+    P_AI_NOPASTE != 0
+}
+/// Get p_et_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_et_nopaste() -> bool {
+    P_ET_NOPASTE != 0
+}
+/// Get p_tw_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_tw_nopaste() -> crate::OptInt {
+    P_TW_NOPASTE
+}
+/// Get p_wm_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_wm_nopaste() -> crate::OptInt {
+    P_WM_NOPASTE
+}
+/// Get p_sts_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_sts_nopaste() -> crate::OptInt {
+    P_STS_NOPASTE
+}
+/// Get p_vsts_nopaste (exported so bufcopy.rs can call it as C function).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_get_p_vsts_nopaste() -> *const c_char {
+    P_VSTS_NOPASTE
+}
+
+/// Save buf paste scalar nopaste fields: copies tw/wm/sts/ai/et -> nopaste.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_save_scalars(buf: *mut c_void) {
+    use crate::opt_index::{
+        K_OPT_AUTOINDENT, K_OPT_EXPANDTAB, K_OPT_SOFTTABSTOP, K_OPT_TEXTWIDTH, K_OPT_WRAPMARGIN,
+    };
+    let offsets = crate::varp::buf_field_offsets();
+    nvim_buf_set_b_p_tw_nopaste(
+        buf,
+        nvim_buf_get_optint_field(buf, offsets[K_OPT_TEXTWIDTH as usize]),
+    );
+    nvim_buf_set_b_p_wm_nopaste(
+        buf,
+        nvim_buf_get_optint_field(buf, offsets[K_OPT_WRAPMARGIN as usize]),
+    );
+    nvim_buf_set_b_p_sts_nopaste(
+        buf,
+        nvim_buf_get_optint_field(buf, offsets[K_OPT_SOFTTABSTOP as usize]),
+    );
+    nvim_buf_set_b_p_ai_nopaste(
+        buf,
+        nvim_buf_get_bool_field(buf, offsets[K_OPT_AUTOINDENT as usize]),
+    );
+    nvim_buf_set_b_p_et_nopaste(
+        buf,
+        nvim_buf_get_bool_field(buf, offsets[K_OPT_EXPANDTAB as usize]),
+    );
+}
+
+/// Save buf->b_p_vsts into buf->b_p_vsts_nopaste (frees old nopaste first).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_save_vsts(buf: *mut c_void) {
+    let old_nopaste = nvim_buf_get_b_p_vsts_nopaste(buf);
+    if !old_nopaste.is_null() {
+        xfree(old_nopaste);
+    }
+    let vsts = nvim_buf_get_b_p_vsts(buf);
+    let empty = nvim_get_empty_string_option();
+    // nvim_buf_set_b_p_vsts_nopaste_dup dups src if non-null, sets NULL otherwise
+    let src = if !vsts.is_null() && vsts != empty {
+        vsts
+    } else {
+        std::ptr::null_mut()
+    };
+    nvim_buf_set_b_p_vsts_nopaste_dup(buf, src);
+}
+
+/// Activate paste for buf scalars: zero tw/wm/sts/ai/et.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_activate_scalars(buf: *mut c_void) {
+    use crate::opt_index::{
+        K_OPT_AUTOINDENT, K_OPT_EXPANDTAB, K_OPT_SOFTTABSTOP, K_OPT_TEXTWIDTH, K_OPT_WRAPMARGIN,
+    };
+    let offsets = crate::varp::buf_field_offsets();
+    nvim_buf_set_optint_field(buf, offsets[K_OPT_TEXTWIDTH as usize], 0);
+    nvim_buf_set_optint_field(buf, offsets[K_OPT_WRAPMARGIN as usize], 0);
+    nvim_buf_set_optint_field(buf, offsets[K_OPT_SOFTTABSTOP as usize], 0);
+    nvim_buf_set_bool_field(buf, offsets[K_OPT_AUTOINDENT as usize], 0);
+    nvim_buf_set_bool_field(buf, offsets[K_OPT_EXPANDTAB as usize], 0);
+}
+
+/// Activate paste for buf->b_p_vsts: free and set to empty_string_option, clear array.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_activate_vsts(buf: *mut c_void) {
+    let vsts = nvim_buf_get_b_p_vsts(buf);
+    if !vsts.is_null() {
+        free_string_option(vsts);
+    }
+    let empty = nvim_get_empty_string_option();
+    nvim_buf_set_b_p_vsts_raw(buf, empty);
+    // XFREE_CLEAR(buf->b_p_vsts_array)
+    let array_ptr = nvim_buf_get_b_p_vsts_array_ptr(buf);
+    if !(*array_ptr).is_null() {
+        xfree((*array_ptr).cast::<c_char>());
+        *array_ptr = std::ptr::null_mut();
+    }
+}
+
+/// Restore buf paste scalar fields: copies nopaste -> tw/wm/sts/ai/et.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_restore_scalars(buf: *mut c_void) {
+    use crate::opt_index::{
+        K_OPT_AUTOINDENT, K_OPT_EXPANDTAB, K_OPT_SOFTTABSTOP, K_OPT_TEXTWIDTH, K_OPT_WRAPMARGIN,
+    };
+    let offsets = crate::varp::buf_field_offsets();
+    nvim_buf_set_optint_field(
+        buf,
+        offsets[K_OPT_TEXTWIDTH as usize],
+        nvim_buf_get_b_p_tw_nopaste(buf),
+    );
+    nvim_buf_set_optint_field(
+        buf,
+        offsets[K_OPT_WRAPMARGIN as usize],
+        nvim_buf_get_b_p_wm_nopaste(buf),
+    );
+    nvim_buf_set_optint_field(
+        buf,
+        offsets[K_OPT_SOFTTABSTOP as usize],
+        nvim_buf_get_b_p_sts_nopaste(buf),
+    );
+    nvim_buf_set_bool_field(
+        buf,
+        offsets[K_OPT_AUTOINDENT as usize],
+        nvim_buf_get_b_p_ai_nopaste(buf),
+    );
+    nvim_buf_set_bool_field(
+        buf,
+        offsets[K_OPT_EXPANDTAB as usize],
+        nvim_buf_get_b_p_et_nopaste(buf),
+    );
+}
+
+/// Restore buf->b_p_vsts from nopaste: free current, dup from nopaste, run tabstop_set.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_buf_paste_restore_vsts(buf: *mut c_void) {
+    let vsts = nvim_buf_get_b_p_vsts(buf);
+    if !vsts.is_null() {
+        free_string_option(vsts);
+    }
+    let empty = nvim_get_empty_string_option();
+    let vsts_nopaste = nvim_buf_get_b_p_vsts_nopaste(buf);
+    let new_vsts = if vsts_nopaste.is_null() {
+        empty
+    } else {
+        xstrdup(vsts_nopaste)
+    };
+    nvim_buf_set_b_p_vsts_raw(buf, new_vsts);
+    // xfree and rebuild the vsts_array
+    let array_ptr = nvim_buf_get_b_p_vsts_array_ptr(buf);
+    if !(*array_ptr).is_null() {
+        xfree((*array_ptr).cast::<c_char>());
+        *array_ptr = std::ptr::null_mut();
+    }
+    if !new_vsts.is_null() && new_vsts != empty {
+        tabstop_set(new_vsts, array_ptr);
+    }
+}
+
+/// Save global paste scalars: copies ai/et/sts/tw/wm to nopaste statics.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_save_scalars() {
+    P_AI_NOPASTE = p_ai;
+    P_ET_NOPASTE = p_et;
+    P_STS_NOPASTE = p_sts;
+    P_TW_NOPASTE = p_tw;
+    P_WM_NOPASTE = p_wm;
+}
+
+/// Save p_vsts to p_vsts_nopaste (frees old nopaste first).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_save_vsts() {
+    if !P_VSTS_NOPASTE.is_null() {
+        xfree(P_VSTS_NOPASTE);
+    }
+    let empty = nvim_get_empty_string_option();
+    P_VSTS_NOPASTE = if !p_vsts.is_null() && p_vsts != empty {
+        xstrdup(p_vsts)
+    } else {
+        std::ptr::null_mut()
+    };
+}
+
+/// Activate global paste scalars: zero sm/sta/ru(+redraw)/ri/tw/wm/sts/ai/et.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_activate_scalars() {
+    p_sm = 0;
+    p_sta = 0;
+    if p_ru != 0 {
+        status_redraw_all();
+    }
+    p_ru = 0;
+    p_ri = 0;
+    p_tw = 0;
+    p_wm = 0;
+    p_sts = 0;
+    p_ai = 0;
+    p_et = 0;
+}
+
+/// Activate global p_vsts: free and set to empty_string_option.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_activate_vsts() {
+    if !p_vsts.is_null() {
+        free_string_option(p_vsts);
+    }
+    p_vsts = nvim_get_empty_string_option();
+}
+
+/// Restore global paste scalars: restores sm/sta/ru(+redraw)/ri from args,
+/// and ai/et/sts/tw/wm from nopaste statics.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_restore_scalars(
+    old_sm: c_int,
+    old_sta: c_int,
+    old_ruler: c_int,
+    old_revins: c_int,
+) {
+    p_sm = old_sm;
+    p_sta = old_sta;
+    if p_ru != old_ruler {
+        status_redraw_all();
+    }
+    p_ru = old_ruler;
+    p_ri = old_revins;
+    p_ai = P_AI_NOPASTE;
+    p_et = P_ET_NOPASTE;
+    p_sts = P_STS_NOPASTE;
+    p_tw = P_TW_NOPASTE;
+    p_wm = P_WM_NOPASTE;
+}
+
+/// Restore p_vsts from p_vsts_nopaste.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_global_restore_vsts() {
+    if !p_vsts.is_null() {
+        free_string_option(p_vsts);
+    }
+    let empty = nvim_get_empty_string_option();
+    p_vsts = if P_VSTS_NOPASTE.is_null() {
+        empty
+    } else {
+        xstrdup(P_VSTS_NOPASTE)
+    };
+}
+
+/// Record sctx for all paste-dependent options.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_paste_didset_sctx_all() {
+    use crate::opt_index::{
+        K_OPT_AUTOINDENT, K_OPT_EXPANDTAB, K_OPT_REVINS, K_OPT_RULER, K_OPT_SHOWMATCH,
+        K_OPT_SMARTTAB, K_OPT_SOFTTABSTOP, K_OPT_TEXTWIDTH, K_OPT_VARSOFTTABSTOP, K_OPT_WRAPMARGIN,
+    };
+    let paste_dep: &[c_int] = &[
+        K_OPT_AUTOINDENT as c_int,
+        K_OPT_EXPANDTAB as c_int,
+        K_OPT_RULER as c_int,
+        K_OPT_SHOWMATCH as c_int,
+        K_OPT_SMARTTAB as c_int,
+        K_OPT_SOFTTABSTOP as c_int,
+        K_OPT_TEXTWIDTH as c_int,
+        K_OPT_WRAPMARGIN as c_int,
+        K_OPT_REVINS as c_int,
+        K_OPT_VARSOFTTABSTOP as c_int,
+    ];
+    let flags = crate::setops::OPT_LOCAL | crate::setops::OPT_GLOBAL;
+    for &idx in paste_dep {
+        nvim_set_option_sctx_from_sid(idx, flags, 0);
+    }
+}
+
+/// Record sctx for all bin-dependent options (called from behavior.rs binary option callback).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_bin_didset_sctx_all(opt_flags: c_int) {
+    use crate::opt_index::{K_OPT_EXPANDTAB, K_OPT_MODELINE, K_OPT_TEXTWIDTH, K_OPT_WRAPMARGIN};
+    let bin_dep: &[c_int] = &[
+        K_OPT_TEXTWIDTH as c_int,
+        K_OPT_WRAPMARGIN as c_int,
+        K_OPT_MODELINE as c_int,
+        K_OPT_EXPANDTAB as c_int,
+    ];
+    for &idx in bin_dep {
+        nvim_set_option_sctx_from_sid(idx, opt_flags, 0);
+    }
 }
 
 // Saved state for when 'paste' is toggled on.

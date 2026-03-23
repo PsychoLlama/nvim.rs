@@ -673,14 +673,6 @@ static int p_ml_nobin;
 static OptInt p_tw_nobin;
 static OptInt p_wm_nobin;
 
-// Saved values for when 'paste' is set.
-static int p_ai_nopaste;
-static int p_et_nopaste;
-static OptInt p_sts_nopaste;
-static OptInt p_tw_nopaste;
-static OptInt p_wm_nopaste;
-static char *p_vsts_nopaste;
-
 #define OPTION_COUNT ARRAY_SIZE(options)
 
 /// :set boolean option prefix
@@ -2320,8 +2312,6 @@ int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array =
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
-/// Returns p_vsts_nopaste.
-const char *nvim_get_p_vsts_nopaste(void) { return p_vsts_nopaste; }
 /// Returns p_csl (completeslash), or "" on non-Windows.
 #ifdef BACKSLASH_IN_FILENAME
 const char *nvim_get_p_csl(void) { return p_csl; }
@@ -2335,12 +2325,6 @@ int nvim_get_backslash_in_filename(void) {
   return 0;
 #endif
 }
-
-bool nvim_get_p_ai_nopaste(void) { return p_ai_nopaste; }
-bool nvim_get_p_et_nopaste(void) { return p_et_nopaste; }
-OptInt nvim_get_p_tw_nopaste(void) { return p_tw_nopaste; }
-OptInt nvim_get_p_wm_nopaste(void) { return p_wm_nopaste; }
-OptInt nvim_get_p_sts_nopaste(void) { return p_sts_nopaste; }
 
 // Generic helpers for offset-based buf_T field writes (used by bufcopy.rs):
 
@@ -2369,6 +2353,13 @@ void nvim_buf_set_optint_field(buf_T *buf, ptrdiff_t offset, OptInt val)
 {
   *(OptInt *)(((char *)buf) + offset) = val;
 }
+
+/// Generic buf_T OptInt field getter: reads OptInt value via byte offset.
+OptInt nvim_buf_get_optint_field(buf_T *buf, ptrdiff_t offset) { return *(OptInt *)(((char *)buf) + offset); }
+/// Generic buf_T bool field getter: reads bool field via byte offset (returns 0 or 1).
+int nvim_buf_get_bool_field(buf_T *buf, ptrdiff_t offset) { return (int)(*(bool *)(((char *)buf) + offset)); }
+/// Generic buf_T char* field getter: reads char* value via byte offset.
+char *nvim_buf_get_string_field(buf_T *buf, ptrdiff_t offset) { return *(char **)(((char *)buf) + offset); }
 
 /// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
@@ -2410,6 +2401,16 @@ void nvim_buf_set_b_p_et_nobin(buf_T *buf, int v) { buf->b_p_et_nobin = v != 0; 
 void nvim_buf_set_b_p_et_nopaste(buf_T *buf, int v) { buf->b_p_et_nopaste = v != 0; }
 void nvim_buf_set_b_p_ml_nobin(buf_T *buf, int v) { buf->b_p_ml_nobin = v != 0; }
 void nvim_buf_set_b_p_sts_nopaste(buf_T *buf, OptInt v) { buf->b_p_sts_nopaste = v; }
+// Per-buffer nopaste/nobin field getters (for paste restore in Rust)
+int nvim_buf_get_b_p_ai_nopaste(buf_T *buf) { return (int)buf->b_p_ai_nopaste; }
+OptInt nvim_buf_get_b_p_tw_nopaste(buf_T *buf) { return buf->b_p_tw_nopaste; }
+OptInt nvim_buf_get_b_p_wm_nopaste(buf_T *buf) { return buf->b_p_wm_nopaste; }
+OptInt nvim_buf_get_b_p_sts_nopaste(buf_T *buf) { return buf->b_p_sts_nopaste; }
+int nvim_buf_get_b_p_et_nopaste(buf_T *buf) { return (int)buf->b_p_et_nopaste; }
+char *nvim_buf_get_b_p_vsts(buf_T *buf) { return buf->b_p_vsts; }
+char *nvim_buf_get_b_p_vsts_nopaste(buf_T *buf) { return buf->b_p_vsts_nopaste; }
+void nvim_buf_set_b_p_vsts_raw(buf_T *buf, char *val) { buf->b_p_vsts = val; }
+int *volatile *nvim_buf_get_b_p_vsts_array_ptr(buf_T *buf) { return (int *volatile *)&buf->b_p_vsts_array; }
 // nvim_buf_set_b_p_iminsert / nvim_buf_set_b_p_imsearch: already in buffer.c (int param)
 void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
 
@@ -2538,160 +2539,6 @@ int nvim_option_p_cpo_has_undo(void)
 int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 
 // =============================================================================
-// Phase 12 Pass 1: Paste helper compound accessors
-// These replace the 6 nvim_paste_* functions called from Rust complex.rs.
-// Each accessor handles a specific sub-operation that requires C pointer
-// comparisons against empty_string_option or free_string_option.
-// =============================================================================
-
-/// Save buf paste scalar nopaste fields: copies tw/wm/sts/ai/et -> nopaste.
-void nvim_buf_paste_save_scalars(buf_T *buf)
-{
-  buf->b_p_tw_nopaste = buf->b_p_tw;
-  buf->b_p_wm_nopaste = buf->b_p_wm;
-  buf->b_p_sts_nopaste = buf->b_p_sts;
-  buf->b_p_ai_nopaste = buf->b_p_ai;
-  buf->b_p_et_nopaste = buf->b_p_et;
-}
-
-/// Save buf->b_p_vsts into buf->b_p_vsts_nopaste (frees old nopaste first).
-void nvim_buf_paste_save_vsts(buf_T *buf)
-{
-  if (buf->b_p_vsts_nopaste) {
-    xfree(buf->b_p_vsts_nopaste);
-  }
-  buf->b_p_vsts_nopaste = buf->b_p_vsts && buf->b_p_vsts != empty_string_option
-                          ? xstrdup(buf->b_p_vsts) : NULL;
-}
-
-/// Activate paste for buf scalars: zero tw/wm/sts/ai/et.
-void nvim_buf_paste_activate_scalars(buf_T *buf)
-{
-  buf->b_p_tw = 0;
-  buf->b_p_wm = 0;
-  buf->b_p_sts = 0;
-  buf->b_p_ai = 0;
-  buf->b_p_et = 0;
-}
-
-/// Activate paste for buf->b_p_vsts: free and set to empty_string_option, clear array.
-void nvim_buf_paste_activate_vsts(buf_T *buf)
-{
-  if (buf->b_p_vsts) {
-    free_string_option(buf->b_p_vsts);
-  }
-  buf->b_p_vsts = empty_string_option;
-  XFREE_CLEAR(buf->b_p_vsts_array);
-}
-
-/// Restore buf paste scalar fields: copies nopaste -> tw/wm/sts/ai/et.
-void nvim_buf_paste_restore_scalars(buf_T *buf)
-{
-  buf->b_p_tw = buf->b_p_tw_nopaste;
-  buf->b_p_wm = buf->b_p_wm_nopaste;
-  buf->b_p_sts = buf->b_p_sts_nopaste;
-  buf->b_p_ai = buf->b_p_ai_nopaste;
-  buf->b_p_et = buf->b_p_et_nopaste;
-}
-
-/// Restore buf->b_p_vsts from nopaste: free current, dup from nopaste, run tabstop_set.
-void nvim_buf_paste_restore_vsts(buf_T *buf)
-{
-  if (buf->b_p_vsts) {
-    free_string_option(buf->b_p_vsts);
-  }
-  buf->b_p_vsts = buf->b_p_vsts_nopaste ? xstrdup(buf->b_p_vsts_nopaste) : empty_string_option;
-  xfree(buf->b_p_vsts_array);
-  if (buf->b_p_vsts && buf->b_p_vsts != empty_string_option) {
-    tabstop_set(buf->b_p_vsts, &buf->b_p_vsts_array);
-  } else {
-    buf->b_p_vsts_array = NULL;
-  }
-}
-
-/// Save global paste scalars: copies ai/et/sts/tw/wm to nopaste statics.
-void nvim_paste_global_save_scalars(void)
-{
-  p_ai_nopaste = p_ai;
-  p_et_nopaste = p_et;
-  p_sts_nopaste = p_sts;
-  p_tw_nopaste = p_tw;
-  p_wm_nopaste = p_wm;
-}
-
-/// Save p_vsts to p_vsts_nopaste (frees old nopaste first).
-void nvim_paste_global_save_vsts(void)
-{
-  if (p_vsts_nopaste) {
-    xfree(p_vsts_nopaste);
-  }
-  p_vsts_nopaste = p_vsts && p_vsts != empty_string_option ? xstrdup(p_vsts) : NULL;
-}
-
-/// Activate global paste scalars: zero sm/sta/ru(+redraw)/ri/tw/wm/sts/ai/et.
-void nvim_paste_global_activate_scalars(void)
-{
-  p_sm = 0;
-  p_sta = 0;
-  if (p_ru) {
-    status_redraw_all();
-  }
-  p_ru = 0;
-  p_ri = 0;
-  p_tw = 0;
-  p_wm = 0;
-  p_sts = 0;
-  p_ai = 0;
-  p_et = 0;
-}
-
-/// Activate global p_vsts: free and set to empty_string_option.
-void nvim_paste_global_activate_vsts(void)
-{
-  if (p_vsts) {
-    free_string_option(p_vsts);
-  }
-  p_vsts = empty_string_option;
-}
-
-/// Restore global paste scalars: restores sm/sta/ru(+redraw)/ri from args,
-/// and ai/et/sts/tw/wm from nopaste statics.
-void nvim_paste_global_restore_scalars(int save_sm, int save_sta, int save_ru, int save_ri)
-{
-  p_sm = save_sm;
-  p_sta = save_sta;
-  if (p_ru != save_ru) {
-    status_redraw_all();
-  }
-  p_ru = save_ru;
-  p_ri = save_ri;
-  p_ai = p_ai_nopaste;
-  p_et = p_et_nopaste;
-  p_sts = p_sts_nopaste;
-  p_tw = p_tw_nopaste;
-  p_wm = p_wm_nopaste;
-}
-
-/// Restore p_vsts from p_vsts_nopaste.
-void nvim_paste_global_restore_vsts(void)
-{
-  if (p_vsts) {
-    free_string_option(p_vsts);
-  }
-  p_vsts = p_vsts_nopaste ? xstrdup(p_vsts_nopaste) : empty_string_option;
-}
-
-/// Record sctx for all paste-dependent options.
-void nvim_paste_didset_sctx_all(void)
-{
-  static int paste_dep[] = {
-    kOptAutoindent, kOptExpandtab, kOptRuler, kOptShowmatch, kOptSmarttab, kOptSofttabstop,
-    kOptTextwidth, kOptWrapmargin, kOptRevins, kOptVarsofttabstop, kOptInvalid
-  };
-  didset_options_sctx((OPT_LOCAL | OPT_GLOBAL), paste_dep);
-}
-
-// =============================================================================
 // Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
 // =============================================================================
 
@@ -2727,14 +2574,6 @@ void nvim_call_curbuf_tabstop_set_vts(void)
 {
   xfree(curbuf->b_p_vts_array);
   tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array);
-}
-/// Record sctx for all bin-dependent options.
-void nvim_bin_didset_sctx_all(int opt_flags)
-{
-  static int bin_dep[] = {
-    kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab, kOptInvalid
-  };
-  didset_options_sctx(opt_flags, bin_dep);
 }
 
 // =============================================================================
