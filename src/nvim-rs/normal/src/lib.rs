@@ -131,7 +131,7 @@ extern "C" {
     fn curbuf_locked() -> bool;
 
     // VIsual_active global (from plines.c, returns 0 or 1)
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
 
     // Beep function
     fn beep_flush();
@@ -823,7 +823,7 @@ pub unsafe extern "C" fn rs_checkclearop(oap: OapHandle) -> bool {
 /// `oap` must be a valid oparg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_checkclearopq(oap: OapHandle) -> bool {
-    if nvim_oap_get_op_type_ptr(oap) == OP_NOP && nvim_get_VIsual_active() == 0 {
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP && !VIsual_active {
         return false;
     }
     rs_clearopbeep(oap);
@@ -1013,7 +1013,7 @@ pub unsafe extern "C" fn rs_nv_help(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_suspend(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     rs_clearop(oap);
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         rs_end_visual_mode();
     }
     do_cmdline_cmd(c"st".as_ptr());
@@ -1099,7 +1099,7 @@ pub unsafe extern "C" fn rs_nv_halfpage(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ctrlg(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // toggle Selection/Visual mode
         let select = nvim_get_VIsual_select();
         nvim_set_VIsual_select(!select);
@@ -1449,7 +1449,7 @@ unsafe fn adjust_cursor(oap: OapHandle) {
     let sel_o = b'o' as std::ffi::c_char;
     if nvim_get_cursor_col() > 0
         && nvim_gchar_cursor() == NUL_CHAR
-        && (nvim_get_VIsual_active() == 0 || nvim_get_p_sel_first() == sel_o)
+        && (!VIsual_active || nvim_get_p_sel_first() == sel_o)
         && !nvim_virtual_active()
         && (nvim_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0
     {
@@ -1469,7 +1469,7 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     #[allow(clippy::cast_possible_wrap)]
     let sel_e = b'e' as std::ffi::c_char;
-    if nvim_get_VIsual_active() != 0
+    if VIsual_active
         && nvim_oap_get_inclusive(oap)
         && nvim_get_p_sel_first() == sel_e
         && nvim_gchar_cursor() != NUL_CHAR
@@ -1854,7 +1854,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
     // VIsual_select = cap->arg (arg != 0 means select mode)
     nvim_set_VIsual_select(nvim_cap_get_arg(cap) != 0);
 
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // change Visual mode
         if nvim_get_VIsual_mode() == cmdchar {
             // stop visual mode
@@ -2113,7 +2113,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         flags |= PUT_BLOCK_INNER;
     }
 
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         was_visual = true;
         let regname = nvim_oap_get_regname_ptr(oap);
         let keep_registers = nvim_cap_get_cmdchar(cap) == b'P' as c_int;
@@ -2224,7 +2224,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
     let sel_e = b'e' as std::ffi::c_char;
     let visual_v = c_int::from(b'v');
     if nvim_get_p_sel_first() == sel_e
-        && nvim_get_VIsual_active() != 0
+        && VIsual_active
         && nvim_get_VIsual_mode() == visual_v
         && nvim_get_VIsual_select_exclu_adj()
     {
@@ -2329,7 +2329,7 @@ pub unsafe extern "C" fn rs_nv_clear(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ctrlo(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+    if VIsual_active && nvim_get_VIsual_select() {
         nvim_set_VIsual_select(false);
         nvim_may_trigger_modechanged();
         nvim_showmode();
@@ -2441,7 +2441,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         // true for CTRL-C
         if nvim_get_restart_edit() == 0
             && nvim_normal_get_cmdwin_type() == 0
-            && nvim_get_VIsual_active() == 0
+            && !VIsual_active
             && no_reason
         {
             nvim_esc_show_msg();
@@ -2468,7 +2468,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         return;
     }
 
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         rs_end_visual_mode(); // stop Visual
         nvim_check_cursor_col_call(); // make sure cursor is not beyond EOL
         nvim_curwin_set_curswant(true);
@@ -2499,13 +2499,11 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
     }
     let oap = nvim_cap_get_oap(cap);
     // in Visual mode "A" and "I" are an operator
-    if nvim_get_VIsual_active() != 0
-        && (cmdchar == c_int::from(b'A') || cmdchar == c_int::from(b'I'))
-    {
+    if VIsual_active && (cmdchar == c_int::from(b'A') || cmdchar == c_int::from(b'I')) {
         rs_v_visop(cap);
     // in Visual mode and after an operator "a" and "i" are for text objects
     } else if (cmdchar == c_int::from(b'a') || cmdchar == c_int::from(b'i'))
-        && (nvim_oap_get_op_type_ptr(oap) != OP_NOP || nvim_get_VIsual_active() != 0)
+        && (nvim_oap_get_op_type_ptr(oap) != OP_NOP || VIsual_active)
     {
         rs_nv_object(cap);
     } else if !nvim_curbuf_modifiable() && !nvim_get_curbuf_terminal() {
@@ -2703,7 +2701,7 @@ pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
 
     // The "]", "CTRL-]" and "K" commands accept an argument in Visual mode.
     if cmdchar == c_int::from(b']') || cmdchar == CTRL_RSB || cmdchar == c_int::from(b'K') {
-        if nvim_get_VIsual_active() != 0 && !rs_get_visual_text(cap, &raw mut ptr, &raw mut n) {
+        if VIsual_active && !rs_get_visual_text(cap, &raw mut ptr, &raw mut n) {
             return;
         }
         if rs_checkclearopq(oap) {
@@ -3149,10 +3147,7 @@ pub unsafe extern "C" fn rs_nv_optrans(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_tilde(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
-    if !nvim_get_p_to()
-        && nvim_get_VIsual_active() == 0
-        && nvim_oap_get_op_type_ptr(oap) != OP_TILDE
-    {
+    if !nvim_get_p_to() && !VIsual_active && nvim_oap_get_op_type_ptr(oap) != OP_TILDE {
         if nvim_replace_check_prompt() != 0 {
             rs_clearopbeep(oap);
             return;
@@ -3177,7 +3172,7 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
         rs_clearopbeep(oap);
         return;
     }
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // "vs" and "vS" are the same as "vc"
         let cmdchar = nvim_cap_get_cmdchar(cap);
         if cmdchar == c_int::from(b'S') {
@@ -3435,7 +3430,7 @@ pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         nvim_set_VIsual_select(true);
         nvim_set_VIsual_select_reg(0);
     } else if nvim_get_VIsual_reselect() != 0 {
@@ -4019,7 +4014,7 @@ const OP_UPPER: c_int = 11;
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_undo(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
-    if nvim_oap_get_op_type_ptr(oap) == OP_LOWER || nvim_get_VIsual_active() != 0 {
+    if nvim_oap_get_op_type_ptr(oap) == OP_LOWER || VIsual_active {
         // translate "<Visual>u" to "<Visual>gu" and "guu" to "gugu"
         nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
         nvim_cap_set_nchar(cap, c_int::from(b'u'));
@@ -4039,7 +4034,7 @@ pub unsafe extern "C" fn rs_nv_undo(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_Undo(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
-    if nvim_oap_get_op_type_ptr(oap) == OP_UPPER || nvim_get_VIsual_active() != 0 {
+    if nvim_oap_get_op_type_ptr(oap) == OP_UPPER || VIsual_active {
         // translate "gUU" to "gUgU"
         nvim_cap_set_cmdchar(cap, c_int::from(b'g'));
         nvim_cap_set_nchar(cap, c_int::from(b'U'));
@@ -4088,7 +4083,7 @@ pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
-    if nvim_get_VIsual_select() && nvim_get_VIsual_active() != 0 {
+    if nvim_get_VIsual_select() && VIsual_active {
         // Get register name
         nvim_inc_no_mapping();
         let mut reg = nvim_plain_vgetc_wrapper();
@@ -4183,7 +4178,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     }
 
     // Visual mode "r"
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         if unsafe { got_int } {
             unsafe {
                 got_int = false;
@@ -4310,7 +4305,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // "R" is replace lines in Visual mode
         nvim_cap_set_cmdchar(cap, c_int::from(b'c'));
         nvim_cap_set_nchar(cap, NUL_CHAR);
@@ -4351,7 +4346,7 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // In Visual mode: do same as "r" for now
         let extra_char = nvim_cap_get_extra_char(cap);
         nvim_cap_set_cmdchar(cap, c_int::from(b'r'));
@@ -4539,7 +4534,7 @@ pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int 
     let mut ptr: *mut c_char = std::ptr::null_mut();
     let mut len: usize = 0;
 
-    if nvim_get_VIsual_active() != 0 && !rs_get_visual_text(cap, &raw mut ptr, &raw mut len) {
+    if VIsual_active && !rs_get_visual_text(cap, &raw mut ptr, &raw mut len) {
         return FAIL;
     }
 
@@ -4690,7 +4685,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
     let cap_nchar = nvim_cap_get_nchar(cap);
     if cap_nchar != b'f' as c_int
         && cap_nchar != b'F' as c_int
-        && !(nvim_get_VIsual_active() != 0 && nvim_vim_strchr_str(c"dcCoO".as_ptr(), cap_nchar))
+        && !(VIsual_active && nvim_vim_strchr_str(c"dcCoO".as_ptr(), cap_nchar))
         && cap_nchar != b'j' as c_int
         && cap_nchar != b'k' as c_int
         && rs_checkclearop(oap)
@@ -4912,7 +4907,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         // "zD": delete fold at cursor recursively
         n if n == b'd' as c_int || n == b'D' as c_int => {
             if rs_foldManualAllowed(false) != 0 {
-                if nvim_get_VIsual_active() != 0 {
+                if VIsual_active {
                     rs_nv_operator(cap);
                 } else {
                     let cursor_lnum = nvim_get_cursor_lnum();
@@ -4979,7 +4974,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
         // "zo": open fold at cursor or Visual area
         n if n == b'o' as c_int => {
-            if nvim_get_VIsual_active() != 0 {
+            if VIsual_active {
                 rs_nv_operator(cap);
             } else {
                 rs_setFoldRepeat(nvim_get_cursor_lnum(), nvim_cap_get_count1(cap), true);
@@ -4988,7 +4983,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
         // "zO": open fold recursively
         n if n == b'O' as c_int => {
-            if nvim_get_VIsual_active() != 0 {
+            if VIsual_active {
                 rs_nv_operator(cap);
             } else {
                 rs_setManualFold(nvim_get_cursor_lnum(), true, true, std::ptr::null_mut());
@@ -4997,7 +4992,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
         // "zc": close fold at cursor or Visual area
         n if n == b'c' as c_int => {
-            if nvim_get_VIsual_active() != 0 {
+            if VIsual_active {
                 rs_nv_operator(cap);
             } else {
                 rs_setFoldRepeat(nvim_get_cursor_lnum(), nvim_cap_get_count1(cap), false);
@@ -5007,7 +5002,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
         // "zC": close fold recursively
         n if n == b'C' as c_int => {
-            if nvim_get_VIsual_active() != 0 {
+            if VIsual_active {
                 rs_nv_operator(cap);
             } else {
                 rs_setManualFold(nvim_get_cursor_lnum(), false, true, std::ptr::null_mut());
@@ -5318,7 +5313,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
         // In virtual edit mode there is no past_line
         false
     } else {
-        nvim_get_VIsual_active() != 0 && nvim_get_p_sel_first() != sel_o_p1
+        VIsual_active && nvim_get_p_sel_first() != sel_o_p1
     };
 
     let count1 = nvim_cap_get_count1(cap);
@@ -6162,7 +6157,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
     match nchar {
         // "g^A/g^X": Sequentially increment visually selected region.
         n if n == CTRL_A || n == CTRL_X => {
-            if nvim_get_VIsual_active() != 0 {
+            if VIsual_active {
                 nvim_cap_set_arg(cap, 1); // cap->arg = true
                 nvim_cap_set_cmdchar(cap, nchar);
                 nvim_cap_set_nchar(cap, NUL_VAL);
@@ -6551,7 +6546,7 @@ pub unsafe extern "C" fn rs_nv_at(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_join(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // join the visual lines
         rs_nv_operator(cap);
         return;
@@ -6605,7 +6600,7 @@ pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
         debug_assert!(opcount >= 0);
         #[allow(clippy::cast_sign_loss)]
         nvim_nv_diffgetput_call(false, opcount as usize);
-    } else if nvim_get_VIsual_active() != 0 {
+    } else if VIsual_active {
         // switch start and end of visual
         rs_v_swap_corners(cmdchar);
     } else if nvim_bt_prompt_curbuf() && nvim_get_cursor_lnum() < nvim_get_b_prompt_start_lnum_put()
@@ -6627,7 +6622,7 @@ pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
 #[no_mangle]
 pub extern "C" fn rs_reset_VIsual_and_resel() {
     unsafe {
-        if nvim_get_VIsual_active() != 0 {
+        if VIsual_active {
             rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
         }
@@ -6642,7 +6637,7 @@ pub extern "C" fn rs_reset_VIsual_and_resel() {
 #[no_mangle]
 pub extern "C" fn rs_reset_VIsual() {
     unsafe {
-        if nvim_get_VIsual_active() != 0 {
+        if VIsual_active {
             rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
             nvim_set_VIsual_reselect(false);
@@ -6782,7 +6777,7 @@ pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ctrlh(cap: CapHandle) {
-    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+    if VIsual_active && nvim_get_VIsual_select() {
         nvim_cap_set_cmdchar(cap, c_int::from(b'x'));
         rs_v_visop(cap);
     } else {
@@ -6843,7 +6838,7 @@ pub unsafe extern "C" fn rs_nv_abbrev(cap: CapHandle) {
         nvim_cap_set_cmdchar(cap, c_int::from(b'x'));
     }
     // in Visual mode these commands are operators
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         rs_v_visop(cap);
     } else {
         nv_optrans_impl(cap);
@@ -6982,7 +6977,7 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
         if nvim_normal_get_cmdwin_type() != 0 {
             nvim_set_cmdwin_result(CTRL_C);
         }
-        if nvim_get_VIsual_active() != 0 {
+        if VIsual_active {
             rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
         }
@@ -7014,7 +7009,7 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
     let tpos_col: c_int;
     let tpos_coladd: c_int;
 
-    if nvim_get_VIsual_active() != 0 {
+    if VIsual_active {
         // Swap VIsual_mode with b_visual.vi_mode
         let i = nvim_get_VIsual_mode();
         nvim_set_VIsual_mode(nvim_get_curbuf_visual_vi_mode());
@@ -7305,7 +7300,7 @@ pub unsafe extern "C" fn rs_nv_addsub(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     if nvim_bt_prompt_curbuf() && !nvim_prompt_curpos_editable() {
         rs_clearopbeep(oap);
-    } else if nvim_get_VIsual_active() == 0 && nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+    } else if !VIsual_active && nvim_oap_get_op_type_ptr(oap) == OP_NOP {
         rs_prep_redo_cmd(cap);
         let cmdchar = nvim_cap_get_cmdchar(cap);
         nvim_oap_set_op_type(
@@ -7320,7 +7315,7 @@ pub unsafe extern "C" fn rs_nv_addsub(cap: CapHandle) {
         let arg = nvim_cap_get_arg(cap);
         nvim_op_addsub_call(oap, count1, arg);
         nvim_oap_set_op_type(oap, OP_NOP);
-    } else if nvim_get_VIsual_active() != 0 {
+    } else if VIsual_active {
         rs_nv_operator(cap);
     } else {
         rs_clearop(oap);
@@ -7338,7 +7333,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
     let is_cmdkey = cmdchar == K_COMMAND;
     let is_lua = cmdchar == K_LUA;
 
-    if nvim_get_VIsual_active() != 0 && !is_cmdkey && !is_lua {
+    if VIsual_active && !is_cmdkey && !is_lua {
         rs_nv_operator(cap);
         return;
     }

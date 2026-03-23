@@ -50,7 +50,7 @@ extern "C" {
     // Global accessors
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_set_msg_nowait(val: c_int);
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_get_restart_VIsual_select() -> c_int;
@@ -125,8 +125,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         let cmdchar = nvim_cap_get_cmdchar(ca);
         if cmdchar != K_IGNORE && cmdchar != K_MOUSEMOVE {
             let op_type = nvim_oap_get_op_type_ptr(oa);
-            did_visual_op =
-                nvim_get_VIsual_active() != 0 && op_type != OP_NOP && op_type != OP_COLON;
+            did_visual_op = VIsual_active && op_type != OP_NOP && op_type != OP_COLON;
             nvim_do_pending_operator_call(ca, nvim_ns_get_old_col(s), false);
         }
 
@@ -187,9 +186,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     // (but not if still inside a mapping that started in Visual mode).
     // May switch from Visual to Select mode after CTRL-O command.
     if nvim_oap_get_op_type_ptr(oa) == OP_NOP
-        && ((nvim_get_restart_edit() != 0
-            && nvim_get_VIsual_active() == 0
-            && nvim_ns_get_old_mapped_len(s) == 0)
+        && ((nvim_get_restart_edit() != 0 && !VIsual_active && nvim_ns_get_old_mapped_len(s) == 0)
             || nvim_get_restart_VIsual_select() == 1)
         && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
         && nvim_stuff_empty()
@@ -202,10 +199,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             nvim_showmode();
             nvim_set_restart_VIsual_select(0);
         }
-        if nvim_get_restart_edit() != 0
-            && nvim_get_VIsual_active() == 0
-            && nvim_ns_get_old_mapped_len(s) == 0
-        {
+        if nvim_get_restart_edit() != 0 && !VIsual_active && nvim_ns_get_old_mapped_len(s) == 0 {
             nvim_edit_wrapper(nvim_get_restart_edit(), false, 1);
         }
     }

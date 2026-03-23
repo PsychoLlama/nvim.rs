@@ -52,7 +52,7 @@ extern "C" {
     fn rs_reset_VIsual_and_resel();
 
     /// Get VIsual_active flag.
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
 
     /// Get wp->w_cursor.lnum.
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
@@ -448,7 +448,7 @@ unsafe fn win_goto_impl(wp: WinHandle) {
     if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
         // careful: triggers ModeChanged autocommand
         rs_reset_VIsual_and_resel();
-    } else if nvim_get_VIsual_active() != 0 {
+    } else if VIsual_active {
         // Set wp->w_cursor = curwin->w_cursor
         nvim_win_set_cursor_lnum(wp, nvim_win_get_cursor_lnum(owp));
         nvim_win_set_cursor_col(wp, nvim_win_get_cursor_col(owp));

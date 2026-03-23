@@ -1541,7 +1541,7 @@ pub extern "C" fn rs_win_post_update(wp: WinHandle) {
 
 // Additional C function declarations for visual mode
 extern "C" {
-    fn nvim_get_visual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_win_get_old_visual_mode(wp: WinHandle) -> c_int;
     fn nvim_win_set_old_visual_mode(wp: WinHandle, val: c_int);
     fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
@@ -1565,7 +1565,7 @@ pub extern "C" fn rs_visual_selection_changed(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let visual_active = nvim_get_visual_active() != 0;
+        let visual_active = VIsual_active;
         let old_visual_mode = nvim_win_get_old_visual_mode(wp);
 
         if !visual_active && old_visual_mode == 0 {
@@ -1596,7 +1596,7 @@ pub extern "C" fn rs_update_visual_state(
     }
 
     unsafe {
-        let visual_active = nvim_get_visual_active() != 0;
+        let visual_active = VIsual_active;
 
         if visual_active {
             let visual_mode = VIsual_mode;

@@ -569,8 +569,7 @@ extern "C" {
     pub fn nvim_curbuf_set_op_start(lnum: c_int, col: c_int);
     /// Set curbuf->b_op_end
     pub fn nvim_curbuf_set_op_end(lnum: c_int, col: c_int);
-    /// Check if VIsual_active is set
-    pub fn nvim_get_visual_active() -> c_int;
+    pub static mut VIsual_active: bool;
     /// Call check_pos(curbuf, &VIsual)
     pub fn nvim_check_pos_visual();
     /// Get a line from the buffer

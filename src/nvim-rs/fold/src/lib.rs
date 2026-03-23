@@ -2756,7 +2756,7 @@ pub extern "C" fn rs_foldUpdate(wp: WinHandle, top: LineNr, bot: LineNr) {
 
 extern "C" {
     /// Get the VIsual_active global.
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
 
     /// Get VIsual position lnum.
     fn nvim_get_VIsual_lnum() -> c_int;
@@ -2804,7 +2804,7 @@ fn fold_adjust_visual_impl() {
     let curwin = unsafe { nvim_get_curwin() };
 
     // Check VIsual_active and hasAnyFolding
-    if unsafe { nvim_get_VIsual_active() } == 0 || !has_any_folding_impl(curwin) {
+    if !unsafe { VIsual_active } || !has_any_folding_impl(curwin) {
         return;
     }
 

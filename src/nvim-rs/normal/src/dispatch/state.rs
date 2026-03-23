@@ -22,7 +22,7 @@ extern "C" {
     fn nvim_set_no_mapping(val: c_int);
     fn nvim_get_allow_keys() -> c_int;
     fn nvim_set_allow_keys(val: c_int);
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_set_VIsual_active(val: bool);
     fn nvim_get_VIsual_reselect() -> c_int;
     fn nvim_set_VIsual_reselect(val: bool);
@@ -100,7 +100,7 @@ fn set_allow_keys_impl(val: bool) {
 /// Check if visual mode is active.
 #[inline]
 fn is_visual_active_impl() -> bool {
-    unsafe { nvim_get_VIsual_active() != 0 }
+    unsafe { VIsual_active }
 }
 
 /// Set visual mode active state.

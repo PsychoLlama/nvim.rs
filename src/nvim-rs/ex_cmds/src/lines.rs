@@ -641,8 +641,7 @@ pub unsafe extern "C" fn rs_ex_copy(line1: c_int, line2: c_int, n: c_int) {
     use crate::{
         appended_lines_mark, ml_append, ml_get, ml_get_len, msgmore, nvim_check_pos_visual,
         nvim_cmdmod_has_lockmarks, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
-        nvim_curwin_get_cursor_lnum, nvim_curwin_set_cursor_lnum, nvim_get_visual_active, u_save,
-        xfree, xstrnsave,
+        nvim_curwin_get_cursor_lnum, nvim_curwin_set_cursor_lnum, u_save, xfree, xstrnsave,
     };
 
     let count = line2 - line1 + 1;
@@ -688,7 +687,7 @@ pub unsafe extern "C" fn rs_ex_copy(line1: c_int, line2: c_int, n: c_int) {
     }
 
     appended_lines_mark(n, count);
-    if nvim_get_visual_active() != 0 {
+    if crate::VIsual_active {
         nvim_check_pos_visual();
     }
 

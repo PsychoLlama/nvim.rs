@@ -81,7 +81,7 @@ extern "C" {
     /// Check if operator is pending
     fn nvim_get_finish_op() -> c_int;
     /// Check if Visual mode is active
-    fn nvim_get_visual_active() -> c_int;
+    static mut VIsual_active: bool;
     /// Get first char of 'selection' option
     fn nvim_get_p_sel_first() -> c_char;
     /// Check if at end of command line
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn rs_cursor_get_mode_idx() -> c_int {
     if nvim_get_finish_op() != 0 {
         return ModeShape::O as c_int;
     }
-    if nvim_get_visual_active() != 0 {
+    if VIsual_active {
         if nvim_get_p_sel_first() == b'e' as c_char {
             return ModeShape::Ve as c_int;
         }

@@ -186,7 +186,7 @@ extern "C" {
 
     // Visual mode and virtual editing accessors for getvcol
     fn nvim_virtual_active(wp: WinHandle) -> bool;
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_get_VIsual_lnum() -> c_int;
     fn nvim_get_VIsual_col() -> c_int;
     fn nvim_get_VIsual_coladd() -> c_int;
@@ -1749,7 +1749,7 @@ fn getvcol_impl(
             let state = State;
             let p_list = nvim_win_get_p_list(wp) != 0;
             let virtual_active = nvim_virtual_active(wp);
-            let visual_active = nvim_get_VIsual_active() != 0;
+            let visual_active = VIsual_active;
             let p_sel_first = nvim_get_p_sel_first();
 
             // Check if we should position cursor at end of tab

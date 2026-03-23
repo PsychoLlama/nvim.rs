@@ -3183,7 +3183,7 @@ pub unsafe extern "C" fn rs_win_has_list(wp: WinHandle) -> c_int {
 // Additional C function declarations for line rendering
 extern "C" {
     // Visual mode state
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
 
     // Buffer state
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
@@ -3206,7 +3206,7 @@ extern "C" {
 /// Returns 1 if Visual mode highlighting should be applied for this window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_should_apply_visual(wp: WinHandle) -> c_int {
-    let visual_active = nvim_get_VIsual_active() != 0;
+    let visual_active = VIsual_active;
     if !visual_active {
         return 0;
     }

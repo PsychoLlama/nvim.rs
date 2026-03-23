@@ -90,7 +90,7 @@ extern "C" {
     fn nvim_wait_return(redraw: bool);
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_get_opcount() -> c_int;
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_get_KeyTyped() -> bool;
 
     // Message/display globals
@@ -356,7 +356,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             && msg_silent == 0
             // must restart insert mode or just entered visual mode
             && (nvim_get_restart_edit() != 0
-                || (nvim_get_VIsual_active() != 0
+                || (VIsual_active
                     && nvim_ns_get_old_pos_lnum(s) == nvim_get_cursor_lnum()
                     && nvim_ns_get_old_pos_col(s) == nvim_get_cursor_col()))
             // command-line must be cleared or redrawn
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             && nvim_get_KeyTyped())
             // must restart insert mode, not in visual mode and error message showing
             || (nvim_get_restart_edit() != 0
-                && nvim_get_VIsual_active() == 0
+                && !VIsual_active
                 && nvim_get_msg_scroll_val()
                 && nvim_get_emsg_on_display() != 0)
     )

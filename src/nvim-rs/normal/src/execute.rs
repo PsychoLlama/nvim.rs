@@ -48,7 +48,7 @@ pub const OP_NOP: c_int = 0;
 
 extern "C" {
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_get_reg_recording() -> c_int;
     fn nvim_get_reg_executing() -> c_int;
 }
@@ -130,7 +130,7 @@ pub extern "C" fn rs_need_additional_char(idx: c_int, cmdchar: c_int, pending_op
     // 'a' or 'i' after an operator is a text object
     // Also, don't do anything when these keys are received in visual mode
     if cmdchar == c_int::from(b'a') || cmdchar == c_int::from(b'i') {
-        let visual_active = unsafe { nvim_get_VIsual_active() != 0 };
+        let visual_active = unsafe { VIsual_active };
         if pending_op || visual_active {
             return true;
         }

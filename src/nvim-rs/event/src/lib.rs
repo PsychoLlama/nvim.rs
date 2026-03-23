@@ -3277,7 +3277,7 @@ pub unsafe extern "C" fn rs_signal_watcher_signum(watcher: SignalWatcherHandle) 
 extern "C" {
     fn nvim_get_was_safe() -> c_int;
     fn nvim_get_state() -> c_int;
-    fn nvim_get_visual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_get_visual_select() -> c_int;
     fn nvim_get_finish_op() -> c_int;
 }
@@ -3309,7 +3309,7 @@ fn get_real_state_impl() -> c_int {
         let state = nvim_get_state();
 
         if (state & MODE_NORMAL) != 0 {
-            if nvim_get_visual_active() != 0 {
+            if VIsual_active {
                 if nvim_get_visual_select() != 0 {
                     return MODE_SELECT;
                 }

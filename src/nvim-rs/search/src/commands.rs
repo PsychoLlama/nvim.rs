@@ -42,7 +42,7 @@ extern "C" {
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
 
     // Phase 7d: current_search accessors
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_set_VIsual_active(val: bool);
     fn nvim_get_VIsual_lnum() -> c_int;
     fn nvim_get_VIsual_col() -> c_int;
@@ -791,7 +791,7 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     let save_visual_col = nvim_get_VIsual_col();
     let save_visual_coladd = nvim_get_VIsual_coladd();
 
-    let visual_active = nvim_get_VIsual_active() != 0;
+    let visual_active = VIsual_active;
 
     // Correct cursor when 'selection' is exclusive
     if visual_active && nvim_get_p_sel_first() == b'e' as c_char {
@@ -809,7 +809,7 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
 
     // Re-read visual_active since dec_cursor might not change it,
     // but also re-read cursor in case it changed.
-    let visual_active = nvim_get_VIsual_active() != 0;
+    let visual_active = VIsual_active;
 
     let cur_lnum = nvim_search_get_curwin_cursor_lnum();
     let cur_col = nvim_search_get_curwin_cursor_col();

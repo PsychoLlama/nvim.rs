@@ -81,7 +81,7 @@ extern "C" {
 
     // Global accessors (existing)
     fn nvim_get_restart_edit() -> c_int;
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_get_KeyTyped() -> bool;
     fn nvim_get_keystuffed() -> c_int;
@@ -171,9 +171,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
     if nvim_get_restart_edit() == 0 {
         nvim_ns_set_old_mapped_len(s, 0);
     } else if nvim_ns_get_old_mapped_len(s) != 0
-        || (nvim_get_VIsual_active() != 0
-            && nvim_ns_get_mapped_len(s) == 0
-            && nvim_typebuf_maplen_wrapper() > 0)
+        || (VIsual_active && nvim_ns_get_mapped_len(s) == 0 && nvim_typebuf_maplen_wrapper() > 0)
     {
         nvim_ns_set_old_mapped_len(s, nvim_typebuf_maplen_wrapper());
     }
@@ -184,7 +182,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     // In Select mode, typed text replaces the selection.
     let c = nvim_ns_get_c(s);
-    if nvim_get_VIsual_active() != 0
+    if VIsual_active
         && nvim_get_VIsual_select()
         && (vim_isprintc(c) || c == NL || c == CAR || c == K_KENTER)
     {
@@ -266,7 +264,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         }
 
         // In Visual/Select mode, a few keys are handled in a special way.
-        if nvim_get_VIsual_active() != 0 && rs_normal_handle_special_visual_command(s) {
+        if VIsual_active && rs_normal_handle_special_visual_command(s) {
             nvim_ns_set_command_finished(s, true);
             break 'finish;
         }
@@ -312,7 +310,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         nvim_ns_set_old_pos(s); // remember where the cursor was
 
         // When 'keymodel' contains "startsel" some keys start Select/Visual mode.
-        if nvim_get_VIsual_active() == 0 && nvim_get_km_startsel() {
+        if !VIsual_active && nvim_get_km_startsel() {
             let cur_idx = nvim_ns_get_idx(s);
             let flags = crate::dispatch::table::rs_table_get_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
@@ -347,7 +345,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bool {
-    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+    if VIsual_active && nvim_get_VIsual_select() {
         return false;
     }
 

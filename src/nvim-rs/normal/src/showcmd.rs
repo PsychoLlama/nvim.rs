@@ -131,7 +131,7 @@ extern "C" {
     fn nvim_showcmd_grid_render(buf: *const std::ffi::c_char, is_clear: bool);
 
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
     fn nvim_char_avail_call() -> bool;
     fn nvim_lt_VIsual_cursor() -> bool;
     fn nvim_get_VIsual_lnum() -> c_int;
@@ -170,7 +170,7 @@ const CTRL_V: c_int = 22;
 /// # Safety
 /// Calls C accessor functions; all pointers are valid while in C event loop.
 unsafe fn clear_showcmd_visual_info() -> bool {
-    if nvim_get_VIsual_active() == 0 || nvim_char_avail_call() {
+    if !VIsual_active || nvim_char_avail_call() {
         return false;
     }
 

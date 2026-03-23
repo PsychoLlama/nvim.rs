@@ -99,7 +99,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     /// Get VIsual_active global.
-    fn nvim_get_VIsual_active() -> c_int;
+    static mut VIsual_active: bool;
 
     /// Reset VIsual mode and resel.
     fn rs_reset_VIsual_and_resel();
@@ -542,7 +542,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     // Handle VIsual selection.
     if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
         rs_reset_VIsual_and_resel();
-    } else if nvim_get_VIsual_active() != 0 {
+    } else if VIsual_active {
         nvim_win_copy_cursor(wp, curwin);
     }
 
