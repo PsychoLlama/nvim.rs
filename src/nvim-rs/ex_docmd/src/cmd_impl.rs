@@ -1000,3 +1000,97 @@ pub unsafe extern "C" fn do_exmode() {
     need_wait_return = false;
     nvim_set_msg_scroll(save_msg_scroll);
 }
+
+// =============================================================================
+// Phase N: post_chdir_impl helpers
+// =============================================================================
+
+extern "C" {
+    fn nvim_docmd_curwin_clear_localdir();
+    fn nvim_docmd_curtab_clear_localdir();
+    fn nvim_docmd_get_globaldir() -> *const c_char;
+    fn nvim_docmd_set_globaldir_strdup(pdir: *const c_char);
+    fn nvim_docmd_clear_globaldir();
+    fn nvim_docmd_os_dirname_cwd(buf: *mut c_char, len: usize) -> c_int;
+    fn nvim_docmd_curtab_set_localdir(cwd: *const c_char);
+    fn nvim_docmd_curwin_set_localdir(cwd: *const c_char);
+    fn nvim_docmd_set_last_chdir_reason_null();
+    fn nvim_docmd_shorten_fnames_nosymlinks();
+    fn nvim_docmd_do_autocmd_dirchanged_manual_post(cwd: *const c_char, scope: c_int);
+}
+
+/// CdScope enum values (from vim_defs.h).
+const CD_SCOPE_INVALID: c_int = -1;
+const CD_SCOPE_WINDOW: c_int = 0;
+const CD_SCOPE_TABPAGE: c_int = 1;
+const CD_SCOPE_GLOBAL: c_int = 2;
+
+/// MAXPATHL - maximum path length (PATH_MAX on Linux = 4096).
+const MAXPATHL: usize = 4096;
+
+/// OS return code OK = 1.
+const OS_OK: c_int = 1;
+
+/// `nvim_docmd_post_chdir_impl` - update directory state after a chdir.
+///
+/// Mirrors the C `nvim_docmd_post_chdir_impl` function. Clears local directory
+/// fields, sets globaldir if needed, stores the new cwd, and fires DirChanged.
+///
+/// # Safety
+/// Accesses C globals (curwin, curtab, globaldir, last_chdir_reason).
+#[export_name = "nvim_docmd_post_chdir_impl"]
+pub unsafe extern "C" fn rs_post_chdir_impl(scope: c_int, trigger_dirchanged: bool) {
+    // Always overwrite the window-local CWD.
+    nvim_docmd_curwin_clear_localdir();
+
+    // Overwrite the tab-local CWD for :cd, :tcd.
+    if scope >= CD_SCOPE_TABPAGE {
+        nvim_docmd_curtab_clear_localdir();
+    }
+
+    if scope < CD_SCOPE_GLOBAL {
+        // nvim_get_prevdir is already declared in commands.rs; use our own call via the C shim
+        // (prevdir is handled in changedir_func before calling us, and we use globaldir here).
+        // If still in global directory, set CWD as the global directory.
+        // We need prevdir here -- call the C accessor from commands.rs.
+        // Since we're in cmd_impl.rs, declare a local extern for it.
+        extern "C" {
+            fn nvim_get_prevdir(scope: c_int) -> *mut c_char;
+        }
+        let pdir = nvim_get_prevdir(scope);
+        let globaldir = nvim_docmd_get_globaldir();
+        if globaldir.is_null() && !pdir.is_null() {
+            nvim_docmd_set_globaldir_strdup(pdir as *const c_char);
+        }
+    }
+
+    let mut cwd = [0u8; MAXPATHL];
+    let cwd_ptr = cwd.as_mut_ptr() as *mut c_char;
+    if nvim_docmd_os_dirname_cwd(cwd_ptr, MAXPATHL) != OS_OK {
+        return;
+    }
+
+    match scope {
+        CD_SCOPE_GLOBAL => {
+            nvim_docmd_clear_globaldir();
+        }
+        CD_SCOPE_TABPAGE => {
+            nvim_docmd_curtab_set_localdir(cwd_ptr);
+        }
+        CD_SCOPE_WINDOW => {
+            nvim_docmd_curwin_set_localdir(cwd_ptr);
+        }
+        CD_SCOPE_INVALID => {
+            // Should never happen; abort() in C. Panic in Rust.
+            panic!("nvim_docmd_post_chdir_impl: invalid CdScope");
+        }
+        _ => {}
+    }
+
+    nvim_docmd_set_last_chdir_reason_null();
+    nvim_docmd_shorten_fnames_nosymlinks();
+
+    if trigger_dirchanged {
+        nvim_docmd_do_autocmd_dirchanged_manual_post(cwd_ptr, scope);
+    }
+}

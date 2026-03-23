@@ -2816,53 +2816,8 @@ static char *nvim_docmd_get_prevdir_impl(CdScope scope)
   }
 }
 
-/// Deal with the side effects of changing the current directory.
-///
-/// @param scope  Scope of the function call (global, tab or window).
-static void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged)
-{
-  // Always overwrite the window-local CWD.
-  XFREE_CLEAR(curwin->w_localdir);
-
-  // Overwrite the tab-local CWD for :cd, :tcd.
-  if (scope >= kCdScopeTabpage) {
-    XFREE_CLEAR(curtab->tp_localdir);
-  }
-
-  if (scope < kCdScopeGlobal) {
-    char *pdir = nvim_docmd_get_prevdir_impl(scope);
-    // If still in global directory, set CWD as the global directory.
-    if (globaldir == NULL && pdir != NULL) {
-      globaldir = xstrdup(pdir);
-    }
-  }
-
-  char cwd[MAXPATHL];
-  if (os_dirname(cwd, MAXPATHL) != OK) {
-    return;
-  }
-  switch (scope) {
-  case kCdScopeGlobal:
-    // We are now in the global directory, no need to remember its name.
-    XFREE_CLEAR(globaldir);
-    break;
-  case kCdScopeTabpage:
-    curtab->tp_localdir = xstrdup(cwd);
-    break;
-  case kCdScopeWindow:
-    curwin->w_localdir = xstrdup(cwd);
-    break;
-  case kCdScopeInvalid:
-    abort();
-  }
-
-  last_chdir_reason = NULL;
-  shorten_fnames(vim_strchr(p_cpo, CPO_NOSYMLINKS) == NULL);
-
-  if (trigger_dirchanged) {
-    do_autocmd_dirchanged(cwd, scope, kCdCauseManual, false);
-  }
-}
+// nvim_docmd_post_chdir_impl is implemented in Rust (cmd_impl.rs).
+extern void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged);
 
 
 
@@ -5019,6 +4974,25 @@ int nvim_docmd_os_mkdir(const char *name, int prot) { return os_mkdir(name, prot
 int nvim_docmd_os_isdir(const char *fname) { return os_isdir(fname) ? 1 : 0; }
 int nvim_docmd_os_path_exists(const char *fname) { return os_path_exists(fname) ? 1 : 0; }
 FILE *nvim_docmd_os_fopen(const char *fname, const char *mode) { return os_fopen(fname, mode); }
+
+// Phase N: post_chdir_impl helpers for Rust FFI
+void nvim_docmd_curwin_clear_localdir(void) { XFREE_CLEAR(curwin->w_localdir); }
+void nvim_docmd_curtab_clear_localdir(void) { XFREE_CLEAR(curtab->tp_localdir); }
+const char *nvim_docmd_get_globaldir(void) { return globaldir; }
+void nvim_docmd_set_globaldir_strdup(const char *pdir) { globaldir = xstrdup(pdir); }
+void nvim_docmd_clear_globaldir(void) { XFREE_CLEAR(globaldir); }
+int nvim_docmd_os_dirname_cwd(char *buf, size_t len) { return (int)os_dirname(buf, len); }
+void nvim_docmd_curtab_set_localdir(const char *cwd) { curtab->tp_localdir = xstrdup(cwd); }
+void nvim_docmd_curwin_set_localdir(const char *cwd) { curwin->w_localdir = xstrdup(cwd); }
+void nvim_docmd_set_last_chdir_reason_null(void) { last_chdir_reason = NULL; }
+void nvim_docmd_shorten_fnames_nosymlinks(void)
+{
+  shorten_fnames(vim_strchr(p_cpo, CPO_NOSYMLINKS) == NULL);
+}
+void nvim_docmd_do_autocmd_dirchanged_manual_post(const char *cwd, int scope)
+{
+  do_autocmd_dirchanged(cwd, (CdScope)scope, kCdCauseManual, false);
+}
 
 // Phase 4 C forwarding wrappers.
 void exec_normal_cmd(char *cmd, int remap, bool silent) { nvim_docmd_exec_normal_cmd_impl(cmd, remap, silent); }
