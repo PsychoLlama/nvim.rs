@@ -123,17 +123,17 @@ extern "C" {
 
     // Spell callback
     fn nvim_win_get_p_spell(win: WinHandle) -> c_int;
-    fn nvim_parse_spelllang(win: WinHandle) -> CallbackResult;
+    fn parse_spelllang(win: WinHandle) -> CallbackResult;
 
     // Phase 95: spell option accessors
-    fn nvim_valid_spellfile(val: *const std::ffi::c_char) -> c_int;
-    fn nvim_valid_spelllang(val: *const std::ffi::c_char) -> c_int;
+    fn valid_spellfile(val: *const std::ffi::c_char) -> bool;
+    fn valid_spelllang(val: *const std::ffi::c_char) -> bool;
     fn did_set_spell_option() -> CallbackResult;
 
     // Phase 96: spellcapcheck and keymodel accessors
     fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
     // Shiftwidth/tabstop callback
-    fn nvim_parse_cino(buf: BufHandle);
+    fn parse_cino(buf: BufHandle);
     fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
 
     // Xhistory callback (use &raw mut crate::p_chi instead)
@@ -219,17 +219,17 @@ extern "C" {
     fn did_set_completeitemalign(args: *mut c_void) -> CallbackResult;
 
     // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
-    fn nvim_fill_culopt_flags(val: *const std::ffi::c_char, win: WinHandle) -> c_int;
+    fn fill_culopt_flags(val: *mut std::ffi::c_char, win: WinHandle) -> c_int;
     fn did_set_completeopt(args: *mut c_void) -> CallbackResult;
     fn did_set_varsofttabstop(args: *mut c_void) -> CallbackResult;
     fn did_set_vartabstop(args: *mut c_void) -> CallbackResult;
 
     // Phase 104: guicursor / ambiwidth / emoji / showbreak
-    fn nvim_parse_guicursor() -> CallbackResult;
+    fn parse_shape_opt(what: c_int) -> CallbackResult;
     fn nvim_get_visual_active_opt() -> c_int;
     fn nvim_redrawWinline_curwin();
-    fn nvim_check_chars_options_str() -> CallbackResult;
-    fn nvim_check_ambiwidth_opt() -> c_int;
+    fn check_chars_options() -> CallbackResult;
+    fn rs_check_str_opt(idx: c_int, varp: *mut *mut std::ffi::c_char) -> c_int;
     // showbreak: ptr2cells and utfc_ptr2len for Rust implementation
     fn ptr2cells(p: *const std::ffi::c_char) -> c_int;
     fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn rs_did_set_equalalways(args: *mut c_void) -> CallbackRe
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_cinoptions(args: *mut c_void) -> CallbackResult {
     let buf = nvim_optset_get_buf(args);
-    nvim_parse_cino(buf);
+    parse_cino(buf);
     callback_ok()
 }
 
@@ -704,7 +704,7 @@ pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> Callback
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_spellfile(args: *mut c_void) -> CallbackResult {
     let varp_str = nvim_optset_get_varp_str(args);
-    if nvim_valid_spellfile(varp_str) == 0 {
+    if !valid_spellfile(varp_str) {
         return E_INVARG_BEHAVIOR;
     }
     did_set_spell_option()
@@ -716,7 +716,7 @@ pub unsafe extern "C" fn rs_did_set_spellfile(args: *mut c_void) -> CallbackResu
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_spelllang(args: *mut c_void) -> CallbackResult {
     let varp_str = nvim_optset_get_varp_str(args);
-    if nvim_valid_spelllang(varp_str) == 0 {
+    if !valid_spelllang(varp_str) {
         return E_INVARG_BEHAVIOR;
     }
     did_set_spell_option()
@@ -756,7 +756,7 @@ pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResul
 pub unsafe extern "C" fn rs_did_set_spell_full(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
     if nvim_win_get_p_spell(win) != 0 {
-        return nvim_parse_spelllang(win);
+        return parse_spelllang(win);
     }
     callback_ok()
 }
@@ -777,7 +777,7 @@ pub unsafe extern "C" fn rs_did_set_shiftwidth_tabstop(args: *mut c_void) -> Cal
     }
     // When 'shiftwidth' changes, or it's zero and 'tabstop' changes: parse 'cinoptions'.
     if varp == sw_addr || nvim_buf_get_b_p_sw(buf) == 0 {
-        nvim_parse_cino(buf);
+        parse_cino(buf);
     }
     callback_ok()
 }
@@ -1011,7 +1011,7 @@ pub unsafe extern "C" fn rs_did_set_cursorlineopt(args: *mut c_void) -> Callback
     let varp_str = nvim_optset_get_varp_str(args);
     // Check for empty string or invalid flags
     // OK == 1; empty string or invalid flags are errors
-    if varp_str.is_null() || *varp_str == 0 || nvim_fill_culopt_flags(varp_str, win) != 1 {
+    if varp_str.is_null() || *varp_str == 0 || fill_culopt_flags(varp_str.cast_mut(), win) != 1 {
         return E_INVARG_BEHAVIOR;
     }
     callback_ok()
@@ -1038,7 +1038,7 @@ pub unsafe extern "C" fn rs_did_set_vartabstop(args: *mut c_void) -> CallbackRes
 /// Callback for 'guicursor' option (Phase 104).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_guicursor(_args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_parse_guicursor();
+    let errmsg = parse_shape_opt(2); // SHAPE_CURSOR = 2
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -1056,17 +1056,17 @@ pub unsafe extern "C" fn rs_did_set_ambiwidth(args: *mut c_void) -> CallbackResu
     if !errmsg.is_null() {
         return errmsg;
     }
-    nvim_check_chars_options_str()
+    check_chars_options()
 }
 
 /// Callback for 'emoji' option (Phase 104).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_emoji(_args: *mut c_void) -> CallbackResult {
-    if nvim_check_ambiwidth_opt() != 1 {
+    if rs_check_str_opt(crate::opt_index::K_OPT_AMBIWIDTH, std::ptr::null_mut()) != 1 {
         // OK == 1 in C
         return E_INVARG_BEHAVIOR;
     }
-    nvim_check_chars_options_str()
+    check_chars_options()
 }
 
 /// Error message for showbreak containing wide/unprintable character.

@@ -450,9 +450,10 @@ extern "C" {
     fn spell_check_sps();
     fn nvim_call_compile_cap_prog_curwin();
     fn did_set_spell_option() -> *const std::ffi::c_char;
-    fn nvim_call_did_set_cedit();
-    fn nvim_call_did_set_breakat();
-    fn nvim_call_didset_window_options_curwin();
+    fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
+    fn did_set_breakat(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
+    fn didset_window_options(win: crate::WinHandle, valid_cursor: bool);
+    fn nvim_opt_get_curwin() -> crate::WinHandle;
     fn highlight_changed();
     fn check_opt_wim() -> c_int;
     fn nvim_call_set_chars_option_fcs_curwin();
@@ -474,9 +475,9 @@ pub unsafe extern "C" fn rs_didset_options() {
     spell_check_sps();
     nvim_call_compile_cap_prog_curwin();
     did_set_spell_option();
-    nvim_call_did_set_cedit();
-    nvim_call_did_set_breakat();
-    nvim_call_didset_window_options_curwin();
+    did_set_cedit(std::ptr::null_mut());
+    did_set_breakat(std::ptr::null_mut());
+    didset_window_options(nvim_opt_get_curwin(), true);
 }
 
 /// More side effects of setting options.

@@ -434,28 +434,12 @@ int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 // Phase 88: undolevels accessors
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 
-// Phase 95: spell option accessors
-int nvim_valid_spellfile(const char *val) { return valid_spellfile(val) ? 1 : 0; }
-int nvim_valid_spelllang(const char *val) { return valid_spelllang(val) ? 1 : 0; }
-
 // Phase 96: spellcapcheck and keymodel accessors
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 
-// Phase 97: eventignore check_ei accessor
-int nvim_check_ei(const char *val) { return check_ei(val); }
-
-// Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
-int nvim_fill_culopt_flags(const char *val, win_T *win) { return fill_culopt_flags((char *)val, win); }
-
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
-const char *check_chars_options(void);  // defined in optionstr.c
-const char *nvim_parse_guicursor(void) { return parse_shape_opt(SHAPE_CURSOR); }
 int nvim_get_visual_active_opt(void) { return VIsual_active ? 1 : 0; }
 void nvim_redrawWinline_curwin(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
-const char *nvim_check_chars_options_str(void) { return check_chars_options(); }
-// Now calls Rust rs_check_str_opt (check_str_opt deleted from C)
-extern int rs_check_str_opt(int idx, char **varp);
-int nvim_check_ambiwidth_opt(void) { return rs_check_str_opt(kOptAmbiwidth, NULL); }
 
 // Phase 102: highlight accessor
 int nvim_check_highlight_init(void *args) {
@@ -517,10 +501,8 @@ void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud)
 }
 // Spell callback accessor
 int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
-const char *nvim_parse_spelllang(win_T *win) { return parse_spelllang(win); }
 
 // Shiftwidth/tabstop callback accessors
-void nvim_parse_cino(buf_T *buf) { parse_cino(buf); }
 void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
 OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
 
@@ -1786,17 +1768,6 @@ int option_set_callback_func(char *optval, Callback *optcb)
   return OK;
 }
 
-static void didset_options_sctx(int opt_flags, int *buf)
-{
-  for (int i = 0;; i++) {
-    if (buf[i] == kOptInvalid) {
-      break;
-    }
-
-    set_option_sctx(buf[i], opt_flags, current_sctx);
-  }
-}
-
 /// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)
   FUNC_ATTR_WARN_UNUSED_RESULT
@@ -2528,12 +2499,6 @@ int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 extern void didset_string_options(void);  // defined in Rust optionstr crate
 /// compile_cap_prog(curwin->w_s) wrapper.
 void nvim_call_compile_cap_prog_curwin(void) { compile_cap_prog(curwin->w_s); }
-/// did_set_cedit(NULL) wrapper.
-void nvim_call_did_set_cedit(void) { did_set_cedit(NULL); }
-/// did_set_breakat(NULL) wrapper.
-void nvim_call_did_set_breakat(void) { did_set_breakat(NULL); }
-/// didset_window_options(curwin, true) wrapper.
-void nvim_call_didset_window_options_curwin(void) { didset_window_options(curwin, true); }
 /// set_chars_option(curwin, curwin->w_p_fcs, kFillchars, true, NULL, 0)
 void nvim_call_set_chars_option_fcs_curwin(void)
 {
@@ -2568,9 +2533,6 @@ void nvim_call_set_option_direct_with_sctx(int opt_idx, OptVal val, int opt_flag
   set_option_direct((OptIndex)opt_idx, val, opt_flags, current_sctx.sc_sid);
 }
 
-/// win_comp_scroll(curwin) wrapper.
-void nvim_call_win_comp_scroll_curwin(void) { win_comp_scroll(curwin); }
-
 /// FOR_ALL_TAB_WINDOWS win_comp_scroll wrapper.
 void nvim_call_comp_scroll_all_windows(void)
 {
@@ -2578,9 +2540,6 @@ void nvim_call_comp_scroll_all_windows(void)
     win_comp_scroll(wp);
   }
 }
-
-/// parse_cino(curbuf) wrapper.
-void nvim_call_parse_cino_curbuf(void) { parse_cino(curbuf); }
 
 /// free_operatorfunc_option() wrapper (EXITFREE only).
 #if defined(EXITFREE)

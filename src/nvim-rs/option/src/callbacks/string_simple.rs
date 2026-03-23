@@ -680,10 +680,10 @@ pub unsafe extern "C" fn rs_did_set_pumborder(_args: *mut c_void) -> CallbackRes
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_eventignore(args: *mut c_void) -> CallbackResult {
     extern "C" {
-        fn nvim_check_ei(val: *const c_char) -> c_int;
+        fn check_ei(val: *const c_char) -> c_int;
     }
     let varp_str = nvim_optset_get_varp_str(args);
-    if nvim_check_ei(varp_str) == FAIL {
+    if check_ei(varp_str) == FAIL {
         return E_INVARG;
     }
     callback_ok()

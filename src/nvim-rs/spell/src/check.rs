@@ -1687,7 +1687,7 @@ extern "C" {
         callback: unsafe extern "C" fn(*mut c_void, *mut c_void),
         ud: *mut c_void,
     );
-    fn nvim_parse_spelllang(win: *mut c_void) -> *const c_char;
+    fn parse_spelllang(win: *mut c_void) -> *mut c_char;
     fn nvim_win_get_buffer(wp: *const c_void) -> *mut c_void;
     fn nvim_win_get_p_spell(wp: *const c_void) -> c_int;
     fn nvim_win_get_cursor_lnum(wp: *const c_void) -> i32;
@@ -1889,7 +1889,7 @@ unsafe extern "C" fn did_set_spell_option_cb(wp: *mut c_void, ud: *mut c_void) {
         return; // already processed a matching window
     }
     if nvim_win_get_buffer(wp) == curbuf_p1 && nvim_win_get_p_spell(wp) != 0 {
-        (*state).errmsg = nvim_parse_spelllang(wp);
+        (*state).errmsg = parse_spelllang(wp);
         (*state).done = true;
     }
 }

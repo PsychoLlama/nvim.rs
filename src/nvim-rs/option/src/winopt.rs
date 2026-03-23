@@ -39,7 +39,7 @@ extern "C" {
     /// briopt_check(briopt, wp) -- pass NULL for briopt to use current w_p_briopt
     fn briopt_check(briopt: *const c_char, wp: WinHandle) -> bool;
     /// fill_culopt_flags(val, wp) -- pass NULL for val to use current w_p_culopt
-    fn fill_culopt_flags(val: *const c_char, wp: WinHandle) -> c_int;
+    fn fill_culopt_flags(val: *mut c_char, wp: WinHandle) -> c_int;
     fn nvim_call_set_chars_option_fcs(wp: WinHandle);
     fn nvim_call_set_chars_option_lcs(wp: WinHandle);
     fn check_blending(wp: WinHandle);
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn rs_didset_window_options(wp: WinHandle, valid_cursor: b
     }
     check_colorcolumn(std::ptr::null(), wp);
     briopt_check(std::ptr::null(), wp);
-    fill_culopt_flags(std::ptr::null(), wp);
+    fill_culopt_flags(std::ptr::null_mut(), wp);
     nvim_call_set_chars_option_fcs(wp);
     nvim_call_set_chars_option_lcs(wp);
     crate::callbacks::winhl::rs_parse_winhl_opt(std::ptr::null(), wp); // sets w_hl_needs_update also for w_p_winbl

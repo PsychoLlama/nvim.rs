@@ -155,7 +155,7 @@ extern "C" {
     fn get_winopts(buf: *mut BufHandle);
     fn set_last_cursor(win: *mut WinHandle);
     fn nvim_maketitle();
-    fn nvim_parse_spelllang(win: *mut WinHandle) -> *const c_char;
+    fn parse_spelllang(win: *mut WinHandle) -> *mut c_char;
     fn check_arg_idx(win: *mut WinHandle);
     fn nvim_excmds_do_autochdir();
     fn nvim_excmds_changed_line_abv_curs();
@@ -788,7 +788,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             rs_diff_invalidate(nvim_get_curbuf());
         }
         if did_get_winopts && p_spell != 0 && spl_empty == 0 {
-            nvim_parse_spelllang(nvim_get_curwin());
+            parse_spelllang(nvim_get_curwin());
         }
 
         // Position cursor

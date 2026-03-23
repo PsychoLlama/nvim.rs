@@ -520,14 +520,16 @@ extern "C" {
         -> *mut c_uint;
     /// nvim_opt_get_curwin() - get current window handle
     fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
+    /// nvim_opt_get_curbuf() - get current buffer handle
+    fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
+    /// win_comp_scroll(wp) - recompute scroll for a window
+    fn win_comp_scroll(win: *mut std::ffi::c_void);
     /// set_option_direct with current_sctx.sc_sid
     fn nvim_call_set_option_direct_with_sctx(opt_idx: c_int, val: OptVal, opt_flags: c_int);
-    /// win_comp_scroll(curwin)
-    fn nvim_call_win_comp_scroll_curwin();
     /// FOR_ALL_TAB_WINDOWS { win_comp_scroll(wp) }
     fn nvim_call_comp_scroll_all_windows();
-    /// parse_cino(curbuf)
-    fn nvim_call_parse_cino_curbuf();
+    /// parse_cino(buf)
+    fn parse_cino(buf: *mut std::ffi::c_void);
     /// free_operatorfunc_option()
     fn nvim_call_free_operatorfunc_option();
     /// free_findfunc_option()
@@ -620,7 +622,7 @@ pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int)
     nvim_call_set_option_direct_with_sctx(opt_idx, def_val, opt_flags);
 
     if opt_idx == K_OPT_SCROLL {
-        nvim_call_win_comp_scroll_curwin();
+        win_comp_scroll(nvim_opt_get_curwin());
     }
 
     // The default value is not insecure.
@@ -652,7 +654,7 @@ pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
     // The 'scroll' option must be computed for all windows.
     nvim_call_comp_scroll_all_windows();
 
-    nvim_call_parse_cino_curbuf();
+    parse_cino(nvim_opt_get_curbuf());
 }
 
 /// Free all options (EXITFREE path only).
