@@ -61,6 +61,7 @@ extern "C" {
     fn nvim_option_get_flags_ptr(opt_idx: OptIndex) -> *mut c_uint;
 
     // set_option_sctx
+    #[link_name = "nvim_dbg_get_sourcing_lnum"]
     fn nvim_option_get_sourcing_lnum() -> i64;
     fn nlua_set_sctx(sctx: *mut ScriptContext);
     fn nvim_curbuf_set_p_script_ctx(idx: c_int, sctx: ScriptContext);

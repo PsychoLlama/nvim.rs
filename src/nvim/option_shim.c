@@ -972,8 +972,6 @@ uint32_t *nvim_win_allbuf_p_wrap_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt
 uint32_t *nvim_win_allbuf_p_fde_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fde_flags; }
 uint32_t *nvim_win_allbuf_p_fdt_flags_ptr(win_T *wp) { return &wp->w_allbuf_opt.wo_fdt_flags; }
 uint32_t *nvim_option_get_flags_ptr(OptIndex opt_idx) { return &options[opt_idx].flags; }
-// set_option_sctx accessors (nvim_get_sourcing_lnum already defined in ex_docmd.c as int)
-int64_t nvim_option_get_sourcing_lnum(void) { return (int64_t)SOURCING_LNUM; }
 
 void nvim_curbuf_set_p_script_ctx(int idx, sctx_T sctx) { curbuf->b_p_script_ctx[idx] = sctx; }
 void nvim_curwin_set_p_script_ctx(int idx, sctx_T sctx) { curwin->w_p_script_ctx[idx] = sctx; }
@@ -1952,14 +1950,6 @@ int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_d
 
 /// Call emsg(_(msg)) -- translates and shows error message
 void nvim_call_emsg_translated(const char *msg) { emsg(_(msg)); }
-
-/// Call rs_check_illegal_path_names(*(char**)varp, flags)
-/// Returns 1 if illegal path names detected, 0 otherwise.
-extern int rs_check_illegal_path_names(const char *val, uint32_t flags);
-int nvim_check_illegal_path_names(void *varp, uint32_t flags)
-{
-  return rs_check_illegal_path_names(*(const char **)varp, flags);
-}
 
 
 /// Call get_varp_scope(&options[opt_idx], opt_flags)

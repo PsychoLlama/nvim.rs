@@ -52,9 +52,6 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     fn nvim_get_sandbox() -> c_int;
 
-    // Illegal path name check
-    fn nvim_check_illegal_path_names(varp: *mut std::ffi::c_void, flags: c_uint) -> c_int;
-
     // OptVal value operations (already in Rust but called from C side via FFI)
     fn rs_optval_equal(o1: OptVal, o2: OptVal) -> c_int;
     fn rs_optval_free(o: OptVal);
@@ -190,7 +187,10 @@ pub unsafe extern "C" fn rs_did_set_option(
         // Check for illegal path names in string options.
         use crate::OptValType;
         if new_value.type_ == OptValType::String
-            && nvim_check_illegal_path_names(varp, opt_flags_val) != 0
+            && crate::parsing::rs_check_illegal_path_names(
+                *(varp.cast::<*const c_char>()),
+                opt_flags_val,
+            ) != 0
         {
             errmsg = (&raw const crate::e_invarg).cast::<c_char>();
         } else if nvim_option_has_did_set_cb(opt_idx) != 0 {
