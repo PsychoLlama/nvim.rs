@@ -192,12 +192,8 @@ unsigned int nvim_get_rdb_flag_nothrottle(void)
 }
 
 // C accessors for redirection state (used by Rust)
-int nvim_get_redir_fd_not_null(void) { return redir_fd != NULL ? 1 : 0; }
-int nvim_get_p_vfile_not_empty(void) { return *p_vfile != NUL ? 1 : 0; }
-int nvim_get_redir_reg(void) { return redir_reg; }
-int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
-int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
-int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
+// redir_fd/reg/vname/capture_ga/p_vfile: accessed as extern statics from Rust (verbose.rs)
+// nvim_get_ui_active: replaced by direct ui_active() call in grid/src/lib.rs
 
 // nvim_hl_msg_free: still used by Rust (history.rs), calls hl_msg_free(entry->msg) by value
 void nvim_hl_msg_free(MessageHistoryEntry *entry)

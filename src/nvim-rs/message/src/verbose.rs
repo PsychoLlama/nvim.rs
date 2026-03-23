@@ -16,7 +16,6 @@ extern "C" {
     static mut pre_verbose_kind: *const c_char;
     fn nvim_verbose_stop_impl();
     fn nvim_verbose_open_impl() -> c_int;
-    fn nvim_get_p_vfile_not_empty() -> c_int;
 
     // State accessors
     static mut msg_scroll: c_int;
@@ -25,15 +24,24 @@ extern "C" {
 
     // Redirection state
     static mut redir_off: bool;
-    fn nvim_get_redir_fd_not_null() -> c_int;
-    fn nvim_get_redir_reg() -> c_int;
-    fn nvim_get_redir_vname() -> c_int;
-    fn nvim_get_capture_ga_not_null() -> c_int;
+    static mut redir_fd: *mut std::ffi::c_void;
+    static mut redir_reg: c_int;
+    static mut redir_vname: bool;
+    static mut capture_ga: *mut std::ffi::c_void;
+    static mut p_vfile: *mut c_char;
 }
 
 // ============================================================================
 // Verbose Message Functions
 // ============================================================================
+
+/// Returns true if 'verbosefile' option is set (non-empty string).
+///
+/// # Safety
+/// Reads the p_vfile global.
+unsafe fn p_vfile_not_empty() -> bool {
+    !p_vfile.is_null() && *p_vfile != 0
+}
 
 /// Enter verbose message mode.
 ///
@@ -44,7 +52,7 @@ extern "C" {
 /// Calls C accessor functions that modify global state.
 #[export_name = "verbose_enter"]
 pub unsafe extern "C" fn rs_verbose_enter() {
-    if nvim_get_p_vfile_not_empty() != 0 {
+    if p_vfile_not_empty() {
         let silent = msg_silent;
         msg_silent = silent + 1;
     }
@@ -64,7 +72,7 @@ pub unsafe extern "C" fn rs_verbose_enter() {
 /// Calls C accessor functions that modify global state.
 #[export_name = "verbose_leave"]
 pub unsafe extern "C" fn rs_verbose_leave() {
-    if nvim_get_p_vfile_not_empty() != 0 {
+    if p_vfile_not_empty() {
         let silent = msg_silent;
         if silent > 0 {
             msg_silent = silent - 1;
@@ -88,7 +96,7 @@ pub unsafe extern "C" fn rs_verbose_leave() {
 #[export_name = "verbose_enter_scroll"]
 pub unsafe extern "C" fn rs_verbose_enter_scroll() {
     rs_verbose_enter();
-    if nvim_get_p_vfile_not_empty() == 0 {
+    if !p_vfile_not_empty() {
         // always scroll up, don't overwrite
         msg_scroll = 1;
     }
@@ -104,7 +112,7 @@ pub unsafe extern "C" fn rs_verbose_enter_scroll() {
 #[export_name = "verbose_leave_scroll"]
 pub unsafe extern "C" fn rs_verbose_leave_scroll() {
     rs_verbose_leave();
-    if nvim_get_p_vfile_not_empty() == 0 {
+    if !p_vfile_not_empty() {
         cmdline_row = msg_row;
     }
 }
@@ -181,11 +189,11 @@ pub unsafe extern "C" fn rs_redir_enable() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_redirecting() -> c_int {
     c_int::from(
-        nvim_get_redir_fd_not_null() != 0
-            || nvim_get_p_vfile_not_empty() != 0
-            || nvim_get_redir_reg() != 0
-            || nvim_get_redir_vname() != 0
-            || nvim_get_capture_ga_not_null() != 0,
+        !redir_fd.is_null()
+            || p_vfile_not_empty()
+            || redir_reg != 0
+            || redir_vname
+            || !capture_ga.is_null(),
     )
 }
 
@@ -195,7 +203,7 @@ pub unsafe extern "C" fn rs_is_redirecting() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_to_file() -> c_int {
-    nvim_get_redir_fd_not_null()
+    c_int::from(!redir_fd.is_null())
 }
 
 /// Check if redirecting to a register.
@@ -206,7 +214,7 @@ pub unsafe extern "C" fn rs_redir_to_file() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_to_reg() -> c_int {
-    nvim_get_redir_reg()
+    redir_reg
 }
 
 /// Check if redirecting to a variable.
@@ -215,7 +223,7 @@ pub unsafe extern "C" fn rs_redir_to_reg() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_to_var() -> c_int {
-    nvim_get_redir_vname()
+    c_int::from(redir_vname)
 }
 
 /// Check if capturing to ga buffer.
@@ -224,7 +232,7 @@ pub unsafe extern "C" fn rs_redir_to_var() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_capturing() -> c_int {
-    nvim_get_capture_ga_not_null()
+    c_int::from(!capture_ga.is_null())
 }
 
 /// Check if verbose file is in use.
@@ -233,7 +241,7 @@ pub unsafe extern "C" fn rs_redir_capturing() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_verbose_file_active() -> c_int {
-    nvim_get_p_vfile_not_empty()
+    c_int::from(p_vfile_not_empty())
 }
 
 // ============================================================================

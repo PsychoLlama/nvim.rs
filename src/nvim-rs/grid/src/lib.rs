@@ -2475,34 +2475,35 @@ pub unsafe extern "C" fn rs_msg_do_throttle() -> bool {
     use_grid && (rdb_flags & nothrottle) == 0
 }
 
-// Message redirection accessors
+// Message redirection state (accessed as extern statics)
+#[allow(clashing_extern_declarations)]
 extern "C" {
-    fn nvim_get_redir_fd_not_null() -> c_int;
-    fn nvim_get_p_vfile_not_empty() -> c_int;
-    fn nvim_get_redir_reg() -> c_int;
-    fn nvim_get_redir_vname() -> c_int;
-    fn nvim_get_capture_ga_not_null() -> c_int;
+    static mut redir_fd: *mut std::ffi::c_void;
+    static mut p_vfile: *mut std::ffi::c_char;
+    static mut redir_reg: c_int;
+    static mut redir_vname: bool;
+    static mut capture_ga: *mut std::ffi::c_void;
 }
 
 /// Check if output is being redirected.
 ///
 /// # Safety
-/// Calls C accessor functions for redirection state.
+/// Reads redirection state globals directly.
 #[export_name = "redirecting"]
 pub unsafe extern "C" fn rs_redirecting() -> c_int {
     c_int::from(
-        nvim_get_redir_fd_not_null() != 0
-            || nvim_get_p_vfile_not_empty() != 0
-            || nvim_get_redir_reg() != 0
-            || nvim_get_redir_vname() != 0
-            || nvim_get_capture_ga_not_null() != 0,
+        !redir_fd.is_null()
+            || (!p_vfile.is_null() && *p_vfile != 0)
+            || redir_reg != 0
+            || redir_vname
+            || !capture_ga.is_null(),
     )
 }
 
 // Message printf mode accessors
 extern "C" {
     static mut embedded_mode: bool;
-    fn nvim_get_ui_active() -> c_int;
+    fn ui_active() -> usize;
 }
 
 /// Check if messages should be printed to stdout/stderr.
@@ -2514,7 +2515,7 @@ extern "C" {
 /// Calls C accessor functions for embedded mode and UI state.
 #[export_name = "msg_use_printf"]
 pub unsafe extern "C" fn rs_msg_use_printf() -> c_int {
-    c_int::from(!embedded_mode && nvim_get_ui_active() == 0)
+    c_int::from(!embedded_mode && ui_active() == 0)
 }
 
 // UI cursor position accessors

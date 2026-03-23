@@ -201,12 +201,12 @@ extern "C" {
     fn nvim_curbuf_locked() -> c_int;
     fn nvim_docmd_get_p_awa() -> c_int;
 
-    // Redir accessors (redir_fd/reg/vname are in globals.h/message.c)
+    // Redir accessors (redir_fd/reg/vname are in globals.h)
     fn nvim_docmd_get_redir_fd() -> *mut c_void;
     fn nvim_docmd_set_redir_fd(fd: *mut c_void);
-    fn nvim_get_redir_reg() -> c_int;
+    static mut redir_reg: c_int;
     fn nvim_docmd_set_redir_reg(reg: c_int);
-    fn nvim_get_redir_vname() -> c_int;
+    static mut redir_vname: bool;
     fn nvim_docmd_set_redir_vname(val: c_int);
     static mut redir_off: bool;
 
@@ -897,10 +897,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
     }
 
     // Make sure redirection is not off.
-    if !nvim_docmd_get_redir_fd().is_null()
-        || nvim_get_redir_reg() != 0
-        || nvim_get_redir_vname() != 0
-    {
+    if !nvim_docmd_get_redir_fd().is_null() || redir_reg != 0 || redir_vname {
         redir_off = false;
     }
 }
