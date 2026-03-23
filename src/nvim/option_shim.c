@@ -1131,11 +1131,7 @@ void *nvim_curwin_p_fdl_varp(void) { return &curwin->w_p_fdl; }
 void *nvim_curwin_p_fml_varp(void) { return &curwin->w_p_fml; }
 void *nvim_curwin_p_fdn_varp(void) { return &curwin->w_p_fdn; }
 void *nvim_curwin_p_fen_varp(void) { return &curwin->w_p_fen; }
-int nvim_call_fprintf(FILE *fd, const char *str) { return fputs(str, fd); }
-int nvim_call_fprintf_int(FILE *fd, const char *fmt, int64_t val)
-{
-  return fprintf(fd, fmt, val);
-}
+
 void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
 {
   *name = options[opt_idx].fullname;
