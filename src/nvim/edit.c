@@ -83,24 +83,9 @@
 #include "nvim/window.h"
 
 // Rust implementations (called directly instead of C wrappers)
-extern int rs_ctrl_x_mode_none(void);
 extern int rs_ctrl_x_mode_scroll(void);
-extern int rs_ctrl_x_mode_cmdline(void);
-extern int rs_ctrl_x_mode_line_or_eval(void);
 extern int rs_ins_compl_active(void);
-extern int rs_ins_compl_accept_char(int c);
-extern int rs_ins_compl_used_match(void);
-extern int rs_ins_compl_enter_selects(void);
 extern int rs_ins_compl_col(void);
-extern int rs_ins_compl_preinsert_effect(void);
-extern int rs_ins_compl_has_autocomplete(void);
-extern int rs_ins_compl_is_match_selected(void);
-extern int rs_ins_compl_preinsert_longest(void);
-extern int rs_ins_compl_has_shown_match(void);
-extern int rs_ins_compl_long_shown_match(void);
-extern int rs_pum_wanted(void);
-extern void rs_ins_compl_init_get_longest(void);
-extern void rs_ins_compl_enable_autocomplete(void);
 
 typedef struct {
   VimState state;
@@ -126,10 +111,6 @@ typedef struct {
 } InsertState;
 
 // Forward declarations for functions now implemented in Rust (dispatch.rs / enter.rs).
-extern int insert_handle_key(InsertState *s);
-extern void insert_do_complete(InsertState *s);
-extern void insert_do_cindent(InsertState *s);
-extern void insert_handle_key_post(InsertState *s);
 extern void insert_enter(InsertState *s);
 
 #include "edit.c.generated.h"
@@ -138,7 +119,6 @@ extern int rs_get_scrolloff_value(win_T *wp);
 
 // Rust fold FFI declarations
 extern void rs_foldOpenCursor(void);
-extern void rs_foldCheckClose(void);
 
 enum {
   BACKSPACE_CHAR = 1,
@@ -187,36 +167,23 @@ extern void rs_start_selection(void);
 extern int insert_check_rs(VimState *state);
 extern int insert_execute_rs(VimState *state, int key);
 
+
 // NOTE: ins_esc returns int (not bool) to match Rust c_int ABI.
-extern int ins_esc(int *count, int cmdchar, int nomove);
-extern void ins_reg(void);
 
 extern void insert_special(int c, int allow_modmask, int ctrlv);
 extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
-extern void check_spell_redraw(void);
 extern int echeck_abbr(int c);
-extern int replace_pop_if_nul(void);
 extern void replace_join(int off);
 extern void replace_pop_ins(void);
-extern void mb_replace_pop_ins(void);
 extern void replace_do_bs(int limit_col);
 extern void ins_ctrl_o(void);
 extern int ins_start_select(int c);
 extern char *do_insert_char_pre(int c);
-extern int del_char_after_col(int limit_col);
 extern void undisplay_dollar(void);
 extern void backspace_until_column(int col);
 extern int get_literal(bool no_simplify);
 extern void start_arrow(pos_T *end_insert_pos);
 extern int stop_arrow(void);
-extern void set_last_insert(int c);
-extern void free_last_insert(void);
-extern void beginline(int flags);
-extern int oneright(void);
-extern int oneleft(void);
-extern int cursor_up(linenr_T n, bool upd_topline);
-extern int cursor_down(int n, bool upd_topline);
-extern int stuff_inserted(int c, int count, int no_esc);
 extern char *get_last_insert_save(void);
 extern void replace_push_nul(void);
 extern int ins_copychar(linenr_T lnum);
