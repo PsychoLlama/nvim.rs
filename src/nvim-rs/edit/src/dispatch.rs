@@ -163,16 +163,16 @@ extern "C" {
     fn nvim_dec_disable_fold_update();
     fn nvim_set_compl_busy(val: bool);
     fn nvim_update_can_si_from_may_do_si();
-    fn nvim_edit_ins_complete(c: c_int) -> c_int;
-    fn nvim_edit_check_compl_option(allow_always: c_int) -> c_int;
+    fn nvim_ins_complete_with_key(c: c_int) -> c_int;
+    fn nvim_check_compl_option_ins(allow_always: c_int) -> c_int;
     fn ins_ctrl_x();
-    fn nvim_edit_do_cmdline_getcmdkeycmd();
-    fn nvim_edit_map_execute_lua();
-    fn nvim_edit_paste_repeat();
+    fn nvim_do_cmdline_getcmdkeycmd();
+    fn nvim_map_execute_lua_false();
+    fn nvim_paste_repeat(count: c_int);
     fn state_handle_k_event();
     fn nvim_curwin_is_qf_not_ll() -> c_int;
-    fn nvim_edit_quickfix_cc();
-    fn nvim_edit_quickfix_ll();
+    fn nvim_quickfix_cc();
+    fn nvim_quickfix_ll();
     fn invoke_prompt_interrupt() -> bool;
     fn prompt_invoke_callback();
     fn nvim_get_curbuf_b_u_synced() -> bool;
@@ -180,7 +180,7 @@ extern "C" {
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
     fn nvim_inindent_zero() -> bool;
-    fn nvim_edit_auto_format(force_format: c_int);
+    fn nvim_auto_format_ins(force_format: c_int);
     fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
     fn do_c_expr_indent();
     fn ins_reg();
@@ -190,8 +190,8 @@ extern "C" {
     fn nvim_bt_quickfix_curbuf() -> c_int;
     fn nvim_bt_prompt_curbuf() -> bool;
     fn nvim_search_get_curwin_w_p_rl() -> c_int;
-    fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
-    fn nvim_edit_get_cpt_first_char() -> c_int;
+    fn nvim_cursor_col_ge_compl_col() -> c_int;
+    fn nvim_get_cpt_first_char() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
     fn nvim_has_ve_flag_onemore() -> bool;
     fn nvim_redraw_later_valid();
@@ -415,7 +415,7 @@ enum SwitchAction {
 pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
     nvim_set_compl_busy(true);
     nvim_inc_disable_fold_update();
-    if nvim_edit_ins_complete((*s).c) == FAIL {
+    if nvim_ins_complete_with_key((*s).c) == FAIL {
         rs_compl_status_clear();
     }
     nvim_dec_disable_fold_update();
@@ -638,7 +638,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
         nvim_set_revins_chars(nvim_get_revins_chars() + 1);
     }
 
-    nvim_edit_auto_format(1); // prev_line=true
+    nvim_auto_format_ins(1); // prev_line=true
 
     rs_foldOpenCursor();
 
@@ -729,7 +729,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Continue;
             }
             ins_reg();
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
@@ -759,33 +759,33 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             }
             // FALLTHROUGH to CTRL_T
             ins_shift((*s).c, (*s).lastc);
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
 
         CTRL_T => {
             if rs_ctrl_x_mode_thesaurus() != 0 {
-                if nvim_edit_check_compl_option(0) != 0 {
+                if nvim_check_compl_option_ins(0) != 0 {
                     rs_insert_do_complete(s);
                 }
                 return SwitchAction::Continue;
             }
             ins_shift((*s).c, (*s).lastc);
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
 
         K_DEL | K_KDEL => {
             ins_del();
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             SwitchAction::Continue
         }
 
         K_BS | CTRL_H => {
             (*s).did_backspace = ins_bs((*s).c, BACKSPACE_CHAR, &raw mut (*s).inserted_space);
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             if (*s).did_backspace && may_trigger_autocomplete(s) {
                 return SwitchAction::Continue;
             }
@@ -801,7 +801,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Exit(0);
             }
             (*s).did_backspace = ins_bs((*s).c, BACKSPACE_WORD, &raw mut (*s).inserted_space);
-            nvim_edit_auto_format(1);
+            nvim_auto_format_ins(1);
             if (*s).did_backspace && may_trigger_autocomplete(s) {
                 return SwitchAction::Continue;
             }
@@ -813,7 +813,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 rs_insert_do_complete(s);
             } else {
                 (*s).did_backspace = ins_bs((*s).c, BACKSPACE_LINE, &raw mut (*s).inserted_space);
-                nvim_edit_auto_format(1);
+                nvim_auto_format_ins(1);
                 (*s).inserted_space = 0;
                 if (*s).did_backspace && may_trigger_autocomplete(s) {
                     return SwitchAction::Continue;
@@ -850,7 +850,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         // K_IGNORE: merged with K_SELECT above
         K_PASTE_START => {
-            nvim_edit_paste_repeat();
+            nvim_paste_repeat(1);
             SwitchAction::CheckPum
         }
 
@@ -864,12 +864,12 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_COMMAND => {
-            nvim_edit_do_cmdline_getcmdkeycmd();
+            nvim_do_cmdline_getcmdkeycmd();
             SwitchAction::CheckPum
         }
 
         K_LUA => {
-            nvim_edit_map_execute_lua();
+            nvim_map_execute_lua_false();
             SwitchAction::CheckPum
         }
 
@@ -970,7 +970,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_K => {
             if rs_ctrl_x_mode_dictionary() != 0 {
-                if nvim_edit_check_compl_option(1) != 0 {
+                if nvim_check_compl_option_ins(1) != 0 {
                     rs_insert_do_complete(s);
                 }
                 return SwitchAction::Continue;
@@ -1055,7 +1055,7 @@ unsafe fn handle_tab(s: *mut InsertState) -> SwitchAction {
     if ins_tab() {
         return SwitchAction::NormalChar; // insert TAB as normal char
     }
-    nvim_edit_auto_format(1);
+    nvim_auto_format_ins(1);
     SwitchAction::Continue
 }
 
@@ -1063,9 +1063,9 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     // In quickfix window, <CR> jumps to error under cursor.
     if nvim_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
         if nvim_curwin_is_qf_not_ll() != 0 {
-            nvim_edit_quickfix_cc();
+            nvim_quickfix_cc();
         } else {
-            nvim_edit_quickfix_ll();
+            nvim_quickfix_ll();
         }
         return SwitchAction::Continue;
     }
@@ -1083,7 +1083,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     if !ins_eol((*s).c) {
         return SwitchAction::Exit(0); // out of memory
     }
-    nvim_edit_auto_format(0);
+    nvim_auto_format_ins(0);
     (*s).inserted_space = 0;
     SwitchAction::Continue
 }
@@ -1091,7 +1091,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
 unsafe fn handle_completion_pn(s: *mut InsertState) -> SwitchAction {
     // If 'complete' is empty then plain ^P is no longer special,
     // but it is under other ^X modes.
-    if nvim_edit_get_cpt_first_char() == NUL as c_int
+    if nvim_get_cpt_first_char() == NUL as c_int
         && (rs_ctrl_x_mode_normal() != 0 || rs_ctrl_x_mode_whole_line() != 0)
         && rs_compl_status_local() == 0
     {

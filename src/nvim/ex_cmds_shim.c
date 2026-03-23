@@ -2398,3 +2398,8 @@ bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) !=
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
 void nvim_do_join_simple(void) { do_join(2, false, false, false, false); }
+
+// Insert mode command/cmdline accessors (migrated from edit.c)
+void nvim_do_cmdline_getcmdkeycmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
+void nvim_quickfix_cc(void) { do_cmdline_cmd(".cc"); }
+void nvim_quickfix_ll(void) { do_cmdline_cmd(".ll"); }

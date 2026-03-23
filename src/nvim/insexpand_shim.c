@@ -3746,3 +3746,11 @@ add_word_check:
 }
 
 void nvim_update_can_si_from_may_do_si(void) { can_si = may_do_si(); }
+
+// Insert-mode autocmd/completion accessors (migrated from edit.c)
+void nvim_ins_apply_insertenter(void) { ins_apply_autocmds(EVENT_INSERTENTER); }
+void nvim_ins_apply_insertleave(void) { ins_apply_autocmds(EVENT_INSERTLEAVE); }
+int nvim_ins_apply_autocmds_insertcharpre(void) { return ins_apply_autocmds(EVENT_INSERTCHARPRE); }
+int nvim_ins_complete_with_key(int c) { return ins_complete(c, true); }
+int nvim_check_compl_option_ins(int allow_always) { return check_compl_option(allow_always != 0) ? 1 : 0; }
+int nvim_get_cpt_first_char(void) { return (unsigned char)*curbuf->b_p_cpt; }

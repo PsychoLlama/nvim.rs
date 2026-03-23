@@ -56,7 +56,7 @@ extern "C" {
     fn nvim_edit_start_arrow_curpos();
     fn AppendCharToRedobuff(c: c_int);
     fn vim_beep(val: c_uint);
-    fn nvim_edit_ww_allows(ch: c_int) -> c_int;
+    fn nvim_ww_allows(ch: c_int) -> c_int;
     fn nvim_curwin_cursor_lnum_add(delta: LinenrT);
 
     // Movement functions (canonical names, exported from Rust)
@@ -77,8 +77,8 @@ extern "C" {
     fn rs_foldOpenCursor();
 
     // Scrolling / tab pages
-    fn nvim_edit_pagescroll_backward() -> c_int;
-    fn nvim_edit_pagescroll_forward() -> c_int;
+    fn nvim_pagescroll_backward() -> c_int;
+    fn nvim_pagescroll_forward() -> c_int;
     fn nvim_first_tabpage_has_next() -> c_int;
     fn nvim_goto_tabpage(n: c_int);
 
@@ -164,7 +164,7 @@ unsafe fn ins_left_impl() {
             nvim_set_revins_legal(nvim_get_revins_legal() + 1);
         }
         nvim_set_revins_chars(nvim_get_revins_chars() + 1);
-    } else if nvim_edit_ww_allows(i32::from(b'[')) != 0 && nvim_curwin_get_cursor_lnum() > 1 {
+    } else if nvim_ww_allows(i32::from(b'[')) != 0 && nvim_curwin_get_cursor_lnum() > 1 {
         // if 'whichwrap' set for cursor in insert mode may go to previous line
         nvim_edit_start_arrow_from_slot(0);
         nvim_curwin_cursor_lnum_add(-1);
@@ -211,7 +211,7 @@ unsafe fn ins_right_impl() {
         if nvim_get_revins_chars() != 0 {
             nvim_set_revins_chars(nvim_get_revins_chars() - 1);
         }
-    } else if nvim_edit_ww_allows(i32::from(b']')) != 0
+    } else if nvim_ww_allows(i32::from(b']')) != 0
         && nvim_curwin_get_cursor_lnum() < nvim_qf_curbuf_line_count()
     {
         // if 'whichwrap' set for cursor in insert mode, may move to next line
@@ -413,7 +413,7 @@ unsafe fn ins_pageup_impl() {
     }
 
     nvim_edit_save_cursor(0);
-    if nvim_edit_pagescroll_backward() == OK {
+    if nvim_pagescroll_backward() == OK {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
@@ -444,7 +444,7 @@ unsafe fn ins_pagedown_impl() {
     }
 
     nvim_edit_save_cursor(0);
-    if nvim_edit_pagescroll_forward() == OK {
+    if nvim_pagescroll_forward() == OK {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {

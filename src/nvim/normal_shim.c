@@ -2306,3 +2306,21 @@ bool nvim_is_literal_register(int regname) { return is_literal_register(regname)
 size_t nvim_reg_y_size(void *reg) { return ((yankreg_T *)reg)->y_size; }
 int nvim_curbuf_meta_total_inline(void) { return buf_meta_total(curbuf, kMTMetaInline); }
 int nvim_get_p_ch_zero_no_ui_messages(void) { return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0; }
+
+// Insert mode general accessors (migrated from edit.c)
+extern int rs_ins_compl_col(void);
+int nvim_has_event_insertcharpre(void) { return has_event(EVENT_INSERTCHARPRE) ? 1 : 0; }
+int nvim_pagescroll_backward(void) { return pagescroll(BACKWARD, 1, false); }
+int nvim_pagescroll_forward(void) { return pagescroll(FORWARD, 1, false); }
+void nvim_map_execute_lua_false(void) { map_execute_lua(false, false); }
+void nvim_auto_format_ins(int force_format) { auto_format(false, force_format != 0); }
+int nvim_get_need_highlight_changed(void) { return need_highlight_changed ? 1 : 0; }
+void nvim_set_need_start_insertmode(int val) { need_start_insertmode = (val != 0); }
+void nvim_state_enter(void *state) { state_enter((VimState *)state); }
+int nvim_ww_allows(int ch) { return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0; }
+int nvim_vv_char_is_empty(void) { return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0; }
+int nvim_cursor_on_tab_or_inline(void) { return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0; }
+void nvim_set_vv_insertmode(int cmdchar) { const char *ptr = cmdchar == 'R' ? "r" : cmdchar == 'V' ? "v" : "i"; set_vim_var_string(VV_INSERTMODE, ptr, 1); }
+int nvim_cursor_col_ge_compl_col(void) { return curwin->w_cursor.col >= rs_ins_compl_col() ? 1 : 0; }
+void nvim_change_warning_col(int col) { change_warning(curbuf, col); }
+void nvim_check_cursor_col_insert_mode(void) { int save_state = State; State = MODE_INSERT; check_cursor_col(curwin); State = save_state; }

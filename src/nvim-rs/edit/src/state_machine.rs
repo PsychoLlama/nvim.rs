@@ -375,7 +375,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
 
     // Special handling when popup menu is visible/wanted and cursor is in completed word
     if unsafe { rs_ins_compl_active() } != 0
-        && unsafe { nvim_edit_cursor_col_ge_compl_col() } != 0
+        && unsafe { nvim_cursor_col_ge_compl_col() } != 0
         && unsafe { rs_ins_compl_has_shown_match() } != 0
         && unsafe { rs_pum_wanted() } != 0
     {
@@ -548,7 +548,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
 extern "C" {
     fn nvim_get_can_cindent() -> c_int;
     fn rs_ins_compl_col() -> c_int;
-    fn nvim_edit_cursor_col_ge_compl_col() -> c_int;
+    fn nvim_cursor_col_ge_compl_col() -> c_int;
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_edit_plain_vgetc_no_mapping() -> c_int;

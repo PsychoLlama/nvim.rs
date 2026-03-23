@@ -705,11 +705,6 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   }
 }
 
-/// Check has_event(EVENT_INSERTCHARPRE) (accessor for Rust).
-int nvim_edit_has_event_insertcharpre(void)
-{
-  return has_event(EVENT_INSERTCHARPRE) ? 1 : 0;
-}
 
 /// Call set_vim_var_string(VV_CHAR, buf, len) (accessor for Rust).
 void nvim_edit_set_vim_var_char(const char *buf, ptrdiff_t len)
@@ -722,11 +717,6 @@ const char *nvim_edit_get_vim_var_char(void)
   return get_vim_var_str(VV_CHAR);
 }
 
-/// Call ins_apply_autocmds(EVENT_INSERTCHARPRE) (accessor for Rust).
-int nvim_edit_ins_apply_autocmds_insertcharpre(void)
-{
-  return ins_apply_autocmds(EVENT_INSERTCHARPRE);
-}
 
 // Saved cursor positions for start_arrow calls (2 slots)
 static pos_T edit_saved_cursor[2];
@@ -765,13 +755,6 @@ void nvim_edit_start_arrow_with_change_curpos(bool end_change)
 }
 
 
-/// Check if p_ww (whichwrap) allows the given character (accessor for Rust).
-int nvim_edit_ww_allows(int ch)
-{
-  return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0;
-}
-
-
 /// Call coladvance(curwin, getvcol_nolist(&Insstart)) (accessor for Rust).
 void nvim_edit_coladvance_insstart(void)
 {
@@ -792,18 +775,6 @@ int nvim_edit_topline_changed(void)
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
 
-
-/// Call pagescroll(BACKWARD, 1, false) and return result (accessor for Rust).
-int nvim_edit_pagescroll_backward(void)
-{
-  return pagescroll(BACKWARD, 1, false);
-}
-
-/// Call pagescroll(FORWARD, 1, false) and return result (accessor for Rust).
-int nvim_edit_pagescroll_forward(void)
-{
-  return pagescroll(FORWARD, 1, false);
-}
 
 /// ins_insert() wrapper — handles set_vim_var_string, autocmds, mode change.
 void nvim_edit_ins_insert(int replaceState)
@@ -1029,74 +1000,10 @@ int nvim_edit_get_pum_want_finish(void)
 }
 
 
-/// Call ins_complete(c, true) (accessor for Rust).
-int nvim_edit_ins_complete(int c)
-{
-  return ins_complete(c, true);
-}
-
-/// Call check_compl_option(allow_always) (accessor for Rust).
-int nvim_edit_check_compl_option(int allow_always)
-{
-  return check_compl_option(allow_always != 0) ? 1 : 0;
-}
-
-
-/// Call do_cmdline(NULL, getcmdkeycmd, NULL, 0) (accessor for Rust).
-void nvim_edit_do_cmdline_getcmdkeycmd(void)
-{
-  do_cmdline(NULL, getcmdkeycmd, NULL, 0);
-}
-
-/// Call map_execute_lua(false, false) (accessor for Rust).
-void nvim_edit_map_execute_lua(void)
-{
-  map_execute_lua(false, false);
-}
-
-/// Call paste_repeat(1) (accessor for Rust).
-void nvim_edit_paste_repeat(void)
-{
-  paste_repeat(1);
-}
-
-
-/// Call do_cmdline_cmd(".cc") for quickfix (accessor for Rust).
-void nvim_edit_quickfix_cc(void)
-{
-  do_cmdline_cmd(".cc");
-}
-
-/// Call do_cmdline_cmd(".ll") for location list (accessor for Rust).
-void nvim_edit_quickfix_ll(void)
-{
-  do_cmdline_cmd(".ll");
-}
-
-
-/// Call auto_format(false, force_format) (accessor for Rust).
-void nvim_edit_auto_format(int force_format)
-{
-  auto_format(false, force_format != 0);
-}
-
 /// Call in_cinkeys(c, type, line_is_white) (accessor for Rust).
 int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
 {
   return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0;
-}
-
-
-/// Check if curwin->w_cursor.col >= rs_ins_compl_col() (accessor for Rust).
-int nvim_edit_cursor_col_ge_compl_col(void)
-{
-  return curwin->w_cursor.col >= rs_ins_compl_col() ? 1 : 0;
-}
-
-/// Get curbuf->b_p_cpt (complete option), first char (accessor for Rust).
-int nvim_edit_get_cpt_first_char(void)
-{
-  return (unsigned char)*curbuf->b_p_cpt;
 }
 
 
@@ -1319,29 +1226,10 @@ void nvim_edit_init_Insstart(int startln)
 }
 
 
-/// Get need_highlight_changed (accessor for Rust).
-int nvim_edit_get_need_highlight_changed(void)
-{
-  return need_highlight_changed ? 1 : 0;
-}
-
-/// Check if cursor is on a TAB or inline virtual text (accessor for Rust).
-int nvim_edit_cursor_on_tab_or_inline(void)
-{
-  return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0;
-}
-
-
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
 {
   revins_on = (val != 0);
-}
-
-/// Set need_start_insertmode (accessor for Rust).
-void nvim_edit_set_need_start_insertmode(int val)
-{
-  need_start_insertmode = (val != 0);
 }
 
 
@@ -1368,41 +1256,6 @@ int nvim_edit_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd)
   return equalpos(curwin->w_cursor, saved) ? 1 : 0;
 }
 
-/// Get *get_vim_var_str(VV_CHAR) == NUL (accessor for Rust).
-int nvim_edit_vv_char_is_empty(void)
-{
-  return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0;
-}
-
-
-/// Set State to MODE_INSERT temporarily, call check_cursor_col, restore State.
-void nvim_edit_check_cursor_col_in_insert_mode(void)
-{
-  int save_state = State;
-  State = MODE_INSERT;
-  check_cursor_col(curwin);
-  State = save_state;
-}
-
-/// Call set_vim_var_string(VV_INSERTMODE, ptr, 1) where ptr depends on cmdchar.
-void nvim_edit_set_vv_insertmode(int cmdchar)
-{
-  const char *ptr = cmdchar == 'R' ? "r" : cmdchar == 'V' ? "v" : "i";
-  set_vim_var_string(VV_INSERTMODE, ptr, 1);
-}
-
-
-/// Call ins_apply_autocmds(EVENT_INSERTENTER) (accessor for Rust).
-void nvim_edit_ins_apply_insertenter(void)
-{
-  ins_apply_autocmds(EVENT_INSERTENTER);
-}
-
-/// Call ins_apply_autocmds(EVENT_INSERTLEAVE) (accessor for Rust).
-void nvim_edit_ins_apply_insertleave(void)
-{
-  ins_apply_autocmds(EVENT_INSERTLEAVE);
-}
 
 /// Get Insstart_textlen from linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
 void nvim_edit_init_Insstart_textlen(void)
@@ -1465,20 +1318,6 @@ int nvim_edit_handle_restart_edit_cursor(void)
   }
   arrow_used = false;
   return 0;
-}
-
-
-/// Call change_warning(curbuf, col) (accessor for Rust).
-void nvim_edit_change_warning(int col)
-{
-  change_warning(curbuf, col);
-}
-
-
-/// Call state_enter(&s->state) (accessor for Rust).
-void nvim_edit_state_enter(void *state)
-{
-  state_enter((VimState *)state);
 }
 
 

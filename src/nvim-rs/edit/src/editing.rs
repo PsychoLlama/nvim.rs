@@ -41,12 +41,12 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
 
     // -- do_insert_char_pre dependencies --
-    fn nvim_edit_has_event_insertcharpre() -> c_int;
+    fn nvim_has_event_insertcharpre() -> c_int;
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     fn nvim_edit_set_vim_var_char(buf: *const c_char, len: isize);
     fn nvim_edit_get_vim_var_char() -> *const c_char;
-    fn nvim_edit_ins_apply_autocmds_insertcharpre() -> c_int;
+    fn nvim_ins_apply_autocmds_insertcharpre() -> c_int;
     fn nvim_set_State(val: c_int);
     fn nvim_get_State() -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
@@ -299,7 +299,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     }
 
     // Return quickly when there is nothing to do.
-    if nvim_edit_has_event_insertcharpre() == 0 {
+    if nvim_has_event_insertcharpre() == 0 {
         return std::ptr::null_mut();
     }
 
@@ -314,7 +314,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     nvim_edit_set_vim_var_char(buf.as_ptr().cast(), buflen as isize);
 
     let mut res: *mut c_char = std::ptr::null_mut();
-    if nvim_edit_ins_apply_autocmds_insertcharpre() != 0 {
+    if nvim_ins_apply_autocmds_insertcharpre() != 0 {
         // Get the value of v:char. Only use it when changed.
         let vchar = nvim_edit_get_vim_var_char();
         // Compare buf (our original) with v:char

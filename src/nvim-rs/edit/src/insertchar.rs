@@ -93,7 +93,7 @@ extern "C" {
     fn rs_redo_literal(c: c_int);
 
     // -- events --
-    fn nvim_edit_has_event_insertcharpre() -> c_int;
+    fn nvim_has_event_insertcharpre() -> c_int;
 
     // -- cindent --
     fn cindent_on() -> bool;
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
     // `InsertCharPre` autocommand could change the input buffer.
     if !is_special(c)
         && utf_char2len(c) == 1
-        && nvim_edit_has_event_insertcharpre() == 0
+        && nvim_has_event_insertcharpre() == 0
         && nvim_test_disable_char_avail() == 0
         && vpeekc() != 0 // != NUL
         && nvim_get_State() & REPLACE_FLAG == 0

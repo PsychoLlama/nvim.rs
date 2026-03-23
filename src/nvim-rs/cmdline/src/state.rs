@@ -1097,7 +1097,7 @@ unsafe extern "C" {
     fn vim_beep(flag: c_int);
     fn set_no_hlsearch(flag: c_int);
     fn nvim_state_handle_k_event();
-    fn nvim_edit_map_execute_lua();
+    fn nvim_map_execute_lua_false();
     fn nvim_cmdline_do_cmdline_nowait();
     fn msg_cursor_goto(row: c_int, col: c_int);
     fn ui_flush();
@@ -1306,7 +1306,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         } else if c == K_COMMAND {
             nvim_cmdline_do_cmdline_nowait();
         } else {
-            nvim_edit_map_execute_lua();
+            nvim_map_execute_lua_false();
         }
         // If the window changed incremental search state is not valid.
         nvim_cls_maybe_reset_incsearch_state(s);

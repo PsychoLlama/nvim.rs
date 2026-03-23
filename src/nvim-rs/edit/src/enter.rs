@@ -69,9 +69,9 @@ extern "C" {
     );
     fn nvim_edit_restore_cursor_pos(lnum: LinenrT, col: ColnrT, coladd: ColnrT);
     fn nvim_edit_cursor_equals_saved(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
-    fn nvim_edit_cursor_on_tab_or_inline() -> c_int;
+    fn nvim_cursor_on_tab_or_inline() -> c_int;
     fn nvim_curwin_invalidate_wrow_wcol_virtcol();
-    fn nvim_edit_check_cursor_col_in_insert_mode();
+    fn nvim_check_cursor_col_insert_mode();
 
     // Buffer
     fn nvim_get_curbuf_ml_line_count() -> LinenrT;
@@ -100,7 +100,7 @@ extern "C" {
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
-    fn nvim_edit_set_need_start_insertmode(val: c_int);
+    fn nvim_set_need_start_insertmode(val: c_int);
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_get_can_cindent() -> c_int;
     fn nvim_set_can_cindent(val: c_int);
@@ -109,15 +109,15 @@ extern "C" {
     fn nvim_set_old_indent(val: c_int);
     fn nvim_set_new_insert_skip(val: c_int);
     fn nvim_get_p_ri() -> c_int;
-    fn nvim_edit_get_need_highlight_changed() -> c_int;
+    fn nvim_get_need_highlight_changed() -> c_int;
     fn nvim_set_did_cursorhold(val: bool);
 
     // AutocmdS
-    fn nvim_edit_set_vv_insertmode(cmdchar: c_int);
+    fn nvim_set_vv_insertmode(cmdchar: c_int);
     fn nvim_textfmt_clear_vv_char();
-    fn nvim_edit_ins_apply_insertenter();
-    fn nvim_edit_ins_apply_insertleave();
-    fn nvim_edit_vv_char_is_empty() -> c_int;
+    fn nvim_ins_apply_insertenter();
+    fn nvim_ins_apply_insertleave();
+    fn nvim_vv_char_is_empty() -> c_int;
     fn highlight_changed();
 
     // Redo
@@ -133,9 +133,9 @@ extern "C" {
     // Utilities
     fn nvim_drawscreen_msg_check_for_delay();
     fn showmode() -> c_int;
-    fn nvim_edit_change_warning(col: c_int);
+    fn nvim_change_warning_col(col: c_int);
     fn pum_check_clear();
-    fn nvim_edit_state_enter(state: *mut c_void);
+    fn nvim_state_enter(state: *mut c_void);
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_edit_get_inserted_size() -> c_int;
     fn nvim_edit_handle_restart_edit_cursor() -> c_int;
@@ -188,23 +188,23 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         let mut save_coladd: ColnrT = 0;
         nvim_edit_save_cursor_pos(&raw mut save_lnum, &raw mut save_col, &raw mut save_coladd);
 
-        nvim_edit_set_vv_insertmode(cmdchar);
+        nvim_set_vv_insertmode(cmdchar);
         nvim_textfmt_clear_vv_char();
-        nvim_edit_ins_apply_insertenter();
+        nvim_ins_apply_insertenter();
 
         // Check for changed highlighting, e.g. for ModeMsg.
-        if nvim_edit_get_need_highlight_changed() != 0 {
+        if nvim_get_need_highlight_changed() != 0 {
             highlight_changed();
         }
 
         // Make sure the cursor didn't move. Do call check_cursor_col() in
         // case the text was modified.
         if nvim_edit_cursor_equals_saved(save_lnum, save_col, save_coladd) == 0
-            && nvim_edit_vv_char_is_empty() != 0
+            && nvim_vv_char_is_empty() != 0
             && save_lnum <= nvim_get_curbuf_ml_line_count()
         {
             nvim_edit_restore_cursor_pos(save_lnum, save_col, save_coladd);
-            nvim_edit_check_cursor_col_in_insert_mode();
+            nvim_check_cursor_col_insert_mode();
         }
     }
 
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text
-    if nvim_edit_cursor_on_tab_or_inline() != 0 {
+    if nvim_cursor_on_tab_or_inline() != 0 {
         nvim_curwin_invalidate_wrow_wcol_virtcol();
     }
 
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     nvim_edit_handle_restart_edit_cursor();
 
     // We are in insert mode now, don't need to start it anymore
-    nvim_edit_set_need_start_insertmode(0);
+    nvim_set_need_start_insertmode(0);
 
     // Need to save the line for undo before inserting the first char.
     nvim_set_ins_need_undo(1);
@@ -310,7 +310,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     (*s).i = show_i;
 
     if nvim_get_did_restart_edit() == 0 {
-        nvim_edit_change_warning(if show_i == 0 { 0 } else { show_i + 1 });
+        nvim_change_warning_col(if show_i == 0 { 0 } else { show_i + 1 });
     }
 
     // nvim calls ui_cursor_shape() and do_digraph(-1) via C helpers not yet wrapped;
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // Main insert event loop.
     // If count != 0, ins_esc will return false to repeat.
     loop {
-        nvim_edit_state_enter(std::ptr::addr_of_mut!((*s).state).cast::<c_void>());
+        nvim_state_enter(std::ptr::addr_of_mut!((*s).state).cast::<c_void>());
         if ins_esc(&raw mut (*s).count, (*s).cmdchar, c_int::from((*s).nomove)) != 0 {
             break;
         }
@@ -344,7 +344,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // that the autocommands won't be executed. When mapped got_int
     // is not set, but let's keep the behavior the same.
     if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') && (*s).c != CTRL_C {
-        nvim_edit_ins_apply_insertleave();
+        nvim_ins_apply_insertleave();
     }
     nvim_set_did_cursorhold(false);
 
