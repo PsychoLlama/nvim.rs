@@ -1864,13 +1864,6 @@ void nvim_ins_complete_setup_match_state(int direction)
 /// Compound accessor: return os_hrtime().
 // nvim_os_hrtime: deleted (Phase 3, Rust calls os_hrtime directly)
 
-/// Compound accessor: check if first_match->cp_next is the first match (no matches case).
-int nvim_compl_first_match_next_is_first(void)
-{
-  return (compl_first_match && compl_first_match->cp_next
-          && is_first_match(compl_first_match->cp_next)) ? 1 : 0;
-}
-
 /// Compound accessor: update compl_cont_status based on compl_curr_match->cp_flags.
 void nvim_ins_complete_update_cont_s_ipos(void)
 {
@@ -2140,9 +2133,6 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 }
 
 // --- compl_old_match / compl_curr_match compound ops ---
-int nvim_compl_curr_vs_old_match_changed(void) {
-  return (compl_curr_match != compl_old_match) ? 1 : 0;
-}
 void nvim_compl_old_match_advance_curr(void) {
   // Called at end of ins_compl_get_exp to advance compl_curr_match.
   if (compl_old_match != NULL) {
@@ -2272,7 +2262,6 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
   return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev,
                         compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest);
 }
-void *nvim_compl_first_match_get_prev(void) { return compl_first_match ? compl_first_match->cp_prev : NULL; }
 // Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
 // compl_first_match->cp_prev for backward), 0 otherwise
 int nvim_compl_shown_match_is_sentinel(int forward) {

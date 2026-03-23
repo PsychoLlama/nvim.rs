@@ -84,8 +84,7 @@ extern "C" {
     fn nvim_ins_compl_st_get_func_cb() -> *mut std::ffi::c_void;
     fn nvim_ins_compl_st_get_first_lnum() -> c_int;
 
-    // old_match / curr_match ops
-    fn nvim_compl_curr_vs_old_match_changed() -> c_int;
+    // old_match / curr_match ops (compl_old_match_advance_curr and curr_rewind still in C)
     fn nvim_compl_old_match_advance_curr();
     fn nvim_compl_curr_rewind_to_head();
 
@@ -473,7 +472,10 @@ unsafe fn get_next_completion_match(
     }
 
     // Check if compl_curr_match has changed (e.g. other type of expansion added something)
-    if compl_type != 0 && nvim_compl_curr_vs_old_match_changed() != 0 {
+    if compl_type != 0
+        && crate::match_list::nvim_compl_get_curr_match()
+            != crate::match_list::nvim_compl_get_old_match()
+    {
         found_new_match = OK;
     }
 

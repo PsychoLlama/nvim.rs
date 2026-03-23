@@ -361,7 +361,8 @@ extern "C" {
     fn rs_ctrl_x_mode_register() -> c_int;
 
     // New accessors for show_statusmsg (Phase 10)
-    fn nvim_compl_first_match_next_is_first() -> c_int;
+    fn nvim_compl_match_get_next(m: crate::match_list::ComplMatch)
+        -> crate::match_list::ComplMatch;
     fn rs_compl_status_adding() -> c_int;
     fn nvim_compl_curr_match_at_original_text() -> c_int;
     fn nvim_compl_curr_match_next_eq_prev() -> c_int;
@@ -482,7 +483,8 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
     // We found no match if the list has only the "compl_orig_text"-entry
-    if nvim_compl_first_match_next_is_first() != 0 {
+    let first = crate::match_list::compl_first_match;
+    if !first.is_null() && crate::match_list::is_first_match(nvim_compl_match_get_next(first)) {
         if rs_compl_status_adding() != 0 && crate::vars::nvim_get_compl_length() > 1 {
             nvim_set_edit_submode_extra_hitend();
         } else {

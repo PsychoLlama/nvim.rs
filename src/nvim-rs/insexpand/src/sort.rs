@@ -38,10 +38,6 @@ extern "C" {
     fn nvim_compl_match_get_prev(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_prev(m: ComplMatch, prev: ComplMatch);
 
-    // Match list compound operations still in C
-    fn nvim_compl_first_match_get_prev() -> ComplMatch;
-    fn nvim_compl_first_match_next_is_first() -> c_int;
-
     // Match score accessor
     fn nvim_compl_match_get_score(m: ComplMatch) -> c_int;
     #[allow(dead_code)]
@@ -159,12 +155,13 @@ pub unsafe extern "C" fn rs_sort_compl_match_list(compare_type: c_int) {
         return;
     }
     // No items to sort if first->cp_next is back to first (only leader node)
-    if nvim_compl_first_match_next_is_first() != 0 {
+    let first_next = nvim_compl_match_get_next(first);
+    if is_first_match(first_next) {
         return;
     }
 
     // comp = tail of the list (compl_first_match->cp_prev)
-    let comp = nvim_compl_first_match_get_prev();
+    let comp = nvim_compl_match_get_prev(first);
 
     crate::match_list::rs_ins_compl_make_linear();
 

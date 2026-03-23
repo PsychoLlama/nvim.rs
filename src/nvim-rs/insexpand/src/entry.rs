@@ -302,7 +302,8 @@ extern "C" {
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
     fn nvim_ins_complete_eat_got_int();
-    fn nvim_compl_first_match_next_is_first() -> c_int;
+    fn nvim_compl_match_get_next(m: crate::match_list::ComplMatch)
+        -> crate::match_list::ComplMatch;
     fn rs_ctrl_x_mode_path_patterns() -> c_int;
     fn rs_ctrl_x_mode_path_defines() -> c_int;
     fn nvim_ins_complete_update_cont_s_ipos();
@@ -386,7 +387,9 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     nvim_ins_complete_eat_got_int();
 
     // Check if no matches found (list has only the compl_orig_text entry)
-    let no_matches_found = nvim_compl_first_match_next_is_first() != 0;
+    let first = crate::match_list::compl_first_match;
+    let no_matches_found =
+        !first.is_null() && crate::match_list::is_first_match(nvim_compl_match_get_next(first));
     if no_matches_found {
         // Remove N_ADDS flag so next ^X<> won't try to go to ADDING mode,
         // unless we might want to add-expand a single-char-word.
