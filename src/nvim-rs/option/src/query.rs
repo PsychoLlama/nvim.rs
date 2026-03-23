@@ -62,10 +62,6 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ma(v: c_int);
 
     // TTY options (Phase 2)
-    fn nvim_option_get_p_term() -> *const c_char;
-    fn nvim_option_get_p_ttytype() -> *const c_char;
-    fn nvim_option_set_p_term(val: *mut c_char);
-    fn nvim_option_set_p_ttytype(val: *mut c_char);
     fn rs_is_tty_option(name: *const c_char) -> c_int;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
@@ -85,6 +81,11 @@ extern "C" {
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn strlen(s: *const c_char) -> usize;
 }
+
+/// Rust-owned storage for the "term" TTY option (formerly C static `p_term`).
+pub(crate) static mut P_TERM: *mut c_char = std::ptr::null_mut();
+/// Rust-owned storage for the "ttytype" TTY option (formerly C static `p_ttytype`).
+pub(crate) static mut P_TTYTYPE: *mut c_char = std::ptr::null_mut();
 
 // BS constants matching option_vars.h (BS_INDENT='i', BS_EOL='l' are valid but not compared directly)
 const BS_START: c_int = b's' as c_int;
@@ -259,16 +260,14 @@ pub unsafe extern "C" fn rs_get_tty_option(name: *const c_char) -> OptVal {
             snprintf(value, NUMBUFLEN, c"%d".as_ptr(), t_colors);
         }
     } else if strcmp(name, c"term".as_ptr()) == 0 {
-        let p_term = nvim_option_get_p_term();
-        value = if !p_term.is_null() {
-            xstrdup(p_term)
+        value = if !P_TERM.is_null() {
+            xstrdup(P_TERM)
         } else {
             xstrdup(c"nvim".as_ptr())
         };
     } else if strcmp(name, c"ttytype".as_ptr()) == 0 {
-        let p_ttytype = nvim_option_get_p_ttytype();
-        value = if !p_ttytype.is_null() {
-            xstrdup(p_ttytype)
+        value = if !P_TTYTYPE.is_null() {
+            xstrdup(P_TTYTYPE)
         } else {
             xstrdup(c"nvim".as_ptr())
         };
@@ -301,19 +300,17 @@ pub unsafe extern "C" fn rs_set_tty_option(name: *const c_char, value: *mut c_ch
         return false;
     }
     if strcmp(name, c"term".as_ptr()) == 0 {
-        let old = nvim_option_get_p_term();
-        if !old.is_null() {
-            xfree(old.cast_mut());
+        if !P_TERM.is_null() {
+            xfree(P_TERM.cast());
         }
-        nvim_option_set_p_term(value);
+        P_TERM = value;
         return true;
     }
     if strcmp(name, c"ttytype".as_ptr()) == 0 {
-        let old = nvim_option_get_p_ttytype();
-        if !old.is_null() {
-            xfree(old.cast_mut());
+        if !P_TTYTYPE.is_null() {
+            xfree(P_TTYTYPE.cast());
         }
-        nvim_option_set_p_ttytype(value);
+        P_TTYTYPE = value;
         return true;
     }
     false

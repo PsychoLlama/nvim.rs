@@ -627,9 +627,6 @@ static const char e_number_required_after_equal[]
 static const char e_preview_window_already_exists[]
   = N_("E590: A preview window already exists");
 const char *nvim_get_e_preview_window_exists(void) { return _(e_preview_window_already_exists); }
-static char *p_term = NULL;
-static char *p_ttytype = NULL;
-
 #define OPTION_COUNT ARRAY_SIZE(options)
 
 /// :set boolean option prefix
@@ -980,12 +977,6 @@ OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 // p_ma / b_p_ma accessors (for reset_modifiable)
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
-// TTY and key accessors
-const char *nvim_option_get_p_term(void) { return p_term; }
-const char *nvim_option_get_p_ttytype(void) { return p_ttytype; }
-void nvim_option_set_p_term(char *val) { p_term = val; }
-void nvim_option_set_p_ttytype(char *val) { p_ttytype = val; }
-
 // insecure_flag pointer accessors
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }
 uint32_t *nvim_win_get_p_stl_flags_ptr(win_T *wp) { return &wp->w_p_stl_flags; }
