@@ -24,9 +24,12 @@ type LinenrT = i32;
 
 extern "C" {
     static mut State: c_int;
+    static mut curbuf: *mut std::ffi::c_void;
     // Buffer state
-    fn nvim_curbuf_is_empty() -> c_int;
-    fn nvim_curbuf_is_prompt() -> c_int;
+    #[link_name = "rs_buf_is_empty"]
+    fn nvim_curbuf_is_empty_via_buf(buf: *mut std::ffi::c_void) -> bool;
+    #[link_name = "rs_bt_prompt"]
+    fn nvim_curbuf_is_prompt_via_curbuf(buf: *mut std::ffi::c_void) -> bool;
 
     // Cursor position
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
@@ -197,11 +200,11 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
     // Can't delete anything in an empty file; can't backup past first char;
     // can't backup past starting point unless 'backspace' > 1.
-    if nvim_curbuf_is_empty() != 0
+    if nvim_curbuf_is_empty_via_buf(curbuf)
         || (!revins_on
             && ((cursor_lnum == 1 && cursor_col == 0)
                 || (!can_bs(BS_START)
-                    && ((arrow_used && nvim_curbuf_is_prompt() == 0)
+                    && ((arrow_used && !nvim_curbuf_is_prompt_via_curbuf(curbuf))
                         || (cursor_lnum == nvim_get_Insstart_orig_lnum()
                             && cursor_col <= nvim_get_Insstart_orig_col())))
                 || (!can_bs(BS_INDENT) && !arrow_used && ai_col > 0 && cursor_col <= ai_col)

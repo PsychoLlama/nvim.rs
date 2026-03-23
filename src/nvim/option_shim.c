@@ -949,8 +949,6 @@ void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
 // Phase 4 (option pass 4) accessors for query.rs migration
 // =============================================================================
 
-// bt_prompt(curbuf) accessor (for can_bs)
-int nvim_curbuf_is_prompt(void) { return bt_prompt(curbuf); }
 // b_p_ep / p_ep accessors (for get_equalprg)
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
 // b_p_ffu / p_ffu accessors (for get_findfunc)
@@ -1006,7 +1004,6 @@ OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_v
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
 // Accessors for rs_ex_set and rs_validate_opt_idx (option pass 7 phase 3)
 int nvim_get_cmd_idx_setlocal(void) { return (int)CMD_setlocal; }
 int nvim_get_cmd_idx_setglobal(void) { return (int)CMD_setglobal; }

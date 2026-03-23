@@ -692,7 +692,8 @@ extern "C" {
     fn invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int, set_sid: c_int);
-    fn nvim_curbuf_is_empty() -> c_int;
+    #[link_name = "rs_buf_is_empty"]
+    fn nvim_curbuf_is_empty_via_buf(buf: *mut core::ffi::c_void) -> bool;
     fn rs_default_fileformat() -> c_int;
     #[link_name = "set_fileformat"]
     fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int);
@@ -805,7 +806,7 @@ pub unsafe extern "C" fn rs_set_init_3() {
     }
     xfree(p);
 
-    if nvim_curbuf_is_empty() != 0 {
+    if nvim_curbuf_is_empty_via_buf(curbuf) {
         // Apply the first entry of 'fileformats' to the initial buffer.
         if (nvim_get_option_flags(K_OPT_FILEFORMATS) & K_OPT_FLAG_WAS_SET_2) != 0 {
             rs_set_fileformat(rs_default_fileformat(), OPT_LOCAL);

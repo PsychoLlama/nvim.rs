@@ -22,13 +22,15 @@ use crate::{BufHandle, OptValType, WinHandle};
 extern "C" {
     static mut redraw_tabline: bool;
     static mut need_maketitle: bool;
+    static mut curbuf: BufHandle;
 }
 
 extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // can_bs
-    fn nvim_curbuf_is_prompt() -> c_int;
+    #[link_name = "rs_bt_prompt"]
+    fn nvim_curbuf_is_prompt_via_curbuf(buf: BufHandle) -> bool;
 
     // get_equalprg
     fn nvim_curbuf_get_b_p_ep() -> *const c_char;
@@ -98,7 +100,7 @@ const BS_NOSTOP: c_int = b'p' as c_int;
 #[export_name = "can_bs"]
 pub unsafe extern "C" fn rs_can_bs(what: c_int) -> c_int {
     // BS_START is disallowed in prompt buffers
-    if what == BS_START && nvim_curbuf_is_prompt() != 0 {
+    if what == BS_START && nvim_curbuf_is_prompt_via_curbuf(curbuf) {
         return 0;
     }
     let p_bs = crate::p_bs.cast_const();
