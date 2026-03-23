@@ -362,6 +362,7 @@ extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
 extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit);
 extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp);
 extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
+extern void nvim_docmd_handle_did_throw_impl(void);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1053,58 +1054,6 @@ int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
 
 /// Handle when "did_throw" is set after executing commands.
 /// handle_did_throw implementation. Called by Rust handle_did_throw.
-void nvim_docmd_handle_did_throw_impl(void)
-{
-  assert(current_exception != NULL);
-  char *p = NULL;
-  msglist_T *messages = NULL;
-
-  // If the uncaught exception is a user exception, report it as an
-  // error.  If it is an error exception, display the saved error
-  // message now.  For an interrupt exception, do nothing; the
-  // interrupt message is given elsewhere.
-  switch (current_exception->type) {
-  case ET_USER:
-    vim_snprintf(IObuff, IOSIZE,
-                 _("E605: Exception not caught: %s"),
-                 current_exception->value);
-    p = xstrdup(IObuff);
-    break;
-  case ET_ERROR:
-    messages = current_exception->messages;
-    current_exception->messages = NULL;
-    break;
-  case ET_INTERRUPT:
-    break;
-  }
-
-  estack_push(ETYPE_EXCEPT, current_exception->throw_name, current_exception->throw_lnum);
-  current_exception->throw_name = NULL;
-
-  discard_current_exception();              // uses IObuff if 'verbose'
-
-  // If "silent!" is active the uncaught exception is not fatal.
-  if (emsg_silent == 0) {
-    suppress_errthrow = true;
-    force_abort = true;
-  }
-
-  if (messages != NULL) {
-    do {
-      msglist_T *next = messages->next;
-      emsg_multiline(messages->msg, "emsg", HLF_E, messages->multiline);
-      xfree(messages->msg);
-      xfree(messages->sfile);
-      xfree(messages);
-      messages = next;
-    } while (messages != NULL);
-  } else if (p != NULL) {
-    emsg(p);
-    xfree(p);
-  }
-  xfree(SOURCING_NAME);
-  estack_pop();
-}
 
 /// Obtain a line when inside a ":while" or ":for" loop.
 static char *get_loop_line(int c, void *cookie, int indent, bool do_concat)
@@ -4169,6 +4118,13 @@ void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
 // apply_cmdmod / undo_cmdmod on global cmdmod
 void nvim_apply_global_cmdmod(void) { nvim_docmd_apply_cmdmod_impl(&cmdmod); }
 void nvim_undo_global_cmdmod(void) { nvim_docmd_undo_cmdmod_impl(&cmdmod); }
+
+/// For handle_did_throw_impl: free SOURCING_NAME then pop estack.
+void nvim_docmd_free_sourcing_name_and_pop(void)
+{
+  xfree(SOURCING_NAME);
+  estack_pop();
+}
 
 /// Helpers for nvim_docmd_ex_tabs_impl (Rust).
 /// Write translated "Tab page %d" into IObuff and return a pointer to it.

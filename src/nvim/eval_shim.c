@@ -2271,3 +2271,48 @@ Channel *nvim_find_channel(uint64_t id)
   return find_channel(id);
 }
 
+// =============================================================================
+// Exception accessors for handle_did_throw_impl (Rust Phase N+9)
+// =============================================================================
+
+/// Returns current_exception->type as int (ET_USER=0, ET_ERROR=1, ET_INTERRUPT=2).
+int nvim_exception_get_type(void) { return (int)current_exception->type; }
+/// Returns current_exception->value.
+char *nvim_exception_get_value(void) { return current_exception->value; }
+/// Takes current_exception->messages (sets it to NULL) and returns it.
+void *nvim_exception_take_messages(void)
+{
+  void *m = current_exception->messages;
+  current_exception->messages = NULL;
+  return m;
+}
+/// Returns current_exception->throw_name.
+char *nvim_exception_get_throw_name(void) { return current_exception->throw_name; }
+/// Returns current_exception->throw_lnum.
+int nvim_exception_get_throw_lnum(void) { return (int)current_exception->throw_lnum; }
+/// Sets current_exception->throw_name to NULL.
+void nvim_exception_set_throw_name_null(void) { current_exception->throw_name = NULL; }
+/// Returns msglist->next.
+void *nvim_msglist_get_next(void *m) { return ((msglist_T *)m)->next; }
+/// Returns msglist->msg.
+char *nvim_msglist_get_msg(void *m) { return ((msglist_T *)m)->msg; }
+/// Returns msglist->multiline.
+int nvim_msglist_is_multiline(void *m) { return ((msglist_T *)m)->multiline ? 1 : 0; }
+/// Frees msg, sfile, and the item itself.
+void nvim_msglist_free_item(void *m)
+{
+  msglist_T *item = (msglist_T *)m;
+  xfree(item->msg);
+  xfree(item->sfile);
+  xfree(item);
+}
+/// Sets suppress_errthrow = val.
+void nvim_set_suppress_errthrow(bool val) { suppress_errthrow = val; }
+/// Sets force_abort = val.
+void nvim_set_force_abort(bool val) { force_abort = val; }
+/// Format "E605: Exception not caught: %s" with value into allocated string.
+char *nvim_docmd_fmt_exception_not_caught(const char *value)
+{
+  vim_snprintf(IObuff, IOSIZE, _("E605: Exception not caught: %s"), value);
+  return xstrdup(IObuff);
+}

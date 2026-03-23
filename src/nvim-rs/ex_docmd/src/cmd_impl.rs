@@ -689,7 +689,6 @@ extern "C" {
     fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
     fn nvim_docmd_tabpage_new_impl();
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
-    fn nvim_docmd_handle_did_throw_impl();
 
     // ex_win_close_impl helpers
     #[link_name = "is_aucmd_win"]
@@ -743,6 +742,35 @@ extern "C" {
     fn nvim_docmd_os_breakcheck();
     fn nvim_iosize() -> usize;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
+
+    // handle_did_throw helpers
+    fn nvim_exception_get_type() -> c_int;
+    fn nvim_exception_get_value() -> *mut c_char;
+    fn nvim_exception_take_messages() -> *mut c_void;
+    fn nvim_exception_get_throw_name() -> *mut c_char;
+    fn nvim_exception_get_throw_lnum() -> c_int;
+    fn nvim_exception_set_throw_name_null();
+    fn nvim_msglist_get_next(m: *mut c_void) -> *mut c_void;
+    fn nvim_msglist_get_msg(m: *mut c_void) -> *mut c_char;
+    fn nvim_msglist_is_multiline(m: *mut c_void) -> c_int;
+    fn nvim_msglist_free_item(m: *mut c_void);
+    fn nvim_get_emsg_silent() -> c_int;
+    fn nvim_set_suppress_errthrow(val: bool);
+    fn nvim_set_force_abort(val: bool);
+    fn nvim_docmd_fmt_exception_not_caught(value: *const c_char) -> *mut c_char;
+    fn nvim_docmd_free_sourcing_name_and_pop();
+    fn nvim_discard_current_exception();
+    fn xfree(p: *mut c_void);
+    // emsg_multiline(s, kind, hl_id, multiline) -> int
+    fn emsg_multiline(
+        s: *const c_char,
+        kind: *const c_char,
+        hl_id: c_int,
+        multiline: c_int,
+    ) -> c_int;
+    // estack_push
+    #[link_name = "estack_push"]
+    fn nvim_estack_push(etype: c_int, name: *mut c_char, lnum: c_int) -> *mut c_void;
 
     // tabpage_close helpers (for Rust implementations)
     fn nvim_docmd_curwin_is_floating() -> c_int;
@@ -965,13 +993,86 @@ pub unsafe extern "C" fn rs_do_exbuffer(eap: ExArgHandle) {
     nvim_docmd_do_exbuffer_impl(eap);
 }
 
-/// `handle_did_throw` - report uncaught exception.
+/// `nvim_docmd_handle_did_throw_impl` - report an uncaught exception.
+///
+/// If the exception is a user exception (ET_USER), formats E605 and calls
+/// `emsg`. For error exceptions (ET_ERROR), replays the saved message list
+/// via `emsg_multiline`. Interrupt exceptions are silently discarded.
+///
+/// # Safety
+/// Accesses global `current_exception`. Must only be called when
+/// `current_exception != NULL`.
+#[export_name = "nvim_docmd_handle_did_throw_impl"]
+pub unsafe extern "C" fn rs_handle_did_throw_impl() {
+    // Exception type constants matching except_type_T
+    const ET_USER: c_int = 0;
+    const ET_ERROR: c_int = 1;
+    // ET_INTERRUPT = 2 (fall-through: no message)
+    const HLF_E: c_int = 6; // ErrorMsg highlight group
+
+    let etype = nvim_exception_get_type();
+    let p: *mut c_char;
+    let messages: *mut c_void;
+
+    match etype {
+        ET_USER => {
+            p = nvim_docmd_fmt_exception_not_caught(nvim_exception_get_value());
+            messages = std::ptr::null_mut();
+        }
+        ET_ERROR => {
+            p = std::ptr::null_mut();
+            messages = nvim_exception_take_messages();
+        }
+        _ => {
+            // ET_INTERRUPT: no message
+            p = std::ptr::null_mut();
+            messages = std::ptr::null_mut();
+        }
+    }
+
+    // Push throw location onto execution stack.
+    let throw_name = nvim_exception_get_throw_name();
+    let throw_lnum = nvim_exception_get_throw_lnum();
+    nvim_estack_push(5 /* ETYPE_EXCEPT */, throw_name, throw_lnum);
+    nvim_exception_set_throw_name_null();
+
+    nvim_discard_current_exception(); // uses IObuff if 'verbose'
+
+    // If "silent!" is not active, mark as fatal.
+    if nvim_get_emsg_silent() == 0 {
+        nvim_set_suppress_errthrow(true);
+        nvim_set_force_abort(true);
+    }
+
+    // Display the error message(s).
+    if !messages.is_null() {
+        let mut cur = messages;
+        while !cur.is_null() {
+            let next = nvim_msglist_get_next(cur);
+            emsg_multiline(
+                nvim_msglist_get_msg(cur),
+                c"emsg".as_ptr(),
+                HLF_E,
+                nvim_msglist_is_multiline(cur),
+            );
+            nvim_msglist_free_item(cur);
+            cur = next;
+        }
+    } else if !p.is_null() {
+        emsg(p);
+        xfree(p as *mut c_void);
+    }
+
+    nvim_docmd_free_sourcing_name_and_pop();
+}
+
+/// `handle_did_throw` - public C entry point.
 ///
 /// # Safety
 /// This function accesses global exception state.
 #[no_mangle]
 pub unsafe extern "C" fn handle_did_throw() {
-    nvim_docmd_handle_did_throw_impl();
+    rs_handle_did_throw_impl();
 }
 
 // =============================================================================
