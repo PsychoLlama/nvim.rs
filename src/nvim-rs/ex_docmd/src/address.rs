@@ -659,7 +659,11 @@ extern "C" {
     fn nvim_docmd_hasFolding(lnum: i32) -> i32;
 
     // Buffer local count (for +/- on buffer addresses)
-    fn nvim_docmd_compute_buf_local_count(addr_type: c_int, lnum: i32, offset: c_int) -> c_int;
+    fn nvim_docmd_compute_buffer_local_count_impl(
+        addr_type: c_int,
+        lnum: i32,
+        offset: c_int,
+    ) -> c_int;
 
     // Digit parsing (getdigits_int32 not in the existing block)
     fn nvim_docmd_getdigits_int32(pp: *mut *mut c_char) -> c_int;
@@ -1023,7 +1027,7 @@ pub unsafe fn get_address_impl(
                 *ptr = cmd;
                 return lnum;
             } else if addr_type == ADDR_LOADED_BUFFERS || addr_type == ADDR_BUFFERS {
-                lnum = nvim_docmd_compute_buf_local_count(
+                lnum = nvim_docmd_compute_buffer_local_count_impl(
                     addr_type,
                     lnum,
                     if i == b'-' { -(n as c_int) } else { n as c_int },

@@ -86,18 +86,9 @@ extern "C" {
     // Window preview flag accessor (returns c_int, 0/1)
     fn nvim_win_get_p_pvw(wp: WinHandle) -> c_int;
 
-    // ex_win_close accessor (with NULL tabpage)
-    fn nvim_docmd_ex_win_close(forceit: bool, win: WinHandle);
-
     // Prepare / restore preview window
     fn nvim_docmd_prepare_preview_window();
     fn nvim_docmd_back_to_current_window(curwin_save: WinHandle);
-
-    // do_exedit wrapper
-    fn nvim_docmd_do_exedit(eap: ExArgHandle);
-
-    // do_exbuffer wrapper
-    fn nvim_docmd_do_exbuffer(eap: ExArgHandle);
 
     // find_pattern_in_path (via rs_find_pattern_in_path)
     #[link_name = "rs_find_pattern_in_path"]
@@ -262,7 +253,7 @@ pub unsafe extern "C" fn rs_ex_pclose(eap: ExArgHandle) {
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
         if nvim_win_get_p_pvw(wp) != 0 {
-            nvim_docmd_ex_win_close(forceit, wp);
+            nvim_docmd_ex_win_close_impl(c_int::from(forceit), wp, std::ptr::null_mut());
             break;
         }
         wp = nvim_win_get_next(wp);
@@ -277,7 +268,7 @@ pub unsafe extern "C" fn rs_ex_pclose(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_pedit(eap: ExArgHandle) {
     let curwin_save = nvim_get_curwin();
     nvim_docmd_prepare_preview_window();
-    nvim_docmd_do_exedit(eap);
+    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
     nvim_docmd_back_to_current_window(curwin_save);
 }
 
@@ -289,7 +280,7 @@ pub unsafe extern "C" fn rs_ex_pedit(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_pbuffer(eap: ExArgHandle) {
     let curwin_save = nvim_get_curwin();
     nvim_docmd_prepare_preview_window();
-    nvim_docmd_do_exbuffer(eap);
+    nvim_docmd_do_exbuffer_impl(eap);
     nvim_docmd_back_to_current_window(curwin_save);
 }
 

@@ -1246,7 +1246,7 @@ void *getline_cookie(LineGetter fgetline, void *cookie)
 /// ":bwipeout", etc.
 ///
 /// @return  the buffer number.
-static int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset)
+int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset)
 {
   int count = offset;
 
@@ -4405,12 +4405,6 @@ linenr_T nvim_docmd_hasFolding(linenr_T lnum)
   return lnum;
 }
 
-/// Wrap compute_buffer_local_count for Rust.
-int nvim_docmd_compute_buf_local_count(int addr_type, linenr_T lnum, int offset)
-{
-  return nvim_docmd_compute_buffer_local_count_impl((cmd_addr_T)addr_type, lnum, offset);
-}
-
 
 /// Wrap getdigits_int32 for Rust.
 int nvim_docmd_getdigits_int32(char **pp)
@@ -4873,8 +4867,6 @@ const char *nvim_docmd_get_e_nogvim(void) { return _("E25: Nvim does not have a 
 /// Get _(e_invcmd).
 const char *nvim_docmd_get_e_invcmd(void) { return _(e_invcmd); }
 
-/// Wrapper for do_exbuffer(eap) -- now calls Rust-owned impl.
-void nvim_docmd_do_exbuffer(exarg_T *eap) { nvim_docmd_do_exbuffer_impl(eap); }
 
 /// Wrapper for goto_buffer(eap, DOBUF_MOD, FORWARD, eap->line2) + do_cmdline_cmd.
 void nvim_docmd_goto_buffer_mod(exarg_T *eap)
@@ -5089,8 +5081,6 @@ void nvim_docmd_win_goto(win_T *wp) { win_goto(wp); }
 /// close_others wrapper.
 void nvim_docmd_close_others(bool message, bool forceit) { close_others(message, forceit); }
 
-/// ex_win_close with NULL tabpage.
-void nvim_docmd_ex_win_close(bool forceit, win_T *win) { nvim_docmd_ex_win_close_impl(forceit, win, NULL); }
 
 // Phase 3 C wrappers (direct implementations for Rust FFI)
 
@@ -5102,7 +5092,6 @@ bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
   return check_can_set_curbuf_forceit(forceit);
 }
 bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
-void nvim_docmd_do_exedit(exarg_T *eap) { nvim_docmd_do_exedit_impl(eap, NULL); }
 
 /// get_argopt_name logic (direct implementation for Rust FFI).
 char *nvim_docmd_get_argopt_name(int idx)
@@ -5158,14 +5147,6 @@ void nvim_docmd_set_curwin_curswant(int val) { curwin->w_curswant = (colnr_T)val
 /// Check if there is only one tab page.
 int nvim_docmd_is_only_tabpage(void) { return first_tabpage->tp_next == NULL ? 1 : 0; }
 
-/// Close the current tab page.
-void nvim_docmd_tabpage_close(int forceit) { nvim_docmd_tabpage_close_impl((bool)forceit); }
-
-/// Close another tab page.
-void nvim_docmd_tabpage_close_other(void *tp, int forceit)
-{
-  nvim_docmd_tabpage_close_other_impl((tabpage_T *)tp, (bool)forceit);
-}
 
 /// Check if a tabpage handle equals curtab.
 int nvim_docmd_tabpage_is_current(void *tp) { return tp == curtab ? 1 : 0; }

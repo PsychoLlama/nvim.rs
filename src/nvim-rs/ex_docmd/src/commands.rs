@@ -1637,7 +1637,7 @@ extern "C" {
     fn nvim_docmd_get_e_invcmd() -> *const c_char;
     fn nvim_eap_set_errmsg_const(eap: ExArgHandle, msg: *const c_char);
     fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
-    fn nvim_docmd_do_exbuffer(eap: ExArgHandle);
+    fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_mod(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_next(eap: ExArgHandle);
     fn nvim_docmd_goto_buffer_prev(eap: ExArgHandle);
@@ -1661,7 +1661,7 @@ extern "C" {
 /// ":buffer" -- delegates to do_exbuffer.
 #[export_name = "ex_buffer"]
 pub unsafe extern "C" fn rs_ex_buffer(eap: ExArgHandle) {
-    nvim_docmd_do_exbuffer(eap);
+    nvim_docmd_do_exbuffer_impl(eap);
 }
 
 /// ":bmodified" and similar -- goto modified buffer.
@@ -2152,7 +2152,7 @@ extern "C" {
     fn nvim_docmd_is_other_file(ffname: *const c_char) -> bool;
     fn nvim_docmd_check_can_set_curbuf_forceit(forceit: bool) -> bool;
     fn nvim_docmd_bt_prompt_curbuf() -> bool;
-    fn nvim_docmd_do_exedit(eap: ExArgHandle);
+    fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: *mut c_void);
 
     // Phase 21 helpers
     fn nvim_docmd_eval_to_string_g_colors_name() -> *mut c_char;
@@ -2167,7 +2167,7 @@ extern "C" {
     fn nvim_docmd_nth_curtab_window(nr: c_int) -> WinHandle;
     fn nvim_docmd_win_goto(wp: WinHandle);
     fn nvim_docmd_close_others(message: bool, forceit: bool);
-    fn nvim_docmd_ex_win_close(forceit: bool, win: WinHandle);
+    fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
     fn nvim_setmark(name: c_int) -> bool;
     fn rs_print_line(lnum: LinenrT, use_number: c_int, list: c_int, first: c_int);
     fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
@@ -2319,7 +2319,7 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
         emsg(c"cannot :edit a prompt buffer".as_ptr());
         return;
     }
-    nvim_docmd_do_exedit(eap);
+    nvim_docmd_do_exedit_impl(eap, std::ptr::null_mut());
 }
 
 /// ":pwd".
@@ -2366,10 +2366,18 @@ pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
         return;
     }
     if nvim_eap_get_addr_count(eap) == 0 {
-        nvim_docmd_ex_win_close(nvim_eap_get_forceit(eap), nvim_get_curwin());
+        nvim_docmd_ex_win_close_impl(
+            c_int::from(nvim_eap_get_forceit(eap)),
+            nvim_get_curwin(),
+            std::ptr::null_mut(),
+        );
     } else {
         let win = nvim_docmd_nth_curtab_window(nvim_eap_get_line2(eap) as c_int);
-        nvim_docmd_ex_win_close(nvim_eap_get_forceit(eap), win);
+        nvim_docmd_ex_win_close_impl(
+            c_int::from(nvim_eap_get_forceit(eap)),
+            win,
+            std::ptr::null_mut(),
+        );
     }
 }
 
@@ -2441,8 +2449,8 @@ extern "C" {
     fn nvim_get_curbuf() -> *mut c_void;
     fn rs_find_tabpage(n: c_int) -> *mut c_void;
     fn nvim_docmd_is_only_tabpage() -> c_int;
-    fn nvim_docmd_tabpage_close(forceit: c_int);
-    fn nvim_docmd_tabpage_close_other(tp: *mut c_void, forceit: c_int);
+    fn nvim_docmd_tabpage_close_impl(forceit: c_int);
+    fn nvim_docmd_tabpage_close_other_impl(tp: *mut c_void, forceit: c_int);
     fn nvim_docmd_tabpage_is_current(tp: *mut c_void) -> c_int;
     fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
     fn nvim_docmd_get_cmdmod_cmod_split() -> c_int;
@@ -2588,9 +2596,9 @@ pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
 
     let forceit = nvim_eap_get_forceit(eap) as c_int;
     if nvim_docmd_tabpage_is_current(tp) == 0 {
-        nvim_docmd_tabpage_close_other(tp, forceit);
+        nvim_docmd_tabpage_close_other_impl(tp, forceit);
     } else if !text_locked() && nvim_curbuf_locked() == 0 {
-        nvim_docmd_tabpage_close(forceit);
+        nvim_docmd_tabpage_close_impl(forceit);
     }
 }
 
