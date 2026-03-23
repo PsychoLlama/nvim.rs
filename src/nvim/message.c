@@ -350,11 +350,6 @@ int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 
 // Phase 68: keep_msg raw setters (used by Rust set_keep_msg)
 // Note: nvim_set_keep_msg (with xfree/xstrdup) is defined in buffer_shim.c
-void nvim_set_keep_msg_raw(const char *s)
-{
-  xfree(keep_msg);
-  keep_msg = (s != NULL) ? xstrdup(s) : NULL;
-}
 // Phase 6: msgmore() accessors - nvim_get_p_report is in indent_ffi.c (returns int64_t)
 // Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
 const char *nvim_format_msgmore(int n)
@@ -411,12 +406,6 @@ int nvim_verbose_open_impl(void)
 void nvim_msg_hist_add_str(const char *s, int hl_id) { msg_hist_add(s, -1, hl_id); }
 // Phase 83: msg_outtrans_len accessor with explicit length
 void nvim_msg_hist_add_len(const char *s, int len, int hl_id) { msg_hist_add(s, len, hl_id); }
-
-// Phase 77: msg_home_replace accessor
-char *nvim_home_replace_save_null(const char *fname) { return home_replace_save(NULL, fname); }
-
-// Phase 86: messagesopt_changed accessors
-const char *nvim_get_p_mopt(void) { return p_mopt; }
 
 // nvim_set_msg_ext_kind deleted: msg_ext_kind is now a Rust static (display.rs)
 

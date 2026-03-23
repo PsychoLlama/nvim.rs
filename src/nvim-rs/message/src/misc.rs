@@ -52,7 +52,7 @@ extern "C" {
     static Columns: c_int;
     static mut msg_silent: c_int;
     // Home directory handling (Phase 77: now implemented in Rust)
-    fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
+    fn home_replace_save(buf: *mut std::ffi::c_void, src: *const c_char) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
 
@@ -102,11 +102,12 @@ extern "C" {
     // nvim_os_delay is defined in change_ffi.c (long ms, bool allow_input)
     fn nvim_os_delay(ms: std::ffi::c_long, allow_input: bool);
 
-    // keep_msg raw setters (nvim_set_keep_msg_raw in message.c does xfree+xstrdup)
-    fn nvim_set_keep_msg_raw(s: *const c_char);
+    // keep_msg state
     static mut keep_msg_more: bool;
     static mut keep_msg_hl_id: c_int;
     static mut keep_msg: *mut c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // For messaging()
     static mut p_lz: c_int;
@@ -119,7 +120,7 @@ extern "C" {
     fn msg_putchar(c: c_int);
 
     // For messagesopt_changed (Phase 86)
-    fn nvim_get_p_mopt() -> *const c_char;
+    static mut p_mopt: *mut c_char;
     fn strnequal(s1: *const c_char, s2: *const c_char, n: usize) -> bool;
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
     fn msg_hist_clear(keep: c_int);
@@ -245,7 +246,7 @@ pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
 /// - `fname` must be a valid NUL-terminated C string
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
-    let name = nvim_home_replace_save_null(fname);
+    let name = home_replace_save(std::ptr::null_mut(), fname);
     msg_outtrans(name.cast_const(), hl_id, false);
     nvim_xfree(name);
 }
@@ -309,10 +310,11 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
         return;
     }
 
+    xfree(keep_msg.cast());
     if s.is_null() || msg_silent != 0 {
-        nvim_set_keep_msg_raw(std::ptr::null());
+        keep_msg = std::ptr::null_mut();
     } else {
-        nvim_set_keep_msg_raw(s);
+        keep_msg = xstrdup(s);
     }
     keep_msg_more = false;
     keep_msg_hl_id = hl_id;
@@ -519,7 +521,7 @@ pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
     let mut messages_wait_new: c_int = 0;
     let mut messages_history_new: c_int = 0;
 
-    let mut p: *mut c_char = nvim_get_p_mopt().cast_mut();
+    let mut p: *mut c_char = p_mopt;
 
     while *p != 0 {
         if strnequal(p, OPT_HIT_ENTER.as_ptr().cast(), OPT_HIT_ENTER.len()) {

@@ -15,7 +15,8 @@ extern "C" {
     // For give_warning
     static mut no_wait_return: c_int;
     fn nvim_set_vim_var_warningmsg(s: *const c_char);
-    fn nvim_set_keep_msg_raw(s: *const c_char);
+    static mut keep_msg: *mut c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
     static mut keep_msg_hl_id: c_int;
     // msg_ext_kind is now a Rust static (display.rs)
     static mut msg_ext_kind: *const c_char;
@@ -59,7 +60,8 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     no_wait_return += 1;
 
     nvim_set_vim_var_warningmsg(message);
-    nvim_set_keep_msg_raw(std::ptr::null());
+    xfree(keep_msg.cast());
+    keep_msg = std::ptr::null_mut();
     let hl_id = if hl != 0 { HLF_W } else { 0 };
     keep_msg_hl_id = hl_id;
 

@@ -67,7 +67,7 @@ extern "C" {
     static mut msg_scrolled: c_int;
     fn nvim_ui_has_messages() -> c_int;
     static mut need_fileinfo: bool;
-    fn nvim_set_keep_msg_raw(s: *const c_char);
+    fn xfree(ptr: *mut std::ffi::c_void);
     fn msg_grid_validate();
     fn nvim_redir_write_newline();
     fn msg_clr_eos();
@@ -77,7 +77,7 @@ extern "C" {
     static mut is_multihl: bool;
     fn nvim_set_vim_var_statusmsg(s: *const c_char);
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
-    static mut keep_msg: *const c_char;
+    static mut keep_msg: *mut c_char;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     static mut sc_col: c_int;
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
@@ -459,7 +459,8 @@ pub unsafe extern "C" fn rs_msg_start() {
 
     if msg_silent == 0 {
         // Don't display old message now; clear keep_msg and need_fileinfo.
-        nvim_set_keep_msg_raw(std::ptr::null());
+        xfree(keep_msg.cast());
+        keep_msg = std::ptr::null_mut();
         need_fileinfo = false;
     }
 
