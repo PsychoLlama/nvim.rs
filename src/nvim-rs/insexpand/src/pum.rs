@@ -317,7 +317,7 @@ extern "C" {
     fn nvim_get_p_inf() -> c_int;
     fn nvim_ignorecase(pat: *const std::ffi::c_char) -> bool;
     fn rs_ins_compl_equal(m: ComplMatch, str_: *const std::ffi::c_char, len: usize) -> c_int;
-    fn nvim_api_clear_compl_leader();
+    // nvim_api_clear_compl_leader: inlined in vars.rs as nvim_compl_clear_leader (Phase 25)
     fn rs_ins_compl_need_restart() -> c_int;
     fn rs_get_cpt_sources_count() -> c_int;
 }
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     // If it's user complete function and refresh_always,
     // do not use "compl_leader" as prefix filter.
     if rs_ins_compl_need_restart() != 0 {
-        nvim_api_clear_compl_leader();
+        crate::vars::nvim_compl_clear_leader();
     }
 
     let compl_no_select = (crate::rs_get_cot_flags() & K_OPT_COT_FLAG_NOSELECT) != 0

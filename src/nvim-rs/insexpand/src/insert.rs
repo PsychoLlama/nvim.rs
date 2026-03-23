@@ -361,7 +361,7 @@ extern "C" {
     fn ins_char_bytes(buf: *const c_char, len: usize);
     fn rs_ins_compl_need_restart() -> c_int;
     fn rs_ins_compl_restart();
-    fn nvim_api_clear_compl_leader();
+    // nvim_api_clear_compl_leader: inlined in vars.rs as nvim_compl_clear_leader (Phase 25)
     fn nvim_set_compl_leader_from_cursor();
 }
 
@@ -414,7 +414,7 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
         rs_ins_compl_restart();
     }
 
-    nvim_api_clear_compl_leader();
+    crate::vars::nvim_compl_clear_leader();
     nvim_set_compl_leader_from_cursor();
     crate::leader::rs_ins_compl_new_leader();
 }
