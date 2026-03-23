@@ -95,6 +95,9 @@ extern int rs_expand_setting_subtract(void *xp, void *regmatch, int *numMatches,
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
 
+// Rust FFI: fuzzy completion support check (takes context int, not expand_T*)
+extern int rs_cmdline_fuzzy_completion_supported(int context);
+
 static bool cmd_showtail;  ///< Only show path tail in lists ?
 static bool may_expand_pattern = false;
 static pos_T pre_incsearch_pos;  ///< Cursor position when incsearch started
@@ -648,46 +651,6 @@ int nvim_cmdexpand_get_filetype_expand_what(void)
 
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
-/// Returns true if fuzzy completion is supported for a given cmdline completion
-/// context.
-static bool cmdline_fuzzy_completion_supported(const expand_T *const xp)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  switch (xp->xp_context) {
-  case EXPAND_BOOL_SETTINGS:
-  case EXPAND_COLORS:
-  case EXPAND_COMPILER:
-  case EXPAND_DIRECTORIES:
-  case EXPAND_DIRS_IN_CDPATH:
-  case EXPAND_FILES:
-  case EXPAND_FILES_IN_PATH:
-  case EXPAND_FILETYPE:
-  case EXPAND_FILETYPECMD:
-  case EXPAND_FINDFUNC:
-  case EXPAND_HELP:
-  case EXPAND_KEYMAP:
-  case EXPAND_LUA:
-  case EXPAND_OLD_SETTING:
-  case EXPAND_STRING_SETTING:
-  case EXPAND_SETTING_SUBTRACT:
-  case EXPAND_OWNSYNTAX:
-  case EXPAND_PACKADD:
-  case EXPAND_RUNTIME:
-  case EXPAND_SHELLCMD:
-  case EXPAND_SHELLCMDLINE:
-  case EXPAND_TAGS:
-  case EXPAND_TAGS_LISTFILES:
-  case EXPAND_USER_LIST:
-  case EXPAND_USER_LUA:
-    return false;
-
-  default:
-    break;
-  }
-
-  return wop_flags & kOptWopFlagFuzzy;
-}
-
 
 
 /// Return FAIL if this is not an appropriate context in which to do
@@ -754,7 +717,7 @@ int nextwild(expand_T *xp, int type, int options, bool escape)
     p = ExpandOne(xp, NULL, NULL, 0, type);
   } else {
     char *tmp;
-    if (cmdline_fuzzy_completion_supported(xp)
+    if (rs_cmdline_fuzzy_completion_supported(xp->xp_context)
         || xp->xp_context == EXPAND_PATTERN_IN_BUF) {
       // Don't modify the search string
       tmp = xstrnsave(xp->xp_pattern, xp->xp_pattern_len);
@@ -889,7 +852,7 @@ char *cmdline_compl_pattern(void)
 bool cmdline_compl_is_fuzzy(void)
 {
   expand_T *xp = get_cmdline_info()->xpc;
-  return xp != NULL && cmdline_fuzzy_completion_supported(xp);
+  return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
 }
 
 
@@ -1446,15 +1409,6 @@ static const char *set_cmd_index(const char *cmd, exarg_T *eap, expand_T *xp, in
   }
 
   return p;
-}
-
-/// Set the completion context for a command argument with wild card characters.
-static void set_context_for_wildcard_arg(exarg_T *eap, const char *arg, bool usefilter,
-                                         expand_T *xp, int *complp)
-{
-  int is_shell_cmd = usefilter
-                     || (eap != NULL && (eap->cmdidx == CMD_bang || eap->cmdidx == CMD_terminal));
-  rs_set_context_for_wildcard_arg(arg, is_shell_cmd ? 1 : 0, xp, complp);
 }
 
 
@@ -2033,7 +1987,9 @@ static const char *set_one_cmd_context(expand_T *xp, const char *buff)
   }
 
   if (ea.argt & EX_XFILE) {
-    set_context_for_wildcard_arg(&ea, arg, usefilter, xp, &context);
+    int is_shell_cmd = usefilter
+                       || (ea.cmdidx == CMD_bang || ea.cmdidx == CMD_terminal);
+    rs_set_context_for_wildcard_arg(arg, is_shell_cmd ? 1 : 0, xp, &context);
   }
 
   // Switch on command name.
@@ -2068,7 +2024,7 @@ void set_cmd_context(expand_T *xp, char *str, int len, int col, int use_ccline)
     xp->xp_arg = ccline->xp_arg;
     if (xp->xp_context == EXPAND_SHELLCMDLINE) {
       int context = xp->xp_context;
-      set_context_for_wildcard_arg(NULL, xp->xp_pattern, false, xp, &context);
+      rs_set_context_for_wildcard_arg(xp->xp_pattern, 0, xp, &context);
     }
   } else {
     while (nextcomm != NULL) {
@@ -2115,7 +2071,7 @@ int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char
   // add star to file name, or convert to regexp if not exp. files.
   assert((str + col) - xp->xp_pattern >= 0);
   xp->xp_pattern_len = (size_t)((str + col) - xp->xp_pattern);
-  if (cmdline_fuzzy_completion_supported(xp)) {
+  if (rs_cmdline_fuzzy_completion_supported(xp->xp_context)) {
     // If fuzzy matching, don't modify the search string
     file_str = xstrdup(xp->xp_pattern);
   } else {
@@ -2324,12 +2280,6 @@ static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches
   return ret;
 }
 
-/// Map wild expand options to flags for expand_wildcards(). Rust implementation.
-static int map_wildopts_to_ewflags(int options)
-{
-  return rs_map_wildopts_to_ewflags(options);
-}
-
 /// Do the expansion based on xp->xp_context and "pat".
 ///
 /// @param options  WILD_ flags
@@ -2337,9 +2287,9 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
 {
   regmatch_T regmatch = { .rm_ic = false };
   int ret;
-  int flags = map_wildopts_to_ewflags(options);
+  int flags = rs_map_wildopts_to_ewflags(options);
   const bool fuzzy = cmdline_fuzzy_complete(pat)
-                     && cmdline_fuzzy_completion_supported(xp);
+                     && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
 
   if (xp->xp_context == EXPAND_FILES
       || xp->xp_context == EXPAND_DIRECTORIES
@@ -3292,7 +3242,7 @@ void f_getcompletion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   case EXPAND_SHELLCMDLINE: {
     int context = EXPAND_SHELLCMDLINE;
-    set_context_for_wildcard_arg(NULL, xpc.xp_pattern, false, &xpc, &context);
+    rs_set_context_for_wildcard_arg(xpc.xp_pattern, 0, &xpc, &context);
     xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
     break;
   }
@@ -3312,7 +3262,7 @@ theend:
     xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
   }
   char *pat;
-  if (cmdline_fuzzy_completion_supported(&xpc)) {
+  if (rs_cmdline_fuzzy_completion_supported(xpc.xp_context)) {
     // when fuzzy matching, don't modify the search string
     pat = xmemdupz(xpc.xp_pattern, xpc.xp_pattern_len);
   } else {
@@ -3377,37 +3327,6 @@ void f_cmdcomplete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-/// Copy a substring from the current buffer (curbuf), spanning from the given
-/// 'start' position to the word boundary after 'end' position.
-/// The copied string is stored in '*match', and the actual end position of the
-/// matched text is returned in '*match_end'.
-/// Rust implementation.
-static int copy_substring_from_pos(pos_T *start, pos_T *end, char **match, pos_T *match_end)
-{
-  return rs_copy_substring_from_pos(start, end, match, match_end);
-}
-
-/// Returns true if the given string `str` matches the regex pattern `pat`.
-/// Honors the 'ignorecase' (p_ic) and 'smartcase' (p_scs) settings to determine
-/// case sensitivity.
-/// Rust implementation.
-static bool is_regex_match(char *pat, char *str)
-{
-  return rs_is_regex_match(pat, str) != 0;
-}
-
-/// Constructs a new match string by appending text from the buffer (starting at
-/// end_match_pos) to the given pattern `pat`. The result is a concatenation of
-/// `pat` and the word following end_match_pos.
-/// If 'lowercase' is true, the appended text is converted to lowercase before
-/// being combined. Returns the newly allocated match string, or NULL on failure.
-/// Rust implementation.
-static char *concat_pattern_with_buffer_match(char *pat, int pat_len, pos_T *end_match_pos,
-                                              bool lowercase)
-  FUNC_ATTR_NONNULL_RET
-{
-  return rs_concat_pattern_with_buffer_match(pat, pat_len, end_match_pos, lowercase);
-}
 
 /// Search for strings matching "pat" in the specified range and return them.
 /// Returns OK on success, FAIL otherwise.
@@ -3500,8 +3419,8 @@ static int expand_pattern_in_buf(char *pat, Direction dir, char ***matches, int 
     }
 
     // Extract the matching text prepended to completed word
-    if (!copy_substring_from_pos(&cur_match_pos, &end_match_pos, &full_match,
-                                 &word_end_pos)) {
+    if (!rs_copy_substring_from_pos(&cur_match_pos, &end_match_pos, &full_match,
+                                    &word_end_pos)) {
       break;
     }
 
@@ -3509,15 +3428,15 @@ static int expand_pattern_in_buf(char *pat, Direction dir, char ***matches, int 
       match = full_match;
     } else {
       // Construct a new match from completed word appended to pattern itself
-      match = concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, false);
+      match = rs_concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, false);
 
       // The regex pattern may include '\C' or '\c'. First, try matching the
       // buffer word as-is. If it doesn't match, try again with the lowercase
       // version of the word to handle smartcase behavior.
-      if (!is_regex_match(match, full_match)) {
+      if (!rs_is_regex_match(match, full_match)) {
         xfree(match);
-        match = concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, true);
-        if (!is_regex_match(match, full_match)) {
+        match = rs_concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, true);
+        if (!rs_is_regex_match(match, full_match)) {
           xfree(match);
           xfree(full_match);
           continue;
