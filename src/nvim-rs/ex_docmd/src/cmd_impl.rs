@@ -518,6 +518,28 @@ pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
     }
 }
 
+// EXFLAG constants (matching ex_cmds.h)
+const EXFLAG_NR: c_int = 0x02;
+const EXFLAG_LIST: c_int = 0x01;
+
+/// `nvim_docmd_ex_may_print_impl` - print current line if flags set.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "nvim_docmd_ex_may_print_impl"]
+pub unsafe extern "C" fn rs_nvim_docmd_ex_may_print_impl(eap: ExArgHandle) {
+    let flags = nvim_eap_get_flags(eap);
+    if flags != 0 {
+        rs_print_line(
+            nvim_get_curwin_cursor_lnum(),
+            flags & EXFLAG_NR,
+            flags & EXFLAG_LIST,
+            1,
+        );
+        nvim_set_ex_no_reprint(1);
+    }
+}
+
 // =============================================================================
 // Phase 2: Public utility functions (delegate to C implementations)
 // =============================================================================
@@ -743,6 +765,11 @@ extern "C" {
 
     // source_runtime (Rust function, already exported as "source_runtime")
     fn source_runtime(name: *const c_char, flags: c_int) -> c_int;
+
+    // rs_print_line (for ex_may_print)
+    fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
+    // nvim_eap_get_flags (for ex_may_print)
+    fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
 
     // filetype constants
     fn nvim_docmd_get_ftplugin_file() -> *const c_char;

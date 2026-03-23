@@ -385,7 +385,8 @@ int nvim_excmds_do_join(int count)
   return do_join((size_t)count, false, true, false, true);
 }
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
-// Call ex_may_print
+// Call ex_may_print (nvim_docmd_ex_may_print_impl is now implemented in Rust)
+extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
 void nvim_excmds_ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // Call save_re_pat
 void nvim_excmds_save_re_pat(int idx, const char *pat, size_t patlen, int magic)

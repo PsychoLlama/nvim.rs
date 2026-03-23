@@ -350,6 +350,8 @@ extern void ex_checkhealth(exarg_T *eap);
 extern void ex_terminal(exarg_T *eap);
 extern void ex_restart(exarg_T *eap);
 extern void ex_tabonly(exarg_T *eap);
+// Rust-implemented nvim_docmd helpers (previously C _impl bodies).
+extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2862,16 +2864,6 @@ static void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged)
 
 
 /// Print the current line if flags were given to the Ex command.
-void nvim_docmd_ex_may_print_impl(exarg_T *eap)
-{
-  if (eap->flags != 0) {
-    rs_print_line(curwin->w_cursor.lnum, (eap->flags & EXFLAG_NR),
-                  (eap->flags & EXFLAG_LIST), true);
-    ex_no_reprint = true;
-  }
-}
-
-
 static void nvim_docmd_close_redir_impl(void)
 {
   if (redir_fd != NULL) {
