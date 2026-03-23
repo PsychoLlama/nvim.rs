@@ -322,6 +322,24 @@ extern void ex_sleep(exarg_T *eap);
 extern void do_sleep(int64_t msec, bool hide_cursor);
 // Phase 10 (ex_docmd plan): C implementations replaced by Rust exports.
 extern void ex_operators(exarg_T *eap);
+// Wave 2, Phase 1: Static command functions migrated to Rust.
+extern void ex_goto(exarg_T *eap);
+extern void ex_tag(exarg_T *eap);
+extern void ex_ptag(exarg_T *eap);
+extern void ex_stag(exarg_T *eap);
+extern void ex_pclose(exarg_T *eap);
+extern void ex_pedit(exarg_T *eap);
+extern void ex_pbuffer(exarg_T *eap);
+extern void ex_findpat(exarg_T *eap);
+extern void ex_tabs(exarg_T *eap);
+extern void ex_syncbind(exarg_T *eap);
+extern void ex_read(exarg_T *eap);
+extern void ex_detach(exarg_T *eap);
+extern void ex_connect(exarg_T *eap);
+extern void ex_checkhealth(exarg_T *eap);
+extern void ex_terminal(exarg_T *eap);
+extern void ex_restart(exarg_T *eap);
+extern void ex_tabonly(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2044,7 +2062,8 @@ bool before_quit_autocmds(win_T *wp, bool quit_all, bool forceit)
 /// ":restart": restart the Nvim server (using ":qall!").
 /// ":restart +cmd": restart the Nvim server using ":cmd".
 /// ":restart +cmd <command>": restart the Nvim server using ":cmd" and add -c <command> to the new server.
-static void ex_restart(exarg_T *eap)
+/// Implementation called by Rust ex_restart.
+void nvim_docmd_ex_restart_impl(exarg_T *eap)
 {
   // Patch v:argv to include "-c <arg>" when it restarts.
   if (eap->arg != NULL) {
@@ -2093,16 +2112,6 @@ static void ex_restart(exarg_T *eap)
   }
 }
 
-/// ":pclose": Close any preview window.
-static void ex_pclose(exarg_T *eap)
-{
-  FOR_ALL_WINDOWS_IN_TAB(win, curtab) {
-    if (win->w_p_pvw) {
-      ex_win_close(eap->forceit, win, NULL);
-      break;
-    }
-  }
-}
 
 /// Close window "win" and take care of handling closing the last window for a
 /// modified buffer.
@@ -2142,10 +2151,8 @@ void ex_win_close(int forceit, win_T *win, tabpage_T *tp)
   }
 }
 
-/// ":tabclose": close current tab page, unless it is the last one.
-/// ":tabclose N": close tab page N.
-/// ":tabonly": close all tab pages except the current one
-static void ex_tabonly(exarg_T *eap)
+/// ":tabonly" implementation called by Rust ex_tabonly.
+void nvim_docmd_ex_tabonly_impl(exarg_T *eap)
 {
   if (cmdwin_type != 0) {
     cmdwin_result = K_IGNORE;
@@ -2222,11 +2229,6 @@ void tabpage_close_other(tabpage_T *tp, int forceit)
       break;
     }
   }
-}
-
-static void ex_goto(exarg_T *eap)
-{
-  rs_goto_byte(eap->line2);
 }
 
 /// callback function for 'findfunc'
@@ -2491,8 +2493,8 @@ void tabpage_new(void)
 }
 
 
-/// :tabs command: List tabs and their contents.
-static void ex_tabs(exarg_T *eap)
+/// :tabs command: List tabs and their contents. Called by Rust ex_tabs.
+void nvim_docmd_ex_tabs_impl(exarg_T *eap)
 {
   int tabcount = 1;
 
@@ -2536,12 +2538,8 @@ static void ex_tabs(exarg_T *eap)
   }
 }
 
-/// ":detach"
-///
-/// Detaches the current UI.
-///
-/// ":detach!" with bang (!) detaches all UIs _except_ the current UI.
-static void ex_detach(exarg_T *eap)
+/// ":detach" - called by Rust ex_detach.
+void nvim_docmd_ex_detach_impl(exarg_T *eap)
 {
   // come on pooky let's burn this mf down
   if (eap && eap->forceit) {
@@ -2586,13 +2584,8 @@ static void ex_detach(exarg_T *eap)
   }
 }
 
-/// ":connect"
-///
-/// Connects the current UI to a different server
-///
-/// ":connect <address>" detaches the current UI and connects to the given server.
-/// ":connect! <address>" stops the current server if no other UIs are attached, then connects to the given server.
-static void ex_connect(exarg_T *eap)
+/// ":connect" - called by Rust ex_connect.
+void nvim_docmd_ex_connect_impl(exarg_T *eap)
 {
   bool stop_server = eap->forceit ? (ui_active() == 1) : false;
 
@@ -2605,7 +2598,7 @@ static void ex_connect(exarg_T *eap)
     return;
   }
 
-  ex_detach(NULL);
+  nvim_docmd_ex_detach_impl(NULL);
   if (stop_server) {
     exiting = true;
     getout(0);
@@ -2781,7 +2774,8 @@ void do_exedit(exarg_T *eap, win_T *old_curwin)
 /// ":syncbind" forces all 'scrollbind' windows to have the same relative
 /// offset.
 /// (1998-11-02 16:21:01  R. Edward Ralston <eralston@computer.org>)
-static void ex_syncbind(exarg_T *eap)
+/// ":syncbind" implementation called by Rust ex_syncbind.
+void nvim_docmd_ex_syncbind_impl(exarg_T *eap)
 {
   linenr_T vtopline;  // Target topline (including fill)
 
@@ -2833,7 +2827,8 @@ static void ex_syncbind(exarg_T *eap)
   }
 }
 
-static void ex_read(exarg_T *eap)
+/// ":read" implementation called by Rust ex_read.
+void nvim_docmd_ex_read_impl(exarg_T *eap)
 {
   int empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
 
@@ -3128,100 +3123,19 @@ void exec_normal(bool was_typed, bool use_vpeekc)
   }
 }
 
-static void ex_findpat(exarg_T *eap)
+/// Open the preview window or popup and make it the current window.
+/// Called by Rust ex_pedit / ex_pbuffer.
+void nvim_docmd_prepare_preview_window(void)
 {
-  bool whole = true;
-  int action;
-
-  switch (cmdnames[eap->cmdidx].cmd_name[2]) {
-  case 'e':             // ":psearch", ":isearch" and ":dsearch"
-    if (cmdnames[eap->cmdidx].cmd_name[0] == 'p') {
-      action = ACTION_GOTO;
-    } else {
-      action = ACTION_SHOW;
-    }
-    break;
-  case 'i':             // ":ilist" and ":dlist"
-    action = ACTION_SHOW_ALL;
-    break;
-  case 'u':             // ":ijump" and ":djump"
-    action = ACTION_GOTO;
-    break;
-  default:              // ":isplit" and ":dsplit"
-    action = ACTION_SPLIT;
-    break;
-  }
-
-  int n = 1;
-  if (ascii_isdigit(*eap->arg)) {  // get count
-    n = getdigits_int(&eap->arg, false, 0);
-    eap->arg = skipwhite(eap->arg);
-  }
-  if (*eap->arg == '/') {   // Match regexp, not just whole words
-    whole = false;
-    eap->arg++;
-    char *p = skip_regexp(eap->arg, '/', rs_magic_isset());
-    if (*p) {
-      *p++ = NUL;
-      p = skipwhite(p);
-
-      // Check for trailing illegal characters.
-      if (!ends_excmd(*p)) {
-        eap->errmsg = ex_errmsg(e_trailing_arg, p);
-      } else {
-        eap->nextcmd = check_nextcmd(p);
-      }
-    }
-  }
-  if (!eap->skip) {
-    find_pattern_in_path(eap->arg, 0, strlen(eap->arg), whole, !eap->forceit,
-                         *eap->cmd == 'd' ? FIND_DEFINE : FIND_ANY, n, action,
-                         eap->line1, eap->line2, eap->forceit, false);
-  }
-}
-
-/// ":ptag", ":ptselect", ":ptjump", ":ptnext", etc.
-static void ex_ptag(exarg_T *eap)
-{
-  g_do_tagpreview = (int)p_pvh;    // will be reset to 0 in ex_tag_cmd()
-  ex_tag_cmd(eap, cmdnames[eap->cmdidx].cmd_name + 1);
-}
-
-/// ":pedit"
-static void ex_pedit(exarg_T *eap)
-{
-  win_T *curwin_save = curwin;
-  prepare_preview_window();
-
-  // Edit the file.
-  do_exedit(eap, NULL);
-
-  back_to_current_window(curwin_save);
-}
-
-/// ":pbuffer"
-static void ex_pbuffer(exarg_T *eap)
-{
-  win_T *curwin_save = curwin;
-  prepare_preview_window();
-
-  // Go to the buffer.
-  do_exbuffer(eap);
-
-  back_to_current_window(curwin_save);
-}
-
-static void prepare_preview_window(void)
-{
-  // Open the preview window or popup and make it the current window.
   g_do_tagpreview = (int)p_pvh;
   prepare_tagpreview(true);
 }
 
-static void back_to_current_window(win_T *curwin_save)
+/// Return cursor to previous window after preview operation.
+/// Called by Rust ex_pedit / ex_pbuffer.
+void nvim_docmd_back_to_current_window(win_T *curwin_save)
 {
   if (curwin != curwin_save && rs_win_valid(curwin_save)) {
-    // Return cursor to where we were
     validate_cursor(curwin);
     redraw_later(curwin, UPD_VALID);
     win_enter(curwin_save, true);
@@ -3229,63 +3143,6 @@ static void back_to_current_window(win_T *curwin_save)
   g_do_tagpreview = 0;
 }
 
-/// ":stag", ":stselect" and ":stjump".
-static void ex_stag(exarg_T *eap)
-{
-  postponed_split = -1;
-  postponed_split_flags = cmdmod.cmod_split;
-  postponed_split_tab = cmdmod.cmod_tab;
-  ex_tag_cmd(eap, cmdnames[eap->cmdidx].cmd_name + 1);
-  postponed_split_flags = 0;
-  postponed_split_tab = 0;
-}
-
-/// ":tag", ":tselect", ":tjump", ":tnext", etc.
-static void ex_tag(exarg_T *eap)
-{
-  ex_tag_cmd(eap, cmdnames[eap->cmdidx].cmd_name);
-}
-
-static void ex_tag_cmd(exarg_T *eap, const char *name)
-{
-  int cmd;
-
-  switch (name[1]) {
-  case 'j':
-    cmd = DT_JUMP;              // ":tjump"
-    break;
-  case 's':
-    cmd = DT_SELECT;            // ":tselect"
-    break;
-  case 'p':                             // ":tprevious"
-  case 'N':
-    cmd = DT_PREV;              // ":tNext"
-    break;
-  case 'n':
-    cmd = DT_NEXT;              // ":tnext"
-    break;
-  case 'o':
-    cmd = DT_POP;               // ":pop"
-    break;
-  case 'f':                             // ":tfirst"
-  case 'r':
-    cmd = DT_FIRST;             // ":trewind"
-    break;
-  case 'l':
-    cmd = DT_LAST;              // ":tlast"
-    break;
-  default:                              // ":tag"
-    cmd = DT_TAG;
-    break;
-  }
-
-  if (name[0] == 'l') {
-    cmd = DT_LTAG;
-  }
-
-  rs_do_tag(eap->arg, cmd, eap->addr_count > 0 ? (int)eap->line2 : 1,
-            eap->forceit, true);
-}
 
 enum {
   SPEC_PERC = 0,
@@ -3842,7 +3699,8 @@ void nvim_docmd_loop_sleep(int64_t msec)
 }
 
 /// ":checkhealth [plugins]"
-static void ex_checkhealth(exarg_T *eap)
+/// ":checkhealth" implementation called by Rust ex_checkhealth.
+void nvim_docmd_ex_checkhealth_impl(exarg_T *eap)
 {
   Error err = ERROR_INIT;
   MAXSIZE_TEMP_ARRAY(args, 2);
@@ -3879,7 +3737,8 @@ static void ex_checkhealth(exarg_T *eap)
   api_clear_error(&err);
 }
 
-static void ex_terminal(exarg_T *eap)
+/// ":terminal" implementation called by Rust ex_terminal.
+void nvim_docmd_ex_terminal_impl(exarg_T *eap)
 {
   char ex_cmd[1024];
   size_t len = 0;
@@ -5100,9 +4959,6 @@ void nvim_docmd_redraw_all_later_some_valid(void) { redraw_all_later(UPD_SOME_VA
 
 /// Set ex_pressedreturn (direct implementation for Rust FFI).
 void nvim_docmd_set_pressedreturn(bool val) { ex_pressedreturn = val; }
-
-/// Accessor: call static ex_findpat for Rust FFI.
-void nvim_docmd_call_findpat(exarg_T *eap) { ex_findpat(eap); }
 
 // =============================================================================
 // Phase 2 (batch plan) accessor functions for Rust FFI

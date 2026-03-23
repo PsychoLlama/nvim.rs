@@ -1811,7 +1811,8 @@ pub unsafe extern "C" fn rs_ex_checkpath(eap: ExArgHandle) {
 #[export_name = "ex_psearch"]
 pub unsafe extern "C" fn rs_ex_psearch(eap: ExArgHandle) {
     g_do_tagpreview = p_pvh as c_int;
-    nvim_docmd_call_findpat(eap);
+    // Call the Rust ex_findpat implementation directly.
+    crate::cmd_impl::rs_ex_findpat(eap);
     g_do_tagpreview = 0;
 }
 
@@ -1861,7 +1862,6 @@ extern "C" {
     // Phase 19: psearch, shada, folddo helpers
     static mut g_do_tagpreview: c_int;
     static mut p_pvh: std::ffi::c_long;
-    fn nvim_docmd_call_findpat(eap: ExArgHandle);
     static mut p_shada: *mut c_char;
     fn rs_shada_read_everything(fname: *const c_char, forceit: bool, missing_ok: bool) -> c_int;
     fn rs_shada_write_file(file: *const c_char, nomerge: bool) -> c_int;

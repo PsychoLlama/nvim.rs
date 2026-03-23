@@ -13,6 +13,7 @@
 
 pub mod address;
 pub mod args;
+pub mod cmd_impl;
 pub mod commands;
 pub mod completion;
 pub mod dispatch;
@@ -41,6 +42,7 @@ pub type CmdModHandle = *mut c_void;
 
 pub use address::*;
 pub use args::*;
+pub use cmd_impl::*;
 pub use commands::*;
 pub use completion::*;
 pub use dispatch::*;
