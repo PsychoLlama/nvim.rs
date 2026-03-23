@@ -639,7 +639,9 @@ extern "C" {
     fn nvim_check_compl_option_dict() -> c_int;
     fn nvim_check_compl_option_tsr() -> c_int;
     fn nvim_emsg_dict_empty(is_dict: c_int);
-    fn nvim_emsg_silent_is_zero() -> c_int;
+    // nvim_emsg_silent_is_zero: inlined below (Phase 35)
+    #[link_name = "emsg_silent"]
+    static mut g_emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_vim_beep_complete();
     fn setcursor();
@@ -670,7 +672,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
         crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
         g_edit_submode = core::ptr::null_mut();
         nvim_emsg_dict_empty(dict_opt);
-        if nvim_emsg_silent_is_zero() != 0 && !nvim_in_assert_fails() {
+        if g_emsg_silent == 0 && !nvim_in_assert_fails() {
             nvim_vim_beep_complete();
             setcursor();
             if nvim_ui_has_messages() == 0 {

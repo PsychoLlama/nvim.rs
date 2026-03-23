@@ -2065,7 +2065,7 @@ int nvim_check_compl_option_tsr(void) {
 void nvim_emsg_dict_empty(int is_dict) {
   emsg(is_dict ? _("'dictionary' option is empty") : _("'thesaurus' option is empty"));
 }
-int nvim_emsg_silent_is_zero(void) { return emsg_silent == 0 ? 1 : 0; }
+// nvim_emsg_silent_is_zero: deleted (Phase 35, inlined in ctrl_x.rs)
 // nvim_in_assert_fails: defined in change_ffi.c (bool nvim_in_assert_fails(void))
 void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
 // nvim_setcursor: deleted (Phase 3, Rust calls setcursor directly)
