@@ -136,13 +136,6 @@ extern void rs_change_option_default(int opt_idx, OptVal value);
 extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
 extern void rs_set_option_default(int opt_idx, int opt_flags);
 
-typedef struct { const char *end; int opt_idx; } FindOptionEndResult;
-extern FindOptionEndResult rs_find_option_end(const char *arg);
-
-typedef struct { int result; const char *errmsg; } ValidateOptIdxResult;
-extern ValidateOptIdxResult rs_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags,
-                                                uint32_t flags, int prefix);
-
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -561,13 +554,6 @@ void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_cul
 
 
 #define OPTION_COUNT ARRAY_SIZE(options)
-
-/// :set boolean option prefix
-typedef enum {
-  PREFIX_NO = 0,  ///< "no" prefix
-  PREFIX_NONE,    ///< no prefix
-  PREFIX_INV,     ///< "inv" prefix
-} set_prefix_T;
 
 #include "option_shim.c.generated.h"
 
