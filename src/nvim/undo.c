@@ -828,6 +828,8 @@ int nvim_get_p_verbose(void)
   return p_verbose;
 }
 
+void nvim_set_p_verbose(int val) { p_verbose = val; }
+
 bool nvim_get_p_fs(void)
 {
   return p_fs;

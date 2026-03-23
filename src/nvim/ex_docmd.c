@@ -364,6 +364,8 @@ extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
 extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 extern void nvim_docmd_handle_did_throw_impl(void);
 extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
+extern void nvim_docmd_apply_cmdmod_impl(cmdmod_T *cmod);
+extern void nvim_docmd_undo_cmdmod_impl(cmdmod_T *cmod);
 extern void nvim_docmd_ex_find_impl(exarg_T *eap);
 extern void nvim_docmd_ex_syncbind_impl(exarg_T *eap);
 extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
@@ -1681,90 +1683,6 @@ static char exmode_plus[] = "+";
 ///
 /// Apply the command modifiers.  Saves current state in "cmdmod", call
 /// undo_cmdmod() later.
-void nvim_docmd_apply_cmdmod_impl(cmdmod_T *cmod)
-{
-  if ((cmod->cmod_flags & CMOD_SANDBOX) && !cmod->cmod_did_sandbox) {
-    sandbox++;
-    cmod->cmod_did_sandbox = true;
-  }
-  if (cmod->cmod_verbose > 0) {
-    if (cmod->cmod_verbose_save == 0) {
-      cmod->cmod_verbose_save = p_verbose + 1;
-    }
-    p_verbose = cmod->cmod_verbose - 1;
-  }
-
-  if ((cmod->cmod_flags & (CMOD_SILENT | CMOD_UNSILENT))
-      && cmod->cmod_save_msg_silent == 0) {
-    cmod->cmod_save_msg_silent = msg_silent + 1;
-    cmod->cmod_save_msg_scroll = msg_scroll;
-  }
-  if (cmod->cmod_flags & CMOD_SILENT) {
-    msg_silent++;
-  }
-  if (cmod->cmod_flags & CMOD_UNSILENT) {
-    msg_silent = 0;
-  }
-
-  if (cmod->cmod_flags & CMOD_ERRSILENT) {
-    emsg_silent++;
-    cmod->cmod_did_esilent++;
-  }
-
-  if ((cmod->cmod_flags & CMOD_NOAUTOCMD) && cmod->cmod_save_ei == NULL) {
-    // Set 'eventignore' to "all".
-    // First save the existing option value for restoring it later.
-    cmod->cmod_save_ei = xstrdup(p_ei);
-    set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE);
-  }
-}
-
-/// Undo and free contents of "cmod".
-void nvim_docmd_undo_cmdmod_impl(cmdmod_T *cmod)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (cmod->cmod_verbose_save > 0) {
-    p_verbose = cmod->cmod_verbose_save - 1;
-    cmod->cmod_verbose_save = 0;
-  }
-
-  if (cmod->cmod_did_sandbox) {
-    sandbox--;
-    cmod->cmod_did_sandbox = false;
-  }
-
-  if (cmod->cmod_save_ei != NULL) {
-    // Restore 'eventignore' to the value before ":noautocmd".
-    set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(cmod->cmod_save_ei), 0, SID_NONE);
-    free_string_option(cmod->cmod_save_ei);
-    cmod->cmod_save_ei = NULL;
-  }
-
-  xfree(cmod->cmod_filter_pat);
-  vim_regfree(cmod->cmod_filter_regmatch.regprog);
-
-  if (cmod->cmod_save_msg_silent > 0) {
-    // messages could be enabled for a serious error, need to check if the
-    // counters don't become negative
-    if (!did_emsg || msg_silent > cmod->cmod_save_msg_silent - 1) {
-      msg_silent = cmod->cmod_save_msg_silent - 1;
-    }
-    emsg_silent -= cmod->cmod_did_esilent;
-    emsg_silent = MAX(emsg_silent, 0);
-    // Restore msg_scroll, it's set by file I/O commands, even when no
-    // message is actually displayed.
-    msg_scroll = cmod->cmod_save_msg_scroll;
-
-    // "silent reg" or "silent echo x" inside "redir" leaves msg_col
-    // somewhere in the line.  Put it back in the first column.
-    if (redirecting()) {
-      msg_col = 0;
-    }
-
-    cmod->cmod_save_msg_silent = 0;
-    cmod->cmod_did_esilent = 0;
-  }
-}
 
 /// Parse the address range, if any, in "eap".
 /// May set the last search pattern, unless "silent" is true.
@@ -3568,6 +3486,38 @@ void nvim_cmod_set_filter_regprog(cmdmod_T *cmod, void *prog)
   cmod->cmod_filter_regmatch.regprog = (regprog_T *)prog;
 }
 
+// --- Accessors for apply_cmdmod_impl / undo_cmdmod_impl (Rust Phase N+14) ---
+int nvim_cmod_get_flags(cmdmod_T *cmod) { return cmod->cmod_flags; }
+int nvim_cmod_get_did_sandbox(cmdmod_T *cmod) { return cmod->cmod_did_sandbox ? 1 : 0; }
+void nvim_cmod_set_did_sandbox(cmdmod_T *cmod, int v) { cmod->cmod_did_sandbox = (bool)v; }
+int nvim_cmod_get_verbose(cmdmod_T *cmod) { return cmod->cmod_verbose; }
+int nvim_cmod_get_verbose_save(cmdmod_T *cmod) { return cmod->cmod_verbose_save; }
+void nvim_cmod_set_verbose_save(cmdmod_T *cmod, int v) { cmod->cmod_verbose_save = v; }
+int nvim_cmod_get_save_msg_silent(cmdmod_T *cmod) { return cmod->cmod_save_msg_silent; }
+void nvim_cmod_set_save_msg_silent(cmdmod_T *cmod, int v) { cmod->cmod_save_msg_silent = v; }
+void nvim_cmod_capture_msg_scroll(cmdmod_T *cmod) { cmod->cmod_save_msg_scroll = msg_scroll; }
+void nvim_cmod_inc_did_esilent(cmdmod_T *cmod) { cmod->cmod_did_esilent++; }
+int nvim_cmod_get_did_esilent(cmdmod_T *cmod) { return cmod->cmod_did_esilent; }
+void nvim_cmod_set_did_esilent(cmdmod_T *cmod, int v) { cmod->cmod_did_esilent = v; }
+char *nvim_cmod_get_save_ei(cmdmod_T *cmod) { return cmod->cmod_save_ei; }
+void nvim_cmod_set_save_ei(cmdmod_T *cmod, char *s) { cmod->cmod_save_ei = s; }
+void nvim_docmd_set_eventignore_all(void)
+{
+  set_option_direct(kOptEventignore, STATIC_CSTR_AS_OPTVAL("all"), 0, SID_NONE);
+}
+void nvim_docmd_set_eventignore_str(char *s)
+{
+  set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(s), 0, SID_NONE);
+}
+void nvim_cmod_regfree_filter(cmdmod_T *cmod)
+{
+  vim_regfree(cmod->cmod_filter_regmatch.regprog);
+  cmod->cmod_filter_regmatch.regprog = NULL;
+}
+int nvim_cmod_get_save_msg_scroll(cmdmod_T *cmod) { return cmod->cmod_save_msg_scroll ? 1 : 0; }
+char *nvim_cmod_get_filter_pat(cmdmod_T *cmod) { return cmod->cmod_filter_pat; }
+void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
+
 // --- Global state accessors for parse_command_modifiers ---
 
 /// Get exmode_active.
@@ -4613,6 +4563,7 @@ void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // Phase 3 C forwarding wrappers (original names forward to renamed impl bodies).
 // These maintain ABI compatibility while Rust takes ownership via #[export_name].
 
+// apply_cmdmod / undo_cmdmod - thin C wrappers calling Rust _impl bodies.
 void apply_cmdmod(cmdmod_T *cmod) { nvim_docmd_apply_cmdmod_impl(cmod); }
 void undo_cmdmod(cmdmod_T *cmod) { nvim_docmd_undo_cmdmod_impl(cmod); }
 char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)

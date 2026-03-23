@@ -390,6 +390,12 @@ int no_wait_return_get(void) { return no_wait_return; }
 void no_wait_return_inc(void) { no_wait_return++; }
 void no_wait_return_dec(void) { if (no_wait_return > 0) no_wait_return--; }
 
+// C accessors for msg_silent (used by Rust apply_cmdmod_impl / undo_cmdmod_impl)
+int nvim_get_msg_silent(void) { return msg_silent; }
+void nvim_set_msg_silent(int val) { msg_silent = val; }
+void nvim_inc_emsg_silent(void) { emsg_silent++; }
+int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
+
 // C accessors for msg_scroll and msg_hist_off (used by Rust)
 void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 void nvim_set_msg_hist_off(int val) { msg_hist_off = (val != 0); }

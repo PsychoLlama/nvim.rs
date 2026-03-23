@@ -38,6 +38,13 @@ const UPD_VALID: c_int = 10;
 // remap constants
 const REMAP_NONE: c_int = -1;
 
+// cmdmod flag constants (from ex_cmds_defs.h)
+const CMOD_SANDBOX: c_int = 0x0001;
+const CMOD_SILENT: c_int = 0x0002;
+const CMOD_ERRSILENT: c_int = 0x0004;
+const CMOD_UNSILENT: c_int = 0x0008;
+const CMOD_NOAUTOCMD: c_int = 0x0010;
+
 // Tag type constants
 const DT_TAG: c_int = 1;
 const DT_POP: c_int = 2;
@@ -920,7 +927,47 @@ extern "C" {
     #[link_name = "vpeekc"]
     fn nvim_docmd_vpeekc() -> c_int;
     fn normal_cmd(oap: *mut OpargT, toplevel: bool);
+
+    // apply_cmdmod / undo_cmdmod accessors (Phase N+14)
+    fn nvim_cmod_get_flags(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_get_did_sandbox(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_set_did_sandbox(cmod: CmodHandle, v: c_int);
+    fn nvim_cmod_get_verbose(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_get_verbose_save(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_set_verbose_save(cmod: CmodHandle, v: c_int);
+    fn nvim_cmod_get_save_msg_silent(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_set_save_msg_silent(cmod: CmodHandle, v: c_int);
+    fn nvim_cmod_capture_msg_scroll(cmod: CmodHandle);
+    fn nvim_cmod_inc_did_esilent(cmod: CmodHandle);
+    fn nvim_cmod_get_did_esilent(cmod: CmodHandle) -> c_int;
+    fn nvim_cmod_set_did_esilent(cmod: CmodHandle, v: c_int);
+    fn nvim_cmod_get_save_ei(cmod: CmodHandle) -> *mut c_char;
+    fn nvim_cmod_set_save_ei(cmod: CmodHandle, s: *mut c_char);
+    fn nvim_cmod_set_filter_pat(cmod: CmodHandle, s: *mut c_char);
+    fn nvim_cmod_regfree_filter(cmod: CmodHandle);
+    fn nvim_docmd_set_eventignore_all();
+    fn nvim_docmd_set_eventignore_str(s: *mut c_char);
+    fn nvim_get_msg_silent() -> c_int;
+    fn nvim_set_msg_silent(val: c_int);
+    fn nvim_inc_msg_silent();
+    fn nvim_inc_emsg_silent();
+    fn nvim_set_emsg_silent(val: c_int);
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_set_p_verbose(val: c_int);
+    fn nvim_get_p_ei() -> *const c_char;
+    fn nvim_inc_sandbox();
+    fn nvim_dec_sandbox();
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "free_string_option"]
+    fn nvim_free_string_option(p: *mut c_char);
+    fn nvim_did_emsg_check() -> c_int;
+    fn nvim_redirecting_check() -> c_int;
+    fn nvim_set_msg_col(col: c_int);
+    fn nvim_docmd_restore_msg_scroll(cmod: CmodHandle);
+    fn nvim_cmod_get_filter_pat(cmod: CmodHandle) -> *mut c_char;
 }
+
+type CmodHandle = *mut c_void;
 
 /// `do_exedit` - edit/badd/visual command dispatch.
 ///
@@ -1734,5 +1781,116 @@ pub unsafe extern "C" fn rs_post_chdir_impl(scope: c_int, trigger_dirchanged: bo
 
     if trigger_dirchanged {
         nvim_docmd_do_autocmd_dirchanged_manual_post(cwd_ptr, scope);
+    }
+}
+
+// =============================================================================
+// Phase N+14: apply_cmdmod_impl / undo_cmdmod_impl
+// =============================================================================
+
+/// Apply command modifiers: sandbox, verbose, silent, errsilent, noautocmd.
+///
+/// # Safety
+/// `cmod` must be a valid cmdmod_T pointer.
+#[export_name = "nvim_docmd_apply_cmdmod_impl"]
+pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
+    let flags = nvim_cmod_get_flags(cmod);
+
+    // :sandbox
+    if (flags & CMOD_SANDBOX) != 0 && nvim_cmod_get_did_sandbox(cmod) == 0 {
+        nvim_inc_sandbox();
+        nvim_cmod_set_did_sandbox(cmod, 1);
+    }
+
+    // :verbose
+    let verbose = nvim_cmod_get_verbose(cmod);
+    if verbose > 0 {
+        if nvim_cmod_get_verbose_save(cmod) == 0 {
+            nvim_cmod_set_verbose_save(cmod, nvim_get_p_verbose() + 1);
+        }
+        nvim_set_p_verbose(verbose - 1);
+    }
+
+    // :silent / :unsilent
+    if (flags & (CMOD_SILENT | CMOD_UNSILENT)) != 0 && nvim_cmod_get_save_msg_silent(cmod) == 0 {
+        nvim_cmod_set_save_msg_silent(cmod, nvim_get_msg_silent() + 1);
+        nvim_cmod_capture_msg_scroll(cmod);
+    }
+    if (flags & CMOD_SILENT) != 0 {
+        nvim_inc_msg_silent();
+    }
+    if (flags & CMOD_UNSILENT) != 0 {
+        nvim_set_msg_silent(0);
+    }
+
+    // :silent!
+    if (flags & CMOD_ERRSILENT) != 0 {
+        nvim_inc_emsg_silent();
+        nvim_cmod_inc_did_esilent(cmod);
+    }
+
+    // :noautocmd
+    if (flags & CMOD_NOAUTOCMD) != 0 && nvim_cmod_get_save_ei(cmod).is_null() {
+        let p_ei = nvim_get_p_ei();
+        nvim_cmod_set_save_ei(cmod, xstrdup(p_ei));
+        nvim_docmd_set_eventignore_all();
+    }
+}
+
+/// Undo and free command modifier state.
+///
+/// # Safety
+/// `cmod` must be a valid cmdmod_T pointer.
+#[export_name = "nvim_docmd_undo_cmdmod_impl"]
+pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
+    // Restore verbose.
+    let verbose_save = nvim_cmod_get_verbose_save(cmod);
+    if verbose_save > 0 {
+        nvim_set_p_verbose(verbose_save - 1);
+        nvim_cmod_set_verbose_save(cmod, 0);
+    }
+
+    // Undo sandbox.
+    if nvim_cmod_get_did_sandbox(cmod) != 0 {
+        nvim_dec_sandbox();
+        nvim_cmod_set_did_sandbox(cmod, 0);
+    }
+
+    // Restore 'eventignore'.
+    let save_ei = nvim_cmod_get_save_ei(cmod);
+    if !save_ei.is_null() {
+        nvim_docmd_set_eventignore_str(save_ei);
+        nvim_free_string_option(save_ei);
+        nvim_cmod_set_save_ei(cmod, std::ptr::null_mut());
+    }
+
+    // Free filter pattern and regexp.
+    xfree(nvim_cmod_get_filter_pat(cmod) as *mut c_void);
+    nvim_cmod_set_filter_pat(cmod, std::ptr::null_mut());
+    nvim_cmod_regfree_filter(cmod);
+
+    // Restore msg_silent.
+    let save_msg_silent = nvim_cmod_get_save_msg_silent(cmod);
+    if save_msg_silent > 0 {
+        // Prevent counters from going negative if a serious error enabled messages.
+        let cur_msg_silent = nvim_get_msg_silent();
+        if nvim_did_emsg_check() == 0 || cur_msg_silent > save_msg_silent - 1 {
+            nvim_set_msg_silent(save_msg_silent - 1);
+        }
+        let did_esilent = nvim_cmod_get_did_esilent(cmod);
+        let new_emsg_silent = nvim_get_emsg_silent() - did_esilent;
+        nvim_set_emsg_silent(if new_emsg_silent < 0 {
+            0
+        } else {
+            new_emsg_silent
+        });
+        // Restore msg_scroll (set by file I/O commands even with no message).
+        nvim_docmd_restore_msg_scroll(cmod);
+        // Restore msg_col if redirecting.
+        if nvim_redirecting_check() != 0 {
+            nvim_set_msg_col(0);
+        }
+        nvim_cmod_set_save_msg_silent(cmod, 0);
+        nvim_cmod_set_did_esilent(cmod, 0);
     }
 }
