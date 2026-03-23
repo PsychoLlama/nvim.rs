@@ -76,8 +76,8 @@ extern "C" {
     // is_multihl: Rust-owned static (misc.rs)
     static mut is_multihl: bool;
     fn nvim_set_vim_var_statusmsg(s: *const c_char);
-    fn nvim_msg_keep_should_add_hist(s: *const c_char) -> c_int;
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
+    static mut keep_msg: *const c_char;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     static mut sc_col: c_int;
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
@@ -100,6 +100,8 @@ extern "C" {
 extern "C" {
     // Also declared in format.rs — same C symbol, safe to re-declare here.
     fn nvim_xfree(ptr: *mut c_char);
+    // Also declared in history.rs — same Rust static, safe to re-declare here.
+    static mut msg_hist_last: *mut crate::history::MessageHistoryEntry;
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -131,6 +133,26 @@ const fn k_third(c: c_int) -> u8 {
 // ============================================================================
 // Core Message Output Functions
 // ============================================================================
+
+/// Check if the message text differs from the last history entry's first chunk text.
+///
+/// Used when inlining `nvim_msg_keep_should_add_hist`.
+///
+/// # Safety
+/// Accesses `msg_hist_last` and dereferences items pointer.
+unsafe fn msg_hist_last_text_differs(s: *const std::ffi::c_char) -> bool {
+    if msg_hist_last.is_null() || (*msg_hist_last).msg.size == 0 {
+        return true;
+    }
+    let first_text = (*(*msg_hist_last).msg.items).text_data.cast_const();
+    if first_text.is_null() {
+        return true;
+    }
+    // Compare strings byte by byte
+    let a = std::ffi::CStr::from_ptr(s);
+    let b = std::ffi::CStr::from_ptr(first_text);
+    a != b
+}
 
 /// Recursion counter for msg_keep (mirrors the C `static int entered`).
 static ENTERED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
@@ -175,7 +197,13 @@ pub(crate) unsafe fn msg_keep_impl(
     ENTERED.store(entered + 1, Ordering::Relaxed);
 
     // Add message to history unless it's a multihl, repeated, or truncated message.
-    if nvim_msg_keep_should_add_hist(s) != 0 {
+    // Inlined from nvim_msg_keep_should_add_hist: !is_multihl &&
+    //   (s != keep_msg || (*s != '<' && msg_hist_last != NULL &&
+    //    msg_hist_last->msg.size > 0 &&
+    //    strcmp(s, msg_hist_last->msg.items[0].text_data) != 0))
+    let should_add_hist = !is_multihl
+        && (s != keep_msg || (*s != b'<' as std::ffi::c_char && msg_hist_last_text_differs(s)));
+    if should_add_hist {
         nvim_msg_hist_add_str(s, hl_id);
     }
 

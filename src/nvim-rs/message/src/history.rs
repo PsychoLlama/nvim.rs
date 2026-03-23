@@ -7,6 +7,25 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
+/// Layout-compatible representation of `HlMessageChunk` in C.
+/// Size: 24 bytes (String=16, int=4, padding=4)
+#[repr(C)]
+pub struct HlMessageChunk {
+    pub text_data: *mut c_char, // String.data  (offset 0)
+    pub text_size: usize,       // String.size  (offset 8)
+    pub hl_id: c_int,           // offset 16
+    _pad: c_int,                // offset 20 (alignment padding)
+}
+
+/// Layout-compatible representation of `HlMessage` (kvec_t(HlMessageChunk)) in C.
+/// Size: 24 bytes
+#[repr(C)]
+pub struct HlMessage {
+    pub size: usize,                // offset 0
+    pub capacity: usize,            // offset 8
+    pub items: *mut HlMessageChunk, // offset 16
+}
+
 // C accessor declarations
 extern "C" {
     static mut msg_silent: c_int;
@@ -34,8 +53,7 @@ extern "C" {
 pub struct MessageHistoryEntry {
     pub next: *mut MessageHistoryEntry,
     pub prev: *mut MessageHistoryEntry,
-    /// HlMessage (kvec_t) — opaque blob, only passed to C functions
-    _msg: [u8; 24],
+    pub msg: HlMessage,
     pub kind: *const c_char,
     pub temp: bool,
     pub append: bool,

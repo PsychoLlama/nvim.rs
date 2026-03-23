@@ -517,16 +517,7 @@ extern bool is_multihl;  // owned by Rust (misc.rs)
 
 void nvim_set_vim_var_statusmsg(const char *s) { set_vim_var_string(VV_STATUSMSG, s, -1); }
 
-/// Check if the message should be added to history.
-/// Encapsulates the complex condition from msg_keep.
-int nvim_msg_keep_should_add_hist(const char *s)
-{
-  return !is_multihl
-         && (s != keep_msg
-             || (*s != '<' && msg_hist_last != NULL
-                 && kv_size(msg_hist_last->msg) > 0
-                 && strcmp(s, kv_A(msg_hist_last->msg, 0).text.data) != 0));
-}
+// nvim_msg_keep_should_add_hist: inlined into Rust output_core.rs
 
 /// Format a progress message, adding title and percent if given.
 ///
