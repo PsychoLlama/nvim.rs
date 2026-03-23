@@ -81,10 +81,10 @@ enum {
   DLG_HOTKEY_CHAR = '&',
 };
 
-static int confirm_msg_used = false;            // displaying confirm_msg
+extern int confirm_msg_used;   // owned by Rust (dialog.rs)
 #include "message.c.generated.h"
-static char *confirm_msg = NULL;            // ":confirm" message
-static char *confirm_buttons;               // ":confirm" buttons sent to cmdline as prompt
+extern char *confirm_msg;      // owned by Rust (dialog.rs)
+extern char *confirm_buttons;  // owned by Rust (dialog.rs)
 
 extern MessageHistoryEntry *msg_hist_last;   // owned by Rust (history.rs)
 extern MessageHistoryEntry *msg_hist_first;  // owned by Rust (history.rs)
@@ -461,7 +461,6 @@ int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
 
 // Phase 72: give_warning() accessors
 void nvim_set_vim_var_warningmsg(const char *s) { set_vim_var_string(VV_WARNINGMSG, s, -1); }
-int nvim_msg_ext_kind_is_null(void) { return msg_ext_kind == NULL ? 1 : 0; }
 
 // verbose_kind and pre_verbose_kind are now Rust statics (display.rs)
 // nvim_verbose_enter_kind and nvim_restore_pre_verbose_kind migrated to Rust (verbose.rs)
@@ -719,13 +718,11 @@ int smsg_keep(int hl_id, const char *s, ...)
 
 // Remember the last sourcing name/lnum used in an error message, so that it
 // isn't printed each time when it didn't change.
-static int last_sourcing_lnum = 0;
+extern int last_sourcing_lnum;  // owned by Rust (error.rs)
 static char *last_sourcing_name = NULL;
 
 // Phase 1: sourcing state accessors for reset_last_sourcing (Rust implementation)
 void nvim_clear_last_sourcing_name(void) { XFREE_CLEAR(last_sourcing_name); }
-int nvim_get_last_sourcing_lnum(void) { return last_sourcing_lnum; }
-void nvim_set_last_sourcing_lnum(int val) { last_sourcing_lnum = val; }
 
 // Phase 2 (msg_source): additional sourcing accessors
 int nvim_other_sourcing_name(void) { return other_sourcing_name() ? 1 : 0; }
@@ -1730,14 +1727,6 @@ typedef enum {
 
 // When to clear text on next msg. Owned by Rust (scrollback.rs), 0 = SB_CLEAR_NONE.
 extern int do_clear_sb_text;
-
-// C accessors for dialog state (used by Rust)
-const char *nvim_get_confirm_msg(void) { return confirm_msg; }
-void nvim_set_confirm_msg(const char *msg) { confirm_msg = (char *)msg; }
-int nvim_get_confirm_msg_used(void) { return confirm_msg_used; }
-void nvim_set_confirm_msg_used(int val) { confirm_msg_used = val; }
-const char *nvim_get_confirm_buttons(void) { return confirm_buttons; }
-void nvim_set_confirm_buttons(const char *buttons) { confirm_buttons = (char *)buttons; }
 
 /// Store part of a printed message for displaying when scrolling back.
 ///

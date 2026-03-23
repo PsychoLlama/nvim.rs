@@ -10,23 +10,28 @@ use std::ptr;
 // C accessor declarations
 extern "C" {
     static mut msg_silent: c_int;
-    /// Get `confirm_msg` pointer
-    fn nvim_get_confirm_msg() -> *const c_char;
-    /// Set `confirm_msg` pointer
-    fn nvim_set_confirm_msg(msg: *const c_char);
-    /// Get `confirm_msg_used` counter
-    fn nvim_get_confirm_msg_used() -> c_int;
-    /// Set `confirm_msg_used` counter
-    fn nvim_set_confirm_msg_used(val: c_int);
-    /// Get `confirm_buttons` pointer
-    fn nvim_get_confirm_buttons() -> *const c_char;
-    /// Set `confirm_buttons` pointer
-    fn nvim_set_confirm_buttons(buttons: *const c_char);
+    // confirm_msg, confirm_buttons, confirm_msg_used: Rust-owned statics (dialog.rs)
     /// Direct C global: silent_mode
     static silent_mode: bool;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
+
+// ============================================================================
+// Rust-owned statics (previously file-local in message.c)
+// ============================================================================
+
+/// Confirm message text (replaces C static confirm_msg)
+#[no_mangle]
+pub static mut confirm_msg: *mut c_char = std::ptr::null_mut();
+
+/// Confirm buttons text (replaces C static confirm_buttons)
+#[no_mangle]
+pub static mut confirm_buttons: *mut c_char = std::ptr::null_mut();
+
+/// Number of times confirm message has been displayed (replaces C static confirm_msg_used)
+#[no_mangle]
+pub static mut confirm_msg_used: c_int = 0;
 
 /// Dialog button separator character (as c_int for comparison)
 pub const DLG_BUTTON_SEP: c_int = b'\n' as c_int;
@@ -76,7 +81,7 @@ impl DialogResponse {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_msg() -> *const c_char {
-    nvim_get_confirm_msg()
+    confirm_msg
 }
 
 /// Set the confirm message.
@@ -85,7 +90,7 @@ pub unsafe extern "C" fn rs_confirm_msg() -> *const c_char {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_confirm_msg(msg: *const c_char) {
-    nvim_set_confirm_msg(msg);
+    confirm_msg = msg.cast_mut();
 }
 
 /// Check if confirm message is currently being displayed.
@@ -94,7 +99,7 @@ pub unsafe extern "C" fn rs_set_confirm_msg(msg: *const c_char) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_msg_used() -> c_int {
-    nvim_get_confirm_msg_used()
+    confirm_msg_used
 }
 
 /// Check if we are in the middle of displaying a confirm message.
@@ -105,7 +110,7 @@ pub unsafe extern "C" fn rs_confirm_msg_used() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_confirm_msg_used() -> c_int {
-    c_int::from(nvim_get_confirm_msg_used() > 0)
+    c_int::from(confirm_msg_used > 0)
 }
 
 /// Increment the confirm message used counter.
@@ -114,8 +119,7 @@ pub unsafe extern "C" fn rs_is_confirm_msg_used() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_msg_enter() {
-    let val = nvim_get_confirm_msg_used();
-    nvim_set_confirm_msg_used(val + 1);
+    confirm_msg_used += 1;
 }
 
 /// Decrement the confirm message used counter.
@@ -124,9 +128,8 @@ pub unsafe extern "C" fn rs_confirm_msg_enter() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_msg_leave() {
-    let val = nvim_get_confirm_msg_used();
-    if val > 0 {
-        nvim_set_confirm_msg_used(val - 1);
+    if confirm_msg_used > 0 {
+        confirm_msg_used -= 1;
     }
 }
 
@@ -136,7 +139,7 @@ pub unsafe extern "C" fn rs_confirm_msg_leave() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_confirm_buttons() -> *const c_char {
-    nvim_get_confirm_buttons()
+    confirm_buttons
 }
 
 /// Set the confirm buttons string.
@@ -145,7 +148,7 @@ pub unsafe extern "C" fn rs_confirm_buttons() -> *const c_char {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_confirm_buttons(buttons: *const c_char) {
-    nvim_set_confirm_buttons(buttons);
+    confirm_buttons = buttons.cast_mut();
 }
 
 /// Check if a confirm message exists.
@@ -154,7 +157,7 @@ pub unsafe extern "C" fn rs_set_confirm_buttons(buttons: *const c_char) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_confirm_msg() -> c_int {
-    c_int::from(!nvim_get_confirm_msg().is_null())
+    c_int::from(!confirm_msg.is_null())
 }
 
 /// Clear the confirm message, freeing its memory.
@@ -163,10 +166,10 @@ pub unsafe extern "C" fn rs_has_confirm_msg() -> c_int {
 /// Calls C accessor functions and frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_confirm_msg() {
-    let msg = nvim_get_confirm_msg();
+    let msg = confirm_msg;
     if !msg.is_null() {
-        xfree(msg as *mut std::ffi::c_void);
-        nvim_set_confirm_msg(ptr::null());
+        xfree(msg.cast());
+        confirm_msg = ptr::null_mut();
     }
 }
 
@@ -176,10 +179,10 @@ pub unsafe extern "C" fn rs_clear_confirm_msg() {
 /// Calls C accessor functions and frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_confirm_buttons() {
-    let buttons = nvim_get_confirm_buttons();
+    let buttons = confirm_buttons;
     if !buttons.is_null() {
-        xfree(buttons as *mut std::ffi::c_void);
-        nvim_set_confirm_buttons(ptr::null());
+        xfree(buttons.cast());
+        confirm_buttons = ptr::null_mut();
     }
 }
 

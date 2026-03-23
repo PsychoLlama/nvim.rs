@@ -441,6 +441,10 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
     emsg_off + emsg_skip + emsg_silent
 }
 
+/// Last sourcing line number (replaces C static last_sourcing_lnum)
+#[no_mangle]
+pub static mut last_sourcing_lnum: c_int = 0;
+
 // ============================================================================
 // Phase 423: Error Message Output Functions
 // ============================================================================
@@ -448,7 +452,7 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
 extern "C" {
     // Phase 1: sourcing state accessors for reset_last_sourcing
     fn nvim_clear_last_sourcing_name();
-    fn nvim_set_last_sourcing_lnum(val: c_int);
+    // last_sourcing_lnum: Rust-owned static (error.rs)
 
     // Accessors for msg_source implementation
     fn nvim_other_sourcing_name() -> c_int;
@@ -761,7 +765,7 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
     if !p.is_null() {
         let _ = crate::output_core::rs_msg(p, HLF_N_LINE_NR);
         xfree(p.cast());
-        nvim_set_last_sourcing_lnum(nvim_get_sourcing_lnum()); // only once for each line
+        last_sourcing_lnum = nvim_get_sourcing_lnum(); // only once for each line
     }
 
     // remember the last sourcing name printed, also when it's empty
@@ -791,7 +795,7 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 #[export_name = "reset_last_sourcing"]
 pub unsafe extern "C" fn rs_reset_last_sourcing() {
     nvim_clear_last_sourcing_name();
-    nvim_set_last_sourcing_lnum(0);
+    last_sourcing_lnum = 0;
 }
 
 // ============================================================================
