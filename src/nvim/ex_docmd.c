@@ -4661,11 +4661,6 @@ bool nvim_eap_argt_has_range(const exarg_T *eap) { return (eap->argt & EX_RANGE)
 bool nvim_eap_argt_has_dflall(const exarg_T *eap) { return (eap->argt & EX_DFLALL) != 0; }
 void nvim_set_cmd_dflall_range(exarg_T *eap) { set_cmd_dflall_range(eap); }
 void nvim_parse_register(exarg_T *eap) { parse_register(eap); }
-int nvim_parse_count(exarg_T *eap, const char **errormsg, bool after_unknown_range)
-{
-  return parse_count(eap, errormsg, after_unknown_range);
-}
-void nvim_undo_cmdmod(CmdParseInfo *cmdinfo) { nvim_docmd_undo_cmdmod_impl(&cmdinfo->cmdmod); }
 void nvim_clear_cmdinfo(CmdParseInfo *cmdinfo) { CLEAR_POINTER(cmdinfo); }
 bool nvim_eap_cmd_is_nul_or_comment(const exarg_T *eap)
 {
@@ -5217,4 +5212,3 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
   return nvim_docmd_eval_vars_impl(src, srcstart, usedlen, lnump, errormsg, escaped,
                                    empty_is_error);
 }
-char *expand_sfile(char *arg) { return nvim_docmd_expand_sfile_impl(arg); }
