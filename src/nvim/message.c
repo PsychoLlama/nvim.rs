@@ -210,13 +210,6 @@ static char *get_emsg_lnum(void);
 static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
-// Phase 4: emsg_multiline accessors
-void nvim_flush_buffers_minimal(void) { flush_buffers(FLUSH_MINIMAL); }
-// Wrappers for static functions used by emsg_multiline:
-int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore)
-{
-  return cause_errthrow(s, multiline, severe, ignore) ? 1 : 0;
-}
 void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxlen); }
 char *nvim_get_emsg_source(void) { return get_emsg_source(); }
 char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }

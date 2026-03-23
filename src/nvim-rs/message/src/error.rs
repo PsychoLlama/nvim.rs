@@ -461,12 +461,12 @@ extern "C" {
     fn strcmp(s1: *const std::ffi::c_char, s2: *const std::ffi::c_char) -> c_int;
 
     // Accessors for emsg_multiline implementation
-    fn nvim_cause_errthrow(
+    fn cause_errthrow(
         s: *const std::ffi::c_char,
-        multiline: c_int,
-        severe: c_int,
-        ignore: *mut c_int,
-    ) -> c_int;
+        multiline: bool,
+        severe: bool,
+        ignore: *mut bool,
+    ) -> bool;
     static mut emsg_assert_fails_msg: *mut std::ffi::c_char;
     static mut emsg_assert_fails_lnum: c_long;
     static mut emsg_assert_fails_context: *mut std::ffi::c_char;
@@ -482,7 +482,7 @@ extern "C" {
     fn nvim_inc_global_busy();
     static mut p_eb: c_int;
     fn nvim_beep_flush();
-    fn nvim_flush_buffers_minimal();
+    fn flush_buffers(flush_typeahead: c_int); // FLUSH_MINIMAL = 0
     static mut msg_nowait: bool;
     static mut msg_scroll: c_int;
     static mut msg_ext_skip_flush: bool;
@@ -546,10 +546,15 @@ pub unsafe extern "C" fn rs_emsg_multiline(
     let debug_t = !vim_strchr(p_debug, c_int::from(b't')).is_null();
     if off == 0 || debug_t {
         // Cause a throw of an error exception if appropriate.
-        let mut ignore: c_int = 0;
+        let mut ignore: bool = false;
         // SAFETY: ignore is a local variable, valid for the duration of the call.
-        if nvim_cause_errthrow(s, multiline, severe, std::ptr::addr_of_mut!(ignore)) != 0 {
-            if ignore == 0 {
+        if cause_errthrow(
+            s,
+            multiline != 0,
+            severe != 0,
+            std::ptr::addr_of_mut!(ignore),
+        ) {
+            if !ignore {
                 let did = did_emsg;
                 did_emsg = did + 1;
             }
@@ -613,7 +618,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         if p_eb != 0 {
             nvim_beep_flush(); // also includes flush_buffers()
         } else {
-            nvim_flush_buffers_minimal(); // flush internal buffers
+            flush_buffers(0); // FLUSH_MINIMAL = 0, flush internal buffers
         }
 
         let did = did_emsg;
