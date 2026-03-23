@@ -2169,13 +2169,10 @@ void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
 // nvim_ui_flush: defined in change_ffi.c (void nvim_ui_flush(void))
 // nvim_os_delay: defined in change_ffi.c (void nvim_os_delay(long ms, bool allow_input))
 // nvim_vpeekc_any: deleted (Phase 3, Rust calls vpeekc_any directly)
-int nvim_test_disable_char_avail(void) { return test_disable_char_avail ? 1 : 0; }
+// nvim_test_disable_char_avail, nvim_got_int, nvim_key_typed, nvim_ex_normal_busy:
+// deleted (Phase 4, Rust uses #[link_name] to access globals directly)
 // NOTE: nvim_vim_is_ctrl_x_key deleted (Phase 15). keys.rs calls rs_vim_is_ctrl_x_key() directly.
 // nvim_safe_vgetc, nvim_vungetc: deleted (Phase 3, Rust calls directly)
-int nvim_got_int(void) { return got_int ? 1 : 0; }
-int nvim_key_typed(void) { return KeyTyped ? 1 : 0; }
-int nvim_using_script(void) { return using_script() ? 1 : 0; }
-int nvim_ex_normal_busy(void) { return ex_normal_busy ? 1 : 0; }
 // nvim_get/set_compl_pending: deleted (Phase 2, COMPL_PENDING moved to Rust)
 int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy)) ? 1 : 0; }
 // NOTE: nvim_get_compl_shows_dir already deleted (duplicate reference was wrong).
@@ -2818,8 +2815,7 @@ size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *
 {
   return copy_option_part(src, buf, (size_t)maxlen, sep);
 }
-// vim_strchr wrapper: returns pointer to first occurrence of c in s, or NULL.
-const char *nvim_vim_strchr_ffi(const char *s, int c) { return vim_strchr(s, c); }
+// vim_strchr: Rust uses #[link_name = "vim_strchr"] directly.
 // nvim_xstrdup is defined in register.c; use it via the existing declaration.
 // Returns 1 if the completion function name for ctrl_x_mode is empty, 0 otherwise.
 int nvim_get_complete_funcname_empty(int ctrl_x_mode_val)

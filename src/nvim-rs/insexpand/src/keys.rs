@@ -54,13 +54,18 @@ static CHECK_KEYS_COUNT: AtomicI32 = AtomicI32::new(0);
 // Additional C accessor functions for Phase 4
 extern "C" {
     fn vpeekc_any() -> c_int;
-    fn nvim_test_disable_char_avail() -> c_int;
+    #[link_name = "test_disable_char_avail"]
+    static mut nvim_test_disable_char_avail: bool;
     fn safe_vgetc() -> c_int;
     fn vungetc(c: c_int);
-    fn nvim_got_int() -> c_int;
-    fn nvim_key_typed() -> c_int;
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
+    #[link_name = "KeyTyped"]
+    static mut nvim_key_typed: bool;
+    #[link_name = "using_script"]
     fn nvim_using_script() -> c_int;
-    fn nvim_ex_normal_busy() -> c_int;
+    #[link_name = "ex_normal_busy"]
+    static mut nvim_ex_normal_busy: c_int;
     // (compl_pending moved to Rust static in state.rs)
     fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int;
     fn nvim_cpt_sources_index_non_neg() -> c_int;
@@ -94,7 +99,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     // Don't check when reading keys from a script, :normal or feedkeys().
     // That would break the test scripts. But do check for keys when called
     // from complete_check().
-    if in_compl_func == 0 && (nvim_using_script() != 0 || nvim_ex_normal_busy() != 0) {
+    if in_compl_func == 0 && (nvim_using_script() != 0 || nvim_ex_normal_busy != 0) {
         return;
     }
 
@@ -108,7 +113,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     // Check for a typed key. Do use mappings, otherwise vim_is_ctrl_x_key()
     // can't do its work correctly.
     let peeked = vpeekc_any();
-    if peeked != NUL && nvim_test_disable_char_avail() == 0 {
+    if peeked != NUL && !nvim_test_disable_char_avail {
         // Eat or inspect the character
         let c = safe_vgetc();
         if crate::rs_vim_is_ctrl_x_key(peeked) != 0 && peeked != CTRL_X && peeked != CTRL_R {
@@ -122,7 +127,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
             if c != K_IGNORE {
                 // Don't interrupt completion when the character wasn't typed,
                 // e.g., when doing @q to replay keys.
-                if c != CTRL_R && nvim_key_typed() != 0 {
+                if c != CTRL_R && nvim_key_typed {
                     crate::vars::nvim_set_compl_interrupted(1);
                 }
                 vungetc(c);
@@ -143,7 +148,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
 
     let pending = crate::state::COMPL_PENDING;
     if pending != 0
-        && nvim_got_int() == 0
+        && !nvim_got_int
         && nvim_cot_flags_has_noinsert_fuzzy() == 0
         && (crate::vars::nvim_get_compl_autocomplete() == 0 || rs_ins_compl_has_preinsert() != 0)
     {

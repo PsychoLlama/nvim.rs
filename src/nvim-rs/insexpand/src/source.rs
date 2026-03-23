@@ -301,6 +301,7 @@ extern "C" {
         sep: *const c_char,
     ) -> usize;
     fn nvim_copy_option_part_iobuff_ffi(src: *mut *mut c_char) -> usize;
+    #[link_name = "vim_strchr"]
     fn nvim_vim_strchr_ffi(s: *const c_char, c: c_int) -> *const c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xfree(ptr: *mut u8);

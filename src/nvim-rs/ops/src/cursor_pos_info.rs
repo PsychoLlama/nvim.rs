@@ -62,7 +62,8 @@ extern "C" {
 
     // Interrupt / breakcheck
     fn nvim_os_breakcheck();
-    fn nvim_got_int() -> c_int;
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
 
     // Output / display
     fn nvim_msg_no_lines();
@@ -355,7 +356,7 @@ unsafe fn count_lines(p: &CountParams) -> Option<Counts> {
     for lnum in 1..=p.line_count {
         if c.byte_count > last_check {
             nvim_os_breakcheck();
-            if nvim_got_int() != 0 {
+            if nvim_got_int {
                 return None;
             }
             last_check = c.byte_count + 100_000;

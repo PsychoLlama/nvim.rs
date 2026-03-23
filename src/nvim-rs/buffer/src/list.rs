@@ -588,7 +588,8 @@ extern "C" {
         one: bool,
     ) -> usize;
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
-    fn nvim_got_int() -> c_int;
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
     fn nvim_msg_putchar(c: c_int);
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -648,7 +649,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
 
     // Iterate
     for buf in bufs {
-        if nvim_got_int() != 0 {
+        if nvim_got_int {
             break;
         }
 

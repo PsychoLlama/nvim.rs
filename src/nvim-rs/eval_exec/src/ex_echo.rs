@@ -39,7 +39,8 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
 
     // Globals accessors
-    fn nvim_got_int() -> c_int;
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
     fn nvim_set_need_clr_eos(val: c_int);
     fn nvim_aborting() -> bool;
     fn did_emsg_get() -> c_int;
@@ -209,7 +210,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
 
     loop {
         let ch = get_byte(arg);
-        if ch == 0 || ch == b'|' || ch == b'\n' || nvim_got_int() != 0 {
+        if ch == 0 || ch == b'|' || ch == b'\n' || nvim_got_int {
             break;
         }
 

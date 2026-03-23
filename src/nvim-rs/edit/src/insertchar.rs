@@ -80,7 +80,8 @@ extern "C" {
     fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
     fn nvim_byte2cells(c: c_int) -> c_int;
     fn do_digraph(c: c_int) -> c_int;
-    fn nvim_test_disable_char_avail() -> c_int;
+    #[link_name = "test_disable_char_avail"]
+    static mut nvim_test_disable_char_avail: bool;
 
     // -- insertion --
     fn nvim_ins_str(p: *const c_char, len: usize);
@@ -211,7 +212,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
     if !is_special(c)
         && utf_char2len(c) == 1
         && nvim_has_event_insertcharpre() == 0
-        && nvim_test_disable_char_avail() == 0
+        && !nvim_test_disable_char_avail
         && vpeekc() != 0 // != NUL
         && nvim_get_State() & REPLACE_FLAG == 0
         && !cindent_on()

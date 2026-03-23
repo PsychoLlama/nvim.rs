@@ -173,7 +173,8 @@ extern "C" {
 
     // misc
     fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
-    fn nvim_got_int() -> c_int;
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
     fn may_trigger_modechanged();
 
 }
@@ -624,7 +625,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         if (rs_ctrl_x_mode_not_default() != 0 && rs_ctrl_x_mode_line_or_eval() == 0)
             || found_new_match != FAIL
         {
-            if nvim_got_int() != 0 {
+            if nvim_got_int {
                 if normal_mode_strict
                     && compl_type == CTRL_X_FUNCTION
                     && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)

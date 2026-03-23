@@ -627,7 +627,8 @@ extern "C" {
     fn msg(s: *const c_char, hl_id: c_int);
 
     // ex_normal_busy
-    fn nvim_ex_normal_busy() -> c_int;
+    #[link_name = "ex_normal_busy"]
+    static mut nvim_ex_normal_busy: c_int;
 
     // typebuf.tb_len
     fn nvim_get_typebuf_len() -> c_int;
@@ -790,7 +791,7 @@ pub unsafe extern "C" fn do_exmode() {
     );
     while nvim_get_exmode_active() {
         // Check for a ":normal" command and no more characters left.
-        if nvim_ex_normal_busy() > 0 && nvim_get_typebuf_len() == 0 {
+        if nvim_ex_normal_busy > 0 && nvim_get_typebuf_len() == 0 {
             nvim_set_exmode_active(false);
             break;
         }
