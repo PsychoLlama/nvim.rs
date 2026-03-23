@@ -361,6 +361,7 @@ extern void nvim_docmd_tabpage_close_impl(int forceit);
 extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
 extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit);
 extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp);
+extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2225,50 +2226,6 @@ void nvim_docmd_tabpage_new_impl(void)
 }
 
 
-/// :tabs command: List tabs and their contents. Called by Rust ex_tabs.
-void nvim_docmd_ex_tabs_impl(exarg_T *eap)
-{
-  int tabcount = 1;
-
-  msg_start();
-  msg_scroll = true;
-
-  win_T *lastused_win = rs_valid_tabpage(lastused_tabpage)
-                        ? lastused_tabpage->tp_curwin
-                        : NULL;
-
-  FOR_ALL_TABS(tp) {
-    if (got_int) {
-      break;
-    }
-
-    msg_putchar('\n');
-    vim_snprintf(IObuff, IOSIZE, _("Tab page %d"), tabcount++);
-    msg_outtrans(IObuff, HLF_T, false);
-    os_breakcheck();
-
-    FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-      if (got_int) {
-        break;
-      } else if (!wp->w_config.focusable || wp->w_config.hide) {
-        continue;
-      }
-
-      msg_putchar('\n');
-      msg_putchar(wp == curwin ? '>' : wp == lastused_win ? '#' : ' ');
-      msg_putchar(' ');
-      msg_putchar(bufIsChanged(wp->w_buffer) ? '+' : ' ');
-      msg_putchar(' ');
-      if (buf_spname(wp->w_buffer) != NULL) {
-        xstrlcpy(IObuff, buf_spname(wp->w_buffer), IOSIZE);
-      } else {
-        home_replace(wp->w_buffer, wp->w_buffer->b_fname, IObuff, IOSIZE, true);
-      }
-      msg_outtrans(IObuff, 0, false);
-      os_breakcheck();
-    }
-  }
-}
 
 /// ":detach" - called by Rust ex_detach.
 void nvim_docmd_ex_detach_impl(exarg_T *eap)
@@ -4212,6 +4169,25 @@ void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
 // apply_cmdmod / undo_cmdmod on global cmdmod
 void nvim_apply_global_cmdmod(void) { nvim_docmd_apply_cmdmod_impl(&cmdmod); }
 void nvim_undo_global_cmdmod(void) { nvim_docmd_undo_cmdmod_impl(&cmdmod); }
+
+/// Helpers for nvim_docmd_ex_tabs_impl (Rust).
+/// Write translated "Tab page %d" into IObuff and return a pointer to it.
+char *nvim_docmd_tab_page_fmt(int n)
+{
+  vim_snprintf(IObuff, IOSIZE, _("Tab page %d"), n);
+  return IObuff;
+}
+/// Call msg_outtrans with an attribute (e.g. HLF_T).
+void nvim_docmd_msg_outtrans_attr(const char *s, int attr)
+{
+  msg_outtrans((char *)s, attr, false);
+}
+/// home_replace into IObuff.
+void nvim_docmd_home_replace(buf_T *buf, const char *src)
+{
+  home_replace(buf, src, IObuff, IOSIZE, true);
+}
+// nvim_docmd_get_iobuff already defined in option_shim.c as nvim_get_iobuff
 void nvim_undo_cmdmod_p(CmdParseInfo *cmdinfo) { nvim_docmd_undo_cmdmod_impl(&cmdinfo->cmdmod); }
 
 // e_nobang and e_norange error strings

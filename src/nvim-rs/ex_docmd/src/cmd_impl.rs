@@ -124,7 +124,6 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
 
     // Complex implementation wrappers (C delegates for complex functions)
-    fn nvim_docmd_ex_tabs_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_syncbind_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_read_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_detach_impl(eap: ExArgHandle);
@@ -399,13 +398,92 @@ pub unsafe extern "C" fn rs_ex_findpat(eap: ExArgHandle) {
 // Phase 1: Complex command implementations (delegate to C wrappers)
 // =============================================================================
 
+/// `nvim_docmd_ex_tabs_impl` - list all tabs and their windows.
+///
+/// # Safety
+/// Accesses global curwin, tabpage list, window list.
+#[export_name = "nvim_docmd_ex_tabs_impl"]
+pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
+    // HLF_T = 23 (highlight group for tab-page header)
+    const HLF_T: c_int = 23;
+
+    nvim_msg_start();
+    nvim_set_msg_scroll(1);
+
+    let lastused_tp = nvim_get_lastused_tabpage();
+    let lastused_win = if rs_valid_tabpage(lastused_tp) != 0 {
+        nvim_tabpage_get_curwin(lastused_tp)
+    } else {
+        std::ptr::null_mut()
+    };
+
+    let curwin = nvim_get_curwin();
+    let mut tabcount: c_int = 1;
+    let mut tp = nvim_get_first_tabpage();
+    while !tp.is_null() {
+        if nvim_docmd_get_got_int() != 0 {
+            break;
+        }
+
+        nvim_msg_putchar(b'\n' as c_int);
+        let label = nvim_docmd_tab_page_fmt(tabcount);
+        nvim_docmd_msg_outtrans_attr(label, HLF_T);
+        tabcount += 1;
+        nvim_docmd_os_breakcheck();
+
+        let mut wp = nvim_tabpage_get_firstwin(tp);
+        while !wp.is_null() {
+            if nvim_docmd_get_got_int() != 0 {
+                break;
+            }
+            if nvim_win_get_focusable(wp) == 0 || nvim_ex2_win_get_w_config_hide(wp) {
+                wp = nvim_win_get_next(wp);
+                continue;
+            }
+
+            nvim_msg_putchar(b'\n' as c_int);
+            nvim_msg_putchar(if wp == curwin {
+                b'>' as c_int
+            } else if wp == lastused_win {
+                b'#' as c_int
+            } else {
+                b' ' as c_int
+            });
+            nvim_msg_putchar(b' ' as c_int);
+            let buf = nvim_win_get_buffer(wp);
+            nvim_msg_putchar(if bufIsChanged(buf) != 0 {
+                b'+' as c_int
+            } else {
+                b' ' as c_int
+            });
+            nvim_msg_putchar(b' ' as c_int);
+
+            let spname = nvim_docmd_buf_spname(buf);
+            if !spname.is_null() {
+                let iobuff = nvim_docmd_get_iobuff();
+                nvim_xstrlcpy(iobuff, spname, nvim_iosize());
+            } else {
+                let fname = nvim_buf_get_b_fname(buf);
+                nvim_docmd_home_replace(buf, fname);
+            }
+            let iobuff = nvim_docmd_get_iobuff();
+            nvim_docmd_msg_outtrans_attr(iobuff, 0);
+            nvim_docmd_os_breakcheck();
+
+            wp = nvim_win_get_next(wp);
+        }
+
+        tp = nvim_tabpage_get_next(tp);
+    }
+}
+
 /// `:tabs` - list all tabs and their windows.
 ///
 /// # Safety
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_tabs"]
 pub unsafe extern "C" fn rs_ex_tabs(eap: ExArgHandle) {
-    nvim_docmd_ex_tabs_impl(eap);
+    rs_ex_tabs_impl(eap);
 }
 
 /// `:syncbind` - synchronize scrollbind windows.
@@ -645,6 +723,26 @@ extern "C" {
     fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int;
     fn nvim_docmd_apply_autocmds_quitpre(buf: BufHandle);
     fn nvim_docmd_apply_autocmds_exitpre();
+
+    // ex_tabs helpers
+    fn nvim_msg_start();
+    fn nvim_docmd_tab_page_fmt(n: c_int) -> *mut c_char;
+    fn nvim_docmd_msg_outtrans_attr(s: *const c_char, attr: c_int);
+    #[link_name = "buf_spname"]
+    fn nvim_docmd_buf_spname(buf: BufHandle) -> *mut c_char;
+    fn nvim_docmd_home_replace(buf: BufHandle, src: *const c_char);
+    fn nvim_docmd_get_iobuff() -> *mut c_char;
+    fn nvim_win_get_focusable(wp: WinHandle) -> c_int;
+    fn nvim_ex2_win_get_w_config_hide(wp: WinHandle) -> bool;
+    fn nvim_tabpage_get_curwin(tp: *mut c_void) -> WinHandle;
+    fn nvim_get_lastused_tabpage() -> *mut c_void;
+    fn nvim_tabpage_get_firstwin(tp: *mut c_void) -> WinHandle;
+    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    fn nvim_msg_putchar(c: c_int);
+    fn nvim_docmd_get_got_int() -> c_int;
+    fn nvim_docmd_os_breakcheck();
+    fn nvim_iosize() -> usize;
+    fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
 
     // tabpage_close helpers (for Rust implementations)
     fn nvim_docmd_curwin_is_floating() -> c_int;
