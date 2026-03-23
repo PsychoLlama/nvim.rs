@@ -68,7 +68,7 @@ extern "C" {
     // (compl_pending moved to Rust static in state.rs)
     fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int;
     // (nvim_cpt_sources_array_exists: inlined in vars.rs Phase 23)
-    fn nvim_p_cto() -> c_int;
+    // nvim_p_cto: inlined in vars.rs (Phase 29)
     fn rs_ctrl_x_mode_normal() -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
     fn rs_check_elapsed_time();
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
             && crate::vars::nvim_cpt_sources_array_exists() != 0
             && crate::vars::nvim_get_cpt_sources_index() >= 0;
         if normal_mode_strict
-            && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+            && (crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0)
         {
             rs_check_elapsed_time();
         }

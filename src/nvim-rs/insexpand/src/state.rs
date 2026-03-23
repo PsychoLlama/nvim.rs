@@ -230,7 +230,7 @@ use std::os::raw::c_char;
 
 extern "C" {
     // New accessors for Phase 1
-    fn nvim_get_p_tsrfu_nonempty() -> c_int;
+    // nvim_get_p_tsrfu_nonempty: inlined in vars.rs (Phase 29)
     fn nvim_get_curbuf_b_p_tsrfu_nonempty() -> c_int;
     // Compound accessors for complex functions
     fn nvim_get_next_include_file_completion(compl_type: c_int);
@@ -283,7 +283,8 @@ pub unsafe extern "C" fn rs_ins_compl_mode() -> *const c_char {
 pub unsafe extern "C" fn rs_thesaurus_func_complete(compl_type: c_int) -> c_int {
     c_int::from(
         compl_type == CTRL_X_THESAURUS
-            && (nvim_get_curbuf_b_p_tsrfu_nonempty() != 0 || nvim_get_p_tsrfu_nonempty() != 0),
+            && (nvim_get_curbuf_b_p_tsrfu_nonempty() != 0
+                || crate::vars::nvim_get_p_tsrfu_nonempty() != 0),
     )
 }
 

@@ -23,7 +23,7 @@ extern "C" {
     fn rs_magic_isset() -> c_int;
 
     // Accessors for Phase 4 (pass 4) inline implementations
-    fn nvim_p_cto() -> c_int;
+    // nvim_p_cto: inlined in vars.rs (Phase 29)
     // (nvim_set_cpt_sources_start_tv: inlined in vars.rs Phase 23)
     fn nvim_semsg_list_index_out_of_range(idx: c_int);
 }
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn rs_strip_caret_numbers_in_place(str: *mut c_char) {
 /// Requires valid cpt_sources_array state with source_idx in bounds.
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
-    if crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
+    if crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0 {
         crate::vars::nvim_set_cpt_sources_start_tv(source_idx, os_hrtime());
         crate::vars::nvim_set_compl_time_slice_expired(0);
     }

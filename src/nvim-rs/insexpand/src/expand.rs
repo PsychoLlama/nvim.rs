@@ -53,8 +53,8 @@ extern "C" {
 
     // (nvim_get_compl_pattern_is_null: inlined in vars.rs Phase 22)
 
-    fn nvim_p_cto() -> c_int;
-    fn nvim_get_p_act() -> c_int;
+    // nvim_p_cto: inlined in vars.rs (Phase 29)
+    // nvim_get_p_act: inlined in vars.rs (Phase 29)
     fn nvim_normal_mode_strict() -> c_int;
 
     // cpt source timer
@@ -518,16 +518,16 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     let normal_mode_strict = nvim_normal_mode_strict() != 0;
     if normal_mode_strict {
         crate::vars::nvim_set_cpt_sources_index(0);
-        if crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
+        if crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0 {
             rs_compl_source_start_timer(0);
             crate::vars::nvim_set_compl_time_slice_expired(0);
             #[allow(clippy::cast_sign_loss)]
             let timeout_ms = if crate::vars::nvim_get_compl_autocomplete() != 0 {
-                let p_act = nvim_get_p_act().max(0) as u64;
+                let p_act = crate::vars::nvim_get_p_act().max(0) as u64;
                 let initial: u64 = 80; // COMPL_INITIAL_TIMEOUT_MS
                 p_act.max(initial)
             } else {
-                nvim_p_cto().max(0) as u64
+                crate::vars::nvim_p_cto().max(0) as u64
             };
             crate::vars::nvim_set_compl_timeout_ms(timeout_ms);
         }
@@ -574,7 +574,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         let compl_timeout_save: u64;
         if normal_mode_strict
             && compl_type == CTRL_X_FUNCTION
-            && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+            && (crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0)
         {
             compl_timeout_save = crate::vars::nvim_get_compl_timeout_ms();
             let new_timeout = if crate::vars::nvim_get_compl_from_nonkeyword() != 0 {
@@ -594,7 +594,8 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         if crate::vars::nvim_get_compl_pattern_is_null() != 0 {
             if normal_mode_strict
                 && compl_type == CTRL_X_FUNCTION
-                && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+                && (crate::vars::nvim_get_compl_autocomplete() != 0
+                    || crate::vars::nvim_p_cto() > 0)
             {
                 crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
             }
@@ -605,7 +606,8 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             if rs_advance_cpt_sources_index_safe() == 0 {
                 if normal_mode_strict
                     && compl_type == CTRL_X_FUNCTION
-                    && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+                    && (crate::vars::nvim_get_compl_autocomplete() != 0
+                        || crate::vars::nvim_p_cto() > 0)
                 {
                     crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
@@ -621,7 +623,8 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             if nvim_got_int {
                 if normal_mode_strict
                     && compl_type == CTRL_X_FUNCTION
-                    && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+                    && (crate::vars::nvim_get_compl_autocomplete() != 0
+                        || crate::vars::nvim_p_cto() > 0)
                 {
                     crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
@@ -637,7 +640,8 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             {
                 if normal_mode_strict
                     && compl_type == CTRL_X_FUNCTION
-                    && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+                    && (crate::vars::nvim_get_compl_autocomplete() != 0
+                        || crate::vars::nvim_p_cto() > 0)
                 {
                     crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
@@ -658,7 +662,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         // Restore the timeout after collecting matches from function source
         if normal_mode_strict
             && compl_type == CTRL_X_FUNCTION
-            && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
+            && (crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0)
         {
             crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
         }

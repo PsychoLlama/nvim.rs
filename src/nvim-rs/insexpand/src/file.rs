@@ -405,7 +405,7 @@ extern "C" {
         matches: *mut *mut *mut c_char,
     ) -> c_int;
     fn nvim_tilde_replace_wrap(pat: *mut c_char, num_matches: c_int, matches: *mut *mut c_char);
-    fn nvim_get_p_fic_or_wic() -> c_int;
+    // nvim_get_p_fic_or_wic: inlined in vars.rs (Phase 29)
 
     // compl_pattern management (set_star still in C, others inlined in vars.rs Phase 22)
     fn nvim_compl_pattern_set_star();
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
             });
 
             let flags = CP_FAST
-                | if nvim_get_p_fic_or_wic() != 0 {
+                | if crate::vars::nvim_get_p_fic_or_wic() != 0 {
                     CP_ICASE
                 } else {
                     0
@@ -593,7 +593,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
     }
 
     if num_matches > 0 {
-        rs_ins_compl_add_matches(num_matches, matches, nvim_get_p_fic_or_wic());
+        rs_ins_compl_add_matches(num_matches, matches, crate::vars::nvim_get_p_fic_or_wic());
     }
 }
 

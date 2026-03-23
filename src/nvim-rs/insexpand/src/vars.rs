@@ -95,10 +95,15 @@ extern "C" {
     // pumitem_T* - treated as opaque pointer
     static mut compl_match_array: *mut u8;
 
-    // --- global options (Phase 28) ---
+    // --- global options (Phase 28, 29) ---
     static mut p_ic: c_int; // 'ignorecase'
     static mut p_ac: c_int; // 'autocomplete'
     pub(crate) static mut p_acl: i64; // 'autocompletedelay' (OptInt = i64)
+    static mut p_cto: i64; // 'completetimeout' (OptInt = i64)
+    static mut p_act: i64; // 'autocompletetimeout' (OptInt = i64)
+    static mut p_fic: c_int; // 'fileignorecase'
+    static mut p_wic: c_int; // 'wildignorecase'
+    static mut p_tsrfu: *mut std::os::raw::c_char; // 'thesaurusfunc'
 
     // --- compl_T* match list pointers (treated as opaque *mut c_void) ---
     static mut compl_first_match: *mut core::ffi::c_void;
@@ -244,6 +249,30 @@ pub unsafe fn nvim_get_p_ac() -> c_int {
 #[inline]
 pub unsafe fn nvim_get_p_acl() -> c_int {
     p_acl as c_int
+}
+
+/// Get p_cto ('completetimeout') as c_int.
+#[inline]
+pub unsafe fn nvim_p_cto() -> c_int {
+    p_cto as c_int
+}
+
+/// Get p_act ('autocompletetimeout') as c_int.
+#[inline]
+pub unsafe fn nvim_get_p_act() -> c_int {
+    p_act as c_int
+}
+
+/// Get (p_fic || p_wic) as bool integer.
+#[inline]
+pub unsafe fn nvim_get_p_fic_or_wic() -> c_int {
+    c_int::from(p_fic != 0 || p_wic != 0)
+}
+
+/// Check if p_tsrfu ('thesaurusfunc') is non-empty.
+#[inline]
+pub unsafe fn nvim_get_p_tsrfu_nonempty() -> c_int {
+    c_int::from(!p_tsrfu.is_null() && *p_tsrfu != 0)
 }
 
 // ============================================================================

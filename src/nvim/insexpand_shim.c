@@ -2093,7 +2093,7 @@ int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNo
 // nvim_compl_shown_match_score: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_has_fname: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_str_eq_orig: deleted (Phase 16, inlined in match_list.rs)
-int nvim_p_cto(void) { return (int)p_cto; }
+// nvim_p_cto: deleted (Phase 29, inlined in vars.rs)
 
 // Phase 2 (pass 8): compound accessors for rs_ins_compl_get_exp / get_next_completion_match
 
@@ -2120,7 +2120,7 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 
 void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
 // nvim_get_compl_pattern_is_null: deleted (Phase 22, inlined in vars.rs)
-int nvim_get_p_act(void) { return (int)p_act; }
+// nvim_get_p_act: deleted (Phase 29, inlined in vars.rs)
 int nvim_normal_mode_strict(void) {
   return (rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
           && !(compl_cont_status & CONT_LOCAL)
@@ -2190,7 +2190,7 @@ void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches)
 {
   tilde_replace(pat, num_matches, matches);
 }
-int nvim_get_p_fic_or_wic(void) { return (p_fic || p_wic) ? 1 : 0; }
+// nvim_get_p_fic_or_wic: deleted (Phase 29, inlined in vars.rs)
 void nvim_compl_pattern_set_star(void)
 {
   API_CLEAR_STRING(compl_pattern);
@@ -2244,7 +2244,7 @@ int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
 // Accessor for Phase 5: ins_compl_del_pum migration
 // Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
 // get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
-int nvim_get_p_tsrfu_nonempty(void) { return *p_tsrfu != NUL ? 1 : 0; }
+// nvim_get_p_tsrfu_nonempty: deleted (Phase 29, inlined in vars.rs)
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
 // Compound accessor: delegates to the original C implementation logic
