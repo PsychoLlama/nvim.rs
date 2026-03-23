@@ -7,6 +7,9 @@ use std::ffi::c_int;
 
 use crate::{Frame, TabpageHandle, WinHandle};
 
+// kOptWindow == 358 (matches K_OPT_WINDOW in nvim-option)
+const K_OPT_WINDOW: c_int = 358;
+
 /// Bulk scroll/resize snapshot (matches C WinSnapshot exactly).
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -34,7 +37,7 @@ extern "C" {
 
     // --- Option helpers ---
     static mut p_window: i64;
-    fn nvim_option_was_set_window() -> c_int;
+    fn option_was_set(opt_idx: c_int) -> bool;
 
     // --- Window field setters ---
     fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
@@ -208,7 +211,7 @@ unsafe fn win_new_screensize_impl() {
         // If 'window' uses the whole screen, keep it using that.
         // Don't change it when set with "-w size" on the command line.
         let window_val = p_window;
-        let window_unset = old_rows == 0 && nvim_option_was_set_window() == 0;
+        let window_unset = old_rows == 0 && !option_was_set(K_OPT_WINDOW);
         if window_val == i64::from(old_rows) - 1 || window_unset {
             p_window = i64::from(rows) - 1;
         }

@@ -401,8 +401,8 @@ pub extern "C" fn rs_default_tmpdir() -> *const c_char {
 extern "C" {
     /// Set p_hlg from a 2-char code, freeing the old value.
     fn nvim_set_p_hlg_from_code(code: *const c_char);
-    /// Return non-zero if 'helplang' was explicitly set by the user.
-    fn nvim_option_hlg_was_set() -> c_int;
+    #[link_name = "rs_get_option_flags"]
+    fn nvim_hlg_get_option_flags(opt_idx: c_int) -> u32;
 }
 
 /// Set 'helplang' to a default value derived from a locale string, if it
@@ -412,10 +412,11 @@ extern "C" {
 /// `rs_compute_helplang`), then stores them via `nvim_set_p_hlg_from_code`.
 #[export_name = "set_helplang_default"]
 pub unsafe extern "C" fn rs_set_helplang_default(lang: *const c_char) {
+    const K_OPT_FLAG_WAS_SET: u32 = 1 << 3;
     if lang.is_null() || *lang == 0 {
         return;
     }
-    if nvim_option_hlg_was_set() != 0 {
+    if (nvim_hlg_get_option_flags(crate::opt_index::K_OPT_HELPLANG) & K_OPT_FLAG_WAS_SET) != 0 {
         return;
     }
 

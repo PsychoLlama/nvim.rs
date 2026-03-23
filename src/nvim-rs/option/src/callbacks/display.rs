@@ -81,7 +81,7 @@ extern "C" {
     fn nvim_get_p_ch() -> i64;
     fn nvim_get_p_sj() -> OptInt;
     fn nvim_set_p_sj(val: OptInt);
-    fn nvim_option_was_set_window() -> c_int;
+    fn option_was_set(opt_idx: c_int) -> bool;
 
     // Phase 107: colorcolumn / background / fileformat - call C directly
     fn did_set_colorcolumn(args: *mut c_void) -> CallbackResult;
@@ -455,7 +455,7 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
             }
         }
         let window = p_window;
-        if window >= OptInt::from(Rows) || nvim_option_was_set_window() == 0 {
+        if window >= OptInt::from(Rows) || !option_was_set(crate::opt_index::K_OPT_WINDOW) {
             p_window = OptInt::from(Rows) - 1;
         }
     }

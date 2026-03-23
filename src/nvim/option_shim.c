@@ -609,8 +609,6 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 char *nvim_get_iobuff(void) { return IObuff; }
 
 
-int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
-
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
@@ -654,9 +652,6 @@ typedef enum {
 
 #include "options.generated.h"
 #include "options_map.generated.h"
-
-// After options[] is available:
-int nvim_option_hlg_was_set(void) { return (options[kOptHelplang].flags & kOptFlagWasSet) != 0; }
 
 // Rust behavior.rs now uses #[link_name] to call qf_resize_stack/ll_resize_stack directly.
 
