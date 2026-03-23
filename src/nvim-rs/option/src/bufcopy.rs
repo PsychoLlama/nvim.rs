@@ -87,7 +87,7 @@ extern "C" {
     fn nvim_buf_clear_b_p_ro(buf: *mut core::ffi::c_void);
     fn nvim_buf_get_b_p_bt_is_help(buf: *mut core::ffi::c_void) -> c_int;
 
-    fn nvim_call_free_buf_options(buf: *mut core::ffi::c_void, free_flags: c_int);
+    fn free_buf_options(buf: *mut core::ffi::c_void, free_flags: bool);
     fn check_buf_options(buf: *mut core::ffi::c_void);
     fn buf_init_chartab(buf: *mut core::ffi::c_void, global: c_int) -> c_int;
     fn nvim_call_compile_cap_prog_buf(buf: *mut core::ffi::c_void);
@@ -593,9 +593,9 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
 
         // Free old allocated strings; initialize some fields if first time
         if initialized {
-            nvim_call_free_buf_options(buf, 0);
+            free_buf_options(buf, false);
         } else {
-            nvim_call_free_buf_options(buf, 1);
+            free_buf_options(buf, true);
             nvim_buf_clear_b_p_ro(buf);
             nvim_buf_set_b_p_fenc_dup(buf);
             nvim_buf_set_b_p_ff_from_ffs(buf);

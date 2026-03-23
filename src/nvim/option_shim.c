@@ -1086,7 +1086,6 @@ int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_i
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
-void nvim_call_parse_shape_opt(void) { parse_shape_opt(SHAPE_CURSOR); }
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf); }
 void nvim_call_set_option_direct(int opt_idx, OptVal val, int opt_flags) { set_option_direct((OptIndex)opt_idx, val, opt_flags, SID_NONE); }
 
@@ -2250,9 +2249,6 @@ void nvim_buf_restore_b_p_isk(buf_T *buf, char *saved) { buf->b_p_isk = saved; }
 /// buf->b_p_ro = false
 void nvim_buf_clear_b_p_ro(buf_T *buf) { buf->b_p_ro = false; }
 
-/// free_buf_options(buf, free_flags)
-void nvim_call_free_buf_options(buf_T *buf, int free_flags) { free_buf_options(buf, free_flags != 0); }
-
 /// compile_cap_prog(&buf->b_s)
 void nvim_call_compile_cap_prog_buf(buf_T *buf) { compile_cap_prog(&buf->b_s); }
 
@@ -2390,29 +2386,11 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-/// save_file_ff(curbuf) wrapper.
-void nvim_call_save_file_ff_curbuf(void) { save_file_ff(curbuf); }
-
-/// os_env_exists(name, false) wrapper. Returns 1 if env exists, 0 otherwise.
-int nvim_call_os_env_exists(const char *name) { return os_env_exists(name, false) ? 1 : 0; }
-
-/// set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0) wrapper.
-void nvim_call_set_termbidi_true(void)
-{
-  set_option_value_give_err(kOptTermbidi, BOOLEAN_OPTVAL(true), 0);
-}
-
 /// check_win_options(curwin) wrapper.
 void nvim_call_check_win_options(void)
 {
   rs_check_winopt(&curwin->w_onebuf_opt);
   rs_check_winopt(&curwin->w_allbuf_opt);
-}
-
-/// set_helplang_default(get_mess_lang()) wrapper.
-void nvim_call_set_helplang_default_from_mess_lang(void)
-{
-  set_helplang_default(get_mess_lang());
 }
 
 /// curbuf->b_p_initialized = true
@@ -2426,9 +2404,6 @@ void nvim_curbuf_set_b_p_ar_minus1(void) { curbuf->b_p_ar = -1; }
 
 /// curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL
 void nvim_curbuf_set_b_p_ul_no_local(void) { curbuf->b_p_ul = NO_LOCAL_UNDOLEVEL; }
-
-/// check_buf_options(curbuf)
-void nvim_call_check_buf_options_curbuf(void) { check_buf_options(curbuf); }
 
 /// stdpaths_user_state_subpath(name, 2, true), returns allocated string.
 char *nvim_call_stdpaths_user_state_subpath(const char *name) { return stdpaths_user_state_subpath(name, 2, true); }

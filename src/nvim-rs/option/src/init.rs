@@ -687,7 +687,7 @@ extern "C" {
     fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
 
     // set_init_3 accessors
-    fn nvim_call_parse_shape_opt();
+    fn parse_shape_opt(what: c_int) -> *const c_char;
     fn invocation_path_tail(p: *const c_char, lenp: *mut usize) -> *const c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn nvim_call_set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int);
@@ -765,7 +765,7 @@ unsafe fn shell_is(p: *const c_char, name: *const c_char) -> bool {
 /// Corresponds to C's `set_init_3`.
 #[export_name = "set_init_3"]
 pub unsafe extern "C" fn rs_set_init_3() {
-    nvim_call_parse_shape_opt();
+    parse_shape_opt(2); // SHAPE_CURSOR = 2
 
     // Set 'shellpipe' and 'shellredir', depending on the 'shell' option.
     let do_srr = (nvim_get_option_flags(K_OPT_SHELLREDIR) & K_OPT_FLAG_WAS_SET_2) == 0;
@@ -826,7 +826,6 @@ extern "C" {
     fn nvim_curbuf_set_b_p_ac_minus1();
     fn nvim_curbuf_set_b_p_ar_minus1();
     fn nvim_curbuf_set_b_p_ul_no_local();
-    fn nvim_call_check_buf_options_curbuf();
     fn nvim_call_check_win_options();
     #[link_name = "check_options"]
     fn rs_check_options();
@@ -834,12 +833,13 @@ extern "C" {
     fn nvim_last_status_0(morewin: c_int);
     fn init_spell_chartab();
     fn nvim_call_set_init_expand_env();
-    fn nvim_call_save_file_ff_curbuf();
-    fn nvim_call_os_env_exists(name: *const c_char) -> c_int;
-    fn nvim_call_set_termbidi_true();
+    fn save_file_ff(buf: *mut core::ffi::c_void);
+    fn os_env_exists(name: *const c_char, nonempty: bool) -> bool;
     fn lang_init();
     fn nvim_call_bind_textdomain_codeset();
-    fn nvim_call_set_helplang_default_from_mess_lang();
+    fn check_buf_options(buf: *mut core::ffi::c_void);
+    fn nvim_opt_get_curbuf() -> *mut core::ffi::c_void;
+    fn get_mess_lang() -> *mut c_char;
 
 }
 
@@ -898,7 +898,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     nvim_curbuf_set_b_p_ac_minus1();
     nvim_curbuf_set_b_p_ar_minus1();
     nvim_curbuf_set_b_p_ul_no_local();
-    nvim_call_check_buf_options_curbuf();
+    check_buf_options(nvim_opt_get_curbuf());
     nvim_call_check_win_options();
     rs_check_options();
 
@@ -915,13 +915,17 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // Expand environment variables and things like "~" for the defaults.
     nvim_call_set_init_expand_env();
 
-    nvim_call_save_file_ff_curbuf();
+    save_file_ff(nvim_opt_get_curbuf());
 
     // Detect use of mlterm.
     // Mlterm is a terminal emulator akin to xterm that has some special
     // abilities (bidi namely).
-    if nvim_call_os_env_exists(c"MLTERM".as_ptr()) != 0 {
-        nvim_call_set_termbidi_true();
+    if os_env_exists(c"MLTERM".as_ptr(), false) {
+        crate::value::rs_set_option_value_give_err(
+            crate::opt_index::K_OPT_TERMBIDI as c_int,
+            boolean_optval(true),
+            0,
+        );
     }
 
     crate::sideeffect::rs_didset_options2();
@@ -933,7 +937,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     nvim_call_bind_textdomain_codeset();
 
     // Set the default for 'helplang'.
-    nvim_call_set_helplang_default_from_mess_lang();
+    rs_set_helplang_default(get_mess_lang());
 }
 
 /// Prepend ".," to a heap-allocated C string.
