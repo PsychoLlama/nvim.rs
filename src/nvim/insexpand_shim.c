@@ -382,7 +382,7 @@ static String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in
 Direction compl_direction = FORWARD;
 Direction compl_shows_dir = FORWARD;
 // compl_pending: moved to Rust static COMPL_PENDING in state.rs (Phase 2)
-static pos_T compl_startpos;
+pos_T compl_startpos;  // made non-static for Rust access (Phase 19)
 /// Length in bytes of the text being completed (this is deleted to be replaced
 /// by the match.)
 int compl_length = 0;
@@ -1771,12 +1771,7 @@ void nvim_clear_indent_flags(void) { did_si = false; can_si = false; can_si_back
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
-void nvim_set_compl_startpos_lnum_col(int lnum_to_cursor, int col) {
-  if (lnum_to_cursor) {
-    compl_startpos.lnum = curwin->w_cursor.lnum;
-  }
-  compl_startpos.col = (colnr_T)col;
-}
+// nvim_set_compl_startpos_lnum_col: deleted (Phase 19, inlined in vars.rs)
 /// Set compl_orig_text from line+compl_col with length compl_length.
 void nvim_set_compl_orig_text_from_line(const char *line) {
   API_CLEAR_STRING(compl_orig_text);
@@ -1803,14 +1798,10 @@ void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Se
 /// Compound accessor: set compl_startpos to the current cursor position.
 void nvim_set_compl_startpos_to_cursor(void)
 {
-  compl_startpos = curwin->w_cursor;
+  compl_startpos = curwin->w_cursor;  // full struct copy including coladd
 }
 
-/// Compound accessor: set compl_startpos.col = compl_col.
-void nvim_set_compl_startpos_col_to_compl_col(void)
-{
-  compl_startpos.col = (colnr_T)compl_col;
-}
+// nvim_set_compl_startpos_col_to_compl_col: deleted (Phase 19, inlined in vars.rs)
 
 /// Compound accessor: restore did_ai from saved value.
 void nvim_restore_did_ai(int saved_val)
@@ -2098,8 +2089,8 @@ int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNo
 // keys.rs calls rs_ins_compl_key2dir() and rs_ins_compl_key2count() directly.
 
 // Phase 1 (pass 8) accessors for rs_ins_compl_next / find_next_completion_match
-int nvim_get_compl_startpos_lnum(void) { return (int)compl_startpos.lnum; }
-int nvim_get_compl_startpos_col(void) { return (int)compl_startpos.col; }
+// nvim_get_compl_startpos_lnum: deleted (Phase 19, inlined in vars.rs)
+// nvim_get_compl_startpos_col: deleted (Phase 19, inlined in vars.rs)
 // nvim_compl_shown_match_score: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_has_fname: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_match_str_eq_orig: deleted (Phase 16, inlined in match_list.rs)
@@ -2508,8 +2499,8 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
 // =============================================================================
 
 // --- compl_startpos setters ---
-void nvim_set_compl_startpos_col(int val) { compl_startpos.col = (colnr_T)val; }
-void nvim_set_compl_startpos_lnum_to_cursor(void) { compl_startpos.lnum = curwin->w_cursor.lnum; }
+// nvim_set_compl_startpos_col: deleted (Phase 19, inlined in vars.rs)
+// nvim_set_compl_startpos_lnum_to_cursor: deleted (Phase 19, inlined in vars.rs)
 
 // --- getwhitecols / skipwhite wrappers ---
 int nvim_getwhitecols_of_line(const char *line) { return (int)getwhitecols(line); }

@@ -49,7 +49,7 @@ extern "C" {
     fn nvim_get_curbuf_b_p_com() -> *const c_char;
     fn nvim_set_curbuf_b_p_com_empty();
     fn nvim_restore_curbuf_b_p_com(old_val: *const c_char);
-    fn nvim_set_compl_startpos_lnum_col(lnum_to_cursor: c_int, col: c_int);
+    // (nvim_set_compl_startpos_lnum_col: inlined in vars.rs)
     fn nvim_set_compl_orig_text_from_line(line: *const c_char);
     fn nvim_ins_compl_add_orig_text(flags: c_int, save_did_ai: c_int) -> c_int;
     fn rs_save_orig_extmarks();
@@ -57,7 +57,7 @@ extern "C" {
     fn showmode() -> c_int;
 
     fn nvim_set_compl_startpos_to_cursor();
-    fn nvim_set_compl_startpos_col_to_compl_col();
+    // (nvim_set_compl_startpos_col_to_compl_col: inlined in vars.rs)
     fn nvim_restore_did_ai(saved_val: c_int);
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
     fn nvim_set_edit_submode_adding();
@@ -243,7 +243,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             let old_b_p_com = nvim_get_curbuf_b_p_com();
             nvim_set_curbuf_b_p_com_empty();
             let compl_col = crate::vars::nvim_get_compl_col();
-            nvim_set_compl_startpos_lnum_col(1, compl_col);
+            crate::vars::nvim_set_compl_startpos_lnum_col(1, compl_col);
             nvim_ins_eol_wrap(c_int::from(b'\r'));
             nvim_restore_curbuf_b_p_com(old_b_p_com);
             crate::vars::nvim_set_compl_length(0);
@@ -252,7 +252,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         }
     } else {
         nvim_clear_edit_submode_pre();
-        nvim_set_compl_startpos_col_to_compl_col();
+        crate::vars::nvim_set_compl_startpos_col_to_compl_col();
     }
 
     // Block 6: set edit_submode to the CTRL-X mode message

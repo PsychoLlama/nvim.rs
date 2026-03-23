@@ -341,10 +341,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_filename() {
 
 extern "C" {
     // New accessors for continue_search (Phase 10)
-    fn nvim_get_compl_startpos_lnum() -> c_int;
-    fn nvim_get_compl_startpos_col() -> c_int;
-    fn nvim_set_compl_startpos_col(val: c_int);
-    fn nvim_set_compl_startpos_lnum_to_cursor();
+    // (startpos get/set functions: inlined in vars.rs)
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_getwhitecols_of_line(line: *const c_char) -> c_int;
@@ -415,7 +412,7 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
         || rs_ctrl_x_mode_path_patterns() != 0
         || rs_ctrl_x_mode_path_defines() != 0
     {
-        if nvim_get_compl_startpos_lnum() == nvim_get_curwin_cursor_lnum() {
+        if crate::vars::nvim_get_compl_startpos_lnum() == nvim_get_curwin_cursor_lnum() {
             cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_S_IPOS) != 0 {
                 cont_status |= CONT_SOL;
@@ -423,16 +420,16 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
                 let new_col = nvim_skipwhite_offset(
                     line,
                     crate::vars::nvim_get_compl_length(),
-                    nvim_get_compl_startpos_col(),
+                    crate::vars::nvim_get_compl_startpos_col(),
                 );
-                nvim_set_compl_startpos_col(new_col);
+                crate::vars::nvim_set_compl_startpos_col(new_col);
             }
-            crate::vars::nvim_set_compl_col(nvim_get_compl_startpos_col());
+            crate::vars::nvim_set_compl_col(crate::vars::nvim_get_compl_startpos_col());
         } else {
             let wcols = nvim_getwhitecols_of_line(line);
             crate::vars::nvim_set_compl_col(wcols);
-            nvim_set_compl_startpos_col(wcols);
-            nvim_set_compl_startpos_lnum_to_cursor();
+            crate::vars::nvim_set_compl_startpos_col(wcols);
+            crate::vars::nvim_set_compl_startpos_lnum_to_cursor();
             // Clear CONT_SOL
             cont_status = crate::vars::nvim_get_compl_cont_status();
             cont_status &= !CONT_SOL;

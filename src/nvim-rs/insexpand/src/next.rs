@@ -42,9 +42,7 @@ extern "C" {
 
     // compl_direction / compl_shows_dir
 
-    // get expansion
-    fn nvim_get_compl_startpos_lnum() -> c_int;
-    fn nvim_get_compl_startpos_col() -> c_int;
+    // (nvim_get_compl_startpos_lnum and _col: inlined in vars.rs)
 
     // fuzzy
     fn rs_cot_fuzzy() -> c_int;
@@ -161,8 +159,8 @@ unsafe fn find_next_completion_match(
             }
 
             // Find matches.
-            let lnum = nvim_get_compl_startpos_lnum();
-            let col = nvim_get_compl_startpos_col();
+            let lnum = crate::vars::nvim_get_compl_startpos_lnum();
+            let col = crate::vars::nvim_get_compl_startpos_col();
             *num_matches = crate::expand::rs_ins_compl_get_exp(lnum, col);
 
             // Handle any pending completions

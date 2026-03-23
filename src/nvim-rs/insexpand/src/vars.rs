@@ -16,6 +16,15 @@
 
 use std::ffi::c_int;
 
+/// C pos_T: { lnum: i32, col: i32, coladd: i32 }
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PosT {
+    pub lnum: i32,
+    pub col: i32,
+    pub coladd: i32,
+}
+
 extern "C" {
     // --- bool variables ---
     static mut compl_interrupted: bool;
@@ -59,6 +68,13 @@ extern "C" {
     // --- window/buffer pointers (opaque handles) ---
     static mut compl_curr_win: *mut core::ffi::c_void;
     static mut compl_curr_buf: *mut core::ffi::c_void;
+
+    // --- pos_T struct ---
+    pub(crate) static mut compl_startpos: PosT;
+}
+
+extern "C" {
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
 }
 
 // ============================================================================
@@ -420,4 +436,43 @@ pub unsafe fn nvim_get_compl_curr_buf() -> *mut c_void {
 #[inline]
 pub unsafe fn nvim_clear_compl_curr_buf() {
     compl_curr_buf = core::ptr::null_mut();
+}
+
+/// Get compl_startpos.lnum
+#[inline]
+pub unsafe fn nvim_get_compl_startpos_lnum() -> c_int {
+    compl_startpos.lnum
+}
+
+/// Get compl_startpos.col
+#[inline]
+pub unsafe fn nvim_get_compl_startpos_col() -> c_int {
+    compl_startpos.col
+}
+
+/// Set compl_startpos.col
+#[inline]
+pub unsafe fn nvim_set_compl_startpos_col(val: c_int) {
+    compl_startpos.col = val;
+}
+
+/// Set compl_startpos.lnum to cursor lnum (calls C for curwin access)
+#[inline]
+pub unsafe fn nvim_set_compl_startpos_lnum_to_cursor() {
+    compl_startpos.lnum = nvim_get_curwin_cursor_lnum();
+}
+
+/// Set compl_startpos.col = compl_col
+#[inline]
+pub unsafe fn nvim_set_compl_startpos_col_to_compl_col() {
+    compl_startpos.col = compl_col;
+}
+
+/// Set compl_startpos: lnum from cursor if requested, col from param.
+#[inline]
+pub unsafe fn nvim_set_compl_startpos_lnum_col(lnum_to_cursor: c_int, col: c_int) {
+    if lnum_to_cursor != 0 {
+        compl_startpos.lnum = nvim_get_curwin_cursor_lnum();
+    }
+    compl_startpos.col = col;
 }
