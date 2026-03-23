@@ -7,6 +7,9 @@ use std::ffi::{c_char, c_int, c_long};
 
 use crate::{BufHandle, HLF_W, VV_WARNINGMSG};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // =============================================================================
 // C Accessor Functions (extern declarations)
 // =============================================================================
@@ -49,7 +52,7 @@ extern "C" {
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;
     fn nvim_ui_active() -> bool;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     // Redraw functions
@@ -179,7 +182,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         if nvim_msg_silent() == 0
             && !nvim_silent_mode()
             && nvim_ui_active()
-            && nvim_ui_has_messages() == 0
+            && !ui_has(K_UI_MESSAGES)
         {
             nvim_ui_flush();
             nvim_os_delay(1002, true);
@@ -233,7 +236,7 @@ fn changed_impl(buf: BufHandle) {
                 if need_wait_return
                     && emsg_silent == 0
                     && !nvim_in_assert_fails()
-                    && nvim_ui_has_messages() == 0
+                    && !ui_has(K_UI_MESSAGES)
                 {
                     nvim_ui_flush();
                     nvim_os_delay(2002, true);

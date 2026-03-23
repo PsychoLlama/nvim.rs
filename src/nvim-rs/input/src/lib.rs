@@ -15,6 +15,9 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // =============================================================================
 // Buffer Size Constants
 // =============================================================================
@@ -301,7 +304,7 @@ extern "C" {
     fn nvim_set_allow_keys(val: c_int);
     fn nvim_get_mapped_ctrl_c() -> c_int;
     fn nvim_set_mapped_ctrl_c(val: c_int);
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     static mut keep_msg: *mut c_char;
     static mut keep_msg_hl_id: c_int;
 
@@ -429,7 +432,7 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
         r = prompt_for_input_impl(prompt, HLF_R, true, std::ptr::null_mut());
         if r == CTRL_C || r == ESC {
             r = b'n' as c_int;
-            if nvim_ui_has_messages() == 0 {
+            if !ui_has(K_UI_MESSAGES) {
                 msg_putchar(r);
             }
         }

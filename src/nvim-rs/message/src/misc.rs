@@ -6,6 +6,9 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr::addr_of_mut;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // ============================================================================
 // C Type Definitions
 // ============================================================================
@@ -96,7 +99,7 @@ extern "C" {
     static mut msg_scroll: c_int;
     static mut did_wait_return: bool;
     static mut emsg_silent: c_int;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     // nvim_ui_flush is defined in change_ffi.c
     fn nvim_ui_flush();
     // nvim_os_delay is defined in change_ffi.c (long ms, bool allow_input)
@@ -210,7 +213,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_i
     let len = (p as usize - longstr as usize) as c_int;
     let mut slen = len;
     let room = Columns - msg_col;
-    if nvim_ui_has_messages() == 0 && len > room && room >= 20 {
+    if !ui_has(K_UI_MESSAGES) && len > room && room >= 20 {
         slen = (room - 3) / 2;
         msg_outtrans_len(longstr, slen, hl_id, false);
         msg_puts_hl(c"...".as_ptr(), HLF_8, false);
@@ -277,7 +280,7 @@ pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
         && !did_wait_return
         && emsg_silent == 0
         && !nvim_get_in_assert_fails()
-        && nvim_ui_has_messages() == 0
+        && !ui_has(K_UI_MESSAGES)
     {
         nvim_ui_flush();
         nvim_os_delay(1006, true);
@@ -306,7 +309,7 @@ pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
 #[export_name = "set_keep_msg"]
 pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
     // Kept message is not cleared and re-emitted with ext_messages: #20416.
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         return;
     }
 
@@ -469,7 +472,7 @@ pub unsafe extern "C" fn rs_messaging() -> bool {
     // TODO(bfredl): with general support for "async" messages with p_ch,
     // this should be re-enabled.
     !(p_lz != 0 && nvim_char_avail() != 0 && nvim_get_key_typed() == 0)
-        && (p_ch > 0 || nvim_ui_has_messages() != 0)
+        && (p_ch > 0 || ui_has(K_UI_MESSAGES))
 }
 
 // ============================================================================

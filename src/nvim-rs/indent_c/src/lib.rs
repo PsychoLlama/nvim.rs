@@ -218,7 +218,7 @@ extern "C" {
     // Phase 6 accessors (for rs_get_c_indent)
     fn nvim_get_state() -> c_int;
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     fn nvim_linewhite(lnum: c_int) -> bool;
     fn nvim_curbuf_get_b_p_com() -> *mut c_char;
     fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool;
@@ -4123,8 +4123,8 @@ pub unsafe extern "C" fn rs_get_c_indent(opts: *const CindentOptions) -> c_int {
                         if start_off != 0 {
                             amount += start_off;
                         } else if start_align == COM_RIGHT {
-                            amount += nvim_vim_strsize(lead_start.as_ptr())
-                                - nvim_vim_strsize(lead_middle.as_ptr());
+                            amount += vim_strsize(lead_start.as_ptr())
+                                - vim_strsize(lead_middle.as_ptr());
                         }
                         break;
                     }
@@ -4135,8 +4135,8 @@ pub unsafe extern "C" fn rs_get_c_indent(opts: *const CindentOptions) -> c_int {
                         if off != 0 {
                             amount += off;
                         } else if align == COM_RIGHT {
-                            amount += nvim_vim_strsize(lead_start.as_ptr())
-                                - nvim_vim_strsize(lead_middle.as_ptr());
+                            amount += vim_strsize(lead_start.as_ptr())
+                                - vim_strsize(lead_middle.as_ptr());
                         }
                         done = true;
                         break;

@@ -591,7 +591,7 @@ extern "C" {
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
     fn msg_putchar(c: c_int);
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_line_breakcheck();
     fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
@@ -772,7 +772,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
         };
 
         // Pad to column 40
-        let displayed_width = nvim_vim_strsize(iobuff);
+        let displayed_width = vim_strsize(iobuff);
         let mut pad = 40 - displayed_width;
         let mut len = n;
         while pad > 0 && len < IOSIZE_LIST - 19 {

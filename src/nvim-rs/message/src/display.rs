@@ -22,6 +22,9 @@ pub static mut verbose_kind: *const c_char = std::ptr::null();
 #[no_mangle]
 pub static mut pre_verbose_kind: *const c_char = std::ptr::null();
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 extern "C" {
     static Rows: c_int;
     // ext_messages protocol functions
@@ -34,7 +37,7 @@ extern "C" {
     static mut cmdline_row: c_int;
 
     // UI capability check
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
 
     // Display coordination
     fn msg_grid_validate();
@@ -119,7 +122,7 @@ pub unsafe extern "C" fn rs_msg_ext_flush_showmode() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ui_has_messages() -> c_int {
-    nvim_ui_has_messages()
+    c_int::from(ui_has(K_UI_MESSAGES))
 }
 
 // ============================================================================
@@ -256,7 +259,7 @@ pub unsafe extern "C" fn rs_set_need_clr_eos(val: c_int) {
 /// Calls C accessor functions that read and modify global state.
 #[export_name = "msg_check"]
 pub unsafe extern "C" fn rs_msg_check() {
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         return;
     }
     if msg_row == Rows - 1 && msg_col >= sc_col {
@@ -348,7 +351,7 @@ pub unsafe extern "C" fn rs_msg_display_reset() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_using_ext_messages() -> c_int {
-    nvim_ui_has_messages()
+    c_int::from(ui_has(K_UI_MESSAGES))
 }
 
 #[cfg(test)]

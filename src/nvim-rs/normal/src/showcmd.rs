@@ -9,6 +9,9 @@
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -140,7 +143,7 @@ extern "C" {
     fn nvim_hasFolding_down(lnum: c_int, out_lnum: *mut c_int) -> bool;
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_getvcols_visual_sbr_save(out_left: *mut c_int, out_right: *mut c_int);
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_ml_get_pos_visual() -> *mut std::ffi::c_char;
     fn nvim_get_cursor_pos_ptr() -> *const std::ffi::c_char;
     fn nvim_utfc_ptr2len_wrapper(ptr: *const std::ffi::c_char) -> c_int;
@@ -265,7 +268,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
     }
 
     // Truncate to the display limit.
-    let limit = if nvim_ui_has_messages() != 0 {
+    let limit = if ui_has(K_UI_MESSAGES) {
         SHOWCMD_BUFLEN - 1
     } else {
         SHOWCMD_COLS
@@ -414,7 +417,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
     let showcmd_buf: *mut u8 = nvim_normal_showcmd_buf_ptr().cast();
     let old_len = libc_strlen_u8(showcmd_buf);
     let extra_len = char_len;
-    let limit = if nvim_ui_has_messages() != 0 {
+    let limit = if ui_has(K_UI_MESSAGES) {
         SHOWCMD_BUFLEN - 1
     } else {
         SHOWCMD_COLS
@@ -507,7 +510,7 @@ pub unsafe extern "C" fn rs_display_showcmd() {
     }
 
     // showcmdloc=last (or empty)
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         nvim_showcmd_ui_msg_showcmd(buf_ptr, is_clear);
         return;
     }

@@ -6,6 +6,9 @@
 
 use std::cell::Cell;
 use std::ffi::{c_char, c_int};
+
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
 use std::io::Write;
 
 use nvim_window::WinHandle;
@@ -72,8 +75,7 @@ extern "C" {
     fn nvim_stl_get_ru_col() -> c_int;
     static mut State: c_int;
     fn nvim_stl_edit_submode_not_null() -> c_int;
-    #[link_name = "nvim_ui_has_messages"]
-    fn nvim_stl_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_stl_buf_ml_empty(buf: *mut std::ffi::c_void) -> c_int;
     fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
 
@@ -151,7 +153,7 @@ pub unsafe fn redraw_ruler() {
 
     let p_ru = nvim_stl_get_p_ru() != 0;
     let status_height = nvim_stl_win_get_status_height(wp);
-    let ui_has_messages = nvim_stl_ui_has_messages() != 0;
+    let ui_has_messages = ui_has(K_UI_MESSAGES);
 
     // Check if ruler should be drawn, clear if it was drawn before.
     if !p_ru || status_height > 0 || is_stl_global || (p_ch == 0 && !ui_has_messages) {

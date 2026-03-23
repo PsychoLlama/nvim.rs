@@ -2425,8 +2425,11 @@ extern "C" {
     /// Check if default_grid.chars is non-NULL
     fn nvim_get_default_grid_has_chars() -> c_int;
     /// Check if any UI has kUIMessages extension
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
 }
+
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
 
 /// Check if message grid should be used.
 ///
@@ -2436,7 +2439,7 @@ extern "C" {
 /// Calls C accessor functions for grid and UI state.
 #[export_name = "msg_use_grid"]
 pub unsafe extern "C" fn rs_msg_use_grid() -> bool {
-    nvim_get_default_grid_has_chars() != 0 && nvim_ui_has_messages() == 0
+    nvim_get_default_grid_has_chars() != 0 && !ui_has(K_UI_MESSAGES)
 }
 
 // Message scroll accessors

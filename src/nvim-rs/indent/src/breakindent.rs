@@ -18,7 +18,7 @@ extern "C" {
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
     fn nvim_win_col_off2(wp: WinHandle) -> c_int;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
 
     // indent_ffi.c accessors
     fn nvim_win_get_briopt_shift(wp: WinHandle) -> c_int;
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn rs_get_breakindent_win(wp: WinHandle, line: *const c_ch
 
     // Indent minus the length of the showbreak string
     if nvim_win_get_briopt_sbr(wp) {
-        bri -= nvim_vim_strsize(nvim_indent_get_showbreak_value(wp));
+        bri -= vim_strsize(nvim_indent_get_showbreak_value(wp));
     }
 
     // Never indent past left window margin

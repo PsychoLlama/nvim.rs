@@ -5,6 +5,9 @@
 
 use std::ffi::c_int;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // C accessor declarations
 extern "C" {
     static mut msg_silent: c_int;
@@ -38,7 +41,7 @@ extern "C" {
     /// Get `p_ch` (cmdheight) option
     static mut p_ch: i64;
     /// Check if UI has messages capability
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
 }
 
 /// Check if any message was output.
@@ -176,7 +179,7 @@ pub unsafe extern "C" fn rs_set_need_fileinfo(val: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_overflow() -> c_int {
-    let ui_has_messages = nvim_ui_has_messages() != 0;
+    let ui_has_messages = ui_has(K_UI_MESSAGES);
 
     // Threshold is 1 when cmdheight is 0, otherwise 0
     let threshold = c_int::from(p_ch == 0);
@@ -371,7 +374,7 @@ pub unsafe extern "C" fn rs_reset_wait_return_state() {
 
 extern "C" {
     fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
-    fn nvim_msg_hist_add_len(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
+    fn msg_hist_add(s: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn msg_use_printf() -> c_int;
     fn nvim_msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
     fn nvim_msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int);
@@ -411,19 +414,19 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     // Don't print anything when using ":silent cmd" or empty message.
     let first_byte = *str_.cast::<u8>();
     if msg_silent != 0 || first_byte == 0 {
-        if first_byte == 0 && nvim_ui_has_messages() != 0 {
+        if first_byte == 0 && ui_has(K_UI_MESSAGES) {
             nvim_msg_show_empty();
         }
         return;
     }
 
     if hist {
-        nvim_msg_hist_add_len(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
+        msg_hist_add(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
     }
 
     // When writing something to the screen after it has scrolled, requires a
     // wait-return prompt later.
-    let overflow = nvim_ui_has_messages() == 0 && {
+    let overflow = !ui_has(K_UI_MESSAGES) && {
         let threshold = c_int::from(p_ch == 0);
         msg_scrolled > threshold
     };

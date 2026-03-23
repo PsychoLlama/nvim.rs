@@ -12,6 +12,9 @@
 
 use std::os::raw::{c_char, c_int};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // =============================================================================
 // CTRL-X mode constants (from insexpand_shim.c)
 // =============================================================================
@@ -645,7 +648,7 @@ extern "C" {
     fn nvim_in_assert_fails() -> bool;
     fn nvim_vim_beep_complete();
     fn setcursor();
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
 }
@@ -675,7 +678,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
         if g_emsg_silent == 0 && !nvim_in_assert_fails() {
             nvim_vim_beep_complete();
             setcursor();
-            if nvim_ui_has_messages() == 0 {
+            if !ui_has(K_UI_MESSAGES) {
                 nvim_ui_flush();
                 nvim_os_delay(2004, false);
             }

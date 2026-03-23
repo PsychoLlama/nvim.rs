@@ -1218,7 +1218,7 @@ extern "C" {
     fn msg_puts_title(s: *const c_char);
     fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     fn os_breakcheck();
     static mut msg_col: c_int;
     fn nvim_get_namebuff() -> *mut c_char;
@@ -1381,7 +1381,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
             } else {
                 rs_option_value2string(opt_idx, opt_flags);
                 let namebuff = nvim_get_namebuff();
-                len = strlen(fullname) as c_int + nvim_vim_strsize(namebuff) + 1;
+                len = strlen(fullname) as c_int + vim_strsize(namebuff) + 1;
             }
 
             if (len <= INC - GAP && run == 1) || (len > INC - GAP && run == 2) {

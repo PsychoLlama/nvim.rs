@@ -26,8 +26,8 @@ extern "C" {
     static mut msg_scroll: c_int;
     /// Get `need_wait_return` flag
     static mut need_wait_return: bool;
-    /// Check shortmess option flag (used by other message code that has not been migrated)
-    fn nvim_shortmess(flag: c_int) -> c_int;
+    /// Check shortmess option flag
+    fn shortmess(flag: c_int) -> bool;
     /// Get the 'shortmess' option string value
     static mut p_shm: *mut c_char;
     /// Search for character in string (returns pointer or NULL)
@@ -35,9 +35,9 @@ extern "C" {
     /// Get `exmode_active` flag
     static mut exmode_active: bool;
     /// Check if UI has messages capability
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     /// Calculate string width in cells
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     /// Get `cmdline_row` global
     static mut cmdline_row: c_int;
 }
@@ -56,6 +56,9 @@ pub const SHM_LAST: c_int = b'l' as c_int;
 
 /// Shortmess flag for "intro message"
 pub const SHM_INTRO: c_int = b'I' as c_int;
+
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
 
 /// Get the current message column.
 ///
@@ -130,8 +133,8 @@ pub unsafe extern "C" fn rs_msg_room() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
     let scroll = msg_scroll != 0;
-    let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let ui_has_messages = nvim_ui_has_messages() != 0;
+    let has_truncall = shortmess(SHM_TRUNCALL);
+    let ui_has_messages = ui_has(K_UI_MESSAGES);
 
     c_int::from(
         !scroll
@@ -182,7 +185,7 @@ pub unsafe extern "C" fn rs_msg_strsize(s: *const c_char) -> c_int {
     if s.is_null() {
         return 0;
     }
-    nvim_vim_strsize(s)
+    vim_strsize(s)
 }
 
 /// Check if a message would need truncation.
@@ -197,7 +200,7 @@ pub unsafe extern "C" fn rs_msg_needs_truncation(s: *const c_char) -> c_int {
         return 0;
     }
 
-    let width = nvim_vim_strsize(s);
+    let width = vim_strsize(s);
     let room = rs_msg_room();
 
     c_int::from(width > room && room > 0)
@@ -448,9 +451,8 @@ extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
 
-    // History management (Phase 76)
-    fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
-    fn nvim_msg_hist_add_len(s: *const c_char, len: c_int, hl_id: c_int);
+    // History management
+    fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int);
     static mut msg_hist_off: bool;
     // msg() — #[export_name = "msg"] is in output_core.rs, callable via C name
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
@@ -620,16 +622,16 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
     let should_truncate = force != 0
         || (msg_scroll == 0
             && !need_wait_return
-            && nvim_shortmess(SHM_TRUNCALL) != 0
+            && shortmess(SHM_TRUNCALL)
             && !exmode_active
             && msg_silent == 0
-            && nvim_ui_has_messages() == 0);
+            && !ui_has(K_UI_MESSAGES));
 
     if !should_truncate {
         return std::ptr::null_mut();
     }
 
-    let len = nvim_vim_strsize(s);
+    let len = vim_strsize(s);
     let scrolled = msg_scrolled;
     let rows = Rows;
     let columns = Columns;
@@ -712,7 +714,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
     }
 
     if hist {
-        nvim_msg_hist_add_len(str, len, hl_id);
+        msg_hist_add(str, len, hl_id);
     }
 
     // When drawing over the command line no need to clear it later or remove
@@ -920,7 +922,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_special(
             text
         };
 
-        let len = nvim_vim_strsize(text);
+        let len = vim_strsize(text);
         if maxlen > 0 && retval + len >= maxlen {
             break;
         }
@@ -954,8 +956,8 @@ pub unsafe extern "C" fn rs_msg_outtrans_special(
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
     let scroll = msg_scroll != 0;
-    let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
-    let ui_has_messages = nvim_ui_has_messages() != 0;
+    let has_truncall = shortmess(SHM_TRUNCALL);
+    let ui_has_messages = ui_has(K_UI_MESSAGES);
 
     c_int::from(
         !scroll
@@ -1010,7 +1012,7 @@ pub unsafe extern "C" fn rs_msg_calc_trunc_room(str_width: c_int) -> c_int {
 #[must_use]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         return s;
     }
 
@@ -1021,8 +1023,8 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let len = libc_strlen(s.cast_const()) as c_int;
-    if (force || (nvim_shortmess(SHM_TRUNC) != 0 && !exmode_active)) && len - room > 0 {
-        let size = nvim_vim_strsize(s.cast_const());
+    if (force || (shortmess(SHM_TRUNC) && !exmode_active)) && len - room > 0 {
+        let size = vim_strsize(s.cast_const());
         if size <= room {
             return s;
         }
@@ -1058,7 +1060,7 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
 #[export_name = "msg_trunc"]
 pub unsafe extern "C" fn rs_msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char {
     // Add message to history before truncating.
-    nvim_msg_hist_add_str(s.cast_const(), hl_id);
+    msg_hist_add(s.cast_const(), -1, hl_id);
 
     let ts = rs_msg_may_trunc(force, s);
 

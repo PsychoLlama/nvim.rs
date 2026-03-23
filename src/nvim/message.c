@@ -193,12 +193,7 @@ extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 // nvim_msgchunk_get_text: still used by Rust (chunk.rs) for flexible array member access
 const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 
-// Additional C accessors for message system (used by Rust)
-int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
-
 // C accessors for message formatting (used by Rust)
-int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
-int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 
 // Rust implementation of emsg_not_now()
 extern int rs_emsg_not_now(void);
@@ -386,10 +381,7 @@ int nvim_verbose_open_impl(void)
 // Note: nvim_get_msg_silent, nvim_set_msg_silent, nvim_set_msg_scroll already defined above
 // Note: nvim_get_p_vfile_not_empty already defined (returns 1 if not empty)
 
-// Phase 76: msg_may_trunc/msg_trunc accessors
-void nvim_msg_hist_add_str(const char *s, int hl_id) { msg_hist_add(s, -1, hl_id); }
-// Phase 83: msg_outtrans_len accessor with explicit length
-void nvim_msg_hist_add_len(const char *s, int len, int hl_id) { msg_hist_add(s, len, hl_id); }
+// nvim_msg_hist_add_str/len removed: msg_hist_add is now non-static, called directly from Rust
 
 // nvim_set_msg_ext_kind deleted: msg_ext_kind is now a Rust static (display.rs)
 
@@ -802,7 +794,7 @@ void hl_msg_free(HlMessage hl_msg)
 /// Add the message at the end of the history
 ///
 /// @param[in]  len  Length of s or -1.
-static void msg_hist_add(const char *s, int len, int hl_id)
+void msg_hist_add(const char *s, int len, int hl_id)
 {
   String text = { .size = len < 0 ? strlen(s) : (size_t)len };
   // Remove leading and trailing newlines.

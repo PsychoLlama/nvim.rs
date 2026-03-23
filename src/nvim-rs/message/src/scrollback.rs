@@ -7,6 +7,9 @@
 use std::ffi::c_int;
 use std::ptr;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 use crate::chunk::MsgChunk;
 
 // C accessor declarations
@@ -349,7 +352,7 @@ pub unsafe extern "C" fn rs_sb_reset_clear_state() {
 extern "C" {
     static mut msg_scrolled: c_int;
     static mut msg_did_scroll: bool;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_msg_reset_scroll_grid();
 }
 
@@ -424,7 +427,7 @@ pub unsafe extern "C" fn rs_set_msg_did_scroll(val: c_int) {
 /// Calls C accessor/mutator functions that modify grid state.
 #[export_name = "msg_reset_scroll"]
 pub unsafe extern "C" fn rs_msg_reset_scroll() {
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         return;
     }
     nvim_msg_reset_scroll_grid();

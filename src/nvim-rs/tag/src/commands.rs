@@ -16,6 +16,9 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 use crate::tag_cmd;
 use crate::TAGSTACKSIZE;
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // Error message string constants
 const E_CANNOT_MODIFY_TAG_STACK_WITHIN_TAGFUNC: &CStr =
     c"E986: Cannot modify the tag stack within tagfunc";
@@ -947,7 +950,7 @@ extern "C" {
     static mut msg_col: c_int;
     static mut msg_didout: bool;
     fn nvim_get_p_verbose() -> c_int;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
     fn nvim_get_curbuf_fnum() -> c_int;
 
@@ -1265,7 +1268,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             }
         }
 
-        if msg_col != 0 && (nvim_ui_has_messages() == 0 || i < num_matches - 1) {
+        if msg_col != 0 && (!ui_has(K_UI_MESSAGES) || i < num_matches - 1) {
             msg_putchar(b'\n' as c_int);
         }
         os_breakcheck();

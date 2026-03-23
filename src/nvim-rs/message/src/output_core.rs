@@ -9,6 +9,9 @@
 
 use std::ffi::{c_char, c_int};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 // Use the mbyte crate for UTF-8 encoding
 use nvim_mbyte::rs_utf_char2bytes;
 
@@ -65,7 +68,7 @@ extern "C" {
     fn nvim_get_full_screen() -> bool;
     static mut msg_didout: bool;
     static mut msg_scrolled: c_int;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     static mut need_fileinfo: bool;
     fn xfree(ptr: *mut std::ffi::c_void);
     fn msg_grid_validate();
@@ -76,9 +79,9 @@ extern "C" {
     // is_multihl: Rust-owned static (misc.rs)
     static mut is_multihl: bool;
     fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
-    fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
+    fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int);
     static mut keep_msg: *mut c_char;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     static mut sc_col: c_int;
     fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
     fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -204,7 +207,7 @@ pub(crate) unsafe fn msg_keep_impl(
     let should_add_hist = !is_multihl
         && (s != keep_msg || (*s != b'<' as std::ffi::c_char && msg_hist_last_text_differs(s)));
     if should_add_hist {
-        nvim_msg_hist_add_str(s, hl_id);
+        msg_hist_add(s, -1, hl_id);
     }
 
     if !is_multihl {
@@ -243,8 +246,7 @@ pub(crate) unsafe fn msg_keep_impl(
         rs_msg_end()
     };
 
-    if keep != 0 && retval != 0 && nvim_vim_strsize(s) < (Rows - cmdline_row - 1) * Columns + sc_col
-    {
+    if keep != 0 && retval != 0 && vim_strsize(s) < (Rows - cmdline_row - 1) * Columns + sc_col {
         crate::misc::rs_set_keep_msg(s, 0);
     }
 
@@ -472,7 +474,7 @@ pub unsafe extern "C" fn rs_msg_start() {
     }
 
     // If cmdheight=0, scroll in the first line of msg_grid upon the screen.
-    if p_ch == 0 && nvim_ui_has_messages() == 0 && msg_scrolled == 0 {
+    if p_ch == 0 && !ui_has(K_UI_MESSAGES) && msg_scrolled == 0 {
         msg_grid_validate();
         rs_msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
         let scrolled = msg_scrolled;
@@ -484,7 +486,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         // Overwrite last message
         msg_row = cmdline_row;
         msg_col = 0;
-    } else if c_int::from(msg_didout) != 0 || (p_ch == 0 && nvim_ui_has_messages() == 0) {
+    } else if c_int::from(msg_didout) != 0 || (p_ch == 0 && !ui_has(K_UI_MESSAGES)) {
         // Start message on next line
         rs_msg_putchar(c_int::from(b'\n'));
         did_return = true;
@@ -499,7 +501,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         msg_didout = false; // no output on current line yet
     }
 
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         msg_ext_ui_flush();
     }
 

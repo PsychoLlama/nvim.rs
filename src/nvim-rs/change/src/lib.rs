@@ -192,7 +192,7 @@ extern "C" {
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;
     fn nvim_ui_active() -> bool;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     // Redraw functions

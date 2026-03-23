@@ -8,6 +8,9 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
+
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
 use crate::WinHandle;
 
 extern "C" {
@@ -144,7 +147,7 @@ extern "C" {
     fn nvim_may_trigger_modechanged();
     fn nvim_typebuf_maplen_wrapper() -> c_int;
     fn nvim_typebuf_typed() -> bool;
-    fn nvim_ui_has_messages() -> c_int; // defined in message.c
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
     fn nvim_showmode();
     fn nvim_show_cursor_info_later();
@@ -402,12 +405,10 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     nvim_setcursor_wrapper();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
     nvim_ui_flush_wrapper();
-    if nvim_ui_has_messages() == 0
-        && (nvim_get_msg_scroll_val() || c_int::from(emsg_on_display) != 0)
-    {
+    if !ui_has(K_UI_MESSAGES) && (nvim_get_msg_scroll_val() || c_int::from(emsg_on_display) != 0) {
         nvim_os_delay_wrapper(1003, true); // wait at least one second
     }
-    if nvim_ui_has_messages() != 0 {
+    if ui_has(K_UI_MESSAGES) {
         nvim_os_delay_wrapper(3003, false); // wait up to three seconds
     }
     State = save_state;

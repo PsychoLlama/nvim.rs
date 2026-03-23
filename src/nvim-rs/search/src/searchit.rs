@@ -86,7 +86,7 @@ extern "C" {
     fn nvim_cpo_has_search() -> c_int;
 
     // Shortmess
-    fn nvim_shortmess(x: c_int) -> c_int;
+    fn shortmess(x: c_int) -> bool;
 
     // Incsearch / char avail
     fn nvim_char_avail() -> c_int;
@@ -636,8 +636,8 @@ pub unsafe extern "C" fn rs_searchit(
             // Wrap around
             lnum = if dir == BACKWARD { line_count } else { 1 };
 
-            if nvim_shortmess(SHM_SEARCH) == 0
-                && nvim_shortmess(SHM_SEARCHCOUNT) != 0
+            if !shortmess(SHM_SEARCH)
+                && shortmess(SHM_SEARCHCOUNT)
                 && (search_options & options::SEARCH_MSG) != 0
             {
                 nvim_searchit_give_warning(dir);

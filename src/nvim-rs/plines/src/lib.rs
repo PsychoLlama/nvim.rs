@@ -164,7 +164,7 @@ extern "C" {
 
     // Additional accessors for charsize_regular
     fn nvim_virt_text_cursor_off(csarg: CharsizeArgHandle, on_NUL: c_int) -> c_int;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     fn nvim_get_breakindent_win(wp: WinHandle, line: *const c_char) -> c_int;
     fn nvim_vim_isbreak(c: c_int) -> c_int;
     fn nvim_win_get_p_lbr(wp: WinHandle) -> c_int;
@@ -1350,7 +1350,7 @@ fn charsize_regular_impl(
                 if head_prev == INT_MIN {
                     head_prev = 0;
                     if sbr_nonempty {
-                        head_prev += nvim_vim_strsize(sbr);
+                        head_prev += vim_strsize(sbr);
                     }
                     if p_bri {
                         head_prev += nvim_get_breakindent_win(wp, line);
@@ -1376,7 +1376,7 @@ fn charsize_regular_impl(
                 if head_mid == INT_MIN {
                     head_mid = 0;
                     if sbr_nonempty {
-                        head_mid += nvim_vim_strsize(sbr);
+                        head_mid += vim_strsize(sbr);
                     }
                     if p_bri {
                         head_mid += nvim_get_breakindent_win(wp, line);

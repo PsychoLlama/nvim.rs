@@ -23,6 +23,9 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+/// UIExtension value for kUIMessages (ui_defs.h)
+const K_UI_MESSAGES: c_int = 4;
+
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // Direct access to C globals (avoids thin C accessor functions).
@@ -162,7 +165,7 @@ extern "C" {
     // Phase 1: Flag/guard function accessors
     fn nvim_char_avail() -> c_int;
     fn nvim_get_KeyTyped() -> bool;
-    fn nvim_ui_has_messages() -> c_int;
+    fn ui_has(ext: c_int) -> bool;
     fn nvim_cmdline_mouse_used() -> c_int;
     #[link_name = "rs_min_rows_for_all_tabpages"]
     fn nvim_min_rows_for_all_tabpages() -> c_int;
@@ -1885,7 +1888,7 @@ pub extern "C" fn rs_check_screensize() {
 /// This is static in C so we keep the rs_ prefix for now.
 fn cmdline_number_prompt_impl() -> bool {
     unsafe {
-        nvim_ui_has_messages() == 0 && (State & MODE_CMDLINE) != 0 && nvim_cmdline_mouse_used() != 0
+        !ui_has(K_UI_MESSAGES) && (State & MODE_CMDLINE) != 0 && nvim_cmdline_mouse_used() != 0
     }
 }
 
@@ -2567,7 +2570,7 @@ extern "C" {
     static mut restart_edit: c_int;
     fn nvim_VIsual_active() -> c_int;
     static mut p_ch: i64;
-    // nvim_ui_has_messages is already declared in the Phase 1 extern block above.
+    // ui_has is already declared in the Phase 1 extern block above.
     static mut need_wait_return: bool;
     fn nvim_drawscreen_msg_check_for_delay();
     fn nvim_get_clear_cmdline() -> bool;
@@ -2585,7 +2588,7 @@ extern "C" {
     // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
     #[link_name = "edit_submode_highl"]
     static mut g_edit_submode_highl: c_int;
-    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn vim_strsize(s: *const c_char) -> c_int;
     fn nvim_get_p_ri() -> c_int;
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
     fn nvim_get_VIsual_select() -> bool;
@@ -2627,20 +2630,20 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
     // CTRL-X in Insert mode
     if !g_edit_submode.is_null() && !shortmess(SHM_COMPLETIONMENU) {
         // Messages can get long; avoid a wrap in a narrow window.
-        if nvim_ui_has_messages() != 0 {
+        if ui_has(K_UI_MESSAGES) {
             *length = c_int::MAX;
         } else {
             *length = (Rows - msg_row) * Columns - 3;
         }
         if !g_edit_submode_extra.is_null() {
-            *length -= nvim_vim_strsize(g_edit_submode_extra);
+            *length -= vim_strsize(g_edit_submode_extra);
         }
         if *length > 0 {
             if !g_edit_submode_pre.is_null() {
-                *length -= nvim_vim_strsize(g_edit_submode_pre);
+                *length -= vim_strsize(g_edit_submode_pre);
             }
             let submode = g_edit_submode;
-            if *length - nvim_vim_strsize(submode) > 0 {
+            if *length - vim_strsize(submode) > 0 {
                 if !g_edit_submode_pre.is_null() {
                     msg_puts_hl(g_edit_submode_pre, hl_id, false);
                 }
@@ -2744,7 +2747,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
             || restart_edit != 0
             || nvim_VIsual_active() != 0);
 
-    let can_show_mode = p_ch != 0 || nvim_ui_has_messages() != 0;
+    let can_show_mode = p_ch != 0 || ui_has(K_UI_MESSAGES);
 
     if (do_mode || reg_recording != 0) && can_show_mode {
         if rs_skip_showmode() {
