@@ -1797,7 +1797,6 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
 // nvim_set_did_ai: defined in change_ffi.c (void nvim_set_did_ai(bool val))
 void nvim_clear_indent_flags(void) { did_si = false; can_si = false; can_si_back = false; }
 void nvim_set_compl_lnum_to_cursor(void) { compl_lnum = curwin->w_cursor.lnum; }
-void nvim_ins_eol_wrap(int c) { ins_eol(c); }
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
@@ -1981,15 +1980,12 @@ int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_compl_lnum(void) { return (int)compl_lnum; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 // nvim_get_compl_hi_on_autocompl_longest: deleted (Phase 2, moved to Rust)
-int nvim_syn_name2attr(const char *name) { return syn_name2attr(name); }
 const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
 size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
 const char *nvim_get_compl_orig_text_data(void) { return compl_orig_text.data; }
 size_t nvim_get_compl_orig_text_size(void) { return compl_orig_text.size; }
 int nvim_compl_shown_match_exists(void) { return compl_shown_match != NULL ? 1 : 0; }
 int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
-int nvim_pum_visible(void) { return pum_visible() ? 1 : 0; }
-
 // Match list and popup menu accessors (used by Rust insexpand crate)
 int nvim_compl_first_match_is_null(void) { return compl_first_match == NULL ? 1 : 0; }
 int nvim_compl_curr_match_is_null(void) { return compl_curr_match == NULL ? 1 : 0; }
@@ -2011,8 +2007,6 @@ void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl();
 // nvim_vpeekc: deleted (Phase 3, Rust calls vpeekc directly)
 int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 
-// Accessor for ins_compl_prep (Phase 2)
-void nvim_ins_redraw(int ready) { ins_redraw(ready != 0); }
 // Accessors for Phase 2 (pass 12): ins_compl_longest_match
 // nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
 // nvim_mb_tolower: deleted (Phase 3, Rust calls mb_tolower directly)
@@ -2374,7 +2368,6 @@ int nvim_compl_shown_match_is_sentinel(int forward) {
 
 // Accessors for Phase 4: ins_compl_new_leader migration
 int nvim_get_p_acl(void) { return (int)p_acl; }
-void nvim_pum_undisplay(int undo) { pum_undisplay(undo != 0); }
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
 int nvim_is_cpt_func_refresh_always(void) {
   for (int i = 0; i < cpt_sources_count; i++) {

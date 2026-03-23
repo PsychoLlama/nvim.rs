@@ -45,7 +45,8 @@ extern "C" {
     fn nvim_set_did_ai(val: bool);
     fn nvim_clear_indent_flags();
     fn nvim_set_compl_lnum_to_cursor();
-    fn nvim_ins_eol_wrap(c: c_int);
+    #[link_name = "ins_eol"]
+    fn nvim_ins_eol_wrap(c: c_int) -> bool;
     fn nvim_get_curbuf_b_p_com() -> *const c_char;
     fn nvim_set_curbuf_b_p_com_empty();
     fn nvim_restore_curbuf_b_p_com(old_val: *const c_char);

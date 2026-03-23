@@ -55,6 +55,7 @@ extern "C" {
 
     // For ins_compl_col_range_attr
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
+    #[link_name = "syn_name2attr"]
     fn nvim_syn_name2attr(name: *const c_char) -> c_int;
     fn nvim_get_compl_lnum() -> c_int;
     fn nvim_get_curwin_cursor_lnum() -> c_int;

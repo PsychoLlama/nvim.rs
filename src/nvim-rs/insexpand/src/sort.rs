@@ -69,6 +69,7 @@ extern "C" {
     fn rs_compl_shows_dir_forward() -> c_int;
 
     // For rs_fuzzy_longest_match
+    #[link_name = "ins_redraw"]
     fn nvim_ins_redraw(ready: c_int);
     fn nvim_clear_compl_best_matches();
     fn rs_ins_compl_delete(new_leader: c_int);

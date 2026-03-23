@@ -538,6 +538,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 extern "C" {
     // For ins_compl_new_leader
     fn nvim_get_p_acl() -> c_int;
+    #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
     fn nvim_redraw_later_valid();
     fn nvim_update_screen();
@@ -652,6 +653,7 @@ extern "C" {
     fn mb_tolower(c: c_int) -> c_int;
     fn nvim_cursor_col_gt_compl_col() -> c_int;
     fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
+    #[link_name = "ins_redraw"]
     fn nvim_ins_redraw(ready: c_int);
 }
 

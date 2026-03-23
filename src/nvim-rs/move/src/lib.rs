@@ -797,6 +797,7 @@ extern "C" {
     fn nvim_redraw_buf_later(buf: *mut std::ffi::c_void, type_: c_int);
 
     // Popup menu visibility
+    #[link_name = "pum_visible"]
     fn nvim_pum_visible() -> c_int;
 
     // Window options for cursorline/cursorcolumn

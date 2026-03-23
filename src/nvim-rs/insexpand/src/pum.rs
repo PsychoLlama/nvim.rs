@@ -28,6 +28,7 @@ extern "C" {
     // Completeopt flags
 
     // For rs_ins_compl_del_pum
+    #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
     fn nvim_xfree_compl_match_array();
 }
