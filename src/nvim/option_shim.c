@@ -2012,20 +2012,7 @@ void nvim_set_option_sctx_from_sid(OptIndex opt_idx, int opt_flags, int set_sid)
 /// Returns 1 if opt->opt_did_set_cb is non-NULL for opt_idx.
 int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_did_set_cb != NULL ? 1 : 0; }
 
-/// Address of curbuf->b_p_syn (for varp pointer comparison)
-void *nvim_curbuf_b_p_syn_addr(void) { return &curbuf->b_p_syn; }
-/// Address of curbuf->b_p_ft (for varp pointer comparison)
-void *nvim_curbuf_b_p_ft_addr(void) { return &curbuf->b_p_ft; }
-/// Address of curwin->w_s->b_p_spl (for varp pointer comparison)
-void *nvim_curwin_b_p_spl_addr(void) { return &curwin->w_s->b_p_spl; }
-/// Address of curbuf->b_p_flp (for varp pointer comparison)
-void *nvim_curbuf_b_p_flp_addr(void) { return &curbuf->b_p_flp; }
-/// Address of curwin->w_p_wbr (for varp pointer comparison)
-void *nvim_curwin_p_wbr_addr(void) { return &curwin->w_p_wbr; }
-
 // nvim_curwin_get_w_curswant and nvim_curwin_set_w_set_curswant are defined in indent_ffi.c
-/// Get curwin->w_briopt_list
-int nvim_curwin_get_w_briopt_list(void) { return curwin->w_briopt_list ? 1 : 0; }
 
 /// Get `secure` global variable
 // nvim_get_secure, nvim_set_secure are defined in ex_docmd.c

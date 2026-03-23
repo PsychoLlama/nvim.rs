@@ -10,7 +10,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 
-use std::ffi::{c_char, c_int, c_uint, c_void};
+use std::ffi::{c_char, c_int, c_uint};
 
 use crate::storage::OptVal;
 use crate::{
@@ -84,15 +84,6 @@ extern "C" {
     // buf_init_chartab(curbuf, true)
     fn buf_init_chartab(buf: *mut std::ffi::c_void, global: c_int) -> c_int;
 
-    // Pointer address comparisons for special-cased options
-    fn nvim_curbuf_b_p_syn_addr() -> *mut std::ffi::c_void;
-    fn nvim_curbuf_b_p_ft_addr() -> *mut std::ffi::c_void;
-    fn nvim_curwin_b_p_spl_addr() -> *mut std::ffi::c_void;
-    // removed -- use &raw mut crate::p_mouse etc.
-    fn nvim_curbuf_b_p_flp_addr() -> *mut std::ffi::c_void;
-    // removed -- use &raw mut crate::p_wbr
-    fn nvim_curwin_p_wbr_addr() -> *mut std::ffi::c_void;
-
     // Special autocmds for file type / syntax / spell
     fn rs_do_syntax_autocmd(buf: *mut std::ffi::c_void, value_changed: c_int);
     fn do_filetype_autocmd(buf: *mut std::ffi::c_void, force: bool);
@@ -103,7 +94,7 @@ extern "C" {
     fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_set_w_set_curswant(val: bool);
-    fn nvim_curwin_get_w_briopt_list() -> c_int;
+    fn nvim_win_get_briopt_list(win: *mut std::ffi::c_void) -> c_int;
 
     // comp_col(), setmouse(), redraw_all_later(), set_winbar()
     fn comp_col();
@@ -261,34 +252,26 @@ pub unsafe extern "C" fn rs_did_set_option(
     let curwin = nvim_opt_get_curwin();
 
     // Trigger autocmds for special options.
-    let syn_addr = nvim_curbuf_b_p_syn_addr();
-    let ft_addr = nvim_curbuf_b_p_ft_addr();
-    let spl_addr = nvim_curwin_b_p_spl_addr();
-
-    if varp == syn_addr {
+    if opt_idx == crate::opt_index::K_OPT_SYNTAX {
         rs_do_syntax_autocmd(curbuf, value_changed);
-    } else if varp == ft_addr {
+    } else if opt_idx == crate::opt_index::K_OPT_FILETYPE {
         if (opt_flags & OPT_MODELINE) == 0 || value_changed != 0 {
             do_filetype_autocmd(curbuf, value_changed != 0);
         }
-    } else if varp == spl_addr {
+    } else if opt_idx == crate::opt_index::K_OPT_SPELLLANG {
         rs_do_spelllang_source(curwin);
     }
 
     // Redraw comp_col in case ruler/showcmd/columns/ls changed.
     comp_col();
 
-    let mouse_addr: *mut c_void = (&raw mut crate::p_mouse).cast::<c_void>();
-    let flp_addr: *mut c_void = (&raw mut crate::p_flp).cast::<c_void>();
-    let buf_flp_addr = nvim_curbuf_b_p_flp_addr();
-    let wbr_addr: *mut c_void = (&raw mut crate::p_wbr).cast::<c_void>();
-    let win_wbr_addr = nvim_curwin_p_wbr_addr();
-
-    if varp == mouse_addr {
+    if opt_idx == crate::opt_index::K_OPT_MOUSE {
         setmouse();
-    } else if (varp == flp_addr || varp == buf_flp_addr) && nvim_curwin_get_w_briopt_list() != 0 {
+    } else if opt_idx == crate::opt_index::K_OPT_FORMATLISTPAT
+        && nvim_win_get_briopt_list(curwin) != 0
+    {
         redraw_all_later(UPD_NOT_VALID);
-    } else if varp == wbr_addr || varp == win_wbr_addr {
+    } else if opt_idx == crate::opt_index::K_OPT_WINBAR {
         set_winbar(true);
     }
 
