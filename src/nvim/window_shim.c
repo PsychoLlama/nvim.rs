@@ -2516,6 +2516,79 @@ void nvim_curwin_clear_wrow_wcol_virtcol(void) { curwin->w_valid &= ~(VALID_WROW
 void nvim_curwin_cursor_lnum_add(linenr_T delta) { curwin->w_cursor.lnum += delta; }
 void nvim_set_Insstart_from_cursor(void) { Insstart = curwin->w_cursor; }
 
+// =============================================================================
+// win_T option field address table (moved from option_shim.c)
+// =============================================================================
+
+// Get the address of a win_T option field by OptIndex.
+// Returns NULL for unknown/unhandled indices.
+void *nvim_win_get_opt_field_addr(win_T *win, OptIndex idx)
+{
+  if (!win) { return NULL; }
+  switch (idx) {
+  // global-local numeric win options
+  case kOptSidescrolloff: return &win->w_p_siso;
+  case kOptScrolloff: return &win->w_p_so;
+  // global-local string win options
+  case kOptShowbreak: return &win->w_p_sbr;
+  case kOptStatusline: return &win->w_p_stl;
+  case kOptWinbar: return &win->w_p_wbr;
+  case kOptFillchars: return &win->w_p_fcs;
+  case kOptListchars: return &win->w_p_lcs;
+  case kOptVirtualedit: return &win->w_p_ve;
+  // win-local only options
+  case kOptArabic: return &win->w_p_arab;
+  case kOptList: return &win->w_p_list;
+  case kOptSpell: return &win->w_p_spell;
+  case kOptCursorcolumn: return &win->w_p_cuc;
+  case kOptCursorline: return &win->w_p_cul;
+  case kOptCursorlineopt: return &win->w_p_culopt;
+  case kOptColorcolumn: return &win->w_p_cc;
+  case kOptDiff: return &win->w_p_diff;
+  case kOptEventignorewin: return &win->w_p_eiw;
+  case kOptFoldcolumn: return &win->w_p_fdc;
+  case kOptFoldenable: return &win->w_p_fen;
+  case kOptFoldignore: return &win->w_p_fdi;
+  case kOptFoldlevel: return &win->w_p_fdl;
+  case kOptFoldmethod: return &win->w_p_fdm;
+  case kOptFoldminlines: return &win->w_p_fml;
+  case kOptFoldnestmax: return &win->w_p_fdn;
+  case kOptFoldexpr: return &win->w_p_fde;
+  case kOptFoldtext: return &win->w_p_fdt;
+  case kOptFoldmarker: return &win->w_p_fmr;
+  case kOptNumber: return &win->w_p_nu;
+  case kOptRelativenumber: return &win->w_p_rnu;
+  case kOptNumberwidth: return &win->w_p_nuw;
+  case kOptWinfixbuf: return &win->w_p_wfb;
+  case kOptWinfixheight: return &win->w_p_wfh;
+  case kOptWinfixwidth: return &win->w_p_wfw;
+  case kOptPreviewwindow: return &win->w_p_pvw;
+  case kOptLhistory: return &win->w_p_lhi;
+  case kOptRightleft: return &win->w_p_rl;
+  case kOptRightleftcmd: return &win->w_p_rlc;
+  case kOptScroll: return &win->w_p_scr;
+  case kOptSmoothscroll: return &win->w_p_sms;
+  case kOptWrap: return &win->w_p_wrap;
+  case kOptLinebreak: return &win->w_p_lbr;
+  case kOptBreakindent: return &win->w_p_bri;
+  case kOptBreakindentopt: return &win->w_p_briopt;
+  case kOptScrollbind: return &win->w_p_scb;
+  case kOptCursorbind: return &win->w_p_crb;
+  case kOptConcealcursor: return &win->w_p_cocu;
+  case kOptConceallevel: return &win->w_p_cole;
+  // win->w_s (synblock) fields accessed via win
+  case kOptSpellcapcheck: return &win->w_s->b_p_spc;
+  case kOptSpellfile: return &win->w_s->b_p_spf;
+  case kOptSpelllang: return &win->w_s->b_p_spl;
+  case kOptSpelloptions: return &win->w_s->b_p_spo;
+  case kOptSigncolumn: return &win->w_p_scl;
+  case kOptWinhighlight: return &win->w_p_winhl;
+  case kOptWinblend: return &win->w_p_winbl;
+  case kOptStatuscolumn: return &win->w_p_stc;
+  default: abort();
+  }
+}
+
 // Compile-time constant checks for Rust FFI (constants used in buffer/info crate)
 _Static_assert(MIN_COLUMNS == 12, "MIN_COLUMNS must be 12");
 _Static_assert(STL_IN_ICON == 1, "STL_IN_ICON must be 1");
