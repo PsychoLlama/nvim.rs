@@ -166,220 +166,184 @@ extern void replace_pop_ins(void);
 extern void replace_do_bs(int limit_col);
 extern char *do_insert_char_pre(int c);
 
-/// Get the no_abbr global variable (accessor for Rust).
 int nvim_get_no_abbr(void)
 {
   return no_abbr;
 }
 
-/// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
 {
   return ins_need_undo;
 }
 
-/// Set the ins_need_undo static variable (accessor for Rust).
 void nvim_set_ins_need_undo(int val)
 {
   ins_need_undo = val != 0;
 }
 
-/// Get the can_cindent static variable (accessor for Rust).
 int nvim_get_can_cindent(void)
 {
   return can_cindent;
 }
 
-/// Set the can_cindent static variable (accessor for Rust).
 void nvim_set_can_cindent(int val)
 {
   can_cindent = val != 0;
 }
 
-/// Get the revins_on static variable (accessor for Rust).
 int nvim_get_revins_on(void)
 {
   return revins_on;
 }
 
-/// Get the did_restart_edit static variable (accessor for Rust).
 int nvim_get_did_restart_edit(void)
 {
   return did_restart_edit;
 }
 
-/// Get buf->b_prompt_text (accessor for Rust).
 char *nvim_buf_get_b_prompt_text(const buf_T *buf)
 {
   return buf->b_prompt_text;
 }
 
-/// Get curwin->w_cursor.lnum (accessor for Rust).
 linenr_T nvim_curwin_get_cursor_lnum(void)
 {
   return curwin->w_cursor.lnum;
 }
 
-/// Get curwin->w_cursor.col (accessor for Rust).
 colnr_T nvim_curwin_get_cursor_col(void)
 {
   return curwin->w_cursor.col;
 }
 
-/// Get curbuf->b_prompt_start.mark.lnum (accessor for Rust).
 linenr_T nvim_curbuf_get_b_prompt_start_lnum(void)
 {
   return curbuf->b_prompt_start.mark.lnum;
 }
 
-/// Get Insstart.lnum (accessor for Rust).
 linenr_T nvim_get_Insstart_lnum(void)
 {
   return Insstart.lnum;
 }
 
-/// Get Insstart.col (accessor for Rust).
 colnr_T nvim_get_Insstart_col(void)
 {
   return Insstart.col;
 }
 
-/// Set Insstart (accessor for Rust).
 void nvim_set_Insstart(linenr_T lnum, colnr_T col)
 {
   Insstart.lnum = lnum;
   Insstart.col = col;
 }
 
-/// Get Insstart_orig.lnum (accessor for Rust).
 linenr_T nvim_get_Insstart_orig_lnum(void)
 {
   return Insstart_orig.lnum;
 }
 
-/// Get Insstart_orig.col (accessor for Rust).
 colnr_T nvim_get_Insstart_orig_col(void)
 {
   return Insstart_orig.col;
 }
 
-/// Set Insstart_orig (accessor for Rust).
 void nvim_set_Insstart_orig(linenr_T lnum, colnr_T col)
 {
   Insstart_orig.lnum = lnum;
   Insstart_orig.col = col;
 }
 
-/// Get Insstart_textlen (accessor for Rust).
 colnr_T nvim_get_Insstart_textlen(void)
 {
   return Insstart_textlen;
 }
 
-/// Set Insstart_textlen (accessor for Rust).
 void nvim_set_Insstart_textlen(colnr_T val)
 {
   Insstart_textlen = val;
 }
 
-/// Get Insstart_blank_vcol (accessor for Rust).
 colnr_T nvim_get_Insstart_blank_vcol(void)
 {
   return Insstart_blank_vcol;
 }
 
-/// Set Insstart_blank_vcol (accessor for Rust).
 void nvim_set_Insstart_blank_vcol(colnr_T val)
 {
   Insstart_blank_vcol = val;
 }
 
-/// Initialize Insstart_textlen and Insstart_blank_vcol (accessor for Rust).
 void nvim_edit_init_Insstart_textlen(void)
 {
   Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
   Insstart_blank_vcol = MAXCOL;
 }
 
-/// Get update_Insstart_orig (accessor for Rust).
 int nvim_get_update_Insstart_orig(void)
 {
   return update_Insstart_orig;
 }
 
-/// Set update_Insstart_orig (accessor for Rust).
 void nvim_set_update_Insstart_orig(int val)
 {
   update_Insstart_orig = val != 0;
 }
 
-/// Get revins_chars (accessor for Rust).
 int nvim_get_revins_chars(void)
 {
   return revins_chars;
 }
 
-/// Set revins_chars (accessor for Rust).
 void nvim_set_revins_chars(int val)
 {
   revins_chars = val;
 }
 
-/// Get revins_legal (accessor for Rust).
 int nvim_get_revins_legal(void)
 {
   return revins_legal;
 }
 
-/// Set revins_legal (accessor for Rust).
 void nvim_set_revins_legal(int val)
 {
   revins_legal = val;
 }
 
-/// Get revins_scol (accessor for Rust).
 int nvim_get_revins_scol(void)
 {
   return revins_scol;
 }
 
-/// Set revins_scol (accessor for Rust).
 void nvim_set_revins_scol(int val)
 {
   revins_scol = val;
 }
 
-/// Set did_restart_edit (accessor for Rust).
 void nvim_set_did_restart_edit(int val)
 {
   did_restart_edit = val;
 }
 
-/// Get compl_busy (accessor for Rust).
 int nvim_get_compl_busy(void)
 {
   return compl_busy;
 }
 
-/// Set compl_busy (accessor for Rust).
 void nvim_set_compl_busy(bool val)
 {
   compl_busy = val;
 }
 
-/// Get last_insert_skip (accessor for Rust).
 int nvim_get_last_insert_skip(void)
 {
   return last_insert_skip;
 }
 
-/// Get new_insert_skip (accessor for Rust).
 int nvim_get_new_insert_skip(void)
 {
   return new_insert_skip;
 }
 
-/// Set new_insert_skip (accessor for Rust).
 void nvim_set_new_insert_skip(int val)
 {
   new_insert_skip = val;
@@ -390,79 +354,66 @@ static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
 
 static linenr_T o_lnum = 0;
 
-/// Get dont_sync_undo (accessor for Rust).
 int nvim_get_dont_sync_undo(void)
 {
   return dont_sync_undo;
 }
 
-/// Set dont_sync_undo (accessor for Rust).
 void nvim_set_dont_sync_undo(int val)
 {
   dont_sync_undo = (TriState)val;
 }
 
-/// Get o_lnum (accessor for Rust).
 linenr_T nvim_get_o_lnum(void)
 {
   return o_lnum;
 }
 
-/// Set o_lnum (accessor for Rust).
 void nvim_set_o_lnum(linenr_T val)
 {
   o_lnum = val;
 }
 
-/// Get arrow_used (accessor for Rust).
 int nvim_get_arrow_used(void)
 {
   return arrow_used;
 }
 
-/// Set arrow_used (accessor for Rust).
 void nvim_set_arrow_used(int val)
 {
   arrow_used = val != 0;
 }
 
-/// Get p_ri (accessor for Rust).
 int nvim_get_p_ri(void)
 {
   return p_ri;
 }
 
-/// Get p_ari (allowrevins option) (accessor for Rust).
 int nvim_get_p_ari(void)
 {
   return p_ari;
 }
 
-/// Check if curwin buffer is valid for cursor operations (accessor for Rust).
 int nvim_curwin_buf_valid(void)
 {
   return curwin->w_buffer != NULL && curwin->w_buffer->b_ml.ml_mfp != NULL;
 }
 
-/// Get curwin buffer line count (accessor for Rust).
 linenr_T nvim_curwin_buf_line_count(void)
 {
   return curwin->w_buffer->b_ml.ml_line_count;
 }
 
-/// Get curwin->w_p_list (accessor for Rust).
 int nvim_curwin_w_p_list(void)
 {
   return curwin->w_p_list;
 }
 
-/// Check if p_cpo contains CPO_LISTWM ('L') (accessor for Rust).
 int nvim_p_cpo_has_listwm(void)
 {
   return vim_strchr(p_cpo, CPO_LISTWM) != NULL;
 }
 
-/// Get getvcol_nolist(&curwin->w_cursor) (accessor for Rust).
 colnr_T nvim_getvcol_nolist(void)
 {
   return getvcol_nolist(&curwin->w_cursor);
@@ -474,50 +425,42 @@ void nvim_validate_virtcol_curwin(void)
   validate_virtcol(curwin);
 }
 
-/// Get curwin->w_virtcol (accessor for Rust).
 colnr_T nvim_curwin_get_w_virtcol(void)
 {
   return curwin->w_virtcol;
 }
 
-/// Get get_cursor_pos_ptr() (accessor for Rust).
 char *nvim_get_cursor_pos_ptr(void)
 {
   return get_cursor_pos_ptr();
 }
 
-/// Get last_insert.data (accessor for Rust).
 char *nvim_get_last_insert_data(void)
 {
   return last_insert.data;
 }
 
-/// Get last_insert.size (accessor for Rust).
 size_t nvim_get_last_insert_size(void)
 {
   return last_insert.size;
 }
 
-/// Set last_insert data and size (accessor for Rust).
 void nvim_set_last_insert(char *data, size_t size)
 {
   last_insert.data = data;
   last_insert.size = size;
 }
 
-/// Clear last_insert (free and zero) (accessor for Rust).
 void nvim_clear_last_insert(void)
 {
   API_CLEAR_STRING(last_insert);
 }
 
-/// Set last_insert_skip (accessor for Rust).
 void nvim_set_last_insert_skip(int val)
 {
   last_insert_skip = val;
 }
 
-/// Get replace_offset global (accessor for Rust).
 int nvim_get_replace_offset(void)
 {
   return replace_offset;
@@ -647,7 +590,6 @@ void nvim_edit_save_topline(void)
   saved_topfill = curwin->w_topfill;
 }
 
-/// Check if topline/topfill changed since save (accessor for Rust).
 int nvim_edit_topline_changed(void)
 {
   return (saved_topline != curwin->w_topline
@@ -909,7 +851,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
   stuffReadbuffLen(data, len);
 }
 
-/// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
 {
   revins_on = (val != 0);
@@ -1288,13 +1229,11 @@ int ins_apply_autocmds(event_T event)
   return r;
 }
 
-/// Get the dollar_vcol global variable (accessor for Rust).
 colnr_T nvim_get_dollar_vcol(void)
 {
   return dollar_vcol;
 }
 
-/// Set the dollar_vcol global variable (accessor for Rust).
 void nvim_set_dollar_vcol(colnr_T val)
 {
   dollar_vcol = val;
@@ -1305,13 +1244,11 @@ long nvim_curbuf_get_b_p_sts(void)
   return (long)curbuf->b_p_sts;
 }
 
-/// Get tabstop_count(curbuf->b_p_vts_array) (accessor for Rust).
 int nvim_curbuf_tabstop_count_vts(void)
 {
   return (int)tabstop_count(curbuf->b_p_vts_array);
 }
 
-/// Get tabstop_count(curbuf->b_p_vsts_array) (accessor for Rust).
 int nvim_curbuf_tabstop_count_vsts(void)
 {
   return (int)tabstop_count(curbuf->b_p_vsts_array);
@@ -1332,13 +1269,11 @@ long nvim_get_sts_value(void)
   return get_sts_value();
 }
 
-/// Get tabstop_padding for softtabstop (accessor for Rust).
 int nvim_curbuf_tabstop_padding_sts(void)
 {
   return tabstop_padding(get_nolist_virtcol(), get_sts_value(), curbuf->b_p_vsts_array);
 }
 
-/// Get tabstop_padding for tabstop (accessor for Rust).
 int nvim_curbuf_tabstop_padding_ts(void)
 {
   return tabstop_padding(get_nolist_virtcol(), curbuf->b_p_ts, curbuf->b_p_vts_array);
@@ -1594,19 +1529,16 @@ void nvim_set_b_last_insert_mark(void)
   RESET_FMARK(&curbuf->b_last_insert, curwin->w_cursor, curbuf->b_fnum, view);
 }
 
-/// Get u_sync_once global (accessor for Rust).
 int nvim_get_u_sync_once(void)
 {
   return u_sync_once;
 }
 
-/// Set u_sync_once global (accessor for Rust).
 void nvim_set_u_sync_once(int val)
 {
   u_sync_once = val;
 }
 
-/// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
 void nvim_set_pc_status_unset(void)
 {
   pc_status = PC_STATUS_UNSET;
@@ -1706,7 +1638,6 @@ void nvim_stop_insert_curpos(int nomove)
   curbuf->b_op_end = *pos;
 }
 
-/// Get curwin->w_cursor.coladd (accessor for Rust).
 colnr_T nvim_curwin_get_cursor_coladd(void)
 {
   return curwin->w_cursor.coladd;
