@@ -370,6 +370,7 @@ extern bool nvim_docmd_save_current_state_impl(save_state_T *sst);
 extern void nvim_docmd_restore_current_state_impl(save_state_T *sst);
 extern void nvim_docmd_ex_find_impl(exarg_T *eap);
 extern void nvim_docmd_ex_syncbind_impl(exarg_T *eap);
+extern void nvim_docmd_ex_splitview_impl(exarg_T *eap);
 extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
 extern void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc);
 
@@ -2005,73 +2006,7 @@ bool nvim_docmd_set_ref_in_findfunc_impl(int copyID)
 /// :tabedit [+command] file     open new Tab page and edit "file"
 /// :tabnew [[+command] file]    just like :tabedit
 /// :tabfind [+command] file     open new Tab page and find "file"
-void nvim_docmd_ex_splitview_impl(exarg_T *eap)
-{
-  win_T *old_curwin = curwin;
-  char *fname = NULL;
-  const bool use_tab = eap->cmdidx == CMD_tabedit
-                       || eap->cmdidx == CMD_tabfind
-                       || eap->cmdidx == CMD_tabnew;
-
-  // A ":split" in the quickfix window works like ":new".  Don't want two
-  // quickfix windows.  But it's OK when doing ":tab split".
-  if (bt_quickfix(curbuf) && cmdmod.cmod_tab == 0) {
-    if (eap->cmdidx == CMD_split) {
-      eap->cmdidx = CMD_new;
-    }
-    if (eap->cmdidx == CMD_vsplit) {
-      eap->cmdidx = CMD_vnew;
-    }
-  }
-
-  if (eap->cmdidx == CMD_sfind || eap->cmdidx == CMD_tabfind) {
-    if (*get_findfunc() != NUL) {
-      fname = findfunc_find_file(eap->arg, strlen(eap->arg),
-                                 eap->addr_count > 0 ? eap->line2 : 1);
-    } else {
-      char *file_to_find = NULL;
-      char *search_ctx = NULL;
-      fname = find_file_in_path(eap->arg, strlen(eap->arg), FNAME_MESS, true,
-                                curbuf->b_ffname, &file_to_find, &search_ctx);
-      xfree(file_to_find);
-      vim_findfile_cleanup(search_ctx);
-    }
-    if (fname == NULL) {
-      goto theend;
-    }
-    eap->arg = fname;
-  }
-
-  // Either open new tab page or split the window.
-  if (use_tab) {
-    if (win_new_tabpage(cmdmod.cmod_tab != 0 ? cmdmod.cmod_tab : eap->addr_count == 0
-                        ? 0 : (int)eap->line2 + 1, eap->arg) != FAIL) {
-      nvim_docmd_do_exedit_impl(eap, old_curwin);
-      apply_autocmds(EVENT_TABNEWENTERED, NULL, NULL, false, curbuf);
-
-      // set the alternate buffer for the window we came from
-      if (curwin != old_curwin
-          && rs_win_valid(old_curwin)
-          && old_curwin->w_buffer != curbuf
-          && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-        old_curwin->w_alt_fnum = curbuf->b_fnum;
-      }
-    }
-  } else if (win_split(eap->addr_count > 0 ? (int)eap->line2 : 0,
-                       *eap->cmd == 'v' ? WSP_VERT : 0) != FAIL) {
-    // Reset 'scrollbind' when editing another file, but keep it when
-    // doing ":split" without arguments.
-    if (*eap->arg != NUL) {
-      RESET_BINDING(curwin);
-    } else {
-      do_check_scrollbind(false);
-    }
-    nvim_docmd_do_exedit_impl(eap, old_curwin);
-  }
-
-theend:
-  xfree(fname);
-}
+// Body migrated to Rust (Phase N+16). Forward decl at top of file.
 
 /// Open a new tab page.
 void nvim_docmd_tabpage_new_impl(void)
@@ -4577,6 +4512,23 @@ extern void nvim_docmd_restore_current_state_impl(save_state_T *sst);
 
 bool save_current_state(save_state_T *sst) { return nvim_docmd_save_current_state_impl(sst); }
 void restore_current_state(save_state_T *sst) { nvim_docmd_restore_current_state_impl(sst); }
+
+// --- Accessors for ex_splitview_impl (Phase N+16) ---
+int nvim_docmd_get_CMD_tabedit(void) { return (int)CMD_tabedit; }
+int nvim_docmd_get_CMD_tabfind(void) { return (int)CMD_tabfind; }
+int nvim_docmd_get_CMD_tabnew(void) { return (int)CMD_tabnew; }
+int nvim_docmd_get_CMD_split(void) { return (int)CMD_split; }
+int nvim_docmd_get_CMD_vsplit(void) { return (int)CMD_vsplit; }
+int nvim_docmd_get_CMD_new(void) { return (int)CMD_new; }
+int nvim_docmd_get_CMD_vnew(void) { return (int)CMD_vnew; }
+int nvim_docmd_get_CMD_sfind(void) { return (int)CMD_sfind; }
+/// Set w_alt_fnum for an arbitrary window (used after tabpage switch).
+void nvim_docmd_win_set_alt_fnum(win_T *wp, int fnum) { wp->w_alt_fnum = fnum; }
+/// Get curbuf->b_fnum.
+int nvim_docmd_curbuf_b_fnum(void) { return curbuf->b_fnum; }
+/// Get cmdmod.cmod_flags (global).
+int nvim_docmd_get_global_cmdmod_flags(void) { return cmdmod.cmod_flags; }
+
 char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
                 const char **errormsg, int *escaped, bool empty_is_error)
 {

@@ -788,7 +788,6 @@ pub unsafe extern "C" fn rs_open_exfile_impl(
 extern "C" {
     // Phase 2 C implementation wrappers
     fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
-    fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
     fn nvim_docmd_tabpage_new_impl();
 
     // ex_win_close_impl helpers
@@ -1085,7 +1084,7 @@ pub unsafe extern "C" fn do_exedit(eap: ExArgHandle, old_curwin: WinHandle) {
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "ex_splitview"]
 pub unsafe extern "C" fn rs_ex_splitview(eap: ExArgHandle) {
-    nvim_docmd_ex_splitview_impl(eap);
+    rs_ex_splitview_impl(eap);
 }
 
 /// `:find` - find file in path and edit it.
@@ -1990,4 +1989,179 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
         nvim_cmod_set_save_msg_silent(cmod, 0);
         nvim_cmod_set_did_esilent(cmod, 0);
     }
+}
+
+// =============================================================================
+// Phase N+16: ex_splitview_impl
+// =============================================================================
+
+extern "C" {
+    // eap cmdidx setter (for splitview quickfix adjustment)
+    fn nvim_eap_set_cmdidx(eap: ExArgHandle, idx: c_int);
+
+    // CMD constant accessors (ex_splitview)
+    fn nvim_docmd_get_CMD_tabedit() -> c_int;
+    fn nvim_docmd_get_CMD_tabfind() -> c_int;
+    fn nvim_docmd_get_CMD_tabnew() -> c_int;
+    fn nvim_docmd_get_CMD_split() -> c_int;
+    fn nvim_docmd_get_CMD_vsplit() -> c_int;
+    fn nvim_docmd_get_CMD_new() -> c_int;
+    fn nvim_docmd_get_CMD_vnew() -> c_int;
+    fn nvim_docmd_get_CMD_sfind() -> c_int;
+
+    // curbuf quickfix check
+    fn nvim_bt_quickfix_curbuf() -> c_int;
+
+    // global cmdmod accessors
+    fn nvim_get_cmdmod_tab() -> c_int;
+    fn nvim_docmd_get_global_cmdmod_flags() -> c_int;
+
+    // win_new_tabpage (exported from Rust window crate)
+    #[link_name = "win_new_tabpage"]
+    fn nvim_docmd_win_new_tabpage(after: c_int, filename: *const u8) -> c_int;
+
+    // EVENT_TABNEWENTERED autocmd
+    fn nvim_apply_autocmds_tabnewentered();
+
+    // win buffer comparison
+    fn nvim_win_buf_is_curbuf(wp: WinHandle) -> c_int;
+
+    // w_alt_fnum setter + curbuf b_fnum getter
+    fn nvim_docmd_win_set_alt_fnum(wp: WinHandle, fnum: c_int);
+    fn nvim_docmd_curbuf_b_fnum() -> c_int;
+
+    // win_split
+    fn nvim_excmds_win_split(size: c_int, flags: c_int) -> c_int;
+
+    // eap->cmd[0] accessor
+    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
+
+    // scrollbind reset/check
+    fn nvim_reset_binding_curwin();
+    fn nvim_do_check_scrollbind_wrapper(flag: bool);
+}
+
+// CMOD_KEEPALT = 0x0100 (from ex_cmds_defs.h)
+const CMOD_KEEPALT: c_int = 0x0100;
+// WSP_VERT = 0x02 (from window.h)
+const WSP_VERT: c_int = 0x02;
+
+/// `:split`, `:vsplit`, `:new`, `:vnew`, `:sfind`, `:tabedit`, `:tabnew`, `:tabfind`.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "nvim_docmd_ex_splitview_impl"]
+pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
+    let old_curwin = nvim_get_curwin();
+
+    let cmd_tabedit = nvim_docmd_get_CMD_tabedit();
+    let cmd_tabfind = nvim_docmd_get_CMD_tabfind();
+    let cmd_tabnew = nvim_docmd_get_CMD_tabnew();
+    let cmd_split = nvim_docmd_get_CMD_split();
+    let cmd_vsplit = nvim_docmd_get_CMD_vsplit();
+    let cmd_new = nvim_docmd_get_CMD_new();
+    let cmd_vnew = nvim_docmd_get_CMD_vnew();
+    let cmd_sfind = nvim_docmd_get_CMD_sfind();
+
+    let mut cmdidx = nvim_eap_get_cmdidx(eap);
+    let use_tab = cmdidx == cmd_tabedit || cmdidx == cmd_tabfind || cmdidx == cmd_tabnew;
+
+    // A ":split" in the quickfix window works like ":new". Don't want two
+    // quickfix windows. But it's OK when doing ":tab split".
+    if nvim_bt_quickfix_curbuf() != 0 && nvim_get_cmdmod_tab() == 0 {
+        if cmdidx == cmd_split {
+            cmdidx = cmd_new;
+            nvim_eap_set_cmdidx(eap, cmdidx);
+        }
+        if cmdidx == cmd_vsplit {
+            cmdidx = cmd_vnew;
+            nvim_eap_set_cmdidx(eap, cmdidx);
+        }
+    }
+
+    let mut fname: *mut c_char = std::ptr::null_mut();
+    let arg = nvim_eap_get_arg(eap);
+
+    if cmdidx == cmd_sfind || cmdidx == cmd_tabfind {
+        let len = std::ffi::CStr::from_ptr(arg).to_bytes().len();
+        if nvim_docmd_get_findfunc_nonempty() {
+            let count = if nvim_eap_get_addr_count(eap) > 0 {
+                nvim_eap_get_line2(eap) as c_int
+            } else {
+                1
+            };
+            fname = nvim_docmd_findfunc_find_file(arg, len, count);
+        } else {
+            let mut file_to_find: *mut c_char = std::ptr::null_mut();
+            let mut search_ctx: *mut c_void = std::ptr::null_mut();
+            const FNAME_MESS: c_int = 1;
+            let rel = nvim_docmd_curbuf_b_ffname();
+            fname = nvim_docmd_find_file_in_path(
+                arg,
+                len,
+                FNAME_MESS,
+                1,
+                rel,
+                &mut file_to_find,
+                &mut search_ctx,
+            );
+            xfree(file_to_find as *mut c_void);
+            nvim_docmd_vim_findfile_cleanup(search_ctx);
+        }
+        if fname.is_null() {
+            return;
+        }
+        nvim_eap_set_arg(eap, fname);
+    }
+
+    // Either open new tab page or split the window.
+    if use_tab {
+        let cmod_tab = nvim_get_cmdmod_tab();
+        let after = if cmod_tab != 0 {
+            cmod_tab
+        } else if nvim_eap_get_addr_count(eap) == 0 {
+            0
+        } else {
+            nvim_eap_get_line2(eap) as c_int + 1
+        };
+        if nvim_docmd_win_new_tabpage(after, nvim_eap_get_arg(eap) as *const u8) != FAIL {
+            nvim_docmd_do_exedit_impl(eap, old_curwin);
+            nvim_apply_autocmds_tabnewentered();
+
+            // Set the alternate buffer for the window we came from.
+            let curwin = nvim_get_curwin();
+            if curwin != old_curwin
+                && rs_win_valid(old_curwin)
+                && nvim_win_buf_is_curbuf(old_curwin) == 0
+                && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
+            {
+                nvim_docmd_win_set_alt_fnum(old_curwin, nvim_docmd_curbuf_b_fnum());
+            }
+        }
+    } else {
+        let size = if nvim_eap_get_addr_count(eap) > 0 {
+            nvim_eap_get_line2(eap) as c_int
+        } else {
+            0
+        };
+        let cmd_ptr = nvim_eap_get_cmd(eap);
+        let flags = if !cmd_ptr.is_null() && *cmd_ptr == b'v' as c_char {
+            WSP_VERT
+        } else {
+            0
+        };
+        if nvim_excmds_win_split(size, flags) != FAIL {
+            // Reset 'scrollbind' when editing another file, but keep it when
+            // doing ":split" without arguments.
+            let arg2 = nvim_eap_get_arg(eap);
+            if !arg2.is_null() && *arg2 != 0 {
+                nvim_reset_binding_curwin();
+            } else {
+                nvim_do_check_scrollbind_wrapper(false);
+            }
+            nvim_docmd_do_exedit_impl(eap, old_curwin);
+        }
+    }
+
+    xfree(fname as *mut c_void);
 }
