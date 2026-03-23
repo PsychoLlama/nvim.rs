@@ -840,31 +840,6 @@ void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
 
-// validate_opt_idx: broken circular wrapper deleted; setcmd.rs now calls rs_validate_opt_idx directly.
-// find_option_end: broken circular wrapper deleted; setcmd.rs now calls rs_find_option_end directly.
-
-/// Parse 'arg' for option settings.
-///
-/// 'arg' may be IObuff, but only when no errors can be present and option
-/// does not need to be expanded with option_expand().
-/// "opt_flags":
-/// 0 for ":set"
-/// OPT_GLOBAL   for ":setglobal"
-/// OPT_LOCAL    for ":setlocal" and a modeline
-/// OPT_MODELINE for a modeline
-/// OPT_WINONLY  to only set window-local options
-/// OPT_NOWIN    to skip setting window-local options
-///
-/// @param arg  option string (may be written to!)
-///
-/// @return  FAIL if an error is detected, OK otherwise
-
-// When changing 'title', 'titlestring', 'icon' or 'iconstring', call
-// maketitle() to create and display it.
-/// set_options_bin -  called when 'bin' changes value.
-///
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-
 /// Get the address of p_kp (keywordprg global), as void*.
 /// Used by Rust stropt_get_newval to detect keywordprg option.
 void *nvim_option_get_p_kp_ptr(void)
@@ -872,26 +847,10 @@ void *nvim_option_get_p_kp_ptr(void)
   return (void *)&p_kp;
 }
 
-/// Handle setting `winhighlight' in window "wp"
-///
-/// @param winhl  when NULL: use "wp->w_p_winhl"
-/// @param wp     when NULL: only parse "winhl"
-///
-/// @return  whether the option value is valid.
-
-/// Process the new global 'undolevels' option value.
-
 void check_redraw(uint32_t flags)
 {
   check_redraw_for(curbuf, curwin, flags);
 }
-
-/// Find index for an option. Don't go beyond `len` length.
-///
-/// @param[in]  name  Option name.
-/// @param      len   Option name length.
-///
-/// @return Option index or kOptInvalid if option was not found.
 
 /// Direct hash-based option lookup for use by Rust (avoids circular delegation).
 ///
@@ -913,13 +872,6 @@ OptVal optval_from_varp(OptIndex opt_idx, void *varp)
 {
   return rs_optval_from_varp(opt_idx, varp);
 }
-
-/// Set option var pointer value from OptVal.
-///
-/// @param       opt_idx      Option index in options[] table.
-/// @param[out]  varp         Pointer to option variable.
-/// @param[in]   value        New option value.
-/// @param       free_oldval  Free old value.
 
 /// Convert an OptVal to an API Object.
 Object optval_as_object(OptVal o)
@@ -1125,24 +1077,6 @@ void ui_refresh_options(void)
     setmouse();
   }
 }
-
-/// Write modified options as ":set" commands to a file.
-///
-/// There are three values for "opt_flags":
-/// OPT_GLOBAL:         Write global option values and fresh values of
-///             buffer-local options (used for start of a session
-///             file).
-/// OPT_GLOBAL + OPT_LOCAL: Idem, add fresh values of window-local options for
-///             curwin (used for a vimrc file).
-/// OPT_LOCAL:          Write buffer-local option values for curbuf, fresh
-///             and local values for window-local options of
-///             curwin.  Local values are also written when at the
-///             default value, because a modeline or autocommand
-///             may have set them when doing ":edit file" and the
-///             user has set them back at the default or fresh
-///             value.
-///             When "local_only" is true, don't write fresh
-///             values, only local values (for ":mkview").
 
 /// Get pointer to option variable, depending on local or global scope.
 ///
