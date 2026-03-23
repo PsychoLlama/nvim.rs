@@ -36,11 +36,12 @@ extern "C" {
     /// Get flags bitmask for option at idx
     fn rs_get_option_flags(idx: OptIndex) -> c_uint;
 
-    /// Get global string value for option at idx (dereferences opt->var)
-    fn nvim_option_get_global_str_val(idx: OptIndex) -> *const c_char;
+    /// Get opt->var pointer (as void*) from opaque vimoption_T*
+    fn nvim_vimoption_get_var(opt: *mut c_void) -> *mut c_void;
 
-    /// Set *opt->flags_var = val if flags_var is non-NULL
-    fn nvim_option_set_flags_var_if_present(idx: OptIndex, val: c_uint);
+    /// Get opt->flags_var pointer (as *mut c_uint) from opaque vimoption_T*;
+    /// returns NULL if flags_var is NULL
+    fn nvim_vimoption_get_flags_var_ptr(opt: *mut c_void) -> *mut c_uint;
 
     /// optset_T field: args->os_idx
     fn nvim_optset_get_idx(args: *const c_void) -> OptIndex;
@@ -78,15 +79,32 @@ pub unsafe fn check_str_opt_impl(idx: OptIndex, varp: *mut *mut c_char) -> bool 
 
     // Get the actual string to validate
     let val: *const c_char = if varp.is_null() {
-        nvim_option_get_global_str_val(idx)
+        // dereference opt->var (a char**) to get the global string value
+        let opt = get_option(idx);
+        if opt.is_null() {
+            std::ptr::null()
+        } else {
+            let var_ptr = nvim_vimoption_get_var(opt);
+            if var_ptr.is_null() {
+                std::ptr::null()
+            } else {
+                *(var_ptr as *const *const c_char)
+            }
+        }
     } else {
         *varp
     };
 
     let result: OptStringsFlagsResult = rs_opt_strings_flags(val, values, is_list);
 
-    // Write flags back
-    nvim_option_set_flags_var_if_present(idx, result.flags);
+    // Write flags back (opt->flags_var if non-NULL)
+    let opt = get_option(idx);
+    if !opt.is_null() {
+        let fv_ptr = nvim_vimoption_get_flags_var_ptr(opt);
+        if !fv_ptr.is_null() {
+            *fv_ptr = result.flags;
+        }
+    }
 
     result.ok
 }

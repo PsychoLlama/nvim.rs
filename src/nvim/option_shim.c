@@ -621,6 +621,8 @@ void *nvim_get_option_var(OptIndex opt_idx) {
 
 // Get p->var from a vimoption_T pointer
 void *nvim_vimoption_get_var(vimoption_T *p) { return p->var; }
+// Get p->flags_var from a vimoption_T pointer (NULL if not set)
+unsigned *nvim_vimoption_get_flags_var_ptr(vimoption_T *p) { return p->flags_var; }
 
 // Get the OptIndex of a vimoption_T by pointer arithmetic against the options array
 OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - options); }
@@ -2138,23 +2140,4 @@ const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : N
 // Phase 4 (optionstr): check_str_opt infrastructure for Rust migration
 // =============================================================================
 
-/// Return the global string value for the option at idx.
-/// opt->var is char** for string options; dereference to get char*.
-const char *nvim_option_get_global_str_val(OptIndex idx)
-{
-  vimoption_T *opt = get_option(idx);
-  if (opt == NULL || opt->var == NULL) {
-    return NULL;
-  }
-  return *(const char **)opt->var;
-}
-
-/// Set *opt->flags_var = val, if flags_var is non-NULL.
-void nvim_option_set_flags_var_if_present(OptIndex idx, unsigned val)
-{
-  vimoption_T *opt = get_option(idx);
-  if (opt != NULL && opt->flags_var != NULL) {
-    *opt->flags_var = val;
-  }
-}
 
