@@ -2583,7 +2583,9 @@ extern "C" {
     fn nvim_drawscreen_edit_submode_ptr() -> *const c_char;
     fn nvim_drawscreen_edit_submode_pre_is_null() -> c_int;
     fn nvim_drawscreen_edit_submode_pre_ptr() -> *const c_char;
-    fn nvim_get_edit_submode_highl_attr() -> c_int;
+    // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
+    #[link_name = "edit_submode_highl"]
+    static mut g_edit_submode_highl: c_int;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     fn nvim_get_p_ri() -> c_int;
     fn nvim_docmd_curbuf_has_terminal() -> c_int;
@@ -2648,8 +2650,12 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             }
             if !g_edit_submode_extra.is_null() {
                 msg_puts_hl(c" ".as_ptr(), hl_id, false);
-                // nvim_get_edit_submode_highl_attr returns highl+1 if valid, else 0
-                let highl_attr = nvim_get_edit_submode_highl_attr();
+                // edit_submode_highl+1 if valid (< HLF_COUNT), else 0
+                let highl_attr = if g_edit_submode_highl < HLF_COUNT {
+                    g_edit_submode_highl + 1
+                } else {
+                    0
+                };
                 let sub_id = if highl_attr > 0 {
                     highl_attr - 1
                 } else {

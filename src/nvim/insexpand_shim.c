@@ -2517,10 +2517,7 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
 }
 const char *nvim_get_edit_submode_extra_ptr(void) { return edit_submode_extra; }
 
-/// Returns (edit_submode_highl < HLF_COUNT ? edit_submode_highl + 1 : 0)
-int nvim_get_edit_submode_highl_attr(void) {
-  return edit_submode_highl < HLF_COUNT ? (int)edit_submode_highl + 1 : 0;
-}
+// nvim_get_edit_submode_highl_attr: deleted (Phase 36, inlined in drawscreen/lib.rs)
 
 // --- compl_curr_match accessors ---
 // nvim_compl_curr_match_cp_number: deleted (Phase 17, inlined in match_list.rs)

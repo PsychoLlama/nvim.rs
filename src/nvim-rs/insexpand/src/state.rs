@@ -369,7 +369,7 @@ extern "C" {
     fn nvim_set_edit_submode_extra_word_from_other_line();
     fn nvim_set_edit_submode_extra_the_only_match();
     fn nvim_set_edit_submode_extra_match_ref(cp_number: c_int, compl_matches: c_int);
-    fn nvim_get_edit_submode_highl_attr() -> c_int;
+    // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
     fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
     #[link_name = "msg_hist_off"]
     static mut g_msg_hist_off: bool;
@@ -528,7 +528,11 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                 nvim_msg_ext_set_kind_completion();
                 nvim_msg_with_attr(
                     nvim_get_edit_submode_extra_ptr(),
-                    nvim_get_edit_submode_highl_attr(),
+                    if g_edit_submode_highl < HLF_COUNT {
+                        g_edit_submode_highl + 1
+                    } else {
+                        0
+                    },
                 );
                 g_msg_hist_off = false;
             }
