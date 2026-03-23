@@ -123,15 +123,12 @@ _Static_assert(sizeof(vimoption_T) == 160,
 
 // Rust FFI declarations (used by internal code)
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-extern char *rs_stropt_get_newval(int nextchar, int opt_idx, char **argp, void *varp,
-                                  const char *origval, int *op_arg, uint32_t flags);
 
 // Rust metadata query functions (option pass 8 phase 1)
 // is_option_hidden, option_has_type, option_has_scope now exported directly from Rust via #[export_name]
 extern int rs_option_is_global_local(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
-extern int rs_option_scope_idx(int opt_idx, int scope);
 
 // Rust default value management functions (option pass 8 phase 2)
 extern void rs_alloc_options_default(void);
@@ -333,7 +330,6 @@ extern const char *rs_did_set_selection(optset_T *args);
 extern OptVal rs_optval_from_varp(OptIndex opt_idx, void *varp);
 extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int free_oldval);
 extern char *rs_optval_to_cstr(OptVal o);
-extern const char *rs_unset_option_local_value(int opt_idx);
 
 // Rust FFI declarations (window/layout module)
 // rs_free_tagfunc_option, rs_set_buflocal_tfu_callback: declared in other C files that use them
@@ -1041,18 +1037,6 @@ extern void rs_set_options_default(int opt_flags);
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
 
-/// Get the string value specified for a ":set" command.  The following set options are supported:
-///     set {opt}={val}
-///     set {opt}:{val}
-static char *stropt_get_newval(int nextchar, OptIndex opt_idx, char **argp, void *varp,
-                               const char *origval, set_op_T *op_arg, uint32_t flags)
-{
-  int op = (int)(*op_arg);
-  char *result = rs_stropt_get_newval(nextchar, opt_idx, argp, varp, origval, &op, flags);
-  *op_arg = (set_op_T)op;
-  return result;
-}
-
 static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
                             set_prefix_T prefix, const char **errmsg)
 {
@@ -1099,14 +1083,6 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 /// set_options_bin -  called when 'bin' changes value.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-
-/// Expand environment variables for some string options.
-/// These string options cannot be indirect!
-/// Returns expanded string (in static NameBuff), or NULL if no expansion.
-char *nvim_option_expand(OptIndex opt_idx, const char *val)
-{
-  return (char *)rs_option_expand((int)opt_idx, val);
-}
 
 /// Get the address of p_kp (keywordprg global), as void*.
 /// Used by Rust stropt_get_newval to detect keywordprg option.
@@ -1215,12 +1191,6 @@ static inline bool option_is_global_local(OptIndex opt_idx)
   return rs_option_is_global_local(opt_idx);
 }
 
-/// Get option index for scope.
-ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
-{
-  return rs_option_scope_idx(opt_idx, (int)scope);
-}
-
 // Rust callers now use #[link_name] to call the rs_ functions directly.
 
 /// Set option value directly, without processing any side effects.
@@ -1231,16 +1201,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 /// @param  set_sid    Script ID. Special values:
 ///                      0: Use current script ID.
 ///                      SID_NONE: Don't set script ID.
-
-/// Unset the local value of a global-local option.
-///
-/// @param      opt_idx    Index in options[] table. Must not be kOptInvalid.
-///
-/// @return  NULL on success, an untranslated error message on error.
-static inline const char *unset_option_local_value(const OptIndex opt_idx)
-{
-  return rs_unset_option_local_value(opt_idx);
-}
 
 /// Switch current context to get/set option value for window/buffer.
 ///

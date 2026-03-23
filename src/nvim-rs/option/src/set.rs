@@ -430,7 +430,8 @@ pub extern "C" fn rs_set_result_errmsg(result: c_int) -> *const c_char {
 extern "C" {
     /// Expand environment variables and ~ in an option value.
     /// Returns a static buffer (NameBuff) if expansion occurred, or NULL.
-    fn nvim_option_expand(opt_idx: c_int, val: *const c_char) -> *mut c_char;
+    #[link_name = "rs_option_expand"]
+    fn nvim_option_expand(opt_idx: c_int, val: *const c_char) -> *const c_char;
 
     /// Returns the address of the p_kp (keywordprg) global as void*.
     fn nvim_option_get_p_kp_ptr() -> *mut c_void;

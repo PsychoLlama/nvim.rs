@@ -482,6 +482,7 @@ extern "C" {
     ) -> c_int;
     fn option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn option_has_scope(opt_idx: c_int, scope: c_int) -> c_int;
+    #[link_name = "rs_option_scope_idx"]
     fn option_scope_idx(opt_idx: c_int, scope: c_int) -> c_int;
     fn rs_set_option_impl(
         opt_idx: c_int,

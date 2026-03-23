@@ -157,7 +157,8 @@ extern "C" {
     #[link_name = "rs_get_option_flags"]
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     /// Get options[opt_idx].def_val.data.string.data
-    fn nvim_option_expand(opt_idx: c_int, val: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    #[link_name = "rs_option_expand"]
+    fn nvim_option_expand(opt_idx: c_int, val: *const std::ffi::c_char) -> *const std::ffi::c_char;
     /// Get the varp for the given scope (OPT_GLOBAL=1, OPT_LOCAL=2)
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     /// Get empty_string_option pointer (for STATIC_CSTR_AS_OPTVAL(""))
@@ -268,16 +269,19 @@ pub unsafe extern "C" fn rs_get_option_default(opt_idx: OptIndex, opt_flags: c_i
         }
         // Build a string OptVal from the expanded (xmalloc'd) string.
         let len = {
-            let mut p = s.cast_const();
+            let mut p = s;
             while *p != 0 {
                 p = p.add(1);
             }
-            p.offset_from(s.cast_const()) as usize
+            p.offset_from(s) as usize
         };
         OptVal {
             type_: OptValType::String,
             data: OptValData {
-                string: String_ { data: s, size: len },
+                string: String_ {
+                    data: s.cast_mut(),
+                    size: len,
+                },
             },
         }
     } else {
