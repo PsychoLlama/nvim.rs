@@ -268,7 +268,7 @@ pub unsafe extern "C" fn rs_ex_pclose(eap: ExArgHandle) {
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
         if nvim_win_get_p_pvw(wp) != 0 {
-            nvim_docmd_ex_win_close_impl(c_int::from(forceit), wp, std::ptr::null_mut());
+            rs_ex_win_close_impl(c_int::from(forceit), wp, std::ptr::null_mut());
             break;
         }
         wp = nvim_win_get_next(wp);
@@ -609,10 +609,30 @@ extern "C" {
     fn nvim_docmd_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHandle);
     fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
-    fn nvim_docmd_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void);
     fn nvim_docmd_tabpage_new_impl();
     fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
     fn nvim_docmd_handle_did_throw_impl();
+
+    // ex_win_close_impl helpers
+    #[link_name = "is_aucmd_win"]
+    fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
+    fn nvim_emsg_id(id: c_int);
+    fn bufIsChanged(buf: BufHandle) -> c_int;
+    fn buf_hide(buf: BufHandle) -> c_int;
+    fn nvim_get_p_confirm() -> c_int;
+    fn nvim_get_cmdmod_confirm() -> c_int;
+    fn nvim_get_p_write() -> c_int;
+    fn nvim_docmd_dialog_changed_still_dirty(buf: BufHandle) -> bool;
+    fn nvim_docmd_no_write_message();
+    #[link_name = "win_close"]
+    fn nvim_docmd_win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
+    #[link_name = "rs_win_close_othertab"]
+    fn nvim_docmd_win_close_othertab(
+        wp: WinHandle,
+        free_buf: c_int,
+        tp: *mut c_void,
+        force: c_int,
+    ) -> c_int;
 
     // before_quit_autocmds helpers
     fn rs_win_valid(wp: WinHandle) -> bool;
@@ -717,13 +737,56 @@ pub unsafe extern "C" fn before_quit_autocmds(
     rs_before_quit_autocmds_impl(wp, quit_all, forceit)
 }
 
-/// `ex_win_close` - close a window, handling modified buffers.
+/// `nvim_docmd_ex_win_close_impl` - close a window, handling modified buffers.
+///
+/// If `tp` is non-null, close the window in that tab page.
+///
+/// # Safety
+/// `win` must be a valid WinHandle. `tp` may be null.
+#[export_name = "nvim_docmd_ex_win_close_impl"]
+pub unsafe extern "C" fn rs_ex_win_close_impl(forceit: c_int, win: WinHandle, tp: *mut c_void) {
+    const EMSG_E_AUTOCMD_CLOSE: c_int = 10;
+
+    // Never close the autocommand window.
+    if nvim_is_aucmd_win(win) != 0 {
+        nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
+        return;
+    }
+
+    let buf = nvim_win_get_buffer(win);
+    let need_hide = bufIsChanged(buf) != 0 && nvim_buf_get_nwindows(buf) <= 1;
+    let mut need_hide = need_hide;
+
+    if need_hide && buf_hide(buf) == 0 && forceit == 0 {
+        if (nvim_get_p_confirm() != 0 || nvim_get_cmdmod_confirm() != 0) && nvim_get_p_write() != 0
+        {
+            // Show dialog; if buffer still changed after, cancel close.
+            if nvim_docmd_dialog_changed_still_dirty(buf) {
+                return;
+            }
+            need_hide = false;
+        } else {
+            nvim_docmd_no_write_message();
+            return;
+        }
+    }
+
+    // Free buffer when not hiding it or when it's a scratch buffer.
+    let free_buf = !need_hide && buf_hide(buf) == 0;
+    if tp.is_null() {
+        nvim_docmd_win_close(win, free_buf, forceit != 0);
+    } else {
+        nvim_docmd_win_close_othertab(win, c_int::from(free_buf), tp, forceit);
+    }
+}
+
+/// `ex_win_close` - public C-callable wrapper.
 ///
 /// # Safety
 /// `win` must be a valid WinHandle. `tp` may be null.
 #[no_mangle]
 pub unsafe extern "C" fn ex_win_close(forceit: c_int, win: WinHandle, tp: *mut c_void) {
-    nvim_docmd_ex_win_close_impl(forceit, win, tp);
+    rs_ex_win_close_impl(forceit, win, tp);
 }
 
 /// `nvim_docmd_tabpage_close_impl` - close the current tab page.

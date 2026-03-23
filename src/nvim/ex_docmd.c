@@ -360,6 +360,7 @@ extern void nvim_docmd_close_redir_impl(void);
 extern void nvim_docmd_tabpage_close_impl(int forceit);
 extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
 extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit);
+extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1963,44 +1964,6 @@ void nvim_docmd_ex_restart_impl(exarg_T *eap)
 }
 
 
-/// Close window "win" and take care of handling closing the last window for a
-/// modified buffer.
-///
-/// @param tp  NULL or the tab page "win" is in
-/// ex_win_close implementation. Called by Rust ex_win_close.
-void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp)
-{
-  // Never close the autocommand window.
-  if (is_aucmd_win(win)) {
-    emsg(_(e_autocmd_close));
-    return;
-  }
-
-  buf_T *buf = win->w_buffer;
-
-  bool need_hide = (bufIsChanged(buf) && buf->b_nwindows <= 1);
-  if (need_hide && !buf_hide(buf) && !forceit) {
-    if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write) {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-      dialog_changed(buf, false);
-      if (bufref_valid(&bufref) && bufIsChanged(buf)) {
-        return;
-      }
-      need_hide = false;
-    } else {
-      no_write_message();
-      return;
-    }
-  }
-
-  // free buffer when not hiding it or when it's a scratch buffer
-  if (tp == NULL) {
-    win_close(win, !need_hide && !buf_hide(buf), forceit);
-  } else {
-    win_close_othertab(win, !need_hide && !buf_hide(buf), tp, forceit);
-  }
-}
 
 // nvim_docmd_tabpage_close_impl and nvim_docmd_tabpage_close_other_impl are implemented in Rust (cmd_impl.rs).
 
@@ -4782,6 +4745,17 @@ const char *nvim_docmd_get_grep_or_make_program(int isgrep)
   return isgrep ? (*curbuf->b_p_gp == NUL ? p_gp : curbuf->b_p_gp)
                 : (*curbuf->b_p_mp == NUL ? p_mp : curbuf->b_p_mp);
 }
+
+// Phase N: ex_win_close_impl helpers for Rust FFI
+// Show dialog_changed prompt and return true if buffer is still changed after.
+bool nvim_docmd_dialog_changed_still_dirty(buf_T *buf)
+{
+  bufref_T bufref;
+  set_bufref(&bufref, buf);
+  dialog_changed(buf, false);
+  return bufref_valid(&bufref) && bufIsChanged(buf);
+}
+void nvim_docmd_no_write_message(void) { no_write_message(); }
 
 // Phase N: tabpage_close_impl / tabpage_close_other_impl helpers for Rust FFI
 int nvim_docmd_curwin_is_floating(void) { return curwin->w_floating ? 1 : 0; }
