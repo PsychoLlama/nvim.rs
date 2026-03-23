@@ -1899,7 +1899,7 @@ void nvim_spell_back_to_badword_impl(void)
 // src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
 
 // Completion state accessors (used by Rust insexpand crate)
-unsigned nvim_get_cot_flags_global(void) { return cot_flags; }
+// nvim_get_cot_flags_global: deleted (Phase 30, inlined in vars.rs)
 unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 // nvim_get_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
@@ -2082,7 +2082,7 @@ void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
 // NOTE: nvim_vim_is_ctrl_x_key deleted (Phase 15). keys.rs calls rs_vim_is_ctrl_x_key() directly.
 // nvim_safe_vgetc, nvim_vungetc: deleted (Phase 3, Rust calls directly)
 // nvim_get/set_compl_pending: deleted (Phase 2, COMPL_PENDING moved to Rust)
-int nvim_cot_flags_has_noinsert_fuzzy(void) { return (cot_flags & (kOptCotFlagNoinsert | kOptCotFlagFuzzy)) ? 1 : 0; }
+// nvim_cot_flags_has_noinsert_fuzzy: deleted (Phase 30, inlined in vars.rs)
 // NOTE: nvim_get_compl_shows_dir already deleted (duplicate reference was wrong).
 // NOTE: nvim_ins_compl_key2dir and nvim_ins_compl_key2count deleted (Phase 15).
 // keys.rs calls rs_ins_compl_key2dir() and rs_ins_compl_key2count() directly.

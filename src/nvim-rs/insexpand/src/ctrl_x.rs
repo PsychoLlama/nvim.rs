@@ -135,8 +135,7 @@ extern "C" {
     fn nvim_spell_back_safe();
     fn vpeekc() -> c_int;
 
-    // Phase 2 accessors
-    fn nvim_get_cot_flags_global() -> u32;
+    // nvim_get_cot_flags_global: inlined in vars.rs (Phase 30)
     fn nvim_curbuf_get_b_cot_flags() -> u32;
 
     // Phase 2: C functions called (not pure accessors)
@@ -292,7 +291,7 @@ unsafe fn get_cot_flags() -> u32 {
     if b != 0 {
         b
     } else {
-        nvim_get_cot_flags_global()
+        crate::vars::nvim_get_cot_flags_global()
     }
 }
 

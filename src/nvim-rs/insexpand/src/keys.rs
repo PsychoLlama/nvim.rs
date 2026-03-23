@@ -66,7 +66,7 @@ extern "C" {
     #[link_name = "ex_normal_busy"]
     static mut nvim_ex_normal_busy: c_int;
     // (compl_pending moved to Rust static in state.rs)
-    fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int;
+    // nvim_cot_flags_has_noinsert_fuzzy: inlined in vars.rs (Phase 30)
     // (nvim_cpt_sources_array_exists: inlined in vars.rs Phase 23)
     // nvim_p_cto: inlined in vars.rs (Phase 29)
     fn rs_ctrl_x_mode_normal() -> c_int;
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func
     let pending = crate::state::COMPL_PENDING;
     if pending != 0
         && !nvim_got_int
-        && nvim_cot_flags_has_noinsert_fuzzy() == 0
+        && crate::vars::nvim_cot_flags_has_noinsert_fuzzy() == 0
         && (crate::vars::nvim_get_compl_autocomplete() == 0 || rs_ins_compl_has_preinsert() != 0)
     {
         // Insert the first match immediately and advance compl_shown_match,

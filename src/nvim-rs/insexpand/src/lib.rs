@@ -128,7 +128,7 @@ const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
 // nvim_get_compl_direction, nvim_get_compl_shows_dir, nvim_get_compl_ins_end_col,
 // nvim_get_compl_selected_item: deleted -- use vars::nvim_get_* wrappers instead.
 extern "C" {
-    fn nvim_get_cot_flags_global() -> c_uint;
+    // nvim_get_cot_flags_global: inlined in vars.rs (Phase 30)
     fn nvim_curbuf_get_b_cot_flags() -> c_uint;
     // Character checking functions from charset.c
     #[link_name = "vim_isIDc"]
@@ -397,7 +397,7 @@ unsafe fn get_cot_flags() -> c_uint {
     if b_cot_flags != 0 {
         b_cot_flags
     } else {
-        nvim_get_cot_flags_global()
+        crate::vars::nvim_get_cot_flags_global()
     }
 }
 

@@ -95,7 +95,8 @@ extern "C" {
     // pumitem_T* - treated as opaque pointer
     static mut compl_match_array: *mut u8;
 
-    // --- global options (Phase 28, 29) ---
+    // --- global options (Phase 28, 29, 30) ---
+    static mut cot_flags: std::os::raw::c_uint; // 'completeopt' flags
     static mut p_ic: c_int; // 'ignorecase'
     static mut p_ac: c_int; // 'autocomplete'
     pub(crate) static mut p_acl: i64; // 'autocompletedelay' (OptInt = i64)
@@ -273,6 +274,23 @@ pub unsafe fn nvim_get_p_fic_or_wic() -> c_int {
 #[inline]
 pub unsafe fn nvim_get_p_tsrfu_nonempty() -> c_int {
     c_int::from(!p_tsrfu.is_null() && *p_tsrfu != 0)
+}
+
+/// kOptCotFlagNoinsert = 0x20
+const K_OPT_COT_FLAG_NOINSERT: std::os::raw::c_uint = 0x20;
+/// kOptCotFlagFuzzy = 0x80
+const K_OPT_COT_FLAG_FUZZY: std::os::raw::c_uint = 0x80;
+
+/// Get the global cot_flags ('completeopt' flags).
+#[inline]
+pub unsafe fn nvim_get_cot_flags_global() -> std::os::raw::c_uint {
+    cot_flags
+}
+
+/// Return 1 if cot_flags has noinsert or fuzzy set, 0 otherwise.
+#[inline]
+pub unsafe fn nvim_cot_flags_has_noinsert_fuzzy() -> c_int {
+    c_int::from((cot_flags & (K_OPT_COT_FLAG_NOINSERT | K_OPT_COT_FLAG_FUZZY)) != 0)
 }
 
 // ============================================================================
