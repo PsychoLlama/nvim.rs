@@ -14,7 +14,7 @@ extern "C" {
 
     // For give_warning
     static mut no_wait_return: c_int;
-    fn nvim_set_vim_var_warningmsg(s: *const c_char);
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
     static mut keep_msg: *mut c_char;
     fn xfree(ptr: *mut std::ffi::c_void);
     static mut keep_msg_hl_id: c_int;
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     // Don't want a hit-enter prompt here.
     no_wait_return += 1;
 
-    nvim_set_vim_var_warningmsg(message);
+    set_vim_var_string(4, message, -1); // VV_WARNINGMSG = 4
     xfree(keep_msg.cast());
     keep_msg = std::ptr::null_mut();
     let hl_id = if hl != 0 { HLF_W } else { 0 };

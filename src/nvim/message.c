@@ -217,7 +217,6 @@ int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore
 {
   return cause_errthrow(s, multiline, severe, ignore) ? 1 : 0;
 }
-void nvim_set_vim_var_errmsg(const char *s) { set_vim_var_string(VV_ERRMSG, s, -1); }
 void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxlen); }
 char *nvim_get_emsg_source(void) { return get_emsg_source(); }
 char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
@@ -376,7 +375,6 @@ const char *nvim_format_msgmore(int n)
 // Note: nvim_get_global_busy is defined in undo.c (returns bool)
 
 // Phase 72: give_warning() accessors
-void nvim_set_vim_var_warningmsg(const char *s) { set_vim_var_string(VV_WARNINGMSG, s, -1); }
 
 // verbose_kind and pre_verbose_kind are now Rust statics (display.rs)
 // nvim_verbose_enter_kind and nvim_restore_pre_verbose_kind migrated to Rust (verbose.rs)
@@ -468,7 +466,6 @@ void msg_grid_validate(void)
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 extern bool is_multihl;  // owned by Rust (misc.rs)
 
-void nvim_set_vim_var_statusmsg(const char *s) { set_vim_var_string(VV_STATUSMSG, s, -1); }
 
 // nvim_msg_keep_should_add_hist: inlined into Rust output_core.rs
 

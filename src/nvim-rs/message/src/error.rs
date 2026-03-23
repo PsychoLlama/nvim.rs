@@ -473,7 +473,7 @@ extern "C" {
     fn nvim_get_sourcing_name() -> *const std::ffi::c_char;
     fn nvim_get_sourcing_lnum() -> c_int;
     fn nvim_xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
-    fn nvim_set_vim_var_errmsg(s: *const std::ffi::c_char);
+    fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
     fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
     fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
     fn nvim_get_emsg_lnum() -> *mut std::ffi::c_char;
@@ -566,7 +566,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
-        nvim_set_vim_var_errmsg(s);
+        set_vim_var_string(3, s, -1); // VV_ERRMSG = 3
 
         // When using ":silent! cmd" ignore error messages.
         // But do write it to the redirection file.

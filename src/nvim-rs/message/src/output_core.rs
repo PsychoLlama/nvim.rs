@@ -75,7 +75,7 @@ extern "C" {
     // Phase 3: msg_keep accessors
     // is_multihl: Rust-owned static (misc.rs)
     static mut is_multihl: bool;
-    fn nvim_set_vim_var_statusmsg(s: *const c_char);
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
     static mut keep_msg: *mut c_char;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
@@ -186,7 +186,7 @@ pub(crate) unsafe fn msg_keep_impl(
     }
 
     if hl_id == 0 {
-        nvim_set_vim_var_statusmsg(s);
+        set_vim_var_string(5, s, -1); // VV_STATUSMSG = 5
     }
 
     // Recursion guard: limit to 3 levels.
