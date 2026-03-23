@@ -363,6 +363,7 @@ extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool 
 extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp);
 extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
 extern void nvim_docmd_handle_did_throw_impl(void);
+extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -1836,25 +1837,6 @@ int nvim_docmd_expand_argopt_impl(char *pat, expand_T *xp, regmatch_T *rmp, char
   return OK;
 }
 
-/// ":buffer" command and alike.
-/// do_exbuffer implementation. Called by Rust do_exbuffer.
-void nvim_docmd_do_exbuffer_impl(exarg_T *eap)
-{
-  if (*eap->arg) {
-    eap->errmsg = ex_errmsg(e_trailing_arg, eap->arg);
-  } else {
-    if (eap->addr_count == 0) {  // default is current buffer
-      goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0);
-    } else {
-      goto_buffer(eap, DOBUF_FIRST, FORWARD, (int)eap->line2);
-    }
-    if (eap->do_ecmd_cmd != NULL) {
-      do_cmdline_cmd(eap->do_ecmd_cmd);
-    }
-  }
-}
-
-
 
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
@@ -2957,15 +2939,6 @@ char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen
 }
 
 
-/// Make a dialog message in "buff[DIALOG_MSG_SIZE]".
-/// "format" must contain "%s".
-void nvim_docmd_dialog_msg_impl(char *buff, char *format, char *fname)
-{
-  if (fname == NULL) {
-    fname = _("Untitled");
-  }
-  vim_snprintf(buff, DIALOG_MSG_SIZE, format, fname);
-}
 
 static TriState filetype_detect = kNone;
 static TriState filetype_plugin = kNone;
@@ -4119,6 +4092,21 @@ void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
 void nvim_apply_global_cmdmod(void) { nvim_docmd_apply_cmdmod_impl(&cmdmod); }
 void nvim_undo_global_cmdmod(void) { nvim_docmd_undo_cmdmod_impl(&cmdmod); }
 
+/// For do_exbuffer_impl: call goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0).
+void nvim_docmd_goto_buffer_current(exarg_T *eap)
+{
+  goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0);
+}
+/// For do_exbuffer_impl: call goto_buffer(eap, DOBUF_FIRST, FORWARD, n).
+void nvim_docmd_goto_buffer_first(exarg_T *eap, int n)
+{
+  goto_buffer(eap, DOBUF_FIRST, FORWARD, n);
+}
+/// For do_exbuffer_impl: get eap->do_ecmd_cmd.
+char *nvim_docmd_eap_get_do_ecmd_cmd(const exarg_T *eap) { return eap->do_ecmd_cmd; }
+/// For do_exbuffer_impl: ex_errmsg(e_trailing_arg, arg).
+char *nvim_docmd_errmsg_trailing_arg(const char *arg) { return ex_errmsg(e_trailing_arg, arg); }
+
 /// For handle_did_throw_impl: free SOURCING_NAME then pop estack.
 void nvim_docmd_free_sourcing_name_and_pop(void)
 {
@@ -4724,7 +4712,13 @@ void exec_normal_cmd(char *cmd, int remap, bool silent) { nvim_docmd_exec_normal
 void exec_normal(bool was_typed, bool use_vpeekc) { nvim_docmd_exec_normal_impl(was_typed, use_vpeekc); }
 void update_topline_cursor(void) { nvim_docmd_update_topline_cursor_impl(); }
 int vim_mkdir_emsg(const char *const name, const int prot) { return nvim_docmd_vim_mkdir_emsg_impl(name, prot); }
-void dialog_msg(char *buff, char *format, char *fname) { nvim_docmd_dialog_msg_impl(buff, format, fname); }
+void dialog_msg(char *buff, char *format, char *fname)
+{
+  if (fname == NULL) {
+    fname = _("Untitled");
+  }
+  vim_snprintf(buff, DIALOG_MSG_SIZE, format, fname);
+}
 void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 // set_ref_in_findfunc: only called from Rust directly as nvim_docmd_set_ref_in_findfunc_impl
 // free_findfunc_option: only called from option_shim.c as nvim_docmd_free_findfunc_option_impl

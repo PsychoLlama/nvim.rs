@@ -294,7 +294,7 @@ pub unsafe extern "C" fn rs_ex_pedit(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_pbuffer(eap: ExArgHandle) {
     let curwin_save = nvim_get_curwin();
     nvim_docmd_prepare_preview_window();
-    nvim_docmd_do_exbuffer_impl(eap);
+    rs_do_exbuffer_impl(eap);
     nvim_docmd_back_to_current_window(curwin_save);
 }
 
@@ -688,7 +688,6 @@ extern "C" {
     fn nvim_docmd_ex_splitview_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_find_impl(eap: ExArgHandle);
     fn nvim_docmd_tabpage_new_impl();
-    fn nvim_docmd_do_exbuffer_impl(eap: ExArgHandle);
 
     // ex_win_close_impl helpers
     #[link_name = "is_aucmd_win"]
@@ -742,6 +741,13 @@ extern "C" {
     fn nvim_docmd_os_breakcheck();
     fn nvim_iosize() -> usize;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
+
+    // do_exbuffer helpers
+    fn nvim_docmd_goto_buffer_current(eap: ExArgHandle);
+    fn nvim_docmd_goto_buffer_first(eap: ExArgHandle, n: c_int);
+    fn nvim_docmd_eap_get_do_ecmd_cmd(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_docmd_errmsg_trailing_arg(arg: *const c_char) -> *mut c_char;
+    fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
 
     // handle_did_throw helpers
     fn nvim_exception_get_type() -> c_int;
@@ -984,13 +990,36 @@ pub unsafe extern "C" fn tabpage_new() {
     nvim_docmd_tabpage_new_impl();
 }
 
-/// `do_exbuffer` - execute buffer command.
+/// `nvim_docmd_do_exbuffer_impl` - execute `:buffer` and related commands.
+///
+/// # Safety
+/// `eap` must be a valid ExArgHandle.
+#[export_name = "nvim_docmd_do_exbuffer_impl"]
+pub unsafe extern "C" fn rs_do_exbuffer_impl(eap: ExArgHandle) {
+    let arg = nvim_eap_get_arg(eap);
+    if !arg.is_null() && *arg != 0 {
+        let errmsg = nvim_docmd_errmsg_trailing_arg(arg);
+        nvim_eap_set_errmsg(eap, errmsg);
+    } else {
+        if nvim_eap_get_addr_count(eap) == 0 {
+            nvim_docmd_goto_buffer_current(eap);
+        } else {
+            nvim_docmd_goto_buffer_first(eap, nvim_eap_get_line2(eap));
+        }
+        let do_ecmd_cmd = nvim_docmd_eap_get_do_ecmd_cmd(eap);
+        if !do_ecmd_cmd.is_null() {
+            do_cmdline_cmd(do_ecmd_cmd);
+        }
+    }
+}
+
+/// `do_exbuffer` - public C entry point.
 ///
 /// # Safety
 /// `eap` must be a valid ExArgHandle.
 #[export_name = "do_exbuffer"]
 pub unsafe extern "C" fn rs_do_exbuffer(eap: ExArgHandle) {
-    nvim_docmd_do_exbuffer_impl(eap);
+    rs_do_exbuffer_impl(eap);
 }
 
 /// `nvim_docmd_handle_did_throw_impl` - report an uncaught exception.
