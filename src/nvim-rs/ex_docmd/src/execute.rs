@@ -388,7 +388,7 @@ extern "C" {
     fn parse_cmd_address(eap: ExArgHandle, errormsg: *mut *const c_char, silent: bool) -> c_int;
     fn nvim_skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
-    fn nvim_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
     fn nvim_append_command(cmdname: *const c_char);
     fn nvim_get_e_not_an_editor_command() -> *const c_char;
     fn nvim_parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
@@ -882,18 +882,15 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     // Fail if command is invalid.
     let cmd_size = crate::commands::CMD_SIZE;
     if nvim_eap_get_cmdidx(eap) == cmd_size {
-        nvim_xstrlcpy(
-            nvim_get_iobuff(),
-            nvim_get_e_not_an_editor_command(),
-            nvim_iosize(),
-        );
+        let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
+        nvim_xstrlcpy(iobuff, nvim_get_e_not_an_editor_command(), nvim_iosize());
         let cmdname = if !after_modifier.is_null() {
             after_modifier
         } else {
             *cmdline
         };
         nvim_append_command(cmdname);
-        *errormsg = nvim_get_iobuff() as *const c_char;
+        *errormsg = iobuff as *const c_char;
         nvim_undo_cmdmod_p(cmdinfo);
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);

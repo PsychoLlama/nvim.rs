@@ -222,7 +222,7 @@ const EXPR_TABLE: &[&[u8]] = &[
 pub type ExargHandle = *mut c_void;
 
 extern "C" {
-    fn nvim_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
     fn find_tags(
         pat: *const c_char,
         num_matches: *mut c_int,
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn rs_find_help_tags(
     matches: *mut *mut *mut c_char,
     keep_lang: bool,
 ) -> c_int {
-    let iobuff = unsafe { nvim_get_iobuff() };
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
     let arg_bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
 
     // d tracks current write position in IObuff
@@ -1128,7 +1128,7 @@ pub unsafe extern "C" fn rs_helptags_one(
         tags.push(s);
     }
 
-    let iobuff = unsafe { nvim_get_iobuff() };
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
 
     // Go over all the files and extract the tags.
     let mut fi = 0;
@@ -1499,7 +1499,7 @@ pub unsafe extern "C" fn rs_get_local_additions() {
         let mut p = unsafe { p_rtp } as *mut c_char;
         let namebuff = unsafe { nvim_help_get_namebuff_mut() };
         let namebuff_size = unsafe { nvim_help_get_namebuff_size() };
-        let iobuff = unsafe { nvim_get_iobuff() };
+        let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
 
         while unsafe { *p } != 0 {
             unsafe { copy_option_part(&mut p, namebuff, MAXPATHL, c",".as_ptr()) };

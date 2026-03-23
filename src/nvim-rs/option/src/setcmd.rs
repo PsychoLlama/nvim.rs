@@ -519,7 +519,7 @@ extern "C" {
     fn nvim_get_option_script_ctx(opt_idx: c_int) -> ScriptContext;
     fn nvim_get_win_p_script_ctx(win: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
     fn nvim_get_buf_p_script_ctx(buf: *const std::ffi::c_void, idx: c_int) -> ScriptContext;
-    fn nvim_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
 
     // get_option_newval dependencies
     fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
@@ -700,7 +700,7 @@ unsafe fn format_and_show_error(
     endarg: *const c_char,
     errmsg: *const c_char,
 ) {
-    let iobuff = nvim_get_iobuff();
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
     let i = vim_snprintf(iobuff, IOSIZE, c"%s".as_ptr(), errmsg) + 2;
 
     let arg_len = endarg.offset_from(startarg);

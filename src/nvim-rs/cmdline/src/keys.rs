@@ -1043,7 +1043,7 @@ unsafe extern "C" {
     fn nvim_get_ccline_overstrike() -> c_int;
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
-    fn nvim_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
     fn nvim_get_mouse_row() -> c_int;
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_get_ex_normal_busy() -> c_int;
@@ -1616,7 +1616,7 @@ unsafe fn handle_key_end(s: *mut c_void, c: c_int) -> c_int {
         let key_name = nvim_get_special_key_name(c, mod_mask);
         crate::edit::put_on_cmdline_rs(key_name, -1, true);
     } else {
-        let iobuff = nvim_get_iobuff();
+        let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
         let j = utf_char2bytes(c, iobuff);
         *iobuff.add(j as usize) = 0; // NUL terminate, exclude composing chars
         crate::edit::put_on_cmdline_rs(iobuff, j, true);

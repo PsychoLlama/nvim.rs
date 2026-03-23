@@ -605,10 +605,6 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
 // Simple accessor functions for Rust (don't require options array)
 // =============================================================================
 
-// IO buffer accessor
-char *nvim_get_iobuff(void) { return IObuff; }
-
-
 // fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }

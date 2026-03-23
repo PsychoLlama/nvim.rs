@@ -595,7 +595,7 @@ extern "C" {
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_line_breakcheck();
     fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
-    fn nvim_get_iobuff() -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
     fn nvim_buflist_line_fmt() -> *const c_char;
 }
 
@@ -749,7 +749,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
         let bl_char: u8 = if bl { b' ' } else { b'u' };
 
         // Build the formatted line into IObuff
-        let iobuff = nvim_get_iobuff();
+        let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
         let name_cstr = name_buf.as_ptr().cast::<c_char>();
 
         // Format: "%3d%c%c%c%c%c \"%s\""
