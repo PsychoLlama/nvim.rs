@@ -18,6 +18,7 @@ pub mod files;
 pub mod helpers;
 pub mod navigation;
 pub mod pattern;
+pub mod set_context;
 
 pub use context::*;
 
