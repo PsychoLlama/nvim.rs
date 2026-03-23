@@ -16,7 +16,7 @@ extern "C" {
     static mut no_wait_return: c_int;
     fn nvim_set_vim_var_warningmsg(s: *const c_char);
     fn nvim_set_keep_msg_raw(s: *const c_char);
-    fn nvim_set_keep_msg_hl_id(val: c_int);
+    static mut keep_msg_hl_id: c_int;
     fn nvim_msg_ext_kind_is_null() -> c_int;
     fn nvim_set_msg_ext_kind(kind: *const c_char);
     fn msg_ext_ui_flush();
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     nvim_set_vim_var_warningmsg(message);
     nvim_set_keep_msg_raw(std::ptr::null());
     let hl_id = if hl != 0 { HLF_W } else { 0 };
-    nvim_set_keep_msg_hl_id(hl_id);
+    keep_msg_hl_id = hl_id;
 
     if nvim_msg_ext_kind_is_null() != 0 {
         msg_ext_ui_flush();

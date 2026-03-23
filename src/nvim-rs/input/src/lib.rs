@@ -302,7 +302,7 @@ extern "C" {
     fn nvim_get_mapped_ctrl_c() -> c_int;
     fn nvim_set_mapped_ctrl_c(val: c_int);
     fn nvim_ui_has_messages() -> c_int;
-    fn nvim_get_keep_msg() -> *const c_char;
+    static mut keep_msg: *mut c_char;
     static mut keep_msg_hl_id: c_int;
 
     // Display / UI
@@ -358,11 +358,10 @@ unsafe fn prompt_for_input_impl(
     let mut ret: c_int = if one_key { ESC } else { 0 };
 
     // Save keep_msg
-    let keep_msg_ptr = nvim_get_keep_msg();
-    let kmsg = if keep_msg_ptr.is_null() {
+    let kmsg = if keep_msg.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_xstrdup(keep_msg_ptr)
+        nvim_xstrdup(keep_msg)
     };
 
     let prompt = if prompt.is_null() {

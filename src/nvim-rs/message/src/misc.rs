@@ -84,7 +84,8 @@ extern "C" {
     // keep_msg raw setters (nvim_set_keep_msg_raw in message.c does xfree+xstrdup)
     fn nvim_set_keep_msg_raw(s: *const c_char);
     fn nvim_set_keep_msg_more(val: c_int);
-    fn nvim_set_keep_msg_hl_id(val: c_int);
+    static mut keep_msg_hl_id: c_int;
+    static mut keep_msg: *mut c_char;
 
     // For messaging()
     fn nvim_get_p_lz() -> c_int;
@@ -107,7 +108,6 @@ extern "C" {
 
     // For msgmore (Phase 6)
     fn nvim_get_global_busy() -> c_int;
-    fn nvim_get_keep_msg() -> *const c_char;
     fn nvim_get_keep_msg_more() -> c_int;
     fn nvim_get_p_report() -> i64;
     fn nvim_format_msgmore(n: c_int) -> *const c_char;
@@ -298,7 +298,7 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
         nvim_set_keep_msg_raw(s);
     }
     nvim_set_keep_msg_more(0);
-    nvim_set_keep_msg_hl_id(hl_id);
+    keep_msg_hl_id = hl_id;
 }
 
 // ============================================================================
@@ -596,7 +596,7 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
 
     // Don't overwrite another important message, but do overwrite a previous
     // "more lines" or "fewer lines" message.
-    if !nvim_get_keep_msg().is_null() && nvim_get_keep_msg_more() == 0 {
+    if !keep_msg.is_null() && nvim_get_keep_msg_more() == 0 {
         return;
     }
 

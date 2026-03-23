@@ -439,9 +439,6 @@ void nvim_msg_ui_flush_impl(void)
 // Phase 2: msg_start accessors
 void nvim_redir_write_newline(void) { redir_write("\n", 1); }
 
-// Phase 3.4: Display state accessors (used by Rust display.rs)
-const char *nvim_get_keep_msg(void) { return keep_msg; }
-
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
@@ -455,7 +452,6 @@ void nvim_set_keep_msg_raw(const char *s)
   keep_msg = (s != NULL) ? xstrdup(s) : NULL;
 }
 void nvim_set_keep_msg_more(int val) { keep_msg_more = (val != 0); }
-void nvim_set_keep_msg_hl_id(int val) { keep_msg_hl_id = val; }
 
 // Phase 6: msgmore() accessors - nvim_get_p_report is in indent_ffi.c (returns int64_t)
 // Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
