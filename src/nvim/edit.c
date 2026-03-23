@@ -665,59 +665,16 @@ colnr_T nvim_edit_linetabsize_cursor_line(void)
 
 
 
-/// Call merge_modifiers(c, &mod_mask) — mutates global mod_mask (accessor for Rust).
-int nvim_edit_merge_modifiers(int c)
-{
-  return merge_modifiers(c, &mod_mask);
-}
 
 
 
-/// Call MB_BYTE2LEN_CHECK(c) (accessor for Rust).
-int nvim_edit_MB_BYTE2LEN_CHECK(int c)
-{
-  return MB_BYTE2LEN_CHECK(c);
-}
 
 
 
-/// Get K_ZERO computed macro value (accessor for Rust).
-int nvim_edit_get_K_ZERO(void)
-{
-  return K_ZERO;
-}
 
-/// Get special key name string (accessor for Rust).
-char *nvim_edit_get_special_key_name(int c, int modifiers)
-{
-  return get_special_key_name(c, modifiers);
-}
 
 /// Call ins_str(p, len) (accessor for Rust).
 
-/// Call comp_textwidth(ff) (accessor for Rust).
-int nvim_edit_comp_textwidth(int ff)
-{
-  return comp_textwidth((bool)ff);
-}
-
-/// Call internal_format(textwidth, second_indent, flags, format_only, c) (accessor for Rust).
-void nvim_edit_internal_format(int textwidth, int second_indent, int flags, int format_only, int c)
-{
-  internal_format(textwidth, second_indent, flags, (bool)format_only, c);
-}
-
-
-
-
-
-
-
-/// Call byte2cells(b) (accessor for Rust).
-int nvim_edit_byte2cells(int b)
-{
-  return byte2cells((uint8_t)b);
-}
 
 
 
@@ -727,11 +684,14 @@ int nvim_edit_byte2cells(int b)
 
 
 
-/// Call ins_char_bytes(buf, charlen) (accessor for Rust).
-void nvim_edit_ins_char_bytes(const char *buf, size_t charlen)
-{
-  ins_char_bytes((char *)buf, charlen);
-}
+
+
+
+
+
+
+
+
 
 
 
@@ -2351,11 +2311,6 @@ void nvim_edit_do_join_simple(void)
   do_join(2, false, false, false, false);
 }
 
-/// Get mb_get_class(get_cursor_pos_ptr()) (accessor for Rust).
-int nvim_edit_mb_get_class_cursor(void)
-{
-  return mb_get_class(get_cursor_pos_ptr());
-}
 
 
 /// Check utf_composinglike at cursor (accessor for Rust).

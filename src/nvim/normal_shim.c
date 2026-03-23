@@ -2287,3 +2287,13 @@ void nvim_truncate_line(bool del_newline) { truncate_line(del_newline); }
 int nvim_has_mod_mask_ctrl(void) { return (mod_mask & MOD_MASK_CTRL) ? 1 : 0; }
 bool nvim_has_ve_flag_onemore(void) { return (get_ve_flags(curwin) & kOptVeFlagOnemore) != 0; }
 bool nvim_fdo_hor_and_key_typed(void) { return (fdo_flags & kOptFdoFlagHor) && KeyTyped; }
+
+// General key/char utility accessors (migrated from edit.c)
+int nvim_merge_modifiers(int c) { return merge_modifiers(c, &mod_mask); }
+int nvim_MB_BYTE2LEN_CHECK(int c) { return MB_BYTE2LEN_CHECK(c); }
+int nvim_get_K_ZERO(void) { return K_ZERO; }
+char *nvim_get_special_key_name(int c, int modifiers) { return get_special_key_name(c, modifiers); }
+int nvim_comp_textwidth(int ff) { return comp_textwidth((bool)ff); }
+void nvim_internal_format(int textwidth, int second_indent, int flags, int format_only, int c) { internal_format(textwidth, second_indent, flags, (bool)format_only, c); }
+int nvim_byte2cells(int b) { return byte2cells((uint8_t)b); }
+int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }

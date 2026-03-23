@@ -55,7 +55,7 @@ extern "C" {
     // -- insert_special dependencies --
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
-    fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
+    fn nvim_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
@@ -63,15 +63,15 @@ extern "C" {
 
     // -- get_literal dependencies --
     fn plain_vgetc() -> c_int;
-    fn nvim_edit_merge_modifiers(c: c_int) -> c_int;
+    fn nvim_merge_modifiers(c: c_int) -> c_int;
     fn add_to_showcmd(c: c_int) -> bool;
-    fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
     fn vungetc(c: c_int);
     fn nvim_digraph_inc_no_mapping();
     fn nvim_digraph_dec_no_mapping();
     fn nvim_get_got_int() -> c_int;
     fn nvim_set_got_int(val: c_int);
-    fn nvim_edit_get_K_ZERO() -> c_int;
+    fn nvim_get_K_ZERO() -> c_int;
 }
 
 // ============================================================================
@@ -374,7 +374,7 @@ unsafe fn insert_special_impl(mut c: c_int, mut allow_modmask: c_int, mut ctrlv:
     }
     // IS_SPECIAL(c) is (c < 0)
     if c < 0 || (mod_mask != 0 && allow_modmask != 0) {
-        let p = nvim_edit_get_special_key_name(c, mod_mask);
+        let p = nvim_get_special_key_name(c, mod_mask);
         let len = c_strlen(p);
         c = c_int::from(*p.add(len - 1) as u8);
         if len > 2 {
@@ -447,7 +447,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     loop {
         nc = plain_vgetc();
         if no_simplify == 0 {
-            nc = nvim_edit_merge_modifiers(nc);
+            nc = nvim_merge_modifiers(nc);
         }
         let mod_mask = nvim_get_mod_mask();
         if (mod_mask & !MOD_MASK_SHIFT) != 0 {
@@ -456,7 +456,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
             break;
         }
         let state = nvim_get_State();
-        if (state & MODE_CMDLINE) == 0 && nvim_edit_MB_BYTE2LEN_CHECK(nc) == 1 {
+        if (state & MODE_CMDLINE) == 0 && nvim_MB_BYTE2LEN_CHECK(nc) == 1 {
             add_to_showcmd(nc);
         }
         if nc == c_int::from(b'x') || nc == c_int::from(b'X') {
@@ -509,7 +509,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     }
     if i == 0 {
         // no number entered
-        let k_zero = nvim_edit_get_K_ZERO();
+        let k_zero = nvim_get_K_ZERO();
         if nc == k_zero {
             // NUL is stored as NL
             cc = c_int::from(b'\n');

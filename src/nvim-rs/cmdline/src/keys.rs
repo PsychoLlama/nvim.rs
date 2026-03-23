@@ -1069,7 +1069,7 @@ unsafe extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
-    fn nvim_edit_get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
+    fn nvim_get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
     fn vim_iswordc(c: c_int) -> bool;
     fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool;
     fn cmdline_pum_active() -> c_int;
@@ -1611,7 +1611,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
 unsafe fn handle_key_end(s: *mut c_void, c: c_int) -> c_int {
     let mod_mask = nvim_get_mod_mask();
     if is_special_key(c) || mod_mask != 0 {
-        let key_name = nvim_edit_get_special_key_name(c, mod_mask);
+        let key_name = nvim_get_special_key_name(c, mod_mask);
         crate::edit::put_on_cmdline_rs(key_name, -1, true);
     } else {
         let iobuff = nvim_get_iobuff();

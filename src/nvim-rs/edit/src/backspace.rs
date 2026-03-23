@@ -111,7 +111,7 @@ extern "C" {
     fn rs_foldOpenCursor();
 
     // Word class
-    fn nvim_edit_mb_get_class_cursor() -> c_int;
+    fn nvim_mb_get_class_cursor() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
     fn nvim_edit_cursor_has_composing() -> c_int;
 
@@ -327,14 +327,14 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
             // Delete up to starting point, start of line or previous word.
             let mut cur_mode = mode;
             let mut temp = false;
-            let mut cclass = nvim_edit_mb_get_class_cursor();
+            let mut cclass = nvim_mb_get_class_cursor();
             loop {
                 if !revins_on {
                     dec_cursor();
                 }
                 let cc = nvim_gchar_cursor();
                 let prev_cclass = cclass;
-                cclass = nvim_edit_mb_get_class_cursor();
+                cclass = nvim_mb_get_class_cursor();
 
                 if cur_mode == BACKSPACE_WORD && cc != c_int::from(b' ') && cc != c_int::from(b'\t')
                 {

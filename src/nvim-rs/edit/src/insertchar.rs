@@ -52,11 +52,11 @@ extern "C" {
     fn nvim_get_p_ri() -> c_int;
 
     // -- textformat --
-    fn nvim_edit_comp_textwidth(force_format: c_int) -> c_int;
+    fn nvim_comp_textwidth(force_format: c_int) -> c_int;
     fn get_nolist_virtcol() -> c_int;
     fn char2cells(c: c_int) -> c_int;
     fn gchar_cursor() -> c_int;
-    fn nvim_edit_internal_format(
+    fn nvim_internal_format(
         textwidth: c_int,
         second_indent: c_int,
         flags: c_int,
@@ -77,15 +77,15 @@ extern "C" {
     // -- input / char --
     fn vpeekc() -> c_int;
     fn vgetc() -> c_int;
-    fn nvim_edit_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
-    fn nvim_edit_byte2cells(c: c_int) -> c_int;
+    fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    fn nvim_byte2cells(c: c_int) -> c_int;
     fn do_digraph(c: c_int) -> c_int;
     fn nvim_test_disable_char_avail() -> c_int;
 
     // -- insertion --
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn ins_char(c: c_int);
-    fn nvim_edit_ins_char_bytes(buf: *const c_char, charlen: usize);
+    fn ins_char_bytes(buf: *const c_char, charlen: usize);
 
     // -- redo --
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
@@ -151,7 +151,7 @@ const MB_MAXCHAR: usize = 21;
 #[unsafe(export_name = "insertchar")]
 pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     let force_format = flags & INSCHAR_FORMAT;
-    let textwidth = nvim_edit_comp_textwidth(force_format);
+    let textwidth = nvim_comp_textwidth(force_format);
     let fo_ins_blank = nvim_has_format_option(FO_INS_BLANK);
 
     // Try to break the line in two or more pieces when conditions are met.
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             nvim_set_ins_need_undo(1);
         }
         if do_internal {
-            nvim_edit_internal_format(textwidth, second_indent, flags, 0, c);
+            nvim_internal_format(textwidth, second_indent, flags, 0, c);
         }
     }
 
@@ -240,14 +240,14 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             if is_special(nc) {
                 break;
             }
-            if nvim_edit_MB_BYTE2LEN_CHECK(nc) != 1 {
+            if nvim_MB_BYTE2LEN_CHECK(nc) != 1 {
                 break;
             }
             if i >= INPUT_BUFLEN {
                 break;
             }
             if textwidth != 0 {
-                let cells = nvim_edit_byte2cells(c_int::from(buf[i - 1]));
+                let cells = nvim_byte2cells(c_int::from(buf[i - 1]));
                 virtcol = virtcol.saturating_add(cells as ColnrT);
                 if virtcol >= textwidth as ColnrT {
                     break;
@@ -284,7 +284,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             let mut buf = [0u8; MB_MAXCHAR + 1];
             utf_char2bytes(c, buf.as_mut_ptr());
             buf[cc as usize] = 0;
-            nvim_edit_ins_char_bytes(buf.as_ptr().cast::<c_char>(), cc as usize);
+            ins_char_bytes(buf.as_ptr().cast::<c_char>(), cc as usize);
             AppendCharToRedobuff(c);
         } else {
             ins_char(c);
