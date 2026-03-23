@@ -2603,7 +2603,7 @@ extern "C" {
     #[link_name = "edit_submode_extra"]
     static mut g_edit_submode_extra: *mut c_char;
     /// edit_submode_extra pointer (from insexpand_shim.c).
-    fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
+    // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     /// w_p_arab window option accessor.
     fn nvim_win_get_w_p_arab(wp: WinHandle) -> c_int;
     /// Clear the showcmd area.
@@ -2635,7 +2635,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             *length = (Rows - msg_row) * Columns - 3;
         }
         if !g_edit_submode_extra.is_null() {
-            *length -= nvim_vim_strsize(nvim_get_edit_submode_extra_ptr());
+            *length -= nvim_vim_strsize(g_edit_submode_extra);
         }
         if *length > 0 {
             if nvim_drawscreen_edit_submode_pre_is_null() == 0 {
@@ -2661,7 +2661,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
                 } else {
                     hl_id
                 };
-                msg_puts_hl(nvim_get_edit_submode_extra_ptr(), sub_id, false);
+                msg_puts_hl(g_edit_submode_extra, sub_id, false);
             }
         }
     } else {

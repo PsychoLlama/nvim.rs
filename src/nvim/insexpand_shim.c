@@ -2515,8 +2515,7 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
   }
   edit_submode_extra = match_ref;
 }
-const char *nvim_get_edit_submode_extra_ptr(void) { return edit_submode_extra; }
-
+// nvim_get_edit_submode_extra_ptr: deleted (Phase 37, use edit_submode_extra directly)
 // nvim_get_edit_submode_highl_attr: deleted (Phase 36, inlined in drawscreen/lib.rs)
 
 // --- compl_curr_match accessors ---

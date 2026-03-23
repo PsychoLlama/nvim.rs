@@ -370,7 +370,7 @@ extern "C" {
     fn nvim_set_edit_submode_extra_the_only_match();
     fn nvim_set_edit_submode_extra_match_ref(cp_number: c_int, compl_matches: c_int);
     // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
-    fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
+    // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     #[link_name = "msg_hist_off"]
     static mut g_msg_hist_off: bool;
     fn nvim_msg_ext_set_kind_completion();
@@ -527,7 +527,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                 g_msg_hist_off = true;
                 nvim_msg_ext_set_kind_completion();
                 nvim_msg_with_attr(
-                    nvim_get_edit_submode_extra_ptr(),
+                    g_edit_submode_extra,
                     if g_edit_submode_highl < HLF_COUNT {
                         g_edit_submode_highl + 1
                     } else {
