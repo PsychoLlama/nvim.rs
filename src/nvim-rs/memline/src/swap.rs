@@ -27,6 +27,7 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
+    static mut msg_silent: c_int;
     static mut got_int: bool;
     // -------------------------------------------------------------------------
     // Buffer Accessors
@@ -67,10 +68,8 @@ extern "C" {
     fn nvim_get_curbuf() -> *mut BufHandle;
 
     /// Get msg_silent global
-    fn nvim_get_msg_silent() -> c_int;
 
     /// Set msg_silent global
-    fn nvim_set_msg_silent(val: c_int);
 
     /// Get buf->b_may_swap (defined in change_ffi.c, returns bool)
     fn nvim_buf_get_b_may_swap(buf: *mut BufHandle) -> bool;
@@ -445,8 +444,8 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
 /// Modifies current buffer state.
 #[export_name = "check_need_swap"]
 pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
-    let old_msg_silent = nvim_get_msg_silent();
-    nvim_set_msg_silent(0); // If swap dialog prompts for input, user needs to see it!
+    let old_msg_silent = msg_silent;
+    msg_silent = 0; // If swap dialog prompts for input, user needs to see it!
 
     let curbuf = nvim_get_curbuf();
     if !curbuf.is_null()
@@ -456,7 +455,7 @@ pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
         rs_ml_open_file(curbuf);
     }
 
-    nvim_set_msg_silent(old_msg_silent);
+    msg_silent = old_msg_silent;
 }
 
 /// Close the memline for a buffer.
@@ -2128,7 +2127,7 @@ pub unsafe extern "C" fn rs_findswapname(
                         _ => {
                             // SEA_CHOICE_NONE
                             nvim_msg_puts_newline();
-                            if nvim_get_msg_silent() == 0 {
+                            if msg_silent == 0 {
                                 // call wait_return() later
                                 nvim_set_need_wait_return(1);
                             }

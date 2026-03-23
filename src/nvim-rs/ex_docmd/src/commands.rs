@@ -144,6 +144,7 @@ pub(crate) const CMD_RSHIFT: c_int = 553;
 // =============================================================================
 
 extern "C" {
+    static mut msg_silent: c_int;
     // Message functions
     fn msg(s: *const c_char, a: c_int);
     fn smsg(a: c_int, fmt: *const c_char, ...);
@@ -154,7 +155,6 @@ extern "C" {
     // Verbose message helpers
     fn verbose_enter_scroll();
     fn verbose_leave_scroll();
-    fn nvim_get_msg_silent() -> c_int;
     static mut no_wait_return: c_int;
 
     // Error messages
@@ -721,7 +721,7 @@ pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
         smsg(0, c"line %ld: %s".as_ptr(), lnum as std::ffi::c_long, cmd);
     }
 
-    if nvim_get_msg_silent() == 0 {
+    if msg_silent == 0 {
         msg_puts(c"\n".as_ptr());
     }
 

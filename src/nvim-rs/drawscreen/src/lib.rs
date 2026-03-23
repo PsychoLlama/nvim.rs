@@ -27,6 +27,7 @@ use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // Direct access to C globals (avoids thin C accessor functions).
 extern "C" {
+    static mut msg_silent: c_int;
     static mut State: c_int;
     /// Global must_redraw flag (int in C).
     static mut must_redraw: c_int;
@@ -1963,7 +1964,6 @@ pub extern "C" fn rs_comp_col() {
 
 extern "C" {
     fn nvim_get_global_busy() -> c_int;
-    fn nvim_get_msg_silent() -> c_int;
 }
 
 extern "C" {
@@ -1984,7 +1984,7 @@ pub extern "C" fn rs_skip_showmode() -> bool {
         // Call char_avail() only when we are going to show something, because it
         // takes a bit of time.  redrawing() may also call char_avail().
         if nvim_get_global_busy() != 0
-            || nvim_get_msg_silent() != 0
+            || msg_silent != 0
             || !redrawing_impl()
             || (nvim_char_avail() != 0 && !nvim_get_KeyTyped())
         {
@@ -2741,7 +2741,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     nvim_drawscreen_msg_grid_validate();
 
     let state = State;
-    let do_mode = (p_smd != 0 && nvim_get_msg_silent() == 0)
+    let do_mode = (p_smd != 0 && msg_silent == 0)
         && ((state & MODE_TERMINAL) != 0
             || (state & MODE_INSERT) != 0
             || nvim_get_restart_edit() != 0
@@ -2789,7 +2789,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         nvim_set_msg_no_more(0);
         nvim_set_lines_left(save_lines_left);
         nvim_set_need_wait_return(nwr_save);
-    } else if nvim_get_clear_cmdline() && nvim_get_msg_silent() == 0 {
+    } else if nvim_get_clear_cmdline() && msg_silent == 0 {
         nvim_drawscreen_msg_clr_cmdline();
     } else if redraw_mode != 0 {
         msg_pos_mode();

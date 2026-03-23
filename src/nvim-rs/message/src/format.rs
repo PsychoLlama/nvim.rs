@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int};
 
 // C accessor declarations
 extern "C" {
+    static mut msg_silent: c_int;
     /// Get `msg_col` global
     fn nvim_get_msg_col() -> c_int;
     /// Set `msg_col` global
@@ -36,7 +37,6 @@ extern "C" {
     /// Get `exmode_active` flag
     fn nvim_get_exmode_active() -> bool;
     /// Get `msg_silent` count
-    fn nvim_get_msg_silent() -> c_int;
     /// Check if UI has messages capability
     fn nvim_ui_has_messages() -> c_int;
     /// Calculate string width in cells
@@ -140,7 +140,6 @@ pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
     let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
     let exmode_active = nvim_get_exmode_active();
-    let msg_silent = nvim_get_msg_silent();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(
@@ -390,7 +389,7 @@ pub const extern "C" fn rs_msg_outtrans_long_slen(room: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_silent() -> c_int {
-    nvim_get_msg_silent()
+    msg_silent
 }
 
 /// Check if message is silent (non-zero).
@@ -399,7 +398,7 @@ pub unsafe extern "C" fn rs_msg_silent() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_msg_silent() -> c_int {
-    c_int::from(nvim_get_msg_silent() != 0)
+    c_int::from(msg_silent != 0)
 }
 
 /// Clamp column to valid range.
@@ -621,7 +620,7 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
             && nvim_get_need_wait_return() == 0
             && nvim_shortmess(SHM_TRUNCALL) != 0
             && !nvim_get_exmode_active()
-            && nvim_get_msg_silent() == 0
+            && msg_silent == 0
             && nvim_ui_has_messages() == 0);
 
     if !should_truncate {
@@ -718,7 +717,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 
     // When drawing over the command line no need to clear it later or remove
     // the mode message.
-    if nvim_get_msg_silent() == 0
+    if msg_silent == 0
         && len > 0
         && nvim_get_msg_row() >= nvim_get_cmdline_row()
         && nvim_get_msg_col() == 0
@@ -962,7 +961,6 @@ pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
     let need_wait_return = nvim_get_need_wait_return() != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
     let exmode_active = nvim_get_exmode_active();
-    let msg_silent = nvim_get_msg_silent();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(

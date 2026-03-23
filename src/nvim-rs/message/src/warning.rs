@@ -7,10 +7,10 @@ use std::ffi::{c_char, c_int};
 
 // C function declarations
 extern "C" {
+    static mut msg_silent: c_int;
     // State accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
-    fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_columns() -> c_int;
 
     // For give_warning
@@ -53,7 +53,7 @@ const WMSG_KIND: &std::ffi::CStr = c"wmsg";
 #[export_name = "give_warning"]
 pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     // Don't do this for ":silent".
-    if nvim_get_msg_silent() != 0 {
+    if msg_silent != 0 {
         return;
     }
 
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn rs_msg_need_advance(col: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_set_col_silent(col: c_int) {
-    if nvim_get_msg_silent() != 0 {
+    if msg_silent != 0 {
         nvim_set_msg_col(col);
     }
 }
@@ -185,7 +185,7 @@ pub const HLF_MSG: c_int = 63;
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_warning_can_show() -> c_int {
-    c_int::from(nvim_get_msg_silent() == 0)
+    c_int::from(msg_silent == 0)
 }
 
 /// Get the warning highlight ID.

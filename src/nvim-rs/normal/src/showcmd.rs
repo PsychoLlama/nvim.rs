@@ -116,6 +116,7 @@ const SHOWCMD_IGNORE: &[c_int] = &[
 // =============================================================================
 
 extern "C" {
+    static mut msg_silent: c_int;
     static p_sc: c_int;
     fn nvim_normal_showcmd_buf_ptr() -> *mut std::ffi::c_char;
 
@@ -149,7 +150,6 @@ extern "C" {
     fn nvim_transchar_wrapper(c: c_int) -> *const std::ffi::c_char;
     fn nvim_utf_char2bytes_wrapper(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
-    fn nvim_get_msg_silent() -> c_int;
 }
 
 // =============================================================================
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn rs_pop_showcmd() {
 /// Reads/writes the shared showcmd_buf C static and calls C helpers.
 #[export_name = "add_to_showcmd"]
 pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
-    if p_sc == 0 || nvim_get_msg_silent() != 0 {
+    if p_sc == 0 || msg_silent != 0 {
         return false;
     }
 

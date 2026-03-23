@@ -7,6 +7,7 @@ use std::ffi::c_int;
 
 // C function declarations for verbose operations
 extern "C" {
+    static mut msg_silent: c_int;
     // Verbose state accessors (in message.c)
     fn nvim_verbose_enter_kind();
     fn nvim_restore_pre_verbose_kind();
@@ -15,8 +16,6 @@ extern "C" {
     fn nvim_get_p_vfile_not_empty() -> c_int;
 
     // State accessors
-    fn nvim_get_msg_silent() -> c_int;
-    fn nvim_set_msg_silent(val: c_int);
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_get_msg_row() -> c_int;
     fn nvim_set_cmdline_row(val: c_int);
@@ -44,8 +43,8 @@ extern "C" {
 #[export_name = "verbose_enter"]
 pub unsafe extern "C" fn rs_verbose_enter() {
     if nvim_get_p_vfile_not_empty() != 0 {
-        let silent = nvim_get_msg_silent();
-        nvim_set_msg_silent(silent + 1);
+        let silent = msg_silent;
+        msg_silent = silent + 1;
     }
     // Save pre_verbose_kind if not already in verbose mode, then set verbose kind.
     // This is done via a single C accessor to keep the pointer comparison in C.
@@ -62,11 +61,11 @@ pub unsafe extern "C" fn rs_verbose_enter() {
 #[export_name = "verbose_leave"]
 pub unsafe extern "C" fn rs_verbose_leave() {
     if nvim_get_p_vfile_not_empty() != 0 {
-        let silent = nvim_get_msg_silent();
+        let silent = msg_silent;
         if silent > 0 {
-            nvim_set_msg_silent(silent - 1);
+            msg_silent = silent - 1;
         } else {
-            nvim_set_msg_silent(0);
+            msg_silent = 0;
         }
     }
     nvim_restore_pre_verbose_kind();
@@ -242,7 +241,7 @@ pub unsafe extern "C" fn rs_verbose_file_active() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_silent(val: c_int) {
-    nvim_set_msg_silent(val);
+    msg_silent = val;
 }
 
 /// Increment the message silent counter.
@@ -251,8 +250,8 @@ pub unsafe extern "C" fn rs_set_msg_silent(val: c_int) {
 /// Calls C accessor/mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_silent_enter() {
-    let val = nvim_get_msg_silent();
-    nvim_set_msg_silent(val + 1);
+    let val = msg_silent;
+    msg_silent = val + 1;
 }
 
 /// Decrement the message silent counter.
@@ -261,9 +260,9 @@ pub unsafe extern "C" fn rs_msg_silent_enter() {
 /// Calls C accessor/mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_silent_leave() {
-    let val = nvim_get_msg_silent();
+    let val = msg_silent;
     if val > 0 {
-        nvim_set_msg_silent(val - 1);
+        msg_silent = val - 1;
     }
 }
 
@@ -275,7 +274,7 @@ pub unsafe extern "C" fn rs_msg_silent_leave() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_output_suppressed() -> c_int {
-    let silent = nvim_get_msg_silent() > 0;
+    let silent = msg_silent > 0;
     c_int::from(silent)
 }
 

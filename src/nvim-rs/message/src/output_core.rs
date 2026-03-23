@@ -30,6 +30,7 @@ pub struct NvimString {
 }
 
 extern "C" {
+    static mut msg_silent: c_int;
     static mut got_int: bool;
     // Core message output functions (call into C until fully migrated)
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
@@ -47,7 +48,6 @@ extern "C" {
     fn verbose_leave();
 
     // State accessors
-    fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
     fn nvim_get_columns() -> c_int;
@@ -443,7 +443,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         nvim_set_msg_row(cmdline_row);
     }
 
-    if nvim_get_msg_silent() == 0 {
+    if msg_silent == 0 {
         // Don't display old message now; clear keep_msg and need_fileinfo.
         nvim_set_keep_msg_raw(std::ptr::null());
         nvim_set_need_fileinfo(0);
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         rs_msg_starthere();
     }
 
-    if nvim_get_msg_silent() == 0 {
+    if msg_silent == 0 {
         nvim_set_msg_didout(0); // no output on current line yet
     }
 
@@ -538,7 +538,7 @@ pub unsafe extern "C" fn rs_msg_clr_eos() {
 /// Internal implementation of msg_clr_eos logic.
 #[inline]
 unsafe fn msg_clr_eos_impl() {
-    if nvim_get_msg_silent() == 0 {
+    if msg_silent == 0 {
         rs_msg_clr_eos_force_exported();
     }
 }
@@ -589,7 +589,7 @@ pub unsafe extern "C" fn rs_msg_clr_eos_force_exported() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_is_silent() -> c_int {
-    nvim_get_msg_silent()
+    msg_silent
 }
 
 // ============================================================================
@@ -728,7 +728,7 @@ pub const extern "C" fn rs_is_printf_length(c: c_int) -> c_int {
 /// Calls C accessor functions.
 #[export_name = "msg_advance"]
 pub unsafe extern "C" fn rs_msg_advance(col: c_int) {
-    if nvim_get_msg_silent() != 0 {
+    if msg_silent != 0 {
         // nothing to advance to (for redirection, may fill it up later)
         nvim_set_msg_col(col);
         return;

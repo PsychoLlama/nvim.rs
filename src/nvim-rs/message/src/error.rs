@@ -7,6 +7,7 @@ use std::ffi::c_int;
 
 // C accessor declarations
 extern "C" {
+    static mut msg_silent: c_int;
     /// Get `emsg_off` counter
     fn nvim_get_emsg_off() -> c_int;
     /// Set `emsg_off` counter
@@ -490,7 +491,6 @@ extern "C" {
     fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
     fn nvim_get_emsg_lnum() -> *mut std::ffi::c_char;
     fn nvim_set_ex_exitval(val: c_int);
-    fn nvim_set_msg_silent(val: c_int);
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
     fn nvim_get_p_eb() -> c_int;
@@ -617,7 +617,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         nvim_set_ex_exitval(1);
 
         // Reset msg_silent, an error causes messages to be switched back on.
-        nvim_set_msg_silent(0);
+        msg_silent = 0;
         nvim_set_cmd_silent(0);
 
         if nvim_get_global_busy() != 0 {

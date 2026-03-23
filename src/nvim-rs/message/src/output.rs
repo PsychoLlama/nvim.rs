@@ -7,6 +7,7 @@ use std::ffi::c_int;
 
 // C accessor declarations
 extern "C" {
+    static mut msg_silent: c_int;
     /// Get `msg_didany` flag
     fn nvim_get_msg_didany() -> c_int;
     /// Set `msg_didany` flag
@@ -247,7 +248,6 @@ extern "C" {
     fn no_wait_return_inc();
     fn no_wait_return_dec();
     fn nvim_get_vgetc_busy() -> c_int;
-    fn nvim_get_msg_silent() -> c_int;
 }
 
 /// Wait for the user to press a key and optionally redraw.
@@ -326,7 +326,6 @@ pub unsafe extern "C" fn rs_no_wait_return_leave() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_wait_return_blocked() -> c_int {
-    let msg_silent = nvim_get_msg_silent();
     let vgetc_busy = nvim_get_vgetc_busy();
     let no_wait = no_wait_return_get();
 
@@ -423,7 +422,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
 
     // Don't print anything when using ":silent cmd" or empty message.
     let first_byte = *str_.cast::<u8>();
-    if nvim_get_msg_silent() != 0 || first_byte == 0 {
+    if msg_silent != 0 || first_byte == 0 {
         if first_byte == 0 && nvim_ui_has_messages() != 0 {
             nvim_msg_show_empty();
         }

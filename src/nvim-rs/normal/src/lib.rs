@@ -31,6 +31,7 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 extern "C" {
+    static mut msg_silent: c_int;
     static mut got_int: bool;
     static mut State: c_int;
     static mut redraw_mode: c_int;
@@ -1399,7 +1400,6 @@ extern "C" {
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
     static p_smd: c_int;
-    fn nvim_get_msg_silent() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
     fn nvim_cap_dec_count1(cap: CapHandle) -> c_int;
 
@@ -1885,7 +1885,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 rs_may_start_select(c_int::from(b'c'));
             }
             nvim_setmouse();
-            if p_smd != 0 && nvim_get_msg_silent() == 0 {
+            if p_smd != 0 && msg_silent == 0 {
                 nvim_set_redraw_cmdline(true); // show visual mode later
             }
             let resel_line_count = nvim_get_resel_VIsual_line_count();
@@ -7724,7 +7724,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     // Check for redraw after changing the state.
     nvim_conceal_check_cursor_line();
 
-    if p_smd != 0 && nvim_get_msg_silent() == 0 {
+    if p_smd != 0 && msg_silent == 0 {
         nvim_set_redraw_cmdline(true); // show visual mode later
     }
     // Only need to redraw this line, unless still need to redraw an old

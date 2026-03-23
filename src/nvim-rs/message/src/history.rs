@@ -9,6 +9,7 @@ use std::ptr;
 
 // C accessor declarations
 extern "C" {
+    static mut msg_silent: c_int;
     /// Get `msg_hist_first` pointer
     fn nvim_get_msg_hist_first() -> *mut MessageHistoryEntryHandle;
     /// Get `msg_hist_last` pointer
@@ -22,7 +23,6 @@ extern "C" {
     /// Get `msg_hist_off`
     fn nvim_get_msg_hist_off() -> c_int;
     /// Get `msg_silent`
-    fn nvim_get_msg_silent() -> c_int;
     /// Get entry->next pointer
     fn nvim_msg_hist_entry_get_next(
         entry: *mut MessageHistoryEntryHandle,
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_msg_hist_clear_temp() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_disabled() -> c_int {
-    c_int::from(nvim_get_msg_hist_off() != 0 || nvim_get_msg_silent() != 0)
+    c_int::from(nvim_get_msg_hist_off() != 0 || msg_silent != 0)
 }
 
 /// Check if history is at capacity.
@@ -451,7 +451,7 @@ pub unsafe extern "C" fn rs_msg_hist_permanent_count() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_can_add() -> c_int {
-    let disabled = nvim_get_msg_hist_off() != 0 || nvim_get_msg_silent() != 0;
+    let disabled = nvim_get_msg_hist_off() != 0 || msg_silent != 0;
     c_int::from(!disabled)
 }
 

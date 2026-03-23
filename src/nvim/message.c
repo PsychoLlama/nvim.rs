@@ -211,8 +211,6 @@ int nvim_get_msg_hist_len(void) { return msg_hist_len; }
 void nvim_set_msg_hist_len(int len) { msg_hist_len = len; }
 int nvim_get_msg_hist_max(void) { return msg_hist_max; }
 int nvim_get_msg_hist_off(void) { return msg_hist_off; }
-int nvim_get_msg_silent(void) { return msg_silent; }
-void nvim_set_msg_silent(int val) { msg_silent = val; }
 MessageHistoryEntry *nvim_get_msg_hist_temp(void) { return msg_hist_temp; }
 void nvim_set_msg_hist_temp(MessageHistoryEntry *entry) { msg_hist_temp = entry; }
 void nvim_set_msg_hist_first(MessageHistoryEntry *entry) { msg_hist_first = entry; }

@@ -11,6 +11,7 @@ use crate::dispatch::types::NormalStateHandle;
 use crate::WinHandle;
 
 extern "C" {
+    static mut msg_silent: c_int;
     static mut got_int: bool;
     static mut State: c_int;
     static must_redraw: c_int;
@@ -96,7 +97,6 @@ extern "C" {
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
     static p_smd: c_int;
-    fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_get_redraw_cmdline() -> bool;
     fn nvim_get_msg_didout() -> c_int; // defined in message.c
@@ -353,7 +353,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
     (
         // 'showmode' is set and messages can be printed
         (p_smd != 0
-            && nvim_get_msg_silent() == 0
+            && msg_silent == 0
             // must restart insert mode or just entered visual mode
             && (nvim_get_restart_edit() != 0
                 || (nvim_get_VIsual_active() != 0

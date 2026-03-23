@@ -10,6 +10,7 @@ use std::ffi::{c_char, c_int};
 // ============================================================================
 
 extern "C" {
+    static mut msg_silent: c_int;
     // Home directory handling (Phase 77: now implemented in Rust)
     fn nvim_home_replace_save_null(fname: *const c_char) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
@@ -56,7 +57,6 @@ extern "C" {
     fn msg_cursor_goto(row: c_int, col: c_int);
 
     // State accessors
-    fn nvim_get_msg_silent() -> c_int;
     fn nvim_get_emsg_on_display() -> c_int;
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_get_msg_scroll() -> c_int;
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
         return;
     }
 
-    if s.is_null() || nvim_get_msg_silent() != 0 {
+    if s.is_null() || msg_silent != 0 {
         nvim_set_keep_msg_raw(std::ptr::null());
     } else {
         nvim_set_keep_msg_raw(s);
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn rs_messaging() -> bool {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_suppress() -> c_int {
-    c_int::from(nvim_get_msg_silent() != 0)
+    c_int::from(msg_silent != 0)
 }
 
 // ============================================================================

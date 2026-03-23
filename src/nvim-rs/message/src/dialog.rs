@@ -9,6 +9,7 @@ use std::ptr;
 
 // C accessor declarations
 extern "C" {
+    static mut msg_silent: c_int;
     /// Get `confirm_msg` pointer
     fn nvim_get_confirm_msg() -> *const c_char;
     /// Set `confirm_msg` pointer
@@ -360,7 +361,6 @@ pub const extern "C" fn rs_dialog_is_error_or_warning(dialog_type: c_int) -> c_i
 
 extern "C" {
     /// Get `msg_silent` flag
-    fn nvim_get_msg_silent() -> c_int;
     /// UI active check
     fn ui_active() -> c_int;
     /// Get `no_wait_return` counter
@@ -379,7 +379,6 @@ extern "C" {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dialogs_suppressed() -> c_int {
-    let msg_silent = nvim_get_msg_silent();
     c_int::from(silent_mode || msg_silent != 0)
 }
 
