@@ -3401,7 +3401,6 @@ void nvim_cmod_regfree_filter(cmdmod_T *cmod)
   vim_regfree(cmod->cmod_filter_regmatch.regprog);
   cmod->cmod_filter_regmatch.regprog = NULL;
 }
-int nvim_cmod_get_save_msg_scroll(cmdmod_T *cmod) { return cmod->cmod_save_msg_scroll ? 1 : 0; }
 char *nvim_cmod_get_filter_pat(cmdmod_T *cmod) { return cmod->cmod_filter_pat; }
 void nvim_docmd_restore_msg_scroll(cmdmod_T *cmod) { msg_scroll = cmod->cmod_save_msg_scroll; }
 
