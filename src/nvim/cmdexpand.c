@@ -161,6 +161,8 @@ extern char *rs_concat_pattern_with_buffer_match(const char *pat, int pat_len,
                                                   const pos_T *end_match_pos, int lowercase);
 extern int rs_copy_substring_from_pos(pos_T *start, pos_T *end, char **match, pos_T *match_end);
 extern int rs_expand_pattern_in_buf(char *pat, int dir, char ***matches, int *numMatches);
+extern int rs_expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, int *numMatches,
+                                    int flags, int options);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
@@ -2143,90 +2145,6 @@ int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char
 }
 
 /// Expand file or directory names.
-static int expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, int *numMatches,
-                                 int flags, int options)
-{
-  bool free_pat = false;
-
-  // for ":set path=" and ":set tags=" halve backslashes for escaped space
-  if (xp->xp_backslash != XP_BS_NONE) {
-    free_pat = true;
-    size_t pat_len = strlen(pat);
-    pat = xstrnsave(pat, pat_len);
-
-    char *pat_end = pat + pat_len;
-    for (char *p = pat; *p != NUL; p++) {
-      if (*p != '\\') {
-        continue;
-      }
-
-      if (xp->xp_backslash & XP_BS_THREE
-          && *(p + 1) == '\\'
-          && *(p + 2) == '\\'
-          && *(p + 3) == ' ') {
-        char *from = p + 3;
-        memmove(p, from, (size_t)(pat_end - from) + 1);  // +1 for NUL
-        pat_end -= 3;
-      } else if (xp->xp_backslash & XP_BS_ONE
-                 && *(p + 1) == ' ') {
-        char *from = p + 1;
-        memmove(p, from, (size_t)(pat_end - from) + 1);  // +1 for NUL
-        pat_end--;
-      } else if (xp->xp_backslash & XP_BS_COMMA) {
-        if (*(p + 1) == '\\' && *(p + 2) == ',') {
-          char *from = p + 2;
-          memmove(p, from, (size_t)(pat_end - from) + 1);  // +1 for NUL
-          pat_end -= 2;
-#ifdef BACKSLASH_IN_FILENAME
-        } else if (*(p + 1) == ',') {
-          char *from = p + 1;
-          memmove(p, from, (size_t)(pat_end - from) + 1);  // +1 for NUL
-          pat_end--;
-#endif
-        }
-      }
-    }
-  }
-
-  int ret = FAIL;
-  if (xp->xp_context == EXPAND_FINDFUNC) {
-    ret = expand_findfunc(pat, matches, numMatches);
-  } else {
-    if (xp->xp_context == EXPAND_FILES) {
-      flags |= EW_FILE;
-    } else if (xp->xp_context == EXPAND_FILES_IN_PATH) {
-      flags |= (EW_FILE | EW_PATH);
-    } else if (xp->xp_context == EXPAND_DIRS_IN_CDPATH) {
-      flags = (flags | EW_DIR | EW_CDPATH) & ~EW_FILE;
-    } else {
-      flags = (flags | EW_DIR) & ~EW_FILE;
-    }
-    if (options & WILD_ICASE) {
-      flags |= EW_ICASE;
-    }
-    // Expand wildcards, supporting %:h and the like.
-    ret = expand_wildcards_eval(&pat, numMatches, matches, flags);
-  }
-  if (free_pat) {
-    xfree(pat);
-  }
-#ifdef BACKSLASH_IN_FILENAME
-  if (p_csl[0] != NUL && (options & WILD_IGNORE_COMPLETESLASH) == 0) {
-    for (int j = 0; j < *numMatches; j++) {
-      char *ptr = (*matches)[j];
-      while (*ptr != NUL) {
-        if (p_csl[0] == 's' && *ptr == '\\') {
-          *ptr = '/';
-        } else if (p_csl[0] == 'b' && *ptr == '/') {
-          *ptr = '\\';
-        }
-        ptr += utfc_ptr2len(ptr);
-      }
-    }
-  }
-#endif
-  return ret;
-}
 
 /// Function given to ExpandGeneric() to obtain the possible arguments for the
 /// ":scriptnames" command.
@@ -2346,7 +2264,7 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
       || xp->xp_context == EXPAND_FILES_IN_PATH
       || xp->xp_context == EXPAND_FINDFUNC
       || xp->xp_context == EXPAND_DIRS_IN_CDPATH) {
-    return expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
+    return rs_expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
   }
 
   *matches = NULL;
