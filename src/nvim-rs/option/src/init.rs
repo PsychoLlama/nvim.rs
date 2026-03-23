@@ -685,7 +685,7 @@ extern "C" {
     // set_init_2 accessors
     fn nvim_option_ilog_rtp();
     fn comp_col();
-    fn nvim_option_was_set_idx(opt_idx: c_int) -> c_int;
+    fn option_was_set(opt_idx: c_int) -> bool;
 
     // set_init_3 accessors
     fn parse_shape_opt(what: c_int) -> *const c_char;
@@ -748,7 +748,7 @@ pub unsafe extern "C" fn rs_set_init_2(_headless: c_int) {
 
     // 'window' is only for backwards compatibility with Vi.
     // Default is Rows - 1.
-    if nvim_option_was_set_idx(K_OPT_WINDOW) == 0 {
+    if !option_was_set(K_OPT_WINDOW) {
         p_window = OptInt::from(Rows) - 1;
     }
     crate::defaults::rs_change_option_default(K_OPT_WINDOW, number_optval(OptInt::from(Rows) - 1));

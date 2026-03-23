@@ -1042,7 +1042,6 @@ OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_v
 
 // Phase 1 init function accessors: expose static helpers to Rust
 void nvim_set_fenc_default(char *val) { fenc_default = val; }
-int nvim_option_was_set_idx(int opt_idx) { return option_was_set((OptIndex)opt_idx); }
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
