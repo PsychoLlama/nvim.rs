@@ -377,7 +377,6 @@ void nvim_unset_vim_env(void) {
   }
 }
 
-
 // Numeric option accessors
 OptInt nvim_option_get_so(void) { return p_so; }
 OptInt nvim_option_get_siso(void) { return p_siso; }
@@ -398,8 +397,6 @@ const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 // =============================================================================
 // Setter functions for Rust code
 // =============================================================================
-
-
 
 // =============================================================================
 // Callback accessor functions for Rust callbacks module
@@ -769,7 +766,6 @@ OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - optio
 // Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
 
-
 // =============================================================================
 // Phase 8 metadata query accessors (Phase 1)
 // =============================================================================
@@ -816,7 +812,6 @@ int64_t nvim_get_no_local_undolevel(void) { return NO_LOCAL_UNDOLEVEL; }
 const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
 // Returns translated "Cannot unset global option value" string pointer.
 const char *nvim_errmsg_no_unset_global(void) { return _("Cannot unset global option value"); }
-
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.
@@ -1091,8 +1086,6 @@ char *nvim_option_vim_getenv(const char *envname) { return vim_getenv(envname); 
 // os_setenv wrapper (for vimrc_found)
 int nvim_option_os_setenv(const char *name, const char *value, int overwrite) { return os_setenv(name, value, overwrite); }
 
-
-
 // insecure_flag pointer accessors
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }
 uint32_t *nvim_win_get_p_stl_flags_ptr(win_T *wp) { return &wp->w_p_stl_flags; }
@@ -1288,25 +1281,16 @@ void nvim_call_set_chars_option_lcs(win_T *wp)
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
-
 extern void rs_set_init_fenc_default(void);
-
-
-
 
 extern const char *rs_option_expand(int opt_idx, const char *val);
 extern void rs_set_options_default(int opt_flags);
-
-
-
-
 
 /// 'title' and 'icon' only default to true if they have not been set or reset
 /// in .vimrc and we can read the old value.
 /// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
 /// they can be reset.  This reduces startup time when using X on a remote
 /// machine.
-
 
 /// Get the string value specified for a ":set" command.  The following set options are supported:
 ///     set {opt}={val}
@@ -1361,7 +1345,6 @@ const char *find_option_end(const char *arg, OptIndex *opt_idxp)
 ///
 /// @return  FAIL if an error is detected, OK otherwise
 
-
 // When changing 'title', 'titlestring', 'icon' or 'iconstring', call
 // maketitle() to create and display it.
 /// set_options_bin -  called when 'bin' changes value.
@@ -1386,14 +1369,12 @@ void *nvim_option_get_p_kp_ptr(void)
 extern void rs_didset_options(void);
 extern void rs_didset_options2(void);
 
-
 /// Handle setting `winhighlight' in window "wp"
 ///
 /// @param winhl  when NULL: use "wp->w_p_winhl"
 /// @param wp     when NULL: only parse "winhl"
 ///
 /// @return  whether the option value is valid.
-
 
 /// Process the new global 'undolevels' option value.
 
@@ -1402,14 +1383,12 @@ void check_redraw(uint32_t flags)
   check_redraw_for(curbuf, curwin, flags);
 }
 
-
 /// Find index for an option. Don't go beyond `len` length.
 ///
 /// @param[in]  name  Option name.
 /// @param      len   Option name length.
 ///
 /// @return Option index or kOptInvalid if option was not found.
-
 
 /// Direct hash-based option lookup for use by Rust (avoids circular delegation).
 ///
@@ -1419,7 +1398,6 @@ OptIndex nvim_find_option_len_hash(const char *name, size_t len)
   int index = find_option_hash(name, len);
   return index >= 0 ? option_hash_elems[index].opt_idx : kOptInvalid;
 }
-
 
 /// Create OptVal from var pointer.
 ///
@@ -1439,7 +1417,6 @@ OptVal optval_from_varp(OptIndex opt_idx, void *varp)
 /// @param[out]  varp         Pointer to option variable.
 /// @param[in]   value        New option value.
 /// @param       free_oldval  Free old value.
-
 
 /// Convert an OptVal to an API Object.
 Object optval_as_object(OptVal o)
@@ -1483,13 +1460,11 @@ OptVal object_as_optval(Object o, bool *error)
   UNREACHABLE;
 }
 
-
 /// Check if option is global-local.
 static inline bool option_is_global_local(OptIndex opt_idx)
 {
   return rs_option_is_global_local(opt_idx);
 }
-
 
 /// Get option index for scope.
 ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
@@ -1498,7 +1473,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 }
 
 // Rust callers now use #[link_name] to call the rs_ functions directly.
-
 
 /// Set option value directly, without processing any side effects.
 ///
@@ -1509,7 +1483,6 @@ ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 ///                      0: Use current script ID.
 ///                      SID_NONE: Don't set script ID.
 
-
 /// Unset the local value of a global-local option.
 ///
 /// @param      opt_idx    Index in options[] table. Must not be kOptInvalid.
@@ -1519,7 +1492,6 @@ static inline const char *unset_option_local_value(const OptIndex opt_idx)
 {
   return rs_unset_option_local_value(opt_idx);
 }
-
 
 /// Switch current context to get/set option value for window/buffer.
 ///
@@ -1667,7 +1639,6 @@ void ui_refresh_options(void)
   }
 }
 
-
 /// Write modified options as ":set" commands to a file.
 ///
 /// There are three values for "opt_flags":
@@ -1686,7 +1657,6 @@ void ui_refresh_options(void)
 ///             When "local_only" is true, don't write fresh
 ///             values, only local values (for ":mkview").
 
-
 /// Get pointer to option variable, depending on local or global scope.
 ///
 /// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
@@ -1702,7 +1672,6 @@ void *get_option_varp_scope_from(OptIndex opt_idx, int opt_flags, buf_T *buf, wi
   return get_varp_scope_from(&(options[opt_idx]), opt_flags, buf, win);
 }
 
-
 /// Get option index from option pointer
 static inline OptIndex get_opt_idx(vimoption_T *opt)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
@@ -1715,7 +1684,6 @@ static inline void *get_varp(vimoption_T *p)
 {
   return get_varp_from(p, curbuf, curwin);
 }
-
 
 /// Copy options from one window to another.
 /// Used when splitting a window.
@@ -1735,9 +1703,6 @@ static char *copy_option_val(const char *val)
 }
 
 extern void rs_check_winopt(winopt_T *wop);
-
-
-
 
 static OptIndex expand_option_idx = kOptInvalid;
 static int expand_option_start_col = 0;
@@ -1821,13 +1786,11 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
   return 4;  // EXPAND_FILES + XP_BS_ONE
 }
 
-
 /// curbuf/curwin accessors for option expansion Rust code.
 buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
 win_T *nvim_opt_get_curwin(void) { return curwin; }
 void nvim_opt_set_curbuf(buf_T *buf) { curbuf = buf; }
 void nvim_opt_set_curwin(win_T *win) { curwin = win; }
-
 
 /// Get the value for the numeric or string option///opp in a nice format into
 /// NameBuff[].  Must not be called with a hidden option!
@@ -1882,7 +1845,6 @@ static void didset_options_sctx(int opt_flags, int *buf)
     set_option_sctx(buf[i], opt_flags, current_sctx);
   }
 }
-
 
 /// Get window or buffer local options
 dict_T *get_winbuf_options(const int bufopt)
@@ -2323,7 +2285,6 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 // Phase 11 (pass 11) accessors: buf_copy_options
 // =============================================================================
 
-
 /// Returns cmdmod.cmod_flags (used by Rust to check CMOD_NOSWAPFILE).
 int nvim_cmdmod_get_cmod_flags(void)
 {
@@ -2384,8 +2345,6 @@ void nvim_call_tabstop_set_vts(buf_T *buf, const char *str) { tabstop_set(str, &
 /// Returns buf->b_p_vts_array (for null check)
 int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array == NULL ? 1 : 0; }
 
-
-
 /// buf->b_kmap_state |= KEYMAP_INIT
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 
@@ -2404,7 +2363,6 @@ int nvim_get_backslash_in_filename(void) {
   return 0;
 #endif
 }
-
 
 OptInt nvim_get_p_sw(void) { return p_sw; }
 OptInt nvim_get_p_scbk(void) { return p_scbk; }
@@ -2514,9 +2472,6 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-
-
-
 /// save_file_ff(curbuf) wrapper.
 void nvim_call_save_file_ff_curbuf(void) { save_file_ff(curbuf); }
 
@@ -2591,7 +2546,6 @@ void nvim_call_set_init_expand_env(void)
 _Static_assert((int)kBufOptAutocomplete == 0, "K_BUF_OPT_AUTOCOMPLETE mismatch");
 _Static_assert((int)kBufOptWrapmargin == 90, "K_BUF_OPT_WRAPMARGIN mismatch");
 _Static_assert(kBufOptCount == 91, "K_BUF_OPT_COUNT mismatch");
-
 
 /// Calls bind_textdomain_codeset(PROJECT_NAME, p_enc) if HAVE_WORKING_LIBINTL.
 /// No-op otherwise.
