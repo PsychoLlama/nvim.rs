@@ -11,8 +11,20 @@ extern "C" {
     fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
     /// Combine two attributes
     fn nvim_hl_combine_attr(a: c_int, b: c_int) -> c_int;
-    /// Get HL_ATTR for a highlight field
-    fn nvim_hl_attr(hlf: c_int) -> c_int;
+    /// hl_attr_active: pointer to the active highlight attribute table
+    static mut hl_attr_active: *mut c_int;
+}
+
+/// Get HL_ATTR for a highlight field index.
+///
+/// Equivalent to `hl_attr_active[hlf]` in C.
+///
+/// # Safety
+/// Reads from the hl_attr_active global array.
+#[inline]
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hl_attr(hlf: c_int) -> c_int {
+    *hl_attr_active.add(hlf as usize)
 }
 
 /// Highlight field constants (mirrors HLF_* in C)
@@ -68,7 +80,7 @@ pub unsafe extern "C" fn rs_msg_combine_attr(hl_id: c_int) -> c_int {
     } else {
         0
     };
-    let msg_attr = nvim_hl_attr(HlField::MSG.0);
+    let msg_attr = hl_attr(HlField::MSG.0);
     nvim_hl_combine_attr(msg_attr, attr)
 }
 
@@ -78,7 +90,7 @@ pub unsafe extern "C" fn rs_msg_combine_attr(hl_id: c_int) -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_error_attr() -> c_int {
-    nvim_hl_attr(HlField::ERROR.0)
+    hl_attr(HlField::ERROR.0)
 }
 
 /// Get the attribute for warning messages.
@@ -87,7 +99,7 @@ pub unsafe extern "C" fn rs_msg_error_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_warning_attr() -> c_int {
-    nvim_hl_attr(HlField::WARNING.0)
+    hl_attr(HlField::WARNING.0)
 }
 
 /// Get the attribute for the message area.
@@ -96,7 +108,7 @@ pub unsafe extern "C" fn rs_msg_warning_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_area_attr() -> c_int {
-    nvim_hl_attr(HlField::MSG.0)
+    hl_attr(HlField::MSG.0)
 }
 
 /// Get the attribute for the "more" prompt.
@@ -105,7 +117,7 @@ pub unsafe extern "C" fn rs_msg_area_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_more_attr() -> c_int {
-    nvim_hl_attr(HlField::MORE.0)
+    hl_attr(HlField::MORE.0)
 }
 
 /// Get the attribute for special characters.
@@ -114,7 +126,7 @@ pub unsafe extern "C" fn rs_msg_more_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_special_attr() -> c_int {
-    nvim_hl_attr(HlField::SPECIAL.0)
+    hl_attr(HlField::SPECIAL.0)
 }
 
 /// Get the attribute for question/prompt messages.
@@ -123,7 +135,7 @@ pub unsafe extern "C" fn rs_msg_special_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_question_attr() -> c_int {
-    nvim_hl_attr(HlField::QUESTION.0)
+    hl_attr(HlField::QUESTION.0)
 }
 
 /// Get the attribute for title messages.
@@ -132,7 +144,7 @@ pub unsafe extern "C" fn rs_msg_question_attr() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_title_attr() -> c_int {
-    nvim_hl_attr(HlField::TITLE.0)
+    hl_attr(HlField::TITLE.0)
 }
 
 #[cfg(test)]

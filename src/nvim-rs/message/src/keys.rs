@@ -152,9 +152,6 @@ pub const extern "C" fn rs_needs_special_form(c: c_int) -> c_int {
 
 // C function declarations
 extern "C" {
-    /// Check if a key code is a special key
-    fn nvim_is_special_key(key: c_int) -> c_int;
-
     // For str2special implementation (Phase 85)
     /// Unescape a K_SPECIAL-encoded multi-byte sequence
     fn mb_unescape(pp: *mut *const c_char) -> *const c_char;
@@ -181,12 +178,9 @@ pub struct Arena {
 }
 
 /// Check if a key code represents a special key.
-///
-/// # Safety
-/// Calls C function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_is_special_key(key: c_int) -> c_int {
-    nvim_is_special_key(key)
+pub extern "C" fn rs_is_special_key(key: c_int) -> c_int {
+    c_int::from(is_special_key(key))
 }
 
 // ============================================================================

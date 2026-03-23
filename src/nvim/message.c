@@ -178,12 +178,6 @@ void msg_grid_set_pos(int row, bool scrolled)
 }
 
 
-/// C accessor for kOptRdbFlagNothrottle constant.
-unsigned int nvim_get_rdb_flag_nothrottle(void)
-{
-  return kOptRdbFlagNothrottle;
-}
-
 // C accessors for redirection state (used by Rust)
 // redir_fd/reg/vname/capture_ga/p_vfile: accessed as extern statics from Rust (verbose.rs)
 // nvim_get_ui_active: replaced by direct ui_active() call in grid/src/lib.rs
@@ -218,7 +212,6 @@ static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
 // Phase 4: emsg_multiline accessors
-int nvim_get_p_eb(void) { return p_eb ? 1 : 0; }
 void nvim_flush_buffers_minimal(void) { flush_buffers(FLUSH_MINIMAL); }
 // Wrappers for static functions used by emsg_multiline:
 int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore)
@@ -314,9 +307,6 @@ void nvim_msg_grid_scroll_up(int to_scroll)
   ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
 }
 
-// Phase 431: Special key helpers
-int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }
-
 // Phase 432: Line printing accessors
 int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
@@ -369,7 +359,6 @@ void nvim_redir_write_newline(void) { redir_write("\n", 1); }
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
-int nvim_hl_attr(int hlf) { return hl_attr_active[hlf]; }
 
 // Phase 68: keep_msg raw setters (used by Rust set_keep_msg)
 // Note: nvim_set_keep_msg (with xfree/xstrdup) is defined in buffer_shim.c
@@ -400,8 +389,6 @@ const char *nvim_format_msgmore(int n)
 // Note: nvim_ui_flush is defined in change_ffi.c
 // Note: nvim_os_delay is defined in change_ffi.c (takes long ms, bool allow_input)
 
-// Phase 70: messaging() p_lz accessor
-int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
 // Note: nvim_get_global_busy is defined in undo.c (returns bool)
 
 // Phase 72: give_warning() accessors

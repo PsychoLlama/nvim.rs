@@ -111,7 +111,7 @@ extern "C" {
     static mut keep_msg: *mut c_char;
 
     // For messaging()
-    fn nvim_get_p_lz() -> c_int;
+    static mut p_lz: c_int;
     fn nvim_char_avail() -> c_int;
     fn nvim_get_key_typed() -> c_int;
     static mut p_ch: i64;
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn rs_msg_clr_eos_force() {
 pub unsafe extern "C" fn rs_messaging() -> bool {
     // TODO(bfredl): with general support for "async" messages with p_ch,
     // this should be re-enabled.
-    !(nvim_get_p_lz() != 0 && nvim_char_avail() != 0 && nvim_get_key_typed() == 0)
+    !(p_lz != 0 && nvim_char_avail() != 0 && nvim_get_key_typed() == 0)
         && (p_ch > 0 || nvim_ui_has_messages() != 0)
 }
 

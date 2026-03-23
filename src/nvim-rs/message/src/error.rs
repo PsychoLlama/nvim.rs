@@ -482,7 +482,7 @@ extern "C" {
     static mut ex_exitval: c_int;
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
-    fn nvim_get_p_eb() -> c_int;
+    static mut p_eb: c_int;
     fn nvim_beep_flush();
     fn nvim_flush_buffers_minimal();
     static mut msg_nowait: bool;
@@ -612,7 +612,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
             nvim_inc_global_busy();
         }
 
-        if nvim_get_p_eb() != 0 {
+        if p_eb != 0 {
             nvim_beep_flush(); // also includes flush_buffers()
         } else {
             nvim_flush_buffers_minimal(); // flush internal buffers

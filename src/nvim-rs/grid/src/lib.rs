@@ -2443,8 +2443,9 @@ pub unsafe extern "C" fn rs_msg_use_grid() -> bool {
 extern "C" {
     static mut msg_scrolled: c_int;
     static mut p_ch: i64;
-    fn nvim_get_rdb_flag_nothrottle() -> c_uint;
 }
+
+const K_OPT_RDB_FLAG_NOTHROTTLE: c_uint = 0x02;
 
 /// Calculate the message scroll size including horizontal separator.
 ///
@@ -2470,8 +2471,7 @@ pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
 pub unsafe extern "C" fn rs_msg_do_throttle() -> bool {
     let use_grid = rs_msg_use_grid();
     let rdb_flags = nvim_get_rdb_flags();
-    let nothrottle = nvim_get_rdb_flag_nothrottle();
-    use_grid && (rdb_flags & nothrottle) == 0
+    use_grid && (rdb_flags & K_OPT_RDB_FLAG_NOTHROTTLE) == 0
 }
 
 // Message redirection state (accessed as extern statics)
