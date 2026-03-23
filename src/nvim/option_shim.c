@@ -1763,12 +1763,6 @@ void nvim_regmatch_set_rm_ic(void *regmatch, int val)
   ((regmatch_T *)regmatch)->rm_ic = val;
 }
 
-/// Call fuzzymatches_to_strmatches with opaque pointer.
-void nvim_option_fuzzymatches_to_strmatches(void *fuzmatch, char ***matches, int count)
-{
-  fuzzymatches_to_strmatches((fuzmatch_str_T *)fuzmatch, matches, count, false);
-}
-
 /// Get fuzmatch_str_T size.
 size_t nvim_option_get_fuzmatch_size(void)
 {
@@ -2004,16 +1998,6 @@ OptInt nvim_buf_get_optint_field(buf_T *buf, ptrdiff_t offset) { return *(OptInt
 int nvim_buf_get_bool_field(buf_T *buf, ptrdiff_t offset) { return (int)(*(bool *)(((char *)buf) + offset)); }
 /// Sets buf->b_p_fenc = xstrdup(p_fenc).
 void nvim_buf_set_b_p_fenc_dup(buf_T *buf) { buf->b_p_fenc = xstrdup(p_fenc); }
-
-/// Sets buf->b_p_ff based on first char of p_ffs.
-void nvim_buf_set_b_p_ff_from_ffs(buf_T *buf) {
-  switch (*p_ffs) {
-  case 'm': buf->b_p_ff = xstrdup("mac"); break;
-  case 'd': buf->b_p_ff = xstrdup("dos"); break;
-  case 'u': buf->b_p_ff = xstrdup("unix"); break;
-  default:  buf->b_p_ff = xstrdup(p_ff); break;
-  }
-}
 
 /// Sets buf->b_p_bh = empty_string_option.
 void nvim_buf_set_b_p_bh_empty(buf_T *buf) { buf->b_p_bh = empty_string_option; }

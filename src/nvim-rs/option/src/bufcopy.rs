@@ -27,15 +27,16 @@ use crate::opt_index::{
     K_OPT_CINKEYS, K_OPT_CINOPTIONS, K_OPT_CINSCOPEDECLS, K_OPT_CINWORDS, K_OPT_COMMENTS,
     K_OPT_COMMENTSTRING, K_OPT_COMPLETE, K_OPT_COMPLETEFUNC, K_OPT_COPYINDENT, K_OPT_DEFINE,
     K_OPT_DICTIONARY, K_OPT_DIFFANCHORS, K_OPT_EQUALPRG, K_OPT_ERRORFORMAT, K_OPT_EXPANDTAB,
-    K_OPT_FILETYPE, K_OPT_FINDFUNC, K_OPT_FIXENDOFLINE, K_OPT_FORMATEXPR, K_OPT_FORMATLISTPAT,
-    K_OPT_FORMATOPTIONS, K_OPT_FORMATPRG, K_OPT_GREPFORMAT, K_OPT_GREPPRG, K_OPT_INCLUDE,
-    K_OPT_INCLUDEEXPR, K_OPT_INDENTEXPR, K_OPT_INDENTKEYS, K_OPT_INFERCASE, K_OPT_ISKEYWORD,
-    K_OPT_KEYMAP, K_OPT_KEYWORDPRG, K_OPT_LISP, K_OPT_LISPOPTIONS, K_OPT_LISPWORDS,
-    K_OPT_MAKEENCODING, K_OPT_MAKEPRG, K_OPT_MATCHPAIRS, K_OPT_NRFORMATS, K_OPT_OMNIFUNC,
-    K_OPT_PATH, K_OPT_PRESERVEINDENT, K_OPT_QUOTEESCAPE, K_OPT_SCROLLBACK, K_OPT_SHIFTWIDTH,
-    K_OPT_SMARTINDENT, K_OPT_SOFTTABSTOP, K_OPT_SUFFIXESADD, K_OPT_SWAPFILE, K_OPT_SYNMAXCOL,
-    K_OPT_SYNTAX, K_OPT_TABSTOP, K_OPT_TAGFUNC, K_OPT_TAGS, K_OPT_TEXTWIDTH, K_OPT_THESAURUS,
-    K_OPT_THESAURUSFUNC, K_OPT_UNDOFILE, K_OPT_VARSOFTTABSTOP, K_OPT_VARTABSTOP, K_OPT_WRAPMARGIN,
+    K_OPT_FILEFORMAT, K_OPT_FILETYPE, K_OPT_FINDFUNC, K_OPT_FIXENDOFLINE, K_OPT_FORMATEXPR,
+    K_OPT_FORMATLISTPAT, K_OPT_FORMATOPTIONS, K_OPT_FORMATPRG, K_OPT_GREPFORMAT, K_OPT_GREPPRG,
+    K_OPT_INCLUDE, K_OPT_INCLUDEEXPR, K_OPT_INDENTEXPR, K_OPT_INDENTKEYS, K_OPT_INFERCASE,
+    K_OPT_ISKEYWORD, K_OPT_KEYMAP, K_OPT_KEYWORDPRG, K_OPT_LISP, K_OPT_LISPOPTIONS,
+    K_OPT_LISPWORDS, K_OPT_MAKEENCODING, K_OPT_MAKEPRG, K_OPT_MATCHPAIRS, K_OPT_NRFORMATS,
+    K_OPT_OMNIFUNC, K_OPT_PATH, K_OPT_PRESERVEINDENT, K_OPT_QUOTEESCAPE, K_OPT_SCROLLBACK,
+    K_OPT_SHIFTWIDTH, K_OPT_SMARTINDENT, K_OPT_SOFTTABSTOP, K_OPT_SUFFIXESADD, K_OPT_SWAPFILE,
+    K_OPT_SYNMAXCOL, K_OPT_SYNTAX, K_OPT_TABSTOP, K_OPT_TAGFUNC, K_OPT_TAGS, K_OPT_TEXTWIDTH,
+    K_OPT_THESAURUS, K_OPT_THESAURUSFUNC, K_OPT_UNDOFILE, K_OPT_VARSOFTTABSTOP, K_OPT_VARTABSTOP,
+    K_OPT_WRAPMARGIN,
 };
 use crate::OptInt;
 use crate::{BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, CPO_BUFOPT, CPO_BUFOPTGLOB};
@@ -105,8 +106,9 @@ extern "C" {
     fn clear_string_option(pp: *mut *mut c_char);
 
     fn nvim_buf_set_b_p_fenc_dup(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_ff_from_ffs(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_bh_empty(buf: *mut core::ffi::c_void);
+    static mut p_ff: *mut c_char;
+    static mut p_ffs: *mut c_char;
     fn nvim_buf_set_b_p_bt_empty(buf: *mut core::ffi::c_void);
 
     // b_s substructure setters (not in the offset table):
@@ -597,7 +599,14 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
             free_buf_options(buf, true);
             nvim_buf_clear_b_p_ro(buf);
             nvim_buf_set_b_p_fenc_dup(buf);
-            nvim_buf_set_b_p_ff_from_ffs(buf);
+            // Set b_p_ff from first char of p_ffs, falling back to p_ff.
+            let ff_str: *const c_char = match (*p_ffs) as u8 {
+                b'm' => c"mac".as_ptr(),
+                b'd' => c"dos".as_ptr(),
+                b'u' => c"unix".as_ptr(),
+                _ => p_ff,
+            };
+            nvim_buf_set_string_field(buf, field_offset(K_OPT_FILEFORMAT), ff_str);
             nvim_buf_set_b_p_bh_empty(buf);
             nvim_buf_set_b_p_bt_empty(buf);
         }
