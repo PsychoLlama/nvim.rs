@@ -22,6 +22,9 @@ use crate::types::{
     UB_SAME_DIR,
 };
 
+/// CMOD_NOSWAPFILE flag value (validated by _Static_assert in option_shim.c)
+const CMOD_NOSWAPFILE: c_int = 0x2000;
+
 // =============================================================================
 // C Implementation Declarations
 // =============================================================================
@@ -119,7 +122,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     // Initialize all ml fields to zero/NULL
     nvim_buf_init_ml_empty(buf);
 
-    if nvim_get_cmod_noswapfile() != 0 {
+    if nvim_get_cmod_flags() & CMOD_NOSWAPFILE != 0 {
         nvim_buf_set_b_p_swf_false(buf);
     }
 
@@ -238,7 +241,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
         // There is no swap file yet.
         // When 'updatecount' is 0 or 'noswapfile' there is no swap file.
         // For help files we will make a swap file now.
-        if p_uc != 0 && nvim_get_cmod_noswapfile() == 0 {
+        if p_uc != 0 && nvim_get_cmod_flags() & CMOD_NOSWAPFILE == 0 {
             rs_ml_open_file(buf); // create a swap file
         }
         return;
@@ -354,7 +357,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
     if mfp.is_null()
         || nvim_mf_get_fd(mfp) >= 0
         || nvim_buf_get_p_swf(buf) == 0
-        || nvim_get_cmod_noswapfile() != 0
+        || nvim_get_cmod_flags() & CMOD_NOSWAPFILE != 0
         || nvim_buf_get_terminal(buf) != 0
     {
         return; // nothing to do
@@ -636,8 +639,8 @@ extern "C" {
     /// Get buf->b_p_swf (swapfile option)
     fn nvim_buf_get_p_swf(buf: *mut BufHandle) -> c_int;
 
-    /// Get cmdmod.cmod_flags & CMOD_NOSWAPFILE
-    fn nvim_get_cmod_noswapfile() -> c_int;
+    #[link_name = "nvim_get_cmdmod_cmod_flags"]
+    fn nvim_get_cmod_flags() -> c_int;
 
     /// Get buf->terminal (returns 1 if terminal buffer)
     fn nvim_buf_get_terminal(buf: *mut BufHandle) -> c_int;

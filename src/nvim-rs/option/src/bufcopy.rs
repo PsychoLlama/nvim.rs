@@ -74,6 +74,7 @@ extern "C" {
 
 extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    #[link_name = "nvim_get_cmdmod_cmod_flags"]
     fn nvim_cmdmod_get_cmod_flags() -> c_int;
 
     fn nvim_buf_get_b_p_initialized(buf: *mut core::ffi::c_void) -> c_int;

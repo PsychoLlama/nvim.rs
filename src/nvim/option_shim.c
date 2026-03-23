@@ -1982,18 +1982,6 @@ void nvim_ui_call_option_set(OptIndex opt_idx, OptVal saved_new_value)
 // Phase 11 (pass 11) accessors: buf_copy_options
 // =============================================================================
 
-/// Returns cmdmod.cmod_flags (used by Rust to check CMOD_NOSWAPFILE).
-int nvim_cmdmod_get_cmod_flags(void)
-{
-  return cmdmod.cmod_flags;
-}
-
-/// Returns cmdmod.cmod_flags & CMOD_NOSWAPFILE (1 if :noswapfile is active, 0 otherwise).
-int nvim_get_cmod_noswapfile(void)
-{
-  return (cmdmod.cmod_flags & CMOD_NOSWAPFILE) != 0;
-}
-
 /// Returns buf->b_p_initialized.
 int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
 /// Sets buf->b_p_initialized.
