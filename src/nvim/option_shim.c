@@ -2341,8 +2341,6 @@ int nvim_option_p_cpo_has_undo(void)
 {
   return vim_strchr(p_cpo, CPO_UNDO) != NULL ? 1 : 0;
 }
-/// Get whether p_icm (inccommand) is non-empty.
-int nvim_option_p_icm_notnul(void) { return *p_icm != NUL ? 1 : 0; }
 
 // =============================================================================
 // Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers

@@ -1194,7 +1194,7 @@ extern "C" {
     fn nvim_number_width_curwin() -> c_int;
     fn nvim_excmds_syn_check_sub_group() -> c_int;
     fn nvim_excmds_disable_inccommand();
-    fn nvim_option_p_icm_notnul() -> c_int;
+    static p_icm: *const std::ffi::c_char;
     fn nvim_do_sub_set_op_start_end(start_lnum: c_int, end_lnum: c_int);
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_nopresub();
@@ -2181,7 +2181,7 @@ pub unsafe extern "C" fn rs_do_sub(
     if cmdpreview_ns > 0 && nvim_excmds_aborting() == 0 {
         if got_quit || rs_profile_passed_limit(timeout) {
             nvim_excmds_disable_inccommand();
-        } else if nvim_option_p_icm_notnul() != 0 && !pat.is_null() {
+        } else if !p_icm.is_null() && *p_icm != 0 && !pat.is_null() {
             let mut hl_id = PRE_HL_ID.load(std::sync::atomic::Ordering::Relaxed);
             if hl_id == 0 {
                 hl_id = nvim_excmds_syn_check_sub_group();
