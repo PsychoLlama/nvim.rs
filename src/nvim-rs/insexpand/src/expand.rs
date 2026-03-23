@@ -84,9 +84,7 @@ extern "C" {
     fn nvim_ins_compl_st_get_func_cb() -> *mut std::ffi::c_void;
     fn nvim_ins_compl_st_get_first_lnum() -> c_int;
 
-    // old_match / curr_match ops (compl_old_match_advance_curr and curr_rewind still in C)
-    fn nvim_compl_old_match_advance_curr();
-    fn nvim_compl_curr_rewind_to_head();
+    // (nvim_compl_old_match_advance_curr and nvim_compl_curr_rewind_to_head: inlined in match_list.rs)
 
     // Phase 14 (Phase 3) accessors for rs_process_next_cpt_value
     fn nvim_curbuf_get_b_scanned() -> c_int;
@@ -669,7 +667,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         // For ^P completion, reset compl_curr_match to the head to avoid
         // mixing matches from different sources.
         if rs_compl_dir_forward() == 0 {
-            nvim_compl_curr_rewind_to_head();
+            crate::match_list::compl_curr_rewind_to_head();
         }
     }
 
@@ -702,7 +700,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     }
 
     // Advance compl_curr_match past old_match
-    nvim_compl_old_match_advance_curr();
+    crate::match_list::compl_old_match_advance_curr();
 
     may_trigger_modechanged();
 

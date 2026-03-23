@@ -148,7 +148,7 @@ extern "C" {
 
     // Phase 3 state accessors
     fn pum_visible() -> c_int;
-    fn nvim_get_compl_curr_match_str_data() -> *const c_char;
+    // (nvim_get_compl_curr_match_str_data: inlined in match_list.rs)
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
     fn nvim_get_compl_leader_data() -> *const c_char;
     fn nvim_get_compl_leader_size() -> usize;
@@ -440,7 +440,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // Get here when we have finished typing a sequence of ^N and ^P or other
     // completion characters in CTRL-X mode. Free up memory that was used, and
     // make sure we can redo the insert.
-    let curr_match_str = nvim_get_compl_curr_match_str_data();
+    let curr_match_str = crate::match_list::curr_match_cp_str_data();
     let leader_data = nvim_get_compl_leader_data();
     if !curr_match_str.is_null() || !leader_data.is_null() || c == CTRL_E {
         // If any of the original typed text has been changed (e.g. when

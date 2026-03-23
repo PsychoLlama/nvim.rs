@@ -213,6 +213,55 @@ pub(crate) unsafe fn shown_match_has_fname() -> bool {
     !compl_shown_match.is_null() && nvim_compl_match_has_fname(compl_shown_match) != 0
 }
 
+/// Get cp_str.data of compl_curr_match (null if match is null).
+#[inline]
+pub(crate) unsafe fn curr_match_cp_str_data() -> *const c_char {
+    if compl_curr_match.is_null() {
+        std::ptr::null()
+    } else {
+        nvim_compl_match_get_cp_str_data(compl_curr_match)
+    }
+}
+
+/// Advance compl_curr_match past compl_old_match.
+///
+/// At end of ins_compl_get_exp: if compl_old_match is set, move curr to
+/// old_match->cp_next (forward) or cp_prev (backward). Fallback to old_match if null.
+#[inline]
+pub(crate) unsafe fn compl_old_match_advance_curr() {
+    if !compl_old_match.is_null() {
+        let next = if rs_compl_dir_forward() != 0 {
+            nvim_compl_match_get_next(compl_old_match)
+        } else {
+            nvim_compl_match_get_prev(compl_old_match)
+        };
+        compl_curr_match = if next.is_null() {
+            compl_old_match
+        } else {
+            next
+        };
+    }
+}
+
+/// Rewind compl_curr_match to the list head (^P: skip original text sentinel).
+///
+/// Walk back using cp_prev until we find a node whose prev is the original text
+/// (match_at_original_text), then stop.
+#[inline]
+pub(crate) unsafe fn compl_curr_rewind_to_head() {
+    loop {
+        let curr = compl_curr_match;
+        if curr.is_null() {
+            break;
+        }
+        let prev = nvim_compl_match_get_prev(curr);
+        if prev.is_null() || nvim_compl_match_at_original_text(prev) != 0 {
+            break;
+        }
+        compl_curr_match = prev;
+    }
+}
+
 /// Check if a match represents the original text.
 #[inline]
 #[allow(dead_code)]

@@ -1948,7 +1948,7 @@ void nvim_spell_back_safe(void) { emsg_off++; nvim_spell_back_to_badword_impl();
 // nvim_mb_tolower: deleted (Phase 3, Rust calls mb_tolower directly)
 
 // Accessors for ins_compl_stop (Phase 3)
-const char *nvim_get_compl_curr_match_str_data(void) { return compl_curr_match ? compl_curr_match->cp_str.data : NULL; }
+// nvim_get_compl_curr_match_str_data: deleted (Phase 15, inlined in match_list.rs)
 char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstrdup(compl_shown_match->cp_str.data) : NULL; }
 void nvim_clear_compl_best_matches(void) { compl_best_matches = 0; }
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
@@ -2133,25 +2133,8 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
   }
 }
 
-// --- compl_old_match / compl_curr_match compound ops ---
-void nvim_compl_old_match_advance_curr(void) {
-  // Called at end of ins_compl_get_exp to advance compl_curr_match.
-  if (compl_old_match != NULL) {
-    compl_curr_match = rs_compl_dir_forward()
-                       ? compl_old_match->cp_next
-                       : compl_old_match->cp_prev;
-    if (compl_curr_match == NULL) {
-      compl_curr_match = compl_old_match;
-    }
-  }
-}
-void nvim_compl_curr_rewind_to_head(void) {
-  // For ^P: walk back to the list head (skip original text sentinel)
-  while (compl_curr_match && compl_curr_match->cp_prev
-         && !match_at_original_text(compl_curr_match->cp_prev)) {
-    compl_curr_match = compl_curr_match->cp_prev;
-  }
-}
+// nvim_compl_old_match_advance_curr: deleted (Phase 15, inlined in match_list.rs)
+// nvim_compl_curr_rewind_to_head: deleted (Phase 15, inlined in match_list.rs)
 
 void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
 int nvim_get_compl_pattern_is_null(void) { return compl_pattern.data == NULL ? 1 : 0; }
