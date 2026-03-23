@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_set_State(val: c_int);
 
     // `CPO_REPLCNT` / `p_cpo`
-    fn nvim_edit_p_cpo_has_replcnt() -> c_int;
+    fn nvim_p_cpo_has_replcnt() -> bool;
 
     // `ve_flags`
     fn nvim_get_ve_flags() -> c_uint;
@@ -74,7 +74,7 @@ extern "C" {
     fn nvim_edit_set_b_last_insert_mark();
 
     // `cmod_flags` / `CMOD_KEEPJUMPS`
-    fn nvim_edit_cmod_keepjumps() -> c_int;
+    fn nvim_cmod_keepjumps() -> bool;
 
     // `oneleft` (already in Rust with `c_int` return)
     fn oneleft() -> c_int;
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         *count -= 1;
         if *count > 0 {
             // Vi repeats insert without replacing characters.
-            if nvim_edit_p_cpo_has_replcnt() != 0 {
+            if nvim_p_cpo_has_replcnt() {
                 let state = nvim_get_State();
                 nvim_set_State(state & !REPLACE_FLAG);
             }
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     }
 
     // Remember the last Insert position in the '^ mark.
-    if nvim_edit_cmod_keepjumps() == 0 {
+    if !nvim_cmod_keepjumps() {
         nvim_edit_set_b_last_insert_mark();
     }
 

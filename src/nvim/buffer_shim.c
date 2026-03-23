@@ -1023,3 +1023,4 @@ void nvim_cmdwin_set_filetype_vim(void)
 }
 
 bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
+bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }

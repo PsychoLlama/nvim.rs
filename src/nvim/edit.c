@@ -695,11 +695,6 @@ colnr_T nvim_edit_linetabsize_cursor_line(void)
 
 
 
-/// Check if curbuf->b_p_fex (formatexpr) is non-empty (accessor for Rust).
-int nvim_edit_has_b_p_fex(void)
-{
-  return *curbuf->b_p_fex != NUL ? 1 : 0;
-}
 
 /// Handle the end_comment_pending char replacement for insertchar (accessor for Rust).
 /// This is the complex comment-leader removal section from insertchar().
@@ -2295,7 +2290,7 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
 
 
 /// Trim last char of previous line if space (FO_WHITE_PAR helper).
-void nvim_edit_trim_eol_space(void)
+void nvim_trim_eol_space(void)
 {
   char *ptr = ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
   int len = get_cursor_line_len();
@@ -2303,32 +2298,6 @@ void nvim_edit_trim_eol_space(void)
     ptr[len - 1] = NUL;
     curbuf->b_ml.ml_line_len--;
   }
-}
-
-/// Call do_join(2, false, false, false, false) (accessor for Rust).
-void nvim_edit_do_join_simple(void)
-{
-  do_join(2, false, false, false, false);
-}
-
-
-
-/// Check utf_composinglike at cursor (accessor for Rust).
-int nvim_edit_cursor_has_composing(void)
-{
-  if (!p_deco) {
-    return 0;
-  }
-  char *p0 = get_cursor_pos_ptr();
-  return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0;
-}
-
-
-
-/// Check if p_cpo contains CPO_BACKSPACE (accessor for Rust).
-int nvim_edit_p_cpo_has_backspace(void)
-{
-  return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL ? 1 : 0;
 }
 
 
@@ -2511,18 +2480,7 @@ void nvim_edit_putchar(int c, int highlight)
 // ---- ins_esc accessors ----
 
 
-/// Check if p_cpo contains CPO_REPLCNT (accessor for Rust).
-int nvim_edit_p_cpo_has_replcnt(void)
-{
-  return vim_strchr(p_cpo, CPO_REPLCNT) != NULL ? 1 : 0;
-}
 
-
-/// Check if (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 (accessor for Rust).
-int nvim_edit_cmod_keepjumps(void)
-{
-  return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0 ? 1 : 0;
-}
 
 /// Call stop_insert logic at curwin->w_cursor (composite for Rust).
 void nvim_edit_stop_insert_curpos(int nomove)

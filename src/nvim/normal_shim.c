@@ -2297,3 +2297,4 @@ int nvim_comp_textwidth(int ff) { return comp_textwidth((bool)ff); }
 void nvim_internal_format(int textwidth, int second_indent, int flags, int format_only, int c) { internal_format(textwidth, second_indent, flags, (bool)format_only, c); }
 int nvim_byte2cells(int b) { return byte2cells((uint8_t)b); }
 int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }
+int nvim_cursor_has_composing(void) { if (!p_deco) { return 0; } char *p0 = get_cursor_pos_ptr(); return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0; }

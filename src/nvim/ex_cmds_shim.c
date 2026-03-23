@@ -2392,3 +2392,9 @@ void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
   out->word_count = (int64_t)wc;
   out->char_count = (int64_t)cc;
 }
+
+// General cpo/cmdmod/join accessors (migrated from edit.c)
+bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
+bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
+bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
+void nvim_do_join_simple(void) { do_join(2, false, false, false, false); }

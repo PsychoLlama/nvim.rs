@@ -86,8 +86,8 @@ extern "C" {
     // Character ops
     fn nvim_gchar_cursor() -> c_int;
     fn nvim_has_format_option(c: c_int) -> bool;
-    fn nvim_edit_trim_eol_space();
-    fn nvim_edit_do_join_simple();
+    fn nvim_trim_eol_space();
+    fn nvim_do_join_simple();
 
     // Replace mode
     fn replace_pop_if_nul() -> c_int;
@@ -102,7 +102,7 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
 
     // p_cpo backspace check
-    fn nvim_edit_p_cpo_has_backspace() -> c_int;
+    fn nvim_p_cpo_has_backspace() -> bool;
 
     // Virtual column
     fn nvim_curwin_get_w_virtcol() -> ColnrT;
@@ -113,7 +113,7 @@ extern "C" {
     // Word class
     fn nvim_mb_get_class_cursor() -> c_int;
     fn vim_iswordc(c: c_int) -> bool;
-    fn nvim_edit_cursor_has_composing() -> c_int;
+    fn nvim_cursor_has_composing() -> c_int;
 
     // Softtabstop helpers
     fn nvim_edit_ins_bs_check_sts(inserted_space_p: *mut c_int, in_indent: bool) -> bool;
@@ -275,10 +275,10 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
 
                 // When "aw" is in 'formatoptions': delete trailing space
                 if nvim_has_format_option(FO_AUTO) && nvim_has_format_option(FO_WHITE_PAR) {
-                    nvim_edit_trim_eol_space();
+                    nvim_trim_eol_space();
                 }
 
-                nvim_edit_do_join_simple();
+                nvim_do_join_simple();
                 if temp == NUL && nvim_gchar_cursor() != NUL {
                     inc_cursor();
                 }
@@ -358,7 +358,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                 if state & REPLACE_FLAG != 0 {
                     replace_do_bs(-1);
                 } else {
-                    let has_composing = nvim_edit_cursor_has_composing();
+                    let has_composing = nvim_cursor_has_composing();
                     del_char(0);
                     if has_composing != 0 {
                         inc_cursor();
@@ -415,7 +415,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
     }
 
     // vi behaviour: dollar display even when not set
-    if nvim_edit_p_cpo_has_backspace() != 0 && nvim_get_dollar_vcol() == -1 {
+    if nvim_p_cpo_has_backspace() && nvim_get_dollar_vcol() == -1 {
         nvim_set_dollar_vcol(nvim_curwin_get_w_virtcol());
     }
 
