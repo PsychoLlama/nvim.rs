@@ -35,7 +35,7 @@ extern "C" {
     fn nvim_optset_get_oldval_str(args: *const c_void) -> *const c_char;
 
     // Validation helpers
-    fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
+    fn rs_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
     fn did_set_str_generic(args: *mut c_void) -> *const c_char;
     fn rs_opt_strings_flags(
         val: *const c_char,
@@ -129,7 +129,7 @@ unsafe fn validate_listflag_with_errbuf(
     while *p != 0 {
         let ch = *p as u8;
         if !allowed.contains(&ch) {
-            return nvim_illegal_char(errbuf, errbuflen, c_int::from(ch));
+            return rs_illegal_char(errbuf, errbuflen, c_int::from(ch));
         }
         p = p.add(1);
     }
@@ -459,7 +459,7 @@ pub unsafe extern "C" fn rs_did_set_comments(args: *mut c_void) -> CallbackResul
         while *s != 0 && *s != b':' as c_char {
             let ch = *s as u8;
             if !COM_ALL.contains(&ch) && !ch.is_ascii_digit() && ch != b'-' {
-                return nvim_illegal_char(errbuf, errbuflen, c_int::from(ch));
+                return rs_illegal_char(errbuf, errbuflen, c_int::from(ch));
             }
             s = s.add(1);
         }

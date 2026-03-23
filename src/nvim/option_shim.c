@@ -535,12 +535,6 @@ const char *nvim_optset_get_varp_str(const void *args)
 char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)->os_errbuf; }
 // Return os_errbuflen for listflag error formatting
 size_t nvim_optset_get_errbuflen(const void *args) { return ((const optset_T *)args)->os_errbuflen; }
-// Wrapper for rs_illegal_char (formats E539 error into errbuf)
-extern const char *rs_illegal_char(char *errbuf, size_t errbuflen, int c);
-const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
-{
-  return rs_illegal_char(errbuf, errbuflen, c);
-}
 // Wrappers for side-effect functions
 int nvim_call_briopt_check_win(const char *val, win_T *win)
 {

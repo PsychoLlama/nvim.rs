@@ -68,7 +68,9 @@ extern "C" {
     fn nvim_optset_get_varp_str(args: *const c_void) -> *const c_char;
     fn nvim_optset_get_errbuf(args: *const c_void) -> *mut c_char;
     fn nvim_optset_get_errbuflen(args: *const c_void) -> usize;
-    fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
+
+    // Validation helpers
+    fn rs_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
 
     // Lines/columns callback accessors
     fn nvim_get_full_screen() -> bool;
@@ -391,7 +393,7 @@ pub unsafe extern "C" fn rs_did_set_concealcursor(args: *mut c_void) -> Callback
         while *p != 0 {
             let ch = *p as u8;
             if !COCU_ALL.contains(&ch) {
-                return nvim_illegal_char(errbuf, errbuflen, c_int::from(ch));
+                return rs_illegal_char(errbuf, errbuflen, c_int::from(ch));
             }
             p = p.add(1);
         }
