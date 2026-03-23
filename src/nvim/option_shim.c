@@ -984,11 +984,6 @@ void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
   return get_varp_scope(&options[opt_idx], opt_flags);
 }
 // nvim_get_namebuff is defined in buffer.c
-void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
-{
-  home_replace(NULL, src, dst, dstlen, false);
-}
-
 void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
 {
   *name = options[opt_idx].fullname;
@@ -2286,21 +2281,6 @@ void nvim_call_free_operatorfunc_option(void) {}
 #endif
 
 
-/// Return escape kind for option_expand:
-///   0 = no escape needed
-///   1 = escape spaces (p_tags or p_path)
-///   2 = use "file:" prefix (p_sps)
-int nvim_option_expand_escape_kind(int opt_idx)
-{
-  char **var = (char **)options[(OptIndex)opt_idx].var;
-  if (var == &p_tags || var == &p_path) {
-    return 1;
-  }
-  if (var == &p_sps) {
-    return 2;
-  }
-  return 0;
-}
 
 /// expand_env_esc into NameBuff wrapper for option_expand.
 /// esc_kind: 0=no escape, 1=escape, 2=use "file:" prefix.
@@ -2333,18 +2313,6 @@ int nvim_oe_get_idx(const optexpand_T *args) { return (int)args->oe_idx; }
 const char **nvim_option_get_values(const vimoption_T *opt) { return (const char **)opt->values; }
 size_t nvim_option_get_values_len(const vimoption_T *opt) { return opt->values_len; }
 
-// Normalize opt_idx for expand_set_str_generic
-// (viewoptions uses sessionoptions values; fileformats uses fileformat values)
-int nvim_normalize_opt_idx_for_expand(int idx)
-{
-  if (idx == kOptViewoptions) {
-    return kOptSessionoptions;
-  }
-  if (idx == kOptFileformats) {
-    return kOptFileformat;
-  }
-  return idx;
-}
 
 // Window p_lcs accessor
 const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }

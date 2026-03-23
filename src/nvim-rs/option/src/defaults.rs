@@ -138,8 +138,8 @@ pub unsafe extern "C" fn rs_check_options() {
 
 use crate::index::OptIndex;
 use crate::opt_index::{
-    K_OPT_AUTOCOMPLETE, K_OPT_AUTOREAD, K_OPT_MODELINE, K_OPT_SCROLLOFF, K_OPT_SIDESCROLLOFF,
-    K_OPT_UNDOLEVELS,
+    K_OPT_AUTOCOMPLETE, K_OPT_AUTOREAD, K_OPT_MODELINE, K_OPT_PATH, K_OPT_SCROLLOFF,
+    K_OPT_SIDESCROLLOFF, K_OPT_SPELLSUGGEST, K_OPT_TAGS, K_OPT_UNDOLEVELS,
 };
 
 extern "C" {
@@ -537,8 +537,6 @@ extern "C" {
     fn xfree(ptr: *mut std::ffi::c_char);
     /// fenc_default global variable
     static mut fenc_default: *mut std::ffi::c_char;
-    /// option_expand escape kind for opt_idx (0=none, 1=esc, 2=file:)
-    fn nvim_option_expand_escape_kind(opt_idx: c_int) -> c_int;
     /// expand_env_esc into NameBuff; returns NameBuff or NULL if no change
     fn nvim_call_expand_env_esc_option(
         val: *const std::ffi::c_char,
@@ -599,8 +597,15 @@ pub unsafe extern "C" fn rs_option_expand(
         p = p.add(1);
     }
 
-    // Get escape kind and expand.
-    let esc_kind = nvim_option_expand_escape_kind(opt_idx);
+    // Determine escape kind for option_expand:
+    // 1 = escape spaces (tags/path), 2 = use "file:" prefix (spellsuggest), 0 = none
+    let esc_kind = if opt_idx == K_OPT_TAGS || opt_idx == K_OPT_PATH {
+        1
+    } else if opt_idx == K_OPT_SPELLSUGGEST {
+        2
+    } else {
+        0
+    };
     nvim_call_expand_env_esc_option(actual_val, esc_kind)
 }
 

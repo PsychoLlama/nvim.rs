@@ -26,9 +26,6 @@ const K_OPT_FLAG_COMMA: c_uint = 1 << 10;
 const K_OPT_FLAG_ONE_COMMA: c_uint = (1 << 11) | (1 << 10);
 
 extern "C" {
-    /// Normalize an option index for values lookup
-    /// (kOptViewoptions -> kOptSessionoptions, kOptFileformats -> kOptFileformat)
-    fn nvim_normalize_opt_idx_for_expand(idx: OptIndex) -> OptIndex;
 
     /// Get opaque vimoption_T* from index
     fn get_option(idx: OptIndex) -> *mut c_void;
@@ -71,7 +68,7 @@ extern "C" {
 /// idx must be a valid OptIndex; varp (if non-null) must point to a valid string pointer.
 pub unsafe fn check_str_opt_impl(idx: OptIndex, varp: *mut *mut c_char) -> bool {
     // Normalize index for values lookup
-    let norm_idx = nvim_normalize_opt_idx_for_expand(idx);
+    let norm_idx = normalize_opt_idx_for_expand(idx);
     let opt_norm = get_option(norm_idx);
     let values = nvim_option_get_values(opt_norm);
 
@@ -99,12 +96,26 @@ pub unsafe fn check_str_opt_impl(idx: OptIndex, varp: *mut *mut c_char) -> bool 
 // (numeric values from build/src/nvim/auto/options_enum.generated.h)
 // =============================================================================
 
+const K_OPT_FILEFORMAT: OptIndex = 94;
+const K_OPT_FILEFORMATS: OptIndex = 95;
 const K_OPT_CASEMAP: OptIndex = 31;
 const K_OPT_BACKUPCOPY: OptIndex = 16;
 const K_OPT_BELLOFF: OptIndex = 20;
 const K_OPT_COMPLETEOPT: OptIndex = 54;
 const K_OPT_SESSIONOPTIONS: OptIndex = 253;
 const K_OPT_VIEWOPTIONS: OptIndex = 342;
+
+/// Normalize opt_idx for values lookup:
+/// viewoptions uses sessionoptions values; fileformats uses fileformat values.
+fn normalize_opt_idx_for_expand(idx: OptIndex) -> OptIndex {
+    if idx == K_OPT_VIEWOPTIONS {
+        K_OPT_SESSIONOPTIONS
+    } else if idx == K_OPT_FILEFORMATS {
+        K_OPT_FILEFORMAT
+    } else {
+        idx
+    }
+}
 const K_OPT_FOLDOPEN: OptIndex = 112;
 const K_OPT_DISPLAY: OptIndex = 76;
 const K_OPT_JUMPOPTIONS: OptIndex = 157;

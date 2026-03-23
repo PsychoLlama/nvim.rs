@@ -81,11 +81,26 @@ extern "C" {
     fn nvim_option_get_values(opt: *mut c_void) -> *const *const c_char;
     fn nvim_option_get_values_len(opt: *mut c_void) -> usize;
 
-    // OptIndex normalization for expand_set_str_generic
-    fn nvim_normalize_opt_idx_for_expand(idx: c_int) -> c_int;
-
     // Window handle (defined in window_shim)
     fn nvim_get_curwin() -> *const c_void;
+}
+
+// OptIndex constants for normalization (must match opt_index.rs)
+const K_OPT_FILEFORMAT: c_int = 94;
+const K_OPT_FILEFORMATS: c_int = 95;
+const K_OPT_SESSIONOPTIONS: c_int = 253;
+const K_OPT_VIEWOPTIONS: c_int = 342;
+
+/// Normalize opt_idx for expand_set_str_generic:
+/// viewoptions uses sessionoptions values; fileformats uses fileformat values.
+fn normalize_opt_idx_for_expand(idx: c_int) -> c_int {
+    if idx == K_OPT_VIEWOPTIONS {
+        K_OPT_SESSIONOPTIONS
+    } else if idx == K_OPT_FILEFORMATS {
+        K_OPT_FILEFORMAT
+    } else {
+        idx
+    }
 }
 
 // Return values matching C OK/FAIL
@@ -380,7 +395,7 @@ pub unsafe extern "C" fn expand_set_str_generic(
     matches: *mut *mut *mut c_char,
 ) -> c_int {
     let idx = nvim_oe_get_idx(args);
-    let normalized_idx = nvim_normalize_opt_idx_for_expand(idx);
+    let normalized_idx = normalize_opt_idx_for_expand(idx);
     let opt = get_option(normalized_idx);
     let values = nvim_option_get_values(opt);
     let values_len = nvim_option_get_values_len(opt);

@@ -66,7 +66,13 @@ extern "C" {
     fn transchar(c: c_int) -> *const c_char;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
     fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
-    fn nvim_option_home_replace(src: *const c_char, dst: *mut c_char, dstlen: usize);
+    fn nvim_home_replace(
+        buf: *const std::ffi::c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    ) -> usize;
 
     // put_set
     fn nvim_put_set_get_opt_name_flags(opt_idx: c_int, name: *mut *const c_char, flags: *mut u64);
@@ -179,7 +185,7 @@ pub unsafe extern "C" fn rs_option_value2string(opt_idx: c_int, opt_flags: c_int
         let mut flags: u64 = 0;
         nvim_put_set_get_opt_name_flags(opt_idx, &mut name, &mut flags);
         if (flags & OptFlags::EXPAND.0 as u64) != 0 {
-            nvim_option_home_replace(str_varp, namebuff, namebuff_size);
+            nvim_home_replace(std::ptr::null(), str_varp, namebuff, namebuff_size, false);
         } else {
             xstrlcpy(namebuff, str_varp, namebuff_size);
         }
@@ -287,7 +293,7 @@ pub unsafe extern "C" fn rs_put_set(
                 if (flags & OptFlags::EXPAND.0 as u64) != 0 {
                     let size = strlen(value_str) + 1;
                     let buf = xmalloc(size);
-                    nvim_option_home_replace(value_str, buf, size);
+                    nvim_home_replace(std::ptr::null(), value_str, buf, size, false);
 
                     let maxpathl = crate::defaults::MAXPATHL;
                     if size >= maxpathl
