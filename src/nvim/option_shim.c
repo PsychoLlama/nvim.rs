@@ -130,12 +130,6 @@ extern int rs_option_is_global_local(int opt_idx);
 // New functions added in Phase 8 index.rs
 extern int rs_option_get_type(int opt_idx);
 
-// Rust default value management functions (option pass 8 phase 2)
-extern void rs_alloc_options_default(void);
-extern void rs_change_option_default(int opt_idx, OptVal value);
-extern void rs_set_string_default_opt(int opt_idx, char *val, int allocated);
-extern void rs_set_option_default(int opt_idx, int opt_flags);
-
 extern void rs_option_value2string(OptIndex opt_idx, int opt_flags);
 
 // Static assertions for constants shared with Rust (see callbacks/mod.rs UpdateType)
@@ -325,10 +319,6 @@ extern void rs_set_option_varp(OptIndex opt_idx, void *varp, OptVal value, int f
 extern char *rs_optval_to_cstr(OptVal o);
 
 // Rust FFI declarations (window/layout module)
-// rs_free_tagfunc_option, rs_set_buflocal_tfu_callback: declared in other C files that use them
-// rs_global_stl_height, rs_min_rows, rs_min_rows_for_all_tabpages, rs_tabline_height,
-// rs_win_comp_pos, rs_win_default_scroll, rs_win_setheight, rs_win_setwidth: declared elsewhere
-extern void rs_last_status(int morewin);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 
 // =============================================================================
@@ -844,11 +834,6 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 // Update w_grid_alloc.blending based on current w_p_winbl value (different from window_shim's nvim_win_set_grid_blending which takes explicit bool).
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
 
-extern void rs_set_init_fenc_default(void);
-
-extern const char *rs_option_expand(int opt_idx, const char *val);
-extern void rs_set_options_default(int opt_flags);
-
 /// 'title' and 'icon' only default to true if they have not been set or reset
 /// in .vimrc and we can read the old value.
 /// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
@@ -886,9 +871,6 @@ void *nvim_option_get_p_kp_ptr(void)
 {
   return (void *)&p_kp;
 }
-
-extern void rs_didset_options(void);
-extern void rs_didset_options2(void);
 
 /// Handle setting `winhighlight' in window "wp"
 ///
@@ -1198,8 +1180,6 @@ void win_copy_options(win_T *wp_from, win_T *wp_to)
   copy_winopt(&wp_from->w_allbuf_opt, &wp_to->w_allbuf_opt);
   didset_window_options(wp_to, true);
 }
-
-extern void rs_check_winopt(winopt_T *wop);
 
 // expand_option_start_col and expand_option_append live in Rust (setcmd.rs).
 extern int expand_option_start_col;
