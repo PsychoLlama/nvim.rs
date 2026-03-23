@@ -201,8 +201,10 @@ int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
 
+// Rust implementation of emsg_not_now()
+extern int rs_emsg_not_now(void);
+
 // Forward declarations for static functions used by Phase 4/5 accessors below
-static int emsg_not_now(void);
 static char *get_emsg_source(void);
 static char *get_emsg_lnum(void);
 static bool other_sourcing_name(void);
@@ -699,15 +701,6 @@ static char *get_emsg_lnum(void)
 ///            If "emsg_off" is set: no error messages at the moment.
 ///            If "msg" is in 'debug': do error message but without side effects.
 ///            If "emsg_skip" is set: never do error messages.
-static int emsg_not_now(void)
-{
-  if ((emsg_off > 0 && vim_strchr(p_debug, 'm') == NULL
-       && vim_strchr(p_debug, 't') == NULL)
-      || emsg_skip > 0) {
-    return true;
-  }
-  return false;
-}
 
 // emsg_multiline() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_emsg_multiline)
 
@@ -747,7 +740,7 @@ bool semsg_multiline(const char *kind, const char *const fmt, ...)
   va_list ap;
 
   static char errbuf[MULTILINE_BUFSIZE];
-  if (emsg_not_now()) {
+  if (rs_emsg_not_now()) {
     return true;
   }
 
@@ -764,7 +757,7 @@ bool semsg_multiline(const char *kind, const char *const fmt, ...)
 static bool semsgv(const char *fmt, va_list ap)
 {
   static char errbuf[IOSIZE];
-  if (emsg_not_now()) {
+  if (rs_emsg_not_now()) {
     return true;
   }
 
@@ -779,7 +772,7 @@ static bool semsgv(const char *fmt, va_list ap)
 /// detected when fuzzing vim.
 void siemsg(const char *s, ...)
 {
-  if (emsg_not_now()) {
+  if (rs_emsg_not_now()) {
     return;
   }
 
