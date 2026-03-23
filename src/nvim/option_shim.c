@@ -427,7 +427,6 @@ void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
-void nvim_redrawWinline_curwin(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
 
 // Phase 102: highlight accessor
 int nvim_check_highlight_init(void *args) {
@@ -550,9 +549,6 @@ const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
 // Pointer accessors for option value arrays (return pointer to NULL-terminated array)
-const char **nvim_get_opt_bkc_values(void) { return (const char **)opt_bkc_values; }
-const char **nvim_get_opt_ssop_values(void) { return (const char **)opt_ssop_values; }
-const char **nvim_get_opt_spo_values(void) { return (const char **)opt_spo_values; }
 
 // =============================================================================
 // Phase 3 accessors for parse_winhl_opt migration

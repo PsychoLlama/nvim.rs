@@ -69,9 +69,9 @@ extern "C" {
     fn nvim_win_get_spo_flags(win: crate::WinHandle) -> c_uint;
     fn nvim_win_set_spo_flags(win: crate::WinHandle, val: c_uint);
     fn rs_diffanchors_changed(buflocal: bool) -> c_int;
-    fn nvim_get_opt_bkc_values() -> *const *const c_char;
-    fn nvim_get_opt_ssop_values() -> *const *const c_char;
-    fn nvim_get_opt_spo_values() -> *const *const c_char;
+    static opt_bkc_values: [*const c_char; 6];
+    static opt_ssop_values: [*const c_char; 19];
+    static opt_spo_values: [*const c_char; 3];
 }
 
 // =============================================================================
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
     let buf = nvim_optset_get_buf(args);
     let oldval = nvim_optset_get_oldval_str(args);
     let opt_flags = nvim_optset_get_flags(args);
-    let bkc_values = nvim_get_opt_bkc_values();
+    let bkc_values = std::ptr::addr_of!(opt_bkc_values).cast::<*const c_char>();
 
     // Determine which bkc string and flags to use: local or global
     let bkc = if opt_flags & OPT_LOCAL != 0 {
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn rs_did_set_sessionoptions(args: *mut c_void) -> Callbac
     if (ssop & SSOP_CURDIR != 0) && (ssop & SSOP_SESDIR != 0) {
         // Restore flags from old value
         let oldval = nvim_optset_get_oldval_str(args);
-        let ssop_values = nvim_get_opt_ssop_values();
+        let ssop_values = std::ptr::addr_of!(opt_ssop_values).cast::<*const c_char>();
         let old_result = rs_opt_strings_flags(oldval, ssop_values, true);
         ssop_flags = old_result.flags;
         return E_INVARG;
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn rs_did_set_spelloptions(args: *mut c_void) -> CallbackR
     let win = nvim_optset_get_win(args);
     let opt_flags = nvim_optset_get_flags(args);
     let val = nvim_optset_get_newval_str(args);
-    let spo_values = nvim_get_opt_spo_values();
+    let spo_values = std::ptr::addr_of!(opt_spo_values).cast::<*const c_char>();
 
     // Validate and set global flags (unless OPT_LOCAL)
     if opt_flags & OPT_LOCAL == 0 {

@@ -230,7 +230,9 @@ extern "C" {
     // Phase 104: guicursor / ambiwidth / emoji / showbreak
     fn parse_shape_opt(what: c_int) -> CallbackResult;
     static mut VIsual_active: bool;
-    fn nvim_redrawWinline_curwin();
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
+    #[link_name = "redrawWinline"]
+    fn nvim_redrawWinline(wp: WinHandle, lnum: c_int);
     fn check_chars_options() -> CallbackResult;
     fn rs_check_str_opt(idx: c_int, varp: *mut *mut std::ffi::c_char) -> c_int;
     // showbreak: ptr2cells and utfc_ptr2len for Rust implementation
@@ -1046,7 +1048,7 @@ pub unsafe extern "C" fn rs_did_set_guicursor(_args: *mut c_void) -> CallbackRes
         return errmsg;
     }
     if VIsual_active {
-        nvim_redrawWinline_curwin();
+        nvim_redrawWinline(curwin, nvim_win_get_cursor_lnum(curwin));
     }
     callback_ok()
 }
