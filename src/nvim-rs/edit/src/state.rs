@@ -83,11 +83,11 @@ extern "C" {
 
     // stop_arrow dependencies
     fn nvim_set_Insstart_from_cursor();
-    fn nvim_edit_insstart_col_gt_orig() -> c_int;
-    fn nvim_edit_linetabsize_cursor_line() -> ColnrT;
+    fn nvim_insstart_col_gt_orig() -> c_int;
+    fn nvim_linetabsize_cursor_line() -> ColnrT;
     fn u_save_cursor() -> c_int;
     fn nvim_set_ai_col(val: ColnrT);
-    fn nvim_edit_set_orig_line_count(val: LinenrT);
+    fn nvim_set_orig_line_count(val: LinenrT);
     fn nvim_set_vr_lines_changed(val: c_int);
     fn nvim_qf_curbuf_line_count() -> LinenrT;
     fn rs_foldOpenCursor();
@@ -603,12 +603,12 @@ pub unsafe extern "C" fn rs_start_arrow_with_change(
 unsafe fn stop_arrow_impl() -> c_int {
     if nvim_get_arrow_used() != 0 {
         nvim_set_Insstart_from_cursor(); // new insertion starts here
-        if nvim_edit_insstart_col_gt_orig() != 0 && !ins_need_undo_get() {
+        if nvim_insstart_col_gt_orig() != 0 && !ins_need_undo_get() {
             // Don't update the original insert position when moved to the
             // right, except when nothing was inserted yet.
             update_insstart_orig_set(false);
         }
-        insstart_textlen_set(nvim_edit_linetabsize_cursor_line());
+        insstart_textlen_set(nvim_linetabsize_cursor_line());
 
         if u_save_cursor() == OK {
             nvim_set_arrow_used(0);
@@ -616,7 +616,7 @@ unsafe fn stop_arrow_impl() -> c_int {
         }
         nvim_set_ai_col(0);
         if nvim_get_State() & VREPLACE_FLAG != 0 {
-            nvim_edit_set_orig_line_count(nvim_qf_curbuf_line_count());
+            nvim_set_orig_line_count(nvim_qf_curbuf_line_count());
             nvim_set_vr_lines_changed(1);
         }
         ResetRedobuff();

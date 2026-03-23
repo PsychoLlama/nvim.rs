@@ -62,13 +62,9 @@ extern "C" {
     // Cursor
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> ColnrT;
-    fn nvim_edit_save_cursor_pos(
-        lnum_out: *mut LinenrT,
-        col_out: *mut ColnrT,
-        coladd_out: *mut ColnrT,
-    );
-    fn nvim_edit_restore_cursor_pos(lnum: LinenrT, col: ColnrT, coladd: ColnrT);
-    fn nvim_edit_cursor_equals_saved(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
+    fn nvim_save_cursor_pos(lnum_out: *mut LinenrT, col_out: *mut ColnrT, coladd_out: *mut ColnrT);
+    fn nvim_restore_cursor_pos(lnum: LinenrT, col: ColnrT, coladd: ColnrT);
+    fn nvim_cursor_equals_saved(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
     fn nvim_cursor_on_tab_or_inline() -> c_int;
     fn nvim_curwin_invalidate_wrow_wcol_virtcol();
     fn nvim_check_cursor_col_insert_mode();
@@ -88,13 +84,13 @@ extern "C" {
 
     // orig_line_count / vr_lines_changed
     fn nvim_get_orig_line_count() -> LinenrT;
-    fn nvim_edit_set_orig_line_count(val: LinenrT);
+    fn nvim_set_orig_line_count(val: LinenrT);
     fn nvim_set_vr_lines_changed(val: c_int);
 
     // Flags
     fn nvim_get_stop_insert_mode() -> c_int;
     fn nvim_set_stop_insert_mode(val: c_int);
-    fn nvim_edit_clear_where_paste_started();
+    fn nvim_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
     fn nvim_set_ins_at_eol(val: bool);
@@ -139,7 +135,7 @@ extern "C" {
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_edit_get_inserted_size() -> c_int;
     fn nvim_edit_handle_restart_edit_cursor() -> c_int;
-    fn nvim_edit_update_o_lnum_if_at_eol();
+    fn nvim_update_o_lnum_if_at_eol();
     fn nvim_curbuf_sync_changedtick_after_insert();
 
     // Rust fold FFI (already defined in Rust)
@@ -186,7 +182,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         let mut save_lnum: LinenrT = 0;
         let mut save_col: ColnrT = 0;
         let mut save_coladd: ColnrT = 0;
-        nvim_edit_save_cursor_pos(&raw mut save_lnum, &raw mut save_col, &raw mut save_coladd);
+        nvim_save_cursor_pos(&raw mut save_lnum, &raw mut save_col, &raw mut save_coladd);
 
         nvim_set_vv_insertmode(cmdchar);
         nvim_textfmt_clear_vv_char();
@@ -199,11 +195,11 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
         // Make sure the cursor didn't move. Do call check_cursor_col() in
         // case the text was modified.
-        if nvim_edit_cursor_equals_saved(save_lnum, save_col, save_coladd) == 0
+        if nvim_cursor_equals_saved(save_lnum, save_col, save_coladd) == 0
             && nvim_vv_char_is_empty() != 0
             && save_lnum <= nvim_get_curbuf_ml_line_count()
         {
-            nvim_edit_restore_cursor_pos(save_lnum, save_col, save_coladd);
+            nvim_restore_cursor_pos(save_lnum, save_col, save_coladd);
             nvim_check_cursor_col_insert_mode();
         }
     }
@@ -248,7 +244,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     } else if cmdchar == c_int::from(b'V') || cmdchar == c_int::from(b'v') {
         nvim_set_State(MODE_VREPLACE);
         (*s).replace_state = MODE_VREPLACE;
-        nvim_edit_set_orig_line_count(nvim_get_curbuf_ml_line_count());
+        nvim_set_orig_line_count(nvim_get_curbuf_ml_line_count());
         nvim_set_vr_lines_changed(1);
     } else {
         nvim_set_State(MODE_INSERT);
@@ -291,7 +287,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // Need to save the line for undo before inserting the first char.
     nvim_set_ins_need_undo(1);
 
-    nvim_edit_clear_where_paste_started();
+    nvim_clear_where_paste_started();
     nvim_set_can_cindent(1);
 
     // The cursor line is not in a closed fold, unless restarting.
@@ -315,7 +311,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // nvim calls ui_cursor_shape() and do_digraph(-1) via C helpers not yet wrapped;
     // call them via the wrappers available in the dispatch module.
-    nvim_edit_ui_cursor_shape_and_clear_digraph();
+    nvim_ui_cursor_shape_and_clear_digraph();
 
     // Get the current length of the redo buffer.
     let insert_skip = nvim_edit_get_inserted_size();
@@ -334,7 +330,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Always update o_lnum, so that a "CTRL-O ." that adds a line
     // still puts the cursor back after the inserted text.
-    nvim_edit_update_o_lnum_if_at_eol();
+    nvim_update_o_lnum_if_at_eol();
 
     pum_check_clear();
 
@@ -359,7 +355,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 // ============================================================================
 
 extern "C" {
-    fn nvim_edit_ui_cursor_shape_and_clear_digraph();
+    fn nvim_ui_cursor_shape_and_clear_digraph();
 }
 
 // ============================================================================

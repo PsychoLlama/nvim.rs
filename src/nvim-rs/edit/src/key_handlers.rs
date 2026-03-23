@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_edit_save_cursor(slot: c_int);
     fn nvim_edit_start_arrow_from_slot(slot: c_int);
     fn nvim_edit_start_arrow_with_change_from_slot(slot: c_int, end_change: c_int);
-    fn nvim_edit_start_arrow_curpos();
+    fn nvim_start_arrow_curpos();
     fn AppendCharToRedobuff(c: c_int);
     fn vim_beep(val: c_uint);
     fn nvim_ww_allows(ch: c_int) -> c_int;
@@ -83,7 +83,7 @@ extern "C" {
     fn nvim_goto_tabpage(n: c_int);
 
     // Up/Down with Insstart column
-    fn nvim_edit_coladvance_insstart();
+    fn nvim_coladvance_insstart();
     fn nvim_edit_topline_changed() -> c_int;
     fn nvim_redraw_later_valid();
 
@@ -194,7 +194,7 @@ unsafe fn ins_right_impl() {
     }
     undisplay_dollar();
     if nvim_gchar_cursor() != 0 || virtual_active(nvim_get_curwin()) {
-        nvim_edit_start_arrow_with_change_curpos(end_change);
+        nvim_start_arrow_with_change_curpos(end_change);
         if !end_change {
             AppendCharToRedobuff(K_RIGHT);
         }
@@ -215,7 +215,7 @@ unsafe fn ins_right_impl() {
         && nvim_curwin_get_cursor_lnum() < nvim_qf_curbuf_line_count()
     {
         // if 'whichwrap' set for cursor in insert mode, may move to next line
-        nvim_edit_start_arrow_curpos();
+        nvim_start_arrow_curpos();
         nvim_curwin_set_w_set_curswant(true);
         nvim_curwin_cursor_lnum_add(1);
         nvim_curwin_set_cursor_col(0);
@@ -243,7 +243,7 @@ unsafe fn ins_s_left_impl() {
     }
     undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() > 1 || nvim_curwin_get_cursor_col() > 0 {
-        nvim_edit_start_arrow_with_change_curpos(end_change);
+        nvim_start_arrow_with_change_curpos(end_change);
         if !end_change {
             AppendCharToRedobuff(K_S_LEFT);
         }
@@ -273,7 +273,7 @@ unsafe fn ins_s_right_impl() {
     }
     undisplay_dollar();
     if nvim_curwin_get_cursor_lnum() < nvim_qf_curbuf_line_count() || nvim_gchar_cursor() != 0 {
-        nvim_edit_start_arrow_with_change_curpos(end_change);
+        nvim_start_arrow_with_change_curpos(end_change);
         if !end_change {
             AppendCharToRedobuff(K_S_RIGHT);
         }
@@ -350,7 +350,7 @@ unsafe fn ins_up_impl(startcol: bool) {
     nvim_edit_save_cursor(0);
     if cursor_up(1, true) == OK {
         if startcol {
-            nvim_edit_coladvance_insstart();
+            nvim_coladvance_insstart();
         }
         if nvim_edit_topline_changed() != 0 {
             nvim_redraw_later_valid();
@@ -378,7 +378,7 @@ unsafe fn ins_down_impl(startcol: bool) {
     nvim_edit_save_cursor(0);
     if cursor_down(1, true) == OK {
         if startcol {
-            nvim_edit_coladvance_insstart();
+            nvim_coladvance_insstart();
         }
         if nvim_edit_topline_changed() != 0 {
             nvim_redraw_later_valid();
@@ -406,7 +406,7 @@ unsafe fn ins_pageup_impl() {
     if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageUp>: tab page back
         if nvim_first_tabpage_has_next() != 0 {
-            nvim_edit_start_arrow_curpos();
+            nvim_start_arrow_curpos();
             nvim_goto_tabpage(-1);
         }
         return;
@@ -437,7 +437,7 @@ unsafe fn ins_pagedown_impl() {
     if nvim_has_mod_mask_ctrl() != 0 {
         // <C-PageDown>: tab page forward
         if nvim_first_tabpage_has_next() != 0 {
-            nvim_edit_start_arrow_curpos();
+            nvim_start_arrow_curpos();
             nvim_goto_tabpage(0);
         }
         return;
@@ -562,7 +562,7 @@ pub unsafe extern "C" fn rs_ins_del() {
 // ============================================================================
 
 extern "C" {
-    fn nvim_edit_start_arrow_with_change_curpos(end_change: bool);
+    fn nvim_start_arrow_with_change_curpos(end_change: bool);
     fn nvim_edit_save_topline();
     fn nvim_has_mod_mask_ctrl() -> c_int;
     fn nvim_set_curswant(val: ColnrT);

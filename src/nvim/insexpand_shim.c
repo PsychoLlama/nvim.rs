@@ -3754,3 +3754,4 @@ int nvim_ins_apply_autocmds_insertcharpre(void) { return ins_apply_autocmds(EVEN
 int nvim_ins_complete_with_key(int c) { return ins_complete(c, true); }
 int nvim_check_compl_option_ins(int allow_always) { return check_compl_option(allow_always != 0) ? 1 : 0; }
 int nvim_get_cpt_first_char(void) { return (unsigned char)*curbuf->b_p_cpt; }
+int nvim_get_pum_want_finish(void) { return pum_want.finish ? 1 : 0; }

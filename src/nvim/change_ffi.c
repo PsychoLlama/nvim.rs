@@ -435,6 +435,7 @@ void nvim_set_ai_col(colnr_T val) { ai_col = val; }
 int nvim_get_end_comment_pending(void) { return end_comment_pending; }
 void nvim_set_end_comment_pending(int val) { end_comment_pending = val; }
 linenr_T nvim_get_orig_line_count(void) { return orig_line_count; }
+void nvim_set_orig_line_count(linenr_T val) { orig_line_count = val; }
 pos_T nvim_get_insstart(void) { return Insstart; }
 int nvim_get_vr_lines_changed(void) { return vr_lines_changed; }
 void nvim_set_vr_lines_changed(int val) { vr_lines_changed = val; }

@@ -1074,7 +1074,7 @@ unsafe extern "C" {
     fn nvim_get_cedit_key() -> c_int;
     fn nvim_open_cmdwin() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
-    fn nvim_edit_get_pum_want_finish() -> c_int;
+    fn nvim_get_pum_want_finish() -> c_int;
     fn nvim_set_pum_want_active(val: c_int);
     fn nvim_get_wild_menu_showing() -> c_int;
     fn nvim_get_cmdline_was_last_drawn() -> c_int;
@@ -1323,7 +1323,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 let firstc = nvim_cls_get_firstc(s);
                 let xp = nvim_cls_get_xpc(s);
                 nvim_nextwild(xp, WILD_PUM_WANT, 0, firstc != b'@' as c_int);
-                if nvim_edit_get_pum_want_finish() != 0 {
+                if nvim_get_pum_want_finish() != 0 {
                     nvim_nextwild(xp, WILD_APPLY, WILD_NO_BEEP, firstc != b'@' as c_int);
                     nvim_command_line_end_wildmenu(s, false);
                 }

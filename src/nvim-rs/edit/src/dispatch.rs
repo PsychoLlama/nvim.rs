@@ -153,7 +153,7 @@ extern "C" {
     fn pum_visible() -> bool;
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_set_pum_want_active(val: c_int);
-    fn nvim_edit_get_pum_want_finish() -> c_int;
+    fn nvim_get_pum_want_finish() -> c_int;
     fn nvim_clear_edit_submode_extra();
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_set_cmdwin_result(val: c_int);
@@ -181,7 +181,7 @@ extern "C" {
     fn char_avail() -> bool;
     fn nvim_inindent_zero() -> bool;
     fn nvim_auto_format_ins(force_format: c_int);
-    fn nvim_edit_in_cinkeys(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
+    fn nvim_in_cinkeys_int(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
     fn do_c_expr_indent();
     fn ins_reg();
     fn ins_try_si(c: c_int);
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
 /// Accesses C globals via accessor functions.
 #[unsafe(export_name = "insert_do_cindent")]
 pub unsafe extern "C" fn rs_insert_do_cindent(s: *mut InsertState) {
-    if nvim_edit_in_cinkeys((*s).c, c_int::from(b' '), c_int::from((*s).line_is_white)) != 0
+    if nvim_in_cinkeys_int((*s).c, c_int::from(b' '), c_int::from((*s).line_is_white)) != 0
         && stop_arrow() == OK
     {
         do_c_expr_indent();
@@ -490,7 +490,7 @@ unsafe fn do_check_pum(s: *mut InsertState) {
         if pum_visible() {
             nvim_clear_edit_submode_extra();
             rs_insert_do_complete(s);
-            if nvim_edit_get_pum_want_finish() != 0 {
+            if nvim_get_pum_want_finish() != 0 {
                 rs_ins_compl_prep(CTRL_Y);
             }
         }

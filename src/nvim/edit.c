@@ -167,7 +167,6 @@ extern void rs_start_selection(void);
 extern int insert_check_rs(VimState *state);
 extern int insert_execute_rs(VimState *state, int key);
 
-
 // NOTE: ins_esc returns int (not bool) to match Rust c_int ABI.
 
 extern void insert_special(int c, int allow_modmask, int ctrlv);
@@ -432,7 +431,6 @@ void nvim_set_o_lnum(linenr_T val)
   o_lnum = val;
 }
 
-
 /// Get arrow_used (accessor for Rust).
 int nvim_get_arrow_used(void)
 {
@@ -546,27 +544,6 @@ const void *nvim_curwin_get_cursor_ptr(void)
 {
   return &curwin->w_cursor;
 }
-
-
-/// Set orig_line_count (accessor for Rust).
-void nvim_edit_set_orig_line_count(linenr_T val)
-{
-  orig_line_count = val;
-}
-
-
-/// Check if Insstart.col > Insstart_orig.col (accessor for Rust).
-int nvim_edit_insstart_col_gt_orig(void)
-{
-  return Insstart.col > Insstart_orig.col ? 1 : 0;
-}
-
-/// Get linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
-colnr_T nvim_edit_linetabsize_cursor_line(void)
-{
-  return linetabsize_str(get_cursor_line_ptr());
-}
-
 
 /// This is the complex comment-leader removal section from insertchar().
 void nvim_edit_handle_end_comment_pending(int c)
@@ -705,24 +682,15 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   }
 }
 
-
-/// Call set_vim_var_string(VV_CHAR, buf, len) (accessor for Rust).
-void nvim_edit_set_vim_var_char(const char *buf, ptrdiff_t len)
-{
-  set_vim_var_string(VV_CHAR, buf, len);
-}
-
 const char *nvim_edit_get_vim_var_char(void)
 {
   return get_vim_var_str(VV_CHAR);
 }
 
-
 // Saved cursor positions for start_arrow calls (2 slots)
 static pos_T edit_saved_cursor[2];
 static linenr_T saved_topline;
 static int saved_topfill;
-
 
 /// Save cursor position to a slot (accessor for Rust).
 void nvim_edit_save_cursor(int slot)
@@ -742,25 +710,6 @@ void nvim_edit_start_arrow_with_change_from_slot(int slot, int end_change)
   start_arrow_with_change(&edit_saved_cursor[slot], end_change != 0);
 }
 
-/// Call start_arrow(&curwin->w_cursor) (accessor for Rust).
-void nvim_edit_start_arrow_curpos(void)
-{
-  start_arrow(&curwin->w_cursor);
-}
-
-/// Call start_arrow_with_change(&curwin->w_cursor, end_change) (accessor for Rust).
-void nvim_edit_start_arrow_with_change_curpos(bool end_change)
-{
-  start_arrow_with_change(&curwin->w_cursor, end_change);
-}
-
-
-/// Call coladvance(curwin, getvcol_nolist(&Insstart)) (accessor for Rust).
-void nvim_edit_coladvance_insstart(void)
-{
-  coladvance(curwin, getvcol_nolist(&Insstart));
-}
-
 /// Save topline/topfill for later comparison (accessor for Rust).
 void nvim_edit_save_topline(void)
 {
@@ -774,7 +723,6 @@ int nvim_edit_topline_changed(void)
   return (saved_topline != curwin->w_topline
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
-
 
 /// ins_insert() wrapper — handles set_vim_var_string, autocmds, mode change.
 void nvim_edit_ins_insert(int replaceState)
@@ -986,27 +934,6 @@ void nvim_edit_ins_del(void)
   AppendCharToRedobuff(K_DEL);
 }
 
-
-/// Set pum_want.active (accessor for Rust).
-void nvim_edit_set_pum_want_active(int val)
-{
-  pum_want.active = val != 0;
-}
-
-/// Get pum_want.finish (accessor for Rust).
-int nvim_edit_get_pum_want_finish(void)
-{
-  return pum_want.finish ? 1 : 0;
-}
-
-
-/// Call in_cinkeys(c, type, line_is_white) (accessor for Rust).
-int nvim_edit_in_cinkeys(int c, int type, int line_is_white)
-{
-  return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0;
-}
-
-
 static int pc_status;
 #ifndef PC_STATUS_UNSET
 #define PC_STATUS_UNSET 0
@@ -1204,13 +1131,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
 
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
 
-
-/// Set where_paste_started.lnum to 0 (accessor for Rust).
-void nvim_edit_clear_where_paste_started(void)
-{
-  where_paste_started.lnum = 0;
-}
-
 /// If where_paste_started.lnum != 0, use it; otherwise use curwin->w_cursor.
 /// If startln is nonzero, set Insstart.col = 0.
 void nvim_edit_init_Insstart(int startln)
@@ -1225,37 +1145,11 @@ void nvim_edit_init_Insstart(int startln)
   }
 }
 
-
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
 {
   revins_on = (val != 0);
 }
-
-
-/// Save curwin->w_cursor into out-params (accessor for Rust).
-void nvim_edit_save_cursor_pos(linenr_T *lnum_out, colnr_T *col_out, colnr_T *coladd_out)
-{
-  *lnum_out = curwin->w_cursor.lnum;
-  *col_out = curwin->w_cursor.col;
-  *coladd_out = curwin->w_cursor.coladd;
-}
-
-/// Restore curwin->w_cursor from saved values (accessor for Rust).
-void nvim_edit_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = col;
-  curwin->w_cursor.coladd = coladd;
-}
-
-/// Check if current cursor equals saved pos (accessor for Rust).
-int nvim_edit_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  pos_T saved = { .lnum = lnum, .col = col, .coladd = coladd };
-  return equalpos(curwin->w_cursor, saved) ? 1 : 0;
-}
-
 
 /// Get Insstart_textlen from linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
 void nvim_edit_init_Insstart_textlen(void)
@@ -1280,14 +1174,6 @@ void nvim_curbuf_sync_changedtick_after_insert(void)
 {
   if (!char_avail() && curbuf->b_last_changedtick_i == buf_get_changedtick(curbuf)) {
     curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-  }
-}
-
-/// Update o_lnum if ins_at_eol (accessor for Rust).
-void nvim_edit_update_o_lnum_if_at_eol(void)
-{
-  if (ins_at_eol) {
-    o_lnum = curwin->w_cursor.lnum;
   }
 }
 
@@ -1320,27 +1206,17 @@ int nvim_edit_handle_restart_edit_cursor(void)
   return 0;
 }
 
-
-/// Call ui_cursor_shape() and do_digraph(-1) (accessor for Rust).
-void nvim_edit_ui_cursor_shape_and_clear_digraph(void)
-{
-  ui_cursor_shape();
-  do_digraph(-1);
-}
-
 /// Set Insstart_orig to Insstart (accessor for Rust state_machine).
 void nvim_set_Insstart_orig_from_Insstart(void)
 {
   Insstart_orig = Insstart;
 }
 
-
 /// Call stuffcharReadbuff(K_NOP) (accessor for Rust state_machine).
 void nvim_stuffcharReadbuff_K_NOP(void)
 {
   stuffcharReadbuff(K_NOP);
 }
-
 
 /// Handle the scroll detection block from insert_check (composite accessor for Rust).
 /// Checks if window should be scrolled up one line. Returns new mincol if scroll
@@ -1444,7 +1320,6 @@ void nvim_edit_init_prompt_impl(int cmdchar_todo)
   }
   check_cursor(curwin);
 }
-
 
 /// edit(): Start inserting text.
 ///
@@ -1921,7 +1796,6 @@ bool nvim_edit_ins_tab_replace_spaces(bool p_sta_val, bool ind)
   return false;
 }
 
-
 /// Trim last char of previous line if space (FO_WHITE_PAR helper).
 void nvim_trim_eol_space(void)
 {
@@ -1932,7 +1806,6 @@ void nvim_trim_eol_space(void)
     curbuf->b_ml.ml_line_len--;
   }
 }
-
 
 /// Handle softtabstop-aware backspace alignment (helper for Rust ins_bs).
 ///
@@ -2027,7 +1900,6 @@ bool nvim_edit_ins_bs_check_sts(int *inserted_space_p, bool in_indent)
                 && (!*inserted_space_p || arrow_used))));
 }
 
-
 /// Call ins_apply_autocmds(EVENT_INSERTLEAVEPRE) (accessor for Rust).
 void nvim_ins_apply_autocmds_insertleavepre(void)
 {
@@ -2040,14 +1912,12 @@ void nvim_unshowmode_false(void)
   unshowmode(false);
 }
 
-
 /// Calls mark_view_make and RESET_FMARK.
 void nvim_set_b_last_insert_mark(void)
 {
   fmarkv_T view = mark_view_make(curwin->w_topline, curwin->w_cursor);
   RESET_FMARK(&curbuf->b_last_insert, curwin->w_cursor, curbuf->b_fnum, view);
 }
-
 
 /// Get u_sync_once global (accessor for Rust).
 int nvim_get_u_sync_once(void)
@@ -2061,7 +1931,6 @@ void nvim_set_u_sync_once(int val)
   u_sync_once = val;
 }
 
-
 /// Set pc_status = PC_STATUS_UNSET (accessor for Rust).
 void nvim_set_pc_status_unset(void)
 {
@@ -2074,9 +1943,7 @@ void nvim_putchar(int c, int highlight)
   edit_putchar(c, highlight != 0);
 }
 
-
 // ---- ins_esc accessors ----
-
 
 /// Call stop_insert logic at curwin->w_cursor (composite for Rust).
 void nvim_stop_insert_curpos(int nomove)
@@ -2163,7 +2030,6 @@ void nvim_stop_insert_curpos(int nomove)
   curbuf->b_op_start_orig = Insstart_orig;
   curbuf->b_op_end = *pos;
 }
-
 
 /// Get curwin->w_cursor.coladd (accessor for Rust).
 colnr_T nvim_curwin_get_cursor_coladd(void)
