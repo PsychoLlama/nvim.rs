@@ -30,7 +30,6 @@ extern "C" {
     // For rs_ins_compl_del_pum
     #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
-    fn nvim_xfree_compl_match_array();
 }
 
 /// Check if a match is the first match.
@@ -557,7 +556,7 @@ pub unsafe extern "C" fn rs_ins_compl_del_pum() {
         return;
     }
     nvim_pum_undisplay(0);
-    nvim_xfree_compl_match_array();
+    crate::vars::nvim_xfree_compl_match_array();
 }
 
 #[cfg(test)]

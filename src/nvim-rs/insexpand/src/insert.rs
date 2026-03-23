@@ -153,7 +153,7 @@ const CTRL_X_EVAL: c_int = 16;
 extern "C" {
     // Accessors for rs_ins_compl_delete
     fn nvim_ins_compl_delete_body(col: c_int) -> c_int;
-    fn nvim_set_cursor_col_to_ins_end();
+    fn nvim_set_cursor_col(col: c_int);
 
     // Accessors for rs_ins_compl_insert
     fn nvim_compl_shown_cp_str_data() -> *const c_char;
@@ -163,9 +163,7 @@ extern "C" {
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
-    fn nvim_ins_compl_insert_bytes_len(cp_str: *const c_char, compl_len: c_int, ins_len: c_int);
     fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
-    fn nvim_cursor_col_sub(n: c_int);
     fn nvim_compl_shown_match_at_orig_text() -> c_int;
     fn nvim_ins_compl_dict_alloc_set_shown();
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
@@ -245,7 +243,7 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
         {
             col += rs_ins_compl_leader_len() as c_int;
         }
-        nvim_set_cursor_col_to_ins_end();
+        nvim_set_cursor_col(crate::vars::nvim_get_compl_ins_end_col());
     }
 
     // Delegate the buffer mutation to C
@@ -339,13 +337,13 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
             } else {
                 -1
             };
-            nvim_ins_compl_insert_bytes_len(cp_str, compl_len, ins_len);
+            nvim_ins_compl_insert_bytes(cp_str.add(compl_len as usize), ins_len);
             if (preinsert != 0 || insert_prefix != 0) && move_cursor != 0 {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 {
                     let adjust = (cp_str_len - leader_len) as c_int;
                     if adjust > 0 {
-                        nvim_cursor_col_sub(adjust);
+                        nvim_set_cursor_col(nvim_get_cursor_col() - adjust);
                     }
                 }
             }

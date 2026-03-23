@@ -47,6 +47,8 @@ extern "C" {
     static mut compl_match_arraysize: c_int;
     static mut spell_bad_len: usize;
     static mut cpt_sources_count: c_int;
+    // pumitem_T* - treated as opaque pointer
+    static mut compl_match_array: *mut u8;
 }
 
 // ============================================================================
@@ -326,4 +328,16 @@ pub unsafe fn nvim_set_spell_bad_len(val: c_int) {
 #[inline]
 pub unsafe fn nvim_get_cpt_sources_count() -> c_int {
     cpt_sources_count
+}
+
+/// Free and clear compl_match_array (equivalent to C XFREE_CLEAR macro).
+#[inline]
+pub unsafe fn nvim_xfree_compl_match_array() {
+    extern "C" {
+        fn xfree(ptr: *mut u8);
+    }
+    if !compl_match_array.is_null() {
+        xfree(compl_match_array);
+        compl_match_array = core::ptr::null_mut();
+    }
 }

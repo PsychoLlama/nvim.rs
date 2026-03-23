@@ -466,7 +466,7 @@ int cpt_sources_index = -1;
 
 // "compl_match_array" points the currently displayed list of entries in the
 // popup menu.  It is NULL when there is no popup menu.
-static pumitem_T *compl_match_array = NULL;
+pumitem_T *compl_match_array = NULL;
 int compl_match_arraysize;
 
 // ins_ctrl_x deleted: Rust exports under the C name directly via #[export_name = "ins_ctrl_x"].
@@ -2043,8 +2043,6 @@ int nvim_ins_compl_delete_body(int col) {
   set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
   return 1;
 }
-void nvim_set_cursor_col_to_ins_end(void) { curwin->w_cursor.col = (colnr_T)compl_ins_end_col; }
-
 // Compound accessors for ins_compl_insert (Phase 3)
 const char *nvim_compl_shown_cp_str_data(void) { return compl_shown_match ? compl_shown_match->cp_str.data : NULL; }
 size_t nvim_compl_shown_cp_str_size(void) { return compl_shown_match ? compl_shown_match->cp_str.size : 0; }
@@ -2078,8 +2076,6 @@ void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
   }
   compl_ins_end_col = curwin->w_cursor.col;
 }
-void nvim_ins_compl_insert_bytes_len(const char *cp_str, int compl_len, int ins_len) { nvim_ins_compl_insert_bytes(cp_str + compl_len, ins_len); }
-void nvim_cursor_col_sub(int n) { curwin->w_cursor.col -= (colnr_T)n; }
 int nvim_compl_shown_match_at_orig_text(void) { return compl_shown_match ? (match_at_original_text(compl_shown_match) ? 1 : 0) : 0; }
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
 // nvim_set_compl_hi_on_longest: deleted (Phase 2, COMPL_HI_ON_AUTOCOMPL_LONGEST moved to Rust)
@@ -2329,8 +2325,6 @@ void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
 // nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
 // Accessor for Phase 5: ins_compl_del_pum migration
-void nvim_xfree_compl_match_array(void) { XFREE_CLEAR(compl_match_array); }
-
 // Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
 // get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
 int nvim_get_p_tsrfu_nonempty(void) { return *p_tsrfu != NUL ? 1 : 0; }
