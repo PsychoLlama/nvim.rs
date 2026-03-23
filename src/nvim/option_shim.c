@@ -1009,9 +1009,6 @@ void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
   home_replace(NULL, src, dst, dstlen, false);
 }
 
-const void *nvim_option_get_p_wc_ptr(void) { return &p_wc; }
-const void *nvim_option_get_p_wcm_ptr(void) { return &p_wcm; }
-
 void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
 {
   *name = options[opt_idx].fullname;

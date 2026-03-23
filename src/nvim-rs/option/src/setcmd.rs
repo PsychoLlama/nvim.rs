@@ -543,8 +543,8 @@ extern "C" {
         op_arg: *mut c_int,
         flags: u32,
     ) -> *mut c_char;
-    fn nvim_option_get_p_wc_ptr() -> *const std::ffi::c_void;
-    fn nvim_option_get_p_wcm_ptr() -> *const std::ffi::c_void;
+    static p_wc: crate::OptInt;
+    static p_wcm: crate::OptInt;
     fn nvim_get_e_number_required_after_equal() -> *const c_char;
 }
 
@@ -1031,15 +1031,13 @@ unsafe fn get_option_newval_impl(
             // Advance past '=' or ':'
             let arg = (*argp).add(1);
 
-            let p_wc = nvim_option_get_p_wc_ptr();
-            let p_wcm = nvim_option_get_p_wcm_ptr();
             let varp_as_optint = varp.cast::<crate::OptInt>();
 
             let newval_num: crate::OptInt;
 
             // Special handling for 'wildchar' / 'wildcharm'
-            if (varp_as_optint == p_wc.cast::<crate::OptInt>().cast_mut()
-                || varp_as_optint == p_wcm.cast::<crate::OptInt>().cast_mut())
+            if (varp_as_optint == std::ptr::addr_of!(p_wc).cast_mut()
+                || varp_as_optint == std::ptr::addr_of!(p_wcm).cast_mut())
                 && (*arg as u8 == b'<'
                     || *arg as u8 == b'^'
                     || (*arg != 0

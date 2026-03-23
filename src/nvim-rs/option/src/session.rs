@@ -16,7 +16,7 @@
 #![allow(clippy::branches_sharing_code)]
 #![allow(clippy::missing_panics_doc)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::{OptFlags, OptInt, OptValType};
 
@@ -56,8 +56,8 @@ extern "C" {
     fn rs_optval_equal(a: crate::storage::OptVal, b: crate::storage::OptVal) -> c_int;
 
     // wc_use_keyname
-    fn nvim_option_get_p_wc_ptr() -> *const std::ffi::c_void;
-    fn nvim_option_get_p_wcm_ptr() -> *const std::ffi::c_void;
+    static p_wc: crate::OptInt;
+    static p_wcm: crate::OptInt;
     fn find_special_key_in_table(c: c_int) -> c_int;
 
     // option_value2string
@@ -132,9 +132,9 @@ pub unsafe extern "C" fn rs_wc_use_keyname(
     varp: *const std::ffi::c_void,
     wcp: *mut OptInt,
 ) -> c_int {
-    let p_wc = nvim_option_get_p_wc_ptr();
-    let p_wcm = nvim_option_get_p_wcm_ptr();
-    if varp == p_wc || varp == p_wcm {
+    if varp == std::ptr::addr_of!(p_wc).cast::<c_void>()
+        || varp == std::ptr::addr_of!(p_wcm).cast::<c_void>()
+    {
         let wc = *(varp as *const OptInt);
         *wcp = wc;
         if is_special(wc) || find_special_key_in_table(wc as c_int) >= 0 {
