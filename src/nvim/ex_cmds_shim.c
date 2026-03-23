@@ -136,6 +136,8 @@ int nvim_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
 int64_t nvim_curwin_get_p_scr(void) { return curwin->w_p_scr; }
 int nvim_curwin_get_view_height(void) { return curwin->w_view_height; }
 void nvim_set_ex_no_reprint(int val) { ex_no_reprint = val != 0; }
+int nvim_get_ex_no_reprint(void) { return ex_no_reprint ? 1 : 0; }
+const char *nvim_get_e_empty_buffer(void) { return _(e_empty_buffer); }
 int nvim_cmdmod_has_lockmarks(void) { return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0; }
 int nvim_cmdmod_has_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
 int nvim_curbuf_get_b_p_ai(void) { return curbuf->b_p_ai; }

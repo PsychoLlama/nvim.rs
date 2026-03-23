@@ -576,3 +576,271 @@ pub unsafe extern "C" fn rs_do_exbuffer(eap: ExArgHandle) {
 pub unsafe extern "C" fn handle_did_throw() {
     nvim_docmd_handle_did_throw_impl();
 }
+
+// =============================================================================
+// Phase 6: Loop infrastructure and small functions
+// =============================================================================
+
+extern "C" {
+    // do_cmdline wrapper (for do_cmdline_cmd implementation)
+    #[link_name = "do_cmdline"]
+    fn nvim_p6_do_cmdline(
+        cmd: *mut c_char,
+        fgetline: *mut c_void,
+        cookie: *mut c_void,
+        flags: c_int,
+    ) -> c_int;
+
+    // getexline wrapper with no flags (do_exmode calls do_cmdline(NULL, getexline, NULL, 0))
+    fn nvim_docmd_do_cmdline_getexline_noflags();
+
+    // curbuf changedtick as i64
+    fn nvim_docmd_curbuf_changedtick() -> i64;
+
+    // msg_scroll_flush wrapper
+    fn nvim_docmd_msg_scroll_flush();
+
+    // State / mode
+    fn nvim_set_state(state: c_int);
+    fn nvim_set_exmode_active(val: bool);
+    fn nvim_get_exmode_active() -> bool;
+
+    // may_trigger_modechanged
+    fn may_trigger_modechanged();
+
+    // global_busy
+    fn nvim_get_global_busy() -> bool;
+
+    // msg_scroll get/set
+    fn nvim_get_msg_scroll() -> c_int;
+    fn nvim_set_msg_scroll(val: c_int);
+
+    // RedrawingDisabled get/set
+    fn nvim_get_RedrawingDisabled() -> c_int;
+    fn nvim_set_redrawing_disabled(val: c_int);
+
+    // no_wait_return
+    fn nvim_ex2_get_no_wait_return() -> c_int;
+    fn nvim_ex2_set_no_wait_return(val: c_int);
+
+    // msg
+    fn msg(s: *const c_char, hl_id: c_int);
+
+    // ex_normal_busy
+    fn nvim_ex_normal_busy() -> c_int;
+
+    // typebuf.tb_len
+    fn nvim_get_typebuf_len() -> c_int;
+
+    // ex_pressedreturn get/set
+    fn nvim_get_ex_pressedreturn() -> c_int;
+    fn nvim_docmd_set_pressedreturn(val: bool);
+
+    // ex_no_reprint set/get
+    fn nvim_set_ex_no_reprint(val: c_int);
+    fn nvim_get_ex_no_reprint() -> c_int;
+
+    // msg_row get/set
+    fn nvim_get_msg_row() -> c_int;
+    fn nvim_ex2_set_msg_row(val: c_int);
+
+    // curwin->w_cursor.lnum
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+
+    // cmdline_row set
+    fn nvim_set_cmdline_row(val: c_int);
+
+    // lines_left / Rows
+    fn nvim_set_lines_left(val: c_int);
+    fn nvim_ses_get_Rows() -> c_int;
+
+    // curbuf->b_ml.ml_flags & ML_EMPTY
+    fn nvim_al_curbuf_ml_empty() -> c_int;
+
+    // emsg
+    fn emsg(s: *const c_char);
+
+    // e_empty_buffer string (translated)
+    fn nvim_get_e_empty_buffer() -> *const c_char;
+
+    // msg_col set
+    fn nvim_ex2_set_msg_col(val: c_int);
+
+    // rs_print_line_no_prefix (already no_mangle in Rust)
+    #[link_name = "rs_print_line_no_prefix"]
+    fn nvim_p6_print_line_no_prefix(lnum: i32, print_marks: bool, list: bool);
+
+    // msg_clr_eos
+    fn msg_clr_eos();
+
+    // need_wait_return
+    fn nvim_set_need_wait_return(val: c_int);
+
+    // redraw_all_later / update_screen
+    fn nvim_redraw_all_later(redraw_type: c_int);
+    fn update_screen();
+
+    // filetype accessor functions
+    fn nvim_docmd_get_filetype_plugin() -> c_int;
+    fn nvim_docmd_set_filetype_plugin(val: c_int);
+    fn nvim_docmd_get_filetype_indent() -> c_int;
+    fn nvim_docmd_set_filetype_indent(val: c_int);
+    fn nvim_docmd_get_filetype_detect() -> c_int;
+    fn nvim_docmd_set_filetype_detect(val: c_int);
+
+    // source_runtime (Rust function, already exported as "source_runtime")
+    fn source_runtime(name: *const c_char, flags: c_int) -> c_int;
+
+    // filetype constants
+    fn nvim_docmd_get_ftplugin_file() -> *const c_char;
+    fn nvim_docmd_get_indent_file() -> *const c_char;
+    fn nvim_docmd_get_filetype_file() -> *const c_char;
+    fn nvim_docmd_get_dip_all() -> c_int;
+}
+
+/// DOCMD flags for do_cmdline_cmd.
+const DOCMD_VERBOSE: c_int = 0x01;
+const DOCMD_NOWAIT: c_int = 0x02;
+const DOCMD_KEYTYPED: c_int = 0x40;
+
+// TriState values for filetype flags.
+const K_NONE: c_int = 0;
+const K_TRUE: c_int = 1;
+
+// MODE_NORMAL constant.
+const MODE_NORMAL: c_int = 0x01;
+
+// UPD_NOT_VALID constant.
+const UPD_NOT_VALID: c_int = 40;
+
+/// `do_cmdline_cmd` - execute a simple Ex command string.
+///
+/// Used for translated commands like "*".
+///
+/// # Safety
+/// `cmd` must be a valid C string pointer or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn do_cmdline_cmd(cmd: *const c_char) -> c_int {
+    nvim_p6_do_cmdline(
+        cmd as *mut c_char,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_KEYTYPED,
+    )
+}
+
+/// `filetype_plugin_enable` - enable ftplugin and indent autocommands.
+///
+/// Called from main.c during startup.
+///
+/// # Safety
+/// Calls C functions that source runtime files.
+#[no_mangle]
+pub unsafe extern "C" fn filetype_plugin_enable() {
+    if nvim_docmd_get_filetype_plugin() == K_NONE {
+        source_runtime(nvim_docmd_get_ftplugin_file(), nvim_docmd_get_dip_all());
+        nvim_docmd_set_filetype_plugin(K_TRUE);
+    }
+    if nvim_docmd_get_filetype_indent() == K_NONE {
+        source_runtime(nvim_docmd_get_indent_file(), nvim_docmd_get_dip_all());
+        nvim_docmd_set_filetype_indent(K_TRUE);
+    }
+}
+
+/// `filetype_maybe_enable` - enable filetype detection if not disabled.
+///
+/// Called from main.c during startup.
+///
+/// # Safety
+/// Calls C functions that source runtime files.
+#[no_mangle]
+pub unsafe extern "C" fn filetype_maybe_enable() {
+    if nvim_docmd_get_filetype_detect() == K_NONE {
+        // Normally .vim files are sourced before .lua files when both are
+        // supported, but we reverse the order here because we want the Lua
+        // autocommand to be defined first so that it runs first
+        source_runtime(nvim_docmd_get_filetype_file(), nvim_docmd_get_dip_all());
+        nvim_docmd_set_filetype_detect(K_TRUE);
+    }
+}
+
+/// `do_exmode` - repeatedly get commands for Ex mode until `:vi`.
+///
+/// # Safety
+/// Accesses many C globals. Must only be called from C context.
+#[no_mangle]
+pub unsafe extern "C" fn do_exmode() {
+    nvim_set_exmode_active(true);
+    nvim_set_state(MODE_NORMAL);
+    may_trigger_modechanged();
+
+    // When using ":global /pat/ visual" and then "Q" we return to continue
+    // the :global command.
+    if nvim_get_global_busy() {
+        return;
+    }
+
+    let save_msg_scroll = nvim_get_msg_scroll();
+    nvim_set_redrawing_disabled(nvim_get_RedrawingDisabled() + 1); // don't redisplay the window
+    nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() + 1); // don't wait for return
+
+    msg(
+        c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr(),
+        0,
+    );
+    while nvim_get_exmode_active() {
+        // Check for a ":normal" command and no more characters left.
+        if nvim_ex_normal_busy() > 0 && nvim_get_typebuf_len() == 0 {
+            nvim_set_exmode_active(false);
+            break;
+        }
+        nvim_set_msg_scroll(1);
+        nvim_set_need_wait_return(0);
+        nvim_docmd_set_pressedreturn(false);
+        nvim_set_ex_no_reprint(0);
+        let changedtick = nvim_docmd_curbuf_changedtick();
+        let prev_msg_row = nvim_get_msg_row();
+        let prev_line = nvim_get_curwin_cursor_lnum();
+        nvim_set_cmdline_row(nvim_get_msg_row());
+        nvim_docmd_do_cmdline_getexline_noflags();
+        nvim_set_lines_left(nvim_ses_get_Rows() - 1);
+
+        if (prev_line != nvim_get_curwin_cursor_lnum()
+            || changedtick != nvim_docmd_curbuf_changedtick())
+            && nvim_get_ex_no_reprint() == 0
+        {
+            if nvim_al_curbuf_ml_empty() != 0 {
+                emsg(nvim_get_e_empty_buffer());
+            } else {
+                if nvim_get_ex_pressedreturn() != 0 {
+                    // Make sure the message overwrites the right line and isn't throttled.
+                    nvim_docmd_msg_scroll_flush();
+                    // go up one line, to overwrite the ":<CR>" line, so the
+                    // output doesn't contain empty lines.
+                    let mut mr = prev_msg_row;
+                    if prev_msg_row == nvim_ses_get_Rows() - 1 {
+                        mr -= 1;
+                    }
+                    nvim_ex2_set_msg_row(mr);
+                }
+                nvim_ex2_set_msg_col(0);
+                nvim_p6_print_line_no_prefix(nvim_get_curwin_cursor_lnum(), false, false);
+                msg_clr_eos();
+            }
+        } else if nvim_get_ex_pressedreturn() != 0 && nvim_get_ex_no_reprint() == 0 {
+            // must be at EOF
+            if nvim_al_curbuf_ml_empty() != 0 {
+                emsg(nvim_get_e_empty_buffer());
+            } else {
+                emsg(c"E501: At end-of-file".as_ptr());
+            }
+        }
+    }
+
+    nvim_set_redrawing_disabled(nvim_get_RedrawingDisabled() - 1);
+    nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() - 1);
+    nvim_redraw_all_later(UPD_NOT_VALID);
+    update_screen();
+    nvim_set_need_wait_return(0);
+    nvim_set_msg_scroll(save_msg_scroll);
+}

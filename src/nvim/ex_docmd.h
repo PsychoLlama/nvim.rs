@@ -91,6 +91,11 @@ void set_no_hlsearch(bool flag);
 void set_pressedreturn(bool val);
 void ex_cd(exarg_T *eap);
 void do_sleep(int64_t msec, bool hide_cursor);
+// Phase 6 (ex_docmd plan): C bodies deleted; Rust exports old names via #[no_mangle].
+void do_exmode(void);
+int do_cmdline_cmd(const char *cmd);
+void filetype_plugin_enable(void);
+void filetype_maybe_enable(void);
 // Phase 2 (ex_docmd plan): C bodies renamed to nvim_docmd_*_impl; Rust exports old names.
 void do_exedit(exarg_T *eap, win_T *old_curwin);
 void ex_splitview(exarg_T *eap);

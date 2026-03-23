@@ -427,76 +427,7 @@ static void restore_dbg_stuff(struct dbg_stuff *dsp)
   current_exception = dsp->current_exception;
 }
 
-/// Repeatedly get commands for Ex mode, until the ":vi" command is given.
-void do_exmode(void)
-{
-  exmode_active = true;
-  State = MODE_NORMAL;
-  may_trigger_modechanged();
-
-  // When using ":global /pat/ visual" and then "Q" we return to continue
-  // the :global command.
-  if (global_busy) {
-    return;
-  }
-
-  int save_msg_scroll = msg_scroll;
-  RedrawingDisabled++;  // don't redisplay the window
-  no_wait_return++;  // don't wait for return
-
-  msg(_("Entering Ex mode.  Type \"visual\" to go to Normal mode."), 0);
-  while (exmode_active) {
-    // Check for a ":normal" command and no more characters left.
-    if (ex_normal_busy > 0 && typebuf.tb_len == 0) {
-      exmode_active = false;
-      break;
-    }
-    msg_scroll = true;
-    need_wait_return = false;
-    ex_pressedreturn = false;
-    ex_no_reprint = false;
-    varnumber_T changedtick = buf_get_changedtick(curbuf);
-    int prev_msg_row = msg_row;
-    linenr_T prev_line = curwin->w_cursor.lnum;
-    cmdline_row = msg_row;
-    do_cmdline(NULL, getexline, NULL, 0);
-    lines_left = Rows - 1;
-
-    if ((prev_line != curwin->w_cursor.lnum
-         || changedtick != buf_get_changedtick(curbuf)) && !ex_no_reprint) {
-      if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-        emsg(_(e_empty_buffer));
-      } else {
-        if (ex_pressedreturn) {
-          // Make sure the message overwrites the right line and isn't throttled.
-          msg_scroll_flush();
-          // go up one line, to overwrite the ":<CR>" line, so the
-          // output doesn't contain empty lines.
-          msg_row = prev_msg_row;
-          if (prev_msg_row == Rows - 1) {
-            msg_row--;
-          }
-        }
-        msg_col = 0;
-        rs_print_line_no_prefix(curwin->w_cursor.lnum, false, false);
-        msg_clr_eos();
-      }
-    } else if (ex_pressedreturn && !ex_no_reprint) {  // must be at EOF
-      if (curbuf->b_ml.ml_flags & ML_EMPTY) {
-        emsg(_(e_empty_buffer));
-      } else {
-        emsg(_("E501: At end-of-file"));
-      }
-    }
-  }
-
-  RedrawingDisabled--;
-  no_wait_return--;
-  redraw_all_later(UPD_NOT_VALID);
-  update_screen();
-  need_wait_return = false;
-  msg_scroll = save_msg_scroll;
-}
+// do_exmode: implemented in Rust (Phase 6). Symbol exported via #[no_mangle].
 
 static int cmdline_call_depth = 0;  ///< recursiveness
 
@@ -525,11 +456,7 @@ static void do_cmdline_end(void)
   end_batch_changes();
 }
 
-/// Execute a simple command line.  Used for translated commands like "*".
-int do_cmdline_cmd(const char *cmd)
-{
-  return do_cmdline((char *)cmd, NULL, NULL, DOCMD_VERBOSE|DOCMD_NOWAIT|DOCMD_KEYTYPED);
-}
+// do_cmdline_cmd: implemented in Rust (Phase 6). Symbol exported via #[no_mangle].
 
 /// do_cmdline(): execute one Ex command line
 ///
@@ -3534,29 +3461,8 @@ static TriState filetype_indent = kNone;
 /// autocommands. We do this separately from filetype.vim so that these
 /// autocommands will always fire first (and thus can be overridden) while still
 /// allowing general filetype detection to be disabled in the user's init file.
-void filetype_plugin_enable(void)
-{
-  if (filetype_plugin == kNone) {
-    source_runtime(FTPLUGIN_FILE, DIP_ALL);
-    filetype_plugin = kTrue;
-  }
-  if (filetype_indent == kNone) {
-    source_runtime(INDENT_FILE, DIP_ALL);
-    filetype_indent = kTrue;
-  }
-}
-
-/// Enable filetype detection if the user did not explicitly disable it.
-void filetype_maybe_enable(void)
-{
-  if (filetype_detect == kNone) {
-    // Normally .vim files are sourced before .lua files when both are
-    // supported, but we reverse the order here because we want the Lua
-    // autocommand to be defined first so that it runs first
-    source_runtime(FILETYPE_FILE, DIP_ALL);
-    filetype_detect = kTrue;
-  }
-}
+// filetype_plugin_enable / filetype_maybe_enable: implemented in Rust (Phase 6).
+// Accessor functions already exist below (nvim_docmd_get_filetype_* / set_filetype_*).
 
 
 
@@ -4538,6 +4444,15 @@ const char *nvim_docmd_get_curbuf_sfname(void) { return curbuf->b_sfname; }
 
 // e_invarg2 accessor (already in ex_docmd.c at line ~6369, named nvim_get_e_invarg2)
 // e_secure accessor (in option_shim.c as nvim_get_e_secure)
+
+// Phase 6 accessor: run do_cmdline with getexline callback, no flags (for do_exmode).
+void nvim_docmd_do_cmdline_getexline_noflags(void) { do_cmdline(NULL, getexline, NULL, 0); }
+
+// Phase 6 accessor: get curbuf changedtick as int64 for do_exmode.
+int64_t nvim_docmd_curbuf_changedtick(void) { return (int64_t)buf_get_changedtick(curbuf); }
+
+// Phase 6 accessor: get msg_scroll_flush.
+void nvim_docmd_msg_scroll_flush(void) { msg_scroll_flush(); }
 
 // =============================================================================
 // Phase 2 accessor functions for Rust FFI (commands.rs / execute.rs)
