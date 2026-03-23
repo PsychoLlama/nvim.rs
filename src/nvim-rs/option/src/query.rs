@@ -406,7 +406,8 @@ extern "C" {
     fn nvim_win_set_grid_blending(wp: WinHandle, val: bool);
 
     // do_syntax_autocmd
-    fn nvim_buf_set_b_flags_syn_set(buf: BufHandle);
+    fn nvim_buf_get_b_flags(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_flags(buf: BufHandle, val: c_int);
     fn nvim_apply_syntax_autocmd(buf: BufHandle, force: bool);
 
     // do_spelllang_source
@@ -452,10 +453,11 @@ static mut SYN_RECURSIVE: c_int = 0;
 /// Translation of C `do_syntax_autocmd`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_syntax_autocmd(buf: BufHandle, value_changed: c_int) {
+    const BF_SYN_SET: c_int = 0x200;
     SYN_RECURSIVE += 1;
     let force = value_changed != 0 || SYN_RECURSIVE == 1;
     nvim_apply_syntax_autocmd(buf, force);
-    nvim_buf_set_b_flags_syn_set(buf);
+    nvim_buf_set_b_flags(buf, nvim_buf_get_b_flags(buf) | BF_SYN_SET);
     SYN_RECURSIVE -= 1;
 }
 

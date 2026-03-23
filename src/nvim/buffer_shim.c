@@ -151,6 +151,8 @@ const char *nvim_buf_get_b_fname(buf_T *buf)
 {
   return buf->b_fname;
 }
+/// Get the b_p_syn option field from a buffer.
+const char *nvim_buf_get_b_p_syn(buf_T *buf) { return buf ? buf->b_p_syn : NULL; }
 
 /// Get the b_ffname field from a buffer (full filename).
 const char *nvim_buf_get_b_ffname(buf_T *buf)

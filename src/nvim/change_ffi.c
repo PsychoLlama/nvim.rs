@@ -71,6 +71,7 @@ int nvim_buf_get_b_ro_locked(buf_T *buf) { return buf->b_ro_locked; }
 void nvim_buf_set_b_ro_locked(buf_T *buf, int val) { buf->b_ro_locked = val; }
 bool nvim_buf_get_b_may_swap(buf_T *buf) { return buf->b_may_swap; }
 int nvim_buf_get_b_flags(buf_T *buf) { return buf->b_flags; }
+void nvim_buf_set_b_flags(buf_T *buf, int val) { buf->b_flags = val; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 // Modification tracking fields

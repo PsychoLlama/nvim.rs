@@ -1664,14 +1664,6 @@ int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t 
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
 // =============================================================================
 
-/// Set BF_SYN_SET flag in buf->b_flags.
-void nvim_buf_set_b_flags_syn_set(buf_T *buf)
-{
-  if (buf) {
-    buf->b_flags |= BF_SYN_SET;
-  }
-}
-
 /// Apply EVENT_SYNTAX autocmds for the given buffer.
 /// @param force  whether to force the autocmd (value_changed || syn_recursive == 1)
 void nvim_apply_syntax_autocmd(buf_T *buf, bool force)
