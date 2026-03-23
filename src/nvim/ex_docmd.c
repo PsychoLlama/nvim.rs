@@ -356,6 +356,7 @@ extern int nvim_docmd_vim_mkdir_emsg_impl(const char *name, int prot);
 extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
 extern void nvim_docmd_update_topline_cursor_impl(void);
 extern char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep);
+extern void nvim_docmd_close_redir_impl(void);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2736,19 +2737,7 @@ extern void nvim_docmd_post_chdir_impl(CdScope scope, bool trigger_dirchanged);
 
 
 
-/// Print the current line if flags were given to the Ex command.
-static void nvim_docmd_close_redir_impl(void)
-{
-  if (redir_fd != NULL) {
-    fclose(redir_fd);
-    redir_fd = NULL;
-  }
-  redir_reg = 0;
-  if (redir_vname) {
-    var_redir_stop();
-    redir_vname = false;
-  }
-}
+// nvim_docmd_close_redir_impl is implemented in Rust (commands.rs).
 
 
 
@@ -4144,6 +4133,9 @@ void nvim_docmd_set_redir_fd(void *fd) { redir_fd = (FILE *)fd; }
 // redir_reg/vname setters (getters already in message.c)
 void nvim_docmd_set_redir_reg(int reg) { redir_reg = (uint8_t)reg; }
 void nvim_docmd_set_redir_vname(int val) { redir_vname = (bool)val; }
+int nvim_docmd_get_redir_vname(void) { return redir_vname ? 1 : 0; }
+void nvim_docmd_fclose_redir_fd(void) { fclose(redir_fd); redir_fd = NULL; }
+void nvim_docmd_var_redir_stop(void) { var_redir_stop(); }
 
 // ex_normal globals
 int nvim_docmd_get_ex_normal_busy(void) { return ex_normal_busy; }

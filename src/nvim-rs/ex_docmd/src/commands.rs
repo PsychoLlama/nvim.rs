@@ -212,6 +212,9 @@ extern "C" {
 
     // Redir helpers
     fn nvim_docmd_close_redir();
+    fn nvim_docmd_fclose_redir_fd();
+    fn nvim_docmd_get_redir_vname() -> c_int;
+    fn nvim_docmd_var_redir_stop();
     fn nvim_docmd_open_exfile_impl(
         fname: *const c_char,
         forceit: c_int,
@@ -888,6 +891,24 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         || nvim_get_redir_vname() != 0
     {
         nvim_set_redir_off(0);
+    }
+}
+
+/// `nvim_docmd_close_redir_impl` - close active redirection.
+///
+/// Closes redirect-to-file, clears register redirect, and stops variable redirect.
+///
+/// # Safety
+/// Accesses C globals (redir_fd, redir_reg, redir_vname). Must be called from C context.
+#[export_name = "nvim_docmd_close_redir_impl"]
+pub unsafe extern "C" fn rs_close_redir_impl() {
+    if !nvim_docmd_get_redir_fd().is_null() {
+        nvim_docmd_fclose_redir_fd();
+    }
+    nvim_docmd_set_redir_reg(0);
+    if nvim_docmd_get_redir_vname() != 0 {
+        nvim_docmd_var_redir_stop();
+        nvim_docmd_set_redir_vname(0);
     }
 }
 
