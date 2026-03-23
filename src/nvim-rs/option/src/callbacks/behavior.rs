@@ -42,7 +42,7 @@ extern "C" {
     fn rs_newFoldLevel();
 
     // Option callback helpers
-    fn nvim_did_set_str_generic(args: *mut c_void) -> *const std::ffi::c_char;
+    fn did_set_str_generic(args: *mut c_void) -> *const std::ffi::c_char;
     fn nvim_optset_get_varp_str(args: *const c_void) -> *const std::ffi::c_char;
 
     // Window functions
@@ -128,7 +128,7 @@ extern "C" {
     // Phase 95: spell option accessors
     fn nvim_valid_spellfile(val: *const std::ffi::c_char) -> c_int;
     fn nvim_valid_spelllang(val: *const std::ffi::c_char) -> c_int;
-    fn nvim_did_set_spell_option() -> CallbackResult;
+    fn did_set_spell_option() -> CallbackResult;
 
     // Phase 96: spellcapcheck and keymodel accessors
     fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
@@ -186,41 +186,43 @@ extern "C" {
     #[link_name = "rs_foldmethodIsExpr"]
     fn nvim_foldmethodIsExpr(win: WinHandle) -> c_int;
 
-    // Phase 101: statustabline_rulerformat accessors
-    fn nvim_did_set_statustabline(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_rulerformat(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_statuscolumn(args: *mut c_void) -> CallbackResult;
+    // Phase 101: statustabline_rulerformat - call directly with extra args
+    fn did_set_statustabline_rulerformat(
+        args: *mut c_void,
+        rulerformat: bool,
+        statuscolumn: bool,
+    ) -> CallbackResult;
 
     // Phase 102: highlight / titleiconstring accessors
     fn nvim_check_highlight_init(args: *mut c_void) -> c_int;
-    fn nvim_did_set_iconstring(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_titlestring(args: *mut c_void) -> CallbackResult;
-    // Phase 103: isopt / signcolumn / tagcase / virtualedit wrappers
-    fn nvim_did_set_isopt(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_iskeyword(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_signcolumn(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_tagcase(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_virtualedit(args: *mut c_void) -> CallbackResult;
+    fn did_set_titleiconstring(args: *mut c_void, flagval: c_int) -> CallbackResult;
+
+    // Phase 103: isopt / signcolumn / tagcase / virtualedit - call C directly
+    fn did_set_isopt(args: *mut c_void) -> CallbackResult;
+    fn did_set_iskeyword(args: *mut c_void) -> CallbackResult;
+    fn did_set_signcolumn(args: *mut c_void) -> CallbackResult;
+    fn did_set_tagcase(args: *mut c_void) -> CallbackResult;
+    fn did_set_virtualedit(args: *mut c_void) -> CallbackResult;
 
     // Phase 108: buftype / encoding / chars_option / keymap / shada / complete
-    fn nvim_did_set_buftype(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_encoding(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_chars_option(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_keymap(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_shada(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_complete(args: *mut c_void) -> CallbackResult;
+    fn did_set_buftype(args: *mut c_void) -> CallbackResult;
+    fn did_set_encoding(args: *mut c_void) -> CallbackResult;
+    fn did_set_chars_option(args: *mut c_void) -> CallbackResult;
+    fn did_set_keymap(args: *mut c_void) -> CallbackResult;
+    fn did_set_shada(args: *mut c_void) -> CallbackResult;
+    fn did_set_complete(args: *mut c_void) -> CallbackResult;
 
     // Phase 106: cedit / operatorfunc / findfunc / completeitemalign
-    fn nvim_did_set_cedit(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_operatorfunc(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_findfunc(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_completeitemalign(args: *mut c_void) -> CallbackResult;
+    fn did_set_cedit(args: *mut c_void) -> CallbackResult;
+    fn did_set_operatorfunc(args: *mut c_void) -> CallbackResult;
+    fn nvim_docmd_did_set_findfunc_impl(args: *mut c_void) -> CallbackResult;
+    fn did_set_completeitemalign(args: *mut c_void) -> CallbackResult;
 
     // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
     fn nvim_fill_culopt_flags(val: *const std::ffi::c_char, win: WinHandle) -> c_int;
-    fn nvim_did_set_completeopt(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_varsofttabstop(args: *mut c_void) -> CallbackResult;
-    fn nvim_did_set_vartabstop(args: *mut c_void) -> CallbackResult;
+    fn did_set_completeopt(args: *mut c_void) -> CallbackResult;
+    fn did_set_varsofttabstop(args: *mut c_void) -> CallbackResult;
+    fn did_set_vartabstop(args: *mut c_void) -> CallbackResult;
 
     // Phase 104: guicursor / ambiwidth / emoji / showbreak
     fn nvim_parse_guicursor() -> CallbackResult;
@@ -228,7 +230,9 @@ extern "C" {
     fn nvim_redrawWinline_curwin();
     fn nvim_check_chars_options_str() -> CallbackResult;
     fn nvim_check_ambiwidth_opt() -> c_int;
-    fn nvim_did_set_showbreak(args: *mut c_void) -> CallbackResult;
+    // showbreak: ptr2cells and utfc_ptr2len for Rust implementation
+    fn ptr2cells(p: *const std::ffi::c_char) -> c_int;
+    fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
 }
 
 // =============================================================================
@@ -382,7 +386,7 @@ pub unsafe extern "C" fn rs_did_set_foldmarker(args: *mut c_void) -> CallbackRes
 /// Validates against allowed values, then updates folds.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_foldmethod(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -703,7 +707,7 @@ pub unsafe extern "C" fn rs_did_set_spellfile(args: *mut c_void) -> CallbackResu
     if nvim_valid_spellfile(varp_str) == 0 {
         return E_INVARG_BEHAVIOR;
     }
-    nvim_did_set_spell_option()
+    did_set_spell_option()
 }
 
 /// Callback for 'spelllang' option (Phase 95).
@@ -715,7 +719,7 @@ pub unsafe extern "C" fn rs_did_set_spelllang(args: *mut c_void) -> CallbackResu
     if nvim_valid_spelllang(varp_str) == 0 {
         return E_INVARG_BEHAVIOR;
     }
-    nvim_did_set_spell_option()
+    did_set_spell_option()
 }
 
 /// Callback for 'spellcapcheck' option (Phase 96).
@@ -732,7 +736,7 @@ pub unsafe extern "C" fn rs_did_set_spellcapcheck(args: *mut c_void) -> Callback
 /// Validates and then updates km_stopsel/km_startsel flags.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -1016,19 +1020,19 @@ pub unsafe extern "C" fn rs_did_set_cursorlineopt(args: *mut c_void) -> Callback
 /// Callback for 'completeopt' option (Phase 105).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_completeopt(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_completeopt(args)
+    did_set_completeopt(args)
 }
 
 /// Callback for 'varsofttabstop' option (Phase 105).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_varsofttabstop(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_varsofttabstop(args)
+    did_set_varsofttabstop(args)
 }
 
 /// Callback for 'vartabstop' option (Phase 105).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_vartabstop(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_vartabstop(args)
+    did_set_vartabstop(args)
 }
 
 /// Callback for 'guicursor' option (Phase 104).
@@ -1048,7 +1052,7 @@ pub unsafe extern "C" fn rs_did_set_guicursor(_args: *mut c_void) -> CallbackRes
 /// Validates the flag value then checks chars options.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_ambiwidth(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -1065,40 +1069,56 @@ pub unsafe extern "C" fn rs_did_set_emoji(_args: *mut c_void) -> CallbackResult 
     nvim_check_chars_options_str()
 }
 
+/// Error message for showbreak containing wide/unprintable character.
+const E_SHOWBREAK_WIDE: *const std::ffi::c_char =
+    c"E595: 'showbreak' contains unprintable or wide character".as_ptr();
+
 /// Callback for 'showbreak' option (Phase 104).
+/// Validates that each character in 'showbreak' takes exactly 1 cell.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_showbreak(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_showbreak(args)
+    let varp_str = nvim_optset_get_varp_str(args);
+    if varp_str.is_null() {
+        return callback_ok();
+    }
+    let mut s = varp_str;
+    while *s != 0 {
+        if ptr2cells(s) != 1 {
+            return E_SHOWBREAK_WIDE;
+        }
+        s = s.add(utfc_ptr2len(s) as usize);
+    }
+    callback_ok()
 }
 
 /// Callback for 'isident'/'isprint'/'isfname' options (Phase 103).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_isopt(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_isopt(args)
+    did_set_isopt(args)
 }
 
 /// Callback for 'iskeyword' option (Phase 103).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_iskeyword(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_iskeyword(args)
+    did_set_iskeyword(args)
 }
 
 /// Callback for 'signcolumn' option (Phase 103).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_signcolumn(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_signcolumn(args)
+    did_set_signcolumn(args)
 }
 
 /// Callback for 'tagcase' option (Phase 103).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_tagcase(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_tagcase(args)
+    did_set_tagcase(args)
 }
 
 /// Callback for 'virtualedit' option (Phase 103).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_virtualedit_full(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_virtualedit(args)
+    did_set_virtualedit(args)
 }
 
 /// Callback for 'highlight' option (Phase 102).
@@ -1111,46 +1131,51 @@ pub unsafe extern "C" fn rs_did_set_highlight(args: *mut c_void) -> CallbackResu
     callback_ok()
 }
 
+/// STL_IN_ICON flag value (from globals.h)
+const STL_IN_ICON: c_int = 1;
+/// STL_IN_TITLE flag value (from globals.h)
+const STL_IN_TITLE: c_int = 2;
+
 /// Callback for 'iconstring' option (Phase 102).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_iconstring(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_iconstring(args)
+    did_set_titleiconstring(args, STL_IN_ICON)
 }
 
 /// Callback for 'titlestring' option (Phase 102).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_titlestring(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_titlestring(args)
+    did_set_titleiconstring(args, STL_IN_TITLE)
 }
 
 /// Callback for 'rulerformat' option (Phase 101).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_rulerformat(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_rulerformat(args)
+    did_set_statustabline_rulerformat(args, true, false)
 }
 
 /// Callback for 'statusline' option (Phase 101).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_statusline(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_statustabline(args)
+    did_set_statustabline_rulerformat(args, false, false)
 }
 
 /// Callback for 'statuscolumn' option (Phase 101).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_statuscolumn(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_statuscolumn(args)
+    did_set_statustabline_rulerformat(args, false, true)
 }
 
 /// Callback for 'tabline' option (Phase 101).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_tabline(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_statustabline(args)
+    did_set_statustabline_rulerformat(args, false, false)
 }
 
 /// Callback for 'winbar' option (Phase 101).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_winbar(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_statustabline(args)
+    did_set_statustabline_rulerformat(args, false, false)
 }
 
 /// Callback for '*expr' options (Phase 100).
@@ -1219,61 +1244,61 @@ pub unsafe extern "C" fn rs_did_set_helpfile(_args: *mut c_void) -> CallbackResu
 /// Callback for 'buftype' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_buftype(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_buftype(args)
+    did_set_buftype(args)
 }
 
 /// Callback for 'encoding'/'fileencoding'/'makeencoding' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_encoding(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_encoding(args)
+    did_set_encoding(args)
 }
 
 /// Callback for 'fillchars'/'listchars' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_chars_option(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_chars_option(args)
+    did_set_chars_option(args)
 }
 
 /// Callback for 'keymap' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_keymap(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_keymap(args)
+    did_set_keymap(args)
 }
 
 /// Callback for 'shada' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_shada(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_shada(args)
+    did_set_shada(args)
 }
 
 /// Callback for 'complete' option (Phase 108).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_complete(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_complete(args)
+    did_set_complete(args)
 }
 
 /// Callback for 'cedit' option (Phase 106).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_cedit(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_cedit(args)
+    did_set_cedit(args)
 }
 
 /// Callback for 'operatorfunc' option (Phase 106).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_operatorfunc(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_operatorfunc(args)
+    did_set_operatorfunc(args)
 }
 
 /// Callback for 'findfunc' option (Phase 106).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_findfunc(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_findfunc(args)
+    nvim_docmd_did_set_findfunc_impl(args)
 }
 
 /// Callback for 'completeitemalign' option (Phase 106).
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_completeitemalign(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_completeitemalign(args)
+    did_set_completeitemalign(args)
 }
 
 // =============================================================================

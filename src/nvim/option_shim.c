@@ -282,6 +282,17 @@ extern const char *rs_did_set_ambiwidth(optset_T *args);
 extern const char *rs_did_set_emoji(optset_T *args);
 extern const char *rs_did_set_showbreak(optset_T *args);
 extern const char *rs_did_set_cursorlineopt(optset_T *args);
+// Phase 1: moved to direct C calls (no more nvim_did_set_* wrappers needed)
+extern const char *rs_did_set_background(optset_T *args);
+extern const char *rs_did_set_buftype(optset_T *args);
+extern const char *rs_did_set_chars_option(optset_T *args);
+extern const char *rs_did_set_colorcolumn(optset_T *args);
+extern const char *rs_did_set_complete(optset_T *args);
+extern const char *rs_did_set_encoding(optset_T *args);
+extern const char *rs_did_set_fileformat(optset_T *args);
+extern const char *rs_did_set_keymap(optset_T *args);
+extern const char *rs_did_set_shada(optset_T *args);
+extern const char *rs_did_set_str_generic(optset_T *args);
 extern const char *rs_did_set_completeopt(optset_T *args);
 extern const char *rs_did_set_varsofttabstop(optset_T *args);
 extern const char *rs_did_set_vartabstop(optset_T *args);
@@ -441,7 +452,6 @@ void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 // Phase 95: spell option accessors
 int nvim_valid_spellfile(const char *val) { return valid_spellfile(val) ? 1 : 0; }
 int nvim_valid_spelllang(const char *val) { return valid_spelllang(val) ? 1 : 0; }
-const char *nvim_did_set_spell_option(void) { return did_set_spell_option(); }
 
 // Phase 96: spellcapcheck and keymodel accessors
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
@@ -449,56 +459,8 @@ const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win-
 // Phase 97: eventignore check_ei accessor
 int nvim_check_ei(const char *val) { return check_ei(val); }
 
-// Phase 108: buftype / encoding / chars_option / keymap / shada / complete
-extern const char *rs_did_set_buftype(optset_T *args);
-extern const char *rs_did_set_encoding(optset_T *args);
-extern const char *rs_did_set_chars_option(optset_T *args);
-extern const char *rs_did_set_keymap(optset_T *args);
-extern const char *rs_did_set_shada(optset_T *args);
-extern const char *rs_did_set_complete(optset_T *args);
-extern const char *did_set_buftype(optset_T *args);
-extern const char *did_set_encoding(optset_T *args);
-extern const char *did_set_chars_option(optset_T *args);
-extern const char *did_set_keymap(optset_T *args);
-extern const char *did_set_shada(optset_T *args);
-extern const char *did_set_complete(optset_T *args);
-const char *nvim_did_set_buftype(void *args) { return did_set_buftype((optset_T *)args); }
-const char *nvim_did_set_encoding(void *args) { return did_set_encoding((optset_T *)args); }
-const char *nvim_did_set_chars_option(void *args) { return did_set_chars_option((optset_T *)args); }
-const char *nvim_did_set_keymap(void *args) { return did_set_keymap((optset_T *)args); }
-const char *nvim_did_set_shada(void *args) { return did_set_shada((optset_T *)args); }
-const char *nvim_did_set_complete(void *args) { return did_set_complete((optset_T *)args); }
-
-// Phase 107: colorcolumn / background / fileformat / str_generic
-extern const char *rs_did_set_colorcolumn(optset_T *args);
-extern const char *rs_did_set_background(optset_T *args);
-extern const char *rs_did_set_fileformat(optset_T *args);
-extern const char *rs_did_set_str_generic(optset_T *args);
-extern const char *did_set_colorcolumn(optset_T *args);
-extern const char *did_set_background(optset_T *args);
-extern const char *did_set_fileformat(optset_T *args);
-const char *nvim_did_set_colorcolumn(void *args) { return did_set_colorcolumn((optset_T *)args); }
-const char *nvim_did_set_background(void *args) { return did_set_background((optset_T *)args); }
-const char *nvim_did_set_fileformat(void *args) { return did_set_fileformat((optset_T *)args); }
-
-// Phase 106: cedit / operatorfunc / findfunc / completeitemalign
-extern const char *did_set_cedit(optset_T *args);
-extern const char *did_set_operatorfunc(optset_T *args);
-extern const char *nvim_docmd_did_set_findfunc_impl(optset_T *args);
-const char *did_set_completeitemalign(optset_T *args);
-const char *nvim_did_set_cedit(void *args) { return did_set_cedit((optset_T *)args); }
-const char *nvim_did_set_operatorfunc(void *args) { return did_set_operatorfunc((optset_T *)args); }
-const char *nvim_did_set_findfunc(void *args) { return nvim_docmd_did_set_findfunc_impl((optset_T *)args); }
-const char *nvim_did_set_completeitemalign(void *args) { return did_set_completeitemalign((optset_T *)args); }
-
 // Phase 105: cursorlineopt / completeopt / varsofttabstop / vartabstop
 int nvim_fill_culopt_flags(const char *val, win_T *win) { return fill_culopt_flags((char *)val, win); }
-const char *did_set_completeopt(optset_T *args);
-const char *did_set_varsofttabstop(optset_T *args);
-const char *did_set_vartabstop(optset_T *args);
-const char *nvim_did_set_completeopt(void *args) { return did_set_completeopt((optset_T *)args); }
-const char *nvim_did_set_varsofttabstop(void *args) { return did_set_varsofttabstop((optset_T *)args); }
-const char *nvim_did_set_vartabstop(void *args) { return did_set_vartabstop((optset_T *)args); }
 
 // Phase 104: guicursor / ambiwidth / emoji / showbreak accessors
 const char *check_chars_options(void);  // defined in optionstr.c
@@ -509,56 +471,11 @@ const char *nvim_check_chars_options_str(void) { return check_chars_options(); }
 // Now calls Rust rs_check_str_opt (check_str_opt deleted from C)
 extern int rs_check_str_opt(int idx, char **varp);
 int nvim_check_ambiwidth_opt(void) { return rs_check_str_opt(kOptAmbiwidth, NULL); }
-// Phase 104: showbreak validation (inlined from optionstr.c)
-static const char e_showbreak_wide[]
-  = N_("E595: 'showbreak' contains unprintable or wide character");
-const char *nvim_did_set_showbreak(void *args) {
-  char **varp = (char **)((optset_T *)args)->os_varp;
-  for (char *s = *varp; *s;) {
-    if (ptr2cells(s) != 1) {
-      return e_showbreak_wide;
-    }
-    MB_PTR_ADV(s);
-  }
-  return NULL;
-}
 
-// Phase 103: isopt / colorcolumn / signcolumn / tagcase / virtualedit wrappers
-// These delegate entire logic to C (complex struct access patterns)
-const char *did_set_isopt(optset_T *args);
-const char *did_set_iskeyword(optset_T *args);
-const char *did_set_signcolumn(optset_T *args);
-const char *did_set_tagcase(optset_T *args);
-const char *did_set_virtualedit(optset_T *args);
-const char *nvim_did_set_isopt(void *args) { return did_set_isopt((optset_T *)args); }
-const char *nvim_did_set_iskeyword(void *args) { return did_set_iskeyword((optset_T *)args); }
-const char *nvim_did_set_signcolumn(void *args) { return did_set_signcolumn((optset_T *)args); }
-const char *nvim_did_set_tagcase(void *args) { return did_set_tagcase((optset_T *)args); }
-const char *nvim_did_set_virtualedit(void *args) { return did_set_virtualedit((optset_T *)args); }
-
-// Phase 102: highlight / titleiconstring accessors
-const char *did_set_titleiconstring(optset_T *args, int flagval);
-const char *nvim_did_set_iconstring(void *args) {
-  return did_set_titleiconstring((optset_T *)args, STL_IN_ICON);
-}
-const char *nvim_did_set_titlestring(void *args) {
-  return did_set_titleiconstring((optset_T *)args, STL_IN_TITLE);
-}
+// Phase 102: highlight accessor
 int nvim_check_highlight_init(void *args) {
   char **varp = (char **)((optset_T *)args)->os_varp;
   return strcmp(*varp, HIGHLIGHT_INIT) == 0 ? 1 : 0;
-}
-
-// Phase 101: statustabline_rulerformat accessors
-const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerformat, bool statuscolumn);
-const char *nvim_did_set_statustabline(void *args) {
-  return did_set_statustabline_rulerformat((optset_T *)args, false, false);
-}
-const char *nvim_did_set_rulerformat(void *args) {
-  return did_set_statustabline_rulerformat((optset_T *)args, true, false);
-}
-const char *nvim_did_set_statuscolumn(void *args) {
-  return did_set_statustabline_rulerformat((optset_T *)args, false, true);
 }
 
 // Phase 100: optexpr / foldexpr accessors
@@ -661,10 +578,6 @@ const char *nvim_illegal_char(char *errbuf, size_t errbuflen, int c)
 {
   return rs_illegal_char(errbuf, errbuflen, c);
 }
-// did_set_str_generic is now implemented in Rust (src/nvim-rs/optionstr/src/didset.rs)
-// Keep nvim_did_set_str_generic as a thin wrapper for Rust option crate callers.
-// did_set_str_generic is declared in optionstr.h (included above).
-const char *nvim_did_set_str_generic(void *args) { return did_set_str_generic((optset_T *)args); }
 // Wrappers for side-effect functions
 void nvim_call_init_chartab(void) { init_chartab(); }
 void nvim_call_msg_grid_validate(void) { msg_grid_validate(); }

@@ -36,7 +36,7 @@ extern "C" {
 
     // Validation helpers
     fn nvim_illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *const c_char;
-    fn nvim_did_set_str_generic(args: *mut c_void) -> *const c_char;
+    fn did_set_str_generic(args: *mut c_void) -> *const c_char;
     fn rs_opt_strings_flags(
         val: *const c_char,
         values: *const *const c_char,
@@ -209,14 +209,14 @@ pub unsafe extern "C" fn rs_did_set_backspace(args: *mut c_void) -> CallbackResu
         }
         return callback_ok();
     }
-    nvim_did_set_str_generic(args)
+    did_set_str_generic(args)
 }
 
 /// Callback for 'bufhidden' option.
 /// Validates against "hide,unload,delete,wipe" and empty string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_bufhidden(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_str_generic(args)
+    did_set_str_generic(args)
 }
 
 /// Callback for 'inccommand' option.
@@ -226,7 +226,7 @@ pub unsafe extern "C" fn rs_did_set_inccommand(args: *mut c_void) -> CallbackRes
     if cmdpreview {
         return E_INVARG;
     }
-    nvim_did_set_str_generic(args)
+    did_set_str_generic(args)
 }
 
 /// Callback for 'lispoptions' option.
@@ -296,7 +296,7 @@ pub unsafe extern "C" fn rs_did_set_breakindentopt(args: *mut c_void) -> Callbac
 /// Validates against allowed values, then reinitializes chartab and msg grid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_display(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -310,7 +310,7 @@ pub unsafe extern "C" fn rs_did_set_display(args: *mut c_void) -> CallbackResult
 /// then recomputes column positions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_showcmdloc(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if errmsg.is_null() {
         // nvim_comp_col is already declared in window_shim.c
         nvim_comp_col();
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn rs_did_set_showcmdloc(args: *mut c_void) -> CallbackRes
 /// then triggers a redraw if Visual mode is active.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_selection(args: *mut c_void) -> CallbackResult {
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn rs_did_set_matchpairs(args: *mut c_void) -> CallbackRes
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_sessionoptions(args: *mut c_void) -> CallbackResult {
     // First validate via did_set_str_generic
-    let errmsg = nvim_did_set_str_generic(args);
+    let errmsg = did_set_str_generic(args);
     if !errmsg.is_null() {
         return errmsg;
     }
@@ -693,7 +693,7 @@ pub unsafe extern "C" fn rs_did_set_eventignore(args: *mut c_void) -> CallbackRe
 /// Validates the option value against the allowed values list via check_str_opt.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_str_generic(args: *mut c_void) -> CallbackResult {
-    nvim_did_set_str_generic(args)
+    did_set_str_generic(args)
 }
 
 // =============================================================================
