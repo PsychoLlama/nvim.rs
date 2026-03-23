@@ -352,6 +352,8 @@ extern void ex_restart(exarg_T *eap);
 extern void ex_tabonly(exarg_T *eap);
 // Rust-implemented nvim_docmd helpers (previously C _impl bodies).
 extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
+extern int nvim_docmd_vim_mkdir_emsg_impl(const char *name, int prot);
+extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
@@ -2877,49 +2879,6 @@ static void nvim_docmd_close_redir_impl(void)
   }
 }
 
-/// Try creating a directory, give error message on failure
-///
-/// @param[in]  name  Directory to create.
-/// @param[in]  prot  Directory permissions.
-///
-/// @return OK in case of success, FAIL otherwise.
-int nvim_docmd_vim_mkdir_emsg_impl(const char *const name, const int prot)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int ret;
-  if ((ret = os_mkdir(name, prot)) != 0) {
-    semsg(_(e_mkdir), name, os_strerror(ret));
-    return FAIL;
-  }
-  return OK;
-}
-
-/// Open a file for writing for an Ex command, with some checks.
-///
-/// @param mode  "w" for create new file or "a" for append
-///
-/// @return  file descriptor, or NULL on failure.
-FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode)
-{
-#ifdef UNIX
-  // with Unix it is possible to open a directory
-  if (os_isdir(fname)) {
-    semsg(_(e_isadir2), fname);
-    return NULL;
-  }
-#endif
-  if (!forceit && *mode != 'a' && os_path_exists(fname)) {
-    semsg(_("E189: \"%s\" exists (add ! to override)"), fname);
-    return NULL;
-  }
-
-  FILE *fd;
-  if ((fd = os_fopen(fname, mode)) == NULL) {
-    semsg(_("E190: Cannot open \"%s\" for writing"), fname);
-  }
-
-  return fd;
-}
 
 /// Update w_topline, w_leftcol and the cursor position.
 void nvim_docmd_update_topline_cursor_impl(void)
@@ -5047,6 +5006,22 @@ linenr_T nvim_docmd_get_address_for_copymove(exarg_T *eap, const char **errormsg
 
 /// Check if curwin->w_buffer should be hidden (for ex_exit).
 int nvim_docmd_buf_hide_curwin(void) { return buf_hide(curwin->w_buffer) ? 1 : 0; }
+
+// Helpers for vim_mkdir_emsg_impl and open_exfile_impl (migrated to Rust).
+void nvim_docmd_semsg_mkdir_err(const char *name, int errcode) {
+  semsg(_(e_mkdir), name, os_strerror(errcode));
+}
+void nvim_docmd_semsg_file_exists(const char *fname) {
+  semsg(_("E189: \"%s\" exists (add ! to override)"), fname);
+}
+void nvim_docmd_semsg_cant_open_write(const char *fname) {
+  semsg(_("E190: Cannot open \"%s\" for writing"), fname);
+}
+void nvim_docmd_semsg_isadir2(const char *fname) { semsg(_(e_isadir2), fname); }
+int nvim_docmd_os_mkdir(const char *name, int prot) { return os_mkdir(name, prot); }
+int nvim_docmd_os_isdir(const char *fname) { return os_isdir(fname) ? 1 : 0; }
+int nvim_docmd_os_path_exists(const char *fname) { return os_path_exists(fname) ? 1 : 0; }
+FILE *nvim_docmd_os_fopen(const char *fname, const char *mode) { return os_fopen(fname, mode); }
 
 // Phase 4 C forwarding wrappers.
 void exec_normal_cmd(char *cmd, int remap, bool silent) { nvim_docmd_exec_normal_cmd_impl(cmd, remap, silent); }

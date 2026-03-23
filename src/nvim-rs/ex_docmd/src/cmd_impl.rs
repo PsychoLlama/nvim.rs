@@ -540,6 +540,51 @@ pub unsafe extern "C" fn rs_nvim_docmd_ex_may_print_impl(eap: ExArgHandle) {
     }
 }
 
+const FAIL: c_int = 0;
+const OK: c_int = 1;
+
+/// `nvim_docmd_vim_mkdir_emsg_impl` - create directory, emit error on failure.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[export_name = "nvim_docmd_vim_mkdir_emsg_impl"]
+pub unsafe extern "C" fn rs_vim_mkdir_emsg_impl(name: *const c_char, prot: c_int) -> c_int {
+    let ret = nvim_docmd_os_mkdir(name, prot);
+    if ret != 0 {
+        nvim_docmd_semsg_mkdir_err(name, ret);
+        return FAIL;
+    }
+    OK
+}
+
+/// `nvim_docmd_open_exfile_impl` - open file for writing, with checks.
+///
+/// # Safety
+/// `fname`, `mode` must be valid null-terminated C strings.
+#[export_name = "nvim_docmd_open_exfile_impl"]
+pub unsafe extern "C" fn rs_open_exfile_impl(
+    fname: *mut c_char,
+    forceit: c_int,
+    mode: *mut c_char,
+) -> *mut c_void {
+    // On UNIX, check for directory.
+    #[cfg(unix)]
+    if nvim_docmd_os_isdir(fname) != 0 {
+        nvim_docmd_semsg_isadir2(fname);
+        return std::ptr::null_mut();
+    }
+    // Check if file exists when not appending and not forcing.
+    if forceit == 0 && *mode != b'a' as c_char && nvim_docmd_os_path_exists(fname) != 0 {
+        nvim_docmd_semsg_file_exists(fname);
+        return std::ptr::null_mut();
+    }
+    let fd = nvim_docmd_os_fopen(fname, mode as *const c_char);
+    if fd.is_null() {
+        nvim_docmd_semsg_cant_open_write(fname);
+    }
+    fd
+}
+
 // =============================================================================
 // Phase 2: Public utility functions (delegate to C implementations)
 // =============================================================================
@@ -770,6 +815,16 @@ extern "C" {
     fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int);
     // nvim_eap_get_flags (for ex_may_print)
     fn nvim_eap_get_flags(eap: ExArgHandle) -> c_int;
+
+    // Helpers for vim_mkdir_emsg and open_exfile (migrated to Rust)
+    fn nvim_docmd_semsg_mkdir_err(name: *const c_char, errcode: c_int);
+    fn nvim_docmd_semsg_file_exists(fname: *const c_char);
+    fn nvim_docmd_semsg_cant_open_write(fname: *const c_char);
+    fn nvim_docmd_semsg_isadir2(fname: *const c_char);
+    fn nvim_docmd_os_mkdir(name: *const c_char, prot: c_int) -> c_int;
+    fn nvim_docmd_os_isdir(fname: *const c_char) -> c_int;
+    fn nvim_docmd_os_path_exists(fname: *const c_char) -> c_int;
+    fn nvim_docmd_os_fopen(fname: *const c_char, mode: *const c_char) -> *mut c_void;
 
     // filetype constants
     fn nvim_docmd_get_ftplugin_file() -> *const c_char;
