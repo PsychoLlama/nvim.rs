@@ -420,7 +420,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     let old_lcount = nvim_curbuf_get_b_ml_ml_line_count();
     let old_buf = nvim_excmds_get_curbuf_identity();
 
-    while !crate::got_int {
+    while !unsafe { crate::got_int } {
         let lnum = nvim_excmds_ml_firstmarked();
         if lnum == 0 || crate::global_busy != 1 {
             break;
@@ -633,7 +633,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         // Pass 1: mark all (not) matching lines
         let mut lnum = nvim_exarg_get_line1(eap);
         let end_lnum = nvim_exarg_get_line2(eap);
-        while lnum <= end_lnum && !crate::got_int {
+        while lnum <= end_lnum && !unsafe { crate::got_int } {
             let matched = nvim_excmds_vim_regexec_multi(regmatch, lnum);
             if nvim_excmds_regmmatch_regprog_null(regmatch) != 0 {
                 break; // re-compiling regprog failed
@@ -647,7 +647,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         }
 
         // Pass 2: execute the command for each marked line
-        if crate::got_int {
+        if unsafe { crate::got_int } {
             nvim_excmds_emsg_by_id(6); // e_interr (msg)
         } else if ndone == 0 {
             if type_char == b'v' {

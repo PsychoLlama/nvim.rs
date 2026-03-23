@@ -185,7 +185,7 @@ pub unsafe extern "C" fn aborted_in_try_impl() -> bool {
 /// handle a range itself should be called again for the next line in the range.
 #[export_name = "aborting"]
 pub unsafe extern "C" fn aborting_impl() -> bool {
-    (did_emsg != 0 && force_abort) || got_int || did_throw
+    (did_emsg != 0 && force_abort) || unsafe { got_int } || did_throw
 }
 
 /// Returns true if a command with a subcommand resulting in `retcode` should
@@ -890,7 +890,9 @@ pub unsafe extern "C" fn cause_errthrow(
     if did_throw {
         // When discarding an interrupt exception, reset got_int.
         if (*current_exception.cast::<ExceptT>()).type_ == ExceptTypeT::EtInterrupt {
-            got_int = false;
+            unsafe {
+                got_int = false;
+            }
         }
         discard_current_exception();
     }
@@ -969,7 +971,7 @@ pub unsafe extern "C" fn do_errthrow(cstack: *mut CstackT, cmdname: *mut c_char)
 pub unsafe extern "C" fn do_intthrow(cstack: *mut CstackT) -> bool {
     // If no interrupt occurred or no try conditional is active and no exception
     // is being thrown, do nothing.
-    if !got_int || (trylevel == 0 && !did_throw) {
+    if !unsafe { got_int } || (trylevel == 0 && !did_throw) {
         return false;
     }
 
@@ -998,14 +1000,18 @@ pub unsafe extern "C" fn do_intthrow(cstack: *mut CstackT) -> bool {
 /// Save exception state for cleanup autocommand execution.
 #[export_name = "enter_cleanup"]
 pub unsafe extern "C" fn enter_cleanup(csp: *mut CleanupT) {
-    if did_emsg != 0 || got_int || did_throw || need_rethrow {
+    if did_emsg != 0 || unsafe { got_int } || did_throw || need_rethrow {
         let throw_pending = if did_throw || need_rethrow {
             CSTP_THROW
         } else {
             0
         };
         (*csp).pending = (if did_emsg != 0 { CSTP_ERROR } else { 0 })
-            | (if got_int { CSTP_INTERRUPT } else { 0 })
+            | (if unsafe { got_int } {
+                CSTP_INTERRUPT
+            } else {
+                0
+            })
             | throw_pending;
 
         if did_throw || need_rethrow {
@@ -1019,7 +1025,9 @@ pub unsafe extern "C" fn enter_cleanup(csp: *mut CleanupT) {
             }
         }
         did_emsg = 0;
-        got_int = false;
+        unsafe {
+            got_int = false;
+        }
         did_throw = false;
         need_rethrow = false;
 
@@ -1069,7 +1077,9 @@ pub unsafe extern "C" fn leave_cleanup(csp: *mut CleanupT) {
             did_emsg = 1;
         }
         if pending & CSTP_INTERRUPT != 0 {
-            got_int = true;
+            unsafe {
+                got_int = true;
+            }
         }
         if pending & CSTP_THROW != 0 {
             need_rethrow = true; // did_throw will be set by do_one_cmd()

@@ -2253,7 +2253,7 @@ pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
         let cmdidx = nvim_eap_get_cmdidx(eap);
         let flags = nvim_eap_get_flags(eap);
         let mut line = line1;
-        while line <= line2 && !got_int {
+        while line <= line2 && !unsafe { got_int } {
             rs_print_line(
                 line,
                 (cmdidx == CMD_NUMBER || cmdidx == CMD_POUND || (flags & EXFLAG_NR) != 0) as c_int,

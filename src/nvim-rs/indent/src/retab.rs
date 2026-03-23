@@ -31,6 +31,7 @@ unsafe fn ascii_isdigit(c: c_char) -> bool {
 
 // C accessor functions
 extern "C" {
+    static mut got_int: bool;
     // exarg_T field accessors
     fn nvim_eap_get_arg(eap: EapHandle) -> *mut c_char;
     fn nvim_eap_get_line1(eap: EapHandle) -> LinenrT;
@@ -66,7 +67,6 @@ extern "C" {
 
     // Misc
     fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_line_breakcheck();
     fn nvim_redraw_curbuf_later(typ: c_int);
     fn nvim_indent_changed_lines(first: LinenrT, last: LinenrT, xtra: LinenrT);
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
     let forceit = nvim_eap_get_forceit(eap);
 
     let mut lnum = line1;
-    while nvim_get_got_int() == 0 && lnum <= line2 {
+    while !unsafe { got_int } && lnum <= line2 {
         ptr = nvim_ml_get(lnum);
         let mut old_len = nvim_ml_get_len(lnum) as c_int;
         let mut col: c_int = 0;
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
         lnum += 1;
     }
 
-    if nvim_get_got_int() != 0 {
+    if unsafe { got_int } {
         nvim_emsg_interr();
     }
 

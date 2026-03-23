@@ -2203,7 +2203,7 @@ extern "C" {
     // nvim_semsg_trailing_arg: now in nvim_eval::errors
     fn shorten_fnames(expand: bool);
     fn syn_name2id(name: *const std::ffi::c_char) -> c_int;
-    static got_int: bool;
+    static mut got_int: bool;
     fn os_breakcheck();
     fn rs_qf_list_entry(
         qfp: *const c_void,
@@ -2309,7 +2309,7 @@ pub unsafe extern "C" fn rs_ex_clist(eap: EapHandle) {
     let qf_count = crate::nvim_qf_get_count(qfl);
     let mut i: c_int = 1;
     let mut qfp = crate::nvim_qf_get_start(qfl);
-    while !got_int && i <= qf_count && !qfp.is_null() {
+    while !unsafe { got_int } && i <= qf_count && !qfp.is_null() {
         let valid = crate::nvim_qfline_get_valid(qfp);
         if (valid || all) && idx1 <= i && i <= idx2 {
             rs_qf_list_entry(

@@ -20,6 +20,7 @@ type Indenter = unsafe extern "C" fn() -> c_int;
 
 // C accessor functions
 extern "C" {
+    static mut got_int: bool;
     // Existing accessors
     fn nvim_get_curwin_cursor_lnum() -> LinenrT;
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
@@ -35,7 +36,6 @@ extern "C" {
     fn nvim_smsg_lines_to_indent(i: i64);
     fn nvim_smsg_lines_indented(count: i64);
     fn nvim_get_p_report() -> i64;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_get_cmdmod_lockmarks() -> bool;
     fn nvim_redraw_curbuf_later(typ: c_int);
 
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
         let is_lisp = nvim_is_lisp_indent(how);
 
         i = line_count - 1;
-        while i >= 0 && nvim_get_got_int() == 0 {
+        while i >= 0 && !unsafe { got_int } {
             // Give feedback for slow operations.
             if i > 1 && (i % 50 == 0 || i == line_count - 1) && i64::from(line_count) > p_report {
                 nvim_smsg_lines_to_indent(i64::from(i));

@@ -209,6 +209,7 @@ impl CmdlineState {
 
 #[allow(dead_code)]
 extern "C" {
+    static mut got_int: bool;
     // Current ccline accessors
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
@@ -1066,8 +1067,6 @@ unsafe extern "C" {
     fn nvim_get_cmdmsg_rl() -> c_int;
     fn nvim_get_key_stuffed() -> c_int;
     fn nvim_get_cmd_silent() -> c_int;
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_get_global_busy() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
     fn nvim_get_exmode_active() -> bool;
@@ -1079,7 +1078,6 @@ unsafe extern "C" {
     fn nvim_get_wild_menu_showing() -> c_int;
     fn nvim_get_cmdline_was_last_drawn() -> c_int;
     fn nvim_syn_get_display_tick() -> c_int;
-    fn nvim_get_got_int_val() -> c_int;
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_set_emsg_silent(val: c_int);
 
@@ -1207,9 +1205,11 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
         }
 
         // if interrupted while completing, behave like it failed
-        if nvim_get_got_int_val() != 0 {
+        if unsafe { got_int } {
             vpeekc(); // remove <C-C> from input stream
-            nvim_set_got_int(0); // don't abandon the command line
+            unsafe {
+                got_int = false;
+            } // don't abandon the command line
             ExpandOne(xp, std::ptr::null_mut(), std::ptr::null_mut(), 0, WILD_FREE);
             nvim_cls_set_xpc_context(s, EXPAND_NOTHING);
             return CMDLINE_CHANGED;
@@ -1361,7 +1361,9 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             && (!break_ctrl_c || exmode)
             && !nvim_get_global_busy()
         {
-            nvim_set_got_int(0);
+            unsafe {
+                got_int = false;
+            }
         }
     }
 
@@ -1496,7 +1498,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         let c_check = nvim_cls_get_c(s);
         let cedit_key = nvim_get_cedit_key();
         if c_check == cedit_key || c_check == K_CMDWIN {
-            if (c_check == K_CMDWIN || nvim_get_ex_normal_busy() == 0) && nvim_get_got_int() == 0 {
+            if (c_check == K_CMDWIN || nvim_get_ex_normal_busy() == 0) && !unsafe { got_int } {
                 let c_new = nvim_open_cmdwin();
                 nvim_cls_set_c(s, c_new);
                 nvim_cls_set_some_key_typed(s, 1);

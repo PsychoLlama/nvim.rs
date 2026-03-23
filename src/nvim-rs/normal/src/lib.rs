@@ -31,6 +31,7 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     static mut redraw_mode: c_int;
     static mut p_sta: c_int;
@@ -2451,7 +2452,9 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         nvim_set_restart_edit(0);
         if nvim_normal_get_cmdwin_type() != 0 {
             nvim_set_cmdwin_result(K_IGNORE);
-            nvim_set_got_int(0); // don't stop executing autocommands et al.
+            unsafe {
+                got_int = false;
+            } // don't stop executing autocommands et al.
             return;
         }
     } else if nvim_normal_get_cmdwin_type() != 0
@@ -4126,8 +4129,6 @@ extern "C" {
     fn nvim_stuffcharReadbuff(c: c_int);
 
     // nv_replace C wrappers (lower-level after Phase 1 inlining)
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_replace_check_prompt() -> c_int;
     fn u_save_cursor() -> c_int;
     fn rs_foldUpdateAfterInsert();
@@ -4183,8 +4184,10 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     // Visual mode "r"
     if nvim_get_VIsual_active() != 0 {
-        if nvim_get_got_int() != 0 {
-            nvim_set_got_int(0);
+        if unsafe { got_int } {
+            unsafe {
+                got_int = false;
+            }
         }
         if had_ctrl_v != 0 {
             let nchar = nvim_cap_get_nchar(cap);

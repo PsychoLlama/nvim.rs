@@ -639,6 +639,7 @@ const GOTO_NORMAL_MODE: c_int = 3;
 const PROCESS_NEXT_KEY: c_int = 4;
 
 unsafe extern "C" {
+    static mut got_int: bool;
     // Getters/setters for globals needed by these functions
     fn nvim_get_ccline_cmdfirstc() -> c_int;
     fn nvim_get_ccline_cmdpos() -> c_int;
@@ -659,7 +660,6 @@ unsafe extern "C" {
     fn nvim_set_no_mapping(val: c_int);
     fn nvim_get_allow_keys() -> c_int;
     fn nvim_set_allow_keys(val: c_int);
-    fn nvim_set_got_int(val: c_int);
     fn nvim_set_did_emsg(val: c_int);
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_get_exmode_active() -> bool;
@@ -757,7 +757,9 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
             }
         }
         beep_flush();
-        nvim_set_got_int(0); // don't abandon the command line
+        unsafe {
+            got_int = false;
+        } // don't abandon the command line
         nvim_set_did_emsg(0);
         nvim_set_emsg_on_display(0);
         crate::screen::redrawcmd_rs();

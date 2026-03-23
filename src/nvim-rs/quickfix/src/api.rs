@@ -1237,7 +1237,7 @@ extern "C" {
     fn nvim_qfline_get_next(qfp: *const c_void) -> *const c_void;
     fn nvim_qfline_get_valid_bufnr(qfp: *const c_void) -> c_int;
     fn nvim_qf_get_start(qfl: *const c_void) -> *const c_void;
-    static got_int: bool;
+    static mut got_int: bool;
     fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_void;
     fn nvim_qf_free_lists_array(qi: *mut c_void);
     // nvim_get_p_efm deleted: use p_efm global directly
@@ -1467,7 +1467,7 @@ pub unsafe extern "C" fn rs_get_errorlist(
 
     let mut qfp = nvim_qf_get_start(qfl);
     let mut i: c_int = 1;
-    while !qfp.is_null() && !got_int && i <= nvim_qf_get_count(qfl) {
+    while !qfp.is_null() && !unsafe { got_int } && i <= nvim_qf_get_count(qfl) {
         if eidx > 0 {
             if eidx == i {
                 return rs_get_qfline_items_impl(qfp, list);

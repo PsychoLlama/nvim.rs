@@ -11,6 +11,7 @@ use crate::dispatch::types::NormalStateHandle;
 use crate::WinHandle;
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     static must_redraw: c_int;
     static redraw_mode: c_int;
@@ -81,8 +82,6 @@ extern "C" {
     fn nvim_stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_get_global_busy() -> bool;
     fn nvim_set_did_check_timestamps(val: bool);
     fn nvim_get_need_check_timestamps() -> bool;
@@ -210,7 +209,7 @@ unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
 
 /// Inline of normal_check_interrupt.
 unsafe fn normal_check_interrupt(s: NormalStateHandle) {
-    if nvim_get_got_int() != 0 {
+    if unsafe { got_int } {
         if nvim_ns_get_noexmode(s)
             && nvim_get_global_busy()
             && !nvim_get_exmode_active()
@@ -225,7 +224,9 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
                 // flush all buffers
                 nvim_vgetc_and_discard();
             }
-            nvim_set_got_int(0);
+            unsafe {
+                got_int = false;
+            }
         }
         nvim_ns_set_previous_got_int(s, true);
     } else {

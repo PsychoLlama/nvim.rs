@@ -43,6 +43,7 @@ type ProftimeHandle = *mut c_void;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Pattern compilation / regex
     fn nvim_search_regcomp(
         pat: *mut c_char,
@@ -80,7 +81,6 @@ extern "C" {
 
     // Global state
     fn nvim_get_called_emsg() -> c_int;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_get_rc_did_emsg() -> c_int;
     fn nvim_get_p_ws() -> c_int;
     fn nvim_cpo_has_search() -> c_int;
@@ -594,7 +594,7 @@ pub unsafe extern "C" fn rs_searchit(
                 }
 
                 nvim_line_breakcheck();
-                if nvim_get_got_int() != 0 {
+                if unsafe { got_int } {
                     break;
                 }
 
@@ -625,7 +625,7 @@ pub unsafe extern "C" fn rs_searchit(
             // Stop conditions
             if nvim_get_p_ws() == 0
                 || stop_lnum != 0
-                || nvim_get_got_int() != 0
+                || unsafe { got_int }
                 || nvim_get_called_emsg() > called_emsg_before
                 || (has_timed_out && res.sa_timed_out != 0)
                 || break_loop
@@ -652,7 +652,7 @@ pub unsafe extern "C" fn rs_searchit(
 
         final_lnum = lnum;
 
-        if nvim_get_got_int() != 0
+        if unsafe { got_int }
             || nvim_get_called_emsg() > called_emsg_before
             || (has_timed_out && res.sa_timed_out != 0)
             || break_loop
@@ -670,7 +670,7 @@ pub unsafe extern "C" fn rs_searchit(
     nvim_regmmatch_free(regmatch);
 
     if !found {
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             nvim_searchit_emsg_interr();
         } else if (search_options & options::SEARCH_MSG) == options::SEARCH_MSG {
             nvim_searchit_emsg_patnotf(nvim_get_p_ws(), final_lnum);

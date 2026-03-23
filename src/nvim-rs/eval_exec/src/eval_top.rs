@@ -1245,7 +1245,9 @@ pub unsafe extern "C" fn rs_invoke_prompt_interrupt() -> bool {
         return false;
     }
 
-    got_int = false;
+    unsafe {
+        got_int = false;
+    }
 
     // Build argv[1] on the stack: [VAR_UNKNOWN]
     let mut argv_buf = [0u8; TYPVAL_SIZE]; // VAR_UNKNOWN = 0, already zeroed

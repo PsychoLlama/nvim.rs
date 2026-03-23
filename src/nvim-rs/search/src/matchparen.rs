@@ -79,6 +79,7 @@ const TRI_TRUE: c_int = 1;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Line access
     fn nvim_search_ml_get(lnum: LinenrT) -> *const c_char;
     fn nvim_search_ml_get_len(lnum: LinenrT) -> ColnrT;
@@ -105,7 +106,6 @@ extern "C" {
     fn nvim_search_get_curwin_cursor_col() -> ColnrT;
 
     // Interrupt check
-    fn nvim_get_got_int() -> c_int;
     fn nvim_line_breakcheck();
 
     // Comment check
@@ -395,7 +395,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
             }
             pos_col = 0;
             let line_count = nvim_search_get_line_count();
-            while nvim_get_got_int() == 0 {
+            while !unsafe { got_int } {
                 if hash_dir > 0 {
                     if pos_lnum == line_count {
                         break;
@@ -465,7 +465,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
     }
 
     // Main search loop
-    while nvim_get_got_int() == 0 {
+    while !unsafe { got_int } {
         if backwards {
             if lispcomm && pos_col < comment_col {
                 break;

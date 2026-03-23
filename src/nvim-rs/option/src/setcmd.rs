@@ -16,6 +16,7 @@ use crate::{OptInt, OptScope, OptValType, SetPrefix, FAIL, OK};
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // State accessors
     fn nvim_get_p_verbose() -> OptInt;
     // Option metadata (also used by rs_set_context_in_set_cmd)
@@ -1184,7 +1185,6 @@ extern "C" {
     fn nvim_message_filtered(msg: *const c_char) -> c_int;
     fn nvim_vim_strsize(s: *const c_char) -> c_int;
     fn os_breakcheck();
-    fn nvim_get_got_int() -> c_int;
     fn nvim_get_Columns() -> c_int;
     static mut msg_col: c_int;
     fn nvim_get_namebuff() -> *mut c_char;
@@ -1305,7 +1305,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
     // When OPT_ONECOLUMN, do everything in run 2.
     let mut run: c_int = 1;
     while run <= 2 {
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             break;
         }
         // Collect the items in items[]
@@ -1368,9 +1368,9 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
         };
 
         let mut row: c_int = 0;
-        while row < rows && nvim_get_got_int() == 0 {
+        while row < rows && !unsafe { got_int } {
             msg_putchar(c_int::from(b'\n')); // go to next line
-            if nvim_get_got_int() != 0 {
+            if unsafe { got_int } {
                 // 'q' typed in more
                 break;
             }

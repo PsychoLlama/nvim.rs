@@ -1130,6 +1130,7 @@ type FindTagsStateHandle = *mut c_void;
 type FindTagsMatchArgsHandle = *mut c_void;
 
 extern "C" {
+    static mut got_int: bool;
     fn nvim_findtags_init_tag_fname(st: FindTagsStateHandle);
     fn nvim_findtags_set_fp_null(st: FindTagsStateHandle);
     // Fine-grained orgpat initialization accessors
@@ -2161,7 +2162,6 @@ extern "C" {
     // Function wrappers
     fn nvim_line_breakcheck();
     fn nvim_fast_breakcheck();
-    fn nvim_get_got_int() -> c_int;
     fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
     fn rs_ins_compl_interrupted() -> c_int;
     fn verbose_enter();
@@ -2369,7 +2369,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
             nvim_ins_compl_check_keys(30, false);
         }
 
-        if nvim_get_got_int() != 0 || rs_ins_compl_interrupted() != 0 {
+        if unsafe { got_int } || rs_ins_compl_interrupted() != 0 {
             nvim_findtags_set_stop_searching(st, true);
             break;
         }

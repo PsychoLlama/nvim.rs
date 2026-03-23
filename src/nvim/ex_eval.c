@@ -1084,18 +1084,6 @@ int nvim_get_force_abort(void)
   return force_abort ? 1 : 0;
 }
 
-/// C accessor for the global got_int variable (used by Rust FFI).
-int nvim_get_got_int(void)
-{
-  return got_int ? 1 : 0;
-}
-
-/// C setter for the global got_int variable (used by Rust FFI).
-void nvim_set_got_int(int val)
-{
-  got_int = (val != 0);
-}
-
 /// C accessor for the global did_throw variable (used by Rust FFI).
 int nvim_get_did_throw(void)
 {

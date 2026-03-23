@@ -514,6 +514,7 @@ pub unsafe extern "C" fn rs_search_stat_state_needs_recompute(
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Position comparison (from mark crate)
     fn rs_lt(a: PosT, b: PosT) -> c_int;
     fn rs_ltoreq(a: PosT, b: PosT) -> c_int;
@@ -526,7 +527,6 @@ extern "C" {
     fn nvim_get_p_msc() -> i64;
     fn nvim_curbuf_get_changedtick() -> c_int;
     fn nvim_search_get_curbuf_ptr() -> *mut c_void;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_fast_breakcheck();
 
     // Search stat specific
@@ -707,7 +707,7 @@ pub unsafe extern "C" fn rs_update_search_stat(
         let mut end_col: c_int = 0;
         let mut end_coladd: c_int = 0;
 
-        while nvim_get_got_int() == 0
+        while !unsafe { got_int }
             && nvim_searchit_for_stat(
                 &mut search_pos_lnum,
                 &mut search_pos_col,
@@ -747,7 +747,7 @@ pub unsafe extern "C" fn rs_update_search_stat(
                 break;
             }
         }
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             (*cache).cur = -1; // abort
         }
         if done_search {

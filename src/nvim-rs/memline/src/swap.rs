@@ -27,6 +27,7 @@ use crate::types::{
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // -------------------------------------------------------------------------
     // Buffer Accessors
     // -------------------------------------------------------------------------
@@ -1565,9 +1566,6 @@ extern "C" {
     /// Decrement no_wait_return
     fn nvim_dec_no_wait_return();
 
-    /// Set got_int global
-    fn nvim_set_got_int(val: c_int);
-
     /// Set buf->b_p_ro = true
     fn nvim_buf_set_b_p_ro_true(buf: *mut BufHandle);
 
@@ -2051,7 +2049,9 @@ pub unsafe extern "C" fn rs_findswapname(
                         attention_message(buf, fname, home_fname, sb, &mut proc_running);
 
                         // We don't want a 'q' typed at the more-prompt to interrupt loading.
-                        nvim_set_got_int(0);
+                        unsafe {
+                            got_int = false;
+                        }
 
                         // Flush typeahead to avoid vimrc "simalt ~x" interference.
                         nvim_flush_buffers_typeahead();
@@ -2121,7 +2121,9 @@ pub unsafe extern "C" fn rs_findswapname(
                         }
                         c if c == crate::types::SEA_CHOICE_ABORT => {
                             nvim_set_swap_exists_action(SEA_QUIT);
-                            nvim_set_got_int(1);
+                            unsafe {
+                                got_int = true;
+                            }
                         }
                         _ => {
                             // SEA_CHOICE_NONE
@@ -2235,9 +2237,6 @@ extern "C" {
 
     /// Emit E313 "Cannot preserve, there is no swap file" error
     fn nvim_emsg_no_swapfile();
-
-    /// Get got_int global
-    fn nvim_get_got_int() -> c_int;
 }
 
 use crate::types::{LineNr, MFS_ALL, MFS_FLUSH, MFS_STOP, ML_FIND, ML_FLUSH};
@@ -2313,8 +2312,10 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     }
 
     // We only want to stop when interrupted here, not when interrupted before.
-    let got_int_save = nvim_get_got_int();
-    nvim_set_got_int(0);
+    let got_int_save = unsafe { got_int };
+    unsafe {
+        got_int = false;
+    }
 
     rs_ml_flush_line(buf, 0); // flush buffered line
     rs_ml_find_line(buf, 0, ML_FLUSH); // flush locked block
@@ -2328,7 +2329,7 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     // In that case the pointer blocks need to be updated.
     // ml_find_line() does the work by translating negative block numbers when
     // getting the first line of each data block.
-    if nvim_mf_need_trans(mfp) != 0 && nvim_get_got_int() == 0 {
+    if nvim_mf_need_trans(mfp) != 0 && !unsafe { got_int } {
         let mut lnum: LineNr = 1;
         while nvim_mf_need_trans(mfp) != 0 && lnum <= nvim_buf_get_ml_line_count(buf) {
             let hp = rs_ml_find_line(buf, lnum, ML_FIND);
@@ -2347,7 +2348,9 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     }
 
     // Restore got_int (OR with saved value so prior interrupt is not lost)
-    nvim_set_got_int(nvim_get_got_int() | got_int_save);
+    unsafe {
+        got_int |= got_int_save;
+    }
 
     if message {
         if status == crate::types::OK {

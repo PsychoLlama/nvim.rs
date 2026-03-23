@@ -12,6 +12,7 @@ use crate::types::{GArray, HlGroup, RgbValue};
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     /// The highlight group table (was `static garray_T highlight_ga` in C).
     pub static mut highlight_ga: GArray;
 
@@ -701,8 +702,7 @@ extern "C" {
     /// Get the Columns (screen width) global.
     fn nvim_get_columns() -> c_int;
 
-    /// Get the got_int global (returns c_int; non-zero means interrupted).
-    fn nvim_get_got_int() -> c_int;
+    /// Get the unsafe { got_int } global (returns c_int; non-zero means interrupted).
 
     /// Get the msg_silent global.
     fn nvim_get_msg_silent() -> c_int;
@@ -851,7 +851,7 @@ pub unsafe extern "C" fn rs_syn_list_header(
 
     if !did_header {
         msg_putchar(b'\n' as c_int);
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             return true;
         }
         let col = msg_outtrans((*hl_table_ptr(id - 1)).sg_name, 0, false);
@@ -863,7 +863,7 @@ pub unsafe extern "C" fn rs_syn_list_header(
         adjust = false;
     } else if nvim_get_msg_col() + outlen + 1 >= nvim_get_columns() || force_newline {
         msg_putchar(b'\n' as c_int);
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             return true;
         }
     } else if nvim_get_msg_col() >= endcol {
@@ -917,7 +917,7 @@ pub unsafe extern "C" fn rs_highlight_list_arg(
     sarg: *const c_char,
     name: *const c_char,
 ) -> bool {
-    if nvim_get_got_int() != 0 {
+    if unsafe { got_int } {
         return false;
     }
 
@@ -982,7 +982,7 @@ pub unsafe extern "C" fn rs_highlight_list_arg(
     }
 
     rs_syn_list_header(didh, vim_strsize(ts) + vim_strsize(name) + 1, id, false);
-    if nvim_get_got_int() == 0 {
+    if !unsafe { got_int } {
         // if *name != NUL
         if *name != 0 {
             msg_puts_hl(name, HLF_D, false);
@@ -1071,7 +1071,7 @@ pub unsafe extern "C" fn rs_highlight_list_one(id: c_int) {
         c"blend".as_ptr(),
     );
 
-    if sgp.sg_link != 0 && nvim_get_got_int() == 0 {
+    if sgp.sg_link != 0 && !unsafe { got_int } {
         rs_syn_list_header(didh, 0, id, true);
         // didh = true (but we don't need to use it further)
         msg_puts_hl(c"links to".as_ptr(), HLF_D, false);

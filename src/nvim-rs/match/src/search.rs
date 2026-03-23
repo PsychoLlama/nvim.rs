@@ -44,6 +44,7 @@ pub struct RegProgHandle {
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // match_T accessors
     fn nvim_match_hl_get_lnum(shl: *mut MatchHlHandle) -> i32;
     fn nvim_match_hl_set_lnum(shl: *mut MatchHlHandle, lnum: i32);
@@ -90,8 +91,6 @@ extern "C" {
 
     // Existing global accessors
     fn nvim_get_called_emsg() -> c_int;
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
     fn nvim_win_hl_attr(wp: *mut WinHandle, hlf: c_int) -> c_int;
     fn nvim_profile_passed_limit(tm: *mut u8) -> c_int;
@@ -250,10 +249,7 @@ pub unsafe extern "C" fn rs_next_search_hl(
                 nvim_match_item_sync_regprog(cur, shl);
             }
 
-            if nvim_get_called_emsg() > called_emsg_before
-                || nvim_get_got_int() != 0
-                || timed_out != 0
-            {
+            if nvim_get_called_emsg() > called_emsg_before || unsafe { got_int } || timed_out != 0 {
                 // Error while handling regexp: stop using this regexp.
                 if ptr::eq(shl, search_hl) {
                     // don't free regprog in the match list, it's a copy
@@ -263,7 +259,9 @@ pub unsafe extern "C" fn rs_next_search_hl(
                 }
                 nvim_match_hl_set_regprog(shl, ptr::null_mut());
                 nvim_match_hl_set_lnum(shl, 0);
-                nvim_set_got_int(0); // avoid the "Type :quit to exit Vim" message
+                unsafe {
+                    got_int = false;
+                } // avoid the "Type :quit to exit Vim" message
                 break;
             }
         } else if !cur.is_null() {

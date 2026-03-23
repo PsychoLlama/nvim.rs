@@ -994,7 +994,7 @@ extern "C" {
     fn nvim_help_get_curbuf_fname() -> *mut c_char;
     fn nvim_help_get_curbuf_ml_line_count() -> c_int;
     fn nvim_help_get_curbuf_ptr() -> *mut c_void;
-    static got_int: bool;
+    static mut got_int: bool;
     fn nvim_help_expand_dir(arg: *const c_char) -> *mut c_char;
     fn nvim_help_convert_help_line(buf: *mut c_char) -> *mut c_char;
 

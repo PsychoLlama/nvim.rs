@@ -31,6 +31,7 @@ pub type WinHandle = *mut c_void;
 
 // C accessor functions for buffer properties
 extern "C" {
+    static mut got_int: bool;
     fn nvim_buf_get_p_sw(buf: BufHandle) -> i64;
     fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
     fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
@@ -71,7 +72,6 @@ extern "C" {
 // Global state accessors
 extern "C" {
     fn nvim_get_trylevel() -> c_int;
-    fn nvim_set_got_int(val: c_int);
 }
 
 /// Translate a gettext message.
@@ -108,7 +108,9 @@ pub unsafe extern "C" fn rs_emsg_text_too_long() {
     emsg(translate(e_resulting_text_too_long));
     // when not inside a try/catch set got_int to break out of any loop
     if nvim_get_trylevel() == 0 {
-        nvim_set_got_int(1);
+        unsafe {
+            got_int = true;
+        }
     }
 }
 

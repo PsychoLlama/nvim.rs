@@ -19,6 +19,7 @@ use crate::ExpandHandle;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut p_fic: c_int;
 }
 
@@ -74,7 +75,6 @@ extern "C" {
 
     // ExpandOne orchestrator helpers
     fn nvim_expand_free_old_matches(xp: ExpandHandle);
-    fn nvim_get_got_int() -> c_int;
     fn nvim_cmdexpand_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut libc::c_void);
     fn xmalloc(size: usize) -> *mut c_char;
@@ -418,7 +418,7 @@ pub unsafe extern "C" fn rs_expand_one(
     }
 
     // Concatenate all matching names
-    if mode == WILD_ALL && (*xp).xp_numfiles > 0 && nvim_get_got_int() == 0 {
+    if mode == WILD_ALL && (*xp).xp_numfiles > 0 && !unsafe { got_int } {
         ss = expand_one_concat_all(xp, options);
     }
 

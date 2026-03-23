@@ -111,7 +111,7 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
     let iosize: c_int = 1025;
 
     let mut lnum: LinenrT = 1;
-    while !vim_fgets(iobuff, iosize, fd) && !got_int {
+    while !vim_fgets(iobuff, iosize, fd) && !unsafe { got_int } {
         let line = iobuff;
 
         if nvim_qf_vim_regexec(p_regmatch, line.cast_const()) {
@@ -148,7 +148,9 @@ unsafe fn hgr_search_file(qfl: QfListHandleMut, fname: *const c_char, p_regmatch
                 c_char::from(true), // valid
             ) == QF_FAIL
             {
-                got_int = true;
+                unsafe {
+                    got_int = true;
+                }
                 break;
             }
         }
@@ -188,7 +190,7 @@ unsafe fn hgr_search_files_in_dir(
         && fcount > 0
     {
         let mut fi = 0;
-        while fi < fcount && !got_int {
+        while fi < fcount && !unsafe { got_int } {
             let fname = *fnames.add(fi as usize);
 
             // Skip files for a different language.
@@ -242,7 +244,7 @@ pub unsafe extern "C" fn rs_hgr_search_in_rtp(
 
     // Go through all directories in 'runtimepath'
     let mut p = p_rtp;
-    while *p != 0 && !got_int {
+    while *p != 0 && !unsafe { got_int } {
         copy_option_part(&raw mut p, name_buff, maxpathl, c",".as_ptr());
         hgr_search_files_in_dir(qfl, name_buff, p_regmatch, lang);
     }

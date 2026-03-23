@@ -321,6 +321,7 @@ mod init_ext {
     const QF_FAIL: c_int = 0;
 
     extern "C" {
+        static mut got_int: bool;
         // Existing accessors (signatures must match lib.rs)
         fn nvim_qf_get_listcount(qi: QfInfoHandle) -> c_int;
         fn nvim_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int;
@@ -331,8 +332,6 @@ mod init_ext {
         fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
 
         // Globals
-        fn nvim_get_got_int() -> c_int;
-        fn nvim_set_got_int(val: c_int);
         fn nvim_line_breakcheck();
 
         // C-side helpers
@@ -541,11 +540,13 @@ mod init_ext {
 
             // got_int is reset here, because it was probably set when killing
             // the ":make" command, but we still want to read the errorfile then.
-            nvim_set_got_int(0);
+            unsafe {
+                got_int = false;
+            }
 
             // Read the lines in the error file one by one.
             // Try to recognize one of the error formats in each line.
-            while nvim_get_got_int() == 0 {
+            while !unsafe { got_int } {
                 // Use Rust parser state directly (replaces nvim_qf_init_process_nextline)
                 let status = process_nextline(qfl, fmt_first, state, fields);
                 if status == QF_END_OF_INPUT {

@@ -39,6 +39,7 @@ type ColnrT = c_int;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Window tag stack accessors
     fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
     fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
@@ -944,8 +945,6 @@ extern "C" {
     // Global variable accessors
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_didout(val: c_int);
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_get_Columns() -> c_int;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
@@ -1075,7 +1074,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
     nvim_msg_puts_hl(c"file\n".as_ptr(), HLF_T, false);
 
     for i in 0..num_matches {
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             break;
         }
 
@@ -1135,7 +1134,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
         if nvim_get_msg_col() > 0 {
             msg_putchar(b'\n' as c_int);
         }
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             break;
         }
         msg_advance(15);
@@ -1174,7 +1173,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
                     if nvim_get_msg_col() + nvim_ptr2cells(p) >= nvim_get_Columns() {
                         msg_putchar(b'\n' as c_int);
-                        if nvim_get_got_int() != 0 {
+                        if unsafe { got_int } {
                             break;
                         }
                         msg_advance(15);
@@ -1191,7 +1190,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             }
             if nvim_get_msg_col() > 15 {
                 msg_putchar(b'\n' as c_int);
-                if nvim_get_got_int() != 0 {
+                if unsafe { got_int } {
                     break;
                 }
                 msg_advance(15);
@@ -1233,7 +1232,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             if nvim_get_msg_col() + cell_width > nvim_get_Columns() {
                 msg_putchar(b'\n' as c_int);
             }
-            if nvim_get_got_int() != 0 {
+            if unsafe { got_int } {
                 break;
             }
             msg_advance(15);
@@ -1272,8 +1271,10 @@ pub unsafe extern "C" fn rs_print_tag_list(
         os_breakcheck();
     }
 
-    if nvim_get_got_int() != 0 {
-        nvim_set_got_int(0); // only stop the listing
+    if unsafe { got_int } {
+        unsafe {
+            got_int = false;
+        } // only stop the listing
     }
 }
 

@@ -45,6 +45,7 @@ type RegmmatchHandle = *mut c_void;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Buffer accessors
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
@@ -77,8 +78,6 @@ extern "C" {
     ) -> bool;
 
     // Globals
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_line_breakcheck();
 
@@ -156,7 +155,7 @@ pub unsafe extern "C" fn rs_vgr_match_buflines(
         }
 
         nvim_line_breakcheck();
-        if nvim_get_got_int() != 0 {
+        if unsafe { got_int } {
             break;
         }
 
@@ -218,7 +217,9 @@ unsafe fn vgr_regex_match(
             1,                // valid = true
         ) == QF_FAIL
         {
-            nvim_set_got_int(1);
+            unsafe {
+                got_int = true;
+            }
             break;
         }
         found_match = true;
@@ -285,7 +286,9 @@ unsafe fn vgr_fuzzy_match(
             1,                              // valid = true
         ) == QF_FAIL
         {
-            nvim_set_got_int(1);
+            unsafe {
+                got_int = true;
+            }
             break;
         }
         found_match = true;
@@ -513,7 +516,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
 
     'theend: {
         for fi in 0..fcount {
-            if nvim_get_got_int() != 0 || *tomatch <= 0 {
+            if unsafe { got_int } || *tomatch <= 0 {
                 break;
             }
 
@@ -556,7 +559,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
             save_qfid = nvim_qf_get_id(nvim_qf_get_curlist(qi));
 
             if buf.is_null() {
-                if nvim_get_got_int() == 0 {
+                if !unsafe { got_int } {
                     smsg(0, c"Cannot open file \"%s\"".as_ptr(), fname);
                 }
             } else {

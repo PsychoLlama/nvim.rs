@@ -1553,11 +1553,6 @@ linenr_T nvim_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count
 /// curbuf->b_ml.ml_flags accessor.
 int nvim_get_curbuf_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
-/// Get got_int global.
-int nvim_get_got_int_val(void) { return got_int ? 1 : 0; }
-
-
-
 
 /// Decrement and return buf->b_ml.ml_stack_top (for stack pop).
 int nvim_buf_dec_ml_stack_top(buf_T *buf) { return --(buf->b_ml.ml_stack_top); }

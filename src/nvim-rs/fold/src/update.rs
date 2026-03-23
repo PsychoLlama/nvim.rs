@@ -277,9 +277,9 @@ use crate::level::{
 use crate::{fold_flags, tristate, FoldHandle};
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     // Global state access
-    fn nvim_get_got_int() -> c_int;
     fn nvim_line_breakcheck();
 
     // Buffer accessors
@@ -314,7 +314,6 @@ extern "C" {
     // Global state for foldUpdate
     fn nvim_get_disable_fold_update() -> c_int;
     fn nvim_get_need_diff_redraw() -> c_int;
-    fn nvim_set_got_int(val: c_int);
 }
 
 /// MODE_INSERT flag value (from state_defs.h).
@@ -581,11 +580,11 @@ pub fn fold_update_impl(wp: WinHandle, top: LinenrT, bot: LinenrT) {
         || crate::foldmethod_is_marker_impl(wp)
         || crate::foldmethod_is_syntax_impl(wp)
     {
-        let save_got_int = unsafe { nvim_get_got_int() };
-        unsafe { nvim_set_got_int(0) };
+        let save_got_int = unsafe { got_int };
+        unsafe { got_int = false };
         fold_update_iems_all_impl(wp, top, bot);
-        let cur_got_int = unsafe { nvim_get_got_int() };
-        unsafe { nvim_set_got_int(cur_got_int | save_got_int) };
+        let cur_got_int = unsafe { got_int };
+        unsafe { got_int = cur_got_int | save_got_int };
     }
 }
 
@@ -673,7 +672,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
         // Backup to a line for which the fold level is defined. Since it's
         // always defined for line one, we will stop there.
         flp.lvl = -1;
-        while unsafe { nvim_get_got_int() } == 0 {
+        while unsafe { !got_int } {
             flp.lvl_next = -1;
             call_level_getter(&mut flp, kind);
 
@@ -731,7 +730,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     let gap = unsafe { nvim_win_get_folds(wp) };
 
     // Main loop
-    while unsafe { nvim_get_got_int() } == 0 {
+    while unsafe { !got_int } {
         // Stop at end of file
         if flp.lnum > line_count {
             break;
@@ -892,7 +891,7 @@ fn fold_update_iems_recurse(
     }
 
     // Main loop
-    while unsafe { nvim_get_got_int() } == 0 {
+    while unsafe { !got_int } {
         unsafe { nvim_line_breakcheck() };
 
         // Set lvl, clamped to MAX_LEVEL
@@ -961,7 +960,7 @@ fn fold_update_iems_recurse(
                 || flp.lnum == line_count)
         {
             // Inner loop: find or create folds
-            while unsafe { nvim_get_got_int() } == 0 {
+            while unsafe { !got_int } {
                 // Find or create a fold
                 let concat = if flp.start != 0 || flp.had_end <= MAX_LEVEL as c_int {
                     0
@@ -1225,7 +1224,7 @@ fn fold_update_iems_recurse(
             flp.lnum = flp.lnum_save;
             let ll = flp.lnum + 1;
 
-            while unsafe { nvim_get_got_int() } == 0 {
+            while unsafe { !got_int } {
                 // Make the previous level available to foldlevel()
                 crate::set_prev_lnum(flp.lnum);
                 crate::set_prev_lnum_lvl(flp.lvl);

@@ -32,6 +32,7 @@ const K_OPT_VE_FLAG_ALL: c_uint = 0x01;
 // ============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     // Spell redraw
     fn check_spell_redraw();
@@ -101,7 +102,6 @@ extern "C" {
     #[link_name = "p_smd"]
     static p_smd: c_int;
     fn skip_showmode() -> bool;
-    fn nvim_get_got_int() -> c_int;
     fn ui_cursor_shape();
 
     // `reg_recording`
@@ -172,7 +172,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
         // Repeating insert may take a long time; check for interrupt.
         if *count > 0 {
             line_breakcheck();
-            if nvim_get_got_int() != 0 {
+            if unsafe { got_int } {
                 *count = 0;
             }
         }
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
     if nvim_get_reg_recording() != 0 || nvim_get_restart_edit() != 0 {
         nvim_showmode();
     } else if p_smd != 0
-        && (nvim_get_got_int() != 0 || !skip_showmode())
+        && (unsafe { got_int } || !skip_showmode())
         && nvim_get_p_ch_zero_no_ui_messages() == 0
     {
         nvim_unshowmode_false();

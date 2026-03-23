@@ -4042,7 +4042,7 @@ extern "C" {
     fn msg_end() -> c_int;
     fn msg_puts(s: *const c_char);
     fn msg_putchar(c: c_int);
-    static got_int: c_int;
+    static mut got_int: bool;
 }
 
 /// `:spellinfo` -- show info about loaded spell files for the current window.
@@ -4058,7 +4058,7 @@ pub unsafe extern "C" fn rs_ex_spellinfo(_eap: *mut c_void) {
     let langp_ga = nvim_win_get_b_langp(curwin_global);
     let len = (*langp_ga).ga_len;
     let mut lpi: c_int = 0;
-    while lpi < len && got_int == 0 {
+    while lpi < len && !unsafe { got_int } {
         let lp = langp_entry(langp_ga, lpi);
         lpi += 1;
         let fname = (*(*lp).lp_slang).sl_fname;

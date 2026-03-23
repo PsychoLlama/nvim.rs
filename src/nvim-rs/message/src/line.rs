@@ -7,14 +7,13 @@ use std::ffi::c_int;
 
 // C function declarations
 extern "C" {
+    static mut got_int: bool;
     /// Check if in list mode
     fn nvim_get_list_mode() -> c_int;
     /// Get Columns (screen width)
     fn nvim_get_columns() -> c_int;
     /// Get current message column
     fn nvim_get_msg_col() -> c_int;
-    /// Check if got_int is set (interrupt)
-    fn nvim_get_got_int() -> c_int;
 }
 
 // ============================================================================
@@ -69,13 +68,13 @@ pub const extern "C" fn rs_is_tab_stop(col: c_int, tabstop: c_int) -> c_int {
 
 /// Check if line printing should continue.
 ///
-/// Returns false if interrupted (got_int set).
+/// Returns false if interrupted (unsafe { got_int } set).
 ///
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_continue() -> c_int {
-    c_int::from(nvim_get_got_int() == 0)
+    c_int::from(!unsafe { got_int })
 }
 
 /// Calculate remaining columns on current line.

@@ -35,6 +35,7 @@ const CTRL_C: u8 = 3;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // Existing accessors
     fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
     fn nvim_get_first_abbr() -> MapblockHandle;
@@ -63,8 +64,6 @@ extern "C" {
         mode: c_int,
         simplified: c_int,
     );
-
-    fn nvim_get_got_int() -> c_int;
     fn nvim_mapping_set_no_abbr(val: c_int);
     fn nvim_get_mapped_ctrl_c() -> c_int;
     fn nvim_set_mapped_ctrl_c(val: c_int);
@@ -111,11 +110,6 @@ extern "C" {
 // =============================================================================
 // Helpers
 // =============================================================================
-
-#[inline]
-fn got_int() -> bool {
-    unsafe { nvim_get_got_int() != 0 }
-}
 
 #[inline]
 fn ascii_iswhite(c: u8) -> bool {
@@ -565,7 +559,7 @@ unsafe fn check_global_conflict(
     len: c_int,
 ) -> bool {
     for hash in 0..256 {
-        if got_int() {
+        if unsafe { got_int } {
             break;
         }
         if is_abbr && hash > 0 {
@@ -579,7 +573,7 @@ unsafe fn check_global_conflict(
         };
 
         let mut mp = mp_head;
-        while !mp.is_null() && !got_int() {
+        while !mp.is_null() && !unsafe { got_int } {
             if (mapblock_mode(mp) & mode) != 0
                 && mapblock_keylen(mp) == len
                 && libc::strncmp(mapblock_keys(mp), lhs, len as usize) == 0
@@ -605,7 +599,7 @@ unsafe fn list_buf_local_mappings(
     let mut did_local = false;
 
     for hash in 0..256 {
-        if got_int() {
+        if unsafe { got_int } {
             break;
         }
         if is_abbr && hash > 0 {
@@ -619,7 +613,7 @@ unsafe fn list_buf_local_mappings(
         };
 
         let mut mp = mp_head;
-        while !mp.is_null() && !got_int() {
+        while !mp.is_null() && !unsafe { got_int } {
             if !mapblock_simplified(mp) && (mapblock_mode(mp) & mode) != 0 {
                 if has_lhs {
                     let n = mapblock_keylen(mp);
@@ -673,7 +667,7 @@ unsafe fn process_matching_entries(
     };
 
     for round in 0..num_rounds {
-        if *did_it || got_int() {
+        if *did_it || unsafe { got_int } {
             break;
         }
 
@@ -689,13 +683,13 @@ unsafe fn process_matching_entries(
         };
 
         for hash in hash_start..hash_end {
-            if got_int() {
+            if unsafe { got_int } {
                 break;
             }
 
             let mut mp = get_list_head(buf, hash, is_abbr, is_buf_local);
 
-            while !mp.is_null() && !got_int() {
+            while !mp.is_null() && !unsafe { got_int } {
                 if (mapblock_mode(mp) & mode) == 0 {
                     // Skip entries with wrong mode
                     mp = mapblock_next(mp);

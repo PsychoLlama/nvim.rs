@@ -12,10 +12,10 @@ use super::dispatch::{rettv_set_number, TypevalPtrMut};
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     fn nvim_get_vgetc_busy() -> c_int;
     fn nvim_curbuf_get_did_filetype() -> c_int;
     fn nvim_curbuf_get_u_seq_cur() -> c_int;
-    fn nvim_set_got_int(v: c_int);
     fn nvim_get_reg_executing() -> c_int;
     fn nvim_get_reg_recording() -> c_int;
     fn nvim_get_reg_recorded() -> c_int;
@@ -196,7 +196,9 @@ pub unsafe extern "C" fn rs_f_interrupt(
     _rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_set_got_int(1);
+    unsafe {
+        got_int = true;
+    }
 }
 
 /// "pumvisible()" function - returns true if popup menu is visible

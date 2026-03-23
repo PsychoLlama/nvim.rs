@@ -48,6 +48,7 @@ const FO_PERIOD_ABBR: c_int = b'p' as c_int;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     // Cursor/window
     fn nvim_textfmt_get_curwin_cursor_lnum() -> c_int;
@@ -92,7 +93,6 @@ extern "C" {
     fn nvim_line_breakcheck();
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn nvim_curbuf_get_b_p_cin() -> c_int;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_get_Insstart_lnum() -> c_int;
     fn nvim_get_Insstart_col() -> c_int;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -167,7 +167,7 @@ pub(crate) unsafe fn internal_format_impl(
     }
 
     // Repeat breaking lines, until the current line is not too long.
-    while nvim_get_got_int() == 0 {
+    while !unsafe { got_int } {
         let mut foundcol: c_int;
         let mut end_foundcol: c_int = 0;
         let mut orig_col: c_int = 0;

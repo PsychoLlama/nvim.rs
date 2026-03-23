@@ -1387,7 +1387,9 @@ unsafe fn assert_fails_cleanup(save_trylevel: c_int, tofree: *mut c_char) {
     suppress_errthrow = false;
     in_assert_fails = false;
     did_emsg = 0;
-    got_int = false;
+    unsafe {
+        got_int = false;
+    }
     msg_col = 0;
     no_wait_return -= 1;
     need_wait_return = false;

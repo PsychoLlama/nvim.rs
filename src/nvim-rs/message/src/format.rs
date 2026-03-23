@@ -454,10 +454,7 @@ extern "C" {
     // msg() — #[export_name = "msg"] is in output_core.rs, callable via C name
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
 
-    // got_int (ex_eval.c)
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
-
+    static mut got_int: bool;
     // clear_cmdline, mode_displayed (normal_shim.c)
     fn nvim_set_clear_cmdline(val: bool);
     fn nvim_set_mode_displayed(val: bool);
@@ -709,9 +706,11 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
     let mut plain_start = msgstr;
     let mut remaining = len;
 
-    let save_got_int = nvim_get_got_int();
+    let save_got_int = unsafe { got_int };
     // Only quit when got_int was set in here.
-    nvim_set_got_int(0);
+    unsafe {
+        got_int = false;
+    }
 
     if hist {
         nvim_msg_hist_add_len(str, len, hl_id);
@@ -730,7 +729,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 
     // Go over the string. Special characters are translated and printed.
     // Normal characters are printed several at a time.
-    while remaining > 0 && nvim_get_got_int() == 0 {
+    while remaining > 0 && !unsafe { got_int } {
         remaining -= 1;
         // Don't include composing chars after the end.
         let mb_l = utfc_ptr2len_len(str, remaining + 1);
@@ -792,7 +791,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
         }
     }
 
-    if (str > plain_start || plain_start == msgstr) && nvim_get_got_int() == 0 {
+    if (str > plain_start || plain_start == msgstr) && !unsafe { got_int } {
         // Print the printable chars at the end (or emit empty string).
         msg_puts_len(
             plain_start,
@@ -802,7 +801,9 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
         );
     }
 
-    nvim_set_got_int(nvim_get_got_int() | save_got_int);
+    unsafe {
+        got_int |= save_got_int;
+    }
 
     retval
 }

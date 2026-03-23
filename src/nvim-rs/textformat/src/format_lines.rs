@@ -38,6 +38,7 @@ const FO_WHITE_PAR: c_int = b'w' as c_int;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     // Cursor and window
     fn nvim_textfmt_get_curwin_cursor_lnum() -> c_int;
@@ -54,7 +55,6 @@ extern "C" {
     fn nvim_textfmt_get_ml_line_count() -> c_int;
 
     // State
-    fn nvim_get_got_int() -> c_int;
 
     // Format lines helpers
     fn nvim_textfmt_del_bytes(count: c_int, fixpos: bool, use_delcombine: bool);
@@ -181,7 +181,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
 
     nvim_textfmt_set_curwin_cursor(cursor_lnum - 1, 0);
     let mut count: c_int = line_count;
-    while count != 0 && nvim_get_got_int() == 0 {
+    while count != 0 && !unsafe { got_int } {
         // Advance to next paragraph.
         if advance {
             let lnum = nvim_textfmt_get_curwin_cursor_lnum();

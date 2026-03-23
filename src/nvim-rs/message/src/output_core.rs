@@ -30,11 +30,11 @@ pub struct NvimString {
 }
 
 extern "C" {
+    static mut got_int: bool;
     // Core message output functions (call into C until fully migrated)
     fn msg_puts_len(s: *const c_char, len: isize, hl_id: c_int, hist: bool);
     fn msg_ext_ui_flush();
-    // got_int accessor
-    fn nvim_get_got_int() -> c_int;
+    // unsafe { got_int } accessor
 
     // For msg_end
     fn nvim_get_exiting() -> c_int;
@@ -808,7 +808,7 @@ pub unsafe extern "C" fn rs_msg_end_prompt() {
 /// # Arguments
 /// * `str` - The string to output (length-delimited, not NUL-terminated)
 /// * `hl_id` - Highlight group ID
-/// * `check_int` - If true, stop early when `got_int` is set
+/// * `check_int` - If true, stop early when `unsafe { got_int }` is set
 /// * `hist` - If true, add to message history
 /// * `need_clear` - In/out flag: true if EOS needs clearing before next newline
 ///
@@ -834,7 +834,7 @@ pub unsafe extern "C" fn rs_msg_multiline(
     let end = base.add(str.size);
 
     while s < end {
-        if check_int && nvim_get_got_int() != 0 {
+        if check_int && unsafe { got_int } {
             return;
         }
         let c = *s as u8;

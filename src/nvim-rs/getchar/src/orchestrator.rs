@@ -386,7 +386,9 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
     let nm = nvim_get_no_mapping();
     nvim_set_no_mapping(nm + 1);
 
-    got_int = false;
+    unsafe {
+        got_int = false;
+    }
 
     while c1 != NUL && !aborted {
         ga_grow(ga_ptr, 32);
@@ -412,7 +414,7 @@ pub unsafe extern "C" fn rs_getcmdkeycmd(
             c1 = to_special_key(c1, c2);
         }
 
-        if got_int {
+        if unsafe { got_int } {
             aborted = true;
         } else if c1 == c_int::from(b'\r') || c1 == c_int::from(b'\n') {
             c1 = NUL; // end the line

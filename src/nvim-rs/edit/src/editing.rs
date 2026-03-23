@@ -23,6 +23,7 @@ type LinenrT = i32;
 // ============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut State: c_int;
     // -- Delegated wrappers for complex functions --
     fn nvim_edit_ins_eol(c: c_int) -> c_int;
@@ -68,8 +69,6 @@ extern "C" {
     fn vungetc(c: c_int);
     fn nvim_digraph_inc_no_mapping();
     fn nvim_digraph_dec_no_mapping();
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn nvim_get_K_ZERO() -> c_int;
 }
 
@@ -436,7 +435,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     let mut octal = false;
     let mut unicode: c_int = 0;
 
-    if nvim_get_got_int() != 0 {
+    if unsafe { got_int } {
         return CTRL_C;
     }
 
@@ -529,7 +528,9 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
         // A character typed with i_CTRL-V_digit cannot have modifiers.
         nvim_set_mod_mask(0);
     }
-    nvim_set_got_int(0); // CTRL-C typed after CTRL-V is not an interrupt
+    unsafe {
+        got_int = false;
+    } // CTRL-C typed after CTRL-V is not an interrupt
     cc
 }
 

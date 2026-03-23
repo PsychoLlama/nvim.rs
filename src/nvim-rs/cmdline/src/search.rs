@@ -408,6 +408,7 @@ pub struct IncsearchStateT {
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     static mut magic_overruled: c_int;
 }
 
@@ -1093,8 +1094,6 @@ unsafe extern "C" {
     fn nvim_win_set_valid_cursor(wp: *mut c_void, lnum: i32, col: c_int, coladd: c_int);
     fn redraw_later(wp: *mut c_void, redraw_type: c_int);
     fn nvim_set_search_match(t: *mut PosT);
-    fn nvim_get_got_int_val() -> c_int;
-    fn nvim_set_got_int(val: c_int);
     fn rs_global_stl_height() -> c_int;
     fn msg_starthere();
     fn changed_cline_bef_curs(wp: *mut c_void);
@@ -1247,9 +1246,11 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
         }
 
         // if interrupted while searching, behave like it failed
-        if nvim_get_got_int_val() != 0 {
+        if unsafe { got_int } {
             vpeekc(); // remove <C-C> from input stream
-            nvim_set_got_int(0); // don't abandon the command line
+            unsafe {
+                got_int = false;
+            } // don't abandon the command line
             found = 0;
         } else if nvim_char_avail() != 0 {
             // cancelled searching because a char was typed

@@ -24,6 +24,7 @@ pub const EXFLAG_PRINT: c_int = 0x04;
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     fn nvim_get_sandbox() -> c_int;
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
@@ -358,7 +359,6 @@ extern "C" {
     fn nvim_cstack_get_idx(cs: CstackHandle) -> c_int;
     fn nvim_cstack_get_flags(cs: CstackHandle, idx: c_int) -> c_int;
     fn nvim_get_did_emsg() -> c_int;
-    fn nvim_get_got_int() -> c_int;
     fn nvim_get_did_throw() -> c_int;
     fn nvim_getline_equal_func_line(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn nvim_getline_equal_getsourceline(fgetline: LineGetter, cookie: *mut c_void) -> bool;
@@ -515,7 +515,7 @@ pub unsafe extern "C" fn rs_profile_cmd(
     }
 
     let did_emsg = nvim_get_did_emsg() != 0;
-    let got_int_val = nvim_get_got_int() != 0;
+    let got_int_val = unsafe { got_int };
     let did_throw_val = nvim_get_did_throw() != 0;
 
     let cmdidx = nvim_eap_get_cmdidx(eap);

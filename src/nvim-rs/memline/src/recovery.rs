@@ -29,6 +29,7 @@ use crate::types::{BlockNr, BufHandle, InfoPtrHandle};
 // =============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // -------------------------------------------------------------------------
     // recover_names helpers (called from rs_recover_names)
     // -------------------------------------------------------------------------
@@ -240,7 +241,6 @@ extern "C" {
     fn nvim_check_cursor();
     fn nvim_redraw_curbuf_later(redraw_type: c_int);
     fn nvim_line_breakcheck();
-    fn nvim_get_got_int_val() -> c_int;
     fn nvim_get_upd_not_valid_val() -> c_int;
     fn nvim_prompt_for_recovery() -> c_int;
     fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
@@ -577,7 +577,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         serious_error = false;
 
         // Final status messages
-        if nvim_get_got_int_val() != 0 {
+        if unsafe { got_int } {
             nvim_recover_msg(
                 RECOVER_MSG_E311_INTERRUPTED,
                 std::ptr::null(),
@@ -680,7 +680,7 @@ unsafe fn recover_btree(
     let mut cannot_open = nvim_get_curbuf_b_ffname().is_null();
 
     'traverse: loop {
-        if nvim_get_got_int_val() != 0 {
+        if unsafe { got_int } {
             break 'traverse;
         }
         nvim_line_breakcheck();

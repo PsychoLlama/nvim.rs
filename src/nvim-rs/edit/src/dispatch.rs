@@ -63,6 +63,7 @@ pub struct InsertState {
 // ============================================================================
 
 extern "C" {
+    static mut got_int: bool;
     // -- Completion mode checks (already-migrated Rust symbols) --
     fn rs_ctrl_x_mode_none() -> c_int;
     fn rs_ctrl_x_mode_normal() -> c_int;
@@ -146,8 +147,6 @@ extern "C" {
     fn nvim_curwin_get_cursor_col() -> c_int;
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_has_mod_mask_ctrl() -> c_int;
-    fn nvim_get_got_int() -> c_int;
-    fn nvim_set_got_int(val: c_int);
 
     // -- Phase 4 dispatch accessors --
     fn pum_visible() -> bool;
@@ -667,7 +666,9 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         CTRL_C => {
             if nvim_get_cmdwin_type() != 0 {
                 nvim_set_cmdwin_result(K_IGNORE);
-                nvim_set_got_int(0);
+                unsafe {
+                    got_int = false;
+                }
                 (*s).nomove = true;
                 return SwitchAction::Exit(0);
             }
