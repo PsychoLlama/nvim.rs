@@ -2579,10 +2579,11 @@ extern "C" {
     fn nvim_set_msg_no_more(val: c_int);
     fn nvim_get_lines_left() -> c_int;
     fn nvim_set_lines_left(val: c_int);
-    fn nvim_drawscreen_edit_submode_is_null() -> c_int;
-    fn nvim_drawscreen_edit_submode_ptr() -> *const c_char;
-    fn nvim_drawscreen_edit_submode_pre_is_null() -> c_int;
-    fn nvim_drawscreen_edit_submode_pre_ptr() -> *const c_char;
+    // nvim_drawscreen_edit_submode_*: inlined (Phase 38, use extern statics directly)
+    #[link_name = "edit_submode"]
+    static mut g_edit_submode: *mut c_char;
+    #[link_name = "edit_submode_pre"]
+    static mut g_edit_submode_pre: *mut c_char;
     // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
     #[link_name = "edit_submode_highl"]
     static mut g_edit_submode_highl: c_int;
@@ -2627,7 +2628,7 @@ unsafe fn msg_pos_mode() {
 unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
     msg_puts_hl(c"--".as_ptr(), hl_id, false);
     // CTRL-X in Insert mode
-    if nvim_drawscreen_edit_submode_is_null() == 0 && !shortmess(SHM_COMPLETIONMENU) {
+    if !g_edit_submode.is_null() && !shortmess(SHM_COMPLETIONMENU) {
         // Messages can get long; avoid a wrap in a narrow window.
         if nvim_ui_has_messages() != 0 {
             *length = c_int::MAX;
@@ -2638,13 +2639,13 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             *length -= nvim_vim_strsize(g_edit_submode_extra);
         }
         if *length > 0 {
-            if nvim_drawscreen_edit_submode_pre_is_null() == 0 {
-                *length -= nvim_vim_strsize(nvim_drawscreen_edit_submode_pre_ptr());
+            if !g_edit_submode_pre.is_null() {
+                *length -= nvim_vim_strsize(g_edit_submode_pre);
             }
-            let submode = nvim_drawscreen_edit_submode_ptr();
+            let submode = g_edit_submode;
             if *length - nvim_vim_strsize(submode) > 0 {
-                if nvim_drawscreen_edit_submode_pre_is_null() == 0 {
-                    msg_puts_hl(nvim_drawscreen_edit_submode_pre_ptr(), hl_id, false);
+                if !g_edit_submode_pre.is_null() {
+                    msg_puts_hl(g_edit_submode_pre, hl_id, false);
                 }
                 msg_puts_hl(submode, hl_id, false);
             }
@@ -2773,7 +2774,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
             need_clear = true;
         }
 
-        if reg_recording != 0 && nvim_drawscreen_edit_submode_is_null() != 0 {
+        if reg_recording != 0 && g_edit_submode.is_null() {
             recording_mode_impl(hl_id);
             need_clear = true;
         }

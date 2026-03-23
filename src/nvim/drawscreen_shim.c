@@ -91,29 +91,10 @@ void nvim_drawscreen_msg_clr_cmdline(void)
   msg_clr_cmdline();
 }
 
-/// Return 1 if edit_submode is NULL, else 0.
-int nvim_drawscreen_edit_submode_is_null(void)
-{
-  return edit_submode == NULL ? 1 : 0;
-}
-
-/// Return the edit_submode pointer (may be NULL; Rust must not free it).
-const char *nvim_drawscreen_edit_submode_ptr(void)
-{
-  return edit_submode;
-}
-
-/// Return 1 if edit_submode_pre is NULL, else 0.
-int nvim_drawscreen_edit_submode_pre_is_null(void)
-{
-  return edit_submode_pre == NULL ? 1 : 0;
-}
-
-/// Return the edit_submode_pre pointer (may be NULL; Rust must not free it).
-const char *nvim_drawscreen_edit_submode_pre_ptr(void)
-{
-  return edit_submode_pre;
-}
+// nvim_drawscreen_edit_submode_is_null: deleted (Phase 38, use edit_submode directly)
+// nvim_drawscreen_edit_submode_ptr: deleted (Phase 38, use edit_submode directly)
+// nvim_drawscreen_edit_submode_pre_is_null: deleted (Phase 38, use edit_submode_pre directly)
+// nvim_drawscreen_edit_submode_pre_ptr: deleted (Phase 38, use edit_submode_pre directly)
 
 /// Call get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL).
 /// Returns the result length (>0 means something was written to NameBuff).
