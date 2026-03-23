@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_set_option_sctx_from_sid(opt_idx: c_int, opt_flags: c_int, set_sid: c_int);
 
     // buf_init_chartab(curbuf, true)
-    fn nvim_call_buf_init_chartab();
+    fn buf_init_chartab(buf: *mut std::ffi::c_void, global: c_int) -> c_int;
 
     // Pointer address comparisons for special-cased options
     fn nvim_curbuf_b_p_syn_addr() -> *mut std::ffi::c_void;
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     if !errmsg.is_null() {
         rs_set_option_varp(opt_idx, varp, old_value, 1);
         if restore_chartab != 0 {
-            nvim_call_buf_init_chartab();
+            buf_init_chartab(nvim_opt_get_curbuf(), 1);
         }
         return errmsg;
     }

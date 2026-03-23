@@ -2101,9 +2101,6 @@ int nvim_curwin_get_w_briopt_list(void) { return curwin->w_briopt_list ? 1 : 0; 
 // nvim_get_secure, nvim_set_secure are defined in ex_docmd.c
 // nvim_get_sandbox is defined in undo.c
 
-/// Call buf_init_chartab(curbuf, true)
-void nvim_call_buf_init_chartab(void) { buf_init_chartab(curbuf, true); }
-
 /// Call do_filetype_autocmd(curbuf, value_changed)
 void nvim_do_filetype_autocmd(int value_changed) { do_filetype_autocmd(curbuf, value_changed != 0); }
 
@@ -2522,9 +2519,6 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 #else
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
-
-/// free_findfunc_option() wrapper.
-void nvim_call_free_findfunc_option(void) { nvim_docmd_free_findfunc_option_impl(); }
 
 /// XFREE_CLEAR(fenc_default) wrapper.
 void nvim_call_xfree_clear_fenc_default(void) { XFREE_CLEAR(fenc_default); }

@@ -532,8 +532,8 @@ extern "C" {
     fn parse_cino(buf: *mut std::ffi::c_void);
     /// free_operatorfunc_option()
     fn nvim_call_free_operatorfunc_option();
-    /// free_findfunc_option()
-    fn nvim_call_free_findfunc_option();
+    /// free_findfunc_option() (implemented in ex_docmd.c)
+    fn nvim_docmd_free_findfunc_option_impl();
     /// rs_free_tagfunc_option() - free tagfunc option
     fn rs_free_tagfunc_option();
     /// XFREE_CLEAR(fenc_default)
@@ -684,7 +684,7 @@ pub unsafe extern "C" fn rs_free_all_options() {
     }
     nvim_call_free_operatorfunc_option();
     rs_free_tagfunc_option();
-    nvim_call_free_findfunc_option();
+    nvim_docmd_free_findfunc_option_impl();
     nvim_call_xfree_clear_fenc_default();
     nvim_call_xfree_clear_p_term();
     nvim_call_xfree_clear_p_ttytype();
