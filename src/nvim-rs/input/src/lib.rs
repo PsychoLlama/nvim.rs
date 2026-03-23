@@ -290,9 +290,9 @@ extern "C" {
     static mut need_wait_return: bool;
 
     // Global state accessors
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     static mut msg_row: c_int;
-    fn nvim_set_cmdline_row(val: c_int);
+    static mut cmdline_row: c_int;
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
     fn nvim_get_no_mapping() -> c_int;
@@ -377,7 +377,7 @@ unsafe fn prompt_for_input_impl(
         prompt.cast_const()
     };
 
-    nvim_set_cmdline_row(msg_row);
+    cmdline_row = msg_row;
     ui_flush();
 
     // Don't map prompt input
@@ -436,7 +436,6 @@ pub unsafe extern "C" fn rs_ask_yesno(str: *const c_char) -> c_int {
         }
     }
 
-    let msg_scrolled = nvim_get_msg_scrolled();
     need_wait_return = msg_scrolled != 0;
     no_wait_return -= 1;
     State = save_state;

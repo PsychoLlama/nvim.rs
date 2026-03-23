@@ -84,7 +84,7 @@ extern "C" {
     fn nvim_check_timestamps_call(focus: bool);
 
     // --- msg_scroll ---
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
 
     // --- fold ---
     fn nvim_get_fdo_flags() -> c_uint;
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     // Clear msg_scroll (set by emsg())
-    unsafe { nvim_set_msg_scroll(0) };
+    unsafe { msg_scroll = 0 };
 
     // Open fold at cursor line per 'foldopen'
     if unsafe { nvim_get_fdo_flags() } & K_OPT_FDO_FLAG_INSERT != 0 {

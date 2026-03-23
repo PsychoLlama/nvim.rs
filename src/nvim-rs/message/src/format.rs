@@ -19,11 +19,11 @@ extern "C" {
     /// Get `Rows` global (screen rows)
     /// Get `Columns` global (screen columns)
     /// Get `msg_scrolled` global
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     /// Get `sc_col` global (showcmd column)
     static mut sc_col: c_int;
     /// Get `msg_scroll` flag
-    fn nvim_get_msg_scroll() -> c_int;
+    static mut msg_scroll: c_int;
     /// Get `need_wait_return` flag
     static mut need_wait_return: bool;
     /// Check shortmess option flag (used by other message code that has not been migrated)
@@ -41,7 +41,7 @@ extern "C" {
     /// Calculate truncation point
     fn nvim_mb_trunc_len(s: *const c_char, width: c_int) -> c_int;
     /// Get `cmdline_row` global
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
 }
 
 /// Shortmess flag for "truncate all messages"
@@ -106,9 +106,9 @@ pub unsafe extern "C" fn rs_set_msg_row(row: c_int) {
 pub unsafe extern "C" fn rs_msg_room() -> c_int {
     let rows = Rows;
     let columns = Columns;
-    let msg_scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
 
-    if msg_scrolled != 0 {
+    if scrolled != 0 {
         // Use all the columns
         (rows - msg_row) * columns - 1
     } else {
@@ -131,12 +131,12 @@ pub unsafe extern "C" fn rs_msg_room() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_truncate() -> c_int {
-    let msg_scroll = nvim_get_msg_scroll() != 0;
+    let scroll = msg_scroll != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(
-        !msg_scroll
+        !scroll
             && !need_wait_return
             && has_truncall
             && !exmode_active
@@ -312,7 +312,7 @@ pub const extern "C" fn rs_msg_trunc_half(room_in: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_cmdline_row() -> c_int {
-    nvim_get_cmdline_row()
+    cmdline_row
 }
 
 /// Check if a message will fit in the available space.
@@ -607,7 +607,7 @@ pub unsafe extern "C" fn rs_trunc_string(
 pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
     // Check conditions for truncation
     let should_truncate = force != 0
-        || (nvim_get_msg_scroll() == 0
+        || (msg_scroll == 0
             && !need_wait_return
             && nvim_shortmess(SHM_TRUNCALL) != 0
             && !exmode_active
@@ -619,11 +619,11 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
     }
 
     let len = nvim_vim_strsize(s);
-    let msg_scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
     let rows = Rows;
     let columns = Columns;
 
-    let room = if msg_scrolled != 0 {
+    let room = if scrolled != 0 {
         // Use all the columns
         (rows - msg_row) * columns - 1
     } else {
@@ -706,7 +706,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 
     // When drawing over the command line no need to clear it later or remove
     // the mode message.
-    if msg_silent == 0 && len > 0 && msg_row >= nvim_get_cmdline_row() && msg_col == 0 {
+    if msg_silent == 0 && len > 0 && msg_row >= cmdline_row && msg_col == 0 {
         nvim_set_clear_cmdline(false);
         nvim_set_mode_displayed(false);
     }
@@ -942,12 +942,12 @@ pub unsafe extern "C" fn rs_msg_outtrans_special(
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
-    let msg_scroll = nvim_get_msg_scroll() != 0;
+    let scroll = msg_scroll != 0;
     let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     c_int::from(
-        !msg_scroll
+        !scroll
             && !need_wait_return
             && has_truncall
             && !exmode_active
@@ -1004,9 +1004,9 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
     }
 
     let rows = Rows;
-    let cmdline_row = nvim_get_cmdline_row();
+    let crow = cmdline_row;
     let columns = Columns;
-    let room = (rows - cmdline_row - 1) * columns + sc_col - 1;
+    let room = (rows - crow - 1) * columns + sc_col - 1;
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let len = libc_strlen(s.cast_const()) as c_int;

@@ -2441,7 +2441,7 @@ pub unsafe extern "C" fn rs_msg_use_grid() -> bool {
 
 // Message scroll accessors
 extern "C" {
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     fn nvim_get_p_ch() -> i64;
     fn nvim_get_rdb_flag_nothrottle() -> c_uint;
 }
@@ -2455,10 +2455,10 @@ extern "C" {
 /// Calls C accessor functions for global state.
 #[export_name = "msg_scrollsize"]
 pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
-    let msg_scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
     let p_ch = nvim_get_p_ch();
-    let separator = c_int::from(p_ch > 0 || msg_scrolled > 1);
-    msg_scrolled + p_ch as c_int + separator
+    let separator = c_int::from(p_ch > 0 || scrolled > 1);
+    scrolled + p_ch as c_int + separator
 }
 
 /// Check if message throttling should be used.
@@ -2501,7 +2501,7 @@ pub unsafe extern "C" fn rs_redirecting() -> c_int {
 
 // Message printf mode accessors
 extern "C" {
-    fn nvim_get_embedded_mode() -> c_int;
+    static mut embedded_mode: bool;
     fn nvim_get_ui_active() -> c_int;
 }
 
@@ -2514,7 +2514,7 @@ extern "C" {
 /// Calls C accessor functions for embedded mode and UI state.
 #[export_name = "msg_use_printf"]
 pub unsafe extern "C" fn rs_msg_use_printf() -> c_int {
-    c_int::from(nvim_get_embedded_mode() == 0 && nvim_get_ui_active() == 0)
+    c_int::from(!embedded_mode && nvim_get_ui_active() == 0)
 }
 
 // UI cursor position accessors
@@ -2682,7 +2682,7 @@ pub unsafe extern "C" fn rs_msg_grid_ready() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_needs_flush() -> c_int {
     let throttled = nvim_msg_grid_is_throttled() != 0;
-    let scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
     let at_flush = msg_scrolled_at_flush;
     c_int::from(throttled && scrolled > at_flush)
 }
@@ -2695,7 +2695,7 @@ pub unsafe extern "C" fn rs_msg_grid_needs_flush() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_scroll_delta() -> c_int {
-    let scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
     let at_flush = msg_scrolled_at_flush;
     if scrolled > at_flush {
         scrolled - at_flush
@@ -2712,7 +2712,7 @@ pub unsafe extern "C" fn rs_msg_grid_scroll_delta() -> c_int {
 /// Calls C accessor/mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_grid_sync_flush() {
-    let scrolled = nvim_get_msg_scrolled();
+    let scrolled = msg_scrolled;
     msg_scrolled_at_flush = scrolled;
 }
 

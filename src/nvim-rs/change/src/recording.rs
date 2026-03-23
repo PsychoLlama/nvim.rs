@@ -65,8 +65,7 @@ extern "C" {
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: c_long, allow_input: bool);
     fn nvim_wait_return(redraw: bool);
-    fn nvim_get_msg_scroll() -> c_int;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     static mut need_wait_return: bool;
     static mut emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;
@@ -213,7 +212,7 @@ fn changed_impl(buf: BufHandle) {
     // SAFETY: All accessors are safe C functions
     unsafe {
         if !nvim_buf_get_b_changed(buf) {
-            let save_msg_scroll = nvim_get_msg_scroll();
+            let save_msg_scroll = msg_scroll;
 
             // Give a warning about changing a read-only file.  This may also
             // check-out the file, thus change "curbuf"!
@@ -239,7 +238,7 @@ fn changed_impl(buf: BufHandle) {
                     nvim_ui_flush();
                     nvim_os_delay(2002, true);
                     nvim_wait_return(true);
-                    nvim_set_msg_scroll(save_msg_scroll);
+                    msg_scroll = save_msg_scroll;
                 } else {
                     need_wait_return = save_need_wait_return;
                 }

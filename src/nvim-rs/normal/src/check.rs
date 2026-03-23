@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_get_did_throw_direct() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
     static mut exmode_active: bool;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     fn nvim_set_quit_more(val: bool);
     fn nvim_get_quit_more() -> bool;
     fn nvim_get_skip_redraw() -> bool;
@@ -492,7 +492,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     }
 
     if !exmode_active {
-        nvim_set_msg_scroll(0);
+        msg_scroll = 0;
     }
     nvim_set_quit_more(false);
 

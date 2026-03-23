@@ -1632,7 +1632,7 @@ extern "C" {
     fn nvim_set_redraw_cmdline(val: bool);
 
     /// Get the global cmdline_row value.
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
 
     /// Get the min_set_ch value (minimum command line height set by user).
     fn nvim_get_min_set_ch() -> i64;
@@ -2148,7 +2148,6 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
         } else {
             // drag down
             // Only dragging the last status line can reduce p_ch.
-            let cmdline_row = nvim_get_cmdline_row();
             let p_ch = nvim_get_window_p_ch() as c_int;
             let min_set_ch = nvim_get_min_set_ch() as c_int;
 

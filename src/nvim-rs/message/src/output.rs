@@ -26,7 +26,7 @@ extern "C" {
     static mut need_wait_return: bool;
     /// Set `need_wait_return` flag
     /// Get `msg_scrolled` global
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     /// Get `msg_scrolled_ign` flag
     static mut msg_scrolled_ign: bool;
     /// Get `emsg_on_display` flag
@@ -176,7 +176,6 @@ pub unsafe extern "C" fn rs_set_need_fileinfo(val: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_overflow() -> c_int {
-    let msg_scrolled = nvim_get_msg_scrolled();
     let p_ch = nvim_get_p_ch();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
@@ -378,7 +377,7 @@ extern "C" {
     fn nvim_msg_puts_printf(str_: *const std::ffi::c_char, len: isize);
     fn nvim_msg_puts_display(str_: *const std::ffi::c_char, len: c_int, hl_id: c_int);
     fn nvim_msg_show_empty();
-    fn nvim_get_headless_mode() -> c_int;
+    static mut headless_mode: bool;
     fn nvim_default_grid_has_chars() -> c_int;
     static mut msg_col: c_int;
 }
@@ -426,7 +425,6 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     // When writing something to the screen after it has scrolled, requires a
     // wait-return prompt later.
     let overflow = nvim_ui_has_messages() == 0 && {
-        let msg_scrolled = nvim_get_msg_scrolled();
         let p_ch = nvim_get_p_ch();
         let threshold = c_int::from(p_ch == 0);
         msg_scrolled > threshold
@@ -446,13 +444,11 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     if msg_use_printf() != 0 {
         let saved_msg_col = msg_col;
         nvim_msg_puts_printf(str_, len);
-        if nvim_get_headless_mode() != 0 {
+        if headless_mode {
             msg_col = saved_msg_col;
         }
     }
-    if msg_use_printf() == 0
-        || (nvim_get_headless_mode() != 0 && nvim_default_grid_has_chars() != 0)
-    {
+    if msg_use_printf() == 0 || (headless_mode && nvim_default_grid_has_chars() != 0) {
         nvim_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
     }
 

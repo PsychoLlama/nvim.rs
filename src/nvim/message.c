@@ -178,11 +178,6 @@ void msg_grid_set_pos(int row, bool scrolled)
 
 
 /// C accessor for msg_scrolled global.
-int nvim_get_msg_scrolled(void)
-{
-  return msg_scrolled;
-}
-
 /// C accessor for p_ch global option.
 int64_t nvim_get_p_ch(void)
 {
@@ -201,7 +196,6 @@ int nvim_get_p_vfile_not_empty(void) { return *p_vfile != NUL ? 1 : 0; }
 int nvim_get_redir_reg(void) { return redir_reg; }
 int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
-int nvim_get_embedded_mode(void) { return embedded_mode ? 1 : 0; }
 int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
 
 // C accessors for message history (used by Rust)
@@ -276,7 +270,6 @@ const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 // C accessors for message formatting (used by Rust)
-int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 /// Check if p_debug contains a specific character
 int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0; }
@@ -310,9 +303,6 @@ int nvim_mb_trunc_len(const char *s, int width)
   return len;
 }
 
-// C accessors for msg_scrolled (used by Rust)
-void nvim_set_msg_scrolled(int val) { msg_scrolled = val; }
-
 // Forward declarations for static functions used by Phase 4/5 accessors below
 static int emsg_not_now(void);
 static char *get_emsg_source(void);
@@ -330,12 +320,6 @@ int nvim_cause_errthrow(const char *s, bool multiline, bool severe, bool *ignore
 {
   return cause_errthrow(s, multiline, severe, ignore) ? 1 : 0;
 }
-const char *nvim_get_emsg_assert_fails_msg(void) { return emsg_assert_fails_msg; }
-void nvim_set_emsg_assert_fails_msg(char *val) { emsg_assert_fails_msg = val; }
-int nvim_get_emsg_assert_fails_lnum(void) { return (int)emsg_assert_fails_lnum; }
-void nvim_set_emsg_assert_fails_lnum(int val) { emsg_assert_fails_lnum = (linenr_T)val; }
-void nvim_free_emsg_assert_fails_context(void) { xfree(emsg_assert_fails_context); }
-void nvim_set_emsg_assert_fails_context(char *val) { emsg_assert_fails_context = val; }
 void nvim_set_vim_var_errmsg(const char *s) { set_vim_var_string(VV_ERRMSG, s, -1); }
 void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxlen); }
 char *nvim_get_emsg_source(void) { return get_emsg_source(); }
@@ -347,8 +331,6 @@ char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
 
 int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
-// C accessors for msg_scroll and msg_hist_off (used by Rust)
-void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
 
 // Phase 429: Message grid state accessors
@@ -473,7 +455,6 @@ void nvim_msg_show_empty(void)
   ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
                    INTEGER_OBJ(-1));
 }
-int nvim_get_headless_mode(void) { return headless_mode ? 1 : 0; }
 int nvim_default_grid_has_chars(void) { return default_grid.chars != NULL ? 1 : 0; }
 
 // Phase 1: message_filtered implementation helper (does the regex check in C)
@@ -510,9 +491,7 @@ void nvim_msg_ui_flush_impl(void)
 void nvim_redir_write_newline(void) { redir_write("\n", 1); }
 
 // Phase 3.4: Display state accessors (used by Rust display.rs)
-void nvim_set_cmdline_row(int val) { cmdline_row = val; }
 const char *nvim_get_keep_msg(void) { return keep_msg; }
-void nvim_set_need_clr_eos(int val) { need_clr_eos = (val != 0); }
 
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }

@@ -1045,7 +1045,7 @@ unsafe extern "C" {
     fn nvim_set_mod_mask(val: c_int);
     static mut IObuff: [c_char; 1025];
     fn nvim_get_mouse_row() -> c_int;
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
     fn nvim_get_ex_normal_busy() -> c_int;
     fn nvim_get_getln_interrupted_highlight() -> c_int;
     fn nvim_set_getln_interrupted_highlight(val: c_int);
@@ -1329,7 +1329,6 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
             let mouse_used = nvim_cls_get_ccline_mouse_used();
             if mouse_used != 0 {
                 let mouse_row = nvim_get_mouse_row();
-                let cmdline_row = nvim_get_cmdline_row();
                 if mouse_row < cmdline_row {
                     nvim_cls_set_ccline_mouse_used_val(1);
                     return 0;

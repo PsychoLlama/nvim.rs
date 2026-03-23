@@ -2572,7 +2572,7 @@ extern "C" {
     fn nvim_drawscreen_msg_check_for_delay();
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_set_clear_cmdline(val: bool);
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
     fn nvim_drawscreen_msg_clr_cmdline();
     static mut msg_no_more: bool;
     fn nvim_set_msg_no_more(val: c_int);
@@ -2755,7 +2755,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         nvim_drawscreen_msg_check_for_delay();
 
         let mut need_clear = nvim_get_clear_cmdline();
-        if nvim_get_clear_cmdline() && nvim_get_cmdline_row() < Rows - 1 {
+        if nvim_get_clear_cmdline() && cmdline_row < Rows - 1 {
             nvim_drawscreen_msg_clr_cmdline();
         }
 

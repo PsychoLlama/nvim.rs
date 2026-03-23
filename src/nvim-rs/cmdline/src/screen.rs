@@ -20,7 +20,7 @@ extern "C" {
     // Global screen state
     fn nvim_get_key_typed() -> c_int;
     fn nvim_get_cmdline_star() -> c_int;
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
     fn nvim_cmdline_win_is_active() -> c_int;
     fn nvim_cmdline_win_width() -> c_int;
     fn nvim_cmdline_win_height() -> c_int;
@@ -110,7 +110,7 @@ pub unsafe fn is_password_mode() -> bool {
 /// Calls C function to access global.
 #[must_use]
 pub unsafe fn get_cmdline_row() -> c_int {
-    nvim_get_cmdline_row()
+    cmdline_row
 }
 
 // =============================================================================
@@ -385,9 +385,8 @@ extern "C" {
     // Global state accessors
     static mut exmode_active: bool;
     static mut need_wait_return: bool;
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     fn nvim_get_p_ch() -> i64;
-    fn nvim_set_cmdline_row(val: c_int);
     static mut lines_left: c_int;
     fn nvim_get_cmd_silent() -> c_int;
     static mut msg_row: c_int;
@@ -424,7 +423,7 @@ extern "C" {
     fn putcmdline(c: c_char, shift: bool);
     fn nvim_set_redrawing_cmdline(val: c_int);
     fn nvim_set_msg_no_more(val: c_int);
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     fn nvim_set_skip_redraw2(val: c_int);
     fn nvim_get_ccline_special_char() -> c_int;
     fn nvim_get_ccline_special_shift() -> c_int;
@@ -445,7 +444,7 @@ const K_UI_CMDLINE: c_int = 32; // kUICmdline
 #[export_name = "compute_cmdrow"]
 pub unsafe extern "C" fn compute_cmdrow_rs() {
     let rows = Rows;
-    let new_row = if exmode_active || nvim_get_msg_scrolled() != 0 {
+    let new_row = if exmode_active || msg_scrolled != 0 {
         rows - 1
     } else {
         let wp = rs_lastwin_nofloating();
@@ -463,7 +462,7 @@ pub unsafe extern "C" fn compute_cmdrow_rs() {
         new_row
     };
 
-    nvim_set_cmdline_row(new_row);
+    cmdline_row = new_row;
     lines_left = new_row;
 }
 
@@ -482,7 +481,6 @@ pub unsafe extern "C" fn cursorcmd_rs() {
 
     let rows = Rows;
     let columns = Columns;
-    let cmdline_row = nvim_get_cmdline_row();
     let cmdspos = nvim_get_ccline_cmdspos();
 
     let mut msg_row_val = cmdline_row + (cmdspos / columns);
@@ -514,7 +512,7 @@ pub unsafe extern "C" fn gotocmdline_rs(clr: bool) {
     if clr {
         msg_clr_eos(); // will reset clear_cmdline
     }
-    msg_cursor_goto(nvim_get_cmdline_row(), 0);
+    msg_cursor_goto(cmdline_row, 0);
 }
 
 /// Direct C replacement for the static correct_screencol().
@@ -564,7 +562,6 @@ pub unsafe extern "C" fn rs_redrawcmdprompt() {
     } else {
         msg_puts_hl(cmdprompt, nvim_get_ccline_hl_id(), false);
         let columns = Columns;
-        let cmdline_row = nvim_get_cmdline_row();
         let new_indent = msg_col + (msg_row - cmdline_row) * columns;
         // reverse of cmd_startcol(): subtract 1 if there's a firstc
         let new_indent = if cmdfirstc == NUL {
@@ -673,7 +670,7 @@ pub unsafe extern "C" fn redrawcmd_rs() {
     // When 'incsearch' is set there may be no cmdbuff while redrawing
     let cmdbuff = nvim_get_ccline_cmdbuff();
     if cmdbuff.is_null() {
-        msg_cursor_goto(nvim_get_cmdline_row(), 0);
+        msg_cursor_goto(cmdline_row, 0);
         msg_clr_eos();
         return;
     }
@@ -700,7 +697,7 @@ pub unsafe extern "C" fn redrawcmd_rs() {
     }
 
     // An emsg() before may have set msg_scroll. Reset it in cmdline mode.
-    nvim_set_msg_scroll(0);
+    msg_scroll = 0;
 
     // Typing ':' at the more prompt may set skip_redraw. Reset it.
     nvim_set_skip_redraw2(0);

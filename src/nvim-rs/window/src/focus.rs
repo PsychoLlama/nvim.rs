@@ -82,7 +82,7 @@ extern "C" {
     fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
 
     /// Get msg_scrolled flag.
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
 
     /// Redraw window line.
     fn nvim_redrawWinline(wp: WinHandle, lnum: c_int);
@@ -460,11 +460,11 @@ unsafe fn win_goto_impl(wp: WinHandle) {
     nvim_win_enter(wp, 1);
 
     // Conceal cursor line in previous window, unconceal in current window.
-    if rs_win_valid(owp) != 0 && nvim_win_get_p_cole(owp) > 0 && nvim_get_msg_scrolled() == 0 {
+    if rs_win_valid(owp) != 0 && nvim_win_get_p_cole(owp) > 0 && msg_scrolled == 0 {
         nvim_redrawWinline(owp, nvim_win_get_cursor_lnum(owp));
     }
     let curwin = nvim_get_curwin();
-    if nvim_win_get_p_cole(curwin) > 0 && nvim_get_msg_scrolled() == 0 {
+    if nvim_win_get_p_cole(curwin) > 0 && msg_scrolled == 0 {
         nvim_redrawWinline(curwin, nvim_win_get_cursor_lnum(curwin));
     }
 }

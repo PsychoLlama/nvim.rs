@@ -1297,7 +1297,6 @@ void nvim_strcpy_cmdbuff(const char *src)
 
 int nvim_get_key_typed(void) { return KeyTyped; }
 int nvim_get_cmdline_star(void) { return cmdline_star; }
-int nvim_get_cmdline_row(void) { return cmdline_row; }
 int nvim_cmdline_win_is_active(void) { return cmdline_win != NULL; }
 int nvim_cmdline_win_width(void) { return cmdline_win ? cmdline_win->w_view_width : 0; }
 int nvim_cmdline_win_height(void) { return cmdline_win ? cmdline_win->w_view_height : 0; }

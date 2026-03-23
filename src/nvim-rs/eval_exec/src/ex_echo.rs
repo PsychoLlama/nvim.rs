@@ -41,7 +41,7 @@ extern "C" {
     // Globals accessors
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
-    fn nvim_set_need_clr_eos(val: c_int);
+    static mut need_clr_eos: bool;
     fn nvim_aborting() -> bool;
     fn did_emsg_get() -> c_int;
     fn called_emsg_get() -> c_int;
@@ -215,7 +215,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
 
         // If eval1() causes an error message the text from the command may
         // still need to be cleared. E.g., "echo 22,44".
-        nvim_set_need_clr_eos(1);
+        need_clr_eos = true;
 
         let p = arg;
         let rettv = alloc_typval();
@@ -230,11 +230,11 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             {
                 nvim_eval::errors::semsg_invexpr2(p);
             }
-            nvim_set_need_clr_eos(0);
+            need_clr_eos = false;
             free_typval(rettv);
             break;
         }
-        nvim_set_need_clr_eos(0);
+        need_clr_eos = false;
 
         if !skip {
             let echo_hl_id = ECHO_HL_ID;

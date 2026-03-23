@@ -119,11 +119,10 @@ pub const MSG_KIND_VERBOSE: &[u8] = b"verbose\0";
 
 extern "C" {
     /// Get `msg_scrolled` global
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     /// Get `msg_scroll` flag
-    fn nvim_get_msg_scroll() -> c_int;
+    static mut msg_scroll: c_int;
     /// Set `msg_scroll` flag
-    fn nvim_set_msg_scroll(val: c_int);
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
     /// Get `keep_msg_more` flag
@@ -138,7 +137,7 @@ extern "C" {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_scrolled() -> c_int {
-    nvim_get_msg_scrolled()
+    msg_scrolled
 }
 
 /// Check if message scrolling is enabled.
@@ -149,7 +148,7 @@ pub unsafe extern "C" fn rs_msg_scrolled() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_scroll() -> c_int {
-    nvim_get_msg_scroll()
+    msg_scroll
 }
 
 /// Set the message scroll flag.
@@ -158,7 +157,7 @@ pub unsafe extern "C" fn rs_msg_scroll() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_scroll(val: c_int) {
-    nvim_set_msg_scroll(val);
+    msg_scroll = val;
 }
 
 /// Check if message history recording is disabled.

@@ -57,7 +57,7 @@ extern "C" {
     fn nvim_get_p_wiw() -> i64;
 
     /// Get global cmdline_row.
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
 
     /// Get global p_ls (laststatus).
     fn nvim_get_p_ls() -> i64;
@@ -221,7 +221,6 @@ fn compute_extra_sep_horizontal_impl(col: c_int, width: c_int) -> c_int {
 /// 0 otherwise.
 fn compute_extra_sep_vertical_impl(row: c_int, height: c_int) -> c_int {
     unsafe {
-        let cmdline_row = nvim_get_cmdline_row();
         let p_ls = nvim_get_p_ls();
 
         if row + height >= cmdline_row && p_ls == 0 {
@@ -666,7 +665,6 @@ fn win_equal_rec_impl(
             if dir != c_int::from(b'h') {
                 // Equalize frame heights
                 let n = rs_frame_minheight(topfr, NOWIN);
-                let cmdline_row = nvim_get_cmdline_row();
                 let p_ls = nvim_get_p_ls();
 
                 if row + height >= cmdline_row && p_ls == 0 {

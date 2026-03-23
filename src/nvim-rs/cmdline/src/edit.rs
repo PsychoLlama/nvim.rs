@@ -54,7 +54,7 @@ extern "C" {
     fn draw_cmdline(start: c_int, len: c_int);
     fn msg_clr_eos();
     fn nvim_get_cmd_silent() -> c_int;
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
 
     // Globals
     fn nvim_get_key_typed_cmdline() -> c_int;
@@ -1054,12 +1054,12 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
 
     if redraw && nvim_get_cmd_silent() == 0 {
         nvim_set_msg_no_more(1);
-        let old_row = nvim_get_cmdline_row();
+        let old_row = cmdline_row;
         cursorcmd();
         let draw_len = nvim_get_ccline_cmdlen();
         draw_cmdline(cur_pos, draw_len - cur_pos);
         // Avoid clearing the rest of the line too often
-        if nvim_get_cmdline_row() != old_row || nvim_get_ccline_overstrike() != 0 {
+        if cmdline_row != old_row || nvim_get_ccline_overstrike() != 0 {
             msg_clr_eos();
         }
         nvim_set_msg_no_more(0);

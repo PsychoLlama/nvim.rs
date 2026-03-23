@@ -22,7 +22,7 @@ extern "C" {
     fn msg_ext_ui_flush();
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
     fn set_keep_msg(s: *const c_char, hl_id: c_int);
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     static mut msg_didout: bool;
     static mut msg_nowait: bool;
 }
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
         nvim_set_msg_ext_kind(WMSG_KIND.as_ptr());
     }
 
-    if msg(message, hl_id) && nvim_get_msg_scrolled() == 0 {
+    if msg(message, hl_id) && msg_scrolled == 0 {
         set_keep_msg(message, hl_id);
     }
     msg_didout = false; // Overwrite this message.

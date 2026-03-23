@@ -208,8 +208,7 @@ extern "C" {
     fn nvim_ui_flush();
     fn nvim_os_delay(ms: c_long, allow_input: bool);
     fn nvim_wait_return(redraw: bool);
-    fn nvim_get_msg_scroll() -> c_int;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     static mut need_wait_return: bool;
     static mut emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;

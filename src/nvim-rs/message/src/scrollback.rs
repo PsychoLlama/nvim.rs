@@ -356,8 +356,7 @@ pub unsafe extern "C" fn rs_sb_reset_clear_state() {
 // ============================================================================
 
 extern "C" {
-    fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_set_msg_scrolled(val: c_int);
+    static mut msg_scrolled: c_int;
     static mut msg_did_scroll: bool;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_msg_reset_scroll_grid();
@@ -382,7 +381,7 @@ pub unsafe extern "C" fn rs_msg_scroll_up_simple() {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_scrolled(val: c_int) {
-    nvim_set_msg_scrolled(val);
+    msg_scrolled = val;
 }
 
 /// Increment the msg_scrolled counter.
@@ -391,8 +390,8 @@ pub unsafe extern "C" fn rs_set_msg_scrolled(val: c_int) {
 /// Calls C accessor/mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_inc_msg_scrolled() {
-    let val = nvim_get_msg_scrolled();
-    nvim_set_msg_scrolled(val + 1);
+    let val = msg_scrolled;
+    msg_scrolled = val + 1;
 }
 
 /// Check if message display has scrolled.
@@ -403,7 +402,7 @@ pub unsafe extern "C" fn rs_inc_msg_scrolled() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_msg_scrolled() -> c_int {
-    c_int::from(nvim_get_msg_scrolled() > 0)
+    c_int::from(msg_scrolled > 0)
 }
 
 /// Check if msg_did_scroll flag is set.

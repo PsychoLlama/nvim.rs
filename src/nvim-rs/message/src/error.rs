@@ -3,7 +3,7 @@
 //! Provides utilities for managing error message state including
 //! suppression flags, error counters, and display state.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_long};
 
 // C accessor declarations
 extern "C" {
@@ -466,11 +466,9 @@ extern "C" {
         severe: c_int,
         ignore: *mut c_int,
     ) -> c_int;
-    fn nvim_get_emsg_assert_fails_msg() -> *const std::ffi::c_char;
-    fn nvim_set_emsg_assert_fails_msg(val: *mut std::ffi::c_char);
-    fn nvim_set_emsg_assert_fails_lnum(val: c_int);
-    fn nvim_free_emsg_assert_fails_context();
-    fn nvim_set_emsg_assert_fails_context(val: *mut std::ffi::c_char);
+    static mut emsg_assert_fails_msg: *mut std::ffi::c_char;
+    static mut emsg_assert_fails_lnum: c_long;
+    static mut emsg_assert_fails_context: *mut std::ffi::c_char;
     fn nvim_get_sourcing_name() -> *const std::ffi::c_char;
     fn nvim_get_sourcing_lnum() -> c_int;
     fn nvim_xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
@@ -485,7 +483,7 @@ extern "C" {
     fn nvim_beep_flush();
     fn nvim_flush_buffers_minimal();
     static mut msg_nowait: bool;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     static mut msg_ext_skip_flush: bool;
 }
 
@@ -494,7 +492,7 @@ extern "C" {
 extern "C" {
     fn nvim_get_in_assert_fails() -> c_int;
     fn nvim_get_global_busy() -> c_int;
-    fn nvim_get_msg_scrolled() -> c_int;
+    static mut msg_scrolled: c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 }
 
@@ -557,13 +555,13 @@ pub unsafe extern "C" fn rs_emsg_multiline(
             return 1;
         }
 
-        if nvim_get_in_assert_fails() != 0 && nvim_get_emsg_assert_fails_msg().is_null() {
-            nvim_set_emsg_assert_fails_msg(nvim_xstrdup(s));
-            nvim_set_emsg_assert_fails_lnum(nvim_get_sourcing_lnum());
-            nvim_free_emsg_assert_fails_context();
+        if nvim_get_in_assert_fails() != 0 && emsg_assert_fails_msg.is_null() {
+            emsg_assert_fails_msg = nvim_xstrdup(s);
+            emsg_assert_fails_lnum = c_long::from(nvim_get_sourcing_lnum());
+            xfree(emsg_assert_fails_context.cast::<std::ffi::c_void>());
             let sname = nvim_get_sourcing_name();
             let ctx: *const c_char = if sname.is_null() { c"".as_ptr() } else { sname };
-            nvim_set_emsg_assert_fails_context(nvim_xstrdup(ctx));
+            emsg_assert_fails_context = nvim_xstrdup(ctx);
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
@@ -622,14 +620,14 @@ pub unsafe extern "C" fn rs_emsg_multiline(
     }
 
     emsg_on_display = true; // remember there is an error message
-    if nvim_get_msg_scrolled() != 0 {
+    if msg_scrolled != 0 {
         need_wait_return = true; // needed in case emsg() is called after
                                  // wait_return() has reset need_wait_return
     }
     crate::display::rs_msg_ext_set_kind(kind);
 
     // Display name and line number for the source of the error.
-    nvim_set_msg_scroll(1);
+    msg_scroll = 1;
     let save_skip_flush = msg_ext_skip_flush;
     msg_ext_skip_flush = true;
     rs_msg_source(hl_id);
@@ -755,7 +753,7 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 
     let p = nvim_get_emsg_source();
     if !p.is_null() {
-        nvim_set_msg_scroll(1); // this will take more than one line
+        msg_scroll = 1; // this will take more than one line
         let _ = crate::output_core::rs_msg(p, hl_id);
         xfree(p.cast());
     }

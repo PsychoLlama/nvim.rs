@@ -51,23 +51,20 @@ extern "C" {
 
     // State accessors
     static mut msg_col: c_int;
-    fn nvim_get_cmdline_row() -> c_int;
+    static mut cmdline_row: c_int;
     static mut lines_left: c_int;
     static mut msg_didany: bool;
     static mut emsg_on_display: bool;
-    fn nvim_set_cmdline_row(val: c_int);
     static mut msg_row: c_int;
 
     // Phase 2: msg_start accessors
-    fn nvim_get_msg_scroll() -> c_int;
+    static mut msg_scroll: c_int;
     static mut need_clr_eos: bool;
-    fn nvim_set_need_clr_eos(val: c_int);
     fn nvim_get_p_ch() -> i64;
     static mut redrawing_cmdline: bool;
     fn nvim_get_full_screen() -> bool;
     static mut msg_didout: bool;
-    fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_set_msg_scrolled(val: c_int);
+    static mut msg_scrolled: c_int;
     fn nvim_ui_has_messages() -> c_int;
     static mut need_fileinfo: bool;
     fn nvim_set_keep_msg_raw(s: *const c_char);
@@ -217,9 +214,7 @@ pub(crate) unsafe fn msg_keep_impl(
         1 // true
     };
 
-    if keep != 0
-        && retval != 0
-        && nvim_vim_strsize(s) < (Rows - nvim_get_cmdline_row() - 1) * Columns + sc_col
+    if keep != 0 && retval != 0 && nvim_vim_strsize(s) < (Rows - cmdline_row - 1) * Columns + sc_col
     {
         crate::misc::rs_set_keep_msg(s, 0);
     }
@@ -429,7 +424,6 @@ pub unsafe extern "C" fn rs_msg_start() {
     let mut did_return = false;
 
     // Ensure msg_row is at least cmdline_row
-    let cmdline_row = nvim_get_cmdline_row();
     if msg_row < cmdline_row {
         msg_row = cmdline_row;
     }
@@ -443,29 +437,29 @@ pub unsafe extern "C" fn rs_msg_start() {
     if need_clr_eos || (nvim_get_p_ch() == 0 && redrawing_cmdline) {
         // Halfway an ":echo" command and getting an (error) message: clear
         // any text from the command.
-        nvim_set_need_clr_eos(0);
+        need_clr_eos = false;
         msg_clr_eos();
     }
 
     // If cmdheight=0, scroll in the first line of msg_grid upon the screen.
-    if nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0 && nvim_get_msg_scrolled() == 0 {
+    if nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0 && msg_scrolled == 0 {
         msg_grid_validate();
         rs_msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
-        let scrolled = nvim_get_msg_scrolled();
-        nvim_set_msg_scrolled(scrolled + 1);
-        nvim_set_cmdline_row(Rows - 1);
+        let scrolled = msg_scrolled;
+        msg_scrolled = scrolled + 1;
+        cmdline_row = Rows - 1;
     }
 
-    if nvim_get_msg_scroll() == 0 && nvim_get_full_screen() {
+    if msg_scroll == 0 && nvim_get_full_screen() {
         // Overwrite last message
-        msg_row = nvim_get_cmdline_row();
+        msg_row = cmdline_row;
         msg_col = 0;
     } else if c_int::from(msg_didout) != 0 || (nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0)
     {
         // Start message on next line
         rs_msg_putchar(c_int::from(b'\n'));
         did_return = true;
-        nvim_set_cmdline_row(msg_row);
+        cmdline_row = msg_row;
     }
 
     if c_int::from(msg_didany) == 0 || lines_left < 0 {
@@ -751,7 +745,6 @@ pub unsafe extern "C" fn rs_verb_msg(s: *const c_char) -> c_int {
 /// Calls C accessor functions that modify global state.
 #[export_name = "msg_starthere"]
 pub unsafe extern "C" fn rs_msg_starthere() {
-    let cmdline_row = nvim_get_cmdline_row();
     lines_left = cmdline_row;
     msg_didany = false;
 }
@@ -778,7 +771,7 @@ pub unsafe extern "C" fn rs_msg_clr_eos_export() {
 pub unsafe extern "C" fn rs_msg_end_prompt() {
     need_wait_return = false;
     emsg_on_display = false;
-    nvim_set_cmdline_row(msg_row);
+    cmdline_row = msg_row;
     msg_col = 0;
     msg_clr_eos_impl();
     lines_left = -1;

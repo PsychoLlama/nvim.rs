@@ -187,7 +187,7 @@ extern "C" {
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
     fn nvim_get_p_sol() -> c_int;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     fn nvim_get_p_verbose() -> c_int;
     // Misc wrappers
     fn nvim_ecmd_buflist_altfpos(win: *mut WinHandle);
@@ -831,13 +831,13 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 && !crate::exiting
                 && nvim_get_p_verbose() == 0
             {
-                nvim_set_msg_scroll(0);
+                msg_scroll = 0;
             }
             if crate::msg_scroll == 0 {
                 msg_check_for_delay(false);
             }
             msg_start();
-            nvim_set_msg_scroll(msg_scroll_save);
+            msg_scroll = msg_scroll_save;
             crate::msg_scrolled_ign = true;
 
             if nvim_ecmd_shortmess_fileinfo() == 0 {

@@ -822,8 +822,6 @@ extern "C" {
     pub fn appended_lines(lnum: c_int, count: c_int);
     pub static mut State: c_int;
     pub static mut need_wait_return: bool;
-    /// Set msg_scroll global
-    pub fn nvim_set_msg_scroll(val: c_int);
     /// Call ui_cursor_shape()
     pub fn nvim_ui_cursor_shape_wrapper();
     /// Duplicate a string with length (allocates len+1 bytes)

@@ -76,8 +76,7 @@ extern "C" {
     fn nvim_get_full_screen() -> bool;
     fn screen_resize(width: c_int, height: c_int);
     fn check_screensize();
-    fn nvim_get_cmdline_row() -> c_int;
-    fn nvim_set_cmdline_row(val: c_int);
+    static mut cmdline_row: c_int;
     fn nvim_get_p_ch() -> i64;
     fn nvim_get_p_sj() -> OptInt;
     fn nvim_set_p_sj(val: OptInt);
@@ -447,9 +446,8 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
             check_screensize();
             let p_ch = nvim_get_p_ch();
             let new_row = Rows - std::cmp::max(p_ch as c_int, 1);
-            let cmdline_row = nvim_get_cmdline_row();
             if cmdline_row > new_row && Rows > p_ch as c_int {
-                nvim_set_cmdline_row(new_row);
+                cmdline_row = new_row;
             }
         }
         let window = p_window;

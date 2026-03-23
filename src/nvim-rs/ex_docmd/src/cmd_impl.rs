@@ -448,7 +448,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
     const HLF_T: c_int = 23;
 
     nvim_msg_start();
-    nvim_set_msg_scroll(1);
+    msg_scroll = 1;
 
     let lastused_tp = nvim_get_lastused_tabpage();
     let lastused_win = if rs_valid_tabpage(lastused_tp) != 0 {
@@ -972,8 +972,7 @@ type SstHandle = *mut c_void;
 
 extern "C" {
     // Global accessors for save/restore state
-    fn nvim_get_msg_scroll() -> c_int;
-    fn nvim_set_msg_scroll(val: c_int);
+    static mut msg_scroll: c_int;
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
     static mut msg_didout: bool;
@@ -1019,7 +1018,7 @@ extern "C" {
 /// `sst` must be a valid save_state_T pointer.
 #[export_name = "nvim_docmd_save_current_state_impl"]
 pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
-    nvim_docmd_sst_set_msg_scroll(sst, nvim_get_msg_scroll());
+    nvim_docmd_sst_set_msg_scroll(sst, msg_scroll);
     nvim_docmd_sst_set_restart_edit(sst, nvim_get_restart_edit());
     nvim_docmd_sst_set_msg_didout(sst, c_int::from(msg_didout));
     nvim_docmd_sst_set_State(sst, nvim_get_current_State());
@@ -1028,7 +1027,7 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     nvim_docmd_sst_set_reg_executing(sst, nvim_get_reg_executing());
     nvim_docmd_sst_set_pending_end_reg_executing(sst, nvim_get_pending_end_reg_executing());
 
-    nvim_set_msg_scroll(0); // no msg scrolling in Normal mode
+    msg_scroll = 0; // no msg scrolling in Normal mode
     nvim_set_restart_edit(0); // don't go to Insert mode
 
     // Save typeahead; return typebuf_valid.
@@ -1043,7 +1042,7 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
 pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
     nvim_docmd_sst_restore_typeahead(sst);
 
-    nvim_set_msg_scroll(nvim_docmd_sst_get_msg_scroll(sst));
+    msg_scroll = nvim_docmd_sst_get_msg_scroll(sst);
     if nvim_get_force_restart_edit() != 0 {
         nvim_set_force_restart_edit(0);
     } else {
@@ -1563,7 +1562,7 @@ extern "C" {
     fn nvim_get_curwin_cursor_lnum() -> c_int;
 
     // cmdline_row set
-    fn nvim_set_cmdline_row(val: c_int);
+    static mut cmdline_row: c_int;
 
     // lines_left / Rows
     static mut lines_left: c_int;
@@ -1716,7 +1715,7 @@ pub unsafe extern "C" fn do_exmode() {
         return;
     }
 
-    let save_msg_scroll = nvim_get_msg_scroll();
+    let save_msg_scroll = msg_scroll;
     nvim_set_redrawing_disabled(nvim_get_RedrawingDisabled() + 1); // don't redisplay the window
     nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() + 1); // don't wait for return
 
@@ -1730,14 +1729,14 @@ pub unsafe extern "C" fn do_exmode() {
             exmode_active = false;
             break;
         }
-        nvim_set_msg_scroll(1);
+        msg_scroll = 1;
         need_wait_return = false;
         nvim_docmd_set_pressedreturn(false);
         nvim_set_ex_no_reprint(0);
         let changedtick = nvim_docmd_curbuf_changedtick();
         let prev_msg_row = msg_row;
         let prev_line = nvim_get_curwin_cursor_lnum();
-        nvim_set_cmdline_row(msg_row);
+        cmdline_row = msg_row;
         nvim_docmd_do_cmdline_getexline_noflags();
         lines_left = nvim_ses_get_Rows() - 1;
 
@@ -1778,7 +1777,7 @@ pub unsafe extern "C" fn do_exmode() {
     nvim_redraw_all_later(UPD_NOT_VALID);
     update_screen();
     need_wait_return = false;
-    nvim_set_msg_scroll(save_msg_scroll);
+    msg_scroll = save_msg_scroll;
 }
 
 // =============================================================================

@@ -1722,7 +1722,7 @@ pub mod jump_machinery {
         fn check_cursor(wp: *mut c_void);
         fn update_topline(wp: *mut c_void);
         // Phase 14 Phase 2: print_msg inlined accessors
-        fn nvim_get_msg_scrolled() -> c_int;
+        static mut msg_scrolled: c_int;
         fn nvim_update_screen();
         fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
         fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
@@ -1730,8 +1730,7 @@ pub mod jump_machinery {
         fn nvim_qfline_get_nr_int(qfp: QfLineHandle) -> c_int;
         fn nvim_qfline_get_text_ptr(qfp: QfLineHandle) -> *const std::ffi::c_char;
         fn skipwhite(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
-        fn nvim_get_msg_scroll() -> c_int;
-        fn nvim_set_msg_scroll(val: c_int);
+        static mut msg_scroll: c_int;
         fn nvim_ecmd_shortmess_overall() -> c_int;
         fn nvim_get_p_ch() -> i64;
         fn nvim_msg_ext_set_kind(kind: *const std::ffi::c_char);
@@ -1857,7 +1856,7 @@ pub mod jump_machinery {
         use std::ffi::c_char;
 
         // Update the screen before showing the message, unless messages scrolled.
-        if nvim_get_msg_scrolled() == 0 {
+        if msg_scrolled == 0 {
             update_topline(curwin);
             if unsafe { must_redraw } != 0 {
                 nvim_update_screen();
@@ -1912,18 +1911,17 @@ pub mod jump_machinery {
 
         // Output the message.  Overwrite to avoid scrolling when the 'O'
         // flag is present in 'shortmess'; But when not jumping, print the whole message.
-        let saved_scroll = nvim_get_msg_scroll();
+        let saved_scroll = msg_scroll;
         if curbuf == old_curbuf && nvim_qf_get_cursor_lnum() == old_lnum {
-            nvim_set_msg_scroll(1);
-        } else if (nvim_get_msg_scrolled() == 0
-            || (nvim_get_p_ch() == 0 && nvim_get_msg_scrolled() == 1))
+            msg_scroll = 1;
+        } else if (msg_scrolled == 0 || (nvim_get_p_ch() == 0 && msg_scrolled == 1))
             && nvim_ecmd_shortmess_overall() != 0
         {
-            nvim_set_msg_scroll(0);
+            msg_scroll = 0;
         }
         nvim_msg_ext_set_kind(c"quickfix".as_ptr());
         msg_keep(full_msg.as_ptr().cast::<c_char>(), 0, true, false);
-        nvim_set_msg_scroll(saved_scroll);
+        msg_scroll = saved_scroll;
     }
 
     const QFLT_QUICKFIX: c_int = 0;

@@ -20,7 +20,7 @@ extern "C" {
     // Display state accessors (getters in format.rs, only setters needed here)
     static mut msg_row: c_int;
     static mut msg_col: c_int;
-    fn nvim_set_cmdline_row(val: c_int);
+    static mut cmdline_row: c_int;
 
     // UI capability check
     fn nvim_ui_has_messages() -> c_int;
@@ -50,7 +50,6 @@ extern "C" {
     // Clear EOS flag — direct access to C global
     static mut need_clr_eos: bool;
     // nvim_set_need_clr_eos kept for other crates
-    fn nvim_set_need_clr_eos(val: c_int);
     static mut need_wait_return: bool;
 }
 
@@ -125,7 +124,7 @@ pub unsafe extern "C" fn rs_ui_has_messages() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_cmdline_row(val: c_int) {
-    nvim_set_cmdline_row(val);
+    cmdline_row = val;
 }
 
 /// Reset message position to start of message area.
@@ -230,7 +229,7 @@ pub unsafe extern "C" fn rs_need_clr_eos() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_need_clr_eos(val: c_int) {
-    nvim_set_need_clr_eos(val);
+    need_clr_eos = (val) != 0;
 }
 
 // ============================================================================
@@ -326,7 +325,7 @@ pub unsafe extern "C" fn rs_msg_ext_end() {
 pub unsafe extern "C" fn rs_msg_display_reset() {
     msg_col = 0;
     did_wait_return = false;
-    nvim_set_need_clr_eos(0);
+    need_clr_eos = false;
 }
 
 /// Check if displaying to external UI.
