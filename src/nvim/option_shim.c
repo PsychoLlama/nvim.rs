@@ -2124,13 +2124,6 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 // Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
 // =============================================================================
 
-/// check_win_options(curwin) wrapper.
-void nvim_call_check_win_options(void)
-{
-  rs_check_winopt(&curwin->w_onebuf_opt);
-  rs_check_winopt(&curwin->w_allbuf_opt);
-}
-
 /// set_init_expand_env() implementation called from Rust.
 /// Iterates over all options and expands environment variables for defaults.
 void nvim_call_set_init_expand_env(void)
