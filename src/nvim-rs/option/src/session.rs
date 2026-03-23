@@ -70,7 +70,6 @@ extern "C" {
     ) -> usize;
 
     // put_set
-    fn nvim_put_set_get_opt_name_flags(opt_idx: c_int, name: *mut *const c_char, flags: *mut u64);
     fn nvim_option_get_var_ptr(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn put_escstr(fd: *mut libc::FILE, str_: *const c_char, what: c_int) -> c_int;
     fn put_eol(fd: *mut libc::FILE) -> c_int;
@@ -193,9 +192,7 @@ pub unsafe extern "C" fn rs_option_value2string(opt_idx: c_int, opt_flags: c_int
     } else {
         // string option
         let str_varp = *(varp as *const *const c_char);
-        let mut name: *const c_char = std::ptr::null();
-        let mut flags: u64 = 0;
-        nvim_put_set_get_opt_name_flags(opt_idx, &mut name, &mut flags);
+        let flags = nvim_get_option_flags(opt_idx) as u64;
         if (flags & OptFlags::EXPAND.0 as u64) != 0 {
             nvim_home_replace(std::ptr::null(), str_varp, namebuff, namebuff_size, false);
         } else {
@@ -220,9 +217,8 @@ pub unsafe extern "C" fn rs_put_set(
 ) -> c_int {
     let value = crate::value::rs_optval_from_varp(opt_idx, varp);
 
-    let mut name: *const c_char = std::ptr::null();
-    let mut flags: u64 = 0;
-    nvim_put_set_get_opt_name_flags(opt_idx, &mut name, &mut flags);
+    let name = nvim_option_get_fullname(opt_idx);
+    let flags = nvim_get_option_flags(opt_idx) as u64;
 
     // If this is a global-local option, varp is a local var (not opt->var),
     // and value equals the unset value, do nothing.

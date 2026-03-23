@@ -923,11 +923,6 @@ void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
   return get_varp_scope(&options[opt_idx], opt_flags);
 }
 // nvim_get_namebuff is defined in buffer.c
-void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64_t *flags)
-{
-  *name = options[opt_idx].fullname;
-  *flags = options[opt_idx].flags;
-}
 void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
