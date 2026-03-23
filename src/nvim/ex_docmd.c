@@ -2285,11 +2285,7 @@ theend:
 /// Open a new tab page.
 void nvim_docmd_tabpage_new_impl(void)
 {
-  exarg_T ea = {
-    .cmdidx = CMD_tabnew,
-    .cmd = "tabn",
-    .arg = "",
-  };
+  exarg_T ea = { .cmdidx = CMD_tabnew, .cmd = "tabn", .arg = "" };
   nvim_docmd_ex_splitview_impl(&ea);
 }
 
@@ -3119,47 +3115,6 @@ char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen
   return result;
 }
 
-/// Expand the <sfile> string in "arg".
-///
-/// @return  an allocated string, or NULL for any error.
-char *nvim_docmd_expand_sfile_impl(char *arg)
-{
-  char *result = xstrdup(arg);
-
-  for (char *p = result; *p;) {
-    if (strncmp(p, "<sfile>", 7) != 0) {
-      p++;
-    } else {
-      // replace "<sfile>" with the sourced file name, and do ":" stuff
-      size_t srclen;
-      const char *errormsg;
-      char *repl = nvim_docmd_eval_vars_impl(p, result, &srclen, NULL, &errormsg, NULL, true);
-      if (errormsg != NULL) {
-        if (*errormsg) {
-          emsg(errormsg);
-        }
-        xfree(result);
-        return NULL;
-      }
-      if (repl == NULL) {               // no match (cannot happen)
-        p += srclen;
-        continue;
-      }
-      size_t len = strlen(result) - srclen + strlen(repl) + 1;
-      char *newres = xmalloc(len);
-      memmove(newres, result, (size_t)(p - result));
-      STRCPY(newres + (p - result), repl);
-      len = strlen(newres);
-      strcat(newres, p + srclen);
-      xfree(repl);
-      xfree(result);
-      result = newres;
-      p = newres + len;                 // continue after the match
-    }
-  }
-
-  return result;
-}
 
 /// Make a dialog message in "buff[DIALOG_MSG_SIZE]".
 /// "format" must contain "%s".

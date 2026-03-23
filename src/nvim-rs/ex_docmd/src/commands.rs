@@ -343,6 +343,17 @@ extern "C" {
     fn nvim_docmd_undo_count_steps(step: LinenrT, found: *mut c_int) -> c_int;
     fn nvim_docmd_get_e_undobang() -> *const c_char;
 
+    // Phase N+5: expand_sfile helpers
+    fn nvim_docmd_eval_vars_impl(
+        src: *mut c_char,
+        srcstart: *const c_char,
+        usedlen: *mut usize,
+        lnump: *mut i32,
+        errormsg: *mut *const c_char,
+        escaped: *mut c_int,
+        empty_is_error: bool,
+    ) -> *mut c_char;
+
     // Phase 8: ex_sleep / do_sleep helpers
     fn nvim_docmd_cursor_valid_curwin() -> c_int;
     fn nvim_docmd_setcursor_mayforce_curwin();
@@ -3450,4 +3461,97 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
     }
     nvim_set_virtual_op_none();
     nvim_docmd_ex_may_print_impl(eap);
+}
+
+// =============================================================================
+// nvim_docmd_expand_sfile_impl - replace <sfile> in a command string
+// =============================================================================
+
+/// Replace all `<sfile>` occurrences in `arg` by evaluating them through
+/// `nvim_docmd_eval_vars_impl`. Returns a newly allocated string or NULL on
+/// error.
+///
+/// # Safety
+///
+/// `arg` must be a valid null-terminated C string.
+#[export_name = "nvim_docmd_expand_sfile_impl"]
+pub unsafe extern "C" fn rs_expand_sfile_impl(arg: *const c_char) -> *mut c_char {
+    use std::ptr;
+
+    const SFILE: &[u8] = b"<sfile>";
+
+    // Work with mutable raw pointers mirroring the C logic.
+    // `result` always owns the current heap string; `p` scans through it.
+    let mut result = xstrdup(arg);
+    let mut offset: usize = 0; // byte offset into result where scanning continues
+
+    loop {
+        // Re-derive p each iteration so it stays valid after reallocations.
+        let p = result.add(offset);
+        if *p == 0 {
+            break;
+        }
+
+        // Check for "<sfile>" prefix at p.
+        let mut matches = true;
+        for (i, &b) in SFILE.iter().enumerate() {
+            if *p.add(i) as u8 != b {
+                matches = false;
+                break;
+            }
+        }
+
+        if !matches {
+            offset += 1;
+            continue;
+        }
+
+        // Replace "<sfile>" with the evaluated expansion.
+        let mut srclen: usize = 0;
+        let mut errormsg: *const c_char = ptr::null();
+        let repl = nvim_docmd_eval_vars_impl(
+            p,
+            result,
+            &raw mut srclen,
+            ptr::null_mut(),
+            &raw mut errormsg,
+            ptr::null_mut(),
+            true,
+        );
+
+        if !errormsg.is_null() {
+            if *errormsg != 0 {
+                emsg(errormsg);
+            }
+            xfree(result.cast());
+            return ptr::null_mut();
+        }
+
+        if repl.is_null() {
+            // no match (cannot happen per C comment)
+            offset += srclen;
+            continue;
+        }
+
+        let result_len = strlen(result);
+        let repl_len = strlen(repl);
+        let new_len = result_len - srclen + repl_len + 1;
+
+        let newres = xmalloc(new_len).cast::<c_char>();
+        // prefix before the match
+        ptr::copy_nonoverlapping(result, newres, offset);
+        // replacement text
+        ptr::copy_nonoverlapping(repl, newres.add(offset), repl_len);
+        // suffix after the match (including NUL)
+        let suffix_len = result_len - offset - srclen + 1;
+        ptr::copy_nonoverlapping(p.add(srclen), newres.add(offset + repl_len), suffix_len);
+
+        xfree(repl.cast());
+        xfree(result.cast());
+
+        result = newres;
+        offset += repl_len; // continue scanning after the inserted replacement
+    }
+
+    result
 }
