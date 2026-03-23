@@ -87,6 +87,7 @@ extern "C" {
     // UTF-8
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Options

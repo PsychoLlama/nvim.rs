@@ -1230,14 +1230,10 @@ void nvim_compl_clear_orig_text(void) { API_CLEAR_STRING(compl_orig_text); }
 void nvim_cpt_sources_clear(void) { XFREE_CLEAR(cpt_sources_array); cpt_sources_index = -1; cpt_sources_count = 0; }
 void nvim_set_completed_item_empty(void) { set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED)); }
 
-void nvim_append_char_to_redobuff(int c) { AppendCharToRedobuff(c); }
-void nvim_append_to_redobuff_lit(const char *s, int len) { AppendToRedobuffLit(s, len); }
-int nvim_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
 void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->cp_score = score; } }
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
-int nvim_fuzzy_match_str(char *str, const char *pat) { return fuzzy_match_str(str, pat); }
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 

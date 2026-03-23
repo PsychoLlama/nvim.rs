@@ -259,6 +259,7 @@ extern "C" {
 
     // Multi-byte functions
     fn nvim_utfc_ptr2len(s: *const c_char) -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
     fn nvim_vim_strnsize(s: *const c_char, len: c_int) -> c_int;

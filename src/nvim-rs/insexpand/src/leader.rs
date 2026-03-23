@@ -112,7 +112,9 @@ pub unsafe extern "C" fn rs_common_prefix_len(s1: *const c_char, s2: *const c_ch
 extern "C" {
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "AppendCharToRedobuff"]
     fn nvim_append_char_to_redobuff(c: c_int);
+    #[link_name = "AppendToRedobuffLit"]
     fn nvim_append_to_redobuff_lit(s: *const c_char, len: c_int);
 }
 

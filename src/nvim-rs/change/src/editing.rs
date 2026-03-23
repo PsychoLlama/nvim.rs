@@ -47,6 +47,7 @@ extern "C" {
     fn nvim_utfc_ptr2len_len(ptr: *const c_char, maxlen: c_int) -> c_int;
     fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn nvim_utf_ptr2len(ptr: *const c_char) -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
     fn nvim_utf_composinglike(p0: *const c_char, p1: *const c_char, state: *mut u64) -> bool;
 

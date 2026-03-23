@@ -63,6 +63,7 @@ extern "C" {
     fn nvim_curwin_get_p_diff() -> c_int;
 
     /// Fuzzy match a string against a pattern. Returns score or `FUZZY_SCORE_NONE`.
+    #[link_name = "fuzzy_match_str"]
     fn nvim_fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
 
     /// `home_replace_save()` for a buffer — caller must free with `nvim_xfree`.

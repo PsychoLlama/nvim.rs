@@ -75,6 +75,7 @@ extern "C" {
 
     // Multibyte
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Global state

@@ -37,6 +37,7 @@ extern "C" {
     fn nvim_get_curwin_cursor_col() -> c_int;
     fn nvim_set_curwin_cursor_col(col: c_int);
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
 
