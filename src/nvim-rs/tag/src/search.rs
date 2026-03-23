@@ -2152,8 +2152,7 @@ extern "C" {
     fn nvim_get_curbuf_tc_flags() -> c_int;
     fn nvim_get_p_hlg() -> *const c_char;
     fn nvim_get_p_verbose() -> c_int;
-    fn nvim_get_emsg_off() -> c_int;
-    fn nvim_set_emsg_off(val: c_int);
+    static mut emsg_off: c_int;
     fn nvim_get_curbuf_b_fname() -> *const c_char;
     fn nvim_get_curbuf_p_tfu() -> *const c_char;
     fn nvim_set_curbuf_b_help(val: c_int);
@@ -2620,11 +2619,11 @@ pub unsafe extern "C" fn rs_find_tags(
     }
 
     // Prepare patterns (regexp compilation), suppressing errors
-    let save_emsg_off = nvim_get_emsg_off();
-    nvim_set_emsg_off(1);
+    let save_emsg_off = emsg_off;
+    emsg_off = 1;
     let has_re = (flags & find_tags_flags::TAG_REGEXP) != 0;
     nvim_findtags_prepare_pats(st, has_re);
-    nvim_set_emsg_off(save_emsg_off);
+    emsg_off = save_emsg_off;
 
     if has_re && !nvim_findtags_has_regprog(st) {
         retval = FAIL;

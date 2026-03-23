@@ -71,7 +71,7 @@ extern "C" {
     // Shell/message helpers
     fn append_redir(buf: *mut c_char, buflen: usize, opt: *const c_char, name: *const c_char);
     fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn nvim_msg_start();
     fn msg_puts(s: *const c_char);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
 
     // Display the command. If cursor is at column 0 reset msg_didout.
     if nvim_get_msg_col() == 0 {
-        nvim_set_msg_didout(0);
+        msg_didout = false;
     }
     nvim_msg_start();
     msg_puts(c":!".as_ptr());

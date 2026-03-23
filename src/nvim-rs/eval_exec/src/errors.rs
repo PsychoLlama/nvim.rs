@@ -461,7 +461,7 @@ extern "C" {
     fn msg(msg: *const c_char) -> c_int;
 
     /// Check if errors should be suppressed.
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_silent: c_int;
 
     /// Get did_emsg counter.
     fn did_emsg_get() -> c_int;
@@ -482,7 +482,7 @@ extern "C" {
 
 /// Check if error messages are being suppressed (e.g., during `:silent`).
 pub fn is_emsg_silent() -> bool {
-    unsafe { nvim_get_emsg_silent() != 0 }
+    unsafe { emsg_silent != 0 }
 }
 
 /// Check if an error has occurred (did_emsg counter > 0).

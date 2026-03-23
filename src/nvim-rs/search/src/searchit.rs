@@ -80,7 +80,7 @@ extern "C" {
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Global state
-    fn nvim_get_called_emsg() -> c_int;
+    static mut called_emsg: c_int;
     fn nvim_get_rc_did_emsg() -> c_int;
     fn nvim_get_p_ws() -> c_int;
     fn nvim_cpo_has_search() -> c_int;
@@ -230,7 +230,7 @@ pub unsafe extern "C" fn rs_searchit(
     }
 
     let search_from_match_end = nvim_cpo_has_search() != 0;
-    let called_emsg_before = nvim_get_called_emsg();
+    let called_emsg_before = called_emsg;
 
     // Working position
     let mut pos_l = res.pos_lnum;
@@ -340,9 +340,7 @@ pub unsafe extern "C" fn rs_searchit(
                 }
 
                 // Abort on error or timeout
-                if nvim_get_called_emsg() > called_emsg_before
-                    || (has_timed_out && res.sa_timed_out != 0)
-                {
+                if called_emsg > called_emsg_before || (has_timed_out && res.sa_timed_out != 0) {
                     break;
                 }
 
@@ -626,7 +624,7 @@ pub unsafe extern "C" fn rs_searchit(
             if nvim_get_p_ws() == 0
                 || stop_lnum != 0
                 || unsafe { got_int }
-                || nvim_get_called_emsg() > called_emsg_before
+                || called_emsg > called_emsg_before
                 || (has_timed_out && res.sa_timed_out != 0)
                 || break_loop
                 || found
@@ -653,7 +651,7 @@ pub unsafe extern "C" fn rs_searchit(
         final_lnum = lnum;
 
         if unsafe { got_int }
-            || nvim_get_called_emsg() > called_emsg_before
+            || called_emsg > called_emsg_before
             || (has_timed_out && res.sa_timed_out != 0)
             || break_loop
         {

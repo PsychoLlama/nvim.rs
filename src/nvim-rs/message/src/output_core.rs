@@ -53,9 +53,9 @@ extern "C" {
     fn nvim_get_msg_col() -> c_int;
     fn nvim_set_msg_col(col: c_int);
     fn nvim_get_cmdline_row() -> c_int;
-    fn nvim_set_lines_left(val: c_int);
-    fn nvim_set_msg_didany(val: c_int);
-    fn nvim_set_emsg_on_display(val: c_int);
+    static mut lines_left: c_int;
+    static mut msg_didany: bool;
+    static mut emsg_on_display: bool;
     fn nvim_set_cmdline_row(val: c_int);
     fn nvim_get_msg_row() -> c_int;
 
@@ -66,14 +66,11 @@ extern "C" {
     fn nvim_get_p_ch() -> i64;
     static mut redrawing_cmdline: bool;
     fn nvim_get_full_screen() -> bool;
-    fn nvim_get_msg_didout() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_set_msg_scrolled(val: c_int);
-    fn nvim_get_msg_didany() -> c_int;
-    fn nvim_get_lines_left() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
-    fn nvim_set_need_fileinfo(val: c_int);
+    static mut need_fileinfo: bool;
     fn nvim_set_keep_msg_raw(s: *const c_char);
     fn nvim_set_msg_row(val: c_int);
     fn msg_grid_validate();
@@ -165,8 +162,8 @@ pub(crate) unsafe fn msg_keep_impl(
     }
 
     // Skip messages not matching ":filter pattern". Don't filter when there is an error.
-    let emsg_on_display = crate::error::rs_emsg_on_display_get();
-    if emsg_on_display == 0 && crate::misc::rs_message_filtered(s) {
+    let on_display = emsg_on_display;
+    if !on_display && crate::misc::rs_message_filtered(s) {
         return 1; // true
     }
 
@@ -229,7 +226,7 @@ pub(crate) unsafe fn msg_keep_impl(
         crate::misc::rs_set_keep_msg(s, 0);
     }
 
-    nvim_set_need_fileinfo(0);
+    need_fileinfo = false;
 
     if !buf.is_null() {
         nvim_xfree(buf);
@@ -443,7 +440,7 @@ pub unsafe extern "C" fn rs_msg_start() {
     if msg_silent == 0 {
         // Don't display old message now; clear keep_msg and need_fileinfo.
         nvim_set_keep_msg_raw(std::ptr::null());
-        nvim_set_need_fileinfo(0);
+        need_fileinfo = false;
     }
 
     if need_clr_eos || (nvim_get_p_ch() == 0 && redrawing_cmdline) {
@@ -466,19 +463,20 @@ pub unsafe extern "C" fn rs_msg_start() {
         // Overwrite last message
         nvim_set_msg_row(nvim_get_cmdline_row());
         nvim_set_msg_col(0);
-    } else if nvim_get_msg_didout() != 0 || (nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0) {
+    } else if c_int::from(msg_didout) != 0 || (nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0)
+    {
         // Start message on next line
         rs_msg_putchar(c_int::from(b'\n'));
         did_return = true;
         nvim_set_cmdline_row(nvim_get_msg_row());
     }
 
-    if nvim_get_msg_didany() == 0 || nvim_get_lines_left() < 0 {
+    if c_int::from(msg_didany) == 0 || lines_left < 0 {
         rs_msg_starthere();
     }
 
     if msg_silent == 0 {
-        nvim_set_msg_didout(0); // no output on current line yet
+        msg_didout = false; // no output on current line yet
     }
 
     if nvim_ui_has_messages() != 0 {
@@ -757,8 +755,8 @@ pub unsafe extern "C" fn rs_verb_msg(s: *const c_char) -> c_int {
 #[export_name = "msg_starthere"]
 pub unsafe extern "C" fn rs_msg_starthere() {
     let cmdline_row = nvim_get_cmdline_row();
-    nvim_set_lines_left(cmdline_row);
-    nvim_set_msg_didany(0);
+    lines_left = cmdline_row;
+    msg_didany = false;
 }
 
 /// Clear from current message position to end of screen.
@@ -782,11 +780,11 @@ pub unsafe extern "C" fn rs_msg_clr_eos_export() {
 #[export_name = "msg_end_prompt"]
 pub unsafe extern "C" fn rs_msg_end_prompt() {
     need_wait_return = false;
-    nvim_set_emsg_on_display(0);
+    emsg_on_display = false;
     nvim_set_cmdline_row(nvim_get_msg_row());
     nvim_set_msg_col(0);
     msg_clr_eos_impl();
-    nvim_set_lines_left(-1);
+    lines_left = -1;
 }
 
 // ============================================================================

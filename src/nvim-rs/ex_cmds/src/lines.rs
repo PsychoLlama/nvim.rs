@@ -449,6 +449,7 @@ const BL_FIX: c_int = 4;
 extern "C" {
     static Rows: c_int;
     static mut State: c_int;
+    static mut lines_left: c_int;
 }
 
 /// `:insert` and `:append` command implementation, also used by `:change`.
@@ -465,9 +466,8 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
         nvim_exarg_get_forceit, nvim_exarg_get_line2, nvim_excmds_call_getline,
         nvim_excmds_ea_getline_is_null, nvim_excmds_get_arg_mut, nvim_excmds_get_b_p_iminsert,
         nvim_excmds_get_cstack_looplevel, nvim_excmds_get_nextcmd, nvim_excmds_set_nextcmd_direct,
-        nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, nvim_set_lines_left,
-        nvim_set_msg_scroll, nvim_ui_cursor_shape_wrapper, u_save, vim_strchr, xfree, xmemdupz,
-        xstrdup,
+        nvim_excmds_toggle_b_p_ai, nvim_set_ex_no_reprint, nvim_set_msg_scroll,
+        nvim_ui_cursor_shape_wrapper, u_save, vim_strchr, xfree, xmemdupz, xstrdup,
     };
 
     let mut did_undo = false;
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn rs_ex_append(eap: *mut crate::ExArgHandle) {
             theline = nvim_excmds_call_getline(eap, c, indent);
             State = save_state;
         }
-        nvim_set_lines_left(Rows - 1);
+        lines_left = Rows - 1;
         if theline.is_null() {
             break;
         }

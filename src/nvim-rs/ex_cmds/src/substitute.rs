@@ -1139,7 +1139,7 @@ extern "C" {
     fn nvim_set_RedrawingDisabled(val: c_int);
     fn nvim_inc_no_u_sync();
     fn nvim_dec_no_u_sync();
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn nvim_set_highlight_match(val: c_int);
     fn nvim_set_search_match_lines(val: c_int);
     fn nvim_set_search_match_endcol(val: c_int);
@@ -2336,7 +2336,7 @@ unsafe fn handle_do_ask(
             nvim_set_highlight_match(0);
             xfree(prompt_str as *mut std::ffi::c_void);
 
-            nvim_set_msg_didout(0);
+            msg_didout = false;
             nvim_al_gotocmdline(1);
             p_lz = save_p_lz;
             nvim_set_RedrawingDisabled(temp);

@@ -9,23 +9,19 @@ use std::ffi::c_int;
 extern "C" {
     static mut msg_silent: c_int;
     /// Get `msg_didany` flag
-    fn nvim_get_msg_didany() -> c_int;
+    static mut msg_didany: bool;
     /// Set `msg_didany` flag
-    fn nvim_set_msg_didany(val: c_int);
     /// Get `msg_didout` flag
-    fn nvim_get_msg_didout() -> c_int;
+    static mut msg_didout: bool;
     /// Set `msg_didout` flag
-    fn nvim_set_msg_didout(val: c_int);
     /// Get `msg_nowait` flag
-    fn nvim_get_msg_nowait() -> c_int;
+    static mut msg_nowait: bool;
     /// Set `msg_nowait` flag
-    fn nvim_set_msg_nowait(val: c_int);
     /// Get `msg_no_more` flag
-    fn nvim_get_msg_no_more() -> c_int;
+    static mut msg_no_more: bool;
     /// Get `lines_left` counter
-    fn nvim_get_lines_left() -> c_int;
+    static mut lines_left: c_int;
     /// Set `lines_left` counter
-    fn nvim_set_lines_left(val: c_int);
     /// Get `need_wait_return` flag
     static mut need_wait_return: bool;
     /// Set `need_wait_return` flag
@@ -34,13 +30,11 @@ extern "C" {
     /// Get `msg_scrolled_ign` flag
     static mut msg_scrolled_ign: bool;
     /// Get `emsg_on_display` flag
-    fn nvim_get_emsg_on_display() -> c_int;
+    static mut emsg_on_display: bool;
     /// Set `emsg_on_display` flag
-    fn nvim_set_emsg_on_display(val: c_int);
     /// Get `need_fileinfo` flag
-    fn nvim_get_need_fileinfo() -> c_int;
+    static mut need_fileinfo: bool;
     /// Set `need_fileinfo` flag
-    fn nvim_set_need_fileinfo(val: c_int);
     /// Get `p_ch` (cmdheight) option
     fn nvim_get_p_ch() -> i64;
     /// Check if UI has messages capability
@@ -53,7 +47,7 @@ extern "C" {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_didany() -> c_int {
-    nvim_get_msg_didany()
+    c_int::from(msg_didany)
 }
 
 /// Set the "message was output" flag.
@@ -62,7 +56,7 @@ pub unsafe extern "C" fn rs_msg_didany() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_didany(val: c_int) {
-    nvim_set_msg_didany(val);
+    msg_didany = (val) != 0;
 }
 
 /// Check if something was written to the current line.
@@ -71,7 +65,7 @@ pub unsafe extern "C" fn rs_set_msg_didany(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_didout() -> c_int {
-    nvim_get_msg_didout()
+    c_int::from(msg_didout)
 }
 
 /// Set the "wrote to current line" flag.
@@ -80,7 +74,7 @@ pub unsafe extern "C" fn rs_msg_didout() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_didout(val: c_int) {
-    nvim_set_msg_didout(val);
+    msg_didout = (val) != 0;
 }
 
 /// Check if message should not wait.
@@ -89,7 +83,7 @@ pub unsafe extern "C" fn rs_set_msg_didout(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_nowait() -> c_int {
-    nvim_get_msg_nowait()
+    c_int::from(msg_nowait)
 }
 
 /// Set the "no wait" flag.
@@ -98,7 +92,7 @@ pub unsafe extern "C" fn rs_msg_nowait() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_nowait(val: c_int) {
-    nvim_set_msg_nowait(val);
+    msg_nowait = (val) != 0;
 }
 
 /// Get the lines left counter.
@@ -107,7 +101,7 @@ pub unsafe extern "C" fn rs_set_msg_nowait(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lines_left() -> c_int {
-    nvim_get_lines_left()
+    lines_left
 }
 
 /// Set the lines left counter.
@@ -116,7 +110,7 @@ pub unsafe extern "C" fn rs_lines_left() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_lines_left(val: c_int) {
-    nvim_set_lines_left(val);
+    lines_left = val;
 }
 
 /// Check if wait_return is needed.
@@ -143,7 +137,7 @@ pub unsafe extern "C" fn rs_set_need_wait_return(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_on_display() -> c_int {
-    nvim_get_emsg_on_display()
+    c_int::from(emsg_on_display)
 }
 
 /// Set the emsg_on_display flag.
@@ -152,7 +146,7 @@ pub unsafe extern "C" fn rs_emsg_on_display() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_emsg_on_display(val: c_int) {
-    nvim_set_emsg_on_display(val);
+    emsg_on_display = (val) != 0;
 }
 
 /// Check if file info is needed.
@@ -161,7 +155,7 @@ pub unsafe extern "C" fn rs_set_emsg_on_display(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_need_fileinfo() -> c_int {
-    nvim_get_need_fileinfo()
+    c_int::from(need_fileinfo)
 }
 
 /// Set the need_fileinfo flag.
@@ -170,7 +164,7 @@ pub unsafe extern "C" fn rs_need_fileinfo() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_need_fileinfo(val: c_int) {
-    nvim_set_need_fileinfo(val);
+    need_fileinfo = (val) != 0;
 }
 
 /// Check if message display has overflowed (scrolled).
@@ -217,10 +211,10 @@ pub unsafe extern "C" fn rs_msg_check_wait_return() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_need_more() -> c_int {
-    let lines_left = nvim_get_lines_left();
-    let msg_no_more = nvim_get_msg_no_more() != 0;
+    let ll = lines_left;
+    let no_more = msg_no_more;
 
-    c_int::from(lines_left == 0 && !msg_no_more)
+    c_int::from(ll == 0 && !no_more)
 }
 
 /// Decrement lines_left counter and return true if more prompt needed.
@@ -229,9 +223,9 @@ pub unsafe extern "C" fn rs_msg_need_more() -> c_int {
 /// Calls C accessor and mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_dec_lines_left() -> c_int {
-    let lines_left = nvim_get_lines_left();
-    if lines_left > 0 {
-        nvim_set_lines_left(lines_left - 1);
+    let ll = lines_left;
+    if ll > 0 {
+        lines_left = ll - 1;
     }
     rs_msg_need_more()
 }
@@ -370,7 +364,7 @@ pub unsafe extern "C" fn rs_clear_wait_return() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_reset_wait_return_state() {
     need_wait_return = false;
-    nvim_set_msg_didout(0);
+    msg_didout = false;
 }
 
 // ============================================================================
@@ -448,7 +442,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
             need_wait_return = true;
         }
     }
-    nvim_set_msg_didany(1); // remember that something was outputted
+    msg_didany = true; // remember that something was outputted
 
     if msg_use_printf() != 0 {
         let saved_msg_col = nvim_get_msg_col();
@@ -463,7 +457,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
         nvim_msg_puts_display(str_, c_int::try_from(len).unwrap_or(c_int::MAX), hl_id);
     }
 
-    nvim_set_need_fileinfo(0);
+    need_fileinfo = false;
 }
 
 #[cfg(test)]

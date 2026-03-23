@@ -55,12 +55,11 @@ extern "C" {
     fn msg_cursor_goto(row: c_int, col: c_int);
 
     // State accessors
-    fn nvim_get_emsg_on_display() -> c_int;
-    fn nvim_set_emsg_on_display(val: c_int);
+    static mut emsg_on_display: bool;
     fn nvim_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
     static mut did_wait_return: bool;
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_silent: c_int;
     fn nvim_ui_has_messages() -> c_int;
     // nvim_ui_flush is defined in change_ffi.c
     fn nvim_ui_flush();
@@ -241,15 +240,15 @@ pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_i
 #[export_name = "msg_check_for_delay"]
 pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
     let check = check_msg_scroll != 0;
-    if (nvim_get_emsg_on_display() != 0 || (check && nvim_get_msg_scroll() != 0))
+    if (c_int::from(emsg_on_display) != 0 || (check && nvim_get_msg_scroll() != 0))
         && !did_wait_return
-        && nvim_get_emsg_silent() == 0
+        && emsg_silent == 0
         && !nvim_get_in_assert_fails()
         && nvim_ui_has_messages() == 0
     {
         nvim_ui_flush();
         nvim_os_delay(1006, true);
-        nvim_set_emsg_on_display(0);
+        emsg_on_display = false;
         if check {
             nvim_set_msg_scroll(0);
         }

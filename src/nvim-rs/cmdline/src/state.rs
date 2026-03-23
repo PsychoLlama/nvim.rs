@@ -1079,8 +1079,7 @@ unsafe extern "C" {
     fn nvim_get_wild_menu_showing() -> c_int;
     fn nvim_get_cmdline_was_last_drawn() -> c_int;
     fn nvim_syn_get_display_tick() -> c_int;
-    fn nvim_get_emsg_silent() -> c_int;
-    fn nvim_set_emsg_silent(val: c_int);
+    static mut emsg_silent: c_int;
 
     // C functions
     fn do_digraph(c: c_int) -> c_int;
@@ -1561,11 +1560,11 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             || c_check == CTRL_Z
         {
             if c_check == K_WILD {
-                nvim_set_emsg_silent(nvim_get_emsg_silent() + 1); // silence the bell
+                emsg_silent += 1; // silence the bell
             }
             let res = rs_command_line_wildchar_complete(s);
             if c_check == K_WILD {
-                nvim_set_emsg_silent(nvim_get_emsg_silent() - 1);
+                emsg_silent -= 1;
             }
             if res == CMDLINE_CHANGED {
                 return nvim_command_line_changed(s);

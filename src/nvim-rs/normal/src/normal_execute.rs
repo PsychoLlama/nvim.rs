@@ -92,8 +92,8 @@ extern "C" {
     fn nvim_get_km_startsel() -> bool;
     fn nvim_get_curwin_w_p_rl() -> bool;
     fn nvim_get_curswant() -> c_int;
-    fn nvim_set_msg_nowait(val: c_int);
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_nowait: bool;
+    static mut msg_didout: bool;
     fn nvim_set_msg_col(val: c_int);
     fn nvim_set_did_cursorhold(val: bool);
 
@@ -197,7 +197,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         } else {
             nvim_ns_set_c(s, c_int::from(b'c'));
         }
-        nvim_set_msg_nowait(1);
+        msg_nowait = true;
         nvim_ns_set_old_mapped_len(s, 0);
     }
 
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         }
 
         if nvim_cap_get_cmdchar(ca) != K_IGNORE {
-            nvim_set_msg_didout(0);
+            msg_didout = false;
             nvim_set_msg_col(0);
         }
 

@@ -96,9 +96,8 @@ extern "C" {
     #[link_name = "api_free_object"]
     fn rs_api_free_object(obj: nvim_api::Object);
     /// Get emsg_off value (from message.c).
-    fn nvim_get_emsg_off() -> c_int;
+    static mut emsg_off: c_int;
     /// Set emsg_off value (from message.c).
-    fn nvim_set_emsg_off(val: c_int);
     /// Save curwin/curbuf and set to wp/wp->w_buffer. Returns old curwin.
     fn nvim_fold_save_curwin(wp: WinHandle) -> WinHandle;
     /// Restore curwin/curbuf from saved_win.
@@ -702,8 +701,8 @@ unsafe fn eval_foldtext_full_impl(
     nvim_fold_save_sctx_foldtext(wp.as_ptr(), saved_sctx.as_mut_ptr().cast::<c_void>());
 
     // emsg_off++: suppress error display during foldtext eval.
-    let old_emsg_off = nvim_get_emsg_off();
-    nvim_set_emsg_off(old_emsg_off + 1);
+    let old_emsg_off = emsg_off;
+    emsg_off = old_emsg_off + 1;
 
     // Call rs_eval_foldtext directly (Rust-to-Rust via extern "C").
     // Object = {c_int obj_type (4) + pad(4) + ObjectData (24)} = 32 bytes.
@@ -738,7 +737,7 @@ unsafe fn eval_foldtext_full_impl(
     rs_api_free_object(obj);
 
     // emsg_off--
-    nvim_set_emsg_off(old_emsg_off);
+    emsg_off = old_emsg_off;
 
     if ((*out_text).is_null() && *out_has_virt_text == 0) || did_emsg != 0 {
         *out_had_error = 1;

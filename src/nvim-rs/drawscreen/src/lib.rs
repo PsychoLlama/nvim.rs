@@ -2574,10 +2574,9 @@ extern "C" {
     fn nvim_set_clear_cmdline(val: bool);
     fn nvim_get_cmdline_row() -> c_int;
     fn nvim_drawscreen_msg_clr_cmdline();
-    fn nvim_get_msg_no_more() -> c_int;
+    static mut msg_no_more: bool;
     fn nvim_set_msg_no_more(val: c_int);
-    fn nvim_get_lines_left() -> c_int;
-    fn nvim_set_lines_left(val: c_int);
+    static mut lines_left: c_int;
     // nvim_drawscreen_edit_submode_*: inlined (Phase 38, use extern statics directly)
     #[link_name = "edit_submode"]
     static mut g_edit_submode: *mut c_char;
@@ -2595,8 +2594,7 @@ extern "C" {
     fn nvim_drawscreen_namebuff_ptr() -> *const c_char;
     fn nvim_get_mode_displayed() -> bool;
     fn nvim_set_mode_displayed(val: bool);
-    fn nvim_get_msg_didout() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn redraw_ruler();
     fn nvim_drawscreen_msg_grid_validate();
     /// edit_submode_extra global (from globals.h).
@@ -2765,8 +2763,8 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         let hl_id = HLF_CM;
 
         nvim_set_msg_no_more(1);
-        let save_lines_left = nvim_get_lines_left();
-        nvim_set_lines_left(0);
+        let save_lines_left = lines_left;
+        lines_left = 0;
 
         if do_mode {
             showmode_display_mode(hl_id, &mut length);
@@ -2782,11 +2780,11 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         if need_clear || nvim_get_clear_cmdline() || redraw_mode != 0 {
             msg_clr_eos();
         }
-        nvim_set_msg_didout(0);
+        msg_didout = false;
         length = msg_col;
         msg_col = 0;
         nvim_set_msg_no_more(0);
-        nvim_set_lines_left(save_lines_left);
+        lines_left = save_lines_left;
         need_wait_return = nwr_save;
     } else if nvim_get_clear_cmdline() && msg_silent == 0 {
         nvim_drawscreen_msg_clr_cmdline();

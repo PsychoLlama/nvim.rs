@@ -388,7 +388,7 @@ extern "C" {
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_p_ch() -> i64;
     fn nvim_set_cmdline_row(val: c_int);
-    fn nvim_set_lines_left(val: c_int);
+    static mut lines_left: c_int;
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_set_msg_row(val: c_int);
     fn nvim_set_msg_col(val: c_int);
@@ -466,7 +466,7 @@ pub unsafe extern "C" fn compute_cmdrow_rs() {
     };
 
     nvim_set_cmdline_row(new_row);
-    nvim_set_lines_left(new_row);
+    lines_left = new_row;
 }
 
 /// Direct C replacement for cursorcmd().

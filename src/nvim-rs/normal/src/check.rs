@@ -98,15 +98,13 @@ extern "C" {
     static p_smd: c_int;
     fn nvim_get_clear_cmdline() -> bool;
     fn nvim_get_redraw_cmdline() -> bool;
-    fn nvim_get_msg_didout() -> c_int; // defined in message.c
-    fn nvim_get_msg_didany() -> c_int; // defined in message.c
-    fn nvim_set_msg_didany(val: c_int); // defined in message.c
+    static mut msg_didout: bool;
+    static mut msg_didany: bool;
     fn nvim_get_msg_scroll_val() -> bool;
     fn nvim_set_msg_scroll_val(val: bool);
     fn nvim_get_msg_nowait_val() -> bool;
-    fn nvim_get_emsg_on_display() -> c_int; // defined in message.c
-    fn nvim_set_emsg_on_display(val: c_int); // defined in message.c
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_on_display: bool;
+    static mut emsg_silent: c_int;
     fn nvim_get_in_assert_fails() -> bool;
     fn nvim_get_did_wait_return_val() -> bool;
     static mut did_emsg: c_int; // defined in message.c
@@ -117,8 +115,7 @@ extern "C" {
 
     // Redraw/display globals
     fn nvim_get_keep_msg_not_null() -> bool;
-    fn nvim_get_need_fileinfo() -> c_int; // defined in message.c
-    fn nvim_set_need_fileinfo(val: c_int); // defined in message.c
+    static mut need_fileinfo: bool;
 
     // Function wrappers
     fn discard_current_exception();
@@ -325,14 +322,14 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     }
 
     // Show fileinfo after redraw.
-    if nvim_get_need_fileinfo() != 0 && !nvim_shortmess_fileinfo() {
+    if c_int::from(need_fileinfo) != 0 && !nvim_shortmess_fileinfo() {
         nvim_fileinfo_call();
-        nvim_set_need_fileinfo(0);
+        need_fileinfo = false;
     }
 
-    nvim_set_emsg_on_display(0); // can delete error message now
+    emsg_on_display = false; // can delete error message now
     did_emsg = 0;
-    nvim_set_msg_didany(0); // reset lines_left in msg_start()
+    msg_didany = false; // reset lines_left in msg_start()
     nvim_may_clear_sb_text_call(); // clear scroll-back text on next msg
 
     nvim_setcursor_wrapper();
@@ -361,8 +358,8 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             // command-line must be cleared or redrawn
             && (nvim_get_clear_cmdline() || nvim_get_redraw_cmdline())
             // some message was printed or scrolled
-            && (nvim_get_msg_didout() != 0
-                || (nvim_get_msg_didany() != 0 && nvim_get_msg_scroll_val()))
+            && (c_int::from(msg_didout) != 0
+                || (c_int::from(msg_didany) != 0 && nvim_get_msg_scroll_val()))
             // it is fine to remove the current message
             && !nvim_get_msg_nowait_val()
             // the command was the result of direct user input and not a mapping
@@ -371,14 +368,14 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             || (restart_edit != 0
                 && !VIsual_active
                 && nvim_get_msg_scroll_val()
-                && nvim_get_emsg_on_display() != 0)
+                && c_int::from(emsg_on_display) != 0)
     )
     // no register was used
     && nvim_oap_get_regname_ptr(oa) == 0
     && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
     && nvim_stuff_empty()
     && nvim_typebuf_typed()
-    && nvim_get_emsg_silent() == 0
+    && emsg_silent == 0
     && !nvim_get_in_assert_fails()
     && !nvim_get_did_wait_return_val()
     && nvim_oap_get_op_type_ptr(oa) == OP_NOP
@@ -405,7 +402,8 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     nvim_setcursor_wrapper();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
     nvim_ui_flush_wrapper();
-    if nvim_ui_has_messages() == 0 && (nvim_get_msg_scroll_val() || nvim_get_emsg_on_display() != 0)
+    if nvim_ui_has_messages() == 0
+        && (nvim_get_msg_scroll_val() || c_int::from(emsg_on_display) != 0)
     {
         nvim_os_delay_wrapper(1003, true); // wait at least one second
     }
@@ -415,7 +413,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     State = save_state;
 
     nvim_set_msg_scroll_val(false);
-    nvim_set_emsg_on_display(0);
+    emsg_on_display = false;
 }
 
 /// Rust implementation of normal_prepare.

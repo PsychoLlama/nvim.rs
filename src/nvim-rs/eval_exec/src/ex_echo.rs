@@ -45,7 +45,7 @@ extern "C" {
     fn nvim_aborting() -> bool;
     fn did_emsg_get() -> c_int;
     fn called_emsg_get() -> c_int;
-    fn nvim_get_msg_didout() -> c_int;
+    static mut msg_didout: bool;
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
     static mut did_emsg: c_int;
@@ -244,7 +244,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
                 // Call msg_start() after eval1(), evaluating the expression
                 // may cause a message to appear.
                 if cmdidx == cmd_echo {
-                    if nvim_get_msg_didout() == 0 {
+                    if c_int::from(msg_didout) == 0 {
                         // Mark the saved text as finishing the line, so that what
                         // follows is displayed on a new line when scrolling back
                         // at the more prompt.

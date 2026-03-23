@@ -90,7 +90,7 @@ extern "C" {
     fn nvim_match_win_get_buffer(wp: *mut WinHandle) -> *mut BufHandle;
 
     // Existing global accessors
-    fn nvim_get_called_emsg() -> c_int;
+    static mut called_emsg: c_int;
     fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
     fn nvim_win_hl_attr(wp: *mut WinHandle, hlf: c_int) -> c_int;
     fn nvim_profile_passed_limit(tm: *mut u8) -> c_int;
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn rs_next_search_hl(
     mincol: i32,
     cur: *mut MatchItemHandle,
 ) {
-    let called_emsg_before = nvim_get_called_emsg();
+    let called_emsg_before = called_emsg;
 
     // For :{range}s/pat only highlight inside the range
     if (lnum < nvim_match_get_search_first_line() || lnum > nvim_match_get_search_last_line())
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn rs_next_search_hl(
                 nvim_match_item_sync_regprog(cur, shl);
             }
 
-            if nvim_get_called_emsg() > called_emsg_before || unsafe { got_int } || timed_out != 0 {
+            if called_emsg > called_emsg_before || unsafe { got_int } || timed_out != 0 {
                 // Error while handling regexp: stop using this regexp.
                 if ptr::eq(shl, search_hl) {
                     // don't free regprog in the match list, it's a copy

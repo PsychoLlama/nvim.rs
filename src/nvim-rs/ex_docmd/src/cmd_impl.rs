@@ -860,7 +860,7 @@ extern "C" {
     fn nvim_msglist_get_msg(m: *mut c_void) -> *mut c_char;
     fn nvim_msglist_is_multiline(m: *mut c_void) -> c_int;
     fn nvim_msglist_free_item(m: *mut c_void);
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_silent: c_int;
     fn nvim_set_suppress_errthrow(val: bool);
     fn nvim_set_force_abort(val: bool);
     fn nvim_docmd_fmt_exception_not_caught(value: *const c_char) -> *mut c_char;
@@ -947,8 +947,6 @@ extern "C" {
     fn nvim_docmd_set_eventignore_str(s: *mut c_char);
     static mut msg_silent: c_int;
     fn nvim_inc_msg_silent();
-    fn nvim_inc_emsg_silent();
-    fn nvim_set_emsg_silent(val: c_int);
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_set_p_verbose(val: c_int);
     fn nvim_get_p_ei() -> *const c_char;
@@ -978,8 +976,7 @@ extern "C" {
     fn nvim_set_msg_scroll(val: c_int);
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
-    fn nvim_get_msg_didout() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn nvim_get_current_State() -> c_int;
     fn nvim_set_current_State(val: c_int);
     fn nvim_get_finish_op() -> c_int;
@@ -1024,7 +1021,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     nvim_docmd_sst_set_msg_scroll(sst, nvim_get_msg_scroll());
     nvim_docmd_sst_set_restart_edit(sst, nvim_get_restart_edit());
-    nvim_docmd_sst_set_msg_didout(sst, nvim_get_msg_didout());
+    nvim_docmd_sst_set_msg_didout(sst, c_int::from(msg_didout));
     nvim_docmd_sst_set_State(sst, nvim_get_current_State());
     nvim_docmd_sst_set_finish_op(sst, nvim_get_finish_op());
     nvim_docmd_sst_set_opcount(sst, nvim_get_opcount());
@@ -1059,7 +1056,7 @@ pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
     nvim_set_pending_end_reg_executing(nvim_docmd_sst_get_pending_end_reg_executing(sst));
 
     // Don't reset msg_didout now; OR in the saved value.
-    nvim_set_msg_didout(nvim_get_msg_didout() | nvim_docmd_sst_get_msg_didout(sst));
+    msg_didout = (c_int::from(msg_didout) | nvim_docmd_sst_get_msg_didout(sst)) != 0;
 
     // Restore the state (needed when called from a function executed for
     // 'indentexpr'). Update the mouse and cursor.
@@ -1462,7 +1459,7 @@ pub unsafe extern "C" fn rs_handle_did_throw_impl() {
     nvim_discard_current_exception(); // uses IObuff if 'verbose'
 
     // If "silent!" is not active, mark as fatal.
-    if nvim_get_emsg_silent() == 0 {
+    if emsg_silent == 0 {
         nvim_set_suppress_errthrow(true);
         nvim_set_force_abort(true);
     }
@@ -1569,7 +1566,7 @@ extern "C" {
     fn nvim_set_cmdline_row(val: c_int);
 
     // lines_left / Rows
-    fn nvim_set_lines_left(val: c_int);
+    static mut lines_left: c_int;
     fn nvim_ses_get_Rows() -> c_int;
 
     // curbuf->b_ml.ml_flags & ML_EMPTY
@@ -1742,7 +1739,7 @@ pub unsafe extern "C" fn do_exmode() {
         let prev_line = nvim_get_curwin_cursor_lnum();
         nvim_set_cmdline_row(nvim_get_msg_row());
         nvim_docmd_do_cmdline_getexline_noflags();
-        nvim_set_lines_left(nvim_ses_get_Rows() - 1);
+        lines_left = nvim_ses_get_Rows() - 1;
 
         if (prev_line != nvim_get_curwin_cursor_lnum()
             || changedtick != nvim_docmd_curbuf_changedtick())
@@ -1919,7 +1916,7 @@ pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
 
     // :silent!
     if (flags & CMOD_ERRSILENT) != 0 {
-        nvim_inc_emsg_silent();
+        emsg_silent += 1;
         nvim_cmod_inc_did_esilent(cmod);
     }
 
@@ -1972,12 +1969,12 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
             msg_silent = save_msg_silent - 1;
         }
         let did_esilent = nvim_cmod_get_did_esilent(cmod);
-        let new_emsg_silent = nvim_get_emsg_silent() - did_esilent;
-        nvim_set_emsg_silent(if new_emsg_silent < 0 {
+        let new_emsg_silent = emsg_silent - did_esilent;
+        emsg_silent = if new_emsg_silent < 0 {
             0
         } else {
             new_emsg_silent
-        });
+        };
         // Restore msg_scroll (set by file I/O commands even with no message).
         nvim_docmd_restore_msg_scroll(cmod);
         // Restore msg_col if redirecting.

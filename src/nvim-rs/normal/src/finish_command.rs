@@ -51,7 +51,7 @@ extern "C" {
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
     static mut VIsual_active: bool;
-    fn nvim_set_msg_nowait(val: c_int);
+    static mut msg_nowait: bool;
     static mut restart_edit: c_int;
     fn nvim_get_restart_VIsual_select() -> c_int;
     fn nvim_set_restart_VIsual_select(val: c_int);
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     }
     // normal_end:
 
-    nvim_set_msg_nowait(0);
+    msg_nowait = false;
 
     if nvim_get_finish_op() != 0 || did_visual_op {
         nvim_set_reg_var_default();

@@ -24,8 +24,8 @@ extern "C" {
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
     fn set_keep_msg(s: *const c_char, hl_id: c_int);
     fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
-    fn nvim_set_msg_nowait(val: c_int);
+    static mut msg_didout: bool;
+    static mut msg_nowait: bool;
 }
 
 /// Highlight face for warning messages (HLF_W = 26)
@@ -72,8 +72,8 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     if msg(message, hl_id) && nvim_get_msg_scrolled() == 0 {
         set_keep_msg(message, hl_id);
     }
-    nvim_set_msg_didout(0); // Overwrite this message.
-    nvim_set_msg_nowait(1); // Don't wait for this message.
+    msg_didout = false; // Overwrite this message.
+    msg_nowait = true; // Don't wait for this message.
     nvim_set_msg_col(0);
 
     if no_wait_return > 0 {

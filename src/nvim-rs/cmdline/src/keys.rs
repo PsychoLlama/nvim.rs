@@ -663,7 +663,7 @@ unsafe extern "C" {
     fn nvim_set_no_mapping(val: c_int);
     fn nvim_get_allow_keys() -> c_int;
     fn nvim_set_allow_keys(val: c_int);
-    fn nvim_set_emsg_on_display(val: c_int);
+    static mut emsg_on_display: bool;
     static mut exmode_active: bool;
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
@@ -763,7 +763,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
             got_int = false;
         } // don't abandon the command line
         did_emsg = 0;
-        nvim_set_emsg_on_display(0);
+        emsg_on_display = false;
         crate::screen::redrawcmd_rs();
         return CMDLINE_NOT_CHANGED;
     }

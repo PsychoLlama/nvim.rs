@@ -317,8 +317,7 @@ extern "C" {
     fn nvim_ascii_iswhite_fn(c: c_int) -> c_int;
     fn nvim_cmdmod_get_did_esilent() -> c_int;
     fn nvim_cmdmod_set_did_esilent(val: c_int);
-    fn nvim_get_emsg_silent() -> c_int;
-    fn nvim_set_emsg_silent(val: c_int);
+    static mut emsg_silent: c_int;
     fn do_ucmd(eap: ExArgHandle, preview: bool) -> c_int;
 
     // execute_cmd helpers
@@ -648,8 +647,8 @@ pub unsafe extern "C" fn rs_execute_cmd0(
     // ":silent! try" was used, it should only apply to :try itself.
     let cmdidx = nvim_eap_get_cmdidx(eap);
     if cmdidx == crate::commands::CMD_TRY && nvim_cmdmod_get_did_esilent() > 0 {
-        let new_val = nvim_get_emsg_silent() - nvim_cmdmod_get_did_esilent();
-        nvim_set_emsg_silent(new_val.max(0));
+        let new_val = emsg_silent - nvim_cmdmod_get_did_esilent();
+        emsg_silent = new_val.max(0);
         nvim_cmdmod_set_did_esilent(0);
     }
 

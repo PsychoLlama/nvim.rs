@@ -315,31 +315,12 @@ int nvim_mb_trunc_len(const char *s, int width)
   return len;
 }
 
-// C accessors for message output state (used by Rust)
-int nvim_get_msg_didany(void) { return msg_didany ? 1 : 0; }
-void nvim_set_msg_didany(int val) { msg_didany = (val != 0); }
-int nvim_get_msg_didout(void) { return msg_didout ? 1 : 0; }
-void nvim_set_msg_didout(int val) { msg_didout = (val != 0); }
-int nvim_get_msg_nowait(void) { return msg_nowait ? 1 : 0; }
-void nvim_set_msg_nowait(int val) { msg_nowait = (val != 0); }
-int nvim_get_msg_no_more(void) { return msg_no_more ? 1 : 0; }
-int nvim_get_lines_left(void) { return lines_left; }
-void nvim_set_lines_left(int val) { lines_left = val; }
-
-// C accessors for msg_scrolled and msg_did_scroll (used by Rust)
+// C accessors for msg_scrolled (used by Rust)
 void nvim_set_msg_scrolled(int val) { msg_scrolled = val; }
-int nvim_get_emsg_on_display(void) { return emsg_on_display ? 1 : 0; }
-void nvim_set_emsg_on_display(int val) { emsg_on_display = (val != 0); }
 
 // C accessors for error message state (used by Rust)
-int nvim_get_emsg_off(void) { return emsg_off; }
-void nvim_set_emsg_off(int val) { emsg_off = val; }
-int nvim_get_emsg_silent(void) { return emsg_silent; }
-void nvim_set_emsg_silent(int val) { emsg_silent = val; }
 int nvim_get_emsg_severe(void) { return emsg_severe ? 1 : 0; }
 void nvim_set_emsg_severe(int val) { emsg_severe = (val != 0); }
-int nvim_get_called_emsg(void) { return called_emsg; }
-void nvim_set_called_emsg(int val) { called_emsg = val; }
 
 // Forward declarations for static functions used by Phase 4/5 accessors below
 static int emsg_not_now(void);
@@ -371,15 +352,10 @@ void nvim_redir_write(const char *str, ptrdiff_t maxlen) { redir_write(str, maxl
 char *nvim_get_emsg_source(void) { return get_emsg_source(); }
 char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
 
-int nvim_get_need_fileinfo(void) { return need_fileinfo ? 1 : 0; }
-void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
-
 // C accessors for did_emsg_syntax (used by Rust)
 
 // C accessors for no_wait_return (used by Rust)
 
-// C accessors for msg_silent (used by Rust apply_cmdmod_impl / undo_cmdmod_impl)
-void nvim_inc_emsg_silent(void) { emsg_silent++; }
 int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
 // C accessors for msg_scroll and msg_hist_off (used by Rust)

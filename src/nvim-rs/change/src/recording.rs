@@ -68,7 +68,7 @@ extern "C" {
     fn nvim_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
     static mut need_wait_return: bool;
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;
     fn nvim_get_msg_row() -> c_int;
     fn nvim_get_msg_col() -> c_int;
@@ -233,7 +233,7 @@ fn changed_impl(buf: BufHandle) {
                 // message.  Since we could be anywhere, call wait_return() now,
                 // and don't let the emsg() set msg_scroll.
                 if need_wait_return
-                    && nvim_get_emsg_silent() == 0
+                    && emsg_silent == 0
                     && !nvim_in_assert_fails()
                     && nvim_ui_has_messages() == 0
                 {

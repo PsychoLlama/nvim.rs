@@ -945,7 +945,7 @@ extern "C" {
 
     // Global variable accessors
     fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_didout(val: c_int);
+    static mut msg_didout: bool;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
@@ -1064,7 +1064,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
     };
 
     if nvim_get_msg_col() == 0 {
-        nvim_set_msg_didout(0); // overwrite previous message
+        msg_didout = false; // overwrite previous message
     }
     nvim_msg_ext_set_kind(c"confirm".as_ptr());
     msg_start();

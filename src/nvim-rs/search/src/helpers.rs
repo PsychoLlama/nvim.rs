@@ -848,7 +848,7 @@ const BACKWARD: c_int = -1;
 const FAIL: c_int = 0;
 
 extern "C" {
-    fn nvim_get_called_emsg() -> c_int;
+    static mut called_emsg: c_int;
     fn nvim_get_last_spat_pat(out_len: *mut usize) -> *const c_char;
     fn nvim_regmmatch_alloc() -> *mut c_void;
     fn nvim_regmmatch_free(regmatch: *mut c_void);
@@ -913,7 +913,7 @@ pub unsafe extern "C" fn rs_is_zero_width(
         return -1;
     }
 
-    let called_emsg_before = nvim_get_called_emsg();
+    let called_emsg_before = called_emsg;
 
     // Init startcol correctly
     nvim_regmatch_set_startcol(regmatch, -1);
@@ -972,7 +972,7 @@ pub unsafe extern "C" fn rs_is_zero_width(
             }
         }
 
-        if nvim_get_called_emsg() == called_emsg_before {
+        if called_emsg == called_emsg_before {
             result = c_int::from(
                 nmatched != 0
                     && nvim_regmatch_get_startlnum(regmatch) == nvim_regmatch_get_endlnum(regmatch)

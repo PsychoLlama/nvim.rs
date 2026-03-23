@@ -195,7 +195,7 @@ extern "C" {
     /// Set typeahead_char value
     fn nvim_set_typeahead_char(val: c_int);
     /// Get emsg_silent
-    fn nvim_get_emsg_silent() -> c_int;
+    static mut emsg_silent: c_int;
     /// Call flush_buffers(flush_type)
     fn nvim_call_flush_buffers(flush_type: c_int);
     /// Call vim_beep(flag)
@@ -347,7 +347,7 @@ pub unsafe extern "C" fn rs_typeahead_noflush(c: c_int) {
 /// Calls C functions.
 #[export_name = "beep_flush"]
 pub unsafe extern "C" fn rs_beep_flush() {
-    if nvim_get_emsg_silent() == 0 {
+    if emsg_silent == 0 {
         nvim_call_flush_buffers(FLUSH_MINIMAL);
         nvim_call_vim_beep(K_OPT_BO_FLAG_ERROR);
     }
