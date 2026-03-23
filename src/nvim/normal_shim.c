@@ -2500,3 +2500,39 @@ int nvim_ins_copychar(linenr_T lnum)
   }
   return c;
 }
+
+extern void rs_start_selection(void);
+int nvim_ins_start_select(int c)
+{
+  if (!km_startsel) {
+    return 0;
+  }
+  switch (c) {
+  case K_KHOME:
+  case K_KEND:
+  case K_PAGEUP:
+  case K_KPAGEUP:
+  case K_PAGEDOWN:
+  case K_KPAGEDOWN:
+    if (!(mod_mask & MOD_MASK_SHIFT)) {
+      break;
+    }
+    FALLTHROUGH;
+  case K_S_LEFT:
+  case K_S_RIGHT:
+  case K_S_UP:
+  case K_S_DOWN:
+  case K_S_END:
+  case K_S_HOME:
+    rs_start_selection();
+    stuffcharReadbuff(Ctrl_O);
+    if (mod_mask) {
+      const char buf[] = { (char)K_SPECIAL, (char)KS_MODIFIER,
+                           (char)(uint8_t)mod_mask, NUL };
+      stuffReadbuffLen(buf, 3);
+    }
+    stuffcharReadbuff(c);
+    return 1;
+  }
+  return 0;
+}

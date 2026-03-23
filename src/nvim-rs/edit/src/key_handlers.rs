@@ -92,7 +92,7 @@ extern "C" {
     fn nvim_ins_ctrl_o();
     fn nvim_ins_ctrl_hat();
     fn nvim_edit_ins_ctrl_(revins_on: c_int);
-    fn nvim_edit_ins_start_select(c: c_int) -> c_int;
+    fn nvim_ins_start_select(c: c_int) -> c_int;
     fn nvim_ins_ctrl_g_get_key() -> c_int;
     fn nvim_edit_ins_shift(c: c_int, lastc: c_int);
     fn nvim_edit_ins_del();
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_() {
 #[must_use]
 #[unsafe(export_name = "ins_start_select")]
 pub unsafe extern "C" fn rs_ins_start_select(c: c_int) -> c_int {
-    nvim_edit_ins_start_select(c)
+    nvim_ins_start_select(c)
 }
 
 // ============================================================================

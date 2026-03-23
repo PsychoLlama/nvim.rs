@@ -749,41 +749,6 @@ void nvim_edit_ins_ctrl_(int new_revins_on)
   showmode();
 }
 
-/// ins_start_select() wrapper — handles key constant switch and stuffing.
-int nvim_edit_ins_start_select(int c)
-{
-  if (!km_startsel) {
-    return 0;
-  }
-  switch (c) {
-  case K_KHOME:
-  case K_KEND:
-  case K_PAGEUP:
-  case K_KPAGEUP:
-  case K_PAGEDOWN:
-  case K_KPAGEDOWN:
-    if (!(mod_mask & MOD_MASK_SHIFT)) {
-      break;
-    }
-    FALLTHROUGH;
-  case K_S_LEFT:
-  case K_S_RIGHT:
-  case K_S_UP:
-  case K_S_DOWN:
-  case K_S_END:
-  case K_S_HOME:
-    rs_start_selection();
-    stuffcharReadbuff(Ctrl_O);
-    if (mod_mask) {
-      const char buf[] = { (char)K_SPECIAL, (char)KS_MODIFIER,
-                           (char)(uint8_t)mod_mask, NUL };
-      stuffReadbuffLen(buf, 3);
-    }
-    stuffcharReadbuff(c);
-    return 1;
-  }
-  return 0;
-}
 
 /// ins_ctrl_g 'u' sync handler (accessor for Rust).
 void nvim_edit_ctrl_g_u_sync(void)
@@ -1021,19 +986,6 @@ void nvim_stuffReadbuffLen(const char *data, ptrdiff_t len)
 
 /// Note: nvim_get_restart_edit is defined in cursor_shape.c; use this wrapper.
 
-/// If where_paste_started.lnum != 0, use it; otherwise use curwin->w_cursor.
-/// If startln is nonzero, set Insstart.col = 0.
-void nvim_edit_init_Insstart(int startln)
-{
-  if (where_paste_started.lnum != 0) {
-    Insstart = where_paste_started;
-  } else {
-    Insstart = curwin->w_cursor;
-    if (startln) {
-      Insstart.col = 0;
-    }
-  }
-}
 
 /// Set revins_on (accessor for Rust).
 void nvim_edit_set_revins_on(int val)
