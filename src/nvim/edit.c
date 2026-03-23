@@ -1017,29 +1017,8 @@ void nvim_edit_init_prompt_impl(int cmdchar_todo)
   check_cursor(curwin);
 }
 
-/// edit(): Start inserting text.
-///
-/// "cmdchar" can be:
-/// 'i' normal insert command
-/// 'a' normal append command
-/// 'R' replace command
-/// 'r' "r<CR>" command: insert one <CR>.
-///     Note: count can be > 1, for redo, but still only one <CR> is inserted.
-///           <Esc> is not used for redo.
-/// 'g' "gI" command.
-/// 'V' "gR" command for Virtual Replace mode.
-/// 'v' "gr" command for single character Virtual Replace mode.
-///
-/// This function is not called recursively.  For CTRL-O commands, it returns
-/// and lets the caller handle the Normal-mode command.
-///
-/// @param  cmdchar  command that started the insert
-/// @param  startln  if true, insert at start of line
-/// @param  count    repeat count for the command
-///
-/// @return true if a CTRL-O command caused the return (insert mode pending).
-// edit: now implemented in Rust (src/nvim-rs/edit/src/enter.rs, export_name = "edit").
-// The full body is provided by nvim_edit_edit_entry below.
+// edit() is implemented in Rust (src/nvim-rs/edit/src/enter.rs).
+// nvim_edit_edit_entry provides the InsertState setup entry point.
 
 /// Composite entry point for `edit()` called by the Rust implementation.
 /// Returns the same bool as `edit()`: true iff a CTRL-O caused the return.
