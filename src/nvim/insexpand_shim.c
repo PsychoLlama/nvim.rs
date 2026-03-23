@@ -3135,18 +3135,8 @@ buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }
 /// Returns curbuf->b_scanned.
 int nvim_curbuf_get_b_scanned(void) { return curbuf->b_scanned ? 1 : 0; }
 
-/// Returns the current character at ins_compl_st.e_cpt (as unsigned int).
-/// Returns 0 (NUL) if e_cpt is NULL.
-int nvim_ins_compl_st_get_e_cpt_char(void) {
-  return ins_compl_st.e_cpt ? (int)(unsigned char)*ins_compl_st.e_cpt : 0;
-}
-
-/// Skips commas and spaces at the start of ins_compl_st.e_cpt.
-void nvim_ins_compl_st_skip_delimiters(void) {
-  while (*ins_compl_st.e_cpt == ',' || *ins_compl_st.e_cpt == ' ') {
-    ins_compl_st.e_cpt++;
-  }
-}
+// nvim_ins_compl_st_get_e_cpt_char: deleted (Phase 27, inlined in vars.rs)
+// nvim_ins_compl_st_skip_delimiters: deleted (Phase 27, inlined in vars.rs)
 
 /// Sets ins_compl_st.ins_buf = curbuf and copies start_pos into first/last_match_pos.
 /// Performs the initial pos setup for the '.' (current buffer) case.
@@ -3231,18 +3221,8 @@ void nvim_ins_compl_st_msg_scanning_tags(void)
   }
 }
 
-/// Sets ins_compl_st.dict = ins_compl_st.e_cpt and dict_f = DICT_FIRST.
-void nvim_ins_compl_st_set_dict_from_e_cpt(void)
-{
-  ins_compl_st.dict = ins_compl_st.e_cpt;
-  ins_compl_st.dict_f = DICT_FIRST;
-}
-
-/// Advances ins_compl_st.e_cpt by one character (for 'k'/'s' option path).
-void nvim_ins_compl_st_e_cpt_inc(void)
-{
-  ins_compl_st.e_cpt++;
-}
+// nvim_ins_compl_st_set_dict_from_e_cpt: deleted (Phase 27, inlined in vars.rs)
+// nvim_ins_compl_st_e_cpt_inc: deleted (Phase 27, inlined in vars.rs)
 
 /// Returns the character one past the current e_cpt position (peeks ahead).
 /// Sets ins_compl_st.func_cb via get_callback_if_cpt_func logic.
@@ -3368,11 +3348,7 @@ int nvim_ins_compl_st_check_and_update_match_pos(void)
   return 2;
 }
 
-/// Sets ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos.
-void nvim_ins_compl_st_set_prev_from_cur(void)
-{
-  ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos;
-}
+// nvim_ins_compl_st_set_prev_from_cur: deleted (Phase 27, inlined in vars.rs)
 
 // nvim_ins_compl_st_get_cur_match_lnum: deleted (Phase 26, inlined in vars.rs)
 // nvim_ins_compl_st_get_cur_match_col: deleted (Phase 26, inlined in vars.rs)

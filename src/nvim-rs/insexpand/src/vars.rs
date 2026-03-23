@@ -851,3 +851,45 @@ pub unsafe fn nvim_ins_compl_st_get_prev_match_lnum() -> c_int {
 pub unsafe fn nvim_ins_compl_st_get_prev_match_col() -> c_int {
     ins_compl_st.prev_match_pos.col
 }
+
+/// Copy *cur_match_pos to prev_match_pos.
+#[inline]
+pub unsafe fn nvim_ins_compl_st_set_prev_from_cur() {
+    ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos;
+}
+
+/// Get the current character at e_cpt (as unsigned byte), or 0 if null.
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_e_cpt_char() -> c_int {
+    if ins_compl_st.e_cpt.is_null() {
+        0
+    } else {
+        c_int::from(*ins_compl_st.e_cpt as u8)
+    }
+}
+
+/// Skip commas and spaces at the start of e_cpt.
+#[inline]
+pub unsafe fn nvim_ins_compl_st_skip_delimiters() {
+    while !ins_compl_st.e_cpt.is_null() {
+        let ch = *ins_compl_st.e_cpt as u8;
+        if ch == b',' || ch == b' ' {
+            ins_compl_st.e_cpt = ins_compl_st.e_cpt.add(1);
+        } else {
+            break;
+        }
+    }
+}
+
+/// Advance ins_compl_st.e_cpt by one character.
+#[inline]
+pub unsafe fn nvim_ins_compl_st_e_cpt_inc() {
+    ins_compl_st.e_cpt = ins_compl_st.e_cpt.add(1);
+}
+
+/// Set ins_compl_st.dict = e_cpt and dict_f = DICT_FIRST (1).
+#[inline]
+pub unsafe fn nvim_ins_compl_st_set_dict_from_e_cpt() {
+    ins_compl_st.dict = ins_compl_st.e_cpt;
+    ins_compl_st.dict_f = 1; // DICT_FIRST
+}

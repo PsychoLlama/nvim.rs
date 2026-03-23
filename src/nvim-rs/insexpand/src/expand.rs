@@ -87,8 +87,8 @@ extern "C" {
 
     // Phase 14 (Phase 3) accessors for rs_process_next_cpt_value
     fn nvim_curbuf_get_b_scanned() -> c_int;
-    fn nvim_ins_compl_st_get_e_cpt_char() -> c_int;
-    fn nvim_ins_compl_st_skip_delimiters();
+    // nvim_ins_compl_st_get_e_cpt_char: inlined in vars.rs (Phase 27)
+    // nvim_ins_compl_st_skip_delimiters: inlined in vars.rs (Phase 27)
     fn nvim_ins_compl_st_set_dot_source(
         start_lnum: c_int,
         start_col: c_int,
@@ -98,8 +98,8 @@ extern "C" {
     fn nvim_ins_compl_st_get_ins_buf_fname() -> *const std::ffi::c_char;
     fn nvim_ins_compl_st_msg_scanning();
     fn nvim_ins_compl_st_msg_scanning_tags();
-    fn nvim_ins_compl_st_set_dict_from_e_cpt();
-    fn nvim_ins_compl_st_e_cpt_inc();
+    // nvim_ins_compl_st_set_dict_from_e_cpt: inlined in vars.rs (Phase 27)
+    // nvim_ins_compl_st_e_cpt_inc: inlined in vars.rs (Phase 27)
     fn nvim_ins_compl_st_set_func_cb_from_e_cpt(cpt_idx: c_int) -> c_int;
     fn nvim_ins_compl_st_set_dict_from_ins_buf();
     fn nvim_ins_compl_st_advance_e_cpt() -> c_int;
@@ -121,7 +121,7 @@ extern "C" {
         fuzzy_score_out: *mut c_int,
     ) -> c_int;
     fn nvim_ins_compl_st_check_and_update_match_pos() -> c_int;
-    fn nvim_ins_compl_st_set_prev_from_cur();
+    // nvim_ins_compl_st_set_prev_from_cur: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_get_cur_match_lnum: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_cur_match_col: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_prev_match_lnum: inlined in vars.rs (Phase 26)
@@ -198,12 +198,12 @@ unsafe fn rs_process_next_cpt_value(
     *advance_cpt_idx_out = 0;
 
     // Skip leading commas and spaces
-    nvim_ins_compl_st_skip_delimiters();
+    crate::vars::nvim_ins_compl_st_skip_delimiters();
 
-    // nvim_ins_compl_st_get_e_cpt_char() returns an ASCII char value (0-127)
+    // crate::vars::nvim_ins_compl_st_get_e_cpt_char() returns an ASCII char value (0-127)
     // or 0 for NUL. Truncation from i32 to u8 is safe for valid ASCII.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let e_char = nvim_ins_compl_st_get_e_cpt_char() as u8;
+    let e_char = crate::vars::nvim_ins_compl_st_get_e_cpt_char() as u8;
 
     if e_char == b'.'
         && nvim_curbuf_get_b_scanned() == 0
@@ -259,12 +259,12 @@ unsafe fn rs_process_next_cpt_value(
                         CTRL_X_THESAURUS
                     };
                     // Check if there's a specific dict/thesaurus path
-                    nvim_ins_compl_st_e_cpt_inc();
+                    crate::vars::nvim_ins_compl_st_e_cpt_inc();
                     // ASCII char value; truncation from i32 to u8 is safe.
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let next_c = nvim_ins_compl_st_get_e_cpt_char() as u8;
+                    let next_c = crate::vars::nvim_ins_compl_st_get_e_cpt_char() as u8;
                     if next_c != b',' && next_c != 0 {
-                        nvim_ins_compl_st_set_dict_from_e_cpt();
+                        crate::vars::nvim_ins_compl_st_set_dict_from_e_cpt();
                     }
                 }
                 b'i' => {
@@ -370,7 +370,7 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
             }
         }
 
-        nvim_ins_compl_st_set_prev_from_cur();
+        crate::vars::nvim_ins_compl_st_set_prev_from_cur();
 
         if found == FAIL {
             break;
