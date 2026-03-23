@@ -669,11 +669,6 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
   return buf->b_p_script_ctx[opt_idx];
 }
 
-// Wrapper functions to expose static functions to Rust
-int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
-                          int prefix, const char **errmsg);
-
-
 // set_options_bin helpers: accessors for curbuf binary-save fields
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
@@ -744,12 +739,6 @@ const char *nvim_option_get_fullname(OptIndex opt_idx) { return options[opt_idx]
 
 // nvim_winopt_string_field_ptr, nvim_copy_winopt_scalars, nvim_copy_winopt_save_strs,
 // nvim_copy_winopt_script_ctx, nvim_win_update_grid_blending: moved to window_shim.c
-
-/// 'title' and 'icon' only default to true if they have not been set or reset
-/// in .vimrc and we can read the old value.
-/// When 'title' and 'icon' have been reset in .vimrc, we won't even check if
-/// they can be reset.  This reduces startup time when using X on a remote
-/// machine.
 
 /// Get the address of p_kp (keywordprg global), as void*.
 /// Used by Rust stropt_get_newval to detect keywordprg option.
@@ -833,15 +822,6 @@ static inline bool option_is_global_local(OptIndex opt_idx)
 }
 
 // Rust callers now use #[link_name] to call the rs_ functions directly.
-
-/// Set option value directly, without processing any side effects.
-///
-/// @param  opt_idx    Option index in options[] table.
-/// @param  value      Option value.
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
-/// @param  set_sid    Script ID. Special values:
-///                      0: Use current script ID.
-///                      SID_NONE: Don't set script ID.
 
 /// Switch current context to get/set option value for window/buffer.
 ///
@@ -1090,11 +1070,6 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
   }
   return 4;  // EXPAND_FILES + XP_BS_ONE
 }
-
-/// Get the value for the numeric or string option///opp in a nice format into
-/// NameBuff[].  Must not be called with a hidden option!
-///
-/// @param  opt_flags  Option flags (can be OPT_LOCAL, OPT_GLOBAL or a combination).
 
 /// Set the callback function value for an option that accepts a function name,
 /// lambda, et al. (e.g. 'operatorfunc', 'tagfunc', etc.)
@@ -1394,12 +1369,6 @@ int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_d
 // nvim_get_secure, nvim_set_secure are defined in ex_docmd.c
 // nvim_get_sandbox is defined in undo.c
 
-
-
-/// Error message strings for did_set_option
-
-/// Call emsg(_(msg)) -- translates and shows error message
-
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
 {
@@ -1485,9 +1454,8 @@ void nvim_buf_copy_opt_sctx(buf_T *buf, int bv)
 }
 
 // =============================================================================
-// Phase 11 (pass 11) accessors: set_init_1, set_init_expand_env
+// Phase 11 compile-time assertions and remaining init accessors
 // =============================================================================
-
 
 // Compile-time boundary validation for kBufOpt enum (Rust K_BUF_OPT_* constants).
 // Checks first value, last value, and count; specific index alignment is validated at
@@ -1504,8 +1472,6 @@ void nvim_call_bind_textdomain_codeset(void)
   (void)bind_textdomain_codeset(PROJECT_NAME, p_enc);
 #endif
 }
-
-
 
 // =============================================================================
 // Phase 12 Pass 2: didset_options / didset_options2 sub-function wrappers
@@ -1528,10 +1494,8 @@ void nvim_call_curbuf_tabstop_set_vts(void)
 }
 
 // =============================================================================
-// Phase 12 lifecycle accessors (set_option_default, set_options_default,
-// option_expand, free_all_options)
+// Phase 12 lifecycle accessors
 // =============================================================================
-
 
 /// free_operatorfunc_option() wrapper (EXITFREE only).
 #if defined(EXITFREE)
@@ -1539,9 +1503,6 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 #else
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
-
-
-
 
 // =============================================================================
 // optexpand_T field accessors for Rust expand.rs
