@@ -147,8 +147,6 @@ extern "C" {
     fn nvim_get_compl_curr_win() -> WinHandle;
     fn nvim_get_compl_curr_buf() -> BufHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_get_compl_col() -> c_int;
-
     // Option accessors
     fn nvim_get_p_ic() -> c_int;
     fn nvim_get_p_inf() -> c_int;
@@ -157,7 +155,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
 
     // Line/column accessors
-    fn nvim_get_compl_lnum() -> c_int;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
 
     // Leader accessors
@@ -393,7 +390,7 @@ pub unsafe extern "C" fn rs_ins_compl_len() -> c_int {
 /// Return the column where the completion text starts.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_col() -> c_int {
-    nvim_get_compl_col()
+    vars::nvim_get_compl_col()
 }
 
 // =============================================================================
@@ -765,7 +762,7 @@ pub unsafe extern "C" fn rs_ins_compl_long_shown_match() -> c_int {
         return 0;
     }
     let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
+    let compl_col = vars::nvim_get_compl_col();
     c_int::from(str_size > (cursor_col - compl_col) as usize)
 }
 
@@ -790,7 +787,7 @@ pub unsafe extern "C" fn rs_ins_compl_lnum_in_range(lnum: c_int) -> c_int {
     if rs_ins_compl_has_multiple() == 0 {
         return 0;
     }
-    let compl_lnum = nvim_get_compl_lnum();
+    let compl_lnum = vars::nvim_get_compl_lnum();
     let cursor_lnum = nvim_get_curwin_cursor_lnum();
     c_int::from(lnum >= compl_lnum && lnum <= cursor_lnum)
 }
@@ -920,7 +917,7 @@ pub unsafe extern "C" fn rs_get_cot_flags() -> c_uint {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_compl_len() -> c_int {
     let cursor_col = nvim_get_cursor_col();
-    let compl_col = nvim_get_compl_col();
+    let compl_col = vars::nvim_get_compl_col();
     let off = cursor_col - compl_col;
     if off < 0 {
         0

@@ -40,6 +40,8 @@ extern "C" {
     static mut compl_cont_mode: c_int;
     static mut compl_direction: c_int; // Direction = int enum
     static mut compl_shows_dir: c_int; // Direction = int enum
+    static mut compl_col: c_int; // colnr_T = int
+    static mut compl_lnum: c_int; // linenr_T = int
 }
 
 // ============================================================================
@@ -248,4 +250,24 @@ pub unsafe fn nvim_set_compl_direction(val: c_int) {
 #[inline]
 pub unsafe fn nvim_set_compl_shows_dir(val: c_int) {
     compl_shows_dir = val;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_col() -> c_int {
+    compl_col
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_col(val: c_int) {
+    compl_col = val;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_lnum() -> c_int {
+    compl_lnum
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_lnum(val: c_int) {
+    compl_lnum = val;
 }

@@ -10,7 +10,6 @@ use std::os::raw::{c_char, c_int};
 // C accessor functions
 extern "C" {
     // State accessors
-    fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 
     // Match accessors
@@ -232,7 +231,7 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
         }
     }
 
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
     let compl_length = crate::vars::nvim_get_compl_length();
     let mut col = compl_col
         + if rs_compl_status_adding() != 0 {
@@ -291,7 +290,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
         }
     } else if nvim_cpt_sources_array_exists() != 0 {
         let cpt_idx = nvim_compl_shown_cp_cpt_source_idx();
-        let compl_col = nvim_get_compl_col();
+        let compl_col = crate::vars::nvim_get_compl_col();
         if cpt_idx >= 0 && compl_col >= 0 {
             let startcol = nvim_get_cpt_source_startcol(cpt_idx);
             if startcol >= 0 && startcol < compl_col {

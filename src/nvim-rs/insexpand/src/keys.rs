@@ -25,7 +25,6 @@ const ESC: c_int = 27; // Escape
 
 // Additional C accessor functions
 extern "C" {
-    fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 }
 

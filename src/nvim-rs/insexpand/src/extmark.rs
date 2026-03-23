@@ -9,8 +9,6 @@ use std::os::raw::c_int;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_compl_col() -> c_int;
-    fn nvim_get_compl_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_compl_shown_match_has_newline() -> c_int;

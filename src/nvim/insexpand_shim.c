@@ -386,8 +386,8 @@ static pos_T compl_startpos;
 /// Length in bytes of the text being completed (this is deleted to be replaced
 /// by the match.)
 int compl_length = 0;
-static linenr_T compl_lnum = 0;         ///< lnum where the completion start
-static colnr_T compl_col = 0;           ///< column where the text starts
+linenr_T compl_lnum = 0;         ///< lnum where the completion start
+colnr_T compl_col = 0;           ///< column where the text starts
                                         ///< that is being completed
 colnr_T compl_ins_end_col = 0;
 static String compl_orig_text = STRING_INIT;  ///< text as it was before
@@ -1129,8 +1129,6 @@ static void ins_compl_item_free(compl_T *match)
 // C accessors for completion state (used by Rust)
 win_T *nvim_get_compl_curr_win(void) { return compl_curr_win; }
 buf_T *nvim_get_compl_curr_buf(void) { return compl_curr_buf; }
-int nvim_get_compl_col(void) { return compl_col; }
-
 // Match list accessors for Rust (using void* since compl_T is static)
 void *nvim_compl_get_first_match(void) { return compl_first_match; }
 void nvim_compl_set_first_match(void *m) { compl_first_match = (compl_T *)m; }
@@ -1795,7 +1793,6 @@ static int compl_get_info(char *line, int startcol, colnr_T curs_col, bool *line
 // nvim_get_did_ai: defined in change_ffi.c (bool nvim_get_did_ai(void))
 // nvim_set_did_ai: defined in change_ffi.c (void nvim_set_did_ai(bool val))
 void nvim_clear_indent_flags(void) { did_si = false; can_si = false; can_si_back = false; }
-void nvim_set_compl_lnum_to_cursor(void) { compl_lnum = curwin->w_cursor.lnum; }
 void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
@@ -1832,12 +1829,6 @@ void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Se
 void nvim_set_compl_startpos_to_cursor(void)
 {
   compl_startpos = curwin->w_cursor;
-}
-
-/// Compound accessor: set compl_col to 0.
-void nvim_set_compl_col_zero(void)
-{
-  compl_col = 0;
 }
 
 /// Compound accessor: set compl_startpos.col = compl_col.
@@ -1976,7 +1967,6 @@ int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
 int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
-int nvim_get_compl_lnum(void) { return (int)compl_lnum; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 // nvim_get_compl_hi_on_autocompl_longest: deleted (Phase 2, moved to Rust)
 const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
@@ -2008,7 +1998,6 @@ int nvim_get_cpt_sources_index(void) { return cpt_sources_index; }
 // Accessors for Phase 2 (pass 12): ins_compl_longest_match
 // nvim_utf_ptr2char is defined in mbyte.c; re-use it via extern declaration
 // nvim_mb_tolower: deleted (Phase 3, Rust calls mb_tolower directly)
-int nvim_cursor_col_gt_compl_col(void) { return curwin->w_cursor.col > compl_col ? 1 : 0; }
 
 // Accessors for ins_compl_stop (Phase 3)
 const char *nvim_get_compl_curr_match_str_data(void) { return compl_curr_match ? compl_curr_match->cp_str.data : NULL; }
@@ -2041,7 +2030,6 @@ void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()")
 // nvim_find_shown_match_in_array: deleted (Rust calls nvim_find_shown_match_in_match_array directly)
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
-void nvim_set_dollar_vcol_minus_one(void) { dollar_vcol = -1; }
 void nvim_set_cursor_col_to_compl_col(void) { curwin->w_cursor.col = (colnr_T)compl_col; }
 void nvim_restore_cursor_col(int col) { curwin->w_cursor.col = (colnr_T)col; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
@@ -2632,8 +2620,7 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
 // show_statusmsg migration to Rust.
 // =============================================================================
 
-// --- compl_col / compl_length / compl_startpos setters ---
-void nvim_set_compl_col(int val) { compl_col = (colnr_T)val; }
+// --- compl_length / compl_startpos setters ---
 void nvim_set_compl_length(int val) { compl_length = val; }
 void nvim_set_compl_startpos_col(int val) { compl_startpos.col = (colnr_T)val; }
 void nvim_set_compl_startpos_lnum_to_cursor(void) { compl_startpos.lnum = curwin->w_cursor.lnum; }
@@ -2685,7 +2672,6 @@ int nvim_compl_curr_match_next_eq_prev(void) {
 // nvim_get_p_smd: defined in normal_shim.c
 // nvim_get_dollar_vcol: defined in edit.c
 void nvim_curs_columns_curwin(void) { curs_columns(curwin, false); }
-void nvim_msg_hist_off_set(int val) { msg_hist_off = val != 0; }
 void nvim_msg_ext_set_kind_completion(void) { msg_ext_set_kind("completion"); }
 // nvim_msg_with_attr, nvim_msg_clr_cmdline_wrap: deleted (Phase 4, Rust uses #[link_name] directly)
 

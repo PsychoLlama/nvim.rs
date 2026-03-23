@@ -11,7 +11,6 @@ use nvim_window::WinHandle;
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn pum_visible() -> c_int;
 
@@ -44,7 +43,7 @@ extern "C" {
     fn nvim_get_did_ai() -> bool;
     fn nvim_set_did_ai(val: bool);
     fn nvim_clear_indent_flags();
-    fn nvim_set_compl_lnum_to_cursor();
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
     #[link_name = "ins_eol"]
     fn nvim_ins_eol_wrap(c: c_int) -> bool;
     fn nvim_get_curbuf_b_p_com() -> *const c_char;
@@ -56,10 +55,8 @@ extern "C" {
     fn rs_save_orig_extmarks();
     fn nvim_set_edit_submode_extra_searching();
     fn showmode() -> c_int;
-    fn nvim_set_compl_col(val: c_int);
     fn nvim_compl_cont_status_or(mask: c_int);
     fn nvim_set_compl_startpos_to_cursor();
-    fn nvim_set_compl_col_zero();
     fn nvim_set_compl_startpos_col_to_compl_col();
     fn nvim_restore_did_ai(saved_val: c_int);
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
@@ -70,7 +67,6 @@ extern "C" {
     static mut g_edit_submode_extra: *mut c_char;
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_ml_get_curline() -> *const c_char;
-    fn nvim_get_curwin_cursor_lnum() -> c_int;
     // (compl_pending moved to Rust static in state.rs)
     fn nvim_get_p_ic() -> c_int;
 }
@@ -179,7 +175,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         return FAIL;
     }
     crate::state::COMPL_PENDING = 0;
-    nvim_set_compl_lnum_to_cursor();
+    crate::vars::nvim_set_compl_lnum(nvim_get_curwin_cursor_lnum());
     // line and curs_col are obtained via accessors
     let line = nvim_ml_get_curline().cast_mut();
     let curs_col = nvim_get_cursor_col();
@@ -206,7 +202,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         }
         nvim_compl_cont_status_or(CONT_N_ADDS);
         nvim_set_compl_startpos_to_cursor();
-        nvim_set_compl_col_zero();
+        crate::vars::nvim_set_compl_col(0);
         curs_col
     } else {
         0
@@ -242,13 +238,13 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             // (was nvim_ins_compl_start_adding_eol_impl; inlined here in Phase 10)
             let old_b_p_com = nvim_get_curbuf_b_p_com();
             nvim_set_curbuf_b_p_com_empty();
-            let compl_col = nvim_get_compl_col();
+            let compl_col = crate::vars::nvim_get_compl_col();
             nvim_set_compl_startpos_lnum_col(1, compl_col);
             nvim_ins_eol_wrap(c_int::from(b'\r'));
             nvim_restore_curbuf_b_p_com(old_b_p_com);
             crate::vars::nvim_set_compl_length(0);
-            nvim_set_compl_col(nvim_get_cursor_col());
-            nvim_set_compl_lnum_to_cursor();
+            crate::vars::nvim_set_compl_col(nvim_get_cursor_col());
+            crate::vars::nvim_set_compl_lnum(nvim_get_curwin_cursor_lnum());
         }
     } else {
         nvim_clear_edit_submode_pre();

@@ -19,7 +19,6 @@ extern "C" {
 
     // Cursor and column accessors
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_get_compl_col() -> c_int;
 
     // UTF-8 functions
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
@@ -252,7 +251,7 @@ pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col:
 
 extern "C" {
     fn nvim_ml_get_curline() -> *const c_char;
-    // nvim_get_compl_col already declared above
+    // nvim_get_compl_col is in crate::vars
     fn nvim_cpt_sources_array_exists() -> c_int;
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
     fn nvim_xfree(ptr: *mut u8);
@@ -299,7 +298,7 @@ unsafe fn prepend_startcol_text_rs(
     src_size: usize,
     startcol: c_int,
 ) -> (*mut c_char, usize) {
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
     let prepend_len = (compl_col - startcol) as usize;
     let new_length = prepend_len + src_size;
 
@@ -352,7 +351,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
     }
 
     let cpt_idx = nvim_compl_match_get_cpt_source_idx(match_);
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
     if cpt_idx < 0 || compl_col <= 0 {
         return leader_data;
     }
@@ -411,7 +410,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
     }
 
     let cpt_idx = nvim_compl_match_get_cpt_source_idx(match_);
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
     if cpt_idx < 0 || compl_col <= 0 {
         return nvim_get_compl_leader_size();
     }
@@ -487,7 +486,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     let p = nvim_mb_ptr_back(line.cast_const(), p.cast_const());
     let p_off = p.offset_from(line.cast_const()) as c_int;
 
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
     let compl_length = crate::vars::nvim_get_compl_length();
 
     // Stop completion when the whole word was deleted. For Omni completion
@@ -508,7 +507,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 
     // rs_ins_compl_restart() calls update_screen() which may invalidate the pointer
     let line = nvim_get_cursor_line_ptr();
-    let compl_col = nvim_get_compl_col();
+    let compl_col = crate::vars::nvim_get_compl_col();
 
     nvim_api_clear_and_set_compl_leader(
         line.add(compl_col as usize).cast_const(),
@@ -651,7 +650,6 @@ use crate::match_list::ComplMatch;
 extern "C" {
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
     fn mb_tolower(c: c_int) -> c_int;
-    fn nvim_cursor_col_gt_compl_col() -> c_int;
     fn nvim_compl_match_get_flags(m: ComplMatch) -> c_int;
     #[link_name = "ins_redraw"]
     fn nvim_ins_redraw(ready: c_int);
@@ -683,7 +681,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         let cp_size = nvim_compl_match_get_cp_str_size(m);
         nvim_api_clear_and_set_compl_leader(cp_data, cp_size);
 
-        let had_match = nvim_cursor_col_gt_compl_col() != 0;
+        let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
         let leader_after = nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
@@ -735,7 +733,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         buf.push(0); // NUL terminate (cbuf_to_string doesn't need it but it's safe)
         nvim_api_clear_and_set_compl_leader(buf.as_ptr().cast::<c_char>(), new_len);
 
-        let had_match = nvim_cursor_col_gt_compl_col() != 0;
+        let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
         let new_leader = nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
@@ -995,7 +993,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_ins_compl_addfrommatch() {
     use crate::match_list::ComplMatch;
 
-    let len = nvim_get_cursor_col() - nvim_get_compl_col();
+    let len = nvim_get_cursor_col() - crate::vars::nvim_get_compl_col();
     let shown = nvim_compl_get_shown_match();
     // If shown is null, return (safety: C caller checks this, but be defensive)
     if shown.is_null() {

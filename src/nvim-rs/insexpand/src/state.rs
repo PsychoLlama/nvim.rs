@@ -29,8 +29,6 @@ extern "C" {
     fn nvim_compl_shown_match_is_singular() -> c_int;
     fn nvim_compl_shown_match_is_first() -> c_int;
 
-    // Numeric state
-    fn nvim_get_compl_col() -> c_int;
 }
 
 // =============================================================================
@@ -354,7 +352,6 @@ pub unsafe extern "C" fn rs_ins_compl_show_filename() {
 
 extern "C" {
     // New accessors for continue_search (Phase 10)
-    fn nvim_set_compl_col(val: c_int);
     fn nvim_get_compl_startpos_lnum() -> c_int;
     fn nvim_get_compl_startpos_col() -> c_int;
     fn nvim_set_compl_startpos_col(val: c_int);
@@ -395,7 +392,8 @@ extern "C" {
     fn nvim_set_edit_submode_highl_count();
     fn nvim_get_edit_submode_highl_attr() -> c_int;
     fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
-    fn nvim_msg_hist_off_set(val: c_int);
+    #[link_name = "msg_hist_off"]
+    static mut g_msg_hist_off: bool;
     fn nvim_msg_ext_set_kind_completion();
     #[link_name = "msg"]
     fn nvim_msg_with_attr(s: *const c_char, attr: c_int) -> bool;
@@ -440,10 +438,10 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
                 );
                 nvim_set_compl_startpos_col(new_col);
             }
-            nvim_set_compl_col(nvim_get_compl_startpos_col());
+            crate::vars::nvim_set_compl_col(nvim_get_compl_startpos_col());
         } else {
             let wcols = nvim_getwhitecols_of_line(line);
-            nvim_set_compl_col(wcols);
+            crate::vars::nvim_set_compl_col(wcols);
             nvim_set_compl_startpos_col(wcols);
             nvim_set_compl_startpos_lnum_to_cursor();
             // Clear CONT_SOL
@@ -451,7 +449,7 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
             cont_status &= !CONT_SOL;
             crate::vars::nvim_set_compl_cont_status(cont_status);
         }
-        let new_length = nvim_get_cursor_col() - nvim_get_compl_col();
+        let new_length = nvim_get_cursor_col() - crate::vars::nvim_get_compl_col();
         crate::vars::nvim_set_compl_length(new_length);
         if crate::vars::nvim_get_compl_length() > IOSIZE_MINUS_MIN_SPACE {
             // Clear CONT_SOL and clamp length
@@ -459,7 +457,9 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
             cont_status &= !CONT_SOL;
             crate::vars::nvim_set_compl_cont_status(cont_status);
             crate::vars::nvim_set_compl_length(IOSIZE_MINUS_MIN_SPACE);
-            nvim_set_compl_col(nvim_get_cursor_col() - crate::vars::nvim_get_compl_length());
+            crate::vars::nvim_set_compl_col(
+                nvim_get_cursor_col() - crate::vars::nvim_get_compl_length(),
+            );
         }
         cont_status = crate::vars::nvim_get_compl_cont_status();
         cont_status |= CONT_ADDING | CONT_N_ADDS;
@@ -538,13 +538,13 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
         } else {
             // edit_submode_extra is non-null
             if nvim_get_p_smd() == 0 {
-                nvim_msg_hist_off_set(1);
+                g_msg_hist_off = true;
                 nvim_msg_ext_set_kind_completion();
                 nvim_msg_with_attr(
                     nvim_get_edit_submode_extra_ptr(),
                     nvim_get_edit_submode_highl_attr(),
                 );
-                nvim_msg_hist_off_set(0);
+                g_msg_hist_off = false;
             }
         }
     }

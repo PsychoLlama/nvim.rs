@@ -196,7 +196,6 @@ pub unsafe extern "C" fn rs_file_count_path_components(path: *const c_char) -> c
 
 // Additional C accessor functions
 extern "C" {
-    fn nvim_get_compl_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 }
 

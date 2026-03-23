@@ -9,7 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_compl_col() -> c_int;
     fn pum_visible() -> c_int;
 
     // Match info accessors

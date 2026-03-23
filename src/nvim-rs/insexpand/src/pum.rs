@@ -191,7 +191,7 @@ extern "C" {
     fn nvim_find_shown_match_in_match_array() -> c_int;
     fn nvim_trigger_complete_changed(cur: c_int);
     fn nvim_has_completechanged_event() -> c_int;
-    fn nvim_set_dollar_vcol_minus_one();
+    fn nvim_set_dollar_vcol(val: c_int);
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_col_to_compl_col();
     fn nvim_restore_cursor_col(col: c_int);
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_pum() {
 
     // In Replace mode when a $ is displayed at the end of the line only
     // part of the screen would be updated.  We do need to redraw here.
-    nvim_set_dollar_vcol_minus_one();
+    nvim_set_dollar_vcol(-1);
 
     // Compute the screen column of the start of the completed text.
     // Use the cursor to get all wrapping and other settings right.
