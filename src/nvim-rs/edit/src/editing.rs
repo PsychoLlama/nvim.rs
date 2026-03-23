@@ -26,7 +26,7 @@ extern "C" {
     // -- Delegated wrappers for complex functions --
     fn nvim_edit_ins_eol(c: c_int) -> c_int;
     fn nvim_edit_ins_ctrl_v();
-    fn nvim_edit_ins_copychar(lnum: LinenrT) -> c_int;
+    fn nvim_ins_copychar(lnum: LinenrT) -> c_int;
     fn nvim_edit_ins_ctrl_ey(tc: c_int) -> c_int;
     fn nvim_edit_ins_digraph() -> c_int;
 
@@ -45,7 +45,7 @@ extern "C" {
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     fn nvim_set_vim_var_char(buf: *const c_char, len: isize);
-    fn nvim_edit_get_vim_var_char() -> *const c_char;
+    fn nvim_get_vim_var_char() -> *const c_char;
     fn nvim_ins_apply_autocmds_insertcharpre() -> c_int;
     fn nvim_set_State(val: c_int);
     fn nvim_get_State() -> c_int;
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_v() {
 #[must_use]
 #[unsafe(export_name = "ins_copychar")]
 pub unsafe extern "C" fn rs_ins_copychar(lnum: LinenrT) -> c_int {
-    nvim_edit_ins_copychar(lnum)
+    nvim_ins_copychar(lnum)
 }
 
 // ============================================================================
@@ -316,7 +316,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     let mut res: *mut c_char = std::ptr::null_mut();
     if nvim_ins_apply_autocmds_insertcharpre() != 0 {
         // Get the value of v:char. Only use it when changed.
-        let vchar = nvim_edit_get_vim_var_char();
+        let vchar = nvim_get_vim_var_char();
         // Compare buf (our original) with v:char
         if !vchar.is_null() {
             let orig = buf.as_ptr().cast::<c_char>();

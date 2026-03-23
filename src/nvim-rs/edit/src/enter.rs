@@ -74,7 +74,7 @@ extern "C" {
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
 
     // Insstart
-    fn nvim_edit_init_Insstart(startln: c_int);
+    fn nvim_init_Insstart(startln: c_int);
     fn nvim_edit_init_Insstart_textlen();
 
     // ai_col
@@ -133,7 +133,7 @@ extern "C" {
     fn pum_check_clear();
     fn nvim_state_enter(state: *mut c_void);
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
-    fn nvim_edit_get_inserted_size() -> c_int;
+    fn nvim_get_inserted_size() -> c_int;
     fn nvim_edit_handle_restart_edit_cursor() -> c_int;
     fn nvim_update_o_lnum_if_at_eol();
     fn nvim_curbuf_sync_changedtick_after_insert();
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // When doing a paste with the middle mouse button, Insstart is set to
     // where the paste started.
-    nvim_edit_init_Insstart((*s).startln);
+    nvim_init_Insstart((*s).startln);
 
     nvim_edit_init_Insstart_textlen();
 
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     nvim_ui_cursor_shape_and_clear_digraph();
 
     // Get the current length of the redo buffer.
-    let insert_skip = nvim_edit_get_inserted_size();
+    let insert_skip = nvim_get_inserted_size();
     nvim_set_new_insert_skip(insert_skip);
 
     nvim_set_old_indent(0);

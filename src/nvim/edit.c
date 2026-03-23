@@ -318,6 +318,13 @@ void nvim_set_Insstart_blank_vcol(colnr_T val)
   Insstart_blank_vcol = val;
 }
 
+/// Initialize Insstart_textlen and Insstart_blank_vcol (accessor for Rust).
+void nvim_edit_init_Insstart_textlen(void)
+{
+  Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
+  Insstart_blank_vcol = MAXCOL;
+}
+
 /// Get update_Insstart_orig (accessor for Rust).
 int nvim_get_update_Insstart_orig(void)
 {
@@ -682,11 +689,6 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   }
 }
 
-const char *nvim_edit_get_vim_var_char(void)
-{
-  return get_vim_var_str(VV_CHAR);
-}
-
 // Saved cursor positions for start_arrow calls (2 slots)
 static pos_T edit_saved_cursor[2];
 static linenr_T saved_topline;
@@ -724,58 +726,6 @@ int nvim_edit_topline_changed(void)
           || saved_topfill != curwin->w_topfill) ? 1 : 0;
 }
 
-/// ins_insert() wrapper — handles set_vim_var_string, autocmds, mode change.
-void nvim_edit_ins_insert(int replaceState)
-{
-  set_vim_var_string(VV_INSERTMODE, ((State & REPLACE_FLAG)
-                                     ? "i"
-                                     : replaceState == MODE_VREPLACE ? "v" : "r"), 1);
-  ins_apply_autocmds(EVENT_INSERTCHANGE);
-  if (State & REPLACE_FLAG) {
-    State = MODE_INSERT | (State & MODE_LANGMAP);
-  } else {
-    State = replaceState | (State & MODE_LANGMAP);
-  }
-  may_trigger_modechanged();
-  AppendCharToRedobuff(K_INS);
-  showmode();
-  ui_cursor_shape();
-}
-
-/// ins_ctrl_o() wrapper — sets restart_edit and ins_at_eol.
-void nvim_edit_ins_ctrl_o(void)
-{
-  restart_VIsual_select = 0;
-  if (State & VREPLACE_FLAG) {
-    restart_edit = 'V';
-  } else if (State & REPLACE_FLAG) {
-    restart_edit = 'R';
-  } else {
-    restart_edit = 'I';
-  }
-  if (virtual_active(curwin)) {
-    ins_at_eol = false;
-  } else {
-    ins_at_eol = (gchar_cursor() == NUL);
-  }
-}
-
-/// ins_ctrl_hat() wrapper — toggles langmap mode.
-void nvim_edit_ins_ctrl_hat(void)
-{
-  if (map_to_exists_mode("", MODE_LANGMAP, false)) {
-    if (State & MODE_LANGMAP) {
-      curbuf->b_p_iminsert = B_IMODE_NONE;
-      State &= ~MODE_LANGMAP;
-    } else {
-      curbuf->b_p_iminsert = B_IMODE_LMAP;
-      State |= MODE_LANGMAP;
-    }
-  }
-  set_iminsert_global(curbuf);
-  showmode();
-  status_redraw_curbuf();
-}
 
 /// ins_ctrl_() helper — handles the state changes that need C access.
 /// The Rust side computes revins_on, this function handles the rest.
@@ -833,36 +783,6 @@ int nvim_edit_ins_start_select(int c)
     return 1;
   }
   return 0;
-}
-
-/// ins_ctrl_g() get key helper — reads key and classifies it.
-/// Returns: 1=up, 2=down, 3=u_sync, 4=no_sync, 5=ESC, 0=unknown
-int nvim_edit_ins_ctrl_g_get_key(void)
-{
-  setcursor();
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  switch (c) {
-  case K_UP:
-  case Ctrl_K:
-  case 'k':
-    return 1;  // up
-  case K_DOWN:
-  case Ctrl_J:
-  case 'j':
-    return 2;  // down
-  case 'u':
-    return 3;  // u_sync
-  case 'U':
-    return 4;  // no_sync
-  case ESC:
-    return 5;  // ESC
-  default:
-    return 0;  // unknown
-  }
 }
 
 /// ins_ctrl_g 'u' sync handler (accessor for Rust).
@@ -998,36 +918,6 @@ void nvim_edit_ins_ctrl_v(void)
   revins_legal++;
 }
 
-/// Delegated wrapper for ins_copychar (Rust FFI export).
-int nvim_edit_ins_copychar(linenr_T lnum)
-{
-  if (lnum < 1 || lnum > curbuf->b_ml.ml_line_count) {
-    vim_beep(kOptBoFlagCopy);
-    return NUL;
-  }
-
-  validate_virtcol(curwin);
-  int const end_vcol = curwin->w_virtcol;
-  char *line = ml_get(lnum);
-
-  CharsizeArg csarg;
-  CSType cstype = init_charsize_arg(&csarg, curwin, lnum, line);
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  int vcol = 0;
-  while (vcol < end_vcol && *ci.ptr != NUL) {
-    vcol += win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg).width;
-    if (vcol > end_vcol) {
-      break;
-    }
-    ci = utfc_next(ci);
-  }
-
-  int c = ci.chr.value < 0 ? (uint8_t)(*ci.ptr) : ci.chr.value;
-  if (c == NUL) {
-    vim_beep(kOptBoFlagCopy);
-  }
-  return c;
-}
 
 /// Delegated wrapper for ins_ctrl_ey (Rust FFI export).
 int nvim_edit_ins_ctrl_ey(int tc)
@@ -1151,24 +1041,6 @@ void nvim_edit_set_revins_on(int val)
   revins_on = (val != 0);
 }
 
-/// Get Insstart_textlen from linetabsize_str(get_cursor_line_ptr()) (accessor for Rust).
-void nvim_edit_init_Insstart_textlen(void)
-{
-  Insstart_textlen = linetabsize_str(get_cursor_line_ptr());
-  Insstart_blank_vcol = MAXCOL;
-}
-
-/// Get size of get_inserted() and free the result (for new_insert_skip).
-int nvim_edit_get_inserted_size(void)
-{
-  String inserted = get_inserted();
-  int sz = (int)inserted.size;
-  if (inserted.data != NULL) {
-    xfree(inserted.data);
-  }
-  return sz;
-}
-
 /// Update curbuf->b_last_changedtick if TextChangedI was triggered (accessor for Rust).
 void nvim_curbuf_sync_changedtick_after_insert(void)
 {
@@ -1218,42 +1090,6 @@ void nvim_stuffcharReadbuff_K_NOP(void)
   stuffcharReadbuff(K_NOP);
 }
 
-/// Handle the scroll detection block from insert_check (composite accessor for Rust).
-/// Checks if window should be scrolled up one line. Returns new mincol if scroll
-/// was adjusted (side effect: may call set_topline()), or -1 if no change.
-int nvim_edit_insert_check_scroll(int mincol, linenr_T old_topline, int old_topfill,
-                                  int did_backspace, int count)
-{
-  if (!curbuf->b_mod_set
-      || !curwin->w_p_wrap
-      || curwin->w_p_sms
-      || did_backspace
-      || curwin->w_topline != old_topline
-      || curwin->w_topfill != old_topfill
-      || count > 1) {
-    return -1;
-  }
-
-  int new_mincol = curwin->w_wcol;
-  validate_cursor_col(curwin);
-
-  if (curwin->w_wcol < new_mincol - tabstop_at(get_nolist_virtcol(),
-                                                curbuf->b_p_ts,
-                                                curbuf->b_p_vts_array,
-                                                false)
-      && curwin->w_wrow == curwin->w_view_height - 1 - rs_get_scrolloff_value(curwin)
-      && (curwin->w_cursor.lnum != curwin->w_topline
-          || curwin->w_topfill > 0)) {
-    if (curwin->w_topfill > 0) {
-      curwin->w_topfill--;
-    } else if (hasFolding(curwin, curwin->w_topline, NULL, &old_topline)) {
-      set_topline(curwin, old_topline + 1);
-    } else {
-      set_topline(curwin, curwin->w_topline + 1);
-    }
-  }
-  return new_mincol;
-}
 
 /// Set did_cursorhold (accessor for Rust state_machine, to avoid duplicate).
 
@@ -1261,17 +1097,6 @@ int nvim_edit_insert_check_scroll(int mincol, linenr_T old_topline, int old_topf
 void ins_redraw_false(void)
 {
   nvim_edit_ins_redraw_impl(false);
-}
-
-/// Call plain_vgetc() with no_mapping++/-- around it (for CTRL-\ handling in Rust).
-int nvim_edit_plain_vgetc_no_mapping(void)
-{
-  no_mapping++;
-  allow_keys++;
-  int c = plain_vgetc();
-  no_mapping--;
-  allow_keys--;
-  return c;
 }
 
 /// Call ins_ctrl_v() (wrapper for Rust state_machine to avoid name clash).

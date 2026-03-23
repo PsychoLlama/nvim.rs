@@ -88,12 +88,12 @@ extern "C" {
     fn nvim_redraw_later_valid();
 
     // -- Control key helpers (Phase 4b) --
-    fn nvim_edit_ins_insert(replace_state: c_int);
-    fn nvim_edit_ins_ctrl_o();
-    fn nvim_edit_ins_ctrl_hat();
+    fn nvim_ins_insert(replace_state: c_int);
+    fn nvim_ins_ctrl_o();
+    fn nvim_ins_ctrl_hat();
     fn nvim_edit_ins_ctrl_(revins_on: c_int);
     fn nvim_edit_ins_start_select(c: c_int) -> c_int;
-    fn nvim_edit_ins_ctrl_g_get_key() -> c_int;
+    fn nvim_ins_ctrl_g_get_key() -> c_int;
     fn nvim_edit_ins_shift(c: c_int, lastc: c_int);
     fn nvim_edit_ins_del();
 
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_ins_pagedown() {
 
 #[unsafe(export_name = "ins_insert")]
 pub unsafe extern "C" fn rs_ins_insert(replace_state: c_int) {
-    nvim_edit_ins_insert(replace_state);
+    nvim_ins_insert(replace_state);
 }
 
 // ============================================================================
@@ -472,7 +472,7 @@ pub unsafe extern "C" fn rs_ins_insert(replace_state: c_int) {
 
 #[unsafe(export_name = "ins_ctrl_o")]
 pub unsafe extern "C" fn rs_ins_ctrl_o() {
-    nvim_edit_ins_ctrl_o();
+    nvim_ins_ctrl_o();
 }
 
 // ============================================================================
@@ -481,7 +481,7 @@ pub unsafe extern "C" fn rs_ins_ctrl_o() {
 
 #[unsafe(export_name = "ins_ctrl_hat")]
 pub unsafe extern "C" fn rs_ins_ctrl_hat() {
-    nvim_edit_ins_ctrl_hat();
+    nvim_ins_ctrl_hat();
 }
 
 // ============================================================================
@@ -515,7 +515,7 @@ pub unsafe extern "C" fn rs_ins_start_select(c: c_int) -> c_int {
 
 /// Handle Ctrl-G in Insert mode.
 unsafe fn ins_ctrl_g_impl() {
-    let key = nvim_edit_ins_ctrl_g_get_key();
+    let key = nvim_ins_ctrl_g_get_key();
     match key {
         CTRL_G_UP => ins_up_impl(true),
         CTRL_G_DOWN => ins_down_impl(true),

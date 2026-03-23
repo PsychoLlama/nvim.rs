@@ -99,7 +99,7 @@ extern "C" {
     // --- scroll detection (composite accessor) ---
     /// Handles the scroll-up check block from `insert_check`.
     /// Returns the new mincol if scroll detected (modifies curwin), or -1 if no action.
-    fn nvim_edit_insert_check_scroll(
+    fn nvim_insert_check_scroll(
         mincol: c_int,
         old_topline: LinenrT,
         old_topfill: c_int,
@@ -266,7 +266,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
         let did_backspace = c_int::from(unsafe { (*s).did_backspace });
         let count = unsafe { (*s).count };
         let new_mincol = unsafe {
-            nvim_edit_insert_check_scroll(mincol, old_topline, old_topfill, did_backspace, count)
+            nvim_insert_check_scroll(mincol, old_topline, old_topfill, did_backspace, count)
         };
         if new_mincol >= 0 {
             unsafe { (*s).mincol = new_mincol };
@@ -462,7 +462,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
     // CTRL-\ CTRL-N/O/G: normal mode or CTRL-O without cursor move
     if unsafe { (*s).c } == CTRL_BSL {
         unsafe { ins_redraw_false() };
-        let c2 = unsafe { nvim_edit_plain_vgetc_no_mapping() };
+        let c2 = unsafe { nvim_plain_vgetc_no_mapping() };
         if c2 != CTRL_N && c2 != CTRL_G && c2 != CTRL_O {
             unsafe { vungetc(c2) };
             unsafe { (*s).c = CTRL_BSL };
@@ -551,7 +551,7 @@ extern "C" {
     fn nvim_cursor_col_ge_compl_col() -> c_int;
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_set_ins_at_eol(val: bool);
-    fn nvim_edit_plain_vgetc_no_mapping() -> c_int;
+    fn nvim_plain_vgetc_no_mapping() -> c_int;
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
     fn nvim_utf_ptr2len(p: *const std::ffi::c_char) -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
