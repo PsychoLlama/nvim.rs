@@ -2028,8 +2028,6 @@ int nvim_check_illegal_path_names(void *varp, uint32_t flags)
   return rs_check_illegal_path_names(*(const char **)varp, flags);
 }
 
-/// Get options[opt_idx].flags (already exists as nvim_option_get_flags_ptr, but need value)
-uint32_t nvim_option_get_flags_val(OptIndex opt_idx) { return options[opt_idx].flags; }
 
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)

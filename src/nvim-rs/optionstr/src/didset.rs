@@ -37,7 +37,7 @@ extern "C" {
     fn nvim_option_get_values(opt: *mut c_void) -> *const *const c_char;
 
     /// Get flags bitmask for option at idx
-    fn nvim_option_get_flags_val(idx: OptIndex) -> c_uint;
+    fn rs_get_option_flags(idx: OptIndex) -> c_uint;
 
     /// Get global string value for option at idx (dereferences opt->var)
     fn nvim_option_get_global_str_val(idx: OptIndex) -> *const c_char;
@@ -76,7 +76,7 @@ pub unsafe fn check_str_opt_impl(idx: OptIndex, varp: *mut *mut c_char) -> bool 
     let values = nvim_option_get_values(opt_norm);
 
     // Determine if this option is a comma-separated list
-    let flags_val = nvim_option_get_flags_val(idx);
+    let flags_val = rs_get_option_flags(idx);
     let is_list = (flags_val & (K_OPT_FLAG_COMMA | K_OPT_FLAG_ONE_COMMA)) != 0;
 
     // Get the actual string to validate

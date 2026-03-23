@@ -44,6 +44,7 @@ extern "C" {
 
     // Option metadata accessors
     fn nvim_get_option_immutable(opt_idx: c_int) -> c_int;
+    #[link_name = "rs_get_option_flags"]
     fn nvim_option_get_flags_val(opt_idx: c_int) -> c_uint;
     fn nvim_option_get_flags_ptr(opt_idx: c_int) -> *mut c_uint;
 
