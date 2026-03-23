@@ -117,10 +117,6 @@ extern "C" {
     // cp_fname accessor
     pub(crate) fn nvim_compl_match_has_fname(m: ComplMatch) -> c_int;
 
-    // compl_orig_text and compl_leader accessors (String_T)
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_leader_data() -> *const c_char;
-
     // Direction check (from lib.rs)
     fn rs_compl_dir_forward() -> c_int;
 }
@@ -280,7 +276,7 @@ pub(crate) unsafe fn shown_match_has_newline() -> bool {
 /// Check if compl_shown_match cp_str equals compl_orig_text.
 #[inline]
 pub(crate) unsafe fn shown_match_str_eq_orig() -> bool {
-    let orig = nvim_get_compl_orig_text_data();
+    let orig = crate::vars::nvim_get_compl_orig_text_data();
     let shown = shown_match_cp_str_data();
     if shown.is_null() || orig.is_null() {
         return false;
@@ -504,8 +500,8 @@ pub(crate) unsafe fn shown_match_is_sentinel(forward: bool) -> bool {
 /// Check if compl_leader equals compl_orig_text (both non-null).
 #[inline]
 pub(crate) unsafe fn compl_leader_eq_orig_text() -> bool {
-    let leader = nvim_get_compl_leader_data();
-    let orig = nvim_get_compl_orig_text_data();
+    let leader = crate::vars::nvim_get_compl_leader_data();
+    let orig = crate::vars::nvim_get_compl_orig_text_data();
     if leader.is_null() || orig.is_null() {
         return false;
     }

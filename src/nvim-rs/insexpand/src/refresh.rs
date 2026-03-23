@@ -9,11 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions
 extern "C" {
-    fn nvim_get_compl_leader_data() -> *const c_char;
-    fn nvim_get_compl_leader_size() -> usize;
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
-
     // UTF-8 functions
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
 }
@@ -26,15 +21,15 @@ const CTRL_X_OMNI: c_int = 13;
 #[no_mangle]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_refresh_leader_char_count() -> c_int {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
-        let orig_data = nvim_get_compl_orig_text_data();
+        let orig_data = crate::vars::nvim_get_compl_orig_text_data();
         if orig_data.is_null() {
             return 0;
         }
-        return rs_refresh_count_chars(orig_data, nvim_get_compl_orig_text_size());
+        return rs_refresh_count_chars(orig_data, crate::vars::nvim_get_compl_orig_text_size());
     }
-    rs_refresh_count_chars(leader_data, nvim_get_compl_leader_size())
+    rs_refresh_count_chars(leader_data, crate::vars::nvim_get_compl_leader_size())
 }
 
 /// Count the number of UTF-8 characters in a string.
@@ -72,8 +67,8 @@ pub unsafe extern "C" fn rs_refresh_count_chars(ptr: *const c_char, len: usize) 
 #[no_mangle]
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_restart_leader_diff() -> c_int {
-    let leader_size = nvim_get_compl_leader_size();
-    let orig_size = nvim_get_compl_orig_text_size();
+    let leader_size = crate::vars::nvim_get_compl_leader_size();
+    let orig_size = crate::vars::nvim_get_compl_orig_text_size();
     (leader_size as c_int) - (orig_size as c_int)
 }
 

@@ -352,7 +352,7 @@ bool compl_enter_selects = false;
 
 /// When "compl_leader" is not NULL only matches that start with this string
 /// are used.
-static String compl_leader = STRING_INIT;
+String compl_leader = STRING_INIT;  // made non-static for Rust access (Phase 20)
 
 bool compl_get_longest = false;  ///< put longest common string in compl_leader
 
@@ -390,8 +390,7 @@ linenr_T compl_lnum = 0;         ///< lnum where the completion start
 colnr_T compl_col = 0;           ///< column where the text starts
                                         ///< that is being completed
 colnr_T compl_ins_end_col = 0;
-static String compl_orig_text = STRING_INIT;  ///< text as it was before
-                                              ///< completion started
+String compl_orig_text = STRING_INIT;  // made non-static for Rust access (Phase 20)
 /// Undo information to restore extmarks for original text.
 static extmark_undo_vec_t compl_orig_extmarks;
 int compl_cont_mode = 0;
@@ -1909,10 +1908,10 @@ int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 // nvim_get_compl_hi_on_autocompl_longest: deleted (Phase 2, moved to Rust)
-const char *nvim_get_compl_leader_data(void) { return compl_leader.data; }
-size_t nvim_get_compl_leader_size(void) { return compl_leader.size; }
-const char *nvim_get_compl_orig_text_data(void) { return compl_orig_text.data; }
-size_t nvim_get_compl_orig_text_size(void) { return compl_orig_text.size; }
+// nvim_get_compl_leader_data: deleted (Phase 20, direct Rust access via extern static)
+// nvim_get_compl_leader_size: deleted (Phase 20, direct Rust access via extern static)
+// nvim_get_compl_orig_text_data: deleted (Phase 20, direct Rust access via extern static)
+// nvim_get_compl_orig_text_size: deleted (Phase 20, direct Rust access via extern static)
 int nvim_get_pum_want_insert(void) { return pum_want.insert ? 1 : 0; }
 int nvim_curbuf_get_b_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
 

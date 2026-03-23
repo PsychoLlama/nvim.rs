@@ -26,7 +26,7 @@ extern "C" {
     // (nvim_compl_shown_match_str_eq_orig: inlined in match_list.rs)
 
     // leader/startcol: rs_get_leader_for_startcol_data/size are defined in Rust (leader.rs)
-    fn nvim_get_compl_leader_data() -> *const std::ffi::c_char;
+    // (nvim_get_compl_leader_data: inlined in vars.rs)
 
     // equal check
     fn rs_ins_compl_equal(m: ComplMatch, str_: *const std::ffi::c_char, len: usize) -> c_int;
@@ -61,7 +61,7 @@ extern "C" {
     fn nvim_restore_orig_extmarks();
 
     // compl_orig_text
-    fn nvim_get_compl_orig_text_data() -> *const std::ffi::c_char;
+    // (nvim_get_compl_orig_text_data: inlined in vars.rs)
     fn rs_get_compl_len() -> c_int;
 
     // enter selects
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         return -1;
     }
 
-    if !nvim_get_compl_leader_data().is_null()
+    if !crate::vars::nvim_get_compl_leader_data().is_null()
         && !crate::match_list::shown_match_at_orig_text()
         && rs_cot_fuzzy() == 0
     {
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
             nvim_update_screen(); // Show the inserted text right away
         }
     } else if compl_no_insert && !started && !compl_preinsert {
-        let orig_data = nvim_get_compl_orig_text_data();
+        let orig_data = crate::vars::nvim_get_compl_orig_text_data();
         let compl_len = rs_get_compl_len();
         debug_assert!(compl_len >= 0);
         #[allow(clippy::cast_sign_loss)]
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
                 c_int::from(preinsert_longest),
             );
         } else {
-            let leader_data = nvim_get_compl_leader_data();
+            let leader_data = crate::vars::nvim_get_compl_leader_data();
             debug_assert!(!leader_data.is_null());
             let compl_len = rs_get_compl_len();
             debug_assert!(compl_len >= 0);

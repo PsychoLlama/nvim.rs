@@ -49,10 +49,6 @@ extern "C" {
     fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
     fn fuzzy_match_str(str: *mut c_char, pat: *const c_char) -> c_int;
     // rs_get_leader_for_startcol_data is defined in Rust (leader.rs)
-    fn nvim_get_compl_leader_data() -> *const c_char;
-    fn nvim_get_compl_leader_size() -> usize;
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
 
     // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
     fn nvim_mergesort_compl_list_raw(head: ComplMatch, compare_type: c_int) -> ComplMatch;
@@ -92,8 +88,8 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
         return;
     }
 
-    let leader_data = nvim_get_compl_leader_data();
-    let leader_size = nvim_get_compl_leader_size();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
+    let leader_size = crate::vars::nvim_get_compl_leader_size();
     let use_leader = !leader_data.is_null() && leader_size > 0;
 
     let pattern = if use_leader {
@@ -101,8 +97,8 @@ pub unsafe extern "C" fn rs_set_fuzzy_score() {
         let _ = crate::leader::rs_get_leader_for_startcol_data(ComplMatch::null(), 1);
         std::ptr::null()
     } else {
-        let orig_data = nvim_get_compl_orig_text_data();
-        let orig_size = nvim_get_compl_orig_text_size();
+        let orig_data = crate::vars::nvim_get_compl_orig_text_data();
+        let orig_size = crate::vars::nvim_get_compl_orig_text_size();
         if orig_data.is_null() || orig_size == 0 {
             return;
         }

@@ -38,8 +38,6 @@ extern "C" {
     // Completion state accessors
     fn rs_compl_status_adding() -> c_int;
     fn nvim_get_p_ic() -> c_int;
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
     fn nvim_vim_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
 
     // Word boundary helpers (from insexpand_shim.c)
@@ -57,11 +55,11 @@ extern "C" {
 /// orig_text (case-insensitive if p_ic is set).
 #[inline]
 unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
-    let orig_data = nvim_get_compl_orig_text_data();
+    let orig_data = crate::vars::nvim_get_compl_orig_text_data();
     if orig_data.is_null() {
         return true;
     }
-    let orig_size = nvim_get_compl_orig_text_size();
+    let orig_size = crate::vars::nvim_get_compl_orig_text_size();
     if nvim_get_p_ic() != 0 {
         nvim_vim_strnicmp(str_, orig_data, orig_size) == 0
     } else {

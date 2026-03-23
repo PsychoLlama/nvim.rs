@@ -9,14 +9,6 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions for leader and original text
 extern "C" {
-    // Leader data
-    fn nvim_get_compl_leader_data() -> *const c_char;
-    fn nvim_get_compl_leader_size() -> usize;
-
-    // Original text data
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
-
     // Cursor and column accessors
     fn nvim_get_cursor_col() -> c_int;
 
@@ -32,9 +24,9 @@ const NL: c_char = 0x0A; // '\012' newline
 /// Get the completion leader data pointer (or orig_text if leader is not set).
 #[inline]
 unsafe fn leader_get_data() -> *const c_char {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
-        nvim_get_compl_orig_text_data()
+        crate::vars::nvim_get_compl_orig_text_data()
     } else {
         leader_data
     }
@@ -43,11 +35,11 @@ unsafe fn leader_get_data() -> *const c_char {
 /// Get the length of the completion leader (or orig_text length if leader is not set).
 #[inline]
 unsafe fn leader_get_len() -> usize {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
-        nvim_get_compl_orig_text_size()
+        crate::vars::nvim_get_compl_orig_text_size()
     } else {
-        nvim_get_compl_leader_size()
+        crate::vars::nvim_get_compl_leader_size()
     }
 }
 
@@ -134,7 +126,7 @@ pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) 
     let mut len: c_int = 0;
 
     let ptr = if ptr_arg.is_null() {
-        let leader_data = nvim_get_compl_leader_data();
+        let leader_data = crate::vars::nvim_get_compl_leader_data();
         if leader_data.is_null() {
             return; // nothing to do
         }
@@ -143,7 +135,7 @@ pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) 
         ptr_arg
     };
 
-    let orig_data = nvim_get_compl_orig_text_data();
+    let orig_data = crate::vars::nvim_get_compl_orig_text_data();
     if !orig_data.is_null() {
         let p_start = orig_data;
         // Find length of common prefix between original text and new completion
@@ -181,7 +173,7 @@ pub unsafe extern "C" fn rs_ins_compl_fixRedoBufForLeader(ptr_arg: *mut c_char) 
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_leader_extra_len() -> c_int {
     let leader_len = leader_get_len();
-    let orig_len = nvim_get_compl_orig_text_size();
+    let orig_len = crate::vars::nvim_get_compl_orig_text_size();
     (leader_len as c_int) - (orig_len as c_int)
 }
 
@@ -343,9 +335,9 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
 
     // No cpt_sources or no leader -> return compl_leader directly
     if nvim_cpt_sources_array_exists() == 0 {
-        return nvim_get_compl_leader_data();
+        return crate::vars::nvim_get_compl_leader_data();
     }
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
         return leader_data;
     }
@@ -358,7 +350,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_data(
 
     let startcol = nvim_get_cpt_source_startcol(cpt_idx);
     if startcol >= 0 && startcol < compl_col {
-        let leader_size = nvim_get_compl_leader_size();
+        let leader_size = crate::vars::nvim_get_compl_leader_size();
         let prepend_len = (compl_col - startcol) as usize;
         let new_length = prepend_len + leader_size;
 
@@ -402,9 +394,9 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
     }
 
     if nvim_cpt_sources_array_exists() == 0 {
-        return nvim_get_compl_leader_size();
+        return crate::vars::nvim_get_compl_leader_size();
     }
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
         return 0;
     }
@@ -412,12 +404,12 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
     let cpt_idx = nvim_compl_match_get_cpt_source_idx(match_);
     let compl_col = crate::vars::nvim_get_compl_col();
     if cpt_idx < 0 || compl_col <= 0 {
-        return nvim_get_compl_leader_size();
+        return crate::vars::nvim_get_compl_leader_size();
     }
 
     let startcol = nvim_get_cpt_source_startcol(cpt_idx);
     if startcol >= 0 && startcol < compl_col {
-        let leader_size = nvim_get_compl_leader_size();
+        let leader_size = crate::vars::nvim_get_compl_leader_size();
         let prepend_len = (compl_col - startcol) as usize;
         let new_length = prepend_len + leader_size;
 
@@ -431,7 +423,7 @@ pub unsafe extern "C" fn rs_get_leader_for_startcol_size(
         }
         new_length
     } else {
-        nvim_get_compl_leader_size()
+        crate::vars::nvim_get_compl_leader_size()
     }
 }
 
@@ -576,7 +568,7 @@ const FAIL: c_int = 0;
 pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     crate::pum::rs_ins_compl_del_pum();
     crate::insert::rs_ins_compl_delete(1);
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if !leader_data.is_null() {
         let compl_len = rs_get_compl_len();
         nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
@@ -591,8 +583,8 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     }
 
     if crate::vars::nvim_get_compl_started() != 0 {
-        let leader_data = nvim_get_compl_leader_data();
-        let leader_size = nvim_get_compl_leader_size();
+        let leader_data = crate::vars::nvim_get_compl_leader_data();
+        let leader_size = crate::vars::nvim_get_compl_leader_size();
         if !leader_data.is_null() {
             rs_ins_compl_set_original_text(leader_data, leader_size);
         }
@@ -629,11 +621,11 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     // Don't let Enter select the original text when there is no popup menu.
     if nvim_get_compl_match_array_exists() == 0 {
         crate::vars::nvim_set_compl_enter_selects(0);
-    } else if rs_ins_compl_has_preinsert() != 0 && nvim_get_compl_leader_size() > 0 {
+    } else if rs_ins_compl_has_preinsert() != 0 && crate::vars::nvim_get_compl_leader_size() > 0 {
         rs_ins_compl_insert(1, 0);
     } else if crate::vars::nvim_get_compl_started() != 0
         && rs_ins_compl_preinsert_longest() != 0
-        && nvim_get_compl_leader_size() > 0
+        && crate::vars::nvim_get_compl_leader_size() > 0
         && rs_ins_compl_preinsert_effect() == 0
     {
         rs_ins_compl_insert(1, 1);
@@ -676,7 +668,7 @@ const CP_ICASE: c_int = 16;
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
 
     if leader_data.is_null() {
         // First match: use the whole cp_str as the leader.
@@ -685,7 +677,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         nvim_api_clear_and_set_compl_leader(cp_data, cp_size);
 
         let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
-        let leader_after = nvim_get_compl_leader_data();
+        let leader_after = crate::vars::nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
         nvim_ins_compl_insert_bytes(leader_after.add(compl_len), -1);
@@ -737,7 +729,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         nvim_api_clear_and_set_compl_leader(buf.as_ptr().cast::<c_char>(), new_len);
 
         let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
-        let new_leader = nvim_get_compl_leader_data();
+        let new_leader = crate::vars::nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
         nvim_ins_compl_insert_bytes(new_leader.add(compl_len), -1);
@@ -1014,8 +1006,8 @@ pub unsafe extern "C" fn rs_ins_compl_addfrommatch() {
         let mut found_size: usize = 0;
         let mut cp: ComplMatch = nvim_compl_match_get_next(shown);
         while !cp.is_null() && !is_first_match(cp) {
-            let leader_data = nvim_get_compl_leader_data();
-            let leader_size = nvim_get_compl_leader_size();
+            let leader_data = crate::vars::nvim_get_compl_leader_data();
+            let leader_size = crate::vars::nvim_get_compl_leader_size();
             if leader_data.is_null() || rs_ins_compl_equal(cp, leader_data, leader_size) != 0 {
                 found = nvim_compl_match_get_cp_str_data(cp);
                 found_size = nvim_compl_match_get_cp_str_size(cp);

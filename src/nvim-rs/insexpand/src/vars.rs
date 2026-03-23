@@ -25,6 +25,14 @@ pub(crate) struct PosT {
     pub coladd: i32,
 }
 
+/// C String: { data: *mut char, size: usize }
+#[repr(C)]
+#[derive(Debug)]
+pub(crate) struct NvimString {
+    pub data: *mut std::os::raw::c_char,
+    pub size: usize,
+}
+
 extern "C" {
     // --- bool variables ---
     static mut compl_interrupted: bool;
@@ -71,6 +79,10 @@ extern "C" {
 
     // --- pos_T struct ---
     pub(crate) static mut compl_startpos: PosT;
+
+    // --- String structs ---
+    pub(crate) static mut compl_leader: NvimString;
+    pub(crate) static mut compl_orig_text: NvimString;
 }
 
 extern "C" {
@@ -475,4 +487,28 @@ pub unsafe fn nvim_set_compl_startpos_lnum_col(lnum_to_cursor: c_int, col: c_int
         compl_startpos.lnum = nvim_get_curwin_cursor_lnum();
     }
     compl_startpos.col = col;
+}
+
+/// Get compl_leader.data
+#[inline]
+pub unsafe fn nvim_get_compl_leader_data() -> *const std::os::raw::c_char {
+    compl_leader.data.cast_const()
+}
+
+/// Get compl_leader.size
+#[inline]
+pub unsafe fn nvim_get_compl_leader_size() -> usize {
+    compl_leader.size
+}
+
+/// Get compl_orig_text.data
+#[inline]
+pub unsafe fn nvim_get_compl_orig_text_data() -> *const std::os::raw::c_char {
+    compl_orig_text.data.cast_const()
+}
+
+/// Get compl_orig_text.size
+#[inline]
+pub unsafe fn nvim_get_compl_orig_text_size() -> usize {
+    compl_orig_text.size
 }

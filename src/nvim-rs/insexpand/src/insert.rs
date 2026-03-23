@@ -16,12 +16,6 @@ extern "C" {
 
     // (nvim_compl_shown_match_has_newline: inlined in match_list.rs)
 
-    // Leader accessors
-    fn nvim_get_compl_leader_data() -> *const c_char;
-    fn nvim_get_compl_leader_size() -> usize;
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
-
     // Status functions
 
     // UTF-8 functions
@@ -179,8 +173,8 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
     // Calculate orig_col: the common prefix length between orig_text and leader
     let mut orig_col: c_int = 0;
     if new_leader != 0 && rs_compl_status_adding() == 0 {
-        let orig = nvim_get_compl_orig_text_data();
-        let leader = nvim_get_compl_leader_data();
+        let orig = crate::vars::nvim_get_compl_orig_text_data();
+        let leader = crate::vars::nvim_get_compl_leader_data();
         let leader = if leader.is_null() { orig } else { leader };
 
         if !orig.is_null() && !leader.is_null() {

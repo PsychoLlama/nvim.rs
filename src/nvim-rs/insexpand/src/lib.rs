@@ -159,12 +159,6 @@ extern "C" {
     // Line/column accessors
     fn nvim_get_curwin_cursor_lnum() -> c_int;
 
-    // Leader accessors
-    fn nvim_get_compl_leader_data() -> *const c_char;
-    fn nvim_get_compl_leader_size() -> usize;
-    fn nvim_get_compl_orig_text_data() -> *const c_char;
-    fn nvim_get_compl_orig_text_size() -> usize;
-
     // Shown match (accessed via compl_shown_match global in match_list)
     #[link_name = "compl_shown_match"]
     static mut g_compl_shown_match: crate::match_list::ComplMatch;
@@ -707,9 +701,9 @@ pub unsafe extern "C" fn rs_ins_compl_has_autocomplete() -> c_int {
 /// Returns compl_leader.data if set, otherwise compl_orig_text.data.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_leader() -> *const c_char {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
-        nvim_get_compl_orig_text_data()
+        crate::vars::nvim_get_compl_orig_text_data()
     } else {
         leader_data
     }
@@ -720,11 +714,11 @@ pub unsafe extern "C" fn rs_ins_compl_leader() -> *const c_char {
 /// Returns compl_leader.size if leader is set, otherwise compl_orig_text.size.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_leader_len() -> usize {
-    let leader_data = nvim_get_compl_leader_data();
+    let leader_data = crate::vars::nvim_get_compl_leader_data();
     if leader_data.is_null() {
-        nvim_get_compl_orig_text_size()
+        crate::vars::nvim_get_compl_orig_text_size()
     } else {
-        nvim_get_compl_leader_size()
+        crate::vars::nvim_get_compl_leader_size()
     }
 }
 
