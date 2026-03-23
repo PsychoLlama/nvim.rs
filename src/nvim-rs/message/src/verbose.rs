@@ -3,14 +3,17 @@
 //! Provides Rust implementations for verbose message output and
 //! redirection state management.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // C function declarations for verbose operations
 extern "C" {
     static mut msg_silent: c_int;
-    // Verbose state accessors (in message.c)
-    fn nvim_verbose_enter_kind();
-    fn nvim_restore_pre_verbose_kind();
+    // msg_ext_set_kind is implemented in Rust (display.rs)
+    fn msg_ext_set_kind(kind: *const c_char);
+    // Verbose state (defined as Rust statics in display.rs)
+    static mut msg_ext_kind: *const c_char;
+    static mut verbose_kind: *const c_char;
+    static mut pre_verbose_kind: *const c_char;
     fn nvim_verbose_stop_impl();
     fn nvim_verbose_open_impl() -> c_int;
     fn nvim_get_p_vfile_not_empty() -> c_int;
@@ -46,8 +49,10 @@ pub unsafe extern "C" fn rs_verbose_enter() {
         msg_silent = silent + 1;
     }
     // Save pre_verbose_kind if not already in verbose mode, then set verbose kind.
-    // This is done via a single C accessor to keep the pointer comparison in C.
-    nvim_verbose_enter_kind();
+    if msg_ext_kind != verbose_kind {
+        pre_verbose_kind = msg_ext_kind;
+    }
+    msg_ext_set_kind(verbose_kind);
 }
 
 /// Leave verbose message mode.
@@ -67,7 +72,10 @@ pub unsafe extern "C" fn rs_verbose_leave() {
             msg_silent = 0;
         }
     }
-    nvim_restore_pre_verbose_kind();
+    if !pre_verbose_kind.is_null() {
+        msg_ext_set_kind(pre_verbose_kind);
+        pre_verbose_kind = std::ptr::null();
+    }
 }
 
 /// Enter verbose message mode with scroll.

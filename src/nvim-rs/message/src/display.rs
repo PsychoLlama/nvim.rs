@@ -10,10 +10,21 @@ use std::ffi::{c_char, c_int};
 // C Function Declarations
 // ============================================================================
 
+/// Message kind for ext_messages UI protocol (owned by Rust, also accessed from C).
+#[no_mangle]
+pub static mut msg_ext_kind: *const c_char = std::ptr::null();
+
+/// Verbose message kind (saved/restored across verbose_enter/leave pairs).
+#[no_mangle]
+pub static mut verbose_kind: *const c_char = std::ptr::null();
+
+/// Pre-verbose message kind (saved before entering verbose mode).
+#[no_mangle]
+pub static mut pre_verbose_kind: *const c_char = std::ptr::null();
+
 extern "C" {
     static Rows: c_int;
     // ext_messages protocol functions
-    fn nvim_set_msg_ext_kind(kind: *const c_char);
     fn msg_ext_ui_flush();
     fn msg_ext_flush_showmode();
 
@@ -71,7 +82,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_msg_ext_set_kind(msg_kind: *const c_char) {
     // Don't change the label of an existing batch:
     msg_ext_ui_flush();
-    nvim_set_msg_ext_kind(msg_kind);
+    msg_ext_kind = msg_kind;
 }
 
 /// Flush pending messages to ext_messages UI.

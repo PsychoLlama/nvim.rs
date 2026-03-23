@@ -141,7 +141,8 @@ bool keep_msg_more = false;    // keep_msg was set by msgmore()
 //                  This is an allocated string or NULL when not used.
 
 // Extended msg state, currently used for external UIs with ext_messages
-static const char *msg_ext_kind = NULL;
+// msg_ext_kind is owned by Rust (display.rs), accessible via extern linkage
+extern const char *msg_ext_kind;
 static MsgID msg_ext_id = { .type = kObjectTypeInteger, .data.integer = 0 };
 static Array *msg_ext_chunks = NULL;
 static garray_T msg_ext_last_chunk = GA_INIT(sizeof(char), 40);
@@ -483,25 +484,8 @@ int nvim_get_p_lz(void) { return p_lz ? 1 : 0; }
 void nvim_set_vim_var_warningmsg(const char *s) { set_vim_var_string(VV_WARNINGMSG, s, -1); }
 int nvim_msg_ext_kind_is_null(void) { return msg_ext_kind == NULL ? 1 : 0; }
 
-// Phase 73: forward declarations for verbose statics (defined later in this file)
-static const char *pre_verbose_kind;
-static const char *verbose_kind;
-
-// Phase 73: verbose state management accessors
-void nvim_verbose_enter_kind(void)
-{
-  if (msg_ext_kind != verbose_kind) {
-    pre_verbose_kind = msg_ext_kind;
-  }
-  msg_ext_set_kind(verbose_kind);
-}
-void nvim_restore_pre_verbose_kind(void)
-{
-  if (pre_verbose_kind != NULL) {
-    msg_ext_set_kind(pre_verbose_kind);
-    pre_verbose_kind = NULL;
-  }
-}
+// verbose_kind and pre_verbose_kind are now Rust statics (display.rs)
+// nvim_verbose_enter_kind and nvim_restore_pre_verbose_kind migrated to Rust (verbose.rs)
 void nvim_verbose_stop_impl(void)
 {
   if (verbose_fd != NULL) {
@@ -539,8 +523,7 @@ void nvim_set_msg_flags(int val) { msg_flags = val; }
 void nvim_set_msg_wait(int val) { msg_wait = val; }
 void nvim_set_msg_hist_max(int val) { msg_hist_max = val; }
 
-// Phase 87: msg_ext_set_kind accessor
-void nvim_set_msg_ext_kind(const char *kind) { msg_ext_kind = kind; }
+// nvim_set_msg_ext_kind deleted: msg_ext_kind is now a Rust static (display.rs)
 
 
 
