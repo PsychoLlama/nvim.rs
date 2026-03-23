@@ -28,8 +28,6 @@ extern "C" {
     fn nvim_compl_match_get_cpt_source_idx(m: ComplMatch) -> c_int;
     fn nvim_compl_match_get_in_match_array(m: ComplMatch) -> c_int;
 
-    fn nvim_get_cpt_sources_index() -> c_int;
-
     // leader-for-startcol (Rust implementation in leader.rs)
     fn rs_get_leader_for_startcol_data(m: ComplMatch, cached: c_int) -> *const std::ffi::c_char;
     fn rs_get_leader_for_startcol_size(m: ComplMatch, cached: c_int) -> usize;
@@ -167,7 +165,7 @@ pub unsafe extern "C" fn rs_remove_old_matches() {
     if first.is_null() {
         return;
     }
-    let cpt_sources_index = nvim_get_cpt_sources_index();
+    let cpt_sources_index = crate::vars::nvim_get_cpt_sources_index();
     if cpt_sources_index < 0 {
         return;
     }

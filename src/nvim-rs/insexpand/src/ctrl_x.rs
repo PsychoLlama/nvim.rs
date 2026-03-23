@@ -134,7 +134,6 @@ extern "C" {
     fn nvim_get_state_replace_flag() -> c_int;
     fn nvim_spell_back_safe();
     fn vpeekc() -> c_int;
-    fn nvim_get_cpt_sources_index() -> c_int;
 
     // Phase 2 accessors
     fn nvim_get_cot_flags_global() -> u32;
@@ -275,7 +274,7 @@ unsafe fn set_ctrl_x_mode_default(c: c_int) {
 /// character remaining in the option string, 0 otherwise.
 #[no_mangle]
 pub unsafe extern "C" fn rs_may_advance_cpt_index(cpt: *const c_char) -> c_int {
-    if nvim_get_cpt_sources_index() == -1 {
+    if crate::vars::nvim_get_cpt_sources_index() == -1 {
         return 0;
     }
 

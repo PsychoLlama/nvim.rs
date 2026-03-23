@@ -311,8 +311,6 @@ extern "C" {
     fn nvim_compl_match_get_match_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_match_next(m: ComplMatch, next: ComplMatch);
     fn nvim_compl_match_clear_icase(m: ComplMatch);
-    fn nvim_get_compl_match_arraysize() -> c_int;
-    fn nvim_set_compl_match_arraysize(val: c_int);
     fn nvim_compl_leader_eq_orig_text() -> c_int;
     fn nvim_set_compl_shown_to_first_or_next(no_select: c_int);
     fn nvim_compl_get_shown_match() -> ComplMatch;
@@ -363,7 +361,7 @@ const FUZZY_SCORE_NONE: c_int = -1;
 )]
 pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     // Reset match array size
-    nvim_set_compl_match_arraysize(0);
+    crate::vars::nvim_set_compl_match_arraysize(0);
 
     // If it's user complete function and refresh_always,
     // do not use "compl_leader" as prefix filter.
@@ -526,7 +524,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
         return -1;
     }
 
-    nvim_set_compl_match_arraysize(array_size);
+    crate::vars::nvim_set_compl_match_arraysize(array_size);
 
     if crate::rs_cot_fuzzy() != 0 && !compl_no_select && !shown_match_ok {
         nvim_compl_set_shown_match(shown_compl);

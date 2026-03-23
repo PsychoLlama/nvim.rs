@@ -12,8 +12,6 @@ use std::os::raw::{c_char, c_int, c_uint};
 extern "C" {
     fn nvim_curbuf_get_b_p_cpt() -> *const c_char;
     fn nvim_get_cpt_start_tv() -> u64;
-    fn nvim_get_compl_timeout_ms() -> u64;
-    fn nvim_decay_compl_timeout();
     fn os_hrtime() -> u64;
 
     // Multibyte helpers
@@ -98,9 +96,9 @@ pub unsafe extern "C" fn rs_check_elapsed_time() {
     let start_tv = nvim_get_cpt_start_tv();
     let elapsed_ms = (os_hrtime() - start_tv) / 1_000_000;
 
-    if elapsed_ms > nvim_get_compl_timeout_ms() {
+    if elapsed_ms > crate::vars::nvim_get_compl_timeout_ms() {
         crate::vars::nvim_set_compl_time_slice_expired(1);
-        nvim_decay_compl_timeout();
+        crate::vars::nvim_decay_compl_timeout();
     }
 }
 
@@ -254,10 +252,10 @@ pub unsafe extern "C" fn rs_compl_source_start_timer(source_idx: c_int) {
 /// Requires valid cpt_sources_array state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_advance_cpt_sources_index_safe() -> c_int {
-    let idx = nvim_get_cpt_sources_index();
-    let count = nvim_get_cpt_sources_count();
+    let idx = crate::vars::nvim_get_cpt_sources_index();
+    let count = crate::vars::nvim_get_cpt_sources_count();
     if idx >= 0 && idx < count - 1 {
-        nvim_set_cpt_sources_index(idx + 1);
+        crate::vars::nvim_set_cpt_sources_index(idx + 1);
         1 // OK
     } else {
         nvim_semsg_list_index_out_of_range(idx);
@@ -289,9 +287,6 @@ extern "C" {
     fn nvim_cpt_sources_set_refresh_always(idx: c_int, val: c_int);
     fn nvim_cpt_sources_get_refresh_always(idx: c_int) -> c_int;
     fn nvim_get_cpt_source_startcol(idx: c_int) -> c_int;
-    fn nvim_get_cpt_sources_index() -> c_int;
-    fn nvim_get_cpt_sources_count() -> c_int;
-    fn nvim_set_cpt_sources_index(val: c_int);
 
     // Option parsing helpers
     fn nvim_copy_option_part_ffi(
@@ -453,7 +448,7 @@ pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
 /// Requires valid `cpt_sources_array` and `cpt_sources_index` state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_void) {
-    let src_idx = nvim_get_cpt_sources_index();
+    let src_idx = crate::vars::nvim_get_cpt_sources_index();
     let startcol = nvim_get_cpt_source_startcol(src_idx);
 
     if startcol == -2 || startcol == -3 {

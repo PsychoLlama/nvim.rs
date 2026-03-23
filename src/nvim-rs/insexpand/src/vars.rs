@@ -42,6 +42,11 @@ extern "C" {
     static mut compl_shows_dir: c_int; // Direction = int enum
     static mut compl_col: c_int; // colnr_T = int
     static mut compl_lnum: c_int; // linenr_T = int
+    static mut compl_timeout_ms: u64;
+    static mut cpt_sources_index: c_int;
+    static mut compl_match_arraysize: c_int;
+    static mut spell_bad_len: usize;
+    static mut cpt_sources_count: c_int;
 }
 
 // ============================================================================
@@ -270,4 +275,55 @@ pub unsafe fn nvim_get_compl_lnum() -> c_int {
 #[inline]
 pub unsafe fn nvim_set_compl_lnum(val: c_int) {
     compl_lnum = val;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_timeout_ms() -> u64 {
+    compl_timeout_ms
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_timeout_ms(val: u64) {
+    compl_timeout_ms = val;
+}
+
+/// Decay the completion timeout: halve it if above the minimum (5 ms).
+#[inline]
+pub unsafe fn nvim_decay_compl_timeout() {
+    const COMPL_MIN_TIMEOUT_MS: u64 = 5;
+    if compl_timeout_ms > COMPL_MIN_TIMEOUT_MS {
+        compl_timeout_ms /= 2;
+    }
+}
+
+#[inline]
+pub unsafe fn nvim_get_cpt_sources_index() -> c_int {
+    cpt_sources_index
+}
+
+#[inline]
+pub unsafe fn nvim_set_cpt_sources_index(val: c_int) {
+    cpt_sources_index = val;
+}
+
+#[inline]
+pub unsafe fn nvim_get_compl_match_arraysize() -> c_int {
+    compl_match_arraysize
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_match_arraysize(val: c_int) {
+    compl_match_arraysize = val;
+}
+
+#[inline]
+pub unsafe fn nvim_set_spell_bad_len(val: c_int) {
+    #[allow(clippy::cast_sign_loss)]
+    let n = if val > 0 { val as usize } else { 0 };
+    spell_bad_len = n;
+}
+
+#[inline]
+pub unsafe fn nvim_get_cpt_sources_count() -> c_int {
+    cpt_sources_count
 }

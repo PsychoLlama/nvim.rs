@@ -547,7 +547,6 @@ extern "C" {
     fn nvim_cpt_compl_refresh();
     fn rs_cot_fuzzy() -> c_int;
     fn rs_ins_compl_fuzzy_sort();
-    fn nvim_set_spell_bad_len(val: c_int);
     // (compl_restarting moved to Rust static in state.rs)
     fn rs_ins_compl_has_autocomplete() -> c_int;
     fn rs_ins_compl_enable_autocomplete();
@@ -602,7 +601,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
             rs_ins_compl_fuzzy_sort();
         }
     } else {
-        nvim_set_spell_bad_len(0);
+        crate::vars::nvim_set_spell_bad_len(0);
         // Matches were cleared, need to search for them now.
         // Set compl_restarting to avoid that the first match is inserted.
         crate::state::COMPL_RESTARTING = true;
@@ -764,7 +763,6 @@ extern "C" {
     fn nvim_compl_match_get_cp_str_size(m: ComplMatch) -> usize;
     fn nvim_get_cpt_source_cs_flag(idx: c_int) -> c_int;
     fn nvim_get_cpt_source_cs_max_matches(idx: c_int) -> c_int;
-    fn nvim_get_cpt_sources_count() -> c_int;
     fn xcalloc(count: usize, size: usize) -> *mut c_int;
     // nvim_xfree already declared above
     fn nvim_get_p_inf() -> c_int;
@@ -808,7 +806,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
         return std::ptr::null();
     }
 
-    let sources_count = nvim_get_cpt_sources_count();
+    let sources_count = crate::vars::nvim_get_cpt_sources_count();
     if sources_count <= 0 {
         return std::ptr::null();
     }

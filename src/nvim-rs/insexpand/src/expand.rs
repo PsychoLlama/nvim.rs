@@ -52,13 +52,8 @@ extern "C" {
     fn rs_ins_compl_has_preinsert() -> c_int;
 
     // completion state
-    fn nvim_get_compl_timeout_ms() -> u64;
-    fn nvim_set_compl_timeout_ms(val: u64);
     fn nvim_get_compl_pattern_is_null() -> c_int;
 
-    // cpt sources index
-    fn nvim_get_cpt_sources_index() -> c_int;
-    fn nvim_set_cpt_sources_index(val: c_int);
     fn nvim_p_cto() -> c_int;
     fn nvim_get_p_act() -> c_int;
     fn nvim_normal_mode_strict() -> c_int;
@@ -256,7 +251,7 @@ unsafe fn rs_process_next_cpt_value(
             // compl_type = -1 (leave as default)
         } else if e_char == b'F' || e_char == b'o' {
             compl_type = CTRL_X_FUNCTION;
-            let idx = nvim_get_cpt_sources_index();
+            let idx = crate::vars::nvim_get_cpt_sources_index();
             if nvim_ins_compl_st_set_func_cb_from_e_cpt(idx) == 0 {
                 compl_type = -1;
             }
@@ -524,7 +519,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     // Determine if we are in "normal_mode_strict" and set up timer/timeout
     let normal_mode_strict = nvim_normal_mode_strict() != 0;
     if normal_mode_strict {
-        nvim_set_cpt_sources_index(0);
+        crate::vars::nvim_set_cpt_sources_index(0);
         if crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0 {
             rs_compl_source_start_timer(0);
             crate::vars::nvim_set_compl_time_slice_expired(0);
@@ -536,7 +531,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             } else {
                 nvim_p_cto().max(0) as u64
             };
-            nvim_set_compl_timeout_ms(timeout_ms);
+            crate::vars::nvim_set_compl_timeout_ms(timeout_ms);
         }
     }
     // compl_type starts as CTRL_X_NORMAL (0); process_next_cpt_value will update it
@@ -571,7 +566,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
                     if rs_advance_cpt_sources_index_safe() == 0 {
                         break;
                     }
-                    rs_compl_source_start_timer(nvim_get_cpt_sources_index());
+                    rs_compl_source_start_timer(crate::vars::nvim_get_cpt_sources_index());
                 }
                 continue;
             }
@@ -583,13 +578,13 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             && compl_type == CTRL_X_FUNCTION
             && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
         {
-            compl_timeout_save = nvim_get_compl_timeout_ms();
+            compl_timeout_save = crate::vars::nvim_get_compl_timeout_ms();
             let new_timeout = if crate::vars::nvim_get_compl_from_nonkeyword() != 0 {
                 COMPL_FUNC_TIMEOUT_NON_KW_MS
             } else {
                 COMPL_FUNC_TIMEOUT_MS
             };
-            nvim_set_compl_timeout_ms(new_timeout);
+            crate::vars::nvim_set_compl_timeout_ms(new_timeout);
         } else {
             compl_timeout_save = 0;
         }
@@ -603,7 +598,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
                 && compl_type == CTRL_X_FUNCTION
                 && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
             {
-                nvim_set_compl_timeout_ms(compl_timeout_save);
+                crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
             }
             break;
         }
@@ -614,11 +609,11 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
                     && compl_type == CTRL_X_FUNCTION
                     && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
                 {
-                    nvim_set_compl_timeout_ms(compl_timeout_save);
+                    crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
                 break;
             }
-            rs_compl_source_start_timer(nvim_get_cpt_sources_index());
+            rs_compl_source_start_timer(crate::vars::nvim_get_cpt_sources_index());
         }
 
         // Break the loop for specialized modes or when we've found a new match
@@ -630,7 +625,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
                     && compl_type == CTRL_X_FUNCTION
                     && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
                 {
-                    nvim_set_compl_timeout_ms(compl_timeout_save);
+                    crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
                 break;
             }
@@ -646,7 +641,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
                     && compl_type == CTRL_X_FUNCTION
                     && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
                 {
-                    nvim_set_compl_timeout_ms(compl_timeout_save);
+                    crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
                 }
                 break;
             }
@@ -667,7 +662,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             && compl_type == CTRL_X_FUNCTION
             && (crate::vars::nvim_get_compl_autocomplete() != 0 || nvim_p_cto() > 0)
         {
-            nvim_set_compl_timeout_ms(compl_timeout_save);
+            crate::vars::nvim_set_compl_timeout_ms(compl_timeout_save);
         }
 
         // For ^P completion, reset compl_curr_match to the head to avoid
@@ -678,7 +673,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     }
 
     // Reset cpt_sources_index and mark search as started
-    nvim_set_cpt_sources_index(-1);
+    crate::vars::nvim_set_cpt_sources_index(-1);
     crate::vars::nvim_set_compl_started(1);
 
     // Check if we reached the end of 'complete'
