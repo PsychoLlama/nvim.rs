@@ -740,3 +740,114 @@ pub unsafe fn nvim_cpt_sources_clear() {
     cpt_sources_index = -1;
     cpt_sources_count = 0;
 }
+
+// ============================================================================
+// ins_compl_st (ins_compl_next_state_T) direct field accessors (Phase 26)
+// ============================================================================
+
+/// C ins_compl_next_state_T struct (Phase 26 migration).
+/// Exact layout verified via offsetof checks.
+/// sizeof = 104; offsets:
+///   e_cpt_copy=0, e_cpt=8, ins_buf=16, cur_match_pos=24,
+///   prev_match_pos=32, set_match_pos=44, first_match_pos=48,
+///   last_match_pos=60, found_all=72, dict=80, dict_f=88, func_cb=96
+#[repr(C)]
+pub(crate) struct InsComplNextStateT {
+    pub e_cpt_copy: *mut std::os::raw::c_char, // offset 0
+    pub e_cpt: *mut std::os::raw::c_char,      // offset 8
+    pub ins_buf: *mut core::ffi::c_void,       // offset 16 (buf_T*)
+    pub cur_match_pos: *mut PosT,              // offset 24 (pos_T*)
+    pub prev_match_pos: PosT,                  // offset 32
+    pub set_match_pos: bool,                   // offset 44
+    _pad1: [u8; 3],
+    pub first_match_pos: PosT, // offset 48
+    pub last_match_pos: PosT,  // offset 60
+    pub found_all: bool,       // offset 72
+    _pad2: [u8; 7],
+    pub dict: *mut std::os::raw::c_char, // offset 80
+    pub dict_f: c_int,                   // offset 88
+    _pad3: [u8; 4],
+    pub func_cb: *mut core::ffi::c_void, // offset 96 (Callback*)
+}
+
+extern "C" {
+    pub(crate) static mut ins_compl_st: InsComplNextStateT;
+}
+
+/// Get ins_compl_st.dict
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_dict() -> *mut std::os::raw::c_char {
+    ins_compl_st.dict
+}
+
+/// Get ins_compl_st.dict_f
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_dict_f() -> c_int {
+    ins_compl_st.dict_f
+}
+
+/// Clear ins_compl_st.dict (set to NULL)
+#[inline]
+pub unsafe fn nvim_ins_compl_st_clear_dict() {
+    ins_compl_st.dict = core::ptr::null_mut();
+}
+
+/// Get ins_compl_st.func_cb (as opaque pointer)
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_func_cb() -> *mut core::ffi::c_void {
+    ins_compl_st.func_cb
+}
+
+/// Get ins_compl_st.first_match_pos.lnum
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_first_lnum() -> c_int {
+    ins_compl_st.first_match_pos.lnum
+}
+
+/// Set ins_compl_st.found_all
+#[inline]
+pub unsafe fn nvim_ins_compl_st_set_found_all(val: c_int) {
+    ins_compl_st.found_all = val != 0;
+}
+
+/// Get ins_compl_st.found_all
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_found_all() -> c_int {
+    c_int::from(ins_compl_st.found_all)
+}
+
+/// Check if *ins_compl_st.e_cpt == NUL
+#[inline]
+pub unsafe fn nvim_ins_compl_st_e_cpt_is_nul() -> c_int {
+    c_int::from(!ins_compl_st.e_cpt.is_null() && *ins_compl_st.e_cpt == 0)
+}
+
+/// Set ins_compl_st.set_match_pos = false
+#[inline]
+pub unsafe fn nvim_ins_compl_st_reset_set_match_pos() {
+    ins_compl_st.set_match_pos = false;
+}
+
+/// Get ins_compl_st.cur_match_pos->lnum
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_cur_match_lnum() -> c_int {
+    (*ins_compl_st.cur_match_pos).lnum
+}
+
+/// Get ins_compl_st.cur_match_pos->col
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_cur_match_col() -> c_int {
+    (*ins_compl_st.cur_match_pos).col
+}
+
+/// Get ins_compl_st.prev_match_pos.lnum
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_prev_match_lnum() -> c_int {
+    ins_compl_st.prev_match_pos.lnum
+}
+
+/// Get ins_compl_st.prev_match_pos.col
+#[inline]
+pub unsafe fn nvim_ins_compl_st_get_prev_match_col() -> c_int {
+    ins_compl_st.prev_match_pos.col
+}

@@ -307,8 +307,8 @@ typedef struct {
   Callback *func_cb;      ///< callback of function in 'cpt' option
 } ins_compl_next_state_T;
 
-// Static state for ins_compl_get_exp, moved to file scope for accessor visibility.
-static ins_compl_next_state_T ins_compl_st;
+// Static state for ins_compl_get_exp, made non-static for Rust access (Phase 26).
+ins_compl_next_state_T ins_compl_st;
 static bool ins_compl_st_cleared = false;
 
 // In large buffers, timeout may miss nearby matches — search above cursor
@@ -2098,15 +2098,15 @@ int nvim_p_cto(void) { return (int)p_cto; }
 // Phase 2 (pass 8): compound accessors for rs_ins_compl_get_exp / get_next_completion_match
 
 // --- ins_compl_st field accessors ---
-char *nvim_ins_compl_st_get_dict(void) { return ins_compl_st.dict; }
-int nvim_ins_compl_st_get_dict_f(void) { return ins_compl_st.dict_f; }
-void nvim_ins_compl_st_clear_dict(void) { ins_compl_st.dict = NULL; }
-void *nvim_ins_compl_st_get_func_cb(void) { return ins_compl_st.func_cb; }
-int nvim_ins_compl_st_get_first_lnum(void) { return (int)ins_compl_st.first_match_pos.lnum; }
-void nvim_ins_compl_st_set_found_all(int val) { ins_compl_st.found_all = val != 0; }
-int nvim_ins_compl_st_get_found_all(void) { return ins_compl_st.found_all ? 1 : 0; }
-int nvim_ins_compl_st_e_cpt_is_nul(void) { return *ins_compl_st.e_cpt == NUL ? 1 : 0; }
-void nvim_ins_compl_st_reset_set_match_pos(void) { ins_compl_st.set_match_pos = false; }
+// nvim_ins_compl_st_get_dict: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_dict_f: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_clear_dict: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_func_cb: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_first_lnum: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_set_found_all: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_found_all: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_e_cpt_is_nul: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_reset_set_match_pos: deleted (Phase 26, inlined in vars.rs)
 int nvim_ins_compl_st_buf_valid(void) { return buf_valid(ins_compl_st.ins_buf) ? 1 : 0; }
 int nvim_ins_compl_st_ins_buf_is_curbuf(void) { return ins_compl_st.ins_buf == curbuf ? 1 : 0; }
 void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
@@ -3374,11 +3374,10 @@ void nvim_ins_compl_st_set_prev_from_cur(void)
   ins_compl_st.prev_match_pos = *ins_compl_st.cur_match_pos;
 }
 
-/// Read accessors for cur_match_pos, prev_match_pos, first_match_pos, last_match_pos.
-int nvim_ins_compl_st_get_cur_match_lnum(void) { return (int)ins_compl_st.cur_match_pos->lnum; }
-int nvim_ins_compl_st_get_cur_match_col(void)  { return (int)ins_compl_st.cur_match_pos->col; }
-int nvim_ins_compl_st_get_prev_match_lnum(void) { return (int)ins_compl_st.prev_match_pos.lnum; }
-int nvim_ins_compl_st_get_prev_match_col(void)  { return (int)ins_compl_st.prev_match_pos.col; }
+// nvim_ins_compl_st_get_cur_match_lnum: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_cur_match_col: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_prev_match_lnum: deleted (Phase 26, inlined in vars.rs)
+// nvim_ins_compl_st_get_prev_match_col: deleted (Phase 26, inlined in vars.rs)
 
 /// Attempt to add the word or line at the current match position to the
 /// completion list.  Inlines ins_compl_get_next_word_or_line logic, then
