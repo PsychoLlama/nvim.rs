@@ -2690,8 +2690,7 @@ int nvim_compl_curr_match_next_eq_prev(void) {
 void nvim_curs_columns_curwin(void) { curs_columns(curwin, false); }
 void nvim_msg_hist_off_set(int val) { msg_hist_off = val != 0; }
 void nvim_msg_ext_set_kind_completion(void) { msg_ext_set_kind("completion"); }
-void nvim_msg_with_attr(const char *s, int attr) { msg(s, attr); }
-void nvim_msg_clr_cmdline_wrap(void) { msg_clr_cmdline(); }
+// nvim_msg_with_attr, nvim_msg_clr_cmdline_wrap: deleted (Phase 4, Rust uses #[link_name] directly)
 
 // Compound accessor for Phase 2 (pass 4): get_next_bufname_token
 void nvim_get_next_bufname_token_impl(void)

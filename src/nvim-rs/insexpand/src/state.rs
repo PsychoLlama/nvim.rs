@@ -396,7 +396,9 @@ extern "C" {
     fn nvim_get_edit_submode_extra_ptr() -> *const c_char;
     fn nvim_msg_hist_off_set(val: c_int);
     fn nvim_msg_ext_set_kind_completion();
-    fn nvim_msg_with_attr(s: *const c_char, attr: c_int);
+    #[link_name = "msg"]
+    fn nvim_msg_with_attr(s: *const c_char, attr: c_int) -> bool;
+    #[link_name = "msg_clr_cmdline"]
     fn nvim_msg_clr_cmdline_wrap();
 }
 
