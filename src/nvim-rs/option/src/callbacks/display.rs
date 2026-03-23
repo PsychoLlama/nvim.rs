@@ -42,8 +42,8 @@ extern "C" {
 
     // Direct C globals
     static mut p_window: crate::OptInt;
-    fn nvim_callback_get_topframe() -> *mut std::ffi::c_void;
-    fn nvim_callback_get_topframe_fr_height() -> c_int;
+    static mut topframe: *mut std::ffi::c_void;
+    fn nvim_ses_topframe_get_height() -> c_int;
     fn rs_tabline_height() -> c_int;
     fn rs_global_stl_height() -> c_int;
     fn nvim_get_curtab() -> *mut std::ffi::c_void;
@@ -127,7 +127,7 @@ fn get_full_screen() -> bool {
 /// Get topframe height.
 #[inline]
 fn get_topframe_height() -> c_int {
-    unsafe { nvim_callback_get_topframe_fr_height() }
+    unsafe { nvim_ses_topframe_get_height() }
 }
 
 /// Get tabline height.
@@ -188,8 +188,6 @@ pub unsafe extern "C" fn rs_did_set_laststatus_full(
     old_value: OptInt,
     new_value: OptInt,
 ) -> CallbackResult {
-    let topframe = nvim_callback_get_topframe();
-
     // When switching to global statusline, decrease topframe height
     if new_value == 3 && old_value != 3 {
         let new_height = get_topframe_height() - STATUS_HEIGHT;

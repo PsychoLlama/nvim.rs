@@ -406,10 +406,6 @@ void nvim_win_set_briopt_sbr(win_T *win, int val) { if (win) { win->w_briopt_sbr
 void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_list = val; } }
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 
-// Display callback accessors
-frame_T *nvim_callback_get_topframe(void) { return topframe; }
-int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
-
 // Window accessors for display callbacks
 const char *nvim_option_win_get_stc(win_T *win) { return win ? (const char *)win->w_p_stc : NULL; }
 void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidth_line_count = value; }
@@ -1011,9 +1007,6 @@ void nvim_put_set_get_opt_name_flags(OptIndex opt_idx, const char **name, uint64
 }
 void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
-
-// Phase 1 init function accessors: expose static helpers to Rust
-void nvim_set_fenc_default(char *val) { fenc_default = val; }
 
 // Accessors for rs_set_init_2 and rs_set_init_3 (option pass 7 phase 2)
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }

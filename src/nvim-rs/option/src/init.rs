@@ -439,7 +439,7 @@ use crate::OptValType;
 extern "C" {
     // Phase 1 accessors (added to option_shim.c)
     fn enc_locale() -> *mut c_char;
-    fn nvim_set_fenc_default(val: *mut c_char);
+    static mut fenc_default: *mut c_char;
     static mut p_title: c_int;
     static mut p_icon: c_int;
     fn os_getenv(name: *const c_char) -> *mut c_char;
@@ -647,7 +647,7 @@ pub unsafe extern "C" fn rs_set_init_fenc_default() {
         let len = 5; // "utf-8\0" = 6, but xmemdupz adds NUL
         p = xmemdupz(utf8.as_ptr(), len);
     }
-    nvim_set_fenc_default(p);
+    fenc_default = p;
 }
 
 /// Set default values for 'title' and 'icon'.
