@@ -19,6 +19,31 @@ struct GridView {
 }
 
 // ============================================================================
+// Rust-owned statics (previously file-local in message.c)
+// ============================================================================
+
+/// Row position when message grid was last flushed (replaces C static msg_grid_pos_at_flush)
+#[no_mangle]
+pub static mut msg_grid_pos_at_flush: c_int = 0;
+
+/// Whether current message uses multiple highlight regions (replaces C static is_multihl)
+#[no_mangle]
+pub static mut is_multihl: bool = false;
+
+/// messagesopt flags (replaces C static msg_flags)
+/// Default: kOptMoptFlagHitEnter (0x01) | kOptMoptFlagHistory (0x04)
+#[no_mangle]
+pub static mut msg_flags: c_int = 0x01 | 0x04;
+
+/// messagesopt wait time in ms (replaces C static msg_wait)
+#[no_mangle]
+pub static mut msg_wait: c_int = 0;
+
+/// Maximum message history entries (replaces C static msg_hist_max)
+#[no_mangle]
+pub static mut msg_hist_max: c_int = 500;
+
+// ============================================================================
 // C Function Declarations
 // ============================================================================
 
@@ -45,8 +70,6 @@ extern "C" {
     // Phase 4: msg_scroll_flush accessors
     fn nvim_msg_grid_is_throttled() -> c_int;
     fn nvim_msg_grid_set_throttled(val: c_int);
-    fn nvim_get_msg_grid_pos_at_flush() -> c_int;
-    fn nvim_set_msg_grid_pos_at_flush(val: c_int);
     static mut msg_grid_pos: c_int;
     static mut msg_scrolled: c_int;
     static mut msg_scrolled_at_flush: c_int;
@@ -83,7 +106,7 @@ extern "C" {
 
     // keep_msg raw setters (nvim_set_keep_msg_raw in message.c does xfree+xstrdup)
     fn nvim_set_keep_msg_raw(s: *const c_char);
-    fn nvim_set_keep_msg_more(val: c_int);
+    static mut keep_msg_more: bool;
     static mut keep_msg_hl_id: c_int;
     static mut keep_msg: *mut c_char;
 
@@ -101,14 +124,10 @@ extern "C" {
     fn nvim_get_p_mopt() -> *const c_char;
     fn strnequal(s1: *const c_char, s2: *const c_char, n: usize) -> bool;
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
-    fn nvim_set_msg_flags(val: c_int);
-    fn nvim_set_msg_wait(val: c_int);
-    fn nvim_set_msg_hist_max(val: c_int);
     fn msg_hist_clear(keep: c_int);
 
     // For msgmore (Phase 6)
     fn nvim_get_global_busy() -> c_int;
-    fn nvim_get_keep_msg_more() -> c_int;
     fn nvim_get_p_report() -> i64;
     fn nvim_format_msgmore(n: c_int) -> *const c_char;
 }
@@ -297,7 +316,7 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
     } else {
         nvim_set_keep_msg_raw(s);
     }
-    nvim_set_keep_msg_more(0);
+    keep_msg_more = false;
     keep_msg_hl_id = hl_id;
 }
 
@@ -343,7 +362,7 @@ pub unsafe extern "C" fn rs_msg_ui_flush() {
 pub unsafe extern "C" fn rs_msg_scroll_flush() {
     if nvim_msg_grid_is_throttled() != 0 {
         nvim_msg_grid_set_throttled(0);
-        let pos_delta = nvim_get_msg_grid_pos_at_flush() - msg_grid_pos;
+        let pos_delta = msg_grid_pos_at_flush - msg_grid_pos;
         assert!(pos_delta >= 0);
         let delta = (msg_scrolled - msg_scrolled_at_flush).min(nvim_msg_grid_get_rows());
 
@@ -368,7 +387,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
     }
     msg_scrolled_at_flush = msg_scrolled;
     msg_grid_scroll_discount = 0;
-    nvim_set_msg_grid_pos_at_flush(msg_grid_pos);
+    msg_grid_pos_at_flush = msg_grid_pos;
 }
 
 // Note: rs_msg_reset_scroll() is defined in scrollback.rs
@@ -550,9 +569,9 @@ pub unsafe extern "C" fn rs_messagesopt_changed() -> c_int {
         return FAIL;
     }
 
-    nvim_set_msg_flags(messages_flags_new);
-    nvim_set_msg_wait(messages_wait_new);
-    nvim_set_msg_hist_max(messages_history_new);
+    msg_flags = messages_flags_new;
+    msg_wait = messages_wait_new;
+    msg_hist_max = messages_history_new;
     msg_hist_clear(messages_history_new);
 
     OK
@@ -596,7 +615,7 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
 
     // Don't overwrite another important message, but do overwrite a previous
     // "more lines" or "fewer lines" message.
-    if !keep_msg.is_null() && nvim_get_keep_msg_more() == 0 {
+    if !keep_msg.is_null() && !keep_msg_more {
         return;
     }
 
@@ -605,7 +624,7 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
         let buf = nvim_format_msgmore(n);
         if crate::output_core::rs_msg(buf, 0) != 0 {
             rs_set_keep_msg(buf, 0);
-            nvim_set_keep_msg_more(1);
+            keep_msg_more = true;
         }
     }
 }

@@ -86,11 +86,11 @@ static int confirm_msg_used = false;            // displaying confirm_msg
 static char *confirm_msg = NULL;            // ":confirm" message
 static char *confirm_buttons;               // ":confirm" buttons sent to cmdline as prompt
 
-MessageHistoryEntry *msg_hist_last = NULL;          // Last message (extern for unittest)
-static MessageHistoryEntry *msg_hist_first = NULL;  // First message
-static MessageHistoryEntry *msg_hist_temp = NULL;   // First potentially temporary message
-static int msg_hist_len = 0;
-static int msg_hist_max = 500;  // The default max value is 500
+extern MessageHistoryEntry *msg_hist_last;   // owned by Rust (history.rs)
+extern MessageHistoryEntry *msg_hist_first;  // owned by Rust (history.rs)
+extern MessageHistoryEntry *msg_hist_temp;   // owned by Rust (history.rs)
+extern int msg_hist_len;                     // owned by Rust (history.rs)
+extern int msg_hist_max;  // owned by Rust (misc.rs), default 500
 
 // args in 'messagesopt' option
 #define MESSAGES_OPT_HIT_ENTER "hit-enter"
@@ -98,8 +98,8 @@ static int msg_hist_max = 500;  // The default max value is 500
 #define MESSAGES_OPT_HISTORY "history:"
 
 // The default is "hit-enter,history:500"
-static int msg_flags = kOptMoptFlagHitEnter | kOptMoptFlagHistory;
-static int msg_wait = 0;
+extern int msg_flags;   // owned by Rust (misc.rs), default kOptMoptFlagHitEnter | kOptMoptFlagHistory
+extern int msg_wait;    // owned by Rust (misc.rs), default 0
 
 static FILE *verbose_fd = NULL;
 static bool verbose_did_open = false;
@@ -151,7 +151,7 @@ static int msg_ext_last_hl_id;
 
 static bool msg_ext_history = false;  ///< message was added to history
 
-static int msg_grid_pos_at_flush = 0;
+extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
 static int64_t msg_id_next = 1;           ///< message id to be allocated to next message
 
@@ -198,17 +198,6 @@ int nvim_get_redir_reg(void) { return redir_reg; }
 int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
 int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
-
-// C accessors for message history (used by Rust)
-MessageHistoryEntry *nvim_get_msg_hist_first(void) { return msg_hist_first; }
-MessageHistoryEntry *nvim_get_msg_hist_last(void) { return msg_hist_last; }
-int nvim_get_msg_hist_len(void) { return msg_hist_len; }
-void nvim_set_msg_hist_len(int len) { msg_hist_len = len; }
-int nvim_get_msg_hist_max(void) { return msg_hist_max; }
-MessageHistoryEntry *nvim_get_msg_hist_temp(void) { return msg_hist_temp; }
-void nvim_set_msg_hist_temp(MessageHistoryEntry *entry) { msg_hist_temp = entry; }
-void nvim_set_msg_hist_first(MessageHistoryEntry *entry) { msg_hist_first = entry; }
-void nvim_set_msg_hist_last(MessageHistoryEntry *entry) { msg_hist_last = entry; }
 
 // C accessors for message history entry fields (used by Rust)
 MessageHistoryEntry *nvim_msg_hist_entry_get_next(MessageHistoryEntry *entry)
@@ -305,8 +294,6 @@ char *nvim_get_emsg_lnum(void) { return get_emsg_lnum(); }
 
 int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
-int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
-
 // Phase 429: Message grid state accessors
 int nvim_msg_grid_has_chars(void) { return msg_grid.chars != NULL ? 1 : 0; }
 int nvim_msg_grid_is_throttled(void) { return msg_grid.throttled ? 1 : 0; }
@@ -369,9 +356,6 @@ void nvim_msg_reset_scroll_grid(void)
   msg_grid_scroll_discount = 0;
 }
 
-// Phase 4: accessors for msg_scroll_flush
-int nvim_get_msg_grid_pos_at_flush(void) { return msg_grid_pos_at_flush; }
-void nvim_set_msg_grid_pos_at_flush(int val) { msg_grid_pos_at_flush = val; }
 int nvim_msg_grid_get_handle(void) { return msg_grid.handle; }
 void nvim_msg_grid_flush_dirty_line(int row)
 {
@@ -452,8 +436,6 @@ void nvim_set_keep_msg_raw(const char *s)
   xfree(keep_msg);
   keep_msg = (s != NULL) ? xstrdup(s) : NULL;
 }
-void nvim_set_keep_msg_more(int val) { keep_msg_more = (val != 0); }
-
 // Phase 6: msgmore() accessors - nvim_get_p_report is in indent_ffi.c (returns int64_t)
 // Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
 const char *nvim_format_msgmore(int n)
@@ -519,9 +501,6 @@ char *nvim_home_replace_save_null(const char *fname) { return home_replace_save(
 
 // Phase 86: messagesopt_changed accessors
 const char *nvim_get_p_mopt(void) { return p_mopt; }
-void nvim_set_msg_flags(int val) { msg_flags = val; }
-void nvim_set_msg_wait(int val) { msg_wait = val; }
-void nvim_set_msg_hist_max(int val) { msg_hist_max = val; }
 
 // nvim_set_msg_ext_kind deleted: msg_ext_kind is now a Rust static (display.rs)
 
@@ -581,10 +560,8 @@ void msg_grid_validate(void)
 
 
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
-static bool is_multihl = false;
+extern bool is_multihl;  // owned by Rust (misc.rs)
 
-// Phase 3: msg_keep accessors
-int nvim_get_is_multihl(void) { return is_multihl ? 1 : 0; }
 void nvim_set_vim_var_statusmsg(const char *s) { set_vim_var_string(VV_STATUSMSG, s, -1); }
 
 /// Check if the message should be added to history.

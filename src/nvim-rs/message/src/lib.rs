@@ -125,8 +125,8 @@ extern "C" {
     /// Set `msg_scroll` flag
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
-    /// Get `keep_msg_more` flag
-    fn nvim_get_keep_msg_more() -> c_int;
+    /// `keep_msg_more` — direct access to C global
+    static mut keep_msg_more: bool;
 }
 
 /// Get the message scrolled count.
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn rs_set_msg_hist_off(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_keep_msg_more() -> c_int {
-    nvim_get_keep_msg_more()
+    c_int::from(keep_msg_more)
 }
 
 #[cfg(test)]

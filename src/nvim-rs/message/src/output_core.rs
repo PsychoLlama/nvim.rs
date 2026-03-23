@@ -73,7 +73,8 @@ extern "C" {
     fn msg_clr_eos();
 
     // Phase 3: msg_keep accessors
-    fn nvim_get_is_multihl() -> c_int;
+    // is_multihl: Rust-owned static (misc.rs)
+    static mut is_multihl: bool;
     fn nvim_set_vim_var_statusmsg(s: *const c_char);
     fn nvim_msg_keep_should_add_hist(s: *const c_char) -> c_int;
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
@@ -178,7 +179,7 @@ pub(crate) unsafe fn msg_keep_impl(
         nvim_msg_hist_add_str(s, hl_id);
     }
 
-    if nvim_get_is_multihl() == 0 {
+    if !is_multihl {
         rs_msg_start();
     }
 
@@ -208,10 +209,10 @@ pub(crate) unsafe fn msg_keep_impl(
         msg_clr_eos();
     }
 
-    let retval: c_int = if nvim_get_is_multihl() == 0 {
-        rs_msg_end()
-    } else {
+    let retval: c_int = if is_multihl {
         1 // true
+    } else {
+        rs_msg_end()
     };
 
     if keep != 0 && retval != 0 && nvim_vim_strsize(s) < (Rows - cmdline_row - 1) * Columns + sc_col
