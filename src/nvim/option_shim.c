@@ -679,10 +679,6 @@ int nvim_is_root_user(void)
   return 0;
 #endif
 }
-// Returns a static C string naming the OptValType: "nil", "boolean", "number", "string".
-const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
-// Returns translated "Cannot unset global option value" string pointer.
-const char *nvim_errmsg_no_unset_global(void) { return _("Cannot unset global option value"); }
 
 // Fill offset table for buf_T option fields indexed by OptIndex.
 // Writes offsetof(buf_T, field) into out[idx] for each handled OptIndex.

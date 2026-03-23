@@ -944,9 +944,7 @@ extern "C" {
     #[link_name = "option_has_type"]
     fn rs_option_has_type(opt_idx: OptIndex, type_: c_int) -> c_int;
     fn nvim_get_option_type(opt_idx: OptIndex) -> c_int;
-    fn nvim_optval_type_get_name(type_: c_int) -> *const c_char;
     fn nvim_option_get_fullname(opt_idx: OptIndex) -> *const c_char;
-    fn nvim_errmsg_no_unset_global() -> *const c_char;
     fn rs_validate_num_option(
         opt_idx: OptIndex,
         newval: *mut i64,
@@ -960,12 +958,34 @@ extern "C" {
 /// kOptValTypeNil constant (must match C kOptValTypeNil = -1)
 #[cfg(not(test))]
 const K_OPT_VAL_TYPE_NIL: c_int = -1;
+/// kOptValTypeBoolean (must match C kOptValTypeBoolean = 0)
+#[cfg(not(test))]
+const K_OPT_VAL_TYPE_BOOLEAN: c_int = 0;
+/// kOptValTypeNumber (must match C kOptValTypeNumber = 1)
+#[cfg(not(test))]
+const K_OPT_VAL_TYPE_NUMBER: c_int = 1;
+/// kOptValTypeString (must match C kOptValTypeString = 2)
+#[cfg(not(test))]
+const K_OPT_VAL_TYPE_STRING: c_int = 2;
 /// OPT_GLOBAL flag (must match C OPT_GLOBAL = 0x01)
 #[cfg(not(test))]
 const OPT_GLOBAL_VAL: c_int = 0x01;
 /// OPT_LOCAL flag (must match C OPT_LOCAL = 0x02)
 #[cfg(not(test))]
 const OPT_LOCAL_VAL: c_int = 0x02;
+
+/// Mirrors C `optval_type_get_name` (static inline in option.h).
+/// Returns a static C string for the given OptValType integer value.
+#[cfg(not(test))]
+unsafe fn optval_type_name(type_: c_int) -> *const c_char {
+    match type_ {
+        K_OPT_VAL_TYPE_NIL => c"nil".as_ptr(),
+        K_OPT_VAL_TYPE_BOOLEAN => c"boolean".as_ptr(),
+        K_OPT_VAL_TYPE_NUMBER => c"number".as_ptr(),
+        K_OPT_VAL_TYPE_STRING => c"string".as_ptr(),
+        _ => c"unknown".as_ptr(),
+    }
+}
 
 /// Validate the new value for an option.
 ///
@@ -996,7 +1016,7 @@ pub unsafe extern "C" fn rs_validate_option_value(
     if newval_type == K_OPT_VAL_TYPE_NIL {
         // Don't try to unset local value if scope is global.
         if opt_flags == OPT_GLOBAL_VAL {
-            return nvim_errmsg_no_unset_global();
+            return gettext(c"Cannot unset global option value".as_ptr());
         }
         *newval = rs_optval_copy(rs_get_option_unset_value(opt_idx));
         return std::ptr::null();
@@ -1005,8 +1025,8 @@ pub unsafe extern "C" fn rs_validate_option_value(
     // Check for type mismatch.
     if rs_option_has_type(opt_idx, newval_type) == 0 {
         let opt_type = nvim_get_option_type(opt_idx);
-        let type_str = nvim_optval_type_get_name(opt_type);
-        let newval_type_str = nvim_optval_type_get_name(newval_type);
+        let type_str = optval_type_name(opt_type);
+        let newval_type_str = optval_type_name(newval_type);
         let rep = crate::value::rs_optval_to_cstr(*newval);
         let fullname = nvim_option_get_fullname(opt_idx);
         let fmt = gettext(c"Invalid value for option '%s': expected %s, got %s %s".as_ptr());
