@@ -12,10 +12,7 @@ extern "C" {
     fn nvim_get_emsg_off() -> c_int;
     /// Set `emsg_off` counter
     fn nvim_set_emsg_off(val: c_int);
-    /// Get `emsg_skip` counter
-    fn nvim_get_emsg_skip() -> c_int;
-    /// Set `emsg_skip` counter
-    fn nvim_set_emsg_skip(val: c_int);
+    static mut emsg_skip: c_int;
     /// Get `emsg_silent` counter
     fn nvim_get_emsg_silent() -> c_int;
     /// Set `emsg_silent` counter
@@ -24,10 +21,7 @@ extern "C" {
     fn nvim_get_emsg_severe() -> c_int;
     /// Set `emsg_severe` flag
     fn nvim_set_emsg_severe(val: c_int);
-    /// Get `emsg_noredir` flag
-    fn nvim_get_emsg_noredir() -> c_int;
-    /// Set `emsg_noredir` flag
-    fn nvim_set_emsg_noredir(val: c_int);
+    static mut emsg_noredir: bool;
     /// Get `did_emsg` counter
     static mut did_emsg: c_int;
     /// Set `did_emsg` counter
@@ -103,7 +97,7 @@ pub unsafe extern "C" fn rs_is_emsg_off() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_skip() -> c_int {
-    nvim_get_emsg_skip()
+    emsg_skip
 }
 
 /// Set the emsg_skip counter.
@@ -112,7 +106,7 @@ pub unsafe extern "C" fn rs_emsg_skip() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_emsg_skip(val: c_int) {
-    nvim_set_emsg_skip(val);
+    emsg_skip = val;
 }
 
 /// Increment emsg_skip to skip error messages.
@@ -121,8 +115,8 @@ pub unsafe extern "C" fn rs_set_emsg_skip(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_skip_enter() {
-    let val = nvim_get_emsg_skip();
-    nvim_set_emsg_skip(val + 1);
+    let val = emsg_skip;
+    emsg_skip = val + 1;
 }
 
 /// Decrement emsg_skip.
@@ -131,9 +125,9 @@ pub unsafe extern "C" fn rs_emsg_skip_enter() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_skip_leave() {
-    let val = nvim_get_emsg_skip();
+    let val = emsg_skip;
     if val > 0 {
-        nvim_set_emsg_skip(val - 1);
+        emsg_skip = val - 1;
     }
 }
 
@@ -216,7 +210,7 @@ pub unsafe extern "C" fn rs_set_emsg_severe(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_noredir() -> c_int {
-    nvim_get_emsg_noredir()
+    c_int::from(emsg_noredir)
 }
 
 /// Set the emsg_noredir flag.
@@ -225,7 +219,7 @@ pub unsafe extern "C" fn rs_emsg_noredir() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_emsg_noredir(val: c_int) {
-    nvim_set_emsg_noredir(val);
+    emsg_noredir = val != 0;
 }
 
 /// Get the did_emsg counter.
@@ -330,7 +324,7 @@ pub unsafe extern "C" fn rs_emsg_on_display_set(val: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_not_now() -> c_int {
     let emsg_off = nvim_get_emsg_off();
-    let emsg_skip = nvim_get_emsg_skip();
+    let skip = emsg_skip;
 
     // If emsg_off > 0 and debug doesn't contain 'm' or 't', skip messages
     // If emsg_skip > 0, always skip messages
@@ -338,7 +332,7 @@ pub unsafe extern "C" fn rs_emsg_not_now() -> c_int {
         && nvim_p_debug_contains(c_int::from(b'm')) == 0
         && nvim_p_debug_contains(c_int::from(b't')) == 0;
 
-    c_int::from(skip_due_to_off || emsg_skip > 0)
+    c_int::from(skip_due_to_off || skip > 0)
 }
 
 /// Simplified check if error messages should not be shown.
@@ -351,7 +345,7 @@ pub unsafe extern "C" fn rs_emsg_not_now() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_not_now_simple() -> c_int {
     // Simplified version - only check emsg_skip
-    c_int::from(nvim_get_emsg_skip() > 0)
+    c_int::from(emsg_skip > 0)
 }
 
 /// Check if any error suppression is active.
@@ -363,7 +357,7 @@ pub unsafe extern "C" fn rs_emsg_not_now_simple() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_emsg_suppressed() -> c_int {
     let off = nvim_get_emsg_off();
-    let skip = nvim_get_emsg_skip();
+    let skip = emsg_skip;
     let silent = nvim_get_emsg_silent();
     c_int::from(off > 0 || skip > 0 || silent > 0)
 }
@@ -379,7 +373,7 @@ pub unsafe extern "C" fn rs_emsg_save_state() -> c_int {
     // Pack the three counters into a single int
     // Each gets 10 bits (max 1023)
     let off = nvim_get_emsg_off() & 0x3FF;
-    let skip = nvim_get_emsg_skip() & 0x3FF;
+    let skip = emsg_skip & 0x3FF;
     let silent = nvim_get_emsg_silent() & 0x3FF;
     off | (skip << 10) | (silent << 20)
 }
@@ -394,7 +388,7 @@ pub unsafe extern "C" fn rs_emsg_restore_state(state: c_int) {
     let skip = (state >> 10) & 0x3FF;
     let silent = (state >> 20) & 0x3FF;
     nvim_set_emsg_off(off);
-    nvim_set_emsg_skip(skip);
+    emsg_skip = skip;
     nvim_set_emsg_silent(silent);
 }
 
@@ -424,7 +418,7 @@ pub unsafe extern "C" fn rs_did_emsg_syntax() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_now() -> c_int {
     let off = nvim_get_emsg_off();
-    let skip = nvim_get_emsg_skip();
+    let skip = emsg_skip;
     c_int::from(off == 0 && skip == 0)
 }
 
@@ -449,7 +443,7 @@ pub unsafe extern "C" fn rs_emsg_reset_counters() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
-    nvim_get_emsg_off() + nvim_get_emsg_skip() + nvim_get_emsg_silent()
+    nvim_get_emsg_off() + emsg_skip + nvim_get_emsg_silent()
 }
 
 // ============================================================================
@@ -583,7 +577,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         // When using ":silent! cmd" ignore error messages.
         // But do write it to the redirection file.
         if nvim_get_emsg_silent() != 0 {
-            if nvim_get_emsg_noredir() == 0 {
+            if !emsg_noredir {
                 crate::output_core::rs_msg_start();
                 let p = nvim_get_emsg_source();
                 if !p.is_null() {
@@ -854,7 +848,7 @@ pub unsafe extern "C" fn rs_emsg_multiline_hl(s: *const c_char, kind: *const c_c
 pub unsafe extern "C" fn rs_emsg_can_output() -> c_int {
     // Use the simple check - same as rs_emsg_now
     let off = nvim_get_emsg_off();
-    let skip = nvim_get_emsg_skip();
+    let skip = emsg_skip;
     c_int::from(off == 0 && skip == 0)
 }
 

@@ -334,14 +334,10 @@ void nvim_set_emsg_on_display(int val) { emsg_on_display = (val != 0); }
 // C accessors for error message state (used by Rust)
 int nvim_get_emsg_off(void) { return emsg_off; }
 void nvim_set_emsg_off(int val) { emsg_off = val; }
-int nvim_get_emsg_skip(void) { return emsg_skip; }
-void nvim_set_emsg_skip(int val) { emsg_skip = val; }
 int nvim_get_emsg_silent(void) { return emsg_silent; }
 void nvim_set_emsg_silent(int val) { emsg_silent = val; }
 int nvim_get_emsg_severe(void) { return emsg_severe ? 1 : 0; }
 void nvim_set_emsg_severe(int val) { emsg_severe = (val != 0); }
-int nvim_get_emsg_noredir(void) { return emsg_noredir ? 1 : 0; }
-void nvim_set_emsg_noredir(int val) { emsg_noredir = (val != 0); }
 int nvim_get_called_emsg(void) { return called_emsg; }
 void nvim_set_called_emsg(int val) { called_emsg = val; }
 
