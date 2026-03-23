@@ -1013,7 +1013,6 @@ void nvim_curwin_set_allbuf_opt_script_ctx(int idx, sctx_T sctx) { curwin->w_all
 void nvim_option_set_script_ctx(OptIndex opt_idx, sctx_T sctx) { options[opt_idx].script_ctx = sctx; }
 
 // Phase 4 (session.rs) accessors
-OptVal nvim_optval_from_varp(OptIndex opt_idx, void *varp) { return optval_from_varp(opt_idx, varp); }
 void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
 {
   return get_varp_scope(&options[opt_idx], opt_flags);

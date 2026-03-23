@@ -43,9 +43,7 @@ extern "C" {
 }
 
 extern "C" {
-    // optval helpers
-    fn nvim_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void)
-        -> crate::storage::OptVal;
+    // optval helpers - nvim_optval_from_varp replaced by crate::value::rs_optval_from_varp
     #[link_name = "rs_get_option_unset_value"]
     fn nvim_get_option_unset_value(opt_idx: c_int) -> crate::storage::OptVal;
     fn nvim_option_get_def_val(opt_idx: c_int) -> crate::storage::OptVal;
@@ -116,7 +114,7 @@ pub unsafe extern "C" fn rs_optval_default(opt_idx: c_int, varp: *mut std::ffi::
     if nvim_opt_is_hidden(opt_idx) != 0 {
         return 1;
     }
-    let current_val = nvim_optval_from_varp(opt_idx, varp);
+    let current_val = crate::value::rs_optval_from_varp(opt_idx, varp);
     let default_val = nvim_option_get_def_val(opt_idx);
     c_int::from(rs_optval_equal(current_val, default_val) != 0)
 }
@@ -203,7 +201,7 @@ pub unsafe extern "C" fn rs_put_set(
     opt_idx: c_int,
     varp: *mut std::ffi::c_void,
 ) -> c_int {
-    let value = nvim_optval_from_varp(opt_idx, varp);
+    let value = crate::value::rs_optval_from_varp(opt_idx, varp);
 
     let mut name: *const c_char = std::ptr::null();
     let mut flags: u64 = 0;

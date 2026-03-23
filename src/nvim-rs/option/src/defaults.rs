@@ -157,8 +157,6 @@ extern "C" {
     fn nvim_option_expand(opt_idx: c_int, val: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     /// Get the varp for the given scope (OPT_GLOBAL=1, OPT_LOCAL=2)
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
-    /// Convert varp to OptVal
-    fn nvim_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
     /// Get empty_string_option pointer (for STATIC_CSTR_AS_OPTVAL(""))
     fn nvim_get_empty_string_option() -> *mut std::ffi::c_char;
 }
@@ -230,7 +228,7 @@ pub unsafe extern "C" fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal 
 
     // For non-global-local options, return the global value as the unset sentinel.
     let varp = nvim_get_varp_scope_by_idx(opt_idx, OPT_GLOBAL);
-    nvim_optval_from_varp(opt_idx, varp)
+    crate::value::rs_optval_from_varp(opt_idx, varp)
 }
 
 /// Get the default value for an option, with scope and root-user awareness.
