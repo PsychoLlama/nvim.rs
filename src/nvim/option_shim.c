@@ -2133,13 +2133,6 @@ void nvim_call_curbuf_tabstop_set_vts(void)
 // option_expand, free_all_options)
 // =============================================================================
 
-/// FOR_ALL_TAB_WINDOWS win_comp_scroll wrapper.
-void nvim_call_comp_scroll_all_windows(void)
-{
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    win_comp_scroll(wp);
-  }
-}
 
 /// free_operatorfunc_option() wrapper (EXITFREE only).
 #if defined(EXITFREE)

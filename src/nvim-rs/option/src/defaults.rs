@@ -526,8 +526,8 @@ extern "C" {
     fn set_option_direct(opt_idx: c_int, val: OptVal, opt_flags: c_int, set_sid: c_int);
     /// nvim_get_current_sctx_sid() - get current_sctx.sc_sid
     fn nvim_get_current_sctx_sid() -> c_int;
-    /// FOR_ALL_TAB_WINDOWS { win_comp_scroll(wp) }
-    fn nvim_call_comp_scroll_all_windows();
+    /// nvim_callback_for_all_tab_windows(callback) - run callback for every window in all tabs
+    fn nvim_callback_for_all_tab_windows(callback: unsafe extern "C" fn(*mut std::ffi::c_void));
     /// parse_cino(buf)
     fn parse_cino(buf: *mut std::ffi::c_void);
     /// free_operatorfunc_option() wrapper (EXITFREE only)
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
     }
 
     // The 'scroll' option must be computed for all windows.
-    nvim_call_comp_scroll_all_windows();
+    nvim_callback_for_all_tab_windows(win_comp_scroll);
 
     parse_cino(curbuf);
 }
