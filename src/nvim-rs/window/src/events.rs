@@ -181,7 +181,7 @@ extern "C" {
     fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
 
     // Globals
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
 
     // redraw_later
     fn nvim_redraw_later_wrapper(wp: WinHandle, type_: c_int);
@@ -341,8 +341,7 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
     } else {
         if relative == K_FLOAT_RELATIVE_LASTSTATUS {
             let rows = Rows;
-            let p_ch = nvim_get_p_ch() as c_int;
-            row += f64::from(rows - p_ch - last_stl_height(0));
+            row += f64::from(rows - p_ch as c_int - last_stl_height(0));
         } else if relative == K_FLOAT_RELATIVE_TABLINE {
             row += f64::from(tabline_height());
         }
@@ -381,9 +380,8 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
     let mut comp_row = row as c_int - if south { height_outer } else { 0 };
     let mut comp_col = col as c_int - if east { width_outer } else { 0 };
 
-    let p_ch = nvim_get_p_ch() as c_int;
     let above_ch = if config_zindex < K_ZINDEX_MESSAGES {
-        p_ch
+        p_ch as c_int
     } else {
         0
     };

@@ -60,7 +60,7 @@ extern "C" {
     fn nvim_get_p_ls() -> i64;
     fn nvim_get_p_sb() -> c_int;
     fn nvim_get_p_spr() -> c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_set_p_wiw(val: i64);
     fn nvim_set_p_wh(val: i64);
 
@@ -519,7 +519,7 @@ unsafe fn calc_horizontal_split(
     if (flags & WSP_ROOM) != 0 {
         needed += nvim_get_p_wh() as c_int - wmh1 + nvim_win_get_winbar_height(oldwin);
     }
-    if nvim_get_p_ch() < 1 {
+    if p_ch < 1 {
         needed += 1; // cmdheight=0 adjustment
     }
 

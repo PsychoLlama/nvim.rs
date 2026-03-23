@@ -36,7 +36,7 @@ extern "C" {
     static mut need_fileinfo: bool;
     /// Set `need_fileinfo` flag
     /// Get `p_ch` (cmdheight) option
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     /// Check if UI has messages capability
     fn nvim_ui_has_messages() -> c_int;
 }
@@ -176,7 +176,6 @@ pub unsafe extern "C" fn rs_set_need_fileinfo(val: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_overflow() -> c_int {
-    let p_ch = nvim_get_p_ch();
     let ui_has_messages = nvim_ui_has_messages() != 0;
 
     // Threshold is 1 when cmdheight is 0, otherwise 0
@@ -425,7 +424,6 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     // When writing something to the screen after it has scrolled, requires a
     // wait-return prompt later.
     let overflow = nvim_ui_has_messages() == 0 && {
-        let p_ch = nvim_get_p_ch();
         let threshold = c_int::from(p_ch == 0);
         msg_scrolled > threshold
     };

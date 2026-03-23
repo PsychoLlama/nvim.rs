@@ -1119,7 +1119,7 @@ extern "C" {
     /// Get `Rows` global.
 
     /// Get `p_ch` global (command height).
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
 
     /// Get `global_stl_height()`.
     #[link_name = "rs_global_stl_height"]
@@ -1279,8 +1279,10 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
         let mouse_grid_val = nvim_get_mouse_grid();
         let rows = Rows;
         #[allow(clippy::cast_possible_truncation)]
-        let p_ch = nvim_get_p_ch() as c_int;
-        if mouse_grid_val <= 1 && row < rows - p_ch && row >= rows - p_ch - nvim_global_stl_height()
+        let p_ch_int = p_ch as c_int;
+        if mouse_grid_val <= 1
+            && row < rows - p_ch_int
+            && row >= rows - p_ch_int - nvim_global_stl_height()
         {
             return IN_STATUS_LINE;
         }

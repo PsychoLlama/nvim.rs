@@ -67,8 +67,7 @@ extern "C" {
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
     fn nvim_stl_get_p_ru() -> c_int;
-    #[link_name = "nvim_get_p_ch"]
-    fn nvim_stl_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_stl_get_p_ruf() -> *mut c_char;
     fn nvim_stl_get_ru_col() -> c_int;
     static mut State: c_int;
@@ -152,7 +151,6 @@ pub unsafe fn redraw_ruler() {
 
     let p_ru = nvim_stl_get_p_ru() != 0;
     let status_height = nvim_stl_win_get_status_height(wp);
-    let p_ch = nvim_stl_get_p_ch();
     let ui_has_messages = nvim_stl_ui_has_messages() != 0;
 
     // Check if ruler should be drawn, clear if it was drawn before.

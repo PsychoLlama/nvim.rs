@@ -89,7 +89,7 @@ extern "C" {
         wfh: c_int,
         set_ch: c_int,
     );
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_tabpage_set_ch_used(tp: TabpageHandle, val: i64);
     fn nvim_compute_cmdrow();
     fn nvim_get_skip_win_fix_scroll() -> c_int;
@@ -366,7 +366,7 @@ unsafe fn win_new_screen_rows_impl() {
     nvim_compute_cmdrow();
 
     let curtab = nvim_get_curtab();
-    nvim_tabpage_set_ch_used(curtab, nvim_get_p_ch());
+    nvim_tabpage_set_ch_used(curtab, p_ch);
 
     if nvim_get_skip_win_fix_scroll() == 0 {
         rs_win_fix_scroll(1); // resize = true

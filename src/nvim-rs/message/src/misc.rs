@@ -114,7 +114,7 @@ extern "C" {
     fn nvim_get_p_lz() -> c_int;
     fn nvim_char_avail() -> c_int;
     fn nvim_get_key_typed() -> c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
 
     // For msg_make
     fn skipwhite(s: *const c_char) -> *mut c_char;
@@ -469,7 +469,7 @@ pub unsafe extern "C" fn rs_messaging() -> bool {
     // TODO(bfredl): with general support for "async" messages with p_ch,
     // this should be re-enabled.
     !(nvim_get_p_lz() != 0 && nvim_char_avail() != 0 && nvim_get_key_typed() == 0)
-        && (nvim_get_p_ch() > 0 || nvim_ui_has_messages() != 0)
+        && (p_ch > 0 || nvim_ui_has_messages() != 0)
 }
 
 // ============================================================================

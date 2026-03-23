@@ -1732,7 +1732,7 @@ pub mod jump_machinery {
         fn skipwhite(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
         static mut msg_scroll: c_int;
         fn nvim_ecmd_shortmess_overall() -> c_int;
-        fn nvim_get_p_ch() -> i64;
+        static mut p_ch: i64;
         fn nvim_msg_ext_set_kind(kind: *const std::ffi::c_char);
         fn msg_keep(s: *const std::ffi::c_char, attr: c_int, keep: bool, multiline: bool) -> bool;
         // (nvim_msg_keep_qf deleted: use msg_keep directly)
@@ -1914,7 +1914,7 @@ pub mod jump_machinery {
         let saved_scroll = msg_scroll;
         if curbuf == old_curbuf && nvim_qf_get_cursor_lnum() == old_lnum {
             msg_scroll = 1;
-        } else if (msg_scrolled == 0 || (nvim_get_p_ch() == 0 && msg_scrolled == 1))
+        } else if (msg_scrolled == 0 || (p_ch == 0 && msg_scrolled == 1))
             && nvim_ecmd_shortmess_overall() != 0
         {
             msg_scroll = 0;

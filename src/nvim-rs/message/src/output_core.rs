@@ -60,7 +60,7 @@ extern "C" {
     // Phase 2: msg_start accessors
     static mut msg_scroll: c_int;
     static mut need_clr_eos: bool;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     static mut redrawing_cmdline: bool;
     fn nvim_get_full_screen() -> bool;
     static mut msg_didout: bool;
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         need_fileinfo = false;
     }
 
-    if need_clr_eos || (nvim_get_p_ch() == 0 && redrawing_cmdline) {
+    if need_clr_eos || (p_ch == 0 && redrawing_cmdline) {
         // Halfway an ":echo" command and getting an (error) message: clear
         // any text from the command.
         need_clr_eos = false;
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn rs_msg_start() {
     }
 
     // If cmdheight=0, scroll in the first line of msg_grid upon the screen.
-    if nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0 && msg_scrolled == 0 {
+    if p_ch == 0 && nvim_ui_has_messages() == 0 && msg_scrolled == 0 {
         msg_grid_validate();
         rs_msg_scroll_up(0, 1); // may_throttle=false, zerocmd=true
         let scrolled = msg_scrolled;
@@ -483,8 +483,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         // Overwrite last message
         msg_row = cmdline_row;
         msg_col = 0;
-    } else if c_int::from(msg_didout) != 0 || (nvim_get_p_ch() == 0 && nvim_ui_has_messages() == 0)
-    {
+    } else if c_int::from(msg_didout) != 0 || (p_ch == 0 && nvim_ui_has_messages() == 0) {
         // Start message on next line
         rs_msg_putchar(c_int::from(b'\n'));
         did_return = true;

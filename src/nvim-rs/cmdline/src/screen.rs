@@ -386,7 +386,7 @@ extern "C" {
     static mut exmode_active: bool;
     static mut need_wait_return: bool;
     static mut msg_scrolled: c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     static mut lines_left: c_int;
     fn nvim_get_cmd_silent() -> c_int;
     static mut msg_row: c_int;
@@ -456,7 +456,7 @@ pub unsafe extern "C" fn compute_cmdrow_rs() {
         winrow + height + hsep + status + stl
     };
 
-    let new_row = if new_row == rows && nvim_get_p_ch() > 0 {
+    let new_row = if new_row == rows && p_ch > 0 {
         new_row - 1
     } else {
         new_row

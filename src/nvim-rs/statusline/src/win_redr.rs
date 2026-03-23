@@ -68,8 +68,7 @@ extern "C" {
     fn nvim_stl_win_get_fcs_wbr(wp: WinHandle) -> ScharT;
 
     // Global state
-    #[link_name = "nvim_get_p_ch"]
-    fn nvim_stl_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_stl_get_ru_col() -> c_int;
     #[link_name = "nvim_get_curwin"]
     fn nvim_stl_get_curwin() -> WinHandle;
@@ -371,7 +370,7 @@ pub unsafe fn win_redr_custom(wp: WinHandle, draw_winbar: bool, draw_ruler: bool
             maxwidth = nvim_stl_win_get_view_width(wp);
         } else {
             row = if is_stl_global {
-                Rows - nvim_stl_get_p_ch() as c_int - 1
+                Rows - p_ch as c_int - 1
             } else {
                 nvim_stl_W_ENDROW(wp)
             };

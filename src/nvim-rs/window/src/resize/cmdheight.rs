@@ -33,7 +33,7 @@ extern "C" {
     // Columns global
 
     // p_ch option
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
 
     // command_frame_height static
     fn nvim_get_command_frame_height() -> c_int;
@@ -134,28 +134,27 @@ fn command_height_impl() {
             frp = prev;
         }
 
-        let p_ch = nvim_get_p_ch() as c_int;
+        let p_ch_int = p_ch as c_int;
         let command_frame_height = nvim_get_command_frame_height() != 0;
 
         // Grow cmdheight: shrink frames from bottom.
         let mut cur_p_ch = old_p_ch;
-        while p_ch > cur_p_ch && command_frame_height {
+        while p_ch_int > cur_p_ch && command_frame_height {
             if frp.is_null() {
                 nvim_emsg_id(EMSG_NOROOM);
                 nvim_set_p_ch(i64::from(cur_p_ch));
                 break;
             }
             let available = (*frp).fr_height - rs_frame_minheight(frp, WinHandle::null());
-            let h = (p_ch - cur_p_ch).min(available);
+            let h = (p_ch_int - cur_p_ch).min(available);
             rs_frame_add_height(frp, -h);
             cur_p_ch += h;
             frp = (*frp).fr_prev;
         }
 
         // Shrink cmdheight: grow the frame.
-        let p_ch_final = nvim_get_p_ch() as c_int; // may have changed above
-        if p_ch_final < cur_p_ch && command_frame_height && !frp.is_null() {
-            rs_frame_add_height(frp, cur_p_ch - p_ch_final);
+        if p_ch_int < cur_p_ch && command_frame_height && !frp.is_null() {
+            rs_frame_add_height(frp, cur_p_ch - p_ch_int);
         }
 
         // Recompute window positions.
@@ -168,9 +167,8 @@ fn command_height_impl() {
 
         // Use the value of p_ch that we remembered. This is needed for when the
         // GUI starts up, and when p_ch was changed in another tab page.
-        let p_ch_final = nvim_get_p_ch();
-        nvim_set_curtab_ch_used(p_ch_final);
-        nvim_set_min_set_ch(p_ch_final);
+        nvim_set_curtab_ch_used(p_ch);
+        nvim_set_min_set_ch(p_ch);
     }
 }
 

@@ -178,13 +178,6 @@ void msg_grid_set_pos(int row, bool scrolled)
 }
 
 
-/// C accessor for msg_scrolled global.
-/// C accessor for p_ch global option.
-int64_t nvim_get_p_ch(void)
-{
-  return p_ch;
-}
-
 /// C accessor for kOptRdbFlagNothrottle constant.
 unsigned int nvim_get_rdb_flag_nothrottle(void)
 {
@@ -214,7 +207,6 @@ int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 /// Check if p_debug contains a specific character
 int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0; }
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
-int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
 
 // Forward declarations for static functions used by Phase 4/5 accessors below

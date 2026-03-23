@@ -455,7 +455,7 @@ extern "C" {
 
     // Incsearch highlighting C dependencies
     fn nvim_get_p_is() -> c_int;
-    fn nvim_cmd_silent() -> c_int;
+    static mut cmd_silent: bool;
     fn nvim_char_avail() -> c_int;
     fn nvim_set_highlight_match(value: c_int);
     fn nvim_set_search_first_line(value: i32);
@@ -609,7 +609,7 @@ pub unsafe extern "C" fn rs_finish_incsearch_highlighting(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_should_do_incsearch(firstc: c_int) -> c_int {
     // Check if 'incsearch' option is set and not in silent mode
-    if nvim_get_p_is() == 0 || nvim_cmd_silent() != 0 {
+    if nvim_get_p_is() == 0 || cmd_silent {
         return 0;
     }
 
@@ -988,7 +988,7 @@ pub unsafe extern "C" fn do_incsearch_highlighting_rs(
     *patlen = nvim_get_ccline_cmdlen();
 
     // Check 'incsearch' and silent mode
-    if nvim_get_p_is() == 0 || nvim_cmd_silent() != 0 {
+    if nvim_get_p_is() == 0 || cmd_silent {
         return false;
     }
 

@@ -2442,7 +2442,7 @@ pub unsafe extern "C" fn rs_msg_use_grid() -> bool {
 // Message scroll accessors
 extern "C" {
     static mut msg_scrolled: c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_get_rdb_flag_nothrottle() -> c_uint;
 }
 
@@ -2456,7 +2456,6 @@ extern "C" {
 #[export_name = "msg_scrollsize"]
 pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
     let scrolled = msg_scrolled;
-    let p_ch = nvim_get_p_ch();
     let separator = c_int::from(p_ch > 0 || scrolled > 1);
     scrolled + p_ch as c_int + separator
 }

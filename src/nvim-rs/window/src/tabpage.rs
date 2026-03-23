@@ -1368,7 +1368,7 @@ extern "C" {
     fn nvim_set_lastwin_null();
 
     // enter_tabpage dependencies
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_get_curtab_ch_used() -> c_int;
     fn nvim_set_cmdheight_for_tabpage(new_ch: i64);
     fn nvim_set_curtab_ch_used(val: i64);
@@ -1484,7 +1484,6 @@ unsafe fn enter_tabpage_impl(
 
     if old_curtab != nvim_get_curtab() {
         crate::ui_flush::rs_tabpage_check_windows(old_curtab);
-        let p_ch = nvim_get_p_ch();
         let tp_ch_used = i64::from(nvim_get_curtab_ch_used());
         if p_ch != tp_ch_used {
             // Temporarily swap tp_ch_used with p_ch so set_option_value

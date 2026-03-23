@@ -77,7 +77,7 @@ extern "C" {
     fn screen_resize(width: c_int, height: c_int);
     fn check_screensize();
     static mut cmdline_row: c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     fn nvim_get_p_sj() -> OptInt;
     fn nvim_set_p_sj(val: OptInt);
     fn option_was_set(opt_idx: c_int) -> bool;
@@ -444,7 +444,6 @@ pub unsafe extern "C" fn rs_did_set_lines_or_columns(args: *mut c_void) -> Callb
             Rows = p_lines as c_int;
             Columns = p_columns as c_int;
             check_screensize();
-            let p_ch = nvim_get_p_ch();
             let new_row = Rows - std::cmp::max(p_ch as c_int, 1);
             if cmdline_row > new_row && Rows > p_ch as c_int {
                 cmdline_row = new_row;

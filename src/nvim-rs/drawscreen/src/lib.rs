@@ -2566,7 +2566,7 @@ extern "C" {
     static p_smd: c_int;
     static mut restart_edit: c_int;
     fn nvim_VIsual_active() -> c_int;
-    fn nvim_get_p_ch() -> i64;
+    static mut p_ch: i64;
     // nvim_ui_has_messages is already declared in the Phase 1 extern block above.
     static mut need_wait_return: bool;
     fn nvim_drawscreen_msg_check_for_delay();
@@ -2744,7 +2744,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
             || restart_edit != 0
             || nvim_VIsual_active() != 0);
 
-    let can_show_mode = nvim_get_p_ch() != 0 || nvim_ui_has_messages() != 0;
+    let can_show_mode = p_ch != 0 || nvim_ui_has_messages() != 0;
 
     if (do_mode || reg_recording != 0) && can_show_mode {
         if rs_skip_showmode() {
