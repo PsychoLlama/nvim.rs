@@ -3,7 +3,20 @@
 //! Provides Rust implementations for various message-related utilities
 //! that don't fit neatly into other modules.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+use std::ptr::addr_of_mut;
+
+// ============================================================================
+// C Type Definitions
+// ============================================================================
+
+/// C GridView struct layout (grid_defs.h)
+#[repr(C)]
+struct GridView {
+    target: *mut c_void,
+    row_offset: c_int,
+    col_offset: c_int,
+}
 
 // ============================================================================
 // C Function Declarations
@@ -50,8 +63,12 @@ extern "C" {
     static mut cmdline_row: c_int;
     static mut msg_row: c_int;
 
-    // Cursor positioning
-    fn msg_cursor_goto(row: c_int, col: c_int);
+    // Cursor positioning (grid_adjust takes *mut c_void = GridView*)
+    fn grid_adjust(view: *mut c_void, row_off: *mut c_int, col_off: *mut c_int) -> *mut c_void;
+    fn nvim_screengrid_get_handle(grid: *mut c_void) -> c_int;
+    fn nvim_ui_grid_cursor_goto(handle: c_int, row: c_int, col: c_int);
+    static mut cmdmsg_rl: bool;
+    static mut msg_grid_adj: GridView;
 
     // State accessors
     static mut emsg_on_display: bool;
@@ -367,10 +384,30 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
 /// * `col` - Target column
 ///
 /// # Safety
-/// Calls C function that modifies display state.
+/// Calls C functions that modify display state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_cursor_goto(row: c_int, col: c_int) {
-    msg_cursor_goto(row, col);
+    rs_msg_cursor_goto_impl(row, col);
+}
+
+/// Position the cursor in the message area (C-exported implementation).
+///
+/// Adjusts column for right-to-left cmdline mode, then calls grid cursor goto.
+///
+/// # Safety
+/// Calls C functions that modify display state.
+#[export_name = "msg_cursor_goto"]
+pub unsafe extern "C" fn rs_msg_cursor_goto_impl(mut row: c_int, mut col: c_int) {
+    if cmdmsg_rl {
+        col = Columns - 1 - col;
+    }
+    let grid = grid_adjust(
+        addr_of_mut!(msg_grid_adj).cast::<c_void>(),
+        &raw mut row,
+        &raw mut col,
+    );
+    let handle = nvim_screengrid_get_handle(grid);
+    nvim_ui_grid_cursor_goto(handle, row, col);
 }
 
 // ============================================================================

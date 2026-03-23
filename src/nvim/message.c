@@ -1735,16 +1735,7 @@ static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse
 }
 
 // msg_line_flush() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_msg_line_flush)
-
-void msg_cursor_goto(int row, int col)
-{
-  if (cmdmsg_rl) {
-    col = Columns - 1 - col;
-  }
-  ScreenGrid *grid = grid_adjust(&msg_grid_adj, &row, &col);
-  ui_grid_cursor_goto(grid->handle, row, col);
-}
-
+// msg_cursor_goto() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_cursor_goto_impl)
 
 /// Scroll the screen up one line for displaying the next message line.
 

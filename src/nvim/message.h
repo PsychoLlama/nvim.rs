@@ -78,6 +78,7 @@ void msg_start(void);
 bool msg_keep(const char *s, int hl_id, bool keep, bool multiline);
 
 // Phase 4 (message migration): Rust-implemented replacements
+void msg_cursor_goto(int row, int col);
 void clear_sb_text(bool all);
 void msg_scroll_up(bool may_throttle, bool zerocmd);
 void msg_clr_eos_force(void);
