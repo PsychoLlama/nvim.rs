@@ -2240,13 +2240,7 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 }
 // Returns 1 if compl_shown_match equals sentinel (compl_first_match for forward,
 // compl_first_match->cp_prev for backward), 0 otherwise
-int nvim_compl_shown_match_is_sentinel(int forward) {
-  if (!compl_shown_match || !compl_first_match) {
-    return 1;
-  }
-  void *sentinel = forward ? (void *)compl_first_match : (void *)compl_first_match->cp_prev;
-  return compl_shown_match == sentinel ? 1 : 0;
-}
+// nvim_compl_shown_match_is_sentinel: deleted (Phase 18, inlined in match_list.rs)
 
 // Accessors for Phase 4: ins_compl_new_leader migration
 int nvim_get_p_acl(void) { return (int)p_acl; }

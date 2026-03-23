@@ -56,7 +56,7 @@ extern "C" {
 
     // For rs_sort_compl_match_list and rs_ins_compl_fuzzy_sort
     fn nvim_mergesort_compl_list_raw(head: ComplMatch, compare_type: c_int) -> ComplMatch;
-    fn nvim_compl_shown_match_is_sentinel(forward: c_int) -> c_int;
+    // (nvim_compl_shown_match_is_sentinel: inlined in match_list.rs)
     fn rs_get_cot_flags() -> c_uint;
     fn rs_compl_shows_dir_forward() -> c_int;
 
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn rs_ins_compl_fuzzy_sort() {
     }
 
     let forward = rs_compl_shows_dir_forward() != 0;
-    let none_selected = nvim_compl_shown_match_is_sentinel(c_int::from(forward)) != 0;
+    let none_selected = crate::match_list::shown_match_is_sentinel(forward);
     if none_selected {
         return;
     }

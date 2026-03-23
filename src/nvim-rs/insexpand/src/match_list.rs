@@ -484,6 +484,23 @@ pub(crate) unsafe fn curr_match_next_eq_prev() -> bool {
     !next.is_null() && next == prev
 }
 
+/// Check if compl_shown_match is the sentinel (noinsert: none selected).
+///
+/// For forward direction, sentinel is compl_first_match.
+/// For backward direction, sentinel is compl_first_match->cp_prev.
+#[inline]
+pub(crate) unsafe fn shown_match_is_sentinel(forward: bool) -> bool {
+    if compl_shown_match.is_null() || compl_first_match.is_null() {
+        return true;
+    }
+    let sentinel = if forward {
+        compl_first_match
+    } else {
+        nvim_compl_match_get_prev(compl_first_match)
+    };
+    compl_shown_match == sentinel
+}
+
 /// Check if compl_leader equals compl_orig_text (both non-null).
 #[inline]
 pub(crate) unsafe fn compl_leader_eq_orig_text() -> bool {
