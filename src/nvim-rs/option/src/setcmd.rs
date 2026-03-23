@@ -531,7 +531,17 @@ extern "C" {
     fn rs_unset_option_local_value(opt_idx: c_int) -> *const c_char;
     #[link_name = "get_option_value"]
     fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal;
-    fn nvim_call_vim_str2nr(arg: *const c_char, len_out: *mut c_int, num_out: *mut crate::OptInt);
+    fn vim_str2nr(
+        start: *const c_char,
+        prep: *mut c_int,
+        len: *mut c_int,
+        what: c_int,
+        nptr: *mut crate::OptInt,
+        unptr: *mut u64,
+        maxlen: c_int,
+        strict: bool,
+        overflow: *mut bool,
+    );
     #[link_name = "string_to_key"]
     fn rs_string_to_key(arg: *mut c_char) -> c_int;
     fn rs_stropt_get_newval(
@@ -1057,7 +1067,18 @@ unsafe fn get_option_newval_impl(
                 // Allow negative, octal and hex numbers.
                 let mut len: c_int = 0;
                 let mut parsed: crate::OptInt = 0;
-                nvim_call_vim_str2nr(arg, &raw mut len, &raw mut parsed);
+                // STR2NR_ALL = BIN|OCT|HEX|OOCT = 0b1111 = 15
+                vim_str2nr(
+                    arg,
+                    std::ptr::null_mut(),
+                    &raw mut len,
+                    15,
+                    &raw mut parsed,
+                    std::ptr::null_mut(),
+                    0,
+                    true,
+                    std::ptr::null_mut(),
+                );
                 // Check that the whole token was consumed (no trailing non-whitespace).
                 if len == 0
                     || (*arg.add(len as usize) != 0

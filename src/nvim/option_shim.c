@@ -1698,15 +1698,6 @@ int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t 
   return validate_opt_idx(win, opt_idx, opt_flags, flags, (set_prefix_T)prefix, errmsg);
 }
 
-/// Parse a number from arg using vim_str2nr (STR2NR_ALL format).
-/// Sets *len_out to the number of characters consumed.
-/// Sets *num_out to the parsed value.
-/// Wraps vim_str2nr for Rust FFI.
-void nvim_call_vim_str2nr(const char *arg, int *len_out, int64_t *num_out)
-{
-  vim_str2nr(arg, NULL, len_out, STR2NR_ALL, num_out, NULL, 0, true, NULL);
-}
-
 
 // =============================================================================
 // Phase 6 accessors: do_syntax_autocmd, do_spelllang_source, get_fileformat_force
