@@ -30,6 +30,19 @@ const OK: c_int = 1;
 /// FAIL return value for C functions.
 const FAIL: c_int = 0;
 
+// Search flags (from search.h)
+const SEARCH_OPT: c_int = 0x10;
+const SEARCH_NOOF: c_int = 0x80;
+const SEARCH_PEEK: c_int = 0x800;
+const SEARCH_NFMSG: c_int = 0x08;
+const SEARCH_START: c_int = 0x100;
+
+// Direction values (from vim_defs.h)
+const FORWARD: c_int = 1;
+
+// Maximum matches for completion (from tag.h)
+const TAG_MANY: usize = 300;
+
 // =============================================================================
 // Struct definitions
 // =============================================================================
@@ -106,6 +119,23 @@ extern "C" {
 
     // String case conversion
     fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char;
+
+    // Phase 2: expand_pattern_in_buf helpers
+    fn nvim_cmdexpand_searchit(
+        pos: *mut PosT,
+        end_pos: *mut PosT,
+        dir: c_int,
+        pat: *mut c_char,
+        patlen: usize,
+        options: c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_curbuf_line_count() -> c_int;
+    fn nvim_cmdexpand_char_avail() -> c_int;
+    fn nvim_cmdexpand_vpeekc() -> c_int;
+    fn nvim_cmdexpand_get_search_first_line() -> c_int;
+    fn nvim_cmdexpand_get_search_last_line() -> c_int;
+    fn nvim_cmdexpand_get_pre_incsearch_pos() -> PosT;
+    static mut got_int: bool;
 }
 
 // =============================================================================
@@ -287,6 +317,239 @@ unsafe fn copy_substring_from_pos(
 }
 
 // =============================================================================
+// expand_pattern_in_buf implementation
+// =============================================================================
+
+/// Outcome of processing one match iteration.
+enum MatchOutcome {
+    /// Store this match pointer.
+    Store(*mut c_char),
+    /// Skip this iteration (match not valid or already freed).
+    Skip,
+    /// Done: no more matches in range.
+    Done,
+}
+
+/// Process one search result: extract and validate the match string.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+unsafe fn process_one_match(
+    pat: *mut c_char,
+    pat_len: usize,
+    cur_match_pos: *mut PosT,
+    end_match_pos: *mut PosT,
+    exacttext: bool,
+) -> MatchOutcome {
+    let mut full_match: *mut c_char = std::ptr::null_mut();
+    let mut word_end_pos = PosT::default();
+
+    if copy_substring_from_pos(
+        cur_match_pos,
+        end_match_pos,
+        std::ptr::addr_of_mut!(full_match),
+        std::ptr::addr_of_mut!(word_end_pos),
+    ) == FAIL
+    {
+        return MatchOutcome::Done;
+    }
+
+    if exacttext {
+        return MatchOutcome::Store(full_match);
+    }
+
+    // Build match = pat + word from buffer
+    let mut m =
+        concat_pattern_with_buffer_match(pat, pat_len as c_int, end_match_pos.cast_const(), false);
+    if !is_regex_match(m, full_match) {
+        xfree(m.cast::<c_void>());
+        m = concat_pattern_with_buffer_match(
+            pat,
+            pat_len as c_int,
+            end_match_pos.cast_const(),
+            true,
+        );
+        if !is_regex_match(m, full_match) {
+            xfree(m.cast::<c_void>());
+            xfree(full_match.cast::<c_void>());
+            return MatchOutcome::Skip;
+        }
+    }
+    xfree(full_match.cast::<c_void>());
+    MatchOutcome::Store(m)
+}
+
+/// Transfer collected matches from a Vec into an xmalloc'd C pointer array.
+///
+/// # Safety
+///
+/// `matches_out` and `num_matches_out` must be valid writable pointers.
+unsafe fn commit_matches(
+    ga: Vec<*mut c_char>,
+    matches_out: *mut *mut *mut c_char,
+    num_matches_out: *mut c_int,
+) {
+    let count = ga.len();
+    if count == 0 {
+        *matches_out = std::ptr::null_mut();
+        *num_matches_out = 0;
+        return;
+    }
+    #[allow(clippy::cast_ptr_alignment)]
+    let arr = xmalloc(count * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+    for (i, p) in ga.into_iter().enumerate() {
+        *arr.add(i) = p;
+    }
+    *matches_out = arr;
+    *num_matches_out = count as c_int;
+}
+
+/// Search for strings matching `pat` in the buffer and return them.
+///
+/// Ports the C `expand_pattern_in_buf` function to Rust.
+///
+/// # Safety
+///
+/// `pat` must be a valid null-terminated C string. `matches_out` and
+/// `num_matches_out` must be valid writable pointers.
+#[allow(clippy::too_many_lines)]
+unsafe fn expand_pattern_in_buf_impl(
+    pat: *mut c_char,
+    dir: c_int,
+    matches_out: *mut *mut *mut c_char,
+    num_matches_out: *mut c_int,
+) -> c_int {
+    let wop_flags = nvim_get_wop_flags();
+    let exacttext = (wop_flags & K_OPT_WOP_FLAG_EXACTTEXT) != 0;
+    let search_first_line = nvim_cmdexpand_get_search_first_line();
+    let search_last_line = nvim_cmdexpand_get_search_last_line();
+    let has_range = search_first_line != 0;
+
+    *matches_out = std::ptr::null_mut();
+    *num_matches_out = 0;
+
+    if pat.is_null() || *pat == 0 {
+        return FAIL;
+    }
+
+    let pat_len = libc::strlen(pat);
+    let mut cur_match_pos = if has_range {
+        PosT {
+            lnum: search_first_line,
+            col: 0,
+            coladd: 0,
+        }
+    } else {
+        nvim_cmdexpand_get_pre_incsearch_pos()
+    };
+    let mut prev_match_pos = PosT::default();
+    let search_flags = SEARCH_OPT
+        | SEARCH_NOOF
+        | SEARCH_PEEK
+        | SEARCH_NFMSG
+        | if has_range { SEARCH_START } else { 0 };
+
+    let mut ga: Vec<*mut c_char> = Vec::with_capacity(10);
+    let mut looped_around = false;
+    let mut compl_started = false;
+
+    loop {
+        let mut end_match_pos = PosT::default();
+        let found = nvim_cmdexpand_searchit(
+            std::ptr::addr_of_mut!(cur_match_pos),
+            std::ptr::addr_of_mut!(end_match_pos),
+            dir,
+            pat,
+            pat_len,
+            search_flags,
+        );
+        if found == FAIL {
+            break;
+        }
+        if has_range
+            && (cur_match_pos.lnum < search_first_line || cur_match_pos.lnum > search_last_line)
+        {
+            break;
+        }
+        if compl_started {
+            let looped = if dir == FORWARD {
+                pos_le(cur_match_pos, prev_match_pos)
+            } else {
+                pos_le(prev_match_pos, cur_match_pos)
+            };
+            if looped {
+                if looped_around {
+                    break;
+                }
+                looped_around = true;
+            }
+        }
+        compl_started = true;
+        prev_match_pos = cur_match_pos;
+
+        if nvim_cmdexpand_char_avail() != 0 || got_int {
+            if got_int {
+                nvim_cmdexpand_vpeekc();
+                got_int = false;
+            }
+            for p in &ga {
+                xfree((*p).cast::<c_void>());
+            }
+            return FAIL;
+        }
+
+        if end_match_pos.lnum > nvim_cmdexpand_curbuf_line_count() {
+            cur_match_pos = PosT {
+                lnum: 1,
+                col: 0,
+                coladd: 0,
+            };
+            continue;
+        }
+
+        match process_one_match(
+            pat,
+            pat_len,
+            std::ptr::addr_of_mut!(cur_match_pos),
+            std::ptr::addr_of_mut!(end_match_pos),
+            exacttext,
+        ) {
+            MatchOutcome::Done => break,
+            MatchOutcome::Skip => {
+                if has_range {
+                    cur_match_pos = end_match_pos;
+                }
+                continue;
+            }
+            MatchOutcome::Store(m) => {
+                let is_dup = ga.iter().any(|&p| libc::strcmp(m, p) == 0);
+                if is_dup {
+                    xfree(m.cast::<c_void>());
+                } else {
+                    ga.push(m);
+                    if ga.len() > TAG_MANY {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if has_range {
+            cur_match_pos = end_match_pos;
+        }
+    }
+
+    commit_matches(ga, matches_out, num_matches_out);
+    OK
+}
+
+/// Compare two positions: returns true if `a <= b`.
+const fn pos_le(a: PosT, b: PosT) -> bool {
+    a.lnum < b.lnum || (a.lnum == b.lnum && a.col <= b.col)
+}
+
+// =============================================================================
 // FFI Interface
 // =============================================================================
 
@@ -328,4 +591,19 @@ pub unsafe extern "C" fn rs_copy_substring_from_pos(
     match_end: *mut PosT,
 ) -> c_int {
     copy_substring_from_pos(start, end, match_out, match_end)
+}
+
+/// FFI entry point for `expand_pattern_in_buf`.
+///
+/// # Safety
+///
+/// `pat` must be a valid null-terminated C string. Output pointers must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_expand_pattern_in_buf(
+    pat: *mut c_char,
+    dir: c_int,
+    matches_out: *mut *mut *mut c_char,
+    num_matches_out: *mut c_int,
+) -> c_int {
+    expand_pattern_in_buf_impl(pat, dir, matches_out, num_matches_out)
 }

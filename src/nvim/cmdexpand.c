@@ -160,6 +160,7 @@ extern int rs_is_regex_match(const char *pat, const char *str);
 extern char *rs_concat_pattern_with_buffer_match(const char *pat, int pat_len,
                                                   const pos_T *end_match_pos, int lowercase);
 extern int rs_copy_substring_from_pos(pos_T *start, pos_T *end, char **match, pos_T *match_end);
+extern int rs_expand_pattern_in_buf(char *pat, int dir, char ***matches, int *numMatches);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
@@ -648,6 +649,55 @@ int nvim_cmdexpand_get_filetype_expand_what(void)
   return (int)filetype_expand_what;
 }
 
+
+// =============================================================================
+// Phase 2: C accessors for expand_pattern_in_buf
+// =============================================================================
+
+/// Wrapper for searchit(NULL, curbuf, ...) for Rust FFI.
+/// Returns FAIL or OK.
+int nvim_cmdexpand_searchit(pos_T *pos, pos_T *end_pos, int dir, char *pat,
+                            size_t patlen, int options)
+{
+  return searchit(NULL, curbuf, pos, end_pos, (Direction)dir, pat, patlen,
+                  1L, options, RE_LAST, NULL);
+}
+
+/// Get curbuf->b_ml.ml_line_count (for Rust FFI).
+int nvim_cmdexpand_curbuf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Wrapper for char_avail() (for Rust FFI).
+int nvim_cmdexpand_char_avail(void)
+{
+  return char_avail();
+}
+
+/// Wrapper for vpeekc() (for Rust FFI).
+int nvim_cmdexpand_vpeekc(void)
+{
+  return vpeekc();
+}
+
+/// Get search_first_line (for Rust FFI).
+int nvim_cmdexpand_get_search_first_line(void)
+{
+  return search_first_line;
+}
+
+/// Get search_last_line (for Rust FFI).
+int nvim_cmdexpand_get_search_last_line(void)
+{
+  return search_last_line;
+}
+
+/// Get pre_incsearch_pos (for Rust FFI).
+pos_T nvim_cmdexpand_get_pre_incsearch_pos(void)
+{
+  return pre_incsearch_pos;
+}
 
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
@@ -2362,7 +2412,7 @@ static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numM
     return expand_runtime_cmd(pat, numMatches, matches);
   }
   if (xp->xp_context == EXPAND_PATTERN_IN_BUF) {
-    return expand_pattern_in_buf(pat, xp->xp_search_dir, matches, numMatches);
+    return rs_expand_pattern_in_buf(pat, xp->xp_search_dir, matches, numMatches);
   }
 
   // When expanding a function name starting with s:, match the <SNR>nr_
@@ -3326,153 +3376,6 @@ void f_cmdcomplete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 }
-
-
-/// Search for strings matching "pat" in the specified range and return them.
-/// Returns OK on success, FAIL otherwise.
-///
-/// @param      pat        pattern to match
-/// @param      dir        FORWARD or BACKWARD
-/// @param[out] matches    array with matched string
-/// @param[out] numMatches number of matches
-static int expand_pattern_in_buf(char *pat, Direction dir, char ***matches, int *numMatches)
-{
-  bool exacttext = wop_flags & kOptWopFlagExacttext;
-  bool has_range = search_first_line != 0;
-
-  *matches = NULL;
-  *numMatches = 0;
-
-  if (pat == NULL || *pat == NUL) {
-    return FAIL;
-  }
-
-  int pat_len = (int)strlen(pat);
-  pos_T cur_match_pos = { 0 }, prev_match_pos = { 0 };
-  if (has_range) {
-    cur_match_pos.lnum = search_first_line;
-  } else {
-    cur_match_pos = pre_incsearch_pos;
-  }
-
-  int search_flags = SEARCH_OPT | SEARCH_NOOF | SEARCH_PEEK | SEARCH_NFMSG
-                     | (has_range ? SEARCH_START : 0);
-
-  garray_T ga;
-  ga_init(&ga, sizeof(char *), 10);  // Use growable array of char *
-
-  pos_T end_match_pos, word_end_pos;
-  bool looped_around = false;
-  bool compl_started = false;
-  char *match, *full_match;
-
-  while (true) {
-    emsg_off++;
-    msg_silent++;
-    int found_new_match = searchit(NULL, curbuf, &cur_match_pos,
-                                   &end_match_pos, dir, pat, (size_t)pat_len, 1L,
-                                   search_flags, RE_LAST, NULL);
-    msg_silent--;
-    emsg_off--;
-
-    if (found_new_match == FAIL) {
-      break;
-    }
-
-    // If in range mode, check if match is within the range
-    if (has_range && (cur_match_pos.lnum < search_first_line
-                      || cur_match_pos.lnum > search_last_line)) {
-      break;
-    }
-
-    if (compl_started) {
-      // If we've looped back to an earlier match, stop
-      if ((dir == FORWARD && ltoreq(cur_match_pos, prev_match_pos))
-          || (dir == BACKWARD && ltoreq(prev_match_pos, cur_match_pos))) {
-        if (looped_around) {
-          break;
-        } else {
-          looped_around = true;
-        }
-      }
-    }
-
-    compl_started = true;
-    prev_match_pos = cur_match_pos;
-
-    // Abort if user typed a character or interrupted
-    if (char_avail() || got_int) {
-      if (got_int) {
-        (void)vpeekc();  // Remove <C-C> from input stream
-        got_int = false;  // Don't abandon the command line
-      }
-      goto cleanup;
-    }
-
-    // searchit() can return line number +1 past the last line when
-    // searching for "foo\n" if "foo" is at end of buffer.
-    if (end_match_pos.lnum > curbuf->b_ml.ml_line_count) {
-      cur_match_pos.lnum = 1;
-      cur_match_pos.col = 0;
-      cur_match_pos.coladd = 0;
-      continue;
-    }
-
-    // Extract the matching text prepended to completed word
-    if (!rs_copy_substring_from_pos(&cur_match_pos, &end_match_pos, &full_match,
-                                    &word_end_pos)) {
-      break;
-    }
-
-    if (exacttext) {
-      match = full_match;
-    } else {
-      // Construct a new match from completed word appended to pattern itself
-      match = rs_concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, false);
-
-      // The regex pattern may include '\C' or '\c'. First, try matching the
-      // buffer word as-is. If it doesn't match, try again with the lowercase
-      // version of the word to handle smartcase behavior.
-      if (!rs_is_regex_match(match, full_match)) {
-        xfree(match);
-        match = rs_concat_pattern_with_buffer_match(pat, pat_len, &end_match_pos, true);
-        if (!rs_is_regex_match(match, full_match)) {
-          xfree(match);
-          xfree(full_match);
-          continue;
-        }
-      }
-      xfree(full_match);
-    }
-
-    // Include this match if it is not a duplicate
-    for (int i = 0; i < ga.ga_len; i++) {
-      if (strcmp(match, ((char **)ga.ga_data)[i]) == 0) {
-        XFREE_CLEAR(match);
-        break;
-      }
-    }
-    if (match != NULL) {
-      ga_grow(&ga, 1);
-      ((char **)ga.ga_data)[ga.ga_len++] = match;
-      if (ga.ga_len > TAG_MANY) {
-        break;
-      }
-    }
-    if (has_range) {
-      cur_match_pos = word_end_pos;
-    }
-  }
-
-  *matches = (char **)ga.ga_data;
-  *numMatches = ga.ga_len;
-  return OK;
-
-cleanup:
-  ga_clear_strings(&ga);
-  return FAIL;
-}
-
 // Rust helper for empty pattern check
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 
