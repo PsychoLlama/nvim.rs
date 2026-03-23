@@ -14,8 +14,7 @@ extern "C" {
     fn nvim_set_msg_col(col: c_int);
 
     // For give_warning
-    fn no_wait_return_inc();
-    fn no_wait_return_dec();
+    static mut no_wait_return: c_int;
     fn nvim_set_vim_var_warningmsg(s: *const c_char);
     fn nvim_set_keep_msg_raw(s: *const c_char);
     fn nvim_set_keep_msg_hl_id(val: c_int);
@@ -58,7 +57,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     }
 
     // Don't want a hit-enter prompt here.
-    no_wait_return_inc();
+    no_wait_return += 1;
 
     nvim_set_vim_var_warningmsg(message);
     nvim_set_keep_msg_raw(std::ptr::null());
@@ -77,7 +76,9 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     nvim_set_msg_nowait(1); // Don't wait for this message.
     nvim_set_msg_col(0);
 
-    no_wait_return_dec();
+    if no_wait_return > 0 {
+        no_wait_return -= 1;
+    }
 }
 
 /// Display a warning message with highlight.

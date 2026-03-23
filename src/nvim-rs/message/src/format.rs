@@ -446,7 +446,7 @@ extern "C" {
     // History management (Phase 76)
     fn nvim_msg_hist_add_str(s: *const c_char, hl_id: c_int);
     fn nvim_msg_hist_add_len(s: *const c_char, len: c_int, hl_id: c_int);
-    fn nvim_set_msg_hist_off(val: c_int);
+    static mut msg_hist_off: bool;
     // msg() — #[export_name = "msg"] is in output_core.rs, callable via C name
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
 
@@ -1064,9 +1064,9 @@ pub unsafe extern "C" fn rs_msg_trunc(s: *mut c_char, force: bool, hl_id: c_int)
 
     let ts = rs_msg_may_trunc(force, s);
 
-    nvim_set_msg_hist_off(1);
+    msg_hist_off = true;
     let n = msg(ts.cast_const(), hl_id);
-    nvim_set_msg_hist_off(0);
+    msg_hist_off = false;
 
     if n {
         ts

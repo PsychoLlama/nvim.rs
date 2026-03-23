@@ -128,19 +128,8 @@ extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files
 extern char *rs_find_longest_match(expand_T *xp, int options);
 
 
-// Phase 5: Context-setting helpers
-extern const char *rs_find_cmd_after_global_cmd(const char *arg);
-extern const char *rs_find_cmd_after_substitute_cmd(const char *arg);
-extern const char *rs_find_cmd_after_isearch_cmd(expand_T *xp, const char *arg);
+// Phase 5: Context-setting helpers (used from set_one_cmd_context)
 extern const char *rs_set_context_in_argopt(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_filter_cmd(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_match_cmd(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_unlet_cmd(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_lang_cmd(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_breakadd_cmd(expand_T *xp, const char *arg, int breakpt_cmd_type);
-extern const char *rs_set_context_in_scriptnames_cmd(expand_T *xp, const char *arg);
-extern const char *rs_set_context_in_filetype_cmd(expand_T *xp, const char *arg);
-extern void rs_set_context_with_pattern(expand_T *xp);
 extern void rs_set_context_for_wildcard_arg(const char *arg, int is_shell_cmd,
                                             expand_T *xp, int *complp);
 

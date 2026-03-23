@@ -400,8 +400,8 @@ pub unsafe extern "C" fn rs_emsg_restore_state(state: c_int) {
 
 // Additional C accessor declarations for warning functionality
 extern "C" {
-    /// Get `did_emsg_syntax` flag
-    fn nvim_get_did_emsg_syntax() -> c_int;
+    /// `did_emsg_syntax` — direct access to C global
+    static mut did_emsg_syntax: bool;
 }
 
 /// Check if did_emsg was set because of a syntax error.
@@ -410,7 +410,7 @@ extern "C" {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_emsg_syntax() -> c_int {
-    nvim_get_did_emsg_syntax()
+    c_int::from(did_emsg_syntax)
 }
 
 /// Check if error should be output now.
@@ -465,8 +465,7 @@ extern "C" {
     fn nvim_other_sourcing_name() -> c_int;
     fn nvim_sourcing_name_is_null() -> c_int;
     fn nvim_update_last_sourcing_name();
-    fn no_wait_return_inc();
-    fn no_wait_return_dec();
+    static mut no_wait_return: c_int;
     fn msg_putchar_hl(c: c_int, hl_id: c_int);
     fn redirecting() -> c_int;
 
@@ -498,8 +497,7 @@ extern "C" {
     fn nvim_flush_buffers_minimal();
     fn nvim_set_msg_nowait(val: c_int);
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_get_msg_ext_skip_flush() -> c_int;
-    fn nvim_set_msg_ext_skip_flush(val: c_int);
+    static mut msg_ext_skip_flush: bool;
 }
 
 // These are also declared elsewhere; allow the type-compatible clashes.
@@ -643,14 +641,14 @@ pub unsafe extern "C" fn rs_emsg_multiline(
 
     // Display name and line number for the source of the error.
     nvim_set_msg_scroll(1);
-    let save_skip_flush = nvim_get_msg_ext_skip_flush();
-    nvim_set_msg_ext_skip_flush(1);
+    let save_skip_flush = msg_ext_skip_flush;
+    msg_ext_skip_flush = true;
     rs_msg_source(hl_id);
 
     // Display the error message itself.
     nvim_set_msg_nowait(0); // Wait for this msg.
     let rv = crate::output_core::msg_keep_impl(s, hl_id, 0, multiline);
-    nvim_set_msg_ext_skip_flush(save_skip_flush);
+    msg_ext_skip_flush = save_skip_flush;
     rv
 }
 
@@ -764,7 +762,7 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
         return;
     }
 
-    no_wait_return_inc();
+    no_wait_return += 1;
 
     let p = nvim_get_emsg_source();
     if !p.is_null() {
@@ -788,7 +786,9 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
         }
     }
 
-    no_wait_return_dec();
+    if no_wait_return > 0 {
+        no_wait_return -= 1;
+    }
 
     MSG_SOURCE_RECURSIVE.store(false, Ordering::Release);
 }

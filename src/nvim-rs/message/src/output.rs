@@ -32,7 +32,7 @@ extern "C" {
     /// Get `msg_scrolled` global
     fn nvim_get_msg_scrolled() -> c_int;
     /// Get `msg_scrolled_ign` flag
-    fn nvim_get_msg_scrolled_ign() -> c_int;
+    static mut msg_scrolled_ign: bool;
     /// Get `emsg_on_display` flag
     fn nvim_get_emsg_on_display() -> c_int;
     /// Set `emsg_on_display` flag
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn rs_msg_overflow() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_check_wait_return() -> c_int {
     let overflow = rs_msg_overflow() != 0;
-    let scrolled_ign = nvim_get_msg_scrolled_ign() != 0;
+    let scrolled_ign = msg_scrolled_ign;
 
     c_int::from(overflow && !scrolled_ign)
 }
@@ -243,9 +243,7 @@ pub unsafe extern "C" fn rs_msg_dec_lines_left() -> c_int {
 extern "C" {
     // Wait return functions
     fn wait_return(redraw: c_int);
-    fn no_wait_return_get() -> c_int;
-    fn no_wait_return_inc();
-    fn no_wait_return_dec();
+    static mut no_wait_return: c_int;
     fn nvim_get_vgetc_busy() -> c_int;
 }
 
@@ -293,7 +291,7 @@ pub unsafe extern "C" fn rs_wait_return_no_redraw() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_no_wait_return() -> c_int {
-    no_wait_return_get()
+    no_wait_return
 }
 
 /// Increment no_wait_return to prevent waiting.
@@ -302,7 +300,7 @@ pub unsafe extern "C" fn rs_no_wait_return() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_no_wait_return_enter() {
-    no_wait_return_inc();
+    no_wait_return += 1;
 }
 
 /// Decrement no_wait_return.
@@ -311,7 +309,9 @@ pub unsafe extern "C" fn rs_no_wait_return_enter() {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_no_wait_return_leave() {
-    no_wait_return_dec();
+    if no_wait_return > 0 {
+        no_wait_return -= 1;
+    }
 }
 
 /// Check if waiting for return is currently blocked.
@@ -326,9 +326,7 @@ pub unsafe extern "C" fn rs_no_wait_return_leave() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_wait_return_blocked() -> c_int {
     let vgetc_busy = nvim_get_vgetc_busy();
-    let no_wait = no_wait_return_get();
-
-    c_int::from(msg_silent != 0 || vgetc_busy > 0 || no_wait > 0)
+    c_int::from(msg_silent != 0 || vgetc_busy > 0 || no_wait_return > 0)
 }
 
 /// Check if wait_return should be called.
@@ -441,7 +439,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
         msg_scrolled > threshold
     };
 
-    if overflow && nvim_get_msg_scrolled_ign() == 0 {
+    if overflow && !msg_scrolled_ign {
         // Check if str_ == "\r" - single CR character
         let is_cr_only = *str_.cast::<u8>() == b'\r'
             && (len < 0 || len == 1)

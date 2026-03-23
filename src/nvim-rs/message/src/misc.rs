@@ -38,8 +38,7 @@ extern "C" {
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_get_msg_scrolled_at_flush() -> c_int;
     fn nvim_set_msg_scrolled_at_flush(val: c_int);
-    fn nvim_get_msg_grid_scroll_discount() -> c_int;
-    fn nvim_set_msg_grid_scroll_discount(val: c_int);
+    static mut msg_grid_scroll_discount: c_int;
     fn nvim_msg_set_pos_for_scroll(pos: c_int);
     fn nvim_msg_grid_scroll_up(to_scroll: c_int);
     fn nvim_msg_grid_get_rows() -> c_int;
@@ -61,7 +60,7 @@ extern "C" {
     fn nvim_set_emsg_on_display(val: c_int);
     fn nvim_get_msg_scroll() -> c_int;
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_get_did_wait_return() -> c_int;
+    static mut did_wait_return: bool;
     fn nvim_get_emsg_silent() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
     // nvim_ui_flush is defined in change_ffi.c
@@ -244,7 +243,7 @@ pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_i
 pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
     let check = check_msg_scroll != 0;
     if (nvim_get_emsg_on_display() != 0 || (check && nvim_get_msg_scroll() != 0))
-        && nvim_get_did_wait_return() == 0
+        && !did_wait_return
         && nvim_get_emsg_silent() == 0
         && !nvim_get_in_assert_fails()
         && nvim_ui_has_messages() == 0
@@ -340,7 +339,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
             nvim_msg_set_pos_for_scroll(nvim_get_msg_grid_pos());
         }
 
-        let to_scroll = delta - pos_delta - nvim_get_msg_grid_scroll_discount();
+        let to_scroll = delta - pos_delta - msg_grid_scroll_discount;
         assert!(to_scroll >= 0);
 
         if to_scroll > 0 && nvim_get_msg_grid_pos() == 0 {
@@ -356,7 +355,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
         }
     }
     nvim_set_msg_scrolled_at_flush(nvim_get_msg_scrolled());
-    nvim_set_msg_grid_scroll_discount(0);
+    msg_grid_scroll_discount = 0;
     nvim_set_msg_grid_pos_at_flush(nvim_get_msg_grid_pos());
 }
 

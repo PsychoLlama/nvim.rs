@@ -61,10 +61,10 @@ extern "C" {
 
     // Phase 2: msg_start accessors
     fn nvim_get_msg_scroll() -> c_int;
-    fn nvim_get_need_clr_eos() -> c_int;
+    static mut need_clr_eos: bool;
     fn nvim_set_need_clr_eos(val: c_int);
     fn nvim_get_p_ch() -> i64;
-    fn nvim_get_redrawing_cmdline() -> c_int;
+    static mut redrawing_cmdline: bool;
     fn nvim_get_full_screen() -> bool;
     fn nvim_get_msg_didout() -> c_int;
     fn nvim_set_msg_didout(val: c_int);
@@ -91,7 +91,7 @@ extern "C" {
     fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
 
     // Phase 4: msg_scroll_up helpers
-    fn nvim_set_msg_did_scroll(val: c_int);
+    static mut msg_did_scroll: bool;
     fn nvim_get_msg_grid_pos() -> c_int;
     fn msg_grid_set_pos(row: c_int, scrolled: bool);
     fn nvim_msg_grid_clear_first_line();
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn rs_msg_start() {
         nvim_set_need_fileinfo(0);
     }
 
-    if nvim_get_need_clr_eos() != 0 || (nvim_get_p_ch() == 0 && nvim_get_redrawing_cmdline() != 0) {
+    if need_clr_eos || (nvim_get_p_ch() == 0 && redrawing_cmdline) {
         // Halfway an ":echo" command and getting an (error) message: clear
         // any text from the command.
         nvim_set_need_clr_eos(0);
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
     if may_throttle != 0 && msg_do_throttle() {
         nvim_msg_grid_set_throttled(1);
     }
-    nvim_set_msg_did_scroll(1);
+    msg_did_scroll = true;
 
     if nvim_get_msg_grid_pos() > 0 {
         msg_grid_set_pos(nvim_get_msg_grid_pos() - 1, zerocmd == 0);

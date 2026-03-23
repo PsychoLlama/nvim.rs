@@ -363,12 +363,7 @@ extern "C" {
     /// Get `msg_silent` flag
     /// UI active check
     fn ui_active() -> c_int;
-    /// Get `no_wait_return` counter
-    fn no_wait_return_get() -> c_int;
-    /// Increment `no_wait_return`
-    fn no_wait_return_inc();
-    /// Decrement `no_wait_return`
-    fn no_wait_return_dec();
+    static mut no_wait_return: c_int;
 }
 
 /// Check if dialogs should be suppressed.
@@ -410,7 +405,7 @@ pub unsafe extern "C" fn rs_dialog_ui_ready() -> c_int {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dialog_enter() {
-    no_wait_return_inc();
+    no_wait_return += 1;
 }
 
 /// Leave dialog context.
@@ -419,7 +414,9 @@ pub unsafe extern "C" fn rs_dialog_enter() {
 /// Calls C function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_dialog_leave() {
-    no_wait_return_dec();
+    if no_wait_return > 0 {
+        no_wait_return -= 1;
+    }
 }
 
 /// Check if currently in dialog context.
@@ -428,7 +425,7 @@ pub unsafe extern "C" fn rs_dialog_leave() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_in_dialog() -> c_int {
-    c_int::from(no_wait_return_get() > 0)
+    c_int::from(no_wait_return > 0)
 }
 
 /// Clear all dialog state.

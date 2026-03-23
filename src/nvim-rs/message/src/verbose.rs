@@ -21,8 +21,7 @@ extern "C" {
     fn nvim_set_cmdline_row(val: c_int);
 
     // Redirection state
-    fn nvim_get_redir_off() -> c_int;
-    fn nvim_set_redir_off(val: c_int);
+    static mut redir_off: bool;
     fn nvim_get_redir_fd_not_null() -> c_int;
     fn nvim_get_redir_reg() -> c_int;
     fn nvim_get_redir_vname() -> c_int;
@@ -135,7 +134,7 @@ pub unsafe extern "C" fn rs_verbose_open() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_off() -> c_int {
-    nvim_get_redir_off()
+    c_int::from(redir_off)
 }
 
 /// Set redirection off state.
@@ -144,7 +143,7 @@ pub unsafe extern "C" fn rs_redir_off() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_redir_off(val: c_int) {
-    nvim_set_redir_off(val);
+    redir_off = val != 0;
 }
 
 /// Temporarily disable redirection.
@@ -153,7 +152,7 @@ pub unsafe extern "C" fn rs_set_redir_off(val: c_int) {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_disable() {
-    nvim_set_redir_off(1);
+    redir_off = true;
 }
 
 /// Re-enable redirection.
@@ -162,7 +161,7 @@ pub unsafe extern "C" fn rs_redir_disable() {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_redir_enable() {
-    nvim_set_redir_off(0);
+    redir_off = false;
 }
 
 /// Check if any redirection is active.

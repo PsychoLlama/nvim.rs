@@ -40,20 +40,18 @@ extern "C" {
     fn nvim_get_sc_col() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
 
-    // Wait state
-    fn nvim_get_did_wait_return() -> c_int;
-    fn nvim_set_did_wait_return(val: c_int);
+    // Wait state — direct access to C global
+    static mut did_wait_return: bool;
 
-    // Overwrite state
-    fn nvim_get_msg_ext_overwrite() -> c_int;
-    fn nvim_set_msg_ext_overwrite(val: c_int);
+    // Overwrite state — direct access to C global
+    static mut msg_ext_overwrite: bool;
 
-    // Skip flush state
-    fn nvim_get_msg_ext_skip_flush() -> c_int;
-    fn nvim_set_msg_ext_skip_flush(val: c_int);
+    // Skip flush state — direct access to C global
+    static mut msg_ext_skip_flush: bool;
 
-    // Clear EOS flag
-    fn nvim_get_need_clr_eos() -> c_int;
+    // Clear EOS flag — direct access to C global
+    static mut need_clr_eos: bool;
+    // nvim_set_need_clr_eos kept for other crates
     fn nvim_set_need_clr_eos(val: c_int);
     static mut need_wait_return: bool;
 }
@@ -166,7 +164,7 @@ pub unsafe extern "C" fn rs_msg_newline() {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_wait_return() -> c_int {
-    nvim_get_did_wait_return()
+    c_int::from(did_wait_return)
 }
 
 /// Set the did_wait_return flag.
@@ -175,7 +173,7 @@ pub unsafe extern "C" fn rs_did_wait_return() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_did_wait_return(val: c_int) {
-    nvim_set_did_wait_return(val);
+    did_wait_return = val != 0;
 }
 
 /// Check if ext_messages should overwrite previous message.
@@ -184,7 +182,7 @@ pub unsafe extern "C" fn rs_set_did_wait_return(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_overwrite() -> c_int {
-    nvim_get_msg_ext_overwrite()
+    c_int::from(msg_ext_overwrite)
 }
 
 /// Set the ext_messages overwrite flag.
@@ -196,7 +194,7 @@ pub unsafe extern "C" fn rs_msg_ext_overwrite() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_ext_overwrite(val: c_int) {
-    nvim_set_msg_ext_overwrite(val);
+    msg_ext_overwrite = val != 0;
 }
 
 /// Check if ext_messages flush is skipped.
@@ -205,7 +203,7 @@ pub unsafe extern "C" fn rs_set_msg_ext_overwrite(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_skip_flush() -> c_int {
-    nvim_get_msg_ext_skip_flush()
+    c_int::from(msg_ext_skip_flush)
 }
 
 /// Set the ext_messages skip flush flag.
@@ -216,7 +214,7 @@ pub unsafe extern "C" fn rs_msg_ext_skip_flush() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_ext_skip_flush(val: c_int) {
-    nvim_set_msg_ext_skip_flush(val);
+    msg_ext_skip_flush = val != 0;
 }
 
 /// Check if clear to end of screen is needed.
@@ -225,7 +223,7 @@ pub unsafe extern "C" fn rs_set_msg_ext_skip_flush(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_need_clr_eos() -> c_int {
-    nvim_get_need_clr_eos()
+    c_int::from(need_clr_eos)
 }
 
 /// Set the need_clr_eos flag.
@@ -305,7 +303,7 @@ pub unsafe extern "C" fn rs_msg_line_flush() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_begin(kind: *const c_char) {
     rs_msg_ext_set_kind(kind);
-    nvim_set_msg_ext_skip_flush(1);
+    msg_ext_skip_flush = true;
 }
 
 /// End an ext_messages batch and flush.
@@ -316,7 +314,7 @@ pub unsafe extern "C" fn rs_msg_ext_begin(kind: *const c_char) {
 /// Calls C functions that may emit UI events.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_end() {
-    nvim_set_msg_ext_skip_flush(0);
+    msg_ext_skip_flush = false;
     msg_ext_ui_flush();
 }
 
@@ -329,7 +327,7 @@ pub unsafe extern "C" fn rs_msg_ext_end() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_display_reset() {
     nvim_set_msg_col(0);
-    nvim_set_did_wait_return(0);
+    did_wait_return = false;
     nvim_set_need_clr_eos(0);
 }
 

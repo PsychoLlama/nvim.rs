@@ -210,7 +210,6 @@ MessageHistoryEntry *nvim_get_msg_hist_last(void) { return msg_hist_last; }
 int nvim_get_msg_hist_len(void) { return msg_hist_len; }
 void nvim_set_msg_hist_len(int len) { msg_hist_len = len; }
 int nvim_get_msg_hist_max(void) { return msg_hist_max; }
-int nvim_get_msg_hist_off(void) { return msg_hist_off; }
 MessageHistoryEntry *nvim_get_msg_hist_temp(void) { return msg_hist_temp; }
 void nvim_set_msg_hist_temp(MessageHistoryEntry *entry) { msg_hist_temp = entry; }
 void nvim_set_msg_hist_first(MessageHistoryEntry *entry) { msg_hist_first = entry; }
@@ -326,12 +325,9 @@ void nvim_set_msg_nowait(int val) { msg_nowait = (val != 0); }
 int nvim_get_msg_no_more(void) { return msg_no_more ? 1 : 0; }
 int nvim_get_lines_left(void) { return lines_left; }
 void nvim_set_lines_left(int val) { lines_left = val; }
-int nvim_get_msg_scrolled_ign(void) { return msg_scrolled_ign ? 1 : 0; }
 
 // C accessors for msg_scrolled and msg_did_scroll (used by Rust)
 void nvim_set_msg_scrolled(int val) { msg_scrolled = val; }
-int nvim_get_msg_did_scroll(void) { return msg_did_scroll ? 1 : 0; }
-void nvim_set_msg_did_scroll(int val) { msg_did_scroll = (val != 0); }
 int nvim_get_emsg_on_display(void) { return emsg_on_display ? 1 : 0; }
 void nvim_set_emsg_on_display(int val) { emsg_on_display = (val != 0); }
 
@@ -383,12 +379,8 @@ int nvim_get_need_fileinfo(void) { return need_fileinfo ? 1 : 0; }
 void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
 
 // C accessors for did_emsg_syntax (used by Rust)
-int nvim_get_did_emsg_syntax(void) { return did_emsg_syntax ? 1 : 0; }
 
 // C accessors for no_wait_return (used by Rust)
-int no_wait_return_get(void) { return no_wait_return; }
-void no_wait_return_inc(void) { no_wait_return++; }
-void no_wait_return_dec(void) { if (no_wait_return > 0) no_wait_return--; }
 
 // C accessors for msg_silent (used by Rust apply_cmdmod_impl / undo_cmdmod_impl)
 int nvim_get_msg_silent(void) { return msg_silent; }
@@ -398,7 +390,6 @@ int nvim_redirecting_check(void) { return redirecting() ? 1 : 0; }
 
 // C accessors for msg_scroll and msg_hist_off (used by Rust)
 void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
-void nvim_set_msg_hist_off(int val) { msg_hist_off = (val != 0); }
 int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
 
 // Phase 429: Message grid state accessors
@@ -491,8 +482,6 @@ void nvim_msg_reset_scroll_grid(void)
 // Phase 4: accessors for msg_scroll_flush
 int nvim_get_msg_grid_pos_at_flush(void) { return msg_grid_pos_at_flush; }
 void nvim_set_msg_grid_pos_at_flush(int val) { msg_grid_pos_at_flush = val; }
-int nvim_get_msg_grid_scroll_discount(void) { return msg_grid_scroll_discount; }
-void nvim_set_msg_grid_scroll_discount(int val) { msg_grid_scroll_discount = val; }
 int nvim_msg_grid_get_handle(void) { return msg_grid.handle; }
 void nvim_msg_grid_flush_dirty_line(int row)
 {
@@ -510,7 +499,6 @@ void nvim_msg_grid_scroll_up(int to_scroll)
 }
 
 // Phase 430: Redirection/verbose state accessors
-int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
 void nvim_set_redir_off(int val) { redir_off = (val != 0); }
 
 // Phase 431: Special key helpers
@@ -569,20 +557,12 @@ void nvim_msg_ui_flush_impl(void)
 }
 
 // Phase 2: msg_start accessors
-int nvim_get_redrawing_cmdline(void) { return redrawing_cmdline ? 1 : 0; }
 void nvim_redir_write_newline(void) { redir_write("\n", 1); }
 
 // Phase 3.4: Display state accessors (used by Rust display.rs)
 void nvim_set_cmdline_row(int val) { cmdline_row = val; }
 const char *nvim_get_keep_msg(void) { return keep_msg; }
 int nvim_get_keep_msg_hl_id(void) { return keep_msg_hl_id; }
-int nvim_get_did_wait_return(void) { return did_wait_return ? 1 : 0; }
-void nvim_set_did_wait_return(int val) { did_wait_return = (val != 0); }
-int nvim_get_msg_ext_overwrite(void) { return msg_ext_overwrite ? 1 : 0; }
-void nvim_set_msg_ext_overwrite(int val) { msg_ext_overwrite = (val != 0); }
-int nvim_get_msg_ext_skip_flush(void) { return msg_ext_skip_flush ? 1 : 0; }
-void nvim_set_msg_ext_skip_flush(int val) { msg_ext_skip_flush = (val != 0); }
-int nvim_get_need_clr_eos(void) { return need_clr_eos ? 1 : 0; }
 void nvim_set_need_clr_eos(int val) { need_clr_eos = (val != 0); }
 
 // C accessors for attribute functions (used by Rust)

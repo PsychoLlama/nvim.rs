@@ -358,8 +358,7 @@ pub unsafe extern "C" fn rs_sb_reset_clear_state() {
 extern "C" {
     fn nvim_get_msg_scrolled() -> c_int;
     fn nvim_set_msg_scrolled(val: c_int);
-    fn nvim_get_msg_did_scroll() -> c_int;
-    fn nvim_set_msg_did_scroll(val: c_int);
+    static mut msg_did_scroll: bool;
     fn nvim_ui_has_messages() -> c_int;
     fn nvim_msg_reset_scroll_grid();
 }
@@ -415,7 +414,7 @@ pub unsafe extern "C" fn rs_has_msg_scrolled() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_did_scroll() -> c_int {
-    nvim_get_msg_did_scroll()
+    c_int::from(msg_did_scroll)
 }
 
 /// Set the msg_did_scroll flag.
@@ -424,7 +423,7 @@ pub unsafe extern "C" fn rs_msg_did_scroll() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_did_scroll(val: c_int) {
-    nvim_set_msg_did_scroll(val);
+    msg_did_scroll = val != 0;
 }
 
 /// Reset scroll state and message grid position.

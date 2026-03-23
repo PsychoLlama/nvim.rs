@@ -124,10 +124,8 @@ extern "C" {
     fn nvim_get_msg_scroll() -> c_int;
     /// Set `msg_scroll` flag
     fn nvim_set_msg_scroll(val: c_int);
-    /// Get `msg_hist_off` flag
-    fn nvim_get_msg_hist_off() -> c_int;
-    /// Set `msg_hist_off` flag
-    fn nvim_set_msg_hist_off(val: c_int);
+    /// `msg_hist_off` — direct access to C global
+    static mut msg_hist_off: bool;
     /// Get `keep_msg_more` flag
     fn nvim_get_keep_msg_more() -> c_int;
 }
@@ -171,7 +169,7 @@ pub unsafe extern "C" fn rs_set_msg_scroll(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_off() -> c_int {
-    nvim_get_msg_hist_off()
+    c_int::from(msg_hist_off)
 }
 
 /// Set the message history off flag.
@@ -180,7 +178,7 @@ pub unsafe extern "C" fn rs_msg_hist_off() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_hist_off(val: c_int) {
-    nvim_set_msg_hist_off(val);
+    msg_hist_off = val != 0;
 }
 
 /// Check if keep_msg was set by msgmore().

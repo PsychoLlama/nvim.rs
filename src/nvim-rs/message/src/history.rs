@@ -20,8 +20,8 @@ extern "C" {
     fn nvim_set_msg_hist_len(len: c_int);
     /// Get `msg_hist_max`
     fn nvim_get_msg_hist_max() -> c_int;
-    /// Get `msg_hist_off`
-    fn nvim_get_msg_hist_off() -> c_int;
+    /// `msg_hist_off` — direct access to C global
+    static mut msg_hist_off: bool;
     /// Get `msg_silent`
     /// Get entry->next pointer
     fn nvim_msg_hist_entry_get_next(
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn rs_msg_hist_clear_temp() {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_disabled() -> c_int {
-    c_int::from(nvim_get_msg_hist_off() != 0 || msg_silent != 0)
+    c_int::from(msg_hist_off || msg_silent != 0)
 }
 
 /// Check if history is at capacity.
@@ -451,7 +451,7 @@ pub unsafe extern "C" fn rs_msg_hist_permanent_count() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_hist_can_add() -> c_int {
-    let disabled = nvim_get_msg_hist_off() != 0 || msg_silent != 0;
+    let disabled = msg_hist_off || msg_silent != 0;
     c_int::from(!disabled)
 }
 
