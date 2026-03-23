@@ -53,7 +53,7 @@ extern "C" {
     fn nvim_gettext(s: *const c_char) -> *const c_char;
 
     /// Get the current message column.
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
 
 }
 
@@ -540,7 +540,7 @@ pub unsafe extern "C" fn rs_digraph_header(msg: *const c_char) {
     if msg.is_null() {
         return;
     }
-    if unsafe { nvim_get_msg_col() } > 0 {
+    if unsafe { msg_col } > 0 {
         unsafe { msg_putchar(c_int::from(b'\n')) };
     }
     unsafe { msg_outtrans(msg, HLF_CM, false) };
@@ -590,14 +590,14 @@ pub unsafe extern "C" fn rs_printdigraph(
     }
 
     // Wrap to next line if not enough room
-    if unsafe { nvim_get_msg_col() } > unsafe { Columns } - list_width {
+    if unsafe { msg_col } > unsafe { Columns } - list_width {
         unsafe { msg_putchar(c_int::from(b'\n')) };
     }
 
     // Align to multiple of list_width
-    let msg_col = unsafe { nvim_get_msg_col() };
-    if msg_col % list_width != 0 {
-        let mut spaces = (msg_col / list_width + 1) * list_width - msg_col;
+    let col = unsafe { msg_col };
+    if col % list_width != 0 {
+        let mut spaces = (col / list_width + 1) * list_width - col;
         while spaces > 0 {
             unsafe { msg_putchar(c_int::from(b' ')) };
             spaces -= 1;

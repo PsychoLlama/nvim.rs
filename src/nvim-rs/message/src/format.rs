@@ -11,19 +11,17 @@ extern "C" {
     static Columns: c_int;
     static mut msg_silent: c_int;
     /// Get `msg_col` global
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
     /// Set `msg_col` global
-    fn nvim_set_msg_col(col: c_int);
     /// Get `msg_row` global
-    fn nvim_get_msg_row() -> c_int;
+    static mut msg_row: c_int;
     /// Set `msg_row` global
-    fn nvim_set_msg_row(row: c_int);
     /// Get `Rows` global (screen rows)
     /// Get `Columns` global (screen columns)
     /// Get `msg_scrolled` global
     fn nvim_get_msg_scrolled() -> c_int;
     /// Get `sc_col` global (showcmd column)
-    fn nvim_get_sc_col() -> c_int;
+    static mut sc_col: c_int;
     /// Get `msg_scroll` flag
     fn nvim_get_msg_scroll() -> c_int;
     /// Get `need_wait_return` flag
@@ -67,7 +65,7 @@ pub const SHM_INTRO: c_int = b'I' as c_int;
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_col() -> c_int {
-    nvim_get_msg_col()
+    msg_col
 }
 
 /// Set the current message column.
@@ -76,7 +74,7 @@ pub unsafe extern "C" fn rs_msg_col() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_col(col: c_int) {
-    nvim_set_msg_col(col);
+    msg_col = col;
 }
 
 /// Get the current message row.
@@ -85,7 +83,7 @@ pub unsafe extern "C" fn rs_set_msg_col(col: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_row() -> c_int {
-    nvim_get_msg_row()
+    msg_row
 }
 
 /// Set the current message row.
@@ -94,7 +92,7 @@ pub unsafe extern "C" fn rs_msg_row() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_msg_row(row: c_int) {
-    nvim_set_msg_row(row);
+    msg_row = row;
 }
 
 /// Calculate available room for a message without causing scrolling.
@@ -108,9 +106,7 @@ pub unsafe extern "C" fn rs_set_msg_row(row: c_int) {
 pub unsafe extern "C" fn rs_msg_room() -> c_int {
     let rows = Rows;
     let columns = Columns;
-    let msg_row = nvim_get_msg_row();
     let msg_scrolled = nvim_get_msg_scrolled();
-    let sc_col = nvim_get_sc_col();
 
     if msg_scrolled != 0 {
         // Use all the columns
@@ -220,8 +216,6 @@ pub unsafe extern "C" fn rs_msg_needs_truncation(s: *const c_char) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_advance_spaces(col: c_int) -> c_int {
-    let msg_col = nvim_get_msg_col();
-
     if msg_col >= col {
         // Need to wrap to next line first
         -1 // Signal to output newline first
@@ -344,7 +338,7 @@ pub const extern "C" fn rs_msg_fits(len: c_int, room: c_int) -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_outtrans_long_room() -> c_int {
-    Columns - nvim_get_msg_col()
+    Columns - msg_col
 }
 
 /// Calculate if outtrans long should truncate.
@@ -627,9 +621,7 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
     let len = nvim_vim_strsize(s);
     let msg_scrolled = nvim_get_msg_scrolled();
     let rows = Rows;
-    let msg_row = nvim_get_msg_row();
     let columns = Columns;
-    let sc_col = nvim_get_sc_col();
 
     let room = if msg_scrolled != 0 {
         // Use all the columns
@@ -714,11 +706,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
 
     // When drawing over the command line no need to clear it later or remove
     // the mode message.
-    if msg_silent == 0
-        && len > 0
-        && nvim_get_msg_row() >= nvim_get_cmdline_row()
-        && nvim_get_msg_col() == 0
-    {
+    if msg_silent == 0 && len > 0 && msg_row >= nvim_get_cmdline_row() && msg_col == 0 {
         nvim_set_clear_cmdline(false);
         nvim_set_mode_displayed(false);
     }
@@ -1018,7 +1006,6 @@ pub unsafe extern "C" fn rs_msg_may_trunc(force: bool, s: *mut c_char) -> *mut c
     let rows = Rows;
     let cmdline_row = nvim_get_cmdline_row();
     let columns = Columns;
-    let sc_col = nvim_get_sc_col();
     let room = (rows - cmdline_row - 1) * columns + sc_col - 1;
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]

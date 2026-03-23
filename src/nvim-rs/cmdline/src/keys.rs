@@ -668,7 +668,7 @@ unsafe extern "C" {
     fn nvim_get_cmd_silent() -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
     fn ui_has(what: c_int) -> c_int;
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_col: c_int;
     fn msg_putchar(c: c_int);
     fn realloc_cmdbuff(len: c_int) -> c_int;
     fn nvim_strcpy_cmdbuff(src: *const c_char);
@@ -913,7 +913,7 @@ pub unsafe extern "C" fn rs_command_line_erase_chars(
         dealloc_cmdbuff(); // no commandline to return
 
         if nvim_get_cmd_silent() == 0 && ui_has(K_UI_CMDLINE) == 0 {
-            nvim_set_msg_col(0);
+            msg_col = 0;
             msg_putchar(b' ' as c_int); // delete ':'
         }
         (*is_state).search_start = (*is_state).save_cursor;

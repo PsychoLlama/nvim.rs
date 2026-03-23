@@ -12,7 +12,7 @@ extern "C" {
     /// Check if in list mode
     fn nvim_get_list_mode() -> c_int;
     /// Get current message column
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
 }
 
 // ============================================================================
@@ -83,7 +83,6 @@ pub unsafe extern "C" fn rs_line_continue() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_remaining() -> c_int {
     let columns = Columns;
-    let msg_col = nvim_get_msg_col();
     if msg_col < columns {
         columns - msg_col
     } else {

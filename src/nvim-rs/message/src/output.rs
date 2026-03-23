@@ -380,8 +380,7 @@ extern "C" {
     fn nvim_msg_show_empty();
     fn nvim_get_headless_mode() -> c_int;
     fn nvim_default_grid_has_chars() -> c_int;
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_col(col: c_int);
+    static mut msg_col: c_int;
 }
 
 /// Write message string with highlight and redirection.
@@ -445,10 +444,10 @@ pub unsafe extern "C" fn rs_msg_puts_len(
     msg_didany = true; // remember that something was outputted
 
     if msg_use_printf() != 0 {
-        let saved_msg_col = nvim_get_msg_col();
+        let saved_msg_col = msg_col;
         nvim_msg_puts_printf(str_, len);
         if nvim_get_headless_mode() != 0 {
-            nvim_set_msg_col(saved_msg_col);
+            msg_col = saved_msg_col;
         }
     }
     if msg_use_printf() == 0

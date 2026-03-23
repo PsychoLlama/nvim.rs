@@ -17,7 +17,7 @@ extern "C" {
 
     // State accessors
     fn nvim_set_msg_scroll(val: c_int);
-    fn nvim_get_msg_row() -> c_int;
+    static mut msg_row: c_int;
     fn nvim_set_cmdline_row(val: c_int);
 
     // Redirection state
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn rs_verbose_enter_scroll() {
 pub unsafe extern "C" fn rs_verbose_leave_scroll() {
     rs_verbose_leave();
     if nvim_get_p_vfile_not_empty() == 0 {
-        nvim_set_cmdline_row(nvim_get_msg_row());
+        nvim_set_cmdline_row(msg_row);
     }
 }
 

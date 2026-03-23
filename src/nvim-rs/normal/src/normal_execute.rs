@@ -94,7 +94,7 @@ extern "C" {
     fn nvim_get_curswant() -> c_int;
     static mut msg_nowait: bool;
     static mut msg_didout: bool;
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_col: c_int;
     fn nvim_set_did_cursorhold(val: bool);
 
     // Function wrappers (existing)
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
         if nvim_cap_get_cmdchar(ca) != K_IGNORE {
             msg_didout = false;
-            nvim_set_msg_col(0);
+            msg_col = 0;
         }
 
         nvim_ns_set_old_pos(s); // remember where the cursor was

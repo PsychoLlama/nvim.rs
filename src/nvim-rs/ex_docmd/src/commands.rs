@@ -208,7 +208,7 @@ extern "C" {
     fn nvim_docmd_set_redir_reg(reg: c_int);
     fn nvim_get_redir_vname() -> c_int;
     fn nvim_docmd_set_redir_vname(val: c_int);
-    fn nvim_set_redir_off(val: c_int);
+    static mut redir_off: bool;
 
     // Redir helpers
     fn nvim_docmd_close_redir();
@@ -901,7 +901,7 @@ pub unsafe extern "C" fn rs_ex_redir(eap: ExArgHandle) {
         || nvim_get_redir_reg() != 0
         || nvim_get_redir_vname() != 0
     {
-        nvim_set_redir_off(0);
+        redir_off = false;
     }
 }
 

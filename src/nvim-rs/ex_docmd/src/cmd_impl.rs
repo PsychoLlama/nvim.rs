@@ -957,7 +957,7 @@ extern "C" {
     fn nvim_free_string_option(p: *mut c_char);
     fn nvim_did_emsg_check() -> c_int;
     fn nvim_redirecting_check() -> c_int;
-    fn nvim_set_msg_col(col: c_int);
+    static mut msg_col: c_int;
     fn nvim_docmd_restore_msg_scroll(cmod: CmodHandle);
     fn nvim_cmod_get_filter_pat(cmod: CmodHandle) -> *mut c_char;
 }
@@ -1556,7 +1556,7 @@ extern "C" {
     fn nvim_get_ex_no_reprint() -> c_int;
 
     // msg_row get/set
-    fn nvim_get_msg_row() -> c_int;
+    static mut msg_row: c_int;
     fn nvim_ex2_set_msg_row(val: c_int);
 
     // curwin->w_cursor.lnum
@@ -1735,9 +1735,9 @@ pub unsafe extern "C" fn do_exmode() {
         nvim_docmd_set_pressedreturn(false);
         nvim_set_ex_no_reprint(0);
         let changedtick = nvim_docmd_curbuf_changedtick();
-        let prev_msg_row = nvim_get_msg_row();
+        let prev_msg_row = msg_row;
         let prev_line = nvim_get_curwin_cursor_lnum();
-        nvim_set_cmdline_row(nvim_get_msg_row());
+        nvim_set_cmdline_row(msg_row);
         nvim_docmd_do_cmdline_getexline_noflags();
         lines_left = nvim_ses_get_Rows() - 1;
 
@@ -1979,7 +1979,7 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
         nvim_docmd_restore_msg_scroll(cmod);
         // Restore msg_col if redirecting.
         if nvim_redirecting_check() != 0 {
-            nvim_set_msg_col(0);
+            msg_col = 0;
         }
         nvim_cmod_set_save_msg_silent(cmod, 0);
         nvim_cmod_set_did_esilent(cmod, 0);

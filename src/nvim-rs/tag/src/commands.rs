@@ -944,7 +944,7 @@ extern "C" {
     fn gettext(msgid: *const c_char) -> *const c_char;
 
     // Global variable accessors
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
     static mut msg_didout: bool;
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_ui_has_messages() -> c_int;
@@ -1063,7 +1063,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
         taglen
     };
 
-    if nvim_get_msg_col() == 0 {
+    if msg_col == 0 {
         msg_didout = false; // overwrite previous message
     }
     nvim_msg_ext_set_kind(c"confirm".as_ptr());
@@ -1131,7 +1131,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             msg_outtrans(p, HLF_D, false);
             xfree(p.cast());
         }
-        if nvim_get_msg_col() > 0 {
+        if msg_col > 0 {
             msg_putchar(b'\n' as c_int);
         }
         if unsafe { got_int } {
@@ -1171,7 +1171,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                 // print all other extra fields
                 let mut hl_id: c_int = HLF_CM;
                 while *p != 0 && *p as u8 != b'\r' && *p as u8 != b'\n' {
-                    if nvim_get_msg_col() + nvim_ptr2cells(p) >= Columns {
+                    if msg_col + nvim_ptr2cells(p) >= Columns {
                         msg_putchar(b'\n' as c_int);
                         if unsafe { got_int } {
                             break;
@@ -1188,7 +1188,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                     }
                 }
             }
-            if nvim_get_msg_col() > 15 {
+            if msg_col > 15 {
                 msg_putchar(b'\n' as c_int);
                 if unsafe { got_int } {
                     break;
@@ -1229,7 +1229,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             } else {
                 nvim_ptr2cells(p)
             };
-            if nvim_get_msg_col() + cell_width > Columns {
+            if msg_col + cell_width > Columns {
                 msg_putchar(b'\n' as c_int);
             }
             if unsafe { got_int } {
@@ -1265,7 +1265,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
             }
         }
 
-        if nvim_get_msg_col() != 0 && (nvim_ui_has_messages() == 0 || i < num_matches - 1) {
+        if msg_col != 0 && (nvim_ui_has_messages() == 0 || i < num_matches - 1) {
             msg_putchar(b'\n' as c_int);
         }
         os_breakcheck();

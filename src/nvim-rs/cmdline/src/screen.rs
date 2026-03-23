@@ -390,8 +390,8 @@ extern "C" {
     fn nvim_set_cmdline_row(val: c_int);
     static mut lines_left: c_int;
     fn nvim_get_cmd_silent() -> c_int;
-    fn nvim_set_msg_row(val: c_int);
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_row: c_int;
+    static mut msg_col: c_int;
     fn ui_has(what: c_int) -> c_int;
     fn msg_cursor_goto(row: c_int, col: c_int);
     fn msg_start();
@@ -403,8 +403,6 @@ extern "C" {
     // For redrawcmdprompt
     fn msg_putchar(c: c_int);
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_get_msg_row() -> c_int;
     fn nvim_get_ccline_cmdprompt() -> *mut c_char;
     fn nvim_get_ccline_hl_id() -> c_int;
     fn nvim_set_ccline_cmdindent(val: c_int);
@@ -494,8 +492,8 @@ pub unsafe extern "C" fn cursorcmd_rs() {
         msg_row_val = rows - 1;
     }
 
-    nvim_set_msg_row(msg_row_val);
-    nvim_set_msg_col(msg_col_val);
+    msg_row = msg_row_val;
+    msg_col = msg_col_val;
     msg_cursor_goto(msg_row_val, msg_col_val);
 }
 
@@ -512,7 +510,7 @@ pub unsafe extern "C" fn gotocmdline_rs(clr: bool) {
         return;
     }
     msg_start();
-    nvim_set_msg_col(0); // always start in column 0
+    msg_col = 0; // always start in column 0
     if clr {
         msg_clr_eos(); // will reset clear_cmdline
     }
@@ -566,8 +564,6 @@ pub unsafe extern "C" fn rs_redrawcmdprompt() {
     } else {
         msg_puts_hl(cmdprompt, nvim_get_ccline_hl_id(), false);
         let columns = Columns;
-        let msg_col = nvim_get_msg_col();
-        let msg_row = nvim_get_msg_row();
         let cmdline_row = nvim_get_cmdline_row();
         let new_indent = msg_col + (msg_row - cmdline_row) * columns;
         // reverse of cmd_startcol(): subtract 1 if there's a firstc

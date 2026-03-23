@@ -114,10 +114,8 @@ extern "C" {
     fn nvim_stl_grid_line_flush();
 
     // Message area
-    #[link_name = "nvim_set_msg_col"]
-    fn nvim_stl_set_msg_col(col: c_int);
-    #[link_name = "nvim_set_msg_row"]
-    fn nvim_stl_set_msg_row(row: c_int);
+    static mut msg_col: c_int;
+    static mut msg_row: c_int;
     #[link_name = "nvim_msg_clr_eos"]
     fn nvim_stl_msg_clr_eos();
 
@@ -164,8 +162,8 @@ pub unsafe fn redraw_ruler() {
             nvim_stl_ui_call_msg_ruler_empty();
             DID_SHOW_EXT_RULER.set(false);
         } else if did_ruler_col > 0 {
-            nvim_stl_set_msg_col(did_ruler_col);
-            nvim_stl_set_msg_row(Rows - 1);
+            msg_col = did_ruler_col;
+            msg_row = Rows - 1;
             nvim_stl_msg_clr_eos();
         }
         DID_RULER_COL.set(-1);

@@ -46,7 +46,9 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_topframe() -> *mut Frame;
-    fn nvim_get_sc_col() -> c_int;
+    static mut sc_col: c_int;
+    static mut msg_row: c_int;
+    static mut msg_col: c_int;
 
     // --- Options ---
     fn nvim_get_p_wmw() -> i64;
@@ -119,9 +121,6 @@ extern "C" {
     fn nvim_one_window_firstwin(firstwin: WinHandle, tp: TabpageHandle) -> c_int;
     fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
     // nvim_fixup_external_curwin removed: replaced by crate::close::win_close::fixup_external_curwin (Phase 8)
-    fn nvim_set_msg_row_val(val: c_int);
-    fn nvim_set_msg_col_val(val: c_int);
-
     // --- Already-migrated Rust functions (called via extern C) ---
     fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
     fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
@@ -310,12 +309,12 @@ unsafe fn win_split_ins_impl(
     nvim_status_redraw_all_wrapper();
 
     if need_status != 0 {
-        nvim_set_msg_row_val(Rows - 1);
-        nvim_set_msg_col_val(nvim_get_sc_col());
+        msg_row = Rows - 1;
+        msg_col = sc_col;
         nvim_msg_clr_eos_force();
         nvim_comp_col();
-        nvim_set_msg_row_val(Rows - 1);
-        nvim_set_msg_col_val(0);
+        msg_row = Rows - 1;
+        msg_col = 0;
     }
 
     // --- Equalize ---

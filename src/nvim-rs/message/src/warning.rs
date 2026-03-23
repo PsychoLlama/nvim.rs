@@ -10,8 +10,7 @@ extern "C" {
     static Columns: c_int;
     static mut msg_silent: c_int;
     // State accessors
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_col(col: c_int);
+    static mut msg_col: c_int;
 
     // For give_warning
     static mut no_wait_return: c_int;
@@ -74,7 +73,7 @@ pub unsafe extern "C" fn rs_give_warning(message: *const c_char, hl: c_int) {
     }
     msg_didout = false; // Overwrite this message.
     msg_nowait = true; // Don't wait for this message.
-    nvim_set_msg_col(0);
+    msg_col = 0;
 
     if no_wait_return > 0 {
         no_wait_return -= 1;
@@ -128,7 +127,6 @@ pub unsafe extern "C" fn rs_give_warning_plain(message: *const c_char) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_advance_count(col: c_int) -> c_int {
-    let msg_col = nvim_get_msg_col();
     let columns = Columns;
 
     // Clamp target to valid range
@@ -152,7 +150,7 @@ pub unsafe extern "C" fn rs_msg_advance_count(col: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_need_advance(col: c_int) -> c_int {
-    c_int::from(nvim_get_msg_col() < col)
+    c_int::from(msg_col < col)
 }
 
 /// Set message column directly (for silent mode).
@@ -165,7 +163,7 @@ pub unsafe extern "C" fn rs_msg_need_advance(col: c_int) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_set_col_silent(col: c_int) {
     if msg_silent != 0 {
-        nvim_set_msg_col(col);
+        msg_col = col;
     }
 }
 
@@ -219,7 +217,6 @@ pub const extern "C" fn rs_info_hl_id() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_line_space() -> c_int {
     let columns = Columns;
-    let msg_col = nvim_get_msg_col();
     columns - msg_col
 }
 

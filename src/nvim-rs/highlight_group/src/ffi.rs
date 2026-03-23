@@ -696,10 +696,9 @@ extern "C" {
     fn msg_advance(col: c_int);
 
     /// Get the current message column.
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
 
     /// Set the current message column.
-    fn nvim_set_msg_col(col: c_int);
 
     /// Get the Columns (screen width) global.
 
@@ -855,26 +854,26 @@ pub unsafe extern "C" fn rs_syn_list_header(
             return true;
         }
         let col = msg_outtrans((*hl_table_ptr(id - 1)).sg_name, 0, false);
-        nvim_set_msg_col(col);
+        msg_col = col;
         name_col = col;
         endcol = 15;
     } else if (ui_has(K_UI_MESSAGES) || msg_silent != 0) && !force_newline {
         msg_putchar(b' ' as c_int);
         adjust = false;
-    } else if nvim_get_msg_col() + outlen + 1 >= Columns || force_newline {
+    } else if msg_col + outlen + 1 >= Columns || force_newline {
         msg_putchar(b'\n' as c_int);
         if unsafe { got_int } {
             return true;
         }
-    } else if nvim_get_msg_col() >= endcol {
+    } else if msg_col >= endcol {
         // wrap around is like starting a new line
         newline = false;
     }
 
     if adjust {
-        if nvim_get_msg_col() >= endcol {
+        if msg_col >= endcol {
             // output at least one space
-            endcol = nvim_get_msg_col() + 1;
+            endcol = msg_col + 1;
         }
         msg_advance(endcol);
     }

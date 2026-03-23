@@ -21,7 +21,7 @@ extern "C" {
     // For msg_outtrans_long (Phase 80)
     fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: bool) -> c_int;
     fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
-    fn nvim_get_msg_col() -> c_int;
+    static mut msg_col: c_int;
 
     // Note: msg_source is wrapped in error.rs
 
@@ -48,8 +48,7 @@ extern "C" {
 
     // For msg_clr_cmdline
     fn nvim_get_cmdline_row() -> c_int;
-    fn nvim_set_msg_row(val: c_int);
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_row: c_int;
 
     // Cursor positioning
     fn msg_cursor_goto(row: c_int, col: c_int);
@@ -176,7 +175,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_long(longstr: *const c_char, hl_id: c_i
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     let len = (p as usize - longstr as usize) as c_int;
     let mut slen = len;
-    let room = Columns - nvim_get_msg_col();
+    let room = Columns - msg_col;
     if nvim_ui_has_messages() == 0 && len > room && room >= 20 {
         slen = (room - 3) / 2;
         msg_outtrans_len(longstr, slen, hl_id, false);
@@ -385,8 +384,8 @@ pub unsafe extern "C" fn rs_msg_cursor_goto(row: c_int, col: c_int) {
 /// Calls C accessor functions that modify display state.
 #[export_name = "msg_clr_cmdline"]
 pub unsafe extern "C" fn rs_msg_clr_cmdline() {
-    nvim_set_msg_row(nvim_get_cmdline_row());
-    nvim_set_msg_col(0);
+    msg_row = nvim_get_cmdline_row();
+    msg_col = 0;
     crate::output_core::rs_msg_clr_eos_force_exported();
 }
 

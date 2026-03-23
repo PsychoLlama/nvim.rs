@@ -291,7 +291,7 @@ extern "C" {
 
     // Global state accessors
     fn nvim_get_msg_scrolled() -> c_int;
-    fn nvim_get_msg_row() -> c_int;
+    static mut msg_row: c_int;
     fn nvim_set_cmdline_row(val: c_int);
     fn nvim_get_mod_mask() -> c_int;
     fn nvim_set_mod_mask(val: c_int);
@@ -377,7 +377,7 @@ unsafe fn prompt_for_input_impl(
         prompt.cast_const()
     };
 
-    nvim_set_cmdline_row(nvim_get_msg_row());
+    nvim_set_cmdline_row(msg_row);
     ui_flush();
 
     // Don't map prompt input

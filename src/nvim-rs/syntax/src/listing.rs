@@ -79,7 +79,7 @@ extern "C" {
     fn msg_advance(col: c_int);
     fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_msg_puts_hl_syn(s: *const c_char, hl_id: c_int, hist: bool);
-    fn nvim_get_msg_col_syn() -> c_int;
+    static mut msg_col: c_int;
 
     // Error / info message
     fn semsg(fmt: *const c_char, ...);
@@ -628,7 +628,7 @@ unsafe fn syn_list_cluster(id: c_int) {
         msg_outtrans(name, 0, false);
     }
 
-    let col = nvim_get_msg_col_syn();
+    let col = unsafe { msg_col };
     let advance_col = if col >= endcol { col + 1 } else { endcol };
     msg_advance(advance_col);
 

@@ -18,9 +18,8 @@ extern "C" {
     fn msg_ext_flush_showmode();
 
     // Display state accessors (getters in format.rs, only setters needed here)
-    fn nvim_get_msg_row() -> c_int;
-    fn nvim_set_msg_row(val: c_int);
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_row: c_int;
+    static mut msg_col: c_int;
     fn nvim_set_cmdline_row(val: c_int);
 
     // UI capability check
@@ -36,8 +35,7 @@ extern "C" {
     fn nvim_get_msg_grid_cols() -> c_int;
 
     // Position and display state
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_get_sc_col() -> c_int;
+    static mut sc_col: c_int;
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Wait state — direct access to C global
@@ -138,7 +136,7 @@ pub unsafe extern "C" fn rs_set_cmdline_row(val: c_int) {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_reset_col() {
-    nvim_set_msg_col(0);
+    msg_col = 0;
 }
 
 /// Move message position to a new line.
@@ -149,9 +147,9 @@ pub unsafe extern "C" fn rs_msg_reset_col() {
 /// Calls C accessor and mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_newline() {
-    nvim_set_msg_col(0);
-    let row = nvim_get_msg_row();
-    nvim_set_msg_row(row + 1);
+    msg_col = 0;
+    let row = msg_row;
+    msg_row = row + 1;
 }
 
 // ============================================================================
@@ -251,7 +249,7 @@ pub unsafe extern "C" fn rs_msg_check() {
     if nvim_ui_has_messages() != 0 {
         return;
     }
-    if nvim_get_msg_row() == Rows - 1 && nvim_get_msg_col() >= nvim_get_sc_col() {
+    if msg_row == Rows - 1 && msg_col >= sc_col {
         need_wait_return = true;
         nvim_set_redraw_cmdline(true);
     }
@@ -326,7 +324,7 @@ pub unsafe extern "C" fn rs_msg_ext_end() {
 /// Calls C mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_display_reset() {
-    nvim_set_msg_col(0);
+    msg_col = 0;
     did_wait_return = false;
     nvim_set_need_clr_eos(0);
 }

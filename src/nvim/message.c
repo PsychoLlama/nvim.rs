@@ -276,11 +276,6 @@ const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 // C accessors for message formatting (used by Rust)
-int nvim_get_msg_col(void) { return msg_col; }
-void nvim_set_msg_col(int col) { msg_col = col; }
-int nvim_get_msg_row(void) { return msg_row; }
-void nvim_set_msg_row(int row) { msg_row = row; }
-int nvim_get_sc_col(void) { return sc_col; }
 int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 /// Check if p_debug contains a specific character
@@ -318,10 +313,6 @@ int nvim_mb_trunc_len(const char *s, int width)
 // C accessors for msg_scrolled (used by Rust)
 void nvim_set_msg_scrolled(int val) { msg_scrolled = val; }
 
-// C accessors for error message state (used by Rust)
-int nvim_get_emsg_severe(void) { return emsg_severe ? 1 : 0; }
-void nvim_set_emsg_severe(int val) { emsg_severe = (val != 0); }
-
 // Forward declarations for static functions used by Phase 4/5 accessors below
 static int emsg_not_now(void);
 static char *get_emsg_source(void);
@@ -331,8 +322,6 @@ static void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 static void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
 // Phase 4: emsg_multiline accessors
-int nvim_get_ex_exitval(void) { return ex_exitval; }
-void nvim_set_ex_exitval(int val) { ex_exitval = val; }
 int nvim_get_p_eb(void) { return p_eb ? 1 : 0; }
 void nvim_flush_buffers_minimal(void) { flush_buffers(FLUSH_MINIMAL); }
 // Wrappers for static functions used by emsg_multiline:
@@ -463,9 +452,6 @@ void nvim_msg_grid_scroll_up(int to_scroll)
 {
   ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
 }
-
-// Phase 430: Redirection/verbose state accessors
-void nvim_set_redir_off(int val) { redir_off = (val != 0); }
 
 // Phase 431: Special key helpers
 int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }

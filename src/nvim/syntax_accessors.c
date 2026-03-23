@@ -1365,9 +1365,6 @@ int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline)
   return syn_list_header((bool)did_header, outlen, id, (bool)force_newline) ? 1 : 0;
 }
 
-/// Get msg_col.
-int nvim_get_msg_col_syn(void) { return msg_col; }
-
 /// Wrap msg_puts_hl.
 void nvim_msg_puts_hl_syn(const char *s, int hl_id, bool hist)
 {

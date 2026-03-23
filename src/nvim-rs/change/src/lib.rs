@@ -213,9 +213,8 @@ extern "C" {
     static mut need_wait_return: bool;
     static mut emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;
-    fn nvim_get_msg_row() -> c_int;
-    fn nvim_get_msg_col() -> c_int;
-    fn nvim_set_msg_col(val: c_int);
+    static mut msg_row: c_int;
+    static mut msg_col: c_int;
 
     // Buffer updates
     fn nvim_buf_updates_send_changes(buf: BufHandle, lnum: LinenrT, added: i64, removed: i64);

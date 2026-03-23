@@ -16,9 +16,8 @@ extern "C" {
     static mut emsg_silent: c_int;
     /// Set `emsg_silent` counter
     /// Get `emsg_severe` flag
-    fn nvim_get_emsg_severe() -> c_int;
+    static mut emsg_severe: bool;
     /// Set `emsg_severe` flag
-    fn nvim_set_emsg_severe(val: c_int);
     static mut emsg_noredir: bool;
     /// Get `did_emsg` counter
     static mut did_emsg: c_int;
@@ -186,7 +185,7 @@ pub unsafe extern "C" fn rs_is_emsg_silent() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_severe() -> c_int {
-    nvim_get_emsg_severe()
+    c_int::from(emsg_severe)
 }
 
 /// Set the emsg_severe flag.
@@ -195,7 +194,7 @@ pub unsafe extern "C" fn rs_emsg_severe() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_emsg_severe(val: c_int) {
-    nvim_set_emsg_severe(val);
+    emsg_severe = (val) != 0;
 }
 
 /// Get the emsg_noredir flag.
@@ -479,7 +478,7 @@ extern "C" {
     fn nvim_redir_write(str_: *const std::ffi::c_char, maxlen: isize);
     fn nvim_get_emsg_source() -> *mut std::ffi::c_char;
     fn nvim_get_emsg_lnum() -> *mut std::ffi::c_char;
-    fn nvim_set_ex_exitval(val: c_int);
+    static mut ex_exitval: c_int;
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
     fn nvim_get_p_eb() -> c_int;
@@ -541,8 +540,8 @@ pub unsafe extern "C" fn rs_emsg_multiline(
 
     // If "emsg_severe" is true: When an error exception is to be thrown,
     // prefer this message over previous messages for the same command.
-    let severe = nvim_get_emsg_severe();
-    nvim_set_emsg_severe(0);
+    let severe = c_int::from(emsg_severe);
+    emsg_severe = false;
 
     let off = emsg_off;
     let debug_t = nvim_p_debug_contains(c_int::from(b't'));
@@ -601,7 +600,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
 
         // Log editor errors as INFO (no Rust equivalent of ILOG/DLOG; skip logging)
 
-        nvim_set_ex_exitval(1);
+        ex_exitval = 1;
 
         // Reset msg_silent, an error causes messages to be switched back on.
         msg_silent = 0;

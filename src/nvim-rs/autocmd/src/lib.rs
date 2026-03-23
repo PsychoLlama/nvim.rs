@@ -118,10 +118,7 @@ extern "C" {
     #[link_name = "msg_puts_hl"]
     fn nvim_autocmd_msg_puts_hl(s: *const c_char, hlf: c_int, append: bool);
     fn nvim_autocmd_msg_outtrans(s: *const c_char);
-    #[link_name = "nvim_set_msg_col"]
-    fn nvim_autocmd_msg_col_set(col: c_int);
-    #[link_name = "nvim_get_msg_col"]
-    fn nvim_autocmd_msg_col_get() -> c_int;
+    static mut msg_col: c_int;
     fn nvim_autocmd_get_got_int() -> c_int;
     fn nvim_autocmd_get_p_verbose() -> c_int;
     fn nvim_autocmd_match_file(
@@ -951,7 +948,7 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
             if nvim_autocmd_get_got_int() != 0 {
                 return;
             }
-            nvim_autocmd_msg_col_set(4);
+            msg_col = 4;
             nvim_autocmd_msg_outtrans(ac_pat);
         }
 
@@ -959,10 +956,10 @@ unsafe fn au_show_event_inner(group: c_int, event: c_int, pat: *const c_char, pa
             return;
         }
 
-        if nvim_autocmd_msg_col_get() >= 14 {
+        if msg_col >= 14 {
             nvim_autocmd_msg_putchar(c_int::from(b'\n'));
         }
-        nvim_autocmd_msg_col_set(14);
+        msg_col = 14;
         if nvim_autocmd_get_got_int() != 0 {
             return;
         }

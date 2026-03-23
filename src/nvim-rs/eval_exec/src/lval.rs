@@ -203,7 +203,7 @@ extern "C" {
     fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // emsg_severe flag (already exists in message.c with int param)
-    fn nvim_set_emsg_severe(val: c_int);
+    static mut emsg_severe: bool;
 
     // Typval type query
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
@@ -793,7 +793,7 @@ unsafe fn get_lval_impl(
             // evaluation has been cancelled due to an aborting error,
             // an interrupt, or an exception.
             if aborting() == 0 && !quiet {
-                nvim_set_emsg_severe(1);
+                emsg_severe = (1) != 0;
                 nvim_semsg_invarg2(name);
                 return std::ptr::null_mut();
             }

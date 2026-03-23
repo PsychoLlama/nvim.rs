@@ -1100,7 +1100,7 @@ unsafe extern "C" {
     fn msg_cursor_goto(row: c_int, col: c_int);
     fn ui_flush();
     fn ui_has(what: c_int) -> c_int;
-    fn nvim_get_msg_row() -> c_int;
+    static mut msg_row: c_int;
     fn vim_strchr(haystack: *const c_char, needle: c_int) -> *mut c_char;
     fn nvim_get_p_cpo() -> *const c_char;
     fn cmdline_pum_active() -> c_int;
@@ -1109,7 +1109,7 @@ unsafe extern "C" {
     fn nvim_cls_xfree_prev_cmdbuff(s: *mut c_void);
     fn nvim_cls_dup_cmdbuff_to_prev(s: *mut c_void);
     fn nvim_cls_set_skip_pum_redraw(s: *mut c_void, val: c_int);
-    fn nvim_set_redir_off(val: c_int);
+    static mut redir_off: bool;
     fn nvim_set_quit_more(val: bool);
     fn nvim_get_typebuf_len() -> c_int;
     fn stuff_empty() -> c_int;
@@ -1540,7 +1540,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 }
                 if nvim_get_cmd_silent() == 0 {
                     if ui_has(K_UI_CMDLINE) == 0 {
-                        msg_cursor_goto(nvim_get_msg_row(), 0);
+                        msg_cursor_goto(msg_row, 0);
                     }
                     ui_flush();
                 }
@@ -1640,7 +1640,7 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
     nvim_cls_set_prev_cmdpos(s, nvim_get_ccline_cmdpos());
     nvim_cls_xfree_prev_cmdbuff(s);
 
-    nvim_set_redir_off(1); // Don't redirect the typed command.
+    redir_off = (1) != 0; // Don't redirect the typed command.
     nvim_set_quit_more(false); // reset after CTRL-D which had a more-prompt
 
     did_emsg = 0; // There can't really be a reason why an error

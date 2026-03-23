@@ -427,28 +427,6 @@ pub unsafe extern "C" fn set_redraw_cmdline(val: bool) {
 }
 
 // -------------------------------------------------------------------------
-// Message position accessors
-// -------------------------------------------------------------------------
-
-/// Set msg_row.
-///
-/// # Safety
-/// Accesses C global msg_row.
-#[export_name = "nvim_set_msg_row_val"]
-pub unsafe extern "C" fn set_msg_row_val(val: c_int) {
-    msg_row = val;
-}
-
-/// Set msg_col.
-///
-/// # Safety
-/// Accesses C global msg_col.
-#[export_name = "nvim_set_msg_col_val"]
-pub unsafe extern "C" fn set_msg_col_val(val: c_int) {
-    msg_col = val;
-}
-
-// -------------------------------------------------------------------------
 // Window option globals
 // -------------------------------------------------------------------------
 
