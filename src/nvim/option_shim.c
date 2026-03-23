@@ -645,10 +645,6 @@ int nvim_option_was_set_window(void) { return option_was_set(kOptWindow); }
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 
-// set_options_bin global option accessors
-OptInt nvim_get_p_tw(void) { return p_tw; }
-OptInt nvim_get_p_wm(void) { return p_wm; }
-
 // set_helplang_default accessors
 void nvim_set_p_hlg_from_code(const char *code)
 {
@@ -1713,7 +1709,6 @@ void nvim_set_expand_option_start_col(int val) { expand_option_start_col = val; 
 int nvim_get_expand_option_flags(void) { return expand_option_flags; }
 void nvim_set_expand_option_flags(int val) { expand_option_flags = val; }
 void nvim_set_expand_option_append(int val) { expand_option_append = (bool)val; }
-void nvim_get_expand_option_name(char out[5]) { memcpy(out, expand_option_name, 5); }
 const char *nvim_get_expand_option_name_ptr(void) { return expand_option_name; }
 void nvim_set_expand_option_name_chars(char c2, char c3)
 {
@@ -2186,9 +2181,6 @@ int nvim_check_illegal_path_names(void *varp, uint32_t flags)
 /// Get options[opt_idx].flags (already exists as nvim_option_get_flags_ptr, but need value)
 uint32_t nvim_option_get_flags_val(OptIndex opt_idx) { return options[opt_idx].flags; }
 
-/// Get current_sctx
-sctx_T nvim_get_current_sctx(void) { return current_sctx; }
-
 /// Call get_varp_scope(&options[opt_idx], opt_flags)
 void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
 {
@@ -2343,10 +2335,6 @@ int nvim_get_backslash_in_filename(void) {
   return 0;
 #endif
 }
-
-// nvim_get_p_tw / nvim_get_p_wm: already defined at lines 793/795
-OptInt nvim_get_p_sts(void) { return p_sts; }
-OptInt nvim_get_p_ts(void) { return p_ts; }
 
 bool nvim_get_p_ai_nopaste(void) { return p_ai_nopaste; }
 bool nvim_get_p_et_nopaste(void) { return p_et_nopaste; }
