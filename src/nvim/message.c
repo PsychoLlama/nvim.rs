@@ -198,8 +198,6 @@ int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 // C accessors for message formatting (used by Rust)
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
-/// Check if p_debug contains a specific character
-int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0; }
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 void nvim_msg_putchar(int c) { msg_putchar(c); }
 

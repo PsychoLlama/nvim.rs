@@ -28,8 +28,8 @@ extern "C" {
     /// Get `emsg_on_display` flag
     static mut emsg_on_display: bool;
     /// Set `emsg_on_display` flag
-    /// Check if p_debug contains a specific character
-    fn nvim_p_debug_contains(c: c_int) -> c_int;
+    static mut p_debug: *mut std::ffi::c_char;
+    fn vim_strchr(string: *const std::ffi::c_char, c: c_int) -> *mut std::ffi::c_char;
     static mut need_wait_return: bool;
 }
 
@@ -324,8 +324,8 @@ pub unsafe extern "C" fn rs_emsg_not_now() -> c_int {
     // If emsg_off > 0 and debug doesn't contain 'm' or 't', skip messages
     // If emsg_skip > 0, always skip messages
     let skip_due_to_off = off > 0
-        && nvim_p_debug_contains(c_int::from(b'm')) == 0
-        && nvim_p_debug_contains(c_int::from(b't')) == 0;
+        && vim_strchr(p_debug, c_int::from(b'm')).is_null()
+        && vim_strchr(p_debug, c_int::from(b't')).is_null();
 
     c_int::from(skip_due_to_off || skip > 0)
 }
@@ -545,8 +545,8 @@ pub unsafe extern "C" fn rs_emsg_multiline(
     emsg_severe = false;
 
     let off = emsg_off;
-    let debug_t = nvim_p_debug_contains(c_int::from(b't'));
-    if off == 0 || debug_t != 0 {
+    let debug_t = !vim_strchr(p_debug, c_int::from(b't')).is_null();
+    if off == 0 || debug_t {
         // Cause a throw of an error exception if appropriate.
         let mut ignore: c_int = 0;
         // SAFETY: ignore is a local variable, valid for the duration of the call.
