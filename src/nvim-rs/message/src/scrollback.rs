@@ -11,10 +11,6 @@ use crate::chunk::MsgChunkHandle;
 
 // C accessor declarations
 extern "C" {
-    /// Get `last_msgchunk` pointer
-    fn nvim_get_last_msgchunk() -> *mut MsgChunkHandle;
-    /// Set `last_msgchunk` pointer
-    fn nvim_set_last_msgchunk(chunk: *mut MsgChunkHandle);
     /// Get chunk->sb_next
     fn nvim_msgchunk_get_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
     /// Set chunk->sb_next
@@ -25,18 +21,25 @@ extern "C" {
     fn nvim_msgchunk_get_eol(chunk: *mut MsgChunkHandle) -> c_int;
     /// Set chunk->sb_eol
     fn nvim_msgchunk_set_eol(chunk: *mut MsgChunkHandle, eol: c_int);
-    /// Get `do_clear_sb_text` state
-    fn nvim_get_do_clear_sb_text() -> c_int;
-    /// Set `do_clear_sb_text` state
-    fn nvim_set_do_clear_sb_text(val: c_int);
-    /// Get `do_clear_hist_temp` flag
-    #[allow(dead_code)]
-    fn nvim_get_do_clear_hist_temp() -> c_int;
-    /// Set `do_clear_hist_temp` flag
-    fn nvim_set_do_clear_hist_temp(val: c_int);
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
+
+// ============================================================================
+// Rust-owned statics (previously file-local in message.c)
+// ============================================================================
+
+/// Last message chunk in scrollback buffer (replaces C static last_msgchunk)
+#[no_mangle]
+pub static mut last_msgchunk: *mut MsgChunkHandle = std::ptr::null_mut();
+
+/// Scrollback clear state (replaces C static do_clear_sb_text, 0 = SB_CLEAR_NONE)
+#[no_mangle]
+pub static mut do_clear_sb_text: c_int = 0;
+
+/// Whether to clear temporary history entries (replaces C static do_clear_hist_temp)
+#[no_mangle]
+pub static mut do_clear_hist_temp: bool = true;
 
 /// Scrollback clear state (mirrors sb_clear_T in C)
 #[repr(C)]
@@ -60,7 +63,7 @@ impl SbClearState {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_clear_state() -> c_int {
-    nvim_get_do_clear_sb_text()
+    do_clear_sb_text
 }
 
 /// Set the scrollback clear state.
@@ -69,7 +72,7 @@ pub unsafe extern "C" fn rs_sb_clear_state() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_sb_clear_state(state: c_int) {
-    nvim_set_do_clear_sb_text(state);
+    do_clear_sb_text = state;
 }
 
 /// Check if scrollback should be cleared on next message.
@@ -80,7 +83,7 @@ pub unsafe extern "C" fn rs_set_sb_clear_state(state: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_should_clear() -> c_int {
-    let state = nvim_get_do_clear_sb_text();
+    let state = do_clear_sb_text;
     c_int::from(state == SbClearState::ALL.0 || state == SbClearState::CMDLINE_DONE.0)
 }
 
@@ -90,7 +93,7 @@ pub unsafe extern "C" fn rs_sb_should_clear() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_cmdline_busy() -> c_int {
-    c_int::from(nvim_get_do_clear_sb_text() == SbClearState::CMDLINE_BUSY.0)
+    c_int::from(do_clear_sb_text == SbClearState::CMDLINE_BUSY.0)
 }
 
 /// Get the start of a screen line in the scrollback buffer.
@@ -127,7 +130,7 @@ fn msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
 /// Calls C accessor and mutator functions.
 #[export_name = "msg_sb_eol"]
 pub unsafe extern "C" fn rs_sb_mark_eol() {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if !last.is_null() {
         nvim_msgchunk_set_eol(last, 1);
     }
@@ -142,14 +145,14 @@ pub unsafe extern "C" fn rs_sb_mark_eol() {
 /// Calls C accessor and mutator functions.
 #[export_name = "sb_text_start_cmdline"]
 pub unsafe extern "C" fn rs_sb_start_cmdline() {
-    let state = nvim_get_do_clear_sb_text();
+    let state = do_clear_sb_text;
 
     if state == SbClearState::CMDLINE_BUSY.0 {
         // Recursive command line: clear last unfinished line
         rs_sb_restart_cmdline();
     } else {
         rs_sb_mark_eol();
-        nvim_set_do_clear_sb_text(SbClearState::CMDLINE_BUSY.0);
+        do_clear_sb_text = SbClearState::CMDLINE_BUSY.0;
     }
 }
 
@@ -161,9 +164,9 @@ pub unsafe extern "C" fn rs_sb_start_cmdline() {
 /// Calls C accessor and mutator functions, frees memory.
 #[export_name = "sb_text_restart_cmdline"]
 pub unsafe extern "C" fn rs_sb_restart_cmdline() {
-    nvim_set_do_clear_sb_text(SbClearState::CMDLINE_BUSY.0);
+    do_clear_sb_text = SbClearState::CMDLINE_BUSY.0;
 
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if last.is_null() || nvim_msgchunk_get_eol(last) != 0 {
         // No unfinished line
         return;
@@ -173,7 +176,7 @@ pub unsafe extern "C" fn rs_sb_restart_cmdline() {
     let tofree = msg_sb_start(last);
     if !tofree.is_null() {
         let prev = nvim_msgchunk_get_prev(tofree);
-        nvim_set_last_msgchunk(prev);
+        last_msgchunk = prev;
 
         if !prev.is_null() {
             nvim_msgchunk_set_next(prev, ptr::null_mut());
@@ -195,7 +198,7 @@ pub unsafe extern "C" fn rs_sb_restart_cmdline() {
 /// Calls C mutator function.
 #[export_name = "sb_text_end_cmdline"]
 pub unsafe extern "C" fn rs_sb_end_cmdline() {
-    nvim_set_do_clear_sb_text(SbClearState::CMDLINE_DONE.0);
+    do_clear_sb_text = SbClearState::CMDLINE_DONE.0;
 }
 
 /// Schedule clearing all scrollback text.
@@ -207,8 +210,8 @@ pub unsafe extern "C" fn rs_sb_end_cmdline() {
 /// Calls C mutator functions.
 #[export_name = "may_clear_sb_text"]
 pub unsafe extern "C" fn rs_sb_schedule_clear() {
-    nvim_set_do_clear_sb_text(SbClearState::ALL.0);
-    nvim_set_do_clear_hist_temp(1);
+    do_clear_sb_text = SbClearState::ALL.0;
+    do_clear_hist_temp = true;
 }
 
 /// Clear scrollback text.
@@ -220,7 +223,7 @@ pub unsafe extern "C" fn rs_sb_schedule_clear() {
 /// Calls C accessor and mutator functions, frees memory.
 #[export_name = "clear_sb_text"]
 pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
 
     if all != 0 {
         // Clear everything
@@ -230,7 +233,7 @@ pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
             xfree(current.cast());
             current = prev;
         }
-        nvim_set_last_msgchunk(ptr::null_mut());
+        last_msgchunk = ptr::null_mut();
     } else {
         // Keep the last line, clear everything before it
         if last.is_null() {
@@ -267,7 +270,7 @@ pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_line_count() -> c_int {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if last.is_null() {
         return 0;
     }
@@ -295,7 +298,7 @@ pub unsafe extern "C" fn rs_sb_line_count() -> c_int {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_has_content() -> c_int {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if last.is_null() {
         return 0;
     }
@@ -315,7 +318,7 @@ pub unsafe extern "C" fn rs_sb_has_content() -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_empty() -> c_int {
-    c_int::from(nvim_get_last_msgchunk().is_null())
+    c_int::from(last_msgchunk.is_null())
 }
 
 /// Get the SB_CLEAR_NONE constant.
@@ -348,7 +351,7 @@ pub const extern "C" fn rs_sb_clear_cmdline_done() -> c_int {
 /// Calls C mutator function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sb_reset_clear_state() {
-    nvim_set_do_clear_sb_text(SbClearState::NONE.0);
+    do_clear_sb_text = SbClearState::NONE.0;
 }
 
 // ============================================================================

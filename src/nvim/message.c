@@ -240,12 +240,9 @@ void nvim_hl_msg_free(MessageHistoryEntry *entry)
   hl_msg_free(entry->msg);
 }
 
-// Static variable for scrollback chunks (used by accessors below and functions later in file)
-static msgchunk_T *last_msgchunk = NULL;
+extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
-// C accessors for scrollback chunks (used by Rust)
-msgchunk_T *nvim_get_last_msgchunk(void) { return last_msgchunk; }
-void nvim_set_last_msgchunk(msgchunk_T *chunk) { last_msgchunk = chunk; }
+// C accessors for scrollback chunk fields (used by Rust)
 msgchunk_T *nvim_msgchunk_get_next(msgchunk_T *chunk) { return chunk->sb_next; }
 void nvim_msgchunk_set_next(msgchunk_T *chunk, msgchunk_T *next) { chunk->sb_next = next; }
 msgchunk_T *nvim_msgchunk_get_prev(msgchunk_T *chunk) { return chunk->sb_prev; }
@@ -976,7 +973,7 @@ static void msg_hist_add(const char *s, int len, int hl_id)
   msg_hist_add_multihl(INTEGER_OBJ(0), msg, false, NULL);
 }
 
-static bool do_clear_hist_temp = true;
+extern bool do_clear_hist_temp;  // owned by Rust (scrollback.rs)
 
 void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
 {
@@ -1731,14 +1728,8 @@ typedef enum {
   SB_CLEAR_CMDLINE_DONE,
 } sb_clear_T;
 
-// When to clear text on next msg.
-static sb_clear_T do_clear_sb_text = SB_CLEAR_NONE;
-
-// C accessors for scrollback state (used by Rust)
-int nvim_get_do_clear_sb_text(void) { return (int)do_clear_sb_text; }
-void nvim_set_do_clear_sb_text(int val) { do_clear_sb_text = (sb_clear_T)val; }
-int nvim_get_do_clear_hist_temp(void) { return do_clear_hist_temp ? 1 : 0; }
-void nvim_set_do_clear_hist_temp(int val) { do_clear_hist_temp = (val != 0); }
+// When to clear text on next msg. Owned by Rust (scrollback.rs), 0 = SB_CLEAR_NONE.
+extern int do_clear_sb_text;
 
 // C accessors for dialog state (used by Rust)
 const char *nvim_get_confirm_msg(void) { return confirm_msg; }

@@ -8,10 +8,8 @@ use std::ptr;
 
 // C accessor declarations
 extern "C" {
-    /// Get `last_msgchunk` pointer
-    fn nvim_get_last_msgchunk() -> *mut MsgChunkHandle;
-    /// Set `last_msgchunk` pointer
-    fn nvim_set_last_msgchunk(chunk: *mut MsgChunkHandle);
+    // last_msgchunk: Rust-owned static in scrollback.rs
+    static mut last_msgchunk: *mut MsgChunkHandle;
     /// Get chunk->sb_next
     fn nvim_msgchunk_get_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
     /// Set chunk->sb_next
@@ -50,7 +48,7 @@ pub struct MsgChunkHandle {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_last() -> *mut MsgChunkHandle {
-    nvim_get_last_msgchunk()
+    last_msgchunk
 }
 
 /// Get the next chunk in the scrollback buffer.
@@ -162,7 +160,7 @@ pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgCh
 /// Calls C accessor and mutator functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_eol() {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if !last.is_null() {
         nvim_msgchunk_set_eol(last, 1);
     }
@@ -176,7 +174,7 @@ pub unsafe extern "C" fn rs_msg_sb_eol() {
 /// Calls C accessor and mutator functions, frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_clear_all() {
-    let mut chunk = nvim_get_last_msgchunk();
+    let mut chunk = last_msgchunk;
 
     while !chunk.is_null() {
         let prev = nvim_msgchunk_get_prev(chunk);
@@ -184,7 +182,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_all() {
         chunk = prev;
     }
 
-    nvim_set_last_msgchunk(ptr::null_mut());
+    last_msgchunk = ptr::null_mut();
 }
 
 /// Clear `count` lines from the beginning of the scrollback buffer.
@@ -196,7 +194,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_all() {
 /// Calls C accessor and mutator functions, frees memory.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if last.is_null() {
         return;
     }
@@ -250,7 +248,7 @@ pub unsafe extern "C" fn rs_msg_sb_clear_lines(count: c_int) {
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_sb_has_prev_line() -> c_int {
-    let last = nvim_get_last_msgchunk();
+    let last = last_msgchunk;
     if last.is_null() {
         return 0;
     }
