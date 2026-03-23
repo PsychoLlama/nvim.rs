@@ -145,8 +145,6 @@ use crate::opt_index::{
 extern "C" {
     /// Check if running as root user (getuid() == ROOT_UID)
     fn nvim_is_root_user() -> c_int;
-    /// Get NO_LOCAL_UNDOLEVEL constant (-123456)
-    fn nvim_get_no_local_undolevel() -> i64;
     /// Check if option is global-local (scope_flags is not a power of two)
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     /// Check if option has the given type
@@ -220,7 +218,8 @@ pub unsafe extern "C" fn rs_get_option_unset_value(opt_idx: OptIndex) -> OptVal 
             return OptVal {
                 type_: OptValType::Number,
                 data: OptValData {
-                    number: nvim_get_no_local_undolevel(),
+                    // NO_LOCAL_UNDOLEVEL sentinel (matches NO_LOCAL_UNDOLEVEL in undofile.h)
+                    number: -123_456,
                 },
             };
         }
@@ -562,7 +561,7 @@ const OPT_LOCAL_P12: c_int = 0x02;
 /// OPT_GLOBAL flag (must match C OPT_GLOBAL = 0x01)
 const OPT_GLOBAL_P12: c_int = 0x01;
 /// MAXPATHL constant (must match C MAXPATHL = 4096)
-const MAXPATHL: usize = 4096;
+pub(crate) const MAXPATHL: usize = 4096;
 
 /// Expand environment variables for a string option.
 ///

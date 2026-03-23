@@ -737,8 +737,6 @@ int nvim_is_root_user(void)
   return 0;
 #endif
 }
-// Returns the NO_LOCAL_UNDOLEVEL sentinel constant.
-int64_t nvim_get_no_local_undolevel(void) { return NO_LOCAL_UNDOLEVEL; }
 // Returns a static C string naming the OptValType: "nil", "boolean", "number", "string".
 const char *nvim_optval_type_get_name(int type) { return optval_type_get_name((OptValType)type); }
 // Returns translated "Cannot unset global option value" string pointer.
@@ -1021,7 +1019,6 @@ void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
   return get_varp_scope(&options[opt_idx], opt_flags);
 }
 // nvim_get_namebuff is defined in buffer.c
-size_t nvim_get_namebuff_size(void) { return MAXPATHL; }
 void nvim_option_home_replace(const char *src, char *dst, size_t dstlen)
 {
   home_replace(NULL, src, dst, dstlen, false);

@@ -65,7 +65,6 @@ extern "C" {
     // option_value2string
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_namebuff() -> *mut c_char;
-    fn nvim_get_namebuff_size() -> usize;
     fn get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
     fn transchar(c: c_int) -> *const c_char;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
@@ -162,7 +161,7 @@ pub unsafe extern "C" fn rs_option_value2string(opt_idx: c_int, opt_flags: c_int
     assert!(!varp.is_null());
 
     let namebuff = nvim_get_namebuff();
-    let namebuff_size = nvim_get_namebuff_size();
+    let namebuff_size = crate::defaults::MAXPATHL;
 
     if nvim_option_has_type(opt_idx, K_OPT_VAL_TYPE_NUMBER) != 0 {
         let mut wc: OptInt = 0;
@@ -293,7 +292,7 @@ pub unsafe extern "C" fn rs_put_set(
                     let buf = xmalloc(size);
                     nvim_option_home_replace(value_str, buf, size);
 
-                    let maxpathl = nvim_get_namebuff_size(); // MAXPATHL
+                    let maxpathl = crate::defaults::MAXPATHL;
                     if size >= maxpathl
                         && (flags & OptFlags::COMMA.0 as u64) != 0
                         && !vim_strchr(buf as *const c_char, b',' as c_int).is_null()
