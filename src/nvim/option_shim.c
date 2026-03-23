@@ -2143,19 +2143,6 @@ void nvim_call_free_operatorfunc_option(void) {}
 
 
 
-/// expand_env_esc into NameBuff wrapper for option_expand.
-/// esc_kind: 0=no escape, 1=escape, 2=use "file:" prefix.
-/// Returns NameBuff if the expanded string differs from val, else NULL.
-const char *nvim_call_expand_env_esc_option(const char *val, int esc_kind)
-{
-  const char *prefix = (esc_kind == 2) ? "file:" : NULL;
-  bool esc = (esc_kind == 1);
-  expand_env_esc(val, NameBuff, MAXPATHL, esc, false, (char *)prefix);
-  if (strcmp(NameBuff, val) == 0) {
-    return NULL;
-  }
-  return NameBuff;
-}
 
 // =============================================================================
 // optexpand_T field accessors for Rust expand.rs

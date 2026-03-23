@@ -540,11 +540,17 @@ extern "C" {
     fn xfree(ptr: *mut std::ffi::c_char);
     /// fenc_default global variable
     static mut fenc_default: *mut std::ffi::c_char;
-    /// expand_env_esc into NameBuff; returns NameBuff or NULL if no change
-    fn nvim_call_expand_env_esc_option(
-        val: *const std::ffi::c_char,
-        esc_kind: c_int,
-    ) -> *const std::ffi::c_char;
+    /// Expand env variables in srcp into dst buffer.
+    fn expand_env_esc(
+        srcp: *const std::ffi::c_char,
+        dst: *mut std::ffi::c_char,
+        dstlen: c_int,
+        esc: bool,
+        one: bool,
+        prefix: *mut std::ffi::c_char,
+    ) -> usize;
+    /// Global NameBuff buffer for file name expansion.
+    static mut NameBuff: [std::ffi::c_char; 4096];
 }
 
 /// OPT_LOCAL flag (must match C OPT_LOCAL = 0x02)
@@ -553,6 +559,8 @@ const OPT_LOCAL_P12: c_int = 0x02;
 const OPT_GLOBAL_P12: c_int = 0x01;
 /// MAXPATHL constant (must match C MAXPATHL = 4096)
 pub(crate) const MAXPATHL: usize = 4096;
+/// MAXPATHL as i32 for passing to C functions expecting int.
+const MAXPATHL_INT: i32 = 4096;
 
 /// Expand environment variables for a string option.
 ///
@@ -602,14 +610,19 @@ pub unsafe extern "C" fn rs_option_expand(
 
     // Determine escape kind for option_expand:
     // 1 = escape spaces (tags/path), 2 = use "file:" prefix (spellsuggest), 0 = none
-    let esc_kind = if opt_idx == K_OPT_TAGS || opt_idx == K_OPT_PATH {
-        1
-    } else if opt_idx == K_OPT_SPELLSUGGEST {
-        2
+    let esc = opt_idx == K_OPT_TAGS || opt_idx == K_OPT_PATH;
+    let prefix: *mut std::ffi::c_char = if opt_idx == K_OPT_SPELLSUGGEST {
+        c"file:".as_ptr().cast_mut()
     } else {
-        0
+        std::ptr::null_mut()
     };
-    nvim_call_expand_env_esc_option(actual_val, esc_kind)
+    let namebuff_ptr = std::ptr::addr_of_mut!(NameBuff).cast::<std::ffi::c_char>();
+    expand_env_esc(actual_val, namebuff_ptr, MAXPATHL_INT, esc, false, prefix);
+    if libc::strcmp(namebuff_ptr, actual_val) == 0 {
+        std::ptr::null()
+    } else {
+        namebuff_ptr
+    }
 }
 
 /// Expand environment variables for all option defaults at init time.
