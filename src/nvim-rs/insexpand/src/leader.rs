@@ -529,7 +529,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
 
 extern "C" {
     // For ins_compl_new_leader
-    fn nvim_get_p_acl() -> c_int;
+    // nvim_get_p_acl: inlined in vars.rs (Phase 28)
     #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
     fn nvim_redraw_later_valid();
@@ -573,7 +573,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     }
     crate::vars::nvim_set_compl_used_match(0);
 
-    if nvim_get_p_acl() > 0 {
+    if crate::vars::nvim_get_p_acl() > 0 {
         nvim_pum_undisplay(1);
         nvim_redraw_later_valid();
         nvim_update_screen();

@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_shortmess_completionmenu() -> bool;
     fn nvim_ml_get_curline() -> *const c_char;
     // (compl_pending moved to Rust static in state.rs)
-    fn nvim_get_p_ic() -> c_int;
+    // nvim_get_p_ic: inlined in vars.rs (Phase 28)
 }
 
 // CP flags (must match C enum)
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     nvim_set_compl_orig_text_from_line(line);
     rs_save_orig_extmarks();
     let mut orig_flags: c_int = CP_ORIGINAL_TEXT;
-    if nvim_get_p_ic() != 0 {
+    if crate::vars::nvim_get_p_ic() != 0 {
         orig_flags |= CP_ICASE;
     }
     if nvim_ins_compl_add_orig_text(orig_flags, c_int::from(save_did_ai)) == FAIL {
@@ -296,7 +296,7 @@ extern "C" {
     fn rs_ins_compl_pum_key(c: c_int) -> c_int;
     fn rs_ins_compl_key2count(c: c_int) -> c_int;
     fn stop_arrow() -> c_int;
-    fn nvim_get_p_acl() -> c_int;
+    // nvim_get_p_acl: inlined in vars.rs (Phase 28)
     fn os_hrtime() -> u64;
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
 
     // Set up timestamp for autocomplete delay
     let compl_start_tv: u64 = if crate::vars::nvim_get_compl_autocomplete() != 0
-        && nvim_get_p_acl() > 0
+        && crate::vars::nvim_get_p_acl() > 0
         && !disable_ac_delay
     {
         os_hrtime()
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     }
 
     // Wait for the autocompletion delay to expire
-    let p_acl = nvim_get_p_acl();
+    let p_acl = crate::vars::nvim_get_p_acl();
     #[allow(clippy::cast_sign_loss)]
     let p_acl_ms: u64 = if p_acl > 0 { p_acl as u64 } else { 0 };
     if crate::vars::nvim_get_compl_autocomplete() != 0

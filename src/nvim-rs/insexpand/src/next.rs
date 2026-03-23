@@ -70,8 +70,7 @@ extern "C" {
     fn rs_ins_compl_has_preinsert() -> c_int;
     fn rs_ins_compl_preinsert_longest() -> c_int;
 
-    // p_acl
-    fn nvim_get_p_acl() -> c_int;
+    // p_acl: inlined in vars.rs (Phase 28)
 
     // curbuf
     fn nvim_get_curbuf() -> BufHandle;
@@ -256,7 +255,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         || (crate::vars::nvim_get_compl_autocomplete() != 0 && rs_ins_compl_has_preinsert() == 0);
     let compl_preinsert = rs_ins_compl_has_preinsert() != 0;
     let has_autocomplete_delay =
-        crate::vars::nvim_get_compl_autocomplete() != 0 && nvim_get_p_acl() > 0;
+        crate::vars::nvim_get_compl_autocomplete() != 0 && crate::vars::nvim_get_p_acl() > 0;
 
     // When user complete function return -1 for findstart which is next
     // time of 'always', compl_shown_match become NULL.

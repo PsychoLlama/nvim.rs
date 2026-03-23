@@ -150,9 +150,9 @@ extern "C" {
     static mut g_compl_curr_buf: BufHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     // Option accessors
-    fn nvim_get_p_ic() -> c_int;
+    // nvim_get_p_ic: inlined in vars.rs (Phase 28)
     fn nvim_get_p_inf() -> c_int;
-    fn nvim_get_p_ac() -> c_int;
+    // nvim_get_p_ac: inlined in vars.rs (Phase 28)
     fn nvim_curbuf_get_b_p_ac() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
 
@@ -634,7 +634,10 @@ pub unsafe extern "C" fn rs_ins_compl_has_preinsert() -> c_int {
     let cur_cot_flags = get_cot_flags();
 
     // If autocomplete is active and ignorecase is set but infercase is not, disable preinsert
-    if vars::nvim_get_compl_autocomplete() != 0 && nvim_get_p_ic() != 0 && nvim_get_p_inf() == 0 {
+    if vars::nvim_get_compl_autocomplete() != 0
+        && crate::vars::nvim_get_p_ic() != 0
+        && nvim_get_p_inf() == 0
+    {
         return 0;
     }
 
@@ -688,7 +691,7 @@ pub unsafe extern "C" fn rs_ins_compl_has_autocomplete() -> c_int {
     if b_p_ac >= 0 {
         c_int::from(b_p_ac != 0)
     } else {
-        c_int::from(nvim_get_p_ac() != 0)
+        c_int::from(crate::vars::nvim_get_p_ac() != 0)
     }
 }
 

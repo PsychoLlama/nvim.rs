@@ -37,7 +37,7 @@ extern "C" {
 
     // Completion state accessors
     fn rs_compl_status_adding() -> c_int;
-    fn nvim_get_p_ic() -> c_int;
+    // nvim_get_p_ic: inlined in vars.rs (Phase 28)
     fn nvim_vim_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
 
     // Word boundary helpers (from insexpand_shim.c)
@@ -60,7 +60,7 @@ unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
         return true;
     }
     let orig_size = crate::vars::nvim_get_compl_orig_text_size();
-    if nvim_get_p_ic() != 0 {
+    if crate::vars::nvim_get_p_ic() != 0 {
         nvim_vim_strnicmp(str_, orig_data, orig_size) == 0
     } else {
         // strncmp equivalent
@@ -87,7 +87,7 @@ unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
 pub unsafe extern "C" fn rs_get_register_completion() {
     let mut dir = crate::vars::nvim_get_compl_direction();
     let adding_mode = rs_compl_status_adding() != 0;
-    let p_ic = nvim_get_p_ic() != 0;
+    let p_ic = crate::vars::nvim_get_p_ic() != 0;
     let num_registers = nvim_get_num_registers();
 
     for i in 0..num_registers {

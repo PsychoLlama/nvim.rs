@@ -95,6 +95,11 @@ extern "C" {
     // pumitem_T* - treated as opaque pointer
     static mut compl_match_array: *mut u8;
 
+    // --- global options (Phase 28) ---
+    static mut p_ic: c_int; // 'ignorecase'
+    static mut p_ac: c_int; // 'autocomplete'
+    pub(crate) static mut p_acl: i64; // 'autocompletedelay' (OptInt = i64)
+
     // --- compl_T* match list pointers (treated as opaque *mut c_void) ---
     static mut compl_first_match: *mut core::ffi::c_void;
     static mut compl_curr_match: *mut core::ffi::c_void;
@@ -221,6 +226,24 @@ pub unsafe fn nvim_get_compl_selected_item() -> c_int {
 #[inline]
 pub unsafe fn nvim_get_compl_num_bests() -> c_int {
     compl_num_bests
+}
+
+/// Get p_ic ('ignorecase') as bool integer.
+#[inline]
+pub unsafe fn nvim_get_p_ic() -> c_int {
+    c_int::from(p_ic != 0)
+}
+
+/// Get p_ac ('autocomplete') as bool integer.
+#[inline]
+pub unsafe fn nvim_get_p_ac() -> c_int {
+    c_int::from(p_ac != 0)
+}
+
+/// Get p_acl ('autocompletedelay') as c_int.
+#[inline]
+pub unsafe fn nvim_get_p_acl() -> c_int {
+    p_acl as c_int
 }
 
 // ============================================================================

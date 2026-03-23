@@ -1904,7 +1904,7 @@ unsigned nvim_curbuf_get_b_cot_flags(void) { return curbuf->b_cot_flags; }
 // nvim_get_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 int nvim_get_p_ic(void) { return p_ic ? 1 : 0; }
 int nvim_get_p_inf(void) { return curbuf->b_p_inf ? 1 : 0; }
-int nvim_get_p_ac(void) { return p_ac ? 1 : 0; }
+// nvim_get_p_ac: deleted (Phase 28, inlined in vars.rs)
 int nvim_curbuf_get_b_p_ac(void) { return curbuf->b_p_ac; }
 int nvim_get_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
 // nvim_get_compl_hi_on_autocompl_longest: deleted (Phase 2, moved to Rust)
@@ -2228,7 +2228,7 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 // nvim_compl_shown_match_is_sentinel: deleted (Phase 18, inlined in match_list.rs)
 
 // Accessors for Phase 4: ins_compl_new_leader migration
-int nvim_get_p_acl(void) { return (int)p_acl; }
+// nvim_get_p_acl: deleted (Phase 28, inlined in vars.rs)
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
 int nvim_is_cpt_func_refresh_always(void) {
   for (int i = 0; i < cpt_sources_count; i++) {
