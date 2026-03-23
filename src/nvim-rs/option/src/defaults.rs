@@ -515,10 +515,8 @@ extern "C" {
     #[link_name = "insecure_flag"]
     fn rs_insecure_flag(wp: *mut std::ffi::c_void, opt_idx: c_int, opt_flags: c_int)
         -> *mut c_uint;
-    /// nvim_opt_get_curwin() - get current window handle
-    fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
-    /// nvim_opt_get_curbuf() - get current buffer handle
-    fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
+    static mut curwin: *mut std::ffi::c_void;
+    static mut curbuf: *mut std::ffi::c_void;
     /// win_comp_scroll(wp) - recompute scroll for a window
     fn win_comp_scroll(win: *mut std::ffi::c_void);
     /// set_option_direct(opt_idx, val, opt_flags, set_sid)
@@ -619,11 +617,10 @@ pub unsafe extern "C" fn rs_set_option_default(opt_idx: c_int, opt_flags: c_int)
     set_option_direct(opt_idx, def_val, opt_flags, nvim_get_current_sctx_sid());
 
     if opt_idx == K_OPT_SCROLL {
-        win_comp_scroll(nvim_opt_get_curwin());
+        win_comp_scroll(curwin);
     }
 
     // The default value is not insecure.
-    let curwin = nvim_opt_get_curwin();
     let flagsp = rs_insecure_flag(curwin, opt_idx, opt_flags);
     *flagsp &= !K_OPT_FLAG_INSECURE;
     if both {
@@ -651,7 +648,7 @@ pub unsafe extern "C" fn rs_set_options_default(opt_flags: c_int) {
     // The 'scroll' option must be computed for all windows.
     nvim_call_comp_scroll_all_windows();
 
-    parse_cino(nvim_opt_get_curbuf());
+    parse_cino(curbuf);
 }
 
 /// Free all options (EXITFREE path only).

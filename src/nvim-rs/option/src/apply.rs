@@ -90,9 +90,9 @@ extern "C" {
     fn do_filetype_autocmd(buf: *mut std::ffi::c_void, force: bool);
     fn rs_do_spelllang_source(win: *mut std::ffi::c_void);
 
-    // curbuf / curwin accessors
-    fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
-    fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
+    // curbuf / curwin globals
+    static mut curbuf: *mut std::ffi::c_void;
+    static mut curwin: *mut std::ffi::c_void;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_set_w_set_curswant(val: bool);
     fn nvim_win_get_briopt_list(win: *mut std::ffi::c_void) -> c_int;
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn rs_did_set_option(
     if !errmsg.is_null() {
         rs_set_option_varp(opt_idx, varp, old_value, 1);
         if restore_chartab != 0 {
-            buf_init_chartab(nvim_opt_get_curbuf(), 1);
+            buf_init_chartab(curbuf, 1);
         }
         return errmsg;
     }
@@ -248,9 +248,6 @@ pub unsafe extern "C" fn rs_did_set_option(
     if direct != 0 {
         return errmsg;
     }
-
-    let curbuf = nvim_opt_get_curbuf();
-    let curwin = nvim_opt_get_curwin();
 
     // Trigger autocmds for special options.
     if opt_idx == crate::opt_index::K_OPT_SYNTAX {
@@ -385,7 +382,6 @@ pub unsafe extern "C" fn rs_set_option_impl(
     let saved_old_local_value = rs_optval_copy(old_local_value);
     let saved_new_value = rs_optval_copy(value);
 
-    let curwin = nvim_opt_get_curwin();
     let p = rs_insecure_flag(curwin, opt_idx, opt_flags);
     let secure_saved = nvim_get_secure();
 

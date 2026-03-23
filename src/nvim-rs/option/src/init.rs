@@ -843,7 +843,7 @@ extern "C" {
     fn lang_init();
     fn nvim_call_bind_textdomain_codeset();
     fn check_buf_options(buf: *mut core::ffi::c_void);
-    fn nvim_opt_get_curbuf() -> *mut core::ffi::c_void;
+    static mut curbuf: *mut core::ffi::c_void;
     fn get_mess_lang() -> *mut c_char;
 
 }
@@ -899,12 +899,11 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // Set all options (except terminal options) to their default value.
     crate::defaults::rs_set_options_default(0);
 
-    let curbuf = nvim_opt_get_curbuf();
     nvim_buf_set_b_p_initialized(curbuf, 1);
     nvim_buf_set_b_p_ac_minus1(curbuf);
     nvim_buf_set_b_p_ar_minus1(curbuf);
     nvim_buf_set_b_p_ul_no_local(curbuf);
-    check_buf_options(nvim_opt_get_curbuf());
+    check_buf_options(curbuf);
     nvim_call_check_win_options();
     rs_check_options();
 
@@ -921,7 +920,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // Expand environment variables and things like "~" for the defaults.
     nvim_call_set_init_expand_env();
 
-    save_file_ff(nvim_opt_get_curbuf());
+    save_file_ff(curbuf);
 
     // Detect use of mlterm.
     // Mlterm is a terminal emulator akin to xterm that has some special

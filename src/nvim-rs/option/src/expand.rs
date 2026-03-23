@@ -613,9 +613,9 @@ extern "C" {
     // vim_regexec: single-line regex match (regmatch_T* passed as *mut c_void)
     fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> c_int;
 
-    // curbuf/curwin accessors
-    fn nvim_opt_get_curbuf() -> BufHandle;
-    fn nvim_opt_get_curwin() -> WinHandle;
+    // curbuf/curwin globals
+    static mut curbuf: BufHandle;
+    static mut curwin: WinHandle;
 
     // garray operations
     fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
@@ -655,8 +655,6 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
     }
 
     let expand_option_flags = get_expand_option_flags();
-    let curbuf = nvim_opt_get_curbuf();
-    let curwin = nvim_opt_get_curwin();
 
     let option_val_ptr =
         get_option_varp_scope_from(expand_option_idx, expand_option_flags, curbuf, curwin);

@@ -453,7 +453,7 @@ extern "C" {
     fn did_set_cedit(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
     fn did_set_breakat(args: *mut std::ffi::c_void) -> *const std::ffi::c_char;
     fn didset_window_options(win: crate::WinHandle, valid_cursor: bool);
-    fn nvim_opt_get_curwin() -> crate::WinHandle;
+    static mut curwin: crate::WinHandle;
     fn highlight_changed();
     fn check_opt_wim() -> c_int;
     fn nvim_win_get_opt_field_addr(win: crate::WinHandle, idx: c_int) -> *mut std::ffi::c_void;
@@ -480,11 +480,11 @@ pub unsafe extern "C" fn rs_didset_options() {
     didset_string_options();
     spell_check_msm();
     spell_check_sps();
-    nvim_compile_cap_prog_win(nvim_opt_get_curwin());
+    nvim_compile_cap_prog_win(curwin);
     did_set_spell_option();
     did_set_cedit(std::ptr::null_mut());
     did_set_breakat(std::ptr::null_mut());
-    didset_window_options(nvim_opt_get_curwin(), true);
+    didset_window_options(curwin, true);
 }
 
 /// More side effects of setting options.
@@ -495,7 +495,6 @@ pub unsafe extern "C" fn rs_didset_options() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_didset_options2() {
     highlight_changed();
-    let curwin = nvim_opt_get_curwin();
     // kFillchars=0, kListchars=1 (CharsOption enum from optionstr.h)
     let fcs = *(nvim_win_get_opt_field_addr(curwin, crate::opt_index::K_OPT_FILLCHARS)
         as *const *const std::ffi::c_char);

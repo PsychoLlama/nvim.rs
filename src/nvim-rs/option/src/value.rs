@@ -593,11 +593,11 @@ pub unsafe extern "C" fn rs_validate_num_option(
 
         idx if idx == K_OPT_SCROLL => {
             // nvim_get_curwin returns *const but we need *mut for C calls
-            let curwin = nvim_get_curwin().cast_mut();
-            let view_height = if curwin.is_null() {
+            let win = nvim_get_curwin().cast_mut();
+            let view_height = if win.is_null() {
                 0
             } else {
-                OptInt::from(nvim_option_win_get_view_height(curwin))
+                OptInt::from(nvim_option_win_get_view_height(win))
             };
             if (*newval <= 0 || (*newval > view_height && view_height > 0)) && full_screen {
                 let errmsg = if *newval != 0 {
@@ -605,10 +605,10 @@ pub unsafe extern "C" fn rs_validate_num_option(
                 } else {
                     ptr::null()
                 };
-                *newval = if curwin.is_null() {
+                *newval = if win.is_null() {
                     *newval
                 } else {
-                    win_default_scroll(curwin)
+                    win_default_scroll(win)
                 };
                 return errmsg;
             }
@@ -786,10 +786,8 @@ extern "C" {
         errbuf: *mut c_char,
         errbuflen: usize,
     ) -> *const c_char;
-    fn nvim_opt_get_curbuf() -> *mut std::ffi::c_void;
-    fn nvim_opt_get_curwin() -> *mut std::ffi::c_void;
-    fn nvim_opt_set_curbuf(buf: *mut std::ffi::c_void);
-    fn nvim_opt_set_curwin(win: *mut std::ffi::c_void);
+    static mut curbuf: crate::BufHandle;
+    static mut curwin: crate::WinHandle;
     fn nvim_win_get_w_buffer(win: *const std::ffi::c_void) -> *mut std::ffi::c_void;
     fn xmalloc(size: usize) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
@@ -1044,24 +1042,24 @@ pub unsafe extern "C" fn rs_set_option_direct_for(
     scope: c_int,
     from: *mut std::ffi::c_void,
 ) {
-    let save_curbuf = nvim_opt_get_curbuf();
-    let save_curwin = nvim_opt_get_curwin();
+    let save_curbuf = curbuf;
+    let save_curwin = curwin;
 
     // Adjust curbuf/curwin for the target scope.
     // Don't use switch_option_context (that calls aucmd_prepbuf with side effects).
     if scope == K_OPT_SCOPE_WIN {
-        nvim_opt_set_curwin(from);
+        curwin = from;
         let buf = nvim_win_get_w_buffer(from.cast_const());
-        nvim_opt_set_curbuf(buf);
+        curbuf = buf;
     } else if scope == K_OPT_SCOPE_BUF {
-        nvim_opt_set_curbuf(from);
+        curbuf = from;
     }
     // K_OPT_SCOPE_GLOBAL: no change to curbuf/curwin
 
     rs_set_option_direct(opt_idx, value, opt_flags, set_sid);
 
-    nvim_opt_set_curwin(save_curwin);
-    nvim_opt_set_curbuf(save_curbuf);
+    curwin = save_curwin;
+    curbuf = save_curbuf;
 }
 
 // =============================================================================

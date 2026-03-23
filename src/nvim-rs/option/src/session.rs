@@ -80,7 +80,7 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // makefoldset - get curwin and opt field addr directly
-    fn nvim_opt_get_curwin() -> crate::WinHandle;
+    static mut curwin: crate::WinHandle;
     fn nvim_win_get_opt_field_addr(win: crate::WinHandle, idx: c_int) -> *mut std::ffi::c_void;
 }
 
@@ -405,7 +405,6 @@ unsafe fn write_int64(fd: *mut libc::FILE, val: i64) -> c_int {
 pub unsafe extern "C" fn rs_makefoldset(fd: *mut libc::FILE) -> c_int {
     let setlocal = c"setlocal".as_ptr();
 
-    let curwin = nvim_opt_get_curwin();
     if rs_put_set(
         fd,
         setlocal,

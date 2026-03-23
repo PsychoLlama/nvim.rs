@@ -1634,12 +1634,6 @@ int nvim_opt_var_expand_type(OptIndex opt_idx) {
   return 4;  // EXPAND_FILES + XP_BS_ONE
 }
 
-/// curbuf/curwin accessors for option expansion Rust code.
-buf_T *nvim_opt_get_curbuf(void) { return curbuf; }
-win_T *nvim_opt_get_curwin(void) { return curwin; }
-void nvim_opt_set_curbuf(buf_T *buf) { curbuf = buf; }
-void nvim_opt_set_curwin(win_T *win) { curwin = win; }
-
 /// Get the value for the numeric or string option///opp in a nice format into
 /// NameBuff[].  Must not be called with a hidden option!
 ///
