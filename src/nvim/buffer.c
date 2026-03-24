@@ -1781,69 +1781,6 @@ static buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_
 }
 
 
-/// Wrapper for buflist_match(). Returns a matched name or NULL.
-const char *nvim_blfp_buflist_match(void *handle, buf_T *buf, bool ignore_case)
-{
-  if (handle == NULL) { return NULL; }
-  return buflist_match((regmatch_T *)handle, buf, ignore_case);
-}
-
-
-
-/// Check if buffer matches the compiled regex. Returns matched name or NULL.
-const char *nvim_bufname_regex_match(void *handle, buf_T *buf, bool ignore_case)
-{
-  if (handle == NULL) {
-    return NULL;
-  }
-  return buflist_match((regmatch_T *)handle, buf, ignore_case);
-}
-
-/// Check for a match on the file name for buffer "buf" with regprog "prog".
-/// Note that rmp->regprog may become NULL when switching regexp engine.
-///
-/// @param ignore_case  When true, ignore case. Use 'fic' otherwise.
-static char *buflist_match(regmatch_T *rmp, buf_T *buf, bool ignore_case)
-{
-  // First try the short file name, then the long file name.
-  char *match = fname_match(rmp, buf->b_sfname, ignore_case);
-  if (match == NULL && rmp->regprog != NULL) {
-    match = fname_match(rmp, buf->b_ffname, ignore_case);
-  }
-  return match;
-}
-
-/// Try matching the regexp in "rmp->regprog" with file name "name".
-/// Note that rmp->regprog may become NULL when switching regexp engine.
-///
-/// @param ignore_case  When true, ignore case. Use 'fileignorecase' otherwise.
-///
-/// @return  "name" when there is a match, NULL when not.
-static char *fname_match(regmatch_T *rmp, char *name, bool ignore_case)
-{
-  char *match = NULL;
-
-  // extra check for valid arguments
-  if (name == NULL || rmp->regprog == NULL) {
-    return NULL;
-  }
-
-  // Ignore case when 'fileignorecase' or the argument is set.
-  rmp->rm_ic = p_fic || ignore_case;
-  if (vim_regexec(rmp, name, 0)) {
-    match = name;
-  } else if (rmp->regprog != NULL) {
-    // Replace $(HOME) with '~' and try matching again.
-    char *p = home_replace_save(NULL, name);
-    if (vim_regexec(rmp, p, 0)) {
-      match = name;
-    }
-    xfree(p);
-  }
-
-  return match;
-}
-
 
 /// Set the line and column numbers for the given buffer and window
 ///
