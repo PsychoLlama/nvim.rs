@@ -190,6 +190,9 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags);
 void goto_buffer(exarg_T *eap, int start, int dir, int count);
 // empty_curbuf() is implemented in Rust (src/nvim-rs/buffer/src/lifecycle.rs).
 int empty_curbuf(bool close_others, int forceit, int action);
+// curbuf_locked() and allbuf_locked() are implemented in Rust (src/nvim-rs/buffer/src/misc.rs).
+bool curbuf_locked(void);
+bool allbuf_locked(void);
 
 // maketitle(), resettitle(), free_titles() are implemented in Rust
 // (src/nvim-rs/buffer/src/info.rs).

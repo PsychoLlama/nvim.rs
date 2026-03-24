@@ -2527,24 +2527,3 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
   }
 }
 
-/// Check if "curbuf->b_ro_locked" or "allbuf_lock" is set and
-/// return true when it is and give an error message.
-bool curbuf_locked(void)
-{
-  if (curbuf->b_ro_locked > 0) {
-    emsg(_(e_cannot_edit_other_buf));
-    return true;
-  }
-  return allbuf_locked();
-}
-
-/// Check if "allbuf_lock" is set and return true when it is and give an error
-/// message.
-bool allbuf_locked(void)
-{
-  if (allbuf_lock > 0) {
-    emsg(_("E811: Not allowed to change buffer information now"));
-    return true;
-  }
-  return false;
-}

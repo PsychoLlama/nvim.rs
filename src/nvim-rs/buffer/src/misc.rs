@@ -39,8 +39,12 @@ extern "C" {
     fn ml_delete(lnum: c_int) -> c_int;
     fn deleted_lines_mark(lnum: c_int, count: c_int);
     fn text_locked() -> bool;
-    fn curbuf_locked() -> bool;
     fn get_text_locked_msg() -> *const c_char;
+
+    // For curbuf_locked / allbuf_locked
+    fn nvim_buf_get_b_ro_locked(buf: BufHandle) -> c_int;
+    static allbuf_lock: c_int;
+    static e_cannot_edit_other_buf: c_char;
 
     fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int) -> c_int;
     fn buflist_findpat(
@@ -207,6 +211,33 @@ pub unsafe extern "C" fn text_or_buf_locked() -> bool {
         return true;
     }
     curbuf_locked()
+}
+
+// Check if allbuf_lock is set and return true when it is and give an error message.
+// Rust port of C allbuf_locked().
+/// # Safety
+/// Accesses global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn allbuf_locked() -> bool {
+    if allbuf_lock > 0 {
+        emsg(c"E811: Not allowed to change buffer information now".as_ptr());
+        return true;
+    }
+    false
+}
+
+// Check if curbuf->b_ro_locked or allbuf_lock is set and give an error message.
+// Rust port of C curbuf_locked().
+/// # Safety
+/// Accesses global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn curbuf_locked() -> bool {
+    let curbuf = nvim_get_curbuf();
+    if nvim_buf_get_b_ro_locked(curbuf) > 0 {
+        emsg(gettext(&raw const e_cannot_edit_other_buf));
+        return true;
+    }
+    allbuf_locked()
 }
 
 /// Clear the current buffer contents.
