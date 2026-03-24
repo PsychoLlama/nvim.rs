@@ -1824,25 +1824,7 @@ void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_matc
 // nvim_get_curwin_cursor_col: defined in change_ffi.c (returns colnr_T)
 // nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool nvim_ascii_iswhite_or_nul(int c)
 // nvim_xcalloc_ints: deleted (Phase 3, Rust calls xcalloc directly)
-void nvim_ins_compl_expand_multiple_skip(const char *str, int skip) {
-  char *start = (char *)str + skip;
-  char *curr = start;
-  int base_indent = get_indent();
-  while (*curr != NUL) {
-    if (*curr == '\n') {
-      if (curr > start) {
-        ins_char_bytes(start, (size_t)(curr - start));
-      }
-      open_line(FORWARD, OPENLINE_KEEPTRAIL | OPENLINE_FORCE_INDENT, base_indent, NULL);
-      start = curr + 1;
-    }
-    curr++;
-  }
-  if (curr > start) {
-    ins_char_bytes(start, (size_t)(curr - start));
-  }
-  compl_ins_end_col = curwin->w_cursor.col;
-}
+// nvim_ins_compl_expand_multiple_skip: deleted (Phase 17), inlined in insert.rs
 // nvim_compl_shown_match_at_orig_text: deleted (Phase 14, inlined in Rust)
 void nvim_ins_compl_dict_alloc_set_shown(void) { set_vim_var_dict(VV_COMPLETED_ITEM, ins_compl_dict_alloc(compl_shown_match)); }
 // nvim_set_compl_hi_on_longest: deleted (Phase 2, COMPL_HI_ON_AUTOCOMPL_LONGEST moved to Rust)

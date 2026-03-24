@@ -166,7 +166,15 @@ extern "C" {
     // Accessors for rs_ins_compl_insert
     // rs_find_common_prefix is defined in Rust (leader.rs)
     // (nvim_get_cpt_source_startcol, nvim_cpt_sources_array_exists: inlined in vars.rs Phase 23)
-    fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
+    // nvim_ins_compl_expand_multiple_skip: deleted (Phase 17), inlined below
+    // Helpers for inlined nvim_ins_compl_expand_multiple_skip
+    fn get_indent() -> c_int;
+    fn open_line(
+        dir: c_int,
+        flags: c_int,
+        second_line_indent: c_int,
+        did_do_comment: *mut bool,
+    ) -> bool;
     // nvim_ins_compl_insert_bytes: deleted (Phase 2), inlined below via ins_bytes_len
     #[link_name = "ins_bytes_len"]
     fn ins_bytes_len(p: *const c_char, len: usize);
@@ -176,6 +184,49 @@ extern "C" {
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_leader_len() -> usize;
     fn rs_get_compl_len() -> c_int;
+}
+
+// Constants for expand_multiple_skip_impl
+const FORWARD_INSERT: c_int = 1;
+const OPENLINE_KEEPTRAIL_INSERT: c_int = 0x04;
+const OPENLINE_FORCE_INDENT_INSERT: c_int = 0x40;
+
+/// Insert a completion string that may contain newlines, skipping a prefix.
+///
+/// Inlined from the deleted C function `nvim_ins_compl_expand_multiple_skip` (Phase 17).
+/// Walks the string starting at `str_ptr + skip`, inserting characters and opening new
+/// lines as needed.
+///
+/// # Safety
+/// `str_ptr` must point to a valid NUL-terminated C string.
+/// Requires valid buffer, cursor, and indent state.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn expand_multiple_skip_impl(str_ptr: *const c_char, skip: c_int) {
+    #[allow(clippy::cast_sign_loss)]
+    let mut start: *mut c_char = str_ptr.add(skip as usize).cast_mut();
+    let mut curr = start;
+    let base_indent = get_indent();
+    while *curr != 0 {
+        if *curr == b'\n' as c_char {
+            if curr > start {
+                #[allow(clippy::cast_sign_loss)]
+                ins_char_bytes(start.cast_const(), curr.offset_from(start) as usize);
+            }
+            open_line(
+                FORWARD_INSERT,
+                OPENLINE_KEEPTRAIL_INSERT | OPENLINE_FORCE_INDENT_INSERT,
+                base_indent,
+                core::ptr::null_mut(),
+            );
+            start = curr.add(1);
+        }
+        curr = curr.add(1);
+    }
+    if curr > start {
+        #[allow(clippy::cast_sign_loss)]
+        ins_char_bytes(start.cast_const(), curr.offset_from(start) as usize);
+    }
+    crate::vars::nvim_set_compl_ins_end_col(nvim_get_cursor_col());
 }
 
 /// Delete old completion text before inserting new match.
@@ -374,7 +425,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
         };
 
         if has_newline {
-            nvim_ins_compl_expand_multiple_skip(cp_str, compl_len);
+            expand_multiple_skip_impl(cp_str, compl_len);
         } else {
             let ins_len = if insert_prefix != 0 {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
@@ -520,15 +571,16 @@ pub unsafe extern "C" fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int)
 
 /// Insert a completion string that may contain newlines.
 ///
-/// Delegates to the C compound accessor `nvim_ins_compl_expand_multiple_skip`
-/// with `skip = 0` (no prefix to skip).
+/// Insert a completion string that may contain newlines.
+///
+/// Wraps `expand_multiple_skip_impl` with `skip = 0` (no prefix to skip).
 ///
 /// # Safety
 /// `str_ptr` must point to a valid NUL-terminated C string.
 /// Requires valid buffer, cursor, and indent state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_expand_multiple(str_ptr: *const c_char) {
-    nvim_ins_compl_expand_multiple_skip(str_ptr, 0);
+    expand_multiple_skip_impl(str_ptr, 0);
 }
 
 #[cfg(test)]
