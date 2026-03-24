@@ -23,7 +23,9 @@ use std::io::Cursor;
 use std::os::raw::c_int;
 use std::ptr;
 
-use rmp::decode::{self, DecodeStringError, MarkerReadError, NumValueReadError, ValueReadError};
+use rmp::decode::{
+    self, DecodeStringError, MarkerReadError, NumValueReadError, RmpRead, ValueReadError,
+};
 use rmp::Marker;
 
 // ============================================================================
@@ -322,48 +324,48 @@ impl<'a> Unpacker<'a> {
 
             // Unsigned integers
             Marker::U8 => {
-                let n = decode::read_data_u8(&mut self.cursor)?;
+                let n = self.cursor.read_data_u8()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::U16 => {
-                let n = decode::read_data_u16(&mut self.cursor)?;
+                let n = self.cursor.read_data_u16()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::U32 => {
-                let n = decode::read_data_u32(&mut self.cursor)?;
+                let n = self.cursor.read_data_u32()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::U64 => {
-                let n = decode::read_data_u64(&mut self.cursor)?;
+                let n = self.cursor.read_data_u64()?;
                 // Note: This may overflow for very large u64 values
                 Ok(Object::integer(n as i64))
             }
 
             // Signed integers
             Marker::I8 => {
-                let n = decode::read_data_i8(&mut self.cursor)?;
+                let n = self.cursor.read_data_i8()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::I16 => {
-                let n = decode::read_data_i16(&mut self.cursor)?;
+                let n = self.cursor.read_data_i16()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::I32 => {
-                let n = decode::read_data_i32(&mut self.cursor)?;
+                let n = self.cursor.read_data_i32()?;
                 Ok(Object::integer(i64::from(n)))
             }
             Marker::I64 => {
-                let n = decode::read_data_i64(&mut self.cursor)?;
+                let n = self.cursor.read_data_i64()?;
                 Ok(Object::integer(n))
             }
 
             // Floats
             Marker::F32 => {
-                let n = decode::read_data_f32(&mut self.cursor)?;
+                let n = self.cursor.read_data_f32()?;
                 Ok(Object::float(f64::from(n)))
             }
             Marker::F64 => {
-                let n = decode::read_data_f64(&mut self.cursor)?;
+                let n = self.cursor.read_data_f64()?;
                 Ok(Object::float(n))
             }
 
@@ -372,29 +374,29 @@ impl<'a> Unpacker<'a> {
 
             // Strings (str8, str16, str32)
             Marker::Str8 => {
-                let len = decode::read_data_u8(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u8()? as usize;
                 self.unpack_string(len)
             }
             Marker::Str16 => {
-                let len = decode::read_data_u16(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u16()? as usize;
                 self.unpack_string(len)
             }
             Marker::Str32 => {
-                let len = decode::read_data_u32(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u32()? as usize;
                 self.unpack_string(len)
             }
 
             // Binary (treat as string)
             Marker::Bin8 => {
-                let len = decode::read_data_u8(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u8()? as usize;
                 self.unpack_string(len)
             }
             Marker::Bin16 => {
-                let len = decode::read_data_u16(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u16()? as usize;
                 self.unpack_string(len)
             }
             Marker::Bin32 => {
-                let len = decode::read_data_u32(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u32()? as usize;
                 self.unpack_string(len)
             }
 
@@ -403,11 +405,11 @@ impl<'a> Unpacker<'a> {
 
             // Arrays (array16, array32)
             Marker::Array16 => {
-                let len = decode::read_data_u16(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u16()? as usize;
                 self.unpack_array(len)
             }
             Marker::Array32 => {
-                let len = decode::read_data_u32(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u32()? as usize;
                 self.unpack_array(len)
             }
 
@@ -416,11 +418,11 @@ impl<'a> Unpacker<'a> {
 
             // Maps (map16, map32)
             Marker::Map16 => {
-                let len = decode::read_data_u16(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u16()? as usize;
                 self.unpack_map(len)
             }
             Marker::Map32 => {
-                let len = decode::read_data_u32(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u32()? as usize;
                 self.unpack_map(len)
             }
 
@@ -431,15 +433,15 @@ impl<'a> Unpacker<'a> {
             Marker::FixExt8 => self.unpack_ext(8),
             Marker::FixExt16 => self.unpack_ext(16),
             Marker::Ext8 => {
-                let len = decode::read_data_u8(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u8()? as usize;
                 self.unpack_ext(len)
             }
             Marker::Ext16 => {
-                let len = decode::read_data_u16(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u16()? as usize;
                 self.unpack_ext(len)
             }
             Marker::Ext32 => {
-                let len = decode::read_data_u32(&mut self.cursor)? as usize;
+                let len = self.cursor.read_data_u32()? as usize;
                 self.unpack_ext(len)
             }
 
@@ -519,7 +521,7 @@ impl<'a> Unpacker<'a> {
 
     fn unpack_ext(&mut self, len: usize) -> Result<Object, UnpackError> {
         // Read ext type
-        let ext_type = decode::read_data_i8(&mut self.cursor)?;
+        let ext_type = self.cursor.read_data_i8()?;
 
         // Check if this is a known ext type (Buffer, Window, Tabpage)
         if (0..=EXT_OBJECT_TYPE_MAX).contains(&ext_type) {
@@ -533,14 +535,14 @@ impl<'a> Unpacker<'a> {
             let handle = match marker {
                 Marker::FixPos(n) => i64::from(n),
                 Marker::FixNeg(n) => i64::from(n),
-                Marker::U8 => i64::from(decode::read_data_u8(&mut self.cursor)?),
-                Marker::U16 => i64::from(decode::read_data_u16(&mut self.cursor)?),
-                Marker::U32 => i64::from(decode::read_data_u32(&mut self.cursor)?),
-                Marker::U64 => decode::read_data_u64(&mut self.cursor)? as i64,
-                Marker::I8 => i64::from(decode::read_data_i8(&mut self.cursor)?),
-                Marker::I16 => i64::from(decode::read_data_i16(&mut self.cursor)?),
-                Marker::I32 => i64::from(decode::read_data_i32(&mut self.cursor)?),
-                Marker::I64 => decode::read_data_i64(&mut self.cursor)?,
+                Marker::U8 => i64::from(self.cursor.read_data_u8()?),
+                Marker::U16 => i64::from(self.cursor.read_data_u16()?),
+                Marker::U32 => i64::from(self.cursor.read_data_u32()?),
+                Marker::U64 => self.cursor.read_data_u64()? as i64,
+                Marker::I8 => i64::from(self.cursor.read_data_i8()?),
+                Marker::I16 => i64::from(self.cursor.read_data_i16()?),
+                Marker::I32 => i64::from(self.cursor.read_data_i32()?),
+                Marker::I64 => self.cursor.read_data_i64()?,
                 _ => return Ok(Object::nil()),
             };
 
@@ -554,7 +556,7 @@ impl<'a> Unpacker<'a> {
         } else {
             // Unknown ext type, skip the data and return nil
             for _ in 0..len {
-                decode::read_data_u8(&mut self.cursor)?;
+                self.cursor.read_data_u8()?;
             }
             Ok(Object::nil())
         }

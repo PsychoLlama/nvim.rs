@@ -10,6 +10,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::range_plus_one)]
 #![allow(clippy::option_if_let_else)]
+#![allow(private_interfaces)] // FFI structs: C callers use raw pointers only
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -7042,6 +7043,563 @@ pub unsafe extern "C" fn rs_spell_make_sugfile(spin: *mut SpellinfoT, wfname: *m
     }
     free_blocks((*spin).si_blocks.cast::<c_void>());
     close_spellbuf((*spin).si_spellbuf);
+}
+
+// =============================================================================
+// Phase 1: Small pure helpers and affix flag utilities
+// =============================================================================
+
+/// AFT_ flag type constants (match C defines in spellfile.c).
+const AFT_CHAR: c_int = 0; // flags are one character
+const AFT_LONG: c_int = 1; // flags are two characters
+const AFT_CAPLONG: c_int = 2; // flags are one or two characters
+const AFT_NUM: c_int = 3; // flags are numbers, comma separated
+
+/// ZERO_FLAG: used when a numeric flag is zero (value "0").
+const ZERO_FLAG: u32 = 65009;
+
+/// AH_KEY_LEN: 2 x 8 bytes + NUL.
+const AH_KEY_LEN: usize = 17;
+
+extern "C" {
+    /// smsg(hl_id, fmt, ...): display a message.
+    #[link_name = "smsg"]
+    fn smsg_phase1(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    /// getdigits_int: parse a decimal integer from *pp, advancing the pointer.
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+    /// ascii_isdigit: returns true if char is ASCII digit.
+    fn ascii_isdigit(c: c_int) -> bool;
+    /// hash_find: look up key in hashtable, returns pointer to hashitem (or empty item).
+    fn hash_find(ht: *const crate::HashtabRaw, key: *const c_char) -> *mut crate::HashitemRaw;
+}
+
+/// Check if a hashitem is empty (key is NULL or hash_removed sentinel).
+///
+/// # Safety
+/// `hi` must be a valid non-null pointer to a `HashitemRaw`.
+unsafe fn hi_is_empty(hi: *const crate::HashitemRaw) -> bool {
+    (*hi).hi_key.is_null()
+        || std::ptr::eq(
+            (*hi).hi_key,
+            std::ptr::addr_of!(hash_removed_sentinel).cast::<c_char>(),
+        )
+}
+
+/// afffile_T repr(C) mirror (64-bit layout from spellfile.c).
+///
+/// sizeof = 952, alignof = 8
+///
+/// Offsets:
+///   0: af_enc (ptr), 8: af_flagtype (int), 12: af_rare..af_nosuggest (10 x u32)
+///   52: af_pfxpostpone (int), 56: af_ignoreextra (bool), 57..63: pad
+///   64: af_pref (hashtab, 296 bytes), 360: af_suff (296), 656: af_comp (296)
+#[repr(C)]
+struct AfffileT {
+    pub af_enc: *mut c_char,        // offset 0
+    pub af_flagtype: c_int,         // offset 8
+    pub af_rare: u32,               // offset 12
+    pub af_keepcase: u32,           // offset 16
+    pub af_bad: u32,                // offset 20
+    pub af_needaffix: u32,          // offset 24
+    pub af_circumfix: u32,          // offset 28
+    pub af_needcomp: u32,           // offset 32
+    pub af_comproot: u32,           // offset 36
+    pub af_compforbid: u32,         // offset 40
+    pub af_comppermit: u32,         // offset 44
+    pub af_nosuggest: u32,          // offset 48
+    pub af_pfxpostpone: c_int,      // offset 52
+    pub af_ignoreextra: bool,       // offset 56
+    _pad0: [u8; 7],                 // offset 57
+    pub af_pref: crate::HashtabRaw, // offset 64 (296 bytes)
+    pub af_suff: crate::HashtabRaw, // offset 360 (296 bytes)
+    pub af_comp: crate::HashtabRaw, // offset 656 (296 bytes)
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<AfffileT>() == 952);
+    assert!(std::mem::align_of::<AfffileT>() == 8);
+    assert!(std::mem::offset_of!(AfffileT, af_enc) == 0);
+    assert!(std::mem::offset_of!(AfffileT, af_flagtype) == 8);
+    assert!(std::mem::offset_of!(AfffileT, af_rare) == 12);
+    assert!(std::mem::offset_of!(AfffileT, af_nosuggest) == 48);
+    assert!(std::mem::offset_of!(AfffileT, af_pfxpostpone) == 52);
+    assert!(std::mem::offset_of!(AfffileT, af_ignoreextra) == 56);
+    assert!(std::mem::offset_of!(AfffileT, af_pref) == 64);
+    assert!(std::mem::offset_of!(AfffileT, af_suff) == 360);
+    assert!(std::mem::offset_of!(AfffileT, af_comp) == 656);
+};
+
+/// affentry_T repr(C) mirror.
+///
+/// sizeof = 56, alignof = 8
+#[repr(C)]
+struct AffentryT {
+    pub ae_next: *mut AffentryT, // offset 0
+    pub ae_chop: *mut c_char,    // offset 8
+    pub ae_add: *mut c_char,     // offset 16
+    pub ae_flags: *mut c_char,   // offset 24
+    pub ae_cond: *mut c_char,    // offset 32
+    pub ae_prog: *mut c_void,    // offset 40 (regprog_T*)
+    pub ae_compforbid: c_char,   // offset 48
+    pub ae_comppermit: c_char,   // offset 49
+    _pad0: [u8; 6],              // offset 50
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<AffentryT>() == 56);
+    assert!(std::mem::offset_of!(AffentryT, ae_next) == 0);
+    assert!(std::mem::offset_of!(AffentryT, ae_add) == 16);
+    assert!(std::mem::offset_of!(AffentryT, ae_flags) == 24);
+    assert!(std::mem::offset_of!(AffentryT, ae_prog) == 40);
+    assert!(std::mem::offset_of!(AffentryT, ae_compforbid) == 48);
+    assert!(std::mem::offset_of!(AffentryT, ae_comppermit) == 49);
+};
+
+/// affheader_T repr(C) mirror (accessed via HI2AH: `(affheader_T *)(hi)->hi_key`).
+///
+/// sizeof = 48, alignof = 8
+#[repr(C)]
+#[allow(non_snake_case)]
+struct AffheaderT {
+    pub ah_key: [c_char; AH_KEY_LEN], // offset 0
+    _pad0: [u8; 3],                   // offset 17
+    pub ah_flag: u32,                 // offset 20
+    pub ah_newID: c_int,              // offset 24
+    pub ah_combine: c_int,            // offset 28
+    pub ah_follows: c_int,            // offset 32
+    _pad1: [u8; 4],                   // offset 36
+    pub ah_first: *mut AffentryT,     // offset 40
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<AffheaderT>() == 48);
+    assert!(std::mem::offset_of!(AffheaderT, ah_key) == 0);
+    assert!(std::mem::offset_of!(AffheaderT, ah_flag) == 20);
+    assert!(std::mem::offset_of!(AffheaderT, ah_newID) == 24);
+    assert!(std::mem::offset_of!(AffheaderT, ah_first) == 40);
+};
+
+/// compitem_T repr(C) mirror (accessed via HI2CI: `(compitem_T *)(hi)->hi_key`).
+///
+/// sizeof = 28, alignof = 4
+#[repr(C)]
+#[allow(non_snake_case)]
+struct CompitemT {
+    pub ci_key: [c_char; AH_KEY_LEN], // offset 0
+    _pad0: [u8; 3],                   // offset 17
+    pub ci_flag: u32,                 // offset 20
+    pub ci_newID: c_int,              // offset 24
+}
+
+const _: () = {
+    assert!(std::mem::offset_of!(CompitemT, ci_key) == 0);
+    assert!(std::mem::offset_of!(CompitemT, ci_flag) == 20);
+    assert!(std::mem::offset_of!(CompitemT, ci_newID) == 24);
+};
+
+/// Get one affix name from `*pp` and advance the pointer.
+/// Returns `ZERO_FLAG` for "0", 0 for error (still advances pointer).
+/// Mirrors C `get_affitem`.
+///
+/// # Safety
+/// `pp` must be a valid non-null double pointer to a NUL-terminated C string.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn get_affitem_inner(flagtype: c_int, pp: *mut *mut c_char) -> u32 {
+    if flagtype == AFT_NUM {
+        if !ascii_isdigit(i32::from(**pp as u8)) {
+            *pp = (*pp).add(1); // always advance, avoid getting stuck
+            return 0;
+        }
+        let res = getdigits_int(pp, true, 0);
+        if res == 0 {
+            ZERO_FLAG
+        } else {
+            res as u32
+        }
+    } else {
+        let res = mb_ptr2char_adv_p(pp.cast::<*const c_char>()) as u32;
+        if flagtype == AFT_LONG
+            || (flagtype == AFT_CAPLONG && res >= u32::from(b'A') && res <= u32::from(b'Z'))
+        {
+            if **pp == 0 {
+                return 0;
+            }
+            let res2 = mb_ptr2char_adv_p(pp.cast::<*const c_char>()) as u32;
+            res2 + (res << 16)
+        } else {
+            res
+        }
+    }
+}
+
+/// FFI export of `get_affitem` for C callers.
+///
+/// # Safety
+/// `pp` must be a valid non-null double pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> u32 {
+    get_affitem_inner(flagtype, pp)
+}
+
+/// Turn an affix flag name into a number, according to the FLAG type.
+/// Returns zero for failure.
+/// Mirrors C `affitem2flag`.
+///
+/// # Safety
+/// `item` and `fname` must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_affitem2flag(
+    flagtype: c_int,
+    item: *mut c_char,
+    fname: *const c_char,
+    lnum: c_int,
+) -> u32 {
+    let mut p = item;
+    let res = get_affitem_inner(flagtype, &raw mut p);
+    if res == 0 {
+        if flagtype == AFT_NUM {
+            smsg_phase1(
+                0,
+                c"Flag is not a number in %s line %d: %s".as_ptr(),
+                fname,
+                lnum,
+                item,
+            );
+        } else {
+            smsg_phase1(
+                0,
+                c"Illegal flag in %s line %d: %s".as_ptr(),
+                fname,
+                lnum,
+                item,
+            );
+        }
+    }
+    if *p != 0 {
+        smsg_phase1(
+            0,
+            c"Affix name too long in %s line %d: %s".as_ptr(),
+            fname,
+            lnum,
+            item,
+        );
+        return 0;
+    }
+    res
+}
+
+/// Check if flag `flag` appears in affix list `afflist`.
+/// Mirrors C `flag_in_afflist`.
+///
+/// # Safety
+/// `afflist` must be a valid NUL-terminated C string.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+unsafe fn flag_in_afflist_inner(flagtype: c_int, afflist: *mut c_char, flag: u32) -> bool {
+    match flagtype {
+        AFT_CHAR => !crate::vim_strchr(afflist, flag as c_int).is_null(),
+        AFT_CAPLONG | AFT_LONG => {
+            let mut p = afflist;
+            while *p != 0 {
+                let mut n = mb_ptr2char_adv_p((&raw mut p).cast::<*const c_char>()) as u32;
+                if (flagtype == AFT_LONG || (n >= u32::from(b'A') && n <= u32::from(b'Z')))
+                    && *p != 0
+                {
+                    n = mb_ptr2char_adv_p((&raw mut p).cast::<*const c_char>()) as u32 + (n << 16);
+                }
+                if n == flag {
+                    return true;
+                }
+            }
+            false
+        }
+        AFT_NUM => {
+            let mut p = afflist;
+            while *p != 0 {
+                let digits = getdigits_int((&raw mut p).cast::<*mut c_char>(), true, 0);
+                assert!(digits >= 0);
+                let mut n = digits as u32;
+                if n == 0 {
+                    n = ZERO_FLAG;
+                }
+                if n == flag {
+                    return true;
+                }
+                if *p != 0 {
+                    p = p.add(1); // skip over comma
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// FFI export of `flag_in_afflist` for C callers.
+///
+/// # Safety
+/// `afflist` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_flag_in_afflist(
+    flagtype: c_int,
+    afflist: *mut c_char,
+    flag: u32,
+) -> bool {
+    flag_in_afflist_inner(flagtype, afflist, flag)
+}
+
+/// Give a warning when `spinval` and `affval` numbers are set and not the same.
+/// Mirrors C `aff_check_number`.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_aff_check_number(spinval: c_int, affval: c_int, name: *const c_char) {
+    if spinval != 0 && spinval != affval {
+        smsg_phase1(
+            0,
+            c"%s value differs from what is used in another .aff file".as_ptr(),
+            name,
+        );
+    }
+}
+
+/// Give a warning when `spinval` and `affval` strings are set and not the same.
+/// Mirrors C `aff_check_string`.
+///
+/// # Safety
+/// All pointers must be valid NUL-terminated C strings (or `spinval` may be NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_aff_check_string(
+    spinval: *const c_char,
+    affval: *const c_char,
+    name: *const c_char,
+) {
+    if spinval.is_null() {
+        return;
+    }
+    // strcmp: check if strings differ
+    let mut s1 = spinval;
+    let mut s2 = affval;
+    loop {
+        if *s1 != *s2 {
+            smsg_phase1(
+                0,
+                c"%s value differs from what is used in another .aff file".as_ptr(),
+                name,
+            );
+            return;
+        }
+        if *s1 == 0 {
+            return;
+        }
+        s1 = s1.add(1);
+        s2 = s2.add(1);
+    }
+}
+
+/// Check that new IDs for postponed affixes and compounding don't overrun each other.
+/// Mirrors C `check_renumber`.
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer to a `spellinfo_T`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_renumber(spin: *mut SpellinfoT) {
+    if (*spin).si_newprefID == (*spin).si_newcompID && (*spin).si_newcompID < 128 {
+        (*spin).si_newprefID = 127;
+        (*spin).si_newcompID = 255;
+    }
+}
+
+/// Extract WF_ flags from an affix list.
+/// Mirrors C `get_affix_flags`.
+///
+/// # Safety
+/// `affile` and `afflist` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_affix_flags(affile: *mut AfffileT, afflist: *mut c_char) -> c_int {
+    // WF_ flag constants (from spell_defs.h)
+    const WF_KEEPCAP: c_int = 0x0400;
+    const WF_FIXCAP: c_int = 0x4000;
+    const WF_RARE: c_int = 0x0200;
+    const WF_BANNED: c_int = 0x0010;
+    const WF_NEEDCOMP: c_int = 0x1000;
+    const WF_COMPROOT: c_int = 0x0800;
+    const WF_NOSUGGEST: c_int = 0x2000;
+
+    let mut flags: c_int = 0;
+    let ft = (*affile).af_flagtype;
+
+    if (*affile).af_keepcase != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_keepcase) {
+        flags |= WF_KEEPCAP | WF_FIXCAP;
+    }
+    if (*affile).af_rare != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_rare) {
+        flags |= WF_RARE;
+    }
+    if (*affile).af_bad != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_bad) {
+        flags |= WF_BANNED;
+    }
+    if (*affile).af_needcomp != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_needcomp) {
+        flags |= WF_NEEDCOMP;
+    }
+    if (*affile).af_comproot != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_comproot) {
+        flags |= WF_COMPROOT;
+    }
+    if (*affile).af_nosuggest != 0 && flag_in_afflist_inner(ft, afflist, (*affile).af_nosuggest) {
+        flags |= WF_NOSUGGEST;
+    }
+    flags
+}
+
+/// Get list of prefix IDs from affix list (for PFXPOSTPONE).
+/// Writes IDs into `store_afflist` (NUL-terminated), returns count.
+/// Mirrors C `get_pfxlist`.
+///
+/// # Safety
+/// All pointers must be valid. `store_afflist` must have at least MAXWLEN bytes.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_get_pfxlist(
+    affile: *mut AfffileT,
+    afflist: *mut c_char,
+    store_afflist: *mut c_char,
+) -> c_int {
+    let mut cnt: c_int = 0;
+    let mut key = [0u8; AH_KEY_LEN];
+    let ft = (*affile).af_flagtype;
+
+    let mut p = afflist;
+    while *p != 0 {
+        let prevp = p;
+        if get_affitem_inner(ft, &raw mut p) != 0 {
+            // Copy flag text (prevp..p) into key buffer.
+            #[allow(clippy::cast_sign_loss)]
+            let key_len = p.offset_from(prevp) as usize;
+            let copy_len = key_len.min(AH_KEY_LEN - 1);
+            std::ptr::copy_nonoverlapping(prevp.cast::<u8>(), key.as_mut_ptr(), copy_len);
+            key[copy_len] = 0;
+
+            let hi = hash_find(&raw const (*affile).af_pref, key.as_ptr().cast::<c_char>());
+            if !hi.is_null() && !hi_is_empty(hi) {
+                // HI2AH: hi_key points to start of affheader_T (key is first field).
+                // The C struct has the key as its first field (offset 0), so the pointer
+                // is valid as affheader_T* regardless of alignment lint.
+                #[allow(clippy::cast_ptr_alignment)]
+                let ah = (*hi).hi_key.cast::<AffheaderT>();
+                let id = (*ah).ah_newID;
+                if id != 0 {
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    let byte = id as u8;
+                    #[allow(clippy::cast_sign_loss)]
+                    let idx = cnt as usize;
+                    *store_afflist.add(idx) = byte as c_char;
+                    cnt += 1;
+                }
+            }
+        }
+        #[allow(clippy::cast_possible_wrap)]
+        if ft == AFT_NUM && *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let end_idx = cnt as usize;
+    *store_afflist.add(end_idx) = 0;
+    cnt
+}
+
+/// Get list of compound IDs from affix list.
+/// Writes IDs into `store_afflist` (NUL-terminated).
+/// Mirrors C `get_compflags`.
+///
+/// # Safety
+/// All pointers must be valid. `store_afflist` must have at least MAXWLEN bytes.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_ptr_alignment
+)]
+pub unsafe extern "C" fn rs_get_compflags(
+    affile: *mut AfffileT,
+    afflist: *mut c_char,
+    store_afflist: *mut c_char,
+) {
+    let mut cnt: usize = 0;
+    let mut key = [0u8; AH_KEY_LEN];
+    let ft = (*affile).af_flagtype;
+
+    let mut p = afflist;
+    while *p != 0 {
+        let prevp = p;
+        if get_affitem_inner(ft, &raw mut p) != 0 {
+            let key_len = p.offset_from(prevp) as usize;
+            let copy_len = key_len.min(AH_KEY_LEN - 1);
+            std::ptr::copy_nonoverlapping(prevp.cast::<u8>(), key.as_mut_ptr(), copy_len);
+            key[copy_len] = 0;
+
+            let hi = hash_find(&raw const (*affile).af_comp, key.as_ptr().cast::<c_char>());
+            if !hi.is_null() && !hi_is_empty(hi) {
+                // HI2CI: hi_key points to start of compitem_T (key is first field).
+                let ci = (*hi).hi_key.cast::<CompitemT>();
+                *store_afflist.add(cnt) = (*ci).ci_newID as u8 as c_char;
+                cnt += 1;
+            }
+        }
+        if ft == AFT_NUM && *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+    *store_afflist.add(cnt) = 0;
+}
+
+/// Process COMPOUNDFORBIDFLAG/COMPOUNDPERMITFLAG in an affix entry.
+/// Removes matched flags from ae_flags and sets ae_compforbid/ae_comppermit.
+/// Mirrors C `aff_process_flags`.
+///
+/// # Safety
+/// `affile` and `entry` must be valid non-null pointers.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_aff_process_flags(affile: *mut AfffileT, entry: *mut AffentryT) {
+    if (*entry).ae_flags.is_null() {
+        return;
+    }
+    if (*affile).af_compforbid == 0 && (*affile).af_comppermit == 0 {
+        return;
+    }
+
+    let ft = (*affile).af_flagtype;
+    let mut p = (*entry).ae_flags;
+    while *p != 0 {
+        let prevp = p;
+        let flag = get_affitem_inner(ft, &raw mut p);
+        if flag == (*affile).af_comppermit || flag == (*affile).af_compforbid {
+            // STRMOVE(prevp, p): memmove to shift string left and remove this flag.
+            let move_len = libc::strlen(p.cast::<libc::c_char>()) + 1;
+            libc::memmove(
+                prevp.cast::<libc::c_void>(),
+                p.cast::<libc::c_void>(),
+                move_len,
+            );
+            p = prevp;
+            if flag == (*affile).af_comppermit {
+                (*entry).ae_comppermit = 1;
+            } else {
+                (*entry).ae_compforbid = 1;
+            }
+        }
+        if ft == AFT_NUM && *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+    if *(*entry).ae_flags == 0 {
+        (*entry).ae_flags = std::ptr::null_mut(); // nothing left
+    }
 }
 
 // =============================================================================

@@ -216,6 +216,20 @@ extern bool spell_info_item(const char *s);
 extern bool str_equal(const char *s1, const char *s2);
 extern int rep_compare(const void *s1, const void *s2);
 
+// Phase 1 (type-independent functions): small pure helpers -- now in Rust.
+extern unsigned rs_get_affitem(int flagtype, char **pp);
+extern unsigned rs_affitem2flag(int flagtype, char *item, const char *fname, int lnum);
+extern bool rs_flag_in_afflist(int flagtype, char *afflist, unsigned flag);
+extern void rs_aff_check_number(int spinval, int affval, const char *name);
+extern void rs_aff_check_string(const char *spinval, const char *affval, const char *name);
+extern void rs_check_renumber(spellinfo_T *spin);
+#define get_affitem(ft, pp)          rs_get_affitem(ft, pp)
+#define affitem2flag(ft, it, fn, ln) rs_affitem2flag(ft, it, fn, ln)
+#define flag_in_afflist(ft, al, f)   rs_flag_in_afflist(ft, al, f)
+#define aff_check_number(sv, av, n)  rs_aff_check_number(sv, av, n)
+#define aff_check_string(sv, av, n)  rs_aff_check_string(sv, av, n)
+#define check_renumber(s)            rs_check_renumber(s)
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
@@ -340,6 +354,16 @@ typedef struct {
 } compitem_T;
 
 #define HI2CI(hi)   ((compitem_T *)(hi)->hi_key)
+
+// Phase 1 (afffile_T/affentry_T-dependent functions): now in Rust.
+extern int rs_get_affix_flags(afffile_T *affile, char *afflist);
+extern int rs_get_pfxlist(afffile_T *affile, char *afflist, char *store_afflist);
+extern void rs_get_compflags(afffile_T *affile, char *afflist, char *store_afflist);
+extern void rs_aff_process_flags(afffile_T *affile, affentry_T *entry);
+#define get_affix_flags(af, al)      rs_get_affix_flags(af, al)
+#define get_pfxlist(af, al, sa)      rs_get_pfxlist(af, al, sa)
+#define get_compflags(af, al, sa)    rs_get_compflags(af, al, sa)
+#define aff_process_flags(af, e)     rs_aff_process_flags(af, e)
 
 // Structure that is used to store the items in the word tree.  This avoids
 // the need to keep track of each allocated thing, everything is freed all at
@@ -1821,86 +1845,8 @@ static afffile_T *spell_read_aff(spellinfo_T *spin, char *fname)
   return aff;
 }
 
-// For affix "entry" move COMPOUNDFORBIDFLAG and COMPOUNDPERMITFLAG from
-// ae_flags to ae_comppermit and ae_compforbid.
-static void aff_process_flags(afffile_T *affile, affentry_T *entry)
-{
-  if (entry->ae_flags != NULL
-      && (affile->af_compforbid != 0 || affile->af_comppermit != 0)) {
-    for (char *p = entry->ae_flags; *p != NUL;) {
-      char *prevp = p;
-      unsigned flag = get_affitem(affile->af_flagtype, &p);
-      if (flag == affile->af_comppermit || flag == affile->af_compforbid) {
-        STRMOVE(prevp, p);
-        p = prevp;
-        if (flag == affile->af_comppermit) {
-          entry->ae_comppermit = true;
-        } else {
-          entry->ae_compforbid = true;
-        }
-      }
-      if (affile->af_flagtype == AFT_NUM && *p == ',') {
-        p++;
-      }
-    }
-    if (*entry->ae_flags == NUL) {
-      entry->ae_flags = NULL;           // nothing left
-    }
-  }
-}
-
-// Turn an affix flag name into a number, according to the FLAG type.
-// returns zero for failure.
-static unsigned affitem2flag(int flagtype, char *item, char *fname, int lnum)
-{
-  char *p = item;
-
-  unsigned res = get_affitem(flagtype, &p);
-  if (res == 0) {
-    if (flagtype == AFT_NUM) {
-      smsg(0, _("Flag is not a number in %s line %d: %s"),
-           fname, lnum, item);
-    } else {
-      smsg(0, _("Illegal flag in %s line %d: %s"),
-           fname, lnum, item);
-    }
-  }
-  if (*p != NUL) {
-    smsg(0, _(e_affname), fname, lnum, item);
-    return 0;
-  }
-
-  return res;
-}
-
-// Get one affix name from "*pp" and advance the pointer.
-// Returns ZERO_FLAG for "0".
-// Returns zero for an error, still advances the pointer then.
-static unsigned get_affitem(int flagtype, char **pp)
-{
-  int res;
-
-  if (flagtype == AFT_NUM) {
-    if (!ascii_isdigit(**pp)) {
-      (*pp)++;            // always advance, avoid getting stuck
-      return 0;
-    }
-    res = getdigits_int(pp, true, 0);
-    if (res == 0) {
-      res = ZERO_FLAG;
-    }
-  } else {
-    res = mb_ptr2char_adv((const char **)pp);
-    if (flagtype == AFT_LONG || (flagtype == AFT_CAPLONG
-                                 && res >= 'A' && res <= 'Z')) {
-      if (**pp == NUL) {
-        return 0;
-      }
-      res = mb_ptr2char_adv((const char **)pp) + (res << 16);
-    }
-  }
-  return (unsigned)res;
-}
+// aff_process_flags, affitem2flag, get_affitem: migrated to Rust (rs_aff_process_flags,
+// rs_affitem2flag, rs_get_affitem). Redirected via #define above.
 
 /// Process the "compflags" string used in an affix file and append it to
 /// spin->si_compflags.
@@ -1966,76 +1912,8 @@ static void process_compflags(spellinfo_T *spin, afffile_T *aff, char *compflags
   *tp = NUL;
 }
 
-// Check that the new IDs for postponed affixes and compounding don't overrun
-// each other.  We have almost 255 available, but start at 0-127 to avoid
-// using two bytes for utf-8.  When the 0-127 range is used up go to 128-255.
-// When that is used up an error message is given.
-static void check_renumber(spellinfo_T *spin)
-{
-  if (spin->si_newprefID == spin->si_newcompID && spin->si_newcompID < 128) {
-    spin->si_newprefID = 127;
-    spin->si_newcompID = 255;
-  }
-}
-
-// Returns true if flag "flag" appears in affix list "afflist".
-static bool flag_in_afflist(int flagtype, char *afflist, unsigned flag)
-{
-  switch (flagtype) {
-  case AFT_CHAR:
-    return vim_strchr(afflist, (int)flag) != NULL;
-
-  case AFT_CAPLONG:
-  case AFT_LONG:
-    for (char *p = afflist; *p != NUL;) {
-      unsigned n = (unsigned)mb_ptr2char_adv((const char **)&p);
-      if ((flagtype == AFT_LONG || (n >= 'A' && n <= 'Z'))
-          && *p != NUL) {
-        n = (unsigned)mb_ptr2char_adv((const char **)&p) + (n << 16);
-      }
-      if (n == flag) {
-        return true;
-      }
-    }
-    break;
-
-  case AFT_NUM:
-    for (char *p = afflist; *p != NUL;) {
-      int digits = getdigits_int(&p, true, 0);
-      assert(digits >= 0);
-      unsigned n = (unsigned)digits;
-      if (n == 0) {
-        n = ZERO_FLAG;
-      }
-      if (n == flag) {
-        return true;
-      }
-      if (*p != NUL) {          // skip over comma
-        p++;
-      }
-    }
-    break;
-  }
-  return false;
-}
-
-// Give a warning when "spinval" and "affval" numbers are set and not the same.
-static void aff_check_number(int spinval, int affval, char *name)
-{
-  if (spinval != 0 && spinval != affval) {
-    smsg(0, _("%s value differs from what is used in another .aff file"),
-         name);
-  }
-}
-
-/// Give a warning when "spinval" and "affval" strings are set and not the same.
-static void aff_check_string(char *spinval, char *affval, char *name)
-{
-  if (spinval != NULL && strcmp(spinval, affval) != 0) {
-    smsg(0, _("%s value differs from what is used in another .aff file"),
-         name);
-  }
-}
+// check_renumber, flag_in_afflist, aff_check_number, aff_check_string:
+// migrated to Rust. Redirected via #define above.
 
 /// Add a from-to item to "gap".  Used for REP and SAL items.
 /// They are stored case-folded.
@@ -2270,100 +2148,8 @@ static int spell_read_dic(spellinfo_T *spin, char *fname, afffile_T *affile)
   return retval;
 }
 
-// Check for affix flags in "afflist" that are turned into word flags.
-// Return WF_ flags.
-static int get_affix_flags(afffile_T *affile, char *afflist)
-{
-  int flags = 0;
-
-  if (affile->af_keepcase != 0
-      && flag_in_afflist(affile->af_flagtype, afflist,
-                         affile->af_keepcase)) {
-    flags |= WF_KEEPCAP | WF_FIXCAP;
-  }
-  if (affile->af_rare != 0
-      && flag_in_afflist(affile->af_flagtype, afflist, affile->af_rare)) {
-    flags |= WF_RARE;
-  }
-  if (affile->af_bad != 0
-      && flag_in_afflist(affile->af_flagtype, afflist, affile->af_bad)) {
-    flags |= WF_BANNED;
-  }
-  if (affile->af_needcomp != 0
-      && flag_in_afflist(affile->af_flagtype, afflist,
-                         affile->af_needcomp)) {
-    flags |= WF_NEEDCOMP;
-  }
-  if (affile->af_comproot != 0
-      && flag_in_afflist(affile->af_flagtype, afflist,
-                         affile->af_comproot)) {
-    flags |= WF_COMPROOT;
-  }
-  if (affile->af_nosuggest != 0
-      && flag_in_afflist(affile->af_flagtype, afflist,
-                         affile->af_nosuggest)) {
-    flags |= WF_NOSUGGEST;
-  }
-  return flags;
-}
-
-// Get the list of prefix IDs from the affix list "afflist".
-// Used for PFXPOSTPONE.
-// Put the resulting flags in "store_afflist[MAXWLEN]" with a terminating NUL
-// and return the number of affixes.
-static int get_pfxlist(afffile_T *affile, char *afflist, char *store_afflist)
-{
-  int cnt = 0;
-  char key[AH_KEY_LEN];
-
-  for (char *p = afflist; *p != NUL;) {
-    char *prevp = p;
-    if (get_affitem(affile->af_flagtype, &p) != 0) {
-      // A flag is a postponed prefix flag if it appears in "af_pref"
-      // and its ID is not zero.
-      xmemcpyz(key, prevp, (size_t)(p - prevp));
-      hashitem_T *hi = hash_find(&affile->af_pref, key);
-      if (!HASHITEM_EMPTY(hi)) {
-        int id = HI2AH(hi)->ah_newID;
-        if (id != 0) {
-          store_afflist[cnt++] = (char)(uint8_t)id;
-        }
-      }
-    }
-    if (affile->af_flagtype == AFT_NUM && *p == ',') {
-      p++;
-    }
-  }
-
-  store_afflist[cnt] = NUL;
-  return cnt;
-}
-
-// Get the list of compound IDs from the affix list "afflist" that are used
-// for compound words.
-// Puts the flags in "store_afflist[]".
-static void get_compflags(afffile_T *affile, char *afflist, char *store_afflist)
-{
-  int cnt = 0;
-  char key[AH_KEY_LEN];
-
-  for (char *p = afflist; *p != NUL;) {
-    char *prevp = p;
-    if (get_affitem(affile->af_flagtype, &p) != 0) {
-      // A flag is a compound flag if it appears in "af_comp".
-      xmemcpyz(key, prevp, (size_t)(p - prevp));
-      hashitem_T *hi = hash_find(&affile->af_comp, key);
-      if (!HASHITEM_EMPTY(hi)) {
-        store_afflist[cnt++] = (char)(uint8_t)HI2CI(hi)->ci_newID;
-      }
-    }
-    if (affile->af_flagtype == AFT_NUM && *p == ',') {
-      p++;
-    }
-  }
-
-  store_afflist[cnt] = NUL;
-}
+// get_affix_flags, get_pfxlist, get_compflags: migrated to Rust.
+// Redirected via #define above.
 
 /// Apply affixes to a word and store the resulting words.
 /// "ht" is the hashtable with affentry_T that need to be applied, either
