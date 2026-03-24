@@ -220,20 +220,6 @@ const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? 
 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
-/// Result of the full errorformat-to-regex conversion
-typedef struct {
-  size_t bytes_written;
-  char prefix;
-  char flags;
-  bool conthere;
-  int status;
-  int error_code;
-  char error_char;
-} EfmToRegpatResult;
-
-// rs_qf_init replaced by qf_init exported from Rust (rs_qf_init_c_abi).
-// rs_qf_alloc_stack replaced by qf_init_stack exported from Rust (rs_qf_init_stack).
-
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
 void nvim_qf_set_listcount(void *qi_void, int count) { ((qf_info_T *)qi_void)->qf_listcount = count; }
@@ -285,96 +271,6 @@ void nvim_qf_set_multiignore(void *qfl_void, bool multiignore) { ((qf_list_T *)q
 bool nvim_qf_get_multiscan(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiscan; }
 
 void nvim_qf_set_multiscan(void *qfl_void, bool multiscan) { ((qf_list_T *)qfl_void)->qf_multiscan = multiscan; }
-
-#define FMT_PATTERNS 14           // maximum number of % recognized
-
-// Structure used to hold the info of one part of 'errorformat'
-typedef struct efm_S efm_T;
-struct efm_S {
-  regprog_T *prog;        // pre-formatted part of 'errorformat'
-  efm_T *next;        // pointer to next (NULL if last)
-  char addr[FMT_PATTERNS];    // indices of used % patterns
-  char prefix;                // prefix of this format line:
-                              // 'D' enter directory
-                              // 'X' leave directory
-                              // 'A' start of multi-line message
-                              // 'E' error message
-                              // 'W' warning message
-                              // 'I' informational message
-                              // 'N' note message
-                              // 'C' continuation line
-                              // 'Z' end of multi-line message
-                              // 'G' general, unspecific message
-                              // 'P' push file (partial) message
-                              // 'Q' pop/quit file (partial) message
-                              // 'O' overread (partial) message
-  char flags;                 // additional flags given in prefix
-                              // '-' do not include this line
-                              // '+' include whole line in message
-  int conthere;                 // %> used
-};
-
-/// Used to delay the deletion of locations lists by autocmds.
-typedef struct qf_delq_S {
-  struct qf_delq_S *next;
-  qf_info_T *qi;
-} qf_delq_T;
-
-enum {
-  QF_FAIL = 0,
-  QF_OK = 1,
-  QF_END_OF_INPUT = 2,
-  QF_NOMEM = 3,
-  QF_IGNORE_LINE = 4,
-  QF_MULTISCAN = 5,
-  QF_ABORT = 6,
-};
-
-/// list.
-typedef struct {
-  char *linebuf;
-  size_t linelen;
-  char *growbuf;
-  size_t growbufsiz;
-  FILE *fd;
-  typval_T *tv;
-  char *p_str;
-  list_T *p_list;
-  listitem_T *p_li;
-  buf_T *buf;
-  linenr_T buflnum;
-  linenr_T lnumlast;
-  vimconv_T vc;
-} qfstate_T;
-
-typedef struct {
-  char *namebuf;
-  int bnr;
-  char *module;
-  char *errmsg;
-  size_t errmsglen;
-  linenr_T lnum;
-  linenr_T end_lnum;
-  int col;
-  int end_col;
-  bool use_viscol;
-  char *pattern;
-  int enr;
-  char type;
-  typval_T *user_data;
-  bool valid;
-} qffields_T;
-
-/// :vimgrep command arguments
-typedef struct {
-  int tomatch;          ///< maximum number of matches to find
-  char *spat;          ///< search pattern
-  int flags;             ///< search modifier
-  char **fnames;       ///< list of files to search
-  int fcount;            ///< number of files
-  regmmatch_T regmatch;  ///< compiled search pattern
-  char *qf_title;      ///< quickfix list title
-} vgr_args_T;
 
 #include "quickfix_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
@@ -983,9 +879,6 @@ static Callback qftf_cb;
 
 void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 
-// =============================================================================
-// =============================================================================
-
 /// Return the start pointer for submatch at index idx (0-based, 0-13).
 const char *nvim_qf_regmatch_startp(const void *rm, int idx)
 {
@@ -1004,11 +897,9 @@ const char *nvim_qf_regmatch_endp(const void *rm, int idx)
   return ((const regmatch_T *)rm)->endp[idx];
 }
 
-// =============================================================================
 // Rust parse.rs uses EfmPattern directly (inline struct field access).
 // nvim_qf_regmatch_create_ic, nvim_qf_regmatch_extract_prog, nvim_qf_vim_regexec
 // remain as C wrappers for vim regex lifecycle (parse.rs calls these for pattern matching).
-// =============================================================================
 
 /// Create a regmatch_T on the heap, set rm_ic=true, and assign the given prog.
 /// Returns an opaque handle. The caller owns the memory; free after extracting prog.
@@ -1071,8 +962,6 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
 /// Move memory: STRMOVE(dst, src) - move overlapping memory.
 /// Get IObuff pointer for reuse in file_pfx multiscan.
 /// skipwhite wrapper.
-// =============================================================================
-// =============================================================================
 
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
 size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
@@ -1168,27 +1057,8 @@ char *nvim_qf_list_item_string(void *li)
 
 /// vim_strchr on a mutable char* with char NL character.
 /// Returns pointer to first NL in str, or NULL.
-// =============================================================================
-// =============================================================================
 
-/// Wrapper for xstrdup used by Rust's EFM cache.
-
-// All qf_parse_fmt_* functions, copy_nonerror_line, qf_parse_match, qf_parse_get_fields,
-// qf_parse_dir_pfx, qf_parse_file_pfx, qf_parse_line_nomatch, and qf_parse_multiline_pfx
 // as rs_qf_parse_match and helpers called from rs_qf_parse_line.
-
-// qf_stack_get_bufnr, qf_free_all, check_quickfix_busy, qf_resize_stack, ll_resize_stack
-
-// qf_init_stack body replaced by rs_qf_init_stack exported as qf_init_stack from Rust lifecycle.rs.
-
-// qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
-
-// nvim_qf_find_help_win wrapper at line 2333 retained for navigate.rs.
-
-// win_set_loclist, qf_find_win_with_loclist, qf_find_win_with_normal_buf,
-// Their nvim_qf_* public counterparts below are the Rust-callable versions.
-
-// Rust exports for jump machinery
 
 /// can_abandon(curbuf, forceit): check if current buffer can be abandoned.
 bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
@@ -1537,8 +1407,6 @@ void nvim_qf_clear_fnum_cache(void)
 {
   XFREE_CLEAR(qf_last_bufname);
 }
-
-// and Rust rs_qf_open_new_cwindow (Phase 10 Pass 10 Phase 3).
 
 // (Phase 10 Pass 10 Phase 3). nvim_qf_open_new_cwindow now calls rs_qf_open_new_cwindow.
 
@@ -2115,8 +1983,6 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
   const win_T *win = (const win_T *)win_void;
   return IS_LL_WINDOW(win) && win->w_llist_ref->qf_refcount == 1;
 }
-
-// nvim_qf_get_ql_info: use existing nvim_get_ql_info instead (Phase 10 Pass 10 Phase 6).
 
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 // ":[range]cbuffer [bufnr]" command.
