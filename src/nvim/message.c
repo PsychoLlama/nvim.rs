@@ -131,12 +131,12 @@ extern int rs_emsg_not_now(void);
 extern char *rs_msg_show_console_dialog(const char *message, const char *buttons, int dfltbutton);
 
 // Forward declarations (non-static functions accessible from Rust via extern "C")
-// get_emsg_source and get_emsg_lnum migrated to Rust (error.rs)
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);  // defined in Rust (misc.rs) with #[export_name]
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 void msg_ext_emit_chunk(void);  // defined in Rust (display.rs) with #[no_mangle]
+void ex_messages(exarg_T *eap);  // defined in Rust (display.rs) with #[export_name]
 void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data);
 // Formerly static; now defined in Rust (scrollback.rs) with #[export_name]
 msgchunk_T *msg_sb_start(msgchunk_T *mps);
@@ -252,9 +252,7 @@ int smsg_keep(int hl_id, const char *s, ...)
   return msg_keep(IObuff, hl_id, true, false);
 }
 
-// get_emsg_source, get_emsg_lnum migrated to Rust (error.rs) as rs_get_emsg_source/rs_get_emsg_lnum
-// msg_source() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_msg_source)
-// emsg_multiline() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_emsg_multiline)
+// get_emsg_source, get_emsg_lnum, msg_source, emsg_multiline migrated to Rust (error.rs)
 
 void emsg_invreg(int name)
 {
@@ -403,57 +401,7 @@ void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
 }
 
 // msg_hist_add_multihl migrated to Rust: src/nvim-rs/message/src/history.rs
-
-/// :messages command implementation
-void ex_messages(exarg_T *eap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (strcmp(eap->arg, "clear") == 0) {
-    msg_hist_clear(eap->addr_count ? eap->line2 : 0);
-    return;
-  }
-
-  if (*eap->arg != NUL) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  Array entries = ARRAY_DICT_INIT;
-  MessageHistoryEntry *p = eap->skip ? msg_hist_temp : msg_hist_first;
-  int skip = eap->addr_count ? (msg_hist_len - eap->line2) : 0;
-  for (; p != NULL; p = p->next) {
-    // Skip over count or temporary "g<" messages.
-    if ((p->temp && !eap->skip) || skip-- > 0) {
-      continue;
-    }
-    if (ui_has(kUIMessages) && !msg_silent) {
-      Array entry = ARRAY_DICT_INIT;
-      ADD(entry, CSTR_TO_OBJ(p->kind));
-      Array content = ARRAY_DICT_INIT;
-      for (uint32_t i = 0; i < kv_size(p->msg); i++) {
-        HlMessageChunk chunk = kv_A(p->msg, i);
-        Array content_entry = ARRAY_DICT_INIT;
-        ADD(content_entry, INTEGER_OBJ(chunk.hl_id ? syn_id2attr(chunk.hl_id) : 0));
-        ADD(content_entry, STRING_OBJ(copy_string(chunk.text, NULL)));
-        ADD(content_entry, INTEGER_OBJ(chunk.hl_id));
-        ADD(content, ARRAY_OBJ(content_entry));
-      }
-      ADD(entry, ARRAY_OBJ(content));
-      ADD(entry, BOOLEAN_OBJ(p->append));
-      ADD(entries, ARRAY_OBJ(entry));
-    }
-    if (redirecting() || !ui_has(kUIMessages)) {
-      msg_silent += ui_has(kUIMessages);
-      bool needs_clear = false;
-      msg_multihl(INTEGER_OBJ(0), p->msg, p->kind, false, false, NULL, &needs_clear);
-      msg_silent -= ui_has(kUIMessages);
-    }
-  }
-  if (kv_size(entries) > 0) {
-    ui_call_msg_history_show(entries, eap->skip != 0);
-    api_free_array(entries);
-  }
-}
+// ex_messages() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_ex_messages)
 
 /// Wait for the user to hit a key (normally Enter)
 ///
@@ -651,9 +599,7 @@ void wait_return(int redraw)
   }
 }
 
-// hit_return_msg() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_hit_return_msg)
-// msgmore() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msgmore)
-// str2special_arena() migrated to Rust: src/nvim-rs/message/src/keys.rs (rs_str2special_arena)
+// hit_return_msg, msgmore, str2special_arena migrated to Rust (misc.rs/keys.rs)
 
 /// print line for :print or :list command
 void msg_prt_line(const char *s, bool list)
@@ -988,11 +934,7 @@ void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse)
   msg_check();
 }
 
-// msg_line_flush() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_msg_line_flush)
-// msg_cursor_goto() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_cursor_goto_impl)
-
-// inc_msg_scrolled() migrated to Rust: src/nvim-rs/message/src/scrollback.rs (rs_inc_msg_scrolled_full)
-// store_sb_text() migrated to Rust: src/nvim-rs/message/src/scrollback.rs (rs_store_sb_text)
+// msg_line_flush, msg_cursor_goto, inc_msg_scrolled, store_sb_text migrated to Rust (display.rs/misc.rs/scrollback.rs)
 
 /// "g<" command.
 void show_sb_text(void)
@@ -1327,12 +1269,8 @@ static bool do_more_prompt(int typed_char)
   return retval;
 }
 
-// msg_moremsg() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_moremsg)
-// repeat_message() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_repeat_message)
-// msg_ext_init_chunks(), msg_ext_emit_chunk(), msg_ext_ui_flush(), msg_ext_flush_showmode()
-// migrated to Rust: src/nvim-rs/message/src/display.rs
-
-// redir_write() migrated to Rust: src/nvim-rs/message/src/verbose.rs (rs_redir_write)
+// msg_moremsg, repeat_message, msg_ext_init_chunks, msg_ext_emit_chunk, msg_ext_ui_flush,
+// msg_ext_flush_showmode, redir_write migrated to Rust (misc.rs/display.rs/verbose.rs)
 
 /// Shows a warning, with optional highlighting.
 ///
