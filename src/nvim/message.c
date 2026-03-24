@@ -156,19 +156,9 @@ void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 
 
 
-void nvim_msg_grid_flush_dirty_line(int row)
-{
-  ui_line(&msg_grid, row, false, 0, msg_grid.dirty_col[row], msg_grid.cols,
-          HL_ATTR(HLF_MSG), false);
-  msg_grid.dirty_col[row] = 0;
-}
 void nvim_msg_set_pos_for_scroll(int pos)
 {
   ui_ext_msg_set_pos(pos, true);
-}
-void nvim_msg_grid_scroll_up(int to_scroll)
-{
-  ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
 }
 
 void nvim_msg_show_empty(void)

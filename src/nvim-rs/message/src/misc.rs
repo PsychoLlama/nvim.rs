@@ -81,8 +81,25 @@ extern "C" {
     static mut msg_scrolled_at_flush: c_int;
     static mut msg_grid_scroll_discount: c_int;
     fn nvim_msg_set_pos_for_scroll(pos: c_int);
-    fn nvim_msg_grid_scroll_up(to_scroll: c_int);
-    fn nvim_msg_grid_flush_dirty_line(row: c_int);
+    fn ui_call_grid_scroll(
+        grid: i64,
+        top: i64,
+        bot: i64,
+        left: i64,
+        right: i64,
+        rows: i64,
+        cols: i64,
+    );
+    fn ui_line(
+        grid: *mut crate::ScreenGrid,
+        row: c_int,
+        clear_clear: bool,
+        start_col: c_int,
+        end_col: c_int,
+        clear_to_col: c_int,
+        bg_attr: c_int,
+        wrap: bool,
+    );
 
     // Phase 1: message_filtered C implementation
     fn nvim_message_filtered_impl(msg: *const c_char) -> bool;
@@ -396,7 +413,16 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
         assert!(to_scroll >= 0);
 
         if to_scroll > 0 && msg_grid_pos == 0 {
-            nvim_msg_grid_scroll_up(to_scroll);
+            // Inlined nvim_msg_grid_scroll_up:
+            ui_call_grid_scroll(
+                i64::from(msg_grid.handle),
+                0,
+                i64::from(Rows),
+                0,
+                i64::from(Columns),
+                i64::from(to_scroll),
+                0,
+            );
         }
 
         let rows = Rows;
@@ -404,7 +430,19 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
         for i in start..rows {
             let row = i - msg_grid_pos;
             assert!(row >= 0);
-            nvim_msg_grid_flush_dirty_line(row);
+            // Inlined nvim_msg_grid_flush_dirty_line:
+            let dirty_end = *msg_grid.dirty_col.add(row as usize);
+            ui_line(
+                std::ptr::addr_of_mut!(msg_grid),
+                row,
+                false,
+                0,
+                dirty_end,
+                msg_grid.cols,
+                hl_attr(HLF_MSG),
+                false,
+            );
+            *msg_grid.dirty_col.add(row as usize) = 0;
         }
     }
     msg_scrolled_at_flush = msg_scrolled;
