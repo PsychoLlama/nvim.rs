@@ -102,6 +102,9 @@ extern bool rs_need_conversion(const char *fenc);
 extern int rs_get_fio_flags(const char *name);
 extern void rs_check_marks_read(void);
 extern void rs_diff_invalidate(buf_T *buf);
+// next_fenc and readfile_charconvert are implemented in Rust (fileio crate).
+extern char *next_fenc(char **pp, bool *alloced);
+extern char *readfile_charconvert(char *fname, char *fenc, int *fdp);
 
 #include "fileio.c.generated.h"
 
@@ -1952,83 +1955,6 @@ void set_forced_fenc(exarg_T *eap)
   xfree(fenc);
 }
 
-/// Find next fileencoding to use from 'fileencodings'.
-/// "pp" points to fenc_next.  It's advanced to the next item.
-/// When there are no more items, an empty string is returned and *pp is set to
-/// NULL.
-/// When *pp is not set to NULL, the result is in allocated memory and "alloced"
-/// is set to true.
-static char *next_fenc(char **pp, bool *alloced)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
-{
-  char *r;
-
-  *alloced = false;
-  if (**pp == NUL) {
-    *pp = NULL;
-    return "";
-  }
-  char *p = vim_strchr(*pp, ',');
-  if (p == NULL) {
-    r = enc_canonize(*pp);
-    *pp += strlen(*pp);
-  } else {
-    r = xmemdupz(*pp, (size_t)(p - *pp));
-    *pp = p + 1;
-    p = enc_canonize(r);
-    xfree(r);
-    r = p;
-  }
-  *alloced = true;
-  return r;
-}
-
-/// Convert a file with the 'charconvert' expression.
-/// This closes the file which is to be read, converts it and opens the
-/// resulting file for reading.
-///
-/// @param fname  name of input file
-/// @param fenc   converted from
-/// @param fdp    in/out: file descriptor of file
-///
-/// @return       name of the resulting converted file (the caller should delete it after reading it).
-///               Returns NULL if the conversion failed ("*fdp" is not set) .
-static char *readfile_charconvert(char *fname, char *fenc, int *fdp)
-{
-  char *errmsg = NULL;
-
-  char *tmpname = vim_tempname();
-  if (tmpname == NULL) {
-    errmsg = _("Can't find temp file for conversion");
-  } else {
-    close(*fdp);                // close the input file, ignore errors
-    *fdp = -1;
-    if (eval_charconvert(fenc, "utf-8",
-                         fname, tmpname) == FAIL) {
-      errmsg = _("Conversion with 'charconvert' failed");
-    }
-    if (errmsg == NULL && (*fdp = os_open(tmpname, O_RDONLY, 0)) < 0) {
-      errmsg = _("can't read output of 'charconvert'");
-    }
-  }
-
-  if (errmsg != NULL) {
-    // Don't use emsg(), it breaks mappings, the retry with
-    // another type of conversion might still work.
-    msg(errmsg, 0);
-    if (tmpname != NULL) {
-      os_remove(tmpname);  // delete converted file
-      XFREE_CLEAR(tmpname);
-    }
-  }
-
-  // If the input file is closed, open it (caller should check for error).
-  if (*fdp < 0) {
-    *fdp = os_open(fname, O_RDONLY, 0);
-  }
-
-  return tmpname;
-}
 
 /// Set the name of the current buffer.  Use when the buffer doesn't have a
 /// name and a ":r" or ":w" command with a file name is used.

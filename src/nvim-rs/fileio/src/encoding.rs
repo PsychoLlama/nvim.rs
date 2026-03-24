@@ -46,6 +46,29 @@ extern "C" {
     fn enc_canon_props(name: *const c_char) -> c_int;
     /// Get the current 'encoding' option value.
     static mut p_enc: *mut c_char;
+    /// Canonicalize an encoding name. Returns xmalloc'd string.
+    fn enc_canonize(enc: *const c_char) -> *mut c_char;
+    /// Duplicate n bytes from s as NUL-terminated string.
+    fn xmemdupz(src: *const std::ffi::c_void, len: usize) -> *mut c_char;
+    /// Free memory.
+    fn xfree(ptr: *mut std::ffi::c_void);
+    /// Search for character in string.
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    /// Create a temporary filename.
+    fn vim_tempname() -> *mut c_char;
+    /// Evaluate the charconvert expression.
+    fn eval_charconvert(
+        enc_from: *const c_char,
+        enc_to: *const c_char,
+        fname_from: *const c_char,
+        fname_to: *const c_char,
+    ) -> c_int;
+    /// Open a file.
+    fn os_open(path: *const c_char, flags: c_int, mode: u32) -> c_int;
+    /// Remove a file.
+    fn os_remove(path: *const c_char) -> c_int;
+    /// Display a message.
+    fn msg(m: *const c_char, hl_id: c_int) -> bool;
 }
 
 // =============================================================================
@@ -377,6 +400,90 @@ pub fn looks_like_latin1(data: &[u8]) -> bool {
         }
     }
     true
+}
+
+// =============================================================================
+// next_fenc and readfile_charconvert
+// =============================================================================
+
+/// Get the next fileencoding from the fileencodings option list.
+///
+/// Directly replaces the static C `next_fenc` symbol.
+///
+/// # Safety
+/// `pp` and `alloced` must be valid non-null pointers.
+#[export_name = "next_fenc"]
+pub unsafe extern "C" fn rs_next_fenc(pp: *mut *mut c_char, alloced: *mut bool) -> *mut c_char {
+    unsafe { *alloced = false };
+    let p_ref = unsafe { *pp };
+    if p_ref.is_null() || unsafe { *p_ref } == 0 {
+        unsafe { *pp = std::ptr::null_mut() };
+        return c"".as_ptr() as *mut c_char;
+    }
+    let comma = unsafe { vim_strchr(p_ref as *const c_char, b',' as c_int) };
+    let r: *mut c_char;
+    if comma.is_null() {
+        r = unsafe { enc_canonize(p_ref as *const c_char) };
+        let len = unsafe { libc::strlen(p_ref as *const libc::c_char) };
+        unsafe { *pp = p_ref.add(len) };
+    } else {
+        let seg_len = unsafe { comma.offset_from(p_ref) } as usize;
+        let dup = unsafe { xmemdupz(p_ref as *const std::ffi::c_void, seg_len) };
+        let canonical = unsafe { enc_canonize(dup as *const c_char) };
+        unsafe { xfree(dup as *mut std::ffi::c_void) };
+        r = canonical;
+        unsafe { *pp = comma.add(1) };
+    }
+    unsafe { *alloced = true };
+    r
+}
+
+/// FAIL constant (matches C define)
+const FAIL: c_int = 0;
+
+/// Convert a file with the charconvert expression.
+///
+/// Directly replaces the static C `readfile_charconvert` symbol.
+///
+/// # Safety
+/// `fname`, `fenc`, `fdp` must be valid non-null pointers.
+#[export_name = "readfile_charconvert"]
+pub unsafe extern "C" fn rs_readfile_charconvert(
+    fname: *mut c_char,
+    fenc: *mut c_char,
+    fdp: *mut c_int,
+) -> *mut c_char {
+    let mut errmsg: *const c_char = std::ptr::null();
+    let tmpname = unsafe { vim_tempname() };
+    if tmpname.is_null() {
+        errmsg = c"Can't find temp file for conversion".as_ptr();
+    } else {
+        unsafe { libc::close(*fdp) };
+        unsafe { *fdp = -1 };
+        if unsafe { eval_charconvert(fenc, c"utf-8".as_ptr(), fname, tmpname) } == FAIL {
+            errmsg = c"Conversion with 'charconvert' failed".as_ptr();
+        }
+        if errmsg.is_null() {
+            let new_fd = unsafe { os_open(tmpname, libc::O_RDONLY, 0) };
+            if new_fd < 0 {
+                errmsg = c"can't read output of 'charconvert'".as_ptr();
+            } else {
+                unsafe { *fdp = new_fd };
+            }
+        }
+    }
+    if !errmsg.is_null() {
+        unsafe { msg(errmsg, 0) };
+        if !tmpname.is_null() {
+            unsafe { os_remove(tmpname) };
+            unsafe { xfree(tmpname as *mut std::ffi::c_void) };
+            return std::ptr::null_mut();
+        }
+    }
+    if unsafe { *fdp } < 0 {
+        unsafe { *fdp = os_open(fname, libc::O_RDONLY, 0) };
+    }
+    tmpname
 }
 
 #[cfg(test)]
