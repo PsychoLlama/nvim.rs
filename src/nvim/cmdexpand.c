@@ -438,6 +438,10 @@ void nvim_cmdexpand_redraw_wildmenu(expand_T *xp, int num_matches, int findex, i
   redraw_wildmenu(xp, num_matches, xp->xp_files, findex, showtail != 0);
 }
 
+// ExpandFromContext is implemented in Rust (expand.rs) -- forward declaration
+extern int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numMatches,
+                             int options);
+
 /// Wrapper for ExpandFromContext (for Rust FFI).
 /// Calls ExpandFromContext and stores results into xp->xp_files/xp_numfiles.
 /// Returns FAIL (0) or OK (1).
@@ -996,6 +1000,284 @@ void nvim_cmdexpand_redraw_statuslines(void)
 int nvim_cmdexpand_get_pathsep(void)
 {
   return PATHSEP;
+}
+
+// =============================================================================
+// Phase 3: C accessors for ExpandOther, ExpandFromContext, and ExpandGeneric
+// =============================================================================
+
+/// Wrapper for ExpandGeneric (for Rust FFI).
+void nvim_cmdexpand_expand_generic(const char *pat, expand_T *xp, regmatch_T *regmatch,
+                                   char ***matches, int *numMatches,
+                                   CompleteListItemGetter func, int escaped)
+{
+  ExpandGeneric(pat, xp, regmatch, matches, numMatches, func, (bool)escaped);
+}
+
+/// Wrapper for vim_regcomp (for Rust FFI).
+void *nvim_cmdexpand_vim_regcomp(const char *pat, int flags)
+{
+  return (void *)vim_regcomp(pat, flags);
+}
+
+/// Wrapper for vim_regfree (for Rust FFI).
+void nvim_cmdexpand_vim_regfree(void *prog)
+{
+  vim_regfree((regprog_T *)prog);
+}
+
+/// Wrapper for ignorecase (for Rust FFI).
+int nvim_cmdexpand_ignorecase(const char *pat)
+{
+  return ignorecase(pat);
+}
+
+/// Set regmatch.rm_ic (for Rust FFI).
+void nvim_cmdexpand_regmatch_set_rm_ic(regmatch_T *rmp, int val)
+{
+  rmp->rm_ic = (bool)val;
+}
+
+/// Set regmatch.regprog (for Rust FFI).
+void nvim_cmdexpand_regmatch_set_regprog(regmatch_T *rmp, void *prog)
+{
+  rmp->rm_ic = false;
+  rmp->regprog = (regprog_T *)prog;
+}
+
+/// Wrapper for find_help_tags (for Rust FFI). Returns OK or FAIL.
+int nvim_cmdexpand_find_help_tags(const char *pat, int *numMatches, char ***matches)
+{
+  if (find_help_tags(*pat == NUL ? "help" : pat, numMatches, matches, false) == OK) {
+    cleanup_help_tags(*numMatches, *matches);
+    return 1;
+  }
+  return 0;
+}
+
+/// Wrapper for expand_shellcmd (for Rust FFI).
+void nvim_cmdexpand_expand_shellcmd(char *filepat, char ***matches, int *numMatches, int flags)
+{
+  expand_shellcmd(filepat, matches, numMatches, flags);
+}
+
+/// Wrapper for ExpandOldSetting (for Rust FFI).
+int nvim_cmdexpand_expand_old_setting(int *numMatches, char ***matches)
+{
+  return ExpandOldSetting(numMatches, matches);
+}
+
+/// Wrapper for ExpandBufnames (for Rust FFI).
+int nvim_cmdexpand_expand_bufnames(const char *pat, int *numMatches, char ***matches, int options)
+{
+  return ExpandBufnames(pat, numMatches, matches, options);
+}
+
+/// Wrapper for ExpandRTDir with NULL-terminated directories array.
+/// dirs_count must match the number of dirs.
+int nvim_cmdexpand_expand_rtdir(const char *pat, int flags, int *numMatches, char ***matches,
+                                char **directories)
+{
+  return ExpandRTDir(pat, flags, numMatches, matches, directories);
+}
+
+/// Wrapper for ExpandPackAddDir (for Rust FFI).
+int nvim_cmdexpand_expand_pack_add_dir(const char *pat, int *numMatches, char ***matches)
+{
+  return ExpandPackAddDir(pat, numMatches, matches);
+}
+
+/// Wrapper for expand_runtime_cmd (for Rust FFI).
+int nvim_cmdexpand_expand_runtime_cmd(const char *pat, int *numMatches, char ***matches)
+{
+  return expand_runtime_cmd(pat, numMatches, matches);
+}
+
+/// Wrapper for ExpandSettings (for Rust FFI).
+int nvim_cmdexpand_expand_settings(expand_T *xp, regmatch_T *regmatch, const char *pat,
+                                   int *numMatches, char ***matches, int fuzzy)
+{
+  return ExpandSettings(xp, regmatch, pat, numMatches, matches, (bool)fuzzy);
+}
+
+/// Wrapper for ExpandStringSetting (for Rust FFI).
+int nvim_cmdexpand_expand_string_setting(expand_T *xp, regmatch_T *regmatch,
+                                          int *numMatches, char ***matches)
+{
+  return ExpandStringSetting(xp, regmatch, numMatches, matches);
+}
+
+/// Wrapper for ExpandMappings (for Rust FFI).
+int nvim_cmdexpand_expand_mappings(const char *pat, regmatch_T *regmatch,
+                                   int *numMatches, char ***matches)
+{
+  return ExpandMappings(pat, regmatch, numMatches, matches);
+}
+
+/// Wrapper for expand_argopt (for Rust FFI).
+int nvim_cmdexpand_expand_argopt(const char *pat, expand_T *xp, regmatch_T *regmatch,
+                                  char ***matches, int *numMatches)
+{
+  return expand_argopt(pat, xp, regmatch, matches, numMatches);
+}
+
+/// Wrapper for ExpandUserDefined (for Rust FFI).
+int nvim_cmdexpand_expand_user_defined(const char *pat, expand_T *xp, regmatch_T *regmatch,
+                                        char ***matches, int *numMatches)
+{
+  return ExpandUserDefined(pat, xp, regmatch, matches, numMatches);
+}
+
+/// Wrapper for ExpandUserList (for Rust FFI).
+int nvim_cmdexpand_expand_user_list(expand_T *xp, char ***matches, int *numMatches)
+{
+  return ExpandUserList(xp, matches, numMatches);
+}
+
+/// Wrapper for ExpandUserLua (for Rust FFI).
+int nvim_cmdexpand_expand_user_lua(expand_T *xp, int *numMatches, char ***matches)
+{
+  return ExpandUserLua(xp, numMatches, matches);
+}
+
+/// Wrapper for nlua_expand_get_matches (for Rust FFI).
+int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
+{
+  return nlua_expand_get_matches(numMatches, matches);
+}
+
+/// Get DIP_START + DIP_OPT flags (for Rust FFI).
+int nvim_cmdexpand_get_dip_start_opt(void)
+{
+  return DIP_START + DIP_OPT;
+}
+
+/// Get RE_MAGIC constant (for Rust FFI).
+int nvim_cmdexpand_get_re_magic(void)
+{
+  return RE_MAGIC;
+}
+
+/// Wrapper for rs_magic_isset() (already declared, but needs int return for Rust FFI).
+int nvim_cmdexpand_magic_isset(void)
+{
+  return rs_magic_isset();
+}
+
+/// Wrapper for xmalloc(n) then snprintf pattern for EXPAND_USER_FUNC s: prefix.
+/// Returns allocated string "^<SNR>\\d\\+_<suffix>" or NULL.
+char *nvim_cmdexpand_make_snr_pattern(const char *suffix)
+{
+  const size_t len = strlen(suffix) + 20;
+  char *tofree = xmalloc(len);
+  snprintf(tofree, len, "^<SNR>\\d\\+_%s", suffix);
+  return tofree;
+}
+
+/// Function pointer accessors for ExpandOther dispatch table (for Rust FFI).
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_command_name(void)
+{
+  return get_command_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_history_arg(void)
+{
+  return get_history_arg;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_commands(void)
+{
+  return get_user_commands;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_addr_type(void)
+{
+  return get_user_cmd_addr_type;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_flags(void)
+{
+  return get_user_cmd_flags;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_nargs(void)
+{
+  return get_user_cmd_nargs;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_cmd_complete(void)
+{
+  return get_user_cmd_complete;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_var_name(void)
+{
+  return get_user_var_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_function_name(void)
+{
+  return get_function_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_user_func_name(void)
+{
+  return get_user_func_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_expr_name(void)
+{
+  return get_expr_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_name(void)
+{
+  return get_menu_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_menu_names(void)
+{
+  return get_menu_names;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntax_name(void)
+{
+  return get_syntax_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_syntime_arg(void)
+{
+  return get_syntime_arg;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_highlight_name(void)
+{
+  return get_highlight_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_event_name(void)
+{
+  return expand_get_event_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_expand_get_augroup_name(void)
+{
+  return expand_get_augroup_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_sign_name(void)
+{
+  return get_sign_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_profile_name(void)
+{
+  return get_profile_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_lang_arg(void)
+{
+  return get_lang_arg;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_locales(void)
+{
+  return get_locales;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_env_name(void)
+{
+  return get_env_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_users(void)
+{
+  return get_users;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_arglist_name(void)
+{
+  return get_arglist_name;
+}
+CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void)
+{
+  return get_healthcheck_names;
 }
 
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
@@ -1749,201 +2031,7 @@ static char *get_healthcheck_names(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   return NULL;
 }
 
-/// Do the expansion based on xp->xp_context and "rmp".
-static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
-{
-  typedef CompleteListItemGetter ExpandFunc;
-  static struct expgen {
-    int context;
-    ExpandFunc func;
-    int ic;
-    int escaped;
-  } tab[] = {
-    { EXPAND_COMMANDS, get_command_name, false, true },
-    { EXPAND_FILETYPECMD, rs_get_filetypecmd_arg, true, true },
-    { EXPAND_MAPCLEAR, rs_get_mapclear_arg, true, true },
-    { EXPAND_MESSAGES, rs_get_messages_arg, true, true },
-    { EXPAND_HISTORY, get_history_arg, true, true },
-    { EXPAND_USER_COMMANDS, get_user_commands, false, true },
-    { EXPAND_USER_ADDR_TYPE, get_user_cmd_addr_type, false, true },
-    { EXPAND_USER_CMD_FLAGS, get_user_cmd_flags, false, true },
-    { EXPAND_USER_NARGS, get_user_cmd_nargs, false, true },
-    { EXPAND_USER_COMPLETE, get_user_cmd_complete, false, true },
-    { EXPAND_USER_VARS, get_user_var_name, false, true },
-    { EXPAND_FUNCTIONS, get_function_name, false, true },
-    { EXPAND_USER_FUNC, get_user_func_name, false, true },
-    { EXPAND_EXPRESSION, get_expr_name, false, true },
-    { EXPAND_MENUS, get_menu_name, false, true },
-    { EXPAND_MENUNAMES, get_menu_names, false, true },
-    { EXPAND_SYNTAX, get_syntax_name, true, true },
-    { EXPAND_SYNTIME, get_syntime_arg, true, true },
-    { EXPAND_HIGHLIGHT, get_highlight_name, true, false },
-    { EXPAND_EVENTS, expand_get_event_name, true, false },
-    { EXPAND_AUGROUP, expand_get_augroup_name, true, false },
-    { EXPAND_SIGN, get_sign_name, true, true },
-    { EXPAND_PROFILE, get_profile_name, true, true },
-    { EXPAND_LANGUAGE, get_lang_arg, true, false },
-    { EXPAND_LOCALES, get_locales, true, false },
-    { EXPAND_ENV_VARS, get_env_name, true, true },
-    { EXPAND_USER, get_users, true, false },
-    { EXPAND_ARGLIST, get_arglist_name, true, false },
-    { EXPAND_BREAKPOINT, rs_get_breakadd_arg, true, true },
-    { EXPAND_SCRIPTNAMES, rs_get_scriptnames_arg, true, false },
-    { EXPAND_RETAB, rs_get_retab_arg, true, true },
-    { EXPAND_CHECKHEALTH, get_healthcheck_names, true, false },
-  };
-  int ret = FAIL;
-
-  // Find a context in the table and call the ExpandGeneric() with the
-  // right function to do the expansion.
-  for (int i = 0; i < (int)ARRAY_SIZE(tab); i++) {
-    if (xp->xp_context == tab[i].context) {
-      if (tab[i].ic) {
-        rmp->rm_ic = true;
-      }
-      ExpandGeneric(pat, xp, rmp, matches, numMatches, tab[i].func, tab[i].escaped);
-      ret = OK;
-      break;
-    }
-  }
-
-  return ret;
-}
-
-/// Do the expansion based on xp->xp_context and "pat".
-///
-/// @param options  WILD_ flags
-static int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numMatches, int options)
-{
-  regmatch_T regmatch = { .rm_ic = false };
-  int ret;
-  int flags = rs_map_wildopts_to_ewflags(options);
-  const bool fuzzy = cmdline_fuzzy_complete(pat)
-                     && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
-
-  if (xp->xp_context == EXPAND_FILES
-      || xp->xp_context == EXPAND_DIRECTORIES
-      || xp->xp_context == EXPAND_FILES_IN_PATH
-      || xp->xp_context == EXPAND_FINDFUNC
-      || xp->xp_context == EXPAND_DIRS_IN_CDPATH) {
-    return rs_expand_files_and_dirs(xp, pat, matches, numMatches, flags, options);
-  }
-
-  *matches = NULL;
-  *numMatches = 0;
-  if (xp->xp_context == EXPAND_HELP) {
-    // With an empty argument we would get all the help tags, which is
-    // very slow.  Get matches for "help" instead.
-    if (find_help_tags(*pat == NUL ? "help" : pat,
-                       numMatches, matches, false) == OK) {
-      cleanup_help_tags(*numMatches, *matches);
-      return OK;
-    }
-    return FAIL;
-  }
-
-  if (xp->xp_context == EXPAND_SHELLCMD) {
-    expand_shellcmd(pat, matches, numMatches, flags);
-    return OK;
-  }
-  if (xp->xp_context == EXPAND_OLD_SETTING) {
-    return ExpandOldSetting(numMatches, matches);
-  }
-  if (xp->xp_context == EXPAND_BUFFERS) {
-    return ExpandBufnames(pat, numMatches, matches, options);
-  }
-  if (xp->xp_context == EXPAND_DIFF_BUFFERS) {
-    return ExpandBufnames(pat, numMatches, matches, options | BUF_DIFF_FILTER);
-  }
-  if (xp->xp_context == EXPAND_TAGS
-      || xp->xp_context == EXPAND_TAGS_LISTFILES) {
-    return rs_expand_tags(xp->xp_context == EXPAND_TAGS, pat, numMatches, matches);
-  }
-  if (xp->xp_context == EXPAND_COLORS) {
-    char *directories[] = { "colors", NULL };
-    return ExpandRTDir(pat, DIP_START + DIP_OPT, numMatches, matches, directories);
-  }
-  if (xp->xp_context == EXPAND_COMPILER) {
-    char *directories[] = { "compiler", NULL };
-    return ExpandRTDir(pat, 0, numMatches, matches, directories);
-  }
-  if (xp->xp_context == EXPAND_OWNSYNTAX) {
-    char *directories[] = { "syntax", NULL };
-    return ExpandRTDir(pat, 0, numMatches, matches, directories);
-  }
-  if (xp->xp_context == EXPAND_FILETYPE) {
-    char *directories[] = { "syntax", "indent", "ftplugin", NULL };
-    return ExpandRTDir(pat, 0, numMatches, matches, directories);
-  }
-  if (xp->xp_context == EXPAND_KEYMAP) {
-    char *directories[] = { "keymap", NULL };
-    return ExpandRTDir(pat, 0, numMatches, matches, directories);
-  }
-  if (xp->xp_context == EXPAND_USER_LIST) {
-    return ExpandUserList(xp, matches, numMatches);
-  }
-  if (xp->xp_context == EXPAND_USER_LUA) {
-    return ExpandUserLua(xp, numMatches, matches);
-  }
-  if (xp->xp_context == EXPAND_PACKADD) {
-    return ExpandPackAddDir(pat, numMatches, matches);
-  }
-  if (xp->xp_context == EXPAND_RUNTIME) {
-    return expand_runtime_cmd(pat, numMatches, matches);
-  }
-  if (xp->xp_context == EXPAND_PATTERN_IN_BUF) {
-    return rs_expand_pattern_in_buf(pat, xp->xp_search_dir, matches, numMatches);
-  }
-
-  // When expanding a function name starting with s:, match the <SNR>nr_
-  // prefix.
-  char *tofree = NULL;
-  if (xp->xp_context == EXPAND_USER_FUNC && strncmp(pat, "^s:", 3) == 0) {
-    const size_t len = strlen(pat) + 20;
-
-    tofree = xmalloc(len);
-    snprintf(tofree, len, "^<SNR>\\d\\+_%s", pat + 3);
-    pat = tofree;
-  }
-
-  if (xp->xp_context == EXPAND_LUA) {
-    return nlua_expand_get_matches(numMatches, matches);
-  }
-
-  if (!fuzzy) {
-    regmatch.regprog = vim_regcomp(pat, rs_magic_isset() ? RE_MAGIC : 0);
-    if (regmatch.regprog == NULL) {
-      return FAIL;
-    }
-
-    // set ignore-case according to p_ic, p_scs and pat
-    regmatch.rm_ic = ignorecase(pat);
-  }
-
-  if (xp->xp_context == EXPAND_SETTINGS
-      || xp->xp_context == EXPAND_BOOL_SETTINGS) {
-    ret = ExpandSettings(xp, &regmatch, pat, numMatches, matches, fuzzy);
-  } else if (xp->xp_context == EXPAND_STRING_SETTING) {
-    ret = ExpandStringSetting(xp, &regmatch, numMatches, matches);
-  } else if (xp->xp_context == EXPAND_SETTING_SUBTRACT) {
-    ret = rs_expand_setting_subtract(xp, &regmatch, numMatches, matches);
-  } else if (xp->xp_context == EXPAND_MAPPINGS) {
-    ret = ExpandMappings(pat, &regmatch, numMatches, matches);
-  } else if (xp->xp_context == EXPAND_ARGOPT) {
-    ret = expand_argopt(pat, xp, &regmatch, matches, numMatches);
-  } else if (xp->xp_context == EXPAND_USER_DEFINED) {
-    ret = ExpandUserDefined(pat, xp, &regmatch, matches, numMatches);
-  } else {
-    ret = ExpandOther(pat, xp, &regmatch, matches, numMatches);
-  }
-
-  if (!fuzzy) {
-    vim_regfree(regmatch.regprog);
-  }
-  xfree(tofree);
-
-  return ret;
-}
+// ExpandOther and ExpandFromContext -- migrated to Rust (expand.rs)
 
 /// Expand a list of names.
 ///

@@ -1,0 +1,676 @@
+//! Context-based expansion dispatch for command-line completion.
+//!
+//! Implements `ExpandFromContext` (main dispatch) and `ExpandOther` (table-driven
+//! callback dispatch), migrated from `cmdexpand.c`.
+
+use libc::{c_char, c_int, c_void};
+
+use crate::{ExpandHandle, ExpandT};
+
+// =============================================================================
+// regmatch_T repr(C) struct (matches C layout exactly)
+// =============================================================================
+
+const NSUBEXP: usize = 10;
+
+/// Structure matching `regmatch_T` for single-line matching.
+#[repr(C)]
+pub struct RegMatch {
+    regprog: *mut c_void,
+    startp: [*mut c_char; NSUBEXP],
+    endp: [*mut c_char; NSUBEXP],
+    rm_matchcol: c_int,
+    rm_ic: bool,
+}
+
+impl Default for RegMatch {
+    fn default() -> Self {
+        Self {
+            regprog: std::ptr::null_mut(),
+            startp: [std::ptr::null_mut(); NSUBEXP],
+            endp: [std::ptr::null_mut(); NSUBEXP],
+            rm_matchcol: 0,
+            rm_ic: false,
+        }
+    }
+}
+
+// =============================================================================
+// CompleteListItemGetter function pointer type
+// =============================================================================
+
+/// Type alias for `CompleteListItemGetter`: `char *(*)(expand_T *, int)`.
+pub type CompleteListItemGetter =
+    Option<unsafe extern "C" fn(xp: ExpandHandle, idx: c_int) -> *mut c_char>;
+
+// =============================================================================
+// External C functions
+// =============================================================================
+
+extern "C" {
+    // Regex
+    fn nvim_cmdexpand_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn nvim_cmdexpand_vim_regfree(prog: *mut c_void);
+    fn nvim_cmdexpand_ignorecase(pat: *const c_char) -> c_int;
+    fn nvim_cmdexpand_regmatch_set_rm_ic(rmp: *mut RegMatch, val: c_int);
+    fn nvim_cmdexpand_regmatch_set_regprog(rmp: *mut RegMatch, prog: *mut c_void);
+    fn nvim_cmdexpand_get_re_magic() -> c_int;
+
+    // ExpandGeneric dispatch
+    fn nvim_cmdexpand_expand_generic(
+        pat: *const c_char,
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+        func: CompleteListItemGetter,
+        escaped: c_int,
+    );
+
+    // Individual expanders
+    fn nvim_cmdexpand_find_help_tags(
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_shellcmd(
+        filepat: *mut c_char,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+        flags: c_int,
+    );
+    fn nvim_cmdexpand_expand_old_setting(
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_bufnames(
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+        options: c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_rtdir(
+        pat: *const c_char,
+        flags: c_int,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+        directories: *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_pack_add_dir(
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_runtime_cmd(
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_settings(
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        pat: *const c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+        fuzzy: c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_string_setting(
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_mappings(
+        pat: *const c_char,
+        regmatch: *mut RegMatch,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_argopt(
+        pat: *const c_char,
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_user_defined(
+        pat: *const c_char,
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_user_list(
+        xp: *mut ExpandT,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+    ) -> c_int;
+    fn nvim_cmdexpand_expand_user_lua(
+        xp: *mut ExpandT,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_nlua_expand_get_matches(
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn nvim_cmdexpand_get_dip_start_opt() -> c_int;
+    fn nvim_cmdexpand_magic_isset() -> c_int;
+    fn nvim_cmdexpand_make_snr_pattern(suffix: *const c_char) -> *mut c_char;
+
+    // Function pointer accessors for ExpandOther dispatch table
+    fn nvim_cmdexpand_get_fn_get_command_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_history_arg() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_commands() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_cmd_addr_type() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_cmd_flags() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_cmd_nargs() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_cmd_complete() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_var_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_function_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_user_func_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_expr_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_menu_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_menu_names() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_syntax_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_syntime_arg() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_highlight_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_expand_get_event_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_expand_get_augroup_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_sign_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_profile_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_lang_arg() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_locales() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_env_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_users() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_arglist_name() -> CompleteListItemGetter;
+    fn nvim_cmdexpand_get_fn_get_healthcheck_names() -> CompleteListItemGetter;
+
+    // Other Rust functions (called via C ABI)
+    fn rs_expand_files_and_dirs(
+        xp: *mut ExpandT,
+        pat: *mut c_char,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+        flags: c_int,
+        options: c_int,
+    ) -> c_int;
+    fn rs_expand_tags(
+        tagnames: c_int,
+        pat: *mut c_char,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn rs_expand_pattern_in_buf(
+        pat: *const c_char,
+        search_dir: c_int,
+        matches: *mut *mut *mut c_char,
+        num_matches: *mut c_int,
+    ) -> c_int;
+    fn rs_expand_setting_subtract(
+        xp: *mut ExpandT,
+        regmatch: *mut RegMatch,
+        num_matches: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    fn rs_map_wildopts_to_ewflags(options: c_int) -> c_int;
+    fn rs_get_filetypecmd_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_get_mapclear_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_get_messages_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_get_breakadd_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_get_scriptnames_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_get_retab_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
+    fn rs_cmdline_fuzzy_completion_supported(context: c_int) -> c_int;
+
+    fn xfree(ptr: *mut c_void);
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+use crate::context::ExpandContext;
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+const BUF_DIFF_FILTER: c_int = 0x2000;
+
+// =============================================================================
+// ExpandOther
+// =============================================================================
+
+/// Entry in the `ExpandOther` dispatch table.
+struct ExpGen {
+    context: c_int,
+    func: CompleteListItemGetter,
+    ic: bool,
+    escaped: bool,
+}
+
+/// Do the expansion based on `xp->xp_context` using the table-driven dispatch.
+///
+/// Matches `ExpandOther` in `cmdexpand.c`.
+///
+/// # Safety
+///
+/// `pat`, `xp`, `rmp`, `matches`, and `num_matches` must all be valid pointers.
+#[allow(clippy::too_many_lines)]
+pub unsafe fn expand_other(
+    pat: *const c_char,
+    xp: *mut ExpandT,
+    rmp: *mut RegMatch,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+) -> c_int {
+    let ctx = (*xp).xp_context;
+
+    // Build the dispatch table inline (all function pointers obtained from C)
+    let table = [
+        ExpGen {
+            context: ExpandContext::Commands.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_command_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Filetypecmd.to_raw(),
+            func: Some(rs_get_filetypecmd_arg),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Mapclear.to_raw(),
+            func: Some(rs_get_mapclear_arg),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Messages.to_raw(),
+            func: Some(rs_get_messages_arg),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::History.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_history_arg(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserCommands.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_commands(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserAddrType.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_cmd_addr_type(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserCmdFlags.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_cmd_flags(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserNargs.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_cmd_nargs(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserComplete.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_cmd_complete(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserVars.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_var_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Functions.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_function_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::UserFunc.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_user_func_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Expression.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_expr_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Menus.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_menu_name(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Menunames.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_menu_names(),
+            ic: false,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Syntax.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_syntax_name(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Syntime.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_syntime_arg(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Highlight.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_highlight_name(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Events.to_raw(),
+            func: nvim_cmdexpand_get_fn_expand_get_event_name(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Augroup.to_raw(),
+            func: nvim_cmdexpand_get_fn_expand_get_augroup_name(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Sign.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_sign_name(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Profile.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_profile_name(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Language.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_lang_arg(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Locales.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_locales(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::EnvVars.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_env_name(),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::User.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_users(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Arglist.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_arglist_name(),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Breakpoint.to_raw(),
+            func: Some(rs_get_breakadd_arg),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Scriptnames.to_raw(),
+            func: Some(rs_get_scriptnames_arg),
+            ic: true,
+            escaped: false,
+        },
+        ExpGen {
+            context: ExpandContext::Retab.to_raw(),
+            func: Some(rs_get_retab_arg),
+            ic: true,
+            escaped: true,
+        },
+        ExpGen {
+            context: ExpandContext::Checkhealth.to_raw(),
+            func: nvim_cmdexpand_get_fn_get_healthcheck_names(),
+            ic: true,
+            escaped: false,
+        },
+    ];
+
+    // Find a context in the table and call ExpandGeneric with the right function.
+    for entry in &table {
+        if ctx == entry.context {
+            if entry.ic {
+                nvim_cmdexpand_regmatch_set_rm_ic(rmp, 1);
+            }
+            nvim_cmdexpand_expand_generic(
+                pat,
+                xp,
+                rmp,
+                matches,
+                num_matches,
+                entry.func,
+                c_int::from(entry.escaped),
+            );
+            return OK;
+        }
+    }
+
+    FAIL
+}
+
+// =============================================================================
+// ExpandFromContext
+// =============================================================================
+
+/// Do the expansion based on `xp->xp_context` and `pat`.
+///
+/// Mirrors `ExpandFromContext` in `cmdexpand.c`.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid. `xp` must be properly initialized.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "ExpandFromContext")]
+pub unsafe extern "C" fn rs_expand_from_context(
+    xp: *mut ExpandT,
+    pat: *mut c_char,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+    options: c_int,
+) -> c_int {
+    let mut regmatch = RegMatch::default();
+    let ctx = (*xp).xp_context;
+    let flags = rs_map_wildopts_to_ewflags(options);
+    let pat_str = std::ffi::CStr::from_ptr(pat).to_bytes();
+    let pat_rust = std::str::from_utf8_unchecked(pat_str);
+    let fuzzy =
+        crate::cmdline_fuzzy_complete(pat_rust) && rs_cmdline_fuzzy_completion_supported(ctx) != 0;
+
+    if ctx == ExpandContext::Files.to_raw()
+        || ctx == ExpandContext::Directories.to_raw()
+        || ctx == ExpandContext::FilesInPath.to_raw()
+        || ctx == ExpandContext::Findfunc.to_raw()
+        || ctx == ExpandContext::DirsInCdpath.to_raw()
+    {
+        return rs_expand_files_and_dirs(xp, pat, matches, num_matches, flags, options);
+    }
+
+    *matches = std::ptr::null_mut();
+    *num_matches = 0;
+
+    if ctx == ExpandContext::Help.to_raw() {
+        return nvim_cmdexpand_find_help_tags(pat, num_matches, matches);
+    }
+
+    if ctx == ExpandContext::Shellcmd.to_raw() {
+        nvim_cmdexpand_expand_shellcmd(pat, matches, num_matches, flags);
+        return OK;
+    }
+    if ctx == ExpandContext::OldSetting.to_raw() {
+        return nvim_cmdexpand_expand_old_setting(num_matches, matches);
+    }
+    if ctx == ExpandContext::Buffers.to_raw() {
+        return nvim_cmdexpand_expand_bufnames(pat, num_matches, matches, options);
+    }
+    if ctx == ExpandContext::DiffBuffers.to_raw() {
+        return nvim_cmdexpand_expand_bufnames(
+            pat,
+            num_matches,
+            matches,
+            options | BUF_DIFF_FILTER,
+        );
+    }
+    if ctx == ExpandContext::Tags.to_raw() || ctx == ExpandContext::TagsListfiles.to_raw() {
+        return rs_expand_tags(
+            c_int::from(ctx == ExpandContext::Tags.to_raw()),
+            pat,
+            num_matches,
+            matches,
+        );
+    }
+    if ctx == ExpandContext::Colors.to_raw() {
+        let mut dirs: [*mut c_char; 2] = [c"colors".as_ptr().cast_mut(), std::ptr::null_mut()];
+        return nvim_cmdexpand_expand_rtdir(
+            pat,
+            nvim_cmdexpand_get_dip_start_opt(),
+            num_matches,
+            matches,
+            dirs.as_mut_ptr(),
+        );
+    }
+    if ctx == ExpandContext::Compiler.to_raw() {
+        let mut dirs: [*mut c_char; 2] = [c"compiler".as_ptr().cast_mut(), std::ptr::null_mut()];
+        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+    }
+    if ctx == ExpandContext::Ownsyntax.to_raw() {
+        let mut dirs: [*mut c_char; 2] = [c"syntax".as_ptr().cast_mut(), std::ptr::null_mut()];
+        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+    }
+    if ctx == ExpandContext::Filetype.to_raw() {
+        let mut dirs: [*mut c_char; 4] = [
+            c"syntax".as_ptr().cast_mut(),
+            c"indent".as_ptr().cast_mut(),
+            c"ftplugin".as_ptr().cast_mut(),
+            std::ptr::null_mut(),
+        ];
+        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+    }
+    if ctx == ExpandContext::Keymap.to_raw() {
+        let mut dirs: [*mut c_char; 2] = [c"keymap".as_ptr().cast_mut(), std::ptr::null_mut()];
+        return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
+    }
+    if ctx == ExpandContext::UserList.to_raw() {
+        return nvim_cmdexpand_expand_user_list(xp, matches, num_matches);
+    }
+    if ctx == ExpandContext::UserLua.to_raw() {
+        return nvim_cmdexpand_expand_user_lua(xp, num_matches, matches);
+    }
+    if ctx == ExpandContext::Packadd.to_raw() {
+        return nvim_cmdexpand_expand_pack_add_dir(pat, num_matches, matches);
+    }
+    if ctx == ExpandContext::Runtime.to_raw() {
+        return nvim_cmdexpand_expand_runtime_cmd(pat, num_matches, matches);
+    }
+    if ctx == ExpandContext::PatternInBuf.to_raw() {
+        return rs_expand_pattern_in_buf(pat, (*xp).xp_search_dir, matches, num_matches);
+    }
+
+    // When expanding a function name starting with s:, match the <SNR>nr_ prefix.
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let effective_pat = if ctx == ExpandContext::UserFunc.to_raw() {
+        let slice = std::ffi::CStr::from_ptr(pat).to_bytes();
+        if slice.starts_with(b"^s:") {
+            tofree = nvim_cmdexpand_make_snr_pattern(pat.add(3));
+            tofree
+        } else {
+            pat
+        }
+    } else {
+        pat
+    };
+
+    if ctx == ExpandContext::Lua.to_raw() {
+        let ret = nvim_cmdexpand_nlua_expand_get_matches(num_matches, matches);
+        xfree(tofree.cast());
+        return ret;
+    }
+
+    if !fuzzy {
+        let prog = nvim_cmdexpand_vim_regcomp(
+            effective_pat,
+            if nvim_cmdexpand_magic_isset() != 0 {
+                nvim_cmdexpand_get_re_magic()
+            } else {
+                0
+            },
+        );
+        if prog.is_null() {
+            xfree(tofree.cast());
+            return FAIL;
+        }
+        nvim_cmdexpand_regmatch_set_regprog(&raw mut regmatch, prog);
+        let ic = nvim_cmdexpand_ignorecase(effective_pat);
+        nvim_cmdexpand_regmatch_set_rm_ic(&raw mut regmatch, ic);
+    }
+
+    let ret =
+        if ctx == ExpandContext::Settings.to_raw() || ctx == ExpandContext::BoolSettings.to_raw() {
+            nvim_cmdexpand_expand_settings(
+                xp,
+                &raw mut regmatch,
+                effective_pat,
+                num_matches,
+                matches,
+                c_int::from(fuzzy),
+            )
+        } else if ctx == ExpandContext::StringSetting.to_raw() {
+            nvim_cmdexpand_expand_string_setting(xp, &raw mut regmatch, num_matches, matches)
+        } else if ctx == ExpandContext::SettingSubtract.to_raw() {
+            rs_expand_setting_subtract(xp, &raw mut regmatch, num_matches, matches)
+        } else if ctx == ExpandContext::Mappings.to_raw() {
+            nvim_cmdexpand_expand_mappings(effective_pat, &raw mut regmatch, num_matches, matches)
+        } else if ctx == ExpandContext::Argopt.to_raw() {
+            nvim_cmdexpand_expand_argopt(effective_pat, xp, &raw mut regmatch, matches, num_matches)
+        } else if ctx == ExpandContext::UserDefined.to_raw() {
+            nvim_cmdexpand_expand_user_defined(
+                effective_pat,
+                xp,
+                &raw mut regmatch,
+                matches,
+                num_matches,
+            )
+        } else {
+            expand_other(effective_pat, xp, &raw mut regmatch, matches, num_matches)
+        };
+
+    if !fuzzy {
+        nvim_cmdexpand_vim_regfree(regmatch.regprog);
+    }
+    xfree(tofree.cast());
+
+    ret
+}
