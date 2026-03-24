@@ -183,6 +183,14 @@ _Static_assert(DOBUF_WIPE == 4, "DOBUF_WIPE mismatch with Rust");
 _Static_assert(EVENT_BUFADD == 0, "EVENT_BUFADD mismatch with Rust");
 _Static_assert(EVENT_BUFDELETE == 2, "EVENT_BUFDELETE mismatch with Rust");
 
+// Static assertions for CMD_* constants used by goto_buffer in Rust.
+_Static_assert(CMD_bnext == 30, "CMD_bnext mismatch with Rust");
+_Static_assert(CMD_sbnext == 393, "CMD_sbnext mismatch with Rust");
+_Static_assert(CMD_bNext == 21, "CMD_bNext mismatch with Rust");
+_Static_assert(CMD_bprevious == 32, "CMD_bprevious mismatch with Rust");
+_Static_assert(CMD_sbNext == 388, "CMD_sbNext mismatch with Rust");
+_Static_assert(CMD_sbprevious == 394, "CMD_sbprevious mismatch with Rust");
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,
@@ -908,55 +916,7 @@ static void free_buffer_stuff(buf_T *buf, int free_flags)
   buf_free_callbacks(buf);
 }
 
-/// Go to another buffer.  Handles the result of the ATTENTION dialog.
-void goto_buffer(exarg_T *eap, int start, int dir, int count)
-{
-  const int save_sea = swap_exists_action;
-  bool skip_help_buf;
-
-  switch (eap->cmdidx) {
-  case CMD_bnext:
-  case CMD_sbnext:
-  case CMD_bNext:
-  case CMD_bprevious:
-  case CMD_sbNext:
-  case CMD_sbprevious:
-    skip_help_buf = true;
-    break;
-  default:
-    skip_help_buf = false;
-    break;
-  }
-
-  bufref_T old_curbuf;
-  set_bufref(&old_curbuf, curbuf);
-
-  if (swap_exists_action == SEA_NONE) {
-    swap_exists_action = SEA_DIALOG;
-  }
-  (void)do_buffer_ext(*eap->cmd == 's' ? DOBUF_SPLIT : DOBUF_GOTO, start, dir, count,
-                      (eap->forceit ? DOBUF_FORCEIT : 0) |
-                      (skip_help_buf ? DOBUF_SKIPHELP : 0));
-
-  if (swap_exists_action == SEA_QUIT && *eap->cmd == 's') {
-    cleanup_T cs;
-
-    // Reset the error/interrupt/exception state here so that
-    // aborting() returns false when closing a window.
-    enter_cleanup(&cs);
-
-    // Quitting means closing the split window, nothing else.
-    win_close(curwin, true, false);
-    swap_exists_action = save_sea;
-    swap_exists_did_quit = true;
-
-    // Restore the error/interrupt/exception state if not discarded by a
-    // new aborting error, interrupt, or uncaught exception.
-    leave_cleanup(&cs);
-  } else {
-    handle_swap_exists(&old_curbuf);
-  }
-}
+// goto_buffer() is implemented in Rust (see src/nvim-rs/buffer/src/lifecycle.rs).
 
 /// Handle the situation of swap_exists_action being set.
 ///
@@ -1091,7 +1051,7 @@ static int empty_curbuf(bool close_others, int forceit, int action)
 /// @param flags  see @ref dobuf_flags_value
 ///
 /// @return  FAIL or OK.
-static int do_buffer_ext(int action, int start, int dir, int count, int flags)
+int do_buffer_ext(int action, int start, int dir, int count, int flags)
 {
   buf_T *buf;
   buf_T *bp;

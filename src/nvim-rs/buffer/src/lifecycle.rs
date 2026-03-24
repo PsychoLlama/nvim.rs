@@ -904,6 +904,107 @@ pub unsafe extern "C" fn rs_find_and_validate_buffer(
 }
 
 // =============================================================================
+// goto_buffer: handle ATTENTION dialog for buffer switching
+// =============================================================================
+
+// `CMD_index` values for buffer navigation commands.
+// These must match the C enum in `ex_cmds_defs.h` exactly.
+// Verified by `_Static_assert` in `buffer.c`.
+const CMD_BNEXT: c_int = 30;
+const CMD_SBNEXT: c_int = 393;
+const CMD_BNEXT_REVERSE: c_int = 21; // CMD_bNext
+const CMD_BPREVIOUS: c_int = 32;
+const CMD_SBNEXT_REVERSE: c_int = 388; // CMD_sbNext
+const CMD_SBPREVIOUS: c_int = 394;
+
+// Opaque representation of `cleanup_T` (16 bytes, 8-byte aligned).
+// Layout must match C struct: `{ int pending; [padding 4]; void *exception; }`
+#[repr(C, align(8))]
+struct CleanupT {
+    _data: [u8; 16],
+}
+
+extern "C" {
+    static mut swap_exists_action: c_int;
+    static mut swap_exists_did_quit: bool;
+
+    fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int) -> c_int;
+    fn nvim_eap_get_cmdidx(eap: *const c_void) -> c_int;
+    fn nvim_eap_get_cmd(eap: *const c_void) -> *const c_char;
+    fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
+    fn handle_swap_exists(old_curbuf: *mut c_void);
+    fn win_close(win: *mut c_void, free_buf: bool, free_tabpage: bool) -> c_int;
+    fn enter_cleanup(csp: *mut CleanupT);
+    fn leave_cleanup(csp: *mut CleanupT);
+}
+
+// SEA_* constants (from globals.h)
+const SEA_NONE: c_int = 0;
+const SEA_DIALOG: c_int = 1;
+const SEA_QUIT: c_int = 2;
+
+/// Go to another buffer. Handles the result of the ATTENTION dialog.
+///
+/// Rust port of C `goto_buffer()`.
+///
+/// # Safety
+/// Accesses global Neovim state. `eap` must be a valid `exarg_T*`.
+#[no_mangle]
+pub unsafe extern "C" fn goto_buffer(eap: *const c_void, start: c_int, dir: c_int, count: c_int) {
+    let save_sea = swap_exists_action;
+
+    let cmdidx = nvim_eap_get_cmdidx(eap);
+    let skip_help_buf = matches!(
+        cmdidx,
+        CMD_BNEXT
+            | CMD_SBNEXT
+            | CMD_BNEXT_REVERSE
+            | CMD_BPREVIOUS
+            | CMD_SBNEXT_REVERSE
+            | CMD_SBPREVIOUS
+    );
+
+    let mut old_curbuf = crate::misc::BufRef {
+        br_buf: std::ptr::null_mut(),
+        br_fnum: 0,
+        br_buf_free_count: 0,
+    };
+    let curbuf = nvim_get_curbuf();
+    crate::misc::set_bufref(&raw mut old_curbuf, curbuf);
+
+    if swap_exists_action == SEA_NONE {
+        swap_exists_action = SEA_DIALOG;
+    }
+
+    let cmd_ptr = nvim_eap_get_cmd(eap);
+    let is_split = !cmd_ptr.is_null() && *cmd_ptr == b's' as c_char;
+    let action = if is_split { DOBUF_SPLIT } else { DOBUF_GOTO };
+    let flags = (if nvim_eap_get_forceit(eap) {
+        DOBUF_FORCEIT
+    } else {
+        0
+    }) | (if skip_help_buf { DOBUF_SKIPHELP } else { 0 });
+
+    let _ = do_buffer_ext(action, start, dir, count, flags);
+
+    if swap_exists_action == SEA_QUIT && is_split {
+        let mut cs = CleanupT { _data: [0u8; 16] };
+        // Reset the error/interrupt/exception state here so that
+        // aborting() returns false when closing a window.
+        enter_cleanup(&raw mut cs);
+        // Quitting means closing the split window, nothing else.
+        win_close(nvim_get_curwin(), true, false);
+        swap_exists_action = save_sea;
+        swap_exists_did_quit = true;
+        // Restore the error/interrupt/exception state if not discarded by a
+        // new aborting error, interrupt, or uncaught exception.
+        leave_cleanup(&raw mut cs);
+    } else {
+        handle_swap_exists((&raw mut old_curbuf).cast::<c_void>());
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
