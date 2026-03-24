@@ -5972,25 +5972,114 @@ pub unsafe extern "C" fn rs_node_compress(
 // =============================================================================
 
 extern "C" {
-    // Wordnode allocator (still in C: get_wordnode / Phase 3 memory management)
-    fn nvim_get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT;
-    // wordtree_compress is still in C (will move to Rust in Phase 2)
-    fn nvim_spell_wordtree_compress(
-        spin: *mut SpellinfoT,
-        root: *mut WordnodeT,
-        name: *const c_char,
-    );
+    fn getroom(spin: *mut SpellinfoT, len: usize, align: bool) -> *mut c_void;
     // Message functions for compression progress output
     fn msg_start();
     fn msg_puts(s: *const c_char);
     fn msg_clr_eos();
     fn ui_flush();
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    fn verbose_enter();
+    fn verbose_leave();
     // curwin global for spell_casefold
     #[link_name = "curwin"]
     static curwin_spell: *mut c_void;
     // msg_didout and msg_col are writable globals
     static mut msg_didout: bool;
     static mut msg_col: c_int;
+    static p_verbose: i64;
+}
+
+// =============================================================================
+// Phase 2: wordnode / wordtree helpers exported to C
+// =============================================================================
+
+/// Allocate and return a fresh WordnodeT from spin's arena.
+///
+/// Reuses nodes from the free list (si_first_free) before allocating from
+/// the arena.  Returns null on allocation failure.
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer.
+#[export_name = "get_wordnode"]
+pub unsafe extern "C" fn rs_get_wordnode_export(spin: *mut SpellinfoT) -> *mut WordnodeT {
+    get_wordnode(spin)
+}
+
+unsafe fn get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT {
+    let first_free = (*spin).si_first_free;
+    if first_free.is_null() {
+        getroom(spin, std::mem::size_of::<WordnodeT>(), true).cast::<WordnodeT>()
+    } else {
+        let n = first_free;
+        (*spin).si_first_free = (*n).wn_child;
+        std::ptr::write_bytes(n, 0u8, 1);
+        (*spin).si_free_count -= 1;
+        n
+    }
+}
+
+/// Allocate a fresh WordnodeT from the arena without touching the free list.
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer.
+#[export_name = "wordtree_alloc"]
+pub unsafe extern "C" fn rs_wordtree_alloc(spin: *mut SpellinfoT) -> *mut WordnodeT {
+    getroom(spin, std::mem::size_of::<WordnodeT>(), true).cast::<WordnodeT>()
+}
+
+/// Print a spell-building message when verbose or si_verbose is set.
+///
+/// # Safety
+/// `spin` and `str_` must be valid non-null pointers. `str_` must be a valid
+/// NUL-terminated C string.
+#[export_name = "spell_message"]
+pub unsafe extern "C" fn rs_spell_message(spin: *const SpellinfoT, str_: *const c_char) {
+    if (*spin).si_verbose != 0 || p_verbose > 2 {
+        if (*spin).si_verbose == 0 {
+            verbose_enter();
+        }
+        msg(str_, 0);
+        ui_flush();
+        if (*spin).si_verbose == 0 {
+            verbose_leave();
+        }
+    }
+}
+
+/// Compress the word tree rooted at `root` and print a progress message.
+///
+/// # Safety
+/// All pointers must be valid. `name` must be a valid NUL-terminated C string.
+#[export_name = "wordtree_compress"]
+pub unsafe extern "C" fn rs_wordtree_compress_export(
+    spin: *mut SpellinfoT,
+    root: *mut WordnodeT,
+    name: *const c_char,
+) {
+    let sibling = (*root).wn_sibling;
+    if sibling.is_null() {
+        return;
+    }
+    let mut tot: c_int = 0;
+    let n = rs_node_compress(spin, sibling, &raw mut tot);
+    if (*spin).si_verbose != 0 || p_verbose > 2 {
+        let perc: i64 = if tot > 1_000_000 {
+            (tot - n) as i64 / (tot as i64 / 100)
+        } else if tot == 0 {
+            0
+        } else {
+            (tot - n) as i64 * 100 / tot as i64
+        };
+        let name_str =
+            String::from_utf8_lossy(std::ffi::CStr::from_ptr(name).to_bytes()).into_owned();
+        let msg_text = format!(
+            "Compressed {name_str}: {n} of {tot} nodes; {} ({}%) remaining\0",
+            tot - n,
+            perc
+        );
+        rs_spell_message(spin, msg_text.as_ptr().cast::<c_char>());
+    }
 }
 
 /// Tracking where to link a new node when inserting.
@@ -6058,7 +6147,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
             let mut copy_p = original_node;
             let mut first_copy: *mut WordnodeT = std::ptr::null_mut();
             while !copy_p.is_null() {
-                let np = nvim_get_wordnode(spin);
+                let np = get_wordnode(spin);
                 if np.is_null() {
                     return 1; // FAIL
                 }
@@ -6137,7 +6226,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
 
         if !matched {
             // ---- Allocate a new node ----
-            let np = nvim_get_wordnode(spin);
+            let np = get_wordnode(spin);
             if np.is_null() {
                 return 1; // FAIL
             }
@@ -6199,9 +6288,9 @@ pub unsafe extern "C" fn rs_tree_add_word(
             msg_col = 0;
             ui_flush();
         }
-        nvim_spell_wordtree_compress(spin, (*spin).si_foldroot, c"case-folded".as_ptr());
+        rs_wordtree_compress_export(spin, (*spin).si_foldroot, c"case-folded".as_ptr());
         if affix_id >= 0 {
-            nvim_spell_wordtree_compress(spin, (*spin).si_keeproot, c"keep-case".as_ptr());
+            rs_wordtree_compress_export(spin, (*spin).si_keeproot, c"keep-case".as_ptr());
         }
     }
 

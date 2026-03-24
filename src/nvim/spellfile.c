@@ -692,15 +692,12 @@ typedef struct spellinfo_S {
   int si_newcompID;             // current value for compound ID
 } spellinfo_T;
 
-// Phase 5: forward declarations for functions defined later in this file.
+// Forward declarations for static functions used before they are defined.
 static bool valid_spell_word(const char *word, const char *end);
 static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name);
 static wordnode_T *get_wordnode(spellinfo_T *spin);
-// nvim_spell_wordtree_compress: wrapper for Rust to call the static wordtree_compress.
-// (Will be removed when wordtree_compress moves to Rust in Phase 2.)
-void nvim_spell_wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name) {
-  wordtree_compress(spin, root, name);
-}
+static wordnode_T *wordtree_alloc(spellinfo_T *spin);
+static void spell_message(const spellinfo_T *spin, char *str);
 
 #include "spellfile.c.generated.h"
 
@@ -3060,7 +3057,7 @@ static int spell_read_wordfile(spellinfo_T *spin, char *fname)
 /// @param len Length needed (<= SBLOCKSIZE).
 /// @param align Align for pointer.
 /// @return Pointer into block data.
-static void *getroom(spellinfo_T *spin, size_t len, bool align)
+void *getroom(spellinfo_T *spin, size_t len, bool align)
   FUNC_ATTR_NONNULL_RET
 {
   sblock_T *bl = spin->si_blocks;

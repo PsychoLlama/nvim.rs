@@ -3637,8 +3637,9 @@ pub extern "C" fn rs_clamp_spell_suggest_timeout(timeout: c_int) -> c_int {
 /// # Safety
 ///
 /// Both pointers must be valid and `word <= end`.
-#[no_mangle]
+#[export_name = "valid_spell_word"]
 #[allow(clippy::missing_const_for_fn)]
+#[must_use]
 pub unsafe extern "C" fn rs_valid_spell_word(word: *const u8, end: *const u8) -> bool {
     if word.is_null() || end.is_null() {
         return false;
