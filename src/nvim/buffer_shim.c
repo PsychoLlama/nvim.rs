@@ -1721,22 +1721,6 @@ int buf_open_scratch(handle_T bufnr, char *bufname)
   return OK;
 }
 
-// ============================================================
-// Buffer file name management cluster (Phase 14)
-// ============================================================
-
-/// Find a buffer by file name and file ID. Returns NULL if not found.
-buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid)
-  FUNC_ATTR_PURE
-{
-  FOR_ALL_BUFFERS_BACKWARDS(buf) {
-    if ((buf->b_flags & BF_DUMMY) == 0
-        && !rs_otherfile_buf_4(buf, ffname, (void *)file_id, file_id_valid)) {
-      return buf;
-    }
-  }
-  return NULL;
-}
 
 /// Set the file name for "buf" to "ffname_arg", short file name to
 /// "sfname_arg".

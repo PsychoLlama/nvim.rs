@@ -535,6 +535,20 @@ unsafe fn buflist_findname_file_id_impl(
     BufHandle(std::ptr::null_mut())
 }
 
+/// Find buffer by full name and optional `FileID`.
+///
+/// C export: `buflist_findname_file_id(ffname, file_id, file_id_valid)`.
+/// `file_id` is a `*FileID` (two `u64` fields), passed as an opaque byte pointer.
+#[must_use]
+#[unsafe(export_name = "buflist_findname_file_id")]
+pub unsafe extern "C" fn rs_buflist_findname_file_id(
+    ffname: *mut c_char,
+    file_id: *const u8,
+    file_id_valid: bool,
+) -> BufHandle {
+    buflist_findname_file_id_impl(ffname, file_id, file_id_valid)
+}
+
 /// Find file in buffer list by name (full path).
 ///
 /// Gets the `file_id` and delegates to the internal `file_id` lookup.
