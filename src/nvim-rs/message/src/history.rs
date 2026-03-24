@@ -7,6 +7,8 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
+use nvim_api::{Object, ObjectData};
+
 /// Layout-compatible representation of `HlMessageChunk` in C.
 /// Size: 24 bytes (String=16, int=4, padding=4)
 #[repr(C)]
@@ -45,8 +47,11 @@ extern "C" {
     static mut msg_hist_max: c_int;
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
+    /// `msg_ext_append` — direct access to C global (message.h)
+    static mut msg_ext_append: bool;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+    fn xmalloc(size: usize) -> *mut c_char;
 }
 
 /// Free an `HlMessage` stored inside a `MessageHistoryEntry`.
@@ -587,6 +592,139 @@ pub unsafe extern "C" fn rs_msg_hist_calc_skip(count: c_int) -> c_int {
     } else {
         len - count
     }
+}
+
+// ============================================================================
+// Phase 11: hl_msg_free, msg_hist_add, msg_hist_add_multihl migrated to Rust
+// ============================================================================
+
+/// Free an `HlMessage` by value: free each chunk's text data, then the items array.
+///
+/// Equivalent to the C `hl_msg_free()` function.
+///
+/// # Safety
+/// `hl_msg` must be a valid `HlMessage` whose chunks and items pointer were heap-allocated.
+#[export_name = "hl_msg_free"]
+pub unsafe extern "C" fn rs_hl_msg_free(hl_msg: HlMessage) {
+    for i in 0..hl_msg.size {
+        xfree((*hl_msg.items.add(i)).text_data.cast::<std::ffi::c_void>());
+    }
+    xfree(hl_msg.items.cast::<std::ffi::c_void>());
+}
+
+/// Add a plain-text string message to history.
+///
+/// Strips leading/trailing newlines, creates a single-chunk `HlMessage`,
+/// and delegates to `msg_hist_add_multihl`.
+///
+/// Equivalent to the C `msg_hist_add()` function.
+///
+/// # Safety
+/// `s` must be a valid C string pointer; `len` is the byte count or -1.
+#[allow(clippy::cast_sign_loss, clippy::cast_ptr_alignment)]
+#[export_name = "msg_hist_add"]
+pub unsafe extern "C" fn rs_msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int) {
+    let raw_len: usize = if len < 0 {
+        std::ffi::CStr::from_ptr(s).to_bytes().len()
+    } else {
+        len as usize
+    };
+
+    let mut text_ptr = s;
+    let mut text_size = raw_len;
+    let newline: c_char = 10; // '\n'
+
+    // Strip leading newlines
+    while text_size > 0 && *text_ptr == newline {
+        text_size -= 1;
+        text_ptr = text_ptr.add(1);
+    }
+    // Strip trailing newlines
+    while text_size > 0 && *text_ptr.add(text_size - 1) == newline {
+        text_size -= 1;
+    }
+
+    if text_size == 0 {
+        return;
+    }
+
+    // Duplicate the text
+    let data = xmalloc(text_size + 1);
+    std::ptr::copy_nonoverlapping(text_ptr, data, text_size);
+    *data.add(text_size) = 0; // NUL-terminate
+
+    // Build a single-chunk HlMessage
+    let chunk = HlMessageChunk::new(data, text_size, hl_id);
+    let items = xmalloc(std::mem::size_of::<HlMessageChunk>()).cast::<HlMessageChunk>();
+    std::ptr::write(items, chunk);
+    let msg = HlMessage {
+        size: 1,
+        capacity: 1,
+        items,
+    };
+
+    // INTEGER_OBJ(0) = { type=kObjectTypeInteger, data.integer=0 }
+    rs_msg_hist_add_multihl(
+        Object {
+            obj_type: 2, // kObjectTypeInteger
+            data: ObjectData { integer: 0 },
+        },
+        msg,
+        false,
+        ptr::null_mut(),
+    );
+}
+
+/// Add a highlighted multi-chunk message to history.
+///
+/// Equivalent to the C `msg_hist_add_multihl()` function.
+///
+/// # Safety
+/// Accesses global message history state and Rust-owned statics.
+#[allow(clippy::cast_ptr_alignment)]
+#[export_name = "msg_hist_add_multihl"]
+pub unsafe extern "C" fn rs_msg_hist_add_multihl(
+    _msg_id: Object,
+    msg: HlMessage,
+    temp: bool,
+    _msg_data: *mut std::ffi::c_void,
+) {
+    if crate::scrollback::do_clear_hist_temp {
+        rs_msg_hist_clear_temp();
+        crate::scrollback::do_clear_hist_temp = false;
+    }
+
+    if msg_hist_off || msg_silent != 0 {
+        rs_hl_msg_free(msg);
+        return;
+    }
+
+    // Allocate a new history entry
+    let entry = xmalloc(std::mem::size_of::<MessageHistoryEntry>()).cast::<MessageHistoryEntry>();
+    (*entry).msg = msg;
+    (*entry).temp = temp;
+    (*entry).kind = crate::display::msg_ext_kind;
+    (*entry).prev = msg_hist_last;
+    (*entry).next = ptr::null_mut();
+    (*entry).append = msg_ext_append;
+
+    if msg_hist_first.is_null() {
+        msg_hist_first = entry;
+    }
+    if !msg_hist_last.is_null() {
+        (*msg_hist_last).next = entry;
+    }
+    if msg_hist_temp.is_null() {
+        msg_hist_temp = entry;
+    }
+
+    if !temp {
+        msg_hist_len += 1;
+    }
+    msg_hist_last = entry;
+    crate::display::msg_ext_history = true;
+
+    rs_msg_hist_clear(msg_hist_max);
 }
 
 #[cfg(test)]

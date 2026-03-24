@@ -487,37 +487,7 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
   loop_schedule_deferred(&main_loop, event_create(msg_semsg_multiline_event, s));
 }
 
-void hl_msg_free(HlMessage hl_msg)
-{
-  for (size_t i = 0; i < kv_size(hl_msg); i++) {
-    xfree(kv_A(hl_msg, i).text.data);
-  }
-  kv_destroy(hl_msg);
-}
-
-/// Add the message at the end of the history
-///
-/// @param[in]  len  Length of s or -1.
-void msg_hist_add(const char *s, int len, int hl_id)
-{
-  String text = { .size = len < 0 ? strlen(s) : (size_t)len };
-  // Remove leading and trailing newlines.
-  while (text.size > 0 && *s == '\n') {
-    text.size--;
-    s++;
-  }
-  while (text.size > 0 && s[text.size - 1] == '\n') {
-    text.size--;
-  }
-  if (text.size == 0) {
-    return;
-  }
-  text.data = xmemdupz(s, text.size);
-
-  HlMessage msg = KV_INITIAL_VALUE;
-  kv_push(msg, ((HlMessageChunk){ text, hl_id }));
-  msg_hist_add_multihl(INTEGER_OBJ(0), msg, false, NULL);
-}
+// hl_msg_free, msg_hist_add migrated to Rust: src/nvim-rs/message/src/history.rs
 
 extern bool do_clear_hist_temp;  // owned by Rust (scrollback.rs)
 
@@ -547,47 +517,7 @@ void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
   kv_destroy(messages);
 }
 
-void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data)
-{
-  if (do_clear_hist_temp) {
-    msg_hist_clear_temp();
-    do_clear_hist_temp = false;
-  }
-
-  if (msg_hist_off || msg_silent != 0) {
-    hl_msg_free(msg);
-    return;
-  }
-
-  // Allocate an entry and add the message at the end of the history.
-  MessageHistoryEntry *entry = xmalloc(sizeof(MessageHistoryEntry));
-  entry->msg = msg;
-  entry->temp = temp;
-  entry->kind = msg_ext_kind;
-  entry->prev = msg_hist_last;
-  entry->next = NULL;
-  // NOTE: this does not encode if the message was actually appended to the
-  // previous entry in the message history. However append is currently only
-  // true for :echon, which is stored in the history as a temporary entry for
-  // "g<" where it is guaranteed to be after the entry it was appended to.
-  entry->append = msg_ext_append;
-
-  if (msg_hist_first == NULL) {
-    msg_hist_first = entry;
-  }
-  if (msg_hist_last != NULL) {
-    msg_hist_last->next = entry;
-  }
-  if (msg_hist_temp == NULL) {
-    msg_hist_temp = entry;
-  }
-
-  msg_hist_len += !temp;
-  msg_hist_last = entry;
-  msg_ext_history = true;
-
-  msg_hist_clear(msg_hist_max);
-}
+// msg_hist_add_multihl migrated to Rust: src/nvim-rs/message/src/history.rs
 
 /// :messages command implementation
 void ex_messages(exarg_T *eap)

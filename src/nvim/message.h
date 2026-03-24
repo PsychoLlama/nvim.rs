@@ -193,6 +193,10 @@ void msgmore(int n);
 // Phase 22: repeat_message migrated to Rust
 void repeat_message(void);
 
+// Phase 11: hl_msg_free, msg_hist_add, msg_hist_add_multihl migrated to Rust
+void hl_msg_free(HlMessage hl_msg);
+void msg_hist_add(const char *s, int len, int hl_id);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

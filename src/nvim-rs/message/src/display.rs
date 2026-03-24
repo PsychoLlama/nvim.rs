@@ -148,8 +148,6 @@ extern "C" {
     fn api_free_array(arr: Array);
     // For msg_ext_flush_showmode
     fn ui_call_msg_showmode(content: Array);
-    // For building temp HlMessage in msg_ext_ui_flush
-    fn msg_hist_add_multihl(msg_id: Object, msg: HlMessage, temp: bool, msg_data: *mut c_void);
     // For cstr_as_string
     fn cstr_as_string(s: *const c_char) -> NvimString;
 }
@@ -350,7 +348,7 @@ pub unsafe extern "C" fn rs_msg_ext_ui_flush() {
             xfree(chunk_arr.cast::<c_void>());
         }
         xfree(tofree.items.cast::<c_void>());
-        msg_hist_add_multihl(
+        crate::history::rs_msg_hist_add_multihl(
             Object {
                 obj_type: K_OBJECT_TYPE_INTEGER,
                 data: ObjectData { integer: 0 },
