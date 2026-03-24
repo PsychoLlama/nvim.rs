@@ -5,7 +5,7 @@
 //! The core buffer operations remain in C.
 
 #![allow(dead_code, unused_imports)]
-use std::os::raw::c_int;
+use std::os::raw::{c_char, c_int};
 
 use nvim_buffer::BufHandle;
 
@@ -15,8 +15,7 @@ type WinPtr = *mut u8;
 // C accessor functions
 extern "C" {
 
-    // Compound accessor for buffer name completion
-    fn nvim_get_next_bufname_token_impl();
+    // nvim_get_next_bufname_token_impl: deleted (Phase 15), inlined below
 
     // ins_compl_next_buf buf accessors (Phase 14) - use BufHandle to match next.rs
     fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
@@ -25,6 +24,19 @@ extern "C" {
     fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
+
+    // Helpers for inlined nvim_get_next_bufname_token_impl
+    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
+    fn path_tail(path: *const c_char) -> *mut c_char;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+    fn nvim_ins_compl_add_simple(
+        str_: *const c_char,
+        len: c_int,
+        dir: c_int,
+        flags: c_int,
+        score: c_int,
+    ) -> c_int;
 }
 
 // ins_compl_next_buf win accessors (Phase 14) - use *mut u8 to match entry.rs/ctrl_x.rs
@@ -44,6 +56,9 @@ const CTRL_X_BUFNAMES: c_int = 18;
 // Continuation status flags
 const CONT_LOCAL: c_int = 32;
 
+// CP flags (matching C enum)
+const CP_ICASE: c_int = 16;
+
 // =============================================================================
 // Phase 2 (pass 4): get_next_bufname_token
 // =============================================================================
@@ -58,7 +73,38 @@ const CONT_LOCAL: c_int = 32;
 /// Requires valid buffer list state; called from insert mode completion only.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_next_bufname_token() {
-    nvim_get_next_bufname_token_impl();
+    // Inline nvim_get_next_bufname_token_impl (Phase 15):
+    // FOR_ALL_BUFFERS: start from firstbuf, walk b_next until NULL
+    let mut b = nvim_get_firstbuf_wrapper();
+    while !b.is_null() {
+        if nvim_buf_get_b_p_bl(b) != 0 {
+            let sfname = nvim_buf_get_b_sfname(b);
+            if !sfname.is_null() {
+                let tail = path_tail(sfname);
+                let orig_data = crate::vars::compl_orig_text.data.cast_const();
+                let orig_size = crate::vars::compl_orig_text.size;
+                if !tail.is_null()
+                    && !orig_data.is_null()
+                    && strncmp(tail.cast_const(), orig_data, orig_size) == 0
+                {
+                    let flags = if crate::vars::nvim_get_p_ic() != 0 {
+                        CP_ICASE
+                    } else {
+                        0
+                    };
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                    nvim_ins_compl_add_simple(
+                        tail.cast_const(),
+                        strlen(tail.cast_const()) as c_int,
+                        0,
+                        flags,
+                        -1, // FUZZY_SCORE_NONE
+                    );
+                }
+            }
+        }
+        b = nvim_buf_get_b_next(b);
+    }
 }
 
 // =============================================================================

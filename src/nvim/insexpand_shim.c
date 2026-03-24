@@ -2251,19 +2251,7 @@ int nvim_skipwhite_offset(const char *line, int length, int start_col) {
 // nvim_msg_ext_set_kind_completion: deleted (Phase 1, Rust calls msg_ext_set_kind("completion") directly)
 // nvim_msg_with_attr, nvim_msg_clr_cmdline_wrap: deleted (Phase 4, Rust uses #[link_name] directly)
 
-// Compound accessor for Phase 2 (pass 4): get_next_bufname_token
-void nvim_get_next_bufname_token_impl(void)
-{
-  FOR_ALL_BUFFERS(b) {
-    if (b->b_p_bl && b->b_sfname != NULL) {
-      char *tail = path_tail(b->b_sfname);
-      if (strncmp(tail, compl_orig_text.data, compl_orig_text.size) == 0) {
-        ins_compl_add(tail, (int)strlen(tail), NULL, NULL, false, NULL, 0,
-                      p_ic ? CP_ICASE : 0, false, NULL, FUZZY_SCORE_NONE);
-      }
-    }
-  }
-}
+// nvim_get_next_bufname_token_impl: deleted (Phase 15), inlined in buffer.rs
 
 // nvim_get_next_tag_completion_impl: deleted (Phase 14), inlined in tag.rs
 
