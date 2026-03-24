@@ -1638,33 +1638,38 @@ void nvim_emsg_e95_buffer_exists(void)
   emsg(_("E95: Buffer with this name already exists"));
 }
 
-/// Creates or switches to a scratch buffer. :h special-buffers
-/// Scratch buffer is:
-///   - buftype=nofile bufhidden=hide noswapfile
-///   - Always considered 'nomodified'
-///
-/// @param bufnr     Buffer to switch to, or 0 to create a new buffer.
-/// @param bufname   Buffer name, or NULL.
-///
-/// @see curbufIsChanged()
-///
-/// @return  FAIL for failure, OK otherwise
-int buf_open_scratch(handle_T bufnr, char *bufname)
+// Accessors for buf_open_scratch (migrated to Rust, src/nvim-rs/buffer/src/lifecycle.rs)
+
+/// Calls do_ecmd(bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL).
+/// Returns 0 on FAIL, 1 on success.
+int nvim_do_ecmd_one_hide(int bufnr)
 {
-  if (do_ecmd((int)bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL) == FAIL) {
-    return FAIL;
-  }
-  if (bufname != NULL) {
-    apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
-    setfname(curbuf, bufname, NULL, true);
-    apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
-  }
+  return do_ecmd(bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL) != FAIL ? 1 : 0;
+}
+
+/// Fires EVENT_BUFFILEPRE autocommands on buf (accessor for Rust).
+void nvim_apply_autocmds_buffilepre(buf_T *buf)
+{
+  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, buf);
+}
+
+/// Fires EVENT_BUFFILEPOST autocommands on buf (accessor for Rust).
+void nvim_apply_autocmds_buffilepost(buf_T *buf)
+{
+  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, buf);
+}
+
+/// Sets bufhidden=hide, buftype=nofile, swapfile=false, and resets bindings.
+/// Compound accessor for buf_open_scratch (Rust).
+void nvim_set_buf_opts_scratch(void)
+{
   set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
   set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
   set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
   RESET_BINDING(curwin);
-  return OK;
 }
+
+// buf_open_scratch migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs)
 
 
 // setfname migrated to Rust (src/nvim-rs/buffer/src/filename.rs)

@@ -86,6 +86,12 @@ extern "C" {
 
     // buf_ensure_loaded accessor (compound: aucmd_prepbuf + open_buffer + aucmd_restbuf)
     fn nvim_buf_aucmd_open_buffer(buf: BufHandle) -> c_int;
+
+    // buf_open_scratch accessors
+    fn nvim_do_ecmd_one_hide(bufnr: c_int) -> c_int;
+    fn nvim_apply_autocmds_buffilepre(buf: BufHandle);
+    fn nvim_apply_autocmds_buffilepost(buf: BufHandle);
+    fn nvim_set_buf_opts_scratch();
 }
 
 // kOptJopFlagClean flag value (from option_vars.generated.h)
@@ -1196,6 +1202,41 @@ pub unsafe extern "C" fn rs_buf_ensure_loaded(buf: BufHandle) -> bool {
         return true; // already loaded
     }
     nvim_buf_aucmd_open_buffer(buf) != 0
+}
+
+// =============================================================================
+// buf_open_scratch
+// =============================================================================
+
+/// Create or switch to a scratch buffer.
+///
+/// Sets `buftype=nofile`, `bufhidden=hide`, `noswapfile`, and resets bindings.
+/// If `bufname` is non-null, applies `BufFilePre`/`BufFilePost` autocmds and
+/// calls `setfname` to rename the buffer.
+///
+/// Mirrors C `buf_open_scratch`.
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[unsafe(export_name = "buf_open_scratch")]
+pub unsafe extern "C" fn rs_buf_open_scratch(bufnr: c_int, bufname: *mut c_char) -> c_int {
+    const FAIL: c_int = 0;
+    const OK: c_int = 1;
+
+    if nvim_do_ecmd_one_hide(bufnr) == 0 {
+        return FAIL;
+    }
+
+    if !bufname.is_null() {
+        let curbuf = nvim_get_curbuf();
+        nvim_apply_autocmds_buffilepre(curbuf);
+        crate::filename::rs_setfname(curbuf, bufname, std::ptr::null_mut(), true);
+        nvim_apply_autocmds_buffilepost(nvim_get_curbuf());
+    }
+
+    nvim_set_buf_opts_scratch();
+    OK
 }
 
 // =============================================================================
