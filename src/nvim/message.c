@@ -75,12 +75,6 @@
 
 // msgchunk_T is now defined in message_defs.h
 
-// Magic chars used in confirm dialog strings
-enum {
-  DLG_BUTTON_SEP = '\n',
-  DLG_HOTKEY_CHAR = '&',
-};
-
 extern int confirm_msg_used;   // owned by Rust (dialog.rs)
 #include "message.c.generated.h"
 extern char *confirm_msg;      // owned by Rust (dialog.rs)
@@ -105,40 +99,6 @@ static FILE *verbose_fd = NULL;
 static bool verbose_did_open = false;
 
 bool keep_msg_more = false;    // keep_msg was set by msgmore()
-
-// When writing messages to the screen, there are many different situations.
-// A number of variables is used to remember the current state:
-// msg_didany       true when messages were written since the last time the
-//                  user reacted to a prompt.
-//                  Reset: After hitting a key for the hit-return prompt,
-//                  hitting <CR> for the command line or input().
-//                  Set: When any message is written to the screen.
-// msg_didout       true when something was written to the current line.
-//                  Reset: When advancing to the next line, when the current
-//                  text can be overwritten.
-//                  Set: When any message is written to the screen.
-// msg_nowait       No extra delay for the last drawn message.
-//                  Used in normal_cmd() before the mode message is drawn.
-// emsg_on_display  There was an error message recently.  Indicates that there
-//                  should be a delay before redrawing.
-// msg_scroll       The next message should not overwrite the current one.
-// msg_scrolled     How many lines the screen has been scrolled (because of
-//                  messages).  Used in update_screen() to scroll the screen
-//                  back.  Incremented each time the screen scrolls a line.
-// msg_scrolled_ign  true when msg_scrolled is non-zero and msg_puts_hl()
-//                  writes something without scrolling should not make
-//                  need_wait_return to be set.  This is a hack to make ":ts"
-//                  work without an extra prompt.
-// lines_left       Number of lines available for messages before the
-//                  more-prompt is to be given.  -1 when not set.
-// need_wait_return true when the hit-return prompt is needed.
-//                  Reset: After giving the hit-return prompt, when the user
-//                  has answered some other prompt.
-//                  Set: When the ruler or typeahead display is overwritten,
-//                  scrolling the screen for some message.
-// keep_msg         Message to be displayed after redrawing the screen, in
-//                  Normal mode main loop.
-//                  This is an allocated string or NULL when not used.
 
 // Extended msg state, currently used for external UIs with ext_messages
 // msg_ext_kind is owned by Rust (display.rs), accessible via extern linkage
@@ -601,20 +561,7 @@ char *get_emsg_lnum(void)
 }
 
 // msg_source() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_msg_source)
-
-/// @return  true if not giving error messages right now:
-///            If "emsg_off" is set: no error messages at the moment.
-///            If "msg" is in 'debug': do error message but without side effects.
-///            If "emsg_skip" is set: never do error messages.
-
 // emsg_multiline() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_emsg_multiline)
-
-/// emsg() - display an error message
-///
-/// Rings the bell, if appropriate, and calls message() to do the real work
-/// When terminal not initialized (yet) fprintf(stderr, "%s", ..) is used.
-///
-/// @return true if wait_return() not called
 
 void emsg_invreg(int name)
 {
