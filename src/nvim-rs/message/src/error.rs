@@ -475,8 +475,8 @@ extern "C" {
     fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
     fn redir_write(str_: *const std::ffi::c_char, maxlen: isize);
-    fn get_emsg_source() -> *mut std::ffi::c_char;
-    fn get_emsg_lnum() -> *mut std::ffi::c_char;
+    fn estack_sfile(which: c_int) -> *mut std::ffi::c_char;
+    fn gettext(s: *const std::ffi::c_char) -> *const std::ffi::c_char;
     static mut ex_exitval: c_int;
     fn nvim_set_cmd_silent(val: c_int);
     fn nvim_inc_global_busy();
@@ -578,7 +578,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
         if emsg_silent != 0 {
             if !emsg_noredir {
                 crate::output_core::rs_msg_start();
-                let p = get_emsg_source();
+                let p = emsg_source_string();
                 if !p.is_null() {
                     let p_len = libc_strlen(p.cast());
                     // Append newline then write (p_len + 1 bytes including newline)
@@ -588,7 +588,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
                     redir_write(p, isize::try_from(p_len + 1).unwrap_or(isize::MAX));
                     xfree(p.cast());
                 }
-                let p = get_emsg_lnum();
+                let p = emsg_lnum_string();
                 if !p.is_null() {
                     let p_len = libc_strlen(p.cast());
                     #[allow(clippy::cast_possible_wrap)]
@@ -757,14 +757,14 @@ pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
 
     no_wait_return += 1;
 
-    let p = get_emsg_source();
+    let p = emsg_source_string();
     if !p.is_null() {
         msg_scroll = 1; // this will take more than one line
         let _ = crate::output_core::rs_msg(p, hl_id);
         xfree(p.cast());
     }
 
-    let p = get_emsg_lnum();
+    let p = emsg_lnum_string();
     if !p.is_null() {
         let _ = crate::output_core::rs_msg(p, HLF_N_LINE_NR);
         xfree(p.cast());
@@ -882,6 +882,92 @@ pub unsafe extern "C" fn rs_emsg_begin() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_end() {
     emsg_on_display = true;
+}
+
+// ESTACK_NONE constant (from runtime_defs.h)
+const ESTACK_NONE_VAL: c_int = 0;
+
+/// Rust implementation of get_emsg_source().
+///
+/// Returns an xmalloc-allocated "Error in <source>:" string, or NULL.
+///
+/// # Safety
+/// Calls C accessor functions and manages allocated memory.
+unsafe fn emsg_source_string() -> *mut c_char {
+    let sourcing_name = nvim_get_sourcing_name();
+    if sourcing_name.is_null() {
+        return std::ptr::null_mut();
+    }
+    // Check if this is a different source name than last displayed.
+    let other_name = last_sourcing_name.is_null() || strcmp(sourcing_name, last_sourcing_name) != 0;
+    if !other_name {
+        return std::ptr::null_mut();
+    }
+    // Get the full sfile representation (may be NULL).
+    let sname = estack_sfile(ESTACK_NONE_VAL);
+    let effective: *const c_char = if sname.is_null() {
+        sourcing_name
+    } else {
+        sname.cast()
+    };
+    // Translate and format "Error in %s:".
+    let fmt_ptr = gettext(c"Error in %s:".as_ptr());
+    let fmt = std::ffi::CStr::from_ptr(fmt_ptr).to_string_lossy();
+    let name = std::ffi::CStr::from_ptr(effective).to_string_lossy();
+    let result = fmt.replacen("%s", &name, 1);
+    if !sname.is_null() {
+        xfree(sname.cast());
+    }
+    let cstr = std::ffi::CString::new(result).unwrap_or_default();
+    xstrdup(cstr.as_ptr())
+}
+
+/// Export get_emsg_source for C callers.
+///
+/// # Safety
+/// Calls C accessor functions and manages allocated memory.
+#[must_use]
+#[export_name = "get_emsg_source"]
+pub unsafe extern "C" fn rs_get_emsg_source() -> *mut c_char {
+    emsg_source_string()
+}
+
+/// Rust implementation of get_emsg_lnum().
+///
+/// Returns an xmalloc-allocated "line   42:" string, or NULL.
+///
+/// # Safety
+/// Calls C accessor functions and manages allocated memory.
+unsafe fn emsg_lnum_string() -> *mut c_char {
+    let sourcing_name = nvim_get_sourcing_name();
+    if sourcing_name.is_null() {
+        return std::ptr::null_mut();
+    }
+    let sourcing_lnum = nvim_get_sourcing_lnum();
+    // Check if this is a different source name than last displayed.
+    let other_name = last_sourcing_name.is_null() || strcmp(sourcing_name, last_sourcing_name) != 0;
+    // Only show lnum if name or lnum changed, and lnum is nonzero.
+    if sourcing_lnum == 0 || (!other_name && sourcing_lnum == last_sourcing_lnum) {
+        return std::ptr::null_mut();
+    }
+    // Translate and format "line %4d:".
+    let fmt_ptr = gettext(c"line %4d:".as_ptr());
+    let fmt = std::ffi::CStr::from_ptr(fmt_ptr).to_string_lossy();
+    // Replace the printf-style %4d with the right-justified number.
+    let num_str = format!("{sourcing_lnum:>4}");
+    let result = fmt.replacen("%4d", &num_str, 1);
+    let cstr = std::ffi::CString::new(result).unwrap_or_default();
+    xstrdup(cstr.as_ptr())
+}
+
+/// Export get_emsg_lnum for C callers.
+///
+/// # Safety
+/// Calls C accessor functions and manages allocated memory.
+#[must_use]
+#[export_name = "get_emsg_lnum"]
+pub unsafe extern "C" fn rs_get_emsg_lnum() -> *mut c_char {
+    emsg_lnum_string()
 }
 
 #[cfg(test)]

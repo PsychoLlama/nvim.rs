@@ -155,8 +155,7 @@ extern int rs_emsg_not_now(void);
 extern char *rs_msg_show_console_dialog(const char *message, const char *buttons, int dfltbutton);
 
 // Forward declarations (non-static functions accessible from Rust via extern "C")
-char *get_emsg_source(void);
-char *get_emsg_lnum(void);
+// get_emsg_source and get_emsg_lnum migrated to Rust (error.rs)
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
@@ -504,62 +503,7 @@ int smsg_keep(int hl_id, const char *s, ...)
   return msg_keep(IObuff, hl_id, true, false);
 }
 
-// last_sourcing_lnum and last_sourcing_name owned by Rust (error.rs)
-extern int last_sourcing_lnum;
-extern char *last_sourcing_name;
-
-/// Get the message about the source, as used for an error message
-///
-/// @return [allocated] String with room for one more character. NULL when no
-///                     message is to be given.
-char *get_emsg_source(void)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  bool other_name = HAVE_SOURCING_INFO && SOURCING_NAME != NULL
-                    && (last_sourcing_name == NULL
-                        || strcmp(SOURCING_NAME, last_sourcing_name) != 0);
-  if (other_name) {
-    char *sname = estack_sfile(ESTACK_NONE);
-    char *tofree = sname;
-
-    if (sname == NULL) {
-      sname = SOURCING_NAME;
-    }
-
-    const char *const p = _("Error in %s:");
-    const size_t buf_len = strlen(sname) + strlen(p) + 1;
-    char *const buf = xmalloc(buf_len);
-    snprintf(buf, buf_len, p, sname);
-    xfree(tofree);
-    return buf;
-  }
-  return NULL;
-}
-
-/// Get the message about the source lnum, as used for an error message.
-///
-/// @return [allocated] String with room for one more character. NULL when no
-///                     message is to be given.
-char *get_emsg_lnum(void)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  // lnum is 0 when executing a command from the command line
-  // argument, we don't want a line number then
-  bool other_name = HAVE_SOURCING_INFO && SOURCING_NAME != NULL
-                    && (last_sourcing_name == NULL
-                        || strcmp(SOURCING_NAME, last_sourcing_name) != 0);
-  if (SOURCING_NAME != NULL
-      && (other_name || SOURCING_LNUM != last_sourcing_lnum)
-      && SOURCING_LNUM != 0) {
-    const char *const p = _("line %4" PRIdLINENR ":");
-    const size_t buf_len = 20 + strlen(p);
-    char *const buf = xmalloc(buf_len);
-    snprintf(buf, buf_len, p, SOURCING_LNUM);
-    return buf;
-  }
-  return NULL;
-}
-
+// get_emsg_source, get_emsg_lnum migrated to Rust (error.rs) as rs_get_emsg_source/rs_get_emsg_lnum
 // msg_source() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_msg_source)
 // emsg_multiline() migrated to Rust: src/nvim-rs/message/src/error.rs (rs_emsg_multiline)
 
