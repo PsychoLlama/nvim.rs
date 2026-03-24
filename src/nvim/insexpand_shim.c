@@ -1890,10 +1890,7 @@ void nvim_set_edit_submode_ctrl_x_msg(int mode) { edit_submode = _(CTRL_X_MSG(mo
 // nvim_utf_char2bytes: defined in change_ffi.c (int nvim_utf_char2bytes(int c, char *buf))
 // nvim_utf_char2len, nvim_ins_char, nvim_ins_char_bytes: deleted (Phase 3, Rust calls directly)
 // nvim_api_clear_compl_leader: deleted (Phase 25, inlined in vars.rs as nvim_compl_clear_leader)
-void nvim_set_compl_leader_from_cursor(void) {
-  compl_leader = cbuf_to_string(get_cursor_line_ptr() + compl_col,
-                                (size_t)(curwin->w_cursor.col - compl_col));
-}
+// nvim_set_compl_leader_from_cursor: deleted (Phase 12), inlined in insert.rs
 void nvim_ins_compl_set_original_text_impl(const char *str, size_t len) {
   if (match_at_original_text(compl_first_match)) {
     API_CLEAR_STRING(compl_first_match->cp_str);

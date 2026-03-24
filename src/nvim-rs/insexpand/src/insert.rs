@@ -364,7 +364,12 @@ extern "C" {
     fn rs_ins_compl_need_restart() -> c_int;
     fn rs_ins_compl_restart();
     // nvim_api_clear_compl_leader: inlined in vars.rs as nvim_compl_clear_leader (Phase 25)
-    fn nvim_set_compl_leader_from_cursor();
+    // nvim_set_compl_leader_from_cursor: deleted (Phase 12), inlined below
+    // Helpers for inlined nvim_set_compl_leader_from_cursor
+    #[link_name = "get_cursor_line_ptr"]
+    fn get_cursor_line_ptr_insert() -> *mut c_char;
+    #[link_name = "cbuf_to_string"]
+    fn cbuf_to_string_insert(buf: *const c_char, size: usize) -> crate::vars::NvimString;
 }
 
 /// Set the original text for the first completion match.
@@ -417,7 +422,17 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
     }
 
     crate::vars::nvim_compl_clear_leader();
-    nvim_set_compl_leader_from_cursor();
+    // nvim_set_compl_leader_from_cursor inlined (Phase 12):
+    #[allow(clippy::cast_sign_loss)]
+    {
+        let line_ptr = get_cursor_line_ptr_insert();
+        let compl_col = crate::vars::nvim_get_compl_col();
+        let cursor_col = nvim_get_cursor_col();
+        debug_assert!(cursor_col >= compl_col);
+        let leader_len = (cursor_col - compl_col) as usize;
+        crate::vars::compl_leader =
+            cbuf_to_string_insert(line_ptr.add(compl_col as usize).cast_const(), leader_len);
+    }
     crate::leader::rs_ins_compl_new_leader();
 }
 
