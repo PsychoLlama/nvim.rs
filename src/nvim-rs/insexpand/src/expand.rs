@@ -115,7 +115,7 @@ extern "C" {
     fn nvim_buf_has_ml_mfp_void(buf: *const core::ffi::c_void) -> bool;
     fn nvim_buf_ml_line_count(buf: *mut core::ffi::c_void) -> c_int;
     fn nvim_ins_compl_st_get_ins_buf_fname() -> *const std::ffi::c_char;
-    fn nvim_ins_compl_st_msg_scanning();
+    // nvim_ins_compl_st_msg_scanning: deleted (Phase 18), inlined below as ins_compl_st_msg_scanning
     // nvim_ins_compl_st_msg_scanning_tags: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_set_dict_from_e_cpt: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_e_cpt_inc: inlined in vars.rs (Phase 27)
@@ -127,8 +127,8 @@ extern "C" {
     fn rs_compl_status_adding() -> c_int;
 
     // Phase 4 accessors for rs_get_next_default_completion
-    fn nvim_compl_p_scs_save_set() -> c_int;
-    fn nvim_compl_p_ws_save_set() -> c_int;
+    // nvim_compl_p_scs_save_set: deleted (Phase 18), inlined below as compl_p_scs_save_set
+    // nvim_compl_p_ws_save_set: deleted (Phase 18), inlined below as compl_p_ws_save_set
     // nvim_compl_restore_p_scs_ws: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), inlined below
     // nvim_ins_compl_st_do_search: deleted (Phase 2), inlined below
@@ -274,10 +274,87 @@ extern "C" {
     #[link_name = "IObuff"]
     static mut IObuff_expand: [std::ffi::c_char; 1025];
 
+    // helpers for inlined nvim_ins_compl_st_msg_scanning (Phase 18)
+    fn nvim_buf_get_b_fname_void(buf: *mut core::ffi::c_void) -> *const std::ffi::c_char;
+    fn nvim_buf_get_b_sfname_void(buf: *mut core::ffi::c_void) -> *const std::ffi::c_char;
+    #[link_name = "rs_buf_spname"]
+    fn buf_spname_void(buf: *mut core::ffi::c_void) -> *mut std::ffi::c_char;
+
+    // helpers for inlined nvim_compl_p_scs_save_set (Phase 18)
+    fn nvim_buf_get_b_p_inf_void(buf: *mut core::ffi::c_void) -> c_int;
+
 }
 
 // Return value constant for INS_COMPL_CPT_OK
 const INS_COMPL_CPT_OK: c_int = 1;
+
+/// Inlined from deleted C `nvim_ins_compl_st_msg_scanning` (Phase 18).
+/// Emits the "Scanning: <name>" completion message for ins_compl_st.ins_buf.
+///
+/// # Safety
+/// Requires valid ins_compl_st state.
+unsafe fn ins_compl_st_msg_scanning() {
+    if !shortmess(SHM_COMPLETIONSCAN) && crate::vars::nvim_get_compl_autocomplete() == 0 {
+        msg_hist_off_expand = true;
+        msg_ext_set_kind(c"completion".as_ptr());
+        let ins_buf = crate::vars::ins_compl_st.ins_buf;
+        let name_ptr: *const std::ffi::c_char = {
+            let fname = nvim_buf_get_b_fname_void(ins_buf);
+            if fname.is_null() {
+                buf_spname_void(ins_buf).cast_const()
+            } else {
+                let sfname = nvim_buf_get_b_sfname_void(ins_buf);
+                if sfname.is_null() {
+                    fname
+                } else {
+                    sfname
+                }
+            }
+        };
+        vim_snprintf(
+            core::ptr::addr_of_mut!(IObuff_expand).cast(),
+            IOSIZE,
+            c"Scanning: %s".as_ptr(),
+            name_ptr,
+        );
+        msg_trunc(core::ptr::addr_of_mut!(IObuff_expand).cast(), true, HLF_R);
+    }
+}
+
+/// Inlined from deleted C `nvim_compl_p_scs_save_set` (Phase 18).
+/// Saves p_scs. If ins_compl_st.ins_buf has 'infercase' set, disables p_scs.
+/// Returns the old p_scs value.
+///
+/// # Safety
+/// Requires valid ins_compl_st state.
+unsafe fn compl_p_scs_save_set() -> c_int {
+    let save = p_scs_expand;
+    if !crate::vars::ins_compl_st.ins_buf.is_null()
+        && nvim_buf_get_b_p_inf_void(crate::vars::ins_compl_st.ins_buf) != 0
+    {
+        p_scs_expand = 0;
+    }
+    save
+}
+
+/// Inlined from deleted C `nvim_compl_p_ws_save_set` (Phase 18).
+/// Saves p_ws and sets it based on curbuf and the current e_cpt entry.
+/// Returns the old p_ws value.
+///
+/// # Safety
+/// Requires valid ins_compl_st state.
+unsafe fn compl_p_ws_save_set() -> c_int {
+    let save = p_ws_expand;
+    let in_curbuf = crate::vars::ins_compl_st.ins_buf == curbuf_expand;
+    if !in_curbuf {
+        p_ws_expand = 0;
+    } else if !crate::vars::ins_compl_st.e_cpt.is_null() && *crate::vars::ins_compl_st.e_cpt == 46
+    // b'.'
+    {
+        p_ws_expand = 1;
+    }
+    save
+}
 
 /// Process the next 'complete' option value in ins_compl_st.e_cpt.
 ///
@@ -356,7 +433,7 @@ unsafe fn rs_process_next_cpt_value(
         } else if result == 2 {
             // Loaded buffer
             compl_type = 0;
-            nvim_ins_compl_st_msg_scanning();
+            ins_compl_st_msg_scanning();
         } else {
             // Unloaded buffer (result == 1): scan like dictionary
             if nvim_ins_compl_st_get_ins_buf_fname().is_null() {
@@ -366,7 +443,7 @@ unsafe fn rs_process_next_cpt_value(
                 crate::vars::ins_compl_st.dict = nvim_ins_compl_st_get_ins_buf_fname().cast_mut();
                 crate::vars::ins_compl_st.dict_f = 2; // DICT_EXACT
                 compl_type = CTRL_X_DICTIONARY;
-                nvim_ins_compl_st_msg_scanning();
+                ins_compl_st_msg_scanning();
             }
         }
     } else if e_char == 0 {
@@ -644,8 +721,8 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
     let in_curbuf = crate::vars::ins_compl_st.ins_buf == curbuf_expand;
 
     // Save and conditionally modify p_scs and p_ws.
-    let save_p_scs = nvim_compl_p_scs_save_set();
-    let save_p_ws = nvim_compl_p_ws_save_set();
+    let save_p_scs = compl_p_scs_save_set();
+    let save_p_ws = compl_p_ws_save_set();
 
     let mut looped_around = false;
     let mut found_new_match = FAIL;

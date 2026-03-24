@@ -2694,6 +2694,14 @@ buf_T *nvim_buf_get_b_next(buf_T *buf) { return buf->b_next; }
 /// Returns buf->b_scanned.
 int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
 
+/// Returns (void*)buf->b_p_inf (takes void* to avoid buf_T in Rust).
+int nvim_buf_get_b_p_inf_void(void *buf) { return ((buf_T *)buf)->b_p_inf ? 1 : 0; }
+
+/// Returns (void*)buf->b_fname (takes void* to avoid buf_T in Rust).
+const char *nvim_buf_get_b_fname_void(void *buf) { return buf ? ((buf_T *)buf)->b_fname : NULL; }
+
+/// Returns (void*)buf->b_sfname (takes void* to avoid buf_T in Rust).
+const char *nvim_buf_get_b_sfname_void(void *buf) { return buf ? ((buf_T *)buf)->b_sfname : NULL; }
 
 /// Returns wp->w_next (next window in the window list).
 win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
@@ -2746,22 +2754,7 @@ const char *nvim_ins_compl_st_get_ins_buf_fname(void)
   return ins_compl_st.ins_buf ? ins_compl_st.ins_buf->b_fname : NULL;
 }
 
-/// Returns ins_compl_st.ins_buf->b_sfname (may be NULL).
-/// Emits the "Scanning: <name>" completion message for ins_compl_st.ins_buf.
-void nvim_ins_compl_st_msg_scanning(void)
-{
-  if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
-    msg_hist_off = true;
-    msg_ext_set_kind("completion");
-    vim_snprintf(IObuff, IOSIZE, _("Scanning: %s"),
-                 ins_compl_st.ins_buf->b_fname == NULL
-                 ? buf_spname(ins_compl_st.ins_buf)
-                 : ins_compl_st.ins_buf->b_sfname == NULL
-                 ? ins_compl_st.ins_buf->b_fname
-                 : ins_compl_st.ins_buf->b_sfname);
-    msg_trunc(IObuff, true, HLF_R);
-  }
-}
+// nvim_ins_compl_st_msg_scanning: deleted (Phase 18), inlined in expand.rs
 
 // nvim_ins_compl_st_msg_scanning_tags: deleted (Phase 2), inlined in expand.rs
 
@@ -2778,30 +2771,9 @@ void nvim_ins_compl_st_msg_scanning(void)
 // Phase 4 (pass 14): get_next_default_completion / ins_compl_get_next_word_or_line
 // =============================================================================
 
-/// Save p_scs, and if ins_compl_st.ins_buf has 'infercase' set, disable p_scs.
-/// Returns the old p_scs value so caller can restore it.
-int nvim_compl_p_scs_save_set(void)
-{
-  int save = (int)p_scs;
-  if (ins_compl_st.ins_buf && ins_compl_st.ins_buf->b_p_inf) {
-    p_scs = false;
-  }
-  return save;
-}
+// nvim_compl_p_scs_save_set: deleted (Phase 18), inlined in expand.rs
 
-/// Save p_ws and set it based on in_curbuf and the current e_cpt flag.
-/// Returns the old p_ws value.
-int nvim_compl_p_ws_save_set(void)
-{
-  int save = (int)p_ws;
-  bool in_curbuf = ins_compl_st.ins_buf == curbuf;
-  if (!in_curbuf) {
-    p_ws = false;
-  } else if (*ins_compl_st.e_cpt == '.') {
-    p_ws = true;
-  }
-  return save;
-}
+// nvim_compl_p_ws_save_set: deleted (Phase 18), inlined in expand.rs
 
 // nvim_compl_restore_p_scs_ws: deleted (Phase 2), inlined in expand.rs
 
