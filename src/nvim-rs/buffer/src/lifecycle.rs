@@ -83,6 +83,9 @@ extern "C" {
     fn nvim_win_get_next_in_tab(wp: *mut c_void) -> *mut c_void;
     /// Emit E937 error with buffer name.
     fn nvim_emsg_e937_buf_in_use(buf: BufHandle);
+
+    // buf_ensure_loaded accessor (compound: aucmd_prepbuf + open_buffer + aucmd_restbuf)
+    fn nvim_buf_aucmd_open_buffer(buf: BufHandle) -> c_int;
 }
 
 // kOptJopFlagClean flag value (from option_vars.generated.h)
@@ -1171,6 +1174,28 @@ pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
     }
 
     true
+}
+
+/// Ensure buffer `buf` is loaded into memory.
+///
+/// If the buffer already has an open memfile (`b_ml.ml_mfp != NULL`), this is
+/// a no-op and returns `true`.  Otherwise it makes the buffer temporarily
+/// current via `aucmd_prepbuf`, calls `open_buffer`, and restores state.
+///
+/// Returns `true` when the buffer is successfully loaded, `false` on failure.
+///
+/// Mirrors C `buf_ensure_loaded`.
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[must_use]
+#[unsafe(export_name = "buf_ensure_loaded")]
+pub unsafe extern "C" fn rs_buf_ensure_loaded(buf: BufHandle) -> bool {
+    if !nvim_buf_get_ml_mfp(buf).is_null() {
+        return true; // already loaded
+    }
+    nvim_buf_aucmd_open_buffer(buf) != 0
 }
 
 // =============================================================================

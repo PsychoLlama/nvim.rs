@@ -2316,23 +2316,18 @@ void nvim_emsg_e937_buf_in_use(buf_T *buf)
         fname != NULL ? fname : "[No Name]");
 }
 
-/// Ensure buffer "buf" is loaded.
-bool buf_ensure_loaded(buf_T *buf)
+/// Compound accessor: aucmd_prepbuf + open_buffer(false,NULL,0) + aucmd_restbuf.
+/// Returns 0 on FAIL, non-zero on OK/NOTDONE (accessor for Rust buf_ensure_loaded).
+int nvim_buf_aucmd_open_buffer(buf_T *buf)
 {
-  if (buf->b_ml.ml_mfp != NULL) {
-    // already open (common case)
-    return true;
-  }
-
   aco_save_T aco;
-
-  // Make sure the buffer is in a window.
   aucmd_prepbuf(&aco, buf);
-  // status can be OK or NOTDONE (which also means ok/done)
   int status = open_buffer(false, NULL, 0);
   aucmd_restbuf(&aco);
-  return (status != FAIL);
+  return (status != FAIL) ? 1 : 0;
 }
+
+// buf_ensure_loaded migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs)
 
 /// Implementation of the commands for the buffer list.
 ///
