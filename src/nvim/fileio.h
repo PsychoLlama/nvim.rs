@@ -70,4 +70,13 @@ int put_time(FILE *fd, time_t time_);
 int vim_rename(const char *from, const char *to);
 int vim_copyfile(const char *from, const char *to);
 
+// Phase 1 migrations: simple utility functions replaced by Rust
+int read_eintr(int fd, void *buf, size_t bufsize);
+int write_eintr(int fd, void *buf, size_t bufsize);
+void add_quoted_fname(char *ret_buf, size_t buf_len, const buf_T *buf, const char *fname);
+bool msg_add_fileformat(int eol_type);
+void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars);
+void write_lnum_adjust(linenr_T offset);
+linenr_T readfile_linenr(linenr_T linecnt, char *p, const char *endp);
+
 #include "fileio.h.generated.h"

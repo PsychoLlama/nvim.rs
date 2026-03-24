@@ -57,23 +57,56 @@ pub fn read_eintr(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
     }
 }
 
-/// FFI wrapper for read_eintr.
+/// FFI wrapper for read_eintr -- directly replaces the C `read_eintr` symbol.
 ///
 /// # Safety
 /// - `fd` must be a valid, open file descriptor
 /// - `buf` must point to a valid buffer of at least `bufsize` bytes
 #[cfg(unix)]
-#[no_mangle]
-pub unsafe extern "C" fn rs_read_eintr(fd: c_int, buf: *mut u8, bufsize: usize) -> c_int {
+#[export_name = "read_eintr"]
+pub unsafe extern "C" fn rs_read_eintr(
+    fd: c_int,
+    buf: *mut std::ffi::c_void,
+    bufsize: usize,
+) -> c_int {
     if buf.is_null() || bufsize == 0 {
         return -1;
     }
 
-    let slice = std::slice::from_raw_parts_mut(buf, bufsize);
+    let slice = std::slice::from_raw_parts_mut(buf as *mut u8, bufsize);
     match read_eintr(fd, slice) {
         Ok(n) => n as c_int,
         Err(_) => -1,
     }
+}
+
+/// Estimate the line number in the current buffer from a byte range.
+///
+/// Used for error messages during readfile().
+///
+/// # Safety
+/// `p` must point to a valid byte range `[p, endp)`.
+#[no_mangle]
+pub unsafe extern "C" fn readfile_linenr(
+    linecnt: i32,
+    p: *const std::ffi::c_char,
+    endp: *const std::ffi::c_char,
+) -> i32 {
+    extern "C" {
+        fn nvim_excmds_curbuf_ml_line_count() -> std::ffi::c_int;
+    }
+    let ml_line_count = unsafe { nvim_excmds_curbuf_ml_line_count() };
+    let mut lnum = ml_line_count - linecnt + 1;
+    if !p.is_null() && !endp.is_null() {
+        let mut s = p;
+        while s < endp {
+            if unsafe { *s } == b'\n' as std::ffi::c_char {
+                lnum += 1;
+            }
+            s = unsafe { s.add(1) };
+        }
+    }
+    lnum
 }
 
 // =============================================================================

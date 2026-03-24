@@ -75,19 +75,23 @@ pub fn write_eintr(fd: c_int, buf: &[u8]) -> io::Result<usize> {
     Ok(total_written)
 }
 
-/// FFI wrapper for write_eintr.
+/// FFI wrapper for write_eintr -- directly replaces the C `write_eintr` symbol.
 ///
 /// # Safety
 /// - `fd` must be a valid, open file descriptor
 /// - `buf` must point to a valid buffer of at least `bufsize` bytes
 #[cfg(unix)]
-#[no_mangle]
-pub unsafe extern "C" fn rs_write_eintr(fd: c_int, buf: *const u8, bufsize: usize) -> c_int {
+#[export_name = "write_eintr"]
+pub unsafe extern "C" fn rs_write_eintr(
+    fd: c_int,
+    buf: *mut std::ffi::c_void,
+    bufsize: usize,
+) -> c_int {
     if buf.is_null() || bufsize == 0 {
         return 0; // Nothing to write
     }
 
-    let slice = std::slice::from_raw_parts(buf, bufsize);
+    let slice = std::slice::from_raw_parts(buf as *const u8, bufsize);
     match write_eintr(fd, slice) {
         Ok(n) => n as c_int,
         Err(_) => -1,

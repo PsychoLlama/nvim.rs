@@ -259,9 +259,9 @@ pub unsafe extern "C" fn rs_file_pat_to_reg_pat(
 
     if nested != 0 {
         if nested < 0 {
-            unsafe { nvim_fileio_emsg_missing_open_brace() };
+            unsafe { emsg(c"E219: Missing {.".as_ptr()) };
         } else {
-            unsafe { nvim_fileio_emsg_missing_close_brace() };
+            unsafe { emsg(c"E220: Missing }.".as_ptr()) };
         }
         unsafe { xfree(reg_pat as *mut c_void) };
         return std::ptr::null_mut();
@@ -271,10 +271,7 @@ pub unsafe extern "C" fn rs_file_pat_to_reg_pat(
 }
 
 extern "C" {
-    /// Emit "E219: Missing {." error message.
-    fn nvim_fileio_emsg_missing_open_brace();
-    /// Emit "E220: Missing }." error message.
-    fn nvim_fileio_emsg_missing_close_brace();
+    fn emsg(s: *const c_char);
 }
 
 // =============================================================================

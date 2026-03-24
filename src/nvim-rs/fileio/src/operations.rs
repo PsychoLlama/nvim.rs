@@ -552,6 +552,163 @@ pub unsafe extern "C" fn rs_format_file_message(
     message_bytes.len()
 }
 
+// =============================================================================
+// Direct C replacements (export_name = original C symbol)
+// =============================================================================
+
+use std::ffi::{c_char, c_void};
+
+extern "C" {
+    /// Access the global IObuff character array.
+    static mut IObuff: [c_char; 1025];
+    /// Returns true if shortmess flag `x` is set.
+    fn shortmess(x: c_int) -> bool;
+    /// Safe string concat: xstrlcat(dst, src, dstlen).
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, dstlen: usize) -> usize;
+    /// Sprintf into a buffer.
+    fn vim_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...);
+    /// Replace $HOME with ~ in path, writing into dst.
+    fn home_replace(
+        buf: *const c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    ) -> usize;
+    /// Get curbuf pointer.
+    fn nvim_get_curbuf() -> *mut c_void;
+    /// Get buf->b_no_eol_lnum.
+    fn nvim_bw_buf_get_no_eol_lnum(buf: *mut c_void) -> i32;
+    /// Set buf->b_no_eol_lnum.
+    fn nvim_bw_buf_set_no_eol_lnum(buf: *mut c_void, lnum: i32);
+    /// gettext translation.
+    fn gettext(msgid: *const c_char) -> *const c_char;
+}
+
+// SHM_LINES = 'l'
+const SHM_LINES: c_int = b'l' as c_int;
+
+/// Adjust the line number for a buffer with missing eol.
+///
+/// Directly replaces the C `write_lnum_adjust` symbol.
+///
+/// # Safety
+/// Accesses the C global `curbuf` via FFI.
+#[export_name = "write_lnum_adjust"]
+pub unsafe extern "C" fn rs_write_lnum_adjust(offset: i32) {
+    let buf = unsafe { nvim_get_curbuf() };
+    if !buf.is_null() {
+        let lnum = unsafe { nvim_bw_buf_get_no_eol_lnum(buf) };
+        if lnum != 0 {
+            unsafe { nvim_bw_buf_set_no_eol_lnum(buf, lnum + offset) };
+        }
+    }
+}
+
+/// Append file format string to IObuff.
+///
+/// Returns true if something was appended.
+/// Directly replaces the C `msg_add_fileformat` symbol.
+///
+/// # Safety
+/// Accesses global IObuff via FFI.
+#[export_name = "msg_add_fileformat"]
+pub unsafe extern "C" fn rs_msg_add_fileformat(eol_type: c_int) -> bool {
+    // EOL_DOS=1, EOL_MAC=2, EOL_UNIX=0
+    // On non-Windows: [dos] and [mac] are non-default
+    if eol_type == 1 {
+        // EOL_DOS
+        let s = unsafe { gettext(c"[dos]".as_ptr()) };
+        unsafe { xstrlcat(std::ptr::addr_of_mut!(IObuff) as *mut c_char, s, 1025) };
+        return true;
+    }
+    if eol_type == 2 {
+        // EOL_MAC
+        let s = unsafe { gettext(c"[mac]".as_ptr()) };
+        unsafe { xstrlcat(std::ptr::addr_of_mut!(IObuff) as *mut c_char, s, 1025) };
+        return true;
+    }
+    false
+}
+
+/// Append line and character count to IObuff.
+///
+/// Directly replaces the C `msg_add_lines` symbol.
+///
+/// # Safety
+/// Accesses global IObuff via FFI.
+#[export_name = "msg_add_lines"]
+pub unsafe extern "C" fn rs_msg_add_lines(insert_space: c_int, lnum: i32, nchars: i64) {
+    // Find end of current IObuff content
+    let iobuf_ptr = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
+    let iobuf_len: usize = 1025;
+    let current_len = unsafe { libc::strlen(iobuf_ptr as *const libc::c_char) };
+    let mut p = unsafe { iobuf_ptr.add(current_len) };
+    let mut remaining = iobuf_len - current_len;
+
+    if insert_space != 0 && remaining > 0 {
+        unsafe { *p = b' ' as c_char };
+        p = unsafe { p.add(1) };
+        remaining -= 1;
+    }
+
+    if unsafe { shortmess(SHM_LINES) } {
+        unsafe {
+            vim_snprintf(
+                p,
+                remaining,
+                c"%ldL, %ldB".as_ptr(),
+                lnum as libc::c_long,
+                nchars as libc::c_long,
+            )
+        };
+    } else {
+        let fmt_lines = if lnum == 1 {
+            c"%ld line, ".as_ptr()
+        } else {
+            c"%ld lines, ".as_ptr()
+        };
+        unsafe { vim_snprintf(p, remaining, fmt_lines, lnum as libc::c_long) };
+        let new_len = unsafe { libc::strlen(p as *const libc::c_char) };
+        p = unsafe { p.add(new_len) };
+        remaining -= new_len;
+        let fmt_bytes = if nchars == 1 {
+            c"%ld byte".as_ptr()
+        } else {
+            c"%ld bytes".as_ptr()
+        };
+        unsafe { vim_snprintf(p, remaining, fmt_bytes, nchars as libc::c_long) };
+    }
+}
+
+/// Put a quoted filename into a buffer.
+///
+/// Directly replaces the C `add_quoted_fname` symbol.
+///
+/// # Safety
+/// - `ret_buf` must be a valid buffer of at least `buf_len` bytes
+/// - `buf` may be null
+/// - `fname` may be null (uses "-stdin-" in that case)
+#[export_name = "add_quoted_fname"]
+pub unsafe extern "C" fn rs_add_quoted_fname(
+    ret_buf: *mut c_char,
+    buf_len: usize,
+    buf: *const c_void,
+    fname: *const c_char,
+) {
+    let fname_ptr = if fname.is_null() {
+        c"-stdin-".as_ptr()
+    } else {
+        fname
+    };
+    if ret_buf.is_null() || buf_len < 4 {
+        return;
+    }
+    unsafe { *ret_buf = b'"' as c_char };
+    unsafe { home_replace(buf, fname_ptr, ret_buf.add(1), buf_len - 4, true) };
+    unsafe { xstrlcat(ret_buf, c"\" ".as_ptr(), buf_len) };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

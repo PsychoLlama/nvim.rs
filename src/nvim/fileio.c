@@ -1900,23 +1900,6 @@ theend:
 }
 
 
-/// From the current line count and characters read after that, estimate the
-/// line number where we are now.
-/// Used for error messages that include a line number.
-///
-/// @param linecnt  line count before reading more bytes
-/// @param p        start of more bytes read
-/// @param endp     end of more bytes read
-static linenr_T readfile_linenr(linenr_T linecnt, char *p, const char *endp)
-{
-  linenr_T lnum = curbuf->b_ml.ml_line_count - linecnt + 1;
-  for (char *s = p; s < endp; s++) {
-    if (*s == '\n') {
-      lnum++;
-    }
-  }
-  return lnum;
-}
 
 /// Fill "*eap" to force the 'fileencoding', 'fileformat' and 'binary' to be
 /// equal to the buffer "buf".  Used for calling readfile().
@@ -2091,73 +2074,8 @@ int set_rw_fname(char *fname, char *sfname)
   return OK;
 }
 
-/// Put file name into the specified buffer with quotes
-///
-/// Replaces home directory at the start with `~`.
-///
-/// @param[out]  ret_buf  Buffer to save results to.
-/// @param[in]  buf_len  ret_buf length.
-/// @param[in]  buf  buf_T file name is coming from.
-/// @param[in]  fname  File name to write.
-void add_quoted_fname(char *const ret_buf, const size_t buf_len, const buf_T *const buf,
-                      const char *fname)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  if (fname == NULL) {
-    fname = "-stdin-";
-  }
-  ret_buf[0] = '"';
-  home_replace(buf, fname, ret_buf + 1, buf_len - 4, true);
-  xstrlcat(ret_buf, "\" ", buf_len);
-}
 
-/// Append message for text mode to IObuff.
-///
-/// @param eol_type line ending type
-///
-/// @return true if something was appended.
-bool msg_add_fileformat(int eol_type)
-{
-#ifndef USE_CRNL
-  if (eol_type == EOL_DOS) {
-    xstrlcat(IObuff, _("[dos]"), IOSIZE);
-    return true;
-  }
-#endif
-  if (eol_type == EOL_MAC) {
-    xstrlcat(IObuff, _("[mac]"), IOSIZE);
-    return true;
-  }
-#ifdef USE_CRNL
-  if (eol_type == EOL_UNIX) {
-    xstrlcat(IObuff, _("[unix]"), IOSIZE);
-    return true;
-  }
-#endif
-  return false;
-}
 
-/// Append line and character count to IObuff.
-void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars)
-{
-  char *p = IObuff + strlen(IObuff);
-
-  if (insert_space) {
-    *p++ = ' ';
-  }
-  if (shortmess(SHM_LINES)) {
-    vim_snprintf(p, (size_t)(IOSIZE - (p - IObuff)), "%" PRId64 "L, %" PRId64 "B",
-                 (int64_t)lnum, (int64_t)nchars);
-  } else {
-    vim_snprintf(p, (size_t)(IOSIZE - (p - IObuff)),
-                 NGETTEXT("%" PRId64 " line, ", "%" PRId64 " lines, ", lnum),
-                 (int64_t)lnum);
-    p += strlen(p);
-    vim_snprintf(p, (size_t)(IOSIZE - (p - IObuff)),
-                 NGETTEXT("%" PRId64 " byte", "%" PRId64 " bytes", nchars),
-                 (int64_t)nchars);
-  }
-}
 
 
 
@@ -2689,14 +2607,6 @@ void buf_store_file_info(buf_T *buf, FileInfo *file_info)
   buf->b_orig_mode = (int)file_info->stat.st_mode;
 }
 
-/// Adjust the line with missing eol, used for the next write.
-/// Used for do_filter(), when the input lines for the filter are deleted.
-void write_lnum_adjust(linenr_T offset)
-{
-  if (curbuf->b_no_eol_lnum != 0) {     // only if there is a missing eol
-    curbuf->b_no_eol_lnum += offset;
-  }
-}
 
 #if defined(BACKSLASH_IN_FILENAME)
 /// Convert all backslashes in fname to forward slashes in-place,
@@ -3017,54 +2927,3 @@ char *vim_tempname(void)
 }
 
 
-/// Emit E219 error for rs_file_pat_to_reg_pat.
-void nvim_fileio_emsg_missing_open_brace(void)
-{
-  emsg(_("E219: Missing {."));
-}
-
-/// Emit E220 error for rs_file_pat_to_reg_pat.
-void nvim_fileio_emsg_missing_close_brace(void)
-{
-  emsg(_("E220: Missing }."));
-}
-
-
-#if defined(EINTR)
-
-/// Version of read() that retries when interrupted by EINTR (possibly
-/// by a SIGWINCH).
-int read_eintr(int fd, void *buf, size_t bufsize)
-{
-  ssize_t ret;
-
-  while (true) {
-    ret = read(fd, buf, (unsigned)bufsize);
-    if (ret >= 0 || errno != EINTR) {
-      break;
-    }
-  }
-  return (int)ret;
-}
-
-/// Version of write() that retries when interrupted by EINTR (possibly
-/// by a SIGWINCH).
-int write_eintr(int fd, void *buf, size_t bufsize)
-{
-  int ret = 0;
-
-  // Repeat the write() so long it didn't fail, other than being interrupted
-  // by a signal.
-  while (ret < (int)bufsize) {
-    ssize_t wlen = write(fd, (char *)buf + ret, (unsigned)(bufsize - (size_t)ret));
-    if (wlen < 0) {
-      if (errno != EINTR) {
-        break;
-      }
-    } else {
-      ret += (int)wlen;
-    }
-  }
-  return ret;
-}
-#endif
