@@ -74,12 +74,7 @@ extern "C" {
     fn rs_advance_cpt_sources_index_safe() -> c_int;
 
     // ins_compl_st accessors
-    fn nvim_ins_compl_get_exp_init_state(
-        lnum: c_int,
-        col: c_int,
-        out_lnum: *mut c_int,
-        out_col: *mut c_int,
-    );
+    // nvim_ins_compl_get_exp_init_state: deleted (Phase 21), inlined below
     // nvim_ins_compl_get_exp_check_buf: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_set_cur_match_dir: deleted (Phase 1), inlined below
     // nvim_ins_compl_st_e_cpt_is_nul: inlined in vars.rs (Phase 26)
@@ -283,6 +278,15 @@ extern "C" {
     fn dec(lp: *mut crate::vars::PosT) -> c_int;
     fn ml_get_len(lnum: c_int) -> c_int;
 
+    // helpers for inlined nvim_ins_compl_get_exp_init_state (Phase 21)
+    fn nvim_clear_all_buf_scanned();
+    fn nvim_clear_ins_compl_st();
+    static mut ins_compl_st_cleared: bool;
+    fn xfree(p: *mut u8);
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn nvim_curbuf_get_b_p_cpt() -> *const std::ffi::c_char;
+    fn rs_strip_caret_numbers_in_place(s: *mut std::ffi::c_char);
+
 }
 
 // Return value constant for INS_COMPL_CPT_OK
@@ -386,6 +390,60 @@ unsafe fn ins_compl_st_set_dot_source(
     crate::vars::ins_compl_st.last_match_pos = crate::vars::ins_compl_st.first_match_pos;
     crate::vars::ins_compl_st.set_match_pos = true;
     wrapped
+}
+
+/// Inlined from deleted C `nvim_ins_compl_get_exp_init_state` (Phase 21).
+/// Initializes ins_compl_st for a fresh completion search starting at (lnum, col).
+/// Clears b_scanned for all buffers, zeros ins_compl_st on first call,
+/// sets up e_cpt_copy/e_cpt, adjusts start position for autocomplete,
+/// and writes the effective start position back to *out_lnum / *out_col.
+///
+/// # Safety
+/// Requires valid global completion state. Mutates ins_compl_st.
+unsafe fn ins_compl_get_exp_init_state(
+    lnum: c_int,
+    col: c_int,
+    out_lnum: *mut c_int,
+    out_col: *mut c_int,
+) {
+    nvim_clear_all_buf_scanned();
+    if !ins_compl_st_cleared {
+        nvim_clear_ins_compl_st();
+        ins_compl_st_cleared = true;
+    }
+    crate::vars::ins_compl_st.found_all = false;
+    crate::vars::ins_compl_st.ins_buf = curbuf_expand;
+    xfree(crate::vars::ins_compl_st.e_cpt_copy.cast());
+    // CONT_LOCAL = 32
+    let cpt_src: *const std::ffi::c_char = if (crate::vars::nvim_get_compl_cont_status() & 32) != 0
+    {
+        c".".as_ptr()
+    } else {
+        nvim_curbuf_get_b_p_cpt()
+    };
+    crate::vars::ins_compl_st.e_cpt_copy = xstrdup(cpt_src);
+    rs_strip_caret_numbers_in_place(crate::vars::ins_compl_st.e_cpt_copy);
+    crate::vars::ins_compl_st.e_cpt = crate::vars::ins_compl_st.e_cpt_copy;
+
+    let mut start_pos = crate::vars::PosT {
+        lnum,
+        col,
+        coladd: 0,
+    };
+    if crate::vars::nvim_get_compl_autocomplete() != 0 && rs_is_nearest_active() != 0 {
+        const LOOKBACK_LINE_COUNT: c_int = 1000;
+        start_pos.lnum = if start_pos.lnum - LOOKBACK_LINE_COUNT > 1 {
+            start_pos.lnum - LOOKBACK_LINE_COUNT
+        } else {
+            1
+        };
+        start_pos.col = 0;
+    }
+    crate::vars::ins_compl_st.first_match_pos = start_pos;
+    crate::vars::ins_compl_st.last_match_pos = start_pos;
+
+    *out_lnum = start_pos.lnum;
+    *out_col = start_pos.col;
 }
 
 /// Process the next 'complete' option value in ins_compl_st.e_cpt.
@@ -996,7 +1054,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     // --- State initialization ---
     if crate::vars::nvim_get_compl_started() == 0 {
         // Initialize state for a fresh search
-        nvim_ins_compl_get_exp_init_state(lnum, col, &raw mut start_lnum, &raw mut start_col);
+        ins_compl_get_exp_init_state(lnum, col, &raw mut start_lnum, &raw mut start_col);
     } else {
         // Inline nvim_ins_compl_get_exp_check_buf (Phase 2):
         // If the buffer was wiped out, fall back to curbuf

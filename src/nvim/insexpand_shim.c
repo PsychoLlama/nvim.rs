@@ -314,7 +314,7 @@ typedef struct {
 
 // Static state for ins_compl_get_exp, made non-static for Rust access (Phase 26).
 ins_compl_next_state_T ins_compl_st;
-static bool ins_compl_st_cleared = false;
+bool ins_compl_st_cleared = false;  ///< made non-static for Rust access (Phase 21)
 
 // In large buffers, timeout may miss nearby matches — search above cursor
 #define LOOKBACK_LINE_COUNT     1000
@@ -1880,35 +1880,19 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 // nvim_get_p_act: deleted (Phase 29, inlined in vars.rs)
 // nvim_normal_mode_strict: deleted (Phase 1), Rust inlines directly
 
-// --- ins_compl_st compound initialization ---
-// Called at the top of ins_compl_get_exp when !compl_started.
-// Sets up ins_compl_st for a fresh search from position (lnum, col).
-// Returns the (possibly adjusted) start position as lnum/col via out params.
-void nvim_ins_compl_get_exp_init_state(int lnum, int col, int *out_lnum, int *out_col) {
+// Helper for nvim_ins_compl_get_exp_init_state inline: clears b_scanned for all bufs.
+void nvim_clear_all_buf_scanned(void) {
   FOR_ALL_BUFFERS(buf) {
     buf->b_scanned = false;
   }
-  if (!ins_compl_st_cleared) {
-    CLEAR_FIELD(ins_compl_st);
-    ins_compl_st_cleared = true;
-  }
-  ins_compl_st.found_all = false;
-  ins_compl_st.ins_buf = curbuf;
-  xfree(ins_compl_st.e_cpt_copy);
-  ins_compl_st.e_cpt_copy = xstrdup((compl_cont_status & CONT_LOCAL) ? "." : curbuf->b_p_cpt);
-  rs_strip_caret_numbers_in_place(ins_compl_st.e_cpt_copy);
-  ins_compl_st.e_cpt = ins_compl_st.e_cpt_copy;
-
-  pos_T start_pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col };
-  if (compl_autocomplete && rs_is_nearest_active()) {
-    start_pos.lnum = MAX(1, start_pos.lnum - LOOKBACK_LINE_COUNT);
-    start_pos.col = 0;
-  }
-  ins_compl_st.last_match_pos = ins_compl_st.first_match_pos = start_pos;
-
-  *out_lnum = (int)start_pos.lnum;
-  *out_col  = (int)start_pos.col;
 }
+
+// Helper for nvim_ins_compl_get_exp_init_state inline: zero-init ins_compl_st.
+void nvim_clear_ins_compl_st(void) {
+  CLEAR_FIELD(ins_compl_st);
+}
+
+// nvim_ins_compl_get_exp_init_state: deleted (Phase 21), inlined in expand.rs
 
 // Called at the top of ins_compl_get_exp when compl_started && ins_buf != curbuf.
 // nvim_ins_compl_get_exp_check_buf: deleted (Phase 2), inlined in expand.rs
