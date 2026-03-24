@@ -441,16 +441,12 @@ extern int rs_store_word(spellinfo_T *spin, const char *word, int flags, int reg
 #define store_word rs_store_word
 #define tree_add_word rs_tree_add_word
 
-// Phase 1: Pure affix utility functions migrated to Rust.
-extern bool rs_is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
-extern bool rs_spell_info_item(const char *s);
-extern bool rs_str_equal(const char *s1, const char *s2);
-extern int rs_rep_compare(const void *s1, const void *s2);
-// Map old names to Rust implementations (avoids touching 60+ call sites).
-#define is_aff_rule rs_is_aff_rule
-#define spell_info_item rs_spell_info_item
-#define str_equal rs_str_equal
-#define rep_compare rs_rep_compare
+// is_aff_rule, spell_info_item, str_equal, rep_compare are implemented in Rust
+// (spellfile.rs) via #[export_name].  Declare for C call sites:
+extern bool is_aff_rule(char **items, int itemcnt, const char *rulename, int mincount);
+extern bool spell_info_item(const char *s);
+extern bool str_equal(const char *s1, const char *s2);
+extern int rep_compare(const void *s1, const void *s2);
 
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
@@ -700,56 +696,10 @@ typedef struct spellinfo_S {
 static bool valid_spell_word(const char *word, const char *end);
 static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name);
 static wordnode_T *get_wordnode(spellinfo_T *spin);
-// Compression globals (defined near tree_add_word below).
-static int compress_start;
-static int compress_inc;
-static int compress_added;
-
-
-// Wrappers for spell-related Vim functions needed by Rust tree-building.
-int nvim_spell_captype(const char *word, const char *end) { return captype(word, end); }
-int nvim_spell_casefold(const char *word, int len, char *buf, int buflen) {
-  return spell_casefold(curwin, word, len, buf, buflen);
-}
-bool nvim_spell_valid_spell_word(const char *word, const char *end) {
-  return valid_spell_word(word, end);
-}
+// nvim_spell_wordtree_compress: wrapper for Rust to call the static wordtree_compress.
+// (Will be removed when wordtree_compress moves to Rust in Phase 2.)
 void nvim_spell_wordtree_compress(spellinfo_T *spin, wordnode_T *root, const char *name) {
   wordtree_compress(spin, root, name);
-}
-// Expose compression globals for tree_add_word and spell_check_msm.
-int nvim_spell_compress_start(void) { return compress_start; }
-int nvim_spell_compress_inc(void) { return compress_inc; }
-int nvim_spell_compress_added(void) { return compress_added; }
-void nvim_spell_set_compress_params(int start, int inc, int added) {
-  compress_start = start;
-  compress_inc = inc;
-  compress_added = added;
-}
-const char *nvim_spell_get_msm(void) { return p_msm; }
-// Show compression message in verbose mode.
-void nvim_spell_show_compress_msg(spellinfo_T *spin) {
-  if (spin->si_verbose) {
-    msg_start();
-    msg_puts(_(msg_compressing));
-    msg_clr_eos();
-    msg_didout = false;
-    msg_col = 0;
-    ui_flush();
-  }
-}
-
-
-// Message helpers needed by tree_add_word for compression progress.
-void nvim_spell_msg_compress(spellinfo_T *spin) {
-  if (spin->si_verbose) {
-    msg_start();
-    msg_puts(_(msg_compressing));
-    msg_clr_eos();
-    msg_didout = false;
-    msg_col = 0;
-    ui_flush();
-  }
 }
 
 #include "spellfile.c.generated.h"
@@ -1405,11 +1355,8 @@ static void spell_reload_one(char *fname, bool added_word)
 #define CONDIT_SUF      4       // add a suffix for matching flags
 #define CONDIT_AFF      8       // word already has an affix
 
-// Tunable parameters for when the tree is compressed.  Filled from the
-// 'mkspellmem' option.
-static int compress_start = 30000;     // memory / SBLOCKSIZE
-static int compress_inc = 100;         // memory / SBLOCKSIZE
-static int compress_added = 500000;    // word count
+// Compression tuning globals (compress_start/inc/added) have moved to Rust
+// (COMPRESS_START/INC/ADDED in spellfile.rs). spell_check_msm() sets them.
 
 // spell_check_msm() is implemented in Rust (rs_do_spell_check_msm) via
 // #[export_name = "spell_check_msm"].  The declaration appears in the
@@ -3210,10 +3157,6 @@ wordnode_T *nvim_get_wordnode(spellinfo_T *spin) { return get_wordnode(spin); }
 
 // deref_wordnode, free_wordnode, and nvim_deref_wordnode have been migrated
 // to Rust (rs_deref_wordnode with #[export_name = "nvim_deref_wordnode"]).
-
-// Phase 6: C callbacks used by Rust compression code.
-bool nvim_spell_got_int(void) { return got_int; }
-void nvim_spell_veryfast_breakcheck(void) { veryfast_breakcheck(); }
 
 // Compress a tree: find tails that are identical and can be shared.
 // node_compress and node_equal have been migrated to Rust (rs_node_compress).

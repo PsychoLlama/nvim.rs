@@ -4902,9 +4902,15 @@ pub unsafe extern "C" fn rs_spell_check_msm(
 }
 
 extern "C" {
-    fn nvim_spell_set_compress_params(start: c_int, inc: c_int, added: c_int);
-    fn nvim_spell_get_msm() -> *const c_char;
+    #[link_name = "p_msm"]
+    static p_msm_global: *const c_char;
 }
+
+// Compression tuning globals (moved from C spellfile.c).
+// Defaults match the C definitions: compress_start=30000, compress_inc=100, compress_added=500000.
+static mut COMPRESS_START: c_int = 30_000;
+static mut COMPRESS_INC: c_int = 100;
+static mut COMPRESS_ADDED: c_int = 500_000;
 
 /// Rust replacement for the C `spell_check_msm()` function.
 /// Parses the 'mkspellmem' option and sets the compression globals.
@@ -4916,7 +4922,7 @@ extern "C" {
 /// Called from C; no raw pointer arguments.
 #[export_name = "spell_check_msm"]
 pub unsafe extern "C" fn rs_do_spell_check_msm() -> c_int {
-    let msm = nvim_spell_get_msm();
+    let msm = p_msm_global;
     if msm.is_null() {
         return 1; // FAIL
     }
@@ -4924,7 +4930,9 @@ pub unsafe extern "C" fn rs_do_spell_check_msm() -> c_int {
     let bytes = std::slice::from_raw_parts(msm.cast::<u8>(), len);
     match parse_msm(bytes) {
         Some((start, incr, added)) => {
-            nvim_spell_set_compress_params(start, incr, added);
+            COMPRESS_START = start;
+            COMPRESS_INC = incr;
+            COMPRESS_ADDED = added;
             0 // OK
         }
         None => 1, // FAIL
@@ -5764,8 +5772,9 @@ pub unsafe extern "C" fn rs_clear_node(node: *mut WordnodeT) {
 extern "C" {
     // C callbacks needed by compression.
     fn nvim_deref_wordnode(spin: *mut SpellinfoT, node: *mut WordnodeT) -> c_int;
-    fn nvim_spell_got_int() -> bool;
-    fn nvim_spell_veryfast_breakcheck();
+    #[link_name = "got_int"]
+    static got_int_spell: bool;
+    fn veryfast_breakcheck();
 }
 
 /// Recursively compress a node and its siblings and children (depth-first).
@@ -5792,7 +5801,7 @@ unsafe fn node_compress_inner(
     // Walk the sibling list.
     let mut np = node;
     while !np.is_null() {
-        if nvim_spell_got_int() {
+        if got_int_spell {
             break;
         }
         len += 1;
@@ -5884,7 +5893,7 @@ unsafe fn node_compress_inner(
 
     (*node).wn_u1.hashkey = key;
 
-    nvim_spell_veryfast_breakcheck();
+    veryfast_breakcheck();
 
     compressed
 }
@@ -5965,25 +5974,23 @@ pub unsafe extern "C" fn rs_node_compress(
 extern "C" {
     // Wordnode allocator (still in C: get_wordnode / Phase 3 memory management)
     fn nvim_get_wordnode(spin: *mut SpellinfoT) -> *mut WordnodeT;
-    // Spell helpers (C-owned logic that needs curwin, etc.)
-    fn nvim_spell_captype(word: *const c_char, end: *const c_char) -> c_int;
-    fn nvim_spell_casefold(
-        word: *const c_char,
-        len: c_int,
-        buf: *mut c_char,
-        buflen: c_int,
-    ) -> c_int;
-    fn nvim_spell_valid_spell_word(word: *const c_char, end: *const c_char) -> bool;
+    // wordtree_compress is still in C (will move to Rust in Phase 2)
     fn nvim_spell_wordtree_compress(
         spin: *mut SpellinfoT,
         root: *mut WordnodeT,
         name: *const c_char,
     );
-    fn nvim_spell_compress_start() -> c_int;
-    fn nvim_spell_compress_inc() -> c_int;
-    fn nvim_spell_compress_added() -> c_int;
-    // Show the "Compressing..." message (C-side, uses msg_start etc.)
-    fn nvim_spell_show_compress_msg(spin: *mut SpellinfoT);
+    // Message functions for compression progress output
+    fn msg_start();
+    fn msg_puts(s: *const c_char);
+    fn msg_clr_eos();
+    fn ui_flush();
+    // curwin global for spell_casefold
+    #[link_name = "curwin"]
+    static curwin_spell: *mut c_void;
+    // msg_didout and msg_col are writable globals
+    static mut msg_didout: bool;
+    static mut msg_col: c_int;
 }
 
 /// Tracking where to link a new node when inserting.
@@ -6168,7 +6175,7 @@ pub unsafe extern "C" fn rs_tree_add_word(
         let new_cnt = compress_cnt - 1;
         (*spin).si_compress_cnt = new_cnt;
         if new_cnt == 1 {
-            (*spin).si_blocks_cnt += nvim_spell_compress_inc();
+            (*spin).si_blocks_cnt += COMPRESS_INC;
         }
     }
 
@@ -6177,15 +6184,20 @@ pub unsafe extern "C" fn rs_tree_add_word(
     let should_compress = if compress_cnt == 1 {
         (*spin).si_free_count < MAXWLEN as c_int
     } else {
-        (*spin).si_blocks_cnt >= nvim_spell_compress_start()
+        (*spin).si_blocks_cnt >= COMPRESS_START
     };
 
     if should_compress {
-        (*spin).si_blocks_cnt -= nvim_spell_compress_inc();
-        (*spin).si_compress_cnt = nvim_spell_compress_added();
+        (*spin).si_blocks_cnt -= COMPRESS_INC;
+        (*spin).si_compress_cnt = COMPRESS_ADDED;
         // Show compression message if verbose
         if (*spin).si_verbose != 0 {
-            nvim_spell_show_compress_msg(spin);
+            msg_start();
+            msg_puts(c"Compressing word tree...".as_ptr());
+            msg_clr_eos();
+            msg_didout = false;
+            msg_col = 0;
+            ui_flush();
         }
         nvim_spell_wordtree_compress(spin, (*spin).si_foldroot, c"case-folded".as_ptr());
         if affix_id >= 0 {
@@ -6232,15 +6244,21 @@ pub unsafe extern "C" fn rs_store_word(
     let end = word.add(word_len as usize);
 
     // Reject words with illegal characters.
-    if !nvim_spell_valid_spell_word(word, end) {
+    if !crate::rs_valid_spell_word(word.cast::<u8>(), end.cast::<u8>()) {
         return 1; // FAIL
     }
 
-    let ct = nvim_spell_captype(word, end);
+    let ct = crate::rs_captype(word, end);
 
     // Case-fold the word.
     let mut foldword = [0i8; MAXWLEN + 1];
-    nvim_spell_casefold(word, word_len, foldword.as_mut_ptr(), FOLDWORD_LEN);
+    crate::check::rs_spell_casefold_c_compat(
+        curwin_spell.cast::<c_void>(),
+        word,
+        word_len,
+        foldword.as_mut_ptr(),
+        FOLDWORD_LEN,
+    );
 
     let mut res = 0i32;
     let foldroot = (*spin).si_foldroot;
@@ -6362,7 +6380,7 @@ unsafe fn rs_free_wordnode(spin: *mut SpellinfoT, n: *mut WordnodeT) {
 /// # Safety
 /// - `items` must be a valid pointer to at least `itemcnt` valid C string pointers.
 /// - `rulename` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "is_aff_rule"]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_is_aff_rule(
     items: *const *const c_char,
@@ -6400,7 +6418,7 @@ pub unsafe extern "C" fn rs_is_aff_rule(
 ///
 /// # Safety
 /// - `s` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[export_name = "spell_info_item"]
 pub unsafe extern "C" fn rs_spell_info_item(s: *const c_char) -> bool {
     if s.is_null() {
         return false;
@@ -6417,7 +6435,7 @@ pub unsafe extern "C" fn rs_spell_info_item(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// - If non-null, `s1` and `s2` must be valid NUL-terminated C strings.
-#[no_mangle]
+#[export_name = "str_equal"]
 pub unsafe extern "C" fn rs_str_equal(s1: *const c_char, s2: *const c_char) -> bool {
     match (s1.is_null(), s2.is_null()) {
         (true, true) => true,
@@ -6434,7 +6452,7 @@ pub unsafe extern "C" fn rs_str_equal(s1: *const c_char, s2: *const c_char) -> b
 ///
 /// # Safety
 /// - `s1` and `s2` must point to valid `fromto_T` structs with non-null `ft_from`.
-#[no_mangle]
+#[export_name = "rep_compare"]
 pub unsafe extern "C" fn rs_rep_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // fromto_T layout: ft_from (*char) then ft_to (*char)
     // We only need to compare ft_from, which is the first field.
