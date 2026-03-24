@@ -183,6 +183,7 @@ void no_write_message(void);
 void no_write_message_nobang(const buf_T *buf);
 void text_locked_msg(void);
 bool text_or_buf_locked(void);
+char *do_bufdel(int command, char *arg, int addr_count, int start_bnr, int end_bnr, int forceit);
 
 // maketitle(), resettitle(), free_titles() are implemented in Rust
 // (src/nvim-rs/buffer/src/info.rs).

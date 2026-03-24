@@ -6,7 +6,8 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_ulong, c_void};
+use std::ptr::addr_of_mut;
 
 use crate::BufHandle;
 
@@ -40,6 +41,32 @@ extern "C" {
     fn text_locked() -> bool;
     fn curbuf_locked() -> bool;
     fn get_text_locked_msg() -> *const c_char;
+
+    // Phase 2: do_bufdel calls C do_buffer (which remains in C)
+    fn do_buffer(action: c_int, start: c_int, dir: c_int, count: c_int, forceit: c_int) -> c_int;
+    fn buflist_findpat(
+        pattern: *const c_char,
+        pattern_end: *const c_char,
+        unlisted: bool,
+        diffmode: bool,
+        curtab_only: bool,
+    ) -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn skiptowhite_esc(p: *const c_char) -> *mut c_char;
+    fn rs_ascii_isdigit(c: c_int) -> c_int;
+    fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
+    fn os_breakcheck();
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn ngettext(s1: *const c_char, s2: *const c_char, n: c_ulong) -> *const c_char;
+    fn ex_errmsg(msg: *const c_char, arg: *const c_char) -> *mut c_char;
+    fn nvim_get_e_trailing_arg() -> *const c_char;
+
+    // Global statics for do_bufdel
+    static mut IObuff: [c_char; 1025];
+    #[link_name = "got_int"]
+    static mut nvim_got_int: bool;
+    static p_report: i64;
 }
 
 // =============================================================================
@@ -61,6 +88,20 @@ const OK: c_int = 1;
 const ML_EMPTY: c_int = 0x01;
 /// kCdCauseAuto = 2 (from `vim_defs.h`: Other=-1, Manual=0, Window=1, Auto=2)
 const K_CD_CAUSE_AUTO: c_int = 2;
+/// `FORWARD` direction constant (from `vim_defs.h`)
+const FORWARD: c_int = 1;
+/// `DOBUF_CURRENT` start value (from `buffer.h`)
+const DOBUF_CURRENT: c_int = 0;
+/// `DOBUF_FIRST` start value (from `buffer.h`)
+const DOBUF_FIRST: c_int = 1;
+/// `DOBUF_WIPE` action value (from `buffer.h`)
+const DOBUF_WIPE: c_int = 4;
+/// `DOBUF_DEL` action value (from `buffer.h`)
+const DOBUF_DEL: c_int = 3;
+/// `DOBUF_UNLOAD` action value (from `buffer.h`)
+const DOBUF_UNLOAD: c_int = 2;
+/// Buffer for I/O size (from `globals.h`)
+const IOSIZE: usize = 1024 + 1;
 
 // =============================================================================
 // bufref_T layout (must match buffer_defs.h exactly)
@@ -208,4 +249,131 @@ pub unsafe extern "C" fn set_bufref(bufref: *mut BufRef, buf: BufHandle) {
         nvim_buf_get_fnum(buf)
     };
     br.br_buf_free_count = nvim_get_buf_free_count();
+}
+
+// =============================================================================
+// Phase 2: do_bufdel, do_buffer
+// =============================================================================
+
+/// Delete or unload buffer(s).
+///
+/// Rust port of C `do_bufdel()`.
+///
+/// Returns an error message string, or NULL on success.
+///
+/// # Safety
+/// All pointers must be valid. Accesses global Neovim state.
+#[no_mangle]
+pub unsafe extern "C" fn do_bufdel(
+    command: c_int,
+    arg: *mut c_char,
+    addr_count: c_int,
+    start_bnr: c_int,
+    end_bnr: c_int,
+    forceit: c_int,
+) -> *mut c_char {
+    let mut arg = arg;
+    let mut do_current: c_int = 0; // delete current buffer?
+    let mut deleted: c_int = 0; // number of buffers deleted
+    let mut errormsg: *mut c_char = std::ptr::null_mut();
+
+    if addr_count == 0 {
+        do_buffer(command, DOBUF_CURRENT, FORWARD, 0, forceit);
+    } else {
+        let mut bnr = if addr_count == 2 {
+            if !arg.is_null() && *arg != 0 {
+                // Both range and argument is not allowed
+                return ex_errmsg(nvim_get_e_trailing_arg(), arg);
+            }
+            start_bnr
+        } else {
+            // addr_count == 1
+            end_bnr
+        };
+
+        while !nvim_got_int {
+            os_breakcheck();
+
+            let curbuf = nvim_get_curbuf();
+            if bnr == nvim_buf_get_fnum(curbuf) {
+                do_current = bnr;
+            } else if do_buffer(command, DOBUF_FIRST, FORWARD, bnr, forceit) == OK {
+                deleted += 1;
+            }
+
+            // Find next buffer number to delete/unload
+            if addr_count == 2 {
+                bnr += 1;
+                if bnr > end_bnr {
+                    break;
+                }
+            } else {
+                // addr_count == 1
+                arg = skipwhite(arg);
+                if arg.is_null() || *arg == 0 {
+                    break;
+                }
+                if rs_ascii_isdigit(c_int::from(*arg)) == 0 {
+                    let p = skiptowhite_esc(arg);
+                    bnr = buflist_findpat(arg, p, command == DOBUF_WIPE, false, false);
+                    if bnr < 0 {
+                        // failed
+                        break;
+                    }
+                    arg = p;
+                } else {
+                    let arg_ptr: *mut *mut c_char = &raw mut arg;
+                    bnr = getdigits_int(arg_ptr, false, 0);
+                }
+            }
+        }
+
+        if !nvim_got_int
+            && do_current != 0
+            && do_buffer(command, DOBUF_FIRST, FORWARD, do_current, forceit) == OK
+        {
+            deleted += 1;
+        }
+
+        if deleted == 0 {
+            let msg = if command == DOBUF_UNLOAD {
+                gettext(c"E515: No buffers were unloaded".as_ptr())
+            } else if command == DOBUF_DEL {
+                gettext(c"E516: No buffers were deleted".as_ptr())
+            } else {
+                gettext(c"E517: No buffers were wiped out".as_ptr())
+            };
+            // Use addr_of_mut! to avoid creating a mutable reference to a mutable static
+            let iobuff_ptr = addr_of_mut!(IObuff).cast::<c_char>();
+            xstrlcpy(iobuff_ptr, msg, IOSIZE);
+            errormsg = iobuff_ptr;
+        } else if i64::from(deleted) >= p_report {
+            // deleted > 0 here (non-zero, >= p_report path)
+            let n = c_ulong::from(deleted.unsigned_abs());
+            if command == DOBUF_UNLOAD {
+                let fmt = ngettext(
+                    c"%d buffer unloaded".as_ptr(),
+                    c"%d buffers unloaded".as_ptr(),
+                    n,
+                );
+                smsg(0, fmt, deleted);
+            } else if command == DOBUF_DEL {
+                let fmt = ngettext(
+                    c"%d buffer deleted".as_ptr(),
+                    c"%d buffers deleted".as_ptr(),
+                    n,
+                );
+                smsg(0, fmt, deleted);
+            } else {
+                let fmt = ngettext(
+                    c"%d buffer wiped out".as_ptr(),
+                    c"%d buffers wiped out".as_ptr(),
+                    n,
+                );
+                smsg(0, fmt, deleted);
+            }
+        }
+    }
+
+    errormsg
 }
