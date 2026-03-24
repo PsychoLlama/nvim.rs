@@ -55,4 +55,14 @@ char *addstar(char *fname, size_t len, int context);
 bool cmdline_fuzzy_complete(const char *const fuzzystr);
 bool cmdline_pum_active(void);
 
+// Phase 1 Rust migrations (pum.rs, wildmenu.rs, lib.rs, callbacks.rs)
+void cmdline_pum_display(bool changed_array);
+void cmdline_pum_remove(bool defer_redraw);
+void cmdline_pum_cleanup(CmdlineInfo *cclp);
+char *cmdline_compl_pattern(void);
+bool cmdline_compl_is_fuzzy(void);
+void set_expand_context(expand_T *xp);
+int wildmenu_translate_key(CmdlineInfo *cclp, int key, expand_T *xp, bool did_wild_list);
+int wildmenu_process_key(CmdlineInfo *cclp, int key, expand_T *xp);
+
 #include "cmdexpand.h.generated.h"

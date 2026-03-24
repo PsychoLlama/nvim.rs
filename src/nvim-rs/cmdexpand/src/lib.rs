@@ -18,7 +18,9 @@ pub mod files;
 pub mod helpers;
 pub mod navigation;
 pub mod pattern;
+pub mod pum;
 pub mod set_context;
+pub mod wildmenu;
 
 pub use context::*;
 
@@ -96,6 +98,24 @@ pub type ExpandHandle = *mut ExpandT;
 extern "C" {
     fn nvim_get_wop_flags() -> libc::c_uint;
     fn nvim_get_compl_match_array_not_null() -> c_int;
+
+    // CmdlineInfo accessors for set_expand_context
+    fn nvim_cmdexpand_get_cmdfirstc() -> c_int;
+    fn nvim_cmdexpand_get_input_fn() -> c_int;
+    fn nvim_cmdexpand_get_cmdbuff() -> *mut c_char;
+    fn nvim_cmdexpand_get_cmdlen() -> c_int;
+    fn nvim_cmdexpand_get_cmdpos() -> c_int;
+    fn nvim_cmdexpand_get_may_expand_pattern() -> c_int;
+    fn nvim_cmdexpand_set_search_first_line(val: c_int);
+
+    // set_cmd_context (still in C; Rust calls it)
+    fn set_cmd_context(
+        xp: *mut ExpandT,
+        str_: *mut c_char,
+        len: c_int,
+        col: c_int,
+        use_ccline: c_int,
+    );
 }
 
 // =============================================================================
@@ -165,6 +185,56 @@ pub fn cmdline_fuzzy_complete(fuzzystr: &str) -> bool {
 pub fn cmdline_pum_active() -> bool {
     // SAFETY: nvim_get_compl_match_array_not_null is a simple accessor
     unsafe { nvim_get_compl_match_array_not_null() != 0 }
+}
+
+// =============================================================================
+// set_expand_context
+// =============================================================================
+
+/// Must parse the command line so far to work out what context we are in.
+///
+/// Sets xp->xp_context and related fields for command-line completion.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle. Must be called from cmdline context.
+#[unsafe(export_name = "set_expand_context")]
+pub unsafe extern "C" fn rs_set_expand_context(xp: *mut ExpandT) {
+    if xp.is_null() {
+        return;
+    }
+
+    let cmdfirstc = nvim_cmdexpand_get_cmdfirstc();
+    let may_expand = nvim_cmdexpand_get_may_expand_pattern() != 0;
+
+    // Handle search commands: '/' or '?'
+    if (cmdfirstc == c_int::from(b'/') || cmdfirstc == c_int::from(b'?')) && may_expand {
+        (*xp).xp_context = ExpandContext::PatternInBuf.to_raw();
+        // FORWARD=1 when '/', BACKWARD=0 (but actual enum values: FORWARD=1, BACKWARD=0)
+        (*xp).xp_search_dir = i32::from(cmdfirstc == c_int::from(b'/'));
+        (*xp).xp_pattern = nvim_cmdexpand_get_cmdbuff();
+        (*xp).xp_pattern_len = nvim_cmdexpand_get_cmdpos() as usize;
+        nvim_cmdexpand_set_search_first_line(0); // Search entire buffer
+        return;
+    }
+
+    let input_fn = nvim_cmdexpand_get_input_fn() != 0;
+
+    // Only handle ':', '>', or '=' command-lines, or expression input
+    if cmdfirstc != c_int::from(b':')
+        && cmdfirstc != c_int::from(b'>')
+        && cmdfirstc != c_int::from(b'=')
+        && !input_fn
+    {
+        (*xp).xp_context = ExpandContext::Nothing.to_raw();
+        return;
+    }
+
+    // Fallback to command-line expansion
+    let cmdbuff = nvim_cmdexpand_get_cmdbuff();
+    let cmdlen = nvim_cmdexpand_get_cmdlen();
+    let cmdpos = nvim_cmdexpand_get_cmdpos();
+    set_cmd_context(xp, cmdbuff, cmdlen, cmdpos, 1);
 }
 
 // =============================================================================

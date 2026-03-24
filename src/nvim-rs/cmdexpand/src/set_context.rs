@@ -855,12 +855,12 @@ pub unsafe extern "C" fn rs_set_context_by_cmdname(
 // =============================================================================
 
 extern "C" {
-    fn nvim_cmdexpand_get_may_expand_pattern() -> bool;
+    fn nvim_cmdexpand_get_may_expand_pattern() -> libc::c_int;
 }
 
 fn may_expand_pattern() -> bool {
     // SAFETY: simple accessor reading a C global
-    unsafe { nvim_cmdexpand_get_may_expand_pattern() }
+    unsafe { nvim_cmdexpand_get_may_expand_pattern() != 0 }
 }
 
 // =============================================================================

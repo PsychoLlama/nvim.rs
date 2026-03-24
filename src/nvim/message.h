@@ -70,6 +70,7 @@ void reset_last_sourcing(void);
 bool message_filtered(const char *msg);
 void msg_ui_refresh(void);
 void msg_ui_flush(void);
+void msg_ext_ui_flush(void);
 
 // Phase 2 (message migration): Rust-implemented replacements
 void msg_start(void);

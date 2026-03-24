@@ -139,6 +139,7 @@ extern char *rs_get_breakadd_arg(expand_T *xp, int idx);
 extern char *rs_get_retab_arg(expand_T *xp, int idx);
 extern char *rs_get_messages_arg(expand_T *xp, int idx);
 extern char *rs_get_mapclear_arg(expand_T *xp, int idx);
+extern char *rs_get_scriptnames_arg(expand_T *xp, int idx);
 
 // Wave 4: Wildmenu display helpers
 extern int rs_skip_wildmenu_char(expand_T *xp, const char *s);
@@ -166,9 +167,9 @@ int nvim_get_compl_match_array_not_null(void)
 }
 
 /// C accessor for may_expand_pattern (used by Rust rs_set_context_by_cmdname).
-bool nvim_cmdexpand_get_may_expand_pattern(void)
+int nvim_cmdexpand_get_may_expand_pattern(void)
 {
-  return may_expand_pattern;
+  return may_expand_pattern ? 1 : 0;
 }
 
 // =============================================================================
@@ -696,6 +697,157 @@ pos_T nvim_cmdexpand_get_pre_incsearch_pos(void)
   return pre_incsearch_pos;
 }
 
+// =============================================================================
+// Phase 1: C accessors for PUM, wildmenu, scriptnames, and set_expand_context
+// =============================================================================
+
+/// Run pum_display with the current compl_* statics (for Rust FFI).
+void nvim_cmdexpand_do_pum_display(int changed_array)
+{
+  pum_display(compl_match_array, compl_match_arraysize, compl_selected,
+              changed_array != 0, compl_startcol);
+}
+
+/// Run pum_undisplay + free compl_match_array + reset arraysize (for Rust FFI).
+void nvim_cmdexpand_do_pum_remove(int defer_redraw)
+{
+  pum_undisplay(defer_redraw == 0);
+  XFREE_CLEAR(compl_match_array);
+  compl_match_arraysize = 0;
+}
+
+/// Run cmdline_pum_remove(false) + wildmenu_cleanup(get_cmdline_info()) (for Rust FFI).
+void nvim_cmdexpand_do_pum_cleanup(void)
+{
+  cmdline_pum_remove(false);
+  wildmenu_cleanup(get_cmdline_info());
+}
+
+/// Return get_cmdline_info()->xpc->xp_orig or NULL if xpc is NULL (for Rust FFI).
+char *nvim_cmdexpand_get_compl_pattern(void)
+{
+  expand_T *xp = get_cmdline_info()->xpc;
+  return xp == NULL ? NULL : xp->xp_orig;
+}
+
+/// Return get_cmdline_info()->xpc if non-null and context supports fuzzy, else 0.
+int nvim_cmdexpand_ccline_xpc_supports_fuzzy(void)
+{
+  expand_T *xp = get_cmdline_info()->xpc;
+  return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
+}
+
+/// Return xp_context of get_cmdline_info()->xpc, or EXPAND_NOTHING if xpc is NULL.
+int nvim_cmdexpand_ccline_xpc_context(void)
+{
+  expand_T *xp = get_cmdline_info()->xpc;
+  return xp ? xp->xp_context : EXPAND_NOTHING;
+}
+
+/// Return the xpc pointer from get_cmdline_info() (for Rust FFI).
+expand_T *nvim_cmdexpand_get_ccline_xpc(void)
+{
+  return get_cmdline_info()->xpc;
+}
+
+/// Get cmdfirstc from get_cmdline_info() (for Rust FFI).
+int nvim_cmdexpand_get_cmdfirstc(void)
+{
+  return get_cmdline_info()->cmdfirstc;
+}
+
+/// Get input_fn from get_cmdline_info() (for Rust FFI).
+int nvim_cmdexpand_get_input_fn(void)
+{
+  return get_cmdline_info()->input_fn ? 1 : 0;
+}
+
+/// Get cmdlen from get_cmdline_info() (for Rust FFI).
+int nvim_cmdexpand_get_cmdlen(void)
+{
+  return get_cmdline_info()->cmdlen;
+}
+
+/// Get p_wc wildchar option value (for Rust FFI).
+int nvim_cmdexpand_get_p_wc(void)
+{
+  return (int)p_wc;
+}
+
+/// Set search_first_line (for Rust FFI).
+void nvim_cmdexpand_set_search_first_line(int val)
+{
+  search_first_line = val;
+}
+
+/// Get K_LEFT key code (for Rust FFI).
+int nvim_cmdexpand_get_key_left(void)
+{
+  return K_LEFT;
+}
+
+/// Get K_RIGHT key code (for Rust FFI).
+int nvim_cmdexpand_get_key_right(void)
+{
+  return K_RIGHT;
+}
+
+/// Get K_DOWN key code (for Rust FFI).
+int nvim_cmdexpand_get_key_down(void)
+{
+  return K_DOWN;
+}
+
+/// Get K_UP key code (for Rust FFI).
+int nvim_cmdexpand_get_key_up(void)
+{
+  return K_UP;
+}
+
+/// Get K_KENTER key code (for Rust FFI).
+int nvim_cmdexpand_get_key_kenter(void)
+{
+  return K_KENTER;
+}
+
+// Forward declarations for static functions used by Rust wrappers below.
+static int wildmenu_process_key_menunames(CmdlineInfo *cclp, int key, expand_T *xp);
+static int wildmenu_process_key_filenames(CmdlineInfo *cclp, int key, expand_T *xp);
+
+/// Wrapper for static wildmenu_process_key_menunames (for Rust FFI).
+int nvim_cmdexpand_process_key_menunames(int key, expand_T *xp, int cmdpos, char *cmdbuff)
+{
+  CmdlineInfo tmp = *get_cmdline_info();
+  tmp.cmdpos = cmdpos;
+  tmp.cmdbuff = cmdbuff;
+  return wildmenu_process_key_menunames(&tmp, key, xp);
+}
+
+/// Wrapper for static wildmenu_process_key_filenames (for Rust FFI).
+int nvim_cmdexpand_process_key_filenames(int key, expand_T *xp, int cmdpos, char *cmdbuff,
+                                         int cmdlen)
+{
+  CmdlineInfo tmp = *get_cmdline_info();
+  tmp.cmdpos = cmdpos;
+  tmp.cmdbuff = cmdbuff;
+  tmp.cmdlen = cmdlen;
+  return wildmenu_process_key_filenames(&tmp, key, xp);
+}
+
+/// Check SCRIPT_ID_VALID(idx+1) (for Rust FFI).
+int nvim_cmdexpand_script_id_valid(int idx)
+{
+  return SCRIPT_ID_VALID(idx + 1) ? 1 : 0;
+}
+
+/// Get home_replace()-processed script name into NameBuff and return it (for Rust FFI).
+char *nvim_cmdexpand_get_script_name(int idx)
+{
+  scriptitem_T *si = SCRIPT_ITEM(idx + 1);
+  home_replace(NULL, si->sn_name, NameBuff, MAXPATHL, true);
+  return NameBuff;
+}
+
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
 
@@ -867,40 +1019,8 @@ static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches
   }
 }
 
-void cmdline_pum_display(bool changed_array)
-{
-  pum_display(compl_match_array, compl_match_arraysize, compl_selected,
-              changed_array, compl_startcol);
-}
-
-
-/// Remove the cmdline completion popup menu (if present), free the list of items.
-void cmdline_pum_remove(bool defer_redraw)
-{
-  pum_undisplay(!defer_redraw);
-  XFREE_CLEAR(compl_match_array);
-  compl_match_arraysize = 0;
-}
-
-void cmdline_pum_cleanup(CmdlineInfo *cclp)
-{
-  cmdline_pum_remove(false);
-  wildmenu_cleanup(cclp);
-}
-
-/// Returns the current cmdline completion pattern.
-char *cmdline_compl_pattern(void)
-{
-  expand_T *xp = get_cmdline_info()->xpc;
-  return xp == NULL ? NULL : xp->xp_orig;
-}
-
-/// Returns true if fuzzy cmdline completion is active, false otherwise.
-bool cmdline_compl_is_fuzzy(void)
-{
-  expand_T *xp = get_cmdline_info()->xpc;
-  return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
-}
+// cmdline_pum_display, cmdline_pum_remove, cmdline_pum_cleanup,
+// cmdline_compl_pattern, cmdline_compl_is_fuzzy -- migrated to Rust (pum.rs)
 
 
 /// Show wildchar matches in the status line.
@@ -1342,32 +1462,7 @@ int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool nos
 ///  EXPAND_ENV_VARS         Complete environment variable names
 ///  EXPAND_USER             Complete user names
 ///  EXPAND_PATTERN_IN_BUF   Complete pattern in '/', '?', ':s', ':g', etc.
-void set_expand_context(expand_T *xp)
-{
-  CmdlineInfo *const ccline = get_cmdline_info();
-
-  // Handle search commands: '/' or '?'
-  if ((ccline->cmdfirstc == '/' || ccline->cmdfirstc == '?')
-      && may_expand_pattern) {
-    xp->xp_context = EXPAND_PATTERN_IN_BUF;
-    xp->xp_search_dir = (ccline->cmdfirstc == '/') ? FORWARD : BACKWARD;
-    xp->xp_pattern = ccline->cmdbuff;
-    xp->xp_pattern_len = (size_t)ccline->cmdpos;
-    search_first_line = 0;  // Search entire buffer
-    return;
-  }
-
-  // Only handle ':', '>', or '=' command-lines, or expression input
-  if (ccline->cmdfirstc != ':'
-      && ccline->cmdfirstc != '>' && ccline->cmdfirstc != '='
-      && !ccline->input_fn) {
-    xp->xp_context = EXPAND_NOTHING;
-    return;
-  }
-
-  // Fallback to command-line expansion
-  set_cmd_context(xp, ccline->cmdbuff, ccline->cmdlen, ccline->cmdpos, true);
-}
+// set_expand_context -- migrated to Rust (lib.rs)
 
 /// Sets the index of a built-in or user defined command "cmd" in eap->cmdidx.
 /// For user defined commands, the completion context is set in "xp" and the
@@ -1566,20 +1661,7 @@ int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char
   return EXPAND_OK;
 }
 
-/// Expand file or directory names.
-
-/// Function given to ExpandGeneric() to obtain the possible arguments for the
-/// ":scriptnames" command.
-static char *get_scriptnames_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  if (!SCRIPT_ID_VALID(idx + 1)) {
-    return NULL;
-  }
-
-  scriptitem_T *si = SCRIPT_ITEM(idx + 1);
-  home_replace(NULL, si->sn_name, NameBuff, MAXPATHL, true);
-  return NameBuff;
-}
+// get_scriptnames_arg -- migrated to Rust (callbacks.rs)
 
 
 /// Completion for |:checkhealth| command.
@@ -1648,7 +1730,7 @@ static int ExpandOther(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches
     { EXPAND_USER, get_users, true, false },
     { EXPAND_ARGLIST, get_arglist_name, true, false },
     { EXPAND_BREAKPOINT, rs_get_breakadd_arg, true, true },
-    { EXPAND_SCRIPTNAMES, get_scriptnames_arg, true, false },
+    { EXPAND_SCRIPTNAMES, rs_get_scriptnames_arg, true, false },
     { EXPAND_RETAB, rs_get_retab_arg, true, true },
     { EXPAND_CHECKHEALTH, get_healthcheck_names, true, false },
   };
@@ -2311,30 +2393,7 @@ void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dir
 }
 #undef TMP_PATHSEPSTR
 
-/// Translate some keys pressed when 'wildmenu' is used.
-int wildmenu_translate_key(CmdlineInfo *cclp, int key, expand_T *xp, bool did_wild_list)
-{
-  int c = key;
-
-  if (cmdline_pum_active() || did_wild_list || wild_menu_showing) {
-    if (c == K_LEFT) {
-      c = Ctrl_P;
-    } else if (c == K_RIGHT) {
-      c = Ctrl_N;
-    }
-  }
-
-  // Hitting CR after "emenu Name.": complete submenu
-  if (xp->xp_context == EXPAND_MENUNAMES
-      && cclp->cmdpos > 1
-      && cclp->cmdbuff[cclp->cmdpos - 1] == '.'
-      && cclp->cmdbuff[cclp->cmdpos - 2] != '\\'
-      && (c == '\n' || c == '\r' || c == K_KENTER)) {
-    c = K_DOWN;
-  }
-
-  return c;
-}
+// wildmenu_translate_key -- migrated to Rust (wildmenu.rs)
 
 /// Delete characters on the command line, from "from" to the current position.
 static void cmdline_del(CmdlineInfo *cclp, int from)
@@ -2484,21 +2543,7 @@ static int wildmenu_process_key_filenames(CmdlineInfo *cclp, int key, expand_T *
   return key;
 }
 
-/// Handle a key pressed when wild menu is displayed
-int wildmenu_process_key(CmdlineInfo *cclp, int key, expand_T *xp)
-{
-  // Special translations for 'wildmenu'
-  if (xp->xp_context == EXPAND_MENUNAMES) {
-    return wildmenu_process_key_menunames(cclp, key, xp);
-  }
-  if (xp->xp_context == EXPAND_FILES
-      || xp->xp_context == EXPAND_DIRECTORIES
-      || xp->xp_context == EXPAND_SHELLCMD) {
-    return wildmenu_process_key_filenames(cclp, key, xp);
-  }
-
-  return key;
-}
+// wildmenu_process_key -- migrated to Rust (wildmenu.rs)
 
 /// Free expanded names when finished walking through the matches
 void wildmenu_cleanup(CmdlineInfo *cclp)

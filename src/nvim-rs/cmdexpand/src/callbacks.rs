@@ -15,6 +15,12 @@ use crate::ExpandHandle;
 extern "C" {
     fn nvim_cmdexpand_get_filetype_expand_what() -> c_int;
     fn nvim_cmdexpand_get_breakpt_expand_what() -> c_int;
+
+    /// Check `SCRIPT_ID_VALID(idx+1)` for scriptnames expansion.
+    fn nvim_cmdexpand_script_id_valid(idx: c_int) -> c_int;
+
+    /// Get `home_replace()`-processed script name into `NameBuff` and return pointer.
+    fn nvim_cmdexpand_get_script_name(idx: c_int) -> *mut c_char;
 }
 
 // =============================================================================
@@ -199,6 +205,25 @@ pub extern "C" fn rs_get_mapclear_arg(_xp: ExpandHandle, idx: c_int) -> *mut c_c
     } else {
         std::ptr::null_mut()
     }
+}
+
+// =============================================================================
+// `get_scriptnames_arg`
+// =============================================================================
+
+/// Return the possible arguments for the `:scriptnames` command by index.
+///
+/// Returns the home-replaced script name or NULL when there are no more entries.
+///
+/// # Safety
+///
+/// `_xp` is unused. Called from C as a `CompleteListItemGetter` callback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_get_scriptnames_arg(_xp: ExpandHandle, idx: c_int) -> *mut c_char {
+    if nvim_cmdexpand_script_id_valid(idx) == 0 {
+        return std::ptr::null_mut();
+    }
+    nvim_cmdexpand_get_script_name(idx)
 }
 
 // =============================================================================

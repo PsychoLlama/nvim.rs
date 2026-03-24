@@ -1593,7 +1593,7 @@ pub unsafe extern "C" fn spell_tofold(c: c_int) -> c_int {
 /// Uppercase character using spelltab or mb_toupper for high chars (SPELL_TOUPPER macro).
 #[inline]
 #[allow(clippy::cast_sign_loss)] // c is always in 0..128 range in the else branch
-unsafe fn spell_toupper(c: c_int) -> c_int {
+pub(crate) unsafe fn spell_toupper(c: c_int) -> c_int {
     if c >= 128 {
         mb_toupper(c)
     } else {
