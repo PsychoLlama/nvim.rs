@@ -22,6 +22,7 @@ pub mod pattern;
 pub mod read;
 pub mod rename;
 pub mod sync;
+pub mod tempdir;
 pub mod write;
 
 // =============================================================================

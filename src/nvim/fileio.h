@@ -79,4 +79,9 @@ void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars);
 void write_lnum_adjust(linenr_T offset);
 linenr_T readfile_linenr(linenr_T linecnt, char *p, const char *endp);
 
+// Phase 2 migrations: tempdir subsystem replaced by Rust
+void vim_deltempdir(void);
+char *vim_gettempdir(void);
+char *vim_tempname(void);
+
 #include "fileio.h.generated.h"

@@ -566,7 +566,7 @@ extern "C" {
     /// Safe string concat: xstrlcat(dst, src, dstlen).
     fn xstrlcat(dst: *mut c_char, src: *const c_char, dstlen: usize) -> usize;
     /// Sprintf into a buffer.
-    fn vim_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...);
+    fn vim_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
     /// Replace $HOME with ~ in path, writing into dst.
     fn home_replace(
         buf: *const c_void,

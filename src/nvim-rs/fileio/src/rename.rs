@@ -23,7 +23,7 @@ extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
     fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
-    fn add_pathsep(path: *mut c_char);
+    fn add_pathsep(path: *mut c_char) -> bool;
     fn path_tail(p: *const c_char) -> *mut c_char;
     fn vim_ispathsep(c: c_int) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
