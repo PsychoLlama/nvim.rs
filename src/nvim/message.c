@@ -130,7 +130,6 @@ void msg_grid_set_pos(int row, bool scrolled)
   }
 }
 
-
 // nvim_hl_msg_free: called from Rust (history.rs); hl_msg_free takes entry->msg by value
 void nvim_hl_msg_free(MessageHistoryEntry *entry)
 {
@@ -153,8 +152,6 @@ void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
-
-
 
 void nvim_msg_set_pos_for_scroll(int pos)
 {
@@ -190,7 +187,6 @@ void nvim_msg_ui_flush_impl(void)
     ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
   }
 }
-
 
 void msg_grid_validate(void)
 {
@@ -360,7 +356,6 @@ MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bo
   return id;
 }
 
-
 /// Shows a printf-style message with highlight id.
 ///
 /// Note: Caller must check the resulting string is shorter than IOSIZE!!!
@@ -450,7 +445,6 @@ static bool semsgv(const char *fmt, va_list ap)
   return emsg(errbuf);
 }
 
-
 /// Same as semsg(...) but abort on error when ABORT_ON_INTERNAL_ERROR is
 /// defined. It is used for internal errors only, so that they can be
 /// detected when fuzzing vim.
@@ -513,7 +507,6 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
   char *s = xstrdup(IObuff);
   loop_schedule_deferred(&main_loop, event_create(msg_semsg_multiline_event, s));
 }
-
 
 void hl_msg_free(HlMessage hl_msg)
 {
@@ -667,7 +660,6 @@ void ex_messages(exarg_T *eap)
     api_free_array(entries);
   }
 }
-
 
 /// Wait for the user to hit a key (normally Enter)
 ///
@@ -1056,7 +1048,6 @@ void msg_prt_line(const char *s, bool list)
   msg_clr_eos();
 }
 
-
 // msg_puts_len() migrated to Rust: src/nvim-rs/message/src/output.rs (rs_msg_puts_len)
 
 static void msg_ext_emit_chunk(void)
@@ -1326,8 +1317,6 @@ static void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb
   *sb_col = 0;
 }
 
-
-
 /// "g<" command.
 void show_sb_text(void)
 {
@@ -1357,7 +1346,6 @@ static msgchunk_T *msg_sb_start(msgchunk_T *mps)
   }
   return mp;
 }
-
 
 /// Display a screen line from previously displayed text at row "row".
 ///
