@@ -136,10 +136,18 @@ extern "C" {
     // For repeat_message (Phase 22)
     static mut State: c_int;
     static mut msg_didout: bool;
-    fn msg_moremsg(full: bool);
     fn hit_return_msg(newline_sb: bool);
     fn ui_cursor_goto(row: c_int, col: c_int);
     fn msg_clr_eos();
+
+    // For msg_moremsg (Phase 24)
+    fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+    static mut hl_attr_active: *mut c_int;
+    fn grid_line_start(view: *mut c_void, row: c_int);
+    fn grid_line_puts(col: c_int, s: *const c_char, len: c_int, attr: c_int) -> c_int;
+    fn grid_line_cursor_goto(col: c_int);
+    fn grid_line_flush();
+    fn gettext(s: *const c_char) -> *const c_char;
 }
 
 // nvim_get_in_assert_fails returns bool in C (normal_shim.c) but other modules
@@ -641,6 +649,47 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
 }
 
 // ============================================================================
+// Phase 24: msg_moremsg migrated from C
+// ============================================================================
+
+/// Highlight field for more prompt (HLF_M = 6)
+const HLF_M: c_int = 6;
+/// Highlight field for message area (HLF_MSG = 5)
+const HLF_MSG: c_int = 5;
+
+/// Get HL_ATTR value for a given highlight field index.
+///
+/// # Safety
+/// Reads from the hl_attr_active global array.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hl_attr(hlf: c_int) -> c_int {
+    *hl_attr_active.add(hlf as usize)
+}
+
+/// Display the "--More--" prompt (and optionally scrolling help).
+///
+/// Equivalent to C `msg_moremsg()`.
+///
+/// # Safety
+/// Accesses global message and grid state.
+#[export_name = "msg_moremsg"]
+pub unsafe extern "C" fn rs_msg_moremsg(full: bool) {
+    msg_moremsg_impl(full);
+}
+
+unsafe fn msg_moremsg_impl(full: bool) {
+    let attr = hl_combine_attr(hl_attr(HLF_MSG), hl_attr(HLF_M));
+    grid_line_start(addr_of_mut!(msg_grid_adj).cast::<c_void>(), Rows - 1);
+    let len = grid_line_puts(0, gettext(c"-- More --".as_ptr()), -1, attr);
+    if full {
+        let more_help = gettext(c" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit ".as_ptr());
+        grid_line_puts(len, more_help, -1, attr);
+    }
+    grid_line_cursor_goto(len);
+    grid_line_flush();
+}
+
+// ============================================================================
 // Phase 22: repeat_message migrated from C
 // ============================================================================
 
@@ -665,7 +714,7 @@ pub unsafe extern "C" fn rs_repeat_message() {
     }
 
     if State == MODE_ASKMORE {
-        msg_moremsg(true); // display --more-- message again
+        msg_moremsg_impl(true); // display --more-- message again
         msg_row = Rows - 1;
     } else if (State & MODE_CMDLINE) != 0 && !crate::dialog::confirm_msg.is_null() {
         crate::dialog::rs_display_confirm_msg(); // display ":confirm" message again

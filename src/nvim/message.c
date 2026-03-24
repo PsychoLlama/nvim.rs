@@ -160,7 +160,7 @@ char *get_emsg_lnum(void);
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
-void msg_moremsg(bool full);
+void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 
 // msg_scroll_up helper wrappers (used by Rust; access msg_grid struct fields)
 void nvim_msg_grid_clear_first_line(void)
@@ -1843,19 +1843,7 @@ static bool do_more_prompt(int typed_char)
   return retval;
 }
 
-void msg_moremsg(bool full)
-{
-  int attr = hl_combine_attr(HL_ATTR(HLF_MSG), HL_ATTR(HLF_M));
-  grid_line_start(&msg_grid_adj, Rows - 1);
-  int len = grid_line_puts(0, _("-- More --"), -1, attr);
-  if (full) {
-    len += grid_line_puts(len, _(" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit "),
-                          -1, attr);
-  }
-  grid_line_cursor_goto(len);
-  grid_line_flush();
-}
-
+// msg_moremsg() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_moremsg)
 // repeat_message() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_repeat_message)
 
 /// Clear "msg_ext_chunks" before flushing so that ui_flush() does not re-emit
@@ -2132,6 +2120,3 @@ int do_dialog(int type, const char *title, const char *message, const char *butt
 // migrated to Rust (dialog.rs) as rs_msg_show_console_dialog
 // display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel
 // migrated to Rust (dialog.rs)
-
-/// Check if there should be a delay to allow the user to see a message.
-///

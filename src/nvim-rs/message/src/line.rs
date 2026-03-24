@@ -9,8 +9,8 @@ use std::ffi::c_int;
 extern "C" {
     static Columns: c_int;
     static mut got_int: bool;
-    /// Check if in list mode
-    fn nvim_get_list_mode() -> c_int;
+    /// Check if in list mode (curwin->w_p_list)
+    fn nvim_curwin_w_p_list() -> c_int;
     /// Get current message column
     static mut msg_col: c_int;
 }
@@ -174,7 +174,7 @@ const fn line_char_cells(c: c_int, col: c_int, tabstop: c_int) -> c_int {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_in_list_mode() -> c_int {
-    nvim_get_list_mode()
+    nvim_curwin_w_p_list()
 }
 
 // ============================================================================
