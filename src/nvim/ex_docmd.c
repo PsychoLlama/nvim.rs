@@ -1717,108 +1717,14 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 }
 
 
-/// Command-line expansion for ++opt=name.
-int nvim_docmd_expand_argopt_impl(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
-{
-  if (xp->xp_pattern > xp->xp_line && *(xp->xp_pattern - 1) == '=') {
-    CompleteListItemGetter cb = NULL;
-
-    char *name_end = xp->xp_pattern - 1;
-    if (name_end - xp->xp_line >= 2
-        && strncmp(name_end - 2, "ff", 2) == 0) {
-      cb = get_fileformat_name;
-    } else if (name_end - xp->xp_line >= 10
-               && strncmp(name_end - 10, "fileformat", 10) == 0) {
-      cb = get_fileformat_name;
-    } else if (name_end - xp->xp_line >= 3
-               && strncmp(name_end - 3, "enc", 3) == 0) {
-      cb = get_encoding_name;
-    } else if (name_end - xp->xp_line >= 8
-               && strncmp(name_end - 8, "encoding", 8) == 0) {
-      cb = get_encoding_name;
-    } else if (name_end - xp->xp_line >= 3
-               && strncmp(name_end - 3, "bad", 3) == 0) {
-      cb = get_bad_name;
-    }
-
-    if (cb != NULL) {
-      ExpandGeneric(pat, xp, rmp, matches, numMatches, cb, false);
-      return OK;
-    }
-    return FAIL;
-  }
-
-  // Special handling of "ff" which acts as a short form of
-  // "fileformat", as "ff" is not a substring of it.
-  if (xp->xp_pattern_len == 2
-      && strncmp(xp->xp_pattern, "ff", xp->xp_pattern_len) == 0) {
-    *matches = xmalloc(sizeof(char *));
-    *numMatches = 1;
-    (*matches)[0] = xstrdup("fileformat=");
-    return OK;
-  }
-
-  ExpandGeneric(pat, xp, rmp, matches, numMatches, get_argopt_name, false);
-  return OK;
-}
+// nvim_docmd_expand_argopt_impl is implemented in Rust (impl_bodies.rs).
 
 
 /// Call this function if we thought we were going to exit, but we won't
 /// (because of an error).  May need to restore the terminal mode.
 
 
-/// ":restart": restart the Nvim server (using ":qall!").
-/// ":restart +cmd": restart the Nvim server using ":cmd".
-/// ":restart +cmd <command>": restart the Nvim server using ":cmd" and add -c <command> to the new server.
-/// Implementation called by Rust ex_restart.
-void nvim_docmd_ex_restart_impl(exarg_T *eap)
-{
-  // Patch v:argv to include "-c <arg>" when it restarts.
-  if (eap->arg != NULL) {
-    const list_T *l = get_vim_var_list(VV_ARGV);
-    int argc = tv_list_len(l);
-    list_T *argv_cpy = tv_list_alloc(argc + 2);
-    bool added_startup_arg = false;
-    TV_LIST_ITER_CONST(l, li, {
-      const char *arg = tv_get_string(TV_LIST_ITEM_TV(li));
-      size_t arg_size = strlen(arg);
-      assert(arg_size <= (size_t)SSIZE_MAX);
-      tv_list_append_string(argv_cpy, arg, (ssize_t)arg_size);
-      if (!added_startup_arg) {
-        tv_list_append_string(argv_cpy, "-c", 2);
-        size_t cmd_size = strlen(eap->arg);
-        assert(cmd_size <= (size_t)SSIZE_MAX);
-        tv_list_append_string(argv_cpy, eap->arg, (ssize_t)cmd_size);
-        added_startup_arg = true;
-      }
-    });
-    set_vim_var_list(VV_ARGV, argv_cpy);
-  }
-
-  char *quit_cmd = (eap->do_ecmd_cmd) ? eap->do_ecmd_cmd : "qall";
-  char *quit_cmd_copy = NULL;
-
-  // Prepend "confirm " to cmd if :confirm is used
-  if (cmdmod.cmod_flags & CMOD_CONFIRM) {
-    quit_cmd_copy = concat_str("confirm ", quit_cmd);
-    quit_cmd = quit_cmd_copy;
-  }
-
-  Error err = ERROR_INIT;
-  restarting = true;
-  nvim_command(cstr_as_string(quit_cmd), &err);
-  xfree(quit_cmd_copy);
-  if (ERROR_SET(&err)) {
-    emsg(err.msg);  // Could not exit
-    api_clear_error(&err);
-    not_restarting();
-    return;
-  }
-  if (!exiting) {
-    emsg("restart failed: +cmd did not quit the server");
-    not_restarting();
-  }
-}
+// nvim_docmd_ex_restart_impl is implemented in Rust (impl_bodies.rs).
 
 
 
@@ -1946,40 +1852,7 @@ static char *findfunc_find_file(char *findarg, size_t findarg_len, int count)
   return ret_fname;
 }
 
-/// Process the 'findfunc' option value.
-/// Returns NULL on success and an error message on failure.
-const char *nvim_docmd_did_set_findfunc_impl(optset_T *args)
-{
-  buf_T *buf = (buf_T *)args->os_buf;
-  int retval;
-
-  if (args->os_flags & OPT_LOCAL) {
-    // buffer-local option set
-    retval = option_set_callback_func(buf->b_p_ffu, &buf->b_ffu_cb);
-  } else {
-    // global option set
-    retval = option_set_callback_func(p_ffu, &ffu_cb);
-    // when using :set, free the local callback
-    if (!(args->os_flags & OPT_GLOBAL)) {
-      callback_free(&buf->b_ffu_cb);
-    }
-  }
-
-  if (retval == FAIL) {
-    return e_invarg;
-  }
-
-  // If the option value starts with <SID> or s:, then replace that with
-  // the script identifier.
-  char **varp = (char **)args->os_varp;
-  char *name = get_scriptlocal_funcname(*varp);
-  if (name != NULL) {
-    free_string_option(*varp);
-    *varp = name;
-  }
-
-  return NULL;
-}
+// nvim_docmd_did_set_findfunc_impl is implemented in Rust (impl_bodies.rs).
 
 void nvim_docmd_free_findfunc_option_impl(void)
 {
@@ -2008,81 +1881,13 @@ bool nvim_docmd_set_ref_in_findfunc_impl(int copyID)
 /// :tabfind [+command] file     open new Tab page and find "file"
 // Body migrated to Rust (Phase N+16). Forward decl at top of file.
 
-/// Open a new tab page.
-void nvim_docmd_tabpage_new_impl(void)
-{
-  exarg_T ea = { .cmdidx = CMD_tabnew, .cmd = "tabn", .arg = "" };
-  nvim_docmd_ex_splitview_impl(&ea);
-}
+// nvim_docmd_tabpage_new_impl is implemented in Rust (impl_bodies.rs).
 
 
 
-/// ":detach" - called by Rust ex_detach.
-void nvim_docmd_ex_detach_impl(exarg_T *eap)
-{
-  // come on pooky let's burn this mf down
-  if (eap && eap->forceit) {
-    emsg("bang (!) not supported yet");
-  } else {
-    // 1. Send "error_exit" UI-event (notification only).
-    // 2. Perform server-side UI detach.
-    // 3. Close server-side channel without self-exit.
+// nvim_docmd_ex_detach_impl is implemented in Rust (impl_bodies.rs).
 
-    if (!current_ui) {
-      emsg("UI not attached");
-      return;
-    }
-
-    Channel *chan = find_channel(current_ui);
-    if (!chan) {
-      emsg(e_invchan);
-      return;
-    }
-    chan->detach = true;  // Prevent self-exit on channel-close.
-
-    // Server-side UI detach. Doesn't close the channel.
-    Error err2 = ERROR_INIT;
-    remote_ui_disconnect(chan->id, &err2, true);
-    if (ERROR_SET(&err2)) {
-      emsg(err2.msg);  // UI disappeared already?
-      api_clear_error(&err2);
-      return;
-    }
-
-    // Server-side channel close.
-    const char *err = NULL;
-    bool rv = channel_close(chan->id, kChannelPartAll, &err);
-    if (!rv && err) {
-      emsg(err);  // UI disappeared already?
-      return;
-    }
-    // XXX: Can't do this, channel_decref() is async...
-    // assert(!find_channel(chan->id));
-
-    ILOG("detach current_ui=%" PRId64, chan->id);
-  }
-}
-
-/// ":connect" - called by Rust ex_connect.
-void nvim_docmd_ex_connect_impl(exarg_T *eap)
-{
-  bool stop_server = eap->forceit ? (ui_active() == 1) : false;
-
-  Error err = ERROR_INIT;
-  remote_ui_connect(current_ui, eap->arg, &err);
-
-  if (ERROR_SET(&err)) {
-    emsg(err.msg);
-    api_clear_error(&err);
-    return;
-  }
-
-  nvim_docmd_ex_detach_impl(NULL);
-  if (stop_server) {
-    exiting = true;
-    getout(0);
-  }
-}
+// nvim_docmd_ex_connect_impl is implemented in Rust (impl_bodies.rs).
 
 /// ":edit", ":badd", ":balt", ":visual".
 /// ":edit <file>" command and alike.
@@ -2091,60 +1896,7 @@ void nvim_docmd_ex_connect_impl(exarg_T *eap)
 // Body migrated to Rust (Phase N+17). Forward decl at top of file.
 
 
-/// ":read" implementation called by Rust ex_read.
-void nvim_docmd_ex_read_impl(exarg_T *eap)
-{
-  int empty = (curbuf->b_ml.ml_flags & ML_EMPTY);
-
-  if (eap->usefilter) {  // :r!cmd
-    do_bang(1, eap, false, false, true);
-    return;
-  }
-
-  if (u_save(eap->line2, (linenr_T)(eap->line2 + 1)) == FAIL) {
-    return;
-  }
-
-  int i;
-  if (*eap->arg == NUL) {
-    if (check_fname() == FAIL) {       // check for no file name
-      return;
-    }
-    i = readfile(curbuf->b_ffname, curbuf->b_fname,
-                 eap->line2, 0, (linenr_T)MAXLNUM, eap, 0, false);
-  } else {
-    if (vim_strchr(p_cpo, CPO_ALTREAD) != NULL) {
-      setaltfname(eap->arg, eap->arg, 1);
-    }
-    i = readfile(eap->arg, NULL,
-                 eap->line2, 0, (linenr_T)MAXLNUM, eap, 0, false);
-  }
-  if (i != OK) {
-    if (!aborting()) {
-      semsg(_(e_notopen), eap->arg);
-    }
-  } else {
-    if (empty && exmode_active) {
-      // Delete the empty line that remains.  Historically ex does
-      // this but vi doesn't.
-      linenr_T lnum;
-      if (eap->line2 == 0) {
-        lnum = curbuf->b_ml.ml_line_count;
-      } else {
-        lnum = 1;
-      }
-      if (*ml_get(lnum) == NUL && u_savedel(lnum, 1) == OK) {
-        ml_delete(lnum);
-        if (curwin->w_cursor.lnum > 1
-            && curwin->w_cursor.lnum >= lnum) {
-          curwin->w_cursor.lnum--;
-        }
-        deleted_lines_mark(lnum, 1);
-      }
-    }
-    redraw_curbuf_later(UPD_VALID);
-  }
-}
+// nvim_docmd_ex_read_impl is implemented in Rust (impl_bodies.rs).
 
 static char *prev_dir = NULL;
 
@@ -2674,99 +2426,9 @@ void nvim_docmd_loop_sleep(int64_t msec)
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int);
 }
 
-/// ":checkhealth [plugins]"
-/// ":checkhealth" implementation called by Rust ex_checkhealth.
-void nvim_docmd_ex_checkhealth_impl(exarg_T *eap)
-{
-  Error err = ERROR_INIT;
-  MAXSIZE_TEMP_ARRAY(args, 2);
+// nvim_docmd_ex_checkhealth_impl is implemented in Rust (impl_bodies.rs).
 
-  char mods[1024];
-  size_t mods_len = 0;
-  mods[0] = NUL;
-
-  if (cmdmod.cmod_tab > 0 || cmdmod.cmod_split != 0) {
-    bool multi_mods = false;
-    mods_len = add_win_cmd_modifiers(mods, &cmdmod, &multi_mods);
-    assert(mods_len < sizeof(mods));
-  }
-  ADD_C(args, STRING_OBJ(((String){ .data = mods, .size = mods_len })));
-  ADD_C(args, CSTR_AS_OBJ(eap->arg));
-
-  NLUA_EXEC_STATIC("vim.health._check(...)", args, kRetNilBool, NULL, &err);
-  if (!ERROR_SET(&err)) {
-    return;
-  }
-
-  char *vimruntime_env = os_getenv_noalloc("VIMRUNTIME");
-  if (!vimruntime_env) {
-    emsg(_("E5009: $VIMRUNTIME is empty or unset"));
-  } else {
-    bool rtp_ok = NULL != strstr(p_rtp, vimruntime_env);
-    if (rtp_ok) {
-      semsg(_("E5009: Invalid $VIMRUNTIME: %s"), vimruntime_env);
-    } else {
-      emsg(_("E5009: Invalid 'runtimepath'"));
-    }
-  }
-  semsg_multiline("emsg", err.msg);
-  api_clear_error(&err);
-}
-
-/// ":terminal" implementation called by Rust ex_terminal.
-void nvim_docmd_ex_terminal_impl(exarg_T *eap)
-{
-  char ex_cmd[1024];
-  size_t len = 0;
-
-  if (cmdmod.cmod_tab > 0 || cmdmod.cmod_split != 0) {
-    bool multi_mods = false;
-    // ex_cmd must be a null-terminated string before passing to add_win_cmd_modifiers
-    ex_cmd[0] = NUL;
-    len = add_win_cmd_modifiers(ex_cmd, &cmdmod, &multi_mods);
-    assert(len < sizeof(ex_cmd));
-    int result = snprintf(ex_cmd + len, sizeof(ex_cmd) - len, " new");
-    assert(result > 0);
-    len += (size_t)result;
-  } else {
-    int result = snprintf(ex_cmd, sizeof(ex_cmd), "enew%s", eap->forceit ? "!" : "");
-    assert(result > 0);
-    len += (size_t)result;
-  }
-
-  assert(len < sizeof(ex_cmd));
-
-  if (*eap->arg != NUL) {  // Run {cmd} in 'shell'.
-    char *name = vim_strsave_escaped(eap->arg, "\"\\");
-    snprintf(ex_cmd + len, sizeof(ex_cmd) - len,
-             " | call jobstart(\"%s\",{'term':v:true})", name);
-    xfree(name);
-  } else {  // No {cmd}: run the job with tokenized 'shell'.
-    if (*p_sh == NUL) {
-      emsg(_(e_shellempty));
-      return;
-    }
-
-    char **argv = shell_build_argv(NULL, NULL);
-    char **p = argv;
-    char tempstring[512];
-    char shell_argv[512] = { 0 };
-
-    while (*p != NULL) {
-      char *escaped = vim_strsave_escaped(*p, "\"\\");
-      snprintf(tempstring, sizeof(tempstring), ",\"%s\"", escaped);
-      xfree(escaped);
-      xstrlcat(shell_argv, tempstring, sizeof(shell_argv));
-      p++;
-    }
-    shell_free_argv(argv);
-
-    snprintf(ex_cmd + len, sizeof(ex_cmd) - len,
-             " | call jobstart([%s], {'term':v:true})", shell_argv + 1);
-  }
-
-  do_cmdline_cmd(ex_cmd);
-}
+// nvim_docmd_ex_terminal_impl is implemented in Rust (impl_bodies.rs).
 
 /// Get argt of command with id
 uint32_t get_cmd_argt(cmdidx_T cmdidx)
@@ -3477,33 +3139,7 @@ void nvim_docmd_set_exiting(int val) { exiting = (bool)val; }
 // autowriteall option
 int nvim_docmd_get_p_awa(void) { return p_awa ? 1 : 0; }
 
-// check_more logic (direct implementation for Rust FFI).
-int nvim_docmd_check_more(int message, int forceit)
-{
-  int n = ARGCOUNT - curwin->w_arg_idx - 1;
-
-  if (!forceit && rs_only_one_window()
-      && ARGCOUNT > 1 && !arg_had_last && n > 0 && quitmore == 0) {
-    if (message) {
-      if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && curbuf->b_fname != NULL) {
-        char buff[DIALOG_MSG_SIZE];
-
-        vim_snprintf(buff, DIALOG_MSG_SIZE,
-                     NGETTEXT("%d more file to edit.  Quit anyway?",
-                              "%d more files to edit.  Quit anyway?", n), n);
-        if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 1) == VIM_YES) {
-          return OK;
-        }
-        return FAIL;
-      }
-      semsg(NGETTEXT("E173: %" PRId64 " more file to edit",
-                     "E173: %" PRId64 " more files to edit", n), (int64_t)n);
-      quitmore = 2;                 // next try to quit is allowed
-    }
-    return FAIL;
-  }
-  return OK;
-}
+// nvim_docmd_check_more is implemented in Rust (impl_bodies.rs).
 
 // ONE_WINDOW || eap->addr_count == 0 check for ex_quit
 int nvim_docmd_one_window_p(int addr_count)
@@ -4337,6 +3973,9 @@ char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
 {
   return nvim_docmd_replace_makeprg_impl(eap, arg, cmdlinep);
 }
+// Forward declaration for Rust-implemented expand_argopt (impl_bodies.rs)
+extern int nvim_docmd_expand_argopt_impl(char *pat, expand_T *xp, regmatch_T *rmp,
+                                         char ***matches, int *numMatches);
 int expand_argopt(char *pat, expand_T *xp, regmatch_T *rmp, char ***matches, int *numMatches)
 {
   return nvim_docmd_expand_argopt_impl(pat, xp, rmp, matches, numMatches);
@@ -4421,62 +4060,8 @@ void nvim_docmd_set_readonlymode(int v) { readonlymode = (v != 0); }
 int nvim_docmd_buf_hide_buf(buf_T *buf) { return buf_hide(buf) ? 1 : 0; }
 void nvim_docmd_set_curbuf_b_p_ro(int v) { curbuf->b_p_ro = (v != 0); }
 linenr_T nvim_docmd_eap_get_do_ecmd_lnum(const exarg_T *eap) { return eap->do_ecmd_lnum; }
-/// Handle the exmode_active early-return branch of do_exedit_impl.
-/// Returns 1 if the caller should return early, 0 otherwise.
-int nvim_docmd_do_exedit_handle_exmode(exarg_T *eap)
-{
-  if (exmode_active && (eap->cmdidx == CMD_visual || eap->cmdidx == CMD_view)) {
-    exmode_active = false;
-    ex_pressedreturn = false;
-    if (*eap->arg == NUL) {
-      if (global_busy) {
-        if (eap->nextcmd != NULL) {
-          stuffReadbuff(eap->nextcmd);
-          eap->nextcmd = NULL;
-        }
-        const int save_rd = RedrawingDisabled;
-        RedrawingDisabled = 0;
-        const int save_nwr = no_wait_return;
-        no_wait_return = 0;
-        need_wait_return = false;
-        const int save_ms = msg_scroll;
-        msg_scroll = 0;
-        redraw_all_later(UPD_NOT_VALID);
-        pending_exmode_active = true;
-        normal_enter(false, true);
-        pending_exmode_active = false;
-        RedrawingDisabled = save_rd;
-        no_wait_return = save_nwr;
-        msg_scroll = save_ms;
-      }
-      return 1;
-    }
-  }
-  return 0;
-}
-/// Close curwin with cleanup on do_ecmd failure (for split windows).
-void nvim_docmd_do_exedit_split_fail_cleanup(void)
-{
-  bool need_hide = (curbufIsChanged() && curbuf->b_nwindows <= 1);
-  if (!need_hide || buf_hide(curbuf)) {
-    cleanup_T cs;
-    enter_cleanup(&cs);
-    win_close(curwin, !need_hide && !buf_hide(curbuf), false);
-    leave_cleanup(&cs);
-  }
-}
-/// Handle the split-with-no-arg fallback branch of do_exedit_impl.
-void nvim_docmd_do_exedit_split_fallback(exarg_T *eap)
-{
-  if (eap->do_ecmd_cmd != NULL) {
-    do_cmdline_cmd(eap->do_ecmd_cmd);
-  }
-  int n = curwin->w_arg_idx_invalid;
-  check_arg_idx(curwin);
-  if (n != curwin->w_arg_idx_invalid) {
-    maketitle();
-  }
-}
+// nvim_docmd_do_exedit_handle_exmode, nvim_docmd_do_exedit_split_fail_cleanup,
+// and nvim_docmd_do_exedit_split_fallback are implemented in Rust (impl_bodies.rs).
 
 char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
                 const char **errormsg, int *escaped, bool empty_is_error)
@@ -4484,3 +4069,248 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
   return nvim_docmd_eval_vars_impl(src, srcstart, usedlen, lnump, errormsg, escaped,
                                    empty_is_error);
 }
+
+// =============================================================================
+// Phase 1 impl_bodies.rs C accessor functions
+// =============================================================================
+
+// --- check_more helpers ---
+int nvim_docmd_get_quitmore(void) { return quitmore; }
+void nvim_docmd_set_quitmore(int n) { quitmore = n; }
+void nvim_docmd_check_more_semsg(int n)
+{
+  semsg(NGETTEXT("E173: %" PRId64 " more file to edit",
+                 "E173: %" PRId64 " more files to edit", (unsigned)n), (int64_t)n);
+}
+int nvim_docmd_check_more_dialog(int n)
+{
+  char buff[DIALOG_MSG_SIZE];
+  vim_snprintf(buff, DIALOG_MSG_SIZE,
+               NGETTEXT("%d more file to edit.  Quit anyway?",
+                        "%d more files to edit.  Quit anyway?", n), n);
+  return vim_dialog_yesno(VIM_QUESTION, NULL, buff, 1);
+}
+// nvim_al_get_arg_had_last is defined in arglist.c
+// nvim_get_p_confirm and nvim_get_cmdmod_confirm are defined in window_shim.c
+
+// --- tabpage_new_body helper ---
+// Calls nvim_docmd_ex_splitview_impl with a stack-allocated ea for CMD_tabnew.
+void nvim_docmd_tabpage_new_body(void)
+{
+  exarg_T ea = { .cmdidx = CMD_tabnew, .cmd = "tabn", .arg = "" };
+  nvim_docmd_ex_splitview_impl(&ea);
+}
+
+// --- do_exedit_handle_exmode helpers ---
+void nvim_docmd_set_exmode_active(int v) { exmode_active = (bool)v; }
+void nvim_docmd_stuffReadbuff_str(const char *s) { stuffReadbuff(s); }
+int nvim_docmd_get_pending_exmode_active(void) { return pending_exmode_active ? 1 : 0; }
+void nvim_docmd_set_pending_exmode_active(int v) { pending_exmode_active = (bool)v; }
+void nvim_docmd_normal_enter_false_true(void) { normal_enter(false, true); }
+
+// --- do_exedit_split_fail_cleanup helpers ---
+int nvim_docmd_curbuf_b_nwindows(void) { return curbuf->b_nwindows; }
+
+// --- ex_read helpers ---
+int nvim_docmd_curbuf_ml_has_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) ? 1 : 0; }
+void nvim_docmd_do_bang_read(exarg_T *eap) { do_bang(1, eap, false, false, true); }
+const char *nvim_docmd_curbuf_b_fname(void) { return curbuf->b_fname; }
+// nvim_get_p_cpo is defined in Rust (window crate globals.rs)
+const char *nvim_docmd_e_notopen_str(void) { return _(e_notopen); }
+linenr_T nvim_docmd_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
+void nvim_docmd_curwin_cursor_lnum_maybe_dec(linenr_T lnum)
+{
+  if (curwin->w_cursor.lnum > 1 && curwin->w_cursor.lnum >= lnum) {
+    curwin->w_cursor.lnum--;
+  }
+}
+
+// --- do_exedit_split_fallback helpers ---
+int nvim_docmd_curwin_w_arg_idx_invalid(void) { return curwin->w_arg_idx_invalid ? 1 : 0; }
+void nvim_docmd_check_arg_idx_curwin(void) { check_arg_idx(curwin); }
+
+// --- ex_checkhealth/ex_terminal helpers ---
+size_t nvim_docmd_add_win_cmd_modifiers_global(char *buf, size_t bufsize)
+{
+  bool multi_mods = false;
+  buf[0] = NUL;
+  size_t len = add_win_cmd_modifiers(buf, &cmdmod, &multi_mods);
+  assert(len < bufsize);
+  return len;
+}
+
+// --- ex_terminal helpers ---
+int nvim_docmd_p_sh_is_empty(void) { return *p_sh == NUL ? 1 : 0; }
+const char *nvim_docmd_e_shellempty_str(void) { return _(e_shellempty); }
+void nvim_docmd_terminal_get_shell_argv_str(char *buf, size_t buflen)
+{
+  char **argv = shell_build_argv(NULL, NULL);
+  char **p = argv;
+  char tempstring[512];
+  buf[0] = NUL;
+  while (*p != NULL) {
+    char *escaped = vim_strsave_escaped(*p, "\"\\");
+    snprintf(tempstring, sizeof(tempstring), ",\"%s\"", escaped);
+    xfree(escaped);
+    xstrlcat(buf, tempstring, buflen);
+    p++;
+  }
+  shell_free_argv(argv);
+}
+int nvim_docmd_snprintf_terminal_suffix(char *buf, size_t buflen, const char *name)
+{
+  return snprintf(buf, buflen, " | call jobstart(\"%s\",{'term':v:true})", name);
+}
+int nvim_docmd_snprintf_terminal_shell(char *buf, size_t buflen, const char *shell_argv)
+{
+  return snprintf(buf, buflen, " | call jobstart([%s], {'term':v:true})", shell_argv);
+}
+
+// --- ex_restart helpers ---
+void nvim_docmd_restart_patch_argv(const char *arg)
+{
+  const list_T *l = get_vim_var_list(VV_ARGV);
+  int argc = tv_list_len(l);
+  list_T *argv_cpy = tv_list_alloc(argc + 2);
+  bool added_startup_arg = false;
+  TV_LIST_ITER_CONST(l, li, {
+    const char *item = tv_get_string(TV_LIST_ITEM_TV(li));
+    size_t item_size = strlen(item);
+    assert(item_size <= (size_t)SSIZE_MAX);
+    tv_list_append_string(argv_cpy, item, (ssize_t)item_size);
+    if (!added_startup_arg) {
+      tv_list_append_string(argv_cpy, "-c", 2);
+      size_t cmd_size = strlen(arg);
+      assert(cmd_size <= (size_t)SSIZE_MAX);
+      tv_list_append_string(argv_cpy, arg, (ssize_t)cmd_size);
+      added_startup_arg = true;
+    }
+  });
+  set_vim_var_list(VV_ARGV, argv_cpy);
+}
+void nvim_docmd_set_restarting(void) { restarting = true; }
+int nvim_docmd_run_quit_cmd(const char *cmd)
+{
+  Error err = ERROR_INIT;
+  nvim_command(cstr_as_string((char *)cmd), &err);
+  if (ERROR_SET(&err)) {
+    emsg(err.msg);
+    api_clear_error(&err);
+    return 0;
+  }
+  return 1;
+}
+int nvim_docmd_get_exiting(void) { return exiting ? 1 : 0; }
+// Return "confirm " if CMOD_CONFIRM is set, else NULL.
+const char *nvim_docmd_get_cmod_confirm_prefix(void)
+{
+  return (cmdmod.cmod_flags & CMOD_CONFIRM) ? "confirm " : NULL;
+}
+
+// --- ex_detach helpers ---
+uint64_t nvim_docmd_get_current_ui(void) { return (uint64_t)current_ui; }
+int nvim_docmd_detach_set_chan_detach(uint64_t id)
+{
+  Channel *chan = find_channel(id);
+  if (!chan) {
+    emsg(e_invchan);
+    return 0;
+  }
+  chan->detach = true;
+  return (int)chan->id;
+}
+int nvim_docmd_remote_ui_disconnect_checked(uint64_t id)
+{
+  Error err = ERROR_INIT;
+  remote_ui_disconnect(id, &err, true);
+  if (ERROR_SET(&err)) {
+    emsg(err.msg);
+    api_clear_error(&err);
+    return 0;
+  }
+  return 1;
+}
+int nvim_docmd_channel_close_all(uint64_t id)
+{
+  const char *err = NULL;
+  ILOG("detach current_ui=%" PRId64, (int64_t)id);
+  bool rv = channel_close(id, kChannelPartAll, &err);
+  if (!rv && err) {
+    emsg(err);
+    return 0;
+  }
+  return 1;
+}
+
+// --- ex_connect helpers ---
+int nvim_docmd_ui_active_count(void) { return (int)ui_active(); }
+int nvim_docmd_remote_ui_connect(uint64_t id, const char *addr)
+{
+  Error err = ERROR_INIT;
+  remote_ui_connect(id, (char *)addr, &err);
+  if (ERROR_SET(&err)) {
+    emsg(err.msg);
+    api_clear_error(&err);
+    return 0;
+  }
+  return 1;
+}
+void nvim_docmd_set_exiting_true(void) { exiting = true; }
+void nvim_docmd_getout_zero(void) { getout(0); }
+
+// --- ex_checkhealth helpers ---
+int nvim_docmd_checkhealth_exec_lua(const char *mods, size_t mlen, const char *arg,
+                                    char **err_msg_out)
+{
+  Error err = ERROR_INIT;
+  MAXSIZE_TEMP_ARRAY(args, 2);
+  ADD_C(args, STRING_OBJ(((String){ .data = (char *)mods, .size = mlen })));
+  ADD_C(args, CSTR_AS_OBJ((char *)arg));
+  NLUA_EXEC_STATIC("vim.health._check(...)", args, kRetNilBool, NULL, &err);
+  if (!ERROR_SET(&err)) {
+    return 1;
+  }
+  *err_msg_out = xstrdup(err.msg);
+  api_clear_error(&err);
+  return 0;
+}
+const char *nvim_docmd_get_vimruntime(void) { return os_getenv_noalloc("VIMRUNTIME"); }
+const char *nvim_docmd_get_p_rtp(void) { return p_rtp; }
+void nvim_docmd_semsg_multiline_emsg(const char *msg)
+{
+  semsg_multiline("emsg", (char *)msg);
+}
+void nvim_docmd_xfree_str(void *p) { xfree(p); }
+
+// --- expand_argopt helpers ---
+// Wrapper for the static get_bad_name function.
+char *nvim_docmd_get_bad_name(expand_T *xp, int idx)
+{
+  return get_bad_name(xp, idx);
+}
+
+// --- did_set_findfunc helpers ---
+int nvim_docmd_findfunc_set_global(void)
+{
+  return option_set_callback_func(p_ffu, &ffu_cb);
+}
+int nvim_docmd_findfunc_set_local(buf_T *buf)
+{
+  return option_set_callback_func(buf->b_p_ffu, &buf->b_ffu_cb);
+}
+void nvim_docmd_findfunc_free_local_cb(buf_T *buf)
+{
+  callback_free(&buf->b_ffu_cb);
+}
+char *nvim_docmd_optset_varp_deref(optset_T *args)
+{
+  return *(char **)args->os_varp;
+}
+void nvim_docmd_optset_varp_set(optset_T *args, char *name)
+{
+  *(char **)args->os_varp = name;
+}
+
+// nvim_xp_get_pattern and nvim_xp_get_line are defined in option_shim.c
+// nvim_xp_get_pattern_len: only defined in ex_docmd.c for impl_bodies.rs
+size_t nvim_xp_get_pattern_len(expand_T *xp) { return xp->xp_pattern_len; }

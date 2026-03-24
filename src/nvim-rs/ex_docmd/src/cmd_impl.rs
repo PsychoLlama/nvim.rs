@@ -164,7 +164,7 @@ extern "C" {
     #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, rtype: c_int);
 
-    // Complex implementation wrappers (C delegates for complex functions)
+    // These are implemented in Rust (impl_bodies.rs) but called via extern for local use
     fn nvim_docmd_ex_read_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_detach_impl(eap: ExArgHandle);
     fn nvim_docmd_ex_connect_impl(eap: ExArgHandle);
