@@ -242,3 +242,6 @@ int buflist_getfile(int n, linenr_T lnum, int options, int forceit);
 
 // buf_contents_changed() moved to buffer_shim.c (Phase 16).
 bool buf_contents_changed(buf_T *buf);
+
+// ex_buffer_all() moved to buffer_shim.c (Phase 17).
+void ex_buffer_all(exarg_T *eap);
