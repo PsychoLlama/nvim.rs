@@ -236,3 +236,6 @@ int buf_open_scratch(handle_T bufnr, char *bufname);
 int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message);
 buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum);
 buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid);
+
+// buflist_getfile() moved to buffer_shim.c (Phase 15).
+int buflist_getfile(int n, linenr_T lnum, int options, int forceit);

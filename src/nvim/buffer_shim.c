@@ -49,8 +49,10 @@
 #include "nvim/types_defs.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
+#include "nvim/cursor.h"
 #include "nvim/drawscreen.h"
 #include "nvim/ex_cmds.h"
+#include "nvim/ex_docmd.h"
 #include "nvim/memory.h"
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
@@ -1870,4 +1872,91 @@ buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum)
     curwin->w_alt_fnum = buf->b_fnum;
   }
   return buf;
+}
+
+// ============================================================
+// Buffer navigation (Phase 15)
+// ============================================================
+
+/// Get alternate file "n".
+/// Set linenr to "lnum" or altfpos.lnum if "lnum" == 0.
+/// Also set cursor column to altfpos.col if 'startofline' is not set.
+/// if (options & GETF_SETMARK) call setpcmark()
+/// if (options & GETF_ALT) we are jumping to an alternate file.
+/// if (options & GETF_SWITCH) respect 'switchbuf' settings when jumping
+///
+/// Return FAIL for failure, OK for success.
+int buflist_getfile(int n, linenr_T lnum, int options, int forceit)
+{
+  win_T *wp = NULL;
+  fmark_T *fm = NULL;
+
+  buf_T *buf = buflist_findnr(n);
+  if (buf == NULL) {
+    if ((options & GETF_ALT) && n == 0) {
+      emsg(_(e_noalt));
+    } else {
+      semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)n);
+    }
+    return FAIL;
+  }
+
+  // if alternate file is the current buffer, nothing to do
+  if (buf == curbuf) {
+    return OK;
+  }
+
+  if (text_or_buf_locked()) {
+    return FAIL;
+  }
+
+  colnr_T col;
+  bool restore_view = false;
+  // altfpos may be changed by getfile(), get it now
+  if (lnum == 0) {
+    fm = buflist_findfmark(buf);
+    lnum = fm->mark.lnum;
+    col = fm->mark.col;
+    restore_view = true;
+  } else {
+    col = 0;
+  }
+
+  if (options & GETF_SWITCH) {
+    // If 'switchbuf' is set jump to the window containing "buf".
+    wp = swbuf_goto_win_with_buf(buf);
+
+    // If 'switchbuf' contains "split", "vsplit" or "newtab" and the
+    // current buffer isn't empty: open new tab or window
+    if (wp == NULL && (swb_flags & (kOptSwbFlagVsplit | kOptSwbFlagSplit | kOptSwbFlagNewtab))
+        && !buf_is_empty(curbuf)) {
+      if (swb_flags & kOptSwbFlagNewtab) {
+        tabpage_new();
+      } else if (win_split(0, (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0)
+                 == FAIL) {
+        return FAIL;
+      }
+      RESET_BINDING(curwin);
+    }
+  }
+
+  RedrawingDisabled++;
+  if (GETFILE_SUCCESS(getfile(buf->b_fnum, NULL, NULL,
+                              (options & GETF_SETMARK), lnum, forceit))) {
+    RedrawingDisabled--;
+
+    // cursor is at to BOL and w_cursor.lnum is checked due to getfile()
+    if (!p_sol && col != 0) {
+      curwin->w_cursor.col = col;
+      check_cursor_col(curwin);
+      curwin->w_cursor.coladd = 0;
+      curwin->w_set_curswant = true;
+    }
+    if (jop_flags & kOptJopFlagView && restore_view) {
+      mark_view_restore(fm);
+    }
+    return OK;
+  }
+  RedrawingDisabled--;
+  return FAIL;
 }
