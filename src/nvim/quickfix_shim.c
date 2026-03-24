@@ -261,19 +261,7 @@ typedef struct {
 
 // Helpgrep functions (Phase 1)
 
-// Init functions
-extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
-                           void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
-                           linenr_T lnumlast, const char *qf_title, char *enc);
-extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newlist,
-                      const char *qf_title, char *enc);
-
-// Phase 11: window/title helpers and position update (migrated to Rust)
-
-// Phase 11: stack resize and location list sync (migrated to Rust)
-
-// Phase 3: lifecycle functions (migrated to Rust)
-extern void *rs_qf_alloc_stack(int qfltype, int n);
+// rs_qf_init and rs_qf_alloc_stack: no C callers remain (Phase 2).
 
 // Pass 4: stack query entry points (Phase 1)
 // rs_qf_get_size_eap, rs_qf_get_valid_size_eap, rs_qf_get_cur_idx_eap,
@@ -1057,13 +1045,7 @@ static bufref_T qf_last_bufref = { NULL, 0, 0 };
 // quickfix_busy and qf_delq_head are now managed by Rust in lifecycle.rs.
 
 
-/// @returns -1 for error, number of errors for success.
-// qf_init body migrated to rs_qf_init in Rust init.rs (Phase 16).
-int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
-            const char *restrict qf_title, char *restrict enc)
-{
-  return rs_qf_init((void *)wp, efile, errorformat, (bool)newlist, qf_title, enc);
-}
+// qf_init: migrated to Rust rs_qf_init_c_abi exported as qf_init (Phase 2).
 
 // migrated to Rust parse_efm_option / EfmPattern in reader.rs (Phase 9).
 
@@ -1294,8 +1276,7 @@ char *nvim_qf_list_item_string(void *li)
 // qf_stack_get_bufnr, qf_free_all, check_quickfix_busy, qf_resize_stack, ll_resize_stack
 
 
-void qf_init_stack(void) { ql_info = (qf_info_T *)rs_qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
-
+// qf_init_stack: migrated to Rust rs_qf_init_stack exported as qf_init_stack (Phase 2).
 
 // qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
 // Dead static wrappers removed in Phase 16.
