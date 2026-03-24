@@ -1791,7 +1791,7 @@ int nvim_ins_compl_add_orig_text(int flags, int save_did_ai) {
   }
   return OK;
 }
-void nvim_set_edit_submode_extra_searching(void) { edit_submode_extra = _("-- Searching..."); }
+// nvim_set_edit_submode_extra_searching: deleted (Phase 1), Rust calls gettext directly
 // nvim_showmode_wrap: deleted (Phase 3, Rust calls showmode directly)
 
 /// Compound accessor: set compl_startpos to the current cursor position.
@@ -2488,21 +2488,12 @@ int nvim_skipwhite_offset(const char *line, int length, int start_col) {
 }
 
 // --- edit_submode_extra compound setters (keep _() in C) ---
-void nvim_set_edit_submode_extra_hitend(void) { edit_submode_extra = _(e_hitend); }
-void nvim_set_edit_submode_extra_patnotf(void) { edit_submode_extra = _(e_patnotf); }
-void nvim_set_edit_submode_extra_back_at_original(void) { edit_submode_extra = _("Back at original"); }
-void nvim_set_edit_submode_extra_word_from_other_line(void) { edit_submode_extra = _("Word from other line"); }
-void nvim_set_edit_submode_extra_the_only_match(void) { edit_submode_extra = _("The only match"); }
-/// Format "match %d of %d" or "match %d" into static buffer and set edit_submode_extra.
-void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val) {
-  static char match_ref[81];
-  if (compl_matches_val > 0) {
-    vim_snprintf(match_ref, sizeof(match_ref), _("match %d of %d"), cp_number, compl_matches_val);
-  } else {
-    vim_snprintf(match_ref, sizeof(match_ref), _("match %d"), cp_number);
-  }
-  edit_submode_extra = match_ref;
-}
+// nvim_set_edit_submode_extra_hitend: deleted (Phase 1), Rust calls gettext directly
+// nvim_set_edit_submode_extra_patnotf: deleted (Phase 1), Rust calls gettext directly
+// nvim_set_edit_submode_extra_back_at_original: deleted (Phase 1), Rust calls gettext directly
+// nvim_set_edit_submode_extra_word_from_other_line: deleted (Phase 1), Rust calls gettext directly
+// nvim_set_edit_submode_extra_the_only_match: deleted (Phase 1), Rust calls gettext directly
+// nvim_set_edit_submode_extra_match_ref: deleted (Phase 1), Rust calls vim_snprintf directly
 // nvim_get_edit_submode_extra_ptr: deleted (Phase 37, use edit_submode_extra directly)
 // nvim_get_edit_submode_highl_attr: deleted (Phase 36, inlined in drawscreen/lib.rs)
 

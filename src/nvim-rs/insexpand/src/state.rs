@@ -372,12 +372,9 @@ extern "C" {
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
     static p_smd: c_int;
-    fn nvim_set_edit_submode_extra_hitend();
-    fn nvim_set_edit_submode_extra_patnotf();
-    fn nvim_set_edit_submode_extra_back_at_original();
-    fn nvim_set_edit_submode_extra_word_from_other_line();
-    fn nvim_set_edit_submode_extra_the_only_match();
-    fn nvim_set_edit_submode_extra_match_ref(cp_number: c_int, compl_matches: c_int);
+    // nvim_set_edit_submode_extra_*: deleted (Phase 1), use gettext() directly
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    fn vim_snprintf(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
     // nvim_get_edit_submode_highl_attr: inlined below (Phase 36)
     // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     #[link_name = "msg_hist_off"]
@@ -486,24 +483,24 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
     let first = crate::match_list::compl_first_match;
     if !first.is_null() && crate::match_list::is_first_match(nvim_compl_match_get_next(first)) {
         if rs_compl_status_adding() != 0 && crate::vars::nvim_get_compl_length() > 1 {
-            nvim_set_edit_submode_extra_hitend();
+            g_edit_submode_extra = gettext(c"Hit end of paragraph".as_ptr()).cast_mut();
         } else {
-            nvim_set_edit_submode_extra_patnotf();
+            g_edit_submode_extra = gettext(c"Pattern not found".as_ptr()).cast_mut();
         }
         g_edit_submode_highl = HLF_E;
     }
 
     if g_edit_submode_extra.is_null() {
         if crate::match_list::curr_match_at_original_text() {
-            nvim_set_edit_submode_extra_back_at_original();
+            g_edit_submode_extra = gettext(c"Back at original".as_ptr()).cast_mut();
             g_edit_submode_highl = HLF_W;
         } else {
             let cont_status = crate::vars::nvim_get_compl_cont_status();
             if (cont_status & CONT_S_IPOS) != 0 {
-                nvim_set_edit_submode_extra_word_from_other_line();
+                g_edit_submode_extra = gettext(c"Word from other line".as_ptr()).cast_mut();
                 g_edit_submode_highl = HLF_COUNT;
             } else if crate::match_list::curr_match_next_eq_prev() {
-                nvim_set_edit_submode_extra_the_only_match();
+                g_edit_submode_extra = gettext(c"The only match".as_ptr()).cast_mut();
                 g_edit_submode_highl = HLF_COUNT;
                 crate::match_list::curr_match_set_cp_number(1);
             } else {
@@ -515,10 +512,23 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                 // The match should always have a sequence number now;
                 // this is just a safety check.
                 if crate::match_list::curr_match_cp_number() != -1 {
-                    nvim_set_edit_submode_extra_match_ref(
-                        crate::match_list::curr_match_cp_number(),
-                        crate::vars::nvim_get_compl_matches(),
-                    );
+                    // Inline nvim_set_edit_submode_extra_match_ref (Phase 1)
+                    static mut MATCH_REF_BUF: [u8; 81] = [0u8; 81];
+                    let buf_ptr: *mut c_char = core::ptr::addr_of_mut!(MATCH_REF_BUF).cast();
+                    let cp_number = crate::match_list::curr_match_cp_number();
+                    let compl_matches = crate::vars::nvim_get_compl_matches();
+                    if compl_matches > 0 {
+                        vim_snprintf(
+                            buf_ptr,
+                            81,
+                            c"match %d of %d".as_ptr(),
+                            cp_number,
+                            compl_matches,
+                        );
+                    } else {
+                        vim_snprintf(buf_ptr, 81, c"match %d".as_ptr(), cp_number);
+                    }
+                    g_edit_submode_extra = buf_ptr;
                     g_edit_submode_highl = HLF_R;
                     if nvim_get_dollar_vcol() >= 0 {
                         curs_columns(g_curwin_state, 0);

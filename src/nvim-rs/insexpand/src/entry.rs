@@ -55,7 +55,9 @@ extern "C" {
     fn nvim_set_compl_orig_text_from_line(line: *const c_char);
     fn nvim_ins_compl_add_orig_text(flags: c_int, save_did_ai: c_int) -> c_int;
     fn rs_save_orig_extmarks();
-    fn nvim_set_edit_submode_extra_searching();
+    // nvim_set_edit_submode_extra_searching: deleted (Phase 1), use gettext() directly
+    #[link_name = "gettext"]
+    fn gettext_entry(msgid: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn showmode() -> c_int;
 
     fn nvim_set_compl_startpos_to_cursor();
@@ -287,7 +289,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
     if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
         // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
-        nvim_set_edit_submode_extra_searching();
+        g_edit_submode_extra = gettext_entry(c"-- Searching...".as_ptr()).cast_mut();
         g_edit_submode_highl = HLF_COUNT;
         showmode();
         g_edit_submode_extra = core::ptr::null_mut();
