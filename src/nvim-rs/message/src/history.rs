@@ -17,6 +17,18 @@ pub struct HlMessageChunk {
     _pad: c_int,                // offset 20 (alignment padding)
 }
 
+impl HlMessageChunk {
+    /// Create a new chunk from a text pointer, size, and highlight ID.
+    pub const fn new(text_data: *mut c_char, text_size: usize, hl_id: c_int) -> Self {
+        Self {
+            text_data,
+            text_size,
+            hl_id,
+            _pad: 0,
+        }
+    }
+}
+
 /// Layout-compatible representation of `HlMessage` (kvec_t(HlMessageChunk)) in C.
 /// Size: 24 bytes
 #[repr(C)]

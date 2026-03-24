@@ -93,16 +93,14 @@ extern int msg_wait;
 extern FILE *verbose_fd;        // owned by Rust (verbose.rs)
 extern bool verbose_did_open;   // owned by Rust (verbose.rs)
 
-// Extended msg state, currently used for external UIs with ext_messages
-// msg_ext_kind is owned by Rust (display.rs), accessible via extern linkage
+// Extended msg state owned by Rust (display.rs)
 extern const char *msg_ext_kind;
-static MsgID msg_ext_id = { .type = kObjectTypeInteger, .data.integer = 0 };
-static Array *msg_ext_chunks = NULL;
-static garray_T msg_ext_last_chunk = GA_INIT(sizeof(char), 40);
-static sattr_T msg_ext_last_attr = -1;
-static int msg_ext_last_hl_id;
-
-static bool msg_ext_history = false;  ///< message was added to history
+extern MsgID msg_ext_id;
+extern Array *msg_ext_chunks;
+extern garray_T msg_ext_last_chunk;
+extern sattr_T msg_ext_last_attr;
+extern int msg_ext_last_hl_id;
+extern bool msg_ext_history;
 
 extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
@@ -143,6 +141,8 @@ void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
+void msg_ext_emit_chunk(void);  // defined in Rust (display.rs) with #[no_mangle]
+void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data);
 
 void nvim_msg_set_pos_for_scroll(int pos, bool scrolled)
 {
@@ -547,7 +547,7 @@ void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
   kv_destroy(messages);
 }
 
-static void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data)
+void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data)
 {
   if (do_clear_hist_temp) {
     msg_hist_clear_temp();
@@ -1028,24 +1028,7 @@ void msg_prt_line(const char *s, bool list)
 }
 
 // msg_puts_len() migrated to Rust: src/nvim-rs/message/src/output.rs (rs_msg_puts_len)
-
-static void msg_ext_emit_chunk(void)
-{
-  if (msg_ext_chunks == NULL) {
-    msg_ext_init_chunks();
-  }
-  // Color was changed or a message flushed, end current chunk.
-  if (msg_ext_last_attr == -1) {
-    return;  // no chunk
-  }
-  Array chunk = ARRAY_DICT_INIT;
-  ADD(chunk, INTEGER_OBJ(msg_ext_last_attr));
-  msg_ext_last_attr = -1;
-  String text = ga_take_string(&msg_ext_last_chunk);
-  ADD(chunk, STRING_OBJ(text));
-  ADD(chunk, INTEGER_OBJ(msg_ext_last_hl_id));
-  ADD(*msg_ext_chunks, ARRAY_OBJ(chunk));
-}
+// msg_ext_emit_chunk() migrated to Rust: src/nvim-rs/message/src/display.rs
 
 /// The display part of msg_puts_len().
 /// May be called recursively to display scroll-back text.
@@ -1640,71 +1623,8 @@ static bool do_more_prompt(int typed_char)
 
 // msg_moremsg() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_moremsg)
 // repeat_message() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_repeat_message)
-
-/// Clear "msg_ext_chunks" before flushing so that ui_flush() does not re-emit
-/// the same message recursively.
-static Array *msg_ext_init_chunks(void)
-{
-  Array *tofree = msg_ext_chunks;
-  msg_ext_chunks = xcalloc(1, sizeof(*msg_ext_chunks));
-  msg_col = 0;
-  return tofree;
-}
-
-void msg_ext_ui_flush(void)
-{
-  if (!ui_has(kUIMessages)) {
-    msg_ext_kind = NULL;
-    return;
-  } else if (msg_ext_skip_flush) {
-    return;
-  }
-
-  msg_ext_emit_chunk();
-  if (msg_ext_chunks->size > 0) {
-    Array *tofree = msg_ext_init_chunks();
-
-    ui_call_msg_show(cstr_as_string(msg_ext_kind), *tofree, msg_ext_overwrite, msg_ext_history,
-                     msg_ext_append, msg_ext_id);
-    // clear info after emitting message.
-    if (msg_ext_history) {
-      api_free_array(*tofree);
-    } else {
-      // Add to history as temporary message for "g<".
-      HlMessage msg = KV_INITIAL_VALUE;
-      for (size_t i = 0; i < kv_size(*tofree); i++) {
-        Object *chunk = kv_A(*tofree, i).data.array.items;
-        kv_push(msg, ((HlMessageChunk){ chunk[1].data.string, (int)chunk[2].data.integer }));
-        xfree(chunk);
-      }
-      xfree(tofree->items);
-      msg_hist_add_multihl(INTEGER_OBJ(0), msg, true, NULL);
-    }
-    xfree(tofree);
-    msg_ext_overwrite = false;
-    msg_ext_history = false;
-    msg_ext_append = false;
-    msg_ext_kind = NULL;
-    msg_ext_id = INTEGER_OBJ(0);
-  }
-}
-
-void msg_ext_flush_showmode(void)
-{
-  // Showmode messages doesn't interrupt normal message flow, so we use
-  // separate event. Still reuse the same chunking logic, for simplicity.
-  // This is called unconditionally; check if we are emitting, or have
-  // emitted non-empty "content".
-  static bool clear = false;
-  if (ui_has(kUIMessages) && (msg_ext_last_attr != -1 || clear)) {
-    clear = msg_ext_last_attr != -1;
-    msg_ext_emit_chunk();
-    Array *tofree = msg_ext_init_chunks();
-    ui_call_msg_showmode(*tofree);
-    api_free_array(*tofree);
-    xfree(tofree);
-  }
-}
+// msg_ext_init_chunks(), msg_ext_emit_chunk(), msg_ext_ui_flush(), msg_ext_flush_showmode()
+// migrated to Rust: src/nvim-rs/message/src/display.rs
 
 // redir_write() migrated to Rust: src/nvim-rs/message/src/verbose.rs (rs_redir_write)
 

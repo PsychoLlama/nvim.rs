@@ -11,3 +11,5 @@ workspace = true
 
 [dependencies]
 nvim-mbyte = { path = "../mbyte" }
+nvim-api = { path = "../api" }
+nvim-memory = { path = "../memory" }

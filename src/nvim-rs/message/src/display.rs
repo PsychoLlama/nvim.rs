@@ -4,7 +4,19 @@
 //! ext_messages UI protocol handling, scrolling coordination, and
 //! display state management.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+
+use nvim_api::{Array, NvimString, Object, ObjectData};
+use nvim_memory::{xcalloc, xfree, xrealloc};
+
+use crate::history::{HlMessage, HlMessageChunk};
+
+// ============================================================================
+// Object type constants (kObjectType* enum values from api/private/defs.h)
+// ============================================================================
+const K_OBJECT_TYPE_INTEGER: c_int = 2;
+const K_OBJECT_TYPE_STRING: c_int = 4;
+const K_OBJECT_TYPE_ARRAY: c_int = 5;
 
 // ============================================================================
 // C Function Declarations
@@ -22,19 +34,71 @@ pub static mut verbose_kind: *const c_char = std::ptr::null();
 #[no_mangle]
 pub static mut pre_verbose_kind: *const c_char = std::ptr::null();
 
+// ============================================================================
+// Rust-owned statics (previously file-local in message.c)
+// ============================================================================
+
+/// MsgID for the current ext_messages batch (replaces C static msg_ext_id).
+/// Initialized to INTEGER_OBJ(0) = { type=kObjectTypeInteger, data.integer=0 }.
+#[no_mangle]
+pub static mut msg_ext_id: Object = Object {
+    obj_type: K_OBJECT_TYPE_INTEGER,
+    data: ObjectData { integer: 0 },
+};
+
+/// Pointer to the chunks array for the current batch (replaces C static msg_ext_chunks).
+#[no_mangle]
+pub static mut msg_ext_chunks: *mut Array = std::ptr::null_mut();
+
+/// Growing array for the current text chunk (replaces C static msg_ext_last_chunk).
+/// Initialized to GA_INIT(sizeof(char), 40) = { 0, 0, 1, 40, NULL }.
+#[allow(non_upper_case_globals)]
+#[no_mangle]
+pub static mut msg_ext_last_chunk: GArray = GArray {
+    ga_len: 0,
+    ga_maxlen: 0,
+    ga_itemsize: 1, // sizeof(char)
+    ga_growsize: 40,
+    ga_data: std::ptr::null_mut(),
+};
+
+/// Attribute for the current chunk, -1 means no active chunk (replaces C static msg_ext_last_attr).
+#[no_mangle]
+pub static mut msg_ext_last_attr: i32 = -1;
+
+/// Highlight ID for the current chunk (replaces C static msg_ext_last_hl_id).
+#[no_mangle]
+pub static mut msg_ext_last_hl_id: c_int = 0;
+
+/// Whether current message was added to history (replaces C static msg_ext_history).
+#[no_mangle]
+pub static mut msg_ext_history: bool = false;
+
+// ============================================================================
+// GArray type (matches C garray_T layout exactly)
+// ============================================================================
+
+/// Growing array structure matching C garray_T.
+#[repr(C)]
+pub struct GArray {
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+    pub ga_data: *mut c_void,
+}
+
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
 
 extern "C" {
     static Rows: c_int;
-    // ext_messages protocol functions
-    fn msg_ext_ui_flush();
-    fn msg_ext_flush_showmode();
 
     // Display state accessors (getters in format.rs, only setters needed here)
     static mut msg_row: c_int;
     static mut msg_col: c_int;
     static mut cmdline_row: c_int;
+    // (msg_ext_ui_flush and msg_ext_flush_showmode are now implemented in Rust)
 
     // UI capability check
     fn ui_has(ext: c_int) -> bool;
@@ -61,10 +125,152 @@ extern "C" {
     // Skip flush state — direct access to C global
     static mut msg_ext_skip_flush: bool;
 
+    // Append state — direct access to C global
+    static mut msg_ext_append: bool;
+
     // Clear EOS flag — direct access to C global
     static mut need_clr_eos: bool;
     // nvim_set_need_clr_eos kept for other crates
     static mut need_wait_return: bool;
+
+    // For msg_ext_emit_chunk
+    fn ga_take_string(ga: *mut GArray) -> NvimString;
+
+    // For msg_ext_ui_flush
+    fn ui_call_msg_show(
+        kind: NvimString,
+        content: Array,
+        replace_last: bool,
+        history: bool,
+        append: bool,
+        id: Object,
+    );
+    fn api_free_array(arr: Array);
+    // For msg_ext_flush_showmode
+    fn ui_call_msg_showmode(content: Array);
+    // For building temp HlMessage in msg_ext_ui_flush
+    fn msg_hist_add_multihl(msg_id: Object, msg: HlMessage, temp: bool, msg_data: *mut c_void);
+    // For cstr_as_string
+    fn cstr_as_string(s: *const c_char) -> NvimString;
+}
+
+// ============================================================================
+// Private helpers
+// ============================================================================
+
+/// Push an item onto a kvec Array (equivalent to kv_push for Array).
+///
+/// # Safety
+/// Must be called with a valid Array.
+unsafe fn array_push(arr: &mut Array, item: Object) {
+    if arr.size == arr.capacity {
+        let new_cap = if arr.capacity == 0 {
+            8
+        } else {
+            arr.capacity * 2
+        };
+        arr.items = xrealloc(
+            arr.items.cast::<c_void>(),
+            new_cap * std::mem::size_of::<Object>(),
+        )
+        .cast::<Object>();
+        arr.capacity = new_cap;
+    }
+    *arr.items.add(arr.size) = item;
+    arr.size += 1;
+}
+
+/// Push an item onto an HlMessage (equivalent to kv_push for HlMessage).
+///
+/// # Safety
+/// Must be called with a valid HlMessage.
+unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
+    if msg.size == msg.capacity {
+        let new_cap = if msg.capacity == 0 {
+            8
+        } else {
+            msg.capacity * 2
+        };
+        msg.items = xrealloc(
+            msg.items.cast::<c_void>(),
+            new_cap * std::mem::size_of::<HlMessageChunk>(),
+        )
+        .cast::<HlMessageChunk>();
+        msg.capacity = new_cap;
+    }
+    *msg.items.add(msg.size) = chunk;
+    msg.size += 1;
+}
+
+/// Emit the current text chunk into msg_ext_chunks.
+///
+/// If msg_ext_last_attr == -1, there is no active chunk and this is a no-op.
+/// Equivalent to the C static function `msg_ext_emit_chunk()`.
+/// Exported as `msg_ext_emit_chunk` so msg_puts_display (still in C) can call it.
+///
+/// # Safety
+/// Accesses and modifies msg_ext_* globals.
+#[no_mangle]
+pub unsafe extern "C" fn msg_ext_emit_chunk() {
+    if msg_ext_chunks.is_null() {
+        let _ = msg_ext_init_chunks_impl();
+    }
+    if msg_ext_last_attr == -1 {
+        return;
+    }
+    let mut chunk = Array {
+        size: 0,
+        capacity: 0,
+        items: std::ptr::null_mut(),
+    };
+    array_push(
+        &mut chunk,
+        Object {
+            obj_type: K_OBJECT_TYPE_INTEGER,
+            data: ObjectData {
+                integer: i64::from(msg_ext_last_attr),
+            },
+        },
+    );
+    msg_ext_last_attr = -1;
+    let text = ga_take_string(std::ptr::addr_of_mut!(msg_ext_last_chunk));
+    array_push(
+        &mut chunk,
+        Object {
+            obj_type: K_OBJECT_TYPE_STRING,
+            data: ObjectData { string: text },
+        },
+    );
+    array_push(
+        &mut chunk,
+        Object {
+            obj_type: K_OBJECT_TYPE_INTEGER,
+            data: ObjectData {
+                integer: i64::from(msg_ext_last_hl_id),
+            },
+        },
+    );
+    array_push(
+        &mut *msg_ext_chunks,
+        Object {
+            obj_type: K_OBJECT_TYPE_ARRAY,
+            data: ObjectData { array: chunk },
+        },
+    );
+}
+
+/// Clear "msg_ext_chunks" before flushing so that ui_flush() does not re-emit
+/// the same message recursively.
+/// Returns the old (to-be-freed) Array pointer.
+/// Equivalent to the C static function `msg_ext_init_chunks()`.
+///
+/// # Safety
+/// Modifies msg_ext_chunks and msg_col globals.
+unsafe fn msg_ext_init_chunks_impl() -> *mut Array {
+    let tofree = msg_ext_chunks;
+    msg_ext_chunks = xcalloc(1, std::mem::size_of::<Array>()).cast::<Array>();
+    msg_col = 0;
+    tofree
 }
 
 // ============================================================================
@@ -84,32 +290,108 @@ extern "C" {
 #[export_name = "msg_ext_set_kind"]
 pub unsafe extern "C" fn rs_msg_ext_set_kind(msg_kind: *const c_char) {
     // Don't change the label of an existing batch:
-    msg_ext_ui_flush();
+    rs_msg_ext_ui_flush();
     msg_ext_kind = msg_kind;
 }
 
 /// Flush pending messages to ext_messages UI.
 ///
-/// This emits any accumulated message chunks to external UIs
-/// using the `msg_show` UI event.
+/// Emits any accumulated message chunks to external UIs using the `msg_show`
+/// UI event. Equivalent to the C function `msg_ext_ui_flush()`.
 ///
 /// # Safety
-/// Calls C function that may emit UI events.
-#[no_mangle]
+/// Accesses and modifies msg_ext_* globals; calls UI functions.
+#[export_name = "msg_ext_ui_flush"]
 pub unsafe extern "C" fn rs_msg_ext_ui_flush() {
-    msg_ext_ui_flush();
+    if !ui_has(K_UI_MESSAGES) {
+        msg_ext_kind = std::ptr::null();
+        return;
+    } else if msg_ext_skip_flush {
+        return;
+    }
+
+    msg_ext_emit_chunk();
+
+    // Only proceed if we have content to send
+    if msg_ext_chunks.is_null() || (*msg_ext_chunks).size == 0 {
+        return;
+    }
+
+    let tofree_ptr = msg_ext_init_chunks_impl();
+    let tofree = *tofree_ptr;
+
+    ui_call_msg_show(
+        cstr_as_string(msg_ext_kind),
+        tofree,
+        msg_ext_overwrite,
+        msg_ext_history,
+        msg_ext_append,
+        msg_ext_id,
+    );
+
+    // Clear info after emitting message.
+    if msg_ext_history {
+        api_free_array(tofree);
+    } else {
+        // Add to history as temporary message for "g<".
+        let mut msg = HlMessage {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+        for i in 0..tofree.size {
+            let entry = &*tofree.items.add(i);
+            // entry.data.array.items: [Integer(attr), String(text), Integer(hl_id)]
+            let chunk_arr = entry.data.array.items;
+            let text: NvimString = (*chunk_arr.add(1)).data.string;
+            #[allow(clippy::cast_possible_truncation)]
+            let hl_id = (*chunk_arr.add(2)).data.integer as c_int;
+            hl_msg_push(&mut msg, HlMessageChunk::new(text.data, text.size, hl_id));
+            xfree(chunk_arr.cast::<c_void>());
+        }
+        xfree(tofree.items.cast::<c_void>());
+        msg_hist_add_multihl(
+            Object {
+                obj_type: K_OBJECT_TYPE_INTEGER,
+                data: ObjectData { integer: 0 },
+            },
+            msg,
+            true,
+            std::ptr::null_mut(),
+        );
+    }
+
+    xfree(tofree_ptr.cast::<c_void>());
+    msg_ext_overwrite = false;
+    msg_ext_history = false;
+    msg_ext_append = false;
+    msg_ext_kind = std::ptr::null();
+    msg_ext_id = Object {
+        obj_type: K_OBJECT_TYPE_INTEGER,
+        data: ObjectData { integer: 0 },
+    };
 }
 
 /// Flush showmode messages to ext_messages UI.
 ///
-/// Similar to `rs_msg_ext_ui_flush()` but uses the separate
-/// `msg_showmode` event which doesn't interrupt normal message flow.
+/// Uses the separate `msg_showmode` event which doesn't interrupt normal
+/// message flow. Equivalent to the C function `msg_ext_flush_showmode()`.
 ///
 /// # Safety
-/// Calls C function that may emit UI events.
-#[no_mangle]
+/// Accesses and modifies msg_ext_* globals; calls UI functions.
+#[export_name = "msg_ext_flush_showmode"]
 pub unsafe extern "C" fn rs_msg_ext_flush_showmode() {
-    msg_ext_flush_showmode();
+    static mut CLEAR: bool = false;
+
+    if ui_has(K_UI_MESSAGES) && (msg_ext_last_attr != -1 || CLEAR) {
+        CLEAR = msg_ext_last_attr != -1;
+        msg_ext_emit_chunk();
+        let tofree_ptr = msg_ext_init_chunks_impl();
+        let tofree = *tofree_ptr;
+        ui_call_msg_showmode(tofree);
+        api_free_array(tofree);
+        xfree(tofree_ptr.cast::<c_void>());
+    }
 }
 
 /// Check if UI has ext_messages capability.
@@ -326,7 +608,7 @@ pub unsafe extern "C" fn rs_msg_ext_begin(kind: *const c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_ext_end() {
     msg_ext_skip_flush = false;
-    msg_ext_ui_flush();
+    rs_msg_ext_ui_flush();
 }
 
 /// Reset display state for new message sequence.
