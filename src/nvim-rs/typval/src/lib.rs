@@ -1104,7 +1104,11 @@ extern "C" {
     // Functions for Phase 2
     fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
     fn nvim_tv_get_string(tv: TypevalHandle, out_len: *mut usize) -> *const c_char;
-    fn nvim_semsg_list_index_out_of_range(idx: c_int);
+    // nvim_semsg_list_index_out_of_range: deleted (Phase 1), use semsg directly
+    #[link_name = "semsg"]
+    fn semsg_typval(fmt: *const c_char, ...) -> c_int;
+    #[link_name = "e_list_index_out_of_range_nr"]
+    static e_list_index_out_of_range_nr_tv: [u8; 0];
 
     // Functions for Phase 3 (tv_get_float, value_check_lock, tv_check_lock)
     fn nvim_emsg_float_funcref();
@@ -2018,7 +2022,10 @@ pub extern "C" fn rs_tv_list_find_nr(l: ListHandle, n: c_int, ret_error: *mut bo
 unsafe fn tv_list_find_str_impl(l: ListHandle, n: c_int) -> *const c_char {
     let li = tv_list_find_impl(l, n);
     if li.is_null() {
-        unsafe { nvim_semsg_list_index_out_of_range(n) };
+        semsg_typval(
+            e_list_index_out_of_range_nr_tv.as_ptr().cast(),
+            i64::from(n),
+        );
         return std::ptr::null();
     }
     let tv = tv_listitem_tv_impl(li);

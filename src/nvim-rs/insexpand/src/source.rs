@@ -25,7 +25,11 @@ extern "C" {
     // Accessors for Phase 4 (pass 4) inline implementations
     // nvim_p_cto: inlined in vars.rs (Phase 29)
     // (nvim_set_cpt_sources_start_tv: inlined in vars.rs Phase 23)
-    fn nvim_semsg_list_index_out_of_range(idx: c_int);
+    // nvim_semsg_list_index_out_of_range: deleted (Phase 1), use semsg directly
+    #[link_name = "semsg"]
+    fn semsg_source(fmt: *const std::os::raw::c_char, ...) -> std::os::raw::c_int;
+    #[link_name = "e_list_index_out_of_range_nr"]
+    static e_list_index_out_of_range_nr_source: [u8; 0];
 }
 
 // CTRL-X mode constants
@@ -258,7 +262,10 @@ pub unsafe extern "C" fn rs_advance_cpt_sources_index_safe() -> c_int {
         crate::vars::nvim_set_cpt_sources_index(idx + 1);
         1 // OK
     } else {
-        nvim_semsg_list_index_out_of_range(idx);
+        semsg_source(
+            e_list_index_out_of_range_nr_source.as_ptr().cast(),
+            i64::from(idx),
+        );
         0 // FAIL
     }
 }

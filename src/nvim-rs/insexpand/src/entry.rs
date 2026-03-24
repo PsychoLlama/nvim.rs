@@ -64,7 +64,7 @@ extern "C" {
     // (nvim_set_compl_startpos_col_to_compl_col: inlined in vars.rs)
     // nvim_restore_did_ai: deleted (Phase 1), use nvim_set_did_ai directly
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
-    fn nvim_set_edit_submode_adding();
+    // nvim_set_edit_submode_adding: deleted (Phase 1), Rust calls gettext directly
     // nvim_clear_edit_submode_pre: inlined below (Phase 34)
     #[link_name = "edit_submode_pre"]
     static mut g_edit_submode_pre: *mut c_char;
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     if rs_compl_status_adding() != 0 {
         if !shortmess(c_int::from(b'c')) {
             // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
-            nvim_set_edit_submode_adding();
+            g_edit_submode_pre = gettext_entry(c" Adding".as_ptr()).cast_mut();
         }
         if rs_ctrl_x_mode_line_or_eval() != 0 {
             // Insert a new line, keep indentation but ignore 'comments'.
@@ -312,7 +312,13 @@ extern "C" {
     fn nvim_ins_complete_setup_match_state(direction: c_int);
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
-    fn nvim_ins_complete_eat_got_int();
+    // nvim_ins_complete_eat_got_int: deleted (Phase 1), Rust accesses got_int/global_busy/vgetc directly
+    #[link_name = "got_int"]
+    static mut got_int_entry: bool;
+    #[link_name = "global_busy"]
+    static global_busy_entry: std::os::raw::c_int;
+    #[link_name = "vgetc"]
+    fn vgetc_entry() -> std::os::raw::c_int;
     fn nvim_compl_match_get_next(m: crate::match_list::ComplMatch)
         -> crate::match_list::ComplMatch;
     fn rs_ctrl_x_mode_path_patterns() -> c_int;
@@ -395,7 +401,11 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     crate::vars::nvim_set_compl_direction(crate::vars::nvim_get_compl_shows_dir());
 
     // Eat the ESC that vgetc() returns after a CTRL-C to avoid leaving Insert mode
-    nvim_ins_complete_eat_got_int();
+    // Eat the ESC that vgetc() returns after a CTRL-C (inline of deleted nvim_ins_complete_eat_got_int)
+    if got_int_entry && global_busy_entry == 0 {
+        vgetc_entry();
+        got_int_entry = false;
+    }
 
     // Check if no matches found (list has only the compl_orig_text entry)
     let first = crate::match_list::compl_first_match;

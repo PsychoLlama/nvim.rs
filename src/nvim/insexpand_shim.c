@@ -1814,11 +1814,7 @@ void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
   }
 }
 
-/// Compound accessor: set edit_submode_pre to _(" Adding").
-void nvim_set_edit_submode_adding(void)
-{
-  edit_submode_pre = _(" Adding");
-}
+// nvim_set_edit_submode_adding: deleted (Phase 1), Rust uses gettext directly
 
 // nvim_clear_edit_submode_pre: deleted (Phase 34, inlined in entry.rs)
 
@@ -1852,14 +1848,7 @@ void nvim_ins_complete_update_cont_s_ipos(void)
   }
 }
 
-/// Compound accessor: eat the ESC vgetc() returns after CTRL-C (got_int handling).
-void nvim_ins_complete_eat_got_int(void)
-{
-  if (got_int && !global_busy) {
-    vgetc();
-    got_int = false;
-  }
-}
+// nvim_ins_complete_eat_got_int: deleted (Phase 1), Rust accesses got_int/global_busy/vgetc directly
 
 // ins_complete deleted: now exported from Rust entry.rs via #[export_name = "ins_complete"]
 
@@ -2100,7 +2089,7 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 // nvim_compl_old_match_advance_curr: deleted (Phase 15, inlined in match_list.rs)
 // nvim_compl_curr_rewind_to_head: deleted (Phase 15, inlined in match_list.rs)
 
-void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
+// nvim_semsg_list_index_out_of_range: deleted (Phase 1), callers use semsg directly
 // nvim_get_compl_pattern_is_null: deleted (Phase 22, inlined in vars.rs)
 // nvim_get_p_act: deleted (Phase 29, inlined in vars.rs)
 // nvim_normal_mode_strict: deleted (Phase 1), Rust inlines directly
