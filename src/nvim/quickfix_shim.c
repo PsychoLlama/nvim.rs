@@ -345,12 +345,7 @@ void nvim_qfline_set_user_data(void *qfp_void, void *qfl_void, const void *user_
 }
 
 /// OR the appropriate flag into buf->b_has_qf_entry (used when adding entries).
-void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list)
-{
-  if (buf_void == NULL) { return; }
-  buf_T *buf = (buf_T *)buf_void;
-  buf->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY;
-}
+void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list) { if (buf_void != NULL) ((buf_T *)buf_void)->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY; }
 
 void nvim_qf_set_id(void *qfl_void, unsigned id) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_id = id; }
 void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qfl_type = (qfltype_T)qfl_type; }
@@ -397,11 +392,7 @@ void nvim_qf_copy_ctx(const void *from_qfl_void, void *to_qfl_void)
   }
 }
 
-void nvim_qf_copy_callback(const void *from_qfl_void, void *to_qfl_void)
-{
-  if (from_qfl_void == NULL || to_qfl_void == NULL) { return; }
-  callback_copy(&((qf_list_T *)to_qfl_void)->qf_qftf_cb, &((const qf_list_T *)from_qfl_void)->qf_qftf_cb);
-}
+void nvim_qf_copy_callback(const void *from_qfl_void, void *to_qfl_void) { if (from_qfl_void != NULL && to_qfl_void != NULL) callback_copy(&((qf_list_T *)to_qfl_void)->qf_qftf_cb, &((const qf_list_T *)from_qfl_void)->qf_qftf_cb); }
 
 const void *nvim_qfline_get_user_data_ptr(const void *qfp_void) { return qfp_void == NULL ? NULL : (const void *)&((const qfline_T *)qfp_void)->qf_user_data; }
 void nvim_qf_set_changedtick(void *qfl_void, int changedtick) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick = changedtick; }
@@ -614,24 +605,9 @@ void nvim_curwin_set_buffer(void *buf) { curwin->w_buffer = (buf_T *)buf; }
 /// Wipe a buffer (calls close_buffer with DOBUF_WIPE).
 void nvim_close_buffer_wipe(void *buf_void) { if (buf_void == NULL) { return; } close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false); }
 
-void *nvim_win_take_llist(void *wp_void)
-{
-  if (wp_void == NULL) { return NULL; }
-  win_T *wp = (win_T *)wp_void;
-  void *old = (void *)wp->w_llist;
-  wp->w_llist = NULL;
-  return old;
-}
-
+void *nvim_win_take_llist(void *wp_void) { if (wp_void == NULL) { return NULL; } win_T *wp = (win_T *)wp_void; void *old = wp->w_llist; wp->w_llist = NULL; return old; }
 /// Atomically exchange wp->w_llist_ref: set to NULL and return old value.
-void *nvim_win_take_llist_ref(void *wp_void)
-{
-  if (wp_void == NULL) { return NULL; }
-  win_T *wp = (win_T *)wp_void;
-  void *old = (void *)wp->w_llist_ref;
-  wp->w_llist_ref = NULL;
-  return old;
-}
+void *nvim_win_take_llist_ref(void *wp_void) { if (wp_void == NULL) { return NULL; } win_T *wp = (win_T *)wp_void; void *old = wp->w_llist_ref; wp->w_llist_ref = NULL; return old; }
 
 /// Returns address of the static ql_info_actual (global quickfix stack).
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
@@ -697,23 +673,10 @@ const char *nvim_qf_regmatch_endp(const void *rm, int idx)
 
 /// Create a regmatch_T on the heap, set rm_ic=true, and assign the given prog.
 /// Returns an opaque handle. The caller owns the memory; free after extracting prog.
-void *nvim_qf_regmatch_create_ic(void *prog)
-{
-  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
-  rm->rm_ic = true;
-  rm->regprog = (regprog_T *)prog;
-  return rm;
-}
-
+void *nvim_qf_regmatch_create_ic(void *prog) { regmatch_T *rm = xcalloc(1, sizeof(regmatch_T)); rm->rm_ic = true; rm->regprog = (regprog_T *)prog; return rm; }
 /// Create a regmatch_T on the heap with given ic flag, assign the given prog.
 /// Returns an opaque handle. The caller owns the memory; free after extracting prog.
-void *nvim_qf_regmatch_create(void *prog, bool ic)
-{
-  regmatch_T *rm = xcalloc(1, sizeof(regmatch_T));
-  rm->rm_ic = ic;
-  rm->regprog = (regprog_T *)prog;
-  return rm;
-}
+void *nvim_qf_regmatch_create(void *prog, bool ic) { regmatch_T *rm = xcalloc(1, sizeof(regmatch_T)); rm->rm_ic = ic; rm->regprog = (regprog_T *)prog; return rm; }
 
 /// Extract the regprog from a regmatch_T and free the regmatch_T struct.
 /// Returns the prog (which may have been updated by vim_regexec).
@@ -725,15 +688,7 @@ bool nvim_qf_vim_regexec(void *rm_void, const char *line) { return rm_void != NU
 
 /// Replace qf_text with the given string (xfrees old, xstrdups new).
 /// Used by Rust when it has already built the concatenated string.
-void nvim_qfline_replace_text(void *qfp_void, const char *text)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  xfree(qfp->qf_text);
-  qfp->qf_text = text != NULL ? xstrdup(text) : NULL;
-}
+void nvim_qfline_replace_text(void *qfp_void, const char *text) { if (qfp_void != NULL) { xfree(((qfline_T *)qfp_void)->qf_text); ((qfline_T *)qfp_void)->qf_text = text != NULL ? xstrdup(text) : NULL; } }
 
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
 size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
@@ -809,12 +764,7 @@ bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit);
 void nvim_no_write_message(void) { no_write_message(); }
 
 /// do_ecmd for help file: open fnum with ECMD_HIDE+ECMD_SET_HELP flags.
-int nvim_do_ecmd_help(int fnum, int prev_winid)
-{
-  return do_ecmd(fnum, NULL, NULL, NULL, 1,
-                 ECMD_HIDE + ECMD_SET_HELP,
-                 prev_winid == curwin->handle ? curwin : NULL);
-}
+int nvim_do_ecmd_help(int fnum, int prev_winid) { return do_ecmd(fnum, NULL, NULL, NULL, 1, ECMD_HIDE + ECMD_SET_HELP, prev_winid == curwin->handle ? curwin : NULL); }
 
 /// curwin->w_p_wfb accessor.
 bool nvim_curwin_get_wfb(void) { return curwin->w_p_wfb; }
@@ -940,13 +890,7 @@ int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NUL
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
 /// Set w_redraw_top and w_redraw_bot on a window.
-void nvim_qf_win_set_redraw_bounds(void *win_void, linenr_T top, linenr_T bot)
-{
-  if (win_void == NULL) { return; }
-  win_T *win = (win_T *)win_void;
-  win->w_redraw_top = top;
-  win->w_redraw_bot = bot;
-}
+void nvim_qf_win_set_redraw_bounds(void *win_void, linenr_T top, linenr_T bot) { if (win_void == NULL) { return; } ((win_T *)win_void)->w_redraw_top = top; ((win_T *)win_void)->w_redraw_bot = bot; }
 
 /// Perform the qf_win_goto operation: save curwin, switch to win, set cursor,
 /// update topline, redraw, restore curwin. (Migrated body from qf_win_goto.)
@@ -970,26 +914,11 @@ void nvim_qf_win_goto_impl(void *win_void, linenr_T lnum)
 
 /// Set the w:quickfix_title window variable for the current window.
 /// Only sets if qfl->qf_title is not NULL.
-void nvim_qf_set_title_var_for_list(void *qfl_void)
-{
-  if (qfl_void == NULL) { return; }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  if (qfl->qf_title != NULL) {
-    set_internal_string_var("w:quickfix_title", qfl->qf_title);
-  }
-}
+void nvim_qf_set_title_var_for_list(void *qfl_void) { if (qfl_void != NULL && ((qf_list_T *)qfl_void)->qf_title != NULL) set_internal_string_var("w:quickfix_title", ((qf_list_T *)qfl_void)->qf_title); }
 
 /// Set buffer options for the quickfix/location list window (swapfile, buftype, bufhidden,
 /// foldmethod). Also resets key bindings and w_p_diff. (Migrated body from qf_set_cwindow_options.)
-void nvim_qf_set_cwindow_options(void)
-{
-  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("quickfix"), OPT_LOCAL);
-  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
-  RESET_BINDING(curwin);
-  curwin->w_p_diff = false;
-  set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL);
-}
+void nvim_qf_set_cwindow_options(void) { set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL); set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("quickfix"), OPT_LOCAL); set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL); RESET_BINDING(curwin); curwin->w_p_diff = false; set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL); }
 
 /// Set curwin->w_llist_ref = qi and increment qi->qf_refcount.
 /// Only do this when qi is a location list stack (IS_LL_STACK).
