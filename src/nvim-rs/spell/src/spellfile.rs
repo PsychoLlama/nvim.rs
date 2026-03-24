@@ -7603,6 +7603,139 @@ pub unsafe extern "C" fn rs_aff_process_flags(affile: *mut AfffileT, entry: *mut
 }
 
 // =============================================================================
+// Phase 2: Arena allocator and memory management
+// =============================================================================
+
+extern "C" {
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+    fn spell_casefold(
+        wp: *const c_void,
+        str_: *const c_char,
+        len: c_int,
+        buf: *mut c_char,
+        buflen: c_int,
+    ) -> c_int;
+}
+
+/// Arena allocator: returns a zeroed sub-allocation of `len` bytes from
+/// `spin->si_blocks`. Mirrors C `getroom`.
+///
+/// # Panics
+/// Panics if `len > SBLOCKSIZE`.
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer to a `spellinfo_T`.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_getroom(spin: *mut SpellinfoT, len: usize, align: bool) -> *mut c_void {
+    assert!(len <= SBLOCKSIZE, "getroom: len > SBLOCKSIZE");
+
+    let mut bl = (*spin).si_blocks;
+
+    if align && !bl.is_null() {
+        // Round sb_used up to pointer alignment.
+        let align_mask = std::mem::align_of::<*mut c_void>() - 1;
+        (*bl).sb_used = (((*bl).sb_used as usize + align_mask) & !align_mask) as c_int;
+    }
+
+    if bl.is_null() || ((*bl).sb_used as usize) + len > SBLOCKSIZE {
+        // Allocate a new block (header + SBLOCKSIZE + 1 bytes for data).
+        let alloc_size = std::mem::size_of::<SblockT>() + SBLOCKSIZE + 1;
+        let new_bl = xcalloc(1, alloc_size).cast::<SblockT>();
+        (*new_bl).sb_next = (*spin).si_blocks;
+        (*spin).si_blocks = new_bl;
+        (*new_bl).sb_used = 0;
+        (*spin).si_blocks_cnt += 1;
+        bl = new_bl;
+    }
+
+    // sb_data[] starts immediately after the SblockT header.
+    let data_start = bl.add(1).cast::<u8>();
+    let p = data_start.add((*bl).sb_used as usize);
+    (*bl).sb_used += len as c_int;
+    p.cast::<c_void>()
+}
+
+/// Copy string `s` into arena memory. Mirrors C `getroom_save`.
+///
+/// # Safety
+/// `spin` and `s` must be valid non-null pointers. `s` must be NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getroom_save(spin: *mut SpellinfoT, s: *mut c_char) -> *mut c_char {
+    let s_size = libc::strlen(s.cast::<libc::c_char>()) + 1;
+    let dest = rs_getroom(spin, s_size, false).cast::<c_char>();
+    libc::memcpy(dest.cast::<c_void>(), s.cast::<c_void>(), s_size);
+    dest
+}
+
+/// Free the sblock_T linked list. Mirrors C `free_blocks`.
+///
+/// # Safety
+/// `bl` must be a valid pointer to a `sblock_T` linked list, or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_blocks(mut bl: *mut SblockT) {
+    while !bl.is_null() {
+        let next = (*bl).sb_next;
+        xfree(bl.cast::<c_void>());
+        bl = next;
+    }
+}
+
+/// Add a REP/SAL from-to item to `gap`. Case-folds both strings.
+/// Mirrors C `add_fromto`.
+///
+/// # Safety
+/// `spin`, `gap`, `from`, and `to` must be valid non-null pointers.
+/// `from` and `to` must be NUL-terminated C strings.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_add_fromto(
+    spin: *mut SpellinfoT,
+    gap: *mut crate::GArrayRaw,
+    from: *const c_char,
+    to: *const c_char,
+) {
+    const MAXWLEN: usize = 254;
+    let mut word_buf = [0u8; MAXWLEN + 1];
+
+    // Grow the array by 1, then get pointer to the new (last) element.
+    ga_grow(gap, 1);
+    let ftp = ((*gap).ga_data.cast::<FromtoC>()).add((*gap).ga_len as usize);
+    (*gap).ga_len += 1;
+
+    // Case-fold "from" string.
+    let from_len = libc::strlen(from.cast::<libc::c_char>()) as c_int;
+    spell_casefold(
+        curwin_spell,
+        from,
+        from_len,
+        word_buf.as_mut_ptr().cast::<c_char>(),
+        (MAXWLEN + 1) as c_int,
+    );
+    (*ftp).ft_from = rs_getroom_save(spin, word_buf.as_ptr().cast::<c_char>().cast_mut());
+
+    // Case-fold "to" string.
+    let to_len = libc::strlen(to.cast::<libc::c_char>()) as c_int;
+    spell_casefold(
+        curwin_spell,
+        to,
+        to_len,
+        word_buf.as_mut_ptr().cast::<c_char>(),
+        (MAXWLEN + 1) as c_int,
+    );
+    (*ftp).ft_to = rs_getroom_save(spin, word_buf.as_ptr().cast::<c_char>().cast_mut());
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

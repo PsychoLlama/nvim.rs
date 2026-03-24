@@ -379,6 +379,14 @@ struct sblock_S {
   char sb_data[];            // data
 };
 
+// Phase 2: Arena allocator and memory management -- now in Rust.
+extern void *rs_getroom(spellinfo_T *spin, size_t len, bool align);
+extern char *rs_getroom_save(spellinfo_T *spin, char *s);
+extern void rs_free_blocks(sblock_T *bl);
+extern void rs_add_fromto(spellinfo_T *spin, garray_T *gap, const char *from, const char *to);
+#define getroom_save(sp, s)          rs_getroom_save(sp, s)
+#define add_fromto(sp, g, f, t)      rs_add_fromto(sp, g, f, t)
+
 // A node in the tree.
 // (Forward declaration is in spellfile.h; full definition here.)
 struct wordnode_S {
@@ -1915,18 +1923,7 @@ static void process_compflags(spellinfo_T *spin, afffile_T *aff, char *compflags
 // check_renumber, flag_in_afflist, aff_check_number, aff_check_string:
 // migrated to Rust. Redirected via #define above.
 
-/// Add a from-to item to "gap".  Used for REP and SAL items.
-/// They are stored case-folded.
-static void add_fromto(spellinfo_T *spin, garray_T *gap, char *from, char *to)
-{
-  char word[MAXWLEN];
-
-  fromto_T *ftp = GA_APPEND_VIA_PTR(fromto_T, gap);
-  spell_casefold(curwin, from, (int)strlen(from), word, MAXWLEN);
-  ftp->ft_from = getroom_save(spin, word);
-  spell_casefold(curwin, to, (int)strlen(to), word, MAXWLEN);
-  ftp->ft_to = getroom_save(spin, word);
-}
+// add_fromto: migrated to Rust (rs_add_fromto). Redirected via #define above.
 
 // Free the structure filled by spell_read_aff().
 static void spell_free_aff(afffile_T *aff)
@@ -2556,59 +2553,19 @@ static int spell_read_wordfile(spellinfo_T *spin, char *fname)
   return retval;
 }
 
-/// Get part of an sblock_T, "len" bytes long.
-/// This avoids calling free() for every little struct we use (and keeping
-/// track of them).
-/// The memory is cleared to all zeros.
-///
-/// @param len Length needed (<= SBLOCKSIZE).
-/// @param align Align for pointer.
-/// @return Pointer into block data.
+/// Thin wrapper: arena allocator delegated to Rust rs_getroom.
 void *getroom(spellinfo_T *spin, size_t len, bool align)
   FUNC_ATTR_NONNULL_RET
 {
-  sblock_T *bl = spin->si_blocks;
-
-  assert(len <= SBLOCKSIZE);
-
-  if (align && bl != NULL) {
-    // Round size up for alignment.  On some systems structures need to be
-    // aligned to the size of a pointer (e.g., SPARC).
-    bl->sb_used = (int)(((size_t)bl->sb_used + sizeof(char *) - 1) & ~(sizeof(char *) - 1));
-  }
-
-  if (bl == NULL || (size_t)bl->sb_used + len > SBLOCKSIZE) {
-    // Allocate a block of memory. It is not freed until much later.
-    bl = xcalloc(1, offsetof(sblock_T, sb_data) + SBLOCKSIZE + 1);
-    bl->sb_next = spin->si_blocks;
-    spin->si_blocks = bl;
-    bl->sb_used = 0;
-    spin->si_blocks_cnt++;
-  }
-
-  char *p = bl->sb_data + bl->sb_used;
-  bl->sb_used += (int)len;
-
-  return p;
+  return rs_getroom(spin, len, align);
 }
 
-/// Make a copy of a string into memory allocated with getroom().
-///
-/// @return  NULL when out of memory.
-static char *getroom_save(spellinfo_T *spin, char *s)
-{
-  const size_t s_size = strlen(s) + 1;
-  return memcpy(getroom(spin, s_size, false), s, s_size);
-}
+// getroom_save: migrated to Rust (rs_getroom_save). Redirected via #define above.
 
-// Free the list of allocated sblock_T.
+/// Thin wrapper: free sblock_T list delegated to Rust rs_free_blocks.
 void free_blocks(sblock_T *bl)
 {
-  while (bl != NULL) {
-    sblock_T *next = bl->sb_next;
-    xfree(bl);
-    bl = next;
-  }
+  rs_free_blocks(bl);
 }
 
 /// Write the Vim .spl file "fname".
