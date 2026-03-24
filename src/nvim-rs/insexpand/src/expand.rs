@@ -105,11 +105,7 @@ extern "C" {
     fn nvim_curbuf_get_b_scanned() -> c_int;
     // nvim_ins_compl_st_get_e_cpt_char: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_skip_delimiters: inlined in vars.rs (Phase 27)
-    fn nvim_ins_compl_st_set_dot_source(
-        start_lnum: c_int,
-        start_col: c_int,
-        fuzzy_collect: c_int,
-    ) -> c_int;
+    // nvim_ins_compl_st_set_dot_source: deleted (Phase 19), inlined below as ins_compl_st_set_dot_source
     // nvim_ins_compl_st_advance_buf: deleted (Phase 2), inlined below
     fn rs_ins_compl_next_buf(buf: nvim_buffer::BufHandle, flag: c_int) -> nvim_buffer::BufHandle;
     fn nvim_buf_has_ml_mfp_void(buf: *const core::ffi::c_void) -> bool;
@@ -283,6 +279,10 @@ extern "C" {
     // helpers for inlined nvim_compl_p_scs_save_set (Phase 18)
     fn nvim_buf_get_b_p_inf_void(buf: *mut core::ffi::c_void) -> c_int;
 
+    // helpers for inlined nvim_ins_compl_st_set_dot_source (Phase 19)
+    fn dec(lp: *mut crate::vars::PosT) -> c_int;
+    fn ml_get_len(lnum: c_int) -> c_int;
+
 }
 
 // Return value constant for INS_COMPL_CPT_OK
@@ -356,6 +356,38 @@ unsafe fn compl_p_ws_save_set() -> c_int {
     save
 }
 
+/// Inlined from deleted C `nvim_ins_compl_st_set_dot_source` (Phase 19).
+/// Sets ins_compl_st to search the current buffer ('.' entry).
+/// Returns 1 if the position wrapped to end-of-buffer, 0 otherwise.
+///
+/// # Safety
+/// Requires valid ins_compl_st state and curbuf.
+unsafe fn ins_compl_st_set_dot_source(
+    start_lnum: c_int,
+    start_col: c_int,
+    fuzzy_collect: c_int,
+) -> c_int {
+    crate::vars::ins_compl_st.ins_buf = curbuf_expand;
+    crate::vars::ins_compl_st.first_match_pos.lnum = start_lnum;
+    crate::vars::ins_compl_st.first_match_pos.col = start_col;
+    let wrapped = if rs_ctrl_x_mode_normal() != 0
+        && fuzzy_collect == 0
+        && dec(core::ptr::addr_of_mut!(
+            crate::vars::ins_compl_st.first_match_pos
+        )) < 0
+    {
+        let lnum = nvim_buf_ml_line_count(crate::vars::ins_compl_st.ins_buf);
+        crate::vars::ins_compl_st.first_match_pos.lnum = lnum;
+        crate::vars::ins_compl_st.first_match_pos.col = ml_get_len(lnum);
+        1
+    } else {
+        0
+    };
+    crate::vars::ins_compl_st.last_match_pos = crate::vars::ins_compl_st.first_match_pos;
+    crate::vars::ins_compl_st.set_match_pos = true;
+    wrapped
+}
+
 /// Process the next 'complete' option value in ins_compl_st.e_cpt.
 ///
 /// This is a Rust translation of the C `process_next_cpt_value` function.
@@ -395,9 +427,9 @@ unsafe fn rs_process_next_cpt_value(
         && crate::vars::nvim_get_compl_time_slice_expired() == 0
     {
         // Current buffer ('.' entry)
-        nvim_ins_compl_st_set_dot_source(start_lnum, start_col, fuzzy_collect);
+        ins_compl_st_set_dot_source(start_lnum, start_col, fuzzy_collect);
         compl_type = 0;
-        // set_match_pos is set inside nvim_ins_compl_st_set_dot_source
+        // set_match_pos is set inside ins_compl_st_set_dot_source
     } else if !skip_source
         && crate::vars::nvim_get_compl_time_slice_expired() == 0
         && matches!(e_char, b'b' | b'u' | b'w' | b'U')

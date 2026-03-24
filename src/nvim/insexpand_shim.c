@@ -2727,24 +2727,7 @@ int nvim_curbuf_get_b_scanned(void) { return curbuf->b_scanned ? 1 : 0; }
 
 /// Sets ins_compl_st.ins_buf = curbuf and copies start_pos into first/last_match_pos.
 /// Performs the initial pos setup for the '.' (current buffer) case.
-/// Returns 1 if rs_ctrl_x_mode_normal() and dec(&first_match_pos) underflowed
-/// (i.e., position moved before the buffer start; caller should wrap to end).
-/// In that case, sets first_match_pos to (ml_line_count, ml_get_len(ml_line_count)).
-int nvim_ins_compl_st_set_dot_source(int start_lnum, int start_col, int fuzzy_collect)
-{
-  ins_compl_st.ins_buf = curbuf;
-  ins_compl_st.first_match_pos.lnum = (linenr_T)start_lnum;
-  ins_compl_st.first_match_pos.col  = (colnr_T)start_col;
-  int wrapped = 0;
-  if (rs_ctrl_x_mode_normal() && (!fuzzy_collect && dec(&ins_compl_st.first_match_pos) < 0)) {
-    ins_compl_st.first_match_pos.lnum = ins_compl_st.ins_buf->b_ml.ml_line_count;
-    ins_compl_st.first_match_pos.col  = ml_get_len(ins_compl_st.first_match_pos.lnum);
-    wrapped = 1;
-  }
-  ins_compl_st.last_match_pos = ins_compl_st.first_match_pos;
-  ins_compl_st.set_match_pos = true;
-  return wrapped;
-}
+// nvim_ins_compl_st_set_dot_source: deleted (Phase 19), inlined in expand.rs
 
 // nvim_ins_compl_st_advance_buf: deleted (Phase 2), inlined in expand.rs
 

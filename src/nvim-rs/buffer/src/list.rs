@@ -57,6 +57,33 @@ extern "C" {
     ) -> BufHandle;
     fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
+
+    // buflist_getfile accessors
+    fn nvim_text_or_buf_locked() -> c_int;
+    fn buflist_findfmark(buf: BufHandle) -> *mut c_void;
+    fn nvim_fmark_get_lnum(fm: *const c_void) -> c_int;
+    fn nvim_fmark_get_col(fm: *const c_void) -> c_int;
+    fn swbuf_goto_win_with_buf(buf: BufHandle) -> *mut c_void;
+    fn nvim_swb_has_vsplit() -> c_int;
+    fn nvim_swb_has_split() -> c_int;
+    fn nvim_swb_has_newtab() -> c_int;
+    fn nvim_curbuf_is_empty() -> c_int;
+    fn tabpage_new();
+    fn rs_win_split(size: c_int, flags: c_int) -> c_int;
+    fn nvim_reset_binding_curwin();
+    fn nvim_inc_RedrawingDisabled();
+    fn nvim_dec_RedrawingDisabled();
+    fn nvim_getfile(fnum: c_int, setpm: c_int, lnum: c_int, forceit: c_int) -> c_int;
+    fn nvim_get_p_sol() -> c_int;
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_curwin_set_cursor_col(col: c_int);
+    fn nvim_curwin_set_cursor_coladd(v: c_int);
+    fn nvim_curwin_set_curswant(val: bool);
+    fn nvim_mark_view_restore(fm: *mut c_void);
+    fn nvim_emsg_noalt();
+    fn nvim_semsg_e92_buf_not_found(n: i64);
+    fn nvim_check_cursor_col(win: *mut c_void);
+    static mut jop_flags: u32;
 }
 
 // =============================================================================
@@ -588,7 +615,6 @@ pub unsafe extern "C" fn rs_buflist_findname_exp(fname: *mut c_char) -> BufHandl
 
 // Additional accessors for buflist_list (not already declared above).
 extern "C" {
-    fn nvim_get_curwin() -> crate::WinHandle;
     fn nvim_win_get_cursor_lnum(wp: crate::WinHandle) -> c_int;
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
     fn nvim_msg_ext_set_kind(kind: *const c_char);
@@ -814,7 +840,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
             );
         } else {
             let lnum: i64 = if buf == curbuf {
-                i64::from(nvim_win_get_cursor_lnum(curwin))
+                i64::from(nvim_win_get_cursor_lnum(crate::WinHandle(curwin)))
             } else {
                 i64::from(nvim_buf_get_ml_line_count(buf))
             };
@@ -1055,6 +1081,115 @@ pub unsafe extern "C" fn rs_setaltfname(
         nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(buf));
     }
     buf
+}
+
+// =============================================================================
+// buflist_getfile
+// =============================================================================
+
+// GETF option flags (from buffer.h)
+const GETF_SETMARK: c_int = 0x01;
+const GETF_ALT: c_int = 0x02;
+const GETF_SWITCH: c_int = 0x04;
+
+// Win split flags (from window.h)
+const WSP_VERT: c_int = 0x02;
+
+// kOptJopFlagView (from option_vars.generated.h)
+const K_OPT_JOP_FLAG_VIEW: u32 = 0x02;
+
+/// Get alternate file `n`, switching to it with optional switchbuf handling.
+///
+/// Mirrors C `buflist_getfile`.
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[must_use]
+#[unsafe(export_name = "buflist_getfile")]
+pub unsafe extern "C" fn rs_buflist_getfile(
+    n: c_int,
+    lnum: c_int,
+    options: c_int,
+    forceit: c_int,
+) -> c_int {
+    const FAIL: c_int = 0;
+    const OK: c_int = 1;
+
+    let buf = rs_buflist_findnr(n);
+    if buf.is_null() {
+        if (options & GETF_ALT) != 0 && n == 0 {
+            nvim_emsg_noalt();
+        } else {
+            nvim_semsg_e92_buf_not_found(i64::from(n));
+        }
+        return FAIL;
+    }
+
+    // Already at this buffer - nothing to do
+    if buf == nvim_get_curbuf() {
+        return OK;
+    }
+
+    if nvim_text_or_buf_locked() != 0 {
+        return FAIL;
+    }
+
+    // altfpos may be changed by getfile(), get it now
+    let (eff_lnum, col, restore_view, fm) = if lnum == 0 {
+        let fm = buflist_findfmark(buf);
+        (nvim_fmark_get_lnum(fm), nvim_fmark_get_col(fm), true, fm)
+    } else {
+        (lnum, 0, false, std::ptr::null_mut::<c_void>())
+    };
+
+    if (options & GETF_SWITCH) != 0 {
+        // If 'switchbuf' is set, jump to the window containing "buf".
+        let wp = swbuf_goto_win_with_buf(buf);
+
+        // If 'switchbuf' contains "split", "vsplit" or "newtab" and the
+        // current buffer isn't empty: open new tab or window.
+        if wp.is_null()
+            && (nvim_swb_has_vsplit() != 0
+                || nvim_swb_has_split() != 0
+                || nvim_swb_has_newtab() != 0)
+            && nvim_curbuf_is_empty() == 0
+        {
+            if nvim_swb_has_newtab() != 0 {
+                tabpage_new();
+            } else {
+                let flags = if nvim_swb_has_vsplit() != 0 {
+                    WSP_VERT
+                } else {
+                    0
+                };
+                if rs_win_split(0, flags) == FAIL {
+                    return FAIL;
+                }
+            }
+            nvim_reset_binding_curwin();
+        }
+    }
+
+    nvim_inc_RedrawingDisabled();
+    let fnum = nvim_buf_get_fnum(buf);
+    if nvim_getfile(fnum, options & GETF_SETMARK, eff_lnum, forceit) != 0 {
+        nvim_dec_RedrawingDisabled();
+
+        // Restore column if 'startofline' is not set
+        if nvim_get_p_sol() == 0 && col != 0 {
+            nvim_curwin_set_cursor_col(col);
+            nvim_check_cursor_col(nvim_get_curwin());
+            nvim_curwin_set_cursor_coladd(0);
+            nvim_curwin_set_curswant(true);
+        }
+        if (jop_flags & K_OPT_JOP_FLAG_VIEW) != 0 && restore_view && !fm.is_null() {
+            nvim_mark_view_restore(fm);
+        }
+        return OK;
+    }
+    nvim_dec_RedrawingDisabled();
+    FAIL
 }
 
 // =============================================================================

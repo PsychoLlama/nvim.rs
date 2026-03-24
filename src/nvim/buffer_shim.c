@@ -1677,90 +1677,43 @@ void nvim_set_buf_opts_scratch(void)
 
 // ============================================================
 // Buffer navigation (Phase 15)
+// Accessors for buflist_getfile (migrated to Rust, src/nvim-rs/buffer/src/list.rs)
 // ============================================================
 
-/// Get alternate file "n".
-/// Set linenr to "lnum" or altfpos.lnum if "lnum" == 0.
-/// Also set cursor column to altfpos.col if 'startofline' is not set.
-/// if (options & GETF_SETMARK) call setpcmark()
-/// if (options & GETF_ALT) we are jumping to an alternate file.
-/// if (options & GETF_SWITCH) respect 'switchbuf' settings when jumping
-///
-/// Return FAIL for failure, OK for success.
-int buflist_getfile(int n, linenr_T lnum, int options, int forceit)
+/// Returns non-zero if 'switchbuf' has the "vsplit" flag.
+int nvim_swb_has_vsplit(void) { return (swb_flags & kOptSwbFlagVsplit) ? 1 : 0; }
+
+/// Returns non-zero if 'switchbuf' has the "split" flag.
+int nvim_swb_has_split(void) { return (swb_flags & kOptSwbFlagSplit) ? 1 : 0; }
+
+/// Returns non-zero if 'switchbuf' has the "newtab" flag.
+int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }
+
+/// Returns non-zero if the current buffer is empty.
+int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
+
+/// Emit E23 "No alternate file" error.
+void nvim_emsg_noalt(void) { emsg(_(e_noalt)); }
+
+/// Wrapper for getfile() returning 1 on GETFILE_SUCCESS, 0 on failure.
+int nvim_getfile(int fnum, int setpm, linenr_T lnum, int forceit)
 {
-  win_T *wp = NULL;
-  fmark_T *fm = NULL;
-
-  buf_T *buf = buflist_findnr(n);
-  if (buf == NULL) {
-    if ((options & GETF_ALT) && n == 0) {
-      emsg(_(e_noalt));
-    } else {
-      semsg(_("E92: Buffer %" PRId64 " not found"), (int64_t)n);
-    }
-    return FAIL;
-  }
-
-  // if alternate file is the current buffer, nothing to do
-  if (buf == curbuf) {
-    return OK;
-  }
-
-  if (text_or_buf_locked()) {
-    return FAIL;
-  }
-
-  colnr_T col;
-  bool restore_view = false;
-  // altfpos may be changed by getfile(), get it now
-  if (lnum == 0) {
-    fm = buflist_findfmark(buf);
-    lnum = fm->mark.lnum;
-    col = fm->mark.col;
-    restore_view = true;
-  } else {
-    col = 0;
-  }
-
-  if (options & GETF_SWITCH) {
-    // If 'switchbuf' is set jump to the window containing "buf".
-    wp = swbuf_goto_win_with_buf(buf);
-
-    // If 'switchbuf' contains "split", "vsplit" or "newtab" and the
-    // current buffer isn't empty: open new tab or window
-    if (wp == NULL && (swb_flags & (kOptSwbFlagVsplit | kOptSwbFlagSplit | kOptSwbFlagNewtab))
-        && !buf_is_empty(curbuf)) {
-      if (swb_flags & kOptSwbFlagNewtab) {
-        tabpage_new();
-      } else if (win_split(0, (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0)
-                 == FAIL) {
-        return FAIL;
-      }
-      RESET_BINDING(curwin);
-    }
-  }
-
-  RedrawingDisabled++;
-  if (GETFILE_SUCCESS(getfile(buf->b_fnum, NULL, NULL,
-                              (options & GETF_SETMARK), lnum, forceit))) {
-    RedrawingDisabled--;
-
-    // cursor is at to BOL and w_cursor.lnum is checked due to getfile()
-    if (!p_sol && col != 0) {
-      curwin->w_cursor.col = col;
-      check_cursor_col(curwin);
-      curwin->w_cursor.coladd = 0;
-      curwin->w_set_curswant = true;
-    }
-    if (jop_flags & kOptJopFlagView && restore_view) {
-      mark_view_restore(fm);
-    }
-    return OK;
-  }
-  RedrawingDisabled--;
-  return FAIL;
+  return GETFILE_SUCCESS(getfile(fnum, NULL, NULL, setpm, lnum, forceit)) ? 1 : 0;
 }
+
+/// Returns WSP_VERT flag if 'switchbuf' has "vsplit", else 0.
+int nvim_swb_win_split_flags(void)
+{
+  return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0;
+}
+
+/// mark_view_restore wrapper for fmark void pointer.
+void nvim_mark_view_restore(void *fm)
+{
+  mark_view_restore((fmark_T *)fm);
+}
+
+// buflist_getfile migrated to Rust (src/nvim-rs/buffer/src/list.rs)
 
 // ============================================================
 // Buffer content comparison (Phase 16)
