@@ -953,20 +953,6 @@ void nvim_estack_pop(void)
 
 /// Call do_set(s, OPT_MODELINE|OPT_LOCAL|flags) with modeline context saved/restored.
 /// This handles the secure and current_sctx save/restore internally.
-int nvim_modeline_do_set(char *s, linenr_T lnum, int flags)
-{
-  const int secure_save = secure;
-  const sctx_T save_current_sctx = current_sctx;
-  current_sctx.sc_sid = SID_MODELINE;
-  current_sctx.sc_seq = 0;
-  current_sctx.sc_lnum = lnum;
-  secure = 1;
-  int retval = do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
-  secure = secure_save;
-  current_sctx = save_current_sctx;
-  return retval;
-}
-
 /// Wrapper for try_getdigits: parses digits at s, sets *vers, returns bytes consumed.
 /// Returns -1 on failure (no digits parsed).
 int nvim_try_getdigits(const char *s, int64_t *vers)

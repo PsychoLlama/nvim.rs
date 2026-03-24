@@ -17,6 +17,10 @@ use crate::BufHandle;
 const OK: c_int = 0;
 const FAIL: c_int = -1;
 
+// Option flags from option.h
+const OPT_LOCAL: c_int = 0x02;
+const OPT_MODELINE: c_int = 0x04;
+
 // =============================================================================
 // External C Functions
 // =============================================================================
@@ -42,8 +46,17 @@ extern "C" {
     /// Pop top entry from execution stack.
     fn nvim_estack_pop();
 
-    /// Call `do_set(s, OPT_MODELINE | OPT_LOCAL | flags)` with saved context.
-    fn nvim_modeline_do_set(s: *mut c_char, lnum: c_int, flags: c_int) -> c_int;
+    /// Call `do_set(s, flags)`.
+    fn nvim_do_set(s: *mut c_char, flags: c_int) -> c_int;
+    /// Save `current_sctx` and set it to `SID_MODELINE` context for `lnum`.
+    /// Returns a heap pointer; must pass to `nvim_modeline_sctx_restore()`.
+    fn nvim_modeline_sctx_save_and_set(lnum: c_int) -> *mut c_void;
+    /// Restore `current_sctx` from pointer returned by `nvim_modeline_sctx_save_and_set()` and free it.
+    fn nvim_modeline_sctx_restore(saved: *mut c_void);
+    /// Get the `secure` global.
+    fn nvim_get_secure() -> c_int;
+    /// Set the `secure` global.
+    fn nvim_set_secure(val: c_int);
 
     fn nvim_xfree(p: *mut c_void);
 }
@@ -244,7 +257,12 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
 
         if *s != 0 {
             // skip over empty "::"
-            retval = nvim_modeline_do_set(s, lnum, flags);
+            let secure_save = nvim_get_secure();
+            let saved_sctx = nvim_modeline_sctx_save_and_set(lnum);
+            nvim_set_secure(1);
+            retval = nvim_do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
+            nvim_set_secure(secure_save);
+            nvim_modeline_sctx_restore(saved_sctx);
             if retval == FAIL {
                 break;
             }

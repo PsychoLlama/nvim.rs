@@ -1554,3 +1554,33 @@ bool nvim_regmatch_exec(void *handle, const char *name)
 
 
 
+
+// =============================================================================
+// Modeline option-setting accessors (used by buffer/modeline.rs)
+// =============================================================================
+
+/// Call do_set(s, flags).  Returns OK (0) or FAIL (-1).
+int nvim_do_set(char *s, int flags)
+{
+  return do_set(s, flags);
+}
+
+/// Save current_sctx on the heap, set it to SID_MODELINE/lnum context.
+/// Caller must pass the returned pointer to nvim_modeline_sctx_restore().
+sctx_T *nvim_modeline_sctx_save_and_set(int lnum)
+{
+  sctx_T *saved = xmalloc(sizeof(sctx_T));
+  *saved = current_sctx;
+  current_sctx.sc_sid  = SID_MODELINE;
+  current_sctx.sc_seq  = 0;
+  current_sctx.sc_lnum = lnum;
+  return saved;
+}
+
+/// Restore current_sctx from a pointer previously returned by
+/// nvim_modeline_sctx_save_and_set() and free the pointer.
+void nvim_modeline_sctx_restore(sctx_T *saved)
+{
+  current_sctx = *saved;
+  xfree(saved);
+}
