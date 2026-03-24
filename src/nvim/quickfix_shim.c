@@ -222,14 +222,6 @@ const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
 
-// Phase 1: Auname lookups and qf_types (migrated to Rust)
-
-// Phase 2: Format and title helpers (migrated to Rust)
-
-// Phase 3: Property flag operations and index resolution (migrated to Rust)
-
-// Phase 4: mark_adjust and valid counting (migrated to Rust)
-
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
   size_t bytes_written;
@@ -247,7 +239,6 @@ typedef struct {
 
 // Prefix type helpers
 
-// Phase 5: parse_match and parse_line (migrated to Rust)
 
 // Entry creation
 
@@ -263,7 +254,6 @@ typedef struct {
 
 // rs_qf_init and rs_qf_alloc_stack: no C callers remain (Phase 2).
 
-// Pass 4: stack query entry points (Phase 1)
 // rs_qf_get_size_eap, rs_qf_get_valid_size_eap, rs_qf_get_cur_idx_eap,
 // rs_qf_get_cur_valid_idx_eap, rs_grep_internal removed: all now export under C names via #[export_name].
 
@@ -286,7 +276,6 @@ const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_
 
 bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 
-// Phase 14 Pass 4: thin replacement for nvim_qf_store_title
 /// Free old title and store a duplicate of the new one (NULL clears it).
 void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 {
@@ -302,16 +291,12 @@ void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
 
-// Phase 2 accessors: buf_T/win_T field access for qf_mark_adjust_entry and qf_jump_first
 int nvim_buf_get_has_qf_entry(const void *buf_void) { return ((const buf_T *)buf_void)->b_has_qf_entry; }
 int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void)->b_fnum; }
 void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_void)->w_llist; }
 // nvim_check_can_set_curbuf_forceit already defined in tag_shim.c
 
-// Phase 2: rs_qf_jump_first
 // rs_qf_mark_adjust_entry removed: exports as qf_mark_adjust via #[export_name].
-
-// Phase 3: qf_list_entry display
 
 
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
@@ -425,7 +410,6 @@ extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declarations
 
-// Phase 14: e_no_more_items, e_current_quickfix_list_was_changed,
 
 enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 
@@ -679,7 +663,6 @@ void nvim_qf_set_directory(void *qfl_void, char *dir) { if (qfl_void != NULL) ((
 const char *nvim_qf_get_currfile(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_currfile; }
 void nvim_qf_set_currfile(void *qfl_void, char *file) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_currfile = file; }
 
-// Phase 3 accessors: typval dict operations for property flag / index resolution functions
 
 /// Return the string value of a dict key if it is VAR_STRING with value "$", else NULL.
 bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_len)
@@ -693,7 +676,6 @@ bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_
 /// Add a number to a dict; returns OK or FAIL.
 /// Add a string copy to a dict; returns OK or FAIL.
 /// Allocate an empty list and add it to a dict; returns OK or FAIL.
-// Phase 8 accessors: get_properties / set_properties cluster
 
 /// Allocate a new list and set it as the return value (qf-specific void* version).
 /// Allocate a new dict and set it as the return value (qf-specific void* version).
@@ -820,7 +802,6 @@ void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
   return (void *)&qi->qf_lists[qf_idx];
 }
 
-// Phase 8 set-side accessors
 
 /// tv_dict_get_string: get string from dict by key (alloc=true means heap copy, qf void* version).
 /// tv_dict_get_number: get number from dict by key (0 if not found, qf void* version).
@@ -929,7 +910,6 @@ int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((c
 void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
 void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
 
-// ---- Phase 6 lifecycle accessors ----
 
 /// Free the qf_lists array inside a qf_info_T (does NOT free the struct itself).
 void nvim_qf_free_lists_array(void *qi_void)
@@ -977,9 +957,6 @@ void *nvim_win_take_llist_ref(void *wp_void)
   return old;
 }
 
-// ---- Rust lifecycle forward declarations ----
-
-// ---- Phase 3 stack-allocation accessors ----
 
 /// Returns address of the static ql_info_actual (global quickfix stack).
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
@@ -1021,7 +998,6 @@ int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)
 
 // nvim_eap_get_cmdidx: already exists in ex_docmd.c
 
-// ---- Phase 4 accessors ----
 
 /// Set wp->w_llist_ref = qi (raw assignment; caller manages refcount separately).
 void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
@@ -1031,7 +1007,6 @@ void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
   }
 }
 
-// ---- Rust Phase 4 forward declarations ----
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -1069,10 +1044,6 @@ static Callback qftf_cb;
 void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 
 
-// =============================================================================
-// Phase 5: regmatch_T indexed accessors for Rust parse_match migration
-// =============================================================================
-
 /// Return the start pointer for submatch at index idx (0-based, 0-13).
 const char *nvim_qf_regmatch_startp(const void *rm, int idx)
 {
@@ -1092,11 +1063,9 @@ const char *nvim_qf_regmatch_endp(const void *rm, int idx)
 }
 
 
-// =============================================================================
 // Rust parse.rs uses EfmPattern directly (inline struct field access).
 // nvim_qf_regmatch_create_ic, nvim_qf_regmatch_extract_prog, nvim_qf_vim_regexec
 // remain as C wrappers for vim regex lifecycle (parse.rs calls these for pattern matching).
-// =============================================================================
 
 /// Create a regmatch_T on the heap, set rm_ic=true, and assign the given prog.
 /// Returns an opaque handle. The caller owns the memory; free after extracting prog.
@@ -1160,9 +1129,6 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
 /// Move memory: STRMOVE(dst, src) - move overlapping memory.
 /// Get IObuff pointer for reuse in file_pfx multiscan.
 /// skipwhite wrapper.
-// =============================================================================
-// Phase 9: Reader state accessors for Rust QfParserState
-// =============================================================================
 
 
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
@@ -1261,9 +1227,6 @@ char *nvim_qf_list_item_string(void *li)
 
 /// vim_strchr on a mutable char* with char NL character.
 /// Returns pointer to first NL in str, or NULL.
-// =============================================================================
-// Phase 9 (Phase 2): vim_regcomp/vim_regfree wrappers and efm error messages
-// =============================================================================
 
 
 /// Wrapper for xstrdup used by Rust's EFM cache.
@@ -1289,7 +1252,6 @@ char *nvim_qf_list_item_string(void *li)
 
 // Rust exports for jump machinery
 
-// Phase 15 thin accessors for inlining jump-open helpers into Rust navigate.rs
 
 /// can_abandon(curbuf, forceit): check if current buffer can be abandoned.
 bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
@@ -1420,7 +1382,6 @@ bool nvim_qf_win_is_preview(const void *win) { return ((const win_T *)win)->w_p_
 
 bool nvim_qf_win_is_wfb(const void *win) { return ((const win_T *)win)->w_p_wfb; }
 
-// Phase 14 Phase 2: Thin C accessors replacing nvim_qf_jump_goto_line and
 
 linenr_T nvim_qf_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void nvim_qf_curwin_set_col(int col) { curwin->w_cursor.col = col; }
@@ -1479,8 +1440,6 @@ int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NUL
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
 
 
-// Phase 10 Pass 10 Phase 2: New C accessors for Rust implementations
-
 /// Set w_redraw_top and w_redraw_bot on a window.
 void nvim_qf_win_set_redraw_bounds(void *win_void, linenr_T top, linenr_T bot)
 {
@@ -1522,8 +1481,6 @@ void nvim_qf_set_title_var_for_list(void *qfl_void)
 }
 
 
-// Phase 10 Pass 10 Phase 3: New C accessors for qf_open_new_cwindow / did_set_quickfixtextfunc
-
 /// Set buffer options for the quickfix/location list window (swapfile, buftype, bufhidden,
 /// foldmethod). Also resets key bindings and w_p_diff. (Migrated body from qf_set_cwindow_options.)
 void nvim_qf_set_cwindow_options(void)
@@ -1563,8 +1520,6 @@ int nvim_qf_option_set_callback_func_for_qftf(void)
 }
 
 
-// Phase 10 Pass 10 Phase 4: New C accessors for rs_qf_update_buffer
-
 /// extmark_splice for quickfix buffer updates.
 void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
                              bcount_t bc, int nr, colnr_T nc, bcount_t nbc)
@@ -1594,10 +1549,6 @@ void nvim_qf_aucmd_restbuf_free(void *aco_void)
   xfree(aco_void);
 }
 
-// Phase 14: qfFile_hl_id, qfSep_hl_id, qfLine_hl_id statics and qf_list_entry wrapper
-
-
-// Phase 10 Pass 10 Phase 5: C accessors for rs_qf_get_fnum
 
 /// Check the filename cache: if bufname matches and the bufref is still valid,
 /// return the cached buf_T pointer. Otherwise return NULL.
@@ -1765,8 +1716,6 @@ void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
 
-// Phase 7: C accessor wrappers needed by rs_ex_make / rs_make_get_fullcmd / rs_get_mef_name
-
 // curbuf option accessors (struct field access - retained as opaque accessors):
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
@@ -1862,23 +1811,18 @@ const void *nvim_qf_curwin_pos_adj(void)
 
 void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_void)->qf_lists[((qf_info_T *)qi_void)->qf_curlist]; }
 
-// Phase 3: qf_list_entry accessors
 // nvim_message_filtered already exists in ex_cmds_shim.c (returns int)
 
-// Phase 14: Direct message output accessors (replacing nvim_qf_list_entry_output and
 
-// Phase 4: qf_list (:clist/:llist) accessors
 // nvim_eap_get_arg already exists in ex_docmd.c
 // nvim_semsg_trailing_arg already exists in eval_shim.c
 // nvim_eap_get_forceit already exists in indent_ffi.c (returns bool)
 
 
-// Phase 3 message API accessors for vgr_display_fname migration
 // nvim_msg_start: already defined in undo.c
 // nvim_msg_clr_eos: already defined in change_ffi.c
 // nvim_ui_flush: already defined in change_ffi.c
 
-// Phase 3 buffer management accessors
 // nvim_buf_has_ml_mfp already exists in memline_shim.c (returns int, takes buf_T*)
 // nvim_buflist_findname_exp already exists in window_shim.c (returns buf_T*, takes const char*)
 const char *nvim_buf_get_mfp_fname(const void *buf)
@@ -2252,8 +2196,6 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
   return li == tv_list_first((const list_T *)list);
 }
 
-
-// Phase 10 Pass 10 Phase 6: C accessors for rs_set_ref_in_quickfix
 
 /// Return a mutable pointer to qfl->qf_qftf_cb.
 void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void)
