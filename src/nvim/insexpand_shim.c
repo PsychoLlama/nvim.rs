@@ -2125,11 +2125,7 @@ void nvim_ins_compl_get_exp_init_state(int lnum, int col, int *out_lnum, int *ou
 }
 
 // Called at the top of ins_compl_get_exp when compl_started && ins_buf != curbuf.
-void nvim_ins_compl_get_exp_check_buf(void) {
-  if (ins_compl_st.ins_buf != curbuf && !buf_valid(ins_compl_st.ins_buf)) {
-    ins_compl_st.ins_buf = curbuf;
-  }
-}
+// nvim_ins_compl_get_exp_check_buf: deleted (Phase 2), inlined in expand.rs
 
 // Sets st.cur_match_pos based on current direction (call after init).
 // nvim_ins_compl_st_set_cur_match_dir: deleted (Phase 1), Rust inlines directly
@@ -3160,16 +3156,7 @@ void nvim_ins_compl_st_msg_scanning(void)
   }
 }
 
-/// Emits the "Scanning tags." completion message.
-void nvim_ins_compl_st_msg_scanning_tags(void)
-{
-  if (!shortmess(SHM_COMPLETIONSCAN) && !compl_autocomplete) {
-    msg_ext_set_kind("completion");
-    msg_hist_off = true;
-    vim_snprintf(IObuff, IOSIZE, "%s", _("Scanning tags."));
-    msg_trunc(IObuff, true, HLF_R);
-  }
-}
+// nvim_ins_compl_st_msg_scanning_tags: deleted (Phase 2), inlined in expand.rs
 
 // nvim_ins_compl_st_set_dict_from_e_cpt: deleted (Phase 27, inlined in vars.rs)
 // nvim_ins_compl_st_e_cpt_inc: deleted (Phase 27, inlined in vars.rs)

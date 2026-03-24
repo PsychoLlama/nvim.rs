@@ -36,6 +36,12 @@ const OK: c_int = 1;
 const COMPL_FUNC_TIMEOUT_MS: u64 = 300;
 const COMPL_FUNC_TIMEOUT_NON_KW_MS: u64 = 1000;
 
+// shortmess() argument for completion scan messages
+const SHM_COMPLETIONSCAN: c_int = b'C' as c_int;
+// highlight attributes
+const HLF_R: c_int = 18;
+const IOSIZE: usize = 1025;
+
 extern "C" {
     // ctrl_x_mode queries
     fn rs_ctrl_x_mode_normal() -> c_int;
@@ -68,7 +74,7 @@ extern "C" {
         out_lnum: *mut c_int,
         out_col: *mut c_int,
     );
-    fn nvim_ins_compl_get_exp_check_buf();
+    // nvim_ins_compl_get_exp_check_buf: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_set_cur_match_dir: deleted (Phase 1), inlined below
     // nvim_ins_compl_st_e_cpt_is_nul: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_found_all: inlined in vars.rs (Phase 26)
@@ -101,7 +107,7 @@ extern "C" {
     fn nvim_ins_compl_st_advance_buf(flag: c_int) -> c_int;
     fn nvim_ins_compl_st_get_ins_buf_fname() -> *const std::ffi::c_char;
     fn nvim_ins_compl_st_msg_scanning();
-    fn nvim_ins_compl_st_msg_scanning_tags();
+    // nvim_ins_compl_st_msg_scanning_tags: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_set_dict_from_e_cpt: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_e_cpt_inc: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_set_func_cb_from_e_cpt: deleted (Phase 2), inlined below
@@ -182,6 +188,18 @@ extern "C" {
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
     fn may_trigger_modechanged();
+
+    // helpers for inlined msg_scanning_tags
+    fn shortmess(x: c_int) -> bool;
+    fn msg_ext_set_kind(kind: *const std::ffi::c_char);
+    fn msg_trunc(s: *mut std::ffi::c_char, force: bool, attr: c_int);
+    fn vim_snprintf(s: *mut std::ffi::c_char, n: usize, fmt: *const std::ffi::c_char, ...)
+        -> c_int;
+    fn gettext(msgid: *const std::ffi::c_char) -> *const std::ffi::c_char;
+    #[link_name = "msg_hist_off"]
+    static mut msg_hist_off_expand: bool;
+    #[link_name = "IObuff"]
+    static mut IObuff_expand: [std::ffi::c_char; 1025];
 
 }
 
@@ -299,7 +317,20 @@ unsafe fn rs_process_next_cpt_value(
                 }
                 b']' | b't' => {
                     compl_type = CTRL_X_TAGS;
-                    nvim_ins_compl_st_msg_scanning_tags();
+                    // Inline nvim_ins_compl_st_msg_scanning_tags (Phase 2)
+                    if !shortmess(SHM_COMPLETIONSCAN)
+                        && crate::vars::nvim_get_compl_autocomplete() == 0
+                    {
+                        msg_ext_set_kind(c"completion".as_ptr());
+                        msg_hist_off_expand = true;
+                        vim_snprintf(
+                            core::ptr::addr_of_mut!(IObuff_expand).cast(),
+                            IOSIZE,
+                            c"%s".as_ptr(),
+                            gettext(c"Scanning tags.".as_ptr()),
+                        );
+                        msg_trunc(core::ptr::addr_of_mut!(IObuff_expand).cast(), true, HLF_R);
+                    }
                 }
                 _ => {}
             }
@@ -548,8 +579,13 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
         // Initialize state for a fresh search
         nvim_ins_compl_get_exp_init_state(lnum, col, &raw mut start_lnum, &raw mut start_col);
     } else {
+        // Inline nvim_ins_compl_get_exp_check_buf (Phase 2):
         // If the buffer was wiped out, fall back to curbuf
-        nvim_ins_compl_get_exp_check_buf();
+        if crate::vars::ins_compl_st.ins_buf != curbuf_expand
+            && !buf_valid_expand(crate::vars::ins_compl_st.ins_buf)
+        {
+            crate::vars::ins_compl_st.ins_buf = curbuf_expand;
+        }
     }
 
     // Remember the last current match
