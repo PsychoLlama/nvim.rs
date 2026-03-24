@@ -2291,86 +2291,8 @@ void nvim_ins_compl_show_filename_impl(void)
 // above) to avoid circular call chains: the original function names now become
 // thin Rust wrappers, so the logic must live here.
 
-int nvim_get_normal_compl_info_impl(char *line, int startcol, int curs_col)
-{
-  if ((compl_cont_status & CONT_SOL) || rs_ctrl_x_mode_path_defines()) {
-    if (!rs_compl_status_adding()) {
-      while (--startcol >= 0 && vim_isIDc((uint8_t)line[startcol])) {}
-      compl_col += ++startcol;
-      compl_length = curs_col - startcol;
-    }
-    if (p_ic) {
-      compl_pattern = cstr_as_string(str_foldcase(line + compl_col,
-                                                  compl_length, NULL, 0));
-    } else {
-      compl_pattern = cbuf_to_string(line + compl_col, (size_t)compl_length);
-    }
-  } else if (rs_compl_status_adding()) {
-    char *prefix = "\\<";
-    size_t prefixlen = STRLEN_LITERAL("\\<");
+// nvim_get_normal_compl_info_impl: deleted (Phase 2), logic moved to rs_get_normal_compl_info in pattern.rs
 
-    if (!vim_iswordp(line + compl_col)
-        || (compl_col > 0
-            && (vim_iswordp(mb_prevptr(line, line + compl_col))))) {
-      prefix = "";
-      prefixlen = 0;
-    }
-
-    // we need up to 2 extra chars for the prefix
-    size_t n = rs_quote_meta(NULL, line + compl_col, compl_length) + prefixlen;
-    compl_pattern.data = xmalloc(n);
-    STRCPY(compl_pattern.data, prefix);
-    rs_quote_meta(compl_pattern.data + prefixlen, line + compl_col, compl_length);
-    compl_pattern.size = n - 1;
-  } else if (--startcol < 0
-             || !vim_iswordp(mb_prevptr(line, line + startcol + 1))) {
-    // Match any word of at least two chars
-    compl_pattern = cbuf_to_string(S_LEN("\\<\\k\\k"));
-    compl_col += curs_col;
-    compl_length = 0;
-    compl_from_nonkeyword = true;
-  } else {
-    // Search the point of change class of multibyte character
-    // or not a word single byte character backward.
-    startcol -= utf_head_off(line, line + startcol);
-    int base_class = mb_get_class(line + startcol);
-    while (--startcol >= 0) {
-      int head_off = utf_head_off(line, line + startcol);
-      if (base_class != mb_get_class(line + startcol - head_off)) {
-        break;
-      }
-      startcol -= head_off;
-    }
-
-    compl_col += ++startcol;
-    compl_length = (int)curs_col - startcol;
-    if (compl_length == 1) {
-      // Only match word with at least two chars -- webb
-      // there's no need to call quote_meta,
-      // xmalloc(7) is enough  -- Acevedo
-      compl_pattern.data = xmalloc(7);
-      STRCPY(compl_pattern.data, "\\<");
-      rs_quote_meta(compl_pattern.data + 2, line + compl_col, 1);
-      strcat(compl_pattern.data, "\\k");
-      compl_pattern.size = strlen(compl_pattern.data);
-    } else {
-      size_t n = rs_quote_meta(NULL, line + compl_col, compl_length) + 2;
-      compl_pattern.data = xmalloc(n);
-      STRCPY(compl_pattern.data, "\\<");
-      rs_quote_meta(compl_pattern.data + 2, line + compl_col, compl_length);
-      compl_pattern.size = n - 1;
-    }
-  }
-
-  // Call functions in 'complete' with 'findstart=1'
-  if (rs_ctrl_x_mode_normal() && !(compl_cont_status & CONT_LOCAL)) {
-    // ^N completion, not complete() or ^X^N
-    rs_setup_cpt_sources();
-    rs_prepare_cpt_compl_funcs();
-  }
-
-  return OK;
-}
 
 int nvim_get_wholeline_compl_info_impl(char *line, int curs_col)
 {

@@ -303,6 +303,7 @@ extern "C" {
     fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
     // (nvim_cpt_sources_array_exists, nvim_get_cpt_source_cs_max_matches: inlined in vars.rs Phase 23)
     fn nvim_xfree(ptr: *mut u8);
+    #[allow(clashing_extern_declarations)]
     fn xmalloc(size: usize) -> *mut c_int;
 
     // From leader.rs (pass 11)
