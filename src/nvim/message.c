@@ -86,14 +86,9 @@ extern MessageHistoryEntry *msg_hist_temp;   // owned by Rust (history.rs)
 extern int msg_hist_len;                     // owned by Rust (history.rs)
 extern int msg_hist_max;  // owned by Rust (misc.rs), default 500
 
-// args in 'messagesopt' option
-#define MESSAGES_OPT_HIT_ENTER "hit-enter"
-#define MESSAGES_OPT_WAIT "wait:"
-#define MESSAGES_OPT_HISTORY "history:"
-
-// The default is "hit-enter,history:500"
-extern int msg_flags;   // owned by Rust (misc.rs), default kOptMoptFlagHitEnter | kOptMoptFlagHistory
-extern int msg_wait;    // owned by Rust (misc.rs), default 0
+// msg_flags and msg_wait owned by Rust (misc.rs)
+extern int msg_flags;
+extern int msg_wait;
 
 static FILE *verbose_fd = NULL;
 static bool verbose_did_open = false;
@@ -350,13 +345,8 @@ void msg_grid_validate(void)
   }
 }
 
-
-
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 extern bool is_multihl;  // owned by Rust (misc.rs)
-
-
-// nvim_msg_keep_should_add_hist: inlined into Rust output_core.rs
 
 /// Format a progress message, adding title and percent if given.
 ///
@@ -728,8 +718,6 @@ static void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, Message
 
   msg_hist_clear(msg_hist_max);
 }
-
-
 
 /// :messages command implementation
 void ex_messages(exarg_T *eap)
@@ -1386,8 +1374,6 @@ static void inc_msg_scrolled(void)
   set_must_redraw(UPD_VALID);
 }
 
-// last_msgchunk is forward-declared earlier in the file
-
 typedef enum {
   SB_CLEAR_NONE = 0,
   SB_CLEAR_ALL,
@@ -1855,7 +1841,6 @@ void msg_ext_flush_showmode(void)
   }
 }
 
-
 /// May write a string to the redirection file.
 ///
 /// @param maxlen  if -1, write the whole string, otherwise up to "maxlen" bytes.
@@ -1955,8 +1940,6 @@ void swmsg(bool hl, const char *const fmt, ...)
 
   give_warning(IObuff, hl);
 }
-
-
 
 /// Used for "confirm()" function, and the :confirm command prefix.
 /// Versions which haven't got flexible dialogs yet, and console
