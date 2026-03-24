@@ -17,6 +17,10 @@ pub static mut verbose_fd: *mut c_void = std::ptr::null_mut();
 #[no_mangle]
 pub static mut verbose_did_open: bool = false;
 
+/// Column position tracked across redir_write calls (replaces C static cur_col)
+#[allow(non_upper_case_globals)]
+static mut redir_write_cur_col: c_int = 0;
+
 // C function declarations for verbose operations
 extern "C" {
     static mut msg_silent: c_int;
@@ -48,6 +52,15 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
     static e_notopen: [c_char; 0];
+
+    // For redir_write
+    static mut msg_col: c_int;
+    fn redirecting() -> c_int;
+    fn ga_concat_len(gap: *mut c_void, s: *const c_char, len: usize);
+    fn write_reg_contents(regname: c_int, str_: *const c_char, str_len: isize, must_append: bool);
+    fn var_redir_str(s: *const c_char, maxlen: c_int);
+    fn fputs(s: *const c_char, stream: *mut c_void) -> c_int;
+    fn putc(c: c_int, stream: *mut c_void) -> c_int;
 }
 
 // ============================================================================
@@ -335,6 +348,112 @@ pub unsafe extern "C" fn rs_msg_silent_leave() {
 pub unsafe extern "C" fn rs_output_suppressed() -> c_int {
     let silent = msg_silent > 0;
     c_int::from(silent)
+}
+
+// ============================================================================
+// Redirection Write
+// ============================================================================
+
+/// Write a string to any active redirection targets.
+///
+/// Mirrors the C `redir_write()` function. Writes to capture buffer, register,
+/// variable, redirection file, and/or verbose file as appropriate.
+///
+/// The `maxlen` argument mirrors the C `ptrdiff_t maxlen`: -1 means write the
+/// whole NUL-terminated string; any other value is the byte count.
+///
+/// # Safety
+/// Accesses many global state variables; calls C functions for writing.
+#[allow(clippy::cast_sign_loss)]
+#[export_name = "redir_write"]
+pub unsafe extern "C" fn rs_redir_write(str: *const c_char, maxlen: isize) {
+    if maxlen == 0 || redir_off {
+        return;
+    }
+
+    // If 'verbosefile' is set, open it for appending.
+    if p_vfile_not_empty() && verbose_fd.is_null() {
+        let _ = rs_verbose_open();
+    }
+
+    if redirecting() == 0 {
+        return;
+    }
+
+    let s = str;
+    let first_byte = *s.cast::<u8>();
+    let space = c" ".as_ptr();
+
+    // Advance to msg_col if string doesn't start with CR or NL.
+    if first_byte != b'\n' && first_byte != b'\r' {
+        while redir_write_cur_col < msg_col {
+            if !capture_ga.is_null() {
+                ga_concat_len(capture_ga, space, 1);
+            }
+            if redir_reg != 0 {
+                write_reg_contents(redir_reg, space, 1, true);
+            } else if redir_vname {
+                var_redir_str(space, -1);
+            } else if !redir_fd.is_null() {
+                fputs(space, redir_fd);
+            }
+            if !verbose_fd.is_null() {
+                fputs(space, verbose_fd);
+            }
+            redir_write_cur_col += 1;
+        }
+    }
+
+    // Write string to bulk targets (capture/reg/var).
+    let len: usize = if maxlen == -1 {
+        std::ffi::CStr::from_ptr(str).to_bytes().len()
+    } else {
+        maxlen as usize
+    };
+
+    if !capture_ga.is_null() {
+        ga_concat_len(capture_ga, str, len);
+    }
+    if redir_reg != 0 {
+        #[allow(clippy::cast_possible_wrap)]
+        write_reg_contents(redir_reg, s, len as isize, true);
+    }
+    if redir_vname {
+        #[allow(clippy::cast_possible_truncation)]
+        var_redir_str(s, maxlen as c_int);
+    }
+
+    // Write char-by-char to file/verbose targets, tracking column position.
+    let mut p = str;
+    let mut pos: isize = 0;
+    loop {
+        let ch = *p.cast::<u8>();
+        if ch == 0 {
+            break;
+        }
+        if maxlen >= 0 && pos >= maxlen {
+            break;
+        }
+        if redir_reg == 0 && !redir_vname && capture_ga.is_null() && !redir_fd.is_null() {
+            putc(c_int::from(ch), redir_fd);
+        }
+        if !verbose_fd.is_null() {
+            putc(c_int::from(ch), verbose_fd);
+        }
+        if ch == b'\r' || ch == b'\n' {
+            redir_write_cur_col = 0;
+        } else if ch == b'\t' {
+            redir_write_cur_col += 8 - redir_write_cur_col % 8;
+        } else {
+            redir_write_cur_col += 1;
+        }
+        p = p.add(1);
+        pos += 1;
+    }
+
+    if msg_silent != 0 {
+        msg_col = redir_write_cur_col;
+    }
 }
 
 #[cfg(test)]
