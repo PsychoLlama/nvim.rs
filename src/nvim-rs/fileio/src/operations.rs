@@ -583,6 +583,24 @@ extern "C" {
     fn nvim_bw_buf_set_no_eol_lnum(buf: *mut c_void, lnum: i32);
     /// gettext translation.
     fn gettext(msgid: *const c_char) -> *const c_char;
+
+    // --- filemess globals ---
+    static msg_col: c_int;
+    static mut msg_silent: c_int;
+    static mut msg_scroll: c_int;
+    static mut msg_scrolled_ign: bool;
+    static mut p_verbose: i64;
+    static mut msg_listdo_overwrite: c_int;
+    static mut exiting: bool;
+
+    // --- filemess functions ---
+    fn msg_check_for_delay(check_msg_scroll: bool);
+    fn msg_start();
+    fn msg_putchar(c: c_int);
+    fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char;
+    fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
+    fn msg_clr_eos();
+    fn ui_flush();
 }
 
 // SHM_LINES = 'l'
@@ -707,6 +725,58 @@ pub unsafe extern "C" fn rs_add_quoted_fname(
     unsafe { *ret_buf = b'"' as c_char };
     unsafe { home_replace(buf, fname_ptr, ret_buf.add(1), buf_len - 4, true) };
     unsafe { xstrlcat(ret_buf, c"\" ".as_ptr(), buf_len) };
+}
+
+// SHM_OVERALL = 'O'
+const SHM_OVERALL: c_int = b'O' as c_int;
+
+/// Display a message for a file operation.
+///
+/// Directly replaces the C `filemess` symbol.
+///
+/// # Safety
+/// Accesses many C globals via FFI.
+#[export_name = "filemess"]
+pub unsafe extern "C" fn rs_filemess(buf: *const c_void, name: *const c_char, s: *const c_char) {
+    let prev_msg_col = unsafe { msg_col };
+
+    if unsafe { msg_silent } != 0 {
+        return;
+    }
+
+    // Fill IObuff with quoted filename.
+    let iobuf_ptr = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
+    unsafe { rs_add_quoted_fname(iobuf_ptr, 1025 - 100, buf, name) };
+
+    // Append the status string.
+    unsafe { xstrlcat(iobuf_ptr, s, 1025) };
+
+    // For the first message may have to start a new line.
+    // For further ones overwrite the previous one, reset msg_scroll before calling filemess().
+    let msg_scroll_save = unsafe { msg_scroll };
+    if unsafe { shortmess(SHM_OVERALL) }
+        && unsafe { msg_listdo_overwrite } == 0
+        && !unsafe { exiting }
+        && unsafe { p_verbose } == 0
+    {
+        unsafe { msg_scroll = 0 };
+    }
+    if unsafe { msg_scroll } == 0 {
+        // wait a bit when overwriting an error msg
+        unsafe { msg_check_for_delay(false) };
+    }
+    unsafe { msg_start() };
+    if prev_msg_col != 0 && unsafe { msg_col } == 0 {
+        unsafe { msg_putchar(b'\r' as c_int) }; // overwrite any previous message.
+    }
+    unsafe { msg_scroll = msg_scroll_save };
+    unsafe { msg_scrolled_ign = true };
+    // may truncate the message to avoid a hit-return prompt
+    let trunc = unsafe { msg_may_trunc(false, iobuf_ptr) };
+    unsafe { msg_outtrans(trunc, 0, false) };
+    unsafe { msg_clr_eos() };
+    unsafe { ui_flush() };
+    unsafe { msg_scrolled_ign = false };
 }
 
 #[cfg(test)]

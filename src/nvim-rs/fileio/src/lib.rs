@@ -15,6 +15,7 @@ use std::ffi::{c_char, c_int, CStr};
 
 pub mod backup;
 pub mod binary_io;
+pub mod dir;
 pub mod encoding;
 pub mod modeline;
 pub mod operations;

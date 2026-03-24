@@ -84,4 +84,9 @@ void vim_deltempdir(void);
 char *vim_gettempdir(void);
 char *vim_tempname(void);
 
+// Phase 5 migrations: utility functions replaced by Rust
+void filemess(buf_T *buf, char *name, char *s);
+int readdir_core(garray_T *gap, const char *path, void *context, CheckItem checkitem);
+int delete_recursive(const char *name);
+
 #include "fileio.h.generated.h"
