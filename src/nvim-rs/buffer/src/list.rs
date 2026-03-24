@@ -835,11 +835,6 @@ extern "C" {
     fn nvim_blfp_regex_compile(pat: *const c_char, magic: c_int) -> *mut c_void;
     fn nvim_blfp_regex_valid(handle: *mut c_void) -> c_int;
     fn nvim_blfp_regex_free(handle: *mut c_void);
-    fn nvim_blfp_buflist_match(
-        handle: *mut c_void,
-        buf: BufHandle,
-        ignore_case: bool,
-    ) -> *const c_char;
     fn nvim_blfp_errmsg_e93(pattern: *const c_char);
     fn nvim_blfp_errmsg_e94(pattern: *const c_char);
     fn rs_magic_isset() -> c_int;
@@ -960,7 +955,7 @@ pub unsafe fn buflist_findpat_impl(
                 let bl = nvim_buf_get_b_p_bl(buf) != 0;
                 if bl == find_listed
                     && (!diffmode || rs_diff_mode_buf(buf))
-                    && !nvim_blfp_buflist_match(regex_handle, buf, false).is_null()
+                    && !crate::expand::buflist_regex_match(regex_handle, buf, false).is_null()
                 {
                     // curtab_only check omitted: all callers pass false
                     if match_fnum >= 0 {

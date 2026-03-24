@@ -1528,5 +1528,29 @@ const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : N
 // =============================================================================
 // Phase 4 (optionstr): check_str_opt infrastructure for Rust migration
 // =============================================================================
+// =============================================================================
+// Regex match accessors for buffer name matching (used by buffer/expand.rs)
+// =============================================================================
+
+/// Get p_fic (fileignorecase) option value.
+bool nvim_get_p_fic(void)
+{
+  return p_fic;
+}
+
+/// Check if a regmatch handle has a valid regprog (not NULL).
+bool nvim_regmatch_has_regprog(const void *handle)
+{
+  if (handle == NULL) { return false; }
+  return ((const regmatch_T *)handle)->regprog != NULL;
+}
+
+/// Execute vim_regexec on a regmatch handle against a string.
+bool nvim_regmatch_exec(void *handle, const char *name)
+{
+  if (handle == NULL || name == NULL) { return false; }
+  return vim_regexec((regmatch_T *)handle, (char *)name, 0);
+}
+
 
 

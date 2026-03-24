@@ -3,6 +3,9 @@
 //! Implements `ExpandBufnames()` which finds all buffer names matching a
 //! pattern (regex or fuzzy) for `:buf`, `:sbuf`, `:diffget`, `:diffput`
 //! tab completion.
+//!
+//! Also provides `buflist_regex_match` (Rust port of C `fname_match` +
+//! `buflist_match`), used by both `ExpandBufnames` and `buflist_findpat`.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_truncation)]
@@ -45,19 +48,22 @@ extern "C" {
 
     /// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
     fn nvim_bufname_regex_compile(pat: *mut c_char) -> *mut c_void;
-    /// Check if buffer matches the compiled regex. Returns matched name or NULL.
-    fn nvim_bufname_regex_match(
-        handle: *mut c_void,
-        buf: BufHandle,
-        ignore_case: bool,
-    ) -> *const c_char;
     /// Check if the compiled regex is still valid.
     fn nvim_bufname_regex_valid(handle: *mut c_void) -> c_int;
     /// Free a compiled regex handle.
     fn nvim_bufname_regex_free(handle: *mut c_void);
 
-    /// Get `p_wic` (fileignorecase) option value.
+    /// Get `p_wic` (wildignorecase) option value.
     fn nvim_get_p_wic() -> c_int;
+
+    /// Get `p_fic` (fileignorecase) option value.
+    fn nvim_get_p_fic() -> bool;
+    /// Check if a regmatch handle has a valid regprog.
+    fn nvim_regmatch_has_regprog(handle: *mut c_void) -> bool;
+    /// Set `rm_ic` on a regmatch handle.
+    fn nvim_regmatch_set_rm_ic(handle: *mut c_void, val: c_int);
+    /// Execute `vim_regexec` on a regmatch handle against name.
+    fn nvim_regmatch_exec(handle: *mut c_void, name: *const c_char) -> bool;
 
     /// Get curwin->w_p_diff value.
     fn nvim_curwin_get_p_diff() -> c_int;
@@ -66,7 +72,7 @@ extern "C" {
     #[link_name = "fuzzy_match_str"]
     fn nvim_fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
 
-    /// `home_replace_save()` for a buffer — caller must free with `nvim_xfree`.
+    /// `home_replace_save()` for a buffer -- caller must free with `nvim_xfree`.
     fn nvim_home_replace_save_buf(buf: BufHandle, src: *const c_char) -> *mut c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xfree(p: *mut c_void);
@@ -82,7 +88,7 @@ extern "C" {
 }
 
 // =============================================================================
-// FuzmatchStr — matches C fuzmatch_str_T layout
+// FuzmatchStr -- matches C fuzmatch_str_T layout
 // =============================================================================
 
 /// Mirrors C `fuzmatch_str_T` layout. Must match exactly for FFI.
@@ -91,6 +97,77 @@ struct FuzmatchStr {
     idx: c_int,
     str_ptr: *mut c_char,
     score: c_int,
+}
+
+// =============================================================================
+// Buffer name regex match (Rust port of fname_match / buflist_match)
+// =============================================================================
+
+/// Match `name` against the compiled regex `handle`, with home-replace fallback.
+///
+/// Mirrors C `fname_match()`. Returns `name` on match, NULL on no match.
+/// Sets `rm_ic` from `p_fic` | `ignore_case`.
+///
+/// # Safety
+/// `handle` must be a valid `regmatch_T`* from `nvim_bufname_regex_compile` or
+/// `nvim_blfp_regex_compile`. `name` must be a valid NUL-terminated C string or NULL.
+unsafe fn fname_match_rs(
+    handle: *mut c_void,
+    name: *const c_char,
+    ignore_case: bool,
+) -> *const c_char {
+    if name.is_null() || !nvim_regmatch_has_regprog(handle) {
+        return std::ptr::null();
+    }
+    // Set ignore-case: p_fic OR caller-requested
+    nvim_regmatch_set_rm_ic(handle, c_int::from(nvim_get_p_fic() || ignore_case));
+    if nvim_regmatch_exec(handle, name) {
+        return name;
+    }
+    // If regprog became NULL (engine switch), stop here
+    if !nvim_regmatch_has_regprog(handle) {
+        return std::ptr::null();
+    }
+    // Replace $HOME with '~' and try again
+    let p = nvim_home_replace_save_buf(BufHandle::from_ptr(std::ptr::null_mut()), name);
+    let matched = if nvim_regmatch_exec(handle, p) {
+        name
+    } else {
+        std::ptr::null()
+    };
+    nvim_xfree(p.cast::<c_void>());
+    matched
+}
+
+/// Match buffer `buf` against the compiled regex `handle`.
+///
+/// Mirrors C `buflist_match()`: tries `b_sfname` first, then `b_ffname`.
+/// Returns matched name or NULL.
+///
+/// Used by both `ExpandBufnames` (via `nvim_bufname_regex_compile`) and
+/// `buflist_findpat` (via `nvim_blfp_regex_compile`); both produce a `regmatch_T`*.
+///
+/// # Safety
+/// Same requirements as `fname_match_rs`.
+pub(crate) unsafe fn buflist_regex_match(
+    handle: *mut c_void,
+    buf: BufHandle,
+    ignore_case: bool,
+) -> *const c_char {
+    if handle.is_null() {
+        return std::ptr::null();
+    }
+    let sfname = nvim_buf_get_b_sfname(buf);
+    let m = fname_match_rs(handle, sfname, ignore_case);
+    if !m.is_null() {
+        return m;
+    }
+    // regprog may have gone NULL if engine switched
+    if !nvim_regmatch_has_regprog(handle) {
+        return std::ptr::null();
+    }
+    let ffname = nvim_buf_get_b_ffname(buf);
+    fname_match_rs(handle, ffname, ignore_case)
 }
 
 // =============================================================================
@@ -149,7 +226,7 @@ pub unsafe fn expand_bufnames_impl(
         // regex_handle may be NULL if pattern is invalid
     }
 
-    // Collect matches in a Vec — single-pass (no need for C's two-round approach)
+    // Collect matches in a Vec -- single-pass (no need for C's two-round approach)
     let mut str_matches: Vec<*mut c_char> = Vec::new();
     let mut fuz_matches: Vec<FuzmatchStr> = Vec::new();
     // For WILD_BUFLASTUSED sorting: track (last_used, buf_handle) alongside str
@@ -215,13 +292,13 @@ pub unsafe fn expand_bufnames_impl(
             buf = nvim_buf_get_next(buf);
             continue;
         } else {
-            // Regex path
+            // Regex path: validity check to detect engine switch
             if nvim_bufname_regex_valid(regex_handle) == 0 {
                 // Regex became invalid (engine switch): abort
                 nvim_bufname_regex_free(regex_handle);
                 return FAIL;
             }
-            nvim_bufname_regex_match(regex_handle, buf, p_wic)
+            buflist_regex_match(regex_handle, buf, p_wic)
         };
 
         if matched_name.is_null() {
