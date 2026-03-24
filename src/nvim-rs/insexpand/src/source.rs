@@ -307,7 +307,8 @@ extern "C" {
     fn nvim_expand_by_function_with_cb(cb_opaque: *mut c_void);
     // Completion state
     fn rs_set_compl_globals(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
-    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
+    fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_ins_compl_delete(new_leader: c_int);
     fn rs_ins_compl_leader() -> *const c_char;
 }
@@ -456,7 +457,7 @@ pub unsafe extern "C" fn rs_get_cpt_func_completion_matches(cb_opaque: *mut c_vo
     let refresh_always = crate::vars::nvim_cpt_sources_get_refresh_always(src_idx) != 0;
 
     if !refresh_always {
-        nvim_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
+        rs_ins_compl_insert_bytes(rs_ins_compl_leader(), -1);
     }
 
     nvim_expand_by_function_with_cb(cb_opaque);

@@ -489,7 +489,8 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     if p_off - compl_col < 0
         || (p_off - compl_col == 0 && rs_ctrl_x_mode_omni() == 0)
         || rs_ctrl_x_mode_eval() != 0
-        || (can_bs(c_int::from(b's')) == 0 && p_off - compl_col - compl_length < 0) // BS_START = 's' (from option_vars.h)
+        // BS_START = 's' (from option_vars.h)
+        || (can_bs(c_int::from(b's')) == 0 && p_off - compl_col - compl_length < 0)
     {
         return K_BS;
     }
@@ -556,7 +557,8 @@ extern "C" {
     fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int);
     fn rs_ins_compl_preinsert_longest() -> c_int;
     fn rs_get_compl_len() -> c_int;
-    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
+    fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_ins_compl_refresh_always() -> c_int;
 }
 
@@ -577,7 +579,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
     let leader_data = crate::vars::nvim_get_compl_leader_data();
     if !leader_data.is_null() {
         let compl_len = rs_get_compl_len();
-        nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
+        rs_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
     }
     crate::vars::nvim_set_compl_used_match(0);
 
@@ -610,7 +612,8 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         } else {
             crate::vars::nvim_set_compl_autocomplete(0);
         }
-        if ins_complete(14, 1) == FAIL { // CTRL_N = 14, enable_pum = 1
+        // CTRL_N = 14, enable_pum = 1
+        if ins_complete(14, 1) == FAIL {
             crate::vars::nvim_set_compl_cont_status(0);
         }
         crate::state::COMPL_RESTARTING = false;
@@ -686,7 +689,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         let leader_after = crate::vars::nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
-        nvim_ins_compl_insert_bytes(leader_after.add(compl_len), -1);
+        rs_ins_compl_insert_bytes(leader_after.add(compl_len), -1);
         nvim_ins_redraw(0);
 
         if !had_match {
@@ -738,7 +741,7 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         let new_leader = crate::vars::nvim_get_compl_leader_data();
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
-        nvim_ins_compl_insert_bytes(new_leader.add(compl_len), -1);
+        rs_ins_compl_insert_bytes(new_leader.add(compl_len), -1);
         nvim_ins_redraw(0);
 
         if !had_match {

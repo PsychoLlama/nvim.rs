@@ -175,7 +175,8 @@ extern "C" {
     fn rs_ins_compl_fixRedoBufForLeader(ptr: *const c_char);
     fn rs_ins_compl_free();
     fn rs_get_compl_len() -> c_int;
-    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
+    fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn nvim_restore_orig_extmarks();
     fn get_can_cindent() -> bool;
     fn cindent_on() -> bool;
@@ -524,7 +525,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
                 clippy::cast_sign_loss
             )]
             if (plen as c_int) > compl_len {
-                nvim_ins_compl_insert_bytes(p.add(compl_len as usize), (plen as c_int) - compl_len);
+                rs_ins_compl_insert_bytes(p.add(compl_len as usize), (plen as c_int) - compl_len);
             }
         }
         nvim_restore_orig_extmarks();
@@ -542,7 +543,8 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     rs_ins_compl_free();
     crate::vars::nvim_set_compl_started(0);
     crate::vars::nvim_set_compl_matches(0);
-    if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    if !shortmess(c_int::from(b'c')) {
+        // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         msg_clr_cmdline(); // necessary for "noshowmode"
     }
     crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);

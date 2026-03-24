@@ -524,7 +524,8 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
 
     // Show a message about what (completion) mode we're in.
     g_redraw_mode = true;
-    if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    if !shortmess(c_int::from(b'c')) {
         if g_edit_submode_extra.is_null() {
             nvim_msg_clr_cmdline_wrap(); // necessary for "noshowmode"
         } else {

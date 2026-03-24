@@ -57,7 +57,8 @@ extern "C" {
     fn rs_ins_compl_show_pum();
     fn rs_ins_compl_show_filename();
     fn nvim_update_screen();
-    fn nvim_ins_compl_insert_bytes(p: *const std::ffi::c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
+    fn rs_ins_compl_insert_bytes(p: *const std::ffi::c_char, len: c_int);
     fn nvim_restore_orig_extmarks();
 
     // compl_orig_text
@@ -314,7 +315,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
         let compl_len = rs_get_compl_len();
         debug_assert!(compl_len >= 0);
         #[allow(clippy::cast_sign_loss)]
-        nvim_ins_compl_insert_bytes(orig_data.add(compl_len as usize), -1);
+        rs_ins_compl_insert_bytes(orig_data.add(compl_len as usize), -1);
         crate::vars::nvim_set_compl_used_match(0);
         nvim_restore_orig_extmarks();
     } else if insert_match {
@@ -333,7 +334,7 @@ pub unsafe extern "C" fn rs_ins_compl_next(
             let compl_len = rs_get_compl_len();
             debug_assert!(compl_len >= 0);
             #[allow(clippy::cast_sign_loss)]
-            nvim_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
+            rs_ins_compl_insert_bytes(leader_data.add(compl_len as usize), -1);
         }
         if crate::match_list::shown_match_str_eq_orig() {
             nvim_restore_orig_extmarks();

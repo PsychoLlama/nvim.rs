@@ -1938,15 +1938,7 @@ void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_CO
 // nvim_shortmess_completionmenu: deleted (Phase 1, Rust calls shortmess(SHM_COMPLETIONMENU) directly)
 bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
 // nvim_set_edit_submode_null_if_set: deleted (Phase 33, inlined in ctrl_x.rs)
-void nvim_ins_compl_insert_bytes(const char *p, int len) {
-  char *q = (char *)p;
-  if (len == -1) {
-    len = (int)strlen(q);
-  }
-  assert(len >= 0);
-  ins_bytes_len(q, (size_t)len);
-  compl_ins_end_col = curwin->w_cursor.col;
-}
+// nvim_ins_compl_insert_bytes: deleted (Phase 2, inlined in rs_ins_compl_insert_bytes in insert.rs)
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
 // Accessor for internal_error in compl_get_info dispatch

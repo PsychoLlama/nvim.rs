@@ -151,7 +151,9 @@ extern "C" {
     // rs_find_common_prefix is defined in Rust (leader.rs)
     // (nvim_get_cpt_source_startcol, nvim_cpt_sources_array_exists: inlined in vars.rs Phase 23)
     fn nvim_ins_compl_expand_multiple_skip(str_ptr: *const c_char, skip: c_int);
-    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), inlined below via ins_bytes_len
+    #[link_name = "ins_bytes_len"]
+    fn ins_bytes_len(p: *const c_char, len: usize);
     fn nvim_ins_compl_dict_alloc_set_shown();
     // (compl_hi_on_autocompl_longest moved to Rust static in state.rs)
     fn rs_compl_status_adding() -> c_int;
@@ -324,7 +326,7 @@ pub unsafe extern "C" fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: 
             } else {
                 -1
             };
-            nvim_ins_compl_insert_bytes(cp_str.add(compl_len as usize), ins_len);
+            rs_ins_compl_insert_bytes(cp_str.add(compl_len as usize), ins_len);
             if (preinsert != 0 || insert_prefix != 0) && move_cursor != 0 {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 {
@@ -425,15 +427,22 @@ pub unsafe extern "C" fn rs_ins_compl_addleader(c: c_int) {
 
 /// Insert bytes at the cursor position and update compl_ins_end_col.
 ///
-/// Delegates to the C compound accessor `nvim_ins_compl_insert_bytes`.
 /// When `len` is -1, the full NUL-terminated length is used.
 ///
 /// # Safety
 /// `p` must point to a valid byte sequence of at least `len` bytes (or be
 /// NUL-terminated when `len == -1`). Requires valid buffer and cursor state.
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int) {
-    nvim_ins_compl_insert_bytes(p, len);
+    let actual_len = if len == -1 {
+        std::ffi::CStr::from_ptr(p).to_bytes().len()
+    } else {
+        debug_assert!(len >= 0);
+        len as usize
+    };
+    ins_bytes_len(p, actual_len);
+    crate::vars::nvim_set_compl_ins_end_col(nvim_get_cursor_col());
 }
 
 /// Insert a completion string that may contain newlines.

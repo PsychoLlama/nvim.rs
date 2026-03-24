@@ -240,7 +240,8 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 5: set up submode pre-text and compl_startpos for adding vs normal
     if rs_compl_status_adding() != 0 {
-        if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+        if !shortmess(c_int::from(b'c')) {
+            // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
             nvim_set_edit_submode_adding();
         }
         if rs_ctrl_x_mode_line_or_eval() != 0 {
@@ -262,7 +263,8 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     }
 
     // Block 6: set edit_submode to the CTRL-X mode message
-    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
+        // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         nvim_set_edit_submode_ctrl_x_local_or_mode();
     }
 
@@ -283,7 +285,8 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 9: show "Searching..." status message
     // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
-    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
+        // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         nvim_set_edit_submode_extra_searching();
         g_edit_submode_highl = HLF_COUNT;
         showmode();
@@ -416,7 +419,8 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     nvim_ins_complete_update_cont_s_ipos();
 
     // Show status message if appropriate
-    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
+        // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         rs_ins_compl_show_statusmsg();
     }
 

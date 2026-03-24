@@ -61,7 +61,8 @@ extern "C" {
     fn nvim_ins_redraw(ready: c_int);
     // nvim_clear_compl_best_matches: inlined in vars.rs (Phase 24)
     fn rs_ins_compl_delete(new_leader: c_int);
-    fn nvim_ins_compl_insert_bytes(p: *const c_char, len: c_int);
+    // nvim_ins_compl_insert_bytes: deleted (Phase 2), use rs_ins_compl_insert_bytes
+    fn rs_ins_compl_insert_bytes(p: *const c_char, len: c_int);
     fn rs_get_compl_len() -> c_int;
     fn utfc_ptr2len(ptr: *const c_char) -> c_int;
     fn rs_ins_compl_leader() -> *const c_char;
@@ -288,7 +289,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
             let str_data = nvim_compl_match_get_cp_str_data(compl);
             let compl_len = rs_get_compl_len() as usize;
             rs_ins_compl_delete(0);
-            nvim_ins_compl_insert_bytes(str_data.add(compl_len), -1);
+            rs_ins_compl_insert_bytes(str_data.add(compl_len), -1);
             nvim_ins_redraw(0);
         }
         crate::vars::nvim_set_compl_num_bests(0);
@@ -371,7 +372,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
 
         let compl_len = rs_get_compl_len() as usize;
         rs_ins_compl_delete(0);
-        nvim_ins_compl_insert_bytes(dup.add(compl_len), -1);
+        rs_ins_compl_insert_bytes(dup.add(compl_len), -1);
         nvim_ins_redraw(0);
         nvim_xfree(dup.cast::<u8>());
     }
