@@ -42,8 +42,7 @@ extern "C" {
     fn curbuf_locked() -> bool;
     fn get_text_locked_msg() -> *const c_char;
 
-    // Phase 2: do_bufdel calls C do_buffer (which remains in C)
-    fn do_buffer(action: c_int, start: c_int, dir: c_int, count: c_int, forceit: c_int) -> c_int;
+    fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int) -> c_int;
     fn buflist_findpat(
         pattern: *const c_char,
         pattern_end: *const c_char,
@@ -100,6 +99,8 @@ const DOBUF_WIPE: c_int = 4;
 const DOBUF_DEL: c_int = 3;
 /// `DOBUF_UNLOAD` action value (from `buffer.h`)
 const DOBUF_UNLOAD: c_int = 2;
+/// `DOBUF_FORCEIT` flag value (from `buffer.h`)
+const DOBUF_FORCEIT: c_int = 1;
 /// Buffer for I/O size (from `globals.h`)
 const IOSIZE: usize = 1024 + 1;
 
@@ -252,7 +253,7 @@ pub unsafe extern "C" fn set_bufref(bufref: *mut BufRef, buf: BufHandle) {
 }
 
 // =============================================================================
-// Phase 2: do_bufdel, do_buffer
+// Phase 2: do_bufdel
 // =============================================================================
 
 /// Delete or unload buffer(s).
@@ -277,8 +278,9 @@ pub unsafe extern "C" fn do_bufdel(
     let mut deleted: c_int = 0; // number of buffers deleted
     let mut errormsg: *mut c_char = std::ptr::null_mut();
 
+    let forceit_flag = if forceit != 0 { DOBUF_FORCEIT } else { 0 };
     if addr_count == 0 {
-        do_buffer(command, DOBUF_CURRENT, FORWARD, 0, forceit);
+        do_buffer_ext(command, DOBUF_CURRENT, FORWARD, 0, forceit_flag);
     } else {
         let mut bnr = if addr_count == 2 {
             if !arg.is_null() && *arg != 0 {
@@ -297,7 +299,7 @@ pub unsafe extern "C" fn do_bufdel(
             let curbuf = nvim_get_curbuf();
             if bnr == nvim_buf_get_fnum(curbuf) {
                 do_current = bnr;
-            } else if do_buffer(command, DOBUF_FIRST, FORWARD, bnr, forceit) == OK {
+            } else if do_buffer_ext(command, DOBUF_FIRST, FORWARD, bnr, forceit_flag) == OK {
                 deleted += 1;
             }
 
@@ -330,7 +332,7 @@ pub unsafe extern "C" fn do_bufdel(
 
         if !nvim_got_int
             && do_current != 0
-            && do_buffer(command, DOBUF_FIRST, FORWARD, do_current, forceit) == OK
+            && do_buffer_ext(command, DOBUF_FIRST, FORWARD, do_current, forceit_flag) == OK
         {
             deleted += 1;
         }
