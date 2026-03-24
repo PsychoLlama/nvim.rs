@@ -383,7 +383,7 @@ int ctrl_x_mode = CTRL_X_NORMAL;
 
 int compl_matches = 0;           ///< number of completion matches
 String compl_pattern = STRING_INIT;      ///< search pattern for matching items, made non-static for Rust access (Phase 22)
-static String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt'
+String cpt_compl_pattern = STRING_INIT;  ///< pattern returned by func in 'cpt', made non-static for Rust access (Phase 20)
 Direction compl_direction = FORWARD;
 Direction compl_shows_dir = FORWARD;
 // compl_pending: moved to Rust static COMPL_PENDING in state.rs (Phase 2)
@@ -1606,38 +1606,7 @@ int nvim_get_cmdline_compl_info_impl(char *line, int curs_col)
 
 /// Compound accessor: set global variables related to completion:
 /// compl_col, compl_length, compl_pattern, and cpt_compl_pattern.
-void nvim_set_compl_globals_impl(int startcol, int curs_col, int is_cpt_compl)
-{
-  if (is_cpt_compl) {
-    API_CLEAR_STRING(cpt_compl_pattern);
-    if (startcol < compl_col) {
-      // Inline prepend_startcol_text: prepend line[startcol..compl_col] to compl_orig_text
-      int prepend_len = compl_col - startcol;
-      int new_length = prepend_len + (int)compl_orig_text.size;
-      cpt_compl_pattern.size = (size_t)new_length;
-      cpt_compl_pattern.data = xmalloc((size_t)new_length + 1);
-      char *_line = ml_get(curwin->w_cursor.lnum);
-      memmove(cpt_compl_pattern.data, _line + startcol, (size_t)prepend_len);
-      memmove(cpt_compl_pattern.data + prepend_len, compl_orig_text.data, compl_orig_text.size);
-      cpt_compl_pattern.data[new_length] = NUL;
-      return;
-    } else {
-      cpt_compl_pattern = copy_string(compl_orig_text, NULL);
-    }
-  } else {
-    if (startcol < 0 || startcol > curs_col) {
-      startcol = curs_col;
-    }
-
-    // Re-obtain line in case it has changed
-    char *line = ml_get(curwin->w_cursor.lnum);
-    int len = curs_col - startcol;
-
-    compl_pattern = cbuf_to_string(line + startcol, (size_t)len);
-    compl_col = startcol;
-    compl_length = len;
-  }
-}
+// nvim_set_compl_globals_impl: deleted (Phase 20), inlined in pattern.rs as rs_set_compl_globals
 
 /// Get the completion pattern, column and length.
 ///

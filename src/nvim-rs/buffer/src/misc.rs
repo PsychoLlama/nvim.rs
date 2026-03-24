@@ -433,6 +433,7 @@ extern "C" {
 
 const NL_BYTE: u8 = b'\n';
 const NUL_BYTE: u8 = b'\0';
+const BLN_DUMMY: c_int = 8; // from buffer.h: don't add to buffer list, don't clip name
 
 /// Read buffer contents from lines [start, end] into a C `StringBuilder`.
 ///
@@ -504,4 +505,95 @@ pub unsafe extern "C" fn rs_read_buffer_into(
             written += len;
         }
     }
+}
+
+// =============================================================================
+// buf_contents_changed
+// =============================================================================
+
+extern "C" {
+    fn nvim_buflist_new(
+        ffname: *const c_char,
+        sfname: *const c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+    fn nvim_buf_prep_exarg_alloc(buf: BufHandle) -> *mut c_void;
+    fn nvim_exarg_free(ea: *mut c_void);
+    fn nvim_buf_aucmd_prepbuf_alloc(buf: BufHandle) -> *mut c_void;
+    fn nvim_buf_aucmd_restbuf_free(aco: *mut c_void);
+    fn nvim_ml_open_curbuf() -> c_int;
+    fn nvim_readfile_for_buf(buf: BufHandle, ea: *mut c_void) -> c_int;
+    fn nvim_buf_get_line_at(buf: BufHandle, lnum: c_int) -> *const c_char;
+    fn nvim_curbuf_get_line_at(lnum: c_int) -> *const c_char;
+    fn nvim_wipe_buffer_no_confirm(buf: BufHandle);
+    fn nvim_block_autocmds();
+    fn nvim_unblock_autocmds();
+}
+
+/// Read the file for `buf` again and check whether the contents changed.
+///
+/// Returns `true` if the contents differ or if the check could not be performed.
+///
+/// Mirrors C `buf_contents_changed`.
+///
+/// # Safety
+///
+/// Must be called on the main thread with valid Neovim state.
+#[must_use]
+#[unsafe(export_name = "buf_contents_changed")]
+pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
+    // Allocate a dummy buffer (not in the buffer list).
+    let newbuf = nvim_buflist_new(std::ptr::null_mut(), std::ptr::null_mut(), 1, BLN_DUMMY);
+    if newbuf.is_null() {
+        return true;
+    }
+
+    // Force 'fileencoding' and 'fileformat' to be equal.
+    let ea = nvim_buf_prep_exarg_alloc(buf);
+
+    // Set curwin/curbuf to newbuf and save a few things.
+    let aco = nvim_buf_aucmd_prepbuf_alloc(newbuf);
+
+    // Block autocommands to avoid nasty side-effects (e.g. wiping buffers).
+    nvim_block_autocmds();
+
+    let mut differ = true;
+
+    if nvim_ml_open_curbuf() == OK && nvim_readfile_for_buf(buf, ea) == OK {
+        // Compare the two files line by line.
+        let buf_lines = nvim_buf_get_ml_line_count(buf);
+        let curbuf_lines = nvim_curbuf_ml_line_count();
+        if buf_lines == curbuf_lines {
+            differ = false;
+            let mut lnum = 1;
+            while lnum <= curbuf_lines {
+                let buf_line = nvim_buf_get_line_at(buf, lnum);
+                let cur_line = nvim_curbuf_get_line_at(lnum);
+                // Both pointers are valid C strings from the memline.
+                let buf_bytes = std::ffi::CStr::from_ptr(buf_line).to_bytes();
+                let cur_bytes = std::ffi::CStr::from_ptr(cur_line).to_bytes();
+                if buf_bytes != cur_bytes {
+                    differ = true;
+                    break;
+                }
+                lnum += 1;
+            }
+        }
+    }
+
+    nvim_exarg_free(ea);
+
+    // Restore curwin/curbuf.
+    nvim_buf_aucmd_restbuf_free(aco);
+
+    let curbuf = nvim_get_curbuf();
+    if curbuf != newbuf {
+        // safety check: only wipe if curbuf moved away from newbuf
+        nvim_wipe_buffer_no_confirm(newbuf);
+    }
+
+    nvim_unblock_autocmds();
+
+    differ
 }

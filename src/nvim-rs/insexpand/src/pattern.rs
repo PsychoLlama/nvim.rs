@@ -31,8 +31,15 @@ extern "C" {
     ) -> c_int;
     fn nvim_get_spell_compl_info_impl(startcol: c_int, curs_col: c_int) -> c_int;
 
-    // Compound accessor for setting compl_col/compl_length/compl_pattern/cpt_compl_pattern.
-    fn nvim_set_compl_globals_impl(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
+    // nvim_set_compl_globals_impl: deleted (Phase 20), inlined below as set_compl_globals
+
+    // helpers for inlined nvim_set_compl_globals_impl (Phase 20)
+    pub(crate) static mut cpt_compl_pattern: NvimString;
+    fn copy_string(str_: NvimString, arena: *mut core::ffi::c_void) -> NvimString;
+    #[link_name = "xfree"]
+    fn xfree_pattern(p: *mut c_char);
+    fn memmove(dst: *mut c_char, src: *const c_char, n: usize) -> *mut c_char;
+    fn nvim_ml_get_curline() -> *const c_char;
 
     // Underlying C functions used by inlined rs_get_normal_compl_info
     fn vim_isIDc(c: c_int) -> bool;
@@ -262,15 +269,61 @@ pub unsafe extern "C" fn rs_get_spell_compl_info(startcol: c_int, curs_col: c_in
 /// Sets `compl_col`, `compl_length`, `compl_pattern`, and `cpt_compl_pattern`
 /// based on the mode (`is_cpt_compl != 0` for cpt function completion).
 ///
+/// Inlined from deleted C `nvim_set_compl_globals_impl` (Phase 20).
+///
 /// # Safety
 /// Requires valid global completion state. Mutates C static globals.
 #[no_mangle]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_set_compl_globals(
-    startcol: c_int,
+    mut startcol: c_int,
     curs_col: c_int,
     is_cpt_compl: c_int,
 ) {
-    nvim_set_compl_globals_impl(startcol, curs_col, is_cpt_compl);
+    if is_cpt_compl != 0 {
+        // API_CLEAR_STRING(cpt_compl_pattern)
+        if !cpt_compl_pattern.data.is_null() {
+            xfree_pattern(cpt_compl_pattern.data);
+            cpt_compl_pattern.data = core::ptr::null_mut();
+            cpt_compl_pattern.size = 0;
+        }
+        let compl_col = crate::vars::nvim_get_compl_col();
+        if startcol < compl_col {
+            let prepend_len = (compl_col - startcol) as usize;
+            let orig_size = core::ptr::read(&raw const crate::vars::compl_orig_text.size);
+            let orig_data = core::ptr::read(&raw const crate::vars::compl_orig_text.data);
+            let new_length = prepend_len + orig_size;
+            cpt_compl_pattern.size = new_length;
+            cpt_compl_pattern.data = xmalloc_pattern(new_length + 1);
+            let line = nvim_ml_get_curline();
+            memmove(
+                cpt_compl_pattern.data,
+                line.add(startcol as usize),
+                prepend_len,
+            );
+            memmove(
+                cpt_compl_pattern.data.add(prepend_len),
+                orig_data.cast_const(),
+                orig_size,
+            );
+            *cpt_compl_pattern.data.add(new_length) = 0;
+        } else {
+            // copy_string does a heap-dup of the String struct
+            cpt_compl_pattern = copy_string(
+                core::ptr::read(&raw const crate::vars::compl_orig_text),
+                core::ptr::null_mut(),
+            );
+        }
+    } else {
+        if startcol < 0 || startcol > curs_col {
+            startcol = curs_col;
+        }
+        let line = nvim_ml_get_curline();
+        let len = curs_col - startcol;
+        crate::vars::compl_pattern = cbuf_to_string(line.add(startcol as usize), len as usize);
+        crate::vars::nvim_set_compl_col(startcol);
+        crate::vars::nvim_set_compl_length(len);
+    }
 }
 
 #[cfg(test)]

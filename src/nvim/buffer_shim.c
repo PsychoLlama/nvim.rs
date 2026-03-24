@@ -1716,66 +1716,60 @@ void nvim_mark_view_restore(void *fm)
 // buflist_getfile migrated to Rust (src/nvim-rs/buffer/src/list.rs)
 
 // ============================================================
-// Buffer content comparison (Phase 16)
+// Accessors for buf_contents_changed (migrated to Rust)
 // ============================================================
 
-/// Read the file for "buf" again and check if the contents changed.
-/// Return true if it changed or this could not be checked.
-///
-/// @param  buf  buffer to check
-///
-/// @return  true if the buffer's contents have changed
-bool buf_contents_changed(buf_T *buf)
-  FUNC_ATTR_NONNULL_ALL
+/// Heap-allocate an exarg_T, fill it via prep_exarg(ea, buf), return pointer.
+void *nvim_buf_prep_exarg_alloc(buf_T *buf)
 {
-  bool differ = true;
-
-  // Allocate a buffer without putting it in the buffer list.
-  buf_T *newbuf = buflist_new(NULL, NULL, 1, BLN_DUMMY);
-  if (newbuf == NULL) {
-    return true;
-  }
-
-  // Force the 'fileencoding' and 'fileformat' to be equal.
-  exarg_T ea;
-  prep_exarg(&ea, buf);
-
-  // Set curwin/curbuf to buf and save a few things.
-  aco_save_T aco;
-  aucmd_prepbuf(&aco, newbuf);
-
-  // We don't want to trigger autocommands now, they may have nasty
-  // side-effects like wiping buffers
-  block_autocmds();
-
-  if (ml_open(curbuf) == OK
-      && readfile(buf->b_ffname, buf->b_fname,
-                  0, 0, (linenr_T)MAXLNUM,
-                  &ea, READ_NEW | READ_DUMMY, false) == OK) {
-    // compare the two files line by line
-    if (buf->b_ml.ml_line_count == curbuf->b_ml.ml_line_count) {
-      differ = false;
-      for (linenr_T lnum = 1; lnum <= curbuf->b_ml.ml_line_count; lnum++) {
-        if (strcmp(ml_get_buf(buf, lnum), ml_get(lnum)) != 0) {
-          differ = true;
-          break;
-        }
-      }
-    }
-  }
-  xfree(ea.cmd);
-
-  // restore curwin/curbuf and a few other things
-  aucmd_restbuf(&aco);
-
-  if (curbuf != newbuf) {  // safety check
-    wipe_buffer(newbuf, false);
-  }
-
-  unblock_autocmds();
-
-  return differ;
+  exarg_T *ea = xcalloc(1, sizeof(exarg_T));
+  prep_exarg(ea, buf);
+  return ea;
 }
+
+/// Free ea->cmd and then free the exarg_T pointer.
+void nvim_exarg_free(void *ea_void)
+{
+  exarg_T *ea = (exarg_T *)ea_void;
+  xfree(ea->cmd);
+  xfree(ea);
+}
+
+/// Heap-allocate an aco_save_T and call aucmd_prepbuf(aco, buf). Returns aco pointer.
+void *nvim_buf_aucmd_prepbuf_alloc(buf_T *buf)
+{
+  aco_save_T *aco = xcalloc(1, sizeof(aco_save_T));
+  aucmd_prepbuf(aco, buf);
+  return aco;
+}
+
+/// Call aucmd_restbuf(aco) and free the aco_save_T.
+void nvim_buf_aucmd_restbuf_free(void *aco_void)
+{
+  aco_save_T *aco = (aco_save_T *)aco_void;
+  aucmd_restbuf(aco);
+  xfree(aco);
+}
+
+// nvim_ml_open_curbuf: duplicate removed (defined in memline_shim.c)
+
+/// Compound: readfile(buf->b_ffname, buf->b_fname, 0, 0, MAXLNUM, ea, READ_NEW|READ_DUMMY, false).
+/// Returns OK (1) or FAIL (0).
+int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
+{
+  exarg_T *ea = (exarg_T *)ea_void;
+  return readfile(buf->b_ffname, buf->b_fname,
+                  0, 0, (linenr_T)MAXLNUM,
+                  ea, READ_NEW | READ_DUMMY, false);
+}
+
+/// Wipe buffer without autocommands: wipe_buffer(buf, false).
+void nvim_wipe_buffer_no_confirm(buf_T *buf)
+{
+  wipe_buffer(buf, false);
+}
+
+// buf_contents_changed migrated to Rust (src/nvim-rs/buffer/src/misc.rs)
 
 // ============================================================
 // Open all buffers (Phase 17)
