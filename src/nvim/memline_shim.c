@@ -1823,3 +1823,8 @@ bool nvim_curbuf_get_b_p_eol(void) { return curbuf->b_p_eol; }
 /// Returns curbuf->b_p_fixeol (whether EOL should be fixed).
 bool nvim_curbuf_get_b_p_fixeol(void) { return curbuf->b_p_fixeol; }
 
+/// Update the swap file name after a buffer rename (accessor for Rust).
+void nvim_ml_setname(buf_T *buf) { ml_setname(buf); }
+
+/// Reset the memline timestamp after a buffer rename (accessor for Rust).
+void nvim_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }

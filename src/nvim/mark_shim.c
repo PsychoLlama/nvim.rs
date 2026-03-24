@@ -182,3 +182,5 @@ int nvim_mark_findpar(int *inclusive, int dir, int count, int what, int do_sente
 }
 void nvim_mark_win_set_cursor(win_T *win, pos_T pos) { win->w_cursor = pos; }
 
+/// Check all named file marks for a buffer after a rename (accessor for Rust).
+void nvim_fmarks_check_names(buf_T *buf) { fmarks_check_names(buf); }

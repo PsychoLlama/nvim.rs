@@ -505,6 +505,28 @@ buf_T *nvim_buflist_findnr(int fnum)
   return buflist_findnr(fnum);
 }
 
+/// Perform the body of buf_set_name: free old names, set new ffname, expand paths.
+/// Rust calls rs_buflist_findnr + this to implement buf_set_name.
+void nvim_buf_set_name_body(buf_T *buf, char *name)
+{
+  if (buf->b_sfname != buf->b_ffname) {
+    xfree(buf->b_sfname);
+  }
+  xfree(buf->b_ffname);
+  buf->b_ffname = xstrdup(name);
+  buf->b_sfname = NULL;
+  fname_expand(buf, &buf->b_ffname, &buf->b_sfname);
+  buf->b_fname = buf->b_sfname;
+}
+
+/// Call check_arg_idx(curwin) if curwin->w_buffer == buf.
+void nvim_check_arg_idx_if_curbuf(buf_T *buf)
+{
+  if (curwin->w_buffer == buf) {
+    check_arg_idx(curwin);
+  }
+}
+
 /// Get the stored line number for a buffer (accessor for Rust).
 linenr_T nvim_buflist_findlnum(buf_T *buf)
 {
@@ -1651,47 +1673,6 @@ fmark_T *buflist_findfmark(buf_T *buf)
   return (wip == NULL) ? &no_position : &(wip->wi_mark);
 }
 
-// ============================================================
-// Buffer name / file management (Phase 13)
-// ============================================================
-
-/// Crude way of changing the name of a buffer.  Use with care!
-/// The name should be relative to the current directory.
-void buf_set_name(int fnum, char *name)
-{
-  buf_T *buf = buflist_findnr(fnum);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (buf->b_sfname != buf->b_ffname) {
-    xfree(buf->b_sfname);
-  }
-  xfree(buf->b_ffname);
-  buf->b_ffname = xstrdup(name);
-  buf->b_sfname = NULL;
-  // Allocate ffname and expand into full path.  Also resolves .lnk
-  // files on Win32.
-  fname_expand(buf, &buf->b_ffname, &buf->b_sfname);
-  buf->b_fname = buf->b_sfname;
-}
-
-/// Take care of what needs to be done when the name of buffer "buf" has changed.
-void buf_name_changed(buf_T *buf)
-{
-  // If the file name changed, also change the name of the swapfile
-  if (buf->b_ml.ml_mfp != NULL) {
-    ml_setname(buf);
-  }
-
-  if (curwin->w_buffer == buf) {
-    check_arg_idx(curwin);      // check file name for arg list
-  }
-  maketitle();                  // set window title
-  status_redraw_all();          // status lines need to be redrawn
-  fmarks_check_names(buf);      // check named file marks
-  ml_timestamp(buf);            // reset timestamp
-}
 
 /// Creates or switches to a scratch buffer. :h special-buffers
 /// Scratch buffer is:
