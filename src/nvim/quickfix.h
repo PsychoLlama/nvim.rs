@@ -36,6 +36,9 @@ extern void rs_qf_age(void *eap);
 extern void rs_qf_history(void *eap);
 
 // Forward declarations for Rust-implemented functions (exported under C names via #[export_name])
+void qf_init_stack(void);
+int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
+            const char *restrict qf_title, char *restrict enc);
 int qf_stack_get_bufnr(void);
 void qf_free_all(win_T *wp);
 #if defined(EXITFREE)

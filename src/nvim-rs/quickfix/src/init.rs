@@ -600,6 +600,24 @@ mod init_ext {
         retval
     }
 
+    /// C ABI entry point for `qf_init` — bridges `int newlist` to `bool`.
+    ///
+    /// # Safety
+    ///
+    /// Same constraints as `rs_qf_init`.
+    #[unsafe(export_name = "qf_init")]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe extern "C" fn rs_qf_init_c_abi(
+        wp: *mut c_void,
+        efile: *const c_char,
+        errorformat: *mut c_char,
+        newlist: c_int,
+        qf_title: *const c_char,
+        enc: *mut c_char,
+    ) -> c_int {
+        rs_qf_init(wp, efile, errorformat, newlist != 0, qf_title, enc)
+    }
+
     /// Entry point for C `qf_init`: resolve qi and call `rs_qf_init_ext`.
     ///
     /// Replaces the C `qf_init` body. The C function becomes a thin wrapper.

@@ -566,7 +566,8 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.
-    if want_cindent && in_cinkeys(0x103, c_int::from(b' '), inindent(0)) { // KEY_COMPLETE = 0x103 (from edit.h)
+    // KEY_COMPLETE = 0x103 (from edit.h)
+    if want_cindent && in_cinkeys(0x103, c_int::from(b' '), inindent(0)) {
         do_c_expr_indent();
     }
 

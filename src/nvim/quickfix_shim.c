@@ -290,6 +290,8 @@ void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 }
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
+void nvim_set_ql_info(void *qi) { ql_info = (qf_info_T *)qi; }
+int nvim_get_p_chi(void) { return (int)p_chi; }
 
 int nvim_buf_get_has_qf_entry(const void *buf_void) { return ((const buf_T *)buf_void)->b_has_qf_entry; }
 int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void)->b_fnum; }
