@@ -56,8 +56,8 @@
 #include "nvim/strings.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
-#include "nvim/undo.h"
 #include "nvim/vim_defs.h"
+#include "nvim/undo.h"
 
 // =============================================================================
 // Rust FFI declarations
@@ -89,7 +89,7 @@ extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32
                         size_t *bytes_consumed_out, int *node_count_out);
 extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint32_t *nodecount_out);
 
-// Phase 4: Dictionary and wordfile line parsers
+// Dictionary and wordfile line parsers
 
 typedef struct {
   uint16_t word_len;       // length of unescaped word written into word_buf
@@ -121,7 +121,7 @@ extern bool rs_spell_find_duplicate_word(const uint8_t *file_content, size_t con
                                          const uint8_t *word, size_t word_len,
                                          size_t *offset_out);
 
-// Phase 5: mkspell argument parsing helpers
+// mkspell argument parsing helpers
 
 typedef struct {
   uint8_t  fname[4096];    // NUL-terminated output filename
@@ -137,26 +137,19 @@ extern int rs_mkspell_output_fname(const uint8_t *const *fnames, int fcount,
 extern int rs_mkspell_validate_args(const uint8_t *const *innames, int incount,
                                     uint8_t *region_name_out);
 
-// Phase 1 & 2: New Rust replacements for spellfile.c utility functions
+// Rust utility replacements
 extern int rs_set_spell_charflags(const uint8_t *flags_in, int cnt, const char *fol);
 extern int *rs_mb_str2wide(const char *s);
 extern void rs_tree_count_words(const uint8_t *byts, int *idxs, int len);
 extern void rs_set_sal_first(slang_T *slang);
 extern void rs_set_map_str(slang_T *slang, const char *map);
-// spell_check_msm is now in Rust via #[export_name = "spell_check_msm"]; no extern needed.
-// Phase 4: set_sofo replacement
 extern int rs_set_sofo(slang_T *slang, const char *from, const char *to);
-// Phase 4: read_compound replacement
 extern int rs_read_compound(const uint8_t *buf, size_t len, slang_T *slang);
-// Phase 4: read_sal_section replacement
 extern int rs_read_sal_section(const uint8_t *buf, size_t len, slang_T *slang);
-// Phase 4: read_prefcond_section replacement
 extern int rs_read_prefcond_section(FILE *fd, slang_T *lp);
-// Phase 4: read_rep_section replacement
 extern int rs_read_rep_section(FILE *fd, garray_T *gap, int16_t *first);
 
-// Phase 2: Spell section writing (write_vim_spell helper)
-// SpellSectionParams is filled from spellinfo_T and passed to Rust.
+// SpellSectionParams is filled from spellinfo_T and passed to rs_write_spell_sections().
 // Rust writes all sections (except SN_CHARFLAGS and SN_WORDS) to a buffer.
 typedef struct {
   const char *si_info;
@@ -199,20 +192,16 @@ extern int rs_write_spell_sections(const SpellSectionParams *params,
                                    uint8_t *buf, size_t buf_len,
                                    size_t *written_out);
 
-// Phase 3: Rust tree serialization - rs_put_node writes tree to buffer and
-// returns the nodecount; rs_clear_node resets index/wnode fields.
-// (Accessor function definitions appear after the full wordnode_S struct below.)
+// rs_put_node writes tree to buffer and returns the nodecount;
+// rs_clear_node resets index/wnode fields.
 extern int rs_put_node(wordnode_T *node, uint8_t *buf, size_t buf_len,
                        int idx, int regionmask, bool prefixtree, size_t *written_out);
 extern void rs_clear_node(wordnode_T *node);
 
-// Phase 6: Rust tree compression.
 // rs_node_compress compresses a sibling list (first sibling of root->wn_sibling).
 // Returns compressed node count; sets *tot_out to total nodes visited.
-// spellinfo_T is forward-declared as an opaque pointer from Rust's perspective.
 extern int rs_node_compress(spellinfo_T *spin, wordnode_T *node, int *tot_out);
 
-// Phase 5: Tree-building functions migrated to Rust.
 extern int rs_tree_add_word(spellinfo_T *spin, const char *word, wordnode_T *root, int flags,
                             int region, int affixID);
 extern int rs_store_word(spellinfo_T *spin, const char *word, int flags, int region,
@@ -1090,13 +1079,6 @@ static void spell_reload_one(char *fname, bool added_word)
 #define CONDIT_CFIX     2       // affix must have CIRCUMFIX flag
 #define CONDIT_SUF      4       // add a suffix for matching flags
 #define CONDIT_AFF      8       // word already has an affix
-
-// Compression tuning globals (compress_start/inc/added) have moved to Rust
-// (COMPRESS_START/INC/ADDED in spellfile.rs). spell_check_msm() sets them.
-
-// spell_check_msm() is implemented in Rust (rs_do_spell_check_msm) via
-// #[export_name = "spell_check_msm"].  The declaration appears in the
-// generated header via the forward declarations below.
 
 // Reads the affix file "fname".
 // Returns an afffile_T, NULL for complete failure.
@@ -2842,9 +2824,6 @@ void free_blocks(sblock_T *bl)
     bl = next;
   }
 }
-
-// Thin wrapper so Rust can call the static get_wordnode.
-wordnode_T *nvim_get_wordnode(spellinfo_T *spin) { return get_wordnode(spin); }
 
 /// Write the Vim .spl file "fname".
 ///
