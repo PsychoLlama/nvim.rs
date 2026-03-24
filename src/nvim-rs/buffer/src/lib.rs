@@ -8,6 +8,7 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_possible_wrap)] // Byte literals in ASCII range are safe
 
+pub mod close;
 pub mod expand;
 pub mod filename;
 pub mod info;

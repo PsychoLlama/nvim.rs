@@ -2495,6 +2495,99 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
 
   return OK;
 }
+
+// ============================================================
+// Accessors for buf_freeall (migrated to Rust, src/nvim-rs/buffer/src/close.rs)
+// ============================================================
+
+void nvim_buf_lock(buf_T *buf)
+{
+  buf->b_locked++;
+  buf->b_locked_split++;
+}
+
+void nvim_buf_unlock(buf_T *buf)
+{
+  buf->b_locked--;
+  buf->b_locked_split--;
+}
+
+void nvim_buf_set_nwindows(buf_T *buf, int val)
+{
+  buf->b_nwindows = val;
+}
+
+void nvim_buf_flags_and(buf_T *buf, int mask)
+{
+  buf->b_flags &= mask;
+}
+
+void nvim_set_bufref(bufref_T *bufref, buf_T *buf)
+{
+  set_bufref(bufref, buf);
+}
+
+bool nvim_bufref_valid(bufref_T *bufref)
+{
+  return bufref_valid(bufref);
+}
+
+void nvim_buf_updates_unload(buf_T *buf)
+{
+  buf_updates_unload(buf, false);
+}
+
+bool nvim_apply_autocmds_bufunload(buf_T *buf)
+{
+  return apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, false, buf);
+}
+
+bool nvim_apply_autocmds_bufdelete_fname(buf_T *buf)
+{
+  return apply_autocmds(EVENT_BUFDELETE, buf->b_fname, buf->b_fname, false, buf);
+}
+
+bool nvim_apply_autocmds_bufwipeout(buf_T *buf)
+{
+  return apply_autocmds(EVENT_BUFWIPEOUT, buf->b_fname, buf->b_fname, false, buf);
+}
+
+void nvim_goto_tabpage_win(void *tab, void *win)
+{
+  goto_tabpage_win((tabpage_T *)tab, (win_T *)win);
+}
+
+void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
+{
+  if (curwin != NULL && curwin->w_buffer == buf) {
+    reset_synblock(curwin);
+  }
+}
+
+void nvim_buf_clearFolding_all_windows(buf_T *buf)
+{
+  FOR_ALL_TAB_WINDOWS(tp, win) {
+    if (win->w_buffer == buf) {
+      rs_clearFolding(win);
+    }
+  }
+}
+
+void nvim_ml_close(buf_T *buf)
+{
+  ml_close(buf, true);
+}
+
+void nvim_u_clearallandblockfree(buf_T *buf)
+{
+  u_clearallandblockfree(buf);
+}
+
+void nvim_syntax_clear_buf(buf_T *buf)
+{
+  syntax_clear(&buf->b_s);
+}
+
 /// Close the link to a buffer.
 ///
 /// @param win    If not NULL, set b_last_cursor.
@@ -2742,95 +2835,4 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
 }
 
 
-/// buf_freeall() - free all things allocated for a buffer that are related to
-/// the file.  Careful: get here with "curwin" NULL when exiting.
-///
-/// @param flags BFA_DEL           buffer is going to be deleted
-///              BFA_WIPE          buffer is going to be wiped out
-///              BFA_KEEP_UNDO     do not free undo information
-///              BFA_IGNORE_ABORT  don't abort even when aborting() returns true
-void buf_freeall(buf_T *buf, int flags)
-{
-  bool is_curbuf = (buf == curbuf);
-  int is_curwin = (curwin != NULL && curwin->w_buffer == buf);
-  win_T *the_curwin = curwin;
-  tabpage_T *the_curtab = curtab;
-
-  // Make sure the buffer isn't closed by autocommands.
-  buf->b_locked++;
-  buf->b_locked_split++;
-
-  bufref_T bufref;
-  set_bufref(&bufref, buf);
-
-  buf_updates_unload(buf, false);
-  if (!bufref_valid(&bufref)) {
-    // on_detach callback deleted the buffer.
-    return;
-  }
-  if ((buf->b_ml.ml_mfp != NULL)
-      && apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, false, buf)
-      && !bufref_valid(&bufref)) {
-    // Autocommands deleted the buffer.
-    return;
-  }
-  if ((flags & BFA_DEL)
-      && buf->b_p_bl
-      && apply_autocmds(EVENT_BUFDELETE, buf->b_fname, buf->b_fname, false, buf)
-      && !bufref_valid(&bufref)) {
-    // Autocommands may delete the buffer.
-    return;
-  }
-  if ((flags & BFA_WIPE)
-      && apply_autocmds(EVENT_BUFWIPEOUT, buf->b_fname, buf->b_fname, false,
-                        buf)
-      && !bufref_valid(&bufref)) {
-    // Autocommands may delete the buffer.
-    return;
-  }
-  buf->b_locked--;
-  buf->b_locked_split--;
-
-  // If the buffer was in curwin and the window has changed, go back to that
-  // window, if it still exists.  This avoids that ":edit x" triggering a
-  // "tabnext" BufUnload autocmd leaves a window behind without a buffer.
-  if (is_curwin && curwin != the_curwin && rs_win_valid_any_tab(the_curwin)) {
-    block_autocmds();
-    goto_tabpage_win(the_curtab, the_curwin);
-    unblock_autocmds();
-  }
-  // autocmds may abort script processing
-  if ((flags & BFA_IGNORE_ABORT) == 0 && aborting()) {
-    return;
-  }
-
-  // It's possible that autocommands change curbuf to the one being deleted.
-  // This might cause curbuf to be deleted unexpectedly.  But in some cases
-  // it's OK to delete the curbuf, because a new one is obtained anyway.
-  // Therefore only return if curbuf changed to the deleted buffer.
-  if (buf == curbuf && !is_curbuf) {
-    return;
-  }
-  rs_diff_buf_delete(buf);             // Can't use 'diff' for unloaded buffer.
-  // Remove any ownsyntax, unless exiting.
-  if (curwin != NULL && curwin->w_buffer == buf) {
-    reset_synblock(curwin);
-  }
-
-  // No folds in an empty buffer.
-  FOR_ALL_TAB_WINDOWS(tp, win) {
-    if (win->w_buffer == buf) {
-      rs_clearFolding(win);
-    }
-  }
-
-  ml_close(buf, true);              // close and delete the memline/memfile
-  buf->b_ml.ml_line_count = 0;      // no lines in buffer
-  if ((flags & BFA_KEEP_UNDO) == 0) {
-    // free the memory allocated for undo
-    // and reset all undo information
-    u_clearallandblockfree(buf);
-  }
-  syntax_clear(&buf->b_s);          // reset syntax info
-  buf->b_flags &= ~BF_READERR;      // a read error is no longer relevant
-}
+// buf_freeall migrated to Rust (src/nvim-rs/buffer/src/close.rs)

@@ -21,7 +21,7 @@ const BFA_WIPE: c_int = 2;
 const BFA_KEEP_UNDO: c_int = 4;
 const BFA_IGNORE_ABORT: c_int = 8;
 
-/// BF_READERR flag (from buffer_defs.h): got errors while reading the file
+/// `BF_READERR` flag (from `buffer_defs.h`): got errors while reading the file
 const BF_READERR: c_int = 0x40;
 
 // =============================================================================
@@ -30,6 +30,7 @@ const BF_READERR: c_int = 0x40;
 
 /// Layout-compatible with C `bufref_T` (`buf_T*`, `int`, `int` = 16 bytes).
 #[repr(C)]
+#[allow(clippy::struct_field_names)]
 pub struct BufRef {
     br_buf: *mut c_void,
     br_fnum: c_int,
@@ -37,6 +38,7 @@ pub struct BufRef {
 }
 
 impl BufRef {
+    #[must_use]
     pub const fn zeroed() -> Self {
         Self {
             br_buf: std::ptr::null_mut(),
