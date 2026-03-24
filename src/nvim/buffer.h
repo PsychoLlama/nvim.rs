@@ -222,3 +222,7 @@ void buflist_setfpos(buf_T *const buf, win_T *const win, linenr_T lnum, colnr_T 
                      bool copy_options);
 void buf_set_changedtick(buf_T *const buf, varnumber_T changedtick);
 void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *sb);
+
+// get_winopts(), buflist_findfmark() moved to buffer_shim.c (Phase 12).
+void get_winopts(buf_T *buf);
+fmark_T *buflist_findfmark(buf_T *buf);

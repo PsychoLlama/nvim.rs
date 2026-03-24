@@ -50,6 +50,9 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
+#include "nvim/winfloat.h"
+
+#include "buffer_shim.c.generated.h"
 
 // Rust-exported fold functions used in wininfo cluster (Phase 11)
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
@@ -1561,4 +1564,121 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
       written += len;
     }
   }
+}
+
+// ============================================================
+// WinInfo lookup cluster (Phase 12)
+// ============================================================
+
+/// Check that "wip" has 'diff' set and the diff is only for another tab page.
+/// That's because a diff is local to a tab page.
+static bool wininfo_other_tab_diff(WinInfo *wip)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  if (!wip->wi_opt.wo_diff) {
+    return false;
+  }
+
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    // return false when it's a window in the current tab page, thus
+    // the buffer was in diff mode here
+    if (wip->wi_win == wp) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Find info for the current window in buffer "buf".
+/// If not found, return the info for the most recently used window.
+///
+/// @param need_options      when true, skip entries where wi_optset is false.
+/// @param skip_diff_buffer  when true, avoid windows with 'diff' set that is in another tab page.
+///
+/// @return  NULL when there isn't any info.
+static WinInfo *find_wininfo(buf_T *buf, bool need_options, bool skip_diff_buffer)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+{
+  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+    WinInfo *wip = kv_A(buf->b_wininfo, i);
+    if (wip->wi_win == curwin
+        && (!skip_diff_buffer || !wininfo_other_tab_diff(wip))
+        && (!need_options || wip->wi_optset)) {
+      return wip;
+    }
+  }
+
+  // If no wininfo for curwin, use the first in the list (that doesn't have
+  // 'diff' set and is in another tab page).
+  // If "need_options" is true skip entries that don't have options set,
+  // unless the window is editing "buf", so we can copy from the window
+  // itself.
+  if (skip_diff_buffer) {
+    for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+      WinInfo *wip = kv_A(buf->b_wininfo, i);
+      if (!wininfo_other_tab_diff(wip)
+          && (!need_options
+              || wip->wi_optset
+              || (wip->wi_win != NULL
+                  && wip->wi_win->w_buffer == buf))) {
+        return wip;
+      }
+    }
+  } else if (kv_size(buf->b_wininfo)) {
+    return kv_A(buf->b_wininfo, 0);
+  }
+  return NULL;
+}
+
+/// Reset the local window options to the values last used in this window.
+/// If the buffer wasn't used in this window before, use the values from
+/// the most recently used window.  If the values were never set, use the
+/// global values for the window.
+void get_winopts(buf_T *buf)
+{
+  clear_winopt(&curwin->w_onebuf_opt);
+  rs_clearFolding(curwin);
+
+  WinInfo *const wip = find_wininfo(buf, true, true);
+  if (wip != NULL && wip->wi_win != curwin && wip->wi_win != NULL
+      && wip->wi_win->w_buffer == buf) {
+    win_T *wp = wip->wi_win;
+    copy_winopt(&wp->w_onebuf_opt, &curwin->w_onebuf_opt);
+    curwin->w_fold_manual = wp->w_fold_manual;
+    curwin->w_foldinvalid = true;
+    rs_cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
+  } else if (wip != NULL && wip->wi_optset) {
+    copy_winopt(&wip->wi_opt, &curwin->w_onebuf_opt);
+    curwin->w_fold_manual = wip->wi_fold_manual;
+    curwin->w_foldinvalid = true;
+    rs_cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
+  } else {
+    copy_winopt(&curwin->w_allbuf_opt, &curwin->w_onebuf_opt);
+  }
+  if (wip != NULL) {
+    curwin->w_changelistidx = wip->wi_changelistidx;
+  }
+
+  if (curwin->w_config.style == kWinStyleMinimal) {
+    didset_window_options(curwin, false);
+    win_set_minimal_style(curwin);
+  }
+
+  // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
+  if (p_fdls >= 0) {
+    curwin->w_p_fdl = p_fdls;
+  }
+  didset_window_options(curwin, false);
+}
+
+/// Find the mark for the buffer 'buf' for the current window.
+///
+/// @return  a pointer to no_position if no position is found.
+fmark_T *buflist_findfmark(buf_T *buf)
+  FUNC_ATTR_PURE
+{
+  static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL };
+
+  WinInfo *const wip = find_wininfo(buf, false, false);
+  return (wip == NULL) ? &no_position : &(wip->wi_mark);
 }
