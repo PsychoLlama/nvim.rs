@@ -154,44 +154,6 @@ void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 
-// msg_scroll_up helper wrappers (used by Rust; access msg_grid struct fields)
-void nvim_msg_grid_clear_first_line(void)
-{
-  if (msg_grid.chars) {
-    grid_clear_line(&msg_grid, msg_grid.line_offset[0], msg_grid.cols, false);
-  }
-}
-void nvim_msg_grid_del_and_shift(void)
-{
-  grid_del_lines(&msg_grid, 0, 1, msg_grid.rows, 0, msg_grid.cols);
-  memmove(msg_grid.dirty_col, msg_grid.dirty_col + 1,
-          (size_t)(msg_grid.rows - 1) * sizeof(*msg_grid.dirty_col));
-  msg_grid.dirty_col[msg_grid.rows - 1] = 0;
-}
-void nvim_msg_grid_adj_clear_bottom(void)
-{
-  grid_clear(&msg_grid_adj, Rows - 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
-}
-
-// Phase 4: msg_clr_eos_force helper (does the full clear)
-void nvim_msg_clr_eos_force_impl(void)
-{
-  int msg_startcol = (cmdmsg_rl) ? 0 : msg_col;
-  int msg_endcol = (cmdmsg_rl) ? Columns - msg_col : Columns;
-  if (msg_grid.chars && msg_row < msg_grid_pos) {
-    msg_grid_validate();
-    if (msg_row < msg_grid_pos) {
-      msg_row = msg_grid_pos;
-    }
-  }
-  grid_clear(&msg_grid_adj, msg_row, msg_row + 1, msg_startcol, msg_endcol, HL_ATTR(HLF_MSG));
-  grid_clear(&msg_grid_adj, msg_row + 1, Rows, 0, Columns, HL_ATTR(HLF_MSG));
-  redraw_cmdline = true;
-  if (msg_row < Rows - 1 || msg_col == 0) {
-    clear_cmdline = false;
-    mode_displayed = false;
-  }
-}
 
 
 void nvim_msg_grid_flush_dirty_line(int row)

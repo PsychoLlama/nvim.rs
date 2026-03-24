@@ -7,7 +7,7 @@
 //!
 //! These functions form the foundation of the message display system.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
@@ -30,6 +30,14 @@ use crate::rs_msg_outtrans_len;
 pub struct NvimString {
     pub data: *mut c_char,
     pub size: usize,
+}
+
+/// C GridView struct layout (grid_defs.h)
+#[repr(C)]
+struct GridView {
+    target: *mut c_void,
+    row_offset: c_int,
+    col_offset: c_int,
 }
 
 extern "C" {
@@ -91,12 +99,33 @@ extern "C" {
     static mut msg_grid_pos: c_int;
     static mut msg_grid: crate::ScreenGrid;
     fn msg_grid_set_pos(row: c_int, scrolled: bool);
-    fn nvim_msg_grid_clear_first_line();
-    fn nvim_msg_grid_del_and_shift();
-    fn nvim_msg_grid_adj_clear_bottom();
 
-    // Phase 4: msg_clr_eos_force helper
-    fn nvim_msg_clr_eos_force_impl();
+    // Grid operation functions (inlined from nvim_msg_grid_* C helpers)
+    fn grid_clear_line(grid: *mut crate::ScreenGrid, off: usize, width: c_int, valid: bool);
+    fn grid_del_lines(
+        grid: *mut crate::ScreenGrid,
+        row: c_int,
+        line_count: c_int,
+        end: c_int,
+        col: c_int,
+        width: c_int,
+    );
+    fn grid_clear(
+        grid: *mut GridView,
+        start_row: c_int,
+        end_row: c_int,
+        start_col: c_int,
+        end_col: c_int,
+        attr: c_int,
+    );
+    static mut msg_grid_adj: GridView;
+    static mut hl_attr_active: *mut c_int;
+
+    // Globals for nvim_msg_clr_eos_force_impl
+    static mut cmdmsg_rl: bool;
+    static mut redraw_cmdline: bool;
+    static mut clear_cmdline: bool;
+    static mut mode_displayed: bool;
 }
 
 #[allow(clashing_extern_declarations)]
@@ -105,6 +134,18 @@ extern "C" {
     fn nvim_xfree(ptr: *mut c_char);
     // Also declared in history.rs — same Rust static, safe to re-declare here.
     static mut msg_hist_last: *mut crate::history::MessageHistoryEntry;
+}
+
+/// Highlight field index for message area (HLF_MSG = 5)
+const HLF_MSG: c_int = 5;
+
+/// Get HL_ATTR value for a given highlight field index.
+///
+/// # Safety
+/// Reads from the hl_attr_active global array (set by nvim at startup).
+#[allow(clippy::cast_sign_loss)]
+unsafe fn hl_attr(hlf: c_int) -> c_int {
+    *hl_attr_active.add(hlf as usize)
 }
 
 /// Maximum bytes for a single UTF-8 character (including composing chars)
@@ -560,7 +601,7 @@ unsafe fn msg_clr_eos_impl() {
 /// Scroll the message grid up one line.
 ///
 /// # Safety
-/// Calls C accessor functions that modify grid state.
+/// Modifies grid state globals; calls grid_clear_line, grid_del_lines, grid_clear.
 #[export_name = "msg_scroll_up"]
 pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
     extern "C" {
@@ -575,22 +616,82 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
         msg_grid_set_pos(msg_grid_pos - 1, zerocmd == 0);
         // When displaying the first line with cmdheight=0, draw over the existing last line.
         if zerocmd != 0 {
-            nvim_msg_grid_clear_first_line();
+            // Inlined nvim_msg_grid_clear_first_line:
+            if !msg_grid.chars.is_null() {
+                let off = *msg_grid.line_offset;
+                grid_clear_line(std::ptr::addr_of_mut!(msg_grid), off, msg_grid.cols, false);
+            }
         }
     } else {
-        nvim_msg_grid_del_and_shift();
+        // Inlined nvim_msg_grid_del_and_shift:
+        grid_del_lines(
+            std::ptr::addr_of_mut!(msg_grid),
+            0,
+            1,
+            msg_grid.rows,
+            0,
+            msg_grid.cols,
+        );
+        // memmove(dirty_col, dirty_col + 1, (rows - 1) * sizeof(int))
+        #[allow(clippy::cast_sign_loss)]
+        let rows = msg_grid.rows as usize;
+        if rows > 1 {
+            std::ptr::copy(msg_grid.dirty_col.add(1), msg_grid.dirty_col, rows - 1);
+        }
+        *msg_grid.dirty_col.add(rows.saturating_sub(1)) = 0;
     }
 
-    nvim_msg_grid_adj_clear_bottom();
+    // Inlined nvim_msg_grid_adj_clear_bottom:
+    grid_clear(
+        std::ptr::addr_of_mut!(msg_grid_adj),
+        Rows - 1,
+        Rows,
+        0,
+        Columns,
+        hl_attr(HLF_MSG),
+    );
 }
 
 /// Force clear to end of screen even if not needed.
 ///
 /// # Safety
-/// Calls C helper that does the actual clearing.
+/// Modifies display globals; calls grid_clear, msg_grid_validate.
 #[export_name = "msg_clr_eos_force"]
 pub unsafe extern "C" fn rs_msg_clr_eos_force_exported() {
-    nvim_msg_clr_eos_force_impl();
+    // Inlined nvim_msg_clr_eos_force_impl:
+    let msg_startcol = if cmdmsg_rl { 0 } else { msg_col };
+    let msg_endcol = if cmdmsg_rl {
+        Columns - msg_col
+    } else {
+        Columns
+    };
+    if !msg_grid.chars.is_null() && msg_row < msg_grid_pos {
+        msg_grid_validate();
+        if msg_row < msg_grid_pos {
+            msg_row = msg_grid_pos;
+        }
+    }
+    grid_clear(
+        std::ptr::addr_of_mut!(msg_grid_adj),
+        msg_row,
+        msg_row + 1,
+        msg_startcol,
+        msg_endcol,
+        hl_attr(HLF_MSG),
+    );
+    grid_clear(
+        std::ptr::addr_of_mut!(msg_grid_adj),
+        msg_row + 1,
+        Rows,
+        0,
+        Columns,
+        hl_attr(HLF_MSG),
+    );
+    redraw_cmdline = true;
+    if msg_row < Rows - 1 || msg_col == 0 {
+        clear_cmdline = false;
+        mode_displayed = false;
+    }
 }
 
 /// Check if messages are silent.
