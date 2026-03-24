@@ -163,7 +163,8 @@ extern "C" {
     // nvim_shortmess_completionmenu: deleted (Phase 1), use shortmess(SHM_COMPLETIONMENU) directly
     #[link_name = "shortmess"]
     fn shortmess(x: c_int) -> bool;
-    fn nvim_in_cinkeys_key_complete(when: c_int, line_is_empty: bool) -> bool;
+    // nvim_in_cinkeys_key_complete: deleted (Phase 1), call in_cinkeys(KEY_COMPLETE, when, line_is_empty) directly
+    fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool;
     // nvim_set_edit_submode_null_if_set: inlined below (Phase 33)
     fn nvim_get_curwin() -> *mut u8; // opaque curwin pointer
     fn nvim_get_curwin_cursor_lnum() -> c_int;
@@ -565,7 +566,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.
-    if want_cindent && nvim_in_cinkeys_key_complete(c_int::from(b' '), inindent(0)) {
+    if want_cindent && in_cinkeys(0x103, c_int::from(b' '), inindent(0)) { // KEY_COMPLETE = 0x103 (from edit.h)
         do_c_expr_indent();
     }
 

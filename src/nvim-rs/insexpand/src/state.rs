@@ -343,7 +343,9 @@ extern "C" {
     // (startpos get/set functions: inlined in vars.rs)
     fn nvim_get_curwin_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_getwhitecols_of_line(line: *const c_char) -> c_int;
+    // nvim_getwhitecols_of_line: deleted (Phase 1), use getwhitecols directly
+    #[link_name = "getwhitecols"]
+    fn getwhitecols(p: *const c_char) -> isize;
     fn nvim_skipwhite_offset(line: *const c_char, length: c_int, start_col: c_int) -> c_int;
     fn rs_ctrl_x_mode_normal() -> c_int;
     fn rs_ctrl_x_mode_path_patterns() -> c_int;
@@ -358,7 +360,10 @@ extern "C" {
     // (nvim_compl_curr_match_next_eq_prev, _cp_number, _set_cp_number: inlined in match_list.rs)
     fn rs_ins_compl_update_sequence_numbers();
     fn nvim_get_dollar_vcol() -> c_int;
-    fn nvim_curs_columns_curwin();
+    // nvim_curs_columns_curwin: deleted (Phase 1), use curs_columns(curwin, false) directly
+    fn curs_columns(wp: *mut std::ffi::c_void, may_scroll: c_int);
+    #[link_name = "curwin"]
+    static mut g_curwin_state: *mut std::ffi::c_void;
     #[link_name = "redraw_mode"]
     static mut g_redraw_mode: bool;
     // nvim_shortmess_completionmenu: deleted (Phase 1), use shortmess(SHM_COMPLETIONMENU) directly
@@ -431,7 +436,8 @@ pub unsafe extern "C" fn rs_ins_compl_continue_search(line: *mut c_char) {
             }
             crate::vars::nvim_set_compl_col(crate::vars::nvim_get_compl_startpos_col());
         } else {
-            let wcols = nvim_getwhitecols_of_line(line);
+            #[allow(clippy::cast_possible_truncation)]
+            let wcols = getwhitecols(line) as c_int;
             crate::vars::nvim_set_compl_col(wcols);
             crate::vars::nvim_set_compl_startpos_col(wcols);
             crate::vars::nvim_set_compl_startpos_lnum_to_cursor();
@@ -515,7 +521,7 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
                     );
                     g_edit_submode_highl = HLF_R;
                     if nvim_get_dollar_vcol() >= 0 {
-                        nvim_curs_columns_curwin();
+                        curs_columns(g_curwin_state, 0);
                     }
                 }
             }

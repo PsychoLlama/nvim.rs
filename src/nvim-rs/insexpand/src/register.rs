@@ -38,7 +38,8 @@ extern "C" {
     // Completion state accessors
     fn rs_compl_status_adding() -> c_int;
     // nvim_get_p_ic: inlined in vars.rs (Phase 28)
-    fn nvim_vim_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    // nvim_vim_strnicmp: deleted (Phase 1), use strncasecmp directly
+    fn strncasecmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
     // Word boundary helpers (from insexpand_shim.c)
     fn rs_find_word_start(ptr: *mut c_char) -> *mut c_char;
@@ -61,7 +62,7 @@ unsafe fn matches_orig_text(str_: *const c_char, _str_len: usize) -> bool {
     }
     let orig_size = crate::vars::nvim_get_compl_orig_text_size();
     if crate::vars::nvim_get_p_ic() != 0 {
-        nvim_vim_strnicmp(str_, orig_data, orig_size) == 0
+        strncasecmp(str_, orig_data, orig_size) == 0
     } else {
         // strncmp equivalent
         let s1 = std::slice::from_raw_parts(str_.cast::<u8>(), orig_size);

@@ -1204,7 +1204,7 @@ void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->c
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_compl_match_has_fname(void *m) { return (m && ((compl_T *)m)->cp_fname != NULL) ? 1 : 0; }
-int nvim_vim_strnicmp(const char *s1, const char *s2, size_t len) { return STRNICMP(s1, s2, len); }
+// nvim_vim_strnicmp: deleted (Phase 1, Rust calls strncasecmp directly)
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
 
@@ -1802,11 +1802,7 @@ void nvim_set_compl_startpos_to_cursor(void)
 
 // nvim_set_compl_startpos_col_to_compl_col: deleted (Phase 19, inlined in vars.rs)
 
-/// Compound accessor: restore did_ai from saved value.
-void nvim_restore_did_ai(int saved_val)
-{
-  did_ai = saved_val != 0;
-}
+// nvim_restore_did_ai: deleted (Phase 1, Rust calls nvim_set_did_ai directly)
 
 /// Compound accessor: set edit_submode to the CTRL-X mode message.
 void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
@@ -1936,7 +1932,7 @@ int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line 
 // Compound accessors for ins_compl_stop (Phase 3)
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
 // nvim_shortmess_completionmenu: deleted (Phase 1, Rust calls shortmess(SHM_COMPLETIONMENU) directly)
-bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
+// nvim_in_cinkeys_key_complete: deleted (Phase 1, Rust calls in_cinkeys(KEY_COMPLETE, when, line_is_empty) directly)
 // nvim_set_edit_submode_null_if_set: deleted (Phase 33, inlined in ctrl_x.rs)
 // nvim_ins_compl_insert_bytes: deleted (Phase 2, inlined in rs_ins_compl_insert_bytes in insert.rs)
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
@@ -1996,7 +1992,7 @@ int nvim_ins_compl_delete_body(int col) {
 // nvim_cpt_sources_array_exists: deleted (Phase 23, inlined in vars.rs)
 // nvim_get_cpt_source_cs_flag: deleted (Phase 23, inlined in vars.rs)
 // nvim_get_cpt_source_cs_max_matches: deleted (Phase 23, inlined in vars.rs)
-int nvim_mb_byte2len(int b) { return (b >= 0 && b <= 255) ? MB_BYTE2LEN((uint8_t)b) : 1; }
+// nvim_mb_byte2len: deleted (Phase 1, Rust uses utf8len_tab directly)
 // nvim_get_cursor_line_ptr: defined in change_ffi.c (returns char *)
 // nvim_get_curwin_cursor_col: defined in change_ffi.c (returns colnr_T)
 // nvim_ascii_iswhite_or_nul: defined in normal_shim.c as bool nvim_ascii_iswhite_or_nul(int c)
@@ -2485,7 +2481,7 @@ int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
 // nvim_set_compl_startpos_lnum_to_cursor: deleted (Phase 19, inlined in vars.rs)
 
 // --- getwhitecols / skipwhite wrappers ---
-int nvim_getwhitecols_of_line(const char *line) { return (int)getwhitecols(line); }
+// nvim_getwhitecols_of_line: deleted (Phase 1, Rust calls getwhitecols directly)
 /// Returns the column offset of skipwhite(line + length + start_col) relative to line.
 int nvim_skipwhite_offset(const char *line, int length, int start_col) {
   return (int)(skipwhite(line + length + start_col) - line);
@@ -2518,7 +2514,7 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
 // --- misc message / display wrappers ---
 // nvim_get_p_smd: defined in normal_shim.c
 // nvim_get_dollar_vcol: defined in edit.c
-void nvim_curs_columns_curwin(void) { curs_columns(curwin, false); }
+// nvim_curs_columns_curwin: deleted (Phase 1, Rust calls curs_columns(curwin, false) directly)
 // nvim_msg_ext_set_kind_completion: deleted (Phase 1, Rust calls msg_ext_set_kind("completion") directly)
 // nvim_msg_with_attr, nvim_msg_clr_cmdline_wrap: deleted (Phase 4, Rust uses #[link_name] directly)
 

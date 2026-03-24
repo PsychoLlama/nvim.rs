@@ -49,7 +49,8 @@ extern "C" {
     fn nvim_compl_match_get_cp_str_data(m: ComplMatch) -> *const c_char;
 
     // Case-insensitive string comparison
-    fn nvim_vim_strnicmp(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;
+    // nvim_vim_strnicmp: deleted (Phase 1), use strncasecmp directly
+    fn strncasecmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
 
     // Standard string comparison (from libc, always available)
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
@@ -94,7 +95,7 @@ pub unsafe extern "C" fn rs_ins_compl_equal(
     }
 
     let result = if flags & CP_ICASE != 0 {
-        nvim_vim_strnicmp(data, str, len)
+        strncasecmp(data, str, len)
     } else {
         strncmp(data, str, len)
     };

@@ -771,7 +771,8 @@ extern "C" {
     fn rs_ctrl_x_mode_normal() -> c_int;
     fn rs_ins_compl_leader() -> *const c_char;
     fn rs_ins_compl_leader_len() -> usize;
-    fn nvim_mb_byte2len(b: c_int) -> c_int;
+    // nvim_mb_byte2len: deleted (Phase 1), use utf8len_tab directly
+    static utf8len_tab: [u8; 256];
     fn nvim_get_curwin_cursor_col() -> c_int;
     fn rs_ascii_iswhite_or_nul(c: c_int) -> c_int;
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
@@ -895,8 +896,8 @@ pub unsafe extern "C" fn rs_find_common_prefix(
                     let mut s2 = cp_str;
 
                     while j < len && *s1 != 0 && *s2 != 0 {
-                        let b1 = nvim_mb_byte2len(c_int::from(*s1));
-                        let b2 = nvim_mb_byte2len(c_int::from(*s2));
+                        let b1 = c_int::from(utf8len_tab[*s1 as u8 as usize]); // MB_BYTE2LEN
+                        let b2 = c_int::from(utf8len_tab[*s2 as u8 as usize]); // MB_BYTE2LEN
                         if b1 != b2
                             || std::slice::from_raw_parts(s1.cast::<u8>(), b1 as usize)
                                 != std::slice::from_raw_parts(s2.cast::<u8>(), b2 as usize)

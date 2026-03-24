@@ -60,7 +60,7 @@ extern "C" {
 
     fn nvim_set_compl_startpos_to_cursor();
     // (nvim_set_compl_startpos_col_to_compl_col: inlined in vars.rs)
-    fn nvim_restore_did_ai(saved_val: c_int);
+    // nvim_restore_did_ai: deleted (Phase 1), use nvim_set_did_ai directly
     fn nvim_set_edit_submode_ctrl_x_local_or_mode();
     fn nvim_set_edit_submode_adding();
     // nvim_clear_edit_submode_pre: inlined below (Phase 34)
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     nvim_set_did_ai(false);
     crate::vars::nvim_clear_indent_flags();
     if stop_arrow() == FAIL {
-        nvim_restore_did_ai(c_int::from(save_did_ai));
+        nvim_set_did_ai(save_did_ai); // was nvim_restore_did_ai
         return FAIL;
     }
     crate::state::COMPL_PENDING = 0;
@@ -226,7 +226,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
             || rs_thesaurus_func_complete(ctrl_x_mode) != 0
         {
             // Restore did_ai so that adding comment leader works
-            nvim_restore_did_ai(c_int::from(save_did_ai));
+            nvim_set_did_ai(save_did_ai); // was nvim_restore_did_ai
         }
         return FAIL;
     }
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         nvim_ui_flush();
     }
 
-    nvim_restore_did_ai(c_int::from(save_did_ai));
+    nvim_set_did_ai(save_did_ai); // was nvim_restore_did_ai
     OK
 }
 
