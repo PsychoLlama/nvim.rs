@@ -108,3 +108,6 @@ void handle_did_throw(void);
 // Phase 4 (ex_docmd plan): do_one_cmd, ex_errmsg, excmd_get_argt implemented in Rust.
 char *ex_errmsg(const char *msg, const char *arg);
 uint32_t excmd_get_argt(cmdidx_T idx);
+// Phase 5 (ex_docmd plan): getline_equal, getline_cookie implemented in Rust.
+bool getline_equal(LineGetter fgetline, void *cookie, LineGetter func);
+void *getline_cookie(LineGetter fgetline, void *cookie);
