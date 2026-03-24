@@ -462,16 +462,7 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
   return retval;
 }
 
-/// Store "buf" in "bufref" and set the free count.
-///
-/// @param bufref Reference to be used for the buffer.
-/// @param buf    The buffer to reference.
-void set_bufref(bufref_T *bufref, buf_T *buf)
-{
-  bufref->br_buf = buf;
-  bufref->br_fnum = buf == NULL ? 0 : buf->b_fnum;
-  bufref->br_buf_free_count = buf_free_count;
-}
+// set_bufref() is implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
 
 
 /// Return true when buffer "buf" can be unloaded.
@@ -744,16 +735,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
 }
 
 
-/// Clears the current buffer contents.
-void buf_clear(void)
-{
-  linenr_T line_count = curbuf->b_ml.ml_line_count;
-  extmark_free_all(curbuf);   // delete any extmarks
-  while (!(curbuf->b_ml.ml_flags & ML_EMPTY)) {
-    ml_delete(1);
-  }
-  deleted_lines_mark(1, line_count);  // prepare for display
-}
+// buf_clear() is implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
 
 /// buf_freeall() - free all things allocated for a buffer that are related to
 /// the file.  Careful: get here with "curwin" NULL when exiting.
@@ -1585,40 +1567,8 @@ static void enter_buffer(buf_T *buf)
   redraw_later(curwin, UPD_NOT_VALID);
 }
 
-/// Change to the directory of the current buffer.
-/// Don't do this while still starting up.
-void do_autochdir(void)
-{
-  if (p_acd) {
-    if (starting == 0
-        && curbuf->b_ffname != NULL
-        && vim_chdirfile(curbuf->b_ffname, kCdCauseAuto) == OK) {
-      last_chdir_reason = "autochdir";
-      shorten_fnames(true);
-    }
-  }
-}
-
-void no_write_message(void)
-{
-  if (curbuf->terminal
-      && channel_job_running((uint64_t)curbuf->b_p_channel)) {
-    emsg(_("E948: Job still running (add ! to end the job)"));
-  } else {
-    emsg(_("E37: No write since last change (add ! to override)"));
-  }
-}
-
-void no_write_message_nobang(const buf_T *const buf)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (buf->terminal
-      && channel_job_running((uint64_t)buf->b_p_channel)) {
-    emsg(_("E948: Job still running"));
-  } else {
-    emsg(_("E37: No write since last change"));
-  }
-}
+// do_autochdir(), no_write_message(), no_write_message_nobang() are
+// implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
 
 //
 // functions for dealing with the buffer list
@@ -2867,23 +2817,8 @@ void nvim_buf_signcols_clear(buf_T *buf)
   CLEAR_FIELD(buf->b_signcols.count);
 }
 
-// Give an error message for a command that isn't allowed while the cmdline
-// window is open or editing the cmdline in another way.
-void text_locked_msg(void)
-{
-  emsg(_(get_text_locked_msg()));
-}
-
-/// Check for text, window or buffer locked.
-/// Give an error message and return true if something is locked.
-bool text_or_buf_locked(void)
-{
-  if (text_locked()) {
-    text_locked_msg();
-    return true;
-  }
-  return curbuf_locked();
-}
+// text_locked_msg() and text_or_buf_locked() are implemented in Rust
+// (see src/nvim-rs/buffer/src/misc.rs).
 
 /// Check if "curbuf->b_ro_locked" or "allbuf_lock" is set and
 /// return true when it is and give an error message.

@@ -174,6 +174,16 @@ static inline int ExpandBufnames(char *pat, int *num_file, char ***file, int opt
 int buflist_findpat(const char *pattern, const char *pattern_end, bool unlisted, bool diffmode,
                     bool curtab_only);
 
+// Declarations for functions now implemented in Rust (src/nvim-rs/buffer/src/misc.rs).
+// These are exported with their original names via #[no_mangle].
+void set_bufref(bufref_T *bufref, buf_T *buf);
+void buf_clear(void);
+void do_autochdir(void);
+void no_write_message(void);
+void no_write_message_nobang(const buf_T *buf);
+void text_locked_msg(void);
+bool text_or_buf_locked(void);
+
 // maketitle(), resettitle(), free_titles() are implemented in Rust
 // (src/nvim-rs/buffer/src/info.rs).
 void maketitle(void);

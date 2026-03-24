@@ -12,6 +12,7 @@ pub mod expand;
 pub mod info;
 pub mod lifecycle;
 pub mod list;
+pub mod misc;
 pub mod modeline;
 pub mod properties;
 pub mod state;
