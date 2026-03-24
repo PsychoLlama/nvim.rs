@@ -252,3 +252,7 @@ void enter_buffer(buf_T *buf);
 void handle_swap_exists(bufref_T *old_curbuf);
 // set_curbuf() moved to buffer_shim.c (Phase 19).
 void set_curbuf(buf_T *buf, int action, bool update_jumplist);
+// buf_ensure_loaded(), can_unload_buffer(), and do_buffer_ext() moved to buffer_shim.c (Phase 21).
+bool buf_ensure_loaded(buf_T *buf);
+bool can_unload_buffer(buf_T *buf);
+int do_buffer_ext(int action, int start, int dir, int count, int flags);

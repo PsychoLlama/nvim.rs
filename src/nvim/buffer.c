@@ -154,9 +154,6 @@ extern int rs_buf_effective_action(buf_T *buf, int action);
 // Accessor functions for Rust opaque handle pattern are in buffer_shim.c.
 // Only accessor functions that reference file-scope static variables remain here.
 
-static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
-  = N_("E937: Attempt to delete a buffer that is in use: %s");
-
 // Number of times free_buffer() was called.
 static int buf_free_count = 0;
 
@@ -243,24 +240,6 @@ static int read_buffer(bool read_stdin, exarg_T *eap, int flags)
                           curbuf, &retval);
   }
   return retval;
-}
-
-/// Ensure buffer "buf" is loaded.
-bool buf_ensure_loaded(buf_T *buf)
-{
-  if (buf->b_ml.ml_mfp != NULL) {
-    // already open (common case)
-    return true;
-  }
-
-  aco_save_T aco;
-
-  // Make sure the buffer is in a window.
-  aucmd_prepbuf(&aco, buf);
-  // status can be OK or NOTDONE (which also means ok/done)
-  int status = open_buffer(false, NULL, 0);
-  aucmd_restbuf(&aco);
-  return (status != FAIL);
 }
 
 /// Open current buffer, that is: open the memfile and read the file into
@@ -468,29 +447,6 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
   }
 
   return retval;
-}
-
-/// Return true when buffer "buf" can be unloaded.
-/// Give an error message and return false when the buffer is locked or the
-/// screen is being redrawn and the buffer is in a window.
-static bool can_unload_buffer(buf_T *buf)
-{
-  bool can_unload = !buf->b_locked;
-
-  if (can_unload && updating_screen) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_buffer == buf) {
-        can_unload = false;
-        break;
-      }
-    }
-  }
-  if (!can_unload) {
-    char *fname = buf->b_fname != NULL ? buf->b_fname : buf->b_ffname;
-    semsg(_(e_attempt_to_delete_buffer_that_is_in_use_str),
-          fname != NULL ? fname : "[No Name]");
-  }
-  return can_unload;
 }
 
 /// Close the link to a buffer.
@@ -925,187 +881,6 @@ static void free_buffer_stuff(buf_T *buf, int free_flags)
 /// action == DOBUF_SPLIT    split window and go to specified buffer
 /// action == DOBUF_UNLOAD   unload specified buffer(s)
 /// action == DOBUF_DEL      delete specified buffer(s) from buffer list
-/// action == DOBUF_WIPE     delete specified buffer(s) really
-///
-/// start == DOBUF_CURRENT   go to "count" buffer from current buffer
-/// start == DOBUF_FIRST     go to "count" buffer from first buffer
-/// start == DOBUF_LAST      go to "count" buffer from last buffer
-/// start == DOBUF_MOD       go to "count" modified buffer from current buffer
-///
-/// @param dir  FORWARD or BACKWARD
-/// @param count  buffer number or number of buffers
-/// @param flags  see @ref dobuf_flags_value
-///
-/// @return  FAIL or OK.
-int do_buffer_ext(int action, int start, int dir, int count, int flags)
-{
-  buf_T *buf;
-  buf_T *bp;
-  bool update_jumplist = true;
-  bool unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
-                 || action == DOBUF_WIPE);
-
-  // Find and validate target buffer (navigation + pre-action checks).
-  // Migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs).
-  buf = rs_find_and_validate_buffer(action, start, dir, count, flags, (int)unload);
-  if (buf == NULL) {
-    return FAIL;
-  }
-
-  // delete buffer "buf" from memory and/or the list
-  if (unload) {
-    bufref_T bufref;
-    if (!can_unload_buffer(buf)) {
-      return FAIL;
-    }
-    set_bufref(&bufref, buf);
-
-    // When unloading or deleting a buffer that's already unloaded and
-    // unlisted: fail silently.
-    if (action != DOBUF_WIPE && buf->b_ml.ml_mfp == NULL && !buf->b_p_bl) {
-      return FAIL;
-    }
-
-    if ((flags & DOBUF_FORCEIT) == 0 && bufIsChanged(buf)) {
-      if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write) {
-        dialog_changed(buf, false);
-        if (!bufref_valid(&bufref)) {
-          // Autocommand deleted buffer, oops! It's not changed now.
-          return FAIL;
-        }
-        // If it's still changed fail silently, the dialog already
-        // mentioned why it fails.
-        if (bufIsChanged(buf)) {
-          return FAIL;
-        }
-      } else {
-        semsg(_("E89: No write since last change for buffer %" PRId64
-                " (add ! to override)"),
-              (int64_t)buf->b_fnum);
-        return FAIL;
-      }
-    }
-
-    if (!(flags & DOBUF_FORCEIT) && buf->terminal && terminal_running(buf->terminal)) {
-      if (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) {
-        if (!dialog_close_terminal(buf)) {
-          return FAIL;
-        }
-      } else {
-        semsg(_("E89: %s will be killed (add ! to override)"), buf->b_fname);
-        return FAIL;
-      }
-    }
-
-    int buf_fnum = buf->b_fnum;
-
-    // When closing the current buffer stop Visual mode.
-    if (buf == curbuf && VIsual_active) {
-      end_visual_mode();
-    }
-
-    // If deleting the last (listed) buffer, make it empty.
-    // The last (listed) buffer cannot be unloaded.
-    bp = NULL;
-    FOR_ALL_BUFFERS(bp2) {
-      if (bp2->b_p_bl && bp2 != buf) {
-        bp = bp2;
-        break;
-      }
-    }
-    if (bp == NULL && buf == curbuf) {
-      return empty_curbuf(true, (flags & DOBUF_FORCEIT), action);
-    }
-
-    // If the deleted buffer is the current one, close the current window
-    // (unless it's the only non-floating window).
-    // When the autocommand window is involved win_close() may need to print an error message.
-    // Repeat this so long as we end up in a window with this buffer.
-    while (buf == curbuf
-           && !(rs_win_locked(curwin) || curwin->w_buffer->b_locked > 0)
-           && (is_aucmd_win(lastwin) || !rs_last_window(curwin))) {
-      if (win_close(curwin, false, false) == FAIL) {
-        break;
-      }
-    }
-
-    // If the buffer to be deleted is not the current one, delete it here.
-    if (buf != curbuf) {
-      if (jop_flags & kOptJopFlagClean) {
-        // Remove the buffer to be deleted from the jump list.
-        mark_jumplist_forget_file(curwin, buf_fnum);
-      }
-
-      close_windows(buf, false);
-
-      if (buf != curbuf && bufref_valid(&bufref) && buf->b_nwindows <= 0) {
-        close_buffer(NULL, buf, action, false, false);
-      }
-      return OK;
-    }
-
-    // Deleting the current buffer: Need to find another buffer to go to.
-    // There should be another, otherwise it would have been handled
-    // above.  However, autocommands may have deleted all buffers.
-    int update_jumplist_int = update_jumplist ? 1 : 0;
-    buf = rs_find_buffer_for_delete(buf_fnum, &update_jumplist_int);
-    update_jumplist = (update_jumplist_int != 0);
-  }
-
-  if (buf == NULL) {
-    // Autocommands must have wiped out all other buffers.  Only option
-    // now is to make the current buffer empty.
-    return empty_curbuf(false, (flags & DOBUF_FORCEIT), action);
-  }
-
-  // make "buf" the current buffer
-  if (action == DOBUF_SPLIT) {      // split window first
-    // If 'switchbuf' is set jump to the window containing "buf".
-    if (swbuf_goto_win_with_buf(buf) != NULL) {
-      return OK;
-    }
-
-    if (win_split(0, 0) == FAIL) {
-      return FAIL;
-    }
-  }
-
-  // go to current buffer - nothing to do
-  if (buf == curbuf) {
-    return OK;
-  }
-
-  // Check if the current buffer may be abandoned.
-  if (action == DOBUF_GOTO && !can_abandon(curbuf, (flags & DOBUF_FORCEIT))) {
-    if ((p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write) {
-      bufref_T bufref;
-      set_bufref(&bufref, buf);
-      dialog_changed(curbuf, false);
-      if (!bufref_valid(&bufref)) {
-        // Autocommand deleted buffer, oops!
-        return FAIL;
-      }
-    }
-    if (bufIsChanged(curbuf)) {
-      no_write_message();
-      return FAIL;
-    }
-  }
-
-  // Go to the other buffer.
-  set_curbuf(buf, action, update_jumplist);
-
-  if (action == DOBUF_SPLIT) {
-    RESET_BINDING(curwin);      // reset 'scrollbind' and 'cursorbind'
-  }
-
-  if (aborting()) {         // autocmds may abort script processing
-    return FAIL;
-  }
-
-  return OK;
-}
-
 
 // set_curbuf() moved to buffer_shim.c (Phase 19).
 
