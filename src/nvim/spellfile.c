@@ -1949,6 +1949,12 @@ static void init_spellfile(void)
   xfree(buf);
 }
 
+/// C wrapper for SPELL_TOUPPER macro (used by Rust via FFI).
+int nvim_spell_toupper(int c)
+{
+  return SPELL_TOUPPER(c);
+}
+
 /// Set the spell character tables from strings in the .spl file.
 ///
 /// @param cnt  length of "flags"

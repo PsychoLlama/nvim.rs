@@ -1880,314 +1880,10 @@ void nvim_docmd_back_to_current_window(win_T *curwin_save)
 }
 
 
-enum {
-  SPEC_PERC = 0,
-  SPEC_HASH,
-  SPEC_CWORD,
-  SPEC_CCWORD,
-  SPEC_CEXPR,
-  SPEC_CFILE,
-  SPEC_SFILE,
-  SPEC_SLNUM,
-  SPEC_STACK,
-  SPEC_SCRIPT,
-  SPEC_AFILE,
-  SPEC_ABUF,
-  SPEC_AMATCH,
-  SPEC_SFLNUM,
-  SPEC_SID,
-  // SPEC_CLIENT,
-};
-
-
-/// Evaluate cmdline variables.
-///
-/// change "%"       to curbuf->b_ffname
-///        "#"       to curwin->w_alt_fnum
-///        "<cword>" to word under the cursor
-///        "<cWORD>" to WORD under the cursor
-///        "<cexpr>" to C-expression under the cursor
-///        "<cfile>" to path name under the cursor
-///        "<sfile>" to sourced file name
-///        "<stack>" to call stack
-///        "<script>" to current script name
-///        "<slnum>" to sourced file line number
-///        "<afile>" to file name for autocommand
-///        "<abuf>"  to buffer number for autocommand
-///        "<amatch>" to matching name for autocommand
-///
-/// When an error is detected, "errormsg" is set to a non-NULL pointer (may be
-/// "" for error without a message) and NULL is returned.
-///
-/// @param src             pointer into commandline
-/// @param srcstart        beginning of valid memory for src
-/// @param usedlen         characters after src that are used
-/// @param lnump           line number for :e command, or NULL
-/// @param errormsg        pointer to error message
-/// @param escaped         return value has escaped white space (can be NULL)
-/// @param empty_is_error  empty result is considered an error
-///
-/// @return          an allocated string if a valid match was found.
-///                  Returns NULL if no match was found.  "usedlen" then still contains the
-///                  number of characters to skip.
-char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnump,
-                                const char **errormsg, int *escaped, bool empty_is_error)
-{
-  char *result = "";
-  char *resultbuf = NULL;
-  size_t resultlen;
-  int valid = VALID_HEAD | VALID_PATH;  // Assume valid result.
-  bool tilde_file = false;
-  bool skip_mod = false;
-  char strbuf[30];
-
-  *errormsg = NULL;
-  if (escaped != NULL) {
-    *escaped = false;
-  }
-
-  // Check if there is something to do.
-  ssize_t spec_idx = find_cmdline_var(src, usedlen);
-  if (spec_idx < 0) {   // no match
-    *usedlen = 1;
-    return NULL;
-  }
-
-  // Skip when preceded with a backslash "\%" and "\#".
-  // Note: In "\\%" the % is also not recognized!
-  if (src > srcstart && src[-1] == '\\') {
-    *usedlen = 0;
-    STRMOVE(src - 1, src);      // remove backslash
-    return NULL;
-  }
-
-  // word or WORD under cursor
-  if (spec_idx == SPEC_CWORD
-      || spec_idx == SPEC_CCWORD
-      || spec_idx == SPEC_CEXPR) {
-    resultlen = rs_find_ident_under_cursor(&result,
-                                           spec_idx == SPEC_CWORD
-                                           ? (FIND_IDENT | FIND_STRING)
-                                           : (spec_idx == SPEC_CEXPR
-                                              ? (FIND_IDENT | FIND_STRING | FIND_EVAL)
-                                              : FIND_STRING));
-    if (resultlen == 0) {
-      *errormsg = "";
-      return NULL;
-    }
-    //
-    // '#': Alternate file name
-    // '%': Current file name
-    //        File name under the cursor
-    //        File name for autocommand
-    //    and following modifiers
-    //
-  } else {
-    switch (spec_idx) {
-    case SPEC_PERC:             // '%': current file
-      if (curbuf->b_fname == NULL) {
-        result = "";
-        valid = 0;                  // Must have ":p:h" to be valid
-      } else {
-        result = curbuf->b_fname;
-        tilde_file = strcmp(result, "~") == 0;
-      }
-      break;
-
-    case SPEC_HASH:             // '#' or "#99": alternate file
-      if (src[1] == '#') {          // "##": the argument list
-        result = arg_all();
-        resultbuf = result;
-        *usedlen = 2;
-        if (escaped != NULL) {
-          *escaped = true;
-        }
-        skip_mod = true;
-        break;
-      }
-      char *s = src + 1;
-      if (*s == '<') {                  // "#<99" uses v:oldfiles.
-        s++;
-      }
-      int i = getdigits_int(&s, false, 0);
-      if (s == src + 2 && src[1] == '-') {
-        // just a minus sign, don't skip over it
-        s--;
-      }
-      *usedlen = (size_t)(s - src);           // length of what we expand
-
-      if (src[1] == '<' && i != 0) {
-        if (*usedlen < 2) {
-          // Should we give an error message for #<text?
-          *usedlen = 1;
-          return NULL;
-        }
-        result = (char *)tv_list_find_str(get_vim_var_list(VV_OLDFILES), i - 1);
-        if (result == NULL) {
-          *errormsg = "";
-          return NULL;
-        }
-      } else {
-        if (i == 0 && src[1] == '<' && *usedlen > 1) {
-          *usedlen = 1;
-        }
-        buf_T *buf = buflist_findnr(i);
-        if (buf == NULL) {
-          *errormsg = _("E194: No alternate file name to substitute for '#'");
-          return NULL;
-        }
-        if (lnump != NULL) {
-          *lnump = ECMD_LAST;
-        }
-        if (buf->b_fname == NULL) {
-          result = "";
-          valid = 0;                        // Must have ":p:h" to be valid
-        } else {
-          result = buf->b_fname;
-          tilde_file = strcmp(result, "~") == 0;
-        }
-      }
-      break;
-
-    case SPEC_CFILE:            // file name under cursor
-      result = file_name_at_cursor(FNAME_MESS|FNAME_HYP, 1, NULL);
-      if (result == NULL) {
-        *errormsg = "";
-        return NULL;
-      }
-      resultbuf = result;                   // remember allocated string
-      break;
-
-    case SPEC_AFILE:  // file name for autocommand
-      if (autocmd_fname != NULL && !autocmd_fname_full) {
-        // Still need to turn the fname into a full path.  It was
-        // postponed to avoid a delay when <afile> is not used.
-        autocmd_fname_full = true;
-        result = FullName_save(autocmd_fname, false);
-        // Copy into `autocmd_fname`, don't reassign it. #8165
-        xstrlcpy(autocmd_fname, result, MAXPATHL);
-        xfree(result);
-      }
-      result = autocmd_fname;
-      if (result == NULL) {
-        *errormsg = _(e_no_autocommand_file_name_to_substitute_for_afile);
-        return NULL;
-      }
-      result = path_try_shorten_fname(result);
-      break;
-
-    case SPEC_ABUF:             // buffer number for autocommand
-      if (autocmd_bufnr <= 0) {
-        *errormsg = _(e_no_autocommand_buffer_number_to_substitute_for_abuf);
-        return NULL;
-      }
-      snprintf(strbuf, sizeof(strbuf), "%d", autocmd_bufnr);
-      result = strbuf;
-      break;
-
-    case SPEC_AMATCH:           // match name for autocommand
-      result = autocmd_match;
-      if (result == NULL) {
-        *errormsg = _(e_no_autocommand_match_name_to_substitute_for_amatch);
-        return NULL;
-      }
-      break;
-
-    case SPEC_SFILE:            // file name for ":so" command
-      result = estack_sfile(ESTACK_SFILE);
-      if (result == NULL) {
-        *errormsg = _(e_no_source_file_name_to_substitute_for_sfile);
-        return NULL;
-      }
-      resultbuf = result;  // remember allocated string
-      break;
-    case SPEC_STACK:            // call stack
-      result = estack_sfile(ESTACK_STACK);
-      if (result == NULL) {
-        *errormsg = _(e_no_call_stack_to_substitute_for_stack);
-        return NULL;
-      }
-      resultbuf = result;  // remember allocated string
-      break;
-    case SPEC_SCRIPT:           // script file name
-      result = estack_sfile(ESTACK_SCRIPT);
-      if (result == NULL) {
-        *errormsg = _(e_no_script_file_name_to_substitute_for_script);
-        return NULL;
-      }
-      resultbuf = result;  // remember allocated string
-      break;
-
-    case SPEC_SLNUM:            // line in file for ":so" command
-      if (SOURCING_NAME == NULL || SOURCING_LNUM == 0) {
-        *errormsg = _(e_no_line_number_to_use_for_slnum);
-        return NULL;
-      }
-      snprintf(strbuf, sizeof(strbuf), "%" PRIdLINENR, SOURCING_LNUM);
-      result = strbuf;
-      break;
-
-    case SPEC_SFLNUM:  // line in script file
-      if (current_sctx.sc_lnum + SOURCING_LNUM == 0) {
-        *errormsg = _(e_no_line_number_to_use_for_sflnum);
-        return NULL;
-      }
-      snprintf(strbuf, sizeof(strbuf), "%" PRIdLINENR,
-               current_sctx.sc_lnum + SOURCING_LNUM);
-      result = strbuf;
-      break;
-
-    case SPEC_SID:
-      if (current_sctx.sc_sid <= 0) {
-        *errormsg = _(e_usingsid);
-        return NULL;
-      }
-      snprintf(strbuf, sizeof(strbuf), "<SNR>%" PRIdSCID "_", current_sctx.sc_sid);
-      result = strbuf;
-      break;
-
-    default:
-      // should not happen
-      *errormsg = "";
-      break;
-    }
-
-    // Length of new string.
-    resultlen = strlen(result);
-    // Remove the file name extension.
-    if (src[*usedlen] == '<') {
-      (*usedlen)++;
-      char *s;
-      if ((s = strrchr(result, '.')) != NULL
-          && s >= path_tail(result)) {
-        resultlen = (size_t)(s - result);
-      }
-    } else if (!skip_mod) {
-      valid |= modify_fname(src, tilde_file, usedlen, &result,
-                            &resultbuf, &resultlen);
-      if (result == NULL) {
-        *errormsg = "";
-        return NULL;
-      }
-    }
-  }
-
-  if (resultlen == 0 || valid != VALID_HEAD + VALID_PATH) {
-    if (empty_is_error) {
-      if (valid != VALID_HEAD + VALID_PATH) {
-        // xgettext:no-c-format
-        *errormsg = _("E499: Empty file name for '%' or '#', only works with \":p:h\"");
-      } else {
-        *errormsg = _("E500: Evaluates to an empty string");
-      }
-    }
-    result = NULL;
-  } else {
-    result = xmemdupz(result, resultlen);
-  }
-  xfree(resultbuf);
-  return result;
-}
+// nvim_docmd_eval_vars_impl is implemented in Rust (eval_vars.rs).
+extern char *nvim_docmd_eval_vars_impl(char *src, const char *srcstart, size_t *usedlen,
+                                       linenr_T *lnump, const char **errormsg, int *escaped,
+                                       bool empty_is_error);
 
 
 
@@ -3983,6 +3679,105 @@ char *eval_vars(char *src, const char *srcstart, size_t *usedlen, linenr_T *lnum
 {
   return nvim_docmd_eval_vars_impl(src, srcstart, usedlen, lnump, errormsg, escaped,
                                    empty_is_error);
+}
+
+// =============================================================================
+// Phase 3 eval_vars.rs C accessor functions
+// =============================================================================
+
+char *nvim_docmd_eval_curbuf_fname(void) { return curbuf->b_fname; }
+
+char *nvim_docmd_file_name_at_cursor(void)
+{
+  return file_name_at_cursor(FNAME_MESS | FNAME_HYP, 1, NULL);
+}
+
+char *nvim_docmd_fullname_save(const char *fname, bool force)
+{
+  return FullName_save(fname, force);
+}
+
+char *nvim_docmd_get_autocmd_fname(void) { return autocmd_fname; }
+int nvim_docmd_get_autocmd_fname_full(void) { return autocmd_fname_full ? 1 : 0; }
+void nvim_docmd_set_autocmd_fname_full(int v) { autocmd_fname_full = (v != 0); }
+void nvim_docmd_set_autocmd_fname(const char *new_fname)
+{
+  xstrlcpy(autocmd_fname, new_fname, MAXPATHL);
+}
+const char *nvim_docmd_get_autocmd_match(void) { return autocmd_match; }
+
+char *nvim_docmd_estack_sfile(int which) { return estack_sfile((estack_arg_T)which); }
+
+int nvim_docmd_modify_fname(char *src, bool tilde_file, size_t *usedlen,
+                             char **fnamep, char **bufp, size_t *fnamelen)
+{
+  return modify_fname(src, tilde_file, usedlen, fnamep, bufp, fnamelen);
+}
+
+const char *nvim_docmd_path_tail(const char *p) { return path_tail(p); }
+
+char *nvim_docmd_path_try_shorten_fname(char *full_path)
+{
+  return path_try_shorten_fname(full_path);
+}
+
+int nvim_docmd_get_current_sctx_lnum(void) { return (int)current_sctx.sc_lnum; }
+int nvim_docmd_get_current_sctx_sid(void) { return (int)current_sctx.sc_sid; }
+
+int nvim_docmd_getdigits_int(char **pp)
+{
+  return getdigits_int(pp, false, 0);
+}
+
+// Error string accessors for eval_vars.rs
+const char *nvim_docmd_eval_get_e_no_alt_file(void)
+{
+  return _("E194: No alternate file name to substitute for '#'");
+}
+const char *nvim_docmd_eval_get_e_no_afile(void)
+{
+  return _(e_no_autocommand_file_name_to_substitute_for_afile);
+}
+const char *nvim_docmd_eval_get_e_no_abuf(void)
+{
+  return _(e_no_autocommand_buffer_number_to_substitute_for_abuf);
+}
+const char *nvim_docmd_eval_get_e_no_amatch(void)
+{
+  return _(e_no_autocommand_match_name_to_substitute_for_amatch);
+}
+const char *nvim_docmd_eval_get_e_no_sfile(void)
+{
+  return _(e_no_source_file_name_to_substitute_for_sfile);
+}
+const char *nvim_docmd_eval_get_e_no_stack(void)
+{
+  return _(e_no_call_stack_to_substitute_for_stack);
+}
+const char *nvim_docmd_eval_get_e_no_slnum(void)
+{
+  return _(e_no_line_number_to_use_for_slnum);
+}
+const char *nvim_docmd_eval_get_e_no_sflnum(void)
+{
+  return _(e_no_line_number_to_use_for_sflnum);
+}
+const char *nvim_docmd_eval_get_e_no_script(void)
+{
+  return _(e_no_script_file_name_to_substitute_for_script);
+}
+const char *nvim_docmd_eval_get_e_usingsid(void)
+{
+  return _(e_usingsid);
+}
+const char *nvim_docmd_eval_get_e_empty_fname(void)
+{
+  // xgettext:no-c-format
+  return _("E499: Empty file name for '%' or '#', only works with \":p:h\"");
+}
+const char *nvim_docmd_eval_get_e_empty_string(void)
+{
+  return _("E500: Evaluates to an empty string");
 }
 
 // =============================================================================

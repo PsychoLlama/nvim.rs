@@ -18,6 +18,7 @@ pub mod commands;
 pub mod completion;
 pub mod dispatch;
 pub mod errors;
+pub mod eval_vars;
 pub mod execute;
 pub mod findfunc;
 pub mod impl_bodies;

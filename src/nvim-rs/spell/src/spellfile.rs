@@ -7082,7 +7082,8 @@ extern "C" {
     /// getdigits_int: parse a decimal integer from *pp, advancing the pointer.
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
     /// ascii_isdigit: returns true if char is ASCII digit.
-    fn ascii_isdigit(c: c_int) -> bool;
+    #[link_name = "rs_ascii_isdigit"]
+    fn ascii_isdigit(c: c_int) -> c_int;
     /// hash_find: look up key in hashtable, returns pointer to hashitem (or empty item).
     fn hash_find(ht: *const crate::HashtabRaw, key: *const c_char) -> *mut crate::HashitemRaw;
 }
@@ -7220,7 +7221,7 @@ const _: () = {
 #[allow(clippy::cast_sign_loss)]
 unsafe fn get_affitem_inner(flagtype: c_int, pp: *mut *mut c_char) -> u32 {
     if flagtype == AFT_NUM {
-        if !ascii_isdigit(i32::from(**pp as u8)) {
+        if ascii_isdigit(i32::from(**pp as u8)) == 0 {
             *pp = (*pp).add(1); // always advance, avoid getting stuck
             return 0;
         }
@@ -8334,7 +8335,7 @@ pub unsafe extern "C" fn rs_spell_read_dic(
             while *p == b' ' as i8 || *p == b'\t' as i8 {
                 p = p.add(1);
             }
-            if !ascii_isdigit(i32::from(*p as u8)) {
+            if ascii_isdigit(i32::from(*p as u8)) == 0 {
                 semsg_sug(c"E760: No word count in %s".as_ptr(), fname);
             }
         }
@@ -8819,7 +8820,7 @@ const RE_STRICT: c_int = 16;
 extern "C" {
     fn skipdigits(q: *const c_char) -> *const c_char;
     fn utf_ptr2char(p: *const c_char) -> c_int;
-    #[link_name = "SPELL_TOUPPER"]
+    #[link_name = "nvim_spell_toupper"]
     fn spell_toupper(c: c_int) -> c_int;
     fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool);
     fn init_spell_chartab();
@@ -8867,12 +8868,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
     }
 
     let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
-    vim_snprintf(
-        iobuff,
-        1025,
-        c"Reading affix file %s...".as_ptr(),
-        fname,
-    );
+    vim_snprintf(iobuff, 1025, c"Reading affix file %s...".as_ptr(), fname);
     rs_spell_message(spin, iobuff);
 
     // Only do REP/REPSAL/SAL/MAP lines when not done in another .aff already.
@@ -8927,7 +8923,11 @@ pub unsafe extern "C" fn rs_spell_read_aff(
         let line: *mut c_char;
         let conv = spin_conv(spin);
         if (*conv).vc_type != CONV_NONE {
-            pc = string_convert(conv, rline.as_mut_ptr().cast::<c_char>(), std::ptr::null_mut());
+            pc = string_convert(
+                conv,
+                rline.as_mut_ptr().cast::<c_char>(),
+                std::ptr::null_mut(),
+            );
             if pc.is_null() {
                 smsg_aff(
                     0,
@@ -8999,11 +8999,8 @@ pub unsafe extern "C" fn rs_spell_read_aff(
             (*aff).af_enc = enc_canonize(items[1]);
             let conv = spin_conv(spin);
             if (*spin).si_ascii == 0
-                && convert_setup(
-                    conv,
-                    (*aff).af_enc,
-                    std::ptr::addr_of!(p_enc_global).read(),
-                ) == FAIL
+                && convert_setup(conv, (*aff).af_enc, std::ptr::addr_of!(p_enc_global).read())
+                    == FAIL
             {
                 smsg_aff(
                     0,
@@ -9074,34 +9071,25 @@ pub unsafe extern "C" fn rs_spell_read_aff(
         } else if is_rule!(c"TRY", 2) {
             // ignored
         } else if (is_rule!(c"RAR", 2) || is_rule!(c"RARE", 2)) && (*aff).af_rare == 0 {
-            (*aff).af_rare =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_rare = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if (is_rule!(c"KEP", 2) || is_rule!(c"KEEPCASE", 2)) && (*aff).af_keepcase == 0 {
-            (*aff).af_keepcase =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_keepcase = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if (is_rule!(c"BAD", 2) || is_rule!(c"FORBIDDENWORD", 2)) && (*aff).af_bad == 0 {
-            (*aff).af_bad =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_bad = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if is_rule!(c"NEEDAFFIX", 2) && (*aff).af_needaffix == 0 {
-            (*aff).af_needaffix =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_needaffix = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if is_rule!(c"CIRCUMFIX", 2) && (*aff).af_circumfix == 0 {
-            (*aff).af_circumfix =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_circumfix = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if is_rule!(c"NOSUGGEST", 2) && (*aff).af_nosuggest == 0 {
-            (*aff).af_nosuggest =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_nosuggest = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if (is_rule!(c"NEEDCOMPOUND", 2) || is_rule!(c"ONLYINCOMPOUND", 2))
             && (*aff).af_needcomp == 0
         {
-            (*aff).af_needcomp =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_needcomp = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if is_rule!(c"COMPOUNDROOT", 2) && (*aff).af_comproot == 0 {
-            (*aff).af_comproot =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_comproot = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
         } else if is_rule!(c"COMPOUNDFORBIDFLAG", 2) && (*aff).af_compforbid == 0 {
-            (*aff).af_compforbid =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_compforbid = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
             if (*aff).af_pref.ht_used > 0 {
                 smsg_aff(
                     0,
@@ -9111,8 +9099,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                 );
             }
         } else if is_rule!(c"COMPOUNDPERMITFLAG", 2) && (*aff).af_comppermit == 0 {
-            (*aff).af_comppermit =
-                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            (*aff).af_comppermit = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
             if (*aff).af_pref.ht_used > 0 {
                 smsg_aff(
                     0,
@@ -9141,7 +9128,8 @@ pub unsafe extern "C" fn rs_spell_read_aff(
         } else if is_rule!(c"COMPOUNDRULE", 2) {
             // Don't use first rule if it is a number.
             if !compflags.is_null() || *skipdigits(items[1]) != 0 {
-                let l = libc::strlen(items[1].cast::<libc::c_char>()) as c_int + 1
+                let l = libc::strlen(items[1].cast::<libc::c_char>()) as c_int
+                    + 1
                     + if compflags.is_null() {
                         0
                     } else {
@@ -9263,7 +9251,8 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                 if ((*cur_aff).ah_combine != 0) != combine_y {
                     smsg_aff(
                         0,
-                        c"Different combining flag in continued affix block in %s line %d: %s".as_ptr(),
+                        c"Different combining flag in continued affix block in %s line %d: %s"
+                            .as_ptr(),
                         fname,
                         lnum,
                         items[1],
@@ -9282,9 +9271,10 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                 // New affix letter.
                 cur_aff =
                     rs_getroom(spin, std::mem::size_of::<AffheaderT>(), true).cast::<AffheaderT>();
-                (*cur_aff).ah_flag =
-                    rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
-                if (*cur_aff).ah_flag == 0 || libc::strlen(items[1].cast::<libc::c_char>()) >= AH_KEY_LEN {
+                (*cur_aff).ah_flag = rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+                if (*cur_aff).ah_flag == 0
+                    || libc::strlen(items[1].cast::<libc::c_char>()) >= AH_KEY_LEN
+                {
                     break;
                 }
                 if (*cur_aff).ah_flag == (*aff).af_bad
@@ -9304,11 +9294,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                         items[1],
                     );
                 }
-                xstrlcpy(
-                    (*cur_aff).ah_key.as_mut_ptr(),
-                    items[1],
-                    AH_KEY_LEN,
-                );
+                xstrlcpy((*cur_aff).ah_key.as_mut_ptr(), items[1], AH_KEY_LEN);
                 hash_add(tp, (*cur_aff).ah_key.as_mut_ptr());
                 (*cur_aff).ah_combine = c_int::from(*items[2] == b'Y' as c_char);
             }
@@ -9322,7 +9308,8 @@ pub unsafe extern "C" fn rs_spell_read_aff(
             }
 
             // Warn about trailing items (unless IGNOREEXTRA or starts with #).
-            if itemcnt > lasti && (*aff).af_ignoreextra == false && *items[lasti as usize] != b'#' as c_char {
+            if itemcnt > lasti && !(*aff).af_ignoreextra && *items[lasti as usize] != b'#' as c_char
+            {
                 smsg_aff(
                     0,
                     c"Trailing text in %s line %d: %s".as_ptr(),
@@ -9369,8 +9356,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
             // Warn about trailing items.
             if itemcnt > lasti
                 && *items[lasti as usize] != b'#' as c_char
-                && (libc::strcmp(items[lasti as usize], c"-".as_ptr()) != 0
-                    || itemcnt != lasti + 1)
+                && (libc::strcmp(items[lasti as usize], c"-".as_ptr()) != 0 || itemcnt != lasti + 1)
             {
                 smsg_aff(
                     0,
@@ -9392,8 +9378,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                 (*aff_entry).ae_add = rs_getroom_save(spin, items[3]);
 
                 // Recognize flags on the affix: abcd/XYZ
-                (*aff_entry).ae_flags =
-                    vim_strchr_aff((*aff_entry).ae_add, c_int::from(b'/'));
+                (*aff_entry).ae_flags = vim_strchr_aff((*aff_entry).ae_add, c_int::from(b'/'));
                 if !(*aff_entry).ae_flags.is_null() {
                     *(*aff_entry).ae_flags = 0;
                     (*aff_entry).ae_flags = (*aff_entry).ae_flags.add(1);
@@ -9403,8 +9388,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
 
             // Don't use affix entry with non-ASCII chars when si_ascii is set.
             if (*spin).si_ascii == 0
-                || (!has_non_ascii((*aff_entry).ae_chop)
-                    && !has_non_ascii((*aff_entry).ae_add))
+                || (!has_non_ascii((*aff_entry).ae_chop) && !has_non_ascii((*aff_entry).ae_add))
             {
                 (*aff_entry).ae_next = (*cur_aff).ah_first;
                 (*cur_aff).ah_first = aff_entry;
@@ -9448,9 +9432,10 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                     // Check if chop is one lower-case letter and add ends in upper-case.
                     if !(*aff_entry).ae_chop.is_null()
                         && !(*aff_entry).ae_add.is_null()
-                        && *(*aff_entry).ae_chop.add(
-                            utfc_ptr2len_spell((*aff_entry).ae_chop) as usize,
-                        ) == 0
+                        && *(*aff_entry)
+                            .ae_chop
+                            .add(utfc_ptr2len_spell((*aff_entry).ae_chop) as usize)
+                            == 0
                     {
                         let c = utf_ptr2char((*aff_entry).ae_chop);
                         let c_up = spell_toupper(c);
@@ -9458,8 +9443,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                             && ((*aff_entry).ae_cond.is_null()
                                 || utf_ptr2char((*aff_entry).ae_cond) == c)
                         {
-                            let add_len =
-                                libc::strlen((*aff_entry).ae_add.cast::<libc::c_char>());
+                            let add_len = libc::strlen((*aff_entry).ae_add.cast::<libc::c_char>());
                             let mut p = (*aff_entry).ae_add.add(add_len);
                             // MB_PTR_BACK: back up one multibyte char
                             let off = utf_head_off((*aff_entry).ae_add, p.sub(1)) as usize;
@@ -9472,10 +9456,8 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                                 if !(*aff_entry).ae_cond.is_null() {
                                     let mut cbuf = [0u8; MAXLINELEN_AFF];
                                     onecap_copy(items[4], cbuf.as_mut_ptr().cast::<c_char>(), true);
-                                    (*aff_entry).ae_cond = rs_getroom_save(
-                                        spin,
-                                        cbuf.as_mut_ptr().cast::<c_char>(),
-                                    );
+                                    (*aff_entry).ae_cond =
+                                        rs_getroom_save(spin, cbuf.as_mut_ptr().cast::<c_char>());
                                     if !(*aff_entry).ae_cond.is_null() {
                                         vim_snprintf(
                                             cbuf.as_mut_ptr().cast::<c_char>(),
@@ -9509,7 +9491,10 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                             // Not found; add a new condition.
                             idx = (*spin).si_prefcond.ga_len;
                             ga_grow(&raw mut (*spin).si_prefcond, 1);
-                            let pp = (*spin).si_prefcond.ga_data.cast::<*mut c_char>()
+                            let pp = (*spin)
+                                .si_prefcond
+                                .ga_data
+                                .cast::<*mut c_char>()
                                 .add((*spin).si_prefcond.ga_len as usize);
                             *pp = if (*aff_entry).ae_cond.is_null() {
                                 std::ptr::null_mut()
@@ -9523,7 +9508,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                         let p_add = if (*aff_entry).ae_add.is_null() {
                             c"".as_ptr()
                         } else {
-                            (*aff_entry).ae_add as *const c_char
+                            (*aff_entry).ae_add.cast_const()
                         };
 
                         let mut n = PFX_FLAGS;
@@ -9539,7 +9524,14 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                         if (*aff_entry).ae_compforbid != 0 {
                             n |= WFP_COMPFORBID;
                         }
-                        rs_tree_add_word(spin, p_add, (*spin).si_prefroot, n, idx, (*cur_aff).ah_newID);
+                        rs_tree_add_word(
+                            spin,
+                            p_add,
+                            (*spin).si_prefroot,
+                            n,
+                            idx,
+                            (*cur_aff).ah_newID,
+                        );
                         did_postpone_prefix = true;
                     }
 
@@ -9614,12 +9606,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
             if !found_map {
                 found_map = true;
                 if !(*items[1] as u8).is_ascii_digit() {
-                    smsg_aff(
-                        0,
-                        c"Expected MAP count in %s line %d".as_ptr(),
-                        fname,
-                        lnum,
-                    );
+                    smsg_aff(0, c"Expected MAP count in %s line %d".as_ptr(), fname, lnum);
                 }
             } else if do_mapline {
                 // Check that every character appears only once.
@@ -9660,7 +9647,7 @@ pub unsafe extern "C" fn rs_spell_read_aff(
                     let to = if libc::strcmp(items[2], c"_".as_ptr()) == 0 {
                         c"".as_ptr()
                     } else {
-                        items[2] as *const c_char
+                        items[2].cast_const()
                     };
                     rs_add_fromto(spin, &raw mut (*spin).si_sal, items[1], to);
                 }
@@ -9670,10 +9657,10 @@ pub unsafe extern "C" fn rs_spell_read_aff(
         } else if is_rule!(c"SOFOTO", 2) && sofoto.is_null() {
             sofoto = rs_getroom_save(spin, items[1]);
         } else if libc::strcmp(items[0], c"COMMON".as_ptr()) == 0 {
-            for i in 1..itemcnt as usize {
-                let hi = hash_find(&raw const (*spin).si_commonwords, items[i] as *const c_char);
+            for item in items.iter().take(itemcnt as usize).skip(1) {
+                let hi = hash_find(&raw const (*spin).si_commonwords, (*item).cast_const());
                 if hi_is_empty(hi) {
-                    let p = xstrdup(items[i]).cast::<c_char>();
+                    let p = xstrdup(*item).cast::<c_char>();
                     hash_add(&raw mut (*spin).si_commonwords, p);
                 }
             }
@@ -9712,13 +9699,25 @@ pub unsafe extern "C" fn rs_spell_read_aff(
     }
     if compsylmax != 0 {
         if syllable.is_null() {
-            smsg_aff(0, c"%s".as_ptr(), c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr());
+            smsg_aff(
+                0,
+                c"%s".as_ptr(),
+                c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr(),
+            );
         }
-        rs_aff_check_number((*spin).si_compsylmax, compsylmax, c"COMPOUNDSYLMAX".as_ptr());
+        rs_aff_check_number(
+            (*spin).si_compsylmax,
+            compsylmax,
+            c"COMPOUNDSYLMAX".as_ptr(),
+        );
         (*spin).si_compsylmax = compsylmax;
     }
     if compoptions != 0 {
-        rs_aff_check_number((*spin).si_compoptions, compoptions, c"COMPOUND options".as_ptr());
+        rs_aff_check_number(
+            (*spin).si_compoptions,
+            compoptions,
+            c"COMPOUND options".as_ptr(),
+        );
         (*spin).si_compoptions |= compoptions;
     }
     if !compflags.is_null() {
@@ -9732,7 +9731,10 @@ pub unsafe extern "C" fn rs_spell_read_aff(
         } else if (*spin).si_newprefID == 0 || (*spin).si_newprefID == 127 {
             msg(c"Too many compound flags".as_ptr(), 0);
         } else {
-            msg(c"Too many postponed prefixes and/or compound flags".as_ptr(), 0);
+            msg(
+                c"Too many postponed prefixes and/or compound flags".as_ptr(),
+                0,
+            );
         }
     }
 
