@@ -49,6 +49,9 @@
 #include "nvim/types_defs.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
+#include "nvim/drawscreen.h"
+#include "nvim/ex_cmds.h"
+#include "nvim/memory.h"
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
@@ -58,6 +61,8 @@
 extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_clearFolding(win_T *win);
 extern void rs_foldUpdateAll(win_T *win);
+// Internal arglist function used in buf_name_changed (Phase 13)
+extern void check_arg_idx(win_T *win);
 
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
@@ -1681,4 +1686,74 @@ fmark_T *buflist_findfmark(buf_T *buf)
 
   WinInfo *const wip = find_wininfo(buf, false, false);
   return (wip == NULL) ? &no_position : &(wip->wi_mark);
+}
+
+// ============================================================
+// Buffer name / file management (Phase 13)
+// ============================================================
+
+/// Crude way of changing the name of a buffer.  Use with care!
+/// The name should be relative to the current directory.
+void buf_set_name(int fnum, char *name)
+{
+  buf_T *buf = buflist_findnr(fnum);
+  if (buf == NULL) {
+    return;
+  }
+
+  if (buf->b_sfname != buf->b_ffname) {
+    xfree(buf->b_sfname);
+  }
+  xfree(buf->b_ffname);
+  buf->b_ffname = xstrdup(name);
+  buf->b_sfname = NULL;
+  // Allocate ffname and expand into full path.  Also resolves .lnk
+  // files on Win32.
+  fname_expand(buf, &buf->b_ffname, &buf->b_sfname);
+  buf->b_fname = buf->b_sfname;
+}
+
+/// Take care of what needs to be done when the name of buffer "buf" has changed.
+void buf_name_changed(buf_T *buf)
+{
+  // If the file name changed, also change the name of the swapfile
+  if (buf->b_ml.ml_mfp != NULL) {
+    ml_setname(buf);
+  }
+
+  if (curwin->w_buffer == buf) {
+    check_arg_idx(curwin);      // check file name for arg list
+  }
+  maketitle();                  // set window title
+  status_redraw_all();          // status lines need to be redrawn
+  fmarks_check_names(buf);      // check named file marks
+  ml_timestamp(buf);            // reset timestamp
+}
+
+/// Creates or switches to a scratch buffer. :h special-buffers
+/// Scratch buffer is:
+///   - buftype=nofile bufhidden=hide noswapfile
+///   - Always considered 'nomodified'
+///
+/// @param bufnr     Buffer to switch to, or 0 to create a new buffer.
+/// @param bufname   Buffer name, or NULL.
+///
+/// @see curbufIsChanged()
+///
+/// @return  FAIL for failure, OK otherwise
+int buf_open_scratch(handle_T bufnr, char *bufname)
+{
+  if (do_ecmd((int)bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL) == FAIL) {
+    return FAIL;
+  }
+  if (bufname != NULL) {
+    apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
+    setfname(curbuf, bufname, NULL, true);
+    apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
+  }
+  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
+  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
+  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
+  RESET_BINDING(curwin);
+  return OK;
 }

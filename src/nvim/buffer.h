@@ -226,3 +226,8 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
 // get_winopts(), buflist_findfmark() moved to buffer_shim.c (Phase 12).
 void get_winopts(buf_T *buf);
 fmark_T *buflist_findfmark(buf_T *buf);
+
+// buf_set_name(), buf_name_changed(), buf_open_scratch() moved to buffer_shim.c (Phase 13).
+void buf_set_name(int fnum, char *name);
+void buf_name_changed(buf_T *buf);
+int buf_open_scratch(handle_T bufnr, char *bufname);

@@ -1861,44 +1861,6 @@ int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message)
   return OK;
 }
 
-/// Crude way of changing the name of a buffer.  Use with care!
-/// The name should be relative to the current directory.
-void buf_set_name(int fnum, char *name)
-{
-  buf_T *buf = buflist_findnr(fnum);
-  if (buf == NULL) {
-    return;
-  }
-
-  if (buf->b_sfname != buf->b_ffname) {
-    xfree(buf->b_sfname);
-  }
-  xfree(buf->b_ffname);
-  buf->b_ffname = xstrdup(name);
-  buf->b_sfname = NULL;
-  // Allocate ffname and expand into full path.  Also resolves .lnk
-  // files on Win32.
-  fname_expand(buf, &buf->b_ffname, &buf->b_sfname);
-  buf->b_fname = buf->b_sfname;
-}
-
-/// Take care of what needs to be done when the name of buffer "buf" has changed.
-void buf_name_changed(buf_T *buf)
-{
-  // If the file name changed, also change the name of the swapfile
-  if (buf->b_ml.ml_mfp != NULL) {
-    ml_setname(buf);
-  }
-
-  if (curwin->w_buffer == buf) {
-    check_arg_idx(curwin);      // check file name for arg list
-  }
-  maketitle();                  // set window title
-  status_redraw_all();          // status lines need to be redrawn
-  fmarks_check_names(buf);      // check named file marks
-  ml_timestamp(buf);            // reset timestamp
-}
-
 /// Set alternate file name for current window
 ///
 /// Used by do_one_cmd(), do_write() and do_ecmd().
@@ -2168,32 +2130,4 @@ bool buf_contents_changed(buf_T *buf)
   return differ;
 }
 
-
-/// Creates or switches to a scratch buffer. :h special-buffers
-/// Scratch buffer is:
-///   - buftype=nofile bufhidden=hide noswapfile
-///   - Always considered 'nomodified'
-///
-/// @param bufnr     Buffer to switch to, or 0 to create a new buffer.
-/// @param bufname   Buffer name, or NULL.
-///
-/// @see curbufIsChanged()
-///
-/// @return  FAIL for failure, OK otherwise
-int buf_open_scratch(handle_T bufnr, char *bufname)
-{
-  if (do_ecmd((int)bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL) == FAIL) {
-    return FAIL;
-  }
-  if (bufname != NULL) {
-    apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, curbuf);
-    setfname(curbuf, bufname, NULL, true);
-    apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, curbuf);
-  }
-  set_option_value_give_err(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("hide"), OPT_LOCAL);
-  set_option_value_give_err(kOptBuftype, STATIC_CSTR_AS_OPTVAL("nofile"), OPT_LOCAL);
-  set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
-  RESET_BINDING(curwin);
-  return OK;
-}
 
