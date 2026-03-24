@@ -71,10 +71,17 @@ extern "C" {
     fn gettext_entry(msgid: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn showmode() -> c_int;
 
-    fn nvim_set_compl_startpos_to_cursor();
+    // nvim_set_compl_startpos_to_cursor: deleted (Phase 22), inlined below
+    // helpers for inlined nvim_set_compl_startpos_to_cursor (Phase 22)
+    fn nvim_curwin_cursor_col() -> c_int;
+    fn nvim_curwin_cursor_coladd() -> c_int;
     // (nvim_set_compl_startpos_col_to_compl_col: inlined in vars.rs)
     // nvim_restore_did_ai: deleted (Phase 1), use nvim_set_did_ai directly
-    fn nvim_set_edit_submode_ctrl_x_local_or_mode();
+    // nvim_set_edit_submode_ctrl_x_local_or_mode: deleted (Phase 22), inlined below
+    // helpers for inlined nvim_set_edit_submode_ctrl_x_local_or_mode (Phase 22)
+    fn nvim_get_ctrl_x_msg(idx: c_int) -> *mut c_char;
+    #[link_name = "edit_submode"]
+    static mut g_edit_submode: *mut c_char;
     // nvim_set_edit_submode_adding: deleted (Phase 1), Rust calls gettext directly
     // nvim_clear_edit_submode_pre: inlined below (Phase 34)
     #[link_name = "edit_submode_pre"]
@@ -224,7 +231,12 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         crate::vars::nvim_set_compl_cont_status(
             crate::vars::nvim_get_compl_cont_status() | CONT_N_ADDS,
         );
-        nvim_set_compl_startpos_to_cursor();
+        // Inlined nvim_set_compl_startpos_to_cursor (Phase 22)
+        crate::vars::compl_startpos = crate::vars::PosT {
+            lnum: nvim_get_curwin_cursor_lnum(),
+            col: nvim_curwin_cursor_col(),
+            coladd: nvim_curwin_cursor_coladd(),
+        };
         crate::vars::nvim_set_compl_col(0);
         curs_col
     } else {
@@ -276,9 +288,15 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     }
 
     // Block 6: set edit_submode to the CTRL-X mode message
+    // Inlined nvim_set_edit_submode_ctrl_x_local_or_mode (Phase 22)
     if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
         // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
-        nvim_set_edit_submode_ctrl_x_local_or_mode();
+        const CTRL_X_LOCAL_MSG: c_int = 15;
+        g_edit_submode = if (crate::vars::nvim_get_compl_cont_status() & CONT_LOCAL) != 0 {
+            nvim_get_ctrl_x_msg(CTRL_X_LOCAL_MSG)
+        } else {
+            nvim_get_ctrl_x_msg(crate::vars::nvim_get_ctrl_x_mode())
+        };
     }
 
     // Block 7: fix redo buffer for leader
@@ -346,7 +364,7 @@ extern "C" {
     fn stop_arrow() -> c_int;
     // nvim_get_p_acl: inlined in vars.rs (Phase 28)
     fn os_hrtime() -> u64;
-    fn nvim_ins_complete_setup_match_state(direction: c_int);
+    // nvim_ins_complete_setup_match_state: deleted (Phase 22), inlined below
     fn nvim_get_curwin_w_wrow() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
     // nvim_ins_complete_eat_got_int: deleted (Phase 1), Rust accesses got_int/global_busy/vgetc directly
@@ -376,6 +394,13 @@ extern "C" {
     // nvim_os_delay: ms is c_long, allow_input is bool
     fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
     fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int);
+}
+
+// Helper for inlined nvim_ins_complete_setup_match_state (Phase 22)
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    #[link_name = "nvim_win_get_w_buffer_raw"]
+    fn nvim_win_get_w_buffer_raw_entry(wp: *mut u8) -> *mut u8;
 }
 
 // Additional key constants for ins_complete
@@ -426,7 +451,14 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     };
 
     // Set up completion window/buffer/match/direction state
-    nvim_ins_complete_setup_match_state(direction);
+    // Inlined nvim_ins_complete_setup_match_state (Phase 22)
+    {
+        let curwin = nvim_get_curwin();
+        crate::vars::nvim_set_compl_curr_win(curwin.cast());
+        crate::vars::nvim_set_compl_curr_buf(nvim_win_get_w_buffer_raw_entry(curwin).cast());
+        crate::vars::nvim_set_compl_shown_match(crate::vars::nvim_get_compl_curr_match());
+        crate::vars::nvim_set_compl_shows_dir(direction);
+    }
 
     // Find next match (and following matches)
     let save_w_wrow = nvim_get_curwin_w_wrow();

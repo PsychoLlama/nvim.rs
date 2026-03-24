@@ -1643,25 +1643,13 @@ const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
 // nvim_set_edit_submode_extra_searching: deleted (Phase 1), Rust calls gettext directly
 // nvim_showmode_wrap: deleted (Phase 3, Rust calls showmode directly)
 
-/// Compound accessor: set compl_startpos to the current cursor position.
-void nvim_set_compl_startpos_to_cursor(void)
-{
-  compl_startpos = curwin->w_cursor;  // full struct copy including coladd
-}
+// nvim_set_compl_startpos_to_cursor: deleted (Phase 22), inlined in entry.rs
 
 // nvim_set_compl_startpos_col_to_compl_col: deleted (Phase 19, inlined in vars.rs)
 
 // nvim_restore_did_ai: deleted (Phase 1, Rust calls nvim_set_did_ai directly)
 
-/// Compound accessor: set edit_submode to the CTRL-X mode message.
-void nvim_set_edit_submode_ctrl_x_local_or_mode(void)
-{
-  if (compl_cont_status & CONT_LOCAL) {
-    edit_submode = _(ctrl_x_msgs[CTRL_X_LOCAL_MSG]);
-  } else {
-    edit_submode = _(CTRL_X_MSG(ctrl_x_mode));
-  }
-}
+// nvim_set_edit_submode_ctrl_x_local_or_mode: deleted (Phase 22), inlined in entry.rs
 
 // nvim_set_edit_submode_adding: deleted (Phase 1), Rust uses gettext directly
 
@@ -1673,16 +1661,13 @@ const char *nvim_ml_get_curline(void)
   return ml_get(curwin->w_cursor.lnum);
 }
 
-
-/// Compound accessor: set up completion window/buffer/match/direction state.
-/// Sets compl_curr_win, compl_curr_buf, compl_shown_match, compl_shows_dir.
-void nvim_ins_complete_setup_match_state(int direction)
+/// Accessor: return translated ctrl_x_msgs entry at index (used by Rust, Phase 22).
+char *nvim_get_ctrl_x_msg(int idx)
 {
-  compl_curr_win = curwin;
-  compl_curr_buf = curwin->w_buffer;
-  compl_shown_match = compl_curr_match;
-  compl_shows_dir = direction;
+  return _(ctrl_x_msgs[idx & ~CTRL_X_WANT_IDENT]);
 }
+
+// nvim_ins_complete_setup_match_state: deleted (Phase 22), inlined in entry.rs
 
 /// Compound accessor: return os_hrtime().
 // nvim_os_hrtime: deleted (Phase 3, Rust calls os_hrtime directly)
@@ -1959,14 +1944,7 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 // Accessors for Phase 4: ins_compl_new_leader migration
 // nvim_get_p_acl: deleted (Phase 28, inlined in vars.rs)
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
-int nvim_is_cpt_func_refresh_always(void) {
-  for (int i = 0; i < cpt_sources_count; i++) {
-    if (cpt_sources_array[i].cs_refresh_always) {
-      return 1;
-    }
-  }
-  return 0;
-}
+// nvim_is_cpt_func_refresh_always: deleted (Phase 22), inlined in leader.rs
 void nvim_cpt_compl_refresh(void) { rs_cpt_compl_refresh(); }
 // nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 // nvim_ins_complete_ctrl_n: deleted (Phase 1, Rust calls ins_complete(CTRL_N, true) directly)

@@ -571,6 +571,11 @@ pub unsafe fn nvim_get_compl_curr_win() -> *mut c_void {
 }
 
 #[inline]
+pub unsafe fn nvim_set_compl_curr_win(w: *mut core::ffi::c_void) {
+    compl_curr_win = w;
+}
+
+#[inline]
 pub unsafe fn nvim_clear_compl_curr_win() {
     compl_curr_win = core::ptr::null_mut();
 }
@@ -578,6 +583,11 @@ pub unsafe fn nvim_clear_compl_curr_win() {
 #[inline]
 pub unsafe fn nvim_get_compl_curr_buf() -> *mut c_void {
     compl_curr_buf
+}
+
+#[inline]
+pub unsafe fn nvim_set_compl_curr_buf(b: *mut core::ffi::c_void) {
+    compl_curr_buf = b;
 }
 
 #[inline]
