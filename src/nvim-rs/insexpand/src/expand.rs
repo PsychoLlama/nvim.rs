@@ -186,12 +186,47 @@ extern "C" {
     // nvim_ins_compl_st_get_cur_match_col: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_prev_match_lnum: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_prev_match_col: inlined in vars.rs (Phase 26)
-    fn nvim_ins_compl_st_add_word_or_line(
-        in_fuzzy: c_int,
-        fuzzy_ptr: *mut std::ffi::c_char,
-        fuzzy_len: c_int,
-        fuzzy_score: c_int,
+    // nvim_ins_compl_st_add_word_or_line: deleted (Phase 2), inlined below as rs_ins_compl_add_word_or_line
+
+    // helpers for inlined rs_ins_compl_add_word_or_line
+    fn nvim_ins_compl_ml_get_buf_at(
+        buf: *mut core::ffi::c_void,
+        lnum: c_int,
+        col: c_int,
+    ) -> *mut std::ffi::c_char;
+    fn nvim_ml_get_buf_len(buf: *mut core::ffi::c_void, lnum: c_int) -> c_int;
+    fn skipwhite(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn vim_iswordp(p: *const std::ffi::c_char) -> bool;
+    fn rs_find_word_start(ptr: *mut std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn rs_find_word_end(ptr: *mut std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn strncpy(
+        dst: *mut std::ffi::c_char,
+        src: *const std::ffi::c_char,
+        n: usize,
+    ) -> *mut std::ffi::c_char;
+    fn xstrlcpy(dst: *mut std::ffi::c_char, src: *const std::ffi::c_char, size: usize) -> usize;
+    fn strcmp(s1: *const std::ffi::c_char, s2: *const std::ffi::c_char) -> c_int;
+    fn nvim_ins_compl_add_infercase_ffi(
+        str_: *const std::ffi::c_char,
+        len: c_int,
+        icase: c_int,
+        fname: *const std::ffi::c_char,
+        dir: c_int,
+        cont_s_ipos: c_int,
+        score: c_int,
     ) -> c_int;
+    fn nvim_ins_compl_st_ins_buf_get_sfname() -> *const std::ffi::c_char;
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    #[link_name = "p_paste"]
+    static p_paste_expand: c_int;
+    #[link_name = "p_js"]
+    static p_js_expand: c_int;
+    #[link_name = "nvim_compl_match_get_next"]
+    fn nvim_compl_match_get_next_expand(
+        m: crate::match_list::ComplMatch,
+    ) -> crate::match_list::ComplMatch;
+    #[link_name = "nvim_compl_match_get_score"]
+    fn nvim_compl_match_get_score_expand(m: crate::match_list::ComplMatch) -> c_int;
 
     // (nvim_get_next_filename_completion_wrap deleted Phase 15; call rs_get_next_filename_completion directly)
 
@@ -418,6 +453,178 @@ unsafe fn rs_process_next_cpt_value(
 
 // nvim_ins_compl_st_do_search inlined above; CONT_SOL now checked directly.
 
+// NOTDONE constant for ins_compl_add_infercase return value
+const NOTDONE: c_int = -1;
+const TAB: c_int = 9;
+
+/// Rust translation of nvim_ins_compl_st_add_word_or_line (Phase 2).
+///
+/// Attempt to add the word or line at the current match position to the
+/// completion list.  When not in fuzzy mode, inlines ins_compl_get_next_word_or_line
+/// logic first; then calls ins_compl_add_infercase.
+///
+/// Returns:
+///   0  ptr is NULL or preinsert-skip (caller should continue loop)
+///   1  ins_compl_add_infercase returned NOTDONE (duplicate)
+///   2  match successfully added (caller should break)
+///
+/// # Safety
+/// Requires valid global completion state.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation
+)]
+unsafe fn rs_ins_compl_add_word_or_line(
+    in_fuzzy: c_int,
+    fuzzy_ptr: *mut std::ffi::c_char,
+    fuzzy_len: c_int,
+    fuzzy_score: c_int,
+) -> c_int {
+    let mut ptr = fuzzy_ptr;
+    let mut len = fuzzy_len;
+    let mut score = fuzzy_score;
+    let mut cont_s_ipos = false;
+
+    if in_fuzzy == 0 {
+        // Inlined ins_compl_get_next_word_or_line logic:
+        let ins_buf = crate::vars::ins_compl_st.ins_buf;
+        let cur_lnum = crate::vars::nvim_ins_compl_st_get_cur_match_lnum();
+        let cur_col = crate::vars::nvim_ins_compl_st_get_cur_match_col();
+
+        // Use labeled block to simulate 'goto add_word_check'
+        'add_word_check: {
+            ptr = nvim_ins_compl_ml_get_buf_at(ins_buf, cur_lnum, cur_col);
+            let raw_len = nvim_ml_get_buf_len(ins_buf, cur_lnum) - cur_col;
+            len = raw_len;
+
+            if rs_ctrl_x_mode_line_or_eval() != 0 {
+                if rs_compl_status_adding() != 0 {
+                    if cur_lnum >= nvim_buf_ml_line_count(ins_buf) {
+                        ptr = core::ptr::null_mut();
+                        break 'add_word_check;
+                    }
+                    ptr = nvim_ins_compl_ml_get_buf_at(ins_buf, cur_lnum + 1, 0);
+                    len = nvim_ml_get_buf_len(ins_buf, cur_lnum + 1);
+                    if p_paste_expand == 0 {
+                        let tmp_ptr = ptr;
+                        ptr = skipwhite(tmp_ptr);
+                        len -= ptr.offset_from(tmp_ptr) as c_int;
+                    }
+                }
+            } else {
+                let mut tmp_ptr = ptr;
+                let compl_length = crate::vars::nvim_get_compl_length();
+                if rs_compl_status_adding() != 0 && compl_length <= len {
+                    tmp_ptr = tmp_ptr.add(compl_length as usize);
+                    if vim_iswordp(tmp_ptr) {
+                        ptr = core::ptr::null_mut();
+                        break 'add_word_check;
+                    }
+                    tmp_ptr = rs_find_word_start(tmp_ptr);
+                }
+                tmp_ptr = rs_find_word_end(tmp_ptr);
+                len = tmp_ptr.offset_from(ptr) as c_int;
+                if rs_compl_status_adding() != 0 && len == compl_length {
+                    let line_count = nvim_buf_ml_line_count(ins_buf);
+                    if cur_lnum < line_count {
+                        strncpy(
+                            core::ptr::addr_of_mut!(IObuff_expand).cast(),
+                            ptr,
+                            len as usize,
+                        );
+                        ptr = nvim_ins_compl_ml_get_buf_at(ins_buf, cur_lnum + 1, 0);
+                        tmp_ptr = skipwhite(ptr);
+                        ptr = tmp_ptr;
+                        tmp_ptr = rs_find_word_start(tmp_ptr);
+                        tmp_ptr = rs_find_word_end(tmp_ptr);
+                        if tmp_ptr > ptr {
+                            let iobuff: *mut std::ffi::c_char =
+                                core::ptr::addr_of_mut!(IObuff_expand).cast();
+                            if *ptr != b')' as std::ffi::c_char
+                                && *iobuff.add((len - 1) as usize) != TAB as std::ffi::c_char
+                            {
+                                if *iobuff.add((len - 1) as usize) != b' ' as std::ffi::c_char {
+                                    *iobuff.add(len as usize) = b' ' as std::ffi::c_char;
+                                    len += 1;
+                                }
+                                if p_js_expand != 0 {
+                                    let prev = *iobuff.add((len - 2) as usize);
+                                    if prev == b'.' as std::ffi::c_char
+                                        || prev == b'?' as std::ffi::c_char
+                                        || prev == b'!' as std::ffi::c_char
+                                    {
+                                        *iobuff.add(len as usize) = b' ' as std::ffi::c_char;
+                                        len += 1;
+                                    }
+                                }
+                            }
+                            let extra = tmp_ptr.offset_from(ptr) as usize;
+                            let remaining = IOSIZE - len as usize;
+                            let capped_extra = if extra >= remaining {
+                                remaining - 1
+                            } else {
+                                extra
+                            };
+                            xstrlcpy(iobuff.add(len as usize), ptr, IOSIZE - len as usize);
+                            len += capped_extra as c_int;
+                            cont_s_ipos = true;
+                        }
+                        *core::ptr::addr_of_mut!(IObuff_expand)
+                            .cast::<std::ffi::c_char>()
+                            .add(len as usize) = 0;
+                        ptr = core::ptr::addr_of_mut!(IObuff_expand).cast();
+                    }
+                    if len == compl_length {
+                        ptr = core::ptr::null_mut();
+                        break 'add_word_check;
+                    }
+                }
+            }
+        } // end 'add_word_check block
+    }
+
+    // add_word_check:
+    if ptr.is_null()
+        || (rs_ins_compl_has_preinsert() != 0 && strcmp(ptr, rs_ins_compl_leader()) == 0)
+    {
+        return 0;
+    }
+
+    if rs_is_nearest_active() != 0 && crate::vars::ins_compl_st.ins_buf == curbuf_expand {
+        score = crate::vars::nvim_ins_compl_st_get_cur_match_lnum() - nvim_get_curwin_cursor_lnum();
+        if score < 0 {
+            score = -score;
+        }
+    }
+
+    let sfname = nvim_ins_compl_st_ins_buf_get_sfname();
+
+    let add_r = nvim_ins_compl_add_infercase_ffi(
+        ptr,
+        len,
+        crate::vars::nvim_get_p_ic(),
+        sfname,
+        0,
+        c_int::from(cont_s_ipos),
+        score,
+    );
+    if add_r == NOTDONE {
+        return 1;
+    }
+    // add_r is OK (or FAIL which shouldn't happen here)
+    if in_fuzzy != 0 {
+        let first = crate::match_list::compl_first_match;
+        if !first.is_null() {
+            let next = nvim_compl_match_get_next_expand(first);
+            if !next.is_null() && score == nvim_compl_match_get_score_expand(next) {
+                crate::vars::nvim_set_compl_num_bests(crate::vars::nvim_get_compl_num_bests() + 1);
+            }
+        }
+    }
+    2
+}
+
 /// Rust translation of get_next_default_completion.
 ///
 /// Searches `ins_compl_st.ins_buf` for the next match of `compl_pattern`,
@@ -564,8 +771,7 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
 
         // Try to add the word/line at the current match position.
         // Returns: 0=skip(ptr null/preinsert), 1=NOTDONE(dup), 2=added.
-        let add_result =
-            nvim_ins_compl_st_add_word_or_line(in_fuzzy, fuzzy_ptr, fuzzy_len, fuzzy_score);
+        let add_result = rs_ins_compl_add_word_or_line(in_fuzzy, fuzzy_ptr, fuzzy_len, fuzzy_score);
         if add_result >= 2 {
             // successfully added
             found_new_match = OK;

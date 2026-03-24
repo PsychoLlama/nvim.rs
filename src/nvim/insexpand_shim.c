@@ -116,6 +116,8 @@ extern int rs_ctrl_x_mode_eval(void);
 extern void rs_ins_compl_free(void);
 extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
                                             int min_len, char **tofree);
+extern int rs_ins_compl_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
+                                          int fuzzy_score);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
@@ -2980,127 +2982,23 @@ int nvim_compl_p_ws_save_set(void)
 // nvim_ins_compl_st_get_prev_match_lnum: deleted (Phase 26, inlined in vars.rs)
 // nvim_ins_compl_st_get_prev_match_col: deleted (Phase 26, inlined in vars.rs)
 
-/// Attempt to add the word or line at the current match position to the
-/// completion list.  Inlines ins_compl_get_next_word_or_line logic, then
-/// calls ins_compl_add_infercase.
-///
-/// Parameters:
-///   in_fuzzy    -- 1 if in fuzzy-collect mode (ptr/len/score already known)
-///   fuzzy_ptr   -- string pointer (used when in_fuzzy == 1)
-///   fuzzy_len   -- length (used when in_fuzzy == 1)
-///   fuzzy_score -- score (used when in_fuzzy == 1; also used for nearest-active)
-///
-/// Returns:
-///   0  ptr is NULL or preinsert-skip (caller should continue loop)
-///   1  ins_compl_add_infercase returned NOTDONE (duplicate)
-///   2  match successfully added (caller should break)
-int nvim_ins_compl_st_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
-                                       int fuzzy_score)
+/// Get a pointer into the given buffer at lnum+col offset (for word/line completion).
+/// Equivalent to ml_get_buf(ins_buf, lnum) + col, but takes void* to avoid buf_T in Rust.
+char *nvim_ins_compl_ml_get_buf_at(void *buf, linenr_T lnum, int col)
 {
-  char *ptr  = fuzzy_ptr;
-  int   len  = fuzzy_len;
-  int   score = fuzzy_score;
-  bool  cont_s_ipos = false;
-
-  if (!in_fuzzy) {
-    // Inlined ins_compl_get_next_word_or_line logic:
-    buf_T *ins_buf = ins_compl_st.ins_buf;
-    pos_T *cur_match_pos = ins_compl_st.cur_match_pos;
-    len = 0;
-    ptr = ml_get_buf(ins_buf, cur_match_pos->lnum) + cur_match_pos->col;
-    int raw_len = ml_get_buf_len(ins_buf, cur_match_pos->lnum) - cur_match_pos->col;
-    len = raw_len;
-    if (rs_ctrl_x_mode_line_or_eval()) {
-      if (rs_compl_status_adding()) {
-        if (cur_match_pos->lnum >= ins_buf->b_ml.ml_line_count) {
-          ptr = NULL;
-          goto add_word_check;
-        }
-        ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
-        len = ml_get_buf_len(ins_buf, cur_match_pos->lnum + 1);
-        if (!p_paste) {
-          char *tmp_ptr = ptr;
-          ptr = skipwhite(tmp_ptr);
-          len -= (int)(ptr - tmp_ptr);
-        }
-      }
-    } else {
-      char *tmp_ptr = ptr;
-      if (rs_compl_status_adding() && compl_length <= len) {
-        tmp_ptr += compl_length;
-        if (vim_iswordp(tmp_ptr)) {
-          ptr = NULL;
-          goto add_word_check;
-        }
-        tmp_ptr = rs_find_word_start(tmp_ptr);
-      }
-      tmp_ptr = rs_find_word_end(tmp_ptr);
-      len = (int)(tmp_ptr - ptr);
-      if (rs_compl_status_adding() && len == compl_length) {
-        if (cur_match_pos->lnum < ins_buf->b_ml.ml_line_count) {
-          strncpy(IObuff, ptr, (size_t)len);  // NOLINT(runtime/printf)
-          ptr = ml_get_buf(ins_buf, cur_match_pos->lnum + 1);
-          tmp_ptr = ptr = skipwhite(ptr);
-          tmp_ptr = rs_find_word_start(tmp_ptr);
-          tmp_ptr = rs_find_word_end(tmp_ptr);
-          if (tmp_ptr > ptr) {
-            if (*ptr != ')' && IObuff[len - 1] != TAB) {
-              if (IObuff[len - 1] != ' ') {
-                IObuff[len++] = ' ';
-              }
-              if (p_js
-                  && (IObuff[len - 2] == '.'
-                      || IObuff[len - 2] == '?'
-                      || IObuff[len - 2] == '!')) {
-                IObuff[len++] = ' ';
-              }
-            }
-            if (tmp_ptr - ptr >= IOSIZE - len) {
-              tmp_ptr = ptr + IOSIZE - len - 1;
-            }
-            xstrlcpy(IObuff + len, ptr, (size_t)(IOSIZE - len));
-            len += (int)(tmp_ptr - ptr);
-            cont_s_ipos = true;
-          }
-          IObuff[len] = NUL;
-          ptr = IObuff;
-        }
-        if (len == compl_length) {
-          ptr = NULL;
-          goto add_word_check;
-        }
-      }
-    }
-  }
-
-add_word_check:
-  if (ptr == NULL || (rs_ins_compl_has_preinsert()
-                      && strcmp(ptr, (char *)rs_ins_compl_leader()) == 0)) {
-    return 0;
-  }
-
-  if (rs_is_nearest_active() && ins_compl_st.ins_buf == curbuf) {
-    score = (int)ins_compl_st.cur_match_pos->lnum - (int)curwin->w_cursor.lnum;
-    if (score < 0) {
-      score = -score;
-    }
-  }
-
-  const char *sfname = (ins_compl_st.ins_buf == curbuf)
-                       ? NULL : ins_compl_st.ins_buf->b_sfname;
-
-  int add_r = ins_compl_add_infercase(ptr, len, p_ic, (char *)sfname,
-                                      0, cont_s_ipos, score);
-  if (add_r == NOTDONE) {
-    return 1;
-  }
-  // add_r is OK (or FAIL which shouldn't happen here)
-  if (in_fuzzy && compl_first_match && compl_first_match->cp_next
-      && score == compl_first_match->cp_next->cp_score) {
-    compl_num_bests++;
-  }
-  return 2;
+  return ml_get_buf((buf_T *)buf, lnum) + col;
 }
+
+/// Returns ins_compl_st.ins_buf->b_sfname (NULL if ins_buf==curbuf or ins_buf is NULL).
+const char *nvim_ins_compl_st_ins_buf_get_sfname(void)
+{
+  if (!ins_compl_st.ins_buf || ins_compl_st.ins_buf == curbuf) {
+    return NULL;
+  }
+  return ins_compl_st.ins_buf->b_sfname;
+}
+
+// nvim_ins_compl_st_add_word_or_line: deleted (Phase 2), inlined in expand.rs as rs_ins_compl_add_word_or_line
 
 // nvim_update_can_si_from_may_do_si: deleted (Phase 1), Rust uses can_si/may_do_si directly
 
