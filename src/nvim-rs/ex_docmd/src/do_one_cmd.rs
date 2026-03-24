@@ -261,8 +261,6 @@ extern "C" {
 
     // register / count / flags
     fn nvim_parse_register(eap: ExArgHandle);
-    fn nvim_parse_count_ex(eap: ExArgHandle, errormsg: *mut *const c_char, validate: bool)
-        -> c_int;
     fn nvim_docmd_get_flags(eap: ExArgHandle);
 
     // trailing / needarg
@@ -988,7 +986,7 @@ pub unsafe extern "C" fn do_one_cmd(
 
     // Parse register and count.
     nvim_parse_register(eap);
-    if nvim_parse_count_ex(eap, &mut errormsg, true) == FAIL {
+    if crate::args::rs_parse_count_ex(eap, &mut errormsg, 1) == FAIL {
         do_one_cmd_doend(
             eap,
             cstack,

@@ -360,19 +360,10 @@ extern FILE *nvim_docmd_open_exfile_impl(char *fname, int forceit, char *mode);
 extern void nvim_docmd_update_topline_cursor_impl(void);
 extern char *nvim_docmd_replace_makeprg_impl(exarg_T *eap, char *arg, char **cmdlinep);
 extern void nvim_docmd_close_redir_impl(void);
-extern void nvim_docmd_tabpage_close_impl(int forceit);
-extern void nvim_docmd_tabpage_close_other_impl(tabpage_T *tp, int forceit);
-extern bool nvim_docmd_before_quit_autocmds_impl(win_T *wp, bool quit_all, bool forceit);
-extern void nvim_docmd_ex_win_close_impl(int forceit, win_T *win, tabpage_T *tp);
-extern void nvim_docmd_ex_tabs_impl(exarg_T *eap);
-extern void nvim_docmd_handle_did_throw_impl(void);
-extern void nvim_docmd_do_exbuffer_impl(exarg_T *eap);
 extern void nvim_docmd_apply_cmdmod_impl(cmdmod_T *cmod);
 extern void nvim_docmd_undo_cmdmod_impl(cmdmod_T *cmod);
 extern bool nvim_docmd_save_current_state_impl(save_state_T *sst);
 extern void nvim_docmd_restore_current_state_impl(save_state_T *sst);
-extern void nvim_docmd_ex_find_impl(exarg_T *eap);
-extern void nvim_docmd_ex_syncbind_impl(exarg_T *eap);
 extern void nvim_docmd_ex_splitview_impl(exarg_T *eap);
 extern void nvim_docmd_exec_normal_cmd_impl(char *cmd, int remap, bool silent);
 extern void nvim_docmd_exec_normal_impl(bool was_typed, bool use_vpeekc);
@@ -1096,9 +1087,6 @@ static void store_loop_line(garray_T *gap, char *line)
 /// ":bwipeout", etc.
 ///
 /// @return  the buffer number.
-// nvim_docmd_compute_buffer_local_count_impl is implemented in Rust (address.rs).
-extern int nvim_docmd_compute_buffer_local_count_impl(cmd_addr_T addr_type, linenr_T lnum, int offset);
-
 /// @return  the window number of "win" or,
 ///          the number of windows if "win" is NULL
 static int current_win_nr(const win_T *win)
@@ -2343,7 +2331,6 @@ char *nvim_skip_colon_white(const char *p, bool skipleadingwhite)
 {
   return skip_colon_white(p, skipleadingwhite);
 }
-char *nvim_eap_get_cmd_field(const exarg_T *eap) { return eap->cmd; }
 bool nvim_parse_bang(exarg_T *eap, char **p_ptr) { return parse_bang(eap, p_ptr); }
 void nvim_set_eap_arg_from_p(exarg_T *eap, char *p)
 {
@@ -2447,12 +2434,6 @@ int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
 void nvim_do_cmdline_end(void) { do_cmdline_end(); }
 void nvim_correct_range(exarg_T *eap) { correct_range(eap); }
-// nvim_parse_count_ex: alias for nvim_parse_count (same signature)
-int nvim_parse_count_ex(exarg_T *eap, const char **errormsg, bool validate)
-{
-  return parse_count(eap, errormsg, validate);
-}
-
 // Phase 3 C accessor wrappers
 
 // changedir_func helpers
@@ -3423,8 +3404,6 @@ void nvim_docmd_semsg_multiline_emsg(const char *msg)
   semsg_multiline("emsg", (char *)msg);
 }
 void nvim_docmd_xfree_str(void *p) { xfree(p); }
-
-// nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
 
 // --- did_set_findfunc helpers ---
 int nvim_docmd_findfunc_set_global(void)

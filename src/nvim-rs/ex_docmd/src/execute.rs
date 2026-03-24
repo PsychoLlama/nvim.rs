@@ -276,7 +276,7 @@ extern "C" {
     fn nvim_eap_set_forceit(eap: ExArgHandle, forceit: bool);
     fn nvim_eap_get_skip(eap: ExArgHandle) -> c_int;
     fn nvim_eap_set_nextcmd(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_eap_get_cmd_field(eap: ExArgHandle) -> *mut c_char;
+    fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
     fn nvim_eap_set_cmd(eap: ExArgHandle, p: *mut c_char);
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
     fn nvim_eap_get_errmsg(eap: ExArgHandle) -> *mut c_char;
@@ -343,11 +343,6 @@ extern "C" {
     fn nvim_correct_range(eap: ExArgHandle);
     fn nvim_hasFolding_line1(lnum: LinenrT, line1_out: *mut LinenrT);
     fn nvim_hasFolding_line2(lnum: LinenrT, line2_out: *mut LinenrT);
-    fn nvim_parse_count_ex(
-        eap: ExArgHandle,
-        errormsg: *mut *const c_char,
-        after_unknown_range: bool,
-    ) -> c_int;
     fn nvim_cstack_alloc() -> CstackHandle;
     fn nvim_cstack_free(cs: CstackHandle);
     fn nvim_curbuf_is_terminal() -> c_int;
@@ -755,7 +750,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
     }
 
     // Use first argument as count when possible.
-    if nvim_parse_count_ex(eap, &mut errormsg, true) == FAIL_P2 {
+    if crate::args::rs_parse_count_ex(eap, &mut errormsg, 1) == FAIL_P2 {
         goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
         return retv;
     }
@@ -839,7 +834,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         xfree(save_cursor);
         return false;
     }
-    let after_modifier = nvim_eap_get_cmd_field(eap);
+    let after_modifier = nvim_eap_get_cmd(eap);
 
     // Find command name to know what kind of range it uses.
     let p = nvim_find_excmd_after_range(eap);
@@ -865,7 +860,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     }
 
     // Skip colon and whitespace: eap->cmd = skip_colon_white(eap->cmd, true)
-    let cmd = nvim_skip_colon_white(nvim_eap_get_cmd_field(eap), true);
+    let cmd = nvim_skip_colon_white(nvim_eap_get_cmd(eap), true);
     nvim_eap_set_cmd(eap, cmd);
 
     // Fail if command is a comment or doesn't exist.
@@ -966,7 +961,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
 
     // Parse register and count.
     nvim_parse_register(eap);
-    if nvim_parse_count_ex(eap, errormsg, false) == FAIL_P2 {
+    if crate::args::rs_parse_count_ex(eap, errormsg, 0) == FAIL_P2 {
         nvim_undo_cmdmod_p(cmdinfo);
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
         nvim_restore_cursor(save_cursor);
