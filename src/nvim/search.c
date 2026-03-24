@@ -110,11 +110,6 @@ static SearchPattern spats[2] = {
 
 static int last_idx = 0;        // index in spats[] for RE_LAST
 
-static uint8_t lastc[2] = { NUL, NUL };   // last character searched for
-static Direction lastcdir = FORWARD;      // last direction of character search
-static bool last_t_cmd = true;            // last search t_cmd
-static char lastc_bytes[MAX_SCHAR_SIZE + 1];
-
 // Rust FFI declarations for character search state
 extern int rs_magic_isset(void);
 
@@ -145,24 +140,6 @@ extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
                                     int maxcount, int timeout, bool recompute,
                                     const char *pattern, searchstat_T *stat);
 
-/// Get the lastcdir static variable (accessor for Rust).
-int nvim_get_lastcdir(void)
-{
-  return lastcdir;
-}
-
-/// Get the last_t_cmd static variable (accessor for Rust).
-int nvim_get_last_t_cmd(void)
-{
-  return last_t_cmd;
-}
-
-/// Get the lastc_bytes static variable (accessor for Rust).
-const char *nvim_get_lastc_bytes(void)
-{
-  return lastc_bytes;
-}
-
 /// Get the last_idx static variable (accessor for Rust).
 int nvim_get_last_idx(void)
 {
@@ -173,59 +150,6 @@ int nvim_get_last_idx(void)
 void nvim_set_last_idx(int idx)
 {
   last_idx = idx;
-}
-
-static int lastc_bytelen = 1;             // >1 for multi-byte char
-
-/// Get the lastc_bytelen static variable (accessor for Rust).
-int nvim_get_lastc_bytelen(void)
-{
-  return lastc_bytelen;
-}
-
-/// Set the lastc_bytelen static variable (setter for Rust).
-void nvim_set_lastc_bytelen(int len)
-{
-  lastc_bytelen = len;
-}
-
-/// Get a value from the lastc array (accessor for Rust).
-uint8_t nvim_get_lastc(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return lastc[idx];
-  }
-  return 0;
-}
-
-/// Set a value in the lastc array (setter for Rust).
-void nvim_set_lastc(int idx, uint8_t val)
-{
-  if (idx >= 0 && idx < 2) {
-    lastc[idx] = val;
-  }
-}
-
-/// Set the lastcdir static variable (setter for Rust).
-void nvim_set_lastcdir(int dir)
-{
-  lastcdir = dir;
-}
-
-/// Set the last_t_cmd static variable (setter for Rust).
-void nvim_set_last_t_cmd(int t_cmd)
-{
-  last_t_cmd = t_cmd;
-}
-
-/// Bulk copy bytes into lastc_bytes[] and clear if len is 0 (accessor for Rust).
-void nvim_set_lastc_bytes_raw(const char *s, int len)
-{
-  if (len > 0 && s != NULL) {
-    memcpy(lastc_bytes, s, (size_t)len);
-  } else {
-    CLEAR_FIELD(lastc_bytes);
-  }
 }
 
 /// Check if line 'lnum' in curbuf is empty or has only white chars (accessor for Rust).
@@ -2413,25 +2337,6 @@ void nvim_search_set_oap_motion_type(void *oap, int motion_type)
 {
   if (oap != NULL) {
     ((oparg_T *)oap)->motion_type = (MotionType)motion_type;
-  }
-}
-
-// =============================================================================
-// Phase 5: searchc() accessors
-// =============================================================================
-
-/// Batch save lastc state for searchc() migration.
-/// Sets lastc[0], lastcdir, last_t_cmd, and the lastc_bytes/lastc_bytelen.
-/// If nchar_len > 0, copies composing_bytes to lastc_bytes.
-/// Otherwise, encodes `c` using utf_char2bytes into lastc_bytes.
-void nvim_searchc_save_lastc_state(int c, int nchar_len, const char *composing_bytes)
-{
-  *lastc = (uint8_t)c;
-  if (nchar_len > 0) {
-    lastc_bytelen = nchar_len;
-    memcpy(lastc_bytes, composing_bytes, (size_t)nchar_len);
-  } else {
-    lastc_bytelen = utf_char2bytes(c, lastc_bytes);
   }
 }
 

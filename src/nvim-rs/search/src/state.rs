@@ -1,27 +1,24 @@
 //! Search state accessors
 //!
-//! This module provides Rust wrappers for accessing search state variables
-//! from C code. The actual state lives in `search.c` and is accessed through
-//! C accessor functions.
+//! This module provides Rust wrappers for accessing search state variables.
+//! Character search state now lives in `char_search_state.rs` (Rust-owned).
+//! Pattern state (spats, mr_pattern, etc.) still accessed via C accessors.
 
 use std::ffi::{c_char, c_int, c_longlong, c_uchar};
 
+use crate::char_search_state;
+
 // =============================================================================
-// C Accessor Functions
+// C Accessor Functions (pattern state still in C)
 // =============================================================================
 
 extern "C" {
-    // Character search state
-    fn nvim_get_lastcdir() -> c_int;
-    fn nvim_get_last_t_cmd() -> c_int;
-    fn nvim_get_lastc_bytes() -> *const c_char;
-    fn nvim_get_last_idx() -> c_int;
-    fn nvim_get_lastc_bytelen() -> c_int;
-    fn nvim_get_lastc(idx: c_int) -> c_uchar;
-
     // Pattern state
     fn nvim_get_mr_pattern() -> *const c_char;
     fn nvim_get_mr_patternlen() -> usize;
+
+    // Pattern index state
+    fn nvim_get_last_idx() -> c_int;
 
     // Search pattern state (spats array)
     fn nvim_get_spat_pat(idx: c_int) -> *const c_char;
@@ -37,11 +34,7 @@ extern "C" {
     fn nvim_get_save_level() -> c_int;
     fn nvim_get_did_save_last_search_spat() -> c_int;
 
-    // Setter functions
-    fn nvim_set_lastcdir(dir: c_int);
-    fn nvim_set_last_t_cmd(t_cmd: c_int);
-    fn nvim_set_lastc_bytelen(len: c_int);
-    fn nvim_set_lastc(idx: c_int, val: c_uchar);
+    // Pattern index setter
     fn nvim_set_last_idx(idx: c_int);
 }
 
@@ -62,15 +55,13 @@ pub const BACKWARD: c_int = -1;
 /// Returns FORWARD (1) or BACKWARD (-1).
 #[inline]
 pub fn get_lastcdir() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_lastcdir() }
+    char_search_state::get_lastcdir()
 }
 
 /// Set the last character search direction.
 #[inline]
 pub fn set_lastcdir(dir: c_int) {
-    // SAFETY: Simple global setter
-    unsafe { nvim_set_lastcdir(dir) }
+    char_search_state::set_lastcdir(dir);
 }
 
 /// Check if the last character search direction was forward.
@@ -82,15 +73,13 @@ pub fn last_csearch_forward() -> bool {
 /// Get whether the last character search was a 't' (until) command.
 #[inline]
 pub fn get_last_t_cmd() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_last_t_cmd() }
+    c_int::from(char_search_state::get_last_t_cmd())
 }
 
 /// Set whether the last character search was a 't' (until) command.
 #[inline]
 pub fn set_last_t_cmd(t_cmd: bool) {
-    // SAFETY: Simple global setter
-    unsafe { nvim_set_last_t_cmd(c_int::from(t_cmd)) }
+    char_search_state::set_last_t_cmd(t_cmd);
 }
 
 /// Check if the last character search was an 'until' command (t or T).
@@ -105,35 +94,31 @@ pub fn last_csearch_until() -> bool {
 /// Returns a pointer to static memory.
 #[inline]
 pub unsafe fn get_lastc_bytes() -> *const c_char {
-    nvim_get_lastc_bytes()
+    char_search_state::get_lastc_bytes_ptr()
 }
 
 /// Get the length of the last character search bytes.
 #[inline]
 pub fn get_lastc_bytelen() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_lastc_bytelen() }
+    char_search_state::get_lastc_bytelen()
 }
 
 /// Set the length of the last character search bytes.
 #[inline]
 pub fn set_lastc_bytelen(len: c_int) {
-    // SAFETY: Simple global setter
-    unsafe { nvim_set_lastc_bytelen(len) }
+    char_search_state::set_lastc_bytelen(len);
 }
 
 /// Get a character from the lastc array.
 #[inline]
 pub fn get_lastc(idx: c_int) -> c_uchar {
-    // SAFETY: Bounds checked in C accessor
-    unsafe { nvim_get_lastc(idx) }
+    char_search_state::get_lastc(idx)
 }
 
 /// Set a character in the lastc array.
 #[inline]
 pub fn set_lastc(idx: c_int, val: c_uchar) {
-    // SAFETY: Bounds checked in C setter
-    unsafe { nvim_set_lastc(idx, val) }
+    char_search_state::set_lastc(idx, val);
 }
 
 // =============================================================================

@@ -5,25 +5,14 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::char_search_state;
+
 // =============================================================================
 // C External Functions
 // =============================================================================
 
 extern "C" {
-    // Character search state accessors
-    fn nvim_get_lastcdir() -> c_int;
-    fn nvim_set_lastcdir(dir: c_int);
-    fn nvim_get_last_t_cmd() -> c_int;
-    fn nvim_set_last_t_cmd(t_cmd: c_int);
-    fn nvim_get_lastc(idx: c_int) -> u8;
-    fn nvim_set_lastc(idx: c_int, val: u8);
-    fn nvim_get_lastc_bytes() -> *const c_char;
-    fn nvim_get_lastc_bytelen() -> c_int;
-    fn nvim_set_lastc_bytelen(len: c_int);
-    fn nvim_set_lastc_bytes_raw(s: *const c_char, len: c_int);
-
     // Phase 5: searchc() accessors
-    fn nvim_searchc_save_lastc_state(c: c_int, nchar_len: c_int, composing_bytes: *const c_char);
     fn nvim_cap_get_nchar(cap: *const c_void) -> c_int;
     fn nvim_cap_get_arg(cap: *const c_void) -> c_int;
     fn nvim_cap_get_count1(cap: *const c_void) -> c_int;
@@ -218,69 +207,58 @@ impl CharSearchState {
 /// Returns FORWARD (1) or BACKWARD (-1).
 #[inline]
 pub fn get_csearch_direction() -> c_int {
-    // SAFETY: Accessing global variable through accessor
-    unsafe { nvim_get_lastcdir() }
+    char_search_state::get_lastcdir()
 }
 
 /// Set the character search direction.
 #[inline]
 pub fn set_csearch_direction(dir: c_int) {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_lastcdir(dir) }
+    char_search_state::set_lastcdir(dir);
 }
 
 /// Get whether the last character search was a 't' command.
 #[inline]
 pub fn get_csearch_until() -> bool {
-    // SAFETY: Accessing global variable through accessor
-    unsafe { nvim_get_last_t_cmd() != 0 }
+    char_search_state::get_last_t_cmd()
 }
 
 /// Set whether the character search is a 't' command.
 #[inline]
 pub fn set_csearch_until(until: bool) {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_last_t_cmd(c_int::from(until)) }
+    char_search_state::set_last_t_cmd(until);
 }
 
 /// Get the last searched character code.
 #[inline]
 pub fn get_last_csearch_char() -> c_int {
-    // SAFETY: Accessing global variable through accessor
-    // Index 0 is the first character
-    unsafe { c_int::from(nvim_get_lastc(0)) }
+    c_int::from(char_search_state::get_lastc(0))
 }
 
 /// Set the last searched character.
 #[inline]
 pub fn set_last_csearch_char(c: u8) {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_lastc(0, c) }
+    char_search_state::set_lastc(0, c);
 }
 
 /// Get the byte length of the last searched character.
 #[inline]
 pub fn get_csearch_bytelen() -> c_int {
-    // SAFETY: Accessing global variable through accessor
-    unsafe { nvim_get_lastc_bytelen() }
+    char_search_state::get_lastc_bytelen()
 }
 
 /// Set the byte length of the last searched character.
 #[inline]
 pub fn set_csearch_bytelen(len: c_int) {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_lastc_bytelen(len) }
+    char_search_state::set_lastc_bytelen(len);
 }
 
 /// Get a pointer to the last searched character bytes.
 ///
-/// # Safety
-///
 /// Returns a pointer to a static buffer. The caller must ensure the
 /// pointer is not used after the buffer is modified.
 #[inline]
-pub unsafe fn get_csearch_bytes() -> *const c_char {
-    nvim_get_lastc_bytes()
+pub fn get_csearch_bytes() -> *const c_char {
+    char_search_state::get_lastc_bytes_ptr()
 }
 
 /// Check if a character search has been performed.
@@ -395,9 +373,9 @@ pub fn should_force_csearch_movement(count: c_int, until: bool, cpo_has_scolon: 
 /// # Safety
 /// `s` must be a valid pointer to `len` bytes (or NULL if `len` is 0).
 pub unsafe fn set_last_csearch(c: c_int, s: *const c_char, len: c_int) {
-    nvim_set_lastc(0, c as u8);
-    nvim_set_lastc_bytelen(len);
-    nvim_set_lastc_bytes_raw(s, len);
+    char_search_state::set_lastc(0, c as u8);
+    char_search_state::set_lastc_bytelen(len);
+    char_search_state::set_lastc_bytes_raw(s, len);
 }
 
 /// FFI: Set the last character search state.
@@ -554,19 +532,19 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
             // Don't remember when redoing
             let nchar_len = nvim_cap_get_nchar_len(cap);
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(cap);
-            nvim_searchc_save_lastc_state(c, nchar_len, composing_ptr);
+            char_search_state::searchc_save_lastc_state(c, nchar_len, composing_ptr);
             set_csearch_direction(dir);
             set_csearch_until(t_cmd);
         }
     } else {
         // Repeat previous search
-        if nvim_get_lastc(0) == 0 && nvim_get_lastc_bytelen() <= 1 {
+        if char_search_state::get_lastc(0) == 0 && char_search_state::get_lastc_bytelen() <= 1 {
             return FAIL;
         }
-        let lastcdir = nvim_get_lastcdir();
+        let lastcdir = char_search_state::get_lastcdir();
         dir = if dir != 0 { -lastcdir } else { lastcdir };
-        t_cmd = nvim_get_last_t_cmd() != 0;
-        c = nvim_get_lastc(0) as c_int;
+        t_cmd = char_search_state::get_last_t_cmd();
+        c = char_search_state::get_lastc(0) as c_int;
         // For multi-byte re-use last lastc_bytes[] and lastc_bytelen.
 
         // Force a move of at least one char, so ";" and "," will move the
@@ -583,7 +561,7 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
     let p = nvim_get_cursor_line_ptr();
     let mut col = nvim_get_curwin_cursor_col();
     let len = nvim_get_cursor_line_len();
-    let lastc_bytelen = nvim_get_lastc_bytelen();
+    let lastc_bytelen = char_search_state::get_lastc_bytelen();
 
     while count > 0 {
         count -= 1;
@@ -604,7 +582,7 @@ pub unsafe extern "C" fn rs_searchc(cap: *mut c_void, t_cmd_arg: bool) -> c_int 
                     break;
                 }
             } else if col + lastc_bytelen <= len {
-                let lastc_bytes = nvim_get_lastc_bytes();
+                let lastc_bytes = char_search_state::get_lastc_bytes_ptr();
                 let blen = lastc_bytelen as usize;
                 let line_slice = std::slice::from_raw_parts(p.add(col as usize) as *const u8, blen);
                 let pat_slice = std::slice::from_raw_parts(lastc_bytes as *const u8, blen);

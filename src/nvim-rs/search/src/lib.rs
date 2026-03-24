@@ -6,6 +6,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
+pub mod char_search_state;
 pub mod commands;
 pub mod core;
 pub mod direction;
@@ -23,17 +24,7 @@ pub mod substitute;
 use std::ffi::{c_char, c_int};
 
 // C accessor functions for search state.
-// These are defined in search.c and provide safe access to static variables.
 extern "C" {
-    /// Get the `lastcdir` static variable (FORWARD=1, BACKWARD=-1).
-    fn nvim_get_lastcdir() -> c_int;
-
-    /// Get the `last_t_cmd` static variable.
-    fn nvim_get_last_t_cmd() -> c_int;
-
-    /// Get the `lastc_bytes` static variable.
-    fn nvim_get_lastc_bytes() -> *const c_char;
-
     /// Get the `last_idx` static variable.
     fn nvim_get_last_idx() -> c_int;
 
@@ -63,8 +54,7 @@ const OPTION_MAGIC_OFF: c_int = 2;
 /// This is the Rust equivalent of `last_csearch_forward()` in search.c.
 #[inline]
 fn last_csearch_forward_impl() -> bool {
-    // SAFETY: nvim_get_lastcdir is a simple global accessor
-    unsafe { nvim_get_lastcdir() == FORWARD }
+    char_search_state::get_lastcdir() == FORWARD
 }
 
 /// FFI wrapper for `last_csearch_forward`.
@@ -80,8 +70,7 @@ pub extern "C" fn rs_last_csearch_forward() -> c_int {
 /// This is the Rust equivalent of `last_csearch_until()` in search.c.
 #[inline]
 fn last_csearch_until_impl() -> c_int {
-    // SAFETY: nvim_get_last_t_cmd is a simple global accessor
-    unsafe { nvim_get_last_t_cmd() }
+    c_int::from(char_search_state::get_last_t_cmd())
 }
 
 /// FFI wrapper for `last_csearch_until`.
@@ -95,13 +84,9 @@ pub extern "C" fn rs_last_csearch_until() -> c_int {
 /// Get the last character search bytes.
 ///
 /// Returns a pointer to the static `lastc_bytes` array.
-///
-/// # Safety
-///
-/// Calls external C function to get pointer to static variable.
 #[unsafe(export_name = "last_csearch")]
-pub unsafe extern "C" fn rs_last_csearch() -> *const c_char {
-    nvim_get_lastc_bytes()
+pub extern "C" fn rs_last_csearch() -> *const c_char {
+    char_search_state::get_lastc_bytes_ptr()
 }
 
 /// Check if search pattern was the last used one.
