@@ -1,4 +1,5 @@
-// search.c: code for normal mode searching commands
+// search_shim.c: C accessor functions and remaining logic for search module
+// (migrated from search.c; logic functions will be moved to Rust in future phases)
 
 #include <assert.h>
 #include <inttypes.h>
@@ -63,7 +64,7 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-#include "search.c.generated.h"
+#include "search_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
 // Rust fold FFI declaration
