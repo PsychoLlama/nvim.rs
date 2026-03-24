@@ -1580,6 +1580,64 @@ void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T chang
 // migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
 
 
+/// Expand ffname and sfname for "buf". Calls fname_expand().
+/// Updates *ffname_ptr (allocated) and *sfname_ptr (points into expanded path).
+/// Accessor for Rust setfname.
+void nvim_fname_expand(buf_T *buf, char **ffname_ptr, char **sfname_ptr)
+{
+  fname_expand(buf, ffname_ptr, sfname_ptr);
+}
+
+/// Return true if "buf" is displayed in any window across all tabs.
+/// Used by setfname to check if obuf is in use. Accessor for Rust.
+bool nvim_buf_is_in_any_window(buf_T *buf)
+{
+  FOR_ALL_TAB_WINDOWS(tab, win) {
+    if (win->w_buffer == buf) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Free and clear b_sfname and b_ffname for "buf" (the "removing the name" branch).
+/// Accessor for Rust setfname.
+void nvim_buf_remove_fnames(buf_T *buf)
+{
+  if (buf->b_sfname != buf->b_ffname) {
+    XFREE_CLEAR(buf->b_sfname);
+  } else {
+    buf->b_sfname = NULL;
+  }
+  XFREE_CLEAR(buf->b_ffname);
+  buf->b_fname = buf->b_sfname;
+}
+
+/// Set b_ffname/b_sfname/b_fname for "buf", freeing any previous names.
+/// "sfname" is xstrdup'd (path_fix_case applied on case-insensitive systems).
+/// Accessor for Rust setfname.
+void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
+{
+  char *sfname_copy = xstrdup(sfname);
+#ifdef CASE_INSENSITIVE_FILENAME
+  path_fix_case(sfname_copy);
+#endif
+  if (buf->b_sfname != buf->b_ffname) {
+    xfree(buf->b_sfname);
+  }
+  xfree(buf->b_ffname);
+  buf->b_ffname = ffname;
+  buf->b_sfname = sfname_copy;
+  buf->b_fname = buf->b_sfname;
+}
+
+/// Emit E95 "Buffer with this name already exists" error message.
+/// Accessor for Rust setfname.
+void nvim_emsg_e95_buffer_exists(void)
+{
+  emsg(_("E95: Buffer with this name already exists"));
+}
+
 /// Creates or switches to a scratch buffer. :h special-buffers
 /// Scratch buffer is:
 ///   - buftype=nofile bufhidden=hide noswapfile
@@ -1609,85 +1667,7 @@ int buf_open_scratch(handle_T bufnr, char *bufname)
 }
 
 
-/// Set the file name for "buf" to "ffname_arg", short file name to
-/// "sfname_arg".
-/// The file name with the full path is also remembered, for when :cd is used.
-///
-/// @param message  give message when buffer already exists
-///
-/// @return  FAIL for failure (file name already in use by other buffer) OK otherwise.
-int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message)
-{
-  char *ffname = ffname_arg;
-  char *sfname = sfname_arg;
-  buf_T *obuf = NULL;
-  FileID file_id;
-  bool file_id_valid = false;
-
-  if (ffname == NULL || *ffname == NUL) {
-    // Removing the name.
-    if (buf->b_sfname != buf->b_ffname) {
-      XFREE_CLEAR(buf->b_sfname);
-    } else {
-      buf->b_sfname = NULL;
-    }
-    XFREE_CLEAR(buf->b_ffname);
-  } else {
-    fname_expand(buf, &ffname, &sfname);    // will allocate ffname
-    if (ffname == NULL) {                   // out of memory
-      return FAIL;
-    }
-
-    // If the file name is already used in another buffer:
-    // - if the buffer is loaded, fail
-    // - if the buffer is not loaded, delete it from the list
-    file_id_valid = os_fileid(ffname, &file_id);
-    if (!(buf->b_flags & BF_DUMMY)) {
-      obuf = buflist_findname_file_id(ffname, &file_id, file_id_valid);
-    }
-    if (obuf != NULL && obuf != buf) {
-      bool in_use = false;
-
-      // during startup a window may use a buffer that is not loaded yet
-      FOR_ALL_TAB_WINDOWS(tab, win) {
-        if (win->w_buffer == obuf) {
-          in_use = true;
-        }
-      }
-
-      // it's loaded or used in a window, fail
-      if (obuf->b_ml.ml_mfp != NULL || in_use) {
-        if (message) {
-          emsg(_("E95: Buffer with this name already exists"));
-        }
-        xfree(ffname);
-        return FAIL;
-      }
-      // delete from the list
-      close_buffer(NULL, obuf, DOBUF_WIPE, false, false);
-    }
-    sfname = xstrdup(sfname);
-#ifdef CASE_INSENSITIVE_FILENAME
-    path_fix_case(sfname);            // set correct case for short file name
-#endif
-    if (buf->b_sfname != buf->b_ffname) {
-      xfree(buf->b_sfname);
-    }
-    xfree(buf->b_ffname);
-    buf->b_ffname = ffname;
-    buf->b_sfname = sfname;
-  }
-  buf->b_fname = buf->b_sfname;
-  if (!file_id_valid) {
-    buf->file_id_valid = false;
-  } else {
-    buf->file_id_valid = true;
-    buf->file_id = file_id;
-  }
-
-  buf_name_changed(buf);
-  return OK;
-}
+// setfname migrated to Rust (src/nvim-rs/buffer/src/filename.rs)
 
 
 // ============================================================
