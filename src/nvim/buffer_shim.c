@@ -12,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "klib/kvec.h"
 #include "nvim/arglist.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
@@ -23,6 +24,7 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
+#include "nvim/fold.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
@@ -48,6 +50,11 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
+
+// Rust-exported fold functions used in wininfo cluster (Phase 11)
+extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
+extern void rs_clearFolding(win_T *win);
+extern void rs_foldUpdateAll(win_T *win);
 
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
@@ -1411,4 +1418,147 @@ const char *nvim_bufname_regex_match(void *handle, buf_T *buf, bool ignore_case)
     return NULL;
   }
   return buflist_match((regmatch_T *)handle, buf, ignore_case);
+}
+
+// ============================================================
+// WinInfo / buffer position functions (Phase 11)
+// ============================================================
+
+/// Set the last cursor position in the info for the current window in buffer "buf".
+/// This is in the WinInfo list in buf->b_wininfo.
+void buflist_setfpos(buf_T *const buf, win_T *const win, linenr_T lnum, colnr_T col,
+                     bool copy_options)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  WinInfo *wip;
+
+  size_t i;
+  for (i = 0; i < kv_size(buf->b_wininfo); i++) {
+    wip = kv_A(buf->b_wininfo, i);
+    if (wip->wi_win == win) {
+      break;
+    }
+  }
+
+  if (i == kv_size(buf->b_wininfo)) {
+    // allocate a new entry
+    wip = xcalloc(1, sizeof(WinInfo));
+    wip->wi_win = win;
+    if (lnum == 0) {            // set lnum even when it's 0
+      lnum = 1;
+    }
+  } else {
+    // remove the entry from the list
+    kv_shift(buf->b_wininfo, i, 1);
+    if (copy_options && wip->wi_optset) {
+      clear_winopt(&wip->wi_opt);
+      deleteFoldRecurse(buf, &wip->wi_folds);
+    }
+  }
+  if (lnum != 0) {
+    wip->wi_mark.mark.lnum = lnum;
+    wip->wi_mark.mark.col = col;
+    if (win != NULL) {
+      wip->wi_mark.view = mark_view_make(win->w_topline, wip->wi_mark.mark);
+    }
+  }
+  if (win != NULL) {
+    wip->wi_changelistidx = win->w_changelistidx;
+  }
+  if (copy_options && win != NULL) {
+    // Save the window-specific option values.
+    copy_winopt(&win->w_onebuf_opt, &wip->wi_opt);
+    wip->wi_fold_manual = win->w_fold_manual;
+    rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
+    wip->wi_optset = true;
+  }
+
+  // insert the entry in front of the list
+  kv_pushp(buf->b_wininfo);
+  memmove(&kv_A(buf->b_wininfo, 1), &kv_A(buf->b_wininfo, 0),
+          (kv_size(buf->b_wininfo) - 1) * sizeof(kv_A(buf->b_wininfo, 0)));
+  kv_A(buf->b_wininfo, 0) = wip;
+}
+
+/// Set b:changedtick, also checking b: for consistency in debug build
+///
+/// @param[out]  buf  Buffer to set changedtick in.
+/// @param[in]  changedtick  New value.
+void buf_set_changedtick(buf_T *const buf, const varnumber_T changedtick)
+  FUNC_ATTR_NONNULL_ALL
+{
+  typval_T old_val = buf->changedtick_di.di_tv;
+
+#ifndef NDEBUG
+  dictitem_T *const changedtick_di = tv_dict_find(buf->b_vars, S_LEN("changedtick"));
+  assert(changedtick_di != NULL);
+  assert(changedtick_di->di_tv.v_type == VAR_NUMBER);
+  assert(changedtick_di->di_tv.v_lock == VAR_FIXED);
+  // For some reason formatc does not like the below.
+# ifndef UNIT_TESTING_LUA_PREPROCESSING
+  assert(changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX));
+# endif
+  assert(changedtick_di == (dictitem_T *)&buf->changedtick_di);
+#endif
+  buf->changedtick_di.di_tv.vval.v_number = changedtick;
+
+  if (tv_dict_is_watched(buf->b_vars)) {
+    buf->b_locked++;
+    tv_dict_watcher_notify(buf->b_vars,
+                           (char *)buf->changedtick_di.di_key,
+                           &buf->changedtick_di.di_tv,
+                           &old_val);
+    buf->b_locked--;
+  }
+}
+
+/// Read the given buffer contents into a string.
+void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *sb)
+  FUNC_ATTR_NONNULL_ALL
+{
+  assert(buf);
+  assert(sb);
+
+  if (buf->b_ml.ml_flags & ML_EMPTY) {
+    return;
+  }
+
+  size_t written = 0;
+  size_t len = 0;
+  linenr_T lnum = start;
+  char *lp = ml_get_buf(buf, lnum);
+  size_t lplen = (size_t)ml_get_buf_len(buf, lnum);
+
+  while (true) {
+    if (lplen == 0) {
+      len = 0;
+    } else if (lp[written] == NL) {
+      // NL -> NUL translation
+      len = 1;
+      kv_push(*sb, NUL);
+    } else {
+      char *s = vim_strchr(lp + written, NL);
+      len = s == NULL ? lplen - written : (size_t)(s - (lp + written));
+      kv_concat_len(*sb, lp + written, len);
+    }
+
+    if (len == lplen - written) {
+      // Finished a line, add a NL, unless this line should not have one.
+      if (lnum != end
+          || (!buf->b_p_bin && buf->b_p_fixeol)
+          || (lnum != buf->b_no_eol_lnum
+              && (lnum != buf->b_ml.ml_line_count || buf->b_p_eol))) {
+        kv_push(*sb, NL);
+      }
+      lnum++;
+      if (lnum > end) {
+        break;
+      }
+      lp = ml_get_buf(buf, lnum);
+      lplen = (size_t)ml_get_buf_len(buf, lnum);
+      written = 0;
+    } else if (len > 0) {
+      written += len;
+    }
+  }
 }

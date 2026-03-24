@@ -216,3 +216,9 @@ static inline uint32_t buf_meta_total(const buf_T *b, MetaIndex m)
 {
   return b->b_marktree->meta_root[m];
 }
+
+// buflist_setfpos(), buf_set_changedtick(), read_buffer_into() moved to buffer_shim.c (Phase 11).
+void buflist_setfpos(buf_T *const buf, win_T *const win, linenr_T lnum, colnr_T col,
+                     bool copy_options);
+void buf_set_changedtick(buf_T *const buf, varnumber_T changedtick);
+void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *sb);
