@@ -647,7 +647,11 @@ pub unsafe extern "C" fn rs_ins_ctrl_x() {
 extern "C" {
     fn nvim_check_compl_option_dict() -> c_int;
     fn nvim_check_compl_option_tsr() -> c_int;
-    fn nvim_emsg_dict_empty(is_dict: c_int);
+    // nvim_emsg_dict_empty: deleted (Phase 1), Rust calls emsg(gettext(...)) directly
+    #[link_name = "emsg"]
+    fn emsg_ctrl_x(s: *const std::os::raw::c_char);
+    #[link_name = "gettext"]
+    fn gettext_ctrl_x(msgid: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     // nvim_emsg_silent_is_zero: inlined below (Phase 35)
     #[link_name = "emsg_silent"]
     static mut g_emsg_silent: c_int;
@@ -681,7 +685,12 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
     if is_empty != 0 {
         crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
         g_edit_submode = core::ptr::null_mut();
-        nvim_emsg_dict_empty(dict_opt);
+        let msg = if dict_opt != 0 {
+            gettext_ctrl_x(c"'dictionary' option is empty".as_ptr())
+        } else {
+            gettext_ctrl_x(c"'thesaurus' option is empty".as_ptr())
+        };
+        emsg_ctrl_x(msg);
         if g_emsg_silent == 0 && !nvim_in_assert_fails() {
             vim_beep(0x08); // kOptBoFlagComplete = 0x08 (from option_vars.generated.h)
             setcursor();

@@ -2050,9 +2050,7 @@ int nvim_check_compl_option_tsr(void) {
   return (*curbuf->b_p_tsr == NUL && *p_tsr == NUL
           && *curbuf->b_p_tsrfu == NUL && *p_tsrfu == NUL) ? 1 : 0;
 }
-void nvim_emsg_dict_empty(int is_dict) {
-  emsg(is_dict ? _("'dictionary' option is empty") : _("'thesaurus' option is empty"));
-}
+// nvim_emsg_dict_empty: deleted (Phase 1), Rust calls emsg/gettext directly
 // nvim_emsg_silent_is_zero: deleted (Phase 35, inlined in ctrl_x.rs)
 // nvim_in_assert_fails: defined in change_ffi.c (bool nvim_in_assert_fails(void))
 // nvim_vim_beep_complete: deleted (Phase 1, Rust calls vim_beep(kOptBoFlagComplete) directly)
@@ -2105,11 +2103,7 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
 void nvim_semsg_list_index_out_of_range(int idx) { semsg(_(e_list_index_out_of_range_nr), idx); }
 // nvim_get_compl_pattern_is_null: deleted (Phase 22, inlined in vars.rs)
 // nvim_get_p_act: deleted (Phase 29, inlined in vars.rs)
-int nvim_normal_mode_strict(void) {
-  return (rs_ctrl_x_mode_normal() && !rs_ctrl_x_mode_line_or_eval()
-          && !(compl_cont_status & CONT_LOCAL)
-          && cpt_sources_array != NULL) ? 1 : 0;
-}
+// nvim_normal_mode_strict: deleted (Phase 1), Rust inlines directly
 
 // --- ins_compl_st compound initialization ---
 // Called at the top of ins_compl_get_exp when !compl_started.

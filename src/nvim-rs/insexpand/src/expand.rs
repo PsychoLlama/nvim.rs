@@ -55,7 +55,7 @@ extern "C" {
 
     // nvim_p_cto: inlined in vars.rs (Phase 29)
     // nvim_get_p_act: inlined in vars.rs (Phase 29)
-    fn nvim_normal_mode_strict() -> c_int;
+    // nvim_normal_mode_strict: deleted (Phase 1), inlined below
 
     // cpt source timer
     fn rs_compl_source_start_timer(source_idx: c_int);
@@ -515,7 +515,12 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     nvim_ins_compl_st_set_cur_match_dir();
 
     // Determine if we are in "normal_mode_strict" and set up timer/timeout
-    let normal_mode_strict = nvim_normal_mode_strict() != 0;
+    // (Inline of deleted nvim_normal_mode_strict: Phase 1)
+    // CONT_LOCAL = 32 (from insexpand.h)
+    let normal_mode_strict = rs_ctrl_x_mode_normal() != 0
+        && rs_ctrl_x_mode_line_or_eval() == 0
+        && (crate::vars::nvim_get_compl_cont_status() & 32) == 0
+        && crate::vars::nvim_cpt_sources_array_exists() != 0;
     if normal_mode_strict {
         crate::vars::nvim_set_cpt_sources_index(0);
         if crate::vars::nvim_get_compl_autocomplete() != 0 || crate::vars::nvim_p_cto() > 0 {
