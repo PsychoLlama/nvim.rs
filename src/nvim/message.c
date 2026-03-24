@@ -130,12 +130,6 @@ void msg_grid_set_pos(int row, bool scrolled)
   }
 }
 
-// nvim_hl_msg_free: called from Rust (history.rs); hl_msg_free takes entry->msg by value
-void nvim_hl_msg_free(MessageHistoryEntry *entry)
-{
-  hl_msg_free(entry->msg);
-}
-
 extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
 // Rust implementation of emsg_not_now()

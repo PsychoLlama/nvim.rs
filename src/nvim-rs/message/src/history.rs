@@ -33,10 +33,29 @@ extern "C" {
     static mut msg_hist_max: c_int;
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
-    /// Free an HlMessage (takes entry pointer, calls hl_msg_free(entry->msg) in C)
-    fn nvim_hl_msg_free(entry: *mut MessageHistoryEntry);
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+/// Free an `HlMessage` stored inside a `MessageHistoryEntry`.
+///
+/// Mirrors the C `hl_msg_free` logic: frees each chunk's text data,
+/// then frees the items array and zeroes the kvec fields.
+///
+/// # Safety
+/// `entry` must be a valid, non-null pointer to a `MessageHistoryEntry`.
+unsafe fn hl_msg_free_entry(entry: *mut MessageHistoryEntry) {
+    let msg = std::ptr::addr_of_mut!((*entry).msg);
+    let size = (*msg).size;
+    let items = (*msg).items;
+    for i in 0..size {
+        let chunk = items.add(i);
+        xfree((*chunk).text_data.cast());
+    }
+    xfree(items.cast());
+    (*msg).size = 0;
+    (*msg).capacity = 0;
+    (*msg).items = std::ptr::null_mut();
 }
 
 /// Layout-compatible representation of `MessageHistoryEntry` in C.
@@ -215,7 +234,7 @@ pub unsafe extern "C" fn rs_msg_hist_free_entry(entry: *mut MessageHistoryEntry)
     }
 
     // Free the message content and entry
-    nvim_hl_msg_free(entry);
+    hl_msg_free_entry(entry);
     xfree(entry.cast());
 }
 
