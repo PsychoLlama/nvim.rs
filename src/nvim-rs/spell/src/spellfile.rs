@@ -8796,6 +8796,983 @@ pub unsafe extern "C" fn rs_spell_read_wordfile(
 }
 
 // =============================================================================
+// Phase 4 (cont.): spell_read_aff
+// =============================================================================
+
+// COMP_ flags for compoptions (match spell_defs.h).
+const COMP_CHECKDUP: c_int = 1;
+const COMP_CHECKREP: c_int = 2;
+const COMP_CHECKCASE: c_int = 4;
+const COMP_CHECKTRIPLE: c_int = 8;
+
+// WFP_ prefix flags (match spell_defs.h).
+const WFP_NC: c_int = 0x02;
+const WFP_UP: c_int = 0x04;
+const WFP_COMPPERMIT: c_int = 0x08;
+const WFP_COMPFORBID: c_int = 0x10;
+
+// vim_regcomp flags (match regexp_defs.h).
+const RE_MAGIC: c_int = 1;
+const RE_STRING: c_int = 2;
+const RE_STRICT: c_int = 16;
+
+extern "C" {
+    fn skipdigits(q: *const c_char) -> *const c_char;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    #[link_name = "SPELL_TOUPPER"]
+    fn spell_toupper(c: c_int) -> c_int;
+    fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool);
+    fn init_spell_chartab();
+    fn ga_concat(gap: *mut crate::GArrayRaw, s: *const c_char);
+    fn ga_append(gap: *mut crate::GArrayRaw, c: c_char);
+    #[link_name = "smsg"]
+    fn smsg_aff(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "semsg"]
+    fn semsg_aff(fmt: *const c_char, ...) -> bool;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xfree"]
+    fn xfree_aff(ptr: *mut c_void);
+    #[link_name = "vim_strchr"]
+    fn vim_strchr_aff(s: *const c_char, c: c_int) -> *mut c_char;
+}
+
+/// Reads an affix file "fname".  Returns an `AfffileT` pointer, NULL for failure.
+/// Mirrors C `spell_read_aff`.
+///
+/// # Safety
+/// `spin` and `fname` must be valid non-null pointers.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_ptr_alignment,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::unnecessary_cast,
+    clippy::cognitive_complexity
+)]
+pub unsafe extern "C" fn rs_spell_read_aff(
+    spin: *mut SpellinfoT,
+    fname: *mut c_char,
+) -> *mut AfffileT {
+    const MAXITEMCNT: usize = 30;
+    const MAXLINELEN_AFF: usize = 500;
+
+    // Open file.
+    let fd = os_fopen_ph4(fname, c"r".as_ptr());
+    if fd.is_null() {
+        semsg_aff(c"%s".as_ptr(), fname); // e_notopen equivalent
+        return std::ptr::null_mut();
+    }
+
+    let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+    vim_snprintf(
+        iobuff,
+        1025,
+        c"Reading affix file %s...".as_ptr(),
+        fname,
+    );
+    rs_spell_message(spin, iobuff);
+
+    // Only do REP/REPSAL/SAL/MAP lines when not done in another .aff already.
+    let do_rep = (*spin).si_rep.ga_len == 0;
+    let do_repsal = (*spin).si_repsal.ga_len == 0;
+    let do_sal = (*spin).si_sal.ga_len == 0;
+    let do_mapline = (*spin).si_map.ga_len == 0;
+
+    // Allocate and init the afffile_T.
+    let aff = rs_getroom(spin, std::mem::size_of::<AfffileT>(), true).cast::<AfffileT>();
+    hash_init(&raw mut (*aff).af_pref);
+    hash_init(&raw mut (*aff).af_suff);
+    hash_init(&raw mut (*aff).af_comp);
+
+    let mut rline = [0u8; MAXLINELEN_AFF];
+    let mut pc: *mut c_char = std::ptr::null_mut();
+    let mut lnum: c_int = 0;
+    let mut cur_aff: *mut AffheaderT = std::ptr::null_mut();
+    let mut did_postpone_prefix = false;
+    let mut aff_todo: c_int = 0;
+    let mut low: *mut c_char = std::ptr::null_mut();
+    let mut fol: *mut c_char = std::ptr::null_mut();
+    let mut upp: *mut c_char = std::ptr::null_mut();
+    let mut found_map = false;
+    let mut compminlen: c_int = 0;
+    let mut compsylmax: c_int = 0;
+    let mut compoptions: c_int = 0;
+    let mut compmax: c_int = 0;
+    let mut compflags: *mut c_char = std::ptr::null_mut();
+    let mut midword: *mut c_char = std::ptr::null_mut();
+    let mut syllable: *mut c_char = std::ptr::null_mut();
+    let mut sofofrom: *mut c_char = std::ptr::null_mut();
+    let mut sofoto: *mut c_char = std::ptr::null_mut();
+
+    // Read all lines.
+    while !vim_fgets(
+        rline.as_mut_ptr().cast::<c_char>(),
+        MAXLINELEN_AFF as c_int,
+        fd,
+    ) && !std::ptr::addr_of!(got_int_global).read()
+    {
+        line_breakcheck_sug();
+        lnum += 1;
+
+        // Skip comment lines.
+        if rline[0] == b'#' {
+            continue;
+        }
+
+        // Convert from "SET" encoding to 'encoding' when needed.
+        xfree_aff(pc.cast::<c_void>());
+        let line: *mut c_char;
+        let conv = spin_conv(spin);
+        if (*conv).vc_type != CONV_NONE {
+            pc = string_convert(conv, rline.as_mut_ptr().cast::<c_char>(), std::ptr::null_mut());
+            if pc.is_null() {
+                smsg_aff(
+                    0,
+                    c"Conversion failure for word in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    rline.as_ptr(),
+                );
+                continue;
+            }
+            line = pc;
+        } else {
+            pc = std::ptr::null_mut();
+            line = rline.as_mut_ptr().cast::<c_char>();
+        }
+
+        // Split line into whitespace-separated items.
+        let mut items: [*mut c_char; MAXITEMCNT] = [std::ptr::null_mut(); MAXITEMCNT];
+        let mut itemcnt: usize = 0;
+        {
+            let mut p = line;
+            loop {
+                // Skip whitespace and CR/NL.
+                while *p != 0 && (*p as u8) <= b' ' {
+                    p = p.add(1);
+                }
+                if *p == 0 {
+                    break;
+                }
+                if itemcnt == MAXITEMCNT {
+                    break;
+                }
+                items[itemcnt] = p;
+                itemcnt += 1;
+                // Some items have arbitrary text argument; don't split them.
+                if itemcnt == 2 && rs_spell_info_item(items[0]) {
+                    while (*p as u8) >= b' ' || *p == b'\t' as c_char {
+                        p = p.add(1);
+                    }
+                } else {
+                    while (*p as u8) > b' ' {
+                        p = p.add(1);
+                    }
+                }
+                if *p == 0 {
+                    break;
+                }
+                *p = 0;
+                p = p.add(1);
+            }
+        }
+        let itemcnt = itemcnt as c_int;
+
+        if itemcnt == 0 {
+            continue;
+        }
+
+        // Convenience: cast items[] to *const *const c_char for rs_is_aff_rule.
+        let items_c = items.as_ptr() as *const *const c_char;
+
+        macro_rules! is_rule {
+            ($name:expr, $cnt:expr) => {
+                rs_is_aff_rule(items_c, itemcnt, $name.as_ptr(), $cnt)
+            };
+        }
+
+        if is_rule!(c"SET", 2) && (*aff).af_enc.is_null() {
+            // Setup encoding conversion.
+            (*aff).af_enc = enc_canonize(items[1]);
+            let conv = spin_conv(spin);
+            if (*spin).si_ascii == 0
+                && convert_setup(
+                    conv,
+                    (*aff).af_enc,
+                    std::ptr::addr_of!(p_enc_global).read(),
+                ) == FAIL
+            {
+                smsg_aff(
+                    0,
+                    c"Conversion in %s not supported: from %s to %s".as_ptr(),
+                    fname,
+                    (*aff).af_enc,
+                    std::ptr::addr_of!(p_enc_global).read(),
+                );
+            }
+            (*conv).vc_fail = true;
+        } else if is_rule!(c"FLAG", 2) && (*aff).af_flagtype == AFT_CHAR {
+            if libc::strcmp(items[1], c"long".as_ptr()) == 0 {
+                (*aff).af_flagtype = AFT_LONG;
+            } else if libc::strcmp(items[1], c"num".as_ptr()) == 0 {
+                (*aff).af_flagtype = AFT_NUM;
+            } else if libc::strcmp(items[1], c"caplong".as_ptr()) == 0 {
+                (*aff).af_flagtype = AFT_CAPLONG;
+            } else {
+                smsg_aff(
+                    0,
+                    c"Invalid value for FLAG in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+            if (*aff).af_rare != 0
+                || (*aff).af_keepcase != 0
+                || (*aff).af_bad != 0
+                || (*aff).af_needaffix != 0
+                || (*aff).af_circumfix != 0
+                || (*aff).af_needcomp != 0
+                || (*aff).af_comproot != 0
+                || (*aff).af_nosuggest != 0
+                || !compflags.is_null()
+                || (*aff).af_suff.ht_used > 0
+                || (*aff).af_pref.ht_used > 0
+            {
+                smsg_aff(
+                    0,
+                    c"FLAG after using flags in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if rs_spell_info_item(items[0]) && itemcnt > 1 {
+            // info item (NAME, HOME, etc.)
+            let si_info_len = if (*spin).si_info.is_null() {
+                0
+            } else {
+                libc::strlen((*spin).si_info.cast::<libc::c_char>())
+            };
+            let items0_len = libc::strlen(items[0].cast::<libc::c_char>());
+            let items1_len = libc::strlen(items[1].cast::<libc::c_char>());
+            let total = si_info_len + items0_len + items1_len + 3;
+            let p = rs_getroom(spin, total, false).cast::<c_char>();
+            if !(*spin).si_info.is_null() {
+                libc::strcpy(p, (*spin).si_info);
+                libc::strcat(p, c"\n".as_ptr());
+            }
+            libc::strcat(p, items[0]);
+            libc::strcat(p, c" ".as_ptr());
+            libc::strcat(p, items[1]);
+            (*spin).si_info = p;
+        } else if is_rule!(c"MIDWORD", 2) && midword.is_null() {
+            midword = rs_getroom_save(spin, items[1]);
+        } else if is_rule!(c"TRY", 2) {
+            // ignored
+        } else if (is_rule!(c"RAR", 2) || is_rule!(c"RARE", 2)) && (*aff).af_rare == 0 {
+            (*aff).af_rare =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if (is_rule!(c"KEP", 2) || is_rule!(c"KEEPCASE", 2)) && (*aff).af_keepcase == 0 {
+            (*aff).af_keepcase =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if (is_rule!(c"BAD", 2) || is_rule!(c"FORBIDDENWORD", 2)) && (*aff).af_bad == 0 {
+            (*aff).af_bad =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if is_rule!(c"NEEDAFFIX", 2) && (*aff).af_needaffix == 0 {
+            (*aff).af_needaffix =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if is_rule!(c"CIRCUMFIX", 2) && (*aff).af_circumfix == 0 {
+            (*aff).af_circumfix =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if is_rule!(c"NOSUGGEST", 2) && (*aff).af_nosuggest == 0 {
+            (*aff).af_nosuggest =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if (is_rule!(c"NEEDCOMPOUND", 2) || is_rule!(c"ONLYINCOMPOUND", 2))
+            && (*aff).af_needcomp == 0
+        {
+            (*aff).af_needcomp =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if is_rule!(c"COMPOUNDROOT", 2) && (*aff).af_comproot == 0 {
+            (*aff).af_comproot =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+        } else if is_rule!(c"COMPOUNDFORBIDFLAG", 2) && (*aff).af_compforbid == 0 {
+            (*aff).af_compforbid =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            if (*aff).af_pref.ht_used > 0 {
+                smsg_aff(
+                    0,
+                    c"Defining COMPOUNDFORBIDFLAG after PFX item may give wrong results in %s line %d".as_ptr(),
+                    fname,
+                    lnum,
+                );
+            }
+        } else if is_rule!(c"COMPOUNDPERMITFLAG", 2) && (*aff).af_comppermit == 0 {
+            (*aff).af_comppermit =
+                rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+            if (*aff).af_pref.ht_used > 0 {
+                smsg_aff(
+                    0,
+                    c"Defining COMPOUNDPERMITFLAG after PFX item may give wrong results in %s line %d".as_ptr(),
+                    fname,
+                    lnum,
+                );
+            }
+        } else if is_rule!(c"COMPOUNDFLAG", 2) && compflags.is_null() {
+            // Turn flag "c" into "c+", "Na" into "Na+", etc.
+            let item1_len = libc::strlen(items[1].cast::<libc::c_char>());
+            let p = rs_getroom(spin, item1_len + 2, false).cast::<c_char>();
+            libc::strcpy(p, items[1]);
+            libc::strcat(p, c"+".as_ptr());
+            compflags = p;
+        } else if is_rule!(c"COMPOUNDRULES", 2) {
+            if libc::atoi(items[1]) == 0 {
+                smsg_aff(
+                    0,
+                    c"Wrong COMPOUNDRULES value in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if is_rule!(c"COMPOUNDRULE", 2) {
+            // Don't use first rule if it is a number.
+            if !compflags.is_null() || *skipdigits(items[1]) != 0 {
+                let l = libc::strlen(items[1].cast::<libc::c_char>()) as c_int + 1
+                    + if compflags.is_null() {
+                        0
+                    } else {
+                        libc::strlen(compflags.cast::<libc::c_char>()) as c_int + 1
+                    };
+                let p = rs_getroom(spin, l as usize, false).cast::<c_char>();
+                if !compflags.is_null() {
+                    libc::strcpy(p, compflags);
+                    libc::strcat(p, c"/".as_ptr());
+                }
+                libc::strcat(p, items[1]);
+                compflags = p;
+            }
+        } else if is_rule!(c"COMPOUNDWORDMAX", 2) && compmax == 0 {
+            compmax = libc::atoi(items[1]);
+            if compmax == 0 {
+                smsg_aff(
+                    0,
+                    c"Wrong COMPOUNDWORDMAX value in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if is_rule!(c"COMPOUNDMIN", 2) && compminlen == 0 {
+            compminlen = libc::atoi(items[1]);
+            if compminlen == 0 {
+                smsg_aff(
+                    0,
+                    c"Wrong COMPOUNDMIN value in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if is_rule!(c"COMPOUNDSYLMAX", 2) && compsylmax == 0 {
+            compsylmax = libc::atoi(items[1]);
+            if compsylmax == 0 {
+                smsg_aff(
+                    0,
+                    c"Wrong COMPOUNDSYLMAX value in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if is_rule!(c"CHECKCOMPOUNDDUP", 1) {
+            compoptions |= COMP_CHECKDUP;
+        } else if is_rule!(c"CHECKCOMPOUNDREP", 1) {
+            compoptions |= COMP_CHECKREP;
+        } else if is_rule!(c"CHECKCOMPOUNDCASE", 1) {
+            compoptions |= COMP_CHECKCASE;
+        } else if is_rule!(c"CHECKCOMPOUNDTRIPLE", 1) {
+            compoptions |= COMP_CHECKTRIPLE;
+        } else if is_rule!(c"CHECKCOMPOUNDPATTERN", 2) {
+            if libc::atoi(items[1]) == 0 {
+                smsg_aff(
+                    0,
+                    c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[1],
+                );
+            }
+        } else if is_rule!(c"CHECKCOMPOUNDPATTERN", 3) {
+            let gap = &raw mut (*spin).si_comppat;
+            // Only add the couple if it isn't already there.
+            let mut i: c_int = 0;
+            while i < (*gap).ga_len - 1 {
+                let data = (*gap).ga_data.cast::<*mut c_char>();
+                if libc::strcmp(*data.add(i as usize), items[1]) == 0
+                    && libc::strcmp(*data.add(i as usize + 1), items[2]) == 0
+                {
+                    break;
+                }
+                i += 2;
+            }
+            if i >= (*gap).ga_len {
+                ga_grow(gap, 2);
+                let data = (*gap).ga_data.cast::<*mut c_char>();
+                *data.add((*gap).ga_len as usize) = rs_getroom_save(spin, items[1]);
+                (*gap).ga_len += 1;
+                *data.add((*gap).ga_len as usize) = rs_getroom_save(spin, items[2]);
+                (*gap).ga_len += 1;
+            }
+        } else if is_rule!(c"SYLLABLE", 2) && syllable.is_null() {
+            syllable = rs_getroom_save(spin, items[1]);
+        } else if is_rule!(c"NOBREAK", 1) {
+            (*spin).si_nobreak = 1;
+        } else if is_rule!(c"NOSPLITSUGS", 1) {
+            (*spin).si_nosplitsugs = 1;
+        } else if is_rule!(c"NOCOMPOUNDSUGS", 1) {
+            (*spin).si_nocompoundsugs = 1;
+        } else if is_rule!(c"NOSUGFILE", 1) {
+            (*spin).si_nosugfile = 1;
+        } else if is_rule!(c"PFXPOSTPONE", 1) {
+            (*aff).af_pfxpostpone = 1;
+        } else if is_rule!(c"IGNOREEXTRA", 1) {
+            (*aff).af_ignoreextra = true;
+        } else if (libc::strcmp(items[0], c"PFX".as_ptr()) == 0
+            || libc::strcmp(items[0], c"SFX".as_ptr()) == 0)
+            && aff_todo == 0
+            && itemcnt >= 4
+        {
+            // PFX/SFX header: key combine count
+            let mut lasti: c_int = 4;
+            let tp = if *items[0] == b'P' as c_char {
+                &raw mut (*aff).af_pref
+            } else {
+                &raw mut (*aff).af_suff
+            };
+
+            let mut key = [0u8; AH_KEY_LEN];
+            xstrlcpy(key.as_mut_ptr().cast::<c_char>(), items[1], AH_KEY_LEN);
+            let hi = hash_find(tp, key.as_ptr().cast::<c_char>());
+            if !hi.is_null() && !hi_is_empty(hi) {
+                cur_aff = (*hi).hi_key.cast::<AffheaderT>();
+                let combine_y = *items[2] == b'Y' as c_char;
+                if ((*cur_aff).ah_combine != 0) != combine_y {
+                    smsg_aff(
+                        0,
+                        c"Different combining flag in continued affix block in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        items[1],
+                    );
+                }
+                if (*cur_aff).ah_follows == 0 {
+                    smsg_aff(
+                        0,
+                        c"Duplicate affix in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        items[1],
+                    );
+                }
+            } else {
+                // New affix letter.
+                cur_aff =
+                    rs_getroom(spin, std::mem::size_of::<AffheaderT>(), true).cast::<AffheaderT>();
+                (*cur_aff).ah_flag =
+                    rs_affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
+                if (*cur_aff).ah_flag == 0 || libc::strlen(items[1].cast::<libc::c_char>()) >= AH_KEY_LEN {
+                    break;
+                }
+                if (*cur_aff).ah_flag == (*aff).af_bad
+                    || (*cur_aff).ah_flag == (*aff).af_rare
+                    || (*cur_aff).ah_flag == (*aff).af_keepcase
+                    || (*cur_aff).ah_flag == (*aff).af_needaffix
+                    || (*cur_aff).ah_flag == (*aff).af_circumfix
+                    || (*cur_aff).ah_flag == (*aff).af_nosuggest
+                    || (*cur_aff).ah_flag == (*aff).af_needcomp
+                    || (*cur_aff).ah_flag == (*aff).af_comproot
+                {
+                    smsg_aff(
+                        0,
+                        c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        items[1],
+                    );
+                }
+                xstrlcpy(
+                    (*cur_aff).ah_key.as_mut_ptr(),
+                    items[1],
+                    AH_KEY_LEN,
+                );
+                hash_add(tp, (*cur_aff).ah_key.as_mut_ptr());
+                (*cur_aff).ah_combine = c_int::from(*items[2] == b'Y' as c_char);
+            }
+
+            // Check for the "S" flag (more blocks following).
+            if itemcnt > lasti && libc::strcmp(items[lasti as usize], c"S".as_ptr()) == 0 {
+                lasti += 1;
+                (*cur_aff).ah_follows = 1;
+            } else {
+                (*cur_aff).ah_follows = 0;
+            }
+
+            // Warn about trailing items (unless IGNOREEXTRA or starts with #).
+            if itemcnt > lasti && (*aff).af_ignoreextra == false && *items[lasti as usize] != b'#' as c_char {
+                smsg_aff(
+                    0,
+                    c"Trailing text in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[lasti as usize],
+                );
+            }
+
+            if libc::strcmp(items[2], c"Y".as_ptr()) != 0
+                && libc::strcmp(items[2], c"N".as_ptr()) != 0
+            {
+                smsg_aff(
+                    0,
+                    c"Expected Y or N in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[2],
+                );
+            }
+
+            if *items[0] == b'P' as c_char && (*aff).af_pfxpostpone != 0 {
+                if (*cur_aff).ah_newID == 0 {
+                    rs_check_renumber(spin);
+                    (*spin).si_newprefID += 1;
+                    (*cur_aff).ah_newID = (*spin).si_newprefID;
+                    did_postpone_prefix = false;
+                } else {
+                    did_postpone_prefix = true;
+                }
+            }
+
+            aff_todo = libc::atoi(items[3]);
+        } else if (libc::strcmp(items[0], c"PFX".as_ptr()) == 0
+            || libc::strcmp(items[0], c"SFX".as_ptr()) == 0)
+            && aff_todo > 0
+            && !cur_aff.is_null()
+            && libc::strcmp((*cur_aff).ah_key.as_ptr(), items[1]) == 0
+            && itemcnt >= 5
+        {
+            // PFX/SFX entry: key chop add condition [#comment]
+            let lasti: c_int = 5;
+
+            // Warn about trailing items.
+            if itemcnt > lasti
+                && *items[lasti as usize] != b'#' as c_char
+                && (libc::strcmp(items[lasti as usize], c"-".as_ptr()) != 0
+                    || itemcnt != lasti + 1)
+            {
+                smsg_aff(
+                    0,
+                    c"Trailing text in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[lasti as usize],
+                );
+            }
+
+            aff_todo -= 1;
+            let aff_entry =
+                rs_getroom(spin, std::mem::size_of::<AffentryT>(), true).cast::<AffentryT>();
+
+            if libc::strcmp(items[2], c"0".as_ptr()) != 0 {
+                (*aff_entry).ae_chop = rs_getroom_save(spin, items[2]);
+            }
+            if libc::strcmp(items[3], c"0".as_ptr()) != 0 {
+                (*aff_entry).ae_add = rs_getroom_save(spin, items[3]);
+
+                // Recognize flags on the affix: abcd/XYZ
+                (*aff_entry).ae_flags =
+                    vim_strchr_aff((*aff_entry).ae_add, c_int::from(b'/'));
+                if !(*aff_entry).ae_flags.is_null() {
+                    *(*aff_entry).ae_flags = 0;
+                    (*aff_entry).ae_flags = (*aff_entry).ae_flags.add(1);
+                    rs_aff_process_flags(aff, aff_entry);
+                }
+            }
+
+            // Don't use affix entry with non-ASCII chars when si_ascii is set.
+            if (*spin).si_ascii == 0
+                || (!has_non_ascii((*aff_entry).ae_chop)
+                    && !has_non_ascii((*aff_entry).ae_add))
+            {
+                (*aff_entry).ae_next = (*cur_aff).ah_first;
+                (*cur_aff).ah_first = aff_entry;
+
+                if libc::strcmp(items[4], c".".as_ptr()) != 0 {
+                    let mut buf = [0u8; MAXLINELEN_AFF];
+                    (*aff_entry).ae_cond = rs_getroom_save(spin, items[4]);
+                    let fmt = if *items[0] == b'P' as c_char {
+                        c"^%s".as_ptr()
+                    } else {
+                        c"%s$".as_ptr()
+                    };
+                    vim_snprintf(
+                        buf.as_mut_ptr().cast::<c_char>(),
+                        MAXLINELEN_AFF,
+                        fmt,
+                        items[4],
+                    );
+                    (*aff_entry).ae_prog = vim_regcomp(
+                        buf.as_ptr().cast::<c_char>(),
+                        RE_MAGIC + RE_STRING + RE_STRICT,
+                    );
+                    if (*aff_entry).ae_prog.is_null() {
+                        smsg_aff(
+                            0,
+                            c"Broken condition in %s line %d: %s".as_ptr(),
+                            fname,
+                            lnum,
+                            items[4],
+                        );
+                    }
+                }
+
+                // For postponed prefixes add an entry in si_prefcond.
+                if *items[0] == b'P' as c_char
+                    && (*aff).af_pfxpostpone != 0
+                    && (*aff_entry).ae_flags.is_null()
+                {
+                    let mut upper = false;
+
+                    // Check if chop is one lower-case letter and add ends in upper-case.
+                    if !(*aff_entry).ae_chop.is_null()
+                        && !(*aff_entry).ae_add.is_null()
+                        && *(*aff_entry).ae_chop.add(
+                            utfc_ptr2len_spell((*aff_entry).ae_chop) as usize,
+                        ) == 0
+                    {
+                        let c = utf_ptr2char((*aff_entry).ae_chop);
+                        let c_up = spell_toupper(c);
+                        if c_up != c
+                            && ((*aff_entry).ae_cond.is_null()
+                                || utf_ptr2char((*aff_entry).ae_cond) == c)
+                        {
+                            let add_len =
+                                libc::strlen((*aff_entry).ae_add.cast::<libc::c_char>());
+                            let mut p = (*aff_entry).ae_add.add(add_len);
+                            // MB_PTR_BACK: back up one multibyte char
+                            let off = utf_head_off((*aff_entry).ae_add, p.sub(1)) as usize;
+                            p = p.sub(off + 1);
+                            if utf_ptr2char(p) == c_up {
+                                upper = true;
+                                (*aff_entry).ae_chop = std::ptr::null_mut();
+                                *p = 0;
+
+                                if !(*aff_entry).ae_cond.is_null() {
+                                    let mut cbuf = [0u8; MAXLINELEN_AFF];
+                                    onecap_copy(items[4], cbuf.as_mut_ptr().cast::<c_char>(), true);
+                                    (*aff_entry).ae_cond = rs_getroom_save(
+                                        spin,
+                                        cbuf.as_mut_ptr().cast::<c_char>(),
+                                    );
+                                    if !(*aff_entry).ae_cond.is_null() {
+                                        vim_snprintf(
+                                            cbuf.as_mut_ptr().cast::<c_char>(),
+                                            MAXLINELEN_AFF,
+                                            c"^%s".as_ptr(),
+                                            (*aff_entry).ae_cond,
+                                        );
+                                        vim_regfree_spell((*aff_entry).ae_prog);
+                                        (*aff_entry).ae_prog = vim_regcomp(
+                                            cbuf.as_ptr().cast::<c_char>(),
+                                            RE_MAGIC + RE_STRING,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (*aff_entry).ae_chop.is_null() {
+                        // Find a previously used condition.
+                        let mut idx: c_int = (*spin).si_prefcond.ga_len - 1;
+                        while idx >= 0 {
+                            let pp = *((*spin).si_prefcond.ga_data.cast::<*mut c_char>())
+                                .add(idx as usize);
+                            if rs_str_equal(pp, (*aff_entry).ae_cond) {
+                                break;
+                            }
+                            idx -= 1;
+                        }
+                        if idx < 0 {
+                            // Not found; add a new condition.
+                            idx = (*spin).si_prefcond.ga_len;
+                            ga_grow(&raw mut (*spin).si_prefcond, 1);
+                            let pp = (*spin).si_prefcond.ga_data.cast::<*mut c_char>()
+                                .add((*spin).si_prefcond.ga_len as usize);
+                            *pp = if (*aff_entry).ae_cond.is_null() {
+                                std::ptr::null_mut()
+                            } else {
+                                rs_getroom_save(spin, (*aff_entry).ae_cond)
+                            };
+                            (*spin).si_prefcond.ga_len += 1;
+                        }
+
+                        // Add prefix to prefix tree.
+                        let p_add = if (*aff_entry).ae_add.is_null() {
+                            c"".as_ptr()
+                        } else {
+                            (*aff_entry).ae_add as *const c_char
+                        };
+
+                        let mut n = PFX_FLAGS;
+                        if (*cur_aff).ah_combine == 0 {
+                            n |= WFP_NC;
+                        }
+                        if upper {
+                            n |= WFP_UP;
+                        }
+                        if (*aff_entry).ae_comppermit != 0 {
+                            n |= WFP_COMPPERMIT;
+                        }
+                        if (*aff_entry).ae_compforbid != 0 {
+                            n |= WFP_COMPFORBID;
+                        }
+                        rs_tree_add_word(spin, p_add, (*spin).si_prefroot, n, idx, (*cur_aff).ah_newID);
+                        did_postpone_prefix = true;
+                    }
+
+                    // Didn't use ah_newID: undo.
+                    if aff_todo == 0 && !did_postpone_prefix {
+                        (*spin).si_newprefID -= 1;
+                        (*cur_aff).ah_newID = 0;
+                    }
+                }
+            }
+        } else if is_rule!(c"FOL", 2) && fol.is_null() {
+            fol = xstrdup(items[1]);
+        } else if is_rule!(c"LOW", 2) && low.is_null() {
+            low = xstrdup(items[1]);
+        } else if is_rule!(c"UPP", 2) && upp.is_null() {
+            upp = xstrdup(items[1]);
+        } else if is_rule!(c"REP", 2) || is_rule!(c"REPSAL", 2) {
+            // Count line: ignored if numeric, warn otherwise.
+            if !(*items[1] as u8).is_ascii_digit() {
+                smsg_aff(
+                    0,
+                    c"Expected REP(SAL) count in %s line %d".as_ptr(),
+                    fname,
+                    lnum,
+                );
+            }
+        } else if (libc::strcmp(items[0], c"REP".as_ptr()) == 0
+            || libc::strcmp(items[0], c"REPSAL".as_ptr()) == 0)
+            && itemcnt >= 3
+        {
+            // REP/REPSAL item.
+            if itemcnt > 3 && *items[3] != b'#' as c_char {
+                smsg_aff(
+                    0,
+                    c"Trailing text in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    items[3],
+                );
+            }
+            let do_this = if *items[0].add(3) == b'S' as c_char {
+                do_repsal
+            } else {
+                do_rep
+            };
+            if do_this {
+                // Replace '_' with space.
+                let mut p = items[1];
+                while *p != 0 {
+                    if *p == b'_' as c_char {
+                        *p = b' ' as c_char;
+                    }
+                    let step = utfc_ptr2len_spell(p) as usize;
+                    p = p.add(step);
+                }
+                let mut p = items[2];
+                while *p != 0 {
+                    if *p == b'_' as c_char {
+                        *p = b' ' as c_char;
+                    }
+                    let step = utfc_ptr2len_spell(p) as usize;
+                    p = p.add(step);
+                }
+                let gap = if *items[0].add(3) == b'S' as c_char {
+                    &raw mut (*spin).si_repsal
+                } else {
+                    &raw mut (*spin).si_rep
+                };
+                rs_add_fromto(spin, gap, items[1], items[2]);
+            }
+        } else if is_rule!(c"MAP", 2) {
+            if !found_map {
+                found_map = true;
+                if !(*items[1] as u8).is_ascii_digit() {
+                    smsg_aff(
+                        0,
+                        c"Expected MAP count in %s line %d".as_ptr(),
+                        fname,
+                        lnum,
+                    );
+                }
+            } else if do_mapline {
+                // Check that every character appears only once.
+                let mut p: *const c_char = items[1];
+                while *p != 0 {
+                    let c = mb_ptr2char_adv_p(&raw mut p);
+                    let si_map_data = (*spin).si_map.ga_data.cast::<c_char>();
+                    let si_map_len = (*spin).si_map.ga_len;
+                    // Check against existing map data (not empty).
+                    let in_map = if si_map_len > 0 {
+                        !vim_strchr_aff(si_map_data, c).is_null()
+                    } else {
+                        false
+                    };
+                    let in_rest = !vim_strchr_aff(p, c).is_null();
+                    if in_map || in_rest {
+                        smsg_aff(
+                            0,
+                            c"Duplicate character in MAP in %s line %d".as_ptr(),
+                            fname,
+                            lnum,
+                        );
+                    }
+                }
+                ga_concat(&raw mut (*spin).si_map, items[1]);
+                ga_append(&raw mut (*spin).si_map, b'/' as c_char);
+            }
+        } else if is_rule!(c"SAL", 3) {
+            if do_sal {
+                if libc::strcmp(items[1], c"followup".as_ptr()) == 0 {
+                    (*spin).si_followup = c_int::from(crate::rs_sal_to_bool(items[2]));
+                } else if libc::strcmp(items[1], c"collapse_result".as_ptr()) == 0 {
+                    (*spin).si_collapse = c_int::from(crate::rs_sal_to_bool(items[2]));
+                } else if libc::strcmp(items[1], c"remove_accents".as_ptr()) == 0 {
+                    (*spin).si_rem_accents = c_int::from(crate::rs_sal_to_bool(items[2]));
+                } else {
+                    // from-to pair; "_" means empty.
+                    let to = if libc::strcmp(items[2], c"_".as_ptr()) == 0 {
+                        c"".as_ptr()
+                    } else {
+                        items[2] as *const c_char
+                    };
+                    rs_add_fromto(spin, &raw mut (*spin).si_sal, items[1], to);
+                }
+            }
+        } else if is_rule!(c"SOFOFROM", 2) && sofofrom.is_null() {
+            sofofrom = rs_getroom_save(spin, items[1]);
+        } else if is_rule!(c"SOFOTO", 2) && sofoto.is_null() {
+            sofoto = rs_getroom_save(spin, items[1]);
+        } else if libc::strcmp(items[0], c"COMMON".as_ptr()) == 0 {
+            for i in 1..itemcnt as usize {
+                let hi = hash_find(&raw const (*spin).si_commonwords, items[i] as *const c_char);
+                if hi_is_empty(hi) {
+                    let p = xstrdup(items[i]).cast::<c_char>();
+                    hash_add(&raw mut (*spin).si_commonwords, p);
+                }
+            }
+        } else {
+            smsg_aff(
+                0,
+                c"Unrecognized or duplicate item in %s line %d: %s".as_ptr(),
+                fname,
+                lnum,
+                items[0],
+            );
+        }
+    } // end while (read lines)
+
+    xfree_aff(pc.cast::<c_void>());
+
+    // Post-loop: handle FOL/LOW/UPP.
+    if !fol.is_null() || !low.is_null() || !upp.is_null() {
+        if (*spin).si_clear_chartab != 0 {
+            init_spell_chartab();
+            (*spin).si_clear_chartab = 0;
+        }
+        xfree_aff(fol.cast::<c_void>());
+        xfree_aff(low.cast::<c_void>());
+        xfree_aff(upp.cast::<c_void>());
+    }
+
+    // Use compound specifications from .aff for spell info.
+    if compmax != 0 {
+        rs_aff_check_number((*spin).si_compmax, compmax, c"COMPOUNDWORDMAX".as_ptr());
+        (*spin).si_compmax = compmax;
+    }
+    if compminlen != 0 {
+        rs_aff_check_number((*spin).si_compminlen, compminlen, c"COMPOUNDMIN".as_ptr());
+        (*spin).si_compminlen = compminlen;
+    }
+    if compsylmax != 0 {
+        if syllable.is_null() {
+            smsg_aff(0, c"%s".as_ptr(), c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr());
+        }
+        rs_aff_check_number((*spin).si_compsylmax, compsylmax, c"COMPOUNDSYLMAX".as_ptr());
+        (*spin).si_compsylmax = compsylmax;
+    }
+    if compoptions != 0 {
+        rs_aff_check_number((*spin).si_compoptions, compoptions, c"COMPOUND options".as_ptr());
+        (*spin).si_compoptions |= compoptions;
+    }
+    if !compflags.is_null() {
+        rs_process_compflags(spin, aff, compflags);
+    }
+
+    // Check that we didn't use too many renumbered flags.
+    if (*spin).si_newcompID < (*spin).si_newprefID {
+        if (*spin).si_newcompID == 127 || (*spin).si_newcompID == 255 {
+            msg(c"Too many postponed prefixes".as_ptr(), 0);
+        } else if (*spin).si_newprefID == 0 || (*spin).si_newprefID == 127 {
+            msg(c"Too many compound flags".as_ptr(), 0);
+        } else {
+            msg(c"Too many postponed prefixes and/or compound flags".as_ptr(), 0);
+        }
+    }
+
+    if !syllable.is_null() {
+        rs_aff_check_string((*spin).si_syllable, syllable, c"SYLLABLE".as_ptr());
+        (*spin).si_syllable = syllable;
+    }
+
+    if !sofofrom.is_null() || !sofoto.is_null() {
+        if sofofrom.is_null() || sofoto.is_null() {
+            smsg_aff(
+                0,
+                c"Missing SOFO%s line in %s".as_ptr(),
+                if sofofrom.is_null() {
+                    c"FROM".as_ptr()
+                } else {
+                    c"TO".as_ptr()
+                },
+                fname,
+            );
+        } else if (*spin).si_sal.ga_len > 0 {
+            smsg_aff(0, c"Both SAL and SOFO lines in %s".as_ptr(), fname);
+        } else {
+            rs_aff_check_string((*spin).si_sofofr, sofofrom, c"SOFOFROM".as_ptr());
+            rs_aff_check_string((*spin).si_sofoto, sofoto, c"SOFOTO".as_ptr());
+            (*spin).si_sofofr = sofofrom;
+            (*spin).si_sofoto = sofoto;
+        }
+    }
+
+    if !midword.is_null() {
+        rs_aff_check_string((*spin).si_midword, midword, c"MIDWORD".as_ptr());
+        (*spin).si_midword = midword;
+    }
+
+    libc::fclose(fd);
+    aff
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
