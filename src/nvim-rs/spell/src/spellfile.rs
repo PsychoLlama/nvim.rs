@@ -4465,8 +4465,22 @@ extern "C" {
     fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn utf_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "utfc_ptr2len"]
+    fn utfc_ptr2len_spell(p: *const c_char) -> c_int;
+    fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn ga_grow(gap: *mut crate::GArrayRaw, n: c_int);
     fn vim_regcomp(expr: *const c_char, re_flags: c_int) -> *mut std::ffi::c_void;
+    #[link_name = "vim_regfree"]
+    fn vim_regfree_spell(prog: *mut c_void);
+    fn vim_regexec_prog(
+        prog: *mut *mut c_void,
+        ignore_case: bool,
+        line: *const c_char,
+        col: c_int,
+    ) -> bool;
+    fn hash_add(ht: *mut crate::HashtabRaw, key: *mut c_char);
+    fn hash_clear(ht: *mut crate::HashtabRaw);
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
     #[link_name = "xmalloc"]
     fn xmalloc_spell(size: usize) -> *mut std::ffi::c_void;
     #[link_name = "xfree"]
@@ -5082,7 +5096,7 @@ pub struct SpellSectionParams {
     pub si_nocompoundsugs: bool,
 
     /// SN_COMPOUND: compound flags (nullable = no compound section)
-    pub si_compflags: *const c_char,
+    pub si_compflags: *mut c_char,
     pub si_compmax: u8,
     pub si_compminlen: u8,
     pub si_compsylmax: u8,
@@ -7733,6 +7747,471 @@ pub unsafe extern "C" fn rs_add_fromto(
         (MAXWLEN + 1) as c_int,
     );
     (*ftp).ft_to = rs_getroom_save(spin, word_buf.as_ptr().cast::<c_char>().cast_mut());
+}
+
+// =============================================================================
+// Phase 3: process_compflags, spell_free_aff, store_aff_word
+// =============================================================================
+
+// Phase 3 uses: vim_regfree_spell, vim_regexec_prog, mb_charlen, utfc_ptr2len_spell,
+// utf_head_off, xstrlcpy, hash_clear, hash_add -- all declared in the main extern block above.
+
+/// Process the "compflags" string and append compound IDs to spin->si_compflags.
+/// Mirrors C `process_compflags`.
+///
+/// # Safety
+/// `spin`, `aff`, and `compflags` must be valid non-null pointers.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_ptr_alignment
+)]
+pub unsafe extern "C" fn rs_process_compflags(
+    spin: *mut SpellinfoT,
+    aff: *mut AfffileT,
+    compflags: *mut c_char,
+) {
+    // Make room for old and new compflags concatenated with '/'.
+    let new_len = libc::strlen(compflags.cast::<libc::c_char>()) as c_int + 1;
+    let total_len = if (*spin).si_compflags.is_null() {
+        new_len
+    } else {
+        new_len + libc::strlen((*spin).si_compflags.cast::<libc::c_char>()) as c_int + 1
+    };
+    let p = rs_getroom(spin, total_len as usize, false).cast::<c_char>();
+    if !(*spin).si_compflags.is_null() {
+        xstrlcpy(p, (*spin).si_compflags, total_len as usize);
+        // Append "/"
+        let plen = libc::strlen(p.cast::<libc::c_char>());
+        *p.add(plen) = b'/' as c_char;
+        *p.add(plen + 1) = 0;
+    }
+    (*spin).si_compflags = p;
+    // tp points to end of current string
+    let mut tp = p.add(libc::strlen(p.cast::<libc::c_char>())).cast::<u8>();
+
+    let ft = (*aff).af_flagtype;
+    let mut scan = compflags;
+    while *scan != 0 {
+        if crate::vim_strchr(c"/?*+[]".as_ptr(), i32::from(*scan as u8)).is_null() {
+            // Flag character: parse and map to ID.
+            let prevp = scan;
+            let flag = get_affitem_inner(ft, &raw mut scan);
+            if flag != 0 {
+                // Build key for hashtable lookup.
+                let mut key = [0u8; AH_KEY_LEN];
+                let key_len = (scan.offset_from(prevp) as usize).min(AH_KEY_LEN - 1);
+                std::ptr::copy_nonoverlapping(prevp.cast::<u8>(), key.as_mut_ptr(), key_len);
+                key[key_len] = 0;
+
+                let hi = hash_find(&raw const (*aff).af_comp, key.as_ptr().cast::<c_char>());
+                let id: c_int;
+                if !hi.is_null() && !hi_is_empty(hi) {
+                    #[allow(clippy::cast_ptr_alignment)]
+                    let ci = (*hi).hi_key.cast::<CompitemT>();
+                    id = (*ci).ci_newID;
+                } else {
+                    // New compound item.
+                    let ci = rs_getroom(spin, std::mem::size_of::<CompitemT>(), true)
+                        .cast::<CompitemT>();
+                    // Zero already done by getroom (xcalloc). Set fields.
+                    std::ptr::copy_nonoverlapping(
+                        key.as_ptr().cast::<c_char>(),
+                        (*ci).ci_key.as_mut_ptr(),
+                        AH_KEY_LEN,
+                    );
+                    (*ci).ci_flag = flag;
+                    // Pick an ID not used as regexp special char.
+                    let mut new_id: c_int;
+                    loop {
+                        rs_check_renumber(spin);
+                        (*spin).si_newcompID -= 1;
+                        new_id = (*spin).si_newcompID;
+                        if crate::vim_strchr(c"/?*+[]\\-^".as_ptr(), new_id).is_null() {
+                            break;
+                        }
+                    }
+                    (*ci).ci_newID = new_id;
+                    id = new_id;
+                    hash_add(&raw mut (*aff).af_comp, (*ci).ci_key.as_mut_ptr());
+                }
+                *tp = id as u8;
+                tp = tp.add(1);
+            }
+            if ft == AFT_NUM && *scan == b',' as c_char {
+                scan = scan.add(1);
+            }
+        } else {
+            // Non-flag regexp char (/?*+[] etc): copy directly.
+            *tp = *scan as u8;
+            tp = tp.add(1);
+            scan = scan.add(1);
+        }
+    }
+    *tp = 0;
+}
+
+/// Free the afffile_T structure (ae_prog entries + hashtables).
+/// Mirrors C `spell_free_aff`.
+///
+/// # Safety
+/// `aff` must be a valid non-null pointer to an `afffile_T`.
+#[no_mangle]
+#[allow(clippy::cast_ptr_alignment, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_spell_free_aff(aff: *mut AfffileT) {
+    xfree((*aff).af_enc.cast::<c_void>());
+
+    // Free ae_prog for all entries in af_pref and af_suff.
+    for which in 0..2usize {
+        let ht = if which == 0 {
+            &raw mut (*aff).af_pref
+        } else {
+            &raw mut (*aff).af_suff
+        };
+        let mut todo = (*ht).ht_used as c_int;
+        let mut hi = (*ht).ht_array;
+        while todo > 0 {
+            if !hi_is_empty(hi) {
+                todo -= 1;
+                let ah = (*hi).hi_key.cast::<AffheaderT>();
+                let mut ae = (*ah).ah_first;
+                while !ae.is_null() {
+                    if !(*ae).ae_prog.is_null() {
+                        vim_regfree_spell((*ae).ae_prog);
+                    }
+                    ae = (*ae).ae_next;
+                }
+            }
+            hi = hi.add(1);
+        }
+    }
+
+    hash_clear(&raw mut (*aff).af_pref);
+    hash_clear(&raw mut (*aff).af_suff);
+    hash_clear(&raw mut (*aff).af_comp);
+}
+
+// Flags for store_aff_word's condit parameter (must match C defines in spellfile.c).
+const CONDIT_COMB: c_int = 1; // affix must combine
+const CONDIT_CFIX: c_int = 2; // affix must have CIRCUMFIX flag
+const CONDIT_SUF: c_int = 4; // add a suffix for matching flags
+const CONDIT_AFF: c_int = 8; // word already has an affix
+
+// WF_ word flags used in store_aff_word (from spell_defs.h).
+const WF_HAS_AFF: c_int = 0x0100;
+const WF_NOCOMPBEF: c_int = 0x1000;
+const WF_NOCOMPAFT: c_int = 0x2000;
+
+/// Apply affixes to a word and store the resulting words.
+/// Mirrors C `store_aff_word`. Recursive.
+///
+/// # Safety
+/// All pointers must be valid. `spin`, `word`, `afflist`, `affile`, `ht` must be non-null.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_ptr_alignment,
+    clippy::too_many_arguments,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_store_aff_word(
+    spin: *mut SpellinfoT,
+    word: *const c_char,
+    afflist: *mut c_char,
+    affile: *mut AfffileT,
+    ht: *mut crate::HashtabRaw,
+    xht: *mut crate::HashtabRaw,
+    condit: c_int,
+    flags: c_int,
+    pfxlist: *mut c_char,
+    pfxlen: c_int,
+) -> c_int {
+    const MAXWLEN: usize = 254;
+    let mut retval: c_int = 0; // OK
+
+    let wordlen = libc::strlen(word.cast::<libc::c_char>());
+    let ft = (*affile).af_flagtype;
+
+    let mut todo = (*ht).ht_used as c_int;
+    let mut hi = (*ht).ht_array;
+
+    while todo > 0 && retval == 0 {
+        if !hi_is_empty(hi) {
+            todo -= 1;
+            let ah = (*hi).hi_key.cast::<AffheaderT>();
+
+            // Check that the affix combines (if required) and that the word supports it.
+            if ((condit & CONDIT_COMB) == 0 || (*ah).ah_combine != 0)
+                && flag_in_afflist_inner(ft, afflist, (*ah).ah_flag)
+            {
+                let mut ae = (*ah).ah_first;
+                while !ae.is_null() {
+                    // Check conditions for applying this affix entry.
+                    let chop_len = if (*ae).ae_chop.is_null() {
+                        0usize
+                    } else {
+                        libc::strlen((*ae).ae_chop.cast::<libc::c_char>())
+                    };
+                    let prog_matches = if (*ae).ae_prog.is_null() {
+                        true
+                    } else {
+                        vim_regexec_prog(&raw mut (*ae).ae_prog, false, word, 0)
+                    };
+                    let circumfix_ok = ((condit & CONDIT_CFIX) == 0)
+                        == ((condit & CONDIT_AFF) == 0
+                            || (*ae).ae_flags.is_null()
+                            || !flag_in_afflist_inner(ft, (*ae).ae_flags, (*affile).af_circumfix));
+
+                    if (!xht.is_null()
+                        || (*affile).af_pfxpostpone == 0
+                        || !(*ae).ae_chop.is_null()
+                        || !(*ae).ae_flags.is_null())
+                        && chop_len < wordlen
+                        && prog_matches
+                        && circumfix_ok
+                    {
+                        // Build new word: apply affix.
+                        let mut newword_buf = [0u8; MAXWLEN + 1];
+                        let newword = newword_buf.as_mut_ptr().cast::<c_char>();
+
+                        if xht.is_null() {
+                            // prefix: chop/add at start of word
+                            if (*ae).ae_add.is_null() {
+                                *newword = 0;
+                            } else {
+                                xstrlcpy(newword, (*ae).ae_add, MAXWLEN + 1);
+                            }
+                            // Skip chop string in word.
+                            let mut p = word.cast_mut();
+                            if !(*ae).ae_chop.is_null() {
+                                let mut i = mb_charlen((*ae).ae_chop);
+                                while i > 0 {
+                                    let step = utfc_ptr2len_spell(p) as usize;
+                                    p = p.add(step);
+                                    i -= 1;
+                                }
+                            }
+                            // Append rest of word after affix.
+                            let nlen = libc::strlen(newword.cast::<libc::c_char>());
+                            libc::strncat(newword, p, MAXWLEN - nlen);
+                        } else {
+                            // suffix: chop/add at end of word
+                            xstrlcpy(newword, word, MAXWLEN + 1);
+                            if !(*ae).ae_chop.is_null() {
+                                // Remove chop from end of word.
+                                let nlen = libc::strlen(newword.cast::<libc::c_char>());
+                                let mut p = newword.add(nlen);
+                                let mut i = mb_charlen((*ae).ae_chop);
+                                while i > 0 {
+                                    // Back up one character.
+                                    let off = utf_head_off(newword, p.sub(1)) as usize;
+                                    p = p.sub(off + 1);
+                                    i -= 1;
+                                }
+                                *p = 0;
+                            }
+                            if !(*ae).ae_add.is_null() {
+                                let nlen = libc::strlen(newword.cast::<libc::c_char>());
+                                libc::strncat(newword, (*ae).ae_add, MAXWLEN - nlen);
+                            }
+                        }
+
+                        let mut use_flags = flags;
+                        let mut use_pfxlist = pfxlist;
+                        let mut use_pfxlen = pfxlen;
+                        let mut need_affix = false;
+                        let mut use_condit = condit | CONDIT_COMB | CONDIT_AFF;
+
+                        let mut store_afflist = [0u8; MAXWLEN + 1];
+                        let mut pfx_pfxlist = [0u8; MAXWLEN + 1];
+
+                        if !(*ae).ae_flags.is_null() {
+                            use_flags |= rs_get_affix_flags(affile, (*ae).ae_flags);
+
+                            if (*affile).af_needaffix != 0
+                                && flag_in_afflist_inner(ft, (*ae).ae_flags, (*affile).af_needaffix)
+                            {
+                                need_affix = true;
+                            }
+
+                            if (*affile).af_circumfix != 0
+                                && flag_in_afflist_inner(ft, (*ae).ae_flags, (*affile).af_circumfix)
+                            {
+                                use_condit |= CONDIT_CFIX;
+                                if (condit & CONDIT_CFIX) == 0 {
+                                    need_affix = true;
+                                }
+                            }
+
+                            if (*affile).af_pfxpostpone != 0 || !(*spin).si_compflags.is_null() {
+                                let sap = store_afflist.as_mut_ptr().cast::<c_char>();
+                                if (*affile).af_pfxpostpone != 0 {
+                                    use_pfxlen = rs_get_pfxlist(affile, (*ae).ae_flags, sap);
+                                } else {
+                                    use_pfxlen = 0;
+                                }
+                                use_pfxlist = sap;
+
+                                // Combine prefix IDs (avoid duplicates).
+                                let mut i = 0;
+                                while i < pfxlen {
+                                    let mut j = 0;
+                                    while j < use_pfxlen {
+                                        if *pfxlist.add(i as usize) == *use_pfxlist.add(j as usize)
+                                        {
+                                            break;
+                                        }
+                                        j += 1;
+                                    }
+                                    if j == use_pfxlen {
+                                        *use_pfxlist.add(use_pfxlen as usize) =
+                                            *pfxlist.add(i as usize);
+                                        use_pfxlen += 1;
+                                    }
+                                    i += 1;
+                                }
+
+                                if (*spin).si_compflags.is_null() {
+                                    *use_pfxlist.add(use_pfxlen as usize) = 0;
+                                } else {
+                                    rs_get_compflags(
+                                        affile,
+                                        (*ae).ae_flags,
+                                        use_pfxlist.add(use_pfxlen as usize),
+                                    );
+                                }
+
+                                // Combine compound flags (avoid duplicates).
+                                let mut i = pfxlen;
+                                while *pfxlist.add(i as usize) != 0 {
+                                    let mut j = use_pfxlen;
+                                    while *use_pfxlist.add(j as usize) != 0 {
+                                        if *pfxlist.add(i as usize) == *use_pfxlist.add(j as usize)
+                                        {
+                                            break;
+                                        }
+                                        j += 1;
+                                    }
+                                    if *use_pfxlist.add(j as usize) == 0 {
+                                        *use_pfxlist.add(j as usize) = *pfxlist.add(i as usize);
+                                        *use_pfxlist.add(j as usize + 1) = 0;
+                                    }
+                                    i += 1;
+                                }
+                            }
+                        }
+
+                        // COMPOUNDFORBIDFLAG: copy pfxlist to prevent modification.
+                        if !use_pfxlist.is_null() && (*ae).ae_compforbid != 0 {
+                            libc::memcpy(
+                                pfx_pfxlist.as_mut_ptr().cast::<c_void>(),
+                                use_pfxlist.cast::<c_void>(),
+                                use_pfxlen as usize,
+                            );
+                            use_pfxlist = pfx_pfxlist.as_mut_ptr().cast::<c_char>();
+                        }
+
+                        // Postponed prefixes.
+                        if !(*spin).si_prefroot.is_null()
+                            && !(*(*spin).si_prefroot).wn_sibling.is_null()
+                        {
+                            use_flags |= WF_HAS_AFF;
+                            if (*ah).ah_combine == 0 && !use_pfxlist.is_null() {
+                                use_pfxlist = use_pfxlist.add(use_pfxlen as usize);
+                            }
+                        }
+
+                        // Compounding: forbid on the side where affix is applied.
+                        if !(*spin).si_compflags.is_null() && (*ae).ae_comppermit == 0 {
+                            if xht.is_null() {
+                                use_flags |= WF_NOCOMPBEF;
+                            } else {
+                                use_flags |= WF_NOCOMPAFT;
+                            }
+                        }
+
+                        // Store the modified word.
+                        if rs_store_word(
+                            spin,
+                            newword,
+                            use_flags,
+                            (*spin).si_region,
+                            use_pfxlist,
+                            need_affix,
+                        ) != 0
+                        {
+                            retval = 1; // FAIL
+                        }
+
+                        // Recurse: add suffix after prefix/first-suffix.
+                        if (condit & CONDIT_SUF) != 0 && !(*ae).ae_flags.is_null() {
+                            let sub_condit =
+                                use_condit & (if xht.is_null() { !0 } else { !CONDIT_SUF });
+                            if rs_store_aff_word(
+                                spin,
+                                newword,
+                                (*ae).ae_flags,
+                                affile,
+                                &raw mut (*affile).af_suff,
+                                xht,
+                                sub_condit,
+                                use_flags,
+                                use_pfxlist,
+                                pfxlen,
+                            ) != 0
+                            {
+                                retval = 1;
+                            }
+                        }
+
+                        // Recurse: add prefix after suffix (combining).
+                        if !xht.is_null() && (*ah).ah_combine != 0 {
+                            if rs_store_aff_word(
+                                spin,
+                                newword,
+                                afflist,
+                                affile,
+                                xht,
+                                std::ptr::null_mut(),
+                                use_condit,
+                                use_flags,
+                                use_pfxlist,
+                                pfxlen,
+                            ) != 0
+                            {
+                                retval = 1;
+                            }
+                            if !(*ae).ae_flags.is_null()
+                                && rs_store_aff_word(
+                                    spin,
+                                    newword,
+                                    (*ae).ae_flags,
+                                    affile,
+                                    xht,
+                                    std::ptr::null_mut(),
+                                    use_condit,
+                                    use_flags,
+                                    use_pfxlist,
+                                    pfxlen,
+                                ) != 0
+                            {
+                                retval = 1;
+                            }
+                        }
+                    }
+
+                    ae = (*ae).ae_next;
+                }
+            }
+        }
+        hi = hi.add(1);
+    }
+
+    retval
 }
 
 // =============================================================================
