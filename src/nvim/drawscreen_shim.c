@@ -749,3 +749,9 @@ int nvim_update_screen_impl(void)
   }
   return OK;
 }
+
+/// Get the `updating_screen` global flag.
+bool nvim_get_updating_screen(void)
+{
+  return updating_screen;
+}

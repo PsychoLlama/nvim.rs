@@ -2690,3 +2690,4 @@ void nvim_copy_winopt_script_ctx(winopt_T *from, winopt_T *to)
 
 // Update w_grid_alloc.blending based on current w_p_winbl value.
 void nvim_win_update_grid_blending(win_T *wp) { wp->w_grid_alloc.blending = wp->w_p_winbl > 0; }
+
