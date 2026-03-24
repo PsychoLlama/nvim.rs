@@ -462,9 +462,6 @@ int open_buffer(bool read_stdin, exarg_T *eap, int flags_arg)
   return retval;
 }
 
-// set_bufref() is implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
-
-
 /// Return true when buffer "buf" can be unloaded.
 /// Give an error message and return false when the buffer is locked or the
 /// screen is being redrawn and the buffer is in a window.
@@ -734,8 +731,6 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   return true;
 }
 
-
-// buf_clear() is implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
 
 /// buf_freeall() - free all things allocated for a buffer that are related to
 /// the file.  Careful: get here with "curwin" NULL when exiting.
@@ -1025,8 +1020,6 @@ void handle_swap_exists(bufref_T *old_curbuf)
   }
   swap_exists_action = SEA_NONE;
 }
-
-// do_bufdel() is implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
 
 /// Make the current buffer empty.
 /// Used when it is wiped out and it's the last buffer.
@@ -1469,9 +1462,6 @@ static void enter_buffer(buf_T *buf)
   redraw_later(curwin, UPD_NOT_VALID);
 }
 
-// do_autochdir(), no_write_message(), no_write_message_nobang() are
-// implemented in Rust (see src/nvim-rs/buffer/src/misc.rs).
-
 //
 // functions for dealing with the buffer list
 //
@@ -1898,9 +1888,6 @@ const char *nvim_blfp_buflist_match(void *handle, buf_T *buf, bool ignore_case)
 
 
 
-// buflist_findpat() is implemented in Rust (see src/nvim-rs/buffer/src/list.rs).
-// Deleted here (100 lines) in Phase 8.
-
 /// Check if buffer matches the compiled regex. Returns matched name or NULL.
 const char *nvim_bufname_regex_match(void *handle, buf_T *buf, bool ignore_case)
 {
@@ -1909,14 +1896,6 @@ const char *nvim_bufname_regex_match(void *handle, buf_T *buf, bool ignore_case)
   }
   return buflist_match((regmatch_T *)handle, buf, ignore_case);
 }
-
-
-// ExpandBufnames() is implemented in Rust (see src/nvim-rs/buffer/src/expand.rs).
-// The C declaration is in buffer.h as a static inline wrapper.
-// buflist_match() and fname_match() are kept as static C helpers for nvim_blfp_buflist_match() and nvim_bufname_regex_match().
-// NOTE: int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
-// was deleted here (152 lines) in Phase 5.
-// buf_time_compare() was deleted here (10 lines) in Phase 5.
 
 /// Check for a match on the file name for buffer "buf" with regprog "prog".
 /// Note that rmp->regprog may become NULL when switching regexp engine.
@@ -2141,11 +2120,6 @@ fmark_T *buflist_findfmark(buf_T *buf)
 }
 
 
-/// List all known file names (for :files and :buffers command).
-// buflist_list() is implemented in Rust (see src/nvim-rs/buffer/src/list.rs).
-// The C declaration is in buffer.h as a static inline wrapper.
-
-
 /// Set the file name for "buf" to "ffname_arg", short file name to
 /// "sfname_arg".
 /// The file name with the full path is also remembered, for when :cd is used.
@@ -2295,11 +2269,6 @@ void buflist_slash_adjust(void)
 }
 
 #endif
-
-
-// fileinfo(), maketitle(), resettitle(), free_titles() are implemented in Rust
-// (src/nvim-rs/buffer/src/info.rs). lasttitle/lasticon statics and accessors
-// moved to buffer_shim.c.
 
 /// Open a window for a number of buffers.
 void ex_buffer_all(exarg_T *eap)
@@ -2480,11 +2449,6 @@ void ex_buffer_all(exarg_T *eap)
   }
 }
 
-// do_modelines() and chk_modeline() are implemented in Rust
-// (see src/nvim-rs/buffer/src/modeline.rs).
-// The C declaration is in buffer.h as a static inline wrapper.
-
-
 /// Read the file for "buf" again and check if the contents changed.
 /// Return true if it changed or this could not be checked.
 ///
@@ -2655,10 +2619,6 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
     }
   }
 }
-
-// Extmark accessor functions for Rust FFI moved to buffer_shim.c.
-// text_locked_msg() and text_or_buf_locked() are implemented in Rust
-// (see src/nvim-rs/buffer/src/misc.rs).
 
 /// Check if "curbuf->b_ro_locked" or "allbuf_lock" is set and
 /// return true when it is and give an error message.
