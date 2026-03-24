@@ -453,8 +453,6 @@ static void restore_dbg_stuff(struct dbg_stuff *dsp)
   current_exception = dsp->current_exception;
 }
 
-// do_exmode: implemented in Rust (Phase 6). Symbol exported via #[no_mangle].
-
 static int cmdline_call_depth = 0;  ///< recursiveness
 
 /// Start executing an Ex command line.
@@ -482,17 +480,7 @@ static void do_cmdline_end(void)
   end_batch_changes();
 }
 
-// do_cmdline_cmd: implemented in Rust (Phase 6). Symbol exported via #[no_mangle].
-
-// do_cmdline: implemented in Rust (Phase 5). See src/nvim-rs/ex_docmd/src/do_cmdline.rs.
-// do_cmdline() execute one Ex command line
-//
-// flags:
-//   DOCMD_VERBOSE  - The command will be included in the error message.
-//   DOCMD_NOWAIT   - Don't call wait_return() and friends.
-//   DOCMD_REPEAT   - Repeat execution until fgetline() returns NULL.
-//   DOCMD_KEYTYPED - Don't reset KeyTyped.
-/// do_cmdline(): execute one Ex command line
+/// do_cmdline(): execute one Ex command line.
 ///
 /// 1. Execute "cmdline" when it is not NULL.
 ///    If "cmdline" is NULL, or more lines are needed, fgetline() is used.
@@ -500,16 +488,7 @@ static void do_cmdline_end(void)
 ///
 /// This function can be called recursively!
 ///
-/// flags:
-///   DOCMD_VERBOSE  - The command will be included in the error message.
-///   DOCMD_NOWAIT   - Don't call wait_return() and friends.
-///   DOCMD_REPEAT   - Repeat execution until fgetline() returns NULL.
-///   DOCMD_KEYTYPED - Don't reset KeyTyped.
-///   DOCMD_EXCRESET - Reset the exception environment (used for debugging).
-///   DOCMD_KEEPLINE - Store first typed line (for repeating with ".").
-///
 /// @param cookie  argument for fgetline()
-///
 /// @return FAIL if cmdline could not be executed, OK otherwise
 int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
 {
@@ -1073,9 +1052,6 @@ int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
   return retval;
 }
 
-/// Handle when "did_throw" is set after executing commands.
-/// handle_did_throw implementation. Called by Rust handle_did_throw.
-
 /// Obtain a line when inside a ":while" or ":for" loop.
 static char *get_loop_line(int c, void *cookie, int indent, bool do_concat)
 {
@@ -1115,11 +1091,6 @@ static void store_loop_line(garray_T *gap, char *line)
   p->lnum = SOURCING_LNUM;
 }
 
-// getline_equal: implemented in Rust (Phase 5). See do_cmdline.rs.
-extern bool getline_equal(LineGetter fgetline, void *cookie, LineGetter func);
-
-// getline_cookie: implemented in Rust (Phase 5). See do_cmdline.rs.
-extern void *getline_cookie(LineGetter fgetline, void *cookie);
 
 /// Helper function to apply an offset for buffer commands, i.e. ":bdelete",
 /// ":bwipeout", etc.
@@ -1162,61 +1133,14 @@ static int current_tab_nr(tabpage_T *tab)
 #define CURRENT_TAB_NR current_tab_nr(curtab)
 #define LAST_TAB_NR current_tab_nr(NULL)
 
-// get_wincmd_addr_type: now in Rust (rs_set_cmd_addr_type calls it internally)
-
-
-// do_one_cmd, find_excmd_after_range, ex_errmsg: see forward declarations near top of file.
 
 /// The "+" string used in place of an empty command in Ex mode.
 /// This string is used in pointer comparison.
 static char exmode_plus[] = "+";
 
-/// Parse and skip over command modifiers:
-/// - update eap->cmd
-/// - store flags in "cmod".
-/// - Set ex_pressedreturn for an empty command line.
-///
-/// @param skip_only      if false, undo_cmdmod() must be called later to free
-///                       any cmod_filter_pat and cmod_filter_regmatch.regprog,
-///                       and ex_pressedreturn may be set.
-/// @param[out] errormsg  potential error message.
-///
-/// Call apply_cmdmod() to get the side effects of the modifiers:
-/// - Increment "sandbox" for ":sandbox"
-/// - set p_verbose for ":verbose"
-/// - set msg_silent for ":silent"
-/// - set 'eventignore' to "all" for ":noautocmd"
-///
-/// Apply the command modifiers.  Saves current state in "cmdmod", call
-/// undo_cmdmod() later.
-
-/// Parse the address range, if any, in "eap".
-/// May set the last search pattern, unless "silent" is true.
-///
-// excmd_get_argt is now implemented in Rust (do_one_cmd.rs).
-extern uint32_t excmd_get_argt(cmdidx_T idx);
-
-
-/// Correct the range for zero line number, if required.
-// nvim_docmd_replace_makeprg_impl is implemented in Rust (args.rs).
-
-
-// get_bad_name / nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
+// excmd_get_argt is implemented in Rust (do_one_cmd.rs), declared in ex_docmd.h.
+// nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
 extern char *nvim_docmd_get_bad_name(expand_T *xp, int idx);
-
-
-// nvim_docmd_expand_argopt_impl is implemented in Rust (impl_bodies.rs).
-
-
-/// Call this function if we thought we were going to exit, but we won't
-/// (because of an error).  May need to restore the terminal mode.
-
-
-// nvim_docmd_ex_restart_impl is implemented in Rust (impl_bodies.rs).
-
-
-
-// nvim_docmd_tabpage_close_impl and nvim_docmd_tabpage_close_other_impl are implemented in Rust (cmd_impl.rs).
 
 /// callback function for 'findfunc'
 static Callback ffu_cb;
@@ -1565,11 +1489,6 @@ void nvim_docmd_loop_sleep(int64_t msec)
 
 // nvim_docmd_ex_terminal_impl is implemented in Rust (impl_bodies.rs).
 
-/// Get argt of command with id
-uint32_t get_cmd_argt(cmdidx_T cmdidx)
-{
-  return cmdnames[(int)cmdidx].cmd_argt;
-}
 
 /// Check if a command is a :map/:abbrev command.
 bool is_map_cmd(cmdidx_T cmdidx)
@@ -3871,11 +3790,6 @@ int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errorms
 {
   return parse_command_modifiers(eap, errormsg, &cmdmod, false);
 }
-// nvim_docmd_get_e_argreq already defined above.
-/// get e_invarg translated string.
-// nvim_docmd_get_e_invarg may already exist as nvim_get_e_invarg in errors.rs accessor
-// Using distinct name to be safe.
-const char *nvim_docmd_get_e_invarg_str(void) { return _(e_invarg); }
 
 // get_loop_line function pointer value for comparison (used by getline_equal/getline_cookie in Rust).
 LineGetter nvim_docmd_get_loop_line_ptr(void) { return get_loop_line; }
