@@ -70,6 +70,12 @@ enum bfa_values {
   BFA_IGNORE_ABORT = 8,  ///< do not abort for aborting()
 };
 
+/// flags for free_buffer_stuff()
+typedef enum {
+  kBffClearWinInfo = 1,
+  kBffInitChangedtick = 2,
+} BufFreeFlags;
+
 EXTERN char *msg_loclist INIT( = N_("[Location List]"));
 EXTERN char *msg_qflist INIT( = N_("[Quickfix List]"));
 
@@ -256,3 +262,10 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist);
 bool buf_ensure_loaded(buf_T *buf);
 bool can_unload_buffer(buf_T *buf);
 int do_buffer_ext(int action, int start, int dir, int count, int flags);
+// close_buffer() and buf_freeall() moved to buffer_shim.c (Phase 22).
+// free_buffer(), clear_wininfo(), free_buffer_stuff() remain in buffer.c as non-static.
+bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool ignore_abort);
+void buf_freeall(buf_T *buf, int flags);
+void free_buffer(buf_T *buf);
+void clear_wininfo(buf_T *buf);
+void free_buffer_stuff(buf_T *buf, int free_flags);
