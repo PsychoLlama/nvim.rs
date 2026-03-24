@@ -104,9 +104,9 @@ extern "C" {
     fn nvim_ins_compl_st_msg_scanning_tags();
     // nvim_ins_compl_st_set_dict_from_e_cpt: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_e_cpt_inc: inlined in vars.rs (Phase 27)
-    fn nvim_ins_compl_st_set_func_cb_from_e_cpt(cpt_idx: c_int) -> c_int;
+    // nvim_ins_compl_st_set_func_cb_from_e_cpt: deleted (Phase 2), inlined below
     fn nvim_ins_compl_st_set_dict_from_ins_buf();
-    fn nvim_ins_compl_st_advance_e_cpt() -> c_int;
+    // nvim_ins_compl_st_advance_e_cpt: deleted (Phase 2), inlined below
 
     // completion status
     fn rs_compl_status_adding() -> c_int;
@@ -114,7 +114,7 @@ extern "C" {
     // Phase 4 accessors for rs_get_next_default_completion
     fn nvim_compl_p_scs_save_set() -> c_int;
     fn nvim_compl_p_ws_save_set() -> c_int;
-    fn nvim_compl_restore_p_scs_ws(save_p_scs: c_int, save_p_ws: c_int);
+    // nvim_compl_restore_p_scs_ws: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), inlined below
     fn nvim_ins_compl_st_do_search(
         in_fuzzy: c_int,
@@ -124,7 +124,19 @@ extern "C" {
         fuzzy_len_out: *mut c_int,
         fuzzy_score_out: *mut c_int,
     ) -> c_int;
-    fn nvim_ins_compl_st_check_and_update_match_pos() -> c_int;
+    // nvim_ins_compl_st_check_and_update_match_pos: deleted (Phase 2), inlined below
+
+    // underlying helpers used by inlined wrappers
+    fn rs_may_advance_cpt_index(cpt: *mut std::ffi::c_char) -> c_int;
+    fn nvim_copy_option_part_iobuff_ffi(src: *mut *mut std::ffi::c_char) -> usize;
+    fn nvim_get_callback_if_cpt_func_impl(
+        p: *const std::ffi::c_char,
+        idx: c_int,
+    ) -> *mut core::ffi::c_void;
+    #[link_name = "p_scs"]
+    static mut p_scs_expand: c_int;
+    #[link_name = "p_ws"]
+    static mut p_ws_expand: c_int;
     // nvim_ins_compl_st_set_prev_from_cur: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_get_cur_match_lnum: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_cur_match_col: inlined in vars.rs (Phase 26)
@@ -251,7 +263,12 @@ unsafe fn rs_process_next_cpt_value(
         } else if e_char == b'F' || e_char == b'o' {
             compl_type = CTRL_X_FUNCTION;
             let idx = crate::vars::nvim_get_cpt_sources_index();
-            if nvim_ins_compl_st_set_func_cb_from_e_cpt(idx) == 0 {
+            // Inline nvim_ins_compl_st_set_func_cb_from_e_cpt (Phase 2)
+            crate::vars::ins_compl_st.func_cb = nvim_get_callback_if_cpt_func_impl(
+                crate::vars::ins_compl_st.e_cpt.cast_const(),
+                idx,
+            );
+            if crate::vars::ins_compl_st.func_cb.is_null() {
                 compl_type = -1;
             }
         } else if !skip_source {
@@ -288,8 +305,12 @@ unsafe fn rs_process_next_cpt_value(
             }
         }
 
-        // Advance e_cpt past this entry (copy_option_part + may_advance check)
-        *advance_cpt_idx_out = nvim_ins_compl_st_advance_e_cpt();
+        // Inline nvim_ins_compl_st_advance_e_cpt (Phase 2):
+        // copy_option_part(&ins_compl_st.e_cpt, IObuff, IOSIZE, ",")
+        // then check rs_may_advance_cpt_index
+        nvim_copy_option_part_iobuff_ffi(core::ptr::addr_of_mut!(crate::vars::ins_compl_st.e_cpt));
+        *advance_cpt_idx_out =
+            c_int::from(rs_may_advance_cpt_index(crate::vars::ins_compl_st.e_cpt) != 0);
 
         crate::vars::nvim_ins_compl_st_set_found_all(1);
         if compl_type == -1 {
@@ -348,7 +369,24 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
         // check == 0: first-time/set_match_pos (positions set; found stays as-is)
         // check == -1: first==last → force FAIL
         // check == 2: normal; run wrap-around detection
-        let check = nvim_ins_compl_st_check_and_update_match_pos();
+        // Inline nvim_ins_compl_st_check_and_update_match_pos (Phase 2)
+        let check = if crate::vars::nvim_get_compl_started() == 0
+            || crate::vars::ins_compl_st.set_match_pos
+        {
+            crate::vars::nvim_set_compl_started(1);
+            crate::vars::ins_compl_st.first_match_pos = *crate::vars::ins_compl_st.cur_match_pos;
+            crate::vars::ins_compl_st.last_match_pos = *crate::vars::ins_compl_st.cur_match_pos;
+            crate::vars::ins_compl_st.set_match_pos = false;
+            0
+        } else if crate::vars::ins_compl_st.first_match_pos.lnum
+            == crate::vars::ins_compl_st.last_match_pos.lnum
+            && crate::vars::ins_compl_st.first_match_pos.col
+                == crate::vars::ins_compl_st.last_match_pos.col
+        {
+            -1
+        } else {
+            2
+        };
         if check == -1 {
             found = FAIL;
         } else if check == 2 {
@@ -401,7 +439,9 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
         // 0 or 1: skip/duplicate — continue the search loop
     }
 
-    nvim_compl_restore_p_scs_ws(save_p_scs, save_p_ws);
+    // Inline nvim_compl_restore_p_scs_ws (Phase 2)
+    p_scs_expand = c_int::from(save_p_scs != 0);
+    p_ws_expand = c_int::from(save_p_ws != 0);
     found_new_match
 }
 

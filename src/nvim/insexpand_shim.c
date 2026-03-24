@@ -3174,14 +3174,7 @@ void nvim_ins_compl_st_msg_scanning_tags(void)
 // nvim_ins_compl_st_set_dict_from_e_cpt: deleted (Phase 27, inlined in vars.rs)
 // nvim_ins_compl_st_e_cpt_inc: deleted (Phase 27, inlined in vars.rs)
 
-/// Returns the character one past the current e_cpt position (peeks ahead).
-/// Sets ins_compl_st.func_cb via get_callback_if_cpt_func logic.
-/// Returns 1 if a valid callback was found, 0 if not.
-int nvim_ins_compl_st_set_func_cb_from_e_cpt(int cpt_idx)
-{
-  ins_compl_st.func_cb = get_callback_if_cpt_func(ins_compl_st.e_cpt, cpt_idx);
-  return ins_compl_st.func_cb != NULL ? 1 : 0;
-}
+// nvim_ins_compl_st_set_func_cb_from_e_cpt: deleted (Phase 2), inlined in expand.rs
 
 /// Sets ins_compl_st.dict = ins_compl_st.ins_buf->b_fname and
 /// ins_compl_st.dict_f = DICT_EXACT.
@@ -3192,14 +3185,7 @@ void nvim_ins_compl_st_set_dict_from_ins_buf(void)
   ins_compl_st.dict_f = DICT_EXACT;
 }
 
-/// Advances ins_compl_st.e_cpt using copy_option_part (skips to next comma-
-/// separated entry). Returns 1 if rs_may_advance_cpt_index() says we should
-/// advance the cpt sources index, 0 otherwise.
-int nvim_ins_compl_st_advance_e_cpt(void)
-{
-  (void)copy_option_part(&ins_compl_st.e_cpt, IObuff, IOSIZE, ",");
-  return rs_may_advance_cpt_index(ins_compl_st.e_cpt) != 0 ? 1 : 0;
-}
+// nvim_ins_compl_st_advance_e_cpt: deleted (Phase 2), inlined in expand.rs
 
 // =============================================================================
 // Phase 4 (pass 14): get_next_default_completion / ins_compl_get_next_word_or_line
@@ -3230,12 +3216,7 @@ int nvim_compl_p_ws_save_set(void)
   return save;
 }
 
-/// Restore p_scs and p_ws to previously saved values.
-void nvim_compl_restore_p_scs_ws(int save_p_scs, int save_p_ws)
-{
-  p_scs = save_p_scs != 0;
-  p_ws  = save_p_ws  != 0;
-}
+// nvim_compl_restore_p_scs_ws: deleted (Phase 2), inlined in expand.rs
 
 /// Returns 1 if ins_compl_st.ins_buf == curbuf, else 0.
 // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), Rust inlines directly
@@ -3274,26 +3255,7 @@ int nvim_ins_compl_st_do_search(int in_fuzzy, int start_lnum, int start_col,
   return found;
 }
 
-/// After a search step: if first-time or set_match_pos, update first/last match
-/// positions and set compl_started.  Returns:
-///   0  first/last positions were just set (caller should continue looping)
-///  -1  first_match_pos == last_match_pos (caller should break with FAIL)
-///   2  normal case (caller should proceed to add-step)
-int nvim_ins_compl_st_check_and_update_match_pos(void)
-{
-  if (!compl_started || ins_compl_st.set_match_pos) {
-    compl_started = true;
-    ins_compl_st.first_match_pos = *ins_compl_st.cur_match_pos;
-    ins_compl_st.last_match_pos  = *ins_compl_st.cur_match_pos;
-    ins_compl_st.set_match_pos   = false;
-    return 0;
-  }
-  if (ins_compl_st.first_match_pos.lnum == ins_compl_st.last_match_pos.lnum
-      && ins_compl_st.first_match_pos.col == ins_compl_st.last_match_pos.col) {
-    return -1;
-  }
-  return 2;
-}
+// nvim_ins_compl_st_check_and_update_match_pos: deleted (Phase 2), inlined in expand.rs
 
 // nvim_ins_compl_st_set_prev_from_cur: deleted (Phase 27, inlined in vars.rs)
 
