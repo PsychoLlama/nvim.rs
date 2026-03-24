@@ -2265,27 +2265,7 @@ void nvim_get_next_bufname_token_impl(void)
   }
 }
 
-// Compound accessor for Phase 3 (pass 4): get_next_tag_completion
-void nvim_get_next_tag_completion_impl(void)
-{
-  // set p_ic according to p_ic, p_scs and pat for find_tags().
-  const int save_p_ic = p_ic;
-  p_ic = ignorecase(compl_pattern.data);
-
-  // Find up to TAG_MANY matches.  Avoids that an enormous number
-  // of matches is found when compl_pattern is empty
-  g_tag_at_cursor = true;
-  char **matches;
-  int num_matches;
-  if (find_tags(compl_pattern.data, &num_matches, &matches,
-                TAG_REGEXP | TAG_NAMES | TAG_NOIC | TAG_INS_COMP
-                | (rs_ctrl_x_mode_not_default() ? TAG_VERBOSE : 0),
-                TAG_MANY, curbuf->b_ffname) == OK && num_matches > 0) {
-    rs_ins_compl_add_matches(num_matches, matches, p_ic);
-  }
-  g_tag_at_cursor = false;
-  p_ic = save_p_ic;
-}
+// nvim_get_next_tag_completion_impl: deleted (Phase 14), inlined in tag.rs
 
 // Compound accessors for Phase 4 (pass 4): compl_source_start_timer and
 // advance_cpt_sources_index_safe
