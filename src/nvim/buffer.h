@@ -239,3 +239,6 @@ buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_vali
 
 // buflist_getfile() moved to buffer_shim.c (Phase 15).
 int buflist_getfile(int n, linenr_T lnum, int options, int forceit);
+
+// buf_contents_changed() moved to buffer_shim.c (Phase 16).
+bool buf_contents_changed(buf_T *buf);
