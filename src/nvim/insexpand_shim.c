@@ -1838,15 +1838,7 @@ void nvim_ins_complete_setup_match_state(int direction)
 /// Compound accessor: return os_hrtime().
 // nvim_os_hrtime: deleted (Phase 3, Rust calls os_hrtime directly)
 
-/// Compound accessor: update compl_cont_status based on compl_curr_match->cp_flags.
-void nvim_ins_complete_update_cont_s_ipos(void)
-{
-  if (compl_curr_match && (compl_curr_match->cp_flags & CP_CONT_S_IPOS)) {
-    compl_cont_status |= CONT_S_IPOS;
-  } else {
-    compl_cont_status &= ~CONT_S_IPOS;
-  }
-}
+// nvim_ins_complete_update_cont_s_ipos: deleted (Phase 2), inlined in entry.rs
 
 // nvim_ins_complete_eat_got_int: deleted (Phase 1), Rust accesses got_int/global_busy/vgetc directly
 
@@ -2294,22 +2286,7 @@ void nvim_ins_compl_show_filename_impl(void)
 // nvim_get_normal_compl_info_impl: deleted (Phase 2), logic moved to rs_get_normal_compl_info in pattern.rs
 
 
-int nvim_get_wholeline_compl_info_impl(char *line, int curs_col)
-{
-  compl_col = (colnr_T)getwhitecols(line);
-  compl_length = (int)curs_col - (int)compl_col;
-  if (compl_length < 0) {  // cursor in indent: empty pattern
-    compl_length = 0;
-  }
-  if (p_ic) {
-    compl_pattern = cstr_as_string(str_foldcase(line + compl_col,
-                                                compl_length, NULL, 0));
-  } else {
-    compl_pattern = cbuf_to_string(line + compl_col, (size_t)compl_length);
-  }
-
-  return OK;
-}
+// nvim_get_wholeline_compl_info_impl: deleted (Phase 2), inlined in pattern.rs
 
 int nvim_get_filename_compl_info_impl(char *line, int startcol, int curs_col)
 {

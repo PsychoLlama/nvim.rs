@@ -22,7 +22,8 @@ use crate::vars::NvimString;
 // Each calls the original C subsystem functions internally.
 extern "C" {
     // nvim_get_normal_compl_info_impl: deleted (Phase 2), inlined below as rs_get_normal_compl_info
-    fn nvim_get_wholeline_compl_info_impl(line: *mut c_char, curs_col: c_int) -> c_int;
+    // nvim_get_wholeline_compl_info_impl: deleted (Phase 2), inlined below as rs_get_wholeline_compl_info
+    fn getwhitecols(p: *const c_char) -> isize;
     fn nvim_get_filename_compl_info_impl(
         line: *mut c_char,
         startcol: c_int,
@@ -207,11 +208,27 @@ pub unsafe extern "C" fn rs_get_normal_compl_info(
 ///
 /// Sets compl_col, compl_length, compl_pattern.
 ///
+/// Rust translation of the C `nvim_get_wholeline_compl_info_impl` compound accessor.
+///
 /// # Safety
 /// Requires valid global state; line must be a valid C string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_wholeline_compl_info(line: *mut c_char, curs_col: c_int) -> c_int {
-    nvim_get_wholeline_compl_info_impl(line, curs_col)
+    let wcols = getwhitecols(line.cast_const()) as c_int;
+    crate::vars::nvim_set_compl_col(wcols);
+    let mut len = curs_col - wcols;
+    if len < 0 {
+        len = 0;
+    }
+    crate::vars::nvim_set_compl_length(len);
+    let col = crate::vars::nvim_get_compl_col() as usize;
+    if crate::vars::nvim_get_p_ic() != 0 {
+        crate::vars::compl_pattern =
+            cstr_as_string(str_foldcase(line.add(col), len, core::ptr::null_mut(), 0));
+    } else {
+        crate::vars::compl_pattern = cbuf_to_string(line.add(col), len as usize);
+    }
+    OK
 }
 
 /// Get the pattern, column and length for filename completion.

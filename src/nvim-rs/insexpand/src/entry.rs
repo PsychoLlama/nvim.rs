@@ -323,7 +323,9 @@ extern "C" {
         -> crate::match_list::ComplMatch;
     fn rs_ctrl_x_mode_path_patterns() -> c_int;
     fn rs_ctrl_x_mode_path_defines() -> c_int;
-    fn nvim_ins_complete_update_cont_s_ipos();
+    // nvim_ins_complete_update_cont_s_ipos: deleted (Phase 2), inlined below
+    #[link_name = "nvim_compl_match_get_flags"]
+    fn nvim_compl_match_get_flags_entry(m: *mut core::ffi::c_void) -> c_int;
     fn rs_ins_compl_show_statusmsg();
     fn setcursor();
     fn nvim_ui_flush();
@@ -342,6 +344,7 @@ extern "C" {
 // Additional key constants for ins_complete
 const CTRL_R: c_int = 18;
 const CONT_S_IPOS: c_int = 8;
+const CP_CONT_S_IPOS: c_int = 4;
 
 /// Do Insert mode completion.
 ///
@@ -428,7 +431,16 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     }
 
     // Update CONT_S_IPOS based on current match flags
-    nvim_ins_complete_update_cont_s_ipos();
+    // (inlined from deleted nvim_ins_complete_update_cont_s_ipos)
+    {
+        let curr = crate::vars::nvim_get_compl_curr_match();
+        let cont = crate::vars::nvim_get_compl_cont_status();
+        if !curr.is_null() && (nvim_compl_match_get_flags_entry(curr) & CP_CONT_S_IPOS) != 0 {
+            crate::vars::nvim_set_compl_cont_status(cont | CONT_S_IPOS);
+        } else {
+            crate::vars::nvim_set_compl_cont_status(cont & !CONT_S_IPOS);
+        }
+    }
 
     // Show status message if appropriate
     if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 {
