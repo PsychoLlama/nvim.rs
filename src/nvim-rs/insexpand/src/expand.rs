@@ -42,6 +42,12 @@ const SHM_COMPLETIONSCAN: c_int = b'C' as c_int;
 const HLF_R: c_int = 18;
 const IOSIZE: usize = 1025;
 
+// Constants for inlined nvim_ins_compl_st_do_search
+const CONT_SOL: c_int = 16;
+const SEARCH_NFMSG: c_int = 0x08;
+const SEARCH_KEEP: c_int = 0x400;
+const RE_LAST: c_int = 2;
+
 extern "C" {
     // ctrl_x_mode queries
     fn rs_ctrl_x_mode_normal() -> c_int;
@@ -122,15 +128,44 @@ extern "C" {
     fn nvim_compl_p_ws_save_set() -> c_int;
     // nvim_compl_restore_p_scs_ws: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), inlined below
-    fn nvim_ins_compl_st_do_search(
-        in_fuzzy: c_int,
-        start_lnum: c_int,
-        start_col: c_int,
-        fuzzy_ptr_out: *mut *mut std::ffi::c_char,
-        fuzzy_len_out: *mut c_int,
-        fuzzy_score_out: *mut c_int,
-    ) -> c_int;
+    // nvim_ins_compl_st_do_search: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_check_and_update_match_pos: deleted (Phase 2), inlined below
+
+    // helpers for inlined nvim_ins_compl_st_do_search
+    #[link_name = "msg_silent"]
+    static mut msg_silent_expand: c_int;
+    fn rs_ins_compl_leader() -> *const std::ffi::c_char;
+    fn rs_ctrl_x_mode_whole_line() -> c_int;
+    fn rs_ctrl_x_mode_eval() -> c_int;
+    fn search_for_fuzzy_match(
+        buf: *mut core::ffi::c_void,
+        pos: *mut crate::vars::PosT,
+        pattern: *const std::ffi::c_char,
+        dir: c_int,
+        start_pos: *const crate::vars::PosT,
+        len_out: *mut c_int,
+        ptr_out: *mut *mut std::ffi::c_char,
+        score_out: *mut c_int,
+    ) -> bool;
+    fn search_for_exact_line(
+        buf: *mut core::ffi::c_void,
+        pos: *mut crate::vars::PosT,
+        dir: c_int,
+        pat: *const std::ffi::c_char,
+    ) -> c_int;
+    fn searchit(
+        win: *mut core::ffi::c_void,
+        buf: *mut core::ffi::c_void,
+        pos: *mut crate::vars::PosT,
+        end_pos: *mut crate::vars::PosT,
+        dir: c_int,
+        pat: *const std::ffi::c_char,
+        patlen: usize,
+        count: c_int,
+        options: c_int,
+        pat_use: c_int,
+        extra_arg: *mut core::ffi::c_void,
+    ) -> c_int;
 
     // underlying helpers used by inlined wrappers
     fn rs_may_advance_cpt_index(cpt: *mut std::ffi::c_char) -> c_int;
@@ -353,7 +388,7 @@ unsafe fn rs_process_next_cpt_value(
     status
 }
 
-// CONT_SOL is checked inside nvim_ins_compl_st_do_search on the C side.
+// nvim_ins_compl_st_do_search inlined above; CONT_SOL now checked directly.
 
 /// Rust translation of get_next_default_completion.
 ///
@@ -387,14 +422,55 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
         #[allow(clippy::cast_possible_wrap)]
         let mut fuzzy_score: c_int = i32::MIN; // FUZZY_SCORE_NONE
 
-        let mut found = nvim_ins_compl_st_do_search(
-            in_fuzzy,
-            start_lnum,
-            start_col,
-            &raw mut fuzzy_ptr,
-            &raw mut fuzzy_len,
-            &raw mut fuzzy_score,
-        );
+        // Inline nvim_ins_compl_st_do_search (Phase 2)
+        let mut found = {
+            msg_silent_expand += 1;
+            let start_pos = crate::vars::PosT {
+                lnum: start_lnum,
+                col: start_col,
+                coladd: 0,
+            };
+            let dir = crate::vars::nvim_get_compl_direction();
+            let r = if in_fuzzy != 0 {
+                let leader = rs_ins_compl_leader();
+                c_int::from(search_for_fuzzy_match(
+                    crate::vars::ins_compl_st.ins_buf,
+                    crate::vars::ins_compl_st.cur_match_pos,
+                    leader,
+                    dir,
+                    &raw const start_pos,
+                    &raw mut fuzzy_len,
+                    &raw mut fuzzy_ptr,
+                    &raw mut fuzzy_score,
+                ))
+            } else if rs_ctrl_x_mode_whole_line() != 0
+                || rs_ctrl_x_mode_eval() != 0
+                || (crate::vars::nvim_get_compl_cont_status() & CONT_SOL) != 0
+            {
+                search_for_exact_line(
+                    crate::vars::ins_compl_st.ins_buf,
+                    crate::vars::ins_compl_st.cur_match_pos,
+                    dir,
+                    crate::vars::compl_pattern.data,
+                )
+            } else {
+                searchit(
+                    core::ptr::null_mut(),
+                    crate::vars::ins_compl_st.ins_buf,
+                    crate::vars::ins_compl_st.cur_match_pos,
+                    core::ptr::null_mut(),
+                    dir,
+                    crate::vars::compl_pattern.data,
+                    crate::vars::compl_pattern.size,
+                    1,
+                    SEARCH_KEEP + SEARCH_NFMSG,
+                    RE_LAST,
+                    core::ptr::null_mut(),
+                )
+            };
+            msg_silent_expand -= 1;
+            r
+        };
 
         // Check / update match positions.
         // check == 0: first-time/set_match_pos (positions set; found stays as-is)

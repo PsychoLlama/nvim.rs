@@ -73,6 +73,16 @@ extern "C" {
     // Validation helpers for do_buffer_ext (implemented in ex_cmds_shim.c)
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
     fn nvim_ecmd_emsg_closing_buffer();
+
+    // can_unload_buffer accessors
+    /// Get the `updating_screen` global.
+    fn nvim_get_updating_screen() -> bool;
+    /// Get the first window in the current tab (`firstwin`).
+    fn nvim_get_firstwin() -> *mut c_void;
+    /// Get `wp->w_next` for current-tab iteration.
+    fn nvim_win_get_next_in_tab(wp: *mut c_void) -> *mut c_void;
+    /// Emit E937 error with buffer name.
+    fn nvim_emsg_e937_buf_in_use(buf: BufHandle);
 }
 
 // kOptJopFlagClean flag value (from option_vars.generated.h)
@@ -1127,6 +1137,40 @@ pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action
     }
 
     retval
+}
+
+// =============================================================================
+// can_unload_buffer
+// =============================================================================
+
+/// Return true when buffer `buf` can be unloaded.
+///
+/// Gives an error message and returns false when the buffer is locked or the
+/// screen is being redrawn and the buffer is in a window.
+///
+/// # Safety
+///
+/// Must be called on the Neovim main thread with valid state.
+#[must_use]
+#[unsafe(export_name = "can_unload_buffer")]
+pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
+    if nvim_buf_get_locked(buf) != 0 {
+        nvim_emsg_e937_buf_in_use(buf);
+        return false;
+    }
+
+    if nvim_get_updating_screen() {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_get_buffer(wp) == buf {
+                nvim_emsg_e937_buf_in_use(buf);
+                return false;
+            }
+            wp = nvim_win_get_next_in_tab(wp);
+        }
+    }
+
+    true
 }
 
 // =============================================================================

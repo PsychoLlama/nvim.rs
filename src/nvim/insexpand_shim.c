@@ -3107,39 +3107,7 @@ int nvim_compl_p_ws_save_set(void)
 /// Returns 1 if ins_compl_st.ins_buf == curbuf, else 0.
 // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), Rust inlines directly
 
-/// Call the appropriate search function (fuzzy / exact-line / searchit) for one
-/// step of the default-completion loop.  Increments msg_silent before the call
-/// and decrements it after (to suppress wrapscan messages).
-///
-/// Returns OK if a new position was found, FAIL otherwise.
-/// in_fuzzy: 1 if fuzzy-collect mode; start_lnum/start_col: the loop start pos.
-/// fuzzy_ptr_out/fuzzy_len_out/fuzzy_score_out: set only in fuzzy mode.
-int nvim_ins_compl_st_do_search(int in_fuzzy, int start_lnum, int start_col,
-                                char **fuzzy_ptr_out, int *fuzzy_len_out,
-                                int *fuzzy_score_out)
-{
-  int found = FAIL;
-  msg_silent++;
-  pos_T start_pos = { .lnum = (linenr_T)start_lnum, .col = (colnr_T)start_col };
-  if (in_fuzzy) {
-    char *leader = (char *)rs_ins_compl_leader();
-    found = (int)search_for_fuzzy_match(ins_compl_st.ins_buf,
-                                        ins_compl_st.cur_match_pos,
-                                        leader, compl_direction,
-                                        &start_pos,
-                                        fuzzy_len_out, fuzzy_ptr_out, fuzzy_score_out);
-  } else if (rs_ctrl_x_mode_whole_line() || rs_ctrl_x_mode_eval()
-             || (compl_cont_status & CONT_SOL)) {
-    found = search_for_exact_line(ins_compl_st.ins_buf, ins_compl_st.cur_match_pos,
-                                  compl_direction, compl_pattern.data);
-  } else {
-    found = searchit(NULL, ins_compl_st.ins_buf, ins_compl_st.cur_match_pos,
-                     NULL, compl_direction, compl_pattern.data, compl_pattern.size,
-                     1, SEARCH_KEEP + SEARCH_NFMSG, RE_LAST, NULL);
-  }
-  msg_silent--;
-  return found;
-}
+// nvim_ins_compl_st_do_search: deleted (Phase 2), inlined in expand.rs
 
 // nvim_ins_compl_st_check_and_update_match_pos: deleted (Phase 2), inlined in expand.rs
 

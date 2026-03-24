@@ -2436,6 +2436,15 @@ void enter_buffer(buf_T *buf)
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
   = N_("E937: Attempt to delete a buffer that is in use: %s");
 
+/// Emit the E937 error message for can_unload_buffer.
+/// Prefers buf->b_fname, falls back to buf->b_ffname, then "[No Name]".
+void nvim_emsg_e937_buf_in_use(buf_T *buf)
+{
+  const char *fname = buf->b_fname != NULL ? buf->b_fname : buf->b_ffname;
+  semsg(_(e_attempt_to_delete_buffer_that_is_in_use_str),
+        fname != NULL ? fname : "[No Name]");
+}
+
 /// Ensure buffer "buf" is loaded.
 bool buf_ensure_loaded(buf_T *buf)
 {
@@ -2452,29 +2461,6 @@ bool buf_ensure_loaded(buf_T *buf)
   int status = open_buffer(false, NULL, 0);
   aucmd_restbuf(&aco);
   return (status != FAIL);
-}
-
-/// Return true when buffer "buf" can be unloaded.
-/// Give an error message and return false when the buffer is locked or the
-/// screen is being redrawn and the buffer is in a window.
-bool can_unload_buffer(buf_T *buf)
-{
-  bool can_unload = !buf->b_locked;
-
-  if (can_unload && updating_screen) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_buffer == buf) {
-        can_unload = false;
-        break;
-      }
-    }
-  }
-  if (!can_unload) {
-    char *fname = buf->b_fname != NULL ? buf->b_fname : buf->b_ffname;
-    semsg(_(e_attempt_to_delete_buffer_that_is_in_use_str),
-          fname != NULL ? fname : "[No Name]");
-  }
-  return can_unload;
 }
 
 /// Implementation of the commands for the buffer list.
