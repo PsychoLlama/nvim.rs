@@ -591,8 +591,6 @@ void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval
 /// Get the qfl->qf_ctx as a raw pointer (NULL if not set).
 void *nvim_qfl_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 
-/// tv_dict_add_list: add an existing list to a dict (qf-specific); returns OK or FAIL.
-/// Allocate a list (qf-specific void* version).
 /// Check if a dict has 'lines' key with a VAR_LIST value and non-NULL list.
 bool nvim_tv_dict_has_lines_key(const void *dict)
 {
@@ -736,8 +734,6 @@ void nvim_qf_free_lists_array(void *qi_void)
   ((qf_info_T *)qi_void)->qf_lists = NULL;
 }
 
-/// Free the qf_info_T struct itself (only for heap-allocated stacks).
-
 /// Return curwin->w_buffer (may be NULL).
 void *nvim_curwin_get_buffer(void) { return (void *)curwin->w_buffer; }
 
@@ -751,7 +747,6 @@ void nvim_close_buffer_wipe(void *buf_void)
   close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false);
 }
 
-/// Atomically exchange wp->w_llist: set to NULL and return old value.
 void *nvim_win_take_llist(void *wp_void)
 {
   if (wp_void == NULL) { return NULL; }
@@ -777,11 +772,8 @@ void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
 /// Set the global ql_info pointer.
 void nvim_set_ql_info(void *qi_void) { ql_info = (qf_info_T *)qi_void; }
 
-/// Allocate a zeroed qf_info_T on the heap.
-/// Set qi->qfl_type.
 void nvim_qf_set_qi_type(void *qi_void, int qfltype) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qfl_type = (qfltype_T)qfltype; }
 
-/// Set qi->qf_maxcount.
 void nvim_qf_set_maxcount(void *qi_void, int n) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_maxcount = n; }
 
 /// Set qi->qf_lists to a freshly xcalloc'd array of n qf_list_T elements.
@@ -937,13 +929,6 @@ void nvim_qf_convert_setup_cleanup(void *vc)
 /// Return vc->vc_type (CONV_NONE == 0).
 int nvim_qf_vc_type(const void *vc) { return vc == NULL ? 0 : ((const vimconv_T *)vc)->vc_type; }
 
-/// Return IObuff pointer.
-/// Return IOSIZE constant.
-/// xmalloc wrapper for growbuf allocation.
-/// xrealloc wrapper for growbuf grow.
-/// xfree wrapper for growbuf free.
-/// xstrlcpy: copy at most n-1 bytes of src to dst, always NUL-terminate.
-/// Return true if tv is VAR_STRING.
 bool nvim_qf_tv_is_string(const void *tv_void)
 {
   return tv_void != NULL && ((const typval_T *)tv_void)->v_type == VAR_STRING;
@@ -1771,23 +1756,6 @@ static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
   restore_start_dir(dirname_start);
 }
 
-/// Flags used by getqflist()/getloclist() to determine which fields to return.
-enum {
-  QF_GETLIST_NONE = 0x0,
-  QF_GETLIST_TITLE = 0x1,
-  QF_GETLIST_ITEMS = 0x2,
-  QF_GETLIST_NR = 0x4,
-  QF_GETLIST_WINID = 0x8,
-  QF_GETLIST_CONTEXT = 0x10,
-  QF_GETLIST_ID = 0x20,
-  QF_GETLIST_IDX = 0x40,
-  QF_GETLIST_SIZE = 0x80,
-  QF_GETLIST_TICK = 0x100,
-  QF_GETLIST_FILEWINID = 0x200,
-  QF_GETLIST_QFBUFNR = 0x400,
-  QF_GETLIST_QFTF = 0x800,
-  QF_GETLIST_ALL = 0xFFF,
-};
 
 /// Get the first item in a VimL list
 void *nvim_tv_list_first(const void *list)
@@ -1880,18 +1848,6 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
   return IS_LL_WINDOW(win) && win->w_llist_ref->qf_refcount == 1;
 }
 
-/// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
-// ":[range]cbuffer [bufnr]" command.
-// ":[range]caddbuffer [bufnr]" command.
-// ":[range]cgetbuffer [bufnr]" command.
-// ":[range]lbuffer [bufnr]" command.
-// ":[range]laddbuffer [bufnr]" command.
-// ":[range]lgetbuffer [bufnr]" command.
-
-//   nvim_qf_find_help_win, nvim_qf_win_get_llist, rs_qf_alloc_stack.
-//   nvim_qf_is_ll_stack_qi, nvim_qf_find_win_with_loclist.
-//   rs_qf_jump_newwin, nvim_semsg_nomatch2, nvim_eap_get_arg.
-//   nvim_qf_get_curwin, nvim_qf_win_get_llist, rs_ll_free_all, nvim_win_set_llist.
 
 /// Save p_cpo and set it to empty. Returns the old value as an opaque pointer.
 void *nvim_save_cpo_set_empty(void)
