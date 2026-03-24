@@ -1832,20 +1832,6 @@ int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message)
   return OK;
 }
 
-/// Set alternate file name for current window
-///
-/// Used by do_one_cmd(), do_write() and do_ecmd().
-///
-/// @return  the buffer.
-buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum)
-{
-  // Create a buffer.  'buflisted' is not set if it's a new buffer
-  buf_T *buf = buflist_new(ffname, sfname, lnum, 0);
-  if (buf != NULL && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
-    curwin->w_alt_fnum = buf->b_fnum;
-  }
-  return buf;
-}
 
 // ============================================================
 // Buffer navigation (Phase 15)

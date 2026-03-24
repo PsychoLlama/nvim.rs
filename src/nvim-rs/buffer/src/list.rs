@@ -47,6 +47,16 @@ extern "C" {
         file_id_valid: bool,
     ) -> bool;
     fn xfree(ptr: *mut c_void);
+
+    // setaltfname accessors
+    fn nvim_buflist_new(
+        ffname: *const c_char,
+        sfname: *const c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> BufHandle;
+    fn nvim_ecmd_cmdmod_has_keepalt() -> c_int;
+    fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
 }
 
 // =============================================================================
@@ -1006,6 +1016,31 @@ pub unsafe extern "C" fn buflist_findpat_export(
     curtab_only: bool,
 ) -> c_int {
     buflist_findpat_impl(pattern, pattern_end, unlisted, diffmode, curtab_only)
+}
+
+// =============================================================================
+// setaltfname: set alternate file name (Phase 2 partial)
+// =============================================================================
+
+/// Set the alternate file name for the current window.
+///
+/// Mirrors C `setaltfname()`. Creates a buffer in the list (not listed),
+/// and if `CMOD_KEEPALT` is not set, updates `curwin->w_alt_fnum`.
+///
+/// # Safety
+/// Must be called on the Neovim main thread with valid state.
+#[must_use]
+#[unsafe(export_name = "setaltfname")]
+pub unsafe extern "C" fn rs_setaltfname(
+    ffname: *const c_char,
+    sfname: *const c_char,
+    lnum: c_int,
+) -> BufHandle {
+    let buf = nvim_buflist_new(ffname, sfname, lnum, 0);
+    if !buf.is_null() && nvim_ecmd_cmdmod_has_keepalt() == 0 {
+        nvim_excmds_set_curwin_alt_fnum(nvim_buf_get_fnum(buf));
+    }
+    buf
 }
 
 // =============================================================================
