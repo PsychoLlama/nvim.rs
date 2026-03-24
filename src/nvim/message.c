@@ -178,11 +178,7 @@ void msg_grid_set_pos(int row, bool scrolled)
 }
 
 
-// C accessors for redirection state (used by Rust)
-// redir_fd/reg/vname/capture_ga/p_vfile: accessed as extern statics from Rust (verbose.rs)
-// nvim_get_ui_active: replaced by direct ui_active() call in grid/src/lib.rs
-
-// nvim_hl_msg_free: still used by Rust (history.rs), calls hl_msg_free(entry->msg) by value
+// nvim_hl_msg_free: called from Rust (history.rs); hl_msg_free takes entry->msg by value
 void nvim_hl_msg_free(MessageHistoryEntry *entry)
 {
   hl_msg_free(entry->msg);
@@ -190,27 +186,19 @@ void nvim_hl_msg_free(MessageHistoryEntry *entry)
 
 extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
-// nvim_msgchunk_get_text: still used by Rust (chunk.rs) for flexible array member access
+// nvim_msgchunk_get_text: called from Rust (chunk.rs) for flexible array member sb_text
 const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
-
-// C accessors for message formatting (used by Rust)
 
 // Rust implementation of emsg_not_now()
 extern int rs_emsg_not_now(void);
 
-// Forward declarations for static functions used by Phase 4/5 accessors below
+// Forward declarations (non-static functions accessible from Rust via extern "C")
 char *get_emsg_source(void);
 char *get_emsg_lnum(void);
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 
-// redir_write, get_emsg_source, get_emsg_lnum now non-static, called directly from Rust
-
-// C accessors for did_emsg_syntax (used by Rust)
-
-// C accessors for no_wait_return (used by Rust)
-
-// Phase 4: msg_scroll_up helper wrappers
+// msg_scroll_up helper wrappers (used by Rust; access msg_grid struct fields)
 void nvim_msg_grid_clear_first_line(void)
 {
   if (msg_grid.chars) {
@@ -280,21 +268,15 @@ void nvim_msg_grid_scroll_up(int to_scroll)
   ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
 }
 
-// Phase 432: Line printing accessors
 int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
-// Note: nvim_get_columns is defined in ex_getln.c
-// Note: nvim_get_got_int is defined in ex_eval.c
 
-// msg_puts_printf, msg_puts_display now non-static, called directly from Rust
 void nvim_msg_show_empty(void)
 {
   ui_call_msg_show(cstr_as_string("empty"), (Array)ARRAY_DICT_INIT, false, false, false,
                    INTEGER_OBJ(-1));
 }
 
-// Phase 1: message_filtered implementation helper (does the regex check in C)
-// This is the actual implementation; message_filtered() is replaced by
-// Rust #[export_name = "message_filtered"] which calls this.
+// message_filtered() is implemented in Rust (#[export_name]); this is its C helper.
 bool nvim_message_filtered_impl(const char *msg)
 {
   if (cmdmod.cmod_filter_regmatch.regprog == NULL) {
@@ -304,7 +286,6 @@ bool nvim_message_filtered_impl(const char *msg)
   return cmdmod.cmod_filter_force ? match : !match;
 }
 
-// Phase 1: msg_ui_refresh and msg_ui_flush implementation helpers
 void nvim_msg_ui_refresh_impl(void)
 {
   if (ui_has(kUIMultigrid) && msg_grid.chars) {
@@ -319,11 +300,6 @@ void nvim_msg_ui_flush_impl(void)
   }
 }
 
-// Phase 2: msg_start accessors
-
-// Phase 68: keep_msg raw setters (used by Rust set_keep_msg)
-// Note: nvim_set_keep_msg (with xfree/xstrdup) is defined in buffer_shim.c
-// Phase 6: msgmore() accessors - nvim_get_p_report is in indent_ffi.c (returns int64_t)
 // Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
 const char *nvim_format_msgmore(int n)
 {
@@ -341,16 +317,6 @@ const char *nvim_format_msgmore(int n)
   return msg_buf;
 }
 
-// Note: nvim_get_in_assert_fails is defined in normal_shim.c (returns bool)
-// Note: nvim_ui_flush is defined in change_ffi.c
-// Note: nvim_os_delay is defined in change_ffi.c (takes long ms, bool allow_input)
-
-// Note: nvim_get_global_busy is defined in undo.c (returns bool)
-
-// Phase 72: give_warning() accessors
-
-// verbose_kind and pre_verbose_kind are now Rust statics (display.rs)
-// nvim_verbose_enter_kind and nvim_restore_pre_verbose_kind migrated to Rust (verbose.rs)
 void nvim_verbose_stop_impl(void)
 {
   if (verbose_fd != NULL) {
@@ -371,14 +337,6 @@ int nvim_verbose_open_impl(void)
   }
   return OK;
 }
-// Note: nvim_get_msg_silent, nvim_set_msg_silent, nvim_set_msg_scroll already defined above
-// Note: nvim_get_p_vfile_not_empty already defined (returns 1 if not empty)
-
-// nvim_msg_hist_add_str/len removed: msg_hist_add is now non-static, called directly from Rust
-
-// nvim_set_msg_ext_kind deleted: msg_ext_kind is now a Rust static (display.rs)
-
-
 
 void msg_grid_validate(void)
 {
@@ -2150,12 +2108,6 @@ void redir_write(const char *const str, const ptrdiff_t maxlen)
     }
   }
 }
-
-// Save and restore message kind when emitting a verbose message.
-// (pre_verbose_kind and verbose_kind managed via C accessors for Rust)
-static const char *pre_verbose_kind = NULL;
-static const char *verbose_kind = "verbose";
-
 
 /// Shows a warning, with optional highlighting.
 ///
