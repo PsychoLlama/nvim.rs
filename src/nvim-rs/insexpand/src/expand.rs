@@ -110,14 +110,17 @@ extern "C" {
         start_col: c_int,
         fuzzy_collect: c_int,
     ) -> c_int;
-    fn nvim_ins_compl_st_advance_buf(flag: c_int) -> c_int;
+    // nvim_ins_compl_st_advance_buf: deleted (Phase 2), inlined below
+    fn rs_ins_compl_next_buf(buf: nvim_buffer::BufHandle, flag: c_int) -> nvim_buffer::BufHandle;
+    fn nvim_buf_has_ml_mfp_void(buf: *const core::ffi::c_void) -> bool;
+    fn nvim_buf_ml_line_count(buf: *mut core::ffi::c_void) -> c_int;
     fn nvim_ins_compl_st_get_ins_buf_fname() -> *const std::ffi::c_char;
     fn nvim_ins_compl_st_msg_scanning();
     // nvim_ins_compl_st_msg_scanning_tags: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_set_dict_from_e_cpt: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_e_cpt_inc: inlined in vars.rs (Phase 27)
     // nvim_ins_compl_st_set_func_cb_from_e_cpt: deleted (Phase 2), inlined below
-    fn nvim_ins_compl_st_set_dict_from_ins_buf();
+    // nvim_ins_compl_st_set_dict_from_ins_buf: deleted (Phase 2), inlined below
     // nvim_ins_compl_st_advance_e_cpt: deleted (Phase 2), inlined below
 
     // completion status
@@ -288,7 +291,30 @@ unsafe fn rs_process_next_cpt_value(
         && matches!(e_char, b'b' | b'u' | b'w' | b'U')
     {
         // Buffer/window scan ('b', 'u', 'w', 'U' entries)
-        let result = nvim_ins_compl_st_advance_buf(c_int::from(e_char));
+        // Inline nvim_ins_compl_st_advance_buf (Phase 2)
+        let result = {
+            let next = rs_ins_compl_next_buf(
+                nvim_buffer::BufHandle::from_ptr(crate::vars::ins_compl_st.ins_buf),
+                c_int::from(e_char),
+            );
+            if next.as_ptr() == curbuf_expand {
+                0
+            } else {
+                crate::vars::ins_compl_st.ins_buf = next.as_ptr();
+                if nvim_buf_has_ml_mfp_void(crate::vars::ins_compl_st.ins_buf.cast_const()) {
+                    crate::vars::nvim_set_compl_started(1);
+                    crate::vars::ins_compl_st.first_match_pos.col = 0;
+                    crate::vars::ins_compl_st.last_match_pos.col = 0;
+                    crate::vars::ins_compl_st.first_match_pos.lnum =
+                        nvim_buf_ml_line_count(crate::vars::ins_compl_st.ins_buf) + 1;
+                    crate::vars::ins_compl_st.last_match_pos.lnum = 0;
+                    2
+                } else {
+                    crate::vars::ins_compl_st.found_all = true;
+                    1
+                }
+            }
+        };
         if result == 0 {
             // No new buffer found (wrapped back to curbuf) -- skip
             status = INS_COMPL_CPT_CONT;
@@ -301,7 +327,9 @@ unsafe fn rs_process_next_cpt_value(
             if nvim_ins_compl_st_get_ins_buf_fname().is_null() {
                 status = INS_COMPL_CPT_CONT;
             } else {
-                nvim_ins_compl_st_set_dict_from_ins_buf();
+                // Inline nvim_ins_compl_st_set_dict_from_ins_buf (Phase 2)
+                crate::vars::ins_compl_st.dict = nvim_ins_compl_st_get_ins_buf_fname().cast_mut();
+                crate::vars::ins_compl_st.dict_f = 2; // DICT_EXACT
                 compl_type = CTRL_X_DICTIONARY;
                 nvim_ins_compl_st_msg_scanning();
             }

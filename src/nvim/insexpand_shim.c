@@ -3004,33 +3004,7 @@ int nvim_ins_compl_st_set_dot_source(int start_lnum, int start_col, int fuzzy_co
   return wrapped;
 }
 
-/// Calls rs_ins_compl_next_buf(ins_compl_st.ins_buf, flag) and updates
-/// ins_compl_st.ins_buf. Returns 1 if the returned buffer != curbuf, else 0.
-/// If the buffer is loaded, sets compl_started=true and initialises match
-/// positions for a full-buffer scan. Otherwise marks found_all=true.
-/// Returns:
-///   2  = buffer found and loaded (compl_type should be 0)
-///   1  = buffer found but unloaded (compl_type should be CTRL_X_DICTIONARY)
-///   0  = no new buffer (wrapped back to curbuf)
-int nvim_ins_compl_st_advance_buf(int flag)
-{
-  buf_T *next = rs_ins_compl_next_buf(ins_compl_st.ins_buf, flag);
-  if (next == curbuf) {
-    return 0;
-  }
-  ins_compl_st.ins_buf = next;
-  if (ins_compl_st.ins_buf->b_ml.ml_mfp != NULL) {
-    // Loaded buffer: set up for full scan
-    compl_started = true;
-    ins_compl_st.first_match_pos.col = ins_compl_st.last_match_pos.col = 0;
-    ins_compl_st.first_match_pos.lnum = ins_compl_st.ins_buf->b_ml.ml_line_count + 1;
-    ins_compl_st.last_match_pos.lnum = 0;
-    return 2;
-  }
-  // Unloaded buffer: scan like dictionary
-  ins_compl_st.found_all = true;
-  return 1;
-}
+// nvim_ins_compl_st_advance_buf: deleted (Phase 2), inlined in expand.rs
 
 /// Returns ins_compl_st.ins_buf->b_fname (may be NULL) as a C string pointer.
 const char *nvim_ins_compl_st_get_ins_buf_fname(void)
@@ -3062,14 +3036,7 @@ void nvim_ins_compl_st_msg_scanning(void)
 
 // nvim_ins_compl_st_set_func_cb_from_e_cpt: deleted (Phase 2), inlined in expand.rs
 
-/// Sets ins_compl_st.dict = ins_compl_st.ins_buf->b_fname and
-/// ins_compl_st.dict_f = DICT_EXACT.
-/// Caller should have verified b_fname != NULL first.
-void nvim_ins_compl_st_set_dict_from_ins_buf(void)
-{
-  ins_compl_st.dict   = ins_compl_st.ins_buf->b_fname;
-  ins_compl_st.dict_f = DICT_EXACT;
-}
+// nvim_ins_compl_st_set_dict_from_ins_buf: deleted (Phase 2), inlined in expand.rs
 
 // nvim_ins_compl_st_advance_e_cpt: deleted (Phase 2), inlined in expand.rs
 
