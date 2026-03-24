@@ -46,6 +46,10 @@ pub static mut msg_wait: c_int = 0;
 #[no_mangle]
 pub static mut msg_hist_max: c_int = 500;
 
+/// Whether keep_msg was set by msgmore() (replaces C global keep_msg_more)
+#[no_mangle]
+pub static mut keep_msg_more: bool = false;
+
 // ============================================================================
 // C Function Declarations
 // ============================================================================
@@ -106,7 +110,6 @@ extern "C" {
     fn nvim_os_delay(ms: std::ffi::c_long, allow_input: bool);
 
     // keep_msg state
-    static mut keep_msg_more: bool;
     static mut keep_msg_hl_id: c_int;
     static mut keep_msg: *mut c_char;
     fn xfree(ptr: *mut std::ffi::c_void);

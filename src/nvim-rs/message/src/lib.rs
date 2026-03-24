@@ -155,8 +155,6 @@ extern "C" {
     /// Set `msg_scroll` flag
     /// `msg_hist_off` — direct access to C global
     static mut msg_hist_off: bool;
-    /// `keep_msg_more` — direct access to C global
-    static mut keep_msg_more: bool;
 }
 
 /// Get the message scrolled count.
@@ -216,7 +214,7 @@ pub unsafe extern "C" fn rs_set_msg_hist_off(val: c_int) {
 /// Calls C accessor function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_keep_msg_more() -> c_int {
-    c_int::from(keep_msg_more)
+    c_int::from(crate::misc::keep_msg_more)
 }
 
 #[cfg(test)]

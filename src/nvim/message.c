@@ -93,8 +93,6 @@ extern int msg_wait;
 static FILE *verbose_fd = NULL;
 static bool verbose_did_open = false;
 
-bool keep_msg_more = false;    // keep_msg was set by msgmore()
-
 // Extended msg state, currently used for external UIs with ext_messages
 // msg_ext_kind is owned by Rust (display.rs), accessible via extern linkage
 extern const char *msg_ext_kind;
