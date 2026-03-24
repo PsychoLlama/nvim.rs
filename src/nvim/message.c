@@ -191,6 +191,8 @@ const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 
 // Rust implementation of emsg_not_now()
 extern int rs_emsg_not_now(void);
+// Rust implementation of msg_show_console_dialog()
+extern char *rs_msg_show_console_dialog(const char *message, const char *buttons, int dfltbutton);
 
 // Forward declarations (non-static functions accessible from Rust via extern "C")
 char *get_emsg_source(void);
@@ -267,8 +269,6 @@ void nvim_msg_grid_scroll_up(int to_scroll)
 {
   ui_call_grid_scroll(msg_grid.handle, 0, Rows, 0, Columns, to_scroll, 0);
 }
-
-int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 
 void nvim_msg_show_empty(void)
 {
@@ -2168,7 +2168,7 @@ int do_dialog(int type, const char *title, const char *message, const char *butt
   // Since we wait for a keypress, don't make the
   // user press RETURN as well afterwards.
   no_wait_return++;
-  char *hotkeys = msg_show_console_dialog(message, buttons, dfltbutton);
+  char *hotkeys = rs_msg_show_console_dialog(message, buttons, dfltbutton);
 
   while (true) {
     // Without a UI Nvim waits for input forever.
@@ -2232,176 +2232,8 @@ int do_dialog(int type, const char *title, const char *message, const char *butt
   return retval;
 }
 
-/// Copy one character from "*from" to "*to", taking care of multi-byte
-/// characters.  Return the length of the character in bytes.
-///
-/// @param lowercase  make character lower case
-static int copy_char(const char *from, char *to, bool lowercase)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (lowercase) {
-    int c = mb_tolower(utf_ptr2char(from));
-    return utf_char2bytes(c, to);
-  }
-  int len = utfc_ptr2len(from);
-  memmove(to, from, (size_t)len);
-  return len;
-}
-
-#define HAS_HOTKEY_LEN 30
-#define HOTK_LEN MB_MAXBYTES
-
-/// Allocates memory for dialog string & for storing hotkeys
-///
-/// Finds the size of memory required for the confirm_msg & for storing hotkeys
-/// and then allocates the memory for them.
-/// has_hotkey array is also filled-up.
-///
-/// @param message Message which will be part of the confirm_msg
-/// @param buttons String containing button names
-/// @param[out] has_hotkey An element in this array is set to true if
-///                        corresponding button has a hotkey
-///
-/// @return Pointer to memory allocated for storing hotkeys
-static char *console_dialog_alloc(const char *message, const char *buttons, bool has_hotkey[])
-{
-  int lenhotkey = HOTK_LEN;  // count first button
-  has_hotkey[0] = false;
-
-  // Compute the size of memory to allocate.
-  int msg_len = 0;
-  int button_len = 0;
-  int idx = 0;
-  const char *r = buttons;
-  while (*r) {
-    if (*r == DLG_BUTTON_SEP) {
-      button_len += 3;                  // '\n' -> ', '; 'x' -> '(x)'
-      lenhotkey += HOTK_LEN;            // each button needs a hotkey
-      if (idx < HAS_HOTKEY_LEN - 1) {
-        has_hotkey[++idx] = false;
-      }
-    } else if (*r == DLG_HOTKEY_CHAR) {
-      r++;
-      button_len++;                     // '&a' -> '[a]'
-      if (idx < HAS_HOTKEY_LEN - 1) {
-        has_hotkey[idx] = true;
-      }
-    }
-
-    // Advance to the next character
-    MB_PTR_ADV(r);
-  }
-
-  msg_len += (int)strlen(message) + 3;     // for the NL's and NUL
-  button_len += (int)strlen(buttons) + 3;  // for the ": " and NUL
-  lenhotkey++;                             // for the NUL
-
-  // If no hotkey is specified, first char is used.
-  if (!has_hotkey[0]) {
-    button_len += 2;                       // "x" -> "[x]"
-  }
-
-  // Now allocate space for the strings
-  confirm_msg = xmalloc((size_t)msg_len);
-  snprintf(confirm_msg, (size_t)msg_len, "\n%s\n", message);
-
-  xfree(confirm_buttons);
-  confirm_buttons = xmalloc((size_t)button_len);
-
-  return xmalloc((size_t)lenhotkey);
-}
-
-/// Format the dialog string, and display it at the bottom of
-/// the screen. Return a string of hotkey chars (if defined) for
-/// each 'button'. If a button has no hotkey defined, the first character of
-/// the button is used.
-/// The hotkeys can be multi-byte characters, but without combining chars.
-///
-/// @return  an allocated string with hotkeys.
-static char *msg_show_console_dialog(const char *message, const char *buttons, int dfltbutton)
-  FUNC_ATTR_NONNULL_RET
-{
-  bool has_hotkey[HAS_HOTKEY_LEN] = { false };
-  char *hotk = console_dialog_alloc(message, buttons, has_hotkey);
-
-  copy_confirm_hotkeys(buttons, dfltbutton, has_hotkey, hotk);
-
-  display_confirm_msg();
-  return hotk;
-}
-
-/// Copies hotkeys into the memory allocated for it
-///
-/// @param buttons String containing button names
-/// @param default_button_idx Number of default button
-/// @param has_hotkey An element in this array is true if corresponding button
-///                   has a hotkey
-/// @param[out] hotkeys_ptr Pointer to the memory location where hotkeys will be copied
-static void copy_confirm_hotkeys(const char *buttons, int default_button_idx,
-                                 const bool has_hotkey[], char *hotkeys_ptr)
-{
-  // Define first default hotkey. Keep the hotkey string NUL
-  // terminated to avoid reading past the end.
-  hotkeys_ptr[copy_char(buttons, hotkeys_ptr, true)] = NUL;
-
-  bool first_hotkey = false;  // Is the first char of button a hotkey
-  if (!has_hotkey[0]) {
-    first_hotkey = true;     // If no hotkey is specified, first char is used
-  }
-
-  // Remember where the choices start, sent as prompt to cmdline.
-  char *msgp = confirm_buttons;
-
-  int idx = 0;
-  const char *r = buttons;
-  while (*r) {
-    if (*r == DLG_BUTTON_SEP) {
-      *msgp++ = ',';
-      *msgp++ = ' ';                    // '\n' -> ', '
-
-      // Advance to next hotkey and set default hotkey
-      hotkeys_ptr += strlen(hotkeys_ptr);
-      hotkeys_ptr[copy_char(r + 1, hotkeys_ptr, true)] = NUL;
-
-      if (default_button_idx) {
-        default_button_idx--;
-      }
-
-      // If no hotkey is specified, first char is used.
-      if (idx < HAS_HOTKEY_LEN - 1 && !has_hotkey[++idx]) {
-        first_hotkey = true;
-      }
-    } else if (*r == DLG_HOTKEY_CHAR || first_hotkey) {
-      if (*r == DLG_HOTKEY_CHAR) {
-        r++;
-      }
-
-      first_hotkey = false;
-      if (*r == DLG_HOTKEY_CHAR) {                 // '&&a' -> '&a'
-        *msgp++ = *r;
-      } else {
-        // '&a' -> '[a]'
-        *msgp++ = (default_button_idx == 1) ? '[' : '(';
-        msgp += copy_char(r, msgp, false);
-        *msgp++ = (default_button_idx == 1) ? ']' : ')';
-
-        // redefine hotkey
-        hotkeys_ptr[copy_char(r, hotkeys_ptr, true)] = NUL;
-      }
-    } else {
-      // everything else copy literally
-      msgp += copy_char(r, msgp, false);
-    }
-
-    // advance to the next character
-    MB_PTR_ADV(r);
-  }
-
-  *msgp++ = ':';
-  *msgp++ = ' ';
-  *msgp = NUL;
-}
-
+// copy_char, console_dialog_alloc, msg_show_console_dialog, copy_confirm_hotkeys
+// migrated to Rust (dialog.rs) as rs_msg_show_console_dialog
 // display_confirm_msg, vim_dialog_yesno, vim_dialog_yesnocancel, vim_dialog_yesnoallcancel
 // migrated to Rust (dialog.rs)
 

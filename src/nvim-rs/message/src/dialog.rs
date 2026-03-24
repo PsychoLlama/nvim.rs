@@ -396,6 +396,18 @@ extern "C" {
     /// UI active check
     fn ui_active() -> c_int;
     static mut no_wait_return: c_int;
+    /// Lowercase a unicode character
+    fn mb_tolower(c: c_int) -> c_int;
+    /// Get unicode code point from UTF-8 pointer
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    /// Write unicode code point as UTF-8 bytes; returns byte count
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    /// Get length of UTF-8 character (with combining chars) at pointer
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    /// Allocate memory (aborts on OOM)
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn strlen(s: *const c_char) -> usize;
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 /// Check if dialogs should be suppressed.
@@ -450,6 +462,216 @@ pub unsafe extern "C" fn rs_dialog_leave() {
         no_wait_return -= 1;
     }
 }
+
+// ============================================================================
+// Console dialog helper functions (migrated from message.c)
+// ============================================================================
+
+/// Maximum number of buttons tracked for hotkeys
+const HAS_HOTKEY_LEN: usize = 30;
+/// Maximum bytes in a multibyte character (MB_MAXBYTES)
+const HOTK_LEN: usize = 21;
+/// NUL terminator byte
+const NUL: c_char = 0;
+
+/// Copy one multibyte character, optionally lowercasing it.
+///
+/// Returns the number of bytes written.
+///
+/// # Safety
+/// `from` and `to` must be valid non-null pointers.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn copy_char(from: *const c_char, to: *mut c_char, lowercase: bool) -> c_int {
+    if lowercase {
+        let c = mb_tolower(utf_ptr2char(from));
+        utf_char2bytes(c, to)
+    } else {
+        let len = utfc_ptr2len(from) as usize;
+        std::ptr::copy_nonoverlapping(from, to, len);
+        len as c_int
+    }
+}
+
+/// Allocate memory for dialog strings and track hotkey presence.
+///
+/// Mirrors C `console_dialog_alloc`. Returns pointer to hotkey buffer.
+///
+/// # Safety
+/// `message`, `buttons`, `has_hotkey` must be valid non-null pointers.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn console_dialog_alloc(
+    message: *const c_char,
+    buttons: *const c_char,
+    has_hotkey: *mut bool,
+) -> *mut c_char {
+    let mut lenhotkey: usize = HOTK_LEN; // count first button
+    *has_hotkey = false;
+
+    let mut msg_len: usize = 0;
+    let mut button_len: usize = 0;
+    let mut idx: usize = 0;
+    let mut r = buttons;
+
+    while *r != 0 {
+        if c_int::from(*r) == DLG_BUTTON_SEP {
+            button_len += 3; // '\n' -> ', '; 'x' -> '(x)'
+            lenhotkey += HOTK_LEN;
+            if idx < HAS_HOTKEY_LEN - 1 {
+                idx += 1;
+                *has_hotkey.add(idx) = false;
+            }
+        } else if c_int::from(*r) == DLG_HOTKEY_CHAR {
+            r = r.add(1);
+            button_len += 1; // '&a' -> '[a]'
+            if idx < HAS_HOTKEY_LEN - 1 {
+                *has_hotkey.add(idx) = true;
+            }
+        }
+        r = r.add(utfc_ptr2len(r) as usize);
+    }
+
+    msg_len += strlen(message) + 3; // for NL's and NUL
+    button_len += strlen(buttons) + 3; // for ": " and NUL
+    lenhotkey += 1; // for NUL
+
+    // If no hotkey specified, first char is used
+    if !*has_hotkey {
+        button_len += 2; // "x" -> "[x]"
+    }
+
+    // Allocate confirm_msg: "\n{message}\n\0"
+    confirm_msg = xmalloc(msg_len);
+    snprintf(confirm_msg, msg_len, c"\n%s\n".as_ptr(), message);
+
+    xfree(confirm_buttons.cast());
+    confirm_buttons = xmalloc(button_len);
+
+    xmalloc(lenhotkey)
+}
+
+/// Copy hotkeys from button string into pre-allocated hotkey buffer.
+///
+/// Mirrors C `copy_confirm_hotkeys`.
+///
+/// # Safety
+/// All pointers must be valid and non-null; `has_hotkey` must have HAS_HOTKEY_LEN elements.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn copy_confirm_hotkeys(
+    buttons: *const c_char,
+    mut default_button_idx: c_int,
+    has_hotkey: *const bool,
+    mut hotkeys_ptr: *mut c_char,
+) {
+    // Set first default hotkey
+    let written = copy_char(buttons, hotkeys_ptr, true);
+    *hotkeys_ptr.add(written as usize) = NUL;
+
+    let mut first_hotkey = !*has_hotkey; // if no hotkey, use first char
+    let mut msgp = confirm_buttons;
+    let mut idx: usize = 0;
+    let mut r = buttons;
+
+    while *r != 0 {
+        if c_int::from(*r) == DLG_BUTTON_SEP {
+            *msgp = b',' as c_char;
+            msgp = msgp.add(1);
+            *msgp = b' ' as c_char;
+            msgp = msgp.add(1);
+
+            // Advance to next hotkey position
+            hotkeys_ptr = hotkeys_ptr.add(strlen(hotkeys_ptr));
+            let written = copy_char(r.add(1), hotkeys_ptr, true);
+            *hotkeys_ptr.add(written as usize) = NUL;
+
+            if default_button_idx != 0 {
+                default_button_idx -= 1;
+            }
+
+            if idx < HAS_HOTKEY_LEN - 1 {
+                idx += 1;
+                if !*has_hotkey.add(idx) {
+                    first_hotkey = true;
+                }
+            }
+        } else if c_int::from(*r) == DLG_HOTKEY_CHAR || first_hotkey {
+            if c_int::from(*r) == DLG_HOTKEY_CHAR {
+                r = r.add(1);
+            }
+
+            first_hotkey = false;
+            if c_int::from(*r) == DLG_HOTKEY_CHAR {
+                // '&&a' -> '&a'
+                *msgp = *r;
+                msgp = msgp.add(1);
+            } else {
+                // '&a' -> '[a]' or '(a)'
+                *msgp = if default_button_idx == 1 {
+                    b'[' as c_char
+                } else {
+                    b'(' as c_char
+                };
+                msgp = msgp.add(1);
+                let written = copy_char(r, msgp, false);
+                msgp = msgp.add(written as usize);
+                *msgp = if default_button_idx == 1 {
+                    b']' as c_char
+                } else {
+                    b')' as c_char
+                };
+                msgp = msgp.add(1);
+
+                // Redefine hotkey
+                let written = copy_char(r, hotkeys_ptr, true);
+                *hotkeys_ptr.add(written as usize) = NUL;
+            }
+        } else {
+            // Copy literally
+            let written = copy_char(r, msgp, false);
+            msgp = msgp.add(written as usize);
+        }
+
+        r = r.add(utfc_ptr2len(r) as usize);
+    }
+
+    *msgp = b':' as c_char;
+    msgp = msgp.add(1);
+    *msgp = b' ' as c_char;
+    msgp = msgp.add(1);
+    *msgp = NUL;
+}
+
+/// Format and display the console dialog, returning allocated hotkey string.
+///
+/// Replaces C `msg_show_console_dialog`. Called from C `do_dialog`.
+///
+/// # Safety
+/// `message` and `buttons` must be valid non-null NUL-terminated strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_show_console_dialog(
+    message: *const c_char,
+    buttons: *const c_char,
+    dfltbutton: c_int,
+) -> *mut c_char {
+    let mut has_hotkey = [false; HAS_HOTKEY_LEN];
+    let hotk = console_dialog_alloc(message, buttons, has_hotkey.as_mut_ptr());
+    copy_confirm_hotkeys(buttons, dfltbutton, has_hotkey.as_ptr(), hotk);
+    rs_display_confirm_msg();
+    hotk
+}
+
+// display_confirm_msg is implemented above in this file with #[export_name]
 
 /// Check if currently in dialog context.
 ///
@@ -556,33 +778,30 @@ pub unsafe extern "C" fn rs_dialog_all_have_hotkeys(buttons: *const c_char) -> c
     c_int::from(button_count > 0 && hotkey_count >= button_count)
 }
 
-/// Maximum buttons with tracked hotkey state.
-pub const HAS_HOTKEY_LEN: c_int = 30;
-
-/// Maximum bytes for a single hotkey character.
-pub const HOTK_LEN: c_int = 6; // MB_MAXBYTES
-
 /// Get the HAS_HOTKEY_LEN constant.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const extern "C" fn rs_has_hotkey_len() -> c_int {
-    HAS_HOTKEY_LEN
+    HAS_HOTKEY_LEN as c_int
 }
 
 /// Get the HOTK_LEN constant.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const extern "C" fn rs_hotk_len() -> c_int {
-    HOTK_LEN
+    HOTK_LEN as c_int
 }
 
 /// Calculate memory needed for hotkey storage.
 ///
 /// Returns (button_count * HOTK_LEN) + 1 for NUL.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const extern "C" fn rs_dialog_hotkey_bufsize(button_count: c_int) -> c_int {
     if button_count <= 0 {
         1 // Just NUL
     } else {
-        button_count * HOTK_LEN + 1
+        button_count * HOTK_LEN as c_int + 1
     }
 }
 
@@ -960,17 +1179,18 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
     fn test_dialog_hotkey_bufsize() {
         assert_eq!(rs_dialog_hotkey_bufsize(0), 1);
-        assert_eq!(rs_dialog_hotkey_bufsize(1), HOTK_LEN + 1);
-        assert_eq!(rs_dialog_hotkey_bufsize(3), 3 * HOTK_LEN + 1);
+        assert_eq!(rs_dialog_hotkey_bufsize(1), HOTK_LEN as c_int + 1);
+        assert_eq!(rs_dialog_hotkey_bufsize(3), 3 * HOTK_LEN as c_int + 1);
     }
 
     #[test]
     fn test_dialog_constants_phase428() {
         assert_eq!(HAS_HOTKEY_LEN, 30);
-        assert_eq!(HOTK_LEN, 6);
+        assert_eq!(HOTK_LEN, 21);
         assert_eq!(rs_has_hotkey_len(), 30);
-        assert_eq!(rs_hotk_len(), 6);
+        assert_eq!(rs_hotk_len(), 21);
     }
 }
