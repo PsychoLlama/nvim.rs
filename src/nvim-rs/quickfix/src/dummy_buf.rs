@@ -38,7 +38,9 @@ extern "C" {
         flags: c_int,
     ) -> BufHandle;
     fn nvim_buf_copy_options_enter(buf: BufHandle);
+    #[link_name = "nvim_qf_aucmd_prepbuf_alloc"]
     fn nvim_aucmd_prepbuf_alloc(buf: BufHandle) -> *mut c_void;
+    #[link_name = "nvim_qf_aucmd_restbuf_free"]
     fn nvim_aucmd_restbuf_free(aco: *mut c_void);
     fn nvim_setfname_curbuf(fname: *mut c_char);
     fn nvim_check_need_swap_newfile();

@@ -871,13 +871,6 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
   qfp->qf_text = text != NULL ? xstrdup(text) : NULL;
 }
 
-/// Wrapper for line_breakcheck().
-/// Call vim_isprintc() - returns nonzero if the char is printable.
-
-/// Move memory: STRMOVE(dst, src) - move overlapping memory.
-/// Get IObuff pointer for reuse in file_pfx multiscan.
-/// skipwhite wrapper.
-
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
 size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
 
@@ -1467,12 +1460,6 @@ char nvim_buf_get_bh_first_char(const void *buf) { return ((const buf_T *)buf)->
 bool nvim_cmdmod_has_cmod_hide(void) { return (cmdmod.cmod_flags & CMOD_HIDE) != 0; }
 void nvim_buf_clear_bf_dummy(void *buf) { ((buf_T *)buf)->b_flags &= ~BF_DUMMY; }
 // Accessors for dummy buffer migration (Phase 3 of quickfix shim cleanup)
-void *nvim_aucmd_prepbuf_alloc(void *buf) {
-  aco_save_T *aco = xmalloc(sizeof(aco_save_T));
-  aucmd_prepbuf(aco, (buf_T *)buf);
-  return aco;
-}
-void nvim_aucmd_restbuf_free(void *aco) { aucmd_restbuf((aco_save_T *)aco); xfree(aco); }
 void *nvim_qf_bufref_alloc(void *buf) {
   bufref_T *br = xmalloc(sizeof(bufref_T));
   set_bufref(br, (buf_T *)buf);
