@@ -810,29 +810,6 @@ int nvim_cmdexpand_get_key_kenter(void)
   return K_KENTER;
 }
 
-// Forward declarations for static functions used by Rust wrappers below.
-static int wildmenu_process_key_menunames(CmdlineInfo *cclp, int key, expand_T *xp);
-static int wildmenu_process_key_filenames(CmdlineInfo *cclp, int key, expand_T *xp);
-
-/// Wrapper for static wildmenu_process_key_menunames (for Rust FFI).
-int nvim_cmdexpand_process_key_menunames(int key, expand_T *xp, int cmdpos, char *cmdbuff)
-{
-  CmdlineInfo tmp = *get_cmdline_info();
-  tmp.cmdpos = cmdpos;
-  tmp.cmdbuff = cmdbuff;
-  return wildmenu_process_key_menunames(&tmp, key, xp);
-}
-
-/// Wrapper for static wildmenu_process_key_filenames (for Rust FFI).
-int nvim_cmdexpand_process_key_filenames(int key, expand_T *xp, int cmdpos, char *cmdbuff,
-                                         int cmdlen)
-{
-  CmdlineInfo tmp = *get_cmdline_info();
-  tmp.cmdpos = cmdpos;
-  tmp.cmdbuff = cmdbuff;
-  tmp.cmdlen = cmdlen;
-  return wildmenu_process_key_filenames(&tmp, key, xp);
-}
 
 /// Check SCRIPT_ID_VALID(idx+1) (for Rust FFI).
 int nvim_cmdexpand_script_id_valid(int idx)
@@ -846,6 +823,179 @@ char *nvim_cmdexpand_get_script_name(int idx)
   scriptitem_T *si = SCRIPT_ITEM(idx + 1);
   home_replace(NULL, si->sn_name, NameBuff, MAXPATHL, true);
   return NameBuff;
+}
+
+// =============================================================================
+// Phase 2: C accessors for wildmenu key handlers, wildmenu_cleanup,
+//           expand_cmdline, and set_cmd_context
+// =============================================================================
+
+/// Get p_wic wildchar-if-count option (for Rust FFI).
+int nvim_cmdexpand_get_p_wic(void)
+{
+  return (int)p_wic;
+}
+
+/// Get xp_context from ccline (for Rust FFI).
+int nvim_cmdexpand_get_ccline_xp_context(void)
+{
+  return get_cmdline_info()->xp_context;
+}
+
+/// Get xp_arg from ccline (for Rust FFI).
+char *nvim_cmdexpand_get_ccline_xp_arg(void)
+{
+  return get_cmdline_info()->xp_arg;
+}
+
+/// Wrapper for set_context_for_expression (for Rust FFI).
+void nvim_cmdexpand_set_context_for_expression(expand_T *xp, char *str, int cmdidx)
+{
+  set_context_for_expression(xp, str, (cmdidx_T)cmdidx);
+}
+
+/// Wrapper for addstar (for Rust FFI).
+char *nvim_cmdexpand_addstar(char *fname, size_t len, int context)
+{
+  return addstar(fname, len, context);
+}
+
+/// Wrapper for cmdline_del on the real ccline (for Rust FFI).
+void nvim_cmdexpand_cmdline_del(int from)
+{
+  cmdline_del(get_cmdline_info(), from);
+}
+
+/// Set KeyTyped global (for Rust FFI).
+void nvim_cmdexpand_set_key_typed(int val)
+{
+  KeyTyped = (bool)val;
+}
+
+/// Get KeyTyped global (for Rust FFI).
+int nvim_cmdexpand_get_key_typed(void)
+{
+  return (int)KeyTyped;
+}
+
+/// Wrapper for put_on_cmdline (for Rust FFI).
+void nvim_cmdexpand_put_on_cmdline(const char *str, int len, int redraw)
+{
+  put_on_cmdline(str, len, (bool)redraw);
+}
+
+/// Wrapper for utf_head_off (for Rust FFI).
+int nvim_cmdexpand_utf_head_off(const char *base, const char *p)
+{
+  return utf_head_off(base, p);
+}
+
+/// Get RedrawingDisabled (for Rust FFI).
+int nvim_cmdexpand_get_redrawing_disabled(void)
+{
+  return RedrawingDisabled;
+}
+
+/// Set RedrawingDisabled (for Rust FFI).
+void nvim_cmdexpand_set_redrawing_disabled(int val)
+{
+  RedrawingDisabled = val;
+}
+
+/// Wrapper for set_no_hlsearch (for Rust FFI).
+void nvim_cmdexpand_set_no_hlsearch(int val)
+{
+  set_no_hlsearch((bool)val);
+}
+
+/// Get WM_SCROLLED constant (for Rust FFI).
+int nvim_cmdexpand_get_wm_scrolled(void)
+{
+  return WM_SCROLLED;
+}
+
+/// Get cmdline_row global (for Rust FFI).
+int nvim_cmdexpand_get_cmdline_row(void)
+{
+  return cmdline_row;
+}
+
+/// Decrement cmdline_row (for Rust FFI).
+void nvim_cmdexpand_dec_cmdline_row(void)
+{
+  cmdline_row--;
+}
+
+/// Wrapper for redrawcmd (for Rust FFI).
+void nvim_cmdexpand_redrawcmd(void)
+{
+  redrawcmd();
+}
+
+/// Set wild_menu_showing (for Rust FFI).
+void nvim_cmdexpand_set_wild_menu_showing(int val)
+{
+  wild_menu_showing = val;
+}
+
+/// Get save_p_ls (for Rust FFI).
+int nvim_cmdexpand_get_save_p_ls(void)
+{
+  return (int)save_p_ls;
+}
+
+/// Set save_p_ls (for Rust FFI).
+void nvim_cmdexpand_set_save_p_ls(int val)
+{
+  save_p_ls = val;
+}
+
+/// Get save_p_wmh (for Rust FFI).
+int nvim_cmdexpand_get_save_p_wmh(void)
+{
+  return (int)save_p_wmh;
+}
+
+/// Set save_p_wmh (for Rust FFI).
+void nvim_cmdexpand_set_save_p_wmh(int val)
+{
+  save_p_wmh = val;
+}
+
+/// Set p_ls (for Rust FFI).
+void nvim_cmdexpand_set_p_ls(int64_t val)
+{
+  p_ls = val;
+}
+
+/// Set p_wmh (for Rust FFI).
+void nvim_cmdexpand_set_p_wmh(int64_t val)
+{
+  p_wmh = val;
+}
+
+/// Wrapper for update_screen (for Rust FFI).
+void nvim_cmdexpand_update_screen(void)
+{
+  update_screen();
+}
+
+/// Wrapper for win_redraw_last_status(topframe) (for Rust FFI).
+void nvim_cmdexpand_win_redraw_last_status(void)
+{
+  win_redraw_last_status(topframe);
+}
+
+/// Wrapper for redraw_statuslines (for Rust FFI).
+void nvim_cmdexpand_redraw_statuslines(void)
+{
+  redraw_statuslines();
+}
+
+/// Get PATHSEP character (for Rust FFI).
+int nvim_cmdexpand_get_pathsep(void)
+{
+  return PATHSEP;
 }
 
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
@@ -1565,101 +1715,9 @@ const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *com
   return p;
 }
 
-/// Set the completion context in "xp" for command "str"
-///
-/// @param str  start of command line
-/// @param len  length of command line (excl. NUL)
-/// @param col  position of cursor
-/// @param use_ccline  use ccline for info
-void set_cmd_context(expand_T *xp, char *str, int len, int col, int use_ccline)
-{
-  CmdlineInfo *const ccline = get_cmdline_info();
-  char old_char = NUL;
+// set_cmd_context -- migrated to Rust (lib.rs)
 
-  // Avoid a UMR warning from Purify, only save the character if it has been
-  // written before.
-  if (col < len) {
-    old_char = str[col];
-  }
-  str[col] = NUL;
-  const char *nextcomm = str;
-
-  if (use_ccline && ccline->cmdfirstc == '=') {
-    // pass CMD_SIZE because there is no real command
-    set_context_for_expression(xp, str, CMD_SIZE);
-  } else if (use_ccline && ccline->input_fn) {
-    xp->xp_context = ccline->xp_context;
-    xp->xp_pattern = ccline->cmdbuff;
-    xp->xp_arg = ccline->xp_arg;
-    if (xp->xp_context == EXPAND_SHELLCMDLINE) {
-      int context = xp->xp_context;
-      rs_set_context_for_wildcard_arg(xp->xp_pattern, 0, xp, &context);
-    }
-  } else {
-    while (nextcomm != NULL) {
-      nextcomm = rs_set_one_cmd_context(xp, nextcomm);
-    }
-  }
-
-  // Store the string here so that call_user_expand_func() can get to them
-  // easily.
-  xp->xp_line = str;
-  xp->xp_col = col;
-
-  str[col] = old_char;
-}
-
-/// Expand the command line "str" from context "xp".
-/// "xp" must have been set by set_cmd_context().
-/// xp->xp_pattern points into "str", to where the text that is to be expanded
-/// starts.
-/// Returns EXPAND_UNSUCCESSFUL when there is something illegal before the
-/// cursor.
-/// Returns EXPAND_NOTHING when there is nothing to expand, might insert the
-/// key that triggered expansion literally.
-/// Returns EXPAND_OK otherwise.
-///
-/// @param str  start of command line
-/// @param col  position of cursor
-/// @param matchcount  return: nr of matches
-/// @param matches  return: array of pointers to matches
-int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char ***matches)
-{
-  char *file_str = NULL;
-  int options = WILD_ADD_SLASH|WILD_SILENT;
-
-  if (xp->xp_context == EXPAND_UNSUCCESSFUL) {
-    beep_flush();
-    return EXPAND_UNSUCCESSFUL;      // Something illegal on command line
-  }
-  if (xp->xp_context == EXPAND_NOTHING) {
-    // Caller can use the character as a normal char instead
-    return EXPAND_NOTHING;
-  }
-
-  // add star to file name, or convert to regexp if not exp. files.
-  assert((str + col) - xp->xp_pattern >= 0);
-  xp->xp_pattern_len = (size_t)((str + col) - xp->xp_pattern);
-  if (rs_cmdline_fuzzy_completion_supported(xp->xp_context)) {
-    // If fuzzy matching, don't modify the search string
-    file_str = xstrdup(xp->xp_pattern);
-  } else {
-    file_str = addstar(xp->xp_pattern, xp->xp_pattern_len, xp->xp_context);
-  }
-
-  if (p_wic) {
-    options += WILD_ICASE;
-  }
-
-  // find all files that match the description
-  if (ExpandFromContext(xp, file_str, matches, matchcount, options) == FAIL) {
-    *matchcount = 0;
-    *matches = NULL;
-  }
-  xfree(file_str);
-
-  return EXPAND_OK;
-}
+// expand_cmdline -- migrated to Rust (lib.rs)
 
 // get_scriptnames_arg -- migrated to Rust (callbacks.rs)
 
@@ -2395,7 +2453,7 @@ void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dir
 
 // wildmenu_translate_key -- migrated to Rust (wildmenu.rs)
 
-/// Delete characters on the command line, from "from" to the current position.
+// cmdline_del -- used by nvim_cmdexpand_cmdline_del accessor only (kept for now)
 static void cmdline_del(CmdlineInfo *cclp, int from)
 {
   assert(cclp->cmdpos <= cclp->cmdlen);
@@ -2405,187 +2463,10 @@ static void cmdline_del(CmdlineInfo *cclp, int from)
   cclp->cmdpos = from;
 }
 
-/// Handle a key pressed when the wild menu for the menu names
-/// (EXPAND_MENUNAMES) is displayed.
-static int wildmenu_process_key_menunames(CmdlineInfo *cclp, int key, expand_T *xp)
-{
-  // Hitting <Down> after "emenu Name.": complete submenu
-  if (key == K_DOWN && cclp->cmdpos > 0
-      && cclp->cmdbuff[cclp->cmdpos - 1] == '.') {
-    key = (int)p_wc;
-    KeyTyped = true;  // in case the key was mapped
-  } else if (key == K_UP) {
-    // Hitting <Up>: Remove one submenu name in front of the
-    // cursor
-    bool found = false;
-
-    int j = (int)(xp->xp_pattern - cclp->cmdbuff);
-    int i = 0;
-    while (--j > 0) {
-      // check for start of menu name
-      if (cclp->cmdbuff[j] == ' '
-          && cclp->cmdbuff[j - 1] != '\\') {
-        i = j + 1;
-        break;
-      }
-      // check for start of submenu name
-      if (cclp->cmdbuff[j] == '.'
-          && cclp->cmdbuff[j - 1] != '\\') {
-        if (found) {
-          i = j + 1;
-          break;
-        } else {
-          found = true;
-        }
-      }
-    }
-    if (i > 0) {
-      cmdline_del(cclp, i);
-    }
-    key = (int)p_wc;
-    KeyTyped = true;  // in case the key was mapped
-    xp->xp_context = EXPAND_NOTHING;
-  }
-
-  return key;
-}
-
-/// Handle a key pressed when the wild menu for file names (EXPAND_FILES) or
-/// directory names (EXPAND_DIRECTORIES) or shell command names
-/// (EXPAND_SHELLCMD) is displayed.
-static int wildmenu_process_key_filenames(CmdlineInfo *cclp, int key, expand_T *xp)
-{
-  char upseg[5];
-  upseg[0] = PATHSEP;
-  upseg[1] = '.';
-  upseg[2] = '.';
-  upseg[3] = PATHSEP;
-  upseg[4] = NUL;
-
-  if (key == K_DOWN
-      && cclp->cmdpos > 0
-      && cclp->cmdbuff[cclp->cmdpos - 1] == PATHSEP
-      && (cclp->cmdpos < 3
-          || cclp->cmdbuff[cclp->cmdpos - 2] != '.'
-          || cclp->cmdbuff[cclp->cmdpos - 3] != '.')) {
-    // go down a directory
-    key = (int)p_wc;
-    KeyTyped = true;  // in case the key was mapped
-  } else if (strncmp(xp->xp_pattern, upseg + 1, 3) == 0 && key == K_DOWN) {
-    // If in a direct ancestor, strip off one ../ to go down
-    bool found = false;
-
-    int j = cclp->cmdpos;
-    int i = (int)(xp->xp_pattern - cclp->cmdbuff);
-    while (--j > i) {
-      j -= utf_head_off(cclp->cmdbuff, cclp->cmdbuff + j);
-      if (vim_ispathsep(cclp->cmdbuff[j])) {
-        found = true;
-        break;
-      }
-    }
-    if (found
-        && cclp->cmdbuff[j - 1] == '.'
-        && cclp->cmdbuff[j - 2] == '.'
-        && (vim_ispathsep(cclp->cmdbuff[j - 3]) || j == i + 2)) {
-      cmdline_del(cclp, j - 2);
-      key = (int)p_wc;
-      KeyTyped = true;  // in case the key was mapped
-    }
-  } else if (key == K_UP) {
-    // go up a directory
-    bool found = false;
-
-    int j = cclp->cmdpos - 1;
-    int i = (int)(xp->xp_pattern - cclp->cmdbuff);
-    while (--j > i) {
-      j -= utf_head_off(cclp->cmdbuff, cclp->cmdbuff + j);
-      if (vim_ispathsep(cclp->cmdbuff[j])
-#ifdef BACKSLASH_IN_FILENAME
-          && vim_strchr(" *?[{`$%#", (uint8_t)cclp->cmdbuff[j + 1]) == NULL
-#endif
-          ) {
-        if (found) {
-          i = j + 1;
-          break;
-        } else {
-          found = true;
-        }
-      }
-    }
-
-    if (!found) {
-      j = i;
-    } else if (strncmp(cclp->cmdbuff + j, upseg, 4) == 0) {
-      j += 4;
-    } else if (strncmp(cclp->cmdbuff + j, upseg + 1, 3) == 0
-               && j == i) {
-      j += 3;
-    } else {
-      j = 0;
-    }
-
-    if (j > 0) {
-      // TODO(tarruda): this is only for DOS/Unix systems - need to put in
-      // machine-specific stuff here and in upseg init
-      cmdline_del(cclp, j);
-      put_on_cmdline(upseg + 1, 3, false);
-    } else if (cclp->cmdpos > i) {
-      cmdline_del(cclp, i);
-    }
-
-    // Now complete in the new directory. Set KeyTyped in case the
-    // Up key came from a mapping.
-    key = (int)p_wc;
-    KeyTyped = true;
-  }
-
-  return key;
-}
-
+// wildmenu_process_key_menunames -- migrated to Rust (wildmenu.rs)
+// wildmenu_process_key_filenames -- migrated to Rust (wildmenu.rs)
 // wildmenu_process_key -- migrated to Rust (wildmenu.rs)
-
-/// Free expanded names when finished walking through the matches
-void wildmenu_cleanup(CmdlineInfo *cclp)
-{
-  if (!p_wmnu || wild_menu_showing == 0) {
-    return;
-  }
-
-  const bool skt = KeyTyped;
-  const int old_RedrawingDisabled = RedrawingDisabled;
-
-  if (cclp->input_fn) {
-    RedrawingDisabled = 0;
-  }
-
-  // Clear highlighting applied during wildmenu activity
-  set_no_hlsearch(true);
-
-  if (wild_menu_showing == WM_SCROLLED) {
-    // Entered command line, move it up
-    cmdline_row--;
-    redrawcmd();
-    wild_menu_showing = 0;
-  } else if (save_p_ls != -1) {
-    // restore 'laststatus' and 'winminheight'
-    p_ls = save_p_ls;
-    p_wmh = save_p_wmh;
-    rs_last_status(0);
-    update_screen();  // redraw the screen NOW
-    redrawcmd();
-    save_p_ls = -1;
-    wild_menu_showing = 0;
-  } else {
-    win_redraw_last_status(topframe);
-    wild_menu_showing = 0;  // must be before redraw_statuslines #8385
-    redraw_statuslines();
-  }
-  KeyTyped = skt;
-  if (cclp->input_fn) {
-    RedrawingDisabled = old_RedrawingDisabled;
-  }
-}
+// wildmenu_cleanup -- migrated to Rust (wildmenu.rs)
 
 /// "getcompletion()" function
 void f_getcompletion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

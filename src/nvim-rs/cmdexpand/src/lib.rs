@@ -108,14 +108,35 @@ extern "C" {
     fn nvim_cmdexpand_get_may_expand_pattern() -> c_int;
     fn nvim_cmdexpand_set_search_first_line(val: c_int);
 
-    // set_cmd_context (still in C; Rust calls it)
-    fn set_cmd_context(
+    // CmdlineInfo accessors for set_cmd_context
+    fn nvim_cmdexpand_get_ccline_xp_context() -> c_int;
+    fn nvim_cmdexpand_get_ccline_xp_arg() -> *mut c_char;
+    fn nvim_cmdexpand_set_context_for_expression(
         xp: *mut ExpandT,
         str_: *mut c_char,
-        len: c_int,
-        col: c_int,
-        use_ccline: c_int,
+        cmdidx: c_int,
     );
+
+    // Rust context helpers (already in Rust, called via C FFI)
+    fn rs_set_context_for_wildcard_arg(
+        arg: *const c_char,
+        is_shell_cmd: c_int,
+        xp: *mut ExpandT,
+        complp: *mut c_int,
+    );
+    fn rs_set_one_cmd_context(xp: *mut ExpandT, buff: *const c_char) -> *const c_char;
+
+    // expand_cmdline helpers
+    fn nvim_cmdexpand_addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
+    fn nvim_cmdexpand_get_p_wic() -> c_int;
+    fn nvim_cmdexpand_expand_from_context(
+        xp: *mut ExpandT,
+        pat: *const c_char,
+        options: c_int,
+    ) -> c_int;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut libc::c_void);
+    fn beep_flush();
 }
 
 // =============================================================================
@@ -188,6 +209,132 @@ pub fn cmdline_pum_active() -> bool {
 }
 
 // =============================================================================
+// set_cmd_context
+// =============================================================================
+
+/// `CMD_SIZE` sentinel value for `set_context_for_expression`.
+const CMD_SIZE: c_int = 556;
+
+/// `EXPAND_SHELLCMDLINE` context value.
+const EXPAND_SHELLCMDLINE: c_int = ExpandContext::Shellcmdline.to_raw();
+
+/// Parse command line string to set xp expansion context.
+///
+/// Sets `xp->xp_context` and related fields based on the command line text.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle. `str_` must be a valid C string of
+/// at least `len` bytes. Must be called from cmdline context when `use_ccline` != 0.
+#[unsafe(export_name = "set_cmd_context")]
+pub unsafe extern "C" fn rs_set_cmd_context(
+    xp: *mut ExpandT,
+    str_: *mut c_char,
+    len: c_int,
+    col: c_int,
+    use_ccline: c_int,
+) {
+    // Avoid a UMR warning from Purify, only save the character if it has been written before.
+    let old_char: c_char = if col < len {
+        *str_.add(col as usize)
+    } else {
+        0
+    };
+    *str_.add(col as usize) = 0; // NUL-terminate at cursor position
+
+    if use_ccline != 0 && nvim_cmdexpand_get_cmdfirstc() == c_int::from(b'=') {
+        // pass CMD_SIZE because there is no real command
+        nvim_cmdexpand_set_context_for_expression(xp, str_, CMD_SIZE);
+    } else if use_ccline != 0 && nvim_cmdexpand_get_input_fn() != 0 {
+        (*xp).xp_context = nvim_cmdexpand_get_ccline_xp_context();
+        (*xp).xp_pattern = nvim_cmdexpand_get_cmdbuff();
+        (*xp).xp_arg = nvim_cmdexpand_get_ccline_xp_arg();
+        if (*xp).xp_context == EXPAND_SHELLCMDLINE {
+            let mut ctx = (*xp).xp_context;
+            rs_set_context_for_wildcard_arg((*xp).xp_pattern, 0, xp, &raw mut ctx);
+        }
+    } else {
+        let mut nextcomm: *const c_char = str_;
+        while !nextcomm.is_null() {
+            nextcomm = rs_set_one_cmd_context(xp, nextcomm);
+        }
+    }
+
+    // Store the string here so that call_user_expand_func() can get to them easily.
+    (*xp).xp_line = str_;
+    (*xp).xp_col = col;
+
+    *str_.add(col as usize) = old_char;
+}
+
+// =============================================================================
+// expand_cmdline
+// =============================================================================
+
+/// Return values from `expand_cmdline`.
+const EXPAND_UNSUCCESSFUL: c_int = ExpandContext::Unsuccessful.to_raw();
+const EXPAND_NOTHING: c_int = ExpandContext::Nothing.to_raw();
+const EXPAND_OK: c_int = ExpandContext::Ok.to_raw();
+
+/// Expand the command line `str` from context `xp`.
+///
+/// `xp` must have been set by `set_cmd_context()`.
+/// `xp->xp_pattern` points into `str`, to where the text to be expanded starts.
+///
+/// Returns `EXPAND_UNSUCCESSFUL` when there is something illegal before the cursor.
+/// Returns `EXPAND_NOTHING` when there is nothing to expand.
+/// Returns `EXPAND_OK` otherwise.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` handle. `str_` must be a valid C string pointer.
+#[unsafe(export_name = "expand_cmdline")]
+pub unsafe extern "C" fn rs_expand_cmdline(
+    xp: *mut ExpandT,
+    str_: *const c_char,
+    col: c_int,
+    matchcount: *mut c_int,
+    matches: *mut *mut *mut c_char,
+) -> c_int {
+    use crate::context::wild_options::{WILD_ADD_SLASH, WILD_ICASE, WILD_SILENT};
+
+    if (*xp).xp_context == EXPAND_UNSUCCESSFUL {
+        beep_flush();
+        return EXPAND_UNSUCCESSFUL;
+    }
+    if (*xp).xp_context == EXPAND_NOTHING {
+        return EXPAND_NOTHING;
+    }
+
+    // add star to file name, or convert to regexp if not exp. files.
+    let pattern_offset = (str_.add(col as usize) as usize).wrapping_sub((*xp).xp_pattern as usize);
+    (*xp).xp_pattern_len = pattern_offset;
+
+    let file_str = if cmdline_fuzzy_completion_supported((*xp).xp_context) {
+        // If fuzzy matching, don't modify the search string
+        xstrdup((*xp).xp_pattern)
+    } else {
+        nvim_cmdexpand_addstar((*xp).xp_pattern, (*xp).xp_pattern_len, (*xp).xp_context)
+    };
+
+    let mut options = WILD_ADD_SLASH | WILD_SILENT;
+    if nvim_cmdexpand_get_p_wic() != 0 {
+        options |= WILD_ICASE;
+    }
+
+    // find all files that match the description
+    let fail = nvim_cmdexpand_expand_from_context(xp, file_str, options);
+    if fail != 0 {
+        // FAIL
+        *matchcount = 0;
+        *matches = std::ptr::null_mut();
+    }
+    xfree(file_str.cast());
+
+    EXPAND_OK
+}
+
+// =============================================================================
 // set_expand_context
 // =============================================================================
 
@@ -234,7 +381,7 @@ pub unsafe extern "C" fn rs_set_expand_context(xp: *mut ExpandT) {
     let cmdbuff = nvim_cmdexpand_get_cmdbuff();
     let cmdlen = nvim_cmdexpand_get_cmdlen();
     let cmdpos = nvim_cmdexpand_get_cmdpos();
-    set_cmd_context(xp, cmdbuff, cmdlen, cmdpos, 1);
+    rs_set_cmd_context(xp, cmdbuff, cmdlen, cmdpos, 1);
 }
 
 // =============================================================================

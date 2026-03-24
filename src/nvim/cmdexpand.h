@@ -65,4 +65,9 @@ void set_expand_context(expand_T *xp);
 int wildmenu_translate_key(CmdlineInfo *cclp, int key, expand_T *xp, bool did_wild_list);
 int wildmenu_process_key(CmdlineInfo *cclp, int key, expand_T *xp);
 
+// Phase 2 Rust migrations (wildmenu.rs, lib.rs)
+void wildmenu_cleanup(CmdlineInfo *cclp);
+void set_cmd_context(expand_T *xp, char *str, int len, int col, int use_ccline);
+int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char ***matches);
+
 #include "cmdexpand.h.generated.h"
