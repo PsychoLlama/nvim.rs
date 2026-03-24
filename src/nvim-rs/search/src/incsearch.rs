@@ -6,6 +6,7 @@
 use std::ffi::c_int;
 
 use crate::helpers;
+use crate::search_state;
 
 // =============================================================================
 // C External Functions
@@ -21,10 +22,6 @@ extern "C" {
     // Option accessors
     fn nvim_get_p_is() -> c_int;
     fn nvim_get_p_hls() -> c_int;
-
-    // Batch save/restore for incsearch state (Phase 3)
-    fn nvim_save_incsearch_state_batch();
-    fn nvim_restore_incsearch_state_batch();
 }
 
 // =============================================================================
@@ -283,16 +280,22 @@ pub extern "C" fn rs_incsearch_is_match_end_line(cursor_lnum: c_int, lnum: c_int
 /// FFI: Save incsearch state (search_match_endcol, search_match_lines).
 #[no_mangle]
 pub extern "C" fn rs_save_incsearch_state() {
-    unsafe {
-        nvim_save_incsearch_state_batch();
-    }
+    let (endcol, lines) = unsafe {
+        (
+            nvim_get_search_match_endcol(),
+            nvim_get_search_match_lines(),
+        )
+    };
+    search_state::save_incsearch_state_batch(endcol, lines);
 }
 
 /// FFI: Restore incsearch state.
 #[no_mangle]
 pub extern "C" fn rs_restore_incsearch_state() {
+    let (endcol, lines) = search_state::restore_incsearch_state_batch();
     unsafe {
-        nvim_restore_incsearch_state_batch();
+        nvim_set_search_match_endcol(endcol);
+        nvim_set_search_match_lines(lines);
     }
 }
 

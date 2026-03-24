@@ -101,17 +101,11 @@ static const char e_search_hit_bottom_without_match_for_str[]
 // one for other searches.  last_idx points to the one that was used the last
 // time.
 
-static SearchPattern spats[2] = {
-  // Last used search pattern
-  [0] = { NULL, 0, true, false, 0, { '/', false, false, 0 }, NULL },
-  // Last used substitute pattern
-  [1] = { NULL, 0, true, false, 0, { '/', false, false, 0 }, NULL }
-};
-
-static int last_idx = 0;        // index in spats[] for RE_LAST
+// spats[2] and last_idx now live in Rust: search_state::SPATS and LAST_IDX
 
 // Rust FFI declarations for character search state
 extern int rs_magic_isset(void);
+extern int rs_is_search_forward(void);
 
 // Rust FFI declaration for find_pattern_in_path
 extern void rs_find_pattern_in_path(const char *ptr, int dir, size_t len,
@@ -140,17 +134,6 @@ extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
                                     int maxcount, int timeout, bool recompute,
                                     const char *pattern, searchstat_T *stat);
 
-/// Get the last_idx static variable (accessor for Rust).
-int nvim_get_last_idx(void)
-{
-  return last_idx;
-}
-
-/// Set the last_idx static variable (setter for Rust).
-void nvim_set_last_idx(int idx)
-{
-  last_idx = idx;
-}
 
 /// Check if line 'lnum' in curbuf is empty or has only white chars (accessor for Rust).
 /// Returns a pointer past whitespace in the line.
@@ -159,137 +142,16 @@ char *nvim_search_skipwhite_ml_get(linenr_T lnum)
   return skipwhite(ml_get(lnum));
 }
 
-// copy of spats[], for keeping the search patterns while executing autocmds
-static SearchPattern saved_spats[ARRAY_SIZE(spats)];
-static char *saved_mr_pattern = NULL;
-static size_t saved_mr_patternlen = 0;
-static int saved_spats_last_idx = 0;
-static bool saved_spats_no_hlsearch = false;
-
-// allocated copy of pattern used by search_regcomp()
-static char *mr_pattern = NULL;
-static size_t mr_patternlen = 0;
-
-/// Get the mr_pattern static variable (accessor for Rust).
-const char *nvim_get_mr_pattern(void)
-{
-  return mr_pattern;
-}
-
-/// Get the mr_patternlen static variable (accessor for Rust).
-size_t nvim_get_mr_patternlen(void)
-{
-  return mr_patternlen;
-}
-
-/// Get the pattern string from spats array (accessor for Rust).
-const char *nvim_get_spat_pat(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].pat;
-  }
-  return NULL;
-}
-
-/// Get the pattern length from spats array (accessor for Rust).
-size_t nvim_get_spat_patlen(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].patlen;
-  }
-  return 0;
-}
-
-/// Get the magic flag from spats array (accessor for Rust).
-int nvim_get_spat_magic(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].magic;
-  }
-  return 0;
-}
-
-/// Get the no_scs flag from spats array (accessor for Rust).
-int nvim_get_spat_no_scs(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].no_scs;
-  }
-  return 0;
-}
-
-/// Get the search direction from spats array (accessor for Rust).
-char nvim_get_spat_off_dir(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].off.dir;
-  }
-  return '/';
-}
-
-/// Get the line offset flag from spats array (accessor for Rust).
-int nvim_get_spat_off_line(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].off.line;
-  }
-  return 0;
-}
-
-/// Get the end offset flag from spats array (accessor for Rust).
-int nvim_get_spat_off_end(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].off.end;
-  }
-  return 0;
-}
-
-/// Get the offset value from spats array (accessor for Rust).
-int64_t nvim_get_spat_off_off(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    return spats[idx].off.off;
-  }
-  return 0;
-}
-
-/// Set the search direction in spats array (setter for Rust).
-void nvim_set_spat_off_dir(int idx, char dir)
-{
-  if (idx >= 0 && idx < 2) {
-    spats[idx].off.dir = dir;
-  }
-}
-
-/// Set the line offset flag in spats array (setter for Rust).
-void nvim_set_spat_off_line(int idx, int line)
-{
-  if (idx >= 0 && idx < 2) {
-    spats[idx].off.line = line;
-  }
-}
-
-/// Set the end offset flag in spats array (setter for Rust).
-void nvim_set_spat_off_end(int idx, int end)
-{
-  if (idx >= 0 && idx < 2) {
-    spats[idx].off.end = end;
-  }
-}
-
-/// Set the offset value in spats array (setter for Rust).
-void nvim_set_spat_off_off(int idx, int64_t off)
-{
-  if (idx >= 0 && idx < 2) {
-    spats[idx].off.off = off;
-  }
-}
+// All spats[], saved_spats[], mr_pattern, last_idx, and their accessor functions
+// have been deleted. These now live in Rust: search_state::SPATS, SAVED_SPATS,
+// MR_PATTERN, LAST_IDX, and associated accessor functions.
 
 /// Call set_vv_searchforward (wrapper for Rust).
+/// Reads search direction from Rust-owned state via rs_is_search_forward().
 void nvim_call_set_vv_searchforward(void)
 {
-  set_vv_searchforward();
+  // Direction now lives in Rust SPATS; read it via rs_is_search_forward()
+  set_vim_var_nr(VV_SEARCHFORWARD, rs_is_search_forward());
 }
 
 // Type used by find_pattern_in_path() to remember which included files have
@@ -316,39 +178,8 @@ typedef struct {
 ///
 /// @return          FAIL if failed, OK otherwise.
 
-// Save the search patterns, so they can be restored later.
-// Used before/after executing autocommands and user functions.
-static int save_level = 0;
-
-/// Get the save_level static variable (accessor for Rust).
-int nvim_get_save_level(void)
-{
-  return save_level;
-}
-
-
-
-static inline void free_spat(SearchPattern *const spat)
-{
-  xfree(spat->pat);
-  xfree(spat->additional_data);
-}
-
-
-// copy of spats[RE_SEARCH], for keeping the search patterns while incremental
-// searching
-static SearchPattern saved_last_search_spat;
-static int did_save_last_search_spat = 0;
-static int saved_last_idx = 0;
-static bool saved_no_hlsearch = false;
-static colnr_T saved_search_match_endcol;
-static linenr_T saved_search_match_lines;
-
-/// Get the did_save_last_search_spat counter (accessor for Rust).
-int nvim_get_did_save_last_search_spat(void)
-{
-  return did_save_last_search_spat;
-}
+// save_level, free_spat, saved_last_search_spat, did_save_last_search_spat,
+// and related statics and accessors deleted: now live in Rust search_state module.
 
 /// Get the search_match_lines global (accessor for Rust).
 int nvim_get_search_match_lines(void)
@@ -491,10 +322,7 @@ int nvim_get_p_hls(void)
 
 
 
-static void set_vv_searchforward(void)
-{
-  set_vim_var_nr(VV_SEARCHFORWARD, spats[0].off.dir == '/');
-}
+// set_vv_searchforward deleted: direction now lives in Rust SPATS.
 
 
 
@@ -1406,97 +1234,13 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 
 
 
+// Batch accessors for pattern save/restore, pattern compilation, and all spat
+// accessor functions have been deleted. These operations now live in the Rust
+// search_state module (src/nvim-rs/search/src/search_state.rs).
+
 // =============================================================================
-// Batch accessors for pattern save/restore (Phase 3)
+// Accessor wrappers for C globals still needed by Rust crates
 // =============================================================================
-
-/// Save search patterns batch: deep-copy spats[] → saved_spats[], save mr_pattern,
-/// last_idx, no_hlsearch. Only acts at top level (save_level was 0).
-void nvim_save_search_patterns_batch(void)
-{
-  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
-    saved_spats[i] = spats[i];
-    if (spats[i].pat != NULL) {
-      saved_spats[i].pat = xstrnsave(spats[i].pat, spats[i].patlen);
-      saved_spats[i].patlen = spats[i].patlen;
-    }
-  }
-  if (mr_pattern == NULL) {
-    saved_mr_pattern = NULL;
-    saved_mr_patternlen = 0;
-  } else {
-    saved_mr_pattern = xstrnsave(mr_pattern, mr_patternlen);
-    saved_mr_patternlen = mr_patternlen;
-  }
-  saved_spats_last_idx = last_idx;
-  saved_spats_no_hlsearch = no_hlsearch;
-}
-
-/// Restore search patterns batch: free spats[], restore from saved_spats[],
-/// restore mr_pattern, last_idx, no_hlsearch. Only acts when save_level reaches 0.
-void nvim_restore_search_patterns_batch(void)
-{
-  for (size_t i = 0; i < ARRAY_SIZE(spats); i++) {
-    free_spat(&spats[i]);
-    spats[i] = saved_spats[i];
-  }
-  set_vv_searchforward();
-  xfree(mr_pattern);
-  mr_pattern = saved_mr_pattern;
-  mr_patternlen = saved_mr_patternlen;
-  last_idx = saved_spats_last_idx;
-  set_no_hlsearch(saved_spats_no_hlsearch);
-}
-
-/// Increment save_level and return old value.
-int nvim_inc_save_level(void)
-{
-  return save_level++;
-}
-
-/// Decrement save_level and return new value.
-int nvim_dec_save_level(void)
-{
-  return --save_level;
-}
-
-/// Save last search pattern for incsearch: deep-copy spats[RE_SEARCH] →
-/// saved_last_search_spat, save last_idx, no_hlsearch.
-void nvim_save_last_search_spat_batch(void)
-{
-  saved_last_search_spat = spats[RE_SEARCH];
-  if (spats[RE_SEARCH].pat != NULL) {
-    saved_last_search_spat.pat = xstrnsave(spats[RE_SEARCH].pat, spats[RE_SEARCH].patlen);
-    saved_last_search_spat.patlen = spats[RE_SEARCH].patlen;
-  }
-  saved_last_idx = last_idx;
-  saved_no_hlsearch = no_hlsearch;
-}
-
-/// Restore last search pattern for incsearch: free spats[RE_SEARCH],
-/// restore from saved_last_search_spat, restore last_idx, no_hlsearch.
-void nvim_restore_last_search_spat_batch(void)
-{
-  xfree(spats[RE_SEARCH].pat);
-  spats[RE_SEARCH] = saved_last_search_spat;
-  saved_last_search_spat.pat = NULL;
-  saved_last_search_spat.patlen = 0;
-  set_vv_searchforward();
-  last_idx = saved_last_idx;
-  set_no_hlsearch(saved_no_hlsearch);
-}
-
-/// Increment did_save_last_search_spat and return old value.
-int nvim_inc_did_save(void)
-{
-  return did_save_last_search_spat++;
-}
-
-/// Decrement did_save_last_search_spat and return new value.
-int nvim_dec_did_save(void)
-{
-  return --did_save_last_search_spat;
-}
 
 /// Call iemsg() for the restore mismatch error.
 void nvim_call_iemsg_restore_mismatch(void)
@@ -1504,26 +1248,6 @@ void nvim_call_iemsg_restore_mismatch(void)
   iemsg("restore_last_search_pattern() called more often than"
         " save_last_search_pattern()");
 }
-
-/// Save incsearch state (search_match_endcol, search_match_lines).
-void nvim_save_incsearch_state_batch(void)
-{
-  saved_search_match_endcol = search_match_endcol;
-  saved_search_match_lines = search_match_lines;
-}
-
-/// Restore incsearch state.
-void nvim_restore_incsearch_state_batch(void)
-{
-  search_match_endcol = saved_search_match_endcol;
-  search_match_lines = saved_search_match_lines;
-}
-
-// =============================================================================
-// Batch accessors for search_regcomp and pattern compilation (Phase 4)
-// =============================================================================
-
-// nvim_emsg_noprevre is already defined in register.c
 
 /// Emit "no previous substitute regular expression" error.
 void nvim_emsg_nopresub(void)
@@ -1555,42 +1279,10 @@ void nvim_search_add_to_history(const char *pat, size_t patlen)
   add_to_history(HIST_SEARCH, pat, patlen, true, NUL);
 }
 
-/// Set mr_pattern from pat (or reversed if rl mode).
-void nvim_set_mr_pattern(const char *pat, size_t patlen)
-{
-  xfree(mr_pattern);
-  if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-    mr_pattern = reverse_text(pat);
-  } else {
-    mr_pattern = xstrnsave(pat, patlen);
-  }
-  mr_patternlen = patlen;
-}
-
 /// Check if cmdmod has keeppatterns flag.
 int nvim_get_cmdmod_keeppatterns(void)
 {
   return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0;
-}
-
-/// Batch save_re_pat: update spats[idx] with new pattern.
-void nvim_save_re_pat_batch(int idx, const char *pat, size_t patlen, int magic)
-{
-  if (spats[idx].pat == pat) {
-    return;
-  }
-  free_spat(&spats[idx]);
-  spats[idx].pat = xstrnsave(pat, patlen);
-  spats[idx].patlen = patlen;
-  spats[idx].magic = magic;
-  spats[idx].no_scs = no_smartcase;
-  spats[idx].timestamp = os_time();
-  spats[idx].additional_data = NULL;
-  last_idx = idx;
-  if (p_hls) {
-    redraw_all_later(UPD_SOME_VALID);
-  }
-  set_no_hlsearch(false);
 }
 
 /// Compile regex: call vim_regcomp and set regmatch fields.
@@ -1603,48 +1295,6 @@ int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatc
   return regmatch->regprog != NULL ? 1 : 0;
 }
 
-/// Batch set_last_search_pat: update spats[idx] and saved_spats[idx] from a string.
-void nvim_set_last_search_pat_batch(const char *s, int idx, int magic, int setlast)
-{
-  free_spat(&spats[idx]);
-  if (*s == NUL) {
-    spats[idx].pat = NULL;
-    spats[idx].patlen = 0;
-  } else {
-    spats[idx].patlen = strlen(s);
-    spats[idx].pat = xstrnsave(s, spats[idx].patlen);
-  }
-  spats[idx].timestamp = os_time();
-  spats[idx].additional_data = NULL;
-  spats[idx].magic = magic;
-  spats[idx].no_scs = false;
-  spats[idx].off.dir = '/';
-  set_vv_searchforward();
-  spats[idx].off.line = false;
-  spats[idx].off.end = false;
-  spats[idx].off.off = 0;
-  if (setlast) {
-    last_idx = idx;
-  }
-  if (save_level) {
-    free_spat(&saved_spats[idx]);
-    saved_spats[idx] = spats[0];
-    if (spats[idx].pat == NULL) {
-      saved_spats[idx].pat = NULL;
-      saved_spats[idx].patlen = 0;
-    } else {
-      saved_spats[idx].pat = xstrnsave(spats[idx].pat, spats[idx].patlen);
-      saved_spats[idx].patlen = spats[idx].patlen;
-    }
-    saved_spats_last_idx = last_idx;
-  }
-  if (p_hls && idx == last_idx && !no_hlsearch) {
-    redraw_all_later(UPD_SOME_VALID);
-  }
-}
-
-// nvim_get_emsg_off is already defined in message.c
-
 /// Increment emsg_off.
 void nvim_inc_emsg_off(void)
 {
@@ -1655,71 +1305,6 @@ void nvim_inc_emsg_off(void)
 void nvim_dec_emsg_off(void)
 {
   emsg_off--;
-}
-
-/// Check if spats[idx].pat is NULL.
-int nvim_spats_pat_is_null(int idx)
-{
-  return spats[idx].pat == NULL ? 1 : 0;
-}
-
-/// Get spats[idx].pat pointer and patlen.
-const char *nvim_spats_get_pat_and_len(int idx, size_t *patlen, int *magic, int *no_scs)
-{
-  if (patlen) *patlen = spats[idx].patlen;
-  if (magic) *magic = spats[idx].magic;
-  if (no_scs) *no_scs = spats[idx].no_scs;
-  return spats[idx].pat;
-}
-
-// =============================================================================
-// Batch accessors for ShaDa pattern get/set (Phase 2)
-// =============================================================================
-
-/// Copy spats[idx] out to caller-provided buffer.
-void nvim_spat_memcpy_out(int idx, SearchPattern *out)
-{
-  if (idx >= 0 && idx < 2 && out != NULL) {
-    memcpy(out, &spats[idx], sizeof(spats[0]));
-  }
-}
-
-/// Free spats[idx] and copy new value in.
-void nvim_spat_memcpy_in(int idx, const SearchPattern *in)
-{
-  if (idx >= 0 && idx < 2 && in != NULL) {
-    free_spat(&spats[idx]);
-    memcpy(&spats[idx], in, sizeof(spats[0]));
-  }
-}
-
-/// Free the pattern and additional_data of spats[idx].
-void nvim_free_spat(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    free_spat(&spats[idx]);
-  }
-}
-
-/// Clear spats[idx].off fields.
-void nvim_clear_spat_off(int idx)
-{
-  if (idx >= 0 && idx < 2) {
-    CLEAR_FIELD(spats[idx].off);
-  }
-}
-
-/// Clear all spats entries (for free_search_patterns).
-void nvim_clear_spats(void)
-{
-  CLEAR_FIELD(spats);
-}
-
-/// Free mr_pattern and reset mr_patternlen.
-void nvim_free_mr_pattern(void)
-{
-  XFREE_CLEAR(mr_pattern);
-  mr_patternlen = 0;
 }
 
 // =============================================================================
@@ -1793,22 +1378,24 @@ int nvim_profile_passed_limit(void *tm)
   return profile_passed_limit(*(proftime_T *)tm) ? 1 : 0;
 }
 
-/// Emit "Pattern not found" error with the pattern from mr_pattern.
+/// Emit "Pattern not found" error with the pattern from Rust-owned mr_pattern.
 void nvim_searchit_emsg_patnotf(int p_ws_val, linenr_T lnum)
 {
+  // get_search_pat is the export_name for rs_get_mr_pattern (reads Rust MR_PATTERN)
+  char *pat = get_search_pat();
   if (p_ws_val) {
-    semsg(_(e_patnotf2), mr_pattern);
+    semsg(_(e_patnotf2), pat);
   } else if (lnum == 0) {
-    semsg(_(e_search_hit_top_without_match_for_str), mr_pattern);
+    semsg(_(e_search_hit_top_without_match_for_str), pat);
   } else {
-    semsg(_(e_search_hit_bottom_without_match_for_str), mr_pattern);
+    semsg(_(e_search_hit_bottom_without_match_for_str), pat);
   }
 }
 
-/// Emit "E383: Invalid search string" error using mr_pattern.
+/// Emit "E383: Invalid search string" error using Rust-owned mr_pattern.
 void nvim_searchit_emsg_invalid(void)
 {
-  semsg(_("E383: Invalid search string: %s"), mr_pattern);
+  semsg(_("E383: Invalid search string: %s"), get_search_pat());
 }
 
 /// Emit "Interrupted" error.
@@ -1849,30 +1436,33 @@ _Static_assert(RE_SEARCH == 0, "RE_SEARCH mismatch");
 _Static_assert(RE_SUBST == 1, "RE_SUBST mismatch");
 _Static_assert(RE_LAST == 2, "RE_LAST mismatch");
 
-/// Check if spats[0].off.line is set and CPO_LINEOFF is in p_cpo.
+/// Check if Rust-owned spats[0].off.line is set and CPO_LINEOFF is in p_cpo.
 int nvim_do_search_check_lineoff(void)
 {
-  return (spats[0].off.line && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
+  extern int rs_get_search_offset_line(int idx);
+  return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0;
 }
 
-/// Clear spats[0].off.line and off if CPO_LINEOFF applies.
+/// Clear Rust-owned spats[0].off.line and off if CPO_LINEOFF applies.
 void nvim_do_search_clear_lineoff(void)
 {
-  spats[0].off.line = false;
-  spats[0].off.off = 0;
+  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
+  extern int rs_get_search_offset_end(int idx);
+  rs_set_search_offset_line_end_off(0, rs_get_search_offset_end(0), 0);
 }
 
-/// Get the dirc from spats[0].off.dir.
+/// Get the dirc from Rust-owned spats[0].off.dir.
 int nvim_do_search_get_dirc(void)
 {
-  return (uint8_t)spats[0].off.dir;
+  extern char rs_search_get_dir(void);
+  return (uint8_t)rs_search_get_dir();
 }
 
-/// Set spats[0].off.dir and update vv:searchforward.
+/// Set Rust-owned spats[0].off.dir and update vv:searchforward.
 void nvim_do_search_set_dirc(int dirc)
 {
-  spats[0].off.dir = (char)dirc;
-  set_vv_searchforward();
+  extern void rs_search_set_dir(int dir);
+  rs_search_set_dir(dirc);
 }
 
 /// Handle fold adjustment for do_search position.
@@ -1906,21 +1496,24 @@ void nvim_do_search_hlsearch_on(int options)
   }
 }
 
-/// Get previous search pattern (spats[RE_SEARCH].pat).
+/// Get previous search pattern (Rust-owned SPATS[RE_SEARCH].pat).
 char *nvim_do_search_get_search_pat(void)
 {
-  return spats[RE_SEARCH].pat;
+  extern const char *rs_get_search_pattern(void);
+  return (char *)rs_get_search_pattern();
 }
 
-/// Get previous subst pattern info.
+/// Get previous subst pattern (Rust-owned SPATS[RE_SUBST].pat).
 char *nvim_do_search_get_subst_pat(void)
 {
-  return spats[RE_SUBST].pat;
+  extern const char *rs_get_subst_pattern(void);
+  return (char *)rs_get_subst_pattern();
 }
 
 size_t nvim_do_search_get_subst_patlen(void)
 {
-  return spats[RE_SUBST].patlen;
+  extern size_t rs_get_subst_pattern_len(void);
+  return rs_get_subst_pattern_len();
 }
 
 /// Call skip_regexp_ex for do_search pattern parsing.
@@ -1942,30 +1535,32 @@ int nvim_do_search_get_searchcmdlen(void)
   return searchcmdlen;
 }
 
-/// Set spats[0].off fields.
+/// Set Rust-owned SPATS[0].off fields.
 void nvim_do_search_set_off(int off_line, int off_end, int64_t off_off)
 {
-  spats[0].off.line = off_line != 0;
-  spats[0].off.end = off_end != 0;
-  spats[0].off.off = off_off;
+  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
+  rs_set_search_offset_line_end_off(off_line, off_end, off_off);
 }
 
-/// Get spats[0].off.end for the SEARCH_END computation.
+/// Get Rust-owned SPATS[0].off.end for the SEARCH_END computation.
 int nvim_do_search_get_off_end(void)
 {
-  return spats[0].off.end ? 1 : 0;
+  extern int rs_get_search_offset_end(int idx);
+  return rs_get_search_offset_end(0);
 }
 
-/// Get spats[0].off.line.
+/// Get Rust-owned SPATS[0].off.line.
 int nvim_do_search_get_off_line(void)
 {
-  return spats[0].off.line ? 1 : 0;
+  extern int rs_get_search_offset_line(int idx);
+  return rs_get_search_offset_line(0);
 }
 
-/// Get spats[0].off.off.
+/// Get Rust-owned SPATS[0].off.off.
 int64_t nvim_do_search_get_off_off(void)
 {
-  return spats[0].off.off;
+  extern int64_t rs_get_search_offset_off(int idx);
+  return rs_get_search_offset_off(0);
 }
 
 /// Batch helper: handle echo/display section of do_search.
@@ -1987,26 +1582,36 @@ DoSearchEchoResult nvim_do_search_echo(int dirc, int options,
   msg_start();
   msg_ext_set_kind("search_cmd");
 
-  if (!cmd_silent
-      && (spats[0].off.line || spats[0].off.end || spats[0].off.off)) {
+  // Read search offset fields from Rust-owned state
+  extern int rs_get_search_offset_end(int idx);
+  extern int rs_get_search_offset_line(int idx);
+  extern int64_t rs_get_search_offset_off(int idx);
+  int off_end = rs_get_search_offset_end(0);
+  int off_line = rs_get_search_offset_line(0);
+  int64_t off_off = rs_get_search_offset_off(0);
+
+  if (!cmd_silent && (off_line || off_end || off_off)) {
     off_buf[off_len++] = (char)dirc;
-    if (spats[0].off.end) {
+    if (off_end) {
       off_buf[off_len++] = 'e';
-    } else if (!spats[0].off.line) {
+    } else if (!off_line) {
       off_buf[off_len++] = 's';
     }
     off_buf[off_len] = NUL;
-    if (spats[0].off.off != 0 || spats[0].off.line) {
+    if (off_off != 0 || off_line) {
       off_len += (size_t)snprintf(off_buf + off_len, sizeof(off_buf) - off_len,
-                                  "%+" PRId64, spats[0].off.off);
+                                  "%+" PRId64, off_off);
     }
   }
 
+  // Read search pattern from Rust-owned state
+  extern const char *rs_get_search_pattern(void);
+  extern size_t rs_get_search_pattern_len(void);
   const char *p;
   size_t plen;
   if (*searchstr == NUL) {
-    p = spats[0].pat;
-    plen = spats[0].patlen;
+    p = rs_get_search_pattern();
+    plen = rs_get_search_pattern_len();
   } else {
     p = searchstr;
     plen = searchstrlen;
@@ -2096,10 +1701,12 @@ void nvim_do_search_echo_free(char *msgbuf)
 /// This handles the "?pat?e+2" / "/pat/s-2" case.
 DoSearchPos nvim_do_search_pre_offset(linenr_T lnum, colnr_T col)
 {
+  extern int rs_get_search_offset_line(int idx);
+  extern int64_t rs_get_search_offset_off(int idx);
   pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
-  int64_t off = spats[0].off.off;
+  int64_t off = rs_get_search_offset_off(0);
 
-  if (!spats[0].off.line && off && pos.col < MAXCOL - 2) {
+  if (!rs_get_search_offset_line(0) && off && pos.col < MAXCOL - 2) {
     if (off > 0) {
       int64_t c;
       for (c = off; c; c--) {
@@ -2136,9 +1743,14 @@ DoSearchPostOffset nvim_do_search_post_offset(linenr_T lnum, colnr_T col, int op
   pos_T pos = { .lnum = lnum, .col = col, .coladd = 0 };
   pos_T org_pos = pos;
 
+  extern int rs_get_search_offset_line(int idx);
+  extern int64_t rs_get_search_offset_off(int idx);
+  int off_line = rs_get_search_offset_line(0);
+  int64_t off_off = rs_get_search_offset_off(0);
+
   if (!(options & SEARCH_NOOF) || pat_has_semicolon) {
-    if (spats[0].off.line) {
-      int64_t c = pos.lnum + spats[0].off.off;
+    if (off_line) {
+      int64_t c = pos.lnum + off_off;
       if (c < 1) {
         pos.lnum = 1;
       } else if (c > curbuf->b_ml.ml_line_count) {
@@ -2149,7 +1761,7 @@ DoSearchPostOffset nvim_do_search_post_offset(linenr_T lnum, colnr_T col, int op
       pos.col = 0;
       result.retval = 2;
     } else if (pos.col < MAXCOL - 2) {
-      int64_t c = spats[0].off.off;
+      int64_t c = off_off;
       if (c > 0) {
         while (c-- > 0) {
           if (incl(&pos) == -1) {
@@ -2191,7 +1803,9 @@ int nvim_do_search_show_top_bot(int dirc, linenr_T pos_lnum, colnr_T pos_col)
 /// Set oap->inclusive if needed.
 void nvim_do_search_set_oap_inclusive(void *oap)
 {
-  if (oap != NULL && spats[0].off.end) {
+  // Read spats[0].off.end from Rust-owned state
+  extern int rs_get_search_offset_end(int idx);
+  if (oap != NULL && rs_get_search_offset_end(0)) {
     ((oparg_T *)oap)->inclusive = true;
   }
 }
@@ -2241,24 +1855,30 @@ void nvim_do_search_finish(int options, linenr_T lnum, colnr_T col)
   curwin->w_set_curswant = true;
 }
 
-/// Save spats[0].off, returns opaque data via struct.
+/// Save Rust-owned spats[0].off, returns opaque data via struct.
 SavedSearchOff nvim_do_search_save_off(void)
 {
+  extern char rs_search_get_dir(void);
+  extern int rs_get_search_offset_line(int idx);
+  extern int rs_get_search_offset_end(int idx);
+  extern int64_t rs_get_search_offset_off(int idx);
   return (SavedSearchOff){
-    spats[0].off.dir,
-    spats[0].off.line,
-    spats[0].off.end,
-    spats[0].off.off
+    rs_search_get_dir(),
+    rs_get_search_offset_line(0),
+    rs_get_search_offset_end(0),
+    rs_get_search_offset_off(0)
   };
 }
 
-/// Restore spats[0].off from saved data.
+/// Restore Rust-owned spats[0].off from saved data.
 void nvim_do_search_restore_off(SavedSearchOff saved)
 {
-  spats[0].off.dir = saved.dir;
-  spats[0].off.line = saved.line != 0;
-  spats[0].off.end = saved.end != 0;
-  spats[0].off.off = saved.off;
+  // set_search_direction is the export_name for rs_set_search_direction_raw (no vv_searchforward update)
+  extern void set_search_direction(int dir);
+  extern void rs_set_search_offset_line_end_off(int line, int end, int64_t off);
+  // restore dir without calling set_vv_searchforward (matching original behavior)
+  set_search_direction(saved.dir);
+  rs_set_search_offset_line_end_off(saved.line, saved.end, saved.off);
 }
 
 /// Get cursor position for do_search start.
@@ -2404,27 +2024,8 @@ int nvim_profile_passed_limit_val(proftime_T start)
   return profile_passed_limit(start) ? 1 : 0;
 }
 
-/// Check if spats[last_idx].pat matches a given pattern.
-int nvim_stat_spats_pat_matches(const char *pat, size_t patlen)
-{
-  if (pat == NULL || spats[last_idx].pat == NULL) {
-    return 0;
-  }
-  return (strncmp(pat, spats[last_idx].pat, patlen) == 0
-          && patlen == spats[last_idx].patlen) ? 1 : 0;
-}
-
-/// Copy spats[last_idx].pat using xstrnsave (for cache update).
-/// Returns a newly allocated string the caller must xfree.
-char *nvim_stat_copy_spats_pat(size_t *out_len)
-{
-  if (spats[last_idx].pat == NULL) {
-    *out_len = 0;
-    return NULL;
-  }
-  *out_len = spats[last_idx].patlen;
-  return xstrnsave(spats[last_idx].pat, spats[last_idx].patlen);
-}
+// nvim_stat_spats_pat_matches and nvim_stat_copy_spats_pat deleted:
+// these operations now use Rust search_state::spats_pat_matches and copy_spats_last_pat.
 
 /// Free a pointer allocated by nvim_stat_copy_spats_pat.
 void nvim_stat_free_pat(char *pat)
@@ -2470,12 +2071,7 @@ int nvim_is_pos_in_string(const char *line, int col)
 
 // nvim_regmmatch_alloc() and nvim_regmmatch_free() already defined above (~line 3717)
 
-/// Get spats[last_idx].pat and patlen for is_zero_width.
-const char *nvim_get_last_spat_pat(size_t *out_len)
-{
-  *out_len = spats[last_idx].patlen;
-  return spats[last_idx].pat;
-}
+// nvim_get_last_spat_pat deleted: use Rust search_state::get_last_pat_for_searchit instead.
 
 /// Call search_regcomp for is_zero_width.
 int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch)
@@ -2636,24 +2232,9 @@ void nvim_showmatch_beep(void)
 // Phase 9: f_searchcount accessors
 // =============================================================================
 
-/// Set spats[last_idx].pat for f_searchcount. Frees old pattern.
-/// Returns 0 if pattern is empty (caller should skip), 1 if ok.
-int nvim_searchcount_set_pattern(const char *pattern)
-{
-  if (*pattern == NUL) {
-    return 0;
-  }
-  xfree(spats[last_idx].pat);
-  spats[last_idx].patlen = strlen(pattern);
-  spats[last_idx].pat = xstrnsave(pattern, spats[last_idx].patlen);
-  return 1;
-}
-
-/// Check if spats[last_idx].pat is non-NULL and non-empty.
-int nvim_searchcount_has_pattern(void)
-{
-  return (spats[last_idx].pat != NULL && *spats[last_idx].pat != NUL) ? 1 : 0;
-}
+// nvim_searchcount_set_pattern and nvim_searchcount_has_pattern are now
+// handled directly in Rust via search_state::searchcount_set_pattern and
+// search_state::searchcount_has_pattern (which operate on Rust-owned SPATS).
 
 // Phase 4: find_pattern_in_path constants
 _Static_assert(FIND_ANY == 1, "FIND_ANY mismatch");
@@ -2701,7 +2282,7 @@ void nvim_search_decl_pos(int *lnum, int *col, int *coladd)
 /// Marshals pos and end_pos from/to integer components.
 /// dir: 1 = FORWARD, 0 = BACKWARD.
 /// flags: SEARCH_* flags.
-/// pat/patlen: the search pattern (from spats[last_idx]).
+/// pat/patlen: the search pattern (from Rust-owned SPATS[last_idx]).
 /// Returns 1 if found, 0 if not found.
 int nvim_search_current_searchit(int dir, int flags, int count,
                                  int *pos_lnum, int *pos_col, int *pos_coladd,
@@ -2709,11 +2290,16 @@ int nvim_search_current_searchit(int dir, int flags, int count,
 {
   _Static_assert(kOptFdoFlagSearch == 0x40,
                  "kOptFdoFlagSearch changed - update K_OPT_FDO_FLAG_SEARCH in search/src/commands.rs");
+  // Read pat/patlen from Rust-owned state
+  extern const char *rs_get_last_used_pattern(void);
+  extern size_t rs_get_last_used_pattern_len(void);
+  const char *pat = rs_get_last_used_pattern();
+  size_t patlen = rs_get_last_used_pattern_len();
   pos_T pos = { *pos_lnum, *pos_col, *pos_coladd };
   pos_T end_pos = { *end_lnum, *end_col, *end_coladd };
   int result = searchit(curwin, curbuf, &pos, &end_pos,
                         dir ? FORWARD : BACKWARD,
-                        spats[last_idx].pat, spats[last_idx].patlen,
+                        (char *)pat, patlen,
                         count, SEARCH_KEEP | flags, RE_SEARCH, NULL);
   *pos_lnum = pos.lnum;
   *pos_col = pos.col;

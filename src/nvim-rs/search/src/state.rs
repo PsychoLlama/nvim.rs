@@ -1,42 +1,13 @@
 //! Search state accessors
 //!
 //! This module provides Rust wrappers for accessing search state variables.
-//! Character search state now lives in `char_search_state.rs` (Rust-owned).
-//! Pattern state (spats, mr_pattern, etc.) still accessed via C accessors.
+//! Character search state lives in `char_search_state.rs` (Rust-owned).
+//! Pattern state (spats, mr_pattern, etc.) lives in `search_state.rs` (Rust-owned).
 
 use std::ffi::{c_char, c_int, c_longlong, c_uchar};
 
 use crate::char_search_state;
-
-// =============================================================================
-// C Accessor Functions (pattern state still in C)
-// =============================================================================
-
-extern "C" {
-    // Pattern state
-    fn nvim_get_mr_pattern() -> *const c_char;
-    fn nvim_get_mr_patternlen() -> usize;
-
-    // Pattern index state
-    fn nvim_get_last_idx() -> c_int;
-
-    // Search pattern state (spats array)
-    fn nvim_get_spat_pat(idx: c_int) -> *const c_char;
-    fn nvim_get_spat_patlen(idx: c_int) -> usize;
-    fn nvim_get_spat_magic(idx: c_int) -> c_int;
-    fn nvim_get_spat_no_scs(idx: c_int) -> c_int;
-    fn nvim_get_spat_off_dir(idx: c_int) -> c_char;
-    fn nvim_get_spat_off_line(idx: c_int) -> c_int;
-    fn nvim_get_spat_off_end(idx: c_int) -> c_int;
-    fn nvim_get_spat_off_off(idx: c_int) -> c_longlong;
-
-    // Save/restore state
-    fn nvim_get_save_level() -> c_int;
-    fn nvim_get_did_save_last_search_spat() -> c_int;
-
-    // Pattern index setter
-    fn nvim_set_last_idx(idx: c_int);
-}
+use crate::search_state;
 
 // =============================================================================
 // Direction Constants
@@ -137,15 +108,13 @@ pub const RE_BOTH: c_int = 3;
 /// Get the last used pattern index (search or substitute).
 #[inline]
 pub fn get_last_idx() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_last_idx() }
+    search_state::get_last_idx()
 }
 
 /// Set the last used pattern index.
 #[inline]
 pub fn set_last_idx(idx: c_int) {
-    // SAFETY: Simple global setter
-    unsafe { nvim_set_last_idx(idx) }
+    search_state::set_last_idx(idx);
 }
 
 /// Check if the search pattern was the last used one (not substitute).
@@ -164,14 +133,13 @@ pub fn search_was_last_used() -> bool {
 /// Returns a pointer to static memory that may be invalidated by subsequent searches.
 #[inline]
 pub unsafe fn get_mr_pattern() -> *const c_char {
-    nvim_get_mr_pattern()
+    search_state::get_mr_pattern()
 }
 
 /// Get the length of the pattern used by search_regcomp().
 #[inline]
 pub fn get_mr_patternlen() -> usize {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_mr_patternlen() }
+    search_state::get_mr_patternlen()
 }
 
 // =============================================================================
@@ -184,56 +152,49 @@ pub fn get_mr_patternlen() -> usize {
 /// Returns a pointer to allocated memory that may be freed.
 #[inline]
 pub unsafe fn get_spat_pat(idx: c_int) -> *const c_char {
-    nvim_get_spat_pat(idx)
+    search_state::get_spat_pat(idx)
 }
 
 /// Get the pattern length for the given index.
 #[inline]
 pub fn get_spat_patlen(idx: c_int) -> usize {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_patlen(idx) }
+    search_state::get_spat_patlen(idx)
 }
 
 /// Check if magic is enabled for the pattern at the given index.
 #[inline]
 pub fn get_spat_magic(idx: c_int) -> bool {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_magic(idx) != 0 }
+    search_state::get_spat_magic(idx)
 }
 
 /// Check if no_scs (no smartcase) is set for the pattern at the given index.
 #[inline]
 pub fn get_spat_no_scs(idx: c_int) -> bool {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_no_scs(idx) != 0 }
+    search_state::get_spat_no_scs(idx)
 }
 
 /// Get the search direction character ('/' or '?') for the pattern at the given index.
 #[inline]
 pub fn get_spat_off_dir(idx: c_int) -> c_char {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_off_dir(idx) }
+    search_state::get_spat_off_dir(idx) as c_char
 }
 
 /// Check if line offset is enabled for the pattern at the given index.
 #[inline]
 pub fn get_spat_off_line(idx: c_int) -> bool {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_off_line(idx) != 0 }
+    search_state::get_spat_off_line(idx)
 }
 
 /// Check if end-of-match offset is enabled for the pattern at the given index.
 #[inline]
 pub fn get_spat_off_end(idx: c_int) -> bool {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_off_end(idx) != 0 }
+    search_state::get_spat_off_end(idx)
 }
 
 /// Get the offset value for the pattern at the given index.
 #[inline]
 pub fn get_spat_off_off(idx: c_int) -> i64 {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_spat_off_off(idx) }
+    search_state::get_spat_off_off(idx)
 }
 
 // =============================================================================
@@ -243,8 +204,7 @@ pub fn get_spat_off_off(idx: c_int) -> i64 {
 /// Get the current save level for search patterns.
 #[inline]
 pub fn get_save_level() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_save_level() }
+    search_state::get_save_level()
 }
 
 /// Check if patterns are currently saved (save_level > 0).
@@ -256,8 +216,7 @@ pub fn patterns_are_saved() -> bool {
 /// Get the did_save_last_search_spat counter.
 #[inline]
 pub fn get_did_save_last_search_spat() -> c_int {
-    // SAFETY: Simple global accessor
-    unsafe { nvim_get_did_save_last_search_spat() }
+    search_state::get_did_save_last_search_spat()
 }
 
 /// Check if incremental search pattern is currently saved.

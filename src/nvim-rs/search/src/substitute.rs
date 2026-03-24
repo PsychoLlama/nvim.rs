@@ -5,15 +5,8 @@
 
 use std::ffi::c_int;
 
+use crate::search_state;
 use crate::state;
-
-// =============================================================================
-// C External Functions
-// =============================================================================
-
-extern "C" {
-    fn nvim_set_last_idx(idx: c_int);
-}
 
 // =============================================================================
 // Pattern Index Constants
@@ -205,15 +198,13 @@ pub fn search_was_last_used() -> bool {
 /// Set the substitute pattern as the last used.
 #[inline]
 pub fn set_substitute_as_last() {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_last_idx(RE_SUBST) }
+    search_state::set_last_idx(RE_SUBST);
 }
 
 /// Set the search pattern as the last used.
 #[inline]
 pub fn set_search_as_last() {
-    // SAFETY: Setting global variable through accessor
-    unsafe { nvim_set_last_idx(RE_SEARCH) }
+    search_state::set_last_idx(RE_SEARCH);
 }
 
 /// Set which pattern is last used by boolean.

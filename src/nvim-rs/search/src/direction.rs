@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_longlong};
 
+use crate::search_state;
 use crate::state;
 
 // =============================================================================
@@ -12,18 +13,6 @@ use crate::state;
 // =============================================================================
 
 extern "C" {
-    /// Set the search direction in spats[0].off.dir
-    fn nvim_set_spat_off_dir(idx: c_int, dir: c_char);
-
-    /// Set the line offset flag in spats array
-    fn nvim_set_spat_off_line(idx: c_int, line: c_int);
-
-    /// Set the end offset flag in spats array
-    fn nvim_set_spat_off_end(idx: c_int, end: c_int);
-
-    /// Set the offset value in spats array
-    fn nvim_set_spat_off_off(idx: c_int, off: c_longlong);
-
     /// Call set_vv_searchforward() in C
     fn nvim_call_set_vv_searchforward();
 }
@@ -54,15 +43,11 @@ pub fn get_search_direction() -> c_char {
 
 /// Set the search direction character.
 ///
-/// # Safety
 /// Modifies global state.
 #[inline]
 pub fn set_search_direction(dir: c_char) {
-    // SAFETY: Setting global state
-    unsafe {
-        nvim_set_spat_off_dir(state::RE_SEARCH, dir);
-        nvim_call_set_vv_searchforward();
-    }
+    search_state::set_spat_off_dir(state::RE_SEARCH, dir);
+    unsafe { nvim_call_set_vv_searchforward() };
 }
 
 /// Check if the current search direction is forward.
@@ -184,16 +169,12 @@ pub fn get_search_offset(idx: c_int) -> SearchOffset {
 
 /// Set the search offset for the given pattern index.
 ///
-/// # Safety
 /// Modifies global state.
 pub fn set_search_offset(idx: c_int, offset: &SearchOffset) {
-    // SAFETY: Setting global state through C accessors
-    unsafe {
-        nvim_set_spat_off_dir(idx, offset.dir);
-        nvim_set_spat_off_line(idx, c_int::from(offset.line));
-        nvim_set_spat_off_end(idx, c_int::from(offset.end));
-        nvim_set_spat_off_off(idx, offset.off);
-    }
+    search_state::set_spat_off_dir(idx, offset.dir);
+    search_state::set_spat_off_line(idx, offset.line);
+    search_state::set_spat_off_end(idx, offset.end);
+    search_state::set_spat_off_off(idx, offset.off);
 }
 
 /// Reset the search direction to forward (for "gd" and "gD" commands).
@@ -241,10 +222,7 @@ pub extern "C" fn rs_reverse_search_direction() {
 /// which only sets `spats[0].off.dir` without calling `set_vv_searchforward()`.
 #[inline]
 pub fn set_search_direction_raw(dir: c_char) {
-    // SAFETY: Setting global state
-    unsafe {
-        nvim_set_spat_off_dir(state::RE_SEARCH, dir);
-    }
+    search_state::set_spat_off_dir(state::RE_SEARCH, dir);
 }
 
 /// FFI: Set the search direction (raw, without updating vim variable).
@@ -296,6 +274,14 @@ pub extern "C" fn rs_int_to_char_direction(dir: c_int) -> c_char {
 #[no_mangle]
 pub extern "C" fn rs_char_to_int_direction(dir: c_char) -> c_int {
     char_to_int_direction(dir)
+}
+
+/// FFI: Set spats[0].off.line, .end, and .off atomically (for nvim_do_search_set_off).
+#[no_mangle]
+pub extern "C" fn rs_set_search_offset_line_end_off(line: c_int, end: c_int, off: c_longlong) {
+    search_state::set_spat_off_line(state::RE_SEARCH, line != 0);
+    search_state::set_spat_off_end(state::RE_SEARCH, end != 0);
+    search_state::set_spat_off_off(state::RE_SEARCH, off);
 }
 
 #[cfg(test)]

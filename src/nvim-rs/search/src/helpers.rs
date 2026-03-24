@@ -5,6 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::search_state;
 use crate::state;
 
 // =============================================================================
@@ -849,7 +850,6 @@ const FAIL: c_int = 0;
 
 extern "C" {
     static mut called_emsg: c_int;
-    fn nvim_get_last_spat_pat(out_len: *mut usize) -> *const c_char;
     fn nvim_regmmatch_alloc() -> *mut c_void;
     fn nvim_regmmatch_free(regmatch: *mut c_void);
     fn nvim_is_zero_width_regcomp(
@@ -895,9 +895,7 @@ pub unsafe extern "C" fn rs_is_zero_width(
     let mut result: c_int = -1;
 
     let (pat, patlen) = if pattern.is_null() {
-        let mut len: usize = 0;
-        let p = nvim_get_last_spat_pat(&mut len);
-        (p, len)
+        search_state::get_last_pat_for_searchit()
     } else {
         (pattern, patternlen)
     };

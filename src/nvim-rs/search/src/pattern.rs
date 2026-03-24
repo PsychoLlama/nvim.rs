@@ -12,55 +12,26 @@ use crate::state;
 // C Functions
 // =============================================================================
 
+use crate::search_state;
+
 extern "C" {
-    /// Get the pattern string from spats array.
-    fn nvim_get_spat_pat(idx: c_int) -> *const c_char;
-
-    // Batch accessors for ShaDa pattern get/set
-    fn nvim_spat_memcpy_out(idx: c_int, out: *mut SearchPatternC);
-    fn nvim_spat_memcpy_in(idx: c_int, inp: *const SearchPatternC);
-    fn nvim_free_spat(idx: c_int);
-    fn nvim_clear_spat_off(idx: c_int);
-    fn nvim_clear_spats();
-    fn nvim_free_mr_pattern();
+    // Non-state C accessors (still in C)
     fn nvim_call_set_vv_searchforward();
-
-    // Batch save/restore helpers (Phase 3)
-    fn nvim_inc_save_level() -> c_int;
-    fn nvim_dec_save_level() -> c_int;
-    fn nvim_save_search_patterns_batch();
-    fn nvim_restore_search_patterns_batch();
-    fn nvim_inc_did_save() -> c_int;
-    fn nvim_dec_did_save() -> c_int;
-    fn nvim_save_last_search_spat_batch();
-    fn nvim_restore_last_search_spat_batch();
-    fn nvim_call_iemsg_restore_mismatch();
-
-    // Batch helpers for search_regcomp and pattern compilation (Phase 4)
     fn nvim_emsg_noprevre();
     fn nvim_emsg_nopresub();
     fn nvim_set_rc_did_emsg();
     fn nvim_clear_rc_did_emsg();
     fn nvim_search_add_to_history(pat: *const c_char, patlen: usize);
-    fn nvim_set_mr_pattern(pat: *const c_char, patlen: usize);
     fn nvim_get_cmdmod_keeppatterns() -> c_int;
-    fn nvim_save_re_pat_batch(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
     fn nvim_search_regcomp_compile(
         pat: *const c_char,
         magic: c_int,
         regmatch: *mut std::ffi::c_void,
     ) -> c_int;
-    fn nvim_set_last_search_pat_batch(s: *const c_char, idx: c_int, magic: c_int, setlast: c_int);
     fn nvim_inc_emsg_off();
     fn nvim_dec_emsg_off();
-    fn nvim_spats_pat_is_null(idx: c_int) -> c_int;
-    fn nvim_spats_get_pat_and_len(
-        idx: c_int,
-        patlen: *mut usize,
-        magic: *mut c_int,
-        no_scs: *mut c_int,
-    ) -> *const c_char;
     fn nvim_set_no_smartcase(val: c_int);
+    fn nvim_call_iemsg_restore_mismatch();
 }
 
 /// Opaque representation of C SearchPattern struct.
@@ -95,7 +66,7 @@ pub struct SearchOffsetC {
 /// Returns a pointer to allocated memory that may be freed.
 #[inline]
 pub unsafe fn get_search_pattern() -> *const c_char {
-    nvim_get_spat_pat(state::RE_SEARCH)
+    search_state::get_spat_pat(state::RE_SEARCH)
 }
 
 /// Get the pattern string for the substitute pattern (index 1).
@@ -104,7 +75,7 @@ pub unsafe fn get_search_pattern() -> *const c_char {
 /// Returns a pointer to allocated memory that may be freed.
 #[inline]
 pub unsafe fn get_subst_pattern() -> *const c_char {
-    nvim_get_spat_pat(state::RE_SUBST)
+    search_state::get_spat_pat(state::RE_SUBST)
 }
 
 /// Get the pattern length for the search pattern.
@@ -145,7 +116,7 @@ pub fn subst_pattern_is_empty() -> bool {
 /// Returns a pointer to allocated memory that may be freed.
 #[inline]
 pub unsafe fn get_last_used_pattern() -> *const c_char {
-    nvim_get_spat_pat(state::get_last_idx())
+    search_state::get_spat_pat(state::get_last_idx())
 }
 
 /// Get the length of the last used pattern.
@@ -391,7 +362,7 @@ pub extern "C" fn rs_get_mr_pattern_len() -> usize {
 /// Returns a pointer to allocated memory owned by C. Do not free.
 #[unsafe(export_name = "last_search_pattern")]
 pub unsafe extern "C" fn rs_last_search_pattern() -> *mut c_char {
-    nvim_get_spat_pat(state::RE_SEARCH) as *mut c_char
+    search_state::get_spat_pat(state::RE_SEARCH) as *mut c_char
 }
 
 /// FFI: Return the search pattern length (spats[RE_SEARCH].patlen).
@@ -406,7 +377,7 @@ pub extern "C" fn rs_last_search_pattern_len() -> usize {
 /// Returns a pointer to allocated memory owned by C. Do not free.
 #[unsafe(export_name = "last_search_pat")]
 pub unsafe extern "C" fn rs_last_search_pat() -> *mut c_char {
-    nvim_get_spat_pat(state::get_last_idx()) as *mut c_char
+    search_state::get_spat_pat(state::get_last_idx()) as *mut c_char
 }
 
 /// FFI: Check if mr_pattern is empty.
@@ -425,7 +396,7 @@ pub extern "C" fn rs_mr_pattern_is_empty() -> c_int {
 /// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
 #[unsafe(export_name = "get_search_pattern")]
 pub unsafe extern "C" fn rs_get_search_pattern_shada(pat: *mut SearchPatternC) {
-    nvim_spat_memcpy_out(state::RE_SEARCH, pat);
+    search_state::spat_memcpy_out(state::RE_SEARCH, pat.cast::<search_state::SearchPattern>());
 }
 
 /// Get last substitute pattern (memcpy spats[1] out, then clear off).
@@ -434,7 +405,7 @@ pub unsafe extern "C" fn rs_get_search_pattern_shada(pat: *mut SearchPatternC) {
 /// `pat` must point to a valid, properly aligned SearchPattern-sized buffer.
 #[unsafe(export_name = "get_substitute_pattern")]
 pub unsafe extern "C" fn rs_get_substitute_pattern_shada(pat: *mut SearchPatternC) {
-    nvim_spat_memcpy_out(state::RE_SUBST, pat);
+    search_state::spat_memcpy_out(state::RE_SUBST, pat.cast::<search_state::SearchPattern>());
     // Clear the offset fields, matching original get_substitute_pattern behavior
     if !pat.is_null() {
         let off = &mut (*pat).off;
@@ -451,7 +422,7 @@ pub unsafe extern "C" fn rs_get_substitute_pattern_shada(pat: *mut SearchPattern
 /// `pat` must point to a valid SearchPattern.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_search_pattern_shada(pat: *const SearchPatternC) {
-    nvim_spat_memcpy_in(state::RE_SEARCH, pat);
+    search_state::spat_memcpy_in(state::RE_SEARCH, pat.cast::<search_state::SearchPattern>());
     nvim_call_set_vv_searchforward();
 }
 
@@ -483,8 +454,8 @@ pub unsafe extern "C" fn set_substitute_pattern_export(pat: SearchPatternC) {
 /// `pat` must point to a valid SearchPattern.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_substitute_pattern_shada(pat: *const SearchPatternC) {
-    nvim_spat_memcpy_in(state::RE_SUBST, pat);
-    nvim_clear_spat_off(state::RE_SUBST);
+    search_state::spat_memcpy_in(state::RE_SUBST, pat.cast::<search_state::SearchPattern>());
+    search_state::clear_spat_off(state::RE_SUBST);
 }
 
 // rs_set_last_used_pattern is already defined in substitute.rs
@@ -535,7 +506,7 @@ pub unsafe extern "C" fn rs_search_regcomp(
             pat_use
         };
 
-        if nvim_spats_pat_is_null(i) != 0 {
+        if search_state::spats_pat_is_null(i) {
             // Pattern was never defined
             if pat_use == RE_SUBST {
                 nvim_emsg_nopresub();
@@ -548,9 +519,12 @@ pub unsafe extern "C" fn rs_search_regcomp(
 
         let mut spat_magic: c_int = 0;
         let mut spat_no_scs: c_int = 0;
-        actual_pat =
-            nvim_spats_get_pat_and_len(i, &mut actual_patlen, &mut spat_magic, &mut spat_no_scs)
-                as *mut c_char;
+        actual_pat = search_state::spats_get_pat_and_len(
+            i,
+            &mut actual_patlen,
+            &mut spat_magic,
+            &mut spat_no_scs,
+        ) as *mut c_char;
         magic = spat_magic;
         nvim_set_no_smartcase(spat_no_scs);
     } else if (options & SEARCH_HIS) != 0 {
@@ -563,15 +537,15 @@ pub unsafe extern "C" fn rs_search_regcomp(
     }
 
     // Set mr_pattern
-    nvim_set_mr_pattern(actual_pat, actual_patlen);
+    search_state::set_mr_pattern(actual_pat, actual_patlen);
 
     // Save pattern unless SEARCH_KEEP or keeppatterns
     if (options & SEARCH_KEEP) == 0 && nvim_get_cmdmod_keeppatterns() == 0 {
         if pat_save == RE_SEARCH || pat_save == RE_BOTH {
-            nvim_save_re_pat_batch(RE_SEARCH, actual_pat, actual_patlen, magic);
+            search_state::save_re_pat_batch(RE_SEARCH, actual_pat, actual_patlen, magic);
         }
         if pat_save == RE_SUBST || pat_save == RE_BOTH {
-            nvim_save_re_pat_batch(RE_SUBST, actual_pat, actual_patlen, magic);
+            search_state::save_re_pat_batch(RE_SUBST, actual_pat, actual_patlen, magic);
         }
     }
 
@@ -593,7 +567,7 @@ pub unsafe extern "C" fn rs_save_re_pat(
     patlen: usize,
     magic: c_int,
 ) {
-    nvim_save_re_pat_batch(idx, pat, patlen, magic);
+    search_state::save_re_pat_batch(idx, pat, patlen, magic);
 }
 
 /// set_last_search_pat: Set the last search pattern (for ":let @/ =" and ShaDa).
@@ -607,7 +581,7 @@ pub unsafe extern "C" fn rs_set_last_search_pat(
     magic: c_int,
     setlast: c_int,
 ) {
-    nvim_set_last_search_pat_batch(s, idx, magic, setlast);
+    search_state::set_last_search_pat_batch(s, idx, magic, setlast);
 }
 
 /// last_pat_prog: Get a regexp program for the last used search pattern.
@@ -617,7 +591,7 @@ pub unsafe extern "C" fn rs_set_last_search_pat(
 #[unsafe(export_name = "last_pat_prog")]
 pub unsafe extern "C" fn rs_last_pat_prog(regmatch: *mut std::ffi::c_void) {
     let last_idx = crate::state::get_last_idx();
-    if nvim_spats_pat_is_null(last_idx) != 0 {
+    if search_state::spats_pat_is_null(last_idx) {
         // Set regmatch->regprog = NULL
         // regprog is the first field of regmmatch_T (it's a pointer)
         let regprog_ptr = regmatch as *mut *mut std::ffi::c_void;
@@ -639,8 +613,6 @@ pub unsafe extern "C" fn rs_last_pat_prog(regmatch: *mut std::ffi::c_void) {
 }
 
 /// set_vv_searchforward: Update vim variable.
-/// This is already handled by nvim_call_set_vv_searchforward in C.
-/// Exposed here for completeness.
 #[no_mangle]
 pub extern "C" fn rs_set_vv_searchforward() {
     unsafe {
@@ -657,13 +629,11 @@ pub extern "C" fn rs_set_vv_searchforward() {
 /// Uses nesting via save_level: only acts at the top level.
 #[unsafe(export_name = "save_search_patterns")]
 pub extern "C" fn rs_save_search_patterns() {
-    unsafe {
-        // Increment save_level; only do the actual save if it was 0
-        if nvim_inc_save_level() != 0 {
-            return;
-        }
-        nvim_save_search_patterns_batch();
+    // Increment save_level; only do the actual save if it was 0
+    if search_state::inc_save_level() != 0 {
+        return;
     }
+    search_state::save_search_patterns_batch();
 }
 
 /// Restore search patterns (for autocmds/user functions).
@@ -671,13 +641,11 @@ pub extern "C" fn rs_save_search_patterns() {
 /// Uses nesting via save_level: only acts when it reaches 0.
 #[unsafe(export_name = "restore_search_patterns")]
 pub extern "C" fn rs_restore_search_patterns() {
-    unsafe {
-        // Decrement save_level; only do the actual restore if it reaches 0
-        if nvim_dec_save_level() != 0 {
-            return;
-        }
-        nvim_restore_search_patterns_batch();
+    // Decrement save_level; only do the actual restore if it reaches 0
+    if search_state::dec_save_level() != 0 {
+        return;
     }
+    search_state::restore_search_patterns_batch();
 }
 
 /// Save last search pattern for incremental search.
@@ -685,13 +653,11 @@ pub extern "C" fn rs_restore_search_patterns() {
 /// Uses nesting via did_save_last_search_spat.
 #[unsafe(export_name = "save_last_search_pattern")]
 pub extern "C" fn rs_save_last_search_pattern() {
-    unsafe {
-        // Increment counter; only save if first call (old value was 0)
-        if nvim_inc_did_save() != 0 {
-            return;
-        }
-        nvim_save_last_search_spat_batch();
+    // Increment counter; only save if first call (old value was 0)
+    if search_state::inc_did_save() != 0 {
+        return;
     }
+    search_state::save_last_search_spat_batch();
 }
 
 /// Restore last search pattern for incremental search.
@@ -699,39 +665,33 @@ pub extern "C" fn rs_save_last_search_pattern() {
 /// Uses nesting via did_save_last_search_spat.
 #[unsafe(export_name = "restore_last_search_pattern")]
 pub extern "C" fn rs_restore_last_search_pattern() {
-    unsafe {
-        // Decrement counter
-        let new_val = nvim_dec_did_save();
-        if new_val > 0 {
-            // Nested call, nothing to do
-            return;
-        }
-        if new_val != 0 {
-            // Called more often than save
-            nvim_call_iemsg_restore_mismatch();
-            return;
-        }
-        nvim_restore_last_search_spat_batch();
+    // Decrement counter
+    let new_val = search_state::dec_did_save();
+    if new_val > 0 {
+        // Nested call, nothing to do
+        return;
     }
+    if new_val != 0 {
+        // Called more often than save
+        unsafe { nvim_call_iemsg_restore_mismatch() };
+        return;
+    }
+    search_state::restore_last_search_spat_batch();
 }
 
 /// Free spat at given index.
 #[no_mangle]
 pub extern "C" fn rs_free_spat(idx: c_int) {
-    unsafe {
-        nvim_free_spat(idx);
-    }
+    search_state::spat_free(idx);
 }
 
 /// Free all search patterns (for EXITFREE).
 #[unsafe(export_name = "free_search_patterns")]
 pub extern "C" fn rs_free_search_patterns() {
-    unsafe {
-        nvim_free_spat(state::RE_SEARCH);
-        nvim_free_spat(state::RE_SUBST);
-        nvim_clear_spats();
-        nvim_free_mr_pattern();
-    }
+    search_state::spat_free(state::RE_SEARCH);
+    search_state::spat_free(state::RE_SUBST);
+    search_state::clear_spats();
+    search_state::free_mr_pattern();
 }
 
 #[cfg(test)]

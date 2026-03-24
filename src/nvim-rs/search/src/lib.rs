@@ -16,6 +16,7 @@ pub mod incsearch;
 pub mod matchparen;
 pub mod path_search;
 pub mod pattern;
+pub mod search_state;
 pub mod searchit;
 pub mod state;
 pub mod stats;
@@ -25,9 +26,6 @@ use std::ffi::{c_char, c_int};
 
 // C accessor functions for search state.
 extern "C" {
-    /// Get the `last_idx` static variable.
-    fn nvim_get_last_idx() -> c_int;
-
     /// Get whether last vim_regcomp() found EOL.
     fn nvim_regexp_get_had_eol() -> c_int;
 
@@ -95,8 +93,7 @@ pub extern "C" fn rs_last_csearch() -> *const c_char {
 /// was last used.
 #[inline]
 fn search_was_last_used_impl() -> bool {
-    // SAFETY: nvim_get_last_idx is a simple global accessor
-    unsafe { nvim_get_last_idx() == 0 }
+    search_state::get_last_idx() == 0
 }
 
 /// FFI wrapper for `search_was_last_used`.

@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::search_state;
+
 // =============================================================================
 // Search Statistics Types
 // =============================================================================
@@ -540,8 +542,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_profile_setlimit_ms(timeout: c_int) -> u64;
     fn nvim_profile_passed_limit_val(start: u64) -> c_int;
-    fn nvim_stat_spats_pat_matches(pat: *const c_char, patlen: usize) -> c_int;
-    fn nvim_stat_copy_spats_pat(out_len: *mut usize) -> *mut c_char;
     fn nvim_stat_free_pat(pat: *mut c_char);
 
     // Display
@@ -654,7 +654,7 @@ pub unsafe extern "C" fn rs_update_search_stat(
     // If anything relevant changed the count has to be recomputed.
     let cache_valid = (*cache).chgtick == nvim_curbuf_get_changedtick()
         && !(*cache).lastpat.is_null()
-        && nvim_stat_spats_pat_matches((*cache).lastpat, (*cache).lastpatlen) != 0
+        && search_state::spats_pat_matches((*cache).lastpat, (*cache).lastpatlen)
         && rs_equalpos((*cache).lastpos, cursor_pos) != 0
         && (*cache).lbuf == nvim_search_get_curbuf_ptr();
 
@@ -753,7 +753,7 @@ pub unsafe extern "C" fn rs_update_search_stat(
         if done_search {
             nvim_stat_free_pat((*cache).lastpat);
             let mut patlen: usize = 0;
-            (*cache).lastpat = nvim_stat_copy_spats_pat(&mut patlen);
+            (*cache).lastpat = search_state::copy_spats_last_pat(&mut patlen);
             (*cache).lastpatlen = patlen;
             (*cache).chgtick = nvim_curbuf_get_changedtick();
             (*cache).lbuf = nvim_search_get_curbuf_ptr();
@@ -924,11 +924,6 @@ pub unsafe extern "C" fn cmdline_search_stat_export(
 // Phase 9: f_searchcount computation
 // =============================================================================
 
-extern "C" {
-    fn nvim_searchcount_set_pattern(pattern: *const c_char) -> c_int;
-    fn nvim_searchcount_has_pattern() -> c_int;
-}
-
 /// Compute search count statistics for the searchcount() VimL function.
 ///
 /// Handles: save/restore patterns, pattern setup, call update_search_stat.
@@ -951,14 +946,14 @@ pub unsafe extern "C" fn rs_searchcount_compute(
     crate::pattern::rs_save_last_search_pattern();
     crate::incsearch::rs_save_incsearch_state();
 
-    if !pattern.is_null() && nvim_searchcount_set_pattern(pattern) == 0 {
+    if !pattern.is_null() && !search_state::searchcount_set_pattern(pattern) {
         // Empty pattern - skip computation
         crate::pattern::rs_restore_last_search_pattern();
         crate::incsearch::rs_restore_incsearch_state();
         return;
     }
 
-    if nvim_searchcount_has_pattern() == 0 {
+    if !search_state::searchcount_has_pattern() {
         // No previous pattern defined
         crate::pattern::rs_restore_last_search_pattern();
         crate::incsearch::rs_restore_incsearch_state();
