@@ -136,8 +136,6 @@ struct qf_info_S {
 
 static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
-static unsigned last_qf_id = 0;   // Last Used quickfix list id
-
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
 
 int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
@@ -371,7 +369,6 @@ void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
   return &qi->qf_lists[idx];
 }
 
-unsigned nvim_qf_alloc_next_id(void) { return ++last_qf_id; }
 void nvim_qf_free_title(void *qfl_void) { if (qfl_void != NULL) XFREE_CLEAR(((qf_list_T *)qfl_void)->qf_title); }
 
 /// Free the context typval of a quickfix list

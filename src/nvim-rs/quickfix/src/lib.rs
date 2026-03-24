@@ -2193,7 +2193,6 @@ extern "C" {
     fn nvim_qf_set_qfl_type(qfl: QfListHandleMut, qfl_type: c_int);
     fn nvim_qf_set_has_user_data(qfl: QfListHandleMut, has_user_data: bool);
     fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
-    fn nvim_qf_alloc_next_id() -> u32;
     fn memset(ptr: *mut c_void, c: c_int, n: usize) -> *mut c_void;
     fn nvim_qf_free_title(qfl: QfListHandleMut);
     fn nvim_qf_free_ctx(qfl: QfListHandleMut);
@@ -5857,6 +5856,23 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
 
     // Always called after rs_incr_quickfix_busy()
     crate::lifecycle::rs_decr_quickfix_busy();
+}
+
+// =============================================================================
+// Static globals migrated from C
+// =============================================================================
+
+/// Monotonic counter for quickfix list IDs.
+///
+/// Replaces the C static `last_qf_id` in `quickfix_shim.c`.
+static LAST_QF_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Allocate the next quickfix list ID.
+///
+/// Replaces `nvim_qf_alloc_next_id` in `quickfix_shim.c`.
+#[no_mangle]
+pub extern "C" fn nvim_qf_alloc_next_id() -> u32 {
+    LAST_QF_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
 }
 
 // =============================================================================
