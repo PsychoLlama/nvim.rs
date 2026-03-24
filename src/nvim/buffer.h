@@ -188,6 +188,8 @@ char *do_bufdel(int command, char *arg, int addr_count, int start_bnr, int end_b
 int do_buffer_ext(int action, int start, int dir, int count, int flags);
 // goto_buffer() is implemented in Rust (src/nvim-rs/buffer/src/lifecycle.rs).
 void goto_buffer(exarg_T *eap, int start, int dir, int count);
+// empty_curbuf() is implemented in Rust (src/nvim-rs/buffer/src/lifecycle.rs).
+int empty_curbuf(bool close_others, int forceit, int action);
 
 // maketitle(), resettitle(), free_titles() are implemented in Rust
 // (src/nvim-rs/buffer/src/info.rs).

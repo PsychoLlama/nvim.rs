@@ -1005,6 +1005,131 @@ pub unsafe extern "C" fn goto_buffer(eap: *const c_void, start: c_int, dir: c_in
 }
 
 // =============================================================================
+// empty_curbuf: make current buffer empty when last buffer is wiped
+// =============================================================================
+
+extern "C" {
+    static mut need_fileinfo: bool;
+
+    fn nvim_ses_get_firstwin() -> *mut c_void;
+    // nvim_win_get_next and nvim_win_get_floating are exported from the Rust window crate
+    fn nvim_win_get_next(wp: *mut c_void) -> *mut c_void;
+    fn nvim_win_get_floating(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_buffer(wp: *mut c_void) -> BufHandle;
+
+    // close_windows(buf, keep_curwin) -- implemented in Rust window crate
+    fn close_windows(buf: BufHandle, keep_curwin: c_int);
+    fn setpcmark();
+    // do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, oldwin)
+    fn do_ecmd(
+        fnum: c_int,
+        ffname: *const c_char,
+        sfname: *const c_char,
+        eap: *mut c_void,
+        newlnum: c_int,
+        flags: c_int,
+        oldwin: *mut c_void,
+    ) -> c_int;
+    // close_buffer(win, buf, action, abort_if_last, ignore_abort)
+    fn close_buffer(
+        win: *mut c_void,
+        buf: BufHandle,
+        action: c_int,
+        abort_if_last: bool,
+        ignore_abort: bool,
+    ) -> bool;
+
+    // bufref_valid and set_bufref -- exported from misc.rs
+    fn bufref_valid(bufref: *mut crate::misc::BufRef) -> bool;
+}
+
+// ECMD newlnum constants (from ex_cmds.h)
+const ECMD_ONE: c_int = 1;
+// ECMD flags
+const ECMD_FORCEIT: c_int = 0x08;
+
+// FAIL/OK from vim_defs.h
+const FAIL: c_int = 0;
+const DOBUF_UNLOAD_VAL: c_int = 2; // matches DOBUF_UNLOAD
+
+/// Make the current buffer empty.
+/// Used when it is wiped out and it's the last buffer.
+///
+/// Rust port of C `empty_curbuf()`.
+///
+/// # Safety
+/// Accesses global Neovim state. Must be called on the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> c_int {
+    if action == DOBUF_UNLOAD_VAL {
+        // Use emsg from misc.rs extern block -- redeclare locally
+        extern "C" {
+            fn emsg(s: *const c_char) -> c_int;
+            fn gettext(msgid: *const c_char) -> *const c_char;
+        }
+        emsg(gettext(c"E90: Cannot unload last buffer".as_ptr()));
+        return FAIL;
+    }
+
+    let buf = nvim_get_curbuf();
+    let mut bufref = crate::misc::BufRef {
+        br_buf: buf.as_ptr(),
+        br_fnum: 0,
+        br_buf_free_count: 0,
+    };
+    crate::misc::set_bufref(&raw mut bufref, buf);
+
+    if close_others {
+        let curwin = nvim_get_curwin();
+        let can_close_all_others = if nvim_win_get_floating(curwin) != 0 {
+            // Check if there is any non-floating window with a different buffer.
+            let mut found = false;
+            let mut wp = nvim_ses_get_firstwin();
+            while !wp.is_null() {
+                if nvim_win_get_floating(wp) != 0 {
+                    break;
+                }
+                if nvim_win_get_buffer(wp) != buf {
+                    found = true;
+                    break;
+                }
+                wp = nvim_win_get_next(wp);
+            }
+            found
+        } else {
+            true
+        };
+        close_windows(buf, c_int::from(can_close_all_others));
+    }
+
+    setpcmark();
+    let curwin = nvim_get_curwin();
+    let ecmd_flags = if forceit != 0 { ECMD_FORCEIT } else { 0 };
+    let retval = do_ecmd(
+        0,
+        std::ptr::null(),
+        std::ptr::null(),
+        std::ptr::null_mut(),
+        ECMD_ONE,
+        ecmd_flags,
+        curwin,
+    );
+
+    // do_ecmd() may create a new buffer; delete the old one if still valid
+    // and no longer in any window.
+    let curbuf_after = nvim_get_curbuf();
+    if buf != curbuf_after && bufref_valid(&raw mut bufref) && nvim_buf_get_nwindows(buf) == 0 {
+        close_buffer(std::ptr::null_mut(), buf, action, false, false);
+    }
+
+    if !close_others {
+        need_fileinfo = false;
+    }
+
+    retval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

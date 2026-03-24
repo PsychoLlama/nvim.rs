@@ -916,8 +916,6 @@ static void free_buffer_stuff(buf_T *buf, int free_flags)
   buf_free_callbacks(buf);
 }
 
-// goto_buffer() is implemented in Rust (see src/nvim-rs/buffer/src/lifecycle.rs).
-
 /// Handle the situation of swap_exists_action being set.
 ///
 /// It is allowed for "old_curbuf" to be NULL or invalid.
@@ -981,57 +979,6 @@ void handle_swap_exists(bufref_T *old_curbuf)
   swap_exists_action = SEA_NONE;
 }
 
-/// Make the current buffer empty.
-/// Used when it is wiped out and it's the last buffer.
-static int empty_curbuf(bool close_others, int forceit, int action)
-{
-  buf_T *buf = curbuf;
-
-  if (action == DOBUF_UNLOAD) {
-    emsg(_("E90: Cannot unload last buffer"));
-    return FAIL;
-  }
-
-  bufref_T bufref;
-  set_bufref(&bufref, buf);
-
-  if (close_others) {
-    bool can_close_all_others = true;
-    if (curwin->w_floating) {
-      // Closing all other windows with this buffer may leave only floating windows.
-      can_close_all_others = false;
-      for (win_T *wp = firstwin; !wp->w_floating; wp = wp->w_next) {
-        if (wp->w_buffer != curbuf) {
-          // Found another non-floating window with a different (probably unlisted) buffer.
-          // Closing all other windows with this buffer is fine in this case.
-          can_close_all_others = true;
-          break;
-        }
-      }
-    }
-    // If it is fine to close all other windows with this buffer, keep the current window and
-    // close any other windows with this buffer, then make it empty.
-    // Otherwise close_windows() will refuse to close the last non-floating window, so allow it
-    // to close the current window instead.
-    close_windows(buf, can_close_all_others);
-  }
-
-  setpcmark();
-  int retval = do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, forceit ? ECMD_FORCEIT : 0, curwin);
-
-  // do_ecmd() may create a new buffer, then we have to delete
-  // the old one.  But do_ecmd() may have done that already, check
-  // if the buffer still exists.
-  if (buf != curbuf && bufref_valid(&bufref) && buf->b_nwindows == 0) {
-    close_buffer(NULL, buf, action, false, false);
-  }
-
-  if (!close_others) {
-    need_fileinfo = false;
-  }
-
-  return retval;
-}
 
 /// Implementation of the commands for the buffer list.
 ///
