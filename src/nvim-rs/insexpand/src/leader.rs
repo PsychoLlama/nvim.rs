@@ -440,7 +440,9 @@ extern "C" {
     // For ins_compl_bs
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
     fn nvim_mb_ptr_back(line: *const c_char, p: *const c_char) -> *const c_char;
-    fn nvim_can_bs_start() -> c_int;
+    // nvim_can_bs_start: deleted (Phase 1), use can_bs(BS_START) directly
+    #[link_name = "can_bs"]
+    fn can_bs(what: c_int) -> c_int;
     fn nvim_api_clear_and_set_compl_leader(data: *const c_char, len: usize);
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_delete(new_leader: c_int);
@@ -487,7 +489,7 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     if p_off - compl_col < 0
         || (p_off - compl_col == 0 && rs_ctrl_x_mode_omni() == 0)
         || rs_ctrl_x_mode_eval() != 0
-        || (nvim_can_bs_start() == 0 && p_off - compl_col - compl_length < 0)
+        || (can_bs(c_int::from(b's')) == 0 && p_off - compl_col - compl_length < 0) // BS_START = 's' (from option_vars.h)
     {
         return K_BS;
     }
@@ -532,7 +534,11 @@ extern "C" {
     // nvim_get_p_acl: inlined in vars.rs (Phase 28)
     #[link_name = "pum_undisplay"]
     fn nvim_pum_undisplay(undo: c_int);
-    fn nvim_redraw_later_valid();
+    // nvim_redraw_later_valid: deleted (Phase 1), use redraw_later(curwin, UPD_VALID) directly
+    #[link_name = "redraw_later"]
+    fn redraw_later(wp: *mut std::ffi::c_void, r#type: c_int);
+    #[link_name = "curwin"]
+    static mut g_curwin: *mut std::ffi::c_void;
     fn nvim_update_screen();
     fn nvim_ui_flush();
     fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize);
@@ -543,7 +549,9 @@ extern "C" {
     // (compl_restarting moved to Rust static in state.rs)
     fn rs_ins_compl_has_autocomplete() -> c_int;
     fn rs_ins_compl_enable_autocomplete();
-    fn nvim_ins_complete_ctrl_n() -> c_int;
+    // nvim_ins_complete_ctrl_n: deleted (Phase 1), use ins_complete(CTRL_N, 1) directly
+    #[link_name = "ins_complete"]
+    fn ins_complete(c: c_int, enable_pum: c_int) -> c_int;
     fn rs_ins_compl_show_pum();
     fn rs_ins_compl_insert(move_cursor: c_int, insert_prefix: c_int);
     fn rs_ins_compl_preinsert_longest() -> c_int;
@@ -575,7 +583,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
 
     if crate::vars::nvim_get_p_acl() > 0 {
         nvim_pum_undisplay(1);
-        nvim_redraw_later_valid();
+        redraw_later(g_curwin, 10); // UPD_VALID = 10
         nvim_update_screen();
         nvim_ui_flush();
     }
@@ -602,7 +610,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         } else {
             crate::vars::nvim_set_compl_autocomplete(0);
         }
-        if nvim_ins_complete_ctrl_n() == FAIL {
+        if ins_complete(14, 1) == FAIL { // CTRL_N = 14, enable_pum = 1
             crate::vars::nvim_set_compl_cont_status(0);
         }
         crate::state::COMPL_RESTARTING = false;

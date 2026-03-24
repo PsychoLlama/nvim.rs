@@ -361,7 +361,9 @@ extern "C" {
     fn nvim_curs_columns_curwin();
     #[link_name = "redraw_mode"]
     static mut g_redraw_mode: bool;
-    fn nvim_shortmess_completionmenu() -> bool;
+    // nvim_shortmess_completionmenu: deleted (Phase 1), use shortmess(SHM_COMPLETIONMENU) directly
+    #[link_name = "shortmess"]
+    fn shortmess(x: c_int) -> bool;
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
     static p_smd: c_int;
@@ -375,7 +377,9 @@ extern "C" {
     // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     #[link_name = "msg_hist_off"]
     static mut g_msg_hist_off: bool;
-    fn nvim_msg_ext_set_kind_completion();
+    // nvim_msg_ext_set_kind_completion: deleted (Phase 1), use msg_ext_set_kind("completion") directly
+    #[link_name = "msg_ext_set_kind"]
+    fn msg_ext_set_kind(kind: *const std::os::raw::c_char);
     #[link_name = "msg"]
     fn nvim_msg_with_attr(s: *const c_char, attr: c_int) -> bool;
     #[link_name = "msg_clr_cmdline"]
@@ -520,14 +524,14 @@ pub unsafe extern "C" fn rs_ins_compl_show_statusmsg() {
 
     // Show a message about what (completion) mode we're in.
     g_redraw_mode = true;
-    if !nvim_shortmess_completionmenu() {
+    if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         if g_edit_submode_extra.is_null() {
             nvim_msg_clr_cmdline_wrap(); // necessary for "noshowmode"
         } else {
             // edit_submode_extra is non-null
             if p_smd == 0 {
                 g_msg_hist_off = true;
-                nvim_msg_ext_set_kind_completion();
+                msg_ext_set_kind(c"completion".as_ptr());
                 nvim_msg_with_attr(
                     g_edit_submode_extra,
                     if g_edit_submode_highl < HLF_COUNT {

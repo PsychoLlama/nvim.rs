@@ -1935,7 +1935,7 @@ char *nvim_get_compl_shown_match_str_dup(void) { return compl_shown_match ? xstr
 int nvim_cursor_on_nul(void) { char *line = get_cursor_line_ptr(); return (line && line[curwin->w_cursor.col] != NUL) ? 1 : 0; }
 // Compound accessors for ins_compl_stop (Phase 3)
 void nvim_ins_apply_autocmds_completedonepre(void) { ins_apply_autocmds(EVENT_COMPLETEDONEPRE); }
-bool nvim_shortmess_completionmenu(void) { return shortmess(SHM_COMPLETIONMENU); }
+// nvim_shortmess_completionmenu: deleted (Phase 1, Rust calls shortmess(SHM_COMPLETIONMENU) directly)
 bool nvim_in_cinkeys_key_complete(int when, bool line_is_empty) { return in_cinkeys(KEY_COMPLETE, when, line_is_empty); }
 // nvim_set_edit_submode_null_if_set: deleted (Phase 33, inlined in ctrl_x.rs)
 void nvim_ins_compl_insert_bytes(const char *p, int len) {
@@ -1950,7 +1950,7 @@ void nvim_ins_compl_insert_bytes(const char *p, int len) {
 void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 
 // Accessor for internal_error in compl_get_info dispatch
-void nvim_internal_error_compl_get_info(void) { internal_error("ins_complete()"); }
+// nvim_internal_error_compl_get_info: deleted (Phase 1, Rust calls internal_error directly)
 
 // Compound accessors for ins_compl_show_pum (Phase 2)
 // nvim_update_screen() already exists in drawscreen.c
@@ -2067,7 +2067,7 @@ void nvim_emsg_dict_empty(int is_dict) {
 }
 // nvim_emsg_silent_is_zero: deleted (Phase 35, inlined in ctrl_x.rs)
 // nvim_in_assert_fails: defined in change_ffi.c (bool nvim_in_assert_fails(void))
-void nvim_vim_beep_complete(void) { vim_beep(kOptBoFlagComplete); }
+// nvim_vim_beep_complete: deleted (Phase 1, Rust calls vim_beep(kOptBoFlagComplete) directly)
 // nvim_setcursor: deleted (Phase 3, Rust calls setcursor directly)
 // nvim_ui_has_messages: defined in message.c (int nvim_ui_has_messages(void))
 // nvim_ui_flush: defined in change_ffi.c (void nvim_ui_flush(void))
@@ -2207,7 +2207,7 @@ const char *nvim_mb_ptr_back(const char *line, const char *p) {
   MB_PTR_BACK(line, pp);
   return pp;
 }
-int nvim_can_bs_start(void) { return can_bs(BS_START) ? 1 : 0; }
+// nvim_can_bs_start: deleted (Phase 1, Rust calls can_bs(BS_START) directly)
 void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
   API_CLEAR_STRING(compl_leader);
   compl_leader = cbuf_to_string(data, len);
@@ -2236,7 +2236,7 @@ int nvim_is_cpt_func_refresh_always(void) {
 }
 void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
 // nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
-int nvim_ins_complete_ctrl_n(void) { return ins_complete(Ctrl_N, true); }
+// nvim_ins_complete_ctrl_n: deleted (Phase 1, Rust calls ins_complete(CTRL_N, true) directly)
 // Accessor for Phase 5: ins_compl_del_pum migration
 // Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
 // get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
@@ -2527,7 +2527,7 @@ void nvim_set_edit_submode_extra_match_ref(int cp_number, int compl_matches_val)
 // nvim_get_p_smd: defined in normal_shim.c
 // nvim_get_dollar_vcol: defined in edit.c
 void nvim_curs_columns_curwin(void) { curs_columns(curwin, false); }
-void nvim_msg_ext_set_kind_completion(void) { msg_ext_set_kind("completion"); }
+// nvim_msg_ext_set_kind_completion: deleted (Phase 1, Rust calls msg_ext_set_kind("completion") directly)
 // nvim_msg_with_attr, nvim_msg_clr_cmdline_wrap: deleted (Phase 4, Rust uses #[link_name] directly)
 
 // Compound accessor for Phase 2 (pass 4): get_next_bufname_token

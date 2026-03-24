@@ -160,7 +160,9 @@ extern "C" {
 
     // Phase 3 compound accessors
     fn nvim_ins_apply_autocmds_completedonepre();
-    fn nvim_shortmess_completionmenu() -> bool;
+    // nvim_shortmess_completionmenu: deleted (Phase 1), use shortmess(SHM_COMPLETIONMENU) directly
+    #[link_name = "shortmess"]
+    fn shortmess(x: c_int) -> bool;
     fn nvim_in_cinkeys_key_complete(when: c_int, line_is_empty: bool) -> bool;
     // nvim_set_edit_submode_null_if_set: inlined below (Phase 33)
     fn nvim_get_curwin() -> *mut u8; // opaque curwin pointer
@@ -540,7 +542,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     rs_ins_compl_free();
     crate::vars::nvim_set_compl_started(0);
     crate::vars::nvim_set_compl_matches(0);
-    if !nvim_shortmess_completionmenu() {
+    if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         msg_clr_cmdline(); // necessary for "noshowmode"
     }
     crate::vars::nvim_set_ctrl_x_mode(CTRL_X_NORMAL);
@@ -646,7 +648,8 @@ extern "C" {
     #[link_name = "emsg_silent"]
     static mut g_emsg_silent: c_int;
     fn nvim_in_assert_fails() -> bool;
-    fn nvim_vim_beep_complete();
+    // nvim_vim_beep_complete: deleted (Phase 1), use vim_beep(kOptBoFlagComplete) directly
+    fn vim_beep(flag: c_int);
     fn setcursor();
     fn ui_has(ext: c_int) -> bool;
     fn nvim_ui_flush();
@@ -676,7 +679,7 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
         g_edit_submode = core::ptr::null_mut();
         nvim_emsg_dict_empty(dict_opt);
         if g_emsg_silent == 0 && !nvim_in_assert_fails() {
-            nvim_vim_beep_complete();
+            vim_beep(0x08); // kOptBoFlagComplete = 0x08 (from option_vars.generated.h)
             setcursor();
             if !ui_has(K_UI_MESSAGES) {
                 nvim_ui_flush();

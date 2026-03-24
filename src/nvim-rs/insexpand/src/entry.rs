@@ -37,7 +37,9 @@ extern "C" {
         cb_opaque: *mut std::ffi::c_void,
         startcol_out: *mut c_int,
     ) -> c_int;
-    fn nvim_internal_error_compl_get_info();
+    // nvim_internal_error_compl_get_info: deleted (Phase 1), use internal_error directly
+    #[link_name = "internal_error"]
+    fn internal_error(where_: *const std::os::raw::c_char);
 
     // Accessors for ins_compl_start (Phase 10)
     fn nvim_get_did_ai() -> bool;
@@ -68,7 +70,9 @@ extern "C" {
     static mut g_edit_submode_extra: *mut c_char;
     #[link_name = "edit_submode_highl"]
     static mut g_edit_submode_highl: c_int;
-    fn nvim_shortmess_completionmenu() -> bool;
+    // nvim_shortmess_completionmenu: deleted (Phase 1), use shortmess(SHM_COMPLETIONMENU) directly
+    #[link_name = "shortmess"]
+    fn shortmess(x: c_int) -> bool;
     fn nvim_ml_get_curline() -> *const c_char;
     // (compl_pending moved to Rust static in state.rs)
     // nvim_get_p_ic: inlined in vars.rs (Phase 28)
@@ -151,7 +155,7 @@ pub unsafe extern "C" fn rs_compl_get_info(
         // "line" may have become invalid
         *line_invalid = 1;
     } else {
-        nvim_internal_error_compl_get_info();
+        internal_error(c"ins_complete()".as_ptr());
         return FAIL;
     }
 
@@ -236,7 +240,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 5: set up submode pre-text and compl_startpos for adding vs normal
     if rs_compl_status_adding() != 0 {
-        if !nvim_shortmess_completionmenu() {
+        if !shortmess(c_int::from(b'c')) { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
             nvim_set_edit_submode_adding();
         }
         if rs_ctrl_x_mode_line_or_eval() != 0 {
@@ -258,7 +262,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
     }
 
     // Block 6: set edit_submode to the CTRL-X mode message
-    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         nvim_set_edit_submode_ctrl_x_local_or_mode();
     }
 
@@ -279,7 +283,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 9: show "Searching..." status message
     // (was nvim_ins_compl_start_show_searching_impl; inlined here in Phase 10)
-    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         nvim_set_edit_submode_extra_searching();
         g_edit_submode_highl = HLF_COUNT;
         showmode();
@@ -412,7 +416,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
     nvim_ins_complete_update_cont_s_ipos();
 
     // Show status message if appropriate
-    if !nvim_shortmess_completionmenu() && crate::vars::nvim_get_compl_autocomplete() == 0 {
+    if !shortmess(c_int::from(b'c')) && crate::vars::nvim_get_compl_autocomplete() == 0 { // SHM_COMPLETIONMENU = 'c' (from option_vars.h)
         rs_ins_compl_show_statusmsg();
     }
 
