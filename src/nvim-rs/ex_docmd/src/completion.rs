@@ -4,7 +4,7 @@
 //! including command name completion, argument completion,
 //! and completion context management.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
 // Completion types (Extended)
@@ -528,6 +528,58 @@ pub const EXPAND_FUNCTIONS: c_int = 8;
 pub const EXPAND_USER_DEFINED: c_int = 9;
 /// EXPAND_MAPPINGS
 pub const EXPAND_MAPPINGS: c_int = 10;
+
+// =============================================================================
+// bad= completion names (migrated from get_bad_name in ex_docmd.c Phase 2)
+// =============================================================================
+
+/// Values for the `bad=` file-read option (used by ExpandGeneric completion).
+/// Must be kept in sync with `get_bad_opt()`.
+static BAD_NAMES: &[&[u8]] = &[b"?\0", b"keep\0", b"drop\0"];
+
+/// ExpandGeneric callback: return the name of the nth bad= value.
+/// Returns null when idx is out of range.
+///
+/// # Safety
+/// idx must be a non-negative integer index.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_get_bad_name(_xp: *mut c_void, idx: c_int) -> *mut c_char {
+    if idx >= 0 && (idx as usize) < BAD_NAMES.len() {
+        BAD_NAMES[idx as usize].as_ptr() as *mut c_char
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+// =============================================================================
+// ++opt= completion names (migrated from nvim_docmd_get_argopt_name Phase 2)
+// =============================================================================
+
+/// Values for ++opt= argument option names (used by ExpandGeneric completion).
+/// Must be kept in sync with `getargopt()`.
+static ARGOPT_NAMES: &[&[u8]] = &[
+    b"fileformat=\0",
+    b"encoding=\0",
+    b"binary\0",
+    b"nobinary\0",
+    b"bad=\0",
+    b"edit\0",
+    b"p\0",
+];
+
+/// Return the name of the nth ++opt name.
+/// Returns null when idx is out of range.
+///
+/// # Safety
+/// idx must be a non-negative integer index.
+#[no_mangle]
+pub unsafe extern "C" fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char {
+    if idx >= 0 && (idx as usize) < ARGOPT_NAMES.len() {
+        ARGOPT_NAMES[idx as usize].as_ptr() as *mut c_char
+    } else {
+        std::ptr::null_mut()
+    }
+}
 
 // =============================================================================
 // Tests

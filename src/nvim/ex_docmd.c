@@ -138,7 +138,6 @@ bool changedir_func(char *new_dir, CdScope scope);
 // Forward declarations for Phase 1 (ex_docmd plan): static functions replaced by Rust exports
 int check_more(bool message, bool forceit);
 char *ex_range_without_command(exarg_T *eap);
-char *get_argopt_name(expand_T *xp, int idx);
 // Forward declarations for Phase 2 Rust exports (static functions replaced by Rust)
 bool is_other_file(int fnum, char *ffname);
 void msg_verbose_cmd(linenr_T lnum, char *cmd);
@@ -1700,21 +1699,8 @@ uint32_t excmd_get_argt(cmdidx_T idx)
 // nvim_docmd_replace_makeprg_impl is implemented in Rust (args.rs).
 
 
-/// Function given to ExpandGeneric() to obtain the list of bad= names.
-static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
-{
-  // Note: Keep this in sync with get_bad_opt().
-  static char *(p_bad_values[]) = {
-    "?",
-    "keep",
-    "drop",
-  };
-
-  if (idx < (int)ARRAY_SIZE(p_bad_values)) {
-    return p_bad_values[idx];
-  }
-  return NULL;
-}
+// get_bad_name / nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
+extern char *nvim_docmd_get_bad_name(expand_T *xp, int idx);
 
 
 // nvim_docmd_expand_argopt_impl is implemented in Rust (impl_bodies.rs).
@@ -1733,13 +1719,17 @@ static char *get_bad_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// callback function for 'findfunc'
 static Callback ffu_cb;
 
+/// Return a pointer to the global ffu_cb (for Rust FFI).
+Callback *nvim_docmd_get_ffu_cb_ptr(void) { return &ffu_cb; }
+
 static Callback *get_findfunc_callback(void)
 {
   return *curbuf->b_p_ffu != NUL ? &curbuf->b_ffu_cb : &ffu_cb;
 }
 
 /// Call 'findfunc' to obtain a list of file names.
-static list_T *call_findfunc(char *pat, BoolVarValue cmdcomplete)
+/// Public C wrapper callable from Rust (hides typval_T / Callback complexity).
+list_T *nvim_docmd_call_findfunc(char *pat, bool cmdcomplete)
 {
   const sctx_T saved_sctx = current_sctx;
 
@@ -1747,7 +1737,7 @@ static list_T *call_findfunc(char *pat, BoolVarValue cmdcomplete)
   args[0].v_type = VAR_STRING;
   args[0].vval.v_string = pat;
   args[1].v_type = VAR_BOOL;
-  args[1].vval.v_bool = cmdcomplete;
+  args[1].vval.v_bool = (BoolVarValue)cmdcomplete;
   args[2].v_type = VAR_UNKNOWN;
 
   // Lock the text to prevent weird things from happening.  Also disallow
@@ -1783,90 +1773,37 @@ static list_T *call_findfunc(char *pat, BoolVarValue cmdcomplete)
   return retlist;
 }
 
-/// Find file names matching "pat" using 'findfunc' and return it in "files".
-/// Used for expanding the :find, :sfind and :tabfind command argument.
-/// Returns OK on success and FAIL otherwise.
-int expand_findfunc(char *pat, char ***files, int *numMatches)
+/// List length accessor for Rust FFI (tv_list_len is a static inline).
+int nvim_docmd_tv_list_len(const list_T *l) { return tv_list_len(l); }
+
+/// List free accessor for Rust FFI.
+void nvim_docmd_tv_list_free(list_T *l) { tv_list_free(l); }
+
+/// Error message accessor for Rust FFI.
+const char *nvim_docmd_e_cant_find_file_str_in_path(void)
 {
-  *numMatches = 0;
-  *files = NULL;
-
-  list_T *l = call_findfunc(pat, kBoolVarTrue);
-  if (l == NULL) {
-    return FAIL;
-  }
-
-  int len = tv_list_len(l);
-  if (len == 0) {  // empty List
-    return FAIL;
-  }
-
-  *files = xmalloc(sizeof(char *) * (size_t)len);
-
-  // Copy all the List items
-  int idx = 0;
-  TV_LIST_ITER_CONST(l, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type == VAR_STRING) {
-      (*files)[idx] = xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string);
-      idx++;
-    }
-  });
-
-  *numMatches = idx;
-  tv_list_free(l);
-
-  return OK;
+  return _(e_cant_find_file_str_in_path);
 }
 
-/// Use 'findfunc' to find file 'findarg'.  The 'count' argument is used to find
-/// the n'th matching file.
-static char *findfunc_find_file(char *findarg, size_t findarg_len, int count)
+/// Error message accessor for Rust FFI.
+const char *nvim_docmd_e_no_more_file_str_found_in_path(void)
 {
-  char *ret_fname = NULL;
-
-  const char cc = findarg[findarg_len];
-  findarg[findarg_len] = NUL;
-
-  list_T *fname_list = call_findfunc(findarg, kBoolVarFalse);
-  int fname_count = tv_list_len(fname_list);
-
-  if (fname_count == 0) {
-    semsg(_(e_cant_find_file_str_in_path), findarg);
-  } else {
-    if (count > fname_count) {
-      semsg(_(e_no_more_file_str_found_in_path), findarg);
-    } else {
-      listitem_T *li = tv_list_find(fname_list, count - 1);
-      if (li != NULL && TV_LIST_ITEM_TV(li)->v_type == VAR_STRING) {
-        ret_fname = xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string);
-      }
-    }
-  }
-
-  if (fname_list != NULL) {
-    tv_list_free(fname_list);
-  }
-
-  findarg[findarg_len] = cc;
-
-  return ret_fname;
+  return _(e_no_more_file_str_found_in_path);
 }
+
+// expand_findfunc is implemented in Rust (findfunc.rs).
+extern int expand_findfunc(char *pat, char ***files, int *numMatches);
+
+// nvim_docmd_findfunc_find_file is implemented in Rust (findfunc.rs).
+extern char *nvim_docmd_findfunc_find_file(char *arg, size_t len, int count);
 
 // nvim_docmd_did_set_findfunc_impl is implemented in Rust (impl_bodies.rs).
 
-void nvim_docmd_free_findfunc_option_impl(void)
-{
-  callback_free(&ffu_cb);
-}
+// nvim_docmd_free_findfunc_option_impl is implemented in Rust (findfunc.rs).
+extern void nvim_docmd_free_findfunc_option_impl(void);
 
-/// Mark the global 'findfunc' callback with "copyID" so that it is not
-/// garbage collected.
-bool nvim_docmd_set_ref_in_findfunc_impl(int copyID)
-{
-  bool abort = false;
-  abort = rs_set_ref_in_callback(&ffu_cb, copyID, NULL, NULL);
-  return abort;
-}
+// nvim_docmd_set_ref_in_findfunc_impl is implemented in Rust (findfunc.rs).
+extern bool nvim_docmd_set_ref_in_findfunc_impl(int copyID);
 
 /// :sview [+command] file       split window with new file, read-only
 /// :split [[+command] file]     split window with current or new file
@@ -3338,11 +3275,7 @@ char *nvim_docmd_errmsg_trailing_arg(const char *arg) { return ex_errmsg(e_trail
 
 /// For ex_find_impl: returns true if 'findfunc' option is non-empty.
 bool nvim_docmd_get_findfunc_nonempty(void) { return *get_findfunc() != NUL; }
-/// For ex_find_impl: wraps the static findfunc_find_file().
-char *nvim_docmd_findfunc_find_file(char *arg, size_t len, int count)
-{
-  return findfunc_find_file(arg, len, count);
-}
+// nvim_docmd_findfunc_find_file is implemented in Rust (findfunc.rs).
 /// For ex_find_impl: returns curbuf->b_ffname.
 const char *nvim_docmd_curbuf_b_ffname(void) { return curbuf->b_ffname; }
 
@@ -3784,25 +3717,7 @@ bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
 }
 bool nvim_docmd_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 
-/// get_argopt_name logic (direct implementation for Rust FFI).
-char *nvim_docmd_get_argopt_name(int idx)
-{
-  // Note: Keep this in sync with getargopt().
-  static char *(p_opt_values[]) = {
-    "fileformat=",
-    "encoding=",
-    "binary",
-    "nobinary",
-    "bad=",
-    "edit",
-    "p",
-  };
-
-  if (idx < (int)ARRAY_SIZE(p_opt_values)) {
-    return p_opt_values[idx];
-  }
-  return NULL;
-}
+// nvim_docmd_get_argopt_name is implemented in Rust (completion.rs).
 
 
 // Phase 23 accessors for ex_at
@@ -4282,12 +4197,7 @@ void nvim_docmd_semsg_multiline_emsg(const char *msg)
 }
 void nvim_docmd_xfree_str(void *p) { xfree(p); }
 
-// --- expand_argopt helpers ---
-// Wrapper for the static get_bad_name function.
-char *nvim_docmd_get_bad_name(expand_T *xp, int idx)
-{
-  return get_bad_name(xp, idx);
-}
+// nvim_docmd_get_bad_name is implemented in Rust (completion.rs).
 
 // --- did_set_findfunc helpers ---
 int nvim_docmd_findfunc_set_global(void)
