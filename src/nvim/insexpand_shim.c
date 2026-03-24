@@ -114,6 +114,8 @@ extern size_t rs_ins_compl_leader_len(void);
 extern unsigned rs_get_cot_flags(void);
 extern int rs_ctrl_x_mode_eval(void);
 extern void rs_ins_compl_free(void);
+extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
+                                            int min_len, char **tofree);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
@@ -491,110 +493,10 @@ static bool is_first_match(const compl_T *const match)
 
 /// Get the completed text by inferring the case of the originally typed text.
 /// If the result is in allocated memory "tofree" is set to it.
-char *nvim_ins_compl_infercase_gettext_impl(const char *str, int char_len, int compl_char_len,
-                                            int min_len, char **tofree)
-{
-  bool has_lower = false;
+// nvim_ins_compl_infercase_gettext_impl: deleted (Phase 2), logic moved to rs_ins_compl_infercase_gettext in infercase.rs
 
-  // Allocate wide character array for the completion and fill it.
-  int *const wca = xmalloc((size_t)char_len * sizeof(*wca));
-  {
-    const char *p = str;
-    for (int i = 0; i < char_len; i++) {
-      wca[i] = mb_ptr2char_adv(&p);
-    }
-  }
-
-  // Rule 1: Were any chars converted to lower?
-  {
-    const char *p = compl_orig_text.data;
-    for (int i = 0; i < min_len; i++) {
-      const int c = mb_ptr2char_adv(&p);
-      if (mb_islower(c)) {
-        has_lower = true;
-        if (mb_isupper(wca[i])) {
-          // Rule 1 is satisfied.
-          for (i = compl_char_len; i < char_len; i++) {
-            wca[i] = mb_tolower(wca[i]);
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // Rule 2: No lower case, 2nd consecutive letter converted to
-  // upper case.
-  if (!has_lower) {
-    bool was_letter = false;
-    const char *p = compl_orig_text.data;
-    for (int i = 0; i < min_len; i++) {
-      const int c = mb_ptr2char_adv(&p);
-      if (was_letter && mb_isupper(c) && mb_islower(wca[i])) {
-        // Rule 2 is satisfied.
-        for (i = compl_char_len; i < char_len; i++) {
-          wca[i] = mb_toupper(wca[i]);
-        }
-        break;
-      }
-      was_letter = mb_islower(c) || mb_isupper(c);
-    }
-  }
-
-  // Copy the original case of the part we typed.
-  {
-    const char *p = compl_orig_text.data;
-    for (int i = 0; i < min_len; i++) {
-      const int c = mb_ptr2char_adv(&p);
-      if (mb_islower(c)) {
-        wca[i] = mb_tolower(wca[i]);
-      } else if (mb_isupper(c)) {
-        wca[i] = mb_toupper(wca[i]);
-      }
-    }
-  }
-
-  // Generate encoding specific output from wide character array.
-  garray_T gap;
-  char *p = IObuff;
-  int i = 0;
-  ga_init(&gap, 1, 500);
-  while (i < char_len) {
-    if (gap.ga_data != NULL) {
-      ga_grow(&gap, 10);
-      assert(gap.ga_data != NULL);  // suppress clang "Dereference of NULL pointer"
-      p = (char *)gap.ga_data + gap.ga_len;
-      gap.ga_len += utf_char2bytes(wca[i++], p);
-    } else if ((p - IObuff) + 6 >= IOSIZE) {
-      // Multi-byte characters can occupy up to five bytes more than
-      // ASCII characters, and we also need one byte for NUL, so when
-      // getting to six bytes from the edge of IObuff switch to using a
-      // growarray.  Add the character in the next round.
-      ga_grow(&gap, IOSIZE);
-      *p = NUL;
-      STRCPY(gap.ga_data, IObuff);
-      gap.ga_len = (int)(p - IObuff);
-    } else {
-      p += utf_char2bytes(wca[i++], p);
-    }
-  }
-  xfree(wca);
-
-  if (gap.ga_data != NULL) {
-    *tofree = gap.ga_data;
-    return gap.ga_data;
-  }
-
-  *p = NUL;
-  return IObuff;
-}
-
-/// This is like ins_compl_add(), but if 'ic' and 'inf' are set, then the
-/// case of the originally typed text is used, and the case of the completed
-/// text is inferred, ie this tries to work out what case you probably wanted
-/// the rest of the word to be in -- webb
-///
-/// @param[in]  cont_s_ipos  next ^X<> will set initial_pos
+/// ins_compl_add_infercase: see rs_ins_compl_add_infercase in infercase.rs.
+/// Still exported from C for spell.c and search_shim.c callers; now calls rs_ins_compl_infercase_gettext.
 int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Direction dir,
                             bool cont_s_ipos, int score)
   FUNC_ATTR_NONNULL_ARG(1)
@@ -606,8 +508,6 @@ int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Dir
   char *tofree = NULL;
 
   if (p_ic && curbuf->b_p_inf && len > 0) {
-    // Infer case of completed part.
-
     // Find actual length of completion.
     {
       const char *p = str;
@@ -617,7 +517,6 @@ int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Dir
         char_len++;
       }
     }
-
     // Find actual length of original text.
     {
       const char *p = compl_orig_text.data;
@@ -627,12 +526,8 @@ int ins_compl_add_infercase(char *str_arg, int len, bool icase, char *fname, Dir
         compl_char_len++;
       }
     }
-
-    // "char_len" may be smaller than "compl_char_len" when using
-    // thesaurus, only use the minimum when comparing.
     int min_len = MIN(char_len, compl_char_len);
-
-    str = nvim_ins_compl_infercase_gettext_impl(str, char_len, compl_char_len, min_len, &tofree);
+    str = rs_ins_compl_infercase_gettext(str, char_len, compl_char_len, min_len, &tofree);
   }
   if (cont_s_ipos) {
     flags |= CP_CONT_S_IPOS;
