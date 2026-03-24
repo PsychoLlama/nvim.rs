@@ -159,9 +159,13 @@ extern "C" {
     // For repeat_message (Phase 22)
     static mut State: c_int;
     static mut msg_didout: bool;
-    fn hit_return_msg(newline_sb: bool);
     fn ui_cursor_goto(row: c_int, col: c_int);
     fn msg_clr_eos();
+
+    // For hit_return_msg
+    static mut p_more: c_int;
+    fn msg_puts(s: *const c_char);
+    fn msg_use_printf() -> c_int;
 
     // For msg_moremsg (Phase 24)
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
@@ -816,9 +820,49 @@ pub unsafe extern "C" fn rs_repeat_message() {
             msg_col = 0;
             msg_clr_eos();
         }
-        hit_return_msg(false);
+        rs_hit_return_msg(false);
         msg_row = Rows - 1;
     }
+}
+
+// ============================================================================
+// hit_return_msg migrated from C (message.c)
+// ============================================================================
+
+/// Highlight for "Press ENTER" prompt (HLF_R = 18 from highlight_defs.h)
+const HLF_R: c_int = 18;
+
+/// Write the hit-return prompt.
+///
+/// @param newline_sb  if starting a new line, add it to the scrollback.
+///
+/// Equivalent to C `hit_return_msg()`.
+///
+/// # Safety
+/// Accesses global state via C extern.
+#[export_name = "hit_return_msg"]
+pub unsafe extern "C" fn rs_hit_return_msg(newline_sb: bool) {
+    let save_p_more = p_more;
+    if !newline_sb {
+        p_more = 0; // false
+    }
+    if msg_didout {
+        // start on a new line
+        msg_putchar(c_int::from(b'\n'));
+    }
+    p_more = 0; // don't want to see this message when scrolling back
+    if got_int {
+        msg_puts(gettext(c"Interrupt: ".as_ptr()));
+    }
+    msg_puts_hl(
+        gettext(c"Press ENTER or type command to continue".as_ptr()),
+        HLF_R,
+        false,
+    );
+    if msg_use_printf() == 0 {
+        msg_clr_eos();
+    }
+    p_more = save_p_more;
 }
 
 #[cfg(test)]

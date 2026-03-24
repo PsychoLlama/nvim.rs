@@ -128,7 +128,7 @@ pub const unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunk) -> *const 
 ///
 /// # Safety
 /// Direct field access on repr(C) struct.
-#[no_mangle]
+#[export_name = "msg_sb_start"]
 pub unsafe extern "C" fn rs_msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
     if mps.is_null() {
         return ptr::null_mut();

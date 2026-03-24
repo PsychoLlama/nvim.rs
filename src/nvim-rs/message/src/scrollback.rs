@@ -458,6 +458,113 @@ pub unsafe extern "C" fn rs_msg_reset_scroll() {
     msg_grid_scroll_discount = 0;
 }
 
+// ============================================================================
+// Phase 13: store_sb_text and inc_msg_scrolled migrated from C
+// ============================================================================
+
+extern "C" {
+    fn xmalloc(size: usize) -> *mut std::ffi::c_char;
+    fn gettext(s: *const std::ffi::c_char) -> *const std::ffi::c_char;
+    fn get_vim_var_str(idx: c_int) -> *mut std::ffi::c_char;
+    fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
+    fn nvim_get_sourcing_name() -> *const std::ffi::c_char;
+    fn nvim_get_sourcing_lnum() -> c_int;
+    fn set_must_redraw(upd_type: c_int);
+}
+
+/// Constant: UPD_VALID redraw level (drawscreen.h)
+const UPD_VALID: c_int = 10;
+/// Constant: VV_SCROLLSTART vim var index (eval_defs.h)
+const VV_SCROLLSTART: c_int = 46;
+
+/// Store part of a printed message for displaying when scrolling back.
+///
+/// Called from msg_puts_display() (which stays in C) with pointer-to-pointer
+/// args so it can advance the string position.
+///
+/// # Safety
+/// Reads/writes through raw C pointers.
+#[export_name = "store_sb_text"]
+pub unsafe extern "C" fn rs_store_sb_text(
+    sb_str: *mut *const std::ffi::c_char,
+    s: *const std::ffi::c_char,
+    hl_id: c_int,
+    sb_col: *mut c_int,
+    finish: c_int,
+) {
+    use crate::chunk::MsgChunk;
+
+    // Handle pending clear
+    if do_clear_sb_text == SbClearState::ALL.0 || do_clear_sb_text == SbClearState::CMDLINE_DONE.0 {
+        rs_sb_clear(c_int::from(do_clear_sb_text == SbClearState::ALL.0));
+        rs_sb_mark_eol();
+        if do_clear_sb_text == SbClearState::CMDLINE_DONE.0 && s > *sb_str && *(*sb_str) == 10
+        // '\n' as c_char
+        {
+            *sb_str = (*sb_str).add(1);
+        }
+        do_clear_sb_text = SbClearState::NONE.0;
+    }
+
+    if s > *sb_str {
+        let text_len = s as usize - (*sb_str) as usize;
+        // Allocate space for the MsgChunk header + text + NUL
+        let chunk_size = std::mem::size_of::<MsgChunk>();
+        // xmalloc returns *mut c_char; alignment is guaranteed by the allocator
+        #[allow(clippy::cast_possible_wrap, clippy::cast_ptr_alignment)]
+        let mp = xmalloc(chunk_size + text_len + 1).cast::<MsgChunk>();
+        (*mp).sb_eol = i8::from(finish != 0); // sb_eol is char (bool-like)
+        (*mp).sb_msg_col = *sb_col;
+        (*mp).sb_hl_id = hl_id;
+        // Copy text into flexible array at end of struct
+        let text_ptr = mp.cast::<u8>().add(chunk_size);
+        std::ptr::copy_nonoverlapping((*sb_str).cast::<u8>(), text_ptr, text_len);
+        *text_ptr.add(text_len) = 0u8; // NUL terminate
+
+        // Link into the scrollback list
+        if last_msgchunk.is_null() {
+            last_msgchunk = mp;
+            (*mp).sb_prev = std::ptr::null_mut();
+        } else {
+            (*mp).sb_prev = last_msgchunk;
+            (*last_msgchunk).sb_next = mp;
+            last_msgchunk = mp;
+        }
+        (*mp).sb_next = std::ptr::null_mut();
+    } else if finish != 0 && !last_msgchunk.is_null() {
+        (*last_msgchunk).sb_eol = 1;
+    }
+
+    *sb_str = s;
+    *sb_col = 0;
+}
+
+/// Increment "msg_scrolled" and set v:scrollstart if not already set.
+///
+/// Mirrors the C static `inc_msg_scrolled()` in message.c.
+///
+/// # Safety
+/// Reads/writes global state via C extern functions.
+#[export_name = "inc_msg_scrolled"]
+pub unsafe extern "C" fn rs_inc_msg_scrolled_full() {
+    if *get_vim_var_str(VV_SCROLLSTART) == 0 {
+        let p = nvim_get_sourcing_name();
+        if p.is_null() {
+            let unknown = gettext(c"Unknown".as_ptr());
+            set_vim_var_string(VV_SCROLLSTART, unknown, -1);
+        } else {
+            // Format "%s line <lnum>" using Rust string formatting
+            let p_str = std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned();
+            let lnum = nvim_get_sourcing_lnum();
+            let fmt = format!("{p_str} line {lnum}\0");
+            set_vim_var_string(VV_SCROLLSTART, fmt.as_ptr().cast::<std::ffi::c_char>(), -1);
+            // fmt stays live until end of this scope
+        }
+    }
+    msg_scrolled += 1;
+    set_must_redraw(UPD_VALID);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

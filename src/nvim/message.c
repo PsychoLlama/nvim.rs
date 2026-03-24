@@ -84,7 +84,6 @@ extern MessageHistoryEntry *msg_hist_last;   // owned by Rust (history.rs)
 extern MessageHistoryEntry *msg_hist_first;  // owned by Rust (history.rs)
 extern MessageHistoryEntry *msg_hist_temp;   // owned by Rust (history.rs)
 extern int msg_hist_len;                     // owned by Rust (history.rs)
-extern int msg_hist_max;  // owned by Rust (misc.rs), default 500
 
 // msg_flags and msg_wait owned by Rust (misc.rs)
 extern int msg_flags;
@@ -94,13 +93,9 @@ extern FILE *verbose_fd;        // owned by Rust (verbose.rs)
 extern bool verbose_did_open;   // owned by Rust (verbose.rs)
 
 // Extended msg state owned by Rust (display.rs)
-extern const char *msg_ext_kind;
-extern MsgID msg_ext_id;
-extern Array *msg_ext_chunks;
 extern garray_T msg_ext_last_chunk;
 extern sattr_T msg_ext_last_attr;
 extern int msg_ext_last_hl_id;
-extern bool msg_ext_history;
 
 extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
@@ -139,10 +134,14 @@ extern char *rs_msg_show_console_dialog(const char *message, const char *buttons
 // get_emsg_source and get_emsg_lnum migrated to Rust (error.rs)
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
-void hit_return_msg(bool newline_sb);
+void hit_return_msg(bool newline_sb);  // defined in Rust (misc.rs) with #[export_name]
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 void msg_ext_emit_chunk(void);  // defined in Rust (display.rs) with #[no_mangle]
 void msg_hist_add_multihl(MsgID msg_id, HlMessage msg, bool temp, MessageData *msg_data);
+// Formerly static; now defined in Rust (scrollback.rs) with #[export_name]
+msgchunk_T *msg_sb_start(msgchunk_T *mps);
+void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb_col, int finish);
+void inc_msg_scrolled(void);
 
 void nvim_msg_set_pos_for_scroll(int pos, bool scrolled)
 {
@@ -376,8 +375,6 @@ void msg_schedule_semsg_multiline(const char *const fmt, ...)
 }
 
 // hl_msg_free, msg_hist_add migrated to Rust: src/nvim-rs/message/src/history.rs
-
-extern bool do_clear_hist_temp;  // owned by Rust (scrollback.rs)
 
 void do_autocmd_progress(MsgID msg_id, HlMessage msg, MessageData *msg_data)
 {
@@ -654,31 +651,7 @@ void wait_return(int redraw)
   }
 }
 
-/// Write the hit-return prompt.
-///
-/// @param newline_sb  if starting a new line, add it to the scrollback.
-void hit_return_msg(bool newline_sb)
-{
-  int save_p_more = p_more;
-
-  if (!newline_sb) {
-    p_more = false;
-  }
-  if (msg_didout) {     // start on a new line
-    msg_putchar('\n');
-  }
-  p_more = false;       // don't want to see this message when scrolling back
-  if (got_int) {
-    msg_puts(_("Interrupt: "));
-  }
-
-  msg_puts_hl(_("Press ENTER or type command to continue"), HLF_R, false);
-  if (!msg_use_printf()) {
-    msg_clr_eos();
-  }
-  p_more = save_p_more;
-}
-
+// hit_return_msg() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_hit_return_msg)
 // msgmore() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msgmore)
 // str2special_arena() migrated to Rust: src/nvim-rs/message/src/keys.rs (rs_str2special_arena)
 
@@ -1018,84 +991,8 @@ void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse)
 // msg_line_flush() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_msg_line_flush)
 // msg_cursor_goto() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_cursor_goto_impl)
 
-/// Increment "msg_scrolled".
-static void inc_msg_scrolled(void)
-{
-  if (*get_vim_var_str(VV_SCROLLSTART) == NUL) {
-    char *p = SOURCING_NAME;
-    char *tofree = NULL;
-
-    // v:scrollstart is empty, set it to the script/function name and line
-    // number
-    if (p == NULL) {
-      p = _("Unknown");
-    } else {
-      size_t len = strlen(p) + 40;
-      tofree = xmalloc(len);
-      vim_snprintf(tofree, len, _("%s line %" PRId64),
-                   p, (int64_t)SOURCING_LNUM);
-      p = tofree;
-    }
-    set_vim_var_string(VV_SCROLLSTART, p, -1);
-    xfree(tofree);
-  }
-  msg_scrolled++;
-  set_must_redraw(UPD_VALID);
-}
-
-typedef enum {
-  SB_CLEAR_NONE = 0,
-  SB_CLEAR_ALL,
-  SB_CLEAR_CMDLINE_BUSY,
-  SB_CLEAR_CMDLINE_DONE,
-} sb_clear_T;
-
-// When to clear text on next msg. Owned by Rust (scrollback.rs), 0 = SB_CLEAR_NONE.
-extern int do_clear_sb_text;
-
-/// Store part of a printed message for displaying when scrolling back.
-///
-/// @param sb_str  start of string
-/// @param s  just after string
-/// @param finish  line ends
-static void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb_col, int finish)
-{
-  msgchunk_T *mp;
-
-  if (do_clear_sb_text == SB_CLEAR_ALL
-      || do_clear_sb_text == SB_CLEAR_CMDLINE_DONE) {
-    clear_sb_text(do_clear_sb_text == SB_CLEAR_ALL);
-    msg_sb_eol();  // prevent messages from overlapping
-    if (do_clear_sb_text == SB_CLEAR_CMDLINE_DONE && s > *sb_str && **sb_str == '\n') {
-      (*sb_str)++;
-    }
-    do_clear_sb_text = SB_CLEAR_NONE;
-  }
-
-  if (s > *sb_str) {
-    mp = xmalloc(offsetof(msgchunk_T, sb_text) + (size_t)(s - *sb_str) + 1);
-    mp->sb_eol = (char)finish;
-    mp->sb_msg_col = *sb_col;
-    mp->sb_hl_id = hl_id;
-    memcpy(mp->sb_text, *sb_str, (size_t)(s - *sb_str));
-    mp->sb_text[s - *sb_str] = NUL;
-
-    if (last_msgchunk == NULL) {
-      last_msgchunk = mp;
-      mp->sb_prev = NULL;
-    } else {
-      mp->sb_prev = last_msgchunk;
-      last_msgchunk->sb_next = mp;
-      last_msgchunk = mp;
-    }
-    mp->sb_next = NULL;
-  } else if (finish && last_msgchunk != NULL) {
-    last_msgchunk->sb_eol = true;
-  }
-
-  *sb_str = s;
-  *sb_col = 0;
-}
+// inc_msg_scrolled() migrated to Rust: src/nvim-rs/message/src/scrollback.rs (rs_inc_msg_scrolled_full)
+// store_sb_text() migrated to Rust: src/nvim-rs/message/src/scrollback.rs (rs_store_sb_text)
 
 /// "g<" command.
 void show_sb_text(void)
@@ -1116,16 +1013,7 @@ void show_sb_text(void)
   }
 }
 
-/// Move to the start of screen line in already displayed text.
-static msgchunk_T *msg_sb_start(msgchunk_T *mps)
-{
-  msgchunk_T *mp = mps;
-
-  while (mp != NULL && mp->sb_prev != NULL && !mp->sb_prev->sb_eol) {
-    mp = mp->sb_prev;
-  }
-  return mp;
-}
+// msg_sb_start() migrated to Rust: src/nvim-rs/message/src/chunk.rs (rs_msg_sb_start)
 
 /// Display a screen line from previously displayed text at row "row".
 ///
