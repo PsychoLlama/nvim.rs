@@ -1669,26 +1669,8 @@ void nvim_set_curbuf_b_p_com_empty(void) { curbuf->b_p_com = ""; }
 void nvim_restore_curbuf_b_p_com(const char *old_val) { curbuf->b_p_com = (char *)old_val; }
 const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
 // nvim_set_compl_startpos_lnum_col: deleted (Phase 19, inlined in vars.rs)
-/// Set compl_orig_text from line+compl_col with length compl_length.
-void nvim_set_compl_orig_text_from_line(const char *line) {
-  API_CLEAR_STRING(compl_orig_text);
-  kv_destroy(compl_orig_extmarks);
-  compl_orig_text = cbuf_to_string(line + compl_col, (size_t)compl_length);
-}
-/// Add orig text as first completion match. Returns OK or FAIL.
-/// On FAIL, clears pattern/orig_text/extmarks and restores did_ai.
-int nvim_ins_compl_add_orig_text(int flags, int save_did_ai) {
-  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
-                    NULL, NULL, false, NULL, 0,
-                    flags, false, NULL, FUZZY_SCORE_NONE) != OK) {
-    API_CLEAR_STRING(compl_pattern);
-    API_CLEAR_STRING(compl_orig_text);
-    kv_destroy(compl_orig_extmarks);
-    did_ai = save_did_ai != 0;
-    return FAIL;
-  }
-  return OK;
-}
+// nvim_set_compl_orig_text_from_line: deleted (Phase 11), inlined in entry.rs
+// nvim_ins_compl_add_orig_text: deleted (Phase 11), inlined in entry.rs
 // nvim_set_edit_submode_extra_searching: deleted (Phase 1), Rust calls gettext directly
 // nvim_showmode_wrap: deleted (Phase 3, Rust calls showmode directly)
 

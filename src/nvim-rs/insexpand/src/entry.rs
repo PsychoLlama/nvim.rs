@@ -52,9 +52,20 @@ extern "C" {
     fn nvim_set_curbuf_b_p_com_empty();
     fn nvim_restore_curbuf_b_p_com(old_val: *const c_char);
     // (nvim_set_compl_startpos_lnum_col: inlined in vars.rs)
-    fn nvim_set_compl_orig_text_from_line(line: *const c_char);
-    fn nvim_ins_compl_add_orig_text(flags: c_int, save_did_ai: c_int) -> c_int;
+    // nvim_set_compl_orig_text_from_line: deleted (Phase 11), inlined below
+    // nvim_ins_compl_add_orig_text: deleted (Phase 11), inlined below
     fn rs_save_orig_extmarks();
+    // Helpers for inlined Phase 11 functions
+    #[link_name = "cbuf_to_string"]
+    fn cbuf_to_string_entry(buf: *const c_char, size: usize) -> crate::vars::NvimString;
+    fn nvim_ins_compl_add_simple(
+        str_: *const c_char,
+        len: c_int,
+        dir: c_int,
+        flags: c_int,
+        score: c_int,
+    ) -> c_int;
+    fn nvim_clear_compl_orig_extmarks();
     // nvim_set_edit_submode_extra_searching: deleted (Phase 1), use gettext() directly
     #[link_name = "gettext"]
     fn gettext_entry(msgid: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
@@ -275,13 +286,39 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
 
     // Block 8: add the original text as the first completion match
     // (was nvim_ins_compl_start_add_orig_impl; inlined here in Phase 10)
-    nvim_set_compl_orig_text_from_line(line);
+    // nvim_set_compl_orig_text_from_line inlined (Phase 11):
+    #[allow(clippy::cast_sign_loss)]
+    {
+        crate::vars::nvim_compl_clear_orig_text();
+        nvim_clear_compl_orig_extmarks();
+        let compl_col_idx = crate::vars::nvim_get_compl_col() as usize;
+        let compl_len = {
+            let l = crate::vars::nvim_get_compl_length();
+            debug_assert!(l >= 0);
+            l as usize
+        };
+        crate::vars::compl_orig_text = cbuf_to_string_entry(line.add(compl_col_idx), compl_len);
+    }
     rs_save_orig_extmarks();
     let mut orig_flags: c_int = CP_ORIGINAL_TEXT;
     if crate::vars::nvim_get_p_ic() != 0 {
         orig_flags |= CP_ICASE;
     }
-    if nvim_ins_compl_add_orig_text(orig_flags, c_int::from(save_did_ai)) == FAIL {
+    // nvim_ins_compl_add_orig_text inlined (Phase 11):
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let orig_text_len_int = crate::vars::nvim_get_compl_orig_text_size() as c_int;
+    if nvim_ins_compl_add_simple(
+        crate::vars::compl_orig_text.data.cast_const(),
+        orig_text_len_int,
+        0,
+        orig_flags,
+        -1, // FUZZY_SCORE_NONE
+    ) != OK
+    {
+        crate::vars::nvim_compl_clear_pattern();
+        crate::vars::nvim_compl_clear_orig_text();
+        nvim_clear_compl_orig_extmarks();
+        nvim_set_did_ai(save_did_ai);
         return FAIL;
     }
 
