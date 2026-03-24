@@ -90,8 +90,8 @@ extern int msg_hist_max;  // owned by Rust (misc.rs), default 500
 extern int msg_flags;
 extern int msg_wait;
 
-static FILE *verbose_fd = NULL;
-static bool verbose_did_open = false;
+extern FILE *verbose_fd;        // owned by Rust (verbose.rs)
+extern bool verbose_did_open;   // owned by Rust (verbose.rs)
 
 // Extended msg state, currently used for external UIs with ext_messages
 // msg_ext_kind is owned by Rust (display.rs), accessible via extern linkage
@@ -271,26 +271,6 @@ const char *nvim_format_msgmore(int n)
   return msg_buf;
 }
 
-void nvim_verbose_stop_impl(void)
-{
-  if (verbose_fd != NULL) {
-    fclose(verbose_fd);
-    verbose_fd = NULL;
-  }
-  verbose_did_open = false;
-}
-int nvim_verbose_open_impl(void)
-{
-  if (verbose_fd == NULL && !verbose_did_open) {
-    verbose_did_open = true;
-    verbose_fd = os_fopen(p_vfile, "a");
-    if (verbose_fd == NULL) {
-      semsg(_(e_notopen), p_vfile);
-      return FAIL;
-    }
-  }
-  return OK;
-}
 
 void msg_grid_validate(void)
 {

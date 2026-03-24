@@ -3,7 +3,19 @@
 //! Provides Rust implementations for verbose message output and
 //! redirection state management.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+
+// ============================================================================
+// Rust-owned statics (previously file-local in message.c)
+// ============================================================================
+
+/// Verbose output file handle (replaces C static verbose_fd)
+#[no_mangle]
+pub static mut verbose_fd: *mut c_void = std::ptr::null_mut();
+
+/// Whether verbose file was already attempted to open (replaces C static verbose_did_open)
+#[no_mangle]
+pub static mut verbose_did_open: bool = false;
 
 // C function declarations for verbose operations
 extern "C" {
@@ -14,8 +26,6 @@ extern "C" {
     static mut msg_ext_kind: *const c_char;
     static mut verbose_kind: *const c_char;
     static mut pre_verbose_kind: *const c_char;
-    fn nvim_verbose_stop_impl();
-    fn nvim_verbose_open_impl() -> c_int;
 
     // State accessors
     static mut msg_scroll: c_int;
@@ -24,11 +34,20 @@ extern "C" {
 
     // Redirection state
     static mut redir_off: bool;
-    static mut redir_fd: *mut std::ffi::c_void;
+    static mut redir_fd: *mut c_void;
     static mut redir_reg: c_int;
     static mut redir_vname: bool;
-    static mut capture_ga: *mut std::ffi::c_void;
+    static mut capture_ga: *mut c_void;
     static mut p_vfile: *mut c_char;
+
+    // For verbose_open_impl
+    fn os_fopen(fname: *const c_char, mode: *const c_char) -> *mut c_void;
+    fn fclose(f: *mut c_void) -> c_int;
+    fn emsg(s: *const c_char) -> bool;
+    fn gettext(s: *const c_char) -> *const c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+    static e_notopen: [c_char; 0];
 }
 
 // ============================================================================
@@ -122,22 +141,47 @@ pub unsafe extern "C" fn rs_verbose_leave_scroll() {
 /// Closes the verbose file if open.
 ///
 /// # Safety
-/// Calls C function that closes file handle.
+/// Modifies verbose_fd and verbose_did_open globals; calls fclose().
 #[export_name = "verbose_stop"]
 pub unsafe extern "C" fn rs_verbose_stop() {
-    nvim_verbose_stop_impl();
+    if !verbose_fd.is_null() {
+        fclose(verbose_fd);
+        verbose_fd = std::ptr::null_mut();
+    }
+    verbose_did_open = false;
 }
+
+// C FAIL/OK constants
+const FAIL: c_int = 0;
+const OK: c_int = 1;
 
 /// Open the verbose file ('verbosefile').
 ///
 /// Returns FAIL or OK.
 ///
 /// # Safety
-/// Calls C function that opens a file.
+/// Modifies verbose_fd and verbose_did_open globals; calls os_fopen(), emsg().
 #[export_name = "verbose_open"]
 #[must_use]
 pub unsafe extern "C" fn rs_verbose_open() -> c_int {
-    nvim_verbose_open_impl()
+    if !verbose_fd.is_null() || verbose_did_open {
+        return OK;
+    }
+    verbose_did_open = true;
+    verbose_fd = os_fopen(p_vfile, c"a".as_ptr());
+    if verbose_fd.is_null() {
+        // Format "E484: Can't open file <filename>" and emit as error
+        let fmt_ptr = gettext(e_notopen.as_ptr());
+        let fmt = std::ffi::CStr::from_ptr(fmt_ptr).to_string_lossy();
+        let fname = std::ffi::CStr::from_ptr(p_vfile).to_string_lossy();
+        let msg = fmt.replacen("%s", &fname, 1);
+        let cmsg = std::ffi::CString::new(msg).unwrap_or_default();
+        let duped = xstrdup(cmsg.as_ptr());
+        emsg(duped);
+        xfree(duped.cast());
+        return FAIL;
+    }
+    OK
 }
 
 // ============================================================================
