@@ -197,6 +197,10 @@ void repeat_message(void);
 void hl_msg_free(HlMessage hl_msg);
 void msg_hist_add(const char *s, int len, int hl_id);
 
+// Phase 12: format_progress_message, msg_multihl migrated to Rust
+MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bool err,
+                  MessageData *msg_data, bool *needs_msg_clear);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong

@@ -104,7 +104,7 @@ extern bool msg_ext_history;
 
 extern int msg_grid_pos_at_flush;  // owned by Rust (misc.rs)
 
-static int64_t msg_id_next = 1;           ///< message id to be allocated to next message
+extern int64_t msg_id_next;  // owned by Rust (display.rs)
 
 static void ui_ext_msg_set_pos(int row, bool scrolled)
 {
@@ -221,119 +221,7 @@ void msg_grid_validate(void)
 // Avoid starting a new message for each chunk and adding message to history in msg_keep().
 extern bool is_multihl;  // owned by Rust (misc.rs)
 
-/// Format a progress message, adding title and percent if given.
-///
-/// @param hl_msg Message chunks
-/// @param msg_data Additional data for progress messages
-static HlMessage format_progress_message(HlMessage hl_msg, MessageData *msg_data)
-{
-  HlMessage updated_msg = KV_INITIAL_VALUE;
-  // progress messages are special. displayed as "title: percent% msg"
-  if (msg_data->title.size != 0) {
-    // this block draws the "title:" before the progress-message
-    int hl_id = 0;
-    if (msg_data->status.data == NULL) {
-      hl_id = 0;
-    } else if (strequal(msg_data->status.data, "success")) {
-      hl_id = syn_check_group("OkMsg", STRLEN_LITERAL("OkMsg"));
-    } else if (strequal(msg_data->status.data, "failed")) {
-      hl_id = syn_check_group("ErrorMsg", STRLEN_LITERAL("ErrorMsg"));
-    } else if (strequal(msg_data->status.data, "running")) {
-      hl_id = syn_check_group("MoreMsg", STRLEN_LITERAL("MoreMsg"));
-    } else if (strequal(msg_data->status.data, "cancel")) {
-      hl_id = syn_check_group("WarningMsg", STRLEN_LITERAL("WarningMsg"));
-    }
-    kv_push(updated_msg,
-            ((HlMessageChunk){ .text = copy_string(msg_data->title, NULL), .hl_id = hl_id }));
-    kv_push(updated_msg, ((HlMessageChunk){ .text = cstr_to_string(": "), .hl_id = 0 }));
-  }
-  if (msg_data->percent > 0) {
-    char percent_buf[10];
-    vim_snprintf(percent_buf, sizeof(percent_buf), "%3ld%% ", (long)msg_data->percent);
-    String percent = cstr_to_string(percent_buf);
-    int hl_id = syn_check_group("WarningMsg", STRLEN_LITERAL("WarningMsg"));
-    kv_push(updated_msg, ((HlMessageChunk){ .text = percent, .hl_id = hl_id }));
-  }
-
-  if (kv_size(updated_msg) != 0) {
-    for (uint32_t i = 0; i < kv_size(hl_msg); i++) {
-      kv_push(updated_msg,
-              ((HlMessageChunk){ .text = copy_string(kv_A(hl_msg, i).text, NULL),
-                                 .hl_id = kv_A(hl_msg, i).hl_id }));
-    }
-    return updated_msg;
-  } else {
-    return hl_msg;
-  }
-}
-
-/// Print message chunks, each with their own highlight ID.
-///
-/// @param hl_msg Message chunks
-/// @param kind Message kind (can be NULL to avoid setting kind)
-/// @param history Whether to add message to history
-/// @param err Whether to print message as an error
-/// @param msg_data Progress-message data
-MsgID msg_multihl(MsgID id, HlMessage hl_msg, const char *kind, bool history, bool err,
-                  MessageData *msg_data, bool *needs_msg_clear)
-{
-  no_wait_return++;
-  msg_start();
-  msg_clr_eos();
-  bool need_clear = false;
-  bool hl_msg_updated = false;
-  msg_ext_history = history;
-  if (kind != NULL) {
-    msg_ext_set_kind(kind);
-  }
-  is_multihl = true;
-  msg_ext_skip_flush = true;
-
-  // provide a new id if not given
-  if (id.type == kObjectTypeNil) {
-    id = INTEGER_OBJ(msg_id_next++);
-  } else if (id.type == kObjectTypeInteger) {
-    id = id.data.integer > 0 ? id : INTEGER_OBJ(msg_id_next++);
-    if (msg_id_next < id.data.integer) {
-      msg_id_next = id.data.integer + 1;
-    }
-  }
-  msg_ext_id = id;
-
-  // progress message are special displayed as "title: percent% msg"
-  if (strequal(kind, "progress") && msg_data) {
-    HlMessage formated_message = format_progress_message(hl_msg, msg_data);
-    if (formated_message.items != hl_msg.items) {
-      *needs_msg_clear = true;
-      hl_msg_updated = true;
-      hl_msg = formated_message;
-    }
-  }
-
-  for (uint32_t i = 0; i < kv_size(hl_msg); i++) {
-    HlMessageChunk chunk = kv_A(hl_msg, i);
-    if (err) {
-      emsg_multiline(chunk.text.data, kind, chunk.hl_id, true);
-    } else {
-      msg_multiline(chunk.text, chunk.hl_id, true, false, &need_clear);
-    }
-    assert(!ui_has(kUIMessages) || kind == NULL || msg_ext_kind == kind);
-  }
-
-  if (history && kv_size(hl_msg)) {
-    msg_hist_add_multihl(id, hl_msg, false, msg_data);
-  }
-
-  msg_ext_skip_flush = false;
-  is_multihl = false;
-  no_wait_return--;
-  msg_end();
-
-  if (hl_msg_updated && !(history && kv_size(hl_msg))) {
-    hl_msg_free(hl_msg);
-  }
-  return id;
-}
+// format_progress_message() and msg_multihl() migrated to Rust (display.rs)
 
 /// Shows a printf-style message with highlight id.
 ///

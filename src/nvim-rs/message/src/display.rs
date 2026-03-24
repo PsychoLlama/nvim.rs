@@ -14,6 +14,7 @@ use crate::history::{HlMessage, HlMessageChunk};
 // ============================================================================
 // Object type constants (kObjectType* enum values from api/private/defs.h)
 // ============================================================================
+const K_OBJECT_TYPE_NIL: c_int = 0;
 const K_OBJECT_TYPE_INTEGER: c_int = 2;
 const K_OBJECT_TYPE_STRING: c_int = 4;
 const K_OBJECT_TYPE_ARRAY: c_int = 5;
@@ -150,6 +151,19 @@ extern "C" {
     fn ui_call_msg_showmode(content: Array);
     // For cstr_as_string
     fn cstr_as_string(s: *const c_char) -> NvimString;
+
+    // For msg_multihl
+    static mut no_wait_return: c_int;
+    fn copy_string(s: NvimString, arena: *mut c_void) -> NvimString;
+    fn cstr_to_string(s: *const c_char) -> NvimString;
+    fn syn_check_group(name: *const c_char, len: usize) -> c_int;
+    fn msg_multiline(
+        str_: NvimString,
+        hl_id: c_int,
+        check_int: bool,
+        hist: bool,
+        need_clear: *mut bool,
+    );
 }
 
 // ============================================================================
@@ -632,6 +646,225 @@ pub unsafe extern "C" fn rs_msg_display_reset() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_using_ext_messages() -> c_int {
     c_int::from(ui_has(K_UI_MESSAGES))
+}
+
+// ============================================================================
+// Phase 12: msg_multihl + format_progress_message migrated to Rust
+// ============================================================================
+
+/// Layout-compatible representation of C `MessageData` struct.
+/// Size: 64 bytes (i64 + NvimString + NvimString + KVec).
+#[repr(C)]
+pub struct MessageData {
+    pub percent: i64,       // offset 0
+    pub title: NvimString,  // offset 8 (16 bytes)
+    pub status: NvimString, // offset 24 (16 bytes)
+    _data: [u8; 24],        // offset 40: opaque Dict field (24 bytes)
+}
+
+/// `msg_id_next` — counter for auto-generated message IDs (was C static).
+#[no_mangle]
+pub static mut msg_id_next: i64 = 1;
+
+/// Compare a C string pointer with a Rust string literal, safely.
+///
+/// Returns true if `ptr` is non-null and the C string equals `s`.
+unsafe fn cstr_eq(ptr: *const c_char, s: &str) -> bool {
+    if ptr.is_null() {
+        return false;
+    }
+    let cstr = std::ffi::CStr::from_ptr(ptr);
+    cstr.to_bytes() == s.as_bytes()
+}
+
+/// Format a progress message with title and percent prefix.
+///
+/// Equivalent to C static `format_progress_message()`.
+///
+/// # Safety
+/// `msg_data` must be a valid pointer to `MessageData`.
+unsafe fn format_progress_message_impl(
+    hl_msg: crate::history::HlMessage,
+    msg_data: *const MessageData,
+) -> crate::history::HlMessage {
+    use crate::history::{HlMessage, HlMessageChunk};
+    let mut updated: HlMessage = HlMessage {
+        size: 0,
+        capacity: 0,
+        items: std::ptr::null_mut(),
+    };
+
+    // Add title prefix if present
+    if (*msg_data).title.size != 0 {
+        let status = (*msg_data).status.data;
+        #[allow(clippy::cast_possible_truncation)]
+        let hl_id: c_int = if status.is_null() {
+            0
+        } else if cstr_eq(status, "success") {
+            syn_check_group(c"OkMsg".as_ptr(), 5)
+        } else if cstr_eq(status, "failed") {
+            syn_check_group(c"ErrorMsg".as_ptr(), 8)
+        } else if cstr_eq(status, "running") {
+            syn_check_group(c"MoreMsg".as_ptr(), 7)
+        } else if cstr_eq(status, "cancel") {
+            syn_check_group(c"WarningMsg".as_ptr(), 10)
+        } else {
+            0
+        };
+        let title_copy = copy_string((*msg_data).title, std::ptr::null_mut());
+        crate::display::hl_msg_push_impl(
+            &mut updated,
+            HlMessageChunk::new(title_copy.data, title_copy.size, hl_id),
+        );
+        let colon = cstr_to_string(c": ".as_ptr());
+        crate::display::hl_msg_push_impl(
+            &mut updated,
+            HlMessageChunk::new(colon.data, colon.size, 0),
+        );
+    }
+
+    // Add percent prefix if present
+    if (*msg_data).percent > 0 {
+        #[allow(clippy::cast_possible_truncation)]
+        let pct = (*msg_data).percent as i32;
+        let pct_str = format!("{pct:3}% ");
+        let pct_nvim = cstr_to_string(std::ffi::CString::new(pct_str).unwrap_or_default().as_ptr());
+        #[allow(clippy::cast_possible_truncation)]
+        let hl_id = syn_check_group(c"WarningMsg".as_ptr(), 10);
+        crate::display::hl_msg_push_impl(
+            &mut updated,
+            HlMessageChunk::new(pct_nvim.data, pct_nvim.size, hl_id),
+        );
+    }
+
+    if updated.size != 0 {
+        // Copy all chunks from hl_msg into updated
+        for i in 0..hl_msg.size {
+            let chunk = &*hl_msg.items.add(i);
+            let text_copy = copy_string(
+                NvimString {
+                    data: chunk.text_data,
+                    size: chunk.text_size,
+                },
+                std::ptr::null_mut(),
+            );
+            crate::display::hl_msg_push_impl(
+                &mut updated,
+                HlMessageChunk::new(text_copy.data, text_copy.size, chunk.hl_id),
+            );
+        }
+        updated
+    } else {
+        hl_msg
+    }
+}
+
+/// Helper to push an HlMessageChunk onto an HlMessage (exposed for format_progress_message_impl).
+///
+/// # Safety
+/// `msg` must point to a valid HlMessage.
+pub(crate) unsafe fn hl_msg_push_impl(
+    msg: &mut crate::history::HlMessage,
+    chunk: crate::history::HlMessageChunk,
+) {
+    hl_msg_push(msg, chunk);
+}
+
+/// Print message chunks, each with their own highlight ID.
+///
+/// Equivalent to the C `msg_multihl()` function.
+///
+/// # Safety
+/// Accesses and modifies global message state.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[export_name = "msg_multihl"]
+pub unsafe extern "C" fn rs_msg_multihl(
+    id: Object,
+    hl_msg: crate::history::HlMessage,
+    kind: *const c_char,
+    history: bool,
+    err: bool,
+    msg_data: *mut MessageData,
+    needs_msg_clear: *mut bool,
+) -> Object {
+    no_wait_return += 1;
+    crate::output_core::rs_msg_start();
+    crate::output_core::rs_msg_clr_eos();
+    let mut need_clear = false;
+    let mut hl_msg_updated = false;
+    msg_ext_history = history;
+    if !kind.is_null() {
+        rs_msg_ext_set_kind(kind);
+    }
+    crate::misc::is_multihl = true;
+    msg_ext_skip_flush = true;
+
+    // Assign a new ID if not given, or generate one if the given one is invalid.
+    let mut id = id;
+    if id.obj_type == K_OBJECT_TYPE_NIL {
+        id = Object {
+            obj_type: K_OBJECT_TYPE_INTEGER,
+            data: ObjectData {
+                integer: msg_id_next,
+            },
+        };
+        msg_id_next += 1;
+    } else if id.obj_type == K_OBJECT_TYPE_INTEGER {
+        if id.data.integer <= 0 {
+            id = Object {
+                obj_type: K_OBJECT_TYPE_INTEGER,
+                data: ObjectData {
+                    integer: msg_id_next,
+                },
+            };
+            msg_id_next += 1;
+        } else if msg_id_next < id.data.integer {
+            msg_id_next = id.data.integer + 1;
+        }
+    }
+    msg_ext_id = id;
+
+    // Progress messages get title/percent prefix
+    let mut hl_msg = hl_msg;
+    if !kind.is_null() && cstr_eq(kind, "progress") && !msg_data.is_null() {
+        let formatted = format_progress_message_impl(hl_msg, msg_data);
+        if formatted.items != hl_msg.items {
+            if !needs_msg_clear.is_null() {
+                *needs_msg_clear = true;
+            }
+            hl_msg_updated = true;
+            hl_msg = formatted;
+        }
+    }
+
+    // Print each chunk
+    for i in 0..hl_msg.size {
+        let chunk = &*hl_msg.items.add(i);
+        let text = NvimString {
+            data: chunk.text_data,
+            size: chunk.text_size,
+        };
+        if err {
+            let _ = crate::error::rs_emsg_multiline(chunk.text_data, kind, chunk.hl_id, 1);
+        } else {
+            msg_multiline(text, chunk.hl_id, true, false, &raw mut need_clear);
+        }
+    }
+
+    if history && hl_msg.size > 0 {
+        crate::history::rs_msg_hist_add_multihl(id, hl_msg, false, msg_data.cast::<c_void>());
+    }
+
+    msg_ext_skip_flush = false;
+    crate::misc::is_multihl = false;
+    no_wait_return -= 1;
+    let _ = crate::output_core::rs_msg_end();
+
+    if hl_msg_updated && !(history && hl_msg.size > 0) {
+        crate::history::rs_hl_msg_free(hl_msg);
+    }
+
+    id
 }
 
 #[cfg(test)]

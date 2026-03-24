@@ -12,6 +12,7 @@ use nvim_api::{Object, ObjectData};
 /// Layout-compatible representation of `HlMessageChunk` in C.
 /// Size: 24 bytes (String=16, int=4, padding=4)
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct HlMessageChunk {
     pub text_data: *mut c_char, // String.data  (offset 0)
     pub text_size: usize,       // String.size  (offset 8)
@@ -34,6 +35,7 @@ impl HlMessageChunk {
 /// Layout-compatible representation of `HlMessage` (kvec_t(HlMessageChunk)) in C.
 /// Size: 24 bytes
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct HlMessage {
     pub size: usize,                // offset 0
     pub capacity: usize,            // offset 8
