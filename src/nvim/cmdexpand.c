@@ -438,10 +438,6 @@ void nvim_cmdexpand_redraw_wildmenu(expand_T *xp, int num_matches, int findex, i
   redraw_wildmenu(xp, num_matches, xp->xp_files, findex, showtail != 0);
 }
 
-// ExpandFromContext is implemented in Rust (expand.rs) -- forward declaration
-extern int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numMatches,
-                             int options);
-
 /// Wrapper for ExpandFromContext (for Rust FFI).
 /// Calls ExpandFromContext and stores results into xp->xp_files/xp_numfiles.
 /// Returns FAIL (0) or OK (1).
@@ -2033,119 +2029,7 @@ static char *get_healthcheck_names(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 
 // ExpandOther and ExpandFromContext -- migrated to Rust (expand.rs)
 
-/// Expand a list of names.
-///
-/// Generic function for command line completion.  It calls a function to
-/// obtain strings, one by one.  The strings are matched against a regexp
-/// program.  Matching strings are copied into an array, which is returned.
-///
-/// @param func  returns a string from the list
-void ExpandGeneric(const char *const pat, expand_T *xp, regmatch_T *regmatch, char ***matches,
-                   int *numMatches, CompleteListItemGetter func, bool escaped)
-{
-  const bool fuzzy = cmdline_fuzzy_complete(pat);
-  *matches = NULL;
-  *numMatches = 0;
-
-  garray_T ga;
-  if (!fuzzy) {
-    ga_init(&ga, sizeof(char *), 30);
-  } else {
-    ga_init(&ga, sizeof(fuzmatch_str_T), 30);
-  }
-
-  for (int i = 0;; i++) {
-    char *str = (*func)(xp, i);
-    if (str == NULL) {  // End of list.
-      break;
-    }
-    if (*str == NUL) {  // Skip empty strings.
-      continue;
-    }
-
-    bool match;
-    int score = 0;
-    if (xp->xp_pattern[0] != NUL) {
-      if (!fuzzy) {
-        match = vim_regexec(regmatch, str, 0);
-      } else {
-        score = fuzzy_match_str(str, pat);
-        match = (score != FUZZY_SCORE_NONE);
-      }
-    } else {
-      match = true;
-    }
-
-    if (!match) {
-      continue;
-    }
-
-    if (escaped) {
-      str = vim_strsave_escaped(str, " \t\\.");
-    } else {
-      str = xstrdup(str);
-    }
-
-    if (fuzzy) {
-      GA_APPEND(fuzmatch_str_T, &ga, ((fuzmatch_str_T){
-        .idx = ga.ga_len,
-        .str = str,
-        .score = score,
-      }));
-    } else {
-      GA_APPEND(char *, &ga, str);
-    }
-
-    if (func == get_menu_names) {
-      // Test for separator added by get_menu_names().
-      str += strlen(str) - 1;
-      if (*str == '\001') {
-        *str = '.';
-      }
-    }
-  }
-
-  if (ga.ga_len == 0) {
-    return;
-  }
-
-  // Sort the matches when using regular expression matching and sorting
-  // applies to the completion context. Menus and scriptnames should be kept
-  // in the specified order.
-  const bool sort_matches = !fuzzy
-                            && xp->xp_context != EXPAND_MENUNAMES
-                            && xp->xp_context != EXPAND_STRING_SETTING
-                            && xp->xp_context != EXPAND_MENUS
-                            && xp->xp_context != EXPAND_SCRIPTNAMES
-                            && xp->xp_context != EXPAND_ARGOPT;
-
-  // <SNR> functions should be sorted to the end.
-  const bool funcsort = xp->xp_context == EXPAND_EXPRESSION
-                        || xp->xp_context == EXPAND_FUNCTIONS
-                        || xp->xp_context == EXPAND_USER_FUNC;
-
-  // Sort the matches.
-  if (sort_matches) {
-    if (funcsort) {
-      // <SNR> functions should be sorted to the end.
-      qsort(ga.ga_data, (size_t)ga.ga_len, sizeof(char *), rs_sort_func_compare);
-    } else {
-      sort_strings(ga.ga_data, ga.ga_len);
-    }
-  }
-
-  if (!fuzzy) {
-    *matches = ga.ga_data;
-    *numMatches = ga.ga_len;
-  } else {
-    fuzzymatches_to_strmatches(ga.ga_data, matches, ga.ga_len, funcsort);
-    *numMatches = ga.ga_len;
-  }
-
-  // Reset the variables used for special highlight names expansion, so that
-  // they don't show up when getting normal highlight names by ID.
-  reset_expand_highlight();
-}
+// ExpandGeneric -- migrated to Rust (expand.rs)
 
 /// Expand shell command matches in one directory of $PATH.
 ///

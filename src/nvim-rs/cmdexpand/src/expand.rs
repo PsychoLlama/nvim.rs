@@ -36,6 +36,21 @@ impl Default for RegMatch {
 }
 
 // =============================================================================
+// fuzmatch_str_T repr(C) struct
+// =============================================================================
+
+/// Matches `fuzmatch_str_T` from `fuzzy.h`.
+/// Layout: `idx:i32@0`, `_pad:i32@4`, `str:*mut c_char@8`, `score:i32@16`, `_pad2:i32@20` = 24 bytes.
+#[repr(C)]
+struct FuzmatchStr {
+    idx: c_int,
+    _pad: c_int,
+    str_: *mut c_char,
+    score: c_int,
+    _pad2: c_int,
+}
+
+// =============================================================================
 // CompleteListItemGetter function pointer type
 // =============================================================================
 
@@ -222,6 +237,20 @@ extern "C" {
     fn rs_get_retab_arg(xp: ExpandHandle, idx: c_int) -> *mut c_char;
     fn rs_cmdline_fuzzy_completion_supported(context: c_int) -> c_int;
 
+    // ExpandGeneric helpers
+    fn vim_regexec(rmp: *mut RegMatch, line: *const c_char, col: c_int) -> bool;
+    fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
+    fn fuzzymatches_to_strmatches(
+        fuzmatch: *mut FuzmatchStr,
+        matches: *mut *mut *mut c_char,
+        count: c_int,
+        funcsort: bool,
+    );
+    fn sort_strings(files: *mut *mut c_char, count: c_int);
+    fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
+    fn reset_expand_highlight();
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+
     fn xfree(ptr: *mut c_void);
 }
 
@@ -234,6 +263,176 @@ use crate::context::ExpandContext;
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 const BUF_DIFF_FILTER: c_int = 0x2000;
+
+// FUZZY_SCORE_NONE = INT_MIN
+const FUZZY_SCORE_NONE: c_int = c_int::MIN;
+
+// =============================================================================
+// ExpandGeneric
+// =============================================================================
+
+/// Expand a list of names by calling `func` for each index.
+///
+/// Generic function for command line completion. Iterates `func(xp, i)`,
+/// matches against `regmatch` (or fuzzy pattern `pat`), and collects results
+/// into `matches`/`numMatches`. Mirrors `ExpandGeneric` in `cmdexpand.c`.
+///
+/// # Safety
+///
+/// All pointer arguments must be valid. `func` must be a valid function pointer.
+#[unsafe(export_name = "ExpandGeneric")]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_expand_generic(
+    pat: *const c_char,
+    xp: *mut ExpandT,
+    regmatch: *mut RegMatch,
+    matches: *mut *mut *mut c_char,
+    num_matches: *mut c_int,
+    func: CompleteListItemGetter,
+    escaped: bool,
+) {
+    let pat_str = std::ffi::CStr::from_ptr(pat).to_bytes();
+    let pat_rust = std::str::from_utf8_unchecked(pat_str);
+    let fuzzy = crate::cmdline_fuzzy_complete(pat_rust);
+
+    *matches = std::ptr::null_mut();
+    *num_matches = 0;
+
+    let mut str_matches: Vec<*mut c_char> = Vec::new();
+    let mut fuz_matches: Vec<FuzmatchStr> = Vec::new();
+
+    let get_menu_names_fn = nvim_cmdexpand_get_fn_get_menu_names();
+
+    let mut i: c_int = 0;
+    loop {
+        let Some(func_fn) = func else {
+            break;
+        };
+        let str_ = func_fn(xp, i);
+        i += 1;
+        if str_.is_null() {
+            break;
+        }
+        if *str_ == 0 {
+            continue;
+        }
+
+        let mut score: c_int = 0;
+        let xp_pattern = (*xp).xp_pattern;
+        let is_match = if !xp_pattern.is_null() && *xp_pattern != 0 {
+            if fuzzy {
+                score = fuzzy_match_str(str_, pat);
+                score != FUZZY_SCORE_NONE
+            } else {
+                vim_regexec(regmatch, str_, 0)
+            }
+        } else {
+            true
+        };
+
+        if !is_match {
+            continue;
+        }
+
+        let owned_str = if escaped {
+            vim_strsave_escaped(str_, c" \t\\.".as_ptr())
+        } else {
+            xstrdup(str_)
+        };
+
+        if fuzzy {
+            fuz_matches.push(FuzmatchStr {
+                idx: fuz_matches.len() as c_int,
+                _pad: 0,
+                str_: owned_str,
+                score,
+                _pad2: 0,
+            });
+        } else {
+            str_matches.push(owned_str);
+        }
+
+        // Test for separator added by get_menu_names(): change '\001' to '.'
+        if let Some(gmn) = get_menu_names_fn {
+            if func_fn as usize == gmn as usize {
+                let len = libc::strlen(owned_str);
+                if len > 0 {
+                    let last = owned_str.add(len - 1);
+                    if *last == 0x01 {
+                        *last = b'.' as c_char;
+                    }
+                }
+            }
+        }
+    }
+
+    let count = if fuzzy {
+        fuz_matches.len()
+    } else {
+        str_matches.len()
+    };
+
+    if count == 0 {
+        return;
+    }
+
+    let ctx = (*xp).xp_context;
+
+    let sort_matches = !fuzzy
+        && ctx != ExpandContext::Menunames.to_raw()
+        && ctx != ExpandContext::StringSetting.to_raw()
+        && ctx != ExpandContext::Menus.to_raw()
+        && ctx != ExpandContext::Scriptnames.to_raw()
+        && ctx != ExpandContext::Argopt.to_raw();
+
+    let funcsort = ctx == ExpandContext::Expression.to_raw()
+        || ctx == ExpandContext::Functions.to_raw()
+        || ctx == ExpandContext::UserFunc.to_raw();
+
+    if fuzzy {
+        fuzzymatches_to_strmatches(
+            fuz_matches.as_mut_ptr(),
+            matches,
+            fuz_matches.len() as c_int,
+            funcsort,
+        );
+        *num_matches = fuz_matches.len() as c_int;
+        std::mem::forget(fuz_matches);
+    } else {
+        if sort_matches {
+            if funcsort {
+                str_matches.sort_unstable_by(|a, b| {
+                    let r = rs_sort_func_compare(
+                        std::ptr::from_ref(a).cast::<c_void>(),
+                        std::ptr::from_ref(b).cast::<c_void>(),
+                    );
+                    r.cmp(&0)
+                });
+            } else {
+                sort_strings(str_matches.as_mut_ptr(), str_matches.len() as c_int);
+            }
+        }
+
+        // Transfer into a C-heap array compatible with xfree.
+        // SAFETY: xmalloc and libc malloc share the same allocator on Linux;
+        // the result can be freed with xfree by the caller.
+        let len = str_matches.len();
+        let arr: *mut *mut c_char =
+            libc::malloc(len * std::mem::size_of::<*mut c_char>()).cast::<*mut c_char>();
+        for (j, p) in str_matches.iter().enumerate() {
+            *arr.add(j) = *p;
+        }
+        std::mem::forget(str_matches);
+        *matches = arr;
+        *num_matches = len as c_int;
+    }
+
+    reset_expand_highlight();
+}
+
+extern "C" {
+    fn rs_sort_func_compare(s1: *const c_void, s2: *const c_void) -> c_int;
+}
 
 // =============================================================================
 // ExpandOther

@@ -70,4 +70,9 @@ void wildmenu_cleanup(CmdlineInfo *cclp);
 void set_cmd_context(expand_T *xp, char *str, int len, int col, int use_ccline);
 int expand_cmdline(expand_T *xp, const char *str, int col, int *matchcount, char ***matches);
 
+// Phase 3-4 Rust migrations (expand.rs)
+int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numMatches, int options);
+void ExpandGeneric(const char *pat, expand_T *xp, regmatch_T *regmatch, char ***matches,
+                   int *numMatches, CompleteListItemGetter func, bool escaped);
+
 #include "cmdexpand.h.generated.h"
