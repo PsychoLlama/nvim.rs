@@ -1167,11 +1167,6 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
   return OK;
 }
 
-int do_buffer(int action, int start, int dir, int count, int forceit)
-{
-  return do_buffer_ext(action, start, dir, count, forceit ? DOBUF_FORCEIT : 0);
-}
-
 /// Set current buffer to "buf".  Executes autocommands and closes current
 /// buffer.
 ///

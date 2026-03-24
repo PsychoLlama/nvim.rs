@@ -923,7 +923,7 @@ void nvim_set_current_buf(Buffer buffer, Error *err)
   }
 
   TRY_WRAP(err, {
-    do_buffer(DOBUF_GOTO, DOBUF_FIRST, FORWARD, buf->b_fnum, 0);
+    do_buffer_ext(DOBUF_GOTO, DOBUF_FIRST, FORWARD, buf->b_fnum, 0);
   });
 }
 

@@ -1063,11 +1063,11 @@ void nvim_buf_delete(Buffer buffer, Dict(buf_delete) *opts, Error *err)
 
   bool unload = opts->unload;
 
-  int result = do_buffer(unload ? DOBUF_UNLOAD : DOBUF_WIPE,
-                         DOBUF_FIRST,
-                         FORWARD,
-                         buf->handle,
-                         force);
+  int result = do_buffer_ext(unload ? DOBUF_UNLOAD : DOBUF_WIPE,
+                             DOBUF_FIRST,
+                             FORWARD,
+                             buf->handle,
+                             force ? DOBUF_FORCEIT : 0);
 
   if (rs_dobuf_failed(result)) {
     api_set_error(err, kErrorTypeException, "Failed to unload buffer.");

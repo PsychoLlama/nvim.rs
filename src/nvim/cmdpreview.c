@@ -176,7 +176,7 @@ static win_T *cmdpreview_open_win(buf_T *cmdpreview_buf)
 
   // Switch to preview buffer
   TRY_WRAP(&err, {
-    result = do_buffer(DOBUF_GOTO, DOBUF_FIRST, FORWARD, cmdpreview_buf->handle, 0);
+    result = do_buffer_ext(DOBUF_GOTO, DOBUF_FIRST, FORWARD, cmdpreview_buf->handle, 0);
   });
   if (ERROR_SET(&err) || result == FAIL) {
     api_clear_error(&err);

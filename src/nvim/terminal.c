@@ -856,7 +856,7 @@ bool terminal_enter(void)
     s->term->destroy = true;
     s->term->opts.close_cb(s->term->opts.data);
     if (buf_handle != 0) {
-      do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, true);
+      do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, DOBUF_FORCEIT);
     }
   }
 
