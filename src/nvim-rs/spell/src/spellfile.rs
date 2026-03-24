@@ -6560,6 +6560,491 @@ pub unsafe extern "C" fn rs_rep_compare(s1: *const c_void, s2: *const c_void) ->
 }
 
 // =============================================================================
+// Phase 3: sugfile generation (spell_make_sugfile and helpers)
+// =============================================================================
+
+extern "C" {
+    #[link_name = "line_breakcheck"]
+    fn line_breakcheck_sug();
+    #[link_name = "ga_init"]
+    fn ga_init_sug(gap: *mut crate::GArrayRaw, itemsize: c_int, growsize: c_int);
+    #[link_name = "ga_clear"]
+    fn ga_clear_sug(gap: *mut crate::GArrayRaw);
+    fn ml_append_buf(
+        buf: *mut c_void,
+        lnum: i32,
+        line: *mut c_char,
+        len: i32,
+        newfile: bool,
+    ) -> c_int;
+    fn ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    fn ml_get_buf_len(buf: *mut c_void, lnum: i32) -> i32;
+    fn open_spellbuf() -> *mut c_void;
+    fn close_spellbuf(buf: *mut c_void);
+    #[link_name = "os_fopen"]
+    fn os_fopen_sug(fname: *const c_char, mode: *const c_char) -> *mut libc::FILE;
+    fn put_bytes(fd: *mut libc::FILE, number: u64, len: usize) -> bool;
+    fn put_time(fd: *mut libc::FILE, time_: i64) -> c_int;
+    fn free_blocks(bl: *mut c_void);
+    fn slang_free(lp: *mut crate::SlangRaw);
+    fn spell_load_file(
+        fname: *mut c_char,
+        lang: *mut c_char,
+        old_lp: *mut crate::SlangRaw,
+        silent: bool,
+    ) -> *mut crate::SlangRaw;
+    #[link_name = "path_full_compare"]
+    fn path_full_compare_sug(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: bool,
+        expandenv: bool,
+    ) -> c_int;
+    fn nvim_decor_buf_get_line_count(buf_ptr: *mut c_void) -> c_int;
+    #[link_name = "smsg"]
+    fn smsg_sug(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "semsg"]
+    fn semsg_sug(fmt: *const c_char, ...) -> bool;
+    #[link_name = "first_lang"]
+    static first_lang_sug: *mut crate::SlangRaw;
+    #[link_name = "e_write"]
+    static e_write_sug: *const c_char;
+    #[link_name = "e_notopen"]
+    static e_notopen_sug: *const c_char;
+}
+
+/// Magic bytes and version for .sug file header.
+const VIMSUGMAGIC: &[u8] = b"VIMsug";
+const VIMSUGVERSION: u8 = 1;
+/// kEqualFiles: path_full_compare return value when both paths refer to the same file.
+const K_EQUAL_FILES: c_int = 1;
+
+/// Build the soundfold trie for language `slang`.
+///
+/// Traverses `sl_fbyts`/`sl_fidxs`, soundfolds each word, and inserts it into
+/// `spin->si_foldroot` via `rs_tree_add_word`.
+///
+/// Returns 0 (OK) or 1 (FAIL).
+///
+/// # Safety
+/// `spin` and `slang` must be valid non-null pointers.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn sug_filltree(spin: *mut SpellinfoT, slang: *mut crate::SlangRaw) -> c_int {
+    const MAXWLEN: usize = 254;
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+
+    let byts = (*slang).sl_fbyts;
+    let idxs = (*slang).sl_fidxs;
+    if byts.is_null() || idxs.is_null() {
+        return FAIL;
+    }
+    let fbyts_len = (*slang).sl_fbyts_len as usize;
+
+    (*spin).si_foldroot = rs_wordtree_alloc(spin);
+    (*spin).si_sugtree = 1;
+
+    let mut arridx = [0i32; MAXWLEN];
+    let mut curi = [0i32; MAXWLEN];
+    let mut wordcount = [0i32; MAXWLEN];
+    let mut tword = [0u8; MAXWLEN];
+    let mut tsalword = [0u8; MAXWLEN + 4];
+
+    arridx[0] = 0;
+    curi[0] = 1;
+    wordcount[0] = 0;
+
+    let mut depth: i32 = 0;
+    let mut words_done: u32 = 0;
+
+    while depth >= 0 && !got_int_spell {
+        let d = depth as usize;
+        let cur_arr = arridx[d] as usize;
+        let n_siblings = *byts.add(cur_arr) as i32;
+        if curi[d] > n_siblings {
+            *idxs.add(cur_arr) = wordcount[d];
+            if depth > 0 {
+                wordcount[d - 1] += wordcount[d];
+            }
+            depth -= 1;
+            line_breakcheck_sug();
+        } else {
+            let n = cur_arr + curi[d] as usize;
+            curi[d] += 1;
+
+            let c = *byts.add(n);
+            if c == 0 {
+                tword[d] = 0;
+                crate::rs_spell_soundfold(
+                    slang,
+                    tword.as_mut_ptr().cast::<c_char>(),
+                    true,
+                    tsalword.as_mut_ptr().cast::<c_char>(),
+                );
+
+                let flags = (words_done >> 16) as c_int;
+                let region = (words_done & 0xffff) as c_int;
+                if rs_tree_add_word(
+                    spin,
+                    tsalword.as_ptr().cast::<c_char>(),
+                    (*spin).si_foldroot,
+                    flags,
+                    region,
+                    0,
+                ) == FAIL
+                {
+                    return FAIL;
+                }
+
+                words_done += 1;
+                wordcount[d] += 1;
+                (*spin).si_blocks_cnt = 0;
+
+                let mut nn = n;
+                while nn + 1 < fbyts_len && *byts.add(nn + 1) == 0 {
+                    nn += 1;
+                    curi[d] += 1;
+                }
+            } else {
+                tword[d] = c;
+                depth += 1;
+                let nd = depth as usize;
+                arridx[nd] = *idxs.add(n);
+                curi[nd] = 1;
+                wordcount[nd] = 0;
+            }
+        }
+    }
+
+    smsg_sug(
+        0,
+        c"Total number of words: %d".as_ptr(),
+        words_done as c_int,
+    );
+
+    OK
+}
+
+/// Fill the suggestion table for one node and its children.
+///
+/// Returns the next word number, or -1 on OOM.
+///
+/// # Safety
+/// All pointers must be valid.
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+unsafe fn sug_filltable(
+    spin: *mut SpellinfoT,
+    node: *mut WordnodeT,
+    startwordnr: c_int,
+    gap: *mut crate::GArrayRaw,
+) -> c_int {
+    const FAIL: c_int = -1;
+    let mut wordnr = startwordnr;
+
+    let mut p = node;
+    while !p.is_null() {
+        if (*p).wn_byte == 0 {
+            (*gap).ga_len = 0;
+            let mut prev_nr: i32 = 0;
+
+            let mut np = p;
+            while !np.is_null() && (*np).wn_byte == 0 {
+                ga_grow(gap, 10);
+
+                let nr = (((*np).wn_flags as i32) << 16) + ((*np).wn_region as i32 & 0xffff);
+                let delta = nr - prev_nr;
+                prev_nr += delta;
+
+                let ga_data = (*gap).ga_data.cast::<u8>();
+                let ga_len = (*gap).ga_len as usize;
+                let buf = std::slice::from_raw_parts_mut(ga_data.add(ga_len), 10);
+                let written = crate::offset2bytes(delta, buf);
+                (*gap).ga_len += written as c_int;
+
+                np = (*np).wn_sibling;
+            }
+
+            let ga_data = (*gap).ga_data.cast::<u8>();
+            *ga_data.add((*gap).ga_len as usize) = 0u8;
+            (*gap).ga_len += 1;
+
+            if ml_append_buf(
+                (*spin).si_spellbuf,
+                wordnr,
+                (*gap).ga_data.cast::<c_char>(),
+                (*gap).ga_len,
+                true,
+            ) != 0
+            {
+                return FAIL;
+            }
+            wordnr += 1;
+
+            while !(*p).wn_sibling.is_null() && (*(*p).wn_sibling).wn_byte == 0 {
+                (*p).wn_sibling = (*(*p).wn_sibling).wn_sibling;
+            }
+
+            (*p).wn_flags = 0;
+            (*p).wn_region = 0;
+        } else {
+            wordnr = sug_filltable(spin, (*p).wn_child, wordnr, gap);
+            if wordnr == FAIL {
+                return FAIL;
+            }
+        }
+        p = (*p).wn_sibling;
+    }
+    wordnr
+}
+
+/// Create the memline table linking soundfold words to source words.
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer.
+unsafe fn sug_maketable(spin: *mut SpellinfoT) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+
+    (*spin).si_spellbuf = open_spellbuf();
+
+    let mut ga = crate::GArrayRaw {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: std::ptr::null_mut(),
+    };
+    ga_init_sug(&raw mut ga, 1, 100);
+
+    let sibling = (*(*spin).si_foldroot).wn_sibling;
+    let res = if sug_filltable(spin, sibling, 0, &raw mut ga) == -1 {
+        FAIL
+    } else {
+        OK
+    };
+
+    ga_clear_sug(&raw mut ga);
+    res
+}
+
+/// Write the .sug file to `fname`.
+///
+/// # Safety
+/// `spin` and `fname` must be valid non-null pointers.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation
+)]
+unsafe fn sug_write(spin: *mut SpellinfoT, fname: *const c_char) {
+    let fd = os_fopen_sug(fname, c"w".as_ptr());
+    if fd.is_null() {
+        semsg_sug(e_notopen_sug, fname);
+        return;
+    }
+
+    {
+        let fname_str = std::ffi::CStr::from_ptr(fname).to_string_lossy();
+        let msg_text = format!("Writing suggestion file {fname_str}...\0");
+        rs_spell_message(spin, msg_text.as_ptr().cast::<c_char>());
+    }
+
+    // <SUGHEADER>: <fileID> <versionnr> <timestamp>
+    if libc::fwrite(
+        VIMSUGMAGIC.as_ptr().cast::<c_void>(),
+        VIMSUGMAGIC.len(),
+        1,
+        fd,
+    ) != 1
+    {
+        emsg(e_write_sug);
+        libc::fclose(fd);
+        return;
+    }
+    libc::fputc(c_int::from(VIMSUGVERSION), fd);
+    put_time(fd, (*spin).si_sugtime);
+
+    // <SUGWORDTREE>
+    (*spin).si_memtot = 0;
+    let tree = (*(*spin).si_foldroot).wn_sibling;
+
+    rs_clear_node(tree);
+    let mut sug_dummy: usize = 0;
+    let sug_nodecount = rs_put_node(
+        tree,
+        std::ptr::null_mut(),
+        0,
+        0,
+        0,
+        false,
+        &raw mut sug_dummy,
+    );
+    if sug_nodecount < 0 {
+        emsg(e_write_sug);
+        libc::fclose(fd);
+        return;
+    }
+
+    put_bytes(fd, sug_nodecount as u64, 4);
+    (*spin).si_memtot += sug_nodecount + sug_nodecount * std::mem::size_of::<c_int>() as c_int;
+
+    let sug_tree_buf_len = (sug_nodecount as usize) * 8 + 1024;
+    let sug_tree_buf = libc::malloc(sug_tree_buf_len).cast::<u8>();
+    if sug_tree_buf.is_null() {
+        emsg(e_write_sug);
+        libc::fclose(fd);
+        return;
+    }
+    rs_clear_node(tree);
+    let mut sug_tree_written: usize = 0;
+    let sug_nc2 = rs_put_node(
+        tree,
+        sug_tree_buf,
+        sug_tree_buf_len,
+        0,
+        0,
+        false,
+        &raw mut sug_tree_written,
+    );
+    if sug_nc2 < 0
+        || (sug_tree_written > 0
+            && libc::fwrite(sug_tree_buf.cast::<c_void>(), sug_tree_written, 1, fd) != 1)
+    {
+        libc::free(sug_tree_buf.cast::<c_void>());
+        emsg(e_write_sug);
+        libc::fclose(fd);
+        return;
+    }
+    libc::free(sug_tree_buf.cast::<c_void>());
+
+    // <SUGTABLE>: <sugwcount> <sugline> ...
+    let wcount = nvim_decor_buf_get_line_count((*spin).si_spellbuf);
+    put_bytes(fd, wcount as u64, 4);
+
+    let mut write_ok = true;
+    for lnum in 1..=wcount {
+        let line = ml_get_buf((*spin).si_spellbuf, lnum);
+        let len = ml_get_buf_len((*spin).si_spellbuf, lnum) + 1;
+        if libc::fwrite(line.cast::<c_void>(), len as usize, 1, fd) == 0 {
+            emsg(e_write_sug);
+            write_ok = false;
+            break;
+        }
+        (*spin).si_memtot += len;
+    }
+
+    if write_ok {
+        if libc::fputc(0, fd) == libc::EOF {
+            emsg(e_write_sug);
+        } else {
+            let msg_text = format!(
+                "Estimated runtime memory use: {} bytes\0",
+                (*spin).si_memtot
+            );
+            rs_spell_message(spin, msg_text.as_ptr().cast::<c_char>());
+        }
+    }
+
+    libc::fclose(fd);
+}
+
+/// Orchestrate .sug file creation for a spell language.
+///
+/// # Safety
+/// `spin` and `wfname` must be valid non-null pointers.
+#[export_name = "spell_make_sugfile"]
+#[inline(never)]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation
+)]
+pub unsafe extern "C" fn rs_spell_make_sugfile(spin: *mut SpellinfoT, wfname: *mut c_char) {
+    const OK: c_int = 0;
+
+    let mut slang = first_lang_sug;
+    while !slang.is_null() {
+        if path_full_compare_sug(wfname, (*slang).sl_fname, false, true) == K_EQUAL_FILES {
+            break;
+        }
+        slang = (*slang).sl_next;
+    }
+    let free_slang = slang.is_null();
+    if free_slang {
+        rs_spell_message(spin, c"Reading back spell file...".as_ptr());
+        slang = spell_load_file(wfname, std::ptr::null_mut(), std::ptr::null_mut(), false);
+        if slang.is_null() {
+            return;
+        }
+    }
+
+    (*spin).si_blocks = std::ptr::null_mut();
+    (*spin).si_blocks_cnt = 0;
+    (*spin).si_compress_cnt = 0;
+    (*spin).si_free_count = 0;
+    (*spin).si_first_free = std::ptr::null_mut();
+    (*spin).si_foldwcount = 0;
+
+    rs_spell_message(spin, c"Performing soundfolding...".as_ptr());
+    if sug_filltree(spin, slang) != OK {
+        if free_slang {
+            slang_free(slang);
+        }
+        free_blocks((*spin).si_blocks.cast::<c_void>());
+        close_spellbuf((*spin).si_spellbuf);
+        return;
+    }
+
+    if sug_maketable(spin) != OK {
+        if free_slang {
+            slang_free(slang);
+        }
+        free_blocks((*spin).si_blocks.cast::<c_void>());
+        close_spellbuf((*spin).si_spellbuf);
+        return;
+    }
+
+    smsg_sug(
+        0,
+        c"Number of words after soundfolding: %ld".as_ptr(),
+        nvim_decor_buf_get_line_count((*spin).si_spellbuf) as libc::c_long,
+    );
+
+    rs_spell_message(spin, c"Compressing word tree...".as_ptr());
+    rs_wordtree_compress_export(spin, (*spin).si_foldroot, c"case-folded".as_ptr());
+
+    let wfname_len = libc::strlen(wfname);
+    let fname_buf = libc::malloc(wfname_len + 1).cast::<u8>();
+    if fname_buf.is_null() {
+        if free_slang {
+            slang_free(slang);
+        }
+        free_blocks((*spin).si_blocks.cast::<c_void>());
+        close_spellbuf((*spin).si_spellbuf);
+        return;
+    }
+    libc::memcpy(
+        fname_buf.cast::<c_void>(),
+        wfname.cast::<c_void>(),
+        wfname_len + 1,
+    );
+    *fname_buf.add(wfname_len - 2) = b'u';
+    *fname_buf.add(wfname_len - 1) = b'g';
+    sug_write(spin, fname_buf.cast::<c_char>());
+    libc::free(fname_buf.cast::<c_void>());
+
+    if free_slang {
+        slang_free(slang);
+    }
+    free_blocks((*spin).si_blocks.cast::<c_void>());
+    close_spellbuf((*spin).si_spellbuf);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
