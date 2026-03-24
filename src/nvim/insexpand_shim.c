@@ -118,6 +118,7 @@ extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int c
                                             int min_len, char **tofree);
 extern int rs_ins_compl_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
                                           int fuzzy_score);
+extern void rs_cpt_compl_refresh(void);
 extern void rs_strip_caret_numbers_in_place(char *str);
 extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
@@ -2086,7 +2087,7 @@ int nvim_is_cpt_func_refresh_always(void) {
   }
   return 0;
 }
-void nvim_cpt_compl_refresh(void) { nvim_cpt_compl_refresh_impl(); }
+void nvim_cpt_compl_refresh(void) { rs_cpt_compl_refresh(); }
 // nvim_set_compl_restarting: deleted (Phase 2, COMPL_RESTARTING moved to Rust)
 // nvim_ins_complete_ctrl_n: deleted (Phase 1, Rust calls ins_complete(CTRL_N, true) directly)
 // Accessor for Phase 5: ins_compl_del_pum migration
@@ -2775,57 +2776,7 @@ void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
 
 /// Compound accessor: cpt_compl_refresh logic, callable from Rust.
 /// Contains the full logic from the original cpt_compl_refresh function.
-void nvim_cpt_compl_refresh_impl(void)
-{
-  // Make the completion list linear (non-cyclic)
-  rs_ins_compl_make_linear();
-  // Make a copy of 'cpt' in case the buffer gets wiped out
-  char *cpt = xstrdup(curbuf->b_p_cpt);
-  rs_strip_caret_numbers_in_place(cpt);
-
-  cpt_sources_index = 0;
-  for (char *p = cpt; *p;) {
-    while (*p == ',' || *p == ' ') {  // Skip delimiters
-      p++;
-    }
-    if (*p == NUL) {
-      break;
-    }
-
-    if (cpt_sources_array[cpt_sources_index].cs_refresh_always) {
-      Callback *cb = (Callback *)nvim_get_callback_if_cpt_func_impl(p, cpt_sources_index);
-      if (cb) {
-        rs_remove_old_matches();
-        int startcol = 0;
-        int ret = rs_get_userdefined_compl_info(curwin->w_cursor.col, cb, &startcol);
-        if (ret == FAIL) {
-          if (startcol == -3) {
-            cpt_sources_array[cpt_sources_index].cs_refresh_always = false;
-          } else {
-            startcol = -2;
-          }
-        } else if (startcol < 0 || startcol > curwin->w_cursor.col) {
-          startcol = curwin->w_cursor.col;
-        }
-        cpt_sources_array[cpt_sources_index].cs_startcol = startcol;
-        if (ret == OK) {
-          rs_compl_source_start_timer(cpt_sources_index);
-          rs_get_cpt_func_completion_matches(cb);
-        }
-      }
-    }
-
-    (void)copy_option_part(&p, IObuff, IOSIZE, ",");  // Advance p
-    if (rs_may_advance_cpt_index(p) != 0) {
-      (void)rs_advance_cpt_sources_index_safe();
-    }
-  }
-  cpt_sources_index = -1;
-
-  xfree(cpt);
-  // Make the list cyclic
-  compl_matches = rs_ins_compl_make_cyclic();
-}
+// nvim_cpt_compl_refresh_impl: deleted (Phase 2), inlined in funcexpand.rs as rs_cpt_compl_refresh
 
 /// Compound accessor: get_callback_if_cpt_func logic, callable from Rust.
 /// Contains the full logic from the original get_callback_if_cpt_func function.
