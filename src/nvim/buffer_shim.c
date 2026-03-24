@@ -51,7 +51,10 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 #include "nvim/cursor.h"
+#include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
+#include "nvim/move.h"
+#include "nvim/normal.h"
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds2.h"
 #include "nvim/ex_docmd.h"
@@ -80,10 +83,10 @@ extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabline_height(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_win_valid(win_T *win);
-// enter_buffer() is in buffer.c (made non-static for Phase 18).
-extern void enter_buffer(buf_T *buf);
 // rs_get_last_winid() is Rust-exported (used in set_curbuf, Phase 19).
 extern int rs_get_last_winid(void);
+// Rust diff helpers (used in enter_buffer, Phase 20).
+extern void rs_diff_buf_add(buf_T *buf);
 
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
@@ -2380,4 +2383,123 @@ void set_curbuf(buf_T *buf, int action, bool update_jumplist)
   if (bufref_valid(&prevbufref) && prevbuf->terminal != NULL) {
     terminal_check_size(prevbuf->terminal);
   }
+}
+
+/// Go to the last known line number for the current buffer.
+static void buflist_getfpos(void)
+{
+  pos_T *fpos = &buflist_findfmark(curbuf)->mark;
+
+  curwin->w_cursor.lnum = fpos->lnum;
+  check_cursor_lnum(curwin);
+
+  if (p_sol) {
+    curwin->w_cursor.col = 0;
+  } else {
+    curwin->w_cursor.col = fpos->col;
+    check_cursor_col(curwin);
+    curwin->w_cursor.coladd = 0;
+    curwin->w_set_curswant = true;
+  }
+}
+
+/// Enter a new current buffer.
+/// Old curbuf must have been abandoned already!  This also means "curbuf" may
+/// be pointing to freed memory.
+void enter_buffer(buf_T *buf)
+{
+  // when closing the current buffer stop Visual mode
+  if (VIsual_active
+#if defined(EXITFREE)
+      && !entered_free_all_mem
+#endif
+      ) {
+    end_visual_mode();
+  }
+
+  // Get the buffer in the current window.
+  curwin->w_buffer = buf;
+  curbuf = buf;
+  curbuf->b_nwindows++;
+
+  // Copy buffer and window local option values.  Not for a help buffer.
+  buf_copy_options(buf, BCO_ENTER | BCO_NOHELP);
+  if (!buf->b_help) {
+    get_winopts(buf);
+  } else {
+    // Remove all folds in the window.
+    rs_clearFolding(curwin);
+  }
+  rs_foldUpdateAll(curwin);        // update folds (later).
+
+  if (curwin->w_p_diff) {
+    rs_diff_buf_add(curbuf);
+  }
+
+  curwin->w_s = &(curbuf->b_s);
+
+  // Cursor on first line by default.
+  curwin->w_cursor.lnum = 1;
+  curwin->w_cursor.col = 0;
+  curwin->w_cursor.coladd = 0;
+  curwin->w_set_curswant = true;
+  curwin->w_topline_was_set = false;
+
+  // mark cursor position as being invalid
+  curwin->w_valid = 0;
+
+  // Make sure the buffer is loaded.
+  if (curbuf->b_ml.ml_mfp == NULL) {    // need to load the file
+    // If there is no filetype, allow for detecting one.  Esp. useful for
+    // ":ball" used in an autocommand.  If there already is a filetype we
+    // might prefer to keep it.
+    if (*curbuf->b_p_ft == NUL) {
+      curbuf->b_did_filetype = false;
+    }
+
+    open_buffer(false, NULL, 0);
+  } else {
+    if (!msg_silent && !shortmess(SHM_FILEINFO)) {
+      need_fileinfo = true;             // display file info after redraw
+    }
+    // check if file changed
+    buf_check_timestamp(curbuf);
+
+    curwin->w_topline = 1;
+    curwin->w_topfill = 0;
+    apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf);
+    apply_autocmds(EVENT_BUFWINENTER, NULL, NULL, false, curbuf);
+  }
+
+  // If autocommands did not change the cursor position, restore cursor lnum
+  // and possibly cursor col.
+  if (curwin->w_cursor.lnum == 1 && inindent(0)) {
+    buflist_getfpos();
+  }
+
+  check_arg_idx(curwin);                // check for valid arg_idx
+  maketitle();
+  // when autocmds didn't change it
+  if (curwin->w_topline == 1 && !curwin->w_topline_was_set) {
+    scroll_cursor_halfway(curwin, false, false);  // redisplay at correct position
+  }
+
+  // Change directories when the 'acd' option is set.
+  do_autochdir();
+
+  if (curbuf->b_kmap_state & KEYMAP_INIT) {
+    keymap_init();
+  }
+  // May need to set the spell language.  Can only do this after the buffer
+  // has been properly setup.
+  if (!curbuf->b_help && curwin->w_p_spell && *curwin->w_s->b_p_spl != NUL) {
+    parse_spelllang(curwin);
+  }
+  curbuf->b_last_used = time(NULL);
+
+  if (curbuf->terminal != NULL) {
+    terminal_check_size(curbuf->terminal);
+  }
+
+  redraw_later(curwin, UPD_NOT_VALID);
 }
