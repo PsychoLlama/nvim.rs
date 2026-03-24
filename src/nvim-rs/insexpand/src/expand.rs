@@ -69,13 +69,17 @@ extern "C" {
         out_col: *mut c_int,
     );
     fn nvim_ins_compl_get_exp_check_buf();
-    fn nvim_ins_compl_st_set_cur_match_dir();
+    // nvim_ins_compl_st_set_cur_match_dir: deleted (Phase 1), inlined below
     // nvim_ins_compl_st_e_cpt_is_nul: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_found_all: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_set_found_all: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_reset_set_match_pos: inlined in vars.rs (Phase 26)
-    fn nvim_ins_compl_st_buf_valid() -> c_int;
-    fn nvim_ins_compl_st_ins_buf_is_curbuf() -> c_int;
+    // nvim_ins_compl_st_buf_valid: deleted (Phase 1), inlined below
+    // nvim_ins_compl_st_ins_buf_is_curbuf: deleted (Phase 1), inlined below
+    #[link_name = "curbuf"]
+    static curbuf_expand: *mut core::ffi::c_void;
+    #[link_name = "buf_valid"]
+    fn buf_valid_expand(buf: *mut core::ffi::c_void) -> bool;
     fn nvim_ins_compl_st_mark_ins_buf_scanned();
     // nvim_ins_compl_st_get_dict: inlined in vars.rs (Phase 26)
     // nvim_ins_compl_st_get_dict_f: inlined in vars.rs (Phase 26)
@@ -111,7 +115,7 @@ extern "C" {
     fn nvim_compl_p_scs_save_set() -> c_int;
     fn nvim_compl_p_ws_save_set() -> c_int;
     fn nvim_compl_restore_p_scs_ws(save_p_scs: c_int, save_p_ws: c_int);
-    fn nvim_ins_compl_st_is_in_curbuf() -> c_int;
+    // nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), inlined below
     fn nvim_ins_compl_st_do_search(
         in_fuzzy: c_int,
         start_lnum: c_int,
@@ -315,7 +319,7 @@ unsafe fn rs_get_next_default_completion(start_lnum: c_int, start_col: c_int) ->
             && rs_cot_fuzzy() != 0
             && crate::vars::nvim_get_compl_length() > 0,
     );
-    let in_curbuf = nvim_ins_compl_st_is_in_curbuf() != 0;
+    let in_curbuf = crate::vars::ins_compl_st.ins_buf == curbuf_expand;
 
     // Save and conditionally modify p_scs and p_ws.
     let save_p_scs = nvim_compl_p_scs_save_set();
@@ -462,7 +466,7 @@ unsafe fn get_next_completion_match(
         _ => {
             // normal ^P/^N and ^X^L
             found_new_match = rs_get_next_default_completion(start_lnum, start_col);
-            if found_new_match == FAIL && nvim_ins_compl_st_ins_buf_is_curbuf() != 0 {
+            if found_new_match == FAIL && crate::vars::ins_compl_st.ins_buf == curbuf_expand {
                 crate::vars::nvim_ins_compl_st_set_found_all(1);
             }
         }
@@ -512,7 +516,12 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
     crate::match_list::nvim_compl_set_old_match(crate::match_list::nvim_compl_get_curr_match());
 
     // Set cur_match_pos based on direction
-    nvim_ins_compl_st_set_cur_match_dir();
+    // Inline nvim_ins_compl_st_set_cur_match_dir (Phase 1)
+    crate::vars::ins_compl_st.cur_match_pos = if rs_compl_dir_forward() != 0 {
+        core::ptr::addr_of_mut!(crate::vars::ins_compl_st.last_match_pos)
+    } else {
+        core::ptr::addr_of_mut!(crate::vars::ins_compl_st.first_match_pos)
+    };
 
     // Determine if we are in "normal_mode_strict" and set up timer/timeout
     // (Inline of deleted nvim_normal_mode_strict: Phase 1)
@@ -656,7 +665,7 @@ pub unsafe extern "C" fn rs_ins_compl_get_exp(lnum: c_int, col: c_int) -> c_int 
             crate::vars::nvim_set_compl_started(c_int::from(not_expired));
         } else {
             // Mark a buffer scanned when it has been scanned completely
-            if nvim_ins_compl_st_buf_valid() != 0
+            if buf_valid_expand(crate::vars::ins_compl_st.ins_buf)
                 && (compl_type == 0 || compl_type == CTRL_X_PATH_PATTERNS)
             {
                 nvim_ins_compl_st_mark_ins_buf_scanned();

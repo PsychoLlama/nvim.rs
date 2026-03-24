@@ -2078,8 +2078,8 @@ int nvim_check_compl_option_tsr(void) {
 // nvim_ins_compl_st_get_found_all: deleted (Phase 26, inlined in vars.rs)
 // nvim_ins_compl_st_e_cpt_is_nul: deleted (Phase 26, inlined in vars.rs)
 // nvim_ins_compl_st_reset_set_match_pos: deleted (Phase 26, inlined in vars.rs)
-int nvim_ins_compl_st_buf_valid(void) { return buf_valid(ins_compl_st.ins_buf) ? 1 : 0; }
-int nvim_ins_compl_st_ins_buf_is_curbuf(void) { return ins_compl_st.ins_buf == curbuf ? 1 : 0; }
+// nvim_ins_compl_st_buf_valid: deleted (Phase 1), Rust inlines directly
+// nvim_ins_compl_st_ins_buf_is_curbuf: deleted (Phase 1), Rust inlines directly
 void nvim_ins_compl_st_mark_ins_buf_scanned(void) {
   if (ins_compl_st.ins_buf) {
     ins_compl_st.ins_buf->b_scanned = true;
@@ -2132,11 +2132,7 @@ void nvim_ins_compl_get_exp_check_buf(void) {
 }
 
 // Sets st.cur_match_pos based on current direction (call after init).
-void nvim_ins_compl_st_set_cur_match_dir(void) {
-  ins_compl_st.cur_match_pos = rs_compl_dir_forward()
-                               ? &ins_compl_st.last_match_pos
-                               : &ins_compl_st.first_match_pos;
-}
+// nvim_ins_compl_st_set_cur_match_dir: deleted (Phase 1), Rust inlines directly
 
 // NOTE: nvim_process_next_cpt_value_wrap deleted (Phase 14, Phase 3).
 // rs_ins_compl_get_exp now calls rs_process_next_cpt_value directly.
@@ -3242,10 +3238,7 @@ void nvim_compl_restore_p_scs_ws(int save_p_scs, int save_p_ws)
 }
 
 /// Returns 1 if ins_compl_st.ins_buf == curbuf, else 0.
-int nvim_ins_compl_st_is_in_curbuf(void)
-{
-  return (ins_compl_st.ins_buf == curbuf) ? 1 : 0;
-}
+// nvim_ins_compl_st_is_in_curbuf: deleted (Phase 1), Rust inlines directly
 
 /// Call the appropriate search function (fuzzy / exact-line / searchit) for one
 /// step of the default-completion loop.  Increments msg_silent before the call
