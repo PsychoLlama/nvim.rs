@@ -1725,10 +1725,9 @@ pub mod jump_machinery {
         static mut msg_scrolled: c_int;
         fn nvim_update_screen();
         fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
-        fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
-        fn nvim_qfline_get_type_char(qfp: QfLineHandle) -> std::ffi::c_char;
-        fn nvim_qfline_get_nr_int(qfp: QfLineHandle) -> c_int;
-        fn nvim_qfline_get_text_ptr(qfp: QfLineHandle) -> *const std::ffi::c_char;
+        fn nvim_qfline_get_cleared(qfp: QfLineHandle) -> bool;
+        fn nvim_qfline_get_nr(qfp: QfLineHandle) -> c_int;
+        fn nvim_qfline_get_text(qfp: QfLineHandle) -> *const std::ffi::c_char;
         fn skipwhite(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
         static mut msg_scroll: c_int;
         fn nvim_ecmd_shortmess_overall() -> c_int;
@@ -1866,15 +1865,15 @@ pub mod jump_machinery {
         // Build types string
         let mut type_buf = [0u8; 20];
         crate::display::qf_types_fmt(
-            c_int::from(nvim_qfline_get_type_char(qf_ptr)),
-            nvim_qfline_get_nr_int(qf_ptr),
+            c_int::from(nvim_qfline_get_type(qf_ptr)),
+            nvim_qfline_get_nr(qf_ptr),
             &mut type_buf,
         );
         let type_len = type_buf.iter().position(|&b| b == 0).unwrap_or(20);
         let type_str = std::str::from_utf8(&type_buf[..type_len]).unwrap_or("");
 
         // Build cleared string
-        let cleared_str = if nvim_qfline_get_cleared_bool(qf_ptr) {
+        let cleared_str = if nvim_qfline_get_cleared(qf_ptr) {
             std::ffi::CStr::from_ptr(nvim_qf_gettext_line_deleted())
                 .to_str()
                 .unwrap_or(" (line deleted)")
@@ -1888,7 +1887,7 @@ pub mod jump_machinery {
         let header = format!("({qf_index} of {count}){cleared_str}{type_str}: ");
 
         // Build the fmt_text part: skip leading whitespace then qf_fmt_text
-        let qf_text_ptr = nvim_qfline_get_text_ptr(qf_ptr);
+        let qf_text_ptr = nvim_qfline_get_text(qf_ptr);
         let fmt_text = if qf_text_ptr.is_null() {
             String::new()
         } else {

@@ -1192,7 +1192,8 @@ extern "C" {
     fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
     fn nvim_qf_get_title(qfl: *const c_void) -> *const std::ffi::c_char;
     fn nvim_qfl_get_ctx(qfl: *const c_void) -> *mut c_void;
-    fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> *mut c_void;
+    #[link_name = "nvim_qf_get_list_at_mut"]
+    fn nvim_qf_get_list_handle(qi: *mut c_void, qf_idx: c_int) -> *mut c_void;
 
     // typval list/dict ops (tv_list_alloc, tv_dict_find, tv_dict_add_list declared above)
     fn tv_list_alloc_ret(rettv: *mut c_void, len: i64) -> *mut c_void;
@@ -1255,6 +1256,7 @@ extern "C" {
     // Phase 8 set-side accessors
     fn tv_get_string_chk(tv: *const c_void) -> *const std::ffi::c_char;
     fn tv_free(tv: *mut c_void);
+    #[link_name = "nvim_qf_free_ctx"]
     fn nvim_qfl_free_ctx(qfl: *mut c_void);
     fn nvim_qfl_set_ctx(qfl: *mut c_void, ctx_tv: *mut c_void);
     fn nvim_qfl_free_qftf_cb(qfl: *mut c_void);
@@ -1460,7 +1462,7 @@ pub unsafe extern "C" fn rs_get_errorlist(
         return C_FAIL;
     }
 
-    let qfl = nvim_qf_get_list_handle(qi, resolved_idx);
+    let qfl = nvim_qf_get_list_handle(qi.cast_mut(), resolved_idx);
     if qfl.is_null() || nvim_qf_get_count(qfl) <= 0 {
         return C_FAIL;
     }
@@ -1544,7 +1546,7 @@ pub unsafe extern "C" fn rs_qf_get_list_from_lines(
     if !qi.is_null() {
         let listcount = nvim_qf_get_listcount(qi.cast_const());
         for i in 0..listcount {
-            let qfl_i = nvim_qf_get_list_handle(qi.cast_const(), i);
+            let qfl_i = nvim_qf_get_list_handle(qi, i);
             if !qfl_i.is_null() {
                 rs_qf_free_list(qfl_i);
             }

@@ -653,32 +653,6 @@ bool nvim_tv_dict_efm_wrong_type(const void *dict)
   return di->di_tv.v_type != VAR_STRING || di->di_tv.vval.v_string == NULL;
 }
 
-/// Get the qfl list handle at index qf_idx from qi.
-void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
-{
-  if (qi_void == NULL) { return NULL; }
-  const qf_info_T *qi = (const qf_info_T *)qi_void;
-  if (qf_idx < 0 || qf_idx >= qi->qf_listcount) { return NULL; }
-  return (void *)&qi->qf_lists[qf_idx];
-}
-
-/// tv_dict_get_string: get string from dict by key (alloc=true means heap copy, qf void* version).
-/// tv_dict_get_number: get number from dict by key (0 if not found, qf void* version).
-/// tv_dict_get_tv: copy tv from dict key into *tv_out (VAR_UNKNOWN if not found).
-/// tv_get_number_chk: get number from typval (qf void* version).
-/// tv_get_string_chk: get string from typval (qf void* version, NULL on error).
-/// tv_free: free a heap-allocated typval_T (qf void* version).
-/// Allocate a heap typval_T (zeroed).
-/// tv_copy from src tv into a newly allocated heap typval_T.
-/// Free the qfl->qf_ctx field (tv_free + set to NULL).
-void nvim_qfl_free_ctx(void *qfl_void)
-{
-  if (qfl_void == NULL) { return; }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  tv_free(qfl->qf_ctx);
-  qfl->qf_ctx = NULL;
-}
-
 /// Set qfl->qf_ctx to the given heap typval_T pointer.
 void nvim_qfl_set_ctx(void *qfl_void, void *ctx_tv)
 {
@@ -1203,13 +1177,6 @@ int nvim_qf_get_curlist_count(const void *qi_void)
   const qf_info_T *qi = (const qf_info_T *)qi_void;
   return qi->qf_lists[qi->qf_curlist].qf_count;
 }
-bool nvim_qfline_get_cleared_bool(const void *qfp_void)
-{
-  return ((const qfline_T *)qfp_void)->qf_cleared != 0;
-}
-char nvim_qfline_get_type_char(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
-int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
-const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
