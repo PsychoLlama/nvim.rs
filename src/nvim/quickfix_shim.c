@@ -163,12 +163,6 @@ static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
 extern bool rs_callback_from_typval(Callback *callback, const typval_T *arg);
-extern bool rs_qf_list_empty(const void *qfl);
-extern bool rs_qflist_valid(const void *wp, unsigned qf_id);
-// rs_qf_msg deleted: Rust bypasses nvim_qf_msg via #[link_name]
-extern int rs_copy_loclist(const void *from_qfl, void *to_qfl);
-
-extern void rs_qf_free_list(void *qfl);
 
 int nvim_qf_get_listcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_listcount; }
 
@@ -226,23 +220,6 @@ const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? 
 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
-
-
-
-// Phase 1: Auname lookups and qf_types (migrated to Rust)
-extern const char *rs_qf_types(int c, int nr, char *buf, size_t bufsz);
-
-// Phase 2: Format and title helpers (migrated to Rust)
-extern size_t rs_qf_cmdtitle(const char *cmd, char *buf, size_t bufsz);
-
-// Phase 3: Property flag operations and index resolution (migrated to Rust)
-
-// Phase 4: mark_adjust and valid counting (migrated to Rust)
-extern bool rs_qf_mark_adjust(void *qi, int buf_fnum, int buf_has_flag, int32_t line1,
-                               int32_t line2, int32_t amount, int32_t amount_after);
-extern int rs_qf_get_valid_size(const void *qfl, bool count_files);
-extern int rs_qf_get_cur_valid_idx(const void *qfl, int qf_index, bool count_files);
-
 /// Result of the full errorformat-to-regex conversion
 typedef struct {
   size_t bytes_written;
@@ -254,62 +231,13 @@ typedef struct {
   char error_char;
 } EfmToRegpatResult;
 
-// Full errorformat to regex conversion
-
-// Buffer size and part length helpers
-
-// Prefix type helpers
-
-// Phase 5: parse_match and parse_line (migrated to Rust)
-extern int rs_qf_parse_match(const char *linebuf, size_t linelen, void *fmt_ptr, const void *rm,
-                              void *fields, bool qf_multiline, bool qf_multiscan, char **tail);
-extern int rs_qf_parse_line(void *qfl, char *linebuf, size_t linelen, void *fmt_first,
-                             void *fields);
-
-// Entry creation
-extern int rs_qf_add_entry(void *qfl, char *dir, const char *fname, const char *module,
-                           int bufnum, const char *mesg, linenr_T lnum, linenr_T end_lnum,
-                           int col, int end_col, char vis_col, const char *pattern, int nr,
-                           char type, const void *user_data, char valid);
-
-// Directory stack operations (Phase 7)
-
-// Vimgrep functions
-
-// List management functions
-
-// Display functions
-extern void rs_qf_fill_buffer(void *qfl, void *buf, void *old_last, int qf_winid);
-
-// Helpgrep functions (Phase 1)
-
-// Init functions
-extern int rs_qf_init_ext(void *qi, int qf_idx, const char *efile, void *buf,
-                           void *tv, char *errorformat, bool newlist, linenr_T lnumfirst,
-                           linenr_T lnumlast, const char *qf_title, char *enc);
 extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newlist,
                       const char *qf_title, char *enc);
-extern void rs_ex_vimgrep(void *eap);
 
-// Phase 11: window/title helpers and position update (migrated to Rust)
-extern const void *rs_qf_find_win_for_stack(const void *qi);
-extern bool rs_qf_win_pos_update(void *qi, int old_qf_index);
-// rs_qf_set_title_var deleted: nvim_qf_set_title_var wrapper deleted (dead code)
-// rs_qf_update_win_titlevar deleted: nvim_qf_update_win_titlevar wrapper deleted (dead code)
-
-// Phase 11: stack resize and location list sync (migrated to Rust)
-extern void rs_qf_resize_stack_base(void *qi, int n);
-extern void rs_qf_sync_llw_to_win(void *llw);
-extern void rs_qf_sync_win_to_llw(void *pwp);
-
-// Phase 3: lifecycle functions (migrated to Rust)
 extern void *rs_qf_alloc_stack(int qfltype, int n);
-// rs_qf_cmd_get_stack deleted: Rust commands.rs uses #[link_name] directly.
 
-// Pass 4: stack query entry points (Phase 1)
 // rs_qf_get_size_eap, rs_qf_get_valid_size_eap, rs_qf_get_cur_idx_eap,
 // rs_qf_get_cur_valid_idx_eap, rs_grep_internal removed: all now export under C names via #[export_name].
-extern void rs_qf_incr_changedtick(void *qfl);
 
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
@@ -323,15 +251,12 @@ int nvim_qf_get_qfl_type(const void *qfl_void) { return ((const qf_list_T *)qfl_
 
 int nvim_qf_get_qi_type(const void *qi_void) { return ((const qf_info_T *)qi_void)->qfl_type; }
 
-// nvim_qi_get_qfl_type deleted: Rust uses #[link_name = "nvim_qf_get_qi_type"] directly.
-
 void *nvim_qf_get_last(const void *qfl_void) { return (void *)((const qf_list_T *)qfl_void)->qf_last; }
 
 const char *nvim_qfline_get_fname(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_fname; }
 
 bool nvim_qf_get_has_user_data(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 
-// Phase 14 Pass 4: thin replacement for nvim_qf_store_title
 /// Free old title and store a duplicate of the new one (NULL clears it).
 void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 {
@@ -347,21 +272,12 @@ void nvim_qf_set_title_dup(void *qfl_void, const char *title)
 
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
 
-// Phase 2 accessors: buf_T/win_T field access for qf_mark_adjust_entry and qf_jump_first
 int nvim_buf_get_has_qf_entry(const void *buf_void) { return ((const buf_T *)buf_void)->b_has_qf_entry; }
 int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void)->b_fnum; }
 void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_void)->w_llist; }
 // nvim_check_can_set_curbuf_forceit already defined in tag_shim.c
 
-// Phase 2: rs_qf_jump_first
 // rs_qf_mark_adjust_entry removed: exports as qf_mark_adjust via #[export_name].
-extern void rs_qf_jump_first(void *qi, unsigned save_qfid, int forceit);
-
-// Phase 3: qf_list_entry display
-extern void rs_qf_list_entry(const void *qfp, int qf_idx, bool cursel,
-                              int qfFile_hl_id, int qfSep_hl_id, int qfLine_hl_id);
-
-// rs_ex_clist deleted: now exported as qf_list via #[export_name]
 
 bool nvim_qf_get_multiline(const void *qfl_void) { return ((const qf_list_T *)qfl_void)->qf_multiline; }
 
@@ -468,17 +384,8 @@ typedef struct {
 #include "quickfix_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
-// Rust FFI declarations (window wrappers removed)
-// rs_qf_open_new_cwindow deleted: Rust commands.rs uses #[link_name] directly.
 // rs_did_set_quickfixtextfunc removed: exports as did_set_quickfixtextfunc via #[export_name].
-// rs_qf_update_buffer deleted: Rust bypasses nvim_qf_update_buffer via #[link_name]
 // rs_set_ref_in_quickfix removed: Rust eval gc.rs uses #[link_name] directly.
-// rs_free_quickfix deleted: now exported as free_quickfix via #[export_name]
-
-// Rust fold FFI declarations
-
-// Phase 14: e_no_more_items, e_current_quickfix_list_was_changed,
-// e_current_location_list_was_changed statics deleted; error strings inlined into wrappers.
 
 enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 
@@ -508,13 +415,7 @@ bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_w
 
 void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
 
-// nvim_qf_find_win_handle deleted: Rust uses #[link_name = "rs_qf_find_win_for_stack"] directly.
-
 int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
-
-// nvim_qflist_valid deleted: logic migrated to rs_qflist_valid Rust loop (Phase 16).
-// nvim_qf_entry_present deleted: logic migrated to rs_qf_entry_present Rust loop (Phase 16).
-// nvim_qf_types deleted: no callers; rs_qf_types handles logic directly (Phase 16).
 
 void nvim_qf_increment_listcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_listcount++; }
 
@@ -654,10 +555,6 @@ void nvim_qf_buf_or_has_entry(void *buf_void, bool is_location_list)
   buf->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY;
 }
 
-// nvim_qf_get_fnum_for_entry deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
-// nvim_qf_fix_fname deleted: migrated to Rust rs_qf_fix_fname (Phase 16).
-// nvim_qf_is_printc deleted: no callers (Phase 16).
-
 void nvim_qf_set_id(void *qfl_void, unsigned id) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_id = id; }
 
 void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qfl_type = (qfltype_T)qfl_type; }
@@ -729,10 +626,6 @@ void nvim_qf_shift_lists_down(void *qi_void)
   }
 }
 
-
-// qf_get_fnum forward declaration deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
-// nvim_qf_get_fnum deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
-
 void *nvim_qf_get_dir_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_dir_stack; }
 void nvim_qf_set_dir_stack(void *qfl_void, void *stack) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_dir_stack = (struct dir_stack_T *)stack; }
 void *nvim_qf_get_file_stack(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_file_stack; }
@@ -741,8 +634,6 @@ const char *nvim_qf_get_directory(const void *qfl_void) { return qfl_void == NUL
 void nvim_qf_set_directory(void *qfl_void, char *dir) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_directory = dir; }
 const char *nvim_qf_get_currfile(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_currfile; }
 void nvim_qf_set_currfile(void *qfl_void, char *file) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_currfile = file; }
-
-// Phase 3 accessors: typval dict operations for property flag / index resolution functions
 
 /// Return the string value of a dict key if it is VAR_STRING with value "$", else NULL.
 bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_len)
@@ -756,7 +647,6 @@ bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_
 /// Add a number to a dict; returns OK or FAIL.
 /// Add a string copy to a dict; returns OK or FAIL.
 /// Allocate an empty list and add it to a dict; returns OK or FAIL.
-// Phase 8 accessors: get_properties / set_properties cluster
 
 /// Allocate a new list and set it as the return value (qf-specific void* version).
 /// Allocate a new dict and set it as the return value (qf-specific void* version).
@@ -797,8 +687,6 @@ const char *nvim_di_get_string(const void *di) { return di == NULL ? NULL : ((co
 
 /// Get a pointer to the dictitem's di_tv (qf-specific void* version).
 void *nvim_qf_di_get_tv(void *di) { return di == NULL ? NULL : (void *)&((dictitem_T *)di)->di_tv; }
-
-// nvim_find_win_by_nr_or_id deleted: Rust calls find_win_by_nr_or_id directly.
 
 /// Advance the typval_T pointer by one element for argvars indexing.
 void *nvim_tv_advance(const void *tv) { return (void *)((const typval_T *)tv + 1); }
@@ -853,11 +741,6 @@ int nvim_qfline_get_valid_bufnr(const void *qfp_void)
   return bufnum;
 }
 
-// nvim_qfl_get_{index,count,id,changedtick,title} deleted: merged into nvim_qf_get_* (Phase 15).
-
-// nvim_qf_alloc_internal_stack deleted: Rust calls rs_qf_alloc_stack(QFLT_INTERNAL, 1) directly.
-// nvim_qf_free_lists_for_qi deleted: Rust inlines loop + nvim_qf_free_lists_array.
-
 /// Get the "efm" string from a what dict (NULL if missing or wrong type).
 const char *nvim_tv_dict_get_efm_str(const void *dict)
 {
@@ -887,8 +770,6 @@ void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
   if (qf_idx < 0 || qf_idx >= qi->qf_listcount) { return NULL; }
   return (void *)&qi->qf_lists[qf_idx];
 }
-
-// Phase 8 set-side accessors
 
 /// tv_dict_get_string: get string from dict by key (alloc=true means heap copy, qf void* version).
 /// tv_dict_get_number: get number from dict by key (0 if not found, qf void* version).
@@ -937,15 +818,6 @@ bool nvim_qfl_set_qftf_cb_from_tv(void *qfl_void, void *tv_void)
   return false;
 }
 
-// nvim_qfl_set_title_from_what deleted: inlined into rs_qf_set_properties (Phase 15)
-// nvim_qfl_set_items deleted: inlined into rs_qf_set_properties (Phase 15)
-// nvim_qfl_set_items_from_lines deleted: inlined into rs_qf_set_properties (Phase 15)
-// nvim_qfl_set_curidx deleted: inlined into rs_qf_set_properties (Phase 15)
-// nvim_qfl_list_changed_and_update_buf deleted: inlined into rs_qf_set_properties (Phase 15)
-// nvim_qfl_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 15)
-// nvim_tv_dict_find_di_tv deleted: callers use nvim_tv_dict_find directly (Phase 15)
-// nvim_tv_get_string_if_string deleted: no longer called from Rust (Phase 15)
-
 /// Set typval_T vval.v_number (qf-specific void* version).
 void nvim_qf_tv_set_number(void *tv_void, int64_t nr)
 {
@@ -973,22 +845,11 @@ int nvim_qf_get_valid_bufnr(const void *qi_void)
   return 0;
 }
 
-// nvim_qf_list_is_empty deleted: Rust uses #[link_name = "rs_qf_list_empty"] directly.
-
 // parse_efm_option, free_efm_list, nvim_qf_parse_efm_option, nvim_qf_free_efm_list,
-// nvim_efm_get_* deleted: migrated to Rust EfmPattern in reader.rs (Phase 9).
 
 // nvim_qf_state_* and qf_{setup,cleanup,get_nextline,grow_linebuf,get_next_*}_state
-// deleted: migrated to Rust QfParserState in reader.rs (Phase 9).
 
-// qf_win_pos_update forward declaration deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
-// qf_update_buffer forward declaration deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
-
-// qf_find_win, qf_find_buf: deleted -- migrated to Rust rs_qf_find_win_for_stack /
-// rs_qf_find_buf_for_stack in lib.rs (Phase 10, Pass 10), bodies deleted Phase 11.
-// nvim_qf_find_win_for_stack, nvim_qf_find_buf_for_stack: deleted -- callers use
 // rs_qf_find_win_for_stack / rs_qf_find_buf_for_stack directly.
-// nvim_qf_update_buffer deleted: Rust bypasses via #[link_name = "rs_qf_update_buffer"]
 int nvim_qf_get_bufnr(const void *qi_void) { return qi_void == NULL ? -1 : ((const qf_info_T *)qi_void)->qf_bufnr; }
 void nvim_qf_set_bufnr(void *qi_void, int bufnr) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_bufnr = bufnr; }
 
@@ -1007,14 +868,11 @@ bool nvim_win_is_qf_win(const void *win_void)
 
 void *nvim_win_get_llist_ref(const void *win_void) { return win_void == NULL ? NULL : ((const win_T *)win_void)->w_llist_ref; }
 
-
 bool nvim_qf_is_qf_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void == ql_info; }
 bool nvim_qf_is_ll_stack(const void *qi_void) { return qi_void == NULL ? false : qi_void != ql_info; }
 int nvim_qf_get_refcount(const void *qi_void) { return qi_void == NULL ? 0 : ((const qf_info_T *)qi_void)->qf_refcount; }
 void nvim_qf_incr_refcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount++; }
 void nvim_qf_set_refcount(void *qi_void, int v) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_refcount = v; }
-
-// ---- Phase 6 lifecycle accessors ----
 
 /// Free the qf_lists array inside a qf_info_T (does NOT free the struct itself).
 void nvim_qf_free_lists_array(void *qi_void)
@@ -1063,10 +921,6 @@ void *nvim_win_take_llist_ref(void *wp_void)
 }
 
 // ---- Rust lifecycle forward declarations ----
-extern void rs_locstack_queue_delreq(void *qi);
-extern void rs_ll_free_all(void **pqi);
-
-// ---- Phase 3 stack-allocation accessors ----
 
 /// Returns address of the static ql_info_actual (global quickfix stack).
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
@@ -1105,11 +959,7 @@ void nvim_qf_resize_lists_array(void *qi_void, int n)
 /// Return wp->w_p_lhi (location history option value).
 int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
 
-// nvim_is_loclist_cmd deleted: Rust calls is_loclist_cmd directly.
-
 // nvim_eap_get_cmdidx: already exists in ex_docmd.c
-
-// ---- Phase 4 accessors ----
 
 /// Set wp->w_llist_ref = qi (raw assignment; caller manages refcount separately).
 void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
@@ -1118,9 +968,6 @@ void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
     ((win_T *)wp_void)->w_llist_ref = (qf_info_T *)qi_void;
   }
 }
-
-// ---- Rust Phase 4 forward declarations ----
-// rs_set_errorlist deleted: now exported as set_errorlist via #[export_name]
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
 bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
@@ -1131,62 +978,19 @@ void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_
 static char *qf_last_bufname = NULL;
 static bufref_T qf_last_bufref = { NULL, 0, 0 };
 
-// quickfix_busy and qf_delq_head are now managed by Rust in lifecycle.rs.
-// qfga static grow-array deleted (Phase 14): all C callers were inlined into Rust.
-
-// qf_init_process_nextline deleted: inlined into Rust process_nextline in init.rs (Phase 9).
-
 /// @returns -1 for error, number of errors for success.
-// qf_init body migrated to rs_qf_init in Rust init.rs (Phase 16).
 int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
             const char *restrict qf_title, char *restrict enc)
 {
   return rs_qf_init((void *)wp, efile, errorformat, (bool)newlist, qf_title, enc);
 }
 
-// LINE_MAXLEN deleted: migrated to Rust reader.rs (Phase 16).
-// efm_to_regpat, fmt_start, free_efm_list, parse_efm_option deleted:
-// migrated to Rust parse_efm_option / EfmPattern in reader.rs (Phase 9).
-
 // callback function for 'quickfixtextfunc'
 static Callback qftf_cb;
 
-// qf_grow_linebuf deleted: migrated to Rust QfParserState::grow_linebuf (Phase 9).
-
-// qf_get_next_str_line, qf_get_next_list_line, qf_get_next_buf_line,
-// qf_get_next_file_line, qf_get_nextline deleted: migrated to Rust
-// QfParserState methods in reader.rs (Phase 9).
-
-// qf_get_list deleted: inlined as &qi->qf_lists[idx] (Phase 11).
-
-// qf_parse_line (thin wrapper), qf_alloc_fields, qf_free_fields,
-// qf_setup_state, qf_cleanup_state deleted: migrated to Rust (Phase 9).
-// nvim_qf_init_alloc_fields, nvim_qf_init_free_fields deleted:
-// replaced by rs_qf_alloc_fields / rs_qf_free_fields in Rust reader.rs (Phase 9).
-// nvim_qf_init_update_efm_cache, s_fmt_first, s_last_efm deleted:
-// replaced by rs_qf_init_update_efm_cache + EFM_CACHE in Rust reader.rs (Phase 9).
-
-// nvim_qf_init_setup_state, nvim_qf_init_cleanup_state deleted:
-// replaced by rs_qf_parser_state_new / rs_qf_parser_state_free in Rust (Phase 9).
-
-// nvim_qf_init_clear_last_bufname deleted: Rust calls nvim_qf_clear_fnum_cache instead (Phase 16).
-// nvim_qf_init_resolve_efm deleted: logic inlined into rs_qf_init_ext in Rust init.rs (Phase 16).
-// nvim_qf_init_process_nextline, nvim_qf_init_state_no_fd_error deleted:
-// inlined into Rust rs_qf_init_ext / process_nextline (Phase 9).
-
-// nvim_qf_init_finalize_list deleted: inlined into Rust init.rs (Phase 14).
-
 void nvim_qf_init_emsg_readerrf(void) { emsg(_(e_readerrf)); }
 
-_Static_assert(QF_END_OF_INPUT == 2, "QF_END_OF_INPUT must be 2");
-_Static_assert(QF_FAIL == 0, "QF_FAIL must be 0");
-
-// qf_cmdtitle deleted: inlined as local char[IOSIZE] + rs_qf_cmdtitle (Phase 11).
-
-// qf_get_curlist deleted: inlined as &qi->qf_lists[qi->qf_curlist] (Phase 11).
-
 // =============================================================================
-// Phase 5: regmatch_T indexed accessors for Rust parse_match migration
 // =============================================================================
 
 /// Return the start pointer for submatch at index idx (0-based, 0-13).
@@ -1207,13 +1011,7 @@ const char *nvim_qf_regmatch_endp(const void *rm, int idx)
   return ((const regmatch_T *)rm)->endp[idx];
 }
 
-// nvim_qf_expand_env deleted: Rust calls expand_env directly.
-// nvim_qf_os_path_exists deleted: Rust calls os_path_exists directly.
-// nvim_qf_buflist_findnr_exists deleted: Rust calls buflist_findnr directly.
-
 // =============================================================================
-// Phase 5: qffields_T accessors deleted: migrated to Rust QfAllFields in reader.rs (Phase 9).
-// nvim_efm_get_prog, nvim_efm_set_prog deleted:
 // Rust parse.rs uses EfmPattern directly (inline struct field access).
 // nvim_qf_regmatch_create_ic, nvim_qf_regmatch_extract_prog, nvim_qf_vim_regexec
 // remain as C wrappers for vim regex lifecycle (parse.rs calls these for pattern matching).
@@ -1262,8 +1060,6 @@ bool nvim_qf_vim_regexec(void *rm_void, const char *line)
   return vim_regexec((regmatch_T *)rm_void, line, 0);
 }
 
-// nvim_qfline_append_text deleted: inlined into Rust parse.rs (Phase 14).
-
 /// Replace qf_text with the given string (xfrees old, xstrdups new).
 /// Used by Rust when it has already built the concatenated string.
 void nvim_qfline_replace_text(void *qfp_void, const char *text)
@@ -1278,27 +1074,15 @@ void nvim_qfline_replace_text(void *qfp_void, const char *text)
 
 /// Wrapper for line_breakcheck().
 /// Call vim_isprintc() - returns nonzero if the char is printable.
-// nvim_qf_get_fnum_for_fields deleted: replaced by rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
 
 /// Move memory: STRMOVE(dst, src) - move overlapping memory.
 /// Get IObuff pointer for reuse in file_pfx multiscan.
 /// skipwhite wrapper.
 // =============================================================================
-// Phase 9: Reader state accessors for Rust QfParserState
 // =============================================================================
-
-// nvim_qf_fclose deleted: Rust uses fclose (libc) directly with null check.
-// nvim_qf_fgets deleted: Rust uses fgets (libc) directly.
-// nvim_qf_vim_fgets deleted: Rust uses vim_fgets directly.
-// nvim_os_fopen_read deleted: Rust uses os_fopen(fname, "r") directly.
-
-// nvim_qf_remove_bom deleted: Rust calls remove_bom directly.
 
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
 size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
-
-// nvim_qf_alloc_vimconv deleted: Rust uses xcalloc(1, nvim_qf_sizeof_vimconv()).
-// nvim_qf_free_vimconv deleted: Rust uses xfree directly.
 
 /// Setup encoding conversion: convert_setup(vc, from, p_enc).
 /// enc may be NULL (no conversion set up in that case).
@@ -1323,10 +1107,6 @@ void nvim_qf_convert_setup_cleanup(void *vc)
 
 /// Return vc->vc_type (CONV_NONE == 0).
 int nvim_qf_vc_type(const void *vc) { return vc == NULL ? 0 : ((const vimconv_T *)vc)->vc_type; }
-
-// nvim_qf_string_convert_with_len deleted: Rust calls string_convert directly.
-// nvim_qf_ml_get_buf deleted: Rust calls ml_get_buf directly.
-// nvim_qf_ml_get_buf_len deleted: Rust calls ml_get_buf_len directly.
 
 /// Return IObuff pointer.
 /// Return IOSIZE constant.
@@ -1396,51 +1176,26 @@ char *nvim_qf_list_item_string(void *li)
 /// vim_strchr on a mutable char* with char NL character.
 /// Returns pointer to first NL in str, or NULL.
 // =============================================================================
-// Phase 9 (Phase 2): vim_regcomp/vim_regfree wrappers and efm error messages
 // =============================================================================
 
-// nvim_qf_vim_regcomp deleted: Rust calls vim_regcomp directly.
-// nvim_qf_vim_regfree deleted: Rust calls vim_regfree directly.
-
 /// Wrapper for xstrdup used by Rust's EFM cache.
-// qf_parse_fmt_f and all qf_parse_fmt_* functions deleted: migrated to Rust rs_qf_parse_match.
 
 // All qf_parse_fmt_* functions, copy_nonerror_line, qf_parse_match, qf_parse_get_fields,
 // qf_parse_dir_pfx, qf_parse_file_pfx, qf_parse_line_nomatch, and qf_parse_multiline_pfx
-// have been deleted. They are now implemented in Rust in src/nvim-rs/quickfix/src/parse.rs
 // as rs_qf_parse_match and helpers called from rs_qf_parse_line.
 
-// locstack_queue_delreq deleted: migrated to Rust rs_locstack_queue_delreq in lifecycle.rs.
-
 // qf_stack_get_bufnr, qf_free_all, check_quickfix_busy, qf_resize_stack, ll_resize_stack
-// deleted: migrated to Rust with #[export_name] exporting under the C names directly.
-
-// qf_resize_stack_base deleted: migrated to Rust rs_qf_resize_stack_base (Phase 11).
 
 void qf_init_stack(void) { ql_info = (qf_info_T *)rs_qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
 
-// qf_sync_llw_to_win deleted: migrated to Rust rs_qf_sync_llw_to_win (Phase 11).
-// qf_sync_win_to_llw deleted: migrated to Rust rs_qf_sync_win_to_llw (Phase 11).
-
 // qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
-// qf_cmd_get_stack, qf_cmd_get_or_alloc_stack deleted: migrated to Rust in lifecycle.rs.
-// Dead static wrappers removed in Phase 16.
 
-// rs_copy_loclist_stack deleted: now exported as copy_loclist_stack via #[export_name]
-
-// qf_get_fnum deleted: migrated to Rust rs_qf_get_fnum (Phase 10 Pass 10 Phase 5).
-
-// qf_find_help_win deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep; public
 // nvim_qf_find_help_win wrapper at line 2333 retained for navigate.rs.
 
 // win_set_loclist, qf_find_win_with_loclist, qf_find_win_with_normal_buf,
-// qf_goto_tabwin_with_file deleted: dead statics (Phase 16).
 // Their nvim_qf_* public counterparts below are the Rust-callable versions.
 
 // Rust exports for jump machinery
-extern void rs_qf_jump_newwin(void *qi, int dir, int errornr, int forceit, bool newwin);
-
-// Phase 15 thin accessors for inlining jump-open helpers into Rust navigate.rs
 
 /// can_abandon(curbuf, forceit): check if current buffer can be abandoned.
 bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
@@ -1455,8 +1210,6 @@ int nvim_do_ecmd_help(int fnum, int prev_winid)
                  ECMD_HIDE + ECMD_SET_HELP,
                  prev_winid == curwin->handle ? curwin : NULL);
 }
-
-// nvim_qf_buflist_getfile deleted: Rust calls buflist_getfile(fnum, 1, GETF_SETMARK|GETF_SWITCH, forceit) directly.
 
 /// curwin->w_p_wfb accessor.
 bool nvim_curwin_get_wfb(void) { return curwin->w_p_wfb; }
@@ -1474,11 +1227,6 @@ bool nvim_qf_prevwin_valid_for_wfb(void)
 }
 
 // nvim_qf_jump_open_help, nvim_qf_jump_open_file, nvim_qf_jump_loc_win_closed
-// deleted: logic inlined into rs_qf_jump_edit_buffer (Phase 15).
-
-_Static_assert(QFLT_QUICKFIX == 0, "QFLT_QUICKFIX must be 0");
-_Static_assert(QFLT_LOCATION == 1, "QFLT_LOCATION must be 1");
-_Static_assert(QF_ABORT == 6, "QF_ABORT must be 6");
 
 /// Find a help window in the current tab. Returns win handle or NULL.
 void *nvim_qf_find_help_win(void)
@@ -1525,11 +1273,7 @@ bool nvim_qf_goto_tabwin_with_file(int fnum)
   return false;
 }
 
-// nvim_qf_open_new_file_win deleted: logic inlined into rs_qf_jump_to_win (Phase 15).
-
 void *nvim_qf_curwin_get_llist_ref(void) { return curwin->w_llist_ref; }
-
-// nvim_qf_curbuf_is_quickfix deleted: Rust calls rs_bt_quickfix(curbuf) directly.
 
 bool nvim_qf_curwin_buf_is_help(void) { return bt_help(curwin->w_buffer); }
 
@@ -1540,10 +1284,6 @@ bool nvim_qf_is_one_window(void) { return ONE_WINDOW; }
 bool nvim_qf_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) != 0; }
 
 int nvim_qf_curwin_handle(void) { return curwin->handle; }
-
-// nvim_qf_win_close_curwin deleted: Rust calls win_close(curwin, true, false) directly.
-// nvim_qf_win_goto deleted: Rust calls win_goto directly.
-// nvim_qf_win_enter deleted: Rust calls win_enter directly.
 
 int nvim_qf_win_buf_nwindows(const void *win) { return ((const win_T *)win)->w_buffer->b_nwindows; }
 
@@ -1561,11 +1301,7 @@ int nvim_qf_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 
 int nvim_qf_curwin_width(void) { return curwin->w_width; }
 
-// nvim_qf_get_columns deleted: Rust accesses Columns global directly.
 int nvim_qf_curwin_height(void) { return curwin->w_height; }
-// nvim_qf_get_p_hh deleted: Rust accesses p_hh global directly.
-// nvim_qf_win_split deleted: Rust calls win_split directly.
-// nvim_qf_clear_restart_edit deleted: Rust sets restart_edit = 0 directly.
 
 bool nvim_qf_is_ll_stack_qi(const void *qi) { return IS_LL_STACK((const qf_info_T *)qi); }
 
@@ -1575,21 +1311,13 @@ void *nvim_qf_win_prev(const void *win) { return ((const win_T *)win)->w_prev; }
 
 void *nvim_qf_win_next(const void *win) { return ((const win_T *)win)->w_next; }
 
-// nvim_qf_get_lastwin deleted: Rust accesses lastwin global directly.
-// nvim_qf_get_curwin deleted: Rust accesses curwin global directly.
-
 bool nvim_qf_win_bt_normal(const void *win) { return bt_normal(((const win_T *)win)->w_buffer); }
 
 bool nvim_qf_swb_uselast_prevwin_ok(void) { return (swb_flags & kOptSwbFlagUselast) && rs_win_valid(prevwin) && !prevwin->w_p_wfb; }
 
-// nvim_qf_get_prevwin deleted: Rust accesses prevwin global directly.
-
 bool nvim_qf_win_is_preview(const void *win) { return ((const win_T *)win)->w_p_pvw; }
 
 bool nvim_qf_win_is_wfb(const void *win) { return ((const win_T *)win)->w_p_wfb; }
-
-// Phase 14 Phase 2: Thin C accessors replacing nvim_qf_jump_goto_line and
-// nvim_qf_jump_print_msg (both deleted; logic inlined into Rust navigate.rs).
 
 linenr_T nvim_qf_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 void nvim_qf_curwin_set_col(int col) { curwin->w_cursor.col = col; }
@@ -1621,10 +1349,7 @@ int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp
 const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
-// nvim_qf_get_curbuf deleted: Rust accesses curbuf global directly.
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
-// nvim_qf_setpcmark deleted: Rust calls setpcmark directly.
-// nvim_qf_curbuf_is deleted: Rust compares curbuf == buf directly.
 
 void *nvim_qf_get_p_swb(void) { return p_swb; }
 
@@ -1639,7 +1364,6 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-// nvim_qf_win_close deleted: Rust checks null and calls win_close directly.
 void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { nvim_qf_win_goto_impl(win_void, lnum); }
 linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_cursor.lnum; }
 linenr_T nvim_qf_win_get_buf_line_count(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count; }
@@ -1648,20 +1372,7 @@ int nvim_qf_win_get_height(const void *win_void) { return win_void == NULL ? 0 :
 int nvim_qf_win_get_hsep_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_hsep_height; }
 int nvim_qf_win_get_status_height(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_status_height; }
 
-// nvim_qf_cmdline_row deleted: Rust accesses cmdline_row global directly.
-
-
-// nvim_qf_open_new_cwindow deleted: Rust commands.rs now uses #[link_name = "rs_qf_open_new_cwindow"].
-// nvim_qf_set_title_var deleted: dead code, only defined but never called externally
-
 void nvim_qf_curwin_set_cursor(linenr_T lnum, int col) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; }
-
-// nvim_qf_check_cursor_curwin deleted: Rust calls check_cursor(curwin) directly.
-// nvim_qf_update_topline_curwin deleted: Rust calls update_topline(curwin) directly.
-
-// nvim_qf_update_win_titlevar deleted: dead code, only defined but never called externally
-
-// Phase 10 Pass 10 Phase 2: New C accessors for Rust implementations
 
 /// Set w_redraw_top and w_redraw_bot on a window.
 void nvim_qf_win_set_redraw_bounds(void *win_void, linenr_T top, linenr_T bot)
@@ -1703,12 +1414,6 @@ void nvim_qf_set_title_var_for_list(void *qfl_void)
   }
 }
 
-// nvim_qf_save_curwin deleted: Rust reads curwin global directly.
-// nvim_qf_restore_curwin deleted: Rust writes curwin global directly.
-// nvim_qf_set_curwin deleted: Rust writes curwin global directly.
-
-// Phase 10 Pass 10 Phase 3: New C accessors for qf_open_new_cwindow / did_set_quickfixtextfunc
-
 /// Set buffer options for the quickfix/location list window (swapfile, buftype, bufhidden,
 /// foldmethod). Also resets key bindings and w_p_diff. (Migrated body from qf_set_cwindow_options.)
 void nvim_qf_set_cwindow_options(void)
@@ -1720,11 +1425,6 @@ void nvim_qf_set_cwindow_options(void)
   curwin->w_p_diff = false;
   set_option_value_give_err(kOptFoldmethod, STATIC_CSTR_AS_OPTVAL("manual"), OPT_LOCAL);
 }
-
-// nvim_qf_do_ecmd_existing_buf deleted: Rust calls do_ecmd(fnum, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE+ECMD_OLDBUF+ECMD_NOWINENTER, oldwin) directly.
-// nvim_qf_do_ecmd_new_buf deleted: Rust calls do_ecmd(0, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE+ECMD_NOWINENTER, oldwin) directly.
-
-// nvim_qf_get_curtab deleted: Rust accesses curtab global directly.
 
 // nvim_qf_curwin_width already defined at line 2529 (nvim_qf_get_columns section).
 
@@ -1744,21 +1444,11 @@ void nvim_qf_curwin_set_wfh(void) { curwin->w_p_wfh = true; }
 /// Reset key bindings on curwin (RESET_BINDING).
 void nvim_qf_curwin_reset_binding(void) { RESET_BINDING(curwin); }
 
-// nvim_qf_set_prevwin deleted: Rust writes prevwin global directly.
-// nvim_qf_curtab_eq deleted: Rust compares curtab == tab directly.
-
 /// Call option_set_callback_func(p_qftf, &qftf_cb). Returns FAIL or OK.
 int nvim_qf_option_set_callback_func_for_qftf(void)
 {
   return option_set_callback_func(p_qftf, &qftf_cb);
 }
-
-// nvim_qf_get_e_invarg deleted: Rust accesses e_invarg global directly.
-
-// nvim_qf_curwin_is deleted: Rust compares curwin == win directly.
-
-// Phase 10 Pass 10 Phase 4: New C accessors for rs_qf_update_buffer
-// nvim_qf_get_region_bytecount deleted: Rust calls get_region_bytecount directly.
 
 /// extmark_splice for quickfix buffer updates.
 void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
@@ -1767,10 +1457,8 @@ void nvim_qf_extmark_splice(void *buf, int r1, colnr_T c1, int r2, colnr_T c2,
   extmark_splice((buf_T *)buf, r1, c1, r2, c2, bc, nr, nc, nbc, kExtmarkNoUndo);
 }
 
-// nvim_qf_changed_lines deleted: Rust calls changed_lines directly.
 /// Set buf->b_changed = false.
 void nvim_qf_buf_set_changed_false(void *buf) { ((buf_T *)buf)->b_changed = false; }
-// nvim_qf_redraw_buf_later deleted: Rust calls redraw_buf_later(buf, UPD_NOT_VALID) directly.
 
 /// Return win->w_botline.
 linenr_T nvim_qf_win_botline(const void *win) { return ((const win_T *)win)->w_botline; }
@@ -1790,14 +1478,6 @@ void nvim_qf_aucmd_restbuf_free(void *aco_void)
   aucmd_restbuf((aco_save_T *)aco_void);
   xfree(aco_void);
 }
-
-// qf_list deleted: now exported directly from Rust via #[export_name]
-// Phase 14: qfFile_hl_id, qfSep_hl_id, qfLine_hl_id statics and qf_list_entry wrapper
-// deleted -- Rust rs_ex_clist computes hl_ids via nvim_syn_name2id_qf.
-
-// qf_mark_adjust deleted: Rust navigate.rs exports directly via #[export_name = "qf_mark_adjust"].
-
-// Phase 10 Pass 10 Phase 5: C accessors for rs_qf_get_fnum
 
 /// Check the filename cache: if bufname matches and the bufref is still valid,
 /// return the cached buf_T pointer. Otherwise return NULL.
@@ -1865,35 +1545,13 @@ void nvim_qf_clear_fnum_cache(void)
   XFREE_CLEAR(qf_last_bufname);
 }
 
-// qf_set_cwindow_options: deleted -- migrated to nvim_qf_set_cwindow_options accessor
 // and Rust rs_qf_open_new_cwindow (Phase 10 Pass 10 Phase 3).
 
-// qf_open_new_cwindow: deleted -- migrated to Rust rs_qf_open_new_cwindow
 // (Phase 10 Pass 10 Phase 3). nvim_qf_open_new_cwindow now calls rs_qf_open_new_cwindow.
 
-// qf_set_title_var deleted: migrated to Rust rs_qf_set_title_var (Phase 11).
 // nvim_qf_set_title_var now calls rs_qf_set_title_var directly.
 
-// qf_win_goto deleted: implementation moved to nvim_qf_win_goto_impl (Phase 10 Pass 10 Phase 2).
-
 // Return the number of the current entry (line number in the quickfix window).
-
-// qf_win_pos_update deleted: migrated to Rust rs_qf_win_pos_update (Phase 11).
-// is_qf_win deleted: logic inlined into rs_qf_find_win_for_stack / rs_qf_win_pos_update (Phase 11).
-// qf_find_win deleted: migrated to Rust rs_qf_find_win_for_stack (Phase 10/11).
-// qf_find_buf deleted: migrated to Rust rs_qf_find_buf_for_stack (Phase 10/11).
-
-// did_set_quickfixtextfunc deleted: Rust lib.rs exports directly via #[export_name = "did_set_quickfixtextfunc"].
-
-// qf_update_win_titlevar deleted: migrated to Rust rs_qf_update_win_titlevar (Phase 11).
-
-// qf_update_buffer deleted: migrated to Rust rs_qf_update_buffer (Phase 10 Pass 10 Phase 4).
-
-// qf_buf_add_line migrated to Rust (Phase 3) -- see rs_qf_buf_add_line in display.rs
-
-// call_qftf_func deleted: migrated to Rust rs_call_qftf_func in display.rs (Phase 11).
-
-// C accessors for rs_call_qftf_func (Phase 11):
 
 /// Allocate a new VAR_FIXED-locked dict.
 /// Increment dict->dv_refcount by 1.
@@ -1948,22 +1606,11 @@ void nvim_qf_zero_skipcol_for_curbuf(void)
 
 void nvim_qf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
-// nvim_call_qftf_func deleted: Rust display.rs calls rs_call_qftf_func directly (Phase 11).
-
 char *nvim_tv_list_item_string(const void *li) { return li == NULL ? NULL : (char *)tv_get_string_chk(TV_LIST_ITEM_TV((const listitem_T *)li)); }
 
-// C accessor wrappers for rs_qf_buf_add_line (Phase 3)
 // Note: nvim_buflist_findnr is in buffer.c (returns buf_T*)
 // Note: nvim_buf_get_sfname is in buffer.c (takes buf_T*)
 const char *nvim_qf_buf_get_fname(const void *buf) { return ((const buf_T *)buf)->b_fname; }
-// nvim_path_tail_buf deleted: Rust calls path_tail directly.
-// nvim_path_is_absolute deleted: Rust calls path_is_absolute directly.
-// nvim_os_dirname deleted: Rust calls os_dirname directly.
-// nvim_shorten_buf_fname deleted: Rust calls shorten_buf_fname directly.
-// nvim_ml_append_buf deleted: Rust calls ml_append_buf directly.
-// nvim_ml_delete_one deleted: Rust calls ml_delete directly.
-
-// nvim_qf_set_filetype_and_autocmds deleted: inlined into Rust display.rs (Phase 14).
 
 /// Increment curbuf->b_ro_locked.
 void nvim_qf_curbuf_incr_ro_locked(void) { curbuf->b_ro_locked++; }
@@ -1978,8 +1625,6 @@ void nvim_qf_set_option_filetype_qf(void)
 {
   set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("qf"), OPT_LOCAL);
 }
-// nvim_qf_apply_autocmds_bufreadpost_qf deleted: Rust calls apply_autocmds(EVENT_BUFREADPOST, ...) directly.
-// nvim_qf_apply_autocmds_bufwinenter_qf deleted: Rust calls apply_autocmds(EVENT_BUFWINENTER, ...) directly.
 /// Call redraw_curbuf_later(UPD_NOT_VALID).
 void nvim_qf_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
 
@@ -1989,23 +1634,9 @@ void nvim_qf_set_key_typed(bool val) { KeyTyped = val; }
 
 void *nvim_qf_get_start_nonnull(const void *qfl) { return qfl == NULL ? NULL : ((const qf_list_T *)qfl)->qf_start; }
 
-// qf_list_changed deleted: callers use rs_qf_incr_changedtick directly (Phase 14).
-// qf_jump_first deleted: callers use rs_qf_jump_first directly (Phase 14).
-
-// grep_internal deleted: Rust commands.rs exports directly via #[export_name = "grep_internal"].
-
-
-// Phase 7: C accessor wrappers needed by rs_ex_make / rs_make_get_fullcmd / rs_get_mef_name
-
-// Global option accessors deleted: Rust accesses p_shq, p_sp, p_mef, p_efm, p_menc, p_gefm, p_ef globals directly.
 // curbuf option accessors (struct field access - retained as opaque accessors):
 const char *nvim_curbuf_get_b_p_menc(void) { return curbuf->b_p_menc; }
 const char *nvim_curbuf_get_b_p_gefm(void) { return curbuf->b_p_gefm; }
-// nvim_append_redir deleted: Rust calls append_redir directly.
-// nvim_autowrite_all deleted: Rust calls autowrite_all directly.
-// nvim_do_shell deleted: Rust calls do_shell directly.
-// nvim_vim_tempname deleted: Rust calls vim_tempname directly.
-// nvim_os_get_pid deleted: Rust calls os_get_pid directly.
 bool nvim_os_fileinfo_link_exists(const char *name) { FileInfo fi; return os_fileinfo_link(name, &fi); }
 
 // curlist id accessor for quickfix list change tracking
@@ -2037,7 +1668,6 @@ bool nvim_buf_has_ml_mfp_void(const void *buf) { return ((const buf_T *)buf)->b_
 linenr_T nvim_buf_get_ml_line_count_void(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
 const char *nvim_buf_get_sfname_void(const void *buf) { return ((const buf_T *)buf)->b_sfname; }
 void *nvim_buflist_findnr_ptr(int nr) { return (void *)buflist_findnr(nr); }
-// nvim_curbuf_ptr deleted: Rust accesses curbuf global directly.
 // eval_expr / tv_free wrappers for ex_cexpr
 void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr((char *)arg_ptr, (exarg_T *)eap); }
 // nvim_tv_get_type: already defined in eval/typval.h (takes const typval_T*)
@@ -2047,12 +1677,6 @@ int nvim_tv_get_type_void(const void *tv) { return ((const typval_T *)tv)->v_typ
 const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)tv)->vval.v_string; }
 bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
-
-// nvim_qf_apply_autocmd_pre deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, ...) + aborting() directly.
-// nvim_qf_apply_autocmd_pre_null deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, NULL, false, ...) directly.
-// nvim_qf_apply_autocmd_post deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, ...) directly.
-// nvim_qf_apply_autocmd_post_null deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, NULL, false, ...) directly.
-// nvim_qf_apply_autocmd_post_track deleted: Rust inlines curbuf comparison + apply_autocmds directly.
 
 // IObuff/IOSIZE for cbuffer title formatting
 // Note: nvim_qf_get_iobuff already defined above (returns char*).
@@ -2073,27 +1697,8 @@ void *nvim_win_get_llist_or_ref(const void *from_win)
 void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
 // nvim_win_get_p_lhi already defined at line 1121 (returns int).
 // nvim_win_set_p_lhi defined earlier in this file.
-// nvim_qi_{get,set}_{listcount,curlist}_qi and nvim_qi_get_maxcount_qi deleted:
-// duplicates of nvim_qf_{get,set}_{listcount,curlist_idx,maxcount} (Phase 15).
 void *nvim_qi_get_list_qi(void *qi, int idx) { return (void *)&((qf_info_T *)qi)->qf_lists[idx]; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
-
-// rs_ex_make, rs_ex_cfile, rs_ex_cbuffer, rs_ex_cexpr deleted: now exported via #[export_name]
-// rs_copy_loclist_stack deleted: now exported as copy_loclist_stack via #[export_name]
-
-// make_get_fullcmd deleted: dead static wrapper (Phase 16). Real impl in Rust rs_make_get_fullcmd.
-// get_mef_name deleted: dead static wrapper (Phase 16). Real impl in Rust rs_get_mef_name.
-
-// ex_make deleted: now exported directly from Rust via #[export_name]
-
-// qf_get_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_size"].
-// qf_get_valid_size deleted: Rust commands.rs exports directly via #[export_name = "qf_get_valid_size"].
-// qf_get_cur_idx deleted: Rust commands.rs exports directly via #[export_name = "qf_get_cur_idx"].
-// qf_get_cur_valid_idx deleted: Rust commands.rs exports directly via #[export_name = "qf_get_cur_valid_idx"].
-
-// nvim_qf_cmd_get_stack deleted: Rust commands.rs now uses #[link_name = "rs_qf_cmd_get_stack"].
-
-// nvim_qf_msg deleted: Rust bypasses via #[link_name = "rs_qf_msg"]
 
 bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
 
@@ -2102,8 +1707,6 @@ bool nvim_qf_is_ll_window(const void *wp_void) { return wp_void != NULL && IS_LL
 void *nvim_qf_curwin_get_loclist(void) { return GET_LOC_LIST(curwin); }
 
 linenr_T nvim_qf_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
-
-// nvim_do_cmdline_cmd deleted: Rust calls do_cmdline_cmd directly.
 
 bool nvim_qf_curbuf_has_flag(int flag) { return (curbuf->b_has_qf_entry & flag) != 0; }
 
@@ -2122,35 +1725,16 @@ const void *nvim_qf_curwin_pos_adj(void)
 
 void *nvim_qf_get_curlist_mut(void *qi_void) { return (void *)&((qf_info_T *)qi_void)->qf_lists[((qf_info_T *)qi_void)->qf_curlist]; }
 
-// Phase 3: qf_list_entry accessors
 // nvim_message_filtered already exists in ex_cmds_shim.c (returns int)
 
-// Phase 14: Direct message output accessors (replacing nvim_qf_list_entry_output and
-// nvim_qf_format_prefix which were deleted after inlining into Rust rs_qf_list_entry).
-// nvim_hlf_qfl deleted: Rust uses constant HLF_QFL = 58.
-
-// Phase 4: qf_list (:clist/:llist) accessors
 // nvim_eap_get_arg already exists in ex_docmd.c
 // nvim_semsg_trailing_arg already exists in eval_shim.c
 // nvim_eap_get_forceit already exists in indent_ffi.c (returns bool)
-// nvim_get_list_range deleted: Rust calls get_list_range directly.
-// nvim_shorten_fnames_qf deleted: Rust calls shorten_fnames(false) directly.
-// nvim_syn_name2id_qf deleted: Rust calls syn_name2id directly.
-// nvim_hlf_d deleted: Rust uses constant HLF_D = 5.
-// nvim_hlf_n deleted: Rust uses constant HLF_N = 12.
-// nvim_got_int_qf deleted: Rust accesses got_int global directly.
-// nvim_os_breakcheck_qf deleted: Rust calls os_breakcheck directly.
 
-// ex_cfile deleted: now exported directly from Rust via #[export_name]
-
-
-
-// Phase 3 message API accessors for vgr_display_fname migration
 // nvim_msg_start: already defined in undo.c
 // nvim_msg_clr_eos: already defined in change_ffi.c
 // nvim_ui_flush: already defined in change_ffi.c
 
-// Phase 3 buffer management accessors
 // nvim_buf_has_ml_mfp already exists in memline_shim.c (returns int, takes buf_T*)
 // nvim_buflist_findname_exp already exists in window_shim.c (returns buf_T*, takes const char*)
 const char *nvim_buf_get_mfp_fname(const void *buf)
@@ -2192,8 +1776,6 @@ void nvim_ex_cd_arg(char *arg, bool is_lcd)
   ex_cd(&ea);
 }
 
-// nvim_path_try_shorten_fname deleted: Rust calls path_try_shorten_fname directly.
-
 /// Load a dummy buffer to search for a pattern using vimgrep.
 static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname_now)
 {
@@ -2214,9 +1796,6 @@ static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname
   return buf;
 }
 
-// nvim_vim_regexec_multi deleted: Rust calls vim_regexec_multi directly with NULL,NULL.
-// nvim_fuzzy_match deleted: Rust calls fuzzy_match directly.
-
 linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm->startpos[idx].lnum; }
 
 colnr_T nvim_regmatch_startpos_col(const regmmatch_T *rm, int idx) { return rm->startpos[idx].col; }
@@ -2226,53 +1805,6 @@ linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx) { return rm->
 colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx) { return rm->endpos[idx].col; }
 
 colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum) { return ml_get_buf_len((buf_T *)buf, lnum); }
-
-// _Static_assert for Phase 1 CMD_* constants used in Rust auname lookups
-_Static_assert(CMD_make == 273, "CMD_make mismatch");
-_Static_assert(CMD_lmake == 248, "CMD_lmake mismatch");
-_Static_assert(CMD_grep == 172, "CMD_grep mismatch");
-_Static_assert(CMD_lgrep == 239, "CMD_lgrep mismatch");
-_Static_assert(CMD_grepadd == 173, "CMD_grepadd mismatch");
-_Static_assert(CMD_lgrepadd == 240, "CMD_lgrepadd mismatch");
-_Static_assert(CMD_cfile == 65, "CMD_cfile mismatch");
-_Static_assert(CMD_cgetfile == 68, "CMD_cgetfile mismatch");
-_Static_assert(CMD_caddfile == 51, "CMD_caddfile mismatch");
-_Static_assert(CMD_lfile == 233, "CMD_lfile mismatch");
-_Static_assert(CMD_lgetfile == 236, "CMD_lgetfile mismatch");
-_Static_assert(CMD_laddfile == 218, "CMD_laddfile mismatch");
-_Static_assert(CMD_cbuffer == 55, "CMD_cbuffer mismatch");
-_Static_assert(CMD_cgetbuffer == 69, "CMD_cgetbuffer mismatch");
-_Static_assert(CMD_caddbuffer == 49, "CMD_caddbuffer mismatch");
-_Static_assert(CMD_lbuffer == 221, "CMD_lbuffer mismatch");
-_Static_assert(CMD_lgetbuffer == 237, "CMD_lgetbuffer mismatch");
-_Static_assert(CMD_laddbuffer == 217, "CMD_laddbuffer mismatch");
-_Static_assert(CMD_cexpr == 64, "CMD_cexpr mismatch");
-_Static_assert(CMD_cgetexpr == 70, "CMD_cgetexpr mismatch");
-_Static_assert(CMD_caddexpr == 50, "CMD_caddexpr mismatch");
-_Static_assert(CMD_lexpr == 232, "CMD_lexpr mismatch");
-_Static_assert(CMD_lgetexpr == 238, "CMD_lgetexpr mismatch");
-_Static_assert(CMD_laddexpr == 216, "CMD_laddexpr mismatch");
-_Static_assert(CMD_vimgrep == 509, "CMD_vimgrep mismatch");
-_Static_assert(CMD_lvimgrep == 267, "CMD_lvimgrep mismatch");
-_Static_assert(CMD_vimgrepadd == 510, "CMD_vimgrepadd mismatch");
-_Static_assert(CMD_lvimgrepadd == 268, "CMD_lvimgrepadd mismatch");
-
-// _Static_assert for Phase 4 CMD_* constants used in Rust valid counting functions
-_Static_assert(CMD_cdo == 62, "CMD_cdo mismatch");
-_Static_assert(CMD_ldo == 228, "CMD_ldo mismatch");
-_Static_assert(CMD_cfdo == 66, "CMD_cfdo mismatch");
-_Static_assert(CMD_lfdo == 234, "CMD_lfdo mismatch");
-
-// _Static_assert for Phase 5 HLF constants used in Rust clist display
-_Static_assert(HLF_D == 5, "HLF_D mismatch");
-_Static_assert(HLF_N == 12, "HLF_N mismatch");
-_Static_assert(HLF_QFL == 58, "HLF_QFL mismatch");
-
-// _Static_assert for Phase 5 autocmd event constants used in Rust display/make/vimgrep
-_Static_assert(EVENT_BUFREADPOST == 13, "EVENT_BUFREADPOST mismatch");
-_Static_assert(EVENT_BUFWINENTER == 16, "EVENT_BUFWINENTER mismatch");
-_Static_assert(EVENT_QUICKFIXCMDPRE == 89, "EVENT_QUICKFIXCMDPRE mismatch");
-_Static_assert(EVENT_QUICKFIXCMDPOST == 88, "EVENT_QUICKFIXCMDPOST mismatch");
 
 /// Heap-allocate and initialize a regmmatch_T for vimgrep.
 /// Returns the heap pointer (caller must free with nvim_vgr_regmatch_free),
@@ -2313,12 +1845,6 @@ void nvim_vgr_regmatch_free(void *rm_void)
   vim_regfree(rm->regprog);
   xfree(rm);
 }
-
-// nvim_vgr_get_arglist_exp deleted: Rust calls get_arglist_exp directly.
-// nvim_vgr_free_wild_raw deleted: Rust calls FreeWild directly.
-
-// nvim_apply_autocmds_quickfixcmdpre deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPRE, ...) directly.
-// nvim_apply_autocmds_quickfixcmdpost deleted: Rust calls apply_autocmds(EVENT_QUICKFIXCMDPOST, ...) directly.
 
 // Restore current working directory to "dirname_start" if they differ, taking
 // into account whether it is set locally or globally.
@@ -2506,27 +2032,6 @@ enum {
   QF_GETLIST_ALL = 0xFFF,
 };
 
-// qf_winid deleted: migrated to Rust rs_qf_winid in lib.rs (Phase 10, Pass 10).
-
-// nvim_qf_winid deleted: Rust api.rs now uses #[link_name = "rs_qf_winid"].
-
-// _Static_assert for Phase 3 QF_GETLIST_* constants used in Rust property functions
-_Static_assert(QF_GETLIST_NONE == 0x0, "QF_GETLIST_NONE mismatch");
-_Static_assert(QF_GETLIST_TITLE == 0x1, "QF_GETLIST_TITLE mismatch");
-_Static_assert(QF_GETLIST_ITEMS == 0x2, "QF_GETLIST_ITEMS mismatch");
-_Static_assert(QF_GETLIST_NR == 0x4, "QF_GETLIST_NR mismatch");
-_Static_assert(QF_GETLIST_WINID == 0x8, "QF_GETLIST_WINID mismatch");
-_Static_assert(QF_GETLIST_CONTEXT == 0x10, "QF_GETLIST_CONTEXT mismatch");
-_Static_assert(QF_GETLIST_ID == 0x20, "QF_GETLIST_ID mismatch");
-_Static_assert(QF_GETLIST_IDX == 0x40, "QF_GETLIST_IDX mismatch");
-_Static_assert(QF_GETLIST_SIZE == 0x80, "QF_GETLIST_SIZE mismatch");
-_Static_assert(QF_GETLIST_TICK == 0x100, "QF_GETLIST_TICK mismatch");
-_Static_assert(QF_GETLIST_FILEWINID == 0x200, "QF_GETLIST_FILEWINID mismatch");
-_Static_assert(QF_GETLIST_QFBUFNR == 0x400, "QF_GETLIST_QFBUFNR mismatch");
-_Static_assert(QF_GETLIST_QFTF == 0x800, "QF_GETLIST_QFTF mismatch");
-_Static_assert(QF_GETLIST_ALL == 0xFFF, "QF_GETLIST_ALL mismatch");
-
-
 /// Get the first item in a VimL list
 void *nvim_tv_list_first(const void *list)
 {
@@ -2558,9 +2063,6 @@ void *nvim_tv_list_item_dict(const void *li)
   return tv->vval.v_dict;
 }
 
-// qf_add_entry_from_dict + nvim_qf_add_entry_from_dict deleted:
-// migrated to Rust rs_qf_add_entry_from_dict in list.rs (Phase 11).
-
 /// Allocate a single null byte (empty C string). Caller must xfree/
 /// Free a char * allocated by xmalloc/xstrdup/etc.
 void nvim_xfree_char(char *ptr) { xfree(ptr); }
@@ -2588,11 +2090,6 @@ bool nvim_tv_list_item_is_first(const void *list, const void *li)
   }
   return li == tv_list_first((const list_T *)list);
 }
-
-
-// set_errorlist deleted: Rust exports under the C name directly via #[export_name].
-
-// Phase 10 Pass 10 Phase 6: C accessors for rs_set_ref_in_quickfix
 
 /// Return a mutable pointer to qfl->qf_qftf_cb.
 void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void)
@@ -2628,12 +2125,6 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
 
 // nvim_qf_get_ql_info: use existing nvim_get_ql_info instead (Phase 10 Pass 10 Phase 6).
 
-
-// mark_quickfix_user_data deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
-// mark_quickfix_ctx deleted: migrated to Rust rs_set_ref_in_quickfix (Phase 10 Pass 10 Phase 6).
-
-// set_ref_in_quickfix deleted: eval gc.rs bypasses via #[link_name = "rs_set_ref_in_quickfix"].
-
 /// :cgetbuffer, :lbuffer, :laddbuffer, :lgetbuffer Ex commands.
 // ":[range]cbuffer [bufnr]" command.
 // ":[range]caddbuffer [bufnr]" command.
@@ -2641,50 +2132,11 @@ bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void)
 // ":[range]lbuffer [bufnr]" command.
 // ":[range]laddbuffer [bufnr]" command.
 // ":[range]lgetbuffer [bufnr]" command.
-// ex_cbuffer deleted: now exported directly from Rust via #[export_name]
 
-// ex_cexpr deleted: now exported directly from Rust via #[export_name]
-
-// hgr_get_ll deleted (Phase 5): logic inlined into Rust rs_ex_helpgrep.
-
-// C accessor wrappers for rs_hgr_search_* functions (Phase 1 deleted, Phase 2 renamed)
-// nvim_hgr_os_fopen deleted: use nvim_os_fopen_read
-// nvim_hgr_vim_fgets deleted: use nvim_qf_vim_fgets
-// nvim_hgr_vim_regexec deleted: use nvim_qf_vim_regexec
-// nvim_hgr_regmatch_startp deleted: use nvim_qf_regmatch_startp(rmp, 0)
-// nvim_hgr_regmatch_endp deleted: use nvim_qf_regmatch_endp(rmp, 0)
-// nvim_hgr_fclose deleted: use nvim_qf_fclose
-// nvim_hgr_get_IObuff deleted: use nvim_qf_get_iobuff
-// nvim_hgr_get_IOSIZE deleted: use nvim_qf_get_iosize
-// nvim_hgr_get_got_int deleted: use nvim_qf_got_int (returns bool)
-// nvim_hgr_set_got_int deleted: use nvim_qf_set_got_int
-// nvim_hgr_line_breakcheck deleted: use nvim_qf_line_breakcheck
-// nvim_hgr_get_MAXPATHL deleted: use nvim_get_maxpathl (memline_shim.c, returns size_t)
-// nvim_hgr_get_NameBuff deleted: use nvim_get_namebuff (buffer.c, returns char*)
-// nvim_gen_expand_wildcards_file_silent deleted: Rust calls gen_expand_wildcards directly.
-// nvim_free_wild deleted: Rust calls FreeWild directly.
-// nvim_fname_at deleted: Rust indexes fnames[idx] directly.
-// nvim_add_pathsep deleted: Rust calls add_pathsep directly.
-// nvim_hgr_strcat_doc_glob deleted: Rust calls strcat("doc/*.\\(txt\\|??x\\)") directly.
-// nvim_strnicmp deleted: Rust calls strncasecmp directly.
-// nvim_get_p_rtp deleted: Rust uses static p_rtp directly.
-// nvim_copy_option_part_comma deleted: Rust calls copy_option_part(pp, buf, maxlen, ",") directly.
-
-// nvim_hgr_pre_check deleted (Phase 4): inlined into Rust using nvim_qf_apply_autocmd_pre.
-// nvim_hgr_is_loclist_cmd deleted (Phase 4): use nvim_is_loclist_cmd + nvim_eap_get_cmdidx.
-// nvim_hgr_get_ll deleted (Phase 4): inlined into Rust using nvim_qf_curwin_buf_is_help,
 //   nvim_qf_find_help_win, nvim_qf_win_get_llist, rs_qf_alloc_stack.
-// nvim_hgr_post_autocmd deleted (Phase 4): inlined into Rust using nvim_qf_apply_autocmd_post,
 //   nvim_qf_is_ll_stack_qi, nvim_qf_find_win_with_loclist.
-// nvim_hgr_jump_or_nomatch deleted (Phase 4): inlined into Rust using rs_qf_list_empty,
 //   rs_qf_jump_newwin, nvim_semsg_nomatch2, nvim_eap_get_arg.
-// nvim_hgr_is_lhelpgrep deleted (Phase 4): use nvim_eap_get_cmdidx comparison in Rust.
-// nvim_hgr_cleanup deleted (Phase 4): inlined into Rust using nvim_qf_curwin_buf_is_help,
 //   nvim_qf_get_curwin, nvim_qf_win_get_llist, rs_ll_free_all, nvim_win_set_llist.
-
-// nvim_hgr_compile_and_search deleted (Phase 3): list creation and finalization inlined into Rust.
-// nvim_check_help_lang deleted (Phase 16): call check_help_lang directly from Rust.
-// nvim_hgr_regex_search deleted (Phase 16): inlined into rs_ex_helpgrep in Rust commands.rs.
 
 /// Save p_cpo and set it to empty. Returns the old value as an opaque pointer.
 void *nvim_save_cpo_set_empty(void)
@@ -2710,7 +2162,3 @@ void nvim_restore_cpo(void *saved_cpo_void)
   }
 }
 
-// free_quickfix deleted: now exported directly from Rust via #[export_name] (EXITFREE guarded)
-
-// f_getloclist, f_getqflist, f_setloclist, f_setqflist deleted:
-// migrated to Rust with #[export_name] exporting under the C names directly.

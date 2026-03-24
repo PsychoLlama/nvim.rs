@@ -194,5 +194,6 @@ void showmatch(int c);
 void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool skip_comments,
                           int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
                           bool forceit, bool silent);
+void f_searchcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
-#include "search.h.generated.h"
+#include "search_shim.c.generated.h"
