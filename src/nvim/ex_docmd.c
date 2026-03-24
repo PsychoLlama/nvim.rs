@@ -2338,7 +2338,6 @@ void nvim_set_eap_arg_from_p(exarg_T *eap, char *p)
 }
 void nvim_eap_set_forceit(exarg_T *eap, bool forceit) { eap->forceit = forceit; }
 bool nvim_eap_get_forceit_bool(const exarg_T *eap) { return eap->forceit; }
-void nvim_separate_nextcmd(exarg_T *eap) { separate_nextcmd(eap); }
 bool nvim_cmd_has_expr_args(int cmdidx) { return cmd_has_expr_args((cmdidx_T)cmdidx); }
 void nvim_skip_expr_arg(char **arg) { skip_expr(arg, NULL); }
 char *nvim_check_nextcmd(const char *p) { return check_nextcmd(p); }
@@ -2362,7 +2361,7 @@ bool nvim_eap_cmd_is_nul_or_comment(const exarg_T *eap)
 size_t nvim_iosize(void) { return IOSIZE; }
 void nvim_xstrlcpy(char *dst, const char *src, size_t n) { xstrlcpy(dst, src, n); }
 // nvim_get_iobuff already exists in option_shim.c
-void nvim_append_command(const char *cmdname) { append_command(cmdname); }
+
 const char *nvim_get_e_not_an_editor_command(void) { return _(e_not_an_editor_command); }
 void nvim_save_last_search_pattern(void) { save_last_search_pattern(); }
 void nvim_restore_last_search_pattern(void) { restore_last_search_pattern(); }
@@ -2433,7 +2432,6 @@ int nvim_ascii_iswhite_fn(int c) { return ascii_iswhite(c) ? 1 : 0; }
 // Wrappers for static Phase 2 helpers called from Rust
 int nvim_do_cmdline_start(void) { return do_cmdline_start(); }
 void nvim_do_cmdline_end(void) { do_cmdline_end(); }
-void nvim_correct_range(exarg_T *eap) { correct_range(eap); }
 // Phase 3 C accessor wrappers
 
 // changedir_func helpers
@@ -2682,7 +2680,7 @@ void nvim_docmd_rundo(const char *arg)
 }
 
 /// Wrapper for get_tabpage_arg(eap).
-int nvim_docmd_get_tabpage_arg(exarg_T *eap) { return get_tabpage_arg(eap); }
+
 
 /// Wrapper for find_pattern_in_path for :checkpath.
 void nvim_docmd_checkpath(bool forceit)
@@ -2819,7 +2817,7 @@ void nvim_docmd_close_others(bool message, bool forceit) { close_others(message,
 
 /// ex_edit logic (direct implementation for Rust FFI).
 // Phase 23 accessors for ex_edit
-bool nvim_docmd_is_other_file(const char *ffname) { return is_other_file(0, (char *)ffname); }
+
 bool nvim_docmd_check_can_set_curbuf_forceit(bool forceit)
 {
   return check_can_set_curbuf_forceit(forceit);
@@ -3588,16 +3586,12 @@ void nvim_eap_advance_arg2(exarg_T *eap) { eap->arg += 2; }
 /// skipwhite(eap->arg) -> eap->arg.
 void nvim_eap_skipwhite_arg(exarg_T *eap) { eap->arg = skipwhite(eap->arg); }
 /// getargopt wrapper (already public Rust export, add C wrapper for do_one_cmd).
-int nvim_docmd_getargopt(exarg_T *eap) { return getargopt(eap); }
+
 /// get_flags wrapper (already public Rust export).
-void nvim_docmd_get_flags(exarg_T *eap) { get_flags(eap); }
+
 /// skip_cmd wrapper (already public Rust export).
-bool nvim_docmd_skip_cmd(const exarg_T *eap) { return skip_cmd(eap); }
-/// execute_cmd0 wrapper.
-int nvim_docmd_execute_cmd0(int *retv, exarg_T *eap, const char **errormsg)
-{
-  return execute_cmd0(retv, eap, errormsg, false);
-}
+
+
 /// Emit error and do_errthrow cleanup for do_one_cmd doend.
 void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
                                   int flags, const exarg_T *eap)
@@ -3629,23 +3623,10 @@ bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname)
 {
   return apply_autocmds(EVENT_CMDUNDEFINED, (char *)cmdname, (char *)cmdname, true, NULL);
 }
-/// aborting() wrapper.
-bool nvim_docmd_aborting(void) { return aborting(); }
-/// find_ex_command wrapper (re-try after CmdUndefined autocmd fires).
-char *nvim_docmd_find_ex_command_retry(exarg_T *eap)
-{
-  return find_ex_command(eap, NULL);
-}
 /// xmemdupz wrapper for do_one_cmd cmdname copy.
 char *nvim_docmd_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
 /// ASCII_ISALNUM check for command name scanning.
 bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
-/// verify_command wrapper.
-void nvim_docmd_verify_command(const char *cmd) { verify_command(cmd); }
-/// get_text_locked_msg wrapper.
-const char *nvim_docmd_get_text_locked_msg(void) { return get_text_locked_msg(); }
-/// text_locked wrapper.
-bool nvim_docmd_text_locked(void) { return text_locked(); }
 /// IS_USER_CMDIDX check by integer index (as opposed to via exarg_T).
 bool nvim_docmd_is_user_cmdidx_i(int cmdidx) { return IS_USER_CMDIDX(cmdidx); }
 /// global_busy accessor.

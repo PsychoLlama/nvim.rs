@@ -129,7 +129,7 @@ extern "C" {
     fn nvim_get_p_cpo() -> *const c_char;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn setaltfname(ffname: *const c_char, fname: *const c_char, lnum: LinenrT);
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn nvim_docmd_e_notopen_str() -> *const c_char;
     fn nvim_docmd_curbuf_ml_line_count() -> LinenrT;
     fn ml_get(lnum: LinenrT) -> *const c_char;
@@ -415,7 +415,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
     };
 
     if i != OK {
-        if aborting() == 0 {
+        if !aborting() {
             semsg(nvim_docmd_e_notopen_str(), arg);
         }
     } else {

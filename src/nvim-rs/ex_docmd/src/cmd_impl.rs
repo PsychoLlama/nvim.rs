@@ -182,7 +182,6 @@ extern "C" {
     fn nvim_get_first_tabpage() -> *mut c_void;
     fn nvim_tabpage_get_next(tp: *mut c_void) -> *mut c_void;
     fn nvim_docmd_tabpage_is_curtopframe(tp: *mut c_void) -> c_int;
-    fn nvim_docmd_get_tabpage_arg(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_is_only_tabpage() -> c_int;
     fn goto_tabpage(n: c_int);
     #[link_name = "rs_valid_tabpage"]
@@ -670,7 +669,7 @@ pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
         return;
     }
 
-    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    let tab_number = crate::address::rs_get_tabpage_arg(eap);
     if !nvim_eap_get_errmsg(eap).is_null() {
         return;
     }

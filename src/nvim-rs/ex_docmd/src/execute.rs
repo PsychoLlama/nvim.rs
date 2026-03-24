@@ -340,7 +340,7 @@ extern "C" {
     fn get_text_locked_msg() -> *const c_char;
     fn nvim_get_eap_addr_type_lines(eap: ExArgHandle) -> c_int;
     fn nvim_get_global_busy() -> bool;
-    fn nvim_correct_range(eap: ExArgHandle);
+
     fn nvim_hasFolding_line1(lnum: LinenrT, line1_out: *mut LinenrT);
     fn nvim_hasFolding_line2(lnum: LinenrT, line2_out: *mut LinenrT);
     fn nvim_cstack_alloc() -> CstackHandle;
@@ -383,11 +383,9 @@ extern "C" {
     fn nvim_skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char;
     fn nvim_xstrlcpy(dst: *mut c_char, src: *const c_char, n: usize);
     static mut IObuff: [c_char; 1025];
-    fn nvim_append_command(cmdname: *const c_char);
     fn nvim_get_e_not_an_editor_command() -> *const c_char;
     fn nvim_parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
     fn nvim_set_eap_arg_from_p(eap: ExArgHandle, p: *mut c_char);
-    fn nvim_separate_nextcmd(eap: ExArgHandle);
     fn nvim_cmd_has_expr_args(cmdidx: c_int) -> bool;
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
     fn nvim_check_nextcmd(p: *const c_char) -> *mut c_char;
@@ -735,7 +733,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         return retv;
     }
 
-    nvim_correct_range(eap);
+    crate::range::rs_correct_range(eap);
 
     if ((argt & EX_WHOLEFOLD_P2) != 0 || nvim_eap_get_addr_count(eap) >= 2)
         && !nvim_get_global_busy()
@@ -883,7 +881,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         } else {
             *cmdline
         };
-        nvim_append_command(cmdname);
+        crate::errors::rs_append_command(cmdname);
         *errormsg = iobuff as *const c_char;
         nvim_undo_cmdmod_p(cmdinfo);
         nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
@@ -912,7 +910,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
 
     // Check for '|' separator.
     if nvim_eap_argt_has_trlbar(eap) {
-        nvim_separate_nextcmd(eap);
+        crate::args::rs_separate_nextcmd(eap);
     } else if nvim_cmd_has_expr_args(cmdidx) {
         // Skip over expressions to find '|' separator.
         let mut arg = nvim_eap_get_arg(eap);

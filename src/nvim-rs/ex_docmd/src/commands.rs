@@ -1688,7 +1688,6 @@ extern "C" {
     fn nvim_docmd_pum_make_popup(arg: *const c_char, forceit: bool);
     fn nvim_docmd_wundo(arg: *const c_char, forceit: bool);
     fn nvim_docmd_rundo(arg: *const c_char);
-    fn nvim_docmd_get_tabpage_arg(eap: ExArgHandle) -> c_int;
     fn tabpage_move(nr: c_int);
     fn nvim_docmd_checkpath(forceit: bool);
     fn nvim_docmd_redraw_all_later_some_valid();
@@ -1812,7 +1811,7 @@ pub unsafe extern "C" fn rs_ex_rundo(eap: ExArgHandle) {
 /// ":tabmove" -- move tab page.
 #[export_name = "ex_tabmove"]
 pub unsafe extern "C" fn rs_ex_tabmove(eap: ExArgHandle) {
-    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    let tab_number = crate::address::rs_get_tabpage_arg(eap);
     let errmsg = nvim_eap_get_errmsg(eap);
     if errmsg.is_null() {
         tabpage_move(tab_number);
@@ -2187,7 +2186,6 @@ pub unsafe extern "C" fn rs_ex_recover(eap: ExArgHandle) {
 extern "C" {
     fn nvim_docmd_get_argopt_name(idx: c_int) -> *mut c_char;
     // Phase 23: ex_edit helpers
-    fn nvim_docmd_is_other_file(ffname: *const c_char) -> bool;
     fn nvim_docmd_check_can_set_curbuf_forceit(forceit: bool) -> bool;
     fn nvim_docmd_bt_prompt_curbuf() -> bool;
 
@@ -2343,7 +2341,7 @@ pub unsafe extern "C" fn rs_ex_edit(eap: ExArgHandle) {
     // Exclude commands which keep the window's current buffer
     if cmdidx != CMD_BADD
         && cmdidx != CMD_BALT
-        && (nvim_docmd_is_other_file(ffname)
+        && (rs_is_other_file(0, ffname) != 0
             && !nvim_docmd_check_can_set_curbuf_forceit(nvim_eap_get_forceit(eap)))
     {
         return;
@@ -2614,7 +2612,7 @@ pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
         return;
     }
 
-    let tab_number = nvim_docmd_get_tabpage_arg(eap);
+    let tab_number = crate::address::rs_get_tabpage_arg(eap);
     if !nvim_eap_get_errmsg(eap).is_null() {
         return;
     }
@@ -3303,7 +3301,7 @@ pub unsafe extern "C" fn rs_ex_tabnext(eap: ExArgHandle) {
         goto_tabpage(-tab_number);
     } else {
         // CMD_tabnext and everything else
-        let tab_number = nvim_docmd_get_tabpage_arg(eap);
+        let tab_number = crate::address::rs_get_tabpage_arg(eap);
         if nvim_eap_get_errmsg(eap).is_null() {
             goto_tabpage(tab_number);
         }
