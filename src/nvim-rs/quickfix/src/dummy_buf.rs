@@ -57,7 +57,7 @@ extern "C" {
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_close_no_free(wp: WinHandle) -> c_int;
+    fn win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
 
     // Cleanup (exception state save/restore)
@@ -127,7 +127,7 @@ pub unsafe fn wipe_dummy_buffer_internal(buf: BufHandle, dirname_start: *mut c_c
             let mut wp = firstwin;
             while !wp.is_null() {
                 if nvim_win_get_buffer(wp) == buf {
-                    if nvim_win_close_no_free(wp) == 1 {
+                    if win_close(wp, false, false) == 1 {
                         // OK = 1
                         did_one = true;
                     }

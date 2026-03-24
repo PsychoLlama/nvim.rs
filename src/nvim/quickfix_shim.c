@@ -505,19 +505,6 @@ bool nvim_tv_dict_find_str_is_dollar(const void *dict, const char *key, int key_
          && strequal(di->di_tv.vval.v_string, "$");
 }
 
-/// Add a number to a dict; returns OK or FAIL.
-/// Add a string copy to a dict; returns OK or FAIL.
-/// Allocate an empty list and add it to a dict; returns OK or FAIL.
-
-/// Allocate a new list and set it as the return value (qf-specific void* version).
-/// Allocate a new dict and set it as the return value (qf-specific void* version).
-/// Allocate a plain dict_T (qf-specific void* version).
-/// Append a dict to a list (qf-specific void* version).
-/// Add a tv (copy) to a dict under 'key' of 'key_len'; returns OK or FAIL.
-/// Allocate a new dictitem_T with the given key (length exclusive).
-/// Add a dictitem_T to a dict (qf-specific void* version); returns OK or FAIL.
-/// Free a dictitem_T including its di_tv (qf-specific void* version).
-/// Copy a typval_T value (shallow copy with reference counting).
 /// Serialize the qfl's quickfixtextfunc callback into a stack-allocated tv.
 /// Returns true if callback was non-None.
 bool nvim_qf_qftf_cb_put(void *qfl_void, void *tv_out)
@@ -533,8 +520,6 @@ bool nvim_qf_qftf_cb_put(void *qfl_void, void *tv_out)
   return true;
 }
 
-/// Clear (free) an inline typval_T value without freeing the struct itself.
-/// Get the v_type field of a typval_T (qf-specific void* version).
 int nvim_qf_tv_get_type(const void *tv) { return tv == NULL ? VAR_UNKNOWN : ((const typval_T *)tv)->v_type; }
 
 /// Get the dictitem's v_type.
@@ -953,9 +938,6 @@ char *nvim_qf_list_item_string(void *li)
   }
   return tv->vval.v_string;
 }
-
-/// vim_strchr on a mutable char* with char NL character.
-/// Returns pointer to first NL in str, or NULL.
 
 /// can_abandon(curbuf, forceit): check if current buffer can be abandoned.
 bool nvim_can_abandon_curbuf(int forceit) { return can_abandon(curbuf, forceit); }
@@ -1475,7 +1457,6 @@ void *nvim_cleanup_enter_alloc(void) {
   return cs;
 }
 void nvim_cleanup_leave_free(void *cs) { leave_cleanup((cleanup_T *)cs); xfree(cs); }
-int nvim_win_close_no_free(void *wp) { return win_close((win_T *)wp, false, false); }
 void nvim_setfname_curbuf(char *fname) { setfname(curbuf, fname, NULL, false); }
 void nvim_check_need_swap_newfile(void) { check_need_swap(true); }
 int nvim_readfile_for_dummy(char *fname) {
