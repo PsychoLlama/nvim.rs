@@ -23,6 +23,7 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval.h"
+#include "nvim/extmark_defs.h"
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
 #include "nvim/fuzzy.h"
@@ -1281,3 +1282,66 @@ void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xs
 
 /// Set b_s.b_p_spo_flags from global spo_flags.
 void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
+
+// ============================================================================
+// lasttitle/lasticon statics and accessors (moved from buffer.c, used by Rust info.rs)
+// ============================================================================
+
+static char *lasttitle = NULL;
+static char *lasticon = NULL;
+
+/// Get lasttitle static variable.
+const char *nvim_buf_get_lasttitle(void) { return lasttitle; }
+/// Set lasttitle static variable (caller transfers ownership of s).
+void nvim_buf_set_lasttitle(char *s) { lasttitle = s; }
+/// Get lasticon static variable.
+const char *nvim_buf_get_lasticon(void) { return lasticon; }
+/// Set lasticon static variable (caller transfers ownership of s).
+void nvim_buf_set_lasticon(char *s) { lasticon = s; }
+
+// ============================================================================
+// Extmark Accessor Functions (moved from buffer.c, for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Get the marktree pointer from a buffer.
+MarkTree *nvim_buf_get_marktree(buf_T *buf)
+{
+  return buf->b_marktree;
+}
+
+/// Get the deleted_bytes2 field from a buffer.
+bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf)
+{
+  return buf->deleted_bytes2;
+}
+
+/// Set the deleted_bytes2 field in a buffer.
+void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val)
+{
+  buf->deleted_bytes2 = val;
+}
+
+/// Get the b_prev_line_count field from a buffer (for extmark adjust).
+int nvim_buf_get_prev_line_count(buf_T *buf)
+{
+  return buf->b_prev_line_count;
+}
+
+/// Set the b_prev_line_count field in a buffer.
+void nvim_buf_set_prev_line_count(buf_T *buf, int val)
+{
+  buf->b_prev_line_count = val;
+}
+
+/// Get the autom field from b_signcols.
+bool nvim_buf_signcols_get_autom(buf_T *buf)
+{
+  return buf->b_signcols.autom;
+}
+
+/// Clear the b_signcols structure.
+void nvim_buf_signcols_clear(buf_T *buf)
+{
+  buf->b_signcols.max = 0;
+  CLEAR_FIELD(buf->b_signcols.count);
+}

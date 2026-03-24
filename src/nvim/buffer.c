@@ -2297,25 +2297,9 @@ void buflist_slash_adjust(void)
 #endif
 
 
-// fileinfo() is implemented in Rust (see src/nvim-rs/buffer/src/info.rs).
-// The C declaration is in buffer.h as a static inline wrapper.
-
-
-static char *lasttitle = NULL;
-static char *lasticon = NULL;
-
-// Phase 9 accessors for maketitle() (Rust migration)
-/// Get lasttitle static variable.
-const char *nvim_buf_get_lasttitle(void) { return lasttitle; }
-/// Set lasttitle static variable (caller transfers ownership of s).
-void nvim_buf_set_lasttitle(char *s) { lasttitle = s; }
-/// Get lasticon static variable.
-const char *nvim_buf_get_lasticon(void) { return lasticon; }
-/// Set lasticon static variable (caller transfers ownership of s).
-void nvim_buf_set_lasticon(char *s) { lasticon = s; }
-
-// maketitle(), value_change(), resettitle(), free_titles() migrated to Rust
-// in src/nvim-rs/buffer/src/info.rs (Phase 9).
+// fileinfo(), maketitle(), resettitle(), free_titles() are implemented in Rust
+// (src/nvim-rs/buffer/src/info.rs). lasttitle/lasticon statics and accessors
+// moved to buffer_shim.c.
 
 /// Open a window for a number of buffers.
 void ex_buffer_all(exarg_T *eap)
@@ -2672,53 +2656,7 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
   }
 }
 
-// ============================================================================
-// Extmark Accessor Functions (for Rust FFI - extmark crate)
-// ============================================================================
-
-/// Get the marktree pointer from a buffer.
-MarkTree *nvim_buf_get_marktree(buf_T *buf)
-{
-  return buf->b_marktree;
-}
-
-/// Get the deleted_bytes2 field from a buffer.
-bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf)
-{
-  return buf->deleted_bytes2;
-}
-
-/// Set the deleted_bytes2 field in a buffer.
-void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val)
-{
-  buf->deleted_bytes2 = val;
-}
-
-/// Get the b_prev_line_count field from a buffer (for extmark adjust).
-int nvim_buf_get_prev_line_count(buf_T *buf)
-{
-  return buf->b_prev_line_count;
-}
-
-/// Set the b_prev_line_count field in a buffer.
-void nvim_buf_set_prev_line_count(buf_T *buf, int val)
-{
-  buf->b_prev_line_count = val;
-}
-
-/// Get the autom field from b_signcols.
-bool nvim_buf_signcols_get_autom(buf_T *buf)
-{
-  return buf->b_signcols.autom;
-}
-
-/// Clear the b_signcols structure.
-void nvim_buf_signcols_clear(buf_T *buf)
-{
-  buf->b_signcols.max = 0;
-  CLEAR_FIELD(buf->b_signcols.count);
-}
-
+// Extmark accessor functions for Rust FFI moved to buffer_shim.c.
 // text_locked_msg() and text_or_buf_locked() are implemented in Rust
 // (see src/nvim-rs/buffer/src/misc.rs).
 
