@@ -63,6 +63,8 @@ extern void rs_clearFolding(win_T *win);
 extern void rs_foldUpdateAll(win_T *win);
 // Internal arglist function used in buf_name_changed (Phase 13)
 extern void check_arg_idx(win_T *win);
+// Rust file identity helper used in buflist_findname_file_id (Phase 14)
+extern bool rs_otherfile_buf_4(buf_T *buf, char *ffname, void *file_id_p, bool file_id_valid);
 
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
@@ -1756,4 +1758,116 @@ int buf_open_scratch(handle_T bufnr, char *bufname)
   set_option_value_give_err(kOptSwapfile, BOOLEAN_OPTVAL(false), OPT_LOCAL);
   RESET_BINDING(curwin);
   return OK;
+}
+
+// ============================================================
+// Buffer file name management cluster (Phase 14)
+// ============================================================
+
+/// Find a buffer by file name and file ID. Returns NULL if not found.
+buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid)
+  FUNC_ATTR_PURE
+{
+  FOR_ALL_BUFFERS_BACKWARDS(buf) {
+    if ((buf->b_flags & BF_DUMMY) == 0
+        && !rs_otherfile_buf_4(buf, ffname, (void *)file_id, file_id_valid)) {
+      return buf;
+    }
+  }
+  return NULL;
+}
+
+/// Set the file name for "buf" to "ffname_arg", short file name to
+/// "sfname_arg".
+/// The file name with the full path is also remembered, for when :cd is used.
+///
+/// @param message  give message when buffer already exists
+///
+/// @return  FAIL for failure (file name already in use by other buffer) OK otherwise.
+int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message)
+{
+  char *ffname = ffname_arg;
+  char *sfname = sfname_arg;
+  buf_T *obuf = NULL;
+  FileID file_id;
+  bool file_id_valid = false;
+
+  if (ffname == NULL || *ffname == NUL) {
+    // Removing the name.
+    if (buf->b_sfname != buf->b_ffname) {
+      XFREE_CLEAR(buf->b_sfname);
+    } else {
+      buf->b_sfname = NULL;
+    }
+    XFREE_CLEAR(buf->b_ffname);
+  } else {
+    fname_expand(buf, &ffname, &sfname);    // will allocate ffname
+    if (ffname == NULL) {                   // out of memory
+      return FAIL;
+    }
+
+    // If the file name is already used in another buffer:
+    // - if the buffer is loaded, fail
+    // - if the buffer is not loaded, delete it from the list
+    file_id_valid = os_fileid(ffname, &file_id);
+    if (!(buf->b_flags & BF_DUMMY)) {
+      obuf = buflist_findname_file_id(ffname, &file_id, file_id_valid);
+    }
+    if (obuf != NULL && obuf != buf) {
+      bool in_use = false;
+
+      // during startup a window may use a buffer that is not loaded yet
+      FOR_ALL_TAB_WINDOWS(tab, win) {
+        if (win->w_buffer == obuf) {
+          in_use = true;
+        }
+      }
+
+      // it's loaded or used in a window, fail
+      if (obuf->b_ml.ml_mfp != NULL || in_use) {
+        if (message) {
+          emsg(_("E95: Buffer with this name already exists"));
+        }
+        xfree(ffname);
+        return FAIL;
+      }
+      // delete from the list
+      close_buffer(NULL, obuf, DOBUF_WIPE, false, false);
+    }
+    sfname = xstrdup(sfname);
+#ifdef CASE_INSENSITIVE_FILENAME
+    path_fix_case(sfname);            // set correct case for short file name
+#endif
+    if (buf->b_sfname != buf->b_ffname) {
+      xfree(buf->b_sfname);
+    }
+    xfree(buf->b_ffname);
+    buf->b_ffname = ffname;
+    buf->b_sfname = sfname;
+  }
+  buf->b_fname = buf->b_sfname;
+  if (!file_id_valid) {
+    buf->file_id_valid = false;
+  } else {
+    buf->file_id_valid = true;
+    buf->file_id = file_id;
+  }
+
+  buf_name_changed(buf);
+  return OK;
+}
+
+/// Set alternate file name for current window
+///
+/// Used by do_one_cmd(), do_write() and do_ecmd().
+///
+/// @return  the buffer.
+buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum)
+{
+  // Create a buffer.  'buflisted' is not set if it's a new buffer
+  buf_T *buf = buflist_new(ffname, sfname, lnum, 0);
+  if (buf != NULL && (cmdmod.cmod_flags & CMOD_KEEPALT) == 0) {
+    curwin->w_alt_fnum = buf->b_fnum;
+  }
+  return buf;
 }

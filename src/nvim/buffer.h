@@ -231,3 +231,8 @@ fmark_T *buflist_findfmark(buf_T *buf);
 void buf_set_name(int fnum, char *name);
 void buf_name_changed(buf_T *buf);
 int buf_open_scratch(handle_T bufnr, char *bufname);
+
+// setfname(), setaltfname(), buflist_findname_file_id() moved to buffer_shim.c (Phase 14).
+int setfname(buf_T *buf, char *ffname_arg, char *sfname_arg, bool message);
+buf_T *setaltfname(char *ffname, char *sfname, linenr_T lnum);
+buf_T *buflist_findname_file_id(char *ffname, FileID *file_id, bool file_id_valid);
