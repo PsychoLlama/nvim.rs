@@ -151,7 +151,11 @@ extern "C" {
     // For msgmore (Phase 6)
     fn nvim_get_global_busy() -> c_int;
     fn nvim_get_p_report() -> i64;
-    fn nvim_format_msgmore(n: c_int) -> *const c_char;
+    // msg_buf is EXTERN char msg_buf[480] in globals.h
+    static mut msg_buf: [c_char; 480];
+    static mut got_int: bool;
+    fn ngettext(s1: *const c_char, s2: *const c_char, n: std::ffi::c_ulong) -> *const c_char;
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
 
     // For repeat_message (Phase 22)
     static mut State: c_int;
@@ -658,6 +662,39 @@ pub unsafe extern "C" fn rs_message_filtered(msg: *const c_char) -> bool {
     nvim_message_filtered_impl(msg)
 }
 
+/// Format "N more/fewer lines" into msg_buf and return pointer to it.
+///
+/// Replaces nvim_format_msgmore (message.c).
+///
+/// # Safety
+/// Writes to the C global msg_buf[480]; calls ngettext, gettext.
+unsafe fn format_msgmore(n: c_int) -> *const c_char {
+    const MSG_BUF_LEN: usize = 480;
+    let pn_u32 = n.unsigned_abs();
+    let pn = std::ffi::c_ulong::from(pn_u32);
+    let fmt_ptr = if n > 0 {
+        ngettext(c"%d more line".as_ptr(), c"%d more lines".as_ptr(), pn)
+    } else {
+        ngettext(c"%d line less".as_ptr(), c"%d fewer lines".as_ptr(), pn)
+    };
+    let fmt = std::ffi::CStr::from_ptr(fmt_ptr).to_string_lossy();
+    let result = fmt.replacen("%d", &pn_u32.to_string(), 1);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(MSG_BUF_LEN - 1);
+    let buf_ptr = std::ptr::addr_of_mut!(msg_buf).cast::<u8>();
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf_ptr, len);
+    *buf_ptr.add(len).cast::<c_char>() = 0;
+    if got_int {
+        let interrupted = gettext(c" (Interrupted)".as_ptr());
+        xstrlcat(
+            std::ptr::addr_of_mut!(msg_buf).cast::<c_char>(),
+            interrupted,
+            MSG_BUF_LEN,
+        );
+    }
+    std::ptr::addr_of!(msg_buf).cast::<c_char>()
+}
+
 /// Display "N more/fewer lines" message.
 ///
 /// Shows the number of lines added or removed by a command.
@@ -681,7 +718,7 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
 
     let pn = c_int::try_from(n.unsigned_abs()).unwrap_or(c_int::MAX);
     if i64::from(pn) > nvim_get_p_report() {
-        let buf = nvim_format_msgmore(n);
+        let buf = format_msgmore(n);
         if crate::output_core::rs_msg(buf, 0) != 0 {
             rs_set_keep_msg(buf, 0);
             keep_msg_more = true;

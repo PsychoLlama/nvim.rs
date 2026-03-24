@@ -191,23 +191,6 @@ void nvim_msg_ui_flush_impl(void)
   }
 }
 
-// Format "N more/fewer lines" message into msg_buf; returns msg_buf pointer.
-const char *nvim_format_msgmore(int n)
-{
-  int pn = abs(n);
-  if (n > 0) {
-    vim_snprintf(msg_buf, MSG_BUF_LEN,
-                 NGETTEXT("%d more line", "%d more lines", pn), pn);
-  } else {
-    vim_snprintf(msg_buf, MSG_BUF_LEN,
-                 NGETTEXT("%d line less", "%d fewer lines", pn), pn);
-  }
-  if (got_int) {
-    xstrlcat(msg_buf, _(" (Interrupted)"), MSG_BUF_LEN);
-  }
-  return msg_buf;
-}
-
 
 void msg_grid_validate(void)
 {
