@@ -78,7 +78,7 @@ extern "C" {
     fn nvim_qf_tv_get_string(tv: *mut c_void) -> *mut c_char;
     fn nvim_qf_tv_list_first(tv: *mut c_void) -> *mut c_void;
     fn nvim_qf_tv_get_list(tv: *const c_void) -> *mut c_void;
-    fn nvim_qf_list_item_next(list: *const c_void, li: *const c_void) -> *mut c_void;
+    fn nvim_tv_list_item_next(list: *const c_void, li: *const c_void) -> *const c_void;
     fn nvim_qf_list_item_is_string(li: *const c_void) -> bool;
     fn nvim_qf_list_item_string(li: *mut c_void) -> *mut c_char;
 }
@@ -285,7 +285,7 @@ impl QfParserState {
         // Skip non-string items
         let mut p_li = self.p_li;
         while !p_li.is_null() && !nvim_qf_list_item_is_string(p_li.cast_const()) {
-            p_li = nvim_qf_list_item_next(self.p_list.cast_const(), p_li.cast_const());
+            p_li = nvim_tv_list_item_next(self.p_list.cast_const(), p_li.cast_const()).cast_mut();
         }
 
         if p_li.is_null() {
@@ -305,7 +305,7 @@ impl QfParserState {
         }
         xstrlcpy(self.linebuf, s, self.linelen + 1);
 
-        self.p_li = nvim_qf_list_item_next(self.p_list.cast_const(), p_li.cast_const());
+        self.p_li = nvim_tv_list_item_next(self.p_list.cast_const(), p_li.cast_const()).cast_mut();
         QF_OK
     }
 
