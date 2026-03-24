@@ -1809,41 +1809,7 @@ void nvim_restore_orig_extmarks(void) { restore_orig_extmarks(); }
 void nvim_trigger_complete_changed(int cur) { trigger_complete_changed_event(cur); }
 int nvim_has_completechanged_event(void) { return has_event(EVENT_COMPLETECHANGED) ? 1 : 0; }
 void nvim_pum_display_compl(int cur, int array_changed) { pum_display(compl_match_array, compl_match_arraysize, cur, array_changed != 0, 0); }
-// Compound accessors for ins_compl_delete (Phase 3)
-int nvim_ins_compl_delete_body(int col) {
-  String remaining = STRING_INIT;
-  if (curwin->w_cursor.lnum > compl_lnum) {
-    if (curwin->w_cursor.col < get_cursor_line_len()) {
-      remaining = cbuf_to_string(get_cursor_pos_ptr(), (size_t)get_cursor_pos_len());
-    }
-    while (curwin->w_cursor.lnum > compl_lnum) {
-      if (ml_delete(curwin->w_cursor.lnum) == FAIL) {
-        xfree(remaining.data);
-        return 0;
-      }
-      deleted_lines_mark(curwin->w_cursor.lnum, 1);
-      curwin->w_cursor.lnum--;
-    }
-    curwin->w_cursor.col = get_cursor_line_len();
-  }
-  if ((int)curwin->w_cursor.col > col) {
-    if (stop_arrow() == FAIL) {
-      xfree(remaining.data);
-      return 0;
-    }
-    backspace_until_column(col);
-    compl_ins_end_col = curwin->w_cursor.col;
-  }
-  if (remaining.data != NULL) {
-    int orig_col = curwin->w_cursor.col;
-    ins_str(remaining.data, remaining.size);
-    curwin->w_cursor.col = orig_col;
-    xfree(remaining.data);
-  }
-  changed_cline_bef_curs(curwin);
-  set_vim_var_dict(VV_COMPLETED_ITEM, tv_dict_alloc_lock(VAR_FIXED));
-  return 1;
-}
+// nvim_ins_compl_delete_body: deleted (Phase 16), inlined in insert.rs
 // Compound accessors for ins_compl_insert (Phase 3)
 // nvim_compl_shown_cp_str_data: deleted (Phase 14, inlined in Rust)
 // nvim_compl_shown_cp_str_size: deleted (Phase 14, inlined in Rust)

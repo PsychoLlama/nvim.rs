@@ -144,8 +144,24 @@ const CTRL_X_EVAL: c_int = 16;
 
 extern "C" {
     // Accessors for rs_ins_compl_delete
-    fn nvim_ins_compl_delete_body(col: c_int) -> c_int;
+    // nvim_ins_compl_delete_body: deleted (Phase 16), inlined below
     fn nvim_set_cursor_col(col: c_int);
+    // Helpers for inlined nvim_ins_compl_delete_body
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+    fn get_cursor_line_len() -> c_int;
+    #[link_name = "get_cursor_pos_ptr"]
+    fn get_cursor_pos_ptr_insert() -> *mut c_char;
+    fn get_cursor_pos_len() -> c_int;
+    fn ml_delete(lnum: c_int) -> c_int;
+    fn deleted_lines_mark(lnum: c_int, count: c_int);
+    fn nvim_set_cursor_lnum(lnum: c_int);
+    fn backspace_until_column(col: c_int);
+    fn ins_str(str_: *const c_char, len: usize);
+    fn changed_cline_bef_curs(wp: *mut u8);
+    fn nvim_get_curwin() -> *mut u8;
+    fn nvim_set_completed_item_empty();
+    #[link_name = "xfree"]
+    fn xfree_ins(p: *mut u8);
 
     // Accessors for rs_ins_compl_insert
     // rs_find_common_prefix is defined in Rust (leader.rs)
@@ -235,8 +251,50 @@ pub unsafe extern "C" fn rs_ins_compl_delete(new_leader: c_int) {
         nvim_set_cursor_col(crate::vars::nvim_get_compl_ins_end_col());
     }
 
-    // Delegate the buffer mutation to C
-    nvim_ins_compl_delete_body(col);
+    // Inline nvim_ins_compl_delete_body (Phase 16):
+    let compl_lnum = crate::vars::nvim_get_compl_lnum();
+    let mut remaining_data: *mut c_char = core::ptr::null_mut();
+    let mut remaining_size: usize = 0;
+
+    #[allow(clippy::cast_sign_loss)]
+    if nvim_get_curwin_cursor_lnum() > compl_lnum {
+        if nvim_get_cursor_col() < get_cursor_line_len() {
+            let pos_len = get_cursor_pos_len();
+            let tmp =
+                cbuf_to_string_insert(get_cursor_pos_ptr_insert().cast_const(), pos_len as usize);
+            remaining_data = tmp.data;
+            remaining_size = tmp.size;
+        }
+        while nvim_get_curwin_cursor_lnum() > compl_lnum {
+            let lnum = nvim_get_curwin_cursor_lnum();
+            if ml_delete(lnum) == 0 {
+                xfree_ins(remaining_data.cast());
+                return;
+            }
+            deleted_lines_mark(lnum, 1);
+            nvim_set_cursor_lnum(nvim_get_curwin_cursor_lnum() - 1);
+        }
+        nvim_set_cursor_col(get_cursor_line_len());
+    }
+
+    if nvim_get_cursor_col() > col {
+        if stop_arrow() == 0 {
+            xfree_ins(remaining_data.cast());
+            return;
+        }
+        backspace_until_column(col);
+        crate::vars::nvim_set_compl_ins_end_col(nvim_get_cursor_col());
+    }
+
+    if !remaining_data.is_null() {
+        let orig_col = nvim_get_cursor_col();
+        ins_str(remaining_data.cast_const(), remaining_size);
+        nvim_set_cursor_col(orig_col);
+        xfree_ins(remaining_data.cast());
+    }
+
+    changed_cline_bef_curs(nvim_get_curwin());
+    nvim_set_completed_item_empty();
 }
 
 /// Insert the new completion text.
