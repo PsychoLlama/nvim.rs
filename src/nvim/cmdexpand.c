@@ -1996,6 +1996,213 @@ const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *com
 
 // get_scriptnames_arg -- migrated to Rust (callbacks.rs)
 
+// Phase 5 C accessors: typval, dict, pum helpers for VimL f_* functions
+
+/// Get the type of typval_T[idx] from an argvars array (for Rust FFI).
+int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx)
+{
+  return (int)argvars[idx].v_type;
+}
+
+/// Check that argvars[idx] is a string (emits error if not). Returns FAIL on error.
+int nvim_cmdexpand_tv_check_for_string_arg(typval_T *argvars, int idx)
+{
+  return tv_check_for_string_arg(argvars, idx);
+}
+
+/// Get string value from argvars[idx]. Returns "" on missing/invalid.
+const char *nvim_cmdexpand_tv_get_string(typval_T *argvars, int idx)
+{
+  return tv_get_string(&argvars[idx]);
+}
+
+/// Get number from argvars[idx] with error check. Sets *errorp to 1 on error.
+int64_t nvim_cmdexpand_tv_get_number_chk(typval_T *argvars, int idx, int *errorp)
+{
+  bool err = false;
+  int64_t val = tv_get_number_chk(&argvars[idx], &err);
+  if (errorp != NULL) {
+    *errorp = err ? 1 : 0;
+  }
+  return val;
+}
+
+/// Allocate a list and set rettv to it (for Rust FFI).
+void nvim_cmdexpand_tv_list_alloc_ret(typval_T *rettv, int estimated_count)
+{
+  tv_list_alloc_ret(rettv, estimated_count);
+}
+
+/// Append string to a list_T (from rettv->vval.v_list) (for Rust FFI).
+void nvim_cmdexpand_tv_list_append_string(typval_T *rettv, const char *str, int64_t len)
+{
+  tv_list_append_string(rettv->vval.v_list, str, len);
+}
+
+/// Set rettv to type VAR_STRING with the given string value (for Rust FFI).
+/// Passes ownership of str to the typval.
+void nvim_cmdexpand_tv_set_string(typval_T *rettv, char *str)
+{
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = str;
+}
+
+/// Allocate a dict and set rettv to it (for Rust FFI).
+void nvim_cmdexpand_tv_dict_alloc_ret(typval_T *rettv)
+{
+  tv_dict_alloc_ret(rettv);
+}
+
+/// Add string to dict (for Rust FFI). Returns OK or FAIL.
+int nvim_cmdexpand_tv_dict_add_str(typval_T *rettv, const char *key, size_t klen, const char *val)
+{
+  return tv_dict_add_str(rettv->vval.v_dict, key, klen, val);
+}
+
+/// Add integer to dict (for Rust FFI). Returns OK or FAIL.
+int nvim_cmdexpand_tv_dict_add_nr(typval_T *rettv, const char *key, size_t klen, int64_t val)
+{
+  return tv_dict_add_nr(rettv->vval.v_dict, key, klen, val);
+}
+
+/// Allocate a list and add it to dict (for Rust FFI). Returns list handle.
+list_T *nvim_cmdexpand_tv_dict_add_list(typval_T *rettv, const char *key, size_t klen, int count)
+{
+  list_T *li = tv_list_alloc(count);
+  tv_dict_add_list(rettv->vval.v_dict, key, klen, li);
+  return li;
+}
+
+/// Append string to a list_T directly (for Rust FFI).
+void nvim_cmdexpand_list_append_string(list_T *li, const char *str, int64_t len)
+{
+  tv_list_append_string(li, str, len);
+}
+
+/// Get pum_visible() return value (for Rust FFI).
+int nvim_cmdexpand_pum_visible(void)
+{
+  return pum_visible();
+}
+
+/// Get xp_selected from ccline->xpc (for Rust FFI).
+int nvim_cmdexpand_get_ccline_xp_selected(void)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  if (ccline == NULL || ccline->xpc == NULL) {
+    return 0;
+  }
+  return ccline->xpc->xp_selected;
+}
+
+/// Get xp_numfiles from ccline->xpc (for Rust FFI). Returns -1 if no xpc.
+int nvim_cmdexpand_get_ccline_xp_numfiles(void)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  if (ccline == NULL || ccline->xpc == NULL) {
+    return -1;
+  }
+  return ccline->xpc->xp_numfiles;
+}
+
+/// Get xp_files[idx] from ccline->xpc (for Rust FFI). Returns NULL if out of range.
+const char *nvim_cmdexpand_get_ccline_xp_file(int idx)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  if (ccline == NULL || ccline->xpc == NULL || ccline->xpc->xp_files == NULL) {
+    return NULL;
+  }
+  if (idx < 0 || idx >= ccline->xpc->xp_numfiles) {
+    return NULL;
+  }
+  return ccline->xpc->xp_files[idx];
+}
+
+/// Check ccline->xpc->xp_files is not NULL (for Rust FFI).
+int nvim_cmdexpand_ccline_has_xp_files(void)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  return ccline != NULL && ccline->xpc != NULL && ccline->xpc->xp_files != NULL;
+}
+
+/// Convert completion type string to context integer (for Rust FFI).
+int nvim_cmdexpand_cmdcomplete_str_to_type(const char *type)
+{
+  return cmdcomplete_str_to_type(type);
+}
+
+/// Convert completion context integer (+ arg) to string (for Rust FFI). Returns xstrdup.
+char *nvim_cmdexpand_cmdcomplete_type_to_str(int ctx, const char *arg)
+{
+  return cmdcomplete_type_to_str(ctx, arg);
+}
+
+/// Get the cmdline_orig static (for Rust FFI).
+const char *nvim_cmdexpand_get_cmdline_orig(void)
+{
+  return cmdline_orig;
+}
+
+/// set_context_in_menu_cmd wrapper (for Rust FFI).
+void nvim_cmdexpand_set_context_in_menu_cmd(expand_T *xp, const char *cmd, char *arg, bool delim_optional)
+{
+  set_context_in_menu_cmd(xp, cmd, arg, delim_optional);
+}
+
+/// set_context_in_sign_cmd wrapper (for Rust FFI).
+void nvim_cmdexpand_set_context_in_sign_cmd(expand_T *xp, char *arg)
+{
+  set_context_in_sign_cmd(xp, arg);
+}
+
+/// set_context_in_runtime_cmd wrapper (for Rust FFI).
+void nvim_cmdexpand_set_context_in_runtime_cmd(expand_T *xp, char *arg)
+{
+  set_context_in_runtime_cmd(xp, arg);
+}
+
+/// VAR_STRING constant (for Rust FFI).
+int nvim_cmdexpand_get_var_string(void)
+{
+  return VAR_STRING;
+}
+
+/// VAR_NUMBER constant (for Rust FFI).
+int nvim_cmdexpand_get_var_number(void)
+{
+  return VAR_NUMBER;
+}
+
+/// VAR_UNKNOWN constant (for Rust FFI).
+int nvim_cmdexpand_get_var_unknown(void)
+{
+  return VAR_UNKNOWN;
+}
+
+/// filetype_expand_what = EXP_FILETYPECMD_ALL (for Rust FFI).
+void nvim_cmdexpand_set_filetype_expand_all(void)
+{
+  filetype_expand_what = EXP_FILETYPECMD_ALL;
+}
+
+/// emsg(_(e_invarg)) wrapper (for Rust FFI).
+void nvim_cmdexpand_emsg_invarg(void)
+{
+  emsg(_(e_invarg));
+}
+
+/// semsg(_(e_invarg2), type) wrapper (for Rust FFI).
+void nvim_cmdexpand_semsg_invarg2(const char *type)
+{
+  semsg(_(e_invarg2), type);
+}
+
+/// xmemdupz wrapper (for Rust FFI).
+char *nvim_cmdexpand_xmemdupz(const char *s, size_t len)
+{
+  return xmemdupz(s, len);
+}
+
 
 /// Completion for |:checkhealth| command.
 ///
@@ -2437,180 +2644,7 @@ static void cmdline_del(CmdlineInfo *cclp, int from)
 // wildmenu_process_key -- migrated to Rust (wildmenu.rs)
 // wildmenu_cleanup -- migrated to Rust (wildmenu.rs)
 
-/// "getcompletion()" function
-void f_getcompletion(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  expand_T xpc;
-  bool filtered = false;
-  int options = WILD_SILENT | WILD_USE_NL | WILD_ADD_SLASH
-                | WILD_NO_BEEP | WILD_HOME_REPLACE;
-
-  if (tv_check_for_string_arg(argvars, 1) == FAIL) {
-    return;
-  }
-  const char *const type = tv_get_string(&argvars[1]);
-
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    filtered = (bool)tv_get_number_chk(&argvars[2], NULL);
-  }
-
-  if (p_wic) {
-    options |= WILD_ICASE;
-  }
-
-  // For filtered results, 'wildignore' is used
-  if (!filtered) {
-    options |= WILD_KEEP_ALL;
-  }
-
-  if (argvars[0].v_type != VAR_STRING) {
-    emsg(_(e_invarg));
-    return;
-  }
-  const char *const pattern = tv_get_string(&argvars[0]);
-  const char *pattern_start = pattern;
-
-  if (strcmp(type, "cmdline") == 0) {
-    const int cmdline_len = (int)strlen(pattern);
-    set_cmd_context(&xpc, (char *)pattern, cmdline_len, cmdline_len, false);
-    pattern_start = xpc.xp_pattern;
-    xpc.xp_pattern_len = strlen(xpc.xp_pattern);
-    xpc.xp_col = cmdline_len;
-    goto theend;
-  }
-
-  ExpandInit(&xpc);
-  xpc.xp_pattern = (char *)pattern;
-  xpc.xp_pattern_len = strlen(xpc.xp_pattern);
-  xpc.xp_line = (char *)pattern;
-
-  xpc.xp_context = cmdcomplete_str_to_type(type);
-  switch (xpc.xp_context) {
-  case EXPAND_NOTHING:
-    semsg(_(e_invarg2), type);
-    return;
-
-  case EXPAND_USER_DEFINED:
-    // Must be "custom,funcname" pattern
-    if (strncmp(type, "custom,", 7) != 0) {
-      semsg(_(e_invarg2), type);
-      return;
-    }
-
-    xpc.xp_arg = (char *)(type + 7);
-    break;
-
-  case EXPAND_USER_LIST:
-    // Must be "customlist,funcname" pattern
-    if (strncmp(type, "customlist,", 11) != 0) {
-      semsg(_(e_invarg2), type);
-      return;
-    }
-
-    xpc.xp_arg = (char *)(type + 11);
-    break;
-
-  case EXPAND_MENUS:
-    set_context_in_menu_cmd(&xpc, "menu", xpc.xp_pattern, false);
-    xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
-    break;
-
-  case EXPAND_SIGN:
-    set_context_in_sign_cmd(&xpc, xpc.xp_pattern);
-    xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
-    break;
-
-  case EXPAND_RUNTIME:
-    set_context_in_runtime_cmd(&xpc, xpc.xp_pattern);
-    xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
-    break;
-
-  case EXPAND_SHELLCMDLINE: {
-    int context = EXPAND_SHELLCMDLINE;
-    rs_set_context_for_wildcard_arg(xpc.xp_pattern, 0, &xpc, &context);
-    xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
-    break;
-  }
-
-  case EXPAND_FILETYPECMD:
-    filetype_expand_what = EXP_FILETYPECMD_ALL;
-    break;
-
-  default:
-    break;
-  }
-
-theend:
-  if (xpc.xp_context == EXPAND_LUA) {
-    xpc.xp_col = (int)strlen(xpc.xp_line);
-    nlua_expand_pat(&xpc);
-    xpc.xp_pattern_len -= (size_t)(xpc.xp_pattern - pattern_start);
-  }
-  char *pat;
-  if (rs_cmdline_fuzzy_completion_supported(xpc.xp_context)) {
-    // when fuzzy matching, don't modify the search string
-    pat = xmemdupz(xpc.xp_pattern, xpc.xp_pattern_len);
-  } else {
-    pat = addstar(xpc.xp_pattern, xpc.xp_pattern_len, xpc.xp_context);
-  }
-
-  ExpandOne(&xpc, pat, NULL, options, WILD_ALL_KEEP);
-  tv_list_alloc_ret(rettv, xpc.xp_numfiles);
-
-  for (int i = 0; i < xpc.xp_numfiles; i++) {
-    tv_list_append_string(rettv->vval.v_list, xpc.xp_files[i], -1);
-  }
-  xfree(pat);
-  ExpandCleanup(&xpc);
-}
-
-/// "getcompletiontype()" function
-void f_getcompletiontype(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  if (tv_check_for_string_arg(argvars, 0) == FAIL) {
-    return;
-  }
-
-  const char *pat = tv_get_string(&argvars[0]);
-  expand_T xpc;
-  ExpandInit(&xpc);
-
-  int cmdline_len = (int)strlen(pat);
-  set_cmd_context(&xpc, (char *)pat, cmdline_len, cmdline_len, false);
-  rettv->vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg);
-
-  ExpandCleanup(&xpc);
-}
-
-/// "cmdcomplete_info()" function
-void f_cmdcomplete_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  CmdlineInfo *ccline = get_cmdline_info();
-
-  tv_dict_alloc_ret(rettv);
-  if (ccline == NULL || ccline->xpc == NULL || ccline->xpc->xp_files == NULL) {
-    return;
-  }
-
-  dict_T *retdict = rettv->vval.v_dict;
-  int ret = tv_dict_add_str(retdict, S_LEN("cmdline_orig"), cmdline_orig);
-  if (ret == OK) {
-    ret = tv_dict_add_nr(retdict, S_LEN("pum_visible"), pum_visible());
-  }
-  if (ret == OK) {
-    ret = tv_dict_add_nr(retdict, S_LEN("selected"), ccline->xpc->xp_selected);
-  }
-  if (ret == OK) {
-    list_T *li = tv_list_alloc(ccline->xpc->xp_numfiles);
-    ret = tv_dict_add_list(retdict, S_LEN("matches"), li);
-    for (int idx = 0; ret == OK && idx < ccline->xpc->xp_numfiles; idx++) {
-      tv_list_append_string(li, ccline->xpc->xp_files[idx], -1);
-    }
-  }
-}
+// f_getcompletion, f_getcompletiontype, f_cmdcomplete_info -- migrated to Rust (viml.rs)
 // Rust helper for empty pattern check
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 

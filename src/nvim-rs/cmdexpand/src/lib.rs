@@ -22,12 +22,24 @@ pub mod navigation;
 pub mod pattern;
 pub mod pum;
 pub mod set_context;
+pub mod viml;
 pub mod wildmenu;
 
 pub use context::*;
 
 use libc::{c_char, c_int};
 use std::ffi::CStr;
+
+// =============================================================================
+// VimL type constants (from eval/typval_defs.h)
+// =============================================================================
+
+/// `VAR_UNKNOWN` — unspecified value type.
+pub const VAR_UNKNOWN: c_int = 0;
+/// `VAR_NUMBER` — number value type.
+pub const VAR_NUMBER: c_int = 1;
+/// `VAR_STRING` — string value type.
+pub const VAR_STRING: c_int = 2;
 
 // =============================================================================
 // expand_T repr(C) struct
@@ -92,6 +104,17 @@ pub struct ExpandT {
 
 /// Handle to `expand_T` (C struct).
 pub type ExpandHandle = *mut ExpandT;
+
+impl ExpandT {
+    /// Create a zeroed `ExpandT` instance (safe to pass to `ExpandInit`).
+    #[must_use]
+    pub const fn zeroed() -> Self {
+        // SAFETY: ExpandT is repr(C) with all-bytes-zero as a valid initial state
+        // before ExpandInit() is called. Pointer fields are null (safe), numeric
+        // fields are zero (valid for their respective types).
+        unsafe { std::mem::zeroed() }
+    }
+}
 
 // =============================================================================
 // External C functions
