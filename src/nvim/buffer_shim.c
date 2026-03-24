@@ -79,6 +79,8 @@ extern win_T *rs_lastwin_nofloating(void);
 extern int rs_tabline_height(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_win_valid(win_T *win);
+// enter_buffer() is in buffer.c (made non-static for Phase 18).
+extern void enter_buffer(buf_T *buf);
 
 // ============================================================
 // Core buf_T field accessors (Phase 1 / lifecycle)
@@ -2216,4 +2218,67 @@ void ex_buffer_all(exarg_T *eap)
       }
     }
   }
+}
+
+/// Handle the situation of swap_exists_action being set.
+///
+/// It is allowed for "old_curbuf" to be NULL or invalid.
+///
+/// @param old_curbuf The buffer to check for.
+void handle_swap_exists(bufref_T *old_curbuf)
+{
+  cleanup_T cs;
+  OptInt old_tw = curbuf->b_p_tw;
+  buf_T *buf;
+
+  if (swap_exists_action == SEA_QUIT) {
+    // Reset the error/interrupt/exception state here so that
+    // aborting() returns false when closing a buffer.
+    enter_cleanup(&cs);
+
+    // User selected Quit at ATTENTION prompt.  Go back to previous
+    // buffer.  If that buffer is gone or the same as the current one,
+    // open a new, empty buffer.
+    swap_exists_action = SEA_NONE;      // don't want it again
+    swap_exists_did_quit = true;
+    close_buffer(curwin, curbuf, DOBUF_UNLOAD, false, false);
+    if (old_curbuf == NULL
+        || !bufref_valid(old_curbuf)
+        || old_curbuf->br_buf == curbuf) {
+      // Block autocommands here because curwin->w_buffer is NULL.
+      block_autocmds();
+      buf = buflist_new(NULL, NULL, 1, BLN_CURBUF | BLN_LISTED);
+      unblock_autocmds();
+    } else {
+      buf = old_curbuf->br_buf;
+    }
+    if (buf != NULL) {
+      enter_buffer(buf);
+
+      if (old_tw != curbuf->b_p_tw) {
+        check_colorcolumn(NULL, curwin);
+      }
+    }
+    // If "old_curbuf" is NULL we are in big trouble here...
+
+    // Restore the error/interrupt/exception state if not discarded by a
+    // new aborting error, interrupt, or uncaught exception.
+    leave_cleanup(&cs);
+  } else if (swap_exists_action == SEA_RECOVER) {
+    // Reset the error/interrupt/exception state here so that
+    // aborting() returns false when closing a buffer.
+    enter_cleanup(&cs);
+
+    // User selected Recover at ATTENTION prompt.
+    msg_scroll = true;
+    ml_recover(false);
+    msg_puts("\n");     // don't overwrite the last message
+    cmdline_row = msg_row;
+    do_modelines(0);
+
+    // Restore the error/interrupt/exception state if not discarded by a
+    // new aborting error, interrupt, or uncaught exception.
+    leave_cleanup(&cs);
+  }
+  swap_exists_action = SEA_NONE;
 }

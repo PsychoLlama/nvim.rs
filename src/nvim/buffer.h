@@ -245,3 +245,8 @@ bool buf_contents_changed(buf_T *buf);
 
 // ex_buffer_all() moved to buffer_shim.c (Phase 17).
 void ex_buffer_all(exarg_T *eap);
+
+// enter_buffer() made non-static (Phase 18) for buffer_shim.c callers.
+void enter_buffer(buf_T *buf);
+// handle_swap_exists() moved to buffer_shim.c (Phase 18).
+void handle_swap_exists(bufref_T *old_curbuf);
