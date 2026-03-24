@@ -4,6 +4,8 @@
 //! migrated from `src/nvim/buffer.c` in Phase 1.
 
 #![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int, c_ulong, c_void};
@@ -409,4 +411,97 @@ pub unsafe extern "C" fn do_bufdel(
     }
 
     errormsg
+}
+
+// =============================================================================
+// read_buffer_into helpers
+// =============================================================================
+
+extern "C" {
+    fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
+    // nvim_ml_get_buf_len: takes *mut c_void in quickfix_shim.c
+    fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
+    fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
+    fn nvim_buf_get_no_eol_lnum(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_fixeol(buf: BufHandle) -> bool;
+    fn nvim_buf_get_b_p_eol(buf: BufHandle) -> bool;
+    fn nvim_sb_push_byte(sb: *mut c_void, byte: c_char);
+    fn nvim_sb_concat_len(sb: *mut c_void, ptr: *const c_char, len: usize);
+}
+
+const NL_BYTE: u8 = b'\n';
+const NUL_BYTE: u8 = b'\0';
+
+/// Read buffer contents from lines [start, end] into a C `StringBuilder`.
+///
+/// Handles NL<->/dev/null translation (Vim stores NUL as NL in the memline).
+/// Appends a trailing newline for each line unless suppressed by
+/// `'fixeol'`, `'eol'`, `'bin'`, or the `b_no_eol_lnum` marker.
+///
+/// # Safety
+///
+/// Must be called on the Neovim main thread. `sb` must be a valid `StringBuilder *`.
+#[unsafe(export_name = "read_buffer_into")]
+pub unsafe extern "C" fn rs_read_buffer_into(
+    buf: BufHandle,
+    start: c_int,
+    end: c_int,
+    sb: *mut c_void,
+) {
+    if nvim_buf_ml_is_empty(buf) {
+        return;
+    }
+
+    let ml_line_count = nvim_buf_get_ml_line_count(buf);
+    let no_eol_lnum = nvim_buf_get_no_eol_lnum(buf);
+    let bin = nvim_buf_get_bin(buf) != 0;
+    let fixeol = nvim_buf_get_b_p_fixeol(buf);
+    let eol = nvim_buf_get_b_p_eol(buf);
+
+    let mut lnum = start;
+    let mut lp = nvim_ml_get_buf(buf, lnum);
+    let mut lplen = nvim_ml_get_buf_len(buf.as_ptr(), lnum) as usize;
+    let mut written: usize = 0;
+
+    loop {
+        let len: usize;
+        if lplen == 0 {
+            len = 0;
+        } else {
+            let ch = *lp.add(written) as u8;
+            if ch == NL_BYTE {
+                // NL -> /dev/null translation
+                len = 1;
+                nvim_sb_push_byte(sb, NUL_BYTE as c_char);
+            } else {
+                // Find next NL or end of available bytes
+                let remaining = lplen - written;
+                let slice = std::slice::from_raw_parts(lp.add(written).cast::<u8>(), remaining);
+                let found = slice.iter().position(|&b| b == NL_BYTE);
+                len = found.unwrap_or(remaining);
+                nvim_sb_concat_len(sb, lp.add(written), len);
+            }
+        }
+
+        if len == lplen - written {
+            // Finished a line; emit a trailing NL unless suppressed.
+            if lnum != end
+                || (!bin && fixeol)
+                || (lnum != no_eol_lnum && (lnum != ml_line_count || eol))
+            {
+                nvim_sb_push_byte(sb, NL_BYTE as c_char);
+            }
+            lnum += 1;
+            if lnum > end {
+                break;
+            }
+            lp = nvim_ml_get_buf(buf, lnum);
+            lplen = nvim_ml_get_buf_len(buf.as_ptr(), lnum) as usize;
+            written = 0;
+        } else if len > 0 {
+            written += len;
+        }
+    }
 }

@@ -1828,3 +1828,15 @@ void nvim_ml_setname(buf_T *buf) { ml_setname(buf); }
 
 /// Reset the memline timestamp after a buffer rename (accessor for Rust).
 void nvim_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
+
+/// Get buf->b_no_eol_lnum (accessor for Rust).
+int nvim_buf_get_no_eol_lnum(buf_T *buf) { return (int)buf->b_no_eol_lnum; }
+
+/// Append a single byte to a StringBuilder (accessor for Rust).
+void nvim_sb_push_byte(void *sb, char byte) { kv_push(*(StringBuilder *)sb, byte); }
+
+/// Append len bytes from ptr to a StringBuilder (accessor for Rust).
+void nvim_sb_concat_len(void *sb, const char *ptr, size_t len)
+{
+  kv_concat_len(*(StringBuilder *)sb, ptr, len);
+}
