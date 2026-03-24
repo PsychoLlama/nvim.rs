@@ -17,6 +17,7 @@ pub mod misc;
 pub mod modeline;
 pub mod properties;
 pub mod state;
+pub mod wininfo;
 
 use std::ffi::{c_char, c_int};
 
@@ -257,15 +258,6 @@ extern "C" {
 
     /// Get cursor column for a window.
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
-
-    /// Call `buflist_setfpos` (set buffer/window position info).
-    fn nvim_buflist_setfpos(
-        buf: BufHandle,
-        win: WinHandle,
-        lnum: c_int,
-        col: c_int,
-        copy_options: bool,
-    );
 
     /// Get stored lnum from `buflist_findfmark`.
     fn nvim_buflist_findfmark_lnum(buf: BufHandle) -> c_int;
@@ -1120,7 +1112,7 @@ pub unsafe extern "C" fn rs_buflist_altfpos(win: WinHandle) {
     let buf = nvim_get_curbuf();
     let lnum = nvim_win_get_cursor_lnum(win);
     let col = nvim_win_get_cursor_col(win);
-    nvim_buflist_setfpos(buf, win, lnum, col, true);
+    crate::wininfo::rs_buflist_setfpos(buf, win, lnum, col, true);
 }
 
 /// Find the stored line number for buffer `buf` for the current window.

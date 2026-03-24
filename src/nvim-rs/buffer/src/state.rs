@@ -38,7 +38,7 @@ extern "C" {
     // Phase 1: unchanged, changedtick, autocmd, close_buffer
     fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
     fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
-    fn buf_set_changedtick(buf: BufHandle, changedtick: i64);
+    fn nvim_buf_set_changedtick_compound(buf: BufHandle, changedtick: i64);
     fn block_autocmds();
     fn unblock_autocmds();
     fn close_buffer(
@@ -369,7 +369,18 @@ pub unsafe extern "C" fn rs_buf_clear_file(buf: BufHandle) {
     nvim_buf_set_ml_flags(buf, ML_EMPTY);
 }
 
-/// Increment b:changedtick value.
+/// Set `b:changedtick`, triggering dict watcher notification if watched.
+///
+/// Mirrors C `buf_set_changedtick`.
+///
+/// # Safety
+/// Must be called on the main thread with valid Neovim state.
+#[unsafe(export_name = "buf_set_changedtick")]
+pub unsafe extern "C" fn rs_buf_set_changedtick(buf: BufHandle, changedtick: i64) {
+    nvim_buf_set_changedtick_compound(buf, changedtick);
+}
+
+/// Increment `b:changedtick` value.
 ///
 /// Delegates to `buf_set_changedtick(buf, buf_get_changedtick(buf) + 1)`.
 #[unsafe(no_mangle)]
@@ -378,7 +389,7 @@ pub unsafe extern "C" fn rs_buf_inc_changedtick(buf: BufHandle) {
         return;
     }
     let tick = nvim_buf_get_changedtick_direct(buf);
-    buf_set_changedtick(buf, tick + 1);
+    rs_buf_set_changedtick(buf, tick + 1);
 }
 
 /// Wipe out a buffer, optionally blocking autocommands.

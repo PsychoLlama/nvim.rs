@@ -725,13 +725,6 @@ char *nvim_home_replace_save(buf_T *buf, const char *src)
 // Phase 4 accessor functions for buffer display & info helpers.
 // ============================================================
 
-/// Call buflist_setfpos (accessor for Rust).
-void nvim_buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum, colnr_T col,
-                          bool copy_options)
-{
-  buflist_setfpos(buf, win, lnum, col, copy_options);
-}
-
 /// Get stored lnum from buflist_findfmark (accessor for Rust).
 linenr_T nvim_buflist_findfmark_lnum(buf_T *buf)
 {
@@ -1417,67 +1410,143 @@ void nvim_buf_signcols_clear(buf_T *buf)
 // WinInfo / buffer position functions (Phase 11)
 // ============================================================
 
-/// Set the last cursor position in the info for the current window in buffer "buf".
-/// This is in the WinInfo list in buf->b_wininfo.
-void buflist_setfpos(buf_T *const buf, win_T *const win, linenr_T lnum, colnr_T col,
-                     bool copy_options)
-  FUNC_ATTR_NONNULL_ARG(1)
+// ============================================================
+// WinInfo FFI accessor helpers (for Rust wininfo.rs)
+// ============================================================
+
+size_t nvim_buf_wininfo_count(buf_T *buf) { return kv_size(buf->b_wininfo); }
+WinInfo *nvim_buf_wininfo_get(buf_T *buf, size_t i) { return kv_A(buf->b_wininfo, i); }
+win_T *nvim_wininfo_get_win(WinInfo *wip) { return wip->wi_win; }
+bool nvim_wininfo_get_optset(WinInfo *wip) { return wip->wi_optset; }
+bool nvim_wininfo_get_wo_diff(WinInfo *wip) { return wip->wi_opt.wo_diff; }
+int nvim_wininfo_get_changelistidx(WinInfo *wip) { return wip->wi_changelistidx; }
+fmark_T *nvim_wininfo_get_mark_ptr(WinInfo *wip) { return &wip->wi_mark; }
+bool nvim_wininfo_get_fold_manual(WinInfo *wip) { return wip->wi_fold_manual; }
+garray_T *nvim_wininfo_get_folds_ptr(WinInfo *wip) { return &wip->wi_folds; }
+garray_T *nvim_win_get_folds_ptr(win_T *wp) { return &wp->w_folds; }
+bool nvim_win_get_fold_manual(win_T *wp) { return wp->w_fold_manual; }
+
+/// Returns true if wip->wi_win is a window in the current tab page.
+bool nvim_wininfo_win_in_curtab(WinInfo *wip)
 {
-  WinInfo *wip;
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wip->wi_win == wp) {
+      return true;
+    }
+  }
+  return false;
+}
 
-  size_t i;
-  for (i = 0; i < kv_size(buf->b_wininfo); i++) {
-    wip = kv_A(buf->b_wininfo, i);
+/// Find and detach a WinInfo entry for win from buf->b_wininfo.
+/// If found: shifts the entry out of the vector and returns it
+///   (if copy_options && wi_optset: clears wi_opt and folds first).
+/// If not found: allocates a new WinInfo with wi_win=win and lnum forced to 1 if lnum==0.
+/// Returns non-NULL always.
+WinInfo *nvim_buf_wininfo_find_and_detach(buf_T *buf, win_T *win, bool copy_options,
+                                          linenr_T *lnum_inout)
+{
+  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+    WinInfo *wip = kv_A(buf->b_wininfo, i);
     if (wip->wi_win == win) {
-      break;
+      kv_shift(buf->b_wininfo, i, 1);
+      if (copy_options && wip->wi_optset) {
+        clear_winopt(&wip->wi_opt);
+        deleteFoldRecurse(buf, &wip->wi_folds);
+      }
+      return wip;
     }
   }
+  // Not found: allocate new entry
+  WinInfo *wip = xcalloc(1, sizeof(WinInfo));
+  wip->wi_win = win;
+  if (*lnum_inout == 0) {
+    *lnum_inout = 1;
+  }
+  return wip;
+}
 
-  if (i == kv_size(buf->b_wininfo)) {
-    // allocate a new entry
-    wip = xcalloc(1, sizeof(WinInfo));
-    wip->wi_win = win;
-    if (lnum == 0) {            // set lnum even when it's 0
-      lnum = 1;
-    }
-  } else {
-    // remove the entry from the list
-    kv_shift(buf->b_wininfo, i, 1);
-    if (copy_options && wip->wi_optset) {
-      clear_winopt(&wip->wi_opt);
-      deleteFoldRecurse(buf, &wip->wi_folds);
-    }
-  }
-  if (lnum != 0) {
-    wip->wi_mark.mark.lnum = lnum;
-    wip->wi_mark.mark.col = col;
-    if (win != NULL) {
-      wip->wi_mark.view = mark_view_make(win->w_topline, wip->wi_mark.mark);
-    }
-  }
-  if (win != NULL) {
-    wip->wi_changelistidx = win->w_changelistidx;
-  }
-  if (copy_options && win != NULL) {
-    // Save the window-specific option values.
-    copy_winopt(&win->w_onebuf_opt, &wip->wi_opt);
-    wip->wi_fold_manual = win->w_fold_manual;
-    rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
-    wip->wi_optset = true;
-  }
-
-  // insert the entry in front of the list
+/// Prepend wip to buf->b_wininfo (push to front of vector).
+void nvim_buf_wininfo_prepend(buf_T *buf, WinInfo *wip)
+{
   kv_pushp(buf->b_wininfo);
   memmove(&kv_A(buf->b_wininfo, 1), &kv_A(buf->b_wininfo, 0),
           (kv_size(buf->b_wininfo) - 1) * sizeof(kv_A(buf->b_wininfo, 0)));
   kv_A(buf->b_wininfo, 0) = wip;
 }
 
-/// Set b:changedtick, also checking b: for consistency in debug build
-///
-/// @param[out]  buf  Buffer to set changedtick in.
-/// @param[in]  changedtick  New value.
-void buf_set_changedtick(buf_T *const buf, const varnumber_T changedtick)
+/// Set wi_mark on wip from lnum/col, and compute view if win != NULL.
+void nvim_wininfo_set_mark(WinInfo *wip, linenr_T lnum, colnr_T col, win_T *win)
+{
+  wip->wi_mark.mark.lnum = lnum;
+  wip->wi_mark.mark.col = col;
+  if (win != NULL) {
+    wip->wi_mark.view = mark_view_make(win->w_topline, wip->wi_mark.mark);
+  }
+}
+
+/// Copy window options from win into wip, set fold_manual and clone folds.
+void nvim_wininfo_copy_from_win(WinInfo *wip, win_T *win)
+{
+  copy_winopt(&win->w_onebuf_opt, &wip->wi_opt);
+  wip->wi_fold_manual = win->w_fold_manual;
+  rs_cloneFoldGrowArray(&win->w_folds, &wip->wi_folds);
+  wip->wi_optset = true;
+}
+
+/// get_winopts: apply WinInfo wip to curwin (copy opts + folds), or copy from win.
+/// Returns 0 if no matching wip (fall back to allbuf_opt),
+///         1 if copied from wip->wi_win (other window with same buffer),
+///         2 if copied from wip->wi_opt (saved options).
+int nvim_get_winopts_apply(WinInfo *wip, buf_T *buf)
+{
+  if (wip == NULL) {
+    copy_winopt(&curwin->w_allbuf_opt, &curwin->w_onebuf_opt);
+    return 0;
+  }
+  if (wip->wi_win != curwin && wip->wi_win != NULL && wip->wi_win->w_buffer == buf) {
+    win_T *wp = wip->wi_win;
+    copy_winopt(&wp->w_onebuf_opt, &curwin->w_onebuf_opt);
+    curwin->w_fold_manual = wp->w_fold_manual;
+    curwin->w_foldinvalid = true;
+    rs_cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
+    return 1;
+  } else if (wip->wi_optset) {
+    copy_winopt(&wip->wi_opt, &curwin->w_onebuf_opt);
+    curwin->w_fold_manual = wip->wi_fold_manual;
+    curwin->w_foldinvalid = true;
+    rs_cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
+    return 2;
+  } else {
+    copy_winopt(&curwin->w_allbuf_opt, &curwin->w_onebuf_opt);
+    return 0;
+  }
+}
+
+void nvim_clear_winopt_curwin(void) { clear_winopt(&curwin->w_onebuf_opt); }
+void nvim_curwin_set_changelistidx(int val) { curwin->w_changelistidx = val; }
+bool nvim_curwin_config_is_minimal(void) { return curwin->w_config.style == kWinStyleMinimal; }
+int64_t nvim_get_p_fdls(void) { return p_fdls; }
+void nvim_curwin_set_p_fdl(int val) { curwin->w_p_fdl = (OptInt)val; }
+void nvim_didset_window_options_curwin(void) { didset_window_options(curwin, false); }
+void nvim_win_set_minimal_style_curwin(void) { win_set_minimal_style(curwin); }
+// nvim_get_curwin: defined in Rust window crate (window/src/globals.rs)
+// nvim_win_get_changelistidx: defined in window_shim.c
+void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelistidx = val; }
+void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
+void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
+
+/// Get pointer to static no_position fmark_T for buflist_findfmark.
+fmark_T *nvim_get_no_position_ptr(void)
+{
+  static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL };
+  return &no_position;
+}
+
+// buflist_setfpos, wininfo_other_tab_diff, find_wininfo, get_winopts, buflist_findfmark:
+// migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
+
+/// Compound accessor: full body of buf_set_changedtick (migrated to Rust).
+void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T changedtick)
   FUNC_ATTR_NONNULL_ALL
 {
   typval_T old_val = buf->changedtick_di.di_tv;
@@ -1507,122 +1576,8 @@ void buf_set_changedtick(buf_T *const buf, const varnumber_T changedtick)
 
 
 
-// ============================================================
-// WinInfo lookup cluster (Phase 12)
-// ============================================================
-
-/// Check that "wip" has 'diff' set and the diff is only for another tab page.
-/// That's because a diff is local to a tab page.
-static bool wininfo_other_tab_diff(WinInfo *wip)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  if (!wip->wi_opt.wo_diff) {
-    return false;
-  }
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    // return false when it's a window in the current tab page, thus
-    // the buffer was in diff mode here
-    if (wip->wi_win == wp) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/// Find info for the current window in buffer "buf".
-/// If not found, return the info for the most recently used window.
-///
-/// @param need_options      when true, skip entries where wi_optset is false.
-/// @param skip_diff_buffer  when true, avoid windows with 'diff' set that is in another tab page.
-///
-/// @return  NULL when there isn't any info.
-static WinInfo *find_wininfo(buf_T *buf, bool need_options, bool skip_diff_buffer)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
-    WinInfo *wip = kv_A(buf->b_wininfo, i);
-    if (wip->wi_win == curwin
-        && (!skip_diff_buffer || !wininfo_other_tab_diff(wip))
-        && (!need_options || wip->wi_optset)) {
-      return wip;
-    }
-  }
-
-  // If no wininfo for curwin, use the first in the list (that doesn't have
-  // 'diff' set and is in another tab page).
-  // If "need_options" is true skip entries that don't have options set,
-  // unless the window is editing "buf", so we can copy from the window
-  // itself.
-  if (skip_diff_buffer) {
-    for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
-      WinInfo *wip = kv_A(buf->b_wininfo, i);
-      if (!wininfo_other_tab_diff(wip)
-          && (!need_options
-              || wip->wi_optset
-              || (wip->wi_win != NULL
-                  && wip->wi_win->w_buffer == buf))) {
-        return wip;
-      }
-    }
-  } else if (kv_size(buf->b_wininfo)) {
-    return kv_A(buf->b_wininfo, 0);
-  }
-  return NULL;
-}
-
-/// Reset the local window options to the values last used in this window.
-/// If the buffer wasn't used in this window before, use the values from
-/// the most recently used window.  If the values were never set, use the
-/// global values for the window.
-void get_winopts(buf_T *buf)
-{
-  clear_winopt(&curwin->w_onebuf_opt);
-  rs_clearFolding(curwin);
-
-  WinInfo *const wip = find_wininfo(buf, true, true);
-  if (wip != NULL && wip->wi_win != curwin && wip->wi_win != NULL
-      && wip->wi_win->w_buffer == buf) {
-    win_T *wp = wip->wi_win;
-    copy_winopt(&wp->w_onebuf_opt, &curwin->w_onebuf_opt);
-    curwin->w_fold_manual = wp->w_fold_manual;
-    curwin->w_foldinvalid = true;
-    rs_cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
-  } else if (wip != NULL && wip->wi_optset) {
-    copy_winopt(&wip->wi_opt, &curwin->w_onebuf_opt);
-    curwin->w_fold_manual = wip->wi_fold_manual;
-    curwin->w_foldinvalid = true;
-    rs_cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
-  } else {
-    copy_winopt(&curwin->w_allbuf_opt, &curwin->w_onebuf_opt);
-  }
-  if (wip != NULL) {
-    curwin->w_changelistidx = wip->wi_changelistidx;
-  }
-
-  if (curwin->w_config.style == kWinStyleMinimal) {
-    didset_window_options(curwin, false);
-    win_set_minimal_style(curwin);
-  }
-
-  // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
-  if (p_fdls >= 0) {
-    curwin->w_p_fdl = p_fdls;
-  }
-  didset_window_options(curwin, false);
-}
-
-/// Find the mark for the buffer 'buf' for the current window.
-///
-/// @return  a pointer to no_position if no position is found.
-fmark_T *buflist_findfmark(buf_T *buf)
-  FUNC_ATTR_PURE
-{
-  static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL };
-
-  WinInfo *const wip = find_wininfo(buf, false, false);
-  return (wip == NULL) ? &no_position : &(wip->wi_mark);
-}
+// wininfo_other_tab_diff, find_wininfo, get_winopts, buflist_findfmark:
+// migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
 
 
 /// Creates or switches to a scratch buffer. :h special-buffers
