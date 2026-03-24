@@ -1117,24 +1117,9 @@ int nvim_cmdexpand_expand_argopt(const char *pat, expand_T *xp, regmatch_T *regm
   return expand_argopt(pat, xp, regmatch, matches, numMatches);
 }
 
-/// Wrapper for ExpandUserDefined (for Rust FFI).
-int nvim_cmdexpand_expand_user_defined(const char *pat, expand_T *xp, regmatch_T *regmatch,
-                                        char ***matches, int *numMatches)
-{
-  return ExpandUserDefined(pat, xp, regmatch, matches, numMatches);
-}
-
-/// Wrapper for ExpandUserList (for Rust FFI).
-int nvim_cmdexpand_expand_user_list(expand_T *xp, char ***matches, int *numMatches)
-{
-  return ExpandUserList(xp, matches, numMatches);
-}
-
-/// Wrapper for ExpandUserLua (for Rust FFI).
-int nvim_cmdexpand_expand_user_lua(expand_T *xp, int *numMatches, char ***matches)
-{
-  return ExpandUserLua(xp, numMatches, matches);
-}
+// nvim_cmdexpand_expand_user_defined -- deleted, Rust calls rs_expand_user_defined directly
+// nvim_cmdexpand_expand_user_list -- deleted, Rust calls rs_expand_user_list directly
+// nvim_cmdexpand_expand_user_lua -- deleted, Rust calls rs_expand_user_lua directly
 
 /// Wrapper for nlua_expand_get_matches (for Rust FFI).
 int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
@@ -2203,6 +2188,91 @@ char *nvim_cmdexpand_xmemdupz(const char *s, size_t len)
   return xmemdupz(s, len);
 }
 
+/// call_user_expand_func with call_func_retlist (for Rust FFI).
+list_T *nvim_cmdexpand_call_user_expand_retlist(expand_T *xp)
+{
+  return call_user_expand_func(call_func_retlist, xp);
+}
+
+/// call_user_expand_func with call_func_retstr (for Rust FFI).
+char *nvim_cmdexpand_call_user_expand_retstr(expand_T *xp)
+{
+  return call_user_expand_func(call_func_retstr, xp);
+}
+
+/// nlua_call_user_expand_func wrapper (for Rust FFI).
+/// Caller must tv_clear rettv when done.
+int nvim_cmdexpand_nlua_call_user_expand(expand_T *xp)
+{
+  typval_T rettv = TV_INITIAL_VALUE;
+  nlua_call_user_expand_func(xp, &rettv);
+  if (rettv.v_type != VAR_LIST) {
+    tv_clear(&rettv);
+    return -1;  // Not a list
+  }
+  // Return list refcount +1; caller must tv_list_unref.
+  list_T *li = rettv.vval.v_list;
+  tv_list_ref(li);
+  tv_clear(&rettv);
+  return 0;  // Not used; see nvim_cmdexpand_nlua_get_retlist.
+}
+
+/// nlua_call_user_expand_func wrapper returning list_T * (for Rust FFI).
+/// Returns NULL if not a list. Caller must tv_list_unref.
+list_T *nvim_cmdexpand_nlua_call_user_expand_retlist(expand_T *xp)
+{
+  typval_T rettv = TV_INITIAL_VALUE;
+  nlua_call_user_expand_func(xp, &rettv);
+  if (rettv.v_type != VAR_LIST) {
+    tv_clear(&rettv);
+    return NULL;
+  }
+  list_T *li = rettv.vval.v_list;
+  tv_list_ref(li);
+  tv_clear(&rettv);
+  return li;
+}
+
+/// Convert list_T to a newly-allocated char ** array (for Rust FFI).
+/// Skips non-string items.  Unrefs the list.
+void nvim_cmdexpand_list_to_string_matches(list_T *list, char ***matches, int *numMatches)
+{
+  garray_T ga;
+  ga_init(&ga, (int)sizeof(char *), 3);
+  TV_LIST_ITER_CONST(list, li, {
+    if (TV_LIST_ITEM_TV(li)->v_type != VAR_STRING
+        || TV_LIST_ITEM_TV(li)->vval.v_string == NULL) {
+      continue;
+    }
+    GA_APPEND(char *, &ga, xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string));
+  });
+  tv_list_unref(list);
+  *matches = ga.ga_data;
+  *numMatches = ga.ga_len;
+}
+
+/// copy_option_part wrapper (for Rust FFI).
+size_t nvim_cmdexpand_copy_option_part(const char **src, char *buf, size_t maxlen, const char *sep)
+{
+  return copy_option_part((char **)src, buf, maxlen, sep);
+}
+
+/// after_pathsep wrapper (for Rust FFI).
+int nvim_cmdexpand_after_pathsep(const char *b, const char *p)
+{
+  return after_pathsep(b, p);
+}
+
+/// ga_grow + store matches into ga (for Rust FFI).
+/// Takes ownership of the char ** array; moves pointers into ga->ga_data.
+void nvim_cmdexpand_ga_append_matches(garray_T *ga, char **matches, int num)
+{
+  ga_grow(ga, num);
+  for (int i = 0; i < num; i++) {
+    ((char **)ga->ga_data)[ga->ga_len++] = matches[i];
+  }
+  xfree(matches);
+}
 
 /// Completion for |:checkhealth| command.
 ///
@@ -2434,138 +2504,7 @@ static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T
   return ret;
 }
 
-/// Expand names with a function defined by the user (EXPAND_USER_DEFINED and
-/// EXPAND_USER_LIST).
-static int ExpandUserDefined(const char *const pat, expand_T *xp, regmatch_T *regmatch,
-                             char ***matches, int *numMatches)
-{
-  const bool fuzzy = cmdline_fuzzy_complete(pat);
-  *matches = NULL;
-  *numMatches = 0;
-
-  char *const retstr = call_user_expand_func(call_func_retstr, xp);
-  if (retstr == NULL) {
-    return FAIL;
-  }
-
-  garray_T ga;
-  if (!fuzzy) {
-    ga_init(&ga, (int)sizeof(char *), 3);
-  } else {
-    ga_init(&ga, (int)sizeof(fuzmatch_str_T), 3);
-  }
-
-  for (char *s = retstr, *e; *s != NUL; s = e) {
-    e = vim_strchr(s, '\n');
-    if (e == NULL) {
-      e = s + strlen(s);
-    }
-    const char keep = *e;
-    *e = NUL;
-
-    bool match;
-    int score = 0;
-    if (xp->xp_pattern[0] != NUL) {
-      if (!fuzzy) {
-        match = vim_regexec(regmatch, s, 0);
-      } else {
-        score = fuzzy_match_str(s, pat);
-        match = (score != FUZZY_SCORE_NONE);
-      }
-    } else {
-      match = true;               // match everything
-    }
-
-    *e = keep;
-
-    if (match) {
-      if (!fuzzy) {
-        GA_APPEND(char *, &ga, xmemdupz(s, (size_t)(e - s)));
-      } else {
-        GA_APPEND(fuzmatch_str_T, &ga, ((fuzmatch_str_T){
-          .idx = ga.ga_len,
-          .str = xmemdupz(s, (size_t)(e - s)),
-          .score = score,
-        }));
-      }
-    }
-
-    if (*e != NUL) {
-      e++;
-    }
-  }
-  xfree(retstr);
-
-  if (ga.ga_len == 0) {
-    return OK;
-  }
-
-  if (!fuzzy) {
-    *matches = ga.ga_data;
-    *numMatches = ga.ga_len;
-  } else {
-    fuzzymatches_to_strmatches(ga.ga_data, matches, ga.ga_len, false);
-    *numMatches = ga.ga_len;
-  }
-  return OK;
-}
-
-/// Expand names with a list returned by a function defined by the user.
-static int ExpandUserList(expand_T *xp, char ***matches, int *numMatches)
-{
-  *matches = NULL;
-  *numMatches = 0;
-  list_T *const retlist = call_user_expand_func(call_func_retlist, xp);
-  if (retlist == NULL) {
-    return FAIL;
-  }
-
-  garray_T ga;
-  ga_init(&ga, (int)sizeof(char *), 3);
-  // Loop over the items in the list.
-  TV_LIST_ITER_CONST(retlist, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_STRING
-        || TV_LIST_ITEM_TV(li)->vval.v_string == NULL) {
-      continue;  // Skip non-string items and empty strings.
-    }
-
-    GA_APPEND(char *, &ga, xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string));
-  });
-  tv_list_unref(retlist);
-
-  *matches = ga.ga_data;
-  *numMatches = ga.ga_len;
-  return OK;
-}
-
-static int ExpandUserLua(expand_T *xp, int *num_file, char ***file)
-{
-  typval_T rettv = TV_INITIAL_VALUE;
-  nlua_call_user_expand_func(xp, &rettv);
-  if (rettv.v_type != VAR_LIST) {
-    tv_clear(&rettv);
-    return FAIL;
-  }
-
-  list_T *const retlist = rettv.vval.v_list;
-
-  garray_T ga;
-  ga_init(&ga, (int)sizeof(char *), 3);
-  // Loop over the items in the list.
-  TV_LIST_ITER_CONST(retlist, li, {
-    if (TV_LIST_ITEM_TV(li)->v_type != VAR_STRING
-        || TV_LIST_ITEM_TV(li)->vval.v_string == NULL) {
-      continue;  // Skip non-string items and empty strings.
-    }
-
-    GA_APPEND(char *, &ga, xstrdup(TV_LIST_ITEM_TV(li)->vval.v_string));
-  });
-  tv_list_unref(retlist);
-
-  *file = ga.ga_data;
-  *num_file = ga.ga_len;
-  return OK;
-}
+// ExpandUserDefined, ExpandUserList, ExpandUserLua -- migrated to Rust (shell.rs)
 
 /// Expand `file` for all comma-separated directories in `path`.
 /// Adds matches to `ga`.

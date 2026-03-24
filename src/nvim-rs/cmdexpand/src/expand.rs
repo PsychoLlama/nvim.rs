@@ -148,23 +148,9 @@ extern "C" {
         matches: *mut *mut *mut c_char,
         num_matches: *mut c_int,
     ) -> c_int;
-    fn nvim_cmdexpand_expand_user_defined(
-        pat: *const c_char,
-        xp: *mut ExpandT,
-        regmatch: *mut RegMatch,
-        matches: *mut *mut *mut c_char,
-        num_matches: *mut c_int,
-    ) -> c_int;
-    fn nvim_cmdexpand_expand_user_list(
-        xp: *mut ExpandT,
-        matches: *mut *mut *mut c_char,
-        num_matches: *mut c_int,
-    ) -> c_int;
-    fn nvim_cmdexpand_expand_user_lua(
-        xp: *mut ExpandT,
-        num_matches: *mut c_int,
-        matches: *mut *mut *mut c_char,
-    ) -> c_int;
+    // nvim_cmdexpand_expand_user_defined -- replaced by crate::shell::rs_expand_user_defined
+    // nvim_cmdexpand_expand_user_list -- replaced by crate::shell::rs_expand_user_list
+    // nvim_cmdexpand_expand_user_lua -- replaced by crate::shell::rs_expand_user_lua
     fn nvim_cmdexpand_nlua_expand_get_matches(
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
@@ -783,10 +769,10 @@ pub unsafe extern "C" fn rs_expand_from_context(
         return nvim_cmdexpand_expand_rtdir(pat, 0, num_matches, matches, dirs.as_mut_ptr());
     }
     if ctx == ExpandContext::UserList.to_raw() {
-        return nvim_cmdexpand_expand_user_list(xp, matches, num_matches);
+        return crate::shell::rs_expand_user_list(xp, matches, num_matches);
     }
     if ctx == ExpandContext::UserLua.to_raw() {
-        return nvim_cmdexpand_expand_user_lua(xp, num_matches, matches);
+        return crate::shell::rs_expand_user_lua(xp, num_matches, matches);
     }
     if ctx == ExpandContext::Packadd.to_raw() {
         return nvim_cmdexpand_expand_pack_add_dir(pat, num_matches, matches);
@@ -855,7 +841,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
         } else if ctx == ExpandContext::Argopt.to_raw() {
             nvim_cmdexpand_expand_argopt(effective_pat, xp, &raw mut regmatch, matches, num_matches)
         } else if ctx == ExpandContext::UserDefined.to_raw() {
-            nvim_cmdexpand_expand_user_defined(
+            crate::shell::rs_expand_user_defined(
                 effective_pat,
                 xp,
                 &raw mut regmatch,

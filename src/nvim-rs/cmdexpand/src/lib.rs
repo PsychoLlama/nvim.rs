@@ -22,6 +22,7 @@ pub mod navigation;
 pub mod pattern;
 pub mod pum;
 pub mod set_context;
+pub mod shell;
 pub mod viml;
 pub mod wildmenu;
 
