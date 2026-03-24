@@ -156,6 +156,10 @@ char *skip_grep_pat(exarg_T *eap);
 // Phase 3 normal-mode Rust exports used by ex_docmd
 extern void rs_set_cursor_for_append_to_line(void);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
+// Phase 4 Rust exports: do_one_cmd and ex_errmsg implemented in do_one_cmd.rs
+extern char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter fgetline,
+                        void *cookie);
+extern char *ex_errmsg(const char *const msg, const char *const arg);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -1183,485 +1187,7 @@ static int current_tab_nr(tabpage_T *tab)
 // get_wincmd_addr_type: now in Rust (rs_set_cmd_addr_type calls it internally)
 
 
-// Find the command name after skipping range specifiers.
-static char *find_excmd_after_range(exarg_T *eap)
-{
-  // Save location after command modifiers.
-  char *cmd = eap->cmd;
-  eap->cmd = skip_range(eap->cmd, NULL);
-  if (*eap->cmd == '*') {
-    eap->cmd = skipwhite(eap->cmd + 1);
-  }
-  char *p = find_ex_command(eap, NULL);
-  eap->cmd = cmd;  // Restore original position for address parsing
-  return p;
-}
-
-
-/// Execute one Ex command.
-///
-/// If "flags" has DOCMD_VERBOSE, the command will be included in the error
-/// message.
-///
-/// 1. skip comment lines and leading space
-/// 2. handle command modifiers
-/// 3. skip over the range to find the command
-/// 4. parse the range
-/// 5. parse the command
-/// 6. parse arguments
-/// 7. switch on command name
-///
-/// Note: "fgetline" can be NULL.
-///
-/// This function may be called recursively!
-///
-/// @param cookie  argument for fgetline()
-static char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter fgetline,
-                        void *cookie)
-{
-  const char *errormsg = NULL;  // error message
-  const int save_reg_executing = reg_executing;
-  const bool save_pending_end_reg_executing = pending_end_reg_executing;
-
-  exarg_T ea = {
-    .line1 = 1,
-    .line2 = 1,
-  };
-  ex_nesting_level++;
-
-  // When the last file has not been edited :q has to be typed twice.
-  if (quitmore
-      // avoid that a function call in 'statusline' does this
-      && !getline_equal(fgetline, cookie, get_func_line)
-      // avoid that an autocommand, e.g. QuitPre, does this
-      && !getline_equal(fgetline, cookie, getnextac)) {
-    quitmore--;
-  }
-
-  // Reset browse, confirm, etc..  They are restored when returning, for
-  // recursive calls.
-  cmdmod_T save_cmdmod = cmdmod;
-
-  // "#!anything" is handled like a comment.
-  if ((*cmdlinep)[0] == '#' && (*cmdlinep)[1] == '!') {
-    goto doend;
-  }
-
-  // 1. Skip comment lines and leading white space and colons.
-  // 2. Handle command modifiers.
-
-  // The "ea" structure holds the arguments that can be used.
-  ea.cmd = *cmdlinep;
-  ea.cmdlinep = cmdlinep;
-  ea.ea_getline = fgetline;
-  ea.cookie = cookie;
-  ea.cstack = cstack;
-
-  if (parse_command_modifiers(&ea, &errormsg, &cmdmod, false) == FAIL) {
-    goto doend;
-  }
-  nvim_docmd_apply_cmdmod_impl(&cmdmod);
-
-  char *after_modifier = ea.cmd;
-
-  ea.skip = (did_emsg
-             || got_int
-             || did_throw
-             || (cstack->cs_idx >= 0
-                 && !(cstack->cs_flags[cstack->cs_idx] & CSF_ACTIVE)));
-
-  // 3. Skip over the range to find the command. Let "p" point to after it.
-  //
-  // We need the command to know what kind of range it uses.
-  char *p = find_excmd_after_range(&ea);
-  profile_cmd(&ea, cstack, fgetline, cookie);
-
-  if (!exiting) {
-    // May go to debug mode.  If this happens and the ">quit" debug command is
-    // used, throw an interrupt exception and skip the next command.
-    dbg_check_breakpoint(&ea);
-  }
-  if (!ea.skip && got_int) {
-    ea.skip = true;
-    do_intthrow(cstack);
-  }
-
-  // 4. Parse a range specifier of the form: addr [,addr] [;addr] ..
-  //
-  // where 'addr' is:
-  //
-  // %          (entire file)
-  // $  [+-NUM]
-  // 'x [+-NUM] (where x denotes a currently defined mark)
-  // .  [+-NUM]
-  // [+-NUM]..
-  // NUM
-  //
-  // The ea.cmd pointer is updated to point to the first character following the
-  // range spec. If an initial address is found, but no second, the upper bound
-  // is equal to the lower.
-  set_cmd_addr_type(&ea, p);
-
-  if (parse_cmd_address(&ea, &errormsg, false) == FAIL) {
-    goto doend;
-  }
-
-  // 5. Parse the command.
-
-  // Skip ':' and any white space
-  ea.cmd = skip_colon_white(ea.cmd, true);
-
-  // If we got a line, but no command, then go to the line.
-  // If we find a '|' or '\n' we set ea.nextcmd.
-  if (*ea.cmd == NUL || *ea.cmd == '"'
-      || (ea.nextcmd = check_nextcmd(ea.cmd)) != NULL) {
-    // strange vi behaviour:
-    // ":3"     jumps to line 3
-    // ":3|..." prints line 3
-    // ":|"     prints current line
-    if (ea.skip) {  // skip this if inside :if
-      goto doend;
-    }
-    assert(errormsg == NULL);
-    errormsg = ex_range_without_command(&ea);
-    goto doend;
-  }
-
-  // If this looks like an undefined user command and there are CmdUndefined
-  // autocommands defined, trigger the matching autocommands.
-  if (p != NULL && ea.cmdidx == CMD_SIZE && !ea.skip
-      && ASCII_ISUPPER(*ea.cmd)
-      && has_event(EVENT_CMDUNDEFINED)) {
-    char *cmdname = ea.cmd;
-    while (ASCII_ISALNUM(*cmdname)) {
-      cmdname++;
-    }
-    cmdname = xmemdupz(ea.cmd, (size_t)(cmdname - ea.cmd));
-    int ret = apply_autocmds(EVENT_CMDUNDEFINED, cmdname, cmdname, true, NULL);
-    xfree(cmdname);
-    // If the autocommands did something and didn't cause an error, try
-    // finding the command again.
-    p = (ret && !aborting()) ? find_ex_command(&ea, NULL) : ea.cmd;
-  }
-
-  if (p == NULL) {
-    if (!ea.skip) {
-      errormsg = _(e_ambiguous_use_of_user_defined_command);
-    }
-    goto doend;
-  }
-
-  // Check for wrong commands.
-  if (ea.cmdidx == CMD_SIZE) {
-    if (!ea.skip) {
-      xstrlcpy(IObuff, _(e_not_an_editor_command), IOSIZE);
-      // If the modifier was parsed OK the error must be in the following
-      // command
-      char *cmdname = after_modifier ? after_modifier : *cmdlinep;
-      if (!(flags & DOCMD_VERBOSE)) {
-        append_command(cmdname);
-      }
-      errormsg = IObuff;
-      did_emsg_syntax = true;
-      verify_command(cmdname);
-    }
-    goto doend;
-  }
-
-  // set when Not Implemented
-  const int ni = is_cmd_ni(ea.cmdidx);
-
-  // Determine if command has forceit flag ('!')
-  ea.forceit = parse_bang(&ea, &p);
-
-  // 6. Parse arguments.  Then check for errors.
-  if (!IS_USER_CMDIDX(ea.cmdidx)) {
-    ea.argt = cmdnames[(int)ea.cmdidx].cmd_argt;
-  }
-
-  if (!ea.skip) {
-    if (sandbox != 0 && !(ea.argt & EX_SBOXOK)) {
-      // Command not allowed in sandbox.
-      errormsg = _(e_sandbox);
-      goto doend;
-    }
-    if (!MODIFIABLE(curbuf) && (ea.argt & EX_MODIFY)
-        // allow :put in terminals
-        && !(curbuf->terminal && (ea.cmdidx == CMD_put || ea.cmdidx == CMD_iput))) {
-      // Command not allowed in non-'modifiable' buffer
-      errormsg = _(e_modifiable);
-      goto doend;
-    }
-
-    if (!IS_USER_CMDIDX(ea.cmdidx)) {
-      if (cmdwin_type != 0 && !(ea.argt & EX_CMDWIN)) {
-        // Command not allowed in the command line window
-        errormsg = _(e_cmdwin);
-        goto doend;
-      }
-      if (text_locked() && !(ea.argt & EX_LOCK_OK)) {
-        // Command not allowed when text is locked
-        errormsg = _(get_text_locked_msg());
-        goto doend;
-      }
-    }
-
-    // Disallow editing another buffer when "curbuf->b_ro_locked" is set.
-    // Do allow ":checktime" (it is postponed).
-    // Do allow ":edit" (check for an argument later).
-    // Do allow ":file" with no arguments (check for an argument later).
-    if (!(ea.argt & EX_CMDWIN)
-        && ea.cmdidx != CMD_checktime
-        && ea.cmdidx != CMD_edit
-        && ea.cmdidx != CMD_file
-        && !IS_USER_CMDIDX(ea.cmdidx)
-        && curbuf_locked()) {
-      goto doend;
-    }
-
-    if (!ni && !(ea.argt & EX_RANGE) && ea.addr_count > 0) {
-      // no range allowed
-      errormsg = _(e_norange);
-      goto doend;
-    }
-  }
-
-  if (!ni && !(ea.argt & EX_BANG) && ea.forceit) {  // no <!> allowed
-    errormsg = _(e_nobang);
-    goto doend;
-  }
-
-  // Don't complain about the range if it is not used
-  // (could happen if line_count is accidentally set to 0).
-  if (!ea.skip && !ni && (ea.argt & EX_RANGE)) {
-    // If the range is backwards, ask for confirmation and, if given, swap
-    // ea.line1 & ea.line2 so it's forwards again.
-    // When global command is busy, don't ask, will fail below.
-    if (!global_busy && ea.line1 > ea.line2) {
-      if (msg_silent == 0) {
-        if ((flags & DOCMD_VERBOSE) || exmode_active) {
-          errormsg = _("E493: Backwards range given");
-          goto doend;
-        }
-        if (ask_yesno(_("Backwards range given, OK to swap")) != 'y') {
-          goto doend;
-        }
-      }
-      linenr_T lnum = ea.line1;
-      ea.line1 = ea.line2;
-      ea.line2 = lnum;
-    }
-    if ((errormsg = invalid_range(&ea)) != NULL) {
-      goto doend;
-    }
-  }
-
-  if ((ea.addr_type == ADDR_OTHER) && ea.addr_count == 0) {
-    // default is 1, not cursor
-    ea.line2 = 1;
-  }
-
-  correct_range(&ea);
-
-  if (((ea.argt & EX_WHOLEFOLD) || ea.addr_count >= 2) && !global_busy
-      && ea.addr_type == ADDR_LINES) {
-    // Put the first line at the start of a closed fold, put the last line
-    // at the end of a closed fold.
-    hasFolding(curwin, ea.line1, &ea.line1, NULL);
-    hasFolding(curwin, ea.line2, NULL, &ea.line2);
-  }
-
-  // For the ":make" and ":grep" commands we insert the 'makeprg'/'grepprg'
-  // option here, so things like % get expanded.
-  p = nvim_docmd_replace_makeprg_impl(&ea, p, cmdlinep);
-  if (p == NULL) {
-    goto doend;
-  }
-
-  // Skip to start of argument.
-  // Don't do this for the ":!" command, because ":!! -l" needs the space.
-  ea.arg = ea.cmdidx == CMD_bang ? p : skipwhite(p);
-
-  // ":file" cannot be run with an argument when "curbuf->b_ro_locked" is set
-  if (ea.cmdidx == CMD_file && *ea.arg != NUL && curbuf_locked()) {
-    goto doend;
-  }
-
-  // Check for "++opt=val" argument.
-  // Must be first, allow ":w ++enc=utf8 !cmd"
-  if (ea.argt & EX_ARGOPT) {
-    while (ea.arg[0] == '+' && ea.arg[1] == '+') {
-      if (getargopt(&ea) == FAIL && !ni) {
-        errormsg = _(e_invarg);
-        goto doend;
-      }
-    }
-  }
-
-  if (ea.cmdidx == CMD_write || ea.cmdidx == CMD_update) {
-    if (*ea.arg == '>') {                       // append
-      if (*++ea.arg != '>') {                   // typed wrong
-        errormsg = _("E494: Use w or w>>");
-        goto doend;
-      }
-      ea.arg = skipwhite(ea.arg + 1);
-      ea.append = true;
-    } else if (*ea.arg == '!' && ea.cmdidx == CMD_write) {  // :w !filter
-      ea.arg++;
-      ea.usefilter = true;
-    }
-  } else if (ea.cmdidx == CMD_read) {
-    if (ea.forceit) {
-      ea.usefilter = true;                      // :r! filter if ea.forceit
-      ea.forceit = false;
-    } else if (*ea.arg == '!') {              // :r !filter
-      ea.arg++;
-      ea.usefilter = true;
-    }
-  } else if (ea.cmdidx == CMD_lshift || ea.cmdidx == CMD_rshift) {
-    ea.amount = 1;
-    while (*ea.arg == *ea.cmd) {                // count number of '>' or '<'
-      ea.arg++;
-      ea.amount++;
-    }
-    ea.arg = skipwhite(ea.arg);
-  }
-
-  // Check for "+command" argument, before checking for next command.
-  // Don't do this for ":read !cmd" and ":write !cmd".
-  if ((ea.argt & EX_CMDARG) && !ea.usefilter) {
-    ea.do_ecmd_cmd = getargcmd(&ea.arg);
-  }
-
-  // Check for '|' to separate commands and '"' to start comments.
-  // Don't do this for ":read !cmd" and ":write !cmd".
-  if ((ea.argt & EX_TRLBAR) && !ea.usefilter) {
-    separate_nextcmd(&ea);
-  } else if (ea.cmdidx == CMD_bang
-             || ea.cmdidx == CMD_terminal
-             || ea.cmdidx == CMD_global
-             || ea.cmdidx == CMD_vglobal
-             || ea.usefilter) {
-    // Check for <newline> to end a shell command.
-    // Also do this for ":read !cmd", ":write !cmd" and ":global".
-    // Any others?
-    for (char *s = ea.arg; *s; s++) {
-      // Remove one backslash before a newline, so that it's possible to
-      // pass a newline to the shell and also a newline that is preceded
-      // with a backslash.  This makes it impossible to end a shell
-      // command in a backslash, but that doesn't appear useful.
-      // Halving the number of backslashes is incompatible with previous
-      // versions.
-      if (*s == '\\' && s[1] == '\n') {
-        STRMOVE(s, s + 1);
-      } else if (*s == '\n') {
-        ea.nextcmd = s + 1;
-        *s = NUL;
-        break;
-      }
-    }
-  }
-
-  if ((ea.argt & EX_DFLALL) && ea.addr_count == 0) {
-    set_cmd_dflall_range(&ea);
-  }
-
-  // Parse register and count
-  parse_register(&ea);
-  if (parse_count(&ea, &errormsg, true) == FAIL) {
-    goto doend;
-  }
-
-  // Check for flags: 'l', 'p' and '#'.
-  if (ea.argt & EX_FLAGS) {
-    get_flags(&ea);
-  }
-  if (!ni && !(ea.argt & EX_EXTRA) && *ea.arg != NUL
-      && *ea.arg != '"' && (*ea.arg != '|' || (ea.argt & EX_TRLBAR) == 0)) {
-    // no arguments allowed but there is something
-    errormsg = ex_errmsg(e_trailing_arg, ea.arg);
-    goto doend;
-  }
-
-  if (!ni && (ea.argt & EX_NEEDARG) && *ea.arg == NUL) {
-    errormsg = _(e_argreq);
-    goto doend;
-  }
-
-  if (skip_cmd(&ea)) {
-    goto doend;
-  }
-
-  // 7. Execute the command.
-  int retv = 0;
-  if (execute_cmd0(&retv, &ea, &errormsg, false) == FAIL) {
-    goto doend;
-  }
-
-  // If the command just executed called do_cmdline(), any throw or ":return"
-  // or ":finish" encountered there must also check the cstack of the still
-  // active do_cmdline() that called this do_one_cmd().  Rethrow an uncaught
-  // exception, or reanimate a returned function or finished script file and
-  // return or finish it again.
-  if (need_rethrow) {
-    do_throw(cstack);
-  } else if (check_cstack) {
-    if (source_finished(fgetline, cookie)) {
-      do_finish(&ea, true);
-    } else if (getline_equal(fgetline, cookie, get_func_line)
-               && current_func_returned()) {
-      do_return(&ea, true, false, NULL);
-    }
-  }
-  need_rethrow = check_cstack = false;
-
-doend:
-  // can happen with zero line number
-  if (curwin->w_cursor.lnum == 0) {
-    curwin->w_cursor.lnum = 1;
-    curwin->w_cursor.col = 0;
-  }
-
-  if (errormsg != NULL && *errormsg != NUL && !did_emsg) {
-    if (flags & DOCMD_VERBOSE) {
-      if (errormsg != IObuff) {
-        xstrlcpy(IObuff, errormsg, IOSIZE);
-        errormsg = IObuff;
-      }
-      append_command(*ea.cmdlinep);
-    }
-    emsg(errormsg);
-  }
-  do_errthrow(cstack,
-              (ea.cmdidx != CMD_SIZE
-               && !IS_USER_CMDIDX(ea.cmdidx)) ? cmdnames[(int)ea.cmdidx].cmd_name : NULL);
-
-  nvim_docmd_undo_cmdmod_impl(&cmdmod);
-  cmdmod = save_cmdmod;
-  reg_executing = save_reg_executing;
-  pending_end_reg_executing = save_pending_end_reg_executing;
-
-  if (ea.nextcmd && *ea.nextcmd == NUL) {       // not really a next command
-    ea.nextcmd = NULL;
-  }
-
-  ex_nesting_level--;
-  xfree(ea.cmdline_tofree);
-
-  return ea.nextcmd;
-}
-
-static char ex_error_buf[MSG_BUF_LEN];
-
-/// @return an error message with argument included.
-/// Uses a static buffer, only the last error will be kept.
-/// "msg" will be translated, caller should use N_().
-char *ex_errmsg(const char *const msg, const char *const arg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  vim_snprintf(ex_error_buf, MSG_BUF_LEN, _(msg), arg);
-  return ex_error_buf;
-}
+// do_one_cmd, find_excmd_after_range, ex_errmsg: see forward declarations near top of file.
 
 /// The "+" string used in place of an empty command in Ex mode.
 /// This string is used in pointer comparison.
@@ -1689,10 +1215,8 @@ static char exmode_plus[] = "+";
 /// Parse the address range, if any, in "eap".
 /// May set the last search pattern, unless "silent" is true.
 ///
-uint32_t excmd_get_argt(cmdidx_T idx)
-{
-  return cmdnames[(int)idx].cmd_argt;
-}
+// excmd_get_argt is now implemented in Rust (do_one_cmd.rs).
+extern uint32_t excmd_get_argt(cmdidx_T idx);
 
 
 /// Correct the range for zero line number, if required.
@@ -2902,7 +2426,18 @@ void nvim_set_ex_pressedreturn(bool val) { ex_pressedreturn = val; }
 void nvim_save_cursor(pos_T *save) { *save = curwin->w_cursor; }
 void nvim_restore_cursor(const pos_T *save) { curwin->w_cursor = *save; }
 size_t nvim_sizeof_pos_T(void) { return sizeof(pos_T); }
-char *nvim_find_excmd_after_range(exarg_T *eap) { return find_excmd_after_range(eap); }
+// nvim_find_excmd_after_range: inline the logic to avoid circular call with Rust export.
+char *nvim_find_excmd_after_range(exarg_T *eap)
+{
+  char *cmd = eap->cmd;
+  eap->cmd = skip_range(eap->cmd, NULL);
+  if (*eap->cmd == '*') {
+    eap->cmd = skipwhite(eap->cmd + 1);
+  }
+  char *p = find_ex_command(eap, NULL);
+  eap->cmd = cmd;
+  return p;
+}
 const char *nvim_get_e_ambiguous_use_of_user_defined_command(void) {
   return _(e_ambiguous_use_of_user_defined_command);
 }
@@ -4019,3 +3554,347 @@ void nvim_docmd_optset_varp_set(optset_T *args, char *name)
 // nvim_xp_get_pattern and nvim_xp_get_line are defined in option_shim.c
 // nvim_xp_get_pattern_len: only defined in ex_docmd.c for impl_bodies.rs
 size_t nvim_xp_get_pattern_len(expand_T *xp) { return xp->xp_pattern_len; }
+
+// =============================================================================
+// Phase 4 (ex_docmd plan) accessor functions for do_one_cmd Rust port
+// =============================================================================
+
+// nvim_docmd_get_quitmore already defined above.
+/// Decrement quitmore.
+void nvim_docmd_dec_quitmore(void) { quitmore--; }
+// nvim_docmd_get_exiting already defined above (returns int 0/1).
+/// Get ex_nesting_level global.
+int nvim_docmd_get_ex_nesting_level(void) { return ex_nesting_level; }
+/// Increment ex_nesting_level.
+void nvim_docmd_inc_ex_nesting_level(void) { ex_nesting_level++; }
+/// Decrement ex_nesting_level.
+void nvim_docmd_dec_ex_nesting_level(void) { ex_nesting_level--; }
+/// Get need_rethrow global.
+bool nvim_docmd_get_need_rethrow(void) { return need_rethrow; }
+/// Set need_rethrow global.
+void nvim_docmd_set_need_rethrow(bool val) { need_rethrow = val; }
+/// Get check_cstack global.
+bool nvim_docmd_get_check_cstack(void) { return check_cstack; }
+/// Set check_cstack global.
+void nvim_docmd_set_check_cstack(bool val) { check_cstack = val; }
+/// Set did_emsg_syntax to true.
+void nvim_docmd_set_did_emsg_syntax(void) { did_emsg_syntax = true; }
+/// Allocate a zeroed exarg_T on the heap (line1=1, line2=1).
+exarg_T *nvim_eap_alloc(void)
+{
+  exarg_T *eap = xcalloc(1, sizeof(exarg_T));
+  eap->line1 = 1;
+  eap->line2 = 1;
+  return eap;
+}
+/// Free a heap-allocated exarg_T (does NOT free cmdline_tofree -- caller must).
+void nvim_eap_free(exarg_T *eap) { xfree(eap); }
+/// Set eap->skip.
+void nvim_eap_set_skip(exarg_T *eap, bool val) { eap->skip = val; }
+/// Set eap->ea_getline.
+void nvim_eap_set_ea_getline(exarg_T *eap, LineGetter fn_ptr) { eap->ea_getline = fn_ptr; }
+/// Get eap->ea_getline.
+LineGetter nvim_eap_get_ea_getline(const exarg_T *eap) { return eap->ea_getline; }
+/// Set eap->cookie.
+void nvim_eap_set_cookie(exarg_T *eap, void *cookie) { eap->cookie = cookie; }
+/// Set eap->cmdlinep.
+void nvim_eap_set_cmdlinep(exarg_T *eap, char **cmdlinep) { eap->cmdlinep = cmdlinep; }
+/// do_errthrow wrapper for do_one_cmd (passes cmd_name from cmdnames or NULL).
+void nvim_docmd_do_errthrow(cstack_T *cstack, const exarg_T *eap)
+{
+  const char *cmd_name = NULL;
+  if (!IS_USER_CMDIDX(eap->cmdidx) && eap->cmdidx != CMD_SIZE) {
+    cmd_name = cmdnames[(int)eap->cmdidx].cmd_name;
+  }
+  do_errthrow(cstack, (char *)cmd_name);
+}
+/// do_throw wrapper.
+void nvim_docmd_do_throw(cstack_T *cstack) { do_throw(cstack); }
+/// do_return wrapper.
+void nvim_docmd_do_return(exarg_T *eap) { do_return(eap, true, false, NULL); }
+/// do_finish wrapper.
+void nvim_docmd_do_finish(exarg_T *eap) { do_finish(eap, true); }
+/// source_finished wrapper (for do_one_cmd).
+bool nvim_docmd_source_finished(LineGetter fgetline, void *cookie)
+{
+  return source_finished(fgetline, cookie);
+}
+/// getline_equal(fgetline, cookie, getnextac) wrapper.
+bool nvim_getline_equal_getnextac(LineGetter fgetline, void *cookie)
+{
+  return getline_equal(fgetline, cookie, getnextac);
+}
+// nvim_docmd_cmdnames_name already defined at line 2217 (returns char*).
+/// Set eap->cmd to *cmdlinep (used to init ea.cmd = *cmdlinep in do_one_cmd).
+void nvim_eap_set_cmd_from_cmdlinep(exarg_T *eap) { eap->cmd = *eap->cmdlinep; }
+/// Get *eap->cmdlinep[0] first char (for "#!" check in do_one_cmd).
+char nvim_eap_cmdlinep_first_char(const exarg_T *eap) { return (*eap->cmdlinep)[0]; }
+/// Get *eap->cmdlinep[1] second char (for "#!" check in do_one_cmd).
+char nvim_eap_cmdlinep_second_char(const exarg_T *eap) { return (*eap->cmdlinep)[1]; }
+/// Save the global cmdmod into a heap-allocated copy (returns pointer).
+/// Caller must free with nvim_docmd_restore_cmdmod_save.
+cmdmod_T *nvim_docmd_save_cmdmod(void)
+{
+  cmdmod_T *save = xmalloc(sizeof(cmdmod_T));
+  *save = cmdmod;
+  return save;
+}
+/// Restore global cmdmod from save and free the save buffer.
+void nvim_docmd_restore_cmdmod(cmdmod_T *save)
+{
+  cmdmod = *save;
+  xfree(save);
+}
+/// do_intthrow wrapper.
+bool nvim_docmd_do_intthrow(cstack_T *cstack) { return do_intthrow(cstack); }
+/// get_func_line function pointer value (for getline_equal comparison).
+/// Returns the function pointer as a void* for comparison.
+void *nvim_docmd_get_func_line_ptr(void) { return (void *)get_func_line; }
+/// getargcmd wrapper (already public, but needs C accessor for Rust FFI).
+char *nvim_docmd_getargcmd(char **argp) { return getargcmd(argp); }
+/// Set eap->do_ecmd_cmd via getargcmd.
+void nvim_eap_set_do_ecmd_cmd_from_arg(exarg_T *eap)
+{
+  eap->do_ecmd_cmd = getargcmd(&eap->arg);
+}
+/// eap->usefilter setter.
+void nvim_eap_set_usefilter(exarg_T *eap, bool val) { eap->usefilter = val; }
+/// eap->append setter.
+void nvim_eap_set_append(exarg_T *eap, bool val) { eap->append = val; }
+/// Get first char of eap->arg.
+char nvim_eap_arg_first_char(const exarg_T *eap) { return eap->arg[0]; }
+/// Newline-scan for shell cmd args in do_one_cmd (CMD_bang/terminal/global/vglobal/usefilter).
+/// Sets eap->nextcmd and NUL-terminates at newline, handling backslash-newline.
+void nvim_eap_scan_newline_nextcmd(exarg_T *eap)
+{
+  for (char *s = eap->arg; *s; s++) {
+    if (*s == '\\' && s[1] == '\n') {
+      STRMOVE(s, s + 1);
+    } else if (*s == '\n') {
+      eap->nextcmd = s + 1;
+      *s = NUL;
+      break;
+    }
+  }
+}
+/// CMD_bang cmdidx constant.
+int nvim_docmd_CMD_bang(void) { return (int)CMD_bang; }
+/// CMD_terminal cmdidx constant.
+int nvim_docmd_CMD_terminal(void) { return (int)CMD_terminal; }
+/// CMD_global cmdidx constant.
+int nvim_docmd_CMD_global(void) { return (int)CMD_global; }
+/// CMD_vglobal cmdidx constant.
+int nvim_docmd_CMD_vglobal(void) { return (int)CMD_vglobal; }
+/// CMD_write cmdidx constant.
+int nvim_docmd_CMD_write(void) { return (int)CMD_write; }
+/// CMD_update cmdidx constant.
+int nvim_docmd_CMD_update(void) { return (int)CMD_update; }
+/// CMD_read cmdidx constant.
+int nvim_docmd_CMD_read(void) { return (int)CMD_read; }
+/// CMD_lshift cmdidx constant.
+int nvim_docmd_CMD_lshift(void) { return (int)CMD_lshift; }
+/// CMD_rshift cmdidx constant.
+int nvim_docmd_CMD_rshift(void) { return (int)CMD_rshift; }
+/// CMD_file cmdidx constant.
+int nvim_docmd_CMD_file(void) { return (int)CMD_file; }
+/// eap->amount setter.
+void nvim_eap_set_amount(exarg_T *eap, int val) { eap->amount = val; }
+/// Increment eap->amount.
+void nvim_eap_inc_amount(exarg_T *eap) { eap->amount++; }
+/// Return eap->cmd[0] for amount counting in lshift/rshift.
+char nvim_eap_cmd_first_char(const exarg_T *eap) { return *eap->cmd; }
+/// Return eap->arg[0] for lshift/rshift loop.
+char nvim_eap_arg_at(const exarg_T *eap, int i) { return eap->arg[i]; }
+/// Advance eap->arg by 1 (for filter arg).
+void nvim_eap_advance_arg(exarg_T *eap) { eap->arg++; }
+/// Advance eap->arg by 2 (for >> arg).
+void nvim_eap_advance_arg2(exarg_T *eap) { eap->arg += 2; }
+/// skipwhite(eap->arg) -> eap->arg.
+void nvim_eap_skipwhite_arg(exarg_T *eap) { eap->arg = skipwhite(eap->arg); }
+/// getargopt wrapper (already public Rust export, add C wrapper for do_one_cmd).
+int nvim_docmd_getargopt(exarg_T *eap) { return getargopt(eap); }
+/// get_flags wrapper (already public Rust export).
+void nvim_docmd_get_flags(exarg_T *eap) { get_flags(eap); }
+/// skip_cmd wrapper (already public Rust export).
+bool nvim_docmd_skip_cmd(const exarg_T *eap) { return skip_cmd(eap); }
+/// execute_cmd0 wrapper.
+int nvim_docmd_execute_cmd0(int *retv, exarg_T *eap, const char **errormsg)
+{
+  return execute_cmd0(retv, eap, errormsg, false);
+}
+/// Emit error and do_errthrow cleanup for do_one_cmd doend.
+void nvim_docmd_do_one_cmd_doend(cstack_T *cstack, const char *errormsg,
+                                  int flags, const exarg_T *eap)
+{
+  if (errormsg != NULL && *errormsg != NUL && !did_emsg) {
+    if (flags & DOCMD_VERBOSE) {
+      if (errormsg != IObuff) {
+        xstrlcpy(IObuff, errormsg, IOSIZE);
+        errormsg = IObuff;
+      }
+      append_command(*eap->cmdlinep);
+    }
+    emsg(errormsg);
+  }
+  const char *cmd_name = NULL;
+  if (!IS_USER_CMDIDX(eap->cmdidx) && eap->cmdidx != CMD_SIZE) {
+    cmd_name = cmdnames[(int)eap->cmdidx].cmd_name;
+  }
+  do_errthrow(cstack, (char *)cmd_name);
+}
+/// xfree wrapper for eap->cmdline_tofree in do_one_cmd cleanup.
+void nvim_docmd_xfree(void *p) { xfree(p); }
+/// get e_sandbox error string.
+const char *nvim_docmd_get_e_sandbox(void) { return _(e_sandbox); }
+/// has_event wrapper.
+bool nvim_docmd_has_event(int event) { return has_event((event_T)event); }
+/// apply_autocmds wrapper (for CmdUndefined event in do_one_cmd).
+bool nvim_docmd_apply_autocmds_cmdundefined(const char *cmdname)
+{
+  return apply_autocmds(EVENT_CMDUNDEFINED, (char *)cmdname, (char *)cmdname, true, NULL);
+}
+/// aborting() wrapper.
+bool nvim_docmd_aborting(void) { return aborting(); }
+/// find_ex_command wrapper (re-try after CmdUndefined autocmd fires).
+char *nvim_docmd_find_ex_command_retry(exarg_T *eap)
+{
+  return find_ex_command(eap, NULL);
+}
+/// xmemdupz wrapper for do_one_cmd cmdname copy.
+char *nvim_docmd_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
+/// ASCII_ISALNUM check for command name scanning.
+bool nvim_docmd_ascii_isalnum(char c) { return ASCII_ISALNUM(c); }
+/// verify_command wrapper.
+void nvim_docmd_verify_command(const char *cmd) { verify_command(cmd); }
+/// get_text_locked_msg wrapper.
+const char *nvim_docmd_get_text_locked_msg(void) { return get_text_locked_msg(); }
+/// text_locked wrapper.
+bool nvim_docmd_text_locked(void) { return text_locked(); }
+/// IS_USER_CMDIDX check by integer index (as opposed to via exarg_T).
+bool nvim_docmd_is_user_cmdidx_i(int cmdidx) { return IS_USER_CMDIDX(cmdidx); }
+/// global_busy accessor.
+bool nvim_docmd_global_busy(void) { return global_busy != 0; }
+/// msg_silent accessor.
+int nvim_docmd_msg_silent(void) { return msg_silent; }
+/// exmode_active accessor.
+bool nvim_docmd_exmode_active(void) { return exmode_active; }
+/// ask_yesno for backwards range check.
+char nvim_docmd_ask_yesno_backwards(void)
+{
+  return (char)ask_yesno(_("Backwards range given, OK to swap"));
+}
+/// invalid_range wrapper (already public Rust export).
+const char *nvim_docmd_invalid_range(exarg_T *eap) { return (const char *)invalid_range(eap); }
+/// eap->skip getter (return as bool).
+bool nvim_eap_get_skip_bool(const exarg_T *eap) { return eap->skip; }
+/// EX_ARGOPT bit check helper.
+bool nvim_eap_argt_has_argopt(const exarg_T *eap) { return (eap->argt & EX_ARGOPT) != 0; }
+/// EX_CMDARG bit check helper.
+bool nvim_eap_argt_has_cmdarg(const exarg_T *eap) { return (eap->argt & EX_CMDARG) != 0; }
+/// EX_EXTRA bit check helper.
+bool nvim_eap_argt_has_extra(const exarg_T *eap) { return (eap->argt & EX_EXTRA) != 0; }
+/// EX_NEEDARG bit check helper.
+bool nvim_eap_argt_has_needarg(const exarg_T *eap) { return (eap->argt & EX_NEEDARG) != 0; }
+/// EX_MODIFY bit check helper.
+bool nvim_eap_argt_has_modify(const exarg_T *eap) { return (eap->argt & EX_MODIFY) != 0; }
+/// EX_SBOXOK bit check helper.
+bool nvim_eap_argt_has_sboxok(const exarg_T *eap) { return (eap->argt & EX_SBOXOK) != 0; }
+/// EX_FLAGS bit check helper.
+bool nvim_eap_argt_has_flags(const exarg_T *eap) { return (eap->argt & EX_FLAGS) != 0; }
+/// EX_RANGE bit check helper (already have nvim_eap_argt_has_range, but using explicit helper).
+bool nvim_eap_argt_has_range_bit(const exarg_T *eap) { return (eap->argt & EX_RANGE) != 0; }
+/// EX_BANG bit check helper (already have nvim_eap_argt_has_bang).
+bool nvim_eap_argt_has_bang_bit(const exarg_T *eap) { return (eap->argt & EX_BANG) != 0; }
+/// ADDR_OTHER constant.
+int nvim_docmd_ADDR_OTHER(void) { return (int)ADDR_OTHER; }
+/// Get eap->forceit as int (0/1).
+int nvim_eap_get_forceit_int(const exarg_T *eap) { return (int)eap->forceit; }
+/// Wrap nvim_curbuf_modifiable (MODIFIABLE macro check).
+bool nvim_docmd_curbuf_modifiable(void) { return MODIFIABLE(curbuf) != 0; }
+/// curbuf->terminal check (already have nvim_curbuf_is_terminal).
+/// e_trailing_arg getter (already used elsewhere).
+const char *nvim_docmd_get_e_trailing_arg(void) { return e_trailing_arg; }
+/// e_argreq getter.
+const char *nvim_docmd_get_e_argreq(void) { return _(e_argreq); }
+/// e_invarg getter.
+const char *nvim_docmd_get_e_invarg(void) { return _(e_invarg); }
+// nvim_docmd_get_e_norange already defined above (returns char* version).
+/// e_nobang getter (already have nvim_get_e_nobang).
+/// nvim_get_reg_executing (already defined in autocmd.c).
+/// nvim_get_pending_end_reg_executing (already defined in getchar.c).
+/// nvim_set_reg_executing (already defined in getchar.c).
+/// nvim_set_pending_end_reg_executing (already defined in getchar.c).
+/// ex_errmsg for e_trailing_arg.
+char *nvim_docmd_ex_errmsg_trailing(const char *arg)
+{
+  return ex_errmsg(e_trailing_arg, arg);
+}
+/// Parse EX_ARGOPT loop in do_one_cmd (handles ++opt=val argument).
+/// Returns FAIL if getargopt fails and !ni, OK otherwise.
+int nvim_docmd_parse_argopt(exarg_T *eap, bool ni)
+{
+  while (eap->arg[0] == '+' && eap->arg[1] == '+') {
+    if (getargopt(eap) == FAIL && !ni) {
+      return FAIL;
+    }
+  }
+  return OK;
+}
+
+// =============================================================================
+// Phase 4 additional accessors for do_one_cmd.rs
+// =============================================================================
+
+/// CMD_put constant.
+int nvim_docmd_CMD_put(void) { return (int)CMD_put; }
+/// CMD_iput constant.
+int nvim_docmd_CMD_iput(void) { return (int)CMD_iput; }
+/// CMD_checktime constant.
+int nvim_docmd_CMD_checktime(void) { return (int)CMD_checktime; }
+/// CMD_edit constant.
+int nvim_docmd_CMD_edit(void) { return (int)CMD_edit; }
+/// "Backwards range given" error string.
+const char *nvim_docmd_get_e_backwards_range(void)
+{
+  return _("E493: Backwards range given");
+}
+/// "E494: Use w or w>>" error string.
+const char *nvim_docmd_get_e_w_usage(void) { return _("E494: Use w or w>>"); }
+/// EX_WHOLEFOLD check on eap->argt.
+bool nvim_eap_argt_has_wholefold(const exarg_T *eap)
+{
+  return (eap->argt & EX_WHOLEFOLD) != 0;
+}
+/// EVENT_CMDUNDEFINED constant.
+int nvim_docmd_get_event_cmdundefined(void) { return (int)EVENT_CMDUNDEFINED; }
+/// Fix cursor lnum if it is 0 (can happen with zero line number).
+void nvim_docmd_fix_cursor_if_zero(void)
+{
+  if (curwin->w_cursor.lnum == 0) {
+    curwin->w_cursor.lnum = 1;
+    curwin->w_cursor.col = 0;
+  }
+}
+/// Format an error message with arg into buf.
+/// Wraps vim_snprintf(buf, buflen, _(msg), arg).
+char *nvim_docmd_ex_errmsg_format(const char *msg, const char *arg,
+                                   char *buf, size_t buflen)
+{
+  vim_snprintf(buf, buflen, _(msg), arg);
+  return buf;
+}
+/// Get argt for cmdidx from cmdnames[] (used by rs_excmd_get_argt and do_one_cmd).
+uint32_t nvim_docmd_get_argt_for_idx(int idx)
+{
+  return cmdnames[idx].cmd_argt;
+}
+/// parse_command_modifiers with global cmdmod (for do_one_cmd).
+int nvim_docmd_parse_command_modifiers_global(exarg_T *eap, const char **errormsg)
+{
+  return parse_command_modifiers(eap, errormsg, &cmdmod, false);
+}
+// nvim_docmd_get_e_argreq already defined above.
+/// get e_invarg translated string.
+// nvim_docmd_get_e_invarg may already exist as nvim_get_e_invarg in errors.rs accessor
+// Using distinct name to be safe.
+const char *nvim_docmd_get_e_invarg_str(void) { return _(e_invarg); }

@@ -105,3 +105,6 @@ void tabpage_close(int forceit);
 void tabpage_close_other(tabpage_T *tp, int forceit);
 void tabpage_new(void);
 void handle_did_throw(void);
+// Phase 4 (ex_docmd plan): do_one_cmd, ex_errmsg, excmd_get_argt implemented in Rust.
+char *ex_errmsg(const char *msg, const char *arg);
+uint32_t excmd_get_argt(cmdidx_T idx);
