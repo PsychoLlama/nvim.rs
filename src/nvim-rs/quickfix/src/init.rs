@@ -670,6 +670,29 @@ pub unsafe extern "C" fn rs_qf_stack_get_bufnr() -> std::ffi::c_int {
 }
 
 // =============================================================================
+// qf_init: C-ABI wrapper exported under the C name
+// =============================================================================
+
+/// C-ABI wrapper for `qf_init`. Converts `c_int newlist` to `bool` and delegates
+/// to `init_ext::rs_qf_init`.
+///
+/// # Safety
+///
+/// Same safety contract as `init_ext::rs_qf_init`.
+#[export_name = "qf_init"]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_qf_init_c_abi(
+    wp: *mut std::ffi::c_void,
+    efile: *const std::ffi::c_char,
+    errorformat: *mut std::ffi::c_char,
+    newlist: std::ffi::c_int,
+    qf_title: *const std::ffi::c_char,
+    enc: *mut std::ffi::c_char,
+) -> std::ffi::c_int {
+    init_ext::rs_qf_init(wp, efile, errorformat, newlist != 0, qf_title, enc)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

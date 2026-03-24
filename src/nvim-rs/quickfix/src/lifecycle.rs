@@ -84,6 +84,7 @@ extern "C" {
     /// Set wp->w_llist_ref = NULL and return old value.
     fn nvim_win_take_llist_ref(wp: *mut c_void) -> *mut c_void;
     fn nvim_get_ql_info() -> *mut c_void;
+    fn nvim_set_ql_info(qi: *mut c_void);
 
     // --- Phase 3: stack allocation ---
     fn nvim_get_ql_info_actual() -> *mut c_void;
@@ -406,6 +407,24 @@ pub unsafe extern "C" fn rs_qf_alloc_stack(qfltype: c_int, n: c_int) -> *mut c_v
     nvim_qf_set_maxcount(qi, n);
 
     qi
+}
+
+/// Initialize the global quickfix stack.
+///
+/// Exported under the C name `qf_init_stack`. Replaces the thin C wrapper that
+/// called `rs_qf_alloc_stack` and stored the result in `ql_info`.
+///
+/// # Safety
+///
+/// Must only be called during nvim startup, before any quickfix operations.
+#[export_name = "qf_init_stack"]
+pub unsafe extern "C" fn rs_qf_init_stack() {
+    extern "C" {
+        static mut p_chi: i64;
+    }
+    let n = c_int::try_from(p_chi).unwrap_or(10);
+    let qi = rs_qf_alloc_stack(QFLT_QUICKFIX, n);
+    nvim_set_ql_info(qi);
 }
 
 /// Get or allocate the location list for window `wp`.

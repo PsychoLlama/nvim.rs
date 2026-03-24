@@ -231,13 +231,8 @@ typedef struct {
   char error_char;
 } EfmToRegpatResult;
 
-extern int rs_qf_init(void *wp, const char *efile, char *errorformat, bool newlist,
-                      const char *qf_title, char *enc);
-
-extern void *rs_qf_alloc_stack(int qfltype, int n);
-
-// rs_qf_get_size_eap, rs_qf_get_valid_size_eap, rs_qf_get_cur_idx_eap,
-// rs_qf_get_cur_valid_idx_eap, rs_grep_internal removed: all now export under C names via #[export_name].
+// rs_qf_init replaced by qf_init exported from Rust (rs_qf_init_c_abi).
+// rs_qf_alloc_stack replaced by qf_init_stack exported from Rust (rs_qf_init_stack).
 
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
@@ -925,6 +920,9 @@ void *nvim_win_take_llist_ref(void *wp_void)
 /// Returns address of the static ql_info_actual (global quickfix stack).
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
 
+/// Set the global ql_info pointer.
+void nvim_set_ql_info(void *qi_void) { ql_info = (qf_info_T *)qi_void; }
+
 /// Allocate a zeroed qf_info_T on the heap.
 /// Set qi->qfl_type.
 void nvim_qf_set_qi_type(void *qi_void, int qfltype) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qfl_type = (qfltype_T)qfltype; }
@@ -978,12 +976,7 @@ void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_
 static char *qf_last_bufname = NULL;
 static bufref_T qf_last_bufref = { NULL, 0, 0 };
 
-/// @returns -1 for error, number of errors for success.
-int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, int newlist,
-            const char *restrict qf_title, char *restrict enc)
-{
-  return rs_qf_init((void *)wp, efile, errorformat, (bool)newlist, qf_title, enc);
-}
+// qf_init body replaced by rs_qf_init_c_abi exported as qf_init from Rust init.rs.
 
 // callback function for 'quickfixtextfunc'
 static Callback qftf_cb;
@@ -1186,7 +1179,7 @@ char *nvim_qf_list_item_string(void *li)
 
 // qf_stack_get_bufnr, qf_free_all, check_quickfix_busy, qf_resize_stack, ll_resize_stack
 
-void qf_init_stack(void) { ql_info = (qf_info_T *)rs_qf_alloc_stack(QFLT_QUICKFIX, (int)p_chi); }
+// qf_init_stack body replaced by rs_qf_init_stack exported as qf_init_stack from Rust lifecycle.rs.
 
 // qf_alloc_stack, qf_alloc_list_stack, ll_get_or_alloc_list,
 
