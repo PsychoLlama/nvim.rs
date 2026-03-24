@@ -189,5 +189,10 @@ char *last_search_pat(void);
 void update_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, searchstat_T *stat, bool recompute, int maxcount, int timeout);
 void cmdline_search_stat(int dirc, pos_T *pos, pos_T *cursor_pos, bool show_top_bot_msg, char *msgbuf, size_t msgbuflen, bool recompute, int maxcount, int timeout);
 int current_search(int count, bool forward);
+// Phase 3: Rust exports replacing C logic functions
+void showmatch(int c);
+void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool skip_comments,
+                          int type, int count, int action, linenr_T start_lnum, linenr_T end_lnum,
+                          bool forceit, bool silent);
 
 #include "search.h.generated.h"

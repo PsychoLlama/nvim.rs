@@ -367,16 +367,12 @@ int nvim_get_p_hls(void)
 /// If there isn't a match, then beep.
 ///
 /// @param c  char to show match for
-void showmatch(int c)
+/// Perform the cursor-display-delay loop for showmatch.
+/// Called from Rust after the match position has been determined.
+void nvim_showmatch_display_cursor(int match_lnum, int match_col, int match_coladd)
 {
   OptInt *so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
   OptInt *siso = curwin->w_p_siso >= 0 ? &curwin->w_p_siso : &p_siso;
-
-  // Rust handles: matchpairs scanning, findmatch, visibility check
-  int match_lnum, match_col, match_coladd;
-  if (!rs_showmatch_find_match(c, &match_lnum, &match_col, &match_coladd)) {
-    return;
-  }
 
   pos_T mpos = { match_lnum, match_col, match_coladd };
   pos_T save_cursor = curwin->w_cursor;

@@ -830,6 +830,8 @@ extern "C" {
         out_coladd: *mut c_int,
     ) -> c_int;
     fn nvim_showmatch_beep();
+    /// Perform the cursor-display-delay loop for showmatch.
+    fn nvim_showmatch_display_cursor(match_lnum: c_int, match_col: c_int, match_coladd: c_int);
 }
 
 /// Scan matchpairs option, find match, and check visibility.
@@ -896,6 +898,26 @@ pub unsafe extern "C" fn rs_showmatch_find_match(
     }
 
     1 // visible match found
+}
+
+/// Full showmatch implementation: find match position, then show it.
+///
+/// Replaces the C `showmatch()` function.  The match-finding part is pure
+/// Rust; the cursor-move/display/delay loop is delegated to a thin C batch
+/// helper (`nvim_showmatch_display_cursor`) that manipulates curwin, State,
+/// dollar_vcol, and calls ui_cursor_shape / update_screen / os_delay.
+///
+/// # Safety
+/// Must be called from the Neovim main thread.
+#[unsafe(export_name = "showmatch")]
+pub unsafe extern "C" fn rs_showmatch(c: c_int) {
+    let mut match_lnum: c_int = 0;
+    let mut match_col: c_int = 0;
+    let mut match_coladd: c_int = 0;
+    if rs_showmatch_find_match(c, &mut match_lnum, &mut match_col, &mut match_coladd) == 0 {
+        return;
+    }
+    nvim_showmatch_display_cursor(match_lnum, match_col, match_coladd);
 }
 
 // =============================================================================
