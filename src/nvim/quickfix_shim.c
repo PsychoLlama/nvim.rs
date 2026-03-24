@@ -1490,11 +1490,38 @@ const char *nvim_buf_get_mfp_fname(const void *buf)
 char nvim_buf_get_bh_first_char(const void *buf) { return ((const buf_T *)buf)->b_p_bh[0]; }
 bool nvim_cmdmod_has_cmod_hide(void) { return (cmdmod.cmod_flags & CMOD_HIDE) != 0; }
 void nvim_buf_clear_bf_dummy(void *buf) { ((buf_T *)buf)->b_flags &= ~BF_DUMMY; }
-void nvim_wipe_dummy_buffer(void *buf, char *dirname_start) { wipe_dummy_buffer((buf_T *)buf, dirname_start); }
-void nvim_unload_dummy_buffer(void *buf, char *dirname_start) { unload_dummy_buffer((buf_T *)buf, dirname_start); }
-void *nvim_load_dummy_buf(const char *fname, char *dirname_start, char *dirname_now)
-{
-  return vgr_load_dummy_buf((char *)fname, dirname_start, dirname_now);
+// Accessors for dummy buffer migration (Phase 3 of quickfix shim cleanup)
+void *nvim_aucmd_prepbuf_alloc(void *buf) {
+  aco_save_T *aco = xmalloc(sizeof(aco_save_T));
+  aucmd_prepbuf(aco, (buf_T *)buf);
+  return aco;
+}
+void nvim_aucmd_restbuf_free(void *aco) { aucmd_restbuf((aco_save_T *)aco); xfree(aco); }
+void *nvim_qf_bufref_alloc(void *buf) {
+  bufref_T *br = xmalloc(sizeof(bufref_T));
+  set_bufref(br, (buf_T *)buf);
+  return br;
+}
+bool nvim_qf_bufref_is_valid(void *br) { return bufref_valid((bufref_T *)br); }
+void *nvim_qf_bufref_get_buf(void *br) { return ((bufref_T *)br)->br_buf; }
+void nvim_qf_bufref_set_buf_null(void *br) { ((bufref_T *)br)->br_buf = NULL; }
+void nvim_qf_bufref_free(void *br) { xfree(br); }
+void *nvim_cleanup_enter_alloc(void) {
+  cleanup_T *cs = xmalloc(sizeof(cleanup_T));
+  enter_cleanup(cs);
+  return cs;
+}
+void nvim_cleanup_leave_free(void *cs) { leave_cleanup((cleanup_T *)cs); xfree(cs); }
+int nvim_win_close_no_free(void *wp) { return win_close((win_T *)wp, false, false); }
+void nvim_setfname_curbuf(char *fname) { setfname(curbuf, fname, NULL, false); }
+void nvim_check_need_swap_newfile(void) { check_need_swap(true); }
+int nvim_readfile_for_dummy(char *fname) {
+  return readfile(fname, NULL, 0, 0, (linenr_T)MAXLNUM, NULL, READ_NEW | READ_DUMMY, false);
+}
+void nvim_buf_inc_locked(void *buf) { ((buf_T *)buf)->b_locked++; }
+void nvim_buf_dec_locked(void *buf) { ((buf_T *)buf)->b_locked--; }
+int nvim_close_buffer_unload(void *buf) {
+  return close_buffer(NULL, (buf_T *)buf, DOBUF_UNLOAD, false, true) ? 1 : 0;
 }
 
 /// Apply Filetype autocmds and modelines to buf (for dummy buffer finalization).
@@ -1518,25 +1545,6 @@ void nvim_ex_cd_arg(char *arg, bool is_lcd)
   ex_cd(&ea);
 }
 
-/// Load a dummy buffer to search for a pattern using vimgrep.
-static buf_T *vgr_load_dummy_buf(char *fname, char *dirname_start, char *dirname_now)
-{
-  // Don't do Filetype autocommands to avoid loading syntax and
-  // indent scripts, a great speed improvement.
-  char *save_ei = au_event_disable(",Filetype");
-
-  OptInt save_mls = p_mls;
-  p_mls = 0;
-
-  // Load file into a buffer, so that 'fileencoding' is detected,
-  // autocommands applied, etc.
-  buf_T *buf = load_dummy_buffer(fname, dirname_start, dirname_now);
-
-  p_mls = save_mls;
-  au_event_restore(save_ei);
-
-  return buf;
-}
 
 linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm->startpos[idx].lnum; }
 
@@ -1588,173 +1596,6 @@ void nvim_vgr_regmatch_free(void *rm_void)
   xfree(rm);
 }
 
-// Restore current working directory to "dirname_start" if they differ, taking
-// into account whether it is set locally or globally.
-static void restore_start_dir(char *dirname_start)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *dirname_now = xmalloc(MAXPATHL);
-
-  os_dirname(dirname_now, MAXPATHL);
-  if (strcmp(dirname_start, dirname_now) != 0) {
-    // If the directory has changed, change it back by building up an
-    // appropriate ex command and executing it.
-    exarg_T ea = {
-      .arg = dirname_start,
-      .cmdidx = (curwin->w_localdir == NULL) ? CMD_cd : CMD_lcd,
-    };
-    ex_cd(&ea);
-  }
-  xfree(dirname_now);
-}
-
-/// @return  NULL if it fails.
-static buf_T *load_dummy_buffer(char *fname, char *dirname_start, char *resulting_dir)
-{
-  // Allocate a buffer without putting it in the buffer list.
-  buf_T *newbuf = buflist_new(NULL, NULL, 1, BLN_DUMMY);
-  if (newbuf == NULL) {
-    return NULL;
-  }
-
-  bool failed = true;
-  bufref_T newbufref;
-  set_bufref(&newbufref, newbuf);
-
-  // Init the options.
-  buf_copy_options(newbuf, BCO_ENTER | BCO_NOHELP);
-
-  // need to open the memfile before putting the buffer in a window
-  if (ml_open(newbuf) == OK) {
-    // Make sure this buffer isn't wiped out by autocommands.
-    newbuf->b_locked++;
-    // set curwin/curbuf to buf and save a few things
-    aco_save_T aco;
-    aucmd_prepbuf(&aco, newbuf);
-
-    // Need to set the filename for autocommands.
-    setfname(curbuf, fname, NULL, false);
-
-    // Create swap file now to avoid the ATTENTION message.
-    check_need_swap(true);
-
-    // Remove the "dummy" flag, otherwise autocommands may not
-    // work.
-    curbuf->b_flags &= ~BF_DUMMY;
-
-    bufref_T newbuf_to_wipe;
-    newbuf_to_wipe.br_buf = NULL;
-    int readfile_result = readfile(fname, NULL, 0, 0,
-                                   (linenr_T)MAXLNUM, NULL,
-                                   READ_NEW | READ_DUMMY, false);
-    newbuf->b_locked--;
-    if (readfile_result == OK
-        && !got_int
-        && !(curbuf->b_flags & BF_NEW)) {
-      failed = false;
-      if (curbuf != newbuf) {
-        // Bloody autocommands changed the buffer!  Can happen when
-        // using netrw and editing a remote file.  Use the current
-        // buffer instead, delete the dummy one after restoring the
-        // window stuff.
-        set_bufref(&newbuf_to_wipe, newbuf);
-        newbuf = curbuf;
-      }
-    }
-
-    // Restore curwin/curbuf and a few other things.
-    aucmd_restbuf(&aco);
-
-    if (newbuf_to_wipe.br_buf != NULL && bufref_valid(&newbuf_to_wipe)) {
-      block_autocmds();
-      wipe_dummy_buffer(newbuf_to_wipe.br_buf, NULL);
-      unblock_autocmds();
-    }
-
-    // Add back the "dummy" flag, otherwise buflist_findname_file_id()
-    // won't skip it.
-    newbuf->b_flags |= BF_DUMMY;
-  }
-
-  // When autocommands/'autochdir' option changed directory: go back.
-  // Let the caller know what the resulting dir was first, in case it is
-  // important.
-  os_dirname(resulting_dir, MAXPATHL);
-  restore_start_dir(dirname_start);
-
-  if (!bufref_valid(&newbufref)) {
-    return NULL;
-  }
-  if (failed) {
-    wipe_dummy_buffer(newbuf, dirname_start);
-    return NULL;
-  }
-  return newbuf;
-}
-
-/// the 'autochdir' option have changed it.
-static void wipe_dummy_buffer(buf_T *buf, char *dirname_start)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  // If any autocommand opened a window on the dummy buffer, close that
-  // window.  If we can't close them all then give up.
-  while (buf->b_nwindows > 0) {
-    bool did_one = false;
-
-    if (firstwin->w_next != NULL) {
-      for (win_T *wp = firstwin; wp != NULL; wp = wp->w_next) {
-        if (wp->w_buffer == buf) {
-          if (win_close(wp, false, false) == OK) {
-            did_one = true;
-          }
-          break;
-        }
-      }
-    }
-    if (!did_one) {
-      goto fail;
-    }
-  }
-
-  if (curbuf != buf && buf->b_nwindows == 0) {  // safety check
-    cleanup_T cs;
-
-    // Reset the error/interrupt/exception state here so that aborting()
-    // returns false when wiping out the buffer.  Otherwise it doesn't
-    // work when got_int is set.
-    enter_cleanup(&cs);
-
-    wipe_buffer(buf, true);
-
-    // Restore the error/interrupt/exception state if not discarded by a
-    // new aborting error, interrupt, or uncaught exception.
-    leave_cleanup(&cs);
-
-    if (dirname_start != NULL) {
-      // When autocommands/'autochdir' option changed directory: go back.
-      restore_start_dir(dirname_start);
-    }
-
-    return;
-  }
-
-fail:
-  // Keeping the buffer, remove the dummy flag.
-  buf->b_flags &= ~BF_DUMMY;
-}
-
-/// 'autochdir' option have changed it.
-static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
-{
-  if (curbuf == buf) {          // safety check
-    return;
-  }
-
-  close_buffer(NULL, buf, DOBUF_UNLOAD, false, true);
-
-  // When autocommands/'autochdir' option changed directory: go back.
-  restore_start_dir(dirname_start);
-}
 
 
 /// Get the first item in a VimL list

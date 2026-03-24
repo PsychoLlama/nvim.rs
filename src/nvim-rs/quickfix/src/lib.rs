@@ -12,6 +12,7 @@ pub mod api;
 pub mod commands;
 pub mod dirstack;
 pub mod display;
+pub mod dummy_buf;
 pub mod errorformat;
 pub mod external;
 pub mod filter;
