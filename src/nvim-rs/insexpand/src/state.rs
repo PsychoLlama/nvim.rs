@@ -235,9 +235,14 @@ extern "C" {
     // Compound accessors for complex functions
     fn nvim_get_next_include_file_completion(compl_type: c_int);
     fn nvim_get_next_cmdline_completion_impl();
-    fn nvim_get_next_spell_completion_impl(lnum: c_int);
+    // nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined below
     fn nvim_do_autocmd_completedone_impl(c: c_int, mode: c_int, word: *const c_char);
     fn nvim_ins_compl_show_filename_impl();
+    // Helpers for inlined nvim_get_next_spell_completion_impl
+    fn expand_spelling(lnum: c_int, pat: *const c_char, matches: *mut *mut *mut c_char) -> c_int;
+    fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
+    #[link_name = "xfree"]
+    fn xfree_state(p: *mut u8);
 }
 
 /// Return the Insert completion mode name string.
@@ -312,7 +317,17 @@ pub unsafe extern "C" fn rs_get_next_cmdline_completion() {
 /// Requires valid global state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_next_spell_completion(lnum: c_int) {
-    nvim_get_next_spell_completion_impl(lnum);
+    let mut matches: *mut *mut c_char = core::ptr::null_mut();
+    let num_matches = expand_spelling(
+        lnum,
+        crate::vars::compl_pattern.data.cast_const(),
+        &raw mut matches,
+    );
+    if num_matches > 0 {
+        rs_ins_compl_add_matches(num_matches, matches, crate::vars::nvim_get_p_ic());
+    } else {
+        xfree_state(matches.cast());
+    }
 }
 
 /// Build v_event dict and fire EVENT_COMPLETEDONE autocmd.

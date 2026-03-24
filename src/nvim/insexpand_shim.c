@@ -2096,16 +2096,7 @@ void nvim_get_next_cmdline_completion_impl(void)
   }
 }
 
-void nvim_get_next_spell_completion_impl(int lnum)
-{
-  char **matches;
-  int num_matches = expand_spelling((linenr_T)lnum, compl_pattern.data, &matches);
-  if (num_matches > 0) {
-    rs_ins_compl_add_matches(num_matches, matches, p_ic);
-  } else {
-    xfree(matches);
-  }
-}
+// nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined in state.rs
 
 void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
 {
