@@ -193,21 +193,6 @@ void nvim_msg_clr_eos_force_impl(void)
   }
 }
 
-// Phase 4: msg_reset_scroll helper (grid clearing loop)
-void nvim_msg_reset_scroll_grid(void)
-{
-  msg_grid.throttled = false;
-  msg_grid_set_pos(Rows - (int)p_ch, false);
-  clear_cmdline = true;
-  if (msg_grid.chars) {
-    for (int i = 0; i < MIN(msg_scrollsize(), msg_grid.rows); i++) {
-      grid_clear_line(&msg_grid, msg_grid.line_offset[i], msg_grid.cols, false);
-    }
-  }
-  msg_scrolled = 0;
-  msg_scrolled_at_flush = 0;
-  msg_grid_scroll_discount = 0;
-}
 
 void nvim_msg_grid_flush_dirty_line(int row)
 {

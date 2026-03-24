@@ -353,7 +353,17 @@ extern "C" {
     static mut msg_scrolled: c_int;
     static mut msg_did_scroll: bool;
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_msg_reset_scroll_grid();
+
+    // For inlined nvim_msg_reset_scroll_grid
+    static mut msg_grid: crate::ScreenGrid;
+    static mut msg_scrolled_at_flush: c_int;
+    static mut msg_grid_scroll_discount: c_int;
+    static mut clear_cmdline: bool;
+    static mut p_ch: i64;
+    static Rows: c_int;
+    fn msg_grid_set_pos(row: c_int, scrolled: bool);
+    fn grid_clear_line(grid: *mut crate::ScreenGrid, off: usize, width: c_int, valid: bool);
+    fn msg_scrollsize() -> c_int;
 }
 
 /// Scroll message display up (normal case).
@@ -424,13 +434,28 @@ pub unsafe extern "C" fn rs_set_msg_did_scroll(val: c_int) {
 /// Called when the message grid should be collapsed (e.g., after redraw).
 ///
 /// # Safety
-/// Calls C accessor/mutator functions that modify grid state.
+/// Modifies grid state globals; calls msg_grid_set_pos and grid_clear_line.
 #[export_name = "msg_reset_scroll"]
 pub unsafe extern "C" fn rs_msg_reset_scroll() {
     if ui_has(K_UI_MESSAGES) {
         return;
     }
-    nvim_msg_reset_scroll_grid();
+    // Inlined from nvim_msg_reset_scroll_grid:
+    msg_grid.throttled = false;
+    let new_pos = Rows - c_int::try_from(p_ch).unwrap_or(c_int::MAX);
+    msg_grid_set_pos(new_pos, false);
+    clear_cmdline = true;
+    if !msg_grid.chars.is_null() {
+        let limit = msg_scrollsize().min(msg_grid.rows);
+        for i in 0..limit {
+            #[allow(clippy::cast_sign_loss)]
+            let off = *msg_grid.line_offset.add(i as usize);
+            grid_clear_line(std::ptr::addr_of_mut!(msg_grid), off, msg_grid.cols, false);
+        }
+    }
+    msg_scrolled = 0;
+    msg_scrolled_at_flush = 0;
+    msg_grid_scroll_discount = 0;
 }
 
 #[cfg(test)]
