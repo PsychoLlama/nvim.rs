@@ -75,4 +75,8 @@ int ExpandFromContext(expand_T *xp, char *pat, char ***matches, int *numMatches,
 void ExpandGeneric(const char *pat, expand_T *xp, regmatch_T *regmatch, char ***matches,
                    int *numMatches, CompleteListItemGetter func, bool escaped);
 
+// Phase 4 Rust migrations (wildmenu.rs)
+int nextwild(expand_T *xp, int type, int options, bool escape);
+int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool noselect);
+
 #include "cmdexpand.h.generated.h"

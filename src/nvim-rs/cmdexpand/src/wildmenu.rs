@@ -112,6 +112,80 @@ extern "C" {
 
     /// Wrapper for `redraw_statuslines()`.
     fn nvim_cmdexpand_redraw_statuslines();
+
+    // Phase 4: nextwild accessors
+    /// Wrapper for `cursorcmd()`.
+    fn nvim_cmdexpand_cursorcmd();
+
+    /// Wrapper for `ui_flush()`.
+    fn nvim_cmdexpand_ui_flush();
+
+    /// Wrapper for `msg_puts(s)`.
+    fn nvim_cmdexpand_msg_puts(s: *const libc::c_char);
+
+    /// Get `cmd_silent` global.
+    fn nvim_cmdexpand_get_cmd_silent() -> c_int;
+
+    /// Get `got_int` global.
+    fn nvim_cmdexpand_get_got_int() -> c_int;
+
+    /// Wrapper for `xstrnsave(s, n)`.
+    fn nvim_cmdexpand_xstrnsave(s: *const libc::c_char, n: usize) -> *mut libc::c_char;
+
+    /// Set `cmd_showtail`.
+    fn nvim_cmdexpand_set_cmd_showtail(val: c_int);
+
+    /// Set `may_expand_pattern`.
+    fn nvim_cmdexpand_set_may_expand_pattern(val: c_int);
+
+    /// Copy `pre_incsearch_pos` from `xp->xp_pre_incsearch_pos`.
+    fn nvim_cmdexpand_copy_pre_incsearch_pos(xp: *mut crate::ExpandT);
+
+    /// Save `cmdline_orig` from current ccline.
+    fn nvim_cmdexpand_save_cmdline_orig();
+
+    /// Apply expansion result into ccline->cmdbuff.
+    fn nvim_cmdexpand_apply_expansion(
+        xp: *mut crate::ExpandT,
+        i: c_int,
+        p: *const libc::c_char,
+        plen: c_int,
+    );
+
+    /// Wrapper for `nlua_expand_pat(xp)`.
+    fn nvim_cmdexpand_nlua_expand_pat(xp: *mut crate::ExpandT);
+
+    /// Get `xp_context` from `get_cmdline_info()->xpc` (or `EXPAND_NOTHING` if NULL).
+    fn nvim_cmdexpand_get_ccline_xp_context() -> c_int;
+
+    /// Get `p_wic` option value (wildchar: use ignore case).
+    fn nvim_cmdexpand_get_p_wic() -> c_int;
+
+    /// `ExpandOne` (already in Rust, but callable via C ABI).
+    fn ExpandOne(
+        xp: *mut crate::ExpandT,
+        str_: *mut libc::c_char,
+        orig: *mut libc::c_char,
+        options: c_int,
+        mode: c_int,
+    ) -> *mut libc::c_char;
+
+    fn xfree(ptr: *mut libc::c_void);
+
+    fn beep_flush();
+
+    fn ui_has(cap: c_int) -> bool;
+
+    fn rs_expand_showtail(xp: *mut crate::ExpandT) -> c_int;
+
+    fn rs_cmdline_fuzzy_completion_supported(context: c_int) -> c_int;
+
+    fn nvim_cmdexpand_addstar(
+        fname: *mut libc::c_char,
+        len: usize,
+        context: c_int,
+    ) -> *mut libc::c_char;
+
 }
 
 // =============================================================================
@@ -439,4 +513,209 @@ pub unsafe extern "C" fn rs_wildmenu_cleanup(_cclp: *mut libc::c_void) {
     if input_fn {
         nvim_cmdexpand_set_redrawing_disabled(old_redrawing_disabled);
     }
+}
+
+// =============================================================================
+// nextwild
+// =============================================================================
+
+use crate::context::wild_mode::{
+    WILD_FREE, WILD_LONGEST, WILD_NEXT, WILD_PAGEDOWN, WILD_PAGEUP, WILD_PREV, WILD_PUM_WANT,
+};
+use crate::context::wild_options::{
+    WILD_ADD_SLASH, WILD_ESCAPE, WILD_FUNC_TRIGGER, WILD_HOME_REPLACE, WILD_ICASE,
+    WILD_MAY_EXPAND_PATTERN, WILD_NOSELECT, WILD_SILENT,
+};
+
+/// `kUICmdline` enum value from `ui_defs.h`.
+const K_UI_CMDLINE: c_int = 0;
+/// `kUIWildmenu` enum value from `ui_defs.h` (= 2 in the 0-based `UIExtType` enum).
+const K_UI_WILDMENU: c_int = 2;
+
+/// `EXPAND_COMMANDS` context constant.
+const EXPAND_COMMANDS: c_int = 6;
+/// `EXPAND_MAPPINGS` context constant.
+const EXPAND_MAPPINGS: c_int = 7;
+/// `EXPAND_UNSUCCESSFUL` context constant.
+const EXPAND_UNSUCCESSFUL: c_int = -1;
+/// `EXPAND_NOTHING` context constant.
+const EXPAND_NOTHING: c_int = 0;
+/// `EXPAND_PATTERN_IN_BUF` context constant.
+const EXPAND_PATTERN_IN_BUF: c_int = 65;
+/// `EXPAND_LUA` context constant.
+const EXPAND_LUA: c_int = 74;
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Main entry point for wildcard expansion on the command line.
+///
+/// Returns `OK` (1) on success, `FAIL` (0) to signal that the character should
+/// be inserted literally (e.g., for `:map` context with no match).
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` pointer; `get_cmdline_info()` must return
+/// a valid ccline for the current context.
+///
+/// # Panics
+///
+/// Panics (via `assert!`) if `cmdpos < i` (pattern offset exceeds cursor position).
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "nextwild")]
+pub unsafe extern "C" fn rs_nextwild(
+    xp: *mut crate::ExpandT,
+    type_: c_int,
+    options: c_int,
+    escape: bool,
+) -> c_int {
+    let from_wildtrigger_func = (options & WILD_FUNC_TRIGGER) != 0;
+    let wild_navigate = type_ == WILD_NEXT
+        || type_ == WILD_PREV
+        || type_ == WILD_PAGEUP
+        || type_ == WILD_PAGEDOWN
+        || type_ == WILD_PUM_WANT;
+
+    if (*xp).xp_numfiles == -1 {
+        // Copy pre_incsearch_pos from xp field
+        nvim_cmdexpand_copy_pre_incsearch_pos(xp);
+
+        let input_fn = nvim_cmdexpand_get_input_fn() != 0;
+        let xp_context = nvim_cmdexpand_get_ccline_xp_context();
+        if input_fn && xp_context == EXPAND_COMMANDS {
+            // Expand commands typed in input() function
+            let cmdbuff = nvim_cmdexpand_get_cmdbuff();
+            let cmdlen = nvim_cmdexpand_get_cmdlen();
+            let cmdpos = nvim_cmdexpand_get_cmdpos();
+            crate::rs_set_cmd_context(xp, cmdbuff, cmdlen, cmdpos, 0);
+        } else {
+            let may_expand = (options & WILD_MAY_EXPAND_PATTERN) != 0;
+            nvim_cmdexpand_set_may_expand_pattern(c_int::from(may_expand));
+            crate::rs_set_expand_context(xp);
+            nvim_cmdexpand_set_may_expand_pattern(0);
+        }
+
+        if (*xp).xp_context == EXPAND_LUA {
+            nvim_cmdexpand_nlua_expand_pat(xp);
+        }
+
+        let showtail = rs_expand_showtail(xp) != 0;
+        nvim_cmdexpand_set_cmd_showtail(c_int::from(showtail));
+    }
+
+    if (*xp).xp_context == EXPAND_UNSUCCESSFUL {
+        beep_flush();
+        return OK; // Something illegal on command line
+    }
+    if (*xp).xp_context == EXPAND_NOTHING {
+        // Caller can use the character as a normal char instead
+        return FAIL;
+    }
+
+    let cmdbuff = nvim_cmdexpand_get_cmdbuff();
+    let cmdpos = nvim_cmdexpand_get_cmdpos();
+    let i = if cmdbuff.is_null() || (*xp).xp_pattern.is_null() {
+        0
+    } else {
+        ((*xp).xp_pattern as usize).wrapping_sub(cmdbuff as usize) as c_int
+    };
+    assert!(cmdpos >= i);
+    (*xp).xp_pattern_len = (cmdpos - i) as usize;
+
+    // Skip showing matches if prefix is invalid during wildtrigger()
+    if from_wildtrigger_func && (*xp).xp_context == EXPAND_COMMANDS && (*xp).xp_pattern_len == 0 {
+        return FAIL;
+    }
+
+    // If cmd_silent is set then don't show dots while busy
+    if nvim_cmdexpand_get_cmd_silent() == 0
+        && !from_wildtrigger_func
+        && !wild_navigate
+        && !ui_has(K_UI_CMDLINE)
+        && !ui_has(K_UI_WILDMENU)
+    {
+        nvim_cmdexpand_msg_puts(c"...".as_ptr());
+        nvim_cmdexpand_ui_flush();
+    }
+
+    let mut p: *mut libc::c_char;
+
+    if wild_navigate {
+        // Get next/previous match for a previously expanded pattern.
+        p = ExpandOne(xp, std::ptr::null_mut(), std::ptr::null_mut(), 0, type_);
+    } else {
+        let xp_pattern = (*xp).xp_pattern;
+        let xp_pattern_len = (*xp).xp_pattern_len;
+        let xp_context = (*xp).xp_context;
+
+        let tmp: *mut libc::c_char = if rs_cmdline_fuzzy_completion_supported(xp_context) != 0
+            || xp_context == EXPAND_PATTERN_IN_BUF
+        {
+            // Don't modify the search string
+            nvim_cmdexpand_xstrnsave(xp_pattern, xp_pattern_len)
+        } else {
+            nvim_cmdexpand_addstar(xp_pattern, xp_pattern_len, xp_context)
+        };
+
+        let p_wic = nvim_cmdexpand_get_p_wic();
+        let use_options = options
+            | WILD_HOME_REPLACE
+            | WILD_ADD_SLASH
+            | WILD_SILENT
+            | if escape { WILD_ESCAPE } else { 0 }
+            | if p_wic != 0 { WILD_ICASE } else { 0 };
+
+        let orig = nvim_cmdexpand_xstrnsave(cmdbuff.add(i as usize), xp_pattern_len);
+        p = ExpandOne(xp, tmp, orig, use_options, type_);
+        xfree(tmp.cast::<libc::c_void>());
+
+        // Longest match: make sure it is not shorter, happens with :help.
+        if !p.is_null() && type_ == WILD_LONGEST {
+            // Count how many non-wildcard chars are in the original pattern.
+            let mut j = 0usize;
+            while j < xp_pattern_len {
+                let ch = *cmdbuff.add(i as usize + j) as u8;
+                if ch == b'*' || ch == b'?' {
+                    break;
+                }
+                j += 1;
+            }
+            if libc::strlen(p) < j {
+                xfree(p.cast::<libc::c_void>());
+                p = std::ptr::null_mut();
+            }
+        }
+    }
+
+    // Save cmdline before inserting selected item
+    if !wild_navigate && !cmdbuff.is_null() {
+        nvim_cmdexpand_save_cmdline_orig();
+    }
+
+    let got_int = nvim_cmdexpand_get_got_int() != 0;
+
+    if !p.is_null() && !got_int && (options & WILD_NOSELECT) == 0 {
+        let plen = libc::strlen(p) as c_int;
+        nvim_cmdexpand_apply_expansion(xp, i, p, plen);
+    }
+
+    nvim_cmdexpand_redrawcmd();
+    nvim_cmdexpand_cursorcmd();
+
+    // When expanding a ":map" command and no matches are found, assume that
+    // the key is supposed to be inserted literally
+    if (*xp).xp_context == EXPAND_MAPPINGS && p.is_null() {
+        return FAIL;
+    }
+
+    if (*xp).xp_numfiles <= 0 && p.is_null() {
+        beep_flush();
+    } else if (*xp).xp_numfiles == 1 && (options & WILD_NOSELECT) == 0 && !wild_navigate {
+        // free expanded pattern
+        ExpandOne(xp, std::ptr::null_mut(), std::ptr::null_mut(), 0, WILD_FREE);
+    }
+
+    xfree(p.cast::<libc::c_void>());
+
+    OK
 }

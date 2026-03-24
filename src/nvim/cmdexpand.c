@@ -1276,148 +1276,129 @@ CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void)
   return get_healthcheck_names;
 }
 
+// =============================================================================
+// Phase 4: C accessors for nextwild and showmatches
+// =============================================================================
+
+/// Wrapper for cursorcmd (for Rust FFI).
+void nvim_cmdexpand_cursorcmd(void)
+{
+  cursorcmd();
+}
+
+/// Wrapper for ui_flush (for Rust FFI).
+void nvim_cmdexpand_ui_flush(void)
+{
+  ui_flush();
+}
+
+/// Wrapper for msg_puts (for Rust FFI).
+void nvim_cmdexpand_msg_puts(const char *s)
+{
+  msg_puts(s);
+}
+
+/// Get cmd_silent (for Rust FFI).
+int nvim_cmdexpand_get_cmd_silent(void)
+{
+  return cmd_silent;
+}
+
+/// Get got_int (for Rust FFI).
+int nvim_cmdexpand_get_got_int(void)
+{
+  return got_int;
+}
+
+/// Set got_int (for Rust FFI).
+void nvim_cmdexpand_set_got_int(int val)
+{
+  got_int = (bool)val;
+}
+
+/// Wrapper for xstrnsave (for Rust FFI).
+char *nvim_cmdexpand_xstrnsave(const char *s, size_t n)
+{
+  return xstrnsave(s, n);
+}
+
+/// Set cmd_showtail (for Rust FFI).
+void nvim_cmdexpand_set_cmd_showtail(int val)
+{
+  cmd_showtail = (bool)val;
+}
+
+/// Set may_expand_pattern (for Rust FFI).
+void nvim_cmdexpand_set_may_expand_pattern(int val)
+{
+  may_expand_pattern = (bool)val;
+}
+
+/// Copy pre_incsearch_pos from xp->xp_pre_incsearch_pos (for Rust FFI).
+void nvim_cmdexpand_copy_pre_incsearch_pos(expand_T *xp)
+{
+  pre_incsearch_pos = xp->xp_pre_incsearch_pos;
+}
+
+/// Save cmdline_orig from current ccline->cmdbuff (for Rust FFI).
+void nvim_cmdexpand_save_cmdline_orig(void)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  xfree(cmdline_orig);
+  cmdline_orig = xstrnsave(ccline->cmdbuff, (size_t)ccline->cmdlen);
+}
+
+/// Apply expansion result into ccline->cmdbuff (for Rust FFI).
+/// @param xp         expand context, xp_pattern_len is used
+/// @param i          offset of pattern start in cmdbuff
+/// @param p          expansion result string (caller retains ownership)
+/// @param plen       length of p
+void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen)
+{
+  CmdlineInfo *ccline = get_cmdline_info();
+  int difflen = plen - (int)xp->xp_pattern_len;
+  if (ccline->cmdlen + difflen + 4 > ccline->cmdbufflen) {
+    realloc_cmdbuff(ccline->cmdlen + difflen + 4);
+    xp->xp_pattern = ccline->cmdbuff + i;
+  }
+  assert(ccline->cmdpos <= ccline->cmdlen);
+  memmove(&ccline->cmdbuff[ccline->cmdpos + difflen],
+          &ccline->cmdbuff[ccline->cmdpos],
+          (size_t)ccline->cmdlen - (size_t)ccline->cmdpos + 1);
+  memmove(&ccline->cmdbuff[i], p, (size_t)plen);
+  ccline->cmdlen += difflen;
+  ccline->cmdpos += difflen;
+}
+
+/// Get cmdbufflen from get_cmdline_info() (for Rust FFI).
+int nvim_cmdexpand_get_cmdbufflen(void)
+{
+  return get_cmdline_info()->cmdbufflen;
+}
+
+/// Set cmdlen in get_cmdline_info() (for Rust FFI).
+void nvim_cmdexpand_set_cmdlen(int val)
+{
+  get_cmdline_info()->cmdlen = val;
+}
+
+/// Set cmdpos in get_cmdline_info() (for Rust FFI).
+void nvim_cmdexpand_set_cmdpos(int val)
+{
+  get_cmdline_info()->cmdpos = val;
+}
+
+/// Wrapper for nlua_expand_pat (for Rust FFI).
+void nvim_cmdexpand_nlua_expand_pat(expand_T *xp)
+{
+  nlua_expand_pat(xp);
+}
+
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
 
 
-/// Return FAIL if this is not an appropriate context in which to do
-/// completion of anything, return OK if it is (even if there are no matches).
-/// For the caller, this means that the character is just passed through like a
-/// normal character (instead of being expanded).  This allows :s/^I^D etc.
-///
-/// @param options  extra options for ExpandOne()
-/// @param escape  if true, escape the returned matches
-int nextwild(expand_T *xp, int type, int options, bool escape)
-{
-  CmdlineInfo *const ccline = get_cmdline_info();
-  char *p;
-  bool from_wildtrigger_func = options & WILD_FUNC_TRIGGER;
-  bool wild_navigate = (type == WILD_NEXT || type == WILD_PREV
-                        || type == WILD_PAGEUP || type == WILD_PAGEDOWN
-                        || type == WILD_PUM_WANT);
-
-  if (xp->xp_numfiles == -1) {
-    pre_incsearch_pos = xp->xp_pre_incsearch_pos;
-    if (ccline->input_fn && ccline->xp_context == EXPAND_COMMANDS) {
-      // Expand commands typed in input() function
-      set_cmd_context(xp, ccline->cmdbuff, ccline->cmdlen, ccline->cmdpos, false);
-    } else {
-      may_expand_pattern = options & WILD_MAY_EXPAND_PATTERN;
-      set_expand_context(xp);
-      may_expand_pattern = false;
-    }
-    if (xp->xp_context == EXPAND_LUA) {
-      nlua_expand_pat(xp);
-    }
-    cmd_showtail = rs_expand_showtail(xp) != 0;
-  }
-
-  if (xp->xp_context == EXPAND_UNSUCCESSFUL) {
-    beep_flush();
-    return OK;      // Something illegal on command line
-  }
-  if (xp->xp_context == EXPAND_NOTHING) {
-    // Caller can use the character as a normal char instead
-    return FAIL;
-  }
-
-  int i = (int)(xp->xp_pattern - ccline->cmdbuff);
-  assert(ccline->cmdpos >= i);
-  xp->xp_pattern_len = (size_t)ccline->cmdpos - (size_t)i;
-
-  // Skip showing matches if prefix is invalid during wildtrigger()
-  if (from_wildtrigger_func && xp->xp_context == EXPAND_COMMANDS
-      && xp->xp_pattern_len == 0) {
-    return FAIL;
-  }
-
-  // If cmd_silent is set then don't show the dots, because redrawcmd() below
-  // won't remove them.
-  if (!cmd_silent && !from_wildtrigger_func && !wild_navigate
-      && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))) {
-    msg_puts("...");  // show that we are busy
-    ui_flush();
-  }
-
-  if (wild_navigate) {
-    // Get next/previous match for a previous expanded pattern.
-    p = ExpandOne(xp, NULL, NULL, 0, type);
-  } else {
-    char *tmp;
-    if (rs_cmdline_fuzzy_completion_supported(xp->xp_context)
-        || xp->xp_context == EXPAND_PATTERN_IN_BUF) {
-      // Don't modify the search string
-      tmp = xstrnsave(xp->xp_pattern, xp->xp_pattern_len);
-    } else {
-      tmp = addstar(xp->xp_pattern, xp->xp_pattern_len, xp->xp_context);
-    }
-    // Translate string into pattern and expand it.
-    const int use_options = (options
-                             | WILD_HOME_REPLACE
-                             | WILD_ADD_SLASH
-                             | WILD_SILENT
-                             | (escape ? WILD_ESCAPE : 0)
-                             | (p_wic ? WILD_ICASE : 0));
-    p = ExpandOne(xp, tmp, xstrnsave(&ccline->cmdbuff[i], xp->xp_pattern_len),
-                  use_options, type);
-    xfree(tmp);
-    // Longest match: make sure it is not shorter, happens with :help.
-    if (p != NULL && type == WILD_LONGEST) {
-      int j;
-      for (j = 0; (size_t)j < xp->xp_pattern_len; j++) {
-        char c = ccline->cmdbuff[i + j];
-        if (c == '*' || c == '?') {
-          break;
-        }
-      }
-      if ((int)strlen(p) < j) {
-        XFREE_CLEAR(p);
-      }
-    }
-  }
-
-  // Save cmdline before inserting selected item
-  if (!wild_navigate && ccline->cmdbuff != NULL) {
-    xfree(cmdline_orig);
-    cmdline_orig = xstrnsave(ccline->cmdbuff, (size_t)ccline->cmdlen);
-  }
-
-  if (p != NULL && !got_int && !(options & WILD_NOSELECT)) {
-    size_t plen = strlen(p);
-    int difflen = (int)plen - (int)(xp->xp_pattern_len);
-    if (ccline->cmdlen + difflen + 4 > ccline->cmdbufflen) {
-      realloc_cmdbuff(ccline->cmdlen + difflen + 4);
-      xp->xp_pattern = ccline->cmdbuff + i;
-    }
-    assert(ccline->cmdpos <= ccline->cmdlen);
-    memmove(&ccline->cmdbuff[ccline->cmdpos + difflen],
-            &ccline->cmdbuff[ccline->cmdpos],
-            (size_t)ccline->cmdlen - (size_t)ccline->cmdpos + 1);
-    memmove(&ccline->cmdbuff[i], p, plen);
-    ccline->cmdlen += difflen;
-    ccline->cmdpos += difflen;
-  }
-
-  redrawcmd();
-  cursorcmd();
-
-  // When expanding a ":map" command and no matches are found, assume that
-  // the key is supposed to be inserted literally
-  if (xp->xp_context == EXPAND_MAPPINGS && p == NULL) {
-    return FAIL;
-  }
-
-  if (xp->xp_numfiles <= 0 && p == NULL) {
-    beep_flush();
-  } else if (xp->xp_numfiles == 1 && !(options & WILD_NOSELECT) && !wild_navigate) {
-    // free expanded pattern
-    ExpandOne(xp, NULL, NULL, 0, WILD_FREE);
-  }
-
-  xfree(p);
-
-  return OK;
-}
+// nextwild -- migrated to Rust (wildmenu.rs)
 
 /// Create completion popup menu with items from "matches".
 static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches, int numMatches,
