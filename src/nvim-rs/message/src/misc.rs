@@ -132,6 +132,14 @@ extern "C" {
     fn nvim_get_global_busy() -> c_int;
     fn nvim_get_p_report() -> i64;
     fn nvim_format_msgmore(n: c_int) -> *const c_char;
+
+    // For repeat_message (Phase 22)
+    static mut State: c_int;
+    static mut msg_didout: bool;
+    fn msg_moremsg(full: bool);
+    fn hit_return_msg(newline_sb: bool);
+    fn ui_cursor_goto(row: c_int, col: c_int);
+    fn msg_clr_eos();
 }
 
 // nvim_get_in_assert_fails returns bool in C (normal_shim.c) but other modules
@@ -629,6 +637,52 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
             rs_set_keep_msg(buf, 0);
             keep_msg_more = true;
         }
+    }
+}
+
+// ============================================================================
+// Phase 22: repeat_message migrated from C
+// ============================================================================
+
+/// Vim editor state mode constants (state_defs.h)
+const MODE_CMDLINE: c_int = 0x08;
+const MODE_ASKMORE: c_int = 0x3000;
+const MODE_SETWSIZE: c_int = 0x4000;
+const MODE_EXTERNCMD: c_int = 0x5000;
+const MODE_HITRETURN: c_int = 0x2001; // 0x2000 | MODE_NORMAL (0x01)
+
+/// Repeat the message for the current mode: MODE_ASKMORE, MODE_EXTERNCMD,
+/// confirm() prompt or exmode_active.
+///
+/// Equivalent to C `repeat_message()`.
+///
+/// # Safety
+/// Accesses global state via C extern.
+#[export_name = "repeat_message"]
+pub unsafe extern "C" fn rs_repeat_message() {
+    if ui_has(K_UI_MESSAGES) {
+        return;
+    }
+
+    if State == MODE_ASKMORE {
+        msg_moremsg(true); // display --more-- message again
+        msg_row = Rows - 1;
+    } else if (State & MODE_CMDLINE) != 0 && !crate::dialog::confirm_msg.is_null() {
+        crate::dialog::rs_display_confirm_msg(); // display ":confirm" message again
+        msg_row = Rows - 1;
+    } else if State == MODE_EXTERNCMD {
+        ui_cursor_goto(msg_row, msg_col); // put cursor back
+    } else if State == MODE_HITRETURN || State == MODE_SETWSIZE {
+        if msg_row == Rows - 1 {
+            // Avoid drawing the "hit-enter" prompt below the previous one,
+            // overwrite it. Esp. useful when regaining focus and a
+            // FocusGained autocmd exists but didn't draw anything.
+            msg_didout = false;
+            msg_col = 0;
+            msg_clr_eos();
+        }
+        hit_return_msg(false);
+        msg_row = Rows - 1;
     }
 }
 

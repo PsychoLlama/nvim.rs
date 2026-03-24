@@ -199,6 +199,8 @@ char *get_emsg_source(void);
 char *get_emsg_lnum(void);
 void msg_puts_printf(const char *str, ptrdiff_t maxlen);
 void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
+void hit_return_msg(bool newline_sb);
+void msg_moremsg(bool full);
 
 // msg_scroll_up helper wrappers (used by Rust; access msg_grid struct fields)
 void nvim_msg_grid_clear_first_line(void)
@@ -1089,7 +1091,7 @@ void wait_return(int redraw)
 /// Write the hit-return prompt.
 ///
 /// @param newline_sb  if starting a new line, add it to the scrollback.
-static void hit_return_msg(bool newline_sb)
+void hit_return_msg(bool newline_sb)
 {
   int save_p_more = p_more;
 
@@ -1111,18 +1113,8 @@ static void hit_return_msg(bool newline_sb)
   p_more = save_p_more;
 }
 
-
-
 // msgmore() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msgmore)
-
-
-
-
-
-
-
 // str2special_arena() migrated to Rust: src/nvim-rs/message/src/keys.rs (rs_str2special_arena)
-
 
 /// print line for :print or :list command
 void msg_prt_line(const char *s, bool list)
@@ -1286,11 +1278,6 @@ void msg_prt_line(const char *s, bool list)
   }
   msg_clr_eos();
 }
-
-
-/// Show a message in such a way that it always fits in the line.  Cut out a
-/// part in the middle and replace it with "..." when necessary.
-/// Does not handle multi-byte characters!
 
 
 // msg_puts_len() migrated to Rust: src/nvim-rs/message/src/output.rs (rs_msg_puts_len)
@@ -1482,10 +1469,6 @@ void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse)
 
 // msg_line_flush() migrated to Rust: src/nvim-rs/message/src/display.rs (rs_msg_line_flush)
 // msg_cursor_goto() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_msg_cursor_goto_impl)
-
-/// Scroll the screen up one line for displaying the next message line.
-
-
 
 /// Increment "msg_scrolled".
 static void inc_msg_scrolled(void)
@@ -1913,7 +1896,7 @@ static bool do_more_prompt(int typed_char)
   return retval;
 }
 
-static void msg_moremsg(bool full)
+void msg_moremsg(bool full)
 {
   int attr = hl_combine_attr(HL_ATTR(HLF_MSG), HL_ATTR(HLF_M));
   grid_line_start(&msg_grid_adj, Rows - 1);
@@ -1926,41 +1909,7 @@ static void msg_moremsg(bool full)
   grid_line_flush();
 }
 
-/// Repeat the message for the current mode: MODE_ASKMORE, MODE_EXTERNCMD,
-/// confirm() prompt or exmode_active.
-void repeat_message(void)
-{
-  if (ui_has(kUIMessages)) {
-    return;
-  }
-
-  if (State == MODE_ASKMORE) {
-    msg_moremsg(true);          // display --more-- message again
-    msg_row = Rows - 1;
-  } else if ((State & MODE_CMDLINE) && confirm_msg != NULL) {
-    display_confirm_msg();      // display ":confirm" message again
-    msg_row = Rows - 1;
-  } else if (State == MODE_EXTERNCMD) {
-    ui_cursor_goto(msg_row, msg_col);     // put cursor back
-  } else if (State == MODE_HITRETURN || State == MODE_SETWSIZE) {
-    if (msg_row == Rows - 1) {
-      // Avoid drawing the "hit-enter" prompt below the previous one,
-      // overwrite it.  Esp. useful when regaining focus and a
-      // FocusGained autocmd exists but didn't draw anything.
-      msg_didout = false;
-      msg_col = 0;
-      msg_clr_eos();
-    }
-    hit_return_msg(false);
-    msg_row = Rows - 1;
-  }
-}
-
-
-/// Clear from current message position to end of screen.
-/// Note: msg_col is not updated, so we remember the end of the message
-
-
+// repeat_message() migrated to Rust: src/nvim-rs/message/src/misc.rs (rs_repeat_message)
 
 /// Clear "msg_ext_chunks" before flushing so that ui_flush() does not re-emit
 /// the same message recursively.

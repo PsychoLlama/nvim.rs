@@ -190,6 +190,9 @@ char *str2special_arena(const char *str, bool replace_spaces, bool replace_lt, A
 // Phase 6: msgmore migrated to Rust
 void msgmore(int n);
 
+// Phase 22: repeat_message migrated to Rust
+void repeat_message(void);
+
 #include "message.h.generated.h"
 
 // Prefer using semsg(), because perror() may send the output to the wrong
