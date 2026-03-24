@@ -1394,6 +1394,196 @@ void nvim_cmdexpand_nlua_expand_pat(expand_T *xp)
   nlua_expand_pat(xp);
 }
 
+// =============================================================================
+// Phase 4b: C accessors for showmatches and showmatches_oneline
+// =============================================================================
+
+/// Get msg_didany (for Rust FFI).
+int nvim_cmdexpand_get_msg_didany(void)
+{
+  return msg_didany;
+}
+
+/// Set msg_didany (for Rust FFI).
+void nvim_cmdexpand_set_msg_didany(int val)
+{
+  msg_didany = (bool)val;
+}
+
+/// Wrapper for msg_start (for Rust FFI).
+void nvim_cmdexpand_msg_start(void)
+{
+  msg_start();
+}
+
+/// Wrapper for msg_putchar (for Rust FFI).
+void nvim_cmdexpand_msg_putchar(int c)
+{
+  msg_putchar(c);
+}
+
+/// Get msg_row (for Rust FFI).
+int nvim_cmdexpand_get_msg_row(void)
+{
+  return msg_row;
+}
+
+/// Set cmdline_row (for Rust FFI).
+void nvim_cmdexpand_set_cmdline_row(int val)
+{
+  cmdline_row = val;
+}
+
+/// Wrapper for msg_ext_set_kind (for Rust FFI).
+void nvim_cmdexpand_msg_ext_set_kind(const char *kind)
+{
+  msg_ext_set_kind(kind);
+}
+
+/// Get Columns (for Rust FFI).
+int nvim_cmdexpand_get_columns(void)
+{
+  return Columns;
+}
+
+/// Free wild matches via FreeWild (for Rust FFI).
+void nvim_cmdexpand_free_wild(int count, char **files)
+{
+  FreeWild(count, files);
+}
+
+/// Wrapper for pum_clear (for Rust FFI).
+void nvim_cmdexpand_pum_clear(void)
+{
+  pum_clear();
+}
+
+/// Set compl_selected (for Rust FFI).
+void nvim_cmdexpand_set_compl_selected(int val)
+{
+  compl_selected = val;
+}
+
+/// Create PUM from explicit matches array (for Rust FFI).
+void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int num_matches,
+                                            int showtail, int noselect)
+{
+  cmdline_pum_create(get_cmdline_info(), xp, matches, num_matches,
+                     showtail != 0, noselect != 0);
+}
+
+/// Wrapper for redraw_wildmenu with explicit matches (for Rust FFI).
+void nvim_cmdexpand_redraw_wildmenu_ex(expand_T *xp, int num_matches, char **matches,
+                                       int findex, int showtail)
+{
+  redraw_wildmenu(xp, num_matches, matches, findex, showtail != 0);
+}
+
+/// Get msg_col (for Rust FFI).
+int nvim_cmdexpand_get_msg_col(void)
+{
+  return msg_col;
+}
+
+/// Wrapper for msg_clr_eos (for Rust FFI).
+void nvim_cmdexpand_msg_clr_eos(void)
+{
+  msg_clr_eos();
+}
+
+/// Wrapper for msg_outtrans (for Rust FFI). Returns column after output.
+int nvim_cmdexpand_msg_outtrans(const char *str, int attr, int maxcol)
+{
+  return msg_outtrans(str, attr, (bool)maxcol);
+}
+
+/// Wrapper for msg_outtrans_long (for Rust FFI).
+void nvim_cmdexpand_msg_outtrans_long(const char *str, int attr)
+{
+  msg_outtrans_long(str, attr);
+}
+
+/// Wrapper for msg_advance (for Rust FFI).
+void nvim_cmdexpand_msg_advance(int col)
+{
+  msg_advance(col);
+}
+
+/// Replace $HOME with ~ in matches[i] for display.
+/// Returns pointer into NameBuff static buffer.
+char *nvim_cmdexpand_home_replace_match(const char *s)
+{
+  home_replace(NULL, s, NameBuff, MAXPATHL, true);
+  return NameBuff;
+}
+
+/// Wrapper for expand_env_save_opt (for Rust FFI).
+char *nvim_cmdexpand_expand_env_save_opt(const char *str)
+{
+  return expand_env_save_opt((char *)str, true);
+}
+
+/// Wrapper for backslash_halve_save (for Rust FFI).
+char *nvim_cmdexpand_backslash_halve_save(const char *str)
+{
+  return backslash_halve_save((char *)str);
+}
+
+/// Wrapper for os_isdir (for Rust FFI).
+int nvim_cmdexpand_os_isdir(const char *str)
+{
+  return os_isdir(str);
+}
+
+/// Wrapper for vim_strsize (for Rust FFI).
+int nvim_cmdexpand_vim_strsize(const char *str)
+{
+  return vim_strsize(str);
+}
+
+/// Wrapper for msg_puts_hl (for Rust FFI).
+void nvim_cmdexpand_msg_puts_hl(const char *str, int attr, int maxcol)
+{
+  msg_puts_hl(str, attr, (bool)maxcol);
+}
+
+/// Get the EXPAND_TAGS_LISTFILES context value (for Rust FFI).
+int nvim_cmdexpand_get_ctx_tags_listfiles(void)
+{
+  return EXPAND_TAGS_LISTFILES;
+}
+
+/// Get the EXPAND_FILES context value (for Rust FFI).
+int nvim_cmdexpand_get_ctx_files(void)
+{
+  return EXPAND_FILES;
+}
+
+/// Get the EXPAND_SHELLCMD context value (for Rust FFI).
+int nvim_cmdexpand_get_ctx_shellcmd(void)
+{
+  return EXPAND_SHELLCMD;
+}
+
+/// Get the EXPAND_BUFFERS context value (for Rust FFI).
+int nvim_cmdexpand_get_ctx_buffers(void)
+{
+  return EXPAND_BUFFERS;
+}
+
+/// Wrapper for rs_showmatches_gettail via SHOW_MATCH macro (for Rust FFI).
+/// Returns either gettail result (if showtail) or matches[m] directly.
+char *nvim_cmdexpand_show_match(char **matches, int m, int showtail)
+{
+  return showtail ? rs_showmatches_gettail(matches[m], false) : matches[m];
+}
+
+/// Wrapper for rs_cmdline_compl_use_pum (for Rust FFI).
+int nvim_cmdexpand_compl_use_pum(int need_wildmenu)
+{
+  return rs_cmdline_compl_use_pum(need_wildmenu);
+}
+
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
 
@@ -1651,181 +1841,7 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
 /// The variables xp->xp_context and xp->xp_backslash must have been set!
 ///
 
-/// Display one line of completion matches. Multiple matches are displayed in
-/// each line (used by wildmode=list and CTRL-D)
-///
-/// @param matches      list of completion match names
-/// @param numMatches   number of completion matches in "matches"
-/// @param lines        number of output lines
-/// @param linenr       line number of matches to display
-/// @param maxlen       maximum number of characters in each line
-/// @param showtail     display only the tail of the full path of a file name
-static void showmatches_oneline(expand_T *xp, char **matches, int numMatches, int lines, int linenr,
-                                int maxlen, bool showtail)
-{
-  char *p;
-  int lastlen = 999;
-  for (int j = linenr; j < numMatches; j += lines) {
-    if (xp->xp_context == EXPAND_TAGS_LISTFILES) {
-      msg_outtrans(matches[j], HLF_D, false);
-      p = matches[j] + strlen(matches[j]) + 1;
-      msg_advance(maxlen + 1);
-      msg_puts(p);
-      msg_advance(maxlen + 3);
-      msg_outtrans_long(p + 2, HLF_D);
-      break;
-    }
-    for (int i = maxlen - lastlen; --i >= 0;) {
-      msg_putchar(' ');
-    }
-    bool isdir;
-    if (xp->xp_context == EXPAND_FILES
-        || xp->xp_context == EXPAND_SHELLCMD
-        || xp->xp_context == EXPAND_BUFFERS) {
-      // highlight directories
-      if (xp->xp_numfiles != -1) {
-        // Expansion was done before and special characters
-        // were escaped, need to halve backslashes.  Also
-        // $HOME has been replaced with ~/.
-        char *exp_path = expand_env_save_opt(matches[j], true);
-        char *path = exp_path != NULL ? exp_path : matches[j];
-        char *halved_slash = backslash_halve_save(path);
-        isdir = os_isdir(halved_slash);
-        xfree(exp_path);
-        if (halved_slash != path) {
-          xfree(halved_slash);
-        }
-      } else {
-        // Expansion was done here, file names are literal.
-        isdir = os_isdir(matches[j]);
-      }
-      if (showtail) {
-        p = SHOW_MATCH(j);
-      } else {
-        home_replace(NULL, matches[j], NameBuff, MAXPATHL, true);
-        p = NameBuff;
-      }
-    } else {
-      isdir = false;
-      p = SHOW_MATCH(j);
-    }
-    lastlen = msg_outtrans(p, isdir ? HLF_D : 0, false);
-  }
-  if (msg_col > 0) {  // when not wrapped around
-    msg_clr_eos();
-    msg_putchar('\n');
-  }
-}
-
-/// Display completion matches.
-/// Returns EXPAND_NOTHING when the character that triggered expansion should be
-///   inserted as a normal character.
-int showmatches(expand_T *xp, bool display_wildmenu, bool display_list, bool noselect)
-{
-  CmdlineInfo *const ccline = get_cmdline_info();
-  int numMatches;
-  char **matches;
-  int maxlen;
-  int lines;
-  int columns;
-  bool showtail;
-
-  if (xp->xp_numfiles == -1) {
-    set_expand_context(xp);
-    if (xp->xp_context == EXPAND_LUA) {
-      nlua_expand_pat(xp);
-    }
-    int retval = expand_cmdline(xp, ccline->cmdbuff, ccline->cmdpos,
-                                &numMatches, &matches);
-    if (retval != EXPAND_OK) {
-      return retval;
-    }
-    showtail = rs_expand_showtail(xp) != 0;
-  } else {
-    numMatches = xp->xp_numfiles;
-    matches = xp->xp_files;
-    showtail = cmd_showtail;
-  }
-
-  if (rs_cmdline_compl_use_pum(display_wildmenu && !display_list)) {
-    cmdline_pum_create(ccline, xp, matches, numMatches, showtail, noselect);
-    compl_selected = noselect ? -1 : 0;
-    pum_clear();
-    cmdline_pum_display(true);
-    return EXPAND_OK;
-  }
-
-  if (display_list) {
-    msg_didany = false;                 // lines_left will be set
-    msg_start();                        // prepare for paging
-    msg_putchar('\n');
-    ui_flush();
-    cmdline_row = msg_row;
-    msg_didany = false;                 // lines_left will be set again
-    msg_ext_set_kind("wildlist");
-    msg_start();                        // prepare for paging
-  }
-
-  if (got_int) {
-    got_int = false;  // only interrupt the completion, not the cmd line
-  } else if (display_wildmenu && !display_list) {
-    redraw_wildmenu(xp, numMatches, matches, noselect ? -1 : 0,
-                    showtail);  // display statusbar menu
-  } else if (display_list) {
-    // find the length of the longest file name
-    maxlen = 0;
-    for (int i = 0; i < numMatches; i++) {
-      int len;
-      if (!showtail && (xp->xp_context == EXPAND_FILES
-                        || xp->xp_context == EXPAND_SHELLCMD
-                        || xp->xp_context == EXPAND_BUFFERS)) {
-        home_replace(NULL, matches[i], NameBuff, MAXPATHL, true);
-        len = vim_strsize(NameBuff);
-      } else {
-        len = vim_strsize(SHOW_MATCH(i));
-      }
-      maxlen = MAX(maxlen, len);
-    }
-
-    if (xp->xp_context == EXPAND_TAGS_LISTFILES) {
-      lines = numMatches;
-    } else {
-      // compute the number of columns and lines for the listing
-      maxlen += 2;          // two spaces between file names
-      columns = (Columns + 2) / maxlen;
-      if (columns < 1) {
-        columns = 1;
-      }
-      lines = (numMatches + columns - 1) / columns;
-    }
-
-    if (xp->xp_context == EXPAND_TAGS_LISTFILES) {
-      msg_puts_hl(_("tagname"), HLF_T, false);
-      msg_clr_eos();
-      msg_advance(maxlen - 3);
-      msg_puts_hl(_(" kind file\n"), HLF_T, false);
-    }
-
-    // list the files line by line
-    for (int i = 0; i < lines; i++) {
-      showmatches_oneline(xp, matches, numMatches, lines, i, maxlen, showtail);
-      if (got_int) {
-        got_int = false;
-        break;
-      }
-    }
-
-    // we redraw the command below the lines that we have just listed
-    // This is a bit tricky, but it saves a lot of screen updating.
-    cmdline_row = msg_row;      // will put it back later
-  }
-
-  if (xp->xp_numfiles == -1) {
-    FreeWild(numMatches, matches);
-  }
-
-  return EXPAND_OK;
-}
+// showmatches_oneline, showmatches -- migrated to Rust (display.rs)
 
 
 

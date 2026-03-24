@@ -14,6 +14,7 @@
 pub mod callbacks;
 pub mod context;
 pub mod context_helpers;
+pub mod display;
 pub mod expand;
 pub mod files;
 pub mod helpers;
