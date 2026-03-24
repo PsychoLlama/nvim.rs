@@ -8215,6 +8215,587 @@ pub unsafe extern "C" fn rs_store_aff_word(
 }
 
 // =============================================================================
+// Phase 4: File readers (spell_read_dic, spell_read_wordfile)
+// =============================================================================
+
+/// Repr(C) mirror of vimconv_T (mbyte_defs.h).
+/// sizeof = 24, alignof = 8.
+#[repr(C)]
+struct VimconvT {
+    pub vc_type: c_int, // ConvFlags: 0=CONV_NONE
+    pub vc_factor: c_int,
+    pub vc_fd: u64, // iconv_t (8 bytes on 64-bit)
+    pub vc_fail: bool,
+    _pad: [u8; 7],
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<VimconvT>() == 24);
+    assert!(std::mem::offset_of!(VimconvT, vc_type) == 0);
+    assert!(std::mem::offset_of!(VimconvT, vc_fd) == 8);
+    assert!(std::mem::offset_of!(VimconvT, vc_fail) == 16);
+};
+
+extern "C" {
+    // os_fopen: file open. Use a new alias to avoid conflict with os_fopen_sug.
+    #[link_name = "os_fopen"]
+    fn os_fopen_ph4(path: *const c_char, flags: *const c_char) -> *mut libc::FILE;
+    fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut libc::FILE) -> bool;
+    fn string_convert(vcp: *const VimconvT, ptr: *mut c_char, lenp: *mut usize) -> *mut c_char;
+    fn convert_setup(vcp: *mut VimconvT, from: *mut c_char, to: *mut c_char) -> c_int;
+    fn enc_canonize(enc: *mut c_char) -> *mut c_char;
+    fn has_non_ascii(s: *const c_char) -> bool;
+    fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int);
+    fn os_time() -> i64;
+    fn vim_snprintf(str_: *mut c_char, str_m: usize, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "got_int"]
+    static got_int_global: bool;
+    #[link_name = "IObuff"]
+    static mut IObuff_global: [c_char; 1025];
+    #[link_name = "p_verbose"]
+    static p_verbose_global: i64;
+    #[link_name = "p_enc"]
+    static p_enc_global: *mut c_char;
+    #[link_name = "msg_didout"]
+    static mut msg_didout_global: bool;
+    #[link_name = "msg_col"]
+    static mut msg_col_global: c_int;
+}
+
+/// C OK/FAIL constants.
+const OK: c_int = 0;
+const FAIL: c_int = 1;
+
+const CONV_NONE: c_int = 0;
+
+const MAXREGIONS: usize = 8;
+
+/// Get the `VimconvT` pointer embedded in `spellinfo_T.si_conv` (offset 112).
+///
+/// # Safety
+/// `spin` must be a valid non-null pointer.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn spin_conv(spin: *mut SpellinfoT) -> *mut VimconvT {
+    (spin as *mut u8).add(112).cast::<VimconvT>()
+}
+
+/// Read a .dic dictionary file and store all words.
+/// Mirrors C `spell_read_dic`.
+///
+/// # Safety
+/// `spin`, `fname`, and `affile` must be valid non-null pointers.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::unnecessary_cast
+)]
+pub unsafe extern "C" fn rs_spell_read_dic(
+    spin: *mut SpellinfoT,
+    fname: *const c_char,
+    affile: *mut AfffileT,
+) -> c_int {
+    const MAXWLEN: usize = 254;
+    let mut retval = OK;
+
+    let fd = os_fopen_ph4(fname, c"r".as_ptr());
+    if fd.is_null() {
+        semsg_sug(c"E484: Can't open file %s".as_ptr(), fname);
+        return FAIL;
+    }
+
+    // The hashtable detects duplicate words.
+    let mut ht = std::mem::zeroed::<crate::HashtabRaw>();
+    hash_init(&raw mut ht);
+
+    // Show progress message.
+    let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+    vim_snprintf(
+        iobuff,
+        1025,
+        c"Reading dictionary file %s...".as_ptr(),
+        fname,
+    );
+    rs_spell_message(spin, iobuff);
+
+    // Start with a large msg_count so first line triggers message.
+    (*spin).si_msg_count = 999_999;
+
+    // Read and ignore the first line (word count).
+    {
+        let mut line_buf = [0i8; 4096];
+        if !vim_fgets(line_buf.as_mut_ptr(), 4096, fd) {
+            // Check that first line is a number (word count header).
+            let mut p = line_buf.as_mut_ptr();
+            while *p == b' ' as i8 || *p == b'\t' as i8 {
+                p = p.add(1);
+            }
+            if !ascii_isdigit(i32::from(*p as u8)) {
+                semsg_sug(c"E760: No word count in %s".as_ptr(), fname);
+            }
+        }
+    }
+
+    let mut line_buf = [0i8; 4096usize];
+    let mut word_buf = [0u8; 4096usize];
+    let mut store_afflist = [0u8; MAXWLEN + 1];
+    let mut lnum: c_int = 1;
+    let mut non_ascii: c_int = 0;
+    let mut duplicate: c_int = 0;
+    let mut last_msg_time: i64 = 0;
+
+    while !vim_fgets(line_buf.as_mut_ptr(), 4096, fd) && !std::ptr::addr_of!(got_int_global).read()
+    {
+        line_breakcheck_sug();
+        lnum += 1;
+
+        // Convert encoding if needed.
+        let conv = spin_conv(spin);
+        let pc: *mut c_char = if (*conv).vc_type != CONV_NONE {
+            let p = string_convert(conv, line_buf.as_mut_ptr(), std::ptr::null_mut());
+            if p.is_null() {
+                semsg_sug(
+                    c"Conversion failure for word in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    line_buf.as_ptr(),
+                );
+                continue;
+            }
+            p
+        } else {
+            std::ptr::null_mut()
+        };
+
+        let src_line: *const c_char = if pc.is_null() { line_buf.as_ptr() } else { pc };
+        let src_len = libc::strlen(src_line.cast::<libc::c_char>());
+
+        // Parse the dic line via Rust.
+        let mut rs_res = DicLineResult {
+            word_len: 0,
+            affix_offset: 0xFFFF,
+            affix_len: 0,
+        };
+        let parse_ret = rs_parse_dic_line(
+            src_line.cast::<u8>(),
+            src_len,
+            word_buf.as_mut_ptr(),
+            word_buf.len(),
+            &raw mut rs_res,
+        );
+        if parse_ret != 0 {
+            xfree(pc.cast::<c_void>());
+            continue;
+        }
+
+        word_buf[rs_res.word_len as usize] = 0;
+        let w = word_buf.as_mut_ptr().cast::<c_char>();
+
+        // Get affix list pointer (into the original src_line buffer).
+        let afflist: *mut c_char = if rs_res.affix_offset == 0xFFFF {
+            std::ptr::null_mut()
+        } else {
+            src_line.add(rs_res.affix_offset as usize).cast_mut()
+        };
+
+        // Skip non-ASCII words when si_ascii is set.
+        if (*spin).si_ascii != 0 && has_non_ascii(w) {
+            non_ascii += 1;
+            xfree(pc.cast::<c_void>());
+            continue;
+        }
+
+        // Verbose progress message every 10000 words but at most once per second.
+        if (*spin).si_verbose != 0 && (*spin).si_msg_count > 10000 {
+            (*spin).si_msg_count = 0;
+            let now = os_time();
+            if now > last_msg_time {
+                last_msg_time = now;
+                let mut message = [0i8; 4096usize + MAXWLEN];
+                vim_snprintf(
+                    message.as_mut_ptr(),
+                    message.len(),
+                    c"line %6d, word %6d - %s".as_ptr(),
+                    lnum,
+                    (*spin).si_foldwcount + (*spin).si_keepwcount,
+                    w,
+                );
+                msg_start();
+                msg_outtrans_long(message.as_ptr(), 0);
+                msg_clr_eos();
+                std::ptr::addr_of_mut!(msg_didout_global).write(false);
+                std::ptr::addr_of_mut!(msg_col_global).write(0);
+                ui_flush();
+            }
+        }
+
+        // Store the word in the hashtable to detect duplicates.
+        let dw = rs_getroom_save(spin, w);
+        if dw.is_null() {
+            retval = FAIL;
+            xfree(pc.cast::<c_void>());
+            break;
+        }
+
+        let hash = hash_hash(dw);
+        let dw_len = libc::strlen(dw.cast::<libc::c_char>());
+        let hi = hash_lookup(&raw const ht, dw, dw_len, hash);
+        if hi_is_empty(hi) {
+            hash_add_item(&raw mut ht, hi, dw, hash);
+        } else {
+            if std::ptr::addr_of!(p_verbose_global).read() > 0 {
+                semsg_sug(
+                    c"Duplicate word in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    dw,
+                );
+            } else if duplicate == 0 {
+                semsg_sug(
+                    c"First duplicate word in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    dw,
+                );
+            }
+            duplicate += 1;
+        }
+
+        let mut flags: c_int = 0;
+        store_afflist[0] = 0;
+        let mut pfxlen: c_int = 0;
+        let mut need_affix = false;
+
+        if !afflist.is_null() {
+            flags |= rs_get_affix_flags(affile, afflist);
+
+            if (*affile).af_needaffix != 0
+                && flag_in_afflist_inner((*affile).af_flagtype, afflist, (*affile).af_needaffix)
+            {
+                need_affix = true;
+            }
+
+            if (*affile).af_pfxpostpone != 0 {
+                pfxlen =
+                    rs_get_pfxlist(affile, afflist, store_afflist.as_mut_ptr().cast::<c_char>());
+            }
+
+            if !(*spin).si_compflags.is_null() {
+                rs_get_compflags(
+                    affile,
+                    afflist,
+                    store_afflist
+                        .as_mut_ptr()
+                        .add(pfxlen as usize)
+                        .cast::<c_char>(),
+                );
+            }
+        }
+
+        // Add the word to the word tree(s).
+        if rs_store_word(
+            spin,
+            dw,
+            flags,
+            (*spin).si_region,
+            store_afflist.as_ptr().cast::<c_char>(),
+            need_affix,
+        ) != OK
+        {
+            retval = FAIL;
+        }
+
+        if !afflist.is_null() {
+            // Find all matching suffixes.
+            if rs_store_aff_word(
+                spin,
+                dw,
+                afflist,
+                affile,
+                &raw mut (*affile).af_suff,
+                &raw mut (*affile).af_pref,
+                CONDIT_SUF,
+                flags,
+                store_afflist.as_mut_ptr().cast::<c_char>(),
+                pfxlen,
+            ) != OK
+            {
+                retval = FAIL;
+            }
+
+            // Find all matching prefixes.
+            if rs_store_aff_word(
+                spin,
+                dw,
+                afflist,
+                affile,
+                &raw mut (*affile).af_pref,
+                std::ptr::null_mut(),
+                CONDIT_SUF,
+                flags,
+                store_afflist.as_mut_ptr().cast::<c_char>(),
+                pfxlen,
+            ) != OK
+            {
+                retval = FAIL;
+            }
+        }
+
+        xfree(pc.cast::<c_void>());
+    }
+
+    if duplicate > 0 {
+        semsg_sug(c"%d duplicate word(s) in %s".as_ptr(), duplicate, fname);
+    }
+    if (*spin).si_ascii != 0 && non_ascii > 0 {
+        semsg_sug(
+            c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr(),
+            non_ascii,
+            fname,
+        );
+    }
+    hash_clear(&raw mut ht);
+
+    libc::fclose(fd);
+    retval
+}
+
+/// Read a plain word list file and store all words.
+/// Mirrors C `spell_read_wordfile`.
+///
+/// # Safety
+/// `spin` and `fname` must be valid non-null pointers.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::unnecessary_cast
+)]
+pub unsafe extern "C" fn rs_spell_read_wordfile(
+    spin: *mut SpellinfoT,
+    fname: *const c_char,
+) -> c_int {
+    let mut retval = OK;
+    let mut lnum: c_int = 0;
+    let mut non_ascii: c_int = 0;
+    let mut did_word = false;
+
+    let fd = os_fopen_ph4(fname, c"r".as_ptr());
+    if fd.is_null() {
+        semsg_sug(c"E484: Can't open file %s".as_ptr(), fname);
+        return FAIL;
+    }
+
+    let iobuff = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+    vim_snprintf(iobuff, 1025, c"Reading word file %s...".as_ptr(), fname);
+    rs_spell_message(spin, iobuff);
+
+    let mut rline = [0i8; 4096usize];
+    let mut pc: *mut c_char = std::ptr::null_mut();
+
+    while !vim_fgets(rline.as_mut_ptr(), 4096, fd) && !std::ptr::addr_of!(got_int_global).read() {
+        line_breakcheck_sug();
+        lnum += 1;
+
+        // Convert encoding if needed.
+        xfree(pc.cast::<c_void>());
+        pc = std::ptr::null_mut();
+        let conv = spin_conv(spin);
+        if (*conv).vc_type != CONV_NONE {
+            pc = string_convert(conv, rline.as_mut_ptr(), std::ptr::null_mut());
+            if pc.is_null() {
+                semsg_sug(
+                    c"Conversion failure for word in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    rline.as_ptr(),
+                );
+                continue;
+            }
+        }
+
+        let line: *const c_char = if pc.is_null() { rline.as_ptr() } else { pc };
+        let line_len = libc::strlen(line.cast::<libc::c_char>());
+
+        let mut rs_res = WordfileLineResult {
+            directive: [0u8; 16],
+            word_len: 0,
+            word_end_offset: 0,
+            flags: 0,
+            regionmask: 0,
+            region_count: 0,
+        };
+        let parse_ret = rs_parse_wordfile_line(
+            line.cast::<u8>(),
+            line_len,
+            (*spin).si_region_count,
+            &raw mut rs_res,
+        );
+
+        if parse_ret == 2 {
+            continue;
+        }
+
+        if parse_ret == 1 {
+            // Directive line.
+            if rs_res.directive[0] == b'e' {
+                // /encoding= directive
+                if (*conv).vc_type != CONV_NONE {
+                    semsg_sug(
+                        c"Duplicate /encoding= line ignored in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        line,
+                    );
+                } else if did_word {
+                    semsg_sug(
+                        c"/encoding= line after word ignored in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        line,
+                    );
+                } else {
+                    let enc_val = line.add(rs_res.word_end_offset as usize).cast_mut();
+                    let enc = enc_canonize(enc_val);
+                    let p_enc = std::ptr::addr_of!(p_enc_global).read();
+                    if (*spin).si_ascii == 0 && convert_setup(conv, enc, p_enc) == FAIL {
+                        semsg_sug(
+                            c"Conversion in %s not supported: from %s to %s".as_ptr(),
+                            fname,
+                            enc_val,
+                            p_enc,
+                        );
+                    }
+                    xfree(enc.cast::<c_void>());
+                    (*conv).vc_fail = true;
+                }
+            } else if rs_res.directive[0] == b'r' {
+                // /regions= directive
+                if (*spin).si_region_count > 1 {
+                    semsg_sug(
+                        c"Duplicate /regions= line ignored in %s line %d: %s".as_ptr(),
+                        fname,
+                        lnum,
+                        line.add(1),
+                    );
+                } else {
+                    let reg_val = line.add(rs_res.word_end_offset as usize);
+                    if (rs_res.word_len as usize) > MAXREGIONS * 2 {
+                        semsg_sug(
+                            c"Too many regions in %s line %d: %s".as_ptr(),
+                            fname,
+                            lnum,
+                            reg_val,
+                        );
+                    } else {
+                        (*spin).si_region_count = i32::from(rs_res.region_count);
+                        libc::strncpy(
+                            (*spin).si_region_name.as_mut_ptr(),
+                            reg_val,
+                            (*spin).si_region_name.len() - 1,
+                        );
+                        (*spin).si_region = (1 << (*spin).si_region_count) - 1;
+                    }
+                }
+            } else {
+                semsg_sug(
+                    c"/ line ignored in %s line %d: %s".as_ptr(),
+                    fname,
+                    lnum,
+                    line,
+                );
+            }
+            continue;
+        }
+
+        if parse_ret == 3 {
+            semsg_sug(
+                c"Invalid region nr in %s line %d: %s".as_ptr(),
+                fname,
+                lnum,
+                line,
+            );
+            continue;
+        }
+
+        if parse_ret == 4 {
+            semsg_sug(
+                c"Unrecognized flags in %s line %d: %s".as_ptr(),
+                fname,
+                lnum,
+                line,
+            );
+            continue;
+        }
+
+        if parse_ret != 0 {
+            continue;
+        }
+
+        // Ordinary word line.
+        let wlen = (rs_res.word_len as usize).min(4095);
+        let mut word_copy = [0i8; 4096usize];
+        libc::memcpy(
+            word_copy.as_mut_ptr().cast::<c_void>(),
+            line.cast::<c_void>(),
+            wlen,
+        );
+        word_copy[wlen] = 0;
+
+        let word_flags = rs_res.flags;
+        let regionmask = if (word_flags & wordfile_flags::WF_REGION) != 0 {
+            rs_res.regionmask
+        } else {
+            (*spin).si_region
+        };
+
+        // Skip non-ASCII words when si_ascii is set.
+        if (*spin).si_ascii != 0 && has_non_ascii(word_copy.as_ptr()) {
+            non_ascii += 1;
+            continue;
+        }
+
+        // Store the word.
+        if rs_store_word(
+            spin,
+            word_copy.as_ptr(),
+            word_flags,
+            regionmask,
+            std::ptr::null(),
+            false,
+        ) != OK
+        {
+            retval = FAIL;
+            break;
+        }
+        did_word = true;
+    }
+
+    xfree(pc.cast::<c_void>());
+    libc::fclose(fd);
+
+    if (*spin).si_ascii != 0 && non_ascii > 0 {
+        let iobuff2 = std::ptr::addr_of_mut!(IObuff_global).cast::<c_char>();
+        vim_snprintf(
+            iobuff2,
+            1025,
+            c"Ignored %d words with non-ASCII characters".as_ptr(),
+            non_ascii,
+        );
+        rs_spell_message(spin, iobuff2);
+    }
+
+    retval
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
