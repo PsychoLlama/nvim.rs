@@ -12,9 +12,7 @@ extern "C" {
 
 // C accessor functions
 extern "C" {
-    // RedrawingDisabled (nvim_set_redrawing_disabled still needed for non-trivial logic)
-    fn nvim_set_redrawing_disabled(val: c_int);
-
+    // nvim_set_redrawing_disabled: deleted (Phase 1), use RedrawingDisabled directly
     // Cursor position
     fn setcursor();
     fn nvim_get_curwin_w_wrow() -> c_int;
@@ -59,7 +57,7 @@ const FORWARD: c_int = 1;
 pub unsafe extern "C" fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // RedrawingDisabled may be set when invoked through complete().
     let n = RedrawingDisabled;
-    nvim_set_redrawing_disabled(0);
+    RedrawingDisabled = 0;
 
     // If the cursor moved or the display scrolled we need to remove the pum first.
     setcursor();
@@ -69,7 +67,7 @@ pub unsafe extern "C" fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) 
 
     rs_ins_compl_show_pum();
     setcursor();
-    nvim_set_redrawing_disabled(n);
+    RedrawingDisabled = n;
 }
 
 /// Add an array of matches to the completion list and free the array.

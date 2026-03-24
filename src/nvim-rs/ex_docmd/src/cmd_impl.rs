@@ -1527,9 +1527,9 @@ extern "C" {
     // global_busy
     fn nvim_get_global_busy() -> bool;
 
-    // RedrawingDisabled get/set
-    fn nvim_get_RedrawingDisabled() -> c_int;
-    fn nvim_set_redrawing_disabled(val: c_int);
+    // nvim_get_RedrawingDisabled + nvim_set_redrawing_disabled: deleted (Phase 1), use RedrawingDisabled directly
+    #[link_name = "RedrawingDisabled"]
+    static mut g_RedrawingDisabled: c_int;
 
     // no_wait_return
     fn nvim_ex2_get_no_wait_return() -> c_int;
@@ -1715,7 +1715,7 @@ pub unsafe extern "C" fn do_exmode() {
     }
 
     let save_msg_scroll = msg_scroll;
-    nvim_set_redrawing_disabled(nvim_get_RedrawingDisabled() + 1); // don't redisplay the window
+    g_RedrawingDisabled += 1; // don't redisplay the window
     nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() + 1); // don't wait for return
 
     msg(
@@ -1771,7 +1771,7 @@ pub unsafe extern "C" fn do_exmode() {
         }
     }
 
-    nvim_set_redrawing_disabled(nvim_get_RedrawingDisabled() - 1);
+    g_RedrawingDisabled -= 1;
     nvim_ex2_set_no_wait_return(nvim_ex2_get_no_wait_return() - 1);
     nvim_redraw_all_later(UPD_NOT_VALID);
     update_screen();

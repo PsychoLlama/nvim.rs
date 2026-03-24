@@ -2576,7 +2576,7 @@ int nvim_ins_compl_add_infercase_ffi(const char *str, int len, int icase, const 
 
 
 // Accessors for Phase 1 (pass 6): show_pum, rs_ins_compl_add_matches, spell_back_to_badword
-void nvim_set_redrawing_disabled(int val) { RedrawingDisabled = val; }
+// nvim_set_redrawing_disabled: deleted (Phase 1), Rust uses RedrawingDisabled directly
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
 // Accessor for Phase 4 (pass 12): rs_ins_compl_add_matches migration
 int nvim_ins_compl_add_simple(const char *str, int len, int dir, int flags, int score)
@@ -3448,13 +3448,13 @@ add_word_check:
   return 2;
 }
 
-void nvim_update_can_si_from_may_do_si(void) { can_si = may_do_si(); }
+// nvim_update_can_si_from_may_do_si: deleted (Phase 1), Rust uses can_si/may_do_si directly
 
 // Insert-mode autocmd/completion accessors (migrated from edit.c)
 void nvim_ins_apply_insertenter(void) { ins_apply_autocmds(EVENT_INSERTENTER); }
 void nvim_ins_apply_insertleave(void) { ins_apply_autocmds(EVENT_INSERTLEAVE); }
 int nvim_ins_apply_autocmds_insertcharpre(void) { return ins_apply_autocmds(EVENT_INSERTCHARPRE); }
-int nvim_ins_complete_with_key(int c) { return ins_complete(c, true); }
-int nvim_check_compl_option_ins(int allow_always) { return check_compl_option(allow_always != 0) ? 1 : 0; }
+// nvim_ins_complete_with_key: deleted (Phase 1), Rust calls ins_complete directly
+// nvim_check_compl_option_ins: deleted (Phase 1), Rust calls check_compl_option directly
 int nvim_get_cpt_first_char(void) { return (unsigned char)*curbuf->b_p_cpt; }
 int nvim_get_pum_want_finish(void) { return pum_want.finish ? 1 : 0; }

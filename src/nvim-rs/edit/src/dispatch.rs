@@ -163,9 +163,16 @@ extern "C" {
     fn nvim_inc_disable_fold_update();
     fn nvim_dec_disable_fold_update();
     fn nvim_set_compl_busy(val: bool);
-    fn nvim_update_can_si_from_may_do_si();
-    fn nvim_ins_complete_with_key(c: c_int) -> c_int;
-    fn nvim_check_compl_option_ins(allow_always: c_int) -> c_int;
+    // nvim_update_can_si_from_may_do_si: deleted (Phase 1), use can_si/may_do_si directly
+    #[link_name = "can_si"]
+    static mut g_can_si: bool;
+    fn may_do_si() -> bool;
+    // nvim_ins_complete_with_key: deleted (Phase 1), use ins_complete directly
+    #[link_name = "ins_complete"]
+    fn ins_complete_dispatch(c: c_int, enable_pum: c_int) -> c_int;
+    // nvim_check_compl_option_ins: deleted (Phase 1), use check_compl_option directly
+    #[link_name = "check_compl_option"]
+    fn check_compl_option_dispatch(allow_always: bool) -> c_int;
     fn ins_ctrl_x();
     fn nvim_do_cmdline_getcmdkeycmd();
     fn nvim_map_execute_lua_false();
@@ -416,12 +423,12 @@ enum SwitchAction {
 pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
     nvim_set_compl_busy(true);
     nvim_inc_disable_fold_update();
-    if nvim_ins_complete_with_key((*s).c) == FAIL {
+    if ins_complete_dispatch((*s).c, 1) == FAIL {
         rs_compl_status_clear();
     }
     nvim_dec_disable_fold_update();
     nvim_set_compl_busy(false);
-    nvim_update_can_si_from_may_do_si();
+    g_can_si = may_do_si();
 }
 
 // ============================================================================
@@ -769,7 +776,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_T => {
             if rs_ctrl_x_mode_thesaurus() != 0 {
-                if nvim_check_compl_option_ins(0) != 0 {
+                if check_compl_option_dispatch(false) != 0 {
                     rs_insert_do_complete(s);
                 }
                 return SwitchAction::Continue;
@@ -973,7 +980,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_K => {
             if rs_ctrl_x_mode_dictionary() != 0 {
-                if nvim_check_compl_option_ins(1) != 0 {
+                if check_compl_option_dispatch(true) != 0 {
                     rs_insert_do_complete(s);
                 }
                 return SwitchAction::Continue;
