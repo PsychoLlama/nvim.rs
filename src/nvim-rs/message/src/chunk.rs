@@ -10,8 +10,6 @@ use std::ptr;
 extern "C" {
     // last_msgchunk: Rust-owned static in scrollback.rs
     static mut last_msgchunk: *mut MsgChunk;
-    /// Get chunk->sb_text pointer (flexible array, can't be accessed via repr(C) field)
-    fn nvim_msgchunk_get_text(chunk: *mut MsgChunk) -> *const c_char;
     /// xfree wrapper
     fn xfree(ptr: *mut std::ffi::c_void);
 }
@@ -107,16 +105,20 @@ pub unsafe extern "C" fn rs_msgchunk_hl_id(chunk: *mut MsgChunk) -> c_int {
 
 /// Get the text pointer for a chunk.
 ///
-/// Uses C accessor for the flexible array member sb_text[].
+/// The `sb_text[]` flexible array immediately follows the struct fields.
+/// `size_of::<MsgChunk>()` is 28, matching the C layout.
 ///
 /// # Safety
-/// Calls C accessor function for chunk->sb_text.
+/// Direct pointer arithmetic on repr(C) struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunk) -> *const c_char {
+pub const unsafe extern "C" fn rs_msgchunk_text(chunk: *mut MsgChunk) -> *const c_char {
     if chunk.is_null() {
         return ptr::null();
     }
-    nvim_msgchunk_get_text(chunk)
+    // sb_text[] flexible array starts immediately after the struct fields
+    (chunk as *const u8)
+        .add(std::mem::size_of::<MsgChunk>())
+        .cast::<c_char>()
 }
 
 /// Find the start of a screen line in the scrollback buffer.

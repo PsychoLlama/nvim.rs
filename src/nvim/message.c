@@ -138,9 +138,6 @@ void nvim_hl_msg_free(MessageHistoryEntry *entry)
 
 extern msgchunk_T *last_msgchunk;  // owned by Rust (scrollback.rs)
 
-// nvim_msgchunk_get_text: called from Rust (chunk.rs) for flexible array member sb_text
-const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
-
 // Rust implementation of emsg_not_now()
 extern int rs_emsg_not_now(void);
 // Rust implementation of msg_show_console_dialog()
@@ -153,9 +150,9 @@ void msg_puts_display(const char *str, int maxlen, int hl_id, int recurse);
 void hit_return_msg(bool newline_sb);
 void msg_moremsg(bool full);  // defined in Rust (misc.rs) with #[export_name]
 
-void nvim_msg_set_pos_for_scroll(int pos)
+void nvim_msg_set_pos_for_scroll(int pos, bool scrolled)
 {
-  ui_ext_msg_set_pos(pos, true);
+  ui_ext_msg_set_pos(pos, scrolled);
 }
 
 void nvim_msg_show_empty(void)
@@ -174,19 +171,7 @@ bool nvim_message_filtered_impl(const char *msg)
   return cmdmod.cmod_filter_force ? match : !match;
 }
 
-void nvim_msg_ui_refresh_impl(void)
-{
-  if (ui_has(kUIMultigrid) && msg_grid.chars) {
-    ui_call_grid_resize(msg_grid.handle, msg_grid.cols, msg_grid.rows);
-    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
-  }
-}
-void nvim_msg_ui_flush_impl(void)
-{
-  if (ui_has(kUIMultigrid) && msg_grid.chars && msg_grid.pending_comp_index_update) {
-    ui_ext_msg_set_pos(msg_grid_pos, msg_scrolled);
-  }
-}
+// nvim_msg_ui_refresh_impl and nvim_msg_ui_flush_impl migrated to Rust (misc.rs)
 
 void msg_grid_validate(void)
 {

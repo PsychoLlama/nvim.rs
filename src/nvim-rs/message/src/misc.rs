@@ -8,6 +8,8 @@ use std::ptr::addr_of_mut;
 
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
+/// UIExtension value for kUIMultigrid (ui_defs.h)
+const K_UI_MULTIGRID: c_int = 6;
 
 // ============================================================================
 // C Type Definitions
@@ -70,17 +72,14 @@ extern "C" {
 
     // Note: msg_source is wrapped in error.rs
 
-    // UI refresh (Phase 1: implementations moved to Rust, C provides accessor wrappers)
-    fn nvim_msg_ui_refresh_impl();
-    fn nvim_msg_ui_flush_impl();
-
     // Phase 4: msg_scroll_flush accessors
     static mut msg_grid: crate::ScreenGrid;
     static mut msg_grid_pos: c_int;
     static mut msg_scrolled: c_int;
     static mut msg_scrolled_at_flush: c_int;
     static mut msg_grid_scroll_discount: c_int;
-    fn nvim_msg_set_pos_for_scroll(pos: c_int);
+    fn nvim_msg_set_pos_for_scroll(pos: c_int, scrolled: bool);
+    fn ui_call_grid_resize(grid: i64, width: i64, height: i64);
     fn ui_call_grid_scroll(
         grid: i64,
         top: i64,
@@ -375,7 +374,14 @@ pub unsafe extern "C" fn rs_set_keep_msg(s: *const c_char, hl_id: c_int) {
 /// Calls C accessor that modifies UI state.
 #[export_name = "msg_ui_refresh"]
 pub unsafe extern "C" fn rs_msg_ui_refresh() {
-    nvim_msg_ui_refresh_impl();
+    if ui_has(K_UI_MULTIGRID) && !msg_grid.chars.is_null() {
+        ui_call_grid_resize(
+            i64::from(msg_grid.handle),
+            i64::from(msg_grid.cols),
+            i64::from(msg_grid.rows),
+        );
+        nvim_msg_set_pos_for_scroll(msg_grid_pos, msg_scrolled != 0);
+    }
 }
 
 /// Flush pending UI updates for messages.
@@ -386,7 +392,9 @@ pub unsafe extern "C" fn rs_msg_ui_refresh() {
 /// Calls C accessor that emits UI events.
 #[export_name = "msg_ui_flush"]
 pub unsafe extern "C" fn rs_msg_ui_flush() {
-    nvim_msg_ui_flush_impl();
+    if ui_has(K_UI_MULTIGRID) && !msg_grid.chars.is_null() && msg_grid.pending_comp_index_update {
+        nvim_msg_set_pos_for_scroll(msg_grid_pos, msg_scrolled != 0);
+    }
 }
 
 /// Flush scroll-related UI updates to clients.
@@ -410,7 +418,7 @@ pub unsafe extern "C" fn rs_msg_scroll_flush() {
         let delta = (msg_scrolled - msg_scrolled_at_flush).min(msg_grid.rows);
 
         if pos_delta > 0 {
-            nvim_msg_set_pos_for_scroll(msg_grid_pos);
+            nvim_msg_set_pos_for_scroll(msg_grid_pos, true);
         }
 
         let to_scroll = delta - pos_delta - msg_grid_scroll_discount;
