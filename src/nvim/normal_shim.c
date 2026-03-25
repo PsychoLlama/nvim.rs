@@ -1016,26 +1016,14 @@ void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); 
 /// Get clear_cmdline global.
 bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
 
-/// Get redraw_cmdline global.
-bool nvim_get_redraw_cmdline(void) { return redraw_cmdline; }
-
 /// Get msg_scroll global.
 bool nvim_get_msg_scroll_val(void) { return msg_scroll; }
 
 /// Set msg_scroll global.
 void nvim_set_msg_scroll_val(bool val) { msg_scroll = val; }
 
-/// Get msg_nowait global.
-bool nvim_get_msg_nowait_val(void) { return msg_nowait; }
-
 /// Get in_assert_fails global.
 bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
-
-/// Get did_wait_return global.
-bool nvim_get_did_wait_return_val(void) { return did_wait_return; }
-
-/// Get keep_msg != NULL.
-bool nvim_get_keep_msg_not_null(void) { return keep_msg != NULL; }
 
 /// Check shortmess(SHM_FILEINFO).
 bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
@@ -1159,8 +1147,6 @@ void nvim_set_may_garbage_collect(bool val) { may_garbage_collect = val; }
 /// update_curswant() wrapper.
 void nvim_update_curswant_wrapper(void) { update_curswant(); }
 
-/// Get cmdwin_result global.
-int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 
 
 // =============================================================================
@@ -1180,7 +1166,6 @@ bool nvim_get_need_check_timestamps(void) { return need_check_timestamps; }
 void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
 
 // For normal_check_interrupt
-bool nvim_get_quit_more(void) { return quit_more; }
 void nvim_vgetc_and_discard(void) { (void)vgetc(); }
 /// Check if last_cursormoved_win != curwin or cursor position differs.
 bool nvim_last_cursormoved_check(void)

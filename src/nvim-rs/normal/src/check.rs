@@ -61,16 +61,17 @@ extern "C" {
     // Global accessors
     fn nvim_get_did_throw_direct() -> bool;
     fn nvim_get_ex_normal_busy() -> c_int;
+
     static mut exmode_active: bool;
     static mut msg_scroll: c_int;
     fn nvim_set_quit_more(val: bool);
-    fn nvim_get_quit_more() -> bool;
+    static mut quit_more: bool;
+    static mut cmdwin_result: c_int;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_set_skip_redraw(val: bool);
     fn nvim_get_diff_need_scrollbind() -> bool;
     fn nvim_set_diff_need_scrollbind(val: bool);
     fn nvim_get_time_fd_not_null() -> bool;
-    fn nvim_get_cmdwin_result() -> c_int;
     fn nvim_set_may_garbage_collect(val: bool);
     fn nvim_stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
@@ -90,16 +91,16 @@ extern "C" {
     #[link_name = "p_smd"]
     static p_smd: c_int;
     fn nvim_get_clear_cmdline() -> bool;
-    fn nvim_get_redraw_cmdline() -> bool;
+    static redraw_cmdline: bool;
     static mut msg_didout: bool;
     static mut msg_didany: bool;
     fn nvim_get_msg_scroll_val() -> bool;
     fn nvim_set_msg_scroll_val(val: bool);
-    fn nvim_get_msg_nowait_val() -> bool;
+    static mut msg_nowait: bool;
     static mut emsg_on_display: bool;
     static mut emsg_silent: c_int;
     fn nvim_get_in_assert_fails() -> bool;
-    fn nvim_get_did_wait_return_val() -> bool;
+    static did_wait_return: bool;
     static mut did_emsg: c_int; // defined in message.c
 
     // Cursor globals
@@ -107,7 +108,6 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
 
     // Redraw/display globals
-    fn nvim_get_keep_msg_not_null() -> bool;
     static mut need_fileinfo: bool;
 
     // Function wrappers
@@ -213,7 +213,7 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
             exmode_active = true;
             State = MODE_NORMAL;
         } else if !nvim_get_global_busy() || !exmode_active {
-            if !nvim_get_quit_more() {
+            if !quit_more {
                 // flush all buffers
                 nvim_vgetc_and_discard();
             }
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
         update_screen();
     } else {
         redraw_statuslines();
-        if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || unsafe { redraw_mode } != 0 {
+        if redraw_cmdline || nvim_get_clear_cmdline() || unsafe { redraw_mode } != 0 {
             nvim_showmode();
         }
     }
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     nvim_curbuf_set_b_last_used();
 
     // Display message after redraw.
-    if nvim_get_keep_msg_not_null() {
+    if !keep_msg.is_null() {
         // Inline of nvim_keep_msg_display_and_free
         let p = xstrdup(keep_msg);
         msg_hist_off = true;
@@ -359,12 +359,12 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
                     && (*sp).old_pos.lnum == nvim_get_cursor_lnum()
                     && (*sp).old_pos.col == nvim_get_cursor_col()))
             // command-line must be cleared or redrawn
-            && (nvim_get_clear_cmdline() || nvim_get_redraw_cmdline())
+            && (nvim_get_clear_cmdline() || redraw_cmdline)
             // some message was printed or scrolled
             && (c_int::from(msg_didout) != 0
                 || (c_int::from(msg_didany) != 0 && nvim_get_msg_scroll_val()))
             // it is fine to remove the current message
-            && !nvim_get_msg_nowait_val()
+            && !msg_nowait
             // the command was the result of direct user input and not a mapping
             && nvim_get_KeyTyped())
             // must restart insert mode, not in visual mode and error message showing
@@ -380,7 +380,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
     && typebuf_typed()
     && emsg_silent == 0
     && !nvim_get_in_assert_fails()
-    && !nvim_get_did_wait_return_val()
+    && !did_wait_return
     && nvim_oap_get_op_type_ptr(oa) == OP_NOP
 }
 
@@ -574,7 +574,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         return -1;
     }
 
-    if (*ns(s)).cmdwin && nvim_get_cmdwin_result() != 0 {
+    if (*ns(s)).cmdwin && cmdwin_result != 0 {
         return 0;
     }
 
