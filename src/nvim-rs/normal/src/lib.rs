@@ -105,6 +105,27 @@ static VISUAL_MODE_ORIG: AtomicI32 = AtomicI32::new(0);
 // C accessor functions for normal mode state
 // =============================================================================
 
+/// Inline implementation of C `lt(a, b)` macro for pos_T comparison.
+///
+/// Returns true if (lnum1, col1, coladd1) < (lnum2, col2, coladd2).
+#[inline]
+unsafe fn lt_pos(
+    lnum1: c_int,
+    col1: c_int,
+    coladd1: c_int,
+    lnum2: c_int,
+    col2: c_int,
+    coladd2: c_int,
+) -> bool {
+    if lnum1 != lnum2 {
+        lnum1 < lnum2
+    } else if col1 != col2 {
+        col1 < col2
+    } else {
+        coladd1 < coladd2
+    }
+}
+
 extern "C" {
     /// Call the C simplify_key function.
     fn simplify_key(key: c_int, modp: *mut c_int) -> c_int;
@@ -263,7 +284,6 @@ extern "C" {
     fn nvim_set_b_visual_vi_curswant(val: c_int);
     fn nvim_set_curbuf_visual_mode_eval(val: c_int);
     fn nvim_p_sel_is_exclusive() -> bool;
-    fn nvim_equalpos_VIsual_cursor() -> bool;
     fn nvim_getvcols_call(
         lnum1: c_int,
         col1: c_int,
@@ -1292,8 +1312,6 @@ extern "C" {
     fn nvim_mb_adjust_cursor();
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
     fn nvim_get_p_sel_first() -> std::ffi::c_char;
-    fn nvim_lt_VIsual_cursor() -> bool;
-    fn nvim_lt_pos_cursor(lnum: c_int, col: c_int) -> bool;
     fn nvim_get_ve_flags() -> c_uint;
 
     // Character search functions
@@ -1441,7 +1459,14 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
         && nvim_oap_get_inclusive(oap)
         && nvim_get_p_sel_first() == sel_e
         && utf_ptr2char(get_cursor_pos_ptr()) != NUL_CHAR
-        && nvim_lt_VIsual_cursor()
+        && lt_pos(
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            nvim_get_cursor_coladd(),
+        )
     {
         nvim_inc_cursor();
         nvim_oap_set_inclusive(oap, false);
@@ -1529,7 +1554,14 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
 
     // Don't leave the cursor on the NUL past the end of line. Unless we
     // didn't move it forward.
-    if nvim_lt_pos_cursor(start_lnum, start_col) {
+    if lt_pos(
+        start_lnum,
+        start_col,
+        0,
+        nvim_get_cursor_lnum(),
+        nvim_get_cursor_col(),
+        nvim_get_cursor_coladd(),
+    ) {
         adjust_cursor(oap);
     }
 
@@ -7120,8 +7152,19 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
 /// Called from C with valid state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_unadjust_for_sel() -> bool {
-    if nvim_p_sel_is_exclusive() && !nvim_equalpos_VIsual_cursor() {
-        if nvim_lt_VIsual_cursor() {
+    if nvim_p_sel_is_exclusive()
+        && !(nvim_get_VIsual_lnum() == nvim_get_cursor_lnum()
+            && nvim_get_VIsual_col() == nvim_get_cursor_col()
+            && nvim_get_VIsual_coladd() == nvim_get_cursor_coladd())
+    {
+        if lt_pos(
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            nvim_get_cursor_coladd(),
+        ) {
             return rs_unadjust_for_sel_inner_cursor();
         }
         return rs_unadjust_for_sel_inner_visual();
@@ -7509,7 +7552,14 @@ pub unsafe extern "C" fn rs_get_visual_text(
         *lenp = nvim_get_cursor_line_len() as usize;
     } else {
         // cursor_gt_VIsual: cursor is after VIsual
-        if nvim_lt_VIsual_cursor() {
+        if lt_pos(
+            nvim_get_VIsual_lnum(),
+            nvim_get_VIsual_col(),
+            nvim_get_VIsual_coladd(),
+            nvim_get_cursor_lnum(),
+            nvim_get_cursor_col(),
+            nvim_get_cursor_coladd(),
+        ) {
             // text from VIsual to cursor
             *pp = nvim_ml_get_pos_visual();
             *lenp = (nvim_get_cursor_col() - nvim_get_VIsual_col()) as usize + 1;

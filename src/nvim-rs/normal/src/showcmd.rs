@@ -136,9 +136,12 @@ extern "C" {
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
     static mut VIsual_active: bool;
     fn char_avail() -> bool;
-    fn nvim_lt_VIsual_cursor() -> bool;
     fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_VIsual_col() -> c_int;
+    fn nvim_get_VIsual_coladd() -> c_int;
     fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_get_cursor_coladd() -> c_int;
     fn nvim_hasFolding_up(lnum: c_int, out_lnum: *mut c_int) -> bool;
     fn nvim_hasFolding_down(lnum: c_int, out_lnum: *mut c_int) -> bool;
     fn nvim_get_VIsual_mode() -> c_int;
@@ -177,9 +180,22 @@ unsafe fn clear_showcmd_visual_info() -> bool {
         return false;
     }
 
-    let cursor_bot = nvim_lt_VIsual_cursor();
-    let visual_lnum = nvim_get_VIsual_lnum();
-    let cursor_lnum = nvim_get_cursor_lnum();
+    // Inline of lt(VIsual, curwin->w_cursor)
+    let vl = nvim_get_VIsual_lnum();
+    let vc = nvim_get_VIsual_col();
+    let vca = nvim_get_VIsual_coladd();
+    let cl = nvim_get_cursor_lnum();
+    let cc = nvim_get_cursor_col();
+    let cca = nvim_get_cursor_coladd();
+    let cursor_bot = if vl != cl {
+        vl < cl
+    } else if vc != cc {
+        vc < cc
+    } else {
+        vca < cca
+    };
+    let visual_lnum = vl;
+    let cursor_lnum = cl;
 
     let (mut top, mut bot) = if cursor_bot {
         (visual_lnum, cursor_lnum)

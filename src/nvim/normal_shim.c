@@ -324,9 +324,7 @@ int nvim_inc_cursor(void) { return inc(&curwin->w_cursor); }
 
 int nvim_dec_cursor(void) { return dec(&curwin->w_cursor); }
 
-bool nvim_lt_VIsual_cursor(void) { return lt(VIsual, curwin->w_cursor); }
 
-bool nvim_lt_pos_cursor(int lnum, int col) { pos_T startpos = { lnum, col, 0 }; return lt(startpos, curwin->w_cursor); }
 
 
 unsigned int nvim_get_ve_flags(void) { return get_ve_flags(curwin); }
@@ -597,7 +595,6 @@ int nvim_get_virtual_op(void) { return (int)virtual_op; }
 
 bool nvim_p_sel_is_exclusive(void) { return *p_sel == 'e'; }
 
-bool nvim_equalpos_VIsual_cursor(void) { return equalpos(VIsual, curwin->w_cursor); }
 
 /// Wrapper for getvcols: takes two positions, returns left/right via out-params.
 void nvim_getvcols_call(int lnum1, int col1, int coladd1,
