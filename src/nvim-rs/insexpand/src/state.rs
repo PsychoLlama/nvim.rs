@@ -18,6 +18,23 @@
 
 use std::os::raw::c_int;
 
+// Opaque type for C expand_T struct (used as a pointer target).
+// Only used by reference via `*mut StateExpandT`.
+#[repr(C)]
+struct StateExpandT {
+    _opaque: [u8; 0],
+}
+
+// Constants for find_pattern_in_path (Phase 25)
+const FIND_ANY: c_int = 1;
+const FIND_DEFINE: c_int = 2;
+const ACTION_EXPAND: c_int = 5;
+const MAXLNUM_STATE: c_int = 0x7FFF_FFFF;
+const CONT_SOL_STATE: c_int = 16;
+
+// Constants for expand_cmdline (Phase 25)
+const EXPAND_OK: c_int = -1;
+
 // C accessor functions for state
 
 // =============================================================================
@@ -228,13 +245,14 @@ static CTRL_X_MODE_NAMES: [Option<&'static [u8]>; 20] = [
 
 use std::os::raw::c_char;
 
+// nvim_get_next_include_file_completion: deleted (Phase 25), inlined below
+// nvim_get_next_cmdline_completion_impl: deleted (Phase 25), inlined below
+
 extern "C" {
     // New accessors for Phase 1
     // nvim_get_p_tsrfu_nonempty: inlined in vars.rs (Phase 29)
     fn nvim_get_curbuf_b_p_tsrfu_nonempty() -> c_int;
     // Compound accessors for complex functions
-    fn nvim_get_next_include_file_completion(compl_type: c_int);
-    fn nvim_get_next_cmdline_completion_impl();
     // nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined below
     fn nvim_do_autocmd_completedone_impl(c: c_int, mode: c_int, word: *const c_char);
     fn nvim_ins_compl_show_filename_impl();
@@ -243,6 +261,31 @@ extern "C" {
     fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
     #[link_name = "xfree"]
     fn xfree_state(p: *mut u8);
+    // Helpers for inlined rs_get_next_include_file_completion (Phase 25)
+    fn find_pattern_in_path(
+        ptr: *const c_char,
+        dir: c_int,
+        len: usize,
+        whole: c_int,
+        skip_comments: c_int,
+        search_type: c_int,
+        count: c_int,
+        action: c_int,
+        start_lnum: c_int,
+        end_lnum: c_int,
+        forceit: c_int,
+        silent: c_int,
+    );
+    // Helpers for inlined rs_get_next_cmdline_completion (Phase 25)
+    fn expand_cmdline(
+        xp: *mut StateExpandT,
+        str_: *const c_char,
+        col: c_int,
+        matchcount: *mut c_int,
+        matches: *mut *mut *mut c_char,
+    ) -> c_int;
+    #[link_name = "compl_xp"]
+    static mut COMPL_XP: StateExpandT;
 }
 
 /// Return the Insert completion mode name string.
@@ -295,20 +338,56 @@ pub unsafe extern "C" fn rs_thesaurus_func_complete(compl_type: c_int) -> c_int 
 
 /// Get the next set of identifiers or defines matching compl_pattern in included files.
 ///
-/// # Safety
-/// Requires valid global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_get_next_include_file_completion(compl_type: c_int) {
-    nvim_get_next_include_file_completion(compl_type);
-}
-
-/// Get the next set of command-line completions matching compl_pattern.
+/// Rust translation of nvim_get_next_include_file_completion (Phase 25).
 ///
 /// # Safety
 /// Requires valid global state.
 #[no_mangle]
+pub unsafe extern "C" fn rs_get_next_include_file_completion(compl_type: c_int) {
+    let search_type = if compl_type == CTRL_X_PATH_DEFINES
+        && (crate::vars::nvim_get_compl_cont_status() & CONT_SOL_STATE) == 0
+    {
+        FIND_DEFINE
+    } else {
+        FIND_ANY
+    };
+    find_pattern_in_path(
+        crate::vars::compl_pattern.data.cast_const(),
+        crate::vars::nvim_get_compl_direction(),
+        crate::vars::compl_pattern.size,
+        0, // whole = false
+        0, // skip_comments = false
+        search_type,
+        1,                                          // count
+        ACTION_EXPAND,                              // action
+        1,                                          // start_lnum
+        MAXLNUM_STATE,                              // end_lnum
+        0,                                          // forceit = false
+        crate::vars::nvim_get_compl_autocomplete(), // silent
+    );
+}
+
+/// Get the next set of command-line completions matching compl_pattern.
+///
+/// Rust translation of nvim_get_next_cmdline_completion_impl (Phase 25).
+///
+/// # Safety
+/// Requires valid global state.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_get_next_cmdline_completion() {
-    nvim_get_next_cmdline_completion_impl();
+    let mut num_matches: c_int = 0;
+    let mut matches: *mut *mut c_char = core::ptr::null_mut();
+    if expand_cmdline(
+        core::ptr::addr_of_mut!(COMPL_XP),
+        crate::vars::compl_pattern.data.cast_const(),
+        crate::vars::compl_pattern.size as c_int,
+        &raw mut num_matches,
+        &raw mut matches,
+    ) == EXPAND_OK
+    {
+        rs_ins_compl_add_matches(num_matches, matches, 0);
+    }
 }
 
 /// Get the next set of spell suggestions matching compl_pattern.

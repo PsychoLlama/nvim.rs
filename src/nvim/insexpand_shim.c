@@ -400,7 +400,7 @@ String compl_orig_text = STRING_INIT;  // made non-static for Rust access (Phase
 /// Undo information to restore extmarks for original text.
 static extmark_undo_vec_t compl_orig_extmarks;
 int compl_cont_mode = 0;
-static expand_T compl_xp;
+expand_T compl_xp;  // non-static: accessible from Rust (Phase 25)
 
 win_T *compl_curr_win = NULL;  ///< win where completion is active
 buf_T *compl_curr_buf = NULL;  ///< buf where completion is active
@@ -1783,26 +1783,8 @@ void nvim_cpt_compl_refresh(void) { rs_cpt_compl_refresh(); }
 // nvim_get_p_tsrfu_nonempty: deleted (Phase 29, inlined in vars.rs)
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }
 
-// Compound accessor: delegates to the original C implementation logic
-void nvim_get_next_include_file_completion(int compl_type)
-{
-  find_pattern_in_path(compl_pattern.data, compl_direction,
-                       compl_pattern.size, false, false,
-                       ((compl_type == CTRL_X_PATH_DEFINES
-                         && !(compl_cont_status & CONT_SOL))
-                        ? FIND_DEFINE : FIND_ANY),
-                       1, ACTION_EXPAND, 1, MAXLNUM, false, compl_autocomplete);
-}
-
-void nvim_get_next_cmdline_completion_impl(void)
-{
-  char **matches;
-  int num_matches;
-  if (expand_cmdline(&compl_xp, compl_pattern.data,
-                     (int)compl_pattern.size, &num_matches, &matches) == EXPAND_OK) {
-    rs_ins_compl_add_matches(num_matches, matches, false);
-  }
-}
+// nvim_get_next_include_file_completion: deleted (Phase 25), inlined in state.rs
+// nvim_get_next_cmdline_completion_impl: deleted (Phase 25), inlined in state.rs
 
 // nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined in state.rs
 
