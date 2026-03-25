@@ -600,9 +600,11 @@ pub unsafe extern "C" fn rs_delbuf_msg(name: *mut c_char) {
 // Phase 4: do_wqall FFI declarations and implementation
 // =============================================================================
 
+// CMD_xall = 537, CMD_wqall = 532 -- validated by _Static_assert in ex_cmds_shim.c
+const CMD_XALL: c_int = 537;
+const CMD_WQALL: c_int = 532;
+
 extern "C" {
-    fn nvim_excmds_cmd_xall() -> c_int;
-    fn nvim_excmds_cmd_wqall() -> c_int;
     fn before_quit_all(eap: *mut ExArgHandle) -> c_int;
     fn getout(code: c_int) -> !;
     fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
@@ -638,10 +640,8 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
     let save_forceit = nvim_exarg_get_forceit(eap);
 
     let cmdidx = nvim_exarg_get_cmdidx(eap);
-    let cmd_xall = nvim_excmds_cmd_xall();
-    let cmd_wqall = nvim_excmds_cmd_wqall();
 
-    if cmdidx == cmd_xall || cmdidx == cmd_wqall {
+    if cmdidx == CMD_XALL || cmdidx == CMD_WQALL {
         if before_quit_all(eap) == 0 {
             return; // FAIL from before_quit_all
         }

@@ -374,7 +374,7 @@ extern "C" {
     fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
     fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
     fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_shortmess_not_fileinfo() -> c_int;
+    fn shortmess(x: c_int) -> bool;
     fn fileinfo(shortmess: c_int, dont_truncate: c_int, forceit: c_int);
     fn nvim_excmds_emsg_invarg();
 }
@@ -467,7 +467,8 @@ pub unsafe extern "C" fn rs_ex_file(eap: *mut ExArgHandle) {
     }
 
     // Print file name if no argument or 'F' is not in 'shortmess'
-    if *arg == 0 || nvim_excmds_shortmess_not_fileinfo() != 0 {
+    // SHM_FILEINFO = 'F' = 70
+    if *arg == 0 || !shortmess(c_int::from(b'F')) {
         let forceit = nvim_exarg_get_forceit(eap);
         fileinfo(0, 0, forceit);
     }

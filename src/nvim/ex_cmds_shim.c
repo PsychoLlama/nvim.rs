@@ -820,9 +820,6 @@ int nvim_excmds_cmdmod_has_keepalt(void)
 /// Set curwin->w_alt_fnum.
 void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 
-/// Check !shortmess(SHM_FILEINFO): returns 1 if fileinfo should be shown.
-int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ? 1 : 0; }
-
 // --- ex_update, ex_write, ex_wnext FFI accessors ---
 
 /// Check if current buffer has been changed (curbufIsChanged).
@@ -1081,13 +1078,9 @@ void nvim_excmds_set_vim_var_string_swapcommand(const char *p)
   set_vim_var_string(VV_SWAPCOMMAND, (char *)p, -1);
 }
 
-// --- do_wqall FFI accessors ---
-
-/// Get CMD_xall constant.
-int nvim_excmds_cmd_xall(void) { return (int)CMD_xall; }
-
-/// Get CMD_wqall constant.
-int nvim_excmds_cmd_wqall(void) { return (int)CMD_wqall; }
+// CMD_xall and CMD_wqall constants -- validated so Rust can use them directly.
+_Static_assert(CMD_xall == 537, "CMD_xall mismatch -- update the Rust constant in write.rs");
+_Static_assert(CMD_wqall == 532, "CMD_wqall mismatch -- update the Rust constant in write.rs");
 
 /// Get buf->b_next (next buffer in list, or NULL).
 buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
@@ -1925,12 +1918,6 @@ int nvim_ecmd_should_dec_nwindows_on_locked(win_T *oldwin)
 /// curwin->w_s = &buf->b_s (set synblock to buf)
 void nvim_ecmd_curwin_set_ws_to_buf(buf_T *buf) { curwin->w_s = &(buf->b_s); }
 
-/// Shortmess flag 'O' check for SHM_OVERALL
-int nvim_ecmd_shortmess_overall(void) { return shortmess(SHM_OVERALL) ? 1 : 0; }
-
-/// Shortmess flag 'F' check for SHM_FILEINFO
-int nvim_ecmd_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO) ? 1 : 0; }
-
 /// Decrement curwin->w_buffer->b_nwindows if nwindows > 1 (for b_locked_split case)
 void nvim_ecmd_dec_curwin_buf_nwindows_safe(void)
 {
@@ -2150,9 +2137,5 @@ void nvim_cpi_block_line_count(int lnum, int eol_size, void *out_ptr)
 bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
-void nvim_do_join_simple(void) { do_join(2, false, false, false, false); }
-
 // Insert mode command/cmdline accessors (migrated from edit.c)
 void nvim_do_cmdline_getcmdkeycmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
-void nvim_quickfix_cc(void) { do_cmdline_cmd(".cc"); }
-void nvim_quickfix_ll(void) { do_cmdline_cmd(".ll"); }

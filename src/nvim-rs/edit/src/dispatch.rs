@@ -179,8 +179,7 @@ extern "C" {
     fn nvim_paste_repeat(count: c_int);
     fn state_handle_k_event();
     fn nvim_curwin_is_qf_not_ll() -> c_int;
-    fn nvim_quickfix_cc();
-    fn nvim_quickfix_ll();
+    fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
     fn invoke_prompt_interrupt() -> bool;
     fn prompt_invoke_callback();
     fn nvim_get_curbuf_b_u_synced() -> bool;
@@ -1073,9 +1072,9 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     // In quickfix window, <CR> jumps to error under cursor.
     if nvim_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
         if nvim_curwin_is_qf_not_ll() != 0 {
-            nvim_quickfix_cc();
+            do_cmdline_cmd(c".cc".as_ptr());
         } else {
-            nvim_quickfix_ll();
+            do_cmdline_cmd(c".ll".as_ptr());
         }
         return SwitchAction::Continue;
     }

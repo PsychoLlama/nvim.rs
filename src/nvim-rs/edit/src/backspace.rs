@@ -89,7 +89,13 @@ extern "C" {
     fn nvim_gchar_cursor() -> c_int;
     fn nvim_has_format_option(c: c_int) -> bool;
     fn nvim_trim_eol_space();
-    fn nvim_do_join_simple();
+    fn do_join(
+        count: usize,
+        insert_space: bool,
+        save_undo: bool,
+        use_formatoptions: bool,
+        setmark: bool,
+    ) -> c_int;
 
     // Replace mode
     fn replace_pop_if_nul() -> c_int;
@@ -280,7 +286,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
                     nvim_trim_eol_space();
                 }
 
-                nvim_do_join_simple();
+                do_join(2, false, false, false, false);
                 if temp == NUL && nvim_gchar_cursor() != NUL {
                     inc_cursor();
                 }

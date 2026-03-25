@@ -61,6 +61,10 @@ const UPD_NOT_VALID: c_int = 40; // buffer needs complete redraw
 const OPT_WINONLY: c_int = 0x08; // only set window-local options
 const BCO_ENTER: c_int = 1; // buf_copy_options: entering buffer
 
+// SHM_* flags for shortmess() (from option_vars.h -- ASCII character values)
+const SHM_OVERALL: c_int = b'O' as c_int; // 'O': overwrite more messages
+const SHM_FILEINFO: c_int = b'F' as c_int; // 'F': no file info messages
+
 // =============================================================================
 // FFI declarations
 // =============================================================================
@@ -225,8 +229,7 @@ extern "C" {
     fn do_modelines(flags: c_int);
     fn keymap_init() -> *mut c_char;
     fn nvim_ecmd_fold_update_all_curbuf_wins();
-    fn nvim_ecmd_shortmess_overall() -> c_int;
-    fn nvim_ecmd_shortmess_fileinfo() -> c_int;
+    fn shortmess(x: c_int) -> bool;
     fn msg_check_for_delay(check_msg_scroll: bool);
     fn msg_start();
     fn nvim_fileinfo_call();
@@ -844,7 +847,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             let msg_scroll_save = crate::msg_scroll;
 
             // 'O' flag in 'cpoptions': overwrite previous file message
-            if nvim_ecmd_shortmess_overall() != 0
+            if shortmess(SHM_OVERALL)
                 && crate::msg_listdo_overwrite == 0
                 && !crate::exiting
                 && nvim_get_p_verbose() == 0
@@ -858,7 +861,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             msg_scroll = msg_scroll_save;
             crate::msg_scrolled_ign = true;
 
-            if nvim_ecmd_shortmess_fileinfo() == 0 {
+            if !shortmess(SHM_FILEINFO) {
                 nvim_fileinfo_call();
             }
 
