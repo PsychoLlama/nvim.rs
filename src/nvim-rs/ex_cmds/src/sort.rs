@@ -480,10 +480,10 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
         nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg, nvim_excmds_emsg_noprevre,
         nvim_excmds_extmark_splice, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
-        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
-        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
-        nvim_excmds_skip_regexp_err, nvim_excmds_str2nr, nvim_get_curbuf, skiptobin, skiptodigit,
-        skiptohex, u_save,
+        nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
+        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err,
+        nvim_excmds_str2nr, nvim_get_curbuf, skiptobin, skiptodigit, skiptohex, u_save,
+        vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -604,7 +604,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
 
         let mut start_col: c_int = 0;
         let mut end_col: c_int = len;
-        if !regmatch.is_null() && nvim_excmds_regexec(regmatch, s) != 0 {
+        if !regmatch.is_null() && vim_regexec(regmatch, s, 0) {
             if sort_rx {
                 start_col = nvim_excmds_regmatch_startp0(regmatch).offset_from(s) as c_int;
                 end_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;
@@ -890,9 +890,9 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
         nvim_exarg_is_nextcmd_null, nvim_exarg_set_nextcmd, nvim_excmds_emsg_interr,
         nvim_excmds_emsg_noprevre, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
-        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
-        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
-        nvim_excmds_skip_regexp_err, nvim_get_curbuf, u_save,
+        nvim_excmds_regfree, nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic,
+        nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err,
+        nvim_get_curbuf, u_save, vim_regexec,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -1005,7 +1005,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
 
         let mut start_col: c_int = 0;
         let mut end_col: c_int = len;
-        if !regmatch.is_null() && nvim_excmds_regexec(regmatch, s) != 0 {
+        if !regmatch.is_null() && vim_regexec(regmatch, s, 0) {
             if sort_rx {
                 start_col = nvim_excmds_regmatch_startp0(regmatch).offset_from(s) as c_int;
                 end_col = nvim_excmds_regmatch_endp0(regmatch).offset_from(s) as c_int;

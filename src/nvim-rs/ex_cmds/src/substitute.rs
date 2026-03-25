@@ -211,8 +211,8 @@ extern "C" {
     ) -> c_int;
     /// Free the regmmatch_T opaque handle (vim_regfree + xfree)
     pub fn nvim_excmds_vim_regfree_multi(rm: *mut std::ffi::c_void);
-    /// Wrap regtilde for do_sub
-    pub fn nvim_do_sub_regtilde(sub_str: *mut c_char, magic: c_int, preview: c_int) -> *mut c_char;
+    /// regtilde: expand ~ in replacement string
+    pub fn regtilde(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char;
 }
 
 /// C-compatible layout for subflags_T.
@@ -1688,7 +1688,7 @@ pub unsafe extern "C" fn rs_do_sub(
         xfree(sub as *mut std::ffi::c_void);
         p
     } else {
-        let p = nvim_do_sub_regtilde(sub, rs_magic_isset(), if cmdpreview_ns > 0 { 1 } else { 0 });
+        let p = regtilde(sub, rs_magic_isset(), cmdpreview_ns > 0);
         if p != sub {
             xfree(sub as *mut std::ffi::c_void);
         }

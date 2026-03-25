@@ -522,7 +522,7 @@ extern "C" {
     fn nvim_xp_get_context(xp: *mut std::ffi::c_void) -> c_int;
     fn nvim_regmatch_get_rm_ic(regmatch: *const std::ffi::c_void) -> c_int;
     fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
-    fn nvim_excmds_regexec(rm: *mut std::ffi::c_void, line: *const c_char) -> c_int;
+    fn vim_regexec(rmp: *mut std::ffi::c_void, line: *const c_char, col: c_int) -> bool;
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
     #[link_name = "nvim_fuzzymatches_to_strmatches"]
     fn nvim_option_fuzzymatches_to_strmatches(
@@ -584,7 +584,7 @@ unsafe fn match_str_impl(
             }
             return true;
         }
-    } else if nvim_excmds_regexec(regmatch, str_) != 0 {
+    } else if vim_regexec(regmatch, str_, 0) {
         if !test_only && !matches.is_null() {
             *matches.add(idx as usize) = xstrdup(str_);
         }
@@ -683,7 +683,7 @@ pub unsafe extern "C" fn rs_expand_option_settings(
             } else if fuzzy_ctx.is_none() {
                 // Also try shortname for regex (not fuzzy - fuzzy already matches both)
                 let shortname = nvim_option_get_shortname(opt_idx);
-                if !shortname.is_null() && nvim_excmds_regexec(regmatch, shortname) != 0 {
+                if !shortname.is_null() && vim_regexec(regmatch, shortname, 0) {
                     if loop_ == 0 {
                         num_normal += 1;
                     } else {

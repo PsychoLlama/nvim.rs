@@ -213,11 +213,6 @@ void *nvim_excmds_regcomp(const char *pat, int magic_val)
   return rm;
 }
 
-int nvim_excmds_regexec(void *rm, const char *line)
-{
-  return vim_regexec((regmatch_T *)rm, (char *)line, 0);
-}
-
 void nvim_excmds_regfree(void *rm)
 {
   if (rm != NULL) {
@@ -1581,14 +1576,6 @@ int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub,
 {
   return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum,
                           (char *)sub, dest, destlen, flags);
-}
-
-/// Wrap regtilde for do_sub.
-/// Returns new string (may be same as sub if no tilde, or newly allocated).
-/// The caller is responsible for freeing if the pointer changed.
-char *nvim_do_sub_regtilde(char *sub, int magic, int preview)
-{
-  return regtilde(sub, magic, preview != 0);
 }
 
 // =============================================================================

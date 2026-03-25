@@ -797,8 +797,8 @@ extern "C" {
     // Regex (opaque regmatch_T via void*)
     /// Compile a regex pattern. Returns opaque handle or null.
     pub fn nvim_excmds_regcomp(pat: *const c_char, magic_val: c_int) -> *mut RegmatchHandle;
-    /// Execute regex match on a line. Returns 1 if match, 0 if not.
-    pub fn nvim_excmds_regexec(rm: *mut RegmatchHandle, line: *const c_char) -> c_int;
+    /// vim_regexec: execute regex match. col=0 for start of line.
+    pub fn vim_regexec(rmp: *mut RegmatchHandle, line: *const c_char, col: c_int) -> bool;
     /// Free regex handle.
     pub fn nvim_excmds_regfree(rm: *mut RegmatchHandle);
     /// Get startp[0] from regex match.

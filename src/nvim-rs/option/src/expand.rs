@@ -611,7 +611,7 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // vim_regexec: single-line regex match (regmatch_T* passed as *mut c_void)
-    fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> c_int;
+    fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> bool;
 
     // curbuf/curwin globals
     static mut curbuf: BufHandle;
@@ -708,7 +708,7 @@ pub unsafe extern "C" fn rs_expand_setting_subtract(
                 continue;
             }
 
-            if vim_regexec(regmatch, item, 0) == 0 {
+            if !vim_regexec(regmatch, item, 0) {
                 if next_val.is_null() {
                     break;
                 }
