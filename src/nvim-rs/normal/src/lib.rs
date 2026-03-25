@@ -1348,7 +1348,6 @@ extern "C" {
     fn nvim_inc_b_visual_vi_end();
     fn nvim_last_line_is_empty() -> bool;
     fn nvim_ml_delete_last_line();
-    fn nvim_coladvance_maxcol();
     // Phase 1 new lower-level accessors for replace helpers
     fn coladvance_force(col: c_int);
     fn get_cursor_pos_len() -> c_int;
@@ -2166,7 +2165,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         nvim_ml_delete_last_line();
         if nvim_get_cursor_lnum() > nvim_get_curwin_ml_line_count() as c_int {
             nvim_set_cursor_lnum(nvim_get_curwin_ml_line_count() as c_int);
-            nvim_coladvance_maxcol();
+            coladvance(nvim_get_curwin(), MAXCOL);
         }
     }
     auto_format(false, true);
@@ -3609,7 +3608,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
     if nchar == b'f' as c_int {
         // "[f" or "]f": Edit file under cursor (same as "gf")
         rs_nv_gotofile(cap);
-    } else if nvim_vim_strchr_str(c"iI\x09dD\x04".as_ptr(), nchar) {
+    } else if !vim_strchr(c"iI\x09dD\x04".as_ptr(), nchar).is_null() {
         // "[i", "[I", "[TAB", "[d", "[D", "[CTRL-D": find occurrence(s) of identifier/define
         // (inlined nvim_bracket_find_ident)
         let mut ptr: *mut c_char = core::ptr::null_mut();
@@ -3631,8 +3630,8 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             nvim_find_pattern_in_path_call(ptr, len, count0, nchar, count1 as i64, from_rbracket);
             nvim_curwin_set_curswant(true);
         }
-    } else if (cmdchar == b'[' as c_int && nvim_vim_strchr_str(c"{(*/#mM".as_ptr(), nchar))
-        || (cmdchar == b']' as c_int && nvim_vim_strchr_str(c"})*/#mM".as_ptr(), nchar))
+    } else if (cmdchar == b'[' as c_int && !vim_strchr(c"{(*/#mM".as_ptr(), nchar).is_null())
+        || (cmdchar == b']' as c_int && !vim_strchr(c"})*/#mM".as_ptr(), nchar).is_null())
     {
         // "[{", "[(", "]}" or "])": bracket/method matching
         rs_nv_bracket_block(cap);
@@ -4073,7 +4072,6 @@ extern "C" {
     // Phase 3: nv_Replace / nv_vreplace accessors
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_modifiable();
-    fn nvim_coladvance_getviscol();
     fn nvim_invoke_edit_R(cap: CapHandle, repl: bool, cmd: c_int);
     fn nvim_get_literal_call(no_simplify: bool) -> c_int;
     fn nvim_stuffcharReadbuff(c: c_int);
@@ -4278,7 +4276,7 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
 
     if nvim_curbuf_modifiable() {
         if virtual_active(nvim_get_curwin()) {
-            nvim_coladvance_getviscol();
+            coladvance(nvim_get_curwin(), nvim_getviscol());
         }
         let arg = nvim_cap_get_arg(cap);
         let cmd = if arg != 0 {
@@ -4328,7 +4326,7 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
         nvim_stuffcharReadbuff(extra_char);
         nvim_stuffcharReadbuff(ESC_CHAR);
         if virtual_active(nvim_get_curwin()) {
-            nvim_coladvance_getviscol();
+            coladvance(nvim_get_curwin(), nvim_getviscol());
         }
         nvim_invoke_edit_R(cap, true, c_int::from(b'v'));
     } else {
@@ -4398,7 +4396,6 @@ extern "C" {
     fn nvim_dec_no_mapping();
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
-    fn nvim_vim_strchr_str(s: *const c_char, c: c_int) -> bool;
     fn nvim_get_curwin() -> WinHandle;
     fn redraw_later(win: WinHandle, type_val: c_int);
     fn cursor_down_inner(win: WinHandle, n: c_int, skip_conceal: bool);
@@ -4643,7 +4640,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
     let cap_nchar = nvim_cap_get_nchar(cap);
     if cap_nchar != b'f' as c_int
         && cap_nchar != b'F' as c_int
-        && !(VIsual_active && nvim_vim_strchr_str(c"dcCoO".as_ptr(), cap_nchar))
+        && (!VIsual_active || vim_strchr(c"dcCoO".as_ptr(), cap_nchar).is_null())
         && cap_nchar != b'j' as c_int
         && cap_nchar != b'k' as c_int
         && rs_checkclearop(oap)
@@ -4653,7 +4650,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
 
     // For "z+", "z<CR>", "zt", "z.", "zz", "z^", "z-", "zb":
     // If line number given, set cursor.
-    if nvim_vim_strchr_str(c"+\r\nt.z^-b".as_ptr(), nchar)
+    if !vim_strchr(c"+\r\nt.z^-b".as_ptr(), nchar).is_null()
         && nvim_cap_get_count0(cap) != 0
         && nvim_cap_get_count0(cap) != nvim_get_cursor_lnum()
     {
@@ -7735,7 +7732,7 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
         // Pretend Insert mode to allow cursor past end of line
         let save_state = State;
         State = MODE_INSERT;
-        nvim_coladvance_maxcol();
+        coladvance(nvim_get_curwin(), MAXCOL);
         State = save_state;
     } else {
         let extra = nvim_get_cursor_pos_ptr_len();

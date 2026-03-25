@@ -425,7 +425,6 @@ void nvim_ml_delete_last_line(void) {
   ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
   deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
 }
-void nvim_coladvance_maxcol(void) { coladvance(curwin, MAXCOL); }
 
 // For nvim_replace helpers inlining
 int nvim_mb_charlen_cursor(void) { return mb_charlen(get_cursor_pos_ptr()); }
@@ -793,7 +792,6 @@ int nvim_replace_check_prompt(void) {
 // =============================================================================
 
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
-void nvim_coladvance_getviscol(void) { coladvance(curwin, getviscol()); }
 void nvim_invoke_edit_R(cmdarg_T *cap, bool repl, int cmd) { invoke_edit(cap, repl, cmd, false); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 
@@ -827,9 +825,6 @@ void nvim_sync_fen_in_diff_windows(void)
     }
   }
 }
-
-/// vim_strchr wrapper for a specific string
-bool nvim_vim_strchr_str(const char *str, int c) { return vim_strchr(str, c) != NULL; }
 
 /// Get translated E352 error message.
 const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
