@@ -260,7 +260,6 @@ extern "C" {
     fn nvim_set_b_visual_vi_curswant(val: c_int);
     fn nvim_set_curbuf_visual_mode_eval(val: c_int);
     fn nvim_set_VIsual_select_reg(val: c_int);
-    fn nvim_update_topline_call();
     fn nvim_p_sel_is_exclusive() -> bool;
     fn nvim_equalpos_VIsual_cursor() -> bool;
     fn nvim_getvcols_call(
@@ -2283,7 +2282,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_nv_clear_impl() {
     nvim_syn_stack_free_all_curwin();
     nvim_clear_b_syn_slow_all_windows();
-    nvim_redraw_later_curwin(UPD_CLEAR);
+    redraw_later(nvim_get_curwin(), UPD_CLEAR);
 }
 
 /// Command handler for CTRL-L: Clear and redraw screen.
@@ -2447,7 +2446,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
 
     if VIsual_active {
         rs_end_visual_mode(); // stop Visual
-        nvim_check_cursor_col_call(); // make sure cursor is not beyond EOL
+        check_cursor_col(nvim_get_curwin()); // make sure cursor is not beyond EOL
         nvim_curwin_set_curswant(true);
         nvim_redraw_curbuf_inverted();
     } else if no_reason {
@@ -4409,17 +4408,10 @@ extern "C" {
     fn nvim_set_curwin_w_leftcol(val: c_int);
     fn nvim_validate_botline_curwin();
     fn nvim_get_curwin_w_botline() -> c_int;
-    fn nvim_check_cursor_col_call();
-    fn nvim_scroll_cursor_top(off: c_int, always: bool);
-    fn nvim_scroll_cursor_bot(off: c_int, always: bool);
-    fn nvim_scroll_cursor_halfway(atend: bool, prefer_above: bool);
-    fn nvim_redraw_later_curwin(redraw_type: c_int);
     fn set_leftcol(col: c_int);
     fn nvim_hasFolding_curwin(lnum: c_int) -> bool;
     fn nvim_getvcol_curwin_cursor(vcol: *mut c_int);
     fn nvim_getvcol_curwin_cursor_end(vcol: *mut c_int);
-    fn nvim_win_col_off_curwin() -> c_int;
-    fn nvim_changed_window_setting_curwin();
     fn spell_suggest(count: c_int);
     fn nvim_get_curwin_w_p_wrap() -> bool;
     fn nvim_sync_fen_in_diff_windows();
@@ -4437,6 +4429,21 @@ extern "C" {
     fn nvim_dec_allow_keys();
     fn nvim_vim_strchr_str(s: *const c_char, c: c_int) -> bool;
     fn nvim_get_curwin() -> WinHandle;
+    fn redraw_later(win: WinHandle, type_val: c_int);
+    fn cursor_down_inner(win: WinHandle, n: c_int, skip_conceal: bool);
+    fn cursor_up_inner(win: WinHandle, n: c_int, skip_conceal: bool);
+    fn update_topline(win: WinHandle);
+    fn scroll_cursor_bot(win: WinHandle, off: c_int, always: bool);
+    fn scroll_cursor_top(win: WinHandle, off: c_int, always: bool);
+    fn scroll_cursor_halfway(win: WinHandle, atend: bool, prefer_above: bool);
+    fn validate_cheight(win: WinHandle);
+    fn changed_window_setting(win: WinHandle);
+    fn check_cursor_col(win: WinHandle);
+    fn linetabsize(win: WinHandle, lnum: c_int) -> c_int;
+    fn win_col_off(win: WinHandle) -> c_int;
+    fn win_col_off2(win: WinHandle) -> c_int;
+    fn sms_marker_overlap(win: WinHandle, width: c_int) -> c_int;
+    fn win_cursorline_standout(win: WinHandle) -> bool;
 
     // Fold functions from fold crate
     fn rs_foldManualAllowed(create: bool) -> c_int;
@@ -4686,7 +4693,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         } else {
             nvim_set_cursor_lnum(nvim_cap_get_count0(cap));
         }
-        nvim_check_cursor_col_call();
+        check_cursor_col(nvim_get_curwin());
     }
 
     match nchar {
@@ -4706,20 +4713,20 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
             }
             // FALLTHROUGH to NL/CAR/K_KENTER -> 't'
             nvim_beginline(BL_WHITE | BL_FIX);
-            nvim_scroll_cursor_top(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_top(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
         n if n == NL_CHAR || n == CAR_CHAR || n == K_KENTER => {
             // FALLTHROUGH to 't'
             nvim_beginline(BL_WHITE | BL_FIX);
-            nvim_scroll_cursor_top(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_top(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
         n if n == b't' as c_int => {
-            nvim_scroll_cursor_top(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_top(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
 
@@ -4727,20 +4734,20 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         n if n == b'.' as c_int => {
             nvim_beginline(BL_WHITE | BL_FIX);
             // FALLTHROUGH to 'z'
-            nvim_scroll_cursor_halfway(true, false);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_halfway(nvim_get_curwin(), true, false);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
         n if n == b'z' as c_int => {
-            nvim_scroll_cursor_halfway(true, false);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_halfway(nvim_get_curwin(), true, false);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
 
         // "z^", "z-" and "zb": put cursor at bottom of screen
         n if n == b'^' as c_int => {
             if nvim_cap_get_count0(cap) != 0 {
-                nvim_scroll_cursor_bot(0, true);
+                scroll_cursor_bot(nvim_get_curwin(), 0, true);
                 nvim_set_cursor_lnum(nvim_win_get_topline(curwin));
             } else if nvim_win_get_topline(curwin) == 1 {
                 nvim_set_cursor_lnum(1);
@@ -4749,20 +4756,20 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
             }
             // FALLTHROUGH to '-' -> 'b'
             nvim_beginline(BL_WHITE | BL_FIX);
-            nvim_scroll_cursor_bot(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_bot(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
         n if n == b'-' as c_int => {
             nvim_beginline(BL_WHITE | BL_FIX);
             // FALLTHROUGH to 'b'
-            nvim_scroll_cursor_bot(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_bot(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
         n if n == b'b' as c_int => {
-            nvim_scroll_cursor_bot(0, true);
-            nvim_redraw_later_curwin(UPD_VALID);
+            scroll_cursor_bot(nvim_get_curwin(), 0, true);
+            redraw_later(nvim_get_curwin(), UPD_VALID);
             rs_set_fraction(curwin);
         }
 
@@ -4828,7 +4835,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
                 }
                 if nvim_get_curwin_w_leftcol() != col {
                     nvim_set_curwin_w_leftcol(col);
-                    nvim_redraw_later_curwin(UPD_NOT_VALID);
+                    redraw_later(nvim_get_curwin(), UPD_NOT_VALID);
                 }
             }
         }
@@ -4842,7 +4849,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
                 } else {
                     nvim_getvcol_curwin_cursor_end(&mut col);
                 }
-                let n_val = nvim_get_curwin_w_view_width() - nvim_win_col_off_curwin();
+                let n_val = nvim_get_curwin_w_view_width() - win_col_off(nvim_get_curwin());
                 if col + siso < n_val {
                     col = 0;
                 } else {
@@ -4850,7 +4857,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
                 }
                 if nvim_get_curwin_w_leftcol() != col {
                     nvim_set_curwin_w_leftcol(col);
-                    nvim_redraw_later_curwin(UPD_NOT_VALID);
+                    redraw_later(nvim_get_curwin(), UPD_NOT_VALID);
                 }
             }
         }
@@ -4906,7 +4913,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         n if n == b'E' as c_int => {
             if rs_foldmethodIsManual(curwin) != 0 {
                 rs_clearFolding(curwin);
-                nvim_changed_window_setting_curwin();
+                changed_window_setting(nvim_get_curwin());
             } else if rs_foldmethodIsMarker(curwin) != 0 {
                 let line_count = nvim_get_line_count();
                 rs_deleteFold(curwin, 1, line_count, true, false);
@@ -5099,7 +5106,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
             // Adjust 'foldenable' in diff-synced windows.
             nvim_sync_fen_in_diff_windows();
         }
-        nvim_changed_window_setting_curwin();
+        changed_window_setting(nvim_get_curwin());
     }
 
     // Redraw when 'foldlevel' changed.
@@ -5524,7 +5531,6 @@ extern "C" {
     // g-command C accessors
     fn current_search(count: c_int, forward: bool) -> bool;
     fn cursor_up(count: c_int, upd_topline: bool) -> c_int;
-    fn nvim_linetabsize_curwin(lnum: c_int) -> c_int;
     fn nvim_cursor_pos_info_call();
     fn nvim_invoke_edit_g(cap: CapHandle);
     fn nvim_set_mod_mask_ctrl();
@@ -5537,8 +5543,6 @@ extern "C" {
     fn nvim_set_oap_cursor_start(oap: OapHandle);
     // nvim_curwin_set_curswant already declared above (consolidated, Phase 4)
     // Phase 3: nv_g_home_m_cmd / nv_g_dollar_cmd / n_opencmd / unadjust_for_sel_inner
-    fn nvim_sms_marker_overlap_curwin(width: c_int) -> c_int;
-    fn nvim_validate_cheight_curwin();
     fn nvim_get_curwin_w_skipcol() -> c_int;
     fn nvim_get_curwin_w_topline() -> c_int;
     fn nvim_get_curwin_w_cline_folded() -> bool;
@@ -5551,7 +5555,6 @@ extern "C" {
     fn nvim_u_save_for_opencmd(backward: bool) -> bool;
     fn nvim_open_line_for_opencmd(backward: bool, do_com: bool) -> bool;
     fn nvim_has_format_option_fo_open_coms() -> bool;
-    fn nvim_win_cursorline_standout_curwin() -> bool;
     fn nvim_clear_curwin_w_valid_crow();
     fn nvim_mark_mb_adjustpos_cursor_new() -> c_int;
     fn nvim_getvcol_cursor_coladd_after_adj() -> c_int;
@@ -5575,10 +5578,7 @@ extern "C" {
 extern "C" {
     fn nvim_get_curwin_w_virtcol() -> c_int;
     fn nvim_get_curwin_ml_line_count() -> c_int;
-    fn nvim_win_col_off2_curwin() -> c_int;
     fn nvim_validate_virtcol_curwin();
-    fn nvim_cursor_up_inner_curwin(n: c_int, skip_conceal: bool);
-    fn nvim_cursor_down_inner_curwin(n: c_int, skip_conceal: bool);
     fn oneright() -> c_int;
     fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
     fn vim_strsize(s: *const c_char) -> c_int;
@@ -5602,15 +5602,15 @@ pub unsafe extern "C" fn rs_nv_screengo(
     dist: c_int,
     skip_conceal: bool,
 ) -> bool {
-    let mut linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+    let mut linelen = linetabsize(nvim_get_curwin(), nvim_get_cursor_lnum());
     let mut retval = true;
     let mut atend = false;
 
     nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
     nvim_oap_set_inclusive(oap, nvim_get_curswant() == MAXCOL);
 
-    let col_off1 = nvim_win_col_off_curwin();
-    let col_off2 = col_off1 - nvim_win_col_off2_curwin();
+    let col_off1 = win_col_off(nvim_get_curwin());
+    let col_off2 = col_off1 - win_col_off2(nvim_get_curwin());
     let width1 = nvim_get_curwin_w_view_width() - col_off1;
     let mut width2 = nvim_get_curwin_w_view_width() - col_off2;
 
@@ -5662,9 +5662,9 @@ pub unsafe extern "C" fn rs_nv_screengo(
                         retval = false;
                         break;
                     }
-                    nvim_cursor_up_inner_curwin(1, skip_conceal);
+                    cursor_up_inner(nvim_get_curwin(), 1, skip_conceal);
 
-                    linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+                    linelen = linetabsize(nvim_get_curwin(), nvim_get_cursor_lnum());
                     if linelen > width1 {
                         let w = (((linelen - width1 - 1) / width2) + 1) * width2;
                         nvim_set_curswant(nvim_get_curswant() + w);
@@ -5688,7 +5688,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
                         retval = false;
                         break;
                     }
-                    nvim_cursor_down_inner_curwin(1, skip_conceal);
+                    cursor_down_inner(nvim_get_curwin(), 1, skip_conceal);
                     let remainder = nvim_get_curswant() % width2;
                     nvim_set_curswant(remainder);
 
@@ -5699,7 +5699,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
                     if nvim_get_curswant() >= width1 {
                         nvim_set_curswant(nvim_get_curswant() - width2);
                     }
-                    linelen = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+                    linelen = linetabsize(nvim_get_curwin(), nvim_get_cursor_lnum());
                 }
             }
         }
@@ -5771,8 +5771,8 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
 
     let mut i: c_int;
     if nvim_get_curwin_w_p_wrap() && nvim_get_curwin_w_view_width() != 0 {
-        let col_off1 = nvim_win_col_off_curwin();
-        let col_off2 = col_off1 - nvim_win_col_off2_curwin();
+        let col_off1 = win_col_off(nvim_get_curwin());
+        let col_off2 = col_off1 - win_col_off2(nvim_get_curwin());
         let width1 = nvim_get_curwin_w_view_width() - col_off1;
         let width2 = width1 + col_off2;
 
@@ -5787,7 +5787,8 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
         // that skipcol is not adjusted later.
         let skipcol = nvim_get_curwin_w_skipcol();
         if skipcol > 0 && nvim_get_cursor_lnum() == nvim_get_curwin_w_topline() {
-            let overlap = nvim_sms_marker_overlap_curwin(nvim_get_curwin_w_view_width() - col_off2);
+            let overlap =
+                sms_marker_overlap(nvim_get_curwin(), nvim_get_curwin_w_view_width() - col_off2);
             if overlap > 0 && i == skipcol {
                 i += overlap;
             }
@@ -5798,8 +5799,8 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
 
     // Go to the middle of the screen line.
     if nchar == c_int::from(b'm') {
-        let col_off1 = nvim_win_col_off_curwin();
-        let col_off2 = col_off1 - nvim_win_col_off2_curwin();
+        let col_off1 = win_col_off(nvim_get_curwin());
+        let col_off2 = col_off1 - win_col_off2(nvim_get_curwin());
         i += i32::midpoint(
             nvim_get_curwin_w_view_width() - col_off1,
             if nvim_get_curwin_w_p_wrap() && i > 0 {
@@ -5825,7 +5826,7 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
     nvim_curwin_set_curswant(true);
 
     if rs_hasAnyFolding(nvim_get_curwin()) != 0 {
-        nvim_validate_cheight_curwin();
+        validate_cheight(nvim_get_curwin());
         if nvim_get_curwin_w_cline_folded() {
             update_curswant_force();
         }
@@ -5843,7 +5844,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     let nchar = nvim_cap_get_nchar(cap);
     let count1 = nvim_cap_get_count1(cap);
-    let col_off = nvim_win_col_off_curwin();
+    let col_off = win_col_off(nvim_get_curwin());
     let flag = nchar == K_END || nchar == K_KEND;
 
     nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
@@ -5852,7 +5853,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
     if nvim_get_curwin_w_p_wrap() && nvim_get_curwin_w_view_width() != 0 {
         nvim_set_curswant(MAXCOL);
         if count1 == 1 {
-            let col_off2 = col_off - nvim_win_col_off2_curwin();
+            let col_off2 = col_off - win_col_off2(nvim_get_curwin());
             let width1 = nvim_get_curwin_w_view_width() - col_off;
             let width2 = width1 + col_off2;
 
@@ -5938,7 +5939,7 @@ pub unsafe extern "C" fn rs_n_opencmd(cap: CapHandle) {
     if nvim_u_save_for_opencmd(backward) {
         let do_com = nvim_has_format_option_fo_open_coms();
         if nvim_open_line_for_opencmd(backward, do_com) {
-            if nvim_win_cursorline_standout_curwin() {
+            if win_cursorline_standout(nvim_get_curwin()) {
                 // force redraw of cursorline
                 nvim_clear_curwin_w_valid_crow();
             }
@@ -6243,7 +6244,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
         n if n == b'M' as c_int => {
             nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
             nvim_oap_set_inclusive(oap, false);
-            let i = nvim_linetabsize_curwin(nvim_get_cursor_lnum());
+            let i = linetabsize(nvim_get_curwin(), nvim_get_cursor_lnum());
             let count0 = nvim_cap_get_count0(cap);
             if count0 > 0 && count0 <= 100 {
                 nvim_coladvance(i * count0 / 100);
@@ -7053,7 +7054,7 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
     // cursor = tpos
     nvim_set_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
     nvim_check_cursor();
-    nvim_update_topline_call();
+    update_topline(nvim_get_curwin());
 
     // Start Select mode or may_start_select
     if nvim_cap_get_arg(cap) != 0 {
@@ -7502,7 +7503,7 @@ pub unsafe fn rs_normal_search(
     }
 
     if nvim_search_hls_needs_redraw(prev_lnum, prev_col, prev_coladd) {
-        nvim_redraw_later_curwin(UPD_SOME_VALID);
+        redraw_later(nvim_get_curwin(), UPD_SOME_VALID);
     }
 
     nvim_check_cursor();

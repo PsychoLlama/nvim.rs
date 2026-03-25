@@ -614,7 +614,6 @@ void nvim_set_VIsual_select_reg(int val) { VIsual_select_reg = val; }
 int nvim_get_VIsual_select_reg(void) { return VIsual_select_reg; }
 int nvim_get_virtual_op(void) { return (int)virtual_op; }
 
-void nvim_update_topline_call(void) { update_topline(curwin); }
 
 bool nvim_p_sel_is_exclusive(void) { return *p_sel == 'e'; }
 
@@ -791,8 +790,6 @@ size_t nvim_spell_move_to_cap_call(int dir, int smt_type) {
 // g-command and n_opencmd accessors for Rust FFI
 // =============================================================================
 
-int nvim_sms_marker_overlap_curwin(int width) { return sms_marker_overlap(curwin, width); }
-void nvim_validate_cheight_curwin(void) { validate_cheight(curwin); }
 int nvim_get_curwin_w_skipcol(void) { return (int)curwin->w_skipcol; }
 int nvim_get_curwin_w_topline(void) { return (int)curwin->w_topline; }
 bool nvim_get_curwin_w_cline_folded(void) { return curwin->w_cline_folded; }
@@ -805,7 +802,6 @@ void nvim_set_curbuf_b_last_changedtick_i(void) { curbuf->b_last_changedtick_i =
 bool nvim_u_save_for_opencmd(bool backward) { return u_save(curwin->w_cursor.lnum - (backward ? 1 : 0), curwin->w_cursor.lnum + (backward ? 0 : 1)) != 0; }
 bool nvim_open_line_for_opencmd(bool backward, bool do_com) { return open_line(backward ? BACKWARD : FORWARD, do_com ? OPENLINE_DO_COM : 0, 0, NULL) != false; }
 bool nvim_has_format_option_fo_open_coms(void) { return has_format_option(FO_OPEN_COMS); }
-bool nvim_win_cursorline_standout_curwin(void) { return win_cursorline_standout(curwin); }
 void nvim_clear_curwin_w_valid_crow(void) { curwin->w_valid &= ~VALID_CROW; }
 /// mark_mb_adjustpos for cursor: adjusts curwin->w_cursor via curbuf,
 /// returns new col.
@@ -868,16 +864,9 @@ int nvim_get_curwin_w_leftcol(void) { return curwin->w_leftcol; }
 void nvim_set_curwin_w_leftcol(int val) { curwin->w_leftcol = val; }
 void nvim_validate_botline_curwin(void) { validate_botline(curwin); }
 int nvim_get_curwin_w_botline(void) { return curwin->w_botline; }
-void nvim_check_cursor_col_call(void) { check_cursor_col(curwin); }
-void nvim_scroll_cursor_top(int off, bool always) { scroll_cursor_top(curwin, off, always); }
-void nvim_scroll_cursor_bot(int off, bool always) { scroll_cursor_bot(curwin, off, always); }
-void nvim_scroll_cursor_halfway(bool atend, bool prefer_above) { scroll_cursor_halfway(curwin, atend, prefer_above); }
-void nvim_redraw_later_curwin(int type) { redraw_later(curwin, type); }
 bool nvim_hasFolding_curwin(int lnum) { return hasFolding(curwin, lnum, NULL, NULL); }
 void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, vcol, NULL, NULL); }
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
-int nvim_win_col_off_curwin(void) { return win_col_off(curwin); }
-void nvim_changed_window_setting_curwin(void) { changed_window_setting(curwin); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
@@ -908,7 +897,6 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 // =============================================================================
 
 // g-command C accessors for Rust FFI
-int nvim_linetabsize_curwin(int lnum) { return linetabsize(curwin, lnum); }
 void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
@@ -917,9 +905,6 @@ void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cur
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
 int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_count; }
-int nvim_win_col_off2_curwin(void) { return win_col_off2(curwin); }
-void nvim_cursor_up_inner_curwin(int n, bool skip_conceal) { cursor_up_inner(curwin, n, skip_conceal); }
-void nvim_cursor_down_inner_curwin(int n, bool skip_conceal) { cursor_down_inner(curwin, n, skip_conceal); }
 void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
 
 bool nvim_cursor_pos_ptr_is_nul(void) { return *get_cursor_pos_ptr() == NUL; }
@@ -1205,8 +1190,6 @@ void nvim_checkpcmark_wrapper(void) { checkpcmark(); }
 /// Free ca->searchbuf and null it.
 void nvim_xfree_cap_searchbuf(cmdarg_T *ca) { xfree(ca->searchbuf); ca->searchbuf = NULL; }
 
-/// mb_check_adjust_col(curwin) wrapper.
-void nvim_mb_check_adjust_col_wrapper(void) { mb_check_adjust_col(curwin); }
 
 /// curwin->w_p_scb.
 bool nvim_curwin_get_p_scb(void) { return curwin->w_p_scb; }

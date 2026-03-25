@@ -9,7 +9,7 @@ use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
 use crate::types::{CmdargT, NormalState};
-use crate::{CapHandle, OapHandle};
+use crate::{CapHandle, OapHandle, WinHandle};
 
 /// Cast `NormalStateHandle` to a typed `*mut NormalState`.
 ///
@@ -70,7 +70,6 @@ extern "C" {
     fn rs_clear_showcmd();
     fn nvim_checkpcmark_wrapper();
     fn nvim_xfree_cap_searchbuf(ca: CapHandle);
-    fn nvim_mb_check_adjust_col_wrapper();
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_curwin_get_p_crb() -> bool;
     fn nvim_validate_cursor_curwin_wrapper();
@@ -78,6 +77,8 @@ extern "C" {
     fn nvim_do_check_cursorbind_wrapper();
     fn edit(cmd: c_int, startln: bool, count: c_int) -> bool;
     fn nvim_showmode();
+    fn nvim_get_curwin() -> WinHandle;
+    fn mb_check_adjust_col(win: WinHandle);
 }
 
 /// Finish a normal-mode command: operator resolution, mode messages,
@@ -169,7 +170,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     nvim_checkpcmark_wrapper();
     nvim_xfree_cap_searchbuf(ca);
 
-    nvim_mb_check_adjust_col_wrapper();
+    mb_check_adjust_col(nvim_get_curwin());
 
     if nvim_curwin_get_p_scb() && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();

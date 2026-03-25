@@ -114,7 +114,6 @@ extern "C" {
     fn discard_current_exception();
     fn nvim_state_no_longer_safe();
     fn setcursor();
-    fn nvim_update_topline_call();
     fn nvim_validate_cursor();
     fn nvim_curtab_needs_diff_update() -> bool;
     #[link_name = "ex_diffupdate"]
@@ -173,6 +172,7 @@ extern "C" {
     fn nvim_curbuf_b_changed_invalid_clear();
 
     fn nvim_get_curwin() -> WinHandle;
+    fn update_topline(win: WinHandle);
 }
 
 // =============================================================================
@@ -290,7 +290,7 @@ unsafe fn normal_check_folds(_s: NormalStateHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     // Before redrawing, ensure w_topline and cursor are up to date.
-    nvim_update_topline_call();
+    update_topline(nvim_get_curwin());
     nvim_validate_cursor();
 
     nvim_show_cursor_info_later();
@@ -500,7 +500,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     } else if do_redraw || nvim_stuff_empty() {
         // Ensure curwin->w_topline and curwin->w_leftcol are up to date
         // before triggering a WinScrolled autocommand.
-        nvim_update_topline_call();
+        update_topline(nvim_get_curwin());
         nvim_validate_cursor();
 
         normal_check_cursor_moved();
