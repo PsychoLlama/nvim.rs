@@ -98,6 +98,12 @@ extern void rs_last_status(int morewin);
 // Rust FFI: fuzzy completion support check (takes context int, not expand_T*)
 extern int rs_cmdline_fuzzy_completion_supported(int context);
 
+// Rust FFI: wildmenu / pum (exported without rs_ prefix by Rust)
+extern void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int match,
+                            bool showtail);
+extern void cmdline_pum_create(void *ccline, expand_T *xp, char **matches, int num_matches,
+                               bool showtail, bool noselect);
+
 static bool cmd_showtail;  ///< Only show path tail in lists ?
 static bool may_expand_pattern = false;
 static pos_T pre_incsearch_pos;  ///< Cursor position when incsearch started
@@ -271,7 +277,7 @@ void nvim_cmdexpand_pum_display(int changed_array)
   cmdline_pum_display(changed_array != 0);
 }
 
-/// Wrapper for cmdline_pum_create for navigation (for Rust FFI).
+/// Wrapper for cmdline_pum_create (Rust) for navigation (for Rust FFI).
 /// Creates PUM with xp->xp_files/xp_numfiles and given showtail/noselect flags.
 void nvim_cmdexpand_pum_create_for_nav(expand_T *xp, int showtail, int noselect)
 {
@@ -279,7 +285,7 @@ void nvim_cmdexpand_pum_create_for_nav(expand_T *xp, int showtail, int noselect)
                      showtail != 0, noselect != 0);
 }
 
-/// Wrapper for redraw_wildmenu (for Rust FFI).
+/// Wrapper for redraw_wildmenu (Rust) (for Rust FFI).
 void nvim_cmdexpand_redraw_wildmenu(expand_T *xp, int num_matches, int findex, int showtail)
 {
   redraw_wildmenu(xp, num_matches, xp->xp_files, findex, showtail != 0);
@@ -547,6 +553,60 @@ void nvim_cmdexpand_do_pum_cleanup(void)
 {
   cmdline_pum_remove(false);
   wildmenu_cleanup(get_cmdline_info());
+}
+
+/// Get compl_startcol (for Rust FFI).
+int nvim_cmdexpand_get_compl_startcol(void)
+{
+  return compl_startcol;
+}
+
+/// Set compl_startcol (for Rust FFI).
+void nvim_cmdexpand_set_compl_startcol(int val)
+{
+  compl_startcol = val;
+}
+
+/// Get compl_match_arraysize (for Rust FFI).
+int nvim_cmdexpand_get_compl_match_arraysize(void)
+{
+  return compl_match_arraysize;
+}
+
+/// Set compl_match_arraysize (for Rust FFI).
+void nvim_cmdexpand_set_compl_match_arraysize(int val)
+{
+  compl_match_arraysize = val;
+}
+
+/// Alloc compl_match_array with numMatches entries and return it (for Rust FFI).
+void *nvim_cmdexpand_alloc_compl_match_array(int numMatches)
+{
+  compl_match_array = xmalloc(sizeof(pumitem_T) * (size_t)numMatches);
+  return compl_match_array;
+}
+
+/// Set compl_match_array[i].pum_text (for Rust FFI).
+void nvim_cmdexpand_set_pum_text(int i, char *text)
+{
+  compl_match_array[i].pum_text = text;
+  compl_match_array[i].pum_info = NULL;
+  compl_match_array[i].pum_extra = NULL;
+  compl_match_array[i].pum_kind = NULL;
+  compl_match_array[i].pum_user_abbr_hlattr = -1;
+  compl_match_array[i].pum_user_kind_hlattr = -1;
+}
+
+/// Get pointer to msg_grid_adj GridView (for Rust FFI).
+void *nvim_cmdexpand_get_msg_grid_adj_ptr(void)
+{
+  return &msg_grid_adj;
+}
+
+/// Get pointer to default_gridview GridView (for Rust FFI).
+void *nvim_cmdexpand_get_default_gridview_ptr(void)
+{
+  return &default_gridview;
 }
 
 /// Return get_cmdline_info()->xpc->xp_orig or NULL if xpc is NULL (for Rust FFI).
@@ -1085,7 +1145,7 @@ void nvim_cmdexpand_pum_create_from_matches(expand_T *xp, char **matches, int nu
                      showtail != 0, noselect != 0);
 }
 
-/// Wrapper for redraw_wildmenu with explicit matches (for Rust FFI).
+/// Wrapper for redraw_wildmenu (Rust) with explicit matches (for Rust FFI).
 void nvim_cmdexpand_redraw_wildmenu_ex(expand_T *xp, int num_matches, char **matches,
                                        int findex, int showtail)
 {
@@ -1167,216 +1227,7 @@ int nvim_cmdexpand_compl_use_pum(int need_wildmenu)
   return rs_cmdline_compl_use_pum(need_wildmenu);
 }
 
-#define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
-
-
-/// Create completion popup menu with items from "matches".
-static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches, int numMatches,
-                               bool showtail, bool noselect)
-{
-  assert(numMatches >= 0);
-  // Add all the completion matches
-  compl_match_array = xmalloc(sizeof(pumitem_T) * (size_t)numMatches);
-  compl_match_arraysize = numMatches;
-  for (int i = 0; i < numMatches; i++) {
-    compl_match_array[i] = (pumitem_T){
-      .pum_text = SHOW_MATCH(i),
-      .pum_info = NULL,
-      .pum_extra = NULL,
-      .pum_kind = NULL,
-      .pum_user_abbr_hlattr = -1,
-      .pum_user_kind_hlattr = -1,
-    };
-  }
-
-  // Compute the popup menu starting column
-  char *endpos = showtail ? rs_showmatches_gettail(xp->xp_pattern, noselect) : xp->xp_pattern;
-  if (ui_has(kUICmdline) && cmdline_win == NULL) {
-    compl_startcol = (int)(endpos - ccline->cmdbuff);
-  } else {
-    compl_startcol = cmd_screencol((int)(endpos - ccline->cmdbuff));
-  }
-}
-
-/// Show wildchar matches in the status line.
-/// Show at least the "match" item.
-/// We start at item "first_match" in the list and show all matches that fit.
-///
-/// If inversion is possible we use it. Else '=' characters are used.
-///
-/// @param matches  list of matches
-static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int match, bool showtail)
-{
-  bool highlight = true;
-  char *selstart = NULL;
-  int selstart_col = 0;
-  char *selend = NULL;
-  static int first_match = 0;
-  bool add_left = false;
-  int i, l;
-
-  if (matches == NULL) {        // interrupted completion?
-    return;
-  }
-
-  char *buf = xmalloc((size_t)Columns * MB_MAXBYTES + 1);
-
-  if (match == -1) {    // don't show match but original text
-    match = 0;
-    highlight = false;
-  }
-  // count 1 for the ending ">"
-  int clen = rs_wildmenu_match_len(xp, SHOW_MATCH(match)) + 3;  // length in screen cells
-  if (match == 0) {
-    first_match = 0;
-  } else if (match < first_match) {
-    // jumping left, as far as we can go
-    first_match = match;
-    add_left = true;
-  } else {
-    // check if match fits on the screen
-    for (i = first_match; i < match; i++) {
-      clen += rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
-    }
-    if (first_match > 0) {
-      clen += 2;
-    }
-    // jumping right, put match at the left
-    if (clen > Columns) {
-      first_match = match;
-      // if showing the last match, we can add some on the left
-      clen = 2;
-      for (i = match; i < num_matches; i++) {
-        clen += rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2;
-        if (clen >= Columns) {
-          break;
-        }
-      }
-      if (i == num_matches) {
-        add_left = true;
-      }
-    }
-  }
-  if (add_left) {
-    while (first_match > 0) {
-      clen += rs_wildmenu_match_len(xp, SHOW_MATCH(first_match - 1)) + 2;
-      if (clen >= Columns) {
-        break;
-      }
-      first_match--;
-    }
-  }
-
-  int len;
-  hlf_T group;
-  schar_T fillchar = fillchar_status(&group, curwin);
-  int attr = win_hl_attr(curwin, (int)group);
-
-  if (first_match == 0) {
-    *buf = NUL;
-    len = 0;
-  } else {
-    STRCPY(buf, "< ");
-    len = 2;
-  }
-  clen = len;
-
-  i = first_match;
-  while (clen + rs_wildmenu_match_len(xp, SHOW_MATCH(i)) + 2 < Columns) {
-    if (i == match) {
-      selstart = buf + len;
-      selstart_col = clen;
-    }
-
-    char *s = SHOW_MATCH(i);
-    // Check for menu separators - replace with '|'
-    int emenu = (xp->xp_context == EXPAND_MENUS || xp->xp_context == EXPAND_MENUNAMES);
-    if (emenu && menu_is_separator(s)) {
-      STRCPY(buf + len, transchar('|'));
-      l = (int)strlen(buf + len);
-      len += l;
-      clen += l;
-    } else {
-      for (; *s != NUL; s++) {
-        s += rs_skip_wildmenu_char(xp, s);
-        clen += ptr2cells(s);
-        if ((l = utfc_ptr2len(s)) > 1) {
-          strncpy(buf + len, s, (size_t)l);  // NOLINT(runtime/printf)
-          s += l - 1;
-          len += l;
-        } else {
-          STRCPY(buf + len, transchar_byte((uint8_t)(*s)));
-          len += (int)strlen(buf + len);
-        }
-      }
-    }
-    if (i == match) {
-      selend = buf + len;
-    }
-
-    *(buf + len++) = ' ';
-    *(buf + len++) = ' ';
-    clen += 2;
-    if (++i == num_matches) {
-      break;
-    }
-  }
-
-  if (i != num_matches) {
-    *(buf + len++) = '>';
-    clen++;
-  }
-
-  buf[len] = NUL;
-
-  int row = cmdline_row - 1;
-  if (row >= 0) {
-    if (wild_menu_showing == 0) {
-      if (msg_scrolled > 0) {
-        // Put the wildmenu just above the command line.  If there is
-        // no room, scroll the screen one line up.
-        if (cmdline_row == Rows - 1) {
-          msg_scroll_up(false, false);
-          msg_scrolled++;
-        } else {
-          cmdline_row++;
-          row++;
-        }
-        wild_menu_showing = WM_SCROLLED;
-      } else {
-        // Create status line if needed by setting 'laststatus' to 2.
-        // Set 'winminheight' to zero to avoid that the window is
-        // resized.
-        if (lastwin->w_status_height == 0 && rs_global_stl_height() == 0) {
-          save_p_ls = (int)p_ls;
-          save_p_wmh = (int)p_wmh;
-          p_ls = 2;
-          p_wmh = 0;
-          rs_last_status(0);
-        }
-        wild_menu_showing = WM_SHOWN;
-      }
-    }
-
-    // Tricky: wildmenu can be drawn either over a status line, or at empty
-    // scrolled space in the message output
-    grid_line_start((wild_menu_showing == WM_SCROLLED) ? &msg_grid_adj : &default_gridview, row);
-
-    grid_line_puts(0, buf, -1, attr);
-    if (selstart != NULL && highlight) {
-      *selend = NUL;
-      grid_line_puts(selstart_col, selstart, -1, HL_ATTR(HLF_WM));
-    }
-
-    grid_line_fill(clen, Columns, fillchar, attr);
-
-    grid_line_flush();
-  }
-
-  win_redraw_last_status(topframe);
-  xfree(buf);
-}
 
 
 /// Do wildcard expansion on the string "str".

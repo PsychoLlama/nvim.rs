@@ -164,6 +164,7 @@ extern "C" {
     ) -> *mut libc::c_char;
 
     fn xfree(ptr: *mut libc::c_void);
+    fn xmalloc(size: usize) -> *mut libc::c_char;
 
     fn beep_flush();
 
@@ -174,6 +175,83 @@ extern "C" {
     fn rs_cmdline_fuzzy_completion_supported(context: c_int) -> c_int;
 
     fn addstar(fname: *mut libc::c_char, len: usize, context: c_int) -> *mut libc::c_char;
+
+    // redraw_wildmenu dependencies
+    /// `nvim_win_hl_attr(wp, hlf)` — get highlight attr for window+group.
+    fn nvim_win_hl_attr(wp: *mut libc::c_void, hlf: c_int) -> c_int;
+
+    /// `nvim_get_curwin()` — returns current window pointer.
+    fn nvim_get_curwin() -> *mut libc::c_void;
+
+    /// `nvim_get_lastwin()` — returns last window pointer.
+    fn nvim_get_lastwin() -> *mut libc::c_void;
+
+    /// `nvim_win_get_status_height(wp)` — get `w_status_height`.
+    fn nvim_win_get_status_height(wp: *mut libc::c_void) -> c_int;
+
+    /// `rs_global_stl_height()` — get global statusline height.
+    fn rs_global_stl_height() -> c_int;
+
+    /// `msg_scrolled` global.
+    static mut msg_scrolled: c_int;
+
+    /// `msg_scroll_up(may_throttle, zerocmd)`.
+    fn msg_scroll_up(may_throttle: bool, zerocmd: bool);
+
+    /// `grid_line_start(view, row)`.
+    fn grid_line_start(view: *mut libc::c_void, row: c_int);
+
+    /// `grid_line_puts(col, str, len, attr)` — writes a C string to the line.
+    fn grid_line_puts(col: c_int, text: *const libc::c_char, textlen: c_int, attr: c_int) -> c_int;
+
+    /// `grid_line_fill(start_col, end_col, sc, attr)`.
+    fn grid_line_fill(start_col: c_int, end_col: c_int, sc: u32, attr: c_int);
+
+    /// `grid_line_flush()`.
+    fn grid_line_flush();
+
+    /// `transchar(c)` — translate char to printable sequence.
+    fn transchar(c: c_int) -> *mut libc::c_char;
+
+    /// `transchar_byte(c)` — translate non-ASCII byte to printable sequence.
+    fn transchar_byte(c: c_int) -> *mut libc::c_char;
+
+    /// `utfc_ptr2len(p)` — byte length of the first UTF-8 sequence.
+    fn utfc_ptr2len(p: *const libc::c_char) -> c_int;
+
+    /// `ptr2cells(p)` — display width of first character in string.
+    fn ptr2cells(p: *const libc::c_char) -> c_int;
+
+    /// `menu_is_separator(name)`.
+    fn menu_is_separator(name: *const libc::c_char) -> c_int;
+
+    /// `fillchar_status(group, wp)` — get fill char and group for status line.
+    #[link_name = "fillchar_status"]
+    fn nvim_fillchar_status(group: *mut c_int, wp: *mut libc::c_void) -> u32;
+
+    /// Get pointer to `msg_grid_adj` `GridView`.
+    fn nvim_cmdexpand_get_msg_grid_adj_ptr() -> *mut libc::c_void;
+
+    /// Get pointer to `default_gridview` `GridView`.
+    fn nvim_cmdexpand_get_default_gridview_ptr() -> *mut libc::c_void;
+
+    /// `hl_attr_active` pointer (array of int, indexed by HLF_* enum value).
+    static mut hl_attr_active: *mut c_int;
+
+    /// `Columns` global — terminal width.
+    static Columns: c_int;
+
+    /// `Rows` global — terminal height.
+    static Rows: c_int;
+
+    /// `cmdline_row` global — row where the command line is displayed.
+    static mut cmdline_row: c_int;
+
+    /// `rs_wildmenu_match_len(xp, s)` — visible width of a completion match.
+    fn rs_wildmenu_match_len(xp: *mut crate::ExpandT, s: *const libc::c_char) -> c_int;
+
+    /// `rs_skip_wildmenu_char(xp, s)` — bytes to skip for non-displayable chars.
+    fn rs_skip_wildmenu_char(xp: *const crate::ExpandT, s: *const libc::c_char) -> c_int;
 
 }
 
@@ -506,6 +584,258 @@ pub unsafe extern "C" fn rs_wildmenu_cleanup(_cclp: *mut libc::c_void) {
 // =============================================================================
 // nextwild
 // =============================================================================
+
+// =============================================================================
+// redraw_wildmenu
+// =============================================================================
+
+/// `WM_SHOWN` — wildmenu is showing.
+const WM_SHOWN: c_int = 1;
+/// `WM_SCROLLED` — wildmenu showing with scroll.
+const WM_SCROLLED: c_int = 2;
+/// `HLF_WM` — wildmenu highlight (index in `hl_attr_active` array).
+const HLF_WM: usize = 27;
+/// `MB_MAXBYTES` — maximum bytes in a multibyte character.
+const MB_MAXBYTES: usize = 21;
+/// `EXPAND_MENUS` context.
+const EXPAND_MENUS: c_int = 11;
+/// `EXPAND_MENUNAMES` context.
+const EXPAND_MENUNAMES: c_int = 21;
+
+/// First visible match in the wildmenu (persists across calls like C `static`).
+static mut FIRST_MATCH: c_int = 0;
+
+/// Get a single match string (showtail or raw).
+///
+/// # Safety
+/// `matches` must be valid, `m` must be in range.
+#[inline]
+unsafe fn show_match_str(
+    matches: *mut *mut libc::c_char,
+    m: c_int,
+    showtail: bool,
+) -> *mut libc::c_char {
+    if showtail {
+        crate::helpers::rs_showmatches_gettail(*matches.add(m as usize), 0)
+    } else {
+        *matches.add(m as usize)
+    }
+}
+
+/// Show wildchar matches in the status line.
+///
+/// Show at least the `match_` item.  Items to the right of `match_` are shown
+/// first; if there is room, items to the left are added.
+///
+/// # Safety
+///
+/// `xp` must be a valid `expand_T` pointer.
+/// `matches` must point to at least `num_matches` valid C string pointers (or be NULL).
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "redraw_wildmenu")]
+pub unsafe extern "C" fn rs_redraw_wildmenu(
+    xp: *mut crate::ExpandT,
+    num_matches: c_int,
+    matches: *mut *mut libc::c_char,
+    match_: c_int,
+    showtail: bool,
+) {
+    if matches.is_null() {
+        // Interrupted completion
+        return;
+    }
+
+    let columns = Columns;
+    let buf = xmalloc(columns as usize * MB_MAXBYTES + 1);
+
+    let (highlight, match_) = if match_ == -1 {
+        // Don't show match but original text
+        (false, 0i32)
+    } else {
+        (true, match_)
+    };
+
+    // Count 1 for the ending ">"
+    let mut clen = rs_wildmenu_match_len(xp, show_match_str(matches, match_, showtail)) + 3;
+    let mut add_left = false;
+
+    if match_ == 0 {
+        FIRST_MATCH = 0;
+    } else if match_ < FIRST_MATCH {
+        // Jumping left: go as far left as possible
+        FIRST_MATCH = match_;
+        add_left = true;
+    } else {
+        // Check if match fits on the screen
+        let mut i = FIRST_MATCH;
+        while i < match_ {
+            clen += rs_wildmenu_match_len(xp, show_match_str(matches, i, showtail)) + 2;
+            i += 1;
+        }
+        if FIRST_MATCH > 0 {
+            clen += 2;
+        }
+
+        // Jumping right: put match at the left
+        if clen > columns {
+            FIRST_MATCH = match_;
+            // If showing the last match, we can add some on the left
+            clen = 2;
+            let mut i = match_;
+            while i < num_matches {
+                clen += rs_wildmenu_match_len(xp, show_match_str(matches, i, showtail)) + 2;
+                if clen >= columns {
+                    break;
+                }
+                i += 1;
+            }
+            if i == num_matches {
+                add_left = true;
+            }
+        }
+    }
+    if add_left {
+        while FIRST_MATCH > 0 {
+            clen +=
+                rs_wildmenu_match_len(xp, show_match_str(matches, FIRST_MATCH - 1, showtail)) + 2;
+            if clen >= columns {
+                break;
+            }
+            FIRST_MATCH -= 1;
+        }
+    }
+
+    let mut group: c_int = 0;
+    let curwin = nvim_get_curwin();
+    let fillchar = nvim_fillchar_status(&raw mut group, curwin);
+    let attr = nvim_win_hl_attr(curwin, group);
+
+    // Build the display string in buf
+    let (mut len, mut clen) = if FIRST_MATCH == 0 {
+        *buf = 0i8; // NUL
+        (0i32, 0i32)
+    } else {
+        // "< "
+        *buf = b'<' as libc::c_char;
+        *buf.add(1) = b' ' as libc::c_char;
+        (2i32, 2i32)
+    };
+
+    let mut selstart: *mut libc::c_char = std::ptr::null_mut();
+    let mut selstart_col: c_int = 0;
+    let mut selend: *mut libc::c_char = std::ptr::null_mut();
+
+    let mut i = FIRST_MATCH;
+    while clen + rs_wildmenu_match_len(xp, show_match_str(matches, i, showtail)) + 2 < columns {
+        if i == match_ {
+            selstart = buf.add(len as usize);
+            selstart_col = clen;
+        }
+
+        let s = show_match_str(matches, i, showtail);
+        let xp_context = (*xp).xp_context;
+        let emenu = xp_context == EXPAND_MENUS || xp_context == EXPAND_MENUNAMES;
+        if emenu && menu_is_separator(s) != 0 {
+            let tc = transchar(c_int::from(b'|'));
+            let tc_len = libc::strlen(tc) as usize;
+            std::ptr::copy_nonoverlapping(tc, buf.add(len as usize), tc_len);
+            len += tc_len as c_int;
+            clen += tc_len as c_int;
+        } else {
+            let mut sp = s;
+            while *sp != 0 {
+                sp = sp.add(rs_skip_wildmenu_char(xp, sp) as usize);
+                clen += ptr2cells(sp);
+                let l = utfc_ptr2len(sp);
+                if l > 1 {
+                    std::ptr::copy_nonoverlapping(sp, buf.add(len as usize), l as usize);
+                    sp = sp.add((l - 1) as usize);
+                    len += l;
+                } else {
+                    let tb = transchar_byte(c_int::from(*sp as u8));
+                    let tb_len = libc::strlen(tb) as usize;
+                    std::ptr::copy_nonoverlapping(tb, buf.add(len as usize), tb_len);
+                    len += tb_len as c_int;
+                }
+                sp = sp.add(1);
+            }
+        }
+
+        if i == match_ {
+            selend = buf.add(len as usize);
+        }
+
+        *buf.add(len as usize) = b' ' as libc::c_char;
+        len += 1;
+        *buf.add(len as usize) = b' ' as libc::c_char;
+        len += 1;
+        clen += 2;
+        i += 1;
+        if i == num_matches {
+            break;
+        }
+    }
+
+    if i != num_matches {
+        *buf.add(len as usize) = b'>' as libc::c_char;
+        len += 1;
+        clen += 1;
+    }
+
+    *buf.add(len as usize) = 0; // NUL terminate
+
+    let mut row = cmdline_row - 1;
+    if row >= 0 {
+        if wild_menu_showing == 0 {
+            if msg_scrolled > 0 {
+                // Put the wildmenu just above the command line.
+                // If there is no room, scroll the screen one line up.
+                if cmdline_row == Rows - 1 {
+                    msg_scroll_up(false, false);
+                    msg_scrolled += 1;
+                } else {
+                    cmdline_row += 1;
+                    row += 1;
+                }
+                wild_menu_showing = WM_SCROLLED;
+            } else {
+                // Create status line if needed by setting 'laststatus' to 2.
+                // Set 'winminheight' to zero to avoid window resizing.
+                let lastwin = nvim_get_lastwin();
+                if nvim_win_get_status_height(lastwin) == 0 && rs_global_stl_height() == 0 {
+                    save_p_ls = p_ls as c_int;
+                    save_p_wmh = p_wmh as c_int;
+                    p_ls = 2;
+                    p_wmh = 0;
+                    rs_last_status(0);
+                }
+                wild_menu_showing = WM_SHOWN;
+            }
+        }
+
+        // Start rendering the grid line
+        let gridview = if wild_menu_showing == WM_SCROLLED {
+            nvim_cmdexpand_get_msg_grid_adj_ptr()
+        } else {
+            nvim_cmdexpand_get_default_gridview_ptr()
+        };
+        grid_line_start(gridview, row);
+
+        grid_line_puts(0, buf, -1, attr);
+
+        if !selstart.is_null() && highlight {
+            *selend = 0; // NUL-terminate at selend
+            let hl_wm = *hl_attr_active.add(HLF_WM);
+            grid_line_puts(selstart_col, selstart, -1, hl_wm);
+        }
+
+        grid_line_fill(clen, columns, fillchar, attr);
+        grid_line_flush();
+    }
+
+    nvim_cmdexpand_win_redraw_last_status();
+    xfree(buf.cast::<libc::c_void>());
+}
 
 use crate::context::wild_mode::{
     WILD_FREE, WILD_LONGEST, WILD_NEXT, WILD_PAGEDOWN, WILD_PAGEUP, WILD_PREV, WILD_PUM_WANT,
