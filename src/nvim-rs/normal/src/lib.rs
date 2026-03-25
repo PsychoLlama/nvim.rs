@@ -166,9 +166,9 @@ extern "C" {
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_get_curswant() -> c_int;
     fn nvim_set_curswant(val: c_int);
-    fn nvim_virtual_active() -> bool;
-    fn nvim_gchar_cursor() -> c_int;
-    fn nvim_coladvance(col: c_int);
+    fn virtual_active(wp: WinHandle) -> bool;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn coladvance(wp: WinHandle, col: c_int) -> c_int;
 
     // oparg_T motion accessors
     #[allow(dead_code)]
@@ -218,7 +218,6 @@ extern "C" {
         forceit: c_int,
         verbose: bool,
     );
-    fn nvim_normal_get_got_int() -> bool;
     fn line_breakcheck();
     fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
     static reg_recorded: c_int;
@@ -1202,7 +1201,9 @@ pub unsafe extern "C" fn rs_nv_dollar(cap: CapHandle) {
     // In virtual mode when off the edge of a line and an operator
     // is pending (whew!) keep the cursor where it is.
     // Otherwise, send it to the end of the line.
-    if !nvim_virtual_active() || nvim_gchar_cursor() != 0 || nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    if !virtual_active(nvim_get_curwin())
+        || utf_ptr2char(get_cursor_pos_ptr()) != 0
+        || nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
         nvim_set_curswant(MAXCOL); // so we stay at the end
     }
@@ -1264,7 +1265,7 @@ pub unsafe extern "C" fn rs_nv_pipe(cap: CapHandle) {
     nvim_beginline(0);
 
     if count0 > 0 {
-        nvim_coladvance(count0 - 1);
+        coladvance(nvim_get_curwin(), count0 - 1);
         nvim_set_curswant(count0 - 1);
     } else {
         nvim_set_curswant(0);
@@ -1422,9 +1423,9 @@ unsafe fn adjust_cursor(oap: OapHandle) {
     #[allow(clippy::cast_possible_wrap)]
     let sel_o = b'o' as std::ffi::c_char;
     if nvim_get_cursor_col() > 0
-        && nvim_gchar_cursor() == NUL_CHAR
+        && utf_ptr2char(get_cursor_pos_ptr()) == NUL_CHAR
         && (!VIsual_active || nvim_get_p_sel_first() == sel_o)
-        && !nvim_virtual_active()
+        && !virtual_active(nvim_get_curwin())
         && (nvim_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0
     {
         nvim_set_cursor_col(nvim_get_cursor_col() - 1);
@@ -1446,7 +1447,7 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
     if VIsual_active
         && nvim_oap_get_inclusive(oap)
         && nvim_get_p_sel_first() == sel_e
-        && nvim_gchar_cursor() != NUL_CHAR
+        && utf_ptr2char(get_cursor_pos_ptr()) != NUL_CHAR
         && nvim_lt_VIsual_cursor()
     {
         nvim_inc_cursor();
@@ -1506,7 +1507,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
 
     // "cw" and "cW" are a special case.
     if !word_end && nvim_oap_get_op_type_ptr(oap) == OP_CHANGE {
-        let n = nvim_gchar_cursor();
+        let n = utf_ptr2char(get_cursor_pos_ptr());
         if n != NUL_CHAR && rs_ascii_iswhite(n) == 0 {
             // This is a little strange. To match what the real Vi does, we
             // effectively map "cw" to "ce", and "cW" to "cE", provided that we are
@@ -1713,7 +1714,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
     let move_res = rs_nv_mark_move_to(cap, flags, fm);
 
     // May need to clear the coladd that a mark includes.
-    if !nvim_virtual_active() {
+    if !virtual_active(nvim_get_curwin()) {
         nvim_set_cursor_coladd(0);
     }
 
@@ -1883,11 +1884,11 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 } else {
                     nvim_set_curswant(resel_vcol);
                 }
-                nvim_coladvance(nvim_get_curswant());
+                coladvance(nvim_get_curwin(), nvim_get_curswant());
             }
             if resel_vcol == MAXCOL {
                 nvim_set_curswant(MAXCOL);
-                nvim_coladvance(MAXCOL);
+                coladvance(nvim_get_curwin(), MAXCOL);
             } else if nvim_get_VIsual_mode() == CTRL_V {
                 // Update curswant on the original line (where "col" is valid)
                 let lnum = nvim_get_cursor_lnum();
@@ -1899,7 +1900,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 if nvim_p_sel_is_exclusive() {
                     nvim_set_curswant(nvim_get_curswant() + 1);
                 }
-                nvim_coladvance(nvim_get_curswant());
+                coladvance(nvim_get_curwin(), nvim_get_curswant());
             } else {
                 nvim_curwin_set_curswant(true);
             }
@@ -2224,8 +2225,8 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 
     nvim_curwin_set_curswant(true);
     // Include a Tab for "tx" and for "dfx".
-    if nvim_gchar_cursor() == TAB_CHAR
-        && nvim_virtual_active()
+    if utf_ptr2char(get_cursor_pos_ptr()) == TAB_CHAR
+        && virtual_active(nvim_get_curwin())
         && arg == FORWARD
         && (t_cmd || nvim_oap_get_op_type_ptr(oap) != OP_NOP)
     {
@@ -2494,13 +2495,13 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
             // "a"ppend is like "i"nsert on the next character.
             // increment coladd when in virtual space, increment the
             // column otherwise, also to append after an unprintable char
-            if nvim_virtual_active()
+            if virtual_active(nvim_get_curwin())
                 && (nvim_get_cursor_coladd() > 0
-                    || nvim_gchar_cursor() == NUL_CHAR
-                    || nvim_gchar_cursor() == TAB_CHAR)
+                    || utf_ptr2char(get_cursor_pos_ptr()) == NUL_CHAR
+                    || utf_ptr2char(get_cursor_pos_ptr()) == TAB_CHAR)
             {
                 nvim_set_cursor_coladd(nvim_get_cursor_coladd() + 1);
-            } else if nvim_gchar_cursor() != NUL_CHAR {
+            } else if utf_ptr2char(get_cursor_pos_ptr()) != NUL_CHAR {
                 nvim_inc_cursor();
             }
         }
@@ -2509,7 +2510,7 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
             // Pretend Insert mode here to allow the cursor on the
             // character past the end of the line
             State = MODE_INSERT;
-            nvim_coladvance(nvim_getviscol());
+            coladvance(nvim_get_curwin(), nvim_getviscol());
             State = save_state;
         }
         invoke_edit_impl(cap, false, cmdchar, false);
@@ -3221,7 +3222,7 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
             did_change = true;
         }
         nvim_inc_cursor();
-        if nvim_gchar_cursor() == NUL_CHAR {
+        if utf_ptr2char(get_cursor_pos_ptr()) == NUL_CHAR {
             if nvim_vim_strchr_p_ww(c_int::from(b'~'))
                 && nvim_get_cursor_lnum() < nvim_get_line_count()
             {
@@ -3567,7 +3568,7 @@ unsafe fn bracket_method_nav(
                 }
                 break 'outer;
             }
-            let c = nvim_gchar_cursor();
+            let c = utf_ptr2char(get_cursor_pos_ptr());
             if c == c_int::from(b'{') || c == c_int::from(b'}') {
                 let cur = (
                     nvim_get_cursor_lnum(),
@@ -4172,11 +4173,11 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
     }
 
     // Inlined nvim_replace_virtual_edit: break tabs in virtual edit mode
-    if nvim_virtual_active() {
+    if virtual_active(nvim_get_curwin()) {
         if u_save_cursor() == 0 {
             return;
         }
-        let gc = nvim_gchar_cursor();
+        let gc = utf_ptr2char(get_cursor_pos_ptr());
         let count1 = nvim_cap_get_count1(cap);
         if gc == NUL_CHAR {
             let viscol = nvim_getviscol();
@@ -4297,7 +4298,7 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
     }
 
     if nvim_curbuf_modifiable() {
-        if nvim_virtual_active() {
+        if virtual_active(nvim_get_curwin()) {
             nvim_coladvance_getviscol();
         }
         let arg = nvim_cap_get_arg(cap);
@@ -4347,7 +4348,7 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
         }
         nvim_stuffcharReadbuff(extra_char);
         nvim_stuffcharReadbuff(ESC_CHAR);
-        if nvim_virtual_active() {
+        if virtual_active(nvim_get_curwin()) {
             nvim_coladvance_getviscol();
         }
         nvim_invoke_edit_R(cap, true, c_int::from(b'v'));
@@ -4401,7 +4402,6 @@ extern "C" {
     fn nvim_get_curwin_w_view_width() -> c_int;
     fn nvim_get_curwin_w_leftcol() -> c_int;
     fn nvim_set_curwin_w_leftcol(val: c_int);
-    fn nvim_validate_botline_curwin();
     fn nvim_get_curwin_w_botline() -> c_int;
     fn set_leftcol(col: c_int);
     fn nvim_hasFolding_curwin(lnum: c_int) -> bool;
@@ -4696,7 +4696,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         n if n == b'+' as c_int => {
             if nvim_cap_get_count0(cap) == 0 {
                 // No count given: put cursor at the line below screen
-                nvim_validate_botline_curwin();
+                nvim_validate_botline(nvim_get_curwin());
                 let botline = nvim_get_curwin_w_botline();
                 let line_count = nvim_get_line_count();
                 let lnum = if botline < line_count {
@@ -5291,7 +5291,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
     // past_line: in Visual mode with 'selection' != 'o', cursor can go past EOL
     #[allow(clippy::cast_possible_wrap)]
     let sel_o_p1 = b'o' as std::ffi::c_char;
-    let past_line = if nvim_virtual_active() {
+    let past_line = if virtual_active(nvim_get_curwin()) {
         // In virtual edit mode there is no past_line
         false
     } else {
@@ -5351,7 +5351,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
         } else if past_line {
             // past_line move: set curswant and advance col
             nvim_curwin_set_curswant(true);
-            if nvim_virtual_active() {
+            if virtual_active(nvim_get_curwin()) {
                 oneright();
             } else {
                 nvim_cursor_col_inc_by_utfc();
@@ -5409,7 +5409,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
 
             if wrap {
                 nvim_set_cursor_lnum(nvim_get_cursor_lnum() - 1);
-                nvim_coladvance(MAXCOL);
+                coladvance(nvim_get_curwin(), MAXCOL);
                 nvim_curwin_set_curswant(true);
 
                 // When deleting NL before first char: put cursor on NUL after prev line
@@ -5705,10 +5705,10 @@ pub unsafe extern "C" fn rs_nv_screengo(
         }
     }
 
-    if nvim_virtual_active() && atend {
-        nvim_coladvance(MAXCOL);
+    if virtual_active(nvim_get_curwin()) && atend {
+        coladvance(nvim_get_curwin(), MAXCOL);
     } else {
-        nvim_coladvance(nvim_get_curswant());
+        coladvance(nvim_get_curwin(), nvim_get_curswant());
     }
 
     if nvim_get_cursor_col() > 0 && nvim_get_curwin_w_p_wrap() {
@@ -5722,7 +5722,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
             virtcol -= vim_strsize(sbr);
         }
 
-        let c = nvim_gchar_cursor();
+        let c = utf_ptr2char(get_cursor_pos_ptr());
         if dir == FORWARD
             && virtcol < nvim_get_curswant()
             && nvim_get_curswant() <= width1
@@ -5811,11 +5811,11 @@ pub unsafe extern "C" fn rs_nv_g_home_m_cmd(cap: CapHandle) {
         );
     }
 
-    nvim_coladvance(i);
+    coladvance(nvim_get_curwin(), i);
 
     if flag {
         loop {
-            let c = nvim_gchar_cursor();
+            let c = utf_ptr2char(get_cursor_pos_ptr());
             if rs_ascii_iswhite(c) == 0 || oneright() != 0 {
                 break;
             }
@@ -5863,7 +5863,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
             if virtcol >= width1 {
                 i += ((virtcol - width1) / width2 + 1) * width2;
             }
-            nvim_coladvance(i);
+            coladvance(nvim_get_curwin(), i);
 
             // Make sure we stick in this column.
             update_curswant_force();
@@ -5885,7 +5885,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
             cursor_down(count1 - 1, false);
         }
         let i = nvim_get_curwin_w_leftcol() + nvim_get_curwin_w_view_width() - col_off - 1;
-        nvim_coladvance(i);
+        coladvance(nvim_get_curwin(), i);
 
         // if the character doesn't fit move one back
         if nvim_get_cursor_col() > 0 && nvim_utf_ptr2cells_cursor() > 1 {
@@ -5902,7 +5902,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
 
     if flag {
         loop {
-            let c = nvim_gchar_cursor();
+            let c = utf_ptr2char(get_cursor_pos_ptr());
             if rs_ascii_iswhite_or_nul(c) == 0 || oneleft() != 0 {
                 break;
             }
@@ -5969,7 +5969,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner(
         let mut new_col: c_int = 0;
         nvim_mark_mb_adjustpos_pos(*lnum, *col, &raw mut new_col);
         *col = new_col;
-        if nvim_virtual_active() {
+        if virtual_active(nvim_get_curwin()) {
             *coladd = nvim_getvcol_pos_coladd(*lnum, *col, *coladd);
         }
     } else if *lnum > 1 {
@@ -6016,7 +6016,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner_cursor() -> bool {
         if col > 0 {
             nvim_set_cursor_col(col - 1);
             nvim_mark_mb_adjustpos_cursor_new();
-            if nvim_virtual_active() {
+            if virtual_active(nvim_get_curwin()) {
                 let coladd_new = nvim_getvcol_cursor_coladd_after_adj();
                 nvim_set_cursor_coladd(coladd_new);
             }
@@ -6050,7 +6050,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner_visual() -> bool {
         if col > 0 {
             nvim_set_VIsual_col(col - 1);
             nvim_mark_mb_adjustpos_visual_new();
-            if nvim_virtual_active() {
+            if virtual_active(nvim_get_curwin()) {
                 let coladd_new = nvim_getvcol_visual_coladd_after_adj();
                 nvim_set_VIsual_coladd(coladd_new);
             }
@@ -6247,9 +6247,9 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             let i = linetabsize(nvim_get_curwin(), nvim_get_cursor_lnum());
             let count0 = nvim_cap_get_count0(cap);
             if count0 > 0 && count0 <= 100 {
-                nvim_coladvance(i * count0 / 100);
+                coladvance(nvim_get_curwin(), i * count0 / 100);
             } else {
-                nvim_coladvance(i / 2);
+                coladvance(nvim_get_curwin(), i / 2);
             }
             nvim_curwin_set_curswant(true);
         }
@@ -6506,7 +6506,7 @@ pub unsafe extern "C" fn rs_nv_at(cap: CapHandle) {
         return;
     }
     let mut count = nvim_cap_get_count1(cap);
-    while count > 0 && !nvim_normal_get_got_int() {
+    while count > 0 && !got_int {
         count -= 1;
         if do_execreg(nchar, 0, 0, 0) == 0 {
             rs_clearopbeep(oap);
@@ -6743,7 +6743,7 @@ pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
     }
 
     let mut count1 = nvim_cap_get_count1(cap);
-    while count1 > 0 && !nvim_normal_get_got_int() {
+    while count1 > 0 && !got_int {
         count1 -= 1;
         if do_execreg(reg_recorded, 0, 0, 0) == 0 {
             rs_clearopbeep(oap);
@@ -6931,7 +6931,7 @@ pub unsafe extern "C" fn rs_nv_gi_cmd(cap: CapHandle) {
         let line_len = nvim_get_cursor_line_len();
         let col = nvim_get_cursor_col();
         if col > line_len {
-            if nvim_virtual_active() {
+            if virtual_active(nvim_get_curwin()) {
                 let coladd = nvim_get_cursor_coladd();
                 nvim_set_cursor_coladd(coladd + col - line_len);
             }
@@ -7098,7 +7098,7 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
 
         // Move cursor to VIsual line, advance to left column
         nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
-        nvim_coladvance(left);
+        coladvance(nvim_get_curwin(), left);
         // VIsual = cursor
         nvim_set_VIsual_pos(
             nvim_get_cursor_lnum(),
@@ -7114,16 +7114,16 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
         if old_lnum >= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
             nvim_set_curswant(nvim_get_curswant() + 1);
         }
-        nvim_coladvance(nvim_get_curswant());
+        coladvance(nvim_get_curwin(), nvim_get_curswant());
 
         if nvim_get_cursor_col() == old_col
-            && (!nvim_virtual_active() || nvim_get_cursor_coladd() == old_coladd)
+            && (!virtual_active(nvim_get_curwin()) || nvim_get_cursor_coladd() == old_coladd)
         {
             nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
             if old_lnum <= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
                 right += 1;
             }
-            nvim_coladvance(right);
+            coladvance(nvim_get_curwin(), right);
             nvim_set_VIsual_pos(
                 nvim_get_cursor_lnum(),
                 nvim_get_cursor_col(),
@@ -7131,7 +7131,7 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
             );
 
             nvim_set_cursor_lnum(old_lnum);
-            nvim_coladvance(left);
+            coladvance(nvim_get_curwin(), left);
             nvim_set_curswant(left);
         }
     } else {
@@ -7683,10 +7683,10 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     // virtualedit. Recalculate curwin->w_cursor to avoid bad highlighting.
     if c == CTRL_V
         && (nvim_get_ve_flags() & K_OPT_VE_FLAG_BLOCK) != 0
-        && nvim_gchar_cursor() == TAB_CHAR
+        && utf_ptr2char(get_cursor_pos_ptr()) == TAB_CHAR
     {
         nvim_validate_virtcol_curwin();
-        nvim_coladvance(nvim_get_curwin_w_virtcol());
+        coladvance(nvim_get_curwin(), nvim_get_curwin_w_virtcol());
     }
     // VIsual = curwin->w_cursor
     let lnum = nvim_get_cursor_lnum();
@@ -7741,7 +7741,7 @@ pub unsafe extern "C" fn rs_end_visual_mode() {
     nvim_set_b_visual_vi_curswant(nvim_get_curswant());
     nvim_set_curbuf_visual_mode_eval(vis_mode);
 
-    if !nvim_virtual_active() {
+    if !virtual_active(nvim_get_curwin()) {
         nvim_set_cursor_coladd(0);
     }
 
