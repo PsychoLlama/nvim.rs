@@ -1057,17 +1057,6 @@ bool nvim_get_did_wait_return_val(void) { return did_wait_return; }
 /// Get keep_msg != NULL.
 bool nvim_get_keep_msg_not_null(void) { return keep_msg != NULL; }
 
-/// Copy keep_msg, display via msg(), free the copy.
-/// Sets msg_hist_off true around the call to prevent history recording.
-void nvim_keep_msg_display_and_free(void)
-{
-  char *p = xstrdup(keep_msg);
-  msg_hist_off = true;
-  msg(p, keep_msg_hl_id);
-  msg_hist_off = false;
-  xfree(p);
-}
-
 /// Check shortmess(SHM_FILEINFO).
 bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
 
@@ -1082,24 +1071,6 @@ void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
 
 /// Set curbuf->b_last_used to time(NULL).
 void nvim_curbuf_set_b_last_used(void) { curbuf->b_last_used = time(NULL); }
-
-/// Compound: display keep_msg if must_redraw and not emsg_on_display.
-/// This wraps the "if (must_redraw && keep_msg != NULL && !emsg_on_display)"
-/// block in normal_redraw_mode_message.
-void nvim_redraw_mode_msg_keep_msg(void)
-{
-  if (must_redraw && keep_msg != NULL && !emsg_on_display) {
-    char *kmsg = keep_msg;
-    keep_msg = NULL;
-    setcursor();
-    update_screen();
-    keep_msg = kmsg;
-    kmsg = xstrdup(keep_msg);
-    msg(kmsg, keep_msg_hl_id);
-    xfree(kmsg);
-  }
-}
-
 
 /// ui_cursor_shape() wrapper.
 void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }

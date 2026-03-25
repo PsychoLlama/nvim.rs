@@ -143,11 +143,9 @@ extern "C" {
     fn update_screen();
     fn redraw_statuslines();
     fn nvim_curbuf_set_b_last_used();
-    fn nvim_keep_msg_display_and_free();
     fn nvim_shortmess_fileinfo() -> bool;
     fn nvim_fileinfo_call();
     fn may_clear_sb_text();
-    fn nvim_redraw_mode_msg_keep_msg();
     fn readbuf1_empty() -> bool;
     fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
 
@@ -173,6 +171,15 @@ extern "C" {
 
     fn nvim_get_curwin() -> WinHandle;
     fn update_topline(win: WinHandle);
+
+    // Phase 5: keep_msg/msg globals for inlining nvim_keep_msg_display_and_free
+    // and nvim_redraw_mode_msg_keep_msg
+    static mut keep_msg: *mut std::ffi::c_char;
+    static keep_msg_hl_id: c_int;
+    static mut msg_hist_off: bool;
+    fn xstrdup(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -308,7 +315,12 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
 
     // Display message after redraw.
     if nvim_get_keep_msg_not_null() {
-        nvim_keep_msg_display_and_free();
+        // Inline of nvim_keep_msg_display_and_free
+        let p = xstrdup(keep_msg);
+        msg_hist_off = true;
+        msg(p, keep_msg_hl_id);
+        msg_hist_off = false;
+        xfree(p.cast());
     }
 
     // Show fileinfo after redraw.
@@ -388,7 +400,17 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     }
 
     // If need to redraw and there is a keep_msg, redraw before the delay
-    nvim_redraw_mode_msg_keep_msg();
+    // Inline of nvim_redraw_mode_msg_keep_msg
+    if must_redraw != 0 && !keep_msg.is_null() && !emsg_on_display {
+        let kmsg = keep_msg;
+        keep_msg = std::ptr::null_mut();
+        setcursor();
+        update_screen();
+        keep_msg = kmsg;
+        let kmsg2 = xstrdup(keep_msg);
+        msg(kmsg2, keep_msg_hl_id);
+        xfree(kmsg2.cast());
+    }
 
     setcursor();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
