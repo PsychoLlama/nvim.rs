@@ -85,100 +85,39 @@
 // Rust rs_* function declarations (only those still called from this file)
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
-extern int rs_magic_isset(void);
-extern int rs_ctrl_x_mode_normal(void);
-extern int rs_ctrl_x_mode_whole_line(void);
-extern int rs_ctrl_x_mode_path_defines(void);
-extern int rs_ctrl_x_mode_function(void);
-extern int rs_ctrl_x_mode_line_or_eval(void);
-extern int rs_ctrl_x_mode_not_default(void);
-extern int rs_compl_status_adding(void);
-extern char *rs_find_word_start(char *ptr);
-extern char *rs_find_word_end(char *ptr);
-extern char *rs_find_line_end(char *ptr);
-extern int rs_compl_dir_forward(void);
 extern int rs_cot_fuzzy(void);
 extern int rs_is_nearest_active(void);
-extern int rs_ins_compl_make_cyclic(void);
 extern int rs_get_cpt_sources_count(void);
 extern int rs_ins_compl_key2dir(int c);
 extern int rs_ins_compl_key2count(int c);
-extern void rs_ins_compl_make_linear(void);
-extern void rs_ins_compl_clear(void);
-extern int rs_ins_compl_interrupted(void);
-extern int rs_ins_compl_has_preinsert(void);
-extern int rs_ins_compl_preinsert_effect(void);
 extern int rs_ins_compl_preinsert_longest(void);
-extern const char *rs_ins_compl_leader(void);
-extern size_t rs_ins_compl_leader_len(void);
-extern unsigned rs_get_cot_flags(void);
-extern int rs_ctrl_x_mode_eval(void);
-extern void rs_ins_compl_free(void);
 extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
                                             int min_len, char **tofree);
 extern int rs_ins_compl_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
                                           int fuzzy_score);
 extern void rs_cpt_compl_refresh(void);
-extern void rs_strip_caret_numbers_in_place(char *str);
-extern unsigned rs_quote_meta(char *dest, char *src, int len);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
 extern int rs_ins_compl_col_range_attr(int lnum, int col);
-extern void rs_ins_compl_insert(int move_cursor, int insert_prefix);
 // rs_ins_ctrl_x deleted: now exported as ins_ctrl_x via #[export_name]
 // rs_check_compl_option deleted: now exported as check_compl_option via #[export_name]
-extern void rs_ins_compl_check_keys(int frequency, int in_compl_func);
 extern void rs_sort_compl_match_list(int compare_type);
 extern void rs_ins_compl_new_leader(void);
 extern void rs_ins_compl_del_pum(void);
-// Phase 1 Rust exports
 extern const char *rs_ins_compl_mode(void);
-// Phase 3 (pass 5) Rust exports
-// Phase 4 (pass 5) Rust exports -- rs_fuzzy_longest_match no longer called from C (Phase 15)
-// Phase 1 (pass 5) Rust exports
-// Phase 5 (pass 5) Rust exports
 // rs_did_set_completefunc deleted: now exported as did_set_completefunc via #[export_name]
 // rs_did_set_omnifunc deleted: now exported as did_set_omnifunc via #[export_name]
 // rs_did_set_thesaurusfunc deleted: now exported as did_set_thesaurusfunc via #[export_name]
 // rs_set_ref_in_insexpand_funcs deleted: now exported as set_ref_in_insexpand_funcs via #[export_name]
-// Phase 2 Rust exports
-// Phase 3 Rust exports
-// Phase 4 (pass 3) Rust exports
-// Phase 2 (pass 4) Rust exports
-// Phase 3 (pass 4) Rust exports
-// Phase 4 (pass 4) Rust exports
 extern void rs_compl_source_start_timer(int source_idx);
 extern int rs_advance_cpt_sources_index_safe(void);
-// Phase 5 (pass 4) Rust exports
-// Phase 6 (pass 4) Rust exports
-// Phase 1 (pass 6) Rust exports
-extern void rs_show_pum(int prev_w_wrow, int prev_w_leftcol);
 extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
-// Phase 1 (pass 7) Rust exports
-extern void rs_save_orig_extmarks(void);
 // rs_free_insexpand_stuff deleted: now exported as free_insexpand_stuff via #[export_name]
-// Phase 2 (pass 7) Rust exports
 extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
-// Phase 3 (pass 7) Rust exports
-// Phase 4 (pass 7) Rust exports
 // rs_ins_complete deleted: now exported as ins_complete via #[export_name]
-// Phase 2 (pass 6) Rust exports
 extern void rs_ins_compl_longest_match(void *match);
 extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
-// Phase 1 (pass 11) Rust exports: leader-for-startcol
-// Phase 2 (pass 11) Rust exports: ins_compl_build_pum
 extern int rs_ins_compl_build_pum(void);
-// Phase 3 (pass 11) Rust exports: find_common_prefix (replaces nvim_find_common_prefix_data)
-// Phase 3 (pass 6) Rust exports
-extern void rs_setup_cpt_sources(void);
-extern void rs_prepare_cpt_compl_funcs(void);
-extern void rs_get_cpt_func_completion_matches(void *cb_opaque);
-// Phase 2 (pass 13) Rust export: get_userdefined_compl_info migration
-extern int rs_get_userdefined_compl_info(int curs_col, void *cb_opaque, int *startcol);
-// Phase 1 (pass 8) Rust exports
-extern int rs_ins_compl_next(int allow_get_expansion, int count, int insert_match);
-// Phase 2 (pass 8) Rust exports
-extern int rs_ins_compl_get_exp(int lnum, int col);
 
 // Phase 9 (pass 9): Forward declarations for compound C accessors.
 // These are defined at the bottom of this file and used by the static
@@ -194,9 +133,6 @@ void nvim_expand_by_function_full_impl(int type, char *base, void *cb);
 // nvim_f_complete_info_impl: deleted (Phase 32), inlined in info.rs
 // nvim_cpt_compl_refresh_impl: deleted (Phase 2), inlined in funcexpand.rs
 void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
-// Rust exports used before the extern declarations further below
-extern void rs_set_completion(int startcol, void *list);
-
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
 // and ctrl_x_mode_names[].
@@ -476,11 +412,6 @@ int compl_match_arraysize;
 // ins_ctrl_x deleted: Rust exports under the C name directly via #[export_name = "ins_ctrl_x"].
 
 // check_compl_option deleted: Rust exports under the C name directly via #[export_name].
-
-extern int rs_vim_is_ctrl_x_key(int c);
-extern int rs_may_advance_cpt_index(const char *cpt);
-extern int rs_ins_compl_prep(int c);
-extern int rs_ins_compl_bs(void);
 
 /// @return  true if "match" is the original text when the completion began.
 static bool match_at_original_text(const compl_T *const match)
@@ -1900,22 +1831,6 @@ size_t nvim_copy_option_part_iobuff_ffi(char **src)
 {
   return copy_option_part(src, IObuff, IOSIZE, ",");
 }
-
-// =============================================================================
-// Phase 9 (pass 9): Compound C accessors for funcexpand.rs
-// These expose static C functions to Rust via the compound-accessor pattern.
-// =============================================================================
-
-// Forward declarations for the Rust wrappers defined in funcexpand.rs
-extern void rs_expand_by_function(int type, char *base, void *cb);
-extern int rs_ins_compl_add_tv(void *tv, int dir, int fast);
-extern void rs_ins_compl_add_list(void *list);
-extern void rs_ins_compl_add_dict(void *dict);
-// NOTE: rs_f_complete, rs_f_complete_add, rs_f_complete_check, rs_f_preinserted
-// are now exported directly as f_complete etc. via #[export_name] (Phase 1).
-extern void rs_set_completion(int startcol, void *list);
-extern void rs_remove_old_matches(void);
-extern void *rs_get_callback_if_cpt_func(const char *p, int idx);
 
 // Phase 1 accessors: wrap static functions for Rust
 
