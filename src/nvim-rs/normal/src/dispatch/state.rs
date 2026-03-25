@@ -24,8 +24,7 @@ extern "C" {
     fn nvim_set_allow_keys(val: c_int);
     static mut VIsual_active: bool;
     fn nvim_set_VIsual_active(val: bool);
-    fn nvim_get_VIsual_reselect() -> c_int;
-    fn nvim_set_VIsual_reselect(val: bool);
+    static mut VIsual_reselect: bool;
     fn nvim_get_VIsual_select() -> bool;
     fn nvim_set_VIsual_select(val: bool);
     fn nvim_get_VIsual_mode() -> c_int;
@@ -110,13 +109,13 @@ fn set_visual_active_impl(val: bool) {
 /// Check if visual reselect mode.
 #[inline]
 fn is_visual_reselect_impl() -> bool {
-    unsafe { nvim_get_VIsual_reselect() != 0 }
+    unsafe { VIsual_reselect }
 }
 
 /// Set visual reselect mode.
 #[inline]
 fn set_visual_reselect_impl(val: bool) {
-    unsafe { nvim_set_VIsual_reselect(val) };
+    unsafe { VIsual_reselect = val };
 }
 
 /// Check if visual select mode.

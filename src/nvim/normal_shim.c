@@ -328,7 +328,6 @@ bool nvim_lt_VIsual_cursor(void) { return lt(VIsual, curwin->w_cursor); }
 
 bool nvim_lt_pos_cursor(int lnum, int col) { pos_T startpos = { lnum, col, 0 }; return lt(startpos, curwin->w_cursor); }
 
-void nvim_set_VIsual_select_exclu_adj(bool val) { VIsual_select_exclu_adj = val; }
 
 unsigned int nvim_get_ve_flags(void) { return get_ve_flags(curwin); }
 
@@ -338,7 +337,6 @@ unsigned int nvim_get_ve_flags(void) { return get_ve_flags(curwin); }
 
 int nvim_get_VIsual_mode(void) { return VIsual_mode; }
 
-bool nvim_get_VIsual_select_exclu_adj(void) { return VIsual_select_exclu_adj; }
 
 
 void nvim_getvcol_cursor(int *scol, int *ecol) { getvcol(curwin, &curwin->w_cursor, scol, NULL, ecol); }
@@ -403,7 +401,6 @@ bool nvim_check_vd_condition(int regname) {
   return !VIsual_active || VIsual_mode == 'V' || regname != '.';
 }
 void nvim_inc_msg_silent(void) { msg_silent++; }
-void nvim_dec_msg_silent(void) { msg_silent--; }
 bool nvim_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
 
 // For nvim_put_visual_flags inlining
@@ -462,8 +459,6 @@ void nvim_set_VIsual_coladd(int coladd) { VIsual.coladd = coladd; }
 
 void nvim_set_VIsual_active(bool val) { VIsual_active = val; }
 
-int nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
-
 void nvim_set_VIsual_reselect(bool val) { VIsual_reselect = val; }
 
 void nvim_setmouse(void) { setmouse(); }
@@ -489,9 +484,7 @@ void nvim_clear_b_syn_slow_all_windows(void) {
 /// syn_stack_free_all(curwin->w_s) wrapper.
 void nvim_syn_stack_free_all_curwin(void) { syn_stack_free_all(curwin->w_s); }
 
-int nvim_get_restart_VIsual_select(void) { return restart_VIsual_select; }
 
-void nvim_set_restart_VIsual_select(int val) { restart_VIsual_select = val; }
 
 void nvim_buflist_getfile(int n, int lnum, int flags, bool setpm) { buflist_getfile(n, lnum, flags, setpm); }
 
@@ -555,7 +548,6 @@ int nvim_get_cursor_line_len(void) { return (int)get_cursor_line_len(); }
 
 int nvim_get_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
-int nvim_normal_get_cmdwin_type(void) { return cmdwin_type; }
 
 void nvim_set_cmdwin_result(int val) { cmdwin_result = val; }
 
@@ -599,7 +591,6 @@ void nvim_set_b_visual_vi_curswant(int val) { curbuf->b_visual.vi_curswant = val
 
 void nvim_set_curbuf_visual_mode_eval(int val) { curbuf->b_visual_mode_eval = val; }
 
-void nvim_set_VIsual_select_reg(int val) { VIsual_select_reg = val; }
 int nvim_get_VIsual_select_reg(void) { return VIsual_select_reg; }
 int nvim_get_virtual_op(void) { return (int)virtual_op; }
 
@@ -1681,8 +1672,6 @@ void nvim_curwin_set_old_visual_lnums(void)
 // nv_z and operator implementation accessors for Rust FFI
 // =============================================================================
 
-/// Return typebuf_was_empty global.
-bool nvim_get_typebuf_was_empty(void) { return typebuf_was_empty; }
 
 /// Call vim_beep(kOptBoFlagEsc).
 void nvim_vim_beep_esc(void) { vim_beep(kOptBoFlagEsc); }

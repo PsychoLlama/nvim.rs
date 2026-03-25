@@ -119,7 +119,7 @@ extern "C" {
     #[link_name = "ex_diffupdate"]
     fn rs_diff_ex_diffupdate(eap: *mut std::ffi::c_void);
     fn nvim_curtab_clear_diff_update();
-    fn nvim_check_scrollbind_zero_wrapper();
+    fn check_scrollbind(vtopline_diff: c_int, leftcol_diff: c_int);
     fn nvim_time_msg_first_screen_and_finish();
     fn may_make_initial_scroll_size_snapshot();
     fn nvim_update_curswant_wrapper();
@@ -519,7 +519,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         // Scroll-binding for diff mode may have been postponed until
         // here. Avoids doing it for every change.
         if nvim_get_diff_need_scrollbind() {
-            nvim_check_scrollbind_zero_wrapper();
+            check_scrollbind(0, 0);
             nvim_set_diff_need_scrollbind(false);
         }
 

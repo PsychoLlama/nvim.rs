@@ -132,6 +132,12 @@ extern "C" {
 
     // VIsual_active global (from plines.c, returns 0 or 1)
     static mut VIsual_active: bool;
+    static mut VIsual_reselect: bool;
+    static mut VIsual_select_exclu_adj: bool;
+    static mut VIsual_select_reg: c_int;
+    static mut restart_VIsual_select: c_int;
+    static cmdwin_type: c_int;
+    static typebuf_was_empty: bool;
 
     // Beep function
     fn beep_flush();
@@ -198,8 +204,6 @@ extern "C" {
 
     // Wave 2 Phase 1: Visual state accessors
     fn nvim_redraw_curbuf_inverted();
-    fn nvim_get_VIsual_reselect() -> c_int;
-    fn nvim_set_VIsual_reselect(val: bool);
     #[allow(dead_code)]
     fn nvim_get_curbuf_visual_vi_mode() -> c_int;
     fn nvim_set_curbuf_visual_vi_mode(val: c_int);
@@ -236,7 +240,6 @@ extern "C" {
     fn nvim_check_cursor_lnum_call();
     fn nvim_get_cursor_line_len() -> c_int;
     fn nvim_get_cursor_coladd() -> c_int;
-    fn nvim_normal_get_cmdwin_type() -> c_int;
     fn nvim_set_cmdwin_result(val: c_int);
     static mut restart_edit: c_int;
     // Wave 2 Phase 5: Visual complex function accessors
@@ -259,7 +262,6 @@ extern "C" {
     fn nvim_get_b_visual_vi_curswant() -> c_int;
     fn nvim_set_b_visual_vi_curswant(val: c_int);
     fn nvim_set_curbuf_visual_mode_eval(val: c_int);
-    fn nvim_set_VIsual_select_reg(val: c_int);
     fn nvim_p_sel_is_exclusive() -> bool;
     fn nvim_equalpos_VIsual_cursor() -> bool;
     fn nvim_getvcols_call(
@@ -1292,12 +1294,10 @@ extern "C" {
     fn nvim_get_p_sel_first() -> std::ffi::c_char;
     fn nvim_lt_VIsual_cursor() -> bool;
     fn nvim_lt_pos_cursor(lnum: c_int, col: c_int) -> bool;
-    fn nvim_set_VIsual_select_exclu_adj(val: bool);
     fn nvim_get_ve_flags() -> c_uint;
 
     // Character search functions
     fn nvim_get_VIsual_mode() -> c_int;
-    fn nvim_get_VIsual_select_exclu_adj() -> bool;
     #[link_name = "rs_unadjust_for_sel"]
     fn nvim_unadjust_for_sel() -> bool;
     fn searchc(cap: CapHandle, t_cmd: bool) -> c_int;
@@ -1340,7 +1340,6 @@ extern "C" {
     fn nvim_set_w_p_fen(val: bool);
     fn nvim_check_vd_condition(regname: c_int) -> bool;
     fn nvim_inc_msg_silent();
-    fn nvim_dec_msg_silent();
     fn nvim_curbuf_ml_empty() -> bool;
     fn nvim_get_cursor_col_vs_b_op_start_col() -> c_int;
     fn nvim_get_cursor_lnum_vs_b_op_start_lnum() -> c_int;
@@ -1446,7 +1445,7 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
     {
         nvim_inc_cursor();
         nvim_oap_set_inclusive(oap, false);
-        nvim_set_VIsual_select_exclu_adj(true);
+        VIsual_select_exclu_adj = true;
     }
 }
 
@@ -1849,7 +1848,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 nvim_get_cursor_coladd(),
             );
             nvim_set_VIsual_active(true);
-            nvim_set_VIsual_reselect(true);
+            VIsual_reselect = true;
             if nvim_cap_get_arg(cap) == 0 {
                 // start Select mode when 'selectmode' contains "cmd"
                 rs_may_start_select(c_int::from(b'c'));
@@ -1910,7 +1909,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 let c1 = nvim_cap_get_count1(cap);
                 nvim_cap_set_count1(cap, c1 + 1);
             } else {
-                nvim_set_VIsual_select_exclu_adj(false);
+                VIsual_select_exclu_adj = false;
             }
             if count0 > 0 && {
                 (*cap.cast::<CmdargT>()).count1 -= 1;
@@ -2116,7 +2115,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
             rs_nv_operator(cap);
             do_pending_operator(cap, 0, false);
             empty = nvim_curbuf_ml_empty();
-            nvim_dec_msg_silent();
+            msg_silent -= 1;
             nvim_oap_set_regname(oap, regname);
         }
 
@@ -2199,7 +2198,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
     if nvim_get_p_sel_first() == sel_e
         && VIsual_active
         && nvim_get_VIsual_mode() == visual_v
-        && nvim_get_VIsual_select_exclu_adj()
+        && VIsual_select_exclu_adj
     {
         nvim_unadjust_for_sel();
         cursor_dec = true;
@@ -2249,13 +2248,9 @@ extern "C" {
     // nvim_nv_clear_impl migrated to Rust rs_nv_clear_impl (Phase 6)
     fn nvim_syn_stack_free_all_curwin();
     fn nvim_clear_b_syn_slow_all_windows();
-    #[allow(dead_code)]
-    fn nvim_get_restart_VIsual_select() -> c_int;
-    fn nvim_set_restart_VIsual_select(val: c_int);
     fn nvim_buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: bool);
     // Phase 4 accessors
     fn nvim_get_ex_normal_busy() -> c_int;
-    fn nvim_get_typebuf_was_empty() -> bool;
     fn nvim_vim_beep_esc();
     fn nvim_get_curbuf_terminal() -> bool;
     fn nvim_esc_show_msg();
@@ -2306,7 +2301,7 @@ pub unsafe extern "C" fn rs_nv_ctrlo(cap: CapHandle) {
         nvim_set_VIsual_select(false);
         nvim_may_trigger_modechanged();
         nvim_showmode();
-        nvim_set_restart_VIsual_select(2); // restart Select mode later
+        restart_VIsual_select = 2; // restart Select mode later
     } else {
         // Negate count1 for backward jump
         let count1 = nvim_cap_get_count1(cap);
@@ -2412,24 +2407,21 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
 
     if nvim_cap_get_arg(cap) != 0 {
         // true for CTRL-C
-        if restart_edit == 0 && nvim_normal_get_cmdwin_type() == 0 && !VIsual_active && no_reason {
+        if restart_edit == 0 && cmdwin_type == 0 && !VIsual_active && no_reason {
             nvim_esc_show_msg();
         }
         if restart_edit != 0 {
             redraw_mode = 1; // remove "-- (insert) --"
         }
         restart_edit = 0;
-        if nvim_normal_get_cmdwin_type() != 0 {
+        if cmdwin_type != 0 {
             nvim_set_cmdwin_result(K_IGNORE);
             unsafe {
                 got_int = false;
             } // don't stop executing autocommands et al.
             return;
         }
-    } else if nvim_normal_get_cmdwin_type() != 0
-        && nvim_get_ex_normal_busy() != 0
-        && nvim_get_typebuf_was_empty()
-    {
+    } else if cmdwin_type != 0 && nvim_get_ex_normal_busy() != 0 && typebuf_was_empty {
         // When :normal runs out of characters while in the command line window
         // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
         // break the loop.
@@ -3395,8 +3387,8 @@ pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
     if VIsual_active {
         nvim_set_VIsual_select(true);
-        nvim_set_VIsual_select_reg(0);
-    } else if nvim_get_VIsual_reselect() != 0 {
+        VIsual_select_reg = 0;
+    } else if VIsual_reselect {
         (*cap.cast::<CmdargT>()).nchar = c_int::from(b'v'); // fake "gv" command
         (*cap.cast::<CmdargT>()).arg = 1;
         rs_nv_g_cmd(cap);
@@ -4050,7 +4042,7 @@ pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
         }
 
         let valid = nvim_valid_yank_reg(reg, true);
-        nvim_set_VIsual_select_reg(if valid { reg } else { 0 });
+        VIsual_select_reg = if valid { reg } else { 0 };
         return;
     }
 
@@ -5466,7 +5458,7 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
         rs_qf_view_result(false);
     } else {
         // In the cmdline window a <CR> executes the command.
-        if nvim_normal_get_cmdwin_type() != 0 && cmdchar == CAR_CHAR {
+        if cmdwin_type != 0 && cmdchar == CAR_CHAR {
             nvim_set_cmdwin_result(CAR_CHAR);
         } else if nvim_bt_prompt_curbuf()
             && cmdchar == CAR_CHAR
@@ -5937,7 +5929,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner(
     col: *mut c_int,
     coladd: *mut c_int,
 ) -> bool {
-    nvim_set_VIsual_select_exclu_adj(false);
+    VIsual_select_exclu_adj = false;
     if *coladd > 0 {
         *coladd -= 1;
     } else if *col > 0 {
@@ -5983,7 +5975,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner_pos(pp: *mut c_void) -> bool 
 /// Caller must ensure curwin global is valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_unadjust_for_sel_inner_cursor() -> bool {
-    nvim_set_VIsual_select_exclu_adj(false);
+    VIsual_select_exclu_adj = false;
     let coladd = nvim_get_cursor_coladd();
     if coladd > 0 {
         nvim_set_cursor_coladd(coladd - 1);
@@ -6017,7 +6009,7 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner_cursor() -> bool {
 /// Caller must ensure VIsual global is valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_unadjust_for_sel_inner_visual() -> bool {
-    nvim_set_VIsual_select_exclu_adj(false);
+    VIsual_select_exclu_adj = false;
     let coladd = nvim_get_VIsual_coladd();
     if coladd > 0 {
         nvim_set_VIsual_coladd(coladd - 1);
@@ -6145,7 +6137,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
 
         // "gV": Don't reselect the previous Visual area.
         n if n == b'V' as c_int => {
-            nvim_set_VIsual_reselect(false);
+            VIsual_reselect = false;
         }
 
         // "gh", "gH", "g^H": start Select mode.
@@ -6584,7 +6576,7 @@ pub extern "C" fn rs_reset_VIsual_and_resel() {
             rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
         }
-        nvim_set_VIsual_reselect(false);
+        VIsual_reselect = false;
     }
 }
 
@@ -6598,7 +6590,7 @@ pub extern "C" fn rs_reset_VIsual() {
         if VIsual_active {
             rs_end_visual_mode();
             nvim_redraw_curbuf_inverted();
-            nvim_set_VIsual_reselect(false);
+            VIsual_reselect = false;
         }
     }
 }
@@ -6932,7 +6924,7 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
             nvim_set_clear_cmdline(true);
         }
         restart_edit = 0;
-        if nvim_normal_get_cmdwin_type() != 0 {
+        if cmdwin_type != 0 {
             nvim_set_cmdwin_result(CTRL_C);
         }
         if VIsual_active {
@@ -7020,7 +7012,7 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
     }
 
     nvim_set_VIsual_active(true);
-    nvim_set_VIsual_reselect(true);
+    VIsual_reselect = true;
 
     // Make sure cursor is on an existing character
     nvim_check_cursor();
@@ -7038,7 +7030,7 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
     // Start Select mode or may_start_select
     if nvim_cap_get_arg(cap) != 0 {
         nvim_set_VIsual_select(true);
-        nvim_set_VIsual_select_reg(0);
+        VIsual_select_reg = 0;
     } else {
         rs_may_start_select(c_int::from(b'c'));
     }
@@ -7348,7 +7340,7 @@ pub unsafe extern "C" fn rs_nv_record(cap: CapHandle) {
 
     let nchar = nvim_cap_get_nchar(cap);
     if nchar == c_int::from(b':') || nchar == c_int::from(b'/') || nchar == c_int::from(b'?') {
-        if nvim_normal_get_cmdwin_type() != 0 {
+        if cmdwin_type != 0 {
             nvim_emsg(nvim_get_e_cmdline_window_already_open());
             return;
         }
@@ -7379,7 +7371,7 @@ pub unsafe extern "C" fn rs_nv_paste(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
     // Disable garbage collection during event handling (see comment in C original).
     nvim_set_may_garbage_collect(false);
-    let may_restart = restart_edit != 0 || nvim_get_restart_VIsual_select() != 0;
+    let may_restart = restart_edit != 0 || restart_VIsual_select != 0;
     nvim_state_handle_k_event();
     nvim_set_finish_op(false);
     if may_restart {
@@ -7647,7 +7639,7 @@ extern "C" {
 pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     nvim_set_VIsual_mode(c);
     nvim_set_VIsual_active(true);
-    nvim_set_VIsual_reselect(true);
+    VIsual_reselect = true;
     // Corner case: the 0 position in a tab may change when going into
     // virtualedit. Recalculate curwin->w_cursor to avoid bad highlighting.
     if c == CTRL_V
@@ -7689,7 +7681,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
 /// Calls C accessor functions.
 #[export_name = "end_visual_mode"]
 pub unsafe extern "C" fn rs_end_visual_mode() {
-    nvim_set_VIsual_select_exclu_adj(false);
+    VIsual_select_exclu_adj = false;
     nvim_set_VIsual_active(false);
     nvim_setmouse();
     nvim_set_mouse_dragging(0);

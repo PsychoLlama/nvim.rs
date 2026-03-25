@@ -51,10 +51,9 @@ extern "C" {
     static mut VIsual_active: bool;
     static mut msg_nowait: bool;
     static mut restart_edit: c_int;
-    fn nvim_get_restart_VIsual_select() -> c_int;
-    fn nvim_set_restart_VIsual_select(val: c_int);
     fn nvim_set_VIsual_select(val: bool);
-    fn nvim_set_VIsual_select_reg(val: c_int);
+    static mut VIsual_select_reg: c_int;
+    static mut restart_VIsual_select: c_int;
     fn nvim_set_opcount(val: c_int);
     fn nvim_stuff_empty() -> bool;
 
@@ -187,25 +186,25 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     // May switch from Visual to Select mode after CTRL-O command.
     if nvim_oap_get_op_type_ptr(oa) == OP_NOP
         && ((restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0)
-            || nvim_get_restart_VIsual_select() == 1)
+            || restart_VIsual_select == 1)
         && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
         && nvim_stuff_empty()
         && nvim_oap_get_regname_ptr(oa) == 0
     {
-        if nvim_get_restart_VIsual_select() == 1 {
+        if restart_VIsual_select == 1 {
             nvim_set_VIsual_select(true);
-            nvim_set_VIsual_select_reg(0);
+            VIsual_select_reg = 0;
             nvim_may_trigger_modechanged();
             nvim_showmode();
-            nvim_set_restart_VIsual_select(0);
+            restart_VIsual_select = 0;
         }
         if restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0 {
             edit(restart_edit, false, 1);
         }
     }
 
-    if nvim_get_restart_VIsual_select() == 2 {
-        nvim_set_restart_VIsual_select(1);
+    if restart_VIsual_select == 2 {
+        restart_VIsual_select = 1;
     }
 
     // Save count before an operator for next time.
