@@ -3341,3 +3341,23 @@ pub unsafe extern "C" fn win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int 
     #[allow(clippy::cast_sign_loss)]
     win_ref(wp).w_border_adj[idx as usize]
 }
+
+/// Returns `wp->w_height_outer`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_w_height_outer"]
+#[must_use]
+pub unsafe extern "C" fn win_get_w_height_outer(wp: WinHandle) -> c_int {
+    win_ref(wp).w_height_outer
+}
+
+/// Returns `wp->w_width_outer`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[export_name = "nvim_win_get_w_width_outer"]
+#[must_use]
+pub unsafe extern "C" fn win_get_w_width_outer(wp: WinHandle) -> c_int {
+    win_ref(wp).w_width_outer
+}

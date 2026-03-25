@@ -830,7 +830,7 @@ int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ?
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 /// Wrapper for win_split_ins callable from Rust (handles win_enter_ext and option restore).
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
-win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
+
 
 
 // (nvim_grab_file_name already exists in normal_shim.c with int* lnum_out)
@@ -937,8 +937,6 @@ _Static_assert(31 == Ctrl__, "Ctrl__ mismatch");
 
 // WinConfig field accessors
 int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
-int nvim_win_get_w_height_outer(win_T *wp) { return wp ? wp->w_height_outer : 0; }
-int nvim_win_get_w_width_outer(win_T *wp) { return wp ? wp->w_width_outer : 0; }
 
 // Find a window by its integer handle (wraps find_window_by_handle)
 win_T *nvim_handle_get_window(int handle)
@@ -1886,11 +1884,6 @@ int nvim_redrawing(void)
 
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 
-/// Get w_p_cole option for a window.
-int nvim_win_get_w_p_cole(win_T *wp) { return wp ? wp->w_p_cole : 0; }
-
-/// Get w_p_cul option for a window.
-int nvim_win_get_w_p_cul(win_T *wp) { return wp ? wp->w_p_cul : 0; }
 
 /// Set w_cursorline for a window.
 
@@ -1911,14 +1904,7 @@ int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *ou
   return fi.fi_level;
 }
 
-/// Get w_wrow for a window.
-int nvim_win_get_w_wrow(win_T *wp) { return wp ? wp->w_wrow : 0; }
 
-/// Get w_wcol for a window.
-int nvim_win_get_w_wcol(win_T *wp) { return wp ? wp->w_wcol : 0; }
-
-/// Get w_p_rl option for a window.
-int nvim_win_get_w_p_rl(win_T *wp) { return wp ? wp->w_p_rl : 0; }
 
 /// Compute rightleft column adjustment for cursor positioning.
 /// Returns the adjusted column, accounting for double-wide chars.
@@ -1966,17 +1952,9 @@ void nvim_status_redraw_all(void)
 
 /// Trigger a full screen update (Rust incsearch).
 
-/// Get w_view_width for a window (visible text column count).
-int nvim_win_get_w_view_width(win_T *wp) { return wp ? wp->w_view_width : 0; }
 
-/// Get w_scwidth for a window (sign column width in chars).
-int nvim_win_get_w_scwidth(win_T *wp) { return wp ? wp->w_scwidth : 0; }
 
-/// Get w_p_nu option for a window (show line numbers).
-int nvim_win_get_w_p_nu(win_T *wp) { return wp ? wp->w_p_nu : 0; }
 
-/// Get w_p_rnu option for a window (show relative line numbers).
-int nvim_win_get_w_p_rnu(win_T *wp) { return wp ? wp->w_p_rnu : 0; }
 
 // Moved from drawscreen.c — display Rust FFI wrappers
 
@@ -2132,15 +2110,8 @@ int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
 /// w_p_cc_cols (colorcolumn array, NULL if not set)
 int *nvim_win_get_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 
-/// w_old_cursor_fcol / w_old_cursor_lcol (block visual mode columns)
-colnr_T nvim_win_get_old_cursor_fcol(win_T *wp) { return wp->w_old_cursor_fcol; }
-colnr_T nvim_win_get_old_cursor_lcol(win_T *wp) { return wp->w_old_cursor_lcol; }
-
 // nvim_win_get_topline, nvim_win_get_topfill already defined above.
 // nvim_win_get_leftcol already defined above.
-
-/// w_virtcol
-colnr_T nvim_win_get_virtcol_val(win_T *wp) { return wp->w_virtcol; }
 
 /// w_cursor compound setter (temporarily move cursor, e.g. for spell checking)
 /// Renamed to avoid clash with Neovim API nvim_win_set_cursor(Window, Array, Error*).

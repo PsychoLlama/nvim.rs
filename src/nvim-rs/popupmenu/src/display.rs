@@ -362,6 +362,7 @@ extern "C" {
     /// Compute horizontal placement (writes `PUM_STATE.col`, `.width`).
     fn nvim_pum_compute_hp(cursor_col: c_int);
     /// Get `w_p_rl` for a window.
+    #[link_name = "nvim_win_get_p_rl"]
     fn nvim_win_get_w_p_rl(wp: *mut WinHandle) -> c_int;
     /// Get `Columns`.
     /// Set selected item (Rust function via extern "C").

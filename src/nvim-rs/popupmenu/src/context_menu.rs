@@ -375,6 +375,7 @@ extern "C" {
     /// Compute item widths and write to `PUM_STATE` (Rust function via extern "C").
     fn rs_pum_compute_size(array: *const crate::item::PumItemArray);
     /// Get `w_p_rl` for a window.
+    #[link_name = "nvim_win_get_p_rl"]
     fn nvim_win_get_w_p_rl(wp: *mut crate::display::WinHandle) -> c_int;
     /// Position popup at mouse.
     fn rs_pum_position_at_mouse(min_width: c_int);

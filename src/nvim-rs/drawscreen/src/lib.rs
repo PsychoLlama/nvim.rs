@@ -2129,7 +2129,9 @@ type FoldinfoHandle = *mut c_void;
 extern "C" {
     fn nvim_get_conceal_cursor_used() -> c_int;
     fn nvim_set_conceal_cursor_used(val: c_int);
+    #[link_name = "nvim_win_get_p_cole"]
     fn nvim_win_get_w_p_cole(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_cul"]
     fn nvim_win_get_w_p_cul(wp: WinHandle) -> c_int;
     fn nvim_win_set_w_cursorline(wp: WinHandle, val: LinenrT);
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
@@ -2215,8 +2217,11 @@ pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, foldinfo: FoldinfoHand
 // =============================================================================
 
 extern "C" {
+    #[link_name = "nvim_win_get_wrow"]
     fn nvim_win_get_w_wrow(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_wcol"]
     fn nvim_win_get_w_wcol(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_rl"]
     fn nvim_win_get_w_p_rl(wp: WinHandle) -> c_int;
     fn nvim_win_rl_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_grid_adjust_cursor_goto(wp: WinHandle, row: c_int, col: c_int);
@@ -2302,9 +2307,13 @@ pub extern "C" fn rs_end_search_hl() {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "nvim_win_get_view_width"]
     fn nvim_win_get_w_view_width(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_scwidth"]
     fn nvim_win_get_w_scwidth(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_nu"]
     fn nvim_win_get_w_p_nu(wp: WinHandle) -> c_int;
+    #[link_name = "nvim_win_get_p_rnu"]
     fn nvim_win_get_w_p_rnu(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_grid(wp: WinHandle) -> GridViewHandle;
     fn win_bg_attr(wp: WinHandle) -> c_int;
