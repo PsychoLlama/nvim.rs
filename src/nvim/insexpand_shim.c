@@ -1412,26 +1412,12 @@ static Callback *get_callback_if_cpt_func(char *p, int idx)
 
 /// Compound accessor: get the pattern, column and length for command-line completion.
 /// Sets the global variables: compl_col, compl_length and compl_pattern.
-int nvim_get_cmdline_compl_info_impl(char *line, int curs_col)
-{
-  compl_pattern = cbuf_to_string(line, (size_t)curs_col);
-  set_cmd_context(&compl_xp, compl_pattern.data,
-                  (int)compl_pattern.size, curs_col, false);
-  if (compl_xp.xp_context == EXPAND_LUA) {
-    nlua_expand_pat(&compl_xp);
-  }
-  if (compl_xp.xp_context == EXPAND_UNSUCCESSFUL
-      || compl_xp.xp_context == EXPAND_NOTHING) {
-    // No completion possible, use an empty pattern to get a
-    // "pattern not found" message.
-    compl_col = curs_col;
-  } else {
-    compl_col = (int)(compl_xp.xp_pattern - compl_pattern.data);
-  }
-  compl_length = curs_col - compl_col;
-
-  return OK;
-}
+// nvim_get_cmdline_compl_info_impl: deleted (Phase 27), inlined in cmdline.rs
+// Accessors for compl_xp fields needed by inlined cmdline completion (Phase 27)
+int nvim_compl_xp_get_context(void) { return compl_xp.xp_context; }
+const char *nvim_compl_xp_get_pattern(void) { return compl_xp.xp_pattern; }
+void nvim_compl_xp_set_cmd_context(int len, int col) { set_cmd_context(&compl_xp, compl_pattern.data, len, col, false); }
+void nvim_compl_xp_nlua_expand(void) { nlua_expand_pat(&compl_xp); }
 
 /// Compound accessor: set global variables related to completion:
 /// compl_col, compl_length, compl_pattern, and cpt_compl_pattern.
