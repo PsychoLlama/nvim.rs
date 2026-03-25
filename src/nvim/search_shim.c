@@ -67,10 +67,6 @@
 #include "search_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
 
-// Rust fold FFI declaration
-extern void rs_foldOpenCursor(void);
-extern void rs_may_start_select(int c);
-
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
 static const char e_search_hit_bottom_without_match_for_str[]
@@ -122,13 +118,6 @@ extern int rs_ins_compl_len(void);
 extern int rs_ins_compl_interrupted(void);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
-
-// Rust FFI declarations for Phase 7 integration functions
-extern int rs_is_zero_width(const char *pattern, size_t patternlen, bool move,
-                             int cur_lnum, int cur_col, int cur_coladd, int direction);
-
-// Rust FFI declaration for Phase 8
-extern int rs_showmatch_find_match(int c, int *out_lnum, int *out_col, int *out_coladd);
 
 // Rust FFI declaration for Phase 9
 extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
