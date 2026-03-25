@@ -63,10 +63,10 @@ pub type CompleteListItemGetter =
 // =============================================================================
 
 extern "C" {
-    // Regex
-    fn nvim_cmdexpand_vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
-    fn nvim_cmdexpand_vim_regfree(prog: *mut c_void);
-    fn nvim_cmdexpand_ignorecase(pat: *const c_char) -> c_int;
+    // Regex (direct C functions)
+    fn vim_regcomp(pat: *const c_char, flags: c_int) -> *mut c_void;
+    fn vim_regfree(prog: *mut c_void);
+    fn ignorecase(pat: *const c_char) -> c_int;
     fn nvim_cmdexpand_regmatch_set_rm_ic(rmp: *mut RegMatch, val: c_int);
     fn nvim_cmdexpand_regmatch_set_regprog(rmp: *mut RegMatch, prog: *mut c_void);
     fn nvim_cmdexpand_get_re_magic() -> c_int;
@@ -805,7 +805,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
     }
 
     if !fuzzy {
-        let prog = nvim_cmdexpand_vim_regcomp(
+        let prog = vim_regcomp(
             effective_pat,
             if nvim_cmdexpand_magic_isset() != 0 {
                 nvim_cmdexpand_get_re_magic()
@@ -818,7 +818,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
             return FAIL;
         }
         nvim_cmdexpand_regmatch_set_regprog(&raw mut regmatch, prog);
-        let ic = nvim_cmdexpand_ignorecase(effective_pat);
+        let ic = ignorecase(effective_pat);
         nvim_cmdexpand_regmatch_set_rm_ic(&raw mut regmatch, ic);
     }
 
@@ -853,7 +853,7 @@ pub unsafe extern "C" fn rs_expand_from_context(
         };
 
     if !fuzzy {
-        nvim_cmdexpand_vim_regfree(regmatch.regprog);
+        vim_regfree(regmatch.regprog);
     }
     xfree(tofree.cast());
 

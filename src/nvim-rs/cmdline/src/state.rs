@@ -1063,7 +1063,7 @@ unsafe extern "C" {
     fn nvim_get_wim_flags(idx: c_int) -> u8;
     static p_wc: i64;
     static p_wcm: i64;
-    fn nvim_get_p_wmnu() -> c_int;
+    static p_wmnu: c_int;
     fn nvim_get_key_typed_cmdline() -> c_int;
     static mut cmdmsg_rl: bool;
     fn nvim_get_key_stuffed() -> c_int;
@@ -1076,7 +1076,7 @@ unsafe extern "C" {
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_finish() -> c_int;
     fn nvim_set_pum_want_active(val: c_int);
-    fn nvim_get_wild_menu_showing() -> c_int;
+    static mut wild_menu_showing: c_int;
     fn nvim_get_cmdline_was_last_drawn() -> c_int;
     fn nvim_syn_get_display_tick() -> c_int;
     static mut emsg_silent: c_int;
@@ -1139,8 +1139,8 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
     let firstc = nvim_cls_get_firstc(s);
     let escape = firstc != b'@' as c_int;
     let redraw_if_menu_empty = c == K_WILD;
-    let p_wmnu = nvim_get_p_wmnu() != 0;
-    let wim_noselect = p_wmnu && (nvim_get_wim_flags(0) & WIM_FLAG_NOSELECT) != 0;
+    let p_wmnu_set = p_wmnu != 0;
+    let wim_noselect = p_wmnu_set && (nvim_get_wim_flags(0) & WIM_FLAG_NOSELECT) != 0;
 
     let wim_index = nvim_cls_get_wim_index(s);
     if (nvim_get_wim_flags(wim_index) & WIM_FLAG_LASTUSED) != 0 {
@@ -1220,18 +1220,18 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
         if res == OK && xpc_numfiles2 > threshold {
             if wim_longest {
                 let found_longest_prefix = nvim_get_ccline_cmdpos() != cmdpos_before;
-                let wim_list_check = wim_list || (p_wmnu && wim_full);
+                let wim_list_check = wim_list || (p_wmnu_set && wim_full);
                 if wim_list_check {
-                    nvim_showmatches(xp, p_wmnu, wim_list, true);
+                    nvim_showmatches(xp, p_wmnu_set, wim_list, true);
                 } else if !found_longest_prefix {
                     let wim_list_next = (nvim_get_wim_flags(1) & WIM_FLAG_LIST) != 0;
                     let wim_full_next = (nvim_get_wim_flags(1) & WIM_FLAG_FULL) != 0;
                     let wim_noselect_next = (nvim_get_wim_flags(1) & WIM_FLAG_NOSELECT) != 0;
-                    if wim_list_next || (p_wmnu && (wim_full_next || wim_noselect_next)) {
+                    if wim_list_next || (p_wmnu_set && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
                             nvim_nextwild(xp, WILD_NEXT, options, escape);
                         } else {
-                            nvim_showmatches(xp, p_wmnu, wim_list_next, wim_noselect_next);
+                            nvim_showmatches(xp, p_wmnu_set, wim_list_next, wim_noselect_next);
                         }
                         if wim_list_next {
                             nvim_cls_set_did_wild_list(s, 1);
@@ -1239,9 +1239,9 @@ pub unsafe extern "C" fn rs_command_line_wildchar_complete(s: *mut c_void) -> c_
                     }
                 }
             } else {
-                let wim_list2 = wim_list || (p_wmnu && (wim_full || wim_noselect));
+                let wim_list2 = wim_list || (p_wmnu_set && (wim_full || wim_noselect));
                 if wim_list2 {
-                    nvim_showmatches(xp, p_wmnu, wim_list, wim_noselect);
+                    nvim_showmatches(xp, p_wmnu_set, wim_list, wim_noselect);
                 } else {
                     vim_beep(K_OPT_BO_FLAG_WILDMODE);
                 }
@@ -1396,7 +1396,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         }
     }
 
-    if nvim_get_p_wmnu() != 0 {
+    if p_wmnu != 0 {
         let c_new = nvim_wildmenu_translate_key(s);
         nvim_cls_set_c(s, c_new);
     }
@@ -1407,9 +1407,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     let key_is_wc = (c_curr == wc && nvim_get_key_typed_cmdline() != 0) || c_curr == wcm;
 
     let mut wild_type = 0_i32;
-    if (cmdline_pum_active() != 0
-        || nvim_get_wild_menu_showing() != 0
-        || nvim_cls_get_did_wild_list(s) != 0)
+    if (cmdline_pum_active() != 0 || wild_menu_showing != 0 || nvim_cls_get_did_wild_list(s) != 0)
         && !key_is_wc
     {
         let c_check = nvim_cls_get_c(s);
@@ -1456,7 +1454,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         nvim_command_line_end_wildmenu(s, key_is_wc);
     }
 
-    if nvim_get_p_wmnu() != 0 {
+    if p_wmnu != 0 {
         let c_new = nvim_wildmenu_process_key(s);
         nvim_cls_set_c(s, c_new);
     }
@@ -1589,11 +1587,11 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 if numfiles > 1
                     && ((nvim_cls_get_did_wild_list(s) == 0
                         && (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0)
-                        || nvim_get_p_wmnu() != 0)
+                        || p_wmnu != 0)
                 {
                     nvim_showmatches(
                         xp,
-                        nvim_get_p_wmnu() != 0,
+                        p_wmnu != 0,
                         (nvim_get_wim_flags(wim_idx) & WIM_FLAG_LIST) != 0,
                         (nvim_get_wim_flags(0) & WIM_FLAG_NOSELECT) != 0,
                     );

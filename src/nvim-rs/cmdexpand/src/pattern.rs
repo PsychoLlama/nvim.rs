@@ -97,20 +97,18 @@ extern "C" {
     // From insexpand crate
     fn rs_find_word_end(ptr: *mut c_char) -> *mut c_char;
 
-    // Error/message suppression
-    fn nvim_cmdexpand_emsg_off_inc();
-    fn nvim_cmdexpand_emsg_off_dec();
-    fn nvim_cmdexpand_msg_silent_inc();
-    fn nvim_cmdexpand_msg_silent_dec();
+    // Error/message suppression (globals)
+    static mut emsg_off: c_int;
+    static mut msg_silent: c_int;
 
-    // Option accessors
-    fn nvim_cmdexpand_get_p_ic() -> c_int;
-    fn nvim_cmdexpand_get_p_scs() -> c_int;
+    // Option globals
+    static mut p_ic: c_int;
+    static mut p_scs: c_int;
     fn nvim_get_wop_flags() -> libc::c_uint;
 
-    // Buffer line access
-    fn nvim_cmdexpand_ml_get(lnum: i32) -> *const c_char;
-    fn nvim_cmdexpand_ml_get_len(lnum: i32) -> c_int;
+    // Buffer line access (direct C functions)
+    fn ml_get(lnum: i32) -> *const c_char;
+    fn ml_get_len(lnum: i32) -> c_int;
 
     // Memory
     fn xmalloc(size: usize) -> *mut c_char;
@@ -155,29 +153,29 @@ unsafe fn is_regex_match(pat: *const c_char, str_: *const c_char) -> bool {
 
     let mut regmatch = RegMatch::default();
 
-    nvim_cmdexpand_emsg_off_inc();
-    nvim_cmdexpand_msg_silent_inc();
+    emsg_off += 1;
+    msg_silent += 1;
     regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-    nvim_cmdexpand_emsg_off_dec();
-    nvim_cmdexpand_msg_silent_dec();
+    emsg_off -= 1;
+    msg_silent -= 1;
 
     if regmatch.regprog.is_null() {
         return false;
     }
 
-    let p_ic = nvim_cmdexpand_get_p_ic() != 0;
-    let p_scs = nvim_cmdexpand_get_p_scs() != 0;
+    let ic = p_ic != 0;
+    let scs = p_scs != 0;
 
-    regmatch.rm_ic = p_ic;
-    if p_ic && p_scs {
+    regmatch.rm_ic = ic;
+    if ic && scs {
         regmatch.rm_ic = rs_pat_has_uppercase(pat) == 0;
     }
 
-    nvim_cmdexpand_emsg_off_inc();
-    nvim_cmdexpand_msg_silent_inc();
+    emsg_off += 1;
+    msg_silent += 1;
     let result = vim_regexec_nl(std::ptr::addr_of_mut!(regmatch), str_, 0) != 0;
-    nvim_cmdexpand_emsg_off_dec();
-    nvim_cmdexpand_msg_silent_dec();
+    emsg_off -= 1;
+    msg_silent -= 1;
 
     vim_regfree(regmatch.regprog);
     result
@@ -198,7 +196,7 @@ unsafe fn concat_pattern_with_buffer_match(
     lowercase: bool,
 ) -> *mut c_char {
     let pos = &*end_match_pos;
-    let line = nvim_cmdexpand_ml_get(pos.lnum);
+    let line = ml_get(pos.lnum);
     let line_at_col = line.add(pos.col as usize);
     let word_end = rs_find_word_end(line_at_col.cast_mut());
     let match_len = word_end.offset_from(line_at_col) as usize;
@@ -255,12 +253,12 @@ unsafe fn copy_substring_from_pos(
     let is_single_line = start_pos.lnum == end_pos.lnum;
 
     // Append start line from start->col to end of line (or end->col if single line)
-    let start_line = nvim_cmdexpand_ml_get(start_pos.lnum);
+    let start_line = ml_get(start_pos.lnum);
     let start_ptr = start_line.add(start_pos.col as usize);
     let segment_len = if is_single_line {
         (end_pos.col - start_pos.col) as usize
     } else {
-        (nvim_cmdexpand_ml_get_len(start_pos.lnum) - start_pos.col) as usize
+        (ml_get_len(start_pos.lnum) - start_pos.col) as usize
     };
     let segment = std::slice::from_raw_parts(start_ptr.cast::<u8>(), segment_len);
     buf.extend_from_slice(segment);
@@ -276,8 +274,8 @@ unsafe fn copy_substring_from_pos(
     if !is_single_line {
         let mut lnum = start_pos.lnum + 1;
         while lnum < end_pos.lnum {
-            let line = nvim_cmdexpand_ml_get(lnum);
-            let line_len = nvim_cmdexpand_ml_get_len(lnum) as usize;
+            let line = ml_get(lnum);
+            let line_len = ml_get_len(lnum) as usize;
             let line_slice = std::slice::from_raw_parts(line.cast::<u8>(), line_len);
             buf.extend_from_slice(line_slice);
             if exacttext {
@@ -290,7 +288,7 @@ unsafe fn copy_substring_from_pos(
     }
 
     // Append partial end line (up to word end)
-    let end_line = nvim_cmdexpand_ml_get(end_pos.lnum);
+    let end_line = ml_get(end_pos.lnum);
     let end_col_ptr = end_line.add(end_pos.col as usize);
     let word_end = rs_find_word_end(end_col_ptr.cast_mut());
     let word_end_offset = word_end.offset_from(end_line) as usize;

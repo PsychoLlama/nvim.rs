@@ -153,7 +153,7 @@ extern "C" {
     fn rs_set_one_cmd_context(xp: *mut ExpandT, buff: *const c_char) -> *const c_char;
 
     // expand_cmdline helpers
-    fn nvim_cmdexpand_addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
+    fn addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
     fn nvim_cmdexpand_get_p_wic() -> c_int;
     fn nvim_cmdexpand_expand_from_context(
         xp: *mut ExpandT,
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn rs_expand_cmdline(
         // If fuzzy matching, don't modify the search string
         xstrdup((*xp).xp_pattern)
     } else {
-        nvim_cmdexpand_addstar((*xp).xp_pattern, (*xp).xp_pattern_len, (*xp).xp_context)
+        addstar((*xp).xp_pattern, (*xp).xp_pattern_len, (*xp).xp_context)
     };
 
     let mut options = WILD_ADD_SLASH | WILD_SILENT;

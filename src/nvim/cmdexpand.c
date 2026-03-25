@@ -197,24 +197,12 @@ int nvim_get_pum_want_item(void)
   return pum_want.item;
 }
 
-/// Get wild_menu_showing (for Rust FFI).
-int nvim_get_wild_menu_showing(void)
-{
-  return wild_menu_showing;
-}
-
 /// Set pum_want.active (for Rust FFI).
 void nvim_set_pum_want_active(int val)
 {
   pum_want.active = (val != 0);
 }
 
-
-/// Check if character is a path separator (for Rust FFI).
-int nvim_cmdexpand_vim_ispathsep(int c)
-{
-  return vim_ispathsep(c);
-}
 
 /// Check if backslash should be removed (for Rust FFI).
 int nvim_cmdexpand_rem_backslash(const char *p)
@@ -226,42 +214,6 @@ int nvim_cmdexpand_rem_backslash(const char *p)
 int nvim_cmdexpand_mb_ptr_adv_len(const char *p)
 {
   return utfc_ptr2len(p);
-}
-
-/// Get buffer line text (for Rust FFI).
-const char *nvim_cmdexpand_ml_get(linenr_T lnum)
-{
-  return ml_get(lnum);
-}
-
-/// Get buffer line length (for Rust FFI).
-int nvim_cmdexpand_ml_get_len(linenr_T lnum)
-{
-  return ml_get_len(lnum);
-}
-
-/// Increment msg_silent (for Rust FFI).
-void nvim_cmdexpand_msg_silent_inc(void)
-{
-  msg_silent++;
-}
-
-/// Decrement msg_silent (for Rust FFI).
-void nvim_cmdexpand_msg_silent_dec(void)
-{
-  msg_silent--;
-}
-
-/// Get p_ic (ignorecase option) value (for Rust FFI).
-int nvim_cmdexpand_get_p_ic(void)
-{
-  return p_ic;
-}
-
-/// Get p_scs (smartcase option) value (for Rust FFI).
-int nvim_cmdexpand_get_p_scs(void)
-{
-  return p_scs;
 }
 
 /// Zero the entire expand_T struct (for Rust FFI).
@@ -311,12 +263,6 @@ void nvim_set_compl_selected(int val)
 int nvim_get_cmd_showtail(void)
 {
   return cmd_showtail;
-}
-
-/// Get p_wmnu (for Rust FFI).
-int nvim_get_p_wmnu(void)
-{
-  return p_wmnu;
 }
 
 /// Wrapper for cmdline_pum_display (for Rust FFI).
@@ -722,12 +668,6 @@ void nvim_cmdexpand_set_context_for_expression(expand_T *xp, char *str, int cmdi
   set_context_for_expression(xp, str, (cmdidx_T)cmdidx);
 }
 
-/// Wrapper for addstar (for Rust FFI).
-char *nvim_cmdexpand_addstar(char *fname, size_t len, int context)
-{
-  return addstar(fname, len, context);
-}
-
 /// Wrapper for cmdline_del on the real ccline (for Rust FFI).
 void nvim_cmdexpand_cmdline_del(int from)
 {
@@ -788,54 +728,6 @@ void nvim_cmdexpand_dec_cmdline_row(void)
   cmdline_row--;
 }
 
-/// Wrapper for redrawcmd (for Rust FFI).
-void nvim_cmdexpand_redrawcmd(void)
-{
-  redrawcmd();
-}
-
-/// Set wild_menu_showing (for Rust FFI).
-void nvim_cmdexpand_set_wild_menu_showing(int val)
-{
-  wild_menu_showing = val;
-}
-
-/// Get save_p_ls (for Rust FFI).
-int nvim_cmdexpand_get_save_p_ls(void)
-{
-  return (int)save_p_ls;
-}
-
-/// Set save_p_ls (for Rust FFI).
-void nvim_cmdexpand_set_save_p_ls(int val)
-{
-  save_p_ls = val;
-}
-
-/// Get save_p_wmh (for Rust FFI).
-int nvim_cmdexpand_get_save_p_wmh(void)
-{
-  return (int)save_p_wmh;
-}
-
-/// Set p_ls (for Rust FFI).
-void nvim_cmdexpand_set_p_ls(int64_t val)
-{
-  p_ls = val;
-}
-
-/// Set p_wmh (for Rust FFI).
-void nvim_cmdexpand_set_p_wmh(int64_t val)
-{
-  p_wmh = val;
-}
-
-/// Wrapper for update_screen (for Rust FFI).
-void nvim_cmdexpand_update_screen(void)
-{
-  update_screen();
-}
-
 /// Wrapper for win_redraw_last_status(topframe) (for Rust FFI).
 void nvim_cmdexpand_win_redraw_last_status(void)
 {
@@ -860,24 +752,6 @@ void nvim_cmdexpand_expand_generic(const char *pat, expand_T *xp, regmatch_T *re
                                    CompleteListItemGetter func, int escaped)
 {
   ExpandGeneric(pat, xp, regmatch, matches, numMatches, func, (bool)escaped);
-}
-
-/// Wrapper for vim_regcomp (for Rust FFI).
-void *nvim_cmdexpand_vim_regcomp(const char *pat, int flags)
-{
-  return (void *)vim_regcomp(pat, flags);
-}
-
-/// Wrapper for vim_regfree (for Rust FFI).
-void nvim_cmdexpand_vim_regfree(void *prog)
-{
-  vim_regfree((regprog_T *)prog);
-}
-
-/// Wrapper for ignorecase (for Rust FFI).
-int nvim_cmdexpand_ignorecase(const char *pat)
-{
-  return ignorecase(pat);
 }
 
 /// Set regmatch.rm_ic (for Rust FFI).
@@ -1113,42 +987,6 @@ CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void)
   return get_healthcheck_names;
 }
 
-/// Wrapper for cursorcmd (for Rust FFI).
-void nvim_cmdexpand_cursorcmd(void)
-{
-  cursorcmd();
-}
-
-/// Wrapper for ui_flush (for Rust FFI).
-void nvim_cmdexpand_ui_flush(void)
-{
-  ui_flush();
-}
-
-/// Wrapper for msg_puts (for Rust FFI).
-void nvim_cmdexpand_msg_puts(const char *s)
-{
-  msg_puts(s);
-}
-
-/// Get cmd_silent (for Rust FFI).
-int nvim_cmdexpand_get_cmd_silent(void)
-{
-  return cmd_silent;
-}
-
-/// Get got_int (for Rust FFI).
-int nvim_cmdexpand_get_got_int(void)
-{
-  return got_int;
-}
-
-/// Set got_int (for Rust FFI).
-void nvim_cmdexpand_set_got_int(int val)
-{
-  got_int = (bool)val;
-}
-
 /// Wrapper for xstrnsave (for Rust FFI).
 char *nvim_cmdexpand_xstrnsave(const char *s, size_t n)
 {
@@ -1209,46 +1047,16 @@ void nvim_cmdexpand_nlua_expand_pat(expand_T *xp)
   nlua_expand_pat(xp);
 }
 
-/// Set msg_didany (for Rust FFI).
-void nvim_cmdexpand_set_msg_didany(int val)
-{
-  msg_didany = (bool)val;
-}
-
-/// Wrapper for msg_start (for Rust FFI).
-void nvim_cmdexpand_msg_start(void)
-{
-  msg_start();
-}
-
 /// Wrapper for msg_putchar (for Rust FFI).
 void nvim_cmdexpand_msg_putchar(int c)
 {
   msg_putchar(c);
 }
 
-/// Get msg_row (for Rust FFI).
-int nvim_cmdexpand_get_msg_row(void)
-{
-  return msg_row;
-}
-
-/// Set cmdline_row (for Rust FFI).
-void nvim_cmdexpand_set_cmdline_row(int val)
-{
-  cmdline_row = val;
-}
-
 /// Wrapper for msg_ext_set_kind (for Rust FFI).
 void nvim_cmdexpand_msg_ext_set_kind(const char *kind)
 {
   msg_ext_set_kind(kind);
-}
-
-/// Get Columns (for Rust FFI).
-int nvim_cmdexpand_get_columns(void)
-{
-  return Columns;
 }
 
 /// Free wild matches via FreeWild (for Rust FFI).
@@ -1282,12 +1090,6 @@ void nvim_cmdexpand_redraw_wildmenu_ex(expand_T *xp, int num_matches, char **mat
                                        int findex, int showtail)
 {
   redraw_wildmenu(xp, num_matches, matches, findex, showtail != 0);
-}
-
-/// Get msg_col (for Rust FFI).
-int nvim_cmdexpand_get_msg_col(void)
-{
-  return msg_col;
 }
 
 /// Wrapper for msg_clr_eos (for Rust FFI).

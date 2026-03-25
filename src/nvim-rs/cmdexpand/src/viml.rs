@@ -188,8 +188,8 @@ extern "C" {
     /// `xmemdupz(s, len)` wrapper.
     fn nvim_cmdexpand_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
-    /// `addstar(pattern, len, context)` wrapper.
-    fn nvim_cmdexpand_addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
+    /// Direct: `addstar(pattern, len, context)`.
+    fn addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
 
     /// `nlua_expand_pat(xp)` wrapper.
     fn nvim_cmdexpand_nlua_expand_pat(xp: *mut crate::ExpandT);
@@ -363,7 +363,7 @@ unsafe fn complete_getcompletion(
         // Don't modify the search string for fuzzy matching
         nvim_cmdexpand_xmemdupz((*xpc).xp_pattern, (*xpc).xp_pattern_len)
     } else {
-        nvim_cmdexpand_addstar((*xpc).xp_pattern, (*xpc).xp_pattern_len, (*xpc).xp_context)
+        addstar((*xpc).xp_pattern, (*xpc).xp_pattern_len, (*xpc).xp_context)
     };
 
     ExpandOne(xpc, pat, std::ptr::null_mut(), options, WILD_ALL_KEEP);

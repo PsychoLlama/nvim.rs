@@ -21,6 +21,7 @@ use crate::ExpandHandle;
 extern "C" {
     static mut got_int: bool;
     static mut p_fic: c_int;
+    static p_wmnu: c_int;
 }
 
 extern "C" {
@@ -32,7 +33,6 @@ extern "C" {
     fn nvim_get_compl_match_array_not_null() -> c_int;
     fn nvim_set_compl_selected(val: c_int);
     fn nvim_get_cmd_showtail() -> c_int;
-    fn nvim_get_p_wmnu() -> c_int;
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
 
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rs_get_next_or_prev_match(mode: c_int, xp: ExpandHandle
     }
 
     // Display matches on screen
-    if nvim_get_p_wmnu() != 0 {
+    if p_wmnu != 0 {
         if nvim_get_compl_match_array_not_null() != 0 {
             nvim_set_compl_selected(findex);
             nvim_cmdexpand_pum_display(0); // false

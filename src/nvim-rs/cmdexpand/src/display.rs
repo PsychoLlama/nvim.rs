@@ -45,35 +45,35 @@ extern "C" {
     /// Get `cmdpos` from `get_cmdline_info()`.
     fn nvim_cmdexpand_get_cmdpos() -> c_int;
 
-    /// Get `got_int` global.
-    fn nvim_cmdexpand_get_got_int() -> c_int;
+    /// `got_int` global.
+    static mut got_int: bool;
 
-    /// Set `got_int` to false.
-    fn nvim_cmdexpand_set_got_int(val: c_int);
+    /// `cmdline_row` global.
+    static mut cmdline_row: c_int;
 
-    /// Set `cmdline_row` to `msg_row`.
-    fn nvim_cmdexpand_set_cmdline_row(val: c_int);
+    /// `msg_row` global.
+    static msg_row: c_int;
 
-    /// Get `msg_row`.
-    fn nvim_cmdexpand_get_msg_row() -> c_int;
+    /// `msg_col` global.
+    static msg_col: c_int;
 
-    /// Set `msg_didany`.
-    fn nvim_cmdexpand_set_msg_didany(val: c_int);
+    /// `msg_didany` global.
+    static mut msg_didany: bool;
 
-    /// Wrapper for `msg_start()`.
-    fn nvim_cmdexpand_msg_start();
+    /// Direct: `msg_start()`.
+    fn msg_start();
 
     /// Wrapper for `msg_putchar(c)`.
     fn nvim_cmdexpand_msg_putchar(c: c_int);
 
-    /// Wrapper for `ui_flush()`.
-    fn nvim_cmdexpand_ui_flush();
+    /// Direct: `ui_flush()`.
+    fn ui_flush();
 
     /// Set kind for `msg_ext`.
     fn nvim_cmdexpand_msg_ext_set_kind(kind: *const c_char);
 
-    /// Get `Columns`.
-    fn nvim_cmdexpand_get_columns() -> c_int;
+    /// `Columns` global.
+    static Columns: c_int;
 
     /// Wrapper for `FreeWild(count, files)`.
     fn nvim_cmdexpand_free_wild(count: c_int, files: *mut *mut c_char);
@@ -105,8 +105,7 @@ extern "C" {
         showtail: c_int,
     );
 
-    /// Get `msg_col`.
-    fn nvim_cmdexpand_get_msg_col() -> c_int;
+    // msg_col declared above as static
 
     /// Wrapper for `msg_clr_eos()`.
     fn nvim_cmdexpand_msg_clr_eos();
@@ -120,8 +119,8 @@ extern "C" {
     /// Wrapper for `msg_advance(col)`.
     fn nvim_cmdexpand_msg_advance(col: c_int);
 
-    /// Wrapper for `msg_puts(s)`.
-    fn nvim_cmdexpand_msg_puts(s: *const c_char);
+    /// Direct: `msg_puts(s)`.
+    fn msg_puts(s: *const c_char);
 
     /// Wrapper for `msg_puts_hl(str, attr, maxcol)`.
     fn nvim_cmdexpand_msg_puts_hl(str_: *const c_char, attr: c_int, maxcol: c_int);
@@ -193,7 +192,7 @@ unsafe fn showmatches_oneline(
             let tag_len = libc::strlen(tag);
             let p = tag.add(tag_len + 1);
             nvim_cmdexpand_msg_advance(maxlen + 1);
-            nvim_cmdexpand_msg_puts(p.cast::<c_char>());
+            msg_puts(p.cast::<c_char>());
             nvim_cmdexpand_msg_advance(maxlen + 3);
             nvim_cmdexpand_msg_outtrans_long(p.add(2).cast::<c_char>(), HLF_D);
             break;
@@ -252,7 +251,7 @@ unsafe fn showmatches_oneline(
         j += lines;
     }
 
-    if nvim_cmdexpand_get_msg_col() > 0 {
+    if msg_col > 0 {
         // When not wrapped around
         nvim_cmdexpand_msg_clr_eos();
         nvim_cmdexpand_msg_putchar(c_int::from(b'\n'));
@@ -346,7 +345,7 @@ unsafe fn showmatches_list(
         }
     }
 
-    let columns = nvim_cmdexpand_get_columns();
+    let columns = Columns;
     let lines;
 
     if (*xp).xp_context == EXPAND_TAGS_LISTFILES {
@@ -372,14 +371,14 @@ unsafe fn showmatches_list(
     // List the matches line by line
     for i in 0..lines {
         showmatches_oneline(xp, matches, num_matches, lines, i, maxlen, showtail);
-        if nvim_cmdexpand_get_got_int() != 0 {
-            nvim_cmdexpand_set_got_int(0);
+        if got_int {
+            got_int = false;
             break;
         }
     }
 
     // Redraw the command below the listed lines
-    nvim_cmdexpand_set_cmdline_row(nvim_cmdexpand_get_msg_row());
+    cmdline_row = msg_row;
 }
 
 // =============================================================================
@@ -433,18 +432,18 @@ pub unsafe extern "C" fn rs_showmatches(
     }
 
     if display_list {
-        nvim_cmdexpand_set_msg_didany(0); // lines_left will be set
-        nvim_cmdexpand_msg_start(); // prepare for paging
+        msg_didany = false; // lines_left will be set
+        msg_start(); // prepare for paging
         nvim_cmdexpand_msg_putchar(c_int::from(b'\n'));
-        nvim_cmdexpand_ui_flush();
-        nvim_cmdexpand_set_cmdline_row(nvim_cmdexpand_get_msg_row());
-        nvim_cmdexpand_set_msg_didany(0); // lines_left will be set again
+        ui_flush();
+        cmdline_row = msg_row;
+        msg_didany = false; // lines_left will be set again
         nvim_cmdexpand_msg_ext_set_kind(c"wildlist".as_ptr());
-        nvim_cmdexpand_msg_start(); // prepare for paging
+        msg_start(); // prepare for paging
     }
 
-    if nvim_cmdexpand_get_got_int() != 0 {
-        nvim_cmdexpand_set_got_int(0); // only interrupt the completion, not the cmd line
+    if got_int {
+        got_int = false; // only interrupt the completion, not the cmd line
     } else if display_wildmenu && !display_list {
         // Display status-bar wildmenu
         nvim_cmdexpand_redraw_wildmenu_ex(

@@ -19,8 +19,8 @@ extern "C" {
     fn nvim_cmdexpand_get_key_up() -> c_int;
     fn nvim_cmdexpand_get_key_kenter() -> c_int;
 
-    /// Read the `wild_menu_showing` static variable (0, `WM_SHOWN`=1, `WM_SCROLLED`=2).
-    fn nvim_get_wild_menu_showing() -> c_int;
+    /// `wild_menu_showing` global (0, `WM_SHOWN`=1, `WM_SCROLLED`=2).
+    static mut wild_menu_showing: c_int;
 
     /// Check if cmdline PUM is active (`compl_match_array != NULL`).
     fn nvim_get_compl_match_array_not_null() -> c_int;
@@ -53,14 +53,14 @@ extern "C" {
     fn nvim_cmdexpand_utf_head_off(base: *const libc::c_char, p: *const libc::c_char) -> c_int;
 
     /// Check if character is a path separator.
-    fn nvim_cmdexpand_vim_ispathsep(c: c_int) -> c_int;
+    fn vim_ispathsep(c: c_int) -> c_int;
 
     /// Get the `PATHSEP` character constant.
     fn nvim_cmdexpand_get_pathsep() -> c_int;
 
-    // Wildmenu cleanup functions
-    /// Get `p_wmnu` (wildmenu option).
-    fn nvim_get_p_wmnu() -> c_int;
+    // Wildmenu cleanup globals
+    /// `p_wmnu` (wildmenu option).
+    static p_wmnu: c_int;
 
     /// Get `input_fn` from `get_cmdline_info()`.
     fn nvim_cmdexpand_get_input_fn() -> c_int;
@@ -80,32 +80,26 @@ extern "C" {
     /// Decrement `cmdline_row`.
     fn nvim_cmdexpand_dec_cmdline_row();
 
-    /// Wrapper for `redrawcmd()`.
-    fn nvim_cmdexpand_redrawcmd();
+    /// Direct: `redrawcmd()`.
+    fn redrawcmd();
 
-    /// Set `wild_menu_showing`.
-    fn nvim_cmdexpand_set_wild_menu_showing(val: c_int);
+    /// `save_p_ls` global.
+    static mut save_p_ls: c_int;
 
-    /// Get `save_p_ls`.
-    fn nvim_cmdexpand_get_save_p_ls() -> c_int;
+    /// `save_p_wmh` global.
+    static mut save_p_wmh: c_int;
 
-    /// Set `save_p_ls`.
-    fn nvim_cmdexpand_set_save_p_ls(val: c_int);
+    /// `p_ls` global (`OptInt = i64`).
+    static mut p_ls: i64;
 
-    /// Get `save_p_wmh`.
-    fn nvim_cmdexpand_get_save_p_wmh() -> c_int;
-
-    /// Set `p_ls`.
-    fn nvim_cmdexpand_set_p_ls(val: i64);
-
-    /// Set `p_wmh`.
-    fn nvim_cmdexpand_set_p_wmh(val: i64);
+    /// `p_wmh` global (`OptInt = i64`).
+    static mut p_wmh: i64;
 
     /// Wrapper for `rs_last_status(0)`.
     fn rs_last_status(morewin: c_int);
 
-    /// Wrapper for `update_screen()`.
-    fn nvim_cmdexpand_update_screen();
+    /// Direct: `update_screen()`.
+    fn update_screen();
 
     /// Wrapper for `win_redraw_last_status(topframe)`.
     fn nvim_cmdexpand_win_redraw_last_status();
@@ -113,21 +107,20 @@ extern "C" {
     /// Wrapper for `redraw_statuslines()`.
     fn nvim_cmdexpand_redraw_statuslines();
 
-    // Phase 4: nextwild accessors
-    /// Wrapper for `cursorcmd()`.
-    fn nvim_cmdexpand_cursorcmd();
+    /// Direct: `cursorcmd()`.
+    fn cursorcmd();
 
-    /// Wrapper for `ui_flush()`.
-    fn nvim_cmdexpand_ui_flush();
+    /// Direct: `ui_flush()`.
+    fn ui_flush();
 
-    /// Wrapper for `msg_puts(s)`.
-    fn nvim_cmdexpand_msg_puts(s: *const libc::c_char);
+    /// Direct: `msg_puts(s)`.
+    fn msg_puts(s: *const libc::c_char);
 
-    /// Get `cmd_silent` global.
-    fn nvim_cmdexpand_get_cmd_silent() -> c_int;
+    /// `cmd_silent` global.
+    static cmd_silent: bool;
 
-    /// Get `got_int` global.
-    fn nvim_cmdexpand_get_got_int() -> c_int;
+    /// `got_int` global.
+    static mut got_int: bool;
 
     /// Wrapper for `xstrnsave(s, n)`.
     fn nvim_cmdexpand_xstrnsave(s: *const libc::c_char, n: usize) -> *mut libc::c_char;
@@ -180,11 +173,7 @@ extern "C" {
 
     fn rs_cmdline_fuzzy_completion_supported(context: c_int) -> c_int;
 
-    fn nvim_cmdexpand_addstar(
-        fname: *mut libc::c_char,
-        len: usize,
-        context: c_int,
-    ) -> *mut libc::c_char;
+    fn addstar(fname: *mut libc::c_char, len: usize, context: c_int) -> *mut libc::c_char;
 
 }
 
@@ -215,7 +204,7 @@ pub unsafe extern "C" fn rs_wildmenu_translate_key(
 
     let mut c = key;
     let pum_active = nvim_get_compl_match_array_not_null() != 0;
-    let wild_showing = nvim_get_wild_menu_showing() != 0;
+    let wild_showing = wild_menu_showing != 0;
 
     if pum_active || did_wild_list || wild_showing {
         if c == k_left {
@@ -356,7 +345,7 @@ unsafe fn process_key_filenames(key: c_int, xp: ExpandHandle) -> c_int {
         while j > i {
             j -= 1;
             j -= nvim_cmdexpand_utf_head_off(cmdbuff, cmdbuff.add(j as usize));
-            if nvim_cmdexpand_vim_ispathsep(c_int::from(*cmdbuff.add(j as usize))) != 0 {
+            if vim_ispathsep(c_int::from(*cmdbuff.add(j as usize))) != 0 {
                 found = true;
                 break;
             }
@@ -366,8 +355,7 @@ unsafe fn process_key_filenames(key: c_int, xp: ExpandHandle) -> c_int {
             && j >= 2
             && *cmdbuff.add((j - 1) as usize) as u8 == b'.'
             && *cmdbuff.add((j - 2) as usize) as u8 == b'.'
-            && (nvim_cmdexpand_vim_ispathsep(c_int::from(*cmdbuff.add((j - 3) as usize))) != 0
-                || j == i + 2)
+            && (vim_ispathsep(c_int::from(*cmdbuff.add((j - 3) as usize))) != 0 || j == i + 2)
         {
             nvim_cmdexpand_cmdline_del(j - 2);
             key = p_wc;
@@ -387,7 +375,7 @@ unsafe fn process_key_filenames(key: c_int, xp: ExpandHandle) -> c_int {
         while j > xp_offset {
             j -= 1;
             j -= nvim_cmdexpand_utf_head_off(cmdbuff, cmdbuff.add(j as usize));
-            if nvim_cmdexpand_vim_ispathsep(c_int::from(*cmdbuff.add(j as usize))) != 0 {
+            if vim_ispathsep(c_int::from(*cmdbuff.add(j as usize))) != 0 {
                 if found {
                     result_i = j + 1;
                     break;
@@ -472,7 +460,7 @@ pub unsafe extern "C" fn rs_wildmenu_process_key(
 /// Must be called from cmdline context where `get_cmdline_info()` is valid.
 #[unsafe(export_name = "wildmenu_cleanup")]
 pub unsafe extern "C" fn rs_wildmenu_cleanup(_cclp: *mut libc::c_void) {
-    if nvim_get_p_wmnu() == 0 || nvim_get_wild_menu_showing() == 0 {
+    if p_wmnu == 0 || wild_menu_showing == 0 {
         return;
     }
 
@@ -489,23 +477,23 @@ pub unsafe extern "C" fn rs_wildmenu_cleanup(_cclp: *mut libc::c_void) {
 
     let wm_scrolled = nvim_cmdexpand_get_wm_scrolled();
 
-    if nvim_get_wild_menu_showing() == wm_scrolled {
+    if wild_menu_showing == wm_scrolled {
         // Entered command line, move it up
         nvim_cmdexpand_dec_cmdline_row();
-        nvim_cmdexpand_redrawcmd();
-        nvim_cmdexpand_set_wild_menu_showing(0);
-    } else if nvim_cmdexpand_get_save_p_ls() != -1 {
+        redrawcmd();
+        wild_menu_showing = 0;
+    } else if save_p_ls != -1 {
         // Restore 'laststatus' and 'winminheight'
-        nvim_cmdexpand_set_p_ls(i64::from(nvim_cmdexpand_get_save_p_ls()));
-        nvim_cmdexpand_set_p_wmh(i64::from(nvim_cmdexpand_get_save_p_wmh()));
+        p_ls = i64::from(save_p_ls);
+        p_wmh = i64::from(save_p_wmh);
         rs_last_status(0);
-        nvim_cmdexpand_update_screen(); // redraw the screen NOW
-        nvim_cmdexpand_redrawcmd();
-        nvim_cmdexpand_set_save_p_ls(-1);
-        nvim_cmdexpand_set_wild_menu_showing(0);
+        update_screen(); // redraw the screen NOW
+        redrawcmd();
+        save_p_ls = -1;
+        wild_menu_showing = 0;
     } else {
         nvim_cmdexpand_win_redraw_last_status();
-        nvim_cmdexpand_set_wild_menu_showing(0); // must be before redraw_statuslines #8385
+        wild_menu_showing = 0; // must be before redraw_statuslines #8385
         nvim_cmdexpand_redraw_statuslines();
     }
 
@@ -628,14 +616,14 @@ pub unsafe extern "C" fn rs_nextwild(
     }
 
     // If cmd_silent is set then don't show dots while busy
-    if nvim_cmdexpand_get_cmd_silent() == 0
+    if !cmd_silent
         && !from_wildtrigger_func
         && !wild_navigate
         && !ui_has(K_UI_CMDLINE)
         && !ui_has(K_UI_WILDMENU)
     {
-        nvim_cmdexpand_msg_puts(c"...".as_ptr());
-        nvim_cmdexpand_ui_flush();
+        msg_puts(c"...".as_ptr());
+        ui_flush();
     }
 
     let mut p: *mut libc::c_char;
@@ -654,7 +642,7 @@ pub unsafe extern "C" fn rs_nextwild(
             // Don't modify the search string
             nvim_cmdexpand_xstrnsave(xp_pattern, xp_pattern_len)
         } else {
-            nvim_cmdexpand_addstar(xp_pattern, xp_pattern_len, xp_context)
+            addstar(xp_pattern, xp_pattern_len, xp_context)
         };
 
         let p_wic = nvim_cmdexpand_get_p_wic();
@@ -692,15 +680,15 @@ pub unsafe extern "C" fn rs_nextwild(
         nvim_cmdexpand_save_cmdline_orig();
     }
 
-    let got_int = nvim_cmdexpand_get_got_int() != 0;
+    let got_int_val = got_int;
 
-    if !p.is_null() && !got_int && (options & WILD_NOSELECT) == 0 {
+    if !p.is_null() && !got_int_val && (options & WILD_NOSELECT) == 0 {
         let plen = libc::strlen(p) as c_int;
         nvim_cmdexpand_apply_expansion(xp, i, p, plen);
     }
 
-    nvim_cmdexpand_redrawcmd();
-    nvim_cmdexpand_cursorcmd();
+    redrawcmd();
+    cursorcmd();
 
     // When expanding a ":map" command and no matches are found, assume that
     // the key is supposed to be inserted literally

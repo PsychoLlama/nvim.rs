@@ -161,8 +161,8 @@ extern "C" {
     // Check if cmdline pum is active (exported as cmdline_pum_active from cmdexpand crate)
     fn cmdline_pum_active() -> c_int;
 
-    // Access to wild_menu_showing global
-    fn nvim_get_wild_menu_showing() -> c_int;
+    // wild_menu_showing global
+    static wild_menu_showing: c_int;
 
     // String operations
     fn rem_backslash(s: *const c_char) -> c_int;
@@ -201,11 +201,11 @@ pub const fn translate_arrow_keys(
     key: c_int,
     pum_active: bool,
     did_wild_list: bool,
-    wild_menu_showing: bool,
+    is_showing_wild_menu: bool,
 ) -> c_int {
     use keys::{CTRL_N, CTRL_P, K_LEFT, K_RIGHT};
 
-    if pum_active || did_wild_list || wild_menu_showing {
+    if pum_active || did_wild_list || is_showing_wild_menu {
         if key == K_LEFT {
             return CTRL_P;
         } else if key == K_RIGHT {
@@ -266,7 +266,7 @@ pub unsafe extern "C" fn rs_wildmenu_translate_arrow_keys(
     did_wild_list: c_int,
 ) -> c_int {
     let pum_active = cmdline_pum_active() != 0;
-    let wild_showing = nvim_get_wild_menu_showing() != 0;
+    let wild_showing = wild_menu_showing != 0;
 
     translate_arrow_keys(key, pum_active, did_wild_list != 0, wild_showing)
 }

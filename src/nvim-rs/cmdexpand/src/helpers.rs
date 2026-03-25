@@ -14,7 +14,7 @@ use crate::ExpandHandle;
 
 extern "C" {
     // C functions with int return to avoid bool ABI issues
-    fn nvim_cmdexpand_vim_ispathsep(c: c_int) -> c_int;
+    fn vim_ispathsep(c: c_int) -> c_int;
     fn nvim_cmdexpand_rem_backslash(p: *const c_char) -> c_int;
     fn nvim_cmdexpand_mb_ptr_adv_len(p: *const c_char) -> c_int;
 
@@ -55,7 +55,7 @@ pub unsafe extern "C" fn rs_showmatches_gettail(s: *mut c_char, eager: c_int) ->
     let mut p = s;
 
     while *p != 0 {
-        if nvim_cmdexpand_vim_ispathsep(c_int::from(*p)) != 0 {
+        if vim_ispathsep(c_int::from(*p)) != 0 {
             if eager {
                 t = p.add(1);
             } else {
