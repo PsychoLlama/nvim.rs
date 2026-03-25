@@ -349,8 +349,6 @@ _Static_assert(TAB == 0x09, "TAB changed");
 
 bool nvim_setmark(int name) { return setmark(name); }
 
-unsigned int nvim_get_jop_flags(void) { return jop_flags; }
-
 fmark_T *nvim_mark_get(int name) { return mark_get(curbuf, curwin, NULL, kMarkAll, name); }
 
 fmark_T *nvim_get_changelist(int count1) { return get_changelist(curbuf, curwin, count1); }
@@ -380,7 +378,6 @@ bool nvim_valid_yank_reg(int regname, bool writing) { return valid_yank_reg(regn
 
 // nv_put C accessors
 bool nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
-int nvim_get_cb_flags(void) { return cb_flags; }
 void *nvim_put_copy_register(int regname) { return copy_register(regname); }
 void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags) { do_put(regname, (yankreg_T *)savereg, dir, count, flags); }
 void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
@@ -643,18 +640,6 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
 /// Returns 1 on success, 0 on failure.
 int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
-
-/// Get p_ws as int.
-int nvim_get_p_ws_bool(void) { return p_ws ? 1 : 0; }
-
-/// Set p_ws from int.
-void nvim_set_p_ws_bool(int val) { p_ws = val != 0; }
-
-/// Get p_scs as int.
-int nvim_get_p_scs_bool(void) { return p_scs ? 1 : 0; }
-
-/// Set p_scs from int.
-void nvim_set_p_scs_bool(int val) { p_scs = val != 0; }
 
 
 
@@ -996,12 +981,6 @@ _Static_assert(offsetof(NormalState, old_pos) == 220, "NormalState.old_pos offse
 
 /// Get clear_cmdline global.
 bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
-
-/// Get msg_scroll global.
-bool nvim_get_msg_scroll_val(void) { return msg_scroll; }
-
-/// Set msg_scroll global.
-void nvim_set_msg_scroll_val(bool val) { msg_scroll = val; }
 
 /// Get in_assert_fails global.
 bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
@@ -1417,9 +1396,6 @@ char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 /// Return mb_prevptr(line, p).
 char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 
-/// Set g_tag_at_cursor.
-void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
-
 // =============================================================================
 // Dispatch table handler accessors (nv_addsub, nv_colon, nv_record, nv_paste, nv_event)
 // =============================================================================
@@ -1537,9 +1513,6 @@ size_t rs_find_ident_under_cursor(char **text, int find_type)
   return rs_find_ident_at_pos(curwin, curwin->w_cursor.lnum,
                               curwin->w_cursor.col, text, NULL, find_type);
 }
-
-/// Get length of cursor line suffix (strlen(get_cursor_pos_ptr())).
-int nvim_get_cursor_pos_ptr_len(void) { return (int)strlen(get_cursor_pos_ptr()); }
 
 /// Get curwin->w_redr_type.
 int nvim_get_curwin_w_redr_type(void) { return curwin->w_redr_type; }

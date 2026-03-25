@@ -95,8 +95,6 @@ extern "C" {
     static redraw_cmdline: bool;
     static mut msg_didout: bool;
     static mut msg_didany: bool;
-    fn nvim_get_msg_scroll_val() -> bool;
-    fn nvim_set_msg_scroll_val(val: bool);
     static mut msg_nowait: bool;
     static mut emsg_on_display: bool;
     static mut emsg_silent: c_int;
@@ -363,7 +361,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             && (nvim_get_clear_cmdline() || redraw_cmdline)
             // some message was printed or scrolled
             && (c_int::from(msg_didout) != 0
-                || (c_int::from(msg_didany) != 0 && nvim_get_msg_scroll_val()))
+                || (c_int::from(msg_didany) != 0 && msg_scroll != 0))
             // it is fine to remove the current message
             && !msg_nowait
             // the command was the result of direct user input and not a mapping
@@ -371,7 +369,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             // must restart insert mode, not in visual mode and error message showing
             || (restart_edit != 0
                 && !VIsual_active
-                && nvim_get_msg_scroll_val()
+                && msg_scroll != 0
                 && c_int::from(emsg_on_display) != 0)
     )
     // no register was used
@@ -416,7 +414,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     setcursor();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
     ui_flush();
-    if !ui_has(K_UI_MESSAGES) && (nvim_get_msg_scroll_val() || c_int::from(emsg_on_display) != 0) {
+    if !ui_has(K_UI_MESSAGES) && (msg_scroll != 0 || c_int::from(emsg_on_display) != 0) {
         os_delay(1003, true); // wait at least one second
     }
     if ui_has(K_UI_MESSAGES) {
@@ -424,7 +422,7 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     }
     State = save_state;
 
-    nvim_set_msg_scroll_val(false);
+    msg_scroll = 0;
     emsg_on_display = false;
 }
 

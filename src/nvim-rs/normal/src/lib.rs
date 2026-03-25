@@ -1323,7 +1323,7 @@ extern "C" {
 
     // Mark command functions
     fn nvim_setmark(name: c_int) -> bool;
-    fn nvim_get_jop_flags() -> c_uint;
+    static jop_flags: c_uint;
     fn nvim_mark_get(name: c_int) -> FmarkHandle;
     fn nvim_get_changelist(count1: c_int) -> FmarkHandle;
     fn nvim_get_jumplist(count1: c_int) -> FmarkHandle;
@@ -1340,7 +1340,7 @@ extern "C" {
     fn set_reg_var(regname: c_int);
     // nv_put_opt lower-level C accessors (Phase 1 inlined helpers)
     fn nvim_put_get_save_fen() -> bool;
-    fn nvim_get_cb_flags() -> c_int;
+    static cb_flags: c_uint;
     fn nvim_put_copy_register(regname: c_int) -> *mut std::ffi::c_void;
     fn nvim_put_do_put(
         regname: c_int,
@@ -1710,7 +1710,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
     // When there is a pending operator, do not restore the view as this is usually unexpected.
     let mut flags: c_int = if nvim_oap_get_op_type_ptr(oap) != OP_NOP {
         0
-    } else if (nvim_get_jop_flags() & K_OPT_JOP_FLAG_VIEW) != 0 {
+    } else if (jop_flags & K_OPT_JOP_FLAG_VIEW) != 0 {
         K_MARK_SET_VIEW
     } else {
         0
@@ -1764,7 +1764,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
     let count1 = nvim_cap_get_count1(cap);
 
     // flags for moving to the mark
-    let mut flags: c_int = if (nvim_get_jop_flags() & K_OPT_JOP_FLAG_VIEW) != 0 {
+    let mut flags: c_int = if (jop_flags & K_OPT_JOP_FLAG_VIEW) != 0 {
         K_MARK_SET_VIEW
     } else {
         0
@@ -2029,8 +2029,8 @@ const PUT_CURSEND: c_int = 2;
 const PUT_BLOCK_INNER: c_int = 64;
 
 // Clipboard flag constants
-const CB_FLAG_UNNAMED: c_int = 0x01;
-const CB_FLAG_UNNAMEDPLUS: c_int = 0x02;
+const CB_FLAG_UNNAMED: c_uint = 0x01;
+const CB_FLAG_UNNAMEDPLUS: c_uint = 0x02;
 
 // PUT_LINE_* flag constants for do_put() visual mode
 const PUT_LINE: c_int = 4;
@@ -2120,7 +2120,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         let regname = nvim_oap_get_regname_ptr(oap);
         let keep_registers = nvim_cap_get_cmdchar(cap) == b'P' as c_int;
         let clipoverwrite = (regname == b'+' as c_int || regname == b'*' as c_int)
-            && (nvim_get_cb_flags() & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
+            && (cb_flags & (CB_FLAG_UNNAMED | CB_FLAG_UNNAMEDPLUS)) != 0;
         if regname == 0
             || regname == b'"' as c_int
             || clipoverwrite
@@ -2546,7 +2546,7 @@ extern "C" {
     fn nvim_ident_get_curbuf_ft() -> *mut c_char;
     fn vim_iswordp(p: *const c_char) -> bool;
     fn nvim_ident_mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
-    fn nvim_ident_set_g_tag_at_cursor(val: bool);
+    static mut g_tag_at_cursor: bool;
 
     fn nvim_set_no_smartcase(val: c_int);
     fn rs_magic_isset() -> c_int;
@@ -3026,11 +3026,11 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
                 core::ptr::null_mut(),
             );
         } else {
-            nvim_ident_set_g_tag_at_cursor(true);
+            g_tag_at_cursor = true;
             buf.push(0); // NUL terminate
             do_cmdline_cmd(buf.as_ptr().cast::<c_char>());
             buf.pop(); // remove NUL
-            nvim_ident_set_g_tag_at_cursor(false);
+            g_tag_at_cursor = false;
             if cmdchar_byte == b'K' && !kp_ex && !kp_help {
                 restart_edit = c_int::from(b'i');
                 add_map(
@@ -3338,10 +3338,8 @@ extern "C" {
     // Phase 4: find_decl accessors
     fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
     fn reset_search_dir();
-    fn nvim_get_p_ws_bool() -> c_int;
-    fn nvim_set_p_ws_bool(val: c_int);
-    fn nvim_get_p_scs_bool() -> c_int;
-    fn nvim_set_p_scs_bool(val: c_int);
+    static mut p_ws: c_int;
+    static mut p_scs: c_int;
 }
 
 // Phase 2 constants
@@ -3940,10 +3938,10 @@ pub unsafe extern "C" fn rs_find_decl(
     let old_col = nvim_get_cursor_col();
     let old_coladd = nvim_get_cursor_coladd();
 
-    let save_p_ws = nvim_get_p_ws_bool();
-    let save_p_scs = nvim_get_p_scs_bool();
-    nvim_set_p_ws_bool(0);
-    nvim_set_p_scs_bool(0);
+    let save_p_ws = p_ws;
+    let save_p_scs = p_scs;
+    p_ws = 0;
+    p_scs = 0;
 
     // Position cursor at start of search range.
     let par_lnum: c_int;
@@ -3970,8 +3968,8 @@ pub unsafe extern "C" fn rs_find_decl(
         nvim_set_cursor_pos(old_lnum, old_col, old_coladd);
     }
 
-    nvim_set_p_ws_bool(save_p_ws);
-    nvim_set_p_scs_bool(save_p_scs);
+    p_ws = save_p_ws;
+    p_scs = save_p_scs;
 
     found
 }
@@ -7678,7 +7676,6 @@ extern "C" {
     fn nvim_get_op_char(optype: c_int) -> c_int;
     fn nvim_get_extra_op_char(optype: c_int) -> c_int;
     fn nvim_set_vim_var_string_vv_op(opchars: *const std::ffi::c_char, len: c_int);
-    fn nvim_get_cursor_pos_ptr_len() -> c_int;
     fn nvim_get_curwin_w_redr_type() -> c_int;
     fn nvim_curwin_set_old_visual_lnums();
     fn redraw_curbuf_later(type_val: c_int);
@@ -7783,7 +7780,7 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
         coladvance(nvim_get_curwin(), MAXCOL);
         State = save_state;
     } else {
-        let extra = nvim_get_cursor_pos_ptr_len();
+        let extra = c_int::try_from(libc::strlen(get_cursor_pos_ptr())).unwrap_or(c_int::MAX);
         nvim_set_cursor_col(nvim_get_cursor_col() + extra);
     }
 }
