@@ -252,7 +252,6 @@ int nvim_buf_get_b_p_ma(buf_T *buf)
   return buf->b_p_ma;
 }
 
-
 /// Set the b_p_ml (modeline) field on a buffer.
 void nvim_buf_set_b_p_ml(buf_T *buf, int val)
 {
@@ -276,8 +275,6 @@ void nvim_buf_set_b_p_imsearch(buf_T *buf, int val)
     buf->b_p_imsearch = val;
   }
 }
-
-// nvim_get_p_hid: deleted (Phase 4, Rust accesses p_hid directly)
 
 /// Get the cmdmod.cmod_flags field.
 int nvim_get_cmdmod_cmod_flags(void)
@@ -393,28 +390,11 @@ const char *nvim_curbuf_get_line_ptr(void)
   return ml_get_buf(curbuf, curwin->w_cursor.lnum);
 }
 
-// nvim_curbuf_get_line_at: deleted (Phase 2, Rust uses ml_get directly via #[link_name])
-// nvim_buf_get_line_at: deleted (Phase 2, Rust uses ml_get_buf directly via #[link_name])
-// nvim_getwhitecols_curline: deleted (Phase 2, Rust uses getwhitecols_curline directly via #[link_name])
-// nvim_buf_first_line_empty: deleted (Phase 2, Rust inlines *ml_get_buf(buf,1)==NUL)
-
-// nvim_no_name_msg: deleted (Phase 1, inlined in messages.rs)
-// nvim_e382_msg: deleted (Phase 1, inlined in messages.rs)
-// nvim_emsg_e84: deleted (Phase 1, inlined in errors.rs)
-// nvim_emsg_e85: deleted (Phase 1, inlined in errors.rs)
-// nvim_emsg_e87: deleted (Phase 1, inlined in errors.rs)
-// nvim_emsg_e88: deleted (Phase 1, inlined in errors.rs)
-// nvim_semsg_e_nobufnr: deleted (Phase 1, inlined in errors.rs)
-
 /// Check if the memfile pointer is NULL for a buffer (accessor for Rust).
 int nvim_buf_get_ml_mfp_null(buf_T *buf)
 {
   return buf->b_ml.ml_mfp == NULL;
 }
-
-// nvim_path_fnamecmp: deleted (Phase 2, Rust uses path_fnamecmp directly via #[link_name])
-// nvim_os_fileid: deleted (Phase 2, Rust uses os_fileid directly via #[link_name])
-// nvim_os_fileid_equal: deleted (Phase 2, Rust uses os_fileid_equal directly via #[link_name])
 
 // Rust uses a 16-byte buffer to hold FileID; assert this is sufficient.
 _Static_assert(sizeof(FileID) <= 16, "FileID size exceeds Rust FILE_ID_SIZE");
@@ -439,8 +419,6 @@ void nvim_buf_set_file_id_data(buf_T *buf, const void *file_id, bool valid)
   }
   buf->file_id_valid = valid;
 }
-
-// nvim_buflist_findnr: deleted (Phase 2, Rust uses buflist_findnr directly via #[link_name])
 
 /// Perform the body of buf_set_name: free old names, set new ffname, expand paths.
 /// Rust calls rs_buflist_findnr + this to implement buf_set_name.
@@ -470,22 +448,6 @@ linenr_T nvim_buflist_findlnum(buf_T *buf)
   return buflist_findfmark(buf)->mark.lnum;
 }
 
-// nvim_qf_stack_get_bufnr: deleted (Phase 2, Rust uses qf_stack_get_bufnr directly)
-
-// nvim_msg_qflist: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_loclist: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_command_line: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_prompt: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_scratch: deleted (Phase 1, inlined in messages.rs)
-// nvim_e_noalt: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_arg_number_invalid: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_arg_number: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_all: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_top: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_bot: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_pct: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_3s: deleted (Phase 1, inlined in messages.rs)
-
 /// Get ARGCOUNT value (accessor for Rust). ARGCOUNT is a macro.
 int nvim_get_argcount(void)
 {
@@ -511,9 +473,6 @@ void nvim_buf_set_ml_mfp_null(buf_T *buf)
 }
 
 // nvim_buf_set_ml_flags already defined in memline.c
-
-// nvim_fix_fname: deleted (Phase 2, Rust uses fix_fname directly via #[link_name])
-// nvim_buflist_new: deleted (Phase 2, Rust uses buflist_new directly via #[link_name])
 
 /// Get buf_get_changedtick value (direct accessor for Rust, avoids API function).
 int64_t nvim_buf_get_changedtick_direct(buf_T *buf)
@@ -575,8 +534,6 @@ buf_T *nvim_handle_get_buffer(handle_T handle)
 
 // nvim_FullName_save already defined in undo.c
 
-// nvim_home_replace_save: deleted (Phase 2, Rust uses home_replace_save directly via #[link_name])
-
 // ============================================================
 // Phase 4 accessor functions for buffer display & info helpers.
 // ============================================================
@@ -592,11 +549,6 @@ void nvim_buf_set_b_p_bl(buf_T *buf, int val)
 {
   buf->b_p_bl = val;
 }
-
-// nvim_apply_autocmds_bufadd: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_apply_autocmds_bufdelete: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_docmd_apply_autocmds_quitpre: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_docmd_apply_autocmds_exitpre: deleted (Phase 3, Rust calls apply_autocmds directly)
 
 // ============================================================
 // Phase 4 accessor functions for buflist_list.
@@ -632,27 +584,12 @@ int nvim_buf_channel_job_running(buf_T *buf)
   return channel_job_running((uint64_t)buf->b_p_channel) ? 1 : 0;
 }
 
-// nvim_undo_fmt_time: deleted (Phase 2, Rust uses undo_fmt_time directly)
-
 // nvim_get_iobuff is already defined in option_shim.c.
-
-// nvim_buflist_line_fmt: deleted (Phase 1, inlined in messages.rs)
 
 // ============================================================
 // Phase 3 accessor functions for fileinfo.
 // NOTE: nvim_get_p_ru is already defined in drawscreen.c.
 // ============================================================
-
-// nvim_msg_scroll_get: deleted (Phase 4, Rust accesses msg_scroll directly)
-// nvim_msg_scroll_set: deleted (Phase 4, Rust accesses msg_scroll directly)
-// nvim_restart_edit_get: deleted (Phase 4, Rust accesses restart_edit directly)
-// nvim_msg_scrolled_get: deleted (Phase 4, Rust accesses msg_scrolled directly)
-// nvim_need_wait_return_get: deleted (Phase 4, Rust accesses need_wait_return directly)
-
-// nvim_msg_call: deleted (Phase 2, Rust uses msg directly)
-// nvim_msg_trunc: deleted (Phase 2, Rust uses msg_trunc directly)
-// nvim_set_keep_msg: deleted (Phase 2, Rust uses set_keep_msg(s, 0) directly)
-// nvim_home_replace: deleted (Phase 2, Rust uses home_replace directly via #[link_name])
 
 /// Get curbuf->b_fname (short filename) (accessor for Rust).
 const char *nvim_curbuf_get_fname(void)
@@ -660,28 +597,9 @@ const char *nvim_curbuf_get_fname(void)
   return curbuf->b_fname;
 }
 
-// nvim_ngettext_line_count: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_modified: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_not_edited: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_new: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_read_errors: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_ro: deleted (Phase 1, inlined in messages.rs)
-// nvim_msg_readonly: deleted (Phase 1, inlined in messages.rs)
-// nvim_no_lines_msg: deleted (Phase 1, inlined in messages.rs)
-
-// nvim_shortmess_mod: deleted (Phase 4, Rust calls shortmess(SHM_MOD) directly)
-// nvim_shortmess_ro: deleted (Phase 4, Rust calls shortmess(SHM_RO) directly)
-
-// nvim_fileinfo_line_fmt: deleted (Phase 1, inlined in messages.rs)
-
 // ============================================================
 // Phase 6 accessor functions for do_modelines / chk_modeline.
 // ============================================================
-
-// nvim_get_p_mls: deleted (Phase 4, Rust accesses p_mls directly)
-
-// nvim_estack_push_modeline: deleted (Phase 5, Rust calls estack_push directly)
-// nvim_estack_pop: deleted (Phase 5, Rust calls estack_pop directly)
 
 /// Call do_set(s, OPT_MODELINE|OPT_LOCAL|flags) with modeline context saved/restored.
 /// This handles the secure and current_sctx save/restore internally.
@@ -725,14 +643,9 @@ void nvim_blfp_regex_free(void *handle)
   xfree(handle);
 }
 
-// nvim_blfp_errmsg_e93: deleted (Phase 1, inlined in errors.rs)
-// nvim_blfp_errmsg_e94: deleted (Phase 1, inlined in errors.rs)
-
 // ============================================================
 // Phase 5 accessor functions for ExpandBufnames.
 // ============================================================
-
-// nvim_cmdline_fuzzy_complete: deleted (Phase 2, Rust uses cmdline_fuzzy_complete directly via #[link_name])
 
 /// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
 void *nvim_bufname_regex_compile(char *pat)
@@ -771,9 +684,6 @@ int nvim_curwin_get_p_diff(void)
 {
   return curwin->w_p_diff ? 1 : 0;
 }
-
-// nvim_home_replace_save_buf: deleted (Phase 2, Rust uses home_replace_save directly via #[link_name])
-// nvim_fuzzymatches_to_strmatches: deleted (Phase 2, Rust uses fuzzymatches_to_strmatches directly via #[link_name])
 
 // Accessors for cmdwin migration
 int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
@@ -1218,12 +1128,9 @@ int nvim_get_winopts_apply(WinInfo *wip, buf_T *buf)
 void nvim_clear_winopt_curwin(void) { clear_winopt(&curwin->w_onebuf_opt); }
 void nvim_curwin_set_changelistidx(int val) { curwin->w_changelistidx = val; }
 bool nvim_curwin_config_is_minimal(void) { return curwin->w_config.style == kWinStyleMinimal; }
-// nvim_get_p_fdls: deleted (Phase 4, Rust accesses p_fdls directly)
 void nvim_curwin_set_p_fdl(int val) { curwin->w_p_fdl = (OptInt)val; }
 void nvim_didset_window_options_curwin(void) { didset_window_options(curwin, false); }
 void nvim_win_set_minimal_style_curwin(void) { win_set_minimal_style(curwin); }
-// nvim_get_curwin: defined in Rust window crate (window/src/globals.rs)
-// nvim_win_get_changelistidx: defined in window_shim.c
 void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelistidx = val; }
 void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
 void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
@@ -1267,13 +1174,8 @@ void nvim_buf_set_changedtick_compound(buf_T *const buf, const varnumber_T chang
   }
 }
 
-
-
 // wininfo_other_tab_diff, find_wininfo, get_winopts, buflist_findfmark:
 // migrated to Rust (src/nvim-rs/buffer/src/wininfo.rs)
-
-
-// nvim_fname_expand: deleted (Phase 2, Rust calls rs_fname_expand directly which is the underlying impl)
 
 /// Return true if "buf" is displayed in any window across all tabs.
 /// Used by setfname to check if obuf is in use. Accessor for Rust.
@@ -1318,14 +1220,7 @@ void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
   buf->b_fname = buf->b_sfname;
 }
 
-// nvim_emsg_e95_buffer_exists: deleted (Phase 1, inlined in errors.rs)
-
 // Accessors for buf_open_scratch (migrated to Rust, src/nvim-rs/buffer/src/lifecycle.rs)
-
-// nvim_do_ecmd_one_hide: deleted (Phase 2, Rust calls do_ecmd directly)
-
-// nvim_apply_autocmds_buffilepre: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_apply_autocmds_buffilepost: deleted (Phase 3, Rust calls apply_autocmds directly)
 
 /// Sets bufhidden=hide, buftype=nofile, swapfile=false, and resets bindings.
 /// Compound accessor for buf_open_scratch (Rust).
@@ -1339,17 +1234,12 @@ void nvim_set_buf_opts_scratch(void)
 
 // buf_open_scratch migrated to Rust (src/nvim-rs/buffer/src/lifecycle.rs)
 
-
 // setfname migrated to Rust (src/nvim-rs/buffer/src/filename.rs)
-
 
 // ============================================================
 // Buffer navigation (Phase 15)
 // Accessors for buflist_getfile (migrated to Rust, src/nvim-rs/buffer/src/list.rs)
 // ============================================================
-
-// nvim_swb_has_vsplit: deleted (Phase 4, Rust accesses swb_flags directly)
-// nvim_swb_has_split: deleted (Phase 4, Rust accesses swb_flags directly)
 
 /// Returns non-zero if 'switchbuf' has the "newtab" flag.
 int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }
@@ -1357,17 +1247,11 @@ int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; 
 /// Returns non-zero if the current buffer is empty.
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
-// nvim_emsg_noalt: deleted (Phase 1, inlined in errors.rs)
-
-// nvim_getfile: deleted (Phase 2, Rust calls getfile directly and inlines GETFILE_SUCCESS check)
-
 /// Returns WSP_VERT flag if 'switchbuf' has "vsplit", else 0.
 int nvim_swb_win_split_flags(void)
 {
   return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0;
 }
-
-// nvim_mark_view_restore: deleted (Phase 2, Rust uses mark_view_restore directly)
 
 // buflist_getfile migrated to Rust (src/nvim-rs/buffer/src/list.rs)
 
@@ -1418,8 +1302,6 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
                   0, 0, (linenr_T)MAXLNUM,
                   ea, READ_NEW | READ_DUMMY, false);
 }
-
-// nvim_wipe_buffer_no_confirm: deleted (Phase 2, Rust calls rs_wipe_buffer(buf, false) directly)
 
 // buf_contents_changed migrated to Rust (src/nvim-rs/buffer/src/misc.rs)
 
@@ -1889,7 +1771,6 @@ void enter_buffer(buf_T *buf)
 // ============================================================
 
 // e_attempt_to_delete_buffer_that_is_in_use_str: deleted (Phase 1, only user was nvim_emsg_e937_buf_in_use)
-// nvim_emsg_e937_buf_in_use: deleted (Phase 1, inlined in errors.rs)
 
 /// Compound accessor: aucmd_prepbuf + open_buffer(false,NULL,0) + aucmd_restbuf.
 /// Returns 0 on FAIL, non-zero on OK/NOTDONE (accessor for Rust buf_ensure_loaded).
@@ -2117,14 +1998,6 @@ void nvim_buf_flags_and(buf_T *buf, int mask)
   buf->b_flags &= mask;
 }
 
-// nvim_set_bufref: deleted (Phase 5, Rust calls set_bufref directly)
-// nvim_bufref_valid: deleted (Phase 5, Rust calls rs_bufref_valid directly via #[link_name])
-// nvim_buf_updates_unload: deleted (Phase 5, Rust calls buf_updates_unload directly)
-// nvim_apply_autocmds_bufunload: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_apply_autocmds_bufdelete_fname: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_apply_autocmds_bufwipeout: deleted (Phase 3, Rust calls apply_autocmds directly)
-// nvim_goto_tabpage_win: deleted (Phase 5, Rust calls goto_tabpage_win directly)
-
 void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
 {
   if (curwin != NULL && curwin->w_buffer == buf) {
@@ -2140,10 +2013,6 @@ void nvim_buf_clearFolding_all_windows(buf_T *buf)
     }
   }
 }
-
-// nvim_ml_close: deleted (Phase 2, Rust uses ml_close(buf, true) directly)
-
-// nvim_u_clearallandblockfree: deleted (Phase 5, Rust calls u_clearallandblockfree directly)
 
 void nvim_syntax_clear_buf(buf_T *buf)
 {
@@ -2395,6 +2264,5 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   // NOTE: at this point "curbuf" may be invalid!
   return true;
 }
-
 
 // buf_freeall migrated to Rust (src/nvim-rs/buffer/src/close.rs)
