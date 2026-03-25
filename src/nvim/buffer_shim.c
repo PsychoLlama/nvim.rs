@@ -680,17 +680,8 @@ const char *nvim_curbuf_get_fname(void)
 
 // nvim_get_p_mls: deleted (Phase 4, Rust accesses p_mls directly)
 
-/// Push a ETYPE_MODELINE entry onto the execution stack (accessor for Rust).
-void nvim_estack_push_modeline(linenr_T lnum)
-{
-  estack_push(ETYPE_MODELINE, "modelines", lnum);
-}
-
-/// Pop top entry from execution stack (accessor for Rust).
-void nvim_estack_pop(void)
-{
-  estack_pop();
-}
+// nvim_estack_push_modeline: deleted (Phase 5, Rust calls estack_push directly)
+// nvim_estack_pop: deleted (Phase 5, Rust calls estack_pop directly)
 
 /// Call do_set(s, OPT_MODELINE|OPT_LOCAL|flags) with modeline context saved/restored.
 /// This handles the secure and current_sctx save/restore internally.
@@ -2126,29 +2117,13 @@ void nvim_buf_flags_and(buf_T *buf, int mask)
   buf->b_flags &= mask;
 }
 
-void nvim_set_bufref(bufref_T *bufref, buf_T *buf)
-{
-  set_bufref(bufref, buf);
-}
-
-bool nvim_bufref_valid(bufref_T *bufref)
-{
-  return bufref_valid(bufref);
-}
-
-void nvim_buf_updates_unload(buf_T *buf)
-{
-  buf_updates_unload(buf, false);
-}
-
+// nvim_set_bufref: deleted (Phase 5, Rust calls set_bufref directly)
+// nvim_bufref_valid: deleted (Phase 5, Rust calls rs_bufref_valid directly via #[link_name])
+// nvim_buf_updates_unload: deleted (Phase 5, Rust calls buf_updates_unload directly)
 // nvim_apply_autocmds_bufunload: deleted (Phase 3, Rust calls apply_autocmds directly)
 // nvim_apply_autocmds_bufdelete_fname: deleted (Phase 3, Rust calls apply_autocmds directly)
 // nvim_apply_autocmds_bufwipeout: deleted (Phase 3, Rust calls apply_autocmds directly)
-
-void nvim_goto_tabpage_win(void *tab, void *win)
-{
-  goto_tabpage_win((tabpage_T *)tab, (win_T *)win);
-}
+// nvim_goto_tabpage_win: deleted (Phase 5, Rust calls goto_tabpage_win directly)
 
 void nvim_reset_synblock_if_curwin_buf(buf_T *buf)
 {
@@ -2168,10 +2143,7 @@ void nvim_buf_clearFolding_all_windows(buf_T *buf)
 
 // nvim_ml_close: deleted (Phase 2, Rust uses ml_close(buf, true) directly)
 
-void nvim_u_clearallandblockfree(buf_T *buf)
-{
-  u_clearallandblockfree(buf);
-}
+// nvim_u_clearallandblockfree: deleted (Phase 5, Rust calls u_clearallandblockfree directly)
 
 void nvim_syntax_clear_buf(buf_T *buf)
 {

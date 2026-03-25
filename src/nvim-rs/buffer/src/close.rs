@@ -72,10 +72,11 @@ extern "C" {
     fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut c_void;
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
 
-    fn nvim_set_bufref(bufref: *mut BufRef, buf: BufHandle);
-    fn nvim_bufref_valid(bufref: *const BufRef) -> bool;
+    fn set_bufref(bufref: *mut BufRef, buf: BufHandle);
+    #[link_name = "rs_bufref_valid"]
+    fn nvim_bufref_valid(bufref: *const BufRef) -> c_int;
 
-    fn nvim_buf_updates_unload(buf: BufHandle);
+    fn buf_updates_unload(buf: BufHandle, can_reload: bool);
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn apply_autocmds(
         event: c_int,
@@ -87,7 +88,7 @@ extern "C" {
 
     fn rs_win_valid_any_tab(win: *mut c_void) -> c_int;
     fn nvim_win_get_buffer(win: *mut c_void) -> BufHandle;
-    fn nvim_goto_tabpage_win(tab: *mut c_void, win: *mut c_void);
+    fn goto_tabpage_win(tab: *mut c_void, win: *mut c_void);
 
     fn nvim_block_autocmds();
     fn nvim_unblock_autocmds();
@@ -97,7 +98,7 @@ extern "C" {
     fn nvim_reset_synblock_if_curwin_buf(buf: BufHandle);
     fn nvim_buf_clearFolding_all_windows(buf: BufHandle);
     fn ml_close(buf: BufHandle, del_file: bool);
-    fn nvim_u_clearallandblockfree(buf: BufHandle);
+    fn u_clearallandblockfree(buf: BufHandle);
     fn nvim_syntax_clear_buf(buf: BufHandle);
 }
 
@@ -131,10 +132,10 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     nvim_buf_lock(buf);
 
     let mut bufref = BufRef::zeroed();
-    nvim_set_bufref(&raw mut bufref, buf);
+    set_bufref(&raw mut bufref, buf);
 
-    nvim_buf_updates_unload(buf);
-    if !nvim_bufref_valid(&raw const bufref) {
+    buf_updates_unload(buf, false);
+    if nvim_bufref_valid(&raw const bufref) == 0 {
         // on_detach callback deleted the buffer.
         return;
     }
@@ -147,7 +148,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
             false,
             buf,
         )
-        && !nvim_bufref_valid(&raw const bufref)
+        && nvim_bufref_valid(&raw const bufref) == 0
     {
         // Autocommands deleted the buffer.
         return;
@@ -162,7 +163,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
             false,
             buf,
         )
-        && !nvim_bufref_valid(&raw const bufref)
+        && nvim_bufref_valid(&raw const bufref) == 0
     {
         // Autocommands may delete the buffer.
         return;
@@ -176,7 +177,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
             false,
             buf,
         )
-        && !nvim_bufref_valid(&raw const bufref)
+        && nvim_bufref_valid(&raw const bufref) == 0
     {
         // Autocommands may delete the buffer.
         return;
@@ -190,7 +191,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     let new_curwin = nvim_get_curwin();
     if is_curwin && new_curwin != the_curwin && rs_win_valid_any_tab(the_curwin) != 0 {
         nvim_block_autocmds();
-        nvim_goto_tabpage_win(the_curtab, the_curwin);
+        goto_tabpage_win(the_curtab, the_curwin);
         nvim_unblock_autocmds();
     }
 
@@ -213,7 +214,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     nvim_buf_set_ml_line_count(buf, 0_i32); // no lines in buffer
 
     if (flags & BFA_KEEP_UNDO) == 0 {
-        nvim_u_clearallandblockfree(buf);
+        u_clearallandblockfree(buf);
     }
 
     nvim_syntax_clear_buf(buf); // reset syntax info

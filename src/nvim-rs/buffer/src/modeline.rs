@@ -21,6 +21,10 @@ const FAIL: c_int = -1;
 const OPT_LOCAL: c_int = 0x02;
 const OPT_MODELINE: c_int = 0x04;
 
+// etype_T enum values (from runtime_defs.h)
+// TOP=0, SCRIPT=1, UFUNC=2, AUCMD=3, MODELINE=4
+const ETYPE_MODELINE: c_int = 4;
+
 // =============================================================================
 // External C Functions
 // =============================================================================
@@ -42,9 +46,9 @@ extern "C" {
     fn nvim_try_getdigits(s: *const c_char, vers: *mut i64) -> c_int;
 
     /// Push a modeline entry onto the execution stack.
-    fn nvim_estack_push_modeline(lnum: c_int);
+    fn estack_push(etype: c_int, name: *mut c_char, lnum: c_int) -> *mut c_void;
     /// Pop top entry from execution stack.
-    fn nvim_estack_pop();
+    fn estack_pop();
 
     /// Call `do_set(s, flags)`.
     fn nvim_do_set(s: *mut c_char, flags: c_int) -> c_int;
@@ -195,7 +199,11 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
     // rest_len + 1 would include the NUL terminator
 
     // Prepare error stack
-    nvim_estack_push_modeline(lnum);
+    estack_push(
+        ETYPE_MODELINE,
+        c"modelines".as_ptr().cast_mut().cast::<c_char>(),
+        lnum,
+    );
 
     // Work through option settings separated by ':'
     let line_copy_end = line_copy_ptr.add(rest_len);
@@ -272,7 +280,7 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
         s = if e == line_copy_end { e } else { e.add(1) };
     }
 
-    nvim_estack_pop();
+    estack_pop();
     nvim_xfree(line_copy_ptr.cast::<c_void>());
 
     retval
