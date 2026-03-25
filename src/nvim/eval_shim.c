@@ -538,12 +538,6 @@ void nvim_blob_set_ret(typval_T *tv, blob_T *b)
   tv_blob_set_ret(tv, b);
 }
 
-/// Check if typval is a function (VAR_FUNC or VAR_PARTIAL) - accessor for Rust.
-int nvim_tv_is_func(const typval_T *tv)
-{
-  return tv->v_type == VAR_FUNC || tv->v_type == VAR_PARTIAL;
-}
-
 // =============================================================================
 // Phase 1: eval_func helpers (accessor functions for rs_eval_func)
 // =============================================================================
@@ -726,12 +720,6 @@ int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
 // Phase 5 (handle_subscript): new C accessor/wrapper functions
 // =============================================================================
 
-/// aborting() wrapper - accessor for Rust rs_handle_subscript.
-bool nvim_aborting(void)
-{
-  return aborting();
-}
-
 /// Get partial->pt_auto - accessor for Rust rs_handle_subscript.
 bool nvim_partial_get_pt_auto(const partial_T *pt)
 {
@@ -823,10 +811,6 @@ int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
 {
   return may_call_simple_func(arg, rettv);
 }
-
-/// tv_list_join with newline separator - wrapper for typval2string.
-/// Appends all list items joined by "\n" followed by NL if list non-empty, then NUL.
-/// Returns heap-allocated string (caller must xfree).
 
 // ============================================================================
 // Phase 3: C accessors for var2fpos / list2fpos (used by Rust indexing module)

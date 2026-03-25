@@ -42,7 +42,7 @@ extern "C" {
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
     static mut need_clr_eos: bool;
-    fn nvim_aborting() -> bool;
+    fn aborting() -> c_int;
     static mut msg_didout: bool;
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
@@ -226,8 +226,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             // Report the invalid expression unless the expression evaluation
             // has been cancelled due to an aborting error, an interrupt, or an
             // exception.
-            if !nvim_aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before
-            {
+            if aborting() == 0 && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
                 nvim_eval::errors::semsg_invexpr2(p);
             }
             need_clr_eos = false;

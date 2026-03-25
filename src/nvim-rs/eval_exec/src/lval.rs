@@ -290,9 +290,6 @@ extern "C" {
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
 
-    // tv_is_func (int return, existing)
-    fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
-
     // Error message wrappers (Phase 1): now in nvim_eval::errors
 }
 

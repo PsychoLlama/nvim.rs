@@ -139,9 +139,6 @@ extern "C" {
     // Pattern matching
     fn pattern_match(pat: *const c_char, text: *const c_char, ic: c_int) -> c_int;
 
-    // Type checking helpers
-    fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
-
     // General equality
     fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
 
@@ -341,7 +338,7 @@ pub unsafe fn typval_compare_impl(
         }
     }
     // Funcref comparison
-    else if nvim_tv_is_func(typ1) != 0 || nvim_tv_is_func(typ2) != 0 {
+    else if typ1.is_func() || typ2.is_func() {
         if expr_type != EXPR_EQUAL
             && expr_type != EXPR_NEQUAL
             && expr_type != EXPR_IS

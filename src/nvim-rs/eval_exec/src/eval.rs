@@ -115,6 +115,17 @@ impl TypevalHandle {
         t.v_type = 2; // VAR_STRING
         t.vval.v_string = s;
     }
+
+    /// Check if v_type is VAR_FUNC (3) or VAR_PARTIAL (9) (inlined from `nvim_tv_is_func`).
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a valid non-null pointer to a `typval_T`.
+    #[inline]
+    pub unsafe fn is_func(self) -> bool {
+        let vtype = (*self.0.cast::<TypvalTRepr>()).v_type;
+        vtype == 3 || vtype == 9 // VAR_FUNC || VAR_PARTIAL
+    }
 }
 
 /// Function pointer type matching C `LineGetter`.
@@ -3244,12 +3255,9 @@ extern "C" {
     // make_partial wrapper
     #[link_name = "make_partial"]
     fn nvim_make_partial(selfdict: *mut c_void, rettv: TypevalHandle);
-    // aborting() wrapper
-    fn nvim_aborting() -> bool;
     // Get partial->pt_auto
     fn nvim_partial_get_pt_auto(pt: *const c_void) -> bool;
-    // tv_is_func wrapper (returns int, matches other declarations in this crate)
-    fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
+    // (nvim_tv_is_func inlined as TypevalHandle::is_func())
     // rs_check_luafunc_name is in the eval crate (different crate)
     fn rs_check_luafunc_name(str: *const c_char, paren: bool) -> c_int;
 }
@@ -3340,7 +3348,7 @@ pub unsafe fn handle_subscript_impl(
         let tv_type = nvim_tv_get_type(rettv);
         let is_subscript = (ch == b'['
             || (ch == b'.' && tv_type == VAR_DICT)
-            || (ch == b'(' && (!evaluate || nvim_tv_is_func(rettv) != 0)))
+            || (ch == b'(' && (!evaluate || rettv.is_func())))
             && rs_ascii_iswhite(c_int::from(prev_ch)) == 0;
         let is_arrow = ch == b'-' && next_ch == b'>';
 
@@ -3359,7 +3367,7 @@ pub unsafe fn handle_subscript_impl(
                 lua_funcname,
             );
             // Stop on aborting (interrupt, exception, etc.)
-            if nvim_aborting() {
+            if aborting() != 0 {
                 if ret == OK {
                     tv_clear(rettv);
                 }
@@ -3395,7 +3403,7 @@ pub unsafe fn handle_subscript_impl(
     }
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
-    if !selfdict.is_null() && nvim_tv_is_func(rettv) != 0 {
+    if !selfdict.is_null() && rettv.is_func() {
         set_selfdict_impl(rettv, selfdict);
     }
 

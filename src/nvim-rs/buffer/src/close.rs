@@ -92,7 +92,7 @@ extern "C" {
 
     fn nvim_block_autocmds();
     fn nvim_unblock_autocmds();
-    fn nvim_aborting() -> bool;
+    fn aborting() -> c_int;
 
     fn rs_diff_buf_delete(buf: BufHandle);
     fn nvim_reset_synblock_if_curwin_buf(buf: BufHandle);
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     // autocmds may abort script processing
-    if (flags & BFA_IGNORE_ABORT) == 0 && nvim_aborting() {
+    if (flags & BFA_IGNORE_ABORT) == 0 && aborting() != 0 {
         return;
     }
 
