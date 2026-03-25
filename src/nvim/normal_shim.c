@@ -1064,14 +1064,6 @@ _Static_assert(MODE_SELECT == 0x40, "MODE_SELECT changed");
 /// Get vgetc_char global.
 int nvim_get_vgetc_char(void) { return vgetc_char; }
 
-/// Get vgetc_mod_mask global.
-int nvim_get_vgetc_mod_mask(void) { return vgetc_mod_mask; }
-
-/// Get km_startsel global.
-bool nvim_get_km_startsel(void) { return km_startsel; }
-
-/// Get km_stopsel global.
-bool nvim_get_km_stopsel(void) { return km_stopsel; }
 
 
 /// Get curwin->w_p_rl.
@@ -1306,8 +1298,6 @@ void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 // Scrollbind C accessors for Rust FFI
 // =============================================================================
 
-/// Get did_syncbind global.
-bool nvim_get_did_syncbind(void) { return did_syncbind; }
 
 /// Set did_syncbind global.
 void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
@@ -1327,8 +1317,6 @@ int nvim_curwin_get_w_scbind_pos(void) { return curwin->w_scbind_pos; }
 /// Set curwin->w_scbind_pos.
 void nvim_curwin_set_w_scbind_pos(int val) { curwin->w_scbind_pos = (linenr_T)val; }
 
-/// Check if char c is in p_sbo (scrollopt) option string.
-bool nvim_vim_strchr_p_sbo(int c) { return vim_strchr(p_sbo, c) != NULL; }
 
 /// Compound: iterate all windows in current tab and sync scrollbind.
 /// Handles curwin/curbuf swapping internally (unsafe to do in Rust).

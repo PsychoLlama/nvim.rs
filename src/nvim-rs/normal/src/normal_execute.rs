@@ -71,8 +71,8 @@ extern "C" {
     #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
     fn nvim_get_vgetc_char() -> c_int;
-    fn nvim_get_vgetc_mod_mask() -> c_int;
-    fn nvim_get_km_startsel() -> bool;
+    static vgetc_mod_mask: c_int;
+    static km_startsel: bool;
     fn nvim_get_curwin_w_p_rl() -> bool;
     fn nvim_get_curswant() -> c_int;
     fn nvim_get_cursor_lnum() -> i32;
@@ -120,7 +120,7 @@ extern "C" {
     fn nvim_dec_allow_keys();
     static mut no_zero_mapping: c_int;
     fn nvim_plain_vgetc_wrapper() -> c_int;
-    fn nvim_get_km_stopsel() -> bool;
+    static km_stopsel: bool;
     fn nvim_redraw_curbuf_inverted();
     #[link_name = "end_visual_mode"]
     fn rs_end_visual_mode();
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         && nvim_get_VIsual_select()
         && (vim_isprintc(c) || c == NL || c == CAR || c == K_KENTER)
     {
-        let len = ins_char_typebuf(nvim_get_vgetc_char(), nvim_get_vgetc_mod_mask(), true);
+        let len = ins_char_typebuf(nvim_get_vgetc_char(), vgetc_mod_mask, true);
 
         if nvim_get_KeyTyped() {
             ungetchars(len);
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         (*sp).old_pos.col = nvim_get_cursor_col();
 
         // When 'keymodel' contains "startsel" some keys start Select/Visual mode.
-        if !VIsual_active && nvim_get_km_startsel() {
+        if !VIsual_active && km_startsel {
             let cur_idx = (*sp).idx;
             let flags = crate::dispatch::table::rs_table_get_cmd_flags(cur_idx);
             if flags & NV_SS != 0 {
@@ -419,7 +419,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     let idx = (*sp).idx;
 
     // When 'keymodel' contains "stopsel" may stop Select/Visual mode
-    if nvim_get_km_stopsel()
+    if km_stopsel
         && (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_STS != 0)
         && (nvim_get_mod_mask() & MOD_MASK_SHIFT == 0)
     {
@@ -428,7 +428,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
     }
 
     // Keys that work differently when 'keymodel' contains "startsel"
-    if nvim_get_km_startsel() {
+    if km_startsel {
         let flags = crate::dispatch::table::rs_table_get_cmd_flags(idx);
         if flags & NV_SS != 0 {
             let mut mm = nvim_get_mod_mask();

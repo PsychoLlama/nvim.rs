@@ -18,7 +18,7 @@ static OLD_BUF: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 static OLD_LEFTCOL: AtomicI32 = AtomicI32::new(0);
 
 extern "C" {
-    fn nvim_get_did_syncbind() -> bool;
+    static did_syncbind: bool;
     fn nvim_set_did_syncbind(val: bool);
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_get_curwin() -> WinHandle;
@@ -29,7 +29,8 @@ extern "C" {
     fn nvim_get_curwin_w_leftcol() -> c_int;
     fn nvim_curwin_get_w_scbind_pos() -> c_int;
     fn nvim_curwin_set_w_scbind_pos(val: c_int);
-    fn nvim_vim_strchr_p_sbo(c: c_int) -> bool;
+    static p_sbo: *const std::ffi::c_char;
+    fn vim_strchr(s: *const std::ffi::c_char, c: c_int) -> *mut std::ffi::c_char;
     fn nvim_scrollbind_sync_windows(
         old_curwin: WinHandle,
         vtopline_diff: c_int,
@@ -57,7 +58,7 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
         let old_vtopline = OLD_VTOPLINE.load(Ordering::Relaxed);
         let old_leftcol = OLD_LEFTCOL.load(Ordering::Relaxed);
 
-        if nvim_get_did_syncbind() {
+        if did_syncbind {
             // ":syncbind" was just used: reset values, don't scroll.
             nvim_set_did_syncbind(false);
         } else if nvim_curwin_eq(old_curwin) {
@@ -70,7 +71,7 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
                     nvim_get_curwin_w_leftcol() - old_leftcol,
                 );
             }
-        } else if nvim_vim_strchr_p_sbo('j' as c_int) {
+        } else if !vim_strchr(p_sbo, 'j' as c_int).is_null() {
             // Window switch: resync relative position if 'j' flag set in 'scrollopt'.
             rs_check_scrollbind(vtopline - nvim_curwin_get_w_scbind_pos(), 0);
         }
@@ -97,9 +98,10 @@ pub unsafe extern "C" fn rs_check_scrollbind(vtopline_diff: c_int, leftcol_diff:
     let tgt_leftcol = nvim_get_curwin_w_leftcol();
 
     // Check 'scrollopt' for vertical and horizontal scroll flags.
-    let want_ver =
-        nvim_curwin_get_w_p_diff() || (nvim_vim_strchr_p_sbo('v' as c_int) && vtopline_diff != 0);
-    let want_hor = nvim_vim_strchr_p_sbo('h' as c_int) && (leftcol_diff != 0 || vtopline_diff != 0);
+    let want_ver = nvim_curwin_get_w_p_diff()
+        || (!vim_strchr(p_sbo, c_int::from(b'v')).is_null() && vtopline_diff != 0);
+    let want_hor = !vim_strchr(p_sbo, c_int::from(b'h')).is_null()
+        && (leftcol_diff != 0 || vtopline_diff != 0);
 
     // Delegate window iteration (curwin/curbuf swapping) to C compound accessor.
     nvim_scrollbind_sync_windows(old_curwin, vtopline_diff, tgt_leftcol, want_ver, want_hor);
