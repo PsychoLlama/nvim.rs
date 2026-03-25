@@ -22,9 +22,12 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 const EVAL_EVALUATE: c_int = 1;
 
+const VAR_NUMBER: c_int = 1;
 const VAR_STRING: c_int = 2;
 const VAR_LIST: c_int = 4;
 const VAR_BLOB: c_int = 10;
+// VarLockStatus::VAR_FIXED = 2
+const VAR_FIXED: c_int = 2;
 
 // =============================================================================
 // Struct definitions mirroring C layout
@@ -36,6 +39,18 @@ const VAR_BLOB: c_int = 10;
 struct ListWatch {
     lw_item: *mut c_void, // listitem_T*
     lw_next: *mut c_void, // listwatch_T* (next watcher in linked list)
+}
+
+/// Mirrors C `listitem_T` (struct listitem_S) from eval/typval_defs.h.
+/// Layout:
+///   offset  0: li_next (*mut c_void, listitem_T*)
+///   offset  8: li_prev (*mut c_void, listitem_T*)
+///   offset 16: li_tv   (TypvalT, 16 bytes)
+#[repr(C)]
+struct ListItemT {
+    li_next: *mut c_void,
+    li_prev: *mut c_void,
+    li_tv: nvim_eval::typval::TypvalT,
 }
 
 /// Mirrors the old `forinfo_T` typedef from eval_shim.c (now deleted).
@@ -73,33 +88,21 @@ struct ForInfo {
 
 extern "C" {
     // skip_var_list / ex_let_vars (direct C calls, not through nvim_ wrappers)
+    fn ex_let_vars(
+        arg: *mut c_char,
+        tv: *const nvim_eval::typval::TypvalT,
+        copy: c_int,
+        semicolon: c_int,
+        var_count: c_int,
+        is_const: c_int,
+        op: *mut c_char,
+    ) -> c_int;
     fn skip_var_list(
         arg: *const c_char,
         var_count: *mut c_int,
         semicolon: *mut c_int,
         silent: bool,
     ) -> *const c_char;
-
-    // ex_let_vars wrappers (kept as C thin wrappers -- construct typval_T in C)
-    fn nvim_ex_let_vars_number(
-        arg: *mut c_char,
-        n: i64,
-        copy: bool,
-        semicolon: c_int,
-        varcount: c_int,
-    ) -> bool;
-    fn nvim_ex_let_vars_string_owned(
-        arg: *mut c_char,
-        s: *mut c_char,
-        semicolon: c_int,
-        varcount: c_int,
-    ) -> bool;
-    fn nvim_ex_let_vars_list_item(
-        arg: *mut c_char,
-        item: *mut c_void,
-        semicolon: c_int,
-        varcount: c_int,
-    ) -> bool;
 
     // tv_list_watch_add/remove (called directly with &fi.fi_lw)
     fn tv_list_watch_add(l: *mut c_void, lw: *mut ListWatch);
@@ -170,6 +173,70 @@ unsafe fn get_byte(p: *const c_char) -> u8 {
     } else {
         *p as u8
     }
+}
+
+/// Call ex_let_vars with a number typval (inlined from nvim_ex_let_vars_number).
+#[inline]
+unsafe fn ex_let_vars_number(
+    arg: *mut c_char,
+    n: i64,
+    copy: bool,
+    semicolon: c_int,
+    varcount: c_int,
+) -> bool {
+    let tv = nvim_eval::typval::TypvalT {
+        v_type: VAR_NUMBER,
+        v_lock: VAR_FIXED,
+        vval: nvim_eval::typval::TypvalVval { v_number: n },
+    };
+    ex_let_vars(
+        arg,
+        &tv,
+        c_int::from(copy),
+        semicolon,
+        varcount,
+        0,
+        std::ptr::null_mut(),
+    ) == OK
+}
+
+/// Call ex_let_vars with a string typval, freeing the string after (inlined from
+/// nvim_ex_let_vars_string_owned).
+#[inline]
+unsafe fn ex_let_vars_string_owned(
+    arg: *mut c_char,
+    s: *mut c_char,
+    semicolon: c_int,
+    varcount: c_int,
+) -> bool {
+    let tv = nvim_eval::typval::TypvalT {
+        v_type: VAR_STRING,
+        v_lock: VAR_FIXED,
+        vval: nvim_eval::typval::TypvalVval { v_string: s },
+    };
+    let result = ex_let_vars(arg, &tv, 1, semicolon, varcount, 0, std::ptr::null_mut()) == OK;
+    xfree(s.cast::<c_void>());
+    result
+}
+
+/// Call ex_let_vars with the typval from a list item (inlined from nvim_ex_let_vars_list_item).
+#[inline]
+unsafe fn ex_let_vars_list_item(
+    arg: *mut c_char,
+    item: *mut c_void,
+    semicolon: c_int,
+    varcount: c_int,
+) -> bool {
+    let li = item.cast::<ListItemT>();
+    ex_let_vars(
+        arg,
+        &(*li).li_tv,
+        1,
+        semicolon,
+        varcount,
+        0,
+        std::ptr::null_mut(),
+    ) == OK
 }
 
 /// Allocate a zeroed ForInfo struct on the heap and return as *mut ForInfo.
@@ -330,7 +397,7 @@ pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool
         }
         let byte_val = i64::from(nvim_blob_get(blob as *const c_void, bi));
         (*fi).fi_bi = bi + 1;
-        return nvim_ex_let_vars_number(arg, byte_val, true, semicolon, varcount);
+        return ex_let_vars_number(arg, byte_val, true, semicolon, varcount);
     }
 
     if !(*fi).fi_string.is_null() {
@@ -342,7 +409,7 @@ pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool
         }
         let dup = xmemdupz(s.add(byte_idx as usize) as *const c_void, len as usize);
         (*fi).fi_byte_idx = byte_idx + len;
-        return nvim_ex_let_vars_string_owned(arg, dup, semicolon, varcount);
+        return ex_let_vars_string_owned(arg, dup, semicolon, varcount);
     }
 
     // List iteration
@@ -353,7 +420,7 @@ pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool
     let list = (*fi).fi_list;
     let next = nvim_list_item_next(list, item);
     (*fi).fi_lw.lw_item = next;
-    nvim_ex_let_vars_list_item(arg, item, semicolon, varcount)
+    ex_let_vars_list_item(arg, item, semicolon, varcount)
 }
 
 /// FFI export for next_for_item.

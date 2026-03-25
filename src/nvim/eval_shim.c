@@ -340,34 +340,6 @@ typval_T *nvim_list_item_tv(listitem_T *item)
   return TV_LIST_ITEM_TV(item);
 }
 
-/// Call ex_let_vars with a number typval.
-bool nvim_ex_let_vars_number(char *arg, varnumber_T n, bool copy, int semicolon,
-                             int varcount)
-{
-  typval_T tv;
-  tv.v_type = VAR_NUMBER;
-  tv.v_lock = VAR_FIXED;
-  tv.vval.v_number = n;
-  return ex_let_vars(arg, &tv, copy, semicolon, varcount, false, NULL) == OK;
-}
-
-/// Call ex_let_vars with a string typval (takes ownership of s).
-bool nvim_ex_let_vars_string_owned(char *arg, char *s, int semicolon, int varcount)
-{
-  typval_T tv;
-  tv.v_type = VAR_STRING;
-  tv.v_lock = VAR_FIXED;
-  tv.vval.v_string = s;
-  bool result = ex_let_vars(arg, &tv, true, semicolon, varcount, false, NULL) == OK;
-  xfree(tv.vval.v_string);
-  return result;
-}
-
-/// Call ex_let_vars with a list item typval.
-bool nvim_ex_let_vars_list_item(char *arg, listitem_T *item, int semicolon, int varcount)
-{
-  return ex_let_vars(arg, TV_LIST_ITEM_TV(item), true, semicolon, varcount, false, NULL) == OK;
-}
 
 // Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
 
