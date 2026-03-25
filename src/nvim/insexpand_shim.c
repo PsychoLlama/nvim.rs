@@ -931,6 +931,7 @@ void nvim_compl_match_set_score(void *m, int score) { if (m) { ((compl_T *)m)->c
 const char *nvim_compl_match_get_cp_str_data(void *m) { return m ? ((compl_T *)m)->cp_str.data : NULL; }
 size_t nvim_compl_match_get_cp_str_size(void *m) { return m ? ((compl_T *)m)->cp_str.size : 0; }
 int nvim_compl_match_has_fname(void *m) { return (m && ((compl_T *)m)->cp_fname != NULL) ? 1 : 0; }
+const char *nvim_compl_shown_match_fname(void) { return compl_shown_match ? compl_shown_match->cp_fname : NULL; }
 // nvim_vim_strnicmp: deleted (Phase 1, Rust calls strncasecmp directly)
 
 _Static_assert(-(('k') + (('b') << 8)) == -25195, "K_BS value mismatch");
@@ -1795,32 +1796,7 @@ void nvim_do_autocmd_completedone_impl(int c, int mode, char *word)
   restore_v_event(v_event, &save_v_event);
 }
 
-void nvim_ins_compl_show_filename_impl(void)
-{
-  char *const lead = _("match in file");
-  int space = sc_col - vim_strsize(lead) - 2;
-  if (space <= 0) {
-    return;
-  }
-
-  char *s;
-  char *e;
-  for (s = e = compl_shown_match->cp_fname; *e != NUL; MB_PTR_ADV(e)) {
-    space -= ptr2cells(e);
-    while (space < 0) {
-      space += ptr2cells(s);
-      MB_PTR_ADV(s);
-    }
-  }
-  if (!compl_autocomplete) {
-    msg_hist_off = true;
-    vim_snprintf(IObuff, IOSIZE, "%s %s%s", lead,
-                 s > compl_shown_match->cp_fname ? "<" : "", s);
-    msg(IObuff, 0);
-    msg_hist_off = false;
-    redraw_cmdline = false;  // don't overwrite!
-  }
-}
+// nvim_ins_compl_show_filename_impl: deleted (Phase 29), inlined in state.rs as rs_ins_compl_show_filename
 
 // Compound accessors for Phase 2 (pass 3): pattern helper functions.
 // These contain the original C logic (moved here from the function bodies

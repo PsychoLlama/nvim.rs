@@ -255,7 +255,7 @@ extern "C" {
     // Compound accessors for complex functions
     // nvim_get_next_spell_completion_impl: deleted (Phase 13), inlined below
     fn nvim_do_autocmd_completedone_impl(c: c_int, mode: c_int, word: *const c_char);
-    fn nvim_ins_compl_show_filename_impl();
+    // nvim_ins_compl_show_filename_impl: deleted (Phase 29), inlined below
     // Helpers for inlined nvim_get_next_spell_completion_impl
     fn expand_spelling(lnum: c_int, pat: *const c_char, matches: *mut *mut *mut c_char) -> c_int;
     fn rs_ins_compl_add_matches(num_matches: c_int, matches: *mut *mut c_char, icase: c_int);
@@ -420,11 +420,53 @@ pub unsafe extern "C" fn rs_do_autocmd_completedone(c: c_int, mode: c_int, word:
 
 /// Show the file name for the completion match (if any).
 ///
+/// Rust translation of nvim_ins_compl_show_filename_impl (Phase 29).
+///
 /// # Safety
 /// Requires valid global state.
 #[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub unsafe extern "C" fn rs_ins_compl_show_filename() {
-    nvim_ins_compl_show_filename_impl();
+    let lead = gettext(c"match in file".as_ptr());
+    let mut space = g_sc_col - vim_strsize_state(lead) - 2;
+    if space <= 0 {
+        return;
+    }
+
+    let fname = nvim_compl_shown_match_fname();
+    if fname.is_null() {
+        return;
+    }
+
+    let mut s = fname.cast_mut();
+    let mut e = fname.cast_mut();
+    // Advance e through the filename, tracking display width
+    while *e != 0 {
+        space -= ptr2cells(e.cast_const());
+        while space < 0 {
+            space += ptr2cells(s.cast_const());
+            s = s.add(utfc_ptr2len(s.cast_const()) as usize);
+        }
+        e = e.add(utfc_ptr2len(e.cast_const()) as usize);
+    }
+
+    if crate::vars::nvim_get_compl_autocomplete() == 0 {
+        g_msg_hist_off = true;
+        let buf = core::ptr::addr_of_mut!(IObuff_state).cast::<c_char>();
+        let ellipsis: *const c_char = if s > fname.cast_mut() {
+            c"<".as_ptr()
+        } else {
+            c"".as_ptr()
+        };
+        vim_snprintf(buf, 1025, c"%s %s%s".as_ptr(), lead, ellipsis, s);
+        nvim_msg_with_attr(buf, 0);
+        g_msg_hist_off = false;
+        g_redraw_cmdline = false; // don't overwrite!
+    }
 }
 
 // =============================================================================
@@ -480,6 +522,19 @@ extern "C" {
     fn nvim_msg_with_attr(s: *const c_char, attr: c_int) -> bool;
     #[link_name = "msg_clr_cmdline"]
     fn nvim_msg_clr_cmdline_wrap();
+    // Helpers for inlined rs_ins_compl_show_filename (Phase 29)
+    #[link_name = "sc_col"]
+    static g_sc_col: c_int;
+    #[link_name = "vim_strsize"]
+    fn vim_strsize_state(s: *const c_char) -> c_int;
+    #[link_name = "ptr2cells"]
+    fn ptr2cells(p: *const c_char) -> c_int;
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "IObuff"]
+    static mut IObuff_state: [c_char; 1025];
+    #[link_name = "redraw_cmdline"]
+    static mut g_redraw_cmdline: bool;
+    fn nvim_compl_shown_match_fname() -> *const c_char;
 }
 
 // Continuation status flags (already defined at top of file, re-use)
