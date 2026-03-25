@@ -221,8 +221,12 @@ extern "C" {
 
     // (nvim_get_next_filename_completion_wrap deleted Phase 15; call rs_get_next_filename_completion directly)
 
-    // expand_by_function wrapper
-    fn nvim_expand_by_function_impl(compl_type: c_int);
+    // nvim_expand_by_function_impl: deleted (Phase 30), call nvim_expand_by_function_full_impl directly
+    fn nvim_expand_by_function_full_impl(
+        type_: c_int,
+        base: *mut std::ffi::c_char,
+        cb: *mut std::ffi::c_void,
+    );
 
     // cpt func completion matches
     fn rs_get_cpt_func_completion_matches(cb_opaque: *mut std::ffi::c_void);
@@ -995,11 +999,21 @@ unsafe fn get_next_completion_match(
                 let cb = crate::vars::nvim_ins_compl_st_get_func_cb();
                 rs_get_cpt_func_completion_matches(cb);
             } else {
-                nvim_expand_by_function_impl(t);
+                // nvim_expand_by_function_impl inlined (Phase 30)
+                nvim_expand_by_function_full_impl(
+                    t,
+                    crate::vars::compl_pattern.data,
+                    core::ptr::null_mut(),
+                );
             }
         }
         t if t == CTRL_X_OMNI => {
-            nvim_expand_by_function_impl(t);
+            // nvim_expand_by_function_impl inlined (Phase 30)
+            nvim_expand_by_function_full_impl(
+                t,
+                crate::vars::compl_pattern.data,
+                core::ptr::null_mut(),
+            );
         }
         t if t == CTRL_X_SPELL => {
             let first_lnum = crate::vars::nvim_ins_compl_st_get_first_lnum();

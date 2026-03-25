@@ -332,8 +332,13 @@ pub unsafe extern "C" fn rs_dict_get_nth_word(
 extern "C" {
     /// Check if thesaurus function completion is active for the given type.
     fn rs_thesaurus_func_complete(compl_type: c_int) -> c_int;
-    /// Compound accessor: calls expand_by_function(type, compl_pattern.data, NULL).
-    fn nvim_expand_by_function_impl(compl_type: c_int);
+    // nvim_expand_by_function_impl: deleted (Phase 30), call nvim_expand_by_function_full_impl directly
+    #[link_name = "nvim_expand_by_function_full_impl"]
+    fn nvim_expand_by_function_full_dict(
+        type_: c_int,
+        base: *mut std::ffi::c_char,
+        cb: *mut std::ffi::c_void,
+    );
     // nvim_ins_compl_dictionaries_impl: deleted (Phase 23), inlined below as ins_compl_dictionaries
     /// Returns the effective thesaurus option (curbuf->b_p_tsr or p_tsr).
     fn nvim_get_curbuf_b_p_tsr() -> *const c_char;
@@ -757,7 +762,12 @@ pub unsafe extern "C" fn rs_get_next_dict_tsr_completion(
     dict_f: c_int,
 ) {
     if rs_thesaurus_func_complete(compl_type) != 0 {
-        nvim_expand_by_function_impl(compl_type);
+        // nvim_expand_by_function_impl inlined (Phase 30)
+        nvim_expand_by_function_full_dict(
+            compl_type,
+            crate::vars::compl_pattern.data,
+            core::ptr::null_mut(),
+        );
     } else {
         let effective_dict = if dict.is_null() {
             if compl_type == CTRL_X_THESAURUS {

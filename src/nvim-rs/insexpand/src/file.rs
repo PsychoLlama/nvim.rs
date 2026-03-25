@@ -407,8 +407,9 @@ extern "C" {
     fn nvim_tilde_replace_wrap(pat: *mut c_char, num_matches: c_int, matches: *mut *mut c_char);
     // nvim_get_p_fic_or_wic: inlined in vars.rs (Phase 29)
 
-    // compl_pattern management (set_star still in C, others inlined in vars.rs Phase 22)
-    fn nvim_compl_pattern_set_star();
+    // nvim_compl_pattern_set_star: deleted (Phase 30), inlined below via cbuf_to_string
+    #[link_name = "cbuf_to_string"]
+    fn cbuf_to_string_file(buf: *const c_char, size: usize) -> crate::vars::NvimString;
 
     // Fuzzy matching
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
@@ -485,7 +486,9 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
 
         if last_sep.is_null() {
             // No path separator: fuzzy match the whole leader against "*"
-            nvim_compl_pattern_set_star();
+            // nvim_compl_pattern_set_star inlined (Phase 30)
+            crate::vars::nvim_compl_clear_pattern();
+            crate::vars::compl_pattern = cbuf_to_string_file(c"*".as_ptr(), 1);
         } else if *last_sep.add(1) == 0 {
             // Separator is the last char: can't do fuzzy on empty file part
             in_fuzzy_collect = false;

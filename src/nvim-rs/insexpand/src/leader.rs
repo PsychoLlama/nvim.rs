@@ -439,11 +439,14 @@ use crate::match_list::{
 extern "C" {
     // For ins_compl_bs
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
-    fn nvim_mb_ptr_back(line: *const c_char, p: *const c_char) -> *const c_char;
+    // nvim_mb_ptr_back: deleted (Phase 30), inlined below via mb_prevptr
+    fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
     // nvim_can_bs_start: deleted (Phase 1), use can_bs(BS_START) directly
     #[link_name = "can_bs"]
     fn can_bs(what: c_int) -> c_int;
-    fn nvim_api_clear_and_set_compl_leader(data: *const c_char, len: usize);
+    // nvim_api_clear_and_set_compl_leader: deleted (Phase 30), inlined below
+    #[link_name = "cbuf_to_string"]
+    fn cbuf_to_string_leader(buf: *const c_char, size: usize) -> crate::vars::NvimString;
     fn rs_ins_compl_preinsert_effect() -> c_int;
     fn rs_ins_compl_delete(new_leader: c_int);
     fn rs_ins_compl_need_restart() -> c_int;
@@ -478,7 +481,8 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     let line = nvim_get_cursor_line_ptr();
     let cursor_col = nvim_get_cursor_col();
     let p = line.add(cursor_col as usize);
-    let p = nvim_mb_ptr_back(line.cast_const(), p.cast_const());
+    // nvim_mb_ptr_back inlined (Phase 30): MB_PTR_BACK(line, p) = mb_prevptr(line, p)
+    let p = mb_prevptr(line, p).cast_const();
     let p_off = p.offset_from(line.cast_const()) as c_int;
 
     let compl_col = crate::vars::nvim_get_compl_col();
@@ -505,7 +509,9 @@ pub unsafe extern "C" fn rs_ins_compl_bs() -> c_int {
     let line = nvim_get_cursor_line_ptr();
     let compl_col = crate::vars::nvim_get_compl_col();
 
-    nvim_api_clear_and_set_compl_leader(
+    // nvim_api_clear_and_set_compl_leader inlined (Phase 30)
+    crate::vars::nvim_compl_clear_leader();
+    crate::vars::compl_leader = cbuf_to_string_leader(
         line.add(compl_col as usize).cast_const(),
         (p_off - compl_col) as usize,
     );
@@ -686,7 +692,9 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         // First match: use the whole cp_str as the leader.
         let cp_data = nvim_compl_match_get_cp_str_data(m);
         let cp_size = nvim_compl_match_get_cp_str_size(m);
-        nvim_api_clear_and_set_compl_leader(cp_data, cp_size);
+        // nvim_api_clear_and_set_compl_leader inlined (Phase 30)
+        crate::vars::nvim_compl_clear_leader();
+        crate::vars::compl_leader = cbuf_to_string_leader(cp_data, cp_size);
 
         let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
         let leader_after = crate::vars::nvim_get_compl_leader_data();
@@ -738,7 +746,9 @@ pub unsafe extern "C" fn rs_ins_compl_longest_match(m: ComplMatch) {
         let leader_bytes = std::slice::from_raw_parts(leader_data.cast::<u8>(), new_len);
         let mut buf = leader_bytes.to_vec();
         buf.push(0); // NUL terminate (cbuf_to_string doesn't need it but it's safe)
-        nvim_api_clear_and_set_compl_leader(buf.as_ptr().cast::<c_char>(), new_len);
+                     // nvim_api_clear_and_set_compl_leader inlined (Phase 30)
+        crate::vars::nvim_compl_clear_leader();
+        crate::vars::compl_leader = cbuf_to_string_leader(buf.as_ptr().cast::<c_char>(), new_len);
 
         let had_match = nvim_get_cursor_col() > crate::vars::nvim_get_compl_col();
         let new_leader = crate::vars::nvim_get_compl_leader_data();

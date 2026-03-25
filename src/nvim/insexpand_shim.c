@@ -833,11 +833,7 @@ const char *nvim_get_curbuf_b_p_dict(void)
   return *curbuf->b_p_dict == NUL ? p_dict : curbuf->b_p_dict;
 }
 
-/// Compound accessor: calls expand_by_function(type, compl_pattern.data, NULL).
-void nvim_expand_by_function_impl(int compl_type)
-{
-  expand_by_function(compl_type, compl_pattern.data, NULL);
-}
+// nvim_expand_by_function_impl: deleted (Phase 30), Rust calls nvim_expand_by_function_full_impl directly
 
 /// Free a completion item in the list
 static void ins_compl_item_free(compl_T *match)
@@ -1721,11 +1717,7 @@ void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches)
   tilde_replace(pat, num_matches, matches);
 }
 // nvim_get_p_fic_or_wic: deleted (Phase 29, inlined in vars.rs)
-void nvim_compl_pattern_set_star(void)
-{
-  API_CLEAR_STRING(compl_pattern);
-  compl_pattern = cbuf_to_string("*", 1);
-}
+// nvim_compl_pattern_set_star: deleted (Phase 30), Rust inlines via nvim_compl_clear_pattern + cbuf_to_string
 // nvim_compl_pattern_set_from_alloc: deleted (Phase 22, inlined in vars.rs)
 // nvim_compl_pattern_get_data: deleted (Phase 22, inlined in vars.rs)
 
@@ -1736,16 +1728,9 @@ void nvim_compl_pattern_set_star(void)
 // edit.c now calls rs_ins_compl_addfrommatch() directly.
 // Accessors for Phase 2: ins_compl_bs migration
 // nvim_get_cursor_line_ptr: defined in change_ffi.c as char *nvim_get_cursor_line_ptr(void)
-const char *nvim_mb_ptr_back(const char *line, const char *p) {
-  const char *pp = p;
-  MB_PTR_BACK(line, pp);
-  return pp;
-}
+// nvim_mb_ptr_back: deleted (Phase 30), Rust calls mb_prevptr directly
 // nvim_can_bs_start: deleted (Phase 1, Rust calls can_bs(BS_START) directly)
-void nvim_api_clear_and_set_compl_leader(const char *data, size_t len) {
-  API_CLEAR_STRING(compl_leader);
-  compl_leader = cbuf_to_string(data, len);
-}
+// nvim_api_clear_and_set_compl_leader: deleted (Phase 30), Rust inlines via cbuf_to_string + nvim_compl_clear_leader
 // Raw mergesort accessor: sorts linked list starting at `head`, returns new head.
 // compare_type: 0 = fuzzy (descending score), 1 = nearest (ascending score).
 void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
