@@ -35,9 +35,11 @@ extern "C" {
     fn nvim_handle_get_buffer(handle: c_int) -> BufHandle;
     fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    #[link_name = "home_replace_save"]
     fn nvim_home_replace_save(buf: BufHandle, src: *const c_char) -> *mut c_char;
     fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
     fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
+    #[link_name = "os_fileid"]
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
     #[link_name = "rs_otherfile_buf_4"]
     fn nvim_otherfile_buf(
@@ -49,6 +51,7 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
 
     // setaltfname accessors
+    #[link_name = "buflist_new"]
     fn nvim_buflist_new(
         ffname: *const c_char,
         sfname: *const c_char,
@@ -73,13 +76,20 @@ extern "C" {
     fn nvim_reset_binding_curwin();
     fn nvim_inc_RedrawingDisabled();
     fn nvim_dec_RedrawingDisabled();
-    fn nvim_getfile(fnum: c_int, setpm: c_int, lnum: c_int, forceit: c_int) -> c_int;
+    fn getfile(
+        fnum: c_int,
+        ffname: *const c_char,
+        sfname: *const c_char,
+        setpm: bool,
+        lnum: c_int,
+        forceit: bool,
+    ) -> c_int;
     fn nvim_get_p_sol() -> c_int;
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_curwin_set_cursor_coladd(v: c_int);
     fn nvim_curwin_set_curswant(val: bool);
-    fn nvim_mark_view_restore(fm: *mut c_void);
+    fn mark_view_restore(fm: *mut c_void);
     fn nvim_semsg_e92_buf_not_found(n: i64);
     fn nvim_check_cursor_col(win: *mut c_void);
     static mut jop_flags: u32;
@@ -629,6 +639,7 @@ extern "C" {
     fn nvim_buf_is_changed(buf: BufHandle) -> c_int;
     fn nvim_buf_get_last_used(buf: BufHandle) -> i64;
     fn rs_buf_spname(buf: BufHandle) -> *mut c_char;
+    #[link_name = "home_replace"]
     fn nvim_home_replace(
         buf: BufHandle,
         src: *const c_char,
@@ -643,7 +654,7 @@ extern "C" {
     fn vim_strsize(s: *const c_char) -> c_int;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn nvim_line_breakcheck();
-    fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
+    fn undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
     static mut IObuff: [c_char; 1025];
 }
 
@@ -831,7 +842,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
 
         // Append time or line number
         if has_arg(b't') && nvim_buf_get_last_used(buf) != 0 {
-            nvim_undo_fmt_time(
+            undo_fmt_time(
                 iobuff.add(len),
                 IOSIZE_LIST - len,
                 nvim_buf_get_last_used(buf),
@@ -1169,7 +1180,16 @@ pub unsafe extern "C" fn rs_buflist_getfile(
 
     nvim_inc_RedrawingDisabled();
     let fnum = nvim_buf_get_fnum(buf);
-    if nvim_getfile(fnum, options & GETF_SETMARK, eff_lnum, forceit) != 0 {
+    // GETFILE_SUCCESS(x) is (x) <= 0
+    if getfile(
+        fnum,
+        std::ptr::null(),
+        std::ptr::null(),
+        (options & GETF_SETMARK) != 0,
+        eff_lnum,
+        forceit != 0,
+    ) <= 0
+    {
         nvim_dec_RedrawingDisabled();
 
         // Restore column if 'startofline' is not set
@@ -1180,7 +1200,7 @@ pub unsafe extern "C" fn rs_buflist_getfile(
             nvim_curwin_set_curswant(true);
         }
         if (jop_flags & K_OPT_JOP_FLAG_VIEW) != 0 && restore_view && !fm.is_null() {
-            nvim_mark_view_restore(fm);
+            mark_view_restore(fm);
         }
         return OK;
     }

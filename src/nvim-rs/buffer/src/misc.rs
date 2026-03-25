@@ -512,6 +512,7 @@ pub unsafe extern "C" fn rs_read_buffer_into(
 // =============================================================================
 
 extern "C" {
+    #[link_name = "buflist_new"]
     fn nvim_buflist_new(
         ffname: *const c_char,
         sfname: *const c_char,
@@ -524,9 +525,10 @@ extern "C" {
     fn nvim_buf_aucmd_restbuf_free(aco: *mut c_void);
     fn nvim_ml_open_curbuf() -> c_int;
     fn nvim_readfile_for_buf(buf: BufHandle, ea: *mut c_void) -> c_int;
+    #[link_name = "ml_get_buf"]
     fn nvim_buf_get_line_at(buf: BufHandle, lnum: c_int) -> *const c_char;
+    #[link_name = "ml_get"]
     fn nvim_curbuf_get_line_at(lnum: c_int) -> *const c_char;
-    fn nvim_wipe_buffer_no_confirm(buf: BufHandle);
     fn nvim_block_autocmds();
     fn nvim_unblock_autocmds();
 }
@@ -590,7 +592,7 @@ pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
     let curbuf = nvim_get_curbuf();
     if curbuf != newbuf {
         // safety check: only wipe if curbuf moved away from newbuf
-        nvim_wipe_buffer_no_confirm(newbuf);
+        crate::state::rs_wipe_buffer(newbuf, false);
     }
 
     nvim_unblock_autocmds();

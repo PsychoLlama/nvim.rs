@@ -524,7 +524,7 @@ extern "C" {
     fn nvim_regmatch_set_rm_ic(regmatch: *mut std::ffi::c_void, val: c_int);
     fn vim_regexec(rmp: *mut std::ffi::c_void, line: *const c_char, col: c_int) -> bool;
     fn fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
-    #[link_name = "nvim_fuzzymatches_to_strmatches"]
+    #[link_name = "fuzzymatches_to_strmatches"]
     fn nvim_option_fuzzymatches_to_strmatches(
         fuzmatch: *mut std::ffi::c_void,
         matches: *mut *mut *mut c_char,

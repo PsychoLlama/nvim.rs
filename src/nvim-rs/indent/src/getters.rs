@@ -17,7 +17,9 @@ extern "C" {
 
     // Line getters
     fn nvim_curbuf_get_line_ptr() -> *const c_char;
+    #[link_name = "ml_get"]
     fn nvim_curbuf_get_line_at(lnum: i32) -> *const c_char;
+    #[link_name = "ml_get_buf"]
     fn nvim_buf_get_line_at(buf: BufHandle, lnum: i32) -> *const c_char;
 
     // Cursor position
@@ -27,6 +29,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // Getwhitecols
+    #[link_name = "getwhitecols_curline"]
     fn nvim_getwhitecols_curline() -> c_int;
 }
 

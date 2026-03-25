@@ -79,7 +79,6 @@ extern "C" {
     fn nvim_buf_aucmd_open_buffer(buf: BufHandle) -> c_int;
 
     // buf_open_scratch accessors
-    fn nvim_do_ecmd_one_hide(bufnr: c_int) -> c_int;
     fn nvim_apply_autocmds_buffilepre(buf: BufHandle);
     fn nvim_apply_autocmds_buffilepost(buf: BufHandle);
     fn nvim_set_buf_opts_scratch();
@@ -1057,6 +1056,7 @@ extern "C" {
 const ECMD_ONE: c_int = 1;
 // ECMD flags
 const ECMD_FORCEIT: c_int = 0x08;
+const ECMD_HIDE: c_int = 0x01;
 
 // FAIL/OK from vim_defs.h
 const FAIL: c_int = 0;
@@ -1210,7 +1210,17 @@ pub unsafe extern "C" fn rs_buf_open_scratch(bufnr: c_int, bufname: *mut c_char)
     const FAIL: c_int = 0;
     const OK: c_int = 1;
 
-    if nvim_do_ecmd_one_hide(bufnr) == 0 {
+    // do_ecmd(bufnr, NULL, NULL, NULL, ECMD_ONE, ECMD_HIDE, NULL) != FAIL
+    if do_ecmd(
+        bufnr,
+        std::ptr::null(),
+        std::ptr::null(),
+        std::ptr::null_mut(),
+        ECMD_ONE,
+        ECMD_HIDE,
+        std::ptr::null_mut(),
+    ) == FAIL
+    {
         return FAIL;
     }
 

@@ -493,6 +493,7 @@ extern "C" {
     fn nvim_qfline_get_nr(qfp: QfLinePtr) -> c_int;
     fn nvim_qfline_get_fname(qfp: QfLinePtr) -> *const c_char;
     // nvim_buflist_findnr returns buf_T* (void* in Rust) - from buffer.c
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     // nvim_buf_get_sfname takes buf_T* (void* in Rust) - from buffer.c
     fn nvim_buf_get_sfname(buf: BufHandle) -> *const c_char;
@@ -1040,7 +1041,7 @@ extern "C" {
     fn qfline_get_pattern_p3(qfp: QfLinePtr) -> *const c_char;
     #[link_name = "nvim_qfline_get_text"]
     fn qfline_get_text_p3(qfp: QfLinePtr) -> *const c_char;
-    #[link_name = "nvim_buflist_findnr"]
+    #[link_name = "rs_buflist_findnr"]
     fn buflist_findnr_p3(nr: c_int) -> *mut c_void;
     #[link_name = "nvim_qf_buf_get_fname"]
     fn buf_get_fname_p3(buf: *const c_void) -> *const c_char;

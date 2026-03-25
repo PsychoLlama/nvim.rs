@@ -86,7 +86,7 @@ extern "C" {
     fn rs_diff_buf_delete(buf: BufHandle);
     fn nvim_reset_synblock_if_curwin_buf(buf: BufHandle);
     fn nvim_buf_clearFolding_all_windows(buf: BufHandle);
-    fn nvim_ml_close(buf: BufHandle);
+    fn ml_close(buf: BufHandle, del_file: bool);
     fn nvim_u_clearallandblockfree(buf: BufHandle);
     fn nvim_syntax_clear_buf(buf: BufHandle);
 }
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     nvim_reset_synblock_if_curwin_buf(buf);
     nvim_buf_clearFolding_all_windows(buf);
 
-    nvim_ml_close(buf); // close and delete the memline/memfile
+    ml_close(buf, true); // close and delete the memline/memfile
     nvim_buf_set_ml_line_count(buf, 0_i32); // no lines in buffer
 
     if (flags & BFA_KEEP_UNDO) == 0 {

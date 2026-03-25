@@ -44,7 +44,8 @@ extern "C" {
     fn rs_diff_mode_buf(buf: BufHandle) -> bool;
 
     /// Check if pattern should use fuzzy matching.
-    fn nvim_cmdline_fuzzy_complete(pat: *const c_char) -> c_int;
+    #[link_name = "cmdline_fuzzy_complete"]
+    fn nvim_cmdline_fuzzy_complete(pat: *const c_char) -> bool;
 
     /// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
     fn nvim_bufname_regex_compile(pat: *mut c_char) -> *mut c_void;
@@ -73,12 +74,14 @@ extern "C" {
     fn nvim_fuzzy_match_str(str_: *mut c_char, pat: *const c_char) -> c_int;
 
     /// `home_replace_save()` for a buffer -- caller must free with `nvim_xfree`.
+    #[link_name = "home_replace_save"]
     fn nvim_home_replace_save_buf(buf: BufHandle, src: *const c_char) -> *mut c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xfree(p: *mut c_void);
     fn nvim_xmalloc(size: usize) -> *mut c_void;
 
     /// Convert fuzzy matches to a string array. Frees `fuzmatch`.
+    #[link_name = "fuzzymatches_to_strmatches"]
     fn nvim_fuzzymatches_to_strmatches(
         fuzmatch: *mut c_void,
         file: *mut *mut *mut c_char,
@@ -196,7 +199,7 @@ pub unsafe fn expand_bufnames_impl(
         return FAIL;
     }
 
-    let fuzzy = nvim_cmdline_fuzzy_complete(pat) != 0;
+    let fuzzy = nvim_cmdline_fuzzy_complete(pat);
     let p_wic = nvim_get_p_wic() != 0;
     let curbuf = nvim_get_curbuf();
 

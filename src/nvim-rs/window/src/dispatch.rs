@@ -262,6 +262,7 @@ extern "C" {
     fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
     fn nvim_curbuf_locked() -> c_int;
     fn nvim_semsg_e92_buf_not_found(nr: i64);
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     fn nvim_buflist_getfile(nr: c_int, lnum: c_int, flags: c_int, setpm: c_int);
 

@@ -238,6 +238,7 @@ extern "C" {
     // Buffer accessors (Phase 3)
     fn nvim_curbuf_fnum() -> c_int;
     fn nvim_get_line_count() -> i32;
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
 
     // Bulk cursor/visual state (Phase 15 bulk-read replaces 9 individual accessors)

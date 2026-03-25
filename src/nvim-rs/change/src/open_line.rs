@@ -164,6 +164,7 @@ extern "C" {
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
     fn nvim_copy_indent(size: c_int, src: *const c_char) -> bool;
     fn nvim_change_get_sw_value() -> c_int;
+    #[link_name = "getwhitecols_curline"]
     fn nvim_getwhitecols_curline() -> c_int;
     fn nvim_linewhite(lnum: LinenrT) -> bool;
     fn nvim_truncate_spaces(line: *mut c_char, col: usize);

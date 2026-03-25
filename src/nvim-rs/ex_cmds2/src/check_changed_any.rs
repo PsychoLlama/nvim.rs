@@ -59,7 +59,7 @@ extern "C" {
     fn nvim_ex2_get_no_wait_return() -> c_int;
     fn nvim_ex2_set_no_wait_return(val: c_int);
     fn nvim_ex2_set_exiting(val: bool);
-    #[link_name = "buflist_findnr"]
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_ex2_buflist_findnr(nr: c_int) -> *mut BufHandle;
     #[link_name = "set_curbuf"]
     fn nvim_ex2_set_curbuf(buf: *mut BufHandle, action: c_int, prevbuf: bool);

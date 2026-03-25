@@ -1591,6 +1591,7 @@ extern "C" {
     fn nvim_read_block0(fd: c_int, b0p: *mut c_void) -> c_int;
 
     /// Compare two file paths
+    #[link_name = "path_fnamecmp"]
     fn nvim_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
     /// Check if paths are in same directory
@@ -1652,6 +1653,7 @@ extern "C" {
     fn nvim_msg_reset_scroll();
 
     /// Get home-replace-save of fname (returns allocated string)
+    #[link_name = "home_replace_save"]
     fn nvim_home_replace_save(buf: *mut BufHandle, fname: *const c_char) -> *mut c_char;
 
     /// Output multiline message

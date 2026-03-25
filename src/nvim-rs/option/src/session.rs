@@ -61,6 +61,7 @@ extern "C" {
     fn transchar(c: c_int) -> *const c_char;
     fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize;
     fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    #[link_name = "home_replace"]
     fn nvim_home_replace(
         buf: *const std::ffi::c_void,
         src: *const c_char,

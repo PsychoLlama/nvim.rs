@@ -32,6 +32,7 @@ extern "C" {
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> *mut c_void; // buf_T*
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;

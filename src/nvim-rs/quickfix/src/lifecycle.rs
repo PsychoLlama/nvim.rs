@@ -71,6 +71,7 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
 
     // --- Buffer management (for `wipe_qf_buffer`) ---
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(bufnr: c_int) -> *mut c_void;
     fn nvim_buf_get_nwindows(buf: *const c_void) -> c_int;
     fn nvim_curwin_get_buffer() -> *mut c_void;

@@ -22,7 +22,7 @@ extern "C" {
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_first_line_empty(buf: BufHandle) -> c_int;
+    fn ml_get_buf(buf: BufHandle, lnum: c_int) -> *const std::ffi::c_char;
 
     // Phase 1 accessors: buffer ml and file state fields
     fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
@@ -318,7 +318,7 @@ pub unsafe fn buf_is_empty(buf: BufHandle) -> bool {
     if buf.is_null() {
         return true;
     }
-    nvim_buf_get_ml_line_count(buf) == 1 && nvim_buf_first_line_empty(buf) != 0
+    nvim_buf_get_ml_line_count(buf) == 1 && *ml_get_buf(buf, 1) == 0
 }
 
 /// FFI wrapper for `buf_is_empty`.

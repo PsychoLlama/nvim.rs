@@ -145,12 +145,15 @@ extern "C" {
     fn curbufIsChanged() -> bool;
 
     /// Compare two file paths (platform-aware).
+    #[link_name = "path_fnamecmp"]
     fn nvim_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
     /// Get file identity for a path. Returns true if successful.
+    #[link_name = "os_fileid"]
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
 
     /// Compare two file identities.
+    #[link_name = "os_fileid_equal"]
     fn nvim_os_fileid_equal(a: *const u8, b: *const u8) -> bool;
 
     /// Check if buffer has a valid cached `file_id`.
@@ -163,13 +166,14 @@ extern "C" {
     fn nvim_buf_set_file_id_data(buf: BufHandle, file_id: *const u8, valid: bool);
 
     /// Find a buffer by its number.
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
 
     /// Get the stored line number for a buffer.
     fn nvim_buflist_findlnum(buf: BufHandle) -> c_int;
 
     /// Get the quickfix stack buffer number.
-    fn nvim_qf_stack_get_bufnr() -> c_int;
+    fn qf_stack_get_bufnr() -> c_int;
 
     /// Get the `cmdwin_buf` global.
     fn nvim_get_cmdwin_buf() -> BufHandle;
@@ -673,7 +677,7 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
     // Quickfix/location list
     if bt_quickfix_impl(buf) {
         let fnum = nvim_buf_get_fnum(buf);
-        if fnum == nvim_qf_stack_get_bufnr() {
+        if fnum == qf_stack_get_bufnr() {
             return messages::msg_qflist().cast_mut();
         }
         return messages::msg_loclist().cast_mut();
@@ -924,7 +928,9 @@ pub unsafe extern "C" fn rs_otherfile(ffname: *const c_char) -> bool {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "fix_fname"]
     fn nvim_fix_fname(fname: *const c_char) -> *mut c_char;
+    #[link_name = "buflist_new"]
     fn nvim_buflist_new(
         ffname: *const c_char,
         sfname: *const c_char,

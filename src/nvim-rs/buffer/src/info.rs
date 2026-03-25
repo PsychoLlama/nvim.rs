@@ -75,14 +75,14 @@ extern "C" {
     fn nvim_msg_start();
     fn nvim_msg_scroll_get() -> c_int;
     fn nvim_msg_scroll_set(val: c_int);
-    fn nvim_msg_call(s: *const c_char, hl_id: c_int) -> bool;
-    fn nvim_msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *const c_char;
+    fn msg(s: *const c_char, hl_id: c_int) -> bool;
+    fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *const c_char;
     fn nvim_restart_edit_get() -> c_int;
     fn nvim_msg_scrolled_get() -> c_int;
     fn nvim_need_wait_return_get() -> bool;
-    fn nvim_set_keep_msg(s: *const c_char);
+    fn set_keep_msg(s: *const c_char, hl_id: c_int);
 
-    fn nvim_home_replace(
+    fn home_replace(
         buf: BufHandle,
         src: *const c_char,
         dst: *mut c_char,
@@ -449,7 +449,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         // home_replace writes directly into remaining buffer space
         let null_buf = BufHandle(std::ptr::null_mut());
         let shorthelp_buf = if shorthelp { curbuf } else { null_buf };
-        let written = nvim_home_replace(
+        let written = home_replace(
             shorthelp_buf,
             name,
             buffer[pos..].as_mut_ptr().cast::<c_char>(),
@@ -587,14 +587,14 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         nvim_msg_start();
         let saved_scroll = nvim_msg_scroll_get();
         nvim_msg_scroll_set(1);
-        let _ = nvim_msg_call(buffer.as_ptr().cast::<c_char>(), 0);
+        let _ = msg(buffer.as_ptr().cast::<c_char>(), 0);
         nvim_msg_scroll_set(saved_scroll);
     } else {
-        let p = nvim_msg_trunc(buffer.as_mut_ptr().cast::<c_char>(), false, 0);
+        let p = msg_trunc(buffer.as_mut_ptr().cast::<c_char>(), false, 0);
         if nvim_restart_edit_get() != 0
             || (nvim_msg_scrolled_get() != 0 && !nvim_need_wait_return_get())
         {
-            nvim_set_keep_msg(p);
+            set_keep_msg(p, 0);
         }
     }
 }

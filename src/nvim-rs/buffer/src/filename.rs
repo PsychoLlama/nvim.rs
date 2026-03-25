@@ -41,11 +41,9 @@ extern "C" {
     fn nvim_ml_timestamp(buf: BufHandle);
 
     // setfname helpers
-    fn nvim_fname_expand(
-        buf: BufHandle,
-        ffname_ptr: *mut *mut c_char,
-        sfname_ptr: *mut *mut c_char,
-    );
+    // rs_fname_expand is the Rust implementation called by C fname_expand inline
+    fn rs_fname_expand(buf: BufHandle, ffname_ptr: *mut *mut c_char, sfname_ptr: *mut *mut c_char);
+    #[link_name = "os_fileid"]
     fn nvim_os_fileid(path: *const c_char, file_id_out: *mut u8) -> bool;
     fn nvim_buf_get_flags(buf: BufHandle) -> c_int;
     fn nvim_buf_get_ml_mfp(buf: BufHandle) -> *mut std::ffi::c_void;
@@ -97,7 +95,7 @@ pub unsafe extern "C" fn rs_setfname(
 
     let mut ffname: *mut c_char = ffname_arg;
     let mut sfname: *mut c_char = sfname_arg;
-    nvim_fname_expand(buf, &raw mut ffname, &raw mut sfname);
+    rs_fname_expand(buf, &raw mut ffname, &raw mut sfname);
 
     if ffname.is_null() {
         // out of memory

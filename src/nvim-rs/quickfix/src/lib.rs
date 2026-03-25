@@ -2045,6 +2045,7 @@ extern "C" {
     fn nvim_tabpage_get_next(tp: *const c_void) -> *mut c_void;
     fn nvim_tabpage_get_firstwin(tp: *const c_void) -> *mut c_void;
     // nvim_qf_win_get_handle already declared above (Phase 1)
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
     fn nvim_qf_win_buf_fnum(win: *const c_void) -> c_int;
 

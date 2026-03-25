@@ -19,7 +19,7 @@ extern "C" {
     fn nvim_ex2_get_curbuf() -> *mut BufHandle;
     fn nvim_ex2_bufIsChanged(buf: *mut BufHandle) -> bool;
     fn nvim_ex2_buf_hide(buf: *mut BufHandle) -> bool;
-    #[link_name = "buflist_findnr"]
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_ex2_buflist_findnr(nr: c_int) -> *mut BufHandle;
     fn nvim_ex2_get_first_tabpage() -> *mut TabHandle;
     fn nvim_ex2_tp_next(tp: *mut TabHandle) -> *mut TabHandle;

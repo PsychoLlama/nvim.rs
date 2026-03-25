@@ -213,10 +213,12 @@ extern "C" {
     fn nvim_ecmd_handle_swap_exists(old_curbuf_ref: *mut std::ffi::c_void);
     fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: c_int) -> *mut crate::BufHandle;
     fn rs_delbuf_msg(name: *mut c_char);
+    #[link_name = "fix_fname"]
     fn nvim_fix_fname(ffname: *const c_char) -> *mut c_char;
     fn rs_otherfile(ffname: *const c_char) -> bool;
     fn nvim_ecmd_path_fix_case(sfname: *mut c_char);
     fn nvim_ecmd_has_case_insensitive_filename() -> c_int;
+    #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(fnum: c_int) -> *mut BufHandle;
     fn buflist_new(
         ffname_arg: *mut c_char,
