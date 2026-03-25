@@ -199,8 +199,6 @@ void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist
 // print_line accessors
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
 int nvim_number_width_curwin(void) { return number_width(curwin); }
-void nvim_msg_puts_hl_excmd(const char *s, int hl_id) { msg_puts_hl(s, hl_id, false); }
-
 // --- Sort/uniq accessor functions for Rust FFI ---
 
 // Regex accessors (opaque regmatch_T handle)
@@ -1757,12 +1755,6 @@ void *nvim_ecmd_new_bufref(void) { return xcalloc(1, sizeof(bufref_T)); }
 /// Call set_bufref(ref, curbuf)
 void nvim_ecmd_set_bufref_to_curbuf(void *ref) { set_bufref((bufref_T *)ref, curbuf); }
 
-/// Call set_bufref(ref, buf)
-void nvim_ecmd_set_bufref_to_buf(void *ref, buf_T *buf) { set_bufref((bufref_T *)ref, buf); }
-
-/// Returns 1 if bufref_valid(ref)
-int nvim_ecmd_bufref_valid(void *ref) { return bufref_valid((bufref_T *)ref) ? 1 : 0; }
-
 /// Returns 1 if ref->br_buf == curbuf
 int nvim_ecmd_bufref_is_curbuf(void *ref) { return ((bufref_T *)ref)->br_buf == curbuf ? 1 : 0; }
 
@@ -1788,36 +1780,7 @@ void *nvim_ecmd_au_new_curbuf_save(void)
 /// Restore au_new_curbuf from heap-allocated void* bufref (does NOT free it)
 void nvim_ecmd_au_new_curbuf_restore(void *saved) { au_new_curbuf = *(bufref_T *)saved; }
 
-// --- Buffer operation wrappers ---
-
-/// Call close_buffer(oldwin, curbuf, flags, false, false). Returns did_decrement as int.
-int nvim_ecmd_close_buffer(win_T *oldwin, int flags)
-{
-  return close_buffer(oldwin, curbuf, flags, false, false) ? 1 : 0;
-}
-
-/// Call open_buffer(false, eap, flags). Returns should_abort(result) as int.
-int nvim_ecmd_open_buffer(exarg_T *eap, int flags)
-{
-  return should_abort(open_buffer(false, eap, flags)) ? 1 : 0;
-}
-
-/// Call check_changed(curbuf, flags). Returns 1 if changed (need to abort).
-int nvim_ecmd_check_changed(int flags)
-{
-  return check_changed(curbuf, flags) ? 1 : 0;
-}
-
-/// Call u_savecommon(curbuf, 0, line_count+1, 0, true). Returns OK/FAIL as 1/0.
-int nvim_ecmd_u_savecommon(int line_count)
-{
-  return u_savecommon(curbuf, 0, (linenr_T)(line_count + 1), 0, true) == OK ? 1 : 0;
-}
-
 // --- Cursor manipulation wrappers ---
-
-/// Call check_cursor_col(curwin)
-void nvim_ecmd_check_cursor_col(void) { check_cursor_col(curwin); }
 
 /// Returns 1 if cursor position equals orig (pass lnum and col)
 int nvim_ecmd_cursor_eq(int lnum, int col)
@@ -1892,9 +1855,6 @@ int nvim_ecmd_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPAL
 
 // --- Misc wrappers ---
 
-/// Call buflist_altfpos(win)
-void nvim_ecmd_buflist_altfpos(win_T *win) { buflist_altfpos(win); }
-
 /// Get mark from buflist_findfmark(buf): fills *lnum and *col
 void nvim_ecmd_buflist_findfmark(buf_T *buf, int *lnum, int *col)
 {
@@ -1924,18 +1884,6 @@ void nvim_ecmd_handle_swap_exists(void *old_curbuf_ref)
   handle_swap_exists((bufref_T *)old_curbuf_ref);
 }
 
-/// Call setaltfname(ffname, sfname, lnum)
-void nvim_ecmd_setaltfname(char *ffname, char *sfname, int lnum)
-{
-  setaltfname(ffname, sfname, (linenr_T)(lnum < 0 ? 0 : lnum));
-}
-
-/// Call delbuf_msg(name). Also frees name.
-void nvim_ecmd_delbuf_msg(char *name) { rs_delbuf_msg(name); }
-
-/// Call otherfile(ffname). Returns 1 if different file.
-int nvim_ecmd_otherfile(char *ffname) { return otherfile(ffname) ? 1 : 0; }
-
 /// Call path_fix_case(sfname) [only on case-insensitive systems]
 void nvim_ecmd_path_fix_case(char *sfname)
 {
@@ -1956,19 +1904,6 @@ int nvim_ecmd_has_case_insensitive_filename(void)
 #endif
 }
 
-/// Call buflist_new(ffname, sfname, lnum, flags). Returns buf_T* or NULL.
-buf_T *nvim_ecmd_buflist_new(char *ffname, char *sfname, int lnum, int flags)
-{
-  return buflist_new(ffname, sfname, (linenr_T)lnum, flags);
-}
-
-/// Call set_file_options(true, eap) and set_forced_fenc(eap)
-void nvim_ecmd_set_file_options(exarg_T *eap)
-{
-  set_file_options(true, eap);
-  set_forced_fenc(eap);
-}
-
 /// Wrap the FOR_ALL_TAB_WINDOWS loop for fold update all curbuf wins
 void nvim_ecmd_fold_update_all_curbuf_wins(void)
 {
@@ -1983,12 +1918,6 @@ void nvim_ecmd_fold_update_all_curbuf_wins(void)
 const char *nvim_ecmd_eap_get_do_ecmd_cmd(exarg_T *eap)
 {
   return eap != NULL ? eap->do_ecmd_cmd : NULL;
-}
-
-/// Call do_cmdline(command, NULL, NULL, DOCMD_VERBOSE)
-void nvim_ecmd_do_cmdline(const char *command)
-{
-  do_cmdline((char *)command, NULL, NULL, DOCMD_VERBOSE);
 }
 
 /// Call set_vim_var_string(VV_SWAPCOMMAND, NULL, -1) to clear swapcommand

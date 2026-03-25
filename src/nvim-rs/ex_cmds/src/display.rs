@@ -791,8 +791,7 @@ const HLF_N_PLUS_1: c_int = 13;
 #[no_mangle]
 pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int, list: c_int) {
     use crate::{
-        ml_get, msg_prt_line, nvim_curwin_get_w_p_nu, nvim_msg_puts_hl_excmd,
-        nvim_number_width_curwin,
+        ml_get, msg_prt_line, msg_puts_hl, nvim_curwin_get_w_p_nu, nvim_number_width_curwin,
     };
 
     if nvim_curwin_get_w_p_nu() != 0 || use_number != 0 {
@@ -803,7 +802,7 @@ pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int,
         let _ = write!(cursor, "{:>width$} ", lnum, width = width as usize);
         let pos = cursor.position() as usize;
         numbuf[pos] = 0;
-        nvim_msg_puts_hl_excmd(numbuf.as_ptr().cast(), HLF_N_PLUS_1);
+        msg_puts_hl(numbuf.as_ptr().cast(), HLF_N_PLUS_1, false);
     }
     msg_prt_line(ml_get(lnum), list != 0);
 }

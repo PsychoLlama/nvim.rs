@@ -563,6 +563,55 @@ extern "C" {
     pub fn fileinfo(shortmess: c_int, dont_truncate: c_int, forceit: c_int);
     /// expand_env_save: expand environment variables, return allocated string
     pub fn expand_env_save(str_: *const c_char) -> *mut c_char;
+    /// rs_buflist_altfpos: update alternate file position for window (Rust impl)
+    pub fn rs_buflist_altfpos(win: *mut WinHandle);
+    /// setaltfname: set alternate filename
+    pub fn setaltfname(
+        ffname: *mut c_char,
+        sfname: *mut c_char,
+        lnum: c_int,
+    ) -> *mut crate::BufHandle;
+    /// rs_delbuf_msg: display buffer delete message (Rust)
+    pub fn rs_delbuf_msg(name: *mut c_char);
+    /// do_cmdline: execute a cmdline
+    pub fn do_cmdline(
+        cmdline: *mut c_char,
+        fgetline: *mut std::ffi::c_void,
+        cookie: *mut std::ffi::c_void,
+        flags: c_int,
+    ) -> c_int;
+    /// set_bufref: set a bufref to point to a buffer
+    pub fn set_bufref(ref_: *mut std::ffi::c_void, buf: *mut BufHandle);
+    /// bufref_valid: check if bufref is still valid
+    pub fn bufref_valid(ref_: *mut std::ffi::c_void) -> bool;
+    /// close_buffer: close buffer, decrement nwindows
+    pub fn close_buffer(
+        win: *mut WinHandle,
+        buf: *mut BufHandle,
+        action: c_int,
+        abort_if_last: bool,
+        ignore_abort: bool,
+    ) -> bool;
+    /// open_buffer: open a buffer in the current window
+    pub fn open_buffer(read_stdin: bool, eap: *mut ExArgHandle, flags: c_int) -> c_int;
+    /// should_abort: check if we should abort after an operation
+    pub fn should_abort(retval: c_int) -> c_int;
+    /// check_changed: check if buffer was changed and show message
+    pub fn check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
+    /// u_savecommon: save common undo information
+    pub fn u_savecommon(
+        buf: *mut BufHandle,
+        top: c_int,
+        bot: c_int,
+        newbot: c_int,
+        reload: bool,
+    ) -> c_int;
+    /// check_cursor_col: check cursor column for window
+    pub fn check_cursor_col(win: *mut WinHandle);
+    /// set_file_options: set file options based on exarg
+    pub fn set_file_options(set_options: bool, eap: *mut ExArgHandle);
+    /// set_forced_fenc: set forced fileencoding from exarg
+    pub fn set_forced_fenc(eap: *mut ExArgHandle);
 
     // ex_z accessors
     /// Check if there is only one window (ONE_WINDOW macro)
@@ -635,8 +684,8 @@ extern "C" {
     pub fn message_filtered(msg: *const c_char) -> bool;
     /// msg_ext_set_kind: set kind for extended message (direct C call)
     pub fn msg_ext_set_kind(kind: *const c_char);
-    /// msg_puts_hl wrapper
-    pub fn nvim_msg_puts_hl_excmd(s: *const c_char, hl_id: c_int);
+    /// msg_puts_hl: print string with highlight (direct C call)
+    pub fn msg_puts_hl(s: *const c_char, hl_id: c_int, right: bool);
     /// msg_outtrans: display string with translation
     pub fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     /// Display error message, returns true
