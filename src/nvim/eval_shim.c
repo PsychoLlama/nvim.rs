@@ -520,23 +520,6 @@ void nvim_gc_iterate_marks(void)
   } while (mark_iter != NULL);
 }
 
-/// Shrink the execution stack if it is too large.
-/// Mirrors the exestack compaction logic from garbage_collect.
-void nvim_gc_shrink_exestack(void)
-{
-  if (exestack.ga_maxlen - exestack.ga_len > 500) {
-    int n = exestack.ga_len / 2;
-    if (n < exestack.ga_growsize) {
-      n = exestack.ga_growsize;
-    }
-    if (exestack.ga_len + n < exestack.ga_maxlen) {
-      size_t new_len = (size_t)exestack.ga_itemsize * (size_t)(exestack.ga_len + n);
-      char *pp = xrealloc(exestack.ga_data, new_len);
-      exestack.ga_maxlen = exestack.ga_len + n;
-      exestack.ga_data = pp;
-    }
-  }
-}
 
 /// Emit the "not enough memory" GC abort verbose message, if p_verbose > 0.
 void nvim_gc_verb_msg_abort(void)

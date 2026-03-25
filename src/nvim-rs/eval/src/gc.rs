@@ -41,6 +41,8 @@ struct ListStackNode {
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+    fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    static mut exestack: nvim_collections::garray::GArray;
 }
 
 /// Push an ht onto the stack (inlined from nvim_eval_ht_stack_push).
@@ -69,6 +71,25 @@ unsafe fn list_stack_push(stack: *mut *mut c_void, list: ListHandle) {
     (*node).list = list;
     (*node).prev = (*stack).cast::<ListStackNode>();
     *stack = node.cast::<c_void>();
+}
+
+/// Shrink the exestack garray if it grew too large (inlined from nvim_gc_shrink_exestack).
+#[inline]
+unsafe fn gc_shrink_exestack() {
+    let maxlen = exestack.ga_maxlen;
+    let len = exestack.ga_len;
+    if maxlen - len > 500 {
+        let mut n = len / 2;
+        if n < exestack.ga_growsize {
+            n = exestack.ga_growsize;
+        }
+        if len + n < maxlen {
+            let new_len = (exestack.ga_itemsize as usize) * ((len + n) as usize);
+            let pp = xrealloc(exestack.ga_data, new_len);
+            exestack.ga_maxlen = len + n;
+            exestack.ga_data = pp;
+        }
+    }
 }
 
 /// Pop a list from the stack (inlined from nvim_eval_list_stack_pop).
@@ -114,7 +135,6 @@ extern "C" {
     fn nvim_gc_mark_timers(copy_id: c_int, abort: bool) -> bool;
     fn nvim_gc_iterate_registers();
     fn nvim_gc_iterate_marks();
-    fn nvim_gc_shrink_exestack();
     static mut want_garbage_collect: bool;
     static mut may_garbage_collect: bool;
     static mut garbage_collect_at_exit: bool;
@@ -188,7 +208,7 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     }
 
     // Shrink the execution stack if it grew too large.
-    nvim_gc_shrink_exestack();
+    gc_shrink_exestack();
 
     // Advance by two (COPYID_INC) because we add one for items referenced
     // through previous_funccal.
