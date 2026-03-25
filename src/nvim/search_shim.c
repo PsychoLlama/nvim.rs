@@ -72,34 +72,6 @@ static const char e_search_hit_top_without_match_for_str[]
 static const char e_search_hit_bottom_without_match_for_str[]
   = N_("E385: Search hit BOTTOM without match for: %s");
 
-//  This file contains various searching-related routines. These fall into
-//  three groups:
-//  1. string searches (for /, ?, n, and N)
-//  2. character searches within a single line (for f, F, t, T, etc)
-//  3. "other" kinds of searches like the '%' command, and 'word' searches.
-//
-//
-//  String searches
-//
-//  The string search functions are divided into two levels:
-//  lowest:  searchit(); uses a pos_T for starting position and found match.
-//  Highest: do_search(); uses curwin->w_cursor; calls searchit().
-//
-//  The last search pattern is remembered for repeating the same search.
-//  This pattern is shared between the :g, :s, ? and / commands.
-//  This is in search_regcomp().
-//
-//  The actual string matching is done using a heavily modified version of
-//  Henry Spencer's regular expression library.  See regexp.c.
-//
-//
-//
-// Two search patterns are remembered: One for the :substitute command and
-// one for other searches.  last_idx points to the one that was used the last
-// time.
-
-// spats[2] and last_idx now live in Rust: search_state::SPATS and LAST_IDX
-
 // Rust FFI declarations for character search state
 extern int rs_magic_isset(void);
 extern int rs_is_search_forward(void);
@@ -132,10 +104,6 @@ char *nvim_search_skipwhite_ml_get(linenr_T lnum)
   return skipwhite(ml_get(lnum));
 }
 
-// All spats[], saved_spats[], mr_pattern, last_idx, and their accessor functions
-// have been deleted. These now live in Rust: search_state::SPATS, SAVED_SPATS,
-// MR_PATTERN, LAST_IDX, and associated accessor functions.
-
 /// Call set_vv_searchforward (wrapper for Rust).
 /// Reads search direction from Rust-owned state via rs_is_search_forward().
 void nvim_call_set_vv_searchforward(void)
@@ -152,24 +120,6 @@ typedef struct {
   linenr_T lnum;                // Line we were up to in file
   int matched;                  // Found a match in this file
 } SearchedFile;
-
-/// translate search pattern for vim_regcomp()
-///
-/// pat_save == RE_SEARCH: save pat in spats[RE_SEARCH].pat (normal search cmd)
-/// pat_save == RE_SUBST: save pat in spats[RE_SUBST].pat (:substitute command)
-/// pat_save == RE_BOTH: save pat in both patterns (:global command)
-/// pat_use  == RE_SEARCH: use previous search pattern if "pat" is NULL
-/// pat_use  == RE_SUBST: use previous substitute pattern if "pat" is NULL
-/// pat_use  == RE_LAST: use last used pattern if "pat" is NULL
-/// options & SEARCH_HIS: put search string in history
-/// options & SEARCH_KEEP: keep previous search pattern
-///
-/// @param regmatch  return: pattern and ignore-case flag
-///
-/// @return          FAIL if failed, OK otherwise.
-
-// save_level, free_spat, saved_last_search_spat, did_save_last_search_spat,
-// and related statics and accessors deleted: now live in Rust search_state module.
 
 /// Get the search_match_lines global (accessor for Rust).
 int nvim_get_search_match_lines(void)
@@ -267,12 +217,6 @@ int nvim_get_p_hls(void)
   return p_hls ? 1 : 0;
 }
 
-/// Save and restore the search pattern for incremental highlight search
-/// feature.
-///
-/// It's similar to but different from save_search_patterns() and
-/// restore_search_patterns(), because the search pattern must be restored when
-/// cancelling incremental searching even if it's called inside user functions.
 
 
 
@@ -282,81 +226,6 @@ int nvim_get_p_hls(void)
 
 
 
-
-
-
-/// Lowest level search function.
-/// Search for 'count'th occurrence of pattern "pat" in direction "dir".
-/// Start at position "pos" and return the found position in "pos".
-///
-/// if (options & SEARCH_MSG) == 0 don't give any messages
-/// if (options & SEARCH_MSG) == SEARCH_NFMSG don't give 'notfound' messages
-/// if (options & SEARCH_MSG) == SEARCH_MSG give all messages
-/// if (options & SEARCH_HIS) put search pattern in history
-/// if (options & SEARCH_END) return position at end of match
-/// if (options & SEARCH_START) accept match at pos itself
-/// if (options & SEARCH_KEEP) keep previous search pattern
-/// if (options & SEARCH_FOLD) match only once in a closed fold
-/// if (options & SEARCH_PEEK) check for typed char, cancel search
-/// if (options & SEARCH_COL) start at pos->col instead of zero
-///
-/// @param win        window to search in; can be NULL for a buffer without a window!
-/// @param end_pos    set to end of the match, unless NULL
-/// @param pat_use    which pattern to use when "pat" is empty
-/// @param extra_arg  optional extra arguments, can be NULL
-///
-/// @returns          FAIL (zero) for failure, non-zero for success.
-///                   the index of the first matching
-///                   subpattern plus one; one if there was none.
-
-
-
-
-// set_vv_searchforward deleted: direction now lives in Rust SPATS.
-
-
-
-// Character Searches
-
-/// Search for a character in a line.  If "t_cmd" is false, move to the
-/// position of the character, otherwise move to just before the char.
-/// Do this "cap->count1" times.
-/// Return FAIL or OK.
-
-// "Other" Searches
-
-
-// check_prevcol(), find_rawstring_end(), and find_mps_values() have been
-// migrated to Rust in search/src/matchparen.rs
-
-// findmatchlimit -- find the matching paren or brace, if it exists within
-// maxtravel lines of the cursor.  A maxtravel of 0 means search until falling
-// off the edge of the file.
-//
-// "initc" is the character to find a match for.  NUL means to find the
-// character at or after the cursor. Special values:
-// '*'  look for C-style comment / *
-// '/'  look for C-style comment / *, ignoring comment-end
-// '#'  look for preprocessor directives
-// 'R'  look for raw string start: R"delim(text)delim" (only backwards)
-//
-// flags: FM_BACKWARD search backwards (when initc is '/', '*' or '#')
-//    FM_FORWARD  search forwards (when initc is '/', '*' or '#')
-//    FM_BLOCKSTOP  stop at start/end of block ({ or } in column 0)
-//    FM_SKIPCOMM skip comments (not implemented yet!)
-//
-// "oap" is only used to set oap->motion_type for a linewise motion, it can be
-// NULL
-
-
-
-
-/// Move cursor briefly to character matching the one under the cursor.
-/// Used for Insert mode and "r" command.
-/// Show the match only if it is visible on the screen.
-/// If there isn't a match, then beep.
-///
-/// @param c  char to show match for
 /// Perform the cursor-display-delay loop for showmatch.
 /// Called from Rust after the match position has been determined.
 void nvim_showmatch_display_cursor(int match_lnum, int match_col, int match_coladd)
