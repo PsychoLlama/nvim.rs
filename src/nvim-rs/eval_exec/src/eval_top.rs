@@ -867,7 +867,6 @@ extern "C" {
 
     // Phase 1: call_func_retstr helper
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
 }
 
 // VAR_FIXED lock constant (from typval_defs.h: VAR_FIXED = 2)
@@ -907,7 +906,7 @@ pub unsafe extern "C" fn rs_call_vim_function(
     }
 
     // Initialize rettv: set v_type = VAR_UNKNOWN (0) so tv_clear works on failure
-    nvim_tv_set_type(rettv, 0); // VAR_UNKNOWN = 0
+    rettv.set_type(0); // VAR_UNKNOWN = 0
 
     let lnum = nvim_curwin_get_cursor_lnum();
     let mut funcexe = FuncExeT::new();

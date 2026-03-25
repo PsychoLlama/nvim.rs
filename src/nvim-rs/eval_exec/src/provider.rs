@@ -69,7 +69,6 @@ extern "C" {
         funcexe: *mut FuncExeT,
     ) -> c_int;
     fn nvim_curwin_get_cursor_lnum() -> i32;
-    fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // ----- string utilities -----
@@ -347,12 +346,12 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     funcexe.fe_evaluate = true;
     unsafe {
         let av1 = argvars.as_mut_ptr().add(16) as *mut c_void;
-        nvim_tv_set_type(av0, 2); // VAR_STRING
+        (*av0.cast::<TypvalTRepr>()).v_type = 2; // VAR_STRING
         (*av0.cast::<TypvalTRepr>()).vval.v_string = method as *mut c_char;
-        nvim_tv_set_type(av1, 4); // VAR_LIST
+        (*av1.cast::<TypvalTRepr>()).v_type = 4; // VAR_LIST
         (*av1.cast::<TypvalTRepr>()).vval.v_list = arguments;
         // Set out_rettv to VAR_UNKNOWN/VAR_UNLOCKED before call
-        nvim_tv_set_type(out_rettv, 0); // VAR_UNKNOWN
+        (*out_rettv.cast::<TypvalTRepr>()).v_type = 0; // VAR_UNKNOWN
         call_func(
             func_buf.as_ptr() as *const c_char,
             name_len,

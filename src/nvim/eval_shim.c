@@ -546,13 +546,6 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // Accessor functions for Rust FFI
 // =============================================================================
 
-/// Set v_type in typval_T (accessor for Rust).
-void nvim_tv_set_type(typval_T *tv, int vtype)
-{
-  if (tv) {
-    tv->v_type = (VarType)vtype;
-  }
-}
 
 /// Wrapper for tv_blob_len inline function (accessor for Rust eval_exec).
 int nvim_blob_len(const blob_T *b)

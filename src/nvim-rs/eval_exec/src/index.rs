@@ -76,7 +76,6 @@ extern "C" {
     fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_get_dict(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
     fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
 
     // eval1 (recursive subscript parsing)
@@ -447,7 +446,7 @@ pub unsafe fn eval_index_inner_impl(
                 }
             }
             tv_clear(rettv);
-            nvim_tv_set_type(rettv, VAR_STRING);
+            rettv.set_type(VAR_STRING);
             nvim_tv_set_string(rettv, v);
         }
 

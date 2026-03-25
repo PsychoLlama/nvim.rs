@@ -59,6 +59,20 @@ pub struct TypvalT {
     pub vval: TypvalVval,
 }
 
+/// Set `v_type` in a `typval_T` pointer (inlined from `nvim_tv_set_type`).
+///
+/// No-op if `tv` is null.
+///
+/// # Safety
+///
+/// `tv` must be a valid pointer to a `typval_T` or null.
+#[inline]
+pub unsafe fn tv_set_type(tv: *mut c_void, vtype: c_int) {
+    if !tv.is_null() {
+        (*tv.cast::<TypvalT>()).v_type = vtype;
+    }
+}
+
 // =============================================================================
 // partial_T (48 bytes, verified by _Static_assert)
 // =============================================================================

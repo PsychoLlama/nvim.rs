@@ -163,7 +163,6 @@ extern "C" {
     fn tv_clear(tv: TypevalHandle);
     fn tv_copy(from: TypevalHandle, to: TypevalHandle);
     fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
 
     // Execution
     fn call_internal_func(

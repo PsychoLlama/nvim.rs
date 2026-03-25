@@ -81,6 +81,18 @@ impl TypevalHandle {
     pub const fn as_ptr(self) -> *mut c_void {
         self.0
     }
+
+    /// Set `v_type` in the underlying `typval_T` (inlined from `nvim_tv_set_type`).
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a valid pointer to a `typval_T` or null.
+    #[inline]
+    pub unsafe fn set_type(self, vtype: c_int) {
+        if !self.0.is_null() {
+            (*self.0.cast::<TypvalTRepr>()).v_type = vtype;
+        }
+    }
 }
 
 /// Function pointer type matching C `LineGetter`.
@@ -266,7 +278,6 @@ extern "C" {
     fn nvim_tv_get_float(tv: TypevalHandle) -> f64;
     fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
     fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
     fn nvim_tv_set_float(tv: TypevalHandle, f: f64);
 
@@ -473,7 +484,7 @@ pub unsafe fn eval1_impl(
     evalarg: EvalargHandle,
 ) -> c_int {
     // Clear rettv
-    nvim_tv_set_type(rettv, VAR_UNKNOWN);
+    rettv.set_type(VAR_UNKNOWN);
 
     // Get the first variable
     if eval2_impl(arg, rettv, evalarg) == FAIL {
@@ -676,7 +687,7 @@ pub unsafe fn eval2_impl(
             free_typval(var2);
 
             if evaluate {
-                nvim_tv_set_type(rettv, VAR_NUMBER);
+                rettv.set_type(VAR_NUMBER);
                 nvim_tv_set_number(rettv, if result { 1 } else { 0 });
             }
 
@@ -776,7 +787,7 @@ pub unsafe fn eval3_impl(
             free_typval(var2);
 
             if evaluate {
-                nvim_tv_set_type(rettv, VAR_NUMBER);
+                rettv.set_type(VAR_NUMBER);
                 nvim_tv_set_number(rettv, if result { 1 } else { 0 });
             }
 
@@ -1200,7 +1211,7 @@ pub unsafe fn eval_interp_string_impl(
         }
     };
 
-    nvim_tv_set_type(rettv, VAR_STRING);
+    rettv.set_type(VAR_STRING);
     if result != FAIL && evaluate {
         ga_append(ga as *mut c_void, 0i32); // NUL terminator
     }
@@ -1243,7 +1254,7 @@ unsafe fn eval_concat_str_impl(tv1: TypevalHandle, tv2: TypevalHandle) -> c_int 
 
     let p = concat_str(s1, s2);
     tv_clear(tv1);
-    nvim_tv_set_type(tv1, VAR_STRING);
+    tv1.set_type(VAR_STRING);
     nvim_tv_set_string(tv1, p);
 
     OK
@@ -1334,7 +1345,7 @@ unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_
         } else {
             f1 - f2
         };
-        nvim_tv_set_type(tv1, VAR_FLOAT);
+        tv1.set_type(VAR_FLOAT);
         nvim_tv_set_float(tv1, result);
     } else {
         let result = if op == b'+' as c_int {
@@ -1342,7 +1353,7 @@ unsafe fn eval_addsub_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c_
         } else {
             n1.wrapping_sub(n2)
         };
-        nvim_tv_set_type(tv1, VAR_NUMBER);
+        tv1.set_type(VAR_NUMBER);
         nvim_tv_set_number(tv1, result);
     }
 
@@ -1416,7 +1427,7 @@ unsafe fn eval_multdiv_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c
             emsg(c"E804: Cannot use '%' with Float".as_ptr());
             return FAIL;
         };
-        nvim_tv_set_type(tv1, VAR_FLOAT);
+        tv1.set_type(VAR_FLOAT);
         nvim_tv_set_float(tv1, result);
     } else {
         let result = if op == b'*' as c_int {
@@ -1426,7 +1437,7 @@ unsafe fn eval_multdiv_number_impl(tv1: TypevalHandle, tv2: TypevalHandle, op: c
         } else {
             rs_num_modulus(n1, n2)
         };
-        nvim_tv_set_type(tv1, VAR_NUMBER);
+        tv1.set_type(VAR_NUMBER);
         nvim_tv_set_number(tv1, result);
     }
 
@@ -1585,7 +1596,7 @@ unsafe fn eval_func_impl(
         if !arg_ptr.is_null() && *arg_ptr == b'(' as c_char {
             (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string =
                 nvim_get_tv_empty_string() as *mut c_char;
-            nvim_tv_set_type(rettv, VAR_FUNC);
+            rettv.set_type(VAR_FUNC);
         }
     }
 
@@ -1732,7 +1743,7 @@ pub unsafe fn eval_number_impl(
         let consumed = rs_string2float(*arg, &mut f);
         *arg = (*arg).add(consumed);
         if evaluate {
-            nvim_tv_set_type(rettv, VAR_FLOAT);
+            rettv.set_type(VAR_FLOAT);
             nvim_tv_set_float(rettv, f);
         }
     } else if get_byte(*arg) == b'0'
@@ -1789,7 +1800,7 @@ pub unsafe fn eval_number_impl(
         }
         *arg = (*arg).add(len as usize);
         if evaluate {
-            nvim_tv_set_type(rettv, VAR_NUMBER);
+            rettv.set_type(VAR_NUMBER);
             nvim_tv_set_number(rettv, n);
         }
     }
@@ -1990,7 +2001,7 @@ pub unsafe fn eval_method_impl(
         base.as_ptr().cast::<u8>(),
         std::mem::size_of::<TypvalTRepr>(),
     );
-    nvim_tv_set_type(rettv, VAR_UNKNOWN);
+    rettv.set_type(VAR_UNKNOWN);
 
     // Locate the method name.
     let mut len: c_int;
@@ -2050,7 +2061,7 @@ pub unsafe fn eval_method_impl(
             *arg = name;
             *paren = 0; // NUL out the '('
             let ref_tv = alloc_typval();
-            nvim_tv_set_type(ref_tv, VAR_UNKNOWN);
+            ref_tv.set_type(VAR_UNKNOWN);
             if eval7_impl(arg, ref_tv, evalarg, false) == FAIL {
                 *arg = name.add(len as usize);
                 ret = FAIL;
@@ -2113,7 +2124,7 @@ pub unsafe fn eval_method_impl(
             } else if !lua_funcname.is_null() {
                 if evaluate {
                     let vlua = nvim_get_vlua_partial();
-                    nvim_tv_set_type(rettv, VAR_PARTIAL);
+                    rettv.set_type(VAR_PARTIAL);
                     (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial = vlua;
                     (*vlua.cast::<PartialT>()).pt_refcount += 1;
                 }
@@ -2309,7 +2320,7 @@ pub unsafe fn eval_lit_string_impl(
     let alloc_len = (raw_len - reduce) as usize;
 
     let str_buf = xmalloc(alloc_len) as *mut c_char;
-    nvim_tv_set_type(rettv, VAR_STRING);
+    rettv.set_type(VAR_STRING);
     nvim_tv_set_string(rettv, str_buf);
 
     // Second pass: copy characters with reductions applied.
@@ -2443,7 +2454,7 @@ pub unsafe fn eval_string_impl(
     }
 
     // Allocate result buffer.
-    nvim_tv_set_type(rettv, VAR_STRING);
+    rettv.set_type(VAR_STRING);
     let raw_len = (p as isize) - (*arg as isize);
     let len = raw_len as usize + extra;
     let vstring = xmalloc(len) as *mut c_char;
@@ -2652,7 +2663,7 @@ unsafe fn get_literal_key_impl(arg: *mut *mut c_char, tv: TypevalHandle) -> c_in
     }
     let key_len = (p as usize) - (*arg as usize);
     let key = xmemdupz(*arg as *const c_void, key_len);
-    nvim_tv_set_type(tv, VAR_STRING);
+    tv.set_type(VAR_STRING);
     nvim_tv_set_string(tv, key);
     *arg = skipwhite(p);
     OK
@@ -2705,8 +2716,8 @@ pub unsafe fn eval_dict_impl(
 
     let tvkey = alloc_typval();
     let tvval = alloc_typval();
-    nvim_tv_set_type(tvkey, VAR_UNKNOWN);
-    nvim_tv_set_type(tvval, VAR_UNKNOWN);
+    tvkey.set_type(VAR_UNKNOWN);
+    tvval.set_type(VAR_UNKNOWN);
 
     *arg = skipwhite((*arg).add(1));
 
@@ -2788,14 +2799,14 @@ pub unsafe fn eval_dict_impl(
             }
             // Do NOT tv_clear(tvval) here: the dict item owns tvval's content.
             // Just reset the type so the next iteration starts fresh.
-            nvim_tv_set_type(tvval, VAR_UNKNOWN);
+            tvval.set_type(VAR_UNKNOWN);
         } else {
             // Not evaluating: tvval should be VAR_UNKNOWN, but clear defensively.
             tv_clear(tvval);
-            nvim_tv_set_type(tvval, VAR_UNKNOWN);
+            tvval.set_type(VAR_UNKNOWN);
         }
         tv_clear(tvkey);
-        nvim_tv_set_type(tvkey, VAR_UNKNOWN);
+        tvkey.set_type(VAR_UNKNOWN);
 
         // comma must come after value
         let had_comma = get_byte(*arg) == b',';
@@ -2973,11 +2984,11 @@ unsafe fn eval7_leader_impl(
 
         if is_float {
             tv_clear(rettv);
-            nvim_tv_set_type(rettv, VAR_FLOAT);
+            rettv.set_type(VAR_FLOAT);
             nvim_tv_set_float(rettv, f);
         } else {
             tv_clear(rettv);
-            nvim_tv_set_type(rettv, VAR_NUMBER);
+            rettv.set_type(VAR_NUMBER);
             nvim_tv_set_number(rettv, val);
         }
     }
@@ -3011,7 +3022,7 @@ pub unsafe fn eval7_impl(
     let mut ret = OK;
 
     // Initialize rettv so tv_clear() won't mistake it for a string
-    nvim_tv_set_type(rettv, VAR_UNKNOWN);
+    rettv.set_type(VAR_UNKNOWN);
 
     // Skip '!', '-' and '+' characters. They are handled later.
     let start_leader = *arg as *const c_char;
@@ -3089,7 +3100,7 @@ pub unsafe fn eval7_impl(
         b'@' => {
             *arg = (*arg).add(1);
             if evaluate {
-                nvim_tv_set_type(rettv, VAR_STRING);
+                rettv.set_type(VAR_STRING);
                 let contents = get_reg_contents(get_byte(*arg) as c_int, K_G_REG_EXPR_SRC);
                 (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = contents;
             }
@@ -3154,7 +3165,7 @@ pub unsafe fn eval7_impl(
                         && get_byte(p.add(5) as *const c_char) == b'.';
                     if is_vlua {
                         let vlua = nvim_get_vlua_partial();
-                        nvim_tv_set_type(rettv, VAR_PARTIAL);
+                        rettv.set_type(VAR_PARTIAL);
                         (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial = vlua;
                         (*vlua.cast::<PartialT>()).pt_refcount += 1;
                     }
@@ -3746,7 +3757,7 @@ pub unsafe extern "C" fn rs_eval_env_var(
         // Restore the original character.
         *name.add(len as usize) = cc as c_char;
 
-        nvim_tv_set_type(rettv, VAR_STRING);
+        rettv.set_type(VAR_STRING);
         (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = string;
         (*rettv.as_ptr().cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
     }

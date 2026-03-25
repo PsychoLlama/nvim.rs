@@ -82,10 +82,17 @@ extern "C" {
         overflow: *mut bool,
     );
 
-    // typval setters
-    fn nvim_tv_set_type(tv: TypvalPtr, vtype: c_int);
     fn nvim_tv_set_number(tv: TypvalPtr, n: i64);
     fn nvim_tv_set_vstring_owned(tv: TypvalPtr, s: *mut c_char);
+}
+
+/// Set v_type in a typval_T pointer (v_type is at offset 0).
+/// Inlined from nvim_tv_set_type.
+#[inline]
+unsafe fn tv_set_type(tv: TypvalPtr, vtype: c_int) {
+    if !tv.is_null() {
+        *tv.cast::<c_int>() = vtype;
+    }
 }
 
 // =============================================================================
@@ -153,7 +160,7 @@ pub unsafe extern "C" fn rs_f_getcmdline(
     rettv: TypvalPtr,
     _fptr: EvalFuncData,
 ) {
-    nvim_tv_set_type(rettv, VAR_STRING);
+    tv_set_type(rettv, VAR_STRING);
     // Return NULL (VAR_STRING with null = empty result) when:
     // - password mode is active, or
     // - not in active cmdline
@@ -211,7 +218,7 @@ pub unsafe extern "C" fn rs_f_getcmdprompt(
     rettv: TypvalPtr,
     _fptr: EvalFuncData,
 ) {
-    nvim_tv_set_type(rettv, VAR_STRING);
+    tv_set_type(rettv, VAR_STRING);
     if !in_active_cmdline() {
         nvim_tv_set_vstring_owned(rettv, std::ptr::null_mut());
         return;
@@ -269,7 +276,7 @@ pub unsafe extern "C" fn rs_f_getcmdtype(
     rettv: TypvalPtr,
     _fptr: EvalFuncData,
 ) {
-    nvim_tv_set_type(rettv, VAR_STRING);
+    tv_set_type(rettv, VAR_STRING);
     // Allocate a 1-byte string (xmallocz gives us 1 byte + NUL)
     let buf = xmallocz(1).cast::<c_char>();
     if buf.is_null() {

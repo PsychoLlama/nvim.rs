@@ -149,7 +149,6 @@ extern "C" {
     fn emsg(s: *const c_char) -> c_int;
 
     // Typval setters
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
     fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
 }
 
@@ -452,7 +451,7 @@ pub unsafe fn typval_compare_impl(
 
     // Set the result
     tv_clear(typ1);
-    nvim_tv_set_type(typ1, VAR_NUMBER);
+    typ1.set_type(VAR_NUMBER);
     nvim_tv_set_number(typ1, result);
 
     OK

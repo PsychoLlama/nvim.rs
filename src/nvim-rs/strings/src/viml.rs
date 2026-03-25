@@ -85,7 +85,6 @@ extern "C" {
     fn nvim_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
     fn nvim_tv_set_number(rettv: TypvalPtr, n: i64);
     fn nvim_tv_set_vstring_owned(rettv: TypvalPtr, s: *mut c_char);
-    fn nvim_tv_set_type(rettv: TypvalPtr, typ: c_int);
     fn nvim_tv_get_type(tv: TypvalPtr) -> c_int;
     fn nvim_tv_get_list(rettv: TypvalPtr) -> *mut c_void;
 
@@ -563,7 +562,7 @@ pub unsafe extern "C" fn rs_f_stridx(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
 #[export_name = "f_string"]
 pub unsafe extern "C" fn rs_f_string(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
-        nvim_tv_set_type(rettv, VAR_STRING);
+        *rettv.cast::<c_int>() = VAR_STRING;
         let tv0 = nvim_tv_idx(argvars, 0);
         let s = encode_tv2string(tv0, std::ptr::null_mut());
         // rettv->vval.v_string = s; but v_type already set via set_type
@@ -1104,7 +1103,7 @@ pub unsafe extern "C" fn rs_f_tr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Ev
         let tostr = tv_get_string_buf_chk(tv2, buf2.as_mut_ptr().cast());
 
         // Default return: empty string
-        nvim_tv_set_type(rettv, VAR_STRING);
+        *rettv.cast::<c_int>() = VAR_STRING;
         // rettv->vval.v_string = NULL; already zeroed by type setter
 
         if fromstr.is_null() || tostr.is_null() {
@@ -1201,7 +1200,7 @@ pub unsafe extern "C" fn rs_f_trim(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: 
         let mut buf1 = [0u8; NUMBUFLEN];
         let mut buf2 = [0u8; NUMBUFLEN];
 
-        nvim_tv_set_type(rettv, VAR_STRING);
+        *rettv.cast::<c_int>() = VAR_STRING;
 
         let tv0 = nvim_tv_idx(argvars, 0);
         let mut head = tv_get_string_buf_chk(tv0, buf1.as_mut_ptr().cast());

@@ -58,6 +58,17 @@ impl TypevalHandle {
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Set v_type field of the typval_T (inlined from nvim_tv_set_type).
+    ///
+    /// # Safety
+    /// `self` must be a valid non-null pointer to a typval_T.
+    pub unsafe fn set_type(self, vtype: c_int) {
+        if !self.0.is_null() {
+            // v_type is at offset 0 of typval_T
+            *(self.0.cast::<c_int>()) = vtype;
+        }
+    }
 }
 
 /// Opaque handle to a dictitem_T
@@ -1233,7 +1244,6 @@ extern "C" {
     // Set tv->vval.v_string (takes ownership)
     fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
     // tv type setter
-    fn nvim_tv_set_type(tv: TypevalHandle, vtype: c_int);
 
     // List operations
     fn nvim_tv_list_copyid(list: *const c_void) -> c_int;
@@ -1340,7 +1350,7 @@ unsafe fn var_item_copy_impl(
             if conv.is_null() || conv_type == CONV_NONE || from_str.is_null() {
                 tv_copy(from, to);
             } else {
-                nvim_tv_set_type(to, VAR_STRING);
+                to.set_type(VAR_STRING);
                 (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
                 let converted = nvim_string_convert(conv, from_str);
                 let s = if converted.is_null() {
@@ -1352,7 +1362,7 @@ unsafe fn var_item_copy_impl(
             }
         }
         VAR_LIST => {
-            nvim_tv_set_type(to, VAR_LIST);
+            to.set_type(VAR_LIST);
             (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
             let from_list = (*from.0.cast::<TypvalTRepr>()).vval.v_list;
             if from_list.is_null() {
@@ -1376,7 +1386,7 @@ unsafe fn var_item_copy_impl(
             nvim_tv_blob_copy(from_blob, to);
         }
         VAR_DICT => {
-            nvim_tv_set_type(to, VAR_DICT);
+            to.set_type(VAR_DICT);
             (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
             let from_dict = (*from.0.cast::<TypvalTRepr>()).vval.v_dict;
             if from_dict.is_null() {

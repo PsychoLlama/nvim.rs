@@ -23,7 +23,6 @@ use super::typval::{list_item_tv, TypvalT as TypvalTRepr};
 extern "C" {
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *const c_void) -> c_int;
-    fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     #[link_name = "tv_get_string"]
@@ -260,7 +259,7 @@ unsafe fn build_not_executable_msg(name: *const c_char) -> Vec<u8> {
 /// - `rettv` must be a valid typval pointer.
 unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retlist: bool) {
     // Initialize rettv as VAR_STRING with NULL string
-    nvim_tv_set_type(rettv, VAR_STRING);
+    (*rettv.cast::<TypvalTRepr>()).v_type = VAR_STRING;
     (*rettv.cast::<TypvalTRepr>()).vval.v_string = ptr::null_mut();
 
     if rs_check_secure() != 0 {
@@ -329,7 +328,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
         if retlist {
             // Empty list for no output
             nvim_tv_list_alloc_ret(rettv, 0);
-            nvim_tv_set_type(rettv, VAR_LIST);
+            (*rettv.cast::<TypvalTRepr>()).v_type = VAR_LIST;
         } else {
             // Empty string
             let empty = nvim_xstrdup(c"".as_ptr());
@@ -348,7 +347,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
             };
         let list = string_to_list(res, nread, keepempty);
         nvim_tv_list_ref(list);
-        nvim_tv_set_type(rettv, VAR_LIST);
+        (*rettv.cast::<TypvalTRepr>()).v_type = VAR_LIST;
         (*rettv.cast::<TypvalTRepr>()).vval.v_list = list;
         xfree(res.cast::<c_void>());
     } else {
