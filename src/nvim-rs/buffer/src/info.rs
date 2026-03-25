@@ -13,7 +13,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{BufHandle, WinHandle};
+use crate::{messages, BufHandle, WinHandle};
 
 extern "C" {
     static p_icon: c_int;
@@ -89,16 +89,6 @@ extern "C" {
         dstlen: usize,
         one: bool,
     ) -> usize;
-
-    fn nvim_msg_modified() -> *const c_char;
-    fn nvim_msg_not_edited() -> *const c_char;
-    fn nvim_msg_new() -> *const c_char;
-    fn nvim_msg_read_errors() -> *const c_char;
-    fn nvim_msg_ro() -> *const c_char;
-    fn nvim_msg_readonly() -> *const c_char;
-    fn nvim_no_lines_msg() -> *const c_char;
-    fn nvim_ngettext_line_count(n: i64) -> *const c_char;
-    fn nvim_fileinfo_line_fmt() -> *const c_char;
 
     // --- maketitle / resettitle / free_titles ---
     fn nvim_redrawing() -> c_int;
@@ -488,7 +478,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         if nvim_shortmess_mod() != 0 {
             pos = append_cstr(&mut buffer, pos, c" [+]".as_ptr().cast::<c_char>());
         } else {
-            pos = append_cstr(&mut buffer, pos, nvim_msg_modified());
+            pos = append_cstr(&mut buffer, pos, messages::msg_modified());
         }
     } else if pos < IOSIZE - 1 {
         buffer[pos] = b' ';
@@ -497,25 +487,25 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
     // [Not edited]
     if (flags & BF_NOTEDITED) != 0 && !dontwrite {
-        pos = append_cstr(&mut buffer, pos, nvim_msg_not_edited());
+        pos = append_cstr(&mut buffer, pos, messages::msg_not_edited());
     }
 
     // [New]
     if (flags & BF_NEW) != 0 && !dontwrite {
-        pos = append_cstr(&mut buffer, pos, nvim_msg_new());
+        pos = append_cstr(&mut buffer, pos, messages::msg_new());
     }
 
     // [Read errors]
     if (flags & BF_READERR) != 0 {
-        pos = append_cstr(&mut buffer, pos, nvim_msg_read_errors());
+        pos = append_cstr(&mut buffer, pos, messages::msg_read_errors());
     }
 
     // [readonly]
     if is_ro {
         let ro_str = if nvim_shortmess_ro() != 0 {
-            nvim_msg_ro()
+            messages::msg_ro()
         } else {
-            nvim_msg_readonly()
+            messages::msg_readonly()
         };
         pos = append_cstr(&mut buffer, pos, ro_str);
     }
@@ -532,12 +522,12 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
     if (ml_flags & ML_EMPTY) != 0 {
         // "--No lines in buffer--"
-        pos = append_cstr(&mut buffer, pos, nvim_no_lines_msg());
+        pos = append_cstr(&mut buffer, pos, messages::no_lines_msg());
     } else if unsafe { p_ru } != 0 {
         // Ruler already on screen — just show "N line(s) --P%--"
         let lnum = nvim_win_get_cursor_lnum(curwin);
         let pct = rs_calc_percentage(i64::from(lnum), i64::from(ml_line_count));
-        let fmt = nvim_ngettext_line_count(i64::from(ml_line_count));
+        let fmt = messages::ngettext_line_count(i64::from(ml_line_count));
         let remaining = IOSIZE - pos;
         let n = libc::snprintf(
             buffer[pos..].as_mut_ptr().cast::<c_char>(),
@@ -553,7 +543,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
         // Full: "line N of M --P%-- col C"
         let lnum = nvim_win_get_cursor_lnum(curwin);
         let pct = rs_calc_percentage(i64::from(lnum), i64::from(ml_line_count));
-        let fmt = nvim_fileinfo_line_fmt();
+        let fmt = messages::fileinfo_line_fmt();
         let remaining = IOSIZE - pos;
         let n = libc::snprintf(
             buffer[pos..].as_mut_ptr().cast::<c_char>(),

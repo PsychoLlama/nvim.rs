@@ -10,7 +10,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::BufHandle;
+use crate::{errors, BufHandle};
 
 // =============================================================================
 // External C Statics
@@ -63,13 +63,6 @@ extern "C" {
     // buflist_findnr (implemented in Rust, re-exported)
     fn rs_buflist_findnr(nr: c_int) -> BufHandle;
 
-    // Error message emitters for do_buffer_ext navigation (implemented in buffer.c)
-    fn nvim_emsg_e84();
-    fn nvim_emsg_e85();
-    fn nvim_emsg_e87();
-    fn nvim_emsg_e88();
-    fn nvim_semsg_e_nobufnr(count: i64);
-
     // Validation helpers for do_buffer_ext (implemented in ex_cmds_shim.c)
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
     fn nvim_ecmd_emsg_closing_buffer();
@@ -81,8 +74,6 @@ extern "C" {
     fn nvim_get_firstwin() -> *mut c_void;
     /// Get `wp->w_next` for current-tab iteration.
     fn nvim_win_get_next_in_tab(wp: *mut c_void) -> *mut c_void;
-    /// Emit E937 error with buffer name.
-    fn nvim_emsg_e937_buf_in_use(buf: BufHandle);
 
     // buf_ensure_loaded accessor (compound: aucmd_prepbuf + open_buffer + aucmd_restbuf)
     fn nvim_buf_aucmd_open_buffer(buf: BufHandle) -> c_int;
@@ -741,7 +732,7 @@ unsafe fn find_and_validate_buffer(
             remaining -= 1;
         }
         if nvim_buf_get_changed(buf) == 0 {
-            nvim_emsg_e84();
+            errors::emsg_e84();
             return null;
         }
     } else if start == DOBUF_FIRST && count != 0 {
@@ -780,7 +771,7 @@ unsafe fn find_and_validate_buffer(
                 bp = null;
             }
             if bp == buf {
-                nvim_emsg_e85();
+                errors::emsg_e85();
                 return null;
             }
         }
@@ -790,12 +781,12 @@ unsafe fn find_and_validate_buffer(
     if buf.is_null() {
         if start == DOBUF_FIRST {
             if !unload {
-                nvim_semsg_e_nobufnr(i64::from(count));
+                errors::semsg_e_nobufnr(i64::from(count));
             }
         } else if dir == FORWARD {
-            nvim_emsg_e87();
+            errors::emsg_e87();
         } else {
-            nvim_emsg_e88();
+            errors::emsg_e88();
         }
         return null;
     }
@@ -815,7 +806,7 @@ unsafe fn find_and_validate_buffer(
     if (action == DOBUF_GOTO || action == DOBUF_SPLIT)
         && (nvim_buf_get_flags(buf) & buf_flags::BF_DUMMY) != 0
     {
-        nvim_semsg_e_nobufnr(i64::from(count));
+        errors::semsg_e_nobufnr(i64::from(count));
         return null;
     }
 
@@ -1081,12 +1072,7 @@ const DOBUF_UNLOAD_VAL: c_int = 2; // matches DOBUF_UNLOAD
 #[no_mangle]
 pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> c_int {
     if action == DOBUF_UNLOAD_VAL {
-        // Use emsg from misc.rs extern block -- redeclare locally
-        extern "C" {
-            fn emsg(s: *const c_char) -> c_int;
-            fn gettext(msgid: *const c_char) -> *const c_char;
-        }
-        emsg(gettext(c"E90: Cannot unload last buffer".as_ptr()));
+        crate::errors::emsg_e90();
         return FAIL;
     }
 
@@ -1164,7 +1150,7 @@ pub unsafe extern "C" fn empty_curbuf(close_others: bool, forceit: c_int, action
 #[unsafe(export_name = "can_unload_buffer")]
 pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
     if nvim_buf_get_locked(buf) != 0 {
-        nvim_emsg_e937_buf_in_use(buf);
+        errors::emsg_e937_buf_in_use(buf);
         return false;
     }
 
@@ -1172,7 +1158,7 @@ pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             if nvim_win_get_buffer(wp) == buf {
-                nvim_emsg_e937_buf_in_use(buf);
+                errors::emsg_e937_buf_in_use(buf);
                 return false;
             }
             wp = nvim_win_get_next_in_tab(wp);

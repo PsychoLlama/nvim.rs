@@ -10,7 +10,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::BufHandle;
+use crate::{errors, BufHandle};
 
 // FileID size: sizeof(FileID) <= 16, asserted in buffer_shim.c
 const FILE_ID_SIZE: usize = 16;
@@ -55,7 +55,6 @@ extern "C" {
         file_id_valid: bool,
     ) -> BufHandle;
     fn nvim_buf_is_in_any_window(buf: BufHandle) -> bool;
-    fn nvim_emsg_e95_buffer_exists();
     fn nvim_xfree_char(ptr: *mut c_char);
     // nvim_close_buffer_wipe defined in quickfix_shim.c with void* parameter
     fn nvim_close_buffer_wipe(obuf: *mut std::ffi::c_void);
@@ -120,7 +119,7 @@ pub unsafe extern "C" fn rs_setfname(
         let in_use = !nvim_buf_get_ml_mfp(obuf).is_null() || nvim_buf_is_in_any_window(obuf);
         if in_use {
             if message {
-                nvim_emsg_e95_buffer_exists();
+                errors::emsg_e95_buffer_exists();
             }
             nvim_xfree_char(ffname);
             return FAIL;

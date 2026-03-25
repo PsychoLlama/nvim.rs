@@ -421,32 +421,13 @@ int nvim_buf_first_line_empty(buf_T *buf)
   return *ml_get_buf(buf, 1) == NUL;
 }
 
-/// Get translated "[No Name]" string (accessor for Rust).
-const char *nvim_no_name_msg(void)
-{
-  return _("[No Name]");
-}
-
-/// Get translated E382 error message string (accessor for Rust).
-const char *nvim_e382_msg(void)
-{
-  return _("E382: Cannot write, 'buftype' option is set");
-}
-
-/// Emit E84 error message (accessor for Rust).
-void nvim_emsg_e84(void) { emsg(_("E84: No modified buffer found")); }
-
-/// Emit E85 error message (accessor for Rust).
-void nvim_emsg_e85(void) { emsg(_("E85: There is no listed buffer")); }
-
-/// Emit E87 error message (accessor for Rust).
-void nvim_emsg_e87(void) { emsg(_("E87: Cannot go beyond last buffer")); }
-
-/// Emit E88 error message (accessor for Rust).
-void nvim_emsg_e88(void) { emsg(_("E88: Cannot go before first buffer")); }
-
-/// Emit e_nobufnr error with a count (accessor for Rust).
-void nvim_semsg_e_nobufnr(int64_t count) { semsg(_(e_nobufnr), count); }
+// nvim_no_name_msg: deleted (Phase 1, inlined in messages.rs)
+// nvim_e382_msg: deleted (Phase 1, inlined in messages.rs)
+// nvim_emsg_e84: deleted (Phase 1, inlined in errors.rs)
+// nvim_emsg_e85: deleted (Phase 1, inlined in errors.rs)
+// nvim_emsg_e87: deleted (Phase 1, inlined in errors.rs)
+// nvim_emsg_e88: deleted (Phase 1, inlined in errors.rs)
+// nvim_semsg_e_nobufnr: deleted (Phase 1, inlined in errors.rs)
 
 /// Check if the memfile pointer is NULL for a buffer (accessor for Rust).
 int nvim_buf_get_ml_mfp_null(buf_T *buf)
@@ -539,94 +520,30 @@ int nvim_qf_stack_get_bufnr(void)
   return qf_stack_get_bufnr();
 }
 
-/// Get translated "[Quickfix List]" string (accessor for Rust).
-const char *nvim_msg_qflist(void)
-{
-  return _(msg_qflist);
-}
+// nvim_msg_qflist: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_loclist: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_command_line: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_prompt: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_scratch: deleted (Phase 1, inlined in messages.rs)
+// nvim_e_noalt: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_arg_number_invalid: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_arg_number: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_all: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_top: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_bot: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_pct: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_3s: deleted (Phase 1, inlined in messages.rs)
 
-/// Get translated "[Location List]" string (accessor for Rust).
-const char *nvim_msg_loclist(void)
+/// Get ARGCOUNT value (accessor for Rust). ARGCOUNT is a macro.
+int nvim_get_argcount(void)
 {
-  return _(msg_loclist);
+  return ARGCOUNT;
 }
 
 /// Get the cmdwin_buf global (accessor for Rust).
 buf_T *nvim_get_cmdwin_buf(void)
 {
   return cmdwin_buf;
-}
-
-/// Get translated "[Command Line]" string (accessor for Rust).
-const char *nvim_msg_command_line(void)
-{
-  return _("[Command Line]");
-}
-
-/// Get translated "[Prompt]" string (accessor for Rust).
-const char *nvim_msg_prompt(void)
-{
-  return _("[Prompt]");
-}
-
-/// Get translated "[Scratch]" string (accessor for Rust).
-const char *nvim_msg_scratch(void)
-{
-  return _("[Scratch]");
-}
-
-/// Get translated "E23: No alternate file" string (accessor for Rust).
-const char *nvim_e_noalt(void)
-{
-  return _(e_noalt);
-}
-
-/// Get ARGCOUNT value (accessor for Rust).
-int nvim_get_argcount(void)
-{
-  return ARGCOUNT;
-}
-
-/// Get translated " ((%d) of %d)" format string (accessor for Rust).
-const char *nvim_msg_arg_number_invalid(void)
-{
-  return _(" ((%d) of %d)");
-}
-
-/// Get translated " (%d of %d)" format string (accessor for Rust).
-const char *nvim_msg_arg_number(void)
-{
-  return _(" (%d of %d)");
-}
-
-/// Get translated "All" string (accessor for Rust).
-const char *nvim_msg_all(void)
-{
-  return _("All");
-}
-
-/// Get translated "Top" string (accessor for Rust).
-const char *nvim_msg_top(void)
-{
-  return _("Top");
-}
-
-/// Get translated "Bot" string (accessor for Rust).
-const char *nvim_msg_bot(void)
-{
-  return _("Bot");
-}
-
-/// Get translated "%d%%" format string (accessor for Rust).
-const char *nvim_msg_pct(void)
-{
-  return _("%d%%");
-}
-
-/// Get translated "%3s" format string (accessor for Rust).
-const char *nvim_msg_3s(void)
-{
-  return _("%3s");
 }
 
 /// Set b_ml.ml_line_count on a buffer (accessor for Rust).
@@ -803,11 +720,7 @@ void nvim_undo_fmt_time(char *buf, size_t buflen, int64_t last_used)
 
 // nvim_get_iobuff is already defined in option_shim.c.
 
-/// Get translated "line %" PRId64 format string (accessor for Rust).
-const char *nvim_buflist_line_fmt(void)
-{
-  return _("line %" PRId64);
-}
+// nvim_buflist_line_fmt: deleted (Phase 1, inlined in messages.rs)
 
 // ============================================================
 // Phase 3 accessor functions for fileinfo.
@@ -875,56 +788,14 @@ const char *nvim_curbuf_get_fname(void)
   return curbuf->b_fname;
 }
 
-/// Get translated plural line-count format string (accessor for Rust).
-/// Returns "%" PRId64 " line --%d%%--" (singular) or "%" PRId64 " lines --%d%%--" (plural).
-const char *nvim_ngettext_line_count(int64_t n)
-{
-  return NGETTEXT("%" PRId64 " line --%d%%--",
-                  "%" PRId64 " lines --%d%%--",
-                  (unsigned long)n);
-}
-
-/// Get translated "[Modified]" string (accessor for Rust).
-const char *nvim_msg_modified(void)
-{
-  return _(" [Modified]");
-}
-
-/// Get translated "[Not edited]" string (accessor for Rust).
-const char *nvim_msg_not_edited(void)
-{
-  return _("[Not edited]");
-}
-
-/// Get translated "[New]" string (accessor for Rust).
-const char *nvim_msg_new(void)
-{
-  return _("[New]");
-}
-
-/// Get translated "[Read errors]" string (accessor for Rust).
-const char *nvim_msg_read_errors(void)
-{
-  return _("[Read errors]");
-}
-
-/// Get translated "[RO]" string (accessor for Rust).
-const char *nvim_msg_ro(void)
-{
-  return _("[RO]");
-}
-
-/// Get translated "[readonly]" string (accessor for Rust).
-const char *nvim_msg_readonly(void)
-{
-  return _("[readonly]");
-}
-
-/// Get translated "--No lines in buffer--" string (accessor for Rust).
-const char *nvim_no_lines_msg(void)
-{
-  return _(no_lines_msg);
-}
+// nvim_ngettext_line_count: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_modified: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_not_edited: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_new: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_read_errors: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_ro: deleted (Phase 1, inlined in messages.rs)
+// nvim_msg_readonly: deleted (Phase 1, inlined in messages.rs)
+// nvim_no_lines_msg: deleted (Phase 1, inlined in messages.rs)
 
 /// Get shortmess(SHM_MOD) (accessor for Rust).
 int nvim_shortmess_mod(void)
@@ -938,11 +809,7 @@ int nvim_shortmess_ro(void)
   return shortmess(SHM_RO) ? 1 : 0;
 }
 
-/// Get translated line-position format string "line %..." (accessor for Rust).
-const char *nvim_fileinfo_line_fmt(void)
-{
-  return _("line %" PRId64 " of %" PRId64 " --%d%%-- col ");
-}
+// nvim_fileinfo_line_fmt: deleted (Phase 1, inlined in messages.rs)
 
 // ============================================================
 // Phase 6 accessor functions for do_modelines / chk_modeline.
@@ -1008,17 +875,8 @@ void nvim_blfp_regex_free(void *handle)
   xfree(handle);
 }
 
-/// Error message E93: More than one match for <pattern>.
-void nvim_blfp_errmsg_e93(const char *pattern)
-{
-  semsg(_("E93: More than one match for %s"), pattern);
-}
-
-/// Error message E94: No matching buffer for <pattern>.
-void nvim_blfp_errmsg_e94(const char *pattern)
-{
-  semsg(_("E94: No matching buffer for %s"), pattern);
-}
+// nvim_blfp_errmsg_e93: deleted (Phase 1, inlined in errors.rs)
+// nvim_blfp_errmsg_e94: deleted (Phase 1, inlined in errors.rs)
 
 // ============================================================
 // Phase 5 accessor functions for ExpandBufnames.
@@ -1631,12 +1489,7 @@ void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
   buf->b_fname = buf->b_sfname;
 }
 
-/// Emit E95 "Buffer with this name already exists" error message.
-/// Accessor for Rust setfname.
-void nvim_emsg_e95_buffer_exists(void)
-{
-  emsg(_("E95: Buffer with this name already exists"));
-}
+// nvim_emsg_e95_buffer_exists: deleted (Phase 1, inlined in errors.rs)
 
 // Accessors for buf_open_scratch (migrated to Rust, src/nvim-rs/buffer/src/lifecycle.rs)
 
@@ -1692,8 +1545,7 @@ int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; 
 /// Returns non-zero if the current buffer is empty.
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
-/// Emit E23 "No alternate file" error.
-void nvim_emsg_noalt(void) { emsg(_(e_noalt)); }
+// nvim_emsg_noalt: deleted (Phase 1, inlined in errors.rs)
 
 /// Wrapper for getfile() returning 1 on GETFILE_SUCCESS, 0 on failure.
 int nvim_getfile(int fnum, int setpm, linenr_T lnum, int forceit)
@@ -2236,17 +2088,8 @@ void enter_buffer(buf_T *buf)
 // Buffer loading and command dispatch (Phase 21)
 // ============================================================
 
-static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
-  = N_("E937: Attempt to delete a buffer that is in use: %s");
-
-/// Emit the E937 error message for can_unload_buffer.
-/// Prefers buf->b_fname, falls back to buf->b_ffname, then "[No Name]".
-void nvim_emsg_e937_buf_in_use(buf_T *buf)
-{
-  const char *fname = buf->b_fname != NULL ? buf->b_fname : buf->b_ffname;
-  semsg(_(e_attempt_to_delete_buffer_that_is_in_use_str),
-        fname != NULL ? fname : "[No Name]");
-}
+// e_attempt_to_delete_buffer_that_is_in_use_str: deleted (Phase 1, only user was nvim_emsg_e937_buf_in_use)
+// nvim_emsg_e937_buf_in_use: deleted (Phase 1, inlined in errors.rs)
 
 /// Compound accessor: aucmd_prepbuf + open_buffer(false,NULL,0) + aucmd_restbuf.
 /// Returns 0 on FAIL, non-zero on OK/NOTDONE (accessor for Rust buf_ensure_loaded).

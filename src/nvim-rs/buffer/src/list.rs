@@ -14,7 +14,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::BufHandle;
+use crate::{errors, messages, BufHandle};
 
 // =============================================================================
 // External C Functions
@@ -80,7 +80,6 @@ extern "C" {
     fn nvim_curwin_set_cursor_coladd(v: c_int);
     fn nvim_curwin_set_curswant(val: bool);
     fn nvim_mark_view_restore(fm: *mut c_void);
-    fn nvim_emsg_noalt();
     fn nvim_semsg_e92_buf_not_found(n: i64);
     fn nvim_check_cursor_col(win: *mut c_void);
     static mut jop_flags: u32;
@@ -646,7 +645,6 @@ extern "C" {
     fn nvim_line_breakcheck();
     fn nvim_undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
     static mut IObuff: [c_char; 1025];
-    fn nvim_buflist_line_fmt() -> *const c_char;
 }
 
 // WinHandle is used via crate::WinHandle in extern "C" blocks above.
@@ -844,7 +842,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
             } else {
                 i64::from(nvim_buf_get_ml_line_count(buf))
             };
-            let fmt = nvim_buflist_line_fmt();
+            let fmt = messages::buflist_line_fmt();
             libc::snprintf(iobuff.add(len), IOSIZE_LIST - len, fmt, lnum);
         }
 
@@ -885,8 +883,6 @@ extern "C" {
     fn nvim_blfp_regex_compile(pat: *const c_char, magic: c_int) -> *mut c_void;
     fn nvim_blfp_regex_valid(handle: *mut c_void) -> c_int;
     fn nvim_blfp_regex_free(handle: *mut c_void);
-    fn nvim_blfp_errmsg_e93(pattern: *const c_char);
-    fn nvim_blfp_errmsg_e94(pattern: *const c_char);
     fn rs_magic_isset() -> c_int;
     fn rs_diff_mode_buf(buf: BufHandle) -> bool;
 }
@@ -936,7 +932,7 @@ pub unsafe fn buflist_findpat_impl(
                 let found_buf = rs_buflist_findnr(found_fnum);
                 if found_buf.is_null() || !rs_diff_mode_buf(found_buf) {
                     // emit E94 with the original pattern char
-                    nvim_blfp_errmsg_e94(pattern);
+                    errors::blfp_errmsg_e94(pattern);
                     return -1;
                 }
             }
@@ -1037,9 +1033,9 @@ pub unsafe fn buflist_findpat_impl(
 
     // Emit error messages
     if match_fnum == -2 {
-        nvim_blfp_errmsg_e93(pattern);
+        errors::blfp_errmsg_e93(pattern);
     } else if match_fnum < 0 {
-        nvim_blfp_errmsg_e94(pattern);
+        errors::blfp_errmsg_e94(pattern);
     }
 
     match_fnum
@@ -1119,7 +1115,7 @@ pub unsafe extern "C" fn rs_buflist_getfile(
     let buf = rs_buflist_findnr(n);
     if buf.is_null() {
         if (options & GETF_ALT) != 0 && n == 0 {
-            nvim_emsg_noalt();
+            errors::emsg_noalt();
         } else {
             nvim_semsg_e92_buf_not_found(i64::from(n));
         }

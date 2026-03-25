@@ -34,7 +34,7 @@ extern "C" {
 
     // C functions we call
     fn gettext(msgid: *const c_char) -> *const c_char;
-    fn emsg(s: *const c_char) -> c_int;
+    fn emsg(s: *const c_char) -> bool;
     fn vim_chdirfile(fname: *mut c_char, cause: c_int) -> c_int;
     fn shorten_fnames(force: bool);
     fn extmark_free_all(buf: BufHandle);

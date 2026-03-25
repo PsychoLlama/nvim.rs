@@ -9,11 +9,13 @@
 #![allow(clippy::cast_possible_wrap)] // Byte literals in ASCII range are safe
 
 pub mod close;
+pub mod errors;
 pub mod expand;
 pub mod filename;
 pub mod info;
 pub mod lifecycle;
 pub mod list;
+pub mod messages;
 pub mod misc;
 pub mod modeline;
 pub mod properties;
@@ -127,12 +129,6 @@ extern "C" {
     /// Get the `b_ffname` field from a buffer (full filename).
     fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
-    /// Get translated "[No Name]" string.
-    fn nvim_no_name_msg() -> *const c_char;
-
-    /// Get translated E382 error message string.
-    fn nvim_e382_msg() -> *const c_char;
-
     /// Emit an error message.
     fn nvim_emsg(msg: *const c_char);
 
@@ -175,26 +171,8 @@ extern "C" {
     /// Get the quickfix stack buffer number.
     fn nvim_qf_stack_get_bufnr() -> c_int;
 
-    /// Get translated "[Quickfix List]" string.
-    fn nvim_msg_qflist() -> *const c_char;
-
-    /// Get translated "[Location List]" string.
-    fn nvim_msg_loclist() -> *const c_char;
-
     /// Get the `cmdwin_buf` global.
     fn nvim_get_cmdwin_buf() -> BufHandle;
-
-    /// Get translated "[Command Line]" string.
-    fn nvim_msg_command_line() -> *const c_char;
-
-    /// Get translated "[Prompt]" string.
-    fn nvim_msg_prompt() -> *const c_char;
-
-    /// Get translated "[Scratch]" string.
-    fn nvim_msg_scratch() -> *const c_char;
-
-    /// Get translated "E23: No alternate file" string.
-    fn nvim_e_noalt() -> *const c_char;
 
     /// Get `ARGCOUNT` value.
     fn nvim_get_argcount() -> c_int;
@@ -204,12 +182,6 @@ extern "C" {
 
     /// Get `w_arg_idx_invalid` from a window.
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
-
-    /// Get translated " ((%d) of %d)" format string.
-    fn nvim_msg_arg_number_invalid() -> *const c_char;
-
-    /// Get translated " (%d of %d)" format string.
-    fn nvim_msg_arg_number() -> *const c_char;
 
     /// Get `w_topline` from a window.
     fn nvim_win_get_topline(wp: WinHandle) -> c_int;
@@ -228,21 +200,6 @@ extern "C" {
 
     /// Get `b_ml.ml_line_count` from a buffer.
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-
-    /// Get translated "All" string.
-    fn nvim_msg_all() -> *const c_char;
-
-    /// Get translated "Top" string.
-    fn nvim_msg_top() -> *const c_char;
-
-    /// Get translated "Bot" string.
-    fn nvim_msg_bot() -> *const c_char;
-
-    /// Get translated "%d%%" format string.
-    fn nvim_msg_pct() -> *const c_char;
-
-    /// Get translated "%3s" format string.
-    fn nvim_msg_3s() -> *const c_char;
 
     /// Calculate percentage (from math crate).
     fn rs_calc_percentage(part: i64, whole: i64) -> c_int;
@@ -630,11 +587,11 @@ pub extern "C" fn rs_buf_hide(buf: BufHandle) -> bool {
 #[inline]
 unsafe fn buf_get_fname_impl(buf: BufHandle) -> *const c_char {
     if buf.is_null() {
-        return nvim_no_name_msg();
+        return messages::no_name_msg();
     }
     let fname = nvim_buf_get_b_fname(buf);
     if fname.is_null() {
-        nvim_no_name_msg()
+        messages::no_name_msg()
     } else {
         fname
     }
@@ -656,7 +613,7 @@ pub unsafe extern "C" fn rs_buf_get_fname(buf: BufHandle) -> *const c_char {
 #[inline]
 unsafe fn bt_dontwrite_msg_impl(buf: BufHandle) -> bool {
     if bt_dontwrite_impl(buf) {
-        nvim_emsg(nvim_e382_msg());
+        nvim_emsg(messages::e382_msg());
         true
     } else {
         false
@@ -717,9 +674,9 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
     if bt_quickfix_impl(buf) {
         let fnum = nvim_buf_get_fnum(buf);
         if fnum == nvim_qf_stack_get_bufnr() {
-            return nvim_msg_qflist().cast_mut();
+            return messages::msg_qflist().cast_mut();
         }
-        return nvim_msg_loclist().cast_mut();
+        return messages::msg_loclist().cast_mut();
     }
 
     // Buffer types with no file name
@@ -729,12 +686,12 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
             return fname.cast_mut();
         }
         if buf == nvim_get_cmdwin_buf() {
-            return nvim_msg_command_line().cast_mut();
+            return messages::msg_command_line().cast_mut();
         }
         if bt_prompt_impl(buf) {
-            return nvim_msg_prompt().cast_mut();
+            return messages::msg_prompt().cast_mut();
         }
-        return nvim_msg_scratch().cast_mut();
+        return messages::msg_scratch().cast_mut();
     }
 
     // Buffer with no fname gets "[No Name]"
@@ -764,7 +721,7 @@ pub unsafe extern "C" fn rs_getaltfname(errmsg: bool) -> *mut c_char {
     {
         // FAIL
         if errmsg {
-            nvim_emsg(nvim_e_noalt());
+            nvim_emsg(messages::e_noalt());
         }
         return std::ptr::null_mut();
     }
@@ -794,9 +751,9 @@ pub unsafe extern "C" fn rs_append_arg_number(
     let invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
 
     let fmt = if invalid {
-        nvim_msg_arg_number_invalid()
+        messages::msg_arg_number_invalid()
     } else {
-        nvim_msg_arg_number()
+        messages::msg_arg_number()
     };
 
     // Use snprintf with the translated format string
@@ -849,23 +806,28 @@ pub unsafe extern "C" fn rs_get_rel_pos(wp: WinHandle, buf: *mut c_char, buflen:
 
     if below <= 0 {
         let msg = if above == 0 {
-            nvim_msg_all()
+            messages::msg_all()
         } else {
-            nvim_msg_bot()
+            messages::msg_bot()
         };
         let n = libc::snprintf(buf, buflen_sz, c"%s".as_ptr(), msg);
         return if n < 0 { 0 } else { n.min(buflen - 1) };
     }
 
     if above <= 0 {
-        let n = libc::snprintf(buf, buflen_sz, c"%s".as_ptr(), nvim_msg_top());
+        let n = libc::snprintf(buf, buflen_sz, c"%s".as_ptr(), messages::msg_top());
         return if n < 0 { 0 } else { n.min(buflen - 1) };
     }
 
     let perc = rs_calc_percentage(above, above + below);
     let mut tmp = [0u8; 8];
-    libc::snprintf(tmp.as_mut_ptr().cast(), tmp.len(), nvim_msg_pct(), perc);
-    let n = libc::snprintf(buf, buflen_sz, nvim_msg_3s(), tmp.as_ptr());
+    libc::snprintf(
+        tmp.as_mut_ptr().cast(),
+        tmp.len(),
+        messages::msg_pct(),
+        perc,
+    );
+    let n = libc::snprintf(buf, buflen_sz, messages::msg_3s(), tmp.as_ptr());
     if n < 0 {
         0
     } else {
