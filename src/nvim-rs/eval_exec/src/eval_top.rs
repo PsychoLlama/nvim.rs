@@ -75,7 +75,9 @@ extern "C" {
     fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
 
     // eval_to_string_safe wrapper (calls through to our rs_eval_to_string)
+    #[link_name = "tv_get_string"]
     fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
+    #[link_name = "xstrdup"]
     fn nvim_eval_xstrdup(s: *const c_char) -> *mut c_char;
 
     // typval2string helpers
@@ -116,7 +118,9 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
 
     // Phase 5: may_call_simple_func / eval_expr_ext accessors
+    #[link_name = "call_simple_luafunc"]
     fn nvim_call_simple_luafunc(name: *const c_char, len: usize, rettv: TypevalHandle) -> c_int;
+    #[link_name = "call_simple_func"]
     fn nvim_call_simple_func(name: *const c_char, len: usize, rettv: TypevalHandle) -> c_int;
     // These are already Rust exports (rs_skip_luafunc_name, rs_to_name_end) called via C ABI
     fn rs_skip_luafunc_name(p: *const c_char) -> *const c_char;
@@ -812,8 +816,10 @@ extern "C" {
     fn rs_check_luafunc_name(s: *const c_char, paren: bool) -> c_int;
 
     // Phase 1: set_argv_var accessors
+    #[link_name = "tv_list_alloc"]
     fn nvim_eval_tv_list_alloc(len: isize) -> *mut c_void; // list_T*
     fn nvim_tv_list_set_lock(l: *mut c_void, lock: c_int);
+    #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(l: *mut c_void, s: *const c_char, len: isize);
     fn nvim_tv_list_last_fix_lock(l: *mut c_void);
     fn nvim_set_vim_var_argv_list(list: *mut c_void);

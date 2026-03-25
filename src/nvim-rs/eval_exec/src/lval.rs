@@ -186,6 +186,7 @@ extern "C" {
     ) -> *mut c_char;
 
     // find_var wrapper
+    #[link_name = "find_var"]
     fn nvim_find_var(
         name: *const c_char,
         name_len: usize,
@@ -1204,6 +1205,7 @@ extern "C" {
     fn nvim_tv_list_copyid(list: *const c_void) -> c_int;
     fn nvim_tv_list_latest_copy(list: *const c_void) -> *mut c_void;
     fn nvim_tv_list_ref(list: *mut c_void);
+    #[link_name = "tv_list_copy"]
     fn nvim_tv_list_copy(
         conv: *const c_void,
         list: *mut c_void,
@@ -1216,6 +1218,7 @@ extern "C" {
     fn nvim_dict_get_copyid(dict: *const c_void) -> c_int;
     fn nvim_dict_get_copydict(dict: *const c_void) -> *mut c_void;
     fn nvim_dict_refcount_inc(dict: *mut c_void);
+    #[link_name = "tv_dict_copy"]
     fn nvim_tv_dict_copy(
         conv: *const c_void,
         dict: *mut c_void,
@@ -1225,6 +1228,7 @@ extern "C" {
     fn nvim_tv_set_dict(tv: TypevalHandle, dict: *mut c_void);
 
     // Blob operations
+    #[link_name = "tv_blob_copy"]
     fn nvim_tv_blob_copy(from_blob: *mut c_void, to: TypevalHandle);
 
     // Error: variable nested too deep -- now in nvim_eval::errors

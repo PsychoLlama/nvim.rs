@@ -108,8 +108,11 @@ extern "C" {
     // list/blob operations
     fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
     fn nvim_tv_list_first(l: *mut c_void) -> *mut c_void;
+    #[link_name = "tv_list_unref"]
     fn nvim_tv_list_unref(l: *mut c_void);
+    #[link_name = "tv_blob_unref"]
     fn nvim_tv_blob_unref(b: *mut c_void);
+    #[link_name = "tv_blob_copy"]
     fn nvim_tv_blob_copy(from: *mut c_void, to: TypevalHandle);
 
     // TV type / value accessors

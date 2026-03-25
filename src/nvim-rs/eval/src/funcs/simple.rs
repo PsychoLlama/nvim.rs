@@ -385,8 +385,10 @@ extern "C" {
 
     // --- list alloc/append (eval_shim.c) ---
     /// Set rettv to VAR_LIST and return the newly allocated list_T*.
+    #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
     /// Append a copy of `s` (len=-1 uses strlen) to list `l`.
+    #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(l: *mut c_void, s: *const c_char, len: isize);
 
     // --- serverstop ---

@@ -971,6 +971,7 @@ const QF_FAIL: c_int = 0;
 extern "C" {
     // Dict field accessors for qf_add_entry_from_dict
     fn tv_dict_get_string(dict: *const c_void, key: *const c_char, save: bool) -> *mut c_char;
+    #[link_name = "tv_dict_get_number"]
     fn nvim_tv_dict_get_number(dict: *const c_void, key: *const c_char) -> i64;
     fn tv_dict_find(dict: *const c_void, key: *const c_char, key_len: i64) -> *mut c_void;
     fn nvim_qf_di_get_tv(di: *mut c_void) -> *mut c_void;

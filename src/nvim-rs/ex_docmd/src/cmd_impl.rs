@@ -873,6 +873,7 @@ extern "C" {
     fn nvim_set_force_abort(val: bool);
     fn nvim_docmd_fmt_exception_not_caught(value: *const c_char) -> *mut c_char;
     fn nvim_docmd_free_sourcing_name_and_pop();
+    #[link_name = "discard_current_exception"]
     fn nvim_discard_current_exception();
     fn xfree(p: *mut c_void);
     // emsg_multiline(s, kind, hl_id, multiline) -> int

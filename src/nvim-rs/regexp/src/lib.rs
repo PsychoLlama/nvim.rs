@@ -1929,6 +1929,7 @@ pub unsafe extern "C" fn reg_submatch(no: c_int) -> *mut c_char {
 extern "C" {
     fn nvim_regexp_tv_list_alloc(len: i64) -> *mut c_void;
     fn nvim_tv_list_ref(list: *mut c_void);
+    #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(list: *mut c_void, s: *const c_char, len: isize);
 }
 

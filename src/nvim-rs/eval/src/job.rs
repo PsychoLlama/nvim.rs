@@ -39,6 +39,7 @@ type CallbackHandle = *mut CallbackT;
 
 extern "C" {
     // -- tv_dict_get_callback wrapper --
+    #[link_name = "tv_dict_get_callback"]
     fn nvim_tv_dict_get_callback(
         dict: DictHandle,
         key: *const c_char,
@@ -47,12 +48,14 @@ extern "C" {
     ) -> bool;
 
     // -- tv_dict_get_number wrapper --
+    #[link_name = "tv_dict_get_number"]
     fn nvim_tv_dict_get_number(dict: DictHandle, key: *const c_char) -> i64;
 
     // -- CallbackReader accessors --
     fn nvim_eval_cbr_get_cb(reader: CallbackReaderHandle) -> CallbackHandle;
     fn nvim_cbr_set_buffered(reader: CallbackReaderHandle, buffered: c_int);
     fn nvim_cbr_set_self(reader: CallbackReaderHandle, dict: DictHandle);
+    #[link_name = "callback_reader_free"]
     fn nvim_callback_reader_free(reader: CallbackReaderHandle);
 
     // -- Callback free (now defined in Rust eval_exec/callback.rs, takes *mut c_void) --

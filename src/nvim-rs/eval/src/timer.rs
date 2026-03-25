@@ -90,6 +90,7 @@ extern "C" {
     fn tv_clear(tv: TvHandle);
 
     // -- Dict/List operations for add_timer_info --
+    #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: TvHandle, count_hint: isize) -> ListHandle;
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
     fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
@@ -116,6 +117,7 @@ extern "C" {
     fn nvim_get_did_throw() -> c_int;
     fn nvim_get_pressedreturn() -> c_int;
     fn nvim_set_pressedreturn(val: c_int);
+    #[link_name = "discard_current_exception"]
     fn nvim_discard_current_exception();
 }
 

@@ -27,8 +27,10 @@ extern "C" {
     fn nvim_tv_set_vstring_raw(tv: *mut c_void, s: *mut c_char);
     fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void;
     fn nvim_tv_set_v_list(tv: *mut c_void, l: *mut c_void);
-    fn nvim_eval_tv_string_chk(tv: *const c_void) -> *const c_char;
-    fn nvim_eval_tv_get_str(tv: *const c_void) -> *const c_char;
+    #[link_name = "tv_get_string_chk"]
+    fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
+    #[link_name = "tv_get_string"]
+    fn nvim_eval_tv_get_str(tv: *mut c_void) -> *const c_char;
     fn nvim_tv_get_number(tv: *const c_void) -> i64;
 
     // ----- list accessors -----
@@ -37,15 +39,21 @@ extern "C" {
     fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
     fn nvim_list_item_tv(item: *mut c_void) -> *mut c_void; // typval_T *
     fn nvim_tv_list_ref(l: *mut c_void);
+    #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
     fn nvim_tv_list_alloc() -> *mut c_void;
+    #[link_name = "encode_list_write"]
     fn nvim_encode_list_write(list: *mut c_void, str: *const c_char, len: usize);
 
     // ----- shell / os -----
+    #[link_name = "shell_build_argv"]
     fn nvim_shell_build_argv(cmd: *const c_char, extra: *const c_char) -> *mut *mut c_char;
+    #[link_name = "shell_free_argv"]
     fn nvim_shell_free_argv(argv: *mut *mut c_char);
+    #[link_name = "shell_argv_to_str"]
     fn nvim_shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_char;
     fn nvim_eval_os_can_exe(name: *const c_char, abspath: *mut *mut c_char) -> bool;
+    #[link_name = "os_system"]
     fn nvim_os_system(
         argv: *mut *mut c_char,
         input: *const c_char,
@@ -56,7 +64,9 @@ extern "C" {
 
     // ----- profiling -----
     fn nvim_do_profiling_active() -> bool;
+    #[link_name = "prof_child_enter"]
     fn nvim_prof_child_enter(tm: *mut u64);
+    #[link_name = "prof_child_exit"]
     fn nvim_prof_child_exit(tm: *mut u64);
 
     // ----- verbose -----
@@ -75,6 +85,7 @@ extern "C" {
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
     fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
+    #[link_name = "memchrsub"]
     fn nvim_eval_memchrsub(data: *mut c_char, c: c_char, x: c_char, len: usize);
 
     // ----- secure check -----

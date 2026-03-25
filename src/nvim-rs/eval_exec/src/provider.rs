@@ -27,6 +27,7 @@ extern "C" {
         verbose: bool,
         import_script: bool,
     ) -> c_int;
+    #[link_name = "script_autoload"]
     fn nvim_script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
     fn nvim_eval_find_func(name: *const c_char) -> bool;
     fn nvim_eval_get_p_lpl() -> bool;
@@ -42,7 +43,9 @@ extern "C" {
 
     // ----- list operations -----
     fn nvim_eval_list_alloc_n(n: c_int) -> *mut c_void;
+    #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(l: *mut c_void, str: *const c_char, len: isize);
+    #[link_name = "tv_list_unref"]
     fn nvim_tv_list_unref(l: *mut c_void);
     fn nvim_eval_list_ref(l: *mut c_void);
 

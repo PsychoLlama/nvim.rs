@@ -267,6 +267,7 @@ const KE_SNR: u8 = 82;
 #[allow(clashing_extern_declarations)]
 extern "C" {
     // Phase 4: get_name_len helpers
+    #[link_name = "eval_fname_script"]
     fn nvim_eval_fname_script(p: *const c_char) -> c_int;
     // skipwhite already declared above as returning *const c_char (link_name alias)
 

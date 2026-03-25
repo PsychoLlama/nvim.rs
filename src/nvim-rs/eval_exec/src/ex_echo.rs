@@ -61,6 +61,7 @@ extern "C" {
 
     // Message functions
     fn nvim_msg_ext_set_kind(kind: *const c_char);
+    #[link_name = "msg_sb_eol"]
     fn nvim_msg_sb_eol();
     fn nvim_msg_start();
     fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
@@ -79,6 +80,7 @@ extern "C" {
     // encode functions
     fn nvim_encode_tv2echo(tv: TypevalHandle) -> *mut c_char;
     fn nvim_encode_tv2string_wrapper(tv: TypevalHandle) -> *mut c_char;
+    #[link_name = "tv_get_string"]
     fn nvim_eval_tv_get_str(tv: TypevalHandle) -> *const c_char;
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
 

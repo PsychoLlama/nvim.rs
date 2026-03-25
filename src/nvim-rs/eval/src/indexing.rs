@@ -34,6 +34,7 @@ extern "C" {
     // Buffer accessors (defined in eval.c)
     fn nvim_eval_buf_ml_valid(buf: BufHandle) -> c_int;
     fn nvim_eval_buf_line_count(buf: BufHandle) -> i32;
+    #[link_name = "ml_get_buf"]
     fn nvim_eval_ml_get_buf(buf: BufHandle, lnum: i32) -> *const c_char;
 
     // Regex functions
@@ -230,7 +231,8 @@ extern "C" {
     // Typval field accessors (Phase 3)
     fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
     fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
-    fn nvim_eval_tv_string_chk(tv: *const c_void) -> *const c_char;
+    #[link_name = "tv_get_string_chk"]
+    fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
     fn nvim_tv_list_item_is_dollar(l: ListHandle, idx: c_int) -> bool;
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
@@ -344,7 +346,7 @@ pub unsafe extern "C" fn rs_var2fpos(
         return true;
     }
 
-    let name_ptr = nvim_eval_tv_string_chk(tv);
+    let name_ptr = nvim_eval_tv_string_chk(tv.cast_mut());
     if name_ptr.is_null() {
         return false;
     }

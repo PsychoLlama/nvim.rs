@@ -1637,7 +1637,8 @@ extern "C" {
     fn c_profile_sub(tm1: u64, tm2: u64) -> u64;
 
     // List construction for reltime/srand return values
-    // nvim_tv_list_alloc_ret: DLLEXPORT wrapper, returns list_T*
+    // tv_list_alloc_ret: returns list_T* set in rettv
+    #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
     fn tv_list_append_number(l: *mut c_void, nr: i64);
 

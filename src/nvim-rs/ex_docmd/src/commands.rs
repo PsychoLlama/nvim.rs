@@ -1373,6 +1373,7 @@ extern "C" {
         escapedp: *mut c_int,
     ) -> *mut c_char;
     fn nvim_has_dollar_or_tilde(s: *const c_char) -> bool;
+    #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(s: *const c_char) -> *mut c_char;
     fn nvim_eap_get_usefilter(eap: ExArgHandle) -> bool;
     // repl_cmdline accessors

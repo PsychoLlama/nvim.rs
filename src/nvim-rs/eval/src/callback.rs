@@ -261,8 +261,11 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: 
 extern "C" {
     fn tv_clear(tv: TvHandleMut);
     fn xfree(ptr: *mut c_void);
+    #[link_name = "tv_dict_unref"]
     fn nvim_dict_unref(dict: DictHandle);
+    #[link_name = "func_unref"]
     fn nvim_func_unref(name: *mut c_char);
+    #[link_name = "func_ptr_unref"]
     fn nvim_func_ptr_unref(func: *mut c_void);
     fn nvim_eval_partial_get_name(pt: PartialHandle) -> *mut c_char;
     fn nvim_eval_partial_get_func(pt: PartialHandle) -> *mut c_void;

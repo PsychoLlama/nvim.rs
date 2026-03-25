@@ -445,7 +445,7 @@ extern "C" {
     fn nvim_callback_is_none(cb: *const c_void) -> bool;
     fn nvim_callback_call_one_dict(cb: *mut c_void, dict: *mut c_void, rettv: *mut c_void) -> bool;
     fn nvim_tv_rettv_list_if_var_list(rettv: *const c_void) -> *mut c_void;
-    fn nvim_tv_list_ref(list: *mut c_void);
+    fn nvim_tv_list_ref(list: *mut c_void); // inline in C, needs wrapper
     fn tv_dict_unref(dict: *mut c_void);
     fn tv_clear(tv: *mut c_void);
     fn tv_dict_add_nr(dict: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;

@@ -263,6 +263,7 @@ extern "C" {
     // Blob operations (wrappers for inline functions)
     fn nvim_blob_len(b: *const c_void) -> c_int;
     fn nvim_blob_get(b: *const c_void, idx: c_int) -> c_int;
+    #[link_name = "tv_blob_alloc"]
     fn nvim_blob_alloc() -> *mut c_void;
     fn nvim_blob_set_ret(tv: TypevalHandle, b: *mut c_void);
     fn ga_append(ga: *mut c_void, c: c_int);
@@ -1791,7 +1792,9 @@ pub unsafe extern "C" fn rs_eval_number(
 
 extern "C" {
     // List operations - new C accessors
+    #[link_name = "tv_list_alloc"]
     fn nvim_eval_tv_list_alloc(len: isize) -> *mut c_void;
+    #[link_name = "tv_list_free"]
     fn nvim_eval_tv_list_free(l: *mut c_void);
     fn nvim_eval_tv_list_append_owned_tv_ptr(l: *mut c_void, tv: TypevalHandle);
     fn nvim_eval_tv_list_set_ret(rettv: TypevalHandle, l: *mut c_void);
@@ -3182,8 +3185,10 @@ extern "C" {
     // Increment dict->dv_refcount
     fn nvim_dict_refcount_inc(dict: *mut c_void);
     // tv_dict_unref wrapper
+    #[link_name = "tv_dict_unref"]
     fn nvim_dict_unref(dict: *mut c_void);
     // make_partial wrapper
+    #[link_name = "make_partial"]
     fn nvim_make_partial(selfdict: *mut c_void, rettv: TypevalHandle);
     // aborting() wrapper
     fn nvim_aborting() -> bool;
@@ -3593,8 +3598,10 @@ extern "C" {
     // Error messages for eval_option
     // nvim_semsg_e112_option_name_missing and nvim_semsg_e113_unknown_option: now in nvim_eval::errors
     // vim_getenv: returns allocated string or NULL
+    #[link_name = "vim_getenv"]
     fn nvim_vim_getenv(name: *const c_char) -> *mut c_char;
     // expand_env_save: expand $VAR from src
+    #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(src: *const c_char) -> *mut c_char;
     // v_lock setter (VAR_UNLOCKED = 0)
     fn nvim_tv_set_v_lock(tv: TypevalHandle, lock: c_int);
