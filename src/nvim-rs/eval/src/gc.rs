@@ -54,7 +54,9 @@ extern "C" {
     fn nvim_gc_iterate_registers();
     fn nvim_gc_iterate_marks();
     fn nvim_gc_shrink_exestack();
-    fn nvim_gc_clear_flags();
+    static mut want_garbage_collect: bool;
+    static mut may_garbage_collect: bool;
+    static mut garbage_collect_at_exit: bool;
     fn nvim_gc_verb_msg_abort();
 
     // C mark/collect functions called by garbage_collect
@@ -125,7 +127,9 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     use super::rs_get_copyID;
 
     if !testing {
-        nvim_gc_clear_flags();
+        want_garbage_collect = false;
+        may_garbage_collect = false;
+        garbage_collect_at_exit = false;
     }
 
     // Shrink the execution stack if it grew too large.

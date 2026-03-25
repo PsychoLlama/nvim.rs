@@ -602,15 +602,6 @@ void nvim_gc_shrink_exestack(void)
   }
 }
 
-/// Clear the garbage collection trigger flags.
-/// Called by rs_garbage_collect when not in testing mode.
-void nvim_gc_clear_flags(void)
-{
-  want_garbage_collect = false;
-  may_garbage_collect = false;
-  garbage_collect_at_exit = false;
-}
-
 /// Emit the "not enough memory" GC abort verbose message, if p_verbose > 0.
 void nvim_gc_verb_msg_abort(void)
 {
@@ -767,12 +758,6 @@ bool nvim_di_check_lock(const dictitem_T *di, const char *name)
   return tv_check_lock(&di->di_tv, name, TV_CSTRING);
 }
 
-/// Set lp->ll_tv to &di->di_tv - composite setter for Rust.
-void nvim_lval_set_tv_from_di(lval_T *lp, dictitem_T *di)
-{
-  lp->ll_tv = &di->di_tv;
-}
-
 /// Wrapper for tv_dict_is_watched inline function - accessor for Rust.
 bool nvim_tv_dict_is_watched(const dict_T *d)
 {
@@ -814,18 +799,6 @@ void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
 void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d)
 {
   tv_dict_set_ret(rettv, d);
-}
-
-/// Get argvars[1] pointer from argvars array - accessor for Rust rs_f_slice.
-typval_T *nvim_f_slice_get_arg1(typval_T *argvars)
-{
-  return &argvars[1];
-}
-
-/// Get argvars[2] pointer from argvars array - accessor for Rust rs_f_slice.
-typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
-{
-  return &argvars[2];
 }
 
 // =============================================================================
@@ -874,18 +847,6 @@ void nvim_lval_alloc_dict_if_null(lval_T *lp)
   lp->ll_dict = lp->ll_tv->vval.v_dict;
 }
 
-/// Get tv->vval.v_blob from the ll_tv - composite accessor for Rust.
-blob_T *nvim_lval_tv_get_blob(const lval_T *lp)
-{
-  return lp->ll_tv->vval.v_blob;
-}
-
-/// Get tv->vval.v_list from the ll_tv - composite accessor for Rust.
-list_T *nvim_lval_tv_get_list(const lval_T *lp)
-{
-  return lp->ll_tv->vval.v_list;
-}
-
 /// Get v_type from the ll_tv - composite accessor for Rust.
 int nvim_lval_tv_get_type(const lval_T *lp)
 {
@@ -909,18 +870,6 @@ void nvim_lval_tv_blob_alloc_ret(lval_T *lp)
 int nvim_lval_tv_blob_len(const lval_T *lp)
 {
   return tv_blob_len(lp->ll_tv->vval.v_blob);
-}
-
-/// Set lp->ll_di = tv_dict_find(lp->ll_dict, key, len) - composite setter for Rust.
-void nvim_lval_set_di_from_dict(lval_T *lp, const char *key, int len)
-{
-  lp->ll_di = tv_dict_find(lp->ll_dict, key, (ptrdiff_t)len);
-}
-
-/// Set lp->ll_tv = &lp->ll_di->di_tv - composite setter for Rust.
-void nvim_lval_set_tv_from_ll_di(lval_T *lp)
-{
-  lp->ll_tv = &lp->ll_di->di_tv;
 }
 
 /// Check if lp->ll_di is NULL - accessor for Rust.

@@ -553,9 +553,15 @@ pub unsafe fn f_slice_impl(argvars: TypevalHandle, rettv: TypevalHandle) {
 
     // argvars[1] = argvars + sizeof(typval_T)
     // argvars[2] = argvars + 2*sizeof(typval_T)
-    // We use nvim_tv_argvars_get to get individual args
-    let var1 = nvim_f_slice_get_arg1(argvars);
-    let var2_raw = nvim_f_slice_get_arg2(argvars);
+    let tv_size = std::mem::size_of::<TypvalTRepr>();
+    let var1 = TypevalHandle::from_ptr(argvars.as_ptr().cast::<u8>().add(tv_size).cast::<c_void>());
+    let var2_raw = TypevalHandle::from_ptr(
+        argvars
+            .as_ptr()
+            .cast::<u8>()
+            .add(2 * tv_size)
+            .cast::<c_void>(),
+    );
     let var2 = if nvim_tv_get_type(var2_raw) == VAR_UNKNOWN {
         TypevalHandle::null()
     } else {
@@ -563,12 +569,6 @@ pub unsafe fn f_slice_impl(argvars: TypevalHandle, rettv: TypevalHandle) {
     };
 
     eval_index_inner_impl(rettv, true, var1, var2, true, ptr::null(), 0, false);
-}
-
-extern "C" {
-    // Helper to access argvars[1] and argvars[2] by index
-    fn nvim_f_slice_get_arg1(argvars: TypevalHandle) -> TypevalHandle;
-    fn nvim_f_slice_get_arg2(argvars: TypevalHandle) -> TypevalHandle;
 }
 
 /// FFI export for f_slice.

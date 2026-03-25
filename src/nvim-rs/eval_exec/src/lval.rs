@@ -266,10 +266,7 @@ extern "C" {
     // tv_blob_alloc_ret on ll_tv; sets ll_tv->v_type = VAR_BLOB, allocates blob.
     fn nvim_lval_tv_blob_alloc_ret(lp: *mut c_void);
 
-    // Get ll_tv->vval.v_blob (blob_T*) for a lval_T*.
-    fn nvim_lval_tv_get_blob(lp: *const c_void) -> *mut c_void;
-    // Get ll_tv->vval.v_list (list_T*) for a lval_T*.
-    fn nvim_lval_tv_get_list(lp: *const c_void) -> *mut c_void;
+    // (nvim_lval_tv_get_blob/list inlined via direct TypvalTRepr field access)
     // Get ll_tv->v_type for a lval_T*.
     fn nvim_lval_tv_get_type(lp: *const c_void) -> c_int;
     // Get tv_blob_len(ll_tv->vval.v_blob) for a lval_T*.
@@ -286,20 +283,18 @@ extern "C" {
     ) -> bool;
 
     // Dict find: lp->ll_di = tv_dict_find(lp->ll_dict, key, len)
-    fn nvim_lval_set_di_from_dict(lp: *mut c_void, key: *const c_char, len: c_int);
+    fn tv_dict_find(dict: *const c_void, key: *const c_char, len: isize) -> *mut c_void;
     // Composite: var_check_ro || var_check_lock on ll_di->di_flags
     fn nvim_lval_di_check_ro_lock(lp: *const c_void, name: *const c_char, name_len: usize) -> bool;
 
-    // Set lp->ll_tv = &lp->ll_di->di_tv
-    fn nvim_lval_set_tv_from_ll_di(lp: *mut c_void);
+    // (nvim_lval_set_tv_from_ll_di inlined via nvim_di_get_tv)
     // Set lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li)
     fn nvim_lval_set_tv_to_li_tv(lp: *mut c_void);
 
     // Check ll_di is NULL
     fn nvim_lval_di_is_null(lp: *const c_void) -> bool;
 
-    // Set lp->ll_tv = &di->di_tv  (di is dictitem_T*)
-    fn nvim_lval_set_tv_from_di(lp: *mut c_void, di: DictitemHandle);
+    // (nvim_lval_set_tv_from_di inlined via nvim_di_get_tv)
 
     // Composite lock check for ll_tv path
     fn nvim_lval_check_tv_lock(lp: *const c_void, name: *const c_char) -> bool;
@@ -359,7 +354,7 @@ unsafe fn get_lval_dict_item_impl(
     nvim_lval_alloc_dict_if_null(lp as *mut c_void);
 
     // Find key in dict: sets lp->ll_di
-    nvim_lval_set_di_from_dict(lp as *mut c_void, key, len);
+    (*lp).ll_di = tv_dict_find((*lp).ll_dict as *const c_void, key, len as isize);
 
     // Scope check: when assigning to scope dict, validate name
     if !rettv.is_null()
@@ -425,7 +420,7 @@ unsafe fn get_lval_dict_item_impl(
     }
 
     // lp->ll_tv = &lp->ll_di->di_tv
-    nvim_lval_set_tv_from_ll_di(lp as *mut c_void);
+    (*lp).ll_tv = nvim_di_get_tv(DictitemHandle((*lp).ll_di)).0;
 
     GlvStatus::Ok
 }
@@ -466,7 +461,7 @@ unsafe fn get_lval_blob_impl(
         }
     }
 
-    (*lp).ll_blob = nvim_lval_tv_get_blob(lp as *const c_void);
+    (*lp).ll_blob = (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_blob;
     (*lp).ll_tv = std::ptr::null_mut();
 
     OK
@@ -496,7 +491,7 @@ unsafe fn get_lval_list_impl(
     }
 
     (*lp).ll_dict = std::ptr::null_mut();
-    (*lp).ll_list = nvim_lval_tv_get_list(lp as *const c_void);
+    (*lp).ll_list = (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_list;
 
     let li = nvim_tv_list_check_range_index_one(lp as *mut c_void, quiet);
     if li.is_null() {
@@ -572,10 +567,12 @@ unsafe fn get_lval_subscript_impl(
             }
 
             // Allocate null list/blob if needed
-            if tv_type == VAR_LIST_TYPE && nvim_lval_tv_get_list(lp as *const c_void).is_null() {
+            if tv_type == VAR_LIST_TYPE
+                && (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_list.is_null()
+            {
                 nvim_lval_tv_list_alloc_ret(lp as *mut c_void);
             } else if tv_type == VAR_BLOB_TYPE
-                && nvim_lval_tv_get_blob(lp as *const c_void).is_null()
+                && (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_blob.is_null()
             {
                 nvim_lval_tv_blob_alloc_ret(lp as *mut c_void);
             }
@@ -1153,7 +1150,7 @@ unsafe fn set_var_lval_impl(
                 return;
             }
             // lp->ll_tv = &di->di_tv
-            nvim_lval_set_tv_from_di(lp as *mut c_void, di);
+            (*lp).ll_tv = nvim_di_get_tv(di).0;
         } else {
             // Existing item
             let lp_tv_h = tv((*lp).ll_tv);
