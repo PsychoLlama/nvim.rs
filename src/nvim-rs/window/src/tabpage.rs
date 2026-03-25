@@ -5,7 +5,7 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
 use crate::{Frame, TabpageHandle, WinHandle};
 
@@ -23,6 +23,7 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     static mut redraw_tabline: bool;
+    fn xfree(ptr: *mut c_void);
 }
 
 extern "C" {
@@ -1615,6 +1616,7 @@ extern "C" {
     fn nvim_tabpage_copy_localdir(dst: TabpageHandle, src: TabpageHandle);
 
     /// Free a tabpage allocated on the failure path.
+    #[link_name = "nvim_xfree_tabpage_raw"]
     fn nvim_xfree_tabpage(tp: TabpageHandle);
 
     /// If curbuf has a terminal, call terminal_check_size.
@@ -1792,9 +1794,6 @@ extern "C" {
     /// Clear t: variables and unref the dict.
     fn nvim_tabpage_clear_vars(tp: TabpageHandle);
 
-    /// Free tp_localdir and tp_prevdir.
-    fn nvim_tabpage_free_dirs(tp: TabpageHandle);
-
     /// xfree the raw tabpage struct.
     fn nvim_xfree_tabpage_raw(tp: TabpageHandle);
 
@@ -1848,7 +1847,9 @@ unsafe fn free_tabpage_impl(tp: TabpageHandle) {
         nvim_set_lastused_tabpage_null();
     }
 
-    nvim_tabpage_free_dirs(tp);
+    let ts = tp.as_tabpage_mut();
+    xfree(ts.tp_localdir.cast::<c_void>());
+    xfree(ts.tp_prevdir.cast::<c_void>());
     nvim_xfree_tabpage_raw(tp);
 }
 

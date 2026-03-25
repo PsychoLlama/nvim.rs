@@ -83,7 +83,8 @@ extern "C" {
     fn nvim_update_topline_curwin_enter();
 
     // buf_copy_options(buf, BCO_ENTER | BCO_NOHELP)
-    fn nvim_buf_copy_options_enter(buf: BufHandle);
+    #[link_name = "buf_copy_options"]
+    fn nvim_buf_copy_options_enter(buf: BufHandle, flags: c_int);
 
     // check_cursor(curwin)
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
@@ -209,7 +210,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         let curbuf = nvim_get_curbuf();
         let wp_buffer = nvim_win_get_buffer(wp);
         if wp_buffer != curbuf {
-            nvim_buf_copy_options_enter(wp_buffer);
+            nvim_buf_copy_options_enter(wp_buffer, 5); // BCO_ENTER | BCO_NOHELP
         }
 
         if !curwin_invalid {

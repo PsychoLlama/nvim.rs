@@ -45,7 +45,8 @@ extern "C" {
     // last_chdir_reason = NULL
     fn nvim_set_last_chdir_reason_null();
     // shorten_fnames(true)
-    fn nvim_shorten_fnames_force();
+    #[link_name = "shorten_fnames"]
+    fn nvim_shorten_fnames_force(force: c_int);
     // do_autocmd_dirchanged for window/tabpage scope
     fn nvim_do_autocmd_dirchanged_win(new_dir: *const c_char, localdir: c_int, pre: c_int);
     // do_autocmd_dirchanged for global scope
@@ -95,7 +96,7 @@ fn win_fix_current_dir_impl() {
                 }
                 nvim_clear_globaldir();
                 nvim_set_last_chdir_reason_null();
-                nvim_shorten_fnames_force();
+                nvim_shorten_fnames_force(1);
             }
         } else {
             // Window/tab has a local directory: Save current directory as global
@@ -117,7 +118,7 @@ fn win_fix_current_dir_impl() {
                 nvim_do_autocmd_dirchanged_win(new_dir, is_window_local, 0);
             }
             nvim_set_last_chdir_reason_null();
-            nvim_shorten_fnames_force();
+            nvim_shorten_fnames_force(1);
         }
     }
 }

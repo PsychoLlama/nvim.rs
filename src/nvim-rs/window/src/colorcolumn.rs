@@ -7,6 +7,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::win_struct::win_mut;
 use crate::WinHandle;
 
 // =============================================================================
@@ -34,9 +35,6 @@ extern "C" {
 
     /// Set wp->w_p_cc_cols.
     fn nvim_win_set_p_cc_cols(wp: WinHandle, cols: *mut c_int);
-
-    /// Free and NULL wp->w_p_cc_cols.
-    fn nvim_win_free_p_cc_cols(wp: WinHandle);
 
     /// Get the e_invarg error string pointer.
     fn nvim_get_e_invarg() -> *const c_char;
@@ -165,7 +163,9 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
     }
 
     // Free the old column array.
-    nvim_win_free_p_cc_cols(wp);
+    let w = win_mut(wp);
+    xfree(w.w_p_cc_cols.cast::<c_void>());
+    w.w_p_cc_cols = std::ptr::null_mut();
 
     if color_cols.is_empty() {
         nvim_win_set_p_cc_cols(wp, std::ptr::null_mut());

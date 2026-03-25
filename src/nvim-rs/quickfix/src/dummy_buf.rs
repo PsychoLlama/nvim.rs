@@ -37,7 +37,8 @@ extern "C" {
         lnum: i32,
         flags: c_int,
     ) -> BufHandle;
-    fn nvim_buf_copy_options_enter(buf: BufHandle);
+    #[link_name = "buf_copy_options"]
+    fn nvim_buf_copy_options_enter(buf: BufHandle, flags: c_int);
     #[link_name = "nvim_qf_aucmd_prepbuf_alloc"]
     fn nvim_aucmd_prepbuf_alloc(buf: BufHandle) -> *mut c_void;
     #[link_name = "nvim_qf_aucmd_restbuf_free"]
@@ -216,7 +217,7 @@ unsafe fn load_dummy_buffer(
     }
 
     let newbufref = nvim_qf_bufref_alloc(newbuf);
-    nvim_buf_copy_options_enter(newbuf);
+    nvim_buf_copy_options_enter(newbuf, 5); // BCO_ENTER | BCO_NOHELP
 
     // OKval: ml_open returns OK (1) on success
     // We declare ml_open separately since its signature is buf-specific

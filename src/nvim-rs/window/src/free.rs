@@ -2,8 +2,9 @@
 //!
 //! This module provides Rust implementations of `win_free` and `win_free_grid`.
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 
+use crate::win_struct::win_mut;
 use crate::{TabpageHandle, WinHandle};
 
 // Imports for inlined compound accessors (Phase 13)
@@ -15,6 +16,8 @@ use crate::list::{nvim_get_first_tabpage, nvim_tabpage_get_next};
 
 extern "C" {
     // --- Compound accessors (Phase 12) ---
+
+    fn xfree(ptr: *mut c_void);
 
     /// pmap_del the window handle from window_handles.
     fn nvim_win_pmap_del(wp: WinHandle);
@@ -40,14 +43,8 @@ extern "C" {
     /// Free all w: variables.
     fn nvim_win_clear_vars(wp: WinHandle);
 
-    /// Free w_lines.
-    fn nvim_win_free_lines(wp: WinHandle);
-
     /// Clear the tagstack entries.
     fn nvim_win_clear_tagstack(wp: WinHandle);
-
-    /// Free w_localdir and w_prevdir.
-    fn nvim_win_free_dirs(wp: WinHandle);
 
     /// Clear all three click_defs arrays.
     fn nvim_win_clear_click_defs_all(wp: WinHandle);
@@ -58,11 +55,12 @@ extern "C" {
     /// Clear border text virttext.
     fn nvim_win_clear_config_virttext(wp: WinHandle);
 
-    /// Free w_p_cc_cols.
-    fn nvim_win_free_cc_cols(wp: WinHandle);
+    /// Get pointer to the window's ScreenGrid (w_grid_alloc).
+    fn nvim_win_get_grid_alloc(wp: WinHandle) -> *mut c_void;
 
-    /// grid_free for the window's grid.
-    fn nvim_win_grid_free(wp: WinHandle);
+    /// grid_free for a ScreenGrid pointer.
+    #[link_name = "grid_free"]
+    fn rs_grid_free(grid: *mut c_void);
 
     /// CLEAR_FIELD the window's grid (for reinit).
     fn nvim_win_grid_clear_field(wp: WinHandle);
@@ -140,7 +138,7 @@ unsafe fn win_free_grid_impl(wp: WinHandle, reinit: bool) {
     if grid_handle != 0 && nvim_ui_has_multigrid() != 0 {
         nvim_ui_call_grid_destroy_handle(grid_handle);
     }
-    nvim_win_grid_free(wp);
+    rs_grid_free(nvim_win_get_grid_alloc(wp));
     if reinit {
         nvim_win_grid_clear_field(wp);
     }
@@ -196,9 +194,10 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
         ttp = nvim_tabpage_get_next(ttp);
     }
 
-    nvim_win_free_lines(wp);
+    xfree(win_mut(wp).w_lines);
     nvim_win_clear_tagstack(wp);
-    nvim_win_free_dirs(wp);
+    xfree(win_mut(wp).w_localdir.cast::<c_void>());
+    xfree(win_mut(wp).w_prevdir.cast::<c_void>());
     nvim_win_clear_click_defs_all(wp);
 
     // Remove the window from the b_wininfo lists.
@@ -212,7 +211,7 @@ unsafe fn win_free_impl(wp: WinHandle, tp: TabpageHandle) {
     nvim_free_jumplist_win(wp);
     nvim_qf_free_all_win(wp.as_ptr());
 
-    nvim_win_free_cc_cols(wp);
+    xfree(win_mut(wp).w_p_cc_cols.cast::<c_void>());
 
     win_free_grid_impl(wp, false);
 

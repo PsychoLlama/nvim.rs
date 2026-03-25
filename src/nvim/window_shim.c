@@ -178,7 +178,6 @@ int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
 int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
-void nvim_win_free_p_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); wp->w_p_cc_cols = NULL; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
 int nvim_win_get_wrap_flags(win_T *wp) { return wp->w_p_wrap_flags; }
 int nvim_win_get_p_culopt_flags(win_T *wp) { return wp->w_p_culopt_flags; }
@@ -448,13 +447,6 @@ void nvim_tabpage_clear_vars(tabpage_T *tp)
   unref_var_dict(tp->tp_vars);
 }
 
-/// Clear tp->tp_localdir and tp->tp_prevdir (xfree both).
-void nvim_tabpage_free_dirs(tabpage_T *tp)
-{
-  xfree(tp->tp_localdir);
-  xfree(tp->tp_prevdir);
-}
-
 
 /// Allocate a raw frame_T (xcalloc only).
 frame_T *nvim_alloc_frame_raw(void) { return xcalloc(1, sizeof(frame_T)); }
@@ -468,8 +460,6 @@ void nvim_tabpage_copy_localdir(tabpage_T *dst, tabpage_T *src)
   }
 }
 
-/// Free a tabpage on failure path (xfree only).
-void nvim_xfree_tabpage(tabpage_T *tp) { xfree(tp); }
 
 /// If curbuf has a terminal, call terminal_check_size on it.
 void nvim_curbuf_terminal_check_size(void)
@@ -618,9 +608,6 @@ void nvim_win_clear_vars(win_T *wp)
   unref_var_dict(wp->w_vars);
 }
 
-/// Free w_lines.
-void nvim_win_free_lines(win_T *wp) { xfree(wp->w_lines); }
-
 /// Clear the tagstack entries.
 void nvim_win_clear_tagstack(win_T *wp)
 {
@@ -628,9 +615,6 @@ void nvim_win_clear_tagstack(win_T *wp)
     rs_tagstack_clear_entry(&wp->w_tagstack[i]);
   }
 }
-
-/// Free w_localdir and w_prevdir.
-void nvim_win_free_dirs(win_T *wp) { xfree(wp->w_localdir); xfree(wp->w_prevdir); }
 
 /// Clear all three click_defs arrays.
 void nvim_win_clear_click_defs_all(win_T *wp)
@@ -679,12 +663,6 @@ void nvim_win_clear_config_virttext(win_T *wp)
   clear_virttext(&wp->w_config.title_chunks);
   clear_virttext(&wp->w_config.footer_chunks);
 }
-
-/// Free w_p_cc_cols.
-void nvim_win_free_cc_cols(win_T *wp) { xfree(wp->w_p_cc_cols); }
-
-/// grid_free for the window's grid.
-void nvim_win_grid_free(win_T *wp) { grid_free(&wp->w_grid_alloc); }
 
 /// CLEAR_FIELD the window's grid (for reinit).
 void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
@@ -1080,8 +1058,6 @@ void nvim_apply_autocmds_event(int event)
 
 /// Update topline for curwin (used in win_enter_ext).
 
-/// Copy buffer options on enter: buf_copy_options(buf, BCO_ENTER | BCO_NOHELP).
-void nvim_buf_copy_options_enter(buf_T *buf) { buf_copy_options(buf, BCO_ENTER | BCO_NOHELP); }
 
 /// Call changed_line_abv_curs().
 
@@ -1107,8 +1083,6 @@ int nvim_os_dirname_maxpathl(char *buf) { return (int)os_dirname(buf, MAXPATHL);
 int nvim_get_p_acd(void) { return p_acd ? 1 : 0; }
 /// Set last_chdir_reason to NULL.
 void nvim_set_last_chdir_reason_null(void) { last_chdir_reason = NULL; }
-/// shorten_fnames(true).
-void nvim_shorten_fnames_force(void) { shorten_fnames(true); }
 /// do_autocmd_dirchanged for window-scoped dir change (kCdScopeWindow or kCdScopeTabpage).
 /// localdir==1 means window scope, localdir==0 means tabpage scope.
 /// pre==1 means pre-change, pre==0 means post-change.
