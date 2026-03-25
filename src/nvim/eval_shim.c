@@ -892,19 +892,6 @@ int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
 /// tv_list_join with newline separator - wrapper for typval2string.
 /// Appends all list items joined by "\n" followed by NL if list non-empty, then NUL.
 /// Returns heap-allocated string (caller must xfree).
-char *nvim_eval_tv_list_join_nl(list_T *l)
-{
-  garray_T ga;
-  ga_init(&ga, (int)sizeof(char), 80);
-  if (l != NULL) {
-    tv_list_join(&ga, l, "\n");
-    if (tv_list_len(l) > 0) {
-      ga_append(&ga, NL);
-    }
-  }
-  ga_append(&ga, NUL);
-  return (char *)ga.ga_data;
-}
 
 // ============================================================================
 // Phase 3: C accessors for var2fpos / list2fpos (used by Rust indexing module)

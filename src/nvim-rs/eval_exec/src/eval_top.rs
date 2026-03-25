@@ -17,6 +17,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use nvim_collections::garray::GArray;
 use nvim_eval::typval::TypvalT as TypvalTRepr;
 
 use crate::callback::CallbackT;
@@ -98,8 +99,10 @@ extern "C" {
     fn nvim_eval_xstrdup(s: *const c_char) -> *mut c_char;
 
     // typval2string helpers
-    fn nvim_eval_tv_list_join_nl(l: *mut c_void) -> *mut c_char;
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
+    // ga helpers for tv_list_join_nl inlining
+    fn tv_list_join(ga: *mut GArray, l: *mut c_void, sep: *const c_char);
+    fn nvim_tv_list_len(l: *const c_void) -> c_int;
 
     // eval_expr_* helpers
     fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
@@ -192,7 +195,17 @@ unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
     let vtype = (*tv_h.as_ptr().cast::<TypvalTRepr>()).v_type;
     if join_list && vtype == VAR_LIST {
         let l = (*tv.cast::<TypvalTRepr>()).vval.v_list;
-        return nvim_eval_tv_list_join_nl(l);
+        // Inlined nvim_eval_tv_list_join_nl: ga_init + tv_list_join + rs_ga_append(NUL)
+        let mut ga = GArray::default();
+        nvim_collections::garray::rs_ga_init(&mut ga, 1, 80);
+        if !l.is_null() {
+            tv_list_join(&mut ga, l, c"\n".as_ptr());
+            if nvim_tv_list_len(l) > 0 {
+                nvim_collections::garray::rs_ga_append(&mut ga, b'\n');
+            }
+        }
+        nvim_collections::garray::rs_ga_append(&mut ga, 0);
+        return ga.ga_data.cast::<c_char>();
     }
     if vtype == VAR_LIST || vtype == VAR_DICT {
         return nvim_encode_tv2string_wrapper(tv);
