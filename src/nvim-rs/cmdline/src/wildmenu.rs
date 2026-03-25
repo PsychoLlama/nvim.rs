@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 
+use nvim_cmdexpand::ExpandT;
 use std::ffi::{c_char, c_int};
 
 use crate::expand::ExpandContext;
@@ -163,17 +164,16 @@ extern "C" {
     // Access to wild_menu_showing global
     fn nvim_get_wild_menu_showing() -> c_int;
 
-    // Get expansion context
-    fn nvim_expand_get_context(xp: *const ()) -> c_int;
-
-    // Access to xp->xp_shell
-    fn nvim_expand_get_shell(xp: *const ()) -> c_int;
-
     // String operations
     fn rem_backslash(s: *const c_char) -> c_int;
     fn menu_is_separator(s: *const c_char) -> c_int;
     fn ptr2cells(s: *const c_char) -> c_int;
     fn rs_csh_like_shell() -> c_int;
+}
+
+#[inline]
+const unsafe fn xp_ref(xp: *const ()) -> &'static ExpandT {
+    &*xp.cast::<ExpandT>()
 }
 
 // =============================================================================
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn rs_skip_wildmenu_char(xp: *const (), s: *const c_char) 
         return 0;
     }
 
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = xp_ref(xp).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return 0;
     };
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn rs_skip_wildmenu_char(xp: *const (), s: *const c_char) 
     };
 
     let is_backslash_escape = rem_backslash(s) != 0;
-    let is_shell = nvim_expand_get_shell(xp) != 0;
+    let is_shell = xp_ref(xp).xp_shell;
     let is_csh_like = rs_csh_like_shell() != 0;
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn rs_wildmenu_match_len(xp: *const (), s: *const c_char) 
         return 0;
     }
 
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = xp_ref(xp).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return 0;
     };

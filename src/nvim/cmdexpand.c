@@ -171,47 +171,6 @@ int nvim_expand_get_context(const expand_T *xp)
   return xp ? xp->xp_context : EXPAND_NOTHING;
 }
 
-/// Get the expansion pattern pointer.
-const char *nvim_expand_get_pattern(const expand_T *xp)
-{
-  return xp ? xp->xp_pattern : NULL;
-}
-
-/// Get the expansion pattern length.
-size_t nvim_expand_get_pattern_len(const expand_T *xp)
-{
-  return xp ? xp->xp_pattern_len : 0;
-}
-
-/// Get the backslash flags.
-int nvim_expand_get_backslash(const expand_T *xp)
-{
-  return xp ? xp->xp_backslash : XP_BS_NONE;
-}
-
-/// Get the number of files.
-int nvim_expand_get_numfiles(const expand_T *xp)
-{
-  return xp ? xp->xp_numfiles : -1;
-}
-
-/// Get the selected index.
-int nvim_expand_get_selected(const expand_T *xp)
-{
-  return xp ? xp->xp_selected : -1;
-}
-
-/// Get the shell flag.
-int nvim_expand_get_shell(const expand_T *xp)
-{
-#ifndef BACKSLASH_IN_FILENAME
-  return xp ? xp->xp_shell : 0;
-#else
-  (void)xp;
-  return 0;
-#endif
-}
-
 /// Set the expansion context type.
 void nvim_expand_set_context(expand_T *xp, int context)
 {
@@ -220,32 +179,10 @@ void nvim_expand_set_context(expand_T *xp, int context)
   }
 }
 
-/// Set the backslash flags.
-void nvim_expand_set_backslash(expand_T *xp, int backslash)
-{
-  if (xp) {
-    xp->xp_backslash = backslash;
-  }
-}
-
-/// Set the selected index.
-void nvim_expand_set_selected(expand_T *xp, int selected)
-{
-  if (xp) {
-    xp->xp_selected = selected;
-  }
-}
-
 /// Check if cmdline_win is NULL (for Rust FFI).
 int nvim_get_cmdline_win_is_null(void)
 {
   return cmdline_win == NULL;
-}
-
-/// Check if xp->xp_orig is not NULL (for Rust FFI).
-int nvim_expand_get_orig_not_null(const expand_T *xp)
-{
-  return xp && xp->xp_orig != NULL;
 }
 
 /// Get pum_want.active (for Rust FFI).

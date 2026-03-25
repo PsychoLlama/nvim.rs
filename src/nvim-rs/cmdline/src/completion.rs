@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 
+use nvim_cmdexpand::ExpandT;
 use std::ffi::{c_char, c_int};
 
 use crate::expand::wild_mode::{WILD_NEXT, WILD_PAGEDOWN, WILD_PAGEUP, WILD_PREV, WILD_PUM_WANT};
@@ -24,11 +25,6 @@ extern "C" {
     // Access to pum_want global structure
     fn nvim_get_pum_want_active() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
-
-    // Access to xp fields for navigation
-    fn nvim_expand_get_numfiles(xp: *const ()) -> c_int;
-    fn nvim_expand_get_selected(xp: *const ()) -> c_int;
-    fn nvim_expand_get_orig_not_null(xp: *const ()) -> c_int;
 
     // Suffix matching
     fn match_suffix(fname: *const c_char) -> c_int;
@@ -146,9 +142,10 @@ pub unsafe extern "C" fn rs_calculate_next_match_index(mode: c_int, xp: *const (
         return -1;
     }
 
-    let num_files = nvim_expand_get_numfiles(xp);
-    let current_selected = nvim_expand_get_selected(xp);
-    let has_orig = nvim_expand_get_orig_not_null(xp) != 0;
+    let xp_ptr = xp.cast::<ExpandT>();
+    let num_files = (*xp_ptr).xp_numfiles;
+    let current_selected = (*xp_ptr).xp_selected;
+    let has_orig = !(*xp_ptr).xp_orig.is_null();
     let pum_height = pum_get_height();
     let pum_want_item = if nvim_get_pum_want_active() != 0 {
         nvim_get_pum_want_item()

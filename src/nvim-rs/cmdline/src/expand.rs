@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 
+use nvim_cmdexpand::ExpandT;
 use std::ffi::{c_char, c_int, c_uint};
 use std::ptr;
 
@@ -483,24 +484,29 @@ impl ExpandHandle {
 // C Accessor Function Declarations
 // =============================================================================
 
-#[allow(dead_code)]
 extern "C" {
-    // Accessors for expand_T fields (to be added in cmdexpand.c)
-    fn nvim_expand_get_context(xp: *const ()) -> c_int;
-    fn nvim_expand_get_pattern(xp: *const ()) -> *const c_char;
-    fn nvim_expand_get_pattern_len(xp: *const ()) -> usize;
-    fn nvim_expand_get_backslash(xp: *const ()) -> c_int;
-    fn nvim_expand_get_numfiles(xp: *const ()) -> c_int;
-    fn nvim_expand_get_selected(xp: *const ()) -> c_int;
-    fn nvim_expand_get_shell(xp: *const ()) -> c_int;
-
-    // Setters
-    fn nvim_expand_set_context(xp: *mut (), context: c_int);
-    fn nvim_expand_set_backslash(xp: *mut (), backslash: c_int);
-    fn nvim_expand_set_selected(xp: *mut (), selected: c_int);
-
     // Global state accessors
     fn nvim_get_wop_flags() -> c_uint;
+}
+
+/// Cast an opaque pointer to a typed ExpandT pointer.
+///
+/// # Safety
+///
+/// The pointer must be a valid `expand_T*` from C code.
+#[inline]
+const unsafe fn xp_cast(xp: *const ()) -> *const ExpandT {
+    xp.cast::<ExpandT>()
+}
+
+/// Cast an opaque mutable pointer to a typed ExpandT pointer.
+///
+/// # Safety
+///
+/// The pointer must be a valid `expand_T*` from C code.
+#[inline]
+const unsafe fn xp_cast_mut(xp: *mut ()) -> *mut ExpandT {
+    xp.cast::<ExpandT>()
 }
 
 // =============================================================================
@@ -513,8 +519,8 @@ extern "C" {
 ///
 /// The handle must be valid.
 #[must_use]
-pub unsafe fn expand_get_context(xp: ExpandHandle) -> Option<ExpandContext> {
-    let raw = nvim_expand_get_context(xp.as_ptr());
+pub const unsafe fn expand_get_context(xp: ExpandHandle) -> Option<ExpandContext> {
+    let raw = (*xp_cast(xp.as_ptr())).xp_context;
     ExpandContext::from_raw(raw)
 }
 
@@ -526,11 +532,11 @@ pub unsafe fn expand_get_context(xp: ExpandHandle) -> Option<ExpandContext> {
 /// lifetime of the returned slice.
 #[must_use]
 pub unsafe fn expand_get_pattern(xp: ExpandHandle) -> Option<&'static str> {
-    let ptr = nvim_expand_get_pattern(xp.as_ptr());
+    let ptr = (*xp_cast(xp.as_ptr())).xp_pattern;
     if ptr.is_null() {
         return None;
     }
-    let len = nvim_expand_get_pattern_len(xp.as_ptr());
+    let len = (*xp_cast(xp.as_ptr())).xp_pattern_len;
     let bytes = std::slice::from_raw_parts(ptr.cast::<u8>(), len);
     std::str::from_utf8(bytes).ok()
 }
@@ -541,8 +547,8 @@ pub unsafe fn expand_get_pattern(xp: ExpandHandle) -> Option<&'static str> {
 ///
 /// The handle must be valid.
 #[must_use]
-pub unsafe fn expand_get_backslash(xp: ExpandHandle) -> c_int {
-    nvim_expand_get_backslash(xp.as_ptr())
+pub const unsafe fn expand_get_backslash(xp: ExpandHandle) -> c_int {
+    (*xp_cast(xp.as_ptr())).xp_backslash
 }
 
 /// Get the number of files from an expand_T handle.
@@ -551,8 +557,8 @@ pub unsafe fn expand_get_backslash(xp: ExpandHandle) -> c_int {
 ///
 /// The handle must be valid.
 #[must_use]
-pub unsafe fn expand_get_numfiles(xp: ExpandHandle) -> c_int {
-    nvim_expand_get_numfiles(xp.as_ptr())
+pub const unsafe fn expand_get_numfiles(xp: ExpandHandle) -> c_int {
+    (*xp_cast(xp.as_ptr())).xp_numfiles
 }
 
 /// Get the selected index from an expand_T handle.
@@ -561,8 +567,8 @@ pub unsafe fn expand_get_numfiles(xp: ExpandHandle) -> c_int {
 ///
 /// The handle must be valid.
 #[must_use]
-pub unsafe fn expand_get_selected(xp: ExpandHandle) -> c_int {
-    nvim_expand_get_selected(xp.as_ptr())
+pub const unsafe fn expand_get_selected(xp: ExpandHandle) -> c_int {
+    (*xp_cast(xp.as_ptr())).xp_selected
 }
 
 /// Set the expansion context type.
@@ -571,7 +577,7 @@ pub unsafe fn expand_get_selected(xp: ExpandHandle) -> c_int {
 ///
 /// The handle must be valid.
 pub unsafe fn expand_set_context(xp: ExpandHandle, context: ExpandContext) {
-    nvim_expand_set_context(xp.as_ptr(), context.to_raw());
+    (*xp_cast_mut(xp.as_ptr())).xp_context = context.to_raw();
 }
 
 /// Set the backslash flags.
@@ -580,7 +586,7 @@ pub unsafe fn expand_set_context(xp: ExpandHandle, context: ExpandContext) {
 ///
 /// The handle must be valid.
 pub unsafe fn expand_set_backslash(xp: ExpandHandle, backslash: c_int) {
-    nvim_expand_set_backslash(xp.as_ptr(), backslash);
+    (*xp_cast_mut(xp.as_ptr())).xp_backslash = backslash;
 }
 
 /// Set the selected index.
@@ -589,7 +595,7 @@ pub unsafe fn expand_set_backslash(xp: ExpandHandle, backslash: c_int) {
 ///
 /// The handle must be valid.
 pub unsafe fn expand_set_selected(xp: ExpandHandle, selected: c_int) {
-    nvim_expand_set_selected(xp.as_ptr(), selected);
+    (*xp_cast_mut(xp.as_ptr())).xp_selected = selected;
 }
 
 // =============================================================================
@@ -607,7 +613,7 @@ pub unsafe extern "C" fn rs_expand_fuzzy_supported(xp: *const ()) -> c_int {
         return 0;
     }
 
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return 0;
     };
@@ -630,7 +636,7 @@ pub unsafe extern "C" fn cmdline_expand_fuzzy_supported_rs(xp: *const ()) -> boo
     if xp.is_null() {
         return false;
     }
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return false;
     };
@@ -645,11 +651,11 @@ pub unsafe extern "C" fn cmdline_expand_fuzzy_supported_rs(xp: *const ()) -> boo
 ///
 /// `xp` must be a valid pointer to an `expand_T` structure.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_expand_get_context(xp: *const ()) -> c_int {
+pub const unsafe extern "C" fn rs_expand_get_context(xp: *const ()) -> c_int {
     if xp.is_null() {
         return ExpandContext::Nothing.to_raw();
     }
-    nvim_expand_get_context(xp)
+    (*xp_cast(xp)).xp_context
 }
 
 /// Check if the context is for file-like expansion.
@@ -663,7 +669,7 @@ pub unsafe extern "C" fn rs_expand_is_file_context(xp: *const ()) -> c_int {
         return 0;
     }
 
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return 0;
     };
@@ -678,11 +684,11 @@ pub unsafe extern "C" fn rs_expand_is_file_context(xp: *const ()) -> c_int {
 /// `xp` must be a valid pointer to an `expand_T` structure.
 #[must_use]
 #[export_name = "cmdline_expand_is_file_context"]
-pub unsafe extern "C" fn cmdline_expand_is_file_context_rs(xp: *const ()) -> bool {
+pub const unsafe extern "C" fn cmdline_expand_is_file_context_rs(xp: *const ()) -> bool {
     if xp.is_null() {
         return false;
     }
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return false;
     };
@@ -700,7 +706,7 @@ pub unsafe extern "C" fn rs_expand_uses_internal_matching(xp: *const ()) -> c_in
         return 1; // Default to internal matching
     }
 
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return 1;
     };
@@ -715,11 +721,11 @@ pub unsafe extern "C" fn rs_expand_uses_internal_matching(xp: *const ()) -> c_in
 /// `xp` must be a valid pointer to an `expand_T` structure.
 #[must_use]
 #[export_name = "cmdline_expand_uses_internal"]
-pub unsafe extern "C" fn cmdline_expand_uses_internal_rs(xp: *const ()) -> bool {
+pub const unsafe extern "C" fn cmdline_expand_uses_internal_rs(xp: *const ()) -> bool {
     if xp.is_null() {
         return true; // Default to internal matching
     }
-    let context_raw = nvim_expand_get_context(xp);
+    let context_raw = (*xp_cast(xp)).xp_context;
     let Some(context) = ExpandContext::from_raw(context_raw) else {
         return true;
     };
