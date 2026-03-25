@@ -479,7 +479,6 @@ void nvim_gc_iterate_marks(void)
   } while (mark_iter != NULL);
 }
 
-
 /// Emit the "not enough memory" GC abort verbose message, if p_verbose > 0.
 void nvim_gc_verb_msg_abort(void)
 {
@@ -509,7 +508,6 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // =============================================================================
 // Accessor functions for Rust FFI
 // =============================================================================
-
 
 /// Wrapper for tv_blob_len inline function (accessor for Rust eval_exec).
 int nvim_blob_len(const blob_T *b)
@@ -653,10 +651,6 @@ void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d)
 }
 
 // =============================================================================
-// Phase 1 (eval_method): new C accessor/wrapper functions
-// =============================================================================
-
-// =============================================================================
 // Phase 1 (lval subscript): composite C accessor/wrapper functions for rs_get_lval_subscript
 // =============================================================================
 
@@ -788,7 +782,6 @@ void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
   do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
 }
 
-
 /// Get eap->skip - accessor for Rust (local, avoids dependency on ex_docmd).
 int nvim_eap_get_skip_local(const exarg_T *eap)
 {
@@ -804,7 +797,6 @@ char *nvim_eap_get_arg_local(const exarg_T *eap)
 // =============================================================================
 // Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
 // =============================================================================
-
 
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
@@ -1049,7 +1041,6 @@ void *nvim_eap_get_cookie(const exarg_T *eap)
   return eap->cookie;
 }
 
-
 /// Allocate exactly sizeof(typval_T) bytes for a heap typval - accessor for Rust.
 typval_T *nvim_alloc_typval(void)
 {
@@ -1115,7 +1106,6 @@ void nvim_tv_list_last_fix_lock(list_T *l)
 {
   TV_LIST_ITEM_TV(tv_list_last(l))->v_lock = VAR_FIXED;
 }
-
 
 // =============================================================================
 // Accessors for Phase 2 (eval_shim pass 5): prompt functions
@@ -1202,10 +1192,6 @@ void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
 }
 
 // =============================================================================
-// Accessors for Phase 4 (eval_shim pass 5): get_name_len / make_expanded_name
-// =============================================================================
-
-// =============================================================================
 // Accessors for Phase 2 (eval_shim pass 6): tv_to_argv + system output
 // =============================================================================
 
@@ -1244,7 +1230,6 @@ int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
 {
   return eval_variable(name, len, rettv, NULL, verbose, import_script);
 }
-
 
 /// find_func wrapper for Rust -- returns non-NULL if function is defined.
 bool nvim_eval_find_func(const char *name)
@@ -1468,7 +1453,6 @@ void nvim_set_pressedreturn(int val)
 {
   set_pressedreturn(val != 0);
 }
-
 
 // =============================================================================
 // Job helper accessors for Rust Phase 2 (eval_shim pass 8)
