@@ -29,7 +29,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_curbuf_get_b_p_ml() -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
-    fn nvim_get_p_mls() -> c_int;
+    static p_mls: i64;
 
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_ml_get_len(lnum: c_int) -> c_int;
@@ -294,7 +294,7 @@ pub unsafe fn do_modelines_impl(flags: c_int) {
         return;
     }
 
-    let mut nmlines = nvim_get_p_mls();
+    let mut nmlines = p_mls as c_int;
     if nmlines == 0 {
         return;
     }

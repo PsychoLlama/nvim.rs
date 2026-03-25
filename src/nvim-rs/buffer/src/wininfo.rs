@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_clear_winopt_curwin();
     fn nvim_curwin_set_changelistidx(val: c_int);
     fn nvim_curwin_config_is_minimal() -> bool;
-    fn nvim_get_p_fdls() -> i64;
+    static p_fdls: i64;
     fn nvim_curwin_set_p_fdl(val: c_int);
     fn nvim_didset_window_options_curwin();
     fn nvim_win_set_minimal_style_curwin();
@@ -211,9 +211,9 @@ pub unsafe extern "C" fn rs_get_winopts(buf: BufHandle) {
     }
 
     // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
-    let p_fdls = nvim_get_p_fdls();
-    if p_fdls >= 0 {
-        nvim_curwin_set_p_fdl(p_fdls as c_int);
+    let p_fdls_val = p_fdls;
+    if p_fdls_val >= 0 {
+        nvim_curwin_set_p_fdl(p_fdls_val as c_int);
     }
     nvim_didset_window_options_curwin();
 }

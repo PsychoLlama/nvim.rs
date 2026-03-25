@@ -39,6 +39,10 @@ const IOSIZE: usize = 1025;
 // ML_EMPTY flag (from memline_defs.h)
 const ML_EMPTY: c_int = 0x01;
 
+// shortmess() argument constants (from option_vars.h, ShmFlags enum)
+const SHM_MOD: c_int = b'm' as c_int; // 'modified' flag
+const SHM_RO: c_int = b'r' as c_int; // 'readonly' flag
+
 // =============================================================================
 // External C Functions
 // =============================================================================
@@ -60,8 +64,7 @@ extern "C" {
     fn rs_bt_dontwrite(buf: BufHandle) -> bool;
     fn nvim_curbufIsChanged() -> c_int;
 
-    fn nvim_shortmess_mod() -> c_int;
-    fn nvim_shortmess_ro() -> c_int;
+    fn shortmess(x: c_int) -> bool;
 
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
@@ -73,13 +76,12 @@ extern "C" {
     fn rs_append_arg_number(wp: WinHandle, buf: *mut c_char, buflen: usize) -> c_int;
 
     fn nvim_msg_start();
-    fn nvim_msg_scroll_get() -> c_int;
-    fn nvim_msg_scroll_set(val: c_int);
+    static mut msg_scroll: c_int;
+    static restart_edit: c_int;
+    static msg_scrolled: c_int;
+    static need_wait_return: bool;
     fn msg(s: *const c_char, hl_id: c_int) -> bool;
     fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *const c_char;
-    fn nvim_restart_edit_get() -> c_int;
-    fn nvim_msg_scrolled_get() -> c_int;
-    fn nvim_need_wait_return_get() -> bool;
     fn set_keep_msg(s: *const c_char, hl_id: c_int);
 
     fn home_replace(
@@ -475,7 +477,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
     // Modified indicator (or space)
     if is_changed {
-        if nvim_shortmess_mod() != 0 {
+        if shortmess(SHM_MOD) {
             pos = append_cstr(&mut buffer, pos, c" [+]".as_ptr().cast::<c_char>());
         } else {
             pos = append_cstr(&mut buffer, pos, messages::msg_modified());
@@ -502,7 +504,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
 
     // [readonly]
     if is_ro {
-        let ro_str = if nvim_shortmess_ro() != 0 {
+        let ro_str = if shortmess(SHM_RO) {
             messages::msg_ro()
         } else {
             messages::msg_readonly()
@@ -585,15 +587,13 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     // Display the message
     if dont_truncate {
         nvim_msg_start();
-        let saved_scroll = nvim_msg_scroll_get();
-        nvim_msg_scroll_set(1);
+        let saved_scroll = msg_scroll;
+        msg_scroll = 1;
         let _ = msg(buffer.as_ptr().cast::<c_char>(), 0);
-        nvim_msg_scroll_set(saved_scroll);
+        msg_scroll = saved_scroll;
     } else {
         let p = msg_trunc(buffer.as_mut_ptr().cast::<c_char>(), false, 0);
-        if nvim_restart_edit_get() != 0
-            || (nvim_msg_scrolled_get() != 0 && !nvim_need_wait_return_get())
-        {
+        if restart_edit != 0 || (msg_scrolled != 0 && !need_wait_return) {
             set_keep_msg(p, 0);
         }
     }

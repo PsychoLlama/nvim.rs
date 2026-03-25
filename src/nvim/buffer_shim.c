@@ -277,11 +277,7 @@ void nvim_buf_set_b_p_imsearch(buf_T *buf, int val)
   }
 }
 
-/// Get the global p_hid option (hidden buffers).
-int nvim_get_p_hid(void)
-{
-  return p_hid;
-}
+// nvim_get_p_hid: deleted (Phase 4, Rust accesses p_hid directly)
 
 /// Get the cmdmod.cmod_flags field.
 int nvim_get_cmdmod_cmod_flags(void)
@@ -647,35 +643,11 @@ int nvim_buf_channel_job_running(buf_T *buf)
 // NOTE: nvim_get_p_ru is already defined in drawscreen.c.
 // ============================================================
 
-/// Get msg_scroll value (accessor for Rust).
-int nvim_msg_scroll_get(void)
-{
-  return msg_scroll;
-}
-
-/// Set msg_scroll value (accessor for Rust).
-void nvim_msg_scroll_set(int val)
-{
-  msg_scroll = val;
-}
-
-/// Get restart_edit value (accessor for Rust).
-int nvim_restart_edit_get(void)
-{
-  return restart_edit;
-}
-
-/// Get msg_scrolled value (accessor for Rust).
-int nvim_msg_scrolled_get(void)
-{
-  return msg_scrolled;
-}
-
-/// Get need_wait_return value (accessor for Rust).
-bool nvim_need_wait_return_get(void)
-{
-  return need_wait_return;
-}
+// nvim_msg_scroll_get: deleted (Phase 4, Rust accesses msg_scroll directly)
+// nvim_msg_scroll_set: deleted (Phase 4, Rust accesses msg_scroll directly)
+// nvim_restart_edit_get: deleted (Phase 4, Rust accesses restart_edit directly)
+// nvim_msg_scrolled_get: deleted (Phase 4, Rust accesses msg_scrolled directly)
+// nvim_need_wait_return_get: deleted (Phase 4, Rust accesses need_wait_return directly)
 
 // nvim_msg_call: deleted (Phase 2, Rust uses msg directly)
 // nvim_msg_trunc: deleted (Phase 2, Rust uses msg_trunc directly)
@@ -697,17 +669,8 @@ const char *nvim_curbuf_get_fname(void)
 // nvim_msg_readonly: deleted (Phase 1, inlined in messages.rs)
 // nvim_no_lines_msg: deleted (Phase 1, inlined in messages.rs)
 
-/// Get shortmess(SHM_MOD) (accessor for Rust).
-int nvim_shortmess_mod(void)
-{
-  return shortmess(SHM_MOD) ? 1 : 0;
-}
-
-/// Get shortmess(SHM_RO) (accessor for Rust).
-int nvim_shortmess_ro(void)
-{
-  return shortmess(SHM_RO) ? 1 : 0;
-}
+// nvim_shortmess_mod: deleted (Phase 4, Rust calls shortmess(SHM_MOD) directly)
+// nvim_shortmess_ro: deleted (Phase 4, Rust calls shortmess(SHM_RO) directly)
 
 // nvim_fileinfo_line_fmt: deleted (Phase 1, inlined in messages.rs)
 
@@ -715,11 +678,7 @@ int nvim_shortmess_ro(void)
 // Phase 6 accessor functions for do_modelines / chk_modeline.
 // ============================================================
 
-/// Get p_mls (modelines option) value (accessor for Rust).
-int nvim_get_p_mls(void)
-{
-  return (int)p_mls;
-}
+// nvim_get_p_mls: deleted (Phase 4, Rust accesses p_mls directly)
 
 /// Push a ETYPE_MODELINE entry onto the execution stack (accessor for Rust).
 void nvim_estack_push_modeline(linenr_T lnum)
@@ -1268,7 +1227,7 @@ int nvim_get_winopts_apply(WinInfo *wip, buf_T *buf)
 void nvim_clear_winopt_curwin(void) { clear_winopt(&curwin->w_onebuf_opt); }
 void nvim_curwin_set_changelistidx(int val) { curwin->w_changelistidx = val; }
 bool nvim_curwin_config_is_minimal(void) { return curwin->w_config.style == kWinStyleMinimal; }
-int64_t nvim_get_p_fdls(void) { return p_fdls; }
+// nvim_get_p_fdls: deleted (Phase 4, Rust accesses p_fdls directly)
 void nvim_curwin_set_p_fdl(int val) { curwin->w_p_fdl = (OptInt)val; }
 void nvim_didset_window_options_curwin(void) { didset_window_options(curwin, false); }
 void nvim_win_set_minimal_style_curwin(void) { win_set_minimal_style(curwin); }
@@ -1398,11 +1357,8 @@ void nvim_set_buf_opts_scratch(void)
 // Accessors for buflist_getfile (migrated to Rust, src/nvim-rs/buffer/src/list.rs)
 // ============================================================
 
-/// Returns non-zero if 'switchbuf' has the "vsplit" flag.
-int nvim_swb_has_vsplit(void) { return (swb_flags & kOptSwbFlagVsplit) ? 1 : 0; }
-
-/// Returns non-zero if 'switchbuf' has the "split" flag.
-int nvim_swb_has_split(void) { return (swb_flags & kOptSwbFlagSplit) ? 1 : 0; }
+// nvim_swb_has_vsplit: deleted (Phase 4, Rust accesses swb_flags directly)
+// nvim_swb_has_split: deleted (Phase 4, Rust accesses swb_flags directly)
 
 /// Returns non-zero if 'switchbuf' has the "newtab" flag.
 int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; }

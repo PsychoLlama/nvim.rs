@@ -12,9 +12,17 @@
 #![allow(clippy::too_many_lines)]
 #![allow(dead_code)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::{errors, messages, BufHandle};
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+// 'switchbuf' flag values (from auto/option_vars.generated.h)
+const SWB_FLAG_VSPLIT: c_uint = 0x10;
+const SWB_FLAG_SPLIT: c_uint = 0x04;
 
 // =============================================================================
 // External C Functions
@@ -67,8 +75,7 @@ extern "C" {
     fn nvim_fmark_get_lnum(fm: *const c_void) -> c_int;
     fn nvim_fmark_get_col(fm: *const c_void) -> c_int;
     fn swbuf_goto_win_with_buf(buf: BufHandle) -> *mut c_void;
-    fn nvim_swb_has_vsplit() -> c_int;
-    fn nvim_swb_has_split() -> c_int;
+    static swb_flags: c_uint;
     fn nvim_swb_has_newtab() -> c_int;
     fn nvim_curbuf_is_empty() -> c_int;
     fn tabpage_new();
@@ -1157,15 +1164,15 @@ pub unsafe extern "C" fn rs_buflist_getfile(
         // If 'switchbuf' contains "split", "vsplit" or "newtab" and the
         // current buffer isn't empty: open new tab or window.
         if wp.is_null()
-            && (nvim_swb_has_vsplit() != 0
-                || nvim_swb_has_split() != 0
+            && ((swb_flags & SWB_FLAG_VSPLIT) != 0
+                || (swb_flags & SWB_FLAG_SPLIT) != 0
                 || nvim_swb_has_newtab() != 0)
             && nvim_curbuf_is_empty() == 0
         {
             if nvim_swb_has_newtab() != 0 {
                 tabpage_new();
             } else {
-                let flags = if nvim_swb_has_vsplit() != 0 {
+                let flags = if (swb_flags & SWB_FLAG_VSPLIT) != 0 {
                     WSP_VERT
                 } else {
                     0

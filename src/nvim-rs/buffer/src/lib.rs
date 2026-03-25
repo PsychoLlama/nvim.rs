@@ -100,8 +100,8 @@ extern "C" {
     /// Get the first character of the `b_p_bh` (bufhidden option) field.
     fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
 
-    /// Get the global `p_hid` option (hidden buffers).
-    fn nvim_get_p_hid() -> c_int;
+    /// Global `p_hid` option (hidden buffers).
+    static p_hid: c_int;
 
     /// Get the `cmdmod.cmod_flags` field.
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
@@ -581,7 +581,7 @@ fn buf_hide_impl(buf: BufHandle) -> bool {
             // "hide" -> hide
             b'h' => true,
             // empty (NUL) or anything else -> fall through to global options
-            _ => nvim_get_p_hid() != 0 || (nvim_get_cmdmod_cmod_flags() & CMOD_HIDE) != 0,
+            _ => p_hid != 0 || (nvim_get_cmdmod_cmod_flags() & CMOD_HIDE) != 0,
         }
     }
 }
