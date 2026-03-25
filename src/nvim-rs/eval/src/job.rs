@@ -4,7 +4,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use super::typval::{CallbackReaderT, CallbackT};
+use super::typval::{CallbackReaderT, CallbackT, DictTHead};
 
 // =============================================================================
 // Opaque handle types
@@ -41,8 +41,7 @@ extern "C" {
     // -- Callback free (now defined in Rust eval_exec/callback.rs, takes *mut c_void) --
     fn nvim_callback_free(cb: *mut c_void);
 
-    // -- Dict refcount --
-    fn nvim_dict_refcount_inc(dict: DictHandle);
+    // (nvim_dict_refcount_inc inlined via DictTHead.dv_refcount)
 
     // -- Channel accessors --
     fn nvim_find_channel(id: u64) -> ChannelHandle;
@@ -96,7 +95,9 @@ pub unsafe extern "C" fn rs_common_job_callbacks(
             (*on_stderr).self_ = vopts;
         }
 
-        nvim_dict_refcount_inc(vopts);
+        if !vopts.is_null() {
+            (*vopts.cast::<DictTHead>()).dv_refcount += 1;
+        }
         return true;
     }
 

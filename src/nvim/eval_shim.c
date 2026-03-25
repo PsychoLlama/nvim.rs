@@ -847,12 +847,6 @@ void nvim_lval_alloc_dict_if_null(lval_T *lp)
   lp->ll_dict = lp->ll_tv->vval.v_dict;
 }
 
-/// Get v_type from the ll_tv - composite accessor for Rust.
-int nvim_lval_tv_get_type(const lval_T *lp)
-{
-  return lp->ll_tv->v_type;
-}
-
 /// Alloc list and set ll_tv - composite accessor for Rust.
 void nvim_lval_tv_list_alloc_ret(lval_T *lp)
 {
@@ -863,19 +857,6 @@ void nvim_lval_tv_list_alloc_ret(lval_T *lp)
 void nvim_lval_tv_blob_alloc_ret(lval_T *lp)
 {
   tv_blob_alloc_ret(lp->ll_tv);
-}
-
-/// Get tv->v_type from ll_tv - same as nvim_lval_tv_get_type but returns int - accessor for Rust.
-/// Also get tv_blob_len from ll_tv blob.
-int nvim_lval_tv_blob_len(const lval_T *lp)
-{
-  return tv_blob_len(lp->ll_tv->vval.v_blob);
-}
-
-/// Check if lp->ll_di is NULL - accessor for Rust.
-bool nvim_lval_di_is_null(const lval_T *lp)
-{
-  return lp->ll_di == NULL;
 }
 
 /// tv_blob_check_index wrapper - accessor for Rust.
@@ -905,14 +886,6 @@ int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
 // =============================================================================
 // Phase 5 (handle_subscript): new C accessor/wrapper functions
 // =============================================================================
-
-/// Increment dict->dv_refcount - accessor for Rust rs_handle_subscript.
-void nvim_dict_refcount_inc(dict_T *dict)
-{
-  if (dict != NULL) {
-    dict->dv_refcount++;
-  }
-}
 
 /// aborting() wrapper - accessor for Rust rs_handle_subscript.
 bool nvim_aborting(void)
@@ -1697,8 +1670,6 @@ void nvim_set_pressedreturn(int val)
 // =============================================================================
 // Job helper accessors for Rust Phase 2 (eval_shim pass 8)
 // =============================================================================
-
-// nvim_dict_refcount_inc already defined above.
 
 /// Check if a Channel is a proc stream and not stopped.
 /// Returns 1 if it is a valid job channel, 0 otherwise.

@@ -28,7 +28,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use nvim_eval::typval::{PartialT, TypvalT as TypvalTRepr};
+use nvim_eval::typval::{DictTHead, PartialT, TypvalT as TypvalTRepr};
 
 use crate::funcexe::FuncExeT;
 
@@ -3192,8 +3192,7 @@ pub unsafe extern "C" fn rs_eval7(
 extern "C" {
     // Get tv->vval.v_dict
     fn nvim_tv_get_dict(tv: TypevalHandle) -> *mut c_void;
-    // Increment dict->dv_refcount
-    fn nvim_dict_refcount_inc(dict: *mut c_void);
+    // (nvim_dict_refcount_inc inlined via DictTHead.dv_refcount)
     // tv_dict_unref wrapper
     #[link_name = "tv_dict_unref"]
     fn nvim_dict_unref(dict: *mut c_void);
@@ -3337,7 +3336,9 @@ pub unsafe fn handle_subscript_impl(
             nvim_dict_unref(selfdict);
             if nvim_tv_get_type(rettv) == VAR_DICT {
                 selfdict = nvim_tv_get_dict(rettv);
-                nvim_dict_refcount_inc(selfdict);
+                if !selfdict.is_null() {
+                    (*selfdict.cast::<DictTHead>()).dv_refcount += 1;
+                }
             } else {
                 selfdict = std::ptr::null_mut();
             }
