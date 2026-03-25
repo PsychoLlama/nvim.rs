@@ -108,7 +108,6 @@ char *nvim_search_skipwhite_ml_get(linenr_T lnum)
 /// Reads search direction from Rust-owned state via rs_is_search_forward().
 void nvim_call_set_vv_searchforward(void)
 {
-  // Direction now lives in Rust SPATS; read it via rs_is_search_forward()
   set_vim_var_nr(VV_SEARCHFORWARD, rs_is_search_forward());
 }
 
@@ -407,9 +406,7 @@ void find_pattern_in_path(char *ptr, Direction dir, size_t len, bool whole, bool
                           forceit ? 1 : 0, silent ? 1 : 0);
 }
 
-// =========================================================================
-// Phase 4: Batch C helpers for find_pattern_in_path
-// =========================================================================
+// find_pattern_in_path batch helpers
 
 /// Opaque state for the find_pattern_in_path operation.
 typedef struct {
@@ -1089,10 +1086,6 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
 
 
 
-// Batch accessors for pattern save/restore, pattern compilation, and all spat
-// accessor functions have been deleted. These operations now live in the Rust
-// search_state module (src/nvim-rs/search/src/search_state.rs).
-
 // =============================================================================
 // Accessor wrappers for C globals still needed by Rust crates
 // =============================================================================
@@ -1162,9 +1155,7 @@ void nvim_dec_emsg_off(void)
   emsg_off--;
 }
 
-// =============================================================================
-// C accessor functions for rs_searchit (Phase 1)
-// =============================================================================
+// rs_searchit accessor functions
 
 // Constant verification
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL mismatch");
@@ -1278,9 +1269,7 @@ void nvim_regmmatch_free(void *rm)
   xfree(rm);
 }
 
-// =============================================================================
-// C accessor functions for rs_do_search (Phase 2)
-// =============================================================================
+// rs_do_search accessor functions
 
 _Static_assert(SEARCH_REV == 0x01, "SEARCH_REV mismatch");
 _Static_assert(SEARCH_ECHO == 0x02, "SEARCH_ECHO mismatch");
@@ -1742,9 +1731,7 @@ DoSearchPos nvim_do_search_get_cursor(void)
   return (DoSearchPos){ curwin->w_cursor.lnum, curwin->w_cursor.col };
 }
 
-// =========================================================================
-// Phase 3: findmatchlimit C accessors
-// =========================================================================
+// findmatchlimit accessor functions
 
 _Static_assert(FM_BACKWARD == 0x01, "FM_BACKWARD mismatch");
 _Static_assert(FM_FORWARD == 0x02, "FM_FORWARD mismatch");
@@ -1821,9 +1808,7 @@ const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap)
   return cap ? cap->nchar_composing : NULL;
 }
 
-// =============================================================================
-// Phase 6: update_search_stat / cmdline_search_stat accessors
-// =============================================================================
+// update_search_stat / cmdline_search_stat accessors
 
 /// Set the p_ws option (wrapscan).
 void nvim_set_p_ws(int val)
@@ -1879,9 +1864,6 @@ int nvim_profile_passed_limit_val(proftime_T start)
   return profile_passed_limit(start) ? 1 : 0;
 }
 
-// nvim_stat_spats_pat_matches and nvim_stat_copy_spats_pat deleted:
-// these operations now use Rust search_state::spats_pat_matches and copy_spats_last_pat.
-
 /// Free a pointer allocated by nvim_stat_copy_spats_pat.
 void nvim_stat_free_pat(char *pat)
 {
@@ -1905,9 +1887,7 @@ void nvim_cmdline_stat_display(const char *msgbuf)
   msg_hist_off = false;
 }
 
-// =============================================================================
-// Phase 7: Integration function accessors
-// =============================================================================
+// Integration function accessors
 
 /// Check if curbuf has lisp mode enabled.
 int nvim_curbuf_is_lisp(void)
@@ -1920,13 +1900,6 @@ int nvim_is_pos_in_string(const char *line, int col)
 {
   return is_pos_in_string(line, (colnr_T)col);
 }
-
-// Phase 7b: is_zero_width accessors
-// NOTE: nvim_get_called_emsg() already exists in message.c
-
-// nvim_regmmatch_alloc() and nvim_regmmatch_free() already defined above (~line 3717)
-
-// nvim_get_last_spat_pat deleted: use Rust search_state::get_last_pat_for_searchit instead.
 
 /// Call search_regcomp for is_zero_width.
 int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch)
@@ -1987,8 +1960,6 @@ int nvim_is_zero_width_searchit(const char *pat, size_t patlen, int dir,
   return result;
 }
 
-// Phase 7c: search_for_exact_line accessors
-
 /// Get buf->b_ml.ml_line_count.
 int nvim_buf_ml_line_count(void *buf)
 {
@@ -2035,9 +2006,7 @@ void nvim_give_search_wrap_warning(int at_top)
   give_warning(_(at_top ? top_bot_msg : bot_top_msg), true);
 }
 
-// =============================================================================
-// Phase 8: showmatch accessors
-// =============================================================================
+// showmatch accessors
 
 /// Get p_ri option (reverse insert).
 int nvim_showmatch_get_p_ri(void)
@@ -2083,15 +2052,9 @@ void nvim_showmatch_beep(void)
   vim_beep(kOptBoFlagShowmatch);
 }
 
-// =============================================================================
-// Phase 9: f_searchcount accessors
-// =============================================================================
+// f_searchcount accessors
 
-// nvim_searchcount_set_pattern and nvim_searchcount_has_pattern are now
-// handled directly in Rust via search_state::searchcount_set_pattern and
-// search_state::searchcount_has_pattern (which operate on Rust-owned SPATS).
-
-// Phase 4: find_pattern_in_path constants
+// find_pattern_in_path constants
 _Static_assert(FIND_ANY == 1, "FIND_ANY mismatch");
 _Static_assert(FIND_DEFINE == 2, "FIND_DEFINE mismatch");
 _Static_assert(CHECK_PATH == 3, "CHECK_PATH mismatch");
@@ -2101,9 +2064,7 @@ _Static_assert(ACTION_SPLIT == 3, "ACTION_SPLIT mismatch");
 _Static_assert(ACTION_SHOW_ALL == 4, "ACTION_SHOW_ALL mismatch");
 _Static_assert(ACTION_EXPAND == 5, "ACTION_EXPAND mismatch");
 
-// =============================================================================
-// Phase 7d: current_search accessors
-// =============================================================================
+// current_search accessors
 
 /// Get curwin->w_cursor.coladd.
 colnr_T nvim_search_get_curwin_cursor_coladd(void)
