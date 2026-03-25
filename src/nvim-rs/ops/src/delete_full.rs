@@ -48,7 +48,7 @@ extern "C" {
     fn nvim_get_virtual_op() -> c_int;
 
     // cpo option
-    fn nvim_p_cpo_get() -> *mut c_char;
+    static mut p_cpo: *mut c_char;
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Beep
@@ -151,7 +151,6 @@ unsafe fn opd_check_empty_line(oap: *const c_void) -> c_int {
             if nvim_get_virtual_op() != 0 {
                 return 2; // goto setmarks
             }
-            let p_cpo = nvim_p_cpo_get();
             if !nvim_vim_strchr(p_cpo, CPO_EMPTYREGION).is_null() {
                 nvim_beep_flush();
             }

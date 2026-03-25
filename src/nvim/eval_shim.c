@@ -184,22 +184,10 @@ _Static_assert(offsetof(CallbackReader, self) == 16, "CallbackReader self offset
 _Static_assert(offsetof(CallbackReader, buffer) == 24, "CallbackReader buffer offset mismatch");
 _Static_assert(offsetof(CallbackReader, buffered) == 49, "CallbackReader buffered offset mismatch");
 
-// C accessors for typval fields (used by Rust callback module)
-int nvim_eval_tv_get_type(const typval_T *tv)
-{
-  return (int)tv->v_type;
-}
-
 // _Static_assert for Callback layout (validated by Rust CallbackT #[repr(C)]):
 _Static_assert(sizeof(Callback) == 16, "Callback size must be 16 bytes");
 _Static_assert(offsetof(Callback, data) == 0, "Callback.data must be at offset 0");
 _Static_assert(offsetof(Callback, type) == 8, "Callback.type must be at offset 8");
-
-/// Accessor for p_mfd option (max function depth).
-int nvim_p_mfd_get(void)
-{
-  return (int)p_mfd;
-}
 
 // Hashtab iteration: iterate over entries and call rs_set_ref_in_item for each
 bool nvim_eval_ht_foreach_di_tv(hashtab_T *ht, int copyID, ht_stack_T **ht_stack,
@@ -297,24 +285,6 @@ void nvim_eval_save_set_cpo(void)
 void nvim_eval_restore_cpo(void)
 {
   p_cpo = saved_eval_p_cpo;
-}
-
-/// Get p_cpo pointer (accessor for rs_do_string_sub).
-char *nvim_p_cpo_get(void)
-{
-  return p_cpo;
-}
-
-/// Set p_cpo pointer (accessor for rs_do_string_sub).
-void nvim_p_cpo_set(char *val)
-{
-  p_cpo = val;
-}
-
-/// Get empty_string_option pointer (accessor for rs_do_string_sub).
-char *nvim_empty_string_option(void)
-{
-  return empty_string_option;
 }
 
 /// Restore p_cpo via set_option_value_give_err when the expression changed it
@@ -665,30 +635,12 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // Accessor functions for Rust FFI
 // =============================================================================
 
-/// Get did_emsg global (accessor for Rust).
-int did_emsg_get(void)
-{
-  return did_emsg;
-}
-
-/// Get called_emsg global (accessor for Rust).
-int called_emsg_get(void)
-{
-  return called_emsg;
-}
-
 /// Set nextcmd in exarg_T (accessor for Rust).
 void exarg_set_nextcmd(exarg_T *eap, char *nextcmd)
 {
   if (eap) {
     eap->nextcmd = nextcmd;
   }
-}
-
-/// Get p_ic option value (accessor for Rust).
-int p_ic_get(void)
-{
-  return p_ic;
 }
 
 /// Set v_type in typval_T (accessor for Rust).
@@ -1600,12 +1552,6 @@ void nvim_smsg_system_cmd(const char *cmdstr)
   smsg(0, _("Executing command: \"%s\""), cmdstr);
 }
 
-/// Get p_verbose (the 'verbose' option value).
-int nvim_p_verbose_get(void)
-{
-  return (int)p_verbose;
-}
-
 /// do_profiling accessor -- returns true when profiling is active (PROF_YES).
 bool nvim_do_profiling_active(void)
 {
@@ -1635,12 +1581,6 @@ int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
 bool nvim_eval_find_func(const char *name)
 {
   return find_func(name) != NULL;
-}
-
-/// p_lpl accessor for Rust.
-bool nvim_eval_get_p_lpl(void)
-{
-  return p_lpl;
 }
 
 /// nlua_is_deferred_safe accessor for Rust.

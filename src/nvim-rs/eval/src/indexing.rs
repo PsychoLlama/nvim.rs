@@ -237,8 +237,6 @@ const FAIL: c_int = 0;
 type ListHandle = *mut c_void;
 
 extern "C" {
-    // Typval field accessors (Phase 3)
-    fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
@@ -307,7 +305,7 @@ pub unsafe extern "C" fn rs_var2fpos(
     out: *mut PosT,
 ) -> bool {
     // Argument can be [lnum, col, coladd].
-    if nvim_eval_tv_get_type(tv) == VAR_LIST {
+    if (*tv.cast::<TypvalTRepr>()).v_type == VAR_LIST {
         let l = tv_get_list_field(tv);
         if l.is_null() {
             return false;
@@ -523,7 +521,7 @@ pub unsafe extern "C" fn rs_list2fpos(
     charcol: bool,
 ) -> c_int {
     // Validate: must be a list
-    if nvim_eval_tv_get_type(arg) != VAR_LIST {
+    if (*arg.cast::<TypvalTRepr>()).v_type != VAR_LIST {
         return FAIL;
     }
     let l = tv_get_list_field(arg);

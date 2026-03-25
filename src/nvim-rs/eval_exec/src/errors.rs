@@ -463,8 +463,8 @@ extern "C" {
     /// Check if errors should be suppressed.
     static mut emsg_silent: c_int;
 
-    /// Get did_emsg counter.
-    fn did_emsg_get() -> c_int;
+    /// did_emsg counter.
+    static did_emsg: c_int;
 
     /// Check if we're aborting due to error.
     fn aborting() -> c_int;
@@ -487,7 +487,7 @@ pub fn is_emsg_silent() -> bool {
 
 /// Check if an error has occurred (did_emsg counter > 0).
 pub fn has_emsg() -> bool {
-    unsafe { did_emsg_get() != 0 }
+    unsafe { did_emsg != 0 }
 }
 
 /// Check if we should abort execution due to an error.
@@ -531,14 +531,14 @@ impl ErrorState {
     /// Save current error state.
     pub fn save() -> Self {
         Self {
-            did_emsg: unsafe { did_emsg_get() },
+            did_emsg: unsafe { did_emsg },
             emsg_silent: is_emsg_silent(),
         }
     }
 
     /// Check if an error occurred since this state was saved.
     pub fn has_new_error(&self) -> bool {
-        unsafe { did_emsg_get() > self.did_emsg }
+        unsafe { did_emsg > self.did_emsg }
     }
 }
 

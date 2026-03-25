@@ -91,8 +91,8 @@ extern "C" {
     // Error message
     fn emsg(s: *const c_char) -> c_int;
 
-    // p_mfd option (max function depth)
-    fn nvim_p_mfd_get() -> c_int;
+    // p_mfd option (max function depth, OptInt = i64)
+    static p_mfd: i64;
 
     // VV_LUA partial getter (canonical name)
     fn nvim_get_vlua_partial() -> *mut c_void;
@@ -136,7 +136,7 @@ static E_CMD_TOO_RECURSIVE: &[u8] = b"E169: Command too recursive\0";
 /// Inlines C `nvim_callback_depth_exceeded`.
 #[inline]
 unsafe fn callback_depth_exceeded() -> bool {
-    CALLBACK_DEPTH.load(Ordering::Relaxed) > nvim_p_mfd_get()
+    CALLBACK_DEPTH.load(Ordering::Relaxed) > p_mfd as c_int
 }
 
 /// Increment callback_depth by 1.

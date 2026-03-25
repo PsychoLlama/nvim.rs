@@ -43,12 +43,11 @@ extern "C" {
     static mut nvim_got_int: bool;
     static mut need_clr_eos: bool;
     fn nvim_aborting() -> bool;
-    fn did_emsg_get() -> c_int;
-    fn called_emsg_get() -> c_int;
     static mut msg_didout: bool;
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
     static mut did_emsg: c_int;
+    static mut called_emsg: c_int;
     fn nvim_get_force_abort() -> c_int;
 
     // semsg with e_invexpr2: now in nvim_eval::errors
@@ -198,8 +197,8 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
 
     let mut atstart = true;
     let mut need_clear = true;
-    let did_emsg_before = did_emsg_get();
-    let called_emsg_before = called_emsg_get();
+    let did_emsg_before = did_emsg;
+    let called_emsg_before = called_emsg;
 
     let mut ea_box = Box::new(EvalargT::new_skip());
     fill_evalarg_from_eap(EvalargHandle(ea_box.as_mut()), eap, skip);
@@ -226,9 +225,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             // Report the invalid expression unless the expression evaluation
             // has been cancelled due to an aborting error, an interrupt, or an
             // exception.
-            if !nvim_aborting()
-                && did_emsg == did_emsg_before
-                && called_emsg_get() == called_emsg_before
+            if !nvim_aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before
             {
                 nvim_eval::errors::semsg_invexpr2(p);
             }

@@ -67,7 +67,7 @@ extern "C" {
     fn nvim_prof_child_exit(tm: *mut u64);
 
     // ----- verbose -----
-    fn nvim_p_verbose_get() -> c_int;
+    static p_verbose: i64;
     fn verbose_enter_scroll();
     fn verbose_leave_scroll();
     fn msg_puts(s: *const c_char);
@@ -292,7 +292,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
     }
 
     // Verbose output: log command if p_verbose > 3
-    if nvim_p_verbose_get() > 3 {
+    if p_verbose > 3 {
         let cmdstr = nvim_shell_argv_to_str(cmd_argv);
         verbose_enter_scroll();
         nvim_smsg_system_cmd(cmdstr);

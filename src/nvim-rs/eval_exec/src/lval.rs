@@ -209,7 +209,6 @@ extern "C" {
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
 
     // Typval type query -- eval version (same signature)
-    fn nvim_eval_tv_get_type(tv: TypevalHandle) -> c_int;
 
     // Typval blob accessors
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
@@ -639,7 +638,7 @@ unsafe fn get_lval_subscript_impl(
                     }
                     // Check rettv type for range
                     if !rettv.is_null() {
-                        let rt = nvim_eval_tv_get_type(rettv);
+                        let rt = (*rettv.0.cast::<TypvalTRepr>()).v_type;
                         let rv_list = (*rettv.0.cast::<TypvalTRepr>()).vval.v_list;
                         let rv_blob = nvim_tv_get_blob(rettv);
                         let ok = (rt == VAR_LIST_TYPE && !rv_list.is_null())

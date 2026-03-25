@@ -88,7 +88,6 @@ unsafe fn tv_set_dict_ptr(tv: TypvalPtr, d: *mut c_void) {
 extern "C" {
     // typval field accessors (window_shim.c / eval_shim.c)
     fn nvim_eval_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
-    fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
     fn nvim_tv_get_blob(tv: TypvalPtr) -> BlobPtr;
     fn nvim_tv_get_vstring(tv: TypvalPtr) -> *mut c_char;
     fn nvim_eval_tv_set_type(tv: TypvalPtr, t: c_int);
@@ -210,7 +209,7 @@ pub unsafe extern "C" fn rs_f_remove(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         let tv0 = argvar_at(argvars, 0);
         let arg_errmsg = c"remove() argument".as_ptr();
 
-        match nvim_eval_tv_get_type(tv0) {
+        match (*tv0.cast::<TypvalTRepr>()).v_type {
             5 => {
                 // VAR_DICT
                 tv_dict_remove(argvars, rettv, arg_errmsg);
@@ -242,7 +241,7 @@ pub unsafe extern "C" fn rs_f_reverse(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
 
         let tv0 = argvar_at(argvars, 0);
 
-        match nvim_eval_tv_get_type(tv0) {
+        match (*tv0.cast::<TypvalTRepr>()).v_type {
             VAR_BLOB => {
                 let b = nvim_tv_get_blob(tv0);
                 let len = nvim_blob_len(b);
@@ -327,7 +326,7 @@ unsafe fn extend_dict_impl(
 
         // Determine action (default "force")
         let tv2 = argvar_at(argvars, 2);
-        let action: *const c_char = if nvim_eval_tv_get_type(tv2) == VAR_UNKNOWN {
+        let action: *const c_char = if (*tv2.cast::<TypvalTRepr>()).v_type == VAR_UNKNOWN {
             c"force".as_ptr()
         } else {
             let s = tv_get_string_chk(tv2);
@@ -392,7 +391,7 @@ unsafe fn extend_list_impl(
         }
 
         let tv2 = argvar_at(argvars, 2);
-        let item: ListItemPtr = if nvim_eval_tv_get_type(tv2) == VAR_UNKNOWN {
+        let item: ListItemPtr = if (*tv2.cast::<TypvalTRepr>()).v_type == VAR_UNKNOWN {
             std::ptr::null_mut()
         } else {
             let mut error = false;
@@ -434,8 +433,8 @@ unsafe fn extend_impl(
     unsafe {
         let tv0 = argvar_at(argvars, 0);
         let tv1 = argvar_at(argvars, 1);
-        let t0 = nvim_eval_tv_get_type(tv0);
-        let t1 = nvim_eval_tv_get_type(tv1);
+        let t0 = (*tv0.cast::<TypvalTRepr>()).v_type;
+        let t1 = (*tv1.cast::<TypvalTRepr>()).v_type;
         if t0 == VAR_LIST && t1 == VAR_LIST {
             extend_list_impl(argvars, arg_errmsg, is_new, rettv);
         } else if t0 == VAR_DICT && t1 == VAR_DICT {
@@ -490,7 +489,7 @@ pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: E
         nvim_tv_set_number(rettv, 1);
 
         let tv0 = argvar_at(argvars, 0);
-        let t0 = nvim_eval_tv_get_type(tv0);
+        let t0 = (*tv0.cast::<TypvalTRepr>()).v_type;
 
         if t0 == VAR_LIST {
             let l = tv_get_list(tv0);
@@ -534,7 +533,7 @@ pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: E
 pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let tv0 = argvar_at(argvars, 0);
-        let t0 = nvim_eval_tv_get_type(tv0);
+        let t0 = (*tv0.cast::<TypvalTRepr>()).v_type;
         let tv1 = argvar_at(argvars, 1);
         let tv2 = argvar_at(argvars, 2);
 
@@ -553,7 +552,7 @@ pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
             let mut before: c_int = 0;
             let len = nvim_blob_len(b);
 
-            if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+            if (*tv2.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN {
                 let mut error = false;
                 before = tv_get_number_chk(tv2, &raw mut error) as c_int;
                 if error {
@@ -600,7 +599,7 @@ pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
             }
 
             let mut before: VarNumber = 0;
-            if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+            if (*tv2.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN {
                 let mut error = false;
                 before = tv_get_number_chk(tv2, &raw mut error);
                 if error {
@@ -729,11 +728,11 @@ pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr:
         let tv2 = argvar_at(argvars, 2);
         let tv3 = argvar_at(argvars, 3);
 
-        if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN {
+        if (*tv2.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN {
             ic = tv_get_number_chk(tv2, &raw mut error) as c_int;
         }
 
-        let t0 = nvim_eval_tv_get_type(tv0);
+        let t0 = (*tv0.cast::<TypvalTRepr>()).v_type;
 
         if !error && t0 == 2 {
             // VAR_STRING = 2
@@ -741,8 +740,8 @@ pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr:
             let needle = tv_get_string_chk(tv1);
             n = count_string_impl(haystack.cast_const(), needle, ic != 0);
         } else if !error && t0 == VAR_LIST {
-            let idx: VarNumber = if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN
-                && nvim_eval_tv_get_type(tv3) != VAR_UNKNOWN
+            let idx: VarNumber = if (*tv2.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN
+                && (*tv3.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN
             {
                 tv_get_number_chk(tv3, &raw mut error)
             } else {
@@ -755,8 +754,8 @@ pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr:
         } else if !error && t0 == VAR_DICT {
             let d = tv_get_dict_ptr(tv0);
             if !d.is_null() {
-                if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN
-                    && nvim_eval_tv_get_type(tv3) != VAR_UNKNOWN
+                if (*tv2.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN
+                    && (*tv3.cast::<TypvalTRepr>()).v_type != VAR_UNKNOWN
                 {
                     emsg(e_invarg.as_ptr());
                 } else {

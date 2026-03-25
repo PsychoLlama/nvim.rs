@@ -110,11 +110,10 @@ extern "C" {
     // memory
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
-    // option accessors
-    fn p_ic_get() -> c_int;
-    fn nvim_p_cpo_get() -> *mut c_char;
-    fn nvim_p_cpo_set(val: *mut c_char);
-    fn nvim_empty_string_option() -> *mut c_char;
+    // option globals
+    static p_ic: c_int;
+    static mut p_cpo: *mut c_char;
+    static empty_string_option: [c_char; 1];
 
     // p_cpo restoration (complex path: option changed during expr eval)
     fn nvim_do_string_sub_restore_cpo_complex(save_cpo: *mut c_char);
@@ -151,16 +150,15 @@ pub unsafe extern "C" fn rs_do_string_sub(
     ret_len: *mut usize,
 ) -> *mut c_char {
     // Save and set p_cpo to empty
-    let save_cpo = nvim_p_cpo_get();
-    let empty = nvim_empty_string_option();
-    nvim_p_cpo_set(empty);
+    let save_cpo = p_cpo;
+    p_cpo = empty_string_option.as_ptr() as *mut c_char;
 
     let mut ga = GArray::default();
     ga_init(&mut ga, 1, 200);
 
-    let p_ic = p_ic_get();
+    let p_ic_val = p_ic;
     let mut regmatch = RegMatch {
-        rm_ic: p_ic != 0,
+        rm_ic: p_ic_val != 0,
         regprog: vim_regcomp(pat, RE_MAGIC + RE_STRING),
         ..RegMatch::default()
     };
@@ -262,10 +260,10 @@ pub unsafe extern "C" fn rs_do_string_sub(
     ga_clear((&mut ga) as *mut GArray as *mut c_void);
 
     // Restore p_cpo
-    let current_cpo = nvim_p_cpo_get();
-    if current_cpo == empty {
+    let current_cpo = p_cpo;
+    if std::ptr::eq(current_cpo, empty_string_option.as_ptr()) {
         // p_cpo was not changed during substitution - simple restore
-        nvim_p_cpo_set(save_cpo);
+        p_cpo = save_cpo;
     } else {
         // p_cpo was changed by evaluating {sub} expression or {expr}
         // Use the complex restore path

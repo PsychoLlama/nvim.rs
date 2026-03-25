@@ -99,7 +99,6 @@ extern "C" {
     fn nvim_eval_tv_set_number(tv: TypvalPtr, n: VarNumber);
     fn nvim_eval_tv_set_string(tv: TypvalPtr, s: *mut c_char);
     fn nvim_eval_tv_set_type(tv: TypvalPtr, t: c_int);
-    fn nvim_eval_tv_get_type(tv: TypvalPtr) -> c_int;
     fn nvim_dictitem_get_tv(di: DictItemPtr) -> TypvalPtr;
 
     // window/tabpage accessors
@@ -261,7 +260,7 @@ unsafe fn get_winnr_impl(tp: TabpageHandle, argvar: TypvalPtr) -> c_int {
         };
         let mut twin = curwin_for_tab;
 
-        if nvim_eval_tv_get_type(argvar) != VAR_UNKNOWN {
+        if (*argvar.cast::<TypvalT>()).v_type != VAR_UNKNOWN {
             let mut invalid_arg = false;
             let arg = tv_get_string_chk(argvar);
             if arg.is_null() {
@@ -528,7 +527,7 @@ pub unsafe extern "C" fn rs_f_win_screenpos(
 pub unsafe extern "C" fn rs_f_tabpagenr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
     unsafe {
         let tv0 = argvar_at(argvars, 0);
-        let nr = if nvim_eval_tv_get_type(tv0) == VAR_UNKNOWN {
+        let nr = if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
             rs_tabpage_index(nvim_get_curtab())
         } else {
             let arg = tv_get_string_chk(tv0);
@@ -598,7 +597,7 @@ pub unsafe extern "C" fn rs_f_win_getid(argvars: TypvalPtr, rettv: TypvalPtr, _f
 unsafe fn win_getid_impl(argvars: TypvalPtr) -> c_int {
     unsafe {
         let tv0 = argvar_at(argvars, 0);
-        if nvim_eval_tv_get_type(tv0) == VAR_UNKNOWN {
+        if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
             return nvim_win_get_handle(nvim_get_curwin());
         }
         let winnr = tv_get_number(tv0) as c_int;
@@ -607,7 +606,7 @@ unsafe fn win_getid_impl(argvars: TypvalPtr) -> c_int {
         }
 
         let tv1 = argvar_at(argvars, 1);
-        let (tp, first_wp) = if nvim_eval_tv_get_type(tv1) == VAR_UNKNOWN {
+        let (tp, first_wp) = if (*tv1.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
             (nvim_get_curtab(), nvim_get_firstwin())
         } else {
             let tabnr = tv_get_number(tv1) as c_int;
@@ -847,7 +846,7 @@ pub unsafe extern "C" fn rs_f_gettabinfo(
 ) {
     unsafe {
         let tv0 = argvar_at(argvars, 0);
-        let tparg = if nvim_eval_tv_get_type(tv0) == VAR_UNKNOWN {
+        let tparg = if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
             TabpageHandle::null()
         } else {
             let n = tv_get_number_chk(tv0, std::ptr::null_mut()) as c_int;
@@ -896,7 +895,7 @@ pub unsafe extern "C" fn rs_f_getwininfo(
         let list = (*rettv.cast::<TypvalT>()).vval.v_list;
 
         let tv0 = argvar_at(argvars, 0);
-        let wparg = if nvim_eval_tv_get_type(tv0) == VAR_UNKNOWN {
+        let wparg = if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
             WinHandle::null()
         } else {
             let id = tv_get_number(tv0) as c_int;

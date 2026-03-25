@@ -32,7 +32,7 @@ extern "C" {
     #[link_name = "script_autoload"]
     fn nvim_script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
     fn nvim_eval_find_func(name: *const c_char) -> bool;
-    fn nvim_eval_get_p_lpl() -> bool;
+    static p_lpl: c_int;
     // nvim_semsg_provider_*: now in nvim_eval::errors
 
     // ----- typval accessors -----
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
             let _ = cp;
 
             if unsafe { nvim_eval_find_func(call_buf.as_ptr() as *const c_char) }
-                && unsafe { nvim_eval_get_p_lpl() }
+                && unsafe { p_lpl != 0 }
             {
                 unsafe { nvim_eval::errors::semsg_provider_missing_var(name_ptr) };
             }

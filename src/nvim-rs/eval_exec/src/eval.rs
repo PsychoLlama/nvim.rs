@@ -226,8 +226,8 @@ extern "C" {
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
 
     // Error handling
-    fn did_emsg_get() -> c_int;
-    fn called_emsg_get() -> c_int;
+    static did_emsg: c_int;
+    static called_emsg: c_int;
     fn aborting() -> c_int;
     fn semsg(fmt: *const c_char, ...) -> c_int;
     fn emsg(s: *const c_char) -> c_int;
@@ -271,7 +271,7 @@ extern "C" {
     fn ga_append(ga: *mut c_void, c: c_int);
 
     // Options
-    fn p_ic_get() -> c_int;
+    static p_ic: c_int;
 
     // Division helpers (Rust exports)
     fn rs_num_divide(n1: i64, n2: i64) -> i64;
@@ -377,8 +377,8 @@ pub unsafe fn eval0_impl(
     eap: ExargHandle,
     evalarg: EvalargHandle,
 ) -> c_int {
-    let did_emsg_before = did_emsg_get();
-    let called_emsg_before = called_emsg_get();
+    let did_emsg_before = did_emsg;
+    let called_emsg_before = called_emsg;
     let mut end_error = false;
 
     let mut p = skipwhite(arg);
@@ -395,10 +395,7 @@ pub unsafe fn eval0_impl(
         // Report the invalid expression unless the expression evaluation has
         // been cancelled due to an aborting error, an interrupt, or an
         // exception, or we already gave a more specific error.
-        if aborting() == 0
-            && did_emsg_get() == did_emsg_before
-            && called_emsg_get() == called_emsg_before
-        {
+        if aborting() == 0 && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
             if end_error {
                 semsg(E_TRAILING_ARG.as_ptr() as *const c_char, p);
             } else {
@@ -886,7 +883,7 @@ pub unsafe fn eval4_impl(
             0
         } else {
             // use 'ignorecase' option
-            p_ic_get()
+            p_ic
         };
 
         // Get the second variable

@@ -84,7 +84,6 @@ extern "C" {
 
     // typval2string helpers
     fn nvim_eval_tv_list_join_nl(l: *mut c_void) -> *mut c_char;
-    fn nvim_eval_tv_get_type(tv: TypevalHandle) -> c_int;
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
 
     // eval_expr_* helpers
@@ -104,8 +103,8 @@ extern "C" {
 
     // Error globals
     fn aborting() -> c_int;
-    fn did_emsg_get() -> c_int;
-    fn called_emsg_get() -> c_int;
+    static did_emsg: c_int;
+    static called_emsg: c_int;
 
     // Phase 5: fill_evalarg_from_eap / clear_evalarg accessors
     fn sourcing_a_script(eap: ExargHandle) -> c_int;
@@ -176,7 +175,7 @@ unsafe fn free_evalarg(evalarg: EvalargHandle, eap: ExargHandle) {
 /// `tv` must be a valid pointer to a typval_T.
 unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
     let tv_h = TypevalHandle::from_ptr(tv);
-    let vtype = nvim_eval_tv_get_type(tv_h);
+    let vtype = (*tv_h.as_ptr().cast::<TypvalTRepr>()).v_type;
     if join_list && vtype == VAR_LIST {
         let l = (*tv.cast::<TypvalTRepr>()).vval.v_list;
         return nvim_eval_tv_list_join_nl(l);
@@ -240,7 +239,7 @@ unsafe fn eval_expr_func_impl(
 ) -> c_int {
     let mut buf = [0u8; NUMBUFLEN];
     let expr_h = TypevalHandle::from_ptr(expr as *mut c_void);
-    let vtype = nvim_eval_tv_get_type(expr_h);
+    let vtype = (*expr_h.as_ptr().cast::<TypvalTRepr>()).v_type;
     let s: *const c_char = if vtype == VAR_FUNC {
         nvim_tv_get_vstring(expr_h) as *const c_char
     } else {
@@ -551,8 +550,8 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     eap: ExargHandle,
 ) -> c_int {
     let start = *arg;
-    let did_emsg_before = did_emsg_get();
-    let called_emsg_before = called_emsg_get();
+    let did_emsg_before = did_emsg;
+    let called_emsg_before = called_emsg;
 
     let skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
     let evalarg = alloc_evalarg(eap, skip);
@@ -560,8 +559,8 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     let ret = eval1(arg, rettv, evalarg);
     if ret == FAIL
         && aborting() == 0
-        && did_emsg_get() == did_emsg_before
-        && called_emsg_get() == called_emsg_before
+        && did_emsg == did_emsg_before
+        && called_emsg == called_emsg_before
     {
         nvim_eval::errors::semsg_invexpr2(start);
     }
@@ -586,7 +585,10 @@ pub unsafe extern "C" fn rs_eval_expr_typval(
     argc: c_int,
     rettv: TypevalHandle,
 ) -> c_int {
-    let vtype = nvim_eval_tv_get_type(TypevalHandle::from_ptr(expr as *mut c_void));
+    let vtype = (*TypevalHandle::from_ptr(expr as *mut c_void)
+        .as_ptr()
+        .cast::<TypvalTRepr>())
+    .v_type;
     if vtype == VAR_PARTIAL {
         return eval_expr_partial_impl(expr, argv, argc, rettv);
     }
@@ -943,7 +945,7 @@ pub unsafe extern "C" fn rs_call_func_retlist(
         return std::ptr::null_mut();
     }
 
-    let vtype = nvim_eval_tv_get_type(rettv);
+    let vtype = (*rettv.as_ptr().cast::<TypvalTRepr>()).v_type;
     if vtype != VAR_LIST {
         tv_clear(rettv);
         return std::ptr::null_mut();
@@ -1341,7 +1343,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
         if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
             0
         } else {
-            let vtype = nvim_eval_tv_get_type(TypevalHandle::from_ptr(tv));
+            let vtype = (*TypevalHandle::from_ptr(tv).as_ptr().cast::<TypvalTRepr>()).v_type;
             let result = if vtype == VAR_NUMBER {
                 (*tv.cast::<TypvalTRepr>()).vval.v_number
             } else if vtype != VAR_STRING {
@@ -1432,7 +1434,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
         nvim_foldtext_make_obj(ptr::null_mut(), 0, out);
     } else {
-        let vtype = nvim_eval_tv_get_type(tv_handle);
+        let vtype = (*tv_handle.as_ptr().cast::<TypvalTRepr>()).v_type;
         nvim_foldtext_make_obj(tv, vtype, out);
         tv_clear(tv_handle);
     }
