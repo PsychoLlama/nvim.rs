@@ -96,7 +96,6 @@ extern void rs_searchcount_compute(int pos_lnum, int pos_col, int pos_coladd,
                                     int maxcount, int timeout, bool recompute,
                                     const char *pattern, searchstat_T *stat);
 
-
 /// Check if line 'lnum' in curbuf is empty or has only white chars (accessor for Rust).
 /// Returns a pointer past whitespace in the line.
 char *nvim_search_skipwhite_ml_get(linenr_T lnum)
@@ -215,15 +214,6 @@ int nvim_get_p_hls(void)
 {
   return p_hls ? 1 : 0;
 }
-
-
-
-
-
-
-
-
-
 
 /// Perform the cursor-display-delay loop for showmatch.
 /// Called from Rust after the match position has been determined.
@@ -1022,7 +1012,6 @@ void nvim_fpip_cleanup(void *handle)
   xfree(st);
 }
 
-
 static void show_pat_in_path(char *line, int type, bool did_show, int action, FILE *fp,
                              linenr_T *lnum, int count)
   FUNC_ATTR_NONNULL_ARG(1, 6)
@@ -1079,12 +1068,6 @@ static void show_pat_in_path(char *line, int type, bool did_show, int action, FI
     msg_putchar('\n');
   }
 }
-
-
-
-
-
-
 
 // =============================================================================
 // Accessor wrappers for C globals still needed by Rust crates
@@ -1975,7 +1958,6 @@ const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
   return p;
 }
 
-
 /// Compare with mb_strcmp_ic.
 int nvim_mb_strcmp_ic_wrapper(int ic, const char *s1, const char *s2)
 {
@@ -2125,4 +2107,3 @@ int nvim_search_current_searchit(int dir, int flags, int count,
   *end_coladd = end_pos.coladd;
   return result;
 }
-
