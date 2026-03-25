@@ -629,16 +629,39 @@ extern "C" {
     pub static mut p_srr: *mut c_char;
     /// Direct C global: p_shq (shellquote option, char* in C)
     pub static mut p_shq: *mut c_char;
-    /// msg_prt_line wrapper
-    pub fn nvim_msg_prt_line(s: *const c_char, list: c_int);
-    /// message_filtered wrapper
-    pub fn nvim_message_filtered(msg: *const c_char) -> c_int;
-    /// msg_ext_set_kind wrapper
-    pub fn nvim_msg_ext_set_kind_excmd(kind: *const c_char);
+    /// msg_prt_line: print one line (direct C call)
+    pub fn msg_prt_line(s: *const c_char, list: bool);
+    /// message_filtered: check if message is filtered (direct C call)
+    pub fn message_filtered(msg: *const c_char) -> bool;
+    /// msg_ext_set_kind: set kind for extended message (direct C call)
+    pub fn msg_ext_set_kind(kind: *const c_char);
     /// msg_puts_hl wrapper
     pub fn nvim_msg_puts_hl_excmd(s: *const c_char, hl_id: c_int);
+    /// msg_outtrans: display string with translation
+    pub fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     /// Display error message, returns true
     pub fn emsg(s: *const c_char) -> c_int;
+    /// call_shell: execute a shell command
+    pub fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_char) -> c_int;
+    /// ui_cursor_goto: move cursor to position
+    pub fn ui_cursor_goto(new_row: c_int, new_col: c_int);
+    /// win_enter: enter a window
+    pub fn win_enter(wp: *mut WinHandle, undo_sync: bool);
+    /// win_split: split current window
+    pub fn win_split(size: c_int, flags: c_int) -> c_int;
+    /// vim_strsave_escaped: escape characters in string
+    pub fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char;
+    /// AppendToRedobuff: append string to redo buffer
+    pub fn AppendToRedobuff(s: *const c_char);
+    /// AppendToRedobuffLit: append literal string to redo buffer
+    pub fn AppendToRedobuffLit(str_: *const c_char, len: c_int);
+    /// buflist_new: create or find a buffer in the buffer list
+    pub fn buflist_new(
+        ffname_arg: *mut c_char,
+        sfname_arg: *mut c_char,
+        lnum: c_int,
+        flags: c_int,
+    ) -> *mut BufHandle;
 
     // ex_copy accessors and functions
     /// Check if CMOD_LOCKMARKS is set in cmdmod
@@ -656,6 +679,20 @@ extern "C" {
     pub fn ml_get_len(lnum: c_int) -> c_int;
     /// Append a line after lnum
     pub fn ml_append(lnum: c_int, line: *const c_char, len: c_int, newfile: c_int) -> c_int;
+    /// ml_get_buf: get a line from a specific buffer
+    pub fn ml_get_buf(buf: *mut BufHandle, lnum: c_int) -> *mut c_char;
+    /// ml_get_buf_len: get length of a line from a specific buffer
+    pub fn ml_get_buf_len(buf: *mut BufHandle, lnum: c_int) -> c_int;
+    /// ml_append_buf: append a line to a specific buffer
+    pub fn ml_append_buf(
+        buf: *mut BufHandle,
+        lnum: c_int,
+        line: *mut c_char,
+        len: c_int,
+        newfile: bool,
+    ) -> c_int;
+    /// ml_delete_flags: delete a line with flags
+    pub fn ml_delete_flags(lnum: c_int, flags: c_int) -> c_int;
     /// Copy a string with known length
     pub fn xstrnsave(string: *const c_char, len: usize) -> *mut c_char;
     /// Free memory
@@ -900,8 +937,14 @@ extern "C" {
     pub fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
     /// Set eap->flags.
     pub fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
-    /// do_join wrapper (count lines, insert_space=false, save_undo=true, use_fo=false, setmark=true).
-    pub fn nvim_excmds_do_join(count: c_int) -> c_int;
+    /// do_join: join count lines (direct C call)
+    pub fn do_join(
+        count: usize,
+        insert_space: bool,
+        save_undo: bool,
+        use_formatoptions: bool,
+        setmark: bool,
+    ) -> c_int;
     /// Get sub_nsubs global.
     pub fn nvim_excmds_get_sub_nsubs() -> c_int;
     /// Set sub_nsubs global.
@@ -912,12 +955,18 @@ extern "C" {
     pub fn nvim_excmds_set_sub_nlines(val: c_int);
     /// Format and display the substitution count message (NGETTEXT in C).
     pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
-    /// Call ex_may_print(eap).
-    pub fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
-    /// Call save_re_pat(idx, pat, patlen, magic).
-    pub fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
-    /// Call add_to_history(HIST_SEARCH, pat, patlen, true, NUL).
-    pub fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
+    /// Call nvim_docmd_ex_may_print_impl(eap) -- implemented in Rust (ex_docmd crate).
+    pub fn nvim_docmd_ex_may_print_impl(eap: *mut ExArgHandle);
+    /// save_re_pat: save regexp pattern (direct C call)
+    pub fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: usize, magic: c_int);
+    /// add_to_history: add entry to history (direct C call)
+    pub fn add_to_history(
+        histype: c_int,
+        new_entry: *const c_char,
+        new_entrylen: usize,
+        in_map: bool,
+        sep: c_int,
+    );
 }
 
 // =============================================================================

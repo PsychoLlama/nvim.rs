@@ -419,20 +419,20 @@ extern "C" {
     // do_shell FFI
     fn nvim_excmds_any_buf_changed() -> c_int;
     fn nvim_excmds_emsg_by_id(id: c_int);
-    fn nvim_excmds_call_shell(cmd: *mut c_char, flags: c_int);
+    fn call_shell(cmd: *mut c_char, opts: c_int, extra_shell_arg: *mut c_char) -> c_int;
     fn nvim_excmds_apply_autocmds_shellcmdpost();
 
     // do_bang FFI
     fn rs_check_secure() -> c_int;
     fn autowrite_all();
-    fn nvim_excmds_vim_strsave_escaped(s: *const c_char, chars: *const c_char) -> *mut c_char;
-    fn nvim_excmds_append_to_redobuff_lit(s: *const c_char, len: c_int);
-    fn nvim_excmds_append_to_redobuff(s: *const c_char);
-    fn nvim_excmds_ui_cursor_goto(row: c_int, col: c_int);
+    fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char;
+    fn AppendToRedobuffLit(str_: *const c_char, len: c_int);
+    fn AppendToRedobuff(s: *const c_char);
+    fn ui_cursor_goto(new_row: c_int, new_col: c_int);
     fn nvim_excmds_apply_autocmds_shellfilterpost();
     fn msg_start();
     fn msg_putchar(c: c_int);
-    fn nvim_excmds_msg_outtrans(s: *const c_char);
+    fn msg_outtrans(str_: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn msg_clr_eos();
     pub fn xmalloc(size: usize) -> *mut std::ffi::c_void;
     pub fn xfree(ptr: *mut std::ffi::c_void);
@@ -785,8 +785,8 @@ pub unsafe extern "C" fn rs_do_shell(cmd: *mut c_char, flags: c_int) {
     // "delete line 1" command to the terminal.
     let row = crate::msg_row;
     let col = crate::msg_col;
-    nvim_excmds_ui_cursor_goto(row, col);
-    nvim_excmds_call_shell(cmd, flags);
+    ui_cursor_goto(row, col);
+    call_shell(cmd, flags, std::ptr::null_mut());
 
     if crate::msg_silent == 0 {
         crate::msg_didout = true;
@@ -949,10 +949,10 @@ pub unsafe extern "C" fn rs_do_bang(
         };
 
         // Escape % and # in the command for redo buffer
-        let escaped = nvim_excmds_vim_strsave_escaped(prevcmd_ptr, c"%#".as_ptr());
-        nvim_excmds_append_to_redobuff_lit(escaped, -1);
+        let escaped = vim_strsave_escaped(prevcmd_ptr, c"%#".as_ptr());
+        AppendToRedobuffLit(escaped, -1);
         xfree(escaped as *mut std::ffi::c_void);
-        nvim_excmds_append_to_redobuff(c"\n".as_ptr());
+        AppendToRedobuff(c"\n".as_ptr());
         crate::bangredo = false;
     }
 
@@ -992,11 +992,11 @@ pub unsafe extern "C" fn rs_do_bang(
         nvim_excmds_emsg_by_id(10); // msg_ext_set_kind_shell_cmd
         msg_putchar(b':' as c_int);
         msg_putchar(b'!' as c_int);
-        nvim_excmds_msg_outtrans(newcmd);
+        msg_outtrans(newcmd, 0, false);
         msg_clr_eos();
         let row = crate::msg_row;
         let col = crate::msg_col;
-        nvim_excmds_ui_cursor_goto(row, col);
+        ui_cursor_goto(row, col);
 
         rs_do_shell(newcmd, 0);
     } else {
@@ -1049,7 +1049,6 @@ extern "C" {
         line2: c_int,
         eap: *mut ExArgHandle,
     ) -> c_int;
-    fn nvim_excmds_call_shell_filter(cmd: *const c_char, flags: c_int);
     fn del_lines(count: c_int, undo: c_int) -> c_int;
     fn write_lnum_adjust(offset: c_int);
     fn nvim_excmds_redraw_curbuf_later_valid();
@@ -1234,7 +1233,7 @@ pub unsafe extern "C" fn rs_do_filter(
 
     // Create shell command
     let cmd_buf = rs_make_filter_cmd(cmd, itmp, otmp, c_int::from(do_in));
-    nvim_excmds_ui_cursor_goto(Rows - 1, 0);
+    ui_cursor_goto(Rows - 1, 0);
 
     if do_out {
         if u_save(line2, line2 + 1) == 0 {
@@ -1260,7 +1259,11 @@ pub unsafe extern "C" fn rs_do_filter(
     let mut read_linecount = nvim_excmds_curbuf_ml_line_count();
 
     // Run the shell command
-    nvim_excmds_call_shell_filter(cmd_buf, k_shell_opt_filter | shell_flags);
+    call_shell(
+        cmd_buf as *mut c_char,
+        k_shell_opt_filter | shell_flags,
+        std::ptr::null_mut(),
+    );
     xfree(cmd_buf as *mut std::ffi::c_void);
 
     crate::did_check_timestamps = false;

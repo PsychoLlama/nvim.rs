@@ -1007,15 +1007,14 @@ const HLF_QFL: c_int = 58;
 
 extern "C" {
     // Phase 3: message output accessors
-    // nvim_message_filtered is defined in ex_cmds_shim.c, returns int (non-zero = filtered)
-    fn nvim_message_filtered(str: *const c_char) -> c_int;
+    fn message_filtered(str: *const c_char) -> bool;
     // Direct message output (Phase 14: replacing nvim_qf_list_entry_output)
     fn msg_putchar(c: c_int);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
     fn msg_puts_hl(s: *const c_char, attr: c_int, right: bool);
     fn msg_puts(s: *const c_char);
     // (nvim_msg_outtrans_attr, nvim_msg_puts_plain deleted: use msg_outtrans/msg_puts directly)
-    fn nvim_msg_prt_line(s: *const c_char, list: c_int);
+    fn msg_prt_line(s: *const c_char, list: bool);
     // nvim_hlf_qfl deleted: use HLF_QFL constant directly
 
     // Phase 3: qfline field accessors (already in lib.rs, re-declare locally)
@@ -1128,18 +1127,18 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     // If all checks return non-zero, the entry is filtered OUT (return early).
     let mut filter_entry = true;
     if module_nonempty {
-        filter_entry &= nvim_message_filtered(module) != 0;
+        filter_entry &= message_filtered(module);
     }
     if filter_entry && !display_name.is_null() && !module_nonempty {
-        filter_entry &= nvim_message_filtered(display_name) != 0;
+        filter_entry &= message_filtered(display_name);
     }
     let pattern = qfline_get_pattern_p3(qfp);
     if filter_entry && !pattern.is_null() {
-        filter_entry &= nvim_message_filtered(pattern) != 0;
+        filter_entry &= message_filtered(pattern);
     }
     let text = qfline_get_text_p3(qfp);
     if filter_entry {
-        filter_entry &= nvim_message_filtered(text) != 0;
+        filter_entry &= message_filtered(text);
     }
     if filter_entry {
         return;
@@ -1272,7 +1271,7 @@ pub unsafe extern "C" fn rs_qf_list_entry(
     msg_puts(c" ".as_ptr());
 
     // body_buf is already NUL-terminated at body_len (or just NUL if empty)
-    nvim_msg_prt_line(body_buf.as_ptr().cast::<c_char>(), 0);
+    msg_prt_line(body_buf.as_ptr().cast::<c_char>(), false);
 }
 
 // =============================================================================

@@ -47,6 +47,8 @@ const RE_LAST: c_int = 2;
 
 /// Add search pattern to history (SEARCH_HIS from search.h, value 0x20)
 const SEARCH_HIS: c_int = 0x20;
+/// History type: HIST_SEARCH = 1 (search command history)
+const HIST_SEARCH: c_int = 1;
 
 /// vim_regsub_multi flags (from regexp_defs.h)
 const REGSUB_COPY: c_int = 1;
@@ -85,8 +87,8 @@ extern "C" {
     fn nvim_excmds_get_p_icm_first() -> c_int;
     fn buflist_findnr(nr: c_int) -> *mut crate::BufHandle;
     fn buf_ensure_loaded(buf: *mut crate::BufHandle);
-    fn nvim_excmds_ml_get_buf(buf: *mut crate::BufHandle, lnum: c_int) -> *const c_char;
-    fn nvim_excmds_ml_get_buf_len(buf: *mut crate::BufHandle, lnum: c_int) -> c_int;
+    fn ml_get_buf(buf: *mut crate::BufHandle, lnum: c_int) -> *mut c_char;
+    fn ml_get_buf_len(buf: *mut crate::BufHandle, lnum: c_int) -> c_int;
     fn nvim_excmds_ml_replace_buf(
         buf: *mut crate::BufHandle,
         lnum: c_int,
@@ -94,13 +96,13 @@ extern "C" {
         copy: bool,
         keep_dirty: bool,
     );
-    fn nvim_excmds_ml_append_buf(
+    fn ml_append_buf(
         buf: *mut crate::BufHandle,
         lnum: c_int,
         line: *mut c_char,
         len: c_int,
         newfile: bool,
-    );
+    ) -> c_int;
     fn nvim_excmds_bufhl_add_hl_pos_offset(
         buf: *mut crate::BufHandle,
         ns_id: c_int,
@@ -133,11 +135,23 @@ extern "C" {
     fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
-    fn nvim_excmds_do_join(count: c_int) -> c_int;
+    fn do_join(
+        count: usize,
+        insert_space: bool,
+        save_undo: bool,
+        use_formatoptions: bool,
+        setmark: bool,
+    ) -> c_int;
     fn aborting() -> c_int;
-    fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
-    fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
-    fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
+    fn nvim_docmd_ex_may_print_impl(eap: *mut ExArgHandle);
+    fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: usize, magic: c_int);
+    fn add_to_history(
+        histype: c_int,
+        new_entry: *const c_char,
+        new_entrylen: usize,
+        in_map: bool,
+        sep: c_int,
+    );
     fn rs_magic_isset() -> c_int;
 
     // do_sub_msg FFI -- control flow in Rust, formatting/messaging in C
@@ -586,18 +600,18 @@ pub unsafe extern "C" fn rs_sub_joining_lines(
     let joined_lines_count = (line2 - line1 + 1) + if line2 < ml_line_count { 1 } else { 0 };
 
     if joined_lines_count > 1 {
-        nvim_excmds_do_join(joined_lines_count);
+        do_join(joined_lines_count as usize, false, true, false, true);
         crate::sub_nsubs = joined_lines_count - 1;
         crate::sub_nlines = 1;
         rs_do_sub_msg(false);
-        nvim_excmds_ex_may_print(eap);
+        nvim_docmd_ex_may_print_impl(eap);
     }
 
     if save != 0 {
         if keeppatterns == 0 {
-            nvim_excmds_save_re_pat(RE_SUBST, pat, patlen, rs_magic_isset());
+            save_re_pat(RE_SUBST, pat as *mut c_char, patlen, rs_magic_isset());
         }
-        nvim_excmds_add_to_hist_search(pat, patlen);
+        add_to_history(HIST_SEARCH, pat, patlen, true, 0);
     }
 
     1 // true: substitute was handled as join
@@ -917,8 +931,8 @@ pub unsafe extern "C" fn rs_show_sub(
                     // Need enough for "|col_width| \0"
                     line_size = (col_width as usize) + 4;
                 } else {
-                    line_ptr = nvim_excmds_ml_get_buf(orig_buf, next_linenr);
-                    let raw_len = nvim_excmds_ml_get_buf_len(orig_buf, next_linenr);
+                    line_ptr = ml_get_buf(orig_buf, next_linenr);
+                    let raw_len = ml_get_buf_len(orig_buf, next_linenr);
                     line_size = raw_len as usize + col_width as usize + 2;
                 }
 
@@ -954,7 +968,7 @@ pub unsafe extern "C" fn rs_show_sub(
                 if linenr_preview == 0 {
                     nvim_excmds_ml_replace_buf(cmdpreview_buf, 1, str_buf, true, false);
                 } else {
-                    nvim_excmds_ml_append_buf(
+                    ml_append_buf(
                         cmdpreview_buf,
                         linenr_preview,
                         str_buf,

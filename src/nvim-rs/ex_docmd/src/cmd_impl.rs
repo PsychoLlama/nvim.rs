@@ -2023,8 +2023,8 @@ extern "C" {
     fn nvim_docmd_win_set_alt_fnum(wp: WinHandle, fnum: c_int);
     fn nvim_docmd_curbuf_b_fnum() -> c_int;
 
-    // win_split
-    fn nvim_excmds_win_split(size: c_int, flags: c_int) -> c_int;
+    // win_split: returns OK (1) on success, FAIL (0) on failure
+    fn win_split(size: c_int, flags: c_int) -> c_int;
 
     // eap->cmd[0] accessor
     fn nvim_eap_get_cmd(eap: ExArgHandle) -> *mut c_char;
@@ -2143,7 +2143,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
         } else {
             0
         };
-        if nvim_excmds_win_split(size, flags) != FAIL {
+        if win_split(size, flags) != FAIL {
             // Reset 'scrollbind' when editing another file, but keep it when
             // doing ":split" without arguments.
             let arg2 = nvim_eap_get_arg(eap);

@@ -4,6 +4,9 @@
 
 use std::ffi::c_int;
 
+/// C FAIL constant (0)
+const FAIL: c_int = 0;
+
 // =============================================================================
 // Split Direction
 // =============================================================================
@@ -361,8 +364,8 @@ extern "C" {
     fn nvim_excmds_curwin_set_wfh(val: c_int);
     fn nvim_excmds_curwin_set_diff(val: c_int);
     fn nvim_excmds_find_preview_win() -> *mut std::ffi::c_void;
-    fn nvim_excmds_win_enter(wp: *mut std::ffi::c_void, undo_sync: c_int);
-    fn nvim_excmds_win_split(size: c_int, flags: c_int) -> c_int;
+    fn win_enter(wp: *mut crate::WinHandle, undo_sync: bool);
+    fn win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_excmds_reset_binding_curwin();
     fn nvim_excmds_set_foldcolumn_zero();
 }
@@ -388,7 +391,7 @@ pub unsafe extern "C" fn rs_prepare_tagpreview(undo_sync: c_int) -> bool {
     // If a preview window already exists in the tab, enter it.
     let pvw = nvim_excmds_find_preview_win();
     if !pvw.is_null() {
-        nvim_excmds_win_enter(pvw, undo_sync);
+        win_enter(pvw as *mut crate::WinHandle, undo_sync != 0);
         return false;
     }
 
@@ -399,7 +402,7 @@ pub unsafe extern "C" fn rs_prepare_tagpreview(undo_sync: c_int) -> bool {
     } else {
         0
     };
-    if nvim_excmds_win_split(split_size, 0) < 0 {
+    if win_split(split_size, 0) == FAIL {
         return false;
     }
 

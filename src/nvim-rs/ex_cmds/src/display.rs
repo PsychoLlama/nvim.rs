@@ -791,7 +791,7 @@ const HLF_N_PLUS_1: c_int = 13;
 #[no_mangle]
 pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int, list: c_int) {
     use crate::{
-        ml_get, nvim_curwin_get_w_p_nu, nvim_msg_prt_line, nvim_msg_puts_hl_excmd,
+        ml_get, msg_prt_line, nvim_curwin_get_w_p_nu, nvim_msg_puts_hl_excmd,
         nvim_number_width_curwin,
     };
 
@@ -805,7 +805,7 @@ pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int,
         numbuf[pos] = 0;
         nvim_msg_puts_hl_excmd(numbuf.as_ptr().cast(), HLF_N_PLUS_1);
     }
-    nvim_msg_prt_line(ml_get(lnum), list);
+    msg_prt_line(ml_get(lnum), list != 0);
 }
 
 /// Print a text line. Also in silent mode ("ex -s").
@@ -815,12 +815,12 @@ pub unsafe extern "C" fn rs_print_line_no_prefix(lnum: c_int, use_number: c_int,
 #[no_mangle]
 pub unsafe extern "C" fn rs_print_line(lnum: c_int, use_number: c_int, list: c_int, first: c_int) {
     use crate::{
-        info_message, ml_get, msg_putchar, msg_start, nvim_message_filtered,
-        nvim_msg_ext_set_kind_excmd, silent_mode,
+        info_message, message_filtered, ml_get, msg_ext_set_kind, msg_putchar, msg_start,
+        silent_mode,
     };
 
     // apply :filter /pat/
-    if nvim_message_filtered(ml_get(lnum)) != 0 {
+    if message_filtered(ml_get(lnum)) {
         return;
     }
 
@@ -829,7 +829,7 @@ pub unsafe extern "C" fn rs_print_line(lnum: c_int, use_number: c_int, list: c_i
     info_message = true; // use stdout, not stderr
     if first != 0 {
         msg_start();
-        nvim_msg_ext_set_kind_excmd(c"list_cmd".as_ptr());
+        msg_ext_set_kind(c"list_cmd".as_ptr());
     } else if !save_silent {
         msg_putchar(b'\n' as c_int); // don't want trailing newline with regular messaging
     }
@@ -862,8 +862,8 @@ extern "C" {
     fn nvim_excmds_oldfiles_find_str(idx: c_int) -> *const std::ffi::c_char;
     fn msg_start();
     fn msg_outnum(nr: c_int);
-    fn nvim_message_filtered(msg: *const std::ffi::c_char) -> c_int;
-    fn nvim_excmds_msg_outtrans(s: *const std::ffi::c_char);
+    fn message_filtered(msg: *const std::ffi::c_char) -> bool;
+    fn msg_outtrans(str_: *const std::ffi::c_char, hl_id: c_int, hist: bool) -> c_int;
     fn msg_clr_eos();
     fn msg_putchar(c: c_int);
     fn os_breakcheck();
@@ -901,12 +901,12 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
             continue;
         }
         let nr = i + 1;
-        if nvim_message_filtered(fname_ptr) == 0 {
+        if !message_filtered(fname_ptr) {
             msg_outnum(nr);
             // Print ": " as individual chars
             msg_putchar(b':' as c_int);
             msg_putchar(b' ' as c_int);
-            nvim_excmds_msg_outtrans(fname_ptr);
+            msg_outtrans(fname_ptr, 0, false);
             msg_clr_eos();
             msg_putchar(b'\n' as c_int);
             os_breakcheck();

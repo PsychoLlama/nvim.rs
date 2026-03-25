@@ -199,9 +199,6 @@ void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist
 // print_line accessors
 int nvim_curwin_get_w_p_nu(void) { return curwin->w_p_nu; }
 int nvim_number_width_curwin(void) { return number_width(curwin); }
-void nvim_msg_prt_line(const char *s, int list) { msg_prt_line((char *)s, list != 0); }
-int nvim_message_filtered(const char *msg) { return message_filtered((char *)msg); }
-void nvim_msg_ext_set_kind_excmd(const char *kind) { msg_ext_set_kind(kind); }
 void nvim_msg_puts_hl_excmd(const char *s, int hl_id) { msg_puts_hl(s, hl_id, false); }
 
 // --- Sort/uniq accessor functions for Rust FFI ---
@@ -305,10 +302,6 @@ int64_t nvim_excmds_ml_find_line_or_offset(linenr_T lnum)
   return (int64_t)rs_ml_find_line_or_offset(curbuf, lnum, NULL, true);
 }
 
-int nvim_excmds_ml_delete_flags(linenr_T lnum, int flags)
-{
-  return ml_delete_flags(lnum, flags);
-}
 
 void nvim_excmds_extmark_move_region(int start_row, int start_col, int64_t start_byte,
                                       int extent_row, int extent_col, int64_t extent_byte,
@@ -371,25 +364,7 @@ char *nvim_excmds_get_arg_mut(exarg_T *eap) { return eap->arg; }
 int nvim_exarg_get_skip(exarg_T *eap) { return eap->skip; }
 // Set eap->flags
 void nvim_exarg_set_flags(exarg_T *eap, int flags) { eap->flags = flags; }
-// do_join wrapper (count, insert_space=false, save_undo=true, use_fo=false, setmark=true)
-int nvim_excmds_do_join(int count)
-{
-  return do_join((size_t)count, false, true, false, true);
-}
 // nvim_excmds_do_sub_msg is defined below (near do_sub_msg) as the full implementation.
-// Call ex_may_print (nvim_docmd_ex_may_print_impl is now implemented in Rust)
-extern void nvim_docmd_ex_may_print_impl(exarg_T *eap);
-void nvim_excmds_ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
-// Call save_re_pat
-void nvim_excmds_save_re_pat(int idx, const char *pat, size_t patlen, int magic)
-{
-  save_re_pat(idx, (char *)pat, patlen, magic);
-}
-// Call add_to_history(HIST_SEARCH, ...)
-void nvim_excmds_add_to_hist_search(const char *pat, size_t patlen)
-{
-  add_to_history(HIST_SEARCH, (char *)pat, patlen, true, NUL);
-}
 
 // --- make_filter_cmd FFI accessors ---
 // Get shell name tail (e.g., "bash" from "/bin/bash")
@@ -547,16 +522,6 @@ win_T *nvim_excmds_find_preview_win(void)
   return NULL;
 }
 
-void nvim_excmds_win_enter(win_T *wp, int undo_sync)
-{
-  win_enter(wp, (bool)undo_sync);
-}
-
-// Returns 0 on success (OK), -1 on failure (FAIL)
-int nvim_excmds_win_split(int size, int flags)
-{
-  return win_split(size, flags) == FAIL ? -1 : 0;
-}
 
 void nvim_excmds_reset_binding_curwin(void)
 {
@@ -585,7 +550,7 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
   return tv_list_find_str(l, idx);
 }
 
-void nvim_excmds_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
+
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
 int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
@@ -603,16 +568,7 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 // --- do_bang FFI accessors ---
 
 
-char *nvim_excmds_vim_strsave_escaped(const char *s, const char *chars)
-{
-  return vim_strsave_escaped((char *)s, (char *)chars);
-}
-void nvim_excmds_append_to_redobuff_lit(const char *s, int len)
-{
-  AppendToRedobuffLit((char *)s, len);
-}
-void nvim_excmds_append_to_redobuff(const char *s) { AppendToRedobuff((char *)s); }
-void nvim_excmds_ui_cursor_goto(int row, int col) { ui_cursor_goto(row, col); }
+
 void nvim_excmds_apply_autocmds_shellfilterpost(void)
 {
   apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, false, curbuf);
@@ -628,10 +584,7 @@ int nvim_excmds_any_buf_changed(void)
   }
   return 0;
 }
-void nvim_excmds_call_shell(char *cmd, int flags)
-{
-  call_shell(cmd, flags, NULL);
-}
+
 void nvim_excmds_apply_autocmds_shellcmdpost(void)
 {
   apply_autocmds(EVENT_SHELLCMDPOST, NULL, NULL, false, curbuf);
@@ -664,26 +617,13 @@ void nvim_excmds_restore_shortmess(char *saved)
 }
 /// Return first char of p_icm option.
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
-/// Wrapper for ml_get_buf.
-const char *nvim_excmds_ml_get_buf(buf_T *buf, linenr_T lnum)
-{
-  return ml_get_buf(buf, lnum);
-}
-/// Wrapper for ml_get_buf_len.
-int nvim_excmds_ml_get_buf_len(buf_T *buf, linenr_T lnum)
-{
-  return ml_get_buf_len(buf, lnum);
-}
+
 /// Wrapper for ml_replace_buf.
 void nvim_excmds_ml_replace_buf(buf_T *buf, linenr_T lnum, char *line, bool copy, bool keep_dirty)
 {
   ml_replace_buf(buf, lnum, line, copy, keep_dirty);
 }
-/// Wrapper for ml_append_buf.
-void nvim_excmds_ml_append_buf(buf_T *buf, linenr_T lnum, char *line, int len, bool newfile)
-{
-  ml_append_buf(buf, lnum, line, (colnr_T)len, newfile);
-}
+
 /// Wrapper for bufhl_add_hl_pos_offset.
 void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id,
                                           linenr_T start_lnum, colnr_T start_col,
@@ -874,11 +814,6 @@ void nvim_excmds_curbuf_set_bf_notedited(void)
   curbuf->b_flags |= BF_NOTEDITED;
 }
 
-/// Call buflist_new(fname, xfname, lnum, 0). Returns opaque buf pointer (may be NULL).
-void *nvim_excmds_buflist_new_rename(const char *fname, const char *xfname, int lnum)
-{
-  return (void *)buflist_new((char *)fname, (char *)xfname, (linenr_T)lnum, 0);
-}
 
 /// Get b_fnum from an opaque buf pointer.
 int nvim_excmds_buf_get_fnum(void *buf) { return ((buf_T *)buf)->b_fnum; }
@@ -1018,11 +953,6 @@ int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)
                   eap, READ_FILTER, false) == OK ? 1 : 0;
 }
 
-/// Call call_shell for filter command.
-void nvim_excmds_call_shell_filter(const char *cmd, int flags)
-{
-  call_shell((char *)cmd, flags, NULL);
-}
 
 /// Wrapper for redraw_curbuf_later(UPD_VALID).
 void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }

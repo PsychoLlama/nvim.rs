@@ -715,13 +715,12 @@ const KEXTMARK_UNDO_MOVE: c_int = 1;
 #[no_mangle]
 pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int) -> c_int {
     use crate::{
-        changed_lines, ml_append, ml_get, ml_get_len, nvim_cmdmod_has_lockmarks,
+        changed_lines, ml_append, ml_delete_flags, ml_get, ml_get_len, nvim_cmdmod_has_lockmarks,
         nvim_curbuf_get_b_ml_ml_line_count, nvim_curbuf_set_op_end, nvim_curbuf_set_op_start,
         nvim_curwin_set_cursor_lnum, nvim_excmds_buf_updates_send_changes, nvim_excmds_emsg_e134,
         nvim_excmds_extmark_move_region, nvim_excmds_fold_move_range_all_wins,
-        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_delete_flags,
-        nvim_excmds_ml_find_line_or_offset, nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save,
-        xfree, xstrnsave,
+        nvim_excmds_mark_adjust_nofold, nvim_excmds_ml_find_line_or_offset,
+        nvim_excmds_smsg_lines_moved, nvim_get_curbuf, u_save, xfree, xstrnsave,
     };
 
     if dest >= line1 && dest < line2 {
@@ -824,7 +823,7 @@ pub unsafe extern "C" fn rs_do_move(line1: c_int, line2: c_int, mut dest: c_int)
     }
 
     for _ in line1..=line2 {
-        nvim_excmds_ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
+        ml_delete_flags(line1 + extra, ML_DEL_MESSAGE);
     }
     if crate::global_busy == 0 && i64::from(num_lines) > crate::p_report {
         nvim_excmds_smsg_lines_moved(i64::from(num_lines));

@@ -356,12 +356,13 @@ extern "C" {
     fn nvim_excmds_curbuf_clear_filenames();
     fn nvim_excmds_setfname(name: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_set_bf_notedited();
-    fn nvim_excmds_buflist_new_rename(
-        fname: *const c_char,
-        xfname: *const c_char,
+    fn buflist_new(
+        ffname_arg: *mut c_char,
+        sfname_arg: *mut c_char,
         lnum: c_int,
-    ) -> *mut std::ffi::c_void;
-    fn nvim_excmds_buf_get_fnum(buf: *mut std::ffi::c_void) -> c_int;
+        flags: c_int,
+    ) -> *mut crate::BufHandle;
+    fn nvim_excmds_buf_get_fnum(buf: *mut crate::BufHandle) -> c_int;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
     fn do_autochdir();
@@ -424,7 +425,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
     // Make a new unlisted buffer for the old name (becomes alternate file)
     if !xfname.is_null() && *xfname != 0 {
         let lnum = nvim_excmds_curwin_cursor_lnum();
-        let buf = nvim_excmds_buflist_new_rename(fname, xfname, lnum);
+        let buf = buflist_new(fname as *mut c_char, xfname as *mut c_char, lnum, 0);
         if !buf.is_null() && nvim_excmds_cmdmod_has_keepalt() == 0 {
             let fnum = nvim_excmds_buf_get_fnum(buf);
             nvim_excmds_set_curwin_alt_fnum(fnum);

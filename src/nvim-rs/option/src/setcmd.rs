@@ -1217,7 +1217,7 @@ extern "C" {
     fn msg_puts(s: *const c_char);
     fn msg_puts_title(s: *const c_char);
     fn msg_outtrans(s: *const c_char, hl_id: c_int, hist: bool) -> c_int;
-    fn nvim_message_filtered(msg: *const c_char) -> c_int;
+    fn message_filtered(msg: *const c_char) -> bool;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn os_breakcheck();
     static mut msg_col: c_int;
@@ -1351,7 +1351,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
             }
             let fullname = nvim_option_get_fullname(opt_idx);
             // apply :filter /pat/
-            if nvim_message_filtered(fullname) != 0 {
+            if message_filtered(fullname) {
                 continue;
             }
 
