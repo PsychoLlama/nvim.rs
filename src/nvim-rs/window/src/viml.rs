@@ -46,6 +46,28 @@ const VAR_STRING: c_int = 2;
 const K_LIST_LEN_MAY_KNOW: c_int = -2;
 
 // =============================================================================
+// repr(C) typval_T mirror (layout validated by _Static_assert in eval_shim.c)
+// =============================================================================
+
+#[repr(C)]
+union TypvalVval {
+    v_number: i64,
+    v_float: f64,
+    v_string: *mut c_char,
+    v_list: *mut c_void,
+    v_dict: *mut c_void,
+    v_partial: *mut c_void,
+    v_blob: *mut c_void,
+}
+
+#[repr(C)]
+struct TypvalT {
+    v_type: c_int,
+    v_lock: c_int,
+    vval: TypvalVval,
+}
+
+// =============================================================================
 // C extern declarations
 // =============================================================================
 
@@ -78,8 +100,6 @@ extern "C" {
     fn nvim_eval_tv_set_string(tv: TypvalPtr, s: *mut c_char);
     fn nvim_eval_tv_set_type(tv: TypvalPtr, t: c_int);
     fn nvim_eval_tv_get_type(tv: TypvalPtr) -> c_int;
-    fn nvim_eval_tv_get_list(tv: TypvalPtr) -> ListPtr;
-    fn nvim_eval_tv_get_dict(tv: TypvalPtr) -> DictPtr;
     fn nvim_dictitem_get_tv(di: DictItemPtr) -> TypvalPtr;
 
     // window/tabpage accessors
@@ -333,7 +353,7 @@ pub unsafe extern "C" fn rs_f_getwinpos(
 ) {
     unsafe {
         tv_list_alloc_ret(rettv, 2);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
         tv_list_append_number(list, -1);
         tv_list_append_number(list, -1);
     }
@@ -479,7 +499,7 @@ pub unsafe extern "C" fn rs_f_win_screenpos(
 ) {
     unsafe {
         tv_list_alloc_ret(rettv, 2);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
         let wp = find_win_by_nr_or_id(argvars);
         tv_list_append_number(
             list,
@@ -643,7 +663,7 @@ pub unsafe extern "C" fn rs_f_win_id2tabwin(
             std::ptr::addr_of_mut!(winnr),
         );
         tv_list_alloc_ret(rettv, 2);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
         tv_list_append_number(list, i64::from(tabnr));
         tv_list_append_number(list, i64::from(winnr));
     }
@@ -690,7 +710,7 @@ pub unsafe extern "C" fn rs_f_win_findbuf(
 ) {
     unsafe {
         tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
         let tv0 = argvar_at(argvars, 0);
         let bufnr = tv_get_number(tv0) as c_int;
         // FOR_ALL_TAB_WINDOWS equivalent
@@ -841,7 +861,7 @@ pub unsafe extern "C" fn rs_f_gettabinfo(
         };
 
         tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
 
         let mut tpnr: c_int = 0;
         let mut tp = nvim_get_first_tabpage();
@@ -873,7 +893,7 @@ pub unsafe extern "C" fn rs_f_getwininfo(
 ) {
     unsafe {
         tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
-        let list = nvim_eval_tv_get_list(rettv);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
 
         let tv0 = argvar_at(argvars, 0);
         let wparg = if nvim_eval_tv_get_type(tv0) == VAR_UNKNOWN {
@@ -945,7 +965,7 @@ pub unsafe extern "C" fn rs_f_winsaveview(
 ) {
     unsafe {
         tv_dict_alloc_ret(rettv);
-        let dict = nvim_eval_tv_get_dict(rettv);
+        let dict = (*rettv.cast::<TypvalT>()).vval.v_dict;
         let curwin = nvim_get_curwin();
 
         macro_rules! add_nr {
@@ -988,7 +1008,7 @@ pub unsafe extern "C" fn rs_f_winrestview(
         }
 
         let tv0 = argvar_at(argvars, 0);
-        let dict = nvim_eval_tv_get_dict(tv0);
+        let dict = (*tv0.cast::<TypvalT>()).vval.v_dict;
         let curwin = nvim_get_curwin();
 
         /// Look up a dict key and call setter if found.

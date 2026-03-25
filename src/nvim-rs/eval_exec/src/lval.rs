@@ -21,6 +21,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_eval::typval::TypvalT as TypvalTRepr;
+
 use crate::eval::EvalargHandle;
 
 // =============================================================================
@@ -200,9 +202,6 @@ extern "C" {
     // is_luafunc check (from eval crate, via C export)
     fn rs_is_luafunc(pt: *const c_void) -> bool;
 
-    // get partial pointer from typval (tv->vval.v_partial)
-    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
-
     // emsg_severe flag (already exists in message.c with int param)
     static mut emsg_severe: bool;
 
@@ -212,8 +211,7 @@ extern "C" {
     // Typval type query -- eval version (same signature)
     fn nvim_eval_tv_get_type(tv: TypevalHandle) -> c_int;
 
-    // Typval list/blob accessors
-    fn nvim_eval_tv_get_list(tv: TypevalHandle) -> *mut c_void;
+    // Typval blob accessors
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_blob_len(tv: TypevalHandle) -> c_int;
 }
@@ -381,7 +379,7 @@ unsafe fn get_lval_dict_item_impl(
         let di = DictitemHandle((*lp).ll_di);
         let di_tv = nvim_di_get_tv(di);
         nvim_tv_get_type(di_tv) == VAR_PARTIAL_TYPE
-            && rs_is_luafunc(nvim_eval_tv_get_partial(di_tv))
+            && rs_is_luafunc((*di_tv.0.cast::<TypvalTRepr>()).vval.v_partial)
     };
 
     if !nvim_lval_di_is_null(lp as *const c_void)
@@ -642,7 +640,7 @@ unsafe fn get_lval_subscript_impl(
                     // Check rettv type for range
                     if !rettv.is_null() {
                         let rt = nvim_eval_tv_get_type(rettv);
-                        let rv_list = nvim_eval_tv_get_list(rettv);
+                        let rv_list = (*rettv.0.cast::<TypvalTRepr>()).vval.v_list;
                         let rv_blob = nvim_tv_get_blob(rettv);
                         let ok = (rt == VAR_LIST_TYPE && !rv_list.is_null())
                             || (rt == VAR_BLOB_TYPE && !rv_blob.is_null());
@@ -834,7 +832,7 @@ unsafe fn get_lval_impl(
     (*lp).ll_tv = di_tv.0;
 
     if nvim_tv_get_type(tv((*lp).ll_tv)) == VAR_PARTIAL_TYPE
-        && rs_is_luafunc(nvim_eval_tv_get_partial(tv((*lp).ll_tv)))
+        && rs_is_luafunc((*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_partial)
     {
         // For v:lua just return a pointer to the "." after the "v:lua".
         // If the caller is trans_function_name() it will check for a Lua function name.
@@ -906,8 +904,7 @@ extern "C" {
     fn nvim_blob_get_bv_lock(blob: *const c_void) -> c_int;
 
     // typval field accessors
-    fn nvim_tv_set_v_lock(tv: TypevalHandle, lock: c_int);
-    fn nvim_eval_tv_get_dict(tv: TypevalHandle) -> *mut c_void; // dict_T*
+
     fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
     fn nvim_tv_init(tv: TypevalHandle);
     fn nvim_tv_alloc_zero() -> TypevalHandle;
@@ -1074,7 +1071,7 @@ unsafe fn set_var_lval_impl(
         }
         tv_list_assign_range(
             (*lp).ll_list,
-            nvim_eval_tv_get_list(rettv),
+            (*rettv.0.cast::<TypvalTRepr>()).vval.v_list,
             (*lp).ll_n1,
             (*lp).ll_n2,
             (*lp).ll_empty2,
@@ -1104,14 +1101,19 @@ unsafe fn set_var_lval_impl(
                 return;
             }
             let lp_tv_h = tv((*lp).ll_tv);
-            if tv_dict_wrong_func_name(nvim_eval_tv_get_dict(lp_tv_h), rettv, newkey) != 0 {
+            if tv_dict_wrong_func_name(
+                (*lp_tv_h.0.cast::<TypvalTRepr>()).vval.v_dict,
+                rettv,
+                newkey,
+            ) != 0
+            {
                 nvim_tv_free(oldtv);
                 return;
             }
             // Add item to dict
             let di = tv_dict_item_alloc(newkey);
             let lp_tv_h = tv((*lp).ll_tv);
-            if tv_dict_add(nvim_eval_tv_get_dict(lp_tv_h), di) == FAIL {
+            if tv_dict_add((*lp_tv_h.0.cast::<TypvalTRepr>()).vval.v_dict, di) == FAIL {
                 nvim_tv_dict_item_free(di);
                 nvim_tv_free(oldtv);
                 return;
@@ -1140,7 +1142,7 @@ unsafe fn set_var_lval_impl(
                 tv_copy(rettv, lp_tv2);
             } else {
                 nvim_tv_assign_direct(lp_tv2, rettv);
-                nvim_tv_set_v_lock(lp_tv2, nvim_var_unlocked());
+                (*lp_tv2.0.cast::<TypvalTRepr>()).v_lock = nvim_var_unlocked();
                 nvim_tv_init(rettv);
             }
         }
@@ -1212,7 +1214,6 @@ extern "C" {
         deep: bool,
         copy_id: c_int,
     ) -> *mut c_void;
-    fn nvim_tv_set_list(tv: TypevalHandle, list: *mut c_void);
 
     // Dict operations
     fn nvim_dict_get_copyid(dict: *const c_void) -> c_int;
@@ -1225,7 +1226,6 @@ extern "C" {
         deep: bool,
         copy_id: c_int,
     ) -> *mut c_void;
-    fn nvim_tv_set_dict(tv: TypevalHandle, dict: *mut c_void);
 
     // Blob operations
     #[link_name = "tv_blob_copy"]
@@ -1309,7 +1309,7 @@ unsafe fn var_item_copy_impl(
                 tv_copy(from, to);
             } else {
                 nvim_tv_set_type(to, VAR_STRING);
-                nvim_tv_set_v_lock(to, VAR_UNLOCKED);
+                (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
                 let converted = nvim_string_convert(conv, from_str);
                 let s = if converted.is_null() {
                     xstrdup(from_str)
@@ -1321,21 +1321,21 @@ unsafe fn var_item_copy_impl(
         }
         VAR_LIST => {
             nvim_tv_set_type(to, VAR_LIST);
-            nvim_tv_set_v_lock(to, VAR_UNLOCKED);
-            let from_list = nvim_eval_tv_get_list(from);
+            (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
+            let from_list = (*from.0.cast::<TypvalTRepr>()).vval.v_list;
             if from_list.is_null() {
-                nvim_tv_set_list(to, std::ptr::null_mut());
+                (*to.0.cast::<TypvalTRepr>()).vval.v_list = std::ptr::null_mut();
             } else if copy_id != 0 && nvim_tv_list_copyid(from_list) == copy_id {
                 // Use the copy made earlier.
                 let existing_copy = nvim_tv_list_latest_copy(from_list);
                 nvim_tv_list_ref(existing_copy);
-                nvim_tv_set_list(to, existing_copy);
+                (*to.0.cast::<TypvalTRepr>()).vval.v_list = existing_copy;
             } else {
                 let new_list = nvim_tv_list_copy(conv, from_list, deep, copy_id);
-                nvim_tv_set_list(to, new_list);
+                (*to.0.cast::<TypvalTRepr>()).vval.v_list = new_list;
             }
-            let to_list = nvim_eval_tv_get_list(to);
-            if to_list.is_null() && !nvim_eval_tv_get_list(from).is_null() {
+            let to_list = (*to.0.cast::<TypvalTRepr>()).vval.v_list;
+            if to_list.is_null() && !(*from.0.cast::<TypvalTRepr>()).vval.v_list.is_null() {
                 ret = FAIL;
             }
         }
@@ -1345,21 +1345,21 @@ unsafe fn var_item_copy_impl(
         }
         VAR_DICT => {
             nvim_tv_set_type(to, VAR_DICT);
-            nvim_tv_set_v_lock(to, VAR_UNLOCKED);
-            let from_dict = nvim_eval_tv_get_dict(from);
+            (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
+            let from_dict = (*from.0.cast::<TypvalTRepr>()).vval.v_dict;
             if from_dict.is_null() {
-                nvim_tv_set_dict(to, std::ptr::null_mut());
+                (*to.0.cast::<TypvalTRepr>()).vval.v_dict = std::ptr::null_mut();
             } else if copy_id != 0 && nvim_dict_get_copyid(from_dict) == copy_id {
                 // Use the copy made earlier.
                 let existing_copy = nvim_dict_get_copydict(from_dict);
                 nvim_dict_refcount_inc(existing_copy);
-                nvim_tv_set_dict(to, existing_copy);
+                (*to.0.cast::<TypvalTRepr>()).vval.v_dict = existing_copy;
             } else {
                 let new_dict = nvim_tv_dict_copy(conv, from_dict, deep, copy_id);
-                nvim_tv_set_dict(to, new_dict);
+                (*to.0.cast::<TypvalTRepr>()).vval.v_dict = new_dict;
             }
-            let to_dict = nvim_eval_tv_get_dict(to);
-            if to_dict.is_null() && !nvim_eval_tv_get_dict(from).is_null() {
+            let to_dict = (*to.0.cast::<TypvalTRepr>()).vval.v_dict;
+            if to_dict.is_null() && !(*from.0.cast::<TypvalTRepr>()).vval.v_dict.is_null() {
                 ret = FAIL;
             }
         }

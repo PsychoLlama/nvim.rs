@@ -15,6 +15,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use super::typval::TypvalT as TypvalTRepr;
+
 /// VARNUMBER_MAX is INT64_MAX (verified by _Static_assert in eval.c)
 const VARNUMBER_MAX: i64 = i64::MAX;
 
@@ -32,13 +34,12 @@ extern "C" {
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
-    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> *mut c_void; // buf_T*
+    #[link_name = "nvim_buf_get_ml_line_count"]
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
-    fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void; // list_T*
     fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_next(list: *mut c_void, item: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_get_string(item: *mut c_void) -> *const c_char;
@@ -95,7 +96,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
 
     // VAR_NUMBER: treat as buffer-id.
     if vtype == VAR_NUMBER_S {
-        let bufnr = nvim_eval_tv_get_vnumber(tv.cast_const());
+        let bufnr = (*tv.cast::<TypvalTRepr>()).vval.v_number;
         let buf = nvim_buflist_findnr(bufnr as c_int);
         if buf.is_null() {
             crate::errors::semsg_e_nobufnr(bufnr);
@@ -139,7 +140,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     }
 
     // VAR_LIST: iterate items, replacing NL with NUL.
-    let list = nvim_eval_tv_get_list(tv.cast_const());
+    let list = (*tv.cast::<TypvalTRepr>()).vval.v_list;
 
     // First pass: calculate total length.
     let mut item = nvim_list_first_item(list);

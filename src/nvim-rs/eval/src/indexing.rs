@@ -17,6 +17,14 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use super::typval::TypvalT as TypvalTRepr;
+
+/// Inline: get v_list field from typval (replaces nvim_eval_tv_get_list).
+#[inline]
+unsafe fn tv_get_list_field(tv: *const c_void) -> *mut c_void {
+    (*tv.cast::<TypvalTRepr>()).vval.v_list
+}
+
 /// Maximum number of subexpressions in a regexp (from regexp_defs.h)
 const NSUBEXP: usize = 10;
 
@@ -33,6 +41,7 @@ extern "C" {
 
     // Buffer accessors (defined in eval.c)
     fn nvim_eval_buf_ml_valid(buf: BufHandle) -> c_int;
+    #[link_name = "nvim_buf_get_ml_line_count"]
     fn nvim_eval_buf_line_count(buf: BufHandle) -> i32;
     #[link_name = "ml_get_buf"]
     fn nvim_eval_ml_get_buf(buf: BufHandle, lnum: i32) -> *const c_char;
@@ -230,7 +239,6 @@ type ListHandle = *mut c_void;
 extern "C" {
     // Typval field accessors (Phase 3)
     fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
-    fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     fn nvim_tv_list_find_nr(l: ListHandle, n: c_int, error_out: *mut bool) -> i64;
@@ -300,7 +308,7 @@ pub unsafe extern "C" fn rs_var2fpos(
 ) -> bool {
     // Argument can be [lnum, col, coladd].
     if nvim_eval_tv_get_type(tv) == VAR_LIST {
-        let l = nvim_eval_tv_get_list(tv);
+        let l = tv_get_list_field(tv);
         if l.is_null() {
             return false;
         }
@@ -518,7 +526,7 @@ pub unsafe extern "C" fn rs_list2fpos(
     if nvim_eval_tv_get_type(arg) != VAR_LIST {
         return FAIL;
     }
-    let l = nvim_eval_tv_get_list(arg);
+    let l = tv_get_list_field(arg);
     if l.is_null() {
         return FAIL;
     }

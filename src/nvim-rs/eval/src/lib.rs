@@ -34,6 +34,7 @@ pub mod strutil;
 pub mod system;
 pub mod timer;
 pub mod types;
+pub mod typval;
 
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -314,7 +315,6 @@ pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
 type PartialHandle = *const std::ffi::c_void;
 
 extern "C" {
-    fn nvim_eval_partial_get_name(pt: *mut std::ffi::c_void) -> *mut c_char;
     fn nvim_partial_get_pt_func_uf_name(pt: PartialHandle) -> *mut c_char;
 }
 
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn rs_partial_name(pt: PartialHandle) -> *mut c_char {
         return EMPTY_STRING.as_ptr() as *mut c_char;
     }
 
-    let pt_name = nvim_eval_partial_get_name(pt.cast_mut());
+    let pt_name = (*pt.cast::<crate::typval::PartialT>().cast_mut()).pt_name;
     if !pt_name.is_null() {
         return pt_name;
     }

@@ -10,6 +10,8 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
+use nvim_eval::typval::TypvalT as TypvalTRepr;
+
 use crate::funcexe::FuncExeT;
 
 // =============================================================================
@@ -35,7 +37,6 @@ extern "C" {
 
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
-    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
     fn nvim_tv_alloc_zero() -> *mut c_void;
     fn nvim_tv_set_number_zero(tv: *mut c_void);
     fn tv_clear(tv: *mut c_void);
@@ -70,8 +71,6 @@ extern "C" {
     ) -> c_int;
     fn nvim_curwin_get_cursor_lnum() -> i32;
     fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
-    fn nvim_tv_set_vstring_raw(tv: *mut c_void, s: *mut c_char);
-    fn nvim_tv_set_list(tv: *mut c_void, list: *mut c_void);
 
     // ----- string utilities -----
     #[link_name = "strchrsub"]
@@ -230,7 +229,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
     // Check: v_type == VAR_NUMBER && v_number == 2 means "loaded and working"
     let tv_type = unsafe { nvim_tv_get_type(rettv) };
     let ok = if tv_type == VAR_NUMBER {
-        let vnum = unsafe { nvim_eval_tv_get_vnumber(rettv as *const c_void) };
+        let vnum = unsafe { (*rettv.cast::<TypvalTRepr>()).vval.v_number };
         vnum == 2
     } else {
         false
@@ -332,9 +331,9 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     unsafe {
         let av1 = argvars.as_mut_ptr().add(16) as *mut c_void;
         nvim_tv_set_type(av0, 2); // VAR_STRING
-        nvim_tv_set_vstring_raw(av0, method as *mut c_char);
+        (*av0.cast::<TypvalTRepr>()).vval.v_string = method as *mut c_char;
         nvim_tv_set_type(av1, 4); // VAR_LIST
-        nvim_tv_set_list(av1, arguments);
+        (*av1.cast::<TypvalTRepr>()).vval.v_list = arguments;
         // Set out_rettv to VAR_UNKNOWN/VAR_UNLOCKED before call
         nvim_tv_set_type(out_rettv, 0); // VAR_UNKNOWN
         call_func(

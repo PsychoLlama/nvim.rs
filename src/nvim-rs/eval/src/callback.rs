@@ -13,34 +13,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-// Re-export CallbackT from eval_exec via FFI -- we reconstruct it here since
-// eval crate doesn't depend on eval_exec.
-//
-// Layout verified by _Static_assert in eval_shim.c:
-//   sizeof(Callback) == 16
-//   offsetof(Callback, data) == 0
-//   offsetof(Callback, type) == 8
-
-/// Union data field of Callback (8 bytes).
-#[repr(C)]
-pub union CallbackData {
-    /// kCallbackFuncref: heap-allocated function name string.
-    pub funcref: *mut c_char,
-    /// kCallbackPartial: pointer to partial_T.
-    pub partial: *mut c_void,
-    /// kCallbackLua: Lua registry reference.
-    pub luaref: c_int,
-}
-
-/// Rust mirror of C `Callback` struct (16 bytes).
-#[repr(C)]
-pub struct CallbackT {
-    /// Union data (funcref / partial / luaref).
-    pub data: CallbackData,
-    /// Which variant is active.
-    pub cb_type: c_int,
-    // 4 bytes trailing padding
-}
+pub use super::typval::{CallbackData, CallbackT};
+use super::typval::{PartialT, TypvalT};
 
 const K_CALLBACK_NONE: c_int = 0;
 const K_CALLBACK_PARTIAL: c_int = 2;
@@ -50,7 +24,7 @@ type TvHandle = *const c_void;
 /// Mutable opaque handle for typval_T struct
 type TvHandleMut = *mut c_void;
 /// Opaque handle for partial_T struct
-type PartialHandle = *mut c_void;
+pub type PartialHandle = *mut c_void;
 /// Opaque handle for dict_T struct
 type DictHandle = *mut c_void;
 
@@ -62,17 +36,7 @@ const VAR_STRING: c_int = 2;
 const VAR_NUMBER: c_int = 1;
 
 extern "C" {
-    // typval field accessors
-    fn nvim_eval_tv_get_type(tv: TvHandle) -> c_int;
     fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut c_char;
-    fn nvim_eval_tv_get_partial(tv: TvHandle) -> PartialHandle;
-    fn nvim_eval_tv_get_vnumber(tv: TvHandle) -> i64;
-
-    // partial field accessors
-    fn nvim_eval_partial_get_dict(pt: PartialHandle) -> DictHandle;
-    fn nvim_eval_partial_get_argc(pt: PartialHandle) -> c_int;
-    fn nvim_eval_partial_get_argv(pt: PartialHandle, idx: c_int) -> TvHandleMut;
-    fn nvim_eval_partial_incref(pt: PartialHandle);
 
     // Already in Rust (cross-crate FFI)
     fn rs_partial_name(pt: PartialHandle) -> *mut c_char;
@@ -103,20 +67,23 @@ static E921_MSG: &[u8] = b"E921: Invalid callback argument\0";
 /// `tv1` and `tv2` must be valid typval pointers with v_type of VAR_FUNC or VAR_PARTIAL.
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -> bool {
+    let tv1_ref = &*tv1.cast::<TypvalT>();
+    let tv2_ref = &*tv2.cast::<TypvalT>();
+
     // empty and NULL function name considered the same
-    let mut s1 = if nvim_eval_tv_get_type(tv1) == VAR_FUNC {
+    let mut s1 = if tv1_ref.v_type == VAR_FUNC {
         nvim_tv_get_vstring(tv1.cast_mut())
     } else {
-        rs_partial_name(nvim_eval_tv_get_partial(tv1))
+        rs_partial_name(tv1_ref.vval.v_partial)
     };
     if !s1.is_null() && *s1 == 0 {
         s1 = std::ptr::null_mut();
     }
 
-    let mut s2 = if nvim_eval_tv_get_type(tv2) == VAR_FUNC {
+    let mut s2 = if tv2_ref.v_type == VAR_FUNC {
         nvim_tv_get_vstring(tv2.cast_mut())
     } else {
-        rs_partial_name(nvim_eval_tv_get_partial(tv2))
+        rs_partial_name(tv2_ref.vval.v_partial)
     };
     if !s2.is_null() && *s2 == 0 {
         s2 = std::ptr::null_mut();
@@ -131,15 +98,15 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
     }
 
     // empty dict and NULL dict is different
-    let d1 = if nvim_eval_tv_get_type(tv1) == VAR_FUNC {
+    let d1 = if tv1_ref.v_type == VAR_FUNC {
         std::ptr::null_mut()
     } else {
-        nvim_eval_partial_get_dict(nvim_eval_tv_get_partial(tv1))
+        (*tv1_ref.vval.v_partial.cast::<PartialT>()).pt_dict
     };
-    let d2 = if nvim_eval_tv_get_type(tv2) == VAR_FUNC {
+    let d2 = if tv2_ref.v_type == VAR_FUNC {
         std::ptr::null_mut()
     } else {
-        nvim_eval_partial_get_dict(nvim_eval_tv_get_partial(tv2))
+        (*tv2_ref.vval.v_partial.cast::<PartialT>()).pt_dict
     };
     if d1.is_null() || d2.is_null() {
         if d1 != d2 {
@@ -150,25 +117,39 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
     }
 
     // empty list and no list considered the same
-    let a1 = if nvim_eval_tv_get_type(tv1) == VAR_FUNC {
+    let a1 = if tv1_ref.v_type == VAR_FUNC {
         0
     } else {
-        nvim_eval_partial_get_argc(nvim_eval_tv_get_partial(tv1))
+        (*tv1_ref.vval.v_partial.cast::<PartialT>()).pt_argc
     };
-    let a2 = if nvim_eval_tv_get_type(tv2) == VAR_FUNC {
+    let a2 = if tv2_ref.v_type == VAR_FUNC {
         0
     } else {
-        nvim_eval_partial_get_argc(nvim_eval_tv_get_partial(tv2))
+        (*tv2_ref.vval.v_partial.cast::<PartialT>()).pt_argc
     };
     if a1 != a2 {
         return false;
     }
+    let pt1 = if tv1_ref.v_type == VAR_FUNC {
+        std::ptr::null_mut()
+    } else {
+        tv1_ref.vval.v_partial
+    };
+    let pt2 = if tv2_ref.v_type == VAR_FUNC {
+        std::ptr::null_mut()
+    } else {
+        tv2_ref.vval.v_partial
+    };
     for i in 0..a1 {
-        if !tv_equal(
-            nvim_eval_partial_get_argv(nvim_eval_tv_get_partial(tv1), i),
-            nvim_eval_partial_get_argv(nvim_eval_tv_get_partial(tv2), i),
-            ic,
-        ) {
+        let argv1 = (*pt1.cast::<PartialT>())
+            .pt_argv
+            .add(i as usize)
+            .cast::<c_void>();
+        let argv2 = (*pt2.cast::<PartialT>())
+            .pt_argv
+            .add(i as usize)
+            .cast::<c_void>();
+        if !tv_equal(argv1, argv2, ic) {
             return false;
         }
     }
@@ -185,11 +166,12 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
 /// `arg` must be a valid pointer to a typval_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: TvHandle) -> bool {
-    let v_type = nvim_eval_tv_get_type(arg);
+    let arg_ref = &*arg.cast::<TypvalT>();
+    let v_type = arg_ref.v_type;
 
-    if v_type == VAR_PARTIAL && !nvim_eval_tv_get_partial(arg).is_null() {
-        let pt = nvim_eval_tv_get_partial(arg);
-        nvim_eval_partial_incref(pt);
+    if v_type == VAR_PARTIAL && !arg_ref.vval.v_partial.is_null() {
+        let pt = arg_ref.vval.v_partial;
+        (*pt.cast::<PartialT>()).pt_refcount += 1;
         // cb->data.partial = pt; cb->type = kCallbackPartial;
         (*callback).data.partial = pt;
         (*callback).cb_type = K_CALLBACK_PARTIAL;
@@ -243,7 +225,7 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: 
         return false;
     }
 
-    if v_type == VAR_SPECIAL || (v_type == VAR_NUMBER && nvim_eval_tv_get_vnumber(arg) == 0) {
+    if v_type == VAR_SPECIAL || (v_type == VAR_NUMBER && arg_ref.vval.v_number == 0) {
         // cb->data.funcref = NULL; cb->type = kCallbackNone;
         (*callback).data.funcref = std::ptr::null_mut();
         (*callback).cb_type = K_CALLBACK_NONE;
@@ -267,10 +249,6 @@ extern "C" {
     fn nvim_func_unref(name: *mut c_char);
     #[link_name = "func_ptr_unref"]
     fn nvim_func_ptr_unref(func: *mut c_void);
-    fn nvim_eval_partial_get_name(pt: PartialHandle) -> *mut c_char;
-    fn nvim_eval_partial_get_func(pt: PartialHandle) -> *mut c_void;
-    /// Decrements pt_refcount and returns true if it drops to <= 0.
-    fn nvim_partial_decref_and_check(pt: PartialHandle) -> bool;
 }
 
 /// Free all resources held by a partial_T and the partial itself.
@@ -280,18 +258,16 @@ extern "C" {
 /// # Safety
 /// - `pt` must be a valid non-null pointer to a partial_T.
 unsafe fn partial_free_impl(pt: PartialHandle) {
-    let argc = nvim_eval_partial_get_argc(pt);
-    for i in 0..argc {
-        tv_clear(nvim_eval_partial_get_argv(pt, i));
+    let pt_ref = &mut *pt.cast::<PartialT>();
+    for i in 0..pt_ref.pt_argc {
+        tv_clear(pt_ref.pt_argv.add(i as usize).cast::<c_void>());
     }
     // Free the argv array itself (pt->pt_argv).
-    // nvim_eval_partial_get_argv(pt, 0) == pt->pt_argv + 0 == pt->pt_argv.
-    xfree(nvim_eval_partial_get_argv(pt, 0));
-    nvim_dict_unref(nvim_eval_partial_get_dict(pt));
-    let name = nvim_eval_partial_get_name(pt);
+    xfree(pt_ref.pt_argv.cast::<c_void>());
+    nvim_dict_unref(pt_ref.pt_dict);
+    let name = pt_ref.pt_name;
     if name.is_null() {
-        let func = nvim_eval_partial_get_func(pt);
-        nvim_func_ptr_unref(func);
+        nvim_func_ptr_unref(pt_ref.pt_func);
     } else {
         nvim_func_unref(name);
         xfree(name.cast());
@@ -310,7 +286,10 @@ pub unsafe extern "C" fn rs_partial_unref(pt: PartialHandle) {
     if pt.is_null() {
         return;
     }
-    if nvim_partial_decref_and_check(pt) {
+    // Decrement refcount and free if it drops to <= 0
+    let pt_ref = &mut *pt.cast::<PartialT>();
+    pt_ref.pt_refcount -= 1;
+    if pt_ref.pt_refcount <= 0 {
         partial_free_impl(pt);
     }
 }

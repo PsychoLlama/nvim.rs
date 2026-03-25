@@ -14,6 +14,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use super::typval::TypvalT as TypvalTRepr;
+
 // =============================================================================
 // C Extern Declarations
 // =============================================================================
@@ -22,11 +24,6 @@ extern "C" {
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *const c_void) -> c_int;
     fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
-    #[allow(dead_code)]
-    fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
-    fn nvim_tv_set_vstring_raw(tv: *mut c_void, s: *mut c_char);
-    fn nvim_eval_tv_get_list(tv: *const c_void) -> *mut c_void;
-    fn nvim_tv_set_v_list(tv: *mut c_void, l: *mut c_void);
     #[link_name = "tv_get_string_chk"]
     fn nvim_eval_tv_string_chk(tv: *mut c_void) -> *const c_char;
     #[link_name = "tv_get_string"]
@@ -179,7 +176,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         return ptr::null_mut();
     }
 
-    let cmd_list = nvim_eval_tv_get_list(cmd_tv.cast_const());
+    let cmd_list = (*cmd_tv.cast::<TypvalTRepr>().cast_const()).vval.v_list;
     let list_len = nvim_tv_list_len(cmd_list);
     if list_len == 0 {
         crate::errors::emsg_tv_to_argv_empty();
@@ -265,7 +262,7 @@ unsafe fn build_not_executable_msg(name: *const c_char) -> Vec<u8> {
 unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retlist: bool) {
     // Initialize rettv as VAR_STRING with NULL string
     nvim_tv_set_type(rettv, VAR_STRING);
-    nvim_tv_set_vstring_raw(rettv, ptr::null_mut());
+    (*rettv.cast::<TypvalTRepr>()).vval.v_string = ptr::null_mut();
 
     if rs_check_secure() != 0 {
         return;
@@ -337,7 +334,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
         } else {
             // Empty string
             let empty = nvim_xstrdup(c"".as_ptr());
-            nvim_tv_set_vstring_raw(rettv, empty);
+            (*rettv.cast::<TypvalTRepr>()).vval.v_string = empty;
         }
         return;
     }
@@ -353,14 +350,14 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
         let list = string_to_list(res, nread, keepempty);
         nvim_tv_list_ref(list);
         nvim_tv_set_type(rettv, VAR_LIST);
-        nvim_tv_set_v_list(rettv, list);
+        (*rettv.cast::<TypvalTRepr>()).vval.v_list = list;
         xfree(res.cast::<c_void>());
     } else {
         // Replace NUL bytes with SOH (1) to avoid string truncation
         nvim_eval_memchrsub(res, 0, 1, nread);
         #[cfg(target_os = "windows")]
         translate_crnl(res, nread);
-        nvim_tv_set_vstring_raw(rettv, res);
+        (*rettv.cast::<TypvalTRepr>()).vval.v_string = res;
     }
 }
 

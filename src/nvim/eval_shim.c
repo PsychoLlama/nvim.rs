@@ -155,42 +155,39 @@ _Static_assert(offsetof(evalarg_T, eval_flags) == 0, "evalarg_T eval_flags offse
 _Static_assert(offsetof(evalarg_T, eval_getline) == 8, "evalarg_T eval_getline offset mismatch");
 _Static_assert(offsetof(evalarg_T, eval_cookie) == 16, "evalarg_T eval_cookie offset mismatch");
 _Static_assert(offsetof(evalarg_T, eval_tofree) == 24, "evalarg_T eval_tofree offset mismatch");
+// Phase 2: typval_T field layout assertions (Rust TypvalT must match exactly).
+_Static_assert(offsetof(typval_T, v_type) == 0, "typval_T v_type offset mismatch");
+_Static_assert(offsetof(typval_T, v_lock) == 4, "typval_T v_lock offset mismatch");
+_Static_assert(offsetof(typval_T, vval) == 8, "typval_T vval offset mismatch");
+// Phase 2: partial_T field layout assertions (Rust PartialT must match exactly).
+_Static_assert(offsetof(partial_T, pt_refcount) == 0, "partial_T pt_refcount offset mismatch");
+_Static_assert(offsetof(partial_T, pt_copyID) == 4, "partial_T pt_copyID offset mismatch");
+_Static_assert(offsetof(partial_T, pt_name) == 8, "partial_T pt_name offset mismatch");
+_Static_assert(offsetof(partial_T, pt_func) == 16, "partial_T pt_func offset mismatch");
+_Static_assert(offsetof(partial_T, pt_auto) == 24, "partial_T pt_auto offset mismatch");
+_Static_assert(offsetof(partial_T, pt_argc) == 28, "partial_T pt_argc offset mismatch");
+_Static_assert(offsetof(partial_T, pt_argv) == 32, "partial_T pt_argv offset mismatch");
+_Static_assert(offsetof(partial_T, pt_dict) == 40, "partial_T pt_dict offset mismatch");
+_Static_assert(sizeof(partial_T) == 48, "partial_T size mismatch");
+// Phase 2: dict_T field layout assertions.
+_Static_assert(offsetof(dict_T, dv_lock) == 0, "dict_T dv_lock offset mismatch");
+_Static_assert(offsetof(dict_T, dv_scope) == 4, "dict_T dv_scope offset mismatch");
+_Static_assert(offsetof(dict_T, dv_refcount) == 8, "dict_T dv_refcount offset mismatch");
+_Static_assert(offsetof(dict_T, dv_copyID) == 12, "dict_T dv_copyID offset mismatch");
+_Static_assert(offsetof(dict_T, dv_hashtab) == 16, "dict_T dv_hashtab offset mismatch");
+// Phase 2: list_T field layout assertions.
+_Static_assert(offsetof(list_T, lv_first) == 0, "list_T lv_first offset mismatch");
+_Static_assert(offsetof(list_T, lv_copyID) == 68, "list_T lv_copyID offset mismatch");
+// Phase 2: CallbackReader field layout assertions.
+_Static_assert(offsetof(CallbackReader, cb) == 0, "CallbackReader cb offset mismatch");
+_Static_assert(offsetof(CallbackReader, self) == 16, "CallbackReader self offset mismatch");
+_Static_assert(offsetof(CallbackReader, buffer) == 24, "CallbackReader buffer offset mismatch");
+_Static_assert(offsetof(CallbackReader, buffered) == 49, "CallbackReader buffered offset mismatch");
 
 // C accessors for typval fields (used by Rust callback module)
 int nvim_eval_tv_get_type(const typval_T *tv)
 {
   return (int)tv->v_type;
-}
-
-partial_T *nvim_eval_tv_get_partial(const typval_T *tv)
-{
-  return tv->vval.v_partial;
-}
-
-int64_t nvim_eval_tv_get_vnumber(const typval_T *tv)
-{
-  return tv->vval.v_number;
-}
-
-// C accessors for partial fields
-dict_T *nvim_eval_partial_get_dict(partial_T *pt)
-{
-  return pt->pt_dict;
-}
-
-int nvim_eval_partial_get_argc(partial_T *pt)
-{
-  return pt->pt_argc;
-}
-
-typval_T *nvim_eval_partial_get_argv(partial_T *pt, int idx)
-{
-  return pt->pt_argv + idx;
-}
-
-void nvim_eval_partial_incref(partial_T *pt)
-{
-  pt->pt_refcount++;
 }
 
 // _Static_assert for Callback layout (validated by Rust CallbackT #[repr(C)]):
@@ -202,76 +199,6 @@ _Static_assert(offsetof(Callback, type) == 8, "Callback.type must be at offset 8
 int nvim_p_mfd_get(void)
 {
   return (int)p_mfd;
-}
-
-// C accessors for typval dict/list fields
-dict_T *nvim_eval_tv_get_dict(const typval_T *tv)
-{
-  return tv->vval.v_dict;
-}
-
-list_T *nvim_eval_tv_get_list(const typval_T *tv)
-{
-  return tv->vval.v_list;
-}
-
-// Dict accessors
-int nvim_eval_dict_get_copyid(dict_T *dd)
-{
-  return dd->dv_copyID;
-}
-
-void nvim_eval_dict_set_copyid(dict_T *dd, int copyid)
-{
-  dd->dv_copyID = copyid;
-}
-
-hashtab_T *nvim_eval_dict_get_ht(dict_T *dd)
-{
-  return &dd->dv_hashtab;
-}
-
-// List accessors
-int nvim_eval_list_get_copyid(list_T *ll)
-{
-  return ll->lv_copyID;
-}
-
-void nvim_eval_list_set_copyid(list_T *ll, int copyid)
-{
-  ll->lv_copyID = copyid;
-}
-
-// Partial accessors for GC
-int nvim_eval_partial_get_copyid(partial_T *pt)
-{
-  return pt->pt_copyID;
-}
-
-void nvim_eval_partial_set_copyid(partial_T *pt, int copyid)
-{
-  pt->pt_copyID = copyid;
-}
-
-char *nvim_eval_partial_get_name(partial_T *pt)
-{
-  return pt->pt_name;
-}
-
-ufunc_T *nvim_eval_partial_get_func(partial_T *pt)
-{
-  return pt->pt_func;
-}
-
-// CallbackReader accessors
-Callback *nvim_eval_cbr_get_cb(CallbackReader *reader)
-{
-  return &reader->cb;
-}
-
-dict_T *nvim_eval_cbr_get_self(CallbackReader *reader)
-{
-  return reader->self;
 }
 
 // Hashtab iteration: iterate over entries and call rs_set_ref_in_item for each
@@ -815,12 +742,6 @@ int nvim_tv_is_func(const typval_T *tv)
 // Phase 1: eval_func helpers (accessor functions for rs_eval_func)
 // =============================================================================
 
-/// Set vval.v_string in typval without clearing (raw assignment) - accessor for Rust.
-void nvim_tv_set_vstring_raw(typval_T *tv, char *s)
-{
-  tv->vval.v_string = s;
-}
-
 /// Return address of the tv_empty_string global - accessor for Rust.
 const char *nvim_get_tv_empty_string(void)
 {
@@ -853,12 +774,6 @@ evalarg_T *nvim_get_evalarg_evaluate_ptr(void)
 VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob)
 {
   return blob->bv_lock;
-}
-
-/// Set v_lock in a typval_T - accessor for Rust.
-void nvim_tv_set_v_lock(typval_T *tv, VarLockStatus lock)
-{
-  tv->v_lock = lock;
 }
 
 /// Get value_check_lock condition for set_var_lval - composite accessor for Rust.
@@ -899,12 +814,6 @@ int nvim_var_unlocked(void)
 }
 
 // nvim_value_check_lock moved to typval.c (3-param version)
-
-/// Set vval.v_list in typval_T (raw assignment, does not update type) - accessor for Rust.
-void nvim_tv_set_v_list(typval_T *tv, list_T *l)
-{
-  tv->vval.v_list = l;
-}
 
 /// Allocate and initialize a zero typval_T on the heap - accessor for Rust.
 /// Replaces TV_INITIAL_VALUE macro (which initializes on the stack).
@@ -997,12 +906,6 @@ typval_T *nvim_f_slice_get_arg2(typval_T *argvars)
 // =============================================================================
 // Phase 1 (eval_method): new C accessor/wrapper functions
 // =============================================================================
-
-/// Set tv->vval.v_partial = pt without clearing - accessor for Rust rs_eval_method.
-void nvim_tv_set_partial_raw(typval_T *tv, partial_T *pt)
-{
-  tv->vval.v_partial = pt;
-}
 
 // =============================================================================
 // Phase 1 (lval subscript): composite C accessor/wrapper functions for rs_get_lval_subscript
@@ -1461,22 +1364,10 @@ void nvim_tv_list_ref(list_T *list)
   tv_list_ref(list);
 }
 
-/// Set tv->vval.v_list = list.
-void nvim_tv_set_list(typval_T *tv, list_T *list)
-{
-  tv->vval.v_list = list;
-}
-
 /// Get dict->dv_copydict.
 dict_T *nvim_dict_get_copydict(const dict_T *dict)
 {
   return dict->dv_copydict;
-}
-
-/// Set tv->vval.v_dict = dict.
-void nvim_tv_set_dict(typval_T *tv, dict_T *dict)
-{
-  tv->vval.v_dict = dict;
 }
 
 // =============================================================================
@@ -1996,18 +1887,6 @@ void nvim_set_pressedreturn(int val)
 // =============================================================================
 // Job helper accessors for Rust Phase 2 (eval_shim pass 8)
 // =============================================================================
-
-/// Set the buffered field of a CallbackReader.
-void nvim_cbr_set_buffered(CallbackReader *reader, int buffered)
-{
-  reader->buffered = buffered != 0;
-}
-
-/// Set the self field of a CallbackReader.
-void nvim_cbr_set_self(CallbackReader *reader, dict_T *self)
-{
-  reader->self = self;
-}
 
 // nvim_dict_refcount_inc already defined above.
 

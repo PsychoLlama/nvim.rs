@@ -68,12 +68,27 @@ struct GArray {
 // C extern declarations
 // =============================================================================
 
+use super::typval::TypvalT as TypvalTRepr;
+
+#[inline]
+unsafe fn tv_get_list(tv: *const c_void) -> ListPtr {
+    (*tv.cast::<TypvalTRepr>()).vval.v_list
+}
+
+#[inline]
+unsafe fn tv_get_dict_ptr(tv: *const c_void) -> *mut c_void {
+    (*tv.cast::<TypvalTRepr>()).vval.v_dict
+}
+
+#[inline]
+unsafe fn tv_set_dict_ptr(tv: TypvalPtr, d: *mut c_void) {
+    (*tv.cast::<TypvalTRepr>()).vval.v_dict = d;
+}
+
 extern "C" {
     // typval field accessors (window_shim.c / eval_shim.c)
     fn nvim_eval_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
     fn nvim_eval_tv_get_type(tv: *const c_void) -> c_int;
-    fn nvim_eval_tv_get_list(tv: *const c_void) -> ListPtr;
-    fn nvim_eval_tv_get_dict(tv: *const c_void) -> *mut c_void;
     fn nvim_tv_get_blob(tv: TypvalPtr) -> BlobPtr;
     fn nvim_tv_get_vstring(tv: TypvalPtr) -> *mut c_char;
     fn nvim_eval_tv_set_type(tv: TypvalPtr, t: c_int);
@@ -130,7 +145,6 @@ extern "C" {
     fn tv_list_insert_tv(l: ListPtr, tv: TypvalPtr, item: ListItemPtr);
     fn nvim_list_get_len(l: *const c_void) -> c_int;
     fn nvim_dict_get_lock(d: *const c_void) -> c_int;
-    fn nvim_tv_set_dict(tv: TypvalPtr, d: *mut c_void);
 
     // error strings (errors.h EXTERN const char arrays)
     static e_listdictblobarg: [c_char; 0];
@@ -253,7 +267,7 @@ pub unsafe extern "C" fn rs_f_reverse(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
                 }
             }
             VAR_LIST => {
-                let l = nvim_eval_tv_get_list(tv0);
+                let l = tv_get_list(tv0);
                 let lock = nvim_list_get_lock(l);
                 if !value_check_lock(lock, c"reverse() argument".as_ptr(), TV_TRANSLATE) {
                     tv_list_reverse(l);
@@ -287,13 +301,13 @@ unsafe fn extend_dict_impl(
     unsafe {
         let tv0 = argvar_at(argvars, 0);
         let tv1 = argvar_at(argvars, 1);
-        let mut d1 = nvim_eval_tv_get_dict(tv0);
+        let mut d1 = tv_get_dict_ptr(tv0);
         if d1.is_null() {
             // Locked (fixed) dict -- value_check_lock will emit the error
             value_check_lock(2 /*VAR_FIXED*/, arg_errmsg, TV_TRANSLATE); // always true
             return;
         }
-        let d2 = nvim_eval_tv_get_dict(tv1);
+        let d2 = tv_get_dict_ptr(tv1);
         if d2.is_null() {
             // d2 is NULL: no-op, return copy of d1
             tv_copy(tv0, rettv);
@@ -342,7 +356,7 @@ unsafe fn extend_dict_impl(
         if is_new {
             // Set rettv to the new dict
             nvim_eval_tv_set_type(rettv, VAR_DICT);
-            nvim_tv_set_dict(rettv, d1);
+            tv_set_dict_ptr(rettv, d1);
         } else {
             tv_copy(tv0, rettv);
         }
@@ -363,8 +377,8 @@ unsafe fn extend_list_impl(
     unsafe {
         let tv0 = argvar_at(argvars, 0);
         let tv1 = argvar_at(argvars, 1);
-        let mut l1 = nvim_eval_tv_get_list(tv0);
-        let l2 = nvim_eval_tv_get_list(tv1);
+        let mut l1 = tv_get_list(tv0);
+        let l2 = tv_get_list(tv1);
 
         if !is_new && value_check_lock(nvim_list_get_lock(l1), arg_errmsg, TV_TRANSLATE) {
             return;
@@ -479,7 +493,7 @@ pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: E
         let t0 = nvim_eval_tv_get_type(tv0);
 
         if t0 == VAR_LIST {
-            let l = nvim_eval_tv_get_list(tv0);
+            let l = tv_get_list(tv0);
             if !value_check_lock(
                 nvim_list_get_lock(l),
                 c"add() argument".as_ptr(),
@@ -576,7 +590,7 @@ pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         } else if t0 != VAR_LIST {
             semsg(e_listblobarg.as_ptr(), c"insert()".as_ptr());
         } else {
-            let l = nvim_eval_tv_get_list(tv0);
+            let l = tv_get_list(tv0);
             if value_check_lock(
                 nvim_list_get_lock(l),
                 c"insert() argument".as_ptr(),
@@ -735,11 +749,11 @@ pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr:
                 0
             };
             if !error {
-                let l = nvim_eval_tv_get_list(tv0);
+                let l = tv_get_list(tv0);
                 n = count_list_impl(l, tv1, idx, ic != 0);
             }
         } else if !error && t0 == VAR_DICT {
-            let d = nvim_eval_tv_get_dict(tv0);
+            let d = tv_get_dict_ptr(tv0);
             if !d.is_null() {
                 if nvim_eval_tv_get_type(tv2) != VAR_UNKNOWN
                     && nvim_eval_tv_get_type(tv3) != VAR_UNKNOWN

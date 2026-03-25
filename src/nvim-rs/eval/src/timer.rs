@@ -10,6 +10,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use super::typval::TypvalT as TypvalTRepr;
+
 // =============================================================================
 // Opaque handle types
 // =============================================================================
@@ -93,7 +95,6 @@ extern "C" {
     #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: TvHandle, count_hint: isize) -> ListHandle;
     fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
-    fn nvim_eval_tv_get_list(tv: *const c_void) -> ListHandle;
     fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
     fn nvim_tv_dict_alloc() -> DictHandle;
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;
@@ -176,7 +177,7 @@ pub unsafe extern "C" fn rs_find_timer_by_nr(xx: i64) -> TimerHandle {
 /// `timer` must be a valid timer_T pointer.
 #[export_name = "add_timer_info"]
 pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) {
-    let list = nvim_eval_tv_get_list(rettv.cast_const());
+    let list = (*rettv.cast::<TypvalTRepr>().cast_const()).vval.v_list;
 
     let dict = nvim_tv_dict_alloc();
     nvim_tv_list_append_dict(list, dict);

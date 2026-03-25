@@ -28,6 +28,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use nvim_eval::typval::{PartialT, TypvalT as TypvalTRepr};
+
 use crate::funcexe::FuncExeT;
 
 // =============================================================================
@@ -1487,9 +1489,6 @@ extern "C" {
     // Cursor position accessor
     fn nvim_curwin_get_cursor_lnum() -> i32;
 
-    // Set vval.v_string without clearing
-    fn nvim_tv_set_vstring_raw(tv: TypevalHandle, s: *mut c_char);
-
     // Return pointer to tv_empty_string global
     fn nvim_get_tv_empty_string() -> *const c_char;
 }
@@ -1560,7 +1559,8 @@ unsafe fn eval_func_impl(
         // Check if **arg == '('
         let arg_ptr = *arg;
         if !arg_ptr.is_null() && *arg_ptr == b'(' as c_char {
-            nvim_tv_set_vstring_raw(rettv, nvim_get_tv_empty_string() as *mut c_char);
+            (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string =
+                nvim_get_tv_empty_string() as *mut c_char;
             nvim_tv_set_type(rettv, VAR_FUNC);
         }
     }
@@ -1918,11 +1918,6 @@ extern "C" {
     fn nvim_get_vlua_partial() -> *mut c_void;
     fn nvim_partial_get_argc(pt: *const c_void) -> c_int;
     fn nvim_partial_get_dict(pt: *const c_void) -> *mut c_void;
-    fn nvim_eval_partial_incref(pt: *mut c_void);
-
-    // Typval partial accessor/setter
-    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_set_partial_raw(tv: TypevalHandle, pt: *mut c_void);
 
     // Typval direct assign (struct copy)
     fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
@@ -2041,13 +2036,16 @@ pub unsafe fn eval_method_impl(
             {
                 name = nvim_tv_get_vstring(ref_tv);
                 // Steal the string: set ref.vval.v_string = NULL so tv_clear won't free it
-                nvim_tv_set_vstring_raw(ref_tv, std::ptr::null_mut());
+                (*ref_tv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = std::ptr::null_mut();
                 tofree = name;
                 len = libc_strlen(name) as c_int;
             } else if nvim_tv_get_type(ref_tv) == VAR_PARTIAL
-                && !nvim_eval_tv_get_partial(ref_tv).is_null()
+                && !(*ref_tv.as_ptr().cast::<TypvalTRepr>())
+                    .vval
+                    .v_partial
+                    .is_null()
             {
-                let pt = nvim_eval_tv_get_partial(ref_tv);
+                let pt = (*ref_tv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial;
                 if nvim_partial_get_argc(pt) > 0 || !nvim_partial_get_dict(pt).is_null() {
                     if verbose {
                         emsg(E_CANNOT_USE_PARTIAL_HERE.as_ptr() as *const c_char);
@@ -2089,8 +2087,8 @@ pub unsafe fn eval_method_impl(
                 if evaluate {
                     let vlua = nvim_get_vlua_partial();
                     nvim_tv_set_type(rettv, VAR_PARTIAL);
-                    nvim_tv_set_partial_raw(rettv, vlua);
-                    nvim_eval_partial_incref(vlua);
+                    (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial = vlua;
+                    (*vlua.cast::<PartialT>()).pt_refcount += 1;
                 }
                 ret = call_func_rettv_impl(
                     arg,
@@ -3066,7 +3064,7 @@ pub unsafe fn eval7_impl(
             if evaluate {
                 nvim_tv_set_type(rettv, VAR_STRING);
                 let contents = get_reg_contents(get_byte(*arg) as c_int, K_G_REG_EXPR_SRC);
-                nvim_tv_set_vstring_raw(rettv, contents);
+                (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = contents;
             }
             if get_byte(*arg) != 0 {
                 *arg = (*arg).add(1);
@@ -3130,8 +3128,8 @@ pub unsafe fn eval7_impl(
                     if is_vlua {
                         let vlua = nvim_get_vlua_partial();
                         nvim_tv_set_type(rettv, VAR_PARTIAL);
-                        nvim_tv_set_partial_raw(rettv, vlua);
-                        nvim_eval_partial_incref(vlua);
+                        (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial = vlua;
+                        (*vlua.cast::<PartialT>()).pt_refcount += 1;
                     }
                 }
                 ret = OK;
@@ -3194,8 +3192,6 @@ extern "C" {
     fn nvim_aborting() -> bool;
     // Get partial->pt_auto
     fn nvim_partial_get_pt_auto(pt: *const c_void) -> bool;
-    // Get partial->pt_dict (for set_selfdict check)
-    fn nvim_eval_partial_get_dict(pt: *const c_void) -> *mut c_void;
     // tv_is_func wrapper (returns int, matches other declarations in this crate)
     fn nvim_tv_is_func(tv: TypevalHandle) -> c_int;
     // rs_check_luafunc_name is in the eval crate (different crate)
@@ -3212,10 +3208,10 @@ extern "C" {
 #[inline]
 unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
     if nvim_tv_get_type(rettv) == VAR_PARTIAL {
-        let pt = nvim_eval_tv_get_partial(rettv);
+        let pt = (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial;
         if !pt.is_null()
             && !nvim_partial_get_pt_auto(pt)
-            && !nvim_eval_partial_get_dict(pt).is_null()
+            && !(*pt.cast::<PartialT>()).pt_dict.is_null()
         {
             return;
         }
@@ -3258,7 +3254,9 @@ pub unsafe fn handle_subscript_impl(
     // We cast to *mut *mut c_char for internal use.
     let arg_mut = arg as *mut *mut c_char;
 
-    if nvim_tv_get_type(rettv) == VAR_PARTIAL && rs_is_luafunc(nvim_eval_tv_get_partial(rettv)) {
+    if nvim_tv_get_type(rettv) == VAR_PARTIAL
+        && rs_is_luafunc((*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial)
+    {
         if !evaluate {
             tv_clear(rettv);
         }
@@ -3413,7 +3411,7 @@ unsafe fn call_func_rettv_impl(
 
         let tv_type = nvim_tv_get_type(functv);
         if tv_type == VAR_PARTIAL {
-            pt = nvim_eval_tv_get_partial(functv);
+            pt = (*functv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial;
             is_lua = rs_is_luafunc(pt);
             funcname = if is_lua {
                 lua_funcname
@@ -3604,7 +3602,6 @@ extern "C" {
     #[link_name = "expand_env_save"]
     fn nvim_expand_env_save(src: *const c_char) -> *mut c_char;
     // v_lock setter (VAR_UNLOCKED = 0)
-    fn nvim_tv_set_v_lock(tv: TypevalHandle, lock: c_int);
 }
 
 /// kOptInvalid value - must match C kOptInvalid
@@ -3723,8 +3720,8 @@ pub unsafe extern "C" fn rs_eval_env_var(
         *name.add(len as usize) = cc as c_char;
 
         nvim_tv_set_type(rettv, VAR_STRING);
-        nvim_tv_set_vstring_raw(rettv, string);
-        nvim_tv_set_v_lock(rettv, VAR_UNLOCKED);
+        (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = string;
+        (*rettv.as_ptr().cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
     }
 
     OK

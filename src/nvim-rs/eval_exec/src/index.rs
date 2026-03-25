@@ -26,6 +26,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use nvim_eval::typval::TypvalT as TypvalTRepr;
+
 use crate::eval::{EvalargHandle, TypevalHandle};
 
 // =============================================================================
@@ -121,9 +123,6 @@ extern "C" {
 
     // rs_is_luafunc: check if a partial is a lua func (from eval crate)
     fn rs_is_luafunc(pt: *const c_void) -> bool;
-
-    // nvim_eval_tv_get_partial: get partial pointer from typval
-    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // String operations
     fn xmemdupz(src: *const c_void, len: usize) -> *mut c_char;
@@ -495,7 +494,7 @@ pub unsafe fn eval_index_inner_impl(
             let item_tv = nvim_di_get_tv(item);
             // Inline tv_is_luafunc: v_type == VAR_PARTIAL && rs_is_luafunc(partial)
             if nvim_tv_get_type(item_tv) == VAR_PARTIAL
-                && rs_is_luafunc(nvim_eval_tv_get_partial(item_tv))
+                && rs_is_luafunc((*item_tv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial)
             {
                 return FAIL;
             }

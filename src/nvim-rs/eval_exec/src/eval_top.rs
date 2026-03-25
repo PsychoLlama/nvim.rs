@@ -17,6 +17,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use nvim_eval::typval::TypvalT as TypvalTRepr;
+
 use crate::callback::CallbackT;
 use crate::eval::{EvalargHandle, EvalargT, ExargHandle, LineGetter, TypevalHandle};
 use crate::funcexe::FuncExeT;
@@ -83,11 +85,9 @@ extern "C" {
     // typval2string helpers
     fn nvim_eval_tv_list_join_nl(l: *mut c_void) -> *mut c_char;
     fn nvim_eval_tv_get_type(tv: TypevalHandle) -> c_int;
-    fn nvim_eval_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
 
     // eval_expr_* helpers
-    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void; // partial_T*
     fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
     // Direct call_func for eval_expr_partial/eval_expr_func/call_vim_function
@@ -178,7 +178,7 @@ unsafe fn typval2string_impl(tv: *mut c_void, join_list: bool) -> *mut c_char {
     let tv_h = TypevalHandle::from_ptr(tv);
     let vtype = nvim_eval_tv_get_type(tv_h);
     if join_list && vtype == VAR_LIST {
-        let l = nvim_eval_tv_get_list(tv_h);
+        let l = (*tv.cast::<TypvalTRepr>()).vval.v_list;
         return nvim_eval_tv_list_join_nl(l);
     }
     if vtype == VAR_LIST || vtype == VAR_DICT {
@@ -214,7 +214,7 @@ unsafe fn eval_expr_partial_impl(
     argc: c_int,
     rettv: TypevalHandle,
 ) -> c_int {
-    let partial = nvim_eval_tv_get_partial(TypevalHandle::from_ptr(expr as *mut c_void));
+    let partial = (*expr.cast::<TypvalTRepr>()).vval.v_partial;
     if partial.is_null() {
         return FAIL;
     }
@@ -949,7 +949,7 @@ pub unsafe extern "C" fn rs_call_func_retlist(
         return std::ptr::null_mut();
     }
 
-    nvim_eval_tv_get_list(rettv)
+    (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_list
 }
 
 /// Set the v:argv list from argc/argv.
@@ -1294,9 +1294,6 @@ extern "C" {
     fn nvim_fold_sctx_save_and_set(wp: *mut c_void) -> *mut c_void; // returns sctx_T*
     fn nvim_restore_current_sctx(saved: *mut c_void); // frees saved sctx_T*
 
-    // Phase 3: typval field accessors
-    fn nvim_eval_tv_get_vnumber(tv: *const c_void) -> i64;
-
     // Phase 16: unified foldtext object maker
     fn nvim_foldtext_make_obj(tv: *mut c_void, tv_type: c_int, out: *mut c_void);
 }
@@ -1346,7 +1343,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
         } else {
             let vtype = nvim_eval_tv_get_type(TypevalHandle::from_ptr(tv));
             let result = if vtype == VAR_NUMBER {
-                nvim_eval_tv_get_vnumber(tv as *const c_void)
+                (*tv.cast::<TypvalTRepr>()).vval.v_number
             } else if vtype != VAR_STRING {
                 0
             } else {

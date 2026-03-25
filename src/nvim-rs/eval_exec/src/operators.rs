@@ -24,6 +24,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_eval::typval::TypvalT as TypvalTRepr;
+
 use crate::eval::TypevalHandle;
 
 // =============================================================================
@@ -130,9 +132,6 @@ extern "C" {
     // Blob operations
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
     fn tv_blob_equal(b1: *mut c_void, b2: *mut c_void) -> c_int;
-
-    // Partial operations
-    fn nvim_eval_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
 
     // String comparison
     fn mb_strcmp_ic(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
@@ -356,12 +355,12 @@ pub unsafe fn typval_compare_impl(
 
         let eq: bool;
         let p1 = if t1 == VAR_PARTIAL {
-            nvim_eval_tv_get_partial(typ1)
+            (*typ1.as_ptr().cast::<TypvalTRepr>()).vval.v_partial
         } else {
             std::ptr::null_mut()
         };
         let p2 = if t2 == VAR_PARTIAL {
-            nvim_eval_tv_get_partial(typ2)
+            (*typ2.as_ptr().cast::<TypvalTRepr>()).vval.v_partial
         } else {
             std::ptr::null_mut()
         };

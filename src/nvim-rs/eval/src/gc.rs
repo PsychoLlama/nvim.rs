@@ -20,12 +20,15 @@
 
 use std::ffi::{c_int, c_void};
 
+use super::typval::{
+    dict_get_ht, list_get_copyid, list_set_copyid, CallbackReaderT, DictTHead, PartialT, TypvalT,
+};
+
 /// Opaque handles for C types
 type TvHandle = *const c_void;
 type TvHandleMut = *mut c_void;
 type DictHandle = *mut c_void;
 type ListHandle = *mut c_void;
-type PartialHandle = *mut c_void;
 type HtHandle = *mut c_void;
 type CallbackReaderHandle = *mut c_void;
 
@@ -38,21 +41,7 @@ const VAR_PARTIAL: c_int = 9;
 // C CallbackType enum values
 const K_CALLBACK_PARTIAL: c_int = 2;
 
-// CallbackT: Rust mirror of C Callback struct (16 bytes, layout validated by _Static_assert).
-#[repr(C)]
-pub union CallbackData {
-    pub funcref: *mut std::ffi::c_char,
-    pub partial: *mut c_void,
-    pub luaref: c_int,
-}
-
-#[repr(C)]
-pub struct CallbackT {
-    data: CallbackData,
-    cb_type: c_int,
-    // 4 bytes trailing padding
-}
-
+use super::typval::CallbackT;
 type CallbackHandle = *mut CallbackT;
 
 extern "C" {
@@ -84,32 +73,7 @@ extern "C" {
     fn set_ref_in_quickfix(copy_id: c_int) -> bool;
     fn free_unref_funccal(copy_id: c_int, testing: bool) -> bool;
 
-    // typval field accessors (Phase 4 already defined some)
-    fn nvim_eval_tv_get_type(tv: TvHandle) -> c_int;
     fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut std::ffi::c_char;
-    fn nvim_eval_tv_get_partial(tv: TvHandle) -> PartialHandle;
-
-    // typval_T field accessors for dict and list
-    fn nvim_eval_tv_get_dict(tv: TvHandle) -> DictHandle;
-    fn nvim_eval_tv_get_list(tv: TvHandle) -> ListHandle;
-
-    // Dict accessors
-    fn nvim_eval_dict_get_copyid(dd: DictHandle) -> c_int;
-    fn nvim_eval_dict_set_copyid(dd: DictHandle, copyid: c_int);
-    fn nvim_eval_dict_get_ht(dd: DictHandle) -> HtHandle;
-
-    // List accessors
-    fn nvim_eval_list_get_copyid(ll: ListHandle) -> c_int;
-    fn nvim_eval_list_set_copyid(ll: ListHandle, copyid: c_int);
-
-    // Partial accessors
-    fn nvim_eval_partial_get_copyid(pt: PartialHandle) -> c_int;
-    fn nvim_eval_partial_set_copyid(pt: PartialHandle, copyid: c_int);
-    fn nvim_eval_partial_get_name(pt: PartialHandle) -> *mut std::ffi::c_char;
-    fn nvim_eval_partial_get_func(pt: PartialHandle) -> *mut c_void;
-    fn nvim_eval_partial_get_dict(pt: PartialHandle) -> DictHandle;
-    fn nvim_eval_partial_get_argc(pt: PartialHandle) -> c_int;
-    fn nvim_eval_partial_get_argv(pt: PartialHandle, idx: c_int) -> TvHandleMut;
 
     // Hashtab iteration: calls set_ref_in_item for each entry
     fn nvim_eval_ht_foreach_di_tv(
@@ -134,10 +98,6 @@ extern "C" {
         ht_stack: *mut *mut c_void,
         list_stack: *mut *mut c_void,
     );
-
-    // Callback reader accessors
-    fn nvim_eval_cbr_get_cb(reader: CallbackReaderHandle) -> CallbackHandle;
-    fn nvim_eval_cbr_get_self(reader: CallbackReaderHandle) -> DictHandle;
 
     // Stack operations (using C malloc/free for ht_stack/list_stack)
     fn nvim_eval_ht_stack_push(stack: *mut *mut c_void, ht: HtHandle);
@@ -321,17 +281,18 @@ unsafe fn set_ref_in_item_dict(
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    if dd.is_null() || nvim_eval_dict_get_copyid(dd) == copy_id {
+    if dd.is_null() || (*dd.cast::<DictTHead>()).dv_copyID == copy_id {
         return false;
     }
 
     // Didn't see this dict yet.
-    nvim_eval_dict_set_copyid(dd, copy_id);
+    (*dd.cast::<DictTHead>()).dv_copyID = copy_id;
+    let ht = dict_get_ht(dd);
     if ht_stack.is_null() {
-        return rs_set_ref_in_ht(nvim_eval_dict_get_ht(dd), copy_id, list_stack);
+        return rs_set_ref_in_ht(ht, copy_id, list_stack);
     }
 
-    nvim_eval_ht_stack_push(ht_stack, nvim_eval_dict_get_ht(dd));
+    nvim_eval_ht_stack_push(ht_stack, ht);
 
     // Iterate over dict watchers
     nvim_eval_dict_foreach_watcher_callback(dd, copy_id, ht_stack, list_stack);
@@ -346,12 +307,12 @@ unsafe fn set_ref_in_item_list(
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    if ll.is_null() || nvim_eval_list_get_copyid(ll) == copy_id {
+    if ll.is_null() || list_get_copyid(ll) == copy_id {
         return false;
     }
 
     // Didn't see this list yet.
-    nvim_eval_list_set_copyid(ll, copy_id);
+    list_set_copyid(ll, copy_id);
     if list_stack.is_null() {
         return rs_set_ref_in_list_items(ll, copy_id, ht_stack);
     }
@@ -363,34 +324,31 @@ unsafe fn set_ref_in_item_list(
 
 /// Mark the partial `pt` with `copyID`.
 unsafe fn set_ref_in_item_partial(
-    pt: PartialHandle,
+    pt: *mut c_void,
     copy_id: c_int,
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    if pt.is_null() || nvim_eval_partial_get_copyid(pt) == copy_id {
+    let pt_ref = &mut *pt.cast::<PartialT>();
+    if pt.is_null() || pt_ref.pt_copyID == copy_id {
         return false;
     }
 
     // Didn't see this partial yet.
-    nvim_eval_partial_set_copyid(pt, copy_id);
+    pt_ref.pt_copyID = copy_id;
 
-    let mut abort = set_ref_in_func(
-        nvim_eval_partial_get_name(pt),
-        nvim_eval_partial_get_func(pt),
-        copy_id,
-    );
+    let mut abort = set_ref_in_func(pt_ref.pt_name, pt_ref.pt_func, copy_id);
 
-    let dict = nvim_eval_partial_get_dict(pt);
+    let dict = pt_ref.pt_dict;
     if !dict.is_null() {
         abort = abort || set_ref_in_item_dict(dict, copy_id, ht_stack, list_stack);
     }
 
-    let argc = nvim_eval_partial_get_argc(pt);
+    let argc = pt_ref.pt_argc;
     for i in 0..argc {
         abort = abort
             || rs_set_ref_in_item(
-                nvim_eval_partial_get_argv(pt, i),
+                pt_ref.pt_argv.add(i as usize).cast::<c_void>().cast_const(),
                 copy_id,
                 ht_stack,
                 list_stack,
@@ -412,18 +370,19 @@ pub unsafe extern "C" fn rs_set_ref_in_item(
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    let v_type = nvim_eval_tv_get_type(tv);
+    let tv_ref = &*tv.cast::<TypvalT>();
+    let v_type = tv_ref.v_type;
 
     match v_type {
-        VAR_DICT => set_ref_in_item_dict(nvim_eval_tv_get_dict(tv), copy_id, ht_stack, list_stack),
-        VAR_LIST => set_ref_in_item_list(nvim_eval_tv_get_list(tv), copy_id, ht_stack, list_stack),
+        VAR_DICT => set_ref_in_item_dict(tv_ref.vval.v_dict, copy_id, ht_stack, list_stack),
+        VAR_LIST => set_ref_in_item_list(tv_ref.vval.v_list, copy_id, ht_stack, list_stack),
         VAR_FUNC => set_ref_in_func(
             nvim_tv_get_vstring(tv.cast_mut()),
             std::ptr::null_mut(),
             copy_id,
         ),
         VAR_PARTIAL => {
-            set_ref_in_item_partial(nvim_eval_tv_get_partial(tv), copy_id, ht_stack, list_stack)
+            set_ref_in_item_partial(tv_ref.vval.v_partial, copy_id, ht_stack, list_stack)
         }
         _ => false,
     }
@@ -461,12 +420,13 @@ pub unsafe extern "C" fn rs_set_ref_in_callback_reader(
     ht_stack: *mut *mut c_void,
     list_stack: *mut *mut c_void,
 ) -> bool {
-    let cb = nvim_eval_cbr_get_cb(reader);
+    let cbr = &mut *reader.cast::<CallbackReaderT>();
+    let cb = std::ptr::addr_of_mut!(cbr.cb).cast::<CallbackT>();
     if rs_set_ref_in_callback(cb, copy_id, ht_stack, list_stack) {
         return true;
     }
 
-    let self_dict = nvim_eval_cbr_get_self(reader);
+    let self_dict = cbr.self_;
     if !self_dict.is_null() {
         return set_ref_in_item_dict(self_dict, copy_id, ht_stack, list_stack);
     }
