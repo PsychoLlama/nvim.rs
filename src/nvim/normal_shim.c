@@ -319,7 +319,6 @@ int nvim_get_cursor_col(void) { return curwin->w_cursor.col; }
 
 void nvim_set_cursor_col(int col) { curwin->w_cursor.col = col; }
 
-void nvim_set_cursor_coladd_zero(void) { curwin->w_cursor.coladd = 0; }
 
 int nvim_inc_cursor(void) { return inc(&curwin->w_cursor); }
 
@@ -426,12 +425,6 @@ bool nvim_last_line_is_empty(void) {
 void nvim_ml_delete_last_line(void) {
   ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE);
   deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
-}
-bool nvim_cursor_lnum_gt_line_count(void) {
-  return curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count;
-}
-void nvim_cursor_lnum_set_to_line_count(void) {
-  curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
 }
 void nvim_coladvance_maxcol(void) { coladvance(curwin, MAXCOL); }
 
@@ -708,11 +701,7 @@ int nvim_get_p_scs_bool(void) { return p_scs ? 1 : 0; }
 /// Set p_scs from int.
 void nvim_set_p_scs_bool(int val) { p_scs = val != 0; }
 
-/// Set cursor col to 0.
-void nvim_set_cursor_col_zero_val(void) { curwin->w_cursor.col = 0; }
 
-/// Cursor lnum decrement.
-void nvim_cursor_lnum_dec_val(void) { curwin->w_cursor.lnum--; }
 
 /// findmatchlimit with NULL oap, FM_FORWARD, for block scope in find_decl.
 bool nvim_findmatchlimit_forward(int64_t maxtravel,
@@ -905,14 +894,11 @@ void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cur
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
 int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_count; }
-void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
 
 bool nvim_cursor_pos_ptr_is_nul(void) { return *get_cursor_pos_ptr() == NUL; }
 bool nvim_lineempty_cursor(void) { return LINEEMPTY(curwin->w_cursor.lnum); }
 bool nvim_vim_strchr_p_ww(int c) { return vim_strchr(p_ww, c) != NULL; }
-int nvim_utfc_ptr2len_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
 void nvim_cursor_col_inc_by_utfc(void) { curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr()); }
-void nvim_set_cursor_col_zero(void) { curwin->w_cursor.col = 0; curwin->w_cursor.coladd = 0; }
 static char *nvim_mps_save = NULL;
 void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
@@ -1786,9 +1772,7 @@ bool nvim_dpo_get_VIsual_active(void) { return VIsual_active; }
 bool nvim_dpo_get_finish_op(void) { return finish_op; }
 bool nvim_get_redo_VIsual_busy(void) { return redo_VIsual_busy; }
 void nvim_set_redo_VIsual_busy(bool val) { redo_VIsual_busy = val; }
-bool nvim_get_bangredo(void) { return bangredo; }
 void nvim_set_bangredo(bool val) { bangredo = val; }
-bool nvim_get_repeat_cmdline_is_null(void) { return repeat_cmdline == NULL; }
 int nvim_get_repeat_luaref(void) { return (int)repeat_luaref; }
 bool nvim_dpo_get_p_sol(void) { return p_sol; }
 int nvim_curwin_get_p_lbr(void) { return curwin->w_p_lbr; }
@@ -1805,20 +1789,14 @@ void nvim_curwin_restore_lbr(int saved) {
   }
 }
 void nvim_dpo_validate_virtcol(void) { validate_virtcol(curwin); }
-void nvim_ResetRedobuff(void) { ResetRedobuff(); }
 void nvim_CancelRedo(void) { CancelRedo(); }
 char *nvim_cap_get_searchbuf(cmdarg_T *cap) { return cap ? cap->searchbuf : NULL; }
 
 void nvim_oap_set_is_VIsual(oparg_T *oap, bool val) { if (oap) oap->is_VIsual = val; }
-void nvim_oap_set_start_pos(oparg_T *oap, int lnum, int col, int coladd) {
-  if (oap) { oap->start.lnum = lnum; oap->start.col = col; oap->start.coladd = coladd; }
-}
 void nvim_oap_set_end_pos(oparg_T *oap, int lnum, int col, int coladd) {
   if (oap) { oap->end.lnum = lnum; oap->end.col = col; oap->end.coladd = coladd; }
 }
-void nvim_oap_set_start_lnum(oparg_T *oap, int val) { if (oap) oap->start.lnum = val; }
 void nvim_oap_set_start_col(oparg_T *oap, int val) { if (oap) oap->start.col = val; }
-void nvim_oap_set_start_coladd(oparg_T *oap, int val) { if (oap) oap->start.coladd = val; }
 void nvim_oap_set_end_lnum(oparg_T *oap, int val) { if (oap) oap->end.lnum = val; }
 void nvim_oap_set_end_col(oparg_T *oap, int val) { if (oap) oap->end.col = val; }
 void nvim_oap_set_end_coladd(oparg_T *oap, int val) { if (oap) oap->end.coladd = val; }
@@ -1832,9 +1810,6 @@ void nvim_oap_set_start_from_cursor(oparg_T *oap) {
 }
 void nvim_oap_set_end_from_cursor(oparg_T *oap) {
   if (oap) { oap->end = curwin->w_cursor; }
-}
-void nvim_oap_swap_start_end(oparg_T *oap) {
-  if (oap) { pos_T tmp = oap->start; oap->start = oap->end; oap->end = tmp; }
 }
 
 void nvim_set_resel_VIsual_mode(int val) { resel_VIsual_mode = val; }
@@ -1861,8 +1836,6 @@ void nvim_dpo_save_visual_state(void) {
   curbuf->b_visual.vi_curswant = curwin->w_curswant;
   curbuf->b_visual_mode_eval = VIsual_mode;
 }
-/// Get ml_get_len for the VIsual line (for VIsual.lnum).
-int nvim_ml_get_len_visual_lnum(void) { return (int)ml_get_len(VIsual.lnum); }
 /// Append repeat_cmdline to redo, then free it (handles ':' vs. K_COMMAND).
 void nvim_dpo_append_repeat_cmdline_to_redo(int is_colon)
 {
@@ -1992,12 +1965,6 @@ bool nvim_dpo_join_would_overflow(int line_count) {
 void nvim_coladvance_set_curswant(int old_col) {
   coladvance(curwin, curwin->w_curswant = (colnr_T)old_col);
 }
-/// Set curwin->w_cursor = dpo_saved_old_cursor (compound via arg).
-void nvim_set_cursor_from_pos(int lnum, int col, int coladd) {
-  curwin->w_cursor.lnum = lnum;
-  curwin->w_cursor.col = col;
-  curwin->w_cursor.coladd = coladd;
-}
 /// Set virtual_op = kNone.
 void nvim_set_virtual_op_none(void) { virtual_op = kNone; }
 /// Set motion_force = NUL.
@@ -2008,8 +1975,6 @@ win_T *nvim_dpo_get_curwin(void) { return curwin; }
 void nvim_redraw_curbuf_later_inverted(void) { redraw_curbuf_later(UPD_INVERTED); }
 /// Set curwin->w_set_curswant = val (bool).
 void nvim_curwin_set_curswant_flag(bool val) { curwin->w_set_curswant = val; }
-/// Set VIsual.col = val.
-void nvim_set_VIsual_col_val(int val) { VIsual.col = val; }
 
 // Phase 2: linewise_delete accessors
 /// Delete count lines starting at cursor with undo support.

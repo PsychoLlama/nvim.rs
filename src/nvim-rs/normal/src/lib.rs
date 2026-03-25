@@ -1289,7 +1289,6 @@ extern "C" {
     fn findpar(pincl: *mut bool, dir: c_int, count: c_int, what: c_int, both: bool) -> bool;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_col(col: c_int);
-    fn nvim_set_cursor_coladd_zero();
     fn nvim_inc_cursor() -> c_int;
     fn nvim_mb_adjust_cursor();
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
@@ -1352,8 +1351,6 @@ extern "C" {
     fn nvim_inc_b_visual_vi_end();
     fn nvim_last_line_is_empty() -> bool;
     fn nvim_ml_delete_last_line();
-    fn nvim_cursor_lnum_gt_line_count() -> bool;
-    fn nvim_cursor_lnum_set_to_line_count();
     fn nvim_coladvance_maxcol();
     // Phase 1 new lower-level accessors for replace helpers
     fn coladvance_force(col: c_int);
@@ -1578,7 +1575,7 @@ pub unsafe extern "C" fn rs_nv_findpar(cap: CapHandle) {
     }
     nvim_oap_set_inclusive(oap, inclusive);
 
-    nvim_set_cursor_coladd_zero();
+    nvim_set_cursor_coladd(0);
     if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
@@ -1612,7 +1609,7 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
 
     // Don't leave the cursor on the NUL past end of line.
     adjust_cursor(oap);
-    nvim_set_cursor_coladd_zero();
+    nvim_set_cursor_coladd(0);
     if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
@@ -2170,8 +2167,8 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     // Inlined nvim_put_delete_empty_line: delete trailing empty line after put
     if empty && nvim_last_line_is_empty() {
         nvim_ml_delete_last_line();
-        if nvim_cursor_lnum_gt_line_count() {
-            nvim_cursor_lnum_set_to_line_count();
+        if nvim_get_cursor_lnum() > nvim_get_curwin_ml_line_count() as c_int {
+            nvim_set_cursor_lnum(nvim_get_curwin_ml_line_count() as c_int);
             nvim_coladvance_maxcol();
         }
     }
@@ -3325,8 +3322,6 @@ extern "C" {
     fn nvim_set_p_ws_bool(val: c_int);
     fn nvim_get_p_scs_bool() -> c_int;
     fn nvim_set_p_scs_bool(val: c_int);
-    fn nvim_set_cursor_col_zero_val();
-    fn nvim_cursor_lnum_dec_val();
     fn nvim_findmatchlimit_forward(
         maxtravel: i64,
         out_lnum: *mut c_int,
@@ -3627,7 +3622,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
     let oap = nvim_cap_get_oap(cap);
     nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
     nvim_oap_set_inclusive(oap, false);
-    nvim_set_cursor_coladd_zero();
+    nvim_set_cursor_coladd(0);
 
     let nchar = nvim_cap_get_nchar(cap);
     let cmdchar = nvim_cap_get_cmdchar(cap);
@@ -3947,10 +3942,10 @@ pub unsafe extern "C" fn rs_find_decl(
     } else {
         par_lnum = nvim_get_cursor_lnum();
         while nvim_get_cursor_lnum() > 1 && nvim_cursor_line_is_blank() == 0 {
-            nvim_cursor_lnum_dec_val();
+            nvim_set_cursor_lnum(nvim_get_cursor_lnum() - 1);
         }
     }
-    nvim_set_cursor_col_zero_val();
+    nvim_set_cursor_col(0);
 
     let found = find_decl_search(
         &pat, patlen, old_lnum, par_lnum, locally, thisblock, flags_arg,
@@ -4265,7 +4260,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
             }
             State = old_state;
         }
-        nvim_dec_cursor_col();
+        nvim_set_cursor_col(nvim_get_cursor_col() - 1);
         nvim_mb_adjust_cursor();
         nvim_set_b_op_end_cursor();
         nvim_curwin_set_curswant(true);
@@ -4373,7 +4368,6 @@ extern "C" {
     fn nvim_utfc_ptr2len_cursor() -> c_int;
     fn oneleft() -> c_int;
     fn nvim_cursor_col_inc_by_utfc();
-    fn nvim_set_cursor_col_zero();
 }
 
 extern "C" {
@@ -5335,7 +5329,8 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
                     // Move to start of next line
                     let lnum = nvim_get_cursor_lnum();
                     nvim_set_cursor_lnum(lnum + 1);
-                    nvim_set_cursor_col_zero();
+                    nvim_set_cursor_col(0);
+                    nvim_set_cursor_coladd(0);
                     nvim_curwin_set_curswant(true);
                     nvim_oap_set_inclusive(oap, false);
                 }
@@ -5412,7 +5407,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
                 && nvim_get_cursor_lnum() > 1;
 
             if wrap {
-                nvim_cursor_lnum_dec_val();
+                nvim_set_cursor_lnum(nvim_get_cursor_lnum() - 1);
                 nvim_coladvance(MAXCOL);
                 nvim_curwin_set_curswant(true);
 
@@ -5583,7 +5578,6 @@ extern "C" {
     fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn adjust_skipcol();
-    fn nvim_dec_cursor_col();
     fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char;
 }
 
@@ -5739,7 +5733,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
                 (nvim_get_curswant() - width1) % width2 > width2 / 2
             })
         {
-            nvim_dec_cursor_col();
+            nvim_set_cursor_col(nvim_get_cursor_col() - 1);
         }
     }
 
@@ -7739,7 +7733,7 @@ pub unsafe extern "C" fn rs_end_visual_mode() {
     nvim_set_curbuf_visual_mode_eval(vis_mode);
 
     if !nvim_virtual_active() {
-        nvim_set_cursor_coladd_zero();
+        nvim_set_cursor_coladd(0);
     }
 
     rs_may_clear_cmdline();
