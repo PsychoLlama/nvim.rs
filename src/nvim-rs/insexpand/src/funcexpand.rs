@@ -158,18 +158,156 @@ pub unsafe extern "C" fn rs_f_complete_add(
 // Phase 3: set_completion Orchestration
 // =============================================================================
 
+// nvim_set_completion_impl: deleted (Phase 24), inlined below as rs_set_completion
+
 extern "C" {
-    fn nvim_set_completion_impl(startcol: c_int, list: ListPtr);
+    // helpers for inlined rs_set_completion (Phase 24)
+    fn rs_ctrl_x_mode_not_default() -> c_int;
+    fn rs_ins_compl_prep(c: c_int) -> c_int;
+    fn rs_ins_compl_clear();
+    fn rs_ins_compl_free();
+    fn rs_get_cot_flags() -> u32;
+    fn rs_save_orig_extmarks();
+    fn nvim_ins_compl_add_simple(
+        str_: *const c_char,
+        len: c_int,
+        dir: c_int,
+        flags: c_int,
+        score: c_int,
+    ) -> c_int;
+    #[link_name = "cbuf_to_string"]
+    fn cbuf_to_string_set_completion(buf: *const c_char, size: usize) -> crate::vars::NvimString;
+    #[link_name = "get_cursor_line_ptr"]
+    fn get_cursor_line_ptr_set_completion() -> *mut c_char;
+    #[link_name = "nvim_get_curwin_cursor_lnum"]
+    fn nvim_get_curwin_cursor_lnum_sc() -> c_int;
+    fn nvim_get_curwin_w_wrow() -> c_int;
+    fn nvim_get_curwin_w_leftcol() -> c_int;
+    fn ins_complete(c: c_int, enable_pum: c_int) -> c_int;
+    fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int);
+    fn may_trigger_modechanged();
+    #[link_name = "ui_flush"]
+    fn nvim_ui_flush_set_completion();
 }
+
+// Flags for ins_compl_add
+const CP_ORIGINAL_TEXT_SC: c_int = 1;
+const CP_ICASE_SC: c_int = 16;
+const CP_FAST_SC: c_int = 32;
+
+// kOptCotFlag values
+const COT_LONGEST_SC: u32 = 0x04;
+const COT_NOINSERT_SC: u32 = 0x20;
+const COT_NOSELECT_SC: u32 = 0x40;
+
+// CTRL_X mode
+const CTRL_X_EVAL_SC: c_int = 16;
+// Direction
+const FORWARD_SC: c_int = 1;
+// Key codes
+const K_DOWN_SC: c_int = -25707;
+const K_UP_SC: c_int = -30059;
+const CTRL_N_SC: c_int = 14;
+// FUZZY_SCORE_NONE = INT_MIN
+const FUZZY_SCORE_NONE_SC: c_int = c_int::MIN;
 
 /// Orchestrate the `complete()` VimL function: clear state, add original
 /// text and list matches, start completion, show popup menu.
 ///
+/// Rust translation of nvim_set_completion_impl (Phase 24).
+///
 /// # Safety
 /// `list` must be a valid `list_T *` pointer.
 #[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_set_completion(startcol: c_int, list: ListPtr) {
-    nvim_set_completion_impl(startcol, list);
+    let mut startcol = startcol;
+
+    let cur_cot_flags = rs_get_cot_flags();
+    let compl_longest = (cur_cot_flags & COT_LONGEST_SC) != 0;
+    let compl_no_insert = (cur_cot_flags & COT_NOINSERT_SC) != 0;
+    let compl_no_select = (cur_cot_flags & COT_NOSELECT_SC) != 0;
+
+    // If already doing completions stop it.
+    if rs_ctrl_x_mode_not_default() != 0 {
+        rs_ins_compl_prep(c_int::from(b' '));
+    }
+    rs_ins_compl_clear();
+    rs_ins_compl_free();
+    crate::vars::nvim_set_compl_get_longest(c_int::from(compl_longest));
+
+    crate::vars::nvim_set_compl_direction(FORWARD_SC);
+
+    // Clamp startcol to cursor column
+    let cur_col = nvim_get_cursor_col();
+    if startcol > cur_col {
+        startcol = cur_col;
+    }
+    crate::vars::nvim_set_compl_col(startcol);
+    crate::vars::nvim_set_compl_lnum(nvim_get_curwin_cursor_lnum_sc());
+    crate::vars::nvim_set_compl_length(cur_col - startcol);
+
+    // Set compl_orig_text from the line
+    let line = get_cursor_line_ptr_set_completion();
+    let col_usize = startcol as usize;
+    let len_usize = crate::vars::nvim_get_compl_length() as usize;
+    crate::vars::compl_orig_text =
+        cbuf_to_string_set_completion(line.add(col_usize).cast_const(), len_usize);
+
+    rs_save_orig_extmarks();
+
+    let mut flags = CP_ORIGINAL_TEXT_SC;
+    if crate::vars::nvim_get_p_ic() != 0 {
+        flags |= CP_ICASE_SC;
+    }
+
+    let add_result = nvim_ins_compl_add_simple(
+        crate::vars::compl_orig_text.data.cast_const(),
+        crate::vars::compl_orig_text.size as c_int,
+        0,
+        flags | CP_FAST_SC,
+        FUZZY_SCORE_NONE_SC,
+    );
+    if add_result != OK_FUNCEXPAND {
+        return;
+    }
+
+    crate::vars::nvim_set_ctrl_x_mode(CTRL_X_EVAL_SC);
+
+    // Add all matches from the list
+    nvim_ins_compl_add_list_impl(list);
+
+    crate::vars::nvim_set_compl_matches(rs_ins_compl_make_cyclic());
+    crate::vars::nvim_set_compl_started(1);
+    crate::vars::nvim_set_compl_used_match(1);
+    crate::vars::nvim_set_compl_cont_status(0);
+
+    let save_w_wrow = nvim_get_curwin_w_wrow();
+    let save_w_leftcol = nvim_get_curwin_w_leftcol();
+
+    crate::match_list::compl_curr_match = crate::match_list::compl_first_match;
+
+    let no_select = compl_no_select || compl_longest;
+    if compl_no_insert || no_select {
+        ins_complete(K_DOWN_SC, 0);
+        if no_select {
+            ins_complete(K_UP_SC, 0);
+        }
+    } else {
+        ins_complete(CTRL_N_SC, 0);
+    }
+    crate::vars::nvim_set_compl_enter_selects(c_int::from(compl_no_insert));
+
+    if crate::vars::nvim_get_compl_interrupted() == 0 {
+        rs_show_pum(save_w_wrow, save_w_leftcol);
+    }
+
+    may_trigger_modechanged();
+    nvim_ui_flush_set_completion();
 }
 
 // =============================================================================

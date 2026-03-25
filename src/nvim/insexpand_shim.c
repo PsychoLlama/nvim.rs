@@ -193,9 +193,10 @@ void nvim_f_complete_add_impl(void *argvars, void *rettv);
 void nvim_f_complete_check_impl(void *rettv);
 void nvim_f_preinserted_impl(void *rettv);
 void nvim_f_complete_info_impl(void *argvars, void *rettv);
-void nvim_set_completion_impl(int startcol, void *list);
 void nvim_cpt_compl_refresh_impl(void);
 void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx);
+// Rust exports used before the extern declarations further below
+extern void rs_set_completion(int startcol, void *list);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1238,7 +1239,7 @@ static void restore_orig_extmarks(void)
 // Logic lives in nvim_set_completion_impl compound accessor.
 static void set_completion(colnr_T startcol, list_T *list)
 {
-  nvim_set_completion_impl((int)startcol, (void *)list);
+  rs_set_completion((int)startcol, (void *)list);
 }
 
 // NOTE: f_complete, f_complete_add, f_complete_check exported from Rust via
@@ -2291,7 +2292,7 @@ void nvim_f_complete_impl(void *argvars_v, void *rettv_v)
   } else {
     const colnr_T startcol = (colnr_T)tv_get_number_chk(&argvars[0], NULL);
     if (startcol > 0) {
-      nvim_set_completion_impl((int)(startcol - 1), argvars[1].vval.v_list);
+      rs_set_completion((int)(startcol - 1), argvars[1].vval.v_list);
     }
   }
 }
@@ -2347,77 +2348,7 @@ void nvim_f_complete_info_impl(void *argvars_v, void *rettv_v)
   rs_get_complete_info(what_list, rettv->vval.v_dict);
 }
 
-// Phase 3 accessor: set_completion
-
-/// Compound accessor: set_completion logic, callable from Rust.
-/// Contains the full logic from the original set_completion function.
-void nvim_set_completion_impl(int startcol_arg, void *list_opaque)
-{
-  colnr_T startcol = (colnr_T)startcol_arg;
-  list_T *list = (list_T *)list_opaque;
-
-  int flags = CP_ORIGINAL_TEXT;
-  unsigned cur_cot_flags = rs_get_cot_flags();
-  bool compl_longest = (cur_cot_flags & kOptCotFlagLongest) != 0;
-  bool compl_no_insert = (cur_cot_flags & kOptCotFlagNoinsert) != 0;
-  bool compl_no_select = (cur_cot_flags & kOptCotFlagNoselect) != 0;
-
-  // If already doing completions stop it.
-  if (rs_ctrl_x_mode_not_default()) {
-    rs_ins_compl_prep(' ');
-  }
-  rs_ins_compl_clear();
-  rs_ins_compl_free();
-  compl_get_longest = compl_longest;
-
-  compl_direction = FORWARD;
-  if (startcol > curwin->w_cursor.col) {
-    startcol = curwin->w_cursor.col;
-  }
-  compl_col = startcol;
-  compl_lnum = curwin->w_cursor.lnum;
-  compl_length = curwin->w_cursor.col - startcol;
-  compl_orig_text = cbuf_to_string(get_cursor_line_ptr() + compl_col,
-                                   (size_t)compl_length);
-  rs_save_orig_extmarks();
-  if (p_ic) {
-    flags |= CP_ICASE;
-  }
-  if (ins_compl_add(compl_orig_text.data, (int)compl_orig_text.size,
-                    NULL, NULL, false, NULL, 0,
-                    flags | CP_FAST, false, NULL, FUZZY_SCORE_NONE) != OK) {
-    return;
-  }
-
-  ctrl_x_mode = CTRL_X_EVAL;
-
-  nvim_ins_compl_add_list_impl(list);
-  compl_matches = rs_ins_compl_make_cyclic();
-  compl_started = true;
-  compl_used_match = true;
-  compl_cont_status = 0;
-  int save_w_wrow = curwin->w_wrow;
-  int save_w_leftcol = curwin->w_leftcol;
-
-  compl_curr_match = compl_first_match;
-  bool no_select = compl_no_select || compl_longest;
-  if (compl_no_insert || no_select) {
-    ins_complete(K_DOWN, false);
-    if (no_select) {
-      ins_complete(K_UP, false);
-    }
-  } else {
-    ins_complete(Ctrl_N, false);
-  }
-  compl_enter_selects = compl_no_insert;
-
-  if (!compl_interrupted) {
-    rs_show_pum(save_w_wrow, save_w_leftcol);
-  }
-
-  may_trigger_modechanged();
-  ui_flush();
-}
+// nvim_set_completion_impl: deleted (Phase 24), inlined in funcexpand.rs as rs_set_completion
 
 /// Compound accessor: cpt_compl_refresh logic, callable from Rust.
 /// Contains the full logic from the original cpt_compl_refresh function.
