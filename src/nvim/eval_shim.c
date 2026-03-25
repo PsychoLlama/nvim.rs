@@ -433,6 +433,12 @@ void nvim_tv_set_vstring_owned(typval_T *tv, char *s)
   tv->vval.v_string = s;
 }
 
+/// Initialize a typval to VAR_UNKNOWN (thin wrapper; tv_init is static-inline).
+void nvim_tv_init(typval_T *tv)
+{
+  tv_init(tv);
+}
+
 /// Get partial_T->pt_func->uf_name (accessor for Rust).
 char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
 {
@@ -741,46 +747,13 @@ bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
   return value_check_lock(lock, name, TV_CSTRING);
 }
 
-/// Direct struct copy: *dst = *src for typval_T - accessor for Rust.
-void nvim_tv_assign_direct(typval_T *dst, const typval_T *src)
-{
-  *dst = *src;
-}
-
-/// Call tv_init on a typval_T - accessor for Rust.
-void nvim_tv_init(typval_T *tv)
-{
-  tv_init(tv);
-}
-
 /// Get di_key from a dictitem_T - accessor for Rust.
 const char *nvim_di_get_key(const dictitem_T *di)
 {
   return di->di_key;
 }
 
-/// Get v_lock constant VAR_UNLOCKED - accessor for Rust.
-int nvim_var_unlocked(void)
-{
-  return VAR_UNLOCKED;
-}
-
 // nvim_value_check_lock moved to typval.c (3-param version)
-
-/// Allocate and initialize a zero typval_T on the heap - accessor for Rust.
-/// Replaces TV_INITIAL_VALUE macro (which initializes on the stack).
-typval_T *nvim_tv_alloc_zero(void)
-{
-  typval_T *tv = xcalloc(1, sizeof(typval_T));
-  tv->v_type = VAR_UNKNOWN;
-  return tv;
-}
-
-/// Free a heap-allocated typval_T - accessor for Rust.
-void nvim_tv_free(typval_T *tv)
-{
-  xfree(tv);
-}
 
 /// Check if di_flags indicate read-only and report error - accessor for Rust.
 bool nvim_di_check_ro(const dictitem_T *di, const char *name)
@@ -1054,9 +1027,6 @@ void nvim_emsg_multiline_echoerr(const char *str)
   emsg_multiline(str, "echoerr", HLF_E, true);
 }
 
-/// Get force_abort global - accessor for Rust.
-int nvim_get_force_abort(void);  // forward: defined in ex_eval.c
-
 /// msg() wrapper for echomsg - accessor for Rust.
 void nvim_msg_echomsg(const char *str, int hl_id)
 {
@@ -1093,23 +1063,6 @@ void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
 // Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
 // =============================================================================
 
-
-/// Heap-allocate a funccal_entry_T and call save_funccal - accessor for Rust.
-/// Returns opaque void* so callers don't need the full type definition.
-void *nvim_eval_save_funccal(void)
-{
-  funccal_entry_T *entry = xcalloc(1, sizeof(funccal_entry_T));
-  save_funccal(entry);
-  return entry;
-}
-
-/// Call restore_funccal and free the entry - accessor for Rust.
-/// Takes opaque void* matching the return type of nvim_eval_save_funccal.
-void nvim_eval_restore_funccal(void *entry)
-{
-  restore_funccal();
-  xfree(entry);
-}
 
 /// may_call_simple_func wrapper - accessor for Rust eval_top.
 int nvim_eval_may_call_simple_func(const char *arg, typval_T *rettv)
@@ -1235,15 +1188,6 @@ int nvim_get_cursor_line_charlen(void)
 int nvim_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
 {
   return get_lambda_tv(arg, rettv, evalarg);
-}
-
-/// Raw-copy a typval_T by value from src to dst (memcpy of sizeof(typval_T)).
-/// Sets src->v_type to VAR_UNKNOWN after the copy.
-/// Used by rs_call_func_rettv to implement `functv = *rettv; rettv->v_type = VAR_UNKNOWN`.
-void nvim_tv_raw_copy_and_reset(typval_T *dst, typval_T *src)
-{
-  *dst = *src;
-  src->v_type = VAR_UNKNOWN;
 }
 
 // =============================================================================
@@ -1614,19 +1558,6 @@ void nvim_restore_provider_caller_scope(void *saved)
   xfree(saved);
 }
 
-/// Increment provider_call_nesting.
-void nvim_provider_call_nesting_inc(void)
-{
-  provider_call_nesting++;
-}
-
-/// Decrement provider_call_nesting (with assertion).
-void nvim_provider_call_nesting_dec(void)
-{
-  provider_call_nesting--;
-  assert(provider_call_nesting >= 0);
-}
-
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n)
 {
@@ -1637,16 +1568,6 @@ list_T *nvim_eval_list_alloc_n(int n)
 void nvim_eval_list_ref(list_T *l)
 {
   tv_list_ref(l);
-}
-
-// nvim_eval_save_funccal and nvim_eval_restore_funccal already defined above (line 3567).
-
-/// Set typval_T to a VAR_NUMBER 0 return (provider not found fallback).
-void nvim_tv_set_number_zero(typval_T *tv)
-{
-  tv->v_type = VAR_NUMBER;
-  tv->v_lock = VAR_UNLOCKED;
-  tv->vval.v_number = 0;
 }
 
 // =============================================================================
@@ -1858,45 +1779,6 @@ Channel *nvim_find_channel(uint64_t id)
   return find_channel(id);
 }
 
-// =============================================================================
-// Exception accessors for handle_did_throw_impl (Rust Phase N+9)
-// =============================================================================
-
-/// Returns current_exception->type as int (ET_USER=0, ET_ERROR=1, ET_INTERRUPT=2).
-int nvim_exception_get_type(void) { return (int)current_exception->type; }
-/// Returns current_exception->value.
-char *nvim_exception_get_value(void) { return current_exception->value; }
-/// Takes current_exception->messages (sets it to NULL) and returns it.
-void *nvim_exception_take_messages(void)
-{
-  void *m = current_exception->messages;
-  current_exception->messages = NULL;
-  return m;
-}
-/// Returns current_exception->throw_name.
-char *nvim_exception_get_throw_name(void) { return current_exception->throw_name; }
-/// Returns current_exception->throw_lnum.
-int nvim_exception_get_throw_lnum(void) { return (int)current_exception->throw_lnum; }
-/// Sets current_exception->throw_name to NULL.
-void nvim_exception_set_throw_name_null(void) { current_exception->throw_name = NULL; }
-/// Returns msglist->next.
-void *nvim_msglist_get_next(void *m) { return ((msglist_T *)m)->next; }
-/// Returns msglist->msg.
-char *nvim_msglist_get_msg(void *m) { return ((msglist_T *)m)->msg; }
-/// Returns msglist->multiline.
-int nvim_msglist_is_multiline(void *m) { return ((msglist_T *)m)->multiline ? 1 : 0; }
-/// Frees msg, sfile, and the item itself.
-void nvim_msglist_free_item(void *m)
-{
-  msglist_T *item = (msglist_T *)m;
-  xfree(item->msg);
-  xfree(item->sfile);
-  xfree(item);
-}
-/// Sets suppress_errthrow = val.
-void nvim_set_suppress_errthrow(bool val) { suppress_errthrow = val; }
-/// Sets force_abort = val.
-void nvim_set_force_abort(bool val) { force_abort = val; }
 /// Format "E605: Exception not caught: %s" with value into allocated string.
 char *nvim_docmd_fmt_exception_not_caught(const char *value)
 {

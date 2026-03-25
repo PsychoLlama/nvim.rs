@@ -545,8 +545,8 @@ unsafe fn get_lval_subscript_impl(
     let quiet = (flags & GLV_QUIET) != 0;
 
     // Allocate var1/var2 on the heap (heap-allocated, cleaned up on all paths)
-    let var1 = nvim_tv_alloc_zero();
-    let var2 = nvim_tv_alloc_zero();
+    let var1 = tv_alloc_zero();
+    let var2 = tv_alloc_zero();
     let mut rc = FAIL;
     let mut empty1 = false;
 
@@ -606,8 +606,8 @@ unsafe fn get_lval_subscript_impl(
                     // Return NULL immediately (no goto done, var1/var2 still clean)
                     tv_clear(var1);
                     tv_clear(var2);
-                    nvim_tv_free(var1);
-                    nvim_tv_free(var2);
+                    tv_free_handle(var1);
+                    tv_free_handle(var2);
                     return std::ptr::null_mut();
                 }
                 p = key.add(len as usize);
@@ -717,8 +717,8 @@ unsafe fn get_lval_subscript_impl(
     // Cleanup
     tv_clear(var1);
     tv_clear(var2);
-    nvim_tv_free(var1);
-    nvim_tv_free(var2);
+    tv_free_handle(var1);
+    tv_free_handle(var2);
 
     if rc == OK {
         p
@@ -898,24 +898,59 @@ pub unsafe extern "C" fn rs_clear_lval(lp: *mut LvalT) {
 // Phase 3: set_var_lval migration
 // =============================================================================
 
+/// VAR_UNLOCKED constant (VarLockStatus = 0).
+const VAR_UNLOCKED_CONST: c_int = 0;
+
+/// Allocate a zero-initialized typval_T on the heap.
+///
+/// Equivalent to the old `tv_alloc_zero()` C wrapper.
+#[inline]
+unsafe fn tv_alloc_zero() -> TypevalHandle {
+    let p = xcalloc_typval();
+    let tv = TypevalHandle(p);
+    (*tv.0.cast::<TypvalTRepr>()).v_type = 0; // VAR_UNKNOWN
+    tv
+}
+
+/// Allocate `sizeof(typval_T)` bytes zeroed.
+#[inline]
+unsafe fn xcalloc_typval() -> *mut c_void {
+    xcalloc(1, std::mem::size_of::<TypvalTRepr>())
+}
+
+/// Free a heap-allocated typval_T.
+#[inline]
+unsafe fn tv_free_handle(tv: TypevalHandle) {
+    xfree(tv.0);
+}
+
+/// Direct struct copy: `*dst = *src` for typval_T.
+///
+/// Equivalent to the old `nvim_tv_assign_direct()` C wrapper.
+#[inline]
+unsafe fn tv_assign_direct(dst: TypevalHandle, src: TypevalHandle) {
+    std::ptr::copy_nonoverlapping(
+        src.0.cast::<u8>(),
+        dst.0.cast::<u8>(),
+        std::mem::size_of::<TypvalTRepr>(),
+    );
+}
+
 extern "C" {
     // Blob accessors
     fn nvim_blob_get_bv_lock(blob: *const c_void) -> c_int;
 
     // typval field accessors
 
-    fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
     fn nvim_tv_init(tv: TypevalHandle);
-    fn nvim_tv_alloc_zero() -> TypevalHandle;
-    fn nvim_tv_free(tv: TypevalHandle);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // dictitem_T accessors
     fn nvim_di_get_key(di: DictitemHandle) -> *const c_char;
     fn nvim_di_check_ro(di: DictitemHandle, name: *const c_char) -> bool;
     fn nvim_di_check_lock(di: DictitemHandle, name: *const c_char) -> bool;
 
-    // VAR_UNLOCKED constant
-    fn nvim_var_unlocked() -> c_int;
+    // VAR_UNLOCKED = 0 (used as constant below)
 
     // Error message helpers (Phase 3): now in nvim_eval::errors
     fn nvim_value_check_lock(lock: c_int, name: *const c_char) -> bool;
@@ -1035,7 +1070,7 @@ unsafe fn set_var_lval_impl(
                 return;
             }
 
-            let tv_tmp = nvim_tv_alloc_zero();
+            let tv_tmp = tv_alloc_zero();
             let mut di_ptr: DictitemHandle = DictitemHandle(std::ptr::null_mut());
             if eval_variable(
                 (*lp).ll_name,
@@ -1054,7 +1089,7 @@ unsafe fn set_var_lval_impl(
                 }
                 tv_clear(tv_tmp);
             }
-            nvim_tv_free(tv_tmp);
+            tv_free_handle(tv_tmp);
         } else {
             // Simple assignment
             set_var_const((*lp).ll_name, (*lp).ll_name_len, rettv, copy, is_const);
@@ -1086,7 +1121,7 @@ unsafe fn set_var_lval_impl(
 
         let dict = (*lp).ll_dict;
         let watched = nvim_tv_dict_is_watched(dict);
-        let oldtv = nvim_tv_alloc_zero();
+        let oldtv = tv_alloc_zero();
         let mut skip_assign = false;
         let mut is_new_key = false;
 
@@ -1096,7 +1131,7 @@ unsafe fn set_var_lval_impl(
             is_new_key = true;
             if !op.is_null() && *op != b'=' as c_char {
                 nvim_eval::errors::semsg_dictkey(newkey);
-                nvim_tv_free(oldtv);
+                tv_free_handle(oldtv);
                 return;
             }
             let lp_tv_h = tv((*lp).ll_tv);
@@ -1106,7 +1141,7 @@ unsafe fn set_var_lval_impl(
                 newkey,
             ) != 0
             {
-                nvim_tv_free(oldtv);
+                tv_free_handle(oldtv);
                 return;
             }
             // Add item to dict
@@ -1114,7 +1149,7 @@ unsafe fn set_var_lval_impl(
             let lp_tv_h = tv((*lp).ll_tv);
             if tv_dict_add((*lp_tv_h.0.cast::<TypvalTRepr>()).vval.v_dict, di) == FAIL {
                 nvim_tv_dict_item_free(di);
-                nvim_tv_free(oldtv);
+                tv_free_handle(oldtv);
                 return;
             }
             // lp->ll_tv = &di->di_tv
@@ -1140,8 +1175,8 @@ unsafe fn set_var_lval_impl(
             if copy {
                 tv_copy(rettv, lp_tv2);
             } else {
-                nvim_tv_assign_direct(lp_tv2, rettv);
-                (*lp_tv2.0.cast::<TypvalTRepr>()).v_lock = nvim_var_unlocked();
+                tv_assign_direct(lp_tv2, rettv);
+                (*lp_tv2.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED_CONST;
                 nvim_tv_init(rettv);
             }
         }
@@ -1162,7 +1197,7 @@ unsafe fn set_var_lval_impl(
                 tv_clear(oldtv);
             }
         }
-        nvim_tv_free(oldtv);
+        tv_free_handle(oldtv);
     }
 }
 

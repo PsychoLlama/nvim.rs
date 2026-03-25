@@ -1450,6 +1450,18 @@ unsafe fn alloc_typval() -> TypevalHandle {
     TypevalHandle(ptr)
 }
 
+/// Raw copy `*src` to `*dst` and reset `src->v_type` to VAR_UNKNOWN.
+/// Equivalent to the old `nvim_tv_raw_copy_and_reset` C wrapper.
+#[inline]
+unsafe fn tv_raw_copy_and_reset(dst: TypevalHandle, src: TypevalHandle) {
+    std::ptr::copy_nonoverlapping(
+        src.as_ptr().cast::<u8>(),
+        dst.as_ptr().cast::<u8>(),
+        std::mem::size_of::<TypvalTRepr>(),
+    );
+    (*src.as_ptr().cast::<TypvalTRepr>()).v_type = 0; // VAR_UNKNOWN
+}
+
 /// Free a temporary typval
 unsafe fn free_typval(tv: TypevalHandle) {
     if !tv.is_null() {
@@ -1916,8 +1928,7 @@ extern "C" {
     fn nvim_partial_get_argc(pt: *const c_void) -> c_int;
     fn nvim_partial_get_dict(pt: *const c_void) -> *mut c_void;
 
-    // Typval direct assign (struct copy)
-    fn nvim_tv_assign_direct(dst: TypevalHandle, src: TypevalHandle);
+    // (nvim_tv_assign_direct inlined as *dst = *src via TypvalTRepr)
 
     // ASCII whitespace check
     fn rs_ascii_iswhite(c: c_int) -> c_int;
@@ -1959,7 +1970,11 @@ pub unsafe fn eval_method_impl(
 
     // Move rettv into base: base = *rettv, rettv->v_type = VAR_UNKNOWN
     let base = alloc_typval();
-    nvim_tv_assign_direct(base, rettv);
+    std::ptr::copy_nonoverlapping(
+        rettv.as_ptr().cast::<u8>(),
+        base.as_ptr().cast::<u8>(),
+        std::mem::size_of::<TypvalTRepr>(),
+    );
     nvim_tv_set_type(rettv, VAR_UNKNOWN);
 
     // Locate the method name.
@@ -3371,8 +3386,7 @@ extern "C" {
         evalarg: EvalargHandle,
     ) -> c_int;
     // Emit e_nowhitespace, e_missingparen, e_empty_function_name: now in nvim_eval::errors
-    // Raw copy typval bytes from src to dst, sets src type to VAR_UNKNOWN
-    fn nvim_tv_raw_copy_and_reset(dst: TypevalHandle, src: TypevalHandle);
+    // (nvim_tv_raw_copy_and_reset inlined)
 }
 
 /// Implementation of call_func_rettv: invoke a funcref/partial stored in rettv.
@@ -3404,7 +3418,7 @@ unsafe fn call_func_rettv_impl(
     let funcname: *const c_char;
     if evaluate {
         // Copy *rettv into functv, then reset rettv to VAR_UNKNOWN
-        nvim_tv_raw_copy_and_reset(functv, rettv);
+        tv_raw_copy_and_reset(functv, rettv);
 
         let tv_type = nvim_tv_get_type(functv);
         if tv_type == VAR_PARTIAL {
@@ -3515,7 +3529,7 @@ unsafe fn eval_lambda_impl(
 
     // Save base typval and reset rettv
     let base = alloc_typval();
-    nvim_tv_raw_copy_and_reset(base, rettv);
+    tv_raw_copy_and_reset(base, rettv);
 
     let ret;
     let lambda_ret = nvim_get_lambda_tv(arg, rettv, evalarg);

@@ -37,8 +37,6 @@ extern "C" {
 
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
-    fn nvim_tv_alloc_zero() -> *mut c_void;
-    fn nvim_tv_set_number_zero(tv: *mut c_void);
     fn tv_clear(tv: *mut c_void);
     fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
 
@@ -53,12 +51,13 @@ extern "C" {
     // ----- provider caller scope save/restore -----
     fn nvim_save_provider_caller_scope() -> *mut c_void;
     fn nvim_restore_provider_caller_scope(saved: *mut c_void);
-    fn nvim_provider_call_nesting_inc();
-    fn nvim_provider_call_nesting_dec();
+    static mut provider_call_nesting: c_int;
 
     // ----- funccal save/restore -----
-    fn nvim_eval_save_funccal() -> *mut c_void;
-    fn nvim_eval_restore_funccal(entry: *mut c_void);
+    #[link_name = "save_funccal"]
+    fn nvim_save_funccal_inner(entry: *mut c_void);
+    #[link_name = "restore_funccal"]
+    fn nvim_restore_funccal_inner();
 
     // ----- direct call_func (replaces nvim_eval_provider_call_func) -----
     fn call_func(
@@ -71,6 +70,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_curwin_get_cursor_lnum() -> i32;
     fn nvim_tv_set_type(tv: *mut c_void, vtype: c_int);
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // ----- string utilities -----
     #[link_name = "strchrsub"]
@@ -92,6 +92,17 @@ extern "C" {
 const VAR_NUMBER: c_int = 1;
 const VAR_STRING: c_int = 2;
 const FAIL: c_int = 0;
+
+// =============================================================================
+// funccal_entry_T layout (Phase 4)
+// =============================================================================
+
+/// Rust mirror of C `funccal_entry_T` ({void*, funccal_entry_T*}).
+#[repr(C)]
+struct FunccalEntryT {
+    top_funccal: *mut c_void,
+    next: *mut FunccalEntryT,
+}
 
 // =============================================================================
 // Provider name table
@@ -165,7 +176,7 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
     pos += suffix.len();
     let varname_len = pos as c_int;
 
-    let rettv = unsafe { nvim_tv_alloc_zero() };
+    let rettv = unsafe { xcalloc(1, std::mem::size_of::<TypvalTRepr>()) };
 
     // Try to get g:loaded_<name>_provider
     if unsafe {
@@ -288,7 +299,12 @@ pub unsafe extern "C" fn rs_eval_call_provider(
 ) {
     if !unsafe { rs_eval_has_provider(provider, false) } {
         unsafe { nvim_eval::errors::semsg_no_provider(provider) };
-        unsafe { nvim_tv_set_number_zero(out_rettv) };
+        unsafe {
+            let tv = out_rettv.cast::<TypvalTRepr>();
+            (*tv).v_type = VAR_NUMBER;
+            (*tv).v_lock = 0; // VAR_UNLOCKED
+            (*tv).vval.v_number = 0;
+        };
         return;
     }
 
@@ -311,8 +327,9 @@ pub unsafe extern "C" fn rs_eval_call_provider(
 
     // Save caller scope
     let saved_scope = unsafe { nvim_save_provider_caller_scope() };
-    let funccal_entry = unsafe { nvim_eval_save_funccal() };
-    unsafe { nvim_provider_call_nesting_inc() };
+    let funccal_entry = unsafe { xcalloc(1, std::mem::size_of::<FunccalEntryT>()) };
+    unsafe { nvim_save_funccal_inner(funccal_entry) };
+    unsafe { provider_call_nesting += 1 };
 
     // Ref the arguments list for the call
     unsafe { nvim_eval_list_ref(arguments) };
@@ -350,9 +367,13 @@ pub unsafe extern "C" fn rs_eval_call_provider(
     unsafe { nvim_tv_list_unref(arguments) };
 
     // Restore
-    unsafe { nvim_eval_restore_funccal(funccal_entry) };
+    unsafe { nvim_restore_funccal_inner() };
+    unsafe { xfree(funccal_entry) };
     unsafe { nvim_restore_provider_caller_scope(saved_scope) };
-    unsafe { nvim_provider_call_nesting_dec() };
+    unsafe {
+        provider_call_nesting -= 1;
+        debug_assert!(provider_call_nesting >= 0);
+    };
 
     if discard {
         unsafe { tv_clear(out_rettv) };

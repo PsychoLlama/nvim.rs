@@ -11,6 +11,35 @@ use crate::ExArgHandle;
 use nvim_normal::types::OpargT;
 
 // =============================================================================
+// Exception / msglist repr(C) structs (Phase 4)
+// =============================================================================
+
+/// Rust mirror of C `msglist_T` (struct msglist).
+/// Fields accessed: next, msg, multiline.
+#[repr(C)]
+struct MsglistT {
+    next: *mut MsglistT,
+    msg: *mut c_char,
+    throw_msg: *mut c_char,
+    sfile: *mut c_char,
+    slnum: i32, // linenr_T
+    multiline: bool,
+}
+
+/// Rust mirror of C `except_T` (struct vim_exception).
+/// Fields accessed: type, value, messages, throw_name, throw_lnum.
+#[repr(C)]
+struct ExceptT {
+    type_: c_int, // except_type_T (int)
+    value: *mut c_char,
+    messages: *mut MsglistT,
+    throw_name: *mut c_char,
+    throw_lnum: i32, // linenr_T
+    stacktrace: *mut c_void,
+    caught: *mut ExceptT,
+}
+
+// =============================================================================
 // Type aliases
 // =============================================================================
 
@@ -857,20 +886,11 @@ extern "C" {
     fn nvim_docmd_errmsg_trailing_arg(arg: *const c_char) -> *mut c_char;
     fn nvim_eap_set_errmsg(eap: ExArgHandle, msg: *mut c_char);
 
-    // handle_did_throw helpers
-    fn nvim_exception_get_type() -> c_int;
-    fn nvim_exception_get_value() -> *mut c_char;
-    fn nvim_exception_take_messages() -> *mut c_void;
-    fn nvim_exception_get_throw_name() -> *mut c_char;
-    fn nvim_exception_get_throw_lnum() -> c_int;
-    fn nvim_exception_set_throw_name_null();
-    fn nvim_msglist_get_next(m: *mut c_void) -> *mut c_void;
-    fn nvim_msglist_get_msg(m: *mut c_void) -> *mut c_char;
-    fn nvim_msglist_is_multiline(m: *mut c_void) -> c_int;
-    fn nvim_msglist_free_item(m: *mut c_void);
+    // handle_did_throw globals (Phase 4)
+    static mut current_exception: *mut ExceptT;
+    static mut suppress_errthrow: bool;
+    static mut force_abort: bool;
     static mut emsg_silent: c_int;
-    fn nvim_set_suppress_errthrow(val: bool);
-    fn nvim_set_force_abort(val: bool);
     fn nvim_docmd_fmt_exception_not_caught(value: *const c_char) -> *mut c_char;
     fn nvim_docmd_free_sourcing_name_and_pop();
     #[link_name = "discard_current_exception"]
@@ -1450,18 +1470,20 @@ pub unsafe extern "C" fn rs_handle_did_throw_impl() {
     // ET_INTERRUPT = 2 (fall-through: no message)
     const HLF_E: c_int = 6; // ErrorMsg highlight group
 
-    let etype = nvim_exception_get_type();
+    let exc = current_exception;
+    let etype = (*exc).type_;
     let p: *mut c_char;
-    let messages: *mut c_void;
+    let messages: *mut MsglistT;
 
     match etype {
         ET_USER => {
-            p = nvim_docmd_fmt_exception_not_caught(nvim_exception_get_value());
+            p = nvim_docmd_fmt_exception_not_caught((*exc).value);
             messages = std::ptr::null_mut();
         }
         ET_ERROR => {
             p = std::ptr::null_mut();
-            messages = nvim_exception_take_messages();
+            messages = (*exc).messages;
+            (*exc).messages = std::ptr::null_mut();
         }
         _ => {
             // ET_INTERRUPT: no message
@@ -1471,31 +1493,33 @@ pub unsafe extern "C" fn rs_handle_did_throw_impl() {
     }
 
     // Push throw location onto execution stack.
-    let throw_name = nvim_exception_get_throw_name();
-    let throw_lnum = nvim_exception_get_throw_lnum();
+    let throw_name = (*exc).throw_name;
+    let throw_lnum = (*exc).throw_lnum;
     nvim_estack_push(5 /* ETYPE_EXCEPT */, throw_name, throw_lnum);
-    nvim_exception_set_throw_name_null();
+    (*exc).throw_name = std::ptr::null_mut();
 
     nvim_discard_current_exception(); // uses IObuff if 'verbose'
 
     // If "silent!" is not active, mark as fatal.
     if emsg_silent == 0 {
-        nvim_set_suppress_errthrow(true);
-        nvim_set_force_abort(true);
+        suppress_errthrow = true;
+        force_abort = true;
     }
 
     // Display the error message(s).
     if !messages.is_null() {
         let mut cur = messages;
         while !cur.is_null() {
-            let next = nvim_msglist_get_next(cur);
+            let next = (*cur).next;
             emsg_multiline(
-                nvim_msglist_get_msg(cur),
+                (*cur).msg,
                 c"emsg".as_ptr(),
                 HLF_E,
-                nvim_msglist_is_multiline(cur),
+                c_int::from((*cur).multiline),
             );
-            nvim_msglist_free_item(cur);
+            xfree((*cur).msg as *mut c_void);
+            xfree((*cur).sfile as *mut c_void);
+            xfree(cur as *mut c_void);
             cur = next;
         }
     } else if !p.is_null() {

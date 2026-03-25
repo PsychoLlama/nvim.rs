@@ -24,6 +24,17 @@ use crate::eval::{EvalargHandle, EvalargT, ExargHandle, LineGetter, TypevalHandl
 use crate::funcexe::FuncExeT;
 
 // =============================================================================
+// funccal_entry_T layout (Phase 4)
+// =============================================================================
+
+/// Rust mirror of C `funccal_entry_T`.
+#[repr(C)]
+struct FunccalEntryT {
+    top_funccal: *mut c_void,
+    next: *mut c_void,
+}
+
+// =============================================================================
 // Constants
 // =============================================================================
 
@@ -65,8 +76,12 @@ extern "C" {
     static mut textlock: c_int;
 
     // funccal save/restore
-    fn nvim_eval_save_funccal() -> *mut c_void;
-    fn nvim_eval_restore_funccal(entry: *mut c_void);
+    #[link_name = "save_funccal"]
+    fn nvim_save_funccal_inner(entry: *mut c_void);
+    #[link_name = "restore_funccal"]
+    fn nvim_restore_funccal_inner();
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
 
     // may_call_simple_func
     fn nvim_eval_may_call_simple_func(arg: *const c_char, rettv: TypevalHandle) -> c_int;
@@ -114,7 +129,6 @@ extern "C" {
     fn nvim_eap_set_cmdline_tofree(eap: ExargHandle, val: *mut c_char);
     fn nvim_eap_get_cmdlinep_deref(eap: ExargHandle) -> *mut c_char;
     fn nvim_eap_set_cmdlinep_deref(eap: ExargHandle, val: *mut c_char);
-    fn xfree(ptr: *mut c_void);
 
     // Phase 5: may_call_simple_func / eval_expr_ext accessors
     #[link_name = "call_simple_luafunc"]
@@ -490,7 +504,8 @@ pub unsafe extern "C" fn rs_eval_to_string_safe(
     use_sandbox: bool,
     use_simple_function: bool,
 ) -> *mut c_char {
-    let entry = nvim_eval_save_funccal();
+    let entry = xcalloc(1, std::mem::size_of::<FunccalEntryT>());
+    nvim_save_funccal_inner(entry);
     if use_sandbox {
         sandbox += 1;
     }
@@ -502,7 +517,8 @@ pub unsafe extern "C" fn rs_eval_to_string_safe(
         sandbox -= 1;
     }
     textlock -= 1;
-    nvim_eval_restore_funccal(entry);
+    nvim_restore_funccal_inner();
+    xfree(entry);
 
     retval
 }
@@ -980,10 +996,12 @@ pub unsafe extern "C" fn rs_set_argv_var(argv: *mut *mut c_char, argc: c_int) {
 /// `name` must be a valid C string. `vartv` must be a valid typval_T.
 #[export_name = "var_set_global"]
 pub unsafe extern "C" fn rs_var_set_global(name: *const c_char, vartv: TypevalHandle) {
-    let entry = nvim_eval_save_funccal();
+    let entry = xcalloc(1, std::mem::size_of::<FunccalEntryT>());
+    nvim_save_funccal_inner(entry);
     let name_len = libc_strlen(name);
     nvim_set_var_wrapper(name, name_len, vartv);
-    nvim_eval_restore_funccal(entry);
+    nvim_restore_funccal_inner();
+    xfree(entry);
 }
 
 /// Write "<sourcing_name>:<sourcing_lnum>" to buf[bufsize].
@@ -1421,7 +1439,8 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     let use_sandbox = fs.insecure_foldtext;
     let arg = fs.foldtext;
 
-    let funccal = nvim_eval_save_funccal();
+    let funccal = xcalloc(1, std::mem::size_of::<FunccalEntryT>());
+    nvim_save_funccal_inner(funccal);
     if use_sandbox {
         sandbox += 1;
     }
@@ -1445,6 +1464,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
         sandbox -= 1;
     }
     textlock -= 1;
-    nvim_eval_restore_funccal(funccal);
+    nvim_restore_funccal_inner();
+    xfree(funccal);
     xfree(tv);
 }

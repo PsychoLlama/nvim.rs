@@ -48,7 +48,7 @@ extern "C" {
     static mut emsg_skip: c_int;
     static mut did_emsg: c_int;
     static mut called_emsg: c_int;
-    fn nvim_get_force_abort() -> c_int;
+    static force_abort: bool;
 
     // semsg with e_invexpr2: now in nvim_eval::errors
 
@@ -383,7 +383,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
             // We don't want to abort following commands, restore did_emsg.
             let save_did_emsg = did_emsg;
             nvim_emsg_multiline_echoerr(data);
-            if nvim_get_force_abort() == 0 {
+            if !force_abort {
                 did_emsg = save_did_emsg;
             }
         } else if cmdidx == cmd_execute {
