@@ -257,9 +257,8 @@ extern "C" {
 // These access ll_tv->vval.* or ll_dict->* etc., which are C struct internals
 // not accessible directly from Rust without replicating more struct layouts.
 extern "C" {
-    // Alloc dict in ll_tv if null; return dict pointer.
-    // Takes lval_T* (as *mut c_void for Rust FFI).
-    fn nvim_lval_alloc_dict_if_null(lp: *mut c_void);
+    // tv_dict_alloc for nvim_lval_alloc_dict_if_null inline
+    fn tv_dict_alloc() -> *mut c_void;
 
     // tv_list_alloc_ret on ll_tv; sets ll_tv->v_type = VAR_LIST, allocates list.
     fn nvim_lval_tv_list_alloc_ret(lp: *mut c_void);
@@ -272,7 +271,7 @@ extern "C" {
 
     // Scope checks on ll_dict:
     fn nvim_lval_dict_is_v_or_a_scope(lp: *const c_void) -> bool;
-    fn nvim_lval_dict_scope(lp: *const c_void) -> c_int;
+    // (nvim_lval_dict_scope inlined via DictTHead.dv_scope)
     fn nvim_lval_dict_scope_check(
         lp: *mut c_void,
         key: *mut c_char,
@@ -348,14 +347,22 @@ unsafe fn get_lval_dict_item_impl(
     (*lp).ll_list = std::ptr::null_mut();
 
     // NULL dict => allocate empty dict and set ll_dict
-    nvim_lval_alloc_dict_if_null(lp as *mut c_void);
+    {
+        let tv_dict = (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_dict;
+        if tv_dict.is_null() {
+            let new_dict = tv_dict_alloc();
+            (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_dict = new_dict;
+            (*new_dict.cast::<DictTHead>()).dv_refcount += 1;
+        }
+        (*lp).ll_dict = (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_dict;
+    }
 
     // Find key in dict: sets lp->ll_di
     (*lp).ll_di = tv_dict_find((*lp).ll_dict as *const c_void, key, len as isize);
 
     // Scope check: when assigning to scope dict, validate name
     if !rettv.is_null()
-        && nvim_lval_dict_scope(lp as *const c_void) != 0
+        && (*(*lp).ll_dict.cast::<DictTHead>()).dv_scope != 0
         && nvim_lval_dict_scope_check(lp as *mut c_void, key, len, rettv)
     {
         return GlvStatus::Fail;

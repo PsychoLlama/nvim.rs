@@ -816,12 +816,6 @@ bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
          || &lp->ll_dict->dv_hashtab == get_funccal_args_ht();
 }
 
-/// Returns dv_scope from ll_dict - accessor for Rust.
-int nvim_lval_dict_scope(const lval_T *lp)
-{
-  return lp->ll_dict->dv_scope;
-}
-
 /// Composite: var_check_ro || var_check_lock on di_flags - accessor for Rust.
 bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len)
 {
@@ -833,18 +827,6 @@ bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_
 void nvim_lval_set_tv_to_li_tv(lval_T *lp)
 {
   lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li);
-}
-
-/// Increment dict refcount and assign to ll_tv->vval.v_dict; set ll_dict = dict - accessor for Rust.
-/// Replicates: lp->ll_tv->vval.v_dict = tv_dict_alloc(); lp->ll_tv->vval.v_dict->dv_refcount++;
-/// lp->ll_dict = lp->ll_tv->vval.v_dict
-void nvim_lval_alloc_dict_if_null(lval_T *lp)
-{
-  if (lp->ll_tv->vval.v_dict == NULL) {
-    lp->ll_tv->vval.v_dict = tv_dict_alloc();
-    lp->ll_tv->vval.v_dict->dv_refcount++;
-  }
-  lp->ll_dict = lp->ll_tv->vval.v_dict;
 }
 
 /// Alloc list and set ll_tv - composite accessor for Rust.
