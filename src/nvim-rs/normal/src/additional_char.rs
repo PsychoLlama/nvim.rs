@@ -66,9 +66,11 @@ extern "C" {
     fn do_sleep(ms: c_int, allow_int: bool);
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
     fn vungetc(c: c_int);
-    fn nvim_get_op_type_wrapper(c1: c_int, c2: c_int) -> c_int;
-    fn nvim_get_p_ttm() -> i64;
-    fn nvim_get_p_tm() -> i64;
+    fn get_op_type(c1: c_int, c2: c_int) -> c_int;
+    #[link_name = "p_ttm"]
+    static p_ttm: i64;
+    #[link_name = "p_tm"]
+    static p_tm: i64;
 
     // Phase 6: composing char handler accessors
     fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
@@ -77,7 +79,8 @@ extern "C" {
     fn utf_char2len(c: c_int) -> c_int;
     fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn nvim_get_MB_BYTE2LEN(c: c_int) -> c_int;
-    fn nvim_gotchars_ignore_wrapper();
+    static mut no_u_sync: c_int;
+    fn gotchars_ignore();
 
     // find_command (already in Rust, but we need the C wrapper)
     fn rs_find_command(cmdchar: c_int) -> c_int;
@@ -185,14 +188,14 @@ unsafe fn read_target_char(
     } else if (nchar == c_int::from(b'n') || nchar == c_int::from(b'N'))
         && cmdchar == c_int::from(b'g')
     {
-        let op_type = nvim_get_op_type_wrapper(target.get(ca), 0);
+        let op_type = get_op_type(target.get(ca), 0);
         nvim_oap_set_op_type(oa, op_type);
     } else if target.get(ca) == CTRL_BSL {
         #[allow(clippy::cast_possible_truncation)]
-        let mut towait: c_int = if nvim_get_p_ttm() >= 0 {
-            nvim_get_p_ttm() as c_int
+        let mut towait: c_int = if p_ttm >= 0 {
+            p_ttm as c_int
         } else {
-            nvim_get_p_tm() as c_int
+            p_tm as c_int
         };
 
         // Busy wait when typing "f<C-\>" and then something else.
@@ -368,5 +371,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
     }
 
     nvim_inc_no_mapping();
-    nvim_gotchars_ignore_wrapper(); // wraps no_u_sync++ / gotchars_ignore() / no_u_sync--
+    no_u_sync += 1;
+    gotchars_ignore();
+    no_u_sync -= 1;
 }

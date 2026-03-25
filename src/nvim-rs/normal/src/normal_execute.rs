@@ -107,7 +107,7 @@ extern "C" {
     fn rs_start_selection();
     fn rs_unshift_special(cmdchar: c_int, modp: *mut c_int) -> c_int;
     fn nvim_set_mod_mask(val: c_int);
-    fn nvim_mod_mask_clear_shift();
+    static mut mod_mask: c_int;
     #[link_name = "rs_execute_dispatch"]
     fn nvim_execute_nv_cmd(idx: c_int, ca: CapHandle);
 
@@ -118,8 +118,7 @@ extern "C" {
     fn nvim_dec_no_mapping();
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
-    fn nvim_inc_no_zero_mapping();
-    fn nvim_dec_no_zero_mapping();
+    static mut no_zero_mapping: c_int;
     fn nvim_plain_vgetc_wrapper() -> c_int;
     fn nvim_get_km_stopsel() -> bool;
     fn nvim_redraw_curbuf_inverted();
@@ -310,7 +309,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
                 (*sp).idx = new_idx;
             } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
                 rs_start_selection();
-                nvim_mod_mask_clear_shift();
+                mod_mask &= !MOD_MASK_SHIFT;
             }
         }
 
@@ -374,11 +373,11 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
             nvim_inc_allow_keys(); // no mapping for nchar, but keys
         }
 
-        nvim_inc_no_zero_mapping(); // don't map zero here
+        no_zero_mapping += 1; // don't map zero here
         let new_c = nvim_plain_vgetc_wrapper();
         let adjusted = nvim_langmap_adjust(new_c, true);
         (*sp).c = adjusted;
-        nvim_dec_no_zero_mapping();
+        no_zero_mapping -= 1;
         if (*sp).ctrl_w {
             nvim_dec_no_mapping();
             nvim_dec_allow_keys();
@@ -444,7 +443,7 @@ pub unsafe extern "C" fn rs_normal_handle_special_visual_command(s: NormalStateH
                 return true;
             }
         } else if (flags & NV_SSS != 0) && (nvim_get_mod_mask() & MOD_MASK_SHIFT != 0) {
-            nvim_mod_mask_clear_shift();
+            mod_mask &= !MOD_MASK_SHIFT;
         }
     }
     false

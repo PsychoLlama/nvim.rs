@@ -503,8 +503,6 @@ void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
 
 
-bool nvim_normal_get_got_int(void) { return got_int; }
-
 
 // =============================================================================
 // Visual operator accessors for Rust FFI
@@ -534,7 +532,6 @@ bool nvim_cursor_line_col_is_white(int col) { char *ptr = get_cursor_line_ptr();
 bool nvim_stuff_empty(void) { return stuff_empty(); }
 
 
-bool nvim_vim_strchr_p_slm(int c) { return vim_strchr(p_slm, c) != NULL; }
 
 bool nvim_set_cursor_from_last_insert(void) { if (curbuf->b_last_insert.mark.lnum != 0) { curwin->w_cursor = curbuf->b_last_insert.mark; return true; } return false; }
 
@@ -748,7 +745,6 @@ int nvim_getvcol_visual_coladd_after_adj(void) {
 // =============================================================================
 
 // Accessors for undo/redo Rust implementations
-bool nvim_get_p_to(void) { return p_to; }
 
 // =============================================================================
 // Insert mode entry handler accessors for Rust FFI
@@ -809,7 +805,6 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 
 // g-command C accessors for Rust FFI
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
-void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
 // nv_screengo C accessors for Rust FFI
@@ -918,18 +913,8 @@ bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
 
 
 /// Wrapper for get_op_type.
-int nvim_get_op_type_wrapper(int c1, int c2) { return get_op_type(c1, c2); }
-
-/// Get p_ttm.
-long nvim_get_p_ttm(void) { return p_ttm; }
-/// Get p_tm.
-long nvim_get_p_tm(void) { return p_tm; }
-
 /// Get MB_BYTE2LEN for a character.
 int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
-
-void nvim_gotchars_ignore_wrapper(void) { no_u_sync++; gotchars_ignore(); no_u_sync--; }
-
 
 
 // =============================================================================
@@ -1007,10 +992,6 @@ _Static_assert(offsetof(NormalState, idx) == 208, "NormalState.idx offset change
 _Static_assert(offsetof(NormalState, c) == 212, "NormalState.c offset changed");
 _Static_assert(offsetof(NormalState, old_col) == 216, "NormalState.old_col offset changed");
 _Static_assert(offsetof(NormalState, old_pos) == 220, "NormalState.old_pos offset changed");
-
-/// set_reg_var(get_default_register_name()).
-void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
-
 
 
 /// Get clear_cmdline global.
@@ -1092,17 +1073,11 @@ bool nvim_get_km_startsel(void) { return km_startsel; }
 /// Get km_stopsel global.
 bool nvim_get_km_stopsel(void) { return km_stopsel; }
 
-/// Increment no_zero_mapping.
-void nvim_inc_no_zero_mapping(void) { no_zero_mapping++; }
-/// Decrement no_zero_mapping.
-void nvim_dec_no_zero_mapping(void) { no_zero_mapping--; }
 
 /// Get curwin->w_p_rl.
 bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
 
 
-/// Clear MOD_MASK_SHIFT from mod_mask.
-void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
 
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
 
@@ -1458,9 +1433,6 @@ bool nvim_ident_curbuf_is_help(void) { return curbuf->b_help; }
 
 /// Return curbuf's filetype string.
 char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
-
-/// Return get_cursor_line_ptr().
-char *nvim_ident_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
 
 /// Return mb_prevptr(line, p).

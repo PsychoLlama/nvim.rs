@@ -59,7 +59,8 @@ extern "C" {
 
     // Phase 3 wrappers
     fn rs_clearop(oap: OapHandle);
-    fn nvim_set_reg_var_default();
+    fn set_reg_var(c: c_int);
+    fn get_default_register_name() -> c_int;
     fn typebuf_maplen() -> c_int;
     fn do_pending_operator(ca: CapHandle, old_col: c_int, gui_yank: bool);
     fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool;
@@ -111,7 +112,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             && (idx < 0 || (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_KEEPREG == 0))
         {
             rs_clearop(oa);
-            nvim_set_reg_var_default();
+            set_reg_var(get_default_register_name());
         }
 
         // Get the length of mapped chars again after typing a count,
@@ -139,7 +140,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     msg_nowait = false;
 
     if nvim_get_finish_op() != 0 || did_visual_op {
-        nvim_set_reg_var_default();
+        set_reg_var(get_default_register_name());
     }
 
     let prev_finish_op = nvim_get_finish_op() != 0;
