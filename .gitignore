@@ -98,3 +98,4 @@ Cargo.lock
 
 # Migration plans (local work, not committed)
 /ref/plans/
+.claude/worktrees/
