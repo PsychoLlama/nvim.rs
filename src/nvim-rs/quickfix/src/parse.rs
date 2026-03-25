@@ -2163,7 +2163,8 @@ extern "C" {
     fn nvim_qfline_set_viscol(qfp: *mut c_void, viscol: c_char);
     fn nvim_qfline_set_end_col(qfp: *mut c_void, end_col: c_int);
     fn nvim_qfline_set_fnum(qfp: *mut c_void, fnum: c_int);
-    // nvim_qfline_append_text replaced by inline Rust + nvim_qfline_replace_text (Phase 14)
+    // nvim_qfline_replace_text is an alias for nvim_qfline_set_text
+    #[link_name = "nvim_qfline_set_text"]
     fn nvim_qfline_replace_text(qfp: *mut c_void, text: *const c_char);
 
     // misc

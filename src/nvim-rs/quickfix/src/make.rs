@@ -200,6 +200,7 @@ extern "C" {
     fn nvim_qf_set_listcount(qi: *mut c_void, n: c_int);
     // nvim_qf_get_curlist_idx already declared above (line 141)
     fn nvim_qf_set_curlist_idx(qi: *mut c_void, n: c_int);
+    #[link_name = "nvim_qf_get_list_at"]
     fn nvim_qi_get_list_qi(qi: *mut c_void, idx: c_int) -> *mut c_void;
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
     fn nvim_qf_free_all_win(to_win: *mut c_void);

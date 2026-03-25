@@ -689,6 +689,7 @@ extern "C" {
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
 
     // qf_list_T accessors
+    #[link_name = "nvim_qf_get_has_user_data"]
     fn nvim_qf_has_user_data(qfl: *const c_void) -> bool;
     fn nvim_qf_get_ctx(qfl: *const c_void) -> *mut c_void;
 

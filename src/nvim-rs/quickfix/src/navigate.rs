@@ -1725,9 +1725,13 @@ pub mod jump_machinery {
         static mut msg_scrolled: c_int;
         fn nvim_update_screen();
         fn nvim_qf_get_curlist_count(qi: *const c_void) -> c_int;
+        #[link_name = "nvim_qfline_get_cleared"]
         fn nvim_qfline_get_cleared_bool(qfp: QfLineHandle) -> bool;
+        #[link_name = "nvim_qfline_get_type"]
         fn nvim_qfline_get_type_char(qfp: QfLineHandle) -> std::ffi::c_char;
+        #[link_name = "nvim_qfline_get_nr"]
         fn nvim_qfline_get_nr_int(qfp: QfLineHandle) -> c_int;
+        #[link_name = "nvim_qfline_get_text"]
         fn nvim_qfline_get_text_ptr(qfp: QfLineHandle) -> *const std::ffi::c_char;
         fn skipwhite(s: *const std::ffi::c_char) -> *mut std::ffi::c_char;
         static mut msg_scroll: c_int;

@@ -686,9 +686,6 @@ void *nvim_qf_tv_get_dict(const void *tv) { return (tv == NULL || ((const typval
 /// Get a list from a typval_T (qf-specific void* version).
 void *nvim_qf_tv_get_list(const void *tv) { return (tv == NULL || ((const typval_T *)tv)->v_type != VAR_LIST) ? NULL : ((const typval_T *)tv)->vval.v_list; }
 
-/// Get the qfl->qf_ctx as a raw pointer (NULL if not set).
-void *nvim_qfl_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
-
 /// Check if a dict has 'lines' key with a VAR_LIST value and non-NULL list.
 bool nvim_tv_dict_has_lines_key(const void *dict)
 {
@@ -754,28 +751,11 @@ void *nvim_qf_get_list_handle(const void *qi_void, int qf_idx)
 }
 
 
-/// Free the qfl->qf_ctx field (tv_free + set to NULL).
-void nvim_qfl_free_ctx(void *qfl_void)
-{
-  if (qfl_void == NULL) { return; }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  tv_free(qfl->qf_ctx);
-  qfl->qf_ctx = NULL;
-}
-
 /// Set qfl->qf_ctx to the given heap typval_T pointer.
 void nvim_qfl_set_ctx(void *qfl_void, void *ctx_tv)
 {
   if (qfl_void != NULL) {
     ((qf_list_T *)qfl_void)->qf_ctx = (typval_T *)ctx_tv;
-  }
-}
-
-/// callback_free on qfl->qf_qftf_cb.
-void nvim_qfl_free_qftf_cb(void *qfl_void)
-{
-  if (qfl_void != NULL) {
-    callback_free(&((qf_list_T *)qfl_void)->qf_qftf_cb);
   }
 }
 
@@ -938,7 +918,6 @@ void nvim_win_set_llist_ref(void *wp_void, void *qi_void)
 
 
 void *nvim_qf_get_ctx(const void *qfl_void) { return qfl_void == NULL ? NULL : ((const qf_list_T *)qfl_void)->qf_ctx; }
-bool nvim_qf_has_user_data(const void *qfl_void) { return qfl_void == NULL ? false : ((const qf_list_T *)qfl_void)->qf_has_user_data; }
 void nvim_qf_incr_changedtick(void *qfl_void) { if (qfl_void != NULL) ((qf_list_T *)qfl_void)->qf_changedtick++; }
 
 // Looking up a buffer can be slow if there are many.  Remember the last one
@@ -1014,18 +993,6 @@ bool nvim_qf_vim_regexec(void *rm_void, const char *line)
   return vim_regexec((regmatch_T *)rm_void, line, 0);
 }
 
-
-/// Replace qf_text with the given string (xfrees old, xstrdups new).
-/// Used by Rust when it has already built the concatenated string.
-void nvim_qfline_replace_text(void *qfp_void, const char *text)
-{
-  if (qfp_void == NULL) {
-    return;
-  }
-  qfline_T *qfp = (qfline_T *)qfp_void;
-  xfree(qfp->qf_text);
-  qfp->qf_text = text != NULL ? xstrdup(text) : NULL;
-}
 
 /// Return sizeof(vimconv_T) for use in Rust xcalloc calls.
 size_t nvim_qf_sizeof_vimconv(void) { return sizeof(vimconv_T); }
@@ -1261,13 +1228,6 @@ int nvim_qf_get_curlist_count(const void *qi_void)
   const qf_info_T *qi = (const qf_info_T *)qi_void;
   return qi->qf_lists[qi->qf_curlist].qf_count;
 }
-bool nvim_qfline_get_cleared_bool(const void *qfp_void)
-{
-  return ((const qfline_T *)qfp_void)->qf_cleared != 0;
-}
-char nvim_qfline_get_type_char(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_type; }
-int nvim_qfline_get_nr_int(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_nr; }
-const char *nvim_qfline_get_text_ptr(const void *qfp_void) { return ((const qfline_T *)qfp_void)->qf_text; }
 const char *nvim_qf_gettext_line_deleted(void) { return _(" (line deleted)"); }
 
 bool nvim_qf_fdo_quickfix(void) { return (fdo_flags & kOptFdoFlagQuickfix) != 0; }
@@ -1601,7 +1561,6 @@ void *nvim_win_get_llist_or_ref(const void *from_win)
   return (void *)(IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist);
 }
 void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
-void *nvim_qi_get_list_qi(void *qi, int idx) { return (void *)&((qf_info_T *)qi)->qf_lists[idx]; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 
 

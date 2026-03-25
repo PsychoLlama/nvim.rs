@@ -1191,6 +1191,7 @@ extern "C" {
     fn nvim_qf_get_id(qfl: *const c_void) -> u32;
     fn nvim_qf_get_changedtick(qfl: *const c_void) -> c_int;
     fn nvim_qf_get_title(qfl: *const c_void) -> *const std::ffi::c_char;
+    #[link_name = "nvim_qf_get_ctx"]
     fn nvim_qfl_get_ctx(qfl: *const c_void) -> *mut c_void;
     fn nvim_qf_get_list_handle(qi: *const c_void, qf_idx: c_int) -> *mut c_void;
 
@@ -1255,8 +1256,10 @@ extern "C" {
     // Phase 8 set-side accessors
     fn tv_get_string_chk(tv: *const c_void) -> *const std::ffi::c_char;
     fn tv_free(tv: *mut c_void);
+    #[link_name = "nvim_qf_free_ctx"]
     fn nvim_qfl_free_ctx(qfl: *mut c_void);
     fn nvim_qfl_set_ctx(qfl: *mut c_void, ctx_tv: *mut c_void);
+    #[link_name = "nvim_qf_free_callback"]
     fn nvim_qfl_free_qftf_cb(qfl: *mut c_void);
     fn nvim_qfl_set_qftf_cb_from_tv(qfl: *mut c_void, tv: *mut c_void) -> bool;
     fn nvim_qf_set_curlist_idx(qi: *mut c_void, idx: c_int);
@@ -1265,6 +1268,7 @@ extern "C" {
     //  nvim_emsg_string_required deleted: use emsg/semsg directly)
     // emsg declared earlier in this file
     fn nvim_qf_tv_set_number(tv: *mut c_void, nr: i64);
+    #[link_name = "nvim_tv_is_list"]
     fn nvim_qf_tv_is_list_type(tv: *const c_void) -> bool;
 
     // Phase 15 inlined set-properties primitives
