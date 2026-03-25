@@ -218,9 +218,10 @@ extern "C" {
         forceit: c_int,
         verbose: bool,
     );
-    fn nvim_do_execreg_recorded() -> bool;
     fn nvim_normal_get_got_int() -> bool;
     fn line_breakcheck();
+    fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
+    static reg_recorded: c_int;
 
     // Wave 2 Phase 3: Visual operator accessors
     fn nvim_set_VIsual_mode(val: c_int);
@@ -1336,7 +1337,7 @@ extern "C" {
         flags: c_int,
     );
     fn nvim_put_free_register(savereg: *mut std::ffi::c_void);
-    fn nvim_auto_format_call();
+    fn auto_format(trailblank: bool, prev_line: bool);
     // Phase 1 new lower-level accessors for put helpers
     fn nvim_get_b_prompt_start_lnum_put() -> c_int;
     fn nvim_set_cursor_col_to_prompt_text_len();
@@ -2172,7 +2173,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
             nvim_coladvance_maxcol();
         }
     }
-    nvim_auto_format_call();
+    auto_format(false, true);
 }
 
 // =============================================================================
@@ -4361,7 +4362,7 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
 
 extern "C" {
     // Phase 1: nv_right_impl / nv_left_impl accessors
-    fn nvim_cursor_pos_ptr_is_nul() -> bool;
+    fn get_cursor_pos_ptr() -> *const c_char;
     fn nvim_lineempty_cursor() -> bool;
     fn nvim_vim_strchr_p_ww(c: c_int) -> bool;
     #[allow(dead_code)]
@@ -5307,7 +5308,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
 
         // Check if we can move right; for non-past_line, oneright() moves the cursor
         let cannot_move_right = if past_line {
-            nvim_cursor_pos_ptr_is_nul()
+            *get_cursor_pos_ptr() == 0
         } else {
             oneright() == 0
         };
@@ -5416,7 +5417,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
                     || nvim_oap_get_op_type_ptr(oap) == OP_CHANGE)
                     && !nvim_lineempty_cursor()
                 {
-                    if !nvim_cursor_pos_ptr_is_nul() {
+                    if *get_cursor_pos_ptr() != 0 {
                         nvim_cursor_col_inc_by_utfc();
                     }
                     (*cap.cast::<CmdargT>()).retval |= CA_NO_ADJ_OP_END_P1;
@@ -5518,15 +5519,20 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
 extern "C" {
     // nvim_nv_at_impl migrated to Rust in Phase 1
     // Phase 3: nv_join / nv_open accessors
-    fn nvim_do_join_call(count: c_int, insert_space: bool);
+    fn do_join(
+        count: usize,
+        insert_space: bool,
+        save_undo: bool,
+        use_fo: bool,
+        setmark: bool,
+    ) -> c_int;
     fn nv_diffgetput(put: bool, count: usize);
     fn nvim_cursor_count0_max2(cap: CapHandle) -> c_int;
-    fn nvim_do_execreg_call(regname: c_int) -> bool;
 
     // g-command C accessors
     fn current_search(count: c_int, forward: bool) -> bool;
     fn cursor_up(count: c_int, upd_topline: bool) -> c_int;
-    fn nvim_cursor_pos_info_call();
+    fn cursor_pos_info(dict: *mut std::ffi::c_void);
     fn nvim_invoke_edit_g(cap: CapHandle);
     fn nvim_set_mod_mask_ctrl();
     fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
@@ -6280,7 +6286,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
 
         // "g CTRL-G": display info about cursor position
         n if n == CTRL_G_KEY => {
-            nvim_cursor_pos_info_call();
+            cursor_pos_info(std::ptr::null_mut());
         }
 
         // "gi": start Insert at the last position.
@@ -6502,7 +6508,7 @@ pub unsafe extern "C" fn rs_nv_at(cap: CapHandle) {
     let mut count = nvim_cap_get_count1(cap);
     while count > 0 && !nvim_normal_get_got_int() {
         count -= 1;
-        if !nvim_do_execreg_call(nchar) {
+        if do_execreg(nchar, 0, 0, 0) == 0 {
             rs_clearopbeep(oap);
             break;
         }
@@ -6552,7 +6558,10 @@ pub unsafe extern "C" fn rs_nv_join(cap: CapHandle) {
     rs_prep_redo(
         regname, count0, NUL_CHAR, cmdchar, NUL_CHAR, NUL_CHAR, nchar,
     );
-    nvim_do_join_call(count0, nchar == NUL_CHAR);
+    // count0 is clamped to >= 2 above, so cast is safe
+    #[allow(clippy::cast_sign_loss)]
+    let count0_usize = count0 as usize;
+    do_join(count0_usize, nchar == NUL_CHAR, true, true, true);
 }
 
 /// Command handler for "o" and "O" open line commands.
@@ -6736,7 +6745,7 @@ pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
     let mut count1 = nvim_cap_get_count1(cap);
     while count1 > 0 && !nvim_normal_get_got_int() {
         count1 -= 1;
-        if !nvim_do_execreg_recorded() {
+        if do_execreg(reg_recorded, 0, 0, 0) == 0 {
             rs_clearopbeep(oap);
             break;
         }
@@ -7655,7 +7664,7 @@ extern "C" {
     fn nvim_get_cursor_pos_ptr_len() -> c_int;
     fn nvim_get_curwin_w_redr_type() -> c_int;
     fn nvim_curwin_set_old_visual_lnums();
-    fn nvim_redraw_curbuf_later_valid();
+    fn redraw_curbuf_later(type_val: c_int);
     fn rs_foldAdjustVisual();
 }
 
@@ -7700,7 +7709,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     if nvim_get_curwin_w_redr_type() < UPD_INVERTED {
         nvim_curwin_set_old_visual_lnums();
     }
-    nvim_redraw_curbuf_later_valid();
+    redraw_curbuf_later(10); // UPD_VALID = 10
 }
 
 /// Exit Visual mode.
