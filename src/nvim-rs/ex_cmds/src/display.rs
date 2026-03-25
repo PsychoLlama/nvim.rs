@@ -872,7 +872,7 @@ extern "C" {
     fn msg_starthere();
     fn nvim_excmds_expand_env_save(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn nvim_excmds_do_exedit_edit(eap: *mut ExArgHandle, arg: *mut std::ffi::c_char);
-    fn nvim_excmds_xfree(ptr: *mut std::ffi::c_void);
+    fn xfree(ptr: *mut std::ffi::c_void);
     fn nvim_excmds_emsg_by_id(id: c_int);
 }
 
@@ -928,7 +928,7 @@ pub unsafe extern "C" fn rs_ex_oldfiles(eap: *mut ExArgHandle) {
                 let expanded = nvim_excmds_expand_env_save(p);
                 if !expanded.is_null() {
                     nvim_excmds_do_exedit_edit(eap, expanded);
-                    nvim_excmds_xfree(expanded.cast());
+                    xfree(expanded.cast());
                 }
             }
         }

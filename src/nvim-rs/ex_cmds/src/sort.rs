@@ -475,16 +475,15 @@ enum InternalSortKey {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
     use crate::{
-        beginline, changed_lines, fast_breakcheck, ml_append, ml_delete, ml_get, ml_get_len,
-        msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
-        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
-        nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg,
-        nvim_excmds_emsg_noprevre, nvim_excmds_extmark_splice, nvim_excmds_last_search_pat,
-        nvim_excmds_mark_adjust, nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree,
-        nvim_excmds_regmatch_endp0, nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0,
-        nvim_excmds_semsg_invarg2, nvim_excmds_skip_regexp_err, nvim_excmds_skiptobin,
-        nvim_excmds_skiptodigit, nvim_excmds_skiptohex, nvim_excmds_str2nr, nvim_get_curbuf,
-        u_save,
+        beginline, changed_lines, check_nextcmd, fast_breakcheck, last_search_pat, ml_append,
+        ml_delete, ml_get, ml_get_len, msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg,
+        nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_set_nextcmd,
+        nvim_excmds_emsg_interr, nvim_excmds_emsg_invarg, nvim_excmds_emsg_noprevre,
+        nvim_excmds_extmark_splice, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
+        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
+        nvim_excmds_skip_regexp_err, nvim_excmds_str2nr, nvim_get_curbuf, skiptobin, skiptodigit,
+        skiptohex, u_save,
     };
 
     let line1 = nvim_exarg_get_line1(eap);
@@ -546,8 +545,8 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
         } else if c == b'"' as c_char {
             // comment start
             break;
-        } else if !nvim_excmds_check_nextcmd(p).is_null() {
-            nvim_exarg_set_nextcmd(eap, nvim_excmds_check_nextcmd(p));
+        } else if !check_nextcmd(p).is_null() {
+            nvim_exarg_set_nextcmd(eap, check_nextcmd(p));
             break;
         } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
             let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
@@ -558,7 +557,7 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
 
             // Use last search pattern if sort pattern is empty.
             if std::ptr::eq(s, p.add(1)) {
-                let last_pat = nvim_excmds_last_search_pat();
+                let last_pat = last_search_pat();
                 if last_pat.is_null() {
                     nvim_excmds_emsg_noprevre();
                     return;
@@ -625,11 +624,11 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
             let key_p = s.add(start_col as usize) as *mut c_char;
             let key = if sort_nr {
                 let skip_s = if sort_what & STR2NR_HEX != 0 {
-                    nvim_excmds_skiptohex(key_p)
+                    skiptohex(key_p)
                 } else if sort_what & STR2NR_BIN != 0 {
-                    nvim_excmds_skiptobin(key_p)
+                    skiptobin(key_p)
                 } else {
-                    nvim_excmds_skiptodigit(key_p)
+                    skiptodigit(key_p)
                 };
 
                 // Include preceding negative sign
@@ -886,12 +885,12 @@ pub unsafe extern "C" fn rs_ex_sort(eap: *mut crate::ExArgHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
     use crate::{
-        beginline, changed_lines, fast_breakcheck, ml_delete, ml_get, ml_get_len, msgmore,
-        nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg, nvim_exarg_get_forceit,
-        nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_is_nextcmd_null,
-        nvim_exarg_set_nextcmd, nvim_excmds_check_nextcmd, nvim_excmds_emsg_interr,
-        nvim_excmds_emsg_noprevre, nvim_excmds_last_search_pat, nvim_excmds_mark_adjust,
-        nvim_excmds_regcomp, nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
+        beginline, changed_lines, check_nextcmd, fast_breakcheck, last_search_pat, ml_delete,
+        ml_get, ml_get_len, msgmore, nvim_curwin_set_cursor_lnum, nvim_exarg_get_arg,
+        nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
+        nvim_exarg_is_nextcmd_null, nvim_exarg_set_nextcmd, nvim_excmds_emsg_interr,
+        nvim_excmds_emsg_noprevre, nvim_excmds_mark_adjust, nvim_excmds_regcomp,
+        nvim_excmds_regexec, nvim_excmds_regfree, nvim_excmds_regmatch_endp0,
         nvim_excmds_regmatch_set_ic, nvim_excmds_regmatch_startp0, nvim_excmds_semsg_invarg2,
         nvim_excmds_skip_regexp_err, nvim_get_curbuf, u_save,
     };
@@ -941,8 +940,8 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
         } else if c == b'"' as c_char {
             // comment start
             break;
-        } else if nvim_exarg_is_nextcmd_null(eap) != 0 && !nvim_excmds_check_nextcmd(p).is_null() {
-            nvim_exarg_set_nextcmd(eap, nvim_excmds_check_nextcmd(p));
+        } else if nvim_exarg_is_nextcmd_null(eap) != 0 && !check_nextcmd(p).is_null() {
+            nvim_exarg_set_nextcmd(eap, check_nextcmd(p));
             break;
         } else if !((c as u8).is_ascii_alphabetic()) && regmatch.is_null() {
             let s = nvim_excmds_skip_regexp_err(p.add(1), c as c_int);
@@ -952,7 +951,7 @@ pub unsafe extern "C" fn rs_ex_uniq(eap: *mut crate::ExArgHandle) {
             *s = 0;
 
             if std::ptr::eq(s, p.add(1)) {
-                let last_pat = nvim_excmds_last_search_pat();
+                let last_pat = last_search_pat();
                 if last_pat.is_null() {
                     nvim_excmds_emsg_noprevre();
                     return;

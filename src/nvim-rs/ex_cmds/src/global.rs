@@ -29,14 +29,14 @@ extern "C" {
     // global_exe FFI
     fn setpcmark();
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
-    fn nvim_excmds_ml_firstmarked() -> c_int;
+    fn ml_firstmarked() -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_excmds_do_cmdline_global(cmd: *const c_char);
     fn os_breakcheck();
     fn beginline(flags: c_int);
     fn nvim_excmds_check_cursor_curwin();
-    fn nvim_excmds_changed_line_abv_curs();
+    fn changed_line_abv_curs();
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
 
@@ -60,9 +60,9 @@ extern "C" {
         pat: *mut c_char,
         delim: c_int,
     ) -> *mut c_char;
-    fn nvim_excmds_ml_setmarked(lnum: c_int);
-    fn nvim_excmds_ml_clearmarked();
-    fn nvim_excmds_line_breakcheck();
+    fn ml_setmarked(lnum: c_int);
+    fn ml_clearmarked();
+    fn line_breakcheck();
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_emsg_with_arg(id: c_int, arg: *const c_char);
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
@@ -421,7 +421,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
     let old_buf = nvim_excmds_get_curbuf_identity();
 
     while !unsafe { crate::got_int } {
-        let lnum = nvim_excmds_ml_firstmarked();
+        let lnum = ml_firstmarked();
         if lnum == 0 || crate::global_busy != 1 {
             break;
         }
@@ -441,7 +441,7 @@ pub unsafe extern "C" fn rs_global_exe(cmd: *const c_char) {
 
     // The cursor may not have moved in the text but a change in a previous
     // line may move it on the screen.
-    nvim_excmds_changed_line_abv_curs();
+    changed_line_abv_curs();
 
     // If it looks like no message was written, allow overwriting the command
     // with the report for number of changes.
@@ -639,10 +639,10 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
                 break; // re-compiling regprog failed
             }
             if (type_char == b'g' && matched != 0) || (type_char == b'v' && matched == 0) {
-                nvim_excmds_ml_setmarked(lnum);
+                ml_setmarked(lnum);
                 ndone += 1;
             }
-            nvim_excmds_line_breakcheck();
+            line_breakcheck();
             lnum += 1;
         }
 
@@ -658,7 +658,7 @@ pub unsafe extern "C" fn rs_ex_global(eap: *mut ExArgHandle) {
         } else {
             rs_global_exe(cmd);
         }
-        nvim_excmds_ml_clearmarked();
+        ml_clearmarked();
     }
 
     nvim_excmds_vim_regfree_multi(regmatch);

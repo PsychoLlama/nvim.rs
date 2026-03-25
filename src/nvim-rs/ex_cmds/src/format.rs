@@ -423,7 +423,7 @@ unsafe fn linelen(check_tab: bool) -> (c_int, bool) {
     // Temporarily NUL-terminate at the last non-blank character
     let save = *last;
     *last = 0;
-    let len = crate::nvim_linetabsize_str(line);
+    let len = crate::linetabsize_col(0, line);
 
     // Check for embedded TAB
     let has_tab = if check_tab {

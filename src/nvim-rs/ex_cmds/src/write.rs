@@ -412,7 +412,7 @@ const ERR_E143: c_int = 14; // E143 autocommands deleted new buffer + clear au_n
 
 extern "C" {
     fn nvim_excmds_check_can_set_curbuf_forceit(forceit: c_int) -> c_int;
-    fn nvim_excmds_text_locked() -> c_int;
+    fn text_locked() -> c_int;
     fn nvim_excmds_curbuf_locked() -> c_int;
     fn nvim_excmds_fname_expand(
         ffname_in: *mut c_char,
@@ -425,7 +425,7 @@ extern "C" {
     fn nvim_excmds_buf_hide_curbuf() -> c_int;
     fn nvim_excmds_autowrite_curbuf(forceit: c_int) -> c_int;
     fn nvim_excmds_dialog_changed_curbuf();
-    fn nvim_excmds_no_write_message();
+    fn no_write_message();
     fn setpcmark();
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_get_curwin() -> *mut WinHandle;
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn rs_getfile(
     if nvim_excmds_check_can_set_curbuf_forceit(forceit) == 0 {
         return GETFILE_ERROR_VAL;
     }
-    if nvim_excmds_text_locked() != 0 {
+    if text_locked() != 0 {
         return GETFILE_ERROR_VAL;
     }
     if nvim_excmds_curbuf_locked() != 0 {
@@ -505,7 +505,7 @@ pub unsafe extern "C" fn rs_getfile(
         }
         if nvim_excmds_curbufIsChanged() != 0 {
             crate::no_wait_return -= 1;
-            nvim_excmds_no_write_message();
+            no_write_message();
             xfree(free_me.cast());
             return GETFILE_NOT_WRITTEN_VAL;
         }
@@ -855,7 +855,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_excmds_saveas_post_success();
     fn nvim_excmds_curbuf_ffname_null() -> c_int;
-    fn nvim_excmds_do_autochdir();
+    fn do_autochdir();
     fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
 }
 
@@ -999,7 +999,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         }
 
         if is_saveas || name_was_missing != 0 {
-            nvim_excmds_do_autochdir();
+            do_autochdir();
         }
     }
 

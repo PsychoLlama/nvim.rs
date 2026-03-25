@@ -134,7 +134,7 @@ extern "C" {
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_do_join(count: c_int) -> c_int;
-    fn nvim_excmds_aborting() -> c_int;
+    fn aborting() -> c_int;
     fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     fn nvim_excmds_save_re_pat(idx: c_int, pat: *const c_char, patlen: usize, magic: c_int);
     fn nvim_excmds_add_to_hist_search(pat: *const c_char, patlen: usize);
@@ -142,7 +142,7 @@ extern "C" {
 
     // do_sub_msg FFI -- control flow in Rust, formatting/messaging in C
     /// Return messaging() result (1 = messaging on, 0 = off).
-    fn nvim_excmds_messaging() -> c_int;
+    fn messaging() -> c_int;
     /// Format and display the substitution count message (NGETTEXT in C).
     /// Returns true if message was displayed.
     fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
@@ -669,7 +669,7 @@ pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
     let cur_nlines = crate::sub_nlines;
     let p_report = crate::p_report;
     let key_typed = crate::KeyTyped;
-    let messaging = nvim_excmds_messaging() != 0;
+    let messaging = messaging() != 0;
     let got_int = crate::got_int;
 
     let threshold_met = (cur_nsubs as i64 > p_report
@@ -1175,7 +1175,7 @@ extern "C" {
         delim: c_int,
         arg_ptr: *mut *mut c_char,
     ) -> *mut c_char;
-    fn nvim_excmds_check_nextcmd(cmd: *const c_char) -> *mut c_char;
+    fn check_nextcmd(cmd: *const c_char) -> *mut c_char;
     fn nvim_do_sub_changed_window_setting();
     fn nvim_curwin_get_cursor_col() -> c_int;
     static mut p_cwh: i64;
@@ -1223,7 +1223,7 @@ extern "C" {
     fn appended_lines(lnum: c_int, count: c_int);
     fn nvim_do_sub_changed_lines(first: c_int, last: c_int, xtra: c_int);
     fn nvim_excmds_buf_updates_send_changes(lnum: c_int, num_added: i64, num_removed: i64);
-    fn nvim_excmds_line_breakcheck();
+    fn line_breakcheck();
     fn nvim_excmds_set_nextcmd_direct(eap: *mut ExArgHandle, p: *mut c_char);
     fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
@@ -1619,7 +1619,7 @@ pub unsafe extern "C" fn rs_do_sub(
     // Check for trailing command or garbage
     cmd = skipwhite(cmd) as *mut c_char;
     if *cmd != 0 && *cmd != b'"' as i8 {
-        let nextcmd = nvim_excmds_check_nextcmd(cmd);
+        let nextcmd = check_nextcmd(cmd);
         if nextcmd.is_null() {
             nvim_excmds_emsg_with_arg(4, cmd); // semsg_trailing
             xfree(sub as *mut std::ffi::c_void);
@@ -1709,7 +1709,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut lnum = nvim_exarg_get_line1(eap);
     while lnum <= line2
         && !got_quit
-        && nvim_excmds_aborting() == 0
+        && aborting() == 0
         && (cmdpreview_ns <= 0
             || preview_lines.lines_needed <= p_cwh as c_int
             || lnum <= nvim_curwin_get_w_botline())
@@ -2075,7 +2075,7 @@ pub unsafe extern "C" fn rs_do_sub(
                     });
                 }
 
-                nvim_excmds_line_breakcheck();
+                line_breakcheck();
             } // end inner while
 
             if did_sub {
@@ -2086,7 +2086,7 @@ pub unsafe extern "C" fn rs_do_sub(
             sub_firstline = std::ptr::null_mut();
         }
 
-        nvim_excmds_line_breakcheck();
+        line_breakcheck();
 
         if rs_profile_passed_limit(timeout) {
             got_quit = true;
@@ -2178,7 +2178,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut retv: c_int = 0;
 
     // Show inccommand preview
-    if cmdpreview_ns > 0 && nvim_excmds_aborting() == 0 {
+    if cmdpreview_ns > 0 && aborting() == 0 {
         if got_quit || rs_profile_passed_limit(timeout) {
             nvim_excmds_disable_inccommand();
         } else if !p_icm.is_null() && *p_icm != 0 && !pat.is_null() {
@@ -2535,7 +2535,7 @@ unsafe fn goto_sub_main(
     subflags.do_number = subflags_save.do_number;
     subflags.do_ic = subflags_save.do_ic;
 
-    if sublen == 0 || nvim_excmds_aborting() != 0 || subflags.do_count {
+    if sublen == 0 || aborting() != 0 || subflags.do_count {
         nvim_curbuf_set_b_p_ma(save_ma);
         nvim_dec_sandbox();
         // Undo sandbox increment

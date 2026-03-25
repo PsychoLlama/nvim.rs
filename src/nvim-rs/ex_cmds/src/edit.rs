@@ -157,8 +157,8 @@ extern "C" {
     fn nvim_maketitle();
     fn parse_spelllang(win: *mut WinHandle) -> *mut c_char;
     fn check_arg_idx(win: *mut WinHandle);
-    fn nvim_excmds_do_autochdir();
-    fn nvim_excmds_changed_line_abv_curs();
+    fn do_autochdir();
+    fn changed_line_abv_curs();
     fn nvim_excmds_update_topline_curwin();
     fn redraw_curbuf_later(type_: c_int);
 
@@ -228,7 +228,7 @@ extern "C" {
     // From existing accessors
     fn nvim_get_curwin() -> *mut WinHandle;
     fn nvim_get_curbuf() -> *mut BufHandle;
-    fn nvim_excmds_aborting() -> c_int;
+    fn aborting() -> c_int;
 
     // rs_* already used elsewhere
     fn rs_reset_VIsual();
@@ -469,7 +469,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 {
                     break 'outer;
                 }
-                if nvim_excmds_aborting() != 0 {
+                if aborting() != 0 {
                     break 'outer;
                 }
             }
@@ -518,7 +518,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     xfree(save_au);
                     break 'outer;
                 }
-                if nvim_excmds_aborting() != 0 {
+                if aborting() != 0 {
                     xfree(new_name as *mut std::ffi::c_void);
                     new_name = std::ptr::null_mut();
                     nvim_ecmd_au_new_curbuf_restore(save_au);
@@ -559,7 +559,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     nvim_ecmd_buf_dec_locked(buf);
 
                     // Autocmds may abort script processing
-                    if nvim_excmds_aborting() != 0 && nvim_ecmd_curwin_buf_is_null() == 0 {
+                    if aborting() != 0 && nvim_ecmd_curwin_buf_is_null() == 0 {
                         xfree(new_name as *mut std::ffi::c_void);
                         new_name = std::ptr::null_mut();
                         nvim_ecmd_au_new_curbuf_restore(save_au);
@@ -642,7 +642,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         if nvim_ecmd_buf_is_curbuf(buf) == 0 {
             break 'outer;
         }
-        if nvim_excmds_aborting() != 0 {
+        if aborting() != 0 {
             break 'outer;
         }
 
@@ -695,7 +695,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if nvim_ecmd_buf_is_curbuf(buf) == 0 {
                 break 'outer;
             }
-            if nvim_excmds_aborting() != 0 {
+            if aborting() != 0 {
                 break 'outer;
             }
             buf_clear_file(nvim_get_curbuf());
@@ -721,7 +721,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             nvim_ecmd_fold_update_all_curbuf_wins();
 
             // Change directories when 'acd' is set
-            nvim_excmds_do_autochdir();
+            do_autochdir();
 
             // Save cursor and topline for autocommand comparison
             let mut orig_lnum: c_int = 0;
@@ -772,7 +772,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             }
 
             // Even when cursor didn't move, recompute topline
-            nvim_excmds_changed_line_abv_curs();
+            changed_line_abv_curs();
 
             nvim_maketitle();
         }
@@ -872,7 +872,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             redraw_curbuf_later(UPD_NOT_VALID);
         }
 
-        nvim_excmds_do_autochdir();
+        do_autochdir();
 
         break 'outer; // Normal exit
     } // end 'outer

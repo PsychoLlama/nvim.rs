@@ -100,7 +100,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
     fn nvim_apply_autocmds_event(event: std::ffi::c_int);
-    fn nvim_excmds_aborting() -> c_int;
+    fn aborting() -> c_int;
 }
 
 // =============================================================================
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         if rs_last_window(win) != 0 {
             return 1; // FAIL
         }
-        if nvim_excmds_aborting() != 0 {
+        if aborting() != 0 {
             return 1; // FAIL
         }
     }

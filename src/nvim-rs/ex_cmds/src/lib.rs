@@ -481,10 +481,44 @@ extern "C" {
     pub fn skipwhite(p: *const c_char) -> *const c_char;
     /// Get visual line length from column 0
     pub fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int;
-    /// Wrapper for linetabsize_str (inline in C)
-    pub fn nvim_linetabsize_str(s: *mut c_char) -> c_int;
     /// Find character in string
     pub fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+
+    // Phase 1 direct declarations (inlined from thin wrappers)
+    /// check_nextcmd: returns next command pointer or NULL
+    pub fn check_nextcmd(p: *const c_char) -> *mut c_char;
+    /// skiptohex: skip to next hex digit
+    pub fn skiptohex(p: *mut c_char) -> *mut c_char;
+    /// skiptobin: skip to next binary digit
+    pub fn skiptobin(p: *mut c_char) -> *mut c_char;
+    /// skiptodigit: skip to next decimal digit
+    pub fn skiptodigit(p: *mut c_char) -> *mut c_char;
+    /// last_search_pat: return last search pattern
+    pub fn last_search_pat() -> *const c_char;
+    /// messaging: returns true if in messaging mode
+    pub fn messaging() -> c_int;
+    /// aborting: returns true if aborting
+    pub fn aborting() -> c_int;
+    /// line_breakcheck: check for line break
+    pub fn line_breakcheck();
+    /// ml_firstmarked: return first marked line
+    pub fn ml_firstmarked() -> c_int;
+    /// ml_setmarked: mark a line
+    pub fn ml_setmarked(lnum: c_int);
+    /// ml_clearmarked: clear all marks
+    pub fn ml_clearmarked();
+    /// changed_line_abv_curs: notify of line change above cursor
+    pub fn changed_line_abv_curs();
+    /// text_locked: returns true if text is locked
+    pub fn text_locked() -> c_int;
+    /// autowrite_all: write all changed buffers
+    pub fn autowrite_all();
+    /// do_autochdir: change to buffer's directory if autochdir is set
+    pub fn do_autochdir();
+    /// no_write_message: display "no write" error message
+    pub fn no_write_message();
+    /// wait_return: wait for user to press return
+    pub fn wait_return(restart_edit: c_int);
 
     // ex_z accessors
     /// Check if there is only one window (ONE_WINDOW macro)
@@ -644,25 +678,13 @@ extern "C" {
     /// Set rm_ic (ignore case) on regex handle.
     pub fn nvim_excmds_regmatch_set_ic(rm: *mut RegmatchHandle, ic: c_int);
 
-    // Search/skip
-    /// Get last search pattern (NULL if none).
-    pub fn nvim_excmds_last_search_pat() -> *const c_char;
-    /// check_nextcmd wrapper.
-    pub fn nvim_excmds_check_nextcmd(p: *const c_char) -> *mut c_char;
+    // Search/skip (direct declarations -- wrappers deleted in Phase 1)
     /// skip_regexp_err wrapper.
     pub fn nvim_excmds_skip_regexp_err(p: *const c_char, delim: c_int) -> *mut c_char;
 
     // Number parsing
     /// Parse a number string with given flags, store result in *result.
     pub fn nvim_excmds_str2nr(s: *const c_char, what: c_int, result: *mut i64);
-
-    // Skip functions
-    /// Skip to next hex digit.
-    pub fn nvim_excmds_skiptohex(p: *const c_char) -> *mut c_char;
-    /// Skip to next binary digit.
-    pub fn nvim_excmds_skiptobin(p: *const c_char) -> *mut c_char;
-    /// Skip to next decimal digit.
-    pub fn nvim_excmds_skiptodigit(p: *const c_char) -> *mut c_char;
 
     // Interrupt
     /// Direct C global: got_int (user interrupt flag)
@@ -846,8 +868,6 @@ extern "C" {
     pub fn nvim_excmds_set_sub_nlines(val: c_int);
     /// Format and display the substitution count message (NGETTEXT in C).
     pub fn nvim_excmds_format_sub_msg(count_only: c_int) -> c_int;
-    /// Return messaging() result (1 = messaging on, 0 = off).
-    pub fn nvim_excmds_messaging() -> c_int;
     /// Call ex_may_print(eap).
     pub fn nvim_excmds_ex_may_print(eap: *mut ExArgHandle);
     /// Call save_re_pat(idx, pat, patlen, magic).

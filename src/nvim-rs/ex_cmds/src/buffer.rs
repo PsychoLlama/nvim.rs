@@ -347,7 +347,7 @@ extern "C" {
     fn nvim_excmds_apply_autocmds_buffilepre();
     fn nvim_excmds_apply_autocmds_buffilepost();
     fn nvim_excmds_curbuf_is(ptr: *mut std::ffi::c_void) -> c_int;
-    fn nvim_excmds_aborting() -> c_int;
+    fn aborting() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_sfname() -> *mut c_char;
     fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
@@ -364,7 +364,7 @@ extern "C" {
     fn nvim_excmds_buf_get_fnum(buf: *mut std::ffi::c_void) -> c_int;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
-    fn nvim_excmds_do_autochdir();
+    fn do_autochdir();
     fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
         return FAIL;
     }
 
-    if nvim_excmds_aborting() != 0 {
+    if aborting() != 0 {
         return FAIL;
     }
 
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
 
     nvim_excmds_apply_autocmds_buffilepost();
     // Change directories when the 'acd' option is set.
-    nvim_excmds_do_autochdir();
+    do_autochdir();
 
     OK
 }

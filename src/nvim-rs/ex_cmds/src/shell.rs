@@ -416,8 +416,6 @@ extern "C" {
     static Rows: c_int;
     // make_filter_cmd FFI
     fn nvim_excmds_shell_name_tail() -> *const c_char;
-    fn nvim_excmds_xmalloc(size: usize) -> *mut std::ffi::c_void;
-
     // do_shell FFI
     fn nvim_excmds_any_buf_changed() -> c_int;
     fn nvim_excmds_emsg_by_id(id: c_int);
@@ -426,7 +424,7 @@ extern "C" {
 
     // do_bang FFI
     fn rs_check_secure() -> c_int;
-    fn nvim_excmds_autowrite_all();
+    fn autowrite_all();
     fn nvim_excmds_vim_strsave_escaped(s: *const c_char, chars: *const c_char) -> *mut c_char;
     fn nvim_excmds_append_to_redobuff_lit(s: *const c_char, len: c_int);
     fn nvim_excmds_append_to_redobuff(s: *const c_char);
@@ -585,7 +583,7 @@ pub unsafe extern "C" fn rs_make_filter_cmd(
         // Calculate extra space needed for the redirect.
         let extra = p_srr.len() + otmp_b.len() + 4; // extra for " opt fname" or " %s substitute"
         let total = result.len() + extra + 1;
-        let buf = nvim_excmds_xmalloc(total) as *mut c_char;
+        let buf = xmalloc(total) as *mut c_char;
 
         // Copy result into buf and null-terminate
         std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, result.len());
@@ -599,7 +597,7 @@ pub unsafe extern "C" fn rs_make_filter_cmd(
 
     // No output redirection: allocate and copy result
     let total = result.len() + 1;
-    let buf = nvim_excmds_xmalloc(total) as *mut c_char;
+    let buf = xmalloc(total) as *mut c_char;
     std::ptr::copy_nonoverlapping(result.as_ptr().cast::<c_char>(), buf, result.len());
     *buf.add(result.len()) = 0;
     buf
@@ -834,7 +832,7 @@ pub unsafe extern "C" fn rs_do_bang(
         // :! -- don't scroll here
         let scroll_save = crate::msg_scroll;
         crate::msg_scroll = 0;
-        nvim_excmds_autowrite_all();
+        autowrite_all();
         crate::msg_scroll = scroll_save;
     }
 
@@ -1061,7 +1059,7 @@ extern "C" {
     fn nvim_rs_foldUpdate(wp: *mut std::ffi::c_void, top: c_int, bot: c_int);
     fn nvim_excmds_msg_lines_filtered(linecount: c_int);
     fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
-    fn nvim_excmds_wait_return_false();
+    fn wait_return(restart_edit: c_int);
     fn nvim_excmds_curbuf_op_save(out_start: *mut u64, out_end: *mut u64);
     fn nvim_excmds_curbuf_op_restore(saved_start: u64, saved_end: u64);
     fn nvim_excmds_curbuf_op_adjust_lnum(delta: c_int);
@@ -1069,12 +1067,12 @@ extern "C" {
     fn nvim_bw_os_remove(path: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
-    fn nvim_excmds_aborting() -> c_int;
+    fn aborting() -> c_int;
     fn os_breakcheck();
     fn u_save(top: c_int, bot: c_int) -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
-    fn nvim_excmds_changed_line_abv_curs();
+    fn changed_line_abv_curs();
     fn beginline(flags: c_int);
     fn msgmore(n: c_int);
     fn appended_lines_mark(lnum: c_int, count: c_int);
@@ -1131,7 +1129,7 @@ pub unsafe extern "C" fn rs_do_filter(
     let linecount = line2 - line1 + 1;
     nvim_curwin_set_cursor_lnum(line1);
     nvim_curwin_set_cursor_col(0);
-    nvim_excmds_changed_line_abv_curs();
+    changed_line_abv_curs();
     nvim_excmds_invalidate_botline();
 
     let k_shell_opt_do_out = K_SHELL_OPT_DO_OUT;
@@ -1204,7 +1202,7 @@ pub unsafe extern "C" fn rs_do_filter(
         if nvim_excmds_buf_write_filter(itmp, line1, line2, eap) == 0 {
             msg_putchar(b'\n' as c_int); // Keep message from buf_write()
             crate::no_wait_return -= 1;
-            if nvim_excmds_aborting() == 0 {
+            if aborting() == 0 {
                 nvim_excmds_error_msg(ERR_E482, itmp);
             }
             goto_filterend(
@@ -1245,7 +1243,7 @@ pub unsafe extern "C" fn rs_do_filter(
             // goto error
             nvim_excmds_curwin_cursor_restore(cursor_save);
             crate::no_wait_return -= 1;
-            nvim_excmds_wait_return_false();
+            wait_return(0);
             goto_filterend(
                 save_cmod_flags,
                 old_curbuf,
@@ -1273,14 +1271,14 @@ pub unsafe extern "C" fn rs_do_filter(
     if do_out {
         if !otmp.is_null() {
             if nvim_excmds_readfile_filter(otmp, line2, eap) == 0 {
-                if nvim_excmds_aborting() == 0 {
+                if aborting() == 0 {
                     msg_putchar(b'\n' as c_int);
                     nvim_excmds_error_msg(ERR_E_NOTREAD, otmp);
                 }
                 // goto error
                 nvim_excmds_curwin_cursor_restore(cursor_save);
                 crate::no_wait_return -= 1;
-                nvim_excmds_wait_return_false();
+                wait_return(0);
                 goto_filterend(
                     save_cmod_flags,
                     old_curbuf,
@@ -1375,7 +1373,7 @@ pub unsafe extern "C" fn rs_do_filter(
         // error path: restore cursor
         nvim_excmds_curwin_cursor_restore(cursor_save);
         crate::no_wait_return -= 1;
-        nvim_excmds_wait_return_false();
+        wait_return(0);
     }
 
     goto_filterend(
