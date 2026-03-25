@@ -53,19 +53,19 @@ extern "C" {
     fn nvim_plain_vgetc_wrapper() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
-    fn nvim_del_from_showcmd_wrapper(n: c_int);
+    fn del_from_showcmd(n: c_int);
     fn nvim_inc_no_mapping();
     fn nvim_dec_no_mapping();
     fn nvim_inc_allow_keys();
     fn nvim_dec_allow_keys();
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
-    fn nvim_ui_cursor_shape_no_check_conceal();
+    fn ui_cursor_shape_no_check_conceal();
     fn nvim_get_digraph(flag: bool) -> c_int;
-    fn nvim_vpeekc_wrapper() -> c_int;
-    fn nvim_do_sleep_wrapper(ms: c_int, allow_int: bool);
+    fn vpeekc() -> c_int;
+    fn do_sleep(ms: c_int, allow_int: bool);
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
-    fn nvim_vungetc_wrapper(c: c_int);
+    fn vungetc(c: c_int);
     fn nvim_get_op_type_wrapper(c1: c_int, c2: c_int) -> c_int;
     fn nvim_get_p_ttm() -> i64;
     fn nvim_get_p_tm() -> i64;
@@ -73,9 +73,9 @@ extern "C" {
     // Phase 6: composing char handler accessors
     fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
     fn nvim_cap_get_nchar_composing_ptr(cap: CapHandle) -> *const std::ffi::c_char; // search.c
-    fn nvim_utf_iscomposing_check(prev: c_int, c: c_int, state_ptr: *mut i32) -> bool;
-    fn nvim_utf_char2len_wrapper(c: c_int) -> c_int;
-    fn nvim_utf_char2bytes_wrapper(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
+    fn utf_iscomposing(prev: c_int, c: c_int, state_ptr: *mut i32) -> bool;
+    fn utf_char2len(c: c_int) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn nvim_get_MB_BYTE2LEN(c: c_int) -> c_int;
     fn nvim_gotchars_ignore_wrapper();
 
@@ -127,7 +127,7 @@ unsafe fn read_target_char(
     let mut langmap_active = false;
     if repl {
         State = MODE_REPLACE;
-        nvim_ui_cursor_shape_no_check_conceal();
+        ui_cursor_shape_no_check_conceal();
     }
     if lang && nvim_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
         nvim_dec_no_mapping();
@@ -160,7 +160,7 @@ unsafe fn read_target_char(
             (*ns(s)).c = c;
             if c > 0 {
                 target.set(ca, c);
-                nvim_del_from_showcmd_wrapper(3);
+                del_from_showcmd(3);
                 (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(target.get(ca));
             }
         }
@@ -197,20 +197,20 @@ unsafe fn read_target_char(
 
         // Busy wait when typing "f<C-\>" and then something else.
         loop {
-            let peeked = nvim_vpeekc_wrapper();
+            let peeked = vpeekc();
             (*ns(s)).c = peeked;
             if peeked > 0 || towait <= 0 {
                 break;
             }
             let sleep_ms = if towait > 50 { 50 } else { towait };
-            nvim_do_sleep_wrapper(sleep_ms, false);
+            do_sleep(sleep_ms, false);
             towait -= 50;
         }
         if (*ns(s)).c > 0 {
             let c = nvim_plain_vgetc_wrapper();
             (*ns(s)).c = c;
             if c != CTRL_N && c != CTRL_G {
-                nvim_vungetc_wrapper(c);
+                vungetc(c);
             } else {
                 (*ca.cast::<CmdargT>()).cmdchar = CTRL_BSL;
                 (*ca.cast::<CmdargT>()).nchar = c;
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
     let mut prev_code = nvim_cap_get_nchar(ca);
 
     loop {
-        let peeked = nvim_vpeekc_wrapper();
+        let peeked = vpeekc();
         (*sp).c = peeked;
         if peeked <= 0 {
             break;
@@ -331,8 +331,8 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
         let c = nvim_plain_vgetc_wrapper();
         (*sp).c = c;
 
-        if !nvim_utf_iscomposing_check(prev_code, c, std::ptr::addr_of_mut!(grapheme_state)) {
-            nvim_vungetc_wrapper(c);
+        if !utf_iscomposing(prev_code, c, std::ptr::addr_of_mut!(grapheme_state)) {
+            vungetc(c);
             break;
         }
 
@@ -341,17 +341,17 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
             let nchar = nvim_cap_get_nchar(ca);
             // nchar_composing is mutable; the const is a C API convention.
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
-            let written = nvim_utf_char2bytes_wrapper(nchar, composing_ptr);
+            let written = utf_char2bytes(nchar, composing_ptr);
             (*ca.cast::<CmdargT>()).nchar_len = written;
         }
 
         // Append composing character if it fits.
         let cur_len = nvim_cap_get_nchar_len(ca);
-        let extra = nvim_utf_char2len_wrapper(c);
+        let extra = utf_char2len(c);
         if cur_len + extra < MAX_SCHAR_SIZE_INT {
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
             let offset = usize::try_from(cur_len).unwrap_or(0);
-            let written = nvim_utf_char2bytes_wrapper(c, composing_ptr.add(offset));
+            let written = utf_char2bytes(c, composing_ptr.add(offset));
             (*ca.cast::<CmdargT>()).nchar_len = cur_len + written;
         }
         prev_code = c;

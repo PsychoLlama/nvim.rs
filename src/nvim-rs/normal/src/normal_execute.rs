@@ -84,7 +84,7 @@ extern "C" {
 
     // Function wrappers (existing)
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
-    fn nvim_typebuf_maplen_wrapper() -> c_int;
+    fn typebuf_maplen() -> c_int;
     fn rs_clearop(oap: OapHandle);
 
     // Phase 3
@@ -96,14 +96,14 @@ extern "C" {
     fn ungetchars(len: c_int);
     fn readbuf1_empty() -> bool;
     fn nvim_add_to_showcmd_wrapper(c: c_int) -> bool;
-    fn nvim_set_vcount_call(count: i64, count1: i64, set_prevcount: bool);
+    fn set_vcount(count: i64, count1: i64, set_prevcount: bool);
     fn rs_find_command(cmdchar: c_int) -> c_int;
     fn rs_clearopbeep(oap: OapHandle);
     fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool;
     fn rs_invert_horizontal(cmdchar: c_int) -> c_int;
     fn rs_need_additional_char(idx: c_int, cmdchar: c_int, pending_op: bool) -> bool;
     fn rs_normal_get_additional_char(s: NormalStateHandle);
-    fn nvim_ui_flush_wrapper();
+    fn ui_flush();
     fn rs_start_selection();
     fn rs_unshift_special(cmdchar: c_int, modp: *mut c_int) -> c_int;
     fn nvim_set_mod_mask(val: c_int);
@@ -113,7 +113,7 @@ extern "C" {
 
     // Phase 5 count/visual accessors
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
-    fn nvim_del_from_showcmd_wrapper(len: c_int);
+    fn del_from_showcmd(len: c_int);
     fn nvim_inc_no_mapping();
     fn nvim_dec_no_mapping();
     fn nvim_inc_allow_keys();
@@ -155,9 +155,9 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
     if restart_edit == 0 {
         (*sp).old_mapped_len = 0;
     } else if (*sp).old_mapped_len != 0
-        || (VIsual_active && (*sp).mapped_len == 0 && nvim_typebuf_maplen_wrapper() > 0)
+        || (VIsual_active && (*sp).mapped_len == 0 && typebuf_maplen() > 0)
     {
-        (*sp).old_mapped_len = nvim_typebuf_maplen_wrapper();
+        (*sp).old_mapped_len = typebuf_maplen();
     }
 
     if (*sp).c == NUL {
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     // Only set v:count when called from main() and not a stuffed command.
     if (*sp).toplevel && readbuf1_empty() {
-        nvim_set_vcount_call(
+        set_vcount(
             i64::from(nvim_cap_get_count0(ca)),
             i64::from(nvim_cap_get_count0(ca).max(1)),
             (*sp).set_prevcount,
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
         // Flush showcmd characters.
         if (*sp).need_flushbuf {
-            nvim_ui_flush_wrapper();
+            ui_flush();
         }
 
         if nvim_cap_get_cmdchar(ca) != K_IGNORE && nvim_cap_get_cmdchar(ca) != K_EVENT {
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         if c == K_DEL || c == K_KDEL {
             let new_count0 = nvim_cap_get_count0(ca) / 10;
             nvim_cap_set_count0(ca, new_count0);
-            nvim_del_from_showcmd_wrapper(4); // delete the digit and ~@%
+            del_from_showcmd(4); // delete the digit and ~@%
         } else if nvim_cap_get_count0(ca) > 99_999_999 {
             nvim_cap_set_count0(ca, 999_999_999);
         } else {

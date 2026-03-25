@@ -227,7 +227,6 @@ void nvim_set_motion_force(int val) { motion_force = val; }
 
 void nvim_goto_tabpage(int n) { goto_tabpage(n); }
 
-void nvim_pagescroll(int dir, int count, bool half) { pagescroll(dir, count, half); }
 
 bool nvim_get_VIsual_select(void) { return VIsual_select; }
 
@@ -237,11 +236,8 @@ void nvim_may_trigger_modechanged(void) { may_trigger_modechanged(); }
 
 void nvim_showmode(void) { showmode(); }
 
-void nvim_fileinfo(int fullname, bool shorthelp, bool dont_truncate) { fileinfo(fullname, shorthelp, dont_truncate); }
 
-void nvim_scroll_redraw(bool down, int count) { scroll_redraw(down, count); }
 
-void nvim_u_undo(int count) { u_undo(count); }
 
 void nvim_curwin_set_curswant(bool val) { curwin->w_set_curswant = val; }
 
@@ -255,7 +251,6 @@ void nvim_setpcmark(void) { setpcmark(); }
 
 void nvim_beginline(int flags) { beginline(flags); }
 
-bool nvim_cursor_down(int n, bool upd_topline) { return cursor_down(n, upd_topline); }
 
 bool nvim_get_KeyTyped(void) { return KeyTyped; }
 
@@ -316,13 +311,9 @@ int nvim_fwd_word(int count, bool bigword, bool eol) { return fwd_word(count, bi
 
 int nvim_bck_word(int count, bool bigword, bool stop) { return bck_word(count, bigword, stop); }
 
-int nvim_end_word(int count, bool bigword, bool stop, bool empty) { return end_word(count, bigword, stop, empty); }
 
-int nvim_bckend_word(int count, bool bigword, bool eol) { return bckend_word(count, bigword, eol); }
 
-int nvim_findsent(int dir, int count) { return findsent(dir, count); }
 
-bool nvim_findpar(bool *pincl, int dir, int count, int what, bool both) { return findpar(pincl, dir, count, what, both); }
 
 int nvim_get_cursor_col(void) { return curwin->w_cursor.col; }
 
@@ -350,7 +341,6 @@ int nvim_get_VIsual_mode(void) { return VIsual_mode; }
 
 bool nvim_get_VIsual_select_exclu_adj(void) { return VIsual_select_exclu_adj; }
 
-int nvim_searchc(cmdarg_T *cap, bool t_cmd) { return searchc(cap, t_cmd); }
 
 void nvim_getvcol_cursor(int *scol, int *ecol) { getvcol(curwin, &curwin->w_cursor, scol, NULL, ecol); }
 
@@ -392,7 +382,6 @@ int nvim_get_expr_register(void) { return get_expr_register(); }
 
 bool nvim_valid_yank_reg(int regname, bool writing) { return valid_yank_reg(regname, writing); }
 
-void nvim_set_reg_var(int regname) { set_reg_var(regname); }
 
 // nv_put C accessors
 bool nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
@@ -447,21 +436,16 @@ void nvim_cursor_lnum_set_to_line_count(void) {
 void nvim_coladvance_maxcol(void) { coladvance(curwin, MAXCOL); }
 
 // For nvim_replace helpers inlining
-void nvim_coladvance_force_val(colnr_T col) { coladvance_force(col); }
-int nvim_get_cursor_pos_len_check(void) { return get_cursor_pos_len(); }
 int nvim_mb_charlen_cursor(void) { return mb_charlen(get_cursor_pos_ptr()); }
 bool nvim_curbuf_b_p_et(void) { return curbuf->b_p_et; }
-void nvim_del_chars_call(int count, bool fixpos) { del_chars(count, fixpos); }
 void nvim_ins_char_call(int c) { ins_char(c); }
 void nvim_ins_char_bytes_from_cap(cmdarg_T *cap) { if (cap && cap->nchar_len > 0) { ins_char_bytes((char *)cap->nchar_composing, (size_t)cap->nchar_len); } }
-void nvim_set_last_insert_call(int c) { set_last_insert(c); }
 void nvim_set_b_op_start_cursor(void) { curbuf->b_op_start = curwin->w_cursor; }
 void nvim_AppendToRedobuff_composing(cmdarg_T *cap) {
   if (cap && cap->nchar_len > 0) {
     AppendToRedobuff(cap->nchar_composing);
   }
 }
-int nvim_ins_copychar_val(int lnum) { return ins_copychar(lnum); }
 
 // =============================================================================
 // Visual mode accessors for Rust FFI
@@ -495,7 +479,6 @@ void nvim_setmouse(void) { setmouse(); }
 
 void nvim_check_cursor(void) { check_cursor(curwin); }
 
-void nvim_update_curswant_force(void) { update_curswant_force(); }
 
 int nvim_get_curswant(void) { return curwin->w_curswant; }
 
@@ -539,13 +522,11 @@ void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 
 int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
 
-void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount) { set_vcount(count, count1, set_prevcount); }
 
 bool nvim_do_execreg_recorded(void) { return do_execreg(reg_recorded, false, false, false) != false; }
 
 bool nvim_normal_get_got_int(void) { return got_int; }
 
-void nvim_normal_line_breakcheck(void) { line_breakcheck(); }
 
 // =============================================================================
 // Visual operator accessors for Rust FFI
@@ -574,7 +555,6 @@ bool nvim_cursor_line_col_is_white(int col) { char *ptr = get_cursor_line_ptr();
 
 bool nvim_stuff_empty(void) { return stuff_empty(); }
 
-bool nvim_typebuf_typed(void) { return typebuf_typed(); }
 
 bool nvim_vim_strchr_p_slm(int c) { return vim_strchr(p_slm, c) != NULL; }
 
@@ -716,8 +696,6 @@ int nvim_get_leader_len_cursor_line(void) { return get_leader_len(get_cursor_lin
 /// Check if first non-white char of cursor line is NUL (line is blank/whitespace).
 int nvim_cursor_line_is_blank(void) { return *skipwhite(get_cursor_line_ptr()) == NUL ? 1 : 0; }
 
-/// Wrapper for reset_search_dir().
-void nvim_reset_search_dir(void) { reset_search_dir(); }
 
 /// Get p_ws as int.
 int nvim_get_p_ws_bool(void) { return p_ws ? 1 : 0; }
@@ -757,10 +735,6 @@ bool nvim_findmatchlimit_forward(int64_t maxtravel,
 
 // Accessors for operator Rust implementations
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
-bool nvim_prompt_curpos_editable(void) { return prompt_curpos_editable(); }
-bool nvim_op_is_change(int op_type) { return op_is_change(op_type); }
-void nvim_stuffnumReadbuff(int n) { stuffnumReadbuff(n); }
-void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
 
 // =============================================================================
 // Text object handler accessors for Rust FFI
@@ -806,20 +780,12 @@ fmark_T *nvim_getnextmark_call(fmark_T *fm, int dir, int begin_line) {
   return getnextmark(&fm->mark, dir, begin_line);
 }
 
-/// do_mouse wrapper for bracket [<mouse>/]<mouse> commands.
-void nvim_bracket_do_mouse_impl(oparg_T *oap, int nchar, int dir, int64_t count1) {
-  do_mouse(oap, nchar, dir, (int)count1, PUT_FIXINDENT);
-}
 
 /// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
 size_t nvim_spell_move_to_cap_call(int dir, int smt_type) {
   return spell_move_to(curwin, dir, smt_type, false, NULL);
 }
 
-/// messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT).
-bool nvim_messaging_and_searchcount(void) {
-  return messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT);
-}
 
 // =============================================================================
 // g-command and n_opencmd accessors for Rust FFI
@@ -869,9 +835,6 @@ int nvim_getvcol_visual_coladd_after_adj(void) {
 // =============================================================================
 
 // Accessors for undo/redo Rust implementations
-bool nvim_start_redo(int count, bool restart) { return start_redo(count, restart); }
-void nvim_u_redo_call(int count) { u_redo(count); }
-void nvim_u_undoline_call(void) { u_undoline(); }
 bool nvim_do_execreg_call(int regname) { return do_execreg(regname, false, false, false) != false; }
 bool nvim_get_p_to(void) { return p_to; }
 
@@ -890,13 +853,11 @@ int nvim_replace_check_prompt(void) {
 // Scroll and screen handler accessors for Rust FFI
 // =============================================================================
 
-void nvim_prompt_invoke_callback(void) { prompt_invoke_callback(); }
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
 void nvim_coladvance_getviscol(void) { coladvance(curwin, getviscol()); }
 void nvim_invoke_edit_R(cmdarg_T *cap, bool repl, int cmd) { invoke_edit(cap, repl, cmd, false); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 void nvim_do_join_call(int count, bool insert_space) { do_join((size_t)count, insert_space, true, true, true); }
-void nvim_nv_diffgetput_call(bool put, size_t count) { nv_diffgetput(put, count); }
 int nvim_cursor_count0_max2(cmdarg_T *cap) { return MAX(cap->count0, 2); }
 // z-command accessors for Rust FFI
 int nvim_get_curwin_w_p_fdl(void) { return (int)curwin->w_p_fdl; }
@@ -912,13 +873,11 @@ void nvim_scroll_cursor_top(int off, bool always) { scroll_cursor_top(curwin, of
 void nvim_scroll_cursor_bot(int off, bool always) { scroll_cursor_bot(curwin, off, always); }
 void nvim_scroll_cursor_halfway(bool atend, bool prefer_above) { scroll_cursor_halfway(curwin, atend, prefer_above); }
 void nvim_redraw_later_curwin(int type) { redraw_later(curwin, type); }
-void nvim_set_leftcol_call(int col) { set_leftcol((colnr_T)col); }
 bool nvim_hasFolding_curwin(int lnum) { return hasFolding(curwin, lnum, NULL, NULL); }
 void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, vcol, NULL, NULL); }
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
 int nvim_win_col_off_curwin(void) { return win_col_off(curwin); }
 void nvim_changed_window_setting_curwin(void) { changed_window_setting(curwin); }
-void nvim_spell_suggest_call(int count) { spell_suggest(count); }
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
@@ -949,17 +908,11 @@ const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with cu
 // =============================================================================
 
 // g-command C accessors for Rust FFI
-bool nvim_current_search(int count, bool forward) { return current_search(count, forward); }
-int nvim_cursor_up(int count, bool upd_topline) { return cursor_up(count, upd_topline); }
 int nvim_linetabsize_curwin(int lnum) { return linetabsize(curwin, lnum); }
 void nvim_cursor_pos_info_call(void) { cursor_pos_info(NULL); }
 void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_set_mod_mask_ctrl(void) { mod_mask = MOD_MASK_CTRL; }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
-void nvim_undo_time_call(int count, bool sec, bool file, bool absolute) { undo_time(count, sec, file, absolute); }
-void nvim_show_sb_text_call(void) { show_sb_text(); }
-void nvim_show_utf8_call(void) { show_utf8(); }
-void nvim_utf_find_illegal_call(void) { utf_find_illegal(); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
 // nv_screengo C accessors for Rust FFI
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
@@ -967,26 +920,20 @@ int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_
 int nvim_win_col_off2_curwin(void) { return win_col_off2(curwin); }
 void nvim_cursor_up_inner_curwin(int n, bool skip_conceal) { cursor_up_inner(curwin, n, skip_conceal); }
 void nvim_cursor_down_inner_curwin(int n, bool skip_conceal) { cursor_down_inner(curwin, n, skip_conceal); }
-int nvim_oneright_call(void) { return oneright(); }
-int nvim_vim_strsize_call(const char *s) { return vim_strsize((char *)s); }
-void nvim_adjust_skipcol_call(void) { adjust_skipcol(); }
 void nvim_dec_cursor_col(void) { curwin->w_cursor.col--; }
 
 bool nvim_cursor_pos_ptr_is_nul(void) { return *get_cursor_pos_ptr() == NUL; }
 bool nvim_lineempty_cursor(void) { return LINEEMPTY(curwin->w_cursor.lnum); }
 bool nvim_vim_strchr_p_ww(int c) { return vim_strchr(p_ww, c) != NULL; }
 int nvim_utfc_ptr2len_cursor(void) { return utfc_ptr2len(get_cursor_pos_ptr()); }
-int nvim_oneleft_call(void) { return oneleft(); }
 void nvim_cursor_col_inc_by_utfc(void) { curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr()); }
 void nvim_set_cursor_col_zero(void) { curwin->w_cursor.col = 0; curwin->w_cursor.coladd = 0; }
 static char *nvim_mps_save = NULL;
 void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
-bool nvim_current_tagblock_call(oparg_T *oap, int count, bool include) { return current_tagblock(oap, count, include); }
 bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar) { return current_quote(oap, count, include, (char)quotechar); }
 
 bool nvim_swapchar_call(int op_type, int lnum, int col) { pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 }; return swapchar(op_type, &pos); }
-bool nvim_u_savesub_call(int lnum) { return u_savesub((linenr_T)lnum); }
 void nvim_u_clearline_curbuf(void) { u_clearline(curbuf); }
 void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed) { changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed); }
 void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnum = (linenr_T)lnum; curbuf->b_op_start.col = (colnr_T)col; curbuf->b_op_start.coladd = (colnr_T)coladd; }
@@ -1006,11 +953,9 @@ _Static_assert(FORWARD == 1, "FORWARD changed");
 
 char *nvim_ml_get_buf_wrapper(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
 
-int nvim_mb_get_class_wrapper(const char *ptr) { return mb_get_class(ptr); }
 
 int nvim_utfc_ptr2len_wrapper(const char *ptr) { return utfc_ptr2len(ptr); }
 
-int nvim_utf_head_off_wrapper(const char *base, const char *ptr) { return utf_head_off(base, ptr); }
 
 void nvim_emsg_no_string_under_cursor(void) { emsg(_("E348: No string under cursor")); }
 
@@ -1058,8 +1003,6 @@ int nvim_langmap_adjust(int c, bool condition) { LANGMAP_ADJUST(c, condition); r
 /// Wrapper for add_to_showcmd.
 bool nvim_add_to_showcmd_wrapper(int c) { return add_to_showcmd(c); }
 
-/// Wrapper for del_from_showcmd (static function).
-void nvim_del_from_showcmd_wrapper(int n) { del_from_showcmd(n); }
 
 /// Increment no_mapping.
 void nvim_inc_no_mapping(void) { no_mapping++; }
@@ -1079,23 +1022,15 @@ int nvim_get_curbuf_b_p_iminsert(void) { return curbuf->b_p_iminsert; }
 
 // nvim_set_State and nvim_get_State are in window.c
 
-/// Wrapper for ui_cursor_shape_no_check_conceal.
-void nvim_ui_cursor_shape_no_check_conceal(void) { ui_cursor_shape_no_check_conceal(); }
 
 /// Wrapper for get_digraph.
 int nvim_get_digraph(bool flag) { return get_digraph(flag); }
 
-/// Wrapper for vpeekc.
-int nvim_vpeekc_wrapper(void) { return vpeekc(); }
 
-/// Wrapper for do_sleep.
-void nvim_do_sleep_wrapper(int ms, bool allow_int) { do_sleep(ms, allow_int); }
 
 /// Check vim_strchr(p_cpo, c) != NULL.
 bool nvim_vim_strchr_p_cpo(int c) { return vim_strchr(p_cpo, c) != NULL; }
 
-/// Wrapper for vungetc.
-void nvim_vungetc_wrapper(int c) { vungetc(c); }
 
 /// Wrapper for get_op_type.
 int nvim_get_op_type_wrapper(int c1, int c2) { return get_op_type(c1, c2); }
@@ -1110,15 +1045,7 @@ int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
 
 void nvim_gotchars_ignore_wrapper(void) { no_u_sync++; gotchars_ignore(); no_u_sync--; }
 
-/// utf_iscomposing(prev, c, state_ptr) wrapper.
-/// state_ptr points to a GraphemeState (int32_t) initialized to 0 (GRAPHEME_STATE_INIT).
-bool nvim_utf_iscomposing_check(int prev, int c, int32_t *state_ptr)
-{
-  return utf_iscomposing(prev, c, (GraphemeState *)state_ptr);
-}
 
-/// utf_char2len(c) wrapper.
-int nvim_utf_char2len_wrapper(int c) { return utf_char2len(c); }
 
 // =============================================================================
 // normal_finish_command accessors for Rust FFI
@@ -1199,10 +1126,7 @@ _Static_assert(offsetof(NormalState, old_pos) == 220, "NormalState.old_pos offse
 /// set_reg_var(get_default_register_name()).
 void nvim_set_reg_var_default(void) { set_reg_var(get_default_register_name()); }
 
-/// typebuf_maplen() wrapper.
-int nvim_typebuf_maplen_wrapper(void) { return typebuf_maplen(); }
 
-void nvim_do_pending_operator_call(cmdarg_T *ca, int old_col, bool gui_yank) { do_pending_operator(ca, old_col, gui_yank); }
 
 /// Get clear_cmdline global.
 bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
@@ -1245,17 +1169,11 @@ bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
 /// fileinfo(false, true, false) call.
 void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
 
-/// may_clear_sb_text() call.
-void nvim_may_clear_sb_text_call(void) { may_clear_sb_text(); }
 
 /// show_cursor_info_later(false) call.
 void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
 
-/// update_screen() call.
-void nvim_update_screen_call(void) { update_screen(); }
 
-/// redraw_statuslines() call.
-void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
 
 /// Set curbuf->b_last_used to time(NULL).
 void nvim_curbuf_set_b_last_used(void) { curbuf->b_last_used = time(NULL); }
@@ -1277,8 +1195,6 @@ void nvim_redraw_mode_msg_keep_msg(void)
   }
 }
 
-/// os_delay(ms, can_interrupt) wrapper.
-void nvim_os_delay_wrapper(int ms, bool can_interrupt) { os_delay(ms, can_interrupt); }
 
 /// ui_cursor_shape() wrapper.
 void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }
@@ -1307,8 +1223,6 @@ void nvim_do_check_scrollbind_wrapper(bool flag) { do_check_scrollbind(flag); }
 /// do_check_cursorbind() wrapper.
 void nvim_do_check_cursorbind_wrapper(void) { do_check_cursorbind(); }
 
-/// edit(cmd, startln, count) wrapper.
-void nvim_edit_wrapper(int cmd, bool startln, int count) { edit(cmd, startln, count); }
 
 // =============================================================================
 // normal_execute accessors for Rust FFI
@@ -1344,8 +1258,6 @@ void nvim_dec_no_zero_mapping(void) { no_zero_mapping--; }
 /// Get curwin->w_p_rl.
 bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
 
-/// ui_flush() wrapper.
-void nvim_ui_flush_wrapper(void) { ui_flush(); }
 
 /// Clear MOD_MASK_SHIFT from mod_mask.
 void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
@@ -1368,8 +1280,6 @@ bool nvim_get_skip_redraw(void) { return skip_redraw; }
 /// Set skip_redraw global.
 void nvim_set_skip_redraw(bool val) { skip_redraw = val; }
 
-/// setcursor() wrapper.
-void nvim_setcursor_wrapper(void) { setcursor(); }
 
 bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curtab->tp_diff_invalid; }
 
@@ -1390,7 +1300,6 @@ bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
 
 void nvim_time_msg_first_screen_and_finish(void) { TIME_MSG("first screen update"); time_finish(); }
 
-void nvim_may_make_initial_scroll_size_snapshot_wrapper(void) { may_make_initial_scroll_size_snapshot(); }
 
 /// Set may_garbage_collect global.
 void nvim_set_may_garbage_collect(bool val) { may_garbage_collect = val; }
@@ -1401,21 +1310,16 @@ void nvim_update_curswant_wrapper(void) { update_curswant(); }
 /// Get cmdwin_result global.
 int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 
-/// do_exmode() wrapper.
-void nvim_do_exmode_wrapper(void) { do_exmode(); }
 
 // =============================================================================
 // normal_check and normal_redraw accessors for Rust FFI
 // =============================================================================
 
 // For normal_check_window_scrolled
-void nvim_may_trigger_win_scrolled_resized_call(void) { may_trigger_win_scrolled_resized(); }
 
 // For normal_check_safe_state
-void nvim_may_trigger_safestate_call(bool safe) { may_trigger_safestate(safe); }
 
 // For normal_check_folds
-bool nvim_char_avail_call(void) { return char_avail(); }
 bool nvim_fdo_has_all_flag(void) { return (fdo_flags & kOptFdoFlagAll) != 0; }
 
 // For normal_check_stuff_buffer
@@ -1505,11 +1409,12 @@ void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
 /// Redraw statusline for curwin and restore cursor (showcmdloc=statusline, non-clear path).
 void nvim_showcmd_win_redr_status(void) { win_redr_status(curwin); setcursor(); }
 
+/// Redraw all status lines.
+void nvim_redraw_statuslines_call(void) { redraw_statuslines(); }
+
 /// Set redraw_tabline flag (showcmdloc=tabline, clear path).
 void nvim_showcmd_set_redraw_tabline(void) { redraw_tabline = true; }
 
-/// Redraw tabline and restore cursor (showcmdloc=tabline, non-clear path).
-void nvim_showcmd_draw_tabline(void) { draw_tabline(); setcursor(); }
 
 /// Send showcmd via UI messages protocol.
 /// If is_clear, sends an empty array; otherwise sends [{0, buf, 0}].
@@ -1554,8 +1459,6 @@ void nvim_showcmd_grid_render(const char *buf, bool is_clear)
 /// transchar(c) wrapper -- result is a static buffer valid until next call.
 const char *nvim_transchar_wrapper(int c) { return transchar(c); }
 
-/// utf_char2bytes(c, buf) -- writes UTF-8 encoding of c into buf, returns length.
-int nvim_utf_char2bytes_wrapper(int c, char *buf) { return utf_char2bytes(c, buf); }
 
 /// vim_isprintc(c) wrapper.
 bool nvim_vim_isprintc_wrapper(int c) { return vim_isprintc(c); }
@@ -1725,8 +1628,6 @@ char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 /// Return get_cursor_line_ptr().
 char *nvim_ident_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
-/// Return vim_iswordp(p).
-bool nvim_ident_vim_iswordp(const char *p) { return vim_iswordp(p); }
 
 /// Return mb_prevptr(line, p).
 char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
@@ -1738,11 +1639,7 @@ void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
 // Dispatch table handler accessors (nv_addsub, nv_colon, nv_record, nv_paste, nv_event)
 // =============================================================================
 
-/// Call op_addsub(oap, count1, arg).
-void nvim_op_addsub_call(oparg_T *oap, int count1, int arg) { op_addsub(oap, count1, arg); }
 
-/// Call do_record(nchar) and return FAIL/OK.
-int nvim_do_record(int nchar) { return do_record(nchar); }
 
 /// Return paste_repeat(count).
 void nvim_paste_repeat(int count) { paste_repeat(count); }
@@ -1810,16 +1707,10 @@ char *nvim_grab_file_name(int count1, int *lnum_out)
   return result;
 }
 
-/// Check curbuf changed, b_nwindows, buf_hide.
-bool nvim_curbuf_needs_autowrite(void) {
-  return curbufIsChanged() && curbuf->b_nwindows <= 1 && !buf_hide(curbuf);
-}
 
 /// Call autowrite(curbuf, false).
 void nvim_autowrite_curbuf(void) { autowrite(curbuf, false); }
 
-/// Call check_can_set_curbuf_disabled().
-bool nvim_check_can_set_curbuf_disabled(void) { return check_can_set_curbuf_disabled(); }
 
 /// Call do_ecmd for gotofile. Returns OK/FAIL (1/0).
 int nvim_do_ecmd_for_gotofile(char *ptr)
@@ -1838,14 +1729,10 @@ int nvim_mark_move_to_call(void *fm, int flags) { return (int)mark_move_to((fmar
 // Visual mode, cursor adjustment, and ident accessors for Rust FFI
 // =============================================================================
 
-/// Call conceal_check_cursor_line().
-void nvim_conceal_check_cursor_line(void) { conceal_check_cursor_line(); }
 
 /// Set mouse_dragging to val.
 void nvim_set_mouse_dragging(int val) { mouse_dragging = val; }
 
-/// Call adjust_cursor_eol().
-void nvim_adjust_cursor_eol(void) { adjust_cursor_eol(); }
 
 /// Get get_op_char(optype).
 int nvim_get_op_char(int optype) { return get_op_char(optype); }
@@ -1895,15 +1782,7 @@ void nvim_vim_beep_esc(void) { vim_beep(kOptBoFlagEsc); }
 /// Return true if curbuf is a terminal buffer.
 bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
 
-/// Call edit(cmd, startln, count) and return bool result.
-bool nvim_edit_call(int cmd, bool startln, int count) { return edit(cmd, startln, count); }
 
-/// Append digit to n (wraps vim_append_digit_int). Returns 0 (FAIL) or 1 (OK).
-/// The updated n is written back through n_ptr.
-int nvim_vim_append_digit_int(int *n_ptr, int digit)
-{
-  return vim_append_digit_int(n_ptr, digit);
-}
 
 /// Show "quit" or "abandon" hint message via msg() for ESC/CTRL-C.
 void nvim_esc_show_msg(void)

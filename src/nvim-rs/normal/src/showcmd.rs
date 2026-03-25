@@ -128,14 +128,14 @@ extern "C" {
     fn nvim_showcmd_set_w_redr_status();
     fn nvim_showcmd_win_redr_status();
     fn nvim_showcmd_set_redraw_tabline();
-    fn nvim_showcmd_draw_tabline();
+    fn draw_tabline();
     fn nvim_showcmd_ui_msg_showcmd(buf: *const std::ffi::c_char, is_clear: bool);
     fn nvim_showcmd_get_p_ch() -> c_int;
     fn nvim_showcmd_grid_render(buf: *const std::ffi::c_char, is_clear: bool);
 
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
     static mut VIsual_active: bool;
-    fn nvim_char_avail_call() -> bool;
+    fn char_avail() -> bool;
     fn nvim_lt_VIsual_cursor() -> bool;
     fn nvim_get_VIsual_lnum() -> c_int;
     fn nvim_get_cursor_lnum() -> c_int;
@@ -151,7 +151,7 @@ extern "C" {
 
     // Phase 5: add_to_showcmd / del_from_showcmd
     fn nvim_transchar_wrapper(c: c_int) -> *const std::ffi::c_char;
-    fn nvim_utf_char2bytes_wrapper(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
     fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
 }
 
@@ -173,7 +173,7 @@ const CTRL_V: c_int = 22;
 /// # Safety
 /// Calls C accessor functions; all pointers are valid while in C event loop.
 unsafe fn clear_showcmd_visual_info() -> bool {
-    if !VIsual_active || nvim_char_avail_call() {
+    if !VIsual_active || char_avail() {
         return false;
     }
 
@@ -405,8 +405,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
                 char_len = i;
             }
         } else {
-            let len_i =
-                nvim_utf_char2bytes_wrapper(c, mbyte_buf.as_mut_ptr().cast::<std::ffi::c_char>());
+            let len_i = utf_char2bytes(c, mbyte_buf.as_mut_ptr().cast::<std::ffi::c_char>());
             let len = usize::try_from(len_i).unwrap_or(0).min(MB_MAXCHAR);
             mbyte_buf[len] = 0;
             char_len = len;
@@ -441,7 +440,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
         extra_len + 1,
     );
 
-    if nvim_char_avail_call() {
+    if char_avail() {
         return false;
     }
 
@@ -466,7 +465,7 @@ pub unsafe extern "C" fn rs_del_from_showcmd(len: c_int) {
     let to_remove = usize::try_from(len).unwrap_or(0).min(old_len);
     *showcmd_buf.add(old_len - to_remove) = 0;
 
-    if !nvim_char_avail_call() {
+    if !char_avail() {
         rs_display_showcmd();
     }
 }
@@ -504,7 +503,7 @@ pub unsafe extern "C" fn rs_display_showcmd() {
         if is_clear {
             nvim_showcmd_set_redraw_tabline();
         } else {
-            nvim_showcmd_draw_tabline();
+            draw_tabline();
         }
         return;
     }

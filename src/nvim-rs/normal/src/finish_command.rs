@@ -61,8 +61,8 @@ extern "C" {
     // Phase 3 wrappers
     fn rs_clearop(oap: OapHandle);
     fn nvim_set_reg_var_default();
-    fn nvim_typebuf_maplen_wrapper() -> c_int;
-    fn nvim_do_pending_operator_call(ca: CapHandle, old_col: c_int, gui_yank: bool);
+    fn typebuf_maplen() -> c_int;
+    fn do_pending_operator(ca: CapHandle, old_col: c_int, gui_yank: bool);
     fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool;
     fn rs_normal_redraw_mode_message(s: NormalStateHandle);
     fn nvim_may_trigger_modechanged();
@@ -76,7 +76,7 @@ extern "C" {
     fn nvim_validate_cursor_curwin_wrapper();
     fn nvim_do_check_scrollbind_wrapper(flag: bool);
     fn nvim_do_check_cursorbind_wrapper();
-    fn nvim_edit_wrapper(cmd: c_int, startln: bool, count: c_int);
+    fn edit(cmd: c_int, startln: bool, count: c_int) -> bool;
     fn nvim_showmode();
 }
 
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         // Get the length of mapped chars again after typing a count,
         // second character or "z333<cr>".
         if (*sp).old_mapped_len > 0 {
-            (*sp).old_mapped_len = nvim_typebuf_maplen_wrapper();
+            (*sp).old_mapped_len = typebuf_maplen();
         }
 
         // If an operation is pending, handle it. But not for K_IGNORE or K_MOUSEMOVE.
@@ -125,7 +125,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         if cmdchar != K_IGNORE && cmdchar != K_MOUSEMOVE {
             let op_type = nvim_oap_get_op_type_ptr(oa);
             did_visual_op = VIsual_active && op_type != OP_NOP && op_type != OP_COLON;
-            nvim_do_pending_operator_call(ca, (*sp).old_col, false);
+            do_pending_operator(ca, (*sp).old_col, false);
         }
 
         // Wait for a moment when a message is displayed that will be
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             nvim_set_restart_VIsual_select(0);
         }
         if restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0 {
-            nvim_edit_wrapper(restart_edit, false, 1);
+            edit(restart_edit, false, 1);
         }
     }
 

@@ -113,7 +113,7 @@ extern "C" {
     // Function wrappers
     fn discard_current_exception();
     fn nvim_state_no_longer_safe();
-    fn nvim_setcursor_wrapper();
+    fn setcursor();
     fn nvim_update_topline_call();
     fn nvim_validate_cursor();
     fn nvim_curtab_needs_diff_update() -> bool;
@@ -122,32 +122,32 @@ extern "C" {
     fn nvim_curtab_clear_diff_update();
     fn nvim_check_scrollbind_zero_wrapper();
     fn nvim_time_msg_first_screen_and_finish();
-    fn nvim_may_make_initial_scroll_size_snapshot_wrapper();
+    fn may_make_initial_scroll_size_snapshot();
     fn nvim_update_curswant_wrapper();
-    fn nvim_do_exmode_wrapper();
+    fn do_exmode();
     fn nvim_check_timestamps_call(focus: bool);
-    fn nvim_may_trigger_win_scrolled_resized_call();
-    fn nvim_may_trigger_safestate_call(safe: bool);
-    fn nvim_char_avail_call() -> bool;
+    fn may_trigger_win_scrolled_resized();
+    fn may_trigger_safestate(safe: bool);
+    fn char_avail() -> bool;
     fn nvim_fdo_has_all_flag() -> bool;
     fn nvim_vgetc_and_discard();
     fn rs_op_pending() -> bool;
     fn nvim_ui_cursor_shape_wrapper();
-    fn nvim_ui_flush_wrapper();
+    fn ui_flush();
     fn nvim_may_trigger_modechanged();
-    fn nvim_typebuf_maplen_wrapper() -> c_int;
-    fn nvim_typebuf_typed() -> bool;
+    fn typebuf_maplen() -> c_int;
+    fn typebuf_typed() -> bool;
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_os_delay_wrapper(ms: c_int, can_interrupt: bool);
+    fn os_delay(ms: c_int, can_interrupt: bool);
     fn nvim_showmode();
     fn nvim_show_cursor_info_later();
-    fn nvim_update_screen_call();
-    fn nvim_redraw_statuslines_call();
+    fn update_screen();
+    fn redraw_statuslines();
     fn nvim_curbuf_set_b_last_used();
     fn nvim_keep_msg_display_and_free();
     fn nvim_shortmess_fileinfo() -> bool;
     fn nvim_fileinfo_call();
-    fn nvim_may_clear_sb_text_call();
+    fn may_clear_sb_text();
     fn nvim_redraw_mode_msg_keep_msg();
     fn readbuf1_empty() -> bool;
     fn rs_set_vcount_ca(cap: *mut std::ffi::c_void, set_prevcount: *mut bool);
@@ -223,13 +223,13 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
 /// Inline of normal_check_window_scrolled.
 unsafe fn normal_check_window_scrolled(_s: NormalStateHandle) {
     if nvim_get_finish_op() == 0 {
-        nvim_may_trigger_win_scrolled_resized_call();
+        may_trigger_win_scrolled_resized();
     }
 }
 
 /// Inline of normal_check_safe_state.
 unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
-    nvim_may_trigger_safestate_call(!rs_op_pending() && restart_edit == 0);
+    may_trigger_safestate(!rs_op_pending() && restart_edit == 0);
 }
 
 /// Inline of normal_check_cursor_moved.
@@ -271,7 +271,7 @@ unsafe fn normal_check_folds(_s: NormalStateHandle) {
     // contain the cursor.
     // When 'foldopen' is "all", open the fold(s) under the cursor.
     // This may mark the window for redrawing.
-    if rs_hasAnyFolding(nvim_get_curwin()) != 0 && !nvim_char_avail_call() {
+    if rs_hasAnyFolding(nvim_get_curwin()) != 0 && !char_avail() {
         rs_foldCheckClose();
 
         if nvim_fdo_has_all_flag() {
@@ -296,9 +296,9 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     nvim_show_cursor_info_later();
 
     if unsafe { must_redraw } != 0 {
-        nvim_update_screen_call();
+        update_screen();
     } else {
-        nvim_redraw_statuslines_call();
+        redraw_statuslines();
         if nvim_get_redraw_cmdline() || nvim_get_clear_cmdline() || unsafe { redraw_mode } != 0 {
             nvim_showmode();
         }
@@ -320,9 +320,9 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     emsg_on_display = false; // can delete error message now
     did_emsg = 0;
     msg_didany = false; // reset lines_left in msg_start()
-    nvim_may_clear_sb_text_call(); // clear scroll-back text on next msg
+    may_clear_sb_text(); // clear scroll-back text on next msg
 
-    nvim_setcursor_wrapper();
+    setcursor();
 }
 
 /// Rust implementation of normal_need_redraw_mode_message.
@@ -365,7 +365,7 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
     && nvim_oap_get_regname_ptr(oa) == 0
     && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
     && nvim_stuff_empty()
-    && nvim_typebuf_typed()
+    && typebuf_typed()
     && emsg_silent == 0
     && !nvim_get_in_assert_fails()
     && !nvim_get_did_wait_return_val()
@@ -390,14 +390,14 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
     // If need to redraw and there is a keep_msg, redraw before the delay
     nvim_redraw_mode_msg_keep_msg();
 
-    nvim_setcursor_wrapper();
+    setcursor();
     nvim_ui_cursor_shape_wrapper(); // show different cursor shape
-    nvim_ui_flush_wrapper();
+    ui_flush();
     if !ui_has(K_UI_MESSAGES) && (nvim_get_msg_scroll_val() || c_int::from(emsg_on_display) != 0) {
-        nvim_os_delay_wrapper(1003, true); // wait at least one second
+        os_delay(1003, true); // wait at least one second
     }
     if ui_has(K_UI_MESSAGES) {
-        nvim_os_delay_wrapper(3003, false); // wait up to three seconds
+        os_delay(3003, false); // wait up to three seconds
     }
     State = save_state;
 
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
         (*oap_typed).prev_count0 = 0;
     }
 
-    (*sp).mapped_len = nvim_typebuf_maplen_wrapper();
+    (*sp).mapped_len = typebuf_maplen();
     State = MODE_NORMAL_BUSY;
 
     // Set v:count here when called from main() and not a stuffed command.
@@ -496,7 +496,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
     // update cursor and redraw.
     if nvim_get_skip_redraw() || exmode_active {
         nvim_set_skip_redraw(false);
-        nvim_setcursor_wrapper();
+        setcursor();
     } else if do_redraw || nvim_stuff_empty() {
         // Ensure curwin->w_topline and curwin->w_leftcol are up to date
         // before triggering a WinScrolled autocommand.
@@ -534,7 +534,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         }
         // After the first screen update may start triggering WinScrolled
         // autocmd events. Store all the scroll positions and sizes now.
-        nvim_may_make_initial_scroll_size_snapshot_wrapper();
+        may_make_initial_scroll_size_snapshot();
     }
 
     // May perform garbage collection when waiting for a character, but
@@ -548,7 +548,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
         if (*ns(s)).noexmode {
             return 0;
         }
-        nvim_do_exmode_wrapper();
+        do_exmode();
         return -1;
     }
 
