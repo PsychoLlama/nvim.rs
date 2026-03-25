@@ -149,13 +149,13 @@ extern "C" {
     fn ui_has(ext: c_int) -> bool;
     fn nvim_ml_get_pos_visual() -> *mut std::ffi::c_char;
     fn nvim_get_cursor_pos_ptr() -> *const std::ffi::c_char;
-    fn nvim_utfc_ptr2len_wrapper(ptr: *const std::ffi::c_char) -> c_int;
     fn nvim_p_sel_is_exclusive() -> bool;
 
     // Phase 5: add_to_showcmd / del_from_showcmd
     fn nvim_transchar_wrapper(c: c_int) -> *const std::ffi::c_char;
     fn utf_char2bytes(c: c_int, buf: *mut std::ffi::c_char) -> c_int;
-    fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
+    fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 }
 
 // =============================================================================
@@ -257,7 +257,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
             if !cond {
                 break;
             }
-            let l = nvim_utfc_ptr2len_wrapper(s.cast());
+            let l = utfc_ptr2len(s.cast());
             if l == 0 {
                 bytes += 1;
                 chars += 1;
@@ -399,7 +399,7 @@ pub unsafe extern "C" fn rs_add_to_showcmd(c: c_int) -> bool {
     // We always write into mbyte_buf so we own the data and avoid pointer casts.
     let char_len: usize;
     {
-        if c <= 0x7f || !nvim_vim_isprintc_wrapper(c) {
+        if c <= 0x7f || !vim_isprintc(c) {
             // Use transchar for ASCII/non-printable chars; result is a static buf.
             let tc: *const u8 = nvim_transchar_wrapper(c).cast();
             if *tc == b' ' {

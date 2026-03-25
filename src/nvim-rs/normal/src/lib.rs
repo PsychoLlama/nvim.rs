@@ -305,7 +305,6 @@ extern "C" {
     // Phase 1A: find_ident_at_pos accessors
     fn nvim_ml_get_buf_wrapper(buf: BufHandle, lnum: i32) -> *mut c_char;
     fn mb_get_class(ptr: *const c_char) -> c_int;
-    fn nvim_utfc_ptr2len_wrapper(ptr: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_emsg_no_string_under_cursor();
@@ -659,7 +658,7 @@ pub unsafe extern "C" fn rs_find_ident_at_pos(
             if this_class != 0 && (i == 1 || this_class != 1) {
                 break;
             }
-            col += nvim_utfc_ptr2len_wrapper(ptr.offset(col as isize));
+            col += utfc_ptr2len(ptr.offset(col as isize));
         }
 
         // When starting on a ']' count it, so that we include the '['.
@@ -737,7 +736,7 @@ pub unsafe extern "C" fn rs_find_ident_at_pos(
                 FORWARD,
             )))
     {
-        end_col += nvim_utfc_ptr2len_wrapper(result_ptr.offset(end_col as isize));
+        end_col += utfc_ptr2len(result_ptr.offset(end_col as isize));
     }
 
     debug_assert!(end_col >= 0);
@@ -1368,7 +1367,6 @@ extern "C" {
     // Phase 1 new lower-level accessors for replace helpers
     fn coladvance_force(col: c_int);
     fn get_cursor_pos_len() -> c_int;
-    fn nvim_mb_charlen_cursor() -> c_int;
     fn nvim_curbuf_b_p_et() -> bool;
     fn del_chars(count: c_int, fixpos: bool);
     fn nvim_ins_char_call(c: c_int);
@@ -2556,6 +2554,15 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn mb_charlen(p: *const c_char) -> c_int;
+    fn utf_ptr2cells(p: *const c_char) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
+    fn get_leader_len(
+        line: *const c_char,
+        flags: *mut *mut c_char,
+        backward: bool,
+        include_space: bool,
+    ) -> c_int;
     fn ml_get(lnum: c_int) -> *const c_char;
     static p_ww: *mut c_char;
     fn vim_strsave_fnameescape(s: *const c_char, what: c_int) -> *mut c_char;
@@ -3331,10 +3338,6 @@ extern "C" {
     fn nvim_dec_cursor() -> c_int;
     // Phase 4: find_decl accessors
     fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
-    fn nvim_findpar_decl() -> c_int;
-    fn nvim_vim_iswordp_char(ptr: *const c_char) -> c_int;
-    fn nvim_get_leader_len_cursor_line() -> c_int;
-    fn nvim_cursor_line_is_blank() -> c_int;
     fn reset_search_dir();
     fn nvim_get_p_ws_bool() -> c_int;
     fn nvim_set_p_ws_bool(val: c_int);
@@ -3805,7 +3808,7 @@ const SEARCH_START: c_int = 0x100; // start search without col offset
 /// # Safety
 /// `ptr` must point to at least `len` valid bytes.
 unsafe fn find_decl_build_pat(ptr: *mut c_char, len: usize) -> (Vec<u8>, usize) {
-    let is_word = nvim_vim_iswordp_char(ptr) != 0;
+    let is_word = vim_iswordp(ptr);
     let pat: Vec<u8> = if is_word {
         let mut p = b"\\V\\<".to_vec();
         p.extend_from_slice(std::slice::from_raw_parts(ptr.cast::<u8>(), len));
@@ -3873,7 +3876,13 @@ unsafe fn find_decl_search(
             }
             break;
         }
-        if nvim_get_leader_len_cursor_line() > 0 {
+        if get_leader_len(
+            nvim_get_cursor_line_ptr(),
+            std::ptr::null_mut(),
+            false,
+            true,
+        ) > 0
+        {
             // Ignore comment lines — continue at start of next line.
             nvim_set_cursor_pos(nvim_get_cursor_lnum() + 1, 0, 0);
             continue;
@@ -3939,13 +3948,13 @@ pub unsafe extern "C" fn rs_find_decl(
 
     // Position cursor at start of search range.
     let par_lnum: c_int;
-    if !locally || nvim_findpar_decl() == 0 {
+    if !locally || !findpar(&mut false, -1, 1, c_int::from(b'{'), false) {
         nvim_setpcmark();
         nvim_set_cursor_pos(1, 0, 0);
         par_lnum = 1;
     } else {
         par_lnum = nvim_get_cursor_lnum();
-        while nvim_get_cursor_lnum() > 1 && nvim_cursor_line_is_blank() == 0 {
+        while nvim_get_cursor_lnum() > 1 && *skipwhite(nvim_get_cursor_line_ptr()) != 0 {
             nvim_set_cursor_lnum(nvim_get_cursor_lnum() - 1);
         }
     }
@@ -4193,7 +4202,7 @@ pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
 
     // Inlined nvim_replace_check_length: abort if not enough chars to replace
     let count1 = nvim_cap_get_count1(cap);
-    if get_cursor_pos_len() < count1 || nvim_mb_charlen_cursor() < count1 {
+    if get_cursor_pos_len() < count1 || mb_charlen(get_cursor_pos_ptr()) < count1 {
         rs_clearopbeep(oap);
         return;
     }
@@ -5548,7 +5557,6 @@ extern "C" {
     fn nvim_get_curwin_w_topline() -> c_int;
     fn nvim_get_curwin_w_cline_folded() -> bool;
     fn nvim_clear_curwin_w_valid_wcol();
-    fn nvim_utf_ptr2cells_cursor() -> c_int;
     fn nvim_getvvcol_cursor_end() -> c_int;
     fn nvim_hasFolding_cursor_set_lnum_up();
     fn nvim_hasFolding_cursor_set_lnum_down();
@@ -5581,7 +5589,6 @@ extern "C" {
     fn nvim_get_curwin_ml_line_count() -> c_int;
     fn nvim_validate_virtcol_curwin();
     fn oneright() -> c_int;
-    fn nvim_vim_isprintc_wrapper(c: c_int) -> bool;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn adjust_skipcol();
     fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char;
@@ -5726,7 +5733,7 @@ pub unsafe extern "C" fn rs_nv_screengo(
         if dir == FORWARD
             && virtcol < nvim_get_curswant()
             && nvim_get_curswant() <= width1
-            && !nvim_vim_isprintc_wrapper(c)
+            && !vim_isprintc(c)
             && c > 255
         {
             oneright();
@@ -5888,7 +5895,7 @@ pub unsafe extern "C" fn rs_nv_g_dollar_cmd(cap: CapHandle) {
         coladvance(nvim_get_curwin(), i);
 
         // if the character doesn't fit move one back
-        if nvim_get_cursor_col() > 0 && nvim_utf_ptr2cells_cursor() > 1 {
+        if nvim_get_cursor_col() > 0 && utf_ptr2cells(get_cursor_pos_ptr()) > 1 {
             let vcol = nvim_getvvcol_cursor_end();
             if vcol >= nvim_get_curwin_w_leftcol() + nvim_get_curwin_w_view_width() - col_off {
                 let col = nvim_get_cursor_col() - 1;

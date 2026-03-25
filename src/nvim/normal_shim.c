@@ -421,8 +421,6 @@ void nvim_ml_delete_last_line(void) {
   deleted_lines(curbuf->b_ml.ml_line_count + 1, 1);
 }
 
-// For nvim_replace helpers inlining
-int nvim_mb_charlen_cursor(void) { return mb_charlen(get_cursor_pos_ptr()); }
 bool nvim_curbuf_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_ins_char_call(int c) { ins_char(c); }
 void nvim_ins_char_bytes_from_cap(cmdarg_T *cap) { if (cap && cap->nchar_len > 0) { ins_char_bytes((char *)cap->nchar_composing, (size_t)cap->nchar_len); } }
@@ -648,17 +646,6 @@ char *nvim_getcmdline_for_search(cmdarg_T *cap)
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
 /// Returns 1 on success, 0 on failure.
 int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
-int nvim_findpar_decl(void) { bool incll; return findpar(&incll, BACKWARD, 1, '{', false) ? 1 : 0; }
-
-/// Wrapper for vim_iswordp for the first char at ptr.
-int nvim_vim_iswordp_char(const char *ptr) { return vim_iswordp(ptr) ? 1 : 0; }
-
-/// Wrapper for get_leader_len on cursor line.
-int nvim_get_leader_len_cursor_line(void) { return get_leader_len(get_cursor_line_ptr(), NULL, false, true); }
-
-/// Check if first non-white char of cursor line is NUL (line is blank/whitespace).
-int nvim_cursor_line_is_blank(void) { return *skipwhite(get_cursor_line_ptr()) == NUL ? 1 : 0; }
-
 
 /// Get p_ws as int.
 int nvim_get_p_ws_bool(void) { return p_ws ? 1 : 0; }
@@ -725,7 +712,6 @@ int nvim_get_curwin_w_skipcol(void) { return (int)curwin->w_skipcol; }
 int nvim_get_curwin_w_topline(void) { return (int)curwin->w_topline; }
 bool nvim_get_curwin_w_cline_folded(void) { return curwin->w_cline_folded; }
 void nvim_clear_curwin_w_valid_wcol(void) { curwin->w_valid &= ~VALID_WCOL; }
-int nvim_utf_ptr2cells_cursor(void) { return utf_ptr2cells(get_cursor_pos_ptr()); }
 int nvim_getvvcol_cursor_end(void) { colnr_T vcol; getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol); return (int)vcol; }
 void nvim_hasFolding_cursor_set_lnum_up(void) { hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL); }
 void nvim_hasFolding_cursor_set_lnum_down(void) { hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum); }
@@ -854,9 +840,6 @@ _Static_assert(BACKWARD == -1, "BACKWARD changed");
 _Static_assert(FORWARD == 1, "FORWARD changed");
 
 char *nvim_ml_get_buf_wrapper(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
-
-
-int nvim_utfc_ptr2len_wrapper(const char *ptr) { return utfc_ptr2len(ptr); }
 
 
 void nvim_emsg_no_string_under_cursor(void) { emsg(_("E348: No string under cursor")); }
@@ -1328,9 +1311,6 @@ void nvim_showcmd_grid_render(const char *buf, bool is_clear)
 /// transchar(c) wrapper -- result is a static buffer valid until next call.
 const char *nvim_transchar_wrapper(int c) { return transchar(c); }
 
-
-/// vim_isprintc(c) wrapper.
-bool nvim_vim_isprintc_wrapper(int c) { return vim_isprintc(c); }
 
 /// hasFolding for upward direction: hasFolding(curwin, lnum, out_lnum, NULL).
 /// Returns true if there is a fold. Sets *out_lnum to the first line of the fold.
