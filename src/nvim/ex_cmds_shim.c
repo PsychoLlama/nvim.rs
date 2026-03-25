@@ -295,7 +295,6 @@ int64_t nvim_excmds_ml_find_line_or_offset(linenr_T lnum)
   return (int64_t)rs_ml_find_line_or_offset(curbuf, lnum, NULL, true);
 }
 
-
 void nvim_excmds_extmark_move_region(int start_row, int start_col, int64_t start_byte,
                                       int extent_row, int extent_col, int64_t extent_byte,
                                       int new_row, int new_col, int64_t new_byte, int etype)
@@ -440,7 +439,6 @@ int global_need_beginline = 0;           // call beginline() after ":g"
 extern void rs_sub_get_replacement(void *ret_sub);
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 
-
 /// Get old substitute replacement string. Thin wrapper calling Rust.
 ///
 /// @param[out]  ret_sub    Location where old string will be saved.
@@ -515,7 +513,6 @@ win_T *nvim_excmds_find_preview_win(void)
   return NULL;
 }
 
-
 void nvim_excmds_reset_binding_curwin(void)
 {
   RESET_BINDING(curwin);
@@ -543,7 +540,6 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
   return tv_list_find_str(l, idx);
 }
 
-
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
 int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
@@ -559,8 +555,6 @@ void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 }
 
 // --- do_bang FFI accessors ---
-
-
 
 void nvim_excmds_apply_autocmds_shellfilterpost(void)
 {
@@ -807,7 +801,6 @@ void nvim_excmds_curbuf_set_bf_notedited(void)
   curbuf->b_flags |= BF_NOTEDITED;
 }
 
-
 /// Get b_fnum from an opaque buf pointer.
 int nvim_excmds_buf_get_fnum(void *buf) { return ((buf_T *)buf)->b_fnum; }
 
@@ -836,7 +829,6 @@ int nvim_excmds_os_path_exists_curbuf_ffname(void)
 {
   return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0;
 }
-
 
 /// Check if eap->cmdidx == CMD_saveas.
 int nvim_exarg_cmdidx_is_saveas(const exarg_T *eap)
@@ -942,7 +934,6 @@ int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap)
   return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM,
                   eap, READ_FILTER, false) == OK ? 1 : 0;
 }
-
 
 /// Wrapper for redraw_curbuf_later(UPD_VALID).
 void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
@@ -1065,7 +1056,6 @@ int nvim_excmds_autowrite_curbuf(int forceit)
 /// Wrap dialog_changed(curbuf, false).
 void nvim_excmds_dialog_changed_curbuf(void) { dialog_changed(curbuf, false); }
 
-
 /// For set_swapcommand: get_vim_var_str(VV_SWAPCOMMAND). Returns the string (not owned).
 const char *nvim_excmds_get_vim_var_str_swapcommand(void)
 {
@@ -1111,7 +1101,6 @@ int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out)
   return result;
 }
 
-
 /// Set a bufref to buf. Opaque handle for buffer reference tracking.
 /// Uses a C-allocated bufref_T. Returns opaque pointer to bufref.
 void *nvim_excmds_new_bufref(buf_T *buf)
@@ -1129,8 +1118,6 @@ int nvim_excmds_bufref_valid(void *ref)
 
 /// Free a bufref created with nvim_excmds_new_bufref.
 void nvim_excmds_free_bufref(void *ref) { xfree(ref); }
-
-
 
 /// Wrap buf_write_all(buf, forceit). Returns 1=OK, 0=FAIL.
 int nvim_excmds_buf_write_all(buf_T *buf, int forceit)
@@ -1202,7 +1189,6 @@ int nvim_excmds_eap_get_line1(const exarg_T *eap) { return (int)eap->line1; }
 /// Get eap->line2.
 int nvim_excmds_eap_get_line2_val(const exarg_T *eap) { return (int)eap->line2; }
 
-
 /// Check vim_strchr(p_cpo, CPO_ALTWRITE) != NULL.
 int nvim_excmds_vim_strchr_cpo_altwrite(void)
 {
@@ -1233,7 +1219,6 @@ void nvim_excmds_emsg_e_bufloaded(void) { emsg(_(e_bufloaded)); }
 /// Wrap bt_dontwrite_msg(curbuf). Returns 1 if true.
 int nvim_excmds_bt_dontwrite_msg_curbuf(void) { return bt_dontwrite_msg(curbuf) ? 1 : 0; }
 
-
 /// Check curbuf->b_ffname writable (Unix: rs_check_writable).
 int nvim_excmds_curbuf_check_writable(void)
 {
@@ -1249,7 +1234,6 @@ int nvim_excmds_dialog_write_partial(void)
 {
   return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0;
 }
-
 
 /// Do saveas: apply BufFilePre, swap names, BufFilePost, BufAdd autocmds.
 /// Returns 1=OK (write can proceed), 0=FAIL (buffer changed, abort).
@@ -1318,10 +1302,8 @@ int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 :
 
 // --- Write Validation Helpers FFI accessors ---
 
-
 /// Get eap->mkdir_p field.
 int nvim_excmds_eap_get_mkdir_p(const exarg_T *eap) { return eap->mkdir_p ? 1 : 0; }
-
 
 /// Get buf->b_p_ro (readonly option).
 int nvim_excmds_buf_get_b_p_ro(const buf_T *buf) { return buf->b_p_ro ? 1 : 0; }
@@ -1832,7 +1814,6 @@ void nvim_ecmd_cmdwin_restore_free(void *bundle)
 /// Check if CMOD_KEEPALT is set in cmdmod.cmod_flags
 int nvim_ecmd_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPALT) != 0 ? 1 : 0; }
 
-
 // --- Misc wrappers ---
 
 /// Get mark from buflist_findfmark(buf): fills *lnum and *col
@@ -1902,8 +1883,6 @@ const char *nvim_ecmd_eap_get_do_ecmd_cmd(exarg_T *eap)
 
 /// Call set_vim_var_string(VV_SWAPCOMMAND, NULL, -1) to clear swapcommand
 void nvim_ecmd_clear_swapcommand(void) { set_vim_var_string(VV_SWAPCOMMAND, NULL, -1); }
-
-
 
 /// Emit emsg(_(e_cannot_switch_to_a_closing_buffer))
 void nvim_ecmd_emsg_closing_buffer(void) { emsg(_(e_cannot_switch_to_a_closing_buffer)); }
