@@ -622,19 +622,6 @@ void nvim_getvcols_call(int lnum1, int col1, int coladd1,
   *out_right = right;
 }
 
-/// findmatch wrapper: returns success and out-params for position.
-bool nvim_findmatch_nul(oparg_T *oap, int *out_lnum, int *out_col, int *out_coladd)
-{
-  pos_T *pos = findmatch(oap, NUL);
-  if (pos == NULL) {
-    return false;
-  }
-  *out_lnum = pos->lnum;
-  *out_col = pos->col;
-  *out_coladd = pos->coladd;
-  return true;
-}
-
 /// mark_mb_adjustpos for arbitrary pos (by lnum/col/coladd).
 /// Updates *col_out after adjustment and returns new col.
 int nvim_mark_mb_adjustpos_pos(int lnum, int col, int *col_out) {
@@ -700,20 +687,6 @@ void nvim_set_p_scs_bool(int val) { p_scs = val != 0; }
 
 
 
-/// findmatchlimit with NULL oap, FM_FORWARD, for block scope in find_decl.
-bool nvim_findmatchlimit_forward(int64_t maxtravel,
-                                  int *out_lnum, int *out_col, int *out_coladd)
-{
-  pos_T *pos = findmatchlimit(NULL, '}', FM_FORWARD, (long)maxtravel);
-  if (pos == NULL) {
-    return false;
-  }
-  *out_lnum = pos->lnum;
-  *out_col = pos->col;
-  *out_coladd = pos->coladd;
-  return true;
-}
-
 // =============================================================================
 // Operator handler accessors for Rust FFI
 // =============================================================================
@@ -724,21 +697,6 @@ bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 // =============================================================================
 // Text object handler accessors for Rust FFI
 // =============================================================================
-
-// nv_brackets_impl C accessors for Rust FFI
-/// findmatchlimit wrapper that copies pos_T fields to output params.
-bool nvim_findmatchlimit_call(oparg_T *oap, int findc, int flags, int64_t maxtravel,
-                               int *out_lnum, int *out_col, int *out_coladd)
-{
-  pos_T *pos = findmatchlimit(oap, findc, flags, (long)maxtravel);
-  if (pos == NULL) {
-    return false;
-  }
-  *out_lnum = pos->lnum;
-  *out_col = pos->col;
-  *out_coladd = pos->coladd;
-  return true;
-}
 
 /// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
 /// Takes a copy of ptr (via xmemdupz) and frees it after the call,

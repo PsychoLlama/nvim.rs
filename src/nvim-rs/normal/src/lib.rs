@@ -272,12 +272,7 @@ extern "C" {
         out_left: *mut c_int,
         out_right: *mut c_int,
     );
-    fn nvim_findmatch_nul(
-        oap: OapHandle,
-        out_lnum: *mut c_int,
-        out_col: *mut c_int,
-        out_coladd: *mut c_int,
-    ) -> bool;
+    fn findmatch(oap: OapHandle, initc: c_int) -> *mut crate::types::PosT;
     #[allow(dead_code)]
     fn nvim_ml_get_len_call(lnum: c_int) -> c_int;
 
@@ -3304,16 +3299,12 @@ extern "C" {
     fn nvim_getnextmark_call(fm: FmarkHandle, dir: c_int, begin_line: c_int) -> FmarkHandle;
     fn do_mouse(oap: OapHandle, nchar: c_int, dir: c_int, count1: i64);
     fn nvim_spell_move_to_cap_call(dir: c_int, smt_type: c_int) -> usize;
-    // Phase 3: findmatchlimit accessor
-    fn nvim_findmatchlimit_call(
+    fn findmatchlimit(
         oap: OapHandle,
-        findc: c_int,
+        initc: c_int,
         flags: c_int,
         maxtravel: i64,
-        out_lnum: *mut c_int,
-        out_col: *mut c_int,
-        out_coladd: *mut c_int,
-    ) -> bool;
+    ) -> *mut crate::types::PosT;
     fn nvim_dec_cursor() -> c_int;
     // Phase 4: find_decl accessors
     fn nvim_searchit_decl(pat: *const c_char, patlen: usize, searchflags: c_int) -> c_int;
@@ -3326,12 +3317,6 @@ extern "C" {
     fn nvim_set_p_ws_bool(val: c_int);
     fn nvim_get_p_scs_bool() -> c_int;
     fn nvim_set_p_scs_bool(val: c_int);
-    fn nvim_findmatchlimit_forward(
-        maxtravel: i64,
-        out_lnum: *mut c_int,
-        out_col: *mut c_int,
-        out_coladd: *mut c_int,
-    ) -> bool;
 }
 
 // Phase 2 constants
@@ -3425,21 +3410,11 @@ unsafe fn findmatchlimit_pos(
     findc: c_int,
     flags: c_int,
 ) -> Option<(c_int, c_int, c_int)> {
-    let mut lnum: c_int = 0;
-    let mut col: c_int = 0;
-    let mut coladd: c_int = 0;
-    if nvim_findmatchlimit_call(
-        oap,
-        findc,
-        flags,
-        0,
-        &raw mut lnum,
-        &raw mut col,
-        &raw mut coladd,
-    ) {
-        Some((lnum, col, coladd))
-    } else {
+    let pos = findmatchlimit(oap, findc, flags, 0);
+    if pos.is_null() {
         None
+    } else {
+        Some(((*pos).lnum, (*pos).col, (*pos).coladd))
     }
 }
 
@@ -3852,18 +3827,20 @@ unsafe fn find_decl_search(
         }
         if thisblock && t {
             let maxtravel = i64::from(old_lnum - nvim_get_cursor_lnum() + 1);
-            let mut blk_lnum: c_int = 0;
-            let mut blk_col: c_int = 0;
-            let mut blk_coladd: c_int = 0;
-            if nvim_findmatchlimit_forward(
-                maxtravel,
-                &raw mut blk_lnum,
-                &raw mut blk_col,
-                &raw mut blk_coladd,
-            ) && blk_lnum < old_lnum
             {
-                nvim_set_cursor_pos(blk_lnum, blk_col, blk_coladd);
-                continue;
+                const FM_FORWARD: c_int = 0x02;
+                let blk_pos = findmatchlimit(
+                    std::ptr::null_mut(),
+                    c_int::from(b'}'),
+                    FM_FORWARD,
+                    maxtravel,
+                );
+                if blk_pos.is_null() || (*blk_pos).lnum >= old_lnum {
+                    // no match in block scope, continue normal search
+                } else {
+                    nvim_set_cursor_pos((*blk_pos).lnum, (*blk_pos).col, (*blk_pos).coladd);
+                    continue;
+                }
             }
         }
         if !t {
@@ -7203,21 +7180,14 @@ pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
         nvim_oap_set_motion_type(oap, K_MT_CHARWISE);
         (*oap.cast::<OpargT>()).use_reg_one = true;
 
-        let mut out_lnum: c_int = 0;
-        let mut out_col: c_int = 0;
-        let mut out_coladd: c_int = 0;
-        if nvim_findmatch_nul(
-            oap,
-            &raw mut out_lnum,
-            &raw mut out_col,
-            &raw mut out_coladd,
-        ) {
+        let pos = findmatch(oap, 0);
+        if pos.is_null() {
+            rs_clearopbeep(oap);
+        } else {
             nvim_setpcmark();
-            nvim_set_cursor_pos(out_lnum, out_col, 0);
+            nvim_set_cursor_pos((*pos).lnum, (*pos).col, 0);
             nvim_curwin_set_curswant(true);
             adjust_for_sel(cap);
-        } else {
-            rs_clearopbeep(oap);
         }
     }
 
