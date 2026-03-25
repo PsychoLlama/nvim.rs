@@ -7280,7 +7280,7 @@ extern "C" {
 
     // Phase 1: event
     fn nvim_state_handle_k_event();
-    fn nvim_set_may_garbage_collect(val: bool);
+    static mut may_garbage_collect: bool;
 }
 
 /// Command handler for CTRL-A and CTRL-X: Add or subtract from number/letter.
@@ -7419,7 +7419,7 @@ pub unsafe extern "C" fn rs_nv_paste(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
     // Disable garbage collection during event handling (see comment in C original).
-    nvim_set_may_garbage_collect(false);
+    may_garbage_collect = false;
     let may_restart = restart_edit != 0 || restart_VIsual_select != 0;
     nvim_state_handle_k_event();
     nvim_set_finish_op(false);

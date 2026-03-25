@@ -40,6 +40,7 @@ const MODE_NORMAL_BUSY: c_int = 0x1001;
 const MODE_INSERT: c_int = 0x10;
 const OP_NOP: c_int = 0;
 const CA_COMMAND_BUSY: c_int = 1;
+const K_OPT_FDO_FLAG_ALL: u32 = 0x01;
 
 // =============================================================================
 // FFI declarations
@@ -59,7 +60,7 @@ extern "C" {
     fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
 
     // Global accessors
-    fn nvim_get_did_throw_direct() -> bool;
+    static did_throw: bool;
     fn nvim_get_ex_normal_busy() -> c_int;
 
     static mut exmode_active: bool;
@@ -69,10 +70,10 @@ extern "C" {
     static mut cmdwin_result: c_int;
     fn nvim_get_skip_redraw() -> bool;
     fn nvim_set_skip_redraw(val: bool);
-    fn nvim_get_diff_need_scrollbind() -> bool;
+    static diff_need_scrollbind: bool;
     fn nvim_set_diff_need_scrollbind(val: bool);
     fn nvim_get_time_fd_not_null() -> bool;
-    fn nvim_set_may_garbage_collect(val: bool);
+    static mut may_garbage_collect: bool;
     fn nvim_stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
     fn nvim_set_finish_op(val: bool);
@@ -128,8 +129,8 @@ extern "C" {
     fn may_trigger_win_scrolled_resized();
     fn may_trigger_safestate(safe: bool);
     fn char_avail() -> bool;
-    fn nvim_fdo_has_all_flag() -> bool;
-    fn nvim_vgetc_and_discard();
+    static fdo_flags: u32;
+    fn vgetc() -> c_int;
     fn rs_op_pending() -> bool;
     fn nvim_ui_cursor_shape_wrapper();
     fn ui_flush();
@@ -215,7 +216,7 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
         } else if !nvim_get_global_busy() || !exmode_active {
             if !quit_more {
                 // flush all buffers
-                nvim_vgetc_and_discard();
+                let _ = vgetc();
             }
             unsafe {
                 got_int = false;
@@ -281,7 +282,7 @@ unsafe fn normal_check_folds(_s: NormalStateHandle) {
     if rs_hasAnyFolding(nvim_get_curwin()) != 0 && !char_avail() {
         rs_foldCheckClose();
 
-        if nvim_fdo_has_all_flag() {
+        if fdo_flags & K_OPT_FDO_FLAG_ALL != 0 {
             rs_foldOpenCursor();
         }
     }
@@ -502,7 +503,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
     // At the toplevel there is no exception handling. Discard any that
     // may be hanging around (e.g. from "interrupt" at the debug prompt).
-    if nvim_get_did_throw_direct() && nvim_get_ex_normal_busy() == 0 {
+    if did_throw && nvim_get_ex_normal_busy() == 0 {
         discard_current_exception();
     }
 
@@ -540,7 +541,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
         // Scroll-binding for diff mode may have been postponed until
         // here. Avoids doing it for every change.
-        if nvim_get_diff_need_scrollbind() {
+        if diff_need_scrollbind {
             check_scrollbind(0, 0);
             nvim_set_diff_need_scrollbind(false);
         }
@@ -561,7 +562,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
     // May perform garbage collection when waiting for a character, but
     // only at the very toplevel.
-    nvim_set_may_garbage_collect(!(*ns(s)).cmdwin && !(*ns(s)).noexmode);
+    may_garbage_collect = !(*ns(s)).cmdwin && !(*ns(s)).noexmode;
 
     // Update w_curswant if w_set_curswant has been set.
     nvim_update_curswant_wrapper();

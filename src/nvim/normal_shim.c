@@ -1085,8 +1085,6 @@ static int normal_execute(VimState *state, int key) { return rs_normal_execute((
 // normal_check accessors for Rust FFI
 // =============================================================================
 
-/// Get did_throw global.
-bool nvim_get_did_throw_direct(void) { return did_throw; }
 
 /// Set quit_more global.
 void nvim_set_quit_more(bool val) { quit_more = val; }
@@ -1103,8 +1101,6 @@ bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curt
 /// Clear curtab diff update flag.
 void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }
 
-/// Get diff_need_scrollbind global.
-bool nvim_get_diff_need_scrollbind(void) { return diff_need_scrollbind; }
 
 /// Set diff_need_scrollbind global.
 void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
@@ -1116,8 +1112,6 @@ bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
 void nvim_time_msg_first_screen_and_finish(void) { TIME_MSG("first screen update"); time_finish(); }
 
 
-/// Set may_garbage_collect global.
-void nvim_set_may_garbage_collect(bool val) { may_garbage_collect = val; }
 
 /// update_curswant() wrapper.
 void nvim_update_curswant_wrapper(void) { update_curswant(); }
@@ -1133,15 +1127,12 @@ void nvim_update_curswant_wrapper(void) { update_curswant(); }
 // For normal_check_safe_state
 
 // For normal_check_folds
-bool nvim_fdo_has_all_flag(void) { return (fdo_flags & kOptFdoFlagAll) != 0; }
-
 // For normal_check_stuff_buffer
 void nvim_set_did_check_timestamps(bool val) { did_check_timestamps = val; }
 bool nvim_get_need_check_timestamps(void) { return need_check_timestamps; }
 void nvim_check_timestamps_call(bool focus) { check_timestamps(focus); }
 
 // For normal_check_interrupt
-void nvim_vgetc_and_discard(void) { (void)vgetc(); }
 /// Check if last_cursormoved_win != curwin or cursor position differs.
 bool nvim_last_cursormoved_check(void)
 {
