@@ -20,6 +20,67 @@
 
 use std::ffi::{c_int, c_void};
 
+// =============================================================================
+// Stack node types for GC iteration (inlined from eval_shim.c Phase 5)
+// =============================================================================
+
+/// Linked-list node for explicit hashtab GC stack (mirrors ht_stack_T).
+#[repr(C)]
+struct HtStackNode {
+    ht: HtHandle,
+    prev: *mut HtStackNode,
+}
+
+/// Linked-list node for explicit list GC stack (mirrors list_stack_T).
+#[repr(C)]
+struct ListStackNode {
+    list: ListHandle,
+    prev: *mut ListStackNode,
+}
+
+extern "C" {
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xfree(ptr: *mut c_void);
+}
+
+/// Push an ht onto the stack (inlined from nvim_eval_ht_stack_push).
+#[inline]
+unsafe fn ht_stack_push(stack: *mut *mut c_void, ht: HtHandle) {
+    let node = xmalloc(std::mem::size_of::<HtStackNode>()).cast::<HtStackNode>();
+    (*node).ht = ht;
+    (*node).prev = (*stack).cast::<HtStackNode>();
+    *stack = node.cast::<c_void>();
+}
+
+/// Pop an ht from the stack (inlined from nvim_eval_ht_stack_pop).
+#[inline]
+unsafe fn ht_stack_pop(stack: *mut *mut c_void) -> HtHandle {
+    let node = (*stack).cast::<HtStackNode>();
+    let ht = (*node).ht;
+    *stack = (*node).prev.cast::<c_void>();
+    xfree(node.cast::<c_void>());
+    ht
+}
+
+/// Push a list onto the stack (inlined from nvim_eval_list_stack_push).
+#[inline]
+unsafe fn list_stack_push(stack: *mut *mut c_void, list: ListHandle) {
+    let node = xmalloc(std::mem::size_of::<ListStackNode>()).cast::<ListStackNode>();
+    (*node).list = list;
+    (*node).prev = (*stack).cast::<ListStackNode>();
+    *stack = node.cast::<c_void>();
+}
+
+/// Pop a list from the stack (inlined from nvim_eval_list_stack_pop).
+#[inline]
+unsafe fn list_stack_pop(stack: *mut *mut c_void) -> ListHandle {
+    let node = (*stack).cast::<ListStackNode>();
+    let list = (*node).list;
+    *stack = (*node).prev.cast::<c_void>();
+    xfree(node.cast::<c_void>());
+    list
+}
+
 use super::typval::{
     dict_get_ht, list_get_copyid, list_set_copyid, CallbackReaderT, DictTHead, PartialT, TypvalT,
 };
@@ -100,12 +161,6 @@ extern "C" {
         ht_stack: *mut *mut c_void,
         list_stack: *mut *mut c_void,
     );
-
-    // Stack operations (using C malloc/free for ht_stack/list_stack)
-    fn nvim_eval_ht_stack_push(stack: *mut *mut c_void, ht: HtHandle);
-    fn nvim_eval_ht_stack_pop(stack: *mut *mut c_void) -> HtHandle;
-    fn nvim_eval_list_stack_push(stack: *mut *mut c_void, list: ListHandle);
-    fn nvim_eval_list_stack_pop(stack: *mut *mut c_void) -> ListHandle;
 
     // External: set_ref_in_func (remains in C)
     fn set_ref_in_func(name: *mut std::ffi::c_char, fp: *mut c_void, copyid: c_int) -> bool;
@@ -242,7 +297,7 @@ pub unsafe extern "C" fn rs_set_ref_in_ht(
         }
 
         // take an item from the stack
-        cur_ht = nvim_eval_ht_stack_pop(&raw mut ht_stack);
+        cur_ht = ht_stack_pop(&raw mut ht_stack);
     }
 
     abort
@@ -272,7 +327,7 @@ pub unsafe extern "C" fn rs_set_ref_in_list_items(
         }
 
         // take an item from the stack
-        cur_l = nvim_eval_list_stack_pop(&raw mut list_stack);
+        cur_l = list_stack_pop(&raw mut list_stack);
     }
 
     abort
@@ -296,7 +351,7 @@ unsafe fn set_ref_in_item_dict(
         return rs_set_ref_in_ht(ht, copy_id, list_stack);
     }
 
-    nvim_eval_ht_stack_push(ht_stack, ht);
+    ht_stack_push(ht_stack, ht);
 
     // Iterate over dict watchers
     nvim_eval_dict_foreach_watcher_callback(dd, copy_id, ht_stack, list_stack);
@@ -321,7 +376,7 @@ unsafe fn set_ref_in_item_list(
         return rs_set_ref_in_list_items(ll, copy_id, ht_stack);
     }
 
-    nvim_eval_list_stack_push(list_stack, ll);
+    list_stack_push(list_stack, ll);
 
     false
 }

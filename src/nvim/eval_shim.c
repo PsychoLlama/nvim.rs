@@ -226,42 +226,6 @@ void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T 
   })
 }
 
-// Stack operations for ht_stack
-void nvim_eval_ht_stack_push(ht_stack_T **stack, hashtab_T *ht)
-{
-  ht_stack_T *newitem = xmalloc(sizeof(ht_stack_T));
-  newitem->ht = ht;
-  newitem->prev = *stack;
-  *stack = newitem;
-}
-
-hashtab_T *nvim_eval_ht_stack_pop(ht_stack_T **stack)
-{
-  ht_stack_T *item = *stack;
-  hashtab_T *ht = item->ht;
-  *stack = item->prev;
-  xfree(item);
-  return ht;
-}
-
-// Stack operations for list_stack
-void nvim_eval_list_stack_push(list_stack_T **stack, list_T *list)
-{
-  list_stack_T *newitem = xmalloc(sizeof(list_stack_T));
-  newitem->list = list;
-  newitem->prev = *stack;
-  *stack = newitem;
-}
-
-list_T *nvim_eval_list_stack_pop(list_stack_T **stack)
-{
-  list_stack_T *item = *stack;
-  list_T *list = item->list;
-  *stack = item->prev;
-  xfree(item);
-  return list;
-}
-
 // C accessors for buffer operations (used by Rust indexing module)
 int nvim_eval_buf_ml_valid(const buf_T *buf)
 {
