@@ -85,20 +85,12 @@ typedef void *(*user_expand_func_T)(const char *, int, typval_T *);
 
 #include "cmdexpand.c.generated.h"
 
-// Rust FFI declarations (tag module)
+// Rust FFI declarations
 extern int rs_expand_tags(bool tagnames, char *pat, int *num_file, char ***file);
-
-// Rust FFI declarations (option expand module)
 extern int rs_expand_setting_subtract(void *xp, void *regmatch, int *numMatches, char ***matches);
-
-// Rust FFI declarations (window wrappers removed)
 extern int rs_global_stl_height(void);
 extern void rs_last_status(int morewin);
-
-// Rust FFI: fuzzy completion support check (takes context int, not expand_T*)
 extern int rs_cmdline_fuzzy_completion_supported(int context);
-
-// Rust FFI: wildmenu / pum (exported without rs_ prefix by Rust)
 extern void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int match,
                             bool showtail);
 extern void cmdline_pum_create(void *ccline, expand_T *xp, char **matches, int num_matches,
@@ -140,7 +132,6 @@ extern char *rs_get_scriptnames_arg(expand_T *xp, int idx);
 extern int rs_skip_wildmenu_char(expand_T *xp, const char *s);
 extern int rs_wildmenu_match_len(expand_T *xp, char *s);
 
-// Wave 4: Pattern-in-buffer helpers
 extern int rs_expand_pattern_in_buf(char *pat, int dir, char ***matches, int *numMatches);
 extern int rs_expand_files_and_dirs(expand_T *xp, char *pat, char ***matches, int *numMatches,
                                     int flags, int options);
@@ -902,10 +893,6 @@ int nvim_cmdexpand_expand_argopt(const char *pat, expand_T *xp, regmatch_T *regm
 {
   return expand_argopt(pat, xp, regmatch, matches, numMatches);
 }
-
-// nvim_cmdexpand_expand_user_defined -- deleted, Rust calls rs_expand_user_defined directly
-// nvim_cmdexpand_expand_user_list -- deleted, Rust calls rs_expand_user_list directly
-// nvim_cmdexpand_expand_user_lua -- deleted, Rust calls rs_expand_user_lua directly
 
 /// Wrapper for nlua_expand_get_matches (for Rust FFI).
 int nvim_cmdexpand_nlua_expand_get_matches(int *numMatches, char ***matches)
