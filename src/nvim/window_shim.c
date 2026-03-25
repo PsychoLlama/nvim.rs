@@ -674,8 +674,6 @@ void nvim_win_grid_clear_field(win_T *wp) { CLEAR_FIELD(wp->w_grid_alloc); }
 #define FRACTION_MULT   16384
 
 
-// command_height: thin wrapper defined in Phase 3 accessors section.
-
 /// Add or remove window bar from window "wp".
 ///
 /// @param make_room Whether to resize frames to make room for winbar.
@@ -810,7 +808,6 @@ int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 
 
-
 // (nvim_grab_file_name already exists in normal_shim.c with int* lnum_out)
 
 /// buflist_findname_exp wrapper (calls rs_buflist_findname_exp via static inline).
@@ -925,8 +922,6 @@ win_T *nvim_handle_get_window(int handle)
   return wp;
 }
 
-// Call win_grid_alloc on a window
-
 // UI call wrappers (these wrap auto-generated ui_call_* functions)
 void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height)
 {
@@ -1022,7 +1017,6 @@ void nvim_set_cmdwin_buf(buf_T *val) { cmdwin_buf = val; }
 void nvim_api_set_error_e_cmdwin(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_cmdwin); }
 /// Set set_option_value for kOptCmdheight with given value (Phase 8 accessor).
 void nvim_set_option_cmdheight(int64_t val) { set_option_value(kOptCmdheight, NUMBER_OPTVAL(val), 0); }
-// nvim_set_min_set_ch already exists below (line ~2867); no duplicate needed here
 /// Returns 1 if local w_p_wbr is empty/NULL (for floating window check).
 int nvim_win_get_p_wbr_empty(win_T *wp) { return (!wp || !wp->w_p_wbr || *wp->w_p_wbr == NUL) ? 1 : 0; }
 /// Returns 1 if BOTH global p_wbr AND local w_p_wbr are empty (for non-floating window check).
@@ -1055,13 +1049,6 @@ void nvim_apply_autocmds_event(int event)
   apply_autocmds((event_T)event, NULL, NULL, false, curbuf);
 }
 
-
-/// Update topline for curwin (used in win_enter_ext).
-
-
-/// Call changed_line_abv_curs().
-
-/// Call do_autochdir().
 
 // =============================================================================
 // Phase 2 accessors: win_fix_current_dir, buf_jump_open_win/tab, swbuf_goto
@@ -1853,7 +1840,6 @@ int nvim_redrawing(void)
 }
 
 
-
 // Drawscreen Phase 5/6 accessors for window cursor/fold fields
 
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
@@ -1877,7 +1863,6 @@ int nvim_fold_info(win_T *wp, linenr_T lnum, linenr_T *out_fi_lnum, linenr_T *ou
   }
   return fi.fi_level;
 }
-
 
 
 /// Compute rightleft column adjustment for cursor positioning.
@@ -1925,9 +1910,6 @@ void nvim_status_redraw_all(void)
 }
 
 /// Trigger a full screen update (Rust incsearch).
-
-
-
 
 
 // Moved from drawscreen.c — display Rust FFI wrappers
