@@ -86,6 +86,7 @@ extern "C" {
     fn nvim_get_KeyTyped() -> bool;
     fn nvim_get_keystuffed() -> c_int;
     fn nvim_get_mod_mask() -> c_int;
+    #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
     fn nvim_get_vgetc_char() -> c_int;
     fn nvim_get_vgetc_mod_mask() -> c_int;

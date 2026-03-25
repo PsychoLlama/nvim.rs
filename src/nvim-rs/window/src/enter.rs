@@ -123,6 +123,7 @@ extern "C" {
     fn rs_win_setwidth(width: c_int);
 
     // get_real_state()
+    #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
 }
 

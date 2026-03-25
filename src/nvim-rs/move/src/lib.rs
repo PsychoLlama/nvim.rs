@@ -4267,6 +4267,7 @@ extern "C" {
     static mut p_ss: i64;
 
     // Win scroll lines
+    #[link_name = "win_scroll_lines"]
     fn nvim_win_scroll_lines(wp: WinHandle, row: c_int, line_count: c_int);
 
     // Grid target check

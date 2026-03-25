@@ -35,9 +35,11 @@ extern "C" {
     // os_dirname(buf, MAXPATHL) -> OK or FAIL
     fn nvim_os_dirname_maxpathl(buf: *mut c_char) -> c_int;
     // os_chdir(dir) -> 0 on success
+    #[link_name = "os_chdir"]
     fn nvim_os_chdir(dir: *const c_char) -> c_int;
     // pathcmp(a, b, -1) -> 0 if equal
-    fn nvim_pathcmp_unlen(a: *const c_char, b: *const c_char) -> c_int;
+    #[link_name = "pathcmp"]
+    fn nvim_pathcmp_impl(a: *const c_char, b: *const c_char, maxlen: c_int) -> c_int;
     // p_acd option
     fn nvim_get_p_acd() -> c_int;
     // last_chdir_reason = NULL
@@ -83,7 +85,7 @@ fn win_fix_current_dir_impl() {
             if !globaldir.is_null() {
                 // Window doesn't have a local directory and we are not in the global
                 // directory: Change to the global directory.
-                let dir_differs = nvim_pathcmp_unlen(globaldir, cwd_ptr) != 0;
+                let dir_differs = nvim_pathcmp_impl(globaldir, cwd_ptr, -1) != 0;
                 let p_acd = nvim_get_p_acd() != 0;
                 if !p_acd && dir_differs {
                     nvim_do_autocmd_dirchanged_global(globaldir, 1);
@@ -102,7 +104,7 @@ fn win_fix_current_dir_impl() {
                 nvim_set_globaldir_from_str(cwd_ptr);
             }
 
-            let dir_differs = nvim_pathcmp_unlen(new_dir, cwd_ptr) != 0;
+            let dir_differs = nvim_pathcmp_impl(new_dir, cwd_ptr, -1) != 0;
             let p_acd = nvim_get_p_acd() != 0;
 
             // localdir=1 means window scope, localdir=0 means tabpage scope.

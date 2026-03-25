@@ -210,6 +210,7 @@ extern "C" {
     fn nvim_bt_quickfix_curbuf() -> c_int;
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     // nvim_cmd_with_count_exec removed: replaced by rs_cmd_with_count_exec (Phase 4)
+    #[link_name = "do_cmdline_cmd"]
     fn nvim_do_cmdline_cmd_wrapper(cmd: *const u8) -> c_int;
     fn nvim_beep_flush_wrapper();
     #[link_name = "rs_one_window_in_tab"]

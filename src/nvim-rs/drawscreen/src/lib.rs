@@ -2903,6 +2903,7 @@ extern "C" {
     /// Return 1 if window's w_p_wbr is empty/NUL.
     fn nvim_win_get_p_wbr_empty(wp: WinHandle) -> c_int;
     /// Get real state (MODE_* flags).
+    #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
 }
 

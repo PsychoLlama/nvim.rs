@@ -63,6 +63,7 @@ extern "C" {
 
     // Global state
     fn nvim_get_p_wmw() -> i64;
+    #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
 
     // String utilities

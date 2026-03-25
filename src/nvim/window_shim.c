@@ -170,7 +170,6 @@ void nvim_frame_set_height(frame_T *frp, int val) { frp->fr_height = val; }
 void nvim_frame_set_width(frame_T *frp, int val) { frp->fr_width = val; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
 void nvim_win_fix_scroll(bool upd_topline) { win_fix_scroll(upd_topline); }
-int nvim_get_real_state(void) { return get_real_state(); }
 int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
 char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 // Colorcolumn accessors
@@ -819,7 +818,6 @@ void nvim_dec_split_disallowed(void) { split_disallowed--; }
 frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp->w_frame->fr_parent : NULL; }
 
 buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
-int nvim_do_cmdline_cmd_wrapper(const char *cmd) { return do_cmdline_cmd(cmd); }
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 int nvim_bt_quickfix_curbuf(void) { return bt_quickfix(curbuf) ? 1 : 0; }
 void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
@@ -837,8 +835,8 @@ win_T *nvim_win_get_prev_win(win_T *wp) { return wp ? wp->w_prev : NULL; }
 
 // (nvim_grab_file_name already exists in normal_shim.c with int* lnum_out)
 
-/// buflist_findname_exp wrapper.
-buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp(ptr); }
+/// buflist_findname_exp wrapper (calls rs_buflist_findname_exp via static inline).
+buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp((char *)ptr); }
 
 /// setpcmark() wrapper.
 
@@ -1107,10 +1105,6 @@ void nvim_set_globaldir_from_str(const char *s) { globaldir = xstrdup(s); }
 void nvim_clear_globaldir(void) { XFREE_CLEAR(globaldir); }
 /// Get the current working directory (os_dirname). Returns non-zero on success.
 int nvim_os_dirname_maxpathl(char *buf) { return (int)os_dirname(buf, MAXPATHL); }
-/// Attempt to chdir to dir. Returns 0 on success.
-int nvim_os_chdir(const char *dir) { return os_chdir(dir); }
-/// pathcmp(a, b, -1): returns 0 if equal.
-int nvim_pathcmp_unlen(const char *a, const char *b) { return pathcmp(a, b, -1); }
 /// p_acd option.
 int nvim_get_p_acd(void) { return p_acd ? 1 : 0; }
 /// Set last_chdir_reason to NULL.
@@ -1886,11 +1880,7 @@ int nvim_redrawing(void)
   return redrawing() ? 1 : 0;
 }
 
-/// Scroll lines in window (wrapper for win_scroll_lines for Rust FFI).
-void nvim_win_scroll_lines(win_T *wp, int row, int line_count)
-{
-  win_scroll_lines(wp, row, line_count);
-}
+
 
 // Drawscreen Phase 5/6 accessors for window cursor/fold fields
 
@@ -2194,27 +2184,12 @@ GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
 
 // nvim_ml_get already defined in change_ffi.c.
 
-/// ml_get_buf_len for a window's buffer
-colnr_T nvim_win_ml_get_buf_len2(win_T *wp, linenr_T lnum) { return ml_get_buf_len(wp->w_buffer, lnum); }
-
-/// win_bg_attr wrapper
-int nvim_win_bg_attr(win_T *wp) { return win_bg_attr(wp); }
-
 /// bt_quickfix check
 int nvim_win_bt_quickfix(win_T *wp) { return bt_quickfix(wp->w_buffer) ? 1 : 0; }
-
-/// qf_current_entry wrapper
-linenr_T nvim_win_qf_current_entry(win_T *wp) { return qf_current_entry(wp); }
 
 /// buf_meta_total wrapper (kMTMetaInline = 2 -- from marktree_defs.h)
 int nvim_win_buf_meta_total_inline(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaInline) > 0 ? 1 : 0; }
 
-/// schar functions needed for win_line
-int nvim_schar_cells(schar_T sc) { return schar_cells(sc); }
-int nvim_schar_len(schar_T sc) { return schar_len(sc); }
-/// schar_get_adv wrapper: buf_out is advanced past the character, returns bytes consumed.
-size_t nvim_schar_get_adv(char **buf_out, schar_T sc) { return schar_get_adv(buf_out, sc); }
-int nvim_schar_get_first_codepoint(schar_T sc) { return (int)schar_get_first_codepoint(sc); }
 
 /// CharsizeArg init (opaque; we pass it around as void* from Rust)
 /// We need to call init_charsize_arg from Rust.

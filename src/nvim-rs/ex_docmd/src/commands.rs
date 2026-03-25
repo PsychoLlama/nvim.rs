@@ -304,7 +304,8 @@ extern "C" {
     fn nvim_vim_chdir(dir: *const c_char) -> c_int;
     fn nvim_do_autocmd_dirchanged_manual_pre(new_dir: *const c_char, scope: c_int);
     fn nvim_post_chdir(scope: c_int, dir_differs: bool);
-    fn nvim_pathcmp_unlen(a: *const c_char, b: *const c_char) -> c_int;
+    #[link_name = "pathcmp"]
+    fn nvim_pathcmp_unlen(a: *const c_char, b: *const c_char, maxlen: c_int) -> c_int;
     fn nvim_get_namebuff() -> *mut c_char;
     fn nvim_get_e_failed() -> *const c_char;
     fn xstrdup(str: *const c_char) -> *mut c_char;
@@ -1333,7 +1334,7 @@ pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -
         new_dir = nvim_get_namebuff();
     }
 
-    let dir_differs = pdir.is_null() || nvim_pathcmp_unlen(pdir, new_dir) != 0;
+    let dir_differs = pdir.is_null() || nvim_pathcmp_unlen(pdir, new_dir, -1) != 0;
     if dir_differs {
         nvim_do_autocmd_dirchanged_manual_pre(new_dir, scope);
         if nvim_vim_chdir(new_dir) != 0 {

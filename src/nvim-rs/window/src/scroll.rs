@@ -130,6 +130,7 @@ extern "C" {
     fn nvim_setmark(name: c_int) -> bool;
 
     /// get_real_state() -- returns current editor mode flags.
+    #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
 
     /// rs_snapshot_windows_scroll_size() -- take scroll size snapshot.
