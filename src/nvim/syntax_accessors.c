@@ -51,13 +51,11 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-// Rust FFI declarations - functions called from C code in this file
 extern synstate_T *rs_syn_stack_find_entry(int lnum);
 extern void rs_syn_stack_free_all(synblock_T *block);
 extern void rs_syn_stack_alloc(void);
 extern void rs_syn_stack_apply_changes_block(synblock_T *block, buf_T *buf);
 extern void rs_syn_stack_apply_changes(buf_T *buf);
-// Phase 8: line initialization (Rust implementations)
 extern int rs_syn_match_linecont(int lnum);
 extern void rs_save_chartab(char *chartab);
 extern void rs_restore_chartab(const char *chartab);
@@ -179,25 +177,16 @@ typedef struct {
 
 #include "syntax_accessors.c.generated.h"
 
-// Rust fold FFI declaration
 extern void rs_foldUpdateAll(win_T *win);
 
-// Rust pattern parse FFI declaration
 extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
-// Rust match command FFI declaration
 
-// Rust list command FFI declaration
 
-// Rust keyword command FFI declaration
 
-// Rust cluster command FFI declaration
 
-// Rust sync command FFI declaration
 
-// Rust clear command FFI declaration
 
-// Rust include command FFI declaration
 
 
 
@@ -341,8 +330,6 @@ void syn_set_timeout(proftime_T *tm)
 // 3. Simply start on a given number of lines above "lnum".
 
 
-/////////////////////////////////////////
-// Handling of the state stack cache.
 
 // EXPLANATION OF THE SYNTAX STATE STACK CACHE
 //
@@ -375,16 +362,8 @@ void syn_set_timeout(proftime_T *tm)
 // number of entries SST_MAX_ENTRIES, and the distance is computed.
 
 
-// End of handling of the state stack.
-// **************************************
 
 
-/// Update an entry in the current_state stack for a start-skip-end pattern.
-/// This finds the end of the current item, if it's in the current line.
-///
-/// @param startcol  where to start searching for the end
-/// @param force     when true overrule a previous end
-///
 
 
 /// Thin C helper: set up regmmatch_T, call vim_regexec_multi, extract results.
@@ -445,13 +424,11 @@ void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
 }
 
 
-// syn_cmd_list and listing functions are implemented in Rust (listing.rs).
 
 extern int rs_syn_add_cluster(char *name);
 extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
 extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
                               int16_t *cont_in_list, int flags);
-extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
 
 
@@ -893,9 +870,6 @@ _Static_assert(HL_FOLD == 0x2000, "HL_FOLD");
 _Static_assert(HL_EXCLUDENL == 0x800, "HL_EXCLUDENL");
 _Static_assert(HL_INCLUDED_TOPLEVEL == 0x80000, "HL_INCLUDED_TOPLEVEL");
 
-// =============================================================================
-// Phase 1 accessors: get_syn_pattern migration
-// =============================================================================
 
 char *nvim_syn_skip_regexp(char *arg, int delim, int magic)
 {
@@ -912,15 +886,9 @@ void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
 char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
 int nvim_syn_get_curwin_syn_ic(void) { return curwin->w_s->b_syn_ic; }
 
-// =============================================================================
-// Phase 2 accessors: syn_cmd_match migration
-// =============================================================================
 
 int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 
-// =============================================================================
-// Phase 7 (pass 7) accessors: pattern_store migration
-// =============================================================================
 
 /// Append one slot to curwin b_syn_patterns and return a pointer to it.
 synpat_T *nvim_synblock_ga_append_pattern(void)
@@ -947,18 +915,12 @@ void nvim_syn_free_synpat(synpat_T *pat)
 /// Set the global reg_do_extmatch variable (REX_SET=1, REX_USE=2, 0=off).
 void nvim_syn_set_reg_do_extmatch(int val) { reg_do_extmatch = val; }
 
-// =============================================================================
-// Phase 3 accessors: syn_cmd_keyword migration
-// =============================================================================
 
 void nvim_syn_semsg_2s(const char *fmt, const char *arg1, const char *arg2)
 {
   semsg(fmt, arg1, arg2);
 }
 
-// =============================================================================
-// Phase 4 accessors: syn_cmd_cluster migration
-// =============================================================================
 
 /// Combine a cluster's ID list with a new list, consuming both.
 /// Calls syn_combine_list on the cluster's list and clstr_list.
@@ -973,9 +935,6 @@ void nvim_syn_find_nextcmd(exarg_T *eap, char *arg)
   eap->nextcmd = find_nextcmd(arg);
 }
 
-// =============================================================================
-// Phase 1 accessors: syn_cmd_sync migration
-// =============================================================================
 
 /// Set eap->arg directly (used by sync MATCH/REGION/CLEAR sub-paths).
 void nvim_syn_set_eap_arg(exarg_T *eap, char *arg)
@@ -1063,9 +1022,6 @@ void *nvim_syn_vim_regcomp_empty_cpo(char *pat, int flags)
   return prog;
 }
 
-// =============================================================================
-// Phase 2 accessors: syn_cmd_clear migration
-// =============================================================================
 
 /// Look up a syntax group name+length and return its ID.
 int nvim_syn_name2id_len_wrapper(const char *arg, int len)
@@ -1074,9 +1030,6 @@ int nvim_syn_name2id_len_wrapper(const char *arg, int len)
 }
 
 
-// =============================================================================
-// Phase 3 accessors: syn_cmd_include migration
-// =============================================================================
 
 /// Prepare for :syntax include.
 /// Sets EX_XFILE|EX_NOSPC argt flags, calls separate_nextcmd,
@@ -1117,9 +1070,6 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
   return 0;
 }
 
-// =============================================================================
-// Phase 4 accessors: simple subcommands and syn_maybe_enable migration
-// =============================================================================
 
 /// Wrap init_highlight for rs_syn_cmd_reset.
 void nvim_syn_init_highlight(int reset, int init)
@@ -1163,18 +1113,12 @@ void nvim_syn_redraw_curbuf_later(void)
   redraw_curbuf_later(UPD_SOME_VALID);
 }
 
-// =============================================================================
-// Phase syntime: accessors for syn_time_on and synpat timing fields
-// =============================================================================
 
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
 
 
 
-// =============================================================================
-// Phase expand: accessors for tab completion functions
-// =============================================================================
 
 void nvim_syn_set_include_link(int val) { include_link = val; }
 void nvim_syn_set_include_default(int val) { include_default = val; }
@@ -1187,9 +1131,6 @@ int nvim_syn_get_expand_cluster_count(void)
 
 
 
-// =============================================================================
-// Phase listing: accessors for syn_cmd_list migration
-// =============================================================================
 
 
 /// Wrap syn_list_header.
@@ -1226,9 +1167,6 @@ keyentry_T *nvim_ht_item_at(const hashtab_T *ht, size_t idx)
   return HI2KE(hi);
 }
 
-// =============================================================================
-// Phase 2 (pass 4): ex_syntax dispatcher migration accessors
-// =============================================================================
 
 /// Increment emsg_skip (suppress error messages during :syntax with skip set).
 void nvim_syn_emsg_skip_inc(void)
@@ -1242,9 +1180,6 @@ void nvim_syn_emsg_skip_dec(void)
   emsg_skip--;
 }
 
-// =============================================================================
-// Phase 4 (pass 4): syn_cmd_iskeyword and ex_ownsyntax migration accessors
-// =============================================================================
 
 /// Return 1 if the synblock's b_syn_isk is set (not empty_string_option).
 int nvim_syn_iskeyword_is_set(synblock_T *block)
@@ -1315,9 +1250,6 @@ void nvim_syn_do_unlet_b_current_syntax(void)
 }
 
 
-// =============================================================================
-// Phase 5 (pass 5) accessors: clearing.rs support
-// =============================================================================
 
 /// Set b_syn_patterns.ga_len (used by rs_syn_remove_pattern to compact).
 void nvim_synblock_set_pattern_count(synblock_T *block, int len)
@@ -1338,9 +1270,6 @@ void nvim_synblock_dec_folditems(synblock_T *block)
   block->b_syn_folditems--;
 }
 
-// =============================================================================
-// Phase 15 bulk clearing accessors: syntax_clear / reset_synblock / syntax_sync_clear
-// =============================================================================
 
 /// Full clear of a synblock: keytabs, patterns, clusters, cluster_ids,
 /// sync_flags, linecont, syn_isk, and all scalar flags.
@@ -1406,14 +1335,8 @@ void nvim_win_release_synblock(win_T *wp)
   }
 }
 
-// =============================================================================
-// Phase 5 pass 5 Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
-// =============================================================================
 
 
-// =============================================================================
-// Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
-// =============================================================================
 
 
 /// Set b_spell_cluster_id on curwin->w_s.
@@ -1434,9 +1357,6 @@ char *nvim_syn_vim_strsave_up(const char *s)
   return vim_strsave_up(s);
 }
 
-// =============================================================================
-// Phase 6 accessors: init_syn_patterns migration
-// =============================================================================
 
 /// Initialize b_syn_patterns garray on curwin->w_s.
 void nvim_synblock_ga_init_patterns(void)
@@ -1445,17 +1365,8 @@ void nvim_synblock_ga_init_patterns(void)
   ga_set_growsize(&curwin->w_s->b_syn_patterns, 10);
 }
 
-// =============================================================================
-// Phase 6 accessors: syn_incl_toplevel migration
-// =============================================================================
 
-// =============================================================================
-// Phase 6 accessors: add_keyword + copy_id_list migration
-// =============================================================================
 
-// =============================================================================
-// Phase 8: State stack cache management accessors (for Rust migration)
-// =============================================================================
 
 /// Get b_sst_array pointer (raw array base) for a synblock.
 synstate_T *nvim_synblock_get_sst_array_ptr(synblock_T *block)
@@ -1572,9 +1483,6 @@ void nvim_syn_apply_changes_for_windows(buf_T *buf)
 }
 
 
-// =============================================================================
-// Phase 8: Line initialization accessors (for Rust migration)
-// =============================================================================
 
 /// Return true if syn_block->b_syn_isk == empty_string_option.
 int nvim_syn_block_isk_is_empty(void)
@@ -1667,9 +1575,6 @@ syn_cluster_T *nvim_synblock_get_clusters_ga_data(synblock_T *block)
   return (syn_cluster_T *)block->b_syn_clusters.ga_data;
 }
 
-// =============================================================================
-// Phase 9: New C accessors for state_entry.rs migration
-// =============================================================================
 
 /// Set sst_next_flags on a synstate entry.
 void nvim_synstate_set_sst_next_flags(synstate_T *state, int flags)
@@ -1689,14 +1594,8 @@ void nvim_synstate_set_tick_to_display(synstate_T *state)
   if (state) state->sst_tick = display_tick;
 }
 
-// =============================================================================
-// Phase 9.2: New C accessors for state_ops.rs migration (Phase 2)
-// =============================================================================
 
 
-// =============================================================================
-// Phase 11: New C accessors for clear_syn_state / store_bufstates migration
-// =============================================================================
 
 /// Call ga_clear on state->sst_union.sst_ga (for use after unreffing all extmatches
 /// in the growarray path of clear_syn_state).
@@ -1735,9 +1634,6 @@ void nvim_synstate_ga_init_for_store(synstate_T *sp)
   sp->sst_union.sst_ga.ga_len = sp->sst_stacksize;
 }
 
-// =============================================================================
-// Phase 11: New C accessors for hashtab keyword operations (Phase 1)
-// =============================================================================
 
 /// Free a keyentry_T's owned lists and the entry itself.
 /// Frees kp->next_list, kp->k_syn.cont_in_list, and kp.
@@ -1837,9 +1733,6 @@ hashtab_T *nvim_curwin_get_keywtab(int use_ic)
   return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab;
 }
 
-// =============================================================================
-// Phase 11: ownsyntax_init and cluster_append C accessors
-// =============================================================================
 
 /// Check if curwin shares the buffer's synblock (i.e. has not yet called ownsyntax).
 /// Returns 1 if they share (curwin->w_s == &curwin->w_buffer->b_s), else 0.
