@@ -35,6 +35,32 @@ type DictPtr = *mut c_void;
 type CallbackPtr = *mut c_void;
 
 // =============================================================================
+// typval_T layout (for f_complete* inline implementations)
+// =============================================================================
+
+/// C typval_T: { v_type: i32, v_lock: i32, vval: union(i64/ptr) }
+/// sizeof = 16; layout verified by _Static_assert in testing.c.
+#[repr(C)]
+union TypvalVval {
+    v_number: i64,
+    v_list: *mut c_void,
+    v_dict: *mut c_void,
+}
+
+#[repr(C)]
+struct TypvalT {
+    v_type: c_int,
+    v_lock: c_int,
+    vval: TypvalVval,
+}
+
+// VarType constants (must match C enum in typval_defs.h)
+const VAR_LIST: c_int = 4;
+
+// C State mode bits
+const MODE_INSERT: c_int = 0x80;
+
+// =============================================================================
 // Phase 1: VimL Completion Function Expansion
 // =============================================================================
 
@@ -94,11 +120,30 @@ pub unsafe extern "C" fn rs_ins_compl_add_dict(dict: DictPtr) {
 // =============================================================================
 
 extern "C" {
-    // Compound C accessors for all Phase 2 functions
-    fn nvim_f_complete_impl(argvars: TypvalPtr, rettv: TypvalPtr);
-    fn nvim_f_complete_add_impl(argvars: TypvalPtr, rettv: TypvalPtr);
-    fn nvim_f_complete_check_impl(rettv: TypvalPtr);
-    fn nvim_f_preinserted_impl(rettv: TypvalPtr);
+    // nvim_f_complete_impl: deleted (Phase 32), inlined below as rs_f_complete
+    // nvim_f_complete_add_impl: deleted (Phase 32), inlined below as rs_f_complete_add
+    // nvim_f_complete_check_impl: deleted (Phase 32), inlined below as rs_f_complete_check
+    // nvim_f_preinserted_impl: deleted (Phase 32), inlined below as rs_f_preinserted
+    // Helpers for inlined f_complete_check
+    #[link_name = "RedrawingDisabled"]
+    static mut g_redrawing_disabled: c_int;
+    fn rs_ins_compl_check_keys(frequency: c_int, in_compl_func: c_int);
+    fn rs_ins_compl_interrupted() -> c_int;
+    // Helper for inlined f_preinserted
+    fn rs_ins_compl_preinsert_effect() -> c_int;
+    // Helpers for inlined f_complete
+    #[link_name = "State"]
+    static mut g_state_funcexpand: c_int;
+    fn undo_allowed(buf: *mut c_void) -> bool;
+    #[link_name = "curbuf"]
+    static mut curbuf_funcexpand: *mut c_void;
+    fn tv_get_number_chk(tv: *const TypvalT, is_err: *mut c_int) -> i64;
+    #[link_name = "emsg"]
+    fn emsg_funcexpand(s: *const c_char);
+    #[link_name = "gettext"]
+    fn gettext_funcexpand(msgid: *const c_char) -> *const c_char;
+    #[link_name = "e_invarg"]
+    static e_invarg_fe: [c_char; 0];
 }
 
 /// VimL `complete_check()` builtin.
@@ -114,7 +159,13 @@ pub unsafe extern "C" fn rs_f_complete_check(
     rettv: TypvalPtr,
     _fptr: *mut c_void,
 ) {
-    nvim_f_complete_check_impl(rettv);
+    // nvim_f_complete_check_impl: deleted (Phase 32), inlined here
+    let rettv = rettv.cast::<TypvalT>();
+    let saved = g_redrawing_disabled;
+    g_redrawing_disabled = 0;
+    rs_ins_compl_check_keys(0, 1);
+    (*rettv).vval.v_number = i64::from(rs_ins_compl_interrupted());
+    g_redrawing_disabled = saved;
 }
 
 /// VimL `preinserted()` builtin.
@@ -129,7 +180,11 @@ pub unsafe extern "C" fn rs_f_preinserted(
     rettv: TypvalPtr,
     _fptr: *mut c_void,
 ) {
-    nvim_f_preinserted_impl(rettv);
+    // nvim_f_preinserted_impl: deleted (Phase 32), inlined here
+    let rettv = rettv.cast::<TypvalT>();
+    if rs_ins_compl_preinsert_effect() != 0 {
+        (*rettv).vval.v_number = 1;
+    }
 }
 
 /// VimL `complete()` builtin.
@@ -137,8 +192,27 @@ pub unsafe extern "C" fn rs_f_preinserted(
 /// # Safety
 /// `argvars` must be a valid `typval_T[2]` pointer; `rettv` a `typval_T*`.
 #[export_name = "f_complete"]
-pub unsafe extern "C" fn rs_f_complete(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: *mut c_void) {
-    nvim_f_complete_impl(argvars, rettv);
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_f_complete(argvars: TypvalPtr, _rettv: TypvalPtr, _fptr: *mut c_void) {
+    // nvim_f_complete_impl: deleted (Phase 32), inlined here
+    if (g_state_funcexpand & MODE_INSERT) == 0 {
+        emsg_funcexpand(gettext_funcexpand(
+            c"E785: complete() can only be used in Insert mode".as_ptr(),
+        ));
+        return;
+    }
+    if !undo_allowed(curbuf_funcexpand) {
+        return;
+    }
+    let argvars = argvars.cast::<TypvalT>();
+    if (*argvars.add(1)).v_type == VAR_LIST {
+        let startcol = tv_get_number_chk(argvars, core::ptr::null_mut()) as c_int;
+        if startcol > 0 {
+            rs_set_completion(startcol - 1, (*argvars.add(1)).vval.v_list);
+        }
+    } else {
+        emsg_funcexpand(gettext_funcexpand(e_invarg_fe.as_ptr()));
+    }
 }
 
 /// VimL `complete_add()` builtin.
@@ -151,7 +225,9 @@ pub unsafe extern "C" fn rs_f_complete_add(
     rettv: TypvalPtr,
     _fptr: *mut c_void,
 ) {
-    nvim_f_complete_add_impl(argvars, rettv);
+    // nvim_f_complete_add_impl: deleted (Phase 32), inlined here
+    let rettv = rettv.cast::<TypvalT>();
+    (*rettv).vval.v_number = i64::from(nvim_ins_compl_add_tv_impl(argvars, 0, 0));
 }
 
 // =============================================================================
