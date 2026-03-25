@@ -1256,7 +1256,7 @@ unsafe fn eval_addblob_impl(tv1: TypevalHandle, tv2: TypevalHandle) {
     let b = nvim_blob_alloc();
 
     // Get the grow array from the blob and append bytes
-    let b_ga = blob_get_ga(b);
+    let b_ga = b;
     for i in 0..nvim_blob_len(b1) {
         ga_append(b_ga, nvim_blob_get(b1, i));
     }
@@ -1453,7 +1453,6 @@ pub unsafe extern "C" fn rs_eval_multdiv_number(
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
-    fn blob_get_ga(blob: *mut c_void) -> *mut c_void;
     fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
 }
 
@@ -1755,7 +1754,7 @@ pub unsafe fn eval_number_impl(
             }
             if !blob.is_null() {
                 let byte_val = (hex2nr(get_byte(bp)) << 4) | hex2nr(get_byte(bp.add(1)));
-                ga_append(blob_get_ga(blob), byte_val as c_int);
+                ga_append(blob, byte_val as c_int);
             }
             bp = bp.add(2);
             // Optional '.' separator between pairs

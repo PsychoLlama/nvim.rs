@@ -640,12 +640,6 @@ void nvim_tv_set_type(typval_T *tv, int vtype)
   }
 }
 
-/// Get grow array from blob (accessor for Rust).
-garray_T *blob_get_ga(blob_T *blob)
-{
-  return blob ? &blob->bv_ga : NULL;
-}
-
 /// Wrapper for tv_blob_len inline function (accessor for Rust eval_exec).
 int nvim_blob_len(const blob_T *b)
 {

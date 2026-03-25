@@ -159,7 +159,6 @@ extern "C" {
 
 extern "C" {
     // Phase 5: f_add, f_insert, f_count helpers
-    fn blob_get_ga(b: BlobPtr) -> *mut GArray;
     fn ga_grow(ga: *mut GArray, n: c_int);
     fn ga_append(ga: *mut GArray, c: u8);
     fn ga_init(ga: *mut GArray, itemsize: c_int, growsize: c_int);
@@ -515,7 +514,7 @@ pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: E
                 let mut error = false;
                 let n = tv_get_number_chk(tv1, &raw mut error);
                 if !error {
-                    ga_append(blob_get_ga(b), n as u8);
+                    ga_append(b.cast::<GArray>(), n as u8);
                     tv_copy(tv0, rettv);
                 }
             }
@@ -574,7 +573,7 @@ pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
                 return;
             }
 
-            let ga = blob_get_ga(b);
+            let ga = b.cast::<GArray>();
             ga_grow(ga, 1);
             let p = (*ga).ga_data.cast::<u8>();
             memmove(
