@@ -38,6 +38,10 @@ const UPD_VALID: c_int = 10;
 // remap constants
 const REMAP_NONE: c_int = -1;
 
+// Event constants from auevents_enum.generated.h
+const EVENT_QUITPRE: c_int = 90;
+const EVENT_EXITPRE: c_int = 47;
+
 // cmdmod flag constants (from ex_cmds_defs.h)
 const CMOD_SANDBOX: c_int = 0x0001;
 const CMOD_SILENT: c_int = 0x0002;
@@ -818,8 +822,13 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn rs_only_one_window() -> c_int;
     fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int;
-    fn nvim_docmd_apply_autocmds_quitpre(buf: BufHandle);
-    fn nvim_docmd_apply_autocmds_exitpre();
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: BufHandle,
+    ) -> bool;
 
     // ex_tabs helpers
     fn nvim_msg_start();
@@ -1219,7 +1228,13 @@ pub unsafe extern "C" fn rs_before_quit_autocmds_impl(
     forceit: bool,
 ) -> bool {
     let buf = nvim_win_get_buffer(wp);
-    nvim_docmd_apply_autocmds_quitpre(buf);
+    apply_autocmds(
+        EVENT_QUITPRE,
+        std::ptr::null(),
+        std::ptr::null(),
+        false,
+        buf,
+    );
 
     // Bail out when autocommands closed the window, or the buffer is locked.
     if !rs_win_valid(wp)
@@ -1231,7 +1246,13 @@ pub unsafe extern "C" fn rs_before_quit_autocmds_impl(
 
     let ok: c_int = 1; // OK
     if quit_all || (nvim_docmd_check_more(0, forceit as c_int) == ok && rs_only_one_window() != 0) {
-        nvim_docmd_apply_autocmds_exitpre();
+        apply_autocmds(
+            EVENT_EXITPRE,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            nvim_get_curbuf(),
+        );
         // Refuse to quit when locked or the window was closed.
         let curbuf = nvim_get_curbuf();
         if !rs_win_valid(wp)

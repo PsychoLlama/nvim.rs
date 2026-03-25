@@ -63,6 +63,10 @@ impl BufHandle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WinHandle(*mut std::ffi::c_void);
 
+// Event constants from auevents_enum.generated.h
+const EVENT_BUFADD: c_int = 0;
+const EVENT_BUFDELETE: c_int = 2;
+
 // C accessor functions for buffer fields.
 // These are defined in buffer.c and provide safe access to buf_T fields.
 extern "C" {
@@ -230,11 +234,14 @@ extern "C" {
     /// Set `b_p_bl` (buflisted) on a buffer.
     fn nvim_buf_set_b_p_bl(buf: BufHandle, val: c_int);
 
-    /// Call `apply_autocmds(EVENT_BUFADD, ...)`.
-    fn nvim_apply_autocmds_bufadd(buf: BufHandle) -> bool;
-
-    /// Call `apply_autocmds(EVENT_BUFDELETE, ...)`.
-    fn nvim_apply_autocmds_bufdelete(buf: BufHandle) -> bool;
+    /// `apply_autocmds` fires autocommands for the given event.
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: BufHandle,
+    ) -> bool;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -1110,9 +1117,15 @@ pub unsafe extern "C" fn rs_set_buflisted(on: c_int) {
     }
     nvim_buf_set_b_p_bl(buf, on);
     if on != 0 {
-        nvim_apply_autocmds_bufadd(buf);
+        apply_autocmds(EVENT_BUFADD, std::ptr::null(), std::ptr::null(), false, buf);
     } else {
-        nvim_apply_autocmds_bufdelete(buf);
+        apply_autocmds(
+            EVENT_BUFDELETE,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            buf,
+        );
     }
 }
 

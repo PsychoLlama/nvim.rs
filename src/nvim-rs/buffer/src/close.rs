@@ -8,7 +8,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(dead_code)]
 
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 use crate::BufHandle;
 
@@ -20,6 +20,11 @@ const BFA_DEL: c_int = 1;
 const BFA_WIPE: c_int = 2;
 const BFA_KEEP_UNDO: c_int = 4;
 const BFA_IGNORE_ABORT: c_int = 8;
+
+// Event constants from auevents_enum.generated.h
+const EVENT_BUFUNLOAD: c_int = 15;
+const EVENT_BUFDELETE: c_int = 2;
+const EVENT_BUFWIPEOUT: c_int = 18;
 
 /// `BF_READERR` flag (from `buffer_defs.h`): got errors while reading the file
 const BF_READERR: c_int = 0x40;
@@ -71,9 +76,14 @@ extern "C" {
     fn nvim_bufref_valid(bufref: *const BufRef) -> bool;
 
     fn nvim_buf_updates_unload(buf: BufHandle);
-    fn nvim_apply_autocmds_bufunload(buf: BufHandle) -> bool;
-    fn nvim_apply_autocmds_bufdelete_fname(buf: BufHandle) -> bool;
-    fn nvim_apply_autocmds_bufwipeout(buf: BufHandle) -> bool;
+    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: BufHandle,
+    ) -> bool;
 
     fn rs_win_valid_any_tab(win: *mut c_void) -> c_int;
     fn nvim_win_get_buffer(win: *mut c_void) -> BufHandle;
@@ -130,7 +140,13 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     if !nvim_buf_get_ml_mfp(buf).is_null()
-        && nvim_apply_autocmds_bufunload(buf)
+        && apply_autocmds(
+            EVENT_BUFUNLOAD,
+            nvim_buf_get_b_fname(buf),
+            nvim_buf_get_b_fname(buf),
+            false,
+            buf,
+        )
         && !nvim_bufref_valid(&raw const bufref)
     {
         // Autocommands deleted the buffer.
@@ -139,7 +155,13 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
 
     if (flags & BFA_DEL) != 0
         && nvim_buf_get_b_p_bl(buf) != 0
-        && nvim_apply_autocmds_bufdelete_fname(buf)
+        && apply_autocmds(
+            EVENT_BUFDELETE,
+            nvim_buf_get_b_fname(buf),
+            nvim_buf_get_b_fname(buf),
+            false,
+            buf,
+        )
         && !nvim_bufref_valid(&raw const bufref)
     {
         // Autocommands may delete the buffer.
@@ -147,7 +169,13 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     if (flags & BFA_WIPE) != 0
-        && nvim_apply_autocmds_bufwipeout(buf)
+        && apply_autocmds(
+            EVENT_BUFWIPEOUT,
+            nvim_buf_get_b_fname(buf),
+            nvim_buf_get_b_fname(buf),
+            false,
+            buf,
+        )
         && !nvim_bufref_valid(&raw const bufref)
     {
         // Autocommands may delete the buffer.

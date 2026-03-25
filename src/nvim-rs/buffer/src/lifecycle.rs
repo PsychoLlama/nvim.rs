@@ -79,10 +79,19 @@ extern "C" {
     fn nvim_buf_aucmd_open_buffer(buf: BufHandle) -> c_int;
 
     // buf_open_scratch accessors
-    fn nvim_apply_autocmds_buffilepre(buf: BufHandle);
-    fn nvim_apply_autocmds_buffilepost(buf: BufHandle);
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: BufHandle,
+    ) -> bool;
     fn nvim_set_buf_opts_scratch();
 }
+
+// Event constants from auevents_enum.generated.h
+const EVENT_BUFFILEPRE: c_int = 5;
+const EVENT_BUFFILEPOST: c_int = 4;
 
 // kOptJopFlagClean flag value (from option_vars.generated.h)
 const K_OPT_JOP_FLAG_CLEAN: c_uint = 0x04;
@@ -1226,9 +1235,21 @@ pub unsafe extern "C" fn rs_buf_open_scratch(bufnr: c_int, bufname: *mut c_char)
 
     if !bufname.is_null() {
         let curbuf = nvim_get_curbuf();
-        nvim_apply_autocmds_buffilepre(curbuf);
+        apply_autocmds(
+            EVENT_BUFFILEPRE,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            curbuf,
+        );
         crate::filename::rs_setfname(curbuf, bufname, std::ptr::null_mut(), true);
-        nvim_apply_autocmds_buffilepost(nvim_get_curbuf());
+        apply_autocmds(
+            EVENT_BUFFILEPOST,
+            std::ptr::null(),
+            std::ptr::null(),
+            false,
+            nvim_get_curbuf(),
+        );
     }
 
     nvim_set_buf_opts_scratch();

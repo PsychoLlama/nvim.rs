@@ -597,29 +597,10 @@ void nvim_buf_set_b_p_bl(buf_T *buf, int val)
   buf->b_p_bl = val;
 }
 
-/// Call apply_autocmds with EVENT_BUFADD (accessor for Rust).
-bool nvim_apply_autocmds_bufadd(buf_T *buf)
-{
-  return apply_autocmds(EVENT_BUFADD, NULL, NULL, false, buf);
-}
-
-/// Call apply_autocmds with EVENT_BUFDELETE (accessor for Rust).
-bool nvim_apply_autocmds_bufdelete(buf_T *buf)
-{
-  return apply_autocmds(EVENT_BUFDELETE, NULL, NULL, false, buf);
-}
-
-/// Call apply_autocmds with EVENT_QUITPRE for the given buffer (accessor for Rust).
-void nvim_docmd_apply_autocmds_quitpre(buf_T *buf)
-{
-  apply_autocmds(EVENT_QUITPRE, NULL, NULL, false, buf);
-}
-
-/// Call apply_autocmds with EVENT_EXITPRE for curbuf (accessor for Rust).
-void nvim_docmd_apply_autocmds_exitpre(void)
-{
-  apply_autocmds(EVENT_EXITPRE, NULL, NULL, false, curbuf);
-}
+// nvim_apply_autocmds_bufadd: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_apply_autocmds_bufdelete: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_docmd_apply_autocmds_quitpre: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_docmd_apply_autocmds_exitpre: deleted (Phase 3, Rust calls apply_autocmds directly)
 
 // ============================================================
 // Phase 4 accessor functions for buflist_list.
@@ -1393,17 +1374,8 @@ void nvim_buf_set_fnames(buf_T *buf, char *ffname, char *sfname)
 
 // nvim_do_ecmd_one_hide: deleted (Phase 2, Rust calls do_ecmd directly)
 
-/// Fires EVENT_BUFFILEPRE autocommands on buf (accessor for Rust).
-void nvim_apply_autocmds_buffilepre(buf_T *buf)
-{
-  apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, false, buf);
-}
-
-/// Fires EVENT_BUFFILEPOST autocommands on buf (accessor for Rust).
-void nvim_apply_autocmds_buffilepost(buf_T *buf)
-{
-  apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, false, buf);
-}
+// nvim_apply_autocmds_buffilepre: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_apply_autocmds_buffilepost: deleted (Phase 3, Rust calls apply_autocmds directly)
 
 /// Sets bufhidden=hide, buftype=nofile, swapfile=false, and resets bindings.
 /// Compound accessor for buf_open_scratch (Rust).
@@ -2213,20 +2185,9 @@ void nvim_buf_updates_unload(buf_T *buf)
   buf_updates_unload(buf, false);
 }
 
-bool nvim_apply_autocmds_bufunload(buf_T *buf)
-{
-  return apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, false, buf);
-}
-
-bool nvim_apply_autocmds_bufdelete_fname(buf_T *buf)
-{
-  return apply_autocmds(EVENT_BUFDELETE, buf->b_fname, buf->b_fname, false, buf);
-}
-
-bool nvim_apply_autocmds_bufwipeout(buf_T *buf)
-{
-  return apply_autocmds(EVENT_BUFWIPEOUT, buf->b_fname, buf->b_fname, false, buf);
-}
+// nvim_apply_autocmds_bufunload: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_apply_autocmds_bufdelete_fname: deleted (Phase 3, Rust calls apply_autocmds directly)
+// nvim_apply_autocmds_bufwipeout: deleted (Phase 3, Rust calls apply_autocmds directly)
 
 void nvim_goto_tabpage_win(void *tab, void *win)
 {
