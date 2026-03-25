@@ -1832,40 +1832,7 @@ void nvim_ins_compl_show_filename_impl(void)
 
 // nvim_get_wholeline_compl_info_impl: deleted (Phase 2), inlined in pattern.rs
 
-int nvim_get_filename_compl_info_impl(char *line, int startcol, int curs_col)
-{
-  // Go back to just before the first filename character.
-  if (startcol > 0) {
-    char *p = line + startcol;
-
-    MB_PTR_BACK(line, p);
-    while (p > line && vim_isfilec(utf_ptr2char(p))) {
-      MB_PTR_BACK(line, p);
-    }
-    bool p_is_filec = false;
-#ifdef MSWIN
-    // check for drive letters on mswin
-    if (p > line && path_has_drive_letter(p - 1, line + startcol - (p - 1))) {
-      p -= p == line + 1 ? 1 : 2;
-      p_is_filec = true;
-    }
-#endif
-    p_is_filec = p_is_filec || vim_isfilec(utf_ptr2char(p));
-
-    if (p == line && p_is_filec) {
-      startcol = 0;
-    } else {
-      startcol = (int)(p - line) + 1;
-    }
-  }
-
-  compl_col += startcol;
-  compl_length = (int)curs_col - startcol;
-  compl_pattern = cstr_as_string(addstar(line + compl_col,
-                                         (size_t)compl_length, EXPAND_FILES));
-
-  return OK;
-}
+// nvim_get_filename_compl_info_impl: deleted (Phase 28), inlined in pattern.rs as rs_get_filename_compl_info
 
 // nvim_get_spell_compl_info_impl: deleted (Phase 26), inlined in pattern.rs as rs_get_spell_compl_info
 

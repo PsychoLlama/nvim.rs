@@ -24,11 +24,7 @@ extern "C" {
     // nvim_get_normal_compl_info_impl: deleted (Phase 2), inlined below as rs_get_normal_compl_info
     // nvim_get_wholeline_compl_info_impl: deleted (Phase 2), inlined below as rs_get_wholeline_compl_info
     fn getwhitecols(p: *const c_char) -> isize;
-    fn nvim_get_filename_compl_info_impl(
-        line: *mut c_char,
-        startcol: c_int,
-        curs_col: c_int,
-    ) -> c_int;
+    // nvim_get_filename_compl_info_impl: deleted (Phase 28), inlined below as rs_get_filename_compl_info
     // nvim_get_spell_compl_info_impl: deleted (Phase 26), inlined below
     // helpers for inlined rs_get_spell_compl_info (Phase 26)
     fn spell_word_start(startcol: c_int) -> c_int;
@@ -52,6 +48,10 @@ extern "C" {
     fn mb_get_class(ptr: *const c_char) -> c_int;
     fn cbuf_to_string(buf: *const c_char, size: usize) -> NvimString;
     fn cstr_as_string(str_: *const c_char) -> NvimString;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    #[link_name = "vim_isfilec"]
+    fn vim_isfilec_pat(c: c_int) -> bool;
+    fn addstar(fname: *mut c_char, len: usize, context: c_int) -> *mut c_char;
     fn str_foldcase(
         str_: *mut c_char,
         orglen: c_int,
@@ -72,6 +72,7 @@ extern "C" {
 
 const OK: c_int = 1;
 const CONT_SOL: c_int = 16;
+const EXPAND_FILES: c_int = 2;
 const CONT_LOCAL: c_int = 32;
 
 /// Get the pattern, column and length for normal (keyword) completion.
@@ -245,15 +246,41 @@ pub unsafe extern "C" fn rs_get_wholeline_compl_info(line: *mut c_char, curs_col
 ///
 /// Sets compl_col, compl_length, compl_pattern.
 ///
+/// Rust translation of nvim_get_filename_compl_info_impl (Phase 28).
+///
 /// # Safety
 /// Requires valid global state; line must be a valid C string.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_get_filename_compl_info(
     line: *mut c_char,
-    startcol: c_int,
+    mut startcol: c_int,
     curs_col: c_int,
 ) -> c_int {
-    nvim_get_filename_compl_info_impl(line, startcol, curs_col)
+    // Go back to just before the first filename character.
+    if startcol > 0 {
+        let mut p = line.add(startcol as usize);
+        p = mb_prevptr(line, p);
+        while p > line && vim_isfilec_pat(utf_ptr2char(p.cast_const())) {
+            p = mb_prevptr(line, p);
+        }
+        let p_is_filec = vim_isfilec_pat(utf_ptr2char(p.cast_const()));
+        if p == line && p_is_filec {
+            startcol = 0;
+        } else {
+            // SAFETY: p is within the same allocation as line
+            startcol = p.offset_from(line) as c_int + 1;
+        }
+    }
+
+    crate::vars::nvim_set_compl_col(crate::vars::nvim_get_compl_col() + startcol);
+    crate::vars::nvim_set_compl_length(curs_col - startcol);
+    #[allow(clippy::cast_sign_loss)]
+    let col = crate::vars::nvim_get_compl_col() as usize;
+    #[allow(clippy::cast_sign_loss)]
+    let len = crate::vars::nvim_get_compl_length() as usize;
+    crate::vars::compl_pattern = cstr_as_string(addstar(line.add(col), len, EXPAND_FILES));
+    OK
 }
 
 /// Get the pattern, column and length for spell completion.
