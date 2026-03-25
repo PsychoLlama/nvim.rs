@@ -1037,7 +1037,7 @@ extern "C" {
     fn nvim_excmds_cmdmod_restore_flags(saved: c_int);
     fn nvim_cmdmod_has_lockmarks() -> c_int;
     fn nvim_excmds_cmdmod_has_keepmarks_now() -> c_int;
-    fn nvim_excmds_vim_tempname() -> *mut c_char;
+    fn vim_tempname() -> *mut c_char;
     fn nvim_excmds_buf_write_filter(
         itmp: *const c_char,
         line1: c_int,
@@ -1050,8 +1050,8 @@ extern "C" {
         eap: *mut ExArgHandle,
     ) -> c_int;
     fn nvim_excmds_call_shell_filter(cmd: *const c_char, flags: c_int);
-    fn nvim_excmds_del_lines(count: c_int);
-    fn nvim_excmds_write_lnum_adjust(offset: c_int);
+    fn del_lines(count: c_int, undo: c_int) -> c_int;
+    fn write_lnum_adjust(offset: c_int);
     fn nvim_excmds_redraw_curbuf_later_valid();
     fn nvim_excmds_invalidate_botline();
     fn nvim_excmds_p_cpo_no_remmark() -> c_int;
@@ -1164,7 +1164,7 @@ pub unsafe extern "C" fn rs_do_filter(
     } else {
         // Use temp files
         if do_in {
-            itmp = nvim_excmds_vim_tempname();
+            itmp = vim_tempname();
             if itmp.is_null() {
                 nvim_excmds_error_msg(ERR_E_NOTMP, std::ptr::null());
                 goto_filterend(
@@ -1179,7 +1179,7 @@ pub unsafe extern "C" fn rs_do_filter(
             }
         }
         if do_out {
-            otmp = nvim_excmds_vim_tempname();
+            otmp = vim_tempname();
             if otmp.is_null() {
                 nvim_excmds_error_msg(ERR_E_NOTMP, std::ptr::null());
                 goto_filterend(
@@ -1339,9 +1339,9 @@ pub unsafe extern "C" fn rs_do_filter(
             }
 
             nvim_curwin_set_cursor_lnum(line1);
-            nvim_excmds_del_lines(linecount);
+            del_lines(linecount, 1);
             nvim_excmds_curbuf_op_adjust_lnum(-linecount);
-            nvim_excmds_write_lnum_adjust(-linecount);
+            write_lnum_adjust(-linecount);
             let op_start = nvim_excmds_curbuf_op_start_lnum();
             let op_end = nvim_excmds_curbuf_op_end_lnum();
             nvim_rs_foldUpdate(crate::nvim_get_curwin().cast(), op_start, op_end);

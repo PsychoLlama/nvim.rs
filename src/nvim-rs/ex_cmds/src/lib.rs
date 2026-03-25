@@ -520,6 +520,50 @@ extern "C" {
     /// wait_return: wait for user to press return
     pub fn wait_return(restart_edit: c_int);
 
+    // Phase 2 direct declarations (inlined from thin wrappers)
+    /// buflist_findnr: find buffer by number
+    pub fn buflist_findnr(nr: c_int) -> *mut BufHandle;
+    /// buf_ensure_loaded: ensure buffer is loaded
+    pub fn buf_ensure_loaded(buf: *mut BufHandle);
+    /// bufIsChanged: check if buffer is changed
+    pub fn bufIsChanged(buf: *mut BufHandle) -> c_int;
+    /// rs_bt_dontwrite: check if buffer type doesn't write (Rust impl)
+    pub fn rs_bt_dontwrite(buf: *mut BufHandle) -> bool;
+    /// rs_bt_nofilename: check if buffer type has no filename (Rust impl)
+    pub fn rs_bt_nofilename(buf: *mut BufHandle) -> bool;
+    /// os_path_exists: check if path exists
+    pub fn os_path_exists(fname: *const c_char) -> c_int;
+    /// os_isdir: check if path is a directory
+    pub fn os_isdir(fname: *const c_char) -> c_int;
+    /// os_nodetype: get node type of path
+    pub fn os_nodetype(fname: *const c_char) -> c_int;
+    /// os_file_mkdir: create directory (mode 0755)
+    pub fn os_file_mkdir(fname: *const c_char, mode: c_int) -> c_int;
+    /// fix_fname: expand and fix a filename
+    pub fn fix_fname(fname: *const c_char) -> *mut c_char;
+    /// otherfile: check if fname is different from current file
+    pub fn otherfile(fname: *const c_char) -> c_int;
+    /// check_fname: check if current buffer has a filename
+    pub fn check_fname() -> c_int;
+    /// do_argfile: edit a file from the argument list
+    pub fn do_argfile(eap: *mut ExArgHandle, i: c_int);
+    /// vim_tempname: create a temporary file name
+    pub fn vim_tempname() -> *mut c_char;
+    /// del_lines: delete lines from buffer
+    pub fn del_lines(count: c_int, undo: c_int) -> c_int;
+    /// write_lnum_adjust: adjust line numbers after write
+    pub fn write_lnum_adjust(offset: c_int);
+    /// no_write_message_nobang: display "no write" error without ! override
+    pub fn no_write_message_nobang(buf: *mut BufHandle);
+    /// getout: exit Vim (diverges)
+    pub fn getout(exitval: c_int) -> !;
+    /// before_quit_all: pre-quit checks
+    pub fn before_quit_all(eap: *mut ExArgHandle) -> c_int;
+    /// fileinfo: display file information
+    pub fn fileinfo(shortmess: c_int, dont_truncate: c_int, forceit: c_int);
+    /// expand_env_save: expand environment variables, return allocated string
+    pub fn expand_env_save(str_: *const c_char) -> *mut c_char;
+
     // ex_z accessors
     /// Check if there is only one window (ONE_WINDOW macro)
     pub fn nvim_is_one_window() -> c_int;

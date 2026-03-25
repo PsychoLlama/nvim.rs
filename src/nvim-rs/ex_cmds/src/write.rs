@@ -256,9 +256,9 @@ pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_os_nodetype(fname: *const c_char) -> c_int;
+    fn os_nodetype(fname: *const c_char) -> c_int;
     fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_os_file_mkdir(fname: *const c_char) -> c_int;
+    fn os_file_mkdir(fname: *const c_char, mode: c_int) -> c_int;
     fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
     fn nvim_excmds_buf_ffname_path_exists(buf: *const BufHandle) -> c_int;
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn rs_not_writing() -> c_int {
 pub unsafe extern "C" fn rs_check_writable(fname: *const c_char) -> c_int {
     #[cfg(unix)]
     {
-        if nvim_excmds_os_nodetype(fname) == NODE_OTHER_VAL {
+        if os_nodetype(fname) == NODE_OTHER_VAL {
             nvim_excmds_error_msg(ERR_E503, fname);
             return 0; // FAIL
         }
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn rs_handle_mkdir_p_arg(
     eap: *mut ExArgHandle,
     fname: *const c_char,
 ) -> c_int {
-    if nvim_excmds_eap_get_mkdir_p(eap) != 0 && nvim_excmds_os_file_mkdir(fname) < 0 {
+    if nvim_excmds_eap_get_mkdir_p(eap) != 0 && os_file_mkdir(fname, 0o755) < 0 {
         return 0; // FAIL
     }
     1 // OK
@@ -465,7 +465,7 @@ pub unsafe extern "C" fn rs_getfile(
         let mut out_ffname: *mut c_char = ffname_arg;
         let mut out_sfname: *mut c_char = sfname_arg;
         nvim_excmds_fname_expand(ffname_arg, sfname_arg, &mut out_ffname, &mut out_sfname);
-        let other = nvim_excmds_otherfile(out_ffname);
+        let other = otherfile(out_ffname);
         // out_ffname is the newly allocated expanded name
         let free_me = if out_ffname != ffname_arg {
             out_ffname
@@ -603,13 +603,13 @@ pub unsafe extern "C" fn rs_delbuf_msg(name: *mut c_char) {
 extern "C" {
     fn nvim_excmds_cmd_xall() -> c_int;
     fn nvim_excmds_cmd_wqall() -> c_int;
-    fn nvim_excmds_before_quit_all(eap: *mut ExArgHandle) -> c_int;
-    fn nvim_excmds_getout(code: c_int);
+    fn before_quit_all(eap: *mut ExArgHandle) -> c_int;
+    fn getout(code: c_int) -> !;
     fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
     fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
-    fn nvim_excmds_no_write_message_nobang(buf: *mut BufHandle);
-    fn nvim_excmds_bufIsChanged(buf: *mut BufHandle) -> c_int;
-    fn nvim_excmds_bt_dontwrite(buf: *const BufHandle) -> c_int;
+    fn no_write_message_nobang(buf: *mut BufHandle);
+    fn bufIsChanged(buf: *mut BufHandle) -> c_int;
+    fn rs_bt_dontwrite(buf: *mut BufHandle) -> bool;
     fn nvim_excmds_buf_get_b_ffname_ptr(buf: *const BufHandle) -> *const c_char;
     fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_semsg_e141(fnum: i64);
@@ -621,7 +621,6 @@ extern "C" {
 
     fn nvim_excmds_new_bufref(buf: *mut BufHandle) -> *mut std::ffi::c_void;
     fn nvim_excmds_bufref_valid(refp: *mut std::ffi::c_void) -> c_int;
-    fn nvim_excmds_free_bufref(refp: *mut std::ffi::c_void);
 
     fn nvim_excmds_buf_write_all(buf: *mut BufHandle, forceit: c_int) -> c_int;
     fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
@@ -643,7 +642,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
     let cmd_wqall = nvim_excmds_cmd_wqall();
 
     if cmdidx == cmd_xall || cmdidx == cmd_wqall {
-        if nvim_excmds_before_quit_all(eap) == 0 {
+        if before_quit_all(eap) == 0 {
             return; // FAIL from before_quit_all
         }
         crate::exiting = true;
@@ -655,9 +654,9 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
         let exiting = crate::exiting;
 
         if exiting && nvim_excmds_buf_has_running_job(buf) != 0 {
-            nvim_excmds_no_write_message_nobang(buf);
+            no_write_message_nobang(buf);
             error += 1;
-        } else if nvim_excmds_bufIsChanged(buf) == 0 || nvim_excmds_bt_dontwrite(buf) != 0 {
+        } else if bufIsChanged(buf) == 0 || rs_bt_dontwrite(buf) {
             buf = nvim_excmds_buf_get_next(buf);
             continue;
         } else {
@@ -692,13 +691,13 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
                     }
                     // An autocommand may have deleted the buffer.
                     if nvim_excmds_bufref_valid(bufref) == 0 {
-                        nvim_excmds_free_bufref(bufref);
+                        xfree(bufref);
                         // Reset to start of list
                         buf = crate::firstbuf;
                         nvim_excmds_set_forceit(eap, save_forceit);
                         continue;
                     }
-                    nvim_excmds_free_bufref(bufref);
+                    xfree(bufref);
                 }
             }
             nvim_excmds_set_forceit(eap, save_forceit); // check_overwrite may have set it
@@ -709,7 +708,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
 
     if crate::exiting {
         if error == 0 {
-            nvim_excmds_getout(0); // exit Vim (diverges)
+            getout(0); // exit Vim (diverges)
         }
         crate::exiting = false;
     }
@@ -720,11 +719,11 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_bt_nofilename(buf: *const BufHandle) -> c_int;
+    fn rs_bt_nofilename(buf: *mut BufHandle) -> bool;
     fn nvim_excmds_buf_get_b_flags(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_cpo_no_overnew() -> c_int;
-    fn nvim_excmds_os_path_exists(ffname: *const c_char) -> c_int;
-    fn nvim_excmds_os_isdir(ffname: *const c_char) -> c_int;
+    fn os_path_exists(ffname: *const c_char) -> c_int;
+    fn os_isdir(ffname: *const c_char) -> c_int;
     fn nvim_excmds_dialog_overwrite(eap: *mut ExArgHandle, fname: *const c_char) -> c_int;
     fn nvim_excmds_get_first_dir() -> *mut c_char;
     fn nvim_excmds_makeswapname(
@@ -753,7 +752,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
 ) -> c_int {
     // Check if overwrite check is needed
     let b_flags = nvim_excmds_buf_get_b_flags(buf);
-    let is_nofilename = nvim_excmds_bt_nofilename(buf) != 0;
+    let is_nofilename = rs_bt_nofilename(buf);
 
     let needs_check = other != 0
         || (!is_nofilename
@@ -761,7 +760,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
                 || ((b_flags & BF_NEW_VAL) != 0 && nvim_excmds_cpo_no_overnew() != 0)
                 || (b_flags & BF_READERR_VAL) != 0));
 
-    if !needs_check || crate::p_wa != 0 || nvim_excmds_os_path_exists(ffname) == 0 {
+    if !needs_check || crate::p_wa != 0 || os_path_exists(ffname) == 0 {
         return 1; // OK
     }
 
@@ -772,7 +771,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         // Check if target is a directory (Unix only)
         #[cfg(unix)]
         {
-            if nvim_excmds_os_isdir(ffname) != 0 {
+            if os_isdir(ffname) != 0 {
                 nvim_excmds_error_msg(ERR_ISADIR2, ffname);
                 return 0; // FAIL
             }
@@ -795,7 +794,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         let swapname = nvim_excmds_makeswapname(fname, ffname, dir);
         xfree(dir.cast());
 
-        if nvim_excmds_os_path_exists(swapname) != 0 {
+        if os_path_exists(swapname) != 0 {
             if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {
                 if nvim_excmds_dialog_swapfile(eap, swapname) == 0 {
                     xfree(swapname.cast());
@@ -823,8 +822,8 @@ extern "C" {
     fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_get_line1(eap: *const ExArgHandle) -> c_int;
     fn nvim_excmds_eap_get_line2_val(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_fix_fname(ffname: *const c_char) -> *mut c_char;
-    fn nvim_excmds_otherfile(ffname: *const c_char) -> c_int;
+    fn fix_fname(ffname: *const c_char) -> *mut c_char;
+    fn otherfile(ffname: *const c_char) -> c_int;
     fn nvim_excmds_vim_strchr_cpo_altwrite() -> c_int;
     fn nvim_excmds_setaltfname(
         ffname: *const c_char,
@@ -835,7 +834,7 @@ extern "C" {
     fn nvim_excmds_buf_has_mfp(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_emsg_e_bufloaded();
     fn nvim_excmds_bt_dontwrite_msg_curbuf() -> c_int;
-    fn nvim_excmds_check_fname() -> c_int;
+    fn check_fname() -> c_int;
     fn nvim_excmds_curbuf_check_writable() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
     fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
@@ -895,13 +894,13 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         } else {
             // Has argument
             let fname_ptr = arg;
-            let free_ptr = nvim_excmds_fix_fname(fname_ptr);
+            let free_ptr = fix_fname(fname_ptr);
             let ff = if !free_ptr.is_null() {
                 free_ptr
             } else {
                 fname_ptr
             };
-            let other = nvim_excmds_otherfile(ff);
+            let other = otherfile(ff);
             (ff, fname_ptr, free_ptr, other)
         }
     };
@@ -926,7 +925,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     if other == 0 {
         let curbuf = nvim_get_curbuf();
         if nvim_excmds_bt_dontwrite_msg_curbuf() != 0
-            || nvim_excmds_check_fname() == 0
+            || check_fname() == 0
             || nvim_excmds_curbuf_check_writable() == 0
             || rs_check_readonly(eap, curbuf) != 0
         {
@@ -1024,7 +1023,7 @@ extern "C" {
     fn nvim_excmds_curwin_get_w_arg_idx() -> c_int;
     fn nvim_exarg_get_cmd_byte1(eap: *const ExArgHandle) -> c_int;
     fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_do_argfile(eap: *mut ExArgHandle, i: c_int);
+    fn do_argfile(eap: *mut ExArgHandle, i: c_int);
 }
 
 /// Implement `:update` command. Replaces C `ex_update`.
@@ -1087,7 +1086,7 @@ pub unsafe extern "C" fn rs_ex_wnext(eap: *mut ExArgHandle) {
     nvim_exarg_set_line2(eap, line_count);
 
     if rs_do_write(eap) != 0 {
-        nvim_excmds_do_argfile(eap, i);
+        do_argfile(eap, i);
     }
 }
 

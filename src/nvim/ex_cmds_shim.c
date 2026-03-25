@@ -588,7 +588,6 @@ const char *nvim_excmds_oldfiles_find_str(int idx)
 void nvim_excmds_msg_outtrans(const char *s) { msg_outtrans((char *)s, 0, false); }
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
 int nvim_excmds_prompt_for_input(void) { return prompt_for_input(NULL, 0, false, NULL); }
-char *nvim_excmds_expand_env_save(const char *p) { return expand_env_save((char *)p); }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
 {
   char *saved_arg = eap->arg;
@@ -665,10 +664,6 @@ void nvim_excmds_restore_shortmess(char *saved)
 }
 /// Return first char of p_icm option.
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
-/// Wrapper for buflist_findnr.
-buf_T *nvim_excmds_buflist_findnr(int nr) { return buflist_findnr(nr); }
-/// Wrapper for buf_ensure_loaded.
-void nvim_excmds_buf_ensure_loaded(buf_T *buf) { buf_ensure_loaded(buf); }
 /// Wrapper for ml_get_buf.
 const char *nvim_excmds_ml_get_buf(buf_T *buf, linenr_T lnum)
 {
@@ -900,9 +895,6 @@ void nvim_excmds_set_curwin_alt_fnum(int fnum) { curwin->w_alt_fnum = fnum; }
 /// Check !shortmess(SHM_FILEINFO): returns 1 if fileinfo should be shown.
 int nvim_excmds_shortmess_not_fileinfo(void) { return !shortmess(SHM_FILEINFO) ? 1 : 0; }
 
-/// Wrapper for fileinfo(false, false, forceit).
-void nvim_excmds_fileinfo(int forceit) { fileinfo(false, false, (bool)forceit); }
-
 // --- ex_update, ex_write, ex_wnext FFI accessors ---
 
 /// Check if current buffer has been changed (curbufIsChanged).
@@ -938,9 +930,6 @@ int nvim_excmds_curwin_get_w_arg_idx(void) { return curwin->w_arg_idx; }
 
 /// Get second byte of eap->cmd (eap->cmd[1]).
 int nvim_exarg_get_cmd_byte1(const exarg_T *eap) { return (unsigned char)eap->cmd[1]; }
-
-/// Wrapper for do_argfile(eap, i).
-void nvim_excmds_do_argfile(exarg_T *eap, int i) { do_argfile(eap, i); }
 
 // --- sub_get_replacement, sub_set_replacement, free_old_sub, ex_substitute, ex_substitute_preview FFI ---
 
@@ -1015,9 +1004,6 @@ int nvim_excmds_cmdmod_has_keepmarks_now(void)
   return (cmdmod.cmod_flags & CMOD_KEEPMARKS) != 0 ? 1 : 0;
 }
 
-/// Wrapper for vim_tempname().
-char *nvim_excmds_vim_tempname(void) { return vim_tempname(); }
-
 /// Call buf_write for the filter temp file write. Returns 1=OK, 0=FAIL.
 int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap)
 {
@@ -1037,12 +1023,6 @@ void nvim_excmds_call_shell_filter(const char *cmd, int flags)
 {
   call_shell((char *)cmd, flags, NULL);
 }
-
-/// Wrapper for del_lines(count, true).
-void nvim_excmds_del_lines(int count) { del_lines((linenr_T)count, true); }
-
-/// Wrapper for write_lnum_adjust.
-void nvim_excmds_write_lnum_adjust(int offset) { write_lnum_adjust((linenr_T)offset); }
 
 /// Wrapper for redraw_curbuf_later(UPD_VALID).
 void nvim_excmds_redraw_curbuf_later_valid(void) { redraw_curbuf_later(UPD_VALID); }
@@ -1186,12 +1166,6 @@ int nvim_excmds_cmd_xall(void) { return (int)CMD_xall; }
 /// Get CMD_wqall constant.
 int nvim_excmds_cmd_wqall(void) { return (int)CMD_wqall; }
 
-/// Wrap before_quit_all(eap). Returns 1=OK, 0=FAIL.
-int nvim_excmds_before_quit_all(exarg_T *eap) { return before_quit_all(eap) == OK ? 1 : 0; }
-
-/// Wrap getout(code). Diverges (process exit).
-void nvim_excmds_getout(int code) { getout(code); }
-
 /// Get buf->b_next (next buffer in list, or NULL).
 buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
 
@@ -1200,15 +1174,6 @@ int nvim_excmds_buf_has_running_job(const buf_T *buf)
 {
   return (buf->terminal != NULL && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0;
 }
-
-/// Wrap no_write_message_nobang(buf).
-void nvim_excmds_no_write_message_nobang(buf_T *buf) { no_write_message_nobang(buf); }
-
-/// Check bufIsChanged(buf). Returns 1 if true.
-int nvim_excmds_bufIsChanged(buf_T *buf) { return bufIsChanged(buf) ? 1 : 0; }
-
-/// Check bt_dontwrite(buf). Returns 1 if true.
-int nvim_excmds_bt_dontwrite(const buf_T *buf) { return bt_dontwrite(buf) ? 1 : 0; }
 
 /// Get buf->b_fnum.
 int nvim_excmds_buf_get_b_fnum(const buf_T *buf) { return buf->b_fnum; }
@@ -1259,20 +1224,11 @@ int nvim_excmds_buf_write_all(buf_T *buf, int forceit)
 
 // --- check_overwrite FFI accessors ---
 
-/// Wrap bt_nofilename(buf). Returns 1 if true.
-int nvim_excmds_bt_nofilename(const buf_T *buf) { return bt_nofilename((buf_T *)buf) ? 1 : 0; }
-
 /// Get buf->b_flags field.
 int nvim_excmds_buf_get_b_flags(const buf_T *buf) { return (int)buf->b_flags; }
 
 /// Check vim_strchr(p_cpo, CPO_OVERNEW) == NULL. Returns 1 if not found.
 int nvim_excmds_cpo_no_overnew(void) { return vim_strchr(p_cpo, CPO_OVERNEW) == NULL ? 1 : 0; }
-
-/// Wrap os_path_exists(ffname). Returns 1 if true.
-int nvim_excmds_os_path_exists(const char *ffname) { return os_path_exists((char *)ffname) ? 1 : 0; }
-
-/// Wrap os_isdir(ffname). Returns 1 if true.
-int nvim_excmds_os_isdir(const char *ffname) { return os_isdir((char *)ffname) ? 1 : 0; }
 
 /// Dialog: "Overwrite existing file "fname"?" Returns 1 if user said yes, sets forceit.
 int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname)
@@ -1330,11 +1286,6 @@ int nvim_excmds_eap_get_line1(const exarg_T *eap) { return (int)eap->line1; }
 /// Get eap->line2.
 int nvim_excmds_eap_get_line2_val(const exarg_T *eap) { return (int)eap->line2; }
 
-/// Wrap fix_fname(ffname). Returns allocated string or NULL. Caller must free.
-char *nvim_excmds_fix_fname(const char *ffname) { return fix_fname((char *)ffname); }
-
-/// Wrap otherfile(ffname). Returns 1 if it's a different file than current.
-int nvim_excmds_otherfile(const char *ffname) { return otherfile((char *)ffname) ? 1 : 0; }
 
 /// Check vim_strchr(p_cpo, CPO_ALTWRITE) != NULL.
 int nvim_excmds_vim_strchr_cpo_altwrite(void)
@@ -1366,8 +1317,6 @@ void nvim_excmds_emsg_e_bufloaded(void) { emsg(_(e_bufloaded)); }
 /// Wrap bt_dontwrite_msg(curbuf). Returns 1 if true.
 int nvim_excmds_bt_dontwrite_msg_curbuf(void) { return bt_dontwrite_msg(curbuf) ? 1 : 0; }
 
-/// Wrap check_fname(). Returns 1=OK, 0=FAIL.
-int nvim_excmds_check_fname(void) { return check_fname() == OK ? 1 : 0; }
 
 /// Check curbuf->b_ffname writable (Unix: rs_check_writable).
 int nvim_excmds_curbuf_check_writable(void)
@@ -1453,14 +1402,10 @@ int nvim_excmds_curbuf_ffname_null(void) { return curbuf->b_ffname == NULL ? 1 :
 
 // --- Write Validation Helpers FFI accessors ---
 
-/// Wrap os_nodetype(fname). Returns NODE_OTHER constant value for comparison.
-int nvim_excmds_os_nodetype(const char *fname) { return (int)os_nodetype(fname); }
 
 /// Get eap->mkdir_p field.
 int nvim_excmds_eap_get_mkdir_p(const exarg_T *eap) { return eap->mkdir_p ? 1 : 0; }
 
-/// Wrap os_file_mkdir(fname, 0755). Returns 0 on success, negative on error.
-int nvim_excmds_os_file_mkdir(const char *fname) { return os_file_mkdir((char *)fname, 0755); }
 
 /// Get buf->b_p_ro (readonly option).
 int nvim_excmds_buf_get_b_p_ro(const buf_T *buf) { return buf->b_p_ro ? 1 : 0; }

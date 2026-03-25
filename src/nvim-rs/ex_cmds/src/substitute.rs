@@ -83,8 +83,8 @@ extern "C" {
     fn nvim_excmds_save_set_shortmess_F() -> *mut c_char;
     fn nvim_excmds_restore_shortmess(saved: *mut c_char);
     fn nvim_excmds_get_p_icm_first() -> c_int;
-    fn nvim_excmds_buflist_findnr(nr: c_int) -> *mut crate::BufHandle;
-    fn nvim_excmds_buf_ensure_loaded(buf: *mut crate::BufHandle);
+    fn buflist_findnr(nr: c_int) -> *mut crate::BufHandle;
+    fn buf_ensure_loaded(buf: *mut crate::BufHandle);
     fn nvim_excmds_ml_get_buf(buf: *mut crate::BufHandle, lnum: c_int) -> *const c_char;
     fn nvim_excmds_ml_get_buf_len(buf: *mut crate::BufHandle, lnum: c_int) -> c_int;
     fn nvim_excmds_ml_replace_buf(
@@ -832,7 +832,7 @@ pub unsafe extern "C" fn rs_show_sub(
 
     let mut cmdpreview_buf: *mut crate::BufHandle = std::ptr::null_mut();
     if preview {
-        cmdpreview_buf = nvim_excmds_buflist_findnr(cmdpreview_bufnr);
+        cmdpreview_buf = buflist_findnr(cmdpreview_bufnr);
         // cmdpreview_buf must be non-NULL per the C assert
         if num_results > 0 {
             let last_idx = num_results - 1;
@@ -884,7 +884,7 @@ pub unsafe extern "C" fn rs_show_sub(
             let mut p_end_lnum: c_int = 0;
             let p_end_col: c_int = end_col;
 
-            nvim_excmds_buf_ensure_loaded(cmdpreview_buf);
+            buf_ensure_loaded(cmdpreview_buf);
 
             let mut next_linenr: c_int = if pre_match == 0 {
                 start_lnum

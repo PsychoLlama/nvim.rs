@@ -122,7 +122,7 @@ extern "C" {
 
     // bufref_T heap handle accessors (exposed as void*)
     fn nvim_ecmd_new_bufref() -> *mut std::ffi::c_void;
-    fn nvim_excmds_free_bufref(r: *mut std::ffi::c_void);
+    fn xfree(ptr: *mut std::ffi::c_void);
     fn nvim_ecmd_set_bufref_to_curbuf(r: *mut std::ffi::c_void);
     fn nvim_ecmd_set_bufref_to_buf(r: *mut std::ffi::c_void, buf: *mut BufHandle);
     fn nvim_ecmd_bufref_valid(r: *mut std::ffi::c_void) -> c_int;
@@ -165,7 +165,7 @@ extern "C" {
     // Cursor manipulation wrappers
     fn nvim_check_cursor();
     fn nvim_ecmd_check_cursor_col();
-    fn nvim_excmds_check_fname() -> c_int;
+    fn check_fname() -> c_int;
     fn nvim_beginline(flags: c_int);
     fn nvim_ecmd_cursor_eq(lnum: c_int, col: c_int) -> c_int;
     fn nvim_ecmd_cursor_col_skipwhite() -> c_int;
@@ -237,8 +237,6 @@ extern "C" {
     fn rs_diff_buf_add(buf: *mut BufHandle);
     fn rs_diff_invalidate(buf: *mut BufHandle);
     fn rs_check_lnums(do_curwin: c_int);
-
-    fn xfree(p: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -618,7 +616,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             // ============================================================
             // !other_file: re-editing the same file
             // ============================================================
-            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 || nvim_excmds_check_fname() == 0 {
+            if (flags & (ECMD_ADDBUF | ECMD_ALTBUF)) != 0 || check_fname() == 0 {
                 break 'outer; // retval stays FAIL
             }
             oldbuf = if (flags & ECMD_OLDBUF) != 0 { 1 } else { 0 };
@@ -892,8 +890,8 @@ pub unsafe extern "C" fn rs_do_ecmd(
         xfree(free_fname as *mut std::ffi::c_void);
     }
 
-    nvim_excmds_free_bufref(old_curbuf);
-    nvim_excmds_free_bufref(bufref);
+    xfree(old_curbuf);
+    xfree(bufref);
 
     retval
 }
