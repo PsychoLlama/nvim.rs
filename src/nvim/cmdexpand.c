@@ -115,33 +115,22 @@ static char *cmdline_orig = NULL;
 extern int rs_magic_isset(void);
 
 
-// Phase 1: Leaf utility functions from Rust
 extern int rs_sort_func_compare(const void *s1, const void *s2);
 extern int rs_cmdline_compl_use_pum(int need_wildmenu);
 extern int rs_map_wildopts_to_ewflags(int options);
 extern char *rs_showmatches_gettail(char *s, int eager);
 extern int rs_expand_showtail(expand_T *xp);
 extern void rs_expand_escape(expand_T *xp, char *str, int numfiles, char **files, int options);
-
-
-// Phase 3: Match navigation
 extern char *rs_find_longest_match(expand_T *xp, int options);
-
-
-// Phase 5: Context-setting helpers (used from set_one_cmd_context)
 extern const char *rs_set_context_in_argopt(expand_T *xp, const char *arg);
 extern void rs_set_context_for_wildcard_arg(const char *arg, int is_shell_cmd,
                                             expand_T *xp, int *complp);
-
-// Phase 6: Callback generators
 extern char *rs_get_filetypecmd_arg(expand_T *xp, int idx);
 extern char *rs_get_breakadd_arg(expand_T *xp, int idx);
 extern char *rs_get_retab_arg(expand_T *xp, int idx);
 extern char *rs_get_messages_arg(expand_T *xp, int idx);
 extern char *rs_get_mapclear_arg(expand_T *xp, int idx);
 extern char *rs_get_scriptnames_arg(expand_T *xp, int idx);
-
-// Wave 4: Wildmenu display helpers
 extern int rs_skip_wildmenu_char(expand_T *xp, const char *s);
 extern int rs_wildmenu_match_len(expand_T *xp, char *s);
 
@@ -210,18 +199,6 @@ int nvim_expand_get_numfiles(const expand_T *xp)
 int nvim_expand_get_selected(const expand_T *xp)
 {
   return xp ? xp->xp_selected : -1;
-}
-
-/// Get the column position.
-int nvim_expand_get_col(const expand_T *xp)
-{
-  return xp ? xp->xp_col : 0;
-}
-
-/// Get the prefix type.
-int nvim_expand_get_prefix(const expand_T *xp)
-{
-  return xp ? (int)xp->xp_prefix : 0;
 }
 
 /// Get the shell flag.
@@ -296,10 +273,6 @@ void nvim_set_pum_want_active(int val)
 }
 
 
-// =============================================================================
-// Phase 1: C accessors for Rust leaf utility functions
-// =============================================================================
-
 /// Check if character is a path separator (for Rust FFI).
 int nvim_cmdexpand_vim_ispathsep(int c)
 {
@@ -354,10 +327,6 @@ int nvim_cmdexpand_get_p_scs(void)
   return p_scs;
 }
 
-// =============================================================================
-// Phase 2: C accessors for expand_T struct operations
-// =============================================================================
-
 /// Zero the entire expand_T struct (for Rust FFI).
 void nvim_expand_clear(expand_T *xp)
 {
@@ -388,11 +357,6 @@ void nvim_clear_cmdline_orig(void)
 {
   XFREE_CLEAR(cmdline_orig);
 }
-
-// =============================================================================
-// Phase 3: C accessors for match navigation
-// =============================================================================
-
 
 /// Get compl_selected (for Rust FFI).
 int nvim_get_compl_selected(void)
@@ -499,11 +463,6 @@ _Static_assert(offsetof(expand_T, xp_pre_incsearch_pos) == 380, "xp_pre_incsearc
 _Static_assert(offsetof(expand_T, xp_shell) == 76, "xp_shell offset mismatch");
 #endif
 
-// =============================================================================
-// Phase 4: C accessors for ExpandOne orchestrator
-// =============================================================================
-
-
 /// Free old wild matches, set numfiles=-1, clear orig, remove PUM if needed.
 /// Used in ExpandOne before starting a new expansion.
 void nvim_expand_free_old_matches(expand_T *xp)
@@ -531,10 +490,6 @@ char *nvim_cmdexpand_xstpcpy(char *dst, const char *src)
   return xstpcpy(dst, src);
 }
 
-// =============================================================================
-// Phase 5: Static enums and constants (moved here for accessor visibility)
-// =============================================================================
-
 static enum {
   EXP_FILETYPECMD_ALL,     ///< expand all :filetype values
   EXP_FILETYPECMD_PLUGIN,  ///< expand plugin on off
@@ -553,10 +508,6 @@ static enum {
   EXP_BREAKPT_DEL,  ///< expand ":breakdel" sub-commands
   EXP_PROFDEL,      ///< expand ":profdel" sub-commands
 } breakpt_expand_what;
-
-// =============================================================================
-// Phase 5: C accessors for context-setting helpers
-// =============================================================================
 
 /// Set xp->xp_pattern (for Rust FFI).
 void nvim_expand_set_pattern(expand_T *xp, char *pattern)
@@ -648,10 +599,6 @@ int nvim_cmdexpand_get_filetype_expand_what(void)
 }
 
 
-// =============================================================================
-// Phase 2: C accessors for expand_pattern_in_buf
-// =============================================================================
-
 /// Wrapper for searchit(NULL, curbuf, ...) for Rust FFI.
 /// Returns FAIL or OK.
 int nvim_cmdexpand_searchit(pos_T *pos, pos_T *end_pos, int dir, char *pat,
@@ -697,10 +644,6 @@ pos_T nvim_cmdexpand_get_pre_incsearch_pos(void)
   return pre_incsearch_pos;
 }
 
-// =============================================================================
-// Phase 1: C accessors for PUM, wildmenu, scriptnames, and set_expand_context
-// =============================================================================
-
 /// Run pum_display with the current compl_* statics (for Rust FFI).
 void nvim_cmdexpand_do_pum_display(int changed_array)
 {
@@ -735,13 +678,6 @@ int nvim_cmdexpand_ccline_xpc_supports_fuzzy(void)
 {
   expand_T *xp = get_cmdline_info()->xpc;
   return xp != NULL && rs_cmdline_fuzzy_completion_supported(xp->xp_context);
-}
-
-/// Return xp_context of get_cmdline_info()->xpc, or EXPAND_NOTHING if xpc is NULL.
-int nvim_cmdexpand_ccline_xpc_context(void)
-{
-  expand_T *xp = get_cmdline_info()->xpc;
-  return xp ? xp->xp_context : EXPAND_NOTHING;
 }
 
 /// Return the xpc pointer from get_cmdline_info() (for Rust FFI).
@@ -824,11 +760,6 @@ char *nvim_cmdexpand_get_script_name(int idx)
   home_replace(NULL, si->sn_name, NameBuff, MAXPATHL, true);
   return NameBuff;
 }
-
-// =============================================================================
-// Phase 2: C accessors for wildmenu key handlers, wildmenu_cleanup,
-//           expand_cmdline, and set_cmd_context
-// =============================================================================
 
 /// Get p_wic wildchar-if-count option (for Rust FFI).
 int nvim_cmdexpand_get_p_wic(void)
@@ -914,12 +845,6 @@ int nvim_cmdexpand_get_wm_scrolled(void)
   return WM_SCROLLED;
 }
 
-/// Get cmdline_row global (for Rust FFI).
-int nvim_cmdexpand_get_cmdline_row(void)
-{
-  return cmdline_row;
-}
-
 /// Decrement cmdline_row (for Rust FFI).
 void nvim_cmdexpand_dec_cmdline_row(void)
 {
@@ -954,12 +879,6 @@ void nvim_cmdexpand_set_save_p_ls(int val)
 int nvim_cmdexpand_get_save_p_wmh(void)
 {
   return (int)save_p_wmh;
-}
-
-/// Set save_p_wmh (for Rust FFI).
-void nvim_cmdexpand_set_save_p_wmh(int val)
-{
-  save_p_wmh = val;
 }
 
 /// Set p_ls (for Rust FFI).
@@ -997,10 +916,6 @@ int nvim_cmdexpand_get_pathsep(void)
 {
   return PATHSEP;
 }
-
-// =============================================================================
-// Phase 3: C accessors for ExpandOther, ExpandFromContext, and ExpandGeneric
-// =============================================================================
 
 /// Wrapper for ExpandGeneric (for Rust FFI).
 void nvim_cmdexpand_expand_generic(const char *pat, expand_T *xp, regmatch_T *regmatch,
@@ -1261,10 +1176,6 @@ CompleteListItemGetter nvim_cmdexpand_get_fn_get_healthcheck_names(void)
   return get_healthcheck_names;
 }
 
-// =============================================================================
-// Phase 4: C accessors for nextwild and showmatches
-// =============================================================================
-
 /// Wrapper for cursorcmd (for Rust FFI).
 void nvim_cmdexpand_cursorcmd(void)
 {
@@ -1355,38 +1266,10 @@ void nvim_cmdexpand_apply_expansion(expand_T *xp, int i, const char *p, int plen
   ccline->cmdpos += difflen;
 }
 
-/// Get cmdbufflen from get_cmdline_info() (for Rust FFI).
-int nvim_cmdexpand_get_cmdbufflen(void)
-{
-  return get_cmdline_info()->cmdbufflen;
-}
-
-/// Set cmdlen in get_cmdline_info() (for Rust FFI).
-void nvim_cmdexpand_set_cmdlen(int val)
-{
-  get_cmdline_info()->cmdlen = val;
-}
-
-/// Set cmdpos in get_cmdline_info() (for Rust FFI).
-void nvim_cmdexpand_set_cmdpos(int val)
-{
-  get_cmdline_info()->cmdpos = val;
-}
-
 /// Wrapper for nlua_expand_pat (for Rust FFI).
 void nvim_cmdexpand_nlua_expand_pat(expand_T *xp)
 {
   nlua_expand_pat(xp);
-}
-
-// =============================================================================
-// Phase 4b: C accessors for showmatches and showmatches_oneline
-// =============================================================================
-
-/// Get msg_didany (for Rust FFI).
-int nvim_cmdexpand_get_msg_didany(void)
-{
-  return msg_didany;
 }
 
 /// Set msg_didany (for Rust FFI).
@@ -1532,30 +1415,6 @@ void nvim_cmdexpand_msg_puts_hl(const char *str, int attr, int maxcol)
   msg_puts_hl(str, attr, (bool)maxcol);
 }
 
-/// Get the EXPAND_TAGS_LISTFILES context value (for Rust FFI).
-int nvim_cmdexpand_get_ctx_tags_listfiles(void)
-{
-  return EXPAND_TAGS_LISTFILES;
-}
-
-/// Get the EXPAND_FILES context value (for Rust FFI).
-int nvim_cmdexpand_get_ctx_files(void)
-{
-  return EXPAND_FILES;
-}
-
-/// Get the EXPAND_SHELLCMD context value (for Rust FFI).
-int nvim_cmdexpand_get_ctx_shellcmd(void)
-{
-  return EXPAND_SHELLCMD;
-}
-
-/// Get the EXPAND_BUFFERS context value (for Rust FFI).
-int nvim_cmdexpand_get_ctx_buffers(void)
-{
-  return EXPAND_BUFFERS;
-}
-
 /// Wrapper for rs_showmatches_gettail via SHOW_MATCH macro (for Rust FFI).
 /// Returns either gettail result (if showtail) or matches[m] directly.
 char *nvim_cmdexpand_show_match(char **matches, int m, int showtail)
@@ -1572,8 +1431,6 @@ int nvim_cmdexpand_compl_use_pum(int need_wildmenu)
 #define SHOW_MATCH(m) (showtail ? rs_showmatches_gettail(matches[m], false) : matches[m])
 
 
-
-// nextwild -- migrated to Rust (wildmenu.rs)
 
 /// Create completion popup menu with items from "matches".
 static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches, int numMatches,
@@ -1602,10 +1459,6 @@ static void cmdline_pum_create(CmdlineInfo *ccline, expand_T *xp, char **matches
     compl_startcol = cmd_screencol((int)(endpos - ccline->cmdbuff));
   }
 }
-
-// cmdline_pum_display, cmdline_pum_remove, cmdline_pum_cleanup,
-// cmdline_compl_pattern, cmdline_compl_is_fuzzy -- migrated to Rust (pum.rs)
-
 
 /// Show wildchar matches in the status line.
 /// Show at least the "match" item.
@@ -1826,10 +1679,6 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
 /// The variables xp->xp_context and xp->xp_backslash must have been set!
 ///
 
-// showmatches_oneline, showmatches -- migrated to Rust (display.rs)
-
-
-
 /// Must parse the command line so far to work out what context we are in.
 /// Completion can then be done based on that context.
 /// This routine sets the variables:
@@ -1872,8 +1721,6 @@ static void redraw_wildmenu(expand_T *xp, int num_matches, char **matches, int m
 ///  EXPAND_ENV_VARS         Complete environment variable names
 ///  EXPAND_USER             Complete user names
 ///  EXPAND_PATTERN_IN_BUF   Complete pattern in '/', '?', ':s', ':g', etc.
-// set_expand_context -- migrated to Rust (lib.rs)
-
 /// Sets the index of a built-in or user defined command "cmd" in eap->cmdidx.
 /// For user defined commands, the completion context is set in "xp" and the
 /// completion flags in "complp".
@@ -1974,14 +1821,6 @@ const char *nvim_cmdexpand_set_cmd_index(const char *cmd, expand_T *xp, int *com
   *cmdidx_out = (int)ea.cmdidx;
   return p;
 }
-
-// set_cmd_context -- migrated to Rust (lib.rs)
-
-// expand_cmdline -- migrated to Rust (lib.rs)
-
-// get_scriptnames_arg -- migrated to Rust (callbacks.rs)
-
-// Phase 5 C accessors: typval, dict, pum helpers for VimL f_* functions
 
 /// Get the type of typval_T[idx] from an argvars array (for Rust FFI).
 int nvim_cmdexpand_tv_get_type(typval_T *argvars, int idx)
@@ -2146,18 +1985,6 @@ void nvim_cmdexpand_set_context_in_runtime_cmd(expand_T *xp, char *arg)
   set_context_in_runtime_cmd(xp, arg);
 }
 
-/// VAR_STRING constant (for Rust FFI).
-int nvim_cmdexpand_get_var_string(void)
-{
-  return VAR_STRING;
-}
-
-/// VAR_NUMBER constant (for Rust FFI).
-int nvim_cmdexpand_get_var_number(void)
-{
-  return VAR_NUMBER;
-}
-
 /// VAR_UNKNOWN constant (for Rust FFI).
 int nvim_cmdexpand_get_var_unknown(void)
 {
@@ -2251,29 +2078,6 @@ void nvim_cmdexpand_list_to_string_matches(list_T *list, char ***matches, int *n
   *numMatches = ga.ga_len;
 }
 
-/// copy_option_part wrapper (for Rust FFI).
-size_t nvim_cmdexpand_copy_option_part(const char **src, char *buf, size_t maxlen, const char *sep)
-{
-  return copy_option_part((char **)src, buf, maxlen, sep);
-}
-
-/// after_pathsep wrapper (for Rust FFI).
-int nvim_cmdexpand_after_pathsep(const char *b, const char *p)
-{
-  return after_pathsep(b, p);
-}
-
-/// ga_grow + store matches into ga (for Rust FFI).
-/// Takes ownership of the char ** array; moves pointers into ga->ga_data.
-void nvim_cmdexpand_ga_append_matches(garray_T *ga, char **matches, int num)
-{
-  ga_grow(ga, num);
-  for (int i = 0; i < num; i++) {
-    ((char **)ga->ga_data)[ga->ga_len++] = matches[i];
-  }
-  xfree(matches);
-}
-
 /// Completion for |:checkhealth| command.
 ///
 /// Given to ExpandGeneric() to obtain all available heathcheck names.
@@ -2300,10 +2104,6 @@ static char *get_healthcheck_names(expand_T *xp FUNC_ATTR_UNUSED, int idx)
   }
   return NULL;
 }
-
-// ExpandOther and ExpandFromContext -- migrated to Rust (expand.rs)
-
-// ExpandGeneric -- migrated to Rust (expand.rs)
 
 /// Expand shell command matches in one directory of $PATH.
 ///
@@ -2504,8 +2304,6 @@ static void *call_user_expand_func(user_expand_func_T user_expand_func, expand_T
   return ret;
 }
 
-// ExpandUserDefined, ExpandUserList, ExpandUserLua -- migrated to Rust (shell.rs)
-
 /// Expand `file` for all comma-separated directories in `path`.
 /// Adds matches to `ga`.
 /// If "dirs" is true only expand directory names.
@@ -2566,8 +2364,6 @@ void globpath(char *path, char *file, garray_T *ga, int expand_options, bool dir
 }
 #undef TMP_PATHSEPSTR
 
-// wildmenu_translate_key -- migrated to Rust (wildmenu.rs)
-
 // cmdline_del -- used by nvim_cmdexpand_cmdline_del accessor only (kept for now)
 static void cmdline_del(CmdlineInfo *cclp, int from)
 {
@@ -2578,12 +2374,6 @@ static void cmdline_del(CmdlineInfo *cclp, int from)
   cclp->cmdpos = from;
 }
 
-// wildmenu_process_key_menunames -- migrated to Rust (wildmenu.rs)
-// wildmenu_process_key_filenames -- migrated to Rust (wildmenu.rs)
-// wildmenu_process_key -- migrated to Rust (wildmenu.rs)
-// wildmenu_cleanup -- migrated to Rust (wildmenu.rs)
-
-// f_getcompletion, f_getcompletiontype, f_cmdcomplete_info -- migrated to Rust (viml.rs)
 // Rust helper for empty pattern check
 extern int rs_empty_pattern_magic(const char *p, size_t len, int magic_val);
 

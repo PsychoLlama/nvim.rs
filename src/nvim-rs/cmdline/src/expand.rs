@@ -492,8 +492,6 @@ extern "C" {
     fn nvim_expand_get_backslash(xp: *const ()) -> c_int;
     fn nvim_expand_get_numfiles(xp: *const ()) -> c_int;
     fn nvim_expand_get_selected(xp: *const ()) -> c_int;
-    fn nvim_expand_get_col(xp: *const ()) -> c_int;
-    fn nvim_expand_get_prefix(xp: *const ()) -> c_int;
     fn nvim_expand_get_shell(xp: *const ()) -> c_int;
 
     // Setters
