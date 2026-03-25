@@ -52,12 +52,8 @@
 #include "nvim/vim_defs.h"
 
 // Rust FFI declarations - functions called from C code in this file
-// Phase 8: state stack cache management (Rust implementations)
 extern synstate_T *rs_syn_stack_find_entry(int lnum);
-extern void rs_syn_stack_free_entry(synblock_T *block, synstate_T *p);
-extern void rs_syn_stack_free_block(synblock_T *block);
 extern void rs_syn_stack_free_all(synblock_T *block);
-extern int rs_syn_stack_cleanup(void);
 extern void rs_syn_stack_alloc(void);
 extern void rs_syn_stack_apply_changes_block(synblock_T *block, buf_T *buf);
 extern void rs_syn_stack_apply_changes(buf_T *buf);
@@ -65,29 +61,21 @@ extern void rs_syn_stack_apply_changes(buf_T *buf);
 extern int rs_syn_match_linecont(int lnum);
 extern void rs_save_chartab(char *chartab);
 extern void rs_restore_chartab(const char *chartab);
-extern void rs_clear_syn_state(synstate_T *p);
 extern void rs_validate_current_state(void);
 extern char *rs_syn_getcurline(void);
 extern void rs_syn_clear_time(syn_time_T *st);
 // rs_check_state_ends: Rust function called via #[link_name] bypasses nvim_syn_check_state_ends
 extern void rs_update_si_attr(int idx);
 
-// Pass 5: clearing.rs Rust functions
 extern void rs_syn_remove_pattern(synblock_T *block, int idx);
 extern void rs_syntax_clear(synblock_T *block);
-extern void rs_reset_synblock(win_T *wp);
 extern void rs_syntax_sync_clear(void);
 extern void rs_clear_keywtab(hashtab_T *ht);
 // rs_invalidate_current_state: Rust function called via #[link_name] bypasses nvim_syn_invalidate_current_state
 
-// Phase 11: commands.rs Rust implementations for do_onoff and maybe_enable
 
-// Phase 11: keyword.rs Rust implementations for keyword_find and hash_insert_keyword
 
-// Phase 11: commands.rs / cluster.rs Rust implementations for ownsyntax_init, cluster_append
 
-// Now a Rust static variable; accessed via extern.
-extern int DID_SYNTAX_ONOFF;
 
 // different types of offsets that are possible
 #define SPO_MS_OFF      0       // match  start offset
@@ -211,14 +199,8 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
 // Rust include command FFI declaration
 
-// Rust simple subcommand FFI declarations (Phase 4)
-extern void rs_syn_cmd_reset(exarg_T *eap, int syncing);
-extern void rs_syn_maybe_enable(void);
 
-// Rust dispatch wrappers (Phase 1 of pass 4): replace C thin wrappers
 
-// Rust Phase 4 (pass 4): iskeyword + ownsyntax
-extern void rs_ex_ownsyntax(exarg_T *eap);
 
 // The sp_off_flags are computed like this:
 // offset from the start of the matched text: (1 << SPO_XX_OFF)
@@ -401,8 +383,6 @@ void syn_set_timeout(proftime_T *tm)
 // 2. Search backwards for given sync patterns.
 // 3. Simply start on a given number of lines above "lnum".
 
-// save_chartab/restore_chartab deleted: Rust calls rs_save_chartab/rs_restore_chartab directly.
-// syn_match_linecont deleted: Rust calls rs_syn_match_linecont directly.
 
 /////////////////////////////////////////
 // Handling of the state stack cache.
@@ -437,8 +417,6 @@ void syn_set_timeout(proftime_T *tm)
 // the distance is fixed at SST_DIST, for large buffers there is a fixed
 // number of entries SST_MAX_ENTRIES, and the distance is computed.
 
-// syn_stack_free_block/alloc/apply_changes_block/cleanup/free_entry/find_entry deleted:
-// These static wrappers just called rs_* Rust functions; C callers deleted below.
 
 // End of handling of the state stack.
 // **************************************
@@ -491,7 +469,6 @@ void nvim_syn_set_b_syn_slow(int val) { syn_win->w_s->b_syn_slow = (val != 0); }
 /// Returns pointer to the inline syn_time_T field in the synblock.
 /// NOTE: nvim_syn_block_get_linecont_time_ptr already exists; this is a new alias.
 
-// nvim_syn_get_pat_time_ptr deleted: Rust uses &raw mut (*pat_ptr).sp_time directly.
 
 /// Update syn_time_T fields from Rust after a regex execution.
 /// elapsed: elapsed time (proftime_T / u64).
@@ -513,7 +490,6 @@ void nvim_syn_time_update(void *st_ptr, uint64_t elapsed, int matched)
 
 // syn_cmd_list and listing functions are implemented in Rust (listing.rs).
 
-// Phase 6+7: Forward declarations for Rust functions used below
 extern int rs_syn_add_cluster(char *name);
 extern void rs_syn_combine_list(int16_t **clstr1, int16_t **clstr2, int list_op);
 extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
@@ -543,7 +519,6 @@ extern int EXPAND_WHAT;
 // and reset_expand_highlight are implemented in Rust (expand.rs).
 // Their C thin wrappers are at the bottom of this file.
 
-// syn_get_id deleted: replaced by rs_syn_get_id_public in api.rs with #[export_name = "syn_get_id"].
 
 
 // ":syntime" and "get_syntime_arg" are implemented in Rust (syntime.rs).
@@ -610,8 +585,6 @@ int nvim_synstate_get_tick(synstate_T *state) { return (int)state->sst_tick; }
 int nvim_synstate_get_change_lnum(synstate_T *state) { return (int)state->sst_change_lnum; }
 
 
-// nvim_syn_get_current_state_len deleted: Rust reads CURRENT_STATE.ga_len directly.
-// nvim_syn_is_current_state_valid deleted: Rust checks CURRENT_STATE.ga_itemsize != 0 directly.
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
 
 hashtab_T *nvim_synblock_get_keywtab(synblock_T *block) { return &block->b_keywtab; }
@@ -624,23 +597,14 @@ size_t nvim_synblock_keywtab_ic_count(synblock_T *block) { return block->b_keywt
 
 int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
 
-// nvim_syn_get/set_next_match_* deleted: Rust statics NEXT_MATCH_* accessed directly.
-// nvim_syn_get/has_next_match deleted: Rust reads NEXT_MATCH_IDX >= 0 directly.
-// nvim_syn_get/set/has_current_next_list deleted: Rust static CURRENT_NEXT_LIST accessed directly.
 
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 
 int nvim_syn_get_topgrp(void) { return curwin->w_s->b_syn_topgrp; }
 void nvim_syn_set_topgrp(int topgrp) { curwin->w_s->b_syn_topgrp = topgrp; }
 
-// nvim_syn_stack_find_entry deleted: Rust calls rs_syn_stack_find_entry directly.
 
-// nvim_syn_validate_current_state deleted: Rust bypasses via #[link_name = "rs_validate_current_state"]
-// nvim_syn_invalidate_current_state deleted: Rust bypasses via #[link_name = "rs_invalidate_current_state"]
 
-// nvim_syn_grow_current_state deleted: Rust calls ga_grow(&CURRENT_STATE, n) directly.
-// nvim_syn_set_current_state_len deleted: Rust writes CURRENT_STATE.ga_len directly.
-// nvim_syn_set_current_next_list deleted: Rust assigns CURRENT_NEXT_LIST directly.
 
 /// Get sst_next_list from a synstate
 int16_t *nvim_synstate_get_next_list(synstate_T *state)
@@ -675,7 +639,6 @@ void nvim_syn_update_si_attr(int idx)
   }
 }
 
-// nvim_synblock_pattern_ic deleted: Rust uses (*syn_item_at(block, idx)).sp_ic directly.
 
 /// Get matches[subidx] string from a reg_extmatch_T.
 const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx)
@@ -695,57 +658,34 @@ int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b)
   return mb_strcmp_ic(ic, a, b);
 }
 
-// nvim_syn_set_next_match_idx deleted: Rust assigns NEXT_MATCH_IDX directly.
-// nvim_syn_set_next_match_col deleted: Rust assigns NEXT_MATCH_COL directly.
-// nvim_syn_check_state_ends deleted: Rust bypasses via #[link_name = "rs_check_state_ends"]
 
 
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
 
-// nvim_syn_id2attr_wrapper deleted: Rust uses syn_id2attr directly.
 
 
 int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
 int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 
-// nvim_syn_get_pattern_sp_syn_inc_tag deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.inc_tag directly.
-// nvim_syn_get_pattern_sp_syn_cont_in_list deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.cont_in_list directly.
-// nvim_syn_get_cluster_scl_list deleted: Rust uses (*syn_cluster_at(block, idx)).scl_list directly.
 int nvim_syn_has_keywords(void) { return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0; }
 int nvim_syn_has_keywords_ic(void) { return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0; }
 
 
-// nvim_syn_save_chartab deleted: Rust calls rs_save_chartab directly.
-// nvim_syn_restore_chartab deleted: Rust calls rs_restore_chartab directly.
 
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 
-// nvim_syn_utfc_ptr2len deleted: Rust uses utfc_ptr2len directly.
 
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
 
-// nvim_syn_get_stateitem deleted: Rust uses crate::statics::current_state_item() directly.
-// nvim_syn_get_top_stateitem deleted: Rust uses crate::statics::current_state_top() directly.
 
-// nvim_syn_get_next_match_positions deleted: Rust reads NEXT_MATCH_*POS statics directly.
-// nvim_syn_get_next_match_flags deleted: Rust reads NEXT_MATCH_FLAGS directly.
-// nvim_syn_get_next_match_end_idx deleted: Rust reads NEXT_MATCH_END_IDX directly.
-// nvim_syn_get_next_match_extmatch deleted: Rust reads NEXT_MATCH_EXTMATCH directly.
 
 reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(em); }
 
 void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 
-// nvim_syn_push_next_match deleted: Rust match_engine.rs bypasses via #[link_name = "rs_push_next_match"].
 
-// nvim_syn_get_pattern_flags deleted: Rust uses (*syn_item_at(block, idx)).sp_flags directly.
-// nvim_syn_get_pattern_cchar deleted: Rust uses (*syn_item_at(block, idx)).sp_cchar directly.
-// nvim_syn_get_pattern_next_list deleted: Rust uses (*syn_item_at(block, idx)).sp_next_list directly.
-// nvim_syn_get_pattern_type deleted: Rust uses (*syn_item_at(block, idx)).sp_type directly.
-// nvim_syn_get_pattern_syn_match_id deleted: Rust uses (*syn_item_at(block, idx)).sp_syn_match_id directly.
 
-// nvim_syn_is_current_state_empty deleted: Rust checks CURRENT_STATE.ga_len <= 0 directly.
 
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
@@ -766,7 +706,6 @@ void nvim_synstate_set_change_lnum(synstate_T *p, int lnum)
   }
 }
 
-// nvim_syn_stack_alloc deleted: Rust calls rs_syn_stack_alloc directly.
 
 void *nvim_win_get_synblock(void *wp) { return wp ? ((win_T *)wp)->w_s : NULL; }
 
@@ -787,7 +726,6 @@ void nvim_syn_set_sst_lasttick(int tick)
 
 int nvim_syn_get_display_tick(void) { return (int)display_tick; }
 
-// nvim_syn_line_breakcheck deleted: Rust uses line_breakcheck directly.
 
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
@@ -809,9 +747,7 @@ int nvim_synblock_is_nospell_cluster(synblock_T *block, int id) { return id == b
 
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 
-// nvim_syn_ensure_current_state_valid deleted: Rust calls rs_validate_current_state directly via #[link_name].
 
-// nvim_syn_get_next_match_attr deleted: Rust inlines syn_id2attr(CURRENT_ID) directly.
 
 win_T *nvim_syn_get_win(void) { return syn_win; }
 
@@ -821,10 +757,6 @@ char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
 int nvim_syn_get_include_link(void) { return include_link; }
 int nvim_syn_get_include_default(void) { return include_default; }
 int nvim_syn_get_include_none(void) { return include_none; }
-// nvim_syn_get_pattern_offset deleted: Rust uses (*syn_item_at(block, idx)).sp_offsets[off_idx] directly.
-// nvim_syn_get_pattern_off_flags deleted: Rust uses (*syn_item_at(block, idx)).sp_off_flags directly.
-// nvim_syn_get_pattern_syn_id deleted: Rust uses (*syn_item_at(block, idx)).sp_syn.id directly.
-// nvim_syn_get_pattern_cont_list deleted: Rust uses (*syn_item_at(block, idx)).sp_cont_list directly.
 
 /// Get pattern count in the current synblock.
 int nvim_syn_get_synblock_pattern_count(void)
@@ -856,8 +788,6 @@ void nvim_syn_clear_extmatch_in(void)
 
 int nvim_syn_getcurline_byte_at(int col) { return (unsigned char)rs_syn_getcurline()[col]; }
 
-// nvim_syn_set_current_from_stateitem deleted: Rust sets CURRENT_* statics directly.
-// nvim_syn_zero_current deleted: Rust zeroes CURRENT_* statics directly.
 
 /// Get re_extmatch_out, take ownership (sets it to NULL in C)
 reg_extmatch_T *nvim_syn_take_re_extmatch_out(void)
@@ -874,14 +804,6 @@ void nvim_syn_clear_re_extmatch_out(void)
   re_extmatch_out = NULL;
 }
 
-// nvim_syn_get_pattern_line_id deleted: Rust uses (*syn_item_at(block, idx)).sp_line_id directly.
-// nvim_syn_set_pattern_line_id deleted: Rust uses (*syn_item_at(block, idx)).sp_line_id = val directly.
-// nvim_syn_get_pattern_startcol deleted: Rust uses (*syn_item_at(block, idx)).sp_startcol directly.
-// nvim_syn_set_pattern_startcol deleted: Rust uses (*syn_item_at(block, idx)).sp_startcol = val directly.
-// nvim_syn_get_pattern_lc_off deleted: Rust uses (*syn_item_at(block, idx)).sp_offsets[SPO_LC_OFF] directly.
-// nvim_syn_get_pattern_syncing deleted: Rust uses (*syn_item_at(block, idx)).sp_syncing directly.
-// nvim_syn_get_pattern_display deleted: Rust uses (*syn_item_at(block, idx)).sp_flags & HL_DISPLAY directly.
-// nvim_syn_get_pattern_ga_len deleted: Rust uses nvim_synblock_get_pattern_count or nvim_synblock_get_patterns_ga_data.
 int nvim_syn_has_containedin(void) { return syn_block->b_syn_containedin; }
 
 /// Check in_id_list for a pattern by index against the current_next_list or
@@ -900,10 +822,7 @@ int nvim_syn_get_syn_spell(void) { return syn_block->b_syn_spell; }
 
 int nvim_syn_vim_iswordp_buf(char *p) { return vim_iswordp_buf(p, syn_buf); }
 
-// nvim_syn_utf_head_off deleted: Rust uses utf_head_off directly.
 
-// nvim_syn_set_next_match_state deleted: Rust assigns NEXT_MATCH_* statics directly,
-// calling nvim_syn_unref_extmatch before storing the new extmatch pointer.
 
 _Static_assert(SPO_MS_OFF == 0, "SPO_MS_OFF");
 _Static_assert(SPO_ME_OFF == 1, "SPO_ME_OFF");
@@ -932,9 +851,7 @@ _Static_assert(HL_SKIPNL == 0x80, "HL_SKIPNL");
 _Static_assert(HL_SKIPEMPTY == 0x200, "HL_SKIPEMPTY");
 
 
-// nvim_syn_match_linecont deleted: Rust calls rs_syn_match_linecont directly.
 
-// nvim_syn_get_pattern_sync_idx deleted: Rust uses (*syn_item_at(block, idx)).sp_sync_idx directly.
 
 char *nvim_syn_ml_get(linenr_T lnum) { return ml_get_buf(syn_buf, lnum); }
 
@@ -1009,29 +926,14 @@ _Static_assert(offsetof(syn_time_T, count) == 16, "syn_time_T.count");
 _Static_assert(offsetof(syn_time_T, match) == 20, "syn_time_T.match");
 
 int nvim_syn_get_b_syn_conceal(void) { return curwin->w_s->b_syn_conceal; }
-// nvim_syn_name2id_wrapper deleted: Rust uses syn_name2id directly.
-// nvim_syn_check_group_wrapper deleted: Rust uses syn_check_group directly.
-// nvim_syn_highlight_num_groups deleted: Rust uses highlight_num_groups directly.
-// nvim_syn_highlight_group_name deleted: Rust uses highlight_group_name directly.
-// nvim_syn_vim_regcomp deleted: Rust uses vim_regcomp directly.
-// nvim_syn_vim_regfree deleted: Rust uses vim_regfree directly.
-// nvim_syn_utf_ptr2char deleted: Rust uses utf_ptr2char directly.
-// nvim_syn_vim_isprintc deleted: Rust uses vim_isprintc directly.
-// nvim_syn_xstrnsave deleted: Rust uses xstrnsave directly.
-// nvim_syn_xfree deleted: Rust uses xfree directly.
-// nvim_syn_xmalloc deleted: Rust uses xmalloc directly.
 
 void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
 
 char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
 
-// nvim_syn_emsg deleted: Rust uses emsg directly.
 
 void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
 
-// nvim_syn_skipwhite deleted: Rust uses skipwhite directly.
-// nvim_syn_skiptowhite deleted: Rust uses skiptowhite directly.
-// nvim_syn_ends_excmd deleted: Rust uses ends_excmd directly.
 
 int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
 
@@ -1233,7 +1135,6 @@ int nvim_syn_name2id_len_wrapper(const char *arg, int len)
   return syn_name2id_len(arg, (size_t)len);
 }
 
-// nvim_synblock_clear_cluster_scl_list deleted: Rust sets (*syn_cluster_at(block, scl_id)).scl_list = null directly.
 
 // =============================================================================
 // Phase 3 accessors: syn_cmd_include migration
@@ -1331,9 +1232,7 @@ void nvim_syn_redraw_curbuf_later(void)
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
 int nvim_syn_get_columns(void) { return (int)Columns; }
 
-// ex_syntime deleted: Rust exports under the C name directly via #[export_name = "ex_syntime"].
 
-// get_syntime_arg deleted: Rust exports under the C name directly via #[export_name].
 
 // =============================================================================
 // Phase expand: accessors for tab completion functions
@@ -1348,16 +1247,12 @@ int nvim_syn_get_expand_cluster_count(void)
   return curwin->w_s->b_syn_clusters.ga_len;
 }
 
-// set_context_in_syntax_cmd and set_context_in_echohl_cmd deleted: Rust exports
-// under the C name directly via #[export_name].
 
-// reset_expand_highlight deleted: Rust exports under the C name directly via #[export_name = "reset_expand_highlight"].
 
 // =============================================================================
 // Phase listing: accessors for syn_cmd_list migration
 // =============================================================================
 
-// nvim_syn_highlight_link_id deleted: Rust uses highlight_link_id directly.
 
 /// Wrap syn_list_header.
 int nvim_syn_list_header(int did_header, int outlen, int id, int force_newline)
@@ -1462,7 +1357,6 @@ char *nvim_syn_get_var_value(const char *name)
   return get_var_value(name);
 }
 
-// nvim_syn_xstrdup deleted: Rust uses xstrdup directly.
 
 /// Apply EVENT_SYNTAX autocmds for :ownsyntax.
 void nvim_syn_apply_autocmds_syntax(const char *arg)
@@ -1578,15 +1472,11 @@ void nvim_win_release_synblock(win_T *wp)
 // Phase 5 pass 5 Phase 3 accessors: syn_clear_keyword / clear_keywtab / invalidate_current_state
 // =============================================================================
 
-// nvim_syn_set_current_state_invalid deleted: Rust assigns CURRENT_STATE.ga_itemsize = 0 directly.
 
 // =============================================================================
 // Phase 6 accessors: cluster management migration (syn_scl_name2id, syn_add_cluster)
 // =============================================================================
 
-// nvim_synblock_set_cluster_name deleted: Rust uses (*syn_cluster_at(block, idx)).scl_name = ptr directly.
-// nvim_synblock_set_cluster_name_u deleted: Rust uses (*syn_cluster_at(block, idx)).scl_name_u = ptr directly.
-// nvim_synblock_set_cluster_list deleted: Rust uses (*syn_cluster_at(block, idx)).scl_list = ptr directly.
 
 /// Set b_spell_cluster_id on curwin->w_s.
 void nvim_synblock_set_spell_cluster_id(int id)
@@ -1802,7 +1692,6 @@ void nvim_syn_block_set_linecont_prog(void *prog)
   if (syn_block) syn_block->b_syn_linecont_prog = (regprog_T *)prog;
 }
 
-// nvim_syn_do_validate_current_state deleted: Rust calls current_state_validate() directly.
 
 /// Return ml_get_buf(syn_buf, current_lnum).
 /// Direct implementation to avoid circular call through syn_getcurline.
@@ -1821,13 +1710,8 @@ void nvim_syn_do_clear_time(syn_time_T *st)
   st->match = 0;
 }
 
-// nvim_cur_state_get_si_idx deleted: Rust accesses current_state_item(i).as_ptr().si_idx directly.
 
-// nvim_syn_get_sptype_at deleted: Rust uses (*syn_item_at(block, idx)).sp_type directly.
 
-// nvim_cur_state_get_m_endpos_lnum deleted: Rust accesses si_m_endpos.lnum directly.
-// nvim_cur_state_get_si_flags deleted: Rust accesses si_flags directly.
-// nvim_cur_state_set_h_startpos_cur deleted: Rust sets si_h_startpos fields directly.
 
 /// Get the base pointer to the synpat_T array for a synblock (SYN_ITEMS(block)).
 /// Used by Rust to do direct field access into SynPat via repr(C) pointer arithmetic.
@@ -1871,7 +1755,6 @@ void nvim_synstate_set_tick_to_display(synstate_T *state)
 // Phase 9.2: New C accessors for state_ops.rs migration (Phase 2)
 // =============================================================================
 
-// nvim_syn_append_new_stateitem deleted: Rust calls crate::statics::current_state_append() directly.
 
 // =============================================================================
 // Phase 11: New C accessors for clear_syn_state / store_bufstates migration
