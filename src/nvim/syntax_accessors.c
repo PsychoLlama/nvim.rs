@@ -222,28 +222,12 @@ extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
 #define SYN_STATE_P(ssp)    ((bufstate_T *)((ssp)->ga_data))
 
-#define MAXKEYWLEN      80          // maximum length of a keyword
 
 // The attributes of the syntax item that has been recognized.
 // These are now Rust static variables (statics.rs); accessed via extern.
-extern int CURRENT_ATTR;
-extern int CURRENT_ID;
-extern int CURRENT_TRANS_ID;
-extern int CURRENT_FLAGS;
-extern int CURRENT_SEQNR;
 extern int CURRENT_SUB_CHAR;
-// Aliases for backward compatibility within this file
-#define current_attr    CURRENT_ATTR
-#define current_id      CURRENT_ID
-#define current_trans_id CURRENT_TRANS_ID
-#define current_flags   CURRENT_FLAGS
-#define current_seqnr   CURRENT_SEQNR
 #define current_sub_char CURRENT_SUB_CHAR
 
-// Methods of combining two clusters
-#define CLUSTER_REPLACE     1   // replace first list with second
-#define CLUSTER_ADD         2   // add second list to first
-#define CLUSTER_SUBTRACT    3   // subtract second list from first
 
 #define SYN_CLSTR(buf)  ((syn_cluster_T *)((buf)->b_syn_clusters.ga_data))
 
@@ -258,7 +242,6 @@ extern int CURRENT_SUB_CHAR;
 #define SYNID_CONTAINED 22000       // syntax group ID for contains=CONTAINED
 #define SYNID_CLUSTER   23000       // first syntax group ID for clusters
 
-#define MAX_SYN_INC_TAG 999         // maximum before the above overflow
 #define MAX_CLUSTER_ID  (32767 - SYNID_CLUSTER)
 
 // Annoying Hack(TM):  ":syn include" needs this pointer to pass to
@@ -271,9 +254,7 @@ static char **syn_cmdlinep;
 // rules in each ":syn include"'d file.
 // These are now Rust static variables; accessed via extern.
 extern int CURRENT_SYN_INC_TAG;
-extern int RUNNING_SYN_INC_TAG;
 #define current_syn_inc_tag CURRENT_SYN_INC_TAG
-#define running_syn_inc_tag RUNNING_SYN_INC_TAG
 
 // In a hashtable item "hi_key" points to "keyword" in a keyentry.
 // This avoids adding a pointer to the hashtable item.
@@ -289,8 +270,6 @@ static keyentry_T dumkey;
 // stack the first item with "keepend" is present.  When "-1", there is no
 // "keepend" on the stack.
 // Now a Rust static variable; accessed via extern.
-extern int KEEPEND_LEVEL;
-#define keepend_level KEEPEND_LEVEL
 
 // value of si_idx for keywords
 #define KEYWORD_IDX     (-1)
@@ -308,31 +287,18 @@ extern int NEXT_SEQNR;
 // (All end positions have the column of the char after the end)
 // These are now Rust static variables (statics.rs); accessed via extern.
 extern int NEXT_MATCH_COL;
-extern lpos_T NEXT_MATCH_M_ENDPOS;
-extern lpos_T NEXT_MATCH_H_STARTPOS;
-extern lpos_T NEXT_MATCH_H_ENDPOS;
 extern int NEXT_MATCH_IDX;
 extern int NEXT_MATCH_FLAGS;
-extern lpos_T NEXT_MATCH_EOS_POS;
-extern lpos_T NEXT_MATCH_EOE_POS;
 extern int NEXT_MATCH_END_IDX;
 extern reg_extmatch_T *NEXT_MATCH_EXTMATCH;
-// Aliases for backward compatibility within this file
 #define next_match_col       NEXT_MATCH_COL
-#define next_match_m_endpos  NEXT_MATCH_M_ENDPOS
-#define next_match_h_startpos NEXT_MATCH_H_STARTPOS
-#define next_match_h_endpos  NEXT_MATCH_H_ENDPOS
 #define next_match_idx       NEXT_MATCH_IDX
 #define next_match_flags     NEXT_MATCH_FLAGS
-#define next_match_eos_pos   NEXT_MATCH_EOS_POS
-#define next_match_eoe_pos   NEXT_MATCH_EOE_POS
 #define next_match_end_idx   NEXT_MATCH_END_IDX
 #define next_match_extmatch  NEXT_MATCH_EXTMATCH
 
 // A state stack is an array of integers or stateitem_T, stored in a
 // garray_T.  A state stack is invalid if its itemsize entry is zero.
-#define INVALID_STATE(ssp)  ((ssp)->ga_itemsize == 0)
-#define VALID_STATE(ssp)    ((ssp)->ga_itemsize != 0)
 
 // The current state (within the line) of the recognition engine.
 // When current_state.ga_itemsize is 0 the current state is invalid.
@@ -343,16 +309,8 @@ static proftime_T *syn_tm;                 // timeout limit
 // These are now Rust static variables (statics.rs); accessed via extern.
 extern int CURRENT_LNUM;
 extern int CURRENT_COL;
-extern int CURRENT_STATE_STORED;
-extern int CURRENT_FINISHED;
-extern int CURRENT_NEXT_FLAGS;
-extern int CURRENT_LINE_ID;
 #define current_lnum       ((linenr_T)CURRENT_LNUM)
 #define current_col        ((colnr_T)CURRENT_COL)
-#define current_state_stored ((bool)(CURRENT_STATE_STORED != 0))
-#define current_finished   ((bool)(CURRENT_FINISHED != 0))
-#define current_next_flags CURRENT_NEXT_FLAGS
-#define current_line_id    CURRENT_LINE_ID
 // current_state is now a Rust static variable (CURRENT_STATE); accessed via extern.
 extern garray_T CURRENT_STATE;
 #define current_state CURRENT_STATE
@@ -365,7 +323,6 @@ extern int16_t *CURRENT_NEXT_LIST;
 // Now a Rust static variable; accessed via extern.
 extern int SYN_TIME_ON;
 #define syn_time_on (SYN_TIME_ON != 0)
-#define IF_SYN_TIME(p) (p)
 
 // Set the timeout used for syntax highlighting.
 // Use NULL to reset, no timeout.
@@ -496,28 +453,9 @@ extern int rs_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc
                               int16_t *cont_in_list, int flags);
 extern char *rs_get_syn_pattern(char *arg, synpat_T *ci);
 
-// Keep ITEM_* defines available for C wrappers
-#define ITEM_START          0
-#define ITEM_SKIP           1
-#define ITEM_END            2
-#define ITEM_MATCHGROUP     3
 
 
-// expand_what enum constants (matching values in Rust expand.rs)
-enum {
-  EXP_SUBCMD = 0,   // expand ":syn" sub-commands
-  EXP_CASE = 1,     // expand ":syn case" arguments
-  EXP_SPELL = 2,    // expand ":syn spell" arguments
-  EXP_SYNC = 3,     // expand ":syn sync" arguments
-  EXP_CLUSTER = 4,  // expand ":syn list @cluster" arguments
-};
-// expand_what is now a Rust static variable; accessed via extern.
-extern int EXPAND_WHAT;
-#define expand_what EXPAND_WHAT
 
-// set_context_in_syntax_cmd, get_syntax_name, set_context_in_echohl_cmd,
-// and reset_expand_highlight are implemented in Rust (expand.rs).
-// Their C thin wrappers are at the bottom of this file.
 
 
 
