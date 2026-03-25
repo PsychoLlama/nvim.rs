@@ -8,7 +8,17 @@ use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
 use crate::execute::NV_LANG;
+use crate::types::NormalState;
 use crate::{CapHandle, OapHandle};
+
+/// Cast `NormalStateHandle` to a typed `*mut NormalState`.
+///
+/// # Safety
+/// The handle must be a valid non-null `NormalState*`.
+#[inline]
+unsafe fn ns(s: NormalStateHandle) -> *mut NormalState {
+    s.as_ptr().cast::<NormalState>()
+}
 
 // =============================================================================
 // Constants (verified with _Static_assert in normal.c)
@@ -31,14 +41,6 @@ const CTRL_G: c_int = 7;
 
 extern "C" {
     static mut State: c_int;
-    // NormalState accessors
-    fn nvim_ns_get_c(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_set_c(s: NormalStateHandle, val: c_int);
-    fn nvim_ns_set_need_flushbuf_or(s: NormalStateHandle, val: bool);
-    fn nvim_ns_get_idx(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_set_idx(s: NormalStateHandle, val: c_int);
-    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> CapHandle;
-    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> OapHandle;
 
     // cmdarg_T accessors
     fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
@@ -151,7 +153,7 @@ unsafe fn read_target_char(
         nvim_inc_allow_keys();
     }
     State = MODE_NORMAL_BUSY;
-    nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(target.get(ca)));
+    (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(target.get(ca));
 
     if !lit {
         // Typing CTRL-K gets a digraph.
@@ -160,11 +162,11 @@ unsafe fn read_target_char(
             && !nvim_vim_strchr_p_cpo(CPO_DIGRAPH)
         {
             let c = nvim_get_digraph(false);
-            nvim_ns_set_c(s, c);
+            (*ns(s)).c = c;
             if c > 0 {
                 target.set(ca, c);
                 nvim_del_from_showcmd_wrapper(3);
-                nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(target.get(ca)));
+                (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(target.get(ca));
             }
         }
 
@@ -184,7 +186,7 @@ unsafe fn read_target_char(
     {
         nvim_cap_set_cmdchar(ca, CTRL_BSL);
         nvim_cap_set_nchar(ca, extra_char);
-        nvim_ns_set_idx(s, rs_find_command(CTRL_BSL));
+        (*ns(s)).idx = rs_find_command(CTRL_BSL);
     } else if (nchar == c_int::from(b'n') || nchar == c_int::from(b'N'))
         && cmdchar == c_int::from(b'g')
     {
@@ -201,7 +203,7 @@ unsafe fn read_target_char(
         // Busy wait when typing "f<C-\>" and then something else.
         loop {
             let peeked = nvim_vpeekc_wrapper();
-            nvim_ns_set_c(s, peeked);
+            (*ns(s)).c = peeked;
             if peeked > 0 || towait <= 0 {
                 break;
             }
@@ -209,9 +211,9 @@ unsafe fn read_target_char(
             nvim_do_sleep_wrapper(sleep_ms, false);
             towait -= 50;
         }
-        if nvim_ns_get_c(s) > 0 {
+        if (*ns(s)).c > 0 {
             let c = nvim_plain_vgetc_wrapper();
-            nvim_ns_set_c(s, c);
+            (*ns(s)).c = c;
             if c != CTRL_N && c != CTRL_G {
                 nvim_vungetc_wrapper(c);
             } else {
@@ -219,7 +221,7 @@ unsafe fn read_target_char(
                 nvim_cap_set_nchar(ca, c);
                 let new_idx = rs_find_command(CTRL_BSL);
                 debug_assert!(new_idx >= 0);
-                nvim_ns_set_idx(s, new_idx);
+                (*ns(s)).idx = new_idx;
             }
         }
     }
@@ -239,8 +241,9 @@ unsafe fn read_target_char(
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
-    let ca = nvim_ns_get_ca_ptr(s);
-    let oa = nvim_ns_get_oa_ptr(s);
+    let sp = ns(s);
+    let ca: CapHandle = (&raw mut (*sp).ca).cast();
+    let oa: OapHandle = (&raw mut (*sp).oa).cast();
 
     let mut repl = false;
     let mut lit = false;
@@ -250,7 +253,7 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
     nvim_set_did_cursorhold(true);
 
     let cmdchar = nvim_cap_get_cmdchar(ca);
-    let idx = nvim_ns_get_idx(s);
+    let idx = (*sp).idx;
 
     // Determine which character field to use and whether we need a third char.
     let cp: Option<CharTarget> = if cmdchar == c_int::from(b'g') {
@@ -258,7 +261,7 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
         let nchar = nvim_plain_vgetc_wrapper();
         let nchar = nvim_langmap_adjust(nchar, true);
         nvim_cap_set_nchar(ca, nchar);
-        nvim_ns_set_need_flushbuf_or(s, nvim_add_to_showcmd_wrapper(nchar));
+        (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(nchar);
 
         if nchar == c_int::from(b'r')
             || nchar == c_int::from(b'\'')
@@ -308,7 +311,8 @@ const MAX_SCHAR_SIZE_INT: c_int = 32;
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) {
-    let ca = nvim_ns_get_ca_ptr(s);
+    let sp = ns(s);
+    let ca: CapHandle = (&raw mut (*sp).ca).cast();
 
     nvim_dec_no_mapping();
 
@@ -318,7 +322,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
 
     loop {
         let peeked = nvim_vpeekc_wrapper();
-        nvim_ns_set_c(s, peeked);
+        (*sp).c = peeked;
         if peeked <= 0 {
             break;
         }
@@ -330,7 +334,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
         }
 
         let c = nvim_plain_vgetc_wrapper();
-        nvim_ns_set_c(s, c);
+        (*sp).c = c;
 
         if !nvim_utf_iscomposing_check(prev_code, c, std::ptr::addr_of_mut!(grapheme_state)) {
             nvim_vungetc_wrapper(c);

@@ -8,10 +8,20 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
+use crate::types::NormalState;
+use crate::WinHandle;
 
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
-use crate::WinHandle;
+
+/// Cast `NormalStateHandle` to a typed `*mut NormalState`.
+///
+/// # Safety
+/// The handle must be a valid non-null `NormalState*`.
+#[inline]
+unsafe fn ns(s: NormalStateHandle) -> *mut NormalState {
+    s.as_ptr().cast::<NormalState>()
+}
 
 extern "C" {
     static mut msg_silent: c_int;
@@ -40,28 +50,9 @@ extern "C" {
 }
 
 extern "C" {
-    // NormalState accessors
-    fn nvim_ns_get_cmdwin(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_noexmode(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_previous_got_int(s: NormalStateHandle) -> bool;
-    fn nvim_ns_set_previous_got_int(s: NormalStateHandle, val: bool);
-    fn nvim_ns_get_toplevel(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_set_prevcount(s: NormalStateHandle) -> bool;
-    fn nvim_ns_set_set_prevcount(s: NormalStateHandle, val: bool);
-    fn nvim_ns_prepare_ca(s: NormalStateHandle);
-    fn nvim_ns_set_mapped_len(s: NormalStateHandle, val: c_int);
-    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
-    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> *mut std::ffi::c_void;
-    fn nvim_ns_get_old_pos_lnum(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_get_old_pos_col(s: NormalStateHandle) -> c_int;
-
-    // oparg_T accessors
+    // oparg_T accessors (used for shared oap accessors, not ns-based)
     fn nvim_oap_get_op_type_ptr(oap: *mut std::ffi::c_void) -> c_int;
     fn nvim_oap_get_regname_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_prev_opcount_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_get_prev_count0_ptr(oap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_oap_set_prev_opcount(oap: *mut std::ffi::c_void, val: c_int);
-    fn nvim_oap_set_prev_count0(oap: *mut std::ffi::c_void, val: c_int);
 
     // cmdarg_T accessors
     fn nvim_cap_get_retval(cap: *mut std::ffi::c_void) -> c_int;
@@ -208,12 +199,9 @@ unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
 
 /// Inline of normal_check_interrupt.
 unsafe fn normal_check_interrupt(s: NormalStateHandle) {
+    let sp = ns(s);
     if unsafe { got_int } {
-        if nvim_ns_get_noexmode(s)
-            && nvim_get_global_busy()
-            && !exmode_active
-            && nvim_ns_get_previous_got_int(s)
-        {
+        if (*sp).noexmode && nvim_get_global_busy() && !exmode_active && (*sp).previous_got_int {
             // Typed two CTRL-C in a row: go back to ex mode as if "Q" was
             // used and keep "got_int" set, so that it aborts ":g".
             exmode_active = true;
@@ -227,9 +215,9 @@ unsafe fn normal_check_interrupt(s: NormalStateHandle) {
                 got_int = false;
             }
         }
-        nvim_ns_set_previous_got_int(s, true);
+        (*sp).previous_got_int = true;
     } else {
-        nvim_ns_set_previous_got_int(s, false);
+        (*sp).previous_got_int = false;
     }
 }
 
@@ -346,8 +334,9 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle) -> bool {
-    let ca = nvim_ns_get_ca_ptr(s);
-    let oa = nvim_ns_get_oa_ptr(s);
+    let sp = ns(s);
+    let ca = (&raw mut (*sp).ca).cast::<std::ffi::c_void>();
+    let oa = (&raw mut (*sp).oa).cast::<std::ffi::c_void>();
 
     (
         // 'showmode' is set and messages can be printed
@@ -356,8 +345,8 @@ pub unsafe extern "C" fn rs_normal_need_redraw_mode_message(s: NormalStateHandle
             // must restart insert mode or just entered visual mode
             && (restart_edit != 0
                 || (VIsual_active
-                    && nvim_ns_get_old_pos_lnum(s) == nvim_get_cursor_lnum()
-                    && nvim_ns_get_old_pos_col(s) == nvim_get_cursor_col()))
+                    && (*sp).old_pos.lnum == nvim_get_cursor_lnum()
+                    && (*sp).old_pos.col == nvim_get_cursor_col()))
             // command-line must be cleared or redrawn
             && (nvim_get_clear_cmdline() || nvim_get_redraw_cmdline())
             // some message was printed or scrolled
@@ -426,11 +415,14 @@ pub unsafe extern "C" fn rs_normal_redraw_mode_message(_s: NormalStateHandle) {
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
-    // CLEAR_FIELD(s->ca); s->ca.oap = &s->oa;
-    nvim_ns_prepare_ca(s);
+    let sp = ns(s);
 
-    let ca = nvim_ns_get_ca_ptr(s);
-    let oa = nvim_ns_get_oa_ptr(s);
+    // CLEAR_FIELD(s->ca); s->ca.oap = &s->oa;
+    (*sp).ca = crate::types::CmdargT::default();
+    (*sp).ca.oap = &raw mut (*sp).oa;
+
+    let ca = (&raw mut (*sp).ca).cast::<std::ffi::c_void>();
+    let oa = (&raw mut (*sp).oa).cast::<std::ffi::c_void>();
 
     // Use a count remembered from before entering an operator.
     nvim_cap_set_opcount(ca, nvim_get_opcount());
@@ -444,31 +436,32 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     }
     nvim_may_trigger_modechanged();
 
-    nvim_ns_set_set_prevcount(s, false);
+    (*sp).set_prevcount = false;
     // When not finishing an operator and no register name typed, reset count.
     if !new_finish_op && nvim_oap_get_regname_ptr(oa) == 0 {
         nvim_cap_set_opcount(ca, 0);
-        nvim_ns_set_set_prevcount(s, true);
+        (*sp).set_prevcount = true;
     }
 
     // Restore counts from before receiving K_EVENT.
-    let prev_opcount = nvim_oap_get_prev_opcount_ptr(oa);
-    let prev_count0 = nvim_oap_get_prev_count0_ptr(oa);
+    let oap_typed = &raw mut (*sp).oa;
+    let prev_opcount = (*oap_typed).prev_opcount;
+    let prev_count0 = (*oap_typed).prev_count0;
     if prev_opcount > 0 || prev_count0 > 0 {
         nvim_cap_set_opcount(ca, prev_opcount);
         nvim_cap_set_count0(ca, prev_count0);
-        nvim_oap_set_prev_opcount(oa, 0);
-        nvim_oap_set_prev_count0(oa, 0);
+        (*oap_typed).prev_opcount = 0;
+        (*oap_typed).prev_count0 = 0;
     }
 
-    nvim_ns_set_mapped_len(s, nvim_typebuf_maplen_wrapper());
+    (*sp).mapped_len = nvim_typebuf_maplen_wrapper();
     State = MODE_NORMAL_BUSY;
 
     // Set v:count here when called from main() and not a stuffed command.
-    if nvim_ns_get_toplevel(s) && readbuf1_empty() {
-        let mut set_prevcount = nvim_ns_get_set_prevcount(s);
+    if (*sp).toplevel && readbuf1_empty() {
+        let mut set_prevcount = (*sp).set_prevcount;
         rs_set_vcount_ca(ca, std::ptr::addr_of_mut!(set_prevcount));
-        nvim_ns_set_set_prevcount(s, set_prevcount);
+        (*sp).set_prevcount = set_prevcount;
     }
 }
 
@@ -547,20 +540,20 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
     // May perform garbage collection when waiting for a character, but
     // only at the very toplevel.
-    nvim_set_may_garbage_collect(!nvim_ns_get_cmdwin(s) && !nvim_ns_get_noexmode(s));
+    nvim_set_may_garbage_collect(!(*ns(s)).cmdwin && !(*ns(s)).noexmode);
 
     // Update w_curswant if w_set_curswant has been set.
     nvim_update_curswant_wrapper();
 
     if exmode_active {
-        if nvim_ns_get_noexmode(s) {
+        if (*ns(s)).noexmode {
             return 0;
         }
         nvim_do_exmode_wrapper();
         return -1;
     }
 
-    if nvim_ns_get_cmdwin(s) && nvim_get_cmdwin_result() != 0 {
+    if (*ns(s)).cmdwin && nvim_get_cmdwin_result() != 0 {
         return 0;
     }
 

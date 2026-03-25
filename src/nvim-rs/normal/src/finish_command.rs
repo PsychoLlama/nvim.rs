@@ -8,7 +8,17 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
+use crate::types::NormalState;
 use crate::{CapHandle, OapHandle};
+
+/// Cast `NormalStateHandle` to a typed `*mut NormalState`.
+///
+/// # Safety
+/// The handle must be a valid non-null `NormalState*`.
+#[inline]
+unsafe fn ns(s: NormalStateHandle) -> *mut NormalState {
+    s.as_ptr().cast::<NormalState>()
+}
 
 // =============================================================================
 // Constants (verified with _Static_assert in normal.c)
@@ -27,16 +37,6 @@ const NV_KEEPREG: c_int = 0x100;
 // =============================================================================
 
 extern "C" {
-    // NormalState accessors
-    fn nvim_ns_get_command_finished(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_idx(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_get_old_mapped_len(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_set_old_mapped_len(s: NormalStateHandle, val: c_int);
-    fn nvim_ns_get_old_col(s: NormalStateHandle) -> c_int;
-    fn nvim_ns_get_toplevel(s: NormalStateHandle) -> bool;
-    fn nvim_ns_get_ca_ptr(s: NormalStateHandle) -> CapHandle;
-    fn nvim_ns_get_oa_ptr(s: NormalStateHandle) -> OapHandle;
-
     // cmdarg_T accessors
     fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
     fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
@@ -92,21 +92,22 @@ extern "C" {
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
-    let ca = nvim_ns_get_ca_ptr(s);
-    let oa = nvim_ns_get_oa_ptr(s);
+    let sp = ns(s);
+    let ca: CapHandle = (&raw mut (*sp).ca).cast();
+    let oa: OapHandle = (&raw mut (*sp).oa).cast();
 
     let mut did_visual_op = false;
 
     // The 'finish: block replaces `goto normal_end` — breaking out of
     // this block skips directly to the normal_end cleanup code.
     'finish: {
-        if nvim_ns_get_command_finished(s) {
+        if (*sp).command_finished {
             break 'finish;
         }
 
         // If we didn't start or finish an operator, reset oap->regname,
         // unless we need it later.
-        let idx = nvim_ns_get_idx(s);
+        let idx = (*sp).idx;
         if nvim_get_finish_op() == 0
             && nvim_oap_get_op_type_ptr(oa) == 0
             && (idx < 0 || (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_KEEPREG == 0))
@@ -117,8 +118,8 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
         // Get the length of mapped chars again after typing a count,
         // second character or "z333<cr>".
-        if nvim_ns_get_old_mapped_len(s) > 0 {
-            nvim_ns_set_old_mapped_len(s, nvim_typebuf_maplen_wrapper());
+        if (*sp).old_mapped_len > 0 {
+            (*sp).old_mapped_len = nvim_typebuf_maplen_wrapper();
         }
 
         // If an operation is pending, handle it. But not for K_IGNORE or K_MOUSEMOVE.
@@ -126,7 +127,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         if cmdchar != K_IGNORE && cmdchar != K_MOUSEMOVE {
             let op_type = nvim_oap_get_op_type_ptr(oa);
             did_visual_op = VIsual_active && op_type != OP_NOP && op_type != OP_COLON;
-            nvim_do_pending_operator_call(ca, nvim_ns_get_old_col(s), false);
+            nvim_do_pending_operator_call(ca, (*sp).old_col, false);
         }
 
         // Wait for a moment when a message is displayed that will be
@@ -172,12 +173,12 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
     nvim_mb_check_adjust_col_wrapper();
 
-    if nvim_curwin_get_p_scb() && nvim_ns_get_toplevel(s) {
+    if nvim_curwin_get_p_scb() && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();
         nvim_do_check_scrollbind_wrapper(true);
     }
 
-    if nvim_curwin_get_p_crb() && nvim_ns_get_toplevel(s) {
+    if nvim_curwin_get_p_crb() && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();
         nvim_do_check_cursorbind_wrapper();
     }
@@ -186,7 +187,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     // (but not if still inside a mapping that started in Visual mode).
     // May switch from Visual to Select mode after CTRL-O command.
     if nvim_oap_get_op_type_ptr(oa) == OP_NOP
-        && ((restart_edit != 0 && !VIsual_active && nvim_ns_get_old_mapped_len(s) == 0)
+        && ((restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0)
             || nvim_get_restart_VIsual_select() == 1)
         && (nvim_cap_get_retval(ca) & CA_COMMAND_BUSY == 0)
         && nvim_stuff_empty()
@@ -199,7 +200,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
             nvim_showmode();
             nvim_set_restart_VIsual_select(0);
         }
-        if restart_edit != 0 && !VIsual_active && nvim_ns_get_old_mapped_len(s) == 0 {
+        if restart_edit != 0 && !VIsual_active && (*sp).old_mapped_len == 0 {
             nvim_edit_wrapper(restart_edit, false, 1);
         }
     }
