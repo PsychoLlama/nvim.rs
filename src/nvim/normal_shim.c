@@ -181,10 +181,6 @@ void nvim_oap_set_regname(oparg_T *oap, int val) { if (oap) oap->regname = val; 
 
 int nvim_oap_get_motion_force(oparg_T *oap) { return oap ? oap->motion_force : NUL; }
 
-void nvim_oap_set_motion_force(oparg_T *oap, int val) { if (oap) oap->motion_force = val; }
-
-void nvim_oap_set_use_reg_one(oparg_T *oap, bool val) { if (oap) oap->use_reg_one = val; }
-
 int nvim_oap_get_motion_type(oparg_T *oap) { return oap ? oap->motion_type : kMTUnknown; }
 
 void nvim_oap_set_motion_type(oparg_T *oap, int val) { if (oap) oap->motion_type = val; }
@@ -298,19 +294,9 @@ int nvim_cap_get_retval(cmdarg_T *cap) { return cap ? cap->retval : 0; }
 
 void nvim_cap_set_retval(cmdarg_T *cap, int val) { if (cap) cap->retval = val; }
 
-void nvim_cap_or_retval(cmdarg_T *cap, int val) { if (cap) cap->retval |= val; }
-
 int nvim_cap_get_cmdchar(cmdarg_T *cap) { return cap ? cap->cmdchar : 0; }
 
-void nvim_cap_set_cmdchar(cmdarg_T *cap, int val) { if (cap) cap->cmdchar = val; }
-
 int nvim_cap_get_nchar(cmdarg_T *cap) { return cap ? cap->nchar : 0; }
-
-void nvim_cap_set_nchar(cmdarg_T *cap, int val) { if (cap) cap->nchar = val; }
-
-int nvim_cap_get_extra_char(cmdarg_T *cap) { return cap ? cap->extra_char : 0; }
-
-void nvim_cap_set_extra_char(cmdarg_T *cap, int val) { if (cap) cap->extra_char = val; }
 
 int nvim_cap_get_count0(cmdarg_T *cap) { return cap ? cap->count0 : 0; }
 
@@ -320,17 +306,7 @@ int nvim_cap_get_count1(cmdarg_T *cap) { return cap ? cap->count1 : 0; }
 
 void nvim_cap_set_count1(cmdarg_T *cap, int val) { if (cap) cap->count1 = val; }
 
-int nvim_cap_get_opcount(cmdarg_T *cap) { return cap ? cap->opcount : 0; }
-
-void nvim_cap_set_opcount(cmdarg_T *cap, int val) { if (cap) cap->opcount = val; }
-
 int nvim_cap_get_arg(cmdarg_T *cap) { return cap ? cap->arg : 0; }
-
-void nvim_cap_set_arg(cmdarg_T *cap, int val) { if (cap) cap->arg = val; }
-
-int nvim_cap_get_prechar(cmdarg_T *cap) { return cap ? cap->prechar : 0; }
-
-void nvim_cap_set_prechar(cmdarg_T *cap, int val) { if (cap) cap->prechar = val; }
 
 // =============================================================================
 // Word motion accessors for Rust FFI
@@ -525,8 +501,6 @@ int nvim_get_curswant(void) { return curwin->w_curswant; }
 
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL changed");
 
-int nvim_cap_dec_count1(cmdarg_T *cap) { return cap ? --cap->count1 : 0; }
-
 // =============================================================================
 // Command handler accessors for Rust FFI
 // =============================================================================
@@ -564,8 +538,6 @@ void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
 // =============================================================================
 
 int nvim_cap_get_nchar_len(cmdarg_T *cap) { return cap ? cap->nchar_len : 0; }
-
-void nvim_cap_append_nchar_composing_to_redobuff(cmdarg_T *cap) { if (cap) AppendToRedobuff(cap->nchar_composing); }
 
 void nvim_set_vcount_call(int64_t count, int64_t count1, bool set_prevcount) { set_vcount(count, count1, set_prevcount); }
 
@@ -787,7 +759,6 @@ bool nvim_findmatchlimit_forward(int64_t maxtravel,
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 bool nvim_prompt_curpos_editable(void) { return prompt_curpos_editable(); }
 bool nvim_op_is_change(int op_type) { return op_is_change(op_type); }
-void nvim_oap_set_start_cursor(oparg_T *oap) { oap->start = curwin->w_cursor; }
 void nvim_stuffnumReadbuff(int n) { stuffnumReadbuff(n); }
 void nvim_stuffReadbuff(const char *s) { stuffReadbuff(s); }
 
@@ -1139,9 +1110,6 @@ int nvim_get_MB_BYTE2LEN(int c) { return MB_BYTE2LEN(c); }
 
 void nvim_gotchars_ignore_wrapper(void) { no_u_sync++; gotchars_ignore(); no_u_sync--; }
 
-/// Set cap->nchar_len.
-void nvim_cap_set_nchar_len(cmdarg_T *cap, int val) { if (cap) { cap->nchar_len = val; } }
-
 /// utf_iscomposing(prev, c, state_ptr) wrapper.
 /// state_ptr points to a GraphemeState (int32_t) initialized to 0 (GRAPHEME_STATE_INIT).
 bool nvim_utf_iscomposing_check(int prev, int c, int32_t *state_ptr)
@@ -1375,12 +1343,6 @@ void nvim_dec_no_zero_mapping(void) { no_zero_mapping--; }
 
 /// Get curwin->w_p_rl.
 bool nvim_get_curwin_w_p_rl(void) { return curwin->w_p_rl; }
-
-/// Set oa->prev_opcount via oap handle.
-void nvim_oap_set_prev_opcount(oparg_T *oap, int val) { oap->prev_opcount = val; }
-
-/// Set oa->prev_count0 via oap handle.
-void nvim_oap_set_prev_count0(oparg_T *oap, int val) { oap->prev_count0 = val; }
 
 /// ui_flush() wrapper.
 void nvim_ui_flush_wrapper(void) { ui_flush(); }

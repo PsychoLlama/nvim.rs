@@ -8,6 +8,7 @@
 use std::ffi::c_int;
 
 use super::types::{CmdArgHandle, OpArgHandle};
+use crate::types::OpargT;
 
 // =============================================================================
 // External C Functions
@@ -26,7 +27,6 @@ extern "C" {
     fn nvim_oap_get_regname_ptr(oap: OpArgHandle) -> c_int;
     fn nvim_oap_set_regname(oap: OpArgHandle, val: c_int);
     fn nvim_oap_get_motion_force(oap: OpArgHandle) -> c_int;
-    fn nvim_oap_set_motion_force(oap: OpArgHandle, val: c_int);
     fn nvim_oap_get_line_count(oap: OpArgHandle) -> c_int;
     fn nvim_oap_set_line_count(oap: OpArgHandle, val: c_int);
     fn nvim_oap_get_empty(oap: OpArgHandle) -> c_int;
@@ -35,18 +35,14 @@ extern "C" {
     // CmdArg accessors (from normal.c)
     fn nvim_cap_get_oap(cap: CmdArgHandle) -> OpArgHandle;
     fn nvim_cap_get_cmdchar(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_cmdchar(cap: CmdArgHandle, val: c_int);
     fn nvim_cap_get_nchar(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_nchar(cap: CmdArgHandle, val: c_int);
     fn nvim_cap_get_count0(cap: CmdArgHandle) -> c_int;
     fn nvim_cap_set_count0(cap: CmdArgHandle, val: c_int);
     fn nvim_cap_get_count1(cap: CmdArgHandle) -> c_int;
     fn nvim_cap_set_count1(cap: CmdArgHandle, val: c_int);
     fn nvim_cap_get_retval(cap: CmdArgHandle) -> c_int;
     fn nvim_cap_set_retval(cap: CmdArgHandle, val: c_int);
-    fn nvim_cap_or_retval(cap: CmdArgHandle, val: c_int);
     fn nvim_cap_get_arg(cap: CmdArgHandle) -> c_int;
-    fn nvim_cap_set_arg(cap: CmdArgHandle, val: c_int);
 
     // Global state
     fn nvim_get_VIsual_active() -> c_int;
@@ -81,8 +77,6 @@ mod test_stubs {
     pub unsafe fn nvim_oap_get_motion_force(_oap: OpArgHandle) -> c_int {
         0
     }
-    pub unsafe fn nvim_oap_set_motion_force(_oap: OpArgHandle, _val: c_int) {}
-
     pub unsafe fn nvim_cap_get_oap(_cap: CmdArgHandle) -> OpArgHandle {
         OpArgHandle::null()
     }
@@ -216,9 +210,9 @@ fn get_motion_force_impl(oap: OpArgHandle) -> c_int {
 
 /// Set motion force character.
 #[inline]
-fn set_motion_force_impl(oap: OpArgHandle, val: c_int) {
+unsafe fn set_motion_force_impl(oap: OpArgHandle, val: c_int) {
     if !oap.is_null() {
-        unsafe { nvim_oap_set_motion_force(oap, val) };
+        (*oap.as_ptr().cast::<OpargT>()).motion_force = val;
     }
 }
 
@@ -376,8 +370,11 @@ pub extern "C" fn rs_exec_get_motion_force(oap: OpArgHandle) -> c_int {
 }
 
 /// FFI: Set motion force.
+///
+/// # Safety
+/// `oap` must be a valid `oparg_T` pointer or null.
 #[unsafe(no_mangle)]
-pub extern "C" fn rs_exec_set_motion_force(oap: OpArgHandle, val: c_int) {
+pub unsafe extern "C" fn rs_exec_set_motion_force(oap: OpArgHandle, val: c_int) {
     set_motion_force_impl(oap, val);
 }
 

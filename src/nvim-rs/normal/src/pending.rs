@@ -14,6 +14,8 @@
 
 use std::ffi::c_int;
 
+use crate::types::CmdargT;
+
 /// Opaque handle to command arguments (`cmdarg_T*`).
 pub type CapHandle = *mut std::ffi::c_void;
 
@@ -33,10 +35,8 @@ extern "C" {
     fn nvim_oap_get_inclusive(oap: OapHandle) -> bool;
     fn nvim_oap_set_inclusive(oap: OapHandle, val: bool);
     fn nvim_oap_get_motion_force(oap: OapHandle) -> c_int;
-    fn nvim_oap_set_motion_force(oap: OapHandle, val: c_int);
     fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
     fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_opcount(cap: CapHandle) -> c_int;
 }
 
 // =============================================================================
@@ -234,7 +234,7 @@ pub unsafe fn get_pending_state_from_cap(cap: CapHandle) -> PendingState {
     let oap = nvim_cap_get_oap(cap);
     let mut state = get_pending_state(oap);
 
-    state.op_count = nvim_cap_get_opcount(cap);
+    state.op_count = (*cap.cast::<CmdargT>()).opcount;
     let count1 = nvim_cap_get_count1(cap);
     state.total_count = if state.op_count > 0 {
         state.op_count * count1

@@ -8,7 +8,7 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
-use crate::types::NormalState;
+use crate::types::{CmdargT, NormalState};
 use crate::WinHandle;
 
 /// UIExtension value for kUIMessages (ui_defs.h)
@@ -56,7 +56,6 @@ extern "C" {
 
     // cmdarg_T accessors
     fn nvim_cap_get_retval(cap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_cap_set_opcount(cap: *mut std::ffi::c_void, val: c_int);
     fn nvim_cap_set_count0(cap: *mut std::ffi::c_void, val: c_int);
 
     // Global accessors
@@ -425,7 +424,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     let oa = (&raw mut (*sp).oa).cast::<std::ffi::c_void>();
 
     // Use a count remembered from before entering an operator.
-    nvim_cap_set_opcount(ca, nvim_get_opcount());
+    (*ca.cast::<CmdargT>()).opcount = nvim_get_opcount();
 
     // Finish_op tells us to finish the operation before returning.
     let old_finish_op = nvim_get_finish_op();
@@ -439,7 +438,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     (*sp).set_prevcount = false;
     // When not finishing an operator and no register name typed, reset count.
     if !new_finish_op && nvim_oap_get_regname_ptr(oa) == 0 {
-        nvim_cap_set_opcount(ca, 0);
+        (*ca.cast::<CmdargT>()).opcount = 0;
         (*sp).set_prevcount = true;
     }
 
@@ -448,7 +447,7 @@ pub unsafe extern "C" fn rs_normal_prepare(s: NormalStateHandle) {
     let prev_opcount = (*oap_typed).prev_opcount;
     let prev_count0 = (*oap_typed).prev_count0;
     if prev_opcount > 0 || prev_count0 > 0 {
-        nvim_cap_set_opcount(ca, prev_opcount);
+        (*ca.cast::<CmdargT>()).opcount = prev_opcount;
         nvim_cap_set_count0(ca, prev_count0);
         (*oap_typed).prev_opcount = 0;
         (*oap_typed).prev_count0 = 0;

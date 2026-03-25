@@ -14,6 +14,9 @@
 
 use std::ffi::c_int;
 
+#[cfg(not(test))]
+use crate::types::CmdargT;
+
 use super::constants::{
     BACKWARD, FORWARD, NV_KEEPREG, NV_LANG, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_NCW, NV_RL, NV_SS,
     NV_SSS, NV_STS,
@@ -1050,7 +1053,6 @@ pub extern "C" fn rs_table_needs_additional_char(
 // All command handler function pointers (called from rs_execute_dispatch)
 #[cfg(not(test))]
 extern "C" {
-    fn nvim_cap_set_arg(cap: *mut std::ffi::c_void, val: c_int);
     fn rs_nv_ignore(cap: *mut std::ffi::c_void);
     fn rs_nv_nop(cap: *mut std::ffi::c_void);
     fn rs_nv_error(cap: *mut std::ffi::c_void);
@@ -1139,7 +1141,7 @@ pub unsafe extern "C" fn rs_execute_dispatch(idx: c_int, cap: *mut std::ffi::c_v
         return;
     };
     // Set ca->arg from the table (mimics nvim_execute_nv_cmd behavior)
-    nvim_cap_set_arg(cap, c_int::from(entry.arg));
+    (*cap.cast::<CmdargT>()).arg = c_int::from(entry.arg);
     match entry.handler {
         CmdHandler::Ignore => rs_nv_ignore(cap),
         CmdHandler::Nop => rs_nv_nop(cap),

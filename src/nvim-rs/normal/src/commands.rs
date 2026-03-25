@@ -31,8 +31,6 @@ extern "C" {
     fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
     fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
     fn nvim_cap_get_arg(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_arg(cap: CapHandle, val: c_int);
-    fn nvim_cap_or_retval(cap: CapHandle, val: c_int);
 
     // Oap accessors
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;

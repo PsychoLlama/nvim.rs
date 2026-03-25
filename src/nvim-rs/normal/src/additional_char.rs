@@ -8,7 +8,7 @@ use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
 use crate::execute::NV_LANG;
-use crate::types::NormalState;
+use crate::types::{CmdargT, NormalState};
 use crate::{CapHandle, OapHandle};
 
 /// Cast `NormalStateHandle` to a typed `*mut NormalState`.
@@ -44,11 +44,7 @@ extern "C" {
 
     // cmdarg_T accessors
     fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_cmdchar(cap: CapHandle, val: c_int);
     fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_nchar(cap: CapHandle, val: c_int);
-    fn nvim_cap_get_extra_char(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_extra_char(cap: CapHandle, val: c_int);
 
     // oparg_T accessors
     fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
@@ -76,7 +72,6 @@ extern "C" {
 
     // Phase 6: composing char handler accessors
     fn nvim_cap_get_nchar_len(cap: CapHandle) -> c_int;
-    fn nvim_cap_set_nchar_len(cap: CapHandle, val: c_int);
     fn nvim_cap_get_nchar_composing_ptr(cap: CapHandle) -> *const std::ffi::c_char; // search.c
     fn nvim_utf_iscomposing_check(prev: c_int, c: c_int, state_ptr: *mut i32) -> bool;
     fn nvim_utf_char2len_wrapper(c: c_int) -> c_int;
@@ -100,15 +95,15 @@ impl CharTarget {
     unsafe fn get(self, ca: CapHandle) -> c_int {
         match self {
             Self::Nchar => nvim_cap_get_nchar(ca),
-            Self::ExtraChar => nvim_cap_get_extra_char(ca),
+            Self::ExtraChar => (*ca.cast::<CmdargT>()).extra_char,
         }
     }
 
     /// Write the target character to the cmdarg.
     unsafe fn set(self, ca: CapHandle, val: c_int) {
         match self {
-            Self::Nchar => nvim_cap_set_nchar(ca, val),
-            Self::ExtraChar => nvim_cap_set_extra_char(ca, val),
+            Self::Nchar => (*ca.cast::<CmdargT>()).nchar = val,
+            Self::ExtraChar => (*ca.cast::<CmdargT>()).extra_char = val,
         }
     }
 }
@@ -178,14 +173,14 @@ unsafe fn read_target_char(
     // When the next character is CTRL-\ a following CTRL-N means the
     // command is aborted and we go to Normal mode.
     let nchar = nvim_cap_get_nchar(ca);
-    let extra_char = nvim_cap_get_extra_char(ca);
+    let extra_char = (*ca.cast::<CmdargT>()).extra_char;
 
     if target == CharTarget::ExtraChar
         && nchar == CTRL_BSL
         && (extra_char == CTRL_N || extra_char == CTRL_G)
     {
-        nvim_cap_set_cmdchar(ca, CTRL_BSL);
-        nvim_cap_set_nchar(ca, extra_char);
+        (*ca.cast::<CmdargT>()).cmdchar = CTRL_BSL;
+        (*ca.cast::<CmdargT>()).nchar = extra_char;
         (*ns(s)).idx = rs_find_command(CTRL_BSL);
     } else if (nchar == c_int::from(b'n') || nchar == c_int::from(b'N'))
         && cmdchar == c_int::from(b'g')
@@ -217,8 +212,8 @@ unsafe fn read_target_char(
             if c != CTRL_N && c != CTRL_G {
                 nvim_vungetc_wrapper(c);
             } else {
-                nvim_cap_set_cmdchar(ca, CTRL_BSL);
-                nvim_cap_set_nchar(ca, c);
+                (*ca.cast::<CmdargT>()).cmdchar = CTRL_BSL;
+                (*ca.cast::<CmdargT>()).nchar = c;
                 let new_idx = rs_find_command(CTRL_BSL);
                 debug_assert!(new_idx >= 0);
                 (*ns(s)).idx = new_idx;
@@ -260,7 +255,7 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
         // For 'g' get the next character now.
         let nchar = nvim_plain_vgetc_wrapper();
         let nchar = nvim_langmap_adjust(nchar, true);
-        nvim_cap_set_nchar(ca, nchar);
+        (*ca.cast::<CmdargT>()).nchar = nchar;
         (*ns(s)).need_flushbuf |= nvim_add_to_showcmd_wrapper(nchar);
 
         if nchar == c_int::from(b'r')
@@ -347,7 +342,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
             // nchar_composing is mutable; the const is a C API convention.
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
             let written = nvim_utf_char2bytes_wrapper(nchar, composing_ptr);
-            nvim_cap_set_nchar_len(ca, written);
+            (*ca.cast::<CmdargT>()).nchar_len = written;
         }
 
         // Append composing character if it fits.
@@ -357,7 +352,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
             let composing_ptr = nvim_cap_get_nchar_composing_ptr(ca).cast_mut();
             let offset = usize::try_from(cur_len).unwrap_or(0);
             let written = nvim_utf_char2bytes_wrapper(c, composing_ptr.add(offset));
-            nvim_cap_set_nchar_len(ca, cur_len + written);
+            (*ca.cast::<CmdargT>()).nchar_len = cur_len + written;
         }
         prev_code = c;
     }

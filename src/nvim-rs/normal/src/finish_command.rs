@@ -8,7 +8,7 @@
 use std::ffi::c_int;
 
 use crate::dispatch::types::NormalStateHandle;
-use crate::types::NormalState;
+use crate::types::{CmdargT, NormalState};
 use crate::{CapHandle, OapHandle};
 
 /// Cast `NormalStateHandle` to a typed `*mut NormalState`.
@@ -41,8 +41,6 @@ extern "C" {
     fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
     fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
     fn nvim_cap_get_retval(cap: CapHandle) -> c_int;
-    fn nvim_cap_get_opcount(cap: CapHandle) -> c_int;
-
     // oparg_T accessors
     fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
     fn nvim_oap_get_regname_ptr(oap: OapHandle) -> c_int;
@@ -210,5 +208,5 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     }
 
     // Save count before an operator for next time.
-    nvim_set_opcount(nvim_cap_get_opcount(ca));
+    nvim_set_opcount((*ca.cast::<CmdargT>()).opcount);
 }
