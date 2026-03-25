@@ -99,6 +99,35 @@ pub struct PartialT {
 }
 
 // =============================================================================
+// listitem_T stub (li_tv at offset 16)
+// =============================================================================
+
+/// Rust mirror of C `listitem_T` (struct listitem_S).
+///
+/// Layout:
+/// ```text
+/// offset 0:  li_next (*mut c_void, listitem_T*)
+/// offset 8:  li_prev (*mut c_void, listitem_T*)
+/// offset 16: li_tv   (TypvalT, 16 bytes)
+/// ```
+#[repr(C)]
+pub struct ListItemT {
+    pub li_next: *mut c_void,
+    pub li_prev: *mut c_void,
+    pub li_tv: TypvalT,
+}
+
+/// Return a pointer to the `li_tv` field of a `listitem_T`.
+///
+/// # Safety
+///
+/// `item` must be a valid non-null pointer to a `listitem_T`.
+#[inline]
+pub unsafe fn list_item_tv(item: *mut c_void) -> *mut TypvalT {
+    &raw mut (*item.cast::<ListItemT>()).li_tv
+}
+
+// =============================================================================
 // Partial dict_T stub (fields up to dv_copyID, used for GC)
 // =============================================================================
 

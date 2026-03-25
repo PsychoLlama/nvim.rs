@@ -68,7 +68,7 @@ struct GArray {
 // C extern declarations
 // =============================================================================
 
-use super::typval::TypvalT as TypvalTRepr;
+use super::typval::{list_item_tv, TypvalT as TypvalTRepr};
 
 #[inline]
 unsafe fn tv_get_list(tv: *const c_void) -> ListPtr {
@@ -97,7 +97,6 @@ extern "C" {
     fn nvim_list_get_lock(l: ListPtr) -> c_int;
     fn nvim_list_get_first(l: *const c_void) -> *const c_void;
     fn nvim_list_item_next(l: ListPtr, item: ListItemPtr) -> ListItemPtr;
-    fn nvim_list_item_tv(item: ListItemPtr) -> TypvalPtr;
     fn tv_list_find(l: ListPtr, idx: c_int) -> ListItemPtr;
     fn tv_list_reverse(l: ListPtr);
     fn nvim_eval_tv_list_set_ret(rettv: TypvalPtr, l: ListPtr);
@@ -676,7 +675,7 @@ unsafe fn count_list_impl(l: ListPtr, needle: TypvalPtr, idx: VarNumber, ic: boo
         let mut n: VarNumber = 0;
         let mut cur = li;
         while !cur.is_null() {
-            let item_tv = nvim_list_item_tv(cur);
+            let item_tv = list_item_tv(cur).cast::<c_void>();
             if tv_equal(item_tv, needle, ic) {
                 n += 1;
             }

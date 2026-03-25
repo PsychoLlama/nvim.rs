@@ -1657,8 +1657,6 @@ extern "C" {
     fn p3_nvim_list_get_len(l: *const c_void) -> c_int;
     /// Get list item at index (returns mutable item handle).
     fn tv_list_find(l: *mut c_void, idx: c_int) -> *mut c_void;
-    /// Get typval from list item (returns mutable).
-    fn nvim_list_item_tv(item: *mut c_void) -> *mut c_void;
 
     // OS functions for random seeding
     fn os_hrtime() -> u64;
@@ -1781,11 +1779,11 @@ pub unsafe extern "C" fn rs_f_rand(argvars: *const c_void, rettv: *mut c_void, _
             return;
         }
         let list_mut = list.cast_mut();
-        // Get mutable item typvals
-        let itv0 = nvim_list_item_tv(tv_list_find(list_mut, 0));
-        let itv1 = nvim_list_item_tv(tv_list_find(list_mut, 1));
-        let itv2 = nvim_list_item_tv(tv_list_find(list_mut, 2));
-        let itv3 = nvim_list_item_tv(tv_list_find(list_mut, 3));
+        // Get mutable item typvals (inlined TV_LIST_ITEM_TV: li_tv at offset 16)
+        let itv0 = crate::typval::list_item_tv(tv_list_find(list_mut, 0)).cast::<c_void>();
+        let itv1 = crate::typval::list_item_tv(tv_list_find(list_mut, 1)).cast::<c_void>();
+        let itv2 = crate::typval::list_item_tv(tv_list_find(list_mut, 2)).cast::<c_void>();
+        let itv3 = crate::typval::list_item_tv(tv_list_find(list_mut, 3)).cast::<c_void>();
 
         // All must be VAR_NUMBER
         if p3_nvim_tv_get_type(itv0.cast_const()) != VAR_NUMBER_P3

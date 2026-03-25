@@ -14,7 +14,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use super::typval::TypvalT as TypvalTRepr;
+use super::typval::{list_item_tv, TypvalT as TypvalTRepr};
 
 // =============================================================================
 // C Extern Declarations
@@ -34,7 +34,6 @@ extern "C" {
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
     fn nvim_tv_list_first(l: *const c_void) -> *mut c_void; // listitem_T *
     fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
-    fn nvim_list_item_tv(item: *mut c_void) -> *mut c_void; // typval_T *
     fn nvim_tv_list_ref(l: *mut c_void);
     #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
@@ -185,7 +184,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
 
     // Get string value of first list element
     let first_item = nvim_tv_list_first(cmd_list);
-    let first_tv = nvim_list_item_tv(first_item);
+    let first_tv = list_item_tv(first_item).cast::<c_void>();
     let cmd0 = nvim_eval_tv_string_chk(first_tv);
 
     let mut exe_resolved: *mut c_char = ptr::null_mut();
@@ -216,7 +215,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
     let mut i = 0usize;
     let mut item = nvim_tv_list_first(cmd_list);
     while !item.is_null() {
-        let tv = nvim_list_item_tv(item);
+        let tv = list_item_tv(item).cast::<c_void>();
         let s = nvim_eval_tv_string_chk(tv);
         if s.is_null() {
             // tv_get_string_chk already emitted an error

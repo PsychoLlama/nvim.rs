@@ -334,11 +334,6 @@ listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
   return TV_LIST_ITEM_NEXT(l, item);
 }
 
-/// Get TV_LIST_ITEM_TV(item) (typval_T *).
-typval_T *nvim_list_item_tv(listitem_T *item)
-{
-  return TV_LIST_ITEM_TV(item);
-}
 
 
 // Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
