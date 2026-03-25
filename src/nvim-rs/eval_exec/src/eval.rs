@@ -213,6 +213,23 @@ impl ExargHandle {
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Get raw pointer
+    pub const fn as_ptr(self) -> *mut c_void {
+        self.0
+    }
+}
+
+/// Minimal Rust mirror of `exarg_T` for accessing the `nextcmd` field.
+/// Only the fields up to and including `nextcmd` are declared.
+/// Layout must match `struct exarg` in `ex_cmds_defs.h`.
+#[repr(C)]
+pub struct ExargNextcmdAccess {
+    pub arg: *mut c_char,
+    pub args: *mut *mut c_char,
+    pub arglens: *mut usize,
+    pub argc: usize,
+    pub nextcmd: *mut c_char,
 }
 
 // =============================================================================
@@ -256,8 +273,7 @@ extern "C" {
     // Evalarg operations (clear_evalarg is a Rust function, declared as extern to call via C ABI)
     fn clear_evalarg(ea: EvalargHandle, eap: ExargHandle);
 
-    // exarg operations
-    fn exarg_set_nextcmd(eap: ExargHandle, nextcmd: *mut c_char);
+    // (exarg_set_nextcmd inlined via ExargNextcmdAccess.nextcmd)
 
     // String concatenation
     fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
@@ -409,14 +425,14 @@ pub unsafe fn eval0_impl(
             // The next command may be "catch".
             let nextcmd = check_nextcmd(p);
             if !nextcmd.is_null() && get_byte(nextcmd) != b'|' {
-                exarg_set_nextcmd(eap, nextcmd);
+                (*eap.0.cast::<ExargNextcmdAccess>()).nextcmd = nextcmd;
             }
         }
         return FAIL;
     }
 
     if !eap.is_null() {
-        exarg_set_nextcmd(eap, check_nextcmd(p));
+        (*eap.0.cast::<ExargNextcmdAccess>()).nextcmd = check_nextcmd(p);
     }
 
     ret

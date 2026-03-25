@@ -9,7 +9,7 @@ use std::ptr;
 
 use nvim_collections::garray::GArray;
 
-use crate::eval::{EvalargHandle, EvalargT, ExargHandle, TypevalHandle};
+use crate::eval::{EvalargHandle, EvalargT, ExargHandle, ExargNextcmdAccess, TypevalHandle};
 
 // CMD_* enum constants (stable values from ex_cmds.lua)
 const CMD_ECHO: c_int = 135;
@@ -55,7 +55,8 @@ extern "C" {
     // EAP accessors
     fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
     fn nvim_eap_get_arg_local(eap: ExargHandle) -> *mut c_char;
-    fn nvim_eap_set_nextcmd_checked(eap: ExargHandle, arg: *mut c_char);
+    fn check_nextcmd(p: *const c_char) -> *mut c_char;
+    // (nvim_eap_set_nextcmd_checked inlined via ExargNextcmdAccess.nextcmd + check_nextcmd)
     fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
 
     // Message functions
@@ -264,7 +265,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
         arg = skipwhite(arg);
     }
 
-    nvim_eap_set_nextcmd_checked(eap, arg);
+    (*eap.as_ptr().cast::<ExargNextcmdAccess>()).nextcmd = check_nextcmd(arg);
     clear_evalarg(evalarg, eap);
     if !evalarg.is_null() {
         drop(Box::from_raw(evalarg.as_ptr()));
@@ -398,7 +399,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         emsg_skip -= 1;
     }
 
-    nvim_eap_set_nextcmd_checked(eap, arg);
+    (*eap.as_ptr().cast::<ExargNextcmdAccess>()).nextcmd = check_nextcmd(arg);
 }
 
 /// FFI export for ex_execute.

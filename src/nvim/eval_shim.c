@@ -632,14 +632,6 @@ _Static_assert(sizeof(sctx_T) == 24, "sctx_T size must be 24 bytes");
 // Accessor functions for Rust FFI
 // =============================================================================
 
-/// Set nextcmd in exarg_T (accessor for Rust).
-void exarg_set_nextcmd(exarg_T *eap, char *nextcmd)
-{
-  if (eap) {
-    eap->nextcmd = nextcmd;
-  }
-}
-
 /// Set v_type in typval_T (accessor for Rust).
 void nvim_tv_set_type(typval_T *tv, int vtype)
 {
@@ -955,13 +947,6 @@ char *nvim_eap_get_arg_local(const exarg_T *eap)
 {
   return eap->arg;
 }
-
-/// Set eap->nextcmd from check_nextcmd - accessor for Rust.
-void nvim_eap_set_nextcmd_checked(exarg_T *eap, char *arg)
-{
-  eap->nextcmd = check_nextcmd(arg);
-}
-
 
 // =============================================================================
 // Phase 2 eval_top accessors - eval_to_* and eval_expr_* family
