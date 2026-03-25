@@ -2538,6 +2538,8 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn ml_get(lnum: c_int) -> *const c_char;
+    static p_ww: *mut c_char;
     fn vim_strsave_fnameescape(s: *const c_char, what: c_int) -> *mut c_char;
     fn vim_strsave_shellescape(s: *const c_char, do_special: bool, do_newline: bool)
         -> *mut c_char;
@@ -3193,7 +3195,7 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
         return;
     }
 
-    if nvim_lineempty_cursor() && !nvim_vim_strchr_p_ww(c_int::from(b'~')) {
+    if *ml_get(nvim_get_cursor_lnum()) == 0 && vim_strchr(p_ww, c_int::from(b'~')).is_null() {
         rs_clearopbeep(oap);
         return;
     }
@@ -3223,7 +3225,7 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
         }
         nvim_inc_cursor();
         if utf_ptr2char(get_cursor_pos_ptr()) == NUL_CHAR {
-            if nvim_vim_strchr_p_ww(c_int::from(b'~'))
+            if !vim_strchr(p_ww, c_int::from(b'~')).is_null()
                 && nvim_get_cursor_lnum() < nvim_get_line_count()
             {
                 let new_lnum = nvim_get_cursor_lnum() + 1;
@@ -4364,12 +4366,9 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
 extern "C" {
     // Phase 1: nv_right_impl / nv_left_impl accessors
     fn get_cursor_pos_ptr() -> *const c_char;
-    fn nvim_lineempty_cursor() -> bool;
-    fn nvim_vim_strchr_p_ww(c: c_int) -> bool;
     #[allow(dead_code)]
     fn nvim_utfc_ptr2len_cursor() -> c_int;
     fn oneleft() -> c_int;
-    fn nvim_cursor_col_inc_by_utfc();
 }
 
 extern "C" {
@@ -5315,15 +5314,16 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
 
         if cannot_move_right {
             // Check whichwrap wrapping to next line
-            let wrap = (cmdchar == c_int::from(b' ') && nvim_vim_strchr_p_ww(c_int::from(b's')))
-                || (cmdchar == c_int::from(b'l') && nvim_vim_strchr_p_ww(c_int::from(b'l')))
-                || (cmdchar == K_RIGHT && nvim_vim_strchr_p_ww(c_int::from(b'>')));
+            let wrap = (cmdchar == c_int::from(b' ')
+                && !vim_strchr(p_ww, c_int::from(b's')).is_null())
+                || (cmdchar == c_int::from(b'l') && !vim_strchr(p_ww, c_int::from(b'l')).is_null())
+                || (cmdchar == K_RIGHT && !vim_strchr(p_ww, c_int::from(b'>')).is_null());
 
             if wrap && nvim_get_cursor_lnum() < nvim_get_line_count() {
                 // When deleting, count NL as a character
                 if nvim_oap_get_op_type_ptr(oap) != OP_NOP
                     && !nvim_oap_get_inclusive(oap)
-                    && !nvim_lineempty_cursor()
+                    && !*ml_get(nvim_get_cursor_lnum()) == 0
                 {
                     nvim_oap_set_inclusive(oap, true);
                 } else {
@@ -5344,7 +5344,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
                 if n == count1 {
                     beep_flush();
                 }
-            } else if !nvim_lineempty_cursor() {
+            } else if !*ml_get(nvim_get_cursor_lnum()) == 0 {
                 nvim_oap_set_inclusive(oap, true);
             }
             break;
@@ -5354,7 +5354,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
             if virtual_active(nvim_get_curwin()) {
                 oneright();
             } else {
-                nvim_cursor_col_inc_by_utfc();
+                nvim_set_cursor_col(nvim_get_cursor_col() + utfc_ptr2len(get_cursor_pos_ptr()));
             }
         }
         n -= 1;
@@ -5402,9 +5402,10 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
         if oneleft() == 0 {
             // Check whichwrap wrapping to previous line
             let wrap = (((cmdchar == K_BS || cmdchar == CTRL_H_KEY)
-                && nvim_vim_strchr_p_ww(c_int::from(b'b')))
-                || (cmdchar == c_int::from(b'h') && nvim_vim_strchr_p_ww(c_int::from(b'h')))
-                || (cmdchar == K_LEFT && nvim_vim_strchr_p_ww(c_int::from(b'<'))))
+                && !vim_strchr(p_ww, c_int::from(b'b')).is_null())
+                || (cmdchar == c_int::from(b'h')
+                    && !vim_strchr(p_ww, c_int::from(b'h')).is_null())
+                || (cmdchar == K_LEFT && !vim_strchr(p_ww, c_int::from(b'<')).is_null()))
                 && nvim_get_cursor_lnum() > 1;
 
             if wrap {
@@ -5415,10 +5416,12 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
                 // When deleting NL before first char: put cursor on NUL after prev line
                 if (nvim_oap_get_op_type_ptr(oap) == OP_DELETE
                     || nvim_oap_get_op_type_ptr(oap) == OP_CHANGE)
-                    && !nvim_lineempty_cursor()
+                    && !*ml_get(nvim_get_cursor_lnum()) == 0
                 {
                     if *get_cursor_pos_ptr() != 0 {
-                        nvim_cursor_col_inc_by_utfc();
+                        nvim_set_cursor_col(
+                            nvim_get_cursor_col() + utfc_ptr2len(get_cursor_pos_ptr()),
+                        );
                     }
                     (*cap.cast::<CmdargT>()).retval |= CA_NO_ADJ_OP_END_P1;
                 }
@@ -5527,7 +5530,6 @@ extern "C" {
         setmark: bool,
     ) -> c_int;
     fn nv_diffgetput(put: bool, count: usize);
-    fn nvim_cursor_count0_max2(cap: CapHandle) -> c_int;
 
     // g-command C accessors
     fn current_search(count: c_int, forward: bool) -> bool;
@@ -6537,7 +6539,7 @@ pub unsafe extern "C" fn rs_nv_join(cap: CapHandle) {
     }
 
     // default for join is two lines!
-    let mut count0 = nvim_cursor_count0_max2(cap);
+    let mut count0 = (*cap.cast::<CmdargT>()).count0.max(2);
     nvim_cap_set_count0(cap, count0);
 
     let cursor_lnum = nvim_get_cursor_lnum();

@@ -838,7 +838,7 @@ bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
 void nvim_coladvance_getviscol(void) { coladvance(curwin, getviscol()); }
 void nvim_invoke_edit_R(cmdarg_T *cap, bool repl, int cmd) { invoke_edit(cap, repl, cmd, false); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
-int nvim_cursor_count0_max2(cmdarg_T *cap) { return MAX(cap->count0, 2); }
+
 // z-command accessors for Rust FFI
 int nvim_get_curwin_w_p_fdl(void) { return (int)curwin->w_p_fdl; }
 void nvim_set_curwin_w_p_fdl(int val) { curwin->w_p_fdl = val; }
@@ -889,9 +889,6 @@ void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cur
 int nvim_get_curwin_w_virtcol(void) { return curwin->w_virtcol; }
 int nvim_get_curwin_ml_line_count(void) { return curwin->w_buffer->b_ml.ml_line_count; }
 
-bool nvim_lineempty_cursor(void) { return LINEEMPTY(curwin->w_cursor.lnum); }
-bool nvim_vim_strchr_p_ww(int c) { return vim_strchr(p_ww, c) != NULL; }
-void nvim_cursor_col_inc_by_utfc(void) { curwin->w_cursor.col += (colnr_T)utfc_ptr2len(get_cursor_pos_ptr()); }
 static char *nvim_mps_save = NULL;
 void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_mps = "(:),{:},[:],<:>"; }
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
