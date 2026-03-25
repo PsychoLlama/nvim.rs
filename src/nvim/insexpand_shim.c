@@ -1166,17 +1166,7 @@ static Callback *get_insert_callback(int type)
   return (*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb;
 }
 
-/// Execute user defined complete function 'completefunc', 'omnifunc' or
-/// 'thesaurusfunc', and get matches in "matches".
-///
-/// @param type  one of CTRL_X_OMNI or CTRL_X_FUNCTION or CTRL_X_THESAURUS
-/// @param cb    set if triggered by a function in 'cpt' option, otherwise NULL
-// NOTE: Body migrated to Rust rs_expand_by_function (Phase 9, pass 9).
-// Logic lives in nvim_expand_by_function_full_impl compound accessor.
-static void expand_by_function(int type, char *base, Callback *cb)
-{
-  nvim_expand_by_function_full_impl(type, base, (void *)cb);
-}
+// expand_by_function: deleted (Phase 31), nvim_expand_by_function_with_cb now calls nvim_expand_by_function_full_impl directly
 
 static inline int get_user_highlight_attr(const char *hlname)
 {
@@ -1186,31 +1176,9 @@ static inline int get_user_highlight_attr(const char *hlname)
   return -1;
 }
 
-/// Add a match to the list of matches from Vimscript object
-///
-/// NOTE: Body migrated to Rust rs_ins_compl_add_tv (Phase 9, pass 9).
-/// Logic lives in nvim_ins_compl_add_tv_impl compound accessor.
-// FUNC_ATTR_NONNULL_ALL removed since body is now in compound accessor
-static int ins_compl_add_tv(typval_T *const tv, const Direction dir, bool fast)
-{
-  return nvim_ins_compl_add_tv_impl((void *)tv, (int)dir, fast ? 1 : 0);
-}
-
-/// Add completions from a list.
-/// NOTE: Body migrated to Rust rs_ins_compl_add_list (Phase 9, pass 9).
-/// Logic lives in nvim_ins_compl_add_list_impl compound accessor.
-static void ins_compl_add_list(list_T *const list)
-{
-  nvim_ins_compl_add_list_impl((void *)list);
-}
-
-/// Add completions from a dict.
-/// NOTE: Body migrated to Rust rs_ins_compl_add_dict (Phase 9, pass 9).
-/// Logic lives in nvim_ins_compl_add_dict_impl compound accessor.
-static void ins_compl_add_dict(dict_T *dict)
-{
-  nvim_ins_compl_add_dict_impl((void *)dict);
-}
+// ins_compl_add_tv: deleted (Phase 31), dead code (callers migrated to Rust)
+// ins_compl_add_list: deleted (Phase 31), dead code (callers migrated to Rust)
+// ins_compl_add_dict: deleted (Phase 31), dead code (callers migrated to Rust)
 
 /// Compound accessor: save extmarks before completion modifies text.
 void nvim_save_orig_extmarks_impl(void)
@@ -1952,7 +1920,7 @@ void nvim_emit_completefunc_not_set_error(int is_function)
 // expand_by_function with non-NULL callback (for cpt func sources).
 void nvim_expand_by_function_with_cb(void *cb_opaque)
 {
-  expand_by_function(0, cpt_compl_pattern.data, (Callback *)cb_opaque);
+  nvim_expand_by_function_full_impl(0, cpt_compl_pattern.data, cb_opaque);
 }
 // Advance p past cpt option segment using IObuff (for prepare_cpt_compl_funcs)
 size_t nvim_copy_option_part_iobuff_ffi(char **src)
