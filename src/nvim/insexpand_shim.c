@@ -1881,27 +1881,7 @@ int nvim_get_filename_compl_info_impl(char *line, int startcol, int curs_col)
   return OK;
 }
 
-int nvim_get_spell_compl_info_impl(int startcol, int curs_col)
-{
-  if (spell_bad_len > 0) {
-    assert(spell_bad_len <= INT_MAX);
-    compl_col = curs_col - (int)spell_bad_len;
-  } else {
-    compl_col = spell_word_start(startcol);
-  }
-  if (compl_col >= (colnr_T)startcol) {
-    compl_length = 0;
-    compl_col = curs_col;
-  } else {
-    spell_expand_check_cap(compl_col);
-    compl_length = (int)curs_col - compl_col;
-  }
-  // Need to obtain "line" again, it may have become invalid.
-  char *line = ml_get(curwin->w_cursor.lnum);
-  compl_pattern = cbuf_to_string(line + compl_col, (size_t)compl_length);
-
-  return OK;
-}
+// nvim_get_spell_compl_info_impl: deleted (Phase 26), inlined in pattern.rs as rs_get_spell_compl_info
 
 // =============================================================================
 // Phase 10 (pass 10): New fine-grained accessors for continue_search and

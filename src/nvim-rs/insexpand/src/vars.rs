@@ -487,6 +487,11 @@ pub unsafe fn nvim_set_spell_bad_len(val: c_int) {
 }
 
 #[inline]
+pub unsafe fn nvim_get_spell_bad_len() -> usize {
+    spell_bad_len
+}
+
+#[inline]
 pub unsafe fn nvim_get_cpt_sources_count() -> c_int {
     cpt_sources_count
 }

@@ -29,7 +29,10 @@ extern "C" {
         startcol: c_int,
         curs_col: c_int,
     ) -> c_int;
-    fn nvim_get_spell_compl_info_impl(startcol: c_int, curs_col: c_int) -> c_int;
+    // nvim_get_spell_compl_info_impl: deleted (Phase 26), inlined below
+    // helpers for inlined rs_get_spell_compl_info (Phase 26)
+    fn spell_word_start(startcol: c_int) -> c_int;
+    fn spell_expand_check_cap(col: c_int);
 
     // nvim_set_compl_globals_impl: deleted (Phase 20), inlined below as set_compl_globals
 
@@ -257,11 +260,34 @@ pub unsafe extern "C" fn rs_get_filename_compl_info(
 ///
 /// Sets compl_col, compl_length, compl_pattern.
 ///
+/// Rust translation of nvim_get_spell_compl_info_impl (Phase 26).
+///
 /// # Safety
 /// Requires valid global state.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_get_spell_compl_info(startcol: c_int, curs_col: c_int) -> c_int {
-    nvim_get_spell_compl_info_impl(startcol, curs_col)
+    let spell_len = crate::vars::nvim_get_spell_bad_len();
+    if spell_len > 0 {
+        crate::vars::nvim_set_compl_col(curs_col - spell_len as c_int);
+    } else {
+        crate::vars::nvim_set_compl_col(spell_word_start(startcol));
+    }
+    if crate::vars::nvim_get_compl_col() >= startcol {
+        crate::vars::nvim_set_compl_length(0);
+        crate::vars::nvim_set_compl_col(curs_col);
+    } else {
+        spell_expand_check_cap(crate::vars::nvim_get_compl_col());
+        crate::vars::nvim_set_compl_length(curs_col - crate::vars::nvim_get_compl_col());
+    }
+    // Re-fetch line (may have become invalid)
+    let line = nvim_ml_get_curline();
+    #[allow(clippy::cast_sign_loss)]
+    let col = crate::vars::nvim_get_compl_col() as usize;
+    #[allow(clippy::cast_sign_loss)]
+    let len = crate::vars::nvim_get_compl_length() as usize;
+    crate::vars::compl_pattern = cbuf_to_string(line.add(col), len);
+    OK
 }
 
 /// Set global variables related to completion.
