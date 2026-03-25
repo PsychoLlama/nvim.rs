@@ -108,7 +108,6 @@ use super::typval::{
 
 /// Opaque handles for C types
 type TvHandle = *const c_void;
-type TvHandleMut = *mut c_void;
 type DictHandle = *mut c_void;
 type ListHandle = *mut c_void;
 type HtHandle = *mut c_void;
@@ -155,8 +154,6 @@ extern "C" {
     #[link_name = "rs_set_ref_in_quickfix"]
     fn set_ref_in_quickfix(copy_id: c_int) -> bool;
     fn free_unref_funccal(copy_id: c_int, testing: bool) -> bool;
-
-    fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut std::ffi::c_char;
 
     // Hashtab iteration: calls set_ref_in_item for each entry
     fn nvim_eval_ht_foreach_di_tv(
@@ -455,11 +452,7 @@ pub unsafe extern "C" fn rs_set_ref_in_item(
     match v_type {
         VAR_DICT => set_ref_in_item_dict(tv_ref.vval.v_dict, copy_id, ht_stack, list_stack),
         VAR_LIST => set_ref_in_item_list(tv_ref.vval.v_list, copy_id, ht_stack, list_stack),
-        VAR_FUNC => set_ref_in_func(
-            nvim_tv_get_vstring(tv.cast_mut()),
-            std::ptr::null_mut(),
-            copy_id,
-        ),
+        VAR_FUNC => set_ref_in_func(tv_ref.vval.v_string, std::ptr::null_mut(), copy_id),
         VAR_PARTIAL => {
             set_ref_in_item_partial(tv_ref.vval.v_partial, copy_id, ht_stack, list_stack)
         }

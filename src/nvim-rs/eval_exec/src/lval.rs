@@ -69,6 +69,38 @@ impl TypevalHandle {
             *(self.0.cast::<c_int>()) = vtype;
         }
     }
+
+    /// Get `vval.v_string` from the underlying typval_T (inlined from nvim_tv_get_vstring).
+    ///
+    /// # Safety
+    /// `self` must be a valid non-null pointer to a typval_T.
+    pub unsafe fn get_vstring(self) -> *mut c_char {
+        (*self.0.cast::<TypvalTRepr>()).vval.v_string
+    }
+
+    /// Initialize typval to VAR_UNKNOWN / VAR_UNLOCKED (inlined from nvim_tv_init / tv_init).
+    ///
+    /// # Safety
+    /// `self` must be a valid non-null pointer to a typval_T.
+    pub unsafe fn tv_init(self) {
+        if !self.0.is_null() {
+            let t = &mut *self.0.cast::<TypvalTRepr>();
+            t.v_type = 0; // VAR_UNKNOWN
+            t.v_lock = 0; // VAR_UNLOCKED
+        }
+    }
+
+    /// Set v_type = VAR_STRING and vval.v_string = s (inlined from nvim_tv_set_vstring_owned).
+    ///
+    /// # Safety
+    /// `self` must be a valid non-null pointer to a typval_T.
+    pub unsafe fn set_vstring_owned(self, s: *mut c_char) {
+        if !self.0.is_null() {
+            let t = &mut *self.0.cast::<TypvalTRepr>();
+            t.v_type = 2; // VAR_STRING
+            t.vval.v_string = s;
+        }
+    }
 }
 
 /// Opaque handle to a dictitem_T
@@ -951,7 +983,6 @@ extern "C" {
 
     // typval field accessors
 
-    fn nvim_tv_init(tv: TypevalHandle);
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // dictitem_T accessors
@@ -1186,7 +1217,7 @@ unsafe fn set_var_lval_impl(
             } else {
                 tv_assign_direct(lp_tv2, rettv);
                 (*lp_tv2.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED_CONST;
-                nvim_tv_init(rettv);
+                rettv.tv_init();
             }
         }
 
@@ -1235,14 +1266,10 @@ use std::cell::Cell;
 extern "C" {
     // vimconv_T accessor: returns conv->vc_type (0 = CONV_NONE)
     fn nvim_vimconv_get_type(conv: *const c_void) -> c_int;
-    // Get tv->vval.v_string (canonical name; cast to *const c_char for read-only use)
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     // string_convert wrapper; returns allocated string or NULL
     fn nvim_string_convert(conv: *const c_void, str: *const c_char) -> *mut c_char;
     // xstrdup
     fn xstrdup(s: *const c_char) -> *mut c_char;
-    // Set tv->vval.v_string (takes ownership)
-    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
     // tv type setter
 
     // List operations
@@ -1345,7 +1372,7 @@ unsafe fn var_item_copy_impl(
             tv_copy(from, to);
         }
         VAR_STRING => {
-            let from_str = nvim_tv_get_vstring(from) as *const c_char;
+            let from_str = from.get_vstring() as *const c_char;
             let conv_type = nvim_vimconv_get_type(conv);
             if conv.is_null() || conv_type == CONV_NONE || from_str.is_null() {
                 tv_copy(from, to);
@@ -1358,7 +1385,7 @@ unsafe fn var_item_copy_impl(
                 } else {
                     converted
                 };
-                nvim_tv_set_vstring_owned(to, s);
+                to.set_vstring_owned(s);
             }
         }
         VAR_LIST => {

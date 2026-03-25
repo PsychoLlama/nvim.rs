@@ -14,7 +14,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use super::typval::{list_item_tv, TypvalT as TypvalTRepr};
+use super::typval::{list_item_tv, ListItemT, TypvalT as TypvalTRepr};
 
 // =============================================================================
 // C Extern Declarations
@@ -32,7 +32,6 @@ extern "C" {
     // ----- list accessors -----
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
     fn nvim_tv_list_first(l: *const c_void) -> *mut c_void; // listitem_T *
-    fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
     fn nvim_tv_list_ref(l: *mut c_void);
     #[link_name = "tv_list_alloc_ret"]
     fn nvim_tv_list_alloc_ret(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
@@ -224,7 +223,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
         }
         *result_argv.add(i) = nvim_xstrdup(s);
         i += 1;
-        item = nvim_list_item_next(cmd_list, item);
+        item = (*item.cast::<ListItemT>()).li_next;
     }
 
     // Replace result_argv[0] with the absolute resolved path

@@ -109,7 +109,6 @@ extern "C" {
     fn tv_list_watch_remove(l: *mut c_void, lw: *mut ListWatch);
 
     // list/blob operations
-    fn nvim_list_item_next(l: *mut c_void, item: *mut c_void) -> *mut c_void;
     fn nvim_tv_list_first(l: *mut c_void) -> *mut c_void;
     #[link_name = "tv_list_unref"]
     fn nvim_tv_list_unref(l: *mut c_void);
@@ -122,8 +121,6 @@ extern "C" {
     fn nvim_tv_get_type(tv: TypevalHandle) -> c_int;
     fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
-    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
     fn tv_clear(tv: TypevalHandle);
     fn nvim_blob_len(b: *const c_void) -> c_int;
     fn nvim_blob_get(b: *const c_void, idx: c_int) -> c_int;
@@ -329,14 +326,14 @@ pub unsafe fn eval_for_line_impl(
                 tv_clear(tv);
             } else if tv_type == VAR_STRING {
                 (*fi).fi_byte_idx = 0;
-                let s = nvim_tv_get_vstring(tv);
+                let s = tv.get_vstring();
                 if s.is_null() {
                     let empty = xstrdup(c"".as_ptr());
                     (*fi).fi_string = empty;
                 } else {
-                    // Take ownership of the string from tv
+                    // Take ownership of the string from tv (set v_type=VAR_STRING, v_string=null)
                     (*fi).fi_string = s;
-                    nvim_tv_set_vstring_owned(tv, ptr::null_mut());
+                    tv.set_vstring_owned(ptr::null_mut());
                 }
                 tv_clear(tv);
             } else {
@@ -417,8 +414,7 @@ pub unsafe fn next_for_item_impl(fi_void: *mut c_void, arg: *mut c_char) -> bool
     if item.is_null() {
         return false;
     }
-    let list = (*fi).fi_list;
-    let next = nvim_list_item_next(list, item);
+    let next = (*item.cast::<nvim_eval::typval::ListItemT>()).li_next;
     (*fi).fi_lw.lw_item = next;
     ex_let_vars_list_item(arg, item, semicolon, varcount)
 }

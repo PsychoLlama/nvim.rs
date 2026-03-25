@@ -73,6 +73,35 @@ pub unsafe fn tv_set_type(tv: *mut c_void, vtype: c_int) {
     }
 }
 
+/// Set `v_type = VAR_STRING` and `vval.v_string = s` (inlined from `nvim_tv_set_vstring_owned`).
+///
+/// Takes ownership of `s` (the C side must not free it).
+/// VAR_STRING = 2.
+///
+/// # Safety
+///
+/// `tv` must be a valid pointer to a `typval_T`.
+#[inline]
+pub unsafe fn tv_set_vstring_owned(tv: *mut c_void, s: *mut c_char) {
+    let t = &mut *tv.cast::<TypvalT>();
+    t.v_type = 2; // VAR_STRING
+    t.vval.v_string = s;
+}
+
+/// Initialize a `typval_T` to VAR_UNKNOWN (inlined from `nvim_tv_init` / `tv_init`).
+///
+/// Sets `v_type = 0` (VAR_UNKNOWN) and `v_lock = 0` (VAR_UNLOCKED).
+///
+/// # Safety
+///
+/// `tv` must be a valid pointer to a `typval_T`.
+#[inline]
+pub unsafe fn tv_init(tv: *mut c_void) {
+    let t = &mut *tv.cast::<TypvalT>();
+    t.v_type = 0; // VAR_UNKNOWN
+    t.v_lock = 0; // VAR_UNLOCKED
+}
+
 // =============================================================================
 // partial_T (48 bytes, verified by _Static_assert)
 // =============================================================================

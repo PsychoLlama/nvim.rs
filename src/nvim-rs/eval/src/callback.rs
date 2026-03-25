@@ -16,6 +16,12 @@ use std::ffi::{c_char, c_int, c_void};
 pub use super::typval::{CallbackData, CallbackT};
 use super::typval::{PartialT, TypvalT};
 
+/// Inline replacement for nvim_tv_get_vstring (tv->vval.v_string).
+#[inline]
+unsafe fn tv_get_vstring(tv: *mut c_void) -> *mut c_char {
+    (*tv.cast::<TypvalT>()).vval.v_string
+}
+
 const K_CALLBACK_NONE: c_int = 0;
 const K_CALLBACK_PARTIAL: c_int = 2;
 
@@ -36,8 +42,6 @@ const VAR_STRING: c_int = 2;
 const VAR_NUMBER: c_int = 1;
 
 extern "C" {
-    fn nvim_tv_get_vstring(tv: TvHandleMut) -> *mut c_char;
-
     // Already in Rust (cross-crate FFI)
     fn rs_partial_name(pt: PartialHandle) -> *mut c_char;
 
@@ -72,7 +76,7 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
 
     // empty and NULL function name considered the same
     let mut s1 = if tv1_ref.v_type == VAR_FUNC {
-        nvim_tv_get_vstring(tv1.cast_mut())
+        tv_get_vstring(tv1.cast_mut())
     } else {
         rs_partial_name(tv1_ref.vval.v_partial)
     };
@@ -81,7 +85,7 @@ pub unsafe extern "C" fn rs_func_equal(tv1: TvHandle, tv2: TvHandle, ic: bool) -
     }
 
     let mut s2 = if tv2_ref.v_type == VAR_FUNC {
-        nvim_tv_get_vstring(tv2.cast_mut())
+        tv_get_vstring(tv2.cast_mut())
     } else {
         rs_partial_name(tv2_ref.vval.v_partial)
     };
@@ -179,7 +183,7 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: 
     }
 
     if v_type == VAR_STRING {
-        let vstr = nvim_tv_get_vstring(arg.cast_mut());
+        let vstr = tv_get_vstring(arg.cast_mut());
         if !vstr.is_null() && (*vstr as u8).is_ascii_digit() {
             emsg(E921_MSG.as_ptr() as *const c_char);
             return false;
@@ -187,7 +191,7 @@ pub unsafe extern "C" fn rs_callback_from_typval(callback: *mut CallbackT, arg: 
     }
 
     if v_type == VAR_FUNC || v_type == VAR_STRING {
-        let name = nvim_tv_get_vstring(arg.cast_mut());
+        let name = tv_get_vstring(arg.cast_mut());
         if name.is_null() {
             emsg(E921_MSG.as_ptr() as *const c_char);
             return false;

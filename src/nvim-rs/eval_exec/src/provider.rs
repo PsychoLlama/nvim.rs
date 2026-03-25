@@ -38,7 +38,6 @@ extern "C" {
     // ----- typval accessors -----
     fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
     fn tv_clear(tv: *mut c_void);
-    fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
 
     // ----- list operations -----
     fn nvim_eval_list_alloc_n(n: c_int) -> *mut c_void;
@@ -408,8 +407,8 @@ pub unsafe extern "C" fn rs_script_host_eval(
 
     // Build args list with one string item: argvars[0].v_string
     let args = unsafe { nvim_eval_list_alloc_n(1) };
-    // argvars[0] is a VAR_STRING typval; get its v_string field via accessor
-    let s = unsafe { nvim_tv_get_vstring(argvars) };
+    // argvars[0] is a VAR_STRING typval; get its v_string field directly
+    let s = unsafe { (*argvars.cast::<TypvalTRepr>()).vval.v_string };
     unsafe { nvim_tv_list_append_string(args, s, -1) };
 
     // Call the provider and write result into rettv

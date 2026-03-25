@@ -10,7 +10,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use super::typval::TypvalT as TypvalTRepr;
+use super::typval::{tv_init as tv_init_typval, TypvalT as TypvalTRepr};
 
 // =============================================================================
 // Opaque handle types
@@ -88,7 +88,6 @@ extern "C" {
 
     // -- typval operations --
     fn nvim_tv_set_number(tv: TvHandle, num: i64);
-    fn nvim_tv_init(tv: TvHandle);
     fn tv_clear(tv: TvHandle);
 
     // -- Dict/List operations for add_timer_info --
@@ -316,8 +315,8 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     let argv1: TvHandle = argv.as_mut_ptr().add(TYPVAL_SIZE).cast();
 
     // Initialize both typvals
-    nvim_tv_init(argv0);
-    nvim_tv_init(argv1);
+    tv_init_typval(argv0);
+    tv_init_typval(argv1);
 
     // Set argv[0] = timer->timer_id as VAR_NUMBER
     let timer_id = i64::from(f.timer_id);
@@ -326,7 +325,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
     // rettv
     let mut rettv = [0u8; TYPVAL_SIZE];
     let rettv_ptr: TvHandle = rettv.as_mut_ptr().cast();
-    nvim_tv_init(rettv_ptr);
+    tv_init_typval(rettv_ptr);
 
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
     callback_call(cb_ptr, 1, argv0, rettv_ptr);

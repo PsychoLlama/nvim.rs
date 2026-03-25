@@ -328,46 +328,10 @@ extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, b
                               void *selfdict, typval_T *basetv, const char *lua_funcname);
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
-/// Get TV_LIST_ITEM_NEXT(fi->fi_list, item).
-listitem_T *nvim_list_item_next(list_T *l, listitem_T *item)
-{
-  return TV_LIST_ITEM_NEXT(l, item);
-}
-
-
-
-// Note: C callers pass cmdidx_T which implicitly converts to int (the Rust parameter type).
-
-/// The "eval" functions have an "evalarg" argument: When NULL or
-/// "evalarg->eval_flags" does not have EVAL_EVALUATE, then the argument is only
-/// parsed but not executed.  The functions may return OK, but the rettv will be
-/// of type VAR_UNKNOWN.  The functions still returns FAIL for a syntax error.
-
-// directly with ga_init/ga_concat/ga_append/ga_clear/xfree (Phase 12).
-
 /// Non-static wrapper for eval_one_expr_in_str -- used by rs_eval_interp_string.
 char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
 {
   return eval_one_expr_in_str(p, gap, evaluate);
-}
-
-/// Get tv->vval.v_string (accessor for Rust interp_string).
-char *nvim_tv_get_vstring(typval_T *tv)
-{
-  return tv->vval.v_string;
-}
-
-/// Set tv->v_type = VAR_STRING and tv->vval.v_string = s (takes ownership of s).
-void nvim_tv_set_vstring_owned(typval_T *tv, char *s)
-{
-  tv->v_type = VAR_STRING;
-  tv->vval.v_string = s;
-}
-
-/// Initialize a typval to VAR_UNKNOWN (thin wrapper; tv_init is static-inline).
-void nvim_tv_init(typval_T *tv)
-{
-  tv_init(tv);
 }
 
 /// Get partial_T->pt_func->uf_name (accessor for Rust).

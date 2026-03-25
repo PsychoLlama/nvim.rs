@@ -80,11 +80,32 @@ impl GArray {
 // C function declarations
 // =============================================================================
 
+/// Minimal repr(C) mirror for typval_T (v_type + v_lock + vval.v_string).
+/// Used only in tv_set_vstring_owned.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct TvForString {
+    v_type: c_int,
+    v_lock: c_int,
+    v_string: *mut c_char,
+}
+
+/// Set v_type = VAR_STRING (2) and vval.v_string = s in a typval_T.
+/// Inlined from nvim_tv_set_vstring_owned.
+///
+/// # Safety
+/// `tv` must be a valid non-null pointer to a typval_T.
+#[inline]
+unsafe fn tv_set_vstring_owned(tv: TypvalPtr, s: *mut c_char) {
+    let t = &mut *tv.cast::<TvForString>();
+    t.v_type = 2; // VAR_STRING
+    t.v_string = s;
+}
+
 extern "C" {
     // typval accessors (eval/typval.c and eval_shim.c)
     fn nvim_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
     fn nvim_tv_set_number(rettv: TypvalPtr, n: i64);
-    fn nvim_tv_set_vstring_owned(rettv: TypvalPtr, s: *mut c_char);
     fn nvim_tv_get_type(tv: TypvalPtr) -> c_int;
     fn nvim_tv_get_list(rettv: TypvalPtr) -> *mut c_void;
 
@@ -566,7 +587,7 @@ pub unsafe extern "C" fn rs_f_string(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
         let tv0 = nvim_tv_idx(argvars, 0);
         let s = encode_tv2string(tv0, std::ptr::null_mut());
         // rettv->vval.v_string = s; but v_type already set via set_type
-        nvim_tv_set_vstring_owned(rettv, s);
+        tv_set_vstring_owned(rettv, s);
     }
 }
 
@@ -812,7 +833,7 @@ pub unsafe extern "C" fn rs_f_strcharpart(
             len = slen as c_int - nbyte;
         }
 
-        nvim_tv_set_vstring_owned(rettv, xmemdupz(p.add(nbyte as usize), len as usize));
+        tv_set_vstring_owned(rettv, xmemdupz(p.add(nbyte as usize), len as usize));
     }
 }
 
@@ -873,7 +894,7 @@ pub unsafe extern "C" fn rs_f_strpart(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
             len = off - n;
         }
 
-        nvim_tv_set_vstring_owned(rettv, xmemdupz(p.add(n as usize), len as usize));
+        tv_set_vstring_owned(rettv, xmemdupz(p.add(n as usize), len as usize));
     }
 }
 
@@ -951,7 +972,7 @@ pub unsafe extern "C" fn rs_f_strtrans(argvars: TypvalPtr, rettv: TypvalPtr, _fp
     unsafe {
         let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_tv_set_vstring_owned(rettv, transstr(s, true));
+        tv_set_vstring_owned(rettv, transstr(s, true));
     }
 }
 
@@ -1064,7 +1085,7 @@ pub unsafe extern "C" fn rs_f_tolower(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
     unsafe {
         let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_tv_set_vstring_owned(rettv, strcase_save(s, false));
+        tv_set_vstring_owned(rettv, strcase_save(s, false));
     }
 }
 
@@ -1077,7 +1098,7 @@ pub unsafe extern "C" fn rs_f_toupper(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
     unsafe {
         let tv0 = nvim_tv_idx(argvars, 0);
         let s = tv_get_string(tv0);
-        nvim_tv_set_vstring_owned(rettv, strcase_save(s, true));
+        tv_set_vstring_owned(rettv, strcase_save(s, true));
     }
 }
 
@@ -1182,7 +1203,7 @@ pub unsafe extern "C" fn rs_f_tr(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: Ev
 
         // Add NUL terminator
         ga_append(&raw mut ga, 0);
-        nvim_tv_set_vstring_owned(rettv, ga.ga_data as *mut c_char);
+        tv_set_vstring_owned(rettv, ga.ga_data as *mut c_char);
     }
 }
 
@@ -1295,7 +1316,7 @@ pub unsafe extern "C" fn rs_f_trim(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: 
             }
         }
 
-        nvim_tv_set_vstring_owned(rettv, xstrnsave(head, tail.offset_from(head) as usize));
+        tv_set_vstring_owned(rettv, xstrnsave(head, tail.offset_from(head) as usize));
     }
 }
 

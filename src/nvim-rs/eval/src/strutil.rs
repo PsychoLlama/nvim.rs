@@ -15,7 +15,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use super::typval::TypvalT as TypvalTRepr;
+use super::typval::{ListItemT, TypvalT as TypvalTRepr};
 
 /// VARNUMBER_MAX is INT64_MAX (verified by _Static_assert in eval.c)
 const VARNUMBER_MAX: i64 = i64::MAX;
@@ -41,10 +41,15 @@ extern "C" {
     #[link_name = "ml_get_buf"]
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
     fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
-    fn nvim_list_item_next(list: *mut c_void, item: *mut c_void) -> *mut c_void; // listitem_T*
     fn nvim_list_item_get_string(item: *mut c_void) -> *const c_char;
     fn xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
+}
+
+/// Inline replacement for nvim_list_item_next (TV_LIST_ITEM_NEXT = li->li_next).
+#[inline]
+unsafe fn list_item_next(_list: *mut c_void, item: *mut c_void) -> *mut c_void {
+    (*item.cast::<ListItemT>()).li_next
 }
 
 /// VAR_UNKNOWN type constant
@@ -147,7 +152,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     while !item.is_null() {
         let s = nvim_list_item_get_string(item);
         *len += strlen(s) as isize + if crlf { 2 } else { 1 };
-        item = nvim_list_item_next(list, item);
+        item = list_item_next(list, item);
     }
 
     if *len == 0 {
@@ -168,7 +173,7 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
 
     let mut item = nvim_list_first_item(list);
     while !item.is_null() {
-        let next = nvim_list_item_next(list, item);
+        let next = list_item_next(list, item);
         let s = nvim_list_item_get_string(item);
         let mut p = s;
         while *p != 0 {
@@ -370,7 +375,6 @@ pub unsafe extern "C" fn rs_string_slice(
 
 extern "C" {
     fn nvim_encode_tv2string_wrapper(tv: *mut c_void) -> *mut c_char;
-    fn nvim_tv_get_vstring(tv: *mut c_void) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
 }
 
@@ -395,7 +399,7 @@ pub unsafe extern "C" fn rs_typval_tostring(arg: *mut c_void, quotes: bool) -> *
         return xstrdup(msg.as_ptr() as *const c_char);
     }
     if !quotes && nvim_tv_get_type(arg) == VAR_STRING_TS {
-        let s = nvim_tv_get_vstring(arg).cast_const();
+        let s = (*arg.cast::<TypvalTRepr>()).vval.v_string.cast_const();
         let s_nn = if s.is_null() {
             EMPTY_STR.as_ptr() as *const c_char
         } else {

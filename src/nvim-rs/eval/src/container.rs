@@ -68,7 +68,7 @@ struct GArray {
 // C extern declarations
 // =============================================================================
 
-use super::typval::{list_item_tv, TypvalT as TypvalTRepr};
+use super::typval::{list_item_tv, ListItemT, TypvalT as TypvalTRepr};
 
 #[inline]
 unsafe fn tv_get_list(tv: *const c_void) -> ListPtr {
@@ -85,18 +85,28 @@ unsafe fn tv_set_dict_ptr(tv: TypvalPtr, d: *mut c_void) {
     (*tv.cast::<TypvalTRepr>()).vval.v_dict = d;
 }
 
+/// Inline replacement for nvim_tv_get_vstring (tv->vval.v_string).
+#[inline]
+unsafe fn tv_get_vstring(tv: TypvalPtr) -> *mut c_char {
+    (*tv.cast::<TypvalTRepr>()).vval.v_string
+}
+
+/// Inline replacement for nvim_list_item_next (TV_LIST_ITEM_NEXT = li->li_next).
+#[inline]
+unsafe fn list_item_next(_l: ListPtr, item: ListItemPtr) -> ListItemPtr {
+    (*item.cast::<ListItemT>()).li_next
+}
+
 extern "C" {
     // typval field accessors (window_shim.c / eval_shim.c)
     fn nvim_eval_tv_idx(argvars: TypvalPtr, i: c_int) -> TypvalPtr;
     fn nvim_tv_get_blob(tv: TypvalPtr) -> BlobPtr;
-    fn nvim_tv_get_vstring(tv: TypvalPtr) -> *mut c_char;
     fn nvim_eval_tv_set_type(tv: TypvalPtr, t: c_int);
     fn nvim_eval_tv_set_string(tv: TypvalPtr, s: *mut c_char);
 
     // list accessors (eval/typval.c, eval_shim.c)
     fn nvim_list_get_lock(l: ListPtr) -> c_int;
     fn nvim_list_get_first(l: *const c_void) -> *const c_void;
-    fn nvim_list_item_next(l: ListPtr, item: ListItemPtr) -> ListItemPtr;
     fn tv_list_find(l: ListPtr, idx: c_int) -> ListItemPtr;
     fn tv_list_reverse(l: ListPtr);
     fn nvim_eval_tv_list_set_ret(rettv: TypvalPtr, l: ListPtr);
@@ -254,7 +264,7 @@ pub unsafe extern "C" fn rs_f_reverse(argvars: TypvalPtr, rettv: TypvalPtr, _fpt
             }
             2 => {
                 // VAR_STRING
-                let s = nvim_tv_get_vstring(tv0);
+                let s = tv_get_vstring(tv0);
                 // VAR_STRING = 2
                 nvim_eval_tv_set_type(rettv, 2);
                 if s.is_null() {
@@ -679,7 +689,7 @@ unsafe fn count_list_impl(l: ListPtr, needle: TypvalPtr, idx: VarNumber, ic: boo
             if tv_equal(item_tv, needle, ic) {
                 n += 1;
             }
-            cur = nvim_list_item_next(l, cur);
+            cur = list_item_next(l, cur);
         }
         n
     }
@@ -734,7 +744,7 @@ pub unsafe extern "C" fn rs_f_count(argvars: TypvalPtr, rettv: TypvalPtr, _fptr:
 
         if !error && t0 == 2 {
             // VAR_STRING = 2
-            let haystack = nvim_tv_get_vstring(tv0);
+            let haystack = tv_get_vstring(tv0);
             let needle = tv_get_string_chk(tv1);
             n = count_string_impl(haystack.cast_const(), needle, ic != 0);
         } else if !error && t0 == VAR_LIST {

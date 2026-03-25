@@ -93,6 +93,28 @@ impl TypevalHandle {
             (*self.0.cast::<TypvalTRepr>()).v_type = vtype;
         }
     }
+
+    /// Get `vval.v_string` from the underlying `typval_T` (inlined from `nvim_tv_get_vstring`).
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a valid non-null pointer to a `typval_T`.
+    #[inline]
+    pub unsafe fn get_vstring(self) -> *mut c_char {
+        (*self.0.cast::<TypvalTRepr>()).vval.v_string
+    }
+
+    /// Set `v_type = VAR_STRING` and `vval.v_string = s` (inlined from `nvim_tv_set_vstring_owned`).
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a valid non-null pointer to a `typval_T`.
+    #[inline]
+    pub unsafe fn set_vstring_owned(self, s: *mut c_char) {
+        let t = &mut *self.0.cast::<TypvalTRepr>();
+        t.v_type = 2; // VAR_STRING
+        t.vval.v_string = s;
+    }
 }
 
 /// Function pointer type matching C `LineGetter`.
@@ -1150,9 +1172,7 @@ extern "C" {
     fn ga_clear(gap: *mut c_void);
     // eval_one_expr_in_str wrapper (stays in C: wraps static C function)
     fn nvim_eval_one_expr_in_str(p: *mut c_char, gap: *mut GArray, evaluate: bool) -> *mut c_char;
-    // TV string field accessor (stays in C: requires typval_T internals)
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
-    fn nvim_tv_set_vstring_owned(tv: TypevalHandle, s: *mut c_char);
+    // (nvim_tv_get_vstring and nvim_tv_set_vstring_owned inlined -- see tv_get_vstring / tv_set_vstring_owned)
 }
 
 /// Evaluate a single or double quoted string possibly containing expressions.
@@ -1192,7 +1212,7 @@ pub unsafe fn eval_interp_string_impl(
                 break 'interp FAIL;
             }
             if evaluate {
-                let s = nvim_tv_get_vstring(tv);
+                let s = tv.get_vstring();
                 ga_concat(ga, s);
                 tv_clear(tv);
             }
@@ -1218,7 +1238,7 @@ pub unsafe fn eval_interp_string_impl(
     // Take ownership of the string data and free the GArray struct.
     let data = (*ga).ga_data.cast::<c_char>();
     xfree(ga.cast::<c_void>());
-    nvim_tv_set_vstring_owned(rettv, data);
+    rettv.set_vstring_owned(data);
     OK
 }
 
@@ -2070,9 +2090,8 @@ pub unsafe fn eval_method_impl(
                     semsg(E_TRAILING_ARG.as_ptr() as *const c_char, *arg);
                 }
                 ret = FAIL;
-            } else if nvim_tv_get_type(ref_tv) == VAR_FUNC && !nvim_tv_get_vstring(ref_tv).is_null()
-            {
-                name = nvim_tv_get_vstring(ref_tv);
+            } else if nvim_tv_get_type(ref_tv) == VAR_FUNC && !ref_tv.get_vstring().is_null() {
+                name = ref_tv.get_vstring();
                 // Steal the string: set ref.vval.v_string = NULL so tv_clear won't free it
                 (*ref_tv.as_ptr().cast::<TypvalTRepr>()).vval.v_string = std::ptr::null_mut();
                 tofree = name;
@@ -3457,7 +3476,7 @@ unsafe fn call_func_rettv_impl(
                 rs_partial_name(pt) as *const c_char
             };
         } else {
-            let vstr = nvim_tv_get_vstring(functv) as *const c_char;
+            let vstr = functv.get_vstring() as *const c_char;
             if vstr.is_null() || *vstr == 0 {
                 nvim_eval::errors::emsg_e_empty_function_name();
                 // jump to theend

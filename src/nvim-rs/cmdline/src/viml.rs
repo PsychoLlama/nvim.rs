@@ -83,7 +83,6 @@ extern "C" {
     );
 
     fn nvim_tv_set_number(tv: TypvalPtr, n: i64);
-    fn nvim_tv_set_vstring_owned(tv: TypvalPtr, s: *mut c_char);
 }
 
 /// Set v_type in a typval_T pointer (v_type is at offset 0).
@@ -92,6 +91,27 @@ extern "C" {
 unsafe fn tv_set_type(tv: TypvalPtr, vtype: c_int) {
     if !tv.is_null() {
         *tv.cast::<c_int>() = vtype;
+    }
+}
+
+/// Minimal repr(C) mirror for typval_T (v_type + v_lock + vval.v_string).
+/// Used only in tv_set_vstring_owned.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct TvForString {
+    v_type: c_int,
+    v_lock: c_int,
+    v_string: *mut c_char,
+}
+
+/// Set v_type = VAR_STRING and vval.v_string = s in a typval_T pointer.
+/// Inlined from nvim_tv_set_vstring_owned.
+#[inline]
+unsafe fn tv_set_vstring_owned(tv: TypvalPtr, s: *mut c_char) {
+    if !tv.is_null() {
+        let t = &mut *tv.cast::<TvForString>();
+        t.v_type = 2; // VAR_STRING
+        t.v_string = s;
     }
 }
 
@@ -165,13 +185,13 @@ pub unsafe extern "C" fn rs_f_getcmdline(
     // - password mode is active, or
     // - not in active cmdline
     if nvim_get_cmdline_star() > 0 || !in_active_cmdline() {
-        nvim_tv_set_vstring_owned(rettv, std::ptr::null_mut());
+        tv_set_vstring_owned(rettv, std::ptr::null_mut());
         return;
     }
     let cmdbuff = nvim_get_ccline_cmdbuff();
     let cmdlen = nvim_get_ccline_cmdlen() as usize;
     let s = xstrnsave(cmdbuff, cmdlen);
-    nvim_tv_set_vstring_owned(rettv, s);
+    tv_set_vstring_owned(rettv, s);
 }
 
 // =============================================================================
@@ -220,7 +240,7 @@ pub unsafe extern "C" fn rs_f_getcmdprompt(
 ) {
     tv_set_type(rettv, VAR_STRING);
     if !in_active_cmdline() {
-        nvim_tv_set_vstring_owned(rettv, std::ptr::null_mut());
+        tv_set_vstring_owned(rettv, std::ptr::null_mut());
         return;
     }
     let prompt = nvim_get_ccline_cmdprompt();
@@ -229,7 +249,7 @@ pub unsafe extern "C" fn rs_f_getcmdprompt(
     } else {
         xstrdup(prompt)
     };
-    nvim_tv_set_vstring_owned(rettv, s);
+    tv_set_vstring_owned(rettv, s);
 }
 
 // =============================================================================
@@ -280,13 +300,13 @@ pub unsafe extern "C" fn rs_f_getcmdtype(
     // Allocate a 1-byte string (xmallocz gives us 1 byte + NUL)
     let buf = xmallocz(1).cast::<c_char>();
     if buf.is_null() {
-        nvim_tv_set_vstring_owned(rettv, std::ptr::null_mut());
+        tv_set_vstring_owned(rettv, std::ptr::null_mut());
         return;
     }
     let c = get_cmdline_type_char();
     // Write the character (safe: buf is valid, allocated with room for 1 byte)
     *buf = c as u8 as c_char;
-    nvim_tv_set_vstring_owned(rettv, buf);
+    tv_set_vstring_owned(rettv, buf);
 }
 
 // =============================================================================

@@ -105,7 +105,6 @@ extern "C" {
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
 
     // eval_expr_* helpers
-    fn nvim_tv_get_vstring(tv: TypevalHandle) -> *mut c_char;
     fn rs_partial_name(pt: *const c_void) -> *mut c_char;
     // Direct call_func for eval_expr_partial/eval_expr_func/call_vim_function
     fn call_func(
@@ -268,7 +267,7 @@ unsafe fn eval_expr_func_impl(
     let expr_h = TypevalHandle::from_ptr(expr as *mut c_void);
     let vtype = (*expr_h.as_ptr().cast::<TypvalTRepr>()).v_type;
     let s: *const c_char = if vtype == VAR_FUNC {
-        nvim_tv_get_vstring(expr_h) as *const c_char
+        expr_h.get_vstring() as *const c_char
     } else {
         tv_get_string_buf_chk(expr_h, buf.as_mut_ptr() as *mut c_char)
     };
@@ -1379,7 +1378,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
             } else if vtype != VAR_STRING {
                 0
             } else {
-                let s = nvim_tv_get_vstring(TypevalHandle::from_ptr(tv));
+                let s = TypevalHandle::from_ptr(tv).get_vstring();
                 if s.is_null() {
                     0
                 } else {
