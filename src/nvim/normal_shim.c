@@ -146,15 +146,6 @@ extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
 extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
 extern void del_from_showcmd(int len);
 
-// Rust dispatch table accessors
-extern int rs_table_get_cmd_flags(int idx);
-extern int rs_table_get_cmd_arg(int idx);
-extern int rs_table_get_cmd_char(int idx);
-extern int rs_table_get_size(void);
-extern int rs_table_get_max_linear(void);
-extern int16_t rs_table_get_cmd_idx(int idx);
-extern void rs_execute_dispatch(int idx, cmdarg_T *cap);
-
 static oparg_T *current_oap = NULL;
 
 // =============================================================================
@@ -401,7 +392,6 @@ unsigned int nvim_get_jop_flags(void) { return jop_flags; }
 
 fmark_T *nvim_mark_get(int name) { return mark_get(curbuf, curwin, NULL, kMarkAll, name); }
 
-
 fmark_T *nvim_get_changelist(int count1) { return get_changelist(curbuf, curwin, count1); }
 
 fmark_T *nvim_get_jumplist(int count1) { return get_jumplist(curwin, count1); }
@@ -503,7 +493,6 @@ int nvim_ins_copychar_val(int lnum) { return ins_copychar(lnum); }
 
 void nvim_set_finish_op(bool val) { finish_op = val; }
 
-
 void nvim_set_VIsual_mode(int val) { VIsual_mode = val; }
 
 void nvim_redraw_curbuf_inverted(void) { redraw_curbuf_later(UPD_INVERTED); }
@@ -527,8 +516,6 @@ int nvim_get_VIsual_reselect(void) { return VIsual_reselect; }
 void nvim_set_VIsual_reselect(bool val) { VIsual_reselect = val; }
 
 void nvim_setmouse(void) { setmouse(); }
-
-// nvim_get_p_smd: deleted (Phase 39, use p_smd directly)
 
 void nvim_check_cursor(void) { check_cursor(curwin); }
 
@@ -791,8 +778,6 @@ bool nvim_findmatchlimit_forward(int64_t maxtravel,
   *out_coladd = pos->coladd;
   return true;
 }
-
-// rs_find_decl extern removed: Rust exports as find_decl via #[export_name].
 
 // =============================================================================
 // Operator handler accessors for Rust FFI
@@ -1331,7 +1316,6 @@ void nvim_set_msg_scroll_val(bool val) { msg_scroll = val; }
 /// Get msg_nowait global.
 bool nvim_get_msg_nowait_val(void) { return msg_nowait; }
 
-
 /// Get in_assert_fails global.
 bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
 
@@ -1357,8 +1341,6 @@ bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
 
 /// fileinfo(false, true, false) call.
 void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
-
-
 
 /// may_clear_sb_text() call.
 void nvim_may_clear_sb_text_call(void) { may_clear_sb_text(); }
@@ -1471,9 +1453,7 @@ void nvim_ui_flush_wrapper(void) { ui_flush(); }
 /// Clear MOD_MASK_SHIFT from mod_mask.
 void nvim_mod_mask_clear_shift(void) { mod_mask &= ~MOD_MASK_SHIFT; }
 
-
 static int normal_execute(VimState *state, int key) { return rs_normal_execute((NormalState *)state, key); }
-
 
 // =============================================================================
 // normal_check accessors for Rust FFI
@@ -1806,7 +1786,6 @@ void nvim_scrollbind_sync_windows(win_T *old_curwin_arg, int vtopline_diff,
   curbuf = old_curbuf_buf;
 }
 
-
 /// Initializes static oparg_T/cmdarg_T and returns cap pointer.
 /// nvim is single-threaded so function-static storage is safe.
 cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
@@ -1820,7 +1799,6 @@ cmdarg_T *nvim_create_temp_cap_for_ident(int c1, int c2)
   ca.nchar = c2;
   return &ca;
 }
-
 
 void normal_cmd(oparg_T *oap, bool toplevel)
 {
@@ -1858,7 +1836,6 @@ char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 
 /// Set g_tag_at_cursor.
 void nvim_ident_set_g_tag_at_cursor(bool val) { g_tag_at_cursor = val; }
-
 
 // =============================================================================
 // Dispatch table handler accessors (nv_addsub, nv_colon, nv_record, nv_paste, nv_event)
@@ -1992,7 +1969,6 @@ size_t rs_find_ident_under_cursor(char **text, int find_type)
                               curwin->w_cursor.col, text, NULL, find_type);
 }
 
-
 /// Get length of cursor line suffix (strlen(get_cursor_pos_ptr())).
 int nvim_get_cursor_pos_ptr_len(void) { return (int)strlen(get_cursor_pos_ptr()); }
 
@@ -2105,7 +2081,6 @@ void nvim_oap_swap_start_end(oparg_T *oap) {
 void nvim_set_resel_VIsual_mode(int val) { resel_VIsual_mode = val; }
 void nvim_set_resel_VIsual_vcol(int val) { resel_VIsual_vcol = val; }
 void nvim_set_resel_VIsual_line_count(int val) { resel_VIsual_line_count = val; }
-
 
 /// Set oap->start = VIsual.
 void nvim_oap_set_start_from_VIsual(oparg_T *oap) {
