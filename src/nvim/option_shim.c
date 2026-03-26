@@ -1,19 +1,3 @@
-// User-settable options. Checklist for adding a new option:
-// - Put it in options.lua
-// - For a global option: Add a variable for it in option_vars.h.
-// - For a buffer or window local option:
-//   - Add a variable to the window or buffer struct in buffer_defs.h.
-//   - For a window option, add some code to copy_winopt().
-//   - For a window string option, add code to check_winopt()
-//     and clear_winopt(). If setting the option needs parsing,
-//     add some code to didset_window_options().
-//   - For a buffer option, add some code to buf_copy_options().
-//   - For a buffer string option, add code to check_buf_options().
-// - If it's a numeric option, add any necessary bounds checks to check_num_option_bounds().
-// - If it's a list of flags, add some code in do_set(), search for WW_ALL.
-// - Add documentation! "desc" in options.lua, and any other related places.
-// - Add an entry in runtime/scripts/optwin.lua.
-
 #define IN_OPTION_C
 #include <assert.h>
 #include <inttypes.h>
@@ -31,7 +15,6 @@
 #include "nvim/assert_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
-#include "nvim/buffer.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/cmdexpand.h"
@@ -139,17 +122,9 @@ int nvim_verbose_check_and_open(void) {
 }
 
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
-
-// Window diff accessor
 int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
-
-// Window accessor for view height (option module specific)
 int nvim_option_win_get_view_height(win_T *win) { return win ? win->w_view_height : 0; }
-
-// Window variable pointer accessors
 const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
-
-// Window briopt accessors and setters
 int nvim_win_get_briopt_list(win_T *win) { return win ? win->w_briopt_list : 0; }
 const char *nvim_win_get_p_briopt(win_T *win) { return win ? win->w_p_briopt : NULL; }
 void nvim_win_set_briopt_shift(win_T *win, int val) { if (win) { win->w_briopt_shift = val; } }
@@ -157,14 +132,10 @@ void nvim_win_set_briopt_min(win_T *win, int val) { if (win) { win->w_briopt_min
 void nvim_win_set_briopt_sbr(win_T *win, int val) { if (win) { win->w_briopt_sbr = (val != 0); } }
 void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_list = val; } }
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
-
-// Window accessors for display callbacks
 const char *nvim_option_win_get_stc(win_T *win) { return win ? (const char *)win->w_p_stc : NULL; }
 void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidth_line_count = value; }
 int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
-
-// Buffer accessors for behavior callbacks
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
 void nvim_option_buf_set_modified_was_set(buf_T *buf, int val) { if (buf) buf->b_modified_was_set = val; }
@@ -175,32 +146,22 @@ int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
 void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 bool parse_border_opt(char *border_opt);  // defined in optionstr.c
-
-// Iterate callback for all tab windows
 void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     callback(wp);
   }
 }
-
-// Iterate callback for all buffers (for undofile and paste callbacks)
 void nvim_for_all_buffers(void (*callback)(buf_T *)) {
   FOR_ALL_BUFFERS(bp) {
     callback(bp);
   }
 }
-
-// Buffer field accessors for undofile callback
 int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
 int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
-
-// Buflisted callback accessors
 int nvim_buf_get_p_bl(buf_T *buf) { return buf ? buf->b_p_bl : 0; }
 void nvim_apply_autocmds_buf_event(int event, buf_T *buf) {
   apply_autocmds((event_T)event, NULL, NULL, true, buf);
 }
-
-// Previewwindow callback accessors and helpers
 int nvim_win_get_p_pvw(win_T *win) { return win ? win->w_p_pvw : 0; }
 void nvim_win_set_p_pvw(win_T *win, int val) { if (win) win->w_p_pvw = val != 0; }
 void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud) {
@@ -208,17 +169,10 @@ void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud)
     callback(wp, ud);
   }
 }
-// Spell callback accessor
 int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
-
-// Shiftwidth/tabstop callback accessors
 void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
 OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
-
-// Pumblend accessors
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
-
-// Winblend accessors
 void nvim_callback_win_clamp_winbl(win_T *win) {
   if (win) {
     if (win->w_p_winbl > 100) win->w_p_winbl = 100;
@@ -228,47 +182,30 @@ void nvim_callback_win_clamp_winbl(win_T *win) {
 void nvim_callback_win_set_hl_needs_update(win_T *win, int value) {
   if (win) win->w_hl_needs_update = (value != 0);
 }
-
-// Scrollbind accessor
 void nvim_callback_win_set_scbind_pos(win_T *win, int value) {
   if (win) win->w_scbind_pos = value;
 }
-
 // Dereference varp as char** to get the current string value
 const char *nvim_optset_get_varp_str(const void *args)
 {
   char **varp = (char **)((const optset_T *)args)->os_varp;
   return varp ? *varp : NULL;
 }
-// Return os_errbuf for listflag error formatting
 char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)->os_errbuf; }
-// Return os_errbuflen for listflag error formatting
 size_t nvim_optset_get_errbuflen(const void *args) { return ((const optset_T *)args)->os_errbuflen; }
-// Wrappers for side-effect functions
 int nvim_call_briopt_check_win(const char *val, win_T *win) { return briopt_check(val, win) == OK ? 1 : 0; }
-// Return address of win->w_p_briopt for varp comparison
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
-// Return varp from optset_T (as void*)
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
-
-// Return os_newval.string.data from optset_T
 const char *nvim_optset_get_newval_str(const void *args) { return ((const optset_T *)args)->os_newval.string.data; }
-// Buffer-local bkc accessors
 unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
 void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; }
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
-// Window-local spo_flags accessors
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
-// Pointer accessors for option value arrays (return pointer to NULL-terminated array)
-
-// Window ns_hl_winhl accessors
 int nvim_win_get_ns_hl_winhl(win_T *win) { return win->w_ns_hl_winhl; }
 void nvim_win_set_ns_hl_winhl(win_T *win, int val) { win->w_ns_hl_winhl = val; }
 void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
-// Return win->w_p_winhl (current winhighlight string)
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
-// Return address of win->w_p_winhl for varp comparison
 const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
 // Prepare namespace for winhighlight: create if absent, bump hl_valid if existing.
 // Returns the namespace id.
@@ -290,77 +227,44 @@ void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id)
   ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL);
 }
 
-// fill_culopt_flags accessors
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
 void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 
-#define OPTION_COUNT ARRAY_SIZE(options)
-
 #include "option_shim.c.generated.h"
-
-// options[] is initialized in options.generated.h.
-// The options with a NULL variable are 'hidden': a set command for them is
-// ignored and they are not printed.
-
 #include "options.generated.h"
 #include "options_map.generated.h"
 
-// lines_or_columns callback: restore option varp to its old number value
 void nvim_optset_restore_oldval_number(const void *args)
 {
   const optset_T *a = (const optset_T *)args;
   OptVal oldval = (OptVal){ .type = kOptValTypeNumber, .data = a->os_oldval };
   rs_set_option_varp(a->os_idx, a->os_varp, oldval, 0);
 }
-
-// Options array accessor
 vimoption_T *nvim_get_options_array(void) { return options; }
-
-// Option flags accessor
 uint32_t nvim_get_option_flags(OptIndex opt_idx) {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
     return 0;
   }
   return options[opt_idx].flags;
 }
-
-// Option variable pointer accessor
 void *nvim_get_option_var(OptIndex opt_idx) {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
     return NULL;
   }
   return options[opt_idx].var;
 }
-
-// Get p->var from a vimoption_T pointer
 void *nvim_vimoption_get_var(vimoption_T *p) { return p->var; }
-// Get p->flags_var from a vimoption_T pointer (NULL if not set)
 unsigned *nvim_vimoption_get_flags_var_ptr(vimoption_T *p) { return p->flags_var; }
-
-// Get the OptIndex of a vimoption_T by pointer arithmetic against the options array
 OptIndex nvim_get_opt_idx_from_ptr(vimoption_T *p) { return (OptIndex)(p - options); }
-
-// Get sizeof(winopt_T) at runtime (for GLOBAL_WO replication in Rust)
 int nvim_get_sizeof_winopt_T(void) { return (int)sizeof(winopt_T); }
-
-// Returns options[opt_idx].type as c_int for Rust metadata.rs
 int nvim_get_option_type(OptIndex opt_idx) { return (int)options[opt_idx].type; }
-// Returns options[opt_idx].scope_flags as c_int for Rust metadata.rs
 int nvim_get_option_scope_flags(OptIndex opt_idx) { return (int)options[opt_idx].scope_flags; }
-// Returns options[opt_idx].scope_idx[scope] as c_int for Rust metadata.rs
 int nvim_get_option_scope_idx(OptIndex opt_idx, int scope) { return (int)options[opt_idx].scope_idx[scope]; }
-// Returns options[opt_idx].immutable as c_int for Rust metadata.rs
 int nvim_get_option_immutable(OptIndex opt_idx) { return (int)options[opt_idx].immutable; }
-// Returns &options[opt_idx].def_val.data as const void* for Rust metadata.rs
 const void *nvim_get_option_def_val_data_ptr(OptIndex opt_idx) { return &options[opt_idx].def_val.data; }
-// Returns &options[opt_idx].script_ctx as void* for Rust metadata.rs
 void *nvim_get_option_script_ctx_ptr(OptIndex opt_idx) { return &options[opt_idx].script_ctx; }
-
-// Set options[opt_idx].def_val (write accessor for Rust)
 void nvim_set_option_def_val(OptIndex opt_idx, OptVal val) { options[opt_idx].def_val = val; }
-// Returns get_varp(&options[opt_idx]) for check_options loop in Rust
 void *nvim_get_option_varp_for_check(OptIndex opt_idx) { return get_varp(&options[opt_idx]); }
-// Get the cmdheight default value as a number for set_init_tablocal
 int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_val.data.number; }
 
 // Returns 1 if the current user is root (getuid() == ROOT_UID), 0 otherwise.
@@ -373,7 +277,6 @@ int nvim_is_root_user(void)
 #endif
 }
 
-// Option script context accessor
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
     return (sctx_T){ 0 };
@@ -381,7 +284,6 @@ sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) {
   return options[opt_idx].script_ctx;
 }
 
-// Window script context accessor
 sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) {
   if (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
     return (sctx_T){ 0 };
@@ -389,7 +291,6 @@ sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) {
   return win->w_p_script_ctx[opt_idx];
 }
 
-// Buffer script context accessor
 sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
   if (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
     return (sctx_T){ 0 };
@@ -397,7 +298,6 @@ sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
   return buf->b_p_script_ctx[opt_idx];
 }
 
-// set_options_bin helpers: accessors for curbuf binary-save fields
 int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
 void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
 int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
@@ -411,20 +311,14 @@ void nvim_curbuf_set_b_p_ml(int v) { curbuf->b_p_ml = v != 0; }
 int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
 
-// b_p_ep / p_ep accessors (for get_equalprg)
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
-// b_p_ffu / p_ffu accessors (for get_findfunc)
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
-// p_flp / b_p_flp accessors (for get_flp_value)
 const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
-// buf b_p_iminsert/imsearch accessors (for set_iminsert/imsearch_global)
 OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
 OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
-// p_ma / b_p_ma accessors (for reset_modifiable)
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
-// insecure_flag pointer accessors
 uint32_t *nvim_win_get_p_wrap_flags_ptr(win_T *wp) { return &wp->w_p_wrap_flags; }
 uint32_t *nvim_win_get_p_stl_flags_ptr(win_T *wp) { return &wp->w_p_stl_flags; }
 uint32_t *nvim_win_get_p_wbr_flags_ptr(win_T *wp) { return &wp->w_p_wbr_flags; }
@@ -700,7 +594,6 @@ void win_copy_options(win_T *wp_from, win_T *wp_to)
 extern int expand_option_start_col;
 extern bool expand_option_append;
 
-// expand_T field accessors
 int nvim_xp_get_context(expand_T *xp) { return xp->xp_context; }
 void nvim_xp_set_context(expand_T *xp, int val) { xp->xp_context = val; }
 char *nvim_xp_get_pattern(expand_T *xp) { return xp->xp_pattern; }
@@ -711,7 +604,6 @@ int nvim_xp_get_backslash(expand_T *xp) { return xp->xp_backslash; }
 void nvim_xp_set_backslash(expand_T *xp, int val) { xp->xp_backslash = val; }
 char *nvim_xp_get_buf(expand_T *xp) { return xp->xp_buf; }
 
-// options[opt_idx] field accessors for set_context logic
 int nvim_option_has_expand_cb(OptIndex opt_idx)
 {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
@@ -720,8 +612,6 @@ int nvim_option_has_expand_cb(OptIndex opt_idx)
   return options[opt_idx].opt_expand_cb != NULL ? 1 : 0;
 }
 
-// Pointer-comparison accessors: check if options[opt_idx].var == &p_xxx
-// Returns 1 if equal, 0 otherwise.
 int nvim_opt_var_is_p_syn(OptIndex opt_idx) {
   if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) return 0;
   return options[opt_idx].var == &p_syn ? 1 : 0;
@@ -1091,7 +981,6 @@ void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 void nvim_call_free_operatorfunc_option(void) {}
 #endif
 
-// optexpand_T field accessors
 char *nvim_oe_get_opt_value(const optexpand_T *args) { return args->oe_opt_value; }
 const char *nvim_oe_get_set_arg(const optexpand_T *args) { return args->oe_set_arg; }
 bool nvim_oe_get_append(const optexpand_T *args) { return args->oe_append; }
@@ -1101,14 +990,9 @@ expand_T *nvim_oe_get_xp(const optexpand_T *args) { return args->oe_xp; }
 char *nvim_oe_get_varp(const optexpand_T *args) { return args->oe_varp; }
 int nvim_oe_get_idx(const optexpand_T *args) { return (int)args->oe_idx; }
 
-// Option value array accessors for expand_set_str_generic
 const char **nvim_option_get_values(const vimoption_T *opt) { return (const char **)opt->values; }
 size_t nvim_option_get_values_len(const vimoption_T *opt) { return opt->values_len; }
-
-// Window p_lcs accessor
 const char *nvim_win_get_p_lcs(const win_T *win) { return win ? win->w_p_lcs : NULL; }
-
-// Regex match accessors
 bool nvim_get_p_fic(void) { return p_fic; }
 
 bool nvim_regmatch_has_regprog(const void *handle)
