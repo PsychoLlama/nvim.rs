@@ -117,19 +117,13 @@ static const char *wasmerr_to_str(TSWasmErrorKind werr)
 #endif
 
 #ifdef HAVE_WASMTIME
-static int tslua_add_language_from_wasm(lua_State *L)
-{
-  return add_language(L, true);
-}
+static int tslua_add_language_from_wasm(lua_State *L) { return add_language(L, true); }
 #endif
 
 // Creates the language into the internal language map.
 //
 // Returns true if the language is correctly loaded in the language map
-static int tslua_add_language_from_object(lua_State *L)
-{
-  return add_language(L, false);
-}
+static int tslua_add_language_from_object(lua_State *L) { return add_language(L, false); }
 
 static const TSLanguage *load_language_from_object(lua_State *L, const char *path,
                                                    const char *lang_name, const char *symbol)
@@ -575,10 +569,7 @@ static int parser_reset(lua_State *L)
   return 0;
 }
 
-static void range_err(lua_State *L)
-{
-  luaL_error(L, "Ranges can only be made from 6 element long tables or nodes.");
-}
+static void range_err(lua_State *L) { luaL_error(L, "Ranges can only be made from 6 element long tables or nodes."); }
 
 // Use the top of the stack (without popping it) to create a TSRange, it can be
 // either a lua table or a TSNode

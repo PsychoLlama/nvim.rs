@@ -140,9 +140,7 @@ static enum {
   EXP_SIGN_GROUPS,  // expand with name of placed sign groups
 } expand_what;
 
-// =============================================================================
 // Accessor functions for Rust sign crate
-// =============================================================================
 
 /// Get sign by name from the sign map
 sign_T *nvim_sign_map_get(const char *name)
@@ -195,22 +193,13 @@ linenr_T nvim_sign_marktree_lookup_row(buf_T *buf, uint32_t ns, uint32_t id)
 }
 
 /// Get the line count of a buffer (for sign operations).
-linenr_T nvim_sign_buf_line_count(buf_T *buf)
-{
-  return buf ? buf->b_ml.ml_line_count : 0;
-}
+linenr_T nvim_sign_buf_line_count(buf_T *buf) { return buf ? buf->b_ml.ml_line_count : 0; }
 
 /// Push a namespace ID onto the sign_ns kvec.
-void nvim_sign_ns_push(Integer ns)
-{
-  kv_push(sign_ns, ns);
-}
+void nvim_sign_ns_push(Integer ns) { kv_push(sign_ns, ns); }
 
 /// Create a namespace from a C string name.
-int nvim_sign_create_namespace_cstr(const char *name)
-{
-  return (int)nvim_create_namespace(cstr_as_string(name));
-}
+int nvim_sign_create_namespace_cstr(const char *name) { return (int)nvim_create_namespace(cstr_as_string(name)); }
 
 /// Check if a namespace with the given name exists.
 int nvim_sign_namespace_exists(const char *name)
@@ -655,9 +644,7 @@ void nvim_ex_sign_impl(exarg_T *eap)
   }
 }
 
-// =============================================================================
 // Command completion composite accessors
-// =============================================================================
 
 /// Get the n'th sign name from the sign_map.
 char *nvim_sign_get_nth_name(int idx)
@@ -810,9 +797,7 @@ void nvim_set_context_in_sign_cmd_impl(expand_T *xp, char *arg)
   }
 }
 
-// =============================================================================
 // Phase 10: VimL function composite accessors
-// =============================================================================
 
 /// Build info dict for a defined sign — composite accessor.
 dict_T *nvim_sign_get_info_dict_impl(sign_T *sp)

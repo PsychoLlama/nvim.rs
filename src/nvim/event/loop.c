@@ -221,47 +221,24 @@ static void timer_cb(uv_timer_t *handle)
   *timeout_expired = true;
 }
 
-static void timer_close_cb(uv_handle_t *handle)
-{
-  xfree(handle->data);
-}
+static void timer_close_cb(uv_handle_t *handle) { xfree(handle->data); }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Get the events queue from a Loop (accessor for Rust).
-MultiQueue *nvim_loop_get_events(Loop *loop)
-{
-  return loop->events;
-}
+MultiQueue *nvim_loop_get_events(Loop *loop) { return loop->events; }
 
 /// Get the fast_events queue from a Loop (accessor for Rust).
-MultiQueue *nvim_loop_get_fast_events(Loop *loop)
-{
-  return loop->fast_events;
-}
+MultiQueue *nvim_loop_get_fast_events(Loop *loop) { return loop->fast_events; }
 
 /// Check if the loop is closing (accessor for Rust).
-int nvim_loop_is_closing(Loop *loop)
-{
-  return loop->closing ? 1 : 0;
-}
+int nvim_loop_is_closing(Loop *loop) { return loop->closing ? 1 : 0; }
 
 /// Get the thread_events queue from a Loop (accessor for Rust).
-MultiQueue *nvim_loop_get_thread_events(Loop *loop)
-{
-  return loop->thread_events;
-}
+MultiQueue *nvim_loop_get_thread_events(Loop *loop) { return loop->thread_events; }
 
 /// Get the recursive count from a Loop (accessor for Rust).
-int nvim_loop_get_recursive(Loop *loop)
-{
-  return loop->recursive;
-}
+int nvim_loop_get_recursive(Loop *loop) { return loop->recursive; }
 
 /// Get the number of children processes from a Loop (accessor for Rust).
-size_t nvim_loop_children_count(Loop *loop)
-{
-  return kv_size(loop->children);
-}
+size_t nvim_loop_children_count(Loop *loop) { return kv_size(loop->children); }

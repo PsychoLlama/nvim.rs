@@ -391,16 +391,10 @@ static void buf_win_common(typval_T *argvars, typval_T *rettv, bool get_nr)
 }
 
 /// "bufwinid(nr)" function
-void f_bufwinid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  buf_win_common(argvars, rettv, false);
-}
+void f_bufwinid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { buf_win_common(argvars, rettv, false); }
 
 /// "bufwinnr(nr)" function
-void f_bufwinnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  buf_win_common(argvars, rettv, true);
-}
+void f_bufwinnr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { buf_win_common(argvars, rettv, true); }
 
 /// "deletebufline()" function
 void f_deletebufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -633,16 +627,10 @@ static void getbufline(typval_T *argvars, typval_T *rettv, bool retlist)
 }
 
 /// "getbufline()" function
-void f_getbufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getbufline(argvars, rettv, true);
-}
+void f_getbufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getbufline(argvars, rettv, true); }
 
 /// "getbufoneline()" function
-void f_getbufoneline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  getbufline(argvars, rettv, false);
-}
+void f_getbufoneline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getbufline(argvars, rettv, false); }
 
 /// "getline(lnum, [end])" function
 void f_getline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -663,10 +651,7 @@ void f_getline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "setbufline()" function
-void f_setbufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  buf_set_append_line(argvars, rettv, false);
-}
+void f_setbufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { buf_set_append_line(argvars, rettv, false); }
 
 /// "setline()" function
 void f_setline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

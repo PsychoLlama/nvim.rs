@@ -25,10 +25,7 @@ static void *default_malloc(size_t size, void *allocdata)
   return ptr;
 }
 
-static void default_free(void *ptr, void *allocdata)
-{
-  xfree(ptr);
-}
+static void default_free(void *ptr, void *allocdata) { xfree(ptr); }
 
 static VTermAllocatorFunctions default_allocator = {
   .malloc = &default_malloc,
@@ -96,15 +93,9 @@ void vterm_free(VTerm *vt)
   vterm_allocator_free(vt, vt);
 }
 
-void *vterm_allocator_malloc(VTerm *vt, size_t size)
-{
-  return (*vt->allocator->malloc)(size, vt->allocdata);
-}
+void *vterm_allocator_malloc(VTerm *vt, size_t size) { return (*vt->allocator->malloc)(size, vt->allocdata); }
 
-void vterm_allocator_free(VTerm *vt, void *ptr)
-{
-  (*vt->allocator->free)(ptr, vt->allocdata);
-}
+void vterm_allocator_free(VTerm *vt, void *ptr) { (*vt->allocator->free)(ptr, vt->allocdata); }
 
 void vterm_get_size(const VTerm *vt, int *rowsp, int *colsp)
 {
@@ -130,10 +121,7 @@ void vterm_set_size(VTerm *vt, int rows, int cols)
   }
 }
 
-void vterm_set_utf8(VTerm *vt, int is_utf8)
-{
-  vt->mode.utf8 = (unsigned)is_utf8;
-}
+void vterm_set_utf8(VTerm *vt, int is_utf8) { vt->mode.utf8 = (unsigned)is_utf8; }
 
 void vterm_output_set_callback(VTerm *vt, VTermOutputCallback *func, void *user)
 {
@@ -157,10 +145,7 @@ void vterm_push_output_bytes(VTerm *vt, const char *bytes, size_t len)
 }
 
 /// Get the ctrl8bit mode flag (for Rust FFI)
-int nvim_vterm_get_ctrl8bit(const VTerm *vt)
-{
-  return (int)vt->mode.ctrl8bit;
-}
+int nvim_vterm_get_ctrl8bit(const VTerm *vt) { return (int)vt->mode.ctrl8bit; }
 
 /// Push a control sequence with a pre-built body string (for Rust FFI, no varargs)
 void nvim_vterm_push_output_ctrl(VTerm *vt, uint8_t ctrl, const char *body, size_t bodylen)

@@ -47,10 +47,7 @@ static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting starte
 #include "os/input.c.generated.h"
 
 /// C accessor for blocking static.
-int nvim_get_input_blocking(void)
-{
-  return blocking;
-}
+int nvim_get_input_blocking(void) { return blocking; }
 
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
@@ -197,10 +194,7 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
 }
 
 // Check if a character is available for reading
-bool os_char_avail(void)
-{
-  return inbuf_poll(0, NULL) == kTrue;
-}
+bool os_char_avail(void) { return inbuf_poll(0, NULL) == kTrue; }
 
 /// Poll for fast events. `got_int` will be set to `true` if CTRL-C was typed.
 ///
@@ -254,15 +248,9 @@ void veryfast_breakcheck(void)
   }
 }
 
-size_t input_available(void)
-{
-  return (size_t)(input_write_pos - input_read_pos);
-}
+size_t input_available(void) { return (size_t)(input_write_pos - input_read_pos); }
 
-static size_t input_space(void)
-{
-  return (size_t)(input_buffer + INPUT_BUFFER_SIZE - input_write_pos);
-}
+static size_t input_space(void) { return (size_t)(input_buffer + INPUT_BUFFER_SIZE - input_write_pos); }
 
 void input_enqueue_raw(const char *data, size_t size)
 {

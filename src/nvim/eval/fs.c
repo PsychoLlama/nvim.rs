@@ -573,16 +573,10 @@ static void findfilendir(typval_T *argvars, typval_T *rettv, int find_what)
 }
 
 /// "finddir({fname}[, {path}[, {count}]])" function
-void f_finddir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  findfilendir(argvars, rettv, FINDFILE_DIR);
-}
+void f_finddir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { findfilendir(argvars, rettv, FINDFILE_DIR); }
 
 /// "findfile({fname}[, {path}[, {count}]])" function
-void f_findfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  findfilendir(argvars, rettv, FINDFILE_FILE);
-}
+void f_findfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { findfilendir(argvars, rettv, FINDFILE_FILE); }
 
 /// "fnamemodify({fname}, {mods})" function
 void f_fnamemodify(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1447,16 +1441,10 @@ static void read_file_or_blob(typval_T *argvars, typval_T *rettv, bool always_bl
 }
 
 /// "readblob()" function
-void f_readblob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  read_file_or_blob(argvars, rettv, true);
-}
+void f_readblob(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_file_or_blob(argvars, rettv, true); }
 
 /// "readfile()" function
-void f_readfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  read_file_or_blob(argvars, rettv, false);
-}
+void f_readfile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { read_file_or_blob(argvars, rettv, false); }
 
 /// "rename({from}, {to})" function
 void f_rename(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1843,7 +1831,4 @@ void f_browse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "browsedir(title, initdir)" function
-void f_browsedir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  f_browse(argvars, rettv, fptr);
-}
+void f_browsedir(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { f_browse(argvars, rettv, fptr); }

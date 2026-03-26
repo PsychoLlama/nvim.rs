@@ -43,9 +43,7 @@
 
 #include "indent_ffi.c.generated.h"
 
-// =============================================================================
 // Static assertions for constants used in Rust code
-// =============================================================================
 
 _Static_assert(SIN_CHANGED == 1, "SIN_CHANGED must be 1");
 _Static_assert(SIN_INSERT == 2, "SIN_INSERT must be 2");
@@ -58,9 +56,7 @@ _Static_assert(BL_FIX == 4, "BL_FIX must be 4");
 _Static_assert(UPD_INVERTED == 20, "UPD_INVERTED must be 20");
 _Static_assert(CMOD_LOCKMARKS == 0x0800, "CMOD_LOCKMARKS must be 0x0800");
 
-// =============================================================================
 // Phase 1: set_indent() accessors
-// =============================================================================
 
 bool nvim_curbuf_get_p_et(void) { return curbuf->b_p_et; }
 
@@ -70,9 +66,7 @@ linenr_T nvim_get_saved_cursor_lnum(void) { return saved_cursor.lnum; }
 colnr_T nvim_get_saved_cursor_col(void) { return saved_cursor.col; }
 void nvim_set_saved_cursor_col(colnr_T val) { saved_cursor.col = val; }
 
-// =============================================================================
 // Phase 3: get_breakindent_win() accessors
-// =============================================================================
 
 // These accessors already exist in other files (window.c, move.c, message.c, option.c):
 //   nvim_win_get_view_width, nvim_win_get_buffer, nvim_win_get_p_list,
@@ -123,9 +117,7 @@ int nvim_breakindent_flp_match(win_T *wp, const char *pat, const char *line,
   return matched;
 }
 
-// =============================================================================
 // Phase 4: ins_try_si() accessors
-// =============================================================================
 
 // These accessors already exist in other files:
 //   nvim_get_did_si, nvim_get_can_si, nvim_get_can_si_back (change_ffi.c)
@@ -149,9 +141,7 @@ void nvim_change_indent(int type, int amount, int round, bool call_changed_bytes
   change_indent(type, amount, round, call_changed_bytes);
 }
 
-// =============================================================================
 // Phase 5: op_reindent() accessors
-// =============================================================================
 
 // Existing accessors from other files:
 //   nvim_get_curwin_cursor_lnum, nvim_set_curwin_cursor_lnum (change_ffi.c/insexpand.c)
@@ -171,10 +161,7 @@ int nvim_u_savecommon_range(linenr_T start, linenr_T count)
   return u_savecommon(curbuf, start - 1, start + count, start + count, false);
 }
 
-void nvim_smsg_lines_to_indent(int64_t i)
-{
-  smsg(0, _("%" PRId64 " lines to indent... "), i);
-}
+void nvim_smsg_lines_to_indent(int64_t i) { smsg(0, _("%" PRId64 " lines to indent... "), i); }
 
 void nvim_smsg_lines_indented(int64_t count)
 {
@@ -201,9 +188,7 @@ void nvim_oap_set_marks(oparg_T *oap)
 /// Compare a function pointer to get_lisp_indent.
 bool nvim_is_lisp_indent(Indenter how) { return how == get_lisp_indent; }
 
-// =============================================================================
 // Phase 6: change_indent() accessors
-// =============================================================================
 
 _Static_assert(MODE_INSERT == 0x10, "MODE_INSERT must be 0x10");
 _Static_assert(REPLACE_FLAG == 0x100, "REPLACE_FLAG must be 0x100");
@@ -224,16 +209,10 @@ void nvim_curwin_set_w_set_curswant(bool val) { curwin->w_set_curswant = val; }
 void nvim_curwin_set_w_virtcol(colnr_T val) { curwin->w_virtcol = val; }
 
 // ml_replace for curwin cursor line
-int nvim_ml_replace_curline(char *line, bool copy)
-{
-  return ml_replace(curwin->w_cursor.lnum, line, copy);
-}
+int nvim_ml_replace_curline(char *line, bool copy) { return ml_replace(curwin->w_cursor.lnum, line, copy); }
 
 // ins_str wrapper: inserts `len` bytes from `ptr` at cursor
-void nvim_ins_str(char *ptr, size_t len)
-{
-  ins_str(ptr, len);
-}
+void nvim_ins_str(char *ptr, size_t len) { ins_str(ptr, len); }
 
 /// Advance cursor in `line` until reaching `target_vcol`.
 /// Returns the byte offset in line, and writes final vcol to *out_vcol.
@@ -265,23 +244,15 @@ int nvim_advance_to_vcol(char *line, int target_vcol, int *out_vcol)
 // Get curbuf handle for extmark_splice_cols
 buf_T *nvim_indent_get_curbuf(void) { return curbuf; }
 
-// =============================================================================
 // Phase 7: ex_retab() accessors
-// =============================================================================
 
 _Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID must be 40");
 
 bool nvim_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
 
-int nvim_u_save(linenr_T top, linenr_T bot)
-{
-  return u_save(top, bot);
-}
+int nvim_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
 
-colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol)
-{
-  return win_chartabsize(curwin, ptr, vcol);
-}
+colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol) { return win_chartabsize(curwin, ptr, vcol); }
 
 colnr_T nvim_curwin_get_w_curswant(void) { return (colnr_T)curwin->w_curswant; }
 
@@ -296,14 +267,9 @@ void nvim_set_option_direct_vts(const char *str)
   set_option_direct(kOptVartabstop, CSTR_AS_OPTVAL(str), OPT_LOCAL, 0);
 }
 
-void nvim_emsg_interr(void)
-{
-  emsg(_(e_interr));
-}
+void nvim_emsg_interr(void) { emsg(_(e_interr)); }
 
-// =============================================================================
 // Phase 8: get_lisp_indent() accessors
-// =============================================================================
 
 /// Compute vcol of the character at byte offset `col` in `line`, using
 /// the charsize machinery for window `wp` at line `lnum`.

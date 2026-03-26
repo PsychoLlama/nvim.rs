@@ -1638,10 +1638,7 @@ static void dummy_timer_due_cb(TimeWatcher *tw, void *data)
 }
 
 /// Dummy timer close callback. Used by f_wait().
-static void dummy_timer_close_cb(TimeWatcher *tw, void *data)
-{
-  xfree(tw);
-}
+static void dummy_timer_close_cb(TimeWatcher *tw, void *data) { xfree(tw); }
 
 /// "wait(timeout, condition[, interval])" function
 static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4354,10 +4351,7 @@ void nvim_eval_max_min(typval_T *argvars, typval_T *rettv, bool domax)
 
   rettv->vval.v_number = n;
 }
-int nvim_eval_searchpair_cmn(typval_T *argvars)
-{
-  return (int)searchpair_cmn(argvars, NULL);
-}
+int nvim_eval_searchpair_cmn(typval_T *argvars) { return (int)searchpair_cmn(argvars, NULL); }
 void nvim_eval_set_position(typval_T *argvars, typval_T *rettv, bool charpos)
 {
   colnr_T curswant = -1;
@@ -4460,10 +4454,7 @@ void nvim_eval_set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 }
 
 // Full-body wrappers for copy/deepcopy
-void nvim_eval_copy(typval_T *argvars, typval_T *rettv)
-{
-  var_item_copy(NULL, &argvars[0], rettv, false, 0);
-}
+void nvim_eval_copy(typval_T *argvars, typval_T *rettv) { var_item_copy(NULL, &argvars[0], rettv, false, 0); }
 void nvim_eval_deepcopy(typval_T *argvars, typval_T *rettv)
 {
   if (tv_check_for_opt_bool_arg(argvars, 1) == FAIL) {
@@ -4625,10 +4616,7 @@ void nvim_eval_len(typval_T *argvars, typval_T *rettv)
 }
 
 
-void nvim_eval_execute(typval_T *argvars, typval_T *rettv)
-{
-  execute_common(argvars, rettv, 0);
-}
+void nvim_eval_execute(typval_T *argvars, typval_T *rettv) { execute_common(argvars, rettv, 0); }
 
 void nvim_eval_flatten(typval_T *argvars, typval_T *rettv, bool make_copy)
 {
@@ -4941,10 +4929,7 @@ void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
 }
 
 
-void nvim_eval_api_info(typval_T *argvars, typval_T *rettv)
-{
-  object_to_vim(api_metadata(), rettv, NULL);
-}
+void nvim_eval_api_info(typval_T *argvars, typval_T *rettv) { object_to_vim(api_metadata(), rettv, NULL); }
 
 void nvim_eval_byte2line(typval_T *argvars, typval_T *rettv)
 {
@@ -5053,10 +5038,7 @@ void nvim_eval_wildmenumode(typval_T *argvars, typval_T *rettv)
   }
 }
 
-void nvim_eval_timer_stopall(typval_T *argvars, typval_T *rettv)
-{
-  timer_stop_all();
-}
+void nvim_eval_timer_stopall(typval_T *argvars, typval_T *rettv) { timer_stop_all(); }
 
 void nvim_eval_synIDtrans(typval_T *argvars, typval_T *rettv)
 {

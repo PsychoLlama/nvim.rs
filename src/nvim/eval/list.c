@@ -401,27 +401,15 @@ static void filter_map(typval_T *argvars, typval_T *rettv, filtermap_T filtermap
 }
 
 /// "filter()" function
-void f_filter(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  filter_map(argvars, rettv, FILTERMAP_FILTER);
-}
+void f_filter(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { filter_map(argvars, rettv, FILTERMAP_FILTER); }
 
 /// "map()" function
-void f_map(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  filter_map(argvars, rettv, FILTERMAP_MAP);
-}
+void f_map(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { filter_map(argvars, rettv, FILTERMAP_MAP); }
 
 /// "mapnew()" function
-void f_mapnew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  filter_map(argvars, rettv, FILTERMAP_MAPNEW);
-}
+void f_mapnew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { filter_map(argvars, rettv, FILTERMAP_MAPNEW); }
 
 /// "foreach()" function
-void f_foreach(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  filter_map(argvars, rettv, FILTERMAP_FOREACH);
-}
+void f_foreach(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { filter_map(argvars, rettv, FILTERMAP_FOREACH); }
 
 

@@ -84,10 +84,7 @@ static const char e_multiple_finally[] = N_("E607: Multiple :finally");
    || (cstack->cs_idx > 0 \
        && !(cstack->cs_flags[cstack->cs_idx - 1] & CSF_ACTIVE)))
 
-static void discard_pending_return(typval_T *p)
-{
-  tv_free(p);
-}
+static void discard_pending_return(typval_T *p) { tv_free(p); }
 
 // cause_abort is now owned by Rust (rs_get_cause_abort/rs_set_cause_abort).
 // When several errors appear in a row, setting "force_abort" is delayed until
@@ -1074,25 +1071,14 @@ static char *get_end_emsg(cstack_T *cstack)
   return _(e_endif);
 }
 
-// =============================================================================
 // Rust FFI accessor functions
-// =============================================================================
 
 /// C accessor for the global force_abort variable (used by Rust FFI).
-int nvim_get_force_abort(void)
-{
-  return force_abort ? 1 : 0;
-}
+int nvim_get_force_abort(void) { return force_abort ? 1 : 0; }
 
 /// C accessor for the global did_throw variable (used by Rust FFI).
-int nvim_get_did_throw(void)
-{
-  return did_throw ? 1 : 0;
-}
+int nvim_get_did_throw(void) { return did_throw ? 1 : 0; }
 
 /// C accessor for the global trylevel variable (used by Rust FFI).
-int nvim_get_trylevel(void)
-{
-  return trylevel;
-}
+int nvim_get_trylevel(void) { return trylevel; }
 

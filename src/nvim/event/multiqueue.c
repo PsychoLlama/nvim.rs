@@ -86,10 +86,7 @@ typedef struct {
 static Event NILEVENT = { .handler = NULL, .argv = { NULL } };
 
 /// Creates a new root (parentless) queue, which may gain child queues via `multiqueue_new_child`.
-MultiQueue *multiqueue_new(PutCallback on_put, void *data)
-{
-  return _multiqueue_new(NULL, on_put, data);
-}
+MultiQueue *multiqueue_new(PutCallback on_put, void *data) { return _multiqueue_new(NULL, on_put, data); }
 
 /// Creates a new queue as a child of a `parent` queue.
 MultiQueue *multiqueue_new_child(MultiQueue *parent)
@@ -129,10 +126,7 @@ void multiqueue_free(MultiQueue *self)
 }
 
 /// Removes the next item and returns its Event.
-Event multiqueue_get(MultiQueue *self)
-{
-  return multiqueue_empty(self) ? NILEVENT : multiqueue_remove(self);
-}
+Event multiqueue_get(MultiQueue *self) { return multiqueue_empty(self) ? NILEVENT : multiqueue_remove(self); }
 
 void multiqueue_put_event(MultiQueue *self, Event event)
 {
@@ -284,30 +278,16 @@ static void multiqueue_oneshot_event(void **argv)
   }
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Check if a MultiQueue is empty (accessor for Rust).
-int nvim_multiqueue_empty(MultiQueue *mq)
-{
-  return multiqueue_empty(mq) ? 1 : 0;
-}
+int nvim_multiqueue_empty(MultiQueue *mq) { return multiqueue_empty(mq) ? 1 : 0; }
 
 /// Get the headtail QUEUE pointer from a MultiQueue (accessor for Rust).
-QUEUE *nvim_multiqueue_get_headtail(MultiQueue *mq)
-{
-  return &mq->headtail;
-}
+QUEUE *nvim_multiqueue_get_headtail(MultiQueue *mq) { return &mq->headtail; }
 
 /// Get the size field from a MultiQueue (accessor for Rust).
-size_t nvim_multiqueue_get_size_field(MultiQueue *mq)
-{
-  return mq->size;
-}
+size_t nvim_multiqueue_get_size_field(MultiQueue *mq) { return mq->size; }
 
 /// Check if a MultiQueue has a parent (accessor for Rust).
-int nvim_multiqueue_has_parent(MultiQueue *mq)
-{
-  return mq->parent != NULL ? 1 : 0;
-}
+int nvim_multiqueue_has_parent(MultiQueue *mq) { return mq->parent != NULL ? 1 : 0; }

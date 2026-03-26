@@ -396,33 +396,19 @@ ptrdiff_t file_skip(FileDescriptor *const fp, const size_t size)
   return (ptrdiff_t)(size - skip_remaining);
 }
 
-// =============================================================================
 // Wrapper functions for Rust FFI (nvim_file_* prefix)
-// =============================================================================
 
 /// Skip bytes in file (wrapper for Rust FFI)
-ptrdiff_t nvim_file_skip(FileDescriptor *fp, size_t offset)
-{
-  return file_skip(fp, offset);
-}
+ptrdiff_t nvim_file_skip(FileDescriptor *fp, size_t offset) { return file_skip(fp, offset); }
 
 /// Check if at end of file (wrapper for Rust FFI)
-int nvim_file_eof(FileDescriptor *fp)
-{
-  return fp->eof ? 1 : 0;
-}
+int nvim_file_eof(FileDescriptor *fp) { return fp->eof ? 1 : 0; }
 
 /// Close file (wrapper for Rust FFI)
-int nvim_file_close(FileDescriptor *fp, int do_fsync)
-{
-  return file_close(fp, do_fsync != 0);
-}
+int nvim_file_close(FileDescriptor *fp, int do_fsync) { return file_close(fp, do_fsync != 0); }
 
 /// Read from file (wrapper for Rust FFI)
-ptrdiff_t nvim_file_read(FileDescriptor *fp, char *buf, size_t size)
-{
-  return file_read(fp, buf, size);
-}
+ptrdiff_t nvim_file_read(FileDescriptor *fp, char *buf, size_t size) { return file_read(fp, buf, size); }
 
 /// Get available space for writing (wrapper for Rust FFI)
 size_t nvim_file_space(FileDescriptor *fp)
@@ -434,7 +420,4 @@ size_t nvim_file_space(FileDescriptor *fp)
 }
 
 /// Flush file (wrapper for Rust FFI)
-int nvim_file_flush(FileDescriptor *fp)
-{
-  return file_flush(fp);
-}
+int nvim_file_flush(FileDescriptor *fp) { return file_flush(fp); }

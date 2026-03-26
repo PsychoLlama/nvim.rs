@@ -180,10 +180,7 @@ bool ui_override(void)
 }
 
 /// Gets the number of UIs connected to this server.
-size_t ui_active(void)
-{
-  return ui_count;
-}
+size_t ui_active(void) { return ui_count; }
 
 void ui_refresh(void)
 {
@@ -279,15 +276,9 @@ bool ui_pum_get_pos(double *pwidth, double *pheight, double *prow, double *pcol)
   return false;
 }
 
-static void ui_refresh_event(void **argv)
-{
-  ui_refresh();
-}
+static void ui_refresh_event(void **argv) { ui_refresh(); }
 
-void ui_schedule_refresh(void)
-{
-  multiqueue_put(resize_events, ui_refresh_event, NULL);
-}
+void ui_schedule_refresh(void) { multiqueue_put(resize_events, ui_refresh_event, NULL); }
 
 void ui_default_colors_set(void)
 {
@@ -487,10 +478,7 @@ void ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endc
   }
 }
 
-void ui_cursor_goto(int new_row, int new_col)
-{
-  ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col);
-}
+void ui_cursor_goto(int new_row, int new_col) { ui_grid_cursor_goto(DEFAULT_GRID_HANDLE, new_row, new_col); }
 
 void ui_grid_cursor_goto(handle_T grid_handle, int new_row, int new_col)
 {
@@ -514,10 +502,7 @@ void ui_check_cursor_grid(handle_T grid_handle)
   }
 }
 
-void ui_mode_info_set(void)
-{
-  pending_mode_info_update = true;
-}
+void ui_mode_info_set(void) { pending_mode_info_update = true; }
 
 // C accessors for cursor position (used by Rust)
 int nvim_get_ui_cursor_row(void) { return cursor_row; }
@@ -816,8 +801,5 @@ void ui_remove_cb(uint32_t ns_id, bool checkerr)
 }
 
 /// Get number of active UIs (used by Rust FFI)
-size_t nvim_ui_active(void)
-{
-  return ui_count;
-}
+size_t nvim_ui_active(void) { return ui_count; }
 

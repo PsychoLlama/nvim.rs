@@ -90,10 +90,7 @@ int nvim_buf_marktree_n_keys(buf_T *buf) { return (int)buf->b_marktree->n_keys; 
 int nvim_buf_meta_total(buf_T *buf, int meta_type) { return (int)buf_meta_total(buf, meta_type); }
 
 bool nvim_get_autocmd_busy(void) { return autocmd_busy; }
-void apply_autocmds_filechangedro(buf_T *buf)
-{
-  apply_autocmds(EVENT_FILECHANGEDRO, NULL, NULL, false, buf);
-}
+void apply_autocmds_filechangedro(buf_T *buf) { apply_autocmds(EVENT_FILECHANGEDRO, NULL, NULL, false, buf); }
 int nvim_get_highlight_match(void) { return highlight_match; }
 int nvim_curbufIsChanged(void) { return curbufIsChanged(); }
 int nvim_msg_silent(void) { return msg_silent; }
@@ -215,10 +212,7 @@ win_T *nvim_for_all_tab_windows_next(void *handle)
   return iter->wp;
 }
 
-void nvim_for_all_tab_windows_end(void *handle)
-{
-  xfree(handle);
-}
+void nvim_for_all_tab_windows_end(void *handle) { xfree(handle); }
 
 win_T *nvim_curtab_first_win(void) { return firstwin; }
 win_T *nvim_win_get_next_in_tab(win_T *wp) { return wp->w_next; }
@@ -313,10 +307,7 @@ size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const 
 
 const char *nvim_prompt_text(void) { return prompt_text(); }
 bool nvim_change_bt_prompt(void) { return bt_prompt(curbuf); }
-linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void)
-{
-  return curbuf->b_prompt_start.mark.lnum;
-}
+linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void) { return curbuf->b_prompt_start.mark.lnum; }
 
 void nvim_ins_bytes(const char *p) { ins_bytes((char *)p); }
 
@@ -334,7 +325,4 @@ void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_a
   buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
 }
 
-int nvim_get_last_leader_offset(const char *line, char **flags)
-{
-  return get_last_leader_offset((char *)line, flags);
-}
+int nvim_get_last_leader_offset(const char *line, char **flags) { return get_last_leader_offset((char *)line, flags); }

@@ -195,35 +195,23 @@ bool default_grid_alloc(void)
   return result;
 }
 
-void screenclear(void)
-{
-  rs_screenclear();
-}
+void screenclear(void) { rs_screenclear(); }
 
 /// Set dimensions of the Nvim application "screen".
-void screen_resize(int width, int height)
-{
-  rs_drawscreen_screen_resize(width, height);
-}
+void screen_resize(int width, int height) { rs_drawscreen_screen_resize(width, height); }
 
 
 /// Redraw the parts of the screen that is marked for redraw.
 ///
 /// Most code shouldn't call this directly, rather use redraw_later() and
 /// and redraw_all_later() to mark parts of the screen as needing a redraw.
-int update_screen(void)
-{
-  return rs_update_screen();
-}
+int update_screen(void) { return rs_update_screen(); }
 
 
 /// Show current cursor info in ruler and various other places
 ///
 /// @param always  if false, only show ruler if position has changed.
-void show_cursor_info_later(bool force)
-{
-  rs_show_cursor_info_later(force);
-}
+void show_cursor_info_later(bool force) { rs_show_cursor_info_later(force); }
 
 
 /// Show the current mode and ruler.
@@ -233,10 +221,7 @@ void show_cursor_info_later(bool force)
 /// cleared only if a mode is shown.
 /// If redraw_mode is true show or clear the mode.
 /// @return the length of the message (0 if no message).
-int showmode(void)
-{
-  return rs_showmode();
-}
+int showmode(void) { return rs_showmode(); }
 
 #define COL_RULER 17        // columns needed by standard ruler
 
@@ -1209,10 +1194,7 @@ redr_statuscol:
 ///
 /// Positive `line_count` means scrolling down, so that more space is available
 /// at 'row'. Negative `line_count` implies deleting lines at `row`.
-void win_scroll_lines(win_T *wp, int row, int line_count)
-{
-  rs_win_scroll_lines(wp, row, line_count);
-}
+void win_scroll_lines(win_T *wp, int row, int line_count) { rs_win_scroll_lines(wp, row, line_count); }
 
 _Static_assert(HLF_FC == 29, "HLF_FC must be 29");
 _Static_assert(HLF_SC == 35, "HLF_SC must be 35");

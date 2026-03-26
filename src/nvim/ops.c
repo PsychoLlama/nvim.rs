@@ -1857,10 +1857,7 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
   }
 }
 
-void clear_oparg(oparg_T *oap)
-{
-  CLEAR_POINTER(oap);
-}
+void clear_oparg(oparg_T *oap) { CLEAR_POINTER(oap); }
 
 /// Handle indent and format operators and visual mode ":".
 static void op_colon(oparg_T *oap)
@@ -1919,16 +1916,10 @@ static void op_colon(oparg_T *oap)
 }
 
 /// Wrapper so Rust can call the static op_colon().
-void nvim_dpo_call_op_colon(oparg_T *oap)
-{
-  op_colon(oap);
-}
+void nvim_dpo_call_op_colon(oparg_T *oap) { op_colon(oap); }
 
 /// Wrapper so Rust can call the static op_function().
-void nvim_dpo_call_op_function(oparg_T *oap)
-{
-  op_function(oap);
-}
+void nvim_dpo_call_op_function(oparg_T *oap) { op_function(oap); }
 
 /// callback function for 'operatorfunc'
 static Callback opfunc_cb;
@@ -1943,18 +1934,12 @@ const char *did_set_operatorfunc(optset_T *args FUNC_ATTR_UNUSED)
 }
 
 #if defined(EXITFREE)
-void free_operatorfunc_option(void)
-{
-  callback_free(&opfunc_cb);
-}
+void free_operatorfunc_option(void) { callback_free(&opfunc_cb); }
 #endif
 
 /// Mark the global 'operatorfunc' callback with "copyID" so that it is not
 /// garbage collected.
-bool set_ref_in_opfunc(int copyID)
-{
-  return rs_set_ref_in_callback(&opfunc_cb, copyID, NULL, NULL);
-}
+bool set_ref_in_opfunc(int copyID) { return rs_set_ref_in_callback(&opfunc_cb, copyID, NULL, NULL); }
 
 /// Handle the "g@" operator: call 'operatorfunc'.
 static void op_function(const oparg_T *oap)

@@ -575,10 +575,7 @@ ArrayOf(String) nvim_list_runtime_paths(Arena *arena, Error *err)
 }
 
 /// @nodoc
-Array nvim__runtime_inspect(Arena *arena)
-{
-  return runtime_inspect(arena);
-}
+Array nvim__runtime_inspect(Arena *arena) { return runtime_inspect(arena); }
 
 typedef struct {
   ArrayBuilder rv;
@@ -1163,10 +1160,7 @@ static void term_write(const char *buf, size_t size, void *data)
   textlock--;
 }
 
-static void term_resize(uint16_t width, uint16_t height, void *data)
-{
-  // TODO(bfredl): Lua callback
-}
+static void term_resize(uint16_t width, uint16_t height, void *data) { }  // TODO(bfredl): Lua callback
 
 static void term_close(void *data)
 {
@@ -1723,10 +1717,7 @@ ArrayOf(Dict) nvim_list_chans(Arena *arena)
 /// @param[in]  obj  Object to return.
 ///
 /// @return its argument.
-Object nvim__id(Object obj, Arena *arena)
-{
-  return copy_object(obj, arena);
-}
+Object nvim__id(Object obj, Arena *arena) { return copy_object(obj, arena); }
 
 /// Returns array given as argument.
 ///
@@ -1736,10 +1727,7 @@ Object nvim__id(Object obj, Arena *arena)
 /// @param[in]  arr  Array to return.
 ///
 /// @return its argument.
-Array nvim__id_array(Array arr, Arena *arena)
-{
-  return copy_array(arr, arena);
-}
+Array nvim__id_array(Array arr, Arena *arena) { return copy_array(arr, arena); }
 
 /// Returns dict given as argument.
 ///
@@ -1749,10 +1737,7 @@ Array nvim__id_array(Array arr, Arena *arena)
 /// @param[in]  dct  Dict to return.
 ///
 /// @return its argument.
-Dict nvim__id_dict(Dict dct, Arena *arena)
-{
-  return copy_dict(dct, arena);
-}
+Dict nvim__id_dict(Dict dct, Arena *arena) { return copy_dict(dct, arena); }
 
 /// Returns floating-point value given as argument.
 ///
@@ -1762,10 +1747,7 @@ Dict nvim__id_dict(Dict dct, Arena *arena)
 /// @param[in]  flt  Value to return.
 ///
 /// @return its argument.
-Float nvim__id_float(Float flt)
-{
-  return flt;
-}
+Float nvim__id_float(Float flt) { return flt; }
 
 /// Gets internal stats.
 ///

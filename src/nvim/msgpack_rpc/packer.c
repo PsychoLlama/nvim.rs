@@ -22,20 +22,11 @@ extern void rs_mpack_str(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
 
 // mpack_str and mpack_bin decompose a String struct before calling Rust.
-void mpack_str(String str, PackerBuffer *packer)
-{
-  rs_mpack_str(str.data, str.size, packer);
-}
+void mpack_str(String str, PackerBuffer *packer) { rs_mpack_str(str.data, str.size, packer); }
 
-void mpack_bin(String str, PackerBuffer *packer)
-{
-  rs_mpack_bin(str.data, str.size, packer);
-}
+void mpack_bin(String str, PackerBuffer *packer) { rs_mpack_bin(str.data, str.size, packer); }
 
-void mpack_object(Object *obj, PackerBuffer *packer)
-{
-  mpack_object_inner(obj, NULL, 0, packer);
-}
+void mpack_object(Object *obj, PackerBuffer *packer) { mpack_object_inner(obj, NULL, 0, packer); }
 
 void mpack_object_array(Array arr, PackerBuffer *packer)
 {
@@ -176,27 +167,16 @@ String packer_take_string(PackerBuffer *buffer)
   return (String){ .data = buffer->startptr, .size = (size_t)(buffer->ptr - buffer->startptr) };
 }
 
-// =============================================================================
 // Rust accessor functions for opaque handle pattern
-// =============================================================================
 
 /// Get the current write pointer from a PackerBuffer (accessor for Rust).
-char *nvim_packer_get_ptr(PackerBuffer *packer)
-{
-  return packer->ptr;
-}
+char *nvim_packer_get_ptr(PackerBuffer *packer) { return packer->ptr; }
 
 /// Set the current write pointer in a PackerBuffer (accessor for Rust).
-void nvim_packer_set_ptr(PackerBuffer *packer, char *ptr)
-{
-  packer->ptr = ptr;
-}
+void nvim_packer_set_ptr(PackerBuffer *packer, char *ptr) { packer->ptr = ptr; }
 
 /// Get the end pointer from a PackerBuffer (accessor for Rust).
-char *nvim_packer_get_endptr(PackerBuffer *packer)
-{
-  return packer->endptr;
-}
+char *nvim_packer_get_endptr(PackerBuffer *packer) { return packer->endptr; }
 
 
 /// Call the packer_flush callback (accessor for Rust).

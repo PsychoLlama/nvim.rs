@@ -143,10 +143,7 @@ msgchunk_T *msg_sb_start(msgchunk_T *mps);
 void store_sb_text(const char **sb_str, const char *s, int hl_id, int *sb_col, int finish);
 void inc_msg_scrolled(void);
 
-void nvim_msg_set_pos_for_scroll(int pos, bool scrolled)
-{
-  ui_ext_msg_set_pos(pos, scrolled);
-}
+void nvim_msg_set_pos_for_scroll(int pos, bool scrolled) { ui_ext_msg_set_pos(pos, scrolled); }
 
 void nvim_msg_show_empty(void)
 {
@@ -254,10 +251,7 @@ int smsg_keep(int hl_id, const char *s, ...)
 
 // get_emsg_source, get_emsg_lnum, msg_source, emsg_multiline migrated to Rust (error.rs)
 
-void emsg_invreg(int name)
-{
-  semsg(_("E354: Invalid register name: '%s'"), transchar_buf(NULL, name));
-}
+void emsg_invreg(int name) { semsg(_("E354: Invalid register name: '%s'"), transchar_buf(NULL, name)); }
 
 /// Print an error message with unknown number of arguments
 ///
@@ -330,10 +324,7 @@ void siemsg(const char *s, ...)
 }
 
 /// Give an "Internal error" message.
-void internal_error(const char *where)
-{
-  siemsg(_(e_intern2), where);
-}
+void internal_error(const char *where) { siemsg(_(e_intern2), where); }
 
 static void msg_semsg_event(void **argv)
 {

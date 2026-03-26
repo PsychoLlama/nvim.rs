@@ -74,10 +74,7 @@ static void log_notify(char *dir, uint64_t channel_id, const char *name)
 # define log_notify(...)
 #endif
 
-void rpc_init(void)
-{
-  ch_before_blocking_events = multiqueue_new_child(loop_get_events(&main_loop));
-}
+void rpc_init(void) { ch_before_blocking_events = multiqueue_new_child(loop_get_events(&main_loop)); }
 
 void rpc_start(Channel *channel)
 {
@@ -677,10 +674,7 @@ void rpc_set_client_info(uint64_t id, Dict info)
   channel_info_changed(chan, false);
 }
 
-Dict rpc_client_info(Channel *chan)
-{
-  return copy_dict(chan->rpc.info, NULL);
-}
+Dict rpc_client_info(Channel *chan) { return copy_dict(chan->rpc.info, NULL); }
 
 const char *get_client_info(Channel *chan, const char *key)
   FUNC_ATTR_NONNULL_ALL
@@ -700,8 +694,5 @@ const char *get_client_info(Channel *chan, const char *key)
 }
 
 #ifdef EXITFREE
-void rpc_free_all_mem(void)
-{
-  multiqueue_free(ch_before_blocking_events);
-}
+void rpc_free_all_mem(void) { multiqueue_free(ch_before_blocking_events); }
 #endif
