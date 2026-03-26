@@ -2784,6 +2784,44 @@ extern "C" {
     fn nvim_terminal_has_termrequest_event() -> c_int;
     fn nvim_terminal_schedule_termrequest(term: *mut c_void);
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
+    // Phase 7: refresh pipeline
+    fn nvim_term_buf_line_count(buf: *const c_void) -> c_int;
+    fn nvim_buf_get_scrollback(buf: *const c_void) -> i64;
+    fn nvim_buf_set_scrollback(buf: *mut c_void, val: i64);
+    fn nvim_rs_buf_valid(buf: *mut c_void) -> c_int;
+    fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
+    fn nvim_ml_append_buf_term(
+        buf: *mut c_void,
+        lnum: c_int,
+        line: *mut i8,
+        newfile: bool,
+    ) -> c_int;
+    fn nvim_ml_replace_buf_term(buf: *mut c_void, lnum: c_int, line: *mut i8, copy: bool) -> c_int;
+    fn nvim_ml_delete_buf_term(buf: *mut c_void, lnum: c_int) -> c_int;
+    fn nvim_mark_adjust_buf_term(
+        buf: *mut c_void,
+        line1: c_int,
+        line2: c_int,
+        amount: c_int,
+        amount_after: c_int,
+    );
+    fn nvim_appended_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
+    fn nvim_deleted_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
+    fn nvim_changed_lines_term(buf: *mut c_void, first: c_int, last: c_int, added: c_int);
+    fn nvim_multiqueue_move_events_term(term: *mut c_void);
+    fn nvim_terminal_sb_get(term: *mut c_void, idx: usize) -> *mut c_void;
+    fn nvim_terminal_sb_buffer_resize(term: *mut c_void, new_size: usize);
+    fn nvim_fetch_row(term: *mut c_void, row: c_int, end_col: c_int);
+    fn nvim_terminal_is_active(term: *mut c_void) -> c_int;
+    fn nvim_ui_busy_start();
+    fn nvim_ui_busy_stop();
+    fn nvim_term_ui_mode_info_set();
+    fn nvim_shape_table_set_cursor(blink: c_int, shape: c_int, percentage: c_int);
+    fn nvim_terminal_foreach_invalidated(
+        fn_ptr: unsafe extern "C" fn(*mut c_void, *mut c_void),
+        ctx: *mut c_void,
+    );
+    fn nvim_is_exiting() -> c_int;
 }
 
 /// Receive data from PTY, optionally inserting `\r` before bare `\n` chars.
@@ -3098,6 +3136,292 @@ pub unsafe extern "C" fn rs_on_apc(
         unsafe { nvim_terminal_schedule_termrequest(user) };
     }
     1
+}
+
+// =============================================================================
+// Phase 7: Migrate refresh pipeline functions
+// =============================================================================
+
+// Cursor shape constants (from cursor_shape.h)
+const SHAPE_BLOCK: c_int = 0;
+const SHAPE_HOR: c_int = 1;
+const SHAPE_VER: c_int = 2;
+
+/// Sync the visible terminal rows with the nvim buffer.
+///
+/// Replaces `refresh_screen` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` and `buf` must be valid pointers.
+unsafe fn rs_refresh_screen(term: TerminalHandle, buf: *mut c_void) {
+    let t = unsafe { term.as_mut() };
+    let size = unsafe { rs_vterm_get_size(t.vt) };
+    let height = size.rows;
+    let width = size.cols;
+
+    // Terminal height may have decreased before invalid_end reflects it
+    t.invalid_end = t.invalid_end.min(height);
+
+    if t.invalid_start >= t.invalid_end {
+        t.invalid_start = c_int::MAX;
+        t.invalid_end = -1;
+        return;
+    }
+
+    let mut changed = 0;
+    let mut added = 0;
+    let ml_line_count = unsafe { nvim_term_buf_line_count(buf) };
+    let row_start = t.invalid_start;
+    let row_end = t.invalid_end;
+
+    for r in row_start..row_end {
+        let linenr = rs_terminal_row_to_linenr(r, t.sb_current);
+        unsafe { nvim_fetch_row(term.as_ptr(), r, width) };
+        let textbuf = t.textbuf.as_mut_ptr();
+        if linenr <= ml_line_count {
+            unsafe { nvim_ml_replace_buf_term(buf, linenr, textbuf, true) };
+            changed += 1;
+        } else {
+            unsafe { nvim_ml_append_buf_term(buf, linenr - 1, textbuf, false) };
+            added += 1;
+        }
+    }
+
+    let change_start = rs_terminal_row_to_linenr(row_start, t.sb_current);
+    let change_end = change_start + changed;
+    unsafe { nvim_changed_lines_term(buf, change_start, change_end, added) };
+    t.invalid_start = c_int::MAX;
+    t.invalid_end = -1;
+}
+
+/// Adjust scrollback storage size, deleting lines exceeding new `scrollback` limit.
+///
+/// Replaces `adjust_scrollback` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` and `buf` must be valid pointers.
+unsafe fn rs_adjust_scrollback(term: TerminalHandle, buf: *mut c_void) {
+    let t = unsafe { term.as_mut() };
+    let mut scbk = unsafe { nvim_buf_get_scrollback(buf) };
+    if scbk < 1 {
+        #[allow(clippy::cast_possible_wrap)]
+        let sb_max = TERMINAL_SB_MAX as i64;
+        scbk = sb_max;
+        unsafe { nvim_buf_set_scrollback(buf, scbk) };
+    }
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let scbk = scbk as usize;
+    assert!(t.sb_current < usize::MAX);
+    assert!(
+        t.sb_pending == 0,
+        "sb_pending must be 0 before adjust_scrollback"
+    );
+
+    // Delete lines exceeding the new scrollback limit
+    if scbk < t.sb_current {
+        let diff = t.sb_current - scbk;
+        for _ in 0..diff {
+            unsafe { nvim_ml_delete_buf_term(buf, 1) };
+            t.sb_current -= 1;
+            let sbrow = unsafe { nvim_terminal_sb_get(term.as_ptr(), t.sb_current) };
+            unsafe { xfree(sbrow) };
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        unsafe {
+            nvim_mark_adjust_buf_term(buf, 1, diff as c_int, i32::MAX, -(diff as c_int));
+            nvim_deleted_lines_buf_term(buf, 1, diff as c_int);
+        }
+    }
+
+    // Resize the scrollback storage
+    if scbk != t.sb_size {
+        unsafe { nvim_terminal_sb_buffer_resize(term.as_ptr(), scbk) };
+    }
+}
+
+/// Sync scrollback buffer with nvim buffer lines.
+///
+/// Replaces `refresh_scrollback` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` and `buf` must be valid pointers.
+unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
+    let t = unsafe { term.as_mut() };
+    #[allow(clippy::cast_sign_loss)]
+    let deleted =
+        (t.sb_deleted - t.sb_deleted_last).min(unsafe { nvim_term_buf_line_count(buf) } as usize);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    unsafe {
+        nvim_mark_adjust_buf_term(buf, 1, deleted as c_int, i32::MAX, -(deleted as c_int));
+    }
+    t.sb_deleted_last = t.sb_deleted;
+
+    let size = unsafe { rs_vterm_get_size(t.vt) };
+    let height = size.rows;
+    let width = size.cols;
+
+    // May still have pending scrollback after increase in terminal height
+    let row_offset = t.sb_pending;
+    while t.sb_pending > 0 && unsafe { nvim_term_buf_line_count(buf) } < height {
+        unsafe { nvim_fetch_row(term.as_ptr(), t.sb_pending - row_offset - 1, width) };
+        unsafe { nvim_ml_append_buf_term(buf, 0, t.textbuf.as_mut_ptr(), false) };
+        unsafe { nvim_appended_lines_buf_term(buf, 0, 1) };
+        t.sb_pending -= 1;
+    }
+
+    let row_offset = row_offset - t.sb_pending;
+    while t.sb_pending > 0 {
+        let ml_line_count = unsafe { nvim_term_buf_line_count(buf) };
+        #[allow(clippy::cast_sign_loss)]
+        if (ml_line_count - height) as usize >= t.sb_size {
+            // scrollback full, delete lines at the top
+            unsafe { nvim_ml_delete_buf_term(buf, 1) };
+            unsafe { nvim_deleted_lines_buf_term(buf, 1, 1) };
+        }
+        unsafe { nvim_fetch_row(term.as_ptr(), -t.sb_pending - row_offset, width) };
+        let buf_index = unsafe { nvim_term_buf_line_count(buf) } - height;
+        unsafe { nvim_ml_append_buf_term(buf, buf_index, t.textbuf.as_mut_ptr(), false) };
+        unsafe { nvim_appended_lines_buf_term(buf, buf_index, 1) };
+        t.sb_pending -= 1;
+    }
+
+    // Remove extra lines at the bottom
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let max_line_count = t.sb_current as c_int + height;
+    while unsafe { nvim_term_buf_line_count(buf) } > max_line_count {
+        let last = unsafe { nvim_term_buf_line_count(buf) };
+        unsafe { nvim_ml_delete_buf_term(buf, last) };
+        unsafe { nvim_deleted_lines_buf_term(buf, last, 1) };
+    }
+
+    unsafe { rs_adjust_scrollback(term, buf) };
+}
+
+/// Update cursor shape/blink in `shape_table` and call `ui_mode_info_set`.
+///
+/// Replaces `refresh_cursor` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_refresh_cursor(term: TerminalHandle, cursor_visible: *mut bool) {
+    if term.is_null() || cursor_visible.is_null() {
+        return;
+    }
+    if unsafe { nvim_terminal_is_active(term.as_ptr()) } == 0 {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    let cv = unsafe { &mut *cursor_visible };
+
+    if t.cursor.visible != *cv {
+        *cv = t.cursor.visible;
+        if *cv {
+            unsafe { nvim_ui_busy_stop() };
+        } else {
+            unsafe { nvim_ui_busy_start() };
+        }
+    }
+
+    if !unsafe { term.as_ref() }.pending.cursor {
+        return;
+    }
+    unsafe { term.as_mut() }.pending.cursor = false;
+
+    let (shape, percentage) = match t.cursor.shape {
+        VTERM_PROP_CURSORSHAPE_UNDERLINE => (SHAPE_HOR, 20),
+        VTERM_PROP_CURSORSHAPE_BAR_LEFT => (SHAPE_VER, 25),
+        _ => (SHAPE_BLOCK, 0), // BLOCK or unknown
+    };
+    unsafe { nvim_shape_table_set_cursor(c_int::from(t.cursor.blink), shape, percentage) };
+    unsafe { nvim_term_ui_mode_info_set() };
+}
+
+/// Refresh a terminal: handle resize, scrollback, screen, topline cursor.
+///
+/// Replaces `refresh_terminal` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_refresh_terminal(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
+    if buf.is_null() || unsafe { nvim_rs_buf_valid(buf) } == 0 {
+        if !buf.is_null() {
+            // buf was destroyed by close_buffer
+            unsafe { term.as_mut() }.buf_handle = 0;
+        }
+        return;
+    }
+
+    let ml_before = unsafe { nvim_term_buf_line_count(buf) };
+    unsafe { rs_terminal_refresh_size(term, buf) };
+    unsafe { rs_refresh_scrollback(term, buf) };
+    unsafe { rs_refresh_screen(term, buf) };
+    let ml_added = unsafe { nvim_term_buf_line_count(buf) } - ml_before;
+
+    // Adjust topline and cursor - stays in C (uses FOR_ALL_TAB_WINDOWS macro)
+    unsafe { rs_adjust_topline_cursor(term.as_ptr(), buf, ml_added) };
+
+    // Copy pending events back to the main event queue
+    unsafe { nvim_multiqueue_move_events_term(term.as_ptr()) };
+}
+
+/// Public C-callable wrapper for `rs_refresh_screen`.
+///
+/// # Safety
+/// `term` and `buf` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_refresh_screen_pub(term: TerminalHandle, buf: *mut c_void) {
+    unsafe { rs_refresh_screen(term, buf) };
+}
+
+extern "C" {
+    /// C `adjust_topline_cursor` (uses `FOR_ALL_TAB_WINDOWS` macro, stays in C).
+    fn rs_adjust_topline_cursor(term: *mut c_void, buf: *mut c_void, added: c_int);
+}
+
+/// Timer callback: refresh all invalidated terminals.
+///
+/// Replaces `refresh_timer_cb` in `terminal_shim.c`.
+///
+/// # Safety
+/// Called by libuv timer; all invalidated terminals must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_refresh_timer_cb(_watcher: *mut c_void, _data: *mut c_void) {
+    unsafe { nvim_terminal_set_refresh_pending(0) };
+    if unsafe { nvim_is_exiting() } != 0 {
+        return;
+    }
+    // Iterate and refresh all invalidated terminals, then clear the set.
+    // block/unblock_autocmds is done inside nvim_terminal_foreach_invalidated.
+    #[allow(clippy::items_after_statements)]
+    unsafe extern "C" fn refresh_one(term: *mut c_void, _ctx: *mut c_void) {
+        let handle = unsafe { TerminalHandle::from_ptr(term) };
+        unsafe { rs_refresh_terminal(handle) };
+    }
+    unsafe { nvim_terminal_foreach_invalidated(refresh_one, std::ptr::null_mut()) };
+}
+
+/// Handle `scrollback` option change on a terminal buffer.
+///
+/// Replaces `on_scrollback_option_changed` in `terminal_shim.c`.
+///
+/// # Safety
+/// `term` must be a valid `Terminal *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_on_scrollback_option_changed(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let t = unsafe { term.as_ref() };
+    if !t.sb_buffer.is_null() {
+        unsafe { rs_refresh_terminal(term) };
+    }
 }
 
 #[cfg(test)]

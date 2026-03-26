@@ -1377,224 +1377,41 @@ static void invalidate_terminal(Terminal *term, int start_row, int end_row)
   rs_invalidate_terminal(term, start_row, end_row);
 }
 
+extern void rs_refresh_terminal(void *term);
 static void refresh_terminal(Terminal *term)
 {
-  buf_T *buf = handle_get_buffer(term->buf_handle);
-  bool valid = true;
-  if (!buf || !(valid = buf_valid(buf))) {
-    // Destroyed by `close_buffer`. Do not do anything else.
-    if (!valid) {
-      term->buf_handle = 0;
-    }
-    return;
-  }
-  linenr_T ml_before = buf->b_ml.ml_line_count;
-
-  rs_terminal_refresh_size(term, buf);
-  refresh_scrollback(term, buf);
-  refresh_screen(term, buf);
-
-  int ml_added = buf->b_ml.ml_line_count - ml_before;
-  adjust_topline_cursor(term, buf, ml_added);
-
-  // Copy pending events back to the main event queue
-  multiqueue_move_events(loop_get_events(&main_loop), term->pending.events);
+  rs_refresh_terminal(term);
 }
 
+extern void rs_refresh_cursor(void *term, bool *cursor_visible);
 static void refresh_cursor(Terminal *term, bool *cursor_visible)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (!(State & MODE_TERMINAL && curbuf->terminal == term)) {
-    return;
-  }
-  if (term->cursor.visible != *cursor_visible) {
-    *cursor_visible = term->cursor.visible;
-    if (*cursor_visible) {
-      ui_busy_stop();
-    } else {
-      ui_busy_start();
-    }
-  }
-
-  if (!term->pending.cursor) {
-    return;
-  }
-  term->pending.cursor = false;
-
-  if (term->cursor.blink) {
-    // For the TUI, this value doesn't actually matter, as long as it's non-zero. The terminal
-    // emulator dictates the blink frequency, not the application.
-    // For GUIs we just pick an arbitrary value, for now.
-    shape_table[SHAPE_IDX_TERM].blinkon = 500;
-    shape_table[SHAPE_IDX_TERM].blinkoff = 500;
-  } else {
-    shape_table[SHAPE_IDX_TERM].blinkon = 0;
-    shape_table[SHAPE_IDX_TERM].blinkoff = 0;
-  }
-
-  switch (term->cursor.shape) {
-  case VTERM_PROP_CURSORSHAPE_BLOCK:
-    shape_table[SHAPE_IDX_TERM].shape = SHAPE_BLOCK;
-    break;
-  case VTERM_PROP_CURSORSHAPE_UNDERLINE:
-    shape_table[SHAPE_IDX_TERM].shape = SHAPE_HOR;
-    shape_table[SHAPE_IDX_TERM].percentage = 20;
-    break;
-  case VTERM_PROP_CURSORSHAPE_BAR_LEFT:
-    shape_table[SHAPE_IDX_TERM].shape = SHAPE_VER;
-    shape_table[SHAPE_IDX_TERM].percentage = 25;
-    break;
-  }
-
-  ui_mode_info_set();
+  rs_refresh_cursor(term, cursor_visible);
 }
 
+extern void rs_refresh_timer_cb(void *watcher, void *data);
 /// Calls refresh_terminal() on all invalidated_terminals.
 static void refresh_timer_cb(TimeWatcher *watcher, void *data)
 {
-  refresh_pending = false;
-  if (exiting) {  // Cannot redraw (requires event loop) during teardown/exit.
-    return;
-  }
-  Terminal *term;
-  void *stub; (void)(stub);
-  // don't process autocommands while updating terminal buffers
-  block_autocmds();
-  set_foreach(&invalidated_terminals, term, {
-    refresh_terminal(term);
-  });
-  set_clear(ptr_t, &invalidated_terminals);
-  unblock_autocmds();
+  rs_refresh_timer_cb(watcher, data);
 }
 
+extern void rs_on_scrollback_option_changed(void *term);
 void on_scrollback_option_changed(Terminal *term)
 {
-  // Scrollback buffer may not exist yet, e.g. if 'scrollback' is set in a TermOpen autocmd.
-  if (term->sb_buffer != NULL) {
-    refresh_terminal(term);
-  }
+  rs_on_scrollback_option_changed(term);
 }
 
-/// Adjusts scrollback storage and the terminal buffer scrollback lines
-static void adjust_scrollback(Terminal *term, buf_T *buf)
-{
-  if (buf->b_p_scbk < 1) {  // Local 'scrollback' was set to -1.
-    buf->b_p_scbk = SB_MAX;
-  }
-  const size_t scbk = (size_t)buf->b_p_scbk;
-  assert(term->sb_current < SIZE_MAX);
-  if (term->sb_pending > 0) {  // Pending rows must be processed first.
-    abort();
-  }
+// adjust_scrollback is now implemented in Rust as rs_adjust_scrollback
 
-  // Delete lines exceeding the new 'scrollback' limit.
-  if (scbk < term->sb_current) {
-    size_t diff = term->sb_current - scbk;
-    for (size_t i = 0; i < diff; i++) {
-      ml_delete_buf(buf, 1, false);
-      term->sb_current--;
-      xfree(term->sb_buffer[term->sb_current]);
-    }
-    mark_adjust_buf(buf, 1, (linenr_T)diff, MAXLNUM, -(linenr_T)diff, true,
-                    kMarkAdjustTerm, kExtmarkUndo);
-    deleted_lines_buf(buf, 1, (linenr_T)diff);
-  }
+// refresh_scrollback is now implemented in Rust as rs_refresh_scrollback
 
-  // Resize the scrollback storage.
-  size_t sb_region = sizeof(ScrollbackLine *) * scbk;
-  if (scbk != term->sb_size) {
-    term->sb_buffer = xrealloc(term->sb_buffer, sb_region);
-  }
-
-  term->sb_size = scbk;
-}
-
-// Refresh the scrollback of an invalidated terminal.
-static void refresh_scrollback(Terminal *term, buf_T *buf)
-{
-  linenr_T deleted = (linenr_T)(term->sb_deleted - term->sb_deleted_last);
-  deleted = MIN(deleted, buf->b_ml.ml_line_count);
-  mark_adjust_buf(buf, 1, deleted, MAXLNUM, -deleted, true, kMarkAdjustTerm, kExtmarkUndo);
-  term->sb_deleted_last = term->sb_deleted;
-
-  int width, height;
-  vterm_get_size(term->vt, &height, &width);
-
-  // May still have pending scrollback after increase in terminal height if the
-  // scrollback wasn't refreshed in time; append these to the top of the buffer.
-  int row_offset = term->sb_pending;
-  while (term->sb_pending > 0 && buf->b_ml.ml_line_count < height) {
-    fetch_row(term, term->sb_pending - row_offset - 1, width);
-    ml_append_buf(buf, 0, term->textbuf, 0, false);
-    appended_lines_buf(buf, 0, 1);
-    term->sb_pending--;
-  }
-
-  row_offset -= term->sb_pending;
-  while (term->sb_pending > 0) {
-    // This means that either the window height has decreased or the screen
-    // became full and libvterm had to push all rows up. Convert the first
-    // pending scrollback row into a string and append it just above the visible
-    // section of the buffer
-    if (((int)buf->b_ml.ml_line_count - height) >= (int)term->sb_size) {
-      // scrollback full, delete lines at the top
-      ml_delete_buf(buf, 1, false);
-      deleted_lines_buf(buf, 1, 1);
-    }
-    fetch_row(term, -term->sb_pending - row_offset, width);
-    int buf_index = (int)buf->b_ml.ml_line_count - height;
-    ml_append_buf(buf, buf_index, term->textbuf, 0, false);
-    appended_lines_buf(buf, buf_index, 1);
-    term->sb_pending--;
-  }
-
-  // Remove extra lines at the bottom
-  int max_line_count = (int)term->sb_current + height;
-  while (buf->b_ml.ml_line_count > max_line_count) {
-    ml_delete_buf(buf, buf->b_ml.ml_line_count, false);
-    deleted_lines_buf(buf, buf->b_ml.ml_line_count, 1);
-  }
-
-  adjust_scrollback(term, buf);
-}
-
-// Refresh the screen (visible part of the buffer when the terminal is
-// focused) of a invalidated terminal
+// refresh_screen is now implemented in Rust as rs_refresh_screen
+extern void rs_refresh_screen_pub(Terminal *term, buf_T *buf);
 static void refresh_screen(Terminal *term, buf_T *buf)
 {
-  int changed = 0;
-  int added = 0;
-  int height;
-  int width;
-  vterm_get_size(term->vt, &height, &width);
-  // Terminal height may have decreased before `invalid_end` reflects it.
-  term->invalid_end = MIN(term->invalid_end, height);
-
-  // There are no invalid rows.
-  if (term->invalid_start >= term->invalid_end) {
-    term->invalid_start = INT_MAX;
-    term->invalid_end = -1;
-    return;
-  }
-
-  for (int r = term->invalid_start, linenr = rs_terminal_row_to_linenr_term(term, r);
-       r < term->invalid_end; r++, linenr++) {
-    fetch_row(term, r, width);
-
-    if (linenr <= buf->b_ml.ml_line_count) {
-      ml_replace_buf(buf, linenr, term->textbuf, true, false);
-      changed++;
-    } else {
-      ml_append_buf(buf, linenr - 1, term->textbuf, 0, false);
-      added++;
-    }
-  }
-
-  int change_start = rs_terminal_row_to_linenr_term(term, term->invalid_start);
-  int change_end = change_start + changed;
-  changed_lines(buf, change_start, 0, change_end, added, true);
-  term->invalid_start = INT_MAX;
-  term->invalid_end = -1;
+  rs_refresh_screen_pub(term, buf);
 }
 
 static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
@@ -1812,6 +1629,116 @@ const char *nvim_vterm_frag_str(const void *val) { return ((const VTermValue *)v
 size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->string.len; }
 int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
 int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
+
+// Phase 7: Buffer manipulation accessors for refresh pipeline
+int nvim_term_buf_line_count(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
+int64_t nvim_buf_get_scrollback(const void *buf) { return ((const buf_T *)buf)->b_p_scbk; }
+void nvim_buf_set_scrollback(void *buf, int64_t val) { ((buf_T *)buf)->b_p_scbk = val; }
+int nvim_rs_buf_valid(void *buf) { return rs_buf_valid((buf_T *)buf); }
+void *nvim_terminal_get_buffer(int buf_handle)
+{
+  return handle_get_buffer(buf_handle);
+}
+
+// ml_append_buf/ml_replace_buf/ml_delete_buf wrappers
+int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile)
+{
+  return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile);
+}
+int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy)
+{
+  return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false);
+}
+int nvim_ml_delete_buf_term(void *buf, int lnum)
+{
+  return ml_delete_buf((buf_T *)buf, (linenr_T)lnum, false);
+}
+void nvim_mark_adjust_buf_term(void *buf, int line1, int line2, int amount, int amount_after)
+{
+  mark_adjust_buf((buf_T *)buf, (linenr_T)line1, (linenr_T)line2, (linenr_T)amount,
+                  (linenr_T)amount_after, true, kMarkAdjustTerm, kExtmarkUndo);
+}
+void nvim_appended_lines_buf_term(void *buf, int lnum, int count)
+{
+  appended_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count);
+}
+void nvim_deleted_lines_buf_term(void *buf, int lnum, int count)
+{
+  deleted_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count);
+}
+void nvim_changed_lines_term(void *buf, int first, int last, int added)
+{
+  changed_lines((buf_T *)buf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)added, true);
+}
+void nvim_multiqueue_move_events_term(void *term)
+{
+  Terminal *t = (Terminal *)term;
+  multiqueue_move_events(loop_get_events(&main_loop), t->pending.events);
+}
+// Get term->sb_buffer[idx] (the idx-th ScrollbackLine *)
+void *nvim_terminal_sb_get(void *term, size_t idx)
+{
+  return ((Terminal *)term)->sb_buffer[idx];
+}
+// Set term->sb_buffer[idx]
+void nvim_terminal_sb_set(void *term, size_t idx, void *sbrow)
+{
+  ((Terminal *)term)->sb_buffer[idx] = (ScrollbackLine *)sbrow;
+}
+// Resize sb_buffer array
+void nvim_terminal_sb_buffer_resize(void *term, size_t new_size)
+{
+  Terminal *t = (Terminal *)term;
+  t->sb_buffer = xrealloc(t->sb_buffer, sizeof(ScrollbackLine *) * new_size);
+  t->sb_size = new_size;
+}
+
+// fetch_row accessor (static function, needed by Rust refresh functions)
+void nvim_fetch_row(void *term, int row, int end_col)
+{
+  fetch_row((Terminal *)term, row, end_col);
+}
+
+// refresh_cursor accessors
+int nvim_terminal_is_active(void *term)
+{
+  return (State & MODE_TERMINAL) && curbuf->terminal == (Terminal *)term;
+}
+void nvim_ui_busy_start(void) { ui_busy_start(); }
+void nvim_ui_busy_stop(void) { ui_busy_stop(); }
+void nvim_term_ui_mode_info_set(void) { ui_mode_info_set(); }
+void nvim_shape_table_set_cursor(int blink, int shape, int percentage)
+{
+  if (blink) {
+    shape_table[SHAPE_IDX_TERM].blinkon = 500;
+    shape_table[SHAPE_IDX_TERM].blinkoff = 500;
+  } else {
+    shape_table[SHAPE_IDX_TERM].blinkon = 0;
+    shape_table[SHAPE_IDX_TERM].blinkoff = 0;
+  }
+  shape_table[SHAPE_IDX_TERM].shape = shape;
+  shape_table[SHAPE_IDX_TERM].percentage = percentage;
+}
+
+// refresh_timer_cb accessors
+void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *ctx)
+{
+  Terminal *term;
+  void *stub; (void)(stub);
+  block_autocmds();
+  set_foreach(&invalidated_terminals, term, {
+    fn(term, ctx);
+  });
+  set_clear(ptr_t, &invalidated_terminals);
+  unblock_autocmds();
+}
+int nvim_is_exiting(void) { return exiting; }
+
+// C wrapper for adjust_topline_cursor (uses FOR_ALL_TAB_WINDOWS macro, can't call from Rust)
+void rs_adjust_topline_cursor(void *term, void *buf, int added)
+{
+  adjust_topline_cursor((Terminal *)term, (buf_T *)buf, added);
+}
 
 // Phase 6: termrequest buffer printf wrappers (kv_printf is a macro, can't call from Rust)
 void nvim_term_treqbuf_printf_osc(void *term, int command)
