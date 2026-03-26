@@ -72,59 +72,21 @@ extern void nvim_win_update(win_T *wp);
 // showmode helpers
 // ---------------------------------------------------------------------------
 
-/// Call msg_grid_validate() (not in public headers).
-void nvim_drawscreen_msg_grid_validate(void)
-{
-  msg_grid_validate();
-}
-
-/// Call msg_check_for_delay(false).
-void nvim_drawscreen_msg_check_for_delay(void)
-{
-  msg_check_for_delay(false);
-}
-
+void nvim_drawscreen_msg_grid_validate(void) { msg_grid_validate(); }
+void nvim_drawscreen_msg_check_for_delay(void) { msg_check_for_delay(false); }
 /// Call msg_clr_cmdline() (already declared as nvim_msg_clr_cmdline_wrap in
 /// insexpand_shim.c; provide a second alias here for use by drawscreen).
-void nvim_drawscreen_msg_clr_cmdline(void)
-{
-  msg_clr_cmdline();
-}
-
-/// Call get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL).
-/// Returns the result length (>0 means something was written to NameBuff).
-int nvim_drawscreen_get_keymap_str(void)
-{
-  return get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL);
-}
-
-/// Return the NameBuff pointer (global char buffer, valid until next C call).
-const char *nvim_drawscreen_namebuff_ptr(void)
-{
-  return NameBuff;
-}
-
-/// Return wp->w_p_arab (arabic option).
-int nvim_win_get_w_p_arab(win_T *wp)
-{
-  return wp ? (int)wp->w_p_arab : 0;
-}
+void nvim_drawscreen_msg_clr_cmdline(void) { msg_clr_cmdline(); }
+int nvim_drawscreen_get_keymap_str(void) { return get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL); }
+const char *nvim_drawscreen_namebuff_ptr(void) { return NameBuff; }
+int nvim_win_get_w_p_arab(win_T *wp) { return wp ? (int)wp->w_p_arab : 0; }
 
 // ---------------------------------------------------------------------------
 // default_grid_alloc, screenclear, screen_resize batch helpers
 // ---------------------------------------------------------------------------
 
-/// Return default_grid.rows.
-int nvim_default_grid_get_rows(void)
-{
-  return default_grid.rows;
-}
-
-/// Return default_grid.cols.
-int nvim_default_grid_get_cols(void)
-{
-  return default_grid.cols;
-}
+int nvim_default_grid_get_rows(void) { return default_grid.rows; }
+int nvim_default_grid_get_cols(void) { return default_grid.cols; }
 
 /// Return 1 if default_grid needs reallocation (size mismatch or NULL), else 0.
 /// Also returns 0 if Rows==0 or Columns==0.
@@ -745,8 +707,4 @@ int nvim_update_screen_impl(void)
   return OK;
 }
 
-/// Get the `updating_screen` global flag.
-bool nvim_get_updating_screen(void)
-{
-  return updating_screen;
-}
+bool nvim_get_updating_screen(void) { return updating_screen; }
