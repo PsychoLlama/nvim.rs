@@ -662,10 +662,6 @@ fmark_T *nvim_getnextmark_call(fmark_T *fm, int dir, int begin_line) {
 
 
 /// spell_move_to wrapper for bracket [s/]s/[r/]r/[S/]S commands.
-size_t nvim_spell_move_to_cap_call(int dir, int smt_type) {
-  return spell_move_to(curwin, dir, smt_type, false, NULL);
-}
-
 
 // =============================================================================
 // g-command and n_opencmd accessors for Rust FFI
@@ -744,7 +740,6 @@ void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_curs
 bool nvim_get_curwin_w_p_wrap(void) { return curwin->w_p_wrap; }
 
 /// Wrapper for spell_move_to(curwin, dir, SMT_ALL, true, NULL) for Rust FFI.
-size_t nvim_spell_move_to_wrapper(int dir) { return spell_move_to(curwin, dir, SMT_ALL, true, NULL); }
 
 /// Wrapper for ml_get_pos(&curwin->w_cursor) for Rust FFI.
 char *nvim_ml_get_pos_cursor(void) { return ml_get_pos(&curwin->w_cursor); }
@@ -777,7 +772,6 @@ void nvim_save_and_set_mps(void) { nvim_mps_save = curbuf->b_p_mps; curbuf->b_p_
 void nvim_restore_mps(void) { curbuf->b_p_mps = nvim_mps_save; }
 bool nvim_current_quote_call(oparg_T *oap, int count, bool include, int quotechar) { return current_quote(oap, count, include, (char)quotechar); }
 
-bool nvim_swapchar_call(int op_type, int lnum, int col) { pos_T pos = { .lnum = (linenr_T)lnum, .col = (colnr_T)col, .coladd = 0 }; return swapchar(op_type, &pos); }
 void nvim_u_clearline_curbuf(void) { u_clearline(curbuf); }
 void nvim_changed_lines_call(int lnum, int col, int lnum_end, bool do_concealed) { changed_lines(curbuf, (linenr_T)lnum, (colnr_T)col, (linenr_T)lnum_end, 0, do_concealed); }
 void nvim_set_b_op_start(int lnum, int col, int coladd) { curbuf->b_op_start.lnum = (linenr_T)lnum; curbuf->b_op_start.col = (colnr_T)col; curbuf->b_op_start.coladd = (colnr_T)coladd; }

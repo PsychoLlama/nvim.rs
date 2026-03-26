@@ -3191,7 +3191,7 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
 
 extern "C" {
     // Phase 4: n_swapchar accessors
-    fn nvim_swapchar_call(op_type: c_int, lnum: c_int, col: c_int) -> bool;
+    fn swapchar(op_type: c_int, pos: *const crate::types::PosT) -> bool;
     fn u_savesub(lnum: c_int) -> bool;
     fn nvim_u_clearline_curbuf();
     fn nvim_changed_lines_call(lnum: c_int, col: c_int, lnum_end: c_int, do_concealed: bool);
@@ -3237,7 +3237,12 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
         }
         let lnum = nvim_get_cursor_lnum();
         let col = nvim_get_cursor_col();
-        if nvim_swapchar_call(op_type, lnum, col) {
+        let pos = crate::types::PosT {
+            lnum,
+            col,
+            coladd: 0,
+        };
+        if swapchar(op_type, &raw const pos) {
             did_change = true;
         }
         nvim_inc_cursor();
@@ -3320,7 +3325,13 @@ extern "C" {
     fn nvim_pos_to_mark_cursor() -> FmarkHandle;
     fn nvim_getnextmark_call(fm: FmarkHandle, dir: c_int, begin_line: c_int) -> FmarkHandle;
     fn do_mouse(oap: OapHandle, nchar: c_int, dir: c_int, count1: i64);
-    fn nvim_spell_move_to_cap_call(dir: c_int, smt_type: c_int) -> usize;
+    fn spell_move_to(
+        wp: WinHandle,
+        dir: c_int,
+        behaviour: c_int,
+        curline: bool,
+        attrp: *mut std::ffi::c_void,
+    ) -> usize;
     fn findmatchlimit(
         oap: OapHandle,
         initc: c_int,
@@ -3766,7 +3777,14 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
         let count1 = nvim_cap_get_count1(cap);
         let op_type = nvim_oap_get_op_type_ptr(oap);
         'spell: for _ in 0..count1 {
-            if nvim_spell_move_to_cap_call(dir, smt_type) == 0 {
+            if spell_move_to(
+                nvim_get_curwin(),
+                dir,
+                smt_type,
+                false,
+                std::ptr::null_mut(),
+            ) == 0
+            {
                 rs_clearopbeep(oap);
                 break 'spell;
             }
@@ -4410,7 +4428,6 @@ extern "C" {
     fn spell_suggest(count: c_int);
     fn nvim_get_curwin_w_p_wrap() -> bool;
     fn nvim_sync_fen_in_diff_windows();
-    fn nvim_spell_move_to_wrapper(dir: c_int) -> usize;
     fn nvim_ml_get_pos_cursor() -> *mut c_char;
     fn nvim_inc_emsg_off();
     fn nvim_dec_emsg_off();
@@ -4526,7 +4543,13 @@ pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int 
         // Find bad word under the cursor. When 'spell' is off this fails
         // and find_ident_under_cursor() is used below.
         nvim_inc_emsg_off();
-        len = nvim_spell_move_to_wrapper(SMT_ALL_DIR);
+        len = spell_move_to(
+            nvim_get_curwin(),
+            SMT_ALL_DIR,
+            SMT_ALL,
+            true,
+            std::ptr::null_mut(),
+        );
         nvim_dec_emsg_off();
 
         if len != 0 && nvim_get_cursor_col() <= saved_col {
