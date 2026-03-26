@@ -1737,40 +1737,8 @@ colnr_T nvim_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
 
-/// b_syn_error / b_syn_slow (via w_s)
-int nvim_win_get_syn_error(win_T *wp) { return wp->w_s->b_syn_error ? 1 : 0; }
-void nvim_win_set_syn_error(win_T *wp, int val) { wp->w_s->b_syn_error = (bool)val; }
-int nvim_win_get_syn_slow(win_T *wp) { return wp->w_s->b_syn_slow ? 1 : 0; }
-
-/// syntax_present wrapper
-int nvim_win_syntax_present(win_T *wp) { return syntax_present(wp) ? 1 : 0; }
-
-/// w_p_fdt (foldtext option, check if set)
-int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
-
-/// w_cursor compound setter (temporarily move cursor, e.g. for spell checking)
-/// Renamed to avoid clash with Neovim API nvim_win_set_cursor(Window, Array, Error*).
-
-/// w_p_cuc (cursorcolumn)
-int nvim_win_get_p_cuc_val(win_T *wp) { return wp->w_p_cuc ? 1 : 0; }
-
-/// w_p_wrap getter
-int nvim_win_get_wrap_val(win_T *wp) { return wp->w_p_wrap ? 1 : 0; }
-
-/// VirtLines helpers for win_line
-/// VirtLines is kvec_t(struct virt_line { VirtText line; int flags; }) from decoration_defs.h
-int nvim_virt_lines_size(void *vl) { return (int)((VirtLines *)vl)->size; }
-int nvim_virt_lines_flags(void *vl, int idx) { return ((VirtLines *)vl)->items[idx].flags; }
-void *nvim_virt_lines_line(void *vl, int idx) { return &((VirtLines *)vl)->items[idx].line; }
-void nvim_virt_lines_destroy(void *vl) { kv_destroy(*(VirtLines *)vl); }
-
 /// wp->w_grid (GridView) pointer accessor for win_line
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
-
-/// bt_quickfix check
-int nvim_win_bt_quickfix(win_T *wp) { return bt_quickfix(wp->w_buffer) ? 1 : 0; }
-
-int nvim_win_buf_meta_total_inline(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaInline) > 0 ? 1 : 0; }
 
 /// CharsizeArg init (opaque; we pass it around as void* from Rust)
 /// We need to call init_charsize_arg from Rust.
@@ -1778,14 +1746,6 @@ int nvim_win_buf_meta_total_inline(win_T *wp) { return buf_meta_total(wp->w_buff
 int nvim_init_charsize_arg_wrap(void *csarg, win_T *wp, linenr_T lnum, const char *line)
 {
   return (int)init_charsize_arg((CharsizeArg *)csarg, wp, lnum, line);
-}
-/// win_charsize wrapper -- returns width and head packed as {width, head}
-void nvim_win_charsize_wrap(bool cstype, int vcol, const char *ptr, int32_t chr,
-                            void *csarg, int *out_width, int *out_head)
-{
-  CharSize cs = win_charsize(cstype, vcol, (char *)ptr, chr, (CharsizeArg *)csarg);
-  *out_width = cs.width;
-  *out_head = cs.head;
 }
 /// Size of CharsizeArg (for stack allocation in Rust)
 int nvim_charsize_arg_size(void) { return (int)sizeof(CharsizeArg); }
@@ -2041,9 +2001,6 @@ void nvim_set_did_emsg(int val) { did_emsg = (bool)val; }
 /// Returns a pointer to the file-static match_T used for 'hlsearch' in the screen.
 void *nvim_get_screen_search_hl(void) { return &screen_search_hl; }
 
-/// w_redr_statuscol getter (setter already in window struct accessors).
-int nvim_win_get_redr_statuscol(win_T *wp) { return wp->w_redr_statuscol ? 1 : 0; }
-
 // nvim_win_get_p_cole already exported from Rust (window crate).
 
 /// ltoreq macro: returns true if pos_a <= pos_b.
@@ -2055,32 +2012,12 @@ bool nvim_ltoreq_pos(const int *pos_a, const int *pos_b)
   return ltoreq(a, b);
 }
 
-/// FOLD_TEXT_LEN constant accessor.
-int nvim_get_FOLD_TEXT_LEN(void) { return FOLD_TEXT_LEN; }
-
-int nvim_spv_get_has_spell(const void *spv) { return ((const spellvars_T *)spv)->spv_has_spell ? 1 : 0; }
-int nvim_spv_get_unchanged(const void *spv) { return ((const spellvars_T *)spv)->spv_unchanged ? 1 : 0; }
-int nvim_spv_get_checked_col(const void *spv) { return ((const spellvars_T *)spv)->spv_checked_col; }
-int nvim_spv_get_checked_lnum(const void *spv) { return (int)((const spellvars_T *)spv)->spv_checked_lnum; }
-int nvim_spv_get_cap_col(const void *spv) { return ((const spellvars_T *)spv)->spv_cap_col; }
-int nvim_spv_get_capcol_lnum(const void *spv) { return (int)((const spellvars_T *)spv)->spv_capcol_lnum; }
-void nvim_spv_set_checked_lnum(void *spv, int val) { ((spellvars_T *)spv)->spv_checked_lnum = (linenr_T)val; }
-void nvim_spv_set_cap_col(void *spv, int val) { ((spellvars_T *)spv)->spv_cap_col = val; }
-void nvim_spv_set_capcol_lnum(void *spv, int val) { ((spellvars_T *)spv)->spv_capcol_lnum = (linenr_T)val; }
-
 /// gchar_pos wrapper taking position as [lnum, col, coladd] int array.
 int nvim_gchar_pos_byval(const int *pos)
 {
   pos_T p = { .lnum = pos[0], .col = pos[1], .coladd = pos[2] };
   return gchar_pos(&p);
 }
-
-extern bool cursor_is_block_during_visual(bool exclusive);
-int nvim_cursor_is_block_during_visual(int exclusive) { return cursor_is_block_during_visual(exclusive != 0) ? 1 : 0; }
-
-/// w_old_cursor_fcol / w_old_cursor_lcol getters (block visual selection columns).
-int nvim_win_get_old_cursor_fcol(win_T *wp) { return (int)wp->w_old_cursor_fcol; }
-int nvim_win_get_old_cursor_lcol(win_T *wp) { return (int)wp->w_old_cursor_lcol; }
 
 /// getvvcol wrapper taking position as [lnum, col, coladd] int array.
 void nvim_getvvcol_byval(win_T *wp, const int *pos, int *scol, int *ccol, int *ecol)
@@ -2100,37 +2037,10 @@ void nvim_getvcol_byval3(win_T *wp, const int *pos, int *scol, int *ccol, int *e
           ecol ? (colnr_T *)ecol : &ec);
 }
 
-int nvim_conceal_cursor_line(const win_T *wp) { return conceal_cursor_line(wp) ? 1 : 0; }
-
-/// ml_get_buf wrapper for drawline (returns char* for given buf/lnum).
-const char *nvim_buf_ml_get(buf_T *buf, int lnum) { return ml_get_buf(buf, (linenr_T)lnum); }
-
-/// buf_T terminal pointer (non-null iff terminal buffer).
-void *nvim_buf_get_terminal_ptr(buf_T *buf) { return buf->terminal; }
-
 /// Terminal line attributes (wrapped to avoid exposing Terminal type in Rust).
 void nvim_buf_terminal_get_line_attributes(void *terminal, win_T *wp, int lnum, int *term_attrs)
 {
   terminal_get_line_attributes((Terminal *)terminal, wp, (linenr_T)lnum, term_attrs);
 }
 
-/// kMTMetaInline constant (value 2).
-int nvim_get_kMTMetaInline(void) { return (int)kMTMetaInline; }
-
-
-#include "nvim/quickfix.h"
-
-// nvim_win_get_topfill and nvim_win_get_leftcol already exported from Rust window crate.
-
-/// Get qf_current_entry(wp) == lnum for win_line setup.
-int nvim_win_qf_current_entry(win_T *wp) { return (int)qf_current_entry(wp); }
-
-/// Check if wp->w_buffer == curwin->w_buffer.
-int nvim_win_buf_eq_curwin_buf(win_T *wp) { return wp->w_buffer == curwin->w_buffer ? 1 : 0; }
-
-/// Get ml_get_buf_len for a buffer pointer (not a window).
-int nvim_buf_ml_get_buf_len(buf_T *buf, int lnum) { return (int)ml_get_buf_len(buf, (linenr_T)lnum); }
-
-/// Set spv_checked_col.
-void nvim_spv_set_checked_col(void *spv, int val) { ((spellvars_T *)spv)->spv_checked_col = val; }
 

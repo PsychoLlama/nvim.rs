@@ -524,23 +524,9 @@ extern "C" {
     fn nvim_get_did_emsg() -> c_int;
     fn nvim_set_did_emsg(val: c_int);
     fn nvim_get_screen_search_hl() -> *mut c_void;
-    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
     fn nvim_ltoreq_pos(pos_a: *const c_int, pos_b: *const c_int) -> bool;
-    fn nvim_get_FOLD_TEXT_LEN() -> c_int;
-    fn nvim_spv_get_has_spell(spv: *const c_void) -> c_int;
-    fn nvim_spv_get_unchanged(spv: *const c_void) -> c_int;
-    fn nvim_spv_get_checked_col(spv: *const c_void) -> c_int;
-    fn nvim_spv_get_checked_lnum(spv: *const c_void) -> c_int;
-    fn nvim_spv_get_cap_col(spv: *const c_void) -> c_int;
-    fn nvim_spv_get_capcol_lnum(spv: *const c_void) -> c_int;
-    fn nvim_spv_set_checked_lnum(spv: *mut c_void, val: c_int);
-    fn nvim_spv_set_cap_col(spv: *mut c_void, val: c_int);
-    fn nvim_spv_set_capcol_lnum(spv: *mut c_void, val: c_int);
     fn nvim_gchar_pos_byval(pos: *const c_int) -> c_int;
-    fn nvim_cursor_is_block_during_visual(exclusive: c_int) -> c_int;
-    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> c_int;
     fn nvim_getvvcol_byval(
         wp: WinHandle,
         pos: *const c_int,
@@ -555,10 +541,6 @@ extern "C" {
         ccol: *mut c_int,
         ecol: *mut c_int,
     );
-    fn nvim_conceal_cursor_line(wp: WinHandle) -> c_int;
-    fn nvim_buf_ml_get(buf: *mut c_void, lnum: c_int) -> *const c_char;
-    fn nvim_buf_get_terminal_ptr(buf: *mut c_void) -> *mut c_void;
-    fn nvim_get_kMTMetaInline() -> c_int;
     fn nvim_get_search_match_lines() -> c_int;
     fn nvim_get_search_match_endcol() -> c_int;
     fn nvim_get_highlight_match() -> c_int;
@@ -567,36 +549,15 @@ extern "C" {
     fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
     fn nvim_get_state() -> c_int;
     fn nvim_virtual_active_win(wp: WinHandle) -> bool;
-    fn nvim_win_buf_meta_total_inline(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
-    fn nvim_win_get_syn_error(wp: WinHandle) -> c_int;
-    fn nvim_win_set_syn_error(wp: WinHandle, val: c_int);
-    fn nvim_win_get_syn_slow(wp: WinHandle) -> c_int;
-    fn nvim_win_p_fdt_empty(wp: WinHandle) -> c_int;
     fn nvim_win_buf_has_terminal(wp: WinHandle) -> c_int;
     fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_win_bt_quickfix(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wrap_val(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cuc_val(wp: WinHandle) -> c_int;
-    fn nvim_virt_lines_size(vl: *mut c_void) -> c_int;
-    fn nvim_virt_lines_flags(vl: *mut c_void, idx: c_int) -> c_int;
-    fn nvim_virt_lines_line(vl: *mut c_void, idx: c_int) -> *mut c_void;
-    fn nvim_virt_lines_destroy(vl: *mut c_void);
     fn nvim_init_charsize_arg_wrap(
         csarg: *mut c_void,
         wp: WinHandle,
         lnum: LinenrT,
         line: *const c_char,
     ) -> c_int;
-    fn nvim_win_charsize_wrap(
-        cstype: bool,
-        vcol: c_int,
-        ptr: *const c_char,
-        chr: i32,
-        csarg: *mut c_void,
-        out_width: *mut c_int,
-        out_head: *mut c_int,
-    );
     fn nvim_charsize_arg_size() -> c_int;
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn nvim_curwin_cursor_lnum() -> LinenrT;
@@ -604,16 +565,11 @@ extern "C" {
     fn nvim_get_p_sel() -> *const c_char;
     fn nvim_get_cmdwin_win() -> WinHandle;
     fn nvim_get_cmdwin_type() -> c_int;
-    fn nvim_win_syntax_present(wp: WinHandle) -> c_int;
     fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
 
     // Phase 3 (win_line setup migration): additional accessors
     fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-    fn nvim_win_qf_current_entry(wp: WinHandle) -> c_int;
-    fn nvim_win_buf_eq_curwin_buf(wp: WinHandle) -> c_int;
-    fn nvim_buf_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
-    fn nvim_spv_set_checked_col(spv: *mut c_void, val: c_int);
 }
 
 /// Opaque handle to buffer (buf_T).
