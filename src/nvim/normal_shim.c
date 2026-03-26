@@ -587,19 +587,6 @@ bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
 /// find_pattern_in_path wrapper for bracket [i/]i/[d/]d commands.
 /// Takes a copy of ptr (via xmemdupz) and frees it after the call,
 /// matching the original nvim_bracket_find_ident behavior.
-void nvim_find_pattern_in_path_call(char *ptr, size_t len, int count0, int nchar,
-                                    int64_t count1, bool from_rbracket) {
-  char *dup = xmemdupz(ptr, len);
-  find_pattern_in_path(dup, 0, len, true,
-                       count0 == 0 ? !isupper(nchar) : false,
-                       (((nchar & 0xf) == ('d' & 0xf)) ? FIND_DEFINE : FIND_ANY),
-                       (int)count1,
-                       (isupper(nchar) ? ACTION_SHOW_ALL
-                                       : islower(nchar) ? ACTION_SHOW : ACTION_GOTO),
-                       (from_rbracket ? curwin->w_cursor.lnum + 1 : 1),
-                       MAXLNUM, false, false);
-  xfree(dup);
-}
 
 /// pos_to_mark(curbuf, NULL, curwin->w_cursor) -- returns fmark_T*.
 fmark_T *nvim_pos_to_mark_cursor(void) { return pos_to_mark(curbuf, NULL, curwin->w_cursor); }

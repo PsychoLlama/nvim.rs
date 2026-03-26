@@ -3325,13 +3325,20 @@ extern "C" {
 
     // nv_brackets_impl C accessors
     // Phase 2: new lower-level accessors replacing the bracket helpers (migrated to Rust)
-    fn nvim_find_pattern_in_path_call(
+    fn xmemdupz(src: *const std::ffi::c_void, len: usize) -> *mut c_char;
+    fn find_pattern_in_path(
         ptr: *mut c_char,
+        dir: c_int,
         len: usize,
-        count0: c_int,
-        nchar: c_int,
-        count1: i64,
-        from_rbracket: bool,
+        whole: bool,
+        skip_comments: bool,
+        pat_type: c_int,
+        count: c_int,
+        action: c_int,
+        start_lnum: c_int,
+        end_lnum: c_int,
+        forceit: bool,
+        silent: bool,
     );
     fn nvim_pos_to_mark_cursor() -> FmarkHandle;
     fn getnextmark(startpos: *mut crate::types::PosT, dir: c_int, begin_line: c_int)
@@ -3669,8 +3676,42 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             let count0 = nvim_cap_get_count0(cap);
             let count1 = nvim_cap_get_count1(cap);
             let from_rbracket = cmdchar == c_int::from(b']');
-            // xmemdupz is called inside the C wrapper since find_pattern_in_path takes ownership
-            nvim_find_pattern_in_path_call(ptr, len, count0, nchar, count1 as i64, from_rbracket);
+            // Inline nvim_find_pattern_in_path_call: duplicate buffer, call, free.
+            let dup = xmemdupz(ptr.cast::<std::ffi::c_void>(), len);
+            // FIND_ANY=1, FIND_DEFINE=2; ACTION_SHOW_ALL=4, ACTION_SHOW=1, ACTION_GOTO=2
+            let pat_type = if (nchar & 0xf) == (c_int::from(b'd') & 0xf) {
+                2
+            } else {
+                1
+            };
+            let skip_comments = count0 == 0 && libc::isupper(nchar) == 0;
+            let action = if libc::isupper(nchar) != 0 {
+                4 // ACTION_SHOW_ALL
+            } else if libc::islower(nchar) != 0 {
+                1 // ACTION_SHOW
+            } else {
+                2 // ACTION_GOTO
+            };
+            let start_lnum = if from_rbracket {
+                nvim_get_cursor_lnum() + 1
+            } else {
+                1
+            };
+            find_pattern_in_path(
+                dup,
+                0,
+                len,
+                true,
+                skip_comments,
+                pat_type,
+                count1,
+                action,
+                start_lnum,
+                0x7FFF_FFFF, // MAXLNUM
+                false,
+                false,
+            );
+            xfree(dup.cast::<std::ffi::c_void>());
             nvim_curwin_set_curswant(true);
         }
     } else if (cmdchar == b'[' as c_int && !vim_strchr(c"{(*/#mM".as_ptr(), nchar).is_null())
