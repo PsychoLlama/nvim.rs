@@ -1,26 +1,22 @@
 // quickfix.c: functions for quickfix mode, using a file with error messages
 
 #include <assert.h>
-#include <errno.h>
 #include <inttypes.h>
-#include <limits.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
-#include "nvim/arglist.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
 #include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
-#include "nvim/change.h"
 #include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
+#include "nvim/ex_eval.h"
+#include "nvim/ex_eval_defs.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -30,22 +26,12 @@
 #include "nvim/ex_cmds2.h"
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/ex_eval.h"
-#include "nvim/ex_eval_defs.h"
-#include "nvim/ex_getln.h"
 #include "nvim/extmark.h"
 #include "nvim/fileio.h"
-#include "nvim/fold.h"
-#include "nvim/fuzzy.h"
-#include "nvim/garray.h"
-#include "nvim/garray_defs.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/help.h"
-#include "nvim/highlight_defs.h"
-#include "nvim/highlight_group.h"
 #include "nvim/macros_defs.h"
-#include "nvim/mark.h"
 #include "nvim/mbyte.h"
 #include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
@@ -54,14 +40,12 @@
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
-#include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
 #include "nvim/os/fs_defs.h"
-#include "nvim/os/input.h"
 #include "nvim/os/os.h"
 #include "nvim/os/os_defs.h"
 #include "nvim/path.h"
