@@ -124,9 +124,6 @@ extern "C" {
     /// Get the `curbuf->b_ml.ml_flags` field.
     fn nvim_curbuf_get_ml_flags() -> c_int;
 
-    /// Get the `ML_LINE_DIRTY` constant.
-    fn nvim_get_ml_line_dirty() -> c_int;
-
     /// Get the `b_fname` field from a buffer (short filename).
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
 
@@ -1065,7 +1062,8 @@ pub unsafe extern "C" fn rs_buflist_name_nr(
 /// Calls external C functions to access buffer state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_line_alloced() -> c_int {
-    nvim_curbuf_get_ml_flags() & nvim_get_ml_line_dirty()
+    const ML_LINE_DIRTY: c_int = 0x02;
+    nvim_curbuf_get_ml_flags() & ML_LINE_DIRTY
 }
 
 // =============================================================================

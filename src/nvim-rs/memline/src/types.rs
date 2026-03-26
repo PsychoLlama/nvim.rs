@@ -575,6 +575,26 @@ impl Default for DataBlockHeader {
 /// Size of the data block header (offset to db_index array).
 pub const DATA_BLOCK_HEADER_SIZE: usize = std::mem::size_of::<DataBlockHeader>();
 
+// =============================================================================
+// Additional constants for C accessor elimination
+// =============================================================================
+
+/// Minimum swap page size (MIN_SWAP_PAGE_SIZE in memfile.h)
+pub const MIN_SWAP_PAGE_SIZE: u32 = 1048;
+
+/// HLF_E highlight group (error messages) - index in hlf_T enum
+/// HLF_NONE=0, HLF_8=1, HLF_EOB=2, HLF_TERM=3, HLF_AT=4, HLF_D=5, HLF_E=6
+pub const HLF_E: c_int = 6;
+
+/// SHM_ATTENTION: 'A' - No ATTENTION messages in 'shortmess'
+pub const SHM_ATTENTION: c_int = b'A' as c_int;
+
+/// UPD_NOT_VALID: buffer needs complete redraw (value 40)
+pub const UPD_NOT_VALID: c_int = 40;
+
+/// Size of b0_version field in ZeroBlock (sizeof(b0_version) = 10)
+pub const B0_VERSION_SIZE: usize = 10;
+
 /// Calculate the maximum number of pointer entries that fit in a page.
 ///
 /// # Arguments

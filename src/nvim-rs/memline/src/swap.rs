@@ -18,9 +18,11 @@ use std::ffi::{c_char, c_int, c_uint};
 
 use crate::rs_long_to_char;
 use crate::types::{
-    BufHandle, B0_DIRTY, B0_FF_MASK, BF_RECOVERED, MFS_ZERO, ML_ALLOCATED, ML_LINE_DIRTY, UB_FNAME,
-    UB_SAME_DIR,
+    BufHandle, B0_DIRTY, B0_FF_MASK, BF_RECOVERED, MFS_ZERO, ML_ALLOCATED, ML_LINE_DIRTY,
+    SHM_ATTENTION, UB_FNAME, UB_SAME_DIR,
 };
+#[allow(unused_imports)]
+use libc;
 
 /// CMOD_NOSWAPFILE flag value (validated by _Static_assert in option_shim.c)
 const CMOD_NOSWAPFILE: c_int = 0x2000;
@@ -300,8 +302,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
     // Need to (re)open the swap file if we closed it
     if nvim_mf_get_fd(mfp) == -1 {
         let mf_fname = nvim_mf_get_fname(mfp);
-        let o_rdwr = nvim_get_o_rdwr();
-        let new_fd = os_open(mf_fname, o_rdwr, 0);
+        let new_fd = os_open(mf_fname, libc::O_RDWR, 0);
         if new_fd < 0 {
             // could not (re)open the swap file
             emsg(c"E301: Oops, lost the swap file!!!".as_ptr());
@@ -708,8 +709,6 @@ extern "C" {
     /// Direct access: p_uc (updatecount)
     static mut p_uc: i64;
 
-    /// Get O_RDWR constant value for os_open
-    fn nvim_get_o_rdwr() -> c_int;
 }
 
 // =============================================================================
@@ -1659,9 +1658,6 @@ extern "C" {
     /// Verbose message
     fn nvim_verb_msg(s: *const c_char);
 
-    /// Get SHM_ATTENTION constant
-    fn nvim_get_shm_attention() -> c_int;
-
     /// Open file for reading, return fd
     fn nvim_os_open_rdonly(fname: *const c_char) -> c_int;
 
@@ -1985,14 +1981,13 @@ pub unsafe extern "C" fn rs_findswapname(
                 // Show the ATTENTION message when:
                 // - there is an old swapfile for the current file
                 // - the buffer was not recovered
-                let shm_attention = nvim_get_shm_attention();
                 let p_shm = nvim_get_p_shm();
                 let shm_has_attention = if p_shm.is_null() {
                     false
                 } else {
                     let mut p = p_shm;
                     while *p != 0 {
-                        if *p == shm_attention as c_char {
+                        if *p == SHM_ATTENTION as c_char {
                             break;
                         }
                         p = p.add(1);

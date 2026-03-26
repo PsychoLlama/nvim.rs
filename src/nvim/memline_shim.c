@@ -183,8 +183,6 @@ static const char e_warning_pointer_block_corrupted[]
 
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
-int nvim_get_ml_line_dirty(void) { return ML_LINE_DIRTY; }
-
 memfile_T *nvim_buf_get_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp; }
 int nvim_buf_get_ml_flags(buf_T *buf) { return buf->b_ml.ml_flags; }
 void nvim_buf_set_ml_flags(buf_T *buf, int flags) { buf->b_ml.ml_flags = flags; }
@@ -563,7 +561,6 @@ int16_t nvim_b0_get_magic_short(const ZeroBlock *b0p) { return b0p->b0_magic_sho
 uint8_t nvim_b0_get_magic_char(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_magic_char; }
 uint8_t nvim_b0_get_id(const ZeroBlock *b0p, int idx) { return (uint8_t)b0p->b0_id[idx]; }
 const char *nvim_b0_get_version_ptr(const ZeroBlock *b0p) { return b0p->b0_version; }
-size_t nvim_b0_get_version_size(void) { return sizeof(((ZeroBlock *)NULL)->b0_version); }
 const char *nvim_b0_get_uname_ptr(const ZeroBlock *b0p) { return b0p->b0_uname; }
 const char *nvim_b0_get_hname_ptr(const ZeroBlock *b0p) { return b0p->b0_hname; }
 const char *nvim_b0_get_fname_ptr(const ZeroBlock *b0p) { return b0p->b0_fname; }
@@ -634,8 +631,6 @@ void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0)
 void nvim_os_set_cloexec(int fd) { os_set_cloexec(fd); }
 
 int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, to); }
-
-int nvim_get_o_rdwr(void) { return O_RDWR; }
 
 void nvim_buf_init_ml_empty(buf_T *buf)
 {
@@ -774,8 +769,6 @@ void nvim_msg_multiline(const char *s, int hl_id)
 
 void nvim_verb_msg(const char *s) { verb_msg((char *)s); }
 
-int nvim_get_shm_attention(void) { return SHM_ATTENTION; }
-
 int nvim_os_open_rdonly(const char *fname) { return os_open(fname, O_RDONLY, 0); }
 
 void nvim_close_fd(int fd) { close(fd); }
@@ -853,16 +846,6 @@ void nvim_mf_put_block(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile) { mf
 void nvim_mf_new_page_size_wrapper(memfile_T *mfp, unsigned new_size) { mf_new_page_size(mfp, new_size); }
 
 void nvim_bhdr_set_bh_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
-
-unsigned nvim_get_min_swap_page_size(void) { return MIN_SWAP_PAGE_SIZE; }
-
-int nvim_get_hlf_e(void) { return HLF_E; }
-
-uint16_t nvim_get_ptr_id(void) { return PTR_ID; }
-
-uint16_t nvim_get_data_id(void) { return DATA_ID; }
-
-unsigned nvim_get_header_size(void) { return (unsigned)HEADER_SIZE; }
 
 uint16_t nvim_pp_count_max_for_mfp(memfile_T *mfp) { return PB_COUNT_MAX(mfp); }
 
@@ -1094,8 +1077,6 @@ int nvim_prompt_for_recovery(void)
 }
 
 void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
-
-int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
 
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 

@@ -22,7 +22,10 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::types::{BlockNr, BufHandle, InfoPtrHandle};
+use crate::types::{
+    BlockNr, BufHandle, InfoPtrHandle, B0_VERSION_SIZE, DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E,
+    MIN_SWAP_PAGE_SIZE, PTR_ID, UPD_NOT_VALID,
+};
 
 // =============================================================================
 // C Implementation Declarations
@@ -167,11 +170,6 @@ extern "C" {
     fn nvim_b0_get_page_size_int(b0p: *const c_void) -> c_uint;
     fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
     fn nvim_b0_is_vim3(b0p: *const c_void) -> c_int;
-    fn nvim_get_min_swap_page_size() -> c_uint;
-    fn nvim_get_hlf_e() -> c_int;
-    fn nvim_get_ptr_id() -> u16;
-    fn nvim_get_data_id() -> u16;
-    fn nvim_get_header_size() -> c_uint;
     fn nvim_pp_get_id(pp: *const c_void) -> u16;
     fn nvim_pp_get_count(pp: *const c_void) -> u16;
     fn nvim_pp_get_count_max(pp: *const c_void) -> u16;
@@ -241,7 +239,6 @@ extern "C" {
     fn nvim_check_cursor();
     fn redraw_curbuf_later(redraw_type: c_int);
     fn line_breakcheck();
-    fn nvim_get_upd_not_valid_val() -> c_int;
     fn nvim_prompt_for_recovery() -> c_int;
     fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
     fn nvim_set_cmdline_row_to_msg_row();
@@ -368,8 +365,8 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         nvim_buf_set_ml_mfp(buf.cast::<BufHandle>(), mfp);
 
         // Use minimum page size to be able to read block 0
-        nvim_mf_new_page_size_wrapper(mfp, nvim_get_min_swap_page_size());
-        let hl_id = nvim_get_hlf_e();
+        nvim_mf_new_page_size_wrapper(mfp, MIN_SWAP_PAGE_SIZE);
+        let hl_id = HLF_E;
 
         // Read block 0
         hp = nvim_mf_get_block(mfp, 0, 1);
@@ -599,7 +596,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             msg_puts(c"\n\n".as_ptr());
             nvim_set_cmdline_row_to_msg_row();
         }
-        redraw_curbuf_later(nvim_get_upd_not_valid_val());
+        redraw_curbuf_later(UPD_NOT_VALID);
     } // end 'cleanup
 
     // Always-run cleanup
@@ -708,7 +705,7 @@ unsafe fn recover_btree(
         } else {
             let data = nvim_bhdr_get_bh_data(hp);
 
-            if nvim_pp_get_id(data) == nvim_get_ptr_id() {
+            if nvim_pp_get_id(data) == PTR_ID {
                 // ---- Pointer block ----
                 let expected_max = nvim_pp_count_max_for_mfp(mfp);
                 let actual_max = nvim_pp_get_count_max(data);
@@ -793,7 +790,7 @@ unsafe fn recover_btree(
                 // idx >= pb_count_now: fall through to stack pop
             } else {
                 // ---- Data block ----
-                if nvim_dp_get_id(data) != nvim_get_data_id() {
+                if nvim_dp_get_id(data) != DATA_ID {
                     if bnum == 1 {
                         nvim_recover_msg(
                             RECOVER_MSG_E310_BLOCK1_ID,
@@ -854,7 +851,7 @@ unsafe fn recover_btree(
                             break;
                         }
                         let txt_start = nvim_dp_get_index_masked(data, i);
-                        let header_size = nvim_get_header_size();
+                        let header_size = DATA_BLOCK_HEADER_SIZE as c_uint;
                         let dp_txt_end = nvim_dp_get_txt_end(data);
                         let line_ptr: *const c_char =
                             if txt_start <= header_size || txt_start >= dp_txt_end {
@@ -1553,7 +1550,6 @@ extern "C" {
     fn nvim_b0_get_version_ptr(b0: *const c_void) -> *const c_char;
 
     /// Get size of b0_version field
-    fn nvim_b0_get_version_size() -> usize;
 
     /// Get pointer to b0_uname field (B0_UNAME_SIZE bytes)
     fn nvim_b0_get_uname_ptr(b0: *const c_void) -> *const c_char;
@@ -1711,12 +1707,11 @@ unsafe fn ml_check_b0_id_native(b0: *const c_void) -> bool {
 /// - `b0` must be a valid pointer to a ZeroBlock
 unsafe fn ml_check_b0_strings_native(b0: *const c_void) -> bool {
     let version = nvim_b0_get_version_ptr(b0);
-    let version_size = nvim_b0_get_version_size();
     let uname = nvim_b0_get_uname_ptr(b0);
     let hname = nvim_b0_get_hname_ptr(b0);
     let fname = nvim_b0_get_fname_ptr(b0);
 
-    has_nul(version, version_size)
+    has_nul(version, B0_VERSION_SIZE)
         && has_nul(uname, B0_UNAME_SIZE)
         && has_nul(hname, B0_HNAME_SIZE)
         && has_nul(fname, B0_FNAME_SIZE_CRYPT)
