@@ -702,7 +702,6 @@ void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelisti
 void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
 void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
 
-/// Get pointer to static no_position fmark_T for buflist_findfmark.
 fmark_T *nvim_get_no_position_ptr(void)
 {
   static fmark_T no_position = { { 1, 0, 0 }, 0, 0, { 0 }, NULL };
@@ -797,11 +796,7 @@ int nvim_swb_has_newtab(void) { return (swb_flags & kOptSwbFlagNewtab) ? 1 : 0; 
 /// Returns non-zero if the current buffer is empty.
 int nvim_curbuf_is_empty(void) { return buf_is_empty(curbuf) ? 1 : 0; }
 
-/// Returns WSP_VERT flag if 'switchbuf' has "vsplit", else 0.
-int nvim_swb_win_split_flags(void)
-{
-  return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0;
-}
+int nvim_swb_win_split_flags(void) { return (swb_flags & kOptSwbFlagVsplit) ? WSP_VERT : 0; }
 
 // ============================================================
 // buf_contents_changed accessors
