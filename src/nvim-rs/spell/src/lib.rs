@@ -1999,9 +1999,10 @@ fn ga_empty(ga: *const GArrayRaw) -> bool {
 ///
 /// # Safety
 /// ga must be a valid non-null pointer to a GArrayRaw for langp_T, and i < ga_len.
+#[must_use]
 #[inline]
 #[allow(clippy::cast_sign_loss)]
-unsafe fn langp_entry(ga: *const GArrayRaw, i: c_int) -> *const LangpT {
+pub unsafe fn langp_entry(ga: *const GArrayRaw, i: c_int) -> *const LangpT {
     let data = (*ga).ga_data.cast::<LangpT>();
     data.add(i as usize)
 }

@@ -255,11 +255,24 @@ int nvim_spellsug_get_sps_limit(void) { return sps_limit; }
 // Accessor for the HLF_COUNT sentinel value (used by rs_check_suggestions).
 int nvim_hlf_count(void) { return (int)HLF_COUNT; }
 
+// Accessors for suginfo_T fields (used by rs_score_combine).
+// Use void* for suginfo_T* to avoid exposing the type in the generated header.
+garray_T *nvim_suginfo_get_ga(void *su) { return &((suginfo_T *)su)->su_ga; }
+garray_T *nvim_suginfo_get_sga(void *su) { return &((suginfo_T *)su)->su_sga; }
+const char *nvim_suginfo_get_fbadword(void *su) { return ((suginfo_T *)su)->su_fbadword; }
+const char *nvim_suginfo_get_badword(void *su) { return ((suginfo_T *)su)->su_badword; }
+const char *nvim_suginfo_get_badptr(void *su) { return ((suginfo_T *)su)->su_badptr; }
+int nvim_suginfo_get_maxscore(void *su) { return ((suginfo_T *)su)->su_maxscore; }
+int nvim_suginfo_get_maxcount(void *su) { return ((suginfo_T *)su)->su_maxcount; }
+void nvim_suginfo_set_ga(void *su, garray_T ga) { ((suginfo_T *)su)->su_ga = ga; }
+int nvim_suginfo_get_badlen(void *su) { return ((suginfo_T *)su)->su_badlen; }
+
 extern int rs_spell_check_sps_full(const char *p_sps_val);
 extern int rs_cleanup_suggestions(suggest_T *data, int *gap_len, int maxscore, int keep);
 extern int rs_stp_sal_score(suggest_T *stp, const char *su_badptr, int su_badlen,
                             slang_T *slang, const char *badsound);
 extern void rs_check_suggestions(suggest_T *data, int *gap_len, const char *su_badptr);
+extern void rs_score_combine_lists(void *su);
 
 /// Check the 'spellsuggest' option.  Return FAIL if it's wrong.
 /// Sets "sps_flags" and "sps_limit".
@@ -2028,97 +2041,7 @@ static void score_comp_sal(suginfo_T *su)
 /// They are entwined.
 static void score_combine(suginfo_T *su)
 {
-  garray_T ga;
-  char *p;
-  char badsound[MAXWLEN];
-  slang_T *slang = NULL;
-
-  // Add the alternate score to su_ga.
-  for (int lpi = 0; lpi < curwin->w_s->b_langp.ga_len; lpi++) {
-    langp_T *lp = LANGP_ENTRY(curwin->w_s->b_langp, lpi);
-    if (!GA_EMPTY(&lp->lp_slang->sl_sal)) {
-      // soundfold the bad word
-      slang = lp->lp_slang;
-      spell_soundfold(slang, su->su_fbadword, true, badsound);
-
-      for (int i = 0; i < su->su_ga.ga_len; i++) {
-        suggest_T *stp = &SUG(su->su_ga, i);
-        stp->st_altscore = stp_sal_score(stp, su, slang, badsound);
-        if (stp->st_altscore == SCORE_MAXMAX) {
-          stp->st_score = (stp->st_score * 3 + SCORE_BIG) / 4;
-        } else {
-          stp->st_score = (stp->st_score * 3 + stp->st_altscore) / 4;
-        }
-        stp->st_salscore = false;
-      }
-      break;
-    }
-  }
-
-  if (slang == NULL) {  // Using "double" without sound folding.
-    cleanup_suggestions(&su->su_ga, su->su_maxscore,
-                        su->su_maxcount);
-    return;
-  }
-
-  // Add the alternate score to su_sga.
-  for (int i = 0; i < su->su_sga.ga_len; i++) {
-    suggest_T *stp = &SUG(su->su_sga, i);
-    stp->st_altscore = rs_spell_edit_score(slang, su->su_badword, stp->st_word);
-    if (stp->st_score == SCORE_MAXMAX) {
-      stp->st_score = (SCORE_BIG * 7 + stp->st_altscore) / 8;
-    } else {
-      stp->st_score = (stp->st_score * 7 + stp->st_altscore) / 8;
-    }
-    stp->st_salscore = true;
-  }
-
-  // Remove bad suggestions, sort the suggestions and truncate at "maxcount"
-  // for both lists.
-  check_suggestions(su, &su->su_ga);
-  cleanup_suggestions(&su->su_ga, su->su_maxscore, su->su_maxcount);
-  check_suggestions(su, &su->su_sga);
-  cleanup_suggestions(&su->su_sga, su->su_maxscore, su->su_maxcount);
-
-  ga_init(&ga, (int)sizeof(suginfo_T), 1);
-  ga_grow(&ga, su->su_ga.ga_len + su->su_sga.ga_len);
-
-  suggest_T *stp = &SUG(ga, 0);
-  for (int i = 0; i < su->su_ga.ga_len || i < su->su_sga.ga_len; i++) {
-    // round 1: get a suggestion from su_ga
-    // round 2: get a suggestion from su_sga
-    for (int round = 1; round <= 2; round++) {
-      garray_T *gap = round == 1 ? &su->su_ga : &su->su_sga;
-      if (i < gap->ga_len) {
-        // Don't add a word if it's already there.
-        p = SUG(*gap, i).st_word;
-        int j;
-        for (j = 0; j < ga.ga_len; j++) {
-          if (strcmp(stp[j].st_word, p) == 0) {
-            break;
-          }
-        }
-        if (j == ga.ga_len) {
-          stp[ga.ga_len++] = SUG(*gap, i);
-        } else {
-          xfree(p);
-        }
-      }
-    }
-  }
-
-  ga_clear(&su->su_ga);
-  ga_clear(&su->su_sga);
-
-  // Truncate the list to the number of suggestions that will be displayed.
-  if (ga.ga_len > su->su_maxcount) {
-    for (int i = su->su_maxcount; i < ga.ga_len; i++) {
-      xfree(stp[i].st_word);
-    }
-    ga.ga_len = su->su_maxcount;
-  }
-
-  su->su_ga = ga;
+  rs_score_combine_lists(su);
 }
 
 /// For the goodword in "stp" compute the soundalike score compared to the

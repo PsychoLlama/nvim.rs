@@ -2688,6 +2688,7 @@ pub unsafe extern "C" fn rs_spell_check_sps_full(p_sps_val: *const c_char) -> c_
 ///   slang_T *st_slang;  // 8 bytes (pointer)
 /// Total: 40 bytes
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct CSuggestT {
     /// Suggested word, allocated C string
     pub st_word: *mut c_char,
@@ -2995,6 +2996,213 @@ pub unsafe extern "C" fn rs_check_suggestions(
         }
     }
     *gap_len = cur_len as c_int;
+}
+
+// =============================================================================
+// Phase 5: score_combine
+// =============================================================================
+
+extern "C" {
+    fn nvim_suginfo_get_ga(su: *mut std::ffi::c_void) -> *mut crate::GArrayRaw;
+    fn nvim_suginfo_get_sga(su: *mut std::ffi::c_void) -> *mut crate::GArrayRaw;
+    fn nvim_suginfo_get_fbadword(su: *mut std::ffi::c_void) -> *const c_char;
+    fn nvim_suginfo_get_badword(su: *mut std::ffi::c_void) -> *const c_char;
+    fn nvim_suginfo_get_badptr(su: *mut std::ffi::c_void) -> *const c_char;
+    fn nvim_suginfo_get_badlen(su: *mut std::ffi::c_void) -> c_int;
+    fn nvim_suginfo_get_maxscore(su: *mut std::ffi::c_void) -> c_int;
+    fn nvim_suginfo_get_maxcount(su: *mut std::ffi::c_void) -> c_int;
+    fn nvim_suginfo_set_ga(su: *mut std::ffi::c_void, ga: crate::GArrayRaw);
+    fn nvim_win_get_b_langp(wp: *const std::ffi::c_void) -> *const crate::GArrayRaw;
+    #[link_name = "ga_init"]
+    fn ga_init_suggest(gap: *mut crate::GArrayRaw, itemsize: c_int, growsize: c_int);
+    #[link_name = "ga_grow"]
+    fn ga_grow_suggest(gap: *mut crate::GArrayRaw, n: c_int);
+    #[link_name = "ga_clear"]
+    fn ga_clear_suggest(gap: *mut crate::GArrayRaw);
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+/// Rust replacement for C `score_combine` (the suggestion list combiner).
+///
+/// Combines su->su_ga and su->su_sga suggestion lists by applying
+/// sound-alike rescoring and merging with deduplication.
+///
+/// # Safety
+/// `su` must be a valid pointer to a `suginfo_T` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_score_combine_lists(su: *mut std::ffi::c_void) {
+    let mut badsound = [0u8; MAXWLEN];
+    let mut slang: SlangHandle = SlangHandle::null();
+
+    let langp_ga = nvim_win_get_b_langp(stp_sal_curwin);
+    let langp_len = (*langp_ga).ga_len;
+
+    // Step 1: Add alternate score to su_ga using sound-alike scoring.
+    for lpi in 0..langp_len {
+        let lp = crate::langp_entry(langp_ga, lpi);
+        let lp_slang = SlangHandle((*lp).lp_slang);
+        if (*(*lp).lp_slang).sl_sal.ga_len > 0 {
+            slang = lp_slang;
+            crate::rs_spell_soundfold(
+                slang.0,
+                nvim_suginfo_get_fbadword(su).cast_mut(),
+                true,
+                badsound.as_mut_ptr().cast::<c_char>(),
+            );
+
+            let su_badptr = nvim_suginfo_get_badptr(su);
+            let su_badlen = nvim_suginfo_get_badlen(su);
+            let ga = nvim_suginfo_get_ga(su);
+            let ga_len = (*ga).ga_len as usize;
+            let ga_data = (*ga).ga_data.cast::<CSuggestT>();
+            for i in 0..ga_len {
+                let stp = ga_data.add(i);
+                (*stp).st_altscore =
+                    rs_stp_sal_score(stp, su_badptr, su_badlen, slang, badsound.as_ptr().cast());
+                if (*stp).st_altscore == SCORE_MAXMAX {
+                    (*stp).st_score = ((*stp).st_score * 3 + SCORE_BIG) / 4;
+                } else {
+                    (*stp).st_score = ((*stp).st_score * 3 + (*stp).st_altscore) / 4;
+                }
+                (*stp).st_salscore = false;
+            }
+            break;
+        }
+    }
+
+    if slang.is_null() {
+        // Using "double" without sound folding.
+        let ga = nvim_suginfo_get_ga(su);
+        let maxscore = nvim_suginfo_get_maxscore(su);
+        let maxcount = nvim_suginfo_get_maxcount(su);
+        rs_cleanup_suggestions(
+            (*ga).ga_data.cast::<CSuggestT>(),
+            &raw mut (*ga).ga_len,
+            maxscore,
+            maxcount,
+        );
+        return;
+    }
+
+    // Step 2: Add alternate score to su_sga using edit distance scoring.
+    let badword = nvim_suginfo_get_badword(su);
+    {
+        let sga = nvim_suginfo_get_sga(su);
+        let sga_len = (*sga).ga_len as usize;
+        let sga_data = (*sga).ga_data.cast::<CSuggestT>();
+        for i in 0..sga_len {
+            let stp = sga_data.add(i);
+            (*stp).st_altscore = rs_spell_edit_score(slang, badword, (*stp).st_word);
+            if (*stp).st_score == SCORE_MAXMAX {
+                (*stp).st_score = (SCORE_BIG * 7 + (*stp).st_altscore) / 8;
+            } else {
+                (*stp).st_score = ((*stp).st_score * 7 + (*stp).st_altscore) / 8;
+            }
+            (*stp).st_salscore = true;
+        }
+    }
+
+    // Step 3: Clean up both lists.
+    let maxscore = nvim_suginfo_get_maxscore(su);
+    let maxcount = nvim_suginfo_get_maxcount(su);
+    let su_badptr = nvim_suginfo_get_badptr(su);
+
+    {
+        let ga = nvim_suginfo_get_ga(su);
+        rs_check_suggestions(
+            (*ga).ga_data.cast::<CSuggestT>(),
+            &raw mut (*ga).ga_len,
+            su_badptr,
+        );
+        rs_cleanup_suggestions(
+            (*ga).ga_data.cast::<CSuggestT>(),
+            &raw mut (*ga).ga_len,
+            maxscore,
+            maxcount,
+        );
+    }
+
+    {
+        let sga = nvim_suginfo_get_sga(su);
+        rs_check_suggestions(
+            (*sga).ga_data.cast::<CSuggestT>(),
+            &raw mut (*sga).ga_len,
+            su_badptr,
+        );
+        rs_cleanup_suggestions(
+            (*sga).ga_data.cast::<CSuggestT>(),
+            &raw mut (*sga).ga_len,
+            maxscore,
+            maxcount,
+        );
+    }
+
+    // Step 4: Merge both lists into a new garray, deduplicating.
+    let ga = nvim_suginfo_get_ga(su);
+    let sga = nvim_suginfo_get_sga(su);
+    let total = (*ga).ga_len + (*sga).ga_len;
+
+    let mut merged = crate::GArrayRaw {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: std::ptr::null_mut(),
+    };
+    ga_init_suggest(
+        &raw mut merged,
+        std::mem::size_of::<CSuggestT>() as c_int,
+        1,
+    );
+    ga_grow_suggest(&raw mut merged, total);
+
+    let merged_data = merged.ga_data.cast::<CSuggestT>();
+    let ga_data = (*ga).ga_data.cast::<CSuggestT>();
+    let sga_data = (*sga).ga_data.cast::<CSuggestT>();
+    let ga_len = (*ga).ga_len as usize;
+    let sga_len = (*sga).ga_len as usize;
+    let outer_len = ga_len.max(sga_len);
+
+    for i in 0..outer_len {
+        for round in 0..2usize {
+            let (src_data, src_len) = if round == 0 {
+                (ga_data, ga_len)
+            } else {
+                (sga_data, sga_len)
+            };
+            if i >= src_len {
+                continue;
+            }
+            let word = (*src_data.add(i)).st_word;
+            // Check if this word is already in the merged list.
+            let mut already_there = false;
+            for j in 0..merged.ga_len as usize {
+                if strcmp((*merged_data.add(j)).st_word, word) == 0 {
+                    already_there = true;
+                    break;
+                }
+            }
+            if already_there {
+                xfree(word.cast::<std::ffi::c_void>());
+            } else {
+                *merged_data.add(merged.ga_len as usize) = *src_data.add(i);
+                merged.ga_len += 1;
+            }
+        }
+    }
+
+    ga_clear_suggest(ga);
+    ga_clear_suggest(sga);
+
+    // Step 5: Truncate to maxcount.
+    if merged.ga_len > maxcount {
+        for i in maxcount as usize..merged.ga_len as usize {
+            xfree((*merged_data.add(i)).st_word.cast::<std::ffi::c_void>());
+        }
+        merged.ga_len = maxcount;
+    }
+
+    nvim_suginfo_set_ga(su, merged);
 }
 
 // =============================================================================
