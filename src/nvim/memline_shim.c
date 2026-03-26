@@ -2,45 +2,10 @@
 // #define CHECK(c, s) do { if (c) emsg(s); } while (0)
 #define CHECK(c, s) do {} while (0)
 
-// memline.c: Contains the functions for appending, deleting and changing the
-// text lines. The memfile functions are used to store the information in
-// blocks of memory, backed up by a file. The structure of the information is
-// a tree.  The root of the tree is a pointer block. The leaves of the tree
-// are data blocks. In between may be several layers of pointer blocks,
-// forming branches.
-//
-// Three types of blocks are used:
-// - Block nr 0 contains information for recovery
-// - Pointer blocks contain list of pointers to other blocks.
-// - Data blocks contain the actual text.
-//
-// Block nr 0 contains the block0 structure (see below).
-//
-// Block nr 1 is the first pointer block. It is the root of the tree.
-// Other pointer blocks are branches.
-//
-//  If a line is too big to fit in a single page, the block containing that
-//  line is made big enough to hold the line. It may span several pages.
-//  Otherwise all blocks are one page.
-//
-//  A data block that was filled when starting to edit a file and was not
-//  changed since then, can have a negative block number. This means that it
-//  has not yet been assigned a place in the file. When recovering, the lines
-//  in this data block can be read from the original file. When the block is
-//  positive number. Use mf_trans_del() to get the new number, before calling
-//  mf_get().
-//
-// "Mom, can we get ropes?"
-// "We have ropes at home."
-// Ropes at home:
-
-#include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <uv.h>
@@ -67,7 +32,6 @@
 #include "nvim/macros_defs.h"
 #include "nvim/main.h"
 #include "nvim/map_defs.h"
-#include "nvim/mark.h"
 #include "nvim/mbyte.h"
 #include "nvim/memfile.h"
 #include "nvim/memfile_defs.h"
@@ -89,14 +53,8 @@
 #include "nvim/pos_defs.h"
 #include "nvim/statusline.h"
 #include "nvim/strings.h"
-#include "nvim/ui.h"
-#include "nvim/undo.h"
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
-
-#ifndef UNIX            // it's in os/unix_defs.h for Unix
-# include <time.h>
-#endif
 
 enum {
   DATA_ID = (('d' << 8) + 'a'),  // data block id
@@ -159,7 +117,6 @@ typedef struct {
 // Additional block 0 constants kept here for internal use
 enum {
   B0_FNAME_SIZE_NOCRYPT = 898,  // 2 bytes used for other things
-  B0_FNAME_SIZE_CRYPT = 890,    // 10 bytes used for other things
 };
 // Restrict the numbers to 32 bits, otherwise most compilers will complain.
 // This won't detect a 64 bit machine that only swaps a byte in the top 32
@@ -193,31 +150,6 @@ enum {
 // When empty there is only the NUL.
 #define B0_HAS_FENC     8
 
-// arguments for ml_find_line()
-enum {
-  ML_DELETE = 0x11,  // delete line
-  ML_INSERT = 0x12,  // insert line
-  ML_FIND = 0x13,    // just find the line
-  ML_FLUSH = 0x02,   // flush locked block
-};
-#define ML_SIMPLE(x)    ((x) & 0x10)  // DEL, INS or FIND
-
-// argument for ml_upd_block0()
-typedef enum {
-  UB_FNAME = 0,         // update timestamp and filename
-  UB_SAME_DIR,  // update the B0_SAME_DIR flag
-} upd_block0_T;
-
-typedef enum {
-  SEA_CHOICE_NONE = 0,
-  SEA_CHOICE_READONLY = 1,
-  SEA_CHOICE_EDIT = 2,
-  SEA_CHOICE_RECOVER = 3,
-  SEA_CHOICE_DELETE = 4,
-  SEA_CHOICE_QUIT = 5,
-  SEA_CHOICE_ABORT = 6,
-} sea_choice_T;
-
 #include "memline_shim.c.generated.h"
 
 extern int rs_get_fileformat(buf_T *buf);
@@ -249,15 +181,10 @@ static const char e_warning_pointer_block_corrupted[]
 # define ML_GET_ALLOC_LINES
 #endif
 
-// C accessors for Rust FFI (memline crate)
-
-// Current buffer accessor
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
-// ML_LINE_DIRTY constant accessor
 int nvim_get_ml_line_dirty(void) { return ML_LINE_DIRTY; }
 
-// Buffer memline field accessors
 memfile_T *nvim_buf_get_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp; }
 int nvim_buf_get_ml_flags(buf_T *buf) { return buf->b_ml.ml_flags; }
 void nvim_buf_set_ml_flags(buf_T *buf, int flags) { buf->b_ml.ml_flags = flags; }
@@ -267,42 +194,33 @@ colnr_T nvim_buf_get_ml_line_len(buf_T *buf) { return buf->b_ml.ml_line_len; }
 void nvim_buf_set_ml_line_len(buf_T *buf, colnr_T len) { buf->b_ml.ml_line_len = len; }
 char *nvim_buf_get_ml_line_ptr(buf_T *buf) { return buf->b_ml.ml_line_ptr; }
 
-// Position accessors
 linenr_T nvim_pos_get_lnum(const pos_T *pos) { return pos->lnum; }
 colnr_T nvim_pos_get_col(const pos_T *pos) { return pos->col; }
 colnr_T nvim_pos_get_coladd(const pos_T *pos) { return pos->coladd; }
 
-// Constants
 colnr_T nvim_get_maxcol(void) { return MAXCOL; }
 size_t nvim_get_maxpathl(void) { return MAXPATHL; }
 
-// Validation helpers
 int nvim_buf_has_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
 int nvim_buf_get_ml_usedchunks(buf_T *buf) { return buf->b_ml.ml_usedchunks; }
 
-// Byte offset cache accessor
 size_t nvim_buf_get_ml_line_offset(buf_T *buf) { return buf->b_ml.ml_line_offset; }
 void nvim_buf_set_ml_line_offset(buf_T *buf, size_t offset) { buf->b_ml.ml_line_offset = offset; }
 
-// Locked block line range accessors
 linenr_T nvim_buf_get_ml_locked_high(buf_T *buf) { return buf->b_ml.ml_locked_high; }
 linenr_T nvim_buf_get_ml_locked_low(buf_T *buf) { return buf->b_ml.ml_locked_low; }
 
-// Chunk size accessors (index into ml_chunksize[])
 int nvim_buf_get_ml_chunksize_numlines(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_numlines; }
 int nvim_buf_get_ml_chunksize_totalsize(buf_T *buf, int idx) { return buf->b_ml.ml_chunksize[idx].mlcs_totalsize; }
 int nvim_buf_get_ml_chunksize_is_null(buf_T *buf) { return buf->b_ml.ml_chunksize == NULL; }
 
-// Block header data accessor (returns void* to DataBlock)
 void *nvim_bhdr_get_bh_data(bhdr_T *hp) { return hp->bh_data; }
 
-// Swap file name accessors for recover_names
 char *nvim_buf_get_ml_mfp_fname(buf_T *buf) { return (buf->b_ml.ml_mfp != NULL) ? buf->b_ml.ml_mfp->mf_fname : NULL; }
 char *nvim_get_p_dir(void) { return p_dir; }
 
 void nvim_buf_set_ml_line_ptr(buf_T *buf, char *ptr) { buf->b_ml.ml_line_ptr = ptr; }
 void nvim_buf_set_ml_line_lnum(buf_T *buf, linenr_T lnum) { buf->b_ml.ml_line_lnum = lnum; }
-/// open_buffer() if ml_mfp is NULL. Returns FAIL if it fails.
 int nvim_buf_open_buffer_if_needed(buf_T *buf)
 {
   if (buf->b_ml.ml_mfp == NULL) {
@@ -311,12 +229,8 @@ int nvim_buf_open_buffer_if_needed(buf_T *buf)
   return OK;
 }
 
-/// Emit the "invalid lnum" internal error for ml_get_buf_impl.
-/// Wraps: siemsg(_(e_ml_get_invalid_lnum_nr), lnum)
 void nvim_siemsg_ml_get_invalid_lnum(int64_t lnum) { siemsg(_(e_ml_get_invalid_lnum_nr), lnum); }
 
-/// Emit the "cannot find line" internal error for ml_get_buf_impl.
-/// Wraps: get_trans_bufname + shorten_dir + siemsg(...)
 void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
 {
   get_trans_bufname(buf);
@@ -325,7 +239,6 @@ void nvim_siemsg_ml_get_cannot_find_line(int64_t lnum, buf_T *buf)
          lnum, buf->b_fnum, NameBuff);
 }
 
-// Print swapfile info (calls rs_swapfile_info directly; proc_running discarded for display)
 void nvim_swapfile_info_and_print(char *fname)
 {
   StringBuilder msg = KV_INITIAL_VALUE;
@@ -337,13 +250,8 @@ void nvim_swapfile_info_and_print(char *fname)
   kv_destroy(msg);
 }
 
-/// Append a string to a StringBuilder (opaque void* pointer from Rust)
 void nvim_sb_append_str(void *sb, const char *s) { kv_printf(*(StringBuilder *)sb, "%s", s); }
 
-/// Get file mtime and owner name from a file, for swapfile_info display.
-/// On UNIX, also fills uname_buf with the owner's name (if available).
-/// Returns mtime in seconds, or 0 if file not found.
-/// uname_found is set to 1 if uname_buf was filled.
 int64_t nvim_swapfile_get_file_info(const char *fname, char *uname_buf, size_t uname_len,
                                     int *uname_found)
 {
@@ -360,15 +268,12 @@ int64_t nvim_swapfile_get_file_info(const char *fname, char *uname_buf, size_t u
   return (int64_t)file_info.stat.st_mtim.tv_sec;
 }
 
-/// Append the ctime string for an mtime value to a StringBuilder.
 void nvim_sb_append_ctime(void *sb, int64_t mtime)
 {
   time_t x = (time_t)mtime;
   char ctime_buf[100];
   kv_printf(*(StringBuilder *)sb, "%s", os_ctime_r(&x, ctime_buf, sizeof(ctime_buf), true));
 }
-
-// Translated message dispatch for rs_swapfile_info
 
 typedef enum {
   SB_MSG_OWNED_BY = 0,
@@ -452,37 +357,30 @@ void nvim_sb_swapinfo_msg(void *sb, int msg_id, const char *str_arg, int int_arg
   }
 }
 
-// B-tree stack accessors
 int nvim_buf_get_ml_stack_top(buf_T *buf) { return buf->b_ml.ml_stack_top; }
 infoptr_T *nvim_buf_get_ml_stack_ip(buf_T *buf, int idx) { return &(buf->b_ml.ml_stack[idx]); }
 int64_t nvim_ip_get_bnum(const infoptr_T *ip) { return (int64_t)ip->ip_bnum; }
 int nvim_ip_get_index(const infoptr_T *ip) { return ip->ip_index; }
 void nvim_ip_add_high(infoptr_T *ip, int count) { ip->ip_high += count; }
 
-// PointerBlock field accessors
 uint16_t nvim_pp_get_id(const void *pp) { return ((const PointerBlock *)pp)->pb_id; }
 void nvim_pp_pe_linecount_add(void *pp, int idx, int count)
 {
   ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count += count;
 }
 
-// upd_block0_T enum constants
 void nvim_iemsg_pointer_block_id_wrong_two(void) { iemsg(_(e_pointer_block_id_wrong_two)); }
 void nvim_iemsg_e304_upd_block0(void) { iemsg(_("E304: ml_upd_block0(): Didn't get block 0??")); }
 
-// ml_locked block pointer accessors
 void *nvim_buf_get_ml_locked(buf_T *buf) { return buf->b_ml.ml_locked; }
 void nvim_buf_set_ml_locked(buf_T *buf, void *hp) { buf->b_ml.ml_locked = hp; }
 
-// ml_locked_lineadd accessors
 int nvim_buf_get_ml_locked_lineadd(buf_T *buf) { return buf->b_ml.ml_locked_lineadd; }
 void nvim_buf_set_ml_locked_lineadd(buf_T *buf, int val) { buf->b_ml.ml_locked_lineadd = val; }
 
-// ml_locked_low and ml_locked_high setters (getters already exist above)
 void nvim_buf_set_ml_locked_low(buf_T *buf, linenr_T val) { buf->b_ml.ml_locked_low = val; }
 void nvim_buf_set_ml_locked_high(buf_T *buf, linenr_T val) { buf->b_ml.ml_locked_high = val; }
 
-// infoptr_T ip_low / ip_high getters and ip_bnum / ip_low / ip_high / ip_index setters
 linenr_T nvim_ip_get_low(const infoptr_T *ip) { return ip->ip_low; }
 linenr_T nvim_ip_get_high(const infoptr_T *ip) { return ip->ip_high; }
 void nvim_ip_set_bnum(infoptr_T *ip, int64_t bnum) { ip->ip_bnum = (blocknr_T)bnum; }
@@ -490,7 +388,6 @@ void nvim_ip_set_low(infoptr_T *ip, linenr_T lnum) { ip->ip_low = lnum; }
 void nvim_ip_set_high(infoptr_T *ip, linenr_T lnum) { ip->ip_high = lnum; }
 void nvim_ip_set_index(infoptr_T *ip, int idx) { ip->ip_index = idx; }
 
-// PointerBlock field accessors for ml_find_line
 uint16_t nvim_pp_get_count(const void *pp) { return ((const PointerBlock *)pp)->pb_count; }
 int64_t nvim_pp_pe_get_bnum(const void *pp, int idx)
 {
@@ -511,10 +408,8 @@ void nvim_pp_pe_set_bnum(void *pp, int idx, int64_t bnum)
 void nvim_pp_pe_dec_line_count(void *pp, int idx) { ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count--; }
 void nvim_pp_pe_inc_line_count(void *pp, int idx) { ((PointerBlock *)pp)->pb_pointer[idx].pe_line_count++; }
 
-// uint16_t db_id accessor for DataBlock (to distinguish from PointerBlock)
 uint16_t nvim_dp_get_id(const void *dp) { return ((const DataBlock *)dp)->db_id; }
 
-// Error message wrappers for ml_find_line
 void nvim_iemsg_pointer_block_id_wrong(void) { iemsg(_(e_pointer_block_id_wrong)); }
 void nvim_siemsg_line_number_out_of_range(int64_t lnum_past)
 {
@@ -522,31 +417,24 @@ void nvim_siemsg_line_number_out_of_range(int64_t lnum_past)
 }
 void nvim_siemsg_line_count_wrong_in_block(int64_t bnum) { siemsg(_(e_line_count_wrong_in_block_nr), bnum); }
 
-/// Increment buf->flush_count
 void nvim_buf_inc_flush_count(buf_T *buf) { buf->flush_count++; }
 
-/// Decrement buf->b_ml.ml_line_count and return new value.
 linenr_T nvim_buf_dec_ml_line_count(buf_T *buf) { return --buf->b_ml.ml_line_count; }
 
-/// Increment buf->b_ml.ml_line_count and return new value.
 linenr_T nvim_buf_inc_ml_line_count(buf_T *buf) { return ++buf->b_ml.ml_line_count; }
 
 linenr_T nvim_buf_get_b_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
 
 void nvim_buf_set_b_prev_line_count(buf_T *buf, linenr_T val) { buf->b_prev_line_count = val; }
 
-/// set_keep_msg(_(no_lines_msg), 0) -- "No lines in buffer" message
 void nvim_set_keep_msg_no_lines(void) { set_keep_msg(_(no_lines_msg), 0); }
 
-/// iemsg for "E317: Pointer block id wrong 4"
 void nvim_iemsg_pointer_block_id_wrong_four(void) { iemsg(_(e_pointer_block_id_wrong_four)); }
 
 void nvim_mf_free(memfile_T *mfp, bhdr_T *hp) { mf_free(mfp, hp); }
 
-/// Decrement pp->pb_count and return new value.
 int nvim_pp_dec_count(void *pp) { return --(((PointerBlock *)pp)->pb_count); }
 
-/// memmove(pp->pb_pointer + dst_idx, pp->pb_pointer + src_idx, count * sizeof(PointerEntry))
 void nvim_pp_pe_memmove(void *pp, int dst_idx, int src_idx, int count)
 {
   PointerBlock *pb = (PointerBlock *)pp;
@@ -558,13 +446,10 @@ int64_t nvim_bhdr_get_bh_bnum(bhdr_T *hp) { return (int64_t)hp->bh_bnum; }
 
 int nvim_bhdr_get_bh_page_count(bhdr_T *hp) { return (int)hp->bh_page_count; }
 
-/// iemsg for "E317: Pointer block id wrong 3"
 void nvim_iemsg_pointer_block_id_wrong_three(void) { iemsg(_(e_pointer_block_id_wrong_three)); }
 
-/// iemsg for "E318: Updated too many blocks?"
 void nvim_iemsg_e318_updated_too_many(void) { iemsg(_("E318: Updated too many blocks?")); }
 
-/// Increment pp->pb_count and return new value.
 uint16_t nvim_pp_inc_count(void *pp) { return ++(((PointerBlock *)pp)->pb_count); }
 
 void nvim_buf_set_ml_chunksize_numlines(buf_T *buf, int idx, int val)
@@ -577,13 +462,11 @@ void nvim_buf_set_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
   buf->b_ml.ml_chunksize[idx].mlcs_totalsize = val;
 }
 
-/// Add val to buf->b_ml.ml_chunksize[idx].mlcs_numlines
 void nvim_buf_add_ml_chunksize_numlines(buf_T *buf, int idx, int val)
 {
   buf->b_ml.ml_chunksize[idx].mlcs_numlines += val;
 }
 
-/// Add val to buf->b_ml.ml_chunksize[idx].mlcs_totalsize
 void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
 {
   buf->b_ml.ml_chunksize[idx].mlcs_totalsize += val;
@@ -591,7 +474,6 @@ void nvim_buf_add_ml_chunksize_totalsize(buf_T *buf, int idx, int val)
 
 void nvim_buf_set_ml_usedchunks(buf_T *buf, int val) { buf->b_ml.ml_usedchunks = val; }
 
-/// memmove within ml_chunksize: move count entries from src_idx to dst_idx.
 void nvim_buf_ml_chunksize_memmove(buf_T *buf, int dst_idx, int src_idx, int count)
 {
   memmove(buf->b_ml.ml_chunksize + dst_idx,
@@ -599,7 +481,6 @@ void nvim_buf_ml_chunksize_memmove(buf_T *buf, int dst_idx, int src_idx, int cou
           (size_t)count * sizeof(chunksize_T));
 }
 
-/// Ensure capacity for usedchunks+1: grow ml_chunksize array by 3/2 if needed.
 void nvim_buf_ml_chunksize_ensure_capacity(buf_T *buf)
 {
   if (buf->b_ml.ml_usedchunks + 1 >= buf->b_ml.ml_numchunks) {
@@ -609,7 +490,6 @@ void nvim_buf_ml_chunksize_ensure_capacity(buf_T *buf)
   }
 }
 
-/// Allocate initial ml_chunksize array (100 entries) and set first entry to (1, 1).
 void nvim_buf_ml_chunksize_init(buf_T *buf)
 {
   buf->b_ml.ml_chunksize = xmalloc(sizeof(chunksize_T) * 100);
@@ -619,10 +499,8 @@ void nvim_buf_ml_chunksize_init(buf_T *buf)
   buf->b_ml.ml_chunksize[0].mlcs_totalsize = 1;
 }
 
-/// Print "E320: Cannot find line N" error for ml_flush_line.
 void nvim_siemsg_e320_cannot_find_line(int64_t lnum) { siemsg(_("E320: Cannot find line %" PRId64), lnum); }
 
-// buf->b_mtime setters
 void nvim_buf_set_b_mtime(buf_T *buf, int64_t val) { buf->b_mtime = val; }
 void nvim_buf_set_b_mtime_ns(buf_T *buf, int64_t val) { buf->b_mtime_ns = val; }
 void nvim_buf_set_b_mtime_read(buf_T *buf, int64_t val) { buf->b_mtime_read = val; }
@@ -630,22 +508,17 @@ void nvim_buf_set_b_mtime_read_ns(buf_T *buf, int64_t val) { buf->b_mtime_read_n
 void nvim_buf_set_b_orig_size(buf_T *buf, int64_t val) { buf->b_orig_size = (uint64_t)val; }
 void nvim_buf_set_b_orig_mode(buf_T *buf, int val) { buf->b_orig_mode = val; }
 
-// ZeroBlock field setters for set_b0_fname
 void nvim_b0_set_fname0(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
-// mtime/ino setters for set_b0_fname
 char *nvim_b0_get_mtime(ZeroBlock *b0p) { return b0p->b0_mtime; }
 char *nvim_b0_get_ino(ZeroBlock *b0p) { return b0p->b0_ino; }
 
-// home_replace wrapper: write home-replaced path into b0_fname
 void nvim_home_replace_b0_fname(const buf_T *buf, ZeroBlock *b0p, size_t maxlen)
 {
   home_replace(NULL, buf->b_ffname, b0p->b0_fname, maxlen, true);
 }
 
-// os_get_username wrapper
 int nvim_os_get_username(char *buf, size_t len) { return os_get_username(buf, len); }
 
-// Wrapper: fills b0_mtime and b0_ino from buf->b_ffname, returns 1 on success
 int nvim_set_b0_mtime_ino(buf_T *buf, ZeroBlock *b0p)
 {
   FileInfo fi;
@@ -660,12 +533,10 @@ int nvim_set_b0_mtime_ino(buf_T *buf, ZeroBlock *b0p)
   return 0;
 }
 
-// Position accessors/setters
 void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
 void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
 
-// Opaque handle accessors for cursor crate (take void* for FFI compatibility)
 linenr_T nvim_buf_get_line_count(void *buf)
 {
   if (buf == NULL) {
@@ -686,7 +557,6 @@ colnr_T nvim_buf_get_line_len(void *buf, linenr_T lnum)
   return ml_get_buf_len(b, lnum);
 }
 
-// ZeroBlock field accessors for Rust FFI
 int64_t nvim_b0_get_magic_long(const ZeroBlock *b0p) { return (int64_t)b0p->b0_magic_long; }
 int32_t nvim_b0_get_magic_int(const ZeroBlock *b0p) { return (int32_t)b0p->b0_magic_int; }
 int16_t nvim_b0_get_magic_short(const ZeroBlock *b0p) { return b0p->b0_magic_short; }
@@ -698,7 +568,6 @@ const char *nvim_b0_get_uname_ptr(const ZeroBlock *b0p) { return b0p->b0_uname; 
 const char *nvim_b0_get_hname_ptr(const ZeroBlock *b0p) { return b0p->b0_hname; }
 const char *nvim_b0_get_fname_ptr(const ZeroBlock *b0p) { return b0p->b0_fname; }
 
-// File inode accessor for fnamecmp_ino native Rust implementation
 uint64_t nvim_get_file_inode(const char *fname)
 {
   FileInfo file_info;
@@ -708,7 +577,6 @@ uint64_t nvim_get_file_inode(const char *fname)
   return 0;
 }
 
-// ml_close accessors
 void *nvim_buf_get_ml_stack_void(buf_T *buf) { return buf->b_ml.ml_stack; }
 void nvim_buf_clear_ml_after_close(buf_T *buf)
 {
@@ -720,15 +588,12 @@ void nvim_buf_xfree_clear_ml_chunksize(buf_T *buf)
   xfree(buf->b_ml.ml_chunksize);
   buf->b_ml.ml_chunksize = NULL;
 }
-// ml_flush_deleted_bytes accessors
 size_t nvim_buf_get_deleted_bytes(buf_T *buf) { return buf->deleted_bytes; }
 void nvim_buf_set_deleted_bytes(buf_T *buf, size_t val) { buf->deleted_bytes = val; }
 size_t nvim_buf_get_deleted_codepoints(buf_T *buf) { return buf->deleted_codepoints; }
 void nvim_buf_set_deleted_codepoints(buf_T *buf, size_t val) { buf->deleted_codepoints = val; }
 size_t nvim_buf_get_deleted_codeunits(buf_T *buf) { return buf->deleted_codeunits; }
 void nvim_buf_set_deleted_codeunits(buf_T *buf, size_t val) { buf->deleted_codeunits = val; }
-// check_need_swap accessors
-// ml_setflags accessors
 bhdr_T *nvim_mf_get_block0_hp(memfile_T *mfp) { return pmap_get(int64_t)(&mfp->mf_hash, 0); }
 void nvim_bhdr_set_bh_flags_dirty(bhdr_T *hp) { hp->bh_flags |= BH_DIRTY; }
 
@@ -753,7 +618,6 @@ uint8_t nvim_b0_get_dirty(const ZeroBlock *b0p) { return (uint8_t)b0p->b0_dirty;
 void nvim_b0_set_hname_end(ZeroBlock *b0p) { b0p->b0_hname[B0_HNAME_SIZE - 1] = NUL; }
 size_t nvim_b0_get_struct_size(void) { return sizeof(ZeroBlock); }
 
-// Get mtime of a file (returns 0 if file not found)
 int64_t nvim_get_file_mtime(const char *fname)
 {
   FileInfo file_info;
@@ -769,7 +633,6 @@ void nvim_buf_set_b_may_swap(buf_T *buf, int val) { buf->b_may_swap = (val != 0)
 
 void nvim_os_set_cloexec(int fd) { os_set_cloexec(fd); }
 
-/// Rename a file (vim_rename wrapper)
 int nvim_vim_rename(const char *from, const char *to) { return vim_rename(from, to); }
 
 int nvim_get_o_rdwr(void) { return O_RDWR; }
@@ -823,8 +686,6 @@ void nvim_buf_set_b_p_swf_false(buf_T *buf) { buf->b_p_swf = false; }
 
 void nvim_buf_set_b_may_swap_true(buf_T *buf) { buf->b_may_swap = true; }
 
-/// Get buf->b_help (returns 1 if true)
-
 void nvim_b0_set_dirty_from_buf(ZeroBlock *b0p, buf_T *buf) { b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0; }
 
 void nvim_b0_set_flags_from_ff(ZeroBlock *b0p, int fileformat) { b0p->b0_flags = (char)(fileformat + 1); }
@@ -833,7 +694,6 @@ void nvim_b0_fill_uname(ZeroBlock *b0p) { os_get_username(b0p->b0_uname, B0_UNAM
 
 void nvim_b0_fill_hname(ZeroBlock *b0p) { os_get_hostname(b0p->b0_hname, B0_HNAME_SIZE); }
 
-/// Write PID into b0_pid
 void nvim_b0_fill_pid(ZeroBlock *b0p) { rs_long_to_char((long)os_get_pid(), b0p->b0_pid); }
 
 int nvim_get_swap_exists_action(void) { return swap_exists_action; }
@@ -844,10 +704,8 @@ int nvim_get_recoverymode(void) { return recoverymode ? 1 : 0; }
 
 const char *nvim_get_p_shm(void) { return p_shm; }
 
-/// Increment no_wait_return
 void nvim_inc_no_wait_return(void) { no_wait_return++; }
 
-/// Decrement no_wait_return
 void nvim_dec_no_wait_return(void) { no_wait_return--; }
 
 void nvim_buf_set_b_p_ro_true(buf_T *buf) { buf->b_p_ro = true; }
@@ -858,7 +716,6 @@ int nvim_os_fileinfo_link(const char *fname)
   return os_fileinfo_link(fname, &fi) ? 1 : 0;
 }
 
-/// Read block 0 from a swap file fd. Returns sizeof(ZeroBlock) on success, -1 on failure.
 int nvim_read_block0(int fd, ZeroBlock *b0p)
 {
   ssize_t n = read_eintr(fd, b0p, sizeof(*b0p));
@@ -867,12 +724,10 @@ int nvim_read_block0(int fd, ZeroBlock *b0p)
 
 int nvim_same_directory(const char *a, const char *b) { return same_directory(a, b); }
 
-/// Expand environment variables in src to dst, maxlen version (expand_env wrapper)
 void nvim_expand_env_maxpathl(const char *src, char *dst, int len) { expand_env((char *)src, dst, len); }
 
 int nvim_os_isdir(const char *name) { return os_isdir(name) ? 1 : 0; }
 
-/// Create directory recursively (os_mkdir_recurse wrapper)
 int nvim_os_mkdir_recurse(const char *dir, int mode, char **failed_dir)
 {
   return os_mkdir_recurse(dir, mode, failed_dir, NULL);
@@ -885,7 +740,6 @@ int nvim_has_autocmd_swapexists(const char *fname, buf_T *buf)
   return has_autocmd(EVENT_SWAPEXISTS, fname, buf) ? 1 : 0;
 }
 
-/// Apply SwapExists autocommands for the given buffer + fname
 void nvim_apply_autocmds_swapexists(const char *fname, buf_T *buf)
 {
   allbuf_lock++;
@@ -897,13 +751,10 @@ const char *nvim_get_vim_var_swapchoice(void) { return get_vim_var_str(VV_SWAPCH
 
 void nvim_set_vim_var_swapname(const char *fname) { set_vim_var_string(VV_SWAPNAME, (char *)fname, -1); }
 
-/// Clear v:swapname (set to NULL)
 void nvim_clear_vim_var_swapname(void) { set_vim_var_string(VV_SWAPNAME, NULL, -1); }
 
-/// Clear v:swapchoice (set to NULL)
 void nvim_clear_vim_var_swapchoice(void) { set_vim_var_string(VV_SWAPCHOICE, NULL, -1); }
 
-/// Show a multiline confirm dialog and return user choice (do_dialog wrapper).
 int nvim_do_dialog_warning(const char *title, const char *message,
                            const char *buttons, int dflt_button, bool mouse_used)
 {
@@ -911,30 +762,24 @@ int nvim_do_dialog_warning(const char *title, const char *message,
                    (char *)buttons, dflt_button, NULL, mouse_used);
 }
 
-/// Flush type-ahead buffers (flush_buffers wrapper)
 void nvim_flush_buffers_typeahead(void) { flush_buffers(FLUSH_TYPEAHEAD); }
 
-/// Reset scroll position for messages (msg_reset_scroll wrapper)
 void nvim_msg_reset_scroll(void) { msg_reset_scroll(); }
 
-/// Output a multiline message string with highlight (msg_multiline wrapper)
 void nvim_msg_multiline(const char *s, int hl_id)
 {
   bool need_clear = false;
   msg_multiline(cbuf_as_string((char *)s, strlen(s)), hl_id, false, false, &need_clear);
 }
 
-/// Print a "verbose" message (verb_msg wrapper)
 void nvim_verb_msg(const char *s) { verb_msg((char *)s); }
 
 int nvim_get_shm_attention(void) { return SHM_ATTENTION; }
 
-/// Open file for reading, return fd (os_open wrapper)
 int nvim_os_open_rdonly(const char *fname) { return os_open(fname, O_RDONLY, 0); }
 
 void nvim_close_fd(int fd) { close(fd); }
 
-/// Allocate and initialize a StringBuilder for attention message building
 void *nvim_alloc_stringbuilder_iosize(void)
 {
   StringBuilder *sb = xmalloc(sizeof(StringBuilder));
@@ -947,23 +792,18 @@ const char *nvim_sb_get_items(void *sb) { return ((StringBuilder *)sb)->items; }
 
 size_t nvim_sb_get_size(void *sb) { return ((StringBuilder *)sb)->size; }
 
-/// Destroy and free a StringBuilder
 void nvim_free_stringbuilder(void *sb)
 {
   kv_destroy(*(StringBuilder *)sb);
   xfree(sb);
 }
 
-/// Append a literal string to a StringBuilder (no format)
 void nvim_sb_append(void *sb, const char *s) { kv_printf(*(StringBuilder *)sb, "%s", s); }
 
-/// msg_puts("\n") wrapper
 void nvim_msg_puts_newline(void) { msg_puts("\n"); }
 
-/// os_strerror wrapper (os_strerror is a macro, cannot be referenced directly from Rust)
 const char *nvim_os_strerror(int err) { return os_strerror(err); }
 
-/// Sync memfile blocks to disk
 int nvim_mf_sync(memfile_T *mfp, int flags) { return mf_sync(mfp, flags); }
 
 int nvim_mf_need_trans(memfile_T *mfp) { return mf_need_trans(mfp); }
@@ -974,7 +814,6 @@ int nvim_os_char_avail(void) { return os_char_avail() ? 1 : 0; }
 
 void nvim_set_need_check_timestamps(int val) { need_check_timestamps = val != 0; }
 
-/// Check if original file changed since last read (mtime, mtime_ns, size comparison).
 int nvim_buf_file_unchanged(buf_T *buf)
 {
   if (buf->b_ffname == NULL) {
@@ -996,14 +835,10 @@ void nvim_emsg_preserve_failed(void) { emsg(_("E314: Preserve failed")); }
 
 void nvim_emsg_no_swapfile(void) { emsg(_("E313: Cannot preserve, there is no swap file")); }
 
-// Extmark Accessor Functions (for Rust FFI - extmark crate)
-
 void nvim_set_recoverymode(int val) { recoverymode = (val != 0); }
 
 int nvim_get_called_from_main(void) { return curbuf->b_ml.ml_mfp == NULL ? 1 : 0; }
 
-/// Open a memfile from an existing swapfile (O_RDONLY).
-/// Consumes fname (mf_open frees it). Returns mfp or NULL.
 memfile_T *nvim_mf_open_rdonly(char *fname) { return mf_open(fname, O_RDONLY); }
 
 void nvim_mf_close_nodelete(memfile_T *mfp) { mf_close(mfp, false); }
@@ -1013,7 +848,6 @@ bhdr_T *nvim_mf_get_block(memfile_T *mfp, int64_t bnum, unsigned page_count)
   return mf_get(mfp, (blocknr_T)bnum, page_count);
 }
 
-/// Release a block back to the memfile (mf_put wrapper).
 void nvim_mf_put_block(memfile_T *mfp, bhdr_T *hp, bool dirty, bool infile) { mf_put(mfp, hp, dirty, infile); }
 
 void nvim_mf_new_page_size_wrapper(memfile_T *mfp, unsigned new_size) { mf_new_page_size(mfp, new_size); }
@@ -1060,7 +894,6 @@ int nvim_dp_index_overruns_txt(const void *dp, int i)
 
 const char *nvim_dp_get_txt_ptr(const void *dp, unsigned offset) { return (const char *)dp + offset; }
 
-/// Write NUL at db_txt_end - 1 in a DataBlock (safety terminator).
 void nvim_dp_write_nul_at_txt_end(void *dp)
 {
   DataBlock *d = (DataBlock *)dp;
@@ -1069,44 +902,33 @@ void nvim_dp_write_nul_at_txt_end(void *dp)
 
 void nvim_curbuf_set_b_flags_recovered(void) { curbuf->b_flags |= BF_RECOVERED; }
 
-/// Call getout(1) -- used when ml_open fails during recovery from main.
 void nvim_getout_one(void) { getout(1); }
 
-/// Call ml_open(curbuf) for recovery.
 int nvim_ml_open_curbuf(void) { return ml_open(curbuf); }
 
-/// Call ml_close(curbuf, true) for recovery cleanup.
 void nvim_ml_close_curbuf_true(void) { ml_close(curbuf, true); }
 
-/// Call setfname(curbuf, name, NULL, true) for recovery.
 int nvim_setfname_for_recovery(const char *name) { return setfname(curbuf, (char *)name, NULL, true); }
 
 const char *nvim_buf_spname_curbuf(void) { return buf_spname(curbuf); }
 
-/// home_replace(NULL, mfp->mf_fname, NameBuff, MAXPATHL, true) -- fill NameBuff.
 void nvim_home_replace_into_namebuff(const char *fname) { home_replace(NULL, (char *)fname, NameBuff, MAXPATHL, true); }
 
-/// home_replace(NULL, curbuf->b_ffname, NameBuff, MAXPATHL, true) -- fill NameBuff.
 void nvim_home_replace_curbuf_ffname_into_namebuff(void)
 {
   home_replace(NULL, curbuf->b_ffname, NameBuff, MAXPATHL, true);
 }
 
-/// xstrlcpy(NameBuff, src, MAXPATHL) -- copy spname into NameBuff.
 void nvim_xstrlcpy_namebuff(const char *src) { xstrlcpy(NameBuff, src, MAXPATHL); }
 
-/// expand_env(b0_fname, NameBuff, MAXPATHL) -- expand env vars from block0 fname.
 void nvim_expand_env_into_namebuff(const char *src) { expand_env((char *)src, NameBuff, MAXPATHL); }
 
 const char *nvim_get_namebuff_ptr(void) { return NameBuff; }
 
-/// smsg(0, _("Using swap file \"%s\""), NameBuff)
 void nvim_smsg_using_swap_file(void) { smsg(0, _("Using swap file \"%s\""), NameBuff); }
 
-/// smsg(0, _("Original file \"%s\""), NameBuff)
 void nvim_smsg_original_file(void) { smsg(0, _("Original file \"%s\""), NameBuff); }
 
-/// Compare timestamps of swap file and original file (curbuf->b_ffname).
 int nvim_recover_check_timestamps(memfile_T *mfp, int mtime_b0)
 {
   if (curbuf->b_ffname == NULL) {
@@ -1127,48 +949,37 @@ int nvim_b0_get_mtime_int(const ZeroBlock *b0p) { return (int)rs_char_to_long(b0
 
 unsigned nvim_b0_get_page_size_int(const ZeroBlock *b0p) { return (unsigned)rs_char_to_long(b0p->b0_page_size); }
 
-/// Read original file for recovery (readfile with READ_NEW flag, lnum=0, topline=0, MAXLNUM).
 int nvim_readfile_for_recovery(const char *fname)
 {
   return readfile((char *)fname, NULL, 0, 0, MAXLNUM, NULL, READ_NEW, false);
 }
 
-/// Read lines from original file starting at lnum, from topline, count lines.
 int nvim_readfile_from_original(const char *fname, linenr_T lnum, linenr_T topline, linenr_T line_count)
 {
   return readfile((char *)fname, NULL, lnum, topline, line_count, NULL, 0, false);
 }
 
-/// set_fileformat(ff, OPT_LOCAL) -- set file format from swap file.
 void nvim_set_fileformat_local(int ff) { set_fileformat(ff, OPT_LOCAL); }
 
-/// set_option_value_give_err(kOptFileencoding, fenc, OPT_LOCAL) -- set fileencoding.
 void nvim_set_fenc_local(const char *fenc)
 {
   set_option_value_give_err(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL);
 }
 
-/// unchanged(curbuf, true, true) -- mark curbuf as unchanged.
 void nvim_unchanged_curbuf(void) { unchanged(curbuf, true, true); }
 
-/// changed_internal(curbuf) -- mark curbuf as changed without triggering autocmds.
 void nvim_changed_internal_curbuf(void) { changed_internal(curbuf); }
 
 int nvim_curbuf_get_b_changed(void) { return curbuf->b_changed ? 1 : 0; }
 
-/// ml_delete(curbuf->b_ml.ml_line_count) -- delete last line of curbuf.
 void nvim_ml_delete_last_curbuf(void) { ml_delete(curbuf->b_ml.ml_line_count); }
 
-/// curbuf->b_ml.ml_line_count accessor.
 linenr_T nvim_get_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
-/// curbuf->b_ml.ml_flags accessor.
 int nvim_get_curbuf_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
-/// Decrement and return buf->b_ml.ml_stack_top (for stack pop).
 int nvim_buf_dec_ml_stack_top(buf_T *buf) { return --(buf->b_ml.ml_stack_top); }
 
-/// Reset stack memory for recovery (set to NULL, size 0).
 void nvim_buf_reset_ml_stack(buf_T *buf)
 {
   buf->b_ml.ml_stack_top = 0;
@@ -1176,13 +987,9 @@ void nvim_buf_reset_ml_stack(buf_T *buf)
   buf->b_ml.ml_stack_size = 0;
 }
 
-/// apply_autocmds(EVENT_BUFREADPOST, NULL, curbuf->b_fname, false, curbuf).
 void nvim_apply_autocmds_bufreadpost(void) { apply_autocmds(EVENT_BUFREADPOST, NULL, curbuf->b_fname, false, curbuf); }
 
-/// apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf).
 void nvim_apply_autocmds_bufwinenter(void) { apply_autocmds(EVENT_BUFWINENTER, NULL, curbuf->b_fname, false, curbuf); }
-
-// Recovery message dispatch enum and function
 
 typedef enum {
   RECOVER_MSG_E305_NO_SWAP = 0,
@@ -1279,10 +1086,8 @@ void nvim_recover_msg(int msg_id, const char *fname, const char *extra, int hl_i
   }
 }
 
-/// Final: cmdline_row = msg_row
 void nvim_set_cmdline_row_to_msg_row(void) { cmdline_row = msg_row; }
 
-/// prompt_for_input for recovery: returns chosen number (0 to quit)
 int nvim_prompt_for_recovery(void)
 {
   return prompt_for_input(_("Enter number of swap file to use (0 to quit): "), 0, false, NULL);
@@ -1290,14 +1095,10 @@ int nvim_prompt_for_recovery(void)
 
 void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
 
-/// UPD_NOT_VALID constant for redraw
 int nvim_get_upd_not_valid_val(void) { return UPD_NOT_VALID; }
 
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 
-/// Get the whole b0 "proc running" check + pid message in one call at end of recovery.
-/// Re-reads block 0 from the swap file (fname_used) and checks if proc is still running.
-/// Prints "process STILL RUNNING: <pid>" if so. Returns 1 if running, 0 otherwise.
 int nvim_recover_check_proc_and_print(const char *fname_used)
 {
   // Open the swap file read-only temporarily
@@ -1324,10 +1125,8 @@ int nvim_b0_is_vim3(const void *b0p)
   return strncmp(((const ZeroBlock *)b0p)->b0_version, "VIM 3.0", 7) == 0 ? 1 : 0;
 }
 
-/// Delete the first line of curbuf (ml_delete(1)).
 void nvim_ml_delete_first_curbuf(void) { ml_delete(1); }
 
-/// Extract the fileencoding string from block 0 b0_fname area (B0_HAS_FENC).
 char *nvim_b0_extract_fenc(const ZeroBlock *b0p)
 {
   if (!(b0p->b0_flags & B0_HAS_FENC)) {
@@ -1343,14 +1142,12 @@ char *nvim_b0_extract_fenc(const ZeroBlock *b0p)
 
 int nvim_b0_get_ff(const ZeroBlock *b0p) { return b0p->b0_flags & B0_FF_MASK; }
 
-/// Get the size of file by seeking to end (for page size recalculation).
 int64_t nvim_mf_get_file_size(memfile_T *mfp)
 {
   off_T size = vim_lseek(mfp->mf_fd, 0, SEEK_END);
   return (int64_t)(size <= 0 ? 0 : size);
 }
 
-/// ml_append wrapper for recovery (appends a line to curbuf).
 int nvim_ml_append_recovery(linenr_T lnum, const char *line, bool is_new)
 {
   return ml_append(lnum, (char *)line, 0, is_new);
@@ -1362,8 +1159,6 @@ unsigned nvim_pp_pe_get_page_count_uint(const void *pp, int idx)
 }
 
 uint16_t nvim_pp_get_count_max(const void *pp) { return ((const PointerBlock *)pp)->pb_count_max; }
-
-// Addsub shims for Rust inline absorption of nvim_addsub_* functions
 
 int nvim_curbuf_nf_has(int c) { return vim_strchr(curbuf->b_p_nf, c) != NULL; }
 
@@ -1386,32 +1181,24 @@ void nvim_curwin_set_cursor_from_pos(const pos_T *pos) { curwin->w_cursor = *pos
 
 void nvim_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = (colnr_T)v; }
 
-// cursor_pos_info shims for Rust inline absorption of nvim_cpi_* functions
-
 int nvim_curbuf_get_fileformat(void) { return rs_get_fileformat((buf_T *)curbuf); }
 
-/// Call os_breakcheck() — replaces nvim_cpi_os_breakcheck.
 void nvim_os_breakcheck(void) { os_breakcheck(); }
 
 int nvim_bomb_size(void) { return bomb_size(); }
 
-/// Show the "no lines in buffer" message — replaces nvim_cpi_show_empty_msg.
 void nvim_msg_no_lines(void) { msg(_(no_lines_msg), 0); }
 
 bool nvim_curbuf_get_b_p_eol(void) { return curbuf->b_p_eol; }
 
 bool nvim_curbuf_get_b_p_fixeol(void) { return curbuf->b_p_fixeol; }
 
-/// Update the swap file name after a buffer rename (accessor for Rust).
 void nvim_ml_setname(buf_T *buf) { ml_setname(buf); }
 
-/// Reset the memline timestamp after a buffer rename (accessor for Rust).
 void nvim_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
 
 int nvim_buf_get_no_eol_lnum(buf_T *buf) { return (int)buf->b_no_eol_lnum; }
 
-/// Append a single byte to a StringBuilder (accessor for Rust).
 void nvim_sb_push_byte(void *sb, char byte) { kv_push(*(StringBuilder *)sb, byte); }
 
-/// Append len bytes from ptr to a StringBuilder (accessor for Rust).
 void nvim_sb_concat_len(void *sb, const char *ptr, size_t len) { kv_concat_len(*(StringBuilder *)sb, ptr, len); }
