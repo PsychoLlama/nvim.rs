@@ -174,6 +174,10 @@ typedef struct {
   VTermScreenCell cells[];
 } ScrollbackLine;
 
+// NOTE: The authoritative definition of struct terminal is CTerminal in
+// src/nvim-rs/terminal/src/lib.rs. This C definition must stay in sync with
+// the Rust repr(C) struct. Layout is verified at startup by Rust
+// size_of/offset_of assertions in the terminal crate.
 struct terminal {
   TerminalOptions opts;  // options passed to terminal_open
   VTerm *vt;
