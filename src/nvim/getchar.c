@@ -77,8 +77,6 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
 
-// Rust implementations from insexpand crate
-
 // Rust FFI declarations (functions called directly from remaining C code)
 extern int rs_can_get_old_char(void);
 extern int rs_get_old_char(void);
@@ -96,12 +94,6 @@ extern uint8_t *rs_get_inserted(void);
 // Recording/gotchars operations (full functions in Rust)
 extern void rs_gotchars(const uint8_t *chars, size_t len);
 
-// Static assertions for constants hardcoded in Rust
-_Static_assert(MOD_MASK_CTRL == 0x04, "MOD_MASK_CTRL");
-_Static_assert(MODE_INSERT == 0x10, "MODE_INSERT");
-_Static_assert(MODE_CMDLINE == 0x08, "MODE_CMDLINE");
-_Static_assert(FLUSH_MINIMAL == 0, "FLUSH_MINIMAL");
-_Static_assert(KS_EXTRA == 253, "KS_EXTRA");
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -117,9 +109,6 @@ static int curscript = -1;
 /// Streams to read script from
 static FileDescriptor scriptin[NSCRIPT] = { 0 };
 
-// Buffer statics (redobuff, old_redobuff, recordbuff, readbuf1, readbuf2)
-// are now owned by Rust in the getchar crate's buffheader module.
-// Access them through rs_* FFI functions.
 
 /// Buffer used to store typed characters for vim.on_key().
 static kvec_withinit_t(char, MAXMAPLEN + 1) on_key_buf = KVI_INITIAL_VALUE(on_key_buf);
@@ -128,8 +117,6 @@ static kvec_withinit_t(char, MAXMAPLEN + 1) on_key_buf = KVI_INITIAL_VALUE(on_ke
 static size_t on_key_ignore_len = 0;
 
 static int typeahead_char = 0;  ///< typeahead char that's not flushed
-
-// block_redo is now owned by Rust (rs_get_block_redo / rs_set_block_redo)
 
 static int KeyNoremap = 0;  ///< remapping flags
 
@@ -177,11 +164,6 @@ static const char e_cmd_mapping_must_end_with_cr[]
   = N_("E1255: <Cmd> mapping must end with <CR>");
 static const char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
   = N_("E1136: <Cmd> mapping must end with <CR> before second <Cmd>");
-
-// Buffer primitive functions (free_buff, get_buffcont, add_buff, etc.)
-// have been removed. Use rs_* FFI functions instead.
-
-// (Buffer primitive functions and get_inserted() removed - now in Rust buffheader module)
 
 
 /// Initialize typebuf.tb_buf to point to typebuf_init.
@@ -296,7 +278,6 @@ static void save_typebuf(void)
 
 static int old_char = -1;   ///< character put back by vungetc()
 static int old_mod_mask;    ///< mod_mask for ungotten character
-// old_mouse_grid, old_mouse_row, old_mouse_col moved to Rust (input.rs) -- Phase 4
 static int old_KeyStuffed;  ///< whether old_char was stuffed
 
 
@@ -512,9 +493,6 @@ static void add_byte_to_showcmd(uint8_t byte)
   }
 }
 
-// vgetc() is implemented in Rust (src/nvim-rs/getchar/src/orchestrator.rs)
-
-
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
 
 /// "getchar()" and "getcharstr()" functions
@@ -701,7 +679,6 @@ typedef enum {
   map_result_nomatch,  // no matching mapping, get char
 } map_result_T;
 
-// put_string_in_typebuf and at_ins_compl_key moved to Rust (typebuf.rs) -- Phase 5
 int put_string_in_typebuf(int offset, int slen, uint8_t *string, int new_slen);
 bool at_ins_compl_key(void);
 
@@ -1781,8 +1758,6 @@ void paste_repeat(int count)
   ga_clear(&ga);
 }
 
-// Rust FFI accessor functions
-
 int nvim_get_typebuf_change_cnt(void)
 {
   return typebuf.tb_change_cnt;
@@ -1923,7 +1898,6 @@ int nvim_get_typebuf_no_abbr_cnt(void)
   return typebuf.tb_no_abbr_cnt;
 }
 
-// Additional typeahead buffer accessors for rs_ins_typebuf
 void nvim_init_typebuf(void)
 {
   init_typebuf();
@@ -2115,7 +2089,6 @@ void nvim_set_mouse_col(int val)
   mouse_col = val;
 }
 
-// Wrapper for can_get_old_char logic (can_get_old_char() moved to Rust orchestrator)
 int nvim_can_get_old_char(void)
 {
   return (old_char != -1 && (old_KeyStuffed || stuff_empty())) ? 1 : 0;
@@ -2132,8 +2105,6 @@ void nvim_add_on_key_ignore_len(size_t val)
   on_key_ignore_len += val;
 }
 
-// Phase 2 C accessor wrappers for getcmdkeycmd (76 lines, above threshold)
-
 /// Emit "E1255: <Cmd> mapping must end with <CR>" error message.
 void nvim_emsg_cmd_mapping_must_end_with_cr(void)
 {
@@ -2145,8 +2116,6 @@ void nvim_emsg_cmd_mapping_before_second_cmd(void)
 {
   emsg(_(e_cmd_mapping_must_end_with_cr_before_second_cmd));
 }
-
-// Phase 1 accessor functions for Rust
 
 void nvim_call_u_sync(int force)
 {
@@ -2178,9 +2147,6 @@ void nvim_set_pending_end_reg_executing(int val)
   pending_end_reg_executing = val != 0;
 }
 
-// nvim_set_block_redo removed - use rs_set_block_redo instead
-
-// Phase 3 accessor: set Visual from cursor for redo Visual
 void nvim_set_visual_from_cursor(void)
 {
   VIsual = curwin->w_cursor;
@@ -2189,8 +2155,6 @@ void nvim_set_visual_from_cursor(void)
   VIsual_reselect = true;
   redo_VIsual_busy = true;
 }
-
-// Phase 4 accessor functions for Rust gotchars
 
 void nvim_call_updatescript(int c)
 {
@@ -2218,8 +2182,6 @@ void nvim_set_debug_did_msg(int val)
 {
   debug_did_msg = val != 0;
 }
-
-// Phase 4: on_key_buf wrappers for vgetc (vgetc is 217 lines, above 50-line threshold)
 
 /// Push a NUL byte onto on_key_buf.
 void nvim_on_key_buf_push_nul(void)
