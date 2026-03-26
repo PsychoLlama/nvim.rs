@@ -2276,7 +2276,7 @@ extern "C" {
     fn nvim_buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: bool);
     // Phase 4 accessors
     fn nvim_get_ex_normal_busy() -> c_int;
-    fn nvim_vim_beep_esc();
+    fn vim_beep(flags: u32);
     fn nvim_get_curbuf_terminal() -> bool;
     fn nvim_esc_show_msg();
     fn nvim_getviscol() -> c_int;
@@ -2460,7 +2460,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         nvim_curwin_set_curswant(true);
         nvim_redraw_curbuf_inverted();
     } else if no_reason {
-        nvim_vim_beep_esc();
+        vim_beep(0x80); // kOptBoFlagEsc
     }
     rs_clearop(oap);
 }
@@ -5140,10 +5140,10 @@ unsafe fn rs_nv_scroll_impl(cap: CapHandle) {
     nvim_setpcmark();
 
     let curwin = nvim_get_curwin();
-    let curbuf = nvim_get_curbuf();
+    let cur_buf = nvim_get_curbuf();
     let cmdchar = nvim_cap_get_cmdchar(cap);
     let count1 = nvim_cap_get_count1(cap);
-    let line_count = nvim_buf_get_line_count(curbuf);
+    let line_count = nvim_buf_get_line_count(cur_buf);
 
     if cmdchar == c_int::from(b'L') {
         nv_scroll_bottom(curwin, count1);
@@ -5560,7 +5560,7 @@ extern "C" {
     fn nvim_set_curbuf_b_last_changedtick_i();
     fn nvim_u_save_for_opencmd(backward: bool) -> bool;
     fn nvim_open_line_for_opencmd(backward: bool, do_com: bool) -> bool;
-    fn nvim_has_format_option_fo_open_coms() -> bool;
+    fn has_format_option(c: c_int) -> bool;
     fn nvim_clear_curwin_w_valid_crow();
     fn nvim_mark_mb_adjustpos_cursor_new() -> c_int;
     fn nvim_getvcol_cursor_coladd_after_adj() -> c_int;
@@ -5941,7 +5941,7 @@ pub unsafe extern "C" fn rs_n_opencmd(cap: CapHandle) {
     nvim_set_curbuf_b_last_changedtick_i();
 
     if nvim_u_save_for_opencmd(backward) {
-        let do_com = nvim_has_format_option_fo_open_coms();
+        let do_com = has_format_option(c_int::from(b'o')); // FO_OPEN_COMS
         if nvim_open_line_for_opencmd(backward, do_com) {
             if win_cursorline_standout(nvim_get_curwin()) {
                 // force redraw of cursorline
@@ -7266,7 +7266,7 @@ extern "C" {
 
     // Phase 1: colon
     fn nvim_do_cmdline_for_colon(cap: CapHandle, is_cmdkey: bool) -> bool;
-    fn nvim_map_execute_lua_for_colon() -> bool;
+    fn map_execute_lua(may_repeat: bool, discard: bool) -> bool;
     fn nvim_compute_cmdrow();
     fn nvim_did_emsg_check() -> c_int;
     // nvim_ml_get_len_call already declared above (line ~299)
@@ -7348,7 +7348,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
     }
 
     let cmd_result = if is_lua {
-        nvim_map_execute_lua_for_colon()
+        map_execute_lua(true, false)
     } else {
         nvim_do_cmdline_for_colon(cap, is_cmdkey)
     };
@@ -7465,7 +7465,8 @@ extern "C" {
     // Phase 2: nv_gotofile accessors
     fn nvim_grab_file_name(count1: c_int, lnum_out: *mut c_int) -> *mut std::ffi::c_char;
     fn curbufIsChanged() -> bool;
-    fn nvim_autowrite_curbuf();
+    fn autowrite(buf: *mut std::ffi::c_void, forceit: bool) -> c_int;
+    static mut curbuf: *mut std::ffi::c_void;
     fn check_can_set_curbuf_disabled() -> bool;
     fn nvim_do_ecmd_for_gotofile(ptr: *mut std::ffi::c_char) -> c_int;
 
@@ -7474,7 +7475,7 @@ extern "C" {
     fn nvim_get_cursor_line_ptr() -> *mut std::ffi::c_char;
 
     // Phase 2: nv_mark_move_to accessor
-    fn nvim_mark_move_to_call(fm: FmarkHandle, flags: c_int) -> c_int;
+    fn mark_move_to(fm: FmarkHandle, flags: c_int) -> c_int;
 }
 
 /// Search for "pat" in direction "dir" ('/' or '?', 0 for repeat).
@@ -7617,7 +7618,7 @@ pub unsafe fn rs_nv_gotofile(cap: CapHandle) {
         rs_clearop(oap);
     } else {
         if curbufIsChanged() {
-            nvim_autowrite_curbuf();
+            autowrite(curbuf, false);
         }
         nvim_setpcmark();
         let nchar = nvim_cap_get_nchar(cap);
@@ -7643,7 +7644,7 @@ pub unsafe extern "C" fn rs_nv_mark_move_to(
     fm: FmarkHandle,
 ) -> c_int {
     let oap = nvim_cap_get_oap(cap);
-    let res = nvim_mark_move_to_call(fm, flags);
+    let res = mark_move_to(fm, flags);
     if (res & K_MARK_MOVED_FAILED) != 0 {
         rs_clearop(oap);
     }

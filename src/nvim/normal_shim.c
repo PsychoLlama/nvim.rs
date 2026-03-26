@@ -682,7 +682,6 @@ void nvim_hasFolding_cursor_set_lnum_down(void) { hasFolding(curwin, curwin->w_c
 void nvim_set_curbuf_b_last_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
 bool nvim_u_save_for_opencmd(bool backward) { return u_save(curwin->w_cursor.lnum - (backward ? 1 : 0), curwin->w_cursor.lnum + (backward ? 0 : 1)) != 0; }
 bool nvim_open_line_for_opencmd(bool backward, bool do_com) { return open_line(backward ? BACKWARD : FORWARD, do_com ? OPENLINE_DO_COM : 0, 0, NULL) != false; }
-bool nvim_has_format_option_fo_open_coms(void) { return has_format_option(FO_OPEN_COMS); }
 void nvim_clear_curwin_w_valid_crow(void) { curwin->w_valid &= ~VALID_CROW; }
 /// mark_mb_adjustpos for cursor: adjusts curwin->w_cursor via curbuf,
 /// returns new col.
@@ -1046,9 +1045,7 @@ bool nvim_curtab_needs_diff_update(void) { return curtab->tp_diff_update || curt
 void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }
 
 
-/// Set diff_need_scrollbind global.
 void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
-
 
 void nvim_time_msg_first_screen_and_finish(void) { TIME_MSG("first screen update"); time_finish(); }
 
@@ -1356,8 +1353,6 @@ bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) {
                     cap->oap->op_type != OP_NOP ? DOCMD_KEEPLINE : 0);
 }
 
-/// Call map_execute_lua(true, false).
-bool nvim_map_execute_lua_for_colon(void) { return map_execute_lua(true, false); }
 
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
@@ -1401,9 +1396,6 @@ char *nvim_grab_file_name(int count1, int *lnum_out)
 }
 
 
-/// Call autowrite(curbuf, false).
-void nvim_autowrite_curbuf(void) { autowrite(curbuf, false); }
-
 
 /// Call do_ecmd for gotofile. Returns OK/FAIL (1/0).
 int nvim_do_ecmd_for_gotofile(char *ptr)
@@ -1415,8 +1407,6 @@ int nvim_do_ecmd_for_gotofile(char *ptr)
 /// Call ml_get_pos(&VIsual).
 char *nvim_ml_get_pos_visual(void) { return ml_get_pos(&VIsual); }
 
-/// Call mark_move_to(fm, flags). Returns MarkMoveRes as int.
-int nvim_mark_move_to_call(void *fm, int flags) { return (int)mark_move_to((fmark_T *)fm, (MarkMove)flags); }
 
 // =============================================================================
 // Visual mode, cursor adjustment, and ident accessors for Rust FFI
@@ -1462,8 +1452,6 @@ void nvim_curwin_set_old_visual_lnums(void)
 // =============================================================================
 
 
-/// Call vim_beep(kOptBoFlagEsc).
-void nvim_vim_beep_esc(void) { vim_beep(kOptBoFlagEsc); }
 
 /// Return true if curbuf is a terminal buffer.
 bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
