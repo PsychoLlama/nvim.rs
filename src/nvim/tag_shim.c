@@ -15,7 +15,6 @@
 #include "nvim/cmdexpand.h"
 #include "nvim/cmdexpand_defs.h"
 #include "nvim/cursor.h"
-#include "nvim/drawscreen.h"
 #include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
@@ -32,7 +31,6 @@
 #include "nvim/hashtab.h"
 #include "nvim/hashtab_defs.h"
 #include "nvim/help.h"
-#include "nvim/highlight_defs.h"
 #include "nvim/input.h"
 #include "nvim/insexpand.h"
 #include "nvim/macros_defs.h"
@@ -66,25 +64,6 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-// Structure to hold pointers to various items in a tag line.
-typedef struct {
-  // filled in by parse_tag_line():
-  char *tagname;        // start of tag name (skip "file:")
-  char *tagname_end;    // char after tag name
-  char *fname;          // first char of file name
-  char *fname_end;      // char after file name
-  char *command;        // first char of command
-  // filled in by parse_match():
-  char *command_end;    // first char after command
-  char *tag_fname;      // file name of the tags file. This is used
-  // when 'tr' is set.
-  char *tagkind;          // "kind:" value
-  char *tagkind_end;      // end of tagkind
-  char *user_data;        // user_data string
-  char *user_data_end;    // end of user_data
-  linenr_T tagline;       // "line:" value
-} tagptrs_T;
-
 // Structure to hold info about the tag pattern being used.
 typedef struct {
   char *pat;            // the pattern
@@ -94,11 +73,6 @@ typedef struct {
   regmatch_T regmatch;  // regexp program, may be NULL
 } pat_T;
 
-// The matching tags are first stored in one of the hash tables.  In
-// which one depends on the priority of the match.
-// ht_match[] is used to find duplicates, ga_match[] to keep them in sequence.
-// At the end, the matches from ga_match[] are concatenated, to make a list
-// sorted on priority.
 enum {
   MT_ST_CUR = 0,  // static match in current file
   MT_GL_CUR = 1,  // global match in current file
@@ -110,18 +84,8 @@ enum {
   MT_COUNT = 16,
 };
 
-static char *mt_names[MT_COUNT/2] =
-{ "FSC", "F C", "F  ", "FS ", " SC", "  C", "   ", " S " };
-
 #define NOTAGFILE       99              // return value for jumpto_tag
 static char *nofile_fname = NULL;       // fname for NOTAGFILE error
-
-/// Return values used when reading lines from a tags file.
-typedef enum {
-  TAGS_READ_SUCCESS = 1,
-  TAGS_READ_EOF,
-  TAGS_READ_IGNORE,
-} tags_read_status_T;
 
 /// States used during a tags search
 typedef enum {
@@ -144,24 +108,6 @@ typedef struct {
   int low_char;            ///< first char at low_offset
   int high_char;           ///< first char at high_offset
 } tagsearch_info_T;
-
-/// Return values used when matching tags against a pattern.
-typedef enum {
-  TAG_MATCH_SUCCESS = 1,
-  TAG_MATCH_FAIL,
-  TAG_MATCH_STOP,
-  TAG_MATCH_NEXT,
-} tagmatch_status_T;
-
-/// Arguments used for matching tags read from a tags file against a pattern.
-typedef struct {
-  int matchoff;      ///< tag match offset
-  bool match_re;     ///< true if the tag matches a regexp
-  bool match_no_ic;  ///< true if the tag matches with case
-  bool has_re;       ///< regular expression used
-  bool sortic;       ///< tags file sorted ignoring case (foldcase)
-  bool sort_error;   ///< tags file not sorted
-} findtags_match_args_T;
 
 /// State information used during a tag search
 typedef struct {
