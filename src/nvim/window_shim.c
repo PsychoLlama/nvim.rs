@@ -953,11 +953,6 @@ void nvim_apply_autocmds_winclosed_by_handle(const char *handle_str, win_T *win)
 }
 win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
 win_T *nvim_get_cmdwin_old_curwin(void) { return cmdwin_old_curwin; }
-void nvim_set_cmdwin_type(int val) { cmdwin_type = val; }
-void nvim_set_cmdwin_level(int val) { cmdwin_level = val; }
-void nvim_set_cmdwin_win(win_T *val) { cmdwin_win = val; }
-void nvim_set_cmdwin_old_curwin(win_T *val) { cmdwin_old_curwin = val; }
-void nvim_set_cmdwin_buf(buf_T *val) { cmdwin_buf = val; }
 // nvim_set_cmdwin_result already exists in normal_shim.c
 /// Set api_error for cmdwin.
 void nvim_api_set_error_e_cmdwin(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_cmdwin); }
@@ -1180,7 +1175,6 @@ void nvim_set_lastused_tabpage_from_rust(tabpage_T *tp) { lastused_tabpage = tp;
 /// Call set_keep_msg(NULL, 0).
 
 void nvim_set_skip_win_fix_scroll(int val) { skip_win_fix_scroll = (val != 0); }
-void nvim_set_skip_win_fix_cursor(int val) { skip_win_fix_cursor = (val != 0); }
 
 /// Wrap set_option_value for cmdheight with command_frame_height guard.
 /// Sets command_frame_height=false, calls set_option_value(kOptCmdheight, new_ch, 0),
@@ -1749,9 +1743,6 @@ const char *nvim_get_p_sel(void) { return p_sel; }
 linenr_T nvim_get_spell_redraw_lnum(void) { return spell_redraw_lnum; }
 void nvim_set_spell_redraw_lnum(linenr_T val) { spell_redraw_lnum = val; }
 
-/// highlight_attr[] indexed access (renamed to avoid clash with highlight.c nvim_get_highlight_attr)
-int nvim_get_highlight_attr_idx(int idx) { return highlight_attr[idx]; }
-
 /// dy_flags (display options)
 int nvim_get_dy_flags(void) { return dy_flags; }
 // nvim_get_p_cpo already defined at line 314; nvim_get_curwin at line 211.
@@ -1813,11 +1804,6 @@ int nvim_virt_lines_size(void *vl) { return (int)((VirtLines *)vl)->size; }
 int nvim_virt_lines_flags(void *vl, int idx) { return ((VirtLines *)vl)->items[idx].flags; }
 void *nvim_virt_lines_line(void *vl, int idx) { return &((VirtLines *)vl)->items[idx].line; }
 void nvim_virt_lines_destroy(void *vl) { kv_destroy(*(VirtLines *)vl); }
-
-/// ScreenGrid field accessors (for the wrap line offset update in win_line)
-int nvim_grid_get_cols(ScreenGrid *grid) { return grid->cols; }
-size_t *nvim_grid_get_line_offset(ScreenGrid *grid) { return grid->line_offset; }
-sattr_T *nvim_grid_get_attrs(ScreenGrid *grid) { return grid->attrs; }
 
 /// wp->w_grid (GridView) pointer accessor for win_line
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
@@ -1909,14 +1895,6 @@ void nvim_curwin_set_stl_state(int32_t state, int32_t empty_line,
 /// its address directly via extern static without generating a double-dereference.
 /// This thin C wrapper returns the correct address.
 char *nvim_get_empty_string_option(void) { return empty_string_option; }
-
-// Accessors for cmdwin migration
-void nvim_curwin_set_p_fen(bool val) { curwin->w_p_fen = val; }
-void nvim_curwin_set_p_rl(bool val) { curwin->w_p_rl = val; }
-void nvim_curwin_set_p_cole(int val) { curwin->w_p_cole = val; }
-void nvim_curwin_set_p_cul(bool val) { curwin->w_p_cul = val; }
-void nvim_curwin_set_p_cuc(bool val) { curwin->w_p_cuc = val; }
-void nvim_curwin_set_p_spell(bool val) { curwin->w_p_spell = val; }
 
 int nvim_hasFoldingWin(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp) { return hasFoldingWin(wp, lnum, firstp, lastp, true, NULL) ? 1 : 0; }
 
