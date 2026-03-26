@@ -154,9 +154,6 @@ typedef enum {
 extern int rs_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff);
 
 // Rust FFI declarations (tag module)
-extern int rs_get_tagfname(tagname_T *tnp, int first, char *buf);
-extern void rs_tagname_free(void *tnp);
-extern int rs_get_tags(void *list, char *pat, char *buf_fname);
 extern void rs_get_tagstack(void *wp, void *retdict);
 extern int rs_set_tagstack(void *wp, const void *d, int action);
 
@@ -638,7 +635,6 @@ end:
   api_clear_error(&err);
 }
 
-// f_api_info: migrated to Rust (simple.rs)
 
 /// Get buffer by number or pattern.
 buf_T *tv_get_buf(typval_T *tv, int curtab_only)
@@ -704,7 +700,6 @@ buf_T *get_buf_arg(typval_T *arg)
   return buf;
 }
 
-// f_byte2line: migrated to Rust (simple.rs)
 
 /// "call(func, arglist [, dict])" function
 static void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -764,7 +759,6 @@ done:
 }
 
 /// "chanclose(id[, stream])" function
-// f_chanclose: migrated to Rust (misc.rs)
 
 /// "chansend(id, data)" function
 static void f_chansend(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -894,13 +888,7 @@ win_T *get_optional_window(typval_T *argvars, int idx)
 }
 
 /// "confirm(message, buttons[, default [, type]])" function
-// f_confirm: migrated to Rust (misc.rs)
 
-// f_ctxget: migrated to Rust (misc.rs)
-
-// f_ctxpush: migrated to Rust (misc.rs)
-
-// f_ctxset: migrated to Rust (misc.rs)
 
 /// Set the cursor position.
 /// If "charcol" is true, then use the column number as a character offset.
@@ -976,19 +964,11 @@ static void set_cursorpos(typval_T *argvars, typval_T *rettv, bool charcol)
 ///
 /// @return  0 when the position could be set, -1 otherwise.
 /// "debugbreak()" function
-// f_debugbreak: migrated to Rust (simple.rs)
 
 /// dictwatcheradd(dict, key, funcref) function
-// f_dictwatcheradd: migrated to Rust (misc.rs)
 
-// f_dictwatcherdel: migrated to Rust (misc.rs)
-
-// f_environ: migrated to Rust (system.rs)
-
-// f_getenv: migrated to Rust (simple.rs)
 
 /// "eval()" function
-// f_eval: migrated to Rust (misc.rs)
 
 
 typedef struct {
@@ -1088,7 +1068,6 @@ void execute_common(typval_T *argvars, typval_T *rettv, int arg_off)
   capture_ga = save_capture_ga;
 }
 
-// f_exists: migrated to Rust (misc.rs)
 
 /// "expand()" function
 static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1166,7 +1145,6 @@ static void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "menu_get(path [, modes])" function
-// f_menu_get: migrated to Rust (simple.rs)
 
 /// "expandcmd()" function
 /// Expand all the special characters in a command string.
@@ -1256,7 +1234,6 @@ static void flatten_common(typval_T *argvars, typval_T *rettv, bool make_copy)
 
 /// "flatten(list[, {maxdepth}])" function
 /// "feedkeys()" function
-// f_feedkeys: migrated to Rust (simple.rs)
 
 /// "function()" function
 /// "funcref()" function
@@ -1417,7 +1394,6 @@ theend:
 }
 
 /// "garbagecollect()" function
-// f_garbagecollect: migrated to Rust (simple.rs)
 
 /// "get()" function
 static void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -1653,7 +1629,6 @@ static void getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, bool
   }
 }
 
-// f_getcharsearch: migrated to Rust (misc.rs)
 
 /// "getjumplist()" function
 static void f_getjumplist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2013,7 +1988,6 @@ static void f_getregionpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
   virtual_op = save_virtual;
 }
 
-// getreg_get_regname, f_getreg, f_getregtype: migrated to Rust (misc.rs)
 
 /// "gettagstack()" function
 static void f_gettagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2100,10 +2074,8 @@ static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   time_watcher_close(tw, dummy_timer_close_cb);
 }
 
-// f_gettext: migrated to Rust (simple.rs)
 
 /// "has()" function
-// f_has: migrated to Rust (misc.rs)
 
 static bool has_wsl(void)
 {
@@ -2121,7 +2093,6 @@ static bool has_wsl(void)
 
 /// "highlightID(name)" function
 /// "index()" function
-// f_index, indexof_eval_expr, indexof_blob, indexof_list, f_indexof: migrated to Rust (misc.rs)
 
 static bool inputsecret_flag = false;
 
@@ -2237,7 +2208,6 @@ static void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "id()" function
-// f_id: migrated to Rust (misc.rs)
 
 /// "jobpid(id)" function
 static void f_jobpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2752,11 +2722,9 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// json_decode() function
-// f_json_decode: migrated to Rust (misc.rs)
 
 /// json_encode() function
 /// "keytrans()" function
-// f_keytrans: migrated to Rust (simple.rs)
 
 static void libcall_common(typval_T *argvars, typval_T *rettv, int out_type)
 {
@@ -2839,9 +2807,6 @@ static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_number = lnum;
 }
 
-// f_line2byte: migrated to Rust (simple.rs)
-
-// f_luaeval: migrated to Rust (simple.rs)
 
 static void find_some_match(typval_T *const argvars, typval_T *const rettv,
                             const SomeMatchType type)
@@ -3314,9 +3279,7 @@ static void max_min(const typval_T *const tv, typval_T *const rettv, const bool 
 }
 
 /// "mode()" function
-// f_mode: migrated to Rust (simple.rs)
 
-// may_add_state_char, f_state: migrated to Rust (misc.rs)
 
 /// "msgpackdump()" function
 static void f_msgpackdump(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3474,12 +3437,9 @@ static void f_msgpackparse(typval_T *argvars, typval_T *rettv, EvalFuncData fptr
 }
 
 /// "nextnonblank()" function
-// f_nextnonblank: migrated to Rust (simple.rs)
 
-// f_prevnonblank: migrated to Rust (simple.rs)
 
 /// "printf()" function
-// f_printf: migrated to Rust (misc.rs)
 
 /// "prompt_getprompt({buffer})" function
 static void f_prompt_getprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3521,30 +3481,18 @@ static void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData f
   rettv->vval.v_string = prompt_get_input(buf);
 }
 
-// f_pum_getpos: migrated to Rust (simple.rs)
 
 /// "py3eval()" and "pyxeval()" functions (always python3)
 
-// init_srand, splitmix32, shuffle_xoshiro128starstar: migrated to Rust (misc.rs)
-// f_rand: migrated to Rust (misc.rs)
-// f_srand: migrated to Rust (misc.rs)
 
 /// "perleval()" function
 /// "range()" function
-// f_range: migrated to Rust (misc.rs)
 
 /// "getreginfo()" function
-// f_getreginfo: migrated to Rust (misc.rs)
 
-// list2proftime: migrated to Rust (misc.rs)
-// f_reltime: migrated to Rust (misc.rs)
 
 /// "reltimestr()" function
-// f_reltimestr: migrated to Rust (misc.rs)
 
-// f_repeat: migrated to Rust (misc.rs)
-
-// reduce_list, reduce_string, reduce_blob, f_reduce: migrated to Rust (misc.rs)
 
 #define SP_NOMOVE       0x01        ///< don't move cursor
 #define SP_REPEAT       0x02        ///< repeat to find outer pair
@@ -3891,11 +3839,6 @@ end:
   api_clear_error(&err);
 }
 
-// screenchar_adjust, f_screenattr: migrated to Rust (display.rs)
-
-// f_screenchar, f_screenchars, f_screenstring: migrated to Rust (display.rs)
-
-// f_searchdecl: migrated to Rust (misc.rs)
 
 /// Used by searchpair() and searchpairpos()
 static int searchpair_cmn(typval_T *argvars, pos_T *match_pos)
@@ -4144,7 +4087,6 @@ int do_searchpair(const char *spat, const char *mpat, const char *epat, int dir,
 }
 
 /// "searchpos()" function
-// f_searchpos: migrated to Rust (misc.rs)
 
 /// "serverlist()" function
 static void f_serverlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4190,10 +4132,8 @@ cleanup:
   arena_mem_free(arena_finish(&arena));
 }
 
-// f_serverstart: migrated to Rust (misc.rs)
 
 /// "serverstop()" function
-// f_serverstop: migrated to Rust (simple.rs)
 
 /// Set the cursor or mark position.
 /// If "charpos" is true, then use the column number as a character offset.
@@ -4236,12 +4176,8 @@ static void set_position(typval_T *argvars, typval_T *rettv, bool charpos)
   }
 }
 
-// f_setcharsearch: migrated to Rust (misc.rs)
-
-// f_setenv: migrated to Rust (simple.rs)
 
 /// "setfperm({fname}, {mode})" function
-// f_setfperm: migrated to Rust (misc.rs)
 
 /// "setpos()" function
 /// Translate a register type string to the yank type and block length
@@ -4465,11 +4401,9 @@ static void f_settagstack(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "sha256({expr})" function
-// f_sha256: migrated to Rust (misc.rs)
 
 /// "shellescape({string})" function
 /// shiftwidth() function
-// f_shiftwidth: migrated to Rust (simple.rs)
 
 /// "sockconnect()" function
 static void f_sockconnect(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4558,13 +4492,10 @@ static void f_stdioopen(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "reltimefloat()" function
-// f_reltimefloat: migrated to Rust (misc.rs)
 
 /// "soundfold({word})" function
-// f_soundfold: migrated to Rust (simple.rs)
 
 /// "spellbadword()" function
-// f_spellbadword, f_spellsuggest: migrated to Rust (misc.rs)
 
 static void f_split(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
@@ -4644,17 +4575,13 @@ theend:
   p_cpo = save_cpo;
 }
 
-// get_xdg_var_list, f_stdpath: migrated to Rust (system.rs)
 
 /// "str2float()" function
 
 /// "strftime({format}[, {time}])" function
-// f_strftime: migrated to Rust (misc.rs)
 
-// f_strptime: migrated to Rust (misc.rs)
 
 /// "submatch()" function
-// f_submatch, f_substitute: migrated to Rust (misc.rs)
 
 /// "swapfilelist()" function
 /// "swapname(expr)" function
@@ -4671,9 +4598,6 @@ static void f_swapname(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-// f_synID, f_synIDattr, f_synIDtrans: migrated to Rust (misc.rs / simple.rs)
-
-// f_synconcealed, f_synstack: migrated to Rust (misc.rs)
 
 /// "tabpagebuflist()" function
 static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4697,14 +4621,9 @@ static void f_tabpagebuflist(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   }
 }
 
-// f_tagfiles: migrated to Rust (simple.rs)
-
-// f_taglist: migrated to Rust (simple.rs)
 
 /// "timer_info([timer])" function
-// f_timer_info, f_timer_pause, f_timer_start, f_timer_stop: migrated to Rust (timer.rs)
 
-// f_timer_stopall: migrated to Rust (simple.rs)
 
 /// "virtcol({expr}, [, {list} [, {winid}]])" function
 static void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -4762,19 +4681,7 @@ theend:
   }
 }
 
-// f_visualmode: migrated to Rust (simple.rs)
 
-// f_wildmenumode: migrated to Rust (simple.rs)
-
-// f_wordcount: migrated to Rust (simple.rs)
-
-// =============================================================================
-// C accessor functions for Rust VimL function implementations (Phase 2)
-// =============================================================================
-
-// nvim_get_vgetc_busy is defined in getchar.c
-// nvim_get_reg_executing, nvim_get_reg_recording are defined in autocmd.c
-// nvim_set_got_int is defined in ex_eval.c
 int nvim_curbuf_get_did_filetype(void) { return curbuf->b_did_filetype; }
 int nvim_curbuf_get_u_seq_cur(void) { return (int)curbuf->b_u_seq_cur; }
 int nvim_get_reg_recorded(void) { return reg_recorded; }
@@ -4792,9 +4699,6 @@ void nvim_eval_getpos_both(typval_T *argvars, typval_T *rettv, bool getcurpos, b
 }
 const char *nvim_eval_get_windows_version(void) { return windowsVersion; }
 
-// =============================================================================
-// C accessor functions for Rust VimL function implementations (Phase 3)
-// =============================================================================
 
 // Delegation wrappers for static helpers
 void nvim_eval_find_some_match(typval_T *argvars, typval_T *rettv, int kind)
@@ -4983,7 +4887,6 @@ void nvim_eval_len(typval_T *argvars, typval_T *rettv)
   }
 }
 
-// Phase 4 accessors for simple delegation functions
 
 void nvim_eval_execute(typval_T *argvars, typval_T *rettv)
 {
@@ -5068,9 +4971,6 @@ void nvim_eval_swapinfo(typval_T *argvars, typval_T *rettv)
   swapfile_dict(tv_get_string(argvars), rettv->vval.v_dict);
 }
 
-// =============================================================================
-// C accessor functions for Rust VimL function implementations (Phase 5/simple)
-// =============================================================================
 
 void nvim_eval_api_info(typval_T *argvars, typval_T *rettv)
 {
@@ -5297,9 +5197,6 @@ void nvim_eval_menu_get(typval_T *argvars, typval_T *rettv)
   menu_get((char *)tv_get_string(&argvars[0]), modes, rettv->vval.v_list);
 }
 
-// =============================================================================
-// C accessor functions for Rust VimL function implementations (Phase 2/display)
-// =============================================================================
 
 static void screenchar_adjust_inner(ScreenGrid **grid, int *row, int *col)
 {
@@ -5370,9 +5267,6 @@ void nvim_eval_screenstring(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_string = xstrdup(buf);
 }
 
-// =============================================================================
-// C accessor functions for Rust VimL function implementations (Phase 3/system)
-// =============================================================================
 
 void nvim_eval_environ(typval_T *argvars, typval_T *rettv)
 {
@@ -5469,9 +5363,6 @@ void nvim_eval_stdpath(typval_T *argvars, typval_T *rettv)
   }
 }
 
-// =============================================================================
-// Phase 6 C accessor functions (called by Rust misc.rs wrappers)
-// =============================================================================
 
 void nvim_eval_ctxget(typval_T *argvars, typval_T *rettv)
 {
@@ -5815,9 +5706,6 @@ void nvim_eval_searchpos(typval_T *argvars, typval_T *rettv)
   }
 }
 
-// =============================================================================
-// Phase 7 C accessor functions (called by Rust timer.rs wrappers)
-// =============================================================================
 
 void nvim_eval_timer_info(typval_T *argvars, typval_T *rettv)
 {
@@ -5901,9 +5789,6 @@ void nvim_eval_timer_stop(typval_T *argvars, typval_T *rettv)
   timer_stop(timer);
 }
 
-// =============================================================================
-// Phase 8 C accessor functions (called by Rust misc.rs wrappers)
-// =============================================================================
 
 void nvim_eval_spellbadword(typval_T *argvars, typval_T *rettv)
 {
@@ -6230,9 +6115,6 @@ void nvim_eval_synstack(typval_T *argvars, typval_T *rettv)
   }
 }
 
-// =============================================================================
-// Phase 9 C accessor functions (called by Rust misc.rs wrappers)
-// =============================================================================
 
 void nvim_eval_index(typval_T *argvars, typval_T *rettv)
 {
@@ -6707,9 +6589,6 @@ void nvim_eval_reduce(typval_T *argvars, typval_T *rettv)
   }
 }
 
-// =============================================================================
-// Phase 10 C accessor functions (called by Rust misc.rs wrappers)
-// =============================================================================
 
 void nvim_eval_eval(typval_T *argvars, typval_T *rettv)
 {
