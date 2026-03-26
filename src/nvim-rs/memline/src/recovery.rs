@@ -166,7 +166,7 @@ extern "C" {
     fn nvim_bhdr_get_bh_data(hp: *mut c_void) -> *mut c_void;
     fn nvim_bhdr_set_bh_data(hp: *mut c_void, data: *mut c_void);
     fn nvim_b0_get_page_size_ptr(b0p: *const c_void) -> *const c_char;
-    fn nvim_b0_set_fname0_nul(b0p: *mut c_void);
+    fn nvim_b0_set_fname0(b0p: *mut c_void);
     fn nvim_pp_get_id(pp: *const c_void) -> u16;
     fn nvim_pp_get_count(pp: *const c_void) -> u16;
     fn nvim_pp_get_count_max(pp: *const c_void) -> u16;
@@ -404,7 +404,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         }
         // Wrong byte order?
         if rs_b0_magic_wrong(b0p) != 0 {
-            nvim_b0_set_fname0_nul(b0p);
+            nvim_b0_set_fname0(b0p);
             let hname = nvim_b0_get_hname_ptr(b0p);
             nvim_recover_msg(
                 RECOVER_MSG_WRONG_BYTE_ORDER,

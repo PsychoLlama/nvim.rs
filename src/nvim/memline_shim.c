@@ -1025,8 +1025,6 @@ int nvim_prompt_for_recovery(void)
   return prompt_for_input(_("Enter number of swap file to use (0 to quit): "), 0, false, NULL);
 }
 
-void nvim_b0_set_fname0_nul(ZeroBlock *b0p) { b0p->b0_fname[0] = NUL; }
-
 size_t nvim_get_buf_t_size(void) { return sizeof(buf_T); }
 
 int nvim_recover_check_proc_and_print(const char *fname_used)
