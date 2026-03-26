@@ -1434,15 +1434,6 @@ bool nvim_get_curbuf_terminal(void) { return curbuf->terminal != NULL; }
 
 
 /// Show "quit" or "abandon" hint message via msg() for ESC/CTRL-C.
-void nvim_esc_show_msg(void)
-{
-  if (anyBufIsChanged()) {
-    msg(_("Type  :qa!  and press <Enter> to abandon all changes"
-          " and exit Nvim"), 0);
-  } else {
-    msg(_("Type  :qa  and press <Enter> to exit Nvim"), 0);
-  }
-}
 
 // =============================================================================
 // DPO (do_pending_operator) accessors for Rust FFI (Phase 1)

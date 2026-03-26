@@ -2276,7 +2276,8 @@ extern "C" {
     fn nvim_get_ex_normal_busy() -> c_int;
     fn vim_beep(flags: u32);
     fn nvim_get_curbuf_terminal() -> bool;
-    fn nvim_esc_show_msg();
+    fn anyBufIsChanged() -> bool;
+    fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> c_int;
     fn nvim_getviscol() -> c_int;
     fn edit(cmd: c_int, startln: bool, count: c_int) -> bool;
     fn vim_append_digit_int(n_ptr: *mut c_int, digit: c_int) -> c_int;
@@ -2431,7 +2432,20 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
     if nvim_cap_get_arg(cap) != 0 {
         // true for CTRL-C
         if restart_edit == 0 && cmdwin_type == 0 && !VIsual_active && no_reason {
-            nvim_esc_show_msg();
+            if anyBufIsChanged() {
+                msg(
+                    gettext(
+                        c"Type  :qa!  and press <Enter> to abandon all changes and exit Nvim"
+                            .as_ptr(),
+                    ),
+                    0,
+                );
+            } else {
+                msg(
+                    gettext(c"Type  :qa  and press <Enter> to exit Nvim".as_ptr()),
+                    0,
+                );
+            }
         }
         if restart_edit != 0 {
             redraw_mode = 1; // remove "-- (insert) --"
