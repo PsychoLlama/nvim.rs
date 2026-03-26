@@ -646,7 +646,6 @@ void *nvim_get_varp_scope_by_idx(OptIndex opt_idx, int opt_flags)
 {
   return get_varp_scope(&options[opt_idx], opt_flags);
 }
-void *nvim_option_get_var_ptr(OptIndex opt_idx) { return options[opt_idx].var; }
 OptVal nvim_option_get_def_val(OptIndex opt_idx) { return options[opt_idx].def_val; }
 
 void nvim_option_ilog_rtp(void) { ILOG("startup runtimepath/packpath value: %s", p_rtp); }
@@ -1247,18 +1246,6 @@ void nvim_set_option_sctx_from_sid(OptIndex opt_idx, int opt_flags, int set_sid)
 
 /// Returns 1 if opt->opt_did_set_cb is non-NULL for opt_idx.
 int nvim_option_has_did_set_cb(OptIndex opt_idx) { return options[opt_idx].opt_did_set_cb != NULL ? 1 : 0; }
-
-/// Call get_varp_scope(&options[opt_idx], opt_flags)
-void *nvim_get_varp_scope_opt(OptIndex opt_idx, int opt_flags)
-{
-  return get_varp_scope(&options[opt_idx], opt_flags);
-}
-
-/// Call get_varp(&options[opt_idx])
-void *nvim_get_varp_opt(OptIndex opt_idx)
-{
-  return get_varp(&options[opt_idx]);
-}
 
 /// Return pointer to options[opt_idx] (vimoption_T *).
 vimoption_T *nvim_get_option_ptr_by_idx(OptIndex opt_idx)

@@ -58,9 +58,9 @@ extern "C" {
     fn rs_optval_copy(o: OptVal) -> OptVal;
 
     // varp dispatch
-    fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
-    fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
-    fn nvim_option_get_var_ptr(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_varp_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
 
     // Read/write option variable pointer values
     fn rs_optval_from_varp(opt_idx: c_int, varp: *mut std::ffi::c_void) -> OptVal;
@@ -234,12 +234,12 @@ pub unsafe extern "C" fn rs_did_set_option(
     if scope_both {
         if rs_option_is_global_local(opt_idx) != 0 {
             // Global option with local value: free local and reset to unset.
-            let varp_local = nvim_get_varp_scope_opt(opt_idx, OPT_LOCAL);
+            let varp_local = nvim_get_varp_scope_by_idx(opt_idx, OPT_LOCAL);
             let unset_value = rs_get_option_unset_value(opt_idx);
             rs_set_option_varp(opt_idx, varp_local, rs_optval_copy(unset_value), 1);
         } else {
             // Local option: also set global value.
-            let varp_global = nvim_get_varp_scope_opt(opt_idx, OPT_GLOBAL);
+            let varp_global = nvim_get_varp_scope_by_idx(opt_idx, OPT_GLOBAL);
             rs_set_option_varp(opt_idx, varp_global, rs_optval_copy(new_value), 1);
         }
     }
@@ -354,12 +354,12 @@ pub unsafe extern "C" fn rs_set_option_impl(
 
     // When using ":set opt=val" for a global option with a local value, use opt->var.
     let varp = if scope_both && rs_option_is_global_local(opt_idx) != 0 {
-        nvim_option_get_var_ptr(opt_idx)
+        nvim_get_option_var(opt_idx)
     } else {
-        nvim_get_varp_scope_opt(opt_idx, opt_flags)
+        nvim_get_varp_scope_by_idx(opt_idx, opt_flags)
     };
-    let varp_local = nvim_get_varp_scope_opt(opt_idx, OPT_LOCAL);
-    let varp_global = nvim_get_varp_scope_opt(opt_idx, OPT_GLOBAL);
+    let varp_local = nvim_get_varp_scope_by_idx(opt_idx, OPT_LOCAL);
+    let varp_global = nvim_get_varp_scope_by_idx(opt_idx, OPT_GLOBAL);
 
     let old_value = rs_optval_from_varp(opt_idx, varp);
     let old_global_value = rs_optval_from_varp(opt_idx, varp_global);
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn rs_set_option_impl(
     };
     // Value actually being used (for OptionSet autocmd).
     let used_old_value = if scope_local && is_opt_local_unset {
-        rs_optval_from_varp(opt_idx, nvim_get_varp_opt(opt_idx))
+        rs_optval_from_varp(opt_idx, nvim_get_varp_by_idx(opt_idx))
     } else {
         old_value
     };

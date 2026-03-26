@@ -529,7 +529,6 @@ extern "C" {
     #[link_name = "get_option_default"]
     fn rs_get_option_default(opt_idx: c_int, opt_flags: c_int) -> OptVal;
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
-    fn nvim_get_varp_opt(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_unset_option_local_value(opt_idx: c_int) -> *const c_char;
     #[link_name = "get_option_value"]
     fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -> OptVal;
@@ -1012,7 +1011,7 @@ unsafe fn get_option_newval_impl(
     let oldval_is_global =
         rs_option_is_global_local(opt_idx) != 0 && (opt_flags & set_flags::OPT_LOCAL) != 0;
     let oldval_varp = if oldval_is_global {
-        nvim_get_varp_opt(opt_idx)
+        nvim_get_varp_by_idx(opt_idx)
     } else {
         varp
     };

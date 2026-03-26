@@ -765,7 +765,6 @@ extern "C" {
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn rs_get_option_unset_value(opt_idx: c_int) -> OptVal;
     fn nvim_get_varp_scope_by_idx(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
-    fn nvim_get_varp_scope_opt(opt_idx: c_int, opt_flags: c_int) -> *mut std::ffi::c_void;
     fn nvim_get_option_ptr_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn rs_optval_copy(o: OptVal) -> OptVal;
     #[link_name = "is_option_hidden"]
@@ -1079,7 +1078,7 @@ pub unsafe extern "C" fn rs_get_option_value(opt_idx: c_int, opt_flags: c_int) -
             data: OptValData { number: 0 },
         };
     }
-    let varp = nvim_get_varp_scope_opt(opt_idx, opt_flags);
+    let varp = nvim_get_varp_scope_by_idx(opt_idx, opt_flags);
     let val = rs_optval_from_varp(opt_idx, varp);
     rs_optval_copy(val)
 }

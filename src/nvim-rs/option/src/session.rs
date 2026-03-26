@@ -71,7 +71,7 @@ extern "C" {
     ) -> usize;
 
     // put_set
-    fn nvim_option_get_var_ptr(opt_idx: c_int) -> *mut std::ffi::c_void;
+    fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
     fn put_escstr(fd: *mut libc::FILE, str_: *const c_char, what: c_int) -> c_int;
     fn put_eol(fd: *mut libc::FILE) -> c_int;
     fn xmalloc(size: usize) -> *mut c_char;
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn rs_put_set(
 
     // If this is a global-local option, varp is a local var (not opt->var),
     // and value equals the unset value, do nothing.
-    let global_var = nvim_option_get_var_ptr(opt_idx);
+    let global_var = nvim_get_option_var(opt_idx);
     if nvim_option_is_global_local(opt_idx) != 0
         && varp != global_var
         && rs_optval_equal(value, nvim_get_option_unset_value(opt_idx)) != 0
@@ -504,8 +504,8 @@ pub unsafe extern "C" fn rs_makeset(
     local_only: c_int,
 ) -> c_int {
     // Get the var_ptr for runtimepath and packpath for skiprtp check.
-    let rtp_var_ptr = nvim_option_get_var_ptr(K_OPT_RUNTIMEPATH);
-    let pp_var_ptr = nvim_option_get_var_ptr(K_OPT_PACKPATH);
+    let rtp_var_ptr = nvim_get_option_var(K_OPT_RUNTIMEPATH);
+    let pp_var_ptr = nvim_get_option_var(K_OPT_PACKPATH);
 
     // Do the loop over options[] twice: once for kOptFlagPriMkrc, once without.
     for pri in (0..=1i32).rev() {
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn rs_makeset(
 
             // OPT_SKIPRTP: skip runtimepath and packpath
             if (opt_flags & OPT_SKIPRTP) != 0 {
-                let opt_var = nvim_option_get_var_ptr(opt_idx);
+                let opt_var = nvim_get_option_var(opt_idx);
                 if opt_var == rtp_var_ptr || opt_var == pp_var_ptr {
                     continue;
                 }
