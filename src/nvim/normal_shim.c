@@ -1149,25 +1149,6 @@ void nvim_showcmd_grid_render(const char *buf, bool is_clear)
 const char *nvim_transchar_wrapper(int c) { return transchar(c); }
 
 
-/// hasFolding for upward direction: hasFolding(curwin, lnum, out_lnum, NULL).
-/// Returns true if there is a fold. Sets *out_lnum to the first line of the fold.
-bool nvim_hasFolding_up(int lnum, int *out_lnum)
-{
-  linenr_T top = (linenr_T)lnum;
-  bool r = hasFolding(curwin, top, &top, NULL);
-  *out_lnum = (int)top;
-  return r;
-}
-
-/// hasFolding for downward direction: hasFolding(curwin, lnum, NULL, out_lnum).
-/// Returns true if there is a fold. Sets *out_lnum to the last line of the fold.
-bool nvim_hasFolding_down(int lnum, int *out_lnum)
-{
-  linenr_T bot = (linenr_T)lnum;
-  bool r = hasFolding(curwin, bot, NULL, &bot);
-  *out_lnum = (int)bot;
-  return r;
-}
 
 /// getvcols with p_sbr/w_p_sbr save-restore for block-Visual showcmd.
 /// Saves p_sbr and curwin->w_p_sbr, sets them to empty, calls
@@ -1398,11 +1379,6 @@ int nvim_get_op_char(int optype) { return get_op_char(optype); }
 /// Get get_extra_op_char(optype).
 int nvim_get_extra_op_char(int optype) { return get_extra_op_char(optype); }
 
-/// Set v:operator to opchars string of length len. If opchars is NULL, clear it.
-void nvim_set_vim_var_string_vv_op(const char *opchars, int len)
-{
-  set_vim_var_string(VV_OP, opchars, len);
-}
 
 /// Call rs_find_ident_at_pos(curwin, cursor.lnum, cursor.col, text, NULL, find_type).
 size_t rs_find_ident_under_cursor(char **text, int find_type)

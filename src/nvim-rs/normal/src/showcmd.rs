@@ -144,8 +144,12 @@ extern "C" {
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_get_cursor_coladd() -> c_int;
-    fn nvim_hasFolding_up(lnum: c_int, out_lnum: *mut c_int) -> bool;
-    fn nvim_hasFolding_down(lnum: c_int, out_lnum: *mut c_int) -> bool;
+    fn hasFolding(
+        wp: crate::WinHandle,
+        lnum: c_int,
+        lnum_top: *mut c_int,
+        lnum_bot: *mut c_int,
+    ) -> bool;
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_getvcols_visual_sbr_save(out_left: *mut c_int, out_right: *mut c_int);
     fn ui_has(ext: c_int) -> bool;
@@ -205,8 +209,8 @@ unsafe fn clear_showcmd_visual_info() -> bool {
         (cursor_lnum, visual_lnum)
     };
 
-    nvim_hasFolding_up(top, &raw mut top);
-    nvim_hasFolding_down(bot, &raw mut bot);
+    hasFolding(nvim_get_curwin(), top, &raw mut top, std::ptr::null_mut());
+    hasFolding(nvim_get_curwin(), bot, std::ptr::null_mut(), &raw mut bot);
     let lines = bot - top + 1;
 
     let vmode = nvim_get_VIsual_mode();

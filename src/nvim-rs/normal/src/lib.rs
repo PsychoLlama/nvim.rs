@@ -7726,7 +7726,7 @@ extern "C" {
     fn adjust_cursor_eol();
     fn nvim_get_op_char(optype: c_int) -> c_int;
     fn nvim_get_extra_op_char(optype: c_int) -> c_int;
-    fn nvim_set_vim_var_string_vv_op(opchars: *const std::ffi::c_char, len: c_int);
+    fn set_vim_var_string(idx: c_int, val: *const std::ffi::c_char, len: c_int);
     fn nvim_get_curwin_w_redr_type() -> c_int;
     fn nvim_curwin_set_old_visual_lnums();
     fn redraw_curbuf_later(type_val: c_int);
@@ -7851,13 +7851,13 @@ pub unsafe extern "C" fn rs_set_cursor_for_append_to_line() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_set_op_var(optype: c_int) {
     if optype == OP_NOP {
-        nvim_set_vim_var_string_vv_op(core::ptr::null(), 0);
+        set_vim_var_string(55, core::ptr::null(), 0); // 55 = VV_OP
     } else {
         let opchar0 = nvim_get_op_char(optype) as u8;
         let opchar1 = nvim_get_extra_op_char(optype) as u8;
         let opchars: [std::ffi::c_char; 3] =
             [opchar0 as std::ffi::c_char, opchar1 as std::ffi::c_char, 0];
-        nvim_set_vim_var_string_vv_op(opchars.as_ptr(), -1);
+        set_vim_var_string(55, opchars.as_ptr(), -1); // 55 = VV_OP
     }
 }
 
