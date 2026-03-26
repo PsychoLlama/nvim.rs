@@ -1330,9 +1330,7 @@ extern "C" {
     fn nvim_goto_tabpage_lastused() -> bool;
     fn nvim_get_changelistlen() -> c_int;
     fn nvim_emsg(msg: *const std::ffi::c_char);
-    fn nvim_get_e_changelist_is_empty() -> *const std::ffi::c_char;
-    fn nvim_get_e_start_of_changelist() -> *const std::ffi::c_char;
-    fn nvim_get_e_end_of_changelist() -> *const std::ffi::c_char;
+    fn gettext(s: *const std::ffi::c_char) -> *const std::ffi::c_char;
 
     // Register command functions
     fn nvim_get_expr_register() -> c_int;
@@ -1797,11 +1795,11 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
         move_res = rs_nv_mark_move_to(cap, flags, fm);
     } else if cmdchar == c_int::from(b'g') {
         if nvim_get_changelistlen() == 0 {
-            nvim_emsg(nvim_get_e_changelist_is_empty());
+            nvim_emsg(gettext(c"E664: Changelist is empty".as_ptr()));
         } else if count1 < 0 {
-            nvim_emsg(nvim_get_e_start_of_changelist());
+            nvim_emsg(gettext(c"E662: At start of changelist".as_ptr()));
         } else {
-            nvim_emsg(nvim_get_e_end_of_changelist());
+            nvim_emsg(gettext(c"E663: At end of changelist".as_ptr()));
         }
         return;
     } else {
@@ -4459,7 +4457,6 @@ extern "C" {
     fn rs_set_fraction(wp: WinHandle);
     fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
     fn nvim_curwin_get_p_scb() -> bool;
-    fn nvim_get_e352_msg() -> *const c_char;
     fn nvim_set_finish_op(val: bool);
 }
 
@@ -4916,7 +4913,9 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
                 let line_count = nvim_get_line_count();
                 rs_deleteFold(curwin, 1, line_count, true, false);
             } else {
-                nvim_emsg(nvim_get_e352_msg());
+                nvim_emsg(gettext(
+                    c"E352: Cannot erase folds with current 'foldmethod'".as_ptr(),
+                ));
             }
         }
 
@@ -7271,8 +7270,6 @@ extern "C" {
     // Phase 1: record
     fn do_record(nchar: c_int) -> c_int;
     fn nvim_get_reg_executing() -> c_int;
-    fn nvim_get_e_cmdline_window_already_open() -> *const std::ffi::c_char;
-
     // Phase 1: paste
     fn nvim_paste_repeat(count: c_int);
 
@@ -7388,7 +7385,9 @@ pub unsafe extern "C" fn rs_nv_record(cap: CapHandle) {
     let nchar = nvim_cap_get_nchar(cap);
     if nchar == c_int::from(b':') || nchar == c_int::from(b'/') || nchar == c_int::from(b'?') {
         if cmdwin_type != 0 {
-            nvim_emsg(nvim_get_e_cmdline_window_already_open());
+            nvim_emsg(gettext(
+                c"E1292: Command-line window is already open".as_ptr(),
+            ));
             return;
         }
         nvim_stuffcharReadbuff(nchar);

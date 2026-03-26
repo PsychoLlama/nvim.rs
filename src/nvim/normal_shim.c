@@ -116,9 +116,6 @@ typedef struct {
 
 #include "normal_shim.c.generated.h"
 
-static const char e_changelist_is_empty[] = N_("E664: Changelist is empty");
-static const char e_cmdline_window_already_open[]
-  = N_("E1292: Command-line window is already open");
 
 static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(NormalState)); s->state.check = normal_check; s->state.execute = normal_execute; }
 
@@ -360,12 +357,6 @@ bool nvim_goto_tabpage_lastused(void) { return goto_tabpage_lastused(); }
 int nvim_get_changelistlen(void) { return curbuf->b_changelistlen; }
 
 void nvim_emsg(const char *msg) { emsg(msg); }
-
-const char *nvim_get_e_changelist_is_empty(void) { return _(e_changelist_is_empty); }
-
-const char *nvim_get_e_start_of_changelist(void) { return _("E662: At start of changelist"); }
-
-const char *nvim_get_e_end_of_changelist(void) { return _("E663: At end of changelist"); }
 
 // =============================================================================
 // Register command accessors for Rust FFI
@@ -782,8 +773,6 @@ void nvim_sync_fen_in_diff_windows(void)
 }
 
 /// Get translated E352 error message.
-const char *nvim_get_e352_msg(void) { return _("E352: Cannot erase folds with current 'foldmethod'"); }
-
 // =============================================================================
 // Miscellaneous handler accessors for Rust FFI
 // =============================================================================
@@ -985,9 +974,6 @@ bool nvim_get_clear_cmdline(void) { return clear_cmdline; }
 /// Get in_assert_fails global.
 bool nvim_get_in_assert_fails(void) { return in_assert_fails; }
 
-/// Check shortmess(SHM_FILEINFO).
-bool nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO); }
-
 /// fileinfo(false, true, false) call.
 void nvim_fileinfo_call(void) { fileinfo(false, true, false); }
 
@@ -1077,9 +1063,6 @@ void nvim_curtab_clear_diff_update(void) { curtab->tp_diff_update = false; }
 void nvim_set_diff_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 
 
-/// time_fd != NULL check.
-bool nvim_get_time_fd_not_null(void) { return time_fd != NULL; }
-
 void nvim_time_msg_first_screen_and_finish(void) { TIME_MSG("first screen update"); time_finish(); }
 
 
@@ -1117,17 +1100,11 @@ void nvim_update_last_cursormoved(void)
   last_cursormoved = curwin->w_cursor;
 }
 
-/// Check if EVENT_CURSORMOVED has listeners.
-bool nvim_has_event_cursormoved(void) { return has_event(EVENT_CURSORMOVED); }
-
 /// Fire EVENT_CURSORMOVED autocmds for curbuf.
 void nvim_apply_autocmds_cursormoved(void)
 {
   apply_autocmds(EVENT_CURSORMOVED, NULL, NULL, false, curbuf);
 }
-
-/// Check if EVENT_TEXTCHANGED has listeners.
-bool nvim_has_event_textchanged(void) { return has_event(EVENT_TEXTCHANGED); }
 
 /// Fire EVENT_TEXTCHANGED autocmds for curbuf.
 void nvim_apply_autocmds_textchanged(void)
@@ -1146,9 +1123,6 @@ void nvim_curbuf_update_last_changedtick(void)
 {
   curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
 }
-
-/// Check if EVENT_BUFMODIFIEDSET has listeners.
-bool nvim_has_event_bufmodifiedset(void) { return has_event(EVENT_BUFMODIFIEDSET); }
 
 /// Fire EVENT_BUFMODIFIEDSET autocmds for curbuf.
 void nvim_apply_autocmds_bufmodifiedset(void)
@@ -1426,9 +1400,6 @@ int nvim_get_oap_start_col(cmdarg_T *cap) { return (int)cap->oap->start.col; }
 
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
-
-/// Return the translated "E1292: Command-line window is already open" message.
-const char *nvim_get_e_cmdline_window_already_open(void) { return _(e_cmdline_window_already_open); }
 
 // =============================================================================
 // Search, gotofile, visual text, and mark movement accessors for Rust FFI

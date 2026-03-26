@@ -72,7 +72,6 @@ extern "C" {
     fn nvim_set_skip_redraw(val: bool);
     static diff_need_scrollbind: bool;
     fn nvim_set_diff_need_scrollbind(val: bool);
-    fn nvim_get_time_fd_not_null() -> bool;
     static mut may_garbage_collect: bool;
     fn nvim_stuff_empty() -> bool;
     fn nvim_get_finish_op() -> c_int;
@@ -142,7 +141,7 @@ extern "C" {
     fn update_screen();
     fn redraw_statuslines();
     fn nvim_curbuf_set_b_last_used();
-    fn nvim_shortmess_fileinfo() -> bool;
+    fn shortmess(x: c_int) -> bool;
     fn nvim_fileinfo_call();
     fn may_clear_sb_text();
     fn readbuf1_empty() -> bool;
@@ -154,16 +153,16 @@ extern "C" {
     fn rs_foldCheckClose();
     fn rs_foldOpenCursor();
 
+    fn has_event(event: c_int) -> c_int;
+    static mut time_fd: *mut std::ffi::c_void;
+
     // Phase 5 autocmd-check accessors
-    fn nvim_has_event_cursormoved() -> bool;
     fn nvim_last_cursormoved_check() -> bool;
     fn nvim_apply_autocmds_cursormoved();
     fn nvim_update_last_cursormoved();
-    fn nvim_has_event_textchanged() -> bool;
     fn nvim_curbuf_changedtick_changed() -> bool;
     fn nvim_apply_autocmds_textchanged();
     fn nvim_curbuf_update_last_changedtick();
-    fn nvim_has_event_bufmodifiedset() -> bool;
     fn nvim_curbuf_b_changed_invalid_get() -> bool;
     fn nvim_apply_autocmds_bufmodifiedset();
     fn nvim_curbuf_b_changed_invalid_clear();
@@ -180,6 +179,14 @@ extern "C" {
     fn xfree(ptr: *mut std::ffi::c_void);
     fn msg(s: *const std::ffi::c_char, hl_id: c_int) -> c_int;
 }
+
+// Event type constants (from auevents_enum.generated.h)
+const EVENT_CURSORMOVED: c_int = 39;
+const EVENT_TEXTCHANGED: c_int = 121;
+const EVENT_BUFMODIFIEDSET: c_int = 8;
+
+// shortmess() flag constant
+const SHM_FILEINFO: c_int = b'F' as c_int;
 
 // =============================================================================
 // Inlined Phase 4 helper implementations
@@ -240,7 +247,10 @@ unsafe fn normal_check_safe_state(_s: NormalStateHandle) {
 
 /// Inline of normal_check_cursor_moved.
 unsafe fn normal_check_cursor_moved() {
-    if nvim_get_finish_op() == 0 && nvim_has_event_cursormoved() && nvim_last_cursormoved_check() {
+    if nvim_get_finish_op() == 0
+        && has_event(EVENT_CURSORMOVED) != 0
+        && nvim_last_cursormoved_check()
+    {
         nvim_apply_autocmds_cursormoved();
         nvim_update_last_cursormoved();
     }
@@ -249,7 +259,7 @@ unsafe fn normal_check_cursor_moved() {
 /// Inline of normal_check_text_changed.
 unsafe fn normal_check_text_changed() {
     if nvim_get_finish_op() == 0
-        && nvim_has_event_textchanged()
+        && has_event(EVENT_TEXTCHANGED) != 0
         && nvim_curbuf_changedtick_changed()
     {
         nvim_apply_autocmds_textchanged();
@@ -260,7 +270,7 @@ unsafe fn normal_check_text_changed() {
 /// Inline of normal_check_buffer_modified.
 unsafe fn normal_check_buffer_modified() {
     if nvim_get_finish_op() == 0
-        && nvim_has_event_bufmodifiedset()
+        && has_event(EVENT_BUFMODIFIEDSET) != 0
         && nvim_curbuf_b_changed_invalid_get()
     {
         nvim_apply_autocmds_bufmodifiedset();
@@ -323,7 +333,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
     }
 
     // Show fileinfo after redraw.
-    if c_int::from(need_fileinfo) != 0 && !nvim_shortmess_fileinfo() {
+    if c_int::from(need_fileinfo) != 0 && !shortmess(SHM_FILEINFO) {
         nvim_fileinfo_call();
         need_fileinfo = false;
     }
@@ -550,7 +560,7 @@ pub unsafe extern "C" fn rs_normal_check(s: NormalStateHandle) -> c_int {
 
         // Now that we have drawn the first screen all the startup stuff
         // has been done, close any file for startup messages.
-        if nvim_get_time_fd_not_null() {
+        if !time_fd.is_null() {
             nvim_time_msg_first_screen_and_finish();
         }
         // After the first screen update may start triggering WinScrolled
