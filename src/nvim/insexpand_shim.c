@@ -82,34 +82,21 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-// Rust rs_* function declarations (only those still called from this file)
+// Rust rs_* function declarations called from this file
 extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **ht_stack,
                                    list_stack_T **list_stack);
 extern int rs_cot_fuzzy(void);
 extern int rs_is_nearest_active(void);
 extern int rs_get_cpt_sources_count(void);
-extern int rs_ins_compl_key2dir(int c);
-extern int rs_ins_compl_key2count(int c);
 extern int rs_ins_compl_preinsert_longest(void);
 extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
                                             int min_len, char **tofree);
-extern int rs_ins_compl_add_word_or_line(int in_fuzzy, char *fuzzy_ptr, int fuzzy_len,
-                                          int fuzzy_score);
 extern void rs_cpt_compl_refresh(void);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
-extern int rs_ins_compl_col_range_attr(int lnum, int col);
-extern void rs_sort_compl_match_list(int compare_type);
-extern void rs_ins_compl_new_leader(void);
 extern void rs_ins_compl_del_pum(void);
 extern const char *rs_ins_compl_mode(void);
-extern void rs_compl_source_start_timer(int source_idx);
-extern int rs_advance_cpt_sources_index_safe(void);
-extern void rs_ins_compl_add_matches(int num_matches, char **matches, int icase);
-extern int rs_compl_get_info(char *line, int startcol, int curs_col, int *line_invalid);
 extern void rs_ins_compl_longest_match(void *match);
-extern const char *rs_find_common_prefix(size_t *prefix_len, int curbuf_only);
-extern int rs_ins_compl_build_pum(void);
 
 // Forward declarations for compound C accessors defined at the bottom of this file.
 int nvim_ins_compl_add_tv_impl(void *tv, int dir, int fast);
@@ -240,7 +227,6 @@ bool ins_compl_st_cleared = false;  ///< made non-static for Rust access (Phase 
 #define LOOKBACK_LINE_COUNT     1000
 
 #include "insexpand_shim.c.generated.h"
-extern buf_T *rs_ins_compl_next_buf(buf_T *buf, int flag);
 
 /// values for cp_flags
 typedef enum {
@@ -1068,7 +1054,6 @@ const char *nvim_get_curbuf_b_p_com(void) { return curbuf->b_p_com; }
 // #[export_name] in src/nvim-rs/insexpand/src/funcexpand.rs (Phase 1).
 
 /// Fill the dict of complete_info
-extern void rs_get_complete_info(void *what_list, void *retdict);
 
 /// Compound accessor for Phase 2 (pass 5): complete_info() implementation.
 /// Contains the full what_flag parsing and dictionary population logic.
