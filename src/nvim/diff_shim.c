@@ -11,7 +11,6 @@
 #include "nvim/buffer.h"
 #include "nvim/bufwrite.h"
 #include "nvim/change.h"
-#include "nvim/charset.h"
 #include "nvim/cursor.h"
 #include "nvim/decoration.h"
 #include "nvim/diff.h"
@@ -231,7 +230,6 @@ int nvim_diffchange_get_end_lnum_off(diffline_change_T *change, int idx) { if (c
 colnr_T nvim_diffchange_get_start(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_start[idx]; }
 colnr_T nvim_diffchange_get_end(diffline_change_T *change, int idx) { if (change == NULL || idx < 0 || idx >= DB_COUNT) { return 0; } return change->dc_end[idx]; }
 bool nvim_diff_is_simple_change(diffline_change_T *change) { return change == &simple_diffline_change; }
-const char *nvim_diff_skipwhite(const char *p) { return skipwhite(p); }
 char *nvim_diffio_get_orig_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.ptr : NULL; }
 int nvim_diffio_get_orig_size(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_orig.din_mmfile.size : 0; }
 char *nvim_diffio_get_new_ptr(void *dio_ptr) { diffio_T *dio = (diffio_T *)dio_ptr; return dio ? dio->dio_new.din_mmfile.ptr : NULL; }
@@ -354,21 +352,12 @@ void nvim_diff_emsg_hidden_diff_anchors(void) { emsg(_(e_diff_anchors_with_hidde
 void nvim_diff_emsg_invrange(void) { emsg(_(e_invrange)); }
 void nvim_diff_semsg_too_many_anchors(int max) { semsg(_(e_cannot_have_more_than_nr_diff_anchors), max); }
 win_T *nvim_diff_get_firstwin(void) { return firstwin; }
-void nvim_diff_emsg(const char *msg) { emsg(msg); }
-char *nvim_diff_vim_tempname(void) { return vim_tempname(); }
 int nvim_diff_buf_write_curbuf(const char *fname) { return buf_write(curbuf, (char *)fname, NULL, 1, curbuf->b_ml.ml_line_count, NULL, false, false, false, true); }
 char *nvim_diff_FullName_save(const char *fname) { return FullName_save((char *)fname, false); }
-char *nvim_diff_vim_strsave_shellescape(const char *s) { return vim_strsave_shellescape(s, true, true); }
-int nvim_diff_os_dirname(char *buf, int size) { return os_dirname(buf, (size_t)size); }
-int nvim_diff_os_chdir(const char *dir) { return os_chdir(dir); }
-const char *nvim_diff_vim_gettempdir(void) { return vim_gettempdir(); }
-void nvim_diff_shorten_fnames(void) { shorten_fnames(true); }
 bool nvim_diff_is_patchexpr_set(void) { return *p_pex != NUL; }
 void nvim_diff_eval_patch(const char *orig, const char *diff, const char *out) { eval_patch((char *)orig, (char *)diff, (char *)out); }
 void nvim_diff_call_shell_filter(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter, NULL); unblock_autocmds(); }
 bool nvim_diff_os_fileinfo_size(const char *fname, uint64_t *size_out) { FileInfo fi; bool ok = os_fileinfo(fname, &fi); if (ok && size_out != NULL) { *size_out = os_fileinfo_size(&fi); } return ok; }
-void nvim_diff_os_remove(const char *fname) { os_remove(fname); }
-char *nvim_diff_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
 int nvim_diff_get_MAXPATHL(void) { return MAXPATHL; }
 char *nvim_diff_xmalloc(size_t size) { return xmalloc(size); }
 void nvim_diff_vim_snprintf_patch(char *buf, size_t buflen, const char *tmp_new, const char *tmp_orig, const char *esc_name) { vim_snprintf(buf, buflen, "patch -o %s %s < %s", tmp_new, tmp_orig, esc_name); }

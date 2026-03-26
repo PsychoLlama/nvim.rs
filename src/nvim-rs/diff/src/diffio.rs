@@ -548,7 +548,7 @@ extern "C" {
     fn nvim_diff_fopen_read(fname: *const c_char) -> *mut std::ffi::c_void;
     fn nvim_diff_fclose(fd: *mut std::ffi::c_void);
     fn nvim_diff_fgets(fd: *mut std::ffi::c_void, buf: *mut c_char, buflen: c_int) -> bool;
-    fn nvim_diff_os_remove(fname: *const c_char);
+    fn os_remove(fname: *const c_char) -> c_int;
     fn nvim_diff_emsg_e810();
     fn nvim_diff_emsg_e97();
 }
@@ -617,10 +617,10 @@ pub unsafe extern "C" fn rs_check_external_diff(dio: DiffioHandle) -> c_int {
                     nvim_diff_fclose(fd3);
                 }
 
-                nvim_diff_os_remove(diff_fname);
-                nvim_diff_os_remove(new_fname);
+                os_remove(diff_fname);
+                os_remove(new_fname);
             }
-            nvim_diff_os_remove(orig_fname);
+            os_remove(orig_fname);
         }
 
         // When using 'diffexpr' break here.

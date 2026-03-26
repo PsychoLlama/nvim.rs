@@ -23,20 +23,21 @@ const WSP_VERT: c_int = 0x02;
 
 extern "C" {
     // Temp file management
-    fn nvim_diff_vim_tempname() -> *mut c_char;
+    fn vim_tempname() -> *mut c_char;
 
     // Buffer write to file
     fn nvim_diff_buf_write_curbuf(fname: *const c_char) -> c_int;
 
     // Path utilities
     fn nvim_diff_FullName_save(fname: *const c_char) -> *mut c_char;
-    fn nvim_diff_vim_strsave_shellescape(s: *const c_char) -> *mut c_char;
+    fn vim_strsave_shellescape(s: *const c_char, do_special: bool, do_newline: bool)
+        -> *mut c_char;
 
     // Directory management (UNIX)
-    fn nvim_diff_os_dirname(buf: *mut c_char, size: c_int) -> c_int;
-    fn nvim_diff_os_chdir(dir: *const c_char) -> c_int;
-    fn nvim_diff_vim_gettempdir() -> *const c_char;
-    fn nvim_diff_shorten_fnames();
+    fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
+    fn os_chdir(dir: *const c_char) -> c_int;
+    fn vim_gettempdir() -> *const c_char;
+    fn shorten_fnames(force: bool);
 
     // Patch application
     fn nvim_diff_is_patchexpr_set() -> bool;
@@ -45,12 +46,12 @@ extern "C" {
 
     // File operations
     fn nvim_diff_os_fileinfo_size(fname: *const c_char, size_out: *mut u64) -> bool;
-    fn nvim_diff_os_remove(fname: *const c_char);
+    fn os_remove(fname: *const c_char) -> c_int;
 
     // Memory
     fn xfree(p: *mut std::ffi::c_void);
     fn strlen(s: *const c_char) -> usize;
-    fn nvim_diff_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_diff_get_MAXPATHL() -> c_int;
     fn nvim_diff_xmalloc(size: usize) -> *mut c_char;
     fn nvim_diff_vim_snprintf_patch(
@@ -118,7 +119,7 @@ unsafe fn ex_diffpatch_body(
     };
 
     // Shell-escape the patchfile name.
-    let esc_name = nvim_diff_vim_strsave_shellescape(diff_path);
+    let esc_name = vim_strsave_shellescape(diff_path, true, true);
     if esc_name.is_null() {
         xfree(fullname.cast());
         return false;
@@ -137,17 +138,17 @@ unsafe fn ex_diffpatch_body(
     let dirbuf_size = (maxpathl + 1).unsigned_abs() as usize;
     let dirbuf = nvim_diff_xmalloc(dirbuf_size);
     let dir_changed = if !dirbuf.is_null()
-        && nvim_diff_os_dirname(dirbuf, maxpathl + 1) == OK
-        && nvim_diff_os_chdir(dirbuf.cast_const()) == 0
+        && os_dirname(dirbuf, (maxpathl + 1).unsigned_abs() as usize) == OK
+        && os_chdir(dirbuf.cast_const()) == 0
     {
-        let tempdir = nvim_diff_vim_gettempdir();
+        let tempdir = vim_gettempdir();
         let tempdir_ptr: *const c_char = if tempdir.is_null() || *tempdir == 0 {
             c"/tmp".as_ptr()
         } else {
             tempdir
         };
-        nvim_diff_os_chdir(tempdir_ptr);
-        nvim_diff_shorten_fnames();
+        os_chdir(tempdir_ptr);
+        shorten_fnames(true);
         true
     } else {
         false
@@ -169,10 +170,10 @@ unsafe fn ex_diffpatch_body(
 
     // Restore directory.
     if dir_changed && !dirbuf.is_null() {
-        if nvim_diff_os_chdir(dirbuf.cast_const()) != 0 {
+        if os_chdir(dirbuf.cast_const()) != 0 {
             nvim_diff_emsg_prev_dir();
         }
-        nvim_diff_shorten_fnames();
+        shorten_fnames(true);
     }
     xfree(dirbuf.cast());
     xfree(cmdbuf.cast());
@@ -192,7 +193,7 @@ unsafe fn ex_diffpatch_body(
             suffixed.add(tmp_new_len),
             orig_suffix.len(),
         );
-        nvim_diff_os_remove(suffixed.cast_const());
+        os_remove(suffixed.cast_const());
 
         // Build "tmp_new.rej" and remove it.
         let rej_suffix: &[u8] = b".rej\0";
@@ -201,7 +202,7 @@ unsafe fn ex_diffpatch_body(
             suffixed.add(tmp_new_len),
             rej_suffix.len(),
         );
-        nvim_diff_os_remove(suffixed.cast_const());
+        os_remove(suffixed.cast_const());
         xfree(suffixed.cast());
     }
 
@@ -218,7 +219,7 @@ unsafe fn ex_diffpatch_body(
     let curbuf_fname = nvim_diff_get_curbuf_fname();
     let newname: *mut c_char = if !curbuf_fname.is_null() && *curbuf_fname != 0 {
         let fname_len = strlen(curbuf_fname);
-        let p = nvim_diff_xstrnsave(curbuf_fname, fname_len + 4);
+        let p = xstrnsave(curbuf_fname, fname_len + 4);
         if !p.is_null() {
             let new_suffix: &[u8] = b".new\0";
             std::ptr::copy_nonoverlapping(
@@ -280,19 +281,19 @@ unsafe fn ex_diffpatch_body(
 /// # Safety
 /// `eap` must be a valid pointer to an `exarg_T`.
 unsafe fn ex_diffpatch_impl(eap: *mut std::ffi::c_void, old_curwin: WinHandle) {
-    let tmp_orig = nvim_diff_vim_tempname();
-    let tmp_new = nvim_diff_vim_tempname();
+    let tmp_orig = vim_tempname();
+    let tmp_new = vim_tempname();
 
     ex_diffpatch_body(eap, old_curwin, tmp_orig, tmp_new);
 
     // Always clean up temp files (matches C `goto theend` behavior).
     if !tmp_orig.is_null() {
-        nvim_diff_os_remove(tmp_orig.cast_const());
+        os_remove(tmp_orig.cast_const());
     }
     xfree(tmp_orig.cast());
 
     if !tmp_new.is_null() {
-        nvim_diff_os_remove(tmp_new.cast_const());
+        os_remove(tmp_new.cast_const());
     }
     xfree(tmp_new.cast());
 }

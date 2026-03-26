@@ -1886,7 +1886,7 @@ extern "C" {
     fn nvim_diffchange_get_start(change: DiffLineChangeHandle, idx: c_int) -> LinenrT;
     fn nvim_diffchange_get_end(change: DiffLineChangeHandle, idx: c_int) -> LinenrT;
     // string helpers
-    fn nvim_diff_skipwhite(p: *const c_char) -> *const c_char;
+    fn skipwhite(p: *const c_char) -> *const c_char;
     // UTF-8
     fn utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
 }
@@ -3191,9 +3191,9 @@ pub unsafe extern "C" fn rs_diff_find_change_simple(
                             || is_white(*line_new.offset(si_new as isize) as u8)))
                 {
                     // Skip whitespace
-                    let new_org = nvim_diff_skipwhite(line_org.offset(si_org as isize));
+                    let new_org = skipwhite(line_org.offset(si_org as isize));
                     si_org = new_org.offset_from(line_org) as c_int;
-                    let new_new = nvim_diff_skipwhite(line_new.offset(si_new as isize));
+                    let new_new = skipwhite(line_new.offset(si_new as isize));
                     si_new = new_new.offset_from(line_new) as c_int;
                 } else {
                     let mut l: c_int = 0;
@@ -3490,7 +3490,7 @@ extern "C" {
     fn nvim_diff_semsg_too_many_anchors(max: c_int);
     fn nvim_diff_get_firstwin() -> WinHandle;
     fn nvim_win_get_w_p_diff(wp: WinHandle) -> bool;
-    fn nvim_diff_emsg(msg: *const c_char);
+    fn emsg(msg: *const c_char) -> bool;
 }
 
 extern "C" {
@@ -3599,7 +3599,7 @@ pub unsafe extern "C" fn rs_parse_diffanchors(
         nvim_diff_restore_curwin_curbuf(orig_curwin);
 
         if !errormsg.is_null() {
-            nvim_diff_emsg(errormsg);
+            emsg(errormsg);
         }
         if dia.is_null() {
             // Error detected by get_address.
