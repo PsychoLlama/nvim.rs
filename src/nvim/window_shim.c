@@ -304,10 +304,6 @@ bool win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, bool force)
 }
 
 
-#if defined(EXITFREE)
-#endif
-
-
 /// Set a new height for a frame.  Recursively sets the height for contained
 /// frames and windows.  Caller must take care of positions.
 ///
@@ -1119,8 +1115,6 @@ void nvim_set_curwin_from_wp(win_T *wp)
   }
 }
 
-
-
 /// Get RedrawingDisabled.
 int nvim_get_RedrawingDisabled(void) { return RedrawingDisabled; }
 /// Set RedrawingDisabled.
@@ -1727,13 +1721,6 @@ size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen
 
 // Global variable accessors
 
-// nvim_get_VIsual_lnum, _col, _coladd already defined in plines.c.
-// nvim_get_VIsual_mode already defined in normal_shim.c.
-// nvim_get_highlight_match already defined in change_ffi.c.
-// nvim_get_search_match_lines, nvim_get_search_match_endcol already defined in search.c.
-// nvim_get_dollar_vcol already defined in edit.c.
-// nvim_get_cmdwin_type already defined in ex_getln.c.
-
 /// 'selection' option
 const char *nvim_get_p_sel(void) { return p_sel; }
 
@@ -1743,15 +1730,12 @@ void nvim_set_spell_redraw_lnum(linenr_T val) { spell_redraw_lnum = val; }
 
 /// dy_flags (display options)
 int nvim_get_dy_flags(void) { return dy_flags; }
-// nvim_get_p_cpo already defined at line 314; nvim_get_curwin at line 211.
 
 /// curwin->w_cursor accessors
 linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 colnr_T nvim_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 colnr_T nvim_curwin_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
-
-// nvim_win_get_p_lbr already defined in plines.c.
 
 /// b_syn_error / b_syn_slow (via w_s)
 int nvim_win_get_syn_error(win_T *wp) { return wp->w_s->b_syn_error ? 1 : 0; }
@@ -1764,29 +1748,14 @@ int nvim_win_syntax_present(win_T *wp) { return syntax_present(wp) ? 1 : 0; }
 /// w_p_fdt (foldtext option, check if set)
 int nvim_win_p_fdt_empty(win_T *wp) { return *wp->w_p_fdt == NUL ? 1 : 0; }
 
-
-// nvim_win_get_topline, nvim_win_get_topfill already defined above.
-// nvim_win_get_leftcol already defined above.
-
 /// w_cursor compound setter (temporarily move cursor, e.g. for spell checking)
 /// Renamed to avoid clash with Neovim API nvim_win_set_cursor(Window, Array, Error*).
-
-// nvim_win_get_botfill already defined above.
 
 /// w_p_cuc (cursorcolumn)
 int nvim_win_get_p_cuc_val(win_T *wp) { return wp->w_p_cuc ? 1 : 0; }
 
-// nvim_win_set_cline_row, nvim_win_set_cline_height, nvim_win_set_cline_folded,
-// nvim_win_get_cline_row, nvim_win_get_cline_height already defined above.
-
-/// w_valid set bits
-
-// nvim_win_get_wrow, nvim_win_set_wrow, nvim_win_get_wcol, nvim_win_set_wcol already defined above.
-// nvim_win_get_scwidth already defined above.
-
 /// w_p_wrap getter
 int nvim_win_get_wrap_val(win_T *wp) { return wp->w_p_wrap ? 1 : 0; }
-
 
 /// VirtLines helpers for win_line
 /// VirtLines is kvec_t(struct virt_line { VirtText line; int flags; }) from decoration_defs.h
@@ -1798,13 +1767,10 @@ void nvim_virt_lines_destroy(void *vl) { kv_destroy(*(VirtLines *)vl); }
 /// wp->w_grid (GridView) pointer accessor for win_line
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
 
-// nvim_ml_get already defined in change_ffi.c.
-
 /// bt_quickfix check
 int nvim_win_bt_quickfix(win_T *wp) { return bt_quickfix(wp->w_buffer) ? 1 : 0; }
 
 int nvim_win_buf_meta_total_inline(win_T *wp) { return buf_meta_total(wp->w_buffer, kMTMetaInline) > 0 ? 1 : 0; }
-
 
 /// CharsizeArg init (opaque; we pass it around as void* from Rust)
 /// We need to call init_charsize_arg from Rust.
@@ -2136,12 +2102,8 @@ void nvim_getvcol_byval3(win_T *wp, const int *pos, int *scol, int *ccol, int *e
 
 int nvim_conceal_cursor_line(const win_T *wp) { return conceal_cursor_line(wp) ? 1 : 0; }
 
-// nvim_win_get_botfill already defined above (line ~698).
-
 /// ml_get_buf wrapper for drawline (returns char* for given buf/lnum).
 const char *nvim_buf_ml_get(buf_T *buf, int lnum) { return ml_get_buf(buf, (linenr_T)lnum); }
-
-// nvim_win_get_buf_ptr(wp) already defined at line ~968.
 
 /// buf_T terminal pointer (non-null iff terminal buffer).
 void *nvim_buf_get_terminal_ptr(buf_T *buf) { return buf->terminal; }
