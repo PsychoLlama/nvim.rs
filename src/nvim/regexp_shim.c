@@ -50,19 +50,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
-// Rust FFI: skip_regexp implementation
 extern char *rs_partial_name(partial_T *pt);
-// rs_skip_regexp_ex deleted: now exported as skip_regexp_ex via #[export_name]
-// Rust FFI: regexp utility functions (directly exported from Rust)
-// Rust FFI: NFA execution engine entry points
-extern int rs_nfa_regexec_multi(void *rmp, void *win, void *buf, int32_t lnum,
-                                int32_t col, void *tm, int *timed_out);
-// Rust FFI: BT execution engine entry points
-// rs_vim_regexec deleted: now exported as vim_regexec via #[export_name]
-// rs_vim_regexec_nl deleted: now exported as vim_regexec_nl via #[export_name]
-// rs_vim_regexec_prog deleted: now exported as vim_regexec_prog via #[export_name]
-// rs_vim_regexec_multi deleted: now exported as vim_regexec_multi via #[export_name]
-// rs_vim_regcomp deleted: now exported as vim_regcomp via #[export_name]
 
 /// Structure returned by vim_regcomp() to pass on to vim_regexec().
 /// This is the general structure. For the actual matcher, two specific
@@ -135,8 +123,6 @@ char *skip_regexp(char *startp, int delim, int magic)
 {
   return skip_regexp_ex(startp, delim, magic, NULL, NULL, NULL);
 }
-
-// skip_regexp_ex deleted: now exported from Rust lib.rs via #[export_name = "skip_regexp_ex"]
 
 // vim_regexec and friends
 
@@ -328,7 +314,6 @@ int32_t nvim_regexp_call_win_linetabsize(void *wp, int32_t lnum,
   return (int32_t)win_linetabsize((win_T *)wp, (linenr_T)lnum, (char *)line, (colnr_T)col);
 }
 
-// nvim_regexp_setup_vim_regsub and nvim_regexp_setup_vim_regsub_multi inlined into Rust
 
 // reg_getline_common accessors for Rust FFI
 char *nvim_regexp_call_ml_get_buf(int32_t lnum) { return ml_get_buf(REX_PTR->reg_buf, (linenr_T)lnum); }
@@ -374,13 +359,6 @@ static void clear_submatch_list(staticList10_T *sl)
     xfree(TV_LIST_ITEM_TV(li)->vval.v_string);
   });
 }
-
-// Rust FFI: vim_regsub functions
-// rs_vim_regsub deleted: now exported as vim_regsub via #[export_name]
-// rs_vim_regsub_multi deleted: now exported as vim_regsub_multi via #[export_name]
-
-// vim_regsub deleted: Rust exports under the C name directly via #[export_name].
-// vim_regsub_multi deleted: now exported from Rust lib.rs via #[export_name = "vim_regsub_multi"]
 
 // Forward declarations for Rust-exported state accessors
 char **nvim_regexp_get_eval_result_ptr(int i);
@@ -510,10 +488,6 @@ int nvim_regexp_eval_regsub_expr(char *source, void *expr_ptr, int flags, int ne
   return 0;
 }
 
-// vim_regsub_both is now implemented in Rust as rs_vim_regsub_both
-
-// init_regexec_multi inlined into Rust (rs_nfa_regexec_multi)
-
 // Error helpers for Rust FFI (keeps gettext _() calls in C)
 
 // reg_do_extmatch is a global (globals.h), not a C static -- accessor kept for Rust FFI
@@ -526,9 +500,6 @@ int32_t nvim_regexp_get_curwin_vcol(void)
   getvvcol(curwin, &curwin->w_cursor, NULL, NULL, &vcol);
   return (int32_t)(++vcol);
 }
-
-
-// vim_regcomp_had_eol deleted: Rust exports under the C name directly via #[export_name].
 
 // --- regmatch accessor functions for Rust FFI (rs_regmatch) ---
 
@@ -568,31 +539,10 @@ int nvim_regexp_call_mb_get_class_tab(uint8_t *p) {
 }
 
 
-// NFA opcode enum deleted (moved to Rust constants in lib.rs)
-
-
-
-
-
-
-// Error messages for post2nfa
 
 
 
 char *nvim_regexp_xstrdup(const char *s) { return xstrdup(s); }
-
-
-
-
-// siemsg wrapper for check_char_class
-
-
-
-// NFA prog allocation: allocates the prog and updates Rust-owned STATE_PTR via nvim_regexp_set_state_ptr
-extern void nvim_regexp_set_state_ptr(void *v);  // exported by Rust, sets STATE_PTR static
-/////////////////////////////////////////////////////////////////
-// NFA execution code.
-/////////////////////////////////////////////////////////////////
 
 // win_T and buffer accessors for VCOL/MARK cases
 void *nvim_regexp_get_curwin(void) { return (void *)curwin; }
@@ -607,8 +557,6 @@ int32_t nvim_regexp_fmark_get_col(void *fm) { return (int32_t)((fmark_T *)fm)->m
 
 void nvim_regexp_xfree(void *p) { xfree(p); }
 
-// nfa_regexec_both: iemsg for null prog/line
-
 // curbuf and buf_T accessors
 void *nvim_regexp_get_curbuf(void) { return (void *)curbuf; }
 int32_t nvim_regexp_get_curbuf_ml_line_count(void) { return (int32_t)curbuf->b_ml.ml_line_count; }
@@ -617,8 +565,6 @@ int32_t nvim_regexp_get_buf_ml_line_count(void *buf) { return (int32_t)((buf_T *
 // p_re option
 int32_t nvim_regexp_get_p_re(void) { return (int32_t)p_re; }
 void nvim_regexp_set_p_re(int32_t v) { p_re = (long)v; }
-
-// nfa_regprog_T pattern accessor
 
 // reg_do_extmatch setter
 void nvim_regexp_set_reg_do_extmatch(int v) { reg_do_extmatch = v; }
@@ -630,8 +576,6 @@ void *nvim_regexp_call_vim_regcomp(const char *pat, int re_flags) {
 void nvim_regexp_call_vim_regfree(void *prog) {
   vim_regfree((regprog_T *)prog);
 }
-
-// Emit e_recursive error
 
 // p_verbose option
 int64_t nvim_regexp_get_p_verbose(void) { return p_verbose; }
@@ -660,18 +604,3 @@ void *nvim_regexp_alloc_bt_regprog(int64_t regsize_val) {
   r->re_in_use = false;
   return r;
 }
-
-// vim_regcomp deleted: Rust exports under the C name directly via #[export_name].
-
-// vim_regexec_prog deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec_prog"]
-// vim_regexec deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec"]
-// vim_regexec_nl deleted: now exported from Rust lib.rs via #[export_name = "vim_regexec_nl"]
-
-/// Match a regexp against multiple lines.
-/// "rmp->regprog" must be a compiled regexp as returned by vim_regcomp().
-/// Note: "rmp->regprog" may be freed and changed, even set to NULL.
-/// Uses curbuf for line count and 'iskeyword'.
-///
-/// @param win        window in which to search or NULL
-/// @param buf        buffer in which to search
-// vim_regexec_multi deleted: Rust exports under the C name directly via #[export_name].
