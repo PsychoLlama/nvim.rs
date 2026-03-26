@@ -427,16 +427,10 @@ char *nvim_xmemdupz(const char *s, size_t len)
 }
 
 const char *nvim_shada_get_p_shada(void) { return p_shada; }
-char *nvim_shada_home_replace_save(const void *buf, const char *src)
-{
-  return home_replace_save((buf_T *)buf, src);
-}
 void nvim_shada_home_replace(const void *buf, const char *src, char *dst, size_t dstlen, int one)
 {
   home_replace((buf_T *)buf, src, dst, dstlen, one != 0);
 }
-size_t nvim_shada_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars) { return copy_option_part(option, buf, maxlen, (char *)sep_chars); }
-int nvim_shada_mb_strnicmp(const char *s1, const char *s2, size_t n) { return mb_strnicmp(s1, s2, n); }
 char *nvim_shada_get_namebuff(void) { return NameBuff; }
 const void *nvim_shada_buf_first(void) { return firstbuf; }
 const void *nvim_shada_buf_next(const void *buf)
@@ -524,9 +518,6 @@ void nvim_shada_get_search_pattern(int is_substitute, char **out_pat, int *out_m
   *out_additional_data = pat.additional_data;
 }
 
-int nvim_shada_search_was_last_used(void) { return search_was_last_used(); }
-int nvim_shada_no_hlsearch(void) { return no_hlsearch; }
-
 // Register iteration accessor
 const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
                                 String **out_contents, size_t *out_size,
@@ -559,14 +550,8 @@ void nvim_shada_buf_get_buflist_info(const void *buf, pos_T *out_pos,
     *out_additional_data = ((const buf_T *)buf)->additional_data;
   }
 }
-Timestamp nvim_shada_os_time(void) { return os_time(); }
 
 // Jump list accessors
-void nvim_shada_setpcmark(void) { setpcmark(); }
-void nvim_shada_cleanup_jumplist(void *wp, int loadfiles)
-{
-  cleanup_jumplist((win_T *)wp, loadfiles != 0);
-}
 void *nvim_shada_curwin(void) { return curwin; }
 
 // mark_jumplist_iter wrapper
@@ -584,8 +569,6 @@ const void *nvim_shada_jumplist_iter(const void *iter, void *wp,
   *out_additional_data = fm.fmark.additional_data;
   return ret;
 }
-
-const void *nvim_shada_buflist_findnr(int nr) { return buflist_findnr(nr); }
 
 /// Free a Header ShadaEntry's dict (api_free_dict wrapper for Header entries).
 /// Called from Rust rs_shada_free_entry_contents when entry_type == Header.
@@ -620,18 +603,6 @@ const char *nvim_shada_os_strerror(int err)
   return os_strerror(err);
 }
 
-/// Wrapper for verbose_enter()
-void nvim_shada_verbose_enter(void)
-{
-  verbose_enter();
-}
-
-/// Wrapper for verbose_leave()
-void nvim_shada_verbose_leave(void)
-{
-  verbose_leave();
-}
-
 /// Get p_verbose value
 int nvim_shada_get_p_verbose(void) { return (int)p_verbose; }
 
@@ -646,9 +617,6 @@ void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
        get_oldfiles ? _(" oldfiles") : "",
        failed ? _(" FAILED") : "");
 }
-
-/// Get p_fs value (for file sync)
-int nvim_shada_get_p_fs(void) { return !!p_fs; }
 
 /// Wrapper for stdpaths_user_state_subpath + concat_fnames_realloc
 /// to build the default shada file path.
@@ -685,18 +653,6 @@ void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts,
   he->additional_data = additional_data;
 }
 
-/// Wrapper for modname() used by rs_shada_write_file.
-char *nvim_shada_modname(const char *fname, const char *ext, bool prepend_dot)
-{
-  return modname(fname, ext, prepend_dot);
-}
-
-/// Wrapper for os_getperm() used by rs_shada_write_file.
-int nvim_shada_os_getperm(const char *fname)
-{
-  return (int)os_getperm(fname);
-}
-
 /// Wrapper for file_open() with write flags used by rs_shada_write_file.
 /// flags: combination of FileOpenFlags bits (int).
 int nvim_shada_file_open_write(void *fd, const char *fname, int flags, int perm)
@@ -712,29 +668,11 @@ size_t nvim_shada_path_tail_with_sep_offset(const char *fname)
   return (size_t)(tail - fname);
 }
 
-/// Wrapper for os_isdir() used by rs_shada_write_file.
-int nvim_shada_os_isdir(const char *fname)
-{
-  return os_isdir(fname) ? 1 : 0;
-}
-
 /// Wrapper for os_mkdir_recurse() used by rs_shada_write_file.
 /// Returns error code; sets *out_failed_dir to the failed directory (caller must free).
 int nvim_shada_os_mkdir_recurse(const char *fname, int perm, char **out_failed_dir)
 {
   return os_mkdir_recurse(fname, (int)perm, out_failed_dir, NULL);
-}
-
-/// Wrapper for vim_rename() used by rs_shada_write_file.
-int nvim_shada_vim_rename(const char *from, const char *to)
-{
-  return vim_rename(from, to);
-}
-
-/// Wrapper for os_remove() used by rs_shada_write_file.
-void nvim_shada_os_remove(const char *fname)
-{
-  os_remove(fname);
 }
 
 /// Get stat fields (mode, uid, gid) for a file via os_fileinfo.
@@ -847,20 +785,6 @@ void nvim_shada_for_all_tab_windows_update_changelist(void *cl_bufs_handle)
       wp->w_changelistidx = wp->w_buffer->b_changelistlen;
     }
   }
-}
-
-/// Clear a history type. Wrapper for clr_history().
-void nvim_shada_clr_history(int i)
-{
-  clr_history(i);
-}
-
-/// Get the histentry_T array for history type i.
-/// Sets *out_hisidx and *out_hisnum to pointers within the array.
-/// Returns NULL if not available.
-void *nvim_shada_hist_get_array(int i, int **out_hisidx, int **out_hisnum)
-{
-  return hist_get_array((uint8_t)i, out_hisidx, out_hisnum);
 }
 
 /// Wrapper for encode_vim_to_msgpack (for encoding typval_T variables).
@@ -1007,15 +931,6 @@ void nvim_shada_set_all_last_cursors(void)
     set_last_cursor(wp);
   }
 }
-
-/// Get the longVersion string (Neovim version string).
-const char *nvim_shada_get_longversion(void) { return longVersion; }
-
-/// Get the current process ID.
-int64_t nvim_shada_os_get_pid(void) { return os_get_pid(); }
-
-/// Get the current encoding option (p_enc).
-const char *nvim_shada_get_p_enc(void) { return p_enc; }
 
 /// Iterate over global marks.
 /// @param iter       Previous iterator or NULL to start.
@@ -1265,12 +1180,6 @@ int nvim_shada_mark_get_cmp(const void *buf, const void *win, int name, uint64_t
   return (fm->timestamp >= entry_ts) ? 1 : 0;
 }
 
-/// Wrapper for path_fnamecmp (path comparison for marks).
-int nvim_shada_path_fnamecmp(const char *a, const char *b)
-{
-  return path_fnamecmp(a, b);
-}
-
 /// Flush the packer buffer.
 
 /// Internal flush callback for file-backed PackerBuffers.
@@ -1375,18 +1284,6 @@ void nvim_shada_set_search_pattern_from_entry(ShadaEntry *entry, int is_substitu
   } else {
     set_search_pattern(spat);
   }
-}
-
-/// Wrap set_last_used_pattern(is_substitute).
-void nvim_shada_set_last_used_pattern(int is_substitute)
-{
-  set_last_used_pattern((bool)is_substitute);
-}
-
-/// Wrap set_no_hlsearch(val).
-void nvim_shada_set_no_hlsearch(int val)
-{
-  set_no_hlsearch((bool)val);
 }
 
 /// Get current substitute replacement string timestamp (0 if no sub set).

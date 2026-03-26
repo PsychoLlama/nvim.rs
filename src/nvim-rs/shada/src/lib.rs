@@ -396,7 +396,7 @@ extern "C" {
 
     // Buffer/path filtering (Phase 2)
     fn nvim_shada_get_p_shada() -> *const c_char;
-    fn nvim_shada_home_replace_save(buf: *const c_void, src: *const c_char) -> *mut c_char;
+    fn home_replace_save(buf: *const c_void, src: *const c_char) -> *mut c_char;
     fn nvim_shada_home_replace(
         buf: *const c_void,
         src: *const c_char,
@@ -404,13 +404,13 @@ extern "C" {
         dstlen: usize,
         one: c_int,
     );
-    fn nvim_shada_copy_option_part(
+    fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
         maxlen: usize,
         sep_chars: *const c_char,
     ) -> usize;
-    fn nvim_shada_mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+    fn mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn nvim_shada_get_namebuff() -> *mut c_char;
     fn nvim_shada_buf_first() -> *const c_void;
     fn nvim_shada_buf_next(buf: *const c_void) -> *const c_void;
@@ -444,8 +444,8 @@ extern "C" {
         out_off_dir: *mut c_char,
         out_additional_data: *mut *mut c_void,
     );
-    fn nvim_shada_search_was_last_used() -> c_int;
-    fn nvim_shada_no_hlsearch() -> c_int;
+    fn search_was_last_used() -> bool;
+    static no_hlsearch: bool;
     fn nvim_shada_reg_iter(
         iter: *const c_void,
         out_name: *mut c_char,
@@ -463,9 +463,9 @@ extern "C" {
         out_pos: *mut Position,
         out_additional_data: *mut *mut c_void,
     );
-    fn nvim_shada_os_time() -> Timestamp;
-    fn nvim_shada_setpcmark();
-    fn nvim_shada_cleanup_jumplist(wp: *mut c_void, loadfiles: c_int);
+    fn os_time() -> Timestamp;
+    fn setpcmark();
+    fn cleanup_jumplist(wp: *mut c_void, loadfiles: bool);
     fn nvim_shada_curwin() -> *mut c_void;
     fn nvim_shada_jumplist_iter(
         iter: *const c_void,
@@ -476,7 +476,7 @@ extern "C" {
         out_fname: *mut *mut c_char,
         out_additional_data: *mut *mut c_void,
     ) -> *const c_void;
-    fn nvim_shada_buflist_findnr(nr: c_int) -> *const c_void;
+    fn buflist_findnr(nr: c_int) -> *const c_void;
     // nvim_shada_siemsg removed (plan 9106c29c Phase 1): replaced by nvim_shada_siemsg_1s.
 
     // Phase 4: Entry free consolidation accessors
@@ -489,8 +489,8 @@ extern "C" {
     fn nvim_shada_file_open(fd: FileDescriptorHandle, fname: *const c_char) -> c_int;
     fn nvim_shada_file_open_buffer(fd: FileDescriptorHandle, data: *mut c_char, len: usize);
     fn nvim_shada_os_strerror(err: c_int) -> *const c_char;
-    fn nvim_shada_verbose_enter();
-    fn nvim_shada_verbose_leave();
+    fn verbose_enter();
+    fn verbose_leave();
     fn nvim_shada_get_p_verbose() -> c_int;
     fn nvim_shada_smsg_reading(
         fname: *const c_char,
@@ -499,7 +499,6 @@ extern "C" {
         get_oldfiles: c_int,
         failed: c_int,
     );
-    fn nvim_shada_get_p_fs() -> c_int;
     fn nvim_shada_build_default_path() -> *mut c_char;
     // nvim_shada_semsg_close_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_1s.
     // nvim_shada_semsg_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
@@ -519,13 +518,8 @@ extern "C" {
         additional_data: *mut c_void,
     );
 
-    // Phase 2 (plan 11dd3cf4): shada_write_file migration accessors
-    fn nvim_shada_modname(
-        fname: *const c_char,
-        ext: *const c_char,
-        prepend_dot: bool,
-    ) -> *mut c_char;
-    fn nvim_shada_os_getperm(fname: *const c_char) -> c_int;
+    fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char;
+    fn os_getperm(fname: *const c_char) -> c_int;
     fn nvim_shada_file_open_write(
         fd: FileDescriptorHandle,
         fname: *const c_char,
@@ -533,14 +527,14 @@ extern "C" {
         perm: c_int,
     ) -> c_int;
     fn nvim_shada_path_tail_with_sep_offset(fname: *const c_char) -> usize;
-    fn nvim_shada_os_isdir(fname: *const c_char) -> c_int;
+    fn os_isdir(fname: *const c_char) -> bool;
     fn nvim_shada_os_mkdir_recurse(
         fname: *const c_char,
         perm: c_int,
         out_failed_dir: *mut *mut c_char,
     ) -> c_int;
-    fn nvim_shada_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
-    fn nvim_shada_os_remove(fname: *const c_char);
+    fn vim_rename(from: *const c_char, to: *const c_char) -> c_int;
+    fn os_remove(fname: *const c_char) -> c_int;
     // nvim_shada_smsg_writing removed (plan 9106c29c Phase 1): use nvim_shada_smsg_1s.
     // nvim_shada_semsg_merge_read_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
     // nvim_shada_semsg_tempfile_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
@@ -625,8 +619,8 @@ extern "C" {
     // Phase 1 (plan b499a5d0): thin accessors for search/sub apply
     fn nvim_shada_get_search_pattern_timestamp(is_substitute: c_int) -> u64;
     fn nvim_shada_set_search_pattern_from_entry(entry: *mut ShadaEntry, is_substitute: c_int);
-    fn nvim_shada_set_last_used_pattern(is_substitute: c_int);
-    fn nvim_shada_set_no_hlsearch(val: c_int);
+    fn set_last_used_pattern(is_substitute: bool);
+    fn set_no_hlsearch(val: bool);
     fn nvim_shada_get_sub_replacement_timestamp() -> u64;
     fn nvim_shada_set_sub_replacement_from_entry(entry: *mut ShadaEntry);
     // Phase 2 (plan b499a5d0): thin accessors for register/variable apply
@@ -641,9 +635,9 @@ extern "C" {
     fn nvim_shada_buflist_new(fname: *const c_char, sfname: *const c_char) -> *mut c_void;
     fn nvim_shada_buf_set_cursor_and_data(buf: *mut c_void, entry: *mut ShadaEntry, i: usize);
     fn nvim_shada_for_all_tab_windows_update_changelist(cl_bufs_handle: *mut c_void);
-    fn nvim_shada_clr_history(i: c_int);
-    fn nvim_shada_hist_get_array(
-        i: c_int,
+    fn clr_history(i: c_int) -> c_int;
+    fn hist_get_array(
+        i: u8,
         out_hisidx: *mut *mut c_int,
         out_hisnum: *mut *mut c_int,
     ) -> *mut c_void;
@@ -662,12 +656,12 @@ extern "C" {
 extern "C" {
     /// Set b_last_cursor for all windows in all tabs.
     fn nvim_shada_set_all_last_cursors();
-    /// Get longVersion string.
-    fn nvim_shada_get_longversion() -> *const c_char;
+    /// The long Neovim version string.
+    static longVersion: *const c_char;
     /// Get current process ID.
-    fn nvim_shada_os_get_pid() -> i64;
-    /// Get p_enc (current encoding).
-    fn nvim_shada_get_p_enc() -> *const c_char;
+    fn os_get_pid() -> i64;
+    /// The current encoding option (p_enc).
+    static p_enc: *mut c_char;
     /// Iterate over global marks.
     fn nvim_shada_mark_global_iter(
         iter: *const c_void,
@@ -755,8 +749,8 @@ extern "C" {
         name: c_int,
         entry_ts: Timestamp,
     ) -> c_int;
-    /// Compare file paths (wraps nvim_mark_path_fnamecmp).
-    fn nvim_shada_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
+    /// Compare file paths directly.
+    fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     // nvim_shada_packer_flush_buf deleted (Phase 1 plan c02d0f11): replaced by nvim_shada_packer_flush inline helper.
     /// Initialize a PackerBuffer for writing to a FileDescriptor (by pointer).
     fn nvim_shada_packer_init_for_file(fd: *mut c_void, out: *mut ShadaPackerBuffer);
@@ -4178,7 +4172,7 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
     let of_ret = nvim_shada_file_open(fd, fname);
 
     if nvim_shada_get_p_verbose() > 1 {
-        nvim_shada_verbose_enter();
+        verbose_enter();
         nvim_shada_smsg_reading(
             fname,
             c_int::from(flags & SHADA_WANT_INFO as c_int != 0),
@@ -4186,7 +4180,7 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
             c_int::from(flags & SHADA_GET_OLDFILES as c_int != 0),
             c_int::from(of_ret != 0),
         );
-        nvim_shada_verbose_leave();
+        verbose_leave();
     }
 
     if of_ret != 0 {
@@ -4516,8 +4510,7 @@ unsafe fn shada_read_when_writing(
                             let mut buf = nvim_shada_buf_first();
                             while !buf.is_null() {
                                 let buf_ffname = nvim_shada_buf_get_ffname(buf);
-                                if !buf_ffname.is_null()
-                                    && nvim_shada_path_fnamecmp(fm_fname, buf_ffname) == 0
+                                if !buf_ffname.is_null() && path_fnamecmp(fm_fname, buf_ffname) == 0
                                 {
                                     let cmp = nvim_shada_mark_get_cmp(
                                         buf,
@@ -4781,9 +4774,9 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
 
         // Initialize search and substitute patterns.
         if dump_one_history[HIST_SEARCH as usize] {
-            let search_highlighted = nvim_shada_no_hlsearch() == 0
-                && find_shada_parameter_impl(c_int::from(b'h')).is_null();
-            let search_last_used = nvim_shada_search_was_last_used() != 0;
+            let search_highlighted =
+                !no_hlsearch && find_shada_parameter_impl(c_int::from(b'h')).is_null();
+            let search_last_used = search_was_last_used();
 
             rs_add_search_pattern(
                 &raw mut (*wms).search_pattern,
@@ -4856,7 +4849,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     }
                     fname
                 } else {
-                    let buf = nvim_shada_buflist_findnr(fnum);
+                    let buf = buflist_findnr(fnum);
                     if buf.is_null() {
                         if global_mark_iter.is_null() {
                             break;
@@ -5057,7 +5050,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
                     ShadaEntry {
                         entry_type: ShadaEntryType::GlobalMark,
                         can_free_entry: false,
-                        timestamp: nvim_shada_os_time(),
+                        timestamp: os_time(),
                         data: ShadaEntryData {
                             filemark: std::mem::ManuallyDrop::new(FilemarkData {
                                 mark: Position::new(cl, cc, 0),
@@ -5292,7 +5285,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
         }
 
         if !nomerge {
-            tempname = nvim_shada_modname(fname, c".tmp.a".as_ptr(), false);
+            tempname = modname(fname, c".tmp.a".as_ptr(), false);
             if tempname.is_null() {
                 nomerge = true;
             }
@@ -5304,7 +5297,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
             // 2: Make sure that user can always read and write the result.
             // 3: If somebody happened to delete the file after it was opened for
             //    reading, use u=rw permissions.
-            let raw_perm = nvim_shada_os_getperm(fname);
+            let raw_perm = os_getperm(fname);
             let perm = if raw_perm >= 0 {
                 (raw_perm & 0o777) | 0o600
             } else {
@@ -5366,7 +5359,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
             let tail_ptr = fname.add(tail_offset).cast::<c_char>();
             let tail_save = *tail_ptr;
             *tail_ptr = 0;
-            if nvim_shada_os_isdir(fname) == 0 {
+            if !os_isdir(fname) {
                 let mut failed_dir: *mut c_char = std::ptr::null_mut();
                 let ret = nvim_shada_os_mkdir_recurse(fname, 0o700, &raw mut failed_dir);
                 if ret != 0 {
@@ -5414,9 +5407,9 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
     }
 
     if nvim_shada_get_p_verbose() > 1 {
-        nvim_shada_verbose_enter();
+        verbose_enter();
         nvim_shada_smsg_1s(c"Writing ShaDa file \"%s\"".as_ptr(), fname);
-        nvim_shada_verbose_leave();
+        verbose_leave();
     }
 
     let sd_reader_arg = if nomerge {
@@ -5434,7 +5427,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
         if sw_ret == K_SD_WRITE_SUCCESSFUL {
             let check_result = rs_shada_platform_check_writable(fname, sd_writer_mem, tempname);
             if check_result == 1 {
-                if nvim_shada_vim_rename(tempname, fname) == -1 {
+                if vim_rename(tempname, fname) == -1 {
                     nvim_shada_semsg_2s(
                         c"E136: Can\'t rename ShaDa file from %s to %s!".as_ptr(),
                         tempname,
@@ -5442,7 +5435,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
                     );
                 } else {
                     did_remove = true;
-                    nvim_shada_os_remove(tempname);
+                    let _ = os_remove(tempname);
                 }
             }
             // check_result == 0 or -1: E137/RNERR already emitted by accessor
@@ -5506,9 +5499,9 @@ unsafe fn rs_shada_apply_search_pattern(entry: *mut ShadaEntry, force: bool) {
     }
     nvim_shada_set_search_pattern_from_entry(entry, is_sub);
     if read_union_field!(entry, search_pattern, is_last_used) {
-        nvim_shada_set_last_used_pattern(is_sub);
+        set_last_used_pattern(is_sub != 0);
         let highlighted = read_union_field!(entry, search_pattern, highlighted);
-        nvim_shada_set_no_hlsearch(c_int::from(!highlighted));
+        set_no_hlsearch(!highlighted);
     }
     // Memory was consumed by set_search_pattern / set_substitute_pattern; do not free.
 }
@@ -6178,10 +6171,10 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
         for (i, hms_slot) in hms.iter_mut().enumerate() {
             let i_int = i as c_int;
             rs_hms_insert_whole_neovim_history(hms_slot);
-            nvim_shada_clr_history(i_int);
+            let _ = clr_history(i_int);
             let mut new_hisidx: *mut c_int = std::ptr::null_mut();
             let mut new_hisnum: *mut c_int = std::ptr::null_mut();
-            let hist = nvim_shada_hist_get_array(i_int, &raw mut new_hisidx, &raw mut new_hisnum);
+            let hist = hist_get_array(i as u8, &raw mut new_hisidx, &raw mut new_hisnum);
             if !hist.is_null() {
                 rs_hms_to_he_array(hms_slot, hist, new_hisidx, new_hisnum);
             }
@@ -6407,7 +6400,7 @@ pub unsafe extern "C" fn rs_shada_encode_gvars() -> NvimString {
     nvim_shada_packer_string_buffer(packer.as_mut_ptr());
     let packer = packer.as_mut_ptr();
 
-    let cur_timestamp = nvim_shada_os_time();
+    let cur_timestamp = os_time();
 
     let mut var_iter: *const c_void = std::ptr::null();
     loop {
@@ -6466,7 +6459,7 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
     const VAR_DICT: c_int = 6;
     const VAR_LIST: c_int = 5;
 
-    let cur_timestamp = nvim_shada_os_time();
+    let cur_timestamp = os_time();
     let mut var_iter: *const c_void = std::ptr::null();
 
     loop {
@@ -7291,13 +7284,13 @@ pub type SetPtrHandle = *mut c_void;
 #[no_mangle]
 pub unsafe extern "C" fn rs_shada_removable(name: *const c_char) -> c_int {
     let mut part = [0u8; MAXPATHL + 1];
-    let new_name = nvim_shada_home_replace_save(std::ptr::null(), name);
+    let new_name = home_replace_save(std::ptr::null(), name);
     let p_shada = nvim_shada_get_p_shada();
     let mut p = p_shada.cast_mut();
     let mut retval = false;
 
     while *p != 0 {
-        nvim_shada_copy_option_part(
+        copy_option_part(
             &raw mut p,
             part.as_mut_ptr().cast(),
             part.len(),
@@ -7313,7 +7306,7 @@ pub unsafe extern "C" fn rs_shada_removable(name: *const c_char) -> c_int {
                 1,
             );
             let n = libc::strlen(name_buff.cast());
-            if nvim_shada_mb_strnicmp(name_buff, new_name, n) == 0 {
+            if mb_strnicmp(name_buff, new_name, n) == 0 {
                 retval = true;
                 break;
             }
@@ -7625,7 +7618,7 @@ pub unsafe extern "C" fn rs_shada_get_buflist(removable_bufs: SetPtrHandle) -> S
     ShadaEntry {
         entry_type: ShadaEntryType::BufferList,
         can_free_entry: false,
-        timestamp: nvim_shada_os_time(),
+        timestamp: os_time(),
         data: ShadaEntryData {
             buffer_list: std::mem::ManuallyDrop::new(BufferListData {
                 size: buf_count,
@@ -7650,9 +7643,9 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
     let mut jumps_size: usize = 0;
     let mut jump_iter: *const c_void = std::ptr::null();
 
-    nvim_shada_setpcmark();
+    setpcmark();
     let wp = nvim_shada_curwin();
-    nvim_shada_cleanup_jumplist(wp, 0);
+    cleanup_jumplist(wp, false);
 
     loop {
         let mut mark = Position::DEFAULT;
@@ -7681,7 +7674,7 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
         let buf = if fnum == 0 {
             std::ptr::null()
         } else {
-            nvim_shada_buflist_findnr(fnum)
+            buflist_findnr(fnum)
         };
 
         if if buf.is_null() {
@@ -7741,7 +7734,7 @@ pub unsafe extern "C" fn rs_shada_init_jumps(
 /// Equivalent to the C `close_file` function.
 #[no_mangle]
 pub unsafe extern "C" fn rs_close_file(cookie: FileDescriptorHandle) {
-    let error = nvim_file_close(cookie, nvim_shada_get_p_fs());
+    let error = nvim_file_close(cookie, c_int::from(nvim_get_p_fs()));
     if error != 0 {
         nvim_shada_semsg_1s(
             c"E886: System error while closing ShaDa file: %s".as_ptr(),
@@ -8404,10 +8397,10 @@ pub unsafe extern "C" fn rs_shada_pack_file_header(
     }
 
     // Collect values from C accessors.
-    let timestamp = nvim_shada_os_time();
-    let long_version = nvim_shada_get_longversion();
-    let pid = nvim_shada_os_get_pid();
-    let p_enc = nvim_shada_get_p_enc();
+    let timestamp = os_time();
+    let long_version = longVersion;
+    let pid = os_get_pid();
+    let enc = p_enc;
 
     // Build body in a temporary string buffer.
     let mut sbuf = std::mem::MaybeUninit::<ShadaPackerBuffer>::uninit();
@@ -8448,12 +8441,8 @@ pub unsafe extern "C" fn rs_shada_pack_file_header(
 
     // "encoding" => p_enc (string)
     rs_mpack_str(b"encoding".as_ptr(), 8, sbuf);
-    let enc_len = if p_enc.is_null() {
-        0
-    } else {
-        libc::strlen(p_enc)
-    };
-    rs_mpack_bin(p_enc.cast::<u8>(), enc_len, sbuf);
+    let enc_len = if enc.is_null() { 0 } else { libc::strlen(enc) };
+    rs_mpack_bin(enc.cast::<u8>(), enc_len, sbuf);
 
     let header_body = nvim_shada_packer_take_string(sbuf);
 
