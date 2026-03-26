@@ -195,8 +195,6 @@ typedef struct {
   PMap(cstr_t) file_marks;
 } WriteMergerState;
 
-#include "shada_shim.c.generated.h"
-
 buf_T *nvim_shada_find_buffer(void *const fname_bufs_handle, const char *const fname)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
@@ -270,44 +268,28 @@ int nvim_shada_set_has_ptr(const void *set, const void *ptr) { return set ? set_
 void nvim_shada_set_put_ptr(void *set, const void *ptr) { if (set) { set_put(ptr_t, (Set(ptr_t) *)set, (ptr_t)ptr); } }
 void nvim_shada_set_destroy_ptr(void *set) { if (set) { set_destroy(ptr_t, (Set(ptr_t) *)set); xfree(set); } }
 
-// hist_iter wrapper that returns individual fields instead of histentry_T
 const void *nvim_shada_hist_iter_raw(const void *iter, uint8_t history_type, int zero,
                                      char **out_str, size_t *out_strlen, Timestamp *out_ts,
                                      void **out_additional_data)
 {
-  histentry_T hist_he;
-  const void *ret = hist_iter(iter, history_type, zero != 0, &hist_he);
-  *out_str = hist_he.hisstr;
-  *out_strlen = hist_he.hisstrlen;
-  *out_ts = hist_he.timestamp;
-  *out_additional_data = hist_he.additional_data;
+  histentry_T he;
+  const void *ret = hist_iter(iter, history_type, zero != 0, &he);
+  *out_str = he.hisstr; *out_strlen = he.hisstrlen; *out_ts = he.timestamp; *out_additional_data = he.additional_data;
   return ret;
 }
 
-// Search/substitute pattern accessor (is_substitute=1 → substitute pattern)
 void nvim_shada_get_search_pattern(int is_substitute, char **out_pat, int *out_magic,
                                    int *out_no_scs, Timestamp *out_ts, int *out_off_line,
                                    int *out_off_end, int64_t *out_off_off, char *out_off_dir,
                                    void **out_additional_data)
 {
   SearchPattern pat;
-  if (is_substitute) {
-    get_substitute_pattern(&pat);
-  } else {
-    get_search_pattern(&pat);
-  }
-  *out_pat = pat.pat;
-  *out_magic = pat.magic;
-  *out_no_scs = pat.no_scs;
-  *out_ts = pat.timestamp;
-  *out_off_line = pat.off.line;
-  *out_off_end = pat.off.end;
-  *out_off_off = pat.off.off;
-  *out_off_dir = pat.off.dir;
-  *out_additional_data = pat.additional_data;
+  if (is_substitute) { get_substitute_pattern(&pat); } else { get_search_pattern(&pat); }
+  *out_pat = pat.pat; *out_magic = pat.magic; *out_no_scs = pat.no_scs; *out_ts = pat.timestamp;
+  *out_off_line = pat.off.line; *out_off_end = pat.off.end; *out_off_off = pat.off.off;
+  *out_off_dir = pat.off.dir; *out_additional_data = pat.additional_data;
 }
 
-// Register iteration accessor
 const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
                                 String **out_contents, size_t *out_size,
                                 size_t *out_width, int *out_is_unnamed,
@@ -316,13 +298,9 @@ const void *nvim_shada_reg_iter(const void *iter, char *out_name, int *out_type,
   yankreg_T reg;
   bool is_unnamed = false;
   const void *ret = op_global_reg_iter(iter, out_name, &reg, &is_unnamed);
-  *out_type = reg.y_type;
-  *out_contents = reg.y_array;
-  *out_size = reg.y_size;
+  *out_type = reg.y_type; *out_contents = reg.y_array; *out_size = reg.y_size;
   *out_width = (size_t)(reg.y_type == kMTBlockWise ? reg.y_width : 0);
-  *out_is_unnamed = is_unnamed;
-  *out_ts = reg.timestamp;
-  *out_additional_data = reg.additional_data;
+  *out_is_unnamed = is_unnamed; *out_ts = reg.timestamp; *out_additional_data = reg.additional_data;
   return ret;
 }
 
@@ -372,11 +350,8 @@ char *nvim_shada_build_default_path(void)
 }
 
 size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
-
 int nvim_shada_curbuf_marks_read(void) { return curbuf->b_marks_read; }
-
 void nvim_shada_curbuf_set_marks_read(int val) { curbuf->b_marks_read = val; }
-
 const char *nvim_shada_curbuf_ffname(void) { return curbuf->b_ffname; }
 
 void nvim_shada_set_histentry(void *hist_array, int idx, uint64_t ts, char *hisstr, void *additional_data)
