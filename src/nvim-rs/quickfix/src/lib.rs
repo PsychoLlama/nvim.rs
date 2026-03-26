@@ -2005,7 +2005,6 @@ extern "C" {
     // nvim_qf_store_title replaced by nvim_qf_set_title_dup (Phase 14)
     fn nvim_qf_set_title_dup(qfl: QfListHandleMut, title: *const c_char);
     fn nvim_get_ql_info() -> QfInfoHandleMut;
-    fn nvim_qf_increment_listcount(qi: QfInfoHandleMut);
     fn nvim_qf_decrement_listcount(qi: QfInfoHandleMut);
     fn nvim_qf_set_start(qfl: QfListHandleMut, start: QfLineHandle);
     fn nvim_qf_set_last(qfl: QfListHandleMut, last: QfLineHandle);

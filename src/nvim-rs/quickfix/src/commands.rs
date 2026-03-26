@@ -1649,8 +1649,7 @@ extern "C" {
     fn win_close(win: *mut c_void, free_buf: bool, force: bool) -> c_int;
     fn nvim_qf_win_get_cursor_lnum(win: *const c_void) -> CLinenrT;
     fn nvim_qf_win_get_buf_line_count(win: *const c_void) -> CLinenrT;
-    // nvim_qf_win_goto_lnum delegates to Rust rs_qf_win_goto_impl
-    fn nvim_qf_win_goto_lnum(win: *mut c_void, lnum: CLinenrT);
+    fn nvim_qf_win_goto_impl(win: *mut c_void, lnum: CLinenrT);
 }
 
 /// Find the quickfix window for a given stack.
@@ -1696,7 +1695,7 @@ pub unsafe extern "C" fn rs_ex_cbottom(eap: EapHandle) {
     let cursor_lnum = nvim_qf_win_get_cursor_lnum(win);
     let line_count = nvim_qf_win_get_buf_line_count(win);
     if cursor_lnum != line_count {
-        nvim_qf_win_goto_lnum(win, line_count);
+        nvim_qf_win_goto_impl(win, line_count);
     }
 }
 

@@ -105,10 +105,6 @@ struct qfline_S {
   char qf_valid;          ///< valid error message detected
 };
 
-// There is a stack of error lists.
-#define INVALID_QFIDX (-1)
-#define INVALID_QFBUFNR (0)
-
 /// Quickfix list type.
 typedef enum {
   QFLT_QUICKFIX,  ///< Quickfix list - global list
@@ -220,17 +216,6 @@ const char *nvim_qf_get_title(const void *qfl_void) { return qfl_void == NULL ? 
 
 int nvim_qf_get_maxcount(const void *qi_void) { return ((const qf_info_T *)qi_void)->qf_maxcount; }
 
-/// Result of the full errorformat-to-regex conversion
-typedef struct {
-  size_t bytes_written;
-  char prefix;
-  char flags;
-  bool conthere;
-  int status;
-  int error_code;
-  char error_char;
-} EfmToRegpatResult;
-
 void nvim_qf_set_curlist_idx(void *qi_void, int idx) { ((qf_info_T *)qi_void)->qf_curlist = idx; }
 
 void nvim_qf_set_listcount(void *qi_void, int count) { ((qf_info_T *)qi_void)->qf_listcount = count; }
@@ -282,100 +267,8 @@ bool nvim_qf_get_multiscan(const void *qfl_void) { return ((const qf_list_T *)qf
 
 void nvim_qf_set_multiscan(void *qfl_void, bool multiscan) { ((qf_list_T *)qfl_void)->qf_multiscan = multiscan; }
 
-#define FMT_PATTERNS 14           // maximum number of % recognized
-
-// Structure used to hold the info of one part of 'errorformat'
-typedef struct efm_S efm_T;
-struct efm_S {
-  regprog_T *prog;        // pre-formatted part of 'errorformat'
-  efm_T *next;        // pointer to next (NULL if last)
-  char addr[FMT_PATTERNS];    // indices of used % patterns
-  char prefix;                // prefix of this format line:
-                              // 'D' enter directory
-                              // 'X' leave directory
-                              // 'A' start of multi-line message
-                              // 'E' error message
-                              // 'W' warning message
-                              // 'I' informational message
-                              // 'N' note message
-                              // 'C' continuation line
-                              // 'Z' end of multi-line message
-                              // 'G' general, unspecific message
-                              // 'P' push file (partial) message
-                              // 'Q' pop/quit file (partial) message
-                              // 'O' overread (partial) message
-  char flags;                 // additional flags given in prefix
-                              // '-' do not include this line
-                              // '+' include whole line in message
-  int conthere;                 // %> used
-};
-
-/// Used to delay the deletion of locations lists by autocmds.
-typedef struct qf_delq_S {
-  struct qf_delq_S *next;
-  qf_info_T *qi;
-} qf_delq_T;
-
-enum {
-  QF_FAIL = 0,
-  QF_OK = 1,
-  QF_END_OF_INPUT = 2,
-  QF_NOMEM = 3,
-  QF_IGNORE_LINE = 4,
-  QF_MULTISCAN = 5,
-  QF_ABORT = 6,
-};
-
-/// list.
-typedef struct {
-  char *linebuf;
-  size_t linelen;
-  char *growbuf;
-  size_t growbufsiz;
-  FILE *fd;
-  typval_T *tv;
-  char *p_str;
-  list_T *p_list;
-  listitem_T *p_li;
-  buf_T *buf;
-  linenr_T buflnum;
-  linenr_T lnumlast;
-  vimconv_T vc;
-} qfstate_T;
-
-typedef struct {
-  char *namebuf;
-  int bnr;
-  char *module;
-  char *errmsg;
-  size_t errmsglen;
-  linenr_T lnum;
-  linenr_T end_lnum;
-  int col;
-  int end_col;
-  bool use_viscol;
-  char *pattern;
-  int enr;
-  char type;
-  typval_T *user_data;
-  bool valid;
-} qffields_T;
-
-/// :vimgrep command arguments
-typedef struct {
-  int tomatch;          ///< maximum number of matches to find
-  char *spat;          ///< search pattern
-  int flags;             ///< search modifier
-  char **fnames;       ///< list of files to search
-  int fcount;            ///< number of files
-  regmmatch_T regmatch;  ///< compiled search pattern
-  char *qf_title;      ///< quickfix list title
-} vgr_args_T;
-
 #include "quickfix_shim.c.generated.h"
 extern int rs_win_valid(win_T *win);
-
-enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 
 // Quickfix window check helper macro
 #define IS_QF_WINDOW(wp) (bt_quickfix((wp)->w_buffer) && (wp)->w_llist_ref == NULL)
@@ -383,29 +276,18 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
 #define IS_LL_WINDOW(wp) (bt_quickfix((wp)->w_buffer) && (wp)->w_llist_ref != NULL)
 
 // Quickfix and location list stack check helper macros
-#define IS_QF_STACK(qi)       ((qi)->qfl_type == QFLT_QUICKFIX)
 #define IS_LL_STACK(qi)       ((qi)->qfl_type == QFLT_LOCATION)
 #define IS_QF_LIST(qfl)       ((qfl)->qfl_type == QFLT_QUICKFIX)
-#define IS_LL_LIST(qfl)       ((qfl)->qfl_type == QFLT_LOCATION)
 
 // Return location list for window 'wp'
 // For location list window, return the referenced location list
 #define GET_LOC_LIST(wp) (IS_LL_WINDOW(wp) ? (wp)->w_llist_ref : (wp)->w_llist)
-
-// Macro to loop through all the items in a quickfix list
-// Quickfix item index starts from 1, so i below starts at 1
-#define FOR_ALL_QFL_ITEMS(qfl, qfp, i) \
-  for ((i) = 1, (qfp) = (qfl)->qf_start; \
-       !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
-       (i)++, (qfp) = (qfp)->qf_next)
 
 bool nvim_win_valid(const void *wp_void) { return wp_void == NULL ? false : rs_win_valid((win_T *)wp_void) != 0; }
 
 void *nvim_win_get_loclist(const void *wp_void) { return wp_void == NULL ? NULL : (void *)GET_LOC_LIST((win_T *)wp_void); }
 
 int nvim_qf_win_get_handle(const void *wp_void) { return wp_void == NULL ? 0 : ((const win_T *)wp_void)->handle; }
-
-void nvim_qf_increment_listcount(void *qi_void) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_listcount++; }
 
 /// Decrement the list count after removing a list
 void nvim_qf_decrement_listcount(void *qi_void)
@@ -1186,7 +1068,6 @@ void nvim_qf_restore_swb(void *old_swb, unsigned old_swb_flags)
   }
 }
 
-void nvim_qf_win_goto_lnum(void *win_void, linenr_T lnum) { nvim_qf_win_goto_impl(win_void, lnum); }
 linenr_T nvim_qf_win_get_cursor_lnum(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_cursor.lnum; }
 linenr_T nvim_qf_win_get_buf_line_count(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_buffer->b_ml.ml_line_count; }
 int nvim_qf_win_get_width(const void *win_void) { return win_void == NULL ? 0 : ((const win_T *)win_void)->w_width; }
@@ -1758,24 +1639,6 @@ static void unload_dummy_buffer(buf_T *buf, char *dirname_start)
   // When autocommands/'autochdir' option changed directory: go back.
   restore_start_dir(dirname_start);
 }
-
-/// Flags used by getqflist()/getloclist() to determine which fields to return.
-enum {
-  QF_GETLIST_NONE = 0x0,
-  QF_GETLIST_TITLE = 0x1,
-  QF_GETLIST_ITEMS = 0x2,
-  QF_GETLIST_NR = 0x4,
-  QF_GETLIST_WINID = 0x8,
-  QF_GETLIST_CONTEXT = 0x10,
-  QF_GETLIST_ID = 0x20,
-  QF_GETLIST_IDX = 0x40,
-  QF_GETLIST_SIZE = 0x80,
-  QF_GETLIST_TICK = 0x100,
-  QF_GETLIST_FILEWINID = 0x200,
-  QF_GETLIST_QFBUFNR = 0x400,
-  QF_GETLIST_QFTF = 0x800,
-  QF_GETLIST_ALL = 0xFFF,
-};
 
 void *nvim_tv_list_first(const void *list)
 {
