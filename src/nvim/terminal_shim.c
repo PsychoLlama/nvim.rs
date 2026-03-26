@@ -59,7 +59,6 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/eval/vars.h"
-// Phase 12: rs_eval_call_provider replaces the C eval_call_provider wrapper
 extern void rs_eval_call_provider(const char *provider, const char *method,
                                   list_T *arguments, bool discard, typval_T *out_rettv);
 #include "nvim/event/defs.h"
@@ -1357,18 +1356,10 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
   return 1;
 }
 
-/// Called when the terminal wants to ring the system bell.
-static int term_bell(void *data)
-{
-  return rs_terminal_bell();
-}
-
-/// Called when the terminal wants to query the system theme.
+static int term_bell(void *data) { return rs_terminal_bell(); }
 static int term_theme(bool *dark, void *data)
   FUNC_ATTR_NONNULL_ALL
-{
-  return rs_terminal_theme_query(dark);
-}
+{ return rs_terminal_theme_query(dark); }
 
 /// Scrollback push handler: called just before a line goes offscreen (and libvterm will forget it),
 /// giving us a chance to store it.
@@ -1992,21 +1983,7 @@ static char *get_config_string(char *key)
 
 // }}}
 
-// =============================================================================
-// C accessors for Rust terminal callbacks
-// =============================================================================
+void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
+char nvim_get_bg_char(void) { return *p_bg; }
 
-/// Ring the terminal bell (accessor for rs_terminal_bell).
-void nvim_vim_beep_term(void)
-{
-  vim_beep(kOptBoFlagTerm);
-}
-
-/// Get the first character of the 'background' option (accessor for rs_terminal_theme_query).
-char nvim_get_bg_char(void)
-{
-  return *p_bg;
-}
-
-// =============================================================================
 // vim: foldmethod=marker
