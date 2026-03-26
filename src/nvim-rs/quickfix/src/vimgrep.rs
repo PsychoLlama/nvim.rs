@@ -79,7 +79,7 @@ extern "C" {
 
     // Globals
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
 
     // Quickfix entry addition (already in Rust, but we call it via FFI
     // since it's in a different module scope within the same crate)
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn rs_vgr_match_buflines(
             );
         }
 
-        nvim_line_breakcheck();
+        line_breakcheck();
         if unsafe { got_int } {
             break;
         }
@@ -333,7 +333,7 @@ extern "C" {
     static mut msg_didout: bool;
     // (nvim_msg_strtrunc_free, nvim_msg_outtrans, nvim_msg_set_nowait,
     //  nvim_msg_set_col_zero, nvim_msg_set_didout_false deleted)
-    fn nvim_ui_flush();
+    fn ui_flush();
     // nvim_buf_has_ml_mfp: defined in memline_shim.c as int(buf_T*); returns 0/1
     fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
     fn nvim_buf_get_mfp_fname(buf: BufHandle) -> *const c_char;
@@ -381,7 +381,7 @@ unsafe fn vgr_display_fname_rust(fname: *mut c_char) {
     msg_didout = false;
     msg_nowait = true;
     msg_col = 0;
-    nvim_ui_flush();
+    ui_flush();
 }
 
 /// Inline of `existing_swapfile`: check if `buf` has a non-`.swp` swap file.

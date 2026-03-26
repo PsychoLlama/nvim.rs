@@ -99,7 +99,7 @@ extern "C" {
     fn nvim_autocmd_get_e216_no_such_group_or_event() -> *const c_char;
     fn nvim_autocmd_get_e215() -> *const c_char;
     fn nvim_autocmd_get_e_duparg2() -> *const c_char;
-    fn nvim_skipwhite(p: *const c_char) -> *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "xmemdupz"]
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
     #[link_name = "xfree"]
@@ -669,7 +669,7 @@ pub unsafe extern "C" fn rs_arg_augroup_get(argp: *mut *const c_char) -> c_int {
     if group_id == group::AUGROUP_ERROR {
         group::AUGROUP_ALL
     } else {
-        *argp = nvim_skipwhite(p);
+        *argp = skipwhite(p);
         group_id
     }
 }
@@ -741,7 +741,7 @@ pub unsafe extern "C" fn rs_arg_autocmd_flag_get(
             return true;
         }
         *flag = true;
-        *cmd_ptr = nvim_skipwhite(cmd.add(len));
+        *cmd_ptr = skipwhite(cmd.add(len));
     }
 
     false
@@ -766,7 +766,7 @@ pub unsafe extern "C" fn rs_check_nomodeline(argp: *mut *const c_char) -> bool {
         }
     }
     if matches {
-        *argp = nvim_skipwhite(arg.add(12));
+        *argp = skipwhite(arg.add(12));
         return false;
     }
     true
@@ -1292,7 +1292,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
     if pat_result.is_null() {
         return;
     }
-    let mut pat: *mut c_char = nvim_skipwhite(pat_result);
+    let mut pat: *mut c_char = skipwhite(pat_result);
 
     if *pat == b'|' as c_char {
         nvim_autocmd_eap_set_nextcmd(eap, pat.add(1));
@@ -1319,7 +1319,7 @@ pub unsafe extern "C" fn rs_do_autocmd(eap: *mut c_void, arg_in: *mut c_char, fo
             }
         }
 
-        cmd = nvim_skipwhite(cmd);
+        cmd = skipwhite(cmd);
 
         // Parse ++once, ++nested flags
         let mut invalid_flags = false;
@@ -1638,7 +1638,7 @@ pub unsafe extern "C" fn rs_do_doautocmd(
         return FAIL;
     }
 
-    let fname = nvim_skipwhite(fname);
+    let fname = skipwhite(fname);
 
     // Loop over the events.
     while *arg != 0 && !ends_excmd(*arg as u8) && !is_ascii_white(*arg as u8) {

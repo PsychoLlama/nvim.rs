@@ -547,7 +547,7 @@ extern "C" {
     #[link_name = "curwin"]
     static mut g_curwin: *mut std::ffi::c_void;
     fn nvim_update_screen();
-    fn nvim_ui_flush();
+    fn ui_flush();
     fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize);
     // nvim_is_cpt_func_refresh_always: deleted (Phase 22), inlined below
     fn rs_cot_fuzzy() -> c_int;
@@ -592,7 +592,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         nvim_pum_undisplay(1);
         redraw_later(g_curwin, 10); // UPD_VALID = 10
         nvim_update_screen();
-        nvim_ui_flush();
+        ui_flush();
     }
 
     if crate::vars::nvim_get_compl_started() != 0 {

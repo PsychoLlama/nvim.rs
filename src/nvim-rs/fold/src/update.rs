@@ -280,7 +280,7 @@ extern "C" {
     static mut got_int: bool;
     static mut State: c_int;
     // Global state access
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
 
     // Buffer accessors
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
@@ -302,7 +302,7 @@ extern "C" {
     fn nvim_fold_set_fd_small(fp: FoldHandle, small: c_int);
 
     // Fold operations
-    fn nvim_changed_window_setting(wp: WinHandle);
+    fn changed_window_setting(wp: WinHandle);
     fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
 
     // Diff context
@@ -819,7 +819,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
 
     // Redraw if folds changed
     if crate::fold_changed() && unsafe { nvim_win_get_p_fen(wp) } != 0 {
-        unsafe { nvim_changed_window_setting(wp) };
+        unsafe { changed_window_setting(wp) };
     }
 
     // Redraw past bot if we updated further
@@ -892,7 +892,7 @@ fn fold_update_iems_recurse(
 
     // Main loop
     while unsafe { !got_int } {
-        unsafe { nvim_line_breakcheck() };
+        unsafe { line_breakcheck() };
 
         // Set lvl, clamped to MAX_LEVEL
         let mut lvl = min(flp.lvl, MAX_LEVEL as LinenrT) as c_int;

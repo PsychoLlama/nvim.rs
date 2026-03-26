@@ -106,14 +106,6 @@ int nvim_msg_silent(void) { return msg_silent; }
 bool nvim_silent_mode(void) { return silent_mode; }
 bool nvim_in_assert_fails(void) { return in_assert_fails; }
 
-void nvim_msg_ext_set_kind(const char *kind) { msg_ext_set_kind(kind); }
-void nvim_msg_puts_hl(const char *msg, int attr, bool right) { msg_puts_hl(msg, attr, right); }
-void nvim_msg_clr_eos(void) { msg_clr_eos(); }
-
-void nvim_set_vim_var_string(int idx, const char *val, int len) { set_vim_var_string(idx, val, len); }
-
-void nvim_redraw_buf_status_later(buf_T *buf) { redraw_buf_status_later(buf); }
-
 char *nvim_ml_get(linenr_T lnum) { return ml_get(lnum); }
 colnr_T nvim_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
 int nvim_ml_replace(linenr_T lnum, char *line, bool copy) { return ml_replace(lnum, line, copy); }
@@ -124,9 +116,6 @@ int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
 
 void nvim_buf_inc_changedtick(buf_T *buf) { buf_inc_changedtick(buf); }
 
-void nvim_ui_flush(void) { ui_flush(); }
-void nvim_os_delay(long ms, bool allow_input) { os_delay((uint64_t)ms, allow_input); }
-void nvim_wait_return(bool redraw) { wait_return(redraw); }
 
 char *nvim_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
 char *nvim_concat_str(const char *s1, const char *s2) { return concat_str(s1, s2); }
@@ -319,7 +308,6 @@ int nvim_indent_size_ts(const char *ptr, colnr_T ts, const colnr_T *vts_array)
 int nvim_get_indent(void) { return get_indent(); }
 bool nvim_set_indent(int size, int flags) { return set_indent(size, flags); }
 int nvim_change_get_sw_value(void) { return get_sw_value(curbuf); }
-bool nvim_linewhite(linenr_T lnum) { return linewhite(lnum); }
 int nvim_get_leader_len(const char *line, char **flags, bool backward, bool include_space)
 {
   return get_leader_len((char *)line, flags, backward, include_space);
@@ -330,9 +318,6 @@ size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const 
   return copy_option_part(option, buf, maxlen, (char *)sep);
 }
 
-char *nvim_skipwhite(const char *s) { return skipwhite(s); }
-char *nvim_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
-
 const char *nvim_prompt_text(void) { return prompt_text(); }
 bool nvim_change_bt_prompt(void) { return bt_prompt(curbuf); }
 linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void)
@@ -340,7 +325,6 @@ linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void)
   return curbuf->b_prompt_start.mark.lnum;
 }
 
-void nvim_changed_bytes(linenr_T lnum, colnr_T col) { changed_bytes(lnum, col); }
 void nvim_ins_bytes(const char *p) { ins_bytes((char *)p); }
 
 char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
@@ -356,12 +340,6 @@ void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_a
 {
   buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
 }
-
-void nvim_changed_window_setting(win_T *wp) { changed_window_setting(wp); }
-void nvim_redraw_buf_later(buf_T *buf, int redraw_type) { redraw_buf_later(buf, redraw_type); }
-void nvim_redraw_curbuf_later(int redraw_type) { redraw_curbuf_later(redraw_type); }
-void nvim_line_breakcheck(void) { line_breakcheck(); }
-int nvim_plines_win_nofold(win_T *wp, linenr_T lnum) { return plines_win_nofold(wp, lnum); }
 
 int nvim_get_last_leader_offset(const char *line, char **flags)
 {

@@ -120,10 +120,10 @@ extern "C" {
     static mut did_wait_return: bool;
     static mut emsg_silent: c_int;
     fn ui_has(ext: c_int) -> bool;
-    // nvim_ui_flush is defined in change_ffi.c
-    fn nvim_ui_flush();
-    // nvim_os_delay is defined in change_ffi.c (long ms, bool allow_input)
-    fn nvim_os_delay(ms: std::ffi::c_long, allow_input: bool);
+    // ui_flush is defined in change_ffi.c
+    fn ui_flush();
+    // os_delay is defined in change_ffi.c (long ms, bool allow_input)
+    fn os_delay(ms: u64, allow_input: bool);
 
     // keep_msg state
     static mut keep_msg_hl_id: c_int;
@@ -325,8 +325,8 @@ pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
         && !nvim_get_in_assert_fails()
         && !ui_has(K_UI_MESSAGES)
     {
-        nvim_ui_flush();
-        nvim_os_delay(1006, true);
+        ui_flush();
+        os_delay(1006, true);
         emsg_on_display = false;
         if check {
             msg_scroll = 0;

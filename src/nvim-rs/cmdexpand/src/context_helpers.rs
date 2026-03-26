@@ -14,7 +14,7 @@ use crate::ExpandHandle;
 
 extern "C" {
     // String utility functions
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn skiptowhite(p: *const c_char) -> *const c_char;
     fn skipdigits(p: *const c_char) -> *mut c_char;
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn rs_set_context_in_argopt(
     xp: ExpandHandle,
     arg: *const c_char,
 ) -> *const c_char {
-    let p = nvim_vim_strchr(arg, c_int::from(b'='));
+    let p = vim_strchr(arg, c_int::from(b'='));
     if p.is_null() {
         (*xp).xp_pattern = arg.cast_mut();
     } else {

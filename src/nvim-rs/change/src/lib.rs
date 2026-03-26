@@ -19,7 +19,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_long, c_void};
+use std::ffi::{c_char, c_int, c_void};
 
 pub mod comment;
 pub mod editing;
@@ -184,26 +184,26 @@ extern "C" {
 
     // Message functions
     fn nvim_msg_start();
-    fn nvim_msg_ext_set_kind(kind: *const c_char);
-    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
-    fn nvim_msg_clr_eos();
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
+    fn msg_clr_eos();
     fn nvim_msg_end();
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;
     fn nvim_ui_active() -> bool;
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     // Redraw functions
-    fn nvim_redraw_buf_status_later(buf: BufHandle);
+    fn redraw_buf_status_later(buf: BufHandle);
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn nvim_showmode();
-    fn nvim_ui_flush();
-    fn nvim_os_delay(ms: c_long, allow_input: bool);
-    fn nvim_wait_return(redraw: bool);
+    fn ui_flush();
+    fn os_delay(ms: u64, allow_input: bool);
+    fn wait_return(redraw: c_int);
     static mut msg_scroll: c_int;
     static mut need_wait_return: bool;
     static mut emsg_silent: c_int;

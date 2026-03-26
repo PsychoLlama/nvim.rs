@@ -25,7 +25,7 @@ extern "C" {
     fn nvim_get_curwin_cursor_lnum() -> LinenrT;
     fn nvim_set_curwin_cursor_lnum(lnum: LinenrT);
     fn nvim_set_curwin_cursor_col(col: ColnrT);
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
     fn nvim_beginline(flags: c_int);
 
@@ -37,7 +37,7 @@ extern "C" {
     fn nvim_smsg_lines_indented(count: i64);
     fn nvim_get_p_report() -> i64;
     fn nvim_get_cmdmod_lockmarks() -> bool;
-    fn nvim_redraw_curbuf_later(typ: c_int);
+    fn redraw_curbuf_later(typ: c_int);
 
     // Buffer change notification
     fn nvim_indent_changed_lines(first: LinenrT, last: LinenrT, xtra: LinenrT);
@@ -90,7 +90,7 @@ pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
             // Be vi-compatible: For lisp indenting the first line is not
             // indented, unless there is only one line.
             if i != line_count - 1 || line_count == 1 || !is_lisp {
-                let l = nvim_skipwhite(nvim_get_cursor_line_ptr());
+                let l = skipwhite(nvim_get_cursor_line_ptr());
                 let amount = if *l == NUL {
                     // empty or blank line
                     0
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn rs_op_reindent(oap: OapHandle, how: Indenter) {
         };
         nvim_indent_changed_lines(first_changed, end, 0);
     } else if nvim_oap_is_visual(oap) {
-        nvim_redraw_curbuf_later(UPD_INVERTED);
+        redraw_curbuf_later(UPD_INVERTED);
     }
 
     let p_report = nvim_get_p_report();

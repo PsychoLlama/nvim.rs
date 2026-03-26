@@ -2159,7 +2159,7 @@ extern "C" {
     fn nvim_get_curbuf_b_help() -> c_int;
 
     // Function wrappers
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
     fn nvim_fast_breakcheck();
     fn nvim_ins_compl_check_keys(interval: c_int, pum_wanted: bool);
     fn rs_ins_compl_interrupted() -> c_int;
@@ -2188,7 +2188,6 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // String functions
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 }
 
 /// Apply the tagfunc option to find tags (Rust port of nvim_findtags_apply_tfu).
@@ -2296,7 +2295,7 @@ pub unsafe extern "C" fn rs_findtags_in_help_init(st: FindTagsStateHandle) -> bo
             break;
         }
         pri += 1;
-        s = nvim_vim_strchr(s, b',' as c_int);
+        s = vim_strchr(s, b',' as c_int);
         if s.is_null() {
             break;
         }
@@ -2359,7 +2358,7 @@ pub unsafe extern "C" fn rs_findtags_get_all_tags(
         // Check for CTRL-C typed
         let state = nvim_findtags_get_state(st);
         if state == TS_BINARY || state == TS_SKIP_BACK {
-            nvim_line_breakcheck();
+            line_breakcheck();
         } else {
             nvim_fast_breakcheck();
         }

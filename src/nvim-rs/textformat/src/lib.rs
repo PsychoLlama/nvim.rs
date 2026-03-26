@@ -28,7 +28,7 @@ pub use textwidth::rs_comp_textwidth;
 extern "C" {
     fn nvim_get_p_paste() -> c_int;
     fn nvim_get_curbuf_b_p_fo() -> *const c_char;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 }
 
 /// Return true if format option 'x' is in effect.
@@ -47,7 +47,7 @@ pub(crate) fn has_format_option_impl(x: c_int) -> bool {
         }
 
         // Check if the character x is in the format options string
-        !nvim_vim_strchr(fo, x).is_null()
+        !vim_strchr(fo, x).is_null()
     }
 }
 

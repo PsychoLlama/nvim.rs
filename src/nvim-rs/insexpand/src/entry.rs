@@ -348,7 +348,7 @@ pub unsafe extern "C" fn rs_ins_compl_start() -> c_int {
         g_edit_submode_highl = HLF_COUNT;
         showmode();
         g_edit_submode_extra = core::ptr::null_mut();
-        nvim_ui_flush();
+        ui_flush();
     }
 
     nvim_set_did_ai(save_did_ai); // was nvim_restore_did_ai
@@ -383,7 +383,7 @@ extern "C" {
     fn nvim_compl_match_get_flags_entry(m: *mut core::ffi::c_void) -> c_int;
     fn rs_ins_compl_show_statusmsg();
     fn setcursor();
-    fn nvim_ui_flush();
+    fn ui_flush();
     fn nvim_char_avail() -> c_int;
     fn rs_ins_compl_preinsert_effect() -> c_int;
     // rs_ins_compl_win_active and nvim_get_curwin use *mut u8 (opaque pointer)
@@ -391,8 +391,8 @@ extern "C" {
     fn nvim_get_curwin() -> *mut u8;
     fn rs_ins_compl_delete(new_leader: c_int);
     fn rs_ins_compl_restart();
-    // nvim_os_delay: ms is c_long, allow_input is bool
-    fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
+    // os_delay: ms is c_long, allow_input is bool
+    fn os_delay(ms: u64, allow_input: bool);
     fn rs_show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int);
 }
 
@@ -528,7 +528,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
         && (os_hrtime() - compl_start_tv) / 1_000_000 < p_acl_ms
     {
         setcursor();
-        nvim_ui_flush();
+        ui_flush();
         loop {
             if nvim_char_avail() != 0 {
                 if rs_ins_compl_preinsert_effect() != 0
@@ -541,7 +541,7 @@ pub unsafe extern "C" fn rs_ins_complete(c: c_int, enable_pum: c_int) -> c_int {
                 crate::vars::nvim_set_compl_interrupted(1);
                 break;
             }
-            nvim_os_delay(2, false);
+            os_delay(2, false);
             if (os_hrtime() - compl_start_tv) / 1_000_000 >= p_acl_ms {
                 break;
             }

@@ -633,7 +633,7 @@ pub unsafe extern "C" fn rs_buflist_findname_exp(fname: *mut c_char) -> BufHandl
 extern "C" {
     fn nvim_win_get_cursor_lnum(wp: crate::WinHandle) -> c_int;
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
-    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    fn msg_ext_set_kind(kind: *const c_char);
     fn nvim_eap_get_arg(eap: *const c_void) -> *const c_char;
     fn nvim_eap_get_forceit(eap: *const c_void) -> bool;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
@@ -660,7 +660,7 @@ extern "C" {
     fn msg_putchar(c: c_int);
     fn vim_strsize(s: *const c_char) -> c_int;
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
     fn undo_fmt_time(buf: *mut c_char, buflen: usize, last_used: i64);
     static mut IObuff: [c_char; 1025];
 }
@@ -693,7 +693,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
         arg.to_bytes().contains(&b't')
     };
 
-    nvim_msg_ext_set_kind(c"list_cmd".as_ptr().cast::<c_char>());
+    msg_ext_set_kind(c"list_cmd".as_ptr().cast::<c_char>());
 
     // Collect buffers
     let mut bufs: Vec<BufHandle> = Vec::new();
@@ -866,7 +866,7 @@ pub unsafe fn buflist_list_impl(eap: *const c_void) {
 
         msg_putchar(c_int::from(b'\n'));
         msg_outtrans(iobuff.cast::<c_char>(), 0, false);
-        nvim_line_breakcheck();
+        line_breakcheck();
     }
 }
 

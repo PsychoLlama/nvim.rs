@@ -38,7 +38,7 @@ extern "C" {
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
-    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_get_min_vim_version() -> c_int;
 
     /// Wrapper for `try_getdigits`. Returns bytes consumed, or -1 on failure.
@@ -149,7 +149,7 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
                 let matches = next_ch == b':'
                     && (ch != b'V' || {
                         // "Vim:" requires "set" at start of option portion
-                        let set_ptr = nvim_skipwhite(line_ptr.add(after_digits + 1));
+                        let set_ptr = skipwhite(line_ptr.add(after_digits + 1));
                         let set_bytes = std::slice::from_raw_parts(
                             set_ptr.cast::<u8>(),
                             3.min(line_len.saturating_sub(set_ptr.offset_from(line_ptr) as usize)),
@@ -212,7 +212,7 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
 
     while !end {
         // skipwhite
-        s = nvim_skipwhite(s).cast_mut();
+        s = skipwhite(s);
 
         if *s == 0 {
             break;

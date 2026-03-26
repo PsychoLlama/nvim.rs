@@ -48,7 +48,7 @@ extern "C" {
     // Other functions
     fn ml_setflags(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
-    fn nvim_redraw_buf_status_later(buf: BufHandle);
+    fn redraw_buf_status_later(buf: BufHandle);
     // Memory functions
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
@@ -174,7 +174,7 @@ fn unchanged_impl(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
             if ff {
                 save_file_ff_impl(buf);
             }
-            nvim_redraw_buf_status_later(buf);
+            redraw_buf_status_later(buf);
             redraw_tabline = true;
             need_maketitle = true; // set window title later
             nvim_buf_inc_changedtick(buf);

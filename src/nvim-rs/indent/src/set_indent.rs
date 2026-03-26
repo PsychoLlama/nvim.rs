@@ -24,7 +24,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ts() -> i64;
     fn nvim_curbuf_get_b_p_vts_array() -> *const c_int;
 
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
 
     fn nvim_u_savesub_curline() -> c_int;
 
@@ -37,7 +37,7 @@ extern "C" {
         new_col: i32,
         undo: c_int,
     );
-    fn nvim_changed_bytes(lnum: i32, col: i32);
+    fn changed_bytes(lnum: i32, col: i32);
 
     fn nvim_get_saved_cursor_lnum() -> i32;
     fn nvim_get_saved_cursor_col() -> i32;
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn rs_set_indent(size: c_int, flags: c_int) -> bool {
     if flags & SIN_INSERT != 0 {
         p = oldline;
     } else {
-        p = nvim_skipwhite(p);
+        p = skipwhite(p);
         line_len -= p.offset_from(oldline) as c_int;
     }
 
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn rs_set_indent(size: c_int, flags: c_int) -> bool {
                 todo -= tab_pad;
                 ind_done += tab_pad;
             }
-            p = nvim_skipwhite(p);
+            p = skipwhite(p);
         }
 
         loop {
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn rs_set_indent(size: c_int, flags: c_int) -> bool {
         }
 
         if flags & SIN_CHANGED != 0 {
-            nvim_changed_bytes(curwin_lnum, 0);
+            changed_bytes(curwin_lnum, 0);
         }
 
         // Correct saved cursor position if it is in this line.

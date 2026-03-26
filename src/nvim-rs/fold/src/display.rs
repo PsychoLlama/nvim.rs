@@ -51,7 +51,7 @@ extern "C" {
     /// Get the current window handle.
     fn nvim_get_curwin() -> WinHandle;
     /// Skip whitespace at the beginning of a string.
-    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
 
     // Generic vim variable accessors
     /// Get a vim variable as a number by index.
@@ -61,11 +61,11 @@ extern "C" {
     /// Get a vim variable as a string by index.
     fn nvim_fold_get_vim_var_str(vv_idx: c_int) -> *const c_char;
     /// Set a vim variable as a string by index (from change_ffi.c).
-    fn nvim_set_vim_var_string(vv_idx: c_int, val: *const c_char, len: c_int);
+    fn set_vim_var_string(vv_idx: c_int, val: *const c_char, len: c_int);
 
     // Generic line/buffer accessors (from change_ffi.c, move.c)
     /// Check if a line contains only whitespace (from change_ffi.c).
-    fn nvim_linewhite(lnum: LinenrT) -> bool;
+    fn linewhite(lnum: LinenrT) -> bool;
     /// Get a buffer line from curbuf (from change_ffi.c).
     fn nvim_ml_get(lnum: LinenrT) -> *const c_char;
     /// Get curbuf's line count (from move.c).
@@ -468,7 +468,7 @@ unsafe fn foldtext_cleanup_impl(s: *mut c_char) {
     if cms_raw.is_null() {
         return;
     }
-    let cms_start = nvim_skipwhite(cms_raw);
+    let cms_start = skipwhite(cms_raw);
 
     // Compute strlen(cms_start), then trim trailing whitespace.
     let mut cms_slen = cstr_len(cms_start);
@@ -490,7 +490,7 @@ unsafe fn foldtext_cleanup_impl(s: *mut c_char) {
         cms_slen = new_slen;
         // skip "%s" and white space after it
         let after_pct_s = raw_cms_end.add(2);
-        let cms_end_skip = nvim_skipwhite(after_pct_s);
+        let cms_end_skip = skipwhite(after_pct_s);
         #[allow(clippy::cast_sign_loss)]
         let skip_count = cms_end_skip.offset_from(raw_cms_end) as usize;
         cms_end_len -= skip_count;
@@ -640,7 +640,7 @@ unsafe fn set_fold_vvars_impl(start: LinenrT, end: LinenrT, level: c_int) {
     dashes[clamped as usize] = 0;
     nvim_fold_set_vim_var_nr(VV_FOLDSTART, i64::from(start));
     nvim_fold_set_vim_var_nr(VV_FOLDEND, i64::from(end));
-    nvim_set_vim_var_string(VV_FOLDDASHES, dashes.as_ptr(), -1);
+    set_vim_var_string(VV_FOLDDASHES, dashes.as_ptr(), -1);
     nvim_fold_set_vim_var_nr(VV_FOLDLEVEL, i64::from(clamped));
 }
 
@@ -649,7 +649,7 @@ unsafe fn set_fold_vvars_impl(start: LinenrT, end: LinenrT, level: c_int) {
 /// # Safety
 /// Must be called with valid global state.
 unsafe fn clear_fold_vvars_impl() {
-    nvim_set_vim_var_string(VV_FOLDDASHES, ptr::null(), -1);
+    set_vim_var_string(VV_FOLDDASHES, ptr::null(), -1);
 }
 
 /// Concatenate all chunks from a VirtText into a single xmalloc'd string.
@@ -765,7 +765,7 @@ unsafe fn f_foldtext_impl() -> *mut c_char {
     // Find first non-empty line in the fold.
     let mut lnum = foldstart;
     while lnum < foldend {
-        if !nvim_linewhite(lnum) {
+        if !linewhite(lnum) {
             break;
         }
         lnum += 1;
@@ -773,16 +773,16 @@ unsafe fn f_foldtext_impl() -> *mut c_char {
 
     // Find interesting text in this line, skip C comment-start.
     let raw_line = nvim_ml_get(lnum);
-    let mut s = nvim_skipwhite(raw_line);
+    let mut s = skipwhite(raw_line);
 
     // Skip C comment-start: "/*" or "//"
     if *s == b'/' as c_char && (*s.add(1) == b'*' as c_char || *s.add(1) == b'/' as c_char) {
-        s = nvim_skipwhite(s.add(2));
+        s = skipwhite(s.add(2));
         // If nothing remains and there's a next line, try it
-        if *nvim_skipwhite(s) == 0 && lnum + 1 < foldend {
-            s = nvim_skipwhite(nvim_ml_get(lnum + 1));
+        if *skipwhite(s) == 0 && lnum + 1 < foldend {
+            s = skipwhite(nvim_ml_get(lnum + 1));
             if *s == b'*' as c_char {
-                s = nvim_skipwhite(s.add(1));
+                s = skipwhite(s.add(1));
             }
         }
     }

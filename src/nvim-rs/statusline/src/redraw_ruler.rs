@@ -117,7 +117,7 @@ extern "C" {
     // Message area
     static mut msg_col: c_int;
     static mut msg_row: c_int;
-    #[link_name = "nvim_msg_clr_eos"]
+    #[link_name = "msg_clr_eos"]
     fn nvim_stl_msg_clr_eos();
 
     // UI events

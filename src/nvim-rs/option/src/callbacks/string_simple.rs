@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_win_get_p_briopt_addr(win: crate::WinHandle) -> *const c_void;
     static mut cmdpreview: bool;
     static mut VIsual_active: bool;
-    fn nvim_redraw_curbuf_later(redraw_type: c_int);
+    fn redraw_curbuf_later(redraw_type: c_int);
     fn nvim_win_get_briopt_list(win: crate::WinHandle) -> c_int;
     fn redraw_all_later(typ: c_int);
 
@@ -328,7 +328,7 @@ pub unsafe extern "C" fn rs_did_set_selection(args: *mut c_void) -> CallbackResu
         return errmsg;
     }
     if VIsual_active {
-        nvim_redraw_curbuf_later(UPD_INVERTED);
+        redraw_curbuf_later(UPD_INVERTED);
     }
     callback_ok()
 }

@@ -40,10 +40,10 @@ extern "C" {
     fn rs_diff_infold(wp: WinHandle, lnum: LineNr) -> bool;
 
     /// Skip whitespace at the beginning of a string.
-    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
 
     /// Find a character in a string (like vim_strchr).
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     /// Get the syntax fold level for a line.
     /// Wraps syn_get_foldlevel(wp, lnum).
@@ -130,7 +130,7 @@ pub fn foldlevel_indent_result(wp: WinHandle, lnum: LineNr, off: LineNr) -> Fold
     }
 
     // Skip whitespace to check if line is empty or starts with foldignore char
-    let s = unsafe { nvim_skipwhite(line_ptr) };
+    let s = unsafe { skipwhite(line_ptr) };
 
     let lvl = unsafe {
         // Empty line check - first char is NUL
@@ -147,7 +147,7 @@ pub fn foldlevel_indent_result(wp: WinHandle, lnum: LineNr, off: LineNr) -> Fold
             let fdi = nvim_win_get_p_fdi(wp);
             #[allow(clippy::cast_sign_loss)]
             let char_val = c_int::from(*s as u8);
-            if !fdi.is_null() && !nvim_vim_strchr(fdi, char_val).is_null() {
+            if !fdi.is_null() && !vim_strchr(fdi, char_val).is_null() {
                 // First and last line can't be undefined, use level 0
                 let line_count = nvim_win_get_buf_line_count(wp);
                 if actual_lnum == 1 || actual_lnum == line_count {

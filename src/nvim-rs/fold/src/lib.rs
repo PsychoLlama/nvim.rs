@@ -308,7 +308,7 @@ extern "C" {
     fn nvim_win_get_p_fml(wp: WinHandle) -> c_int;
 
     /// Get the number of screen lines for a physical line (no fold consideration).
-    fn nvim_plines_win_nofold(wp: WinHandle, lnum: LineNr) -> c_int;
+    fn plines_win_nofold(wp: WinHandle, lnum: LineNr) -> c_int;
 
     // ========================================================================
     // Phase 1: Foundation function accessors
@@ -391,7 +391,7 @@ extern "C" {
     fn nvim_win_set_w_fold_manual(wp: WinHandle, val: bool);
 
     /// Call changed_window_setting for a window.
-    fn nvim_changed_window_setting(wp: WinHandle);
+    fn changed_window_setting(wp: WinHandle);
 
     /// Emit the "no fold found" error message.
     fn nvim_emsg_nofold();
@@ -1077,7 +1077,7 @@ fn check_small_impl(wp: WinHandle, fp: FoldHandle, lnum_off: LineNr) {
         let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
         let mut count: c_int = 0;
         for n in 0..fd_len {
-            count += unsafe { nvim_plines_win_nofold(wp, fd_top + lnum_off + n) };
+            count += unsafe { plines_win_nofold(wp, fd_top + lnum_off + n) };
             if count > fml {
                 unsafe { nvim_fold_set_fd_small(fp, tristate::K_FALSE) };
                 return;
@@ -2288,7 +2288,7 @@ fn set_manual_fold_win_impl(
         }
         unsafe { nvim_win_set_w_fold_manual(wp, true) };
         if done & done_flags::DONE_ACTION != 0 {
-            unsafe { nvim_changed_window_setting(wp) };
+            unsafe { changed_window_setting(wp) };
         }
         done |= done_flags::DONE_FOLD;
     } else if done_out.is_null() {
@@ -2378,7 +2378,7 @@ fn new_fold_level_win_impl(wp: WinHandle) {
         }
     }
 
-    unsafe { nvim_changed_window_setting(wp) };
+    unsafe { changed_window_setting(wp) };
 }
 
 /// Set new foldlevel for current window.
@@ -3141,7 +3141,7 @@ extern "C" {
     );
 
     /// Redraw the current buffer later.
-    fn nvim_redraw_curbuf_later(redraw_type: c_int);
+    fn redraw_curbuf_later(redraw_type: c_int);
 }
 
 /// UPD_INVERTED redraw type (from drawscreen.h).
@@ -3328,7 +3328,7 @@ fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr)
     }
 
     // Redraw
-    unsafe { nvim_changed_window_setting(wp) };
+    unsafe { changed_window_setting(wp) };
 }
 
 /// Delete folds from line `start` to `end` (inclusive).
@@ -3410,7 +3410,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
             did_one = true;
 
             // redraw window
-            unsafe { nvim_changed_window_setting(wp) };
+            unsafe { changed_window_setting(wp) };
         } else {
             lnum += 1;
         }
@@ -3424,7 +3424,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
         // Force a redraw to remove the Visual highlighting.
         if had_visual {
             let buf = unsafe { nvim_win_get_buffer(wp) };
-            unsafe { nvim_redraw_buf_later(buf, UPD_INVERTED) };
+            unsafe { redraw_buf_later(buf, UPD_INVERTED) };
         }
     }
 
@@ -3440,7 +3440,7 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
 
 extern "C" {
     /// Redraw buffer later.
-    fn nvim_redraw_buf_later(buf: BufHandle, redraw_type: c_int);
+    fn redraw_buf_later(buf: BufHandle, redraw_type: c_int);
 }
 
 /// Open or close folds for current window in lines "first" to "last".
@@ -3487,7 +3487,7 @@ fn op_fold_range_impl(
 
     // Force a redraw to remove the Visual highlighting.
     if had_visual {
-        unsafe { nvim_redraw_curbuf_later(UPD_INVERTED) };
+        unsafe { redraw_curbuf_later(UPD_INVERTED) };
     }
 }
 
@@ -3656,7 +3656,7 @@ fn fold_check_close_impl() {
     let fdl = unsafe { nvim_win_get_p_fdl(curwin) };
 
     if check_close_rec_impl(gap, cursor_lnum, fdl) {
-        unsafe { nvim_changed_window_setting(curwin) };
+        unsafe { changed_window_setting(curwin) };
     }
 }
 

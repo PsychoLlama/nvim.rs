@@ -473,7 +473,7 @@ extern "C" {
         opt_flags: c_int,
         set_sid: i32,
     );
-    fn nvim_redraw_buf_status_later(buf: *mut core::ffi::c_void);
+    fn redraw_buf_status_later(buf: *mut core::ffi::c_void);
     static mut curbuf: *mut core::ffi::c_void;
     static mut redraw_tabline: bool;
     static mut need_maketitle: bool;
@@ -509,7 +509,7 @@ pub unsafe extern "C" fn rs_set_fileformat(eol_style: c_int, opt_flags: c_int) {
         };
         set_option_direct(K_OPT_FILEFORMAT, val, opt_flags, 0);
     }
-    nvim_redraw_buf_status_later(curbuf);
+    redraw_buf_status_later(curbuf);
     redraw_tabline = true;
     need_maketitle = true;
 }

@@ -49,7 +49,7 @@ extern "C" {
 
     // cpo option
     static mut p_cpo: *mut c_char;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Beep
     fn nvim_beep_flush();
@@ -58,7 +58,7 @@ extern "C" {
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
 
     // skipwhite and inindent
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_inindent_zero() -> bool;
 
     // marks: set curbuf->b_op_start/end from oap
@@ -151,7 +151,7 @@ unsafe fn opd_check_empty_line(oap: *const c_void) -> c_int {
             if nvim_get_virtual_op() != 0 {
                 return 2; // goto setmarks
             }
-            if !nvim_vim_strchr(p_cpo, CPO_EMPTYREGION).is_null() {
+            if !vim_strchr(p_cpo, CPO_EMPTYREGION).is_null() {
                 nvim_beep_flush();
             }
             return 1; // return OK
@@ -190,7 +190,7 @@ unsafe fn opd_maybe_promote_to_linewise(oap: *mut c_void) {
             let inclusive = nvim_oap_get_inclusive(oap_const);
             ptr = ptr.add(usize::from(inclusive));
         }
-        let ptr = nvim_skipwhite(ptr);
+        let ptr = skipwhite(ptr);
         if unsafe { *ptr } == 0 && nvim_inindent_zero() {
             nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
         }

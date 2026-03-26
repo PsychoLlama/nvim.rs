@@ -928,10 +928,10 @@ extern "C" {
     fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
 
     // Message output functions
-    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    fn msg_ext_set_kind(kind: *const c_char);
     fn msg_start();
-    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
-    fn nvim_msg_clr_eos();
+    fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
+    fn msg_clr_eos();
     fn msg_advance(col: c_int);
     fn msg_puts(s: *const c_char);
     fn msg_puts_title(s: *const c_char);
@@ -1069,12 +1069,12 @@ pub unsafe extern "C" fn rs_print_tag_list(
     if msg_col == 0 {
         msg_didout = false; // overwrite previous message
     }
-    nvim_msg_ext_set_kind(c"confirm".as_ptr());
+    msg_ext_set_kind(c"confirm".as_ptr());
     msg_start();
-    nvim_msg_puts_hl(c"  # pri kind tag".as_ptr(), HLF_T, false);
-    nvim_msg_clr_eos();
+    msg_puts_hl(c"  # pri kind tag".as_ptr(), HLF_T, false);
+    msg_clr_eos();
     rs_taglen_advance(taglen);
-    nvim_msg_puts_hl(c"file\n".as_ptr(), HLF_T, false);
+    msg_puts_hl(c"file\n".as_ptr(), HLF_T, false);
 
     for i in 0..num_matches {
         if unsafe { got_int } {
@@ -1183,7 +1183,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
                     }
                     p = msg_outtrans_one(p, hl_id, false).cast_mut();
                     if *p as u8 == TAB {
-                        nvim_msg_puts_hl(c" ".as_ptr(), hl_id, false);
+                        msg_puts_hl(c" ".as_ptr(), hl_id, false);
                         break;
                     }
                     if *p as u8 == b':' {

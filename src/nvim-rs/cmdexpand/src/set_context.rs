@@ -343,7 +343,7 @@ extern "C" {
     );
 
     // vim_strchr
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 }
 
 // =============================================================================
@@ -590,7 +590,7 @@ pub unsafe extern "C" fn rs_set_context_by_cmdname(
         c if c == CMD_bdelete || c == CMD_bwipeout || c == CMD_bunload => {
             let mut a = arg;
             loop {
-                let sp = nvim_vim_strchr(a, c_int::from(b' '));
+                let sp = vim_strchr(a, c_int::from(b' '));
                 if sp.is_null() {
                     break;
                 }
@@ -810,7 +810,7 @@ pub unsafe extern "C" fn rs_set_context_by_cmdname(
         c if c == CMD_argdelete => {
             let mut a = arg;
             loop {
-                let sp = nvim_vim_strchr(a, c_int::from(b' '));
+                let sp = vim_strchr(a, c_int::from(b' '));
                 if sp.is_null() {
                     break;
                 }

@@ -239,8 +239,8 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_buf_inc_changedtick(buf: *mut c_void);
     fn nvim_check_cursor();
-    fn nvim_redraw_curbuf_later(redraw_type: c_int);
-    fn nvim_line_breakcheck();
+    fn redraw_curbuf_later(redraw_type: c_int);
+    fn line_breakcheck();
     fn nvim_get_upd_not_valid_val() -> c_int;
     fn nvim_prompt_for_recovery() -> c_int;
     fn nvim_recover_check_proc_and_print(fname_used: *const c_char) -> c_int;
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             msg_puts(c"\n\n".as_ptr());
             nvim_set_cmdline_row_to_msg_row();
         }
-        nvim_redraw_curbuf_later(nvim_get_upd_not_valid_val());
+        redraw_curbuf_later(nvim_get_upd_not_valid_val());
     } // end 'cleanup
 
     // Always-run cleanup
@@ -683,7 +683,7 @@ unsafe fn recover_btree(
         if unsafe { got_int } {
             break 'traverse;
         }
-        nvim_line_breakcheck();
+        line_breakcheck();
 
         if !hp.is_null() {
             nvim_mf_put_block(mfp, hp, false, false);

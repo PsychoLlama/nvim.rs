@@ -54,7 +54,7 @@ extern "C" {
     fn nvim_get_exiting() -> c_int;
     static mut need_wait_return: bool;
     fn nvim_get_state() -> c_int;
-    fn nvim_wait_return(redraw: bool);
+    fn wait_return(redraw: c_int);
 
     // Verbose enter/leave
     fn verbose_enter();
@@ -121,7 +121,7 @@ extern "C" {
     static mut msg_grid_adj: GridView;
     static mut hl_attr_active: *mut c_int;
 
-    // Globals for nvim_msg_clr_eos_force_impl
+    // Globals for msg_clr_eos_force_impl
     static mut cmdmsg_rl: bool;
     static mut redraw_cmdline: bool;
     static mut clear_cmdline: bool;
@@ -571,7 +571,7 @@ pub unsafe extern "C" fn rs_msg_end() -> c_int {
     // Do not do this if we are abandoning the file or editing the command line.
     const MODE_CMDLINE: c_int = 0x08;
     if nvim_get_exiting() == 0 && need_wait_return && (nvim_get_state() & MODE_CMDLINE) == 0 {
-        nvim_wait_return(false);
+        wait_return(0);
         return 0;
     }
 
@@ -658,7 +658,7 @@ pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
 /// Modifies display globals; calls grid_clear, msg_grid_validate.
 #[export_name = "msg_clr_eos_force"]
 pub unsafe extern "C" fn rs_msg_clr_eos_force_exported() {
-    // Inlined nvim_msg_clr_eos_force_impl:
+    // Inlined msg_clr_eos_force_impl:
     let msg_startcol = if cmdmsg_rl { 0 } else { msg_col };
     let msg_endcol = if cmdmsg_rl {
         Columns - msg_col

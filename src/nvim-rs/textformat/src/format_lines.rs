@@ -84,7 +84,7 @@ extern "C" {
     fn nvim_ui_cursor_shape_wrapper();
     fn nvim_curbuf_get_b_p_lisp() -> c_int;
     fn nvim_curbuf_get_b_p_inde_ptr() -> *const c_char;
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
     fn nvim_beep_flush();
     fn nvim_textfmt_u_save_cursor() -> c_int;
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;
@@ -380,7 +380,7 @@ pub(crate) unsafe fn format_lines_impl(line_count: c_int, avoid_fex: bool) {
                 force_format = nvim_textfmt_get_cursor_line_len() > max_len;
             }
         }
-        nvim_line_breakcheck();
+        line_breakcheck();
         count -= 1;
     }
 }

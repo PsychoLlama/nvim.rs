@@ -148,8 +148,8 @@ extern "C" {
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // String functions
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
 
     // Indent functions
@@ -161,7 +161,7 @@ extern "C" {
     fn nvim_change_get_sw_value() -> c_int;
     #[link_name = "getwhitecols_curline"]
     fn nvim_getwhitecols_curline() -> c_int;
-    fn nvim_linewhite(lnum: LinenrT) -> bool;
+    fn linewhite(lnum: LinenrT) -> bool;
     fn truncate_spaces(line: *mut c_char, col: usize);
 
     // Comment leader functions
@@ -242,7 +242,7 @@ extern "C" {
         extra: LinenrT,
         last_u: bool,
     );
-    fn nvim_changed_bytes(lnum: LinenrT, col: ColnrT);
+    fn changed_bytes(lnum: LinenrT, col: ColnrT);
 
     // Indentation functions
     fn use_indentexpr_for_lisp() -> bool;
@@ -453,7 +453,7 @@ fn open_line_impl(
             p_extra = saved_line.add(col as usize);
             if do_si {
                 // Need first char after new line break
-                p = nvim_skipwhite(p_extra);
+                p = skipwhite(p_extra);
                 first_char = *p as u8 as c_int;
             }
             extra_len = nvim_strlen(p_extra) as c_int;
@@ -583,7 +583,7 @@ fn open_line_impl(
                             nvim_get_indent()
                         };
                     }
-                    p = nvim_skipwhite(ptr);
+                    p = skipwhite(ptr);
                     if *p == b'}' as c_char {
                         nvim_set_did_si(true);
                     } else {
@@ -609,7 +609,7 @@ fn open_line_impl(
                     KEY_OPEN_BACK
                 },
                 b' ' as c_int,
-                nvim_linewhite(nvim_get_curwin_cursor_lnum()),
+                linewhite(nvim_get_curwin_cursor_lnum()),
             )
             && !openline_flags.contains(OpenlineFlags::FORCE_INDENT);
 
@@ -748,7 +748,7 @@ fn open_line_impl(
                 if *p == COM_END {
                     // Doing "o" on end of comment does not insert leader
                     if dir == FORWARD {
-                        comment_end = nvim_skipwhite(saved_line);
+                        comment_end = skipwhite(saved_line);
                         lead_len = 0;
                         break;
                     }
@@ -906,7 +906,7 @@ fn open_line_impl(
                         }
                     } else {
                         // Left adjusted leader
-                        p = nvim_skipwhite(leader);
+                        p = skipwhite(leader);
                         let repl_size = vim_strnsize(lead_repl, lead_repl_len);
                         let mut i = 0;
                         while i < lead_len && *p.add(i as usize) != NUL {
@@ -975,7 +975,7 @@ fn open_line_impl(
                         && lead_len > 0
                         && *leader.add((lead_len - 1) as usize) == b' ' as c_char
                     {
-                        if !nvim_vim_strchr(nvim_skipwhite(leader), TAB as c_int).is_null() {
+                        if !vim_strchr(skipwhite(leader), TAB as c_int).is_null() {
                             break;
                         }
                         lead_len -= 1;
@@ -1132,7 +1132,7 @@ fn open_line_impl(
                 nvim_set_vr_lines_changed(vr_lines + 1);
             }
             nvim_ml_replace(cursor_lnum, p_extra, true);
-            nvim_changed_bytes(cursor_lnum, 0);
+            changed_bytes(cursor_lnum, 0);
             nvim_set_curwin_cursor_lnum(cursor_lnum - 1);
             did_append = false;
         }
@@ -1254,7 +1254,7 @@ fn open_line_impl(
                         );
                     }
                 } else {
-                    nvim_changed_bytes(cursor_lnum, col);
+                    changed_bytes(cursor_lnum, col);
                 }
             }
 

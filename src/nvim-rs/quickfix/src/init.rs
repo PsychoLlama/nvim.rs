@@ -332,7 +332,7 @@ mod init_ext {
         fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
 
         // Globals
-        fn nvim_line_breakcheck();
+        fn line_breakcheck();
 
         // C-side helpers
         // nvim_qf_init_clear_last_bufname removed: use nvim_qf_clear_fnum_cache (Phase 16)
@@ -555,7 +555,7 @@ mod init_ext {
                 if status == QF_FAIL {
                     break 'init -1; // error2 path
                 }
-                nvim_line_breakcheck();
+                line_breakcheck();
             }
 
             // Check if file source had a read error (replaces nvim_qf_init_state_no_fd_error)

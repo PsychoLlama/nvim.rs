@@ -90,7 +90,7 @@ extern "C" {
 
     // Incsearch / char avail
     fn nvim_char_avail() -> c_int;
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
 
     // Timeout
     fn nvim_profile_passed_limit(tm: ProftimeHandle) -> c_int;
@@ -591,7 +591,7 @@ pub unsafe extern "C" fn rs_searchit(
                     break;
                 }
 
-                nvim_line_breakcheck();
+                line_breakcheck();
                 if unsafe { got_int } {
                     break;
                 }

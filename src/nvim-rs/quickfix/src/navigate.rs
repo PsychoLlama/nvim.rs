@@ -1737,7 +1737,7 @@ pub mod jump_machinery {
         static mut msg_scroll: c_int;
         fn shortmess(x: c_int) -> bool;
         static mut p_ch: i64;
-        fn nvim_msg_ext_set_kind(kind: *const std::ffi::c_char);
+        fn msg_ext_set_kind(kind: *const std::ffi::c_char);
         fn msg_keep(s: *const std::ffi::c_char, attr: c_int, keep: bool, multiline: bool) -> bool;
         // (nvim_msg_keep_qf deleted: use msg_keep directly)
         fn nvim_qf_gettext_line_deleted() -> *const std::ffi::c_char;
@@ -1923,7 +1923,7 @@ pub mod jump_machinery {
         {
             msg_scroll = 0;
         }
-        nvim_msg_ext_set_kind(c"quickfix".as_ptr());
+        msg_ext_set_kind(c"quickfix".as_ptr());
         msg_keep(full_msg.as_ptr().cast::<c_char>(), 0, true, false);
         msg_scroll = saved_scroll;
     }

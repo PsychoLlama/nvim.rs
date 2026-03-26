@@ -80,7 +80,7 @@ extern "C" {
     fn nvim_set_did_check_timestamps(val: bool);
     fn nvim_get_need_check_timestamps() -> bool;
     static mut need_wait_return: bool;
-    fn nvim_wait_return(redraw: bool);
+    fn wait_return(redraw: c_int);
     static mut restart_edit: c_int;
     fn nvim_get_opcount() -> c_int;
     static mut VIsual_active: bool;
@@ -209,7 +209,7 @@ unsafe fn normal_check_stuff_buffer(s: NormalStateHandle) {
 
         if need_wait_return {
             // if wait_return still needed call it now
-            nvim_wait_return(false);
+            wait_return(0);
         }
     }
 }

@@ -660,8 +660,8 @@ extern "C" {
     fn vim_beep(flag: c_int);
     fn setcursor();
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_ui_flush();
-    fn nvim_os_delay(ms: std::os::raw::c_long, allow_input: bool);
+    fn ui_flush();
+    fn os_delay(ms: u64, allow_input: bool);
 }
 
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
@@ -695,8 +695,8 @@ pub unsafe extern "C" fn rs_check_compl_option(dict_opt: c_int) -> c_int {
             vim_beep(0x08); // kOptBoFlagComplete = 0x08 (from option_vars.generated.h)
             setcursor();
             if !ui_has(K_UI_MESSAGES) {
-                nvim_ui_flush();
-                nvim_os_delay(2004, false);
+                ui_flush();
+                os_delay(2004, false);
             }
         }
         return 0;

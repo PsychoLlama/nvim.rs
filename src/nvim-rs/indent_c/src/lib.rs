@@ -219,7 +219,7 @@ extern "C" {
     fn nvim_get_state() -> c_int;
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
     fn vim_strsize(s: *const c_char) -> c_int;
-    fn nvim_linewhite(lnum: c_int) -> bool;
+    fn linewhite(lnum: c_int) -> bool;
     fn nvim_curbuf_get_b_p_com() -> *mut c_char;
     fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool;
     fn xstrdup(str_: *const c_char) -> *mut c_char;
@@ -4155,7 +4155,7 @@ pub unsafe extern "C" fn rs_get_c_indent(opts: *const CindentOptions) -> c_int {
                 amount = -1;
                 let mut lnum = cur_lnum - 1;
                 while lnum > cp.lnum {
-                    if nvim_linewhite(lnum) {
+                    if linewhite(lnum) {
                         lnum -= 1;
                         continue;
                     }

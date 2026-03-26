@@ -27,7 +27,7 @@ extern "C" {
 
     // Path utilities (existing `nvim_` wrappers)
     fn nvim_path_tail(p: *const c_char) -> *const c_char;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     // `expand_T` complex operations (kept in C due to macros)
     fn nvim_expand_clear(xp: ExpandHandle);
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rs_wildescape(
                 *files.offset(i) = p;
                 // BACKSLASH_IN_FILENAME is not defined on Linux
             } else if backslash & XP_BS_COMMA != 0
-                && !nvim_vim_strchr(*files.offset(i), c_int::from(b',')).is_null()
+                && !vim_strchr(*files.offset(i), c_int::from(b',')).is_null()
             {
                 let p = vim_strsave_escaped(*files.offset(i), c",".as_ptr());
                 xfree((*files.offset(i)).cast::<libc::c_void>());

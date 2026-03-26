@@ -60,11 +60,11 @@ extern "C" {
     fn nvim_eap_get_cmdidx(eap: ExargHandle) -> c_int;
 
     // Message functions
-    fn nvim_msg_ext_set_kind(kind: *const c_char);
+    fn msg_ext_set_kind(kind: *const c_char);
     #[link_name = "msg_sb_eol"]
     fn nvim_msg_sb_eol();
     fn nvim_msg_start();
-    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
+    fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
     fn nvim_msg_multiline_cstr(
         s: *const c_char,
         hl_id: c_int,
@@ -72,7 +72,7 @@ extern "C" {
         hist: bool,
         need_clear: *mut bool,
     );
-    fn nvim_msg_clr_eos();
+    fn msg_clr_eos();
     fn nvim_msg_end();
     fn nvim_set_msg_ext_append(val: bool);
     fn nvim_msg_echomsg(str: *const c_char, hl_id: c_int);
@@ -239,7 +239,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
             let echo_hl_id = ECHO_HL_ID;
             if atstart {
                 atstart = false;
-                nvim_msg_ext_set_kind(KIND_ECHO.as_ptr() as *const c_char);
+                msg_ext_set_kind(KIND_ECHO.as_ptr() as *const c_char);
                 // Call msg_start() after eval1(), evaluating the expression
                 // may cause a message to appear.
                 if cmdidx == cmd_echo {
@@ -252,7 +252,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
                     nvim_msg_start();
                 }
             } else if cmdidx == cmd_echo {
-                nvim_msg_puts_hl(KIND_SPACE.as_ptr() as *const c_char, echo_hl_id, false);
+                msg_puts_hl(KIND_SPACE.as_ptr() as *const c_char, echo_hl_id, false);
             }
             let tofree = nvim_encode_tv2echo(rettv);
             nvim_set_msg_ext_append(cmdidx == CMD_ECHON);
@@ -275,7 +275,7 @@ pub unsafe fn ex_echo_impl(eap: ExargHandle) {
     } else {
         // remove text that may still be there from the command
         if need_clear {
-            nvim_msg_clr_eos();
+            msg_clr_eos();
         }
         if cmdidx == cmd_echo {
             nvim_msg_end();
@@ -377,7 +377,7 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
         let data = (*ga).ga_data as *mut c_char;
         let echo_hl_id = ECHO_HL_ID;
         if cmdidx == cmd_echomsg {
-            nvim_msg_ext_set_kind(KIND_ECHOMSG.as_ptr() as *const c_char);
+            msg_ext_set_kind(KIND_ECHOMSG.as_ptr() as *const c_char);
             nvim_msg_echomsg(data, echo_hl_id);
         } else if cmdidx == cmd_echoerr {
             // We don't want to abort following commands, restore did_emsg.

@@ -56,7 +56,7 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
     fn ml_get(lnum: LinenrT) -> *const c_char;
-    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
     fn nvim_mark_buflist_findnr(fnum: c_int) -> BufHandle;
@@ -5297,7 +5297,7 @@ pub unsafe extern "C" fn rs_mark_line(mp: *mut PosT, lead_len: c_int) -> *mut c_
     assert!(columns >= 0);
     // Get the line and skip leading whitespace
     let raw_line = ml_get(lnum);
-    let ws_skipped = nvim_skipwhite(raw_line);
+    let ws_skipped = skipwhite(raw_line);
     // Allow up to 5 bytes per character
     let save_len = (columns as usize) * 5;
     let s = nvim_xstrnsave(ws_skipped, save_len);

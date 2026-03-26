@@ -154,7 +154,7 @@ extern "C" {
     fn nvim_set_topline(wp: WinHandle, lnum: c_int);
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
-    fn nvim_changed_window_setting(wp: WinHandle);
+    fn changed_window_setting(wp: WinHandle);
     fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
     fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
     fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: c_int);
@@ -1051,7 +1051,7 @@ pub unsafe extern "C" fn rs_f_winrestview(
         nvim_check_cursor_win_wrapper(curwin);
         rs_win_new_height(curwin, nvim_win_get_view_height(curwin));
         rs_win_new_width(curwin, nvim_win_get_view_width(curwin));
-        nvim_changed_window_setting(curwin);
+        changed_window_setting(curwin);
 
         // Clamp w_topline to [1, line_count]
         let topline = nvim_win_get_topline(curwin);

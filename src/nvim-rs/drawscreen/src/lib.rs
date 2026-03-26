@@ -2136,7 +2136,7 @@ extern "C" {
     fn nvim_win_set_w_cursorline(wp: WinHandle, val: LinenrT);
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
-    fn nvim_changed_window_setting(wp: WinHandle);
+    fn changed_window_setting(wp: WinHandle);
     fn nvim_curs_columns(wp: WinHandle, may_scroll: c_int);
     fn nvim_fold_info(
         wp: WinHandle,
@@ -2171,7 +2171,7 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
 
         // Concealed line visibility toggled.
         if nvim_decor_conceal_line(curwin, cursor_lnum - 1, 1) != 0 {
-            nvim_changed_window_setting(curwin);
+            changed_window_setting(curwin);
         }
         // Need to recompute cursor column, e.g., when starting Visual mode
         // without concealing.

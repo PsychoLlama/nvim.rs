@@ -66,9 +66,9 @@ extern "C" {
     fn nvim_utfc_ptr2len(p: *const c_char) -> c_int;
 
     // Misc
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
-    fn nvim_line_breakcheck();
-    fn nvim_redraw_curbuf_later(typ: c_int);
+    fn skipwhite(s: *const c_char) -> *mut c_char;
+    fn line_breakcheck();
+    fn redraw_curbuf_later(typ: c_int);
     fn nvim_indent_changed_lines(first: LinenrT, last: LinenrT, xtra: LinenrT);
     fn nvim_set_option_direct_vts(str: *const c_char);
     fn nvim_emsg_interr();
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
     // Check for "-indentonly" flag
     if starts_with_indentonly(ptr) && is_whitespace_or_nul(*ptr.add(11)) {
         is_indent_only = true;
-        ptr = nvim_skipwhite(ptr.add(11));
+        ptr = skipwhite(ptr.add(11));
     }
 
     let new_ts_str_start = ptr;
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
             // out of memory
             break;
         }
-        nvim_line_breakcheck();
+        line_breakcheck();
         lnum += 1;
     }
 
@@ -279,7 +279,7 @@ pub unsafe extern "C" fn rs_ex_retab(eap: EapHandle) {
         && nvim_retab_curbuf_get_p_ts() == i64::from(rs_tabstop_first(new_vts_array)))
         || (rs_tabstop_count(cur_vts) > 0 && rs_tabstop_eq(cur_vts, new_vts_array));
     if !ts_unchanged {
-        nvim_redraw_curbuf_later(UPD_NOT_VALID);
+        redraw_curbuf_later(UPD_NOT_VALID);
     }
     if first_line != 0 {
         nvim_indent_changed_lines(first_line, last_line + 1, 0);

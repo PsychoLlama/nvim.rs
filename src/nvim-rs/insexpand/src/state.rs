@@ -515,7 +515,7 @@ extern "C" {
     // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     #[link_name = "msg_hist_off"]
     static mut g_msg_hist_off: bool;
-    // nvim_msg_ext_set_kind_completion: deleted (Phase 1), use msg_ext_set_kind("completion") directly
+    // msg_ext_set_kind_completion: deleted (Phase 1), use msg_ext_set_kind("completion") directly
     #[link_name = "msg_ext_set_kind"]
     fn msg_ext_set_kind(kind: *const std::os::raw::c_char);
     #[link_name = "msg"]

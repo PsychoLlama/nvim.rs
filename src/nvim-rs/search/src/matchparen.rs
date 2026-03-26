@@ -98,15 +98,15 @@ extern "C" {
     fn nvim_search_get_curwin_w_p_rl() -> c_int;
 
     // String helpers
-    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn skipwhite(s: *const c_char) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     // Cursor and buffer
     fn nvim_search_get_curwin_cursor_lnum() -> LinenrT;
     fn nvim_search_get_curwin_cursor_col() -> ColnrT;
 
     // Interrupt check
-    fn nvim_line_breakcheck();
+    fn line_breakcheck();
 
     // Comment check
     fn nvim_search_check_linecomment(line: *const c_char) -> c_int;
@@ -280,8 +280,8 @@ pub unsafe extern "C" fn rs_findmatchlimit(
     let lisp = nvim_search_get_curbuf_b_p_lisp() != 0;
 
     let p_cpo = nvim_get_p_cpo();
-    let cpo_match = !nvim_vim_strchr(p_cpo, CPO_MATCH).is_null();
-    let cpo_bsl = !nvim_vim_strchr(p_cpo, CPO_MATCHBSL).is_null();
+    let cpo_match = !vim_strchr(p_cpo, CPO_MATCH).is_null();
+    let cpo_bsl = !vim_strchr(p_cpo, CPO_MATCHBSL).is_null();
 
     // Direction from flags
     let dir = if (flags & FM_BACKWARD) != 0 {
@@ -315,9 +315,9 @@ pub unsafe extern "C" fn rs_findmatchlimit(
             hash_dir = dir;
         } else {
             if !cpo_match {
-                let ptr = nvim_skipwhite(linep);
+                let ptr = skipwhite(linep);
                 if *ptr == b'#' as c_char && pos_col <= (ptr.offset_from(linep) as ColnrT) {
-                    let ptr2 = nvim_skipwhite(ptr.add(1));
+                    let ptr2 = skipwhite(ptr.add(1));
                     if strncmp(ptr2, c"if".as_ptr(), 2) == 0
                         || strncmp(ptr2, c"endif".as_ptr(), 5) == 0
                         || strncmp(ptr2, c"el".as_ptr(), 2) == 0
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                     pos_col += nvim_utfc_ptr2len(linep.add(pos_col as usize));
                 }
                 if findc == 0 {
-                    if !cpo_match && *nvim_skipwhite(linep) == b'#' as c_char {
+                    if !cpo_match && *skipwhite(linep) == b'#' as c_char {
                         hash_dir = 1;
                     } else {
                         return FindMatchResult::not_found();
@@ -384,7 +384,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                 nvim_search_set_oap_motion_type(oap, KMT_LINEWISE);
             }
             if initc != b'#' as c_int {
-                let ptr = nvim_skipwhite(nvim_skipwhite(linep).add(1));
+                let ptr = skipwhite(skipwhite(linep).add(1));
                 if strncmp(ptr, c"if".as_ptr(), 2) == 0 || strncmp(ptr, c"el".as_ptr(), 2) == 0 {
                     hash_dir = 1;
                 } else if strncmp(ptr, c"endif".as_ptr(), 5) == 0 {
@@ -405,13 +405,13 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                 }
                 pos_lnum += hash_dir;
                 linep = nvim_search_ml_get(pos_lnum);
-                nvim_line_breakcheck();
-                let ptr = nvim_skipwhite(linep);
+                line_breakcheck();
+                let ptr = skipwhite(linep);
                 if *ptr != b'#' as c_char {
                     continue;
                 }
                 pos_col = ptr.offset_from(linep) as ColnrT;
-                let ptr2 = nvim_skipwhite(ptr.add(1));
+                let ptr2 = skipwhite(ptr.add(1));
                 if hash_dir > 0 {
                     if strncmp(ptr2, c"if".as_ptr(), 2) == 0 {
                         count += 1;
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
     // Rightleft: reverse direction for bracket chars
     if nvim_search_get_curwin_w_p_rl() != 0 {
         let bracket_chars = c"()[]{}<>";
-        if !nvim_vim_strchr(bracket_chars.as_ptr(), initc).is_null() {
+        if !vim_strchr(bracket_chars.as_ptr(), initc).is_null() {
             backwards = !backwards;
         }
     }
@@ -486,7 +486,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                 linep = nvim_search_ml_get(pos_lnum);
                 pos_col = nvim_search_ml_get_len(pos_lnum);
                 do_quotes = -1;
-                nvim_line_breakcheck();
+                line_breakcheck();
 
                 if comment_dir != 0 || lisp {
                     comment_col = nvim_search_check_linecomment(linep);
@@ -518,7 +518,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                 linep = nvim_search_ml_get(pos_lnum);
                 pos_col = 0;
                 do_quotes = -1;
-                nvim_line_breakcheck();
+                line_breakcheck();
                 if lisp {
                     comment_col = nvim_search_check_linecomment(linep);
                 }
@@ -553,8 +553,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
                 } else if raw_string {
                     if *linep.add(pos_col as usize - 1) == b'R' as c_char
                         && *linep.add(pos_col as usize) == b'"' as c_char
-                        && !nvim_vim_strchr(linep.add(pos_col as usize + 1), b'(' as c_int)
-                            .is_null()
+                        && !vim_strchr(linep.add(pos_col as usize + 1), b'(' as c_int).is_null()
                     {
                         let end_lnum = if count > 0 {
                             match_pos_lnum
@@ -734,7 +733,7 @@ pub unsafe extern "C" fn rs_findmatchlimit(
             // Default case (all other characters)
             // Lisp: skip #\( etc
             if lisp
-                && !nvim_vim_strchr(c"(){}[]".as_ptr(), c).is_null()
+                && !vim_strchr(c"(){}[]".as_ptr(), c).is_null()
                 && pos_col > 1
                 && check_prevcol(linep, pos_col, b'\\', std::ptr::null_mut())
                 && check_prevcol(linep, pos_col - 1, b'#', std::ptr::null_mut())
@@ -787,7 +786,7 @@ unsafe fn handle_default_match(
 ) -> bool {
     // Lisp: skip #\( etc
     if lisp
-        && !nvim_vim_strchr(c"(){}[]".as_ptr(), c).is_null()
+        && !vim_strchr(c"(){}[]".as_ptr(), c).is_null()
         && pos_col > 1
         && check_prevcol(linep, pos_col, b'\\', std::ptr::null_mut())
         && check_prevcol(linep, pos_col - 1, b'#', std::ptr::null_mut())

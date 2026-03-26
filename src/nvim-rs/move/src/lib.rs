@@ -796,7 +796,7 @@ extern "C" {
     #[link_name = "redrawWinline"]
     fn nvim_redrawWinline(wp: WinHandle, lnum: LinenrT);
     #[link_name = "redraw_buf_later"]
-    fn nvim_redraw_buf_later(buf: *mut std::ffi::c_void, type_: c_int);
+    fn redraw_buf_later(buf: *mut std::ffi::c_void, type_: c_int);
 
     // Popup menu visibility
     #[link_name = "pum_visible"]
@@ -964,7 +964,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     let win_buf = nvim_win_get_buffer(wp);
     let curbuf = nvim_get_curbuf();
     if visual_active && win_buf == curbuf {
-        nvim_redraw_buf_later(curbuf, upd::INVERTED);
+        redraw_buf_later(curbuf, upd::INVERTED);
     }
 }
 

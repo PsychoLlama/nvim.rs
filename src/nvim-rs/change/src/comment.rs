@@ -58,7 +58,7 @@ extern "C" {
         maxlen: c_int,
         sep: *const c_char,
     ) -> usize;
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 }
 
 /// ASCII whitespace check (space or tab).
@@ -123,7 +123,7 @@ fn get_leader_len_impl(
                     c",".as_ptr(),
                 );
 
-                let string = nvim_vim_strchr(part_buf.as_ptr(), b':' as c_int);
+                let string = vim_strchr(part_buf.as_ptr(), b':' as c_int);
                 if string.is_null() {
                     // missing ':', ignore this part
                     continue;
@@ -134,19 +134,19 @@ fn get_leader_len_impl(
                 // If we found a middle match previously, use that match when this
                 // is not a middle or end.
                 if middle_match_len != 0
-                    && nvim_vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null()
-                    && nvim_vim_strchr(part_buf.as_ptr(), COM_END as c_int).is_null()
+                    && vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null()
+                    && vim_strchr(part_buf.as_ptr(), COM_END as c_int).is_null()
                 {
                     break;
                 }
 
                 // When we already found a nested comment, only accept further nested comments.
-                if got_com && nvim_vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
+                if got_com && vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
                     continue;
                 }
 
                 // When 'O' flag present and using "O" command skip this one.
-                if backward && !nvim_vim_strchr(part_buf.as_ptr(), COM_NOBACK as c_int).is_null() {
+                if backward && !vim_strchr(part_buf.as_ptr(), COM_NOBACK as c_int).is_null() {
                     continue;
                 }
 
@@ -172,7 +172,7 @@ fn get_leader_len_impl(
                 }
 
                 // When 'b' flag used, there must be white space or end-of-line after the string.
-                if !nvim_vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
+                if !vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
                     && !nvim_change_ascii_iswhite(*line.offset((i + j as i32) as isize) as c_int)
                     && *line.offset((i + j as i32) as isize) != 0
                 {
@@ -180,7 +180,7 @@ fn get_leader_len_impl(
                 }
 
                 // We have found a match.
-                if !nvim_vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null() {
+                if !vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null() {
                     if middle_match_len == 0 {
                         middle_match_len = j as i32;
                         saved_flags = prev_list;
@@ -227,7 +227,7 @@ fn get_leader_len_impl(
 
             // If this comment doesn't nest, stop here.
             got_com = true;
-            if nvim_vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
+            if vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
                 break;
             }
         }
@@ -287,7 +287,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                     c",".as_ptr(),
                 );
 
-                let mut string = nvim_vim_strchr(part_buf.as_ptr(), b':' as c_int);
+                let mut string = vim_strchr(part_buf.as_ptr(), b':' as c_int);
                 if string.is_null() {
                     continue;
                 }
@@ -316,7 +316,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                 }
 
                 // When 'b' flag used, there must be white space or end-of-line after the string.
-                if !nvim_vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
+                if !vim_strchr(part_buf.as_ptr(), COM_BLANK as c_int).is_null()
                     && !nvim_change_ascii_iswhite(*line.offset((i + j as i32) as isize) as c_int)
                     && *line.offset((i + j as i32) as isize) != 0
                 {
@@ -325,7 +325,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
 
                 // For a middlepart comment, only consider it to match if
                 // everything before the current position in the line is whitespace.
-                if !nvim_vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null() {
+                if !vim_strchr(part_buf.as_ptr(), COM_MIDDLE as c_int).is_null() {
                     let mut k = 0;
                     while k <= i && nvim_change_ascii_iswhite(*line.offset(k as isize) as c_int) {
                         k += 1;
@@ -349,7 +349,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                 result = i;
 
                 // If this comment nests, continue searching.
-                if !nvim_vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
+                if !vim_strchr(part_buf.as_ptr(), COM_NEST as c_int).is_null() {
                     i -= 1;
                     continue;
                 }
@@ -358,7 +358,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
 
                 // Let's verify whether the comment leader found is a substring
                 // of other comment leaders.
-                let mut com_leader = nvim_vim_strchr(part_buf.as_ptr(), b':' as c_int);
+                let mut com_leader = vim_strchr(part_buf.as_ptr(), b':' as c_int);
                 if !com_leader.is_null() {
                     com_leader = com_leader.add(1);
                     while nvim_change_ascii_iswhite(*com_leader as c_int) {
@@ -378,7 +378,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                         if flags_save == com_flags {
                             continue;
                         }
-                        let mut string = nvim_vim_strchr(part_buf2.as_ptr(), b':' as c_int);
+                        let mut string = vim_strchr(part_buf2.as_ptr(), b':' as c_int);
                         if string.is_null() {
                             continue;
                         }

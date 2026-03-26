@@ -36,7 +36,7 @@ extern "C" {
     fn nvim_get_ai_col() -> ColnrT;
     fn nvim_set_ai_col(val: ColnrT);
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
-    fn nvim_skipwhite(s: *const c_char) -> *mut c_char;
+    fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_findmatch(initc: *mut c_char, ch: c_char) -> *mut PosT;
     fn nvim_change_get_curwin_cursor() -> PosT;
     fn nvim_set_curwin_cursor(pos: PosT);
@@ -112,7 +112,7 @@ pub unsafe extern "C" fn rs_ins_try_si(c: c_int) {
                 while lnum > 1 {
                     lnum -= 1;
                     nvim_set_curwin_cursor_lnum(lnum);
-                    let line_ptr = nvim_skipwhite(nvim_ml_get(lnum));
+                    let line_ptr = skipwhite(nvim_ml_get(lnum));
 
                     // ignore empty lines and lines starting with '#'.
                     if *line_ptr != b'#' as c_char && *line_ptr != NUL {

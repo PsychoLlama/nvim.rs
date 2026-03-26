@@ -31,7 +31,7 @@ extern "C" {
 
     // Line operations
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
-    fn nvim_linewhite(lnum: LinenrT) -> bool;
+    fn linewhite(lnum: LinenrT) -> bool;
 
     // Matching
     fn nvim_findmatch(initc: *mut c_char, ch: c_char) -> *mut PosT;
@@ -117,7 +117,7 @@ unsafe fn compute_indent_from_match(pos: &PosT, _realpos: PosT) -> c_int {
     lnum -= 1;
     while lnum >= pos.lnum {
         nvim_set_curwin_cursor_lnum(lnum);
-        if nvim_linewhite(lnum) {
+        if linewhite(lnum) {
             lnum -= 1;
             continue;
         }

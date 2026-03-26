@@ -67,7 +67,7 @@ extern "C" {
     fn nvim_get_real_state() -> c_int;
 
     // String utilities
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     // Buffer properties for charsize
     fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
@@ -345,7 +345,7 @@ fn conceal_cursor_line_impl(wp: WinHandle) -> bool {
             return false;
         };
 
-        !nvim_vim_strchr(p_cocu, c).is_null()
+        !vim_strchr(p_cocu, c).is_null()
     }
 }
 
@@ -458,7 +458,7 @@ fn win_col_off2_impl(wp: WinHandle) -> c_int {
         let p_stc = nvim_win_get_p_stc(wp);
         let has_stc = !p_stc.is_null() && *p_stc != 0;
 
-        if (p_nu || p_rnu || has_stc) && !nvim_vim_strchr(nvim_get_p_cpo(), CPO_NUMCOL).is_null() {
+        if (p_nu || p_rnu || has_stc) && !vim_strchr(nvim_get_p_cpo(), CPO_NUMCOL).is_null() {
             rs_number_width(wp) + c_int::from(!has_stc)
         } else {
             0
@@ -2526,7 +2526,7 @@ pub extern "C" fn rs_plines_win_nofill(
         }
 
         // Get lines from plines_win_nofold (calls through C which calls Rust)
-        let lines = nvim_plines_win_nofold(wp, lnum);
+        let lines = plines_win_nofold(wp, lnum);
         let view_height = nvim_win_get_view_height(wp);
         if limit_winheight != 0 && lines > view_height {
             view_height
@@ -2537,7 +2537,7 @@ pub extern "C" fn rs_plines_win_nofill(
 }
 
 extern "C" {
-    fn nvim_plines_win_nofold(wp: WinHandle, lnum: c_int) -> c_int;
+    fn plines_win_nofold(wp: WinHandle, lnum: c_int) -> c_int;
 }
 
 // ============================================================================

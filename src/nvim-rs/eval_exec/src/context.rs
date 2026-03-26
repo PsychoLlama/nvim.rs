@@ -40,7 +40,7 @@ extern "C" {
     fn nvim_cmdexpand_get_xp_pattern(xp: ExpandHandle) -> *mut c_char;
 
     // String utility functions
-    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn skiptowhite(p: *const c_char) -> *const c_char;
 
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn rs_set_context_for_expression(
                 break;
             } else if (c == b'<' || c == b'#')
                 && nvim_expand_get_context(xp) == EXPAND_FUNCTIONS
-                && nvim_vim_strchr(nvim_cmdexpand_get_xp_pattern(xp), c_int::from(b'(')).is_null()
+                && vim_strchr(nvim_cmdexpand_get_xp_pattern(xp), c_int::from(b'(')).is_null()
             {
                 // Function name can start with "<SNR>" and contain '#'.
                 break;

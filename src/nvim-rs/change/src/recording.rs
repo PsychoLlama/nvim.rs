@@ -3,7 +3,7 @@
 //! This module provides functions to mark buffers as modified and handle
 //! readonly file warnings.
 
-use std::ffi::{c_char, c_int, c_long};
+use std::ffi::{c_char, c_int};
 
 use crate::{BufHandle, HLF_W, VV_WARNINGMSG};
 
@@ -45,18 +45,18 @@ extern "C" {
     // Message functions
     fn nvim_msg_start();
     fn msg_source(attr: c_int);
-    fn nvim_msg_ext_set_kind(kind: *const c_char);
-    fn nvim_msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
-    fn nvim_msg_clr_eos();
+    fn msg_ext_set_kind(kind: *const c_char);
+    fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
+    fn msg_clr_eos();
     fn nvim_msg_end();
     fn nvim_msg_silent() -> c_int;
     fn nvim_silent_mode() -> bool;
     fn nvim_ui_active() -> bool;
     fn ui_has(ext: c_int) -> bool;
-    fn nvim_set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
 
     // Redraw functions
-    fn nvim_redraw_buf_status_later(buf: BufHandle);
+    fn redraw_buf_status_later(buf: BufHandle);
     fn nvim_set_redraw_cmdline(val: bool);
 
     // Other functions
@@ -65,9 +65,9 @@ extern "C" {
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn apply_autocmds_filechangedro(buf: BufHandle);
     fn nvim_showmode();
-    fn nvim_ui_flush();
-    fn nvim_os_delay(ms: c_long, allow_input: bool);
-    fn nvim_wait_return(redraw: bool);
+    fn ui_flush();
+    fn os_delay(ms: u64, allow_input: bool);
+    fn wait_return(redraw: c_int);
     static mut msg_scroll: c_int;
     static mut need_wait_return: bool;
     static mut emsg_silent: c_int;
@@ -100,7 +100,7 @@ fn changed_internal_impl(buf: BufHandle) {
         nvim_buf_set_b_changed(buf, true);
         nvim_buf_set_b_changed_invalid(buf, true);
         ml_setflags(buf);
-        nvim_redraw_buf_status_later(buf);
+        redraw_buf_status_later(buf);
         redraw_tabline = true;
         need_maketitle = true;
     }
@@ -168,14 +168,14 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         }
 
         msg_source(HLF_W);
-        nvim_msg_ext_set_kind(c"wmsg".as_ptr());
+        msg_ext_set_kind(c"wmsg".as_ptr());
 
         // Get the translated warning message
         let warning_msg = nvim_gettext(W10_WARNING.as_ptr().cast());
-        nvim_msg_puts_hl(warning_msg, HLF_W, true);
-        nvim_set_vim_var_string(VV_WARNINGMSG, warning_msg, -1);
+        msg_puts_hl(warning_msg, HLF_W, true);
+        set_vim_var_string(VV_WARNINGMSG, warning_msg, -1);
 
-        nvim_msg_clr_eos();
+        msg_clr_eos();
         nvim_msg_end();
 
         // Give the user time to read the message
@@ -184,8 +184,8 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
             && nvim_ui_active()
             && !ui_has(K_UI_MESSAGES)
         {
-            nvim_ui_flush();
-            nvim_os_delay(1002, true);
+            ui_flush();
+            os_delay(1002, true);
         }
 
         nvim_buf_set_b_did_warn(buf, true);
@@ -238,9 +238,9 @@ fn changed_impl(buf: BufHandle) {
                     && !nvim_in_assert_fails()
                     && !ui_has(K_UI_MESSAGES)
                 {
-                    nvim_ui_flush();
-                    nvim_os_delay(2002, true);
-                    nvim_wait_return(true);
+                    ui_flush();
+                    os_delay(2002, true);
+                    wait_return(1);
                     msg_scroll = save_msg_scroll;
                 } else {
                     need_wait_return = save_need_wait_return;
