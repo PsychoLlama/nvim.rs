@@ -29,78 +29,44 @@
 
 #include "textobject.c.generated.h"
 
-// =============================================================================
 // Rust function declarations
-// =============================================================================
 
 extern bool rs_current_quote(oparg_T *oap, int count, bool include, int quotechar,
                               const char *escape);
 extern bool in_html_tag(bool end_tag);
 extern bool rs_unadjust_for_sel(void);
 
-// =============================================================================
 // C accessor functions for Rust
-// =============================================================================
 
 /// Get character at cursor position (accessor for Rust).
-int nvim_textobj_gchar_cursor(void)
-{
-  return gchar_cursor();
-}
+int nvim_textobj_gchar_cursor(void) { return gchar_cursor(); }
 
 /// Increment cursor position (accessor for Rust).
-int nvim_textobj_inc_cursor(void)
-{
-  return inc_cursor();
-}
+int nvim_textobj_inc_cursor(void) { return inc_cursor(); }
 
 /// Decrement cursor position (accessor for Rust).
-int nvim_textobj_dec_cursor(void)
-{
-  return dec_cursor();
-}
+int nvim_textobj_dec_cursor(void) { return dec_cursor(); }
 
 /// Get UTF character class (accessor for Rust).
-int nvim_textobj_utf_class(int c)
-{
-  return utf_class(c);
-}
+int nvim_textobj_utf_class(int c) { return utf_class(c); }
 
 /// Get current cursor column (accessor for Rust).
-int nvim_textobj_get_cursor_col(void)
-{
-  return curwin->w_cursor.col;
-}
+int nvim_textobj_get_cursor_col(void) { return curwin->w_cursor.col; }
 
 /// Get current cursor line number (accessor for Rust).
-int nvim_textobj_get_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+int nvim_textobj_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 /// Get total line count in current buffer (accessor for Rust).
-int nvim_textobj_get_ml_line_count(void)
-{
-  return curbuf->b_ml.ml_line_count;
-}
+int nvim_textobj_get_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
 /// Check if a line is empty (accessor for Rust).
-bool nvim_textobj_is_lineempty(int lnum)
-{
-  return LINEEMPTY(lnum);
-}
+bool nvim_textobj_is_lineempty(int lnum) { return LINEEMPTY(lnum); }
 
 /// Get pointer to cursor line content (accessor for Rust).
-char *nvim_textobj_get_cursor_line_ptr(void)
-{
-  return get_cursor_line_ptr();
-}
+char *nvim_textobj_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
 /// Set cursor coladd to 0 (accessor for Rust).
-void nvim_textobj_set_cursor_coladd_zero(void)
-{
-  curwin->w_cursor.coladd = 0;
-}
+void nvim_textobj_set_cursor_coladd_zero(void) { curwin->w_cursor.coladd = 0; }
 
 /// Check for folding at line (accessor for Rust).
 bool nvim_textobj_hasFolding(int lnum, int *first, int *last)
@@ -118,28 +84,16 @@ bool nvim_textobj_hasFolding(int lnum, int *first, int *last)
 }
 
 /// Move cursor to given column (accessor for Rust).
-void nvim_textobj_coladvance(int col)
-{
-  coladvance(curwin, col);
-}
+void nvim_textobj_coladvance(int col) { coladvance(curwin, col); }
 
 /// Adjust skipcol after cursor movement (accessor for Rust).
-void nvim_textobj_adjust_skipcol(void)
-{
-  adjust_skipcol();
-}
+void nvim_textobj_adjust_skipcol(void) { adjust_skipcol(); }
 
 /// Set cursor line number (accessor for Rust).
-void nvim_textobj_set_cursor_lnum(int lnum)
-{
-  curwin->w_cursor.lnum = lnum;
-}
+void nvim_textobj_set_cursor_lnum(int lnum) { curwin->w_cursor.lnum = lnum; }
 
 /// Set cursor column (accessor for Rust).
-void nvim_textobj_set_cursor_col(int col)
-{
-  curwin->w_cursor.col = col;
-}
+void nvim_textobj_set_cursor_col(int col) { curwin->w_cursor.col = col; }
 
 /// Unadjust for exclusive selection if needed (accessor for Rust).
 void nvim_textobj_unadjust_for_sel_if_needed(void)
@@ -150,56 +104,30 @@ void nvim_textobj_unadjust_for_sel_if_needed(void)
 }
 
 /// Get length of multibyte character (accessor for Rust).
-int nvim_textobj_utfc_ptr2len(const char *p)
-{
-  return utfc_ptr2len(p);
-}
+int nvim_textobj_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
 
 /// Get head offset for multibyte char (accessor for Rust).
-int nvim_textobj_utf_head_off(const char *base, const char *p)
-{
-  return utf_head_off(base, p);
-}
+int nvim_textobj_utf_head_off(const char *base, const char *p) { return utf_head_off(base, p); }
 
 /// Search for character in string (accessor for Rust).
-char *nvim_textobj_vim_strchr(const char *s, int c)
-{
-  return vim_strchr(s, c);
-}
+char *nvim_textobj_vim_strchr(const char *s, int c) { return vim_strchr(s, c); }
 
-// =============================================================================
 // Accessors for current_word function
-// =============================================================================
 
 /// Get VIsual_active state (accessor for Rust).
-bool nvim_textobj_get_VIsual_active(void)
-{
-  return VIsual_active;
-}
+bool nvim_textobj_get_VIsual_active(void) { return VIsual_active; }
 
 /// Get VIsual position lnum (accessor for Rust).
-int nvim_textobj_get_VIsual_lnum(void)
-{
-  return VIsual.lnum;
-}
+int nvim_textobj_get_VIsual_lnum(void) { return VIsual.lnum; }
 
 /// Get VIsual position column (accessor for Rust).
-int nvim_textobj_get_VIsual_col(void)
-{
-  return VIsual.col;
-}
+int nvim_textobj_get_VIsual_col(void) { return VIsual.col; }
 
 /// Get VIsual_mode (accessor for Rust).
-int nvim_textobj_get_VIsual_mode(void)
-{
-  return VIsual_mode;
-}
+int nvim_textobj_get_VIsual_mode(void) { return VIsual_mode; }
 
 /// Set VIsual_mode (accessor for Rust).
-void nvim_textobj_set_VIsual_mode(int mode)
-{
-  VIsual_mode = mode;
-}
+void nvim_textobj_set_VIsual_mode(int mode) { VIsual_mode = mode; }
 
 /// Set VIsual position (accessor for Rust).
 void nvim_textobj_set_VIsual(int lnum, int col)
@@ -209,83 +137,44 @@ void nvim_textobj_set_VIsual(int lnum, int col)
 }
 
 /// Get selection option first char (accessor for Rust).
-int nvim_textobj_get_p_sel_first(void)
-{
-  return *p_sel;
-}
+int nvim_textobj_get_p_sel_first(void) { return *p_sel; }
 
 /// Check if cursor is less than VIsual (accessor for Rust).
-bool nvim_textobj_lt_cursor_VIsual(void)
-{
-  return lt(curwin->w_cursor, VIsual);
-}
+bool nvim_textobj_lt_cursor_VIsual(void) { return lt(curwin->w_cursor, VIsual); }
 
 /// Check if cursor equals VIsual (accessor for Rust).
-bool nvim_textobj_equalpos_cursor_VIsual(void)
-{
-  return equalpos(curwin->w_cursor, VIsual);
-}
+bool nvim_textobj_equalpos_cursor_VIsual(void) { return equalpos(curwin->w_cursor, VIsual); }
 
 /// Check if VIsual is less than cursor (accessor for Rust).
-bool nvim_textobj_lt_VIsual_cursor(void)
-{
-  return lt(VIsual, curwin->w_cursor);
-}
+bool nvim_textobj_lt_VIsual_cursor(void) { return lt(VIsual, curwin->w_cursor); }
 
 /// Check if VIsual is less than or equal to cursor (accessor for Rust).
-bool nvim_textobj_ltoreq_VIsual_cursor(void)
-{
-  return ltoreq(VIsual, curwin->w_cursor);
-}
+bool nvim_textobj_ltoreq_VIsual_cursor(void) { return ltoreq(VIsual, curwin->w_cursor); }
 
 
 /// Set operator argument start position from cursor (accessor for Rust).
-void nvim_textobj_set_oap_start_from_cursor(oparg_T *oap)
-{
-  oap->start = curwin->w_cursor;
-}
+void nvim_textobj_set_oap_start_from_cursor(oparg_T *oap) { oap->start = curwin->w_cursor; }
 
 /// Set operator argument motion type (accessor for Rust).
-void nvim_textobj_set_oap_motion_type(oparg_T *oap, int type)
-{
-  oap->motion_type = type;
-}
+void nvim_textobj_set_oap_motion_type(oparg_T *oap, int type) { oap->motion_type = type; }
 
 /// Set operator argument inclusive flag (accessor for Rust).
-void nvim_textobj_set_oap_inclusive(oparg_T *oap, bool val)
-{
-  oap->inclusive = val;
-}
+void nvim_textobj_set_oap_inclusive(oparg_T *oap, bool val) { oap->inclusive = val; }
 
 /// Call oneleft() (accessor for Rust).
-int nvim_textobj_oneleft(void)
-{
-  return oneleft();
-}
+int nvim_textobj_oneleft(void) { return oneleft(); }
 
 /// Call incl on cursor (accessor for Rust).
-int nvim_textobj_incl_cursor(void)
-{
-  return incl(&curwin->w_cursor);
-}
+int nvim_textobj_incl_cursor(void) { return incl(&curwin->w_cursor); }
 
 /// Call decl on cursor (accessor for Rust).
-int nvim_textobj_decl_cursor(void)
-{
-  return decl(&curwin->w_cursor);
-}
+int nvim_textobj_decl_cursor(void) { return decl(&curwin->w_cursor); }
 
 /// Call redraw_curbuf_later (accessor for Rust).
-void nvim_textobj_redraw_curbuf_later(int type)
-{
-  redraw_curbuf_later(type);
-}
+void nvim_textobj_redraw_curbuf_later(int type) { redraw_curbuf_later(type); }
 
 /// Set redraw_cmdline flag (accessor for Rust).
-void nvim_textobj_set_redraw_cmdline(bool val)
-{
-  redraw_cmdline = val;
-}
+void nvim_textobj_set_redraw_cmdline(bool val) { redraw_cmdline = val; }
 
 /// Save and restore cursor positions (accessor for Rust).
 /// Saves current cursor, sets cursor from oap->start, then calls
@@ -306,10 +195,7 @@ void nvim_textobj_set_cursor_pos(int lnum, int col)
 }
 
 /// Set VIsual from cursor (accessor for Rust).
-void nvim_textobj_set_VIsual_from_cursor(void)
-{
-  VIsual = curwin->w_cursor;
-}
+void nvim_textobj_set_VIsual_from_cursor(void) { VIsual = curwin->w_cursor; }
 
 /// Set oap->start from stored position (accessor for Rust).
 void nvim_textobj_set_oap_start(oparg_T *oap, int lnum, int col)
@@ -318,147 +204,76 @@ void nvim_textobj_set_oap_start(oparg_T *oap, int lnum, int col)
   oap->start.col = col;
 }
 
-// =============================================================================
 // Accessors for paragraph functions
-// =============================================================================
 
 /// Get p_sections option pointer (accessor for Rust).
-char *nvim_textobj_get_p_sections(void)
-{
-  return p_sections;
-}
+char *nvim_textobj_get_p_sections(void) { return p_sections; }
 
 /// Get p_para option pointer (accessor for Rust).
-char *nvim_textobj_get_p_para(void)
-{
-  return p_para;
-}
+char *nvim_textobj_get_p_para(void) { return p_para; }
 
 /// Get line content at lnum (accessor for Rust).
-char *nvim_textobj_ml_get(int lnum)
-{
-  return ml_get(lnum);
-}
+char *nvim_textobj_ml_get(int lnum) { return ml_get(lnum); }
 
 /// Get line length at lnum (accessor for Rust).
-int nvim_textobj_ml_get_len(int lnum)
-{
-  return ml_get_len(lnum);
-}
+int nvim_textobj_ml_get_len(int lnum) { return ml_get_len(lnum); }
 
 /// Check if line is all whitespace (accessor for Rust).
-bool nvim_textobj_linewhite(int lnum)
-{
-  return linewhite(lnum);
-}
+bool nvim_textobj_linewhite(int lnum) { return linewhite(lnum); }
 
 /// Call setpcmark (accessor for Rust).
-void nvim_textobj_setpcmark(void)
-{
-  setpcmark();
-}
+void nvim_textobj_setpcmark(void) { setpcmark(); }
 
 /// Call showmode (accessor for Rust).
-void nvim_textobj_showmode(void)
-{
-  showmode();
-}
+void nvim_textobj_showmode(void) { showmode(); }
 
 /// Get character at position (accessor for Rust).
-int nvim_textobj_gchar_pos(pos_T *pos)
-{
-  return gchar_pos(pos);
-}
+int nvim_textobj_gchar_pos(pos_T *pos) { return gchar_pos(pos); }
 
 /// Increment position with incl (accessor for Rust).
-int nvim_textobj_incl_pos(pos_T *pos)
-{
-  return incl(pos);
-}
+int nvim_textobj_incl_pos(pos_T *pos) { return incl(pos); }
 
 /// Decrement position with decl (accessor for Rust).
-int nvim_textobj_decl_pos(pos_T *pos)
-{
-  return decl(pos);
-}
+int nvim_textobj_decl_pos(pos_T *pos) { return decl(pos); }
 
 /// Increment position with inc (accessor for Rust).
-int nvim_textobj_inc_pos(pos_T *pos)
-{
-  return inc(pos);
-}
+int nvim_textobj_inc_pos(pos_T *pos) { return inc(pos); }
 
 /// Check if two positions are equal (accessor for Rust).
-bool nvim_textobj_equalpos(pos_T *a, pos_T *b)
-{
-  return equalpos(*a, *b);
-}
+bool nvim_textobj_equalpos(pos_T *a, pos_T *b) { return equalpos(*a, *b); }
 
 /// Check if position a is less than position b (accessor for Rust).
-bool nvim_textobj_lt_pos(pos_T *a, pos_T *b)
-{
-  return lt(*a, *b);
-}
+bool nvim_textobj_lt_pos(pos_T *a, pos_T *b) { return lt(*a, *b); }
 
 /// Get p_cpo option string (accessor for Rust).
-char *nvim_textobj_get_p_cpo(void)
-{
-  return p_cpo;
-}
+char *nvim_textobj_get_p_cpo(void) { return p_cpo; }
 
 /// Get cursor as pos_T pointer (accessor for Rust).
-pos_T *nvim_textobj_get_cursor_ptr(void)
-{
-  return &curwin->w_cursor;
-}
+pos_T *nvim_textobj_get_cursor_ptr(void) { return &curwin->w_cursor; }
 
 /// Get VIsual as pos_T pointer (accessor for Rust).
-pos_T *nvim_textobj_get_VIsual_ptr(void)
-{
-  return &VIsual;
-}
+pos_T *nvim_textobj_get_VIsual_ptr(void) { return &VIsual; }
 
 /// Copy position from src to dst (accessor for Rust).
-void nvim_textobj_copy_pos(pos_T *dst, pos_T *src)
-{
-  *dst = *src;
-}
+void nvim_textobj_copy_pos(pos_T *dst, pos_T *src) { *dst = *src; }
 
 /// Get position lnum (accessor for Rust).
-int nvim_textobj_pos_get_lnum(pos_T *pos)
-{
-  return (int)pos->lnum;
-}
+int nvim_textobj_pos_get_lnum(pos_T *pos) { return (int)pos->lnum; }
 
 /// Get position col (accessor for Rust).
-int nvim_textobj_pos_get_col(pos_T *pos)
-{
-  return pos->col;
-}
+int nvim_textobj_pos_get_col(pos_T *pos) { return pos->col; }
 
 /// Set position lnum (accessor for Rust).
-void nvim_textobj_pos_set_lnum(pos_T *pos, int lnum)
-{
-  pos->lnum = lnum;
-}
+void nvim_textobj_pos_set_lnum(pos_T *pos, int lnum) { pos->lnum = lnum; }
 
 /// Set position col (accessor for Rust).
-void nvim_textobj_pos_set_col(pos_T *pos, int col)
-{
-  pos->col = col;
-}
+void nvim_textobj_pos_set_col(pos_T *pos, int col) { pos->col = col; }
 
 /// Check if line is empty using LINEEMPTY macro (accessor for Rust).
-bool nvim_textobj_lineempty(int lnum)
-{
-  return LINEEMPTY(lnum);
-}
+bool nvim_textobj_lineempty(int lnum) { return LINEEMPTY(lnum); }
 
 /// Check if character is ASCII whitespace (accessor for Rust).
-bool nvim_textobj_ascii_iswhite(int c)
-{
-  return ascii_iswhite(c);
-}
+bool nvim_textobj_ascii_iswhite(int c) { return ascii_iswhite(c); }
 
 /// Allocate a temporary pos_T on the C side (accessor for Rust).
 pos_T *nvim_textobj_alloc_pos(void)
@@ -469,22 +284,13 @@ pos_T *nvim_textobj_alloc_pos(void)
 }
 
 /// Free a temporary pos_T (accessor for Rust).
-void nvim_textobj_free_pos(pos_T *pos)
-{
-  xfree(pos);
-}
+void nvim_textobj_free_pos(pos_T *pos) { xfree(pos); }
 
 /// Set cursor from position (accessor for Rust).
-void nvim_textobj_set_cursor_from_pos(pos_T *pos)
-{
-  curwin->w_cursor = *pos;
-}
+void nvim_textobj_set_cursor_from_pos(pos_T *pos) { curwin->w_cursor = *pos; }
 
 /// Find matching bracket (accessor for Rust).
-pos_T *nvim_textobj_findmatch(int what)
-{
-  return findmatch(NULL, what);
-}
+pos_T *nvim_textobj_findmatch(int what) { return findmatch(NULL, what); }
 
 /// Find matching bracket with limit (accessor for Rust).
 pos_T *nvim_textobj_findmatchlimit(int what, int flags, int64_t maxtravel)
@@ -493,22 +299,13 @@ pos_T *nvim_textobj_findmatchlimit(int what, int flags, int64_t maxtravel)
 }
 
 /// Check if cursor is in indent (accessor for Rust).
-bool nvim_textobj_inindent(void)
-{
-  return inindent(1);
-}
+bool nvim_textobj_inindent(void) { return inindent(1); }
 
 /// Increment cursor with inc_cursor (accessor for Rust).
-int nvim_textobj_inc_cursor_int(void)
-{
-  return inc_cursor();
-}
+int nvim_textobj_inc_cursor_int(void) { return inc_cursor(); }
 
 /// Increment position with inc (accessor for Rust).
-int nvim_textobj_inc(pos_T *pos)
-{
-  return inc(pos);
-}
+int nvim_textobj_inc(pos_T *pos) { return inc(pos); }
 
 static char *saved_p_cpo = NULL;
 
@@ -529,39 +326,22 @@ void nvim_textobj_restore_p_cpo(void)
 }
 
 /// Check if cpo contains MATCHBSL (accessor for Rust).
-bool nvim_textobj_cpo_has_matchbsl(void)
-{
-  return vim_strchr(p_cpo, CPO_MATCHBSL) != NULL;
-}
+bool nvim_textobj_cpo_has_matchbsl(void) { return vim_strchr(p_cpo, CPO_MATCHBSL) != NULL; }
 
 /// Check if position a <= position b (accessor for Rust).
-bool nvim_textobj_ltoreq_pos(pos_T *a, pos_T *b)
-{
-  return ltoreq(*a, *b);
-}
+bool nvim_textobj_ltoreq_pos(pos_T *a, pos_T *b) { return ltoreq(*a, *b); }
 
-// =============================================================================
 // Accessors for tag functions
-// =============================================================================
 
 
 /// Move backward through multibyte string (accessor for Rust).
-void nvim_textobj_mb_ptr_back(const char *base, char **p)
-{
-  MB_PTR_BACK(base, *p);
-}
+void nvim_textobj_mb_ptr_back(const char *base, char **p) { MB_PTR_BACK(base, *p); }
 
 /// Move forward through multibyte string (accessor for Rust).
-void nvim_textobj_mb_ptr_adv(char **p)
-{
-  MB_PTR_ADV(*p);
-}
+void nvim_textobj_mb_ptr_adv(char **p) { MB_PTR_ADV(*p); }
 
 /// Get ml_get_pos for a position (accessor for Rust).
-char *nvim_textobj_ml_get_pos(pos_T *pos)
-{
-  return ml_get_pos(pos);
-}
+char *nvim_textobj_ml_get_pos(pos_T *pos) { return ml_get_pos(pos); }
 
 /// @param end_tag  when true, return true if the cursor is on "</aaa>".
 ///
