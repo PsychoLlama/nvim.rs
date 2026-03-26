@@ -67,9 +67,7 @@
 
 #include "memfile.c.generated.h"
 
-// =============================================================================
 // _Static_assert for all constants crossing the FFI boundary
-// =============================================================================
 
 _Static_assert(BH_DIRTY == 1U, "BH_DIRTY must be 1");
 _Static_assert(BH_LOCKED == 2U, "BH_LOCKED must be 2");
@@ -85,253 +83,108 @@ _Static_assert(MAX_SWAP_PAGE_SIZE == 50000, "MAX_SWAP_PAGE_SIZE must be 50000");
 _Static_assert(OK == 1, "OK must be 1");
 _Static_assert(FAIL == 0, "FAIL must be 0");
 
-// =============================================================================
 // Rust function declarations (only those called with rs_ prefix from C)
-// =============================================================================
 
 extern bool rs_mf_release_for_memfile(memfile_T *mfp);
 extern void rs_mf_close_file_impl(memfile_T *mfp);
 
-// =============================================================================
 // C accessor functions for memfile_T fields
-// =============================================================================
 
-char *nvim_mf_get_fname(memfile_T *mfp)
-{
-  return mfp->mf_fname;
-}
+char *nvim_mf_get_fname(memfile_T *mfp) { return mfp->mf_fname; }
 
-void nvim_mf_set_fname(memfile_T *mfp, char *fname)
-{
-  mfp->mf_fname = fname;
-}
+void nvim_mf_set_fname(memfile_T *mfp, char *fname) { mfp->mf_fname = fname; }
 
-char *nvim_mf_get_ffname(memfile_T *mfp)
-{
-  return mfp->mf_ffname;
-}
+char *nvim_mf_get_ffname(memfile_T *mfp) { return mfp->mf_ffname; }
 
-void nvim_mf_set_ffname(memfile_T *mfp, char *ffname)
-{
-  mfp->mf_ffname = ffname;
-}
+void nvim_mf_set_ffname(memfile_T *mfp, char *ffname) { mfp->mf_ffname = ffname; }
 
-int nvim_mf_get_fd(memfile_T *mfp)
-{
-  return mfp->mf_fd;
-}
+int nvim_mf_get_fd(memfile_T *mfp) { return mfp->mf_fd; }
 
-void nvim_mf_set_fd(memfile_T *mfp, int fd)
-{
-  mfp->mf_fd = fd;
-}
+void nvim_mf_set_fd(memfile_T *mfp, int fd) { mfp->mf_fd = fd; }
 
-int nvim_mf_get_flags(memfile_T *mfp)
-{
-  return mfp->mf_flags;
-}
+int nvim_mf_get_flags(memfile_T *mfp) { return mfp->mf_flags; }
 
-void nvim_mf_set_flags(memfile_T *mfp, int flags)
-{
-  mfp->mf_flags = flags;
-}
+void nvim_mf_set_flags(memfile_T *mfp, int flags) { mfp->mf_flags = flags; }
 
-bool nvim_mf_get_reopen(memfile_T *mfp)
-{
-  return mfp->mf_reopen;
-}
+bool nvim_mf_get_reopen(memfile_T *mfp) { return mfp->mf_reopen; }
 
-void nvim_mf_set_reopen(memfile_T *mfp, bool reopen)
-{
-  mfp->mf_reopen = reopen;
-}
+void nvim_mf_set_reopen(memfile_T *mfp, bool reopen) { mfp->mf_reopen = reopen; }
 
-bhdr_T *nvim_mf_get_free_first(memfile_T *mfp)
-{
-  return mfp->mf_free_first;
-}
+bhdr_T *nvim_mf_get_free_first(memfile_T *mfp) { return mfp->mf_free_first; }
 
-void nvim_mf_set_free_first(memfile_T *mfp, bhdr_T *hp)
-{
-  mfp->mf_free_first = hp;
-}
+void nvim_mf_set_free_first(memfile_T *mfp, bhdr_T *hp) { mfp->mf_free_first = hp; }
 
-blocknr_T nvim_mf_get_blocknr_max(memfile_T *mfp)
-{
-  return mfp->mf_blocknr_max;
-}
+blocknr_T nvim_mf_get_blocknr_max(memfile_T *mfp) { return mfp->mf_blocknr_max; }
 
-void nvim_mf_set_blocknr_max(memfile_T *mfp, blocknr_T val)
-{
-  mfp->mf_blocknr_max = val;
-}
+void nvim_mf_set_blocknr_max(memfile_T *mfp, blocknr_T val) { mfp->mf_blocknr_max = val; }
 
-blocknr_T nvim_mf_get_blocknr_min(memfile_T *mfp)
-{
-  return mfp->mf_blocknr_min;
-}
+blocknr_T nvim_mf_get_blocknr_min(memfile_T *mfp) { return mfp->mf_blocknr_min; }
 
-void nvim_mf_set_blocknr_min(memfile_T *mfp, blocknr_T val)
-{
-  mfp->mf_blocknr_min = val;
-}
+void nvim_mf_set_blocknr_min(memfile_T *mfp, blocknr_T val) { mfp->mf_blocknr_min = val; }
 
-blocknr_T nvim_mf_get_neg_count(memfile_T *mfp)
-{
-  return mfp->mf_neg_count;
-}
+blocknr_T nvim_mf_get_neg_count(memfile_T *mfp) { return mfp->mf_neg_count; }
 
-void nvim_mf_set_neg_count(memfile_T *mfp, blocknr_T val)
-{
-  mfp->mf_neg_count = val;
-}
+void nvim_mf_set_neg_count(memfile_T *mfp, blocknr_T val) { mfp->mf_neg_count = val; }
 
-blocknr_T nvim_mf_get_infile_count(memfile_T *mfp)
-{
-  return mfp->mf_infile_count;
-}
+blocknr_T nvim_mf_get_infile_count(memfile_T *mfp) { return mfp->mf_infile_count; }
 
-void nvim_mf_set_infile_count(memfile_T *mfp, blocknr_T val)
-{
-  mfp->mf_infile_count = val;
-}
+void nvim_mf_set_infile_count(memfile_T *mfp, blocknr_T val) { mfp->mf_infile_count = val; }
 
-unsigned nvim_mf_get_page_size(memfile_T *mfp)
-{
-  return mfp->mf_page_size;
-}
+unsigned nvim_mf_get_page_size(memfile_T *mfp) { return mfp->mf_page_size; }
 
-void nvim_mf_set_page_size(memfile_T *mfp, unsigned val)
-{
-  mfp->mf_page_size = val;
-}
+void nvim_mf_set_page_size(memfile_T *mfp, unsigned val) { mfp->mf_page_size = val; }
 
-int nvim_mf_get_dirty(memfile_T *mfp)
-{
-  return (int)mfp->mf_dirty;
-}
+int nvim_mf_get_dirty(memfile_T *mfp) { return (int)mfp->mf_dirty; }
 
-void nvim_mf_set_dirty(memfile_T *mfp, int val)
-{
-  mfp->mf_dirty = (mfdirty_T)val;
-}
+void nvim_mf_set_dirty(memfile_T *mfp, int val) { mfp->mf_dirty = (mfdirty_T)val; }
 
-// =============================================================================
 // C accessor functions for bhdr_T fields
-// =============================================================================
 
-blocknr_T nvim_bh_get_bnum(bhdr_T *hp)
-{
-  return hp->bh_bnum;
-}
+blocknr_T nvim_bh_get_bnum(bhdr_T *hp) { return hp->bh_bnum; }
 
-void nvim_bh_set_bnum(bhdr_T *hp, blocknr_T bnum)
-{
-  hp->bh_bnum = bnum;
-}
+void nvim_bh_set_bnum(bhdr_T *hp, blocknr_T bnum) { hp->bh_bnum = bnum; }
 
-void *nvim_bh_get_data(bhdr_T *hp)
-{
-  return hp->bh_data;
-}
+void *nvim_bh_get_data(bhdr_T *hp) { return hp->bh_data; }
 
-void nvim_bh_set_data(bhdr_T *hp, void *data)
-{
-  hp->bh_data = data;
-}
+void nvim_bh_set_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
 
-unsigned nvim_bh_get_page_count(bhdr_T *hp)
-{
-  return hp->bh_page_count;
-}
+unsigned nvim_bh_get_page_count(bhdr_T *hp) { return hp->bh_page_count; }
 
-void nvim_bh_set_page_count(bhdr_T *hp, unsigned count)
-{
-  hp->bh_page_count = count;
-}
+void nvim_bh_set_page_count(bhdr_T *hp, unsigned count) { hp->bh_page_count = count; }
 
-unsigned nvim_bh_get_flags(bhdr_T *hp)
-{
-  return hp->bh_flags;
-}
+unsigned nvim_bh_get_flags(bhdr_T *hp) { return hp->bh_flags; }
 
-void nvim_bh_set_flags(bhdr_T *hp, unsigned flags)
-{
-  hp->bh_flags = flags;
-}
+void nvim_bh_set_flags(bhdr_T *hp, unsigned flags) { hp->bh_flags = flags; }
 
-// =============================================================================
 // Allocation wrappers
-// =============================================================================
 
-memfile_T *nvim_mf_alloc(void)
-{
-  return xmalloc(sizeof(memfile_T));
-}
+memfile_T *nvim_mf_alloc(void) { return xmalloc(sizeof(memfile_T)); }
 
-void nvim_mf_dealloc(memfile_T *mfp)
-{
-  xfree(mfp);
-}
+void nvim_mf_dealloc(memfile_T *mfp) { xfree(mfp); }
 
-bhdr_T *nvim_bh_alloc(void)
-{
-  return xmalloc(sizeof(bhdr_T));
-}
+bhdr_T *nvim_bh_alloc(void) { return xmalloc(sizeof(bhdr_T)); }
 
-void nvim_bh_dealloc(bhdr_T *hp)
-{
-  xfree(hp);
-}
+void nvim_bh_dealloc(bhdr_T *hp) { xfree(hp); }
 
-// =============================================================================
 // Map/PMap wrappers
-// =============================================================================
 
-void nvim_mf_hash_init(memfile_T *mfp)
-{
-  mfp->mf_hash = (PMap(int64_t))MAP_INIT;
-}
+void nvim_mf_hash_init(memfile_T *mfp) { mfp->mf_hash = (PMap(int64_t))MAP_INIT; }
 
-void nvim_mf_hash_destroy(memfile_T *mfp)
-{
-  map_destroy(int64_t, &mfp->mf_hash);
-}
+void nvim_mf_hash_destroy(memfile_T *mfp) { map_destroy(int64_t, &mfp->mf_hash); }
 
-bhdr_T *nvim_mf_hash_get(memfile_T *mfp, blocknr_T key)
-{
-  return pmap_get(int64_t)(&mfp->mf_hash, key);
-}
+bhdr_T *nvim_mf_hash_get(memfile_T *mfp, blocknr_T key) { return pmap_get(int64_t)(&mfp->mf_hash, key); }
 
-void nvim_mf_hash_put(memfile_T *mfp, blocknr_T key, bhdr_T *hp)
-{
-  pmap_put(int64_t)(&mfp->mf_hash, key, hp);
-}
+void nvim_mf_hash_put(memfile_T *mfp, blocknr_T key, bhdr_T *hp) { pmap_put(int64_t)(&mfp->mf_hash, key, hp); }
 
-void nvim_mf_hash_del(memfile_T *mfp, blocknr_T key)
-{
-  pmap_del(int64_t)(&mfp->mf_hash, key, NULL);
-}
+void nvim_mf_hash_del(memfile_T *mfp, blocknr_T key) { pmap_del(int64_t)(&mfp->mf_hash, key, NULL); }
 
-int nvim_mf_hash_size(memfile_T *mfp)
-{
-  return (int)map_size(&mfp->mf_hash);
-}
+int nvim_mf_hash_size(memfile_T *mfp) { return (int)map_size(&mfp->mf_hash); }
 
-bhdr_T *nvim_mf_hash_value_at(memfile_T *mfp, int index)
-{
-  return mfp->mf_hash.values[index];
-}
+bhdr_T *nvim_mf_hash_value_at(memfile_T *mfp, int index) { return mfp->mf_hash.values[index]; }
 
-void nvim_mf_trans_init(memfile_T *mfp)
-{
-  mfp->mf_trans = (Map(int64_t, int64_t))MAP_INIT;
-}
+void nvim_mf_trans_init(memfile_T *mfp) { mfp->mf_trans = (Map(int64_t, int64_t))MAP_INIT; }
 
-void nvim_mf_trans_destroy(memfile_T *mfp)
-{
-  map_destroy(int64_t, &mfp->mf_trans);
-}
+void nvim_mf_trans_destroy(memfile_T *mfp) { map_destroy(int64_t, &mfp->mf_trans); }
 
 void nvim_mf_trans_put(memfile_T *mfp, blocknr_T old_bnum, blocknr_T new_bnum)
 {
@@ -348,52 +201,25 @@ void nvim_mf_trans_del(memfile_T *mfp, blocknr_T old_bnum)
   map_del(int64_t, int64_t)(&mfp->mf_trans, old_bnum, NULL);
 }
 
-// =============================================================================
 // Global variable accessors
-// =============================================================================
 
-int nvim_mf_get_got_int(void)
-{
-  return got_int;
-}
+int nvim_mf_get_got_int(void) { return got_int; }
 
-void nvim_mf_set_got_int(int val)
-{
-  got_int = val;
-}
+void nvim_mf_set_got_int(int val) { got_int = val; }
 
-int nvim_mf_get_did_swapwrite_msg(void)
-{
-  return did_swapwrite_msg;
-}
+int nvim_mf_get_did_swapwrite_msg(void) { return did_swapwrite_msg; }
 
-void nvim_mf_set_did_swapwrite_msg(int val)
-{
-  did_swapwrite_msg = val;
-}
+void nvim_mf_set_did_swapwrite_msg(int val) { did_swapwrite_msg = val; }
 
-// =============================================================================
 // Message wrappers (apply _() for localization)
-// =============================================================================
 
-void nvim_mf_emsg(const char *msg)
-{
-  emsg(_(msg));
-}
+void nvim_mf_emsg(const char *msg) { emsg(_(msg)); }
 
-void nvim_mf_iemsg(const char *msg)
-{
-  iemsg(_(msg));
-}
+void nvim_mf_iemsg(const char *msg) { iemsg(_(msg)); }
 
-void nvim_mf_perror(const char *msg)
-{
-  PERROR(_(msg));
-}
+void nvim_mf_perror(const char *msg) { PERROR(_(msg)); }
 
-// =============================================================================
 // FileInfo wrappers
-// =============================================================================
 
 bool nvim_mf_fileinfo_fd(int fd, uint64_t *blocksize_out)
 {
@@ -411,82 +237,37 @@ bool nvim_mf_fileinfo_link_exists(const char *fname)
   return os_fileinfo_link(fname, &file_info);
 }
 
-// =============================================================================
 // File I/O wrappers
-// =============================================================================
 
-int nvim_mf_os_open(const char *fname, int flags, int mode)
-{
-  return os_open(fname, flags, mode);
-}
+int nvim_mf_os_open(const char *fname, int flags, int mode) { return os_open(fname, flags, mode); }
 
-void nvim_mf_os_remove(const char *fname)
-{
-  os_remove(fname);
-}
+void nvim_mf_os_remove(const char *fname) { os_remove(fname); }
 
-void nvim_mf_os_set_cloexec(int fd)
-{
-  os_set_cloexec(fd);
-}
+void nvim_mf_os_set_cloexec(int fd) { os_set_cloexec(fd); }
 
-int nvim_mf_os_fsync(int fd)
-{
-  return os_fsync(fd);
-}
+int nvim_mf_os_fsync(int fd) { return os_fsync(fd); }
 
-bool nvim_mf_os_char_avail(void)
-{
-  return os_char_avail();
-}
+bool nvim_mf_os_char_avail(void) { return os_char_avail(); }
 
-void nvim_mf_os_breakcheck(void)
-{
-  os_breakcheck();
-}
+void nvim_mf_os_breakcheck(void) { os_breakcheck(); }
 
-int64_t nvim_mf_vim_lseek(int fd, int64_t offset, int whence)
-{
-  return (int64_t)vim_lseek(fd, (off_T)offset, whence);
-}
+int64_t nvim_mf_vim_lseek(int fd, int64_t offset, int whence) { return (int64_t)vim_lseek(fd, (off_T)offset, whence); }
 
-int nvim_mf_read_eintr(int fd, void *buf, unsigned size)
-{
-  return read_eintr(fd, buf, size);
-}
+int nvim_mf_read_eintr(int fd, void *buf, unsigned size) { return read_eintr(fd, buf, size); }
 
-int nvim_mf_write_eintr(int fd, const void *buf, unsigned size)
-{
-  return write_eintr(fd, (void *)buf, size);
-}
+int nvim_mf_write_eintr(int fd, const void *buf, unsigned size) { return write_eintr(fd, (void *)buf, size); }
 
-int nvim_mf_close_fd(int fd)
-{
-  return close(fd);
-}
+int nvim_mf_close_fd(int fd) { return close(fd); }
 
-// =============================================================================
 // String/path wrappers
-// =============================================================================
 
-char *nvim_mf_fullname_save(const char *fname)
-{
-  return FullName_save(fname, false);
-}
+char *nvim_mf_fullname_save(const char *fname) { return FullName_save(fname, false); }
 
-void nvim_mf_xfree_clear_fname(memfile_T *mfp)
-{
-  XFREE_CLEAR(mfp->mf_fname);
-}
+void nvim_mf_xfree_clear_fname(memfile_T *mfp) { XFREE_CLEAR(mfp->mf_fname); }
 
-void nvim_mf_xfree_clear_ffname(memfile_T *mfp)
-{
-  XFREE_CLEAR(mfp->mf_ffname);
-}
+void nvim_mf_xfree_clear_ffname(memfile_T *mfp) { XFREE_CLEAR(mfp->mf_ffname); }
 
-// =============================================================================
 // C functions with real logic that call Rust helpers
-// =============================================================================
 
 /// Close the swap file for a memfile. Used when 'swapfile' is reset.
 ///

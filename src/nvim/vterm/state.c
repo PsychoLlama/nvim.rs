@@ -2450,10 +2450,7 @@ void vterm_state_focus_out(VTermState *state)
   }
 }
 
-const VTermLineInfo *vterm_state_get_lineinfo(const VTermState *state, int row)
-{
-  return state->lineinfo + row;
-}
+const VTermLineInfo *vterm_state_get_lineinfo(const VTermState *state, int row) { return state->lineinfo + row; }
 
 void vterm_state_set_selection_callbacks(VTermState *state,
                                          const VTermSelectionCallbacks *callbacks, void *user,
@@ -2469,126 +2466,61 @@ void vterm_state_set_selection_callbacks(VTermState *state,
   state->selection.buflen = buflen;
 }
 
-// =============================================================================
 // C Accessor Functions for Rust FFI
-// =============================================================================
 // These functions provide Rust code access to VTermState fields via the
 // opaque handle pattern. Each accessor follows the naming convention:
 // nvim_vterm_state_get_<field> / nvim_vterm_state_set_<field>
 
 // --- Dimension accessors ---
 
-int nvim_vterm_state_get_rows(const VTermState *state)
-{
-  return state->rows;
-}
+int nvim_vterm_state_get_rows(const VTermState *state) { return state->rows; }
 
-int nvim_vterm_state_get_cols(const VTermState *state)
-{
-  return state->cols;
-}
+int nvim_vterm_state_get_cols(const VTermState *state) { return state->cols; }
 
 // --- Cursor position accessors ---
 
-VTermPos nvim_vterm_state_get_pos(const VTermState *state)
-{
-  return state->pos;
-}
+VTermPos nvim_vterm_state_get_pos(const VTermState *state) { return state->pos; }
 
-void nvim_vterm_state_set_pos(VTermState *state, VTermPos pos)
-{
-  state->pos = pos;
-}
+void nvim_vterm_state_set_pos(VTermState *state, VTermPos pos) { state->pos = pos; }
 
-int nvim_vterm_state_get_at_phantom(const VTermState *state)
-{
-  return state->at_phantom;
-}
+int nvim_vterm_state_get_at_phantom(const VTermState *state) { return state->at_phantom; }
 
-void nvim_vterm_state_set_at_phantom(VTermState *state, int at_phantom)
-{
-  state->at_phantom = at_phantom;
-}
+void nvim_vterm_state_set_at_phantom(VTermState *state, int at_phantom) { state->at_phantom = at_phantom; }
 
 // --- Scroll region accessors ---
 
-int nvim_vterm_state_get_scrollregion_top(const VTermState *state)
-{
-  return state->scrollregion_top;
-}
+int nvim_vterm_state_get_scrollregion_top(const VTermState *state) { return state->scrollregion_top; }
 
-void nvim_vterm_state_set_scrollregion_top(VTermState *state, int top)
-{
-  state->scrollregion_top = top;
-}
+void nvim_vterm_state_set_scrollregion_top(VTermState *state, int top) { state->scrollregion_top = top; }
 
-int nvim_vterm_state_get_scrollregion_bottom(const VTermState *state)
-{
-  return state->scrollregion_bottom;
-}
+int nvim_vterm_state_get_scrollregion_bottom(const VTermState *state) { return state->scrollregion_bottom; }
 
-void nvim_vterm_state_set_scrollregion_bottom(VTermState *state, int bottom)
-{
-  state->scrollregion_bottom = bottom;
-}
+void nvim_vterm_state_set_scrollregion_bottom(VTermState *state, int bottom) { state->scrollregion_bottom = bottom; }
 
-int nvim_vterm_state_get_scrollregion_left(const VTermState *state)
-{
-  return state->scrollregion_left;
-}
+int nvim_vterm_state_get_scrollregion_left(const VTermState *state) { return state->scrollregion_left; }
 
-void nvim_vterm_state_set_scrollregion_left(VTermState *state, int left)
-{
-  state->scrollregion_left = left;
-}
+void nvim_vterm_state_set_scrollregion_left(VTermState *state, int left) { state->scrollregion_left = left; }
 
-int nvim_vterm_state_get_scrollregion_right(const VTermState *state)
-{
-  return state->scrollregion_right;
-}
+int nvim_vterm_state_get_scrollregion_right(const VTermState *state) { return state->scrollregion_right; }
 
-void nvim_vterm_state_set_scrollregion_right(VTermState *state, int right)
-{
-  state->scrollregion_right = right;
-}
+void nvim_vterm_state_set_scrollregion_right(VTermState *state, int right) { state->scrollregion_right = right; }
 
 // Computed scroll region bounds (using macros from the header)
-int nvim_vterm_state_scrollregion_bottom(const VTermState *state)
-{
-  return SCROLLREGION_BOTTOM(state);
-}
+int nvim_vterm_state_scrollregion_bottom(const VTermState *state) { return SCROLLREGION_BOTTOM(state); }
 
-int nvim_vterm_state_scrollregion_left(const VTermState *state)
-{
-  return SCROLLREGION_LEFT(state);
-}
+int nvim_vterm_state_scrollregion_left(const VTermState *state) { return SCROLLREGION_LEFT(state); }
 
-int nvim_vterm_state_scrollregion_right(const VTermState *state)
-{
-  return SCROLLREGION_RIGHT(state);
-}
+int nvim_vterm_state_scrollregion_right(const VTermState *state) { return SCROLLREGION_RIGHT(state); }
 
-int nvim_vterm_state_row_width(const VTermState *state, int row)
-{
-  return ROWWIDTH(state, row);
-}
+int nvim_vterm_state_row_width(const VTermState *state, int row) { return ROWWIDTH(state, row); }
 
-int nvim_vterm_state_this_row_width(const VTermState *state)
-{
-  return THISROWWIDTH(state);
-}
+int nvim_vterm_state_this_row_width(const VTermState *state) { return THISROWWIDTH(state); }
 
 // --- Line info accessors ---
 
-VTermLineInfo *nvim_vterm_state_get_lineinfo(VTermState *state)
-{
-  return state->lineinfo;
-}
+VTermLineInfo *nvim_vterm_state_get_lineinfo(VTermState *state) { return state->lineinfo; }
 
-VTermLineInfo *nvim_vterm_state_get_lineinfo_at(VTermState *state, int row)
-{
-  return &state->lineinfo[row];
-}
+VTermLineInfo *nvim_vterm_state_get_lineinfo_at(VTermState *state, int row) { return &state->lineinfo[row]; }
 
 void nvim_vterm_state_set_lineinfo_continuation(VTermState *state, int row, int continuation)
 {
@@ -2597,103 +2529,49 @@ void nvim_vterm_state_set_lineinfo_continuation(VTermState *state, int row, int 
 
 // --- Mode accessors ---
 
-int nvim_vterm_state_mode_autowrap(const VTermState *state)
-{
-  return state->mode.autowrap;
-}
+int nvim_vterm_state_mode_autowrap(const VTermState *state) { return state->mode.autowrap; }
 
-int nvim_vterm_state_mode_insert(const VTermState *state)
-{
-  return state->mode.insert;
-}
+int nvim_vterm_state_mode_insert(const VTermState *state) { return state->mode.insert; }
 
-int nvim_vterm_state_mode_newline(const VTermState *state)
-{
-  return state->mode.newline;
-}
+int nvim_vterm_state_mode_newline(const VTermState *state) { return state->mode.newline; }
 
-int nvim_vterm_state_mode_origin(const VTermState *state)
-{
-  return state->mode.origin;
-}
+int nvim_vterm_state_mode_origin(const VTermState *state) { return state->mode.origin; }
 
-int nvim_vterm_state_mode_cursor_visible(const VTermState *state)
-{
-  return state->mode.cursor_visible;
-}
+int nvim_vterm_state_mode_cursor_visible(const VTermState *state) { return state->mode.cursor_visible; }
 
-int nvim_vterm_state_mode_leftrightmargin(const VTermState *state)
-{
-  return state->mode.leftrightmargin;
-}
+int nvim_vterm_state_mode_leftrightmargin(const VTermState *state) { return state->mode.leftrightmargin; }
 
-int nvim_vterm_state_mode_alt_screen(const VTermState *state)
-{
-  return state->mode.alt_screen;
-}
+int nvim_vterm_state_mode_alt_screen(const VTermState *state) { return state->mode.alt_screen; }
 
 // --- Protected cell accessor ---
 
-int nvim_vterm_state_get_protected_cell(const VTermState *state)
-{
-  return state->protected_cell;
-}
+int nvim_vterm_state_get_protected_cell(const VTermState *state) { return state->protected_cell; }
 
 // --- Callback accessors ---
 
-const VTermStateCallbacks *nvim_vterm_state_get_callbacks(const VTermState *state)
-{
-  return state->callbacks;
-}
+const VTermStateCallbacks *nvim_vterm_state_get_callbacks(const VTermState *state) { return state->callbacks; }
 
-void *nvim_vterm_state_get_cbdata(const VTermState *state)
-{
-  return state->cbdata;
-}
+void *nvim_vterm_state_get_cbdata(const VTermState *state) { return state->cbdata; }
 
 // --- VTerm handle accessor ---
 
-VTerm *nvim_vterm_state_get_vt(const VTermState *state)
-{
-  return state->vt;
-}
+VTerm *nvim_vterm_state_get_vt(const VTermState *state) { return state->vt; }
 
 // --- Grapheme buffer accessors ---
 
-char *nvim_vterm_state_get_grapheme_buf(VTermState *state)
-{
-  return state->grapheme_buf;
-}
+char *nvim_vterm_state_get_grapheme_buf(VTermState *state) { return state->grapheme_buf; }
 
-size_t nvim_vterm_state_get_grapheme_len(const VTermState *state)
-{
-  return state->grapheme_len;
-}
+size_t nvim_vterm_state_get_grapheme_len(const VTermState *state) { return state->grapheme_len; }
 
-void nvim_vterm_state_set_grapheme_len(VTermState *state, size_t len)
-{
-  state->grapheme_len = len;
-}
+void nvim_vterm_state_set_grapheme_len(VTermState *state, size_t len) { state->grapheme_len = len; }
 
-int nvim_vterm_state_get_combine_width(const VTermState *state)
-{
-  return state->combine_width;
-}
+int nvim_vterm_state_get_combine_width(const VTermState *state) { return state->combine_width; }
 
-void nvim_vterm_state_set_combine_width(VTermState *state, int width)
-{
-  state->combine_width = width;
-}
+void nvim_vterm_state_set_combine_width(VTermState *state, int width) { state->combine_width = width; }
 
-VTermPos nvim_vterm_state_get_combine_pos(const VTermState *state)
-{
-  return state->combine_pos;
-}
+VTermPos nvim_vterm_state_get_combine_pos(const VTermState *state) { return state->combine_pos; }
 
-void nvim_vterm_state_set_combine_pos(VTermState *state, VTermPos pos)
-{
-  state->combine_pos = pos;
-}
+void nvim_vterm_state_set_combine_pos(VTermState *state, VTermPos pos) { state->combine_pos = pos; }
 
 // --- Lineinfo scroll helpers ---
 
@@ -2765,257 +2643,113 @@ void nvim_vterm_scroll_rect(VTermRect rect, int downward, int rightward,
 
 // Scalar pen fields
 
-int nvim_vterm_state_get_pen_bold(const VTermState *state)
-{
-  return (int)state->pen.bold;
-}
+int nvim_vterm_state_get_pen_bold(const VTermState *state) { return (int)state->pen.bold; }
 
-void nvim_vterm_state_set_pen_bold(VTermState *state, int val)
-{
-  state->pen.bold = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_bold(VTermState *state, int val) { state->pen.bold = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_underline(const VTermState *state)
-{
-  return (int)state->pen.underline;
-}
+int nvim_vterm_state_get_pen_underline(const VTermState *state) { return (int)state->pen.underline; }
 
-void nvim_vterm_state_set_pen_underline(VTermState *state, int val)
-{
-  state->pen.underline = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_underline(VTermState *state, int val) { state->pen.underline = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_italic(const VTermState *state)
-{
-  return (int)state->pen.italic;
-}
+int nvim_vterm_state_get_pen_italic(const VTermState *state) { return (int)state->pen.italic; }
 
-void nvim_vterm_state_set_pen_italic(VTermState *state, int val)
-{
-  state->pen.italic = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_italic(VTermState *state, int val) { state->pen.italic = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_blink(const VTermState *state)
-{
-  return (int)state->pen.blink;
-}
+int nvim_vterm_state_get_pen_blink(const VTermState *state) { return (int)state->pen.blink; }
 
-void nvim_vterm_state_set_pen_blink(VTermState *state, int val)
-{
-  state->pen.blink = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_blink(VTermState *state, int val) { state->pen.blink = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_reverse(const VTermState *state)
-{
-  return (int)state->pen.reverse;
-}
+int nvim_vterm_state_get_pen_reverse(const VTermState *state) { return (int)state->pen.reverse; }
 
-void nvim_vterm_state_set_pen_reverse(VTermState *state, int val)
-{
-  state->pen.reverse = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_reverse(VTermState *state, int val) { state->pen.reverse = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_conceal(const VTermState *state)
-{
-  return (int)state->pen.conceal;
-}
+int nvim_vterm_state_get_pen_conceal(const VTermState *state) { return (int)state->pen.conceal; }
 
-void nvim_vterm_state_set_pen_conceal(VTermState *state, int val)
-{
-  state->pen.conceal = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_conceal(VTermState *state, int val) { state->pen.conceal = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_strike(const VTermState *state)
-{
-  return (int)state->pen.strike;
-}
+int nvim_vterm_state_get_pen_strike(const VTermState *state) { return (int)state->pen.strike; }
 
-void nvim_vterm_state_set_pen_strike(VTermState *state, int val)
-{
-  state->pen.strike = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_strike(VTermState *state, int val) { state->pen.strike = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_font(const VTermState *state)
-{
-  return (int)state->pen.font;
-}
+int nvim_vterm_state_get_pen_font(const VTermState *state) { return (int)state->pen.font; }
 
-void nvim_vterm_state_set_pen_font(VTermState *state, int val)
-{
-  state->pen.font = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_font(VTermState *state, int val) { state->pen.font = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_small(const VTermState *state)
-{
-  return (int)state->pen.small;
-}
+int nvim_vterm_state_get_pen_small(const VTermState *state) { return (int)state->pen.small; }
 
-void nvim_vterm_state_set_pen_small(VTermState *state, int val)
-{
-  state->pen.small = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_small(VTermState *state, int val) { state->pen.small = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_baseline(const VTermState *state)
-{
-  return (int)state->pen.baseline;
-}
+int nvim_vterm_state_get_pen_baseline(const VTermState *state) { return (int)state->pen.baseline; }
 
-void nvim_vterm_state_set_pen_baseline(VTermState *state, int val)
-{
-  state->pen.baseline = (unsigned)val;
-}
+void nvim_vterm_state_set_pen_baseline(VTermState *state, int val) { state->pen.baseline = (unsigned)val; }
 
-int nvim_vterm_state_get_pen_uri(const VTermState *state)
-{
-  return state->pen.uri;
-}
+int nvim_vterm_state_get_pen_uri(const VTermState *state) { return state->pen.uri; }
 
-void nvim_vterm_state_set_pen_uri(VTermState *state, int val)
-{
-  state->pen.uri = val;
-}
+void nvim_vterm_state_set_pen_uri(VTermState *state, int val) { state->pen.uri = val; }
 
 // Color pen fields
 
-VTermColor nvim_vterm_state_get_pen_fg(const VTermState *state)
-{
-  return state->pen.fg;
-}
+VTermColor nvim_vterm_state_get_pen_fg(const VTermState *state) { return state->pen.fg; }
 
-void nvim_vterm_state_set_pen_fg(VTermState *state, VTermColor col)
-{
-  state->pen.fg = col;
-}
+void nvim_vterm_state_set_pen_fg(VTermState *state, VTermColor col) { state->pen.fg = col; }
 
-VTermColor nvim_vterm_state_get_pen_bg(const VTermState *state)
-{
-  return state->pen.bg;
-}
+VTermColor nvim_vterm_state_get_pen_bg(const VTermState *state) { return state->pen.bg; }
 
-void nvim_vterm_state_set_pen_bg(VTermState *state, VTermColor col)
-{
-  state->pen.bg = col;
-}
+void nvim_vterm_state_set_pen_bg(VTermState *state, VTermColor col) { state->pen.bg = col; }
 
 // Default fg/bg accessors
 
-VTermColor nvim_vterm_state_get_default_fg(const VTermState *state)
-{
-  return state->default_fg;
-}
+VTermColor nvim_vterm_state_get_default_fg(const VTermState *state) { return state->default_fg; }
 
-void nvim_vterm_state_set_default_fg(VTermState *state, VTermColor col)
-{
-  state->default_fg = col;
-}
+void nvim_vterm_state_set_default_fg(VTermState *state, VTermColor col) { state->default_fg = col; }
 
-VTermColor nvim_vterm_state_get_default_bg(const VTermState *state)
-{
-  return state->default_bg;
-}
+VTermColor nvim_vterm_state_get_default_bg(const VTermState *state) { return state->default_bg; }
 
-void nvim_vterm_state_set_default_bg(VTermState *state, VTermColor col)
-{
-  state->default_bg = col;
-}
+void nvim_vterm_state_set_default_bg(VTermState *state, VTermColor col) { state->default_bg = col; }
 
 // Palette color accessors (indices 0-15)
 
-VTermColor nvim_vterm_state_get_color(const VTermState *state, int index)
-{
-  return state->colors[index];
-}
+VTermColor nvim_vterm_state_get_color(const VTermState *state, int index) { return state->colors[index]; }
 
-void nvim_vterm_state_set_color(VTermState *state, int index, VTermColor col)
-{
-  state->colors[index] = col;
-}
+void nvim_vterm_state_set_color(VTermState *state, int index, VTermColor col) { state->colors[index] = col; }
 
 // bold_is_highbright
 
-int nvim_vterm_state_get_bold_is_highbright(const VTermState *state)
-{
-  return state->bold_is_highbright;
-}
+int nvim_vterm_state_get_bold_is_highbright(const VTermState *state) { return state->bold_is_highbright; }
 
 // Save/restore pen via saved.pen
 
-void nvim_vterm_state_save_pen(VTermState *state)
-{
-  state->saved.pen = state->pen;
-}
+void nvim_vterm_state_save_pen(VTermState *state) { state->saved.pen = state->pen; }
 
-void nvim_vterm_state_restore_pen(VTermState *state)
-{
-  state->pen = state->saved.pen;
-}
+void nvim_vterm_state_restore_pen(VTermState *state) { state->pen = state->saved.pen; }
 
 // Saved pen field accessors (for reading back after restore)
 
-int nvim_vterm_state_get_saved_pen_bold(const VTermState *state)
-{
-  return (int)state->saved.pen.bold;
-}
+int nvim_vterm_state_get_saved_pen_bold(const VTermState *state) { return (int)state->saved.pen.bold; }
 
-int nvim_vterm_state_get_saved_pen_underline(const VTermState *state)
-{
-  return (int)state->saved.pen.underline;
-}
+int nvim_vterm_state_get_saved_pen_underline(const VTermState *state) { return (int)state->saved.pen.underline; }
 
-int nvim_vterm_state_get_saved_pen_italic(const VTermState *state)
-{
-  return (int)state->saved.pen.italic;
-}
+int nvim_vterm_state_get_saved_pen_italic(const VTermState *state) { return (int)state->saved.pen.italic; }
 
-int nvim_vterm_state_get_saved_pen_blink(const VTermState *state)
-{
-  return (int)state->saved.pen.blink;
-}
+int nvim_vterm_state_get_saved_pen_blink(const VTermState *state) { return (int)state->saved.pen.blink; }
 
-int nvim_vterm_state_get_saved_pen_reverse(const VTermState *state)
-{
-  return (int)state->saved.pen.reverse;
-}
+int nvim_vterm_state_get_saved_pen_reverse(const VTermState *state) { return (int)state->saved.pen.reverse; }
 
-int nvim_vterm_state_get_saved_pen_conceal(const VTermState *state)
-{
-  return (int)state->saved.pen.conceal;
-}
+int nvim_vterm_state_get_saved_pen_conceal(const VTermState *state) { return (int)state->saved.pen.conceal; }
 
-int nvim_vterm_state_get_saved_pen_strike(const VTermState *state)
-{
-  return (int)state->saved.pen.strike;
-}
+int nvim_vterm_state_get_saved_pen_strike(const VTermState *state) { return (int)state->saved.pen.strike; }
 
-int nvim_vterm_state_get_saved_pen_font(const VTermState *state)
-{
-  return (int)state->saved.pen.font;
-}
+int nvim_vterm_state_get_saved_pen_font(const VTermState *state) { return (int)state->saved.pen.font; }
 
-int nvim_vterm_state_get_saved_pen_small(const VTermState *state)
-{
-  return (int)state->saved.pen.small;
-}
+int nvim_vterm_state_get_saved_pen_small(const VTermState *state) { return (int)state->saved.pen.small; }
 
-int nvim_vterm_state_get_saved_pen_baseline(const VTermState *state)
-{
-  return (int)state->saved.pen.baseline;
-}
+int nvim_vterm_state_get_saved_pen_baseline(const VTermState *state) { return (int)state->saved.pen.baseline; }
 
-int nvim_vterm_state_get_saved_pen_uri(const VTermState *state)
-{
-  return state->saved.pen.uri;
-}
+int nvim_vterm_state_get_saved_pen_uri(const VTermState *state) { return state->saved.pen.uri; }
 
-VTermColor nvim_vterm_state_get_saved_pen_fg(const VTermState *state)
-{
-  return state->saved.pen.fg;
-}
+VTermColor nvim_vterm_state_get_saved_pen_fg(const VTermState *state) { return state->saved.pen.fg; }
 
-VTermColor nvim_vterm_state_get_saved_pen_bg(const VTermState *state)
-{
-  return state->saved.pen.bg;
-}
+VTermColor nvim_vterm_state_get_saved_pen_bg(const VTermState *state) { return state->saved.pen.bg; }
 
 // Callback dispatcher for setpenattr
 
@@ -3026,9 +2760,7 @@ void nvim_vterm_state_call_setpenattr(VTermState *state, int attr, VTermValue *v
   }
 }
 
-// =============================================================================
 // Thin C wrappers for Rust pen.rs FFI exports (moved from pen.c)
-// =============================================================================
 
 // Rust FFI declarations (implemented in src/nvim-rs/vterm/src/pen.rs)
 extern void rs_vterm_state_newpen(VTermState *state);
@@ -3042,20 +2774,11 @@ extern int rs_vterm_state_set_penattr(VTermState *state, int attr, int type, VTe
 extern void rs_vterm_state_setpen(VTermState *state, const long args[], int argcount);
 extern int rs_vterm_state_getpen(VTermState *state, long args[], int argcount);
 
-void vterm_state_newpen(VTermState *state)
-{
-  rs_vterm_state_newpen(state);
-}
+void vterm_state_newpen(VTermState *state) { rs_vterm_state_newpen(state); }
 
-void vterm_state_resetpen(VTermState *state)
-{
-  rs_vterm_state_resetpen(state);
-}
+void vterm_state_resetpen(VTermState *state) { rs_vterm_state_resetpen(state); }
 
-void vterm_state_savepen(VTermState *state, int save)
-{
-  rs_vterm_state_savepen(state, save);
-}
+void vterm_state_savepen(VTermState *state, int save) { rs_vterm_state_savepen(state, save); }
 
 void vterm_state_set_default_colors(VTermState *state, const VTermColor *default_fg,
                                     const VTermColor *default_bg)

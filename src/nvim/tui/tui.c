@@ -217,60 +217,29 @@ extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
 extern void rs_tui_enable_extended_underline(TUIData *tui);
 extern void rs_tui_query_bg_color(TUIData *tui);
 
-// ============================================================================
 // TUIData Accessor Functions for Rust
-// ============================================================================
 
 
 /// Set cursor row position
-void nvim_tui_set_row(TUIData *tui, int row)
-{
-  tui->row = row;
-}
+void nvim_tui_set_row(TUIData *tui, int row) { tui->row = row; }
 
 
 /// Set cursor col position
-void nvim_tui_set_col(TUIData *tui, int col)
-{
-  tui->col = col;
-}
+void nvim_tui_set_col(TUIData *tui, int col) { tui->col = col; }
 
 /// Set an HlAttrs entry in the attrs kvec (resizes if needed)
-void nvim_tui_set_attrs(TUIData *tui, size_t idx, HlAttrs attrs)
-{
-  kv_a(tui->attrs, idx) = attrs;
-}
+void nvim_tui_set_attrs(TUIData *tui, size_t idx, HlAttrs attrs) { kv_a(tui->attrs, idx) = attrs; }
 
-/// Set the clear_attrs field
-void nvim_tui_set_clear_attrs(TUIData *tui, HlAttrs attrs)
-{
-  tui->clear_attrs = attrs;
-}
+void nvim_tui_set_clear_attrs(TUIData *tui, HlAttrs attrs) { tui->clear_attrs = attrs; }
 
 
-/// Set print_attr_id
-void nvim_tui_set_print_attr_id(TUIData *tui, int id)
-{
-  tui->print_attr_id = id;
-}
+void nvim_tui_set_print_attr_id(TUIData *tui, int id) { tui->print_attr_id = id; }
 
-/// Set set_default_colors flag
-void nvim_tui_set_default_colors_flag(TUIData *tui, bool value)
-{
-  tui->set_default_colors = value;
-}
+void nvim_tui_set_default_colors_flag(TUIData *tui, bool value) { tui->set_default_colors = value; }
 
-/// Get grid height
-int nvim_tui_get_grid_height(TUIData *tui)
-{
-  return tui->grid.height;
-}
+int nvim_tui_get_grid_height(TUIData *tui) { return tui->grid.height; }
 
-/// Get grid width
-int nvim_tui_get_grid_width(TUIData *tui)
-{
-  return tui->grid.width;
-}
+int nvim_tui_get_grid_width(TUIData *tui) { return tui->grid.width; }
 
 /// Invalidate a region (wrapper for invalidate function)
 void nvim_tui_invalidate(TUIData *tui, int top, int bot, int left, int right)
@@ -279,35 +248,19 @@ void nvim_tui_invalidate(TUIData *tui, int top, int bot, int left, int right)
   kv_push(tui->invalid_regions, r);
 }
 
-/// Get is_starting flag
-bool nvim_tui_get_is_starting(TUIData *tui)
-{
-  return tui->is_starting;
-}
+bool nvim_tui_get_is_starting(TUIData *tui) { return tui->is_starting; }
 
 /// Get pending_resize_events count
-int nvim_tui_get_pending_resize_events(TUIData *tui)
-{
-  return tui->pending_resize_events;
-}
+int nvim_tui_get_pending_resize_events(TUIData *tui) { return tui->pending_resize_events; }
 
 /// Set pending_resize_events count
-void nvim_tui_set_pending_resize_events(TUIData *tui, int val)
-{
-  tui->pending_resize_events = val;
-}
+void nvim_tui_set_pending_resize_events(TUIData *tui, int val) { tui->pending_resize_events = val; }
 
 /// Get the number of invalid regions
-size_t nvim_tui_get_invalid_regions_size(TUIData *tui)
-{
-  return kv_size(tui->invalid_regions);
-}
+size_t nvim_tui_get_invalid_regions_size(TUIData *tui) { return kv_size(tui->invalid_regions); }
 
 /// Clear all invalid regions
-void nvim_tui_clear_invalid_regions(TUIData *tui)
-{
-  kv_size(tui->invalid_regions) = 0;
-}
+void nvim_tui_clear_invalid_regions(TUIData *tui) { kv_size(tui->invalid_regions) = 0; }
 
 /// Clip an invalid region to grid bounds
 void nvim_tui_clip_invalid_region(TUIData *tui, size_t idx, int max_height, int max_width)
@@ -320,28 +273,14 @@ void nvim_tui_clip_invalid_region(TUIData *tui, size_t idx, int max_height, int 
 }
 
 /// Get pointer to UGrid
-UGrid *nvim_tui_get_grid(TUIData *tui)
-{
-  return &tui->grid;
-}
+UGrid *nvim_tui_get_grid(TUIData *tui) { return &tui->grid; }
 
 /// Set grid row to -1 (invalidate cursor position)
-void nvim_tui_invalidate_grid_cursor(TUIData *tui)
-{
-  tui->grid.row = -1;
-}
+void nvim_tui_invalidate_grid_cursor(TUIData *tui) { tui->grid.row = -1; }
 
-/// Get TUI width
-int nvim_tui_get_width(TUIData *tui)
-{
-  return tui->width;
-}
+int nvim_tui_get_width(TUIData *tui) { return tui->width; }
 
-/// Get TUI height
-int nvim_tui_get_height(TUIData *tui)
-{
-  return tui->height;
-}
+int nvim_tui_get_height(TUIData *tui) { return tui->height; }
 
 // Forward declaration for clear_region
 static void clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
@@ -360,9 +299,7 @@ void nvim_tui_out_resize(TUIData *tui, int height, int width)
   out_printf(tui, 64, "\x1b[8;%d;%dt", height, width);
 }
 
-// ============================================================================
 // Terminfo Output Infrastructure for Rust
-// ============================================================================
 
 // Forward declarations for output functions defined later
 static void out(TUIData *tui, const char *str, size_t len);
@@ -373,16 +310,10 @@ static void update_attrs(TUIData *tui, int attr_id);
 static void invalidate(TUIData *tui, int top, int bot, int left, int right);
 
 /// Wrapper for cursor_goto callable from Rust
-void nvim_tui_cursor_goto_internal(TUIData *tui, int row, int col)
-{
-  cursor_goto(tui, row, col);
-}
+void nvim_tui_cursor_goto_internal(TUIData *tui, int row, int col) { cursor_goto(tui, row, col); }
 
 /// Wrapper for update_attrs callable from Rust
-void nvim_tui_update_attrs_internal(TUIData *tui, int attr_id)
-{
-  update_attrs(tui, attr_id);
-}
+void nvim_tui_update_attrs_internal(TUIData *tui, int attr_id) { update_attrs(tui, attr_id); }
 
 /// Wrapper for invalidate callable from Rust
 void nvim_tui_invalidate_region(TUIData *tui, int top, int bot, int left, int right)
@@ -397,16 +328,10 @@ void nvim_tui_ugrid_scroll(TUIData *tui, int top, int bot, int left, int right, 
 }
 
 /// Write raw bytes to output buffer
-void nvim_tui_out(TUIData *tui, const char *str, size_t len)
-{
-  out(tui, str, len);
-}
+void nvim_tui_out(TUIData *tui, const char *str, size_t len) { out(tui, str, len); }
 
 /// Output a terminfo escape sequence
-void nvim_tui_terminfo_out(TUIData *tui, int what)
-{
-  terminfo_out(tui, (TerminfoDef)what);
-}
+void nvim_tui_terminfo_out(TUIData *tui, int what) { terminfo_out(tui, (TerminfoDef)what); }
 
 /// Output a terminfo escape sequence with 1 parameter
 void nvim_tui_terminfo_print_num1(TUIData *tui, int what, int num1)
@@ -421,182 +346,77 @@ void nvim_tui_terminfo_print_num2(TUIData *tui, int what, int num1, int num2)
 }
 
 /// Get grid row position
-int nvim_tui_get_grid_row(TUIData *tui)
-{
-  return tui->grid.row;
-}
+int nvim_tui_get_grid_row(TUIData *tui) { return tui->grid.row; }
 
 /// Get grid col position
-int nvim_tui_get_grid_col(TUIData *tui)
-{
-  return tui->grid.col;
-}
+int nvim_tui_get_grid_col(TUIData *tui) { return tui->grid.col; }
 
 /// Increment grid col position
-void nvim_tui_inc_grid_col(TUIData *tui)
-{
-  tui->grid.col++;
-}
+void nvim_tui_inc_grid_col(TUIData *tui) { tui->grid.col++; }
 
 /// Get url index
-int nvim_tui_get_url(TUIData *tui)
-{
-  return tui->url;
-}
+int nvim_tui_get_url(TUIData *tui) { return tui->url; }
 
 /// Set url index
-void nvim_tui_set_url(TUIData *tui, int url)
-{
-  tui->url = url;
-}
+void nvim_tui_set_url(TUIData *tui, int url) { tui->url = url; }
 
-/// Get print_attr_id
-int nvim_tui_get_print_attr_id(TUIData *tui)
-{
-  return tui->print_attr_id;
-}
+int nvim_tui_get_print_attr_id(TUIData *tui) { return tui->print_attr_id; }
 
 /// Get immediate_wrap_after_last_column flag
-bool nvim_tui_get_immediate_wrap(TUIData *tui)
-{
-  return tui->immediate_wrap_after_last_column;
-}
+bool nvim_tui_get_immediate_wrap(TUIData *tui) { return tui->immediate_wrap_after_last_column; }
 
 /// Wrapper for cursor_goto callable from Rust
-void nvim_tui_cursor_goto(TUIData *tui, int row, int col)
-{
-  cursor_goto(tui, row, col);
-}
+void nvim_tui_cursor_goto(TUIData *tui, int row, int col) { cursor_goto(tui, row, col); }
 
 /// Wrapper for update_attrs callable from Rust
-void nvim_tui_update_attrs(TUIData *tui, int attr_id)
-{
-  update_attrs(tui, attr_id);
-}
+void nvim_tui_update_attrs(TUIData *tui, int attr_id) { update_attrs(tui, attr_id); }
 
-/// Get can_clear_attr flag
-bool nvim_tui_get_can_clear_attr(TUIData *tui)
-{
-  return tui->can_clear_attr;
-}
+bool nvim_tui_get_can_clear_attr(TUIData *tui) { return tui->can_clear_attr; }
 
-/// Get can_erase_chars flag
-bool nvim_tui_get_can_erase_chars(TUIData *tui)
-{
-  return tui->can_erase_chars;
-}
+bool nvim_tui_get_can_erase_chars(TUIData *tui) { return tui->can_erase_chars; }
 
-/// Get set_default_colors flag
-bool nvim_tui_get_set_default_colors(TUIData *tui)
-{
-  return tui->set_default_colors;
-}
+bool nvim_tui_get_set_default_colors(TUIData *tui) { return tui->set_default_colors; }
 
 // Forward declaration for cheap_to_print
 static bool cheap_to_print(TUIData *tui, int row, int col, int next);
 
 /// Wrapper for cheap_to_print callable from Rust
-bool nvim_tui_cheap_to_print(TUIData *tui, int row, int col, int next)
-{
-  return cheap_to_print(tui, row, col, next);
-}
+bool nvim_tui_cheap_to_print(TUIData *tui, int row, int col, int next) { return cheap_to_print(tui, row, col, next); }
 
-/// Get default_attr flag
-bool nvim_tui_get_default_attr(TUIData *tui)
-{
-  return tui->default_attr;
-}
+bool nvim_tui_get_default_attr(TUIData *tui) { return tui->default_attr; }
 
 
-/// Set busy flag
-void nvim_tui_set_busy(TUIData *tui, bool busy)
-{
-  tui->busy = busy;
-}
+void nvim_tui_set_busy(TUIData *tui, bool busy) { tui->busy = busy; }
 
-/// Get mouse_enabled flag
-bool nvim_tui_get_mouse_enabled(TUIData *tui)
-{
-  return tui->mouse_enabled;
-}
+bool nvim_tui_get_mouse_enabled(TUIData *tui) { return tui->mouse_enabled; }
 
-/// Set mouse_enabled flag
-void nvim_tui_set_mouse_enabled(TUIData *tui, bool enabled)
-{
-  tui->mouse_enabled = enabled;
-}
+void nvim_tui_set_mouse_enabled(TUIData *tui, bool enabled) { tui->mouse_enabled = enabled; }
 
-/// Get mouse_move_enabled flag
-bool nvim_tui_get_mouse_move_enabled(TUIData *tui)
-{
-  return tui->mouse_move_enabled;
-}
+bool nvim_tui_get_mouse_move_enabled(TUIData *tui) { return tui->mouse_move_enabled; }
 
-/// Get screen_or_tmux flag
-bool nvim_tui_get_screen_or_tmux(TUIData *tui)
-{
-  return tui->screen_or_tmux;
-}
+bool nvim_tui_get_screen_or_tmux(TUIData *tui) { return tui->screen_or_tmux; }
 
-/// Get can_scroll flag
-bool nvim_tui_get_can_scroll(TUIData *tui)
-{
-  return tui->can_scroll;
-}
+bool nvim_tui_get_can_scroll(TUIData *tui) { return tui->can_scroll; }
 
-/// Get can_change_scroll_region flag
-bool nvim_tui_get_can_change_scroll_region(TUIData *tui)
-{
-  return tui->can_change_scroll_region;
-}
+bool nvim_tui_get_can_change_scroll_region(TUIData *tui) { return tui->can_change_scroll_region; }
 
 /// Get has_left_and_right_margin_mode flag
-bool nvim_tui_get_has_lr_margin_mode(TUIData *tui)
-{
-  return tui->has_left_and_right_margin_mode;
-}
+bool nvim_tui_get_has_lr_margin_mode(TUIData *tui) { return tui->has_left_and_right_margin_mode; }
 
-/// Get can_set_lr_margin flag
-bool nvim_tui_get_can_set_lr_margin(TUIData *tui)
-{
-  return tui->can_set_lr_margin;
-}
+bool nvim_tui_get_can_set_lr_margin(TUIData *tui) { return tui->can_set_lr_margin; }
 
-/// Get stopped flag
-bool nvim_tui_get_stopped(TUIData *tui)
-{
-  return tui->stopped;
-}
+bool nvim_tui_get_stopped(TUIData *tui) { return tui->stopped; }
 
-/// Get can_set_title flag
-bool nvim_tui_get_can_set_title(TUIData *tui)
-{
-  return tui->can_set_title;
-}
+bool nvim_tui_get_can_set_title(TUIData *tui) { return tui->can_set_title; }
 
-/// Get title_enabled flag
-bool nvim_tui_get_title_enabled(TUIData *tui)
-{
-  return tui->title_enabled;
-}
+bool nvim_tui_get_title_enabled(TUIData *tui) { return tui->title_enabled; }
 
-/// Set title_enabled flag
-void nvim_tui_set_title_enabled(TUIData *tui, bool enabled)
-{
-  tui->title_enabled = enabled;
-}
+void nvim_tui_set_title_enabled(TUIData *tui, bool enabled) { tui->title_enabled = enabled; }
 
 /// Get available buffer space for title
-size_t nvim_tui_get_buf_space(TUIData *tui)
-{
-  return sizeof(tui->buf) - tui->bufpos;
-}
+size_t nvim_tui_get_buf_space(TUIData *tui) { return sizeof(tui->buf) - tui->bufpos; }
 
-/// Set can_set_underline_color flag
-void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val)
-{
-  tui->can_set_underline_color = val;
-}
+void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val) { tui->can_set_underline_color = val; }
 
 /// Wrapper for terminfo_set_if_empty (set underline style)
 void nvim_tui_terminfo_set_underline_style(TUIData *tui)
@@ -608,37 +428,22 @@ void nvim_tui_terminfo_set_underline_style(TUIData *tui)
 static void flush_buf(TUIData *tui);
 
 /// Wrapper for flush_buf callable from Rust
-void nvim_tui_flush_buf(TUIData *tui)
-{
-  flush_buf(tui);
-}
+void nvim_tui_flush_buf(TUIData *tui) { flush_buf(tui); }
 
 /// Wrapper for uv_sleep callable from Rust
-void nvim_tui_uv_sleep(uint64_t ms)
-{
-  uv_sleep(ms);
-}
+void nvim_tui_uv_sleep(uint64_t ms) { uv_sleep(ms); }
 
 /// Wrapper for tui_set_term_mode callable from Rust
-void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set)
-{
-  tui_set_term_mode(tui, (TermMode)mode, set);
-}
+void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set) { tui_set_term_mode(tui, (TermMode)mode, set); }
 
 // Forward declaration for out_len
 static void out_len(TUIData *tui, const char *str);
 
 /// Get reset_scroll_region string from terminfo_ext
-const char *nvim_tui_get_reset_scroll_region(TUIData *tui)
-{
-  return tui->terminfo_ext.reset_scroll_region;
-}
+const char *nvim_tui_get_reset_scroll_region(TUIData *tui) { return tui->terminfo_ext.reset_scroll_region; }
 
 /// Wrapper for out_len callable from Rust
-void nvim_tui_out_len(TUIData *tui, const char *str)
-{
-  out_len(tui, str);
-}
+void nvim_tui_out_len(TUIData *tui, const char *str) { out_len(tui, str); }
 
 #define TERMINFO_SEQ_LIMIT 128
 
@@ -771,10 +576,7 @@ static void tui_query_extended_underline(TUIData *tui)
 }
 
 /// Enable extended underline support. Rust implementation.
-void tui_enable_extended_underline(TUIData *tui)
-{
-  rs_tui_enable_extended_underline(tui);
-}
+void tui_enable_extended_underline(TUIData *tui) { rs_tui_enable_extended_underline(tui); }
 
 /// Query the terminal emulator to see if it supports Kitty's keyboard protocol.
 ///
@@ -1415,18 +1217,12 @@ static void update_attrs(TUIData *tui, int attr_id)
 }
 
 /// Handle cursor wrapping at the final column. Rust implementation.
-static void final_column_wrap(TUIData *tui)
-{
-  rs_final_column_wrap(tui);
-}
+static void final_column_wrap(TUIData *tui) { rs_final_column_wrap(tui); }
 
 /// It is undocumented, but in the majority of terminals and terminal emulators
 /// printing at the right margin does not cause an automatic wrap until the
 /// next character is printed, holding the cursor in place until then. Rust implementation.
-static void print_cell(TUIData *tui, char *buf, sattr_T attr)
-{
-  rs_print_cell(tui, buf, attr);
-}
+static void print_cell(TUIData *tui, char *buf, sattr_T attr) { rs_print_cell(tui, buf, attr); }
 
 static bool cheap_to_print(TUIData *tui, int row, int col, int next)
 {
@@ -1669,10 +1465,7 @@ static void set_scroll_region(TUIData *tui, int top, int bot, int left, int righ
 }
 
 /// Reset scroll region to full screen. Rust implementation.
-static void reset_scroll_region(TUIData *tui, bool fullwidth)
-{
-  rs_reset_scroll_region(tui, fullwidth);
-}
+static void reset_scroll_region(TUIData *tui, bool fullwidth) { rs_reset_scroll_region(tui, fullwidth); }
 
 /// Resize the TUI grid. Rust implementation in nvim-tui crate.
 void tui_grid_resize(TUIData *tui, Integer g, Integer width, Integer height)
@@ -1681,10 +1474,7 @@ void tui_grid_resize(TUIData *tui, Integer g, Integer width, Integer height)
 }
 
 /// Clear the TUI grid. Rust implementation in nvim-tui crate.
-void tui_grid_clear(TUIData *tui, Integer g)
-{
-  rs_tui_grid_clear(tui, g);
-}
+void tui_grid_clear(TUIData *tui, Integer g) { rs_tui_grid_clear(tui, g); }
 
 /// Set cursor position for the grid. Rust implementation in nvim-tui crate.
 void tui_grid_cursor_goto(TUIData *tui, Integer grid, Integer row, Integer col)
@@ -1749,34 +1539,19 @@ void tui_mode_info_set(TUIData *tui, bool guicursor_enabled, Array args)
 }
 
 /// Update menu (stub - menus are for GUI only). Rust implementation.
-void tui_update_menu(TUIData *tui)
-{
-  rs_tui_update_menu(tui);
-}
+void tui_update_menu(TUIData *tui) { rs_tui_update_menu(tui); }
 
 /// Mark TUI as busy. Rust implementation.
-void tui_busy_start(TUIData *tui)
-{
-  rs_tui_busy_start(tui);
-}
+void tui_busy_start(TUIData *tui) { rs_tui_busy_start(tui); }
 
 /// Mark TUI as not busy. Rust implementation.
-void tui_busy_stop(TUIData *tui)
-{
-  rs_tui_busy_stop(tui);
-}
+void tui_busy_stop(TUIData *tui) { rs_tui_busy_stop(tui); }
 
 /// Enable mouse tracking. Rust implementation.
-void tui_mouse_on(TUIData *tui)
-{
-  rs_tui_mouse_on(tui);
-}
+void tui_mouse_on(TUIData *tui) { rs_tui_mouse_on(tui); }
 
 /// Disable mouse tracking. Rust implementation.
-void tui_mouse_off(TUIData *tui)
-{
-  rs_tui_mouse_off(tui);
-}
+void tui_mouse_off(TUIData *tui) { rs_tui_mouse_off(tui); }
 
 static void tui_set_mode(TUIData *tui, ModeShape mode)
 {
@@ -1887,16 +1662,10 @@ void tui_hl_attr_define(TUIData *tui, Integer id, HlAttrs attrs, HlAttrs cterm_a
 }
 
 /// Ring the terminal bell. Rust implementation.
-void tui_bell(TUIData *tui)
-{
-  rs_tui_bell(tui);
-}
+void tui_bell(TUIData *tui) { rs_tui_bell(tui); }
 
 /// Visual bell - inverts screen briefly or uses screen/tmux bell. Rust implementation.
-void tui_visual_bell(TUIData *tui)
-{
-  rs_tui_visual_bell(tui);
-}
+void tui_visual_bell(TUIData *tui) { rs_tui_visual_bell(tui); }
 
 /// Set default colors and invalidate entire grid. Rust implementation in nvim-tui crate.
 void tui_default_colors_set(TUIData *tui, Integer rgb_fg, Integer rgb_bg, Integer rgb_sp,
@@ -2026,16 +1795,10 @@ static void tui_suspend_cb(TUIData *tui)
 #endif
 
 /// Set terminal title. Rust implementation.
-void tui_set_title(TUIData *tui, String title)
-{
-  rs_tui_set_title(tui, title.data, title.size);
-}
+void tui_set_title(TUIData *tui, String title) { rs_tui_set_title(tui, title.data, title.size); }
 
 /// Set icon (stub - not implemented). Rust implementation.
-void tui_set_icon(TUIData *tui, String icon)
-{
-  rs_tui_set_icon(tui);
-}
+void tui_set_icon(TUIData *tui, String icon) { rs_tui_set_icon(tui); }
 
 void tui_screenshot(TUIData *tui, String path)
 {
@@ -2324,10 +2087,7 @@ static void terminfo_set_if_empty(TUIData *tui, TerminfoDef str, const char *val
   }
 }
 
-static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val)
-{
-  tui->ti.defs[str] = val;
-}
+static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val) { tui->ti.defs[str] = val; }
 
 /// Determine if the terminal supports truecolor or not.
 ///
@@ -2761,10 +2521,7 @@ static void augment_terminfo(TUIData *tui, const char *term, int vte_version, in
   xfree(xterm_version);
 }
 
-static bool should_invisible(TUIData *tui)
-{
-  return tui->busy || tui->want_invisible;
-}
+static bool should_invisible(TUIData *tui) { return tui->busy || tui->want_invisible; }
 
 /// Write the sequence to begin flushing output to `buf`.
 /// If 'termsync' is set and the terminal supports synchronized output, begin synchronized update.

@@ -251,323 +251,143 @@ static void script_dump_profile(FILE *fd)
 }
 
 // C accessors for Phase 2
-int nvim_get_script_items_len(void)
-{
-  return script_items.ga_len;
-}
+int nvim_get_script_items_len(void) { return script_items.ga_len; }
 
-int nvim_script_item_get_pr_force(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_pr_force ? 1 : 0;
-}
+int nvim_script_item_get_pr_force(int sid) { return SCRIPT_ITEM(sid)->sn_pr_force ? 1 : 0; }
 
 // C accessors for Phase 4: scriptitem_T profiling fields
 
-int nvim_si_get_prof_on(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prof_on ? 1 : 0;
-}
+int nvim_si_get_prof_on(int sid) { return SCRIPT_ITEM(sid)->sn_prof_on ? 1 : 0; }
 
-int nvim_si_get_prl_idx(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_idx;
-}
+int nvim_si_get_prl_idx(int sid) { return SCRIPT_ITEM(sid)->sn_prl_idx; }
 
-void nvim_si_set_prl_idx(int sid, int val)
-{
-  SCRIPT_ITEM(sid)->sn_prl_idx = val;
-}
+void nvim_si_set_prl_idx(int sid, int val) { SCRIPT_ITEM(sid)->sn_prl_idx = val; }
 
-int nvim_si_get_prl_execed(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_execed;
-}
+int nvim_si_get_prl_execed(int sid) { return SCRIPT_ITEM(sid)->sn_prl_execed; }
 
-void nvim_si_set_prl_execed(int sid, int val)
-{
-  SCRIPT_ITEM(sid)->sn_prl_execed = val;
-}
+void nvim_si_set_prl_execed(int sid, int val) { SCRIPT_ITEM(sid)->sn_prl_execed = val; }
 
-proftime_T nvim_si_get_prl_start(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_start;
-}
+proftime_T nvim_si_get_prl_start(int sid) { return SCRIPT_ITEM(sid)->sn_prl_start; }
 
-void nvim_si_set_prl_start(int sid, proftime_T val)
-{
-  SCRIPT_ITEM(sid)->sn_prl_start = val;
-}
+void nvim_si_set_prl_start(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_prl_start = val; }
 
-proftime_T nvim_si_get_prl_children(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_children;
-}
+proftime_T nvim_si_get_prl_children(int sid) { return SCRIPT_ITEM(sid)->sn_prl_children; }
 
-void nvim_si_set_prl_children(int sid, proftime_T val)
-{
-  SCRIPT_ITEM(sid)->sn_prl_children = val;
-}
+void nvim_si_set_prl_children(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_prl_children = val; }
 
-proftime_T nvim_si_get_prl_wait(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_wait;
-}
+proftime_T nvim_si_get_prl_wait(int sid) { return SCRIPT_ITEM(sid)->sn_prl_wait; }
 
-void nvim_si_set_prl_wait(int sid, proftime_T val)
-{
-  SCRIPT_ITEM(sid)->sn_prl_wait = val;
-}
+void nvim_si_set_prl_wait(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_prl_wait = val; }
 
-int nvim_si_get_pr_nest(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_pr_nest;
-}
+int nvim_si_get_pr_nest(int sid) { return SCRIPT_ITEM(sid)->sn_pr_nest; }
 
-void nvim_si_set_pr_nest(int sid, int val)
-{
-  SCRIPT_ITEM(sid)->sn_pr_nest = val;
-}
+void nvim_si_set_pr_nest(int sid, int val) { SCRIPT_ITEM(sid)->sn_pr_nest = val; }
 
-proftime_T nvim_si_get_pr_child(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_pr_child;
-}
+proftime_T nvim_si_get_pr_child(int sid) { return SCRIPT_ITEM(sid)->sn_pr_child; }
 
-void nvim_si_set_pr_child(int sid, proftime_T val)
-{
-  SCRIPT_ITEM(sid)->sn_pr_child = val;
-}
+void nvim_si_set_pr_child(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_pr_child = val; }
 
-proftime_T nvim_si_get_pr_children(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_pr_children;
-}
+proftime_T nvim_si_get_pr_children(int sid) { return SCRIPT_ITEM(sid)->sn_pr_children; }
 
-void nvim_si_set_pr_children(int sid, proftime_T val)
-{
-  SCRIPT_ITEM(sid)->sn_pr_children = val;
-}
+void nvim_si_set_pr_children(int sid, proftime_T val) { SCRIPT_ITEM(sid)->sn_pr_children = val; }
 
 // garray_T ops for sn_prl_ga
-int nvim_si_prl_ga_len(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_ga.ga_len;
-}
+int nvim_si_prl_ga_len(int sid) { return SCRIPT_ITEM(sid)->sn_prl_ga.ga_len; }
 
-void nvim_si_prl_ga_set_len(int sid, int len)
-{
-  SCRIPT_ITEM(sid)->sn_prl_ga.ga_len = len;
-}
+void nvim_si_prl_ga_set_len(int sid, int len) { SCRIPT_ITEM(sid)->sn_prl_ga.ga_len = len; }
 
-int nvim_si_prl_ga_maxlen(int sid)
-{
-  return SCRIPT_ITEM(sid)->sn_prl_ga.ga_maxlen;
-}
+int nvim_si_prl_ga_maxlen(int sid) { return SCRIPT_ITEM(sid)->sn_prl_ga.ga_maxlen; }
 
-void nvim_si_prl_ga_grow(int sid, int n)
-{
-  ga_grow(&SCRIPT_ITEM(sid)->sn_prl_ga, n);
-}
+void nvim_si_prl_ga_grow(int sid, int n) { ga_grow(&SCRIPT_ITEM(sid)->sn_prl_ga, n); }
 
 // PRL_ITEM field accessors
-int nvim_si_prl_item_get_count(int sid, int idx)
-{
-  return PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count;
-}
+int nvim_si_prl_item_get_count(int sid, int idx) { return PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count; }
 
-void nvim_si_prl_item_set_count(int sid, int idx, int val)
-{
-  PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count = val;
-}
+void nvim_si_prl_item_set_count(int sid, int idx, int val) { PRL_ITEM(SCRIPT_ITEM(sid), idx).snp_count = val; }
 
-proftime_T nvim_si_prl_item_get_total(int sid, int idx)
-{
-  return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_total;
-}
+proftime_T nvim_si_prl_item_get_total(int sid, int idx) { return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_total; }
 
 void nvim_si_prl_item_set_total(int sid, int idx, proftime_T val)
 {
   PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_total = val;
 }
 
-proftime_T nvim_si_prl_item_get_self(int sid, int idx)
-{
-  return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self;
-}
+proftime_T nvim_si_prl_item_get_self(int sid, int idx) { return PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self; }
 
-void nvim_si_prl_item_set_self(int sid, int idx, proftime_T val)
-{
-  PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self = val;
-}
+void nvim_si_prl_item_set_self(int sid, int idx, proftime_T val) { PRL_ITEM(SCRIPT_ITEM(sid), idx).sn_prl_self = val; }
 
 // C accessors for Phase 6: startup timing FILE* management
 
-FILE *nvim_profile_get_time_fd(void)
-{
-  return time_fd;
-}
+FILE *nvim_profile_get_time_fd(void) { return time_fd; }
 
-void nvim_profile_set_time_fd(FILE *fd)
-{
-  time_fd = fd;
-}
+void nvim_profile_set_time_fd(FILE *fd) { time_fd = fd; }
 
-FILE *nvim_profile_fopen(const char *name, const char *mode)
-{
-  return fopen(name, mode);
-}
+FILE *nvim_profile_fopen(const char *name, const char *mode) { return fopen(name, mode); }
 
-void nvim_profile_fclose(FILE *fd)
-{
-  fclose(fd);
-}
+void nvim_profile_fclose(FILE *fd) { fclose(fd); }
 
-void nvim_profile_fputs(const char *s, FILE *fd)
-{
-  fputs(s, fd);
-}
+void nvim_profile_fputs(const char *s, FILE *fd) { fputs(s, fd); }
 
-char *nvim_profile_xmalloc(size_t size)
-{
-  return xmalloc(size);
-}
+char *nvim_profile_xmalloc(size_t size) { return xmalloc(size); }
 
-void nvim_profile_xfree(char *ptr)
-{
-  xfree(ptr);
-}
+void nvim_profile_xfree(char *ptr) { xfree(ptr); }
 
-int nvim_profile_setvbuf(FILE *fd, char *buf, size_t size)
-{
-  return setvbuf(fd, buf, _IOFBF, size);
-}
+int nvim_profile_setvbuf(FILE *fd, char *buf, size_t size) { return setvbuf(fd, buf, _IOFBF, size); }
 
-void nvim_profile_fprintf_stderr(const char *s)
-{
-  fprintf(stderr, "%s", s);
-}
+void nvim_profile_fprintf_stderr(const char *s) { fprintf(stderr, "%s", s); }
 
-char *nvim_profile_get_startuptime_buf(void)
-{
-  return startuptime_buf;
-}
+char *nvim_profile_get_startuptime_buf(void) { return startuptime_buf; }
 
-void nvim_profile_set_startuptime_buf(char *buf)
-{
-  startuptime_buf = buf;
-}
+void nvim_profile_set_startuptime_buf(char *buf) { startuptime_buf = buf; }
 
-const char *nvim_profile_gettext_e_notopen(void)
-{
-  return _(e_notopen);
-}
+const char *nvim_profile_gettext_e_notopen(void) { return _(e_notopen); }
 
-const char *nvim_profile_uv_err_name(int r)
-{
-  return uv_err_name(r);
-}
+const char *nvim_profile_uv_err_name(int r) { return uv_err_name(r); }
 
 // C accessors for Phase 7: command handling, state management, dump
 
-int nvim_profile_get_prof_none(void)
-{
-  return PROF_NONE;
-}
+int nvim_profile_get_prof_none(void) { return PROF_NONE; }
 
-int nvim_profile_get_prof_yes(void)
-{
-  return PROF_YES;
-}
+int nvim_profile_get_prof_yes(void) { return PROF_YES; }
 
-int nvim_profile_get_prof_paused(void)
-{
-  return PROF_PAUSED;
-}
+int nvim_profile_get_prof_paused(void) { return PROF_PAUSED; }
 
-int nvim_profile_get_do_profiling(void)
-{
-  return do_profiling;
-}
+int nvim_profile_get_do_profiling(void) { return do_profiling; }
 
-void nvim_profile_set_do_profiling(int val)
-{
-  do_profiling = val;
-}
+void nvim_profile_set_do_profiling(int val) { do_profiling = val; }
 
-void nvim_profile_set_vim_var_nr_profiling(int val)
-{
-  set_vim_var_nr(VV_PROFILING, val);
-}
+void nvim_profile_set_vim_var_nr_profiling(int val) { set_vim_var_nr(VV_PROFILING, val); }
 
 void nvim_profile_emsg_e750(void)
 {
   emsg(_("E750: First use \":profile start {fname}\""));
 }
 
-void nvim_profile_semsg_notopen(const char *fname)
-{
-  semsg(_(e_notopen), fname);
-}
+void nvim_profile_semsg_notopen(const char *fname) { semsg(_(e_notopen), fname); }
 
-void nvim_profile_ex_breakadd(exarg_T *eap)
-{
-  ex_breakadd(eap);
-}
+void nvim_profile_ex_breakadd(exarg_T *eap) { ex_breakadd(eap); }
 
-char *nvim_profile_expand_env_save_opt(char *src)
-{
-  return expand_env_save_opt(src, true);
-}
+char *nvim_profile_expand_env_save_opt(char *src) { return expand_env_save_opt(src, true); }
 
-char *nvim_profile_eap_get_arg(exarg_T *eap)
-{
-  return eap->arg;
-}
+char *nvim_profile_eap_get_arg(exarg_T *eap) { return eap->arg; }
 
-char *nvim_profile_skiptowhite(const char *s)
-{
-  return skiptowhite(s);
-}
+char *nvim_profile_skiptowhite(const char *s) { return skiptowhite(s); }
 
-char *nvim_profile_skipwhite(const char *s)
-{
-  return skipwhite(s);
-}
+char *nvim_profile_skipwhite(const char *s) { return skipwhite(s); }
 
-void nvim_profile_xp_set_context(expand_T *xp, int ctx)
-{
-  xp->xp_context = ctx;
-}
+void nvim_profile_xp_set_context(expand_T *xp, int ctx) { xp->xp_context = ctx; }
 
-void nvim_profile_xp_set_pattern(expand_T *xp, const char *pat)
-{
-  xp->xp_pattern = (char *)pat;
-}
+void nvim_profile_xp_set_pattern(expand_T *xp, const char *pat) { xp->xp_pattern = (char *)pat; }
 
-int nvim_profile_get_expand_profile(void)
-{
-  return EXPAND_PROFILE;
-}
+int nvim_profile_get_expand_profile(void) { return EXPAND_PROFILE; }
 
-int nvim_profile_get_expand_files(void)
-{
-  return EXPAND_FILES;
-}
+int nvim_profile_get_expand_files(void) { return EXPAND_FILES; }
 
-int nvim_profile_get_expand_user_func(void)
-{
-  return EXPAND_USER_FUNC;
-}
+int nvim_profile_get_expand_user_func(void) { return EXPAND_USER_FUNC; }
 
-int nvim_profile_get_expand_nothing(void)
-{
-  return EXPAND_NOTHING;
-}
+int nvim_profile_get_expand_nothing(void) { return EXPAND_NOTHING; }
 
-FILE *nvim_profile_os_fopen(const char *name, const char *mode)
-{
-  return os_fopen(name, mode);
-}
+FILE *nvim_profile_os_fopen(const char *name, const char *mode) { return os_fopen(name, mode); }
 
 void nvim_profile_reset_scripts(void)
 {
@@ -625,12 +445,6 @@ void nvim_profile_reset_funcs(void)
   }
 }
 
-void nvim_profile_script_dump(FILE *fd)
-{
-  script_dump_profile(fd);
-}
+void nvim_profile_script_dump(FILE *fd) { script_dump_profile(fd); }
 
-void nvim_profile_func_dump(FILE *fd)
-{
-  func_dump_profile(fd);
-}
+void nvim_profile_func_dump(FILE *fd) { func_dump_profile(fd); }

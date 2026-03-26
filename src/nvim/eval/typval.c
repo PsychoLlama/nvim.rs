@@ -1246,15 +1246,9 @@ item_compare_end:
   return res;
 }
 
-static int item_compare_keeping_zero(const void *s1, const void *s2)
-{
-  return item_compare(s1, s2, true);
-}
+static int item_compare_keeping_zero(const void *s1, const void *s2) { return item_compare(s1, s2, true); }
 
-static int item_compare_not_keeping_zero(const void *s1, const void *s2)
-{
-  return item_compare(s1, s2, false);
-}
+static int item_compare_not_keeping_zero(const void *s1, const void *s2) { return item_compare(s1, s2, false); }
 
 static int item_compare2(const void *s1, const void *s2, bool keep_zero)
 {
@@ -1319,15 +1313,9 @@ static int item_compare2(const void *s1, const void *s2, bool keep_zero)
   return res;
 }
 
-static int item_compare2_keeping_zero(const void *s1, const void *s2)
-{
-  return item_compare2(s1, s2, true);
-}
+static int item_compare2_keeping_zero(const void *s1, const void *s2) { return item_compare2(s1, s2, true); }
 
-static int item_compare2_not_keeping_zero(const void *s1, const void *s2)
-{
-  return item_compare2(s1, s2, false);
-}
+static int item_compare2_not_keeping_zero(const void *s1, const void *s2) { return item_compare2(s1, s2, false); }
 
 /// sort() List "l"
 static void do_sort(list_T *l, sortinfo_T *info)
@@ -1511,16 +1499,10 @@ theend:
 }
 
 /// "sort({list})" function
-void f_sort(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  do_sort_uniq(argvars, rettv, true);
-}
+void f_sort(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uniq(argvars, rettv, true); }
 
 /// "uniq({list})" function
-void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  do_sort_uniq(argvars, rettv, false);
-}
+void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uniq(argvars, rettv, false); }
 
 // tv_list_equal, tv_list_find_nr, tv_list_find_str migrated to Rust (Phase 2)
 
@@ -2782,16 +2764,10 @@ void f_items(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 }
 
 /// "keys()" function
-void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict2list(argvars, rettv, kDict2ListKeys);
-}
+void f_keys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListKeys); }
 
 /// "values(dict)" function
-void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_dict2list(argvars, rettv, kDict2ListValues);
-}
+void f_values(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { tv_dict2list(argvars, rettv, kDict2ListValues); }
 
 /// "has_key()" function
 void f_has_key(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -3567,72 +3543,37 @@ linenr_T tv_get_lnum_buf(const typval_T *const tv, const buf_T *const buf)
 
 // tv_get_float migrated to Rust (nvim-rs/typval); declared in typval.h
 
-// =============================================================================
 // Rust FFI accessor functions for error message reporting
 // These wrap semsg() calls since semsg is variadic and hard to call from Rust.
-// =============================================================================
 
 /// Get a pointer to args[idx] in a typval array.
 /// Used by Rust to safely index into typval arrays.
-const void *nvim_typval_array_get(const typval_T *args, int idx)
-{
-  return &args[idx];
-}
+const void *nvim_typval_array_get(const typval_T *args, int idx) { return &args[idx]; }
 
-void nvim_typval_error_string_required(int idx)
-{
-  semsg(_(e_string_required_for_argument_nr), idx);
-}
+void nvim_typval_error_string_required(int idx) { semsg(_(e_string_required_for_argument_nr), idx); }
 
-void nvim_typval_error_nonempty_string_required(int idx)
-{
-  semsg(_(e_non_empty_string_required_for_argument_nr), idx);
-}
+void nvim_typval_error_nonempty_string_required(int idx) { semsg(_(e_non_empty_string_required_for_argument_nr), idx); }
 
-void nvim_typval_error_number_required(int idx)
-{
-  semsg(_(e_number_required_for_argument_nr), idx);
-}
+void nvim_typval_error_number_required(int idx) { semsg(_(e_number_required_for_argument_nr), idx); }
 
-void nvim_typval_error_float_or_number_required(int idx)
-{
-  semsg(_(e_float_or_number_required_for_argument_nr), idx);
-}
+void nvim_typval_error_float_or_number_required(int idx) { semsg(_(e_float_or_number_required_for_argument_nr), idx); }
 
-void nvim_typval_error_bool_required(int idx)
-{
-  semsg(_(e_bool_required_for_argument_nr), idx);
-}
+void nvim_typval_error_bool_required(int idx) { semsg(_(e_bool_required_for_argument_nr), idx); }
 
-void nvim_typval_error_blob_required(int idx)
-{
-  semsg(_(e_blob_required_for_argument_nr), idx);
-}
+void nvim_typval_error_blob_required(int idx) { semsg(_(e_blob_required_for_argument_nr), idx); }
 
-void nvim_typval_error_list_required(int idx)
-{
-  semsg(_(e_list_required_for_argument_nr), idx);
-}
+void nvim_typval_error_list_required(int idx) { semsg(_(e_list_required_for_argument_nr), idx); }
 
-void nvim_typval_error_dict_required(int idx)
-{
-  semsg(_(e_dict_required_for_argument_nr), idx);
-}
+void nvim_typval_error_dict_required(int idx) { semsg(_(e_dict_required_for_argument_nr), idx); }
 
-void nvim_typval_error_nonnull_dict_required(int idx)
-{
-  semsg(_(e_non_null_dict_required_for_argument_nr), idx);
-}
+void nvim_typval_error_nonnull_dict_required(int idx) { semsg(_(e_non_null_dict_required_for_argument_nr), idx); }
 
 void nvim_typval_error_string_or_number_required(int idx)
 {
   semsg(_(e_string_or_number_required_for_argument_nr), idx);
 }
 
-void nvim_typval_error_string_or_list_required(int idx)
-{
-  semsg(_(e_string_or_list_required_for_argument_nr), idx);
-}
+void nvim_typval_error_string_or_list_required(int idx) { semsg(_(e_string_or_list_required_for_argument_nr), idx); }
 
 void nvim_typval_error_string_list_or_blob_required(int idx)
 {
@@ -3649,117 +3590,51 @@ void nvim_typval_error_string_or_func_required(int idx)
   semsg(_(e_string_or_function_required_for_argument_nr), idx);
 }
 
-void nvim_typval_error_list_or_blob_required(int idx)
-{
-  semsg(_(e_list_or_blob_required_for_argument_nr), idx);
-}
+void nvim_typval_error_list_or_blob_required(int idx) { semsg(_(e_list_or_blob_required_for_argument_nr), idx); }
 
-// =============================================================================
 // tv_check_num error messages (type-specific)
-// =============================================================================
 
-void nvim_typval_error_using_funcref_as_number(void)
-{
-  emsg(_("E703: Using a Funcref as a Number"));
-}
+void nvim_typval_error_using_funcref_as_number(void) { emsg(_("E703: Using a Funcref as a Number")); }
 
-void nvim_typval_error_using_list_as_number(void)
-{
-  emsg(_("E745: Using a List as a Number"));
-}
+void nvim_typval_error_using_list_as_number(void) { emsg(_("E745: Using a List as a Number")); }
 
-void nvim_typval_error_using_dict_as_number(void)
-{
-  emsg(_("E728: Using a Dictionary as a Number"));
-}
+void nvim_typval_error_using_dict_as_number(void) { emsg(_("E728: Using a Dictionary as a Number")); }
 
-void nvim_typval_error_using_float_as_number(void)
-{
-  emsg(_("E805: Using a Float as a Number"));
-}
+void nvim_typval_error_using_float_as_number(void) { emsg(_("E805: Using a Float as a Number")); }
 
-void nvim_typval_error_using_blob_as_number(void)
-{
-  emsg(_("E974: Using a Blob as a Number"));
-}
+void nvim_typval_error_using_blob_as_number(void) { emsg(_("E974: Using a Blob as a Number")); }
 
-void nvim_typval_error_using_invalid_as_number(void)
-{
-  emsg(_("E685: using an invalid value as a Number"));
-}
+void nvim_typval_error_using_invalid_as_number(void) { emsg(_("E685: using an invalid value as a Number")); }
 
-// =============================================================================
 // tv_check_str error messages (type-specific)
-// =============================================================================
 
-void nvim_typval_error_using_funcref_as_string(void)
-{
-  emsg(_("E729: Using a Funcref as a String"));
-}
+void nvim_typval_error_using_funcref_as_string(void) { emsg(_("E729: Using a Funcref as a String")); }
 
-void nvim_typval_error_using_list_as_string(void)
-{
-  emsg(_("E730: Using a List as a String"));
-}
+void nvim_typval_error_using_list_as_string(void) { emsg(_("E730: Using a List as a String")); }
 
-void nvim_typval_error_using_dict_as_string(void)
-{
-  emsg(_("E731: Using a Dictionary as a String"));
-}
+void nvim_typval_error_using_dict_as_string(void) { emsg(_("E731: Using a Dictionary as a String")); }
 
-void nvim_typval_error_using_blob_as_string(void)
-{
-  emsg(_("E976: Using a Blob as a String"));
-}
+void nvim_typval_error_using_blob_as_string(void) { emsg(_("E976: Using a Blob as a String")); }
 
-void nvim_typval_error_using_invalid_as_string(void)
-{
-  emsg(_(e_using_invalid_value_as_string));
-}
+void nvim_typval_error_using_invalid_as_string(void) { emsg(_(e_using_invalid_value_as_string)); }
 
-// =============================================================================
 // tv_check_str_or_nr error messages (type-specific)
-// =============================================================================
 
-void nvim_typval_error_str_or_nr_float(void)
-{
-  emsg(_("E805: Expected a Number or a String, Float found"));
-}
+void nvim_typval_error_str_or_nr_float(void) { emsg(_("E805: Expected a Number or a String, Float found")); }
 
-void nvim_typval_error_str_or_nr_funcref(void)
-{
-  emsg(_("E703: Expected a Number or a String, Funcref found"));
-}
+void nvim_typval_error_str_or_nr_funcref(void) { emsg(_("E703: Expected a Number or a String, Funcref found")); }
 
-void nvim_typval_error_str_or_nr_list(void)
-{
-  emsg(_("E745: Expected a Number or a String, List found"));
-}
+void nvim_typval_error_str_or_nr_list(void) { emsg(_("E745: Expected a Number or a String, List found")); }
 
-void nvim_typval_error_str_or_nr_dict(void)
-{
-  emsg(_("E728: Expected a Number or a String, Dictionary found"));
-}
+void nvim_typval_error_str_or_nr_dict(void) { emsg(_("E728: Expected a Number or a String, Dictionary found")); }
 
-void nvim_typval_error_str_or_nr_blob(void)
-{
-  emsg(_("E974: Expected a Number or a String, Blob found"));
-}
+void nvim_typval_error_str_or_nr_blob(void) { emsg(_("E974: Expected a Number or a String, Blob found")); }
 
-void nvim_typval_error_str_or_nr_bool(void)
-{
-  emsg(_("E5299: Expected a Number or a String, Boolean found"));
-}
+void nvim_typval_error_str_or_nr_bool(void) { emsg(_("E5299: Expected a Number or a String, Boolean found")); }
 
-void nvim_typval_error_str_or_nr_special(void)
-{
-  emsg(_("E5300: Expected a Number or a String"));
-}
+void nvim_typval_error_str_or_nr_special(void) { emsg(_("E5300: Expected a Number or a String")); }
 
-void nvim_typval_error_str_or_nr_unknown(void)
-{
-  semsg(_(e_intern2), "tv_check_str_or_nr(UNKNOWN)");
-}
+void nvim_typval_error_str_or_nr_unknown(void) { semsg(_(e_intern2), "tv_check_str_or_nr(UNKNOWN)"); }
 
 /// Get the string value of a "stringish" Vimscript object.
 ///
@@ -3872,85 +3747,45 @@ const char *tv_get_string_buf(const typval_T *const tv, char *const buf)
 
 // tv2bool migrated to Rust (Phase 2)
 
-// =============================================================================
 // Rust accessor functions for opaque typval_T handle pattern
-// =============================================================================
 
 /// Get the v_type field from a typval (accessor for Rust).
-int nvim_tv_get_type(const typval_T *tv)
-{
-  return (int)tv->v_type;
-}
+int nvim_tv_get_type(const typval_T *tv) { return (int)tv->v_type; }
 
 /// Get the v_number field from a typval (accessor for Rust).
-int64_t nvim_tv_get_number(const typval_T *tv)
-{
-  return tv->vval.v_number;
-}
+int64_t nvim_tv_get_number(const typval_T *tv) { return tv->vval.v_number; }
 
 /// Get the v_bool field from a typval (accessor for Rust).
-int nvim_tv_get_bool(const typval_T *tv)
-{
-  return (int)tv->vval.v_bool;
-}
+int nvim_tv_get_bool(const typval_T *tv) { return (int)tv->vval.v_bool; }
 
 /// Get the v_float field from a typval (accessor for Rust).
-double nvim_tv_get_float(const typval_T *tv)
-{
-  return tv->vval.v_float;
-}
+double nvim_tv_get_float(const typval_T *tv) { return tv->vval.v_float; }
 
 /// Get the v_string field from a typval (accessor for Rust).
-const char *nvim_tv_get_string_ptr(const typval_T *tv)
-{
-  return tv->vval.v_string;
-}
+const char *nvim_tv_get_string_ptr(const typval_T *tv) { return tv->vval.v_string; }
 
 /// Check if v_list is NULL (accessor for Rust).
-int nvim_tv_list_is_null(const typval_T *tv)
-{
-  return tv->vval.v_list == NULL;
-}
+int nvim_tv_list_is_null(const typval_T *tv) { return tv->vval.v_list == NULL; }
 
 /// Check if v_dict is NULL (accessor for Rust).
-int nvim_tv_dict_is_null(const typval_T *tv)
-{
-  return tv->vval.v_dict == NULL;
-}
+int nvim_tv_dict_is_null(const typval_T *tv) { return tv->vval.v_dict == NULL; }
 
 /// Check if v_blob is NULL (accessor for Rust).
-int nvim_tv_blob_is_null(const typval_T *tv)
-{
-  return tv->vval.v_blob == NULL;
-}
+int nvim_tv_blob_is_null(const typval_T *tv) { return tv->vval.v_blob == NULL; }
 
 /// Check if v_partial is NULL (accessor for Rust).
-int nvim_tv_partial_is_null(const typval_T *tv)
-{
-  return tv->vval.v_partial == NULL;
-}
+int nvim_tv_partial_is_null(const typval_T *tv) { return tv->vval.v_partial == NULL; }
 
 /// Get the v_list pointer from a typval (accessor for Rust).
-list_T *nvim_tv_get_list(const typval_T *tv)
-{
-  return tv->vval.v_list;
-}
+list_T *nvim_tv_get_list(const typval_T *tv) { return tv->vval.v_list; }
 
 /// Get the v_dict pointer from a typval (accessor for Rust).
-dict_T *nvim_tv_get_dict(const typval_T *tv)
-{
-  return tv->vval.v_dict;
-}
+dict_T *nvim_tv_get_dict(const typval_T *tv) { return tv->vval.v_dict; }
 
 /// Get the v_blob pointer from a typval (accessor for Rust).
-blob_T *nvim_tv_get_blob(const typval_T *tv)
-{
-  return tv->vval.v_blob;
-}
+blob_T *nvim_tv_get_blob(const typval_T *tv) { return tv->vval.v_blob; }
 
-// =============================================================================
 // Typval setter functions for Rust
-// =============================================================================
 
 /// Set v_type to VAR_NUMBER and v_number (setter for Rust).
 void nvim_tv_set_number(typval_T *tv, int64_t n)
@@ -3968,10 +3803,7 @@ void nvim_tv_set_float(typval_T *tv, double f)
 
 /// Get number from typval with error checking (accessor for Rust).
 /// This wrapper calls tv_get_number_chk and updates the error pointer.
-int64_t nvim_tv_get_number_chk(const typval_T *tv, bool *error)
-{
-  return tv_get_number_chk(tv, error);
-}
+int64_t nvim_tv_get_number_chk(const typval_T *tv, bool *error) { return tv_get_number_chk(tv, error); }
 
 /// Get float from typval with error checking (accessor for Rust).
 /// Returns true on success and stores result in *ret.
@@ -3984,9 +3816,7 @@ bool nvim_tv_get_float_chk(const typval_T *tv, double *ret)
   return ok;
 }
 
-// =============================================================================
 // String accessor functions for Rust
-// =============================================================================
 
 /// Get string from typval with type conversion (accessor for Rust).
 /// Uses a static buffer for conversions, so result may be overwritten by next call.
@@ -4058,61 +3888,33 @@ char *nvim_tv_alloc_string(typval_T *tv, size_t len)
   return tv->vval.v_string;
 }
 
-// =============================================================================
 // List accessor functions for Rust
-// =============================================================================
 
 /// Get lv_len from a list (accessor for Rust).
-int nvim_list_get_len(const list_T *l)
-{
-  return l->lv_len;
-}
+int nvim_list_get_len(const list_T *l) { return l->lv_len; }
 
 /// Get lv_lock from a list (accessor for Rust).
-int nvim_list_get_lock(const list_T *l)
-{
-  return (int)l->lv_lock;
-}
+int nvim_list_get_lock(const list_T *l) { return (int)l->lv_lock; }
 
 /// Check if lv_watch is non-NULL (accessor for Rust).
-int nvim_list_has_watchers(const list_T *l)
-{
-  return l->lv_watch != NULL;
-}
+int nvim_list_has_watchers(const list_T *l) { return l->lv_watch != NULL; }
 
 /// Get lv_first from a list (accessor for Rust).
-listitem_T *nvim_list_get_first(const list_T *l)
-{
-  return l->lv_first;
-}
+listitem_T *nvim_list_get_first(const list_T *l) { return l->lv_first; }
 
 /// Get lv_last from a list (accessor for Rust).
-listitem_T *nvim_list_get_last(const list_T *l)
-{
-  return l->lv_last;
-}
+listitem_T *nvim_list_get_last(const list_T *l) { return l->lv_last; }
 
-// =============================================================================
 // Dict accessor functions for Rust
-// =============================================================================
 
 /// Get dv_hashtab.ht_used from a dict (accessor for Rust).
-size_t nvim_dict_get_ht_used(const dict_T *d)
-{
-  return d->dv_hashtab.ht_used;
-}
+size_t nvim_dict_get_ht_used(const dict_T *d) { return d->dv_hashtab.ht_used; }
 
 /// Get dv_lock from a dict (accessor for Rust).
-int nvim_dict_get_lock(const dict_T *d)
-{
-  return (int)d->dv_lock;
-}
+int nvim_dict_get_lock(const dict_T *d) { return (int)d->dv_lock; }
 
 /// Check if dict has watchers (accessor for Rust).
-int nvim_dict_has_watchers(const dict_T *d)
-{
-  return !QUEUE_EMPTY(&d->watchers);
-}
+int nvim_dict_has_watchers(const dict_T *d) { return !QUEUE_EMPTY(&d->watchers); }
 
 /// Get dict length (number of items) (accessor for Rust).
 int nvim_dict_get_len(const dict_T *d)
@@ -4124,71 +3926,39 @@ int nvim_dict_get_len(const dict_T *d)
 }
 
 /// Get dv_copyID from a dict (accessor for Rust).
-int nvim_dict_get_copyid(const dict_T *d)
-{
-  return d->dv_copyID;
-}
+int nvim_dict_get_copyid(const dict_T *d) { return d->dv_copyID; }
 
 /// Get dv_used_next from a dict (accessor for Rust).
-dict_T *nvim_dict_get_used_next(const dict_T *d)
-{
-  return d->dv_used_next;
-}
+dict_T *nvim_dict_get_used_next(const dict_T *d) { return d->dv_used_next; }
 
 // nvim_dictitem_get_tv: defined in vars.c
 
 /// Get di_key from a dictitem as a C string (accessor for Rust).
-const char *nvim_dictitem_get_key(const dictitem_T *di)
-{
-  return di->di_key;
-}
+const char *nvim_dictitem_get_key(const dictitem_T *di) { return di->di_key; }
 
 /// Look up a key in a dict, returning a dictitem pointer or NULL (accessor for Rust).
-dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len)
-{
-  return tv_dict_find(d, key, len);
-}
+dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len) { return tv_dict_find(d, key, len); }
 
 /// Get string representation of a typval into buf (accessor for Rust).
 /// Returns NULL on type error, empty string for empty string.
-const char *nvim_tv_get_string_buf(const typval_T *tv, char *buf)
-{
-  return tv_get_string_buf(tv, buf);
-}
+const char *nvim_tv_get_string_buf(const typval_T *tv, char *buf) { return tv_get_string_buf(tv, buf); }
 
 /// Get string or NULL on type error (accessor for Rust).
-const char *nvim_tv_get_string_buf_chk(const typval_T *tv, char *buf)
-{
-  return tv_get_string_buf_chk(tv, buf);
-}
+const char *nvim_tv_get_string_buf_chk(const typval_T *tv, char *buf) { return tv_get_string_buf_chk(tv, buf); }
 
 /// Get number from typval (accessor for Rust).
-int64_t nvim_tv_get_number_simple(const typval_T *tv)
-{
-  return (int64_t)tv_get_number(tv);
-}
+int64_t nvim_tv_get_number_simple(const typval_T *tv) { return (int64_t)tv_get_number(tv); }
 
 /// Get bool from typval (accessor for Rust).
-int nvim_tv_get_bool_simple(const typval_T *tv)
-{
-  return (int)tv_get_bool(tv);
-}
+int nvim_tv_get_bool_simple(const typval_T *tv) { return (int)tv_get_bool(tv); }
 
 /// Get lv_used_next from a list (accessor for Rust).
-list_T *nvim_list_get_used_next(const list_T *l)
-{
-  return l->lv_used_next;
-}
+list_T *nvim_list_get_used_next(const list_T *l) { return l->lv_used_next; }
 
 /// Set tv_in_free_unref_items global (accessor for Rust).
-void nvim_set_tv_in_free_unref_items(int val)
-{
-  tv_in_free_unref_items = (bool)val;
-}
+void nvim_set_tv_in_free_unref_items(int val) { tv_in_free_unref_items = (bool)val; }
 
-// =============================================================================
 // Blob accessor functions for Rust
-// =============================================================================
 
 /// Get blob length from typval (accessor for Rust).
 int nvim_tv_blob_len(const typval_T *tv)
@@ -4200,53 +3970,29 @@ int nvim_tv_blob_len(const typval_T *tv)
 }
 
 /// Get bv_ga.ga_len from a blob (accessor for Rust).
-int nvim_blob_get_len(const blob_T *b)
-{
-  return b->bv_ga.ga_len;
-}
+int nvim_blob_get_len(const blob_T *b) { return b->bv_ga.ga_len; }
 
 /// Get bv_lock from a blob (accessor for Rust).
-int nvim_blob_get_lock(const blob_T *b)
-{
-  return (int)b->bv_lock;
-}
+int nvim_blob_get_lock(const blob_T *b) { return (int)b->bv_lock; }
 
 /// Get a byte from blob at index (accessor for Rust).
-uint8_t nvim_blob_get_byte(const blob_T *b, int idx)
-{
-  return ((uint8_t *)b->bv_ga.ga_data)[idx];
-}
+uint8_t nvim_blob_get_byte(const blob_T *b, int idx) { return ((uint8_t *)b->bv_ga.ga_data)[idx]; }
 
 /// Set a byte in blob at index (accessor for Rust).
-void nvim_blob_set_byte(blob_T *b, int idx, uint8_t c)
-{
-  ((uint8_t *)b->bv_ga.ga_data)[idx] = c;
-}
+void nvim_blob_set_byte(blob_T *b, int idx, uint8_t c) { ((uint8_t *)b->bv_ga.ga_data)[idx] = c; }
 
 /// Get the raw data pointer from a blob's garray (accessor for Rust).
-uint8_t *nvim_blob_get_ga_data(blob_T *b)
-{
-  return (uint8_t *)b->bv_ga.ga_data;
-}
+uint8_t *nvim_blob_get_ga_data(blob_T *b) { return (uint8_t *)b->bv_ga.ga_data; }
 
 /// Set ga_len in a blob's garray (accessor for Rust).
-void nvim_blob_set_ga_len(blob_T *b, int len)
-{
-  b->bv_ga.ga_len = len;
-}
+void nvim_blob_set_ga_len(blob_T *b, int len) { b->bv_ga.ga_len = len; }
 
 /// Call ga_grow on a blob's garray (accessor for Rust).
-void nvim_blob_ga_grow(blob_T *b, int n)
-{
-  ga_grow(&b->bv_ga, n);
-}
+void nvim_blob_ga_grow(blob_T *b, int n) { ga_grow(&b->bv_ga, n); }
 
 /// Set v_type=VAR_BLOB and vval.v_blob (accessor for Rust).
 /// Also increments the blob's refcount.
-void nvim_tv_set_blob(typval_T *tv, blob_T *b)
-{
-  tv_blob_set_ret(tv, b);
-}
+void nvim_tv_set_blob(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
 
 /// Real implementation of value_check_lock (called from Rust and from
 /// nvim_value_check_lock_translated). Does NOT call the Rust symbol.
@@ -4287,16 +4033,10 @@ bool nvim_value_check_lock_translated(VarLockStatus lock, const char *name)
 }
 
 /// Emit blob index out of range error (accessor for Rust).
-void nvim_semsg_blobidx(int64_t idx)
-{
-  semsg(_(e_blobidx), idx);
-}
+void nvim_semsg_blobidx(int64_t idx) { semsg(_(e_blobidx), idx); }
 
 /// Emit blob wrong number of bytes error (accessor for Rust).
-void nvim_emsg_blob_wrong_bytes(void)
-{
-  emsg(_("E972: Blob value does not have the right number of bytes"));
-}
+void nvim_emsg_blob_wrong_bytes(void) { emsg(_("E972: Blob value does not have the right number of bytes")); }
 
 /// Emit tv_get_float error for funcref (accessor for Rust).
 void nvim_emsg_float_funcref(void) { emsg(_("E891: Using a Funcref as a Float")); }
@@ -4323,99 +4063,50 @@ bool nvim_value_check_lock(VarLockStatus lock, const char *name, size_t name_len
 }
 
 /// Get v_lock from a typval (accessor for Rust).
-int nvim_tv_get_v_lock(const typval_T *tv)
-{
-  return (int)tv->v_lock;
-}
+int nvim_tv_get_v_lock(const typval_T *tv) { return (int)tv->v_lock; }
 
-// =============================================================================
 // Listitem accessor functions for Rust
-// =============================================================================
 
 /// Get li_next from a listitem (accessor for Rust).
-listitem_T *nvim_listitem_get_next(const listitem_T *li)
-{
-  return li->li_next;
-}
+listitem_T *nvim_listitem_get_next(const listitem_T *li) { return li->li_next; }
 
 /// Get li_prev from a listitem (accessor for Rust).
-listitem_T *nvim_listitem_get_prev(const listitem_T *li)
-{
-  return li->li_prev;
-}
+listitem_T *nvim_listitem_get_prev(const listitem_T *li) { return li->li_prev; }
 
 /// Get pointer to li_tv from a listitem (accessor for Rust).
-typval_T *nvim_listitem_get_tv(listitem_T *li)
-{
-  return &li->li_tv;
-}
+typval_T *nvim_listitem_get_tv(listitem_T *li) { return &li->li_tv; }
 
-// =============================================================================
 // List cache accessor functions for Rust (for tv_list_find optimization)
-// =============================================================================
 
 /// Get lv_idx from a list (accessor for Rust).
-int nvim_list_get_idx(const list_T *l)
-{
-  return l->lv_idx;
-}
+int nvim_list_get_idx(const list_T *l) { return l->lv_idx; }
 
 /// Get lv_idx_item from a list (accessor for Rust).
-listitem_T *nvim_list_get_idx_item(const list_T *l)
-{
-  return l->lv_idx_item;
-}
+listitem_T *nvim_list_get_idx_item(const list_T *l) { return l->lv_idx_item; }
 
 /// Set lv_idx on a list (accessor for Rust).
-void nvim_list_set_idx(list_T *l, int idx)
-{
-  l->lv_idx = idx;
-}
+void nvim_list_set_idx(list_T *l, int idx) { l->lv_idx = idx; }
 
 /// Set lv_idx_item on a list (accessor for Rust).
-void nvim_list_set_idx_item(list_T *l, listitem_T *item)
-{
-  l->lv_idx_item = item;
-}
+void nvim_list_set_idx_item(list_T *l, listitem_T *item) { l->lv_idx_item = item; }
 
 /// Get lv_copyID from a list (accessor for Rust).
-int nvim_list_get_copyid(const list_T *l)
-{
-  return l->lv_copyID;
-}
+int nvim_list_get_copyid(const list_T *l) { return l->lv_copyID; }
 
 /// Get lv_copylist from a list (accessor for Rust).
-list_T *nvim_list_get_copylist(const list_T *l)
-{
-  return l->lv_copylist;
-}
+list_T *nvim_list_get_copylist(const list_T *l) { return l->lv_copylist; }
 
 /// Set lv_first on a list (accessor for Rust).
-void nvim_list_set_first(list_T *l, listitem_T *item)
-{
-  l->lv_first = item;
-}
+void nvim_list_set_first(list_T *l, listitem_T *item) { l->lv_first = item; }
 
 /// Set lv_last on a list (accessor for Rust).
-void nvim_list_set_last(list_T *l, listitem_T *item)
-{
-  l->lv_last = item;
-}
+void nvim_list_set_last(list_T *l, listitem_T *item) { l->lv_last = item; }
 
 /// Set li_next on a listitem (accessor for Rust).
-void nvim_listitem_set_next(listitem_T *li, listitem_T *next)
-{
-  li->li_next = next;
-}
+void nvim_listitem_set_next(listitem_T *li, listitem_T *next) { li->li_next = next; }
 
 /// Set li_prev on a listitem (accessor for Rust).
-void nvim_listitem_set_prev(listitem_T *li, listitem_T *prev)
-{
-  li->li_prev = prev;
-}
+void nvim_listitem_set_prev(listitem_T *li, listitem_T *prev) { li->li_prev = prev; }
 
 /// Index into a typval_T array (accessor for Rust).
-typval_T *nvim_tv_idx(typval_T *argvars, int i)
-{
-  return &argvars[i];
-}
+typval_T *nvim_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }

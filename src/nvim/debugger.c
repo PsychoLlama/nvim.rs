@@ -68,130 +68,59 @@ static garray_T prof_ga = { 0, 0, sizeof(struct debuggy), 4, NULL };
 #define DBG_FILE        2
 #define DBG_EXPR        3
 
-// =============================================================================
 // C accessor functions for Rust to call back into
-// =============================================================================
 
 // --- garray_T gap handle getters ---
 
-garray_T *nvim_dbg_get_breakp_gap(void)
-{
-  return &dbg_breakp;
-}
+garray_T *nvim_dbg_get_breakp_gap(void) { return &dbg_breakp; }
 
-garray_T *nvim_dbg_get_prof_gap(void)
-{
-  return &prof_ga;
-}
+garray_T *nvim_dbg_get_prof_gap(void) { return &prof_ga; }
 
 // --- garray_T operations ---
 
-int nvim_dbg_gap_len(garray_T *gap)
-{
-  return gap->ga_len;
-}
+int nvim_dbg_gap_len(garray_T *gap) { return gap->ga_len; }
 
-void nvim_dbg_gap_set_len(garray_T *gap, int len)
-{
-  gap->ga_len = len;
-}
+void nvim_dbg_gap_set_len(garray_T *gap, int len) { gap->ga_len = len; }
 
-void nvim_dbg_gap_grow(garray_T *gap, int n)
-{
-  ga_grow(gap, n);
-}
+void nvim_dbg_gap_grow(garray_T *gap, int n) { ga_grow(gap, n); }
 
-void nvim_dbg_gap_clear(garray_T *gap)
-{
-  ga_clear(gap);
-}
+void nvim_dbg_gap_clear(garray_T *gap) { ga_clear(gap); }
 
-bool nvim_dbg_gap_is_empty(garray_T *gap)
-{
-  return GA_EMPTY(gap);
-}
+bool nvim_dbg_gap_is_empty(garray_T *gap) { return GA_EMPTY(gap); }
 
 // --- struct debuggy per-field accessors (by index) ---
 
-int nvim_dbg_get_nr(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_nr;
-}
+int nvim_dbg_get_nr(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_nr; }
 
-void nvim_dbg_set_nr(garray_T *gap, int idx, int val)
-{
-  DEBUGGY(gap, idx).dbg_nr = val;
-}
+void nvim_dbg_set_nr(garray_T *gap, int idx, int val) { DEBUGGY(gap, idx).dbg_nr = val; }
 
-int nvim_dbg_get_type(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_type;
-}
+int nvim_dbg_get_type(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_type; }
 
-void nvim_dbg_set_type(garray_T *gap, int idx, int val)
-{
-  DEBUGGY(gap, idx).dbg_type = val;
-}
+void nvim_dbg_set_type(garray_T *gap, int idx, int val) { DEBUGGY(gap, idx).dbg_type = val; }
 
-char *nvim_dbg_get_name(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_name;
-}
+char *nvim_dbg_get_name(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_name; }
 
-void nvim_dbg_set_name(garray_T *gap, int idx, char *val)
-{
-  DEBUGGY(gap, idx).dbg_name = val;
-}
+void nvim_dbg_set_name(garray_T *gap, int idx, char *val) { DEBUGGY(gap, idx).dbg_name = val; }
 
-regprog_T *nvim_dbg_get_prog(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_prog;
-}
+regprog_T *nvim_dbg_get_prog(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_prog; }
 
-void nvim_dbg_set_prog(garray_T *gap, int idx, regprog_T *val)
-{
-  DEBUGGY(gap, idx).dbg_prog = val;
-}
+void nvim_dbg_set_prog(garray_T *gap, int idx, regprog_T *val) { DEBUGGY(gap, idx).dbg_prog = val; }
 
-linenr_T nvim_dbg_get_lnum(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_lnum;
-}
+linenr_T nvim_dbg_get_lnum(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_lnum; }
 
-void nvim_dbg_set_lnum(garray_T *gap, int idx, linenr_T val)
-{
-  DEBUGGY(gap, idx).dbg_lnum = val;
-}
+void nvim_dbg_set_lnum(garray_T *gap, int idx, linenr_T val) { DEBUGGY(gap, idx).dbg_lnum = val; }
 
-int nvim_dbg_get_forceit(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_forceit;
-}
+int nvim_dbg_get_forceit(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_forceit; }
 
-void nvim_dbg_set_forceit(garray_T *gap, int idx, int val)
-{
-  DEBUGGY(gap, idx).dbg_forceit = val;
-}
+void nvim_dbg_set_forceit(garray_T *gap, int idx, int val) { DEBUGGY(gap, idx).dbg_forceit = val; }
 
-typval_T *nvim_dbg_get_val(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_val;
-}
+typval_T *nvim_dbg_get_val(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_val; }
 
-void nvim_dbg_set_val(garray_T *gap, int idx, typval_T *val)
-{
-  DEBUGGY(gap, idx).dbg_val = val;
-}
+void nvim_dbg_set_val(garray_T *gap, int idx, typval_T *val) { DEBUGGY(gap, idx).dbg_val = val; }
 
-int nvim_dbg_get_level(garray_T *gap, int idx)
-{
-  return DEBUGGY(gap, idx).dbg_level;
-}
+int nvim_dbg_get_level(garray_T *gap, int idx) { return DEBUGGY(gap, idx).dbg_level; }
 
-void nvim_dbg_set_level(garray_T *gap, int idx, int val)
-{
-  DEBUGGY(gap, idx).dbg_level = val;
-}
+void nvim_dbg_set_level(garray_T *gap, int idx, int val) { DEBUGGY(gap, idx).dbg_level = val; }
 
 // --- gap entry removal (memmove helper) ---
 
@@ -203,118 +132,56 @@ void nvim_dbg_gap_remove_at(garray_T *gap, int idx)
   }
 }
 
-int64_t nvim_dbg_get_sourcing_lnum(void)
-{
-  return (int64_t)SOURCING_LNUM;
-}
+int64_t nvim_dbg_get_sourcing_lnum(void) { return (int64_t)SOURCING_LNUM; }
 
 // --- Buffer/window accessors ---
 
-char *nvim_dbg_curbuf_ffname(void)
-{
-  return curbuf->b_ffname;
-}
+char *nvim_dbg_curbuf_ffname(void) { return curbuf->b_ffname; }
 
-linenr_T nvim_dbg_curwin_cursor_lnum(void)
-{
-  return curwin->w_cursor.lnum;
-}
+linenr_T nvim_dbg_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 // --- ExArg accessors ---
 
-char *nvim_dbg_eap_get_arg(const exarg_T *eap)
-{
-  return eap->arg;
-}
+char *nvim_dbg_eap_get_arg(const exarg_T *eap) { return eap->arg; }
 
-char *nvim_dbg_eap_get_cmd(const exarg_T *eap)
-{
-  return eap->cmd;
-}
+char *nvim_dbg_eap_get_cmd(const exarg_T *eap) { return eap->cmd; }
 
-int nvim_dbg_eap_get_skip(const exarg_T *eap)
-{
-  return eap->skip;
-}
+int nvim_dbg_eap_get_skip(const exarg_T *eap) { return eap->skip; }
 
-void nvim_dbg_eap_set_skip(exarg_T *eap, int val)
-{
-  eap->skip = val;
-}
+void nvim_dbg_eap_set_skip(exarg_T *eap, int val) { eap->skip = val; }
 
-int nvim_dbg_eap_get_forceit(const exarg_T *eap)
-{
-  return eap->forceit;
-}
+int nvim_dbg_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
 
-int nvim_dbg_eap_get_cmdidx(const exarg_T *eap)
-{
-  return (int)eap->cmdidx;
-}
+int nvim_dbg_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
 
-int nvim_dbg_eap_get_addr_count(const exarg_T *eap)
-{
-  return eap->addr_count;
-}
+int nvim_dbg_eap_get_addr_count(const exarg_T *eap) { return eap->addr_count; }
 
-linenr_T nvim_dbg_eap_get_line2(const exarg_T *eap)
-{
-  return eap->line2;
-}
+linenr_T nvim_dbg_eap_get_line2(const exarg_T *eap) { return eap->line2; }
 
-// =============================================================================
 // Message wrappers (keep gettext in C)
-// =============================================================================
 
-void nvim_dbg_msg_entering_debug(void)
-{
-  msg(_("Entering Debug mode.  Type \"cont\" to continue."), 0);
-}
+void nvim_dbg_msg_entering_debug(void) { msg(_("Entering Debug mode.  Type \"cont\" to continue."), 0); }
 
-void nvim_dbg_smsg_oldval(const char *val)
-{
-  smsg(0, _("Oldval = \"%s\""), val);
-}
+void nvim_dbg_smsg_oldval(const char *val) { smsg(0, _("Oldval = \"%s\""), val); }
 
-void nvim_dbg_smsg_newval(const char *val)
-{
-  smsg(0, _("Newval = \"%s\""), val);
-}
+void nvim_dbg_smsg_newval(const char *val) { smsg(0, _("Newval = \"%s\""), val); }
 
-void nvim_dbg_smsg_line_cmd(int64_t lnum, const char *cmd)
-{
-  smsg(0, _("line %" PRId64 ": %s"), lnum, cmd);
-}
+void nvim_dbg_smsg_line_cmd(int64_t lnum, const char *cmd) { smsg(0, _("line %" PRId64 ": %s"), lnum, cmd); }
 
-void nvim_dbg_smsg_cmd(const char *cmd)
-{
-  smsg(0, _("cmd: %s"), cmd);
-}
+void nvim_dbg_smsg_cmd(const char *cmd) { smsg(0, _("cmd: %s"), cmd); }
 
 void nvim_dbg_smsg_breakpoint(const char *prefix, const char *name, int64_t lnum)
 {
   smsg(0, _("Breakpoint in \"%s%s\" line %" PRId64), prefix, name, lnum);
 }
 
-void nvim_dbg_smsg_frame_arrow(int num, const char *name)
-{
-  smsg(0, "->%d %s", num, name);
-}
+void nvim_dbg_smsg_frame_arrow(int num, const char *name) { smsg(0, "->%d %s", num, name); }
 
-void nvim_dbg_smsg_frame(int num, const char *name)
-{
-  smsg(0, "  %d %s", num, name);
-}
+void nvim_dbg_smsg_frame(int num, const char *name) { smsg(0, "  %d %s", num, name); }
 
-void nvim_dbg_msg_frame_zero(void)
-{
-  msg(_("frame is zero"), 0);
-}
+void nvim_dbg_msg_frame_zero(void) { msg(_("frame is zero"), 0); }
 
-void nvim_dbg_smsg_frame_highest(int max)
-{
-  smsg(0, _("frame at highest level: %d"), max);
-}
+void nvim_dbg_smsg_frame_highest(int max) { smsg(0, _("frame at highest level: %d"), max); }
 
 void nvim_dbg_smsg_bp_func(int nr, const char *name, int64_t lnum)
 {
@@ -326,63 +193,29 @@ void nvim_dbg_smsg_bp_file(int nr, const char *name, int64_t lnum)
   smsg(0, _("%3d  %s %s  line %" PRId64), nr, "file", name, lnum);
 }
 
-void nvim_dbg_smsg_bp_expr(int nr, const char *name)
-{
-  smsg(0, _("%3d  expr %s"), nr, name);
-}
+void nvim_dbg_smsg_bp_expr(int nr, const char *name) { smsg(0, _("%3d  expr %s"), nr, name); }
 
-void nvim_dbg_msg_no_breakpoints(void)
-{
-  msg(_("No breakpoints defined"), 0);
-}
+void nvim_dbg_msg_no_breakpoints(void) { msg(_("No breakpoints defined"), 0); }
 
-void nvim_dbg_emsg_noname(void)
-{
-  emsg(_(e_noname));
-}
+void nvim_dbg_emsg_noname(void) { emsg(_(e_noname)); }
 
-void nvim_dbg_semsg_invarg(const char *arg)
-{
-  semsg(_(e_invarg2), arg);
-}
+void nvim_dbg_semsg_invarg(const char *arg) { semsg(_(e_invarg2), arg); }
 
-void nvim_dbg_semsg_bp_not_found(const char *arg)
-{
-  semsg(_("E161: Breakpoint not found: %s"), arg);
-}
+void nvim_dbg_semsg_bp_not_found(const char *arg) { semsg(_("E161: Breakpoint not found: %s"), arg); }
 
-void nvim_dbg_msg_str(const char *s)
-{
-  msg(s, 0);
-}
+void nvim_dbg_msg_str(const char *s) { msg(s, 0); }
 
-// =============================================================================
 // Eval wrappers
-// =============================================================================
 
-typval_T *nvim_dbg_eval_expr(const char *name)
-{
-  return eval_expr((char *)name, NULL);
-}
+typval_T *nvim_dbg_eval_expr(const char *name) { return eval_expr((char *)name, NULL); }
 
-int64_t nvim_dbg_typval_get_v_number(typval_T *tv)
-{
-  return (int64_t)tv->vval.v_number;
-}
+int64_t nvim_dbg_typval_get_v_number(typval_T *tv) { return (int64_t)tv->vval.v_number; }
 
-char *nvim_dbg_typval_tostring(typval_T *tv)
-{
-  return typval_tostring(tv, true);
-}
+char *nvim_dbg_typval_tostring(typval_T *tv) { return typval_tostring(tv, true); }
 
-void nvim_dbg_tv_free(typval_T *tv)
-{
-  tv_free(tv);
-}
+void nvim_dbg_tv_free(typval_T *tv) { tv_free(tv); }
 
-// =============================================================================
 // Command line wrappers
-// =============================================================================
 
 char *nvim_dbg_getcmdline_prompt(void)
 {
@@ -390,24 +223,13 @@ char *nvim_dbg_getcmdline_prompt(void)
                            false, NULL);
 }
 
-void nvim_dbg_do_cmdline(const char *cmd)
-{
-  do_cmdline((char *)cmd, getexline, NULL, DOCMD_VERBOSE|DOCMD_EXCRESET);
-}
+void nvim_dbg_do_cmdline(const char *cmd) { do_cmdline((char *)cmd, getexline, NULL, DOCMD_VERBOSE|DOCMD_EXCRESET); }
 
-void nvim_dbg_do_cmdline_cmd(const char *cmd)
-{
-  do_cmdline_cmd((char *)cmd);
-}
+void nvim_dbg_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd((char *)cmd); }
 
-void nvim_dbg_msg_starthere(void)
-{
-  msg_starthere();
-}
+void nvim_dbg_msg_starthere(void) { msg_starthere(); }
 
-// =============================================================================
 // Typeahead wrappers
-// =============================================================================
 
 /// Save typeahead state. Returns allocated handle (caller must free via restore).
 void *nvim_dbg_save_typeahead(void)
@@ -425,17 +247,9 @@ void nvim_dbg_restore_typeahead(void *handle)
   xfree(tp);
 }
 
-// =============================================================================
 // String/memory wrappers
-// =============================================================================
 
-int32_t nvim_dbg_getdigits_int32(char **pp)
-{
-  return getdigits_int32(pp, true, 0);
-}
+int32_t nvim_dbg_getdigits_int32(char **pp) { return getdigits_int32(pp, true, 0); }
 
-void nvim_dbg_home_replace(const char *name, char *buf, int buflen)
-{
-  home_replace(NULL, name, buf, buflen, true);
-}
+void nvim_dbg_home_replace(const char *name, char *buf, int buflen) { home_replace(NULL, name, buf, buflen, true); }
 
