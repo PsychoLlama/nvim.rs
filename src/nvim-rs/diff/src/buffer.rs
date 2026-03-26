@@ -169,7 +169,6 @@ extern "C" {
     fn rs_diff_redraw(dofold: bool);
     fn nvim_diff_semsg_e96();
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
-    fn nvim_upd_valid() -> c_int;
 
     // Window/tab iteration accessors
     fn nvim_tabpage_first_win(tp: TabpageHandle) -> WinHandle;
@@ -949,7 +948,7 @@ pub unsafe extern "C" fn rs_diff_buf_delete(buf: BufHandle) {
         return;
     }
     let curtab = nvim_get_curtab();
-    let upd_valid = nvim_upd_valid();
+    let upd_valid: c_int = 10; // UPD_VALID
     let mut tp = nvim_get_first_tabpage();
     while !tp.is_null() {
         let i = rs_diff_buf_idx_tp(buf, tp);

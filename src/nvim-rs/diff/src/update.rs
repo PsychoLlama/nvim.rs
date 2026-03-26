@@ -33,7 +33,6 @@ extern "C" {
 
     // Redraw
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
-    fn nvim_upd_some_valid() -> c_int;
 
     // Fold
     fn rs_foldmethodIsDiff(wp: WinHandle) -> c_int;
@@ -393,7 +392,7 @@ pub unsafe extern "C" fn rs_diff_redraw(dofold: bool) {
 
     let curtab = nvim_get_curtab();
     let curwin = nvim_get_curwin();
-    let upd_some_valid = nvim_upd_some_valid();
+    let upd_some_valid: c_int = 35; // UPD_SOME_VALID
 
     // FOR_ALL_WINDOWS_IN_TAB: iterate from firstwin via w_next
     let mut wp = nvim_tabpage_first_win(curtab);

@@ -111,7 +111,6 @@ extern "C" {
     fn rs_diff_clear(tp: TabpageHandle);
     fn rs_set_diff_option(wp: WinHandle, value: bool);
     fn nvim_redraw_later_win(wp: WinHandle, typ: c_int);
-    fn nvim_upd_not_valid() -> c_int;
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
 
@@ -228,7 +227,7 @@ pub unsafe extern "C" fn rs_diff_win_options(wp: WinHandle, addbuf: bool) {
         rs_diff_buf_add(nvim_win_get_w_buffer(wp));
     }
 
-    let upd = nvim_upd_not_valid();
+    let upd: c_int = 40; // UPD_NOT_VALID
     nvim_redraw_later_win(wp, upd);
 }
 

@@ -2,16 +2,12 @@
 /// FFI bridge between C and the Rust `nvim-diff` crate.
 /// Contains thin wrappers, accessor functions, static state, and type definitions.
 
-#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "auto/config.h"
-#include "nvim/ascii_defs.h"
 #include "nvim/autocmd.h"
-#include "nvim/autocmd_defs.h"
 #include "nvim/buffer.h"
 #include "nvim/bufwrite.h"
 #include "nvim/change.h"
@@ -27,38 +23,26 @@
 #include "nvim/ex_cmds_defs.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/extmark.h"
-#include "nvim/extmark_defs.h"
 #include "nvim/fileio.h"
 #include "nvim/fold.h"
 #include "nvim/garray.h"
-#include "nvim/garray_defs.h"
-#include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/mark.h"
-#include "nvim/mbyte.h"
-#include "nvim/mbyte_defs.h"
 #include "nvim/memline.h"
-#include "nvim/memline_defs.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
 #include "nvim/option.h"
-#include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/optionstr.h"
 #include "nvim/os/fs.h"
-#include "nvim/os/fs_defs.h"
 #include "nvim/os/os.h"
-#include "nvim/os/os_defs.h"
 #include "nvim/os/shell.h"
 #include "nvim/path.h"
-#include "nvim/pos_defs.h"
 #include "nvim/strings.h"
-#include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/undo.h"
-#include "nvim/vim_defs.h"
 #include "nvim/window.h"
 #include "xdiff/xdiff.h"
 
@@ -184,8 +168,6 @@ win_T *nvim_win_next(win_T *wp) { if (wp == NULL) { return NULL; } return wp->w_
 void nvim_diff_foldUpdate(win_T *wp, linenr_T top, linenr_T bot) { if (wp != NULL) { rs_foldUpdate(wp, top, bot); } }
 void nvim_diff_set_diff_option(win_T *wp, bool value) { if (wp == NULL) { return; } win_T *old_curwin = curwin; curwin = wp; curbuf = curwin->w_buffer; curbuf->b_ro_locked++; set_option_value_give_err(kOptDiff, BOOLEAN_OPTVAL(value), OPT_LOCAL); curbuf->b_ro_locked--; curwin = old_curwin; curbuf = curwin->w_buffer; }
 const char *nvim_diff_ml_get_buf(buf_T *buf, linenr_T lnum) { if (buf == NULL) { return ""; } return ml_get_buf(buf, lnum); }
-int nvim_upd_valid(void) { return UPD_VALID; }
-int nvim_upd_some_valid(void) { return UPD_SOME_VALID; }
 bool nvim_diff_get_busy(void) { return diff_busy; }
 void nvim_diff_set_need_scrollbind(bool val) { diff_need_scrollbind = val; }
 linenr_T nvim_diff_maxlnum(void) { return MAXLNUM; }
@@ -317,7 +299,6 @@ bool nvim_diff_sbo_has_hor(void) { return vim_strchr(p_sbo, 'h') != NULL; }
 void nvim_diff_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
 void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
-int nvim_upd_not_valid(void) { return UPD_NOT_VALID; }
 void nvim_diff_validate_cursor_curwin(void) { validate_cursor(curwin); }
 void nvim_diff_set_cmdmod_tab_zero(void) { cmdmod.cmod_tab = 0; }
 void nvim_diff_do_exedit_with_old_curwin(exarg_T *eap, win_T *old_curwin) { do_exedit(eap, old_curwin); }
