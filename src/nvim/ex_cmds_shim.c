@@ -286,11 +286,7 @@ int global_need_beginline = 0;           // call beginline() after ":g"
 // implemented in Rust (ex_cmds/src/substitute.rs). old_sub state is owned by Rust.
 extern void rs_sub_set_replacement(char *sub, uint64_t timestamp, void *additional_data);
 
-/// Format and display the substitution count message.
-///
-/// Handles the NGETTEXT formatting (which must stay in C for i18n) and message
-/// display. This is called by rs_do_sub_msg when thresholds are met.
-/// Returns true if the message was displayed.
+// Format and display the substitution count message (uses NGETTEXT, must stay in C).
 bool nvim_excmds_format_sub_msg(bool count_only)
 {
   if (got_int) {
@@ -318,11 +314,6 @@ bool nvim_excmds_format_sub_msg(bool count_only)
   return true;
 }
 
-/// Set up for a tagpreview.
-///
-/// @param undo_sync  sync undo when leaving the window
-///
-/// @return           true when it was created.
 // --- prepare_tagpreview FFI accessors ---
 int nvim_excmds_curwin_get_pvw(void) { return curwin->w_p_pvw; }
 void nvim_excmds_curwin_set_pvw(int val) { curwin->w_p_pvw = (bool)val; }
@@ -346,27 +337,9 @@ void nvim_excmds_set_foldcolumn_zero(void) { set_option_direct(kOptFoldcolumn, S
 
 int nvim_excmds_oldfiles_count(void) { list_T *l = get_vim_var_list(VV_OLDFILES); return l == NULL ? 0 : (int)tv_list_len(l); }
 
-const char *nvim_excmds_oldfiles_find_str(int idx)
-{
-  list_T *l = get_vim_var_list(VV_OLDFILES);
-  if (l == NULL) {
-    return NULL;
-  }
-  return tv_list_find_str(l, idx);
-}
-
+const char *nvim_excmds_oldfiles_find_str(int idx) { list_T *l = get_vim_var_list(VV_OLDFILES); if (l == NULL) { return NULL; } return tv_list_find_str(l, idx); }
 int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
-void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg)
-{
-  char *saved_arg = eap->arg;
-  int saved_cmdidx = eap->cmdidx;
-  eap->arg = arg;
-  eap->cmdidx = CMD_edit;
-  cmdmod.cmod_flags &= ~CMOD_BROWSE;
-  do_exedit(eap, NULL);
-  eap->arg = saved_arg;
-  eap->cmdidx = saved_cmdidx;
-}
+void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg) { char *saved_arg = eap->arg; int saved_cmdidx = eap->cmdidx; eap->arg = arg; eap->cmdidx = CMD_edit; cmdmod.cmod_flags &= ~CMOD_BROWSE; do_exedit(eap, NULL); eap->arg = saved_arg; eap->cmdidx = saved_cmdidx; }
 
 // --- do_shell FFI accessors ---
 int nvim_excmds_any_buf_changed(void)
@@ -580,13 +553,7 @@ int nvim_excmds_curbuf_check_writable(void) { return 1; }
 int nvim_excmds_dialog_write_partial(void) { return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0; }
 
 // --- rs_do_saveas_swap FFI accessors ---
-void nvim_excmds_buf_swap_filenames(buf_T *alt_buf)
-{
-  char *tmp;
-  tmp = alt_buf->b_fname; alt_buf->b_fname = curbuf->b_fname; curbuf->b_fname = tmp;
-  tmp = alt_buf->b_ffname; alt_buf->b_ffname = curbuf->b_ffname; curbuf->b_ffname = tmp;
-  tmp = alt_buf->b_sfname; alt_buf->b_sfname = curbuf->b_sfname; curbuf->b_sfname = tmp;
-}
+void nvim_excmds_buf_swap_filenames(buf_T *alt_buf) { char *tmp; tmp = alt_buf->b_fname; alt_buf->b_fname = curbuf->b_fname; curbuf->b_fname = tmp; tmp = alt_buf->b_ffname; alt_buf->b_ffname = curbuf->b_ffname; curbuf->b_ffname = tmp; tmp = alt_buf->b_sfname; alt_buf->b_sfname = curbuf->b_sfname; curbuf->b_sfname = tmp; }
 void nvim_excmds_buf_name_changed_curbuf(void) { buf_name_changed(curbuf); }
 int nvim_excmds_buf_get_b_p_bl(const buf_T *buf) { return buf->b_p_bl ? 1 : 0; }
 void nvim_excmds_buf_set_b_p_bl_true(buf_T *buf) { buf->b_p_bl = true; }
