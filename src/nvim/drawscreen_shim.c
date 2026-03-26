@@ -91,11 +91,6 @@ void nvim_drawscreen_msg_clr_cmdline(void)
   msg_clr_cmdline();
 }
 
-// nvim_drawscreen_edit_submode_is_null: deleted (Phase 38, use edit_submode directly)
-// nvim_drawscreen_edit_submode_ptr: deleted (Phase 38, use edit_submode directly)
-// nvim_drawscreen_edit_submode_pre_is_null: deleted (Phase 38, use edit_submode_pre directly)
-// nvim_drawscreen_edit_submode_pre_ptr: deleted (Phase 38, use edit_submode_pre directly)
-
 /// Call get_keymap_str(curwin, " (%s)", NameBuff, MAXPATHL).
 /// Returns the result length (>0 means something was written to NameBuff).
 int nvim_drawscreen_get_keymap_str(void)
@@ -116,7 +111,7 @@ int nvim_win_get_w_p_arab(win_T *wp)
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: default_grid_alloc, screenclear, screen_resize batch helpers
+// default_grid_alloc, screenclear, screen_resize batch helpers
 // ---------------------------------------------------------------------------
 
 /// Return default_grid.rows.
@@ -354,7 +349,7 @@ void nvim_screen_resize_impl(int width, int height)
 }
 
 // ---------------------------------------------------------------------------
-// Phase 6: win_update visual region helper
+// win_update visual region helper
 // ---------------------------------------------------------------------------
 
 /// Full implementation of the visual region update section of win_update().
@@ -510,7 +505,7 @@ void nvim_win_visual_region_impl(win_T *wp, buf_T *buf, int type,
 }
 
 // ---------------------------------------------------------------------------
-// Phase 5: update_screen batch helper
+// update_screen batch helper
 // ---------------------------------------------------------------------------
 
 /// Full implementation of update_screen(), called from rs_update_screen() in Rust.
