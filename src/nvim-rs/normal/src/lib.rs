@@ -305,8 +305,6 @@ extern "C" {
     fn mb_get_class(ptr: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_emsg_no_string_under_cursor();
-    fn nvim_emsg_no_ident_under_cursor();
 
     // pos_T accessors (from memline_shim.c)
     fn nvim_pos_get_lnum(pos: *const c_void) -> c_int;
@@ -702,9 +700,9 @@ pub unsafe extern "C" fn rs_find_ident_at_pos(
     if *ptr.offset(col as isize) == nul || (i == 0 && this_class != 2) {
         // Didn't find an identifier or text.
         if find_type & FIND_STRING != 0 {
-            nvim_emsg_no_string_under_cursor();
+            nvim_emsg(gettext(c"E348: No string under cursor".as_ptr()));
         } else {
-            nvim_emsg_no_ident_under_cursor();
+            nvim_emsg(gettext(c"E349: No identifier under cursor".as_ptr()));
         }
         return 0;
     }
@@ -2406,7 +2404,7 @@ unsafe fn invoke_edit_impl(cap: CapHandle, repl: bool, cmd: c_int, startln: bool
     }
 }
 
-/// FFI export for `invoke_edit` (used by C callers n_opencmd, nvim_invoke_edit_R, etc.).
+/// FFI export for `invoke_edit` (used by C callers n_opencmd, etc.).
 ///
 /// # Safety
 /// `cap` must be a valid cmdarg_T pointer.
@@ -2798,7 +2796,7 @@ unsafe fn nv_k_getcmd(
         }
         if n == 0 {
             // found dashes only
-            nvim_emsg_no_ident_under_cursor();
+            nvim_emsg(gettext(c"E349: No identifier under cursor".as_ptr()));
             return None;
         }
 
@@ -2864,7 +2862,7 @@ pub unsafe extern "C" fn rs_ident_build_and_exec(
 
         #[allow(clippy::cast_sign_loss)]
         if kp_help && *skipwhite(ptr.cast_const()).cast::<u8>() == 0 {
-            nvim_emsg_no_ident_under_cursor();
+            nvim_emsg(gettext(c"E349: No identifier under cursor".as_ptr()));
             return;
         }
         #[allow(clippy::cast_sign_loss)]
@@ -4097,7 +4095,6 @@ extern "C" {
     // Phase 3: nv_Replace / nv_vreplace accessors
     fn nvim_curbuf_modifiable() -> bool;
     fn nvim_emsg_modifiable();
-    fn nvim_invoke_edit_R(cap: CapHandle, repl: bool, cmd: c_int);
     fn nvim_get_literal_call(no_simplify: bool) -> c_int;
     fn nvim_stuffcharReadbuff(c: c_int);
 
@@ -4313,7 +4310,7 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
         } else {
             c_int::from(b'R')
         };
-        nvim_invoke_edit_R(cap, false, cmd);
+        invoke_edit_impl(cap, false, cmd, false);
     } else {
         nvim_emsg_modifiable();
     }
@@ -4357,7 +4354,7 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
         if virtual_active(nvim_get_curwin()) {
             coladvance(nvim_get_curwin(), nvim_getviscol());
         }
-        nvim_invoke_edit_R(cap, true, c_int::from(b'v'));
+        invoke_edit_impl(cap, true, c_int::from(b'v'), false);
     } else {
         nvim_emsg_modifiable();
     }
@@ -5539,7 +5536,6 @@ extern "C" {
     fn current_search(count: c_int, forward: bool) -> bool;
     fn cursor_up(count: c_int, upd_topline: bool) -> c_int;
     fn cursor_pos_info(dict: *mut std::ffi::c_void);
-    fn nvim_invoke_edit_g(cap: CapHandle);
     static mut mod_mask: c_int;
     fn nvim_do_mouse_g(oap: OapHandle, nchar: c_int, count1: c_int);
     fn rs_goto_byte(count: c_int);
@@ -6302,7 +6298,7 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
         n if n == b'I' as c_int => {
             nvim_beginline(0);
             if !rs_checkclearopq(oap) {
-                nvim_invoke_edit_g(cap);
+                invoke_edit_impl(cap, false, c_int::from(b'g'), false);
             }
         }
 

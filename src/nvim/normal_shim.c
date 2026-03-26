@@ -123,7 +123,6 @@ static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(Norma
 // n_*(): functions called to handle Normal mode commands.
 // v_*(): functions called to handle Visual mode commands.
 
-static const char *e_noident = N_("E349: No identifier under cursor");
 
 // Rust FFI declarations (only those called directly from this file)
 
@@ -728,7 +727,6 @@ int nvim_replace_check_prompt(void) {
 // =============================================================================
 
 bool nvim_curbuf_modifiable(void) { return MODIFIABLE(curbuf); }
-void nvim_invoke_edit_R(cmdarg_T *cap, bool repl, int cmd) { invoke_edit(cap, repl, cmd, false); }
 int nvim_get_literal_call(bool no_simplify) { return get_literal(no_simplify); }
 
 // z-command accessors for Rust FFI
@@ -768,7 +766,6 @@ void nvim_sync_fen_in_diff_windows(void)
 // =============================================================================
 
 // g-command C accessors for Rust FFI
-void nvim_invoke_edit_g(cmdarg_T *cap) { invoke_edit(cap, false, 'g', false); }
 void nvim_do_mouse_g(oparg_T *oap, int nchar, int count1) { do_mouse(oap, nchar, BACKWARD, count1, 0); }
 void nvim_set_oap_cursor_start(oparg_T *oap) { oap->cursor_start = curwin->w_cursor; }
 // nv_screengo C accessors for Rust FFI
@@ -800,10 +797,6 @@ _Static_assert(FORWARD == 1, "FORWARD changed");
 
 char *nvim_ml_get_buf_wrapper(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
 
-
-void nvim_emsg_no_string_under_cursor(void) { emsg(_("E348: No string under cursor")); }
-
-void nvim_emsg_no_ident_under_cursor(void) { emsg(_(e_noident)); }
 
 
 /// Normal state entry point. This is called on:
@@ -977,9 +970,6 @@ void nvim_ui_cursor_shape_wrapper(void) { ui_cursor_shape(); }
 
 /// checkpcmark() wrapper.
 void nvim_checkpcmark_wrapper(void) { checkpcmark(); }
-
-/// Free ca->searchbuf and null it.
-void nvim_xfree_cap_searchbuf(cmdarg_T *ca) { xfree(ca->searchbuf); ca->searchbuf = NULL; }
 
 
 /// curwin->w_p_scb.

@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_ui_cursor_shape_wrapper();
     fn rs_clear_showcmd();
     fn nvim_checkpcmark_wrapper();
-    fn nvim_xfree_cap_searchbuf(ca: CapHandle);
+    fn xfree(ptr: *mut std::ffi::c_void);
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_curwin_get_p_crb() -> bool;
     fn nvim_validate_cursor_curwin_wrapper();
@@ -168,7 +168,11 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     }
 
     nvim_checkpcmark_wrapper();
-    nvim_xfree_cap_searchbuf(ca);
+    {
+        let cap_typed = ca.cast::<CmdargT>();
+        xfree((*cap_typed).searchbuf.cast::<std::ffi::c_void>());
+        (*cap_typed).searchbuf = std::ptr::null_mut();
+    }
 
     mb_check_adjust_col(nvim_get_curwin());
 
