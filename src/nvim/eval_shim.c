@@ -134,11 +134,7 @@ int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count;
 // C accessors for p_cpo save/restore (used by Rust pattern_match)
 static char *saved_eval_p_cpo;
 
-void nvim_eval_save_set_cpo(void)
-{
-  saved_eval_p_cpo = p_cpo;
-  p_cpo = empty_string_option;
-}
+void nvim_eval_save_set_cpo(void) { saved_eval_p_cpo = p_cpo; p_cpo = empty_string_option; }
 
 void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
@@ -218,18 +214,9 @@ extern int rs_call_func_rettv(char **arg, evalarg_T *evalarg, typval_T *rettv, b
 extern int rs_eval_lambda(char **arg, typval_T *rettv, evalarg_T *evalarg, bool verbose);
 
 /// Non-static wrapper for eval_one_expr_in_str -- used by rs_eval_interp_string.
-char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
-{
-  return eval_one_expr_in_str(p, gap, evaluate);
-}
+char *nvim_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return eval_one_expr_in_str(p, gap, evaluate); }
 
-char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
-{
-  if (pt->pt_func != NULL) {
-    return pt->pt_func->uf_name;
-  }
-  return NULL;
-}
+char *nvim_partial_get_pt_func_uf_name(partial_T *pt) { return pt->pt_func != NULL ? pt->pt_func->uf_name : NULL; }
 
 /// Mark buffer-local variables and callbacks with copyID.
 /// Iterates all buffers and calls rs_set_ref_in_item / rs_set_ref_in_callback
@@ -429,32 +416,20 @@ void nvim_tv_dict_item_free(dictitem_T *di) { xfree(di); }
 /// Takes a typval_T pointer and copies by value, avoiding FFI struct-by-value issues.
 void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
 {
-  tv->v_lock = VAR_UNLOCKED;
-  tv_list_append_owned_tv(l, *tv);
+  tv->v_lock = VAR_UNLOCKED; tv_list_append_owned_tv(l, *tv);
 }
 
 void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l) { tv_list_set_ret(rettv, l); }
 
 void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
-{
-  di->di_tv = *tv;
-  di->di_tv.v_lock = VAR_UNLOCKED;
-}
+  { di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED; }
 
 void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d) { tv_dict_set_ret(rettv, d); }
 
-bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp)
-{
-  return lp->ll_dict == get_vimvar_dict()
-         || &lp->ll_dict->dv_hashtab == get_funccal_args_ht();
-}
+bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp) { return lp->ll_dict == get_vimvar_dict() || &lp->ll_dict->dv_hashtab == get_funccal_args_ht(); }
 
 /// Composite: var_check_ro || var_check_lock on di_flags - accessor for Rust.
-bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len)
-{
-  return var_check_ro(lp->ll_di->di_flags, name, name_len)
-         || var_check_lock(lp->ll_di->di_flags, name, name_len);
-}
+bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len) { return var_check_ro(lp->ll_di->di_flags, name, name_len) || var_check_lock(lp->ll_di->di_flags, name, name_len); }
 
 void nvim_lval_set_tv_to_li_tv(lval_T *lp) { lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li); }
 
@@ -463,28 +438,16 @@ void nvim_lval_tv_list_alloc_ret(lval_T *lp) { tv_list_alloc_ret(lp->ll_tv, kLis
 void nvim_lval_tv_blob_alloc_ret(lval_T *lp) { tv_blob_alloc_ret(lp->ll_tv); }
 
 /// tv_blob_check_index wrapper - accessor for Rust.
-int nvim_tv_blob_check_index(int bloblen, int n1, bool quiet)
-{
-  return tv_blob_check_index(bloblen, (varnumber_T)n1, quiet);
-}
+int nvim_tv_blob_check_index(int bloblen, int n1, bool quiet) { return tv_blob_check_index(bloblen, (varnumber_T)n1, quiet); }
 
 /// tv_blob_check_range wrapper - accessor for Rust.
-int nvim_tv_blob_check_range(int bloblen, int n1, int n2, bool quiet)
-{
-  return tv_blob_check_range(bloblen, (varnumber_T)n1, (varnumber_T)n2, quiet);
-}
+int nvim_tv_blob_check_range(int bloblen, int n1, int n2, bool quiet) { return tv_blob_check_range(bloblen, (varnumber_T)n1, (varnumber_T)n2, quiet); }
 
 /// tv_list_check_range_index_one returning opaque listitem_T* - accessor for Rust.
-listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet)
-{
-  return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet);
-}
+listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet) { return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet); }
 
 /// tv_list_check_range_index_two via lp fields - accessor for Rust.
-int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet)
-{
-  return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet);
-}
+int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet) { return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet); }
 
 bool nvim_partial_get_pt_auto(const partial_T *pt) { return pt->pt_auto; }
 
@@ -524,10 +487,7 @@ void nvim_emsg_multiline_echoerr(const char *str) { emsg_multiline(str, "echoerr
 void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }
 
 /// do_cmdline wrapper for :execute - accessor for Rust.
-void nvim_do_cmdline_execute(char *cmd, exarg_T *eap)
-{
-  do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
-}
+void nvim_do_cmdline_execute(char *cmd, exarg_T *eap) { do_cmdline(cmd, eap->ea_getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE); }
 
 int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 
@@ -631,10 +591,7 @@ void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
 int nvim_vimconv_get_type(const vimconv_T *conv) { return conv == NULL ? CONV_NONE : (int)conv->vc_type; }
 
 /// Wrap string_convert(conv, str, NULL).
-char *nvim_string_convert(const vimconv_T *conv, const char *str)
-{
-  return string_convert((vimconv_T *)conv, (char *)str, NULL);
-}
+char *nvim_string_convert(const vimconv_T *conv, const char *str) { return string_convert((vimconv_T *)conv, (char *)str, NULL); }
 
 int nvim_tv_list_copyid(const list_T *list) { return tv_list_copyid(list); }
 
@@ -727,11 +684,7 @@ sctx_T *nvim_fold_sctx_save_and_set(win_T *wp)
 }
 
 /// Restore current_sctx from an opaque pointer and free it.
-void nvim_restore_current_sctx(sctx_T *saved)
-{
-  current_sctx = *saved;
-  xfree(saved);
-}
+void nvim_restore_current_sctx(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
 
 /// Construct an Object result for foldtext evaluation.
 /// tv_type: VAR_LIST (4) -> vim_to_object; otherwise -> STRING_OBJ(cstr_to_string(tv_get_string)).
@@ -786,11 +739,7 @@ void *nvim_save_provider_caller_scope(void)
 }
 
 /// Restore the provider_caller_scope from the saved blob and free it.
-void nvim_restore_provider_caller_scope(void *saved)
-{
-  provider_caller_scope = *(struct caller_scope *)saved;
-  xfree(saved);
-}
+void nvim_restore_provider_caller_scope(void *saved) { provider_caller_scope = *(struct caller_scope *)saved; xfree(saved); }
 
 /// tv_list_alloc with explicit count (for provider args list).
 list_T *nvim_eval_list_alloc_n(int n) { return tv_list_alloc((ptrdiff_t)n); }
@@ -830,19 +779,13 @@ void nvim_timer_set_callback(timer_T *timer, const Callback *cb) { timer->callba
 
 void nvim_timer_tw_init(timer_T *timer) { time_watcher_init(&main_loop, &timer->tw, timer); }
 
-void nvim_timer_tw_start(timer_T *timer, uint64_t timeout, uint64_t repeat)
-{
-  time_watcher_start(&timer->tw, timer_due_cb, timeout, repeat);
-}
+void nvim_timer_tw_start(timer_T *timer, uint64_t timeout, uint64_t repeat) { time_watcher_start(&timer->tw, timer_due_cb, timeout, repeat); }
 
 void nvim_timer_tw_stop(timer_T *timer) { time_watcher_stop(&timer->tw); }
 
 void nvim_timer_tw_close(timer_T *timer) { time_watcher_close(&timer->tw, rs_timer_close_cb); }
 
-void nvim_timer_tw_set_events_child(timer_T *timer)
-{
-  timer->tw.events = multiqueue_new_child(rs_loop_get_events(&main_loop));
-}
+void nvim_timer_tw_set_events_child(timer_T *timer) { timer->tw.events = multiqueue_new_child(rs_loop_get_events(&main_loop)); }
 
 void nvim_timer_tw_set_blockable(timer_T *timer, int blockable) { timer->tw.blockable = blockable != 0; }
 
@@ -903,7 +846,4 @@ char *nvim_docmd_fmt_exception_not_caught(const char *value)
 }
 
 // msg_multiline wrapper for eval_exec crate.
-void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear)
-{
-  msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear);
-}
+void nvim_msg_multiline_cstr(const char *s, int hl_id, bool check_int, bool hist, bool *need_clear) { msg_multiline(cstr_as_string(s), hl_id, check_int, hist, need_clear); }
