@@ -652,7 +652,7 @@ unsafe extern "C" {
     fn nvim_set_ccline_cmdlen(len: c_int);
     fn nvim_get_ccline_cmdprompt() -> *mut c_char;
     fn nvim_set_ccline_special_char(c: c_int);
-    fn nvim_get_cmdline_star_count() -> c_int;
+    fn nvim_get_cmdline_star() -> c_int;
     fn nvim_get_new_cmdpos() -> c_int;
     fn nvim_set_new_cmdpos(val: c_int);
     fn nvim_get_key_typed_cmdline() -> c_int;
@@ -711,7 +711,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
         && c != CTRL_G
         && (c != b'e' as c_int
             || (nvim_get_ccline_cmdfirstc() == b'=' as c_int && nvim_get_key_typed_cmdline() != 0)
-            || nvim_get_cmdline_star_count() > 0)
+            || nvim_get_cmdline_star() > 0)
     {
         vungetc(c);
         return PROCESS_NEXT_KEY;
@@ -804,7 +804,7 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
     let c = *c_ptr;
     if c == b'=' as c_int {
         if nvim_get_ccline_cmdfirstc() == b'=' as c_int // can't do this recursively
-            || nvim_get_cmdline_star_count() > 0
+            || nvim_get_cmdline_star() > 0
         // or when typing a password
         {
             beep_flush();

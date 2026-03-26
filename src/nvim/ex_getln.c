@@ -1318,13 +1318,8 @@ void nvim_dec_textlock(void) { textlock--; }
 /// Get p_wim (wildmode option string) for Rust.
 char *nvim_get_p_wim(void) { return p_wim; }
 
-/// Get a wim_flags entry for Rust.
 uint8_t nvim_get_wim_flags(int idx) { return wim_flags[idx]; }
-
-/// Set a wim_flags entry for Rust.
 void nvim_set_wim_flags(int idx, uint8_t val) { wim_flags[idx] = val; }
-
-/// Get number of color chunks in ccline.last_colors.colors.
 size_t nvim_get_ccline_colors_size(void) { return kv_size(ccline.last_colors.colors); }
 
 /// Get a color chunk's fields by index.
@@ -1336,31 +1331,11 @@ void nvim_get_ccline_color_chunk(size_t idx, int *start_out, int *end_out, int *
   *hl_id_out = chunk.hl_id;
 }
 
-/// Get cmdline_star global (for draw_cmdline star mode).
-int nvim_get_cmdline_star_count(void) { return cmdline_star; }
-
-/// Set redrawing_cmdline global.
 void nvim_set_redrawing_cmdline(int val) { redrawing_cmdline = (val != 0); }
-
-/// Set msg_no_more global.
 void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
-
-/// Set skip_redraw global.
 void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
-
-/// Get cmdbuff byte at given index.
-char nvim_get_ccline_cmdbuff_byte(int idx) { return ccline.cmdbuff[idx]; }
-
-/// Set cmdbuff byte at given index.
-void nvim_set_ccline_cmdbuff_byte(int idx, char val) { ccline.cmdbuff[idx] = val; }
-
-/// Get KeyTyped global.
 int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
-
-/// Call msg_check() for Rust.
 void nvim_msg_check(void) { msg_check(); }
-
-/// Get p_ru option (ruler) for Rust.
 int nvim_get_p_ru(void) { return p_ru; }
 
 /// Move cursor to end of search match (called from Rust).
@@ -1376,13 +1351,8 @@ void nvim_set_search_match(pos_T *t)
   }
 }
 
-/// Get new_cmdpos (set by setcmdpos()/setcmdline() VimL functions, consumed by cmdline state loop).
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }
-
-/// Set new_cmdpos.
 void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
-
-/// Set KeyTyped global.
 void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
 /// Paste a yank register into the command line (called from Rust).
@@ -1613,21 +1583,9 @@ void nvim_command_line_end_wildmenu(void *vs, bool key_is_wc)
   wildmenu_cleanup(&ccline);
 }
 
-// CommandLineState field accessors (for Rust opaque handle pattern)
-
-/// Get s->c field.
-int nvim_cls_get_c(void *s)
-{
-  return ((CommandLineState *)s)->c;
-}
-
-/// Set s->c field.
-void nvim_cls_set_c(void *s, int val)
-{
-  ((CommandLineState *)s)->c = val;
-}
-
 // CommandLineState field accessors
+int nvim_cls_get_c(void *s) { return ((CommandLineState *)s)->c; }
+void nvim_cls_set_c(void *s, int val) { ((CommandLineState *)s)->c = val; }
 int nvim_cls_get_firstc(void *s) { return ((CommandLineState *)s)->firstc; }
 int nvim_cls_get_count(void *s) { return ((CommandLineState *)s)->count; }
 int nvim_cls_get_indent(void *s) { return ((CommandLineState *)s)->indent; }
@@ -1643,7 +1601,6 @@ int nvim_cls_get_wim_index(void *s) { return ((CommandLineState *)s)->wim_index;
 void nvim_cls_set_wim_index(void *s, int val) { ((CommandLineState *)s)->wim_index = val; }
 void nvim_cls_set_skip_pum_redraw(void *s, int val) { ((CommandLineState *)s)->skip_pum_redraw = (val != 0); }
 void nvim_cls_set_prev_cmdpos(void *s, int val) { ((CommandLineState *)s)->prev_cmdpos = val; }
-char *nvim_cls_get_prev_cmdbuff(void *s) { return ((CommandLineState *)s)->prev_cmdbuff; }
 void nvim_cls_xfree_prev_cmdbuff(void *s) { XFREE_CLEAR(((CommandLineState *)s)->prev_cmdbuff); }
 
 /// Set s->prev_cmdbuff to a copy of ccline.cmdbuff (if non-NULL).
