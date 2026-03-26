@@ -459,17 +459,13 @@ void terminal_notify_theme(Terminal *term, bool dark)
 // }}}
 // libvterm callbacks {{{
 
+static void buf_set_term_title(buf_T *buf, const char *title, size_t len) FUNC_ATTR_NONNULL_ALL;
 static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
-  FUNC_ATTR_NONNULL_ALL
 {
   Error err = ERROR_INIT;
-  dict_set_var(buf->b_vars,
-               STATIC_CSTR_AS_STRING("term_title"),
+  dict_set_var(buf->b_vars, STATIC_CSTR_AS_STRING("term_title"),
                STRING_OBJ(((String){ .data = (char *)title, .size = len })),
-               false,
-               false,
-               NULL,
-               &err);
+               false, false, NULL, &err);
   api_clear_error(&err);
   status_redraw_buf(buf);
 }
@@ -743,9 +739,7 @@ static char *get_config_string(char *key)
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 char nvim_get_bg_char(void) { return *p_bg; }
 
-// C accessor functions for Rust callbacks (Phase 1)
-
-// Accessor functions for Rust callbacks
+// C accessor functions for Rust
 void nvim_terminal_invalidate(void *term, int start_row, int end_row)
   { invalidate_terminal((Terminal *)term, start_row, end_row); }
 void nvim_terminal_send(void *term, const char *data, size_t size)
@@ -949,28 +943,14 @@ void nvim_term_set_osc8_attr(void *vt, int attr)
   vterm_state_set_penattr(state, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value);
 }
 
-// Phase 14: terminal_enter state machine helpers
-
-// vim state
-// nvim_get_state - already in cursor_shape.c
-// nvim_set_state - already in change_ffi.c
-// nvim_get_RedrawingDisabled/nvim_set_RedrawingDisabled - already in window_shim.c
-// nvim_get/set_mapped_ctrl_c - already in getchar.c
-// nvim_get/set_stop_insert_mode - already in nvim-window crate
-// nvim_get/set_restart_edit - already in ex_docmd.c
+// terminal_enter state machine helpers
 void nvim_set_got_int(int v) { got_int = (bool)v; }
-
-// cursor/display
-// nvim_showmode - already in normal_shim.c
 void nvim_unshowmode(void) { unshowmode(true); }
-// nvim_ui_cursor_shape - already in mouse.c
 void nvim_setcursor(void) { setcursor(); }
 void nvim_parse_shape_opt(int scope) { (void)parse_shape_opt(scope); }
 void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
 void nvim_refresh_cursor_c(void *term, int *cursor_visible)
   { bool vis = (bool)*cursor_visible; refresh_cursor((Terminal *)term, &vis); *cursor_visible = (int)vis; }
-
-// redraw
 void nvim_validate_cursor_cw(void) { validate_cursor(curwin); }
 void nvim_update_screen_c(void) { update_screen(); }
 void nvim_redraw_statuslines(void) { redraw_statuslines(); }
@@ -979,29 +959,17 @@ int nvim_clear_cmdline(void) { return (int)clear_cmdline; }
 int nvim_redraw_cmdline(void) { return (int)redraw_cmdline; }
 int nvim_redraw_mode(void) { return (int)redraw_mode; }
 void nvim_ui_flush(void) { ui_flush(); }
-
-// autocmds
 void nvim_apply_termenter_autocmd(void) { apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf); }
 void nvim_apply_termleave_autocmd(void) { apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf); }
 void nvim_apply_textchangedt_autocmd(void) { apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf); }
-// nvim_may_trigger_modechanged - already in normal_shim.c
 void nvim_may_trigger_win_scrolled_resized(void) { may_trigger_win_scrolled_resized(); }
 int nvim_has_event_textchangedt(void) { return (int)has_event(EVENT_TEXTCHANGEDT); }
-
-// changedtick
-// nvim_buf_get_changedtick - already defined (inline in buffer.h)
 void nvim_curbuf_update_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
 void nvim_curbuf_update_changedtick(void) { curbuf->b_last_changedtick = buf_get_changedtick(curbuf); }
 int nvim_curbuf_last_changedtick_i(void) { return (int)curbuf->b_last_changedtick_i; }
-
-// state machine
 void nvim_state_enter_c(void *state) { state_enter((VimState *)state); }
-
-// key handling
-// nvim_get_mod_mask - already in getchar.c
 int nvim_merge_modifiers_c(int key, int *tmp_mod_mask) { return merge_modifiers(key, tmp_mod_mask); }
 void nvim_paste_repeat_c(void) { paste_repeat(1); }
-// nvim_state_handle_k_event - already in normal_shim.c
 void nvim_do_cmdline_key_cmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
 void nvim_map_execute_lua_c(void) { map_execute_lua(false, false); }
 
@@ -1010,8 +978,6 @@ extern void rs_set_terminal_winopts(void *s);
 extern void rs_unset_terminal_winopts(void *s);
 void nvim_terminal_set_winopts(void *s) { rs_set_terminal_winopts(s); }
 void nvim_terminal_unset_winopts(void *s) { rs_unset_terminal_winopts(s); }
-// window option accessors for rs_set_terminal_winopts / rs_unset_terminal_winopts
-// (nvim_win_get_p_cul/cuc/so/siso are already in nvim-window crate; nvim_xstrdup in register.c)
 win_T *nvim_curwin_ptr(void) { return curwin; }
 void nvim_win_set_p_cul(win_T *wp, bool v) { wp->w_p_cul = v; }
 void nvim_win_set_p_cuc(win_T *wp, bool v) { wp->w_p_cuc = v; }
@@ -1025,8 +991,6 @@ void nvim_terminal_check_cursor_c(void) { terminal_check_cursor(); }
 int nvim_terminal_send_mouse_event_c(void *term, int c) { return (int)send_mouse_event((Terminal *)term, c); }
 int nvim_curwin_handle(void) { return curwin->handle; }
 int nvim_buf_get_changedtick_curbuf(void) { return (int)buf_get_changedtick(curbuf); }
-
-// buffer wipe
 void nvim_do_buffer_wipe(int buf_handle)
   { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
 
