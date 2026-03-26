@@ -1316,7 +1316,7 @@ extern "C" {
     fn nvim_buf_get_ml_mfp_fname(buf: *mut BufHandle) -> *mut c_char;
 
     /// Get buf->b_ffname
-    fn nvim_buf_get_ffname(buf: *mut BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_ffname(buf: *mut BufHandle) -> *const c_char;
 
     /// Get buf->b_p_fenc
     fn nvim_buf_get_b_p_fenc(buf: *mut BufHandle) -> *const c_char;
@@ -1343,7 +1343,7 @@ use crate::types::{B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC, B0_SAME_DIR};
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_b0_dir_flag(b0p: *mut c_void, buf: *mut BufHandle) {
     let mfp_fname = nvim_buf_get_ml_mfp_fname(buf);
-    let ffname = nvim_buf_get_ffname(buf);
+    let ffname = nvim_buf_get_b_ffname(buf);
     let flags = nvim_b0_get_flags_byte(b0p);
     if same_directory(mfp_fname, ffname) != 0 {
         nvim_b0_set_flags_byte(b0p, flags | B0_SAME_DIR);
@@ -1430,7 +1430,7 @@ use crate::types::B0_FNAME_SIZE_CRYPT;
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_set_b0_fname(b0p: *mut c_void, buf: *mut BufHandle) {
-    let ffname = nvim_buf_get_ffname(buf);
+    let ffname = nvim_buf_get_b_ffname(buf);
 
     if ffname.is_null() {
         // No file name: clear b0_fname
@@ -1580,9 +1580,6 @@ extern "C" {
 
     /// Get buf->b_fname as const char*
     fn nvim_buf_get_b_fname(buf: *mut BufHandle) -> *const c_char;
-
-    /// Get buf->b_ffname as const char*
-    fn nvim_buf_get_b_ffname(buf: *mut BufHandle) -> *const c_char;
 
     /// Check if path link exists
     fn nvim_os_fileinfo_link(fname: *const c_char) -> c_int;

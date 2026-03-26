@@ -899,8 +899,8 @@ extern "C" {
         allow_dirs: c_int,
     ) -> *mut c_char;
     fn nvim_blfp_regex_compile(pat: *const c_char, magic: c_int) -> *mut c_void;
-    fn nvim_blfp_regex_valid(handle: *mut c_void) -> c_int;
-    fn nvim_blfp_regex_free(handle: *mut c_void);
+    fn nvim_bufname_regex_valid(handle: *mut c_void) -> c_int;
+    fn nvim_bufname_regex_free(handle: *mut c_void);
     fn rs_magic_isset() -> c_int;
     fn rs_diff_mode_buf(buf: BufHandle) -> bool;
 }
@@ -1010,9 +1010,9 @@ pub unsafe fn buflist_findpat_impl(
             // Walk buffers backwards
             let mut buf = nvim_get_lastbuf();
             while !buf.is_null() {
-                if nvim_blfp_regex_valid(regex_handle) == 0 {
+                if nvim_bufname_regex_valid(regex_handle) == 0 {
                     // Regex engine switched — abort
-                    nvim_blfp_regex_free(regex_handle);
+                    nvim_bufname_regex_free(regex_handle);
                     return -1;
                 }
 
@@ -1034,7 +1034,7 @@ pub unsafe fn buflist_findpat_impl(
                 buf = nvim_buf_get_prev(buf);
             }
 
-            nvim_blfp_regex_free(regex_handle);
+            nvim_bufname_regex_free(regex_handle);
 
             if match_fnum >= 0 {
                 break 'attempt_loop; // found exactly one match

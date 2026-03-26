@@ -225,9 +225,6 @@ extern "C" {
     /// Get cursor column for a window.
     fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
 
-    /// Get stored lnum from `buflist_findfmark`.
-    fn nvim_buflist_findfmark_lnum(buf: BufHandle) -> c_int;
-
     /// Get `b_p_bl` (buflisted) from a buffer.
     fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
 
@@ -1098,7 +1095,7 @@ pub unsafe extern "C" fn rs_buflist_altfpos(win: WinHandle) {
 /// `buf` must be a valid buffer handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_buflist_findlnum(buf: BufHandle) -> c_int {
-    nvim_buflist_findfmark_lnum(buf)
+    nvim_buflist_findlnum(buf)
 }
 
 /// Set `buflisted` for curbuf to `on` and trigger autocommands if it changed.

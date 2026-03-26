@@ -129,7 +129,7 @@ extern "C" {
 
     // Cross-function callbacks
     fn nvim_mark_fname2fnum(xfm: *mut XfmarkT);
-    fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
     // Static inline wrappers (can't call these C functions directly from Rust)
     fn nvim_mark_bt_prompt(buf: BufHandle) -> c_int;
@@ -4752,7 +4752,7 @@ pub unsafe extern "C" fn rs_fm_getname(
 /// `buf` must be a valid buffer handle.
 #[unsafe(export_name = "fmarks_check_names")]
 pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
-    let name = nvim_buf_get_ffname(buf);
+    let name = nvim_buf_get_b_ffname(buf);
     if name.is_null() {
         return;
     }

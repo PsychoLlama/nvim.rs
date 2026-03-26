@@ -33,7 +33,7 @@ extern "C" {
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
     fn nvim_buf_get_locked_split(buf: BufHandle) -> c_int;
@@ -366,7 +366,7 @@ pub unsafe fn has_filename(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
     }
-    !nvim_buf_get_ffname(buf).is_null()
+    !nvim_buf_get_b_ffname(buf).is_null()
 }
 
 /// Check if buffer is modified.

@@ -495,8 +495,8 @@ extern "C" {
     // nvim_buflist_findnr returns buf_T* (void* in Rust) - from buffer.c
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
-    // nvim_buf_get_sfname takes buf_T* (void* in Rust) - from buffer.c
-    fn nvim_buf_get_sfname(buf: BufHandle) -> *const c_char;
+    // nvim_buf_get_b_sfname takes buf_T* (void* in Rust) - from buffer.c
+    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
     #[link_name = "nvim_qf_buf_get_fname"]
     fn qf_buf_get_fname_fill(buf: *const c_void) -> *const c_char;
     fn path_tail(fname: *const c_char) -> *mut c_char;
@@ -701,7 +701,7 @@ unsafe fn qf_buf_add_line(
                             // Shorten the file name if not done already.
                             // For optimization, only for the first entry in a buffer.
                             if first_bufline {
-                                let sfname = nvim_buf_get_sfname(errbuf);
+                                let sfname = nvim_buf_get_b_sfname(errbuf);
                                 if sfname.is_null() || path_is_absolute(sfname) {
                                     if dirname[0] == 0 {
                                         os_dirname(dirname.as_mut_ptr().cast(), MAXPATHL);

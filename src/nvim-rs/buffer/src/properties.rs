@@ -18,8 +18,8 @@ use crate::BufHandle;
 
 extern "C" {
     // Name accessors
-    fn nvim_buf_get_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_sfname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
 
     // State accessors
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
@@ -360,7 +360,7 @@ pub unsafe fn get_buffer_properties(buf: BufHandle) -> BufferProperties {
         buftype: get_buffer_type(buf),
         bufhidden: get_hidden_action(buf),
         fileformat: get_file_format(buf),
-        has_filename: !nvim_buf_get_ffname(buf).is_null(),
+        has_filename: !nvim_buf_get_b_ffname(buf).is_null(),
         is_modified: nvim_buf_get_changed(buf) != 0,
         is_readonly: nvim_buf_get_b_p_ro(buf) != 0,
         is_modifiable: nvim_buf_get_b_p_ma(buf) != 0,

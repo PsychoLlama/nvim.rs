@@ -134,8 +134,6 @@ int nvim_buf_get_locked_split(buf_T *buf) { return buf->b_locked_split; }
 int nvim_buf_get_flags(buf_T *buf) { return buf->b_flags; }
 int nvim_buf_get_changed(buf_T *buf) { return buf->b_changed; }
 int nvim_buf_get_b_p_bl(buf_T *buf) { return buf->b_p_bl; }
-const char *nvim_buf_get_ffname(buf_T *buf) { return buf->b_ffname; }
-const char *nvim_buf_get_sfname(buf_T *buf) { return buf->b_sfname; }
 const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
 const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
 const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
@@ -196,7 +194,6 @@ void nvim_buf_set_start_bomb(buf_T *buf, int val) { buf->b_start_bomb = val; }
 
 int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }
-linenr_T nvim_buflist_findfmark_lnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
 void nvim_buf_set_b_p_bl(buf_T *buf, int val) { buf->b_p_bl = val; }
 int64_t nvim_buf_get_last_used(buf_T *buf) { return buf ? (int64_t)buf->b_last_used : 0; }
 
@@ -235,21 +232,6 @@ void *nvim_blfp_regex_compile(const char *pat, int magic)
   regmatch_T *rmp = xmalloc(sizeof(regmatch_T));
   rmp->regprog = vim_regcomp((char *)pat, magic);
   return rmp;
-}
-
-/// Returns 1 if the regprog is still valid (non-NULL).
-int nvim_blfp_regex_valid(void *handle)
-{
-  if (handle == NULL) { return 0; }
-  return ((regmatch_T *)handle)->regprog != NULL ? 1 : 0;
-}
-
-/// Free a heap-allocated regmatch_T handle.
-void nvim_blfp_regex_free(void *handle)
-{
-  if (handle == NULL) { return; }
-  vim_regfree(((regmatch_T *)handle)->regprog);
-  xfree(handle);
 }
 
 /// Compile a regex pattern for buffer name matching. Returns opaque handle or NULL.
