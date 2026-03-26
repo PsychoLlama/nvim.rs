@@ -114,8 +114,6 @@ static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(Norma
 // n_*(): functions called to handle Normal mode commands.
 // v_*(): functions called to handle Visual mode commands.
 
-// Rust FFI declarations (only those called directly from this file)
-
 // Normal mode state machine
 extern int rs_normal_check(void *s);
 extern int rs_normal_execute(void *s, int key);
@@ -294,8 +292,6 @@ int nvim_get_curswant(void) { return curwin->w_curswant; }
 
 _Static_assert(MAXCOL == 0x7fffffff, "MAXCOL changed");
 
-// Command handler accessors for Rust FFI
-
 /// Clear b_syn_slow for all windows in current tab (for nv_clear).
 void nvim_clear_b_syn_slow_all_windows(void) {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
@@ -319,8 +315,6 @@ bool nvim_get_mode_displayed(void) { return mode_displayed; }
 void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
-
-// Redo/count accessors for Rust FFI
 
 // Visual operator accessors for Rust FFI
 _Static_assert(Ctrl_V == 22, "Ctrl_V mismatch");
@@ -350,8 +344,6 @@ int nvim_get_cursor_line_len(void) { return (int)get_cursor_line_len(); }
 int nvim_get_cursor_coladd(void) { return curwin->w_cursor.coladd; }
 
 void nvim_set_cmdwin_result(int val) { cmdwin_result = val; }
-
-// Visual complex function accessors for Rust FFI
 
 // Guards: ensure Rust constants match C values
 _Static_assert(kOptFdoFlagPercent == 0x10,
@@ -405,16 +397,12 @@ int nvim_getvcol_pos_coladd(int lnum, int col, int coladd) { pos_T pp = { lnum, 
 
 int nvim_ml_get_len_call(int lnum) { return (int)ml_get_len(lnum); }
 
-// Search handler accessors for Rust FFI
-
 /// Call getcmdline for search and set cap->searchbuf. Returns the searchbuf (or NULL).
 char *nvim_getcmdline_for_search(cmdarg_T *cap) { cap->searchbuf = getcmdline(cap->cmdchar, cap->count1, 0, true); return cap->searchbuf; }
 
 /// Wrapper for searchit using curwin/curbuf cursor (for find_decl pattern).
 /// Returns 1 on success, 0 on failure.
 int nvim_searchit_decl(const char *pat, size_t patlen, int searchflags) { return searchit(curwin, curbuf, &curwin->w_cursor, NULL, FORWARD, (char *)pat, patlen, 1, searchflags, RE_LAST, NULL); }
-
-// Operator handler accessors for Rust FFI
 
 // Accessors for operator Rust implementations
 bool nvim_bt_prompt_curbuf(void) { return bt_prompt(curbuf); }
@@ -809,8 +797,6 @@ void nvim_getvcols_visual_sbr_save(int *out_left, int *out_right)
 
 void add_to_showcmd_c(int c) { add_to_showcmd(c); setcursor(); }
 
-// Scrollbind C accessors for Rust FFI
-
 /// Set did_syncbind global.
 void nvim_set_did_syncbind(bool val) { did_syncbind = val; }
 
@@ -921,8 +907,6 @@ char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 /// Return mb_prevptr(line, p).
 char *nvim_ident_mb_prevptr(char *line, char *p) { return mb_prevptr(line, p); }
 
-// Dispatch table handler accessors (nv_addsub, nv_colon, nv_record, nv_paste, nv_event)
-
 /// Return paste_repeat(count).
 void nvim_paste_repeat(int count) { paste_repeat(count); }
 
@@ -935,8 +919,6 @@ bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) { return do_cmdlin
 
 /// Return did_emsg.
 int nvim_did_emsg_check(void) { return did_emsg; }
-
-// Search, gotofile, visual text, and mark movement accessors for Rust FFI
 
 /// Returns true if cursor moved and highlights need refresh.
 bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd) { pos_T prev = { .lnum = prev_lnum, .col = (colnr_T)prev_col, .coladd = (colnr_T)prev_coladd }; return !equalpos(curwin->w_cursor, prev) && p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L); }
@@ -957,8 +939,6 @@ int nvim_do_ecmd_for_gotofile(char *ptr) { return do_ecmd(0, ptr, NULL, NULL, EC
 
 /// Call ml_get_pos(&VIsual).
 char *nvim_ml_get_pos_visual(void) { return ml_get_pos(&VIsual); }
-
-// Visual mode, cursor adjustment, and ident accessors for Rust FFI
 
 /// Set mouse_dragging to val.
 void nvim_set_mouse_dragging(int val) { mouse_dragging = val; }
@@ -1101,7 +1081,6 @@ void nvim_redraw_curbuf_later_inverted(void) { redraw_curbuf_later(UPD_INVERTED)
 /// Set curwin->w_set_curswant = val (bool).
 void nvim_curwin_set_curswant_flag(bool val) { curwin->w_set_curswant = val; }
 
-// Phase 2: linewise_delete accessors
 /// Delete count lines starting at cursor with undo support.
 void nvim_del_lines(int count, bool undo) { del_lines((linenr_T)count, undo); }
 /// Truncate the current line (called for OP_CHANGE linewise).
@@ -1218,7 +1197,6 @@ void nvim_ins_ctrl_hat(void)
   showmode();
   status_redraw_curbuf();
 }
-
 
 void nvim_init_Insstart(int startln)
 {
