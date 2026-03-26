@@ -8,6 +8,10 @@
 use std::ffi::c_int;
 
 use super::types::OpArgHandle;
+use crate::types::OpargT;
+
+/// OP_NOP constant (no pending operator).
+const OP_NOP: c_int = 0;
 
 // =============================================================================
 // External C Functions
@@ -30,12 +34,8 @@ extern "C" {
     fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_set_VIsual_mode(val: c_int);
     static mut restart_edit: c_int;
-    // Current operation accessors
-    fn nvim_oap_get_op_type() -> c_int;
+    static mut nvim_current_oap: *mut OpargT;
     fn nvim_oap_set_op_type(oap: OpArgHandle, val: c_int);
-    fn nvim_oap_get_prev_opcount() -> c_int;
-    fn nvim_oap_get_prev_count0() -> c_int;
-    fn nvim_oap_get_regname() -> c_int;
 
     // vcount accessors
     fn nvim_get_opcount() -> c_int;
@@ -165,25 +165,53 @@ fn set_restart_edit_impl(val: c_int) {
 /// Get current operator type from global state.
 #[inline]
 fn get_op_type_global_impl() -> c_int {
-    unsafe { nvim_oap_get_op_type() }
+    unsafe {
+        let oap = nvim_current_oap;
+        if oap.is_null() {
+            OP_NOP
+        } else {
+            (*oap).op_type
+        }
+    }
 }
 
 /// Get previous operator count.
 #[inline]
 fn get_prev_opcount_impl() -> c_int {
-    unsafe { nvim_oap_get_prev_opcount() }
+    unsafe {
+        let oap = nvim_current_oap;
+        if oap.is_null() {
+            0
+        } else {
+            (*oap).prev_opcount
+        }
+    }
 }
 
 /// Get previous count0.
 #[inline]
 fn get_prev_count0_impl() -> c_int {
-    unsafe { nvim_oap_get_prev_count0() }
+    unsafe {
+        let oap = nvim_current_oap;
+        if oap.is_null() {
+            0
+        } else {
+            (*oap).prev_count0
+        }
+    }
 }
 
 /// Get current register name from global state.
 #[inline]
 fn get_regname_global_impl() -> c_int {
-    unsafe { nvim_oap_get_regname() }
+    unsafe {
+        let oap = nvim_current_oap;
+        if oap.is_null() {
+            0
+        } else {
+            (*oap).regname
+        }
+    }
 }
 
 // =============================================================================

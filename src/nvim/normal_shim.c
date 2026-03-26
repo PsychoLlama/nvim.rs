@@ -132,20 +132,7 @@ extern size_t rs_find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol,
 extern void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln);
 extern void del_from_showcmd(int len);
 
-static oparg_T *current_oap = NULL;
-
-// Accessor functions for Rust FFI
-
-/// Check if current_oap is NULL.
-int nvim_oap_is_null(void) { return current_oap == NULL; }
-
-int nvim_oap_get_prev_opcount(void) { return current_oap ? current_oap->prev_opcount : 0; }
-
-int nvim_oap_get_prev_count0(void) { return current_oap ? current_oap->prev_count0 : 0; }
-
-int nvim_oap_get_op_type(void) { return current_oap ? current_oap->op_type : OP_NOP; }
-
-int nvim_oap_get_regname(void) { return current_oap ? current_oap->regname : NUL; }
+oparg_T *nvim_current_oap = NULL;
 
 int nvim_get_opcount(void) { return opcount; }
 
@@ -525,13 +512,13 @@ void normal_enter(bool cmdwin, bool noexmode)
 {
   NormalState state;
   normal_state_init(&state);
-  oparg_T *prev_oap = current_oap;
-  current_oap = &state.oa;
+  oparg_T *prev_oap = nvim_current_oap;
+  nvim_current_oap = &state.oa;
   state.cmdwin = cmdwin;
   state.noexmode = noexmode;
   state.toplevel = (!cmdwin || cmdwin_result == 0) && !noexmode;
   state_enter(&state.state);
-  current_oap = prev_oap;
+  nvim_current_oap = prev_oap;
 }
 
 // normal_get_additional_char accessors for Rust FFI

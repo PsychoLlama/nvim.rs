@@ -43,6 +43,7 @@ pub mod yank;
 pub use oparg::{OpArgHandle, OpArgMut, OpArgRef};
 pub use types::{BlockDef, MotionType, OpType, Pos};
 
+use nvim_normal::types::OpargT;
 use std::ffi::{c_int, c_void};
 
 /// Flags for operator properties
@@ -233,23 +234,10 @@ pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
 // C accessor functions for operator state
 extern "C" {
     static mut State: c_int;
-    /// Check if current_oap is NULL.
-    fn nvim_oap_is_null() -> c_int;
+    static mut nvim_current_oap: *mut OpargT;
 
     /// Get the finish_op global flag.
     fn nvim_get_finish_op() -> c_int;
-
-    /// Get current_oap->prev_opcount (returns 0 if current_oap is NULL).
-    fn nvim_oap_get_prev_opcount() -> c_int;
-
-    /// Get current_oap->prev_count0 (returns 0 if current_oap is NULL).
-    fn nvim_oap_get_prev_count0() -> c_int;
-
-    /// Get current_oap->op_type (returns OP_NOP if current_oap is NULL).
-    fn nvim_oap_get_op_type() -> c_int;
-
-    /// Get current_oap->regname (returns NUL if current_oap is NULL).
-    fn nvim_oap_get_regname() -> c_int;
 }
 
 /// Check if an operator was started but not finished yet.
@@ -258,23 +246,21 @@ extern "C" {
 /// Returns true when an operator is pending, false otherwise.
 #[inline]
 fn op_pending_impl() -> bool {
-    // SAFETY: These are safe accessors to C globals
+    // SAFETY: nvim_current_oap is a C global maintained by normal_enter.
     unsafe {
-        let oap_null = nvim_oap_is_null() != 0;
+        let oap = nvim_current_oap;
+        if oap.is_null() {
+            return false;
+        }
         let finish_op = nvim_get_finish_op() != 0;
-        let prev_opcount = nvim_oap_get_prev_opcount();
-        let prev_count0 = nvim_oap_get_prev_count0();
-        let op_type = nvim_oap_get_op_type();
-        let regname = nvim_oap_get_regname();
+        let prev_opcount = (*oap).prev_opcount;
+        let prev_count0 = (*oap).prev_count0;
+        let op_type = (*oap).op_type;
+        let regname = (*oap).regname;
 
         // Logic: !(current_oap != NULL && !finish_op && prev_opcount == 0
         //          && prev_count0 == 0 && op_type == OP_NOP && regname == NUL)
-        !(!oap_null
-            && !finish_op
-            && prev_opcount == 0
-            && prev_count0 == 0
-            && op_type == OP_NOP
-            && regname == 0)
+        !(!finish_op && prev_opcount == 0 && prev_count0 == 0 && op_type == OP_NOP && regname == 0)
     }
 }
 
