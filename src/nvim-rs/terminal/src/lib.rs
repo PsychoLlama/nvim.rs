@@ -4184,6 +4184,154 @@ pub unsafe extern "C" fn rs_terminal_check_size(term: TerminalHandle) {
     unsafe { rs_invalidate_terminal(term, -1, -1) };
 }
 
+// Phase 17: Migrate set_terminal_winopts / unset_terminal_winopts
+
+extern "C" {
+    fn nvim_curwin_ptr() -> *mut c_void;
+    // getters from nvim-window crate (return c_int for bool options, i64 for OptInt)
+    fn nvim_win_get_p_cul(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_p_cuc(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_p_so(wp: *mut c_void) -> i64;
+    fn nvim_win_get_p_siso(wp: *mut c_void) -> i64;
+    // setters (new, in terminal_shim.c)
+    fn nvim_win_set_p_cul(wp: *mut c_void, v: bool);
+    fn nvim_win_set_p_cuc(wp: *mut c_void, v: bool);
+    fn nvim_win_set_p_so(wp: *mut c_void, v: i64);
+    fn nvim_win_set_p_siso(wp: *mut c_void, v: i64);
+    fn nvim_win_redraw_later_some_valid(wp: *mut c_void);
+    fn nvim_win_redraw_later_valid(wp: *mut c_void);
+    fn nvim_free_string_option(str: *mut i8);
+    fn nvim_win_set_p_culopt(wp: *mut c_void, s: *mut i8);
+    fn nvim_xstrdup(s: *const i8) -> *mut i8;
+    // from window_shim.c / option_shim.c
+    fn nvim_win_get_p_culopt_flags(wp: *mut c_void) -> c_int;
+    fn nvim_win_set_p_culopt_flags(wp: *mut c_void, flags: u8);
+    fn nvim_win_get_p_culopt(wp: *mut c_void) -> *const i8;
+    fn nvim_handle_get_window(handle: c_int) -> *mut c_void;
+    fn rs_win_valid(wp: *mut c_void) -> c_int;
+}
+
+// kOptCuloptFlagNumber = 0x04 (from option_vars.generated.h)
+const K_OPT_CULOPT_FLAG_NUMBER: u8 = 0x04;
+
+/// Save current window options and apply terminal-mode overrides.
+///
+/// Replaces `set_terminal_winopts` in `terminal_shim.c`.
+///
+/// # Safety
+/// `s` must be a valid `*mut TerminalStateRust`.
+///
+/// # Panics
+/// Panics if `s.save_curwin_handle != 0` (window opts already saved).
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::similar_names
+)]
+pub unsafe extern "C" fn rs_set_terminal_winopts(s: *mut c_void) {
+    let s = unsafe { &mut *s.cast::<TerminalStateRust>() };
+    assert!(s.save_curwin_handle == 0);
+
+    let curwin = unsafe { nvim_curwin_ptr() };
+    // Disable these options in terminal-mode. They are nonsense because cursor is
+    // placed at end of buffer to "follow" output. #11072
+    s.save_curwin_handle = unsafe { nvim_curwin_handle() };
+    s.save_w_p_cul = unsafe { nvim_win_get_p_cul(curwin) } != 0;
+    s.save_w_p_culopt = std::ptr::null_mut();
+    s.save_w_p_culopt_flags = unsafe { nvim_win_get_p_culopt_flags(curwin) } as u8;
+    s.save_w_p_cuc = unsafe { nvim_win_get_p_cuc(curwin) };
+    s.save_w_p_so = unsafe { nvim_win_get_p_so(curwin) };
+    s.save_w_p_siso = unsafe { nvim_win_get_p_siso(curwin) };
+
+    let culopt_flags = s.save_w_p_culopt_flags;
+    if s.save_w_p_cul && (culopt_flags & K_OPT_CULOPT_FLAG_NUMBER != 0) {
+        // Compare curwin->w_p_culopt to "number"
+        let culopt_c = unsafe { nvim_win_get_p_culopt(curwin) };
+        let is_number = !culopt_c.is_null() && {
+            // Safety: culopt_c is a valid C string owned by the option system
+            let culopt_str = unsafe { std::ffi::CStr::from_ptr(culopt_c) };
+            culopt_str == c"number"
+        };
+        if !is_number {
+            // Save old culopt and replace with "number"
+            s.save_w_p_culopt = culopt_c.cast_mut();
+            let new_culopt = unsafe { nvim_xstrdup(c"number".as_ptr()) };
+            unsafe { nvim_win_set_p_culopt(curwin, new_culopt) };
+        }
+        unsafe { nvim_win_set_p_culopt_flags(curwin, K_OPT_CULOPT_FLAG_NUMBER) };
+    } else {
+        unsafe { nvim_win_set_p_cul(curwin, false) };
+    }
+    unsafe { nvim_win_set_p_cuc(curwin, false) };
+    unsafe { nvim_win_set_p_so(curwin, 0) };
+    unsafe { nvim_win_set_p_siso(curwin, 0) };
+
+    let result_cuc = unsafe { nvim_win_get_p_cuc(curwin) } != 0;
+    let result_cul = unsafe { nvim_win_get_p_cul(curwin) } != 0;
+    let result_culopt_flags = unsafe { nvim_win_get_p_culopt_flags(curwin) } as u8;
+    if result_cuc != (s.save_w_p_cuc != 0) {
+        unsafe { nvim_win_redraw_later_some_valid(curwin) };
+    } else if result_cul != s.save_w_p_cul
+        || (result_cul && result_culopt_flags != s.save_w_p_culopt_flags)
+    {
+        unsafe { nvim_win_redraw_later_valid(curwin) };
+    }
+}
+
+/// Restore window options after leaving terminal mode.
+///
+/// Replaces `unset_terminal_winopts` in `terminal_shim.c`.
+///
+/// # Safety
+/// `s` must be a valid `*mut TerminalStateRust`.
+///
+/// # Panics
+/// Panics if `s.save_curwin_handle == 0` (window opts not saved).
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::similar_names
+)]
+pub unsafe extern "C" fn rs_unset_terminal_winopts(s: *mut c_void) {
+    let s = unsafe { &mut *s.cast::<TerminalStateRust>() };
+    assert!(s.save_curwin_handle != 0);
+
+    let wp = unsafe { nvim_handle_get_window(s.save_curwin_handle) };
+    if wp.is_null() {
+        unsafe { nvim_free_string_option(s.save_w_p_culopt) };
+        s.save_curwin_handle = 0;
+        return;
+    }
+
+    if unsafe { rs_win_valid(wp) } != 0 {
+        // No need to redraw if window not in curtab.
+        let wp_has_cuc = unsafe { nvim_win_get_p_cuc(wp) } != 0;
+        let wp_has_cul = unsafe { nvim_win_get_p_cul(wp) } != 0;
+        let wp_culopt_flags = unsafe { nvim_win_get_p_culopt_flags(wp) } as u8;
+        if (s.save_w_p_cuc != 0) != wp_has_cuc {
+            unsafe { nvim_win_redraw_later_some_valid(wp) };
+        } else if s.save_w_p_cul != wp_has_cul
+            || (s.save_w_p_cul && s.save_w_p_culopt_flags != wp_culopt_flags)
+        {
+            unsafe { nvim_win_redraw_later_valid(wp) };
+        }
+    }
+
+    unsafe { nvim_win_set_p_cul(wp, s.save_w_p_cul) };
+    if !s.save_w_p_culopt.is_null() {
+        let old_culopt = unsafe { nvim_win_get_p_culopt(wp) };
+        unsafe { nvim_free_string_option(old_culopt.cast_mut()) };
+        unsafe { nvim_win_set_p_culopt(wp, s.save_w_p_culopt) };
+    }
+    unsafe { nvim_win_set_p_culopt_flags(wp, s.save_w_p_culopt_flags) };
+    unsafe { nvim_win_set_p_cuc(wp, s.save_w_p_cuc != 0) };
+    unsafe { nvim_win_set_p_so(wp, s.save_w_p_so) };
+    unsafe { nvim_win_set_p_siso(wp, s.save_w_p_siso) };
+    s.save_curwin_handle = 0;
+}
+
 // Phase 14: Migrate terminal_enter state machine
 
 // Constants for terminal_execute

@@ -427,75 +427,6 @@ void terminal_close(Terminal **termpp, int status)
 extern void rs_terminal_check_size(Terminal *term);
 void terminal_check_size(Terminal *term) { rs_terminal_check_size(term); }
 
-static void set_terminal_winopts(TerminalState *const s)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(s->save_curwin_handle == 0);
-
-  // Disable these options in terminal-mode. They are nonsense because cursor is
-  // placed at end of buffer to "follow" output. #11072
-  s->save_curwin_handle = curwin->handle;
-  s->save_w_p_cul = curwin->w_p_cul;
-  s->save_w_p_culopt = NULL;
-  s->save_w_p_culopt_flags = curwin->w_p_culopt_flags;
-  s->save_w_p_cuc = curwin->w_p_cuc;
-  s->save_w_p_so = curwin->w_p_so;
-  s->save_w_p_siso = curwin->w_p_siso;
-
-  if (curwin->w_p_cul && curwin->w_p_culopt_flags & kOptCuloptFlagNumber) {
-    if (!strequal(curwin->w_p_culopt, "number")) {
-      s->save_w_p_culopt = curwin->w_p_culopt;
-      curwin->w_p_culopt = xstrdup("number");
-    }
-    curwin->w_p_culopt_flags = kOptCuloptFlagNumber;
-  } else {
-    curwin->w_p_cul = false;
-  }
-  curwin->w_p_cuc = false;
-  curwin->w_p_so = 0;
-  curwin->w_p_siso = 0;
-
-  if (curwin->w_p_cuc != s->save_w_p_cuc) {
-    redraw_later(curwin, UPD_SOME_VALID);
-  } else if (curwin->w_p_cul != s->save_w_p_cul
-             || (curwin->w_p_cul && curwin->w_p_culopt_flags != s->save_w_p_culopt_flags)) {
-    redraw_later(curwin, UPD_VALID);
-  }
-}
-
-static void unset_terminal_winopts(TerminalState *const s)
-  FUNC_ATTR_NONNULL_ALL
-{
-  assert(s->save_curwin_handle != 0);
-
-  win_T *const wp = handle_get_window(s->save_curwin_handle);
-  if (!wp) {
-    free_string_option(s->save_w_p_culopt);
-    s->save_curwin_handle = 0;
-    return;
-  }
-
-  if (rs_win_valid(wp)) {  // No need to redraw if window not in curtab.
-    if (s->save_w_p_cuc != wp->w_p_cuc) {
-      redraw_later(wp, UPD_SOME_VALID);
-    } else if (s->save_w_p_cul != wp->w_p_cul
-               || (s->save_w_p_cul && s->save_w_p_culopt_flags != wp->w_p_culopt_flags)) {
-      redraw_later(wp, UPD_VALID);
-    }
-  }
-
-  wp->w_p_cul = s->save_w_p_cul;
-  if (s->save_w_p_culopt) {
-    free_string_option(wp->w_p_culopt);
-    wp->w_p_culopt = s->save_w_p_culopt;
-  }
-  wp->w_p_culopt_flags = s->save_w_p_culopt_flags;
-  wp->w_p_cuc = s->save_w_p_cuc;
-  wp->w_p_so = s->save_w_p_so;
-  wp->w_p_siso = s->save_w_p_siso;
-  s->save_curwin_handle = 0;
-}
-
 /// Implements MODE_TERMINAL state. :help Terminal-mode
 extern bool rs_terminal_enter(void);
 bool terminal_enter(void) { return rs_terminal_enter(); }
@@ -1110,8 +1041,21 @@ void nvim_do_cmdline_key_cmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
 void nvim_map_execute_lua_c(void) { map_execute_lua(false, false); }
 
 // terminal mode window options
-void nvim_terminal_set_winopts(void *s) { set_terminal_winopts((TerminalState *)s); }
-void nvim_terminal_unset_winopts(void *s) { unset_terminal_winopts((TerminalState *)s); }
+extern void rs_set_terminal_winopts(void *s);
+extern void rs_unset_terminal_winopts(void *s);
+void nvim_terminal_set_winopts(void *s) { rs_set_terminal_winopts(s); }
+void nvim_terminal_unset_winopts(void *s) { rs_unset_terminal_winopts(s); }
+// window option accessors for rs_set_terminal_winopts / rs_unset_terminal_winopts
+// (nvim_win_get_p_cul/cuc/so/siso are already in nvim-window crate; nvim_xstrdup in register.c)
+win_T *nvim_curwin_ptr(void) { return curwin; }
+void nvim_win_set_p_cul(win_T *wp, bool v) { wp->w_p_cul = v; }
+void nvim_win_set_p_cuc(win_T *wp, bool v) { wp->w_p_cuc = v; }
+void nvim_win_set_p_so(win_T *wp, int64_t v) { wp->w_p_so = v; }
+void nvim_win_set_p_siso(win_T *wp, int64_t v) { wp->w_p_siso = v; }
+void nvim_win_redraw_later_some_valid(win_T *wp) { redraw_later(wp, UPD_SOME_VALID); }
+void nvim_win_redraw_later_valid(win_T *wp) { redraw_later(wp, UPD_VALID); }
+void nvim_free_string_option(char *str) { free_string_option(str); }
+void nvim_win_set_p_culopt(win_T *wp, char *s) { wp->w_p_culopt = s; }
 void nvim_terminal_check_cursor_c(void) { terminal_check_cursor(); }
 int nvim_terminal_send_mouse_event_c(void *term, int c) { return (int)send_mouse_event((Terminal *)term, c); }
 int nvim_curwin_handle(void) { return curwin->handle; }
