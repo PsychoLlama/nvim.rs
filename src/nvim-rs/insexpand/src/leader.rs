@@ -550,7 +550,6 @@ extern "C" {
     fn nvim_ui_flush();
     fn rs_ins_compl_set_original_text(str_ptr: *const c_char, len: usize);
     // nvim_is_cpt_func_refresh_always: deleted (Phase 22), inlined below
-    fn nvim_cpt_compl_refresh();
     fn rs_cot_fuzzy() -> c_int;
     fn rs_ins_compl_fuzzy_sort();
     // (compl_restarting moved to Rust static in state.rs)
@@ -606,7 +605,7 @@ pub unsafe extern "C" fn rs_ins_compl_new_leader() {
         let cpt_refresh_always = (0..crate::vars::nvim_get_cpt_sources_count())
             .any(|i| crate::vars::nvim_cpt_sources_get_refresh_always(i) != 0);
         if cpt_refresh_always {
-            nvim_cpt_compl_refresh();
+            crate::funcexpand::rs_cpt_compl_refresh();
         }
         if rs_cot_fuzzy() != 0 {
             rs_ins_compl_fuzzy_sort();

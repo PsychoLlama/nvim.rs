@@ -91,7 +91,6 @@ extern int rs_get_cpt_sources_count(void);
 extern int rs_ins_compl_preinsert_longest(void);
 extern char *rs_ins_compl_infercase_gettext(const char *str, int char_len, int compl_char_len,
                                             int min_len, char **tofree);
-extern void rs_cpt_compl_refresh(void);
 extern int rs_ins_compl_equal(void *m, const char *str, size_t len);
 extern void rs_ins_compl_update_sequence_numbers(void);
 extern void rs_ins_compl_del_pum(void);
@@ -1356,7 +1355,6 @@ void *nvim_mergesort_compl_list_raw(void *head, int compare_type)
 
 // Accessors for Phase 4: ins_compl_new_leader migration
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
-void nvim_cpt_compl_refresh(void) { rs_cpt_compl_refresh(); }
 // Accessor for Phase 5: ins_compl_del_pum migration
 // Accessors for Phase 1 (pass 3): ins_compl_mode, thesaurus_func_complete,
 // get_next_*_completion, do_autocmd_completedone, ins_compl_show_filename
