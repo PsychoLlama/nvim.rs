@@ -117,44 +117,16 @@ extern bool rs_set_ref_in_callback(Callback *callback, int copyID, ht_stack_T **
 extern int rs_get_copyID(void);
 extern void rs_do_tag(char *tag, int type, int count, int forceit, bool verbose);
 extern void rs_listdigraphs(int use_headers);
-int ends_excmd(int c);
-char *find_nextcmd(const char *p);
-char *check_nextcmd(char *p);
-bool is_loclist_cmd(int cmdidx);
-int get_pressedreturn(void);
-bool expr_map_locked(void);
-int one_letter_cmd(const char *p, int *idx);
-int modifier_len(char *cmd);
-bool is_cmd_ni(cmdidx_T cmdidx);
-bool cmd_has_expr_args(cmdidx_T cmdidx);
-cmdidx_T excmd_get_cmdidx(const char *cmd, size_t len);
-char *get_command_name(expand_T *xp, int idx);
-int get_bad_opt(const char *p, exarg_T *eap);
-int getargopt(exarg_T *eap);
-char *skip_cmd_arg(char *p, bool rembs);
-int get_tabpage_arg(exarg_T *eap);
-bool changedir_func(char *new_dir, CdScope scope);
-int check_more(bool message, bool forceit);
-char *ex_range_without_command(exarg_T *eap);
-bool is_other_file(int fnum, char *ffname);
-void msg_verbose_cmd(linenr_T lnum, char *cmd);
-char *skip_colon_white(const char *p, bool skipleadingwhite);
-void parse_register(exarg_T *eap);
-int parse_count(exarg_T *eap, const char **errormsg, bool validate);
-bool parse_bang(const exarg_T *eap, char **p);
+// Forward declarations for Rust-exported do_one_cmd helpers called within this file.
+// (Not in ex_docmd.h.generated.h since these are Rust exports, not C definitions.)
 void shift_cmd_args(exarg_T *eap);
-int execute_cmd0(int *retv, exarg_T *eap, const char **errormsg, bool preview);
-void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie);
-bool skip_cmd(const exarg_T *eap);
+char *skip_colon_white(const char *p, bool skipleadingwhite);
+bool parse_bang(const exarg_T *eap, char **p);
+void parse_register(exarg_T *eap);
 void append_command(const char *cmd);
-void get_flags(exarg_T *eap);
-void correct_range(exarg_T *eap);
-char *skip_grep_pat(exarg_T *eap);
+void msg_verbose_cmd(linenr_T lnum, char *cmd);
 extern void rs_set_cursor_for_append_to_line(void);
 extern size_t rs_find_ident_under_cursor(char **text, int find_type);
-extern char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter fgetline,
-                        void *cookie);
-extern char *ex_errmsg(const char *const msg, const char *const arg);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
