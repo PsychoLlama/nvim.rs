@@ -13,6 +13,8 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
+use nvim_memory::xrealloc;
+
 use crate::tag_cmd;
 use crate::TAGSTACKSIZE;
 
@@ -984,8 +986,8 @@ extern "C" {
     // Memory management
     fn xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
-    fn nvim_tag_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize);
-    fn nvim_tag_xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    fn xmemcpyz(dst: *mut c_char, src: *const c_char, len: usize);
     fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn atoi(s: *const c_char) -> c_int;
@@ -1324,7 +1326,7 @@ pub unsafe extern "C" fn rs_add_llist_tags(
         if p.is_null() {
             continue;
         }
-        nvim_tag_xstrlcpy(fname, p, MAXPATHL);
+        xstrlcpy(fname, p, MAXPATHL);
         xfree(p.cast());
 
         // Get the line number or the search pattern
@@ -1547,7 +1549,7 @@ pub unsafe extern "C" fn rs_add_tag_field(
         if len > MAXPATHL - 1 {
             len = MAXPATHL - 1;
         }
-        nvim_tag_xmemcpyz(buf, start, len);
+        xmemcpyz(buf, start, len);
     }
     *buf.add(len) = 0;
 
@@ -1574,10 +1576,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_tag_free_wild(count: c_int, files: *mut *mut c_char);
     fn nvim_tag_get_curbuf_ffname() -> *mut c_char;
-    fn nvim_tag_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn nvim_tag_memmove(dest: *mut c_void, src: *const c_void, n: usize);
     fn nvim_tag_mb_ptr_adv(p: *const c_char) -> *mut c_char;
-    fn nvim_tag_ascii_iswhite(c: c_int) -> bool;
     fn nvim_tag_get_tfu_in_use() -> bool;
     fn nvim_tag_tv_dict_find_item(
         dict: *const c_void,
@@ -1712,7 +1711,7 @@ pub unsafe extern "C" fn rs_expand_tags(
 
             if len > name_buf_size - 3 {
                 name_buf_size = len + 3;
-                name_buf = nvim_tag_xrealloc(name_buf.cast(), name_buf_size).cast();
+                name_buf = xrealloc(name_buf.cast(), name_buf_size).cast();
             }
 
             memmove(name_buf.cast(), tagname.cast(), len);
@@ -1842,7 +1841,7 @@ pub unsafe extern "C" fn rs_get_tags(
                 } else if strncmp(p, c"file:".as_ptr(), 5) == 0 {
                     // skip "file:" (static tag)
                     p = p.add(4);
-                } else if !nvim_tag_ascii_iswhite(*p as c_int) {
+                } else if !matches!(*p as u8, b' ' | b'\t') {
                     // Add extra field as a dict entry
                     let n = p;
                     while *p != 0 && *p as u8 >= b' ' && (*p as u8) < 127 && *p as u8 != b':' {

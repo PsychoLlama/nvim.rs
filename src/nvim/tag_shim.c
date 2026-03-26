@@ -465,8 +465,6 @@ void nvim_tag_set_topline_curwin(void) { set_topline(curwin, curwin->w_cursor.ln
 void nvim_tag_win_close_curwin(void) { win_close(curwin, false, false); }
 char *nvim_tag_fm_getname(const void *tg_void, int lead_len) { const taggy_T *tg = (const taggy_T *)tg_void; return fm_getname(&((taggy_T *)tg)->fmark, lead_len); }
 
-void nvim_tag_xstrlcpy(char *dst, const char *src, size_t dstsize) { xstrlcpy(dst, src, dstsize); }
-void nvim_tag_xmemcpyz(char *dst, const char *src, size_t len) { xmemcpyz(dst, src, len); }
 int nvim_tag_get_ptag_cur_match(void) { return ptag_entry.cur_match; }
 
 /// Wrapper for find_tags callable from Rust
@@ -478,8 +476,6 @@ int nvim_tag_find_tags(char *pat, int *num_matches, char ***matchesp,
 
 void nvim_tag_free_wild(int count, char **files) { FreeWild(count, files); }
 char *nvim_tag_get_curbuf_ffname(void) { return curbuf->b_ffname; }
-void *nvim_tag_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
-void nvim_tag_memmove(void *dest, const void *src, size_t n) { memmove(dest, src, n); }
 /// MB_PTR_ADV wrapper - advance pointer past one multi-byte char
 const char *nvim_tag_mb_ptr_adv(const char *p)
 {
@@ -488,7 +484,6 @@ const char *nvim_tag_mb_ptr_adv(const char *p)
   return result;
 }
 
-bool nvim_tag_ascii_iswhite(int c) { return ascii_iswhite(c); }
 bool nvim_tag_get_tfu_in_use(void) { return tfu_in_use; }
 void nvim_tag_set_tfu_in_use(bool val) { tfu_in_use = val; }
 void *nvim_findtags_get_ga_match_ptr(void *st_void) { findtags_state_T *st = (findtags_state_T *)st_void; return (void *)st->ga_match; }
@@ -797,10 +792,6 @@ int nvim_tag_get_msg_silent(void) { return msg_silent; }
 bool nvim_tag_ui_has_messages(void) { return ui_has(kUIMessages); }
 void nvim_tag_ui_flush(void) { ui_flush(); }
 void nvim_tag_os_delay(int msec) { os_delay(msec, true); }
-char *nvim_tag_xstrdup(const char *s) { return xstrdup(s); }
-void nvim_tag_xfree(void *p) { xfree(p); }
-char *nvim_tag_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
-int nvim_tag_strcmp(const char *s1, const char *s2) { return strcmp(s1, s2); }
 char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnum); return buf != NULL ? buf->b_ffname : NULL; }
 /// buflist_getfile wrapper that returns the result (OK/FAIL).
 /// Used from Rust for DT_POP jump to different buffer.
